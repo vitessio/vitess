@@ -75,7 +75,17 @@ type healthStreamer struct {
 }
 
 func newHealthStreamer(env tabletenv.Env, alias topodatapb.TabletAlias) *healthStreamer {
-	reloadTime := env.Config().SchemaReloadIntervalSeconds.Get()
+	var newTimer *timer.Timer
+	var pool *connpool.Pool
+	if env.Config().SignalWhenSchemaChange {
+		reloadTime := env.Config().SchemaReloadIntervalSeconds.Get()
+		newTimer = timer.NewTimer(reloadTime)
+		// We need one connection for the reloader.
+		pool = connpool.NewPool(env, "", tabletenv.ConnPoolConfig{
+			Size:               1,
+			IdleTimeoutSeconds: env.Config().OltpReadPool.IdleTimeoutSeconds,
+		})
+	}
 	return &healthStreamer{
 		stats:              env.Stats(),
 		degradedThreshold:  env.Config().Healthcheck.DegradedThresholdSeconds.Get(),
@@ -91,13 +101,8 @@ func newHealthStreamer(env tabletenv.Env, alias topodatapb.TabletAlias) *healthS
 		},
 
 		history: history.New(5),
-
-		ticks: timer.NewTimer(reloadTime),
-		// We need one connection for the reloader.
-		conns: connpool.NewPool(env, "", tabletenv.ConnPoolConfig{
-			Size:               1,
-			IdleTimeoutSeconds: env.Config().OltpReadPool.IdleTimeoutSeconds,
-		}),
+		ticks:   newTimer,
+		conns:   pool,
 	}
 }
 
@@ -117,12 +122,15 @@ func (hs *healthStreamer) Open() {
 		return
 	}
 	hs.ctx, hs.cancel = context.WithCancel(context.Background())
-	hs.conns.Open(hs.dbConfig, hs.dbConfig, hs.dbConfig)
-	hs.ticks.Start(func() {
-		if err := hs.Reload(); err != nil {
-			log.Errorf("periodic schema reload failed in health stream: %v", err)
-		}
-	})
+	if hs.conns != nil {
+		// if we don't have a live conns object, it means we are not configured to signal when the schema changes
+		hs.conns.Open(hs.dbConfig, hs.dbConfig, hs.dbConfig)
+		hs.ticks.Start(func() {
+			if err := hs.Reload(); err != nil {
+				log.Errorf("periodic schema reload failed in health stream: %v", err)
+			}
+		})
+	}
 
 }
 
@@ -131,7 +139,9 @@ func (hs *healthStreamer) Close() {
 	defer hs.mu.Unlock()
 
 	if hs.cancel != nil {
-		hs.ticks.Stop()
+		if hs.ticks != nil {
+			hs.ticks.Stop()
+		}
 		hs.cancel()
 		hs.cancel = nil
 	}
@@ -288,6 +298,7 @@ func (hs *healthStreamer) SetUnhealthyThreshold(v time.Duration) {
 	}
 }
 
+// Reload reloads the schema from the underlying mysql
 func (hs *healthStreamer) Reload() error {
 	hs.mu.Lock()
 	defer hs.mu.Unlock()

@@ -28,7 +28,6 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
@@ -157,6 +156,7 @@ func TestReloadSchema(t *testing.T) {
 	defer db.Close()
 	config := newConfig(db)
 	config.SchemaReloadIntervalSeconds.Set(100 * time.Millisecond)
+	config.SignalWhenSchemaChange = true
 
 	env := tabletenv.NewEnv(config, "ReplTrackerTest")
 	alias := topodatapb.TabletAlias{
@@ -194,8 +194,6 @@ func TestReloadSchema(t *testing.T) {
 			if response.RealtimeStats.TableSchemaChanged != nil {
 				assert.Equal(t, []string{"product", "users"}, response.RealtimeStats.TableSchemaChanged)
 				wg.Done()
-			} else {
-				log.Error("1")
 			}
 			return nil
 		})
@@ -208,10 +206,59 @@ func TestReloadSchema(t *testing.T) {
 	}()
 	select {
 	case <-c:
-
 	case <-time.After(1 * time.Second):
 		t.Errorf("timed out")
 	}
+}
+
+func TestDoesNotReloadSchema(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	config := newConfig(db)
+	config.SchemaReloadIntervalSeconds.Set(100 * time.Millisecond)
+	config.SignalWhenSchemaChange = false
+
+	env := tabletenv.NewEnv(config, "ReplTrackerTest")
+	alias := topodatapb.TabletAlias{
+		Cell: "cell",
+		Uid:  1,
+	}
+	blpFunc = testBlpFunc
+	hs := newHealthStreamer(env, alias)
+
+	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
+	configs := config.DB
+
+	hs.InitDBConfig(target, configs.DbaWithDB())
+	hs.Open()
+	defer hs.Close()
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		hs.Stream(ctx, func(response *querypb.StreamHealthResponse) error {
+			if response.RealtimeStats.TableSchemaChanged != nil {
+				wg.Done()
+			}
+			return nil
+		})
+	}()
+
+	c := make(chan struct{})
+	go func() {
+		defer close(c)
+		wg.Wait()
+	}()
+
+	timeout := false
+
+	// here we will wait for a second, to make sure that we are not signaling a changed schema.
+	select {
+	case <-c:
+	case <-time.After(1 * time.Second):
+		timeout = true
+	}
+
+	assert.True(t, timeout, "should have timed out")
 }
 
 func testStream(hs *healthStreamer) (<-chan *querypb.StreamHealthResponse, context.CancelFunc) {
