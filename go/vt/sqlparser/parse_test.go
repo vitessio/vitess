@@ -1167,6 +1167,9 @@ var (
 		input:  "create table foo (f timestamp null not null , g timestamp not null null)",
 		output: "create table foo (\n\tf timestamp not null,\n\tg timestamp null\n)",
 	}, {
+		// Tests unicode character §
+		input: "create table invalid_enum_value_name (\n\there_be_enum enum('$§!') default null\n)",
+	}, {
 		input: "alter vschema create vindex hash_vdx using hash",
 	}, {
 		input: "alter vschema create vindex keyspace.hash_vdx using hash",
