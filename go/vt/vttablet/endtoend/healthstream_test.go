@@ -107,7 +107,7 @@ func TestSchemaChange(t *testing.T) {
 	}()
 	select {
 	case <-c:
-	case <-time.After(2 * time.Second):
+	case <-time.After(5 * time.Second):
 		t.Errorf("timed out")
 	}
 
