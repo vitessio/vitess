@@ -31,6 +31,7 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/proto/vschema"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
+	"vitess.io/vitess/go/vt/vtctl/workflow"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 )
@@ -1438,15 +1439,15 @@ func TestStreamMigrateStreamsMismatch(t *testing.T) {
 
 func TestTemplatize(t *testing.T) {
 	tests := []struct {
-		in  []*vrStream
+		in  []*workflow.VReplicationStream
 		out string
 		err string
 	}{{
 		// First test contains all fields.
-		in: []*vrStream{{
-			id:       1,
-			workflow: "test",
-			bls: &binlogdatapb.BinlogSource{
+		in: []*workflow.VReplicationStream{{
+			ID:       1,
+			Workflow: "test",
+			BinlogSource: &binlogdatapb.BinlogSource{
 				Keyspace: "ks",
 				Shard:    "80-",
 				Filter: &binlogdatapb.Filter{
@@ -1460,8 +1461,8 @@ func TestTemplatize(t *testing.T) {
 		out: `[{"ID":1,"Workflow":"test","Bls":{"keyspace":"ks","shard":"80-","filter":{"rules":[{"match":"t1","filter":"select * from t1 where in_keyrange('{{.}}')"}]}}}]`,
 	}, {
 		// Reference table.
-		in: []*vrStream{{
-			bls: &binlogdatapb.BinlogSource{
+		in: []*workflow.VReplicationStream{{
+			BinlogSource: &binlogdatapb.BinlogSource{
 				Filter: &binlogdatapb.Filter{
 					Rules: []*binlogdatapb.Rule{{
 						Match:  "ref",
@@ -1473,8 +1474,8 @@ func TestTemplatize(t *testing.T) {
 		out: "",
 	}, {
 		// Sharded table.
-		in: []*vrStream{{
-			bls: &binlogdatapb.BinlogSource{
+		in: []*workflow.VReplicationStream{{
+			BinlogSource: &binlogdatapb.BinlogSource{
 				Filter: &binlogdatapb.Filter{
 					Rules: []*binlogdatapb.Rule{{
 						Match:  "t1",
@@ -1486,8 +1487,8 @@ func TestTemplatize(t *testing.T) {
 		out: `[{"ID":0,"Workflow":"","Bls":{"filter":{"rules":[{"match":"t1","filter":"{{.}}"}]}}}]`,
 	}, {
 		// table not found
-		in: []*vrStream{{
-			bls: &binlogdatapb.BinlogSource{
+		in: []*workflow.VReplicationStream{{
+			BinlogSource: &binlogdatapb.BinlogSource{
 				Filter: &binlogdatapb.Filter{
 					Rules: []*binlogdatapb.Rule{{
 						Match: "t3",
@@ -1498,8 +1499,8 @@ func TestTemplatize(t *testing.T) {
 		err: `table t3 not found in vschema`,
 	}, {
 		// sharded table with no filter
-		in: []*vrStream{{
-			bls: &binlogdatapb.BinlogSource{
+		in: []*workflow.VReplicationStream{{
+			BinlogSource: &binlogdatapb.BinlogSource{
 				Filter: &binlogdatapb.Filter{
 					Rules: []*binlogdatapb.Rule{{
 						Match: "t1",
@@ -1510,8 +1511,8 @@ func TestTemplatize(t *testing.T) {
 		err: `rule match:"t1"  does not have a select expression in vreplication`,
 	}, {
 		// Excluded table.
-		in: []*vrStream{{
-			bls: &binlogdatapb.BinlogSource{
+		in: []*workflow.VReplicationStream{{
+			BinlogSource: &binlogdatapb.BinlogSource{
 				Filter: &binlogdatapb.Filter{
 					Rules: []*binlogdatapb.Rule{{
 						Match:  "t1",
@@ -1523,8 +1524,8 @@ func TestTemplatize(t *testing.T) {
 		err: `unexpected rule in vreplication: match:"t1" filter:"exclude" `,
 	}, {
 		// Sharded table and ref table
-		in: []*vrStream{{
-			bls: &binlogdatapb.BinlogSource{
+		in: []*workflow.VReplicationStream{{
+			BinlogSource: &binlogdatapb.BinlogSource{
 				Filter: &binlogdatapb.Filter{
 					Rules: []*binlogdatapb.Rule{{
 						Match:  "t1",
@@ -1539,8 +1540,8 @@ func TestTemplatize(t *testing.T) {
 		err: `cannot migrate streams with a mix of reference and sharded tables: filter:<rules:<match:"t1" filter:"{{.}}" > rules:<match:"ref" > > `,
 	}, {
 		// Ref table and sharded table (different code path)
-		in: []*vrStream{{
-			bls: &binlogdatapb.BinlogSource{
+		in: []*workflow.VReplicationStream{{
+			BinlogSource: &binlogdatapb.BinlogSource{
 				Filter: &binlogdatapb.Filter{
 					Rules: []*binlogdatapb.Rule{{
 						Match:  "ref",
@@ -1555,8 +1556,8 @@ func TestTemplatize(t *testing.T) {
 		err: `cannot migrate streams with a mix of reference and sharded tables: filter:<rules:<match:"ref" > rules:<match:"t2" filter:"{{.}}" > > `,
 	}, {
 		// Ref table with select expression
-		in: []*vrStream{{
-			bls: &binlogdatapb.BinlogSource{
+		in: []*workflow.VReplicationStream{{
+			BinlogSource: &binlogdatapb.BinlogSource{
 				Filter: &binlogdatapb.Filter{
 					Rules: []*binlogdatapb.Rule{{
 						Match:  "ref",
@@ -1568,8 +1569,8 @@ func TestTemplatize(t *testing.T) {
 		out: "",
 	}, {
 		// Select expresstion with no keyrange value
-		in: []*vrStream{{
-			bls: &binlogdatapb.BinlogSource{
+		in: []*workflow.VReplicationStream{{
+			BinlogSource: &binlogdatapb.BinlogSource{
 				Filter: &binlogdatapb.Filter{
 					Rules: []*binlogdatapb.Rule{{
 						Match:  "t1",
@@ -1581,8 +1582,8 @@ func TestTemplatize(t *testing.T) {
 		out: `[{"ID":0,"Workflow":"","Bls":{"filter":{"rules":[{"match":"t1","filter":"select * from t1 where in_keyrange(c1, 'hash', '{{.}}')"}]}}}]`,
 	}, {
 		// Select expresstion with one keyrange value
-		in: []*vrStream{{
-			bls: &binlogdatapb.BinlogSource{
+		in: []*workflow.VReplicationStream{{
+			BinlogSource: &binlogdatapb.BinlogSource{
 				Filter: &binlogdatapb.Filter{
 					Rules: []*binlogdatapb.Rule{{
 						Match:  "t1",
@@ -1594,8 +1595,8 @@ func TestTemplatize(t *testing.T) {
 		out: `[{"ID":0,"Workflow":"","Bls":{"filter":{"rules":[{"match":"t1","filter":"select * from t1 where in_keyrange('{{.}}')"}]}}}]`,
 	}, {
 		// Select expresstion with three keyrange values
-		in: []*vrStream{{
-			bls: &binlogdatapb.BinlogSource{
+		in: []*workflow.VReplicationStream{{
+			BinlogSource: &binlogdatapb.BinlogSource{
 				Filter: &binlogdatapb.Filter{
 					Rules: []*binlogdatapb.Rule{{
 						Match:  "t1",
@@ -1607,8 +1608,8 @@ func TestTemplatize(t *testing.T) {
 		out: `[{"ID":0,"Workflow":"","Bls":{"filter":{"rules":[{"match":"t1","filter":"select * from t1 where in_keyrange(col, vdx, '{{.}}')"}]}}}]`,
 	}, {
 		// syntax error
-		in: []*vrStream{{
-			bls: &binlogdatapb.BinlogSource{
+		in: []*workflow.VReplicationStream{{
+			BinlogSource: &binlogdatapb.BinlogSource{
 				Filter: &binlogdatapb.Filter{
 					Rules: []*binlogdatapb.Rule{{
 						Match:  "t1",
@@ -1620,8 +1621,8 @@ func TestTemplatize(t *testing.T) {
 		err: "syntax error at position 4 near 'bad'",
 	}, {
 		// invalid statement
-		in: []*vrStream{{
-			bls: &binlogdatapb.BinlogSource{
+		in: []*workflow.VReplicationStream{{
+			BinlogSource: &binlogdatapb.BinlogSource{
 				Filter: &binlogdatapb.Filter{
 					Rules: []*binlogdatapb.Rule{{
 						Match:  "t1",
@@ -1633,8 +1634,8 @@ func TestTemplatize(t *testing.T) {
 		err: "unexpected query: update t set a=1",
 	}, {
 		// invalid in_keyrange
-		in: []*vrStream{{
-			bls: &binlogdatapb.BinlogSource{
+		in: []*workflow.VReplicationStream{{
+			BinlogSource: &binlogdatapb.BinlogSource{
 				Filter: &binlogdatapb.Filter{
 					Rules: []*binlogdatapb.Rule{{
 						Match:  "t1",
@@ -1646,8 +1647,8 @@ func TestTemplatize(t *testing.T) {
 		err: "unexpected in_keyrange parameters: in_keyrange(col, vdx, '-80', extra)",
 	}, {
 		// * in_keyrange
-		in: []*vrStream{{
-			bls: &binlogdatapb.BinlogSource{
+		in: []*workflow.VReplicationStream{{
+			BinlogSource: &binlogdatapb.BinlogSource{
 				Filter: &binlogdatapb.Filter{
 					Rules: []*binlogdatapb.Rule{{
 						Match:  "t1",
@@ -1659,8 +1660,8 @@ func TestTemplatize(t *testing.T) {
 		err: "unexpected in_keyrange parameters: in_keyrange(*)",
 	}, {
 		// non-string in_keyrange
-		in: []*vrStream{{
-			bls: &binlogdatapb.BinlogSource{
+		in: []*workflow.VReplicationStream{{
+			BinlogSource: &binlogdatapb.BinlogSource{
 				Filter: &binlogdatapb.Filter{
 					Rules: []*binlogdatapb.Rule{{
 						Match:  "t1",
@@ -1672,8 +1673,8 @@ func TestTemplatize(t *testing.T) {
 		err: "unexpected in_keyrange parameters: in_keyrange(aa)",
 	}, {
 		// '{{' in query
-		in: []*vrStream{{
-			bls: &binlogdatapb.BinlogSource{
+		in: []*workflow.VReplicationStream{{
+			BinlogSource: &binlogdatapb.BinlogSource{
 				Filter: &binlogdatapb.Filter{
 					Rules: []*binlogdatapb.Rule{{
 						Match:  "t1",
@@ -1739,16 +1740,16 @@ type testVRS struct {
 	Bls      *binlogdatapb.BinlogSource
 }
 
-func stringifyVRS(in []*vrStream) string {
+func stringifyVRS(in []*workflow.VReplicationStream) string {
 	if len(in) == 0 {
 		return ""
 	}
 	var converted []*testVRS
 	for _, vrs := range in {
 		converted = append(converted, &testVRS{
-			ID:       vrs.id,
-			Workflow: vrs.workflow,
-			Bls:      vrs.bls,
+			ID:       vrs.ID,
+			Workflow: vrs.Workflow,
+			Bls:      vrs.BinlogSource,
 		})
 	}
 	b, _ := json.Marshal(converted)

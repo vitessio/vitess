@@ -23,6 +23,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+
 	"vitess.io/vitess/go/mysql"
 
 	"github.com/prometheus/common/log"
@@ -70,6 +72,8 @@ type iExecute interface {
 	StreamExecuteMulti(ctx context.Context, s string, rss []*srvtopo.ResolvedShard, vars []map[string]*querypb.BindVariable, options *querypb.ExecuteOptions, callback func(reply *sqltypes.Result) error) error
 	ExecuteLock(ctx context.Context, rs *srvtopo.ResolvedShard, query *querypb.BoundQuery, session *SafeSession) (*sqltypes.Result, error)
 	Commit(ctx context.Context, safeSession *SafeSession) error
+	ExecuteMessageStream(ctx context.Context, rss []*srvtopo.ResolvedShard, name string, callback func(*sqltypes.Result) error) error
+	ExecuteVStream(ctx context.Context, rss []*srvtopo.ResolvedShard, filter *binlogdatapb.Filter, gtid string, callback func(evs []*binlogdatapb.VEvent) error) error
 
 	// TODO: remove when resolver is gone
 	ParseDestinationTarget(targetString string) (string, topodatapb.TabletType, key.Destination, error)
@@ -107,47 +111,6 @@ type vcursorImpl struct {
 	warnShardedOnly       bool // when using sharded only features, a warning will be warnings field
 
 	warnings []*querypb.QueryWarning // any warnings that are accumulated during the planning phase are stored here
-}
-
-func (vc *vcursorImpl) GetKeyspace() string {
-	return vc.keyspace
-}
-
-func (vc *vcursorImpl) ExecuteVSchema(keyspace string, vschemaDDL *sqlparser.AlterVschema) error {
-	srvVschema := vc.vm.GetCurrentSrvVschema()
-	if srvVschema == nil {
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vschema not loaded")
-	}
-
-	user := callerid.ImmediateCallerIDFromContext(vc.ctx)
-	allowed := vschemaacl.Authorized(user)
-	if !allowed {
-		return vterrors.NewErrorf(vtrpcpb.Code_PERMISSION_DENIED, vterrors.AccessDeniedError, "User '%s' is not allowed to perform vschema operations", user.GetUsername())
-	}
-
-	// Resolve the keyspace either from the table qualifier or the target keyspace
-	var ksName string
-	if !vschemaDDL.Table.IsEmpty() {
-		ksName = vschemaDDL.Table.Qualifier.String()
-	}
-	if ksName == "" {
-		ksName = keyspace
-	}
-	if ksName == "" {
-		return errNoKeyspace
-	}
-
-	ks := srvVschema.Keyspaces[ksName]
-	ks, err := topotools.ApplyVSchemaDDL(ksName, ks, vschemaDDL)
-
-	if err != nil {
-		return err
-	}
-
-	srvVschema.Keyspaces[ksName] = ks
-
-	return vc.vm.UpdateVSchema(vc.ctx, ksName, srvVschema)
-
 }
 
 // newVcursorImpl creates a vcursorImpl. Before creating this object, you have to separate out any marginComments that came with
@@ -799,4 +762,55 @@ func (vc *vcursorImpl) planPrefixKey() string {
 		return fmt.Sprintf("%s%s%s", vc.keyspace, vindexes.TabletTypeSuffix[vc.tabletType], vc.destination.String())
 	}
 	return fmt.Sprintf("%s%s", vc.keyspace, vindexes.TabletTypeSuffix[vc.tabletType])
+}
+
+func (vc *vcursorImpl) GetKeyspace() string {
+	return vc.keyspace
+}
+
+func (vc *vcursorImpl) ExecuteVSchema(keyspace string, vschemaDDL *sqlparser.AlterVschema) error {
+	srvVschema := vc.vm.GetCurrentSrvVschema()
+	if srvVschema == nil {
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vschema not loaded")
+	}
+
+	user := callerid.ImmediateCallerIDFromContext(vc.ctx)
+	allowed := vschemaacl.Authorized(user)
+	if !allowed {
+		return vterrors.NewErrorf(vtrpcpb.Code_PERMISSION_DENIED, vterrors.AccessDeniedError, "User '%s' is not authorized to perform vschema operations", user.GetUsername())
+
+	}
+
+	// Resolve the keyspace either from the table qualifier or the target keyspace
+	var ksName string
+	if !vschemaDDL.Table.IsEmpty() {
+		ksName = vschemaDDL.Table.Qualifier.String()
+	}
+	if ksName == "" {
+		ksName = keyspace
+	}
+	if ksName == "" {
+		return errNoKeyspace
+	}
+
+	ks := srvVschema.Keyspaces[ksName]
+	ks, err := topotools.ApplyVSchemaDDL(ksName, ks, vschemaDDL)
+
+	if err != nil {
+		return err
+	}
+
+	srvVschema.Keyspaces[ksName] = ks
+
+	return vc.vm.UpdateVSchema(vc.ctx, ksName, srvVschema)
+
+}
+
+func (vc *vcursorImpl) MessageStream(rss []*srvtopo.ResolvedShard, tableName string, callback func(*sqltypes.Result) error) error {
+	atomic.AddUint64(&vc.logStats.ShardQueries, uint64(len(rss)))
+	return vc.executor.ExecuteMessageStream(vc.ctx, rss, tableName, callback)
+}
+
+func (vc *vcursorImpl) VStream(rss []*srvtopo.ResolvedShard, filter *binlogdatapb.Filter, gtid string, callback func(evs []*binlogdatapb.VEvent) error) error {
+	return vc.executor.ExecuteVStream(vc.ctx, rss, filter, gtid, callback)
 }
