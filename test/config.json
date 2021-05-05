@@ -574,7 +574,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/topotest/zk2", "--topo-flavor=zk2"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "25",
+			"Shard": 25,
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -583,7 +583,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/topotest/consul", "--topo-flavor=consul"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "18",
+			"Shard": 18,
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -592,7 +592,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/topotest/etcd2"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "17",
+			"Shard": 17,
 			"RetryMax": 0,
 			"Tags": []
 		},
