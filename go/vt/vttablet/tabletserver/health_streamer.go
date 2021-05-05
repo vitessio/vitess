@@ -141,6 +141,7 @@ func (hs *healthStreamer) Close() {
 	if hs.cancel != nil {
 		if hs.ticks != nil {
 			hs.ticks.Stop()
+			hs.conns.Close()
 		}
 		hs.cancel()
 		hs.cancel = nil
