@@ -1,5 +1,5 @@
 /**
- * Copyright 2020 The Vitess Authors.
+ * Copyright 2021 The Vitess Authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,23 +13,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-.container {
-  display: grid;
-  grid-template-areas: 'nav content';
-  grid-template-rows: auto;
-  grid-template-columns: 240px auto;
-  height: 100vh;
-  overflow: hidden;
-  position: relative;
-  width: 100vw;
+import cx from 'classnames';
+
+import style from './WorkspaceTitle.module.scss';
+
+interface Props {
+    className?: string;
 }
 
-.navContainer {
-  grid-area: nav;
-  height: 100vh;
-}
-
-.mainContainer {
-  grid-area: content;
-  overflow: auto;
-}
+export const WorkspaceTitle: React.FunctionComponent<Props> = ({ children, className }) => {
+    return <h1 className={cx(style.title, className)}>{children}</h1>;
+};
