@@ -20,16 +20,16 @@ import { vtadmin as pb } from '../../proto/vtadmin';
 import { orderBy } from 'lodash-es';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import { DataTable } from '../dataTable/DataTable';
-import { TextInput } from '../TextInput';
-import { Icons } from '../Icon';
 import { filterNouns } from '../../util/filterNouns';
-import style from './Tablets.module.scss';
-import { Button } from '../Button';
 import { DataCell } from '../dataTable/DataCell';
 import { TabletServingPip } from '../pips/TabletServingPip';
 import { useSyncedURLParam } from '../../hooks/useSyncedURLParam';
 import { formatAlias, formatDisplayType, formatState, formatType } from '../../util/tablets';
 import { ShardServingPip } from '../pips/ShardServingPip';
+import { ContentContainer } from '../layout/ContentContainer';
+import { WorkspaceHeader } from '../layout/WorkspaceHeader';
+import { WorkspaceTitle } from '../layout/WorkspaceTitle';
+import { DataFilter } from '../dataTable/DataFilter';
 
 export const Tablets = () => {
     useDocumentTitle('Tablets');
@@ -71,25 +71,24 @@ export const Tablets = () => {
     );
 
     return (
-        <div className="max-width-content">
-            <h1>Tablets</h1>
-            <div className={style.controls}>
-                <TextInput
+        <div>
+            <WorkspaceHeader>
+                <WorkspaceTitle>Tablets</WorkspaceTitle>
+            </WorkspaceHeader>
+            <ContentContainer>
+                <DataFilter
                     autoFocus
-                    iconLeft={Icons.search}
                     onChange={(e) => updateFilter(e.target.value)}
+                    onClear={() => updateFilter('')}
                     placeholder="Filter tablets"
                     value={filter || ''}
                 />
-                <Button disabled={!filter} onClick={() => updateFilter('')} secondary>
-                    Clear filters
-                </Button>
-            </div>
-            <DataTable
-                columns={['Keyspace', 'Shard', 'Type', 'Tablet State', 'Alias', 'Hostname']}
-                data={filteredData}
-                renderRows={renderRows}
-            />
+                <DataTable
+                    columns={['Keyspace', 'Shard', 'Type', 'Tablet State', 'Alias', 'Hostname']}
+                    data={filteredData}
+                    renderRows={renderRows}
+                />
+            </ContentContainer>
         </div>
     );
 };

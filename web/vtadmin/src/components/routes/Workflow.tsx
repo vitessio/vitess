@@ -13,9 +13,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import { useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
+
 import { useWorkflow } from '../../hooks/api';
 import { Code } from '../Code';
+import { ContentContainer } from '../layout/ContentContainer';
+import { NavCrumbs } from '../layout/NavCrumbs';
+import { WorkspaceHeader } from '../layout/WorkspaceHeader';
+import { WorkspaceTitle } from '../layout/WorkspaceTitle';
 
 interface RouteParams {
     clusterID: string;
@@ -30,8 +35,16 @@ export const Workflow = () => {
     // Placeholder
     return (
         <div>
-            <h1>{name}</h1>
-            <Code code={JSON.stringify(data, null, 2)} />
+            <WorkspaceHeader>
+                <NavCrumbs>
+                    <Link to="/workflows">Workflows</Link>
+                </NavCrumbs>
+
+                <WorkspaceTitle>{name}</WorkspaceTitle>
+            </WorkspaceHeader>
+            <ContentContainer>
+                <Code code={JSON.stringify(data, null, 2)} />
+            </ContentContainer>
         </div>
     );
 };
