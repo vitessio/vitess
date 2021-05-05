@@ -367,9 +367,12 @@ func (hs *healthStreamer) Reload() error {
 }
 
 func (hs *healthStreamer) InitSchemaLocked(conn *connpool.DBConn) (bool, error) {
-	_, err := conn.Exec(hs.ctx, mysql.CreateSchemaCopyTable, 1, false)
-	if err != nil {
-		return false, err
+	for _, query := range mysql.VTDatabaseInit {
+		_, err := conn.Exec(hs.ctx, query, 1, false)
+		if err != nil {
+			return false, err
+		}
 	}
+
 	return true, nil
 }
