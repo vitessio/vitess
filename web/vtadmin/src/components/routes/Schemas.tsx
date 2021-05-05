@@ -23,12 +23,12 @@ import { useSyncedURLParam } from '../../hooks/useSyncedURLParam';
 import { filterNouns } from '../../util/filterNouns';
 import { formatBytes } from '../../util/formatBytes';
 import { getTableDefinitions } from '../../util/tableDefinitions';
-import { Button } from '../Button';
 import { DataCell } from '../dataTable/DataCell';
+import { DataFilter } from '../dataTable/DataFilter';
 import { DataTable } from '../dataTable/DataTable';
-import { Icons } from '../Icon';
-import { TextInput } from '../TextInput';
-import style from './Schemas.module.scss';
+import { ContentContainer } from '../layout/ContentContainer';
+import { WorkspaceHeader } from '../layout/WorkspaceHeader';
+import { WorkspaceTitle } from '../layout/WorkspaceTitle';
 
 const TABLE_COLUMNS = [
     'Keyspace',
@@ -95,22 +95,20 @@ export const Schemas = () => {
         });
 
     return (
-        <div className="max-width-content">
-            <h1>Schemas</h1>
-            <div className={style.controls}>
-                <TextInput
+        <div>
+            <WorkspaceHeader>
+                <WorkspaceTitle>Schemas</WorkspaceTitle>
+            </WorkspaceHeader>
+            <ContentContainer>
+                <DataFilter
                     autoFocus
-                    iconLeft={Icons.search}
                     onChange={(e) => updateFilter(e.target.value)}
+                    onClear={() => updateFilter('')}
                     placeholder="Filter schemas"
                     value={filter || ''}
                 />
-                <Button disabled={!filter} onClick={() => updateFilter('')} secondary>
-                    Clear filters
-                </Button>
-            </div>
-
-            <DataTable columns={TABLE_COLUMNS} data={filteredData} renderRows={renderRows} />
+                <DataTable columns={TABLE_COLUMNS} data={filteredData} renderRows={renderRows} />
+            </ContentContainer>
         </div>
     );
 };

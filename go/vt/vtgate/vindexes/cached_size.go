@@ -65,6 +65,26 @@ func (cached *BinaryMD5) CachedSize(alloc bool) int64 {
 	size += int64(len(cached.name))
 	return size
 }
+func (cached *CFC) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(64)
+	}
+	// field name string
+	size += int64(len(cached.name))
+	// field offsets []int
+	{
+		size += int64(cap(cached.offsets)) * int64(8)
+	}
+	// field prefixVindex vitess.io/vitess/go/vt/vtgate/vindexes.SingleColumn
+	if cc, ok := cached.prefixVindex.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
 func (cached *Column) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -477,5 +497,17 @@ func (cached *lookupInternal) CachedSize(alloc bool) int64 {
 	size += int64(len(cached.ver))
 	// field del string
 	size += int64(len(cached.del))
+	return size
+}
+func (cached *prefixCFC) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(8)
+	}
+	// field CFC *vitess.io/vitess/go/vt/vtgate/vindexes.CFC
+	size += cached.CFC.CachedSize(true)
 	return size
 }

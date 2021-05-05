@@ -2098,6 +2098,7 @@ $root.vtadmin = (function() {
          * @property {vtadmin.ICluster|null} [cluster] Tablet cluster
          * @property {topodata.ITablet|null} [tablet] Tablet tablet
          * @property {vtadmin.Tablet.ServingState|null} [state] Tablet state
+         * @property {string|null} [FQDN] Tablet FQDN
          */
 
         /**
@@ -2140,6 +2141,14 @@ $root.vtadmin = (function() {
         Tablet.prototype.state = 0;
 
         /**
+         * Tablet FQDN.
+         * @member {string} FQDN
+         * @memberof vtadmin.Tablet
+         * @instance
+         */
+        Tablet.prototype.FQDN = "";
+
+        /**
          * Creates a new Tablet instance using the specified properties.
          * @function create
          * @memberof vtadmin.Tablet
@@ -2169,6 +2178,8 @@ $root.vtadmin = (function() {
                 $root.topodata.Tablet.encode(message.tablet, writer.uint32(/* id 2, wireType 2 =*/18).fork()).ldelim();
             if (message.state != null && Object.hasOwnProperty.call(message, "state"))
                 writer.uint32(/* id 3, wireType 0 =*/24).int32(message.state);
+            if (message.FQDN != null && Object.hasOwnProperty.call(message, "FQDN"))
+                writer.uint32(/* id 4, wireType 2 =*/34).string(message.FQDN);
             return writer;
         };
 
@@ -2211,6 +2222,9 @@ $root.vtadmin = (function() {
                     break;
                 case 3:
                     message.state = reader.int32();
+                    break;
+                case 4:
+                    message.FQDN = reader.string();
                     break;
                 default:
                     reader.skipType(tag & 7);
@@ -2266,6 +2280,9 @@ $root.vtadmin = (function() {
                 case 2:
                     break;
                 }
+            if (message.FQDN != null && message.hasOwnProperty("FQDN"))
+                if (!$util.isString(message.FQDN))
+                    return "FQDN: string expected";
             return null;
         };
 
@@ -2305,6 +2322,8 @@ $root.vtadmin = (function() {
                 message.state = 2;
                 break;
             }
+            if (object.FQDN != null)
+                message.FQDN = String(object.FQDN);
             return message;
         };
 
@@ -2325,6 +2344,7 @@ $root.vtadmin = (function() {
                 object.cluster = null;
                 object.tablet = null;
                 object.state = options.enums === String ? "UNKNOWN" : 0;
+                object.FQDN = "";
             }
             if (message.cluster != null && message.hasOwnProperty("cluster"))
                 object.cluster = $root.vtadmin.Cluster.toObject(message.cluster, options);
@@ -2332,6 +2352,8 @@ $root.vtadmin = (function() {
                 object.tablet = $root.topodata.Tablet.toObject(message.tablet, options);
             if (message.state != null && message.hasOwnProperty("state"))
                 object.state = options.enums === String ? $root.vtadmin.Tablet.ServingState[message.state] : message.state;
+            if (message.FQDN != null && message.hasOwnProperty("FQDN"))
+                object.FQDN = message.FQDN;
             return object;
         };
 
@@ -2615,6 +2637,7 @@ $root.vtadmin = (function() {
          * @interface IVtctld
          * @property {string|null} [hostname] Vtctld hostname
          * @property {vtadmin.ICluster|null} [cluster] Vtctld cluster
+         * @property {string|null} [FQDN] Vtctld FQDN
          */
 
         /**
@@ -2649,6 +2672,14 @@ $root.vtadmin = (function() {
         Vtctld.prototype.cluster = null;
 
         /**
+         * Vtctld FQDN.
+         * @member {string} FQDN
+         * @memberof vtadmin.Vtctld
+         * @instance
+         */
+        Vtctld.prototype.FQDN = "";
+
+        /**
          * Creates a new Vtctld instance using the specified properties.
          * @function create
          * @memberof vtadmin.Vtctld
@@ -2676,6 +2707,8 @@ $root.vtadmin = (function() {
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.hostname);
             if (message.cluster != null && Object.hasOwnProperty.call(message, "cluster"))
                 $root.vtadmin.Cluster.encode(message.cluster, writer.uint32(/* id 2, wireType 2 =*/18).fork()).ldelim();
+            if (message.FQDN != null && Object.hasOwnProperty.call(message, "FQDN"))
+                writer.uint32(/* id 3, wireType 2 =*/26).string(message.FQDN);
             return writer;
         };
 
@@ -2715,6 +2748,9 @@ $root.vtadmin = (function() {
                     break;
                 case 2:
                     message.cluster = $root.vtadmin.Cluster.decode(reader, reader.uint32());
+                    break;
+                case 3:
+                    message.FQDN = reader.string();
                     break;
                 default:
                     reader.skipType(tag & 7);
@@ -2759,6 +2795,9 @@ $root.vtadmin = (function() {
                 if (error)
                     return "cluster." + error;
             }
+            if (message.FQDN != null && message.hasOwnProperty("FQDN"))
+                if (!$util.isString(message.FQDN))
+                    return "FQDN: string expected";
             return null;
         };
 
@@ -2781,6 +2820,8 @@ $root.vtadmin = (function() {
                     throw TypeError(".vtadmin.Vtctld.cluster: object expected");
                 message.cluster = $root.vtadmin.Cluster.fromObject(object.cluster);
             }
+            if (object.FQDN != null)
+                message.FQDN = String(object.FQDN);
             return message;
         };
 
@@ -2800,11 +2841,14 @@ $root.vtadmin = (function() {
             if (options.defaults) {
                 object.hostname = "";
                 object.cluster = null;
+                object.FQDN = "";
             }
             if (message.hostname != null && message.hasOwnProperty("hostname"))
                 object.hostname = message.hostname;
             if (message.cluster != null && message.hasOwnProperty("cluster"))
                 object.cluster = $root.vtadmin.Cluster.toObject(message.cluster, options);
+            if (message.FQDN != null && message.hasOwnProperty("FQDN"))
+                object.FQDN = message.FQDN;
             return object;
         };
 
@@ -2833,6 +2877,7 @@ $root.vtadmin = (function() {
          * @property {string|null} [cell] VTGate cell
          * @property {vtadmin.ICluster|null} [cluster] VTGate cluster
          * @property {Array.<string>|null} [keyspaces] VTGate keyspaces
+         * @property {string|null} [FQDN] VTGate FQDN
          */
 
         /**
@@ -2892,6 +2937,14 @@ $root.vtadmin = (function() {
         VTGate.prototype.keyspaces = $util.emptyArray;
 
         /**
+         * VTGate FQDN.
+         * @member {string} FQDN
+         * @memberof vtadmin.VTGate
+         * @instance
+         */
+        VTGate.prototype.FQDN = "";
+
+        /**
          * Creates a new VTGate instance using the specified properties.
          * @function create
          * @memberof vtadmin.VTGate
@@ -2926,6 +2979,8 @@ $root.vtadmin = (function() {
             if (message.keyspaces != null && message.keyspaces.length)
                 for (var i = 0; i < message.keyspaces.length; ++i)
                     writer.uint32(/* id 5, wireType 2 =*/42).string(message.keyspaces[i]);
+            if (message.FQDN != null && Object.hasOwnProperty.call(message, "FQDN"))
+                writer.uint32(/* id 6, wireType 2 =*/50).string(message.FQDN);
             return writer;
         };
 
@@ -2976,6 +3031,9 @@ $root.vtadmin = (function() {
                     if (!(message.keyspaces && message.keyspaces.length))
                         message.keyspaces = [];
                     message.keyspaces.push(reader.string());
+                    break;
+                case 6:
+                    message.FQDN = reader.string();
                     break;
                 default:
                     reader.skipType(tag & 7);
@@ -3033,6 +3091,9 @@ $root.vtadmin = (function() {
                     if (!$util.isString(message.keyspaces[i]))
                         return "keyspaces: string[] expected";
             }
+            if (message.FQDN != null && message.hasOwnProperty("FQDN"))
+                if (!$util.isString(message.FQDN))
+                    return "FQDN: string expected";
             return null;
         };
 
@@ -3066,6 +3127,8 @@ $root.vtadmin = (function() {
                 for (var i = 0; i < object.keyspaces.length; ++i)
                     message.keyspaces[i] = String(object.keyspaces[i]);
             }
+            if (object.FQDN != null)
+                message.FQDN = String(object.FQDN);
             return message;
         };
 
@@ -3089,6 +3152,7 @@ $root.vtadmin = (function() {
                 object.pool = "";
                 object.cell = "";
                 object.cluster = null;
+                object.FQDN = "";
             }
             if (message.hostname != null && message.hasOwnProperty("hostname"))
                 object.hostname = message.hostname;
@@ -3103,6 +3167,8 @@ $root.vtadmin = (function() {
                 for (var j = 0; j < message.keyspaces.length; ++j)
                     object.keyspaces[j] = message.keyspaces[j];
             }
+            if (message.FQDN != null && message.hasOwnProperty("FQDN"))
+                object.FQDN = message.FQDN;
             return object;
         };
 

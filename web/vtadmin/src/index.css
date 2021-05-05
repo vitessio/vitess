@@ -90,7 +90,7 @@
   --textColorDisabled: #cbd5e0;
 
   /* A common bounding width for views that don't require the full viewport. */
-  --contentWidth: 1200px;
+  --contentWidth: 1400px;
 }
 
 /* Dark theme */
@@ -111,6 +111,10 @@
   --textColorInverted: #17171b;
   --textColorSecondary: #cbd5e0;
   --textColorDisabled: #2d3748;
+}
+
+* {
+  box-sizing: border-box;
 }
 
 html {
@@ -201,6 +205,10 @@ table tbody td[rowSpan] {
 /* One-liner utilities */
 .font-family-monospace {
   font-family: var(--fontFamilyMonospace);
+}
+
+.font-family-primary {
+  font-family: var(--fontFamilyPrimary);
 }
 
 .font-size-small {
