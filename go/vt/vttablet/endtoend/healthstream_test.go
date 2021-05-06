@@ -17,8 +17,6 @@ limitations under the License.
 package endtoend
 
 import (
-	"strconv"
-	"sync"
 	"testing"
 	"time"
 
@@ -38,10 +36,6 @@ func TestSchemaChange(t *testing.T) {
 		ddl      string
 	}{
 		{
-			"default",
-			[]string{"upsert_test", "vitess_a", "vitess_acl_admin", "vitess_acl_all_user_read_only", "vitess_acl_no_access", "vitess_acl_read_only", "vitess_acl_read_write", "vitess_acl_unmatched", "vitess_autoinc_seq", "vitess_b", "vitess_big", "vitess_bit_default", "vitess_bool", "vitess_c", "vitess_d", "vitess_e", "vitess_f", "vitess_fracts", "vitess_ints", "vitess_misc", "vitess_mixed_case", "vitess_part", "vitess_reset_seq", "vitess_seq", "vitess_stress", "vitess_strings", "vitess_test", "vitess_test_debuguser"},
-			"",
-		}, {
 			"create table 1",
 			[]string{"vitess_sc1"},
 			"create table vitess_sc1(id bigint primary key)",
@@ -69,8 +63,6 @@ func TestSchemaChange(t *testing.T) {
 	}
 
 	ch := make(chan []string)
-	var wg sync.WaitGroup
-	wg.Add(1)
 	go func(ch chan []string) {
 		client.StreamHealth(func(response *querypb.StreamHealthResponse) error {
 			if response.RealtimeStats.TableSchemaChanged != nil {
@@ -80,35 +72,23 @@ func TestSchemaChange(t *testing.T) {
 		})
 	}(ch)
 
-	go func(client *framework.QueryClient, ch chan []string) {
-		index := 0
-		for {
-			t.Run(strconv.Itoa(index), func(t *testing.T) {
-				res := <-ch
-				utils.MustMatch(t, tcs[index].response, res, "")
-			})
-			index++
-			if index == len(tcs) {
-				close(ch)
-				break
-			}
-			if tcs[index].ddl != "" {
-				_, err := client.Execute(tcs[index].ddl, nil)
-				require.NoError(t, err)
-			}
-		}
-		wg.Done()
-	}(client, ch)
-
-	c := make(chan struct{})
-	go func() {
-		defer close(c)
-		wg.Wait()
-	}()
 	select {
-	case <-c:
+	case <-ch: // get the schema notification
 	case <-time.After(5 * time.Second):
 		t.Errorf("timed out")
 	}
 
+	for _, tc := range tcs {
+		t.Run(tc.tName, func(t *testing.T) {
+			_, err := client.Execute(tc.ddl, nil)
+			require.NoError(t, err)
+			select {
+			case res := <-ch: // get the schema notification
+				utils.MustMatch(t, tc.response, res, "")
+			case <-time.After(5 * time.Second):
+				t.Errorf("timed out")
+				return
+			}
+		})
+	}
 }
