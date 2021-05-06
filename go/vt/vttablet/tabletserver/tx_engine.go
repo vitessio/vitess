@@ -254,6 +254,15 @@ func (te *TxEngine) Rollback(ctx context.Context, transactionID int64) (int64, e
 	})
 }
 
+// Wait until the TwoPC engine has been opened, and the redo read (for testing)
+func (te *TxEngine) twoPCEngineWait() {
+	for {
+		if te.ticks.Running() {
+			return
+		}
+	}
+}
+
 func (te *TxEngine) txFinish(transactionID int64, reason tx.ReleaseReason, f func(*StatefulConnection) error) (int64, error) {
 	conn, err := te.txPool.GetAndLock(transactionID, reason.String())
 	if err != nil {
@@ -364,7 +373,7 @@ outer:
 	for _, preparedTx := range prepared {
 		txid, err := dtids.TransactionID(preparedTx.Dtid)
 		if err != nil {
-			log.Errorf("Error extracting transaction ID from ditd: %v", err)
+			log.Errorf("Error extracting transaction ID from dtid: %v", err)
 		}
 		if txid > maxid {
 			maxid = txid
@@ -394,7 +403,7 @@ outer:
 	for _, preparedTx := range failed {
 		txid, err := dtids.TransactionID(preparedTx.Dtid)
 		if err != nil {
-			log.Errorf("Error extracting transaction ID from ditd: %v", err)
+			log.Errorf("Error extracting transaction ID from dtid: %v", err)
 		}
 		if txid > maxid {
 			maxid = txid
