@@ -862,6 +862,7 @@ func (vs *vstreamer) extractRowAndFilter(plan *streamerPlan, data []byte, dataCo
 			return false, nil, err
 		}
 		pos += l
+
 		values[colNum] = value
 		valueIndex++
 	}

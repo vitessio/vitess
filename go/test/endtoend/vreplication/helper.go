@@ -24,6 +24,9 @@ import (
 func execMultipleQueries(t *testing.T, conn *mysql.Conn, database string, lines string) {
 	queries := strings.Split(lines, "\n")
 	for _, query := range queries {
+		if strings.HasPrefix(query, "--") {
+			continue
+		}
 		execVtgateQuery(t, conn, database, string(query))
 	}
 }
