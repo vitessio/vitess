@@ -20,7 +20,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/require"
+	"github.com/stretchr/testify/assert"
 
 	"vitess.io/vitess/go/test/utils"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -56,13 +56,17 @@ func TestSchemaChange(t *testing.T) {
 			[]string{"vitess_sc1"},
 			"alter table vitess_sc1 drop column newCol",
 		}, {
-			"drop table",
+			"drop table 2",
 			[]string{"vitess_sc2"},
 			"drop table vitess_sc2",
+		}, {
+			"drop table 1",
+			[]string{"vitess_sc1"},
+			"drop table vitess_sc1",
 		},
 	}
 
-	ch := make(chan []string)
+	ch := make(chan []string, 100)
 	go func(ch chan []string) {
 		client.StreamHealth(func(response *querypb.StreamHealthResponse) error {
 			if response.RealtimeStats.TableSchemaChanged != nil {
@@ -81,7 +85,7 @@ func TestSchemaChange(t *testing.T) {
 	for _, tc := range tcs {
 		t.Run(tc.tName, func(t *testing.T) {
 			_, err := client.Execute(tc.ddl, nil)
-			require.NoError(t, err)
+			assert.NoError(t, err)
 			select {
 			case res := <-ch: // get the schema notification
 				utils.MustMatch(t, tc.response, res, "")
