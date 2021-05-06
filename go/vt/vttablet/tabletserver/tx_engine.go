@@ -257,11 +257,6 @@ func (te *TxEngine) Rollback(ctx context.Context, transactionID int64) (int64, e
 	})
 }
 
-// Wait until the TwoPC engine has been opened, and the redo read (for testing)
-func (te *TxEngine) twoPCEngineWait() {
-	te.twoPCReady.Wait()
-}
-
 func (te *TxEngine) txFinish(transactionID int64, reason tx.ReleaseReason, f func(*StatefulConnection) error) (int64, error) {
 	conn, err := te.txPool.GetAndLock(transactionID, reason.String())
 	if err != nil {
