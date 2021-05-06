@@ -126,7 +126,7 @@ func (hs *healthStreamer) Open() {
 		// if we don't have a live conns object, it means we are not configured to signal when the schema changes
 		hs.conns.Open(hs.dbConfig, hs.dbConfig, hs.dbConfig)
 		hs.ticks.Start(func() {
-			if err := hs.Reload(); err != nil {
+			if err := hs.reload(); err != nil {
 				log.Errorf("periodic schema reload failed in health stream: %v", err)
 			}
 		})
@@ -299,8 +299,8 @@ func (hs *healthStreamer) SetUnhealthyThreshold(v time.Duration) {
 	}
 }
 
-// Reload reloads the schema from the underlying mysql
-func (hs *healthStreamer) Reload() error {
+// reload reloads the schema from the underlying mysql
+func (hs *healthStreamer) reload() error {
 	hs.mu.Lock()
 	defer hs.mu.Unlock()
 
@@ -323,6 +323,7 @@ func (hs *healthStreamer) Reload() error {
 		}
 	}
 
+	// TODO: fix the maxrows from using a magic number.
 	qr, err := conn.Exec(ctx, mysql.DetectSchemaChange, 10000, false)
 	if err != nil {
 		return err
@@ -332,15 +333,6 @@ func (hs *healthStreamer) Reload() error {
 	if len(qr.Rows) == 0 {
 		return nil
 	}
-
-	var tables []string
-	for _, row := range qr.Rows {
-		tables = append(tables, row[0].ToString())
-	}
-	hs.state.RealtimeStats.TableSchemaChanged = tables
-	shr := proto.Clone(hs.state).(*querypb.StreamHealthResponse)
-	hs.broadCastToClients(shr)
-	hs.state.RealtimeStats.TableSchemaChanged = nil
 
 	// Reload the schema in a transaction.
 	_, err = conn.Exec(ctx, "begin", 1, false)
@@ -363,6 +355,16 @@ func (hs *healthStreamer) Reload() error {
 	if err != nil {
 		return err
 	}
+
+	// publish only if changes are committed.
+	var tables []string
+	for _, row := range qr.Rows {
+		tables = append(tables, row[0].ToString())
+	}
+	hs.state.RealtimeStats.TableSchemaChanged = tables
+	shr := proto.Clone(hs.state).(*querypb.StreamHealthResponse)
+	hs.broadCastToClients(shr)
+	hs.state.RealtimeStats.TableSchemaChanged = nil
 
 	return nil
 }
