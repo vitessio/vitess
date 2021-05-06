@@ -453,6 +453,11 @@ func (tsv *TabletServer) TableGC() *gc.TableGC {
 	return tsv.tableGC
 }
 
+// TwoPCEngineWait waits until the TwoPC engine has been opened, and the redo read
+func (tsv *TabletServer) TwoPCEngineWait() {
+	tsv.te.twoPCReady.Wait()
+}
+
 // SchemaEngine returns the SchemaEngine part of TabletServer.
 func (tsv *TabletServer) SchemaEngine() *schema.Engine {
 	return tsv.se

@@ -1152,7 +1152,7 @@ func newTestTabletServer(ctx context.Context, flags executorFlags, db *fakesqldb
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
 	err := tsv.StartService(target, dbconfigs, nil /* mysqld */)
 	if config.TwoPCEnable {
-		tsv.te.twoPCEngineWait()
+		tsv.TwoPCEngineWait()
 	}
 	if err != nil {
 		panic(err)
