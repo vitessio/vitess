@@ -1567,21 +1567,21 @@ check_constraint_definition:
   }
 
 constraint_info:
-  FOREIGN KEY '(' column_list ')' REFERENCES table_name '(' column_list ')'
+  FOREIGN KEY name_opt '(' column_list ')' REFERENCES table_name '(' column_list ')'
   {
-    $$ = &ForeignKeyDefinition{Source: $4, ReferencedTable: $7, ReferencedColumns: $9}
+    $$ = &ForeignKeyDefinition{IndexName: NewColIdent($3), Source: $5, ReferencedTable: $8, ReferencedColumns: $10}
   }
-| FOREIGN KEY '(' column_list ')' REFERENCES table_name '(' column_list ')' fk_on_delete
+| FOREIGN KEY name_opt '(' column_list ')' REFERENCES table_name '(' column_list ')' fk_on_delete
   {
-    $$ = &ForeignKeyDefinition{Source: $4, ReferencedTable: $7, ReferencedColumns: $9, OnDelete: $11}
+    $$ = &ForeignKeyDefinition{IndexName: NewColIdent($3), Source: $5, ReferencedTable: $8, ReferencedColumns: $10, OnDelete: $12}
   }
-| FOREIGN KEY '(' column_list ')' REFERENCES table_name '(' column_list ')' fk_on_update
+| FOREIGN KEY name_opt '(' column_list ')' REFERENCES table_name '(' column_list ')' fk_on_update
   {
-    $$ = &ForeignKeyDefinition{Source: $4, ReferencedTable: $7, ReferencedColumns: $9, OnUpdate: $11}
+    $$ = &ForeignKeyDefinition{IndexName: NewColIdent($3), Source: $5, ReferencedTable: $8, ReferencedColumns: $10, OnUpdate: $12}
   }
-| FOREIGN KEY '(' column_list ')' REFERENCES table_name '(' column_list ')' fk_on_delete fk_on_update
+| FOREIGN KEY name_opt '(' column_list ')' REFERENCES table_name '(' column_list ')' fk_on_delete fk_on_update
   {
-    $$ = &ForeignKeyDefinition{Source: $4, ReferencedTable: $7, ReferencedColumns: $9, OnDelete: $11, OnUpdate: $12}
+    $$ = &ForeignKeyDefinition{IndexName: NewColIdent($3), Source: $5, ReferencedTable: $8, ReferencedColumns: $10, OnDelete: $12, OnUpdate: $13}
   }
 
 check_constraint_info:
