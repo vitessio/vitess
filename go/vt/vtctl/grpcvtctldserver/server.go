@@ -79,6 +79,9 @@ func NewVtctldServer(ts *topo.Server) *VtctldServer {
 
 // ChangeTabletType is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) ChangeTabletType(ctx context.Context, req *vtctldatapb.ChangeTabletTypeRequest) (*vtctldatapb.ChangeTabletTypeResponse, error) {
+	ctx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+	defer cancel()
+
 	tablet, err := s.ts.GetTablet(ctx, req.TabletAlias)
 	if err != nil {
 		return nil, err
