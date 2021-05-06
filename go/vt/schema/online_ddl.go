@@ -181,7 +181,7 @@ func NewOnlineDDLs(keyspace string, ddlStmt sqlparser.DDLStatement, ddlStrategyS
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported statement for Online DDL: %v", sqlparser.String(ddlStmt))
 	}
 	if !ddlStmt.IsFullyParsed() {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "NewOnlineDDL: cannot fully parse statement %v", sqlparser.String(ddlStmt))
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "NewOnlineDDL: cannot parse statement: %v", sqlparser.String(ddlStmt))
 	}
 
 	fk := &fkContraint{}
@@ -239,7 +239,7 @@ func NewOnlineDDL(keyspace string, table string, sql string, ddlStrategySetting 
 			switch stmt := stmt.(type) {
 			case sqlparser.DDLStatement:
 				if !stmt.IsFullyParsed() {
-					return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "NewOnlineDDL: cannot fully parse statement %v", sqlparser.String(stmt))
+					return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "NewOnlineDDL: cannot parse statement: %v", sqlparser.String(stmt))
 				}
 				stmt.SetComments(comments)
 			case *sqlparser.RevertMigration:
