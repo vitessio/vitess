@@ -78,8 +78,10 @@ func TestSchemaChange(t *testing.T) {
 
 	select {
 	case <-ch: // get the schema notification
-	case <-time.After(5 * time.Second):
-		t.Errorf("timed out")
+	case <-time.After(3 * time.Second):
+		// We might not see the initial changes
+		// as the health stream ticker would have started very early on and
+		// this test client might not be even registered.
 	}
 
 	for _, tc := range tcs {
