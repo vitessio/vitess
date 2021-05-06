@@ -164,6 +164,8 @@ func (client *QueryClient) ReadTransaction(dtid string) (*querypb.TransactionMet
 // It currently supports only master->replica and back.
 func (client *QueryClient) SetServingType(tabletType topodatapb.TabletType) error {
 	err := client.server.SetServingType(tabletType, time.Time{}, true /* serving */, "" /* reason */)
+	// Wait for TwoPC transition, if necessary
+	client.server.TwoPCEngineWait()
 	return err
 }
 
