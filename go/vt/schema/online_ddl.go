@@ -49,6 +49,21 @@ const (
 	RevertActionStr           = "revert"
 )
 
+type fkContraint struct {
+	found bool
+}
+
+func (fk *fkContraint) FkWalk(node sqlparser.SQLNode) (kontinue bool, err error) {
+	switch node.(type) {
+	case *sqlparser.CreateTable, *sqlparser.AlterTable,
+		*sqlparser.TableSpec, *sqlparser.AddConstraintDefinition, *sqlparser.ConstraintDefinition:
+		return true, nil
+	case *sqlparser.ForeignKeyDefinition:
+		fk.found = true
+	}
+	return false, nil
+}
+
 // MigrationBasePath is the root for all schema migration entries
 func MigrationBasePath() string {
 	return migrationBasePath
@@ -154,7 +169,6 @@ func NewOnlineDDLs(keyspace string, ddlStmt sqlparser.DDLStatement, ddlStrategyS
 		if err := appendOnlineDDL(ddlStmt.GetTable().Name.String(), ddlStmt); err != nil {
 			return nil, err
 		}
-		return onlineDDLs, nil
 	case *sqlparser.DropTable:
 		tables := ddlStmt.GetFromTables()
 		for _, table := range tables {
@@ -163,10 +177,19 @@ func NewOnlineDDLs(keyspace string, ddlStmt sqlparser.DDLStatement, ddlStrategyS
 				return nil, err
 			}
 		}
-		return onlineDDLs, nil
 	default:
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported statement for Online DDL: %v", sqlparser.String(ddlStmt))
 	}
+	if !ddlStmt.IsFullyParsed() {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "NewOnlineDDL: cannot fully parse statement %v", sqlparser.String(ddlStmt))
+	}
+
+	fk := &fkContraint{}
+	_ = sqlparser.Walk(fk.FkWalk, ddlStmt)
+	if fk.found {
+		return nil, vterrors.Errorf(vtrpcpb.Code_ABORTED, "foreign key constraint are not supported in online DDL")
+	}
+	return onlineDDLs, nil
 }
 
 // NewOnlineDDL creates a schema change request with self generated UUID and RequestTime

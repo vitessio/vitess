@@ -265,6 +265,7 @@ func TestNewOnlineDDLs(t *testing.T) {
 		"truncate table t":                              {isError: true},
 		"drop view t":                                   {isError: true},
 		"rename table t to t1":                          {isError: true},
+		"alter table corder add FOREIGN KEY my_fk(customer_id) reference customer(customer_id)": {isError: true},
 	}
 	migrationContext := "354b-11eb-82cd-f875a4d24e90"
 	for query, expect := range tests {

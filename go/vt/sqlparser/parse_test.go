@@ -1035,6 +1035,9 @@ var (
 	}, {
 		input: "alter table a add foreign key (id) references f (id)",
 	}, {
+		input:  "alter table a add foreign key the_idx (id) references f (id)",
+		output: "alter table a add foreign key (id) references f (id)",
+	}, {
 		input: "alter table a add primary key (id)",
 	}, {
 		input: "alter table a add constraint b primary key (id)",

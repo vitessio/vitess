@@ -947,7 +947,7 @@ func (cached *ForeignKeyDefinition) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(96)
+		size += int64(136)
 	}
 	// field Source vitess.io/vitess/go/vt/sqlparser.Columns
 	{
@@ -956,6 +956,8 @@ func (cached *ForeignKeyDefinition) CachedSize(alloc bool) int64 {
 			size += elem.CachedSize(false)
 		}
 	}
+	// field IndexName vitess.io/vitess/go/vt/sqlparser.ColIdent
+	size += cached.IndexName.CachedSize(false)
 	// field ReferencedTable vitess.io/vitess/go/vt/sqlparser.TableName
 	size += cached.ReferencedTable.CachedSize(false)
 	// field ReferencedColumns vitess.io/vitess/go/vt/sqlparser.Columns
