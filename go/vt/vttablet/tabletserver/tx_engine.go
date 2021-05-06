@@ -90,6 +90,7 @@ type TxEngine struct {
 	txPool       *TxPool
 	preparedPool *TxPreparedPool
 	twoPC        *TwoPC
+	twoPCReady   sync.WaitGroup
 }
 
 // NewTxEngine creates a new TxEngine.
@@ -170,7 +171,9 @@ func (te *TxEngine) transition(state txEngineState) {
 		// than blocking everything for the sake of a few transactions.
 		// We do this async; so we do not end up blocking writes on
 		// failover for our setup tasks if using semi-sync replication.
+		te.twoPCReady.Add(1)
 		go func() {
+			defer te.twoPCReady.Done()
 			if err := te.twoPC.Open(te.env.Config().DB); err != nil {
 				te.env.Stats().InternalErrors.Add("TwopcOpen", 1)
 				log.Errorf("Could not open TwoPC engine: %v", err)
@@ -256,11 +259,7 @@ func (te *TxEngine) Rollback(ctx context.Context, transactionID int64) (int64, e
 
 // Wait until the TwoPC engine has been opened, and the redo read (for testing)
 func (te *TxEngine) twoPCEngineWait() {
-	for {
-		if te.ticks.Running() {
-			return
-		}
-	}
+	te.twoPCReady.Wait()
 }
 
 func (te *TxEngine) txFinish(transactionID int64, reason tx.ReleaseReason, f func(*StatefulConnection) error) (int64, error) {
