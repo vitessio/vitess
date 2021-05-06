@@ -112,8 +112,25 @@ func buildChangedVindexesValues(update *sqlparser.Update, table *vindexes.Table,
 	if len(changedVindexes) == 0 {
 		return nil, "", nil
 	}
+
+	var tableExpr sqlparser.TableExpr
+	if len(update.TableExprs) != 1 {
+		return nil, "", vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "multi-table update statement is not supported in sharded database")
+	}
+	for _, expr := range update.TableExprs {
+		// There is only one table.
+		tableExpr = expr
+	}
+
+	aliasedTableExpr, isAliased := tableExpr.(*sqlparser.AliasedTableExpr)
+	if isAliased && !aliasedTableExpr.As.IsEmpty() {
+		buf.Myprintf(" from %v as %v", table.Name, aliasedTableExpr.As)
+	} else {
+		buf.Myprintf(" from %v", table.Name)
+	}
+
 	// generate rest of the owned vindex query.
-	buf.Myprintf(" from %v%v%v%v for update", table.Name, update.Where, update.OrderBy, update.Limit)
+	buf.Myprintf("%v%v%v for update", update.Where, update.OrderBy, update.Limit)
 	return changedVindexes, buf.String(), nil
 }
 
