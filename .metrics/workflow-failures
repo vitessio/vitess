@@ -9639,3 +9639,6 @@
 2021-05-06T15:36:39Z,Unit Test (mysql57),https://github.com/vitessio/vitess/actions/runs/817378021
 2021-05-06T15:36:39Z,unit_race,https://github.com/vitessio/vitess/actions/runs/817378020
 2021-05-06T19:07:50Z,endtoend,https://github.com/vitessio/vitess/actions/runs/817947195
+2021-05-06T19:22:34Z,Cluster (17),https://github.com/vitessio/vitess/actions/runs/817987165
+2021-05-06T19:22:34Z,Cluster (tabletmanager_tablegc),https://github.com/vitessio/vitess/actions/runs/817987126
+2021-05-06T19:22:34Z,endtoend,https://github.com/vitessio/vitess/actions/runs/817987144
