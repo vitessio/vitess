@@ -9620,3 +9620,5 @@
 2021-05-06T07:37:11Z,endtoend,https://github.com/vitessio/vitess/actions/runs/816043294
 2021-05-06T07:37:12Z,unit_race,https://github.com/vitessio/vitess/actions/runs/816043303
 2021-05-06T08:39:07Z,Cluster (tabletmanager_tablegc),https://github.com/vitessio/vitess/actions/runs/816206479
+2021-05-06T09:08:29Z,Cluster (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/816287834
+2021-05-06T09:14:24Z,unit,https://github.com/vitessio/vitess/actions/runs/816305288
