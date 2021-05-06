@@ -152,7 +152,7 @@ func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, params BackupP
 	replicaStatus, err := params.Mysqld.ReplicationStatus()
 	switch err {
 	case nil:
-		replicaStartRequired = replicaStatus.ReplicationRunning()
+		replicaStartRequired = replicaStatus.ReplicationRunning() && !*DisableActiveReparents
 	case mysql.ErrNotReplica:
 		// keep going if we're the master, might be a degenerate case
 		sourceIsMaster = true
