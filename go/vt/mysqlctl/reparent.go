@@ -118,3 +118,24 @@ func (mysqld *Mysqld) Promote(hookExtraEnv map[string]string) (mysql.Position, e
 	}
 	return conn.MasterPosition()
 }
+
+// FlushBinaryLogs flushes the binary logs on this instance
+func (mysqld *Mysqld) FlushBinaryLogs(ctx context.Context) error {
+	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
+	if err != nil {
+		return err
+	}
+	defer conn.Recycle()
+
+	// Since we handle replication, just stop it.
+	cmds := []string{
+		// When using semi-sync and GTID, a replica first connects to the new master with a given GTID set,
+		// it can take a long time to scan the current binlog file to find the corresponding position.
+		// This can cause commits that occur soon after the master is promoted to take a long time waiting
+		// for a semi-sync ACK, since replication is not fully set up.
+		// More details in: https://github.com/vitessio/vitess/issues/4161
+		"FLUSH BINARY LOGS",
+	}
+
+	return mysqld.executeSuperQueryListConn(ctx, conn, cmds)
+}

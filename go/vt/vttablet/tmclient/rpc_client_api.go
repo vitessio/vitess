@@ -196,6 +196,9 @@ type TabletManagerClient interface {
 	// PromoteReplica makes the tablet the new master
 	PromoteReplica(ctx context.Context, tablet *topodatapb.Tablet) (string, error)
 
+	// FlushBinaryLogs flushes the binary logs on the underlying mysql server
+	FlushBinaryLogs(ctx context.Context, tablet *topodatapb.Tablet) error
+
 	//
 	// Backup / restore related methods
 	//

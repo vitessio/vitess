@@ -445,6 +445,12 @@ message PromoteReplicaResponse {
   string position = 1;
 }
 
+message FlushBinaryLogsRequest {
+}
+
+message FlushBinaryLogsResponse {
+}
+
 // Backup / Restore related messages
 
 message BackupRequest {

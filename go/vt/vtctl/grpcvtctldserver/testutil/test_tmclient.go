@@ -366,6 +366,11 @@ func (fake *TabletManagerClient) PromoteReplica(ctx context.Context, tablet *top
 	return "", assert.AnError
 }
 
+// FlushBinaryLogs is part of the tmclient.TabletManagerClient interface.
+func (fake *TabletManagerClient) FlushBinaryLogs(_ context.Context, _ *topodatapb.Tablet) error {
+	return nil
+}
+
 // ReplicationStatus is part of the tmclient.TabletManagerClient interface.
 func (fake *TabletManagerClient) ReplicationStatus(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.Status, error) {
 	if fake.ReplicationStatusResults == nil {

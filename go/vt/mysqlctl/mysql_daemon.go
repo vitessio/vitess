@@ -63,7 +63,7 @@ type MysqlDaemon interface {
 	WaitForReparentJournal(ctx context.Context, timeCreatedNS int64) error
 
 	WaitMasterPos(context.Context, mysql.Position) error
-
+	FlushBinaryLogs(context.Context) error
 	// Promote makes the current server master. It will not change
 	// the read_only state of the server.
 	Promote(map[string]string) (mysql.Position, error)

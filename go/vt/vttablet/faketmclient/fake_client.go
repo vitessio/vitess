@@ -305,6 +305,11 @@ func (client *FakeTabletManagerClient) PromoteReplica(ctx context.Context, table
 	return "", nil
 }
 
+// FlushBinaryLogs is part of the tmclient.TabletManagerClient interface.
+func (client *FakeTabletManagerClient) FlushBinaryLogs(ctx context.Context, tablet *topodatapb.Tablet) error {
+	return nil
+}
+
 //
 // Backup related methods
 //

@@ -755,6 +755,16 @@ func (tm *TabletManager) PromoteReplica(ctx context.Context) (string, error) {
 	return mysql.EncodePosition(pos), nil
 }
 
+// FlushBinaryLogs flushes the binary logs
+func (tm *TabletManager) FlushBinaryLogs(ctx context.Context) error {
+	if err := tm.lock(ctx); err != nil {
+		return err
+	}
+	defer tm.unlock()
+
+	return tm.MysqlDaemon.FlushBinaryLogs(ctx)
+}
+
 func isMasterEligible(tabletType topodatapb.TabletType) bool {
 	switch tabletType {
 	case topodatapb.TabletType_MASTER, topodatapb.TabletType_REPLICA:

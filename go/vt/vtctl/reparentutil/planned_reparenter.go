@@ -182,6 +182,13 @@ func (pr *PlannedReparenter) preflightChecks(
 	return false, nil
 }
 
+func (pr *PlannedReparenter) preparePrimaryElect(
+	ctx context.Context,
+	primaryElect *topodatapb.Tablet,
+) error {
+	return pr.tmc.FlushBinaryLogs(ctx, primaryElect)
+}
+
 func (pr *PlannedReparenter) performGracefulPromotion(
 	ctx context.Context,
 	ev *events.Reparent,
@@ -225,6 +232,13 @@ func (pr *PlannedReparenter) performGracefulPromotion(
 
 	if err := pr.tmc.SetMaster(setMasterCtx, &primaryElect, currentPrimary.Alias, 0, snapshotPos, true); err != nil {
 		return "", vterrors.Wrapf(err, "replication on primary-elect %v did not catch up in time; replication must be healthy to perform PlannedReparent", primaryElectAliasStr)
+	}
+
+	// Prepare the primary-elect before demoting old primary
+	prepareCtx, prepareCancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+	defer prepareCancel()
+	if err := pr.preparePrimaryElect(prepareCtx, &primaryElect); err != nil {
+		return "", vterrors.Wrapf(err, "error preparing primary-elect %v before demoting old primary", primaryElectAliasStr)
 	}
 
 	// Verify we still have the topology lock before doing the demotion.
@@ -333,6 +347,13 @@ func (pr *PlannedReparenter) performPotentialPromotion(
 	primaryElectAliasStr := topoproto.TabletAliasString(primaryElect.Alias)
 
 	pr.logger.Infof("no clear winner found for current master term; checking if it's safe to recover by electing %v", primaryElectAliasStr)
+
+	// Prepare the primary-elect before demoting old primary
+	prepareCtx, prepareCancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+	defer prepareCancel()
+	if err := pr.preparePrimaryElect(prepareCtx, &primaryElect); err != nil {
+		return "", vterrors.Wrapf(err, "error preparing primary-elect %v before demoting old primary", primaryElectAliasStr)
+	}
 
 	type tabletPos struct {
 		alias  string

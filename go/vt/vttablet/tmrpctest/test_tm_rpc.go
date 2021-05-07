@@ -1156,6 +1156,23 @@ func tmRPCTestPromoteReplicaPanic(ctx context.Context, t *testing.T, client tmcl
 	expectHandleRPCPanic(t, "PromoteReplica", true /*verbose*/, err)
 }
 
+func (fra *fakeRPCTM) FlushBinaryLogs(ctx context.Context) error {
+	if fra.panics {
+		panic(fmt.Errorf("test-triggered panic"))
+	}
+	return nil
+}
+
+func tmRPCTestFlushBinaryLogs(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+	err := client.FlushBinaryLogs(ctx, tablet)
+	compareError(t, "FlushBinaryLogs", err, "", "")
+}
+
+func tmRPCTestFlushBinaryLogsPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+	err := client.FlushBinaryLogs(ctx, tablet)
+	expectHandleRPCPanic(t, "FlushBinaryLogs", true /*verbose*/, err)
+}
+
 //
 // Backup / restore related methods
 //
@@ -1294,6 +1311,7 @@ func Run(t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.T
 	tmRPCTestSetMaster(ctx, t, client, tablet)
 	tmRPCTestStopReplicationAndGetStatus(ctx, t, client, tablet)
 	tmRPCTestPromoteReplica(ctx, t, client, tablet)
+	tmRPCTestFlushBinaryLogs(ctx, t, client, tablet)
 
 	tmRPCTestInitReplica(ctx, t, client, tablet)
 	tmRPCTestReplicaWasPromoted(ctx, t, client, tablet)
@@ -1346,6 +1364,7 @@ func Run(t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.T
 	tmRPCTestSetMasterPanic(ctx, t, client, tablet)
 	tmRPCTestStopReplicationAndGetStatusPanic(ctx, t, client, tablet)
 	tmRPCTestPromoteReplicaPanic(ctx, t, client, tablet)
+	tmRPCTestFlushBinaryLogsPanic(ctx, t, client, tablet)
 
 	tmRPCTestInitReplicaPanic(ctx, t, client, tablet)
 	tmRPCTestReplicaWasPromotedPanic(ctx, t, client, tablet)

@@ -454,6 +454,14 @@ func (s *server) PromoteReplica(ctx context.Context, request *tabletmanagerdatap
 	return response, err
 }
 
+func (s *server) FlushBinaryLogs(ctx context.Context, request *tabletmanagerdatapb.FlushBinaryLogsRequest) (response *tabletmanagerdatapb.FlushBinaryLogsResponse, err error) {
+	defer s.tm.HandleRPCPanic(ctx, "FlushBinaryLogs", request, response, true /*verbose*/, &err)
+	ctx = callinfo.GRPCCallInfo(ctx)
+	response = &tabletmanagerdatapb.FlushBinaryLogsResponse{}
+	err = s.tm.FlushBinaryLogs(ctx)
+	return response, err
+}
+
 func (s *server) Backup(request *tabletmanagerdatapb.BackupRequest, stream tabletmanagerservicepb.TabletManager_BackupServer) (err error) {
 	ctx := stream.Context()
 	defer s.tm.HandleRPCPanic(ctx, "Backup", request, nil, true /*verbose*/, &err)

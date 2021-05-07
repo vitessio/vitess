@@ -126,6 +126,9 @@ type FakeMysqlDaemon struct {
 	// PromoteError is used by Promote
 	PromoteError error
 
+	// FlushBinaryLogsError is used by FlushBinaryLogs
+	FlushBinaryLogsError error
+
 	// SchemaFunc provides the return value for GetSchema.
 	// If not defined, the "Schema" field will be used instead, see below.
 	SchemaFunc func() (*tabletmanagerdatapb.SchemaDefinition, error)
@@ -420,6 +423,11 @@ func (fmd *FakeMysqlDaemon) Promote(hookExtraEnv map[string]string) (mysql.Posit
 		return mysql.Position{}, fmd.PromoteError
 	}
 	return fmd.PromoteResult, nil
+}
+
+// FlushBinaryLogs is part of the MysqlDaemon interface
+func (fmd *FakeMysqlDaemon) FlushBinaryLogs(_ context.Context) error {
+	return fmd.FlushBinaryLogsError
 }
 
 // ExecuteSuperQueryList is part of the MysqlDaemon interface

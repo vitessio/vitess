@@ -156,6 +156,8 @@ service TabletManager {
   // PromoteReplica makes the replica the new master
   rpc PromoteReplica(tabletmanagerdata.PromoteReplicaRequest) returns (tabletmanagerdata.PromoteReplicaResponse) {};
 
+  // FlushBinaryLogs flushes the binary logs
+  rpc FlushBinaryLogs(tabletmanagerdata.FlushBinaryLogsRequest) returns (tabletmanagerdata.FlushBinaryLogsResponse) {};
   //
   // Backup related methods
   //

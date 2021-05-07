@@ -128,6 +128,8 @@ type RPCTM interface {
 
 	PromoteReplica(ctx context.Context) (string, error)
 
+	FlushBinaryLogs(ctx context.Context) error
+
 	// Backup / restore related methods
 
 	Backup(ctx context.Context, concurrency int, logger logutil.Logger, allowMaster bool) error
