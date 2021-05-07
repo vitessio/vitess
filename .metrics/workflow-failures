@@ -9652,3 +9652,5 @@
 2021-05-07T07:15:50Z,endtoend,https://github.com/vitessio/vitess/actions/runs/819433881
 2021-05-07T07:15:50Z,unit_race,https://github.com/vitessio/vitess/actions/runs/819433890
 2021-05-07T08:03:09Z,Cluster (vreplication_cellalias),https://github.com/vitessio/vitess/actions/runs/819549779
+2021-05-07T09:01:39Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/819707222
+2021-05-07T09:01:39Z,unit_race,https://github.com/vitessio/vitess/actions/runs/819707238
