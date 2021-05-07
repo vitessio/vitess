@@ -9746,3 +9746,7 @@
 2021-05-07T20:11:25Z,region_example,https://github.com/vitessio/vitess/actions/runs/821469448
 2021-05-07T20:23:46Z,Cluster (17),https://github.com/vitessio/vitess/actions/runs/821500193
 2021-05-07T20:23:46Z,Cluster (tabletmanager_tablegc),https://github.com/vitessio/vitess/actions/runs/821500181
+2021-05-07T21:57:27Z,Cluster (vreplication_cellalias),https://github.com/vitessio/vitess/actions/runs/821704322
+2021-05-07T21:57:27Z,Cluster (vreplication_migrate),https://github.com/vitessio/vitess/actions/runs/821704357
+2021-05-07T21:57:27Z,Cluster (vreplication_multicell),https://github.com/vitessio/vitess/actions/runs/821704360
+2021-05-07T21:59:17Z,Cluster (vreplication_cellalias),https://github.com/vitessio/vitess/actions/runs/821707060
