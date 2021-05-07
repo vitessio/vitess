@@ -9741,4 +9741,5 @@
 2021-05-07T18:56:18Z,Cluster (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/821285457
 2021-05-07T18:58:11Z,check_make_visitor,https://github.com/vitessio/vitess/actions/runs/821290266
 2021-05-07T18:58:11Z,e2e_race,https://github.com/vitessio/vitess/actions/runs/821290264
+2021-05-07T20:11:25Z,Cluster (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/821469414
 2021-05-07T20:11:25Z,region_example,https://github.com/vitessio/vitess/actions/runs/821469448
