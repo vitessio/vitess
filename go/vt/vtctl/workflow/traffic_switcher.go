@@ -29,11 +29,15 @@ import (
 	"github.com/golang/protobuf/proto"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 var (
@@ -46,6 +50,38 @@ var (
 	// target keyspace.
 	ErrNoStreams = errors.New("no streams found")
 )
+
+// ITrafficSwitcher is a temporary hack to allow us to move streamMigrater out
+// of package wrangler without also needing to move trafficSwitcher in the same
+// changeset.
+//
+// After moving TrafficSwitcher to this package, this type should be removed,
+// and StreamMigrator should be updated to contain a field of type
+// *TrafficSwitcher instead of ITrafficSwitcher.
+type ITrafficSwitcher interface {
+	/* Functions that expose types and behavior contained in *wrangler.Wrangler */
+
+	TopoServer() *topo.Server
+	TabletManagerClient() tmclient.TabletManagerClient
+	Logger() logutil.Logger
+	// VReplicationExec here is used when we want the (*wrangler.Wrangler)
+	// implementation, which does a topo lookup on the tablet alias before
+	// calling the underlying TabletManagerClient RPC.
+	VReplicationExec(ctx context.Context, alias *topodatapb.TabletAlias, query string) (*querypb.QueryResult, error)
+
+	/* Functions that expose fields on the *wrangler.trafficSwitcher */
+
+	MigrationType() binlogdatapb.MigrationType
+	ReverseWorkflowName() string
+	SourceKeyspaceName() string
+	SourceKeyspaceSchema() *vindexes.KeyspaceSchema
+	WorkflowName() string
+
+	/* Functions that *wrangler.trafficSwitcher implements */
+
+	ForAllSources(f func(source *MigrationSource) error) error
+	ForAllTargets(f func(target *MigrationTarget) error) error
+}
 
 // TargetInfo contains the metadata for a set of targets involved in a workflow.
 type TargetInfo struct {
