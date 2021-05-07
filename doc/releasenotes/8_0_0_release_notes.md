@@ -11,6 +11,9 @@ If a scatter query is attempting to collect and process too many rows in memory 
 * Zero auto-increment mode: This enables inserting a 0 value (and not just NULL) into an auto-increment column to generate sequence values. This matches the default behavior of MySQL. #6749
 * Turn off schema tracker by default #6712
 
+## Known Issue(s)
+* VReplication errors when a fixed-length binary column is used as the sharding key #8080
+
 ## Bugs Fixed
 
 ### VTGate / MySQL compatibility
