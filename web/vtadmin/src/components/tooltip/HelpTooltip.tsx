@@ -13,27 +13,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-.shardList {
-  color: var(--textColorSecondary);
-  font-size: var(--fontSizeSmall);
-  max-width: 20rem;
-  padding-right: 24px;
+import cx from 'classnames';
+
+import style from './HelpTooltip.module.scss';
+import { Icon, Icons } from '../Icon';
+import { Tooltip, TooltipProps } from './Tooltip';
+
+interface Props extends Omit<TooltipProps, 'children'> {
+    className?: string;
 }
 
-.streams {
-  display: grid;
-  grid-gap: 8px;
-  grid-template-columns: repeat(4, 60px);
-}
-
-.stream,
-.streamPlaceholder {
-  margin: 0 4px;
-  text-align: left;
-  white-space: nowrap;
-}
-
-.streamPlaceholder {
-  color: var(--textColorSecondary);
-  text-align: center;
-}
+export const HelpTooltip = ({ className, ...props }: Props) => {
+    return (
+        <Tooltip {...props}>
+            <Icon className={cx(style.icon, className)} icon={Icons.question} />
+        </Tooltip>
+    );
+};

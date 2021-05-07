@@ -25,6 +25,7 @@ import { ContentContainer } from '../layout/ContentContainer';
 import { NavCrumbs } from '../layout/NavCrumbs';
 import { WorkspaceHeader } from '../layout/WorkspaceHeader';
 import { WorkspaceTitle } from '../layout/WorkspaceTitle';
+import { Tooltip } from '../tooltip/Tooltip';
 
 interface RouteParams {
     clusterID: string;
@@ -134,7 +135,6 @@ export const Schema = () => {
                                             <th>Columns</th>
                                             <th>Type</th>
                                             <th>Params</th>
-                                            <th className={style.skCol} />
                                         </tr>
                                     </thead>
                                     <tbody className="font-family-monospace">
@@ -142,7 +142,15 @@ export const Schema = () => {
                                             const columns = v.column ? [v.column] : v.columns;
                                             return (
                                                 <tr key={v.name}>
-                                                    <td>{v.name}</td>
+                                                    <td>
+                                                        {v.name}
+
+                                                        {vdx === 0 && (
+                                                            <Tooltip text="A table's Primary Vindex maps a column value to a keyspace ID.">
+                                                                <span className={style.skBadge}>Primary</span>
+                                                            </Tooltip>
+                                                        )}
+                                                    </td>
                                                     <td>{(columns || []).join(', ')}</td>
                                                     <td>{v.meta?.type}</td>
                                                     <td>
@@ -156,11 +164,6 @@ export const Schema = () => {
                                                             <span className="font-size-small text-color-secondary">
                                                                 N/A
                                                             </span>
-                                                        )}
-                                                    </td>
-                                                    <td>
-                                                        {vdx === 0 && (
-                                                            <span className={style.skBadge}>Sharding Key</span>
                                                         )}
                                                     </td>
                                                 </tr>

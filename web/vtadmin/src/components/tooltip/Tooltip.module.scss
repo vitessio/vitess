@@ -13,27 +13,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-.shardList {
-  color: var(--textColorSecondary);
+.tooltip {
+  background: var(--tooltipBackground);
+  border-radius: 4px;
+  color: var(--textColorInverted);
+  font-family: var(--fontFamilyPrimary);
   font-size: var(--fontSizeSmall);
-  max-width: 20rem;
-  padding-right: 24px;
-}
-
-.streams {
-  display: grid;
-  grid-gap: 8px;
-  grid-template-columns: repeat(4, 60px);
-}
-
-.stream,
-.streamPlaceholder {
-  margin: 0 4px;
-  text-align: left;
-  white-space: nowrap;
-}
-
-.streamPlaceholder {
-  color: var(--textColorSecondary);
+  margin: 8px;
+  max-width: 24rem;
+  padding: 8px 12px;
   text-align: center;
 }
