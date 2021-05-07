@@ -9651,3 +9651,4 @@
 2021-05-07T01:14:46Z,Unit Test (mariadb101),https://github.com/vitessio/vitess/actions/runs/818756804
 2021-05-07T07:15:50Z,endtoend,https://github.com/vitessio/vitess/actions/runs/819433881
 2021-05-07T07:15:50Z,unit_race,https://github.com/vitessio/vitess/actions/runs/819433890
+2021-05-07T08:03:09Z,Cluster (vreplication_cellalias),https://github.com/vitessio/vitess/actions/runs/819549779
