@@ -9686,3 +9686,13 @@
 2021-05-07T14:55:46Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/820663154
 2021-05-07T14:55:46Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/820663153
 2021-05-07T14:55:46Z,unit_race,https://github.com/vitessio/vitess/actions/runs/820663165
+2021-05-07T16:15:21Z,Cluster (17),https://github.com/vitessio/vitess/actions/runs/820888664
+2021-05-07T16:18:09Z,unit_race,https://github.com/vitessio/vitess/actions/runs/820895855
+2021-05-07T16:23:27Z,Cluster (24),https://github.com/vitessio/vitess/actions/runs/820908839
+2021-05-07T16:23:27Z,Cluster (onlineddl_declarative),https://github.com/vitessio/vitess/actions/runs/820908817
+2021-05-07T16:23:27Z,Cluster (onlineddl_ghost),https://github.com/vitessio/vitess/actions/runs/820908844
+2021-05-07T16:23:27Z,Cluster (onlineddl_revert),https://github.com/vitessio/vitess/actions/runs/820908822
+2021-05-07T16:23:27Z,Cluster (tabletmanager_throttler_custom_config),https://github.com/vitessio/vitess/actions/runs/820908831
+2021-05-07T16:23:27Z,Cluster (vreplication_cellalias),https://github.com/vitessio/vitess/actions/runs/820908827
+2021-05-07T16:23:27Z,Cluster (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/820908833
+2021-05-07T16:23:27Z,gomod-tidy,https://github.com/vitessio/vitess/actions/runs/820908863
