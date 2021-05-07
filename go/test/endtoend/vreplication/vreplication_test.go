@@ -566,7 +566,7 @@ func vdiff(t *testing.T, workflow, cells string) {
 		t.Logf("vdiff err: %+v, output: %+v", err, output)
 		require.Nil(t, err)
 		require.NotNil(t, output)
-		diffReports := make([]*wrangler.DiffReport, 0)
+		diffReports := make(map[string]*wrangler.DiffReport)
 		err = json.Unmarshal([]byte(output), &diffReports)
 		require.Nil(t, err)
 		if len(diffReports) < 1 {
