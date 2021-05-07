@@ -20,8 +20,11 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"strings"
 	"sync"
 	"time"
+
+	"vitess.io/vitess/go/vt/sqlparser"
 
 	"vitess.io/vitess/go/vt/dbconfigs"
 
@@ -323,8 +326,8 @@ func (hs *healthStreamer) reload() error {
 		}
 	}
 
-	// TODO: fix the maxrows from using a magic number.
-	qr, err := conn.Exec(ctx, mysql.DetectSchemaChange, 10000, false)
+	maxrows := 10000
+	qr, err := conn.Exec(ctx, mysql.DetectSchemaChange, maxrows, false)
 	if err != nil {
 		return err
 	}
@@ -334,6 +337,19 @@ func (hs *healthStreamer) reload() error {
 		return nil
 	}
 
+	var tables []string
+	var tablePredicates []string
+	for _, row := range qr.Rows {
+		table := row[0].ToString()
+		tables = append(tables, table)
+
+		tableName := sqlparser.NewStrLiteral(table)
+		tablePredicates = append(tablePredicates, "table_name = "+sqlparser.String(tableName))
+	}
+	tableNamePredicates := strings.Join(tablePredicates, " OR ")
+	del := fmt.Sprintf("%s WHERE %s", mysql.ClearSchemaCopy, tableNamePredicates)
+	upd := fmt.Sprintf("%s AND %s", mysql.InsertIntoSchemaCopy, tableNamePredicates)
+
 	// Reload the schema in a transaction.
 	_, err = conn.Exec(ctx, "begin", 1, false)
 	if err != nil {
@@ -341,12 +357,12 @@ func (hs *healthStreamer) reload() error {
 	}
 	defer conn.Exec(ctx, "rollback", 1, false)
 
-	_, err = conn.Exec(ctx, mysql.ClearSchemaCopy, 1, false)
+	_, err = conn.Exec(ctx, del, 1, false)
 	if err != nil {
 		return err
 	}
 
-	_, err = conn.Exec(ctx, mysql.InsertIntoSchemaCopy, 1, false)
+	_, err = conn.Exec(ctx, upd, 1, false)
 	if err != nil {
 		return err
 	}
@@ -356,11 +372,6 @@ func (hs *healthStreamer) reload() error {
 		return err
 	}
 
-	// publish only if changes are committed.
-	var tables []string
-	for _, row := range qr.Rows {
-		tables = append(tables, row[0].ToString())
-	}
 	hs.state.RealtimeStats.TableSchemaChanged = tables
 	shr := proto.Clone(hs.state).(*querypb.StreamHealthResponse)
 	hs.broadCastToClients(shr)
