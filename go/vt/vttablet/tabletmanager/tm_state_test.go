@@ -22,6 +22,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/test/utils"
+
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/servenv"
 
@@ -391,7 +393,7 @@ func TestPublishStateNew(t *testing.T) {
 	tm := newTestTM(t, ts, 42, "ks", "0")
 	ttablet, err := tm.TopoServer.GetTablet(ctx, tm.tabletAlias)
 	require.NoError(t, err)
-	assert.Equal(t, tm.Tablet(), ttablet.Tablet)
+	utils.MustMatch(t, tm.Tablet(), ttablet.Tablet)
 
 	tab1 := tm.Tablet()
 	tab1.Keyspace = "tab1"
@@ -401,7 +403,7 @@ func TestPublishStateNew(t *testing.T) {
 	tm.tmState.mu.Unlock()
 	ttablet, err = tm.TopoServer.GetTablet(ctx, tm.tabletAlias)
 	require.NoError(t, err)
-	assert.Equal(t, tab1, ttablet.Tablet)
+	utils.MustMatch(t, tab1, ttablet.Tablet)
 
 	tab2 := tm.Tablet()
 	tab2.Keyspace = "tab2"
@@ -411,7 +413,7 @@ func TestPublishStateNew(t *testing.T) {
 	tm.tmState.retryPublish()
 	ttablet, err = tm.TopoServer.GetTablet(ctx, tm.tabletAlias)
 	require.NoError(t, err)
-	assert.Equal(t, tab2, ttablet.Tablet)
+	utils.MustMatch(t, tab2, ttablet.Tablet)
 
 	// If hostname doesn't match, it should not update.
 	tab3 := tm.Tablet()
@@ -422,13 +424,13 @@ func TestPublishStateNew(t *testing.T) {
 	tm.tmState.mu.Unlock()
 	ttablet, err = tm.TopoServer.GetTablet(ctx, tm.tabletAlias)
 	require.NoError(t, err)
-	assert.Equal(t, tab2, ttablet.Tablet)
+	utils.MustMatch(t, tab2, ttablet.Tablet)
 
 	// Same for retryPublish.
 	tm.tmState.retryPublish()
 	ttablet, err = tm.TopoServer.GetTablet(ctx, tm.tabletAlias)
 	require.NoError(t, err)
-	assert.Equal(t, tab2, ttablet.Tablet)
+	utils.MustMatch(t, tab2, ttablet.Tablet)
 }
 
 func TestPublishDeleted(t *testing.T) {

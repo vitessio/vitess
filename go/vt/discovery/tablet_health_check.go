@@ -34,7 +34,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
 
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/proto/topodata"
@@ -77,7 +77,7 @@ type tabletHealthCheck struct {
 // String is defined because we want to print a []*tabletHealthCheck array nicely.
 func (thc *tabletHealthCheck) String() string {
 	return fmt.Sprintf("tabletHealthCheck{Tablet: %v,Target: %v,Serving: %v, MasterTermStartTime: %v, Stats: %v, LastError: %v",
-		thc.Tablet, thc.Target, thc.Serving, thc.MasterTermStartTime, *thc.Stats, thc.LastError)
+		thc.Tablet, thc.Target, thc.Serving, thc.MasterTermStartTime, thc.Stats, thc.LastError)
 }
 
 // SimpleCopy returns a TabletHealth with all the necessary fields copied from tabletHealthCheck.

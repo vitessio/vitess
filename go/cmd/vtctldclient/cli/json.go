@@ -17,12 +17,12 @@ limitations under the License.
 package cli
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 
-	"github.com/golang/protobuf/jsonpb"
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/encoding/protojson"
+
+	"google.golang.org/protobuf/proto"
 )
 
 // MarshalJSON marshals obj to a JSON string. It uses the jsonpb marshaler for
@@ -37,19 +37,14 @@ import (
 func MarshalJSON(obj interface{}) ([]byte, error) {
 	switch obj := obj.(type) {
 	case proto.Message:
-		b := bytes.NewBuffer(nil)
-		m := jsonpb.Marshaler{
-			EnumsAsInts:  false,
-			EmitDefaults: true,
-			Indent:       "  ",
-			OrigName:     true,
+		m := protojson.MarshalOptions{
+			Multiline:       true,
+			Indent:          "  ",
+			UseEnumNumbers:  true,
+			UseProtoNames:   true,
+			EmitUnpopulated: true,
 		}
-
-		if err := m.Marshal(b, obj); err != nil {
-			return nil, fmt.Errorf("jsonpb.Marshal = %v", err)
-		}
-
-		return b.Bytes(), nil
+		return m.Marshal(obj)
 	default:
 		data, err := json.MarshalIndent(obj, "", "  ")
 		if err != nil {

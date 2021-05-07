@@ -25,6 +25,8 @@ import (
 	"sync"
 	"time"
 
+	"google.golang.org/protobuf/proto"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
@@ -627,10 +629,10 @@ func (vre *Engine) transitionJournal(je *journalEvent) {
 	var newids []int
 	for _, shard := range shardGTIDs {
 		sgtid := je.shardGTIDs[shard]
-		bls := vre.controllers[refid].source
+		bls := proto.Clone(vre.controllers[refid].source).(*binlogdatapb.BinlogSource)
 		bls.Keyspace, bls.Shard = sgtid.Keyspace, sgtid.Shard
 		ig := NewInsertGenerator(binlogplayer.BlpRunning, vre.dbName)
-		ig.AddRow(params["workflow"], &bls, sgtid.Gtid, params["cell"], params["tablet_types"])
+		ig.AddRow(params["workflow"], bls, sgtid.Gtid, params["cell"], params["tablet_types"])
 		qr, err := withDDL.Exec(vre.ctx, ig.String(), dbClient.ExecuteFetch)
 		if err != nil {
 			log.Errorf("transitionJournal: %v", err)

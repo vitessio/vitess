@@ -786,7 +786,7 @@ func TestOrderedAggregateExecuteGtid(t *testing.T) {
 			"keyspace|vgtid",
 			"varchar|varchar",
 		),
-		`ks|shard_gtids:<keyspace:"ks" shard:"-40" gtid:"a" > shard_gtids:<keyspace:"ks" shard:"40-80" gtid:"b" > shard_gtids:<keyspace:"ks" shard:"80-c0" gtid:"c" > shard_gtids:<keyspace:"ks" shard:"c0-" gtid:"d" > `,
+		`ks|shard_gtids:{keyspace:"ks" shard:"-40" gtid:"a"} shard_gtids:{keyspace:"ks" shard:"40-80" gtid:"b"} shard_gtids:{keyspace:"ks" shard:"80-c0" gtid:"c"} shard_gtids:{keyspace:"ks" shard:"c0-" gtid:"d"}`,
 	)
 	assert.Equal(t, wantResult, result)
 }

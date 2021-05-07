@@ -21,9 +21,9 @@ import (
 	"testing"
 	"time"
 
-	"context"
+	"google.golang.org/protobuf/proto"
 
-	"github.com/golang/protobuf/proto"
+	"context"
 
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/logutil"
@@ -59,7 +59,7 @@ func TestRealtimeStatsWithQueryService(t *testing.T) {
 	t2 := testlib.NewFakeTablet(t, wr, "cell2", 1, topodatapb.TabletType_REPLICA, nil,
 		testlib.TabletKeyspaceShard(t, keyspace, shard))
 
-	target := querypb.Target{
+	target := &querypb.Target{
 		Keyspace:   keyspace,
 		Shard:      shard,
 		TabletType: topodatapb.TabletType_REPLICA,

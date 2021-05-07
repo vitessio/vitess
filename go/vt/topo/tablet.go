@@ -27,7 +27,7 @@ import (
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/event"
 	"vitess.io/vitess/go/netutil"
@@ -275,7 +275,7 @@ func (ts *Server) UpdateTablet(ctx context.Context, ti *TabletInfo) error {
 	ti.version = newVersion
 
 	event.Dispatch(&events.TabletChange{
-		Tablet: *ti.Tablet,
+		Tablet: ti.Tablet,
 		Status: "updated",
 	})
 	return nil
@@ -356,7 +356,7 @@ func (ts *Server) CreateTablet(ctx context.Context, tablet *topodatapb.Tablet) e
 
 	if err == nil {
 		event.Dispatch(&events.TabletChange{
-			Tablet: *tablet,
+			Tablet: tablet,
 			Status: "created",
 		})
 	}
@@ -383,7 +383,7 @@ func (ts *Server) DeleteTablet(ctx context.Context, tabletAlias *topodatapb.Tabl
 	if tErr == nil {
 		// Only copy the identity info for the tablet. The rest has been deleted.
 		event.Dispatch(&events.TabletChange{
-			Tablet: topodatapb.Tablet{
+			Tablet: &topodatapb.Tablet{
 				Alias:    tabletAlias,
 				Keyspace: ti.Tablet.Keyspace,
 				Shard:    ti.Tablet.Shard,

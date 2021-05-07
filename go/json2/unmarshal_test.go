@@ -64,7 +64,7 @@ func TestUnmarshalPB(t *testing.T) {
   "name": "c1",
 	"type": "badtype"
 }`,
-		err: "unknown value \"badtype\" for enum query.Type",
+		err: "proto: (line 3:10): invalid value for enum type: \"badtype\"",
 	}, {
 		in: `{
   "l2": "val",
@@ -73,7 +73,7 @@ func TestUnmarshalPB(t *testing.T) {
     "l5"asdas"
   ]
 }`,
-		err: "line: 5, position 9: invalid character 'a' after array element",
+		err: "proto: (line 2:3): unknown field \"l2\"",
 	}}
 	for _, tcase := range tcases {
 		var out vschemapb.Column

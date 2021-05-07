@@ -710,7 +710,7 @@ func (client *Client) DemoteMaster(ctx context.Context, tablet *topodatapb.Table
 	if masterStatus == nil {
 		// We are assuming this means a response came from an older server.
 		masterStatus = &replicationdatapb.MasterStatus{
-			Position:     response.DeprecatedPosition,
+			Position:     response.DeprecatedPosition, //nolint
 			FilePosition: "",
 		}
 	}
@@ -781,7 +781,7 @@ func (client *Client) StopReplicationAndGetStatus(ctx context.Context, tablet *t
 	if err != nil {
 		return nil, nil, err
 	}
-	return response.HybridStatus, &replicationdatapb.StopReplicationStatus{
+	return response.HybridStatus, &replicationdatapb.StopReplicationStatus{ //nolint
 		Before: response.Status.Before,
 		After:  response.Status.After,
 	}, nil

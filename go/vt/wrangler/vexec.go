@@ -24,14 +24,13 @@ import (
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/vt/binlog/binlogplayer"
+	"google.golang.org/protobuf/encoding/prototext"
 
-	"github.com/golang/protobuf/proto"
 	"k8s.io/apimachinery/pkg/util/sets"
 
 	"vitess.io/vitess/go/mysql"
-
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -374,7 +373,7 @@ type ReplicationStatus struct {
 	// ID represents the id column from the _vt.vreplication table.
 	ID int64
 	// Bls represents the BinlogSource.
-	Bls binlogdatapb.BinlogSource
+	Bls *binlogdatapb.BinlogSource
 	// Pos represents the pos column from the _vt.vreplication table.
 	Pos string
 	// StopPos represents the stop_pos column from the _vt.vreplication table.
@@ -405,7 +404,7 @@ func (wr *Wrangler) getReplicationStatusFromRow(ctx context.Context, row []sqlty
 	if err != nil {
 		return nil, "", err
 	}
-	if err := proto.UnmarshalText(row[1].ToString(), &bls); err != nil {
+	if err := prototext.Unmarshal(row[1].ToBytes(), &bls); err != nil {
 		return nil, "", err
 	}
 
@@ -434,7 +433,7 @@ func (wr *Wrangler) getReplicationStatusFromRow(ctx context.Context, row []sqlty
 		Shard:                master.Shard,
 		Tablet:               master.AliasString(),
 		ID:                   id,
-		Bls:                  bls,
+		Bls:                  &bls,
 		Pos:                  pos,
 		StopPos:              stopPos,
 		State:                state,

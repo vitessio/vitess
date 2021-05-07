@@ -21,6 +21,8 @@ import (
 	"regexp"
 	"time"
 
+	"google.golang.org/protobuf/encoding/prototext"
+
 	"vitess.io/vitess/go/vt/orchestrator/config"
 	"vitess.io/vitess/go/vt/orchestrator/db"
 	"vitess.io/vitess/go/vt/orchestrator/process"
@@ -28,7 +30,6 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/patrickmn/go-cache"
 	"github.com/rcrowley/go-metrics"
 
@@ -370,14 +371,14 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 		}
 
 		tablet := &topodatapb.Tablet{}
-		if err := proto.UnmarshalText(m.GetString("tablet_info"), tablet); err != nil {
+		if err := prototext.Unmarshal([]byte(m.GetString("tablet_info")), tablet); err != nil {
 			log.Errorf("could not read tablet %v: %v", m.GetString("tablet_info"), err)
 			return nil
 		}
 
 		masterTablet := &topodatapb.Tablet{}
 		if str := m.GetString("master_tablet_info"); str != "" {
-			if err := proto.UnmarshalText(str, masterTablet); err != nil {
+			if err := prototext.Unmarshal([]byte(str), masterTablet); err != nil {
 				log.Errorf("could not read tablet %v: %v", str, err)
 				return nil
 			}

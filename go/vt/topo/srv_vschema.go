@@ -20,9 +20,9 @@ import (
 	"fmt"
 	"sync"
 
-	"context"
+	"google.golang.org/protobuf/proto"
 
-	"github.com/golang/protobuf/proto"
+	"context"
 
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vterrors"

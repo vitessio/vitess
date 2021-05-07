@@ -211,7 +211,8 @@ java_test:
 	VTROOT=${PWD} mvn -f java/pom.xml -B clean verify
 
 install_protoc-gen-go:
-	go install github.com/gogo/protobuf/protoc-gen-gofast
+	go install google.golang.org/protobuf/cmd/protoc-gen-go
+	go install google.golang.org/grpc/cmd/protoc-gen-go-grpc
 
 PROTO_SRCS = $(wildcard proto/*.proto)
 PROTO_SRC_NAMES = $(basename $(notdir $(PROTO_SRCS)))
@@ -226,9 +227,10 @@ endif
 
 $(PROTO_GO_OUTS): minimaltools install_protoc-gen-go proto/*.proto
 	for name in $(PROTO_SRC_NAMES); do \
-		$(VTROOT)/bin/protoc --gofast_out=plugins=grpc:. --plugin protoc-gen-gofast="${GOBIN}/protoc-gen-gofast" \
-		-I${PWD}/dist/vt-protoc-3.6.1/include:proto proto/$${name}.proto && \
-		goimports -w vitess.io/vitess/go/vt/proto/$${name}/$${name}.pb.go; \
+		$(VTROOT)/bin/protoc \
+		--go_out=. --plugin protoc-gen-go="${GOBIN}/protoc-gen-go" \
+		--go-grpc_out=. --plugin protoc-gen-go-grpc="${GOBIN}/protoc-gen-go-grpc" \
+		-I${PWD}/dist/vt-protoc-3.6.1/include:proto proto/$${name}.proto; \
 	done
 	cp -Rf vitess.io/vitess/go/vt/proto/* go/vt/proto
 	rm -rf vitess.io/vitess/go/vt/proto/

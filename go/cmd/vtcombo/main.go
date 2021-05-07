@@ -22,16 +22,13 @@ limitations under the License.
 package main
 
 import (
+	"context"
 	"flag"
 	"os"
 	"strings"
 	"time"
 
-	"vitess.io/vitess/go/vt/wrangler"
-
-	"context"
-
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/encoding/prototext"
 
 	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/vt/dbconfigs"
@@ -47,6 +44,7 @@ import (
 	"vitess.io/vitess/go/vt/vtctld"
 	"vitess.io/vitess/go/vt/vtgate"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
+	"vitess.io/vitess/go/vt/wrangler"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vttestpb "vitess.io/vitess/go/vt/proto/vttest"
@@ -117,7 +115,7 @@ func main() {
 
 	// parse the input topology
 	tpb := &vttestpb.VTTestTopology{}
-	if err := proto.UnmarshalText(*protoTopo, tpb); err != nil {
+	if err := prototext.Unmarshal([]byte(*protoTopo), tpb); err != nil {
 		log.Errorf("cannot parse topology: %v", err)
 		exit.Return(1)
 	}
