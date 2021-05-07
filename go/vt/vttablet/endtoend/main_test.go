@@ -308,6 +308,13 @@ var tableACLConfig = `{
       "readers": ["dev"],
       "writers": ["dev"],
       "admins": ["dev"]
+    },
+    {
+      "name": "vitess_healthstream",
+      "table_names_or_prefixes": ["vitess_sc1", "vitess_sc2"],
+      "readers": ["dev"],
+      "writers": ["dev"],
+      "admins": ["dev"]
     }
   ]
 }`
