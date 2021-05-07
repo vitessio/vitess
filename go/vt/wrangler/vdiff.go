@@ -501,7 +501,6 @@ func (df *vdiff) buildTablePlan(table *tabletmanagerdatapb.TableDefinition, quer
 	}
 
 	orderby, err := findPKs(table, targetSelect, td)
-	log.Infof("COMPARE KEYS %v", td.comparePKs)
 	if err != nil {
 		return nil, err
 	}
