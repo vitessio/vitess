@@ -9661,6 +9661,8 @@
 2021-05-07T12:24:30Z,Cluster (upgrade),https://github.com/vitessio/vitess/actions/runs/820232405
 2021-05-07T12:38:40Z,unit_race,https://github.com/vitessio/vitess/actions/runs/820269811
 2021-05-07T14:04:04Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/820508055
+2021-05-07T14:07:12Z,Cluster (17),https://github.com/vitessio/vitess/actions/runs/820517913
 2021-05-07T14:07:12Z,Cluster (tabletmanager_tablegc),https://github.com/vitessio/vitess/actions/runs/820517940
 2021-05-07T14:07:12Z,Cluster (vreplication_cellalias),https://github.com/vitessio/vitess/actions/runs/820517907
+2021-05-07T14:07:12Z,cluster_initial_sharding_multi,https://github.com/vitessio/vitess/actions/runs/820517934
 2021-05-07T14:07:12Z,unit_race,https://github.com/vitessio/vitess/actions/runs/820517915
