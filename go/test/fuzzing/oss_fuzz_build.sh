@@ -24,10 +24,7 @@ compile_go_fuzzer ./go/test/fuzzing Fuzz vtctl_fuzzer
 compile_go_fuzzer ./go/test/fuzzing FuzzIsDML is_dml_fuzzer
 compile_go_fuzzer ./go/test/fuzzing FuzzNormalizer normalizer_fuzzer
 compile_go_fuzzer ./go/test/fuzzing FuzzParser parser_fuzzer
-
 compile_go_fuzzer ./go/mysql FuzzWritePacket write_packet_fuzzer
-compile_go_fuzzer ./go/mysql FuzzHandleNextCommand handle_next_command_fuzzer
-compile_go_fuzzer ./go/mysql FuzzReadQueryResults read_query_results_fuzzer
 compile_go_fuzzer ./go/mysql FuzzTLSServer fuzz_tls
 compile_go_fuzzer ./go/vt/vtgate/grpcvtgateconn Fuzz grpc_vtgate_fuzzer
 compile_go_fuzzer ./go/vt/vtgate/planbuilder FuzzAnalyse planbuilder_fuzzer
