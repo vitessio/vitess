@@ -9654,3 +9654,6 @@
 2021-05-07T08:03:09Z,Cluster (vreplication_cellalias),https://github.com/vitessio/vitess/actions/runs/819549779
 2021-05-07T09:01:39Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/819707222
 2021-05-07T09:01:39Z,unit_race,https://github.com/vitessio/vitess/actions/runs/819707238
+2021-05-07T09:18:46Z,Cluster (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/819757483
+2021-05-07T09:18:46Z,Cluster (vreplication_multicell),https://github.com/vitessio/vitess/actions/runs/819757501
+2021-05-07T09:18:46Z,Cluster (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/819757506
