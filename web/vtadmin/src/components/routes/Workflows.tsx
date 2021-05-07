@@ -20,11 +20,8 @@ import { Link } from 'react-router-dom';
 import style from './Workflows.module.scss';
 import { useWorkflows } from '../../hooks/api';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
-import { Button } from '../Button';
 import { DataCell } from '../dataTable/DataCell';
 import { DataTable } from '../dataTable/DataTable';
-import { Icons } from '../Icon';
-import { TextInput } from '../TextInput';
 import { useSyncedURLParam } from '../../hooks/useSyncedURLParam';
 import { filterNouns } from '../../util/filterNouns';
 import { getStreams, getTimeUpdated } from '../../util/workflows';
@@ -33,6 +30,7 @@ import { StreamStatePip } from '../pips/StreamStatePip';
 import { ContentContainer } from '../layout/ContentContainer';
 import { WorkspaceHeader } from '../layout/WorkspaceHeader';
 import { WorkspaceTitle } from '../layout/WorkspaceTitle';
+import { DataFilter } from '../dataTable/DataFilter';
 
 export const Workflows = () => {
     useDocumentTitle('Workflows');
@@ -119,18 +117,13 @@ export const Workflows = () => {
                 <WorkspaceTitle>Workflows</WorkspaceTitle>
             </WorkspaceHeader>
             <ContentContainer>
-                <div className={style.controls}>
-                    <TextInput
-                        autoFocus
-                        iconLeft={Icons.search}
-                        onChange={(e) => updateFilter(e.target.value)}
-                        placeholder="Filter workflows"
-                        value={filter || ''}
-                    />
-                    <Button disabled={!filter} onClick={() => updateFilter('')} secondary>
-                        Clear filters
-                    </Button>
-                </div>
+                <DataFilter
+                    autoFocus
+                    onChange={(e) => updateFilter(e.target.value)}
+                    onClear={() => updateFilter('')}
+                    placeholder="Filter workflows"
+                    value={filter || ''}
+                />
 
                 <DataTable
                     columns={['Workflow', 'Source', 'Target', 'Error', 'Copying', 'Running', 'Stopped', 'Last Updated']}

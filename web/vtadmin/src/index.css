@@ -17,7 +17,7 @@
 
 :root {
   /* Greyscale */
-  --grey75: #fafafa;
+  --grey75: #f8fafd;
   --grey200: #edf2f7;
   --grey400: #cbd5e0;
   --grey600: #718096;
@@ -179,18 +179,24 @@ a:active {
 /* Tables */
 table {
   border-collapse: collapse;
-  margin-bottom: var(--tableCellPadding);
+  margin: var(--tableCellPadding) 0;
   width: 100%;
 }
 
 table th {
+  background: var(--backgroundSecondary);
+  border: solid 1px var(--backgroundSecondary);
+  border-bottom-color: var(--tableBorderColor);
+  color: var(--textColorSecondary);
   font-size: var(--fontSizeSmall);
-  padding: 8px var(--tableCellPadding);
+  font-weight: 500;
+  padding: 12px var(--tableCellPadding);
   text-align: left;
 }
 
 table tbody tr {
-  border: solid 1px var(--tableBorderColor);
+  border-bottom: solid 1px var(--tableBorderColor);
+  border-top: solid 1px var(--tableBorderColor);
 }
 
 table tbody td {
