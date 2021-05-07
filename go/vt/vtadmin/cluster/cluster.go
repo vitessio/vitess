@@ -26,6 +26,8 @@ import (
 	"text/template"
 	"time"
 
+	"google.golang.org/protobuf/proto"
+
 	"k8s.io/apimachinery/pkg/util/sets"
 
 	"vitess.io/vitess/go/textutil"
@@ -681,16 +683,16 @@ func (c *Cluster) getSchemaFromTablets(ctx context.Context, keyspace string, tab
 			span, ctx := trace.NewSpan(ctx, "Vtctld.GetSchema")
 			defer span.Finish()
 
-			req := *opts.BaseRequest
+			req := proto.Clone(opts.BaseRequest).(*vtctldatapb.GetSchemaRequest)
 			req.TableSizesOnly = sizesOnly
 			req.TabletAlias = tablet.Tablet.Alias
 
 			AnnotateSpan(c, span)
-			annotateGetSchemaRequest(&req, span)
+			annotateGetSchemaRequest(req, span)
 			span.Annotate("keyspace", keyspace)
 			span.Annotate("shard", tablet.Tablet.Shard)
 
-			resp, err := c.Vtctld.GetSchema(ctx, &req)
+			resp, err := c.Vtctld.GetSchema(ctx, req)
 			if err != nil {
 				err = fmt.Errorf("GetSchema(cluster = %s, keyspace = %s, tablet = %s) failed: %w", c.ID, keyspace, tablet.Tablet.Alias, err)
 				rec.RecordError(err)

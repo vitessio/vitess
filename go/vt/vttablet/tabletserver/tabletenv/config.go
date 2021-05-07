@@ -22,7 +22,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/encoding/prototext"
 
 	"vitess.io/vitess/go/cache"
 	"vitess.io/vitess/go/flagutil"
@@ -487,7 +487,7 @@ func defaultTxThrottlerConfig() string {
 	// TODO(erez): Make DefaultMaxReplicationLagModuleConfig() return a MaxReplicationLagSec of 10
 	// and remove this line.
 	config.MaxReplicationLagSec = 10
-	return proto.MarshalTextString(&config)
+	return prototext.Format(config)
 }
 
 func defaultTransactionLimitConfig() TransactionLimitConfig {

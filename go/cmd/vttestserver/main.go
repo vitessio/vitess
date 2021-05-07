@@ -28,7 +28,7 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/encoding/prototext"
 
 	"vitess.io/vitess/go/vt/log"
 	vttestpb "vitess.io/vitess/go/vt/proto/vttest"
@@ -208,7 +208,7 @@ func parseFlags() (env vttest.Environment, err error) {
 		}
 	} else {
 		var topology vttestpb.VTTestTopology
-		err = proto.UnmarshalText(protoTopo, &topology)
+		err = prototext.Unmarshal([]byte(protoTopo), &topology)
 		if err != nil {
 			return
 		}

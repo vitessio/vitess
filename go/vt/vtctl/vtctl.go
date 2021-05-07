@@ -81,7 +81,6 @@ COMMAND ARGUMENT DEFINITIONS
 */
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -94,10 +93,11 @@ import (
 	"sync"
 	"time"
 
+	"google.golang.org/protobuf/encoding/protojson"
+
 	"context"
 
-	"github.com/golang/protobuf/jsonpb"
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/cmd/vtctldclient/cli"
 	"vitess.io/vitess/go/flagutil"
@@ -3331,7 +3331,11 @@ func commandGetSrvKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 		return err
 	}
 
-	return printJSON(wr.Logger(), resp.SrvKeyspaces[cell])
+	cellKs := resp.SrvKeyspaces[cell]
+	if cellKs == nil {
+		return fmt.Errorf("missing keyspace %q in cell %q", keyspace, cell)
+	}
+	return printJSON(wr.Logger(), cellKs)
 }
 
 func commandGetSrvVSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -3558,7 +3562,7 @@ func printJSON(logger logutil.Logger, val interface{}) error {
 	if err != nil {
 		return fmt.Errorf("cannot marshal data: %v", err)
 	}
-	logger.Printf("%v\n", string(data))
+	logger.Printf("%s\n", data)
 	return nil
 }
 
@@ -3583,12 +3587,16 @@ func MarshalJSON(obj interface{}) (data []byte, err error) {
 		// In that case jsonpb may panic if the "obj" has non-exported fields.
 
 		// Marshal the protobuf message.
-		var b bytes.Buffer
-		m := jsonpb.Marshaler{EnumsAsInts: true, EmitDefaults: true, Indent: "  ", OrigName: true}
-		if err := m.Marshal(&b, obj); err != nil {
-			return nil, fmt.Errorf("jsonpb error: %v", err)
+		data, err = protojson.MarshalOptions{
+			Multiline:       true,
+			Indent:          "  ",
+			UseProtoNames:   true,
+			UseEnumNumbers:  true,
+			EmitUnpopulated: true,
+		}.Marshal(obj)
+		if err != nil {
+			return nil, fmt.Errorf("protojson error: %v", err)
 		}
-		data = b.Bytes()
 	case []string:
 		if len(obj) == 0 {
 			return []byte{'[', ']'}, nil

@@ -23,6 +23,8 @@ import (
 	"testing"
 	"time"
 
+	"google.golang.org/protobuf/proto"
+
 	"vitess.io/vitess/go/cache"
 	"vitess.io/vitess/go/test/utils"
 
@@ -208,7 +210,7 @@ func TestStreamBuffering(t *testing.T) {
 		NewSafeSession(masterSession),
 		"select id from music_user_map where id = 1",
 		nil,
-		querypb.Target{
+		&querypb.Target{
 			TabletType: topodatapb.TabletType_MASTER,
 		},
 		func(qr *sqltypes.Result) error {
@@ -283,7 +285,7 @@ func TestStreamLimitOffset(t *testing.T) {
 		NewSafeSession(masterSession),
 		"select id, textcol from user order by id limit 2 offset 2",
 		nil,
-		querypb.Target{
+		&querypb.Target{
 			TabletType: topodatapb.TabletType_MASTER,
 		},
 		func(qr *sqltypes.Result) error {
@@ -589,8 +591,8 @@ func TestSelectDatabase(t *testing.T) {
 	executor, _, _, _ := createLegacyExecutorEnv()
 	executor.normalize = true
 	sql := "select database()"
-	newSession := *masterSession
-	session := NewSafeSession(&newSession)
+	newSession := proto.Clone(masterSession).(*vtgatepb.Session)
+	session := NewSafeSession(newSession)
 	session.TargetString = "TestExecutor@master"
 	result, err := executor.Execute(
 		context.Background(),
@@ -1800,7 +1802,7 @@ func TestVarJoin(t *testing.T) {
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
 	// We have to use string representation because bindvars type is too complex.
 	got := fmt.Sprintf("%+v", sbc2.Queries)
-	want := `[sql:"select u2.id from ` + "`user`" + ` as u2 where u2.id = :u1_col" bind_variables:<key:"u1_col" value:<type:INT32 value:"3" > > ]`
+	want := `[sql:"select u2.id from ` + "`user`" + ` as u2 where u2.id = :u1_col" bind_variables:{key:"u1_col" value:{type:INT32 value:"3"}}]`
 	if got != want {
 		t.Errorf("sbc2.Queries: %s, want %s\n", got, want)
 	}
@@ -1835,7 +1837,7 @@ func TestVarJoinStream(t *testing.T) {
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
 	// We have to use string representation because bindvars type is too complex.
 	got := fmt.Sprintf("%+v", sbc2.Queries)
-	want := `[sql:"select u2.id from ` + "`user`" + ` as u2 where u2.id = :u1_col" bind_variables:<key:"u1_col" value:<type:INT32 value:"3" > > ]`
+	want := `[sql:"select u2.id from ` + "`user`" + ` as u2 where u2.id = :u1_col" bind_variables:{key:"u1_col" value:{type:INT32 value:"3"}}]`
 	if got != want {
 		t.Errorf("sbc2.Queries: %s, want %s\n", got, want)
 	}
@@ -2109,7 +2111,7 @@ func TestCrossShardSubquery(t *testing.T) {
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
 	// We have to use string representation because bindvars type is too complex.
 	got := fmt.Sprintf("%+v", sbc2.Queries)
-	want := `[sql:"select u2.id from ` + "`user`" + ` as u2 where u2.id = :u1_col" bind_variables:<key:"u1_col" value:<type:INT32 value:"3" > > ]`
+	want := `[sql:"select u2.id from ` + "`user`" + ` as u2 where u2.id = :u1_col" bind_variables:{key:"u1_col" value:{type:INT32 value:"3"}}]`
 	if got != want {
 		t.Errorf("sbc2.Queries: %s, want %s\n", got, want)
 	}
@@ -2192,7 +2194,7 @@ func TestCrossShardSubqueryStream(t *testing.T) {
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
 	// We have to use string representation because bindvars type is too complex.
 	got := fmt.Sprintf("%+v", sbc2.Queries)
-	want := `[sql:"select u2.id from ` + "`user`" + ` as u2 where u2.id = :u1_col" bind_variables:<key:"u1_col" value:<type:INT32 value:"3" > > ]`
+	want := `[sql:"select u2.id from ` + "`user`" + ` as u2 where u2.id = :u1_col" bind_variables:{key:"u1_col" value:{type:INT32 value:"3"}}]`
 	if got != want {
 		t.Errorf("sbc2.Queries:\n%s, want\n%s\n", got, want)
 	}

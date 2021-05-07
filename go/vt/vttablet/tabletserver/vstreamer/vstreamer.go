@@ -24,9 +24,9 @@ import (
 	"strings"
 	"time"
 
-	vtschema "vitess.io/vitess/go/vt/schema"
+	"google.golang.org/protobuf/encoding/prototext"
 
-	"github.com/golang/protobuf/proto"
+	vtschema "vitess.io/vitess/go/vt/schema"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
@@ -782,7 +782,7 @@ nextrow:
 				continue
 			}
 			journal := &binlogdatapb.Journal{}
-			if err := proto.UnmarshalText(afterValues[i].ToString(), journal); err != nil {
+			if err := prototext.Unmarshal(afterValues[i].ToBytes(), journal); err != nil {
 				return nil, err
 			}
 			vevents = append(vevents, &binlogdatapb.VEvent{

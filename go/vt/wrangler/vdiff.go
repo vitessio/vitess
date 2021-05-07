@@ -26,7 +26,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/encoding/prototext"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
@@ -623,7 +623,7 @@ func (df *vdiff) stopTargets(ctx context.Context) error {
 
 		for _, row := range qr.Rows {
 			var bls binlogdatapb.BinlogSource
-			if err := proto.UnmarshalText(row[0].ToString(), &bls); err != nil {
+			if err := prototext.Unmarshal(row[0].ToBytes(), &bls); err != nil {
 				return err
 			}
 			pos, err := binlogplayer.DecodePosition(row[1].ToString())

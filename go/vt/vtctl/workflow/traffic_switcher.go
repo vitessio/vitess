@@ -26,7 +26,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/encoding/prototext"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/logutil"
@@ -203,7 +203,7 @@ func BuildTargets(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManag
 			}
 
 			var bls binlogdatapb.BinlogSource
-			if err := proto.UnmarshalText(row[1].ToString(), &bls); err != nil {
+			if err := prototext.Unmarshal(row[1].ToBytes(), &bls); err != nil {
 				return nil, err
 			}
 

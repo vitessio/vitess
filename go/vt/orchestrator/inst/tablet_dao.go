@@ -20,7 +20,9 @@ import (
 	"context"
 	"errors"
 
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/encoding/prototext"
+
+	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/orchestrator/db"
@@ -124,7 +126,7 @@ func ReadTablet(instanceKey InstanceKey) (*topodatapb.Tablet, error) {
 	args := sqlutils.Args(instanceKey.Hostname, instanceKey.Port)
 	tablet := &topodatapb.Tablet{}
 	err := db.QueryOrchestrator(query, args, func(row sqlutils.RowMap) error {
-		return proto.UnmarshalText(row.GetString("info"), tablet)
+		return prototext.Unmarshal([]byte(row.GetString("info")), tablet)
 	})
 	if err != nil {
 		return nil, err
@@ -137,7 +139,11 @@ func ReadTablet(instanceKey InstanceKey) (*topodatapb.Tablet, error) {
 
 // SaveTablet saves the tablet record against the instanceKey.
 func SaveTablet(tablet *topodatapb.Tablet) error {
-	_, err := db.ExecOrchestrator(`
+	tabletp, err := prototext.Marshal(tablet)
+	if err != nil {
+		return err
+	}
+	_, err = db.ExecOrchestrator(`
 		replace
 			into vitess_tablet (
 				hostname, port, cell, keyspace, shard, tablet_type, master_timestamp, info
@@ -152,7 +158,7 @@ func SaveTablet(tablet *topodatapb.Tablet) error {
 		tablet.Shard,
 		int(tablet.Type),
 		logutil.ProtoToTime(tablet.MasterTermStartTime),
-		proto.CompactTextString(tablet),
+		tabletp,
 	)
 	return err
 }

@@ -22,6 +22,7 @@ import (
 	stderrors "errors"
 	"fmt"
 	"net/http"
+	stdsort "sort"
 	"strings"
 	"sync"
 	"time"
@@ -55,6 +56,8 @@ import (
 // API is the main entrypoint for the vtadmin server. It implements
 // vtadminpb.VTAdminServer.
 type API struct {
+	vtadminpb.UnimplementedVTAdminServer
+
 	clusters   []*cluster.Cluster
 	clusterMap map[string]*cluster.Cluster
 	serv       *grpcserver.Server
@@ -436,6 +439,10 @@ func (api *API) GetSchemas(ctx context.Context, req *vtadminpb.GetSchemasRequest
 	if er.HasErrors() {
 		return nil, er.Error()
 	}
+
+	stdsort.Slice(schemas, func(i, j int) bool {
+		return schemas[i].Cluster.Id < schemas[j].Cluster.Id
+	})
 
 	return &vtadminpb.GetSchemasResponse{
 		Schemas: schemas,
