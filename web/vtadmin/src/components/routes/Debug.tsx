@@ -6,6 +6,7 @@ import { Icon, Icons } from '../Icon';
 import { Select } from '../inputs/Select';
 import { ContentContainer } from '../layout/ContentContainer';
 import { TextInput } from '../TextInput';
+import { Tooltip } from '../tooltip/Tooltip';
 import style from './Debug.module.scss';
 
 export const Debug = () => {
@@ -47,7 +48,9 @@ export const Debug = () => {
                     <h3>Icons</h3>
                     <div className={style.iconContainer}>
                         {Object.values(Icons).map((i) => (
-                            <Icon className={style.icon} icon={i} key={i} />
+                            <Tooltip text={i}>
+                                <Icon className={style.icon} icon={i} key={i} tabIndex={0} />
+                            </Tooltip>
                         ))}
                     </div>
                 </section>
