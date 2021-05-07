@@ -1,5 +1,5 @@
 /*
-Copyright 2020 The Vitess Authors.
+Copyright 2021 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -19,7 +19,6 @@ package vreplication
 import (
 	"fmt"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 )
@@ -61,6 +60,7 @@ const smMaterializeSpec = `{"workflow": "wf1", "source_keyspace": "ks1", "target
 
 const initDataQuery = `insert into ks1.tx(id, typ, val) values (1, 1, 'abc'), (2, 1, 'def'), (3, 2, 'def'), (4, 2, 'abc'), (5, 3, 'def'), (6, 3, 'abc')`
 
+// TestShardedMaterialize tests a materialize from a sharded (single shard) using comparison filters
 func TestShardedMaterialize(t *testing.T) {
 	defaultCellName := "zone1"
 	allCells := []string{"zone1"}
@@ -72,7 +72,7 @@ func TestShardedMaterialize(t *testing.T) {
 	defaultReplicas = 0 // because of CI resource constraints we can only run this test with master tablets
 	defer func() { defaultReplicas = 1 }()
 
-	//defer vc.TearDown(t)
+	defer vc.TearDown(t)
 
 	defaultCell = vc.Cells[defaultCellName]
 	vc.AddKeyspace(t, []*Cell{defaultCell}, ks1, "-", smVSchema, smSchema, defaultReplicas, defaultRdonly, 100)
@@ -89,6 +89,10 @@ func TestShardedMaterialize(t *testing.T) {
 	_, err := vtgateConn.ExecuteFetch(initDataQuery, 0, false)
 	require.NoError(t, err)
 	materialize(t, smMaterializeSpec)
-	time.Sleep(5 * time.Second)
+	tab := vc.Cells[defaultCell.Name].Keyspaces[ks2].Shards["-"].Tablets["zone1-200"].Vttablet
+	catchup(t, tab, "wf1", "Materialize")
+
 	validateCount(t, vtgateConn, ks2, "tx", 2)
+	validateQuery(t, vtgateConn, "ks2:-", "select id, val from tx",
+		`[[INT64(3) VARBINARY("def")] [INT64(5) VARBINARY("def")]]`)
 }
