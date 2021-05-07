@@ -9659,3 +9659,4 @@
 2021-05-07T09:18:46Z,Cluster (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/819757506
 2021-05-07T11:17:56Z,Cluster (17),https://github.com/vitessio/vitess/actions/runs/820069868
 2021-05-07T12:24:30Z,Cluster (upgrade),https://github.com/vitessio/vitess/actions/runs/820232405
+2021-05-07T12:38:40Z,unit_race,https://github.com/vitessio/vitess/actions/runs/820269811
