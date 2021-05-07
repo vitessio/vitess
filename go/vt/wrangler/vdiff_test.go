@@ -1259,6 +1259,56 @@ func TestVDiffNullWeightString(t *testing.T) {
 		dr: &DiffReport{
 			ProcessedRows:  3,
 			MismatchedRows: 3,
+			MismatchedRowsSamle: []*DiffContent{
+				{
+					Source: &RowDiff{Row: map[string]sqltypes.Value{
+						"c1":                sqltypes.NewInt64(1),
+						"c2":                sqltypes.NewVarChar("abd"),
+						"weight_string(c2)": sqltypes.NULL,
+					},
+						Query: "",
+					},
+					Target: &RowDiff{Row: map[string]sqltypes.Value{
+						"c1":                sqltypes.NewInt64(1),
+						"c2":                sqltypes.NewVarChar("abc"),
+						"weight_string(c2)": sqltypes.NULL,
+					},
+						Query: "",
+					},
+				},
+				{
+					Source: &RowDiff{Row: map[string]sqltypes.Value{
+						"c1":                sqltypes.NewInt64(2),
+						"c2":                sqltypes.NewVarChar("abd"),
+						"weight_string(c2)": sqltypes.NewVarBinary("abd"),
+					},
+						Query: "",
+					},
+					Target: &RowDiff{Row: map[string]sqltypes.Value{
+						"c1":                sqltypes.NewInt64(2),
+						"c2":                sqltypes.NewVarChar("abc"),
+						"weight_string(c2)": sqltypes.NewVarBinary("abc"),
+					},
+						Query: "",
+					},
+				},
+				{
+					Source: &RowDiff{Row: map[string]sqltypes.Value{
+						"c1":                sqltypes.NewInt64(3),
+						"c2":                sqltypes.NewVarChar("abd"),
+						"weight_string(c2)": sqltypes.NULL,
+					},
+						Query: "",
+					},
+					Target: &RowDiff{Row: map[string]sqltypes.Value{
+						"c1":                sqltypes.NewInt64(3),
+						"c2":                sqltypes.NewVarChar("abc"),
+						"weight_string(c2)": sqltypes.NULL,
+					},
+						Query: "",
+					},
+				},
+			},
 		},
 	}, {
 		//this explicitly tests for a bug that existed with a small max_allowed_packet setting
@@ -1273,6 +1323,24 @@ func TestVDiffNullWeightString(t *testing.T) {
 		dr: &DiffReport{
 			ProcessedRows:  1,
 			MismatchedRows: 1,
+			MismatchedRowsSamle: []*DiffContent{
+				{
+					Source: &RowDiff{Row: map[string]sqltypes.Value{
+						"c1":                sqltypes.NewInt64(1),
+						"c2":                sqltypes.NewVarChar("abd"),
+						"weight_string(c2)": sqltypes.NULL,
+					},
+						Query: "",
+					},
+					Target: &RowDiff{Row: map[string]sqltypes.Value{
+						"c1":                sqltypes.NewInt64(1),
+						"c2":                sqltypes.NewVarChar("abc"),
+						"weight_string(c2)": sqltypes.NULL,
+					},
+						Query: "",
+					},
+				},
+			},
 		},
 	}}
 	for _, tcase := range testcases {
