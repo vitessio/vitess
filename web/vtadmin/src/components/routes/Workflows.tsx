@@ -31,6 +31,7 @@ import { ContentContainer } from '../layout/ContentContainer';
 import { WorkspaceHeader } from '../layout/WorkspaceHeader';
 import { WorkspaceTitle } from '../layout/WorkspaceTitle';
 import { DataFilter } from '../dataTable/DataFilter';
+import { Tooltip } from '../tooltip/Tooltip';
 
 export const Workflows = () => {
     useDocumentTitle('Workflows');
@@ -88,18 +89,30 @@ export const Workflows = () => {
                         )}
                     </DataCell>
 
-                    {/* TODO(doeg): add a protobuf enum for this (https://github.com/vitessio/vitess/projects/12#card-60190340) */}
-                    {['Error', 'Copying', 'Running', 'Stopped'].map((streamState) => (
-                        <DataCell key={streamState}>
-                            {streamState in row.streams ? (
-                                <>
-                                    <StreamStatePip state={streamState} /> {row.streams[streamState].length}
-                                </>
-                            ) : (
-                                <span className="text-color-secondary">-</span>
-                            )}
-                        </DataCell>
-                    ))}
+                    <DataCell>
+                        <div className={style.streams}>
+                            {/* TODO(doeg): add a protobuf enum for this (https://github.com/vitessio/vitess/projects/12#card-60190340) */}
+                            {['Error', 'Copying', 'Running', 'Stopped'].map((streamState) => {
+                                if (streamState in row.streams) {
+                                    const streamCount = row.streams[streamState].length;
+                                    const tooltip = [
+                                        streamCount,
+                                        streamState === 'Error' ? 'failed' : streamState.toLocaleLowerCase(),
+                                        streamCount === 1 ? 'stream' : 'streams',
+                                    ].join(' ');
+
+                                    return (
+                                        <Tooltip text={tooltip}>
+                                            <span className={style.stream}>
+                                                <StreamStatePip state={streamState} /> {streamCount}
+                                            </span>
+                                        </Tooltip>
+                                    );
+                                }
+                                return <span className={style.streamPlaceholder}>-</span>;
+                            })}
+                        </div>
+                    </DataCell>
 
                     <DataCell>
                         <div className="font-family-primary white-space-nowrap">{formatDateTime(row.timeUpdated)}</div>
@@ -126,7 +139,7 @@ export const Workflows = () => {
                 />
 
                 <DataTable
-                    columns={['Workflow', 'Source', 'Target', 'Error', 'Copying', 'Running', 'Stopped', 'Last Updated']}
+                    columns={['Workflow', 'Source', 'Target', 'Streams', 'Last Updated']}
                     data={sortedData}
                     renderRows={renderRows}
                 />
