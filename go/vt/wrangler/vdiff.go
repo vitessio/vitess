@@ -62,14 +62,16 @@ type DiffReport struct {
 	ExtraRowsSourceSample []*RowDiff
 	ExtraRowsTarget       int
 	ExtraRowsTargetSample []*RowDiff
-	MismatchedRowsSamle   []*DiffContent
+	MismatchedRowsSample  []*DiffMismatch
 }
 
-type DiffContent struct {
+// DiffMismatch is a sample of row diffs between source and target.
+type DiffMismatch struct {
 	Source *RowDiff
 	Target *RowDiff
 }
 
+// RowDiff is a row that didn't match as part of the comparison.
 type RowDiff struct {
 	Row   map[string]sqltypes.Value
 	Query string
@@ -273,7 +275,7 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflowName, sou
 				wr.Logger().Printf("\tSample extra row in target %v:\n", i)
 				formatSampleRow(wr.Logger(), rs, debug)
 			}
-			for i, rs := range dr.MismatchedRowsSamle {
+			for i, rs := range dr.MismatchedRowsSample {
 				wr.Logger().Printf("\tSample rows with mismatch %v:\n", i)
 				wr.Logger().Printf("\t\tSource row:\n")
 				formatSampleRow(wr.Logger(), rs.Source, debug)
@@ -1014,7 +1016,7 @@ func (td *tableDiffer) diff(ctx context.Context, wr *Wrangler, rowsToCompare *in
 				if err != nil {
 					return nil, vterrors.Wrap(err, "unexpected error generating diff")
 				}
-				dr.MismatchedRowsSamle = append(dr.MismatchedRowsSamle, &DiffContent{Source: sourceDiffRow, Target: targetDiffRow})
+				dr.MismatchedRowsSample = append(dr.MismatchedRowsSample, &DiffMismatch{Source: sourceDiffRow, Target: targetDiffRow})
 			}
 			dr.MismatchedRows++
 		default:
@@ -1179,14 +1181,6 @@ func wrapWeightString(expr sqlparser.SelectExpr) *sqlparser.AliasedExpr {
 				},
 			},
 		},
-	}
-}
-
-func formatSampleRows(title string, logger logutil.Logger, rowDiffs []*RowDiff, debug bool) {
-	for i, rs := range rowDiffs {
-		logger.Printf("\tSample extra row in %s %v:\n", title, i)
-		logger.Printf("\t\tRow:\n")
-		formatSampleRow(logger, rs, debug)
 	}
 }
 
