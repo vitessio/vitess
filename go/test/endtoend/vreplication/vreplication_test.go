@@ -162,7 +162,10 @@ func TestMultiCellVreplicationWorkflow(t *testing.T) {
 
 func TestCellAliasVreplicationWorkflow(t *testing.T) {
 	cells := []string{"zone1", "zone2"}
-
+	mainClusterConfig.vreplicationCompressGTID = true
+	defer func() {
+		mainClusterConfig.vreplicationCompressGTID = false
+	}()
 	vc = NewVitessCluster(t, "TestBasicVreplicationWorkflow", cells, mainClusterConfig)
 	require.NotNil(t, vc)
 	allCellNames = "zone1,zone2"
