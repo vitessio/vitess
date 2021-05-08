@@ -81,7 +81,7 @@ func (r *switcher) changeRouting(ctx context.Context) error {
 }
 
 func (r *switcher) streamMigraterfinalize(ctx context.Context, ts *trafficSwitcher, workflows []string) error {
-	return streamMigraterfinalize(ctx, ts, workflows)
+	return workflow.StreamMigratorFinalize(ctx, ts, workflows)
 }
 
 func (r *switcher) createReverseVReplication(ctx context.Context) error {
