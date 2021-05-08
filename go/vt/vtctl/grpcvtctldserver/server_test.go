@@ -4581,6 +4581,44 @@ func TestReparentTablet(t *testing.T) {
 			shouldErr: true,
 		},
 		{
+			name: "requested tablet is shard primary",
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Type:     topodatapb.TabletType_MASTER,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+			},
+			shards: []*vtctldatapb.Shard{
+				{
+					Keyspace: "testkeyspace",
+					Name:     "-",
+					Shard: &topodatapb.Shard{
+						MasterAlias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+						MasterTermStartTime: &vttime.Time{
+							Seconds: 1010,
+						},
+						IsMasterServing: true,
+					},
+				},
+			},
+			req: &vtctldatapb.ReparentTabletRequest{
+				Tablet: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+			expected:  nil,
+			shouldErr: true,
+		},
+		{
 			name: "tmc.SetMaster failure",
 			tmc: &testutil.TabletManagerClient{
 				SetMasterResults: map[string]error{
