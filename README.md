@@ -6,6 +6,51 @@
 [![CII Best Practices](https://bestpractices.coreinfrastructure.org/projects/1724/badge)](https://bestpractices.coreinfrastructure.org/projects/1724)
 [![Coverage](https://sonarcloud.io/api/project_badges/measure?project=vitessio&metric=coverage)](https://sonarcloud.io/dashboard?id=vitessio)
 
+# Branch description
+
+Collapsed commits from
+
+```
+26f2fb7a5b (origin/latest, latest) Hide the overly specific Vitess version string from clients (#283)
+887e04d397 backups: try to fix short write error (#255)
+0ecde2c095 kmsbackup: switch to fully use annoations (#253)
+d92f903071 kmsbackup: support annotations (#230)
+c5a1d9b953 rebase from upstream main branch, master has been renamed (#235)
+babb2c668d Push latest to old PSOP repo (#231)
+d7426114a7 kmsbackup: tests and code cleanup (#212)
+743ed110df Add back image name to nightly images (#225)
+366a36c148 Fix images output var reference in nightly (#224)
+8cc1b4221e Build fewer images and push vthead to dev (#222)
+1781e7243a Really, actually, for realsies fix nightly (#217)
+5509ac7eb7 Fix nightly sha (#216)
+f4354d8147 Fix nightly image sha (#214)
+5345c46f68 Nightly build main not latest (default) (#213)
+cd02bd7840 Implement updated branching strategy.
+a3e68bbfc0 Remove upstream sha from build workflows (#207)
+06952d46d0 Annotate branch
+92156fedc1 kmsbackup: backup implementation for singularity
+6416572e30 Simplify CODEOWNERS
+fbbf8d6eb6 Add vttablet-starter. (#46)
+2618a29eae Setup nightly builds
+05a699a6a2 .github: Add workflow to rebase from upstream.
+dc63ef0bd6 Add README.md for private fork.
+```
+
+to
+
+```
+58a25c4f70 (HEAD -> ss-cleanup) Annotate branch
+b43ff9fd61 Hide the overly specific Vitess version string from clients (#283)
+b2d1a76fd9 kmsbackup: backup implementation for singularity
+e4f2248683 Add vttablet-starter. (#46)
+a3fca7de96 PlanetScale workflows
+f8674ca2b2 Simplify CODEOWNERS
+dc63ef0bd6 Add README.md for private fork.
+```
+
+Also dropped 887e04d397 because it was not helpful.
+
+
 # Vitess 
 
 Vitess is a database clustering system for horizontal scaling of MySQL
