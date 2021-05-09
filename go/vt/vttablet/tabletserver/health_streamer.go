@@ -23,11 +23,18 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/vt/dbconfigs"
+
+	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/timer"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
+
 	"context"
 
 	"github.com/golang/protobuf/proto"
 
 	"vitess.io/vitess/go/history"
+	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -51,7 +58,7 @@ var (
 type healthStreamer struct {
 	stats              *tabletenv.Stats
 	degradedThreshold  time.Duration
-	unhealthyThreshold time.Duration
+	unhealthyThreshold sync2.AtomicDuration
 
 	mu      sync.Mutex
 	ctx     context.Context
@@ -60,13 +67,29 @@ type healthStreamer struct {
 	state   *querypb.StreamHealthResponse
 
 	history *history.History
+
+	ticks       *timer.Timer
+	dbConfig    dbconfigs.Connector
+	conns       *connpool.Pool
+	initSuccess bool
 }
 
 func newHealthStreamer(env tabletenv.Env, alias topodatapb.TabletAlias) *healthStreamer {
+	var newTimer *timer.Timer
+	var pool *connpool.Pool
+	if env.Config().SignalWhenSchemaChange {
+		reloadTime := env.Config().SchemaReloadIntervalSeconds.Get()
+		newTimer = timer.NewTimer(reloadTime)
+		// We need one connection for the reloader.
+		pool = connpool.NewPool(env, "", tabletenv.ConnPoolConfig{
+			Size:               1,
+			IdleTimeoutSeconds: env.Config().OltpReadPool.IdleTimeoutSeconds,
+		})
+	}
 	return &healthStreamer{
 		stats:              env.Stats(),
 		degradedThreshold:  env.Config().Healthcheck.DegradedThresholdSeconds.Get(),
-		unhealthyThreshold: env.Config().Healthcheck.UnhealthyThresholdSeconds.Get(),
+		unhealthyThreshold: sync2.NewAtomicDuration(env.Config().Healthcheck.UnhealthyThresholdSeconds.Get()),
 		clients:            make(map[chan *querypb.StreamHealthResponse]struct{}),
 
 		state: &querypb.StreamHealthResponse{
@@ -78,14 +101,17 @@ func newHealthStreamer(env tabletenv.Env, alias topodatapb.TabletAlias) *healthS
 		},
 
 		history: history.New(5),
+		ticks:   newTimer,
+		conns:   pool,
 	}
 }
 
-func (hs *healthStreamer) InitDBConfig(target querypb.Target) {
+func (hs *healthStreamer) InitDBConfig(target querypb.Target, cp dbconfigs.Connector) {
 	// Weird test failures happen if we don't instantiate
 	// a separate variable.
 	inner := target
 	hs.state.Target = &inner
+	hs.dbConfig = cp
 }
 
 func (hs *healthStreamer) Open() {
@@ -95,7 +121,17 @@ func (hs *healthStreamer) Open() {
 	if hs.cancel != nil {
 		return
 	}
-	hs.ctx, hs.cancel = context.WithCancel(context.TODO())
+	hs.ctx, hs.cancel = context.WithCancel(context.Background())
+	if hs.conns != nil {
+		// if we don't have a live conns object, it means we are not configured to signal when the schema changes
+		hs.conns.Open(hs.dbConfig, hs.dbConfig, hs.dbConfig)
+		hs.ticks.Start(func() {
+			if err := hs.reload(); err != nil {
+				log.Errorf("periodic schema reload failed in health stream: %v", err)
+			}
+		})
+	}
+
 }
 
 func (hs *healthStreamer) Close() {
@@ -103,6 +139,10 @@ func (hs *healthStreamer) Close() {
 	defer hs.mu.Unlock()
 
 	if hs.cancel != nil {
+		if hs.ticks != nil {
+			hs.ticks.Stop()
+			hs.conns.Close()
+		}
 		hs.cancel()
 		hs.cancel = nil
 	}
@@ -181,6 +221,17 @@ func (hs *healthStreamer) ChangeState(tabletType topodatapb.TabletType, terTimes
 
 	shr := proto.Clone(hs.state).(*querypb.StreamHealthResponse)
 
+	hs.broadCastToClients(shr)
+	hs.history.Add(&historyRecord{
+		Time:       time.Now(),
+		serving:    shr.Serving,
+		tabletType: shr.Target.TabletType,
+		lag:        lag,
+		err:        err,
+	})
+}
+
+func (hs *healthStreamer) broadCastToClients(shr *querypb.StreamHealthResponse) {
 	for ch := range hs.clients {
 		select {
 		case ch <- shr:
@@ -202,13 +253,6 @@ func (hs *healthStreamer) ChangeState(tabletType topodatapb.TabletType, terTimes
 			delete(hs.clients, ch)
 		}
 	}
-	hs.history.Add(&historyRecord{
-		Time:       time.Now(),
-		serving:    shr.Serving,
-		tabletType: shr.Target.TabletType,
-		lag:        lag,
-		err:        err,
-	})
 }
 
 func (hs *healthStreamer) AppendDetails(details []*kv) []*kv {
@@ -220,7 +264,7 @@ func (hs *healthStreamer) AppendDetails(details []*kv) []*kv {
 	sbm := time.Duration(hs.state.RealtimeStats.SecondsBehindMaster) * time.Second
 	class := healthyClass
 	switch {
-	case sbm > hs.unhealthyThreshold:
+	case sbm > hs.unhealthyThreshold.Get():
 		class = unhealthyClass
 	case sbm > hs.degradedThreshold:
 		class = unhappyClass
@@ -239,4 +283,99 @@ func (hs *healthStreamer) AppendDetails(details []*kv) []*kv {
 	}
 
 	return details
+}
+
+func (hs *healthStreamer) SetUnhealthyThreshold(v time.Duration) {
+	hs.unhealthyThreshold.Set(v)
+	shr := proto.Clone(hs.state).(*querypb.StreamHealthResponse)
+	for ch := range hs.clients {
+		select {
+		case ch <- shr:
+		default:
+			log.Info("Resetting health streamer clients due to unhealthy threshold change")
+			close(ch)
+			delete(hs.clients, ch)
+		}
+	}
+}
+
+// reload reloads the schema from the underlying mysql
+func (hs *healthStreamer) reload() error {
+	hs.mu.Lock()
+	defer hs.mu.Unlock()
+
+	// Schema Reload to happen only on master.
+	if hs.state.Target.TabletType != topodatapb.TabletType_MASTER {
+		return nil
+	}
+
+	ctx := hs.ctx
+	conn, err := hs.conns.Get(ctx)
+	if err != nil {
+		return err
+	}
+	defer conn.Recycle()
+
+	if !hs.initSuccess {
+		hs.initSuccess, err = hs.InitSchemaLocked(conn)
+		if err != nil {
+			return err
+		}
+	}
+
+	// TODO: fix the maxrows from using a magic number.
+	qr, err := conn.Exec(ctx, mysql.DetectSchemaChange, 10000, false)
+	if err != nil {
+		return err
+	}
+
+	// If no change detected, then return
+	if len(qr.Rows) == 0 {
+		return nil
+	}
+
+	// Reload the schema in a transaction.
+	_, err = conn.Exec(ctx, "begin", 1, false)
+	if err != nil {
+		return err
+	}
+	defer conn.Exec(ctx, "rollback", 1, false)
+
+	_, err = conn.Exec(ctx, mysql.ClearSchemaCopy, 1, false)
+	if err != nil {
+		return err
+	}
+
+	_, err = conn.Exec(ctx, mysql.InsertIntoSchemaCopy, 1, false)
+	if err != nil {
+		return err
+	}
+
+	_, err = conn.Exec(ctx, "commit", 1, false)
+	if err != nil {
+		return err
+	}
+
+	// publish only if changes are committed.
+	var tables []string
+	for _, row := range qr.Rows {
+		tables = append(tables, row[0].ToString())
+	}
+	hs.state.RealtimeStats.TableSchemaChanged = tables
+	shr := proto.Clone(hs.state).(*querypb.StreamHealthResponse)
+	hs.broadCastToClients(shr)
+	hs.state.RealtimeStats.TableSchemaChanged = nil
+
+	return nil
+}
+
+func (hs *healthStreamer) InitSchemaLocked(conn *connpool.DBConn) (bool, error) {
+	for _, query := range mysql.VTDatabaseInit {
+		_, err := conn.Exec(hs.ctx, query, 1, false)
+		if err != nil {
+			return false, err
+		}
+	}
+
+	return true, nil
 }

@@ -94,8 +94,8 @@ type Route struct {
 	ScatterErrorsAsWarnings bool
 
 	// The following two fields are used when routing information_schema queries
-	SysTableTableSchema evalengine.Expr
-	SysTableTableName   evalengine.Expr
+	SysTableTableSchema []evalengine.Expr
+	SysTableTableName   []evalengine.Expr
 
 	// Route does not take inputs
 	noInputs
@@ -347,12 +347,25 @@ func (route *Route) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.
 	}
 
 	if len(route.OrderBy) == 0 {
-		return vcursor.StreamExecuteMulti(route.Query, rss, bvs, func(qr *sqltypes.Result) error {
+		err = vcursor.StreamExecuteMulti(route.Query, rss, bvs, func(qr *sqltypes.Result) error {
 			return callback(qr.Truncate(route.TruncateColumnCount))
 		})
+		if err != nil {
+			if !route.ScatterErrorsAsWarnings {
+				return err
+			}
+			partialSuccessScatterQueries.Add(1)
+			sErr := mysql.NewSQLErrorFromError(err).(*mysql.SQLError)
+			vcursor.Session().RecordWarning(&querypb.QueryWarning{Code: uint32(sErr.Num), Message: err.Error()})
+		}
+		return nil
 	}
 
 	// There is an order by. We have to merge-sort.
+	return route.mergeSort(vcursor, bindVars, wantfields, callback, rss, bvs)
+}
+
+func (route *Route) mergeSort(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error, rss []*srvtopo.ResolvedShard, bvs []map[string]*querypb.BindVariable) error {
 	prims := make([]StreamExecutor, 0, len(rss))
 	for i, rs := range rss {
 		prims = append(prims, &shardRoute{
@@ -365,9 +378,18 @@ func (route *Route) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.
 		Primitives: prims,
 		OrderBy:    route.OrderBy,
 	}
-	return ms.StreamExecute(vcursor, bindVars, wantfields, func(qr *sqltypes.Result) error {
+	err := ms.StreamExecute(vcursor, bindVars, wantfields, func(qr *sqltypes.Result) error {
 		return callback(qr.Truncate(route.TruncateColumnCount))
 	})
+	if err != nil {
+		if !route.ScatterErrorsAsWarnings {
+			return err
+		}
+		partialSuccessScatterQueries.Add(1)
+		sErr := mysql.NewSQLErrorFromError(err).(*mysql.SQLError)
+		vcursor.Session().RecordWarning(&querypb.QueryWarning{Code: uint32(sErr.Num), Message: err.Error()})
+	}
+	return nil
 }
 
 // GetFields fetches the field info.
@@ -415,7 +437,7 @@ func (route *Route) routeInfoSchemaQuery(vcursor VCursor, bindVars map[string]*q
 		return destinations, vterrors.Wrapf(err, "failed to find information about keyspace `%s`", ks)
 	}
 
-	if route.SysTableTableName == nil && route.SysTableTableSchema == nil {
+	if len(route.SysTableTableName) == 0 && len(route.SysTableTableSchema) == 0 {
 		return defaultRoute()
 	}
 
@@ -425,22 +447,38 @@ func (route *Route) routeInfoSchemaQuery(vcursor VCursor, bindVars map[string]*q
 	}
 
 	var specifiedKS string
-	if route.SysTableTableSchema != nil {
-		result, err := route.SysTableTableSchema.Evaluate(env)
+	for _, tableSchema := range route.SysTableTableSchema {
+		result, err := tableSchema.Evaluate(env)
 		if err != nil {
 			return nil, err
 		}
-		specifiedKS = result.Value().ToString()
+		ks := result.Value().ToString()
+		if specifiedKS == "" {
+			specifiedKS = ks
+		}
+		if specifiedKS != ks {
+			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "specifying two different database in the query is not supported")
+		}
+	}
+	if specifiedKS != "" {
 		bindVars[sqltypes.BvSchemaName] = sqltypes.StringBindVariable(specifiedKS)
 	}
 
 	var tableName string
-	if route.SysTableTableName != nil {
-		val, err := route.SysTableTableName.Evaluate(env)
+	for _, sysTableName := range route.SysTableTableName {
+		val, err := sysTableName.Evaluate(env)
 		if err != nil {
 			return nil, err
 		}
-		tableName = val.Value().ToString()
+		tabName := val.Value().ToString()
+		if tableName == "" {
+			tableName = tabName
+		}
+		if tableName != tabName {
+			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "two predicates for table_name not supported")
+		}
+	}
+	if tableName != "" {
 		bindVars[BvTableName] = sqltypes.StringBindVariable(tableName)
 	}
 
@@ -729,11 +767,27 @@ func (route *Route) description() PrimitiveDescription {
 	if len(route.Values) > 0 {
 		other["Values"] = route.Values
 	}
-	if route.SysTableTableSchema != nil {
-		other["SysTableTableSchema"] = route.SysTableTableSchema.String()
+	if len(route.SysTableTableSchema) != 0 {
+		sysTabSchema := "["
+		for idx, tableSchema := range route.SysTableTableSchema {
+			if idx != 0 {
+				sysTabSchema += ", "
+			}
+			sysTabSchema += tableSchema.String()
+		}
+		sysTabSchema += "]"
+		other["SysTableTableSchema"] = sysTabSchema
 	}
-	if route.SysTableTableName != nil {
-		other["SysTableTableName"] = route.SysTableTableName.String()
+	if len(route.SysTableTableName) != 0 {
+		sysTableName := "["
+		for idx, tableName := range route.SysTableTableName {
+			if idx != 0 {
+				sysTableName += ", "
+			}
+			sysTableName += tableName.String()
+		}
+		sysTableName += "]"
+		other["SysTableTableName"] = sysTableName
 	}
 	orderBy := GenericJoin(route.OrderBy, orderByToString)
 	if orderBy != "" {

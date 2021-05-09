@@ -18,9 +18,7 @@ package planbuilder
 
 import (
 	"vitess.io/vitess/go/sqltypes"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
@@ -36,15 +34,9 @@ func (pb *primitiveBuilder) findSysInfoRoutingPredicates(expr sqlparser.Expr, ru
 	}
 
 	if isTableSchema {
-		if rut.eroute.SysTableTableSchema != nil && !evalengine.AreExprEqual(rut.eroute.SysTableTableSchema, out) {
-			return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "two predicates for specifying the database are not supported")
-		}
-		rut.eroute.SysTableTableSchema = out
+		rut.eroute.SysTableTableSchema = append(rut.eroute.SysTableTableSchema, out)
 	} else {
-		if rut.eroute.SysTableTableName != nil && !evalengine.AreExprEqual(rut.eroute.SysTableTableName, out) {
-			return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "two predicates for table_name not supported")
-		}
-		rut.eroute.SysTableTableName = out
+		rut.eroute.SysTableTableName = append(rut.eroute.SysTableTableName, out)
 	}
 
 	return nil

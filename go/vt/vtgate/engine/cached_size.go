@@ -295,6 +295,24 @@ func (cached *Lock) CachedSize(alloc bool) int64 {
 	size += int64(len(cached.Query))
 	return size
 }
+func (cached *MStream) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(40)
+	}
+	// field Keyspace *vitess.io/vitess/go/vt/vtgate/vindexes.Keyspace
+	size += cached.Keyspace.CachedSize(true)
+	// field TargetDestination vitess.io/vitess/go/vt/key.Destination
+	if cc, ok := cached.TargetDestination.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field TableName string
+	size += int64(len(cached.TableName))
+	return size
+}
 func (cached *MemorySort) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -344,7 +362,7 @@ func (cached *OnlineDDL) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(72)
+		size += int64(64)
 	}
 	// field Keyspace *vitess.io/vitess/go/vt/vtgate/vindexes.Keyspace
 	size += cached.Keyspace.CachedSize(true)
@@ -354,10 +372,12 @@ func (cached *OnlineDDL) CachedSize(alloc bool) int64 {
 	}
 	// field SQL string
 	size += int64(len(cached.SQL))
-	// field Strategy vitess.io/vitess/go/vt/schema.DDLStrategy
-	size += int64(len(cached.Strategy))
-	// field Options string
-	size += int64(len(cached.Options))
+	// field DDLStrategySetting *vitess.io/vitess/go/vt/schema.DDLStrategySetting
+	size += cached.DDLStrategySetting.CachedSize(true)
+	// field TargetDestination vitess.io/vitess/go/vt/key.Destination
+	if cc, ok := cached.TargetDestination.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
 	return size
 }
 func (cached *OrderedAggregate) CachedSize(alloc bool) int64 {
@@ -507,7 +527,7 @@ func (cached *RevertMigration) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(32)
+		size += int64(48)
 	}
 	// field Keyspace *vitess.io/vitess/go/vt/vtgate/vindexes.Keyspace
 	size += cached.Keyspace.CachedSize(true)
@@ -515,6 +535,10 @@ func (cached *RevertMigration) CachedSize(alloc bool) int64 {
 	size += cached.Stmt.CachedSize(true)
 	// field Query string
 	size += int64(len(cached.Query))
+	// field TargetDestination vitess.io/vitess/go/vt/key.Destination
+	if cc, ok := cached.TargetDestination.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
 	return size
 }
 func (cached *Route) CachedSize(alloc bool) int64 {
@@ -523,7 +547,7 @@ func (cached *Route) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(208)
+		size += int64(224)
 	}
 	// field Keyspace *vitess.io/vitess/go/vt/vtgate/vindexes.Keyspace
 	size += cached.Keyspace.CachedSize(true)
@@ -552,13 +576,23 @@ func (cached *Route) CachedSize(alloc bool) int64 {
 	{
 		size += int64(cap(cached.OrderBy)) * int64(32)
 	}
-	// field SysTableTableSchema vitess.io/vitess/go/vt/vtgate/evalengine.Expr
-	if cc, ok := cached.SysTableTableSchema.(cachedObject); ok {
-		size += cc.CachedSize(true)
+	// field SysTableTableSchema []vitess.io/vitess/go/vt/vtgate/evalengine.Expr
+	{
+		size += int64(cap(cached.SysTableTableSchema)) * int64(16)
+		for _, elem := range cached.SysTableTableSchema {
+			if cc, ok := elem.(cachedObject); ok {
+				size += cc.CachedSize(true)
+			}
+		}
 	}
-	// field SysTableTableName vitess.io/vitess/go/vt/vtgate/evalengine.Expr
-	if cc, ok := cached.SysTableTableName.(cachedObject); ok {
-		size += cc.CachedSize(true)
+	// field SysTableTableName []vitess.io/vitess/go/vt/vtgate/evalengine.Expr
+	{
+		size += int64(cap(cached.SysTableTableName)) * int64(16)
+		for _, elem := range cached.SysTableTableName {
+			if cc, ok := elem.(cachedObject); ok {
+				size += cc.CachedSize(true)
+			}
+		}
 	}
 	return size
 }
@@ -793,6 +827,26 @@ func (cached *UserDefinedVariable) CachedSize(alloc bool) int64 {
 	if cc, ok := cached.Expr.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
+	return size
+}
+func (cached *VStream) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(64)
+	}
+	// field Keyspace *vitess.io/vitess/go/vt/vtgate/vindexes.Keyspace
+	size += cached.Keyspace.CachedSize(true)
+	// field TargetDestination vitess.io/vitess/go/vt/key.Destination
+	if cc, ok := cached.TargetDestination.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field TableName string
+	size += int64(len(cached.TableName))
+	// field Position string
+	size += int64(len(cached.Position))
 	return size
 }
 func (cached *VindexFunc) CachedSize(alloc bool) int64 {

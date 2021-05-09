@@ -440,23 +440,7 @@ func (rb *route) JoinCanMerge(pb *primitiveBuilder, rrb *route, ajoin *sqlparser
 		if where == nil {
 			return true
 		}
-		tableWithRoutingPredicates := make(map[sqlparser.TableName]struct{})
-		_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
-			col, ok := node.(*sqlparser.ColName)
-			if ok {
-				hasRuntimeRoutingPredicates := isTableNameCol(col) || isDbNameCol(col)
-				if hasRuntimeRoutingPredicates && pb.st.tables[col.Qualifier] != nil {
-					tableWithRoutingPredicates[col.Qualifier] = struct{}{}
-				}
-			}
-			return true, nil
-		}, where)
-		// Routes can be merged if only 1 table is used in the predicates that are used for routing
-		// TODO :- Even if more table are present in the routing, we can merge if they agree
-		if len(tableWithRoutingPredicates) <= 1 {
-			return true
-		}
-		return len(tableWithRoutingPredicates) == 0
+		return ajoin != nil
 	}
 	if ajoin == nil {
 		return false
@@ -622,10 +606,36 @@ func (rb *route) computePlan(pb *primitiveBuilder, filter sqlparser.Expr) (opcod
 			return rb.computeINPlan(pb, node)
 		case sqlparser.NotInOp:
 			return rb.computeNotInPlan(node.Right), nil, nil
+		case sqlparser.LikeOp:
+			return rb.computeLikePlan(pb, node)
 		}
 	case *sqlparser.IsExpr:
 		return rb.computeISPlan(pb, node)
 	}
+	return engine.SelectScatter, nil, nil
+}
+
+// computeLikePlan computes the plan for 'LIKE' constraint
+func (rb *route) computeLikePlan(pb *primitiveBuilder, comparison *sqlparser.ComparisonExpr) (opcode engine.RouteOpcode, vindex vindexes.SingleColumn, condition sqlparser.Expr) {
+
+	left := comparison.Left
+	right := comparison.Right
+
+	if sqlparser.IsNull(right) {
+		return engine.SelectNone, nil, nil
+	}
+	if !rb.exprIsValue(right) {
+		return engine.SelectScatter, nil, nil
+	}
+	vindex = pb.st.Vindex(left, rb)
+	if vindex == nil {
+		// if there is no vindex defined, scatter
+		return engine.SelectScatter, nil, nil
+	}
+	if subsharding, ok := vindex.(vindexes.Prefixable); ok {
+		return engine.SelectEqual, subsharding.PrefixVindex(), right
+	}
+
 	return engine.SelectScatter, nil, nil
 }
 

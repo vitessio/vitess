@@ -93,7 +93,7 @@ func TestBasicVreplicationWorkflow(t *testing.T) {
 	defaultReplicas = 0 // because of CI resource constraints we can only run this test with master tablets
 	defer func() { defaultReplicas = 1 }()
 
-	defer vc.TearDown()
+	defer vc.TearDown(t)
 
 	defaultCell = vc.Cells[defaultCellName]
 	vc.AddKeyspace(t, []*Cell{defaultCell}, "product", "0", initialProductVSchema, initialProductSchema, defaultReplicas, defaultRdonly, 100)
@@ -108,7 +108,9 @@ func TestBasicVreplicationWorkflow(t *testing.T) {
 	materializeRollup(t)
 
 	shardCustomer(t, true, []*Cell{defaultCell}, defaultCellName)
-
+	// the tenant table was to test a specific case with binary sharding keys. Drop it now so that we don't
+	// have to update the rest of the tests
+	execVtgateQuery(t, vtgateConn, "customer", "drop table tenant")
 	validateRollupReplicates(t)
 	shardOrders(t)
 	shardMerchant(t)
@@ -140,7 +142,7 @@ func TestMultiCellVreplicationWorkflow(t *testing.T) {
 	defaultCellName := "zone1"
 	defaultCell = vc.Cells[defaultCellName]
 
-	defer vc.TearDown()
+	defer vc.TearDown(t)
 
 	cell1 := vc.Cells["zone1"]
 	cell2 := vc.Cells["zone2"]
@@ -160,14 +162,17 @@ func TestMultiCellVreplicationWorkflow(t *testing.T) {
 
 func TestCellAliasVreplicationWorkflow(t *testing.T) {
 	cells := []string{"zone1", "zone2"}
-
+	mainClusterConfig.vreplicationCompressGTID = true
+	defer func() {
+		mainClusterConfig.vreplicationCompressGTID = false
+	}()
 	vc = NewVitessCluster(t, "TestBasicVreplicationWorkflow", cells, mainClusterConfig)
 	require.NotNil(t, vc)
 	allCellNames = "zone1,zone2"
 	defaultCellName := "zone1"
 	defaultCell = vc.Cells[defaultCellName]
 
-	defer vc.TearDown()
+	defer vc.TearDown(t)
 
 	cell1 := vc.Cells["zone1"]
 	cell2 := vc.Cells["zone2"]
@@ -191,12 +196,12 @@ func TestCellAliasVreplicationWorkflow(t *testing.T) {
 
 func insertInitialData(t *testing.T) {
 	t.Run("insertInitialData", func(t *testing.T) {
-		fmt.Printf("Inserting initial data\n")
+		t.Logf("Inserting initial data")
 		lines, _ := ioutil.ReadFile("unsharded_init_data.sql")
 		execMultipleQueries(t, vtgateConn, "product:0", string(lines))
 		execVtgateQuery(t, vtgateConn, "product:0", "insert into customer_seq(id, next_id, cache) values(0, 100, 100);")
 		execVtgateQuery(t, vtgateConn, "product:0", "insert into order_seq(id, next_id, cache) values(0, 100, 100);")
-		fmt.Printf("Done inserting initial data\n")
+		t.Logf("Done inserting initial data")
 
 		validateCount(t, vtgateConn, "product:0", "product", 2)
 		validateCount(t, vtgateConn, "product:0", "customer", 3)
@@ -249,7 +254,7 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 			t.Fatal(err)
 		}
 
-		tables := "customer"
+		tables := "customer,tenant"
 		moveTables(t, sourceCellOrAlias, workflow, sourceKs, targetKs, tables)
 
 		// Assume we are operating on first cell
@@ -267,6 +272,7 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 		insertQuery1 := "insert into customer(cid, name) values(1001, 'tempCustomer1')"
 		matchInsertQuery1 := "insert into customer(cid, `name`) values (:vtg1, :vtg2)"
 		require.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, productTab, "product", insertQuery1, matchInsertQuery1))
+		execVtgateQuery(t, vtgateConn, "product", "update tenant set name='xyz'")
 		vdiff(t, ksWorkflow, "")
 		switchReadsDryRun(t, allCellNames, ksWorkflow, dryRunResultsReadCustomerShard)
 		switchReads(t, allCellNames, ksWorkflow)
@@ -472,10 +478,10 @@ func reshard(t *testing.T, ksName string, tableName string, workflow string, sou
 		targetShards = "," + targetShards + ","
 		for _, tab := range tablets {
 			if strings.Contains(targetShards, ","+tab.Shard+",") {
-				fmt.Printf("Waiting for vrepl to catch up on %s since it IS a target shard\n", tab.Shard)
+				t.Logf("Waiting for vrepl to catch up on %s since it IS a target shard", tab.Shard)
 				catchup(t, tab, workflow, "Reshard")
 			} else {
-				fmt.Printf("Not waiting for vrepl to catch up on %s since it is NOT a target shard\n", tab.Shard)
+				t.Logf("Not waiting for vrepl to catch up on %s since it is NOT a target shard", tab.Shard)
 				continue
 			}
 		}
@@ -560,7 +566,7 @@ func shardMerchant(t *testing.T) {
 func vdiff(t *testing.T, workflow, cells string) {
 	t.Run("vdiff", func(t *testing.T) {
 		output, err := vc.VtctlClient.ExecuteCommandWithOutput("VDiff", "-tablet_types=master", "-source_cell="+cells, "-format", "json", workflow)
-		fmt.Printf("vdiff err: %+v, output: %+v\n", err, output)
+		t.Logf("vdiff err: %+v, output: %+v", err, output)
 		require.Nil(t, err)
 		require.NotNil(t, output)
 		diffReports := make([]*wrangler.DiffReport, 0)
@@ -803,8 +809,7 @@ func verifyClusterHealth(t *testing.T, cluster *VitessCluster) {
 
 func catchup(t *testing.T, vttablet *cluster.VttabletProcess, workflow, info string) {
 	const MaxWait = 10 * time.Second
-	err := vc.WaitForVReplicationToCatchup(vttablet, workflow, fmt.Sprintf("vt_%s", vttablet.Keyspace), MaxWait)
-	require.NoError(t, err, fmt.Sprintf("%s timed out for workflow %s on tablet %s.%s.%s", info, workflow, vttablet.Keyspace, vttablet.Shard, vttablet.Name))
+	vttablet.WaitForVReplicationToCatchup(t, workflow, fmt.Sprintf("vt_%s", vttablet.Keyspace), MaxWait)
 }
 
 func moveTables(t *testing.T, cell, workflow, sourceKs, targetKs, tables string) {
@@ -843,7 +848,7 @@ func printSwitchWritesExtraDebug(t *testing.T, ksWorkflow, msg string) {
 	// Temporary code: print lots of info for debugging occasional flaky failures in customer reshard in CI for multicell test
 	debug := true
 	if debug {
-		fmt.Printf("------------------- START Extra debug info %s SwitchWrites %s\n", msg, ksWorkflow)
+		t.Logf("------------------- START Extra debug info %s SwitchWrites %s", msg, ksWorkflow)
 		ksShards := []string{"product/0", "customer/-80", "customer/80-"}
 		printShardPositions(vc, ksShards)
 		custKs := vc.Cells[defaultCell.Name].Keyspaces["customer"]
@@ -861,11 +866,11 @@ func printSwitchWritesExtraDebug(t *testing.T, ksWorkflow, msg string) {
 			for _, query := range queries {
 				qr, err := tab.QueryTablet(query, "", false)
 				require.NoError(t, err)
-				fmt.Printf("\nTablet:%s.%s.%s.%d\nQuery: %s\n%+v\n\n",
+				t.Logf("\nTablet:%s.%s.%s.%d\nQuery: %s\n%+v\n",
 					tab.Cell, tab.Keyspace, tab.Shard, tab.TabletUID, query, qr.Rows)
 			}
 		}
-		fmt.Printf("------------------- END Extra debug info %s SwitchWrites %s\n", msg, ksWorkflow)
+		t.Logf("------------------- END Extra debug info %s SwitchWrites %s", msg, ksWorkflow)
 	}
 }
 

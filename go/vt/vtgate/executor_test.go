@@ -195,7 +195,7 @@ func TestLegacyExecutorTransactionsNoAutoCommit(t *testing.T) {
 	// Prevent use of non-master if in_transaction is on.
 	session = NewSafeSession(&vtgatepb.Session{TargetString: "@master", InTransaction: true})
 	_, err = executor.Execute(ctx, "TestExecute", session, "use @replica", nil)
-	require.EqualError(t, err, `Can't execute the given command because you have an active transaction`)
+	require.EqualError(t, err, `can't execute the given command because you have an active transaction`)
 }
 
 func TestDirectTargetRewrites(t *testing.T) {
@@ -943,10 +943,7 @@ func TestExecutorUse(t *testing.T) {
 	}
 
 	_, err = executor.Execute(ctx, "TestExecute", NewSafeSession(&vtgatepb.Session{}), "use UnexistentKeyspace", nil)
-	wantErr = "Unknown database 'UnexistentKeyspace'"
-	if err == nil || err.Error() != wantErr {
-		t.Errorf("got: %v, want %v", err, wantErr)
-	}
+	require.EqualError(t, err, "unknown database 'UnexistentKeyspace'")
 }
 
 func TestExecutorComment(t *testing.T) {
@@ -1371,10 +1368,10 @@ func TestExecutorVindexDDLACL(t *testing.T) {
 	// test that by default no users can perform the operation
 	stmt := "alter vschema create vindex test_hash using hash"
 	_, err := executor.Execute(ctxRedUser, "TestExecute", session, stmt, nil)
-	require.EqualError(t, err, `User 'redUser' is not allowed to perform vschema operations`)
+	require.EqualError(t, err, `User 'redUser' is not authorized to perform vschema operations`)
 
 	_, err = executor.Execute(ctxBlueUser, "TestExecute", session, stmt, nil)
-	require.EqualError(t, err, `User 'blueUser' is not allowed to perform vschema operations`)
+	require.EqualError(t, err, `User 'blueUser' is not authorized to perform vschema operations`)
 
 	// test when all users are enabled
 	*vschemaacl.AuthorizedDDLUsers = "%"
@@ -1393,7 +1390,7 @@ func TestExecutorVindexDDLACL(t *testing.T) {
 	*vschemaacl.AuthorizedDDLUsers = "orangeUser, blueUser, greenUser"
 	vschemaacl.Init()
 	_, err = executor.Execute(ctxRedUser, "TestExecute", session, stmt, nil)
-	require.EqualError(t, err, `User 'redUser' is not allowed to perform vschema operations`)
+	require.EqualError(t, err, `User 'redUser' is not authorized to perform vschema operations`)
 
 	stmt = "alter vschema create vindex test_hash3 using hash"
 	_, err = executor.Execute(ctxBlueUser, "TestExecute", session, stmt, nil)
@@ -1803,63 +1800,6 @@ func TestDebugVSchema(t *testing.T) {
 	}
 	if _, ok := v["keyspaces"]; !ok {
 		t.Errorf("keyspaces missing: %v", resp.Body.String())
-	}
-}
-
-func TestGenerateCharsetRows(t *testing.T) {
-	rows := make([][]sqltypes.Value, 0, 4)
-	rows0 := [][]sqltypes.Value{
-		append(buildVarCharRow(
-			"utf8",
-			"UTF-8 Unicode",
-			"utf8_general_ci"),
-			sqltypes.NewInt32(3)),
-	}
-	rows1 := [][]sqltypes.Value{
-		append(buildVarCharRow(
-			"utf8mb4",
-			"UTF-8 Unicode",
-			"utf8mb4_general_ci"),
-			sqltypes.NewInt32(4)),
-	}
-	rows2 := [][]sqltypes.Value{
-		append(buildVarCharRow(
-			"utf8",
-			"UTF-8 Unicode",
-			"utf8_general_ci"),
-			sqltypes.NewInt32(3)),
-		append(buildVarCharRow(
-			"utf8mb4",
-			"UTF-8 Unicode",
-			"utf8mb4_general_ci"),
-			sqltypes.NewInt32(4)),
-	}
-
-	testcases := []struct {
-		input    string
-		expected [][]sqltypes.Value
-	}{
-		{input: "show charset", expected: rows2},
-		{input: "show character set", expected: rows2},
-		{input: "show charset where charset like 'foo%'", expected: rows},
-		{input: "show charset where charset like 'utf8%'", expected: rows0},
-		{input: "show charset where charset = 'utf8'", expected: rows0},
-		{input: "show charset where charset = 'foo%'", expected: rows},
-		{input: "show charset where charset = 'utf8mb4'", expected: rows1},
-	}
-
-	charsets := []string{"utf8", "utf8mb4"}
-
-	for _, tc := range testcases {
-		t.Run(tc.input, func(t *testing.T) {
-			stmt, err := sqlparser.Parse(tc.input)
-			require.NoError(t, err)
-			match := stmt.(*sqlparser.Show).Internal.(*sqlparser.ShowBasic)
-			filter := match.Filter
-			actual, err := generateCharsetRows(filter, charsets)
-			require.NoError(t, err)
-			require.Equal(t, tc.expected, actual)
-		})
 	}
 }
 

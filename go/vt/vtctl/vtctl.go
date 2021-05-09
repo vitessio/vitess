@@ -888,6 +888,10 @@ func commandChangeTabletType(ctx context.Context, wr *wrangler.Wrangler, subFlag
 	if err != nil {
 		return err
 	}
+
+	ctx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+	defer cancel()
+
 	if *dryRun {
 		ti, err := wr.TopoServer().GetTablet(ctx, tabletAlias)
 		if err != nil {
@@ -2153,7 +2157,7 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 	case vReplicationWorkflowActionProgress:
 		return printCopyProgress()
 	case vReplicationWorkflowActionCreate:
-		err = wf.Create()
+		err = wf.Create(ctx)
 		if err != nil {
 			return err
 		}
@@ -2783,7 +2787,7 @@ func commandValidateSchemaShard(ctx context.Context, wr *wrangler.Wrangler, subF
 	if *excludeTables != "" {
 		excludeTableArray = strings.Split(*excludeTables, ",")
 	}
-	return wr.ValidateSchemaShard(ctx, keyspace, shard, excludeTableArray, *includeViews)
+	return wr.ValidateSchemaShard(ctx, keyspace, shard, excludeTableArray, *includeViews, false /*includeVSchema*/)
 }
 
 func commandValidateSchemaKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -2840,7 +2844,7 @@ func commandApplySchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 		executor.SkipPreflight()
 	}
 	if err := executor.SetDDLStrategy(*ddlStrategy); err != nil {
-		return nil
+		return err
 	}
 
 	return schemamanager.Run(
@@ -2933,7 +2937,8 @@ func commandOnlineDDL(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag
 			}
 			requestContext := fmt.Sprintf("vtctl:%s", contextUUID)
 
-			onlineDDL, err := schema.NewOnlineDDL(keyspace, "", fmt.Sprintf("revert %s", uuid), schema.DDLStrategyOnline, "", requestContext)
+			ddlStrategySetting := schema.NewDDLStrategySetting(schema.DDLStrategyOnline, "")
+			onlineDDL, err := schema.NewOnlineDDL(keyspace, "", fmt.Sprintf("revert %s", uuid), ddlStrategySetting, requestContext)
 			if err != nil {
 				return err
 			}

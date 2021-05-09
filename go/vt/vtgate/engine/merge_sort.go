@@ -79,7 +79,7 @@ func (ms *MergeSort) StreamExecute(vcursor VCursor, bindVars map[string]*querypb
 
 	handles := make([]*streamHandle, len(ms.Primitives))
 	for i, input := range ms.Primitives {
-		handles[i] = runOneStream(vcursor, input, bindVars, wantfields)
+		handles[i] = runOneStream(ctx, vcursor, input, bindVars, wantfields)
 		// Need fields only from first handle, if wantfields was true.
 		wantfields = false
 	}
@@ -182,12 +182,11 @@ type streamHandle struct {
 }
 
 // runOnestream starts a streaming query on one shard, and returns a streamHandle for it.
-func runOneStream(vcursor VCursor, input StreamExecutor, bindVars map[string]*querypb.BindVariable, wantfields bool) *streamHandle {
+func runOneStream(ctx context.Context, vcursor VCursor, input StreamExecutor, bindVars map[string]*querypb.BindVariable, wantfields bool) *streamHandle {
 	handle := &streamHandle{
 		fields: make(chan []*querypb.Field, 1),
 		row:    make(chan []sqltypes.Value, 10),
 	}
-	ctx := vcursor.Context()
 
 	go func() {
 		defer close(handle.fields)

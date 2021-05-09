@@ -39,6 +39,7 @@ import (
 	"vitess.io/vitess/go/vt/vtadmin/errors"
 	"vitess.io/vitess/go/vt/vtadmin/grpcserver"
 	vtadminhttp "vitess.io/vitess/go/vt/vtadmin/http"
+	"vitess.io/vitess/go/vt/vtadmin/http/experimental"
 	vthandlers "vitess.io/vitess/go/vt/vtadmin/http/handlers"
 	"vitess.io/vitess/go/vt/vtadmin/sort"
 	"vitess.io/vitess/go/vt/vtadmin/vtadminproto"
@@ -100,7 +101,7 @@ func NewAPI(clusters []*cluster.Cluster, opts grpcserver.Options, httpOpts vtadm
 
 	vtadminpb.RegisterVTAdminServer(serv.GRPCServer(), api)
 
-	httpAPI := vtadminhttp.NewAPI(api)
+	httpAPI := vtadminhttp.NewAPI(api, httpOpts)
 
 	router.HandleFunc("/clusters", httpAPI.Adapt(vtadminhttp.GetClusters)).Name("API.GetClusters")
 	router.HandleFunc("/gates", httpAPI.Adapt(vtadminhttp.GetGates)).Name("API.GetGates")
@@ -115,6 +116,9 @@ func NewAPI(clusters []*cluster.Cluster, opts grpcserver.Options, httpOpts vtadm
 	router.HandleFunc("/vtexplain", httpAPI.Adapt(vtadminhttp.VTExplain)).Name("API.VTExplain")
 	router.HandleFunc("/workflow/{cluster_id}/{keyspace}/{name}", httpAPI.Adapt(vtadminhttp.GetWorkflow)).Name("API.GetWorkflow")
 	router.HandleFunc("/workflows", httpAPI.Adapt(vtadminhttp.GetWorkflows)).Name("API.GetWorkflows")
+
+	experimentalRouter := router.PathPrefix("/experimental").Subrouter()
+	experimentalRouter.HandleFunc("/tablet/{tablet}/debug/vars", httpAPI.Adapt(experimental.TabletDebugVarsPassthrough)).Name("API.TabletDebugVarsPassthrough")
 
 	// Middlewares are executed in order of addition. Our ordering (all
 	// middlewares being optional) is:
@@ -154,7 +158,7 @@ func (api *API) FindSchema(ctx context.Context, req *vtadminpb.FindSchemaRequest
 
 	span.Annotate("table", req.Table)
 
-	clusters, _ := api.getClustersForRequest(req.ClusterIds)
+	clusters, clusterIDs := api.getClustersForRequest(req.ClusterIds)
 
 	var (
 		m       sync.Mutex
@@ -217,7 +221,10 @@ func (api *API) FindSchema(ctx context.Context, req *vtadminpb.FindSchemaRequest
 
 	switch len(results) {
 	case 0:
-		return nil, fmt.Errorf("%w: no schemas found with table named %s", errors.ErrNoSchema, req.Table)
+		return nil, &errors.NoSuchSchema{
+			Clusters: clusterIDs,
+			Table:    req.Table,
+		}
 	case 1:
 		return results[0], nil
 	default:
@@ -264,28 +271,16 @@ func (api *API) GetGates(ctx context.Context, req *vtadminpb.GetGatesRequest) (*
 		go func(c *cluster.Cluster) {
 			defer wg.Done()
 
-			gs, err := c.Discovery.DiscoverVTGates(ctx, []string{})
+			gs, err := c.GetGates(ctx)
 			if err != nil {
-				er.RecordError(fmt.Errorf("DiscoverVTGates(cluster = %s): %w", c.ID, err))
+				er.RecordError(err)
 				return
 			}
 
 			m.Lock()
+			defer m.Unlock()
 
-			for _, g := range gs {
-				gates = append(gates, &vtadminpb.VTGate{
-					Cell: g.Cell,
-					Cluster: &vtadminpb.Cluster{
-						Id:   c.ID,
-						Name: c.Name,
-					},
-					Hostname:  g.Hostname,
-					Keyspaces: g.Keyspaces,
-					Pool:      g.Pool,
-				})
-			}
-
-			m.Unlock()
+			gates = append(gates, gs...)
 		}(c)
 	}
 
@@ -404,12 +399,24 @@ func (api *API) GetSchema(ctx context.Context, req *vtadminpb.GetSchemaRequest) 
 		return nil, fmt.Errorf("%w: no cluster with id %s", errors.ErrUnsupportedCluster, req.ClusterId)
 	}
 
-	return c.GetSchema(ctx, req.Keyspace, cluster.GetSchemaOptions{
+	schema, err := c.GetSchema(ctx, req.Keyspace, cluster.GetSchemaOptions{
 		BaseRequest: &vtctldatapb.GetSchemaRequest{
 			Tables: []string{req.Table},
 		},
 		TableSizeOptions: req.TableSizeOptions,
 	})
+	if err != nil {
+		return nil, err
+	}
+
+	if schema == nil || len(schema.TableDefinitions) == 0 {
+		return nil, &errors.NoSuchSchema{
+			Clusters: []string{req.ClusterId},
+			Table:    req.Table,
+		}
+	}
+
+	return schema, nil
 }
 
 // GetSchemas is part of the vtadminpb.VTAdminServer interface.

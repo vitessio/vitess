@@ -123,7 +123,7 @@ func TestQueryGraph(t *testing.T) {
 		t.Run(fmt.Sprintf("%d %s", i, sql), func(t *testing.T) {
 			tree, err := sqlparser.Parse(sql)
 			require.NoError(t, err)
-			semTable, err := semantics.Analyse(tree, &fakeSI{})
+			semTable, err := semantics.Analyze(tree, "", &fakeSI{})
 			require.NoError(t, err)
 			qgraph, err := createQGFromSelect(tree.(*sqlparser.Select), semTable)
 			require.NoError(t, err)
@@ -136,7 +136,7 @@ func TestQueryGraph(t *testing.T) {
 func TestString(t *testing.T) {
 	tree, err := sqlparser.Parse("select * from a,b join c on b.id = c.id where a.id = b.id and b.col IN (select 42) and func() = 'foo'")
 	require.NoError(t, err)
-	semTable, err := semantics.Analyse(tree, &fakeSI{})
+	semTable, err := semantics.Analyze(tree, "", &fakeSI{})
 	require.NoError(t, err)
 	qgraph, err := createQGFromSelect(tree.(*sqlparser.Select), semTable)
 	require.NoError(t, err)

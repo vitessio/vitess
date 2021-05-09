@@ -35,9 +35,6 @@ var (
 	// ErrInvalidRequest occurs when a request is invalid for any reason.
 	// For example, if mandatory parameters are undefined.
 	ErrInvalidRequest = errors.New("Invalid request")
-	// ErrNoSchema occurs when a schema definition cannot be found for a given
-	// set of filter criteria.
-	ErrNoSchema = errors.New("no such schema")
 	// ErrNoServingTablet occurs when a tablet with state SERVING cannot be
 	// found for a given set of filter criteria. It is a more specific form of
 	// ErrNoTablet

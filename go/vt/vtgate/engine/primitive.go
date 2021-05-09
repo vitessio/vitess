@@ -17,23 +17,21 @@ limitations under the License.
 package engine
 
 import (
+	"context"
 	"encoding/json"
 	"sync/atomic"
 	"time"
 
-	"vitess.io/vitess/go/vt/vtgate/vindexes"
-
 	"golang.org/x/sync/errgroup"
-
-	"vitess.io/vitess/go/vt/sqlparser"
-
-	"context"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/schema"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 )
@@ -104,6 +102,10 @@ type (
 
 		// KeyspaceAvailable returns true when a keyspace is visible from vtgate
 		KeyspaceAvailable(ks string) bool
+
+		MessageStream(rss []*srvtopo.ResolvedShard, tableName string, callback func(*sqltypes.Result) error) error
+
+		VStream(rss []*srvtopo.ResolvedShard, filter *binlogdatapb.Filter, gtid string, callback func(evs []*binlogdatapb.VEvent) error) error
 	}
 
 	//SessionActions gives primitives ability to interact with the session state

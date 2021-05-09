@@ -207,10 +207,25 @@ func (sbc *SandboxConn) StreamExecute(ctx context.Context, target *querypb.Targe
 		return err
 	}
 	parse, _ := sqlparser.Parse(query)
-	nextRs := sbc.getNextResult(parse)
-	sbc.sExecMu.Unlock()
 
-	return callback(nextRs)
+	if sbc.results == nil {
+		nextRs := sbc.getNextResult(parse)
+		sbc.sExecMu.Unlock()
+		return callback(nextRs)
+	}
+
+	for len(sbc.results) > 0 {
+		nextRs := sbc.getNextResult(parse)
+		sbc.sExecMu.Unlock()
+		err := callback(nextRs)
+		if err != nil {
+			return err
+		}
+		sbc.sExecMu.Lock()
+	}
+
+	sbc.sExecMu.Unlock()
+	return nil
 }
 
 // Begin is part of the QueryService interface.
@@ -481,7 +496,7 @@ func (sbc *SandboxConn) VStreamResults(ctx context.Context, target *querypb.Targ
 }
 
 // QueryServiceByAlias is part of the Gateway interface.
-func (sbc *SandboxConn) QueryServiceByAlias(_ *topodatapb.TabletAlias) (queryservice.QueryService, error) {
+func (sbc *SandboxConn) QueryServiceByAlias(_ *topodatapb.TabletAlias, _ *querypb.Target) (queryservice.QueryService, error) {
 	return sbc, nil
 }
 
@@ -579,6 +594,10 @@ func (sbc *SandboxConn) setTxReservedID(transactionID int64, reservedID int64) {
 	sbc.mapMu.Lock()
 	defer sbc.mapMu.Unlock()
 	sbc.txIDToRID[transactionID] = reservedID
+}
+
+func (sbc *SandboxConn) ResultsAllFetched() bool {
+	return len(sbc.results) == 0
 }
 
 func (sbc *SandboxConn) getTxReservedID(txID int64) int64 {

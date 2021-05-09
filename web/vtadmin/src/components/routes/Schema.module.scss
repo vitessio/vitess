@@ -13,23 +13,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-.header {
-  margin: 4.8rem 0;
-}
-
-.header h1 {
-  margin: 2.4rem 0 0 0;
-  padding: 0;
-}
-
 .headingMeta {
   display: flex;
 }
 
 .headingMeta span {
   display: inline-block;
-  font-size: var(--fontSizeLarge);
   line-height: 2;
 
   &::after {
@@ -42,6 +31,11 @@
   &:last-child::after {
     content: none;
   }
+}
+
+.container {
+  display: grid;
+  grid-gap: 16px;
 }
 
 .panel {
@@ -70,4 +64,17 @@
 .errorEmoji {
   display: block;
   font-size: 5.6rem;
+}
+
+.skBadge {
+  border: solid 1px var(--colorPrimary50);
+  border-radius: 6px;
+  color: var(--colorPrimary);
+  cursor: default;
+  display: inline-block;
+  font-size: var(--fontSizeSmall);
+  margin: 0 12px;
+  padding: 4px 8px;
+  text-transform: uppercase;
+  white-space: nowrap;
 }

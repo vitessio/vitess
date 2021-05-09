@@ -21,6 +21,11 @@ import (
 	"fmt"
 	"strings"
 
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
+
+	"vitess.io/vitess/go/bytes2"
+
 	"vitess.io/vitess/go/sqltypes"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -80,6 +85,38 @@ func (pq *ParsedQuery) Append(buf *strings.Builder, bindVariables map[string]*qu
 	return nil
 }
 
+// AppendFromRow behaves like Append but takes a querypb.Row directly, assuming that
+// the fields in the row are in the same order as the placeholders in this query.
+func (pq *ParsedQuery) AppendFromRow(buf *bytes2.Buffer, fields []*querypb.Field, row *querypb.Row) error {
+	if len(fields) < len(pq.bindLocations) {
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "wrong number of fields: got %d fields for %d bind locations ", len(fields), len(pq.bindLocations))
+	}
+	var offsetQuery int
+	var offsetRow int64
+	for i, loc := range pq.bindLocations {
+		buf.WriteString(pq.Query[offsetQuery:loc.offset])
+
+		typ := fields[i].Type
+		if typ == querypb.Type_TUPLE {
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected Type_TUPLE for value %d", i)
+		}
+
+		length := row.Lengths[i]
+		if length < 0 {
+			// -1 means a null variable; serialize it directly
+			buf.WriteString("null")
+		} else {
+			vv := sqltypes.MakeTrusted(typ, row.Values[offsetRow:offsetRow+length])
+			vv.EncodeSQLBytes2(buf)
+			offsetRow += length
+		}
+
+		offsetQuery = loc.offset + loc.length
+	}
+	buf.WriteString(pq.Query[offsetQuery:])
+	return nil
+}
+
 // MarshalJSON is a custom JSON marshaler for ParsedQuery.
 // Note that any queries longer that 512 bytes will be truncated.
 func (pq *ParsedQuery) MarshalJSON() ([]byte, error) {
@@ -91,7 +128,7 @@ func EncodeValue(buf *strings.Builder, value *querypb.BindVariable) {
 	if value.Type != querypb.Type_TUPLE {
 		// Since we already check for TUPLE, we don't expect an error.
 		v, _ := sqltypes.BindVariableToValue(value)
-		v.EncodeSQL(buf)
+		v.EncodeSQLStringBuilder(buf)
 		return
 	}
 
@@ -101,7 +138,7 @@ func EncodeValue(buf *strings.Builder, value *querypb.BindVariable) {
 		if i != 0 {
 			buf.WriteString(", ")
 		}
-		sqltypes.ProtoToValue(bv).EncodeSQL(buf)
+		sqltypes.ProtoToValue(bv).EncodeSQLStringBuilder(buf)
 	}
 	buf.WriteByte(')')
 }

@@ -22,6 +22,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/mysql/fakesqldb"
+
 	"context"
 
 	"github.com/stretchr/testify/assert"
@@ -531,9 +533,9 @@ func TestStateManagerValidations(t *testing.T) {
 	target.Shard = ""
 	target.TabletType = topodatapb.TabletType_REPLICA
 	err = sm.StartRequest(ctx, target, false)
-	assert.Contains(t, err.Error(), "invalid tablet type")
+	assert.Contains(t, err.Error(), "wrong tablet type")
 	err = sm.VerifyTarget(ctx, target)
-	assert.Contains(t, err.Error(), "invalid tablet type")
+	assert.Contains(t, err.Error(), "wrong tablet type")
 
 	sm.alsoAllow = []topodatapb.TabletType{topodatapb.TabletType_REPLICA}
 	err = sm.StartRequest(ctx, target, false)
@@ -696,7 +698,7 @@ func newTestStateManager(t *testing.T) *stateManager {
 		tableGC:     &testTableGC{},
 	}
 	sm.Init(env, querypb.Target{})
-	sm.hs.InitDBConfig(querypb.Target{})
+	sm.hs.InitDBConfig(querypb.Target{}, fakesqldb.New(t).ConnParams())
 	log.Infof("returning sm: %p", sm)
 	return sm
 }

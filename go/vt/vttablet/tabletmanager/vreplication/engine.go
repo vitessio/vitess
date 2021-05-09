@@ -25,7 +25,6 @@ import (
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
@@ -63,6 +62,7 @@ const (
 )
 
 var withDDL *withddl.WithDDL
+var withDDLInitialQueries []string
 
 const (
 	throttlerAppName = "vreplication"
@@ -72,7 +72,10 @@ func init() {
 	allddls := append([]string{}, binlogplayer.CreateVReplicationTable()...)
 	allddls = append(allddls, binlogplayer.AlterVReplicationTable...)
 	allddls = append(allddls, createReshardingJournalTable, createCopyState)
+	allddls = append(allddls, createVReplicationLog)
 	withDDL = withddl.New(allddls)
+
+	withDDLInitialQueries = append(withDDLInitialQueries, binlogplayer.WithDDLInitialQueries...)
 }
 
 // this are the default tablet_types that will be used by the tablet picker to find sources for a vreplication stream
@@ -342,7 +345,7 @@ func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error)
 	}
 
 	dbClient := vre.getDBClient(runAsAdmin)
-
+	vdbc := newVDBClient(dbClient, binlogplayer.NewStats())
 	if err := dbClient.Connect(); err != nil {
 		return nil, err
 	}
@@ -379,6 +382,9 @@ func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error)
 				return nil, err
 			}
 			vre.controllers[id] = ct
+			if err := insertLogWithParams(vdbc, LogStreamCreate, uint32(id), params); err != nil {
+				return nil, err
+			}
 		}
 		return qr, nil
 	case updateQuery:
@@ -417,6 +423,9 @@ func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error)
 				return nil, err
 			}
 			vre.controllers[id] = ct
+			if err := insertLog(vdbc, LogStateChange, uint32(id), params["state"], ""); err != nil {
+				return nil, err
+			}
 		}
 		return qr, nil
 	case deleteQuery:
@@ -432,6 +441,9 @@ func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error)
 			if ct := vre.controllers[id]; ct != nil {
 				ct.Stop()
 				delete(vre.controllers, id)
+			}
+			if err := insertLogWithParams(vdbc, LogStreamDelete, uint32(id), nil); err != nil {
+				return nil, err
 			}
 		}
 		if err := dbClient.Begin(); err != nil {
@@ -665,7 +677,7 @@ func (vre *Engine) transitionJournal(je *journalEvent) {
 // WaitForPos waits for the replication to reach the specified position.
 func (vre *Engine) WaitForPos(ctx context.Context, id int, pos string) error {
 	start := time.Now()
-	mPos, err := mysql.DecodePosition(pos)
+	mPos, err := binlogplayer.DecodePosition(pos)
 	if err != nil {
 		return err
 	}
@@ -703,7 +715,7 @@ func (vre *Engine) WaitForPos(ctx context.Context, id int, pos string) error {
 		case len(qr.Rows) > 1 || len(qr.Rows[0]) != 3:
 			return fmt.Errorf("unexpected result: %v", qr)
 		}
-		current, err := mysql.DecodePosition(qr.Rows[0][0].ToString())
+		current, err := binlogplayer.DecodePosition(qr.Rows[0][0].ToString())
 		if err != nil {
 			return err
 		}
@@ -772,7 +784,19 @@ func readRow(dbClient binlogplayer.DBClient, id int) (map[string]string, error) 
 	if len(qr.Fields) != len(qr.Rows[0]) {
 		return nil, fmt.Errorf("fields don't match rows: %v", qr)
 	}
-	return rowToMap(qr, 0)
+	row, err := rowToMap(qr, 0)
+	if err != nil {
+		return nil, err
+	}
+	gtid, ok := row["pos"]
+	if ok {
+		b := binlogplayer.MysqlUncompress(gtid)
+		if b != nil {
+			gtid = string(b)
+			row["pos"] = gtid
+		}
+	}
+	return row, nil
 }
 
 // rowToMap converts a row into a map for easier processing.

@@ -180,10 +180,10 @@ func buildDBPlan(show *sqlparser.ShowBasic, vschema ContextVSchema) (engine.Prim
 
 	if show.Command == sqlparser.Database {
 		//Hard code default databases
-		rows = append(rows, buildVarCharRow("information_schema"))
-		rows = append(rows, buildVarCharRow("mysql"))
-		rows = append(rows, buildVarCharRow("sys"))
-		rows = append(rows, buildVarCharRow("performance_schema"))
+		ks = append(ks, &vindexes.Keyspace{Name: "information_schema"},
+			&vindexes.Keyspace{Name: "mysql"},
+			&vindexes.Keyspace{Name: "sys"},
+			&vindexes.Keyspace{Name: "performance_schema"})
 	}
 
 	for _, v := range ks {
@@ -311,21 +311,21 @@ func generateCharsetRows(showFilter *sqlparser.ShowFilter, colNames []string) ([
 	} else {
 		cmpExp, ok := showFilter.Filter.(*sqlparser.ComparisonExpr)
 		if !ok {
-			return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.SyntaxError, "expect a 'LIKE' or '=' expression")
+			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "expect a 'LIKE' or '=' expression")
 		}
 
 		left, ok := cmpExp.Left.(*sqlparser.ColName)
 		if !ok {
-			return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.SyntaxError, "expect left side to be 'charset'")
+			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "expect left side to be 'charset'")
 		}
 		leftOk := left.Name.EqualString(charset)
 
 		if leftOk {
 			literal, ok := cmpExp.Right.(*sqlparser.Literal)
 			if !ok {
-				return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.SyntaxError, "we expect the right side to be a string")
+				return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "we expect the right side to be a string")
 			}
-			rightString := string(literal.Val)
+			rightString := literal.Val
 
 			switch cmpExp.Operator {
 			case sqlparser.EqualOp:

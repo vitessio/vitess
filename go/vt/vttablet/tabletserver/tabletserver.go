@@ -238,7 +238,7 @@ func (tsv *TabletServer) InitDBConfig(target querypb.Target, dbcfgs *dbconfigs.D
 	tsv.rt.InitDBConfig(target, mysqld)
 	tsv.txThrottler.InitDBConfig(target)
 	tsv.vstreamer.InitDBConfig(target.Keyspace)
-	tsv.hs.InitDBConfig(target)
+	tsv.hs.InitDBConfig(target, tsv.config.DB.DbaWithDB())
 	tsv.onlineDDLExecutor.InitDBConfig(target.Keyspace, target.Shard, dbcfgs.DBName)
 	tsv.lagThrottler.InitDBConfig(target.Keyspace, target.Shard)
 	tsv.tableGC.InitDBConfig(target.Keyspace, target.Shard, dbcfgs.DBName)
@@ -1791,6 +1791,16 @@ func (tsv *TabletServer) SetWarnResultSize(val int) {
 // WarnResultSize returns the warn result size.
 func (tsv *TabletServer) WarnResultSize() int {
 	return int(tsv.qe.warnResultSize.Get())
+}
+
+// SetThrottleMetricThreshold changes the throttler metric threshold
+func (tsv *TabletServer) SetThrottleMetricThreshold(val float64) {
+	tsv.lagThrottler.MetricsThreshold.Set(val)
+}
+
+// ThrottleMetricThreshold returns the throttler metric threshold
+func (tsv *TabletServer) ThrottleMetricThreshold() float64 {
+	return tsv.lagThrottler.MetricsThreshold.Get()
 }
 
 // SetPassthroughDMLs changes the setting to pass through all DMLs

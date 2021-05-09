@@ -46,7 +46,11 @@ func gen4Planner(_ string) func(sqlparser.Statement, *sqlparser.ReservedVars, Co
 }
 
 func newBuildSelectPlan(sel *sqlparser.Select, vschema ContextVSchema) (engine.Primitive, error) {
-	semTable, err := semantics.Analyse(sel, vschema)
+	keyspace, err := vschema.DefaultKeyspace()
+	if err != nil {
+		return nil, err
+	}
+	semTable, err := semantics.Analyze(sel, keyspace.Name, vschema)
 	if err != nil {
 		return nil, err
 	}
@@ -645,7 +649,19 @@ func createRoutePlan(table *queryTable, solves semantics.TableSet, vschema Conte
 		return nil, err
 	}
 	if vschemaTable.Name.String() != table.table.Name.String() {
-		return nil, semantics.Gen4NotSupportedF("routed tables")
+		// we are dealing with a routed table
+		name := table.table.Name
+		table.table.Name = vschemaTable.Name
+		astTable, ok := table.alias.Expr.(sqlparser.TableName)
+		if !ok {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] a derived table should never be a routed table")
+		}
+		realTableName := sqlparser.NewTableIdent(vschemaTable.Name.String())
+		astTable.Name = realTableName
+		if table.alias.As.IsEmpty() {
+			// if the user hasn't specified an alias, we'll insert one here so the old table name still works
+			table.alias.As = sqlparser.NewTableIdent(name.String())
+		}
 	}
 	plan := &routePlan{
 		solved: solves,

@@ -18,31 +18,28 @@ package engine
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"reflect"
 	"sort"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/test/utils"
-
-	"vitess.io/vitess/go/vt/vtgate/vindexes"
-
 	"golang.org/x/sync/errgroup"
 
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-
-	"vitess.io/vitess/go/vt/sqlparser"
-
-	"context"
-
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/schema"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 )
 
@@ -55,6 +52,14 @@ var _ SessionActions = (*noopVCursor)(nil)
 // noopVCursor is used to build other vcursors.
 type noopVCursor struct {
 	ctx context.Context
+}
+
+func (t *noopVCursor) VStream(rss []*srvtopo.ResolvedShard, filter *binlogdatapb.Filter, gtid string, callback func(evs []*binlogdatapb.VEvent) error) error {
+	panic("implement me")
+}
+
+func (t *noopVCursor) MessageStream(rss []*srvtopo.ResolvedShard, tableName string, callback func(*sqltypes.Result) error) error {
+	panic("implement me")
 }
 
 func (t *noopVCursor) KeyspaceAvailable(ks string) bool {
@@ -269,6 +274,7 @@ type loggingVCursor struct {
 	multiShardErrs []error
 
 	log []string
+	mu  sync.Mutex
 
 	resolvedTargetTabletType topodatapb.TabletType
 
@@ -396,8 +402,10 @@ func (f *loggingVCursor) ExecuteStandalone(query string, bindvars map[string]*qu
 }
 
 func (f *loggingVCursor) StreamExecuteMulti(query string, rss []*srvtopo.ResolvedShard, bindVars []map[string]*querypb.BindVariable, callback func(reply *sqltypes.Result) error) error {
+	f.mu.Lock()
 	f.log = append(f.log, fmt.Sprintf("StreamExecuteMulti %s %s", query, printResolvedShardsBindVars(rss, bindVars)))
 	r, err := f.nextResult()
+	f.mu.Unlock()
 	if err != nil {
 		return err
 	}
@@ -420,7 +428,7 @@ func (f *loggingVCursor) ResolveDestinations(keyspace string, ids []*querypb.Val
 		case key.DestinationAllShards:
 			shards = f.shards
 		case key.DestinationKeyRange:
-			shards = []string{"-20", "20-"}
+			shards = f.shardForKsid
 		case key.DestinationKeyspaceID:
 			if f.shardForKsid == nil || f.curShardForKsid >= len(f.shardForKsid) {
 				shards = []string{"-20"}

@@ -110,9 +110,9 @@ func TestSetAndEnum(t *testing.T) {
 		output: [][]string{{
 			`begin`,
 			fe.String(),
-			`type:ROW row_event:<table_name:"t1" row_changes:<after:<lengths:1 lengths:3 lengths:1 lengths:1 values:"1aaa51" > > > `,
-			`type:ROW row_event:<table_name:"t1" row_changes:<after:<lengths:1 lengths:3 lengths:1 lengths:1 values:"2bbb22" > > > `,
-			`type:ROW row_event:<table_name:"t1" row_changes:<after:<lengths:1 lengths:3 lengths:1 lengths:1 values:"3ccc73" > > > `,
+			`type:ROW row_event:<table_name:"t1" row_changes:<after:<lengths:1 lengths:4 lengths:1 lengths:1 values:"1aaa\00051" > > > `,
+			`type:ROW row_event:<table_name:"t1" row_changes:<after:<lengths:1 lengths:4 lengths:1 lengths:1 values:"2bbb\00022" > > > `,
+			`type:ROW row_event:<table_name:"t1" row_changes:<after:<lengths:1 lengths:4 lengths:1 lengths:1 values:"3ccc\00073" > > > `,
 			`gtid`,
 			`commit`,
 		}},
@@ -133,8 +133,8 @@ func TestCellValuePadding(t *testing.T) {
 	engine.se.Reload(context.Background())
 	queries := []string{
 		"begin",
-		"insert into t1 values (1, 'aaa')",
-		"insert into t1 values (2, 'bbb')",
+		"insert into t1 values (1, 'aaa\000')",
+		"insert into t1 values (2, 'bbb\000')",
 		"update t1 set id = 11 where val = 'aaa\000'",
 		"insert into t2 values (1, 'aaa')",
 		"insert into t2 values (2, 'bbb')",
@@ -147,9 +147,9 @@ func TestCellValuePadding(t *testing.T) {
 		output: [][]string{{
 			`begin`,
 			`type:FIELD field_event:<table_name:"t1" fields:<name:"id" type:INT32 table:"t1" org_table:"t1" database:"vttest" org_name:"id" column_length:11 charset:63 > fields:<name:"val" type:BINARY table:"t1" org_table:"t1" database:"vttest" org_name:"val" column_length:4 charset:63 > > `,
-			`type:ROW row_event:<table_name:"t1" row_changes:<after:<lengths:1 lengths:3 values:"1aaa" > > > `,
-			`type:ROW row_event:<table_name:"t1" row_changes:<after:<lengths:1 lengths:3 values:"2bbb" > > > `,
-			`type:ROW row_event:<table_name:"t1" row_changes:<before:<lengths:1 lengths:3 values:"1aaa" > after:<lengths:2 lengths:3 values:"11aaa" > > > `,
+			`type:ROW row_event:<table_name:"t1" row_changes:<after:<lengths:1 lengths:4 values:"1aaa\000" > > > `,
+			`type:ROW row_event:<table_name:"t1" row_changes:<after:<lengths:1 lengths:4 values:"2bbb\000" > > > `,
+			`type:ROW row_event:<table_name:"t1" row_changes:<before:<lengths:1 lengths:4 values:"1aaa\000" > after:<lengths:2 lengths:4 values:"11aaa\000" > > > `,
 			`type:FIELD field_event:<table_name:"t2" fields:<name:"id" type:INT32 table:"t2" org_table:"t2" database:"vttest" org_name:"id" column_length:11 charset:63 > fields:<name:"val" type:CHAR table:"t2" org_table:"t2" database:"vttest" org_name:"val" column_length:12 charset:33 > > `,
 			`type:ROW row_event:<table_name:"t2" row_changes:<after:<lengths:1 lengths:3 values:"1aaa" > > > `,
 			`type:ROW row_event:<table_name:"t2" row_changes:<after:<lengths:1 lengths:3 values:"2bbb" > > > `,
@@ -1299,9 +1299,8 @@ func TestBuffering(t *testing.T) {
 		t.Skip()
 	}
 
-	savedSize := *PacketSize
-	*PacketSize = 10
-	defer func() { *PacketSize = savedSize }()
+	reset := AdjustPacketSize(10)
+	defer reset()
 
 	execStatement(t, "create table packet_test(id int, val varbinary(128), primary key(id))")
 	defer execStatement(t, "drop table packet_test")
@@ -1561,13 +1560,13 @@ func TestTypes(t *testing.T) {
 	}, {
 		// TODO(sougou): validate that binary and char data generate correct DMLs on the other end.
 		input: []string{
-			"insert into vitess_strings values('a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'a', 'a,b')",
+			"insert into vitess_strings values('a', 'b', 'c', 'd\000\000\000', 'e', 'f', 'g', 'h', 'a', 'a,b')",
 		},
 		output: [][]string{{
 			`begin`,
 			`type:FIELD field_event:<table_name:"vitess_strings" fields:<name:"vb" type:VARBINARY table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"vb" column_length:16 charset:63 > fields:<name:"c" type:CHAR table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"c" column_length:48 charset:33 > fields:<name:"vc" type:VARCHAR table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"vc" column_length:48 charset:33 > fields:<name:"b" type:BINARY table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"b" column_length:4 charset:63 > fields:<name:"tb" type:BLOB table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"tb" column_length:255 charset:63 > fields:<name:"bl" type:BLOB table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"bl" column_length:65535 charset:63 > fields:<name:"ttx" type:TEXT table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"ttx" column_length:765 charset:33 > fields:<name:"tx" type:TEXT table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"tx" column_length:196605 charset:33 > fields:<name:"en" type:ENUM table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"en" column_length:3 charset:33 column_type:"enum('a','b')" > fields:<name:"s" type:SET table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"s" column_length:9 charset:33 column_type:"set('a','b')" > > `,
-			`type:ROW row_event:<table_name:"vitess_strings" row_changes:<after:<lengths:1 lengths:1 lengths:1 lengths:1 lengths:1 lengths:1 lengths:1 lengths:1 lengths:1 lengths:1 ` +
-				`values:"abcdefgh13" > > > `,
+			`type:ROW row_event:<table_name:"vitess_strings" row_changes:<after:<lengths:1 lengths:1 lengths:1 lengths:4 lengths:1 lengths:1 lengths:1 lengths:1 lengths:1 lengths:1 ` +
+				`values:"abcd\000\000\000efgh13" > > > `,
 			`gtid`,
 			`commit`,
 		}},
