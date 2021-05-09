@@ -59,6 +59,7 @@ type rowStreamer struct {
 	se      *schema.Engine
 	query   string
 	lastpk  []sqltypes.Value
+	maxpk   []sqltypes.Value
 	send    func(*binlogdatapb.VStreamRowsResponse) error
 	vschema *localVSchema
 
@@ -138,10 +139,6 @@ func (rs *rowStreamer) buildPlan() error {
 	if err != nil {
 		return err
 	}
-	rs.sendQuery, err = rs.buildSelect(rs.lastpk)
-	if err != nil {
-		return err
-	}
 	return err
 }
 
@@ -172,12 +169,15 @@ func (rs *rowStreamer) buildSelect(startWithPk []sqltypes.Value) (string, error)
 		buf.Myprintf("%s%v", prefix, sqlparser.NewColIdent(col.Name))
 		prefix = ", "
 	}
+	wherePrinted := false
 	buf.Myprintf(" from %v", sqlparser.NewTableIdent(rs.plan.Table.Name))
 	if len(startWithPk) != 0 {
 		if len(startWithPk) != len(rs.pkColumns) {
 			return "", fmt.Errorf("primary key values don't match length: %v vs %v", startWithPk, rs.pkColumns)
 		}
 		buf.WriteString(" where ")
+		buf.Myprintf("(")
+		wherePrinted = true
 		prefix := ""
 		// This loop handles the case for composite pks. For example,
 		// if lastpk was (1,2), the where clause would be:
@@ -196,6 +196,48 @@ func (rs *rowStreamer) buildSelect(startWithPk []sqltypes.Value) (string, error)
 			startWithPk[lastcol].EncodeSQL(buf)
 			buf.Myprintf(")")
 		}
+		buf.Myprintf(")")
+	}
+	if rs.maxpk != nil && len(rs.maxpk) != 0 {
+		if len(rs.maxpk) != len(rs.pkColumns) {
+			return "", fmt.Errorf("primary key values don't match length: %v vs %v", rs.maxpk, rs.pkColumns)
+		}
+		if wherePrinted {
+			buf.WriteString(" and ")
+		} else {
+			buf.WriteString(" where ")
+		}
+		buf.Myprintf("(")
+		{
+			buf.Myprintf("(")
+			for i, pk := range rs.pkColumns {
+				if i > 0 {
+					buf.Myprintf(" and ")
+				}
+				buf.Myprintf("%v = ", sqlparser.NewColIdent(rs.plan.Table.Fields[pk].Name))
+				rs.maxpk[i].EncodeSQL(buf)
+			}
+			buf.Myprintf(") or ")
+		}
+		prefix := ""
+		// This loop handles the case for composite pks. For example,
+		// if lastpk was (1,2), the where clause would be:
+		// (col1 = 1 and col2 = 2) or (col1 = 1 and col2 < 2) or (col1 < 1)
+		// A tuple inequality like (col1,col2) < (1,2) ends up
+		// being a full table scan for mysql.
+		for lastcol := len(rs.pkColumns) - 1; lastcol >= 0; lastcol-- {
+			buf.Myprintf("%s(", prefix)
+			prefix = " or "
+			for i, pk := range rs.pkColumns[:lastcol] {
+				buf.Myprintf("%v = ", sqlparser.NewColIdent(rs.plan.Table.Fields[pk].Name))
+				rs.maxpk[i].EncodeSQL(buf)
+				buf.Myprintf(" and ")
+			}
+			buf.Myprintf("%v < ", sqlparser.NewColIdent(rs.plan.Table.Fields[rs.pkColumns[lastcol]].Name))
+			rs.maxpk[lastcol].EncodeSQL(buf)
+			buf.Myprintf(")")
+		}
+		buf.Myprintf(")")
 	}
 	buf.Myprintf(" order by ", sqlparser.NewTableIdent(rs.plan.Table.Name))
 	prefix = ""
@@ -207,8 +249,51 @@ func (rs *rowStreamer) buildSelect(startWithPk []sqltypes.Value) (string, error)
 	return buf.String(), nil
 }
 
-func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.VStreamRowsResponse) error) error {
+func (rs *rowStreamer) buildSelectMaxPK() (string, error) {
+	buf := sqlparser.NewTrackedBuffer(nil)
+	// We could have used select *, but being explicit is more predictable.
+	buf.Myprintf("select ")
+	prefix := ""
+	for _, pk := range rs.pkColumns {
+		buf.Myprintf("%s%v", prefix, sqlparser.NewColIdent(rs.plan.Table.Fields[pk].Name))
+		prefix = ", "
+	}
+	buf.Myprintf(" from %v", sqlparser.NewTableIdent(rs.plan.Table.Name))
+	buf.Myprintf(" order by ", sqlparser.NewTableIdent(rs.plan.Table.Name))
+	prefix = ""
+	for _, pk := range rs.pkColumns {
+		buf.Myprintf("%s%v desc", prefix, sqlparser.NewColIdent(rs.plan.Table.Fields[pk].Name))
+		prefix = ", "
+	}
+	buf.WriteString(" limit 1")
+	return buf.String(), nil
+}
+
+func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.VStreamRowsResponse) error) (err error) {
 	log.Infof("Streaming query: %v\n", rs.sendQuery)
+	{
+		maxPKQuery, err := rs.buildSelectMaxPK()
+		if err != nil {
+			return err
+		}
+		fmt.Printf("===============maxPKQuery: %v\n", maxPKQuery)
+		maxPKRS, err := conn.ExecuteFetch(maxPKQuery, 1, true)
+		if err != nil {
+			return err
+		}
+		if len(maxPKRS.Rows) == 1 {
+			mysqlrow := maxPKRS.Rows[0]
+
+			rs.maxpk = make([]sqltypes.Value, len(rs.pkColumns))
+			for i := range rs.pkColumns {
+				rs.maxpk[i] = mysqlrow[i]
+			}
+		}
+	}
+	rs.sendQuery, err = rs.buildSelect(rs.lastpk)
+	if err != nil {
+		return err
+	}
 	gtid, err := conn.streamWithoutSnapshot(rs.ctx, rs.plan.Table.Name, rs.sendQuery)
 	if err != nil {
 		return err
