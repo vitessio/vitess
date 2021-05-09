@@ -17,10 +17,9 @@ limitations under the License.
 package framework
 
 import (
+	"context"
 	"errors"
 	"time"
-
-	"context"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/callerid"
@@ -355,4 +354,9 @@ func (client *QueryClient) SetTransactionID(id int64) {
 //SetReservedID does what it says
 func (client *QueryClient) SetReservedID(id int64) {
 	client.reservedID = id
+}
+
+// StreamHealth receives the health response
+func (client *QueryClient) StreamHealth(sendFunc func(*querypb.StreamHealthResponse) error) error {
+	return client.server.StreamHealth(client.ctx, sendFunc)
 }

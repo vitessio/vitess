@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/vtctl/workflow"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
@@ -243,39 +244,40 @@ func (rs *resharder) readRefStreams(ctx context.Context) error {
 // blsIsReference is partially copied from streamMigrater.templatize.
 // It reuses the constants from that function also.
 func (rs *resharder) blsIsReference(bls *binlogdatapb.BinlogSource) (bool, error) {
-	streamType := unknown
+	streamType := workflow.StreamTypeUnknown
 	for _, rule := range bls.Filter.Rules {
 		typ, err := rs.identifyRuleType(rule)
 		if err != nil {
 			return false, err
 		}
+
 		switch typ {
-		case sharded:
-			if streamType == reference {
+		case workflow.StreamTypeSharded:
+			if streamType == workflow.StreamTypeReference {
 				return false, fmt.Errorf("cannot reshard streams with a mix of reference and sharded tables: %v", bls)
 			}
-			streamType = sharded
-		case reference:
-			if streamType == sharded {
+			streamType = workflow.StreamTypeSharded
+		case workflow.StreamTypeReference:
+			if streamType == workflow.StreamTypeSharded {
 				return false, fmt.Errorf("cannot reshard streams with a mix of reference and sharded tables: %v", bls)
 			}
-			streamType = reference
+			streamType = workflow.StreamTypeReference
 		}
 	}
-	return streamType == reference, nil
+	return streamType == workflow.StreamTypeReference, nil
 }
 
-func (rs *resharder) identifyRuleType(rule *binlogdatapb.Rule) (int, error) {
+func (rs *resharder) identifyRuleType(rule *binlogdatapb.Rule) (workflow.StreamType, error) {
 	vtable, ok := rs.vschema.Tables[rule.Match]
 	if !ok {
 		return 0, fmt.Errorf("table %v not found in vschema", rule.Match)
 	}
 	if vtable.Type == vindexes.TypeReference {
-		return reference, nil
+		return workflow.StreamTypeReference, nil
 	}
 	// In this case, 'sharded' means that it's not a reference
 	// table. We don't care about any other subtleties.
-	return sharded, nil
+	return workflow.StreamTypeSharded, nil
 }
 
 func (rs *resharder) copySchema(ctx context.Context) error {

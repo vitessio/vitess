@@ -62,6 +62,8 @@ var (
 	vreplicationExperimentalFlags = flag.Int64("vreplication_experimental_flags", 0, "(Bitmask) of experimental features in vreplication to enable")
 
 	vreplicationExperimentalFlagOptimizeInserts int64 = 1
+
+	vreplicationStoreCompressedGTID = flag.Bool("vreplication_store_compressed_gtid", false, "Store compressed gtids in the pos column of _vt.vreplication")
 )
 
 // vreplicator provides the core logic to start vreplication streams

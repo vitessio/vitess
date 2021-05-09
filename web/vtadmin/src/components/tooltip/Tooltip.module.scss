@@ -13,17 +13,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-.container > a {
-  font-family: var(--fontFamilyMonospace);
-  line-height: 4rem;
-
-  &::after {
-    color: var(--colorScaffoldingHighlight);
-    content: "/";
-    display: inline-block;
-    font-size: 2rem;
-    line-height: 2rem;
-    margin: 0 1rem;
-    vertical-align: middle;
-  }
+.tooltip {
+  background: var(--tooltipBackground);
+  border-radius: 4px;
+  color: var(--textColorInverted);
+  font-family: var(--fontFamilyPrimary);
+  font-size: var(--fontSizeSmall);
+  margin: 8px;
+  max-width: 24rem;
+  padding: 8px 12px;
+  text-align: center;
 }

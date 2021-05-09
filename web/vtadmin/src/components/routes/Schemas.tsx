@@ -29,20 +29,35 @@ import { DataTable } from '../dataTable/DataTable';
 import { ContentContainer } from '../layout/ContentContainer';
 import { WorkspaceHeader } from '../layout/WorkspaceHeader';
 import { WorkspaceTitle } from '../layout/WorkspaceTitle';
+import { HelpTooltip } from '../tooltip/HelpTooltip';
 
 const TABLE_COLUMNS = [
     'Keyspace',
     'Table',
-    // TODO: add tooltips to explain that "approx." means something
-    // along the lines of "information_schema is an eventually correct
-    // statistical analysis, past results do not guarantee future performance,
-    // please consult an attorney and we are not a licensed medical professional".
-    // Namely, these numbers come from `information_schema`, which is never precisely
-    // correct for tables that have a high rate of updates. (The only way to get
-    // accurate numbers is to run `ANALYZE TABLE` on the tables periodically, which
-    // is out of scope for VTAdmin.)
-    <div className="text-align-right">Approx. Size</div>,
-    <div className="text-align-right">Approx. Rows</div>,
+    <div className="text-align-right">
+        Approx. Size{' '}
+        <HelpTooltip
+            text={
+                <span>
+                    Size is an approximate value derived from{' '}
+                    <span className="font-family-monospace">INFORMATION_SCHEMA</span>.
+                </span>
+            }
+        />
+    </div>,
+    <div className="text-align-right">
+        Approx. Rows{' '}
+        <HelpTooltip
+            text={
+                // c.f. https://dev.mysql.com/doc/refman/5.7/en/information-schema-tables-table.html
+                <span>
+                    Row count is an approximate value derived from{' '}
+                    <span className="font-family-monospace">INFORMATION_SCHEMA</span>. Actual values may vary by as much
+                    as 40% to 50%.
+                </span>
+            }
+        />
+    </div>,
 ];
 
 export const Schemas = () => {

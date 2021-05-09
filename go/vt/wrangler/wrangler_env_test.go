@@ -146,7 +146,7 @@ func newWranglerTestEnv(sourceShards, targetShards []string, query string, posit
 		result := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 			"id|source|pos|stop_pos|max_replication_lag|state|db_name|time_updated|transaction_timestamp|message",
 			"int64|varchar|varchar|varchar|int64|varchar|varchar|int64|int64|varchar"),
-			fmt.Sprintf("1|%v|pos||0|Running|vt_target|%d|0|", bls, timeUpdated),
+			fmt.Sprintf("1|%v|MySQL56/14b68925-696a-11ea-aee7-fec597a91f5e:1-3||0|Running|vt_target|%d|0|", bls, timeUpdated),
 		)
 		env.tmc.setVRResults(master.tablet, "select id, source, pos, stop_pos, max_replication_lag, state, db_name, time_updated, transaction_timestamp, message from _vt.vreplication where db_name = 'vt_target' and workflow = 'wrWorkflow'", result)
 		env.tmc.setVRResults(

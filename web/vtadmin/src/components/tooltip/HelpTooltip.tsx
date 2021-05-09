@@ -13,17 +13,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-.container > a {
-  font-family: var(--fontFamilyMonospace);
-  line-height: 4rem;
+import cx from 'classnames';
 
-  &::after {
-    color: var(--colorScaffoldingHighlight);
-    content: "/";
-    display: inline-block;
-    font-size: 2rem;
-    line-height: 2rem;
-    margin: 0 1rem;
-    vertical-align: middle;
-  }
+import style from './HelpTooltip.module.scss';
+import { Icon, Icons } from '../Icon';
+import { Tooltip, TooltipProps } from './Tooltip';
+
+interface Props extends Omit<TooltipProps, 'children'> {
+    className?: string;
 }
+
+export const HelpTooltip = ({ className, ...props }: Props) => {
+    return (
+        <Tooltip {...props}>
+            <Icon className={cx(style.icon, className)} icon={Icons.question} />
+        </Tooltip>
+    );
+};

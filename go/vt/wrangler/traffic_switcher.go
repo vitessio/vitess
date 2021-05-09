@@ -34,6 +34,7 @@ import (
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topotools"
@@ -41,8 +42,10 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
+	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 )
@@ -114,6 +117,39 @@ type trafficSwitcher struct {
 	externalCluster string
 	externalTopo    *topo.Server
 }
+
+/*
+begin: implementation of workflow.ITrafficSwitcher
+
+(NOTE:@ajm188) Please see comments on that interface type for why this exists.
+This is temporary to allow workflow.StreamMigrator to use this trafficSwitcher
+code and should be removed in the very near-term when we move trafficSwitcher to
+package workflow as well.
+*/
+
+var _ workflow.ITrafficSwitcher = (*trafficSwitcher)(nil)
+
+func (ts *trafficSwitcher) TopoServer() *topo.Server                          { return ts.wr.ts }
+func (ts *trafficSwitcher) TabletManagerClient() tmclient.TabletManagerClient { return ts.wr.tmc }
+func (ts *trafficSwitcher) Logger() logutil.Logger                            { return ts.wr.logger }
+func (ts *trafficSwitcher) VReplicationExec(ctx context.Context, alias *topodatapb.TabletAlias, query string) (*querypb.QueryResult, error) {
+	return ts.wr.VReplicationExec(ctx, alias, query)
+}
+
+func (ts *trafficSwitcher) MigrationType() binlogdatapb.MigrationType      { return ts.migrationType }
+func (ts *trafficSwitcher) ReverseWorkflowName() string                    { return ts.reverseWorkflow }
+func (ts *trafficSwitcher) SourceKeyspaceName() string                     { return ts.sourceKSSchema.Keyspace.Name }
+func (ts *trafficSwitcher) SourceKeyspaceSchema() *vindexes.KeyspaceSchema { return ts.sourceKSSchema }
+func (ts *trafficSwitcher) WorkflowName() string                           { return ts.workflow }
+
+func (ts *trafficSwitcher) ForAllSources(f func(source *workflow.MigrationSource) error) error {
+	return ts.forAllSources(f)
+}
+func (ts *trafficSwitcher) ForAllTargets(f func(source *workflow.MigrationTarget) error) error {
+	return ts.forAllTargets(f)
+}
+
+/* end: implementation of workflow.ITrafficSwitcher */
 
 // For a Reshard, to check whether we have switched reads for a tablet type, we check if any one of the source shards has
 // the query service disabled in its tablet control record
@@ -444,15 +480,15 @@ func (wr *Wrangler) SwitchReads(ctx context.Context, targetKeyspace, workflow st
 }
 
 // SwitchWrites is a generic way of migrating write traffic for a resharding workflow.
-func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflow string, timeout time.Duration, cancel, reverse, reverseReplication bool, dryRun bool) (journalID int64, dryRunResults *[]string, err error) {
-	ts, ws, err := wr.getWorkflowState(ctx, targetKeyspace, workflow)
+func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflowName string, timeout time.Duration, cancel, reverse, reverseReplication bool, dryRun bool) (journalID int64, dryRunResults *[]string, err error) {
+	ts, ws, err := wr.getWorkflowState(ctx, targetKeyspace, workflowName)
 	_ = ws
 	if err != nil {
 		wr.Logger().Errorf("getWorkflowState failed: %v", err)
 		return 0, nil, err
 	}
 	if ts == nil {
-		errorMsg := fmt.Sprintf("workflow %s not found in keyspace %s", workflow, targetKeyspace)
+		errorMsg := fmt.Sprintf("workflow %s not found in keyspace %s", workflowName, targetKeyspace)
 		wr.Logger().Errorf(errorMsg)
 		return 0, nil, fmt.Errorf(errorMsg)
 	}
@@ -501,7 +537,7 @@ func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflow s
 	}
 	if !journalsExist {
 		ts.wr.Logger().Infof("No previous journals were found. Proceeding normally.")
-		sm, err := buildStreamMigrater(ctx, ts, cancel)
+		sm, err := workflow.BuildStreamMigrator(ctx, ts, cancel)
 		if err != nil {
 			ts.wr.Logger().Errorf("buildStreamMigrater failed: %v", err)
 			return 0, nil, err
@@ -514,7 +550,7 @@ func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflow s
 		sourceWorkflows, err = sw.stopStreams(ctx, sm)
 		if err != nil {
 			ts.wr.Logger().Errorf("stopStreams failed: %v", err)
-			for key, streams := range sm.streams {
+			for key, streams := range sm.Streams() {
 				for _, stream := range streams {
 					ts.wr.Logger().Errorf("stream in stopStreams: key %s shard %s stream %+v", key, stream.BinlogSource.Shard, stream.BinlogSource)
 				}
@@ -1089,7 +1125,7 @@ func (ts *trafficSwitcher) waitForCatchup(ctx context.Context, filteredReplicati
 	})
 }
 
-func (ts *trafficSwitcher) cancelMigration(ctx context.Context, sm *streamMigrater) {
+func (ts *trafficSwitcher) cancelMigration(ctx context.Context, sm *workflow.StreamMigrator) {
 	var err error
 	if ts.migrationType == binlogdatapb.MigrationType_TABLES {
 		err = ts.changeTableSourceWrites(ctx, allowWrites)
@@ -1100,7 +1136,7 @@ func (ts *trafficSwitcher) cancelMigration(ctx context.Context, sm *streamMigrat
 		ts.wr.Logger().Errorf("Cancel migration failed:", err)
 	}
 
-	sm.cancelMigration(ctx)
+	sm.CancelMigration(ctx)
 
 	err = ts.forAllTargets(func(target *workflow.MigrationTarget) error {
 		query := fmt.Sprintf("update _vt.vreplication set state='Running', message='' where db_name=%s and workflow=%s", encodeString(target.GetPrimary().DbName()), encodeString(ts.workflow))

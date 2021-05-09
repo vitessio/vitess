@@ -25,6 +25,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/mysql"
+
 	"github.com/spyzhov/ajson"
 	"github.com/stretchr/testify/require"
 
@@ -252,6 +254,7 @@ func TestCharPK(t *testing.T) {
 		}
 	}
 }
+
 func TestRollup(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 
@@ -1597,9 +1600,62 @@ func TestPlayerDDL(t *testing.T) {
 	cancel()
 }
 
+func TestGTIDCompress(t *testing.T) {
+	ctx := context.Background()
+	defer deleteTablet(addTablet(100))
+	err := env.Mysqld.ExecuteSuperQuery(ctx, "insert into _vt.vreplication (id, workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state,db_name) values (1, '', '', '', 0,0,0,0,'Stopped','')")
+	require.NoError(t, err)
+
+	type testCase struct {
+		name, gtid string
+		compress   bool
+	}
+
+	testCases := []testCase{
+		{"cleartext1", "MySQL56/14b68925-696a-11ea-aee7-fec597a91f5e:1-308092", false},
+		{"cleartext2", "MySQL56/14b68925-696a-11ea-aee7-fec597a91f5e:1-308092,320a5e98-6965-11ea-b949-eeafd34ae6e4:1-3,81cbdbf8-6969-11ea-aeb1-a6143b021f67:1-524891956,c9a0f301-6965-11ea-ba9d-02c229065569:1-3,cb698dac-6969-11ea-ac38-16e5d0ac5c3a:1-524441991,e39fca4d-6960-11ea-b4c2-1e895fd49fa0:1-3", false},
+		{"compress1", "MySQL56/14b68925-696a-11ea-aee7-fec597a91f5e:1-308092", true},
+		{"compress2", "MySQL56/14b68925-696a-11ea-aee7-fec597a91f5e:1-308092,320a5e98-6965-11ea-b949-eeafd34ae6e4:1-3,81cbdbf8-6969-11ea-aeb1-a6143b021f67:1-524891956,c9a0f301-6965-11ea-ba9d-02c229065569:1-3,cb698dac-6969-11ea-ac38-16e5d0ac5c3a:1-524441991,e39fca4d-6960-11ea-b4c2-1e895fd49fa0:1-3", true},
+		{"nil-compress", "", true},
+		{"nil-clear", "", false},
+	}
+	for _, tCase := range testCases {
+		t.Run(tCase.name, func(t *testing.T) {
+			strGTID := fmt.Sprintf("'%s'", tCase.gtid)
+			if tCase.compress {
+				strGTID = fmt.Sprintf("compress(%s)", strGTID)
+			}
+			err := env.Mysqld.ExecuteSuperQuery(ctx, fmt.Sprintf("update _vt.vreplication set pos=%s where id = 1", strGTID))
+			require.NoError(t, err)
+			qr, err := env.Mysqld.FetchSuperQuery(ctx, "select pos from _vt.vreplication where id = 1")
+			require.NoError(t, err)
+			require.NotNil(t, qr)
+			require.Equal(t, 1, len(qr.Rows))
+			gotGTID := qr.Rows[0][0].ToString()
+			pos, err := mysql.DecodePosition(gotGTID)
+			if tCase.compress {
+				require.True(t, pos.IsZero())
+				pos, err = binlogplayer.DecodePosition(gotGTID)
+				require.NoError(t, err)
+				require.NotNil(t, pos)
+				tpos, err := mysql.DecodePosition(tCase.gtid)
+				require.NoError(t, err)
+				require.Equal(t, tpos.String(), pos.String())
+			} else {
+				require.NoError(t, err)
+				require.NotNil(t, pos)
+				require.Equal(t, tCase.gtid, gotGTID)
+			}
+		})
+	}
+}
+
 func TestPlayerStopPos(t *testing.T) {
 	defer deleteTablet(addTablet(100))
-
+	*vreplicationStoreCompressedGTID = true
+	defer func() {
+		*vreplicationStoreCompressedGTID = false
+	}()
 	execStatements(t, []string{
 		"create table yes(id int, val varbinary(128), primary key(id))",
 		fmt.Sprintf("create table %s.yes(id int, val varbinary(128), primary key(id))", vrepldb),
@@ -1652,7 +1708,7 @@ func TestPlayerStopPos(t *testing.T) {
 		"/update.*'Running'",
 		"begin",
 		"insert into yes(id,val) values (1,'aaa')",
-		fmt.Sprintf("/update.*'%s'", stopPos),
+		fmt.Sprintf("/update.*compress.*'%s'", stopPos),
 		"/update.*'Stopped'",
 		"commit",
 	})

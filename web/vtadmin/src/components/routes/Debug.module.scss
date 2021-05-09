@@ -17,6 +17,7 @@
 }
 
 .icon {
+  box-sizing: unset;
   fill: var(--colorPrimary);
   padding: 16px;
   transition: fill 0.1s ease-in-out;

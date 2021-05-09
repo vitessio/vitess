@@ -20,11 +20,8 @@ import { Link } from 'react-router-dom';
 import style from './Workflows.module.scss';
 import { useWorkflows } from '../../hooks/api';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
-import { Button } from '../Button';
 import { DataCell } from '../dataTable/DataCell';
 import { DataTable } from '../dataTable/DataTable';
-import { Icons } from '../Icon';
-import { TextInput } from '../TextInput';
 import { useSyncedURLParam } from '../../hooks/useSyncedURLParam';
 import { filterNouns } from '../../util/filterNouns';
 import { getStreams, getTimeUpdated } from '../../util/workflows';
@@ -33,6 +30,8 @@ import { StreamStatePip } from '../pips/StreamStatePip';
 import { ContentContainer } from '../layout/ContentContainer';
 import { WorkspaceHeader } from '../layout/WorkspaceHeader';
 import { WorkspaceTitle } from '../layout/WorkspaceTitle';
+import { DataFilter } from '../dataTable/DataFilter';
+import { Tooltip } from '../tooltip/Tooltip';
 
 export const Workflows = () => {
     useDocumentTitle('Workflows');
@@ -90,18 +89,30 @@ export const Workflows = () => {
                         )}
                     </DataCell>
 
-                    {/* TODO(doeg): add a protobuf enum for this (https://github.com/vitessio/vitess/projects/12#card-60190340) */}
-                    {['Error', 'Copying', 'Running', 'Stopped'].map((streamState) => (
-                        <DataCell key={streamState}>
-                            {streamState in row.streams ? (
-                                <>
-                                    <StreamStatePip state={streamState} /> {row.streams[streamState].length}
-                                </>
-                            ) : (
-                                <span className="text-color-secondary">-</span>
-                            )}
-                        </DataCell>
-                    ))}
+                    <DataCell>
+                        <div className={style.streams}>
+                            {/* TODO(doeg): add a protobuf enum for this (https://github.com/vitessio/vitess/projects/12#card-60190340) */}
+                            {['Error', 'Copying', 'Running', 'Stopped'].map((streamState) => {
+                                if (streamState in row.streams) {
+                                    const streamCount = row.streams[streamState].length;
+                                    const tooltip = [
+                                        streamCount,
+                                        streamState === 'Error' ? 'failed' : streamState.toLocaleLowerCase(),
+                                        streamCount === 1 ? 'stream' : 'streams',
+                                    ].join(' ');
+
+                                    return (
+                                        <Tooltip text={tooltip}>
+                                            <span className={style.stream}>
+                                                <StreamStatePip state={streamState} /> {streamCount}
+                                            </span>
+                                        </Tooltip>
+                                    );
+                                }
+                                return <span className={style.streamPlaceholder}>-</span>;
+                            })}
+                        </div>
+                    </DataCell>
 
                     <DataCell>
                         <div className="font-family-primary white-space-nowrap">{formatDateTime(row.timeUpdated)}</div>
@@ -119,21 +130,16 @@ export const Workflows = () => {
                 <WorkspaceTitle>Workflows</WorkspaceTitle>
             </WorkspaceHeader>
             <ContentContainer>
-                <div className={style.controls}>
-                    <TextInput
-                        autoFocus
-                        iconLeft={Icons.search}
-                        onChange={(e) => updateFilter(e.target.value)}
-                        placeholder="Filter workflows"
-                        value={filter || ''}
-                    />
-                    <Button disabled={!filter} onClick={() => updateFilter('')} secondary>
-                        Clear filters
-                    </Button>
-                </div>
+                <DataFilter
+                    autoFocus
+                    onChange={(e) => updateFilter(e.target.value)}
+                    onClear={() => updateFilter('')}
+                    placeholder="Filter workflows"
+                    value={filter || ''}
+                />
 
                 <DataTable
-                    columns={['Workflow', 'Source', 'Target', 'Error', 'Copying', 'Running', 'Stopped', 'Last Updated']}
+                    columns={['Workflow', 'Source', 'Target', 'Streams', 'Last Updated']}
                     data={sortedData}
                     renderRows={renderRows}
                 />
