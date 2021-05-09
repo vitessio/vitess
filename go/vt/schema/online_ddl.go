@@ -180,14 +180,25 @@ func NewOnlineDDLs(keyspace string, ddlStmt sqlparser.DDLStatement, ddlStrategyS
 	default:
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported statement for Online DDL: %v", sqlparser.String(ddlStmt))
 	}
-	if !ddlStmt.IsFullyParsed() {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "NewOnlineDDL: cannot parse statement: %v", sqlparser.String(ddlStmt))
-	}
 
-	fk := &fkContraint{}
-	_ = sqlparser.Walk(fk.FkWalk, ddlStmt)
-	if fk.found {
-		return nil, vterrors.Errorf(vtrpcpb.Code_ABORTED, "foreign key constraint are not supported in online DDL")
+	{
+		// SQL statement sanity checks:
+		switch ddlStmt := ddlStmt.(type) {
+		case *sqlparser.AlterTable:
+			if len(ddlStmt.AlterOptions) == 0 {
+				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "NewOnlineDDL: cannot parse statement: %v", sqlparser.String(ddlStmt))
+			}
+		}
+
+		if !ddlStmt.IsFullyParsed() {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "NewOnlineDDL: cannot parse statement: %v", sqlparser.String(ddlStmt))
+		}
+
+		fk := &fkContraint{}
+		_ = sqlparser.Walk(fk.FkWalk, ddlStmt)
+		if fk.found {
+			return nil, vterrors.Errorf(vtrpcpb.Code_ABORTED, "foreign key constraint are not supported in online DDL")
+		}
 	}
 	return onlineDDLs, nil
 }
