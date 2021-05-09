@@ -1941,6 +1941,9 @@ var (
 		input: "call proc(1, 'foo')",
 	}, {
 		input: "call proc(@param)",
+	}, {
+		input:  "create table unused_reserved_keywords (dense_rank bigint, lead VARCHAR(255), percent_rank decimal(3, 0), constraint PK_project PRIMARY KEY (dense_rank))",
+		output: "create table unused_reserved_keywords (\n\t`dense_rank` bigint,\n\t`lead` VARCHAR(255),\n\t`percent_rank` decimal(3,0),\n\tconstraint PK_project PRIMARY KEY (`dense_rank`)\n)",
 	}}
 )
 
