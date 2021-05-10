@@ -102,14 +102,18 @@ export const Workflows = () => {
                                     ].join(' ');
 
                                     return (
-                                        <Tooltip text={tooltip}>
+                                        <Tooltip key={streamState} text={tooltip}>
                                             <span className={style.stream}>
                                                 <StreamStatePip state={streamState} /> {streamCount}
                                             </span>
                                         </Tooltip>
                                     );
                                 }
-                                return <span className={style.streamPlaceholder}>-</span>;
+                                return (
+                                    <span key={streamState} className={style.streamPlaceholder}>
+                                        -
+                                    </span>
+                                );
                             })}
                         </div>
                     </DataCell>

@@ -13,14 +13,22 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+import { groupBy } from 'lodash-es';
 import { Link, useParams } from 'react-router-dom';
 
+import style from './Workflow.module.scss';
 import { useWorkflow } from '../../hooks/api';
-import { Code } from '../Code';
+import { formatStreamID, getStreams, getStreamSource, getStreamTarget } from '../../util/workflows';
+import { DataCell } from '../dataTable/DataCell';
+import { DataTable } from '../dataTable/DataTable';
 import { ContentContainer } from '../layout/ContentContainer';
 import { NavCrumbs } from '../layout/NavCrumbs';
 import { WorkspaceHeader } from '../layout/WorkspaceHeader';
 import { WorkspaceTitle } from '../layout/WorkspaceTitle';
+import { StreamStatePip } from '../pips/StreamStatePip';
+import { formatAlias } from '../../util/tablets';
+import { useDocumentTitle } from '../../hooks/useDocumentTitle';
+import { formatDateTime } from '../../util/time';
 
 interface RouteParams {
     clusterID: string;
@@ -28,11 +36,43 @@ interface RouteParams {
     name: string;
 }
 
+const COLUMNS = ['Stream', 'Source', 'Target', 'Tablet'];
+
 export const Workflow = () => {
     const { clusterID, keyspace, name } = useParams<RouteParams>();
+    useDocumentTitle(`${name} (${keyspace})`);
+
     const { data } = useWorkflow({ clusterID, keyspace, name });
 
-    // Placeholder
+    const streams = getStreams(data);
+    const streamsByState = groupBy(streams, 'state');
+
+    const renderRows = (rows: typeof streams) => {
+        return rows.map((row) => {
+            const streamID = formatStreamID(row);
+            const href =
+                row.tablet && row.id
+                    ? `/workflow/${clusterID}/${keyspace}/${name}/stream/${row.tablet.cell}/${row.tablet.uid}/${row.id}`
+                    : null;
+
+            return (
+                <tr key={streamID}>
+                    <DataCell>
+                        <StreamStatePip state={row.state} /> <Link to={href}>{streamID}</Link>
+                        <div className="font-size-small text-color-secondary">
+                            Updated {formatDateTime(row.time_updated?.seconds)}
+                        </div>
+                    </DataCell>
+                    <DataCell>{getStreamSource(row) || <span className="text-color-secondary">N/A</span>}</DataCell>
+                    <DataCell>
+                        {getStreamTarget(row, keyspace) || <span className="text-color-secondary">N/A</span>}
+                    </DataCell>
+                    <DataCell>{formatAlias(row.tablet)}</DataCell>
+                </tr>
+            );
+        });
+    };
+
     return (
         <div>
             <WorkspaceHeader>
@@ -40,10 +80,36 @@ export const Workflow = () => {
                     <Link to="/workflows">Workflows</Link>
                 </NavCrumbs>
 
-                <WorkspaceTitle>{name}</WorkspaceTitle>
+                <WorkspaceTitle className="font-family-monospace">{name}</WorkspaceTitle>
+                <div className={style.headingMeta}>
+                    <span>
+                        Cluster: <code>{clusterID}</code>
+                    </span>
+                    <span>
+                        Target keyspace: <code>{keyspace}</code>
+                    </span>
+                </div>
             </WorkspaceHeader>
             <ContentContainer>
-                <Code code={JSON.stringify(data, null, 2)} />
+                {/* TODO(doeg): add a protobuf enum for this (https://github.com/vitessio/vitess/projects/12#card-60190340) */}
+                {['Error', 'Copying', 'Running', 'Stopped'].map((streamState) => {
+                    if (!Array.isArray(streamsByState[streamState])) {
+                        return null;
+                    }
+
+                    return (
+                        <div className={style.streamTable} key={streamState}>
+                            <DataTable
+                                columns={COLUMNS}
+                                data={streamsByState[streamState]}
+                                // TODO(doeg): make pagination optional in DataTable https://github.com/vitessio/vitess/projects/12#card-60810231
+                                pageSize={1000}
+                                renderRows={renderRows}
+                                title={streamState}
+                            />
+                        </div>
+                    );
+                })}
             </ContentContainer>
         </div>
     );
