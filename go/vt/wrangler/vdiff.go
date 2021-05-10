@@ -21,29 +21,29 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 	"sync"
 	"time"
-
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
-
-	"vitess.io/vitess/go/vt/binlog/binlogplayer"
-	"vitess.io/vitess/go/vt/log"
 
 	"github.com/golang/protobuf/proto"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/key"
+	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtctl/workflow"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 
@@ -55,11 +55,26 @@ import (
 
 // DiffReport is the summary of differences for one table.
 type DiffReport struct {
-	ProcessedRows   int
-	MatchingRows    int
-	MismatchedRows  int
-	ExtraRowsSource int
-	ExtraRowsTarget int
+	ProcessedRows         int
+	MatchingRows          int
+	MismatchedRows        int
+	ExtraRowsSource       int
+	ExtraRowsSourceSample []*RowDiff
+	ExtraRowsTarget       int
+	ExtraRowsTargetSample []*RowDiff
+	MismatchedRowsSample  []*DiffMismatch
+}
+
+// DiffMismatch is a sample of row diffs between source and target.
+type DiffMismatch struct {
+	Source *RowDiff
+	Target *RowDiff
+}
+
+// RowDiff is a row that didn't match as part of the comparison.
+type RowDiff struct {
+	Row   map[string]sqltypes.Value
+	Query string
 }
 
 // vdiff contains the metadata for performing vdiff for one workflow.
@@ -106,8 +121,10 @@ type tableDiffer struct {
 	// pkCols has the indices of PK cols in the select list
 	pkCols []int
 
-	// sourcePrimitive and targetPrimitive are used for streaming
-	// results from source and target.
+	// selectPks is the list of pk columns as they appear in the select clause for the diff.
+	selectPks []int
+
+	// source Primitive and targetPrimitive are used for streaming
 	sourcePrimitive engine.Primitive
 	targetPrimitive engine.Primitive
 }
@@ -130,7 +147,7 @@ type shardStreamer struct {
 
 // VDiff reports differences between the sources and targets of a vreplication workflow.
 func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflowName, sourceCell, targetCell, tabletTypesStr string,
-	filteredReplicationWaitTime time.Duration, format string, maxRows int64, tables string) (map[string]*DiffReport, error) {
+	filteredReplicationWaitTime time.Duration, format string, maxRows int64, tables string, debug, onlyPks bool) (map[string]*DiffReport, error) {
 	log.Infof("Starting VDiff for %s.%s, sourceCell %s, targetCell %s, tabletTypes %s, timeout %s",
 		targetKeyspace, workflowName, sourceCell, targetCell, tabletTypesStr, filteredReplicationWaitTime.String())
 	// Assign defaults to sourceCell and targetCell if not specified.
@@ -229,26 +246,43 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflowName, sou
 			return nil, err
 		}
 		// Perform the diff of source and target streams.
-		dr, err := td.diff(ctx, df.ts.wr, &rowsToCompare)
+		dr, err := td.diff(ctx, df.ts.wr, &rowsToCompare, debug, onlyPks)
 		if err != nil {
 			return nil, vterrors.Wrap(err, "diff")
 		}
-		if format == "json" {
-			json, err := json.MarshalIndent(*dr, "", "")
-			if err != nil {
-				wr.Logger().Printf("Error converting report to json: %v", err.Error())
-			}
-			if jsonOutput != "" {
-				jsonOutput += ","
-			}
-			jsonOutput += fmt.Sprintf("%s", json)
-		} else {
-			wr.Logger().Printf("Summary for %v: %+v\n", td.targetTable, *dr)
-		}
 		diffReports[table] = dr
 	}
-	if format == "json" && jsonOutput != "" {
-		wr.logger.Printf(`[ %s ]`, jsonOutput)
+	if format == "json" {
+		json, err := json.MarshalIndent(diffReports, "", "")
+		if err != nil {
+			wr.Logger().Printf("Error converting report to json: %v", err.Error())
+		}
+		jsonOutput += fmt.Sprintf("%s", json)
+		wr.logger.Printf("%s", jsonOutput)
+	} else {
+		for table, dr := range diffReports {
+			wr.Logger().Printf("Summary for table %v:\n", table)
+			wr.Logger().Printf("\tProcessedRows: %v\n", dr.ProcessedRows)
+			wr.Logger().Printf("\tMatchingRows: %v\n", dr.MatchingRows)
+			wr.Logger().Printf("\tMismatchedRows: %v\n", dr.MismatchedRows)
+			wr.Logger().Printf("\tExtraRowsSource: %v\n", dr.ExtraRowsSource)
+			wr.Logger().Printf("\tExtraRowsTarget: %v\n", dr.ExtraRowsTarget)
+			for i, rs := range dr.ExtraRowsSourceSample {
+				wr.Logger().Printf("\tSample extra row in source %v:\n", i)
+				formatSampleRow(wr.Logger(), rs, debug)
+			}
+			for i, rs := range dr.ExtraRowsTargetSample {
+				wr.Logger().Printf("\tSample extra row in target %v:\n", i)
+				formatSampleRow(wr.Logger(), rs, debug)
+			}
+			for i, rs := range dr.MismatchedRowsSample {
+				wr.Logger().Printf("\tSample rows with mismatch %v:\n", i)
+				wr.Logger().Printf("\t\tSource row:\n")
+				formatSampleRow(wr.Logger(), rs.Source, debug)
+				wr.Logger().Printf("\t\tTarget row:\n")
+				formatSampleRow(wr.Logger(), rs.Target, debug)
+			}
+		}
 	}
 	return diffReports, nil
 }
@@ -358,6 +392,7 @@ func findPKs(table *tabletmanagerdatapb.TableDefinition, targetSelect *sqlparser
 			if strings.EqualFold(pk, colname) {
 				td.compareCols[i].isPK = true
 				td.comparePKs = append(td.comparePKs, td.compareCols[i])
+				td.selectPks = append(td.selectPks, i)
 				// We'll be comparing pks separately. So, remove them from compareCols.
 				td.pkCols = append(td.pkCols, i)
 				found = true
@@ -862,7 +897,7 @@ func humanInt(n int64) string {
 //-----------------------------------------------------------------
 // tableDiffer
 
-func (td *tableDiffer) diff(ctx context.Context, wr *Wrangler, rowsToCompare *int64) (*DiffReport, error) {
+func (td *tableDiffer) diff(ctx context.Context, wr *Wrangler, rowsToCompare *int64, debug, onlyPks bool) (*DiffReport, error) {
 	sourceExecutor := newPrimitiveExecutor(ctx, td.sourcePrimitive)
 	targetExecutor := newPrimitiveExecutor(ctx, td.targetPrimitive)
 	dr := &DiffReport{}
@@ -900,8 +935,13 @@ func (td *tableDiffer) diff(ctx context.Context, wr *Wrangler, rowsToCompare *in
 		advanceTarget = true
 
 		if sourceRow == nil {
+			diffRow, err := td.genRowDiff(td.sourceExpression, targetRow, debug, onlyPks)
+			if err != nil {
+				return nil, vterrors.Wrap(err, "unexpected error generating diff")
+			}
+			dr.ExtraRowsTargetSample = append(dr.ExtraRowsTargetSample, diffRow)
+
 			// drain target, update count
-			wr.Logger().Errorf("Draining extra row(s) found on the target starting with: %v", targetRow)
 			count, err := targetExecutor.drain(ctx)
 			if err != nil {
 				return nil, err
@@ -913,7 +953,12 @@ func (td *tableDiffer) diff(ctx context.Context, wr *Wrangler, rowsToCompare *in
 		if targetRow == nil {
 			// no more rows from the target
 			// we know we have rows from source, drain, update count
-			wr.Logger().Warningf("Draining extra row(s) found on the source starting with: %v", sourceRow)
+			diffRow, err := td.genRowDiff(td.sourceExpression, sourceRow, debug, onlyPks)
+			if err != nil {
+				return nil, vterrors.Wrap(err, "unexpected error generating diff")
+			}
+			dr.ExtraRowsSourceSample = append(dr.ExtraRowsTargetSample, diffRow)
+
 			count, err := sourceExecutor.drain(ctx)
 			if err != nil {
 				return nil, err
@@ -932,14 +977,22 @@ func (td *tableDiffer) diff(ctx context.Context, wr *Wrangler, rowsToCompare *in
 			return nil, err
 		case c < 0:
 			if dr.ExtraRowsSource < 10 {
-				wr.Logger().Errorf("[table=%v] Extra row %v on source: %v", td.targetTable, dr.ExtraRowsSource, sourceRow)
+				diffRow, err := td.genRowDiff(td.sourceExpression, sourceRow, debug, onlyPks)
+				if err != nil {
+					return nil, vterrors.Wrap(err, "unexpected error generating diff")
+				}
+				dr.ExtraRowsSourceSample = append(dr.ExtraRowsTargetSample, diffRow)
 			}
 			dr.ExtraRowsSource++
 			advanceTarget = false
 			continue
 		case c > 0:
 			if dr.ExtraRowsTarget < 10 {
-				wr.Logger().Errorf("[table=%v] Extra row %v on target: %v", td.targetTable, dr.ExtraRowsTarget, targetRow)
+				diffRow, err := td.genRowDiff(td.targetExpression, targetRow, debug, onlyPks)
+				if err != nil {
+					return nil, vterrors.Wrap(err, "unexpected error generating diff")
+				}
+				dr.ExtraRowsTargetSample = append(dr.ExtraRowsTargetSample, diffRow)
 			}
 			dr.ExtraRowsTarget++
 			advanceSource = false
@@ -954,7 +1007,15 @@ func (td *tableDiffer) diff(ctx context.Context, wr *Wrangler, rowsToCompare *in
 			return nil, err
 		case c != 0:
 			if dr.MismatchedRows < 10 {
-				wr.Logger().Errorf("[table=%v] Different content %v in same PK: %v != %v", td.targetTable, dr.MismatchedRows, sourceRow, targetRow)
+				sourceDiffRow, err := td.genRowDiff(td.targetExpression, sourceRow, debug, onlyPks)
+				if err != nil {
+					return nil, vterrors.Wrap(err, "unexpected error generating diff")
+				}
+				targetDiffRow, err := td.genRowDiff(td.targetExpression, targetRow, debug, onlyPks)
+				if err != nil {
+					return nil, vterrors.Wrap(err, "unexpected error generating diff")
+				}
+				dr.MismatchedRowsSample = append(dr.MismatchedRowsSample, &DiffMismatch{Source: sourceDiffRow, Target: targetDiffRow})
 			}
 			dr.MismatchedRows++
 		default:
@@ -991,6 +1052,72 @@ func (td *tableDiffer) compare(sourceRow, targetRow []sqltypes.Value, cols []com
 		}
 	}
 	return 0, nil
+}
+
+func (td *tableDiffer) genRowDiff(queryStmt string, row []sqltypes.Value, debug, onlyPks bool) (*RowDiff, error) {
+	drp := &RowDiff{}
+	drp.Row = make(map[string]sqltypes.Value)
+	statement, err := sqlparser.Parse(queryStmt)
+	if err != nil {
+		return nil, err
+	}
+	sel, ok := statement.(*sqlparser.Select)
+	if !ok {
+		return nil, fmt.Errorf("unexpected: %v", sqlparser.String(statement))
+	}
+
+	if debug {
+		drp.Query = td.genDebugQueryDiff(sel, row, onlyPks)
+	}
+
+	if onlyPks {
+		for _, pkI := range td.selectPks {
+			buf := sqlparser.NewTrackedBuffer(nil)
+			sel.SelectExprs[pkI].Format(buf)
+			col := buf.String()
+			drp.Row[col] = row[pkI]
+		}
+		return drp, nil
+	}
+
+	for i := range sel.SelectExprs {
+		buf := sqlparser.NewTrackedBuffer(nil)
+		sel.SelectExprs[i].Format(buf)
+		col := buf.String()
+		drp.Row[col] = row[i]
+	}
+
+	return drp, nil
+}
+
+func (td *tableDiffer) genDebugQueryDiff(sel *sqlparser.Select, row []sqltypes.Value, onlyPks bool) string {
+	buf := sqlparser.NewTrackedBuffer(nil)
+	buf.Myprintf("select ")
+
+	if onlyPks {
+		for i, pkI := range td.selectPks {
+			pk := sel.SelectExprs[pkI]
+			pk.Format(buf)
+			if i != len(td.selectPks)-1 {
+				buf.Myprintf(", ")
+			}
+		}
+	} else {
+		sel.SelectExprs.Format(buf)
+	}
+	buf.Myprintf(" from ")
+	sel.From.Format(buf)
+	buf.Myprintf(" where ")
+	for i, pkI := range td.selectPks {
+		sel.SelectExprs[pkI].Format(buf)
+		buf.Myprintf("=")
+		row[pkI].EncodeSQL(buf)
+		if i != len(td.selectPks)-1 {
+			buf.Myprintf(" AND ")
+		}
+	}
+	buf.Myprintf(";")
+	return buf.String()
 }
 
 //-----------------------------------------------------------------
@@ -1054,4 +1181,36 @@ func wrapWeightString(expr sqlparser.SelectExpr) *sqlparser.AliasedExpr {
 			},
 		},
 	}
+}
+
+func formatSampleRow(logger logutil.Logger, rd *RowDiff, debug bool) {
+	keys := make([]string, 0, len(rd.Row))
+	for k := range rd.Row {
+		keys = append(keys, k)
+	}
+
+	sort.Strings(keys)
+
+	for _, k := range keys {
+		logger.Printf("\t\t\t %s: %s\n", k, formatValue(rd.Row[k]))
+	}
+
+	if debug {
+		logger.Printf("\t\tDebugQuery: %v\n", rd.Query)
+	}
+}
+
+func formatValue(val sqltypes.Value) string {
+	if val.Type() == sqltypes.Null {
+		return "null (NULL_TYPE)"
+	}
+	if val.IsQuoted() || val.Type() == sqltypes.Bit {
+		if len(val.Raw()) >= 20 {
+			rawBytes := val.Raw()[:20]
+			rawBytes = append(rawBytes, []byte("...[TRUNCATED]")...)
+			return fmt.Sprintf("%q (%v)", rawBytes, val.Type())
+		}
+		return fmt.Sprintf("%q (%v)", val.Raw(), val.Type())
+	}
+	return fmt.Sprintf("%s (%v)", val.Raw(), val.Type())
 }
