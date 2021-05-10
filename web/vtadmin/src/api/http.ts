@@ -213,3 +213,19 @@ export const fetchWorkflow = async (params: { clusterID: string; keyspace: strin
 
     return pb.Workflow.create(result);
 };
+
+export const fetchVTExplain = async <R extends pb.IVTExplainRequest>({ cluster, keyspace, sql }: R) => {
+    // As an easy enhancement for later, we can also validate the request parameters on the front-end
+    // instead of defaulting to '', to save a round trip.
+    const req = new URLSearchParams();
+    req.append('cluster', cluster || '');
+    req.append('keyspace', keyspace || '');
+    req.append('sql', sql || '');
+
+    const { result } = await vtfetch(`/api/vtexplain?${req}`);
+
+    const err = pb.VTExplainResponse.verify(result);
+    if (err) throw Error(err);
+
+    return pb.VTExplainResponse.create(result);
+};
