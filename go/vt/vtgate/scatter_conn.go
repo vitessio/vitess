@@ -217,23 +217,7 @@ func (stc *ScatterConn) ExecuteMultiShard(
 
 			qs, err = getQueryService(rs, info)
 			if err != nil {
-				// an error here could mean that the tablet we were targeting earlier has changed type.
-				// if we have a transaction, we'll have to fail, but if we only had a reserved connection,
-				// we can create a new reserved connection to a new tablet that is on the right shard
-				// and has the right type
-				switch info.actionNeeded {
-				case nothing:
-					info.actionNeeded = reserve
-				case begin:
-					info.actionNeeded = reserveBegin
-				default:
-					return nil, err
-				}
-				retry := checkAndResetShardSession(info, err, session)
-				if retry != newQS {
-					return nil, err
-				}
-				qs = rs.Gateway
+				return nil, err
 			}
 
 			retryRequest := func(exec func()) {
