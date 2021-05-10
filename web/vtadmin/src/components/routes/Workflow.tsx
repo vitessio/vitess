@@ -13,12 +13,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import { groupBy } from 'lodash-es';
+import { useMemo } from 'react';
+import { groupBy, orderBy } from 'lodash-es';
 import { Link, useParams } from 'react-router-dom';
 
 import style from './Workflow.module.scss';
 import { useWorkflow } from '../../hooks/api';
-import { formatStreamID, getStreams, getStreamSource, getStreamTarget } from '../../util/workflows';
+import { formatStreamKey, getStreams, getStreamSource, getStreamTarget } from '../../util/workflows';
 import { DataCell } from '../dataTable/DataCell';
 import { DataTable } from '../dataTable/DataTable';
 import { ContentContainer } from '../layout/ContentContainer';
@@ -44,23 +45,30 @@ export const Workflow = () => {
 
     const { data } = useWorkflow({ clusterID, keyspace, name }, { refetchInterval: 1000 });
 
-    const streams = getStreams(data);
+    const streams = useMemo(() => {
+        const rows = getStreams(data).map((stream) => ({
+            key: formatStreamKey(stream),
+            ...stream,
+        }));
+
+        return orderBy(rows, 'streamKey');
+    }, [data]);
+
     const streamsByState = groupBy(streams, 'state');
 
     const renderRows = (rows: typeof streams) => {
         return rows.map((row) => {
-            const streamID = formatStreamID(row);
             const href =
                 row.tablet && row.id
                     ? `/workflow/${clusterID}/${keyspace}/${name}/stream/${row.tablet.cell}/${row.tablet.uid}/${row.id}`
                     : null;
 
             return (
-                <tr key={streamID}>
+                <tr key={row.key}>
                     <DataCell>
                         <StreamStatePip state={row.state} />{' '}
                         <Link className="font-weight-bold" to={href}>
-                            {streamID}
+                            {row.key}
                         </Link>
                         <div className="font-size-small text-color-secondary">
                             Updated {formatDateTime(row.time_updated?.seconds)}

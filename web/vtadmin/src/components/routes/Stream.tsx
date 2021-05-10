@@ -13,11 +13,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import React from 'react';
 import { Link, useParams } from 'react-router-dom';
+
 import { useWorkflow } from '../../hooks/api';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
-import { formatStreamID, getStreams } from '../../util/workflows';
+import { formatStreamKey, getStreams } from '../../util/workflows';
 import { Code } from '../Code';
 import { ContentContainer } from '../layout/ContentContainer';
 import { NavCrumbs } from '../layout/NavCrumbs';
@@ -48,7 +48,7 @@ export const Stream = () => {
     const streamID = parseInt(params.streamID, 10);
     const tabletUID = parseInt(params.tabletUID, 10);
     const tabletAlias = { cell: params.tabletCell, uid: tabletUID };
-    const streamKey = formatStreamID({ id: streamID, tablet: tabletAlias });
+    const streamKey = formatStreamKey({ id: streamID, tablet: tabletAlias });
 
     useDocumentTitle(`${streamKey} (${params.workflowName})`);
 
