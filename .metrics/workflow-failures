@@ -9946,3 +9946,8 @@
 2021-05-10T15:46:09Z,endtoend,https://github.com/vitessio/vitess/actions/runs/828629104
 2021-05-10T15:46:09Z,unit_race,https://github.com/vitessio/vitess/actions/runs/828629106
 2021-05-10T16:03:57Z,Cluster (tabletmanager_tablegc),https://github.com/vitessio/vitess/actions/runs/828682437
+2021-05-10T16:36:34Z,Cluster (12),https://github.com/vitessio/vitess/actions/runs/828772753
+2021-05-10T16:36:34Z,Cluster (15),https://github.com/vitessio/vitess/actions/runs/828772735
+2021-05-10T16:36:34Z,Cluster (22),https://github.com/vitessio/vitess/actions/runs/828772781
+2021-05-10T16:36:34Z,Cluster (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/828772750
+2021-05-10T16:36:34Z,docker_test_1,https://github.com/vitessio/vitess/actions/runs/828772736
