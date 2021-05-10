@@ -1940,6 +1940,11 @@ func (a *application) rewriteRefOfForeignKeyDefinition(parent SQLNode, node *For
 	}) {
 		return false
 	}
+	if !a.rewriteColIdent(node, node.IndexName, func(newNode, parent SQLNode) {
+		parent.(*ForeignKeyDefinition).IndexName = newNode.(ColIdent)
+	}) {
+		return false
+	}
 	if !a.rewriteTableName(node, node.ReferencedTable, func(newNode, parent SQLNode) {
 		parent.(*ForeignKeyDefinition).ReferencedTable = newNode.(TableName)
 	}) {

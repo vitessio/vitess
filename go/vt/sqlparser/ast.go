@@ -1530,6 +1530,7 @@ type (
 	// ForeignKeyDefinition describes a foreign key in a CREATE TABLE statement
 	ForeignKeyDefinition struct {
 		Source            Columns
+		IndexName         ColIdent
 		ReferencedTable   TableName
 		ReferencedColumns Columns
 		OnDelete          ReferenceAction

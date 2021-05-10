@@ -1577,6 +1577,7 @@ func EqualsRefOfForeignKeyDefinition(a, b *ForeignKeyDefinition) bool {
 		return false
 	}
 	return EqualsColumns(a.Source, b.Source) &&
+		EqualsColIdent(a.IndexName, b.IndexName) &&
 		EqualsTableName(a.ReferencedTable, b.ReferencedTable) &&
 		EqualsColumns(a.ReferencedColumns, b.ReferencedColumns) &&
 		a.OnDelete == b.OnDelete &&
