@@ -58,7 +58,10 @@ export const Workflow = () => {
             return (
                 <tr key={streamID}>
                     <DataCell>
-                        <StreamStatePip state={row.state} /> <Link to={href}>{streamID}</Link>
+                        <StreamStatePip state={row.state} />{' '}
+                        <Link className="font-weight-bold" to={href}>
+                            {streamID}
+                        </Link>
                         <div className="font-size-small text-color-secondary">
                             Updated {formatDateTime(row.time_updated?.seconds)}
                         </div>
