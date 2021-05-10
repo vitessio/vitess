@@ -9929,5 +9929,6 @@
 2021-05-10T14:34:58Z,endtoend,https://github.com/vitessio/vitess/actions/runs/828407099
 2021-05-10T14:56:20Z,Cluster (15),https://github.com/vitessio/vitess/actions/runs/828472978
 2021-05-10T14:56:20Z,Cluster (18),https://github.com/vitessio/vitess/actions/runs/828472991
+2021-05-10T14:56:20Z,Cluster (vreplication_cellalias),https://github.com/vitessio/vitess/actions/runs/828473004
 2021-05-10T14:56:20Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/828472968
 2021-05-10T14:56:58Z,Unit Test (mariadb101),https://github.com/vitessio/vitess/actions/runs/828474680
