@@ -17,14 +17,13 @@ limitations under the License.
 package wrangler
 
 import (
+	"context"
 	"fmt"
 	"regexp"
 	"strconv"
 	"strings"
 	"sync"
 	"testing"
-
-	"context"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/logutil"
@@ -245,7 +244,7 @@ func (tmc *testMaterializerTMClient) VReplicationExec(ctx context.Context, table
 		matched = query == qrs[0].query
 	}
 	if !matched {
-		return nil, fmt.Errorf("tablet %v: unexpected query %s, want: %s", tablet, query, qrs[0].query)
+		return nil, fmt.Errorf("tablet %v:\nunexpected query\n%s\nwant:\n%s", tablet, query, qrs[0].query)
 	}
 	tmc.vrQueries[int(tablet.Alias.Uid)] = qrs[1:]
 	return qrs[0].result, nil
