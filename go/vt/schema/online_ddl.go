@@ -39,15 +39,28 @@ var (
 	onlineDDLGeneratedTableNameRegexp = regexp.MustCompile(`^_[0-f]{8}_[0-f]{4}_[0-f]{4}_[0-f]{4}_[0-f]{12}_([0-9]{14})_(gho|ghc|del|new|vrepl)$`)
 	ptOSCGeneratedTableNameRegexp     = regexp.MustCompile(`^_.*_old$`)
 )
+
 var (
 	// ErrOnlineDDLDisabled is returned when online DDL is disabled, and a user attempts to run an online DDL operation (submit, review, control)
 	ErrOnlineDDLDisabled = errors.New("online DDL is disabled")
+	ErrForeignKeyFound   = errors.New("Foreign key found")
 )
 
 const (
 	SchemaMigrationsTableName = "schema_migrations"
 	RevertActionStr           = "revert"
 )
+
+func errorOnFKWalk(node sqlparser.SQLNode) (kontinue bool, err error) {
+	switch node.(type) {
+	case *sqlparser.CreateTable, *sqlparser.AlterTable,
+		*sqlparser.TableSpec, *sqlparser.AddConstraintDefinition, *sqlparser.ConstraintDefinition:
+		return true, nil
+	case *sqlparser.ForeignKeyDefinition:
+		return false, ErrForeignKeyFound
+	}
+	return false, nil
+}
 
 // MigrationBasePath is the root for all schema migration entries
 func MigrationBasePath() string {
@@ -154,7 +167,6 @@ func NewOnlineDDLs(keyspace string, ddlStmt sqlparser.DDLStatement, ddlStrategyS
 		if err := appendOnlineDDL(ddlStmt.GetTable().Name.String(), ddlStmt); err != nil {
 			return nil, err
 		}
-		return onlineDDLs, nil
 	case *sqlparser.DropTable:
 		tables := ddlStmt.GetFromTables()
 		for _, table := range tables {
@@ -163,10 +175,28 @@ func NewOnlineDDLs(keyspace string, ddlStmt sqlparser.DDLStatement, ddlStrategyS
 				return nil, err
 			}
 		}
-		return onlineDDLs, nil
 	default:
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported statement for Online DDL: %v", sqlparser.String(ddlStmt))
 	}
+
+	{
+		// SQL statement sanity checks:
+		switch ddlStmt := ddlStmt.(type) {
+		case *sqlparser.AlterTable:
+			if len(ddlStmt.AlterOptions) == 0 {
+				return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.SyntaxError, "NewOnlineDDL: cannot parse statement: %v", sqlparser.String(ddlStmt))
+			}
+		}
+
+		if !ddlStmt.IsFullyParsed() {
+			return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.SyntaxError, "NewOnlineDDL: cannot parse statement: %v", sqlparser.String(ddlStmt))
+		}
+
+		if err := sqlparser.Walk(errorOnFKWalk, ddlStmt); err == ErrForeignKeyFound {
+			return nil, vterrors.Errorf(vtrpcpb.Code_ABORTED, "foreign key constraint are not supported in online DDL")
+		}
+	}
+	return onlineDDLs, nil
 }
 
 // NewOnlineDDL creates a schema change request with self generated UUID and RequestTime
@@ -216,7 +246,7 @@ func NewOnlineDDL(keyspace string, table string, sql string, ddlStrategySetting 
 			switch stmt := stmt.(type) {
 			case sqlparser.DDLStatement:
 				if !stmt.IsFullyParsed() {
-					return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "NewOnlineDDL: cannot fully parse statement %v", sqlparser.String(stmt))
+					return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "NewOnlineDDL: cannot parse statement: %v", sqlparser.String(stmt))
 				}
 				stmt.SetComments(comments)
 			case *sqlparser.RevertMigration:

@@ -159,14 +159,23 @@ func planAggregations(qp *queryProjection, plan logicalPlan, semTable *semantics
 func planOrderBy(qp *queryProjection, plan logicalPlan, semTable *semantics.SemTable) (logicalPlan, error) {
 	switch plan := plan.(type) {
 	case *route:
+		additionalColAdded := false
 		for _, order := range qp.orderExprs {
 			offset, exists := qp.orderExprColMap[order]
-			if !exists {
-				return nil, semantics.Gen4NotSupportedF("order by column not exists in select list")
-			}
 			colName, ok := order.Expr.(*sqlparser.ColName)
 			if !ok {
 				return nil, semantics.Gen4NotSupportedF("order by non-column expression")
+			}
+			if !exists {
+				expr := &sqlparser.AliasedExpr{
+					Expr: order.Expr,
+				}
+				var err error
+				offset, err = pushProjection(expr, plan, semTable)
+				if err != nil {
+					return nil, err
+				}
+				additionalColAdded = true
 			}
 
 			table := semTable.Dependencies(colName)
@@ -200,9 +209,7 @@ func planOrderBy(qp *queryProjection, plan logicalPlan, semTable *semantics.SemT
 				if err != nil {
 					return nil, err
 				}
-			}
-			if weightStringOffset != -1 {
-				plan.eroute.TruncateColumnCount = len(qp.selectExprs) + len(qp.aggrExprs)
+				additionalColAdded = true
 			}
 
 			plan.eroute.OrderBy = append(plan.eroute.OrderBy, engine.OrderbyParams{
@@ -212,6 +219,10 @@ func planOrderBy(qp *queryProjection, plan logicalPlan, semTable *semantics.SemT
 			})
 			plan.Select.AddOrder(order)
 		}
+		if additionalColAdded {
+			plan.eroute.TruncateColumnCount = len(qp.selectExprs) + len(qp.aggrExprs)
+		}
+
 		return plan, nil
 	default:
 		return nil, semantics.Gen4NotSupportedF("ordering on complex query")
