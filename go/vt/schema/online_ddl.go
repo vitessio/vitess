@@ -184,12 +184,12 @@ func NewOnlineDDLs(keyspace string, ddlStmt sqlparser.DDLStatement, ddlStrategyS
 		switch ddlStmt := ddlStmt.(type) {
 		case *sqlparser.AlterTable:
 			if len(ddlStmt.AlterOptions) == 0 {
-				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "NewOnlineDDL: cannot parse statement: %v", sqlparser.String(ddlStmt))
+				return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.SyntaxError, "NewOnlineDDL: cannot parse statement: %v", sqlparser.String(ddlStmt))
 			}
 		}
 
 		if !ddlStmt.IsFullyParsed() {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "NewOnlineDDL: cannot parse statement: %v", sqlparser.String(ddlStmt))
+			return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.SyntaxError, "NewOnlineDDL: cannot parse statement: %v", sqlparser.String(ddlStmt))
 		}
 
 		if err := sqlparser.Walk(errorOnFKWalk, ddlStmt); err == ErrForeignKeyFound {
