@@ -1059,6 +1059,9 @@ func VisitRefOfForeignKeyDefinition(in *ForeignKeyDefinition, f Visit) error {
 	if err := VisitColumns(in.Source, f); err != nil {
 		return err
 	}
+	if err := VisitColIdent(in.IndexName, f); err != nil {
+		return err
+	}
 	if err := VisitTableName(in.ReferencedTable, f); err != nil {
 		return err
 	}

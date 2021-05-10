@@ -838,6 +838,7 @@ func (a ReferenceAction) formatFast(buf *TrackedBuffer) {
 // formatFast formats the node.
 func (f *ForeignKeyDefinition) formatFast(buf *TrackedBuffer) {
 	buf.WriteString("foreign key ")
+	f.IndexName.formatFast(buf)
 	f.Source.formatFast(buf)
 	buf.WriteString(" references ")
 	f.ReferencedTable.formatFast(buf)

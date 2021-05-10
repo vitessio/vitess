@@ -868,6 +868,7 @@ func CloneRefOfForeignKeyDefinition(n *ForeignKeyDefinition) *ForeignKeyDefiniti
 	}
 	out := *n
 	out.Source = CloneColumns(n.Source)
+	out.IndexName = CloneColIdent(n.IndexName)
 	out.ReferencedTable = CloneTableName(n.ReferencedTable)
 	out.ReferencedColumns = CloneColumns(n.ReferencedColumns)
 	return &out
