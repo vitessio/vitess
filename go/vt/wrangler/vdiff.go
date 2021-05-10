@@ -26,12 +26,11 @@ import (
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
-
 	"github.com/golang/protobuf/proto"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/grpcclient"
@@ -44,6 +43,7 @@ import (
 	"vitess.io/vitess/go/vt/vtctl/workflow"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 
@@ -626,7 +626,7 @@ func (df *vdiff) stopTargets(ctx context.Context) error {
 			if err := proto.UnmarshalText(row[0].ToString(), &bls); err != nil {
 				return err
 			}
-			pos, err := mysql.DecodePosition(row[1].ToString())
+			pos, err := binlogplayer.DecodePosition(row[1].ToString())
 			if err != nil {
 				return err
 			}
@@ -762,7 +762,7 @@ func (df *vdiff) syncTargets(ctx context.Context, filteredReplicationWaitTime ti
 		if err != nil {
 			return err
 		}
-		mpos, err := mysql.DecodePosition(pos)
+		mpos, err := binlogplayer.DecodePosition(pos)
 		if err != nil {
 			return err
 		}

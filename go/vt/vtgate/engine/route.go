@@ -491,6 +491,11 @@ func (route *Route) routeInfoSchemaQuery(vcursor VCursor, bindVars map[string]*q
 	if tableName != "" {
 		rss, err := route.paramsRoutedTable(vcursor, bindVars, specifiedKS, tableName)
 		if err != nil {
+			// Only if keyspace is not found in vschema, we try with default keyspace.
+			// As the in the table_schema predicates for a keyspace 'ks' it can contain 'vt_ks'.
+			if vterrors.ErrState(err) == vterrors.BadDb {
+				return defaultRoute()
+			}
 			return nil, err
 		}
 		if rss != nil {

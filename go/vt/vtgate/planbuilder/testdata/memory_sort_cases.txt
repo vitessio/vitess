@@ -570,3 +570,24 @@
   }
 }
 Gen4 plan same as above
+
+# scatter order by with order by column not present
+"select col from user order by id"
+"unsupported: in scatter query: order by must reference a column in the select list: id asc"
+{
+  "QueryType": "SELECT",
+  "Original": "select col from user order by id",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select col, id, weight_string(id) from `user` where 1 != 1",
+    "OrderBy": "1 ASC",
+    "Query": "select col, id, weight_string(id) from `user` order by id asc",
+    "ResultColumns": 1,
+    "Table": "`user`"
+  }
+}
