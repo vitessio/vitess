@@ -113,7 +113,7 @@ export const formatRows = (
         const shard = shardName ? keyspace?.shards[shardName] : null;
 
         return {
-            alias: formatAlias(t),
+            alias: formatAlias(t.tablet?.alias),
             cluster: t.cluster?.name,
             hostname: t.tablet?.hostname,
             isShardServing: shard?.shard?.is_master_serving,

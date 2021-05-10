@@ -26,6 +26,7 @@ import { Gates } from './routes/Gates';
 import { Keyspaces } from './routes/Keyspaces';
 import { Schemas } from './routes/Schemas';
 import { Schema } from './routes/Schema';
+import { Stream } from './routes/Stream';
 import { Workflows } from './routes/Workflows';
 import { Workflow } from './routes/Workflow';
 
@@ -67,8 +68,12 @@ export const App = () => {
                             <Workflows />
                         </Route>
 
-                        <Route path="/workflow/:clusterID/:keyspace/:name">
+                        <Route exact path="/workflow/:clusterID/:keyspace/:name">
                             <Workflow />
+                        </Route>
+
+                        <Route path="/workflow/:clusterID/:keyspace/:workflowName/stream/:tabletCell/:tabletUID/:streamID">
+                            <Stream />
                         </Route>
 
                         <Route path="/debug">
