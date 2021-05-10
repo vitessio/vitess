@@ -31,8 +31,8 @@ export const TABLET_TYPES = Object.entries(invertBy(topodata.TabletType)).reduce
 /**
  * formatAlias formats a tablet.alias object as a single string, The Vitess Way™.
  */
-export const formatAlias = <T extends pb.ITablet>(t: T) =>
-    t.tablet?.alias?.cell && t.tablet?.alias?.uid ? `${t.tablet.alias.cell}-${t.tablet.alias.uid}` : null;
+export const formatAlias = <A extends topodata.ITabletAlias>(alias: A | null | undefined) =>
+    alias?.uid ? `${alias.cell}-${alias.uid}` : null;
 
 export const formatType = (t: pb.Tablet) => t.tablet?.type && TABLET_TYPES[t.tablet?.type];
 
