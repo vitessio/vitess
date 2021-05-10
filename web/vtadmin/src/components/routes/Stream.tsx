@@ -36,11 +36,14 @@ interface RouteParams {
 
 export const Stream = () => {
     const params = useParams<RouteParams>();
-    const { data: workflow } = useWorkflow({
-        clusterID: params.clusterID,
-        keyspace: params.keyspace,
-        name: params.workflowName,
-    });
+    const { data: workflow } = useWorkflow(
+        {
+            clusterID: params.clusterID,
+            keyspace: params.keyspace,
+            name: params.workflowName,
+        },
+        { refetchInterval: 1000 }
+    );
 
     const streamID = parseInt(params.streamID, 10);
     const tabletUID = parseInt(params.tabletUID, 10);

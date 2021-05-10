@@ -42,7 +42,7 @@ export const Workflow = () => {
     const { clusterID, keyspace, name } = useParams<RouteParams>();
     useDocumentTitle(`${name} (${keyspace})`);
 
-    const { data } = useWorkflow({ clusterID, keyspace, name });
+    const { data } = useWorkflow({ clusterID, keyspace, name }, { refetchInterval: 1000 });
 
     const streams = getStreams(data);
     const streamsByState = groupBy(streams, 'state');
