@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 import { vtctldata, vtadmin as pb } from '../proto/vtadmin';
+import { formatAlias } from './tablets';
 
 /**
  * getStreams returns a flat list of streams across all keyspaces/shards in the workflow.
@@ -29,6 +30,23 @@ export const getStreams = <W extends pb.IWorkflow>(workflow: W | null | undefine
         });
         return acc;
     }, [] as vtctldata.Workflow.IStream[]);
+};
+
+export const formatStreamKey = <S extends vtctldata.Workflow.IStream>(stream: S | null | undefined): string | null => {
+    return stream?.tablet && stream?.id ? `${formatAlias(stream.tablet)}/${stream.id}` : null;
+};
+
+export const getStreamSource = <S extends vtctldata.Workflow.IStream>(stream: S | null | undefined): string | null => {
+    return stream?.binlog_source?.keyspace && stream?.binlog_source.shard
+        ? `${stream.binlog_source.keyspace}/${stream.binlog_source.shard}`
+        : null;
+};
+
+export const getStreamTarget = <S extends vtctldata.Workflow.IStream>(
+    stream: S | null | undefined,
+    workflowKeyspace: string | null | undefined
+): string | null => {
+    return stream?.shard && workflowKeyspace ? `${workflowKeyspace}/${stream.shard}` : null;
 };
 
 /**
