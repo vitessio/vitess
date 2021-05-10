@@ -338,17 +338,17 @@ func (hs *healthStreamer) reload() error {
 	}
 
 	var tables []string
-	var tablePredicates []string
+	var tableNames []string
 	for _, row := range qr.Rows {
 		table := row[0].ToString()
 		tables = append(tables, table)
 
-		tableName := sqlparser.NewStrLiteral(table)
-		tablePredicates = append(tablePredicates, "table_name = "+sqlparser.String(tableName))
+		escapedTblName := sqlparser.String(sqlparser.NewStrLiteral(table))
+		tableNames = append(tableNames, escapedTblName)
 	}
-	tableNamePredicates := strings.Join(tablePredicates, " OR ")
-	del := fmt.Sprintf("%s WHERE %s", mysql.ClearSchemaCopy, tableNamePredicates)
-	upd := fmt.Sprintf("%s AND %s", mysql.InsertIntoSchemaCopy, tableNamePredicates)
+	tableNamePredicate := fmt.Sprintf("table_name IN (%s)", strings.Join(tableNames, ", "))
+	del := fmt.Sprintf("%s WHERE %s", mysql.ClearSchemaCopy, tableNamePredicate)
+	upd := fmt.Sprintf("%s AND %s", mysql.InsertIntoSchemaCopy, tableNamePredicate)
 
 	// Reload the schema in a transaction.
 	_, err = conn.Exec(ctx, "begin", 1, false)
