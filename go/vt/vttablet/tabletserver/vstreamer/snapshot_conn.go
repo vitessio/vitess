@@ -65,7 +65,7 @@ func (conn *snapshotConn) streamWithoutSnapshot(ctx context.Context, table, quer
 // startSnapshot starts a streaming query with a snapshot view of the specified table.
 // It returns the gtid of the time when the snapshot was taken.
 func (conn *snapshotConn) streamWithSnapshot(ctx context.Context, table, query string) (gtid string, err error) {
-	fmt.Printf("======= streamWithSnapshot: sql=%v\n", query[0:50])
+	fmt.Printf("======= streamWithSnapshot: sql=%v\n", query)
 	gtid, err = conn.startSnapshot(ctx, table)
 	if err != nil {
 		return "", err
