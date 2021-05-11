@@ -145,14 +145,39 @@ func getOpcode(comparison *sqlparser.ComparisonExpr) (Opcode, error) {
 
 // compare returns true after applying the comparison specified in the Filter to the actual data in the column
 func compare(comparison Opcode, columnValue, filterValue sqltypes.Value) (bool, error) {
+	// NullsafeCompare returns 0 if values match, -1 if columnValue < filterValue, 1 if columnValue > filterValue
 	result, err := evalengine.NullsafeCompare(columnValue, filterValue)
 	if err != nil {
 		return false, err
 	}
-	if result == 0 && (comparison == Equal || comparison == LessThanEqual || comparison == GreaterThanEqual) ||
-		result < 0 && (comparison == LessThan || comparison == LessThanEqual || comparison == NotEqual) ||
-		result > 0 && (comparison == GreaterThan || comparison == GreaterThanEqual || comparison == NotEqual) {
-		return true, nil
+
+	switch comparison {
+	case Equal:
+		if result == 0 {
+			return true, nil
+		}
+	case NotEqual:
+		if result != 0 {
+			return true, nil
+		}
+	case LessThan:
+		if result == -1 {
+			return true, nil
+		}
+	case LessThanEqual:
+		if result <= 0 {
+			return true, nil
+		}
+	case GreaterThan:
+		if result == 1 {
+			return true, nil
+		}
+	case GreaterThanEqual:
+		if result >= 0 {
+			return true, nil
+		}
+	default:
+		return false, fmt.Errorf("comparison operator %d not supported", comparison)
 	}
 	return false, nil
 }
