@@ -20,8 +20,14 @@ import (
 	"log/syslog"
 	"testing"
 
+	"vitess.io/vitess/go/hack"
+
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
+
+func init() {
+	hack.DisableProtoBufRandomness()
+}
 
 func TestShardChangeSyslog(t *testing.T) {
 	wantSev, wantMsg := syslog.LOG_INFO, "keyspace-123/shard-123 [shard] status value: master_alias:{cell:\"test\" uid:123}"
