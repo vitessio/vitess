@@ -27,6 +27,7 @@
     "react-router-dom": "^5.2.0",
     "react-scripts": "4.0.1",
     "react-tiny-popover": "^6.0.5",
+    "source-map-explorer": "^2.5.2",
     "typescript": "^4.1.3",
     "web-vitals": "^0.2.4"
   },
@@ -42,6 +43,7 @@
     "lint:prettier:fix": "npm run lint:prettier -- --write",
     "lint:stylelint": "stylelint \"**/*.{css,scss}\"",
     "lint:stylelint:fix": "npm run lint:stylelint -- --fix",
+    "analyze": "source-map-explorer 'build/static/js/*.js'",
     "eject": "react-scripts eject"
   },
   "eslintConfig": {
