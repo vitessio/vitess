@@ -9983,3 +9983,8 @@
 2021-05-11T09:53:58Z,Cluster (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/831237599
 2021-05-11T09:53:58Z,gomod-tidy,https://github.com/vitessio/vitess/actions/runs/831237564
 2021-05-11T09:57:29Z,Cluster (15),https://github.com/vitessio/vitess/actions/runs/831249275
+2021-05-11T09:57:29Z,Cluster (22),https://github.com/vitessio/vitess/actions/runs/831249270
+2021-05-11T09:57:29Z,Cluster (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/831249299
+2021-05-11T09:57:29Z,Cluster (vreplication_cellalias),https://github.com/vitessio/vitess/actions/runs/831249291
+2021-05-11T10:05:14Z,Cluster (15),https://github.com/vitessio/vitess/actions/runs/831271519
+2021-05-11T10:05:14Z,Cluster (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/831271528
