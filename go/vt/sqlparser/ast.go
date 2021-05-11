@@ -66,6 +66,7 @@ type (
 		SetFromTables(tables TableNames)
 		SetComments(comments Comments)
 		GetComments() Comments
+		SetFullyParsed(fullyParsed bool)
 		Statement
 	}
 
@@ -74,6 +75,7 @@ type (
 		iDBDDLStatement()
 		IsFullyParsed() bool
 		GetDatabaseName() string
+		SetFullyParsed(bool)
 		Statement
 	}
 
@@ -664,14 +666,25 @@ func (*TruncateTable) IsFullyParsed() bool {
 	return true
 }
 
+// SetFullyParsed implements the DDLStatement interface
+func (*TruncateTable) SetFullyParsed(bool) {}
+
 // IsFullyParsed implements the DDLStatement interface
 func (*RenameTable) IsFullyParsed() bool {
 	return true
 }
 
+// SetFullyParsed implements the DDLStatement interface
+func (node *RenameTable) SetFullyParsed(fullyParsed bool) {}
+
 // IsFullyParsed implements the DDLStatement interface
 func (node *CreateTable) IsFullyParsed() bool {
 	return node.FullyParsed
+}
+
+// SetFullyParsed implements the DDLStatement interface
+func (node *CreateTable) SetFullyParsed(fullyParsed bool) {
+	node.FullyParsed = fullyParsed
 }
 
 // IsFullyParsed implements the DDLStatement interface
@@ -679,25 +692,42 @@ func (node *AlterTable) IsFullyParsed() bool {
 	return node.FullyParsed
 }
 
+// SetFullyParsed implements the DDLStatement interface
+func (node *AlterTable) SetFullyParsed(fullyParsed bool) {
+	node.FullyParsed = fullyParsed
+}
+
 // IsFullyParsed implements the DDLStatement interface
 func (node *CreateView) IsFullyParsed() bool {
 	return true
 }
+
+// SetFullyParsed implements the DDLStatement interface
+func (node *CreateView) SetFullyParsed(fullyParsed bool) {}
 
 // IsFullyParsed implements the DDLStatement interface
 func (node *DropView) IsFullyParsed() bool {
 	return true
 }
 
+// SetFullyParsed implements the DDLStatement interface
+func (node *DropView) SetFullyParsed(fullyParsed bool) {}
+
 // IsFullyParsed implements the DDLStatement interface
 func (node *DropTable) IsFullyParsed() bool {
 	return true
 }
 
+// SetFullyParsed implements the DDLStatement interface
+func (node *DropTable) SetFullyParsed(fullyParsed bool) {}
+
 // IsFullyParsed implements the DDLStatement interface
 func (node *AlterView) IsFullyParsed() bool {
 	return true
 }
+
+// SetFullyParsed implements the DDLStatement interface
+func (node *AlterView) SetFullyParsed(fullyParsed bool) {}
 
 // IsTemporary implements the DDLStatement interface
 func (*TruncateTable) IsTemporary() bool {
@@ -1308,14 +1338,27 @@ func (node *DropDatabase) IsFullyParsed() bool {
 	return true
 }
 
+// SetFullyParsed implements the DBDDLStatement interface
+func (node *DropDatabase) SetFullyParsed(fullyParsed bool) {}
+
 // IsFullyParsed implements the DBDDLStatement interface
 func (node *CreateDatabase) IsFullyParsed() bool {
 	return node.FullyParsed
 }
 
+// SetFullyParsed implements the DBDDLStatement interface
+func (node *CreateDatabase) SetFullyParsed(fullyParsed bool) {
+	node.FullyParsed = fullyParsed
+}
+
 // IsFullyParsed implements the DBDDLStatement interface
 func (node *AlterDatabase) IsFullyParsed() bool {
 	return node.FullyParsed
+}
+
+// SetFullyParsed implements the DBDDLStatement interface
+func (node *AlterDatabase) SetFullyParsed(fullyParsed bool) {
+	node.FullyParsed = fullyParsed
 }
 
 // GetDatabaseName implements the DBDDLStatement interface
