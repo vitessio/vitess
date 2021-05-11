@@ -178,17 +178,9 @@ func (vrw *VReplicationWorkflow) Create(ctx context.Context) error {
 		excludeTables := strings.Split(vrw.params.ExcludeTables, ",")
 		keyspace := vrw.params.SourceKeyspace
 
-		errs := []string{}
-		for _, shard := range vrw.params.SourceShards {
-			if err := vrw.wr.ValidateSchemaShard(ctx, keyspace, shard, excludeTables, true /*includeViews*/, true /*includeVschema*/); err != nil {
-				errMsg := fmt.Sprintf("%s/%s: %s", keyspace, shard, err.Error())
-				errs = append(errs, errMsg)
-			}
-		}
-
-		// There were some schema drifts
-		if len(errs) > 0 {
-			return fmt.Errorf("Create ReshardWorkflow failed Schema Validation:\n" + strings.Join(errs, "\n"))
+		vschmErr := vrw.wr.ValidateVSchema(ctx, keyspace, vrw.params.SourceShards, excludeTables, true /*includeViews*/)
+		if vschmErr != nil {
+			return fmt.Errorf("Create ReshardWorkflow failed: %v", vschmErr)
 		}
 
 		err = vrw.initReshard()
