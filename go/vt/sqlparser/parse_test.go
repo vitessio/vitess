@@ -1018,8 +1018,13 @@ var (
 	}, {
 		input: "alter table a upgrade partitioning",
 	}, {
-		input:  "alter table a partition by range (id) (partition p0 values less than (10), partition p1 values less than (maxvalue))",
-		output: "alter table a",
+		input:      "alter table a partition by range (id) (partition p0 values less than (10), partition p1 values less than (maxvalue))",
+		output:     "alter table a",
+		partialDDL: true,
+	}, {
+		input:      "create database a garbage values",
+		output:     "create database a",
+		partialDDL: true,
 	}, {
 		input: "alter table `Post With Space` drop foreign key `Post With Space_ibfk_1`",
 	}, {
@@ -1065,15 +1070,17 @@ var (
 	}, {
 		input: "alter table a add check (ch_1) not enforced",
 	}, {
-		input:  "alter table a drop check ch_1",
-		output: "alter table a",
+		input:      "alter table a drop check ch_1",
+		output:     "alter table a",
+		partialDDL: true,
 	}, {
 		input: "alter table a drop foreign key kx",
 	}, {
 		input: "alter table a drop primary key",
 	}, {
-		input:  "alter table a drop constraint",
-		output: "alter table a",
+		input:      "alter table a drop constraint",
+		output:     "alter table a",
+		partialDDL: true,
 	}, {
 		input:  "alter table a drop id",
 		output: "alter table a drop column id",
@@ -1109,13 +1116,16 @@ var (
 		input:  "alter schema d collate = 'utf8_bin' character set = geostd8 character set = geostd8",
 		output: "alter database d collate 'utf8_bin' character set geostd8 character set geostd8",
 	}, {
-		input: "create table a",
+		input:      "create table a",
+		partialDDL: true,
 	}, {
-		input:  "CREATE TABLE a",
-		output: "create table a",
+		input:      "CREATE TABLE a",
+		output:     "create table a",
+		partialDDL: true,
 	}, {
-		input:  "create table `a`",
-		output: "create table a",
+		input:      "create table `a`",
+		output:     "create table a",
+		partialDDL: true,
 	}, {
 		input:  "create table a (\n\t`a` int\n)",
 		output: "create table a (\n\ta int\n)",
@@ -1141,11 +1151,13 @@ var (
 		input:  "create table if not exists a (\n\t`a` int\n)",
 		output: "create table if not exists a (\n\ta int\n)",
 	}, {
-		input:  "create table a ignore me this is garbage",
-		output: "create table a",
+		input:      "create table a ignore me this is garbage",
+		output:     "create table a",
+		partialDDL: true,
 	}, {
-		input:  "create table a (a int, b char, c garbage)",
-		output: "create table a",
+		input:      "create table a (a int, b char, c garbage)",
+		output:     "create table a",
+		partialDDL: true,
 	}, {
 		input:  "create table a (b1 bool not null primary key, b2 boolean not null)",
 		output: "create table a (\n\tb1 bool not null primary key,\n\tb2 boolean not null\n)",
@@ -1824,6 +1836,10 @@ var (
 	}, {
 		input: "create database test_db character set geostd8",
 	}, {
+		input:      "alter table corder zzzz zzzz zzzz",
+		output:     "alter table corder",
+		partialDDL: true,
+	}, {
 		input:      "create database test_db character set * unparsable",
 		output:     "create database test_db",
 		partialDDL: true,
@@ -1961,9 +1977,9 @@ func TestValid(t *testing.T) {
 			// For mysql 8.0 syntax, the query is not entirely parsed.
 			// Add more structs as we go on adding full parsing support for DDL constructs for 5.7 syntax.
 			switch x := tree.(type) {
-			case *CreateDatabase:
+			case DBDDLStatement:
 				assert.Equal(t, !tcase.partialDDL, x.IsFullyParsed())
-			case *AlterDatabase:
+			case DDLStatement:
 				assert.Equal(t, !tcase.partialDDL, x.IsFullyParsed())
 			}
 			// This test just exercises the tree walking functionality.
