@@ -8701,9 +8701,9 @@ yydefault:
 		{
 			// Change this to an alter statement
 			if yyDollar[4].colIdent.Lowered() == "primary" {
-				yyLOCAL = &AlterTable{Table: yyDollar[6].tableName, AlterOptions: append([]AlterOption{&DropKey{Type: PrimaryKeyType}}, yyDollar[7].alterOptionsUnion()...)}
+				yyLOCAL = &AlterTable{FullyParsed: true, Table: yyDollar[6].tableName, AlterOptions: append([]AlterOption{&DropKey{Type: PrimaryKeyType}}, yyDollar[7].alterOptionsUnion()...)}
 			} else {
-				yyLOCAL = &AlterTable{Table: yyDollar[6].tableName, AlterOptions: append([]AlterOption{&DropKey{Type: NormalKeyType, Name: yyDollar[4].colIdent}}, yyDollar[7].alterOptionsUnion()...)}
+				yyLOCAL = &AlterTable{FullyParsed: true, Table: yyDollar[6].tableName, AlterOptions: append([]AlterOption{&DropKey{Type: NormalKeyType, Name: yyDollar[4].colIdent}}, yyDollar[7].alterOptionsUnion()...)}
 			}
 		}
 		yyVAL.union = yyLOCAL

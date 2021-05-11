@@ -20,23 +20,23 @@ import relativeTime from 'dayjs/plugin/relativeTime';
 dayjs.extend(localizedFormat);
 dayjs.extend(relativeTime);
 
-export const parse = (timestamp: number | null | undefined): dayjs.Dayjs | null => {
+export const parse = (timestamp: number | Long | null | undefined): dayjs.Dayjs | null => {
     if (typeof timestamp !== 'number') {
         return null;
     }
     return dayjs.unix(timestamp);
 };
 
-export const format = (timestamp: number | null | undefined, template: string | undefined): string | null => {
+export const format = (timestamp: number | Long | null | undefined, template: string | undefined): string | null => {
     const u = parse(timestamp);
     return u ? u.format(template) : null;
 };
 
-export const formatDateTime = (timestamp: number | null | undefined): string | null => {
-    return format(timestamp, 'YYYY-MM-DD LT');
+export const formatDateTime = (timestamp: number | Long | null | undefined): string | null => {
+    return format(timestamp, 'YYYY-MM-DD LT Z');
 };
 
-export const formatRelativeTime = (timestamp: number | null | undefined): string | null => {
+export const formatRelativeTime = (timestamp: number | Long | null | undefined): string | null => {
     const u = parse(timestamp);
     return u ? u.fromNow() : null;
 };

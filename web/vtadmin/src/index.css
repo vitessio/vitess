@@ -187,14 +187,23 @@ table {
   width: 100%;
 }
 
+table caption {
+  background: var(--backgroundSecondary);
+  color: var(--textColorPrimary);
+  font-size: var(--fontSizeDefault);
+  font-weight: 500;
+  padding: 1.2rem var(--tableCellPadding) 0.8rem var(--tableCellPadding);
+  text-align: left;
+}
+
 table th {
   background: var(--backgroundSecondary);
   border: solid 1px var(--backgroundSecondary);
   border-bottom-color: var(--tableBorderColor);
   color: var(--textColorSecondary);
-  font-size: var(--fontSizeSmall);
+  font-size: var(--fontSizeDefault);
   font-weight: 500;
-  padding: 12px var(--tableCellPadding);
+  padding: 8px var(--tableCellPadding);
   text-align: left;
 }
 
