@@ -24,6 +24,7 @@ import {
     fetchTablets,
     fetchVSchema,
     FetchVSchemaParams,
+    fetchVTExplain,
     fetchWorkflow,
     fetchWorkflows,
 } from '../api/http';
@@ -112,6 +113,13 @@ export const useSchema = (params: FetchSchemaParams, options?: UseQueryOptions<p
  */
 export const useVSchema = (params: FetchVSchemaParams, options?: UseQueryOptions<pb.VSchema, Error> | undefined) => {
     return useQuery(['vschema', params], () => fetchVSchema(params));
+};
+
+export const useVTExplain = (
+    params: Parameters<typeof fetchVTExplain>[0],
+    options?: UseQueryOptions<pb.VTExplainResponse, Error> | undefined
+) => {
+    return useQuery(['vtexplain', params], () => fetchVTExplain(params), { ...options });
 };
 
 /**
