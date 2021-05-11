@@ -124,5 +124,3 @@ require (
 )
 
 replace github.com/skeema/tengo => github.com/planetscale/tengo v0.9.6-ps.v3
-
-replace google.golang.org/protobuf => github.com/vmg/protobuf-go v1.26.1-0.20210505160851-6eface5a27ed
