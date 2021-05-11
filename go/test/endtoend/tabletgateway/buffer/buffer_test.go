@@ -79,7 +79,6 @@ const (
 
 //threadParams is set of params passed into read and write threads
 type threadParams struct {
-	writable                   bool
 	quit                       bool
 	rpcs                       int        // Number of queries successfully executed.
 	errors                     int        // Number of failed queries.
@@ -90,6 +89,7 @@ type threadParams struct {
 	i                          int        //
 	commitErrors               int
 	executeFunction            func(c *threadParams, conn *mysql.Conn) error // Implement the method for read/update.
+	reservedConn               bool
 }
 
 // Thread which constantly executes a query on vtgate.
@@ -100,6 +100,13 @@ func (c *threadParams) threadRun() {
 		log.Errorf("error connecting to mysql with params %v: %v", vtParams, err)
 	}
 	defer conn.Close()
+	if c.reservedConn {
+		_, err = conn.ExecuteFetch("set default_week_format = 1", 1000, true)
+		if err != nil {
+			c.errors++
+			log.Errorf("error setting default_week_format: %v", err)
+		}
+	}
 	for !c.quit {
 		err = c.executeFunction(c, conn)
 		if err != nil {
@@ -164,7 +171,7 @@ func updateExecute(c *threadParams, conn *mysql.Conn) error {
 			if c.commitErrors > 1 {
 				return err
 			}
-			log.Errorf("UPDATE %d failed during ROLLBACK. This is okay once because we do not support buffering it. err: %v", attempt, err)
+			log.Errorf("UPDATE %d failed during COMMIT. This is okay once because we do not support buffering it. err: %v", attempt, err)
 		}
 	}
 	if err != nil {
@@ -176,7 +183,7 @@ func updateExecute(c *threadParams, conn *mysql.Conn) error {
 		if c.commitErrors > 1 {
 			return err
 		}
-		log.Errorf("UPDATE %d failed during COMMIT with err: %v.This is okay once because we do not support buffering it.", attempt, err)
+		log.Errorf("UPDATE %d failed during ROLLBACK with err: %v.This is okay once because we do not support buffering it.", attempt, err)
 	}
 	return nil
 }
@@ -185,6 +192,7 @@ func createCluster() (*cluster.LocalProcessCluster, int) {
 	clusterInstance = cluster.NewCluster(cell, hostname)
 
 	// Start topo server
+	clusterInstance.VtctldExtraArgs = []string{"-remote_operation_timeout", "20s", "-topo_etcd_lease_ttl", "40"}
 	if err := clusterInstance.StartTopo(); err != nil {
 		return nil, 1
 	}
@@ -194,8 +202,9 @@ func createCluster() (*cluster.LocalProcessCluster, int) {
 		Name:      keyspaceUnshardedName,
 		SchemaSQL: sqlSchema,
 	}
-	clusterInstance.VtTabletExtraArgs = []string{"-health_check_interval", "1s"}
-
+	clusterInstance.VtTabletExtraArgs = []string{"-health_check_interval", "1s",
+		"-queryserver-config-transaction-timeout", "5",
+	}
 	if err := clusterInstance.StartUnshardedKeyspace(*keyspace, 1, false); err != nil {
 		return nil, 1
 	}
@@ -228,14 +237,16 @@ func exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
 }
 
 func TestBufferInternalReparenting(t *testing.T) {
-	testBufferBase(t, false)
+	testBufferBase(t, false, false)
+	testBufferBase(t, false, true)
 }
 
 func TestBufferExternalReparenting(t *testing.T) {
-	testBufferBase(t, true)
+	testBufferBase(t, true, false)
+	testBufferBase(t, true, true)
 }
 
-func testBufferBase(t *testing.T, isExternalParent bool) {
+func testBufferBase(t *testing.T, isExternalParent bool, useReservedConn bool) {
 	defer cluster.PanicHandler(t)
 	clusterInstance, exitCode := createCluster()
 	if exitCode != 0 {
@@ -253,10 +264,19 @@ func testBufferBase(t *testing.T, isExternalParent bool) {
 	exec(t, conn, fmt.Sprintf("INSERT INTO buffer (id, msg) VALUES (%d, %s)", updateRowID, "'update'"))
 
 	//Start both threads.
-	readThreadInstance := &threadParams{writable: false, quit: false, rpcs: 0, errors: 0, notifyAfterNSuccessfulRpcs: 0, rpcsSoFar: 0, executeFunction: readExecute, waitForNotification: make(chan bool)}
+	readThreadInstance := &threadParams{
+		executeFunction:     readExecute,
+		waitForNotification: make(chan bool),
+		reservedConn:        useReservedConn,
+	}
 	wg.Add(1)
 	go readThreadInstance.threadRun()
-	updateThreadInstance := &threadParams{writable: false, quit: false, rpcs: 0, errors: 0, notifyAfterNSuccessfulRpcs: 0, rpcsSoFar: 0, executeFunction: updateExecute, i: 1, commitErrors: 0, waitForNotification: make(chan bool)}
+	updateThreadInstance := &threadParams{
+		i:                   1,
+		executeFunction:     updateExecute,
+		waitForNotification: make(chan bool),
+		reservedConn:        useReservedConn,
+	}
 	wg.Add(1)
 	go updateThreadInstance.threadRun()
 
@@ -275,13 +295,24 @@ func testBufferBase(t *testing.T, isExternalParent bool) {
 		externalReparenting(ctx, t, clusterInstance)
 	} else {
 		//reparent call
-		clusterInstance.VtctlclientProcess.ExecuteCommand("PlannedReparentShard", "-keyspace_shard",
+		err := clusterInstance.VtctlclientProcess.ExecuteCommand("PlannedReparentShard", "-keyspace_shard",
 			fmt.Sprintf("%s/%s", keyspaceUnshardedName, "0"),
 			"-new_master", clusterInstance.Keyspaces[0].Shards[0].Vttablets[1].Alias)
+		require.NoError(t, err)
 	}
 
-	<-readThreadInstance.waitForNotification
-	<-updateThreadInstance.waitForNotification
+	timeout := time.After(40 * time.Second)
+	select {
+	case <-readThreadInstance.waitForNotification:
+	case <-timeout:
+		timeout = time.After(100 * time.Millisecond)
+		log.Error("failed to get read thread notification")
+	}
+	select {
+	case <-updateThreadInstance.waitForNotification:
+	case <-timeout:
+		log.Error("failed to get update thread notification")
+	}
 
 	// Stop threads
 	readThreadInstance.stop()
