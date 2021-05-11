@@ -99,38 +99,10 @@ func (wr *Wrangler) ShardReplicationStatuses(ctx context.Context, keyspace, shar
 // master, based on the current replication position. If there is no
 // match, it will fail.
 func (wr *Wrangler) ReparentTablet(ctx context.Context, tabletAlias *topodatapb.TabletAlias) error {
-	// Get specified tablet.
-	// Get current shard master tablet.
-	// Sanity check they are in the same keyspace/shard.
-	// Issue a SetMaster to the tablet.
-	ti, err := wr.ts.GetTablet(ctx, tabletAlias)
-	if err != nil {
-		return err
-	}
-
-	shardInfo, err := wr.ts.GetShard(ctx, ti.Keyspace, ti.Shard)
-	if err != nil {
-		return err
-	}
-	if !shardInfo.HasMaster() {
-		return fmt.Errorf("no master tablet for shard %v/%v", ti.Keyspace, ti.Shard)
-	}
-
-	masterTi, err := wr.ts.GetTablet(ctx, shardInfo.MasterAlias)
-	if err != nil {
-		return err
-	}
-
-	// Basic sanity checking.
-	if masterTi.Type != topodatapb.TabletType_MASTER {
-		return fmt.Errorf("TopologyServer has inconsistent state for shard master %v", topoproto.TabletAliasString(shardInfo.MasterAlias))
-	}
-	if masterTi.Keyspace != ti.Keyspace || masterTi.Shard != ti.Shard {
-		return fmt.Errorf("master %v and potential replica not in same keyspace/shard", topoproto.TabletAliasString(shardInfo.MasterAlias))
-	}
-
-	// and do the remote command
-	return wr.tmc.SetMaster(ctx, ti.Tablet, shardInfo.MasterAlias, 0, "", false)
+	_, err := wr.vtctld.ReparentTablet(ctx, &vtctldatapb.ReparentTabletRequest{
+		Tablet: tabletAlias,
+	})
+	return err
 }
 
 // InitShardMaster will make the provided tablet the master for the shard.
