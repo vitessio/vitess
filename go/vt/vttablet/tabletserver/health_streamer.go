@@ -20,8 +20,13 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"strings"
 	"sync"
 	"time"
+
+	"vitess.io/vitess/go/sqltypes"
+
+	"vitess.io/vitess/go/vt/sqlparser"
 
 	"vitess.io/vitess/go/vt/dbconfigs"
 
@@ -323,16 +328,35 @@ func (hs *healthStreamer) reload() error {
 		}
 	}
 
-	// TODO: fix the maxrows from using a magic number.
-	qr, err := conn.Exec(ctx, mysql.DetectSchemaChange, 10000, false)
+	var tables []string
+	var tableNames []string
+
+	callback := func(qr *sqltypes.Result) error {
+		for _, row := range qr.Rows {
+			table := row[0].ToString()
+			tables = append(tables, table)
+
+			escapedTblName := sqlparser.String(sqlparser.NewStrLiteral(table))
+			tableNames = append(tableNames, escapedTblName)
+		}
+
+		return nil
+	}
+	alloc := func() *sqltypes.Result { return &sqltypes.Result{} }
+	bufferSize := 1000
+	err = conn.Stream(ctx, mysql.DetectSchemaChange, callback, alloc, bufferSize, 0)
 	if err != nil {
 		return err
 	}
 
 	// If no change detected, then return
-	if len(qr.Rows) == 0 {
+	if len(tables) == 0 {
 		return nil
 	}
+
+	tableNamePredicate := fmt.Sprintf("table_name IN (%s)", strings.Join(tableNames, ", "))
+	del := fmt.Sprintf("%s WHERE %s", mysql.ClearSchemaCopy, tableNamePredicate)
+	upd := fmt.Sprintf("%s AND %s", mysql.InsertIntoSchemaCopy, tableNamePredicate)
 
 	// Reload the schema in a transaction.
 	_, err = conn.Exec(ctx, "begin", 1, false)
@@ -341,12 +365,12 @@ func (hs *healthStreamer) reload() error {
 	}
 	defer conn.Exec(ctx, "rollback", 1, false)
 
-	_, err = conn.Exec(ctx, mysql.ClearSchemaCopy, 1, false)
+	_, err = conn.Exec(ctx, del, 1, false)
 	if err != nil {
 		return err
 	}
 
-	_, err = conn.Exec(ctx, mysql.InsertIntoSchemaCopy, 1, false)
+	_, err = conn.Exec(ctx, upd, 1, false)
 	if err != nil {
 		return err
 	}
@@ -356,11 +380,6 @@ func (hs *healthStreamer) reload() error {
 		return err
 	}
 
-	// publish only if changes are committed.
-	var tables []string
-	for _, row := range qr.Rows {
-		tables = append(tables, row[0].ToString())
-	}
 	hs.state.RealtimeStats.TableSchemaChanged = tables
 	shr := proto.Clone(hs.state).(*querypb.StreamHealthResponse)
 	hs.broadCastToClients(shr)
