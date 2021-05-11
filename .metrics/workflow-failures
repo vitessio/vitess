@@ -9975,3 +9975,5 @@
 2021-05-11T05:19:27Z,docker_test_1,https://github.com/vitessio/vitess/actions/runs/830489983
 2021-05-11T05:19:27Z,unit_race,https://github.com/vitessio/vitess/actions/runs/830490005
 2021-05-11T06:31:21Z,cluster_endtoend,https://github.com/vitessio/vitess/actions/runs/830665074
+2021-05-11T08:55:13Z,unit,https://github.com/vitessio/vitess/actions/runs/831064961
+2021-05-11T08:55:13Z,unit_race,https://github.com/vitessio/vitess/actions/runs/831064943
