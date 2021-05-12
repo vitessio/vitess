@@ -229,10 +229,12 @@ func (ts *tmState) updateLocked(ctx context.Context) {
 		return
 	}
 
-	localMetadata := ts.tm.getLocalMetadataValues(ts.tablet.Type)
-	err := mysqlctl.PopulateMetadataTables(ts.tm.MysqlDaemon, localMetadata, topoproto.TabletDbName(ts.tablet))
-	if err != nil {
-		log.Errorf("PopulateMetadataTables(%v) failed: %v", localMetadata, err)
+	populateMetadata := func() {
+		localMetadata := ts.tm.getLocalMetadataValues(ts.tablet.Type)
+		err := mysqlctl.PopulateMetadataTables(ts.tm.MysqlDaemon, localMetadata, topoproto.TabletDbName(ts.tablet))
+		if err != nil {
+			log.Errorf("PopulateMetadataTables(%v) failed: %v", localMetadata, err)
+		}
 	}
 
 	terTime := logutil.ProtoToTime(ts.tablet.MasterTermStartTime)
@@ -241,6 +243,7 @@ func (ts *tmState) updateLocked(ctx context.Context) {
 	// before other services are shutdown.
 	reason := ts.canServe(ts.tablet.Type)
 	if reason != "" {
+		populateMetadata()
 		log.Infof("Disabling query service: %v", reason)
 		if err := ts.tm.QueryServiceControl.SetServingType(ts.tablet.Type, terTime, false, reason); err != nil {
 			log.Errorf("SetServingType(serving=false) failed: %v", err)
@@ -282,6 +285,8 @@ func (ts *tmState) updateLocked(ctx context.Context) {
 		if err := ts.tm.QueryServiceControl.SetServingType(ts.tablet.Type, terTime, true, ""); err != nil {
 			log.Errorf("Cannot start query service: %v", err)
 		}
+
+		populateMetadata()
 	}
 }
 
