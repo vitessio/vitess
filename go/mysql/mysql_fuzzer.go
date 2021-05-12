@@ -95,7 +95,7 @@ func (t fuzztestRun) ComQuery(c *Conn, query string, callback func(*sqltypes.Res
 }
 
 func (t fuzztestRun) ComPrepare(c *Conn, query string, bindVars map[string]*querypb.BindVariable) ([]*querypb.Field, error) {
-	panic("implement me")
+	return nil, nil
 }
 
 func (t fuzztestRun) ComStmtExecute(c *Conn, prepare *PrepareData, callback func(*sqltypes.Result) error) error {
@@ -205,6 +205,7 @@ func FuzzHandleNextCommand(data []byte) int {
 		pos:         -1,
 		queryPacket: data,
 	})
+	sConn.PrepareData = map[uint32]*PrepareData{}
 
 	handler := &fuzztestRun{}
 	_ = sConn.handleNextCommand(handler)
