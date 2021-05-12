@@ -229,6 +229,12 @@ func (ts *tmState) updateLocked(ctx context.Context) {
 		return
 	}
 
+	localMetadata := ts.tm.getLocalMetadataValues(ts.tablet.Type)
+	err := mysqlctl.PopulateMetadataTables(ts.tm.MysqlDaemon, localMetadata, topoproto.TabletDbName(ts.tablet))
+	if err != nil {
+		log.Errorf("PopulateMetadataTables(%v) failed: %v", localMetadata, err)
+	}
+
 	terTime := logutil.ProtoToTime(ts.tablet.MasterTermStartTime)
 
 	// Disable TabletServer first so the nonserving state gets advertised
