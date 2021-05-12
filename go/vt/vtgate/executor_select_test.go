@@ -2163,12 +2163,12 @@ func TestSubQueryAndQueryWithLimit(t *testing.T) {
 	require.Equal(t, 2, len(sbc2.Queries))
 
 	// sub query is evaluated first, and sees a limit of 1
-	assert.Equal(t, `type:INT64 value:"1" `, sbc1.Queries[0].BindVariables["__upper_limit"].String())
-	assert.Equal(t, `type:INT64 value:"1" `, sbc2.Queries[0].BindVariables["__upper_limit"].String())
+	assert.Equal(t, `type:INT64 value:"1"`, sbc1.Queries[0].BindVariables["__upper_limit"].String())
+	assert.Equal(t, `type:INT64 value:"1"`, sbc2.Queries[0].BindVariables["__upper_limit"].String())
 
 	// outer limit is only applied to the outer query
-	assert.Equal(t, `type:INT64 value:"100" `, sbc1.Queries[1].BindVariables["__upper_limit"].String())
-	assert.Equal(t, `type:INT64 value:"100" `, sbc2.Queries[1].BindVariables["__upper_limit"].String())
+	assert.Equal(t, `type:INT64 value:"100"`, sbc1.Queries[1].BindVariables["__upper_limit"].String())
+	assert.Equal(t, `type:INT64 value:"100"`, sbc2.Queries[1].BindVariables["__upper_limit"].String())
 }
 
 func TestCrossShardSubqueryStream(t *testing.T) {
