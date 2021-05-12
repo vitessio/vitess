@@ -119,8 +119,8 @@ type fuzztestConn struct {
 }
 
 func (t fuzztestConn) Read(b []byte) (n int, err error) {
-	for j, i := range t.queryPacket {
-		b[j] = i
+	for i := 0; i < len(b) && i < len(t.queryPacket); i++ {
+		b[i] = t.queryPacket[i]
 	}
 	return len(b), nil
 }
