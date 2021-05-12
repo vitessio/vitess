@@ -344,9 +344,15 @@ func (e *Executor) readMySQLVariables(ctx context.Context) (variables *mysqlVari
 	}
 	variables = &mysqlVariables{}
 
-	variables.host = row["hostname"].ToString()
+	if e.env.Config().DB.Host != "" {
+		variables.host = e.env.Config().DB.Host
+	} else {
+		variables.host = row["hostname"].ToString()
+	}
 
-	if port, err := row.ToInt64("port"); err != nil {
+	if e.env.Config().DB.Port != 0 {
+		variables.port = e.env.Config().DB.Port
+	} else if port, err := row.ToInt64("port"); err != nil {
 		return nil, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "could not parse @@global.port %v: %v", tm, err)
 	} else {
 		variables.port = int(port)
