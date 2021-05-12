@@ -29,8 +29,8 @@ const DEFAULT_ARRAY_FORMAT = 'none';
 
 const DEFAULT_PARSE_OPTIONS: qs.ParseOptions = {
     arrayFormat: DEFAULT_ARRAY_FORMAT,
-    parseBooleans: true,
-    parseNumbers: true,
+    parseBooleans: false,
+    parseNumbers: false,
 };
 
 /**

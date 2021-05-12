@@ -38,7 +38,7 @@ const FIRST_PAGE = 1;
 export const useURLPagination = ({ totalPages }: PaginationOpts): PaginationParams => {
     const history = useHistory();
     const location = useLocation();
-    const { query, replaceQuery } = useURLQuery();
+    const { query, replaceQuery } = useURLQuery({ parseNumbers: true });
 
     // A slight nuance here -- if `page` is not in the URL at all, then we can assume
     // it's the first page. This makes for slightly nicer URLs for the first/default page:
