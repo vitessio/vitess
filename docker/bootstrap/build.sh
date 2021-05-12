@@ -13,6 +13,21 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+#
+# Usage:
+#
+# First build the `common` image, then any flavors you want. For example:
+# $ docker/bootstrap/build.sh common
+# $ docker/bootstrap/build.sh mysql56
+#
+# Is it also possible to specify the resulting image name:
+# $ docker/bootstrap/build.sh common --image my-common-image
+#
+# If custom image names are specified, you might need to set the base image name when building flavors:
+# $ docker/bootstrap/build.sh mysql56 --base_image my-common-image
+# Both arguments can be combined. For example:
+# $ docker/bootstrap/build.sh mysql56 --base_image my-common-image --image my-mysql-image
+
 
 flavor=$1
 if [[ -z "$flavor" ]]; then
@@ -33,6 +48,19 @@ chmod -R o=g *
 
 arch=$(uname -m)
 [ "$arch" == "aarch64" ] && [ $flavor != "common" ] && arch_ext='-arm64v8'
+
+
+base_image="${base_image:-vitess/bootstrap:$version-common}"
+image="${image:-vitess/bootstrap:$version-$flavor$arch_ext}"
+
+while [ $# -gt 0 ]; do
+   if [[ $1 == *"--"* ]]; then
+        param="${1/--/}"
+        declare $param="$2"
+   fi
+  shift
+done
+
 if [ -f "docker/bootstrap/Dockerfile.$flavor$arch_ext" ]; then
-    docker build --no-cache -f docker/bootstrap/Dockerfile.$flavor$arch_ext -t vitess/bootstrap:$version-$flavor$arch_ext --build-arg bootstrap_version=$version .
+    docker build --no-cache -f docker/bootstrap/Dockerfile.$flavor$arch_ext -t $image --build-arg bootstrap_version=$version --build-arg image=$base_image .
 fi
