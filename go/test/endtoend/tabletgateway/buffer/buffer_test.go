@@ -163,7 +163,7 @@ func updateExecute(c *threadParams, conn *mysql.Conn) error {
 		if err != nil {
 			_, errRollback := conn.ExecuteFetch("rollback", 1000, true)
 			if errRollback != nil {
-				log.Errorf("Error in rollback: %v", errRollback)
+				log.Errorf("Error in rollback #%d: %v", attempt, errRollback)
 			}
 			c.commitErrors++
 			if c.commitErrors > 1 {
@@ -175,7 +175,7 @@ func updateExecute(c *threadParams, conn *mysql.Conn) error {
 	if err != nil {
 		_, errRollback := conn.ExecuteFetch("rollback", 1000, true)
 		if errRollback != nil {
-			log.Errorf("Error in rollback: %v", errRollback)
+			log.Errorf("Error in rollback #%d: %v", attempt, errRollback)
 		}
 		c.commitErrors++
 		if c.commitErrors > 1 {
@@ -257,6 +257,8 @@ func testBufferBase(t *testing.T, isExternalParent bool, useReservedConn bool) {
 	if exitCode != 0 {
 		t.Fatal("failed to start cluster")
 	}
+	defer clusterInstance.Teardown()
+
 	// Healthcheck interval on tablet is set to 1s, so sleep for 2s
 	time.Sleep(2 * time.Second)
 	conn, err := mysql.Connect(ctx, &vtParams)
@@ -296,7 +298,8 @@ func testBufferBase(t *testing.T, isExternalParent bool, useReservedConn bool) {
 	updateThreadInstance.setNotifyAfterNSuccessfulRpcs(10)
 
 	if isExternalParent {
-		externalReparenting(ctx, t, clusterInstance)
+		err := externalReparenting(t, clusterInstance)
+		require.NoError(t, err)
 	} else {
 		//reparent call
 		err := clusterInstance.VtctlclientProcess.ExecuteCommand("PlannedReparentShard", "-keyspace_shard",
@@ -365,7 +368,6 @@ func testBufferBase(t *testing.T, isExternalParent bool, useReservedConn bool) {
 		assert.Equal(t, masterPromotedCount, bufferingStops)
 	}
 	wg.Wait()
-	clusterInstance.Teardown()
 }
 
 func getVarFromVtgate(t *testing.T, label string, param string, resultMap map[string]interface{}) int {
@@ -385,7 +387,7 @@ func getVarFromVtgate(t *testing.T, label string, param string, resultMap map[st
 	return paramVal
 }
 
-func externalReparenting(ctx context.Context, t *testing.T, clusterInstance *cluster.LocalProcessCluster) {
+func externalReparenting(t *testing.T, clusterInstance *cluster.LocalProcessCluster) error {
 	start := time.Now()
 
 	// Demote master Query
@@ -426,5 +428,5 @@ func externalReparenting(ctx context.Context, t *testing.T, clusterInstance *clu
 	oldMaster.VttabletProcess.QueryTablet(changeMasterCommands, keyspaceUnshardedName, true)
 
 	// Notify the new vttablet master about the reparent.
-	clusterInstance.VtctlclientProcess.ExecuteCommand("TabletExternallyReparented", newMaster.Alias)
+	return clusterInstance.VtctlclientProcess.ExecuteCommand("TabletExternallyReparented", newMaster.Alias)
 }
