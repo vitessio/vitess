@@ -94,8 +94,8 @@ type Route struct {
 	ScatterErrorsAsWarnings bool
 
 	// The following two fields are used when routing information_schema queries
-	SysTableTableSchema evalengine.Expr
-	SysTableTableName   evalengine.Expr
+	SysTableTableSchema []evalengine.Expr
+	SysTableTableName   []evalengine.Expr
 
 	// Route does not take inputs
 	noInputs
@@ -408,7 +408,7 @@ func (route *Route) routeInfoSchemaQuery(vcursor VCursor, bindVars map[string]*q
 		return destinations, vterrors.Wrapf(err, "failed to find information about keyspace `%s`", ks)
 	}
 
-	if route.SysTableTableName == nil && route.SysTableTableSchema == nil {
+	if len(route.SysTableTableName) == 0 && len(route.SysTableTableSchema) == 0 {
 		return defaultRoute()
 	}
 
@@ -417,53 +417,80 @@ func (route *Route) routeInfoSchemaQuery(vcursor VCursor, bindVars map[string]*q
 		Row:      []sqltypes.Value{},
 	}
 
-	if route.SysTableTableName != nil {
-		// the use has specified a table_name - let's check if it's a routed table
-		rss, err := route.paramsRoutedTable(vcursor, env, bindVars)
+	var specifiedKS string
+	for _, tableSchema := range route.SysTableTableSchema {
+		result, err := tableSchema.Evaluate(env)
 		if err != nil {
+			return nil, err
+		}
+		ks := result.Value().ToString()
+		if specifiedKS == "" {
+			specifiedKS = ks
+		}
+		if specifiedKS != ks {
+			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "specifying two different database in the query is not supported")
+		}
+	}
+	if specifiedKS != "" {
+		bindVars[sqltypes.BvSchemaName] = sqltypes.StringBindVariable(specifiedKS)
+	}
+
+	var tableName string
+	for _, sysTableName := range route.SysTableTableName {
+		val, err := sysTableName.Evaluate(env)
+		if err != nil {
+			return nil, err
+		}
+		tabName := val.Value().ToString()
+		if tableName == "" {
+			tableName = tabName
+		}
+		if tableName != tabName {
+			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "two predicates for table_name not supported")
+		}
+	}
+	if tableName != "" {
+		bindVars[BvTableName] = sqltypes.StringBindVariable(tableName)
+	}
+
+	// if the table_schema is system system, route to default keyspace.
+	if sqlparser.SystemSchema(specifiedKS) {
+		return defaultRoute()
+	}
+
+	// the use has specified a table_name - let's check if it's a routed table
+	if tableName != "" {
+		rss, err := route.paramsRoutedTable(vcursor, bindVars, specifiedKS, tableName)
+		if err != nil {
+			// Only if keyspace is not found in vschema, we try with default keyspace.
+			// As the in the table_schema predicates for a keyspace 'ks' it can contain 'vt_ks'.
+			if vterrors.Code(err) == vtrpcpb.Code_NOT_FOUND {
+				return defaultRoute()
+			}
 			return nil, err
 		}
 		if rss != nil {
 			return rss, nil
 		}
-		// it was not a routed table, and we dont have a schema name to look up. give up
-		if route.SysTableTableSchema == nil {
-			return defaultRoute()
-		}
+	}
+
+	// it was not a routed table, and we dont have a schema name to look up. give up
+	if specifiedKS == "" {
+		return defaultRoute()
 	}
 
 	// we only have table_schema to work with
-	result, err := route.SysTableTableSchema.Evaluate(env)
-	if err != nil {
-		return nil, err
-	}
-	specifiedKS := result.Value().ToString()
 	destinations, _, err := vcursor.ResolveDestinations(specifiedKS, nil, []key.Destination{key.DestinationAnyShard{}})
 	if err != nil {
 		log.Errorf("failed to route information_schema query to keyspace [%s]", specifiedKS)
 		bindVars[sqltypes.BvSchemaName] = sqltypes.StringBindVariable(specifiedKS)
 		return defaultRoute()
 	}
-	bindVars[sqltypes.BvReplaceSchemaName] = sqltypes.Int64BindVariable(1)
+	setReplaceSchemaName(bindVars)
 	return destinations, nil
 }
 
-func (route *Route) paramsRoutedTable(vcursor VCursor, env evalengine.ExpressionEnv, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, error) {
-	val, err := route.SysTableTableName.Evaluate(env)
-	if err != nil {
-		return nil, err
-	}
-	tableName := val.Value().ToString()
-
-	var tableSchema string
-	if route.SysTableTableSchema != nil {
-		val, err := route.SysTableTableSchema.Evaluate(env)
-		if err != nil {
-			return nil, err
-		}
-		tableSchema = val.Value().ToString()
-	}
-
+func (route *Route) paramsRoutedTable(vcursor VCursor, bindVars map[string]*querypb.BindVariable, tableSchema string, tableName string) ([]*srvtopo.ResolvedShard, error) {
 	tbl := sqlparser.TableName{
 		Name:      sqlparser.NewTableIdent(tableName),
 		Qualifier: sqlparser.NewTableIdent(tableSchema),
@@ -478,7 +505,7 @@ func (route *Route) paramsRoutedTable(vcursor VCursor, env evalengine.Expression
 		shards, _, err := vcursor.ResolveDestinations(destination.Keyspace.Name, nil, []key.Destination{key.DestinationAnyShard{}})
 		bindVars[BvTableName] = sqltypes.StringBindVariable(destination.Name.String())
 		if tableSchema != "" {
-			bindVars[sqltypes.BvReplaceSchemaName] = sqltypes.Int64BindVariable(1)
+			setReplaceSchemaName(bindVars)
 		}
 		return shards, err
 	}
@@ -486,6 +513,11 @@ func (route *Route) paramsRoutedTable(vcursor VCursor, env evalengine.Expression
 	// no routed table info found. we'll return nil and check on the outside if we can find the table_schema
 	bindVars[BvTableName] = sqltypes.StringBindVariable(tableName)
 	return nil, nil
+}
+
+func setReplaceSchemaName(bindVars map[string]*querypb.BindVariable) {
+	delete(bindVars, sqltypes.BvSchemaName)
+	bindVars[sqltypes.BvReplaceSchemaName] = sqltypes.Int64BindVariable(1)
 }
 
 func (route *Route) paramsAnyShard(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
@@ -712,11 +744,27 @@ func (route *Route) description() PrimitiveDescription {
 	if len(route.Values) > 0 {
 		other["Values"] = route.Values
 	}
-	if route.SysTableTableSchema != nil {
-		other["SysTableTableSchema"] = route.SysTableTableSchema.String()
+	if len(route.SysTableTableSchema) != 0 {
+		sysTabSchema := "["
+		for idx, tableSchema := range route.SysTableTableSchema {
+			if idx != 0 {
+				sysTabSchema += ", "
+			}
+			sysTabSchema += tableSchema.String()
+		}
+		sysTabSchema += "]"
+		other["SysTableTableSchema"] = sysTabSchema
 	}
-	if route.SysTableTableName != nil {
-		other["SysTableTableName"] = route.SysTableTableName.String()
+	if len(route.SysTableTableName) != 0 {
+		sysTableName := "["
+		for idx, tableName := range route.SysTableTableName {
+			if idx != 0 {
+				sysTableName += ", "
+			}
+			sysTableName += tableName.String()
+		}
+		sysTableName += "]"
+		other["SysTableTableName"] = sysTableName
 	}
 	orderBy := GenericJoin(route.OrderBy, orderByToString)
 	if orderBy != "" {
