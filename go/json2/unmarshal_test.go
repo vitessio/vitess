@@ -18,8 +18,6 @@ package json2
 
 import (
 	"testing"
-
-	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 )
 
 func TestUnmarshal(t *testing.T) {
@@ -40,43 +38,6 @@ func TestUnmarshal(t *testing.T) {
 	}}
 	for _, tcase := range tcases {
 		out := make(map[string]interface{})
-		err := Unmarshal([]byte(tcase.in), &out)
-		got := ""
-		if err != nil {
-			got = err.Error()
-		}
-		if got != tcase.err {
-			t.Errorf("Unmarshal(%v) err: %v, want %v", tcase.in, got, tcase.err)
-		}
-	}
-}
-
-func TestUnmarshalPB(t *testing.T) {
-	tcases := []struct {
-		in, err string
-	}{{
-		in: `{
-  "name": "c1",
-	"type": "VARCHAR"
-}`,
-	}, {
-		in: `{
-  "name": "c1",
-	"type": "badtype"
-}`,
-		err: "proto: (line 3:10): invalid value for enum type: \"badtype\"",
-	}, {
-		in: `{
-  "l2": "val",
-  "l3": [
-    "l4",
-    "l5"asdas"
-  ]
-}`,
-		err: "proto: (line 2:3): unknown field \"l2\"",
-	}}
-	for _, tcase := range tcases {
-		var out vschemapb.Column
 		err := Unmarshal([]byte(tcase.in), &out)
 		got := ""
 		if err != nil {
