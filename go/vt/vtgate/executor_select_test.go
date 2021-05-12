@@ -2127,6 +2127,48 @@ func TestCrossShardSubquery(t *testing.T) {
 	}
 }
 
+func TestSubQueryAndQueryWithLimit(t *testing.T) {
+	executor, sbc1, sbc2, _ := createExecutorEnv()
+	result1 := []*sqltypes.Result{{
+		Fields: []*querypb.Field{
+			{Name: "id", Type: sqltypes.Int32},
+			{Name: "col", Type: sqltypes.Int32},
+		},
+		InsertID: 0,
+		Rows: [][]sqltypes.Value{{
+			sqltypes.NewInt32(1),
+			sqltypes.NewInt32(3),
+		}},
+	}}
+	result2 := []*sqltypes.Result{{
+		Fields: []*querypb.Field{
+			{Name: "id", Type: sqltypes.Int32},
+			{Name: "col", Type: sqltypes.Int32},
+		},
+		InsertID: 0,
+		Rows: [][]sqltypes.Value{{
+			sqltypes.NewInt32(111),
+			sqltypes.NewInt32(333),
+		}},
+	}}
+	sbc1.SetResults(result1)
+	sbc2.SetResults(result2)
+
+	exec(executor, NewSafeSession(&vtgatepb.Session{
+		TargetString: "@master",
+	}), "select id1, id2 from t1 where id1 >= ( select id1 from t1 order by id1 asc limit 1) limit 100")
+	require.Equal(t, 2, len(sbc1.Queries))
+	require.Equal(t, 2, len(sbc2.Queries))
+
+	// sub query is evaluated first, and sees a limit of 1
+	assert.Equal(t, `type:INT64 value:"1" `, sbc1.Queries[0].BindVariables["__upper_limit"].String())
+	assert.Equal(t, `type:INT64 value:"1" `, sbc2.Queries[0].BindVariables["__upper_limit"].String())
+
+	// outer limit is only applied to the outer query
+	assert.Equal(t, `type:INT64 value:"100" `, sbc1.Queries[1].BindVariables["__upper_limit"].String())
+	assert.Equal(t, `type:INT64 value:"100" `, sbc2.Queries[1].BindVariables["__upper_limit"].String())
+}
+
 func TestCrossShardSubqueryStream(t *testing.T) {
 	executor, sbc1, sbc2, _ := createLegacyExecutorEnv()
 	result1 := []*sqltypes.Result{{
