@@ -30,6 +30,7 @@ import { StreamStatePip } from '../pips/StreamStatePip';
 import { formatAlias } from '../../util/tablets';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import { formatDateTime } from '../../util/time';
+import { KeyspaceLink } from '../links/KeyspaceLink';
 
 interface RouteParams {
     clusterID: string;
@@ -63,6 +64,9 @@ export const Workflow = () => {
                     ? `/workflow/${clusterID}/${keyspace}/${name}/stream/${row.tablet.cell}/${row.tablet.uid}/${row.id}`
                     : null;
 
+            const source = getStreamSource(row);
+            const target = getStreamTarget(row, keyspace);
+
             return (
                 <tr key={row.key}>
                     <DataCell>
@@ -74,9 +78,27 @@ export const Workflow = () => {
                             Updated {formatDateTime(row.time_updated?.seconds)}
                         </div>
                     </DataCell>
-                    <DataCell>{getStreamSource(row) || <span className="text-color-secondary">N/A</span>}</DataCell>
                     <DataCell>
-                        {getStreamTarget(row, keyspace) || <span className="text-color-secondary">N/A</span>}
+                        {source ? (
+                            <KeyspaceLink
+                                clusterID={clusterID}
+                                name={row.binlog_source?.keyspace}
+                                shard={row.binlog_source?.shard}
+                            >
+                                {source}
+                            </KeyspaceLink>
+                        ) : (
+                            <span className="text-color-secondary">N/A</span>
+                        )}
+                    </DataCell>
+                    <DataCell>
+                        {target ? (
+                            <KeyspaceLink clusterID={clusterID} name={keyspace} shard={row.shard}>
+                                {source}
+                            </KeyspaceLink>
+                        ) : (
+                            <span className="text-color-secondary">N/A</span>
+                        )}
                     </DataCell>
                     <DataCell>{formatAlias(row.tablet)}</DataCell>
                 </tr>
@@ -97,7 +119,10 @@ export const Workflow = () => {
                         Cluster: <code>{clusterID}</code>
                     </span>
                     <span>
-                        Target keyspace: <code>{keyspace}</code>
+                        Target keyspace:{' '}
+                        <KeyspaceLink clusterID={clusterID} name={keyspace}>
+                            <code>{keyspace}</code>
+                        </KeyspaceLink>
                     </span>
                 </div>
             </WorkspaceHeader>

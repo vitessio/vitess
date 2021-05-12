@@ -30,6 +30,7 @@ import { ContentContainer } from '../layout/ContentContainer';
 import { WorkspaceHeader } from '../layout/WorkspaceHeader';
 import { WorkspaceTitle } from '../layout/WorkspaceTitle';
 import { DataFilter } from '../dataTable/DataFilter';
+import { KeyspaceLink } from '../links/KeyspaceLink';
 
 export const Tablets = () => {
     useDocumentTitle('Tablets');
@@ -47,16 +48,25 @@ export const Tablets = () => {
             return rows.map((t, tdx) => (
                 <tr key={tdx}>
                     <DataCell>
-                        <div>{t.keyspace}</div>
-                        <div className="font-size-small text-color-secondary">{t.cluster}</div>
+                        <KeyspaceLink clusterID={t._raw.cluster?.id} name={t.keyspace}>
+                            <div>{t.keyspace}</div>
+                            <div className="font-size-small text-color-secondary">{t.cluster}</div>
+                        </KeyspaceLink>
                     </DataCell>
                     <DataCell>
-                        <ShardServingPip isLoading={ksQuery.isLoading} isServing={t.isShardServing} /> {t.shard}
-                        {ksQuery.isSuccess && (
-                            <div className="font-size-small text-color-secondary white-space-nowrap">
-                                {!t.isShardServing && 'NOT SERVING'}
-                            </div>
-                        )}
+                        <KeyspaceLink
+                            className="white-space-nowrap"
+                            clusterID={t._raw.cluster?.id}
+                            name={t.keyspace}
+                            shard={t.shard}
+                        >
+                            <ShardServingPip isLoading={ksQuery.isLoading} isServing={t.isShardServing} /> {t.shard}
+                            {ksQuery.isSuccess && (
+                                <div className="font-size-small text-color-secondary white-space-nowrap">
+                                    {!t.isShardServing && 'NOT SERVING'}
+                                </div>
+                            )}
+                        </KeyspaceLink>
                     </DataCell>
                     <DataCell className="white-space-nowrap">
                         <TabletServingPip state={t._raw.state} /> {t.type}

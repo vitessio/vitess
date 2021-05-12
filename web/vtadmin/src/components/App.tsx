@@ -30,6 +30,7 @@ import { Stream } from './routes/Stream';
 import { Workflows } from './routes/Workflows';
 import { Workflow } from './routes/Workflow';
 import { VTExplain } from './routes/VTExplain';
+import { Keyspace } from './routes/keyspace/Keyspace';
 
 export const App = () => {
     return (
@@ -51,6 +52,10 @@ export const App = () => {
 
                         <Route path="/keyspaces">
                             <Keyspaces />
+                        </Route>
+
+                        <Route path="/keyspace/:clusterID/:name">
+                            <Keyspace />
                         </Route>
 
                         <Route path="/schemas">
