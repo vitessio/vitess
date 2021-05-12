@@ -24,6 +24,8 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/vt/vtgate/buffer"
+
 	"github.com/golang/protobuf/proto"
 
 	"vitess.io/vitess/go/mysql"
@@ -221,7 +223,7 @@ func (stc *ScatterConn) ExecuteMultiShard(
 			}
 
 			retryRequest := func(exec func()) {
-				retry := checkAndResetShardSession(info, err, session)
+				retry := checkAndResetShardSession(info, err, session, rs.Target)
 				switch retry {
 				case newQS:
 					// Current tablet is not available, try querying new tablet using gateway.
@@ -288,13 +290,13 @@ func (stc *ScatterConn) ExecuteMultiShard(
 	return qr, allErrors.GetErrors()
 }
 
-func checkAndResetShardSession(info *shardActionInfo, err error, session *SafeSession) reset {
+func checkAndResetShardSession(info *shardActionInfo, err error, session *SafeSession, target *querypb.Target) reset {
 	retry := none
 	if info.reservedID != 0 && info.transactionID == 0 {
 		if wasConnectionClosed(err) {
 			retry = shard
 		}
-		if requireNewQS(err) {
+		if requireNewQS(err, target) {
 			retry = newQS
 		}
 	}
@@ -700,10 +702,11 @@ func wasConnectionClosed(err error) bool {
 		(sqlErr.Number() == mysql.ERQueryInterrupted && txClosed.MatchString(message))
 }
 
-func requireNewQS(err error) bool {
+func requireNewQS(err error, target *querypb.Target) bool {
 	code := vterrors.Code(err)
 	msg := err.Error()
-	return code == vtrpcpb.Code_FAILED_PRECONDITION && (vterrors.RxOp.MatchString(msg) || vterrors.RxWrongTablet.MatchString(msg))
+	return (code == vtrpcpb.Code_FAILED_PRECONDITION && (vterrors.RxOp.MatchString(msg) || vterrors.RxWrongTablet.MatchString(msg))) ||
+		(target != nil && target.TabletType == topodatapb.TabletType_MASTER && buffer.CausedByFailover(err))
 }
 
 // actionInfo looks at the current session, and returns information about what needs to be done for this tablet
