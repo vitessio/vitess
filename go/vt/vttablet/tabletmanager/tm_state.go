@@ -61,6 +61,7 @@ type tmState struct {
 	// more freely even while tmState is busy transitioning.
 	mu                sync.Mutex
 	isOpen            bool
+	isOpening         bool
 	isResharding      bool
 	isInSrvKeyspace   bool
 	isShardServing    map[topodatapb.TabletType]bool
@@ -68,6 +69,8 @@ type tmState struct {
 	blacklistedTables map[topodatapb.TabletType][]string
 	tablet            *topodatapb.Tablet
 	isPublishing      bool
+
+	populateMetadataTables func(mysqld mysqlctl.MysqlDaemon, tablet *topodatapb.Tablet, metadata map[string]string)
 
 	// displayState contains the current snapshot of the internal state
 	// and has its own mutex.
@@ -82,6 +85,12 @@ func newTMState(tm *TabletManager, tablet *topodatapb.Tablet) *tmState {
 			tablet: proto.Clone(tablet).(*topodatapb.Tablet),
 		},
 		tablet: tablet,
+		populateMetadataTables: func(mysqld mysqlctl.MysqlDaemon, tablet *topodatapb.Tablet, metadata map[string]string) {
+			err := mysqlctl.PopulateMetadataTables(mysqld, metadata, topoproto.TabletDbName(tablet))
+			if err != nil {
+				log.Errorf("PopulateMetadataTables(%v) failed: %v", metadata, err)
+			}
+		},
 		ctx:    ctx,
 		cancel: cancel,
 	}
@@ -95,7 +104,9 @@ func (ts *tmState) Open() {
 	}
 
 	ts.isOpen = true
+	ts.isOpening = true
 	ts.updateLocked(ts.ctx)
+	ts.isOpening = false
 	ts.publishStateLocked(ts.ctx)
 }
 
@@ -229,21 +240,13 @@ func (ts *tmState) updateLocked(ctx context.Context) {
 		return
 	}
 
-	populateMetadata := func() {
-		localMetadata := ts.tm.getLocalMetadataValues(ts.tablet.Type)
-		err := mysqlctl.PopulateMetadataTables(ts.tm.MysqlDaemon, localMetadata, topoproto.TabletDbName(ts.tablet))
-		if err != nil {
-			log.Errorf("PopulateMetadataTables(%v) failed: %v", localMetadata, err)
-		}
-	}
-
 	terTime := logutil.ProtoToTime(ts.tablet.MasterTermStartTime)
 
 	// Disable TabletServer first so the nonserving state gets advertised
 	// before other services are shutdown.
 	reason := ts.canServe(ts.tablet.Type)
 	if reason != "" {
-		populateMetadata()
+		ts.populateLocalMetadataLocked()
 		log.Infof("Disabling query service: %v", reason)
 		if err := ts.tm.QueryServiceControl.SetServingType(ts.tablet.Type, terTime, false, reason); err != nil {
 			log.Errorf("SetServingType(serving=false) failed: %v", err)
@@ -286,7 +289,22 @@ func (ts *tmState) updateLocked(ctx context.Context) {
 			log.Errorf("Cannot start query service: %v", err)
 		}
 
-		populateMetadata()
+		ts.populateLocalMetadataLocked()
+	}
+}
+
+func (ts *tmState) populateLocalMetadataLocked() {
+	if ts.tm.LocalMetadataPopulator == nil {
+		return
+	}
+
+	if ts.isOpening && !*initPopulateMetadata {
+		return
+	}
+
+	localMetadata := ts.tm.getLocalMetadataValues(ts.tablet.Type)
+	if err := ts.tm.LocalMetadataPopulator(ts.tm.MysqlDaemon, localMetadata, topoproto.TabletDbName(ts.tablet)); err != nil {
+		log.Errorf("PopulateMetadataTables(%v) failed: %v", localMetadata, err)
 	}
 }
 
