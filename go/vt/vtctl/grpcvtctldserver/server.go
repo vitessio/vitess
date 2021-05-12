@@ -919,6 +919,15 @@ func (s *VtctldServer) GetVSchema(ctx context.Context, req *vtctldatapb.GetVSche
 	}, nil
 }
 
+// ApplyVSchema is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) ApplyVSchema(ctx context.Context, req *vtctldatapb.ApplyVSchemaRequest) (*vtctldatapb.ApplyVSchemaResponse, error) {
+	if err := s.ts.SaveVSchema(ctx, req.Keyspace, req.VSchema); err != nil {
+		return nil, err
+	}
+
+	return &vtctldatapb.ApplyVSchemaResponse{}, nil
+}
+
 // GetWorkflows is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflowsRequest) (*vtctldatapb.GetWorkflowsResponse, error) {
 	return s.ws.GetWorkflows(ctx, req)
