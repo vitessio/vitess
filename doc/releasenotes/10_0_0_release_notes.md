@@ -3,6 +3,7 @@ This release complies with VEP-3 which removes the upgrade order requirement. Co
 ## Known Issues
 * Running binaries with `--version` or running `select @@version` from a MySQL client still shows `10.0.0-RC1`
 * Online DDL [cannot be used](https://github.com/vitessio/vitess/pull/7873#issuecomment-822798180) if you are using the keyspace filtering feature of VTGate
+* VReplication errors when a fixed-length binary column is used as the sharding key #8080
 
 ## Bugs Fixed
 
