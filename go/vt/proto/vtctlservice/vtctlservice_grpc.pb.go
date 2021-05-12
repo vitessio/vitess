@@ -214,6 +214,8 @@ type VtctldClient interface {
 	GetTablets(ctx context.Context, in *vtctldata.GetTabletsRequest, opts ...grpc.CallOption) (*vtctldata.GetTabletsResponse, error)
 	// GetVSchema returns the vschema for a keyspace.
 	GetVSchema(ctx context.Context, in *vtctldata.GetVSchemaRequest, opts ...grpc.CallOption) (*vtctldata.GetVSchemaResponse, error)
+	// ApplyVSchema applies a vschema to a keyspace.
+	ApplyVSchema(ctx context.Context, in *vtctldata.ApplyVSchemaRequest, opts ...grpc.CallOption) (*vtctldata.ApplyVSchemaResponse, error)
 	// GetWorkflows returns a list of workflows for the given keyspace.
 	GetWorkflows(ctx context.Context, in *vtctldata.GetWorkflowsRequest, opts ...grpc.CallOption) (*vtctldata.GetWorkflowsResponse, error)
 	// InitShardPrimary sets the initial primary for a shard. Will make all other
@@ -529,6 +531,15 @@ func (c *vtctldClient) GetVSchema(ctx context.Context, in *vtctldata.GetVSchemaR
 	return out, nil
 }
 
+func (c *vtctldClient) ApplyVSchema(ctx context.Context, in *vtctldata.ApplyVSchemaRequest, opts ...grpc.CallOption) (*vtctldata.ApplyVSchemaResponse, error) {
+	out := new(vtctldata.ApplyVSchemaResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/ApplyVSchema", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *vtctldClient) GetWorkflows(ctx context.Context, in *vtctldata.GetWorkflowsRequest, opts ...grpc.CallOption) (*vtctldata.GetWorkflowsResponse, error) {
 	out := new(vtctldata.GetWorkflowsResponse)
 	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/GetWorkflows", in, out, opts...)
@@ -714,6 +725,8 @@ type VtctldServer interface {
 	GetTablets(context.Context, *vtctldata.GetTabletsRequest) (*vtctldata.GetTabletsResponse, error)
 	// GetVSchema returns the vschema for a keyspace.
 	GetVSchema(context.Context, *vtctldata.GetVSchemaRequest) (*vtctldata.GetVSchemaResponse, error)
+	// ApplyVSchema applies a vschema to a keyspace.
+	ApplyVSchema(context.Context, *vtctldata.ApplyVSchemaRequest) (*vtctldata.ApplyVSchemaResponse, error)
 	// GetWorkflows returns a list of workflows for the given keyspace.
 	GetWorkflows(context.Context, *vtctldata.GetWorkflowsRequest) (*vtctldata.GetWorkflowsResponse, error)
 	// InitShardPrimary sets the initial primary for a shard. Will make all other
@@ -857,6 +870,9 @@ func (UnimplementedVtctldServer) GetTablets(context.Context, *vtctldata.GetTable
 }
 func (UnimplementedVtctldServer) GetVSchema(context.Context, *vtctldata.GetVSchemaRequest) (*vtctldata.GetVSchemaResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetVSchema not implemented")
+}
+func (UnimplementedVtctldServer) ApplyVSchema(context.Context, *vtctldata.ApplyVSchemaRequest) (*vtctldata.ApplyVSchemaResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ApplyVSchema not implemented")
 }
 func (UnimplementedVtctldServer) GetWorkflows(context.Context, *vtctldata.GetWorkflowsRequest) (*vtctldata.GetWorkflowsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetWorkflows not implemented")
@@ -1408,6 +1424,24 @@ func _Vtctld_GetVSchema_Handler(srv interface{}, ctx context.Context, dec func(i
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Vtctld_ApplyVSchema_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.ApplyVSchemaRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).ApplyVSchema(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/ApplyVSchema",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).ApplyVSchema(ctx, req.(*vtctldata.ApplyVSchemaRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Vtctld_GetWorkflows_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(vtctldata.GetWorkflowsRequest)
 	if err := dec(in); err != nil {
@@ -1724,6 +1758,10 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetVSchema",
 			Handler:    _Vtctld_GetVSchema_Handler,
+		},
+		{
+			MethodName: "ApplyVSchema",
+			Handler:    _Vtctld_ApplyVSchema_Handler,
 		},
 		{
 			MethodName: "GetWorkflows",

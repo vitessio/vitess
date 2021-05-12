@@ -476,6 +476,14 @@ message GetVSchemaResponse {
   vschema.Keyspace v_schema = 1;
 }
 
+message ApplyVSchemaRequest {
+  string keyspace = 1;
+  vschema.Keyspace v_schema = 2;
+}
+
+message ApplyVSchemaResponse {
+}
+
 message GetWorkflowsRequest {
   string keyspace = 1;
   bool active_only = 2;
