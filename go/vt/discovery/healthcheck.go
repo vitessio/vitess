@@ -45,8 +45,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/golang/protobuf/proto"
-
 	"vitess.io/vitess/go/flagutil"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/log"
@@ -710,12 +708,6 @@ func (hc *HealthCheckImpl) TabletConnection(alias *topodata.TabletAlias, target 
 	if thc == nil || thc.Conn == nil {
 		//TODO: test that throws this error
 		return nil, vterrors.Errorf(vtrpc.Code_NOT_FOUND, "tablet: %v is either down or nonexistent", alias)
-	}
-	if !thc.Serving {
-		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, vterrors.NotServing)
-	}
-	if target != nil && !proto.Equal(thc.Target, target) {
-		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "%s: target mismatch %v vs %v", vterrors.WrongTablet, thc.Target, target)
 	}
 	return thc.Connection(), nil
 }
