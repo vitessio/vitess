@@ -114,6 +114,8 @@ type SandboxConn struct {
 
 	// this error will only happen once
 	EphemeralShardErr error
+
+	NotServing bool
 }
 
 var _ queryservice.QueryService = (*SandboxConn)(nil) // compile-time interface check
@@ -153,6 +155,12 @@ func (sbc *SandboxConn) Execute(ctx context.Context, target *querypb.Target, que
 	sbc.execMu.Lock()
 	defer sbc.execMu.Unlock()
 	sbc.ExecCount.Add(1)
+	if sbc.NotServing {
+		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.NotServing)
+	}
+	if sbc.tablet.Type != target.TabletType {
+		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "%s: %v, want: %v", vterrors.WrongTablet, target.TabletType, sbc.tablet.Type)
+	}
 	bv := make(map[string]*querypb.BindVariable)
 	for k, v := range bindVars {
 		bv[k] = v
@@ -557,6 +565,11 @@ func (sbc *SandboxConn) Tablet() *topodatapb.Tablet {
 	return sbc.tablet
 }
 
+// ChangeTabletType changes the tablet type.
+func (sbc *SandboxConn) ChangeTabletType(typ topodatapb.TabletType) {
+	sbc.tablet.Type = typ
+}
+
 func (sbc *SandboxConn) getNextResult(stmt sqlparser.Statement) *sqltypes.Result {
 	if len(sbc.results) != 0 {
 		r := sbc.results[0]
@@ -594,10 +607,6 @@ func (sbc *SandboxConn) setTxReservedID(transactionID int64, reservedID int64) {
 	sbc.mapMu.Lock()
 	defer sbc.mapMu.Unlock()
 	sbc.txIDToRID[transactionID] = reservedID
-}
-
-func (sbc *SandboxConn) ResultsAllFetched() bool {
-	return len(sbc.results) == 0
 }
 
 func (sbc *SandboxConn) getTxReservedID(txID int64) int64 {
