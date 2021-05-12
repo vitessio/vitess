@@ -35,7 +35,6 @@ import (
 	"io/ioutil"
 	"math/rand"
 	"net/http"
-	"os"
 	"reflect"
 	"strconv"
 	"strings"
@@ -94,7 +93,6 @@ type threadParams struct {
 
 // Thread which constantly executes a query on vtgate.
 func (c *threadParams) threadRun() {
-	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	if err != nil {
 		log.Errorf("error connecting to mysql with params %v: %v", vtParams, err)
@@ -236,25 +234,31 @@ func exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
 	return qr
 }
 
-func TestBufferInternalReparenting(t *testing.T) {
-	testBufferBase(t, false, false)
-	testBufferBase(t, false, true)
+func TestBufferReparenting(t *testing.T) {
+	t.Run("TER without reserved connection", func(t *testing.T) {
+		testBufferBase(t, true, false)
+	})
+	t.Run("TER with reserved connection", func(t *testing.T) {
+		testBufferBase(t, true, true)
+	})
+	t.Run("PRS without reserved connections", func(t *testing.T) {
+		testBufferBase(t, false, false)
+	})
+	t.Run("PRS with reserved connections", func(t *testing.T) {
+		testBufferBase(t, false, true)
+	})
 }
 
-func TestBufferExternalReparenting(t *testing.T) {
-	testBufferBase(t, true, false)
-	testBufferBase(t, true, true)
-}
+var ctx = context.Background()
 
 func testBufferBase(t *testing.T, isExternalParent bool, useReservedConn bool) {
 	defer cluster.PanicHandler(t)
 	clusterInstance, exitCode := createCluster()
 	if exitCode != 0 {
-		os.Exit(exitCode)
+		t.Fatal("failed to start cluster")
 	}
 	// Healthcheck interval on tablet is set to 1s, so sleep for 2s
 	time.Sleep(2 * time.Second)
-	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)
 	defer conn.Close()
@@ -319,8 +323,8 @@ func testBufferBase(t *testing.T, isExternalParent bool, useReservedConn bool) {
 	updateThreadInstance.stop()
 
 	// Both threads must not see any error
-	assert.Equal(t, 0, readThreadInstance.errors)
-	assert.Equal(t, 0, updateThreadInstance.errors)
+	assert.Zero(t, readThreadInstance.errors, "found errors in read queries")
+	assert.Zero(t, updateThreadInstance.errors, "found errors in tx queries")
 
 	//At least one thread should have been buffered.
 	//This may fail if a failover is too fast. Add retries then.
