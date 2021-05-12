@@ -90,6 +90,7 @@ type TxEngine struct {
 	txPool       *TxPool
 	preparedPool *TxPreparedPool
 	twoPC        *TwoPC
+	twoPCReady   sync.WaitGroup
 }
 
 // NewTxEngine creates a new TxEngine.
@@ -168,15 +169,21 @@ func (te *TxEngine) transition(state txEngineState) {
 		// If there are errors, we choose to raise an alert and
 		// continue anyway. Serving traffic is considered more important
 		// than blocking everything for the sake of a few transactions.
-		if err := te.twoPC.Open(te.env.Config().DB); err != nil {
-			te.env.Stats().InternalErrors.Add("TwopcOpen", 1)
-			log.Errorf("Could not open TwoPC engine: %v", err)
-		}
-		if err := te.prepareFromRedo(); err != nil {
-			te.env.Stats().InternalErrors.Add("TwopcResurrection", 1)
-			log.Errorf("Could not prepare transactions: %v", err)
-		}
-		te.startWatchdog()
+		// We do this async; so we do not end up blocking writes on
+		// failover for our setup tasks if using semi-sync replication.
+		te.twoPCReady.Add(1)
+		go func() {
+			defer te.twoPCReady.Done()
+			if err := te.twoPC.Open(te.env.Config().DB); err != nil {
+				te.env.Stats().InternalErrors.Add("TwopcOpen", 1)
+				log.Errorf("Could not open TwoPC engine: %v", err)
+			}
+			if err := te.prepareFromRedo(); err != nil {
+				te.env.Stats().InternalErrors.Add("TwopcResurrection", 1)
+				log.Errorf("Could not prepare transactions: %v", err)
+			}
+			te.startWatchdog()
+		}()
 	}
 }
 
@@ -360,7 +367,7 @@ outer:
 	for _, preparedTx := range prepared {
 		txid, err := dtids.TransactionID(preparedTx.Dtid)
 		if err != nil {
-			log.Errorf("Error extracting transaction ID from ditd: %v", err)
+			log.Errorf("Error extracting transaction ID from dtid: %v", err)
 		}
 		if txid > maxid {
 			maxid = txid
@@ -390,7 +397,7 @@ outer:
 	for _, preparedTx := range failed {
 		txid, err := dtids.TransactionID(preparedTx.Dtid)
 		if err != nil {
-			log.Errorf("Error extracting transaction ID from ditd: %v", err)
+			log.Errorf("Error extracting transaction ID from dtid: %v", err)
 		}
 		if txid > maxid {
 			maxid = txid
@@ -398,7 +405,7 @@ outer:
 		te.preparedPool.SetFailed(preparedTx.Dtid)
 	}
 	te.txPool.AdjustLastID(maxid)
-	log.Infof("Prepared %d transactions, and registered %d failures.", len(prepared), len(failed))
+	log.Infof("TwoPC: Prepared %d transactions, and registered %d failures.", len(prepared), len(failed))
 	return allErr.Error()
 }
 
