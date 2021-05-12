@@ -17,17 +17,29 @@ limitations under the License.
 package mysql
 
 import (
-	"strconv"
+	"io/ioutil"
+	"path"
+	"runtime/debug"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
-func TestFuzzHandleNextCommand(t *testing.T) {
-	testcases := [][]byte{
-		{0x20, 0x20, 0x20, 0x00, 0x16, 0x20, 0x20, 0x20, 0x20, 0x20},
-		{0x00, 0x00, 0x00, 0x00, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20},
-	}
-	for i, testcase := range testcases {
-		t.Run(strconv.Itoa(i), func(t *testing.T) {
+func TestFuzzHandleNextCommandFromFile(t *testing.T) {
+	directoryName := "fuzzdata"
+	files, err := ioutil.ReadDir(directoryName)
+	require.NoError(t, err)
+	for _, file := range files {
+		t.Run(file.Name(), func(t *testing.T) {
+			defer func() {
+				r := recover()
+				if r != nil {
+					t.Error(r)
+					t.Fatal(string(debug.Stack()))
+				}
+			}()
+			testcase, err := ioutil.ReadFile(path.Join(directoryName, file.Name()))
+			require.NoError(t, err)
 			FuzzHandleNextCommand(testcase)
 		})
 	}
