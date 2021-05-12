@@ -192,7 +192,7 @@ func createCluster() (*cluster.LocalProcessCluster, int) {
 	clusterInstance = cluster.NewCluster(cell, hostname)
 
 	// Start topo server
-	clusterInstance.VtctldExtraArgs = []string{"-remote_operation_timeout", "20s", "-topo_etcd_lease_ttl", "40"}
+	clusterInstance.VtctldExtraArgs = []string{"-remote_operation_timeout", "30s", "-topo_etcd_lease_ttl", "40"}
 	if err := clusterInstance.StartTopo(); err != nil {
 		return nil, 1
 	}
@@ -203,7 +203,7 @@ func createCluster() (*cluster.LocalProcessCluster, int) {
 		SchemaSQL: sqlSchema,
 	}
 	clusterInstance.VtTabletExtraArgs = []string{"-health_check_interval", "1s",
-		"-queryserver-config-transaction-timeout", "5",
+		"-queryserver-config-transaction-timeout", "20",
 	}
 	if err := clusterInstance.StartUnshardedKeyspace(*keyspace, 1, false); err != nil {
 		return nil, 1
