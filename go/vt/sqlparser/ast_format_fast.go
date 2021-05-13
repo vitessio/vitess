@@ -678,6 +678,12 @@ func (ct *ColumnType) formatFast(buf *TrackedBuffer) {
 		buf.WriteByte(' ')
 		ct.Options.OnUpdate.formatFast(buf)
 	}
+	if ct.Options.As != nil {
+		buf.WriteByte(' ')
+		buf.WriteString(keywordStrings[AS])
+		buf.WriteByte(' ')
+		ct.Options.As.formatFast(buf)
+	}
 	if ct.Options.Autoincrement {
 		buf.WriteByte(' ')
 		buf.WriteString(keywordStrings[AUTO_INCREMENT])

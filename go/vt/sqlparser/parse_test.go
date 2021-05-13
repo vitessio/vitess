@@ -2954,6 +2954,12 @@ func TestCreateTable(t *testing.T) {
 	time4 timestamp default current_time() on update current_time(),
 	time5 timestamp(2) default current_time(2) on update current_time(2)
 )`,
+		}, {
+			input: `create table t1 (
+	first_name varchar(10),
+	last_name varchar(10),
+	full_name varchar(255) as concat(first_name, ' ', last_name)
+)`,
 		},
 	}
 	for _, test := range createTableQueries {

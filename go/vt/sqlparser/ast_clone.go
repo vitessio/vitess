@@ -2276,6 +2276,7 @@ func CloneRefOfColumnTypeOptions(n *ColumnTypeOptions) *ColumnTypeOptions {
 	out.Null = CloneRefOfBool(n.Null)
 	out.Default = CloneExpr(n.Default)
 	out.OnUpdate = CloneExpr(n.OnUpdate)
+	out.As = CloneExpr(n.As)
 	out.Comment = CloneRefOfLiteral(n.Comment)
 	return &out
 }

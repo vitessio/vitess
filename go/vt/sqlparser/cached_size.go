@@ -516,7 +516,7 @@ func (cached *ColumnTypeOptions) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(64)
+		size += int64(80)
 	}
 	// field Null *bool
 	size += int64(1)
@@ -526,6 +526,10 @@ func (cached *ColumnTypeOptions) CachedSize(alloc bool) int64 {
 	}
 	// field OnUpdate vitess.io/vitess/go/vt/sqlparser.Expr
 	if cc, ok := cached.OnUpdate.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field As vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.As.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
 	// field Comment *vitess.io/vitess/go/vt/sqlparser.Literal
