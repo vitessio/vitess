@@ -41,6 +41,8 @@ var (
 )
 
 var (
+	// ErrDirectDDLDisabled is returned when direct DDL is disabled, and a user attempts to run a DDL statement
+	ErrDirectDDLDisabled = errors.New("direct DDL is disabled")
 	// ErrOnlineDDLDisabled is returned when online DDL is disabled, and a user attempts to run an online DDL operation (submit, review, control)
 	ErrOnlineDDLDisabled = errors.New("online DDL is disabled")
 	ErrForeignKeyFound   = errors.New("Foreign key found")
