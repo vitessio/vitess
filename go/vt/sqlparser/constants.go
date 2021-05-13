@@ -523,3 +523,10 @@ const (
 	CancelMigrationType
 	CancelAllMigrationType
 )
+
+// ColumnStorage constants
+const (
+	UndefinedStorage ColumnStorage = iota
+	VirtualStorage
+	StoredStorage
+)

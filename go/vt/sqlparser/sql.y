@@ -154,6 +154,8 @@ func bindVariable(yylex yyLexer, bvar string) {
   explainType 	  ExplainType
   lockType LockType
 
+  columnStorage ColumnStorage
+
   boolean bool
   boolVal BoolVal
   ignore Ignore
@@ -175,6 +177,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %token <str> ID AT_ID AT_AT_ID HEX STRING INTEGRAL FLOAT HEXNUM VALUE_ARG LIST_ARG COMMENT COMMENT_KEYWORD BIT_LITERAL COMPRESSION
 %token <str> NULL TRUE FALSE OFF
 %token <str> DISCARD IMPORT ENABLE DISABLE TABLESPACE
+%token <str> VIRTUAL STORED
 
 // Precedence dictated by mysql. But the vitess grammar is simplified.
 // Some of these operators don't conflict in our situation. Nevertheless,
@@ -345,7 +348,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <orderDirection> asc_desc_opt
 %type <limit> limit_opt
 %type <selectInto> into_option
-%type <columnTypeOptions> opt_column_attribute_list
+%type <columnTypeOptions> column_attribute_list_opt generated_column_attribute_list_opt
 %type <str> header_opt export_options manifest_opt overwrite_opt format_opt optionally_opt
 %type <str> fields_opts fields_opt_list fields_opt lines_opts lines_opt lines_opt_list
 %type <lock> lock_opt
@@ -414,6 +417,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <tableAndLockType> lock_table
 %type <lockType> lock_type
 %type <empty> session_or_local_opt
+%type <columnStorage> column_storage
 
 
 %start any_command
@@ -1015,97 +1019,107 @@ table_column_list:
   }
 
 column_definition:
-  sql_id column_type opt_column_attribute_list
+  sql_id column_type column_attribute_list_opt
   {
     $2.Options = $3
     $$ = &ColumnDefinition{Name: $1, Type: $2}
   }
+| sql_id column_type generated_always_opt AS '(' value_expression ')' generated_column_attribute_list_opt
+  {
+    $2.Options = $8
+    $2.Options.As = $6
+    $$ = &ColumnDefinition{Name: $1, Type: $2}
+  }
 
 generated_always_opt:
-    {
-      $$ = ""
-    }
+  {
+    $$ = ""
+  }
 |  GENERATED ALWAYS
-   {
-     $$ = ""
-   }
+  {
+    $$ = ""
+  }
 
 // There is a shift reduce conflict that arises here because UNIQUE and KEY are column_type_option and so is UNIQUE KEY.
 // So in the state "column_type_options UNIQUE. KEY" there is a shift-reduce conflict.
 // This has been added to emulate what MySQL does. The previous architecture was such that the order of the column options
 // was specific (as stated in the MySQL guide) and did not accept arbitrary order options. For example NOT NULL DEFAULT 1 and not DEFAULT 1 NOT NULL
-opt_column_attribute_list:
+column_attribute_list_opt:
   {
     $$ = &ColumnTypeOptions{Null: nil, Default: nil, OnUpdate: nil, Autoincrement: false, KeyOpt: colKeyNone, Comment: nil, As: nil}
   }
-| opt_column_attribute_list NULL
+| column_attribute_list_opt NULL
   {
     val := true
     $1.Null = &val
     $$ = $1
   }
-| opt_column_attribute_list NOT NULL
+| column_attribute_list_opt NOT NULL
   {
     val := false
     $1.Null = &val
     $$ = $1
   }
-| opt_column_attribute_list DEFAULT value_expression
+| column_attribute_list_opt DEFAULT value_expression
   {
     $1.Default = $3
     $$ = $1
   }
-| opt_column_attribute_list generated_always_opt AS '(' value_expression ')'
-  {
-    $1.As = $5
-    $$ = $1
-  }
-| opt_column_attribute_list ON UPDATE function_call_nonkeyword
+| column_attribute_list_opt ON UPDATE function_call_nonkeyword
   {
     $1.OnUpdate = $4
     $$ = $1
   }
-| opt_column_attribute_list AUTO_INCREMENT
+| column_attribute_list_opt AUTO_INCREMENT
   {
     $1.Autoincrement = true
     $$ = $1
   }
-| opt_column_attribute_list COMMENT_KEYWORD STRING
+| column_attribute_list_opt COMMENT_KEYWORD STRING
   {
     $1.Comment = NewStrLiteral($3)
     $$ = $1
   }
-| opt_column_attribute_list PRIMARY KEY
+| column_attribute_list_opt PRIMARY KEY
   {
     $1.KeyOpt = colKeyPrimary
     $$ = $1
   }
-| opt_column_attribute_list KEY
+| column_attribute_list_opt KEY
   {
     $1.KeyOpt = colKey
     $$ = $1
   }
-| opt_column_attribute_list UNIQUE KEY
+| column_attribute_list_opt UNIQUE KEY
   {
     $1.KeyOpt = colKeyUniqueKey
     $$ = $1
   }
-| opt_column_attribute_list UNIQUE
+| column_attribute_list_opt UNIQUE
   {
     $1.KeyOpt = colKeyUnique
     $$ = $1
   }
-//
-//column_type_options:
-//  {
-//    $$ = &ColumnTypeOptions{Null: nil, Default: nil, OnUpdate: nil, Autoincrement: false, KeyOpt: colKeyNone, Comment: nil, As: nil}
-//  }
-//| opt_column_attribute_list NULL
-//  {
-//    val := true
-//    $1.Null = &val
-//    $$ = $1
-//  }
+
+column_storage:
+  VIRTUAL
+{
+  $$ = VirtualStorage
+}
+| STORED
+{
+  $$ = StoredStorage
+}
+
+generated_column_attribute_list_opt:
+  {
+    $$ = &ColumnTypeOptions{}
+  }
+| generated_column_attribute_list_opt column_storage
+  {
+    $1.Storage = $2
+    $$ = $1
+  }
 
 column_type:
   numeric_type unsigned_opt zero_fill_opt

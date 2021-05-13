@@ -516,7 +516,7 @@ func (cached *ColumnTypeOptions) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(80)
+		size += int64(88)
 	}
 	// field Null *bool
 	size += int64(1)
