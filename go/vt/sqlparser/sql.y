@@ -345,7 +345,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <orderDirection> asc_desc_opt
 %type <limit> limit_opt
 %type <selectInto> into_option
-%type <columnTypeOptions> column_type_options
+%type <columnTypeOptions> opt_column_attribute_list
 %type <str> header_opt export_options manifest_opt overwrite_opt format_opt optionally_opt
 %type <str> fields_opts fields_opt_list fields_opt lines_opts lines_opt lines_opt_list
 %type <lock> lock_opt
@@ -1015,7 +1015,7 @@ table_column_list:
   }
 
 column_definition:
-  sql_id column_type column_type_options
+  sql_id column_type opt_column_attribute_list
   {
     $2.Options = $3
     $$ = &ColumnDefinition{Name: $1, Type: $2}
@@ -1034,67 +1034,78 @@ generated_always_opt:
 // So in the state "column_type_options UNIQUE. KEY" there is a shift-reduce conflict.
 // This has been added to emulate what MySQL does. The previous architecture was such that the order of the column options
 // was specific (as stated in the MySQL guide) and did not accept arbitrary order options. For example NOT NULL DEFAULT 1 and not DEFAULT 1 NOT NULL
-column_type_options:
+opt_column_attribute_list:
   {
     $$ = &ColumnTypeOptions{Null: nil, Default: nil, OnUpdate: nil, Autoincrement: false, KeyOpt: colKeyNone, Comment: nil, As: nil}
   }
-| column_type_options NULL
+| opt_column_attribute_list NULL
   {
     val := true
     $1.Null = &val
     $$ = $1
   }
-| column_type_options NOT NULL
+| opt_column_attribute_list NOT NULL
   {
     val := false
     $1.Null = &val
     $$ = $1
   }
-| column_type_options DEFAULT value_expression
+| opt_column_attribute_list DEFAULT value_expression
   {
     $1.Default = $3
     $$ = $1
   }
-| column_type_options generated_always_opt AS value_expression
+| opt_column_attribute_list generated_always_opt AS '(' value_expression ')'
   {
-    $1.As = $4
+    $1.As = $5
     $$ = $1
   }
-| column_type_options ON UPDATE function_call_nonkeyword
+| opt_column_attribute_list ON UPDATE function_call_nonkeyword
   {
     $1.OnUpdate = $4
     $$ = $1
   }
-| column_type_options AUTO_INCREMENT
+| opt_column_attribute_list AUTO_INCREMENT
   {
     $1.Autoincrement = true
     $$ = $1
   }
-| column_type_options COMMENT_KEYWORD STRING
+| opt_column_attribute_list COMMENT_KEYWORD STRING
   {
     $1.Comment = NewStrLiteral($3)
     $$ = $1
   }
-| column_type_options PRIMARY KEY
+| opt_column_attribute_list PRIMARY KEY
   {
     $1.KeyOpt = colKeyPrimary
     $$ = $1
   }
-| column_type_options KEY
+| opt_column_attribute_list KEY
   {
     $1.KeyOpt = colKey
     $$ = $1
   }
-| column_type_options UNIQUE KEY
+| opt_column_attribute_list UNIQUE KEY
   {
     $1.KeyOpt = colKeyUniqueKey
     $$ = $1
   }
-| column_type_options UNIQUE
+| opt_column_attribute_list UNIQUE
   {
     $1.KeyOpt = colKeyUnique
     $$ = $1
   }
+//
+//column_type_options:
+//  {
+//    $$ = &ColumnTypeOptions{Null: nil, Default: nil, OnUpdate: nil, Autoincrement: false, KeyOpt: colKeyNone, Comment: nil, As: nil}
+//  }
+//| opt_column_attribute_list NULL
+//  {
+//    val := true
+//    $1.Null = &val
+//    $$ = $1
+//  }
 
 column_type:
   numeric_type unsigned_opt zero_fill_opt
