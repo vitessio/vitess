@@ -28,7 +28,10 @@ import (
 func TestDDLFlags(t *testing.T) {
 	executor, _, _, _ := createLegacyExecutorEnv()
 	session := NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded})
-
+	defer func() {
+		*enableOnlineDDL = true
+		*enableDirectDDL = true
+	}()
 	testcases := []struct {
 		enableDirectDDL bool
 		enableOnlineDDL bool
