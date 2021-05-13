@@ -470,7 +470,7 @@ func (ct *ColumnType) Format(buf *TrackedBuffer) {
 		buf.astPrintf(ct, " %s %s %v", keywordStrings[ON], keywordStrings[UPDATE], ct.Options.OnUpdate)
 	}
 	if ct.Options.As != nil {
-		buf.astPrintf(ct, " %s %v", keywordStrings[AS], ct.Options.As)
+		buf.astPrintf(ct, " %s (%v)", keywordStrings[AS], ct.Options.As)
 	}
 	if ct.Options.Autoincrement {
 		buf.astPrintf(ct, " %s", keywordStrings[AUTO_INCREMENT])

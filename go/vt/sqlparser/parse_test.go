@@ -2958,7 +2958,7 @@ func TestCreateTable(t *testing.T) {
 			input: `create table t1 (
 	first_name varchar(10),
 	last_name varchar(10),
-	full_name varchar(255) as concat(first_name, ' ', last_name)
+	full_name varchar(255) as (concat(first_name, ' ', last_name))
 )`,
 		}, {
 			input: `create table t1 (first_name varchar(10), last_name varchar(10),
@@ -2966,7 +2966,7 @@ func TestCreateTable(t *testing.T) {
 			output: `create table t1 (
 	first_name varchar(10),
 	last_name varchar(10),
-	full_name varchar(255) as concat(first_name, ' ', last_name)
+	full_name varchar(255) as (concat(first_name, ' ', last_name))
 )`,
 		},
 	}
