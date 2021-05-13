@@ -1201,7 +1201,8 @@ func TestExecutorDDLFk(t *testing.T) {
 					require.NoError(t, err)
 					require.EqualValues(t, 1, sbc.ExecCount.Get())
 				} else {
-					require.EqualError(t, err, "foreign key constraint is not allowed")
+					require.Error(t, err)
+					require.Contains(t, err.Error(), "foreign key constraints are not allowed")
 				}
 			})
 		}
