@@ -4939,6 +4939,7 @@ reserved_keyword:
 | SET
 | SHOW
 | SPATIAL
+| STORED
 | STRAIGHT_JOIN
 | SYSTEM
 | TABLE
@@ -4957,6 +4958,7 @@ reserved_keyword:
 | UTC_TIME
 | UTC_TIMESTAMP
 | VALUES
+| VIRTUAL
 | WITH
 | WHEN
 | WHERE
