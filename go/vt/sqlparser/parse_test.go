@@ -1971,7 +1971,7 @@ func TestValid(t *testing.T) {
 			if tcase.output == "" {
 				tcase.output = tcase.input
 			}
-			tree, err := ParseStrictDDL(tcase.input)
+			tree, err := Parse(tcase.input)
 			require.NoError(t, err, tcase.input)
 			out := String(tree)
 			if tcase.output != out {
@@ -2956,6 +2956,14 @@ func TestCreateTable(t *testing.T) {
 )`,
 		}, {
 			input: `create table t1 (
+	first_name varchar(10),
+	last_name varchar(10),
+	full_name varchar(255) as concat(first_name, ' ', last_name)
+)`,
+		}, {
+			input: `create table t1 (first_name varchar(10), last_name varchar(10),
+	full_name varchar(255) generated always as (concat(first_name, ' ', last_name)))`,
+			output: `create table t1 (
 	first_name varchar(10),
 	last_name varchar(10),
 	full_name varchar(255) as concat(first_name, ' ', last_name)
