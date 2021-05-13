@@ -38,6 +38,7 @@ import (
 
 var (
 	enableOnlineDDL = flag.Bool("enable_online_ddl", true, "Allow users to submit, review and control Online DDL")
+	enableDirectDDL = flag.Bool("enable_direct_ddl", true, "Allow users to submit direct DDL statements")
 )
 
 // ContextVSchema defines the interface for this package to fetch
