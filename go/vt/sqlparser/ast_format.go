@@ -471,6 +471,12 @@ func (ct *ColumnType) Format(buf *TrackedBuffer) {
 	}
 	if ct.Options.As != nil {
 		buf.astPrintf(ct, " %s (%v)", keywordStrings[AS], ct.Options.As)
+
+		if ct.Options.Storage == VirtualStorage {
+			buf.astPrintf(ct, " %s", keywordStrings[VIRTUAL])
+		} else if ct.Options.Storage == StoredStorage {
+			buf.astPrintf(ct, " %s", keywordStrings[STORED])
+		}
 	}
 	if ct.Options.Autoincrement {
 		buf.astPrintf(ct, " %s", keywordStrings[AUTO_INCREMENT])
