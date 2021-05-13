@@ -82,7 +82,7 @@ func (v *OnlineDDL) Execute(vcursor VCursor, bindVars map[string]*query.BindVari
 		},
 		Rows: [][]sqltypes.Value{},
 	}
-	onlineDDLs, err := schema.NewOnlineDDLs(v.GetKeyspaceName(), v.DDL,
+	onlineDDLs, err := schema.NewOnlineDDLs(v.GetKeyspaceName(), v.SQL, v.DDL,
 		v.DDLStrategySetting, fmt.Sprintf("vtgate:%s", vcursor.Session().GetSessionUUID()),
 	)
 	if err != nil {

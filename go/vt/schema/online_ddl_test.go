@@ -265,7 +265,8 @@ func TestNewOnlineDDLs(t *testing.T) {
 		"truncate table t":                              {isError: true},
 		"drop view t":                                   {isError: true},
 		"rename table t to t1":                          {isError: true},
-		"alter table corder add FOREIGN KEY my_fk(customer_id) reference customer(customer_id)": {isError: true},
+		"alter table corder add FOREIGN KEY my_fk(customer_id) reference customer(customer_id)":                                                                                                     {isError: true},
+		"CREATE TABLE if not exists t (id bigint unsigned NOT NULL AUTO_INCREMENT, ts datetime(6) DEFAULT NULL, ts_generated int GENERATED ALWAYS AS (ts) VIRTUAL, PRIMARY KEY (id)) ENGINE=InnoDB": {isError: true},
 	}
 	migrationContext := "354b-11eb-82cd-f875a4d24e90"
 	for query, expect := range tests {
@@ -283,7 +284,7 @@ func TestNewOnlineDDLs(t *testing.T) {
 			}
 			assert.True(t, ok)
 
-			onlineDDLs, err := NewOnlineDDLs("test_ks", ddlStmt, NewDDLStrategySetting(DDLStrategyOnline, ""), migrationContext)
+			onlineDDLs, err := NewOnlineDDLs("test_ks", query, ddlStmt, NewDDLStrategySetting(DDLStrategyOnline, ""), migrationContext)
 			if expect.isError {
 				assert.Error(t, err)
 				return
