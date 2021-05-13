@@ -1501,6 +1501,9 @@ type ColumnType struct {
 	EnumValues []string
 }
 
+// ColumnStorage is an enum that defines the type of storage.
+type ColumnStorage int
+
 // ColumnTypeOptions are generic field options for a column type
 type ColumnTypeOptions struct {
 	/* We need Null to be *bool to distinguish 3 cases -
@@ -1514,7 +1517,9 @@ type ColumnTypeOptions struct {
 	Autoincrement bool
 	Default       Expr
 	OnUpdate      Expr
+	As            Expr
 	Comment       *Literal
+	Storage       ColumnStorage
 
 	// Key specification
 	KeyOpt ColumnKeyOption

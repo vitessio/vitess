@@ -133,7 +133,7 @@ grpcvtctldclient: go/vt/proto/vtctlservice/vtctlservice.pb.go
 parser:
 	make -C go/vt/sqlparser
 
-codegen: asthelpergen sizegen parser
+codegen: asthelpergen sizegen parser astfmtgen
 
 visitor: asthelpergen
 	echo "make visitor has been replaced by make asthelpergen"
