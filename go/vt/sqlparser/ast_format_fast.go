@@ -684,6 +684,14 @@ func (ct *ColumnType) formatFast(buf *TrackedBuffer) {
 		buf.WriteString(" (")
 		ct.Options.As.formatFast(buf)
 		buf.WriteByte(')')
+
+		if ct.Options.Storage == VirtualStorage {
+			buf.WriteByte(' ')
+			buf.WriteString(keywordStrings[VIRTUAL])
+		} else if ct.Options.Storage == StoredStorage {
+			buf.WriteByte(' ')
+			buf.WriteString(keywordStrings[STORED])
+		}
 	}
 	if ct.Options.Autoincrement {
 		buf.WriteByte(' ')

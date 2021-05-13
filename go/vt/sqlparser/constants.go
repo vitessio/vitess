@@ -526,7 +526,6 @@ const (
 
 // ColumnStorage constants
 const (
-	UndefinedStorage ColumnStorage = iota
-	VirtualStorage
+	VirtualStorage ColumnStorage = iota
 	StoredStorage
 )
