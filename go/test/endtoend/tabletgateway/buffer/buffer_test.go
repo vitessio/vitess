@@ -88,6 +88,7 @@ type threadParams struct {
 	i                          int        //
 	commitErrors               int
 	executeFunction            func(c *threadParams, conn *mysql.Conn) error // Implement the method for read/update.
+	typ                        string
 	reservedConn               bool
 }
 
@@ -109,7 +110,7 @@ func (c *threadParams) threadRun() {
 		err = c.executeFunction(c, conn)
 		if err != nil {
 			c.errors++
-			log.Errorf("error executing function %v: %v", c.executeFunction, err)
+			log.Errorf("error executing function %s: %v", c.typ, err)
 		}
 		c.rpcs++
 		// If notifications are requested, check if we already executed the
@@ -158,30 +159,34 @@ func updateExecute(c *threadParams, conn *mysql.Conn) error {
 	time.Sleep(time.Duration(rand.Int31n(1000)) * time.Millisecond)
 
 	if err == nil {
-		log.Infof("update attempt #%d affected %v rows", attempt, result.RowsAffected)
+		log.Errorf("update attempt #%d affected %v rows", attempt, result.RowsAffected)
 		_, err = conn.ExecuteFetch("commit", 1000, true)
 		if err != nil {
+			log.Errorf("UPDATE #%d failed during COMMIT, err: %v", attempt, err)
 			_, errRollback := conn.ExecuteFetch("rollback", 1000, true)
 			if errRollback != nil {
 				log.Errorf("Error in rollback #%d: %v", attempt, errRollback)
 			}
 			c.commitErrors++
 			if c.commitErrors > 1 {
+				log.Errorf("More Commit Errors: %d", c.commitErrors)
 				return err
 			}
-			log.Errorf("UPDATE %d failed during COMMIT. This is okay once because we do not support buffering it. err: %v", attempt, err)
+			log.Error("This is okay once because we do not support buffering it.")
 		}
 	}
 	if err != nil {
+		log.Errorf("UPDATE #%d failed with err: %v", attempt, err)
 		_, errRollback := conn.ExecuteFetch("rollback", 1000, true)
 		if errRollback != nil {
 			log.Errorf("Error in rollback #%d: %v", attempt, errRollback)
 		}
 		c.commitErrors++
 		if c.commitErrors > 1 {
+			log.Errorf("More Rollback Errors: %d", c.commitErrors)
 			return err
 		}
-		log.Errorf("UPDATE %d failed during ROLLBACK with err: %v.This is okay once because we do not support buffering it.", attempt, err)
+		log.Error("This is okay once because we do not support buffering it.")
 	}
 	return nil
 }
@@ -271,6 +276,7 @@ func testBufferBase(t *testing.T, isExternalParent bool, useReservedConn bool) {
 
 	//Start both threads.
 	readThreadInstance := &threadParams{
+		typ:                 "read",
 		executeFunction:     readExecute,
 		waitForNotification: make(chan bool),
 		reservedConn:        useReservedConn,
@@ -279,6 +285,7 @@ func testBufferBase(t *testing.T, isExternalParent bool, useReservedConn bool) {
 	go readThreadInstance.threadRun()
 	updateThreadInstance := &threadParams{
 		i:                   1,
+		typ:                 "write",
 		executeFunction:     updateExecute,
 		waitForNotification: make(chan bool),
 		reservedConn:        useReservedConn,

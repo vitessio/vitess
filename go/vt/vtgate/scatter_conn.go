@@ -249,11 +249,6 @@ func (stc *ScatterConn) ExecuteMultiShard(
 			case begin:
 				innerqr, transactionID, alias, err = qs.BeginExecute(ctx, rs.Target, session.Savepoints, queries[i].Sql, queries[i].BindVariables, reservedID, opts)
 				if err != nil {
-					if transactionID != 0 {
-						// if we had an open transaction, we can't repair anything and have to exit here.
-						// we still keep the transaction open - an error doesn't immediately close the transaction
-						break
-					}
 					retryRequest(func() {
 						// we seem to have lost our connection. it was a reserved connection, let's try to recreate it
 						info.actionNeeded = reserveBegin
