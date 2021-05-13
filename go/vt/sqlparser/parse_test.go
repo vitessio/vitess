@@ -945,6 +945,24 @@ var (
 	}, {
 		input: "alter table a modify column foo int default 1 first x",
 	}, {
+		input:  "alter table a add foo varchar(255) generated always as (concat(bar, ' ', baz)) stored",
+		output: "alter table a add column foo varchar(255) as (concat(bar, ' ', baz)) stored",
+	}, {
+		input:  "alter table a add foo varchar(255) generated always as (concat(bar, ' ', baz))",
+		output: "alter table a add column foo varchar(255) as (concat(bar, ' ', baz)) virtual",
+	}, {
+		input:  "alter table a add foo varchar(255) generated always as (concat(bar, ' ', baz)) null",
+		output: "alter table a add column foo varchar(255) as (concat(bar, ' ', baz)) virtual null",
+	}, {
+		input:  "alter table a add foo varchar(255) generated always as (concat(bar, ' ', baz)) not null",
+		output: "alter table a add column foo varchar(255) as (concat(bar, ' ', baz)) virtual not null",
+	}, {
+		input:  "alter table a change column s foo varchar(255) generated always as (concat(bar, ' ', baz)) stored",
+		output: "alter table a change column s foo varchar(255) as (concat(bar, ' ', baz)) stored",
+	}, {
+		input:  "alter table a modify column foo varchar(255) generated always as (concat(bar, ' ', baz))",
+		output: "alter table a modify column foo varchar(255) as (concat(bar, ' ', baz)) virtual",
+	}, {
 		input:  "alter table a character set utf32 collate = 'utf'",
 		output: "alter table a charset utf32 collate utf",
 	}, {
