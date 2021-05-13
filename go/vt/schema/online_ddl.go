@@ -155,18 +155,11 @@ func ParseOnlineDDLStatement(sql string) (ddlStmt sqlparser.DDLStatement, action
 func onlineDDLStatementSanity(sql string, ddlStmt sqlparser.DDLStatement) error {
 	// SQL statement sanity checks:
 	if !ddlStmt.IsFullyParsed() {
-		if err := ddlStmt.GetParseError(); err != nil {
+		if _, err := sqlparser.ParseStrictDDL(sql); err != nil {
 			// More information about the reason why the statement is not fully parsed:
 			return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.SyntaxError, "%v", err)
 		}
 		return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.SyntaxError, "cannot parse statement: %v", sql)
-	}
-
-	switch ddlStmt := ddlStmt.(type) {
-	case *sqlparser.AlterTable:
-		if len(ddlStmt.AlterOptions) == 0 {
-			return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.SyntaxError, "cannot parse statement: %v", sql)
-		}
 	}
 
 	if err := sqlparser.Walk(errorOnFKWalk, ddlStmt); err == ErrForeignKeyFound {
