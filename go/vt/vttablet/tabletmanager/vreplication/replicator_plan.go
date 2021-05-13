@@ -101,6 +101,19 @@ func (rp *ReplicatorPlan) buildFromFields(tableName string, lastpk *sqltypes.Res
 	}
 	for _, field := range fields {
 		colName := sqlparser.NewColIdent(field.Name)
+		isGenerated := false
+		for _, colInfo := range tpb.columnInfos {
+			if !strings.EqualFold(colInfo.Name, field.Name) {
+				continue
+			}
+			if colInfo.IsGenerated {
+				isGenerated = true
+			}
+			break
+		}
+		if isGenerated {
+			continue
+		}
 		cexpr := &colExpr{
 			colName: colName,
 			colType: field.Type,

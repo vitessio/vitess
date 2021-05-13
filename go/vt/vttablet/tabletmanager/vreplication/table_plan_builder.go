@@ -535,6 +535,9 @@ func (tpb *tablePlanBuilder) generateInsertPart(buf *sqlparser.TrackedBuffer) *s
 	}
 	separator := ""
 	for _, cexpr := range tpb.colExprs {
+		if tpb.isColumnGenerated(cexpr.colName) {
+			continue
+		}
 		buf.Myprintf("%s%v", separator, cexpr.colName)
 		separator = ","
 	}
@@ -546,6 +549,9 @@ func (tpb *tablePlanBuilder) generateValuesPart(buf *sqlparser.TrackedBuffer, bv
 	bvf.mode = bvAfter
 	separator := "("
 	for _, cexpr := range tpb.colExprs {
+		if tpb.isColumnGenerated(cexpr.colName) {
+			continue
+		}
 		buf.Myprintf("%s", separator)
 		separator = ","
 		switch cexpr.operation {
@@ -571,6 +577,9 @@ func (tpb *tablePlanBuilder) generateSelectPart(buf *sqlparser.TrackedBuffer, bv
 	buf.WriteString(" select ")
 	separator := ""
 	for _, cexpr := range tpb.colExprs {
+		if tpb.isColumnGenerated(cexpr.colName) {
+			continue
+		}
 		buf.Myprintf("%s", separator)
 		separator = ", "
 		switch cexpr.operation {
@@ -604,6 +613,9 @@ func (tpb *tablePlanBuilder) generateOnDupPart(buf *sqlparser.TrackedBuffer) *sq
 		if cexpr.isGrouped || cexpr.isPK {
 			continue
 		}
+		if tpb.isColumnGenerated(cexpr.colName) {
+			continue
+		}
 		buf.Myprintf("%s%v=", separator, cexpr.colName)
 		separator = ", "
 		switch cexpr.operation {
@@ -629,6 +641,9 @@ func (tpb *tablePlanBuilder) generateUpdateStatement() *sqlparser.ParsedQuery {
 	separator := ""
 	for _, cexpr := range tpb.colExprs {
 		if cexpr.isGrouped || cexpr.isPK {
+			continue
+		}
+		if tpb.isColumnGenerated(cexpr.colName) {
 			continue
 		}
 		buf.Myprintf("%s%v=", separator, cexpr.colName)
@@ -746,6 +761,17 @@ func (tpb *tablePlanBuilder) generatePKConstraint(buf *sqlparser.TrackedBuffer, 
 		buf.WriteString(charSetCollations[i].collation)
 	}
 	buf.WriteString(")")
+}
+
+func (tpb *tablePlanBuilder) isColumnGenerated(col sqlparser.ColIdent) bool {
+	isGenerated := false
+	for _, colInfo := range tpb.columnInfos {
+		if col.EqualString(colInfo.Name) && colInfo.IsGenerated {
+			isGenerated = true
+			break
+		}
+	}
+	return isGenerated
 }
 
 // bindvarFormatter is a dual mode formatter. Its behavior
