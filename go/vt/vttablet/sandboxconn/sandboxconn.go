@@ -22,8 +22,6 @@ import (
 	"fmt"
 	"sync"
 
-	"vitess.io/vitess/go/vt/sqlparser"
-
 	"context"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -169,8 +167,7 @@ func (sbc *SandboxConn) Execute(ctx context.Context, target *querypb.Target, que
 	if err := sbc.getError(); err != nil {
 		return nil, err
 	}
-	parse, _ := sqlparser.Parse(query)
-	return sbc.getNextResult(parse), nil
+	return sbc.getNextResult(), nil
 }
 
 // ExecuteBatch is part of the QueryService interface.
@@ -185,9 +182,8 @@ func (sbc *SandboxConn) ExecuteBatch(ctx context.Context, target *querypb.Target
 	sbc.BatchQueries = append(sbc.BatchQueries, queries)
 	sbc.Options = append(sbc.Options, options)
 	result := make([]sqltypes.Result, 0, len(queries))
-	for _, query := range queries {
-		parse, _ := sqlparser.Parse(query.Sql)
-		result = append(result, *(sbc.getNextResult(parse)))
+	for range queries {
+		result = append(result, *(sbc.getNextResult()))
 	}
 	return result, nil
 }
@@ -210,15 +206,14 @@ func (sbc *SandboxConn) StreamExecute(ctx context.Context, target *querypb.Targe
 		sbc.sExecMu.Unlock()
 		return err
 	}
-	ast, _ := sqlparser.Parse(query)
 	if sbc.results == nil {
-		nextRs := sbc.getNextResult(ast)
+		nextRs := sbc.getNextResult()
 		sbc.sExecMu.Unlock()
 		return callback(nextRs)
 	}
 
 	for len(sbc.results) > 0 {
-		nextRs := sbc.getNextResult(ast)
+		nextRs := sbc.getNextResult()
 		sbc.sExecMu.Unlock()
 		err := callback(nextRs)
 		if err != nil {
@@ -391,7 +386,7 @@ func (sbc *SandboxConn) MessageStream(ctx context.Context, target *querypb.Targe
 	if err := sbc.getError(); err != nil {
 		return err
 	}
-	r := sbc.getNextResult(nil)
+	r := sbc.getNextResult()
 	if r == nil {
 		return nil
 	}
@@ -518,55 +513,13 @@ func (sbc *SandboxConn) Tablet() *topodatapb.Tablet {
 	return sbc.tablet
 }
 
-func (sbc *SandboxConn) getNextResult(stmt sqlparser.Statement) *sqltypes.Result {
+func (sbc *SandboxConn) getNextResult() *sqltypes.Result {
 	if len(sbc.results) != 0 {
 		r := sbc.results[0]
 		sbc.results = sbc.results[1:]
 		return r
 	}
-	if stmt == nil {
-		// if we didn't get a valid query, we'll assume we need a SELECT
-		return getSingleRowResult()
-	}
-	switch stmt.(type) {
-	case *sqlparser.Select,
-		*sqlparser.Union,
-		*sqlparser.Show,
-		*sqlparser.Explain,
-		*sqlparser.OtherRead:
-		return getSingleRowResult()
-	case *sqlparser.Set,
-		sqlparser.DDLStatement,
-		*sqlparser.AlterVschema,
-		*sqlparser.Use,
-		*sqlparser.OtherAdmin,
-		*sqlparser.SetTransaction,
-		*sqlparser.Savepoint,
-		*sqlparser.SRollback,
-		*sqlparser.Release:
-		return &sqltypes.Result{}
-	}
-
-	// for everything else we fake a single row being affected
-	return &sqltypes.Result{RowsAffected: 1}
-}
-
-// getSingleRowResult is used to get a SingleRowResult but it creates separate fields because some tests change the fields
-// If these fields are not created separately then the constants value also changes which leads to some other tests failing later
-func getSingleRowResult() *sqltypes.Result {
-	singleRowResult := &sqltypes.Result{
-		InsertID: SingleRowResult.InsertID,
-		Rows:     SingleRowResult.Rows,
-	}
-
-	for _, field := range SingleRowResult.Fields {
-		singleRowResult.Fields = append(singleRowResult.Fields, &querypb.Field{
-			Name: field.Name,
-			Type: field.Type,
-		})
-	}
-
-	return singleRowResult
+	return SingleRowResult
 }
 
 //StringQueries returns the queries executed as a slice of strings
