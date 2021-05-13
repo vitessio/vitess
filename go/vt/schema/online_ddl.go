@@ -163,7 +163,7 @@ func onlineDDLStatementSanity(sql string, ddlStmt sqlparser.DDLStatement) error 
 	}
 
 	if err := sqlparser.Walk(errorOnFKWalk, ddlStmt); err == ErrForeignKeyFound {
-		return vterrors.Errorf(vtrpcpb.Code_ABORTED, "foreign key constraint are not supported in online DDL")
+		return vterrors.Errorf(vtrpcpb.Code_ABORTED, "foreign key constraints are not supported in online DDL, see https://code.openark.org/blog/mysql/the-problem-with-mysql-foreign-key-constraints-in-online-schema-changes")
 	}
 	return nil
 }
