@@ -163,7 +163,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %left <str> UNION
 %token <str> SELECT STREAM VSTREAM INSERT UPDATE DELETE FROM WHERE GROUP HAVING ORDER BY LIMIT OFFSET FOR
 %token <str> ALL DISTINCT AS EXISTS ASC DESC INTO DUPLICATE KEY DEFAULT SET LOCK UNLOCK KEYS DO CALL
-%token <str> DISTINCTROW PARSER
+%token <str> DISTINCTROW PARSER GENERATED ALWAYS
 %token <str> OUTFILE S3 DATA LOAD LINES TERMINATED ESCAPED ENCLOSED
 %token <str> DUMPFILE CSV HEADER MANIFEST OVERWRITE STARTING OPTIONALLY
 %token <str> VALUES LAST_INSERT_ID
@@ -309,7 +309,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <selectExpr> select_expression
 %type <strs> select_options flush_option_list
 %type <str> select_option algorithm_view security_view security_view_opt
-%type <str> definer_opt user
+%type <str> definer_opt user generated_always_opt
 %type <expr> expression
 %type <tableExprs> from_opt table_references
 %type <tableExpr> table_reference table_factor join_table
@@ -1021,6 +1021,15 @@ column_definition:
     $$ = &ColumnDefinition{Name: $1, Type: $2}
   }
 
+generated_always_opt:
+    {
+      $$ = ""
+    }
+|  GENERATED ALWAYS
+   {
+     $$ = ""
+   }
+
 // There is a shift reduce conflict that arises here because UNIQUE and KEY are column_type_option and so is UNIQUE KEY.
 // So in the state "column_type_options UNIQUE. KEY" there is a shift-reduce conflict.
 // This has been added to emulate what MySQL does. The previous architecture was such that the order of the column options
@@ -1046,9 +1055,9 @@ column_type_options:
     $1.Default = $3
     $$ = $1
   }
-| column_type_options AS value_expression
+| column_type_options generated_always_opt AS value_expression
   {
-    $1.As = $3
+    $1.As = $4
     $$ = $1
   }
 | column_type_options ON UPDATE function_call_nonkeyword
@@ -4814,6 +4823,7 @@ reserved_keyword:
 | FOREIGN
 | FROM
 | FULLTEXT
+| GENERATED
 | GROUP
 | GROUPING
 | GROUPS
@@ -4918,6 +4928,7 @@ non_reserved_keyword:
 | ADMIN
 | AFTER
 | ALGORITHM
+| ALWAYS
 | AUTO_INCREMENT
 | AVG_ROW_LENGTH
 | BEGIN
