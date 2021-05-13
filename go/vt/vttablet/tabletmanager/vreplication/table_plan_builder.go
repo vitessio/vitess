@@ -47,13 +47,13 @@ type tablePlanBuilder struct {
 	// selColumns keeps track of the columns we want to pull from source.
 	// If Lastpk is set, we compare this list against the table's pk and
 	// add missing references.
-	selColumns map[string]bool
-	colExprs   []*colExpr
-	onInsert   insertType
-	pkCols     []*colExpr
-	lastpk     *sqltypes.Result
-	pkInfos    []*PrimaryKeyInfo
-	stats      *binlogplayer.Stats
+	selColumns  map[string]bool
+	colExprs    []*colExpr
+	onInsert    insertType
+	pkCols      []*colExpr
+	lastpk      *sqltypes.Result
+	columnInfos []*ColumnInfo
+	stats       *binlogplayer.Stats
 }
 
 // colExpr describes the processing to be performed to
@@ -112,7 +112,7 @@ const (
 // a table-specific rule is built to be sent to the source. We don't send the
 // original rule to the source because it may not match the same tables as the
 // target.
-// pkInfoMap specifies the list of primary key columns for each table.
+// colInfoMap specifies the list of primary key columns for each table.
 // copyState is a map of tables that have not been fully copied yet.
 // If a table is not present in copyState, then it has been fully copied. If so,
 // all replication events are applied. The table still has to match a Filter.Rule.
@@ -123,15 +123,15 @@ const (
 // The TablePlan built is a partial plan. The full plan for a table is built
 // when we receive field information from events or rows sent by the source.
 // buildExecutionPlan is the function that builds the full plan.
-func buildReplicatorPlan(filter *binlogdatapb.Filter, pkInfoMap map[string][]*PrimaryKeyInfo, copyState map[string]*sqltypes.Result, stats *binlogplayer.Stats) (*ReplicatorPlan, error) {
+func buildReplicatorPlan(filter *binlogdatapb.Filter, colInfoMap map[string][]*ColumnInfo, copyState map[string]*sqltypes.Result, stats *binlogplayer.Stats) (*ReplicatorPlan, error) {
 	plan := &ReplicatorPlan{
 		VStreamFilter: &binlogdatapb.Filter{FieldEventMode: filter.FieldEventMode},
 		TargetTables:  make(map[string]*TablePlan),
 		TablePlans:    make(map[string]*TablePlan),
-		PKInfoMap:     pkInfoMap,
+		ColInfoMap:    colInfoMap,
 		stats:         stats,
 	}
-	for tableName := range pkInfoMap {
+	for tableName := range colInfoMap {
 		lastpk, ok := copyState[tableName]
 		if ok && lastpk == nil {
 			// Don't replicate uncopied tables.
@@ -144,7 +144,7 @@ func buildReplicatorPlan(filter *binlogdatapb.Filter, pkInfoMap map[string][]*Pr
 		if rule == nil {
 			continue
 		}
-		tablePlan, err := buildTablePlan(tableName, rule.Filter, pkInfoMap, lastpk, stats)
+		tablePlan, err := buildTablePlan(tableName, rule.Filter, colInfoMap, lastpk, stats)
 		if err != nil {
 			return nil, err
 		}
@@ -183,7 +183,7 @@ func MatchTable(tableName string, filter *binlogdatapb.Filter) (*binlogdatapb.Ru
 	return nil, nil
 }
 
-func buildTablePlan(tableName, filter string, pkInfoMap map[string][]*PrimaryKeyInfo, lastpk *sqltypes.Result, stats *binlogplayer.Stats) (*TablePlan, error) {
+func buildTablePlan(tableName, filter string, colInfoMap map[string][]*ColumnInfo, lastpk *sqltypes.Result, stats *binlogplayer.Stats) (*TablePlan, error) {
 	query := filter
 	// generate equivalent select statement if filter is empty or a keyrange.
 	switch {
@@ -231,10 +231,10 @@ func buildTablePlan(tableName, filter string, pkInfoMap map[string][]*PrimaryKey
 			From:  sel.From,
 			Where: sel.Where,
 		},
-		selColumns: make(map[string]bool),
-		lastpk:     lastpk,
-		pkInfos:    pkInfoMap[tableName],
-		stats:      stats,
+		selColumns:  make(map[string]bool),
+		lastpk:      lastpk,
+		columnInfos: colInfoMap[tableName],
+		stats:       stats,
 	}
 
 	if err := tpb.analyzeExprs(sel.SelectExprs); err != nil {
@@ -255,7 +255,7 @@ func buildTablePlan(tableName, filter string, pkInfoMap map[string][]*PrimaryKey
 	if err := tpb.analyzeGroupBy(sel.GroupBy); err != nil {
 		return nil, err
 	}
-	if err := tpb.analyzePK(pkInfoMap); err != nil {
+	if err := tpb.analyzePK(colInfoMap); err != nil {
 		return nil, err
 	}
 
@@ -475,22 +475,25 @@ func (tpb *tablePlanBuilder) analyzeGroupBy(groupBy sqlparser.GroupBy) error {
 }
 
 // analyzePK builds tpb.pkCols.
-func (tpb *tablePlanBuilder) analyzePK(pkInfoMap map[string][]*PrimaryKeyInfo) error {
-	pkcols, ok := pkInfoMap[tpb.name.String()]
+func (tpb *tablePlanBuilder) analyzePK(colInfoMap map[string][]*ColumnInfo) error {
+	cols, ok := colInfoMap[tpb.name.String()]
 	if !ok {
 		return fmt.Errorf("table %s not found in schema", tpb.name)
 	}
-	for _, pkcol := range pkcols {
-		cexpr := tpb.findCol(sqlparser.NewColIdent(pkcol.Name))
+	for _, col := range cols {
+		if !col.IsPK {
+			continue
+		}
+		cexpr := tpb.findCol(sqlparser.NewColIdent(col.Name))
 		if cexpr == nil {
-			return fmt.Errorf("primary key column %v not found in select list", pkcol)
+			return fmt.Errorf("primary key column %v not found in select list", col)
 		}
 		if cexpr.operation != opExpr {
-			return fmt.Errorf("primary key column %v is not allowed to reference an aggregate expression", pkcol)
+			return fmt.Errorf("primary key column %v is not allowed to reference an aggregate expression", col)
 		}
 		cexpr.isPK = true
-		cexpr.dataType = pkcol.DataType
-		cexpr.columnType = pkcol.ColumnType
+		cexpr.dataType = col.DataType
+		cexpr.columnType = col.ColumnType
 		tpb.pkCols = append(tpb.pkCols, cexpr)
 	}
 	return nil
@@ -708,13 +711,13 @@ func (tpb *tablePlanBuilder) generateWhere(buf *sqlparser.TrackedBuffer, bvf *bi
 }
 
 func (tpb *tablePlanBuilder) getCharsetAndCollation(pkname string) (charSet string, collation string) {
-	for _, pkInfo := range tpb.pkInfos {
-		if strings.EqualFold(pkInfo.Name, pkname) {
-			if pkInfo.CharSet != "" {
-				charSet = fmt.Sprintf(" _%s ", pkInfo.CharSet)
+	for _, colInfo := range tpb.columnInfos {
+		if colInfo.IsPK && strings.EqualFold(colInfo.Name, pkname) {
+			if colInfo.CharSet != "" {
+				charSet = fmt.Sprintf(" _%s ", colInfo.CharSet)
 			}
-			if pkInfo.Collation != "" {
-				collation = fmt.Sprintf(" COLLATE %s ", pkInfo.Collation)
+			if colInfo.Collation != "" {
+				collation = fmt.Sprintf(" COLLATE %s ", colInfo.Collation)
 			}
 		}
 	}
