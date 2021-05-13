@@ -1514,6 +1514,7 @@ type ColumnTypeOptions struct {
 	Autoincrement bool
 	Default       Expr
 	OnUpdate      Expr
+	As            Expr
 	Comment       *Literal
 
 	// Key specification

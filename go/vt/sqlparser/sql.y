@@ -1027,7 +1027,7 @@ column_definition:
 // was specific (as stated in the MySQL guide) and did not accept arbitrary order options. For example NOT NULL DEFAULT 1 and not DEFAULT 1 NOT NULL
 column_type_options:
   {
-    $$ = &ColumnTypeOptions{Null: nil, Default: nil, OnUpdate: nil, Autoincrement: false, KeyOpt: colKeyNone, Comment: nil}
+    $$ = &ColumnTypeOptions{Null: nil, Default: nil, OnUpdate: nil, Autoincrement: false, KeyOpt: colKeyNone, Comment: nil, As: nil}
   }
 | column_type_options NULL
   {
@@ -1044,6 +1044,11 @@ column_type_options:
 | column_type_options DEFAULT value_expression
   {
     $1.Default = $3
+    $$ = $1
+  }
+| column_type_options AS value_expression
+  {
+    $1.As = $3
     $$ = $1
   }
 | column_type_options ON UPDATE function_call_nonkeyword
