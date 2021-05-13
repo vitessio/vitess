@@ -507,6 +507,8 @@ func TestCheckTabletTypeResets(t *testing.T) {
 }
 
 func newTestMysqlDaemon(t *testing.T, port int32) *fakemysqldaemon.FakeMysqlDaemon {
+	t.Helper()
+
 	db := fakesqldb.New(t)
 	db.AddQueryPattern("SET @@.*", &sqltypes.Result{})
 	db.AddQueryPattern("BEGIN", &sqltypes.Result{})
