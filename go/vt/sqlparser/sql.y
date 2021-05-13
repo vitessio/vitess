@@ -418,7 +418,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <lockType> lock_type
 %type <empty> session_or_local_opt
 %type <columnStorage> column_storage
-
+%type <colKeyOpt> keys
 
 %start any_command
 
@@ -1080,24 +1080,9 @@ column_attribute_list_opt:
     $1.Comment = NewStrLiteral($3)
     $$ = $1
   }
-| column_attribute_list_opt PRIMARY KEY
+| column_attribute_list_opt keys
   {
-    $1.KeyOpt = colKeyPrimary
-    $$ = $1
-  }
-| column_attribute_list_opt KEY
-  {
-    $1.KeyOpt = colKey
-    $$ = $1
-  }
-| column_attribute_list_opt UNIQUE KEY
-  {
-    $1.KeyOpt = colKeyUniqueKey
-    $$ = $1
-  }
-| column_attribute_list_opt UNIQUE
-  {
-    $1.KeyOpt = colKeyUnique
+    $1.KeyOpt = $2
     $$ = $1
   }
 
@@ -1119,6 +1104,46 @@ generated_column_attribute_list_opt:
   {
     $1.Storage = $2
     $$ = $1
+  }
+| generated_column_attribute_list_opt NULL
+  {
+    val := true
+    $1.Null = &val
+    $$ = $1
+  }
+| generated_column_attribute_list_opt NOT NULL
+  {
+    val := false
+    $1.Null = &val
+    $$ = $1
+  }
+| generated_column_attribute_list_opt COMMENT_KEYWORD STRING
+  {
+    $1.Comment = NewStrLiteral($3)
+    $$ = $1
+  }
+| generated_column_attribute_list_opt keys
+  {
+    $1.KeyOpt = $2
+    $$ = $1
+  }
+
+keys:
+  PRIMARY KEY
+  {
+    $$ = colKeyPrimary
+  }
+| UNIQUE
+  {
+    $$ = colKeyUnique
+  }
+| UNIQUE KEY
+  {
+    $$ = colKeyUniqueKey
+  }
+| KEY
+  {
+    $$ = colKey
   }
 
 column_type:

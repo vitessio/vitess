@@ -2978,6 +2978,50 @@ func TestCreateTable(t *testing.T) {
 	last_name varchar(10),
 	full_name varchar(255) as (concat(first_name, ' ', last_name)) virtual
 )`,
+		}, {
+			input: `create table t1 (first_name varchar(10), last_name varchar(10),
+	full_name varchar(255) generated always as (concat(first_name, ' ', last_name)) not null )`,
+			output: `create table t1 (
+	first_name varchar(10),
+	last_name varchar(10),
+	full_name varchar(255) as (concat(first_name, ' ', last_name)) virtual not null
+)`,
+		}, {
+			input: `create table t1 (first_name varchar(10), full_name varchar(255) as (concat(first_name, ' ', last_name)) null)`,
+			output: `create table t1 (
+	first_name varchar(10),
+	full_name varchar(255) as (concat(first_name, ' ', last_name)) virtual null
+)`,
+		}, {
+			input: `create table t1 (first_name varchar(10), full_name varchar(255) as (concat(first_name, ' ', last_name)) unique)`,
+			output: `create table t1 (
+	first_name varchar(10),
+	full_name varchar(255) as (concat(first_name, ' ', last_name)) virtual unique
+)`,
+		}, {
+			input: `create table t1 (first_name varchar(10), full_name varchar(255) as (concat(first_name, ' ', last_name)) unique key)`,
+			output: `create table t1 (
+	first_name varchar(10),
+	full_name varchar(255) as (concat(first_name, ' ', last_name)) virtual unique key
+)`,
+		}, {
+			input: `create table t1 (first_name varchar(10), full_name varchar(255) as (concat(first_name, ' ', last_name)) key)`,
+			output: `create table t1 (
+	first_name varchar(10),
+	full_name varchar(255) as (concat(first_name, ' ', last_name)) virtual key
+)`,
+		}, {
+			input: `create table t1 (first_name varchar(10), full_name varchar(255) as (concat(first_name, ' ', last_name)) primary key)`,
+			output: `create table t1 (
+	first_name varchar(10),
+	full_name varchar(255) as (concat(first_name, ' ', last_name)) virtual primary key
+)`,
+		}, {
+			input: `create table t1 (first_name varchar(10), full_name varchar(255) as (concat(first_name, ' ', last_name)) comment 'hello world')`,
+			output: `create table t1 (
+	first_name varchar(10),
+	full_name varchar(255) as (concat(first_name, ' ', last_name)) virtual comment 'hello world'
+)`,
 		},
 	}
 	for _, test := range createTableQueries {
