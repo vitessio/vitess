@@ -67,6 +67,8 @@ type (
 		SetComments(comments Comments)
 		GetComments() Comments
 		SetFullyParsed(fullyParsed bool)
+		SetParseError(parseError error)
+		GetParseError() error
 		Statement
 	}
 
@@ -435,6 +437,7 @@ type (
 		PartitionSpec *PartitionSpec
 		Comments      Comments
 		FullyParsed   bool
+		ParseError    error
 	}
 
 	// DropTable represents a DROP TABLE statement.
@@ -442,8 +445,9 @@ type (
 		Temp       bool
 		FromTables TableNames
 		// The following fields are set if a DDL was fully analyzed.
-		IfExists bool
-		Comments Comments
+		IfExists   bool
+		Comments   Comments
+		ParseError error
 	}
 
 	// DropView represents a DROP VIEW statement.
@@ -461,6 +465,7 @@ type (
 		OptLike     *OptLike
 		Comments    Comments
 		FullyParsed bool
+		ParseError  error
 	}
 
 	// CreateView represents a CREATE VIEW query
@@ -1184,6 +1189,91 @@ func (node *DropView) GetComments() Comments {
 
 // GetComments implements DDLStatement.
 func (node *AlterView) GetComments() Comments {
+	// irrelevant
+	return nil
+}
+
+// SetParseError implements DDLStatement.
+func (node *RenameTable) SetParseError(parseError error) {
+	// irrelevant
+}
+
+// SetParseError implements DDLStatement.
+func (node *TruncateTable) SetParseError(parseError error) {
+	// irrelevant
+}
+
+// SetParseError implements DDLStatement.
+func (node *AlterTable) SetParseError(parseError error) {
+	node.ParseError = parseError
+}
+
+// SetParseError implements DDLStatement.
+func (node *CreateTable) SetParseError(parseError error) {
+	node.ParseError = parseError
+}
+
+// SetParseError implements DDLStatement.
+func (node *CreateView) SetParseError(parseError error) {
+	// irrelevant
+}
+
+// SetParseError implements DDLStatement.
+func (node *DropTable) SetParseError(parseError error) {
+	node.ParseError = parseError
+}
+
+// SetParseError implements DDLStatement.
+func (node *DropView) SetParseError(parseError error) {
+	// irrelevant
+}
+
+// SetParseError implements DDLStatement.
+func (node *AlterView) SetParseError(parseError error) {
+	// irrelevant
+}
+
+// GetParseError implements DDLStatement.
+func (node *RenameTable) GetParseError() error {
+	// irrelevant
+	return nil
+}
+
+// GetParseError implements DDLStatement.
+func (node *TruncateTable) GetParseError() error {
+	// irrelevant
+	return nil
+}
+
+// GetParseError implements DDLStatement.
+func (node *AlterTable) GetParseError() error {
+	return node.ParseError
+}
+
+// GetParseError implements DDLStatement.
+func (node *CreateTable) GetParseError() error {
+	return node.ParseError
+}
+
+// GetParseError implements DDLStatement.
+func (node *CreateView) GetParseError() error {
+	// irrelevant
+	return nil
+}
+
+// GetParseError implements DDLStatement.
+func (node *DropTable) GetParseError() error {
+	return node.ParseError
+}
+
+// GetParseError implements DDLStatement.
+func (node *DropView) GetParseError() error {
+	// irrelevant
+	return nil
+}
+
+// GetParseError implements DDLStatement.
+func (node *AlterView) GetParseError() error {
 	// irrelevant
 	return nil
 }

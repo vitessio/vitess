@@ -427,6 +427,7 @@ func CloneRefOfAlterTable(n *AlterTable) *AlterTable {
 	out.AlterOptions = CloneSliceOfAlterOption(n.AlterOptions)
 	out.PartitionSpec = CloneRefOfPartitionSpec(n.PartitionSpec)
 	out.Comments = CloneComments(n.Comments)
+	out.ParseError = Cloneerror(n.ParseError)
 	return &out
 }
 
@@ -689,6 +690,7 @@ func CloneRefOfCreateTable(n *CreateTable) *CreateTable {
 	out.TableSpec = CloneRefOfTableSpec(n.TableSpec)
 	out.OptLike = CloneRefOfOptLike(n.OptLike)
 	out.Comments = CloneComments(n.Comments)
+	out.ParseError = Cloneerror(n.ParseError)
 	return &out
 }
 
@@ -789,6 +791,7 @@ func CloneRefOfDropTable(n *DropTable) *DropTable {
 	out := *n
 	out.FromTables = CloneTableNames(n.FromTables)
 	out.Comments = CloneComments(n.Comments)
+	out.ParseError = Cloneerror(n.ParseError)
 	return &out
 }
 
@@ -2235,6 +2238,20 @@ func CloneSliceOfAlterOption(n []AlterOption) []AlterOption {
 	return res
 }
 
+// Cloneerror creates a deep clone of the input.
+func Cloneerror(in error) error {
+	if in == nil {
+		return nil
+	}
+	switch in := in.(type) {
+	case PositionedErr:
+		return ClonePositionedErr(in)
+	default:
+		// this should never happen
+		return nil
+	}
+}
+
 // CloneSliceOfColIdent creates a deep clone of the input.
 func CloneSliceOfColIdent(n []ColIdent) []ColIdent {
 	res := make([]ColIdent, 0, len(n))
@@ -2453,6 +2470,11 @@ func CloneCollateAndCharset(n CollateAndCharset) CollateAndCharset {
 	return *CloneRefOfCollateAndCharset(&n)
 }
 
+// ClonePositionedErr creates a deep clone of the input.
+func ClonePositionedErr(n PositionedErr) PositionedErr {
+	return *CloneRefOfPositionedErr(&n)
+}
+
 // CloneRefOfIndexColumn creates a deep clone of the input.
 func CloneRefOfIndexColumn(n *IndexColumn) *IndexColumn {
 	if n == nil {
@@ -2497,6 +2519,15 @@ func CloneRefOfRenameTablePair(n *RenameTablePair) *RenameTablePair {
 
 // CloneRefOfCollateAndCharset creates a deep clone of the input.
 func CloneRefOfCollateAndCharset(n *CollateAndCharset) *CollateAndCharset {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	return &out
+}
+
+// CloneRefOfPositionedErr creates a deep clone of the input.
+func CloneRefOfPositionedErr(n *PositionedErr) *PositionedErr {
 	if n == nil {
 		return nil
 	}

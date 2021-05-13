@@ -1032,7 +1032,8 @@ func EqualsRefOfAlterTable(a, b *AlterTable) bool {
 		EqualsTableName(a.Table, b.Table) &&
 		EqualsSliceOfAlterOption(a.AlterOptions, b.AlterOptions) &&
 		EqualsRefOfPartitionSpec(a.PartitionSpec, b.PartitionSpec) &&
-		EqualsComments(a.Comments, b.Comments)
+		EqualsComments(a.Comments, b.Comments) &&
+		Equalserror(a.ParseError, b.ParseError)
 }
 
 // EqualsRefOfAlterView does deep equals between the two objects.
@@ -1359,7 +1360,8 @@ func EqualsRefOfCreateTable(a, b *CreateTable) bool {
 		EqualsTableName(a.Table, b.Table) &&
 		EqualsRefOfTableSpec(a.TableSpec, b.TableSpec) &&
 		EqualsRefOfOptLike(a.OptLike, b.OptLike) &&
-		EqualsComments(a.Comments, b.Comments)
+		EqualsComments(a.Comments, b.Comments) &&
+		Equalserror(a.ParseError, b.ParseError)
 }
 
 // EqualsRefOfCreateView does deep equals between the two objects.
@@ -1479,7 +1481,8 @@ func EqualsRefOfDropTable(a, b *DropTable) bool {
 	return a.Temp == b.Temp &&
 		a.IfExists == b.IfExists &&
 		EqualsTableNames(a.FromTables, b.FromTables) &&
-		EqualsComments(a.Comments, b.Comments)
+		EqualsComments(a.Comments, b.Comments) &&
+		Equalserror(a.ParseError, b.ParseError)
 }
 
 // EqualsRefOfDropView does deep equals between the two objects.
@@ -3701,6 +3704,27 @@ func EqualsSliceOfAlterOption(a, b []AlterOption) bool {
 	return true
 }
 
+// Equalserror does deep equals between the two objects.
+func Equalserror(inA, inB error) bool {
+	if inA == nil && inB == nil {
+		return true
+	}
+	if inA == nil || inB == nil {
+		return false
+	}
+	switch a := inA.(type) {
+	case PositionedErr:
+		b, ok := inB.(PositionedErr)
+		if !ok {
+			return false
+		}
+		return EqualsPositionedErr(a, b)
+	default:
+		// this should never happen
+		return false
+	}
+}
+
 // EqualsSliceOfColIdent does deep equals between the two objects.
 func EqualsSliceOfColIdent(a, b []ColIdent) bool {
 	if len(a) != len(b) {
@@ -4004,6 +4028,13 @@ func EqualsCollateAndCharset(a, b CollateAndCharset) bool {
 		a.Type == b.Type
 }
 
+// EqualsPositionedErr does deep equals between the two objects.
+func EqualsPositionedErr(a, b PositionedErr) bool {
+	return a.Err == b.Err &&
+		a.Pos == b.Pos &&
+		a.Near == b.Near
+}
+
 // EqualsRefOfIndexColumn does deep equals between the two objects.
 func EqualsRefOfIndexColumn(a, b *IndexColumn) bool {
 	if a == b {
@@ -4065,4 +4096,17 @@ func EqualsRefOfCollateAndCharset(a, b *CollateAndCharset) bool {
 	return a.IsDefault == b.IsDefault &&
 		a.Value == b.Value &&
 		a.Type == b.Type
+}
+
+// EqualsRefOfPositionedErr does deep equals between the two objects.
+func EqualsRefOfPositionedErr(a, b *PositionedErr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Err == b.Err &&
+		a.Pos == b.Pos &&
+		a.Near == b.Near
 }

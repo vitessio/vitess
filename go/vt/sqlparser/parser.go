@@ -87,6 +87,7 @@ func Parse2(sql string) (Statement, BindVars, error) {
 				x.SetFullyParsed(false)
 			case DDLStatement:
 				x.SetFullyParsed(false)
+				x.SetParseError(tokenizer.LastError)
 			}
 			tokenizer.ParseTree = tokenizer.partialDDL
 			return tokenizer.ParseTree, tokenizer.BindVars, nil
