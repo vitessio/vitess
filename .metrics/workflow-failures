@@ -1,5 +1,3 @@
-2020-12-16T23:14:21Z,docker_test_1,https://github.com/vitessio/vitess/actions/runs/426834991
-2020-12-16T23:14:21Z,docker_test_2,https://github.com/vitessio/vitess/actions/runs/426834992
 2020-12-16T23:14:21Z,docker_test_3,https://github.com/vitessio/vitess/actions/runs/426834998
 2020-12-16T23:29:42Z,docker_test_1,https://github.com/vitessio/vitess/actions/runs/426857725
 2020-12-16T23:29:42Z,docker_test_3,https://github.com/vitessio/vitess/actions/runs/426857728
@@ -9998,3 +9996,5 @@
 2021-05-13T20:32:20Z,Cluster (tabletmanager_tablegc),https://github.com/vitessio/vitess/actions/runs/840117078
 2021-05-13T20:32:20Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/840117059
 2021-05-13T21:08:00Z,endtoend,https://github.com/vitessio/vitess/actions/runs/840204491
+2021-05-13T21:52:49Z,cluster_endtoend,https://github.com/vitessio/vitess/actions/runs/840313009
+2021-05-13T21:52:49Z,unit,https://github.com/vitessio/vitess/actions/runs/840313008
