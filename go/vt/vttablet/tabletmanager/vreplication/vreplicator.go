@@ -226,12 +226,13 @@ func (vr *vreplicator) replicate(ctx context.Context) error {
 
 // ColumnInfo is used to store charset and collation for primary keys where applicable
 type ColumnInfo struct {
-	Name       string
-	CharSet    string
-	Collation  string
-	DataType   string
-	ColumnType string
-	IsPK       bool
+	Name        string
+	CharSet     string
+	Collation   string
+	DataType    string
+	ColumnType  string
+	IsPK        bool
+	IsGenerated bool
 }
 
 func (vr *vreplicator) buildColInfoMap(ctx context.Context) (map[string][]*ColumnInfo, error) {
@@ -239,7 +240,7 @@ func (vr *vreplicator) buildColInfoMap(ctx context.Context) (map[string][]*Colum
 	if err != nil {
 		return nil, err
 	}
-	queryTemplate := "select character_set_name, collation_name, column_name, data_type, column_type from information_schema.columns where table_schema=%s and table_name=%s;"
+	queryTemplate := "select character_set_name, collation_name, column_name, data_type, column_type, extra from information_schema.columns where table_schema=%s and table_name=%s;"
 	colInfoMap := make(map[string][]*ColumnInfo)
 	for _, td := range schema.TableDefinitions {
 
@@ -264,6 +265,7 @@ func (vr *vreplicator) buildColInfoMap(ctx context.Context) (map[string][]*Colum
 			collation := ""
 			columnName := ""
 			isPK := false
+			isGenerated := false
 			var dataType, columnType string
 			columnName = row[2].ToString()
 			var currentField *querypb.Field
@@ -290,13 +292,18 @@ func (vr *vreplicator) buildColInfoMap(ctx context.Context) (map[string][]*Colum
 					isPK = true
 				}
 			}
+			extra := row[5].ToString()
+			if strings.Contains(strings.ToLower(extra), "generated") {
+				isGenerated = true
+			}
 			colInfo = append(colInfo, &ColumnInfo{
-				Name:       columnName,
-				CharSet:    charSet,
-				Collation:  collation,
-				DataType:   dataType,
-				ColumnType: columnType,
-				IsPK:       isPK,
+				Name:        columnName,
+				CharSet:     charSet,
+				Collation:   collation,
+				DataType:    dataType,
+				ColumnType:  columnType,
+				IsPK:        isPK,
+				IsGenerated: isGenerated,
 			})
 		}
 		colInfoMap[td.Name] = colInfo
