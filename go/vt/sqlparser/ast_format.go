@@ -456,7 +456,7 @@ func (ct *ColumnType) Format(buf *TrackedBuffer) {
 	if ct.Collate != "" {
 		buf.astPrintf(ct, " %s %s", keywordStrings[COLLATE], ct.Collate)
 	}
-	if ct.Options.Null != nil {
+	if ct.Options.Null != nil && ct.Options.As == nil {
 		if *ct.Options.Null {
 			buf.astPrintf(ct, " %s", keywordStrings[NULL])
 		} else {
@@ -476,6 +476,13 @@ func (ct *ColumnType) Format(buf *TrackedBuffer) {
 			buf.astPrintf(ct, " %s", keywordStrings[VIRTUAL])
 		} else if ct.Options.Storage == StoredStorage {
 			buf.astPrintf(ct, " %s", keywordStrings[STORED])
+		}
+		if ct.Options.Null != nil {
+			if *ct.Options.Null {
+				buf.astPrintf(ct, " %s", keywordStrings[NULL])
+			} else {
+				buf.astPrintf(ct, " %s %s", keywordStrings[NOT], keywordStrings[NULL])
+			}
 		}
 	}
 	if ct.Options.Autoincrement {
