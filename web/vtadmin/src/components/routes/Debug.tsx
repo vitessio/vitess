@@ -5,6 +5,8 @@ import { Button } from '../Button';
 import { Icon, Icons } from '../Icon';
 import { Select } from '../inputs/Select';
 import { ContentContainer } from '../layout/ContentContainer';
+import { Tab } from '../tabs/Tab';
+import { TabContainer } from '../tabs/TabContainer';
 import { TextInput } from '../TextInput';
 import { Tooltip } from '../tooltip/Tooltip';
 import style from './Debug.module.scss';
@@ -42,6 +44,28 @@ export const Debug = () => {
                             </div>
                         ))}
                     </div>
+                </section>
+
+                <section>
+                    <h3>Tabs</h3>
+
+                    <TabContainer className={style.tabContainer} size="small">
+                        <Tab text="Small Tab" to="/debug/small/1" />
+                        <Tab text="Small Tab" to="/debug/small/2" count={1} />
+                        <Tab text="Small Tab" to="/debug/small/3" status="danger" />
+                    </TabContainer>
+
+                    <TabContainer className={style.tabContainer} size="medium">
+                        <Tab text="Medium Tab" to="/debug/medium/1" />
+                        <Tab text="Medium Tab" to="/debug/medium/2" status="success" count={1000} />
+                        <Tab text="Medium Tab" to="/debug/medium/3" />
+                    </TabContainer>
+
+                    <TabContainer className={style.tabContainer} size="large">
+                        <Tab text="Large Tab" to="/debug/large/1" />
+                        <Tab text="Large Tab" to="/debug/large/2" status="primary" />
+                        <Tab text="Large Tab" to="/debug/large/3" count={10000} />
+                    </TabContainer>
                 </section>
 
                 <section>
