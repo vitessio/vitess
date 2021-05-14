@@ -295,6 +295,11 @@ func (api *API) GetGates(ctx context.Context, req *vtadminpb.GetGatesRequest) (*
 	}, nil
 }
 
+// GetKeyspace is part of the vtadminpb.VTAdminServer interface.
+func (api *API) GetKeyspace(ctx context.Context, req *vtadminpb.GetKeyspaceRequest) (*vtadminpb.Keyspace, error) {
+	panic("unimplemented!")
+}
+
 // GetKeyspaces is part of the vtadminpb.VTAdminServer interface.
 func (api *API) GetKeyspaces(ctx context.Context, req *vtadminpb.GetKeyspacesRequest) (*vtadminpb.GetKeyspacesResponse, error) {
 	span, ctx := trace.NewSpan(ctx, "API.GetKeyspaces")
