@@ -918,6 +918,9 @@ func TestGetGates(t *testing.T) {
 	assert.Nil(t, resp)
 }
 
+func TestGetKeyspace(t *testing.T) {
+}
+
 func TestGetKeyspaces(t *testing.T) {
 	t.Parallel()
 
