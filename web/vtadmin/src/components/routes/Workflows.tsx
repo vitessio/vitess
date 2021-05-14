@@ -32,6 +32,7 @@ import { WorkspaceHeader } from '../layout/WorkspaceHeader';
 import { WorkspaceTitle } from '../layout/WorkspaceTitle';
 import { DataFilter } from '../dataTable/DataFilter';
 import { Tooltip } from '../tooltip/Tooltip';
+import { KeyspaceLink } from '../links/KeyspaceLink';
 
 export const Workflows = () => {
     useDocumentTitle('Workflows');
@@ -71,7 +72,9 @@ export const Workflows = () => {
                     <DataCell>
                         {row.source ? (
                             <>
-                                <div>{row.source}</div>
+                                <KeyspaceLink clusterID={row.clusterID} name={row.source}>
+                                    {row.source}
+                                </KeyspaceLink>
                                 <div className={style.shardList}>{(row.sourceShards || []).join(', ')}</div>
                             </>
                         ) : (
@@ -81,7 +84,9 @@ export const Workflows = () => {
                     <DataCell>
                         {row.target ? (
                             <>
-                                <div>{row.target}</div>
+                                <KeyspaceLink clusterID={row.clusterID} name={row.target}>
+                                    {row.target}
+                                </KeyspaceLink>
                                 <div className={style.shardList}>{(row.targetShards || []).join(', ')}</div>
                             </>
                         ) : (
