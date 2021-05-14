@@ -723,5 +723,11 @@ func (tm *TabletManager) BlacklistedTables() []string {
 
 // hookExtraEnv returns the map to pass to local hooks
 func (tm *TabletManager) hookExtraEnv() map[string]string {
-	return map[string]string{"TABLET_ALIAS": topoproto.TabletAliasString(tm.tabletAlias)}
+	tablet := tm.Tablet()
+
+	return map[string]string{
+		"TABLET_ALIAS": topoproto.TabletAliasString(tm.tabletAlias),
+		"KEYSPACE":     tablet.Keyspace,
+		"SHARD":        tablet.Shard,
+	}
 }
