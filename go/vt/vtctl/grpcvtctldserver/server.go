@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -80,6 +81,7 @@ func NewVtctldServer(ts *topo.Server) *VtctldServer {
 	}
 }
 
+
 // AddCellInfo is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) AddCellInfo(ctx context.Context, req *vtctldatapb.AddCellInfoRequest) (*vtctldatapb.AddCellInfoResponse, error) {
 	if req.CellInfo.Root == "" {
@@ -126,6 +128,30 @@ func (s *VtctldServer) ApplyRoutingRules(ctx context.Context, req *vtctldatapb.A
 	}
 
 	return resp, nil
+}
+
+// ApplyVSchema is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) ApplyVSchema(ctx context.Context, req *vtctldatapb.ApplyVSchemaRequest) (*vtctldatapb.ApplyVSchemaResponse, error) {
+	if _, err := s.ts.GetKeyspace(ctx, req.Keyspace); err != nil {
+		if strings.Contains(err.Error(), "node doesn't exist") {
+			return nil, fmt.Errorf("keyspace(%s) doesn't exist, check if the keyspace is initialized", req.Keyspace)
+		}
+		return nil, err
+	}
+	if err := s.ts.SaveVSchema(ctx, req.Keyspace, req.VSchema); err != nil {
+		return nil, err
+	}
+
+	if !req.SkipRebuild {
+		if err := s.ts.RebuildSrvVSchema(ctx, nil); err != nil {
+			return nil, err
+		}
+	}
+	updatedVS, err := s.ts.GetVSchema(ctx, req.Keyspace)
+	if err != nil {
+		return nil, err
+	}
+	return &vtctldatapb.ApplyVSchemaResponse{VSchema: updatedVS}, nil
 }
 
 // ChangeTabletType is part of the vtctlservicepb.VtctldServer interface.
@@ -917,15 +943,6 @@ func (s *VtctldServer) GetVSchema(ctx context.Context, req *vtctldatapb.GetVSche
 	return &vtctldatapb.GetVSchemaResponse{
 		VSchema: vschema,
 	}, nil
-}
-
-// ApplyVSchema is part of the vtctlservicepb.VtctldServer interface.
-func (s *VtctldServer) ApplyVSchema(ctx context.Context, req *vtctldatapb.ApplyVSchemaRequest) (*vtctldatapb.ApplyVSchemaResponse, error) {
-	if err := s.ts.SaveVSchema(ctx, req.Keyspace, req.VSchema); err != nil {
-		return nil, err
-	}
-
-	return &vtctldatapb.ApplyVSchemaResponse{}, nil
 }
 
 // GetWorkflows is part of the vtctlservicepb.VtctldServer interface.

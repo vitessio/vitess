@@ -853,12 +853,158 @@ func (x *ChangeTabletTypeRequest) ProtoReflect() protoreflect.Message {
 		}
 		return ms
 	}
+<<<<<<< HEAD
 	return mi.MessageOf(x)
+=======
+	return ""
+}
+
+type ApplyVSchemaRequest struct {
+	Keyspace             string            `protobuf:"bytes,1,opt,name=keyspace,proto3" json:"keyspace,omitempty"`
+	VSchema              *vschema.Keyspace `protobuf:"bytes,2,opt,name=v_schema,json=vSchema,proto3" json:"v_schema,omitempty"`
+	SkipRebuild          bool              `protobuf:"varint,3,opt,name=skip_rebuild,json=skipRebuild,proto3" json:"skip_rebuild,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}          `json:"-"`
+	XXX_unrecognized     []byte            `json:"-"`
+	XXX_sizecache        int32             `json:"-"`
+}
+
+func (m *ApplyVSchemaRequest) Reset()         { *m = ApplyVSchemaRequest{} }
+func (m *ApplyVSchemaRequest) String() string { return proto.CompactTextString(m) }
+func (*ApplyVSchemaRequest) ProtoMessage()    {}
+func (*ApplyVSchemaRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_f41247b323a1ab2e, []int{7}
+}
+func (m *ApplyVSchemaRequest) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *ApplyVSchemaRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_ApplyVSchemaRequest.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *ApplyVSchemaRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ApplyVSchemaRequest.Merge(m, src)
+}
+func (m *ApplyVSchemaRequest) XXX_Size() int {
+	return m.Size()
+}
+func (m *ApplyVSchemaRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_ApplyVSchemaRequest.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_ApplyVSchemaRequest proto.InternalMessageInfo
+
+func (m *ApplyVSchemaRequest) GetKeyspace() string {
+	if m != nil {
+		return m.Keyspace
+	}
+	return ""
+}
+
+func (m *ApplyVSchemaRequest) GetVSchema() *vschema.Keyspace {
+	if m != nil {
+		return m.VSchema
+	}
+	return nil
+}
+
+func (m *ApplyVSchemaRequest) GetSkipRebuild() bool {
+	if m != nil {
+		return m.SkipRebuild
+	}
+	return false
+}
+
+type ApplyVSchemaResponse struct {
+	VSchema              *vschema.Keyspace `protobuf:"bytes,1,opt,name=v_schema,json=vSchema,proto3" json:"v_schema,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}          `json:"-"`
+	XXX_unrecognized     []byte            `json:"-"`
+	XXX_sizecache        int32             `json:"-"`
+}
+
+func (m *ApplyVSchemaResponse) Reset()         { *m = ApplyVSchemaResponse{} }
+func (m *ApplyVSchemaResponse) String() string { return proto.CompactTextString(m) }
+func (*ApplyVSchemaResponse) ProtoMessage()    {}
+func (*ApplyVSchemaResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor_f41247b323a1ab2e, []int{8}
+}
+func (m *ApplyVSchemaResponse) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *ApplyVSchemaResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_ApplyVSchemaResponse.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *ApplyVSchemaResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ApplyVSchemaResponse.Merge(m, src)
+}
+func (m *ApplyVSchemaResponse) XXX_Size() int {
+	return m.Size()
+}
+func (m *ApplyVSchemaResponse) XXX_DiscardUnknown() {
+	xxx_messageInfo_ApplyVSchemaResponse.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_ApplyVSchemaResponse proto.InternalMessageInfo
+
+func (m *ApplyVSchemaResponse) GetVSchema() *vschema.Keyspace {
+	if m != nil {
+		return m.VSchema
+	}
+	return nil
+}
+
+type ChangeTabletTypeRequest struct {
+	TabletAlias          *topodata.TabletAlias `protobuf:"bytes,1,opt,name=tablet_alias,json=tabletAlias,proto3" json:"tablet_alias,omitempty"`
+	DbType               topodata.TabletType   `protobuf:"varint,2,opt,name=db_type,json=dbType,proto3,enum=topodata.TabletType" json:"db_type,omitempty"`
+	DryRun               bool                  `protobuf:"varint,3,opt,name=dry_run,json=dryRun,proto3" json:"dry_run,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}              `json:"-"`
+	XXX_unrecognized     []byte                `json:"-"`
+	XXX_sizecache        int32                 `json:"-"`
+>>>>>>> added skip_rebuild and v_schema to message types
 }
 
 // Deprecated: Use ChangeTabletTypeRequest.ProtoReflect.Descriptor instead.
 func (*ChangeTabletTypeRequest) Descriptor() ([]byte, []int) {
+<<<<<<< HEAD
 	return file_vtctldata_proto_rawDescGZIP(), []int{13}
+=======
+<<<<<<< HEAD
+	return file_vtctldata_proto_rawDescGZIP(), []int{7}
+=======
+	return fileDescriptor_f41247b323a1ab2e, []int{9}
+}
+func (m *ChangeTabletTypeRequest) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *ChangeTabletTypeRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_ChangeTabletTypeRequest.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+>>>>>>> added skip_rebuild and v_schema to message types
+>>>>>>> added skip_rebuild and v_schema to message types
 }
 
 func (x *ChangeTabletTypeRequest) GetTabletAlias() *topodata.TabletAlias {
@@ -892,12 +1038,34 @@ type ChangeTabletTypeResponse struct {
 	WasDryRun    bool             `protobuf:"varint,3,opt,name=was_dry_run,json=wasDryRun,proto3" json:"was_dry_run,omitempty"`
 }
 
+<<<<<<< HEAD
 func (x *ChangeTabletTypeResponse) Reset() {
 	*x = ChangeTabletTypeResponse{}
 	if protoimpl.UnsafeEnabled {
 		mi := &file_vtctldata_proto_msgTypes[14]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
+=======
+func (m *ChangeTabletTypeResponse) Reset()         { *m = ChangeTabletTypeResponse{} }
+func (m *ChangeTabletTypeResponse) String() string { return proto.CompactTextString(m) }
+func (*ChangeTabletTypeResponse) ProtoMessage()    {}
+func (*ChangeTabletTypeResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor_f41247b323a1ab2e, []int{10}
+}
+func (m *ChangeTabletTypeResponse) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *ChangeTabletTypeResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_ChangeTabletTypeResponse.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+>>>>>>> added skip_rebuild and v_schema to message types
 	}
 }
 
@@ -974,12 +1142,34 @@ type CreateKeyspaceRequest struct {
 	SnapshotTime *vttime.Time `protobuf:"bytes,9,opt,name=snapshot_time,json=snapshotTime,proto3" json:"snapshot_time,omitempty"`
 }
 
+<<<<<<< HEAD
 func (x *CreateKeyspaceRequest) Reset() {
 	*x = CreateKeyspaceRequest{}
 	if protoimpl.UnsafeEnabled {
 		mi := &file_vtctldata_proto_msgTypes[15]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
+=======
+func (m *CreateKeyspaceRequest) Reset()         { *m = CreateKeyspaceRequest{} }
+func (m *CreateKeyspaceRequest) String() string { return proto.CompactTextString(m) }
+func (*CreateKeyspaceRequest) ProtoMessage()    {}
+func (*CreateKeyspaceRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_f41247b323a1ab2e, []int{11}
+}
+func (m *CreateKeyspaceRequest) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *CreateKeyspaceRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_CreateKeyspaceRequest.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+>>>>>>> added skip_rebuild and v_schema to message types
 	}
 }
 
@@ -1078,12 +1268,34 @@ type CreateKeyspaceResponse struct {
 	Keyspace *Keyspace `protobuf:"bytes,1,opt,name=keyspace,proto3" json:"keyspace,omitempty"`
 }
 
+<<<<<<< HEAD
 func (x *CreateKeyspaceResponse) Reset() {
 	*x = CreateKeyspaceResponse{}
 	if protoimpl.UnsafeEnabled {
 		mi := &file_vtctldata_proto_msgTypes[16]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
+=======
+func (m *CreateKeyspaceResponse) Reset()         { *m = CreateKeyspaceResponse{} }
+func (m *CreateKeyspaceResponse) String() string { return proto.CompactTextString(m) }
+func (*CreateKeyspaceResponse) ProtoMessage()    {}
+func (*CreateKeyspaceResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor_f41247b323a1ab2e, []int{12}
+}
+func (m *CreateKeyspaceResponse) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *CreateKeyspaceResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_CreateKeyspaceResponse.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+>>>>>>> added skip_rebuild and v_schema to message types
 	}
 }
 
@@ -1134,12 +1346,34 @@ type CreateShardRequest struct {
 	IncludeParent bool `protobuf:"varint,4,opt,name=include_parent,json=includeParent,proto3" json:"include_parent,omitempty"`
 }
 
+<<<<<<< HEAD
 func (x *CreateShardRequest) Reset() {
 	*x = CreateShardRequest{}
 	if protoimpl.UnsafeEnabled {
 		mi := &file_vtctldata_proto_msgTypes[17]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
+=======
+func (m *CreateShardRequest) Reset()         { *m = CreateShardRequest{} }
+func (m *CreateShardRequest) String() string { return proto.CompactTextString(m) }
+func (*CreateShardRequest) ProtoMessage()    {}
+func (*CreateShardRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_f41247b323a1ab2e, []int{13}
+}
+func (m *CreateShardRequest) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *CreateShardRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_CreateShardRequest.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+>>>>>>> added skip_rebuild and v_schema to message types
 	}
 }
 
@@ -1209,12 +1443,34 @@ type CreateShardResponse struct {
 	ShardAlreadyExists bool `protobuf:"varint,3,opt,name=shard_already_exists,json=shardAlreadyExists,proto3" json:"shard_already_exists,omitempty"`
 }
 
+<<<<<<< HEAD
 func (x *CreateShardResponse) Reset() {
 	*x = CreateShardResponse{}
 	if protoimpl.UnsafeEnabled {
 		mi := &file_vtctldata_proto_msgTypes[18]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
+=======
+func (m *CreateShardResponse) Reset()         { *m = CreateShardResponse{} }
+func (m *CreateShardResponse) String() string { return proto.CompactTextString(m) }
+func (*CreateShardResponse) ProtoMessage()    {}
+func (*CreateShardResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor_f41247b323a1ab2e, []int{14}
+}
+func (m *CreateShardResponse) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *CreateShardResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_CreateShardResponse.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+>>>>>>> added skip_rebuild and v_schema to message types
 	}
 }
 
@@ -1453,12 +1709,34 @@ type DeleteKeyspaceRequest struct {
 	Recursive bool `protobuf:"varint,2,opt,name=recursive,proto3" json:"recursive,omitempty"`
 }
 
+<<<<<<< HEAD
 func (x *DeleteKeyspaceRequest) Reset() {
 	*x = DeleteKeyspaceRequest{}
 	if protoimpl.UnsafeEnabled {
 		mi := &file_vtctldata_proto_msgTypes[23]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
+=======
+func (m *DeleteKeyspaceRequest) Reset()         { *m = DeleteKeyspaceRequest{} }
+func (m *DeleteKeyspaceRequest) String() string { return proto.CompactTextString(m) }
+func (*DeleteKeyspaceRequest) ProtoMessage()    {}
+func (*DeleteKeyspaceRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_f41247b323a1ab2e, []int{15}
+}
+func (m *DeleteKeyspaceRequest) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *DeleteKeyspaceRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_DeleteKeyspaceRequest.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+>>>>>>> added skip_rebuild and v_schema to message types
 	}
 }
 
@@ -1505,12 +1783,34 @@ type DeleteKeyspaceResponse struct {
 	unknownFields protoimpl.UnknownFields
 }
 
+<<<<<<< HEAD
 func (x *DeleteKeyspaceResponse) Reset() {
 	*x = DeleteKeyspaceResponse{}
 	if protoimpl.UnsafeEnabled {
 		mi := &file_vtctldata_proto_msgTypes[24]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
+=======
+func (m *DeleteKeyspaceResponse) Reset()         { *m = DeleteKeyspaceResponse{} }
+func (m *DeleteKeyspaceResponse) String() string { return proto.CompactTextString(m) }
+func (*DeleteKeyspaceResponse) ProtoMessage()    {}
+func (*DeleteKeyspaceResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor_f41247b323a1ab2e, []int{16}
+}
+func (m *DeleteKeyspaceResponse) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *DeleteKeyspaceResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_DeleteKeyspaceResponse.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+>>>>>>> added skip_rebuild and v_schema to message types
 	}
 }
 
@@ -1554,12 +1854,34 @@ type DeleteShardsRequest struct {
 	EvenIfServing bool `protobuf:"varint,4,opt,name=even_if_serving,json=evenIfServing,proto3" json:"even_if_serving,omitempty"`
 }
 
+<<<<<<< HEAD
 func (x *DeleteShardsRequest) Reset() {
 	*x = DeleteShardsRequest{}
 	if protoimpl.UnsafeEnabled {
 		mi := &file_vtctldata_proto_msgTypes[25]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
+=======
+func (m *DeleteShardsRequest) Reset()         { *m = DeleteShardsRequest{} }
+func (m *DeleteShardsRequest) String() string { return proto.CompactTextString(m) }
+func (*DeleteShardsRequest) ProtoMessage()    {}
+func (*DeleteShardsRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_f41247b323a1ab2e, []int{17}
+}
+func (m *DeleteShardsRequest) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *DeleteShardsRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_DeleteShardsRequest.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+>>>>>>> added skip_rebuild and v_schema to message types
 	}
 }
 
@@ -1613,12 +1935,34 @@ type DeleteShardsResponse struct {
 	unknownFields protoimpl.UnknownFields
 }
 
+<<<<<<< HEAD
 func (x *DeleteShardsResponse) Reset() {
 	*x = DeleteShardsResponse{}
 	if protoimpl.UnsafeEnabled {
 		mi := &file_vtctldata_proto_msgTypes[26]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
+=======
+func (m *DeleteShardsResponse) Reset()         { *m = DeleteShardsResponse{} }
+func (m *DeleteShardsResponse) String() string { return proto.CompactTextString(m) }
+func (*DeleteShardsResponse) ProtoMessage()    {}
+func (*DeleteShardsResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor_f41247b323a1ab2e, []int{18}
+}
+func (m *DeleteShardsResponse) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *DeleteShardsResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_DeleteShardsResponse.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+>>>>>>> added skip_rebuild and v_schema to message types
 	}
 }
 
@@ -1657,12 +2001,34 @@ type DeleteTabletsRequest struct {
 	AllowPrimary bool `protobuf:"varint,2,opt,name=allow_primary,json=allowPrimary,proto3" json:"allow_primary,omitempty"`
 }
 
+<<<<<<< HEAD
 func (x *DeleteTabletsRequest) Reset() {
 	*x = DeleteTabletsRequest{}
 	if protoimpl.UnsafeEnabled {
 		mi := &file_vtctldata_proto_msgTypes[27]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
+=======
+func (m *DeleteTabletsRequest) Reset()         { *m = DeleteTabletsRequest{} }
+func (m *DeleteTabletsRequest) String() string { return proto.CompactTextString(m) }
+func (*DeleteTabletsRequest) ProtoMessage()    {}
+func (*DeleteTabletsRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_f41247b323a1ab2e, []int{19}
+}
+func (m *DeleteTabletsRequest) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *DeleteTabletsRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_DeleteTabletsRequest.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+>>>>>>> added skip_rebuild and v_schema to message types
 	}
 }
 
@@ -1709,12 +2075,34 @@ type DeleteTabletsResponse struct {
 	unknownFields protoimpl.UnknownFields
 }
 
+<<<<<<< HEAD
 func (x *DeleteTabletsResponse) Reset() {
 	*x = DeleteTabletsResponse{}
 	if protoimpl.UnsafeEnabled {
 		mi := &file_vtctldata_proto_msgTypes[28]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
+=======
+func (m *DeleteTabletsResponse) Reset()         { *m = DeleteTabletsResponse{} }
+func (m *DeleteTabletsResponse) String() string { return proto.CompactTextString(m) }
+func (*DeleteTabletsResponse) ProtoMessage()    {}
+func (*DeleteTabletsResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor_f41247b323a1ab2e, []int{20}
+}
+func (m *DeleteTabletsResponse) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *DeleteTabletsResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_DeleteTabletsResponse.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+>>>>>>> added skip_rebuild and v_schema to message types
 	}
 }
 
@@ -1763,12 +2151,34 @@ type EmergencyReparentShardRequest struct {
 	WaitReplicasTimeout *vttime.Duration `protobuf:"bytes,5,opt,name=wait_replicas_timeout,json=waitReplicasTimeout,proto3" json:"wait_replicas_timeout,omitempty"`
 }
 
+<<<<<<< HEAD
 func (x *EmergencyReparentShardRequest) Reset() {
 	*x = EmergencyReparentShardRequest{}
 	if protoimpl.UnsafeEnabled {
 		mi := &file_vtctldata_proto_msgTypes[29]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
+=======
+func (m *EmergencyReparentShardRequest) Reset()         { *m = EmergencyReparentShardRequest{} }
+func (m *EmergencyReparentShardRequest) String() string { return proto.CompactTextString(m) }
+func (*EmergencyReparentShardRequest) ProtoMessage()    {}
+func (*EmergencyReparentShardRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_f41247b323a1ab2e, []int{21}
+}
+func (m *EmergencyReparentShardRequest) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *EmergencyReparentShardRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_EmergencyReparentShardRequest.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+>>>>>>> added skip_rebuild and v_schema to message types
 	}
 }
 
@@ -1847,12 +2257,34 @@ type EmergencyReparentShardResponse struct {
 	Events          []*logutil.Event      `protobuf:"bytes,4,rep,name=events,proto3" json:"events,omitempty"`
 }
 
+<<<<<<< HEAD
 func (x *EmergencyReparentShardResponse) Reset() {
 	*x = EmergencyReparentShardResponse{}
 	if protoimpl.UnsafeEnabled {
 		mi := &file_vtctldata_proto_msgTypes[30]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
+=======
+func (m *EmergencyReparentShardResponse) Reset()         { *m = EmergencyReparentShardResponse{} }
+func (m *EmergencyReparentShardResponse) String() string { return proto.CompactTextString(m) }
+func (*EmergencyReparentShardResponse) ProtoMessage()    {}
+func (*EmergencyReparentShardResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor_f41247b323a1ab2e, []int{22}
+}
+func (m *EmergencyReparentShardResponse) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *EmergencyReparentShardResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_EmergencyReparentShardResponse.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+>>>>>>> added skip_rebuild and v_schema to message types
 	}
 }
 
@@ -1915,12 +2347,34 @@ type FindAllShardsInKeyspaceRequest struct {
 	Keyspace string `protobuf:"bytes,1,opt,name=keyspace,proto3" json:"keyspace,omitempty"`
 }
 
+<<<<<<< HEAD
 func (x *FindAllShardsInKeyspaceRequest) Reset() {
 	*x = FindAllShardsInKeyspaceRequest{}
 	if protoimpl.UnsafeEnabled {
 		mi := &file_vtctldata_proto_msgTypes[31]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
+=======
+func (m *FindAllShardsInKeyspaceRequest) Reset()         { *m = FindAllShardsInKeyspaceRequest{} }
+func (m *FindAllShardsInKeyspaceRequest) String() string { return proto.CompactTextString(m) }
+func (*FindAllShardsInKeyspaceRequest) ProtoMessage()    {}
+func (*FindAllShardsInKeyspaceRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_f41247b323a1ab2e, []int{23}
+}
+func (m *FindAllShardsInKeyspaceRequest) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *FindAllShardsInKeyspaceRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_FindAllShardsInKeyspaceRequest.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+>>>>>>> added skip_rebuild and v_schema to message types
 	}
 }
 
@@ -1962,12 +2416,34 @@ type FindAllShardsInKeyspaceResponse struct {
 	Shards map[string]*Shard `protobuf:"bytes,1,rep,name=shards,proto3" json:"shards,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
 }
 
+<<<<<<< HEAD
 func (x *FindAllShardsInKeyspaceResponse) Reset() {
 	*x = FindAllShardsInKeyspaceResponse{}
 	if protoimpl.UnsafeEnabled {
 		mi := &file_vtctldata_proto_msgTypes[32]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
+=======
+func (m *FindAllShardsInKeyspaceResponse) Reset()         { *m = FindAllShardsInKeyspaceResponse{} }
+func (m *FindAllShardsInKeyspaceResponse) String() string { return proto.CompactTextString(m) }
+func (*FindAllShardsInKeyspaceResponse) ProtoMessage()    {}
+func (*FindAllShardsInKeyspaceResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor_f41247b323a1ab2e, []int{24}
+}
+func (m *FindAllShardsInKeyspaceResponse) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *FindAllShardsInKeyspaceResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_FindAllShardsInKeyspaceResponse.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+>>>>>>> added skip_rebuild and v_schema to message types
 	}
 }
 
@@ -2010,12 +2486,34 @@ type GetBackupsRequest struct {
 	Shard    string `protobuf:"bytes,2,opt,name=shard,proto3" json:"shard,omitempty"`
 }
 
+<<<<<<< HEAD
 func (x *GetBackupsRequest) Reset() {
 	*x = GetBackupsRequest{}
 	if protoimpl.UnsafeEnabled {
 		mi := &file_vtctldata_proto_msgTypes[33]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
+=======
+func (m *GetBackupsRequest) Reset()         { *m = GetBackupsRequest{} }
+func (m *GetBackupsRequest) String() string { return proto.CompactTextString(m) }
+func (*GetBackupsRequest) ProtoMessage()    {}
+func (*GetBackupsRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_f41247b323a1ab2e, []int{25}
+}
+func (m *GetBackupsRequest) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *GetBackupsRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_GetBackupsRequest.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+>>>>>>> added skip_rebuild and v_schema to message types
 	}
 }
 
@@ -2064,12 +2562,34 @@ type GetBackupsResponse struct {
 	Backups []*mysqlctl.BackupInfo `protobuf:"bytes,1,rep,name=backups,proto3" json:"backups,omitempty"`
 }
 
+<<<<<<< HEAD
 func (x *GetBackupsResponse) Reset() {
 	*x = GetBackupsResponse{}
 	if protoimpl.UnsafeEnabled {
 		mi := &file_vtctldata_proto_msgTypes[34]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
+=======
+func (m *GetBackupsResponse) Reset()         { *m = GetBackupsResponse{} }
+func (m *GetBackupsResponse) String() string { return proto.CompactTextString(m) }
+func (*GetBackupsResponse) ProtoMessage()    {}
+func (*GetBackupsResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor_f41247b323a1ab2e, []int{26}
+}
+func (m *GetBackupsResponse) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *GetBackupsResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_GetBackupsResponse.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+>>>>>>> added skip_rebuild and v_schema to message types
 	}
 }
 
@@ -2111,12 +2631,39 @@ type GetCellInfoRequest struct {
 	Cell string `protobuf:"bytes,1,opt,name=cell,proto3" json:"cell,omitempty"`
 }
 
+<<<<<<< HEAD
 func (x *GetCellInfoRequest) Reset() {
 	*x = GetCellInfoRequest{}
+=======
+<<<<<<< HEAD
+func (x *GetCellInfoNamesRequest) Reset() {
+	*x = GetCellInfoNamesRequest{}
+>>>>>>> added skip_rebuild and v_schema to message types
 	if protoimpl.UnsafeEnabled {
 		mi := &file_vtctldata_proto_msgTypes[35]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
+=======
+func (m *GetCellInfoNamesRequest) Reset()         { *m = GetCellInfoNamesRequest{} }
+func (m *GetCellInfoNamesRequest) String() string { return proto.CompactTextString(m) }
+func (*GetCellInfoNamesRequest) ProtoMessage()    {}
+func (*GetCellInfoNamesRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_f41247b323a1ab2e, []int{27}
+}
+func (m *GetCellInfoNamesRequest) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *GetCellInfoNamesRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_GetCellInfoNamesRequest.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+>>>>>>> added skip_rebuild and v_schema to message types
 	}
 }
 
@@ -2158,12 +2705,41 @@ type GetCellInfoResponse struct {
 	CellInfo *topodata.CellInfo `protobuf:"bytes,1,opt,name=cell_info,json=cellInfo,proto3" json:"cell_info,omitempty"`
 }
 
+<<<<<<< HEAD
 func (x *GetCellInfoResponse) Reset() {
 	*x = GetCellInfoResponse{}
 	if protoimpl.UnsafeEnabled {
 		mi := &file_vtctldata_proto_msgTypes[36]
+=======
+<<<<<<< HEAD
+func (x *GetCellInfoNamesResponse) Reset() {
+	*x = GetCellInfoNamesResponse{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_vtctldata_proto_msgTypes[26]
+>>>>>>> added skip_rebuild and v_schema to message types
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
+=======
+func (m *GetCellInfoNamesResponse) Reset()         { *m = GetCellInfoNamesResponse{} }
+func (m *GetCellInfoNamesResponse) String() string { return proto.CompactTextString(m) }
+func (*GetCellInfoNamesResponse) ProtoMessage()    {}
+func (*GetCellInfoNamesResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor_f41247b323a1ab2e, []int{28}
+}
+func (m *GetCellInfoNamesResponse) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *GetCellInfoNamesResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_GetCellInfoNamesResponse.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+>>>>>>> added skip_rebuild and v_schema to message types
 	}
 }
 
@@ -2203,12 +2779,39 @@ type GetCellInfoNamesRequest struct {
 	unknownFields protoimpl.UnknownFields
 }
 
+<<<<<<< HEAD
 func (x *GetCellInfoNamesRequest) Reset() {
 	*x = GetCellInfoNamesRequest{}
+=======
+<<<<<<< HEAD
+func (x *GetCellInfoRequest) Reset() {
+	*x = GetCellInfoRequest{}
+>>>>>>> added skip_rebuild and v_schema to message types
 	if protoimpl.UnsafeEnabled {
 		mi := &file_vtctldata_proto_msgTypes[37]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
+=======
+func (m *GetCellInfoRequest) Reset()         { *m = GetCellInfoRequest{} }
+func (m *GetCellInfoRequest) String() string { return proto.CompactTextString(m) }
+func (*GetCellInfoRequest) ProtoMessage()    {}
+func (*GetCellInfoRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_f41247b323a1ab2e, []int{29}
+}
+func (m *GetCellInfoRequest) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *GetCellInfoRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_GetCellInfoRequest.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+>>>>>>> added skip_rebuild and v_schema to message types
 	}
 }
 
@@ -2243,12 +2846,39 @@ type GetCellInfoNamesResponse struct {
 	Names []string `protobuf:"bytes,1,rep,name=names,proto3" json:"names,omitempty"`
 }
 
+<<<<<<< HEAD
 func (x *GetCellInfoNamesResponse) Reset() {
 	*x = GetCellInfoNamesResponse{}
+=======
+<<<<<<< HEAD
+func (x *GetCellInfoResponse) Reset() {
+	*x = GetCellInfoResponse{}
+>>>>>>> added skip_rebuild and v_schema to message types
 	if protoimpl.UnsafeEnabled {
 		mi := &file_vtctldata_proto_msgTypes[38]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
+=======
+func (m *GetCellInfoResponse) Reset()         { *m = GetCellInfoResponse{} }
+func (m *GetCellInfoResponse) String() string { return proto.CompactTextString(m) }
+func (*GetCellInfoResponse) ProtoMessage()    {}
+func (*GetCellInfoResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor_f41247b323a1ab2e, []int{30}
+}
+func (m *GetCellInfoResponse) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *GetCellInfoResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_GetCellInfoResponse.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+>>>>>>> added skip_rebuild and v_schema to message types
 	}
 }
 
@@ -2288,12 +2918,34 @@ type GetCellsAliasesRequest struct {
 	unknownFields protoimpl.UnknownFields
 }
 
+<<<<<<< HEAD
 func (x *GetCellsAliasesRequest) Reset() {
 	*x = GetCellsAliasesRequest{}
 	if protoimpl.UnsafeEnabled {
 		mi := &file_vtctldata_proto_msgTypes[39]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
+=======
+func (m *GetCellsAliasesRequest) Reset()         { *m = GetCellsAliasesRequest{} }
+func (m *GetCellsAliasesRequest) String() string { return proto.CompactTextString(m) }
+func (*GetCellsAliasesRequest) ProtoMessage()    {}
+func (*GetCellsAliasesRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_f41247b323a1ab2e, []int{31}
+}
+func (m *GetCellsAliasesRequest) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *GetCellsAliasesRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_GetCellsAliasesRequest.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+>>>>>>> added skip_rebuild and v_schema to message types
 	}
 }
 
@@ -2328,12 +2980,34 @@ type GetCellsAliasesResponse struct {
 	Aliases map[string]*topodata.CellsAlias `protobuf:"bytes,1,rep,name=aliases,proto3" json:"aliases,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
 }
 
+<<<<<<< HEAD
 func (x *GetCellsAliasesResponse) Reset() {
 	*x = GetCellsAliasesResponse{}
 	if protoimpl.UnsafeEnabled {
 		mi := &file_vtctldata_proto_msgTypes[40]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
+=======
+func (m *GetCellsAliasesResponse) Reset()         { *m = GetCellsAliasesResponse{} }
+func (m *GetCellsAliasesResponse) String() string { return proto.CompactTextString(m) }
+func (*GetCellsAliasesResponse) ProtoMessage()    {}
+func (*GetCellsAliasesResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor_f41247b323a1ab2e, []int{32}
+}
+func (m *GetCellsAliasesResponse) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *GetCellsAliasesResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_GetCellsAliasesResponse.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+>>>>>>> added skip_rebuild and v_schema to message types
 	}
 }
 
@@ -2373,12 +3047,34 @@ type GetKeyspacesRequest struct {
 	unknownFields protoimpl.UnknownFields
 }
 
+<<<<<<< HEAD
 func (x *GetKeyspacesRequest) Reset() {
 	*x = GetKeyspacesRequest{}
 	if protoimpl.UnsafeEnabled {
 		mi := &file_vtctldata_proto_msgTypes[41]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
+=======
+func (m *GetKeyspacesRequest) Reset()         { *m = GetKeyspacesRequest{} }
+func (m *GetKeyspacesRequest) String() string { return proto.CompactTextString(m) }
+func (*GetKeyspacesRequest) ProtoMessage()    {}
+func (*GetKeyspacesRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_f41247b323a1ab2e, []int{33}
+}
+func (m *GetKeyspacesRequest) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *GetKeyspacesRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_GetKeyspacesRequest.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+>>>>>>> added skip_rebuild and v_schema to message types
 	}
 }
 
@@ -2413,12 +3109,34 @@ type GetKeyspacesResponse struct {
 	Keyspaces []*Keyspace `protobuf:"bytes,1,rep,name=keyspaces,proto3" json:"keyspaces,omitempty"`
 }
 
+<<<<<<< HEAD
 func (x *GetKeyspacesResponse) Reset() {
 	*x = GetKeyspacesResponse{}
 	if protoimpl.UnsafeEnabled {
 		mi := &file_vtctldata_proto_msgTypes[42]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
+=======
+func (m *GetKeyspacesResponse) Reset()         { *m = GetKeyspacesResponse{} }
+func (m *GetKeyspacesResponse) String() string { return proto.CompactTextString(m) }
+func (*GetKeyspacesResponse) ProtoMessage()    {}
+func (*GetKeyspacesResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor_f41247b323a1ab2e, []int{34}
+}
+func (m *GetKeyspacesResponse) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *GetKeyspacesResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_GetKeyspacesResponse.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+>>>>>>> added skip_rebuild and v_schema to message types
 	}
 }
 
@@ -2460,12 +3178,34 @@ type GetKeyspaceRequest struct {
 	Keyspace string `protobuf:"bytes,1,opt,name=keyspace,proto3" json:"keyspace,omitempty"`
 }
 
+<<<<<<< HEAD
 func (x *GetKeyspaceRequest) Reset() {
 	*x = GetKeyspaceRequest{}
 	if protoimpl.UnsafeEnabled {
 		mi := &file_vtctldata_proto_msgTypes[43]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
+=======
+func (m *GetKeyspaceRequest) Reset()         { *m = GetKeyspaceRequest{} }
+func (m *GetKeyspaceRequest) String() string { return proto.CompactTextString(m) }
+func (*GetKeyspaceRequest) ProtoMessage()    {}
+func (*GetKeyspaceRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_f41247b323a1ab2e, []int{35}
+}
+func (m *GetKeyspaceRequest) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *GetKeyspaceRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_GetKeyspaceRequest.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+>>>>>>> added skip_rebuild and v_schema to message types
 	}
 }
 
@@ -2507,12 +3247,34 @@ type GetKeyspaceResponse struct {
 	Keyspace *Keyspace `protobuf:"bytes,1,opt,name=keyspace,proto3" json:"keyspace,omitempty"`
 }
 
+<<<<<<< HEAD
 func (x *GetKeyspaceResponse) Reset() {
 	*x = GetKeyspaceResponse{}
 	if protoimpl.UnsafeEnabled {
 		mi := &file_vtctldata_proto_msgTypes[44]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
+=======
+func (m *GetKeyspaceResponse) Reset()         { *m = GetKeyspaceResponse{} }
+func (m *GetKeyspaceResponse) String() string { return proto.CompactTextString(m) }
+func (*GetKeyspaceResponse) ProtoMessage()    {}
+func (*GetKeyspaceResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor_f41247b323a1ab2e, []int{36}
+}
+func (m *GetKeyspaceResponse) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *GetKeyspaceResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_GetKeyspaceResponse.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+>>>>>>> added skip_rebuild and v_schema to message types
 	}
 }
 
@@ -2654,12 +3416,34 @@ type GetSchemaRequest struct {
 	TableSizesOnly bool `protobuf:"varint,6,opt,name=table_sizes_only,json=tableSizesOnly,proto3" json:"table_sizes_only,omitempty"`
 }
 
+<<<<<<< HEAD
 func (x *GetSchemaRequest) Reset() {
 	*x = GetSchemaRequest{}
 	if protoimpl.UnsafeEnabled {
 		mi := &file_vtctldata_proto_msgTypes[47]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
+=======
+func (m *GetSchemaRequest) Reset()         { *m = GetSchemaRequest{} }
+func (m *GetSchemaRequest) String() string { return proto.CompactTextString(m) }
+func (*GetSchemaRequest) ProtoMessage()    {}
+func (*GetSchemaRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_f41247b323a1ab2e, []int{37}
+}
+func (m *GetSchemaRequest) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *GetSchemaRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_GetSchemaRequest.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+>>>>>>> added skip_rebuild and v_schema to message types
 	}
 }
 
@@ -2736,12 +3520,34 @@ type GetSchemaResponse struct {
 	Schema *tabletmanagerdata.SchemaDefinition `protobuf:"bytes,1,opt,name=schema,proto3" json:"schema,omitempty"`
 }
 
+<<<<<<< HEAD
 func (x *GetSchemaResponse) Reset() {
 	*x = GetSchemaResponse{}
 	if protoimpl.UnsafeEnabled {
 		mi := &file_vtctldata_proto_msgTypes[48]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
+=======
+func (m *GetSchemaResponse) Reset()         { *m = GetSchemaResponse{} }
+func (m *GetSchemaResponse) String() string { return proto.CompactTextString(m) }
+func (*GetSchemaResponse) ProtoMessage()    {}
+func (*GetSchemaResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor_f41247b323a1ab2e, []int{38}
+}
+func (m *GetSchemaResponse) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *GetSchemaResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_GetSchemaResponse.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+>>>>>>> added skip_rebuild and v_schema to message types
 	}
 }
 
@@ -2784,12 +3590,34 @@ type GetShardRequest struct {
 	ShardName string `protobuf:"bytes,2,opt,name=shard_name,json=shardName,proto3" json:"shard_name,omitempty"`
 }
 
+<<<<<<< HEAD
 func (x *GetShardRequest) Reset() {
 	*x = GetShardRequest{}
 	if protoimpl.UnsafeEnabled {
 		mi := &file_vtctldata_proto_msgTypes[49]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
+=======
+func (m *GetShardRequest) Reset()         { *m = GetShardRequest{} }
+func (m *GetShardRequest) String() string { return proto.CompactTextString(m) }
+func (*GetShardRequest) ProtoMessage()    {}
+func (*GetShardRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_f41247b323a1ab2e, []int{39}
+}
+func (m *GetShardRequest) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *GetShardRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_GetShardRequest.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+>>>>>>> added skip_rebuild and v_schema to message types
 	}
 }
 
@@ -2838,12 +3666,34 @@ type GetShardResponse struct {
 	Shard *Shard `protobuf:"bytes,1,opt,name=shard,proto3" json:"shard,omitempty"`
 }
 
+<<<<<<< HEAD
 func (x *GetShardResponse) Reset() {
 	*x = GetShardResponse{}
 	if protoimpl.UnsafeEnabled {
 		mi := &file_vtctldata_proto_msgTypes[50]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
+=======
+func (m *GetShardResponse) Reset()         { *m = GetShardResponse{} }
+func (m *GetShardResponse) String() string { return proto.CompactTextString(m) }
+func (*GetShardResponse) ProtoMessage()    {}
+func (*GetShardResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor_f41247b323a1ab2e, []int{40}
+}
+func (m *GetShardResponse) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *GetShardResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_GetShardResponse.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+>>>>>>> added skip_rebuild and v_schema to message types
 	}
 }
 
@@ -2888,12 +3738,34 @@ type GetSrvKeyspacesRequest struct {
 	Cells []string `protobuf:"bytes,2,rep,name=cells,proto3" json:"cells,omitempty"`
 }
 
+<<<<<<< HEAD
 func (x *GetSrvKeyspacesRequest) Reset() {
 	*x = GetSrvKeyspacesRequest{}
 	if protoimpl.UnsafeEnabled {
 		mi := &file_vtctldata_proto_msgTypes[51]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
+=======
+func (m *GetSrvKeyspacesRequest) Reset()         { *m = GetSrvKeyspacesRequest{} }
+func (m *GetSrvKeyspacesRequest) String() string { return proto.CompactTextString(m) }
+func (*GetSrvKeyspacesRequest) ProtoMessage()    {}
+func (*GetSrvKeyspacesRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_f41247b323a1ab2e, []int{41}
+}
+func (m *GetSrvKeyspacesRequest) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *GetSrvKeyspacesRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_GetSrvKeyspacesRequest.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+>>>>>>> added skip_rebuild and v_schema to message types
 	}
 }
 
@@ -2943,12 +3815,34 @@ type GetSrvKeyspacesResponse struct {
 	SrvKeyspaces map[string]*topodata.SrvKeyspace `protobuf:"bytes,1,rep,name=srv_keyspaces,json=srvKeyspaces,proto3" json:"srv_keyspaces,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
 }
 
+<<<<<<< HEAD
 func (x *GetSrvKeyspacesResponse) Reset() {
 	*x = GetSrvKeyspacesResponse{}
 	if protoimpl.UnsafeEnabled {
 		mi := &file_vtctldata_proto_msgTypes[52]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
+=======
+func (m *GetSrvKeyspacesResponse) Reset()         { *m = GetSrvKeyspacesResponse{} }
+func (m *GetSrvKeyspacesResponse) String() string { return proto.CompactTextString(m) }
+func (*GetSrvKeyspacesResponse) ProtoMessage()    {}
+func (*GetSrvKeyspacesResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor_f41247b323a1ab2e, []int{42}
+}
+func (m *GetSrvKeyspacesResponse) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *GetSrvKeyspacesResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_GetSrvKeyspacesResponse.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+>>>>>>> added skip_rebuild and v_schema to message types
 	}
 }
 
@@ -2990,12 +3884,34 @@ type GetSrvVSchemaRequest struct {
 	Cell string `protobuf:"bytes,1,opt,name=cell,proto3" json:"cell,omitempty"`
 }
 
+<<<<<<< HEAD
 func (x *GetSrvVSchemaRequest) Reset() {
 	*x = GetSrvVSchemaRequest{}
 	if protoimpl.UnsafeEnabled {
 		mi := &file_vtctldata_proto_msgTypes[53]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
+=======
+func (m *GetSrvVSchemaRequest) Reset()         { *m = GetSrvVSchemaRequest{} }
+func (m *GetSrvVSchemaRequest) String() string { return proto.CompactTextString(m) }
+func (*GetSrvVSchemaRequest) ProtoMessage()    {}
+func (*GetSrvVSchemaRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_f41247b323a1ab2e, []int{43}
+}
+func (m *GetSrvVSchemaRequest) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *GetSrvVSchemaRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_GetSrvVSchemaRequest.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+>>>>>>> added skip_rebuild and v_schema to message types
 	}
 }
 
@@ -3037,12 +3953,34 @@ type GetSrvVSchemaResponse struct {
 	SrvVSchema *vschema.SrvVSchema `protobuf:"bytes,1,opt,name=srv_v_schema,json=srvVSchema,proto3" json:"srv_v_schema,omitempty"`
 }
 
+<<<<<<< HEAD
 func (x *GetSrvVSchemaResponse) Reset() {
 	*x = GetSrvVSchemaResponse{}
 	if protoimpl.UnsafeEnabled {
 		mi := &file_vtctldata_proto_msgTypes[54]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
+=======
+func (m *GetSrvVSchemaResponse) Reset()         { *m = GetSrvVSchemaResponse{} }
+func (m *GetSrvVSchemaResponse) String() string { return proto.CompactTextString(m) }
+func (*GetSrvVSchemaResponse) ProtoMessage()    {}
+func (*GetSrvVSchemaResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor_f41247b323a1ab2e, []int{44}
+}
+func (m *GetSrvVSchemaResponse) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *GetSrvVSchemaResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_GetSrvVSchemaResponse.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+>>>>>>> added skip_rebuild and v_schema to message types
 	}
 }
 
@@ -3084,12 +4022,39 @@ type GetSrvVSchemasRequest struct {
 	Cells []string `protobuf:"bytes,2,rep,name=cells,proto3" json:"cells,omitempty"`
 }
 
+<<<<<<< HEAD
 func (x *GetSrvVSchemasRequest) Reset() {
 	*x = GetSrvVSchemasRequest{}
+=======
+<<<<<<< HEAD
+func (x *GetTabletRequest) Reset() {
+	*x = GetTabletRequest{}
+>>>>>>> added skip_rebuild and v_schema to message types
 	if protoimpl.UnsafeEnabled {
 		mi := &file_vtctldata_proto_msgTypes[55]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
+=======
+func (m *GetTabletRequest) Reset()         { *m = GetTabletRequest{} }
+func (m *GetTabletRequest) String() string { return proto.CompactTextString(m) }
+func (*GetTabletRequest) ProtoMessage()    {}
+func (*GetTabletRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_f41247b323a1ab2e, []int{45}
+}
+func (m *GetTabletRequest) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *GetTabletRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_GetTabletRequest.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+>>>>>>> added skip_rebuild and v_schema to message types
 	}
 }
 
@@ -3132,8 +4097,14 @@ type GetSrvVSchemasResponse struct {
 	SrvVSchemas map[string]*vschema.SrvVSchema `protobuf:"bytes,1,rep,name=srv_v_schemas,json=srvVSchemas,proto3" json:"srv_v_schemas,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
 }
 
+<<<<<<< HEAD
 func (x *GetSrvVSchemasResponse) Reset() {
 	*x = GetSrvVSchemasResponse{}
+=======
+<<<<<<< HEAD
+func (x *GetTabletResponse) Reset() {
+	*x = GetTabletResponse{}
+>>>>>>> added skip_rebuild and v_schema to message types
 	if protoimpl.UnsafeEnabled {
 		mi := &file_vtctldata_proto_msgTypes[56]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -3232,6 +4203,27 @@ func (x *GetTabletResponse) Reset() {
 		mi := &file_vtctldata_proto_msgTypes[58]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
+=======
+func (m *GetTabletResponse) Reset()         { *m = GetTabletResponse{} }
+func (m *GetTabletResponse) String() string { return proto.CompactTextString(m) }
+func (*GetTabletResponse) ProtoMessage()    {}
+func (*GetTabletResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor_f41247b323a1ab2e, []int{46}
+}
+func (m *GetTabletResponse) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *GetTabletResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_GetTabletResponse.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+>>>>>>> added skip_rebuild and v_schema to message types
 	}
 }
 
@@ -3291,12 +4283,34 @@ type GetTabletsRequest struct {
 	TabletAliases []*topodata.TabletAlias `protobuf:"bytes,5,rep,name=tablet_aliases,json=tabletAliases,proto3" json:"tablet_aliases,omitempty"`
 }
 
+<<<<<<< HEAD
 func (x *GetTabletsRequest) Reset() {
 	*x = GetTabletsRequest{}
 	if protoimpl.UnsafeEnabled {
 		mi := &file_vtctldata_proto_msgTypes[59]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
+=======
+func (m *GetTabletsRequest) Reset()         { *m = GetTabletsRequest{} }
+func (m *GetTabletsRequest) String() string { return proto.CompactTextString(m) }
+func (*GetTabletsRequest) ProtoMessage()    {}
+func (*GetTabletsRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_f41247b323a1ab2e, []int{47}
+}
+func (m *GetTabletsRequest) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *GetTabletsRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_GetTabletsRequest.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+>>>>>>> added skip_rebuild and v_schema to message types
 	}
 }
 
@@ -3366,12 +4380,34 @@ type GetTabletsResponse struct {
 	Tablets []*topodata.Tablet `protobuf:"bytes,1,rep,name=tablets,proto3" json:"tablets,omitempty"`
 }
 
+<<<<<<< HEAD
 func (x *GetTabletsResponse) Reset() {
 	*x = GetTabletsResponse{}
 	if protoimpl.UnsafeEnabled {
 		mi := &file_vtctldata_proto_msgTypes[60]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
+=======
+func (m *GetTabletsResponse) Reset()         { *m = GetTabletsResponse{} }
+func (m *GetTabletsResponse) String() string { return proto.CompactTextString(m) }
+func (*GetTabletsResponse) ProtoMessage()    {}
+func (*GetTabletsResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor_f41247b323a1ab2e, []int{48}
+}
+func (m *GetTabletsResponse) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *GetTabletsResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_GetTabletsResponse.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+>>>>>>> added skip_rebuild and v_schema to message types
 	}
 }
 
@@ -3413,12 +4449,34 @@ type GetVSchemaRequest struct {
 	Keyspace string `protobuf:"bytes,1,opt,name=keyspace,proto3" json:"keyspace,omitempty"`
 }
 
+<<<<<<< HEAD
 func (x *GetVSchemaRequest) Reset() {
 	*x = GetVSchemaRequest{}
 	if protoimpl.UnsafeEnabled {
 		mi := &file_vtctldata_proto_msgTypes[61]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
+=======
+func (m *GetVSchemaRequest) Reset()         { *m = GetVSchemaRequest{} }
+func (m *GetVSchemaRequest) String() string { return proto.CompactTextString(m) }
+func (*GetVSchemaRequest) ProtoMessage()    {}
+func (*GetVSchemaRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_f41247b323a1ab2e, []int{49}
+}
+func (m *GetVSchemaRequest) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *GetVSchemaRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_GetVSchemaRequest.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+>>>>>>> added skip_rebuild and v_schema to message types
 	}
 }
 
@@ -3460,12 +4518,34 @@ type GetVSchemaResponse struct {
 	VSchema *vschema.Keyspace `protobuf:"bytes,1,opt,name=v_schema,json=vSchema,proto3" json:"v_schema,omitempty"`
 }
 
+<<<<<<< HEAD
 func (x *GetVSchemaResponse) Reset() {
 	*x = GetVSchemaResponse{}
 	if protoimpl.UnsafeEnabled {
 		mi := &file_vtctldata_proto_msgTypes[62]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
+=======
+func (m *GetVSchemaResponse) Reset()         { *m = GetVSchemaResponse{} }
+func (m *GetVSchemaResponse) String() string { return proto.CompactTextString(m) }
+func (*GetVSchemaResponse) ProtoMessage()    {}
+func (*GetVSchemaResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor_f41247b323a1ab2e, []int{50}
+}
+func (m *GetVSchemaResponse) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *GetVSchemaResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_GetVSchemaResponse.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+>>>>>>> added skip_rebuild and v_schema to message types
 	}
 }
 
@@ -3499,6 +4579,7 @@ func (x *GetVSchemaResponse) GetVSchema() *vschema.Keyspace {
 	return nil
 }
 
+<<<<<<< HEAD
 type ApplyVSchemaRequest struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
@@ -3543,17 +4624,70 @@ func (*ApplyVSchemaRequest) Descriptor() ([]byte, []int) {
 func (x *ApplyVSchemaRequest) GetKeyspace() string {
 	if x != nil {
 		return x.Keyspace
+=======
+type GetWorkflowsRequest struct {
+	Keyspace             string   `protobuf:"bytes,1,opt,name=keyspace,proto3" json:"keyspace,omitempty"`
+	ActiveOnly           bool     `protobuf:"varint,2,opt,name=active_only,json=activeOnly,proto3" json:"active_only,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *GetWorkflowsRequest) Reset()         { *m = GetWorkflowsRequest{} }
+func (m *GetWorkflowsRequest) String() string { return proto.CompactTextString(m) }
+func (*GetWorkflowsRequest) ProtoMessage()    {}
+func (*GetWorkflowsRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_f41247b323a1ab2e, []int{51}
+}
+func (m *GetWorkflowsRequest) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *GetWorkflowsRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_GetWorkflowsRequest.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *GetWorkflowsRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_GetWorkflowsRequest.Merge(m, src)
+}
+func (m *GetWorkflowsRequest) XXX_Size() int {
+	return m.Size()
+}
+func (m *GetWorkflowsRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_GetWorkflowsRequest.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_GetWorkflowsRequest proto.InternalMessageInfo
+
+func (m *GetWorkflowsRequest) GetKeyspace() string {
+	if m != nil {
+		return m.Keyspace
+>>>>>>> added skip_rebuild and v_schema to message types
 	}
 	return ""
 }
 
+<<<<<<< HEAD
 func (x *ApplyVSchemaRequest) GetVSchema() *vschema.Keyspace {
 	if x != nil {
 		return x.VSchema
+=======
+func (m *GetWorkflowsRequest) GetActiveOnly() bool {
+	if m != nil {
+		return m.ActiveOnly
+>>>>>>> added skip_rebuild and v_schema to message types
 	}
-	return nil
+	return false
 }
 
+<<<<<<< HEAD
 type ApplyVSchemaResponse struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
@@ -3665,6 +4799,13 @@ type GetWorkflowsResponse struct {
 	unknownFields protoimpl.UnknownFields
 
 	Workflows []*Workflow `protobuf:"bytes,1,rep,name=workflows,proto3" json:"workflows,omitempty"`
+=======
+type GetWorkflowsResponse struct {
+	Workflows            []*Workflow `protobuf:"bytes,1,rep,name=workflows,proto3" json:"workflows,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}    `json:"-"`
+	XXX_unrecognized     []byte      `json:"-"`
+	XXX_sizecache        int32       `json:"-"`
+>>>>>>> added skip_rebuild and v_schema to message types
 }
 
 func (x *GetWorkflowsResponse) Reset() {
@@ -5086,9 +6227,322 @@ func (x *UpdateCellsAliasResponse) GetName() string {
 	return ""
 }
 
+<<<<<<< HEAD
 func (x *UpdateCellsAliasResponse) GetCellsAlias() *topodata.CellsAlias {
 	if x != nil {
 		return x.CellsAlias
+=======
+func (x *TabletExternallyReparentedResponse) GetNewPrimary() *topodata.TabletAlias {
+	if x != nil {
+		return x.NewPrimary
+	}
+	return nil
+}
+
+<<<<<<< HEAD
+func (x *TabletExternallyReparentedResponse) GetOldPrimary() *topodata.TabletAlias {
+	if x != nil {
+		return x.OldPrimary
+=======
+func init() {
+	proto.RegisterType((*ExecuteVtctlCommandRequest)(nil), "vtctldata.ExecuteVtctlCommandRequest")
+	proto.RegisterType((*ExecuteVtctlCommandResponse)(nil), "vtctldata.ExecuteVtctlCommandResponse")
+	proto.RegisterType((*TableMaterializeSettings)(nil), "vtctldata.TableMaterializeSettings")
+	proto.RegisterType((*MaterializeSettings)(nil), "vtctldata.MaterializeSettings")
+	proto.RegisterType((*Keyspace)(nil), "vtctldata.Keyspace")
+	proto.RegisterType((*Shard)(nil), "vtctldata.Shard")
+	proto.RegisterType((*Workflow)(nil), "vtctldata.Workflow")
+	proto.RegisterMapType((map[string]*Workflow_ShardStream)(nil), "vtctldata.Workflow.ShardStreamsEntry")
+	proto.RegisterType((*Workflow_ReplicationLocation)(nil), "vtctldata.Workflow.ReplicationLocation")
+	proto.RegisterType((*Workflow_ShardStream)(nil), "vtctldata.Workflow.ShardStream")
+	proto.RegisterType((*Workflow_Stream)(nil), "vtctldata.Workflow.Stream")
+	proto.RegisterType((*Workflow_Stream_CopyState)(nil), "vtctldata.Workflow.Stream.CopyState")
+	proto.RegisterType((*ApplyVSchemaRequest)(nil), "vtctldata.ApplyVSchemaRequest")
+	proto.RegisterType((*ApplyVSchemaResponse)(nil), "vtctldata.ApplyVSchemaResponse")
+	proto.RegisterType((*ChangeTabletTypeRequest)(nil), "vtctldata.ChangeTabletTypeRequest")
+	proto.RegisterType((*ChangeTabletTypeResponse)(nil), "vtctldata.ChangeTabletTypeResponse")
+	proto.RegisterType((*CreateKeyspaceRequest)(nil), "vtctldata.CreateKeyspaceRequest")
+	proto.RegisterType((*CreateKeyspaceResponse)(nil), "vtctldata.CreateKeyspaceResponse")
+	proto.RegisterType((*CreateShardRequest)(nil), "vtctldata.CreateShardRequest")
+	proto.RegisterType((*CreateShardResponse)(nil), "vtctldata.CreateShardResponse")
+	proto.RegisterType((*DeleteKeyspaceRequest)(nil), "vtctldata.DeleteKeyspaceRequest")
+	proto.RegisterType((*DeleteKeyspaceResponse)(nil), "vtctldata.DeleteKeyspaceResponse")
+	proto.RegisterType((*DeleteShardsRequest)(nil), "vtctldata.DeleteShardsRequest")
+	proto.RegisterType((*DeleteShardsResponse)(nil), "vtctldata.DeleteShardsResponse")
+	proto.RegisterType((*DeleteTabletsRequest)(nil), "vtctldata.DeleteTabletsRequest")
+	proto.RegisterType((*DeleteTabletsResponse)(nil), "vtctldata.DeleteTabletsResponse")
+	proto.RegisterType((*EmergencyReparentShardRequest)(nil), "vtctldata.EmergencyReparentShardRequest")
+	proto.RegisterType((*EmergencyReparentShardResponse)(nil), "vtctldata.EmergencyReparentShardResponse")
+	proto.RegisterType((*FindAllShardsInKeyspaceRequest)(nil), "vtctldata.FindAllShardsInKeyspaceRequest")
+	proto.RegisterType((*FindAllShardsInKeyspaceResponse)(nil), "vtctldata.FindAllShardsInKeyspaceResponse")
+	proto.RegisterMapType((map[string]*Shard)(nil), "vtctldata.FindAllShardsInKeyspaceResponse.ShardsEntry")
+	proto.RegisterType((*GetBackupsRequest)(nil), "vtctldata.GetBackupsRequest")
+	proto.RegisterType((*GetBackupsResponse)(nil), "vtctldata.GetBackupsResponse")
+	proto.RegisterType((*GetCellInfoNamesRequest)(nil), "vtctldata.GetCellInfoNamesRequest")
+	proto.RegisterType((*GetCellInfoNamesResponse)(nil), "vtctldata.GetCellInfoNamesResponse")
+	proto.RegisterType((*GetCellInfoRequest)(nil), "vtctldata.GetCellInfoRequest")
+	proto.RegisterType((*GetCellInfoResponse)(nil), "vtctldata.GetCellInfoResponse")
+	proto.RegisterType((*GetCellsAliasesRequest)(nil), "vtctldata.GetCellsAliasesRequest")
+	proto.RegisterType((*GetCellsAliasesResponse)(nil), "vtctldata.GetCellsAliasesResponse")
+	proto.RegisterMapType((map[string]*topodata.CellsAlias)(nil), "vtctldata.GetCellsAliasesResponse.AliasesEntry")
+	proto.RegisterType((*GetKeyspacesRequest)(nil), "vtctldata.GetKeyspacesRequest")
+	proto.RegisterType((*GetKeyspacesResponse)(nil), "vtctldata.GetKeyspacesResponse")
+	proto.RegisterType((*GetKeyspaceRequest)(nil), "vtctldata.GetKeyspaceRequest")
+	proto.RegisterType((*GetKeyspaceResponse)(nil), "vtctldata.GetKeyspaceResponse")
+	proto.RegisterType((*GetSchemaRequest)(nil), "vtctldata.GetSchemaRequest")
+	proto.RegisterType((*GetSchemaResponse)(nil), "vtctldata.GetSchemaResponse")
+	proto.RegisterType((*GetShardRequest)(nil), "vtctldata.GetShardRequest")
+	proto.RegisterType((*GetShardResponse)(nil), "vtctldata.GetShardResponse")
+	proto.RegisterType((*GetSrvKeyspacesRequest)(nil), "vtctldata.GetSrvKeyspacesRequest")
+	proto.RegisterType((*GetSrvKeyspacesResponse)(nil), "vtctldata.GetSrvKeyspacesResponse")
+	proto.RegisterMapType((map[string]*topodata.SrvKeyspace)(nil), "vtctldata.GetSrvKeyspacesResponse.SrvKeyspacesEntry")
+	proto.RegisterType((*GetSrvVSchemaRequest)(nil), "vtctldata.GetSrvVSchemaRequest")
+	proto.RegisterType((*GetSrvVSchemaResponse)(nil), "vtctldata.GetSrvVSchemaResponse")
+	proto.RegisterType((*GetTabletRequest)(nil), "vtctldata.GetTabletRequest")
+	proto.RegisterType((*GetTabletResponse)(nil), "vtctldata.GetTabletResponse")
+	proto.RegisterType((*GetTabletsRequest)(nil), "vtctldata.GetTabletsRequest")
+	proto.RegisterType((*GetTabletsResponse)(nil), "vtctldata.GetTabletsResponse")
+	proto.RegisterType((*GetVSchemaRequest)(nil), "vtctldata.GetVSchemaRequest")
+	proto.RegisterType((*GetVSchemaResponse)(nil), "vtctldata.GetVSchemaResponse")
+	proto.RegisterType((*GetWorkflowsRequest)(nil), "vtctldata.GetWorkflowsRequest")
+	proto.RegisterType((*GetWorkflowsResponse)(nil), "vtctldata.GetWorkflowsResponse")
+	proto.RegisterType((*InitShardPrimaryRequest)(nil), "vtctldata.InitShardPrimaryRequest")
+	proto.RegisterType((*InitShardPrimaryResponse)(nil), "vtctldata.InitShardPrimaryResponse")
+	proto.RegisterType((*PlannedReparentShardRequest)(nil), "vtctldata.PlannedReparentShardRequest")
+	proto.RegisterType((*PlannedReparentShardResponse)(nil), "vtctldata.PlannedReparentShardResponse")
+	proto.RegisterType((*RemoveKeyspaceCellRequest)(nil), "vtctldata.RemoveKeyspaceCellRequest")
+	proto.RegisterType((*RemoveKeyspaceCellResponse)(nil), "vtctldata.RemoveKeyspaceCellResponse")
+	proto.RegisterType((*RemoveShardCellRequest)(nil), "vtctldata.RemoveShardCellRequest")
+	proto.RegisterType((*RemoveShardCellResponse)(nil), "vtctldata.RemoveShardCellResponse")
+	proto.RegisterType((*ReparentTabletRequest)(nil), "vtctldata.ReparentTabletRequest")
+	proto.RegisterType((*ReparentTabletResponse)(nil), "vtctldata.ReparentTabletResponse")
+	proto.RegisterType((*ShardReplicationPositionsRequest)(nil), "vtctldata.ShardReplicationPositionsRequest")
+	proto.RegisterType((*ShardReplicationPositionsResponse)(nil), "vtctldata.ShardReplicationPositionsResponse")
+	proto.RegisterMapType((map[string]*replicationdata.Status)(nil), "vtctldata.ShardReplicationPositionsResponse.ReplicationStatusesEntry")
+	proto.RegisterMapType((map[string]*topodata.Tablet)(nil), "vtctldata.ShardReplicationPositionsResponse.TabletMapEntry")
+	proto.RegisterType((*TabletExternallyReparentedRequest)(nil), "vtctldata.TabletExternallyReparentedRequest")
+	proto.RegisterType((*TabletExternallyReparentedResponse)(nil), "vtctldata.TabletExternallyReparentedResponse")
+}
+
+func init() { proto.RegisterFile("vtctldata.proto", fileDescriptor_f41247b323a1ab2e) }
+
+var fileDescriptor_f41247b323a1ab2e = []byte{
+	// 2778 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xd4, 0x3a, 0xcb, 0x6f, 0x24, 0x47,
+	0xf9, 0xbf, 0x9e, 0x97, 0x3d, 0xdf, 0x3c, 0x6c, 0xb7, 0xc7, 0x76, 0x67, 0x92, 0x75, 0x9c, 0xde,
+	0xec, 0xc6, 0xbf, 0x4d, 0x76, 0x9c, 0x38, 0x0f, 0x45, 0x9b, 0x04, 0xe2, 0xb5, 0xc7, 0x91, 0x37,
+	0x89, 0x31, 0x3d, 0x66, 0x23, 0x72, 0xa0, 0x29, 0xcf, 0x94, 0x67, 0x5b, 0xee, 0xe9, 0xee, 0x74,
+	0xd5, 0x8c, 0x3d, 0xe1, 0x80, 0x84, 0xe0, 0x10, 0x09, 0x89, 0x2b, 0x52, 0x84, 0xc4, 0x09, 0x21,
+	0x6e, 0x5c, 0x22, 0x81, 0x10, 0x47, 0xc4, 0x81, 0x03, 0x57, 0x6e, 0x28, 0xfc, 0x19, 0x5c, 0x50,
+	0xbd, 0x7a, 0xba, 0x7b, 0x1e, 0x3b, 0xeb, 0xac, 0x84, 0x38, 0x79, 0xea, 0xab, 0xef, 0xab, 0xef,
+	0x51, 0xdf, 0xb3, 0xda, 0xb0, 0x34, 0xa0, 0x6d, 0xea, 0x76, 0x10, 0x45, 0x8d, 0x20, 0xf4, 0xa9,
+	0xaf, 0x17, 0x23, 0x40, 0x7d, 0xf9, 0xcc, 0xf1, 0x5c, 0xbf, 0x3b, 0xda, 0xac, 0x57, 0x5c, 0xbf,
+	0xdb, 0xa7, 0x8e, 0x2b, 0x97, 0xd5, 0xde, 0x90, 0x7c, 0xe6, 0xb6, 0xa9, 0x5a, 0xaf, 0x85, 0x38,
+	0x70, 0x9d, 0x36, 0xa2, 0x8e, 0xef, 0xc5, 0xa8, 0x36, 0x28, 0x3a, 0x73, 0x31, 0xed, 0x21, 0x0f,
+	0x75, 0x71, 0x18, 0xdb, 0xa8, 0x52, 0x3f, 0xf0, 0xe3, 0xc7, 0x0f, 0x48, 0xfb, 0x11, 0xee, 0xa9,
+	0x65, 0x79, 0x40, 0xa9, 0xd3, 0xc3, 0x62, 0x65, 0x7e, 0x02, 0xf5, 0xe6, 0x15, 0x6e, 0xf7, 0x29,
+	0x7e, 0xc8, 0x24, 0xdc, 0xf7, 0x7b, 0x3d, 0xe4, 0x75, 0x2c, 0xfc, 0x59, 0x1f, 0x13, 0xaa, 0xeb,
+	0x90, 0x43, 0x61, 0x97, 0x18, 0xda, 0x56, 0x76, 0xbb, 0x68, 0xf1, 0xdf, 0xfa, 0x2d, 0xa8, 0xa2,
+	0x36, 0x93, 0xc5, 0x66, 0xc7, 0xf8, 0x7d, 0x6a, 0x64, 0xb6, 0xb4, 0xed, 0xac, 0x55, 0x11, 0xd0,
+	0x53, 0x01, 0x34, 0xf7, 0xe1, 0xd9, 0x89, 0x07, 0x93, 0xc0, 0xf7, 0x08, 0xd6, 0x5f, 0x84, 0x3c,
+	0x1e, 0x60, 0x8f, 0x1a, 0xda, 0x96, 0xb6, 0x5d, 0xda, 0xad, 0x36, 0x94, 0x0d, 0x9a, 0x0c, 0x6a,
+	0x89, 0x4d, 0xf3, 0x0b, 0x0d, 0x8c, 0x53, 0xa6, 0xe6, 0xc7, 0x88, 0xe2, 0xd0, 0x41, 0xae, 0xf3,
+	0x39, 0x6e, 0x61, 0x4a, 0x1d, 0xaf, 0x4b, 0xf4, 0x17, 0xa0, 0x4c, 0x51, 0xd8, 0xc5, 0xd4, 0xe6,
+	0x96, 0xe0, 0x27, 0x15, 0xad, 0x92, 0x80, 0x71, 0x2a, 0xfd, 0x65, 0x58, 0x21, 0x7e, 0x3f, 0x6c,
+	0x63, 0x1b, 0x5f, 0x05, 0x21, 0x26, 0xc4, 0xf1, 0x3d, 0x2e, 0x6e, 0xd1, 0x5a, 0x16, 0x1b, 0xcd,
+	0x08, 0xae, 0xdf, 0x00, 0x68, 0x87, 0x18, 0x51, 0x6c, 0x77, 0x3a, 0xae, 0x91, 0xe5, 0x58, 0x45,
+	0x01, 0x39, 0xe8, 0xb8, 0xe6, 0x3f, 0x32, 0xb0, 0x3a, 0x49, 0x8c, 0x3a, 0x2c, 0x5e, 0xfa, 0xe1,
+	0xc5, 0xb9, 0xeb, 0x5f, 0x4a, 0x11, 0xa2, 0xb5, 0xfe, 0x12, 0x2c, 0x49, 0xfe, 0x17, 0x78, 0x48,
+	0x02, 0xd4, 0xc6, 0x92, 0x7b, 0x55, 0x80, 0x3f, 0x94, 0x50, 0x86, 0x28, 0x75, 0x89, 0x10, 0x85,
+	0x00, 0x55, 0x01, 0x8e, 0x10, 0x6f, 0xc3, 0x12, 0xa1, 0x7e, 0x60, 0xa3, 0x73, 0x8a, 0x43, 0xbb,
+	0xed, 0x07, 0x43, 0x23, 0xb7, 0xa5, 0x6d, 0x2f, 0x5a, 0x15, 0x06, 0xde, 0x63, 0xd0, 0x7d, 0x3f,
+	0x18, 0xea, 0x0f, 0xa0, 0xca, 0xad, 0x62, 0x13, 0x29, 0xa7, 0x91, 0xdf, 0xca, 0x6e, 0x97, 0x76,
+	0x6f, 0x36, 0x46, 0xae, 0x39, 0xcd, 0xb2, 0x56, 0x85, 0x93, 0x46, 0x1a, 0xea, 0x90, 0x6b, 0x63,
+	0xd7, 0x35, 0x0a, 0x5c, 0x22, 0xfe, 0x5b, 0x18, 0x9f, 0xf9, 0x9f, 0x4d, 0x87, 0x01, 0x26, 0xc6,
+	0x82, 0x32, 0x3e, 0x83, 0x9d, 0x32, 0x90, 0xfe, 0xff, 0xb0, 0x8c, 0xaf, 0x28, 0x0e, 0x3d, 0xe4,
+	0xda, 0x6d, 0xb7, 0x4f, 0x28, 0x0e, 0x8d, 0x45, 0x8e, 0xb6, 0xa4, 0xe0, 0xfb, 0x02, 0x6c, 0x1e,
+	0xc3, 0x62, 0xa4, 0xa1, 0x0e, 0x39, 0x0f, 0xf5, 0xd4, 0x75, 0xf2, 0xdf, 0x7a, 0x03, 0x16, 0x13,
+	0x06, 0x2c, 0xed, 0xea, 0x8d, 0xc8, 0xcb, 0x15, 0xa5, 0x15, 0xe1, 0x98, 0x3f, 0x80, 0x7c, 0xeb,
+	0x11, 0x0a, 0x3b, 0xec, 0x72, 0x22, 0x42, 0x79, 0x39, 0x17, 0x69, 0x46, 0x99, 0x18, 0xa3, 0x5b,
+	0x90, 0x27, 0x8c, 0x90, 0x5b, 0xbf, 0xb4, 0xbb, 0x34, 0xe2, 0xc2, 0xcf, 0xb3, 0xc4, 0xae, 0xf9,
+	0xdb, 0x22, 0x2c, 0x7e, 0xa2, 0x2e, 0x79, 0x92, 0xc0, 0xdf, 0x86, 0x82, 0xb8, 0x61, 0x29, 0xee,
+	0x4b, 0x31, 0xb3, 0x2b, 0xc2, 0x86, 0x35, 0x8a, 0xeb, 0x8f, 0x7c, 0xf1, 0xd7, 0x92, 0x64, 0xec,
+	0x00, 0x71, 0xf3, 0x52, 0x92, 0xf9, 0x0f, 0x10, 0x64, 0xfa, 0x6b, 0xb0, 0xd6, 0x43, 0x57, 0xf6,
+	0xc0, 0x8e, 0x65, 0x0f, 0xdb, 0x45, 0x5d, 0xee, 0x2e, 0x59, 0x4b, 0xef, 0xa1, 0xab, 0x87, 0x71,
+	0x7a, 0xd4, 0xd5, 0x1f, 0x40, 0x85, 0xab, 0x67, 0x13, 0x1a, 0x62, 0xd4, 0x53, 0x2e, 0x73, 0x6b,
+	0x12, 0x6b, 0x6e, 0x8e, 0x96, 0xc0, 0x6b, 0x7a, 0x34, 0x1c, 0x5a, 0x65, 0x12, 0x03, 0xd5, 0x7f,
+	0x08, 0x2b, 0x63, 0x28, 0xfa, 0x32, 0x64, 0x2f, 0xf0, 0x50, 0x1a, 0x8a, 0xfd, 0xd4, 0xdf, 0x84,
+	0xfc, 0x00, 0xb9, 0x7d, 0x65, 0xa6, 0xe7, 0x1f, 0xc3, 0xca, 0x12, 0xd8, 0xf7, 0x32, 0x6f, 0x6b,
+	0xf5, 0x23, 0x58, 0x9d, 0xa0, 0xff, 0xcc, 0x1b, 0x5f, 0x87, 0x02, 0x17, 0x92, 0x18, 0x19, 0x9e,
+	0xd0, 0xe4, 0xaa, 0xfe, 0x07, 0x0d, 0x4a, 0x31, 0x2e, 0xfa, 0x1b, 0xb0, 0xa0, 0x4c, 0xa0, 0x71,
+	0x13, 0xd4, 0x27, 0xca, 0x25, 0x44, 0x52, 0xa8, 0xfa, 0x21, 0x8b, 0x61, 0x1e, 0x12, 0x6d, 0xdf,
+	0xa3, 0xa1, 0xef, 0x0a, 0x36, 0xa5, 0xdd, 0x1b, 0x29, 0x2f, 0x12, 0x81, 0x47, 0xf7, 0x05, 0x96,
+	0x25, 0x02, 0x55, 0x2d, 0x89, 0xfe, 0x0a, 0xe8, 0x0e, 0xb1, 0x83, 0xd0, 0xe9, 0xa1, 0x70, 0x68,
+	0x13, 0x1c, 0x0e, 0x1c, 0xaf, 0xcb, 0xdd, 0x60, 0xd1, 0x5a, 0x76, 0xc8, 0x89, 0xd8, 0x68, 0x09,
+	0x78, 0xfd, 0x57, 0x39, 0x28, 0x48, 0xb1, 0xab, 0x90, 0x71, 0x3a, 0x5c, 0xe9, 0xac, 0x95, 0x71,
+	0x3a, 0x7a, 0x4d, 0x39, 0xb3, 0xf0, 0x70, 0xb1, 0xd0, 0xef, 0x32, 0xcf, 0x62, 0x0c, 0xa5, 0x67,
+	0xad, 0x8d, 0xa4, 0x13, 0x72, 0xed, 0xb9, 0x0e, 0x22, 0x96, 0x44, 0xd2, 0xdf, 0x83, 0x8a, 0x28,
+	0x58, 0xb6, 0x74, 0xe8, 0x1c, 0xa7, 0x32, 0x1a, 0xb1, 0x32, 0x76, 0x9f, 0xff, 0x6c, 0xf1, 0x7d,
+	0xab, 0x7c, 0x16, 0x5b, 0xb1, 0xeb, 0x08, 0x7c, 0xe2, 0xb0, 0xab, 0x31, 0xf2, 0xe2, 0x3a, 0xd4,
+	0x5a, 0xbf, 0x09, 0x3c, 0x69, 0xd9, 0x11, 0x82, 0x48, 0x30, 0x65, 0x06, 0x3c, 0x51, 0x48, 0x4c,
+	0x09, 0x8a, 0x28, 0x96, 0x19, 0x46, 0x2c, 0xf4, 0x0d, 0x58, 0xe8, 0x9c, 0xd9, 0x3c, 0xec, 0x44,
+	0x4a, 0x29, 0x74, 0xce, 0x8e, 0x59, 0xe0, 0xed, 0xc1, 0x1a, 0x0d, 0x91, 0x47, 0x62, 0x25, 0x8a,
+	0x50, 0xd4, 0x0b, 0x8c, 0x22, 0x17, 0xbb, 0xdc, 0x90, 0xd5, 0x8f, 0x95, 0x29, 0xab, 0x16, 0x43,
+	0x3d, 0x55, 0x98, 0xfa, 0x0e, 0x94, 0x19, 0x8a, 0xdd, 0x0f, 0x3a, 0x88, 0xe2, 0x8e, 0x01, 0x13,
+	0x28, 0x4b, 0xec, 0xe7, 0xf7, 0x04, 0x82, 0x6e, 0xc0, 0x42, 0x0f, 0x13, 0x82, 0xba, 0xd8, 0x28,
+	0x71, 0x61, 0xd4, 0x52, 0x6f, 0x42, 0x89, 0xa5, 0x68, 0x9b, 0x0b, 0x4d, 0x8c, 0x32, 0x77, 0x87,
+	0x17, 0xa7, 0x3b, 0x53, 0x83, 0xe5, 0xee, 0x16, 0x43, 0xb6, 0xa0, 0xad, 0x7e, 0x92, 0xfa, 0x3d,
+	0x28, 0x46, 0x1b, 0xcc, 0x20, 0xf1, 0x7a, 0x27, 0x16, 0xcc, 0x20, 0x2e, 0x22, 0xd4, 0x0e, 0x2e,
+	0xe4, 0x6d, 0x17, 0xd8, 0xf2, 0xe4, 0xc2, 0xfc, 0x89, 0x06, 0xab, 0x7b, 0x41, 0xe0, 0x0e, 0x1f,
+	0xb6, 0x78, 0x17, 0xa0, 0x4a, 0xfb, 0xac, 0x38, 0x79, 0x05, 0x16, 0x07, 0xb6, 0x68, 0x1a, 0x64,
+	0x60, 0xae, 0x34, 0x54, 0x13, 0x11, 0x65, 0xdb, 0x85, 0x81, 0x38, 0x90, 0x95, 0x02, 0x72, 0xe1,
+	0x04, 0x76, 0x88, 0xcf, 0xfa, 0x8e, 0xdb, 0x91, 0x9e, 0x5a, 0x62, 0x30, 0x4b, 0x80, 0xcc, 0x03,
+	0xa8, 0x25, 0x65, 0x90, 0x5d, 0x40, 0x9c, 0x91, 0xf6, 0x38, 0x46, 0xe6, 0x97, 0x1a, 0x6c, 0xec,
+	0x3f, 0x42, 0x5e, 0x17, 0x9f, 0x46, 0x65, 0x46, 0xa9, 0xf3, 0x76, 0x54, 0x8f, 0x10, 0x73, 0x5f,
+	0x79, 0xda, 0x14, 0xdf, 0x96, 0x65, 0x8a, 0x2f, 0xf4, 0xbb, 0xdc, 0x95, 0x58, 0x15, 0xe3, 0xba,
+	0x56, 0x77, 0x6b, 0x69, 0x22, 0xce, 0xa7, 0xd0, 0x39, 0x63, 0x7f, 0xb9, 0xe7, 0x85, 0x43, 0x3b,
+	0xec, 0x7b, 0x52, 0xd1, 0x42, 0x27, 0x1c, 0x5a, 0x7d, 0xcf, 0xfc, 0x8d, 0x06, 0xc6, 0xb8, 0x74,
+	0x52, 0xd1, 0x37, 0xa1, 0x72, 0x86, 0xcf, 0xfd, 0x10, 0xdb, 0x32, 0xf6, 0x84, 0x7c, 0xcb, 0x69,
+	0x56, 0x56, 0x59, 0xa0, 0x89, 0x95, 0xfe, 0x3a, 0x94, 0x45, 0xa1, 0x97, 0x54, 0x99, 0x29, 0x54,
+	0x25, 0x8e, 0x25, 0x89, 0x36, 0xa1, 0x74, 0x89, 0x88, 0x9d, 0x94, 0xb2, 0x78, 0x89, 0xc8, 0x81,
+	0x10, 0xf4, 0xab, 0x2c, 0xac, 0xed, 0xf3, 0xb6, 0x26, 0x32, 0xf1, 0xa8, 0xdd, 0x1b, 0xab, 0x64,
+	0x35, 0xc8, 0x9f, 0xfb, 0xaa, 0x90, 0x2d, 0x5a, 0x62, 0xa1, 0xef, 0x40, 0x0d, 0xb9, 0xae, 0x7f,
+	0x69, 0xe3, 0x5e, 0x40, 0x87, 0x76, 0x74, 0x89, 0x82, 0xd9, 0x0a, 0xdf, 0x6b, 0xb2, 0x2d, 0x79,
+	0xe3, 0xfa, 0xab, 0x50, 0xe3, 0xe9, 0xc7, 0xf1, 0xba, 0x76, 0xdb, 0x77, 0xfb, 0x3d, 0x4f, 0x44,
+	0x6f, 0x8e, 0xb3, 0xd2, 0xd5, 0xde, 0x3e, 0xdf, 0xe2, 0x91, 0xfc, 0x60, 0x9c, 0x82, 0x5f, 0x52,
+	0x9e, 0x5f, 0x92, 0x31, 0x5e, 0xff, 0x8f, 0x3a, 0xdc, 0xe4, 0xa9, 0xb3, 0xf8, 0xa5, 0xbd, 0x0f,
+	0x65, 0x96, 0x47, 0x71, 0xc7, 0x3e, 0x0f, 0xfd, 0x1e, 0x31, 0x0a, 0xe9, 0xbc, 0xac, 0xce, 0x68,
+	0xb4, 0x38, 0xda, 0x61, 0xe8, 0xf7, 0xac, 0x12, 0x89, 0x7e, 0x13, 0xfd, 0x0e, 0xe4, 0x38, 0xf7,
+	0x05, 0xce, 0x7d, 0x7d, 0x9c, 0x92, 0xf3, 0xe6, 0x38, 0x2c, 0xaf, 0x9d, 0x21, 0x12, 0xeb, 0xf9,
+	0x44, 0x8a, 0x2a, 0x33, 0x60, 0xd4, 0xe6, 0xbc, 0x06, 0x15, 0xe2, 0xa1, 0x80, 0x3c, 0xf2, 0x29,
+	0xcf, 0x52, 0x13, 0x13, 0x54, 0x59, 0xa1, 0xb0, 0x95, 0x79, 0x04, 0xeb, 0xe9, 0x7b, 0x93, 0xee,
+	0xb5, 0x93, 0x0a, 0xe6, 0xd2, 0xee, 0x6a, 0x2c, 0xc9, 0x4c, 0x68, 0x90, 0x7e, 0xae, 0x81, 0x2e,
+	0xce, 0x12, 0x7d, 0xcd, 0x1c, 0x49, 0xe1, 0x06, 0x80, 0xe8, 0x0e, 0x62, 0x4d, 0x53, 0x91, 0x43,
+	0x8e, 0x13, 0x7e, 0x92, 0x8d, 0xfb, 0xc9, 0x2d, 0xa8, 0x3a, 0x5e, 0xdb, 0xed, 0x77, 0xb0, 0x1d,
+	0xa0, 0x90, 0xf5, 0xfb, 0xb2, 0x5b, 0x95, 0xd0, 0x13, 0x0e, 0x34, 0x7f, 0xad, 0xc1, 0x6a, 0x42,
+	0x9c, 0x6b, 0xea, 0xa5, 0xdf, 0x8e, 0x97, 0x3c, 0x16, 0x29, 0x23, 0xec, 0x78, 0x03, 0x17, 0xb9,
+	0xa3, 0x8d, 0xdc, 0x10, 0xa3, 0xce, 0xd0, 0xc6, 0x57, 0x0e, 0xa1, 0x44, 0x0a, 0x2f, 0x5c, 0x68,
+	0x4f, 0x6c, 0x35, 0xf9, 0x8e, 0xf9, 0x5d, 0x58, 0x3b, 0xc0, 0x2e, 0x1e, 0x0f, 0x9a, 0x59, 0x36,
+	0x7b, 0x0e, 0x8a, 0x21, 0x6e, 0xf7, 0x43, 0xe2, 0x0c, 0x54, 0x00, 0x8d, 0x00, 0xa6, 0x01, 0xeb,
+	0xe9, 0x23, 0x85, 0xde, 0xe6, 0xcf, 0x34, 0x58, 0x15, 0x5b, 0x5c, 0x6a, 0xa2, 0x78, 0x6d, 0x47,
+	0x0d, 0x8c, 0xe8, 0x4b, 0xc6, 0xf5, 0x93, 0xfb, 0xb3, 0x39, 0xb3, 0x29, 0x82, 0x0d, 0x58, 0xb6,
+	0x73, 0x1e, 0xf5, 0x17, 0xf2, 0x5e, 0x18, 0xf8, 0xe8, 0x5c, 0x36, 0x17, 0xe6, 0x3a, 0xd4, 0x92,
+	0x62, 0x48, 0xf9, 0x86, 0x0a, 0x2e, 0x52, 0x4e, 0x24, 0xdf, 0xbb, 0x72, 0xea, 0x90, 0x59, 0x18,
+	0x2b, 0x39, 0xa7, 0xe4, 0xe1, 0x4a, 0x2c, 0x0f, 0x63, 0xc2, 0xe2, 0x46, 0x24, 0x15, 0xd9, 0xfb,
+	0x48, 0xb9, 0xcb, 0x1c, 0x28, 0xdb, 0x1e, 0x73, 0x43, 0xdd, 0x43, 0xc4, 0x5a, 0xca, 0xf4, 0x8b,
+	0x0c, 0xdc, 0x68, 0xf6, 0x70, 0xd8, 0xc5, 0x5e, 0x7b, 0x68, 0x61, 0xe1, 0x6e, 0x73, 0x7b, 0xf7,
+	0xe4, 0x5e, 0xe9, 0x2d, 0x28, 0x79, 0x78, 0x24, 0xcf, 0xcc, 0x86, 0x09, 0x3c, 0xac, 0x84, 0xd4,
+	0xbf, 0x05, 0x4b, 0x4e, 0xd7, 0x63, 0xe9, 0x5e, 0x76, 0xdf, 0xc4, 0xc8, 0xcd, 0x32, 0x44, 0x55,
+	0x60, 0xcb, 0x7e, 0x96, 0xe8, 0x07, 0xb0, 0x76, 0x89, 0x1c, 0x1a, 0x51, 0x47, 0xa3, 0x76, 0x3e,
+	0x72, 0x6b, 0x9e, 0x24, 0x0e, 0xfa, 0xa1, 0xe8, 0xfa, 0x57, 0x19, 0xba, 0x22, 0x57, 0x23, 0xf8,
+	0x9f, 0x34, 0xd8, 0x9c, 0x66, 0x11, 0x19, 0x60, 0x4f, 0x6e, 0x92, 0xf7, 0x61, 0x39, 0x08, 0xfd,
+	0x9e, 0x4f, 0x71, 0x67, 0x3e, 0xbb, 0x2c, 0x29, 0x74, 0x65, 0x9c, 0xdb, 0x50, 0xe0, 0xd3, 0xbd,
+	0xb2, 0x49, 0x7a, 0xf6, 0x97, 0xbb, 0xe6, 0xbb, 0xb0, 0x79, 0xe8, 0x78, 0x9d, 0x3d, 0xd7, 0x15,
+	0xde, 0x77, 0xe4, 0x3d, 0x41, 0xe8, 0x99, 0x7f, 0xd6, 0xe0, 0xf9, 0xa9, 0xe4, 0x52, 0xfb, 0xe3,
+	0x54, 0x38, 0xbd, 0x15, 0x0b, 0xa7, 0xc7, 0xd0, 0x8a, 0x70, 0x93, 0xa3, 0x8f, 0x9a, 0x23, 0x3e,
+	0x94, 0x63, 0xc4, 0xd4, 0x71, 0xe7, 0x76, 0x72, 0xdc, 0x99, 0x90, 0x9e, 0xa2, 0xf9, 0xc6, 0x6c,
+	0xc2, 0xca, 0x07, 0x98, 0xde, 0x47, 0xed, 0x8b, 0x7e, 0x40, 0xae, 0xed, 0xc2, 0xe6, 0x01, 0xe8,
+	0xf1, 0x63, 0xa4, 0xe6, 0x0d, 0x58, 0x38, 0x13, 0x20, 0xa9, 0x7a, 0xad, 0x11, 0xbd, 0x3a, 0x09,
+	0xdc, 0x23, 0xef, 0xdc, 0xb7, 0x14, 0x92, 0xf9, 0x0c, 0x6c, 0x7c, 0x80, 0xe9, 0x3e, 0x76, 0x5d,
+	0x06, 0x67, 0x09, 0x5f, 0x89, 0x64, 0xbe, 0x0a, 0xc6, 0xf8, 0x96, 0x64, 0x53, 0x83, 0x3c, 0xab,
+	0x16, 0xea, 0x01, 0x49, 0x2c, 0xcc, 0x6d, 0x2e, 0x92, 0xa2, 0x88, 0x35, 0x1f, 0xfc, 0x95, 0x41,
+	0x1b, 0xbd, 0x32, 0x98, 0x87, 0xb0, 0x9a, 0xc0, 0x8c, 0xca, 0x42, 0x91, 0x6d, 0xdb, 0x8e, 0x77,
+	0xee, 0xcb, 0xba, 0x10, 0x7b, 0x0f, 0x88, 0xd0, 0x17, 0xdb, 0xf2, 0x17, 0xcb, 0xb4, 0xf2, 0x1c,
+	0x22, 0x93, 0x8d, 0x92, 0xfe, 0x2b, 0x2d, 0xd2, 0x6c, 0xb4, 0x25, 0xd9, 0x1c, 0xc1, 0x42, 0x32,
+	0x8d, 0xed, 0xc4, 0xee, 0x6b, 0x0a, 0x51, 0x43, 0xae, 0x85, 0x63, 0x28, 0xfa, 0xfa, 0x09, 0x94,
+	0xe3, 0x1b, 0x13, 0x5c, 0xe3, 0x4e, 0xd2, 0x35, 0x6a, 0x49, 0x7d, 0x04, 0x9b, 0xb8, 0x7b, 0xac,
+	0x71, 0xd3, 0x28, 0xb7, 0x8c, 0xf4, 0x39, 0x82, 0x5a, 0x12, 0x2c, 0x75, 0x79, 0x0d, 0x8a, 0xca,
+	0x51, 0x94, 0x36, 0x13, 0x4b, 0xe9, 0x08, 0xcb, 0x7c, 0x95, 0x5f, 0xd3, 0x93, 0xc4, 0xdc, 0x61,
+	0x42, 0xa6, 0xeb, 0x77, 0x27, 0x3f, 0xcd, 0xc0, 0xf2, 0x07, 0x98, 0x26, 0x07, 0x96, 0xeb, 0x77,
+	0xf8, 0xeb, 0x72, 0xe2, 0x8d, 0xc6, 0x7e, 0xb1, 0x62, 0xcd, 0x09, 0xbe, 0x12, 0xcd, 0x89, 0xdc,
+	0xcf, 0xf2, 0xfd, 0x8a, 0x84, 0x9e, 0x0a, 0xb4, 0x9b, 0xa0, 0xba, 0x15, 0x7b, 0xe0, 0xe0, 0x4b,
+	0x22, 0x4b, 0x65, 0x59, 0x02, 0x1f, 0x32, 0x98, 0xbe, 0x0d, 0xcb, 0xe2, 0xbd, 0x8d, 0xbb, 0xb8,
+	0xed, 0x7b, 0xee, 0x90, 0x27, 0xeb, 0x45, 0x39, 0xde, 0xf3, 0xb8, 0xf8, 0x8e, 0xe7, 0x0e, 0x47,
+	0x98, 0xc4, 0xf9, 0x5c, 0x61, 0x16, 0x62, 0x98, 0x2d, 0x06, 0x66, 0x98, 0xe6, 0x09, 0xcf, 0x00,
+	0xa9, 0x91, 0xe9, 0x1d, 0x28, 0x24, 0x06, 0xa6, 0x9b, 0x8d, 0xf1, 0x77, 0x60, 0x41, 0x72, 0x80,
+	0xcf, 0x1d, 0xcf, 0x91, 0xaf, 0x4a, 0x62, 0x82, 0xfa, 0x08, 0x96, 0xd8, 0x89, 0x4f, 0xa7, 0xe5,
+	0x33, 0xef, 0x89, 0x5b, 0x4a, 0x14, 0x94, 0xa8, 0x01, 0xd3, 0x66, 0x36, 0x60, 0xe6, 0x03, 0x1e,
+	0x91, 0xad, 0x70, 0x90, 0xf6, 0xe0, 0xc7, 0xa5, 0x38, 0x16, 0xd3, 0xea, 0x22, 0xc5, 0xc2, 0xfc,
+	0x9b, 0x88, 0xe1, 0xe4, 0x61, 0x52, 0x9e, 0xef, 0x43, 0x85, 0x84, 0x03, 0x3b, 0xed, 0xfb, 0x6f,
+	0x24, 0x23, 0x79, 0x12, 0x69, 0x23, 0x0e, 0x54, 0x4f, 0x5c, 0x31, 0x50, 0xfd, 0x21, 0xac, 0x8c,
+	0xa1, 0x4c, 0x08, 0xec, 0x97, 0x93, 0x81, 0x1d, 0x73, 0xd8, 0x18, 0x75, 0x3c, 0xb2, 0xef, 0xf0,
+	0x10, 0x6e, 0x85, 0x83, 0xd4, 0xc4, 0x3e, 0x29, 0x41, 0x1e, 0xc3, 0x5a, 0x0a, 0x37, 0x1a, 0x38,
+	0x99, 0xb0, 0x76, 0x6a, 0xba, 0x5e, 0x8d, 0xa6, 0xeb, 0x18, 0x09, 0x90, 0xe8, 0xb7, 0xf9, 0x11,
+	0xbf, 0x52, 0x39, 0x55, 0x7e, 0xd3, 0xc0, 0x33, 0xdf, 0xe3, 0x0e, 0xac, 0x4e, 0x93, 0x92, 0x6d,
+	0x47, 0xef, 0x4f, 0xd3, 0x66, 0x60, 0xb9, 0x6f, 0xfe, 0x5e, 0x8b, 0xd1, 0x5f, 0xbf, 0x04, 0x8e,
+	0xbc, 0x26, 0x1b, 0xf3, 0x1a, 0xfe, 0x18, 0x48, 0x43, 0xa7, 0xad, 0x46, 0x12, 0xb9, 0x9a, 0xd0,
+	0xc3, 0xe6, 0xe7, 0xef, 0x61, 0xcd, 0xf7, 0x79, 0xd2, 0x4c, 0xf5, 0xa6, 0xfa, 0x1d, 0x58, 0x10,
+	0x68, 0xa3, 0xc6, 0x3d, 0xad, 0xb4, 0x42, 0x30, 0x77, 0xb8, 0xd2, 0xf3, 0xbf, 0xd6, 0x98, 0xf7,
+	0x39, 0xcb, 0x6f, 0xf6, 0xb4, 0x62, 0xf1, 0xcc, 0xad, 0x5e, 0xa3, 0xe6, 0xb2, 0xf5, 0xf3, 0x50,
+	0x42, 0x6d, 0xea, 0x0c, 0xb0, 0x48, 0x61, 0xa2, 0x57, 0x07, 0x01, 0xe2, 0xe9, 0x4b, 0x94, 0xa2,
+	0xd8, 0x99, 0xa3, 0x52, 0xa4, 0x3e, 0x90, 0x4c, 0x2a, 0x45, 0x8a, 0xc0, 0x1a, 0x61, 0x99, 0xff,
+	0xd6, 0x60, 0xe3, 0xc8, 0x73, 0x44, 0xae, 0x91, 0x7d, 0xe4, 0xf5, 0xfd, 0xc1, 0x82, 0xba, 0x7a,
+	0x5d, 0xc5, 0x2e, 0x6e, 0xcb, 0xef, 0x47, 0xca, 0xbd, 0x67, 0x36, 0xb3, 0x1b, 0x92, 0xb0, 0xc9,
+	0xe8, 0x62, 0x1b, 0xa3, 0xf1, 0x37, 0x17, 0x1f, 0x7f, 0x9f, 0x4e, 0x1f, 0x7f, 0x1f, 0x8c, 0x71,
+	0xe5, 0xa3, 0x7c, 0xab, 0x9a, 0x69, 0x6d, 0x66, 0x33, 0xfd, 0x45, 0x06, 0x9e, 0x3d, 0x71, 0x91,
+	0xe7, 0xe1, 0xce, 0x7f, 0x79, 0x36, 0xba, 0x07, 0x15, 0x34, 0xf0, 0x9d, 0xd1, 0xf4, 0x90, 0x9b,
+	0x45, 0x59, 0xe6, 0xb8, 0x8a, 0xf6, 0xe9, 0xd8, 0xf3, 0x8f, 0x1a, 0x3c, 0x37, 0xd9, 0x16, 0xff,
+	0x03, 0x53, 0xd1, 0x8f, 0xe1, 0x19, 0x0b, 0xf7, 0xfc, 0x41, 0xf4, 0x68, 0xc0, 0xda, 0xc3, 0x79,
+	0x6e, 0x51, 0x95, 0x8f, 0x4c, 0xec, 0x2b, 0xde, 0xe4, 0x47, 0x9b, 0xc4, 0xdb, 0x41, 0x2e, 0xfd,
+	0x6a, 0xf1, 0x1c, 0xd4, 0x27, 0x09, 0x20, 0xa7, 0xf0, 0x2f, 0x35, 0x58, 0x17, 0xdb, 0xdc, 0xa4,
+	0xf3, 0x0a, 0xf7, 0x98, 0xc7, 0x25, 0x25, 0x7b, 0x76, 0x92, 0xec, 0xb9, 0xa9, 0xb2, 0xe7, 0xd3,
+	0xb2, 0x3f, 0x03, 0x1b, 0x63, 0xc2, 0x49, 0xc1, 0x0f, 0x61, 0x4d, 0x39, 0x43, 0xb2, 0xfc, 0xdd,
+	0x4d, 0xd5, 0xab, 0xd9, 0xdf, 0x4b, 0xcc, 0x1f, 0x31, 0xfd, 0x93, 0xe7, 0x5c, 0xdb, 0xab, 0x76,
+	0x60, 0x61, 0x2e, 0x67, 0x52, 0x58, 0xe6, 0x29, 0x6c, 0x49, 0x4f, 0x8e, 0x3e, 0x8c, 0xa9, 0x0f,
+	0x29, 0xdf, 0x60, 0x84, 0xfc, 0x5d, 0x16, 0x5e, 0x98, 0x71, 0xac, 0x54, 0xef, 0x0a, 0x6a, 0xf1,
+	0x4f, 0x8d, 0x84, 0x22, 0xda, 0x1f, 0x8d, 0x4e, 0xcd, 0xb1, 0x46, 0x70, 0xc6, 0x59, 0xf1, 0x0f,
+	0x9b, 0x2d, 0x79, 0x8e, 0xe8, 0xc0, 0x56, 0xc3, 0xf1, 0x1d, 0xfd, 0x53, 0x00, 0x99, 0xc1, 0x7b,
+	0x28, 0x90, 0xdf, 0xdc, 0xde, 0x79, 0x22, 0x7e, 0xc2, 0x98, 0x1f, 0xa3, 0x40, 0x70, 0x29, 0x52,
+	0xb5, 0xae, 0xdb, 0x60, 0x4c, 0x13, 0x66, 0x42, 0xaf, 0x77, 0x37, 0xd9, 0xeb, 0x6d, 0x34, 0xd2,
+	0xff, 0xba, 0x21, 0x0e, 0x88, 0x7f, 0xc6, 0x3c, 0x86, 0x6a, 0x92, 0xfb, 0x3c, 0xcf, 0x06, 0xe9,
+	0xe6, 0x21, 0xd6, 0x3d, 0x5a, 0xf0, 0x82, 0x00, 0x36, 0xe5, 0x37, 0x76, 0x37, 0x7a, 0xfa, 0xc1,
+	0x9d, 0x6b, 0xfa, 0xf4, 0x5f, 0x34, 0x30, 0x67, 0x1d, 0x7a, 0x6d, 0x07, 0xbf, 0x6e, 0x0d, 0x79,
+	0x0b, 0x4a, 0xbe, 0x3b, 0x67, 0x05, 0x01, 0xdf, 0x55, 0x49, 0xf6, 0xfe, 0xdb, 0x7f, 0xfd, 0x7a,
+	0x53, 0xfb, 0xfb, 0xd7, 0x9b, 0xda, 0x3f, 0xbf, 0xde, 0xd4, 0x7e, 0xf9, 0xaf, 0xcd, 0xff, 0xfb,
+	0xf4, 0xf6, 0xc0, 0xa1, 0x98, 0x90, 0x86, 0xe3, 0xef, 0x88, 0x5f, 0x3b, 0x5d, 0x7f, 0x67, 0x40,
+	0x77, 0xf8, 0x7f, 0xc7, 0xec, 0x44, 0x3e, 0x74, 0x56, 0xe0, 0x80, 0xd7, 0xff, 0x13, 0x00, 0x00,
+	0xff, 0xff, 0x19, 0xf6, 0xd1, 0x56, 0xda, 0x23, 0x00, 0x00,
+}
+
+func (m *ExecuteVtctlCommandRequest) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *ExecuteVtctlCommandRequest) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *ExecuteVtctlCommandRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.XXX_unrecognized != nil {
+		i -= len(m.XXX_unrecognized)
+		copy(dAtA[i:], m.XXX_unrecognized)
+	}
+	if m.ActionTimeout != 0 {
+		i = encodeVarintVtctldata(dAtA, i, uint64(m.ActionTimeout))
+		i--
+		dAtA[i] = 0x10
+	}
+	if len(m.Args) > 0 {
+		for iNdEx := len(m.Args) - 1; iNdEx >= 0; iNdEx-- {
+			i -= len(m.Args[iNdEx])
+			copy(dAtA[i:], m.Args[iNdEx])
+			i = encodeVarintVtctldata(dAtA, i, uint64(len(m.Args[iNdEx])))
+			i--
+			dAtA[i] = 0xa
+		}
+>>>>>>> added skip_rebuild and v_schema to message types
+>>>>>>> added skip_rebuild and v_schema to message types
 	}
 	return nil
 }
@@ -5161,9 +6615,321 @@ type Workflow_ShardStream struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
+<<<<<<< HEAD
 	Streams          []*Workflow_Stream              `protobuf:"bytes,1,rep,name=streams,proto3" json:"streams,omitempty"`
 	TabletControls   []*topodata.Shard_TabletControl `protobuf:"bytes,2,rep,name=tablet_controls,json=tabletControls,proto3" json:"tablet_controls,omitempty"`
 	IsPrimaryServing bool                            `protobuf:"varint,3,opt,name=is_primary_serving,json=isPrimaryServing,proto3" json:"is_primary_serving,omitempty"`
+=======
+func (m *Workflow_Stream) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.XXX_unrecognized != nil {
+		i -= len(m.XXX_unrecognized)
+		copy(dAtA[i:], m.XXX_unrecognized)
+	}
+	if len(m.CopyStates) > 0 {
+		for iNdEx := len(m.CopyStates) - 1; iNdEx >= 0; iNdEx-- {
+			{
+				size, err := m.CopyStates[iNdEx].MarshalToSizedBuffer(dAtA[:i])
+				if err != nil {
+					return 0, err
+				}
+				i -= size
+				i = encodeVarintVtctldata(dAtA, i, uint64(size))
+			}
+			i--
+			dAtA[i] = 0x62
+		}
+	}
+	if len(m.Message) > 0 {
+		i -= len(m.Message)
+		copy(dAtA[i:], m.Message)
+		i = encodeVarintVtctldata(dAtA, i, uint64(len(m.Message)))
+		i--
+		dAtA[i] = 0x5a
+	}
+	if m.TimeUpdated != nil {
+		{
+			size, err := m.TimeUpdated.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintVtctldata(dAtA, i, uint64(size))
+		}
+		i--
+		dAtA[i] = 0x52
+	}
+	if m.TransactionTimestamp != nil {
+		{
+			size, err := m.TransactionTimestamp.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintVtctldata(dAtA, i, uint64(size))
+		}
+		i--
+		dAtA[i] = 0x4a
+	}
+	if len(m.DbName) > 0 {
+		i -= len(m.DbName)
+		copy(dAtA[i:], m.DbName)
+		i = encodeVarintVtctldata(dAtA, i, uint64(len(m.DbName)))
+		i--
+		dAtA[i] = 0x42
+	}
+	if len(m.State) > 0 {
+		i -= len(m.State)
+		copy(dAtA[i:], m.State)
+		i = encodeVarintVtctldata(dAtA, i, uint64(len(m.State)))
+		i--
+		dAtA[i] = 0x3a
+	}
+	if len(m.StopPosition) > 0 {
+		i -= len(m.StopPosition)
+		copy(dAtA[i:], m.StopPosition)
+		i = encodeVarintVtctldata(dAtA, i, uint64(len(m.StopPosition)))
+		i--
+		dAtA[i] = 0x32
+	}
+	if len(m.Position) > 0 {
+		i -= len(m.Position)
+		copy(dAtA[i:], m.Position)
+		i = encodeVarintVtctldata(dAtA, i, uint64(len(m.Position)))
+		i--
+		dAtA[i] = 0x2a
+	}
+	if m.BinlogSource != nil {
+		{
+			size, err := m.BinlogSource.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintVtctldata(dAtA, i, uint64(size))
+		}
+		i--
+		dAtA[i] = 0x22
+	}
+	if m.Tablet != nil {
+		{
+			size, err := m.Tablet.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintVtctldata(dAtA, i, uint64(size))
+		}
+		i--
+		dAtA[i] = 0x1a
+	}
+	if len(m.Shard) > 0 {
+		i -= len(m.Shard)
+		copy(dAtA[i:], m.Shard)
+		i = encodeVarintVtctldata(dAtA, i, uint64(len(m.Shard)))
+		i--
+		dAtA[i] = 0x12
+	}
+	if m.Id != 0 {
+		i = encodeVarintVtctldata(dAtA, i, uint64(m.Id))
+		i--
+		dAtA[i] = 0x8
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *Workflow_Stream_CopyState) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *Workflow_Stream_CopyState) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *Workflow_Stream_CopyState) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.XXX_unrecognized != nil {
+		i -= len(m.XXX_unrecognized)
+		copy(dAtA[i:], m.XXX_unrecognized)
+	}
+	if len(m.LastPk) > 0 {
+		i -= len(m.LastPk)
+		copy(dAtA[i:], m.LastPk)
+		i = encodeVarintVtctldata(dAtA, i, uint64(len(m.LastPk)))
+		i--
+		dAtA[i] = 0x12
+	}
+	if len(m.Table) > 0 {
+		i -= len(m.Table)
+		copy(dAtA[i:], m.Table)
+		i = encodeVarintVtctldata(dAtA, i, uint64(len(m.Table)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *ApplyVSchemaRequest) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *ApplyVSchemaRequest) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *ApplyVSchemaRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.XXX_unrecognized != nil {
+		i -= len(m.XXX_unrecognized)
+		copy(dAtA[i:], m.XXX_unrecognized)
+	}
+	if m.SkipRebuild {
+		i--
+		if m.SkipRebuild {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x18
+	}
+	if m.VSchema != nil {
+		{
+			size, err := m.VSchema.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintVtctldata(dAtA, i, uint64(size))
+		}
+		i--
+		dAtA[i] = 0x12
+	}
+	if len(m.Keyspace) > 0 {
+		i -= len(m.Keyspace)
+		copy(dAtA[i:], m.Keyspace)
+		i = encodeVarintVtctldata(dAtA, i, uint64(len(m.Keyspace)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *ApplyVSchemaResponse) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *ApplyVSchemaResponse) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *ApplyVSchemaResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.XXX_unrecognized != nil {
+		i -= len(m.XXX_unrecognized)
+		copy(dAtA[i:], m.XXX_unrecognized)
+	}
+	if m.VSchema != nil {
+		{
+			size, err := m.VSchema.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintVtctldata(dAtA, i, uint64(size))
+		}
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *ChangeTabletTypeRequest) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *ChangeTabletTypeRequest) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *ChangeTabletTypeRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.XXX_unrecognized != nil {
+		i -= len(m.XXX_unrecognized)
+		copy(dAtA[i:], m.XXX_unrecognized)
+	}
+	if m.DryRun {
+		i--
+		if m.DryRun {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x18
+	}
+	if m.DbType != 0 {
+		i = encodeVarintVtctldata(dAtA, i, uint64(m.DbType))
+		i--
+		dAtA[i] = 0x10
+	}
+	if m.TabletAlias != nil {
+		{
+			size, err := m.TabletAlias.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintVtctldata(dAtA, i, uint64(size))
+		}
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+>>>>>>> added skip_rebuild and v_schema to message types
 }
 
 func (x *Workflow_ShardStream) Reset() {
@@ -5433,6 +7199,7 @@ func (x *Workflow_Stream_CopyState) GetLastPk() string {
 	return ""
 }
 
+<<<<<<< HEAD
 var File_vtctldata_proto protoreflect.FileDescriptor
 
 var file_vtctldata_proto_rawDesc = []byte{
@@ -6370,7 +8137,12974 @@ var file_vtctldata_proto_rawDesc = []byte{
 	0x2e, 0x69, 0x6f, 0x2f, 0x76, 0x69, 0x74, 0x65, 0x73, 0x73, 0x2f, 0x67, 0x6f, 0x2f, 0x76, 0x74,
 	0x2f, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2f, 0x76, 0x74, 0x63, 0x74, 0x6c, 0x64, 0x61, 0x74, 0x61,
 	0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
+<<<<<<< HEAD
 >>>>>>> implement ApplyVSchema in grpc-vtctld
+=======
+=======
+func (m *GetCellInfoNamesRequest) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *GetCellInfoNamesRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.XXX_unrecognized != nil {
+		i -= len(m.XXX_unrecognized)
+		copy(dAtA[i:], m.XXX_unrecognized)
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *GetCellInfoNamesResponse) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *GetCellInfoNamesResponse) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *GetCellInfoNamesResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.XXX_unrecognized != nil {
+		i -= len(m.XXX_unrecognized)
+		copy(dAtA[i:], m.XXX_unrecognized)
+	}
+	if len(m.Names) > 0 {
+		for iNdEx := len(m.Names) - 1; iNdEx >= 0; iNdEx-- {
+			i -= len(m.Names[iNdEx])
+			copy(dAtA[i:], m.Names[iNdEx])
+			i = encodeVarintVtctldata(dAtA, i, uint64(len(m.Names[iNdEx])))
+			i--
+			dAtA[i] = 0xa
+		}
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *GetCellInfoRequest) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *GetCellInfoRequest) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *GetCellInfoRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.XXX_unrecognized != nil {
+		i -= len(m.XXX_unrecognized)
+		copy(dAtA[i:], m.XXX_unrecognized)
+	}
+	if len(m.Cell) > 0 {
+		i -= len(m.Cell)
+		copy(dAtA[i:], m.Cell)
+		i = encodeVarintVtctldata(dAtA, i, uint64(len(m.Cell)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *GetCellInfoResponse) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *GetCellInfoResponse) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *GetCellInfoResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.XXX_unrecognized != nil {
+		i -= len(m.XXX_unrecognized)
+		copy(dAtA[i:], m.XXX_unrecognized)
+	}
+	if m.CellInfo != nil {
+		{
+			size, err := m.CellInfo.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintVtctldata(dAtA, i, uint64(size))
+		}
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *GetCellsAliasesRequest) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *GetCellsAliasesRequest) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *GetCellsAliasesRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.XXX_unrecognized != nil {
+		i -= len(m.XXX_unrecognized)
+		copy(dAtA[i:], m.XXX_unrecognized)
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *GetCellsAliasesResponse) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *GetCellsAliasesResponse) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *GetCellsAliasesResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.XXX_unrecognized != nil {
+		i -= len(m.XXX_unrecognized)
+		copy(dAtA[i:], m.XXX_unrecognized)
+	}
+	if len(m.Aliases) > 0 {
+		for k := range m.Aliases {
+			v := m.Aliases[k]
+			baseI := i
+			if v != nil {
+				{
+					size, err := v.MarshalToSizedBuffer(dAtA[:i])
+					if err != nil {
+						return 0, err
+					}
+					i -= size
+					i = encodeVarintVtctldata(dAtA, i, uint64(size))
+				}
+				i--
+				dAtA[i] = 0x12
+			}
+			i -= len(k)
+			copy(dAtA[i:], k)
+			i = encodeVarintVtctldata(dAtA, i, uint64(len(k)))
+			i--
+			dAtA[i] = 0xa
+			i = encodeVarintVtctldata(dAtA, i, uint64(baseI-i))
+			i--
+			dAtA[i] = 0xa
+		}
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *GetKeyspacesRequest) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *GetKeyspacesRequest) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *GetKeyspacesRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.XXX_unrecognized != nil {
+		i -= len(m.XXX_unrecognized)
+		copy(dAtA[i:], m.XXX_unrecognized)
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *GetKeyspacesResponse) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *GetKeyspacesResponse) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *GetKeyspacesResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.XXX_unrecognized != nil {
+		i -= len(m.XXX_unrecognized)
+		copy(dAtA[i:], m.XXX_unrecognized)
+	}
+	if len(m.Keyspaces) > 0 {
+		for iNdEx := len(m.Keyspaces) - 1; iNdEx >= 0; iNdEx-- {
+			{
+				size, err := m.Keyspaces[iNdEx].MarshalToSizedBuffer(dAtA[:i])
+				if err != nil {
+					return 0, err
+				}
+				i -= size
+				i = encodeVarintVtctldata(dAtA, i, uint64(size))
+			}
+			i--
+			dAtA[i] = 0xa
+		}
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *GetKeyspaceRequest) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *GetKeyspaceRequest) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *GetKeyspaceRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.XXX_unrecognized != nil {
+		i -= len(m.XXX_unrecognized)
+		copy(dAtA[i:], m.XXX_unrecognized)
+	}
+	if len(m.Keyspace) > 0 {
+		i -= len(m.Keyspace)
+		copy(dAtA[i:], m.Keyspace)
+		i = encodeVarintVtctldata(dAtA, i, uint64(len(m.Keyspace)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *GetKeyspaceResponse) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *GetKeyspaceResponse) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *GetKeyspaceResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.XXX_unrecognized != nil {
+		i -= len(m.XXX_unrecognized)
+		copy(dAtA[i:], m.XXX_unrecognized)
+	}
+	if m.Keyspace != nil {
+		{
+			size, err := m.Keyspace.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintVtctldata(dAtA, i, uint64(size))
+		}
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *GetSchemaRequest) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *GetSchemaRequest) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *GetSchemaRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.XXX_unrecognized != nil {
+		i -= len(m.XXX_unrecognized)
+		copy(dAtA[i:], m.XXX_unrecognized)
+	}
+	if m.TableSizesOnly {
+		i--
+		if m.TableSizesOnly {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x30
+	}
+	if m.TableNamesOnly {
+		i--
+		if m.TableNamesOnly {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x28
+	}
+	if m.IncludeViews {
+		i--
+		if m.IncludeViews {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x20
+	}
+	if len(m.ExcludeTables) > 0 {
+		for iNdEx := len(m.ExcludeTables) - 1; iNdEx >= 0; iNdEx-- {
+			i -= len(m.ExcludeTables[iNdEx])
+			copy(dAtA[i:], m.ExcludeTables[iNdEx])
+			i = encodeVarintVtctldata(dAtA, i, uint64(len(m.ExcludeTables[iNdEx])))
+			i--
+			dAtA[i] = 0x1a
+		}
+	}
+	if len(m.Tables) > 0 {
+		for iNdEx := len(m.Tables) - 1; iNdEx >= 0; iNdEx-- {
+			i -= len(m.Tables[iNdEx])
+			copy(dAtA[i:], m.Tables[iNdEx])
+			i = encodeVarintVtctldata(dAtA, i, uint64(len(m.Tables[iNdEx])))
+			i--
+			dAtA[i] = 0x12
+		}
+	}
+	if m.TabletAlias != nil {
+		{
+			size, err := m.TabletAlias.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintVtctldata(dAtA, i, uint64(size))
+		}
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *GetSchemaResponse) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *GetSchemaResponse) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *GetSchemaResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.XXX_unrecognized != nil {
+		i -= len(m.XXX_unrecognized)
+		copy(dAtA[i:], m.XXX_unrecognized)
+	}
+	if m.Schema != nil {
+		{
+			size, err := m.Schema.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintVtctldata(dAtA, i, uint64(size))
+		}
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *GetShardRequest) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *GetShardRequest) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *GetShardRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.XXX_unrecognized != nil {
+		i -= len(m.XXX_unrecognized)
+		copy(dAtA[i:], m.XXX_unrecognized)
+	}
+	if len(m.ShardName) > 0 {
+		i -= len(m.ShardName)
+		copy(dAtA[i:], m.ShardName)
+		i = encodeVarintVtctldata(dAtA, i, uint64(len(m.ShardName)))
+		i--
+		dAtA[i] = 0x12
+	}
+	if len(m.Keyspace) > 0 {
+		i -= len(m.Keyspace)
+		copy(dAtA[i:], m.Keyspace)
+		i = encodeVarintVtctldata(dAtA, i, uint64(len(m.Keyspace)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *GetShardResponse) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *GetShardResponse) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *GetShardResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.XXX_unrecognized != nil {
+		i -= len(m.XXX_unrecognized)
+		copy(dAtA[i:], m.XXX_unrecognized)
+	}
+	if m.Shard != nil {
+		{
+			size, err := m.Shard.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintVtctldata(dAtA, i, uint64(size))
+		}
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *GetSrvKeyspacesRequest) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *GetSrvKeyspacesRequest) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *GetSrvKeyspacesRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.XXX_unrecognized != nil {
+		i -= len(m.XXX_unrecognized)
+		copy(dAtA[i:], m.XXX_unrecognized)
+	}
+	if len(m.Cells) > 0 {
+		for iNdEx := len(m.Cells) - 1; iNdEx >= 0; iNdEx-- {
+			i -= len(m.Cells[iNdEx])
+			copy(dAtA[i:], m.Cells[iNdEx])
+			i = encodeVarintVtctldata(dAtA, i, uint64(len(m.Cells[iNdEx])))
+			i--
+			dAtA[i] = 0x12
+		}
+	}
+	if len(m.Keyspace) > 0 {
+		i -= len(m.Keyspace)
+		copy(dAtA[i:], m.Keyspace)
+		i = encodeVarintVtctldata(dAtA, i, uint64(len(m.Keyspace)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *GetSrvKeyspacesResponse) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *GetSrvKeyspacesResponse) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *GetSrvKeyspacesResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.XXX_unrecognized != nil {
+		i -= len(m.XXX_unrecognized)
+		copy(dAtA[i:], m.XXX_unrecognized)
+	}
+	if len(m.SrvKeyspaces) > 0 {
+		for k := range m.SrvKeyspaces {
+			v := m.SrvKeyspaces[k]
+			baseI := i
+			if v != nil {
+				{
+					size, err := v.MarshalToSizedBuffer(dAtA[:i])
+					if err != nil {
+						return 0, err
+					}
+					i -= size
+					i = encodeVarintVtctldata(dAtA, i, uint64(size))
+				}
+				i--
+				dAtA[i] = 0x12
+			}
+			i -= len(k)
+			copy(dAtA[i:], k)
+			i = encodeVarintVtctldata(dAtA, i, uint64(len(k)))
+			i--
+			dAtA[i] = 0xa
+			i = encodeVarintVtctldata(dAtA, i, uint64(baseI-i))
+			i--
+			dAtA[i] = 0xa
+		}
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *GetSrvVSchemaRequest) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *GetSrvVSchemaRequest) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *GetSrvVSchemaRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.XXX_unrecognized != nil {
+		i -= len(m.XXX_unrecognized)
+		copy(dAtA[i:], m.XXX_unrecognized)
+	}
+	if len(m.Cell) > 0 {
+		i -= len(m.Cell)
+		copy(dAtA[i:], m.Cell)
+		i = encodeVarintVtctldata(dAtA, i, uint64(len(m.Cell)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *GetSrvVSchemaResponse) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *GetSrvVSchemaResponse) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *GetSrvVSchemaResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.XXX_unrecognized != nil {
+		i -= len(m.XXX_unrecognized)
+		copy(dAtA[i:], m.XXX_unrecognized)
+	}
+	if m.SrvVSchema != nil {
+		{
+			size, err := m.SrvVSchema.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintVtctldata(dAtA, i, uint64(size))
+		}
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *GetTabletRequest) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *GetTabletRequest) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *GetTabletRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.XXX_unrecognized != nil {
+		i -= len(m.XXX_unrecognized)
+		copy(dAtA[i:], m.XXX_unrecognized)
+	}
+	if m.TabletAlias != nil {
+		{
+			size, err := m.TabletAlias.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintVtctldata(dAtA, i, uint64(size))
+		}
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *GetTabletResponse) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *GetTabletResponse) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *GetTabletResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.XXX_unrecognized != nil {
+		i -= len(m.XXX_unrecognized)
+		copy(dAtA[i:], m.XXX_unrecognized)
+	}
+	if m.Tablet != nil {
+		{
+			size, err := m.Tablet.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintVtctldata(dAtA, i, uint64(size))
+		}
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *GetTabletsRequest) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *GetTabletsRequest) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *GetTabletsRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.XXX_unrecognized != nil {
+		i -= len(m.XXX_unrecognized)
+		copy(dAtA[i:], m.XXX_unrecognized)
+	}
+	if len(m.TabletAliases) > 0 {
+		for iNdEx := len(m.TabletAliases) - 1; iNdEx >= 0; iNdEx-- {
+			{
+				size, err := m.TabletAliases[iNdEx].MarshalToSizedBuffer(dAtA[:i])
+				if err != nil {
+					return 0, err
+				}
+				i -= size
+				i = encodeVarintVtctldata(dAtA, i, uint64(size))
+			}
+			i--
+			dAtA[i] = 0x2a
+		}
+	}
+	if m.Strict {
+		i--
+		if m.Strict {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x20
+	}
+	if len(m.Cells) > 0 {
+		for iNdEx := len(m.Cells) - 1; iNdEx >= 0; iNdEx-- {
+			i -= len(m.Cells[iNdEx])
+			copy(dAtA[i:], m.Cells[iNdEx])
+			i = encodeVarintVtctldata(dAtA, i, uint64(len(m.Cells[iNdEx])))
+			i--
+			dAtA[i] = 0x1a
+		}
+	}
+	if len(m.Shard) > 0 {
+		i -= len(m.Shard)
+		copy(dAtA[i:], m.Shard)
+		i = encodeVarintVtctldata(dAtA, i, uint64(len(m.Shard)))
+		i--
+		dAtA[i] = 0x12
+	}
+	if len(m.Keyspace) > 0 {
+		i -= len(m.Keyspace)
+		copy(dAtA[i:], m.Keyspace)
+		i = encodeVarintVtctldata(dAtA, i, uint64(len(m.Keyspace)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *GetTabletsResponse) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *GetTabletsResponse) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *GetTabletsResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.XXX_unrecognized != nil {
+		i -= len(m.XXX_unrecognized)
+		copy(dAtA[i:], m.XXX_unrecognized)
+	}
+	if len(m.Tablets) > 0 {
+		for iNdEx := len(m.Tablets) - 1; iNdEx >= 0; iNdEx-- {
+			{
+				size, err := m.Tablets[iNdEx].MarshalToSizedBuffer(dAtA[:i])
+				if err != nil {
+					return 0, err
+				}
+				i -= size
+				i = encodeVarintVtctldata(dAtA, i, uint64(size))
+			}
+			i--
+			dAtA[i] = 0xa
+		}
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *GetVSchemaRequest) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *GetVSchemaRequest) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *GetVSchemaRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.XXX_unrecognized != nil {
+		i -= len(m.XXX_unrecognized)
+		copy(dAtA[i:], m.XXX_unrecognized)
+	}
+	if len(m.Keyspace) > 0 {
+		i -= len(m.Keyspace)
+		copy(dAtA[i:], m.Keyspace)
+		i = encodeVarintVtctldata(dAtA, i, uint64(len(m.Keyspace)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *GetVSchemaResponse) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *GetVSchemaResponse) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *GetVSchemaResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.XXX_unrecognized != nil {
+		i -= len(m.XXX_unrecognized)
+		copy(dAtA[i:], m.XXX_unrecognized)
+	}
+	if m.VSchema != nil {
+		{
+			size, err := m.VSchema.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintVtctldata(dAtA, i, uint64(size))
+		}
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *GetWorkflowsRequest) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *GetWorkflowsRequest) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *GetWorkflowsRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.XXX_unrecognized != nil {
+		i -= len(m.XXX_unrecognized)
+		copy(dAtA[i:], m.XXX_unrecognized)
+	}
+	if m.ActiveOnly {
+		i--
+		if m.ActiveOnly {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x10
+	}
+	if len(m.Keyspace) > 0 {
+		i -= len(m.Keyspace)
+		copy(dAtA[i:], m.Keyspace)
+		i = encodeVarintVtctldata(dAtA, i, uint64(len(m.Keyspace)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *GetWorkflowsResponse) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *GetWorkflowsResponse) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *GetWorkflowsResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.XXX_unrecognized != nil {
+		i -= len(m.XXX_unrecognized)
+		copy(dAtA[i:], m.XXX_unrecognized)
+	}
+	if len(m.Workflows) > 0 {
+		for iNdEx := len(m.Workflows) - 1; iNdEx >= 0; iNdEx-- {
+			{
+				size, err := m.Workflows[iNdEx].MarshalToSizedBuffer(dAtA[:i])
+				if err != nil {
+					return 0, err
+				}
+				i -= size
+				i = encodeVarintVtctldata(dAtA, i, uint64(size))
+			}
+			i--
+			dAtA[i] = 0xa
+		}
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *InitShardPrimaryRequest) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *InitShardPrimaryRequest) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *InitShardPrimaryRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.XXX_unrecognized != nil {
+		i -= len(m.XXX_unrecognized)
+		copy(dAtA[i:], m.XXX_unrecognized)
+	}
+	if m.WaitReplicasTimeout != nil {
+		{
+			size, err := m.WaitReplicasTimeout.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintVtctldata(dAtA, i, uint64(size))
+		}
+		i--
+		dAtA[i] = 0x2a
+	}
+	if m.Force {
+		i--
+		if m.Force {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x20
+	}
+	if m.PrimaryElectTabletAlias != nil {
+		{
+			size, err := m.PrimaryElectTabletAlias.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintVtctldata(dAtA, i, uint64(size))
+		}
+		i--
+		dAtA[i] = 0x1a
+	}
+	if len(m.Shard) > 0 {
+		i -= len(m.Shard)
+		copy(dAtA[i:], m.Shard)
+		i = encodeVarintVtctldata(dAtA, i, uint64(len(m.Shard)))
+		i--
+		dAtA[i] = 0x12
+	}
+	if len(m.Keyspace) > 0 {
+		i -= len(m.Keyspace)
+		copy(dAtA[i:], m.Keyspace)
+		i = encodeVarintVtctldata(dAtA, i, uint64(len(m.Keyspace)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *InitShardPrimaryResponse) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *InitShardPrimaryResponse) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *InitShardPrimaryResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.XXX_unrecognized != nil {
+		i -= len(m.XXX_unrecognized)
+		copy(dAtA[i:], m.XXX_unrecognized)
+	}
+	if len(m.Events) > 0 {
+		for iNdEx := len(m.Events) - 1; iNdEx >= 0; iNdEx-- {
+			{
+				size, err := m.Events[iNdEx].MarshalToSizedBuffer(dAtA[:i])
+				if err != nil {
+					return 0, err
+				}
+				i -= size
+				i = encodeVarintVtctldata(dAtA, i, uint64(size))
+			}
+			i--
+			dAtA[i] = 0xa
+		}
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *PlannedReparentShardRequest) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *PlannedReparentShardRequest) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *PlannedReparentShardRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.XXX_unrecognized != nil {
+		i -= len(m.XXX_unrecognized)
+		copy(dAtA[i:], m.XXX_unrecognized)
+	}
+	if m.WaitReplicasTimeout != nil {
+		{
+			size, err := m.WaitReplicasTimeout.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintVtctldata(dAtA, i, uint64(size))
+		}
+		i--
+		dAtA[i] = 0x2a
+	}
+	if m.AvoidPrimary != nil {
+		{
+			size, err := m.AvoidPrimary.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintVtctldata(dAtA, i, uint64(size))
+		}
+		i--
+		dAtA[i] = 0x22
+	}
+	if m.NewPrimary != nil {
+		{
+			size, err := m.NewPrimary.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintVtctldata(dAtA, i, uint64(size))
+		}
+		i--
+		dAtA[i] = 0x1a
+	}
+	if len(m.Shard) > 0 {
+		i -= len(m.Shard)
+		copy(dAtA[i:], m.Shard)
+		i = encodeVarintVtctldata(dAtA, i, uint64(len(m.Shard)))
+		i--
+		dAtA[i] = 0x12
+	}
+	if len(m.Keyspace) > 0 {
+		i -= len(m.Keyspace)
+		copy(dAtA[i:], m.Keyspace)
+		i = encodeVarintVtctldata(dAtA, i, uint64(len(m.Keyspace)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *PlannedReparentShardResponse) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *PlannedReparentShardResponse) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *PlannedReparentShardResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.XXX_unrecognized != nil {
+		i -= len(m.XXX_unrecognized)
+		copy(dAtA[i:], m.XXX_unrecognized)
+	}
+	if len(m.Events) > 0 {
+		for iNdEx := len(m.Events) - 1; iNdEx >= 0; iNdEx-- {
+			{
+				size, err := m.Events[iNdEx].MarshalToSizedBuffer(dAtA[:i])
+				if err != nil {
+					return 0, err
+				}
+				i -= size
+				i = encodeVarintVtctldata(dAtA, i, uint64(size))
+			}
+			i--
+			dAtA[i] = 0x22
+		}
+	}
+	if m.PromotedPrimary != nil {
+		{
+			size, err := m.PromotedPrimary.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintVtctldata(dAtA, i, uint64(size))
+		}
+		i--
+		dAtA[i] = 0x1a
+	}
+	if len(m.Shard) > 0 {
+		i -= len(m.Shard)
+		copy(dAtA[i:], m.Shard)
+		i = encodeVarintVtctldata(dAtA, i, uint64(len(m.Shard)))
+		i--
+		dAtA[i] = 0x12
+	}
+	if len(m.Keyspace) > 0 {
+		i -= len(m.Keyspace)
+		copy(dAtA[i:], m.Keyspace)
+		i = encodeVarintVtctldata(dAtA, i, uint64(len(m.Keyspace)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *RemoveKeyspaceCellRequest) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *RemoveKeyspaceCellRequest) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *RemoveKeyspaceCellRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.XXX_unrecognized != nil {
+		i -= len(m.XXX_unrecognized)
+		copy(dAtA[i:], m.XXX_unrecognized)
+	}
+	if m.Recursive {
+		i--
+		if m.Recursive {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x20
+	}
+	if m.Force {
+		i--
+		if m.Force {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x18
+	}
+	if len(m.Cell) > 0 {
+		i -= len(m.Cell)
+		copy(dAtA[i:], m.Cell)
+		i = encodeVarintVtctldata(dAtA, i, uint64(len(m.Cell)))
+		i--
+		dAtA[i] = 0x12
+	}
+	if len(m.Keyspace) > 0 {
+		i -= len(m.Keyspace)
+		copy(dAtA[i:], m.Keyspace)
+		i = encodeVarintVtctldata(dAtA, i, uint64(len(m.Keyspace)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *RemoveKeyspaceCellResponse) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *RemoveKeyspaceCellResponse) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *RemoveKeyspaceCellResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.XXX_unrecognized != nil {
+		i -= len(m.XXX_unrecognized)
+		copy(dAtA[i:], m.XXX_unrecognized)
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *RemoveShardCellRequest) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *RemoveShardCellRequest) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *RemoveShardCellRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.XXX_unrecognized != nil {
+		i -= len(m.XXX_unrecognized)
+		copy(dAtA[i:], m.XXX_unrecognized)
+	}
+	if m.Recursive {
+		i--
+		if m.Recursive {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x28
+	}
+	if m.Force {
+		i--
+		if m.Force {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x20
+	}
+	if len(m.Cell) > 0 {
+		i -= len(m.Cell)
+		copy(dAtA[i:], m.Cell)
+		i = encodeVarintVtctldata(dAtA, i, uint64(len(m.Cell)))
+		i--
+		dAtA[i] = 0x1a
+	}
+	if len(m.ShardName) > 0 {
+		i -= len(m.ShardName)
+		copy(dAtA[i:], m.ShardName)
+		i = encodeVarintVtctldata(dAtA, i, uint64(len(m.ShardName)))
+		i--
+		dAtA[i] = 0x12
+	}
+	if len(m.Keyspace) > 0 {
+		i -= len(m.Keyspace)
+		copy(dAtA[i:], m.Keyspace)
+		i = encodeVarintVtctldata(dAtA, i, uint64(len(m.Keyspace)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *RemoveShardCellResponse) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *RemoveShardCellResponse) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *RemoveShardCellResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.XXX_unrecognized != nil {
+		i -= len(m.XXX_unrecognized)
+		copy(dAtA[i:], m.XXX_unrecognized)
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *ReparentTabletRequest) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *ReparentTabletRequest) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *ReparentTabletRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.XXX_unrecognized != nil {
+		i -= len(m.XXX_unrecognized)
+		copy(dAtA[i:], m.XXX_unrecognized)
+	}
+	if m.Tablet != nil {
+		{
+			size, err := m.Tablet.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintVtctldata(dAtA, i, uint64(size))
+		}
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *ReparentTabletResponse) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *ReparentTabletResponse) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *ReparentTabletResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.XXX_unrecognized != nil {
+		i -= len(m.XXX_unrecognized)
+		copy(dAtA[i:], m.XXX_unrecognized)
+	}
+	if m.Primary != nil {
+		{
+			size, err := m.Primary.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintVtctldata(dAtA, i, uint64(size))
+		}
+		i--
+		dAtA[i] = 0x1a
+	}
+	if len(m.Shard) > 0 {
+		i -= len(m.Shard)
+		copy(dAtA[i:], m.Shard)
+		i = encodeVarintVtctldata(dAtA, i, uint64(len(m.Shard)))
+		i--
+		dAtA[i] = 0x12
+	}
+	if len(m.Keyspace) > 0 {
+		i -= len(m.Keyspace)
+		copy(dAtA[i:], m.Keyspace)
+		i = encodeVarintVtctldata(dAtA, i, uint64(len(m.Keyspace)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *ShardReplicationPositionsRequest) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *ShardReplicationPositionsRequest) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *ShardReplicationPositionsRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.XXX_unrecognized != nil {
+		i -= len(m.XXX_unrecognized)
+		copy(dAtA[i:], m.XXX_unrecognized)
+	}
+	if len(m.Shard) > 0 {
+		i -= len(m.Shard)
+		copy(dAtA[i:], m.Shard)
+		i = encodeVarintVtctldata(dAtA, i, uint64(len(m.Shard)))
+		i--
+		dAtA[i] = 0x12
+	}
+	if len(m.Keyspace) > 0 {
+		i -= len(m.Keyspace)
+		copy(dAtA[i:], m.Keyspace)
+		i = encodeVarintVtctldata(dAtA, i, uint64(len(m.Keyspace)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *ShardReplicationPositionsResponse) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *ShardReplicationPositionsResponse) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *ShardReplicationPositionsResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.XXX_unrecognized != nil {
+		i -= len(m.XXX_unrecognized)
+		copy(dAtA[i:], m.XXX_unrecognized)
+	}
+	if len(m.TabletMap) > 0 {
+		for k := range m.TabletMap {
+			v := m.TabletMap[k]
+			baseI := i
+			if v != nil {
+				{
+					size, err := v.MarshalToSizedBuffer(dAtA[:i])
+					if err != nil {
+						return 0, err
+					}
+					i -= size
+					i = encodeVarintVtctldata(dAtA, i, uint64(size))
+				}
+				i--
+				dAtA[i] = 0x12
+			}
+			i -= len(k)
+			copy(dAtA[i:], k)
+			i = encodeVarintVtctldata(dAtA, i, uint64(len(k)))
+			i--
+			dAtA[i] = 0xa
+			i = encodeVarintVtctldata(dAtA, i, uint64(baseI-i))
+			i--
+			dAtA[i] = 0x12
+		}
+	}
+	if len(m.ReplicationStatuses) > 0 {
+		for k := range m.ReplicationStatuses {
+			v := m.ReplicationStatuses[k]
+			baseI := i
+			if v != nil {
+				{
+					size, err := v.MarshalToSizedBuffer(dAtA[:i])
+					if err != nil {
+						return 0, err
+					}
+					i -= size
+					i = encodeVarintVtctldata(dAtA, i, uint64(size))
+				}
+				i--
+				dAtA[i] = 0x12
+			}
+			i -= len(k)
+			copy(dAtA[i:], k)
+			i = encodeVarintVtctldata(dAtA, i, uint64(len(k)))
+			i--
+			dAtA[i] = 0xa
+			i = encodeVarintVtctldata(dAtA, i, uint64(baseI-i))
+			i--
+			dAtA[i] = 0xa
+		}
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *TabletExternallyReparentedRequest) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *TabletExternallyReparentedRequest) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *TabletExternallyReparentedRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.XXX_unrecognized != nil {
+		i -= len(m.XXX_unrecognized)
+		copy(dAtA[i:], m.XXX_unrecognized)
+	}
+	if m.Tablet != nil {
+		{
+			size, err := m.Tablet.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintVtctldata(dAtA, i, uint64(size))
+		}
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *TabletExternallyReparentedResponse) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *TabletExternallyReparentedResponse) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *TabletExternallyReparentedResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.XXX_unrecognized != nil {
+		i -= len(m.XXX_unrecognized)
+		copy(dAtA[i:], m.XXX_unrecognized)
+	}
+	if m.OldPrimary != nil {
+		{
+			size, err := m.OldPrimary.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintVtctldata(dAtA, i, uint64(size))
+		}
+		i--
+		dAtA[i] = 0x22
+	}
+	if m.NewPrimary != nil {
+		{
+			size, err := m.NewPrimary.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintVtctldata(dAtA, i, uint64(size))
+		}
+		i--
+		dAtA[i] = 0x1a
+	}
+	if len(m.Shard) > 0 {
+		i -= len(m.Shard)
+		copy(dAtA[i:], m.Shard)
+		i = encodeVarintVtctldata(dAtA, i, uint64(len(m.Shard)))
+		i--
+		dAtA[i] = 0x12
+	}
+	if len(m.Keyspace) > 0 {
+		i -= len(m.Keyspace)
+		copy(dAtA[i:], m.Keyspace)
+		i = encodeVarintVtctldata(dAtA, i, uint64(len(m.Keyspace)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func encodeVarintVtctldata(dAtA []byte, offset int, v uint64) int {
+	offset -= sovVtctldata(v)
+	base := offset
+	for v >= 1<<7 {
+		dAtA[offset] = uint8(v&0x7f | 0x80)
+		v >>= 7
+		offset++
+	}
+	dAtA[offset] = uint8(v)
+	return base
+}
+func (m *ExecuteVtctlCommandRequest) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if len(m.Args) > 0 {
+		for _, s := range m.Args {
+			l = len(s)
+			n += 1 + l + sovVtctldata(uint64(l))
+		}
+	}
+	if m.ActionTimeout != 0 {
+		n += 1 + sovVtctldata(uint64(m.ActionTimeout))
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *ExecuteVtctlCommandResponse) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if m.Event != nil {
+		l = m.Event.Size()
+		n += 1 + l + sovVtctldata(uint64(l))
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *TableMaterializeSettings) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.TargetTable)
+	if l > 0 {
+		n += 1 + l + sovVtctldata(uint64(l))
+	}
+	l = len(m.SourceExpression)
+	if l > 0 {
+		n += 1 + l + sovVtctldata(uint64(l))
+	}
+	l = len(m.CreateDdl)
+	if l > 0 {
+		n += 1 + l + sovVtctldata(uint64(l))
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *MaterializeSettings) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.Workflow)
+	if l > 0 {
+		n += 1 + l + sovVtctldata(uint64(l))
+	}
+	l = len(m.SourceKeyspace)
+	if l > 0 {
+		n += 1 + l + sovVtctldata(uint64(l))
+	}
+	l = len(m.TargetKeyspace)
+	if l > 0 {
+		n += 1 + l + sovVtctldata(uint64(l))
+	}
+	if m.StopAfterCopy {
+		n += 2
+	}
+	if len(m.TableSettings) > 0 {
+		for _, e := range m.TableSettings {
+			l = e.Size()
+			n += 1 + l + sovVtctldata(uint64(l))
+		}
+	}
+	l = len(m.Cell)
+	if l > 0 {
+		n += 1 + l + sovVtctldata(uint64(l))
+	}
+	l = len(m.TabletTypes)
+	if l > 0 {
+		n += 1 + l + sovVtctldata(uint64(l))
+	}
+	l = len(m.ExternalCluster)
+	if l > 0 {
+		n += 1 + l + sovVtctldata(uint64(l))
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *Keyspace) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.Name)
+	if l > 0 {
+		n += 1 + l + sovVtctldata(uint64(l))
+	}
+	if m.Keyspace != nil {
+		l = m.Keyspace.Size()
+		n += 1 + l + sovVtctldata(uint64(l))
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *Shard) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.Keyspace)
+	if l > 0 {
+		n += 1 + l + sovVtctldata(uint64(l))
+	}
+	l = len(m.Name)
+	if l > 0 {
+		n += 1 + l + sovVtctldata(uint64(l))
+	}
+	if m.Shard != nil {
+		l = m.Shard.Size()
+		n += 1 + l + sovVtctldata(uint64(l))
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *Workflow) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.Name)
+	if l > 0 {
+		n += 1 + l + sovVtctldata(uint64(l))
+	}
+	if m.Source != nil {
+		l = m.Source.Size()
+		n += 1 + l + sovVtctldata(uint64(l))
+	}
+	if m.Target != nil {
+		l = m.Target.Size()
+		n += 1 + l + sovVtctldata(uint64(l))
+	}
+	if m.MaxVReplicationLag != 0 {
+		n += 1 + sovVtctldata(uint64(m.MaxVReplicationLag))
+	}
+	if len(m.ShardStreams) > 0 {
+		for k, v := range m.ShardStreams {
+			_ = k
+			_ = v
+			l = 0
+			if v != nil {
+				l = v.Size()
+				l += 1 + sovVtctldata(uint64(l))
+			}
+			mapEntrySize := 1 + len(k) + sovVtctldata(uint64(len(k))) + l
+			n += mapEntrySize + 1 + sovVtctldata(uint64(mapEntrySize))
+		}
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *Workflow_ReplicationLocation) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.Keyspace)
+	if l > 0 {
+		n += 1 + l + sovVtctldata(uint64(l))
+	}
+	if len(m.Shards) > 0 {
+		for _, s := range m.Shards {
+			l = len(s)
+			n += 1 + l + sovVtctldata(uint64(l))
+		}
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *Workflow_ShardStream) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if len(m.Streams) > 0 {
+		for _, e := range m.Streams {
+			l = e.Size()
+			n += 1 + l + sovVtctldata(uint64(l))
+		}
+	}
+	if len(m.TabletControls) > 0 {
+		for _, e := range m.TabletControls {
+			l = e.Size()
+			n += 1 + l + sovVtctldata(uint64(l))
+		}
+	}
+	if m.IsPrimaryServing {
+		n += 2
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *Workflow_Stream) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if m.Id != 0 {
+		n += 1 + sovVtctldata(uint64(m.Id))
+	}
+	l = len(m.Shard)
+	if l > 0 {
+		n += 1 + l + sovVtctldata(uint64(l))
+	}
+	if m.Tablet != nil {
+		l = m.Tablet.Size()
+		n += 1 + l + sovVtctldata(uint64(l))
+	}
+	if m.BinlogSource != nil {
+		l = m.BinlogSource.Size()
+		n += 1 + l + sovVtctldata(uint64(l))
+	}
+	l = len(m.Position)
+	if l > 0 {
+		n += 1 + l + sovVtctldata(uint64(l))
+	}
+	l = len(m.StopPosition)
+	if l > 0 {
+		n += 1 + l + sovVtctldata(uint64(l))
+	}
+	l = len(m.State)
+	if l > 0 {
+		n += 1 + l + sovVtctldata(uint64(l))
+	}
+	l = len(m.DbName)
+	if l > 0 {
+		n += 1 + l + sovVtctldata(uint64(l))
+	}
+	if m.TransactionTimestamp != nil {
+		l = m.TransactionTimestamp.Size()
+		n += 1 + l + sovVtctldata(uint64(l))
+	}
+	if m.TimeUpdated != nil {
+		l = m.TimeUpdated.Size()
+		n += 1 + l + sovVtctldata(uint64(l))
+	}
+	l = len(m.Message)
+	if l > 0 {
+		n += 1 + l + sovVtctldata(uint64(l))
+	}
+	if len(m.CopyStates) > 0 {
+		for _, e := range m.CopyStates {
+			l = e.Size()
+			n += 1 + l + sovVtctldata(uint64(l))
+		}
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *Workflow_Stream_CopyState) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.Table)
+	if l > 0 {
+		n += 1 + l + sovVtctldata(uint64(l))
+	}
+	l = len(m.LastPk)
+	if l > 0 {
+		n += 1 + l + sovVtctldata(uint64(l))
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *ApplyVSchemaRequest) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.Keyspace)
+	if l > 0 {
+		n += 1 + l + sovVtctldata(uint64(l))
+	}
+	if m.VSchema != nil {
+		l = m.VSchema.Size()
+		n += 1 + l + sovVtctldata(uint64(l))
+	}
+	if m.SkipRebuild {
+		n += 2
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *ApplyVSchemaResponse) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if m.VSchema != nil {
+		l = m.VSchema.Size()
+		n += 1 + l + sovVtctldata(uint64(l))
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *ChangeTabletTypeRequest) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if m.TabletAlias != nil {
+		l = m.TabletAlias.Size()
+		n += 1 + l + sovVtctldata(uint64(l))
+	}
+	if m.DbType != 0 {
+		n += 1 + sovVtctldata(uint64(m.DbType))
+	}
+	if m.DryRun {
+		n += 2
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *ChangeTabletTypeResponse) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if m.BeforeTablet != nil {
+		l = m.BeforeTablet.Size()
+		n += 1 + l + sovVtctldata(uint64(l))
+	}
+	if m.AfterTablet != nil {
+		l = m.AfterTablet.Size()
+		n += 1 + l + sovVtctldata(uint64(l))
+	}
+	if m.WasDryRun {
+		n += 2
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *CreateKeyspaceRequest) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.Name)
+	if l > 0 {
+		n += 1 + l + sovVtctldata(uint64(l))
+	}
+	if m.Force {
+		n += 2
+	}
+	if m.AllowEmptyVSchema {
+		n += 2
+	}
+	l = len(m.ShardingColumnName)
+	if l > 0 {
+		n += 1 + l + sovVtctldata(uint64(l))
+	}
+	if m.ShardingColumnType != 0 {
+		n += 1 + sovVtctldata(uint64(m.ShardingColumnType))
+	}
+	if len(m.ServedFroms) > 0 {
+		for _, e := range m.ServedFroms {
+			l = e.Size()
+			n += 1 + l + sovVtctldata(uint64(l))
+		}
+	}
+	if m.Type != 0 {
+		n += 1 + sovVtctldata(uint64(m.Type))
+	}
+	l = len(m.BaseKeyspace)
+	if l > 0 {
+		n += 1 + l + sovVtctldata(uint64(l))
+	}
+	if m.SnapshotTime != nil {
+		l = m.SnapshotTime.Size()
+		n += 1 + l + sovVtctldata(uint64(l))
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *CreateKeyspaceResponse) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if m.Keyspace != nil {
+		l = m.Keyspace.Size()
+		n += 1 + l + sovVtctldata(uint64(l))
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *CreateShardRequest) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.Keyspace)
+	if l > 0 {
+		n += 1 + l + sovVtctldata(uint64(l))
+	}
+	l = len(m.ShardName)
+	if l > 0 {
+		n += 1 + l + sovVtctldata(uint64(l))
+	}
+	if m.Force {
+		n += 2
+	}
+	if m.IncludeParent {
+		n += 2
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *CreateShardResponse) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if m.Keyspace != nil {
+		l = m.Keyspace.Size()
+		n += 1 + l + sovVtctldata(uint64(l))
+	}
+	if m.Shard != nil {
+		l = m.Shard.Size()
+		n += 1 + l + sovVtctldata(uint64(l))
+	}
+	if m.ShardAlreadyExists {
+		n += 2
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *DeleteKeyspaceRequest) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.Keyspace)
+	if l > 0 {
+		n += 1 + l + sovVtctldata(uint64(l))
+	}
+	if m.Recursive {
+		n += 2
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *DeleteKeyspaceResponse) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *DeleteShardsRequest) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if len(m.Shards) > 0 {
+		for _, e := range m.Shards {
+			l = e.Size()
+			n += 1 + l + sovVtctldata(uint64(l))
+		}
+	}
+	if m.Recursive {
+		n += 2
+	}
+	if m.EvenIfServing {
+		n += 2
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *DeleteShardsResponse) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *DeleteTabletsRequest) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if len(m.TabletAliases) > 0 {
+		for _, e := range m.TabletAliases {
+			l = e.Size()
+			n += 1 + l + sovVtctldata(uint64(l))
+		}
+	}
+	if m.AllowPrimary {
+		n += 2
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *DeleteTabletsResponse) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *EmergencyReparentShardRequest) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.Keyspace)
+	if l > 0 {
+		n += 1 + l + sovVtctldata(uint64(l))
+	}
+	l = len(m.Shard)
+	if l > 0 {
+		n += 1 + l + sovVtctldata(uint64(l))
+	}
+	if m.NewPrimary != nil {
+		l = m.NewPrimary.Size()
+		n += 1 + l + sovVtctldata(uint64(l))
+	}
+	if len(m.IgnoreReplicas) > 0 {
+		for _, e := range m.IgnoreReplicas {
+			l = e.Size()
+			n += 1 + l + sovVtctldata(uint64(l))
+		}
+	}
+	if m.WaitReplicasTimeout != nil {
+		l = m.WaitReplicasTimeout.Size()
+		n += 1 + l + sovVtctldata(uint64(l))
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *EmergencyReparentShardResponse) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.Keyspace)
+	if l > 0 {
+		n += 1 + l + sovVtctldata(uint64(l))
+	}
+	l = len(m.Shard)
+	if l > 0 {
+		n += 1 + l + sovVtctldata(uint64(l))
+	}
+	if m.PromotedPrimary != nil {
+		l = m.PromotedPrimary.Size()
+		n += 1 + l + sovVtctldata(uint64(l))
+	}
+	if len(m.Events) > 0 {
+		for _, e := range m.Events {
+			l = e.Size()
+			n += 1 + l + sovVtctldata(uint64(l))
+		}
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *FindAllShardsInKeyspaceRequest) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.Keyspace)
+	if l > 0 {
+		n += 1 + l + sovVtctldata(uint64(l))
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *FindAllShardsInKeyspaceResponse) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if len(m.Shards) > 0 {
+		for k, v := range m.Shards {
+			_ = k
+			_ = v
+			l = 0
+			if v != nil {
+				l = v.Size()
+				l += 1 + sovVtctldata(uint64(l))
+			}
+			mapEntrySize := 1 + len(k) + sovVtctldata(uint64(len(k))) + l
+			n += mapEntrySize + 1 + sovVtctldata(uint64(mapEntrySize))
+		}
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *GetBackupsRequest) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.Keyspace)
+	if l > 0 {
+		n += 1 + l + sovVtctldata(uint64(l))
+	}
+	l = len(m.Shard)
+	if l > 0 {
+		n += 1 + l + sovVtctldata(uint64(l))
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *GetBackupsResponse) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if len(m.Backups) > 0 {
+		for _, e := range m.Backups {
+			l = e.Size()
+			n += 1 + l + sovVtctldata(uint64(l))
+		}
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *GetCellInfoNamesRequest) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *GetCellInfoNamesResponse) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if len(m.Names) > 0 {
+		for _, s := range m.Names {
+			l = len(s)
+			n += 1 + l + sovVtctldata(uint64(l))
+		}
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *GetCellInfoRequest) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.Cell)
+	if l > 0 {
+		n += 1 + l + sovVtctldata(uint64(l))
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *GetCellInfoResponse) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if m.CellInfo != nil {
+		l = m.CellInfo.Size()
+		n += 1 + l + sovVtctldata(uint64(l))
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *GetCellsAliasesRequest) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *GetCellsAliasesResponse) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if len(m.Aliases) > 0 {
+		for k, v := range m.Aliases {
+			_ = k
+			_ = v
+			l = 0
+			if v != nil {
+				l = v.Size()
+				l += 1 + sovVtctldata(uint64(l))
+			}
+			mapEntrySize := 1 + len(k) + sovVtctldata(uint64(len(k))) + l
+			n += mapEntrySize + 1 + sovVtctldata(uint64(mapEntrySize))
+		}
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *GetKeyspacesRequest) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *GetKeyspacesResponse) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if len(m.Keyspaces) > 0 {
+		for _, e := range m.Keyspaces {
+			l = e.Size()
+			n += 1 + l + sovVtctldata(uint64(l))
+		}
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *GetKeyspaceRequest) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.Keyspace)
+	if l > 0 {
+		n += 1 + l + sovVtctldata(uint64(l))
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *GetKeyspaceResponse) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if m.Keyspace != nil {
+		l = m.Keyspace.Size()
+		n += 1 + l + sovVtctldata(uint64(l))
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *GetSchemaRequest) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if m.TabletAlias != nil {
+		l = m.TabletAlias.Size()
+		n += 1 + l + sovVtctldata(uint64(l))
+	}
+	if len(m.Tables) > 0 {
+		for _, s := range m.Tables {
+			l = len(s)
+			n += 1 + l + sovVtctldata(uint64(l))
+		}
+	}
+	if len(m.ExcludeTables) > 0 {
+		for _, s := range m.ExcludeTables {
+			l = len(s)
+			n += 1 + l + sovVtctldata(uint64(l))
+		}
+	}
+	if m.IncludeViews {
+		n += 2
+	}
+	if m.TableNamesOnly {
+		n += 2
+	}
+	if m.TableSizesOnly {
+		n += 2
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *GetSchemaResponse) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if m.Schema != nil {
+		l = m.Schema.Size()
+		n += 1 + l + sovVtctldata(uint64(l))
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *GetShardRequest) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.Keyspace)
+	if l > 0 {
+		n += 1 + l + sovVtctldata(uint64(l))
+	}
+	l = len(m.ShardName)
+	if l > 0 {
+		n += 1 + l + sovVtctldata(uint64(l))
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *GetShardResponse) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if m.Shard != nil {
+		l = m.Shard.Size()
+		n += 1 + l + sovVtctldata(uint64(l))
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *GetSrvKeyspacesRequest) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.Keyspace)
+	if l > 0 {
+		n += 1 + l + sovVtctldata(uint64(l))
+	}
+	if len(m.Cells) > 0 {
+		for _, s := range m.Cells {
+			l = len(s)
+			n += 1 + l + sovVtctldata(uint64(l))
+		}
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *GetSrvKeyspacesResponse) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if len(m.SrvKeyspaces) > 0 {
+		for k, v := range m.SrvKeyspaces {
+			_ = k
+			_ = v
+			l = 0
+			if v != nil {
+				l = v.Size()
+				l += 1 + sovVtctldata(uint64(l))
+			}
+			mapEntrySize := 1 + len(k) + sovVtctldata(uint64(len(k))) + l
+			n += mapEntrySize + 1 + sovVtctldata(uint64(mapEntrySize))
+		}
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *GetSrvVSchemaRequest) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.Cell)
+	if l > 0 {
+		n += 1 + l + sovVtctldata(uint64(l))
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *GetSrvVSchemaResponse) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if m.SrvVSchema != nil {
+		l = m.SrvVSchema.Size()
+		n += 1 + l + sovVtctldata(uint64(l))
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *GetTabletRequest) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if m.TabletAlias != nil {
+		l = m.TabletAlias.Size()
+		n += 1 + l + sovVtctldata(uint64(l))
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *GetTabletResponse) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if m.Tablet != nil {
+		l = m.Tablet.Size()
+		n += 1 + l + sovVtctldata(uint64(l))
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *GetTabletsRequest) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.Keyspace)
+	if l > 0 {
+		n += 1 + l + sovVtctldata(uint64(l))
+	}
+	l = len(m.Shard)
+	if l > 0 {
+		n += 1 + l + sovVtctldata(uint64(l))
+	}
+	if len(m.Cells) > 0 {
+		for _, s := range m.Cells {
+			l = len(s)
+			n += 1 + l + sovVtctldata(uint64(l))
+		}
+	}
+	if m.Strict {
+		n += 2
+	}
+	if len(m.TabletAliases) > 0 {
+		for _, e := range m.TabletAliases {
+			l = e.Size()
+			n += 1 + l + sovVtctldata(uint64(l))
+		}
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *GetTabletsResponse) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if len(m.Tablets) > 0 {
+		for _, e := range m.Tablets {
+			l = e.Size()
+			n += 1 + l + sovVtctldata(uint64(l))
+		}
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *GetVSchemaRequest) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.Keyspace)
+	if l > 0 {
+		n += 1 + l + sovVtctldata(uint64(l))
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *GetVSchemaResponse) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if m.VSchema != nil {
+		l = m.VSchema.Size()
+		n += 1 + l + sovVtctldata(uint64(l))
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *GetWorkflowsRequest) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.Keyspace)
+	if l > 0 {
+		n += 1 + l + sovVtctldata(uint64(l))
+	}
+	if m.ActiveOnly {
+		n += 2
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *GetWorkflowsResponse) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if len(m.Workflows) > 0 {
+		for _, e := range m.Workflows {
+			l = e.Size()
+			n += 1 + l + sovVtctldata(uint64(l))
+		}
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *InitShardPrimaryRequest) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.Keyspace)
+	if l > 0 {
+		n += 1 + l + sovVtctldata(uint64(l))
+	}
+	l = len(m.Shard)
+	if l > 0 {
+		n += 1 + l + sovVtctldata(uint64(l))
+	}
+	if m.PrimaryElectTabletAlias != nil {
+		l = m.PrimaryElectTabletAlias.Size()
+		n += 1 + l + sovVtctldata(uint64(l))
+	}
+	if m.Force {
+		n += 2
+	}
+	if m.WaitReplicasTimeout != nil {
+		l = m.WaitReplicasTimeout.Size()
+		n += 1 + l + sovVtctldata(uint64(l))
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *InitShardPrimaryResponse) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if len(m.Events) > 0 {
+		for _, e := range m.Events {
+			l = e.Size()
+			n += 1 + l + sovVtctldata(uint64(l))
+		}
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *PlannedReparentShardRequest) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.Keyspace)
+	if l > 0 {
+		n += 1 + l + sovVtctldata(uint64(l))
+	}
+	l = len(m.Shard)
+	if l > 0 {
+		n += 1 + l + sovVtctldata(uint64(l))
+	}
+	if m.NewPrimary != nil {
+		l = m.NewPrimary.Size()
+		n += 1 + l + sovVtctldata(uint64(l))
+	}
+	if m.AvoidPrimary != nil {
+		l = m.AvoidPrimary.Size()
+		n += 1 + l + sovVtctldata(uint64(l))
+	}
+	if m.WaitReplicasTimeout != nil {
+		l = m.WaitReplicasTimeout.Size()
+		n += 1 + l + sovVtctldata(uint64(l))
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *PlannedReparentShardResponse) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.Keyspace)
+	if l > 0 {
+		n += 1 + l + sovVtctldata(uint64(l))
+	}
+	l = len(m.Shard)
+	if l > 0 {
+		n += 1 + l + sovVtctldata(uint64(l))
+	}
+	if m.PromotedPrimary != nil {
+		l = m.PromotedPrimary.Size()
+		n += 1 + l + sovVtctldata(uint64(l))
+	}
+	if len(m.Events) > 0 {
+		for _, e := range m.Events {
+			l = e.Size()
+			n += 1 + l + sovVtctldata(uint64(l))
+		}
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *RemoveKeyspaceCellRequest) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.Keyspace)
+	if l > 0 {
+		n += 1 + l + sovVtctldata(uint64(l))
+	}
+	l = len(m.Cell)
+	if l > 0 {
+		n += 1 + l + sovVtctldata(uint64(l))
+	}
+	if m.Force {
+		n += 2
+	}
+	if m.Recursive {
+		n += 2
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *RemoveKeyspaceCellResponse) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *RemoveShardCellRequest) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.Keyspace)
+	if l > 0 {
+		n += 1 + l + sovVtctldata(uint64(l))
+	}
+	l = len(m.ShardName)
+	if l > 0 {
+		n += 1 + l + sovVtctldata(uint64(l))
+	}
+	l = len(m.Cell)
+	if l > 0 {
+		n += 1 + l + sovVtctldata(uint64(l))
+	}
+	if m.Force {
+		n += 2
+	}
+	if m.Recursive {
+		n += 2
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *RemoveShardCellResponse) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *ReparentTabletRequest) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if m.Tablet != nil {
+		l = m.Tablet.Size()
+		n += 1 + l + sovVtctldata(uint64(l))
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *ReparentTabletResponse) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.Keyspace)
+	if l > 0 {
+		n += 1 + l + sovVtctldata(uint64(l))
+	}
+	l = len(m.Shard)
+	if l > 0 {
+		n += 1 + l + sovVtctldata(uint64(l))
+	}
+	if m.Primary != nil {
+		l = m.Primary.Size()
+		n += 1 + l + sovVtctldata(uint64(l))
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *ShardReplicationPositionsRequest) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.Keyspace)
+	if l > 0 {
+		n += 1 + l + sovVtctldata(uint64(l))
+	}
+	l = len(m.Shard)
+	if l > 0 {
+		n += 1 + l + sovVtctldata(uint64(l))
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *ShardReplicationPositionsResponse) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if len(m.ReplicationStatuses) > 0 {
+		for k, v := range m.ReplicationStatuses {
+			_ = k
+			_ = v
+			l = 0
+			if v != nil {
+				l = v.Size()
+				l += 1 + sovVtctldata(uint64(l))
+			}
+			mapEntrySize := 1 + len(k) + sovVtctldata(uint64(len(k))) + l
+			n += mapEntrySize + 1 + sovVtctldata(uint64(mapEntrySize))
+		}
+	}
+	if len(m.TabletMap) > 0 {
+		for k, v := range m.TabletMap {
+			_ = k
+			_ = v
+			l = 0
+			if v != nil {
+				l = v.Size()
+				l += 1 + sovVtctldata(uint64(l))
+			}
+			mapEntrySize := 1 + len(k) + sovVtctldata(uint64(len(k))) + l
+			n += mapEntrySize + 1 + sovVtctldata(uint64(mapEntrySize))
+		}
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *TabletExternallyReparentedRequest) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if m.Tablet != nil {
+		l = m.Tablet.Size()
+		n += 1 + l + sovVtctldata(uint64(l))
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *TabletExternallyReparentedResponse) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.Keyspace)
+	if l > 0 {
+		n += 1 + l + sovVtctldata(uint64(l))
+	}
+	l = len(m.Shard)
+	if l > 0 {
+		n += 1 + l + sovVtctldata(uint64(l))
+	}
+	if m.NewPrimary != nil {
+		l = m.NewPrimary.Size()
+		n += 1 + l + sovVtctldata(uint64(l))
+	}
+	if m.OldPrimary != nil {
+		l = m.OldPrimary.Size()
+		n += 1 + l + sovVtctldata(uint64(l))
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func sovVtctldata(x uint64) (n int) {
+	return (math_bits.Len64(x|1) + 6) / 7
+}
+func sozVtctldata(x uint64) (n int) {
+	return sovVtctldata(uint64((x << 1) ^ uint64((int64(x) >> 63))))
+}
+func (m *ExecuteVtctlCommandRequest) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowVtctldata
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: ExecuteVtctlCommandRequest: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: ExecuteVtctlCommandRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Args", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Args = append(m.Args, string(dAtA[iNdEx:postIndex]))
+			iNdEx = postIndex
+		case 2:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ActionTimeout", wireType)
+			}
+			m.ActionTimeout = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.ActionTimeout |= int64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		default:
+			iNdEx = preIndex
+			skippy, err := skipVtctldata(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *ExecuteVtctlCommandResponse) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowVtctldata
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: ExecuteVtctlCommandResponse: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: ExecuteVtctlCommandResponse: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Event", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.Event == nil {
+				m.Event = &logutil.Event{}
+			}
+			if err := m.Event.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipVtctldata(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *TableMaterializeSettings) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowVtctldata
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: TableMaterializeSettings: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: TableMaterializeSettings: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field TargetTable", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.TargetTable = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field SourceExpression", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.SourceExpression = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 3:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field CreateDdl", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.CreateDdl = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipVtctldata(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *MaterializeSettings) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowVtctldata
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: MaterializeSettings: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: MaterializeSettings: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Workflow", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Workflow = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field SourceKeyspace", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.SourceKeyspace = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 3:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field TargetKeyspace", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.TargetKeyspace = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 4:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field StopAfterCopy", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.StopAfterCopy = bool(v != 0)
+		case 5:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field TableSettings", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.TableSettings = append(m.TableSettings, &TableMaterializeSettings{})
+			if err := m.TableSettings[len(m.TableSettings)-1].Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 6:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Cell", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Cell = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 7:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field TabletTypes", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.TabletTypes = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 8:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ExternalCluster", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.ExternalCluster = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipVtctldata(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *Keyspace) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowVtctldata
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: Keyspace: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: Keyspace: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Name", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Name = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Keyspace", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.Keyspace == nil {
+				m.Keyspace = &topodata.Keyspace{}
+			}
+			if err := m.Keyspace.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipVtctldata(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *Shard) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowVtctldata
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: Shard: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: Shard: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Keyspace", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Keyspace = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Name", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Name = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 3:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Shard", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.Shard == nil {
+				m.Shard = &topodata.Shard{}
+			}
+			if err := m.Shard.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipVtctldata(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *Workflow) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowVtctldata
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: Workflow: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: Workflow: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Name", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Name = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Source", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.Source == nil {
+				m.Source = &Workflow_ReplicationLocation{}
+			}
+			if err := m.Source.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 3:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Target", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.Target == nil {
+				m.Target = &Workflow_ReplicationLocation{}
+			}
+			if err := m.Target.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 4:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field MaxVReplicationLag", wireType)
+			}
+			m.MaxVReplicationLag = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.MaxVReplicationLag |= int64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 5:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ShardStreams", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.ShardStreams == nil {
+				m.ShardStreams = make(map[string]*Workflow_ShardStream)
+			}
+			var mapkey string
+			var mapvalue *Workflow_ShardStream
+			for iNdEx < postIndex {
+				entryPreIndex := iNdEx
+				var wire uint64
+				for shift := uint(0); ; shift += 7 {
+					if shift >= 64 {
+						return ErrIntOverflowVtctldata
+					}
+					if iNdEx >= l {
+						return io.ErrUnexpectedEOF
+					}
+					b := dAtA[iNdEx]
+					iNdEx++
+					wire |= uint64(b&0x7F) << shift
+					if b < 0x80 {
+						break
+					}
+				}
+				fieldNum := int32(wire >> 3)
+				if fieldNum == 1 {
+					var stringLenmapkey uint64
+					for shift := uint(0); ; shift += 7 {
+						if shift >= 64 {
+							return ErrIntOverflowVtctldata
+						}
+						if iNdEx >= l {
+							return io.ErrUnexpectedEOF
+						}
+						b := dAtA[iNdEx]
+						iNdEx++
+						stringLenmapkey |= uint64(b&0x7F) << shift
+						if b < 0x80 {
+							break
+						}
+					}
+					intStringLenmapkey := int(stringLenmapkey)
+					if intStringLenmapkey < 0 {
+						return ErrInvalidLengthVtctldata
+					}
+					postStringIndexmapkey := iNdEx + intStringLenmapkey
+					if postStringIndexmapkey < 0 {
+						return ErrInvalidLengthVtctldata
+					}
+					if postStringIndexmapkey > l {
+						return io.ErrUnexpectedEOF
+					}
+					mapkey = string(dAtA[iNdEx:postStringIndexmapkey])
+					iNdEx = postStringIndexmapkey
+				} else if fieldNum == 2 {
+					var mapmsglen int
+					for shift := uint(0); ; shift += 7 {
+						if shift >= 64 {
+							return ErrIntOverflowVtctldata
+						}
+						if iNdEx >= l {
+							return io.ErrUnexpectedEOF
+						}
+						b := dAtA[iNdEx]
+						iNdEx++
+						mapmsglen |= int(b&0x7F) << shift
+						if b < 0x80 {
+							break
+						}
+					}
+					if mapmsglen < 0 {
+						return ErrInvalidLengthVtctldata
+					}
+					postmsgIndex := iNdEx + mapmsglen
+					if postmsgIndex < 0 {
+						return ErrInvalidLengthVtctldata
+					}
+					if postmsgIndex > l {
+						return io.ErrUnexpectedEOF
+					}
+					mapvalue = &Workflow_ShardStream{}
+					if err := mapvalue.Unmarshal(dAtA[iNdEx:postmsgIndex]); err != nil {
+						return err
+					}
+					iNdEx = postmsgIndex
+				} else {
+					iNdEx = entryPreIndex
+					skippy, err := skipVtctldata(dAtA[iNdEx:])
+					if err != nil {
+						return err
+					}
+					if skippy < 0 {
+						return ErrInvalidLengthVtctldata
+					}
+					if (iNdEx + skippy) > postIndex {
+						return io.ErrUnexpectedEOF
+					}
+					iNdEx += skippy
+				}
+			}
+			m.ShardStreams[mapkey] = mapvalue
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipVtctldata(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *Workflow_ReplicationLocation) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowVtctldata
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: ReplicationLocation: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: ReplicationLocation: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Keyspace", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Keyspace = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Shards", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Shards = append(m.Shards, string(dAtA[iNdEx:postIndex]))
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipVtctldata(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *Workflow_ShardStream) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowVtctldata
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: ShardStream: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: ShardStream: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Streams", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Streams = append(m.Streams, &Workflow_Stream{})
+			if err := m.Streams[len(m.Streams)-1].Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field TabletControls", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.TabletControls = append(m.TabletControls, &topodata.Shard_TabletControl{})
+			if err := m.TabletControls[len(m.TabletControls)-1].Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 3:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field IsPrimaryServing", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.IsPrimaryServing = bool(v != 0)
+		default:
+			iNdEx = preIndex
+			skippy, err := skipVtctldata(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *Workflow_Stream) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowVtctldata
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: Stream: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: Stream: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Id", wireType)
+			}
+			m.Id = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.Id |= int64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Shard", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Shard = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 3:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Tablet", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.Tablet == nil {
+				m.Tablet = &topodata.TabletAlias{}
+			}
+			if err := m.Tablet.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 4:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field BinlogSource", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.BinlogSource == nil {
+				m.BinlogSource = &binlogdata.BinlogSource{}
+			}
+			if err := m.BinlogSource.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 5:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Position", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Position = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 6:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field StopPosition", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.StopPosition = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 7:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field State", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.State = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 8:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field DbName", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.DbName = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 9:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field TransactionTimestamp", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.TransactionTimestamp == nil {
+				m.TransactionTimestamp = &vttime.Time{}
+			}
+			if err := m.TransactionTimestamp.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 10:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field TimeUpdated", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.TimeUpdated == nil {
+				m.TimeUpdated = &vttime.Time{}
+			}
+			if err := m.TimeUpdated.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 11:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Message", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Message = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 12:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field CopyStates", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.CopyStates = append(m.CopyStates, &Workflow_Stream_CopyState{})
+			if err := m.CopyStates[len(m.CopyStates)-1].Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipVtctldata(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *Workflow_Stream_CopyState) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowVtctldata
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: CopyState: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: CopyState: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Table", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Table = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field LastPk", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.LastPk = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipVtctldata(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *ApplyVSchemaRequest) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowVtctldata
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: ApplyVSchemaRequest: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: ApplyVSchemaRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Keyspace", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Keyspace = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field VSchema", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.VSchema == nil {
+				m.VSchema = &vschema.Keyspace{}
+			}
+			if err := m.VSchema.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 3:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field SkipRebuild", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.SkipRebuild = bool(v != 0)
+		default:
+			iNdEx = preIndex
+			skippy, err := skipVtctldata(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *ApplyVSchemaResponse) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowVtctldata
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: ApplyVSchemaResponse: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: ApplyVSchemaResponse: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field VSchema", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.VSchema == nil {
+				m.VSchema = &vschema.Keyspace{}
+			}
+			if err := m.VSchema.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipVtctldata(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *ChangeTabletTypeRequest) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowVtctldata
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: ChangeTabletTypeRequest: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: ChangeTabletTypeRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field TabletAlias", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.TabletAlias == nil {
+				m.TabletAlias = &topodata.TabletAlias{}
+			}
+			if err := m.TabletAlias.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 2:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field DbType", wireType)
+			}
+			m.DbType = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.DbType |= topodata.TabletType(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 3:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field DryRun", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.DryRun = bool(v != 0)
+		default:
+			iNdEx = preIndex
+			skippy, err := skipVtctldata(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *ChangeTabletTypeResponse) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowVtctldata
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: ChangeTabletTypeResponse: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: ChangeTabletTypeResponse: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field BeforeTablet", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.BeforeTablet == nil {
+				m.BeforeTablet = &topodata.Tablet{}
+			}
+			if err := m.BeforeTablet.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field AfterTablet", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.AfterTablet == nil {
+				m.AfterTablet = &topodata.Tablet{}
+			}
+			if err := m.AfterTablet.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 3:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field WasDryRun", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.WasDryRun = bool(v != 0)
+		default:
+			iNdEx = preIndex
+			skippy, err := skipVtctldata(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *CreateKeyspaceRequest) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowVtctldata
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: CreateKeyspaceRequest: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: CreateKeyspaceRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Name", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Name = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 2:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Force", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.Force = bool(v != 0)
+		case 3:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field AllowEmptyVSchema", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.AllowEmptyVSchema = bool(v != 0)
+		case 4:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ShardingColumnName", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.ShardingColumnName = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 5:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ShardingColumnType", wireType)
+			}
+			m.ShardingColumnType = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.ShardingColumnType |= topodata.KeyspaceIdType(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 6:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ServedFroms", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.ServedFroms = append(m.ServedFroms, &topodata.Keyspace_ServedFrom{})
+			if err := m.ServedFroms[len(m.ServedFroms)-1].Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 7:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Type", wireType)
+			}
+			m.Type = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.Type |= topodata.KeyspaceType(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 8:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field BaseKeyspace", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.BaseKeyspace = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 9:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field SnapshotTime", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.SnapshotTime == nil {
+				m.SnapshotTime = &vttime.Time{}
+			}
+			if err := m.SnapshotTime.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipVtctldata(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *CreateKeyspaceResponse) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowVtctldata
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: CreateKeyspaceResponse: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: CreateKeyspaceResponse: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Keyspace", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.Keyspace == nil {
+				m.Keyspace = &Keyspace{}
+			}
+			if err := m.Keyspace.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipVtctldata(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *CreateShardRequest) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowVtctldata
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: CreateShardRequest: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: CreateShardRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Keyspace", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Keyspace = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ShardName", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.ShardName = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 3:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Force", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.Force = bool(v != 0)
+		case 4:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field IncludeParent", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.IncludeParent = bool(v != 0)
+		default:
+			iNdEx = preIndex
+			skippy, err := skipVtctldata(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *CreateShardResponse) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowVtctldata
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: CreateShardResponse: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: CreateShardResponse: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Keyspace", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.Keyspace == nil {
+				m.Keyspace = &Keyspace{}
+			}
+			if err := m.Keyspace.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Shard", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.Shard == nil {
+				m.Shard = &Shard{}
+			}
+			if err := m.Shard.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 3:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ShardAlreadyExists", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.ShardAlreadyExists = bool(v != 0)
+		default:
+			iNdEx = preIndex
+			skippy, err := skipVtctldata(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *DeleteKeyspaceRequest) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowVtctldata
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: DeleteKeyspaceRequest: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: DeleteKeyspaceRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Keyspace", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Keyspace = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 2:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Recursive", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.Recursive = bool(v != 0)
+		default:
+			iNdEx = preIndex
+			skippy, err := skipVtctldata(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *DeleteKeyspaceResponse) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowVtctldata
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: DeleteKeyspaceResponse: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: DeleteKeyspaceResponse: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		default:
+			iNdEx = preIndex
+			skippy, err := skipVtctldata(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *DeleteShardsRequest) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowVtctldata
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: DeleteShardsRequest: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: DeleteShardsRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Shards", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Shards = append(m.Shards, &Shard{})
+			if err := m.Shards[len(m.Shards)-1].Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 2:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Recursive", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.Recursive = bool(v != 0)
+		case 4:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field EvenIfServing", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.EvenIfServing = bool(v != 0)
+		default:
+			iNdEx = preIndex
+			skippy, err := skipVtctldata(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *DeleteShardsResponse) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowVtctldata
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: DeleteShardsResponse: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: DeleteShardsResponse: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		default:
+			iNdEx = preIndex
+			skippy, err := skipVtctldata(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *DeleteTabletsRequest) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowVtctldata
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: DeleteTabletsRequest: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: DeleteTabletsRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field TabletAliases", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.TabletAliases = append(m.TabletAliases, &topodata.TabletAlias{})
+			if err := m.TabletAliases[len(m.TabletAliases)-1].Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 2:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field AllowPrimary", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.AllowPrimary = bool(v != 0)
+		default:
+			iNdEx = preIndex
+			skippy, err := skipVtctldata(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *DeleteTabletsResponse) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowVtctldata
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: DeleteTabletsResponse: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: DeleteTabletsResponse: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		default:
+			iNdEx = preIndex
+			skippy, err := skipVtctldata(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *EmergencyReparentShardRequest) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowVtctldata
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: EmergencyReparentShardRequest: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: EmergencyReparentShardRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Keyspace", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Keyspace = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Shard", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Shard = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 3:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field NewPrimary", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.NewPrimary == nil {
+				m.NewPrimary = &topodata.TabletAlias{}
+			}
+			if err := m.NewPrimary.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 4:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field IgnoreReplicas", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.IgnoreReplicas = append(m.IgnoreReplicas, &topodata.TabletAlias{})
+			if err := m.IgnoreReplicas[len(m.IgnoreReplicas)-1].Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 5:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field WaitReplicasTimeout", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.WaitReplicasTimeout == nil {
+				m.WaitReplicasTimeout = &vttime.Duration{}
+			}
+			if err := m.WaitReplicasTimeout.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipVtctldata(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *EmergencyReparentShardResponse) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowVtctldata
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: EmergencyReparentShardResponse: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: EmergencyReparentShardResponse: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Keyspace", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Keyspace = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Shard", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Shard = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 3:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field PromotedPrimary", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.PromotedPrimary == nil {
+				m.PromotedPrimary = &topodata.TabletAlias{}
+			}
+			if err := m.PromotedPrimary.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 4:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Events", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Events = append(m.Events, &logutil.Event{})
+			if err := m.Events[len(m.Events)-1].Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipVtctldata(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *FindAllShardsInKeyspaceRequest) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowVtctldata
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: FindAllShardsInKeyspaceRequest: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: FindAllShardsInKeyspaceRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Keyspace", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Keyspace = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipVtctldata(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *FindAllShardsInKeyspaceResponse) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowVtctldata
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: FindAllShardsInKeyspaceResponse: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: FindAllShardsInKeyspaceResponse: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Shards", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.Shards == nil {
+				m.Shards = make(map[string]*Shard)
+			}
+			var mapkey string
+			var mapvalue *Shard
+			for iNdEx < postIndex {
+				entryPreIndex := iNdEx
+				var wire uint64
+				for shift := uint(0); ; shift += 7 {
+					if shift >= 64 {
+						return ErrIntOverflowVtctldata
+					}
+					if iNdEx >= l {
+						return io.ErrUnexpectedEOF
+					}
+					b := dAtA[iNdEx]
+					iNdEx++
+					wire |= uint64(b&0x7F) << shift
+					if b < 0x80 {
+						break
+					}
+				}
+				fieldNum := int32(wire >> 3)
+				if fieldNum == 1 {
+					var stringLenmapkey uint64
+					for shift := uint(0); ; shift += 7 {
+						if shift >= 64 {
+							return ErrIntOverflowVtctldata
+						}
+						if iNdEx >= l {
+							return io.ErrUnexpectedEOF
+						}
+						b := dAtA[iNdEx]
+						iNdEx++
+						stringLenmapkey |= uint64(b&0x7F) << shift
+						if b < 0x80 {
+							break
+						}
+					}
+					intStringLenmapkey := int(stringLenmapkey)
+					if intStringLenmapkey < 0 {
+						return ErrInvalidLengthVtctldata
+					}
+					postStringIndexmapkey := iNdEx + intStringLenmapkey
+					if postStringIndexmapkey < 0 {
+						return ErrInvalidLengthVtctldata
+					}
+					if postStringIndexmapkey > l {
+						return io.ErrUnexpectedEOF
+					}
+					mapkey = string(dAtA[iNdEx:postStringIndexmapkey])
+					iNdEx = postStringIndexmapkey
+				} else if fieldNum == 2 {
+					var mapmsglen int
+					for shift := uint(0); ; shift += 7 {
+						if shift >= 64 {
+							return ErrIntOverflowVtctldata
+						}
+						if iNdEx >= l {
+							return io.ErrUnexpectedEOF
+						}
+						b := dAtA[iNdEx]
+						iNdEx++
+						mapmsglen |= int(b&0x7F) << shift
+						if b < 0x80 {
+							break
+						}
+					}
+					if mapmsglen < 0 {
+						return ErrInvalidLengthVtctldata
+					}
+					postmsgIndex := iNdEx + mapmsglen
+					if postmsgIndex < 0 {
+						return ErrInvalidLengthVtctldata
+					}
+					if postmsgIndex > l {
+						return io.ErrUnexpectedEOF
+					}
+					mapvalue = &Shard{}
+					if err := mapvalue.Unmarshal(dAtA[iNdEx:postmsgIndex]); err != nil {
+						return err
+					}
+					iNdEx = postmsgIndex
+				} else {
+					iNdEx = entryPreIndex
+					skippy, err := skipVtctldata(dAtA[iNdEx:])
+					if err != nil {
+						return err
+					}
+					if skippy < 0 {
+						return ErrInvalidLengthVtctldata
+					}
+					if (iNdEx + skippy) > postIndex {
+						return io.ErrUnexpectedEOF
+					}
+					iNdEx += skippy
+				}
+			}
+			m.Shards[mapkey] = mapvalue
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipVtctldata(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *GetBackupsRequest) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowVtctldata
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: GetBackupsRequest: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: GetBackupsRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Keyspace", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Keyspace = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Shard", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Shard = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipVtctldata(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *GetBackupsResponse) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowVtctldata
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: GetBackupsResponse: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: GetBackupsResponse: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Backups", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Backups = append(m.Backups, &mysqlctl.BackupInfo{})
+			if err := m.Backups[len(m.Backups)-1].Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipVtctldata(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *GetCellInfoNamesRequest) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowVtctldata
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: GetCellInfoNamesRequest: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: GetCellInfoNamesRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		default:
+			iNdEx = preIndex
+			skippy, err := skipVtctldata(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *GetCellInfoNamesResponse) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowVtctldata
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: GetCellInfoNamesResponse: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: GetCellInfoNamesResponse: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Names", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Names = append(m.Names, string(dAtA[iNdEx:postIndex]))
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipVtctldata(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *GetCellInfoRequest) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowVtctldata
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: GetCellInfoRequest: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: GetCellInfoRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Cell", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Cell = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipVtctldata(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *GetCellInfoResponse) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowVtctldata
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: GetCellInfoResponse: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: GetCellInfoResponse: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field CellInfo", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.CellInfo == nil {
+				m.CellInfo = &topodata.CellInfo{}
+			}
+			if err := m.CellInfo.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipVtctldata(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *GetCellsAliasesRequest) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowVtctldata
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: GetCellsAliasesRequest: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: GetCellsAliasesRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		default:
+			iNdEx = preIndex
+			skippy, err := skipVtctldata(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *GetCellsAliasesResponse) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowVtctldata
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: GetCellsAliasesResponse: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: GetCellsAliasesResponse: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Aliases", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.Aliases == nil {
+				m.Aliases = make(map[string]*topodata.CellsAlias)
+			}
+			var mapkey string
+			var mapvalue *topodata.CellsAlias
+			for iNdEx < postIndex {
+				entryPreIndex := iNdEx
+				var wire uint64
+				for shift := uint(0); ; shift += 7 {
+					if shift >= 64 {
+						return ErrIntOverflowVtctldata
+					}
+					if iNdEx >= l {
+						return io.ErrUnexpectedEOF
+					}
+					b := dAtA[iNdEx]
+					iNdEx++
+					wire |= uint64(b&0x7F) << shift
+					if b < 0x80 {
+						break
+					}
+				}
+				fieldNum := int32(wire >> 3)
+				if fieldNum == 1 {
+					var stringLenmapkey uint64
+					for shift := uint(0); ; shift += 7 {
+						if shift >= 64 {
+							return ErrIntOverflowVtctldata
+						}
+						if iNdEx >= l {
+							return io.ErrUnexpectedEOF
+						}
+						b := dAtA[iNdEx]
+						iNdEx++
+						stringLenmapkey |= uint64(b&0x7F) << shift
+						if b < 0x80 {
+							break
+						}
+					}
+					intStringLenmapkey := int(stringLenmapkey)
+					if intStringLenmapkey < 0 {
+						return ErrInvalidLengthVtctldata
+					}
+					postStringIndexmapkey := iNdEx + intStringLenmapkey
+					if postStringIndexmapkey < 0 {
+						return ErrInvalidLengthVtctldata
+					}
+					if postStringIndexmapkey > l {
+						return io.ErrUnexpectedEOF
+					}
+					mapkey = string(dAtA[iNdEx:postStringIndexmapkey])
+					iNdEx = postStringIndexmapkey
+				} else if fieldNum == 2 {
+					var mapmsglen int
+					for shift := uint(0); ; shift += 7 {
+						if shift >= 64 {
+							return ErrIntOverflowVtctldata
+						}
+						if iNdEx >= l {
+							return io.ErrUnexpectedEOF
+						}
+						b := dAtA[iNdEx]
+						iNdEx++
+						mapmsglen |= int(b&0x7F) << shift
+						if b < 0x80 {
+							break
+						}
+					}
+					if mapmsglen < 0 {
+						return ErrInvalidLengthVtctldata
+					}
+					postmsgIndex := iNdEx + mapmsglen
+					if postmsgIndex < 0 {
+						return ErrInvalidLengthVtctldata
+					}
+					if postmsgIndex > l {
+						return io.ErrUnexpectedEOF
+					}
+					mapvalue = &topodata.CellsAlias{}
+					if err := mapvalue.Unmarshal(dAtA[iNdEx:postmsgIndex]); err != nil {
+						return err
+					}
+					iNdEx = postmsgIndex
+				} else {
+					iNdEx = entryPreIndex
+					skippy, err := skipVtctldata(dAtA[iNdEx:])
+					if err != nil {
+						return err
+					}
+					if skippy < 0 {
+						return ErrInvalidLengthVtctldata
+					}
+					if (iNdEx + skippy) > postIndex {
+						return io.ErrUnexpectedEOF
+					}
+					iNdEx += skippy
+				}
+			}
+			m.Aliases[mapkey] = mapvalue
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipVtctldata(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *GetKeyspacesRequest) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowVtctldata
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: GetKeyspacesRequest: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: GetKeyspacesRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		default:
+			iNdEx = preIndex
+			skippy, err := skipVtctldata(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *GetKeyspacesResponse) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowVtctldata
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: GetKeyspacesResponse: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: GetKeyspacesResponse: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Keyspaces", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Keyspaces = append(m.Keyspaces, &Keyspace{})
+			if err := m.Keyspaces[len(m.Keyspaces)-1].Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipVtctldata(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *GetKeyspaceRequest) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowVtctldata
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: GetKeyspaceRequest: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: GetKeyspaceRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Keyspace", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Keyspace = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipVtctldata(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *GetKeyspaceResponse) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowVtctldata
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: GetKeyspaceResponse: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: GetKeyspaceResponse: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Keyspace", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.Keyspace == nil {
+				m.Keyspace = &Keyspace{}
+			}
+			if err := m.Keyspace.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipVtctldata(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *GetSchemaRequest) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowVtctldata
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: GetSchemaRequest: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: GetSchemaRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field TabletAlias", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.TabletAlias == nil {
+				m.TabletAlias = &topodata.TabletAlias{}
+			}
+			if err := m.TabletAlias.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Tables", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Tables = append(m.Tables, string(dAtA[iNdEx:postIndex]))
+			iNdEx = postIndex
+		case 3:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ExcludeTables", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.ExcludeTables = append(m.ExcludeTables, string(dAtA[iNdEx:postIndex]))
+			iNdEx = postIndex
+		case 4:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field IncludeViews", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.IncludeViews = bool(v != 0)
+		case 5:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field TableNamesOnly", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.TableNamesOnly = bool(v != 0)
+		case 6:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field TableSizesOnly", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.TableSizesOnly = bool(v != 0)
+		default:
+			iNdEx = preIndex
+			skippy, err := skipVtctldata(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *GetSchemaResponse) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowVtctldata
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: GetSchemaResponse: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: GetSchemaResponse: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Schema", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.Schema == nil {
+				m.Schema = &tabletmanagerdata.SchemaDefinition{}
+			}
+			if err := m.Schema.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipVtctldata(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *GetShardRequest) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowVtctldata
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: GetShardRequest: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: GetShardRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Keyspace", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Keyspace = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ShardName", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.ShardName = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipVtctldata(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *GetShardResponse) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowVtctldata
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: GetShardResponse: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: GetShardResponse: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Shard", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.Shard == nil {
+				m.Shard = &Shard{}
+			}
+			if err := m.Shard.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipVtctldata(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *GetSrvKeyspacesRequest) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowVtctldata
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: GetSrvKeyspacesRequest: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: GetSrvKeyspacesRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Keyspace", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Keyspace = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Cells", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Cells = append(m.Cells, string(dAtA[iNdEx:postIndex]))
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipVtctldata(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *GetSrvKeyspacesResponse) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowVtctldata
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: GetSrvKeyspacesResponse: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: GetSrvKeyspacesResponse: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field SrvKeyspaces", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.SrvKeyspaces == nil {
+				m.SrvKeyspaces = make(map[string]*topodata.SrvKeyspace)
+			}
+			var mapkey string
+			var mapvalue *topodata.SrvKeyspace
+			for iNdEx < postIndex {
+				entryPreIndex := iNdEx
+				var wire uint64
+				for shift := uint(0); ; shift += 7 {
+					if shift >= 64 {
+						return ErrIntOverflowVtctldata
+					}
+					if iNdEx >= l {
+						return io.ErrUnexpectedEOF
+					}
+					b := dAtA[iNdEx]
+					iNdEx++
+					wire |= uint64(b&0x7F) << shift
+					if b < 0x80 {
+						break
+					}
+				}
+				fieldNum := int32(wire >> 3)
+				if fieldNum == 1 {
+					var stringLenmapkey uint64
+					for shift := uint(0); ; shift += 7 {
+						if shift >= 64 {
+							return ErrIntOverflowVtctldata
+						}
+						if iNdEx >= l {
+							return io.ErrUnexpectedEOF
+						}
+						b := dAtA[iNdEx]
+						iNdEx++
+						stringLenmapkey |= uint64(b&0x7F) << shift
+						if b < 0x80 {
+							break
+						}
+					}
+					intStringLenmapkey := int(stringLenmapkey)
+					if intStringLenmapkey < 0 {
+						return ErrInvalidLengthVtctldata
+					}
+					postStringIndexmapkey := iNdEx + intStringLenmapkey
+					if postStringIndexmapkey < 0 {
+						return ErrInvalidLengthVtctldata
+					}
+					if postStringIndexmapkey > l {
+						return io.ErrUnexpectedEOF
+					}
+					mapkey = string(dAtA[iNdEx:postStringIndexmapkey])
+					iNdEx = postStringIndexmapkey
+				} else if fieldNum == 2 {
+					var mapmsglen int
+					for shift := uint(0); ; shift += 7 {
+						if shift >= 64 {
+							return ErrIntOverflowVtctldata
+						}
+						if iNdEx >= l {
+							return io.ErrUnexpectedEOF
+						}
+						b := dAtA[iNdEx]
+						iNdEx++
+						mapmsglen |= int(b&0x7F) << shift
+						if b < 0x80 {
+							break
+						}
+					}
+					if mapmsglen < 0 {
+						return ErrInvalidLengthVtctldata
+					}
+					postmsgIndex := iNdEx + mapmsglen
+					if postmsgIndex < 0 {
+						return ErrInvalidLengthVtctldata
+					}
+					if postmsgIndex > l {
+						return io.ErrUnexpectedEOF
+					}
+					mapvalue = &topodata.SrvKeyspace{}
+					if err := mapvalue.Unmarshal(dAtA[iNdEx:postmsgIndex]); err != nil {
+						return err
+					}
+					iNdEx = postmsgIndex
+				} else {
+					iNdEx = entryPreIndex
+					skippy, err := skipVtctldata(dAtA[iNdEx:])
+					if err != nil {
+						return err
+					}
+					if skippy < 0 {
+						return ErrInvalidLengthVtctldata
+					}
+					if (iNdEx + skippy) > postIndex {
+						return io.ErrUnexpectedEOF
+					}
+					iNdEx += skippy
+				}
+			}
+			m.SrvKeyspaces[mapkey] = mapvalue
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipVtctldata(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *GetSrvVSchemaRequest) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowVtctldata
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: GetSrvVSchemaRequest: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: GetSrvVSchemaRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Cell", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Cell = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipVtctldata(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *GetSrvVSchemaResponse) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowVtctldata
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: GetSrvVSchemaResponse: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: GetSrvVSchemaResponse: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field SrvVSchema", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.SrvVSchema == nil {
+				m.SrvVSchema = &vschema.SrvVSchema{}
+			}
+			if err := m.SrvVSchema.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipVtctldata(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *GetTabletRequest) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowVtctldata
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: GetTabletRequest: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: GetTabletRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field TabletAlias", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.TabletAlias == nil {
+				m.TabletAlias = &topodata.TabletAlias{}
+			}
+			if err := m.TabletAlias.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipVtctldata(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *GetTabletResponse) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowVtctldata
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: GetTabletResponse: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: GetTabletResponse: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Tablet", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.Tablet == nil {
+				m.Tablet = &topodata.Tablet{}
+			}
+			if err := m.Tablet.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipVtctldata(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *GetTabletsRequest) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowVtctldata
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: GetTabletsRequest: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: GetTabletsRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Keyspace", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Keyspace = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Shard", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Shard = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 3:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Cells", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Cells = append(m.Cells, string(dAtA[iNdEx:postIndex]))
+			iNdEx = postIndex
+		case 4:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Strict", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.Strict = bool(v != 0)
+		case 5:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field TabletAliases", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.TabletAliases = append(m.TabletAliases, &topodata.TabletAlias{})
+			if err := m.TabletAliases[len(m.TabletAliases)-1].Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipVtctldata(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *GetTabletsResponse) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowVtctldata
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: GetTabletsResponse: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: GetTabletsResponse: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Tablets", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Tablets = append(m.Tablets, &topodata.Tablet{})
+			if err := m.Tablets[len(m.Tablets)-1].Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipVtctldata(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *GetVSchemaRequest) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowVtctldata
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: GetVSchemaRequest: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: GetVSchemaRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Keyspace", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Keyspace = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipVtctldata(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *GetVSchemaResponse) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowVtctldata
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: GetVSchemaResponse: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: GetVSchemaResponse: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field VSchema", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.VSchema == nil {
+				m.VSchema = &vschema.Keyspace{}
+			}
+			if err := m.VSchema.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipVtctldata(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *GetWorkflowsRequest) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowVtctldata
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: GetWorkflowsRequest: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: GetWorkflowsRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Keyspace", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Keyspace = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 2:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ActiveOnly", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.ActiveOnly = bool(v != 0)
+		default:
+			iNdEx = preIndex
+			skippy, err := skipVtctldata(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *GetWorkflowsResponse) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowVtctldata
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: GetWorkflowsResponse: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: GetWorkflowsResponse: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Workflows", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Workflows = append(m.Workflows, &Workflow{})
+			if err := m.Workflows[len(m.Workflows)-1].Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipVtctldata(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *InitShardPrimaryRequest) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowVtctldata
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: InitShardPrimaryRequest: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: InitShardPrimaryRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Keyspace", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Keyspace = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Shard", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Shard = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 3:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field PrimaryElectTabletAlias", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.PrimaryElectTabletAlias == nil {
+				m.PrimaryElectTabletAlias = &topodata.TabletAlias{}
+			}
+			if err := m.PrimaryElectTabletAlias.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 4:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Force", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.Force = bool(v != 0)
+		case 5:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field WaitReplicasTimeout", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.WaitReplicasTimeout == nil {
+				m.WaitReplicasTimeout = &vttime.Duration{}
+			}
+			if err := m.WaitReplicasTimeout.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipVtctldata(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *InitShardPrimaryResponse) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowVtctldata
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: InitShardPrimaryResponse: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: InitShardPrimaryResponse: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Events", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Events = append(m.Events, &logutil.Event{})
+			if err := m.Events[len(m.Events)-1].Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipVtctldata(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *PlannedReparentShardRequest) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowVtctldata
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: PlannedReparentShardRequest: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: PlannedReparentShardRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Keyspace", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Keyspace = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Shard", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Shard = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 3:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field NewPrimary", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.NewPrimary == nil {
+				m.NewPrimary = &topodata.TabletAlias{}
+			}
+			if err := m.NewPrimary.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 4:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field AvoidPrimary", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.AvoidPrimary == nil {
+				m.AvoidPrimary = &topodata.TabletAlias{}
+			}
+			if err := m.AvoidPrimary.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 5:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field WaitReplicasTimeout", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.WaitReplicasTimeout == nil {
+				m.WaitReplicasTimeout = &vttime.Duration{}
+			}
+			if err := m.WaitReplicasTimeout.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipVtctldata(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *PlannedReparentShardResponse) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowVtctldata
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: PlannedReparentShardResponse: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: PlannedReparentShardResponse: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Keyspace", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Keyspace = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Shard", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Shard = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 3:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field PromotedPrimary", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.PromotedPrimary == nil {
+				m.PromotedPrimary = &topodata.TabletAlias{}
+			}
+			if err := m.PromotedPrimary.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 4:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Events", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Events = append(m.Events, &logutil.Event{})
+			if err := m.Events[len(m.Events)-1].Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipVtctldata(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *RemoveKeyspaceCellRequest) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowVtctldata
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: RemoveKeyspaceCellRequest: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: RemoveKeyspaceCellRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Keyspace", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Keyspace = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Cell", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Cell = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 3:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Force", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.Force = bool(v != 0)
+		case 4:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Recursive", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.Recursive = bool(v != 0)
+		default:
+			iNdEx = preIndex
+			skippy, err := skipVtctldata(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *RemoveKeyspaceCellResponse) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowVtctldata
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: RemoveKeyspaceCellResponse: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: RemoveKeyspaceCellResponse: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		default:
+			iNdEx = preIndex
+			skippy, err := skipVtctldata(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *RemoveShardCellRequest) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowVtctldata
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: RemoveShardCellRequest: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: RemoveShardCellRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Keyspace", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Keyspace = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ShardName", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.ShardName = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 3:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Cell", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Cell = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 4:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Force", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.Force = bool(v != 0)
+		case 5:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Recursive", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.Recursive = bool(v != 0)
+		default:
+			iNdEx = preIndex
+			skippy, err := skipVtctldata(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *RemoveShardCellResponse) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowVtctldata
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: RemoveShardCellResponse: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: RemoveShardCellResponse: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		default:
+			iNdEx = preIndex
+			skippy, err := skipVtctldata(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *ReparentTabletRequest) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowVtctldata
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: ReparentTabletRequest: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: ReparentTabletRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Tablet", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.Tablet == nil {
+				m.Tablet = &topodata.TabletAlias{}
+			}
+			if err := m.Tablet.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipVtctldata(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *ReparentTabletResponse) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowVtctldata
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: ReparentTabletResponse: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: ReparentTabletResponse: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Keyspace", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Keyspace = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Shard", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Shard = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 3:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Primary", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.Primary == nil {
+				m.Primary = &topodata.TabletAlias{}
+			}
+			if err := m.Primary.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipVtctldata(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *ShardReplicationPositionsRequest) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowVtctldata
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: ShardReplicationPositionsRequest: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: ShardReplicationPositionsRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Keyspace", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Keyspace = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Shard", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Shard = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipVtctldata(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *ShardReplicationPositionsResponse) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowVtctldata
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: ShardReplicationPositionsResponse: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: ShardReplicationPositionsResponse: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ReplicationStatuses", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.ReplicationStatuses == nil {
+				m.ReplicationStatuses = make(map[string]*replicationdata.Status)
+			}
+			var mapkey string
+			var mapvalue *replicationdata.Status
+			for iNdEx < postIndex {
+				entryPreIndex := iNdEx
+				var wire uint64
+				for shift := uint(0); ; shift += 7 {
+					if shift >= 64 {
+						return ErrIntOverflowVtctldata
+					}
+					if iNdEx >= l {
+						return io.ErrUnexpectedEOF
+					}
+					b := dAtA[iNdEx]
+					iNdEx++
+					wire |= uint64(b&0x7F) << shift
+					if b < 0x80 {
+						break
+					}
+				}
+				fieldNum := int32(wire >> 3)
+				if fieldNum == 1 {
+					var stringLenmapkey uint64
+					for shift := uint(0); ; shift += 7 {
+						if shift >= 64 {
+							return ErrIntOverflowVtctldata
+						}
+						if iNdEx >= l {
+							return io.ErrUnexpectedEOF
+						}
+						b := dAtA[iNdEx]
+						iNdEx++
+						stringLenmapkey |= uint64(b&0x7F) << shift
+						if b < 0x80 {
+							break
+						}
+					}
+					intStringLenmapkey := int(stringLenmapkey)
+					if intStringLenmapkey < 0 {
+						return ErrInvalidLengthVtctldata
+					}
+					postStringIndexmapkey := iNdEx + intStringLenmapkey
+					if postStringIndexmapkey < 0 {
+						return ErrInvalidLengthVtctldata
+					}
+					if postStringIndexmapkey > l {
+						return io.ErrUnexpectedEOF
+					}
+					mapkey = string(dAtA[iNdEx:postStringIndexmapkey])
+					iNdEx = postStringIndexmapkey
+				} else if fieldNum == 2 {
+					var mapmsglen int
+					for shift := uint(0); ; shift += 7 {
+						if shift >= 64 {
+							return ErrIntOverflowVtctldata
+						}
+						if iNdEx >= l {
+							return io.ErrUnexpectedEOF
+						}
+						b := dAtA[iNdEx]
+						iNdEx++
+						mapmsglen |= int(b&0x7F) << shift
+						if b < 0x80 {
+							break
+						}
+					}
+					if mapmsglen < 0 {
+						return ErrInvalidLengthVtctldata
+					}
+					postmsgIndex := iNdEx + mapmsglen
+					if postmsgIndex < 0 {
+						return ErrInvalidLengthVtctldata
+					}
+					if postmsgIndex > l {
+						return io.ErrUnexpectedEOF
+					}
+					mapvalue = &replicationdata.Status{}
+					if err := mapvalue.Unmarshal(dAtA[iNdEx:postmsgIndex]); err != nil {
+						return err
+					}
+					iNdEx = postmsgIndex
+				} else {
+					iNdEx = entryPreIndex
+					skippy, err := skipVtctldata(dAtA[iNdEx:])
+					if err != nil {
+						return err
+					}
+					if skippy < 0 {
+						return ErrInvalidLengthVtctldata
+					}
+					if (iNdEx + skippy) > postIndex {
+						return io.ErrUnexpectedEOF
+					}
+					iNdEx += skippy
+				}
+			}
+			m.ReplicationStatuses[mapkey] = mapvalue
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field TabletMap", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.TabletMap == nil {
+				m.TabletMap = make(map[string]*topodata.Tablet)
+			}
+			var mapkey string
+			var mapvalue *topodata.Tablet
+			for iNdEx < postIndex {
+				entryPreIndex := iNdEx
+				var wire uint64
+				for shift := uint(0); ; shift += 7 {
+					if shift >= 64 {
+						return ErrIntOverflowVtctldata
+					}
+					if iNdEx >= l {
+						return io.ErrUnexpectedEOF
+					}
+					b := dAtA[iNdEx]
+					iNdEx++
+					wire |= uint64(b&0x7F) << shift
+					if b < 0x80 {
+						break
+					}
+				}
+				fieldNum := int32(wire >> 3)
+				if fieldNum == 1 {
+					var stringLenmapkey uint64
+					for shift := uint(0); ; shift += 7 {
+						if shift >= 64 {
+							return ErrIntOverflowVtctldata
+						}
+						if iNdEx >= l {
+							return io.ErrUnexpectedEOF
+						}
+						b := dAtA[iNdEx]
+						iNdEx++
+						stringLenmapkey |= uint64(b&0x7F) << shift
+						if b < 0x80 {
+							break
+						}
+					}
+					intStringLenmapkey := int(stringLenmapkey)
+					if intStringLenmapkey < 0 {
+						return ErrInvalidLengthVtctldata
+					}
+					postStringIndexmapkey := iNdEx + intStringLenmapkey
+					if postStringIndexmapkey < 0 {
+						return ErrInvalidLengthVtctldata
+					}
+					if postStringIndexmapkey > l {
+						return io.ErrUnexpectedEOF
+					}
+					mapkey = string(dAtA[iNdEx:postStringIndexmapkey])
+					iNdEx = postStringIndexmapkey
+				} else if fieldNum == 2 {
+					var mapmsglen int
+					for shift := uint(0); ; shift += 7 {
+						if shift >= 64 {
+							return ErrIntOverflowVtctldata
+						}
+						if iNdEx >= l {
+							return io.ErrUnexpectedEOF
+						}
+						b := dAtA[iNdEx]
+						iNdEx++
+						mapmsglen |= int(b&0x7F) << shift
+						if b < 0x80 {
+							break
+						}
+					}
+					if mapmsglen < 0 {
+						return ErrInvalidLengthVtctldata
+					}
+					postmsgIndex := iNdEx + mapmsglen
+					if postmsgIndex < 0 {
+						return ErrInvalidLengthVtctldata
+					}
+					if postmsgIndex > l {
+						return io.ErrUnexpectedEOF
+					}
+					mapvalue = &topodata.Tablet{}
+					if err := mapvalue.Unmarshal(dAtA[iNdEx:postmsgIndex]); err != nil {
+						return err
+					}
+					iNdEx = postmsgIndex
+				} else {
+					iNdEx = entryPreIndex
+					skippy, err := skipVtctldata(dAtA[iNdEx:])
+					if err != nil {
+						return err
+					}
+					if skippy < 0 {
+						return ErrInvalidLengthVtctldata
+					}
+					if (iNdEx + skippy) > postIndex {
+						return io.ErrUnexpectedEOF
+					}
+					iNdEx += skippy
+				}
+			}
+			m.TabletMap[mapkey] = mapvalue
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipVtctldata(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *TabletExternallyReparentedRequest) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowVtctldata
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: TabletExternallyReparentedRequest: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: TabletExternallyReparentedRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Tablet", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.Tablet == nil {
+				m.Tablet = &topodata.TabletAlias{}
+			}
+			if err := m.Tablet.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipVtctldata(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *TabletExternallyReparentedResponse) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowVtctldata
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: TabletExternallyReparentedResponse: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: TabletExternallyReparentedResponse: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Keyspace", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Keyspace = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Shard", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Shard = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 3:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field NewPrimary", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.NewPrimary == nil {
+				m.NewPrimary = &topodata.TabletAlias{}
+			}
+			if err := m.NewPrimary.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 4:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field OldPrimary", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.OldPrimary == nil {
+				m.OldPrimary = &topodata.TabletAlias{}
+			}
+			if err := m.OldPrimary.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipVtctldata(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthVtctldata
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func skipVtctldata(dAtA []byte) (n int, err error) {
+	l := len(dAtA)
+	iNdEx := 0
+	depth := 0
+	for iNdEx < l {
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return 0, ErrIntOverflowVtctldata
+			}
+			if iNdEx >= l {
+				return 0, io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= (uint64(b) & 0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		wireType := int(wire & 0x7)
+		switch wireType {
+		case 0:
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return 0, ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return 0, io.ErrUnexpectedEOF
+				}
+				iNdEx++
+				if dAtA[iNdEx-1] < 0x80 {
+					break
+				}
+			}
+		case 1:
+			iNdEx += 8
+		case 2:
+			var length int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return 0, ErrIntOverflowVtctldata
+				}
+				if iNdEx >= l {
+					return 0, io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				length |= (int(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if length < 0 {
+				return 0, ErrInvalidLengthVtctldata
+			}
+			iNdEx += length
+		case 3:
+			depth++
+		case 4:
+			if depth == 0 {
+				return 0, ErrUnexpectedEndOfGroupVtctldata
+			}
+			depth--
+		case 5:
+			iNdEx += 4
+		default:
+			return 0, fmt.Errorf("proto: illegal wireType %d", wireType)
+		}
+		if iNdEx < 0 {
+			return 0, ErrInvalidLengthVtctldata
+		}
+		if depth == 0 {
+			return iNdEx, nil
+		}
+	}
+	return 0, io.ErrUnexpectedEOF
+>>>>>>> added skip_rebuild and v_schema to message types
+>>>>>>> added skip_rebuild and v_schema to message types
 }
 
 var (
