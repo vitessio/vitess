@@ -200,7 +200,7 @@ func (thc *tabletHealthCheck) processResponse(hc *HealthCheckImpl, shr *query.St
 	thc.setServingState(serving, reason)
 
 	// notify downstream for master change
-	hc.updateHealth(thc.SimpleCopy(), prevTarget, trivialUpdate, true)
+	hc.updateHealth(thc.SimpleCopy(), prevTarget, trivialUpdate, thc.Serving)
 	return nil
 }
 
@@ -294,7 +294,7 @@ func (thc *tabletHealthCheck) checkConn(hc *HealthCheckImpl) {
 				return
 			}
 			// trivialUpdate = false because this is an error
-			// isPrimaryUp = false because we did not get a healthy response
+			// up = false because we did not get a healthy response
 			hc.updateHealth(thc.SimpleCopy(), thc.Target, false, false)
 		}
 		// If there was a timeout send an error. We do this after stream has returned.
@@ -305,7 +305,7 @@ func (thc *tabletHealthCheck) checkConn(hc *HealthCheckImpl) {
 			thc.setServingState(false, thc.LastError.Error())
 			hcErrorCounters.Add([]string{thc.Target.Keyspace, thc.Target.Shard, topoproto.TabletTypeLString(thc.Target.TabletType)}, 1)
 			// trivialUpdate = false because this is an error
-			// isPrimaryUp = false because we did not get a healthy response within the timeout
+			// up = false because we did not get a healthy response within the timeout
 			hc.updateHealth(thc.SimpleCopy(), thc.Target, false, false)
 		}
 
