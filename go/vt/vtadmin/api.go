@@ -297,7 +297,15 @@ func (api *API) GetGates(ctx context.Context, req *vtadminpb.GetGatesRequest) (*
 
 // GetKeyspace is part of the vtadminpb.VTAdminServer interface.
 func (api *API) GetKeyspace(ctx context.Context, req *vtadminpb.GetKeyspaceRequest) (*vtadminpb.Keyspace, error) {
-	panic("unimplemented!")
+	span, ctx := trace.NewSpan(ctx, "API.GetKeyspace")
+	defer span.Finish()
+
+	c, ok := api.clusterMap[req.ClusterId]
+	if !ok {
+		return nil, fmt.Errorf("%w: %s", errors.ErrUnsupportedCluster, req.ClusterId)
+	}
+
+	return c.GetKeyspace(ctx, req.Keyspace)
 }
 
 // GetKeyspaces is part of the vtadminpb.VTAdminServer interface.
@@ -320,57 +328,11 @@ func (api *API) GetKeyspaces(ctx context.Context, req *vtadminpb.GetKeyspacesReq
 		go func(c *cluster.Cluster) {
 			defer wg.Done()
 
-			if err := c.Vtctld.Dial(ctx); err != nil {
+			kss, err := c.GetKeyspaces(ctx)
+			if err != nil {
 				er.RecordError(err)
 				return
 			}
-
-			getKeyspacesSpan, getKeyspacesCtx := trace.NewSpan(ctx, "Cluster.GetKeyspaces")
-			cluster.AnnotateSpan(c, getKeyspacesSpan)
-
-			resp, err := c.Vtctld.GetKeyspaces(getKeyspacesCtx, &vtctldatapb.GetKeyspacesRequest{})
-			if err != nil {
-				er.RecordError(fmt.Errorf("GetKeyspaces(cluster = %s): %w", c.ID, err))
-				getKeyspacesSpan.Finish()
-				return
-			}
-
-			getKeyspacesSpan.Finish()
-
-			kss := make([]*vtadminpb.Keyspace, 0, len(resp.Keyspaces))
-
-			var (
-				kwg sync.WaitGroup
-				km  sync.Mutex
-			)
-
-			for _, ks := range resp.Keyspaces {
-				kwg.Add(1)
-
-				// Find all shards for each keyspace in the cluster, in parallel
-				go func(c *cluster.Cluster, ks *vtctldatapb.Keyspace) {
-					defer kwg.Done()
-
-					shards, err := c.FindAllShardsInKeyspace(ctx, ks.Name, cluster.FindAllShardsInKeyspaceOptions{
-						SkipDial: true,
-					})
-
-					if err != nil {
-						er.RecordError(err)
-						return
-					}
-
-					km.Lock()
-					kss = append(kss, &vtadminpb.Keyspace{
-						Cluster:  c.ToProto(),
-						Keyspace: ks,
-						Shards:   shards,
-					})
-					km.Unlock()
-				}(c, ks)
-			}
-
-			kwg.Wait()
 
 			m.Lock()
 			keyspaces = append(keyspaces, kss...)
