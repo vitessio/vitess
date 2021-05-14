@@ -47,13 +47,13 @@ type tablePlanBuilder struct {
 	// selColumns keeps track of the columns we want to pull from source.
 	// If Lastpk is set, we compare this list against the table's pk and
 	// add missing references.
-	selColumns  map[string]bool
-	colExprs    []*colExpr
-	onInsert    insertType
-	pkCols      []*colExpr
-	lastpk      *sqltypes.Result
-	columnInfos []*ColumnInfo
-	stats       *binlogplayer.Stats
+	selColumns map[string]bool
+	colExprs   []*colExpr
+	onInsert   insertType
+	pkCols     []*colExpr
+	lastpk     *sqltypes.Result
+	colInfos   []*ColumnInfo
+	stats      *binlogplayer.Stats
 }
 
 // colExpr describes the processing to be performed to
@@ -231,10 +231,10 @@ func buildTablePlan(tableName, filter string, colInfoMap map[string][]*ColumnInf
 			From:  sel.From,
 			Where: sel.Where,
 		},
-		selColumns:  make(map[string]bool),
-		lastpk:      lastpk,
-		columnInfos: colInfoMap[tableName],
-		stats:       stats,
+		selColumns: make(map[string]bool),
+		lastpk:     lastpk,
+		colInfos:   colInfoMap[tableName],
+		stats:      stats,
 	}
 
 	if err := tpb.analyzeExprs(sel.SelectExprs); err != nil {
@@ -295,6 +295,13 @@ func (tpb *tablePlanBuilder) generate() *TablePlan {
 
 	bvf := &bindvarFormatter{}
 
+	fieldsToSkip := make(map[string]bool)
+	for _, colInfo := range tpb.colInfos {
+		if colInfo.IsGenerated {
+			fieldsToSkip[colInfo.Name] = true
+		}
+	}
+
 	return &TablePlan{
 		TargetName:       tpb.name.String(),
 		Lastpk:           tpb.lastpk,
@@ -306,6 +313,7 @@ func (tpb *tablePlanBuilder) generate() *TablePlan {
 		Delete:           tpb.generateDeleteStatement(),
 		PKReferences:     pkrefs,
 		Stats:            tpb.stats,
+		FieldsToSkip:     fieldsToSkip,
 	}
 }
 
@@ -726,7 +734,7 @@ func (tpb *tablePlanBuilder) generateWhere(buf *sqlparser.TrackedBuffer, bvf *bi
 }
 
 func (tpb *tablePlanBuilder) getCharsetAndCollation(pkname string) (charSet string, collation string) {
-	for _, colInfo := range tpb.columnInfos {
+	for _, colInfo := range tpb.colInfos {
 		if colInfo.IsPK && strings.EqualFold(colInfo.Name, pkname) {
 			if colInfo.CharSet != "" {
 				charSet = fmt.Sprintf(" _%s ", colInfo.CharSet)
@@ -765,7 +773,7 @@ func (tpb *tablePlanBuilder) generatePKConstraint(buf *sqlparser.TrackedBuffer, 
 
 func (tpb *tablePlanBuilder) isColumnGenerated(col sqlparser.ColIdent) bool {
 	isGenerated := false
-	for _, colInfo := range tpb.columnInfos {
+	for _, colInfo := range tpb.colInfos {
 		if col.EqualString(colInfo.Name) && colInfo.IsGenerated {
 			isGenerated = true
 			break
