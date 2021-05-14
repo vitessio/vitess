@@ -133,17 +133,18 @@ func (tm *TabletManager) Backup(ctx context.Context, concurrency int, logger log
 				l.Errorf("mysql backup command returned error: %v", returnErr)
 			}
 			returnErr = err
+		} else {
+			// Tell Orchestrator we're no longer stopped on purpose.
+			// Do this in the background, as it's best-effort.
+			go func() {
+				if tm.orc == nil {
+					return
+				}
+				if err := tm.orc.EndMaintenance(tm.Tablet()); err != nil {
+					logger.Warningf("Orchestrator EndMaintenance failed: %v", err)
+				}
+			}()
 		}
-		// Tell Orchestrator we're no longer stopped on purpose.
-		// Do this in the background, as it's best-effort.
-		go func() {
-			if tm.orc == nil {
-				return
-			}
-			if err := tm.orc.EndMaintenance(tm.Tablet()); err != nil {
-				logger.Warningf("Orchestrator EndMaintenance failed: %v", err)
-			}
-		}()
 	}
 
 	return returnErr
