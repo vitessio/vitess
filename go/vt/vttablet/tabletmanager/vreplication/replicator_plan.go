@@ -94,15 +94,15 @@ func (rp *ReplicatorPlan) buildExecutionPlan(fieldEvent *binlogdatapb.FieldEvent
 // requires us to wait for the field info sent by the source.
 func (rp *ReplicatorPlan) buildFromFields(tableName string, lastpk *sqltypes.Result, fields []*querypb.Field) (*TablePlan, error) {
 	tpb := &tablePlanBuilder{
-		name:        sqlparser.NewTableIdent(tableName),
-		lastpk:      lastpk,
-		columnInfos: rp.ColInfoMap[tableName],
-		stats:       rp.stats,
+		name:     sqlparser.NewTableIdent(tableName),
+		lastpk:   lastpk,
+		colInfos: rp.ColInfoMap[tableName],
+		stats:    rp.stats,
 	}
 	for _, field := range fields {
 		colName := sqlparser.NewColIdent(field.Name)
 		isGenerated := false
-		for _, colInfo := range tpb.columnInfos {
+		for _, colInfo := range tpb.colInfos {
 			if !strings.EqualFold(colInfo.Name, field.Name) {
 				continue
 			}
@@ -196,6 +196,7 @@ type TablePlan struct {
 	// a primary key column (row move).
 	PKReferences []string
 	Stats        *binlogplayer.Stats
+	FieldsToSkip map[string]bool
 }
 
 // MarshalJSON performs a custom JSON Marshalling.
@@ -233,7 +234,7 @@ func (tp *TablePlan) applyBulkInsert(sqlbuffer *bytes2.Buffer, rows *binlogdatap
 		if i > 0 {
 			sqlbuffer.WriteString(", ")
 		}
-		if err := tp.BulkInsertValues.AppendFromRow(sqlbuffer, tp.Fields, row); err != nil {
+		if err := tp.BulkInsertValues.AppendFromRow(sqlbuffer, tp.Fields, row, tp.FieldsToSkip); err != nil {
 			return nil, err
 		}
 	}
