@@ -918,6 +918,140 @@ func TestGetGates(t *testing.T) {
 	assert.Nil(t, resp)
 }
 
+func TestGetKeyspace(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name          string
+		clusterShards [][]*vtctldatapb.Shard
+		req           *vtadminpb.GetKeyspaceRequest
+		expected      *vtadminpb.Keyspace
+		shouldErr     bool
+	}{
+		{
+			clusterShards: [][]*vtctldatapb.Shard{
+				// cluster-0
+				{
+					{
+						Keyspace: "ks",
+						Name:     "-80",
+						Shard:    &topodatapb.Shard{},
+					},
+					{
+						Keyspace: "ks",
+						Name:     "80-",
+						Shard:    &topodatapb.Shard{},
+					},
+				},
+				// cluster-1
+				{
+					{
+						Keyspace: "ks",
+						Name:     "-",
+						Shard:    &topodatapb.Shard{},
+					},
+				},
+			},
+			req: &vtadminpb.GetKeyspaceRequest{
+				ClusterId: "cluster-1",
+				Keyspace:  "ks",
+			},
+			expected: &vtadminpb.Keyspace{
+				Cluster: &vtadminpb.Cluster{
+					Id:   "cluster-1",
+					Name: "cluster-1",
+				},
+				Keyspace: &vtctldatapb.Keyspace{
+					Name:     "ks",
+					Keyspace: &topodatapb.Keyspace{},
+				},
+				Shards: map[string]*vtctldatapb.Shard{
+					"-": {
+						Keyspace: "ks",
+						Name:     "-",
+						Shard:    &topodatapb.Shard{},
+					},
+				},
+			},
+		},
+		{
+			name: "nonexistent cluster",
+			clusterShards: [][]*vtctldatapb.Shard{
+				// cluster-0
+				{
+					{
+						Keyspace: "ks",
+						Name:     "-80",
+						Shard:    &topodatapb.Shard{},
+					},
+					{
+						Keyspace: "ks",
+						Name:     "80-",
+						Shard:    &topodatapb.Shard{},
+					},
+				},
+				// cluster-1
+				{
+					{
+						Keyspace: "ks",
+						Name:     "-",
+						Shard:    &topodatapb.Shard{},
+					},
+				},
+			},
+			req: &vtadminpb.GetKeyspaceRequest{
+				ClusterId: "cluster-2",
+			},
+			shouldErr: true,
+		},
+	}
+
+	ctx := context.Background()
+
+	for _, tt := range tests {
+		tt := tt
+
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			topos := make([]*topo.Server, len(tt.clusterShards))
+			vtctlds := make([]vtctlservicepb.VtctldServer, len(tt.clusterShards))
+
+			for i, shards := range tt.clusterShards {
+				ts := memorytopo.NewServer("cell1")
+				testutil.AddShards(ctx, t, ts, shards...)
+				topos[i] = ts
+				vtctlds[i] = testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+					return grpcvtctldserver.NewVtctldServer(ts)
+				})
+			}
+
+			testutil.WithTestServers(t, func(t *testing.T, clients ...vtctldclient.VtctldClient) {
+				clusters := make([]*cluster.Cluster, len(clients))
+				for i, client := range clients {
+					clusters[i] = vtadmintestutil.BuildCluster(vtadmintestutil.TestClusterConfig{
+						Cluster: &vtadminpb.Cluster{
+							Id:   fmt.Sprintf("cluster-%d", i),
+							Name: fmt.Sprintf("cluster-%d", i),
+						},
+						VtctldClient: client,
+					})
+				}
+
+				api := NewAPI(clusters, grpcserver.Options{}, http.Options{})
+				ks, err := api.GetKeyspace(ctx, tt.req)
+				if tt.shouldErr {
+					assert.Error(t, err)
+					return
+				}
+
+				assert.NoError(t, err)
+				assert.Equal(t, tt.expected, ks)
+			}, vtctlds...)
+		})
+	}
+}
+
 func TestGetKeyspaces(t *testing.T) {
 	t.Parallel()
 

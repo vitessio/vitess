@@ -150,6 +150,39 @@ $root.vtadmin = (function() {
          */
 
         /**
+         * Callback as used by {@link vtadmin.VTAdmin#getKeyspace}.
+         * @memberof vtadmin.VTAdmin
+         * @typedef GetKeyspaceCallback
+         * @type {function}
+         * @param {Error|null} error Error, if any
+         * @param {vtadmin.Keyspace} [response] Keyspace
+         */
+
+        /**
+         * Calls GetKeyspace.
+         * @function getKeyspace
+         * @memberof vtadmin.VTAdmin
+         * @instance
+         * @param {vtadmin.IGetKeyspaceRequest} request GetKeyspaceRequest message or plain object
+         * @param {vtadmin.VTAdmin.GetKeyspaceCallback} callback Node-style callback called with the error, if any, and Keyspace
+         * @returns {undefined}
+         * @variation 1
+         */
+        Object.defineProperty(VTAdmin.prototype.getKeyspace = function getKeyspace(request, callback) {
+            return this.rpcCall(getKeyspace, $root.vtadmin.GetKeyspaceRequest, $root.vtadmin.Keyspace, request, callback);
+        }, "name", { value: "GetKeyspace" });
+
+        /**
+         * Calls GetKeyspace.
+         * @function getKeyspace
+         * @memberof vtadmin.VTAdmin
+         * @instance
+         * @param {vtadmin.IGetKeyspaceRequest} request GetKeyspaceRequest message or plain object
+         * @returns {Promise<vtadmin.Keyspace>} Promise
+         * @variation 2
+         */
+
+        /**
          * Callback as used by {@link vtadmin.VTAdmin#getKeyspaces}.
          * @memberof vtadmin.VTAdmin
          * @typedef GetKeyspacesCallback
@@ -4459,6 +4492,216 @@ $root.vtadmin = (function() {
         };
 
         return GetGatesResponse;
+    })();
+
+    vtadmin.GetKeyspaceRequest = (function() {
+
+        /**
+         * Properties of a GetKeyspaceRequest.
+         * @memberof vtadmin
+         * @interface IGetKeyspaceRequest
+         * @property {string|null} [cluster_id] GetKeyspaceRequest cluster_id
+         * @property {string|null} [keyspace] GetKeyspaceRequest keyspace
+         */
+
+        /**
+         * Constructs a new GetKeyspaceRequest.
+         * @memberof vtadmin
+         * @classdesc Represents a GetKeyspaceRequest.
+         * @implements IGetKeyspaceRequest
+         * @constructor
+         * @param {vtadmin.IGetKeyspaceRequest=} [properties] Properties to set
+         */
+        function GetKeyspaceRequest(properties) {
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * GetKeyspaceRequest cluster_id.
+         * @member {string} cluster_id
+         * @memberof vtadmin.GetKeyspaceRequest
+         * @instance
+         */
+        GetKeyspaceRequest.prototype.cluster_id = "";
+
+        /**
+         * GetKeyspaceRequest keyspace.
+         * @member {string} keyspace
+         * @memberof vtadmin.GetKeyspaceRequest
+         * @instance
+         */
+        GetKeyspaceRequest.prototype.keyspace = "";
+
+        /**
+         * Creates a new GetKeyspaceRequest instance using the specified properties.
+         * @function create
+         * @memberof vtadmin.GetKeyspaceRequest
+         * @static
+         * @param {vtadmin.IGetKeyspaceRequest=} [properties] Properties to set
+         * @returns {vtadmin.GetKeyspaceRequest} GetKeyspaceRequest instance
+         */
+        GetKeyspaceRequest.create = function create(properties) {
+            return new GetKeyspaceRequest(properties);
+        };
+
+        /**
+         * Encodes the specified GetKeyspaceRequest message. Does not implicitly {@link vtadmin.GetKeyspaceRequest.verify|verify} messages.
+         * @function encode
+         * @memberof vtadmin.GetKeyspaceRequest
+         * @static
+         * @param {vtadmin.IGetKeyspaceRequest} message GetKeyspaceRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        GetKeyspaceRequest.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.cluster_id != null && Object.hasOwnProperty.call(message, "cluster_id"))
+                writer.uint32(/* id 1, wireType 2 =*/10).string(message.cluster_id);
+            if (message.keyspace != null && Object.hasOwnProperty.call(message, "keyspace"))
+                writer.uint32(/* id 2, wireType 2 =*/18).string(message.keyspace);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified GetKeyspaceRequest message, length delimited. Does not implicitly {@link vtadmin.GetKeyspaceRequest.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtadmin.GetKeyspaceRequest
+         * @static
+         * @param {vtadmin.IGetKeyspaceRequest} message GetKeyspaceRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        GetKeyspaceRequest.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a GetKeyspaceRequest message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtadmin.GetKeyspaceRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtadmin.GetKeyspaceRequest} GetKeyspaceRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        GetKeyspaceRequest.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.GetKeyspaceRequest();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    message.cluster_id = reader.string();
+                    break;
+                case 2:
+                    message.keyspace = reader.string();
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a GetKeyspaceRequest message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtadmin.GetKeyspaceRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtadmin.GetKeyspaceRequest} GetKeyspaceRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        GetKeyspaceRequest.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a GetKeyspaceRequest message.
+         * @function verify
+         * @memberof vtadmin.GetKeyspaceRequest
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        GetKeyspaceRequest.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.cluster_id != null && message.hasOwnProperty("cluster_id"))
+                if (!$util.isString(message.cluster_id))
+                    return "cluster_id: string expected";
+            if (message.keyspace != null && message.hasOwnProperty("keyspace"))
+                if (!$util.isString(message.keyspace))
+                    return "keyspace: string expected";
+            return null;
+        };
+
+        /**
+         * Creates a GetKeyspaceRequest message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtadmin.GetKeyspaceRequest
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtadmin.GetKeyspaceRequest} GetKeyspaceRequest
+         */
+        GetKeyspaceRequest.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtadmin.GetKeyspaceRequest)
+                return object;
+            var message = new $root.vtadmin.GetKeyspaceRequest();
+            if (object.cluster_id != null)
+                message.cluster_id = String(object.cluster_id);
+            if (object.keyspace != null)
+                message.keyspace = String(object.keyspace);
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a GetKeyspaceRequest message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtadmin.GetKeyspaceRequest
+         * @static
+         * @param {vtadmin.GetKeyspaceRequest} message GetKeyspaceRequest
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        GetKeyspaceRequest.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.defaults) {
+                object.cluster_id = "";
+                object.keyspace = "";
+            }
+            if (message.cluster_id != null && message.hasOwnProperty("cluster_id"))
+                object.cluster_id = message.cluster_id;
+            if (message.keyspace != null && message.hasOwnProperty("keyspace"))
+                object.keyspace = message.keyspace;
+            return object;
+        };
+
+        /**
+         * Converts this GetKeyspaceRequest to JSON.
+         * @function toJSON
+         * @memberof vtadmin.GetKeyspaceRequest
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        GetKeyspaceRequest.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return GetKeyspaceRequest;
     })();
 
     vtadmin.GetKeyspacesRequest = (function() {
@@ -16003,6 +16246,453 @@ $root.tabletmanagerdata = (function() {
         };
 
         return UnlockTablesResponse;
+    })();
+
+    tabletmanagerdata.ExecuteQueryRequest = (function() {
+
+        /**
+         * Properties of an ExecuteQueryRequest.
+         * @memberof tabletmanagerdata
+         * @interface IExecuteQueryRequest
+         * @property {Uint8Array|null} [query] ExecuteQueryRequest query
+         * @property {string|null} [db_name] ExecuteQueryRequest db_name
+         * @property {number|Long|null} [max_rows] ExecuteQueryRequest max_rows
+         */
+
+        /**
+         * Constructs a new ExecuteQueryRequest.
+         * @memberof tabletmanagerdata
+         * @classdesc Represents an ExecuteQueryRequest.
+         * @implements IExecuteQueryRequest
+         * @constructor
+         * @param {tabletmanagerdata.IExecuteQueryRequest=} [properties] Properties to set
+         */
+        function ExecuteQueryRequest(properties) {
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * ExecuteQueryRequest query.
+         * @member {Uint8Array} query
+         * @memberof tabletmanagerdata.ExecuteQueryRequest
+         * @instance
+         */
+        ExecuteQueryRequest.prototype.query = $util.newBuffer([]);
+
+        /**
+         * ExecuteQueryRequest db_name.
+         * @member {string} db_name
+         * @memberof tabletmanagerdata.ExecuteQueryRequest
+         * @instance
+         */
+        ExecuteQueryRequest.prototype.db_name = "";
+
+        /**
+         * ExecuteQueryRequest max_rows.
+         * @member {number|Long} max_rows
+         * @memberof tabletmanagerdata.ExecuteQueryRequest
+         * @instance
+         */
+        ExecuteQueryRequest.prototype.max_rows = $util.Long ? $util.Long.fromBits(0,0,true) : 0;
+
+        /**
+         * Creates a new ExecuteQueryRequest instance using the specified properties.
+         * @function create
+         * @memberof tabletmanagerdata.ExecuteQueryRequest
+         * @static
+         * @param {tabletmanagerdata.IExecuteQueryRequest=} [properties] Properties to set
+         * @returns {tabletmanagerdata.ExecuteQueryRequest} ExecuteQueryRequest instance
+         */
+        ExecuteQueryRequest.create = function create(properties) {
+            return new ExecuteQueryRequest(properties);
+        };
+
+        /**
+         * Encodes the specified ExecuteQueryRequest message. Does not implicitly {@link tabletmanagerdata.ExecuteQueryRequest.verify|verify} messages.
+         * @function encode
+         * @memberof tabletmanagerdata.ExecuteQueryRequest
+         * @static
+         * @param {tabletmanagerdata.IExecuteQueryRequest} message ExecuteQueryRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        ExecuteQueryRequest.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.query != null && Object.hasOwnProperty.call(message, "query"))
+                writer.uint32(/* id 1, wireType 2 =*/10).bytes(message.query);
+            if (message.db_name != null && Object.hasOwnProperty.call(message, "db_name"))
+                writer.uint32(/* id 2, wireType 2 =*/18).string(message.db_name);
+            if (message.max_rows != null && Object.hasOwnProperty.call(message, "max_rows"))
+                writer.uint32(/* id 3, wireType 0 =*/24).uint64(message.max_rows);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified ExecuteQueryRequest message, length delimited. Does not implicitly {@link tabletmanagerdata.ExecuteQueryRequest.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof tabletmanagerdata.ExecuteQueryRequest
+         * @static
+         * @param {tabletmanagerdata.IExecuteQueryRequest} message ExecuteQueryRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        ExecuteQueryRequest.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes an ExecuteQueryRequest message from the specified reader or buffer.
+         * @function decode
+         * @memberof tabletmanagerdata.ExecuteQueryRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {tabletmanagerdata.ExecuteQueryRequest} ExecuteQueryRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        ExecuteQueryRequest.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.ExecuteQueryRequest();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    message.query = reader.bytes();
+                    break;
+                case 2:
+                    message.db_name = reader.string();
+                    break;
+                case 3:
+                    message.max_rows = reader.uint64();
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes an ExecuteQueryRequest message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof tabletmanagerdata.ExecuteQueryRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {tabletmanagerdata.ExecuteQueryRequest} ExecuteQueryRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        ExecuteQueryRequest.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies an ExecuteQueryRequest message.
+         * @function verify
+         * @memberof tabletmanagerdata.ExecuteQueryRequest
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        ExecuteQueryRequest.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.query != null && message.hasOwnProperty("query"))
+                if (!(message.query && typeof message.query.length === "number" || $util.isString(message.query)))
+                    return "query: buffer expected";
+            if (message.db_name != null && message.hasOwnProperty("db_name"))
+                if (!$util.isString(message.db_name))
+                    return "db_name: string expected";
+            if (message.max_rows != null && message.hasOwnProperty("max_rows"))
+                if (!$util.isInteger(message.max_rows) && !(message.max_rows && $util.isInteger(message.max_rows.low) && $util.isInteger(message.max_rows.high)))
+                    return "max_rows: integer|Long expected";
+            return null;
+        };
+
+        /**
+         * Creates an ExecuteQueryRequest message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof tabletmanagerdata.ExecuteQueryRequest
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {tabletmanagerdata.ExecuteQueryRequest} ExecuteQueryRequest
+         */
+        ExecuteQueryRequest.fromObject = function fromObject(object) {
+            if (object instanceof $root.tabletmanagerdata.ExecuteQueryRequest)
+                return object;
+            var message = new $root.tabletmanagerdata.ExecuteQueryRequest();
+            if (object.query != null)
+                if (typeof object.query === "string")
+                    $util.base64.decode(object.query, message.query = $util.newBuffer($util.base64.length(object.query)), 0);
+                else if (object.query.length)
+                    message.query = object.query;
+            if (object.db_name != null)
+                message.db_name = String(object.db_name);
+            if (object.max_rows != null)
+                if ($util.Long)
+                    (message.max_rows = $util.Long.fromValue(object.max_rows)).unsigned = true;
+                else if (typeof object.max_rows === "string")
+                    message.max_rows = parseInt(object.max_rows, 10);
+                else if (typeof object.max_rows === "number")
+                    message.max_rows = object.max_rows;
+                else if (typeof object.max_rows === "object")
+                    message.max_rows = new $util.LongBits(object.max_rows.low >>> 0, object.max_rows.high >>> 0).toNumber(true);
+            return message;
+        };
+
+        /**
+         * Creates a plain object from an ExecuteQueryRequest message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof tabletmanagerdata.ExecuteQueryRequest
+         * @static
+         * @param {tabletmanagerdata.ExecuteQueryRequest} message ExecuteQueryRequest
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        ExecuteQueryRequest.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.defaults) {
+                if (options.bytes === String)
+                    object.query = "";
+                else {
+                    object.query = [];
+                    if (options.bytes !== Array)
+                        object.query = $util.newBuffer(object.query);
+                }
+                object.db_name = "";
+                if ($util.Long) {
+                    var long = new $util.Long(0, 0, true);
+                    object.max_rows = options.longs === String ? long.toString() : options.longs === Number ? long.toNumber() : long;
+                } else
+                    object.max_rows = options.longs === String ? "0" : 0;
+            }
+            if (message.query != null && message.hasOwnProperty("query"))
+                object.query = options.bytes === String ? $util.base64.encode(message.query, 0, message.query.length) : options.bytes === Array ? Array.prototype.slice.call(message.query) : message.query;
+            if (message.db_name != null && message.hasOwnProperty("db_name"))
+                object.db_name = message.db_name;
+            if (message.max_rows != null && message.hasOwnProperty("max_rows"))
+                if (typeof message.max_rows === "number")
+                    object.max_rows = options.longs === String ? String(message.max_rows) : message.max_rows;
+                else
+                    object.max_rows = options.longs === String ? $util.Long.prototype.toString.call(message.max_rows) : options.longs === Number ? new $util.LongBits(message.max_rows.low >>> 0, message.max_rows.high >>> 0).toNumber(true) : message.max_rows;
+            return object;
+        };
+
+        /**
+         * Converts this ExecuteQueryRequest to JSON.
+         * @function toJSON
+         * @memberof tabletmanagerdata.ExecuteQueryRequest
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        ExecuteQueryRequest.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return ExecuteQueryRequest;
+    })();
+
+    tabletmanagerdata.ExecuteQueryResponse = (function() {
+
+        /**
+         * Properties of an ExecuteQueryResponse.
+         * @memberof tabletmanagerdata
+         * @interface IExecuteQueryResponse
+         * @property {query.IQueryResult|null} [result] ExecuteQueryResponse result
+         */
+
+        /**
+         * Constructs a new ExecuteQueryResponse.
+         * @memberof tabletmanagerdata
+         * @classdesc Represents an ExecuteQueryResponse.
+         * @implements IExecuteQueryResponse
+         * @constructor
+         * @param {tabletmanagerdata.IExecuteQueryResponse=} [properties] Properties to set
+         */
+        function ExecuteQueryResponse(properties) {
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * ExecuteQueryResponse result.
+         * @member {query.IQueryResult|null|undefined} result
+         * @memberof tabletmanagerdata.ExecuteQueryResponse
+         * @instance
+         */
+        ExecuteQueryResponse.prototype.result = null;
+
+        /**
+         * Creates a new ExecuteQueryResponse instance using the specified properties.
+         * @function create
+         * @memberof tabletmanagerdata.ExecuteQueryResponse
+         * @static
+         * @param {tabletmanagerdata.IExecuteQueryResponse=} [properties] Properties to set
+         * @returns {tabletmanagerdata.ExecuteQueryResponse} ExecuteQueryResponse instance
+         */
+        ExecuteQueryResponse.create = function create(properties) {
+            return new ExecuteQueryResponse(properties);
+        };
+
+        /**
+         * Encodes the specified ExecuteQueryResponse message. Does not implicitly {@link tabletmanagerdata.ExecuteQueryResponse.verify|verify} messages.
+         * @function encode
+         * @memberof tabletmanagerdata.ExecuteQueryResponse
+         * @static
+         * @param {tabletmanagerdata.IExecuteQueryResponse} message ExecuteQueryResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        ExecuteQueryResponse.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.result != null && Object.hasOwnProperty.call(message, "result"))
+                $root.query.QueryResult.encode(message.result, writer.uint32(/* id 1, wireType 2 =*/10).fork()).ldelim();
+            return writer;
+        };
+
+        /**
+         * Encodes the specified ExecuteQueryResponse message, length delimited. Does not implicitly {@link tabletmanagerdata.ExecuteQueryResponse.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof tabletmanagerdata.ExecuteQueryResponse
+         * @static
+         * @param {tabletmanagerdata.IExecuteQueryResponse} message ExecuteQueryResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        ExecuteQueryResponse.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes an ExecuteQueryResponse message from the specified reader or buffer.
+         * @function decode
+         * @memberof tabletmanagerdata.ExecuteQueryResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {tabletmanagerdata.ExecuteQueryResponse} ExecuteQueryResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        ExecuteQueryResponse.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.ExecuteQueryResponse();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    message.result = $root.query.QueryResult.decode(reader, reader.uint32());
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes an ExecuteQueryResponse message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof tabletmanagerdata.ExecuteQueryResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {tabletmanagerdata.ExecuteQueryResponse} ExecuteQueryResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        ExecuteQueryResponse.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies an ExecuteQueryResponse message.
+         * @function verify
+         * @memberof tabletmanagerdata.ExecuteQueryResponse
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        ExecuteQueryResponse.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.result != null && message.hasOwnProperty("result")) {
+                var error = $root.query.QueryResult.verify(message.result);
+                if (error)
+                    return "result." + error;
+            }
+            return null;
+        };
+
+        /**
+         * Creates an ExecuteQueryResponse message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof tabletmanagerdata.ExecuteQueryResponse
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {tabletmanagerdata.ExecuteQueryResponse} ExecuteQueryResponse
+         */
+        ExecuteQueryResponse.fromObject = function fromObject(object) {
+            if (object instanceof $root.tabletmanagerdata.ExecuteQueryResponse)
+                return object;
+            var message = new $root.tabletmanagerdata.ExecuteQueryResponse();
+            if (object.result != null) {
+                if (typeof object.result !== "object")
+                    throw TypeError(".tabletmanagerdata.ExecuteQueryResponse.result: object expected");
+                message.result = $root.query.QueryResult.fromObject(object.result);
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from an ExecuteQueryResponse message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof tabletmanagerdata.ExecuteQueryResponse
+         * @static
+         * @param {tabletmanagerdata.ExecuteQueryResponse} message ExecuteQueryResponse
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        ExecuteQueryResponse.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.defaults)
+                object.result = null;
+            if (message.result != null && message.hasOwnProperty("result"))
+                object.result = $root.query.QueryResult.toObject(message.result, options);
+            return object;
+        };
+
+        /**
+         * Converts this ExecuteQueryResponse to JSON.
+         * @function toJSON
+         * @memberof tabletmanagerdata.ExecuteQueryResponse
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        ExecuteQueryResponse.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return ExecuteQueryResponse;
     })();
 
     tabletmanagerdata.ExecuteFetchAsDbaRequest = (function() {
@@ -42380,6 +43070,7 @@ $root.query = (function() {
          * @property {number|Long|null} [seconds_behind_master_filtered_replication] RealtimeStats seconds_behind_master_filtered_replication
          * @property {number|null} [cpu_usage] RealtimeStats cpu_usage
          * @property {number|null} [qps] RealtimeStats qps
+         * @property {Array.<string>|null} [table_schema_changed] RealtimeStats table_schema_changed
          */
 
         /**
@@ -42391,6 +43082,7 @@ $root.query = (function() {
          * @param {query.IRealtimeStats=} [properties] Properties to set
          */
         function RealtimeStats(properties) {
+            this.table_schema_changed = [];
             if (properties)
                 for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
                     if (properties[keys[i]] != null)
@@ -42446,6 +43138,14 @@ $root.query = (function() {
         RealtimeStats.prototype.qps = 0;
 
         /**
+         * RealtimeStats table_schema_changed.
+         * @member {Array.<string>} table_schema_changed
+         * @memberof query.RealtimeStats
+         * @instance
+         */
+        RealtimeStats.prototype.table_schema_changed = $util.emptyArray;
+
+        /**
          * Creates a new RealtimeStats instance using the specified properties.
          * @function create
          * @memberof query.RealtimeStats
@@ -42481,6 +43181,9 @@ $root.query = (function() {
                 writer.uint32(/* id 5, wireType 1 =*/41).double(message.cpu_usage);
             if (message.qps != null && Object.hasOwnProperty.call(message, "qps"))
                 writer.uint32(/* id 6, wireType 1 =*/49).double(message.qps);
+            if (message.table_schema_changed != null && message.table_schema_changed.length)
+                for (var i = 0; i < message.table_schema_changed.length; ++i)
+                    writer.uint32(/* id 7, wireType 2 =*/58).string(message.table_schema_changed[i]);
             return writer;
         };
 
@@ -42532,6 +43235,11 @@ $root.query = (function() {
                     break;
                 case 6:
                     message.qps = reader.double();
+                    break;
+                case 7:
+                    if (!(message.table_schema_changed && message.table_schema_changed.length))
+                        message.table_schema_changed = [];
+                    message.table_schema_changed.push(reader.string());
                     break;
                 default:
                     reader.skipType(tag & 7);
@@ -42586,6 +43294,13 @@ $root.query = (function() {
             if (message.qps != null && message.hasOwnProperty("qps"))
                 if (typeof message.qps !== "number")
                     return "qps: number expected";
+            if (message.table_schema_changed != null && message.hasOwnProperty("table_schema_changed")) {
+                if (!Array.isArray(message.table_schema_changed))
+                    return "table_schema_changed: array expected";
+                for (var i = 0; i < message.table_schema_changed.length; ++i)
+                    if (!$util.isString(message.table_schema_changed[i]))
+                        return "table_schema_changed: string[] expected";
+            }
             return null;
         };
 
@@ -42620,6 +43335,13 @@ $root.query = (function() {
                 message.cpu_usage = Number(object.cpu_usage);
             if (object.qps != null)
                 message.qps = Number(object.qps);
+            if (object.table_schema_changed) {
+                if (!Array.isArray(object.table_schema_changed))
+                    throw TypeError(".query.RealtimeStats.table_schema_changed: array expected");
+                message.table_schema_changed = [];
+                for (var i = 0; i < object.table_schema_changed.length; ++i)
+                    message.table_schema_changed[i] = String(object.table_schema_changed[i]);
+            }
             return message;
         };
 
@@ -42636,6 +43358,8 @@ $root.query = (function() {
             if (!options)
                 options = {};
             var object = {};
+            if (options.arrays || options.defaults)
+                object.table_schema_changed = [];
             if (options.defaults) {
                 object.health_error = "";
                 object.seconds_behind_master = 0;
@@ -42663,6 +43387,11 @@ $root.query = (function() {
                 object.cpu_usage = options.json && !isFinite(message.cpu_usage) ? String(message.cpu_usage) : message.cpu_usage;
             if (message.qps != null && message.hasOwnProperty("qps"))
                 object.qps = options.json && !isFinite(message.qps) ? String(message.qps) : message.qps;
+            if (message.table_schema_changed && message.table_schema_changed.length) {
+                object.table_schema_changed = [];
+                for (var j = 0; j < message.table_schema_changed.length; ++j)
+                    object.table_schema_changed[j] = message.table_schema_changed[j];
+            }
             return object;
         };
 
