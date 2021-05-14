@@ -65,6 +65,20 @@ export namespace vtadmin {
         public getGates(request: vtadmin.IGetGatesRequest): Promise<vtadmin.GetGatesResponse>;
 
         /**
+         * Calls GetKeyspace.
+         * @param request GetKeyspaceRequest message or plain object
+         * @param callback Node-style callback called with the error, if any, and Keyspace
+         */
+        public getKeyspace(request: vtadmin.IGetKeyspaceRequest, callback: vtadmin.VTAdmin.GetKeyspaceCallback): void;
+
+        /**
+         * Calls GetKeyspace.
+         * @param request GetKeyspaceRequest message or plain object
+         * @returns Promise
+         */
+        public getKeyspace(request: vtadmin.IGetKeyspaceRequest): Promise<vtadmin.Keyspace>;
+
+        /**
          * Calls GetKeyspaces.
          * @param request GetKeyspacesRequest message or plain object
          * @param callback Node-style callback called with the error, if any, and GetKeyspacesResponse
@@ -227,6 +241,13 @@ export namespace vtadmin {
          * @param [response] GetGatesResponse
          */
         type GetGatesCallback = (error: (Error|null), response?: vtadmin.GetGatesResponse) => void;
+
+        /**
+         * Callback as used by {@link vtadmin.VTAdmin#getKeyspace}.
+         * @param error Error, if any
+         * @param [response] Keyspace
+         */
+        type GetKeyspaceCallback = (error: (Error|null), response?: vtadmin.Keyspace) => void;
 
         /**
          * Callback as used by {@link vtadmin.VTAdmin#getKeyspaces}.
@@ -1897,6 +1918,102 @@ export namespace vtadmin {
 
         /**
          * Converts this GetGatesResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a GetKeyspaceRequest. */
+    interface IGetKeyspaceRequest {
+
+        /** GetKeyspaceRequest cluster_id */
+        cluster_id?: (string|null);
+
+        /** GetKeyspaceRequest keyspace */
+        keyspace?: (string|null);
+    }
+
+    /** Represents a GetKeyspaceRequest. */
+    class GetKeyspaceRequest implements IGetKeyspaceRequest {
+
+        /**
+         * Constructs a new GetKeyspaceRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtadmin.IGetKeyspaceRequest);
+
+        /** GetKeyspaceRequest cluster_id. */
+        public cluster_id: string;
+
+        /** GetKeyspaceRequest keyspace. */
+        public keyspace: string;
+
+        /**
+         * Creates a new GetKeyspaceRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns GetKeyspaceRequest instance
+         */
+        public static create(properties?: vtadmin.IGetKeyspaceRequest): vtadmin.GetKeyspaceRequest;
+
+        /**
+         * Encodes the specified GetKeyspaceRequest message. Does not implicitly {@link vtadmin.GetKeyspaceRequest.verify|verify} messages.
+         * @param message GetKeyspaceRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtadmin.IGetKeyspaceRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified GetKeyspaceRequest message, length delimited. Does not implicitly {@link vtadmin.GetKeyspaceRequest.verify|verify} messages.
+         * @param message GetKeyspaceRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtadmin.IGetKeyspaceRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a GetKeyspaceRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns GetKeyspaceRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.GetKeyspaceRequest;
+
+        /**
+         * Decodes a GetKeyspaceRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns GetKeyspaceRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.GetKeyspaceRequest;
+
+        /**
+         * Verifies a GetKeyspaceRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a GetKeyspaceRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns GetKeyspaceRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtadmin.GetKeyspaceRequest;
+
+        /**
+         * Creates a plain object from a GetKeyspaceRequest message. Also converts values to other types if specified.
+         * @param message GetKeyspaceRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtadmin.GetKeyspaceRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this GetKeyspaceRequest to JSON.
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
@@ -7007,6 +7124,198 @@ export namespace tabletmanagerdata {
 
         /**
          * Converts this UnlockTablesResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of an ExecuteQueryRequest. */
+    interface IExecuteQueryRequest {
+
+        /** ExecuteQueryRequest query */
+        query?: (Uint8Array|null);
+
+        /** ExecuteQueryRequest db_name */
+        db_name?: (string|null);
+
+        /** ExecuteQueryRequest max_rows */
+        max_rows?: (number|Long|null);
+    }
+
+    /** Represents an ExecuteQueryRequest. */
+    class ExecuteQueryRequest implements IExecuteQueryRequest {
+
+        /**
+         * Constructs a new ExecuteQueryRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: tabletmanagerdata.IExecuteQueryRequest);
+
+        /** ExecuteQueryRequest query. */
+        public query: Uint8Array;
+
+        /** ExecuteQueryRequest db_name. */
+        public db_name: string;
+
+        /** ExecuteQueryRequest max_rows. */
+        public max_rows: (number|Long);
+
+        /**
+         * Creates a new ExecuteQueryRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ExecuteQueryRequest instance
+         */
+        public static create(properties?: tabletmanagerdata.IExecuteQueryRequest): tabletmanagerdata.ExecuteQueryRequest;
+
+        /**
+         * Encodes the specified ExecuteQueryRequest message. Does not implicitly {@link tabletmanagerdata.ExecuteQueryRequest.verify|verify} messages.
+         * @param message ExecuteQueryRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: tabletmanagerdata.IExecuteQueryRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ExecuteQueryRequest message, length delimited. Does not implicitly {@link tabletmanagerdata.ExecuteQueryRequest.verify|verify} messages.
+         * @param message ExecuteQueryRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: tabletmanagerdata.IExecuteQueryRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes an ExecuteQueryRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ExecuteQueryRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.ExecuteQueryRequest;
+
+        /**
+         * Decodes an ExecuteQueryRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ExecuteQueryRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.ExecuteQueryRequest;
+
+        /**
+         * Verifies an ExecuteQueryRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates an ExecuteQueryRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ExecuteQueryRequest
+         */
+        public static fromObject(object: { [k: string]: any }): tabletmanagerdata.ExecuteQueryRequest;
+
+        /**
+         * Creates a plain object from an ExecuteQueryRequest message. Also converts values to other types if specified.
+         * @param message ExecuteQueryRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: tabletmanagerdata.ExecuteQueryRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ExecuteQueryRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of an ExecuteQueryResponse. */
+    interface IExecuteQueryResponse {
+
+        /** ExecuteQueryResponse result */
+        result?: (query.IQueryResult|null);
+    }
+
+    /** Represents an ExecuteQueryResponse. */
+    class ExecuteQueryResponse implements IExecuteQueryResponse {
+
+        /**
+         * Constructs a new ExecuteQueryResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: tabletmanagerdata.IExecuteQueryResponse);
+
+        /** ExecuteQueryResponse result. */
+        public result?: (query.IQueryResult|null);
+
+        /**
+         * Creates a new ExecuteQueryResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ExecuteQueryResponse instance
+         */
+        public static create(properties?: tabletmanagerdata.IExecuteQueryResponse): tabletmanagerdata.ExecuteQueryResponse;
+
+        /**
+         * Encodes the specified ExecuteQueryResponse message. Does not implicitly {@link tabletmanagerdata.ExecuteQueryResponse.verify|verify} messages.
+         * @param message ExecuteQueryResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: tabletmanagerdata.IExecuteQueryResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ExecuteQueryResponse message, length delimited. Does not implicitly {@link tabletmanagerdata.ExecuteQueryResponse.verify|verify} messages.
+         * @param message ExecuteQueryResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: tabletmanagerdata.IExecuteQueryResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes an ExecuteQueryResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ExecuteQueryResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.ExecuteQueryResponse;
+
+        /**
+         * Decodes an ExecuteQueryResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ExecuteQueryResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.ExecuteQueryResponse;
+
+        /**
+         * Verifies an ExecuteQueryResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates an ExecuteQueryResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ExecuteQueryResponse
+         */
+        public static fromObject(object: { [k: string]: any }): tabletmanagerdata.ExecuteQueryResponse;
+
+        /**
+         * Creates a plain object from an ExecuteQueryResponse message. Also converts values to other types if specified.
+         * @param message ExecuteQueryResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: tabletmanagerdata.ExecuteQueryResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ExecuteQueryResponse to JSON.
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
@@ -18109,6 +18418,9 @@ export namespace query {
 
         /** RealtimeStats qps */
         qps?: (number|null);
+
+        /** RealtimeStats table_schema_changed */
+        table_schema_changed?: (string[]|null);
     }
 
     /** Represents a RealtimeStats. */
@@ -18137,6 +18449,9 @@ export namespace query {
 
         /** RealtimeStats qps. */
         public qps: number;
+
+        /** RealtimeStats table_schema_changed. */
+        public table_schema_changed: string[];
 
         /**
          * Creates a new RealtimeStats instance using the specified properties.
