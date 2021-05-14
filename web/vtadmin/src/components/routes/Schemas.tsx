@@ -29,6 +29,7 @@ import { DataTable } from '../dataTable/DataTable';
 import { ContentContainer } from '../layout/ContentContainer';
 import { WorkspaceHeader } from '../layout/WorkspaceHeader';
 import { WorkspaceTitle } from '../layout/WorkspaceTitle';
+import { KeyspaceLink } from '../links/KeyspaceLink';
 import { HelpTooltip } from '../tooltip/HelpTooltip';
 
 const TABLE_COLUMNS = [
@@ -90,8 +91,10 @@ export const Schemas = () => {
             return (
                 <tr key={idx}>
                     <DataCell>
-                        <div>{row.keyspace}</div>
-                        <div className="font-size-small text-color-secondary">{row.cluster}</div>
+                        <KeyspaceLink clusterID={row.clusterID} name={row.keyspace}>
+                            <div>{row.keyspace}</div>
+                            <div className="font-size-small text-color-secondary">{row.cluster}</div>
+                        </KeyspaceLink>
                     </DataCell>
                     <DataCell className="font-weight-bold">
                         {href ? <Link to={href}>{row.table}</Link> : row.table}

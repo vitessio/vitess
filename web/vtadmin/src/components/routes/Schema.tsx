@@ -26,6 +26,7 @@ import { NavCrumbs } from '../layout/NavCrumbs';
 import { WorkspaceHeader } from '../layout/WorkspaceHeader';
 import { WorkspaceTitle } from '../layout/WorkspaceTitle';
 import { Tooltip } from '../tooltip/Tooltip';
+import { KeyspaceLink } from '../links/KeyspaceLink';
 
 interface RouteParams {
     clusterID: string;
@@ -70,7 +71,10 @@ export const Schema = () => {
                             Cluster: <code>{clusterID}</code>
                         </span>
                         <span>
-                            Keyspace: <code>{keyspace}</code>
+                            Keyspace:{' '}
+                            <KeyspaceLink clusterID={clusterID} name={keyspace}>
+                                <code>{keyspace}</code>
+                            </KeyspaceLink>
                         </span>
                     </div>
                 </WorkspaceHeader>
