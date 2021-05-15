@@ -1285,7 +1285,7 @@ func TestPlayerCopyTablesWithGeneratedColumn(t *testing.T) {
 	flavor := strings.ToLower(env.Flavor)
 	// Disable tests on percona (which identifies as mysql56) and mariadb platforms in CI since they
 	// generated columns support was added in 5.7 and mariadb added mysql compatible generated columns in 10.2
-	if strings.Contains(flavor, "56") || strings.Contains(flavor, "maria") {
+	if !strings.Contains(flavor, "mysql57") && !strings.Contains(flavor, "mysql80") {
 		return
 	}
 	defer deleteTablet(addTablet(100))
