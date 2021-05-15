@@ -1,4 +1,3 @@
-2021-01-12T17:50:46Z,check_make_parser,https://github.com/vitessio/vitess/actions/runs/480863496
 2021-01-12T17:50:46Z,e2e_race,https://github.com/vitessio/vitess/actions/runs/480863473
 2021-01-12T17:50:46Z,endtoend,https://github.com/vitessio/vitess/actions/runs/480863506
 2021-01-12T17:50:46Z,local_example,https://github.com/vitessio/vitess/actions/runs/480863467
@@ -9998,3 +9997,4 @@
 2021-05-15T16:08:47Z,local_example,https://github.com/vitessio/vitess/actions/runs/845225496
 2021-05-15T16:08:47Z,region_example,https://github.com/vitessio/vitess/actions/runs/845225494
 2021-05-15T19:31:07Z,Cluster (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/845535283
+2021-05-15T19:31:07Z,unit_race,https://github.com/vitessio/vitess/actions/runs/845535377
