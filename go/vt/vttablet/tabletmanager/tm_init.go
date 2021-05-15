@@ -133,11 +133,10 @@ type TabletManager struct {
 	UpdateStream        binlog.UpdateStreamControl
 	VREngine            *vreplication.Engine
 
-	// LocalMetadataPopulator is a function for populating the local metadata
-	// tables. It is exported to support swapping a no-op function in test
-	// code, but in normal production usage this should be
-	// mysqlctl.PopulateMetadataTables.
-	LocalMetadataPopulator func(mysqld mysqlctl.MysqlDaemon, metadata map[string]string, dbName string) error
+	// MetadataManager manages the local metadata tables for a tablet. It
+	// exists, and is exported, to support swapping a nil pointer in test code,
+	// in which case metadata creation/population is skipped.
+	MetadataManager *mysqlctl.MetadataManager
 
 	// tmState manages the TabletManager state.
 	tmState *tmState
@@ -667,8 +666,8 @@ func (tm *TabletManager) handleRestore(ctx context.Context) (bool, error) {
 			}
 		}
 
-		if tm.LocalMetadataPopulator != nil {
-			err := mysqlctl.PopulateMetadataTables(tm.MysqlDaemon, localMetadata, topoproto.TabletDbName(tablet))
+		if tm.MetadataManager != nil {
+			err := tm.MetadataManager.PopulateMetadataTables(tm.MysqlDaemon, localMetadata, topoproto.TabletDbName(tablet))
 			if err != nil {
 				return false, vterrors.Wrap(err, "failed to -init_populate_metadata")
 			}

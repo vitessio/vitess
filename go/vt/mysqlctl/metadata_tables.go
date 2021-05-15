@@ -59,6 +59,29 @@ var (
 	}
 )
 
+// MetadataManager manages the creation and filling of the _vt.local_metadata
+// and _vt.shard_metadata tables.
+type MetadataManager struct{}
+
+// CreateMetadataTables creates the metadata tables. See the package-level
+// function for more details.
+func (m *MetadataManager) CreateMetadataTables(mysqld MysqlDaemon, dbName string) error {
+	return CreateMetadataTables(mysqld, dbName)
+}
+
+// PopulateMetadataTables creates and fills the metadata tables. See the
+// package-level function for more details.
+func (m *MetadataManager) PopulateMetadataTables(mysqld MysqlDaemon, localMetadata map[string]string, dbName string) error {
+	return PopulateMetadataTables(mysqld, localMetadata, dbName)
+}
+
+// UpsertLocalMetadata adds the given metadata map to the _vt.local_metadata
+// table, updating any duplicate rows to the values in the map. See the package-
+// level function for more details.
+func (m *MetadataManager) UpsertLocalMetadata(mysqld MysqlDaemon, localMetadata map[string]string, dbName string) error {
+	return UpsertLocalMetadata(mysqld, localMetadata, dbName)
+}
+
 // CreateMetadataTables creates the _vt.local_metadata and _vt.shard_metadata
 // tables.
 //

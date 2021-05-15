@@ -59,18 +59,17 @@ type tmState struct {
 	// Because mu can be held for long, we publish the current state
 	// of these variables into displayState, which can be accessed
 	// more freely even while tmState is busy transitioning.
-	mu                sync.Mutex
-	isOpen            bool
-	isOpening         bool
-	isResharding      bool
-	isInSrvKeyspace   bool
-	isShardServing    map[topodatapb.TabletType]bool
-	tabletControls    map[topodatapb.TabletType]bool
-	blacklistedTables map[topodatapb.TabletType][]string
-	tablet            *topodatapb.Tablet
-	isPublishing      bool
-
-	populateMetadataTables func(mysqld mysqlctl.MysqlDaemon, tablet *topodatapb.Tablet, metadata map[string]string)
+	mu                       sync.Mutex
+	isOpen                   bool
+	isOpening                bool
+	isResharding             bool
+	isInSrvKeyspace          bool
+	isShardServing           map[topodatapb.TabletType]bool
+	tabletControls           map[topodatapb.TabletType]bool
+	blacklistedTables        map[topodatapb.TabletType][]string
+	tablet                   *topodatapb.Tablet
+	isPublishing             bool
+	hasCreatedMetadataTables bool
 
 	// displayState contains the current snapshot of the internal state
 	// and has its own mutex.
@@ -85,12 +84,6 @@ func newTMState(tm *TabletManager, tablet *topodatapb.Tablet) *tmState {
 			tablet: proto.Clone(tablet).(*topodatapb.Tablet),
 		},
 		tablet: tablet,
-		populateMetadataTables: func(mysqld mysqlctl.MysqlDaemon, tablet *topodatapb.Tablet, metadata map[string]string) {
-			err := mysqlctl.PopulateMetadataTables(mysqld, metadata, topoproto.TabletDbName(tablet))
-			if err != nil {
-				log.Errorf("PopulateMetadataTables(%v) failed: %v", metadata, err)
-			}
-		},
 		ctx:    ctx,
 		cancel: cancel,
 	}
@@ -294,7 +287,7 @@ func (ts *tmState) updateLocked(ctx context.Context) {
 }
 
 func (ts *tmState) populateLocalMetadataLocked() {
-	if ts.tm.LocalMetadataPopulator == nil {
+	if ts.tm.MetadataManager == nil {
 		return
 	}
 
@@ -303,8 +296,20 @@ func (ts *tmState) populateLocalMetadataLocked() {
 	}
 
 	localMetadata := ts.tm.getLocalMetadataValues(ts.tablet.Type)
-	if err := ts.tm.LocalMetadataPopulator(ts.tm.MysqlDaemon, localMetadata, topoproto.TabletDbName(ts.tablet)); err != nil {
-		log.Errorf("PopulateMetadataTables(%v) failed: %v", localMetadata, err)
+	dbName := topoproto.TabletDbName(ts.tablet)
+
+	if !ts.hasCreatedMetadataTables {
+		if err := ts.tm.MetadataManager.PopulateMetadataTables(ts.tm.MysqlDaemon, localMetadata, dbName); err != nil {
+			log.Errorf("PopulateMetadataTables(%v) failed: %v", localMetadata, err)
+			return
+		}
+
+		ts.hasCreatedMetadataTables = true
+		return
+	}
+
+	if err := ts.tm.MetadataManager.UpsertLocalMetadata(ts.tm.MysqlDaemon, localMetadata, dbName); err != nil {
+		log.Errorf("UpsertMetadataTables(%v) failed: %v", localMetadata, err)
 	}
 }
 
