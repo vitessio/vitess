@@ -96,15 +96,15 @@ func main() {
 		log.Exitf("failed to parse -tablet-path: %v", err)
 	}
 	tm = &tabletmanager.TabletManager{
-		BatchCtx:               context.Background(),
-		TopoServer:             ts,
-		Cnf:                    mycnf,
-		MysqlDaemon:            mysqld,
-		DBConfigs:              config.DB.Clone(),
-		QueryServiceControl:    qsc,
-		UpdateStream:           binlog.NewUpdateStream(ts, tablet.Keyspace, tabletAlias.Cell, qsc.SchemaEngine()),
-		VREngine:               vreplication.NewEngine(config, ts, tabletAlias.Cell, mysqld, qsc.LagThrottler()),
-		LocalMetadataPopulator: mysqlctl.PopulateMetadataTables,
+		BatchCtx:            context.Background(),
+		TopoServer:          ts,
+		Cnf:                 mycnf,
+		MysqlDaemon:         mysqld,
+		DBConfigs:           config.DB.Clone(),
+		QueryServiceControl: qsc,
+		UpdateStream:        binlog.NewUpdateStream(ts, tablet.Keyspace, tabletAlias.Cell, qsc.SchemaEngine()),
+		VREngine:            vreplication.NewEngine(config, ts, tabletAlias.Cell, mysqld, qsc.LagThrottler()),
+		MetadataManager:     &mysqlctl.MetadataManager{},
 	}
 	if err := tm.Start(tablet, config.Healthcheck.IntervalSeconds.Get()); err != nil {
 		log.Exitf("failed to parse -tablet-path or initialize DB credentials: %v", err)
