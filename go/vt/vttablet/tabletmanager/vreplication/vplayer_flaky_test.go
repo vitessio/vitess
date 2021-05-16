@@ -2619,6 +2619,12 @@ func TestVReplicationLogs(t *testing.T) {
 }
 
 func TestGeneratedColumns(t *testing.T) {
+	flavor := strings.ToLower(env.Flavor)
+	// Disable tests on percona (which identifies as mysql56) and mariadb platforms in CI since they
+	// generated columns support was added in 5.7 and mariadb added mysql compatible generated columns in 10.2
+	if !strings.Contains(flavor, "mysql57") && !strings.Contains(flavor, "mysql80") {
+		return
+	}
 	defer deleteTablet(addTablet(100))
 
 	execStatements(t, []string{
@@ -2694,7 +2700,6 @@ func TestGeneratedColumns(t *testing.T) {
 			tcases.output,
 		}
 		expectNontxQueries(t, output)
-		time.Sleep(1 * time.Second)
 		if tcases.table != "" {
 			expectData(t, tcases.table, tcases.data)
 		}
