@@ -2618,6 +2618,89 @@ func TestVReplicationLogs(t *testing.T) {
 	}
 }
 
+func TestGeneratedColumns(t *testing.T) {
+	defer deleteTablet(addTablet(100))
+
+	execStatements(t, []string{
+		"create table t1(id int, val varbinary(6), val2 varbinary(6) as (concat(id, val)), val3 varbinary(6) as (concat(val, id)), id2 int, primary key(id))",
+		fmt.Sprintf("create table %s.t1(id int, val varbinary(6), val2 varbinary(6) as (concat(id, val)), val3 varbinary(6), id2 int, primary key(id))", vrepldb),
+		"create table t2(id int, val varbinary(128), val2 varbinary(128) as (concat(id, val)) stored, val3 varbinary(128) as (concat(val, id)), id2 int, primary key(id))",
+		fmt.Sprintf("create table %s.t2(id int, val3 varbinary(128), val varbinary(128), id2 int, primary key(id))", vrepldb),
+	})
+	defer execStatements(t, []string{
+		"drop table t1",
+		fmt.Sprintf("drop table %s.t1", vrepldb),
+		"drop table t2",
+		fmt.Sprintf("drop table %s.t2", vrepldb),
+	})
+	env.SchemaEngine.Reload(context.Background())
+
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "t1",
+			Filter: "select * from t1",
+		}, {
+			Match:  "t2",
+			Filter: "select id, val3, val, id2 from t2",
+		}},
+	}
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace: env.KeyspaceName,
+		Shard:    env.ShardName,
+		Filter:   filter,
+		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
+	}
+	cancel, _ := startVReplication(t, bls, "")
+	defer cancel()
+
+	testcases := []struct {
+		input  string
+		output string
+		table  string
+		data   [][]string
+	}{{
+		input:  "insert into t1(id, val, id2) values (1, 'aaa', 10)",
+		output: "insert into t1(id,val,val3,id2) values (1,'aaa','aaa1',10)",
+		table:  "t1",
+		data: [][]string{
+			{"1", "aaa", "1aaa", "aaa1", "10"},
+		},
+	}, {
+		input:  "update t1 set val = 'bbb', id2 = 11 where id = 1",
+		output: "update t1 set val='bbb', val3='bbb1', id2=11 where id=1",
+		table:  "t1",
+		data: [][]string{
+			{"1", "bbb", "1bbb", "bbb1", "11"},
+		},
+	}, {
+		input:  "insert into t2(id, val, id2) values (1, 'aaa', 10)",
+		output: "insert into t2(id,val3,val,id2) values (1,'aaa1','aaa',10)",
+		table:  "t2",
+		data: [][]string{
+			{"1", "aaa1", "aaa", "10"},
+		},
+	}, {
+		input:  "update t2 set val = 'bbb', id2 = 11 where id = 1",
+		output: "update t2 set val3='bbb1', val='bbb', id2=11 where id=1",
+		table:  "t2",
+		data: [][]string{
+			{"1", "bbb1", "bbb", "11"},
+		},
+	}}
+
+	for _, tcases := range testcases {
+		execStatements(t, []string{tcases.input})
+		output := []string{
+			tcases.output,
+		}
+		expectNontxQueries(t, output)
+		time.Sleep(1 * time.Second)
+		if tcases.table != "" {
+			expectData(t, tcases.table, tcases.data)
+		}
+	}
+}
+
 func expectJSON(t *testing.T, table string, values [][]string, id int, exec func(ctx context.Context, query string) (*sqltypes.Result, error)) {
 	t.Helper()
 
