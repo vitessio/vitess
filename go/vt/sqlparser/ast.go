@@ -1520,6 +1520,8 @@ type ColumnTypeOptions struct {
 	As            Expr
 	Comment       *Literal
 	Storage       ColumnStorage
+	// Reference stores a foreign key constraint for the given column
+	Reference *ReferenceDefinition
 
 	// Key specification
 	KeyOpt ColumnKeyOption
@@ -1577,8 +1579,13 @@ type (
 
 	// ForeignKeyDefinition describes a foreign key in a CREATE TABLE statement
 	ForeignKeyDefinition struct {
-		Source            Columns
-		IndexName         ColIdent
+		Source              Columns
+		IndexName           ColIdent
+		ReferenceDefinition *ReferenceDefinition
+	}
+
+	// ReferenceDefinition describes the referenced tables and columns that the foreign key references
+	ReferenceDefinition struct {
 		ReferencedTable   TableName
 		ReferencedColumns Columns
 		OnDelete          ReferenceAction
