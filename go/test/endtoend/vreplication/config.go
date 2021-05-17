@@ -8,6 +8,7 @@ create table merchant(mname varchar(128), category varchar(128), primary key(mna
 create table orders(oid int, cid int, pid int, mname varchar(128), price int, primary key(oid));
 create table customer_seq(id int, next_id bigint, cache bigint, primary key(id)) comment 'vitess_sequence';
 create table order_seq(id int, next_id bigint, cache bigint, primary key(id)) comment 'vitess_sequence';
+create table tenant(tenant_id binary(16), name varbinary(16), primary key (tenant_id));
 `
 
 	initialProductVSchema = `
@@ -22,7 +23,8 @@ create table order_seq(id int, next_id bigint, cache bigint, primary key(id)) co
 	},
 	"order_seq": {
 		"type": "sequence"
-	}
+	},
+	"tenant": {}
   }
 }
 `
@@ -33,7 +35,10 @@ create table order_seq(id int, next_id bigint, cache bigint, primary key(id)) co
   "vindexes": {
 	    "reverse_bits": {
 	      "type": "reverse_bits"
-	    }
+	    },
+		"binary_md5": {
+          "type": "binary_md5"
+		}
 	  },
    "tables": {
 	    "customer": {
@@ -47,7 +52,15 @@ create table order_seq(id int, next_id bigint, cache bigint, primary key(id)) co
 	        "column": "cid",
 	        "sequence": "customer_seq"
 	      }
-	    }
+	    },
+	   "tenant": {
+          "column_vindexes": [
+	        {
+	          "column": "tenant_id",
+	          "name": "binary_md5"
+	        }
+	      ]
+	   }
    }
   
 }
