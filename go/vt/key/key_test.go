@@ -23,6 +23,7 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
@@ -633,9 +634,9 @@ func TestGenerateShardRanges(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := GenerateShardRanges(tt.args.shards)
 			if tt.wantErr {
-				assert.Error(t, err)
+				require.Error(t, err)
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 			}
 
 			assert.Equal(t, got, tt.want)
