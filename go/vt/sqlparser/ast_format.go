@@ -609,12 +609,17 @@ func (a ReferenceAction) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (f *ForeignKeyDefinition) Format(buf *TrackedBuffer) {
-	buf.astPrintf(f, "foreign key %v%v references %v %v", f.IndexName, f.Source, f.ReferencedTable, f.ReferencedColumns)
-	if f.OnDelete != DefaultAction {
-		buf.astPrintf(f, " on delete %v", f.OnDelete)
+	buf.astPrintf(f, "foreign key %v%v %v", f.IndexName, f.Source, f.ReferenceDefinition)
+}
+
+// Format formats the node.
+func (ref *ReferenceDefinition) Format(buf *TrackedBuffer) {
+	buf.astPrintf(ref, "references %v %v", ref.ReferencedTable, ref.ReferencedColumns)
+	if ref.OnDelete != DefaultAction {
+		buf.astPrintf(ref, " on delete %v", ref.OnDelete)
 	}
-	if f.OnUpdate != DefaultAction {
-		buf.astPrintf(f, " on update %v", f.OnUpdate)
+	if ref.OnUpdate != DefaultAction {
+		buf.astPrintf(ref, " on update %v", ref.OnUpdate)
 	}
 }
 

@@ -866,17 +866,23 @@ func (f *ForeignKeyDefinition) formatFast(buf *TrackedBuffer) {
 	buf.WriteString("foreign key ")
 	f.IndexName.formatFast(buf)
 	f.Source.formatFast(buf)
-	buf.WriteString(" references ")
-	f.ReferencedTable.formatFast(buf)
 	buf.WriteByte(' ')
-	f.ReferencedColumns.formatFast(buf)
-	if f.OnDelete != DefaultAction {
+	f.ReferenceDefinition.formatFast(buf)
+}
+
+// formatFast formats the node.
+func (ref *ReferenceDefinition) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("references ")
+	ref.ReferencedTable.formatFast(buf)
+	buf.WriteByte(' ')
+	ref.ReferencedColumns.formatFast(buf)
+	if ref.OnDelete != DefaultAction {
 		buf.WriteString(" on delete ")
-		f.OnDelete.formatFast(buf)
+		ref.OnDelete.formatFast(buf)
 	}
-	if f.OnUpdate != DefaultAction {
+	if ref.OnUpdate != DefaultAction {
 		buf.WriteString(" on update ")
-		f.OnUpdate.formatFast(buf)
+		ref.OnUpdate.formatFast(buf)
 	}
 }
 

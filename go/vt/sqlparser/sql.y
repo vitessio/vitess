@@ -153,6 +153,7 @@ func bindVariable(yylex yyLexer, bvar string) {
   orderDirection  OrderDirection
   explainType 	  ExplainType
   lockType LockType
+  referenceDefinition *ReferenceDefinition
 
   columnStorage ColumnStorage
 
@@ -419,6 +420,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <empty> session_or_local_opt
 %type <columnStorage> column_storage
 %type <colKeyOpt> keys
+%type <referenceDefinition> reference_definition
 
 %start any_command
 
@@ -1631,21 +1633,27 @@ check_constraint_definition:
   }
 
 constraint_info:
-  FOREIGN KEY name_opt '(' column_list ')' REFERENCES table_name '(' column_list ')'
+  FOREIGN KEY name_opt '(' column_list ')' reference_definition
   {
-    $$ = &ForeignKeyDefinition{IndexName: NewColIdent($3), Source: $5, ReferencedTable: $8, ReferencedColumns: $10}
+    $$ = &ForeignKeyDefinition{IndexName: NewColIdent($3), Source: $5, ReferenceDefinition: $7}
   }
-| FOREIGN KEY name_opt '(' column_list ')' REFERENCES table_name '(' column_list ')' fk_on_delete
+
+reference_definition:
+  REFERENCES table_name '(' column_list ')'
   {
-    $$ = &ForeignKeyDefinition{IndexName: NewColIdent($3), Source: $5, ReferencedTable: $8, ReferencedColumns: $10, OnDelete: $12}
+    $$ = &ReferenceDefinition{ReferencedTable: $2, ReferencedColumns: $4}
   }
-| FOREIGN KEY name_opt '(' column_list ')' REFERENCES table_name '(' column_list ')' fk_on_update
+| REFERENCES table_name '(' column_list ')' fk_on_delete
   {
-    $$ = &ForeignKeyDefinition{IndexName: NewColIdent($3), Source: $5, ReferencedTable: $8, ReferencedColumns: $10, OnUpdate: $12}
+    $$ = &ReferenceDefinition{ReferencedTable: $2, ReferencedColumns: $4, OnDelete: $6}
   }
-| FOREIGN KEY name_opt '(' column_list ')' REFERENCES table_name '(' column_list ')' fk_on_delete fk_on_update
+| REFERENCES table_name '(' column_list ')' fk_on_update
   {
-    $$ = &ForeignKeyDefinition{IndexName: NewColIdent($3), Source: $5, ReferencedTable: $8, ReferencedColumns: $10, OnDelete: $12, OnUpdate: $13}
+    $$ = &ReferenceDefinition{ReferencedTable: $2, ReferencedColumns: $4, OnUpdate: $6}
+  }
+| REFERENCES table_name '(' column_list ')' fk_on_delete fk_on_update
+  {
+    $$ = &ReferenceDefinition{ReferencedTable: $2, ReferencedColumns: $4, OnDelete: $6, OnUpdate: $7}
   }
 
 check_constraint_info:

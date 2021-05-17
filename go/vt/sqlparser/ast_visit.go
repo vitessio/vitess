@@ -212,6 +212,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfRangeCond(in, f)
 	case ReferenceAction:
 		return VisitReferenceAction(in, f)
+	case *ReferenceDefinition:
+		return VisitRefOfReferenceDefinition(in, f)
 	case *Release:
 		return VisitRefOfRelease(in, f)
 	case *RenameIndex:
@@ -1062,16 +1064,7 @@ func VisitRefOfForeignKeyDefinition(in *ForeignKeyDefinition, f Visit) error {
 	if err := VisitColIdent(in.IndexName, f); err != nil {
 		return err
 	}
-	if err := VisitTableName(in.ReferencedTable, f); err != nil {
-		return err
-	}
-	if err := VisitColumns(in.ReferencedColumns, f); err != nil {
-		return err
-	}
-	if err := VisitReferenceAction(in.OnDelete, f); err != nil {
-		return err
-	}
-	if err := VisitReferenceAction(in.OnUpdate, f); err != nil {
+	if err := VisitRefOfReferenceDefinition(in.ReferenceDefinition, f); err != nil {
 		return err
 	}
 	return nil
@@ -1561,6 +1554,27 @@ func VisitRefOfRangeCond(in *RangeCond, f Visit) error {
 		return err
 	}
 	if err := VisitExpr(in.To, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfReferenceDefinition(in *ReferenceDefinition, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitTableName(in.ReferencedTable, f); err != nil {
+		return err
+	}
+	if err := VisitColumns(in.ReferencedColumns, f); err != nil {
+		return err
+	}
+	if err := VisitReferenceAction(in.OnDelete, f); err != nil {
+		return err
+	}
+	if err := VisitReferenceAction(in.OnUpdate, f); err != nil {
 		return err
 	}
 	return nil
