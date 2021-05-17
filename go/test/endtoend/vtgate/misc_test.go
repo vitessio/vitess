@@ -640,6 +640,47 @@ func TestShowGtid(t *testing.T) {
 	}
 }
 
+func TestScatterErrsAsWarns(t *testing.T) {
+	conn, err := mysql.Connect(context.Background(), &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	exec(t, conn, `insert into t1(id1, id2) values (1, 1), (2, 2), (3, 3), (4, 4), (5, 5)`)
+	defer func() {
+		exec(t, conn, "use @master")
+		exec(t, conn, `delete from t1`)
+	}()
+
+	exec(t, conn, "use `ks:-80@rdonly`")
+	qrM80 := exec(t, conn, `select id1 from t1`)
+	assert.EqualValues(t, 4, len(qrM80.Rows))
+
+	exec(t, conn, "use `ks:80-@rdonly`")
+	qr80M := exec(t, conn, `select id1 from t1`)
+	assert.EqualValues(t, 1, len(qr80M.Rows))
+
+	exec(t, conn, `use ks@rdonly`)
+	qrT := exec(t, conn, `select id1 from t1`)
+	assert.EqualValues(t, 5, len(qrT.Rows))
+
+	rdonly := clusterInstance.Keyspaces[0].Shards[0].Rdonly()
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", rdonly.Alias, "spare")
+	require.NoError(t, err)
+	defer clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", rdonly.Alias, "rdonly")
+
+	for _, mode := range []string{"oltp", "olap"} {
+		t.Run(mode, func(t *testing.T) {
+			exec(t, conn, fmt.Sprintf("set workload = %s", mode))
+
+			_, err = conn.ExecuteFetch(`select id1 from t1`, 1000, true)
+			require.Error(t, err)
+
+			qr := exec(t, conn, `select /*vt+ SCATTER_ERRORS_AS_WARNINGS */ id1 from t1`)
+			assert.EqualValues(t, 1, len(qr.Rows))
+		})
+	}
+}
+
 func TestQueryAndSubQWithLimit(t *testing.T) {
 	conn, err := mysql.Connect(context.Background(), &vtParams)
 	require.NoError(t, err)

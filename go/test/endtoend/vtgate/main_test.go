@@ -419,10 +419,14 @@ func TestMain(m *testing.M) {
 		}
 
 		// Start vtgate
-		err = clusterInstance.StartVtgate()
-		if err != nil {
+		vtgateInstance := clusterInstance.NewVtgateInstance()
+		vtgateInstance.TabletTypesToWait = "MASTER,REPLICA,RDONLY"
+		if err := vtgateInstance.Setup(); err != nil {
 			return 1
 		}
+		// ensure it is torn down during cluster TearDown
+		clusterInstance.VtgateProcess = *vtgateInstance
+
 		vtParams = mysql.ConnParams{
 			Host: clusterInstance.Hostname,
 			Port: clusterInstance.VtgateMySQLPort,
