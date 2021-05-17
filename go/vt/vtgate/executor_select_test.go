@@ -1229,6 +1229,18 @@ func TestSelectScatterPartialOLAP2(t *testing.T) {
 	require.NoError(t, err)
 	assert.EqualValues(t, 7, len(results.Rows))
 	testQueryLog(t, logChan, "TestExecuteStream", "SELECT", "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from user", 8)
+
+	// order by
+	results, err = executorStream(executor, "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from user order by id")
+	require.NoError(t, err)
+	assert.EqualValues(t, 7, len(results.Rows))
+	testQueryLog(t, logChan, "TestExecuteStream", "SELECT", "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from user order by id", 8)
+
+	// order by and limit
+	results, err = executorStream(executor, "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from user order by id limit 5")
+	require.NoError(t, err)
+	assert.EqualValues(t, 5, len(results.Rows))
+	testQueryLog(t, logChan, "TestExecuteStream", "SELECT", "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from user order by id limit 5", 8)
 }
 
 func TestStreamSelectScatter(t *testing.T) {

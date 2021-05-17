@@ -47,8 +47,9 @@ var _ Primitive = (*MergeSort)(nil)
 // be used like other Primitives in VTGate. However, it satisfies the Primitive API
 // so that vdiff can use it. In that situation, only StreamExecute is used.
 type MergeSort struct {
-	Primitives []StreamExecutor
-	OrderBy    []OrderbyParams
+	Primitives              []StreamExecutor
+	OrderBy                 []OrderbyParams
+	ScatterErrorsAsWarnings bool
 	noInputs
 	noTxNeeded
 }
@@ -84,12 +85,24 @@ func (ms *MergeSort) StreamExecute(vcursor VCursor, bindVars map[string]*querypb
 		wantfields = false
 	}
 
-	// Fetch field info from just one stream.
-	fields := <-handles[0].fields
-	// If fields is nil, it means there was an error.
+	var fields []*querypb.Field
+	if ms.ScatterErrorsAsWarnings {
+		for _, handle := range handles {
+			// Fetch field info from just one stream.
+			fields = <-handle.fields
+			// If fields is nil, it means there was an error.
+			if fields != nil {
+				break
+			}
+		}
+	} else {
+		// Fetch field info from just one stream.
+		fields = <-handles[0].fields
+	}
 	if fields == nil {
 		return handles[0].err
 	}
+
 	if err := callback(&sqltypes.Result{Fields: fields}); err != nil {
 		return err
 	}
@@ -100,6 +113,7 @@ func (ms *MergeSort) StreamExecute(vcursor VCursor, bindVars map[string]*querypb
 		comparers: comparers,
 	}
 
+	var errs []error
 	// Prime the heap. One element must be pulled from
 	// each stream.
 	for i, handle := range handles {
@@ -107,6 +121,10 @@ func (ms *MergeSort) StreamExecute(vcursor VCursor, bindVars map[string]*querypb
 		case row, ok := <-handle.row:
 			if !ok {
 				if handle.err != nil {
+					if ms.ScatterErrorsAsWarnings {
+						errs = append(errs, handle.err)
+						break
+					}
 					return handle.err
 				}
 				// It's possible that a stream returns no rows.
@@ -154,7 +172,7 @@ func (ms *MergeSort) StreamExecute(vcursor VCursor, bindVars map[string]*querypb
 			return ctx.Err()
 		}
 	}
-	return nil
+	return vterrors.Aggregate(errs)
 }
 
 func (ms *MergeSort) description() PrimitiveDescription {
