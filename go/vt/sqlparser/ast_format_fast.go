@@ -746,6 +746,10 @@ func (ct *ColumnType) formatFast(buf *TrackedBuffer) {
 		buf.WriteByte(' ')
 		buf.WriteString(keywordStrings[KEY])
 	}
+	if ct.Options.Reference != nil {
+		buf.WriteByte(' ')
+		ct.Options.Reference.formatFast(buf)
+	}
 }
 
 // formatFast formats the node.

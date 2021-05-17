@@ -516,7 +516,7 @@ func (cached *ColumnTypeOptions) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(88)
+		size += int64(96)
 	}
 	// field Null *bool
 	size += int64(1)
@@ -534,6 +534,8 @@ func (cached *ColumnTypeOptions) CachedSize(alloc bool) int64 {
 	}
 	// field Comment *vitess.io/vitess/go/vt/sqlparser.Literal
 	size += cached.Comment.CachedSize(true)
+	// field Reference *vitess.io/vitess/go/vt/sqlparser.ReferenceDefinition
+	size += cached.Reference.CachedSize(true)
 	return size
 }
 func (cached *ComparisonExpr) CachedSize(alloc bool) int64 {

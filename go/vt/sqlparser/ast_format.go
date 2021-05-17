@@ -509,6 +509,9 @@ func (ct *ColumnType) Format(buf *TrackedBuffer) {
 	if ct.Options.KeyOpt == colKey {
 		buf.astPrintf(ct, " %s", keywordStrings[KEY])
 	}
+	if ct.Options.Reference != nil {
+		buf.astPrintf(ct, " %v", ct.Options.Reference)
+	}
 }
 
 // Format formats the node.

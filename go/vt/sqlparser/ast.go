@@ -1520,6 +1520,8 @@ type ColumnTypeOptions struct {
 	As            Expr
 	Comment       *Literal
 	Storage       ColumnStorage
+	// Reference stores a foreign key constraint for the given column
+	Reference *ReferenceDefinition
 
 	// Key specification
 	KeyOpt ColumnKeyOption
