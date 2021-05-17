@@ -634,11 +634,11 @@ func TestGenerateShardRanges(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := GenerateShardRanges(tt.args.shards)
 			if tt.wantErr {
-				require.Error(t, err)
-			} else {
-				require.NoError(t, err)
+				assert.Error(t, err)
+				return
 			}
 
+			require.NoError(t, err)
 			assert.Equal(t, got, tt.want)
 		})
 	}
