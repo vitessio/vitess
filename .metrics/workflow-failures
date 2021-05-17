@@ -1,7 +1,3 @@
-2021-01-13T06:15:33Z,Cluster (15),https://github.com/vitessio/vitess/actions/runs/482053224
-2021-01-13T06:15:33Z,Cluster (16),https://github.com/vitessio/vitess/actions/runs/482053231
-2021-01-13T06:15:33Z,Cluster (17),https://github.com/vitessio/vitess/actions/runs/482053251
-2021-01-13T06:15:33Z,Cluster (18),https://github.com/vitessio/vitess/actions/runs/482053232
 2021-01-13T06:15:33Z,Cluster (19),https://github.com/vitessio/vitess/actions/runs/482053259
 2021-01-13T06:15:33Z,Cluster (20),https://github.com/vitessio/vitess/actions/runs/482053246
 2021-01-13T06:15:33Z,Cluster (21),https://github.com/vitessio/vitess/actions/runs/482053256
@@ -9998,3 +9994,7 @@
 2021-05-17T10:18:33Z,Cluster (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/849399762
 2021-05-17T10:27:30Z,unit_race,https://github.com/vitessio/vitess/actions/runs/849422902
 2021-05-17T10:40:34Z,endtoend,https://github.com/vitessio/vitess/actions/runs/849456911
+2021-05-17T12:49:24Z,Cluster (12),https://github.com/vitessio/vitess/actions/runs/849793808
+2021-05-17T12:49:24Z,Cluster (17),https://github.com/vitessio/vitess/actions/runs/849793819
+2021-05-17T12:59:20Z,cluster_endtoend,https://github.com/vitessio/vitess/actions/runs/849821256
+2021-05-17T12:59:20Z,unit,https://github.com/vitessio/vitess/actions/runs/849821258
