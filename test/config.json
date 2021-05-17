@@ -698,7 +698,7 @@
 		},
 		"errs_as_warns": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/errors_as_warnings"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/errors_as_warnings"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "17",
