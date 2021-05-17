@@ -924,8 +924,8 @@ var (
 		input:  "set S= +- - - - -(4+1)",
 		output: "set S = -(4 + 1)",
 	}, {
-		input:  "alter table a add foo int first v",
-		output: "alter table a add column foo int first v",
+		input:  "alter table a add foo int references simple (a) on delete restrict first v",
+		output: "alter table a add column foo int references simple (a) on delete restrict first v",
 	}, {
 		input:  "alter table a lock default, lock = none, lock shared, lock exclusive",
 		output: "alter table a lock default, lock none, lock shared, lock exclusive",
@@ -1182,8 +1182,8 @@ var (
 		input:  "create table a (b1 bool not null primary key, b2 boolean not null)",
 		output: "create table a (\n\tb1 bool not null primary key,\n\tb2 boolean not null\n)",
 	}, {
-		input:  "create table a (b1 bool NOT NULL PRIMARY KEY, b2 boolean not null, KEY b2_idx(b))",
-		output: "create table a (\n\tb1 bool not null primary key,\n\tb2 boolean not null,\n\tKEY b2_idx (b)\n)",
+		input:  "create table a (b1 bool NOT NULL PRIMARY KEY, b2 boolean not null references simple (a) on delete restrict, KEY b2_idx(b))",
+		output: "create table a (\n\tb1 bool not null primary key,\n\tb2 boolean not null references simple (a) on delete restrict,\n\tKEY b2_idx (b)\n)",
 	}, {
 		input: "create temporary table a (\n\tid bigint\n)",
 	}, {
@@ -2721,6 +2721,14 @@ func TestCreateTable(t *testing.T) {
 	username varchar,
 	k int,
 	Z int,
+	newCol int references simple (a),
+	newCol int references simple (a) on delete restrict,
+	newCol int references simple (a) on delete no action,
+	newCol int references simple (a) on delete cascade on update set default,
+	newCol int references simple (a) on delete set default on update set null,
+	newCol int references simple (a) on delete set null on update restrict,
+	newCol int references simple (a) on update no action,
+	newCol int references simple (a) on update cascade,
 	primary key (id, username),
 	key by_email (email(10), username),
 	constraint second_ibfk_1 foreign key (k, j) references simple (a, b),
