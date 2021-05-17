@@ -1,5 +1,5 @@
 /*
-Copyright 2019 The Vitess Authors.
+Copyright 2021 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -19,8 +19,11 @@ package vtgate
 import (
 	"context"
 	"flag"
+	"fmt"
 	"os"
 	"testing"
+
+	"github.com/google/go-cmp/cmp"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -45,8 +48,8 @@ var (
 {
   "sharded": true,
   "vindexes": {
-    "xxhash": {
-      "type": "xxhash"
+    "hash": {
+      "type": "hash"
     }
   },
   "tables": {
@@ -54,7 +57,7 @@ var (
       "column_vindexes": [
         {
           "column": "id1",
-          "name": "xxhash"
+          "name": "hash"
         }
       ]
     }
@@ -82,19 +85,14 @@ func TestMain(m *testing.M) {
 			SchemaSQL: SchemaSQL,
 			VSchema:   VSchema,
 		}
-		err = clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 1, false)
-		if err != nil {
+		if err := clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 1, false); err != nil {
 			return 1
 		}
 
 		// Start vtgate
-		vtgateInstance := clusterInstance.NewVtgateInstance()
-		vtgateInstance.TabletTypesToWait = "MASTER,REPLICA,RDONLY"
-		if err := vtgateInstance.Setup(); err != nil {
+		if err := clusterInstance.StartVtgate(); err != nil {
 			return 1
 		}
-		// ensure it is torn down during cluster TearDown
-		clusterInstance.VtgateProcess = *vtgateInstance
 
 		vtParams = mysql.ConnParams{
 			Host: clusterInstance.Hostname,
@@ -113,35 +111,50 @@ func TestScatterErrsAsWarns(t *testing.T) {
 	olap, err := mysql.Connect(context.Background(), &vtParams)
 	require.NoError(t, err)
 	defer olap.Close()
-	exec(t, olap, "set workload = olap")
-	exec(t, olap, "use @replica")
 
-	exec(t, oltp, "use @master")
-	exec(t, oltp, `insert into t1(id1, id2) values (1, 1), (2, 2), (3, 3), (4, 4), (5, 5)`)
-	exec(t, oltp, "set workload = oltp")
-	exec(t, oltp, "use @replica")
-
+	checkedExec(t, oltp, `insert into t1(id1, id2) values (1, 1), (2, 2), (3, 3), (4, 4), (5, 5)`)
 	defer func() {
-		exec(t, oltp, "use @master")
-		exec(t, oltp, `delete from t1`)
+		checkedExec(t, oltp, "use @master")
+		checkedExec(t, oltp, `delete from t1`)
 	}()
 
-	require.NoError(t, // stop one tablet from the first shard
+	// connection setup
+	checkedExec(t, oltp, "use @replica")
+	checkedExec(t, oltp, "set workload = oltp")
+	checkedExec(t, olap, "use @replica")
+	checkedExec(t, olap, "set workload = olap")
+
+	// stop one tablet from the first shard
+	require.NoError(t,
 		clusterInstance.Keyspaces[0].Shards[0].Replica().MysqlctlProcess.Stop())
 
 	query := `select /*vt+ SCATTER_ERRORS_AS_WARNINGS */ id1 from t1`
-	qr, err := oltp.ExecuteFetch(query, 1000, true)
-	require.NoError(t, err)
-	assert.NotEmpty(t, qr.Rows)
 
-	qr, err = olap.ExecuteFetch(query, 1000, true)
-	require.NoError(t, err)
-	assert.NotEmpty(t, qr.Rows)
+	assertMatches(t, oltp, query, `[[INT64(4)]]`)
+	assertMatches(t, olap, query, `[[INT64(4)]]`)
+
+	// change tablet type
+	assert.NoError(t,
+		clusterInstance.VtctlclientProcess.ExecuteCommand(
+			"ChangeTabletType", clusterInstance.Keyspaces[0].Shards[0].Replica().Alias, "spare"))
+
+	assertMatches(t, oltp, query, `[[INT64(4)]]`)
+	assertMatches(t, olap, query, `[[INT64(4)]]`)
 }
 
-func exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
+func checkedExec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
 	t.Helper()
 	qr, err := conn.ExecuteFetch(query, 1000, true)
-	require.NoError(t, err, "for query: "+query)
+	require.NoError(t, err)
 	return qr
+}
+
+func assertMatches(t *testing.T, conn *mysql.Conn, query, expected string) {
+	t.Helper()
+	qr := checkedExec(t, conn, query)
+	got := fmt.Sprintf("%v", qr.Rows)
+	diff := cmp.Diff(expected, got)
+	if diff != "" {
+		t.Errorf("Query: %s (-want +got):\n%s", query, diff)
+	}
 }
