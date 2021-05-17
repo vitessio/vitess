@@ -3785,6 +3785,7 @@ func EqualsRefOfColumnTypeOptions(a, b *ColumnTypeOptions) bool {
 		EqualsExpr(a.As, b.As) &&
 		EqualsRefOfLiteral(a.Comment, b.Comment) &&
 		a.Storage == b.Storage &&
+		EqualsRefOfReferenceDefinition(a.Reference, b.Reference) &&
 		a.KeyOpt == b.KeyOpt
 }
 

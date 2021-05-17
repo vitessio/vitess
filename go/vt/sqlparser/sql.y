@@ -420,7 +420,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <empty> session_or_local_opt
 %type <columnStorage> column_storage
 %type <colKeyOpt> keys
-%type <referenceDefinition> reference_definition
+%type <referenceDefinition> reference_definition reference_definition_opt
 
 %start any_command
 
@@ -1021,15 +1021,17 @@ table_column_list:
   }
 
 column_definition:
-  sql_id column_type column_attribute_list_opt
+  sql_id column_type column_attribute_list_opt reference_definition_opt
   {
     $2.Options = $3
+    $2.Options.Reference = $4
     $$ = &ColumnDefinition{Name: $1, Type: $2}
   }
-| sql_id column_type generated_always_opt AS '(' value_expression ')' generated_column_attribute_list_opt
+| sql_id column_type generated_always_opt AS '(' value_expression ')' generated_column_attribute_list_opt reference_definition_opt
   {
     $2.Options = $8
     $2.Options.As = $6
+    $2.Options.Reference = $9
     $$ = &ColumnDefinition{Name: $1, Type: $2}
   }
 
@@ -1654,6 +1656,15 @@ reference_definition:
 | REFERENCES table_name '(' column_list ')' fk_on_delete fk_on_update
   {
     $$ = &ReferenceDefinition{ReferencedTable: $2, ReferencedColumns: $4, OnDelete: $6, OnUpdate: $7}
+  }
+
+reference_definition_opt:
+  {
+    $$ = nil
+  }
+| reference_definition
+  {
+    $$ = $1
   }
 
 check_constraint_info:
