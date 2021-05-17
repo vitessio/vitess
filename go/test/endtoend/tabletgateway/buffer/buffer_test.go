@@ -85,8 +85,8 @@ type threadParams struct {
 	notifyLock                 sync.Mutex // notifyLock guards the two fields notifyAfterNSuccessfulRpcs/rpcsSoFar.
 	notifyAfterNSuccessfulRpcs int        // If 0, notifications are disabled
 	rpcsSoFar                  int        // Number of RPCs at the time a notification was requested
-	i                          int        //
-	commitErrors               int
+	index                      int        //
+	internalErrs               int
 	executeFunction            func(c *threadParams, conn *mysql.Conn) error // Implement the method for read/update.
 	typ                        string
 	reservedConn               bool
@@ -141,14 +141,34 @@ func (c *threadParams) stop() {
 }
 
 func readExecute(c *threadParams, conn *mysql.Conn) error {
-	_, err := conn.ExecuteFetch(fmt.Sprintf("SELECT * FROM buffer WHERE id = %d", criticalReadRowID), 1000, true)
-	return err
+	attempt := c.index
+	c.index++
+	qr, err := conn.ExecuteFetch(fmt.Sprintf("SELECT * FROM buffer WHERE id = %d", criticalReadRowID), 1000, true)
+
+	if err != nil {
+		log.Errorf("select attempt #%d, failed with err: %v", attempt, err)
+		// For a reserved connection, read query can fail as it does not go through the gateway and
+		// goes to tablet directly and later is directed to use Gateway if the error is caused due to cluster failover operation.
+		if c.reservedConn {
+			c.internalErrs++
+			if c.internalErrs > 1 {
+				log.Errorf("More Read Errors: %d", c.internalErrs)
+				return err
+			}
+			log.Error("This is okay once because we do not support buffering it.")
+			return nil
+		}
+		return err
+	}
+
+	log.Infof("select attempt #%d, rows: %d", attempt, len(qr.Rows))
+	return nil
 }
 
 func updateExecute(c *threadParams, conn *mysql.Conn) error {
-	attempt := c.i
+	attempt := c.index
 	// Value used in next UPDATE query. Increased after every query.
-	c.i++
+	c.index++
 	conn.ExecuteFetch("begin", 1000, true)
 
 	result, err := conn.ExecuteFetch(fmt.Sprintf("UPDATE buffer SET msg='update %d' WHERE id = %d", attempt, updateRowID), 1000, true)
@@ -159,7 +179,7 @@ func updateExecute(c *threadParams, conn *mysql.Conn) error {
 	time.Sleep(time.Duration(rand.Int31n(1000)) * time.Millisecond)
 
 	if err == nil {
-		log.Errorf("update attempt #%d affected %v rows", attempt, result.RowsAffected)
+		log.Infof("update attempt #%d affected %v rows", attempt, result.RowsAffected)
 		_, err = conn.ExecuteFetch("commit", 1000, true)
 		if err != nil {
 			log.Errorf("UPDATE #%d failed during COMMIT, err: %v", attempt, err)
@@ -167,27 +187,26 @@ func updateExecute(c *threadParams, conn *mysql.Conn) error {
 			if errRollback != nil {
 				log.Errorf("Error in rollback #%d: %v", attempt, errRollback)
 			}
-			c.commitErrors++
-			if c.commitErrors > 1 {
-				log.Errorf("More Commit Errors: %d", c.commitErrors)
+			c.internalErrs++
+			if c.internalErrs > 1 {
+				log.Errorf("More Commit Errors: %d", c.internalErrs)
 				return err
 			}
 			log.Error("This is okay once because we do not support buffering it.")
 		}
+		return nil
 	}
-	if err != nil {
-		log.Errorf("UPDATE #%d failed with err: %v", attempt, err)
-		_, errRollback := conn.ExecuteFetch("rollback", 1000, true)
-		if errRollback != nil {
-			log.Errorf("Error in rollback #%d: %v", attempt, errRollback)
-		}
-		c.commitErrors++
-		if c.commitErrors > 1 {
-			log.Errorf("More Rollback Errors: %d", c.commitErrors)
-			return err
-		}
-		log.Error("This is okay once because we do not support buffering it.")
+	log.Errorf("UPDATE #%d failed with err: %v", attempt, err)
+	_, errRollback := conn.ExecuteFetch("rollback", 1000, true)
+	if errRollback != nil {
+		log.Errorf("Error in rollback #%d: %v", attempt, errRollback)
 	}
+	c.internalErrs++
+	if c.internalErrs > 1 {
+		log.Errorf("More Rollback Errors: %d", c.internalErrs)
+		return err
+	}
+	log.Error("This is okay once because we do not support buffering it.")
 	return nil
 }
 
@@ -276,6 +295,7 @@ func testBufferBase(t *testing.T, isExternalParent bool, useReservedConn bool) {
 
 	//Start both threads.
 	readThreadInstance := &threadParams{
+		index:               1,
 		typ:                 "read",
 		executeFunction:     readExecute,
 		waitForNotification: make(chan bool),
@@ -284,7 +304,7 @@ func testBufferBase(t *testing.T, isExternalParent bool, useReservedConn bool) {
 	wg.Add(1)
 	go readThreadInstance.threadRun()
 	updateThreadInstance := &threadParams{
-		i:                   1,
+		index:               1,
 		typ:                 "write",
 		executeFunction:     updateExecute,
 		waitForNotification: make(chan bool),
@@ -360,7 +380,7 @@ func testBufferBase(t *testing.T, isExternalParent bool, useReservedConn bool) {
 	if inFlightMax == 0 {
 		// Missed buffering is okay when we observed the failover during the
 		// COMMIT (which cannot trigger the buffering).
-		assert.Greater(t, updateThreadInstance.commitErrors, 0, "No buffering took place and the update thread saw no error during COMMIT. But one of it must happen.")
+		assert.Greater(t, updateThreadInstance.internalErrs, 0, "No buffering took place and the update thread saw no error during COMMIT. But one of it must happen.")
 	} else {
 		assert.Greater(t, inFlightMax, 0)
 	}
