@@ -801,7 +801,9 @@ func (route *Route) description() PrimitiveDescription {
 	if route.TruncateColumnCount > 0 {
 		other["ResultColumns"] = route.TruncateColumnCount
 	}
-
+	if route.ScatterErrorsAsWarnings {
+		other["ScatterErrorsAsWarnings"] = true
+	}
 	return PrimitiveDescription{
 		OperatorType:      "Route",
 		Variant:           routeName[route.Opcode],

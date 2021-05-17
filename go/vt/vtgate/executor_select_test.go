@@ -1139,6 +1139,98 @@ func TestSelectScatterPartial(t *testing.T) {
 	testQueryLog(t, logChan, "TestExecute", "SELECT", "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from user", 8)
 }
 
+func TestSelectScatterPartialOLAP(t *testing.T) {
+	// Special setup: Don't use createLegacyExecutorEnv.
+	cell := "aa"
+	hc := discovery.NewFakeLegacyHealthCheck()
+	s := createSandbox("TestExecutor")
+	s.VSchema = executorVSchema
+	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
+	serv := new(sandboxTopo)
+	resolver := newTestLegacyResolver(hc, serv, cell)
+	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
+	var conns []*sandboxconn.SandboxConn
+	for _, shard := range shards {
+		sbc := hc.AddTestTablet(cell, shard, 1, "TestExecutor", shard, topodatapb.TabletType_MASTER, true, 1, nil)
+		conns = append(conns, sbc)
+	}
+
+	executor := NewExecutor(context.Background(), serv, cell, resolver, false, false, testBufferSize, cache.DefaultConfig)
+	logChan := QueryLogger.Subscribe("Test")
+	defer QueryLogger.Unsubscribe(logChan)
+
+	// Fail 1 of N without the directive fails the whole operation
+	conns[2].MustFailCodes[vtrpcpb.Code_RESOURCE_EXHAUSTED] = 1000
+	results, err := executorStream(executor, "select id from user")
+	assert.EqualError(t, err, "target: TestExecutor.40-60.master: RESOURCE_EXHAUSTED error")
+	assert.Equal(t, vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.Code(err))
+	assert.Nil(t, results)
+	testQueryLog(t, logChan, "TestExecuteStream", "SELECT", "select id from user", 8)
+
+	// Fail 1 of N with the directive succeeds with 7 rows
+	results, err = executorStream(executor, "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from user")
+	require.NoError(t, err)
+	assert.EqualValues(t, 7, len(results.Rows))
+	testQueryLog(t, logChan, "TestExecuteStream", "SELECT", "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from user", 8)
+
+	// Even if all shards fail the operation succeeds with 0 rows
+	conns[0].MustFailCodes[vtrpcpb.Code_RESOURCE_EXHAUSTED] = 1000
+	conns[1].MustFailCodes[vtrpcpb.Code_RESOURCE_EXHAUSTED] = 1000
+	conns[3].MustFailCodes[vtrpcpb.Code_RESOURCE_EXHAUSTED] = 1000
+	conns[4].MustFailCodes[vtrpcpb.Code_RESOURCE_EXHAUSTED] = 1000
+	conns[5].MustFailCodes[vtrpcpb.Code_RESOURCE_EXHAUSTED] = 1000
+	conns[6].MustFailCodes[vtrpcpb.Code_RESOURCE_EXHAUSTED] = 1000
+	conns[7].MustFailCodes[vtrpcpb.Code_RESOURCE_EXHAUSTED] = 1000
+
+	results, err = executorStream(executor, "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from user")
+	require.NoError(t, err)
+	require.Empty(t, results.Rows)
+	testQueryLog(t, logChan, "TestExecuteStream", "SELECT", "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from user", 8)
+}
+
+func TestSelectScatterPartialOLAP2(t *testing.T) {
+	// Special setup: Don't use createLegacyExecutorEnv.
+	cell := "aa"
+	hc := discovery.NewFakeHealthCheck()
+	s := createSandbox("TestExecutor")
+	s.VSchema = executorVSchema
+	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
+	serv := new(sandboxTopo)
+	resolver := newTestResolver(hc, serv, cell)
+	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
+	var conns []*sandboxconn.SandboxConn
+	for _, shard := range shards {
+		sbc := hc.AddTestTablet(cell, shard, 1, "TestExecutor", shard, topodatapb.TabletType_MASTER, true, 1, nil)
+		conns = append(conns, sbc)
+	}
+
+	executor := NewExecutor(context.Background(), serv, cell, resolver, false, false, testBufferSize, cache.DefaultConfig)
+	logChan := QueryLogger.Subscribe("Test")
+	defer QueryLogger.Unsubscribe(logChan)
+
+	// Fail 1 of N without the directive fails the whole operation
+	tablet0 := conns[2].Tablet()
+	ths := hc.GetHealthyTabletStats(&querypb.Target{
+		Keyspace:   tablet0.GetKeyspace(),
+		Shard:      tablet0.GetShard(),
+		TabletType: tablet0.GetType(),
+	})
+	sbc0Th := ths[0]
+	sbc0Th.Serving = false
+
+	results, err := executorStream(executor, "select id from user")
+	assert.EqualError(t, err, `target: TestExecutor.40-60.master: no healthy tablet available for 'keyspace:"TestExecutor" shard:"40-60" tablet_type:MASTER '`)
+	assert.Equal(t, vtrpcpb.Code_UNAVAILABLE, vterrors.Code(err))
+	assert.Nil(t, results)
+	testQueryLog(t, logChan, "TestExecuteStream", "SELECT", "select id from user", 8)
+
+	// Fail 1 of N with the directive succeeds with 7 rows
+	results, err = executorStream(executor, "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from user")
+	require.NoError(t, err)
+	assert.EqualValues(t, 7, len(results.Rows))
+	testQueryLog(t, logChan, "TestExecuteStream", "SELECT", "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from user", 8)
+}
+
 func TestStreamSelectScatter(t *testing.T) {
 	// Special setup: Don't use createLegacyExecutorEnv.
 	cell := "aa"
