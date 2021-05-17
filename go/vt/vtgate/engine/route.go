@@ -375,8 +375,9 @@ func (route *Route) mergeSort(vcursor VCursor, bindVars map[string]*querypb.Bind
 		})
 	}
 	ms := MergeSort{
-		Primitives: prims,
-		OrderBy:    route.OrderBy,
+		Primitives:              prims,
+		OrderBy:                 route.OrderBy,
+		ScatterErrorsAsWarnings: route.ScatterErrorsAsWarnings,
 	}
 	err := ms.StreamExecute(vcursor, bindVars, wantfields, func(qr *sqltypes.Result) error {
 		return callback(qr.Truncate(route.TruncateColumnCount))

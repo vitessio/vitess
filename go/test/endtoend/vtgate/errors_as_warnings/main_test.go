@@ -128,18 +128,23 @@ func TestScatterErrsAsWarns(t *testing.T) {
 	require.NoError(t,
 		clusterInstance.Keyspaces[0].Shards[0].Replica().MysqlctlProcess.Stop())
 
-	query := `select /*vt+ SCATTER_ERRORS_AS_WARNINGS */ id1 from t1`
+	query1 := `select /*vt+ SCATTER_ERRORS_AS_WARNINGS */ id1 from t1`
+	query2 := `select /*vt+ SCATTER_ERRORS_AS_WARNINGS */ id1 from t1 order by id1`
 
-	assertMatches(t, oltp, query, `[[INT64(4)]]`)
-	assertMatches(t, olap, query, `[[INT64(4)]]`)
+	assertMatches(t, oltp, query1, `[[INT64(4)]]`)
+	assertMatches(t, olap, query1, `[[INT64(4)]]`)
+	assertMatches(t, oltp, query2, `[[INT64(4)]]`)
+	assertMatches(t, olap, query2, `[[INT64(4)]]`)
 
 	// change tablet type
 	assert.NoError(t,
 		clusterInstance.VtctlclientProcess.ExecuteCommand(
 			"ChangeTabletType", clusterInstance.Keyspaces[0].Shards[0].Replica().Alias, "spare"))
 
-	assertMatches(t, oltp, query, `[[INT64(4)]]`)
-	assertMatches(t, olap, query, `[[INT64(4)]]`)
+	assertMatches(t, oltp, query1, `[[INT64(4)]]`)
+	assertMatches(t, olap, query1, `[[INT64(4)]]`)
+	assertMatches(t, oltp, query2, `[[INT64(4)]]`)
+	assertMatches(t, olap, query2, `[[INT64(4)]]`)
 }
 
 func checkedExec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
