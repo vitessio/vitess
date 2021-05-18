@@ -47,11 +47,8 @@ var (
 	relayLogMaxSize  = flag.Int("relay_log_max_size", 250000, "Maximum buffer size (in bytes) for VReplication target buffering. If single rows are larger than this, a single row is buffered at a time.")
 	relayLogMaxItems = flag.Int("relay_log_max_items", 5000, "Maximum number of rows for VReplication target buffering.")
 
-	copyTimeout              = 1 * time.Hour
-	copyPhaseDurationSeconds = flag.Int("vreplication_copy_phase_duration", 3600, "Duration (seconds) for each copy phase loop (before running the next catchup)")
-
-	replicaLagTolerance        = 60 * time.Second
-	replicaLagToleranceSeconds = flag.Int("vreplication_replica_lag_tolerance", 60, "Replica lag threshold (seconds): once lag is below this we switch from copy phase to the replication (streaming) phase")
+	copyPhaseDuration   = flag.Duration("vreplication_copy_phase_duration", 1*time.Hour, "Duration for each copy phase loop (before running the next catchup: default 1h)")
+	replicaLagTolerance = flag.Duration("vreplication_replica_lag_tolerance", 1*time.Minute, "Replica lag threshold duration: once lag is below this we switch from copy phase to the replication (streaming) phase")
 
 	// vreplicationHeartbeatUpdateInterval determines how often the time_updated column is updated if there are no real events on the source and the source
 	// vstream is only sending heartbeats for this long. Keep this low if you expect high QPS and are monitoring this column to alert about potential
