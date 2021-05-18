@@ -75,7 +75,7 @@ func buildShowBasicPlan(show *sqlparser.ShowBasic, vschema ContextVSchema) (engi
 	case sqlparser.GtidExecGlobal:
 		return buildShowGtidPlan(show, vschema)
 	case sqlparser.Warnings:
-		return buildWarnings(show, vschema)
+		return buildWarnings()
 	}
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unknown show query type %s", show.Command.ToString())
 
@@ -538,7 +538,7 @@ func buildShowGtidPlan(show *sqlparser.ShowBasic, vschema ContextVSchema) (engin
 	}, nil
 }
 
-func buildWarnings(show *sqlparser.ShowBasic, vschema ContextVSchema) (engine.Primitive, error) {
+func buildWarnings() (engine.Primitive, error) {
 
 	f := func(sa engine.SessionActions) (*sqltypes.Result, error) {
 		fields := []*querypb.Field{
@@ -563,7 +563,5 @@ func buildWarnings(show *sqlparser.ShowBasic, vschema ContextVSchema) (engine.Pr
 		}, nil
 	}
 
-	return &engine.Session{
-		Action: f,
-	}, nil
+	return engine.NewSessionPrimitive("SHOW WARNINGS", f), nil
 }
