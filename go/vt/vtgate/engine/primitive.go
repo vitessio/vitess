@@ -152,6 +152,7 @@ type (
 
 		// HasCreatedTempTable will mark the session as having created temp tables
 		HasCreatedTempTable()
+		GetWarnings() []*querypb.QueryWarning
 	}
 
 	// Plan represents the execution strategy for a given query.

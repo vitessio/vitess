@@ -692,6 +692,11 @@ func (vc *vcursorImpl) HasCreatedTempTable() {
 	vc.safeSession.GetOrCreateOptions().HasCreatedTempTables = true
 }
 
+// GetWarnings implements the SessionActions interface
+func (vc *vcursorImpl) GetWarnings() []*querypb.QueryWarning {
+	return vc.safeSession.GetWarnings()
+}
+
 // GetDBDDLPluginName implements the VCursor interface
 func (vc *vcursorImpl) GetDBDDLPluginName() string {
 	return *dbDDLPlugin

@@ -54,6 +54,10 @@ type noopVCursor struct {
 	ctx context.Context
 }
 
+func (t *noopVCursor) GetWarnings() []*querypb.QueryWarning {
+	panic("implement me")
+}
+
 func (t *noopVCursor) VStream(rss []*srvtopo.ResolvedShard, filter *binlogdatapb.Filter, gtid string, callback func(evs []*binlogdatapb.VEvent) error) error {
 	panic("implement me")
 }
