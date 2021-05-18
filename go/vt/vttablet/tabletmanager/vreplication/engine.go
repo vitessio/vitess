@@ -141,8 +141,6 @@ func NewEngine(config *tabletenv.TabletConfig, ts *topo.Server, cell string, mys
 		throttlerClient: throttle.NewBackgroundClient(lagThrottler, throttlerAppName, throttle.ThrottleCheckPrimaryWrite),
 	}
 
-	copyTimeout = time.Duration(*copyPhaseDurationSeconds) * time.Second
-	replicaLagTolerance = time.Duration(*replicaLagToleranceSeconds) * time.Second
 	return vre
 }
 
