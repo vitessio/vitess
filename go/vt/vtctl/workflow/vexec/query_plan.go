@@ -48,26 +48,17 @@ func (qp *QueryPlan) Execute(ctx context.Context, target *topo.TabletInfo) (qr *
 
 	targetAliasStr := target.AliasString()
 
-	log.Infof("Running %v on %v", qp.ParsedQuery.Query, targetAliasStr)
 	defer func() {
 		if err != nil {
 			log.Warningf("Result on %v: %v", targetAliasStr, err)
-
 			return
 		}
-
-		log.Infof("Result on %v: %v", targetAliasStr, qr)
 	}()
 
 	qr, err = qp.tmc.VReplicationExec(ctx, target.Tablet, qp.ParsedQuery.Query)
 	if err != nil {
 		return nil, err
 	}
-
-	if qr.RowsAffected == 0 {
-		log.Infof("no matching streams found for workflows %s, tablet %s, query %s", qp.workflow, targetAliasStr, qp.ParsedQuery.Query)
-	}
-
 	return qr, nil
 }
 

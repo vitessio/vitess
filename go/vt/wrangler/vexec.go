@@ -33,7 +33,6 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/concurrency"
-	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	vtctldvexec "vitess.io/vitess/go/vt/vtctl/workflow/vexec" // renamed to avoid a collision with the vexec struct in this package
@@ -209,9 +208,7 @@ func (vx *vexec) exec() (map[*topo.TabletInfo]*querypb.QueryResult, error) {
 		wg.Add(1)
 		go func(ctx context.Context, master *topo.TabletInfo) {
 			defer wg.Done()
-			log.Infof("Running %s on %s\n", vx.plannedQuery, master.AliasString())
 			qr, err := vx.planner.exec(ctx, master.Alias, vx.plannedQuery)
-			log.Infof("Result is %s: %v", master.AliasString(), qr)
 			if err != nil {
 				allErrors.RecordError(err)
 			} else {
