@@ -1501,6 +1501,9 @@ type ColumnType struct {
 	EnumValues []string
 }
 
+// ColumnStorage is an enum that defines the type of storage.
+type ColumnStorage int
+
 // ColumnTypeOptions are generic field options for a column type
 type ColumnTypeOptions struct {
 	/* We need Null to be *bool to distinguish 3 cases -
@@ -1514,7 +1517,11 @@ type ColumnTypeOptions struct {
 	Autoincrement bool
 	Default       Expr
 	OnUpdate      Expr
+	As            Expr
 	Comment       *Literal
+	Storage       ColumnStorage
+	// Reference stores a foreign key constraint for the given column
+	Reference *ReferenceDefinition
 
 	// Key specification
 	KeyOpt ColumnKeyOption
@@ -1572,8 +1579,13 @@ type (
 
 	// ForeignKeyDefinition describes a foreign key in a CREATE TABLE statement
 	ForeignKeyDefinition struct {
-		Source            Columns
-		IndexName         ColIdent
+		Source              Columns
+		IndexName           ColIdent
+		ReferenceDefinition *ReferenceDefinition
+	}
+
+	// ReferenceDefinition describes the referenced tables and columns that the foreign key references
+	ReferenceDefinition struct {
 		ReferencedTable   TableName
 		ReferencedColumns Columns
 		OnDelete          ReferenceAction

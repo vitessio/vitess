@@ -42,6 +42,8 @@ service VTAdmin {
     rpc GetClusters(GetClustersRequest) returns (GetClustersResponse) {};
     // GetGates returns all gates across all the specified clusters.
     rpc GetGates(GetGatesRequest) returns (GetGatesResponse) {};
+    // GetKeyspace returns a keyspace by name in the specified cluster.
+    rpc GetKeyspace(GetKeyspaceRequest) returns (Keyspace) {};
     // GetKeyspaces returns all keyspaces across the specified clusters.
     rpc GetKeyspaces(GetKeyspacesRequest) returns (GetKeyspacesResponse) {};
     // GetSchema returns the schema for the specified (cluster, keyspace, table)
@@ -187,6 +189,11 @@ message GetGatesRequest {
 
 message GetGatesResponse {
     repeated VTGate gates = 1;
+}
+
+message GetKeyspaceRequest {
+    string cluster_id = 1;
+    string keyspace = 2;
 }
 
 message GetKeyspacesRequest {

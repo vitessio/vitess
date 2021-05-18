@@ -426,6 +426,91 @@ func (c *Cluster) GetGates(ctx context.Context) ([]*vtadminpb.VTGate, error) {
 	return gates, nil
 }
 
+// GetKeyspace returns a single keyspace in the cluster.
+func (c *Cluster) GetKeyspace(ctx context.Context, name string) (*vtadminpb.Keyspace, error) {
+	span, ctx := trace.NewSpan(ctx, "Cluster.GetKeyspace")
+	defer span.Finish()
+
+	AnnotateSpan(c, span)
+	span.Annotate("keyspace", name)
+
+	if err := c.Vtctld.Dial(ctx); err != nil {
+		return nil, fmt.Errorf("Vtctld.Dial failed for cluster = %s: %w", c.ID, err)
+	}
+
+	resp, err := c.Vtctld.GetKeyspace(ctx, &vtctldatapb.GetKeyspaceRequest{
+		Keyspace: name,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	shards, err := c.FindAllShardsInKeyspace(ctx, name, FindAllShardsInKeyspaceOptions{SkipDial: true})
+	if err != nil {
+		return nil, err
+	}
+
+	return &vtadminpb.Keyspace{
+		Cluster:  c.ToProto(),
+		Keyspace: resp.Keyspace,
+		Shards:   shards,
+	}, nil
+}
+
+// GetKeyspaces returns all keyspaces, with their shard maps, in the cluster.
+func (c *Cluster) GetKeyspaces(ctx context.Context) ([]*vtadminpb.Keyspace, error) {
+	span, ctx := trace.NewSpan(ctx, "Cluster.GetKeyspaces")
+	defer span.Finish()
+
+	AnnotateSpan(c, span)
+
+	if err := c.Vtctld.Dial(ctx); err != nil {
+		return nil, fmt.Errorf("Vtctld.Dial(cluster=%s) failed: %w", c.ID, err)
+	}
+
+	resp, err := c.Vtctld.GetKeyspaces(ctx, &vtctldatapb.GetKeyspacesRequest{})
+	if err != nil {
+		return nil, err
+	}
+
+	var (
+		m         sync.Mutex
+		wg        sync.WaitGroup
+		rec       concurrency.AllErrorRecorder
+		keyspaces = make([]*vtadminpb.Keyspace, len(resp.Keyspaces))
+	)
+
+	for i, ks := range resp.Keyspaces {
+		wg.Add(1)
+		go func(i int, ks *vtctldatapb.Keyspace) {
+			defer wg.Done()
+
+			shards, err := c.FindAllShardsInKeyspace(ctx, ks.Name, FindAllShardsInKeyspaceOptions{SkipDial: true})
+			if err != nil {
+				rec.RecordError(err)
+				return
+			}
+
+			keyspace := &vtadminpb.Keyspace{
+				Cluster:  c.ToProto(),
+				Keyspace: ks,
+				Shards:   shards,
+			}
+
+			m.Lock()
+			defer m.Unlock()
+			keyspaces[i] = keyspace
+		}(i, ks)
+	}
+
+	wg.Wait()
+	if rec.HasErrors() {
+		return nil, rec.Error()
+	}
+
+	return keyspaces, nil
+}
+
 // GetTablets returns all tablets in the cluster.
 func (c *Cluster) GetTablets(ctx context.Context) ([]*vtadminpb.Tablet, error) {
 	span, ctx := trace.NewSpan(ctx, "Cluster.GetTablets")

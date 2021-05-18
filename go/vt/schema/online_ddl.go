@@ -41,6 +41,8 @@ var (
 )
 
 var (
+	// ErrDirectDDLDisabled is returned when direct DDL is disabled, and a user attempts to run a DDL statement
+	ErrDirectDDLDisabled = errors.New("direct DDL is disabled")
 	// ErrOnlineDDLDisabled is returned when online DDL is disabled, and a user attempts to run an online DDL operation (submit, review, control)
 	ErrOnlineDDLDisabled = errors.New("online DDL is disabled")
 	ErrForeignKeyFound   = errors.New("Foreign key found")
@@ -152,9 +154,28 @@ func ParseOnlineDDLStatement(sql string) (ddlStmt sqlparser.DDLStatement, action
 	return ddlStmt, action, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported query type: %s", sql)
 }
 
+func onlineDDLStatementSanity(sql string, ddlStmt sqlparser.DDLStatement) error {
+	// SQL statement sanity checks:
+	if !ddlStmt.IsFullyParsed() {
+		if _, err := sqlparser.ParseStrictDDL(sql); err != nil {
+			// More information about the reason why the statement is not fully parsed:
+			return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.SyntaxError, "%v", err)
+		}
+		return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.SyntaxError, "cannot parse statement: %v", sql)
+	}
+
+	if err := sqlparser.Walk(errorOnFKWalk, ddlStmt); err == ErrForeignKeyFound {
+		return vterrors.Errorf(vtrpcpb.Code_ABORTED, "foreign key constraints are not supported in online DDL, see https://code.openark.org/blog/mysql/the-problem-with-mysql-foreign-key-constraints-in-online-schema-changes")
+	}
+	return nil
+}
+
 // NewOnlineDDLs takes a single DDL statement, normalizes it (potentially break down into multiple statements), and generates one or more OnlineDDL instances, one for each normalized statement
-func NewOnlineDDLs(keyspace string, ddlStmt sqlparser.DDLStatement, ddlStrategySetting *DDLStrategySetting, requestContext string) (onlineDDLs [](*OnlineDDL), err error) {
+func NewOnlineDDLs(keyspace string, sql string, ddlStmt sqlparser.DDLStatement, ddlStrategySetting *DDLStrategySetting, requestContext string) (onlineDDLs [](*OnlineDDL), err error) {
 	appendOnlineDDL := func(tableName string, ddlStmt sqlparser.DDLStatement) error {
+		if err := onlineDDLStatementSanity(sql, ddlStmt); err != nil {
+			return err
+		}
 		onlineDDL, err := NewOnlineDDL(keyspace, tableName, sqlparser.String(ddlStmt), ddlStrategySetting, requestContext)
 		if err != nil {
 			return err
@@ -179,23 +200,6 @@ func NewOnlineDDLs(keyspace string, ddlStmt sqlparser.DDLStatement, ddlStrategyS
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported statement for Online DDL: %v", sqlparser.String(ddlStmt))
 	}
 
-	{
-		// SQL statement sanity checks:
-		switch ddlStmt := ddlStmt.(type) {
-		case *sqlparser.AlterTable:
-			if len(ddlStmt.AlterOptions) == 0 {
-				return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.SyntaxError, "NewOnlineDDL: cannot parse statement: %v", sqlparser.String(ddlStmt))
-			}
-		}
-
-		if !ddlStmt.IsFullyParsed() {
-			return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.SyntaxError, "NewOnlineDDL: cannot parse statement: %v", sqlparser.String(ddlStmt))
-		}
-
-		if err := sqlparser.Walk(errorOnFKWalk, ddlStmt); err == ErrForeignKeyFound {
-			return nil, vterrors.Errorf(vtrpcpb.Code_ABORTED, "foreign key constraint are not supported in online DDL")
-		}
-	}
 	return onlineDDLs, nil
 }
 
@@ -245,9 +249,6 @@ func NewOnlineDDL(keyspace string, table string, sql string, ddlStrategySetting 
 		} else {
 			switch stmt := stmt.(type) {
 			case sqlparser.DDLStatement:
-				if !stmt.IsFullyParsed() {
-					return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "NewOnlineDDL: cannot parse statement: %v", sqlparser.String(stmt))
-				}
 				stmt.SetComments(comments)
 			case *sqlparser.RevertMigration:
 				stmt.SetComments(comments)

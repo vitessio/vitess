@@ -212,6 +212,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfRangeCond(parent, node, replacer)
 	case ReferenceAction:
 		return a.rewriteReferenceAction(parent, node, replacer)
+	case *ReferenceDefinition:
+		return a.rewriteRefOfReferenceDefinition(parent, node, replacer)
 	case *Release:
 		return a.rewriteRefOfRelease(parent, node, replacer)
 	case *RenameIndex:
@@ -1945,23 +1947,8 @@ func (a *application) rewriteRefOfForeignKeyDefinition(parent SQLNode, node *For
 	}) {
 		return false
 	}
-	if !a.rewriteTableName(node, node.ReferencedTable, func(newNode, parent SQLNode) {
-		parent.(*ForeignKeyDefinition).ReferencedTable = newNode.(TableName)
-	}) {
-		return false
-	}
-	if !a.rewriteColumns(node, node.ReferencedColumns, func(newNode, parent SQLNode) {
-		parent.(*ForeignKeyDefinition).ReferencedColumns = newNode.(Columns)
-	}) {
-		return false
-	}
-	if !a.rewriteReferenceAction(node, node.OnDelete, func(newNode, parent SQLNode) {
-		parent.(*ForeignKeyDefinition).OnDelete = newNode.(ReferenceAction)
-	}) {
-		return false
-	}
-	if !a.rewriteReferenceAction(node, node.OnUpdate, func(newNode, parent SQLNode) {
-		parent.(*ForeignKeyDefinition).OnUpdate = newNode.(ReferenceAction)
+	if !a.rewriteRefOfReferenceDefinition(node, node.ReferenceDefinition, func(newNode, parent SQLNode) {
+		parent.(*ForeignKeyDefinition).ReferenceDefinition = newNode.(*ReferenceDefinition)
 	}) {
 		return false
 	}
@@ -3051,6 +3038,48 @@ func (a *application) rewriteRefOfRangeCond(parent SQLNode, node *RangeCond, rep
 	}
 	if !a.rewriteExpr(node, node.To, func(newNode, parent SQLNode) {
 		parent.(*RangeCond).To = newNode.(Expr)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfReferenceDefinition(parent SQLNode, node *ReferenceDefinition, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteTableName(node, node.ReferencedTable, func(newNode, parent SQLNode) {
+		parent.(*ReferenceDefinition).ReferencedTable = newNode.(TableName)
+	}) {
+		return false
+	}
+	if !a.rewriteColumns(node, node.ReferencedColumns, func(newNode, parent SQLNode) {
+		parent.(*ReferenceDefinition).ReferencedColumns = newNode.(Columns)
+	}) {
+		return false
+	}
+	if !a.rewriteReferenceAction(node, node.OnDelete, func(newNode, parent SQLNode) {
+		parent.(*ReferenceDefinition).OnDelete = newNode.(ReferenceAction)
+	}) {
+		return false
+	}
+	if !a.rewriteReferenceAction(node, node.OnUpdate, func(newNode, parent SQLNode) {
+		parent.(*ReferenceDefinition).OnUpdate = newNode.(ReferenceAction)
 	}) {
 		return false
 	}

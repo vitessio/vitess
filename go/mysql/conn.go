@@ -860,6 +860,9 @@ func (c *Conn) handleNextCommand(handler Handler) bool {
 		}
 		return false
 	}
+	if len(data) == 0 {
+		return false
+	}
 
 	switch data[0] {
 	case ComQuit:

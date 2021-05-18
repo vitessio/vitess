@@ -171,8 +171,8 @@ func TestReloadSchema(t *testing.T) {
 
 	db.AddQuery(mysql.CreateVTDatabase, &sqltypes.Result{})
 	db.AddQuery(mysql.CreateSchemaCopyTable, &sqltypes.Result{})
-	db.AddQuery(mysql.ClearSchemaCopy, &sqltypes.Result{})
-	db.AddQuery(mysql.InsertIntoSchemaCopy, &sqltypes.Result{})
+	db.AddQueryPattern(mysql.ClearSchemaCopy+".*", &sqltypes.Result{})
+	db.AddQueryPattern(mysql.InsertIntoSchemaCopy+".*", &sqltypes.Result{})
 	db.AddQuery("begin", &sqltypes.Result{})
 	db.AddQuery("commit", &sqltypes.Result{})
 	db.AddQuery("rollback", &sqltypes.Result{})

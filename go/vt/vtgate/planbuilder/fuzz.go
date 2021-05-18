@@ -42,12 +42,12 @@ func FuzzAnalyse(data []byte) int {
 	if err != nil {
 		return -1
 	}
-	semTable, err := semantics.Analyze(tree, "", &fakeFuzzSI{})
-	if err != nil {
-		return 0
-	}
 	switch stmt := tree.(type) {
 	case *sqlparser.Select:
+		semTable, err := semantics.Analyze(tree, "", &fakeFuzzSI{})
+		if err != nil {
+			return 0
+		}
 		_, _ = createQGFromSelect(stmt, semTable)
 	default:
 		return 0
