@@ -4,7 +4,7 @@ jobs:
 
   build:
     name: Docker Test 3
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-18.04
 
     steps:
 

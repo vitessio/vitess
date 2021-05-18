@@ -56,6 +56,7 @@ type LocalProcessCluster struct {
 	Cell               string
 	BaseTabletUID      int
 	Hostname           string
+	TopoFlavor         string
 	TopoPort           int
 	TmpDirectory       string
 	OriginalVTDATAROOT string
@@ -173,6 +174,8 @@ func (cluster *LocalProcessCluster) StartTopo() (err error) {
 	if cluster.Cell == "" {
 		cluster.Cell = DefaultCell
 	}
+
+	topoFlavor = cluster.TopoFlavorString()
 	cluster.TopoPort = cluster.GetAndReservePort()
 	cluster.TmpDirectory = path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/tmp_%d", cluster.GetAndReservePort()))
 	cluster.TopoProcess = *TopoProcessInstance(cluster.TopoPort, cluster.GetAndReservePort(), cluster.Hostname, *topoFlavor, "global")
@@ -758,9 +761,13 @@ func (cluster *LocalProcessCluster) StartVttablet(tablet *Vttablet, servingStatu
 	return tablet.VttabletProcess.Setup()
 }
 
-//func (cluster *LocalProcessCluster) NewOrcInstance() OrchestratorProcess {
-//
-//}
+// TopoFlavorString returns the topo flavor
+func (cluster *LocalProcessCluster) TopoFlavorString() *string {
+	if cluster.TopoFlavor != "" {
+		return &cluster.TopoFlavor
+	}
+	return topoFlavor
+}
 
 func getCoveragePath(fileName string) string {
 	covDir := os.Getenv("COV_DIR")

@@ -531,9 +531,9 @@ func TestStateManagerValidations(t *testing.T) {
 	target.Shard = ""
 	target.TabletType = topodatapb.TabletType_REPLICA
 	err = sm.StartRequest(ctx, target, false)
-	assert.Contains(t, err.Error(), "invalid tablet type")
+	assert.Contains(t, err.Error(), "wrong tablet type")
 	err = sm.VerifyTarget(ctx, target)
-	assert.Contains(t, err.Error(), "invalid tablet type")
+	assert.Contains(t, err.Error(), "wrong tablet type")
 
 	sm.alsoAllow = []topodatapb.TabletType{topodatapb.TabletType_REPLICA}
 	err = sm.StartRequest(ctx, target, false)

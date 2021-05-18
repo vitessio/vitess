@@ -27,6 +27,7 @@ func buildGeneralDDLPlan(sql string, ddlStatement sqlparser.DDLStatement, vschem
 	if vschema.Destination() != nil {
 		return buildByPassDDLPlan(sql, vschema)
 	}
+
 	normalDDLPlan, onlineDDLPlan, err := buildDDLPlans(sql, ddlStatement, vschema)
 	if err != nil {
 		return nil, err
