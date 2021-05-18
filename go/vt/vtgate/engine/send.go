@@ -152,7 +152,8 @@ func (s *Send) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindV
 		}
 		multiBindVars[i] = bv
 	}
-	return vcursor.StreamExecuteMulti(s.Query, rss, multiBindVars, callback)
+	errors := vcursor.StreamExecuteMulti(s.Query, rss, multiBindVars, callback)
+	return vterrors.Aggregate(errors)
 }
 
 // GetFields implements Primitive interface
