@@ -1735,6 +1735,303 @@ func TestReverseVReplicationUpdateQuery(t *testing.T) {
 	}
 }
 
+func TestShardMigrateNoAvailableTabletsForReverseReplication(t *testing.T) {
+	ctx := context.Background()
+	tme := newTestShardMigrater(ctx, t, []string{"-40", "40-"}, []string{"-80", "80-"})
+	defer tme.stopTablets(t)
+
+	// Initial check
+	checkServedTypes(t, tme.ts, "ks:-40", 3)
+	checkServedTypes(t, tme.ts, "ks:40-", 3)
+	checkServedTypes(t, tme.ts, "ks:-80", 0)
+	checkServedTypes(t, tme.ts, "ks:80-", 0)
+
+	tme.expectNoPreviousJournals()
+	//-------------------------------------------------------------------------------------------------------------------
+	// Single cell RDONLY migration.
+	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", []topodatapb.TabletType{topodatapb.TabletType_RDONLY}, []string{"cell1"}, DirectionForward, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	checkCellServedTypes(t, tme.ts, "ks:-40", "cell1", 2)
+	checkCellServedTypes(t, tme.ts, "ks:40-", "cell1", 2)
+	checkCellServedTypes(t, tme.ts, "ks:-80", "cell1", 1)
+	checkCellServedTypes(t, tme.ts, "ks:80-", "cell1", 1)
+	checkCellServedTypes(t, tme.ts, "ks:-40", "cell2", 3)
+	checkCellServedTypes(t, tme.ts, "ks:40-", "cell2", 3)
+	checkCellServedTypes(t, tme.ts, "ks:-80", "cell2", 0)
+	checkCellServedTypes(t, tme.ts, "ks:80-", "cell2", 0)
+	verifyQueries(t, tme.allDBClients)
+
+	tme.expectNoPreviousJournals()
+	//-------------------------------------------------------------------------------------------------------------------
+	// Other cell REPLICA migration.
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", []topodatapb.TabletType{topodatapb.TabletType_REPLICA}, []string{"cell2"}, DirectionForward, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	checkCellServedTypes(t, tme.ts, "ks:-40", "cell1", 2)
+	checkCellServedTypes(t, tme.ts, "ks:40-", "cell1", 2)
+	checkCellServedTypes(t, tme.ts, "ks:-80", "cell1", 1)
+	checkCellServedTypes(t, tme.ts, "ks:80-", "cell1", 1)
+	checkCellServedTypes(t, tme.ts, "ks:-40", "cell2", 1)
+	checkCellServedTypes(t, tme.ts, "ks:40-", "cell2", 1)
+	checkCellServedTypes(t, tme.ts, "ks:-80", "cell2", 2)
+	checkCellServedTypes(t, tme.ts, "ks:80-", "cell2", 2)
+	verifyQueries(t, tme.allDBClients)
+
+	tme.expectNoPreviousJournals()
+	//-------------------------------------------------------------------------------------------------------------------
+	// Single cell backward REPLICA migration.
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", []topodatapb.TabletType{topodatapb.TabletType_REPLICA}, []string{"cell2"}, DirectionBackward, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	checkCellServedTypes(t, tme.ts, "ks:-40", "cell1", 2)
+	checkCellServedTypes(t, tme.ts, "ks:40-", "cell1", 2)
+	checkCellServedTypes(t, tme.ts, "ks:-80", "cell1", 1)
+	checkCellServedTypes(t, tme.ts, "ks:80-", "cell1", 1)
+	checkCellServedTypes(t, tme.ts, "ks:-40", "cell2", 3)
+	checkCellServedTypes(t, tme.ts, "ks:40-", "cell2", 3)
+	checkCellServedTypes(t, tme.ts, "ks:-80", "cell2", 0)
+	checkCellServedTypes(t, tme.ts, "ks:80-", "cell2", 0)
+	verifyQueries(t, tme.allDBClients)
+
+	tme.expectNoPreviousJournals()
+	//-------------------------------------------------------------------------------------------------------------------
+	// Switch all RDONLY.
+	// This is an extra step that does not exist in the tables test.
+	// The per-cell migration mechanism is different for tables. So, this
+	// extra step is needed to bring things in sync.
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", []topodatapb.TabletType{topodatapb.TabletType_RDONLY}, nil, DirectionForward, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	checkServedTypes(t, tme.ts, "ks:-40", 2)
+	checkServedTypes(t, tme.ts, "ks:40-", 2)
+	checkServedTypes(t, tme.ts, "ks:-80", 1)
+	checkServedTypes(t, tme.ts, "ks:80-", 1)
+	verifyQueries(t, tme.allDBClients)
+
+	tme.expectNoPreviousJournals()
+	//-------------------------------------------------------------------------------------------------------------------
+	// Switch all REPLICA.
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", []topodatapb.TabletType{topodatapb.TabletType_REPLICA}, nil, DirectionForward, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	checkServedTypes(t, tme.ts, "ks:-40", 1)
+	checkServedTypes(t, tme.ts, "ks:40-", 1)
+	checkServedTypes(t, tme.ts, "ks:-80", 2)
+	checkServedTypes(t, tme.ts, "ks:80-", 2)
+	verifyQueries(t, tme.allDBClients)
+
+	tme.expectNoPreviousJournals()
+	//-------------------------------------------------------------------------------------------------------------------
+	// All cells RDONLY backward migration.
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", []topodatapb.TabletType{topodatapb.TabletType_RDONLY}, nil, DirectionBackward, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	checkServedTypes(t, tme.ts, "ks:-40", 2)
+	checkServedTypes(t, tme.ts, "ks:40-", 2)
+	checkServedTypes(t, tme.ts, "ks:-80", 1)
+	checkServedTypes(t, tme.ts, "ks:80-", 1)
+	verifyQueries(t, tme.allDBClients)
+
+	//-------------------------------------------------------------------------------------------------------------------
+	// Can't switch master with SwitchReads.
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", []topodatapb.TabletType{topodatapb.TabletType_MASTER}, nil, DirectionForward, false)
+	want := "tablet type must be REPLICA or RDONLY: MASTER"
+	if err == nil || err.Error() != want {
+		t.Errorf("SwitchReads(master) err: %v, want %v", err, want)
+	}
+	verifyQueries(t, tme.allDBClients)
+
+	//-------------------------------------------------------------------------------------------------------------------
+	// Test SwitchWrites cancelation on failure.
+
+	tme.expectNoPreviousJournals()
+	// Switch all the reads first.
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", []topodatapb.TabletType{topodatapb.TabletType_RDONLY}, nil, DirectionForward, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	checkServedTypes(t, tme.ts, "ks:-40", 1)
+	checkServedTypes(t, tme.ts, "ks:40-", 1)
+	checkServedTypes(t, tme.ts, "ks:-80", 2)
+	checkServedTypes(t, tme.ts, "ks:80-", 2)
+	checkIsMasterServing(t, tme.ts, "ks:-40", true)
+	checkIsMasterServing(t, tme.ts, "ks:40-", true)
+	checkIsMasterServing(t, tme.ts, "ks:-80", false)
+	checkIsMasterServing(t, tme.ts, "ks:80-", false)
+
+	checkJournals := func() {
+		tme.dbSourceClients[0].addQuery("select val from _vt.resharding_journal where id=6432976123657117097", &sqltypes.Result{}, nil)
+		tme.dbSourceClients[1].addQuery("select val from _vt.resharding_journal where id=6432976123657117097", &sqltypes.Result{}, nil)
+	}
+	checkJournals()
+
+	stopStreams := func() {
+		tme.dbSourceClients[0].addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse' and state = 'Stopped' and message != 'FROZEN'", &sqltypes.Result{}, nil)
+		tme.dbSourceClients[1].addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse' and state = 'Stopped' and message != 'FROZEN'", &sqltypes.Result{}, nil)
+		tme.dbSourceClients[0].addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse'", &sqltypes.Result{}, nil)
+		tme.dbSourceClients[1].addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse'", &sqltypes.Result{}, nil)
+	}
+	stopStreams()
+
+	deleteReverseReplicaion := func() {
+		tme.dbSourceClients[0].addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow = 'test_reverse'", resultid3, nil)
+		tme.dbSourceClients[1].addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow = 'test_reverse'", resultid34, nil)
+		tme.dbSourceClients[0].addQuery("delete from _vt.vreplication where id in (3)", &sqltypes.Result{}, nil)
+		tme.dbSourceClients[1].addQuery("delete from _vt.vreplication where id in (3, 4)", &sqltypes.Result{}, nil)
+		tme.dbSourceClients[0].addQuery("delete from _vt.copy_state where vrepl_id in (3)", &sqltypes.Result{}, nil)
+		tme.dbSourceClients[1].addQuery("delete from _vt.copy_state where vrepl_id in (3, 4)", &sqltypes.Result{}, nil)
+	}
+	cancelMigration := func() {
+		tme.dbSourceClients[0].addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow != 'test_reverse'", &sqltypes.Result{}, nil)
+		tme.dbSourceClients[1].addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow != 'test_reverse'", &sqltypes.Result{}, nil)
+
+		tme.dbTargetClients[0].addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow = 'test'", resultid12, nil)
+		tme.dbTargetClients[1].addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow = 'test'", resultid2, nil)
+		tme.dbTargetClients[0].addQuery("update _vt.vreplication set state = 'Running', message = '' where id in (1, 2)", &sqltypes.Result{}, nil)
+		tme.dbTargetClients[1].addQuery("update _vt.vreplication set state = 'Running', message = '' where id in (2)", &sqltypes.Result{}, nil)
+		tme.dbTargetClients[0].addQuery("select * from _vt.vreplication where id = 1", runningResult(1), nil)
+		tme.dbTargetClients[0].addQuery("select * from _vt.vreplication where id = 2", runningResult(2), nil)
+		tme.dbTargetClients[1].addQuery("select * from _vt.vreplication where id = 2", runningResult(2), nil)
+
+		deleteReverseReplicaion()
+	}
+	cancelMigration()
+
+	_, _, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 0*time.Second, false, false, true, false)
+	want = "DeadlineExceeded"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("SwitchWrites(0 timeout) err: %v, must contain %v", err, want)
+	}
+
+	verifyQueries(t, tme.allDBClients)
+	checkServedTypes(t, tme.ts, "ks:-40", 1)
+	checkServedTypes(t, tme.ts, "ks:40-", 1)
+	checkServedTypes(t, tme.ts, "ks:-80", 2)
+	checkServedTypes(t, tme.ts, "ks:80-", 2)
+	checkIsMasterServing(t, tme.ts, "ks:-40", true)
+	checkIsMasterServing(t, tme.ts, "ks:40-", true)
+	checkIsMasterServing(t, tme.ts, "ks:-80", false)
+	checkIsMasterServing(t, tme.ts, "ks:80-", false)
+
+	//-------------------------------------------------------------------------------------------------------------------
+	// Test successful SwitchWrites.
+
+	checkJournals()
+	stopStreams()
+
+	waitForCatchup := func() {
+		// mi.waitForCatchup-> mi.wr.tmc.VReplicationWaitForPos
+		state := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+			"pos|state|message",
+			"varchar|varchar|varchar"),
+			"MariaDB/5-456-892|Running",
+		)
+		tme.dbTargetClients[0].addQuery("select pos, state, message from _vt.vreplication where id=1", state, nil)
+		tme.dbTargetClients[1].addQuery("select pos, state, message from _vt.vreplication where id=2", state, nil)
+		tme.dbTargetClients[0].addQuery("select pos, state, message from _vt.vreplication where id=2", state, nil)
+
+		// mi.waitForCatchup-> mi.wr.tmc.VReplicationExec('stopped for cutover')
+		tme.dbTargetClients[0].addQuery("select id from _vt.vreplication where id = 1", resultid1, nil)
+		tme.dbTargetClients[0].addQuery("update _vt.vreplication set state = 'Stopped', message = 'stopped for cutover' where id in (1)", &sqltypes.Result{}, nil)
+		tme.dbTargetClients[0].addQuery("select id from _vt.vreplication where id = 2", resultid2, nil)
+		tme.dbTargetClients[0].addQuery("update _vt.vreplication set state = 'Stopped', message = 'stopped for cutover' where id in (2)", &sqltypes.Result{}, nil)
+		tme.dbTargetClients[1].addQuery("select id from _vt.vreplication where id = 2", resultid2, nil)
+		tme.dbTargetClients[1].addQuery("update _vt.vreplication set state = 'Stopped', message = 'stopped for cutover' where id in (2)", &sqltypes.Result{}, nil)
+		tme.dbTargetClients[0].addQuery("select * from _vt.vreplication where id = 1", stoppedResult(1), nil)
+		tme.dbTargetClients[1].addQuery("select * from _vt.vreplication where id = 2", stoppedResult(2), nil)
+		tme.dbTargetClients[0].addQuery("select * from _vt.vreplication where id = 2", stoppedResult(2), nil)
+	}
+	waitForCatchup()
+
+	createReverseVReplication := func() {
+		deleteReverseReplicaion()
+
+		tme.dbSourceClients[0].addQueryRE("insert into _vt.vreplication.*-80.*-40.*MariaDB/5-456-893.*Stopped", &sqltypes.Result{InsertID: 1}, nil)
+		tme.dbSourceClients[1].addQueryRE("insert into _vt.vreplication.*-80.*40-.*MariaDB/5-456-893.*Stopped", &sqltypes.Result{InsertID: 1}, nil)
+		tme.dbSourceClients[1].addQueryRE("insert into _vt.vreplication.*80-.*40-.*MariaDB/5-456-893.*Stopped", &sqltypes.Result{InsertID: 2}, nil)
+		tme.dbSourceClients[0].addQuery("select * from _vt.vreplication where id = 1", stoppedResult(1), nil)
+		tme.dbSourceClients[1].addQuery("select * from _vt.vreplication where id = 1", stoppedResult(1), nil)
+		tme.dbSourceClients[1].addQuery("select * from _vt.vreplication where id = 2", stoppedResult(2), nil)
+	}
+	createReverseVReplication()
+
+	createJournals := func() {
+		journal1 := "insert into _vt.resharding_journal.*6432976123657117097.*migration_type:SHARDS.*local_position.*MariaDB/5-456-892.*shard_gtids.*-80.*MariaDB/5-456-893.*participants.*40.*40"
+		tme.dbSourceClients[0].addQueryRE(journal1, &sqltypes.Result{}, nil)
+		journal2 := "insert into _vt.resharding_journal.*6432976123657117097.*migration_type:SHARDS.*local_position.*MariaDB/5-456-892.*shard_gtids.*80.*MariaDB/5-456-893.*shard_gtids.*80.*MariaDB/5-456-893.*participants.*40.*40"
+		tme.dbSourceClients[1].addQueryRE(journal2, &sqltypes.Result{}, nil)
+	}
+	createJournals()
+
+	startReverseVReplication := func() {
+		tme.dbSourceClients[0].addQuery("select id from _vt.vreplication where db_name = 'vt_ks'", resultid34, nil)
+		tme.dbSourceClients[0].addQuery("update _vt.vreplication set state = 'Running', message = '' where id in (3, 4)", &sqltypes.Result{}, nil)
+		tme.dbSourceClients[0].addQuery("select * from _vt.vreplication where id = 3", runningResult(3), nil)
+		tme.dbSourceClients[0].addQuery("select * from _vt.vreplication where id = 4", runningResult(4), nil)
+		tme.dbSourceClients[1].addQuery("select id from _vt.vreplication where db_name = 'vt_ks'", resultid34, nil)
+		tme.dbSourceClients[1].addQuery("update _vt.vreplication set state = 'Running', message = '' where id in (3, 4)", &sqltypes.Result{}, nil)
+		tme.dbSourceClients[1].addQuery("select * from _vt.vreplication where id = 3", runningResult(3), nil)
+		tme.dbSourceClients[1].addQuery("select * from _vt.vreplication where id = 4", runningResult(4), nil)
+	}
+	startReverseVReplication()
+
+	freezeTargetVReplication := func() {
+		tme.dbTargetClients[0].addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow = 'test'", resultid12, nil)
+		tme.dbTargetClients[0].addQuery("update _vt.vreplication set message = 'FROZEN' where id in (1, 2)", &sqltypes.Result{}, nil)
+		tme.dbTargetClients[0].addQuery("select * from _vt.vreplication where id = 1", stoppedResult(1), nil)
+		tme.dbTargetClients[0].addQuery("select * from _vt.vreplication where id = 2", stoppedResult(2), nil)
+		tme.dbTargetClients[1].addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow = 'test'", resultid2, nil)
+		tme.dbTargetClients[1].addQuery("update _vt.vreplication set message = 'FROZEN' where id in (2)", &sqltypes.Result{}, nil)
+		tme.dbTargetClients[1].addQuery("select * from _vt.vreplication where id = 2", stoppedResult(2), nil)
+	}
+	freezeTargetVReplication()
+
+	// Temporarily set tablet types to RDONLY to test that SwitchWrites fails if no tablets of rdonly are available
+	invariants := make(map[string]*sqltypes.Result)
+	for i := range tme.targetShards {
+		invariants[fmt.Sprintf("%s-%d", vreplQueryks, i)] = tme.dbTargetClients[i].getInvariant(vreplQueryks)
+		tme.dbTargetClients[i].addInvariant(vreplQueryks, tme.dbTargetClients[i].getInvariant(vreplQueryks+"-rdonly"))
+	}
+	_, _, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, false, true, false)
+	require.Error(t, err)
+	require.True(t, strings.Contains(err.Error(), "no tablet found"))
+	require.True(t, strings.Contains(err.Error(), "-80"))
+	require.True(t, strings.Contains(err.Error(), "80-"))
+	require.False(t, strings.Contains(err.Error(), "40"))
+	for i := range tme.targetShards {
+		tme.dbTargetClients[i].addInvariant(vreplQueryks, invariants[fmt.Sprintf("%s-%d", vreplQueryks, i)])
+	}
+
+	journalID, _, err := tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, false, true, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if journalID != 6432976123657117097 {
+		t.Errorf("journal id: %d, want 6432976123657117097", journalID)
+	}
+
+	verifyQueries(t, tme.allDBClients)
+
+	checkServedTypes(t, tme.ts, "ks:-40", 0)
+	checkServedTypes(t, tme.ts, "ks:40-", 0)
+	checkServedTypes(t, tme.ts, "ks:-80", 3)
+	checkServedTypes(t, tme.ts, "ks:80-", 3)
+
+	checkIsMasterServing(t, tme.ts, "ks:-40", false)
+	checkIsMasterServing(t, tme.ts, "ks:40-", false)
+	checkIsMasterServing(t, tme.ts, "ks:-80", true)
+	checkIsMasterServing(t, tme.ts, "ks:80-", true)
+
+	verifyQueries(t, tme.allDBClients)
+}
+
 func checkRouting(t *testing.T, wr *Wrangler, want map[string][]string) {
 	t.Helper()
 	ctx := context.Background()
