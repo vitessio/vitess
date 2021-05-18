@@ -282,18 +282,16 @@ func (route *Route) execute(vcursor VCursor, bindVars map[string]*querypb.BindVa
 	result, errs := vcursor.ExecuteMultiShard(rss, queries, false /* rollbackOnError */, false /* autocommit */)
 
 	if errs != nil {
-		if route.ScatterErrorsAsWarnings {
-			partialSuccessScatterQueries.Add(1)
-
-			for _, err := range errs {
-				if err != nil {
-					serr := mysql.NewSQLErrorFromError(err).(*mysql.SQLError)
-					vcursor.Session().RecordWarning(&querypb.QueryWarning{Code: uint32(serr.Num), Message: err.Error()})
-				}
-			}
-			// fall through
-		} else {
+		if !route.ScatterErrorsAsWarnings || len(errs) == len(rss) {
 			return nil, vterrors.Aggregate(errs)
+		}
+		partialSuccessScatterQueries.Add(1)
+
+		for _, err := range errs {
+			if err != nil {
+				serr := mysql.NewSQLErrorFromError(err).(*mysql.SQLError)
+				vcursor.Session().RecordWarning(&querypb.QueryWarning{Code: uint32(serr.Num), Message: err.Error()})
+			}
 		}
 	}
 	if len(route.OrderBy) == 0 {
@@ -347,16 +345,18 @@ func (route *Route) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.
 	}
 
 	if len(route.OrderBy) == 0 {
-		err = vcursor.StreamExecuteMulti(route.Query, rss, bvs, func(qr *sqltypes.Result) error {
+		errs := vcursor.StreamExecuteMulti(route.Query, rss, bvs, func(qr *sqltypes.Result) error {
 			return callback(qr.Truncate(route.TruncateColumnCount))
 		})
-		if err != nil {
-			if !route.ScatterErrorsAsWarnings {
-				return err
+		if len(errs) > 0 {
+			if !route.ScatterErrorsAsWarnings || len(errs) == len(rss) {
+				return vterrors.Aggregate(errs)
 			}
 			partialSuccessScatterQueries.Add(1)
-			sErr := mysql.NewSQLErrorFromError(err).(*mysql.SQLError)
-			vcursor.Session().RecordWarning(&querypb.QueryWarning{Code: uint32(sErr.Num), Message: err.Error()})
+			for _, err := range errs {
+				sErr := mysql.NewSQLErrorFromError(err).(*mysql.SQLError)
+				vcursor.Session().RecordWarning(&querypb.QueryWarning{Code: uint32(sErr.Num), Message: err.Error()})
+			}
 		}
 		return nil
 	}
