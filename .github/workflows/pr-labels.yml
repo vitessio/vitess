@@ -1,7 +1,11 @@
 name: pr-labels
-on: [push, pull_request]
+on: [push, pull_request, label]
 jobs:
-  build:
+  analyze:
+    if: github.repository == 'vitessio/vitess'
+    name: analyze_pr_labels
+    runs-on: ubuntu-latest
+    steps:
     - name: Tune the OS
       run: |
         echo '1024 65535' | sudo tee -a /proc/sys/net/ipv4/ip_local_port_range
