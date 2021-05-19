@@ -21,11 +21,11 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
@@ -118,33 +118,38 @@ func TestScatterErrsAsWarns(t *testing.T) {
 		checkedExec(t, oltp, `delete from t1`)
 	}()
 
-	// connection setup
-	checkedExec(t, oltp, "use @replica")
-	checkedExec(t, oltp, "set workload = oltp")
-	checkedExec(t, olap, "use @replica")
-	checkedExec(t, olap, "set workload = olap")
+	query1 := `select /*vt+ SCATTER_ERRORS_AS_WARNINGS */ id1 from t1`
+	query2 := `select /*vt+ SCATTER_ERRORS_AS_WARNINGS */ id1 from t1 order by id1`
+	showQ := "show warnings"
 
-	// stop one tablet from the first shard
+	// stop the mysql on one tablet, query will fail at vttablet level
 	require.NoError(t,
 		clusterInstance.Keyspaces[0].Shards[0].Replica().MysqlctlProcess.Stop())
 
-	query1 := `select /*vt+ SCATTER_ERRORS_AS_WARNINGS */ id1 from t1`
-	query2 := `select /*vt+ SCATTER_ERRORS_AS_WARNINGS */ id1 from t1 order by id1`
+	modes := []struct {
+		conn *mysql.Conn
+		m    string
+	}{
+		{m: "oltp", conn: oltp},
+		{m: "olap", conn: olap},
+	}
 
-	assertMatches(t, oltp, query1, `[[INT64(4)]]`)
-	assertMatches(t, olap, query1, `[[INT64(4)]]`)
-	assertMatches(t, oltp, query2, `[[INT64(4)]]`)
-	assertMatches(t, olap, query2, `[[INT64(4)]]`)
+	for _, mode := range modes {
+		t.Run(mode.m, func(t *testing.T) {
+			// connection setup
+			checkedExec(t, mode.conn, "use @replica")
+			checkedExec(t, mode.conn, fmt.Sprintf("set workload = %s", mode.m))
 
-	// change tablet type
-	assert.NoError(t,
-		clusterInstance.VtctlclientProcess.ExecuteCommand(
-			"ChangeTabletType", clusterInstance.Keyspaces[0].Shards[0].Replica().Alias, "spare"))
+			assertMatches(t, mode.conn, query1, `[[INT64(4)]]`)
+			assertContainsOneOf(t, mode.conn, showQ, "no valid tablet", "no healthy tablet")
+			assertMatches(t, mode.conn, query2, `[[INT64(4)]]`)
+			assertContainsOneOf(t, mode.conn, showQ, "no valid tablet", "no healthy tablet")
 
-	assertMatches(t, oltp, query1, `[[INT64(4)]]`)
-	assertMatches(t, olap, query1, `[[INT64(4)]]`)
-	assertMatches(t, oltp, query2, `[[INT64(4)]]`)
-	assertMatches(t, olap, query2, `[[INT64(4)]]`)
+			// invalid_field should throw error and not warning
+			_, err = mode.conn.ExecuteFetch("SELECT /*vt+ SCATTER_ERRORS_AS_WARNINGS */ invalid_field from t1;", 1, false)
+			require.EqualError(t, err, "target: test_keyspace.0.master: vttablet: rpc error: code = NotFound desc = Unknown column 'invalid_field' in 'field list' (errno 1054) (sqlstate 42S22) (CallerID: vtgate client 1): Sql: \"select /*vt+ SCATTER_ERRORS_AS_WARNINGS */ invalid_field from vt_insert_test\", BindVars: {} (errno 1054) (sqlstate 42S22) during query: SELECT /*vt+ SCATTER_ERRORS_AS_WARNINGS */ invalid_field from vt_insert_test")
+		})
+	}
 }
 
 func checkedExec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
@@ -160,6 +165,19 @@ func assertMatches(t *testing.T, conn *mysql.Conn, query, expected string) {
 	got := fmt.Sprintf("%v", qr.Rows)
 	diff := cmp.Diff(expected, got)
 	if diff != "" {
-		t.Errorf("Query: %s (-want +got):\n%s", query, diff)
+		t.Errorf("Query: %s (-want +got):\n%s\n%s", query, diff, got)
 	}
+}
+
+func assertContainsOneOf(t *testing.T, conn *mysql.Conn, query string, expected ...string) {
+	t.Helper()
+	qr := checkedExec(t, conn, query)
+	got := fmt.Sprintf("%v", qr.Rows)
+	for _, s := range expected {
+		if strings.Contains(got, s) {
+			return
+		}
+	}
+
+	t.Errorf("%s\n did not match any of %v", got, expected)
 }
