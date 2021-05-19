@@ -1,5 +1,5 @@
 name: pr-labels
-on: [push, pull_request, label]
+on: [push, pull_request]
 jobs:
   build:
     - name: Tune the OS
