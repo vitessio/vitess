@@ -163,6 +163,7 @@ func TestStateIsShardServingisInSrvKeyspace(t *testing.T) {
 
 	tm.tmState.mu.Lock()
 	tm.tmState.tablet.Type = topodatapb.TabletType_MASTER
+	tm.tmState.updateLocked(ctx)
 	tm.tmState.mu.Unlock()
 
 	leftKeyRange, err := key.ParseShardingSpec("-80")
