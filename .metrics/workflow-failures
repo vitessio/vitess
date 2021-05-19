@@ -1,4 +1,3 @@
-2021-01-17T19:24:07Z,Cluster (24),https://github.com/vitessio/vitess/actions/runs/492071989
 2021-01-17T19:24:07Z,Cluster (26),https://github.com/vitessio/vitess/actions/runs/492071996
 2021-01-17T19:24:07Z,Cluster (27),https://github.com/vitessio/vitess/actions/runs/492071997
 2021-01-17T19:24:07Z,Unit Test (mariadb101),https://github.com/vitessio/vitess/actions/runs/492071987
@@ -9998,3 +9997,4 @@
 2021-05-19T05:59:56Z,Cluster (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/855777358
 2021-05-19T05:59:56Z,check_make_sizegen,https://github.com/vitessio/vitess/actions/runs/855777360
 2021-05-19T06:26:33Z,Cluster (24),https://github.com/vitessio/vitess/actions/runs/855840221
+2021-05-19T06:56:52Z,.github/workflows/pr-labels.yml,https://github.com/vitessio/vitess/actions/runs/855913230
