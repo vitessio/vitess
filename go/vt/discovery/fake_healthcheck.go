@@ -21,7 +21,7 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/topo"

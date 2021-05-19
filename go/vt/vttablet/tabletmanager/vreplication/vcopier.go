@@ -17,18 +17,17 @@ limitations under the License.
 package vreplication
 
 import (
-	"bytes"
 	"fmt"
 	"io"
 	"strconv"
 	"strings"
 	"time"
 
+	"google.golang.org/protobuf/encoding/prototext"
+
 	"vitess.io/vitess/go/bytes2"
 
 	"context"
-
-	"github.com/golang/protobuf/proto"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
@@ -125,7 +124,7 @@ func (vc *vcopier) copyNext(ctx context.Context, settings binlogplayer.VRSetting
 		copyState[tableName] = nil
 		if lastpk != "" {
 			var r querypb.QueryResult
-			if err := proto.UnmarshalText(lastpk, &r); err != nil {
+			if err := prototext.Unmarshal([]byte(lastpk), &r); err != nil {
 				return err
 			}
 			copyState[tableName] = sqltypes.Proto3ToResult(&r)
@@ -167,7 +166,7 @@ func (vc *vcopier) catchup(ctx context.Context, copyState map[string]*sqltypes.R
 	// Wait for catchup.
 	tkr := time.NewTicker(waitRetryTime)
 	defer tkr.Stop()
-	seconds := int64(replicaLagTolerance / time.Second)
+	seconds := int64(*replicaLagTolerance / time.Second)
 	for {
 		sbm := vc.vr.stats.SecondsBehindMaster.Get()
 		if sbm < seconds {
@@ -211,8 +210,8 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 		return fmt.Errorf("plan not found for table: %s, current plans are: %#v", tableName, plan.TargetTables)
 	}
 
-	fmt.Printf("============ copyTimeout=%v\n", copyTimeout)
-	ctx, cancel := context.WithTimeout(ctx, copyTimeout)
+	fmt.Printf("============ copyPhaseDuration=%v\n", copyPhaseDuration)
+	ctx, cancel := context.WithTimeout(ctx, *copyPhaseDuration)
 	defer cancel()
 
 	var lastpkpb *querypb.QueryResult
@@ -287,8 +286,8 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 			return err
 		}
 
-		var buf bytes.Buffer
-		err = proto.CompactText(&buf, &querypb.QueryResult{
+		var buf []byte
+		buf, err = prototext.Marshal(&querypb.QueryResult{
 			Fields: pkfields,
 			Rows:   []*querypb.Row{rows.Lastpk},
 		})
@@ -298,7 +297,7 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 		bv = map[string]*querypb.BindVariable{
 			"lastpk": {
 				Type:  sqltypes.VarBinary,
-				Value: buf.Bytes(),
+				Value: buf,
 			},
 		}
 		updateState, err := updateCopyState.GenerateQuery(bv, nil)

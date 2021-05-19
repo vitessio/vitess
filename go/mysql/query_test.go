@@ -22,10 +22,10 @@ import (
 	"sync"
 	"testing"
 
+	"google.golang.org/protobuf/proto"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/golang/protobuf/proto"
 
 	"vitess.io/vitess/go/sqltypes"
 

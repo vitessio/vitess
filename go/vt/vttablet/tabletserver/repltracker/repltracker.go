@@ -62,7 +62,7 @@ type ReplTracker struct {
 }
 
 // NewReplTracker creates a new ReplTracker.
-func NewReplTracker(env tabletenv.Env, alias topodatapb.TabletAlias) *ReplTracker {
+func NewReplTracker(env tabletenv.Env, alias *topodatapb.TabletAlias) *ReplTracker {
 	return &ReplTracker{
 		mode:           env.Config().ReplicationTracker.Mode,
 		forceHeartbeat: env.Config().EnableLagThrottler,
@@ -73,7 +73,7 @@ func NewReplTracker(env tabletenv.Env, alias topodatapb.TabletAlias) *ReplTracke
 }
 
 // InitDBConfig initializes the target name.
-func (rt *ReplTracker) InitDBConfig(target querypb.Target, mysqld mysqlctl.MysqlDaemon) {
+func (rt *ReplTracker) InitDBConfig(target *querypb.Target, mysqld mysqlctl.MysqlDaemon) {
 	rt.hw.InitDBConfig(target)
 	rt.hr.InitDBConfig(target)
 	rt.poller.InitDBConfig(mysqld)

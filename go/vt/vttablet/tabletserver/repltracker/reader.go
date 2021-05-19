@@ -89,7 +89,7 @@ func newHeartbeatReader(env tabletenv.Env) *heartbeatReader {
 }
 
 // InitDBConfig initializes the target name for the heartbeatReader.
-func (r *heartbeatReader) InitDBConfig(target querypb.Target) {
+func (r *heartbeatReader) InitDBConfig(target *querypb.Target) {
 	r.keyspaceShard = fmt.Sprintf("%s:%s", target.Keyspace, target.Shard)
 }
 

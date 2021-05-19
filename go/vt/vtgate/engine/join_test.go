@@ -81,12 +81,12 @@ func TestJoinExecute(t *testing.T) {
 		t.Fatal(err)
 	}
 	leftPrim.ExpectLog(t, []string{
-		`Execute a: type:INT64 value:"10"  true`,
+		`Execute a: type:INT64 value:"10" true`,
 	})
 	rightPrim.ExpectLog(t, []string{
-		`Execute a: type:INT64 value:"10" bv: type:VARCHAR value:"a"  true`,
-		`Execute a: type:INT64 value:"10" bv: type:VARCHAR value:"b"  false`,
-		`Execute a: type:INT64 value:"10" bv: type:VARCHAR value:"c"  false`,
+		`Execute a: type:INT64 value:"10" bv: type:VARCHAR value:"a" true`,
+		`Execute a: type:INT64 value:"10" bv: type:VARCHAR value:"b" false`,
+		`Execute a: type:INT64 value:"10" bv: type:VARCHAR value:"c" false`,
 	})
 	expectResult(t, "jn.Execute", r, sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
@@ -108,12 +108,12 @@ func TestJoinExecute(t *testing.T) {
 		t.Fatal(err)
 	}
 	leftPrim.ExpectLog(t, []string{
-		`Execute a: type:INT64 value:"10"  true`,
+		`Execute a: type:INT64 value:"10" true`,
 	})
 	rightPrim.ExpectLog(t, []string{
-		`Execute a: type:INT64 value:"10" bv: type:VARCHAR value:"a"  true`,
-		`Execute a: type:INT64 value:"10" bv: type:VARCHAR value:"b"  false`,
-		`Execute a: type:INT64 value:"10" bv: type:VARCHAR value:"c"  false`,
+		`Execute a: type:INT64 value:"10" bv: type:VARCHAR value:"a" true`,
+		`Execute a: type:INT64 value:"10" bv: type:VARCHAR value:"b" false`,
+		`Execute a: type:INT64 value:"10" bv: type:VARCHAR value:"c" false`,
 	})
 	expectResult(t, "jn.Execute", r, sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
@@ -386,9 +386,9 @@ func TestJoinStreamExecute(t *testing.T) {
 	rightPrim.ExpectLog(t, []string{
 		`GetFields bv: `,
 		`Execute bv:  true`,
-		`StreamExecute bv: type:VARCHAR value:"a"  false`,
-		`StreamExecute bv: type:VARCHAR value:"b"  false`,
-		`StreamExecute bv: type:VARCHAR value:"c"  false`,
+		`StreamExecute bv: type:VARCHAR value:"a" false`,
+		`StreamExecute bv: type:VARCHAR value:"b" false`,
+		`StreamExecute bv: type:VARCHAR value:"c" false`,
 	})
 	expectResult(t, "jn.Execute", r, sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
@@ -415,9 +415,9 @@ func TestJoinStreamExecute(t *testing.T) {
 	rightPrim.ExpectLog(t, []string{
 		`GetFields bv: `,
 		`Execute bv:  true`,
-		`StreamExecute bv: type:VARCHAR value:"a"  false`,
-		`StreamExecute bv: type:VARCHAR value:"b"  false`,
-		`StreamExecute bv: type:VARCHAR value:"c"  false`,
+		`StreamExecute bv: type:VARCHAR value:"a" false`,
+		`StreamExecute bv: type:VARCHAR value:"b" false`,
+		`StreamExecute bv: type:VARCHAR value:"c" false`,
 	})
 	expectResult(t, "jn.Execute", r, sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(

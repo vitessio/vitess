@@ -113,7 +113,7 @@ func executorStreamMessages(executor *Executor, sql string) (qr *sqltypes.Result
 		NewSafeSession(masterSession),
 		sql,
 		nil,
-		querypb.Target{
+		&querypb.Target{
 			TabletType: topodatapb.TabletType_MASTER,
 		},
 		func(qr *sqltypes.Result) error {

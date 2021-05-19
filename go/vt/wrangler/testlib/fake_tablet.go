@@ -257,8 +257,8 @@ func (ft *FakeTablet) StopActionLoop(t *testing.T) {
 }
 
 // Target returns the keyspace/shard/type info of this tablet as Target.
-func (ft *FakeTablet) Target() querypb.Target {
-	return querypb.Target{
+func (ft *FakeTablet) Target() *querypb.Target {
+	return &querypb.Target{
 		Keyspace:   ft.Tablet.Keyspace,
 		Shard:      ft.Tablet.Shard,
 		TabletType: ft.Tablet.Type,

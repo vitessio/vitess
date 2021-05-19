@@ -17,7 +17,7 @@ limitations under the License.
 package sqltypes
 
 import (
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/vt/vterrors"
 

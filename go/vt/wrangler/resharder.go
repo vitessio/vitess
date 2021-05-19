@@ -22,10 +22,11 @@ import (
 	"sync"
 	"time"
 
+	"google.golang.org/protobuf/encoding/prototext"
+
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vtctl/workflow"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -208,8 +209,8 @@ func (rs *resharder) readRefStreams(ctx context.Context) error {
 				return fmt.Errorf("VReplication streams must have named workflows for migration: shard: %s:%s", source.Keyspace(), source.ShardName())
 			}
 			var bls binlogdatapb.BinlogSource
-			if err := proto.UnmarshalText(row[1].ToString(), &bls); err != nil {
-				return vterrors.Wrapf(err, "UnmarshalText: %v", row)
+			if err := prototext.Unmarshal(row[1].ToBytes(), &bls); err != nil {
+				return vterrors.Wrapf(err, "prototext.Unmarshal: %v", row)
 			}
 			isReference, err := rs.blsIsReference(&bls)
 			if err != nil {
