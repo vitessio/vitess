@@ -29,6 +29,8 @@ import (
 	"syscall"
 	"time"
 
+	"google.golang.org/protobuf/proto"
+
 	"context"
 
 	"vitess.io/vitess/go/acl"
@@ -120,7 +122,7 @@ type TabletServer struct {
 	onlineDDLExecutor *onlineddl.Executor
 
 	// alias is used for identifying this tabletserver in healthcheck responses.
-	alias topodatapb.TabletAlias
+	alias *topodatapb.TabletAlias
 }
 
 var _ queryservice.QueryService = (*TabletServer)(nil)
@@ -131,7 +133,7 @@ var _ queryservice.QueryService = (*TabletServer)(nil)
 var RegisterFunctions []func(Controller)
 
 // NewServer creates a new TabletServer based on the command line flags.
-func NewServer(name string, topoServer *topo.Server, alias topodatapb.TabletAlias) *TabletServer {
+func NewServer(name string, topoServer *topo.Server, alias *topodatapb.TabletAlias) *TabletServer {
 	return NewTabletServer(name, tabletenv.NewCurrentConfig(), topoServer, alias)
 }
 
@@ -142,7 +144,7 @@ var (
 
 // NewTabletServer creates an instance of TabletServer. Only the first
 // instance of TabletServer will expose its state variables.
-func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *topo.Server, alias topodatapb.TabletAlias) *TabletServer {
+func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *topo.Server, alias *topodatapb.TabletAlias) *TabletServer {
 	exporter := servenv.NewExporter(name, "Tablet")
 	tsv := &TabletServer{
 		exporter:               exporter,
@@ -153,7 +155,7 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 		TerseErrors:            config.TerseErrors,
 		enableHotRowProtection: config.HotRowProtection.Mode != tabletenv.Disable,
 		topoServer:             topoServer,
-		alias:                  alias,
+		alias:                  proto.Clone(alias).(*topodatapb.TabletAlias),
 	}
 
 	tsOnce.Do(func() { srvTopoServer = srvtopo.NewResilientServer(topoServer, "TabletSrvTopo") })
@@ -226,12 +228,12 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 
 // InitDBConfig initializes the db config variables for TabletServer. You must call this function
 // to complete the creation of TabletServer.
-func (tsv *TabletServer) InitDBConfig(target querypb.Target, dbcfgs *dbconfigs.DBConfigs, mysqld mysqlctl.MysqlDaemon) error {
+func (tsv *TabletServer) InitDBConfig(target *querypb.Target, dbcfgs *dbconfigs.DBConfigs, mysqld mysqlctl.MysqlDaemon) error {
 	if tsv.sm.State() != StateNotConnected {
 		return vterrors.NewErrorf(vtrpcpb.Code_UNAVAILABLE, vterrors.ServerNotAvailable, "Server isn't available")
 	}
 	tsv.sm.Init(tsv, target)
-	tsv.sm.target = target
+	tsv.sm.target = proto.Clone(target).(*querypb.Target)
 	tsv.config.DB = dbcfgs
 
 	tsv.se.InitDBConfig(tsv.config.DB.DbaWithDB())
@@ -347,7 +349,7 @@ func (tsv *TabletServer) SetServingType(tabletType topodatapb.TabletType, terTim
 
 // StartService is a convenience function for InitDBConfig->SetServingType
 // with serving=true.
-func (tsv *TabletServer) StartService(target querypb.Target, dbcfgs *dbconfigs.DBConfigs, mysqld mysqlctl.MysqlDaemon) error {
+func (tsv *TabletServer) StartService(target *querypb.Target, dbcfgs *dbconfigs.DBConfigs, mysqld mysqlctl.MysqlDaemon) error {
 	if err := tsv.InitDBConfig(target, dbcfgs, mysqld); err != nil {
 		return err
 	}
@@ -496,7 +498,7 @@ func (tsv *TabletServer) begin(ctx context.Context, target *querypb.Target, preQ
 			return err
 		},
 	)
-	return transactionID, &tsv.alias, err
+	return transactionID, tsv.alias, err
 }
 
 // Commit commits the specified transaction.
@@ -1170,7 +1172,7 @@ func (tsv *TabletServer) ReserveBeginExecute(ctx context.Context, target *queryp
 	}
 
 	result, err := tsv.Execute(ctx, target, sql, bindVariables, connID, connID, options)
-	return result, connID, connID, &tsv.alias, err
+	return result, connID, connID, tsv.alias, err
 }
 
 //ReserveExecute implements the QueryService interface
@@ -1199,7 +1201,7 @@ func (tsv *TabletServer) ReserveExecute(ctx context.Context, target *querypb.Tar
 	}
 
 	result, err := tsv.Execute(ctx, target, sql, bindVariables, connID, connID, options)
-	return result, connID, &tsv.alias, err
+	return result, connID, tsv.alias, err
 }
 
 //Release implements the QueryService interface

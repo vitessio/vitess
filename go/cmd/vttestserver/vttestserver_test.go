@@ -28,6 +28,8 @@ import (
 	"testing"
 	"time"
 
+	"google.golang.org/protobuf/encoding/protojson"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/tlstest"
 
@@ -37,8 +39,6 @@ import (
 	"vitess.io/vitess/go/mysql"
 
 	"vitess.io/vitess/go/vt/vttest"
-
-	"github.com/golang/protobuf/jsonpb"
 
 	"vitess.io/vitess/go/vt/proto/logutil"
 	"vitess.io/vitess/go/vt/proto/vschema"
@@ -305,7 +305,7 @@ func assertColumnVindex(t *testing.T, cluster vttest.LocalCluster, expected colu
 
 	err := vtctlclient.RunCommandAndWait(ctx, server, args, func(e *logutil.Event) {
 		var keyspace vschema.Keyspace
-		if err := jsonpb.UnmarshalString(e.Value, &keyspace); err != nil {
+		if err := protojson.Unmarshal([]byte(e.Value), &keyspace); err != nil {
 			t.Error(err)
 		}
 

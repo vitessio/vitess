@@ -30,11 +30,11 @@ import (
 	"sync"
 	"time"
 
+	"google.golang.org/protobuf/proto"
+
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"context"
-
-	"github.com/golang/protobuf/proto"
 
 	"vitess.io/vitess/go/history"
 	"vitess.io/vitess/go/mysql"
@@ -418,10 +418,10 @@ func (blp *BinlogPlayer) processTransaction(tx *binlogdatapb.BinlogTransaction) 
 				// needed during event playback. Here we also adjust so that playback
 				// proceeds, but in Vitess-land this usually means a misconfigured
 				// server or a misbehaving client, so we spam the logs with warnings.
-				log.Warningf("BinlogPlayer changing charset from %v to %v for statement %d in transaction %v", blp.currentCharset, stmtCharset, i, *tx)
+				log.Warningf("BinlogPlayer changing charset from %v to %v for statement %d in transaction %v", blp.currentCharset, stmtCharset, i, tx)
 				err = mysql.SetCharset(dbClient.dbConn, stmtCharset)
 				if err != nil {
-					return false, fmt.Errorf("can't set charset for statement %d in transaction %v: %v", i, *tx, err)
+					return false, fmt.Errorf("can't set charset for statement %d in transaction %v: %v", i, tx, err)
 				}
 				blp.currentCharset = stmtCharset
 			}

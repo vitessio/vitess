@@ -38,7 +38,7 @@ func TestHealthStreamerClosed(t *testing.T) {
 	defer db.Close()
 	config := newConfig(db)
 	env := tabletenv.NewEnv(config, "ReplTrackerTest")
-	alias := topodatapb.TabletAlias{
+	alias := &topodatapb.TabletAlias{
 		Cell: "cell",
 		Uid:  1,
 	}
@@ -62,7 +62,7 @@ func TestHealthStreamerBroadcast(t *testing.T) {
 	config := newConfig(db)
 
 	env := tabletenv.NewEnv(config, "ReplTrackerTest")
-	alias := topodatapb.TabletAlias{
+	alias := &topodatapb.TabletAlias{
 		Cell: "cell",
 		Uid:  1,
 	}
@@ -70,7 +70,7 @@ func TestHealthStreamerBroadcast(t *testing.T) {
 	hs := newHealthStreamer(env, alias)
 	hs.Open()
 	defer hs.Close()
-	target := querypb.Target{}
+	target := &querypb.Target{}
 	hs.InitDBConfig(target, db.ConnParams())
 
 	ch, cancel := testStream(hs)
@@ -79,7 +79,7 @@ func TestHealthStreamerBroadcast(t *testing.T) {
 	shr := <-ch
 	want := &querypb.StreamHealthResponse{
 		Target:      &querypb.Target{},
-		TabletAlias: &alias,
+		TabletAlias: alias,
 		RealtimeStats: &querypb.RealtimeStats{
 			HealthError: "tabletserver uninitialized",
 		},
@@ -92,7 +92,7 @@ func TestHealthStreamerBroadcast(t *testing.T) {
 		Target: &querypb.Target{
 			TabletType: topodatapb.TabletType_REPLICA,
 		},
-		TabletAlias: &alias,
+		TabletAlias: alias,
 		RealtimeStats: &querypb.RealtimeStats{
 			SecondsBehindMasterFilteredReplication: 1,
 			BinlogPlayersCount:                     2,
@@ -108,7 +108,7 @@ func TestHealthStreamerBroadcast(t *testing.T) {
 		Target: &querypb.Target{
 			TabletType: topodatapb.TabletType_MASTER,
 		},
-		TabletAlias:                         &alias,
+		TabletAlias:                         alias,
 		Serving:                             true,
 		TabletExternallyReparentedTimestamp: now.Unix(),
 		RealtimeStats: &querypb.RealtimeStats{
@@ -125,7 +125,7 @@ func TestHealthStreamerBroadcast(t *testing.T) {
 		Target: &querypb.Target{
 			TabletType: topodatapb.TabletType_REPLICA,
 		},
-		TabletAlias: &alias,
+		TabletAlias: alias,
 		RealtimeStats: &querypb.RealtimeStats{
 			SecondsBehindMaster:                    1,
 			SecondsBehindMasterFilteredReplication: 1,
@@ -141,7 +141,7 @@ func TestHealthStreamerBroadcast(t *testing.T) {
 		Target: &querypb.Target{
 			TabletType: topodatapb.TabletType_REPLICA,
 		},
-		TabletAlias: &alias,
+		TabletAlias: alias,
 		RealtimeStats: &querypb.RealtimeStats{
 			HealthError:                            "repl err",
 			SecondsBehindMasterFilteredReplication: 1,
@@ -159,14 +159,14 @@ func TestReloadSchema(t *testing.T) {
 	config.SignalWhenSchemaChange = true
 
 	env := tabletenv.NewEnv(config, "ReplTrackerTest")
-	alias := topodatapb.TabletAlias{
+	alias := &topodatapb.TabletAlias{
 		Cell: "cell",
 		Uid:  1,
 	}
 	blpFunc = testBlpFunc
 	hs := newHealthStreamer(env, alias)
 
-	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
+	target := &querypb.Target{TabletType: topodatapb.TabletType_MASTER}
 	configs := config.DB
 
 	db.AddQuery(mysql.CreateVTDatabase, &sqltypes.Result{})
@@ -220,14 +220,14 @@ func TestDoesNotReloadSchema(t *testing.T) {
 	config.SignalWhenSchemaChange = false
 
 	env := tabletenv.NewEnv(config, "ReplTrackerTest")
-	alias := topodatapb.TabletAlias{
+	alias := &topodatapb.TabletAlias{
 		Cell: "cell",
 		Uid:  1,
 	}
 	blpFunc = testBlpFunc
 	hs := newHealthStreamer(env, alias)
 
-	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
+	target := &querypb.Target{TabletType: topodatapb.TabletType_MASTER}
 	configs := config.DB
 
 	hs.InitDBConfig(target, configs.DbaWithDB())

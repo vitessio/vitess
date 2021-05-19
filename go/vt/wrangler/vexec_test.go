@@ -28,7 +28,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/logutil"
 )
 
@@ -90,7 +89,7 @@ func TestVExec2(t *testing.T) {
 	result = sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 		"id|source|message|cell|tablet_types",
 		"int64|varchar|varchar|varchar|varchar"),
-		"1|keyspace:\"source\" shard:\"0\" filter:<rules:<match:\"t1\" > > |||",
+		"1|keyspace:\"source\" shard:\"0\" filter:{rules:{match:\"t1\"}}|||",
 	)
 	testCases = append(testCases, &TestCase{
 		name:   "select",
@@ -136,7 +135,9 @@ func TestVExec2(t *testing.T) {
 			if testCase.errorString == "" {
 				require.NoError(t, err)
 				for _, result := range results {
-					utils.MustMatch(t, testCase.result, result, "Incorrect result")
+					if !testCase.result.Equal(result) {
+						t.Errorf("mismatched result:\nwant: %v\ngot:  %v", testCase.result, result)
+					}
 				}
 			} else {
 				require.Error(t, err)
@@ -157,10 +158,10 @@ func TestVExec2(t *testing.T) {
 |        TABLET        | ID |          BINLOGSOURCE          |  STATE  |  DBNAME   |               CURRENT GTID               |
 +----------------------+----+--------------------------------+---------+-----------+------------------------------------------+
 | -80/zone1-0000000200 |  1 | keyspace:"source" shard:"0"    | Copying | vt_target | 14b68925-696a-11ea-aee7-fec597a91f5e:1-3 |
-|                      |    | filter:<rules:<match:"t1" > >  |         |           |                                          |
+|                      |    | filter:{rules:{match:"t1"}}    |         |           |                                          |
 +----------------------+----+--------------------------------+---------+-----------+------------------------------------------+
 | 80-/zone1-0000000210 |  1 | keyspace:"source" shard:"0"    | Copying | vt_target | 14b68925-696a-11ea-aee7-fec597a91f5e:1-3 |
-|                      |    | filter:<rules:<match:"t1" > >  |         |           |                                          |
+|                      |    | filter:{rules:{match:"t1"}}    |         |           |                                          |
 +----------------------+----+--------------------------------+---------+-----------+------------------------------------------+`,
 	}
 	require.Equal(t, strings.Join(dryRunResults, "\n")+"\n\n\n\n\n", logger.String())
@@ -300,7 +301,7 @@ func TestWorkflowListStreams(t *testing.T) {
 		gotResults = append(gotResults, fmt.Sprintf("%s:%v", key.String(), result))
 	}
 	sort.Strings(gotResults)
-	wantResults := []string{"Tablet{zone1-0000000200}:rows_affected:1 ", "Tablet{zone1-0000000210}:rows_affected:1 "}
+	wantResults := []string{"Tablet{zone1-0000000200}:rows_affected:1", "Tablet{zone1-0000000210}:rows_affected:1"}
 	sort.Strings(wantResults)
 	require.ElementsMatch(t, wantResults, gotResults)
 
@@ -316,10 +317,10 @@ will be run on the following streams in keyspace target for workflow wrWorkflow:
 |        TABLET        | ID |          BINLOGSOURCE          |  STATE  |  DBNAME   |               CURRENT GTID               |
 +----------------------+----+--------------------------------+---------+-----------+------------------------------------------+
 | -80/zone1-0000000200 |  1 | keyspace:"source" shard:"0"    | Copying | vt_target | 14b68925-696a-11ea-aee7-fec597a91f5e:1-3 |
-|                      |    | filter:<rules:<match:"t1" > >  |         |           |                                          |
+|                      |    | filter:{rules:{match:"t1"}}    |         |           |                                          |
 +----------------------+----+--------------------------------+---------+-----------+------------------------------------------+
 | 80-/zone1-0000000210 |  1 | keyspace:"source" shard:"0"    | Copying | vt_target | 14b68925-696a-11ea-aee7-fec597a91f5e:1-3 |
-|                      |    | filter:<rules:<match:"t1" > >  |         |           |                                          |
+|                      |    | filter:{rules:{match:"t1"}}    |         |           |                                          |
 +----------------------+----+--------------------------------+---------+-----------+------------------------------------------+
 
 

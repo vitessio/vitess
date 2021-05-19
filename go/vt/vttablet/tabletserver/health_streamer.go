@@ -36,7 +36,7 @@ import (
 
 	"context"
 
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/history"
 	"vitess.io/vitess/go/sync2"
@@ -79,7 +79,7 @@ type healthStreamer struct {
 	initSuccess bool
 }
 
-func newHealthStreamer(env tabletenv.Env, alias topodatapb.TabletAlias) *healthStreamer {
+func newHealthStreamer(env tabletenv.Env, alias *topodatapb.TabletAlias) *healthStreamer {
 	var newTimer *timer.Timer
 	var pool *connpool.Pool
 	if env.Config().SignalWhenSchemaChange {
@@ -99,7 +99,7 @@ func newHealthStreamer(env tabletenv.Env, alias topodatapb.TabletAlias) *healthS
 
 		state: &querypb.StreamHealthResponse{
 			Target:      &querypb.Target{},
-			TabletAlias: &alias,
+			TabletAlias: alias,
 			RealtimeStats: &querypb.RealtimeStats{
 				HealthError: errUnintialized,
 			},
@@ -111,11 +111,8 @@ func newHealthStreamer(env tabletenv.Env, alias topodatapb.TabletAlias) *healthS
 	}
 }
 
-func (hs *healthStreamer) InitDBConfig(target querypb.Target, cp dbconfigs.Connector) {
-	// Weird test failures happen if we don't instantiate
-	// a separate variable.
-	inner := target
-	hs.state.Target = &inner
+func (hs *healthStreamer) InitDBConfig(target *querypb.Target, cp dbconfigs.Connector) {
+	hs.state.Target = proto.Clone(target).(*querypb.Target)
 	hs.dbConfig = cp
 }
 

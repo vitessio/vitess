@@ -23,9 +23,10 @@ import (
 	"strings"
 	"time"
 
+	"google.golang.org/protobuf/encoding/prototext"
+
 	"context"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/olekukonko/tablewriter"
 
 	"vitess.io/vitess/go/vt/logutil"
@@ -202,7 +203,8 @@ func commandGetThrottlerConfiguration(ctx context.Context, wr *wrangler.Wrangler
 	table.SetAutoWrapText(false)
 	table.SetHeader([]string{"Name", "Configuration (protobuf text, fields with a zero value are omitted)"})
 	for name, c := range configurations {
-		table.Append([]string{name, proto.CompactTextString(c)})
+		pcfg, _ := prototext.Marshal(c)
+		table.Append([]string{name, string(pcfg)})
 	}
 	table.Render()
 	wr.Logger().Printf("%d active throttler(s) on server '%v'.\n", len(configurations), *server)
@@ -226,7 +228,7 @@ func commandUpdateThrottlerConfiguration(ctx context.Context, wr *wrangler.Wrang
 
 	protoText := subFlags.Arg(0)
 	configuration := &throttlerdatapb.Configuration{}
-	if err := proto.UnmarshalText(protoText, configuration); err != nil {
+	if err := prototext.Unmarshal([]byte(protoText), configuration); err != nil {
 		return fmt.Errorf("failed to unmarshal the configuration protobuf text (%v) into a protobuf instance: %v", protoText, err)
 	}
 

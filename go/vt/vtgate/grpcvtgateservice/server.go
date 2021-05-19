@@ -53,6 +53,7 @@ var (
 
 // VTGate is the public structure that is exported via gRPC
 type VTGate struct {
+	vtgateservicepb.UnimplementedVitessServer
 	server vtgateservice.VTGateService
 }
 
@@ -210,7 +211,7 @@ func (vtg *VTGate) VStream(request *vtgatepb.VStreamRequest, stream vtgateservic
 func init() {
 	vtgate.RegisterVTGates = append(vtgate.RegisterVTGates, func(vtGate vtgateservice.VTGateService) {
 		if servenv.GRPCCheckServiceMap("vtgateservice") {
-			vtgateservicepb.RegisterVitessServer(servenv.GRPCServer, &VTGate{vtGate})
+			vtgateservicepb.RegisterVitessServer(servenv.GRPCServer, &VTGate{server: vtGate})
 		}
 	})
 }
@@ -219,5 +220,5 @@ func init() {
 // server.  Useful for unit tests only, for real use, the init()
 // function does the registration.
 func RegisterForTest(s *grpc.Server, service vtgateservice.VTGateService) {
-	vtgateservicepb.RegisterVitessServer(s, &VTGate{service})
+	vtgateservicepb.RegisterVitessServer(s, &VTGate{server: service})
 }

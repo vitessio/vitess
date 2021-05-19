@@ -2053,7 +2053,7 @@ func TestGetSchemas(t *testing.T) {
 				ClusterIds: []string{"nope"},
 			},
 			expected: &vtadminpb.GetSchemasResponse{
-				Schemas: []*vtadminpb.Schema{},
+				Schemas: nil,
 			},
 		},
 		{
@@ -2076,7 +2076,7 @@ func TestGetSchemas(t *testing.T) {
 			tabletSchemas: map[string]*tabletmanagerdatapb.SchemaDefinition{},
 			req:           &vtadminpb.GetSchemasRequest{},
 			expected: &vtadminpb.GetSchemasResponse{
-				Schemas: []*vtadminpb.Schema{},
+				Schemas: nil,
 			},
 		},
 		{
@@ -2119,7 +2119,7 @@ func TestGetSchemas(t *testing.T) {
 			},
 			req: &vtadminpb.GetSchemasRequest{},
 			expected: &vtadminpb.GetSchemasResponse{
-				Schemas: []*vtadminpb.Schema{},
+				Schemas: nil,
 			},
 		},
 	}
@@ -2198,7 +2198,7 @@ func TestGetSchemas(t *testing.T) {
 				resp, err := api.GetSchemas(ctx, tt.req)
 				require.NoError(t, err)
 
-				vtadmintestutil.AssertSchemaSlicesEqual(t, tt.expected.Schemas, resp.Schemas, tt.name)
+				vtadmintestutil.AssertSchemaSlicesEqual(t, tt.expected.Schemas, resp.Schemas)
 			}, vtctlds...)
 		})
 	}

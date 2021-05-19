@@ -32,6 +32,7 @@ import (
 
 // server is our gRPC server.
 type server struct {
+	mysqlctlpb.UnimplementedMysqlCtlServer
 	cnf    *mysqlctl.Mycnf
 	mysqld *mysqlctl.Mysqld
 }

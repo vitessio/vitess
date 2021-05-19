@@ -21,6 +21,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/test/utils"
+
 	"github.com/stretchr/testify/assert"
 
 	"vitess.io/vitess/go/vt/logutil"
@@ -337,7 +339,7 @@ func TestChooseNewPrimary(t *testing.T) {
 			}
 
 			assert.NoError(t, err)
-			assert.Equal(t, tt.expected, actual)
+			utils.MustMatch(t, tt.expected, actual)
 		})
 	}
 }
