@@ -29,6 +29,8 @@ type VTAdminClient interface {
 	GetClusters(ctx context.Context, in *GetClustersRequest, opts ...grpc.CallOption) (*GetClustersResponse, error)
 	// GetGates returns all gates across all the specified clusters.
 	GetGates(ctx context.Context, in *GetGatesRequest, opts ...grpc.CallOption) (*GetGatesResponse, error)
+	// GetKeyspace returns a keyspace by name in the specified cluster.
+	GetKeyspace(ctx context.Context, in *GetKeyspaceRequest, opts ...grpc.CallOption) (*Keyspace, error)
 	// GetKeyspaces returns all keyspaces across the specified clusters.
 	GetKeyspaces(ctx context.Context, in *GetKeyspacesRequest, opts ...grpc.CallOption) (*GetKeyspacesResponse, error)
 	// GetSchema returns the schema for the specified (cluster, keyspace, table)
@@ -84,6 +86,15 @@ func (c *vTAdminClient) GetClusters(ctx context.Context, in *GetClustersRequest,
 func (c *vTAdminClient) GetGates(ctx context.Context, in *GetGatesRequest, opts ...grpc.CallOption) (*GetGatesResponse, error) {
 	out := new(GetGatesResponse)
 	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/GetGates", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vTAdminClient) GetKeyspace(ctx context.Context, in *GetKeyspaceRequest, opts ...grpc.CallOption) (*Keyspace, error) {
+	out := new(Keyspace)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/GetKeyspace", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -195,6 +206,8 @@ type VTAdminServer interface {
 	GetClusters(context.Context, *GetClustersRequest) (*GetClustersResponse, error)
 	// GetGates returns all gates across all the specified clusters.
 	GetGates(context.Context, *GetGatesRequest) (*GetGatesResponse, error)
+	// GetKeyspace returns a keyspace by name in the specified cluster.
+	GetKeyspace(context.Context, *GetKeyspaceRequest) (*Keyspace, error)
 	// GetKeyspaces returns all keyspaces across the specified clusters.
 	GetKeyspaces(context.Context, *GetKeyspacesRequest) (*GetKeyspacesResponse, error)
 	// GetSchema returns the schema for the specified (cluster, keyspace, table)
@@ -234,6 +247,9 @@ func (UnimplementedVTAdminServer) GetClusters(context.Context, *GetClustersReque
 }
 func (UnimplementedVTAdminServer) GetGates(context.Context, *GetGatesRequest) (*GetGatesResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetGates not implemented")
+}
+func (UnimplementedVTAdminServer) GetKeyspace(context.Context, *GetKeyspaceRequest) (*Keyspace, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetKeyspace not implemented")
 }
 func (UnimplementedVTAdminServer) GetKeyspaces(context.Context, *GetKeyspacesRequest) (*GetKeyspacesResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetKeyspaces not implemented")
@@ -328,6 +344,24 @@ func _VTAdmin_GetGates_Handler(srv interface{}, ctx context.Context, dec func(in
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(VTAdminServer).GetGates(ctx, req.(*GetGatesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _VTAdmin_GetKeyspace_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetKeyspaceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VTAdminServer).GetKeyspace(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtadmin.VTAdmin/GetKeyspace",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VTAdminServer).GetKeyspace(ctx, req.(*GetKeyspaceRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -530,6 +564,10 @@ var VTAdmin_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetGates",
 			Handler:    _VTAdmin_GetGates_Handler,
+		},
+		{
+			MethodName: "GetKeyspace",
+			Handler:    _VTAdmin_GetKeyspace_Handler,
 		},
 		{
 			MethodName: "GetKeyspaces",
