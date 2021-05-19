@@ -141,13 +141,15 @@ func TestScatterErrsAsWarns(t *testing.T) {
 			checkedExec(t, mode.conn, fmt.Sprintf("set workload = %s", mode.m))
 
 			assertMatches(t, mode.conn, query1, `[[INT64(4)]]`)
-			assertContainsOneOf(t, mode.conn, showQ, "no valid tablet", "no healthy tablet")
+			assertContainsOneOf(t, mode.conn, showQ, "no valid tablet", "no healthy tablet", "mysql.sock: connect: no such file or directory")
 			assertMatches(t, mode.conn, query2, `[[INT64(4)]]`)
-			assertContainsOneOf(t, mode.conn, showQ, "no valid tablet", "no healthy tablet")
+			assertContainsOneOf(t, mode.conn, showQ, "no valid tablet", "no healthy tablet", "mysql.sock: connect: no such file or directory")
 
 			// invalid_field should throw error and not warning
 			_, err = mode.conn.ExecuteFetch("SELECT /*vt+ SCATTER_ERRORS_AS_WARNINGS */ invalid_field from t1;", 1, false)
-			require.EqualError(t, err, "target: test_keyspace.0.master: vttablet: rpc error: code = NotFound desc = Unknown column 'invalid_field' in 'field list' (errno 1054) (sqlstate 42S22) (CallerID: vtgate client 1): Sql: \"select /*vt+ SCATTER_ERRORS_AS_WARNINGS */ invalid_field from vt_insert_test\", BindVars: {} (errno 1054) (sqlstate 42S22) during query: SELECT /*vt+ SCATTER_ERRORS_AS_WARNINGS */ invalid_field from vt_insert_test")
+			require.Error(t, err)
+			serr := mysql.NewSQLErrorFromError(err).(*mysql.SQLError)
+			require.Equal(t, 1054, serr.Number())
 		})
 	}
 }
