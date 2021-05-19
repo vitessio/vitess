@@ -20,6 +20,8 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -1138,129 +1140,95 @@ func TestParamsFail(t *testing.T) {
 }
 
 func TestExecFail(t *testing.T) {
-	// Unsharded error
-	sel := NewRoute(
-		SelectUnsharded,
-		&vindexes.Keyspace{
-			Name:    "ks",
-			Sharded: false,
-		},
-		"dummy_select",
-		"dummy_select_field",
-	)
 
-	vc := &loggingVCursor{shards: []string{"0"}, resultErr: vterrors.NewErrorf(vtrpcpb.Code_CANCELED, vterrors.QueryInterrupted, "query timeout")}
-	_, err := sel.Execute(vc, map[string]*querypb.BindVariable{}, false)
-	require.EqualError(t, err, `query timeout`)
-	vc.ExpectWarnings(t, nil)
+	t.Run("unsharded", func(t *testing.T) {
+		// Unsharded error
+		sel := NewRoute(
+			SelectUnsharded,
+			&vindexes.Keyspace{
+				Name:    "ks",
+				Sharded: false,
+			},
+			"dummy_select",
+			"dummy_select_field",
+		)
 
-	vc.Rewind()
-	_, err = wrapStreamExecute(sel, vc, map[string]*querypb.BindVariable{}, false)
-	require.EqualError(t, err, `query timeout`)
+		vc := &loggingVCursor{shards: []string{"0"}, resultErr: vterrors.NewErrorf(vtrpcpb.Code_CANCELED, vterrors.QueryInterrupted, "query timeout")}
+		_, err := sel.Execute(vc, map[string]*querypb.BindVariable{}, false)
+		require.EqualError(t, err, `query timeout`)
+		assert.Empty(t, vc.warnings)
 
-	// Scatter fails if one of N fails without ScatterErrorsAsWarnings
-	sel = NewRoute(
-		SelectScatter,
-		&vindexes.Keyspace{
-			Name:    "ks",
-			Sharded: true,
-		},
-		"dummy_select",
-		"dummy_select_field",
-	)
-
-	vc = &loggingVCursor{
-		shards:  []string{"-20", "20-"},
-		results: []*sqltypes.Result{defaultSelectResult},
-		multiShardErrs: []error{
-			errors.New("result error -20"),
-		},
-	}
-	_, err = sel.Execute(vc, map[string]*querypb.BindVariable{}, false)
-	require.EqualError(t, err, `result error -20`)
-	vc.ExpectWarnings(t, nil)
-	vc.ExpectLog(t, []string{
-		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
-		`ExecuteMultiShard ks.-20: dummy_select {} ks.20-: dummy_select {} false false`,
+		vc.Rewind()
+		_, err = wrapStreamExecute(sel, vc, map[string]*querypb.BindVariable{}, false)
+		require.EqualError(t, err, `query timeout`)
 	})
 
-	// Scatter succeeds if all shards fail with ScatterErrorsAsWarnings
-	sel = NewRoute(
-		SelectScatter,
-		&vindexes.Keyspace{
-			Name:    "ks",
-			Sharded: true,
-		},
-		"dummy_select",
-		"dummy_select_field",
-	)
-	sel.ScatterErrorsAsWarnings = true
+	t.Run("normal route with no scatter errors as warnings", func(t *testing.T) {
+		// Scatter fails if one of N fails without ScatterErrorsAsWarnings
+		sel := NewRoute(
+			SelectScatter,
+			&vindexes.Keyspace{
+				Name:    "ks",
+				Sharded: true,
+			},
+			"dummy_select",
+			"dummy_select_field",
+		)
 
-	vc = &loggingVCursor{
-		shards:  []string{"-20", "20-"},
-		results: []*sqltypes.Result{defaultSelectResult},
-		multiShardErrs: []error{
-			mysql.NewSQLError(mysql.ERQueryInterrupted, "", "query timeout -20"),
-			errors.New("not a sql error 20-"),
-		},
-	}
-	_, err = sel.Execute(vc, map[string]*querypb.BindVariable{}, false)
-	require.NoError(t, err, "unexpected ScatterErrorsAsWarnings error %v", err)
-
-	// Ensure that the error code is preserved from SQLErrors and that it
-	// turns into ERUnknownError for all others
-	vc.ExpectWarnings(t, []*querypb.QueryWarning{
-		{Code: mysql.ERQueryInterrupted, Message: "query timeout -20 (errno 1317) (sqlstate HY000)"},
-		{Code: mysql.ERUnknownError, Message: "not a sql error 20-"},
-	})
-	vc.ExpectLog(t, []string{
-		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
-		`ExecuteMultiShard ks.-20: dummy_select {} ks.20-: dummy_select {} false false`,
+		vc := &loggingVCursor{
+			shards:  []string{"-20", "20-"},
+			results: []*sqltypes.Result{defaultSelectResult},
+			multiShardErrs: []error{
+				errors.New("result error -20"),
+			},
+		}
+		_, err := sel.Execute(vc, map[string]*querypb.BindVariable{}, false)
+		require.EqualError(t, err, `result error -20`)
+		vc.ExpectWarnings(t, nil)
+		vc.ExpectLog(t, []string{
+			`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
+			`ExecuteMultiShard ks.-20: dummy_select {} ks.20-: dummy_select {} false false`,
+		})
 	})
 
-	vc.Rewind()
-	vc.results = nil
-	vc.resultErr = mysql.NewSQLError(mysql.ERQueryInterrupted, "", "query timeout -20")
-	_, err = wrapStreamExecute(sel, vc, map[string]*querypb.BindVariable{}, false)
-	require.NoError(t, err, "unexpected ScatterErrorsAsWarnings error %v", err)
-	vc.ExpectWarnings(t, []*querypb.QueryWarning{{Code: mysql.ERQueryInterrupted, Message: "query timeout -20 (errno 1317) (sqlstate HY000)"}})
+	t.Run("ScatterErrorsAsWarnings", func(t *testing.T) {
+		// Scatter succeeds if one of N fails with ScatterErrorsAsWarnings
+		sel := NewRoute(
+			SelectScatter,
+			&vindexes.Keyspace{
+				Name:    "ks",
+				Sharded: true,
+			},
+			"dummy_select",
+			"dummy_select_field",
+		)
+		sel.ScatterErrorsAsWarnings = true
 
-	// Scatter succeeds if one of N fails with ScatterErrorsAsWarnings
-	sel = NewRoute(
-		SelectScatter,
-		&vindexes.Keyspace{
-			Name:    "ks",
-			Sharded: true,
-		},
-		"dummy_select",
-		"dummy_select_field",
-	)
-	sel.ScatterErrorsAsWarnings = true
+		vc := &loggingVCursor{
+			shards:  []string{"-20", "20-"},
+			results: []*sqltypes.Result{defaultSelectResult},
+			multiShardErrs: []error{
+				errors.New("result error -20"),
+				nil,
+			},
+		}
+		result, err := sel.Execute(vc, map[string]*querypb.BindVariable{}, false)
+		require.NoError(t, err, "unexpected ScatterErrorsAsWarnings error %v", err)
+		vc.ExpectLog(t, []string{
+			`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
+			`ExecuteMultiShard ks.-20: dummy_select {} ks.20-: dummy_select {} false false`,
+		})
+		expectResult(t, "sel.Execute", result, defaultSelectResult)
 
-	vc = &loggingVCursor{
-		shards:  []string{"-20", "20-"},
-		results: []*sqltypes.Result{defaultSelectResult},
-		multiShardErrs: []error{
-			errors.New("result error -20"),
-			nil,
-		},
-	}
-	result, err := sel.Execute(vc, map[string]*querypb.BindVariable{}, false)
-	require.NoError(t, err, "unexpected ScatterErrorsAsWarnings error %v", err)
-	vc.ExpectLog(t, []string{
-		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
-		`ExecuteMultiShard ks.-20: dummy_select {} ks.20-: dummy_select {} false false`,
+		vc.Rewind()
+		vc.resultErr = mysql.NewSQLError(mysql.ERQueryInterrupted, "", "query timeout -20")
+		// test when there is order by column
+		sel.OrderBy = []OrderbyParams{{
+			WeightStringCol: -1,
+			Col:             0,
+		}}
+		_, err = wrapStreamExecute(sel, vc, map[string]*querypb.BindVariable{}, false)
+		require.NoError(t, err, "unexpected ScatterErrorsAsWarnings error %v", err)
+		vc.ExpectWarnings(t, []*querypb.QueryWarning{{Code: mysql.ERQueryInterrupted, Message: "query timeout -20 (errno 1317) (sqlstate HY000)"}})
 	})
-	expectResult(t, "sel.Execute", result, defaultSelectResult)
-
-	vc.Rewind()
-	vc.resultErr = mysql.NewSQLError(mysql.ERQueryInterrupted, "", "query timeout -20")
-	// test when there is order by column
-	sel.OrderBy = []OrderbyParams{{
-		WeightStringCol: -1,
-		Col:             0,
-	}}
-	_, err = wrapStreamExecute(sel, vc, map[string]*querypb.BindVariable{}, false)
-	require.NoError(t, err, "unexpected ScatterErrorsAsWarnings error %v", err)
-	vc.ExpectWarnings(t, []*querypb.QueryWarning{{Code: mysql.ERQueryInterrupted, Message: "query timeout -20 (errno 1317) (sqlstate HY000)"}})
 }

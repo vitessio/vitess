@@ -264,7 +264,7 @@ func (route *Route) execute(vcursor VCursor, bindVars map[string]*querypb.BindVa
 		rss, bvs, err = nil, nil, nil
 	default:
 		// Unreachable.
-		return nil, fmt.Errorf("unsupported query route: %v", route)
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unsupported query route: %v", route)
 	}
 	if err != nil {
 		return nil, err
@@ -282,23 +282,34 @@ func (route *Route) execute(vcursor VCursor, bindVars map[string]*querypb.BindVa
 	result, errs := vcursor.ExecuteMultiShard(rss, queries, false /* rollbackOnError */, false /* autocommit */)
 
 	if errs != nil {
+		errs = filterOutNilErrors(errs)
 		if !route.ScatterErrorsAsWarnings || len(errs) == len(rss) {
 			return nil, vterrors.Aggregate(errs)
 		}
+
 		partialSuccessScatterQueries.Add(1)
 
 		for _, err := range errs {
-			if err != nil {
-				serr := mysql.NewSQLErrorFromError(err).(*mysql.SQLError)
-				vcursor.Session().RecordWarning(&querypb.QueryWarning{Code: uint32(serr.Num), Message: err.Error()})
-			}
+			serr := mysql.NewSQLErrorFromError(err).(*mysql.SQLError)
+			vcursor.Session().RecordWarning(&querypb.QueryWarning{Code: uint32(serr.Num), Message: err.Error()})
 		}
 	}
+
 	if len(route.OrderBy) == 0 {
 		return result, nil
 	}
 
 	return route.sort(result)
+}
+
+func filterOutNilErrors(errs []error) []error {
+	var errors []error
+	for _, err := range errs {
+		if err != nil {
+			errors = append(errors, err)
+		}
+	}
+	return errors
 }
 
 // StreamExecute performs a streaming exec.
