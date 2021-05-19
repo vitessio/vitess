@@ -184,7 +184,11 @@ func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.L
 	}
 	if !ok {
 		params.Logger.Infof("Attempting to restore, but mysqld already contains data. Assuming vttablet was just restarted.")
-		return mysqlctl.PopulateMetadataTables(params.Mysqld, params.LocalMetadata, params.DbName)
+		// (NOTE:@ajm188) the legacy behavior is to always populate the metadata
+		// tables in this branch. Since tm.MetadataManager could be nil, we
+		// create a new instance for use here.
+		metadataManager := &mysqlctl.MetadataManager{}
+		return metadataManager.PopulateMetadataTables(params.Mysqld, params.LocalMetadata, params.DbName)
 	}
 	// We should not become master after restore, because that would incorrectly
 	// start a new master term, and it's likely our data dir will be out of date.
