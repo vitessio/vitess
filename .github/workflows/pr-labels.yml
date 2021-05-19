@@ -23,7 +23,7 @@ jobs:
         LABELS_JSON="/tmp/labels.json"
 
         # Get labels for this pull request
-        curl \
+        curl -s \
           -H 'authorization: Bearer ${{ secrets.GITHUB_TOKEN }}' \
           -H "Accept: application/vnd.github.v3+json" \
           -H "Content-type: application/json" \
@@ -31,11 +31,11 @@ jobs:
           > "$LABELS_JSON"
 
         if ! cat ${LABELS_JSON} | jq -r '.[].name ' | grep -q 'Component:' ; then
-          echo "Expecting label 'Component: ...'"
+          echo "Expecting PR to have label 'Component: ...'"
           exit 1
         fi
         if ! cat ${LABELS_JSON} | jq -r '.[].name ' | grep -q 'Type:' ; then
-          echo "Expecting label 'Type: ...'"
+          echo "Expecting PR to have label 'Type: ...'"
           exit 1
         fi
         exit 0
