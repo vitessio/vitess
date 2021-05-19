@@ -3616,47 +3616,51 @@ function_call_keyword:
   {
     $$ = &ValuesFuncExpr{Name: $3}
   }
+| CURRENT_USER func_paren_opt
+  {
+    $$ =  &FuncExpr{Name: NewColIdent(string($1))}
+  }
 
 /*
   Function calls using non reserved keywords but with special syntax forms.
   Dedicated grammar rules are needed because of the special syntax
 */
 function_call_nonkeyword:
-  CURRENT_TIMESTAMP func_datetime_opt
+  CURRENT_TIMESTAMP func_paren_opt
   {
     $$ = &FuncExpr{Name:NewColIdent("current_timestamp")}
   }
-| UTC_TIMESTAMP func_datetime_opt
+| UTC_TIMESTAMP func_paren_opt
   {
     $$ = &FuncExpr{Name:NewColIdent("utc_timestamp")}
   }
-| UTC_TIME func_datetime_opt
+| UTC_TIME func_paren_opt
   {
     $$ = &FuncExpr{Name:NewColIdent("utc_time")}
   }
 /* doesn't support fsp */
-| UTC_DATE func_datetime_opt
+| UTC_DATE func_paren_opt
   {
     $$ = &FuncExpr{Name:NewColIdent("utc_date")}
   }
   // now
-| LOCALTIME func_datetime_opt
+| LOCALTIME func_paren_opt
   {
     $$ = &FuncExpr{Name:NewColIdent("localtime")}
   }
   // now
-| LOCALTIMESTAMP func_datetime_opt
+| LOCALTIMESTAMP func_paren_opt
   {
     $$ = &FuncExpr{Name:NewColIdent("localtimestamp")}
   }
   // curdate
 /* doesn't support fsp */
-| CURRENT_DATE func_datetime_opt
+| CURRENT_DATE func_paren_opt
   {
     $$ = &FuncExpr{Name:NewColIdent("current_date")}
   }
   // curtime
-| CURRENT_TIME func_datetime_opt
+| CURRENT_TIME func_paren_opt
   {
     $$ = &FuncExpr{Name:NewColIdent("current_time")}
   }
@@ -3697,7 +3701,7 @@ function_call_nonkeyword:
     $$ = &TimestampFuncExpr{Name:string("timestampdiff"), Unit:$3.String(), Expr1:$5, Expr2:$7}
   }
 
-func_datetime_opt:
+func_paren_opt:
   /* empty */
 | openb closeb
 

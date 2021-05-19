@@ -108,6 +108,8 @@ type SandboxConn struct {
 
 	// this error will only happen once
 	EphemeralShardErr error
+
+	NotServing bool
 }
 
 var _ queryservice.QueryService = (*SandboxConn)(nil) // compile-time interface check
@@ -147,6 +149,12 @@ func (sbc *SandboxConn) Execute(ctx context.Context, target *querypb.Target, que
 	sbc.execMu.Lock()
 	defer sbc.execMu.Unlock()
 	sbc.ExecCount.Add(1)
+	if sbc.NotServing {
+		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.NotServing)
+	}
+	if sbc.tablet.Type != target.TabletType {
+		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "%s: %v, want: %v", vterrors.WrongTablet, target.TabletType, sbc.tablet.Type)
+	}
 	bv := make(map[string]*querypb.BindVariable)
 	for k, v := range bindVars {
 		bv[k] = v
@@ -198,10 +206,24 @@ func (sbc *SandboxConn) StreamExecute(ctx context.Context, target *querypb.Targe
 		sbc.sExecMu.Unlock()
 		return err
 	}
-	nextRs := sbc.getNextResult()
+	if sbc.results == nil {
+		nextRs := sbc.getNextResult()
+		sbc.sExecMu.Unlock()
+		return callback(nextRs)
+	}
+
+	for len(sbc.results) > 0 {
+		nextRs := sbc.getNextResult()
+		sbc.sExecMu.Unlock()
+		err := callback(nextRs)
+		if err != nil {
+			return err
+		}
+		sbc.sExecMu.Lock()
+	}
 	sbc.sExecMu.Unlock()
 
-	return callback(nextRs)
+	return nil
 }
 
 // Begin is part of the QueryService interface.
@@ -430,7 +452,7 @@ func (sbc *SandboxConn) VStreamResults(ctx context.Context, target *querypb.Targ
 }
 
 // QueryServiceByAlias is part of the Gateway interface.
-func (sbc *SandboxConn) QueryServiceByAlias(_ *topodatapb.TabletAlias) (queryservice.QueryService, error) {
+func (sbc *SandboxConn) QueryServiceByAlias(_ *topodatapb.TabletAlias, _ *querypb.Target) (queryservice.QueryService, error) {
 	return sbc, nil
 }
 
@@ -441,7 +463,7 @@ func (sbc *SandboxConn) HandlePanic(err *error) {
 //ReserveBeginExecute implements the QueryService interface
 func (sbc *SandboxConn) ReserveBeginExecute(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, int64, *topodatapb.TabletAlias, error) {
 	reservedID := sbc.reserve(ctx, target, preQueries, bindVariables, 0, options)
-	result, transactionID, alias, err := sbc.BeginExecute(ctx, target, preQueries, sql, bindVariables, reservedID, options)
+	result, transactionID, alias, err := sbc.BeginExecute(ctx, target, nil, sql, bindVariables, reservedID, options)
 	if transactionID != 0 {
 		sbc.txIDToRID[transactionID] = reservedID
 	}

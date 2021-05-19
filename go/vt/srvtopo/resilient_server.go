@@ -20,6 +20,7 @@ import (
 	"flag"
 	"fmt"
 	"html/template"
+	"net/url"
 	"sort"
 	"sync"
 	"time"
@@ -466,7 +467,9 @@ func (server *ResilientServer) watchSrvKeyspace(callerCtx context.Context, entry
 		server.counts.Add(errorCategory, 1)
 		log.Errorf("Initial WatchSrvKeyspace failed for %v/%v: %v", cell, keyspace, current.Err)
 
-		if time.Since(entry.lastValueTime) > server.cacheTTL {
+		// This watcher will able to continue to return the last value till it is not able to connect to the topo server even if the cache TTL is reached.
+		_, netErr := current.Err.(*url.Error)
+		if !netErr && time.Since(entry.lastValueTime) > server.cacheTTL {
 			log.Errorf("WatchSrvKeyspace clearing cached entry for %v/%v", cell, keyspace)
 			entry.value = nil
 		}
