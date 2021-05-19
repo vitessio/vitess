@@ -167,7 +167,7 @@ func (vc *vcopier) catchup(ctx context.Context, copyState map[string]*sqltypes.R
 	// Wait for catchup.
 	tkr := time.NewTicker(waitRetryTime)
 	defer tkr.Stop()
-	seconds := int64(replicaLagTolerance / time.Second)
+	seconds := int64(*replicaLagTolerance / time.Second)
 	for {
 		sbm := vc.vr.stats.SecondsBehindMaster.Get()
 		if sbm < seconds {
@@ -211,7 +211,7 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 		return fmt.Errorf("plan not found for table: %s, current plans are: %#v", tableName, plan.TargetTables)
 	}
 
-	ctx, cancel := context.WithTimeout(ctx, copyTimeout)
+	ctx, cancel := context.WithTimeout(ctx, *copyPhaseDuration)
 	defer cancel()
 
 	var lastpkpb *querypb.QueryResult
