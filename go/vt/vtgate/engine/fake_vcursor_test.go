@@ -568,7 +568,10 @@ func printBindVars(bindvars map[string]*querypb.BindVariable) string {
 	}
 	sort.Strings(keys)
 	buf := &bytes.Buffer{}
-	for _, k := range keys {
+	for i, k := range keys {
+		if i > 0 {
+			fmt.Fprintf(buf, " ")
+		}
 		fmt.Fprintf(buf, "%s: %v", k, bindvars[k])
 	}
 	return buf.String()

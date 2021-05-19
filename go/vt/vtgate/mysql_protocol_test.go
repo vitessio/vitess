@@ -18,16 +18,17 @@ package vtgate
 
 import (
 	"net"
-	"reflect"
 	"strconv"
 	"testing"
+
+	"vitess.io/vitess/go/test/utils"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"context"
 
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/vttablet/sandboxconn"
@@ -49,9 +50,7 @@ func TestMySQLProtocolExecute(t *testing.T) {
 
 	qr, err := c.ExecuteFetch("select id from t1", 10, true /* wantfields */)
 	require.NoError(t, err)
-	if !reflect.DeepEqual(sandboxconn.SingleRowResult, qr) {
-		t.Errorf("want \n%+v, got \n%+v", sandboxconn.SingleRowResult, qr)
-	}
+	utils.MustMatch(t, sandboxconn.SingleRowResult, qr, "mismatch in rows")
 
 	options := &querypb.ExecuteOptions{
 		IncludedFields: querypb.ExecuteOptions_ALL,
@@ -78,9 +77,7 @@ func TestMySQLProtocolStreamExecute(t *testing.T) {
 
 	qr, err := c.ExecuteFetch("select id from t1", 10, true /* wantfields */)
 	require.NoError(t, err)
-	if !reflect.DeepEqual(sandboxconn.SingleRowResult, qr) {
-		t.Errorf("want \n%+v, got \n%+v", sandboxconn.SingleRowResult, qr)
-	}
+	utils.MustMatch(t, sandboxconn.SingleRowResult, qr, "mismatch in rows")
 
 	options := &querypb.ExecuteOptions{
 		IncludedFields: querypb.ExecuteOptions_ALL,
@@ -104,7 +101,7 @@ func TestMySQLProtocolExecuteUseStatement(t *testing.T) {
 
 	qr, err := c.ExecuteFetch("select id from t1", 10, true /* wantfields */)
 	require.NoError(t, err)
-	require.Equal(t, sandboxconn.SingleRowResult, qr)
+	utils.MustMatch(t, sandboxconn.SingleRowResult, qr)
 
 	qr, err = c.ExecuteFetch("show vitess_target", 1, false)
 	require.NoError(t, err)
@@ -115,7 +112,7 @@ func TestMySQLProtocolExecuteUseStatement(t *testing.T) {
 
 	qr, err = c.ExecuteFetch("select id from t1", 10, true /* wantfields */)
 	require.NoError(t, err)
-	assert.Equal(t, sandboxconn.SingleRowResult, qr)
+	utils.MustMatch(t, sandboxconn.SingleRowResult, qr)
 
 	// No such keyspace this will fail
 	_, err = c.ExecuteFetch("use InvalidKeyspace", 0, false)
@@ -154,9 +151,7 @@ func TestMySQLProtocolClientFoundRows(t *testing.T) {
 
 	qr, err := c.ExecuteFetch("select id from t1", 10, true /* wantfields */)
 	require.NoError(t, err)
-	if !reflect.DeepEqual(sandboxconn.SingleRowResult, qr) {
-		t.Errorf("want \n%+v, got \n%+v", sandboxconn.SingleRowResult, qr)
-	}
+	utils.MustMatch(t, sandboxconn.SingleRowResult, qr)
 
 	options := &querypb.ExecuteOptions{
 		IncludedFields:  querypb.ExecuteOptions_ALL,

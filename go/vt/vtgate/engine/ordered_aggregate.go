@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"strconv"
 
+	"google.golang.org/protobuf/proto"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -319,7 +321,7 @@ func (oa *OrderedAggregate) convertRow(row []sqltypes.Value) (newRow []sqltypes.
 				Shard:    row[aggr.Col+1].ToString(),
 				Gtid:     row[aggr.Col].ToString(),
 			})
-			data, _ := vgtid.Marshal()
+			data, _ := proto.Marshal(vgtid)
 			val, _ := sqltypes.NewValue(sqltypes.VarBinary, data)
 			newRow[aggr.Col] = val
 		}
@@ -390,7 +392,7 @@ func (oa *OrderedAggregate) merge(fields []*querypb.Field, row1, row2 []sqltypes
 			result[aggr.Col] = evalengine.NullsafeAdd(row1[aggr.Col], row2[aggr.Col], opcodeType[aggr.Opcode])
 		case AggregateGtid:
 			vgtid := &binlogdatapb.VGtid{}
-			err = vgtid.Unmarshal(row1[aggr.Col].ToBytes())
+			err = proto.Unmarshal(row1[aggr.Col].ToBytes(), vgtid)
 			if err != nil {
 				return nil, sqltypes.NULL, err
 			}
@@ -399,7 +401,7 @@ func (oa *OrderedAggregate) merge(fields []*querypb.Field, row1, row2 []sqltypes
 				Shard:    row2[aggr.Col+1].ToString(),
 				Gtid:     row2[aggr.Col].ToString(),
 			})
-			data, _ := vgtid.Marshal()
+			data, _ := proto.Marshal(vgtid)
 			val, _ := sqltypes.NewValue(sqltypes.VarBinary, data)
 			result[aggr.Col] = val
 		default:
@@ -471,7 +473,7 @@ func (oa *OrderedAggregate) convertFinal(current []sqltypes.Value) ([]sqltypes.V
 		switch aggr.Opcode {
 		case AggregateGtid:
 			vgtid := &binlogdatapb.VGtid{}
-			err := vgtid.Unmarshal(current[aggr.Col].ToBytes())
+			err := proto.Unmarshal(current[aggr.Col].ToBytes(), vgtid)
 			if err != nil {
 				return nil, err
 			}

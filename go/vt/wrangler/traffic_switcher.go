@@ -26,7 +26,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/encoding/prototext"
 
 	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/sqltypes"
@@ -1023,7 +1023,7 @@ func (wr *Wrangler) checkIfJournalExistsOnTablet(ctx context.Context, tablet *to
 	if len(p3qr.Rows) != 0 {
 		qr := sqltypes.Proto3ToResult(p3qr)
 		if !exists {
-			if err := proto.UnmarshalText(qr.Rows[0][0].ToString(), journal); err != nil {
+			if err := prototext.Unmarshal(qr.Rows[0][0].ToBytes(), journal); err != nil {
 				return nil, false, err
 			}
 			exists = true

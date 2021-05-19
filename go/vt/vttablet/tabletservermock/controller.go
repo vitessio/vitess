@@ -20,6 +20,8 @@ package tabletservermock
 import (
 	"sync"
 
+	"google.golang.org/protobuf/proto"
+
 	"context"
 
 	"time"
@@ -72,7 +74,7 @@ type Controller struct {
 	// Set at construction time.
 	StateChanges chan *StateChange
 
-	target querypb.Target
+	target *querypb.Target
 
 	// SetServingTypeError is the return value for SetServingType.
 	SetServingTypeError error
@@ -124,11 +126,11 @@ func (tqsc *Controller) AddStatusPart() {
 }
 
 // InitDBConfig is part of the tabletserver.Controller interface
-func (tqsc *Controller) InitDBConfig(target querypb.Target, dbcfgs *dbconfigs.DBConfigs, _ mysqlctl.MysqlDaemon) error {
+func (tqsc *Controller) InitDBConfig(target *querypb.Target, dbcfgs *dbconfigs.DBConfigs, _ mysqlctl.MysqlDaemon) error {
 	tqsc.mu.Lock()
 	defer tqsc.mu.Unlock()
 
-	tqsc.target = target
+	tqsc.target = proto.Clone(target).(*querypb.Target)
 	return nil
 }
 
@@ -158,11 +160,10 @@ func (tqsc *Controller) IsServing() bool {
 }
 
 // CurrentTarget returns the current target.
-func (tqsc *Controller) CurrentTarget() querypb.Target {
+func (tqsc *Controller) CurrentTarget() *querypb.Target {
 	tqsc.mu.Lock()
 	defer tqsc.mu.Unlock()
-
-	return tqsc.target
+	return proto.Clone(tqsc.target).(*querypb.Target)
 }
 
 // IsHealthy is part of the tabletserver.Controller interface

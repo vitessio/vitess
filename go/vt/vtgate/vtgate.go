@@ -355,7 +355,7 @@ func (vtg *VTGate) StreamExecute(ctx context.Context, session *vtgatepb.Session,
 			NewSafeSession(session),
 			sql,
 			bindVariables,
-			querypb.Target{
+			&querypb.Target{
 				Keyspace:   destKeyspace,
 				TabletType: destTabletType,
 			},

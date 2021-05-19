@@ -23,7 +23,7 @@ import (
 
 	"context"
 
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/vt/logutil"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -241,8 +241,8 @@ func checkLegacyWatcher(t *testing.T, cellTablets, refreshKnownTablets bool) {
 	// tablet2 happens to land on the host:port that tablet 1 used to be on.
 	// This can only be tested when we refresh known tablets.
 	if refreshKnownTablets {
-		origTablet := *tablet
-		origTablet2 := *tablet2
+		origTablet := proto.Clone(tablet).(*topodatapb.Tablet)
+		origTablet2 := proto.Clone(tablet2).(*topodatapb.Tablet)
 
 		if _, err := ts.UpdateTabletFields(context.Background(), tablet2.Alias, func(t *topodatapb.Tablet) error {
 			t.Hostname = tablet.Hostname

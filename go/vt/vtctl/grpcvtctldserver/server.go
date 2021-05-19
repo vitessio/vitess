@@ -24,6 +24,8 @@ import (
 	"sync"
 	"time"
 
+	"google.golang.org/protobuf/proto"
+
 	"google.golang.org/grpc"
 	"k8s.io/apimachinery/pkg/util/sets"
 
@@ -61,6 +63,7 @@ const (
 
 // VtctldServer implements the Vtctld RPC service protocol.
 type VtctldServer struct {
+	vtctlservicepb.UnimplementedVtctldServer
 	ts  *topo.Server
 	tmc tmclient.TabletManagerClient
 	ws  *workflow.Server
@@ -92,12 +95,12 @@ func (s *VtctldServer) ChangeTabletType(ctx context.Context, req *vtctldatapb.Ch
 	}
 
 	if req.DryRun {
-		afterTablet := *tablet.Tablet
+		afterTablet := proto.Clone(tablet.Tablet).(*topodatapb.Tablet)
 		afterTablet.Type = req.DbType
 
 		return &vtctldatapb.ChangeTabletTypeResponse{
 			BeforeTablet: tablet.Tablet,
-			AfterTablet:  &afterTablet,
+			AfterTablet:  afterTablet,
 			WasDryRun:    true,
 		}, nil
 	}
@@ -367,7 +370,7 @@ func (s *VtctldServer) EmergencyReparentShard(ctx context.Context, req *vtctldat
 		resp.Keyspace = ev.ShardInfo.Keyspace()
 		resp.Shard = ev.ShardInfo.ShardName()
 
-		if !topoproto.TabletAliasIsZero(ev.NewMaster.Alias) {
+		if ev.NewMaster != nil && !topoproto.TabletAliasIsZero(ev.NewMaster.Alias) {
 			resp.PromotedPrimary = ev.NewMaster.Alias
 		}
 	}
@@ -888,7 +891,7 @@ func (s *VtctldServer) InitShardPrimaryLocked(
 	if !ok {
 		return fmt.Errorf("master-elect tablet %v is not in the shard", topoproto.TabletAliasString(req.PrimaryElectTabletAlias))
 	}
-	ev.NewMaster = *masterElectTabletInfo.Tablet
+	ev.NewMaster = proto.Clone(masterElectTabletInfo.Tablet).(*topodatapb.Tablet)
 
 	// Check the master is the only master is the shard, or -force was used.
 	_, masterTabletMap := topotools.SortedTabletMap(tabletMap)
@@ -1327,8 +1330,8 @@ func (s *VtctldServer) TabletExternallyReparented(ctx context.Context, req *vtct
 	log.Infof("TabletExternallyReparented: executing tablet type change %v -> MASTER on %v", tablet.Type, topoproto.TabletAliasString(req.Tablet))
 	ev := &events.Reparent{
 		ShardInfo: *shard,
-		NewMaster: *tablet.Tablet,
-		OldMaster: topodatapb.Tablet{
+		NewMaster: proto.Clone(tablet.Tablet).(*topodatapb.Tablet),
+		OldMaster: &topodatapb.Tablet{
 			Alias: shard.MasterAlias,
 			Type:  topodatapb.TabletType_MASTER,
 		},

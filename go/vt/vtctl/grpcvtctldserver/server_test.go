@@ -23,6 +23,10 @@ import (
 	"testing"
 	"time"
 
+	"google.golang.org/protobuf/proto"
+
+	"vitess.io/vitess/go/test/utils"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -240,7 +244,7 @@ func TestChangeTabletType(t *testing.T) {
 			}
 
 			assert.NoError(t, err)
-			assert.Equal(t, tt.expected, resp)
+			utils.MustMatch(t, tt.expected, resp)
 
 			// If we are testing a dry-run, then the tablet in the actual
 			// topo should match the BeforeTablet in the response. Otherwise,
@@ -261,7 +265,7 @@ func TestChangeTabletType(t *testing.T) {
 				resp.AfterTablet.Type,
 				resp.WasDryRun,
 			)
-			assert.Equal(t, expectedRealType, tablet.Type, msg)
+			utils.MustMatch(t, expectedRealType, tablet.Type, msg)
 		})
 	}
 
@@ -566,7 +570,7 @@ func TestCreateKeyspace(t *testing.T) {
 				return
 			}
 			assert.NoError(t, err)
-			assert.Equal(t, tt.expectedVSchema, vs)
+			utils.MustMatch(t, tt.expectedVSchema, vs)
 		})
 	}
 }
@@ -787,7 +791,6 @@ func TestCreateShard(t *testing.T) {
 
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-
 			if tt.req == nil {
 				t.Skip("focusing on other tests")
 			}
@@ -815,7 +818,7 @@ func TestCreateShard(t *testing.T) {
 			}
 
 			assert.NoError(t, err)
-			assert.Equal(t, tt.expected, resp)
+			utils.MustMatch(t, tt.expected, resp)
 		})
 	}
 }
@@ -1010,7 +1013,7 @@ func TestDeleteKeyspace(t *testing.T) {
 					remainingShards[ks] = shards
 				}
 
-				assert.Equal(t, tt.expectedRemainingShards, remainingShards)
+				utils.MustMatch(t, tt.expectedRemainingShards, remainingShards)
 			}()
 
 			resp, err := vtctld.DeleteKeyspace(ctx, tt.req)
@@ -1021,7 +1024,7 @@ func TestDeleteKeyspace(t *testing.T) {
 			}
 
 			assert.NoError(t, err)
-			assert.Equal(t, tt.expected, resp)
+			utils.MustMatch(t, tt.expected, resp)
 		})
 	}
 }
@@ -1449,7 +1452,7 @@ func TestDeleteShards(t *testing.T) {
 			}
 
 			assert.NoError(t, err)
-			assert.Equal(t, tt.expected, resp)
+			utils.MustMatch(t, tt.expected, resp)
 		})
 	}
 }
@@ -1934,8 +1937,7 @@ func TestDeleteTablets(t *testing.T) {
 
 				resp, err := vtctld.GetTablets(ctx, &vtctldatapb.GetTabletsRequest{})
 				assert.NoError(t, err, "cannot look up tablets from topo after issuing DeleteTablets request")
-
-				assert.ElementsMatch(t, tt.expectedRemainingTablets, resp.Tablets)
+				testutil.AssertSameTablets(t, tt.expectedRemainingTablets, resp.Tablets)
 			}
 
 			// Run the test
@@ -1951,7 +1953,7 @@ func TestDeleteTablets(t *testing.T) {
 			}
 
 			assert.NoError(t, err)
-			assert.Equal(t, tt.expected, resp)
+			utils.MustMatch(t, tt.expected, resp)
 			checkRemainingTablets()
 		})
 	}
@@ -2149,7 +2151,7 @@ func TestEmergencyReparentShard(t *testing.T) {
 			}
 
 			assert.NoError(t, err)
-			testutil.AssertEmergencyReparentShardResponsesEqual(t, *tt.expected, *resp)
+			testutil.AssertEmergencyReparentShardResponsesEqual(t, tt.expected, resp)
 		})
 	}
 }
@@ -2191,7 +2193,7 @@ func TestFindAllShardsInKeyspace(t *testing.T) {
 		},
 	}
 
-	assert.Equal(t, expected, resp.Shards)
+	utils.MustMatch(t, expected, resp.Shards)
 
 	_, err = vtctld.FindAllShardsInKeyspace(ctx, &vtctldatapb.FindAllShardsInKeyspaceRequest{Keyspace: "nothing"})
 	assert.Error(t, err)
@@ -2226,7 +2228,7 @@ func TestGetBackups(t *testing.T) {
 		Shard:    "-",
 	})
 	assert.NoError(t, err)
-	assert.Equal(t, expected, resp)
+	utils.MustMatch(t, expected, resp)
 
 	t.Run("no backupstorage", func(t *testing.T) {
 		*backupstorage.BackupStorageImplementation = "doesnotexist"
@@ -2272,7 +2274,7 @@ func TestGetKeyspace(t *testing.T) {
 
 	ks, err := vtctld.GetKeyspace(ctx, &vtctldatapb.GetKeyspaceRequest{Keyspace: expected.Keyspace.Name})
 	assert.NoError(t, err)
-	assert.Equal(t, expected, ks)
+	utils.MustMatch(t, expected, ks)
 
 	_, err = vtctld.GetKeyspace(ctx, &vtctldatapb.GetKeyspaceRequest{Keyspace: "notfound"})
 	assert.Error(t, err)
@@ -2323,12 +2325,12 @@ func TestGetCellInfo(t *testing.T) {
 		ServerAddress: "example.com",
 		Root:          "vitess",
 	}
-	input := *expected // shallow copy
-	require.NoError(t, ts.CreateCellInfo(ctx, "cell1", &input))
+	input := proto.Clone(expected).(*topodatapb.CellInfo)
+	require.NoError(t, ts.CreateCellInfo(ctx, "cell1", input))
 
 	resp, err := vtctld.GetCellInfo(ctx, &vtctldatapb.GetCellInfoRequest{Cell: "cell1"})
 	assert.NoError(t, err)
-	assert.Equal(t, expected, resp.CellInfo)
+	utils.MustMatch(t, expected, resp.CellInfo)
 
 	_, err = vtctld.GetCellInfo(ctx, &vtctldatapb.GetCellInfoRequest{Cell: "does_not_exist"})
 	assert.Error(t, err)
@@ -2354,10 +2356,9 @@ func TestGetCellsAliases(t *testing.T) {
 	}
 
 	for i, alias := range []*topodatapb.CellsAlias{alias1, alias2} {
-		input := *alias // shallow copy
+		input := proto.Clone(alias).(*topodatapb.CellsAlias)
 		name := fmt.Sprintf("a%d", i+1)
-
-		require.NoError(t, ts.CreateCellsAlias(ctx, name, &input), "cannot create cells alias %d (idx = %d) = %+v", i+1, i, &input)
+		require.NoError(t, ts.CreateCellsAlias(ctx, name, input), "cannot create cells alias %d (idx = %d) = %+v", i+1, i, input)
 	}
 
 	expected := map[string]*topodatapb.CellsAlias{
@@ -2367,7 +2368,7 @@ func TestGetCellsAliases(t *testing.T) {
 
 	resp, err := vtctld.GetCellsAliases(ctx, &vtctldatapb.GetCellsAliasesRequest{})
 	assert.NoError(t, err)
-	assert.Equal(t, expected, resp.Aliases)
+	utils.MustMatch(t, expected, resp.Aliases)
 
 	ts, topofactory := memorytopo.NewServerAndFactory()
 	vtctld = testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
@@ -2418,7 +2419,7 @@ func TestGetKeyspaces(t *testing.T) {
 
 	resp, err = vtctld.GetKeyspaces(ctx, &vtctldatapb.GetKeyspacesRequest{})
 	assert.NoError(t, err)
-	assert.Equal(t, expected, resp.Keyspaces)
+	utils.MustMatch(t, expected, resp.Keyspaces)
 
 	topofactory.SetError(errors.New("error from toposerver"))
 
@@ -2455,7 +2456,7 @@ func TestGetTablet(t *testing.T) {
 		},
 	})
 	assert.NoError(t, err)
-	assert.Equal(t, resp.Tablet, tablet)
+	utils.MustMatch(t, resp.Tablet, tablet)
 
 	// not found
 	_, err = vtctld.GetTablet(ctx, &vtctldatapb.GetTabletRequest{
@@ -2655,7 +2656,7 @@ func TestGetSchema(t *testing.T) {
 			}
 
 			assert.NoError(t, err)
-			assert.Equal(t, tt.expected, resp)
+			utils.MustMatch(t, tt.expected, resp)
 		})
 	}
 }
@@ -2746,7 +2747,7 @@ func TestGetShard(t *testing.T) {
 				return
 			}
 
-			assert.Equal(t, tt.expected, resp)
+			utils.MustMatch(t, tt.expected, resp)
 		})
 	}
 }
@@ -2924,7 +2925,7 @@ func TestGetSrvKeyspaces(t *testing.T) {
 			}
 
 			assert.NoError(t, err)
-			assert.Equal(t, tt.expected, resp)
+			utils.MustMatch(t, tt.expected, resp)
 		})
 	}
 }
@@ -2983,7 +2984,7 @@ func TestGetSrvVSchema(t *testing.T) {
 	}
 	resp, err := vtctld.GetSrvVSchema(ctx, &vtctldatapb.GetSrvVSchemaRequest{Cell: "zone1"})
 	assert.NoError(t, err)
-	assert.Equal(t, expected.Keyspaces, resp.SrvVSchema.Keyspaces, "GetSrvVSchema(zone1) mismatch")
+	utils.MustMatch(t, expected.Keyspaces, resp.SrvVSchema.Keyspaces, "GetSrvVSchema(zone1) mismatch")
 	assert.ElementsMatch(t, expected.RoutingRules.Rules, resp.SrvVSchema.RoutingRules.Rules, "GetSrvVSchema(zone1) rules mismatch")
 
 	expected = &vschemapb.SrvVSchema{ // have to copy our structs because of proto marshal artifacts
@@ -3003,7 +3004,7 @@ func TestGetSrvVSchema(t *testing.T) {
 	}
 	resp, err = vtctld.GetSrvVSchema(ctx, &vtctldatapb.GetSrvVSchemaRequest{Cell: "zone2"})
 	assert.NoError(t, err)
-	assert.Equal(t, expected.Keyspaces, resp.SrvVSchema.Keyspaces, "GetSrvVSchema(zone2) mismatch %+v %+v", zone2SrvVSchema.Keyspaces["testkeyspace"], resp.SrvVSchema.Keyspaces["testkeyspace"])
+	utils.MustMatch(t, expected.Keyspaces, resp.SrvVSchema.Keyspaces, "GetSrvVSchema(zone2) mismatch")
 	assert.ElementsMatch(t, expected.RoutingRules.Rules, resp.SrvVSchema.RoutingRules.Rules, "GetSrvVSchema(zone2) rules mismatch")
 
 	resp, err = vtctld.GetSrvVSchema(ctx, &vtctldatapb.GetSrvVSchemaRequest{Cell: "dne"})
@@ -3471,7 +3472,7 @@ func TestGetTablets(t *testing.T) {
 			}
 
 			assert.NoError(t, err)
-			assert.ElementsMatch(t, tt.expected, resp.Tablets)
+			testutil.AssertSameTablets(t, tt.expected, resp.Tablets)
 		})
 	}
 }
@@ -3513,7 +3514,7 @@ func TestGetVSchema(t *testing.T) {
 			Keyspace: "testkeyspace",
 		})
 		assert.NoError(t, err)
-		assert.Equal(t, expected, resp)
+		utils.MustMatch(t, expected, resp)
 	})
 
 	t.Run("not found", func(t *testing.T) {
@@ -3707,7 +3708,7 @@ func TestPlannedReparentShard(t *testing.T) {
 			}
 
 			assert.NoError(t, err)
-			testutil.AssertPlannedReparentShardResponsesEqual(t, *tt.expected, *resp)
+			testutil.AssertPlannedReparentShardResponsesEqual(t, tt.expected, resp)
 		})
 	}
 }
@@ -3895,7 +3896,7 @@ func TestRemoveKeyspaceCell(t *testing.T) {
 			}
 
 			assert.NoError(t, err)
-			assert.Equal(t, tt.expected, resp)
+			utils.MustMatch(t, tt.expected, resp)
 		})
 	}
 }
@@ -4199,7 +4200,7 @@ func TestRemoveShardCell(t *testing.T) {
 			}
 
 			assert.NoError(t, err)
-			assert.Equal(t, tt.expected, resp)
+			utils.MustMatch(t, tt.expected, resp)
 		})
 	}
 }
@@ -4765,7 +4766,7 @@ func TestReparentTablet(t *testing.T) {
 			}
 
 			assert.NoError(t, err)
-			assert.Equal(t, tt.expected, resp)
+			utils.MustMatch(t, tt.expected, resp)
 		})
 	}
 }
@@ -5038,7 +5039,7 @@ func TestShardReplicationPositions(t *testing.T) {
 			}
 
 			assert.NoError(t, err)
-			assert.Equal(t, tt.expected, resp)
+			utils.MustMatch(t, tt.expected, resp)
 		})
 	}
 }
@@ -5444,7 +5445,7 @@ func TestTabletExternallyReparented(t *testing.T) {
 
 					resp, err := vtctld.GetTablets(ctx, &vtctldatapb.GetTabletsRequest{})
 					require.NoError(t, err, "cannot get all tablets in the topo")
-					assert.ElementsMatch(t, tt.expectedTopo, resp.Tablets)
+					testutil.AssertSameTablets(t, tt.expectedTopo, resp.Tablets)
 				}()
 			}
 
@@ -5455,7 +5456,7 @@ func TestTabletExternallyReparented(t *testing.T) {
 			}
 
 			assert.NoError(t, err)
-			assert.Equal(t, tt.expected, resp)
+			utils.MustMatch(t, tt.expected, resp)
 		})
 	}
 }

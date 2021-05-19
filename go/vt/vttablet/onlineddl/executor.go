@@ -36,6 +36,10 @@ import (
 	"syscall"
 	"time"
 
+	"google.golang.org/protobuf/proto"
+
+	"google.golang.org/protobuf/encoding/prototext"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/textutil"
@@ -59,7 +63,6 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/vexec"
 
 	mysqldriver "github.com/go-sql-driver/mysql"
-	"github.com/golang/protobuf/proto"
 	"github.com/jmoiron/sqlx"
 	"github.com/skeema/tengo"
 )
@@ -180,10 +183,10 @@ func newGCTableRetainTime() time.Time {
 }
 
 // NewExecutor creates a new gh-ost executor.
-func NewExecutor(env tabletenv.Env, tabletAlias topodatapb.TabletAlias, ts *topo.Server, tabletTypeFunc func() topodatapb.TabletType) *Executor {
+func NewExecutor(env tabletenv.Env, tabletAlias *topodatapb.TabletAlias, ts *topo.Server, tabletTypeFunc func() topodatapb.TabletType) *Executor {
 	return &Executor{
 		env:         env,
-		tabletAlias: &tabletAlias,
+		tabletAlias: proto.Clone(tabletAlias).(*topodatapb.TabletAlias),
 
 		pool: connpool.NewPool(env, "OnlineDDLExecutorPool", tabletenv.ConnPoolConfig{
 			Size:               databasePoolSize,
@@ -2007,7 +2010,7 @@ func (e *Executor) readVReplStream(ctx context.Context, uuid string, okIfMissing
 		message:              row.AsString("message", ""),
 		bls:                  &binlogdatapb.BinlogSource{},
 	}
-	if err := proto.UnmarshalText(s.source, s.bls); err != nil {
+	if err := prototext.Unmarshal([]byte(s.source), s.bls); err != nil {
 		return nil, err
 	}
 	return s, nil

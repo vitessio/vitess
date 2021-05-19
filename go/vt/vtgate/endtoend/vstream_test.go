@@ -25,8 +25,8 @@ import (
 
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
