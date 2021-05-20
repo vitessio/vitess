@@ -253,6 +253,8 @@ func TestStreamRowsKeyRange(t *testing.T) {
 	}
 	defer env.SetVSchema("{}")
 
+	copyLimit = 10000
+
 	execStatements(t, []string{
 		"create table t1(id1 int, val varbinary(128), primary key(id1))",
 		"insert into t1 values (1, 'aaa'), (6, 'bbb')",
@@ -270,7 +272,7 @@ func TestStreamRowsKeyRange(t *testing.T) {
 		`fields:{name:"id1" type:INT32 table:"t1" org_table:"t1" database:"vttest" org_name:"id1" column_length:11 charset:63} fields:{name:"val" type:VARBINARY table:"t1" org_table:"t1" database:"vttest" org_name:"val" column_length:128 charset:63} pkfields:{name:"id1" type:INT32}`,
 		`rows:{lengths:1 lengths:3 values:"1aaa"} lastpk:{lengths:1 values:"6"}`,
 	}
-	wantQuery := "select id1, val from t1 order by id1"
+	wantQuery := "select id1, val from t1 where ((id1 = 6) or (id1 < 6)) order by id1 limit 10000"
 	checkStream(t, "select * from t1 where in_keyrange('-80')", nil, wantQuery, wantStream)
 }
 
@@ -285,6 +287,8 @@ func TestStreamRowsFilterInt(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer env.SetVSchema("{}")
+
+	copyLimit = 10000
 
 	execStatements(t, []string{
 		"create table t1(id1 int, id2 int, val varbinary(128), primary key(id1))",
@@ -302,7 +306,7 @@ func TestStreamRowsFilterInt(t *testing.T) {
 		`fields:{name:"id1" type:INT32 table:"t1" org_table:"t1" database:"vttest" org_name:"id1" column_length:11 charset:63} fields:{name:"val" type:VARBINARY table:"t1" org_table:"t1" database:"vttest" org_name:"val" column_length:128 charset:63} pkfields:{name:"id1" type:INT32}`,
 		`rows:{lengths:1 lengths:3 values:"1aaa"} rows:{lengths:1 lengths:3 values:"4ddd"} lastpk:{lengths:1 values:"5"}`,
 	}
-	wantQuery := "select id1, id2, val from t1 order by id1"
+	wantQuery := "select id1, id2, val from t1 where ((id1 = 5) or (id1 < 5)) order by id1 limit 10000"
 	checkStream(t, "select id1, val from t1 where id2 = 100", nil, wantQuery, wantStream)
 	require.Equal(t, int64(0), engine.rowStreamerNumPackets.Get())
 	require.Equal(t, int64(2), engine.rowStreamerNumRows.Get())
@@ -318,6 +322,8 @@ func TestStreamRowsFilterVarBinary(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer env.SetVSchema("{}")
+
+	copyLimit = 10000
 
 	execStatements(t, []string{
 		"create table t1(id1 int, val varbinary(128), primary key(id1))",
@@ -335,7 +341,7 @@ func TestStreamRowsFilterVarBinary(t *testing.T) {
 		`fields:{name:"id1" type:INT32 table:"t1" org_table:"t1" database:"vttest" org_name:"id1" column_length:11 charset:63} fields:{name:"val" type:VARBINARY table:"t1" org_table:"t1" database:"vttest" org_name:"val" column_length:128 charset:63} pkfields:{name:"id1" type:INT32}`,
 		`rows:{lengths:1 lengths:6 values:"2newton"} rows:{lengths:1 lengths:6 values:"3newton"} rows:{lengths:1 lengths:6 values:"5newton"} lastpk:{lengths:1 values:"6"}`,
 	}
-	wantQuery := "select id1, val from t1 order by id1"
+	wantQuery := "select id1, val from t1 where ((id1 = 6) or (id1 < 6)) order by id1 limit 10000"
 	checkStream(t, "select id1, val from t1 where val = 'newton'", nil, wantQuery, wantStream)
 }
 
@@ -363,7 +369,7 @@ func TestStreamRowsMultiPacket(t *testing.T) {
 		`rows:{lengths:1 lengths:10 values:"42345678901"} lastpk:{lengths:1 values:"4"}`,
 		`rows:{lengths:1 lengths:1 values:"52"} lastpk:{lengths:1 values:"5"}`,
 	}
-	wantQuery := "select id, val from t1 order by id"
+	wantQuery := "select id, val from t1 where ((id = 5) or (id < 5)) order by id limit 10000"
 	checkStream(t, "select * from t1", nil, wantQuery, wantStream)
 }
 
