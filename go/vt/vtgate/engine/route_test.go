@@ -1098,7 +1098,7 @@ func TestRouteStreamSortTruncate(t *testing.T) {
 			),
 		},
 	}
-	result, err := wrapStreamExecute(sel, vc, map[string]*querypb.BindVariable{}, false)
+	result, err := wrapStreamExecute(sel, vc, map[string]*querypb.BindVariable{}, true)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,

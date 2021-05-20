@@ -1220,7 +1220,8 @@ func TestSelectScatterPartialOLAP2(t *testing.T) {
 	sbc0Th.Serving = false
 
 	results, err := executorStream(executor, "select id from user")
-	assert.EqualError(t, err, `target: TestExecutor.40-60.master: no healthy tablet available for 'keyspace:"TestExecutor" shard:"40-60" tablet_type:MASTER '`)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), `no healthy tablet available for 'keyspace:"TestExecutor" shard:"40-60"`)
 	assert.Equal(t, vtrpcpb.Code_UNAVAILABLE, vterrors.Code(err))
 	assert.Nil(t, results)
 	testQueryLog(t, logChan, "TestExecuteStream", "SELECT", "select id from user", 8)
