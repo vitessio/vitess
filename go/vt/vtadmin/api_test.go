@@ -2531,7 +2531,7 @@ func TestGetTablet(t *testing.T) {
 			},
 			dbconfigs: map[string]vtadmintestutil.Dbcfg{},
 			req: &vtadminpb.GetTabletRequest{
-				Hostname: "ks1-00-00-zone1-a",
+				Alias: "zone1-100",
 			},
 			expected: &vtadminpb.Tablet{
 				Cluster: &vtadminpb.Cluster{
@@ -2592,7 +2592,7 @@ func TestGetTablet(t *testing.T) {
 				"c1": {ShouldErr: true},
 			},
 			req: &vtadminpb.GetTabletRequest{
-				Hostname: "doesn't matter",
+				Alias: "doesn't matter",
 			},
 			expected:  nil,
 			shouldErr: true,
@@ -2635,7 +2635,7 @@ func TestGetTablet(t *testing.T) {
 			},
 			dbconfigs: map[string]vtadmintestutil.Dbcfg{},
 			req: &vtadminpb.GetTabletRequest{
-				Hostname:   "ks1-00-00-zone1-a",
+				Alias:      "zone1-100",
 				ClusterIds: []string{"c0"},
 			},
 			expected: &vtadminpb.Tablet{
@@ -2682,7 +2682,7 @@ func TestGetTablet(t *testing.T) {
 						State: vtadminpb.Tablet_SERVING,
 						Tablet: &topodatapb.Tablet{
 							Alias: &topodatapb.TabletAlias{
-								Uid:  200,
+								Uid:  100,
 								Cell: "zone1",
 							},
 							Hostname: "ks1-00-00-zone1-a",
@@ -2695,7 +2695,7 @@ func TestGetTablet(t *testing.T) {
 			},
 			dbconfigs: map[string]vtadmintestutil.Dbcfg{},
 			req: &vtadminpb.GetTabletRequest{
-				Hostname: "ks1-00-00-zone1-a",
+				Alias: "zone1-100",
 			},
 			expected:  nil,
 			shouldErr: true,
@@ -2708,7 +2708,7 @@ func TestGetTablet(t *testing.T) {
 			},
 			dbconfigs: map[string]vtadmintestutil.Dbcfg{},
 			req: &vtadminpb.GetTabletRequest{
-				Hostname: "ks1-00-00-zone1-a",
+				Alias: "zone1-100",
 			},
 			expected:  nil,
 			shouldErr: true,

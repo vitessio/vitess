@@ -6029,7 +6029,7 @@ $root.vtadmin = (function() {
          * Properties of a GetTabletRequest.
          * @memberof vtadmin
          * @interface IGetTabletRequest
-         * @property {string|null} [hostname] GetTabletRequest hostname
+         * @property {string|null} [alias] GetTabletRequest alias
          * @property {Array.<string>|null} [cluster_ids] GetTabletRequest cluster_ids
          */
 
@@ -6050,12 +6050,12 @@ $root.vtadmin = (function() {
         }
 
         /**
-         * GetTabletRequest hostname.
-         * @member {string} hostname
+         * GetTabletRequest alias.
+         * @member {string} alias
          * @memberof vtadmin.GetTabletRequest
          * @instance
          */
-        GetTabletRequest.prototype.hostname = "";
+        GetTabletRequest.prototype.alias = "";
 
         /**
          * GetTabletRequest cluster_ids.
@@ -6089,8 +6089,8 @@ $root.vtadmin = (function() {
         GetTabletRequest.encode = function encode(message, writer) {
             if (!writer)
                 writer = $Writer.create();
-            if (message.hostname != null && Object.hasOwnProperty.call(message, "hostname"))
-                writer.uint32(/* id 1, wireType 2 =*/10).string(message.hostname);
+            if (message.alias != null && Object.hasOwnProperty.call(message, "alias"))
+                writer.uint32(/* id 1, wireType 2 =*/10).string(message.alias);
             if (message.cluster_ids != null && message.cluster_ids.length)
                 for (var i = 0; i < message.cluster_ids.length; ++i)
                     writer.uint32(/* id 2, wireType 2 =*/18).string(message.cluster_ids[i]);
@@ -6129,7 +6129,7 @@ $root.vtadmin = (function() {
                 var tag = reader.uint32();
                 switch (tag >>> 3) {
                 case 1:
-                    message.hostname = reader.string();
+                    message.alias = reader.string();
                     break;
                 case 2:
                     if (!(message.cluster_ids && message.cluster_ids.length))
@@ -6171,9 +6171,9 @@ $root.vtadmin = (function() {
         GetTabletRequest.verify = function verify(message) {
             if (typeof message !== "object" || message === null)
                 return "object expected";
-            if (message.hostname != null && message.hasOwnProperty("hostname"))
-                if (!$util.isString(message.hostname))
-                    return "hostname: string expected";
+            if (message.alias != null && message.hasOwnProperty("alias"))
+                if (!$util.isString(message.alias))
+                    return "alias: string expected";
             if (message.cluster_ids != null && message.hasOwnProperty("cluster_ids")) {
                 if (!Array.isArray(message.cluster_ids))
                     return "cluster_ids: array expected";
@@ -6196,8 +6196,8 @@ $root.vtadmin = (function() {
             if (object instanceof $root.vtadmin.GetTabletRequest)
                 return object;
             var message = new $root.vtadmin.GetTabletRequest();
-            if (object.hostname != null)
-                message.hostname = String(object.hostname);
+            if (object.alias != null)
+                message.alias = String(object.alias);
             if (object.cluster_ids) {
                 if (!Array.isArray(object.cluster_ids))
                     throw TypeError(".vtadmin.GetTabletRequest.cluster_ids: array expected");
@@ -6224,9 +6224,9 @@ $root.vtadmin = (function() {
             if (options.arrays || options.defaults)
                 object.cluster_ids = [];
             if (options.defaults)
-                object.hostname = "";
-            if (message.hostname != null && message.hasOwnProperty("hostname"))
-                object.hostname = message.hostname;
+                object.alias = "";
+            if (message.alias != null && message.hasOwnProperty("alias"))
+                object.alias = message.alias;
             if (message.cluster_ids && message.cluster_ids.length) {
                 object.cluster_ids = [];
                 for (var j = 0; j < message.cluster_ids.length; ++j)

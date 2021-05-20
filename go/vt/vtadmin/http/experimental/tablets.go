@@ -36,7 +36,7 @@ func TabletDebugVarsPassthrough(ctx context.Context, r vtadminhttp.Request, api 
 	vars := r.Vars()
 
 	tablet, err := api.Server().GetTablet(ctx, &vtadminpb.GetTabletRequest{
-		Hostname:   vars["tablet"],
+		Alias:      vars["tablet"],
 		ClusterIds: r.URL.Query()["cluster"],
 	})
 
