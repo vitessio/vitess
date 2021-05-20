@@ -59,6 +59,9 @@ func newBuildSelectPlan(sel *sqlparser.Select, vschema ContextVSchema) (engine.P
 	if err != nil {
 		return nil, err
 	}
+	if len(qgraph.subqueries) > 0 {
+		return nil, semantics.Gen4NotSupportedF("subquery")
+	}
 
 	var tree joinTree
 
