@@ -9,6 +9,9 @@ vtadmin \
   --addr ":${vtadmin_api_port}" \
   --http-origin "http://localhost:3000" \
   --http-tablet-url-tmpl "http://localhost:15{{ .Tablet.Alias.Uid }}" \
+  --tracer "opentracing-jaeger" \
+  --grpc-tracing \
+  --http-tracing \
   --logtostderr \
   --alsologtostderr \
   --cluster "id=local,name=local,discovery=staticfile,discovery-staticfile-path=./vtadmin/discovery.json,tablet-fqdn-tmpl=localhost:15{{ .Tablet.Alias.Uid }}" \
