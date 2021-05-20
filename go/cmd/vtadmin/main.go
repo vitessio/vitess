@@ -85,10 +85,10 @@ func main() {
 	rootCmd.Flags().BoolVar(&httpOpts.EnableTracing, "http-tracing", false, "whether to enable tracing on the HTTP server")
 	rootCmd.Flags().BoolVar(&httpOpts.DisableCompression, "http-no-compress", false, "whether to disable compression of HTTP API responses")
 	rootCmd.Flags().StringSliceVar(&httpOpts.CORSOrigins, "http-origin", []string{}, "repeated, comma-separated flag of allowed CORS origins. omit to disable CORS")
-	rootCmd.Flags().StringVar(&httpOpts.ExperimentalOptions.TabletFQDNTmpl,
-		"http-tablet-fqdn-tmpl",
-		"{{ .Tablet.Hostname }}:80",
-		"[EXPERIMENTAL] Go template string to generate a reachable http "+
+	rootCmd.Flags().StringVar(&httpOpts.ExperimentalOptions.TabletURLTmpl,
+		"http-tablet-url-tmpl",
+		"https://{{ .Tablet.Hostname }}:80",
+		"[EXPERIMENTAL] Go template string to generate a reachable http(s) "+
 			"address for a tablet. Currently used to make passthrough "+
 			"requests to /debug/vars endpoints.",
 	)
