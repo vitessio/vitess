@@ -696,6 +696,15 @@
 			"RetryMax": 0,
 			"Tags": []
 		},
+		"errs_as_warns": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/errors_as_warnings"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "17",
+			"RetryMax": 0,
+			"Tags": []
+		},
 		"web_test": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/vtctldweb"],

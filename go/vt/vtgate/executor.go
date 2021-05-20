@@ -836,28 +836,6 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 			Fields: buildVarCharFields("Keyspace", "Name", "Type", "Params", "Owner"),
 			Rows:   rows,
 		}, nil
-	case sqlparser.KeywordString(sqlparser.WARNINGS):
-		fields := []*querypb.Field{
-			{Name: "Level", Type: sqltypes.VarChar},
-			{Name: "Code", Type: sqltypes.Uint16},
-			{Name: "Message", Type: sqltypes.VarChar},
-		}
-		rows := make([][]sqltypes.Value, 0)
-
-		if safeSession.Warnings != nil {
-			for _, warning := range safeSession.Warnings {
-				rows = append(rows, []sqltypes.Value{
-					sqltypes.NewVarChar("Warning"),
-					sqltypes.NewUint32(warning.Code),
-					sqltypes.NewVarChar(warning.Message),
-				})
-			}
-		}
-
-		return &sqltypes.Result{
-			Fields: fields,
-			Rows:   rows,
-		}, nil
 	}
 
 	// Any other show statement is passed through
@@ -1476,7 +1454,7 @@ func (e *Executor) ExecuteMultiShard(ctx context.Context, rss []*srvtopo.Resolve
 }
 
 // StreamExecuteMulti implements the IExecutor interface
-func (e *Executor) StreamExecuteMulti(ctx context.Context, query string, rss []*srvtopo.ResolvedShard, vars []map[string]*querypb.BindVariable, options *querypb.ExecuteOptions, callback func(reply *sqltypes.Result) error) error {
+func (e *Executor) StreamExecuteMulti(ctx context.Context, query string, rss []*srvtopo.ResolvedShard, vars []map[string]*querypb.BindVariable, options *querypb.ExecuteOptions, callback func(reply *sqltypes.Result) error) []error {
 	return e.scatterConn.StreamExecuteMulti(ctx, query, rss, vars, options, callback)
 }
 
