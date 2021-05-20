@@ -184,7 +184,7 @@ func TestCharPK(t *testing.T) {
 		data   [][]string
 	}{{ //binary(2)
 		input:  "insert into t1 values(1, 'a')",
-		output: "insert into t1(id,val) values (1,'a\\0')",
+		output: "replace into t1(id,val) values (1,'a\\0')",
 		table:  "t1",
 		data: [][]string{
 			{"1", "a\000"},
@@ -198,7 +198,7 @@ func TestCharPK(t *testing.T) {
 		},
 	}, { //char(2)
 		input:  "insert into t2 values(1, 'a')",
-		output: "insert into t2(id,val) values (1,'a')",
+		output: "replace into t2(id,val) values (1,'a')",
 		table:  "t2",
 		data: [][]string{
 			{"1", "a"},
@@ -212,7 +212,7 @@ func TestCharPK(t *testing.T) {
 		},
 	}, { //varbinary(2)
 		input:  "insert into t3 values(1, 'a')",
-		output: "insert into t3(id,val) values (1,'a')",
+		output: "replace into t3(id,val) values (1,'a')",
 		table:  "t3",
 		data: [][]string{
 			{"1", "a"},
@@ -226,7 +226,7 @@ func TestCharPK(t *testing.T) {
 		},
 	}, { //varchar(2)
 		input:  "insert into t4 values(1, 'a')",
-		output: "insert into t4(id,val) values (1,'a')",
+		output: "replace into t4(id,val) values (1,'a')",
 		table:  "t4",
 		data: [][]string{
 			{"1", "a"},
@@ -291,7 +291,7 @@ func TestRollup(t *testing.T) {
 	}{{
 		// Start with all nulls
 		input:  "insert into t1 values(1, 'a')",
-		output: "insert into t1(rollupname,kount) values ('total',1) on duplicate key update kount=kount+1",
+		output: "replace into t1(rollupname,kount) values ('total',1) on duplicate key update kount=kount+1",
 		table:  "t1",
 		data: [][]string{
 			{"total", "1"},
@@ -363,9 +363,9 @@ func TestPlayerSavepoint(t *testing.T) {
 	})
 	expectDBClientQueries(t, []string{
 		"begin",
-		"/insert into t1.*2.*",
+		"/replace into t1.*2.*",
 		"SAVEPOINT `vrepl_b`",
-		"/insert into t1.*3.*",
+		"/replace into t1.*3.*",
 		"SAVEPOINT `vrepl_a`",
 		"/update _vt.vreplication set pos=",
 		"commit",
@@ -452,7 +452,7 @@ func TestPlayerStatementMode(t *testing.T) {
 
 	output := []string{
 		"begin",
-		"insert into src1 values(1, 'aaa')",
+		"replace into src1 values(1, 'aaa')",
 		"/update _vt.vreplication set pos=",
 		"commit",
 	}
@@ -1946,16 +1946,16 @@ func TestPlayerSplitTransaction(t *testing.T) {
 
 	execStatements(t, []string{
 		"begin",
-		"insert into t1 values(1, '123456')",
-		"insert into t1 values(2, '789012')",
+		"replace into t1 values(1, '123456')",
+		"replace into t1 values(2, '789012')",
 		"commit",
 	})
 	// Because the packet size is 10, this is received as two events,
 	// but still combined as one transaction.
 	expectDBClientQueries(t, []string{
 		"begin",
-		"insert into t1(id,val) values (1,'123456')",
-		"insert into t1(id,val) values (2,'789012')",
+		"replace into t1(id,val) values (1,'123456')",
+		"replace into t1(id,val) values (2,'789012')",
 		"/update _vt.vreplication set pos=",
 		"commit",
 	})
@@ -1996,8 +1996,8 @@ func TestPlayerLockErrors(t *testing.T) {
 	})
 	expectDBClientQueries(t, []string{
 		"begin",
-		"insert into t1(id,val) values (1,'aaa')",
-		"insert into t1(id,val) values (2,'bbb')",
+		"replace into t1(id,val) values (1,'aaa')",
+		"replace into t1(id,val) values (2,'bbb')",
 		"/update _vt.vreplication set pos=",
 		"commit",
 	})
@@ -2075,7 +2075,7 @@ func TestPlayerCancelOnLock(t *testing.T) {
 	})
 	expectDBClientQueries(t, []string{
 		"begin",
-		"insert into t1(id,val) values (1,'aaa')",
+		"replace into t1(id,val) values (1,'aaa')",
 		"/update _vt.vreplication set pos=",
 		"commit",
 	})
@@ -2151,7 +2151,7 @@ func TestPlayerBatching(t *testing.T) {
 	})
 	expectDBClientQueries(t, []string{
 		"begin",
-		"insert into t1(id,val) values (1,'aaa')",
+		"replace into t1(id,val) values (1,'aaa')",
 		"/update _vt.vreplication set pos=",
 		"commit",
 	})
@@ -2303,12 +2303,12 @@ func TestPlayerRelayLogMaxSize(t *testing.T) {
 				"/update _vt.vreplication set pos=",
 				"commit",
 				"begin",
-				"insert into t1(id,val) values (2,'789012')",
-				"insert into t1(id,val) values (3,'345678')",
+				"replace into t1(id,val) values (2,'789012')",
+				"replace into t1(id,val) values (3,'345678')",
 				"/update _vt.vreplication set pos=",
 				"commit",
 				"begin",
-				"insert into t1(id,val) values (4,'901234')",
+				"replace into t1(id,val) values (4,'901234')",
 				"/update _vt.vreplication set pos=",
 				"commit",
 			})
@@ -2370,7 +2370,7 @@ func TestRestartOnVStreamEnd(t *testing.T) {
 		"/update _vt.vreplication set message='Picked source tablet.*",
 		"/update _vt.vreplication set state='Running'",
 		"begin",
-		"insert into t1(id,val) values (2,'aaa')",
+		"replace into t1(id,val) values (2,'aaa')",
 		"/update _vt.vreplication set pos=",
 		"commit",
 	})
@@ -2418,7 +2418,7 @@ func TestTimestamp(t *testing.T) {
 		"begin",
 		// The insert value for ts will be in UTC.
 		// We'll check the row instead.
-		"/insert into t1",
+		"/replace into t1",
 		"/update _vt.vreplication set pos=",
 		"commit",
 	})
