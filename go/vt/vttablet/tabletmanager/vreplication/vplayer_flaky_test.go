@@ -2352,7 +2352,7 @@ func TestRestartOnVStreamEnd(t *testing.T) {
 	})
 	expectDBClientQueries(t, []string{
 		"begin",
-		"insert into t1(id,val) values (1,'aaa')",
+		"replace into t1(id,val) values (1,'aaa')",
 		"/update _vt.vreplication set pos=",
 		"commit",
 	})
