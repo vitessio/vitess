@@ -253,6 +253,9 @@
             <configuration>
               <failOnWarning>true</failOnWarning>
               <outputXML>true</outputXML>
+              <usedDependencies>
+                <dependency>mysql:mysql-connector-java</dependency>
+              </usedDependencies>
             </configuration>
           </execution>
         </executions>
