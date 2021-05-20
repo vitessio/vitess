@@ -2612,7 +2612,7 @@ show_statement:
   }
 | SHOW WARNINGS
   {
-    $$ = &Show{&ShowLegacy{Type: string($2), Scope: ImplicitScope}}
+    $$ = &Show{&ShowBasic{Command: Warnings}}
   }
 /* vitess_topo supports SHOW VITESS_SHARDS / SHOW VITESS_TABLETS */
 | SHOW vitess_topo like_or_where_opt

@@ -381,7 +381,9 @@ func (oa *OrderedAggregate) merge(fields []*querypb.Field, row1, row2 []sqltypes
 		var err error
 		switch aggr.Opcode {
 		case AggregateCount, AggregateSum:
-			result[aggr.Col] = evalengine.NullsafeAdd(row1[aggr.Col], row2[aggr.Col], fields[aggr.Col].Type)
+			value := row1[aggr.Col]
+			v2 := row2[aggr.Col]
+			result[aggr.Col] = evalengine.NullsafeAdd(value, v2, fields[aggr.Col].Type)
 		case AggregateMin:
 			result[aggr.Col], err = evalengine.Min(row1[aggr.Col], row2[aggr.Col])
 		case AggregateMax:

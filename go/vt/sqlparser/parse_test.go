@@ -1613,8 +1613,7 @@ var (
 	}, {
 		input: "alter vitess_migration cancel all",
 	}, {
-		input:  "show warnings",
-		output: "show warnings",
+		input: "show warnings",
 	}, {
 		input:  "select warnings from t",
 		output: "select `warnings` from t",
