@@ -216,7 +216,13 @@ func (vp *vplayer) applyRowEvent(ctx context.Context, rowEvent *binlogdatapb.Row
 		_, err := tplan.applyChange(change, func(sql string) (*sqltypes.Result, error) {
 			stats := NewVrLogStats("ROWCHANGE")
 			start := time.Now()
-			fmt.Printf("============== applyRowEvent: %s\n", sql[0:50])
+			{
+				shortSQL := sql
+				if len(shortSQL) > 50 {
+					shortSQL = shortSQL[0:50]
+				}
+				fmt.Printf("============== applyRowEvent: %s\n", shortSQL)
+			}
 			qr, err := vp.vr.dbClient.ExecuteWithRetry(ctx, sql)
 			vp.vr.stats.QueryCount.Add(vp.phase, 1)
 			vp.vr.stats.QueryTimings.Record(vp.phase, start)
