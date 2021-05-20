@@ -46,7 +46,14 @@ fi
 # them when we run "exec:java". See also: http://stackoverflow.com/questions/11091311/maven-execjava-goal-on-a-multi-module-project
 # Install only "example". See also: http://stackoverflow.com/questions/1114026/maven-modules-building-a-single-specific-module
 mvn -f $VTROOT/java/pom.xml -pl example -am install -DskipTests
+# running tests using vitess-jdbc through grpc
 mvn -f $VTROOT/java/example/pom.xml exec:java \
     -Dexec.cleanupDaemonThreads=false \
     -Dexec.mainClass="io.vitess.example.VitessJDBCExample" \
     -Dexec.args="localhost:15991$optional_tls_args"
+
+# running tests using mysql protocol
+mvn -f $VTROOT/java/example/pom.xml exec:java \
+    -Dexec.cleanupDaemonThreads=false \
+    -Dexec.mainClass="io.vitess.example.MysqlJDBCExample" \
+    -Dexec.args="localhost:15306$optional_tls_args"
