@@ -523,7 +523,15 @@ func (api *API) GetTablet(ctx context.Context, req *vtadminpb.GetTabletRequest) 
 	span, ctx := trace.NewSpan(ctx, "API.GetTablet")
 	defer span.Finish()
 
-	span.Annotate("tablet_hostname", req.Hostname)
+	span.Annotate("tablet_alias", req.Alias)
+
+	alias, err := topoproto.ParseTabletAlias(req.Alias)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse tablet_alias %s: %w", req.Alias, err)
+	}
+
+	span.Annotate("tablet_cell", alias.Cell)
+	span.Annotate("tablet_uid", alias.Uid)
 
 	clusters, ids := api.getClustersForRequest(req.ClusterIds)
 
@@ -549,7 +557,7 @@ func (api *API) GetTablet(ctx context.Context, req *vtadminpb.GetTabletRequest) 
 			var found []*vtadminpb.Tablet
 
 			for _, t := range ts {
-				if t.Tablet.Hostname == req.Hostname {
+				if t.Tablet.Alias.Cell == alias.Cell && t.Tablet.Alias.Uid == alias.Uid {
 					found = append(found, t)
 				}
 			}
@@ -568,12 +576,12 @@ func (api *API) GetTablet(ctx context.Context, req *vtadminpb.GetTabletRequest) 
 
 	switch len(tablets) {
 	case 0:
-		return nil, vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "%s: %s, searched clusters = %v", errors.ErrNoTablet, req.Hostname, ids)
+		return nil, vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "%s: %s, searched clusters = %v", errors.ErrNoTablet, req.Alias, ids)
 	case 1:
 		return tablets[0], nil
 	}
 
-	return nil, vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "%s: %s, searched clusters = %v", errors.ErrAmbiguousTablet, req.Hostname, ids)
+	return nil, vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "%s: %s, searched clusters = %v", errors.ErrAmbiguousTablet, req.Alias, ids)
 }
 
 // GetTablets is part of the vtadminpb.VTAdminServer interface.
