@@ -1794,6 +1794,9 @@ var (
 	}, {
 		input: "select title from video as v where match(v.title, v.tag) against ('DEMO' in boolean mode)",
 	}, {
+		input:  "SELECT id FROM blog_posts USE INDEX (PRIMARY) WHERE id = 10",
+		output: "select id from blog_posts use index (`PRIMARY`) where id = 10",
+	}, {
 		input:  "select name, group_concat(score) from t group by name",
 		output: "select `name`, group_concat(score) from t group by `name`",
 	}, {
