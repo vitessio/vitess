@@ -819,7 +819,7 @@ func newPrimitiveExecutor(ctx context.Context, prim engine.Primitive) *primitive
 	vcursor := &contextVCursor{ctx: ctx}
 	go func() {
 		defer close(pe.resultch)
-		pe.err = pe.prim.StreamExecute(vcursor, make(map[string]*querypb.BindVariable), false, func(qr *sqltypes.Result) error {
+		pe.err = pe.prim.StreamExecute(vcursor, make(map[string]*querypb.BindVariable), true, func(qr *sqltypes.Result) error {
 			select {
 			case pe.resultch <- qr:
 			case <-ctx.Done():
