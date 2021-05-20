@@ -111,7 +111,6 @@ func TestSelectDBA(t *testing.T) {
 			"__vtschemaname": sqltypes.StringBindVariable("vt_ks"),
 		}}}
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
-
 }
 
 func TestUnsharded(t *testing.T) {
@@ -1133,8 +1132,10 @@ func TestSelectScatterPartial(t *testing.T) {
 
 	_, err = executorExec(executor, "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from user", nil)
 	require.Error(t, err)
-
 	testQueryLog(t, logChan, "TestExecute", "SELECT", "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from user", 8)
+
+	_, err = executorExec(executor, "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from user order by id", nil)
+	require.Error(t, err)
 }
 
 func TestSelectScatterPartialOLAP(t *testing.T) {
@@ -1183,6 +1184,9 @@ func TestSelectScatterPartialOLAP(t *testing.T) {
 	_, err = executorStream(executor, "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from user")
 	require.Error(t, err)
 	testQueryLog(t, logChan, "TestExecuteStream", "SELECT", "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from user", 8)
+
+	_, err = executorStream(executor, "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from user order by id")
+	require.Error(t, err)
 }
 
 func TestSelectScatterPartialOLAP2(t *testing.T) {

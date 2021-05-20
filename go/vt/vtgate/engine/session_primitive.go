@@ -19,6 +19,8 @@ package engine
 import (
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 // SessionPrimitive the session primitive is a very small primitive used
@@ -72,7 +74,7 @@ func (s *SessionPrimitive) StreamExecute(vcursor VCursor, _ map[string]*querypb.
 
 // GetFields implements the Primitive interface
 func (s *SessionPrimitive) GetFields(_ VCursor, _ map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	panic("implement me")
+	return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "not supported for this primitive")
 }
 
 // description implements the Primitive interface

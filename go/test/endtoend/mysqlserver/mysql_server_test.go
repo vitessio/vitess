@@ -145,7 +145,7 @@ func TestWarnings(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
-	// validate warning with invalid_field error as warning
+	// using CALL will produce a warning saying this only works in unsharded
 	qr, err := conn.ExecuteFetch("CALL testing()", 1, false)
 	require.NoError(t, err)
 	assert.Empty(t, qr.Rows, "number of rows")
@@ -163,7 +163,7 @@ func TestWarnings(t *testing.T) {
 
 	qr, err = conn.ExecuteFetch("SHOW WARNINGS;", 1, false)
 	require.NoError(t, err)
-	assert.Empty(t, len(qr.Rows), "number of rows")
+	assert.Empty(t, qr.Rows)
 
 	// verify that show warnings are empty if another statement is run before calling it
 	qr, err = conn.ExecuteFetch("CALL testing()", 1, false)
@@ -174,7 +174,7 @@ func TestWarnings(t *testing.T) {
 
 	qr, err = conn.ExecuteFetch("SHOW WARNINGS;", 1, false)
 	require.NoError(t, err)
-	assert.Empty(t, len(qr.Rows), "number of rows")
+	assert.Empty(t, qr.Rows)
 }
 
 // TestSelectWithUnauthorizedUser verifies that an unauthorized user
