@@ -1,5 +1,9 @@
 name: pr-labels
-on: [push, pull_request, label]
+on:
+  push
+  pull_request:
+    types: [opened, labeled, unlabeled, synchronize]
+  label
 jobs:
   analyze:
     if: github.repository == 'vitessio/vitess'
