@@ -34,6 +34,8 @@ import (
 )
 
 func TestStreamRowsScan(t *testing.T) {
+	copyLimit = 10000
+
 	if testing.Short() {
 		t.Skip()
 	}
@@ -67,7 +69,7 @@ func TestStreamRowsScan(t *testing.T) {
 		`fields:{name:"1" type:INT64} pkfields:{name:"id" type:INT32}`,
 		`rows:{lengths:1 values:"1"} rows:{lengths:1 values:"1"} lastpk:{lengths:1 values:"2"}`,
 	}
-	wantQuery := "select id, val from t1 order by id"
+	wantQuery := "select id, val from t1 where ((id = 2) or (id < 2)) order by id limit 10000"
 	checkStream(t, "select 1 from t1", nil, wantQuery, wantStream)
 
 	// t1: simulates rollup, with non-pk column
@@ -75,7 +77,7 @@ func TestStreamRowsScan(t *testing.T) {
 		`fields:{name:"1" type:INT64} fields:{name:"val" type:VARBINARY table:"t1" org_table:"t1" database:"vttest" org_name:"val" column_length:128 charset:63} pkfields:{name:"id" type:INT32}`,
 		`rows:{lengths:1 lengths:3 values:"1aaa"} rows:{lengths:1 lengths:3 values:"1bbb"} lastpk:{lengths:1 values:"2"}`,
 	}
-	wantQuery = "select id, val from t1 order by id"
+	wantQuery = "select id, val from t1 where ((id = 2) or (id < 2)) order by id limit 10000"
 	checkStream(t, "select 1, val from t1", nil, wantQuery, wantStream)
 
 	// t1: simulates rollup, with pk and non-pk column
@@ -83,7 +85,7 @@ func TestStreamRowsScan(t *testing.T) {
 		`fields:{name:"1" type:INT64} fields:{name:"id" type:INT32 table:"t1" org_table:"t1" database:"vttest" org_name:"id" column_length:11 charset:63} fields:{name:"val" type:VARBINARY table:"t1" org_table:"t1" database:"vttest" org_name:"val" column_length:128 charset:63} pkfields:{name:"id" type:INT32}`,
 		`rows:{lengths:1 lengths:1 lengths:3 values:"11aaa"} rows:{lengths:1 lengths:1 lengths:3 values:"12bbb"} lastpk:{lengths:1 values:"2"}`,
 	}
-	wantQuery = "select id, val from t1 order by id"
+	wantQuery = "select id, val from t1 where ((id = 2) or (id < 2)) order by id limit 10000"
 	checkStream(t, "select 1, id, val from t1", nil, wantQuery, wantStream)
 
 	// t1: no pk in select list
@@ -91,7 +93,7 @@ func TestStreamRowsScan(t *testing.T) {
 		`fields:{name:"val" type:VARBINARY table:"t1" org_table:"t1" database:"vttest" org_name:"val" column_length:128 charset:63} pkfields:{name:"id" type:INT32}`,
 		`rows:{lengths:3 values:"aaa"} rows:{lengths:3 values:"bbb"} lastpk:{lengths:1 values:"2"}`,
 	}
-	wantQuery = "select id, val from t1 order by id"
+	wantQuery = "select id, val from t1 where ((id = 2) or (id < 2)) order by id limit 10000"
 	checkStream(t, "select val from t1", nil, wantQuery, wantStream)
 
 	// t1: all rows
@@ -99,15 +101,26 @@ func TestStreamRowsScan(t *testing.T) {
 		`fields:{name:"id" type:INT32 table:"t1" org_table:"t1" database:"vttest" org_name:"id" column_length:11 charset:63} fields:{name:"val" type:VARBINARY table:"t1" org_table:"t1" database:"vttest" org_name:"val" column_length:128 charset:63} pkfields:{name:"id" type:INT32}`,
 		`rows:{lengths:1 lengths:3 values:"1aaa"} rows:{lengths:1 lengths:3 values:"2bbb"} lastpk:{lengths:1 values:"2"}`,
 	}
-	wantQuery = "select id, val from t1 order by id"
+	wantQuery = "select id, val from t1 where ((id = 2) or (id < 2)) order by id limit 10000"
 	checkStream(t, "select * from t1", nil, wantQuery, wantStream)
+
+	// t1: all rows, no limit
+	copyLimitValue := copyLimit
+	copyLimit = 0
+	wantStream = []string{
+		`fields:{name:"id" type:INT32 table:"t1" org_table:"t1" database:"vttest" org_name:"id" column_length:11 charset:63} fields:{name:"val" type:VARBINARY table:"t1" org_table:"t1" database:"vttest" org_name:"val" column_length:128 charset:63} pkfields:{name:"id" type:INT32}`,
+		`rows:{lengths:1 lengths:3 values:"1aaa"} rows:{lengths:1 lengths:3 values:"2bbb"} lastpk:{lengths:1 values:"2"}`,
+	}
+	wantQuery = "select id, val from t1 where ((id = 2) or (id < 2)) order by id"
+	checkStream(t, "select * from t1", nil, wantQuery, wantStream)
+	copyLimit = copyLimitValue
 
 	// t1: lastpk=1
 	wantStream = []string{
 		`fields:{name:"id" type:INT32 table:"t1" org_table:"t1" database:"vttest" org_name:"id" column_length:11 charset:63} fields:{name:"val" type:VARBINARY table:"t1" org_table:"t1" database:"vttest" org_name:"val" column_length:128 charset:63} pkfields:{name:"id" type:INT32}`,
 		`rows:{lengths:1 lengths:3 values:"2bbb"} lastpk:{lengths:1 values:"2"}`,
 	}
-	wantQuery = "select id, val from t1 where (id > 1) order by id"
+	wantQuery = "select id, val from t1 where ((id > 1)) and ((id = 2) or (id < 2)) order by id limit 10000"
 	checkStream(t, "select * from t1", []sqltypes.Value{sqltypes.NewInt64(1)}, wantQuery, wantStream)
 
 	// t1: different column ordering
@@ -115,7 +128,7 @@ func TestStreamRowsScan(t *testing.T) {
 		`fields:{name:"val" type:VARBINARY table:"t1" org_table:"t1" database:"vttest" org_name:"val" column_length:128 charset:63} fields:{name:"id" type:INT32 table:"t1" org_table:"t1" database:"vttest" org_name:"id" column_length:11 charset:63} pkfields:{name:"id" type:INT32}`,
 		`rows:{lengths:3 lengths:1 values:"aaa1"} rows:{lengths:3 lengths:1 values:"bbb2"} lastpk:{lengths:1 values:"2"}`,
 	}
-	wantQuery = "select id, val from t1 order by id"
+	wantQuery = "select id, val from t1 where ((id = 2) or (id < 2)) order by id limit 10000"
 	checkStream(t, "select val, id from t1", nil, wantQuery, wantStream)
 
 	// t2: all rows
@@ -123,7 +136,7 @@ func TestStreamRowsScan(t *testing.T) {
 		`fields:{name:"id1" type:INT32 table:"t2" org_table:"t2" database:"vttest" org_name:"id1" column_length:11 charset:63} fields:{name:"id2" type:INT32 table:"t2" org_table:"t2" database:"vttest" org_name:"id2" column_length:11 charset:63} fields:{name:"val" type:VARBINARY table:"t2" org_table:"t2" database:"vttest" org_name:"val" column_length:128 charset:63} pkfields:{name:"id1" type:INT32} pkfields:{name:"id2" type:INT32}`,
 		`rows:{lengths:1 lengths:1 lengths:3 values:"12aaa"} rows:{lengths:1 lengths:1 lengths:3 values:"13bbb"} lastpk:{lengths:1 lengths:1 values:"13"}`,
 	}
-	wantQuery = "select id1, id2, val from t2 order by id1, id2"
+	wantQuery = "select id1, id2, val from t2 where ((id1 = 1 and id2 = 3) or (id1 = 1 and id2 < 3) or (id1 < 1)) order by id1, id2 limit 10000"
 	checkStream(t, "select * from t2", nil, wantQuery, wantStream)
 
 	// t2: lastpk=1,2
@@ -131,7 +144,7 @@ func TestStreamRowsScan(t *testing.T) {
 		`fields:{name:"id1" type:INT32 table:"t2" org_table:"t2" database:"vttest" org_name:"id1" column_length:11 charset:63} fields:{name:"id2" type:INT32 table:"t2" org_table:"t2" database:"vttest" org_name:"id2" column_length:11 charset:63} fields:{name:"val" type:VARBINARY table:"t2" org_table:"t2" database:"vttest" org_name:"val" column_length:128 charset:63} pkfields:{name:"id1" type:INT32} pkfields:{name:"id2" type:INT32}`,
 		`rows:{lengths:1 lengths:1 lengths:3 values:"13bbb"} lastpk:{lengths:1 lengths:1 values:"13"}`,
 	}
-	wantQuery = "select id1, id2, val from t2 where (id1 = 1 and id2 > 2) or (id1 > 1) order by id1, id2"
+	wantQuery = "select id1, id2, val from t2 where ((id1 = 1 and id2 > 2) or (id1 > 1)) and ((id1 = 1 and id2 = 3) or (id1 = 1 and id2 < 3) or (id1 < 1)) order by id1, id2 limit 10000"
 	checkStream(t, "select * from t2", []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)}, wantQuery, wantStream)
 
 	// t3: all rows
@@ -139,7 +152,7 @@ func TestStreamRowsScan(t *testing.T) {
 		`fields:{name:"id" type:INT32 table:"t3" org_table:"t3" database:"vttest" org_name:"id" column_length:11 charset:63} fields:{name:"val" type:VARBINARY table:"t3" org_table:"t3" database:"vttest" org_name:"val" column_length:128 charset:63} pkfields:{name:"id" type:INT32} pkfields:{name:"val" type:VARBINARY}`,
 		`rows:{lengths:1 lengths:3 values:"1aaa"} rows:{lengths:1 lengths:3 values:"2bbb"} lastpk:{lengths:1 lengths:3 values:"2bbb"}`,
 	}
-	wantQuery = "select id, val from t3 order by id, val"
+	wantQuery = "select id, val from t3 where ((id = 2 and val = 'bbb') or (id = 2 and val < 'bbb') or (id < 2)) order by id, val limit 10000"
 	checkStream(t, "select * from t3", nil, wantQuery, wantStream)
 
 	// t3: lastpk: 1,'aaa'
@@ -147,7 +160,7 @@ func TestStreamRowsScan(t *testing.T) {
 		`fields:{name:"id" type:INT32 table:"t3" org_table:"t3" database:"vttest" org_name:"id" column_length:11 charset:63} fields:{name:"val" type:VARBINARY table:"t3" org_table:"t3" database:"vttest" org_name:"val" column_length:128 charset:63} pkfields:{name:"id" type:INT32} pkfields:{name:"val" type:VARBINARY}`,
 		`rows:{lengths:1 lengths:3 values:"2bbb"} lastpk:{lengths:1 lengths:3 values:"2bbb"}`,
 	}
-	wantQuery = "select id, val from t3 where (id = 1 and val > 'aaa') or (id > 1) order by id, val"
+	wantQuery = "select id, val from t3 where ((id = 1 and val > 'aaa') or (id > 1)) and ((id = 2 and val = 'bbb') or (id = 2 and val < 'bbb') or (id < 2)) order by id, val limit 10000"
 	checkStream(t, "select * from t3", []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewVarBinary("aaa")}, wantQuery, wantStream)
 
 	// t4: all rows
@@ -155,7 +168,7 @@ func TestStreamRowsScan(t *testing.T) {
 		`fields:{name:"id1" type:INT32 table:"t4" org_table:"t4" database:"vttest" org_name:"id1" column_length:11 charset:63} fields:{name:"id2" type:INT32 table:"t4" org_table:"t4" database:"vttest" org_name:"id2" column_length:11 charset:63} fields:{name:"id3" type:INT32 table:"t4" org_table:"t4" database:"vttest" org_name:"id3" column_length:11 charset:63} fields:{name:"val" type:VARBINARY table:"t4" org_table:"t4" database:"vttest" org_name:"val" column_length:128 charset:63} pkfields:{name:"id1" type:INT32} pkfields:{name:"id2" type:INT32} pkfields:{name:"id3" type:INT32}`,
 		`rows:{lengths:1 lengths:1 lengths:1 lengths:3 values:"123aaa"} rows:{lengths:1 lengths:1 lengths:1 lengths:3 values:"234bbb"} lastpk:{lengths:1 lengths:1 lengths:1 values:"234"}`,
 	}
-	wantQuery = "select id1, id2, id3, val from t4 order by id1, id2, id3"
+	wantQuery = "select id1, id2, id3, val from t4 where ((id1 = 2 and id2 = 3 and id3 = 4) or (id1 = 2 and id2 = 3 and id3 < 4) or (id1 = 2 and id2 < 3) or (id1 < 2)) order by id1, id2, id3 limit 10000"
 	checkStream(t, "select * from t4", nil, wantQuery, wantStream)
 
 	// t4: lastpk: 1,2,3
@@ -163,7 +176,7 @@ func TestStreamRowsScan(t *testing.T) {
 		`fields:{name:"id1" type:INT32 table:"t4" org_table:"t4" database:"vttest" org_name:"id1" column_length:11 charset:63} fields:{name:"id2" type:INT32 table:"t4" org_table:"t4" database:"vttest" org_name:"id2" column_length:11 charset:63} fields:{name:"id3" type:INT32 table:"t4" org_table:"t4" database:"vttest" org_name:"id3" column_length:11 charset:63} fields:{name:"val" type:VARBINARY table:"t4" org_table:"t4" database:"vttest" org_name:"val" column_length:128 charset:63} pkfields:{name:"id1" type:INT32} pkfields:{name:"id2" type:INT32} pkfields:{name:"id3" type:INT32}`,
 		`rows:{lengths:1 lengths:1 lengths:1 lengths:3 values:"234bbb"} lastpk:{lengths:1 lengths:1 lengths:1 values:"234"}`,
 	}
-	wantQuery = "select id1, id2, id3, val from t4 where (id1 = 1 and id2 = 2 and id3 > 3) or (id1 = 1 and id2 > 2) or (id1 > 1) order by id1, id2, id3"
+	wantQuery = "select id1, id2, id3, val from t4 where ((id1 = 1 and id2 = 2 and id3 > 3) or (id1 = 1 and id2 > 2) or (id1 > 1)) and ((id1 = 2 and id2 = 3 and id3 = 4) or (id1 = 2 and id2 = 3 and id3 < 4) or (id1 = 2 and id2 < 3) or (id1 < 2)) order by id1, id2, id3 limit 10000"
 	checkStream(t, "select * from t4", []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2), sqltypes.NewInt64(3)}, wantQuery, wantStream)
 
 	// t1: test for unsupported integer literal

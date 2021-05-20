@@ -38,6 +38,10 @@ type RowStreamer interface {
 	Cancel()
 }
 
+var (
+	copyLimit = 10000
+)
+
 // NewRowStreamer returns a RowStreamer
 func NewRowStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine, query string, lastpk []sqltypes.Value, send func(*binlogdatapb.VStreamRowsResponse) error, vse *Engine) RowStreamer {
 	return newRowStreamer(ctx, cp, se, query, lastpk, &localVSchema{vschema: &vindexes.VSchema{}}, send, vse)
@@ -245,7 +249,9 @@ func (rs *rowStreamer) buildSelect(startWithPk []sqltypes.Value) (string, error)
 		buf.Myprintf("%s%v", prefix, sqlparser.NewColIdent(rs.plan.Table.Fields[pk].Name))
 		prefix = ", "
 	}
-	buf.WriteString(" limit 10000 ")
+	if copyLimit > 0 {
+		buf.WriteString(fmt.Sprintf(" limit %d", copyLimit))
+	}
 	return buf.String(), nil
 }
 
