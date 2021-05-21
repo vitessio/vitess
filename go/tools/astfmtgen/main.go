@@ -22,23 +22,21 @@ import (
 	"go/printer"
 	"go/token"
 	"go/types"
+	"log"
 	"os"
 	"path"
 	"strconv"
 	"strings"
+
+	"vitess.io/vitess/go/tools/common"
 
 	"golang.org/x/tools/go/ast/astutil"
 	"golang.org/x/tools/go/packages"
 )
 
 func main() {
-	err := load(os.Args[1])
-	if err != nil {
-		panic(err)
-	}
-}
+	packageName := os.Args[1]
 
-func load(packageName string) error {
 	config := &packages.Config{
 		Mode: packages.NeedName |
 			packages.NeedFiles |
@@ -49,19 +47,18 @@ func load(packageName string) error {
 			packages.NeedTypesInfo,
 	}
 	pkgs, err := packages.Load(config, packageName)
-	if err != nil {
-		return fmt.Errorf("error loading package %s: %w", packageName, err)
+	if err != nil || common.PkgFailed(pkgs) {
+		log.Fatal("error loading packaged")
 	}
 	for _, pkg := range pkgs {
 		if pkg.Name == "sqlparser" {
 			rewriter := &Rewriter{pkg: pkg}
 			err := rewriter.Rewrite()
 			if err != nil {
-				return err
+				log.Fatal(err.Error())
 			}
 		}
 	}
-	return nil
 }
 
 type Rewriter struct {
