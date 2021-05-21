@@ -94,6 +94,13 @@ where c.table_schema = database() AND ISC.table_schema is null`
 select table_schema, table_name, column_name, ordinal_position, character_set_name, collation_name, data_type, column_key 
 from information_schema.columns 
 where table_schema = database()`
+
+	// FetchUpdatedTables queries fetches all information about updated tables
+	FetchUpdatedTables = `select table_name, column_name, data_type 
+from _vt.schemacopy 
+where table_schema = database() and 
+	table_name in :tableNames 
+order by ordinal_position`
 )
 
 // VTDatabaseInit contains all the schema creation queries needed to
