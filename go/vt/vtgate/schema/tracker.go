@@ -69,6 +69,7 @@ func (t *Tracker) StartWithWaiter(i waitFor) {
 				}
 			case <-ctx.Done():
 				close(t.ch)
+				return
 			}
 		}
 	}(ctx, t)
@@ -105,7 +106,8 @@ func (t *Tracker) updateSchema(th *discovery.TabletHealth) {
 	// first we empty all prior schema. deleted tables will not show up in the result,
 	// so this is the only chance to delete
 	for _, tbl := range th.TablesUpdated {
-		delete(t.tableMap, tbl)
+		key := th.Target.Keyspace + "." + tbl
+		delete(t.tableMap, key)
 	}
 
 	for _, row := range res.Rows {
