@@ -42,8 +42,9 @@ import (
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
-
 	"vitess.io/vitess/go/vt/vtgate/vtgateservice"
+
+	vtschema "vitess.io/vitess/go/vt/vtgate/schema"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -132,6 +133,7 @@ type VTGate struct {
 	vsm      *vstreamManager
 	txConn   *TxConn
 	gw       Gateway
+	st       *vtschema.Tracker
 
 	// stats objects.
 	// TODO(sougou): This needs to be cleaned up. There
@@ -194,6 +196,7 @@ func Init(ctx context.Context, serv srvtopo.Server, cell string, tabletTypesToWa
 	srvResolver := srvtopo.NewResolver(serv, gw, cell)
 	resolver := NewResolver(srvResolver, serv, cell, sc)
 	vsm := newVStreamManager(srvResolver, serv, cell)
+	st := vtschema.NewTracker(gw.hc.Subscribe())
 	cacheCfg := &cache.Config{
 		MaxEntries:     *queryPlanCacheSize,
 		MaxMemoryUsage: *queryPlanCacheMemory,
@@ -206,6 +209,7 @@ func Init(ctx context.Context, serv srvtopo.Server, cell string, tabletTypesToWa
 		vsm:      vsm,
 		txConn:   tc,
 		gw:       gw,
+		st:       st,
 		timings: stats.NewMultiTimings(
 			"VtgateApi",
 			"VtgateApi timings",
@@ -240,6 +244,10 @@ func Init(ctx context.Context, serv srvtopo.Server, cell string, tabletTypesToWa
 		for _, f := range RegisterVTGates {
 			f(rpcVTGate)
 		}
+		st.Start()
+	})
+	servenv.OnTerm(func() {
+		st.Stop()
 	})
 	rpcVTGate.registerDebugHealthHandler()
 	err := initQueryLogger(rpcVTGate)
