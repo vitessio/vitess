@@ -25,6 +25,8 @@ services:
     deploy:
       resources:
         limits:
-          memory: 1G
+          memory: 2G
         reservations:
-          memory: 500M
+          memory: 1G
+volumes:
+  prometheus-data: {}

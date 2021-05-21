@@ -19,6 +19,7 @@
   - [Test and Deploy](#test-and-deploy)
     - [Local Unit Tests with `make all`](#local-unit-tests-with-make-all)
     - [Local e2e tests using Cypress (Alpha)](#local-e2e-tests-using-cypress-alpha)
+    - [Local e2e manual testing using compose (Alpha)](#local-e2e-manual-testing-using-compose-alpha)
 
 ## What is the Vitess Mixin
 
@@ -286,3 +287,40 @@ post](https://www.cypress.io/blog/2019/05/02/run-cypress-with-a-single-docker-co
 describes how to set this up with [XQuartz](https://www.xquartz.org/).
 
 **Note** The dummy Grafana server is not connected to a Prometheus Backend for this reason dashboards will not display any data, templates will fail to load etc... If you don't have a Dev Prometheus server. Replacing prometheus datasources(`Prometheus_Vitess`, `Prometheus_Node` ...) with an empty string in the generated JSON file will default to the dummy datasource displaying dummy data. This is useful when testing using interactive mode `make e2e-dev`.
+
+### Local e2e manual testing using compose (Alpha)
+
+**Note**: This targets have been tested using docker for Mac. You may need to change the IPs and configurations for your specific setup.
+
+Before we run the local environment using compose it is necessary to generate the dashboards and recording rules using `ENV=dev make all` (Note: choose the environment you want to test).
+
+Once our dashboards are available simply run:
+
+- `make e2e-compose-up`: spin up the cluster
+
+Changes to the dashboards are not dynamically loaded so you will need to bring down the cluster and initialized it again to load your changes.
+
+If you are done testing or the cluster gets in a bad state quit and clean up using:
+
+- `make e2e-compose-down`: cleanup compose resources
+
+In order to generate some metrics we can use the following commands:
+
+```shell
+## INSERT TEST DATA
+mysql --port=15306 --host=127.0.0.1 < load_test.sql
+## SIMULATED QUERIES
+mysqlslap -c 5 --port=15306 --host=127.0.0.1 --iterations=1000 --create-schema=test_keyspace:80-@master --query="SELECT * FROM messages;"
+mysqlslap -c 5 --port=15306 --host=127.0.0.1 --iterations=1000 --create-schema=test_keyspace:80-@replica --query="SELECT * FROM messages;"
+mysqlslap -c 5 --port=15306 --host=127.0.0.1 --iterations=1000 --create-schema=lookup_keyspace:-@master --query="SELECT * FROM messages_message_lookup;"
+mysqlslap -c 5 --port=15306 --host=127.0.0.1 --iterations=1000 --create-schema=lookup_keyspace:-@replica --query="SELECT * FROM messages_message_lookup;"
+## SIMULATED ERRORS
+mysqlslap --port=15306 --host=127.0.0.1 --iterations=10000 --create-schema=test_keyspace:80-@master --query="SELECT name FROM messages;"
+mysqlslap --port=15306 --host=127.0.0.1 --iterations=10000 --create-schema=lookup_keyspace:-@replica --query="SELECT name FROM messages_message_lookup;"
+```
+
+Once the cluster is up and running you should be able to access:
+
+- grafana (default credentials > admin/admin) http://localhost:3030/
+- prometheus http://localhost:9000/
+- vitess control panel http://localhost:15000/

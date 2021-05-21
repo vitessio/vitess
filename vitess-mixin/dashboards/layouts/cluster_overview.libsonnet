@@ -40,10 +40,10 @@ local config = import '../../config.libsonnet';
         helpers.vtgate.getPanel(config.vtgate.panels.vtgateErrorRateByKeyspace) { gridPos: { h: 8, w: 8, x: 8, y: 14 } },
         helpers.vtgate.getPanel(config.vtgate.panels.vtgateDurationP99ByKeyspace) { gridPos: { h: 8, w: 8, x: 16, y: 14 } },
 
-        rows.keyspaceShard { gridPos: { h: 1, w: 24, x: 0, y: 22 } },
-        helpers.vttablet.getPanel(config.vttablet.panels.countServingTabletsByKeyspaceShard) { gridPos: { h: 8, w: 8, x: 0, y: 23 } },
-        helpers.mysql.getPanel(config.mysql.panels.mysqlSlowQueriesByKeyspaceShard) { gridPos: { h: 8, w: 8, x: 8, y: 23 } },
-        helpers.vttablet.getPanel(config.vttablet.panels.vttabletQueryTransactionKilledByKeyspaceShard) { gridPos: { h: 8, w: 8, x: 16, y: 23 } },
+        rows.tabletsQueries { gridPos: { h: 1, w: 24, x: 0, y: 22 } },
+        helpers.vttablet.getPanel(config.vttablet.panels.countServingTablets) { gridPos: { h: 8, w: 8, x: 0, y: 23 } },
+        helpers.mysql.getPanel(config.mysql.panels.mysqlSlowQueries) { gridPos: { h: 8, w: 8, x: 8, y: 23 } },
+        helpers.vttablet.getPanel(config.vttablet.panels.vttabletQueryTransactionKilled) { gridPos: { h: 8, w: 8, x: 16, y: 23 } },
 
         rows.serviceRestart { gridPos: { h: 1, w: 24, x: 0, y: 31 } },
         helpers.vtgate.getPanel(config.vtgate.panels.vtgateRestart) { gridPos: { h: 8, w: 8, x: 0, y: 32 } },

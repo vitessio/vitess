@@ -12,23 +12,11 @@ local template = grafana.template;
     auto_min='1m'
   ),
 
-  keyspace::
-    template.new(
-      'keyspace',
-      '%(dataSource)s' % config._config,
-      'query_result(sum by(keyspace)(vttablet_build_number{%(vttabletSelector)s}))',
-      regex='.*keyspace="(.*)".*',
-      label='Keyspace',
-      refresh='load',
-      includeAll=false,
-      sort=1,
-    ),
-
   table::
     template.new(
       'table',
       '%(dataSource)s' % config._config,
-      'query_result(sum by(table)(vitess_mixin:vtgate_queries_processed_by_table:irate1m{keyspace="$keyspace"}))',
+      'query_result(sum by(table)(vitess_mixin:vtgate_queries_processed_by_table:rate1m{keyspace="$keyspace"}))',
       regex='.*table="(.*)".*',
       label='Table',
       refresh='time',
@@ -37,57 +25,27 @@ local template = grafana.template;
       allValues='.*',
     ),
 
-  host::
+  hostVtgate::
     template.new(
       'host',
       '%(dataSource)s' % config._config,
-      'label_values(vtgate_build_number{ instance)',
-      regex='',
+      'label_values(vtgate_build_number, instance)',
       label='Host(s)',
       refresh='time',
-      includeAll=true,
       multi=true,
       allValues='.*',
     ),
 
-  hostByKeyspaceShard::
+  hostVttablet::
     template.new(
       'host',
       '%(dataSource)s' % config._config,
-      'label_values(vttablet_build_number{keyspace="$keyspace", shard=~"$shard"}, instance)',
-      regex='',
+      'label_values(vttablet_build_number{}, instance)',
       label='Host(s)',
       refresh='time',
-      includeAll=true,
       multi=true,
       allValues='.*',
       sort=1
     ),
 
-  shard::
-    template.new(
-      'shard',
-      '%(dataSource)s' % config._config,
-      'label_values(vttablet_build_number{keyspace="$keyspace"}, shard)',
-      regex='',
-      label='Shard',
-      refresh='time',
-      includeAll=true,
-      sort=1,
-      allValues='.*'
-    ),
-
-  shard_multi::
-    template.new(
-      'shard',
-      '%(dataSource)s' % config._config,
-      'label_values(vttablet_build_number{keyspace="$keyspace"}, shard)',
-      regex='',
-      label='Shard',
-      refresh='time',
-      multi=true,
-      includeAll=false,
-      sort=1,
-      allValues='.*'
-    ),
 }

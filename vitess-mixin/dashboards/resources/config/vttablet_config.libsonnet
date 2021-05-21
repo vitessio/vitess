@@ -4,6 +4,7 @@ local config = import '../../../config.libsonnet';
 local configuration_templates = import './configuration_templates.libsonnet';
 local vitess_ct = configuration_templates.prometheus_vitess;
 
+// TODO: move local template variables to ./configurations_templates.libsonnet.
 {
   panels: {
     //  ____                  _
@@ -13,7 +14,6 @@ local vitess_ct = configuration_templates.prometheus_vitess;
     // |_|   \__,_|_| |_|\___|_|___/
 
     // TODO: add description for each panel.
-    // TODO: move local template variables to ./configurations_templates.libsonnet.
 
     //Override default_panel values with custom configuration
     local vttablet_queries_killed = vitess_ct.panel.legend_min_max_avg + vitess_ct.panel.null_as_zeros,
@@ -33,1208 +33,560 @@ local vitess_ct = configuration_templates.prometheus_vitess;
     },
 
     //TODO Create a recording rule.
-    countServingTabletsByKeyspaceShard: panel_template {
-      title: '# of serving tablets (by keyspace/shard)',
-      legend_sortDesc: false,
-      shared_tooltip: false,
-      sort: 'increasing',
-      targets: [
-        {
-          expr:
-            |||
-              count(
-                vttablet_tablet_server_state{
-                  %(vttabletSelector)s,
-                  name="SERVING"
-                }
-              ) by (keyspace, shard)
-            |||
-            % config._config,
-          legendFormat: '{{keyspace}}/{{shard}}',
-        },
-      ],
-    },
+    countServingTablets:
+      panel_template {
+        title: '# of serving tablets',
+        legend_sortDesc: false,
+        shared_tooltip: false,
+        sort: 'increasing',
+        targets: [
+          {
+            expr:
+              |||
+                count(
+                  vttablet_tablet_server_state{
+                    %(vttabletSelector)s,
+                    name="SERVING"
+                  }
+                )
+              |||
+              % config._config,
+            legendFormat: 'SERVING',
+          },
+        ],
+      },
 
-    vttabletRequestsByTable: panel_template {
-      title: 'Requests (by table)',
-      format: 'rps',
-      targets: [
-        {
-          expr:
-            |||
-              sum by (table)(
-                vitess_mixin:vttablet_query_counts_by_keyspace_table:irate1m{
-                  keyspace="$keyspace",
-                  table=~"$table"
-                }
-              )
-              or
-              vector(0)
-            |||,
-          legendFormat: '{{table}}',
-        },
-      ],
-    },
-
-    vttabletRequestsByPlanType: panel_template {
-      title: 'Requests (by plan type)',
-      format: 'rps',
-      targets: [
-        {
-          expr:
-            |||
-              sum by (plan)(
-                vitess_mixin:vttablet_query_counts_by_keyspace_table_plan:irate1m{
-                  keyspace="$keyspace",
-                  table=~"$table"
-                }
-              )
-              or
-              vector(0)
-            |||,
-          legendFormat: '{{plan}}',
-        },
-      ],
-    },
+    vttabletRequestsByTable:
+      panel_template
+      + vitess_ct.panel.null_as_zeros {
+        title: 'Requests (by table)',
+        format: 'rps',
+        targets: [
+          {
+            expr:
+              |||
+                sum by (table)(
+                  vitess_mixin:vttablet_query_counts_by_keyspace_table:rate1m{
+                    table=~"$table"
+                  }
+                )
+                or
+                vector(0)
+              |||,
+            legendFormat: '{{table}}',
+          },
+        ],
+      },
 
     //TODO CREATE A RECORDING RULE FOR THIS PROMEHTEUS TARGET
-    vttabletRequestsByPlanTypeFilteredByShardKeyspace: panel_template {
-      title: 'Requests (by plan type)',
-      format: 'ops',
-      targets: [
-        {
-          expr:
-            |||
-              sum by (plan_type)(
-                rate(
-                  vttablet_queries_count{
-                    keyspace="$keyspace",
-                    shard=~"$shard",
-                    instance=~"$host"
-                  } [5m]
+    vttabletRequestsByPlanType:
+      panel_template
+      + vitess_ct.panel.null_as_zeros {
+        title: 'Requests (by plan type)',
+        format: 'ops',
+        nullPointMode: 'null as zero',
+        targets: [
+          {
+            expr:
+              |||
+                sum by (plan_type)(
+                  rate(
+                    vttablet_queries_count{
+                      instance=~"$host"
+                    } [1m]
+                  )
                 )
-              )
-            |||,
-          legendFormat: '{{plan_type}}',
-        },
-      ],
-    },
-
-    vttabletRequestsByKeyspace: panel_template {
-      title: 'Requests',
-      format: 'ops',
-      legend_current: false,
-      legend_avg: true,
-      targets: [
-        {
-          expr:
-            |||
-              sum by (keyspace)(
-                vitess_mixin:vttablet_query_counts_by_keyspace:irate1m{
-                  keyspace="$keyspace"
-                }
-              )
-            |||,
-          legendFormat: '{{keyspace}}',
-        },
-      ],
-    },
+              |||,
+            legendFormat: '{{plan_type}}',
+          },
+        ],
+      },
 
     //TODO CREATE A RECORDING RULE FOR THIS PROM TARGET
-    vttabletRequestsByInstance: panel_template {
-      title: 'Requests',
-      format: 'ops',
-      legend_current: false,
-      legend_avg: true,
-      legend_sort: 'avg',
-      targets: [
-        {
-          expr:
-            |||
-              sum  by (instance)(
-                rate(
-                  vttablet_query_counts{
-                    keyspace="$keyspace",
-                    shard=~"$shard",
-                    instance=~"$host"
-                  }[5m]
+    vttabletRequestsByInstance:
+      panel_template
+      + vitess_ct.panel.null_as_zeros {
+        title: 'Requests',
+        format: 'ops',
+        legend_current: false,
+        legend_avg: true,
+        legend_sort: 'avg',
+        nullPointMode: 'null as zero',
+        targets: [
+          {
+            expr:
+              |||
+                sum  by (instance)(
+                  rate(
+                    vttablet_query_counts{
+                      instance=~"$host"
+                    }[1m]
+                  )
                 )
-              )
-            |||,
-          legendFormat: '{{instance}}',
-        },
-      ],
-    },
+              |||,
+            legendFormat: '{{instance}}',
+          },
+        ],
+      },
 
     //TODO CREATE A RECORDING RULE FOR THIS PROM TARGET
-    vttabletRequestsByShardFilteredByInstanceKeyspace: panel_template {
-      title: 'Requests (by shard)',
-      format: 'ops',
-      targets: [
-        {
-          expr:
-            |||
-              sum  by (shard)(
-                rate(
-                  vttablet_query_counts{
-                    keyspace="$keyspace",
-                    shard=~"$shard",
-                    instance=~"$host"
-                  }[5m]
+    vttabletRequestsByTableFilteredByInstance:
+      panel_template
+      + vitess_ct.panel.null_as_zeros {
+        title: 'Requests (by table)',
+        format: 'ops',
+        nullPointMode: 'null as zero',
+        targets: [
+          {
+            expr:
+              |||
+                sum  by (table)(
+                  rate(
+                    vttablet_query_counts{
+                      instance=~"$host"
+                    }[1m]
+                  )
                 )
-              )
-            |||,
-          legendFormat: '{{shard}}',
-          intervalFactor: 1,
-        },
-      ],
-    },
+              |||,
+            legendFormat: '{{table}}',
+            intervalFactor: 1,
+          },
+        ],
+      },
 
     //TODO CREATE A RECORDING RULE FOR THIS PROM TARGET
-    vttabletRequestsByTableFilteredByInstanceShardKeyspace: panel_template {
-      title: 'Requests (by table)',
-      format: 'ops',
-      targets: [
-        {
-          expr:
-            |||
-              sum  by (table)(
-                rate(
-                  vttablet_query_counts{
-                    keyspace="$keyspace",
-                    shard=~"$shard",
-                    instance=~"$host"
-                  }[5m]
-                )
-              )
-            |||,
-          legendFormat: '{{table}}',
-          intervalFactor: 1,
-        },
-      ],
-    },
-
-
-    vttabletRequestsSuccessRateFilterByKeyspace: panel_template {
-      title: 'Requests success rate (by keyspace)',
-      format: 'percent',
-      max: 100,
-      min: null,
-      fill: 1,
-      targets: [
-        {
-          expr:
-            |||
-              100 -
-              (
-                100
-                *
-                sum(
-                  vitess_mixin:vttablet_errors_by_keyspace:irate1m{
-                    keyspace="$keyspace"
-                  }
+    vttabletErrorRateByInstance:
+      panel_template
+      + vitess_ct.panel.null_as_zeros {
+        title: 'Error rate',
+        format: 'percentunit',
+        legend_current: false,
+        legend_avg: true,
+        legend_sort: 'avg',
+        targets: [
+          {
+            expr:
+              |||
+                sum by (instance)(
+                  rate(
+                    vttablet_query_error_counts{
+                      instance=~"$host"
+                    }[1m]
+                  )
                 )
                 /
-                sum(
-                  vitess_mixin:vttablet_query_counts_by_keyspace:irate1m{
-                    keyspace="$keyspace"
-                  }
-                )
-              )
-            |||,
-          legendFormat: 'Success rate',
-        },
-      ],
-    },
-
-    vttabletErrorRateByKeyspace: panel_template {
-      title: 'Error rate',
-      format: 'percentunit',
-      legend_current: false,
-      legend_avg: true,
-      legend_sort: 'avg',
-      nullPointMode: 'null as zero',
-      targets: [
-        {
-          expr:
-            |||
-              sum by (keyspace)(
-                vitess_mixin:vttablet_query_error_counts_by_keyspace_table:irate1m{
-                  keyspace="$keyspace"
-                })
-              /
-              (
-                sum by (keyspace)(
-                  vitess_mixin:vttablet_query_error_counts_by_keyspace_table:irate1m{
-                    keyspace="$keyspace"
-                  }
-                )
-                +
-                sum by (keyspace)(
-                  vitess_mixin:vttablet_query_counts_by_keyspace:irate1m{
-                    keyspace="$keyspace"
-                  }
-                )
-              )
-            |||,
-          legendFormat: '{{keyspace}}',
-        },
-      ],
-    },
-
-    //TODO CREATE A RECORDING RULE FOR THIS PROM TARGET
-    vttabletErrorRateByInstance: panel_template {
-      title: 'Error rate',
-      format: 'percentunit',
-      legend_current: false,
-      legend_avg: true,
-      legend_sort: 'avg',
-      nullPointMode: 'null as zero',
-      targets: [
-        {
-          expr:
-            |||
-              sum by (instance)(
-                rate(
-                  vttablet_query_error_counts{
-                    keyspace="$keyspace",
-                    shard=~"$shard",
-                    instance=~"$host"
-                  }[5m]
-                ) > 0
-              )
-              /
-              (
-                sum by (instance)(
-                  rate(
-                    vttablet_query_error_counts{
-                      keyspace="$keyspace",
-                      shard=~"$shard",
-                      instance=~"$host"
-                    }[5m]
-                  ) > 0
-                )
-                +
-                sum by (instance)(
-                  rate(
-                    vttablet_query_counts{
-                      keyspace="$keyspace",
-                      shard=~"$shard",
-                      instance=~"$host"
-                    }[5m]
+                (
+                  sum by (instance)(
+                    rate(
+                      vttablet_query_error_counts{
+                        instance=~"$host"
+                      }[1m]
+                    )
+                  )
+                  +
+                  sum by (instance)(
+                    rate(
+                      vttablet_query_counts{
+                        instance=~"$host"
+                      }[1m]
+                    )
                   )
                 )
-              )
-            |||,
-          legendFormat: '{{instance}}',
-        },
-      ],
-    },
+              |||,
+            legendFormat: '{{instance}}',
+          },
+        ],
+      },
 
-    vttabletErrorRateByPlanFilteredByInstanceShardKeyspace: panel_template {
-      title: 'Error rate (by plan type)',
-      format: 'percentunit',
-      legend_current: false,
-      legend_avg: true,
-      legend_sort: 'avg',
-      nullPointMode: 'null as zero',
-      targets: [
-        {
-          expr:
-            |||
-              sum by (plan)(
-                rate(
-                  vttablet_query_error_counts{
-                    keyspace="$keyspace",
-                    shard=~"$shard",
-                    instance=~"$host"
-                  }[5m]
-                ) > 0
-              )
-              /
-              (
+    vttabletErrorRateByPlanFilteredByInstance:
+      panel_template
+      + vitess_ct.panel.null_as_zeros {
+        title: 'Error rate (by plan type)',
+        format: 'percentunit',
+        legend_current: false,
+        legend_avg: true,
+        legend_sort: 'avg',
+        targets: [
+          {
+            expr:
+              |||
                 sum by (plan)(
                   rate(
                     vttablet_query_error_counts{
-                      keyspace="$keyspace",
-                      shard=~"$shard",
                       instance=~"$host"
-                    }[5m]
-                  ) > 0
-                )
-                +
-                sum by (plan)(
-                  rate(
-                    vttablet_query_counts{
-                      keyspace="$keyspace",
-                      shard=~"$shard",
-                      instance=~"$host"
-                    }[5m]
+                    }[1m]
                   )
                 )
-              )
-            |||,
-          legendFormat: '{{plan}}',
-        },
-      ],
-    },
-
-    //TODO CREATE A RECORDING RULE FOR THIS PROM TARGET
-    vttabletErrorRateByShardFilteredByInstanceKeyspace: panel_template {
-      title: 'Error rate (by shard)',
-      format: 'percentunit',
-      legend_current: false,
-      legend_avg: true,
-      legend_sort: 'avg',
-      nullPointMode: 'null as zero',
-      targets: [
-        {
-          expr:
-            |||
-              sum by (shard)(
-                rate(
-                  vttablet_query_error_counts{
-                    keyspace="$keyspace",
-                    shard=~"$shard",
-                    instance=~"$host"
-                  }[5m]
-                ) > 0
-              )
-              /
-              (
-                sum by (shard)(
-                  rate(
-                    vttablet_query_error_counts{
-                      keyspace="$keyspace",
-                      shard=~"$shard",
-                      instance=~"$host"
-                    }[5m]
-                  ) > 0
-                )
-                +
-                sum by (shard)(
-                  rate(
-                    vttablet_query_counts{
-                      keyspace="$keyspace",
-                      shard=~"$shard",
-                      instance=~"$host"
-                    }[5m]
+                /
+                (
+                  sum by (plan)(
+                    rate(
+                      vttablet_query_error_counts{
+                        instance=~"$host"
+                      }[1m]
+                    )
+                  )
+                  +
+                  sum by (plan)(
+                    rate(
+                      vttablet_query_counts{
+                        instance=~"$host"
+                      }[1m]
+                    )
                   )
                 )
-              )
-            |||,
-          legendFormat: '{{shard}}',
-        },
-      ],
-    },
+              |||,
+            legendFormat: '{{plan}}',
+          },
+        ],
+      },
 
     //TODO CREATE A RECORDING RULE FOR THIS PROM TARGET
-    vttabletErrorRateByTableFilteredByInstanceShardKeyspace: panel_template {
-      title: 'Error rate (by table)',
-      format: 'percentunit',
-      legend_current: false,
-      legend_avg: true,
-      legend_sort: 'avg',
-      nullPointMode: 'null as zero',
-      targets: [
-        {
-          expr:
-            |||
-              sum by (table)(
-                rate(
-                  vttablet_query_error_counts{
-                    keyspace="$keyspace",
-                    shard=~"$shard",
-                    instance=~"$host"
-                  }[5m]
-                ) > 0
-              )
-              /
-              (
+    vttabletErrorRateByTableFilteredByInstance:
+      panel_template
+      + vitess_ct.panel.null_as_zeros {
+        title: 'Error rate (by table)',
+        format: 'percentunit',
+        legend_current: false,
+        legend_avg: true,
+        legend_sort: 'avg',
+        targets: [
+          {
+            expr:
+              |||
                 sum by (table)(
                   rate(
                     vttablet_query_error_counts{
-                      keyspace="$keyspace",
-                      shard=~"$shard",
                       instance=~"$host"
-                    }[5m]
-                  ) > 0
-                )
-                +
-                sum by (table)(
-                  rate(
-                    vttablet_query_counts{
-                      keyspace="$keyspace",
-                      shard=~"$shard",
-                      instance=~"$host"
-                    }[5m]
+                    }[1m]
                   )
                 )
-              )
-            |||,
-          legendFormat: '{{table}}',
-        },
-      ],
-    },
-
-    vttabletErrorByTablesFilterByKeyspaceTables: panel_template {
-      title: 'Errors (by table)',
-      format: 'cps',
-      targets: [
-        {
-          expr:
-            |||
-              sum  by (table)(
-                vitess_mixin:vttablet_query_error_counts_by_keyspace_table:irate1m{
-                  keyspace="$keyspace",
-                  table=~"$table"
-                }
-              )
-            |||,
-          legendFormat: '{{table}}',
-        },
-      ],
-    },
-
-    vttabletErrorByPlanFilterByKeyspaceTables: panel_template {
-      title: 'Errors (by plan type/table)',
-      format: 'cps',
-      targets: [
-        {
-          expr:
-            |||
-              sum  by (plan,table)(
-                vitess_mixin:vttablet_query_error_counts_by_keyspace_table_plan:irate1m{
-                  keyspace="$keyspace",
-                  table=~"$table"
-                }
-              )
-            |||,
-          legendFormat: '{{plan}} / {{table}}',
-        },
-      ],
-    },
-
-    vttabletErrorByShardFilterByKeyspaceTables: panel_template {
-      title: 'Errors (by shard/table)',
-      format: 'cps',
-      targets: [
-        {
-          expr:
-            |||
-              sum by (shard,table)(
-                vitess_mixin:vttablet_query_error_counts_by_keyspace_table_shard:irate1m{
-                  keyspace="$keyspace",
-                  table=~"$table"
-                }
-              )
-            |||,
-          legendFormat: '{{shard}} / {{table}}',
-        },
-      ],
-    },
-
-    //Use recording rule
-    vttabletRowsReturnedByTablesFilterByKeyspace: panel_template {
-      title: 'Rows returned (by table)',
-      targets: [
-        {
-          expr:
-            |||
-              sum by (table)(
-                vitess_mixin:vttablet_query_row_counts_by_keyspace_table:rate1m{
-                  keyspace="$keyspace",
-                  table=~"$table"
-                }
-              )
-            |||,
-          legendFormat: '{{table}}',
-        },
-      ],
-    },
-
-    vttabletRowsReturnedByPlansFilterByKeyspace: panel_template {
-      title: 'Rows returned (by plan type)',
-      targets: [
-        {
-          expr:
-            |||
-              sum by (plan)(
-                vitess_mixin:vttablet_query_row_counts_by_keyspace_table_plan:rate1m{
-                  keyspace="$keyspace",
-                  table=~"$table"
-                }
-              )
-            |||,
-          legendFormat: '{{plan}}',
-        },
-      ],
-    },
-
-    vttabletRowsReturnedByShardFilterByKeyspace: panel_template {
-      title: 'Rows returned (by shard)',
-      targets: [
-        {
-          expr:
-            |||
-              sum by (shard)(
-                vitess_mixin:vttablet_query_row_counts_by_keyspace_table_shard:rate1m{
-                  keyspace="$keyspace",
-                  table=~"$table"
-                }
-              )
-            |||,
-          legendFormat: '{{shard}}',
-        },
-      ],
-    },
-
-    //TODO use recording rule `vitess_mixin_79` when deployed.
-    vttabletRowsReturnedByTableFilteredByKeyspaceShardInstance: self.vttabletRowsReturnedByTablesFilterByKeyspace {
-      targets: [
-        {
-          expr:
-            |||
-              sum by (table) (
-                rate(vttablet_query_row_counts{
-                    keyspace=~"$keyspace",
-                    shard=~"$shard",
-                    instance=~"$host"
-                  }[1m]
+                /
+                (
+                  sum by (table)(
+                    rate(
+                      vttablet_query_error_counts{
+                        instance=~"$host"
+                      }[1m]
+                    )
+                  )
+                  +
+                  sum by (table)(
+                    rate(
+                      vttablet_query_counts{
+                        instance=~"$host"
+                      }[1m]
+                    )
+                  )
                 )
-              )
-            |||,
-          legendFormat: '{{table}}',
-        },
-      ],
-    },
+              |||,
+            legendFormat: '{{table}}',
+          },
+        ],
+      },
 
-    //TODO use recording rule `vitess_mixin_78` when deployed.
-    vttabletRowsReturnedByPlansFilterByKeyspaceShardInstance: self.vttabletRowsReturnedByPlansFilterByKeyspace {
-      targets: [
-        {
-          expr:
-            |||
-              sum by (plan) (
-                rate(vttablet_query_row_counts{
-                    keyspace=~"$keyspace",
-                    shard=~"$shard",
-                    instance=~"$host"
-                  }[1m]
+    vttabletRowsReturnedByTableFilteredByInstance:
+      panel_template
+      + vitess_ct.panel.null_as_zeros {
+        title: 'Rows Returned (by table)',
+        targets: [
+          {
+            expr:
+              |||
+                sum by (table) (
+                  rate(
+                    vttablet_query_row_counts{
+                      instance=~"$host"
+                    }[1m]
+                  )
                 )
-              )
-            |||,
-          legendFormat: '{{plan}}',
-        },
-      ],
-    },
+              |||,
+            legendFormat: '{{table}}',
+          },
+        ],
+      },
 
-    vttabletQueryDurationAvg: panel_template {
-      title: 'Query duration (avg)',
-      format: 's',
-      targets: [
-        {
-          expr:
-            |||
-              sum(
-                vitess_mixin:vttablet_queries_sum_by_keyspace:rate1m{
-                  keyspace="$keyspace"
-                }
-              )
-              /
-              sum (
-                vitess_mixin:vttablet_queries_count_by_keyspace:rate1m{
-                  keyspace="$keyspace"
-                }
-              )
-            |||,
-          legendFormat: 'Total',
-        },
-        {
-          expr:
-            |||
-              sum by (shard)(
-                vitess_mixin:vttablet_queries_sum_by_keyspace_shard:rate1m{
-                  keyspace="$keyspace"
-                }
-              )
-              /
-              sum by(shard)(
-                vitess_mixin:vttablet_queries_count_by_keyspace_shard:rate1m{
-                  keyspace="$keyspace"
-                }
-              )
-            |||,
-          legendFormat: '{{shard}}',
-        },
-      ],
-    },
-
-    vttabletQueryDurationP50: panel_template {
-      title: 'Query duration (p50)',
-      format: 's',
-      targets: [
-        {
-          expr:
-            |||
-              histogram_quantile(
-                0.50,
-                sum by (le)(
-                  vitess_mixin:vttablet_queries_bucket_by_keyspace:rate1m{
-                    keyspace="$keyspace"
-                  }
+    vttabletRowsReturnedByPlansFilterByInstance:
+      panel_template
+      + vitess_ct.panel.null_as_zeros {
+        title: 'Rows Returned (by plan)',
+        targets: [
+          {
+            expr:
+              |||
+                sum by (plan) (
+                  rate(
+                    vttablet_query_row_counts{
+                      instance=~"$host"
+                    }[1m]
+                  )
                 )
-              )
-            |||,
-          legendFormat: 'Total',
-        },
-        {
-          expr:
-            |||
-              histogram_quantile(
-                0.50,
-                sum by (shard, le)(
-                  vitess_mixin:vttablet_queries_bucket_by_keyspace_shard:rate1m{
-                    keyspace="$keyspace"
-                  }
-                )
-              )
-            |||,
-          legendFormat: '{{shard}}',
-        },
-      ],
-    },
-
-    vttabletQueryDurationP95: panel_template {
-      title: 'Query duration (p95)',
-      format: 's',
-      targets: [
-        {
-          expr:
-            |||
-              histogram_quantile(
-                0.95,
-                sum by (le)(
-                  vitess_mixin:vttablet_queries_bucket_by_keyspace:rate1m{
-                    keyspace="$keyspace"
-                  }
-                )
-              )
-            |||,
-          legendFormat: 'Total',
-        },
-        {
-          expr:
-            |||
-              histogram_quantile(
-                0.95,
-                sum by (shard, le)(
-                  vitess_mixin:vttablet_queries_bucket_by_keyspace_shard:rate1m{
-                    keyspace="$keyspace"
-                  }
-                )
-              )
-            |||,
-          legendFormat: '{{shard}}',
-        },
-      ],
-    },
-
-    vttabletQueryDurationP999: panel_template {
-      title: 'Query duration (p999)',
-      format: 's',
-
-      targets: [
-        {
-          expr:
-            |||
-              histogram_quantile(
-                0.999,
-                sum by (le)(
-                  vitess_mixin:vttablet_queries_bucket_by_keyspace:rate1m{
-                    keyspace="$keyspace"
-                  }
-                )
-              )
-            |||,
-          legendFormat: 'Total',
-        },
-        {
-          expr:
-            |||
-              histogram_quantile(
-                0.999,
-                sum by (shard, le)(
-                  vitess_mixin:vttablet_queries_bucket_by_keyspace_shard:rate1m{
-                    keyspace="$keyspace"
-                  }
-                )
-              )
-            |||,
-          legendFormat: '{{shard}}',
-        },
-      ],
-    },
-
-    vttabletQueryDurationP99ByKeyspace: panel_template {
-      title: 'Duration (p99)',
-      format: 's',
-      legend_current: false,
-      legend_avg: true,
-      legend_sort: 'avg',
-      targets: [
-        {
-          expr:
-            |||
-              histogram_quantile(
-                0.99,sum by(keyspace,le)(
-                  vitess_mixin:vttablet_queries_bucket_by_keyspace:rate1m{
-                    keyspace="$keyspace"
-                  }
-                )
-              )
-            |||,
-          legendFormat: '{{keyspace}}',
-        },
-      ],
-    },
+              |||,
+            legendFormat: '{{plan}}',
+          },
+        ],
+      },
 
     //TODO DEDUPLICATE LEGEND CONFIGURATION FOR QUERY DURATION PANELS
     //TODO CREATE A RECORDING RULE FOR THIS PROMETHEUS TARGET
-    vttabletQueryDurationAvgByInstance: panel_template {
-      title: 'Query Duration (avg)',
-      format: 's',
-      legend_current: false,
-      legend_avg: true,
-      legend_sort: 'max',
-      targets: [
-        {
-          expr:
-            |||
-              sum by(instance)(
-                rate(
-                  vttablet_queries_sum{
-                    keyspace="$keyspace",
-                    shard=~"$shard",
-                    instance=~"$host"
-                  }[5m]
-                )
-              )
-              /
-              sum by(instance)(
-                rate(
-                  vttablet_queries_count{
-                    keyspace="$keyspace",
-                    shard=~"$shard",
-                    instance=~"$host"
-                  }[5m]
-                )
-              )
-            |||,
-          legendFormat: '{{instance}}',
-        },
-      ],
-    },
-
-    //TODO CREATE A RECORDING RULE FOR THIS PROMETHEUS TARGET
-    vttabletQueryDurationP50ByInstance: panel_template {
-      title: 'Query Duration (p50)',
-      format: 's',
-      legend_current: false,
-      legend_avg: true,
-      legend_sort: 'max',
-      targets: [
-        {
-          expr:
-            |||
-              histogram_quantile(
-                0.50,sum by(instance,le)(
+    vttabletQueryDurationAvgByInstance:
+      panel_template
+      + vitess_ct.panel.null_as_zeros {
+        title: 'Query Duration (avg)',
+        format: 's',
+        legend_current: false,
+        legend_avg: true,
+        legend_sort: 'max',
+        targets: [
+          {
+            expr:
+              |||
+                sum by(instance)(
                   rate(
-                    vttablet_queries_bucket{
-                      keyspace="$keyspace",
-                      shard=~"$shard",
+                    vttablet_queries_sum{
                       instance=~"$host"
-                    }[5m]
+                    }[1m]
                   )
                 )
-              )
-            |||,
-          legendFormat: '{{instance}}',
-        },
-      ],
-    },
-
-    //TODO CREATE A RECORDING RULE FOR THIS PROMETHEUS TARGET
-    vttabletQueryDurationP95ByInstance: panel_template {
-      title: 'Query Duration (p95)',
-      format: 's',
-      legend_current: false,
-      legend_avg: true,
-      legend_sort: 'max',
-      targets: [
-        {
-          expr:
-            |||
-              histogram_quantile(
-                0.95,sum by(instance,le)(
+                /
+                sum by(instance)(
                   rate(
-                    vttablet_queries_bucket{
-                      keyspace="$keyspace",
-                      shard=~"$shard",
+                    vttablet_queries_count{
                       instance=~"$host"
-                    }[5m]
+                    }[1m]
                   )
                 )
-              )
-            |||,
-          legendFormat: '{{instance}}',
-        },
-      ],
-    },
+              |||,
+            legendFormat: '{{instance}}',
+          },
+        ],
+      },
 
     //TODO CREATE A RECORDING RULE FOR THIS PROMETHEUS TARGET
-    vttabletQueryDurationP99ByInstance: panel_template {
-      title: 'Duration (p99)',
-      format: 's',
-      legend_current: false,
-      legend_avg: true,
-      legend_sort: 'avg',
-      targets: [
-        {
-          expr:
-            |||
-              histogram_quantile(
-                0.99,sum by(instance,le)(
-                  rate(
-                    vttablet_queries_bucket{
-                      keyspace="$keyspace",
-                      shard=~"$shard",
-                      instance=~"$host"
-                    }[5m]
+    vttabletQueryDurationP50ByInstance:
+      panel_template
+      + vitess_ct.panel.null_as_zeros {
+        title: 'Query Duration (p50)',
+        format: 's',
+        legend_current: false,
+        legend_avg: true,
+        legend_sort: 'max',
+        targets: [
+          {
+            expr:
+              |||
+                histogram_quantile(
+                  0.50,sum by(instance,le)(
+                    rate(
+                      vttablet_queries_bucket{
+                        instance=~"$host"
+                      }[1m]
+                    )
                   )
                 )
-              )
-            |||,
-          legendFormat: '{{instance}}',
-        },
-      ],
-    },
+              |||,
+            legendFormat: '{{instance}}',
+          },
+        ],
+      },
 
     //TODO CREATE A RECORDING RULE FOR THIS PROMETHEUS TARGET
-    vttabletQueryDurationP99ByPlan: panel_template {
-      title: 'Duration p99 (by plan type)',
-      format: 's',
-      legend_current: false,
-      legend_avg: true,
-      legend_sort: 'avg',
-      targets: [
-        {
-          expr:
-            |||
-              histogram_quantile(
-                0.99,sum by(plan_type,le)(
-                  rate(
-                    vttablet_queries_bucket{
-                      keyspace="$keyspace",
-                      shard=~"$shard",
-                      instance=~"$host"
-                    }[5m]
+    vttabletQueryDurationP95ByInstance:
+      panel_template
+      + vitess_ct.panel.null_as_zeros {
+        title: 'Query Duration (p95)',
+        format: 's',
+        legend_current: false,
+        legend_avg: true,
+        legend_sort: 'max',
+        targets: [
+          {
+            expr:
+              |||
+                histogram_quantile(
+                  0.95,sum by(instance,le)(
+                    rate(
+                      vttablet_queries_bucket{
+                        instance=~"$host"
+                      }[1m]
+                    )
                   )
                 )
-              )
-            |||,
-          legendFormat: '{{plan_type}}',
-        },
-      ],
-    },
+              |||,
+            legendFormat: '{{instance}}',
+          },
+        ],
+      },
 
     //TODO CREATE A RECORDING RULE FOR THIS PROMETHEUS TARGET
-    vttabletQueryDurationP99ByShard: panel_template {
-      title: 'Duration p99 (by shard)',
-      format: 's',
-      legend_current: false,
-      legend_avg: true,
-      legend_sort: 'avg',
-      targets: [
-        {
-          expr:
-            |||
-              histogram_quantile(
-                0.99,sum by(shard,le)(
-                  rate(
-                    vttablet_queries_bucket{
-                      keyspace="$keyspace",
-                      shard=~"$shard",
-                      instance=~"$host"
-                    }[5m]
+    vttabletQueryDurationP99ByInstance:
+      panel_template
+      + vitess_ct.panel.null_as_zeros {
+        title: 'Duration (p99)',
+        format: 's',
+        legend_current: false,
+        legend_avg: true,
+        legend_sort: 'avg',
+        targets: [
+          {
+            expr:
+              |||
+                histogram_quantile(
+                  0.99,sum by(instance,le)(
+                    rate(
+                      vttablet_queries_bucket{
+                        instance=~"$host"
+                      }[1m]
+                    )
                   )
                 )
-              )
-            |||,
-          legendFormat: '{{shard}}',
-        },
-      ],
-    },
+              |||,
+            legendFormat: '{{instance}}',
+          },
+        ],
+      },
 
-    vttabletTransDurationAvg: panel_template {
-      title: 'Transaction duration (avg)',
-      format: 's',
-      targets: [
-        {
-          expr:
-            |||
-              sum(
-                vitess_mixin:vttablet_transactions_sum_by_keyspace:rate1m{
-                  keyspace="$keyspace"
-                }
-              )
-              /
-              sum (
-                vitess_mixin:vttablet_transactions_count_by_keyspace:rate1m{
-                  keyspace="$keyspace"
-                }
-              )
-            |||,
-          legendFormat: 'Total',
-        },
-        {
-          expr:
-            |||
-              sum by (shard)(
-                vitess_mixin:vttablet_transactions_sum_by_keyspace_shard:rate1m{
-                  keyspace="$keyspace"
-                }
-              )
-              /
-              sum by (shard)(
-                vitess_mixin:vttablet_transactions_count_by_keyspace_shard:rate1m{
-                  keyspace="$keyspace"}
+    //TODO CREATE A RECORDING RULE FOR THIS PROMETHEUS TARGET
+    vttabletQueryDurationP99ByPlan:
+      panel_template
+      + vitess_ct.panel.null_as_zeros {
+        title: 'Duration p99 (by plan type)',
+        format: 's',
+        legend_current: false,
+        legend_avg: true,
+        legend_sort: 'avg',
+        targets: [
+          {
+            expr:
+              |||
+                histogram_quantile(
+                  0.99,sum by(plan_type,le)(
+                    rate(
+                      vttablet_queries_bucket{
+                        instance=~"$host"
+                      }[1m]
+                    )
+                  )
                 )
-            |||,
-          legendFormat: '{{shard}}',
-        },
-      ],
-    },
-
-    vttabletTransDurationP50: panel_template {
-      title: 'Transaction duration (p50)',
-      format: 's',
-      targets: [
-        {
-          expr:
-            |||
-              histogram_quantile(
-                0.50,
-                sum by (le)(
-                  vitess_mixin:vttablet_transactions_bucket_by_keyspace:rate1m{
-                    keyspace="$keyspace"
-                  }
-                )
-              )
-            |||,
-          legendFormat: 'Total',
-        },
-        {
-          expr:
-            |||
-              histogram_quantile(
-                0.50,
-                sum by (le,shard)(
-                  vitess_mixin:vttablet_transactions_bucket_by_keyspace_shard:rate1m{
-                    keyspace="$keyspace"
-                  }
-                )
-              )
-            |||,
-          legendFormat: '{{shard}}',
-        },
-      ],
-    },
-
-    vttabletTransDurationP95: panel_template {
-      title: 'Transaction duration (p95)',
-      format: 's',
-      targets: [
-        {
-          expr:
-            |||
-              histogram_quantile(
-                0.95,
-                sum by (le)(
-                  vitess_mixin:vttablet_transactions_bucket_by_keyspace:rate1m{
-                    keyspace="$keyspace"
-                  }
-                )
-              )
-            |||,
-          legendFormat: 'Total',
-        },
-        {
-          expr:
-            |||
-              histogram_quantile(
-                0.95,
-                sum by (le,shard)(
-                  vitess_mixin:vttablet_transactions_bucket_by_keyspace_shard:rate1m{
-                    keyspace="$keyspace"
-                  }
-                )
-              )
-            |||,
-          legendFormat: '{{shard}}',
-        },
-      ],
-    },
-
-    vttabletTransDurationP999: panel_template {
-      title: 'Transaction duration (p999)',
-      format: 's',
-      targets: [
-        {
-          expr:
-            |||
-              histogram_quantile(
-                0.999,
-                sum by (le)(
-                  vitess_mixin:vttablet_transactions_bucket_by_keyspace:rate1m{
-                    keyspace="$keyspace"
-                  }
-                )
-              )
-            |||,
-          legendFormat: 'Total',
-        },
-        {
-          expr:
-            |||
-              histogram_quantile(
-                0.999,
-                sum by (le,shard)(
-                  vitess_mixin:vttablet_transactions_bucket_by_keyspace_shard:rate1m{
-                    keyspace="$keyspace"
-                  }
-                )
-              )
-            |||,
-          legendFormat: '{{shard}}',
-        },
-      ],
-    },
+              |||,
+            legendFormat: '{{plan_type}}',
+          },
+        ],
+      },
 
     //TODO DEDUPLICATE LEGEND CONFIGURATION FOR TRANSACTION DURATION PANELS
     //TODO CREATE A RECORDING RULE FOR THIS PROMETHEUS TARGET
-    vttabletTransactionDurationAvgByInstance: panel_template {
-      title: 'Transaction Duration (avg)',
-      format: 's',
-      legend_current: false,
-      legend_avg: true,
-      legend_sort: 'max',
-      targets: [
-        {
-          expr:
-            |||
-              sum by(instance)(
-                rate(
-                  vttablet_transactions_sum{
-                    keyspace="$keyspace",
-                    shard=~"$shard",
-                    instance=~"$host"
-                  }[5m]
-                )
-              )
-              /
-              sum by(instance)(
-                rate(
-                  vttablet_transactions_count{
-                    keyspace="$keyspace",
-                    shard=~"$shard",
-                    instance=~"$host"
-                  }[5m]
-                )
-              )
-            |||,
-          legendFormat: '{{instance}}',
-        },
-      ],
-    },
-
-    //TODO CREATE A RECORDING RULE FOR THIS PROMETHEUS TARGET
-    vttabletTransactionDurationP50ByInstance: panel_template {
-      title: 'Transaction Duration (p50)',
-      format: 's',
-      legend_current: false,
-      legend_avg: true,
-      legend_sort: 'max',
-      targets: [
-        {
-          expr:
-            |||
-              histogram_quantile(
-                0.50,sum by(instance,le)(
+    vttabletTransactionDurationAvgByInstance:
+      panel_template
+      + vitess_ct.panel.null_as_zeros {
+        title: 'Transaction Duration (avg)',
+        format: 's',
+        legend_current: false,
+        legend_avg: true,
+        legend_sort: 'max',
+        targets: [
+          {
+            expr:
+              |||
+                sum by(instance)(
                   rate(
-                    vttablet_transactions_bucket{
-                      keyspace="$keyspace",
-                      shard=~"$shard",
+                    vttablet_transactions_sum{
                       instance=~"$host"
-                    }[5m]
+                    }[1m]
                   )
                 )
-              )
-            |||,
-          legendFormat: '{{instance}}',
-        },
-      ],
-    },
-
-    //TODO CREATE A RECORDING RULE FOR THIS PROMETHEUS TARGET
-    vttabletTransactionDurationP95ByInstance: panel_template {
-      title: 'Transaction Duration (p95)',
-      format: 's',
-      legend_current: false,
-      legend_avg: true,
-      legend_sort: 'max',
-      targets: [
-        {
-          expr:
-            |||
-              histogram_quantile(
-                0.95,sum by(instance,le)(
+                /
+                sum by(instance)(
                   rate(
-                    vttablet_transactions_bucket{
-                      keyspace="$keyspace",
-                      shard=~"$shard",
+                    vttablet_transactions_count{
                       instance=~"$host"
-                    }[5m]
+                    }[1m]
                   )
                 )
-              )
-            |||,
-          legendFormat: '{{instance}}',
-        },
-      ],
-    },
+              |||,
+            legendFormat: '{{instance}}',
+          },
+        ],
+      },
 
-    vttabletQueryTransactionKilledByKeyspaceShard: panel_template {
-      title: 'Query/Transaction killed (by keyspace/shard)',
-      format: 'cps',
-      legend_alignAsTable: true,
-      nullPointMode: 'null as zero',
-      shared_tooltip: false,
-      targets: [
-        {
-          expr:
-            |||
-              sum by (keyspace,shard)(
-                vitess_mixin:vttablet_kills_by_keyspace_shard:irate1m
-              ) > 0
-            |||,
-          legendFormat: '{{keyspace}}/{{shard}}',
-        },
-      ],
-    },
+    //TODO CREATE A RECORDING RULE FOR THIS PROMETHEUS TARGET
+    vttabletTransactionDurationP50ByInstance:
+      panel_template
+      + vitess_ct.panel.null_as_zeros {
+        title: 'Transaction Duration (p50)',
+        format: 's',
+        legend_current: false,
+        legend_avg: true,
+        legend_sort: 'max',
+        targets: [
+          {
+            expr:
+              |||
+                histogram_quantile(
+                  0.50,sum by(instance,le)(
+                    rate(
+                      vttablet_transactions_bucket{
+                        instance=~"$host"
+                      }[1m]
+                    )
+                  )
+                )
+              |||,
+            legendFormat: '{{instance}}',
+          },
+        ],
+      },
+
+    //TODO CREATE A RECORDING RULE FOR THIS PROMETHEUS TARGET
+    vttabletTransactionDurationP95ByInstance:
+      panel_template
+      + vitess_ct.panel.null_as_zeros {
+        title: 'Transaction Duration (p95)',
+        format: 's',
+        legend_current: false,
+        legend_avg: true,
+        legend_sort: 'max',
+        targets: [
+          {
+            expr:
+              |||
+                histogram_quantile(
+                  0.95,sum by(instance,le)(
+                    rate(
+                      vttablet_transactions_bucket{
+                        instance=~"$host"
+                      }[1m]
+                    )
+                  )
+                )
+              |||,
+            legendFormat: '{{instance}}',
+          },
+        ],
+      },
+
+    vttabletQueryTransactionKilled:
+      panel_template
+      + vitess_ct.panel.null_as_zeros {
+        title: 'Query/Transaction killed',
+        format: 'cps',
+        legend_alignAsTable: true,
+        shared_tooltip: false,
+        targets: [
+          {
+            expr:
+              |||
+                sum (
+                  vitess_mixin:vttablet_kills:rate1m
+                )
+              |||,
+            legendFormat: 'Killed',
+          },
+        ],
+      },
 
     vttabletRestart: {
-      title: 'vttablet (by keyspace/shard)',
+      title: 'vttablet',
       bars: true,
       datasource: '%(dataSource)s' % config._config,
       fill: 0,
@@ -1252,13 +604,13 @@ local vitess_ct = configuration_templates.prometheus_vitess;
         {
           expr:
             |||
-              sum by (keyspace,shard) (
-                vitess_mixin:process_start_time_seconds_by_keyspace_shard_job:sum5m{
+              sum by (instance) (
+                vitess_mixin:process_start_time_seconds_by_instance_job:sum5m{
                   %(vttabletSelector)s
                 }
-              ) > 0
+              )
             ||| % config._config,
-          legendFormat: '{{keyspace}}/{{shard}}',
+          legendFormat: '{{instance}}',
         },
       ],
     },
@@ -1274,8 +626,6 @@ local vitess_ct = configuration_templates.prometheus_vitess;
             |||
               sum by (instance)(
                 vttablet_conn_pool_available{
-                 keyspace='$keyspace',
-                  shard=~'$shard',
                   instance=~'$host'
                 }
               )
@@ -1296,8 +646,6 @@ local vitess_ct = configuration_templates.prometheus_vitess;
             |||
               sum by(instance) (
                 vttablet_conn_pool_active{
-                  keyspace='$keyspace',
-                  shard=~'$shard',
                   instance=~'$host'
                 }
               )
@@ -1319,10 +667,8 @@ local vitess_ct = configuration_templates.prometheus_vitess;
               sum by (instance)(
                 rate(
                   vttablet_conn_pool_idle_closed{
-                    keyspace="$keyspace",
-                    shard=~"$shard",
                     instance=~"$host"
-                  }[5m]
+                  }[1m]
                 )
               )
             |||,
@@ -1343,10 +689,8 @@ local vitess_ct = configuration_templates.prometheus_vitess;
               sum by (instance)(
                 rate(
                   vttablet_conn_pool_wait_count{
-                    keyspace='$keyspace',
-                    shard=~'$shard',
                     instance=~'$host'
-                  }[5m]
+                  }[1m]
                 )
               )
             |||,
@@ -1367,20 +711,16 @@ local vitess_ct = configuration_templates.prometheus_vitess;
               sum by (instance) (
                 rate(
                   vttablet_conn_pool_wait_time{
-                    keyspace="$keyspace",
-                    shard=~"$shard",
                     instance=~"$host"
-                  }[5m]
+                  }[1m]
                 )
               )
               /
               sum by (instance) (
                 rate(
                   vttablet_conn_pool_wait_count{
-                    keyspace="$keyspace",
-                    shard=~"$shard",
                     instance=~"$host"
-                  }[5m]
+                  }[1m]
                 )
               )
             |||,
@@ -1399,11 +739,9 @@ local vitess_ct = configuration_templates.prometheus_vitess;
         {
           expr: |||
             sum by (instance)(
-              vitess_mixin:vttablet_kills:irate1m{
-                keyspace=~"$keyspace",
-                shard=~"$shard",
+              vitess_mixin:vttablet_kills_by_instance:rate1m{
                 instance=~"$host"
-              } > 0
+              }
             )
           |||,
           legendFormat: '{{instance}}',
@@ -1412,17 +750,15 @@ local vitess_ct = configuration_templates.prometheus_vitess;
     },
 
     vttabletQueryErrorsByType: vttablet_query_errors_by_type {
-      title: 'Query errors by type',
+      title: 'Query errors (by error code)',
       description: '',
       targets: [
         {
           expr: |||
             sum by (error_code)(
-              vitess_mixin:vttablet_errors:irate1m{
-                keyspace=~"$keyspace",
-                shard=~"$shard",
+              vitess_mixin:vttablet_errors:rate1m{
                 instance=~"$host"
-              } > 0
+              }
             )
           |||,
           legendFormat: 'ErrorCode: {{error_code}}',
@@ -1441,8 +777,6 @@ local vitess_ct = configuration_templates.prometheus_vitess;
             |||
               sum by (instance)(
                 vttablet_transaction_pool_available{
-                  keyspace='$keyspace',
-                  shard=~'$shard',
                   instance=~'$host'
                 }
               )
@@ -1463,8 +797,6 @@ local vitess_ct = configuration_templates.prometheus_vitess;
             |||
               sum by(instance) (
                 vttablet_transaction_pool_active{
-                  keyspace='$keyspace',
-                  shard=~'$shard',
                   instance=~'$host'
                 }
               )
@@ -1486,10 +818,8 @@ local vitess_ct = configuration_templates.prometheus_vitess;
               sum by (instance)(
                 rate(
                   vttablet_transaction_pool_idle_closed{
-                    keyspace="$keyspace",
-                    shard=~"$shard",
                     instance=~"$host"
-                  }[5m]
+                  }[1m]
                 )
               )
             |||,
@@ -1510,10 +840,8 @@ local vitess_ct = configuration_templates.prometheus_vitess;
               sum by (instance)(
                 rate(
                   vttablet_transaction_pool_wait_count{
-                    keyspace='$keyspace',
-                    shard=~'$shard',
                     instance=~'$host'
-                  }[5m]
+                  }[1m]
                 )
               )
             |||,
@@ -1534,20 +862,16 @@ local vitess_ct = configuration_templates.prometheus_vitess;
               sum by (instance) (
                 rate(
                   vttablet_transaction_pool_wait_time{
-                    keyspace="$keyspace",
-                    shard=~"$shard",
                     instance=~"$host"
-                  }[5m]
+                  }[1m]
                 )
               )
               /
               sum by (instance) (
                 rate(
                   vttablet_transaction_pool_wait_count{
-                    keyspace="$keyspace",
-                    shard=~"$shard",
                     instance=~"$host"
-                  }[5m]
+                  }[1m]
                 )
               )
             |||,
@@ -1566,8 +890,6 @@ local vitess_ct = configuration_templates.prometheus_vitess;
               sum by(instance)(
                 rate(
                   go_gc_duration_seconds_count{
-                    keyspace=~"$keyspace", 
-                    shard=~"$shard", 
                     instance=~"$host"
                   }[1m]
                 )
@@ -1590,8 +912,6 @@ local vitess_ct = configuration_templates.prometheus_vitess;
               sum by(instance)(
                 rate(
                   go_gc_duration_seconds_count{
-                    keyspace=~"$keyspace", 
-                    shard=~"$shard", 
                     instance=~"$host"
                   }[1m]
                 )
@@ -1612,8 +932,6 @@ local vitess_ct = configuration_templates.prometheus_vitess;
               sum by(quantile)(
                 rate(
                   go_gc_duration_seconds{
-                    keyspace=~"$keyspace", 
-                    shard=~"$shard", 
                     instance=~"$host"
                   }[1m]
                 )
@@ -1626,7 +944,7 @@ local vitess_ct = configuration_templates.prometheus_vitess;
     },
 
     //TODO CREATE A RECORDING RULE FOR THIS PROMETHEUS TARGET
-    vttabletMysqlTimeAvgFilteredByKeyspaceShardInstance: vitess_ct.panel.mysql_timings {
+    vttabletMysqlTimeAvgFilteredByInstance: vitess_ct.panel.mysql_timings {
       title: 'MySQL time (avg)',
       targets: [
         {
@@ -1635,8 +953,6 @@ local vitess_ct = configuration_templates.prometheus_vitess;
               sum by (instance) (
                 rate(
                   vttablet_mysql_sum{
-                    keyspace=~"$keyspace",
-                    shard=~"$shard",
                     instance=~"$host"
                   }[1m]
                 )
@@ -1645,8 +961,6 @@ local vitess_ct = configuration_templates.prometheus_vitess;
               sum by (instance) (
                 rate(
                   vttablet_mysql_count{
-                    keyspace=~"$keyspace",
-                    shard=~"$shard",
                     instance=~"$host"
                   }[1m]
                 )
@@ -1658,7 +972,7 @@ local vitess_ct = configuration_templates.prometheus_vitess;
     },
 
     //TODO CREATE A RECORDING RULE FOR THIS PROMETHEUS TARGET
-    vttabletMysqlExecTimeP50FilterebyKeyspaceShardInstance: vitess_ct.panel.mysql_timings {
+    vttabletMysqlExecTimeP50FilterebyInstance: vitess_ct.panel.mysql_timings {
       title: 'MySQL Exec Time P50',
       targets: [
         {
@@ -1669,8 +983,6 @@ local vitess_ct = configuration_templates.prometheus_vitess;
                 rate(
                   vttablet_mysql_bucket{
                     operation="Exec",
-                    keyspace=~"$keyspace",
-                    shard=~"$shard",
                     instance=~"$host"
                   }[1m]
                 )
@@ -1683,7 +995,7 @@ local vitess_ct = configuration_templates.prometheus_vitess;
     },
 
     //TODO CREATE A RECORDING RULE FOR THIS PROMETHEUS TARGET
-    vttabletMysqlExecTimeP95FilterebyKeyspaceShardInstance: vitess_ct.panel.mysql_timings {
+    vttabletMysqlExecTimeP95FilterebyInstance: vitess_ct.panel.mysql_timings {
       title: 'MySQL Exec Time P95',
       targets: [
         {
@@ -1694,8 +1006,6 @@ local vitess_ct = configuration_templates.prometheus_vitess;
                 rate(
                   vttablet_mysql_bucket{
                     operation="Exec",
-                    keyspace=~"$keyspace",
-                    shard=~"$shard",
                     instance=~"$host"
                   }[1m]
                 )
@@ -1708,105 +1018,7 @@ local vitess_ct = configuration_templates.prometheus_vitess;
     },
 
     //TODO CREATE A RECORDING RULE FOR THIS PROMETHEUS TARGET
-    vttabletConsolidationRateFilteredByKeyspaceShardInstance: vitess_ct.panel.consolidation_timings_ops {
-      title: 'Consolidations rate',
-      description: |||
-        Waits is a histogram variable that tracks various waits in the system.
-        Right now, the only category is "Consolidations".
-        A consolidation happens when one query waits for the results of an identical query already executing,
-        thereby saving the database from performing duplicate work.
-      |||,
-      targets: [
-        {
-          expr:
-            |||
-              sum by (instance) (
-                rate(
-                  vttablet_waits_count{
-                    keyspace=~"$keyspace",
-                    shard=~"$shard",
-                    type="Consolidations",
-                    instance=~"$host"}[1m]))
-            |||,
-          legendFormat: '{{instance}}',
-        },
-      ],
-    },
-
-    //TODO CREATE A RECORDING RULE FOR THIS PROMETHEUS TARGET
-    vttabletConsolidationWaitTimeAvgFilteredByKeyspaceShardInstance: vitess_ct.panel.consolidation_timings_seconds {
-      title: 'Consolidations wait time (avg)',
-      description: |||
-        Waits is a histogram variable that tracks various waits in the system.
-        Right now, the only category is "Consolidations".
-        A consolidation happens when one query waits for the results of an identical query already executing,
-        thereby saving the database from performing duplicate work.
-      |||,
-      targets: [
-        {
-          expr:
-            |||
-              sum by (instance) (
-                rate(
-                  vttablet_waits_sum{
-                    keyspace=~"$keyspace",
-                    shard=~"$shard",
-                    type="Consolidations",
-                    instance=~"$host"
-                  }[1m]
-                )
-              )
-              /
-              sum by (instance) (
-                rate(
-                  vttablet_waits_count{
-                    keyspace=~"$keyspace",
-                    shard=~"$shard",
-                    type="Consolidations",
-                    instance=~"$host"
-                  }[1m]
-                )
-              )
-            |||,
-          legendFormat: '{{instance}}',
-        },
-      ],
-    },
-
-    //TODO CREATE A RECORDING RULE FOR THIS PROMETHEUS TARGET
-    vttabletConsolidationWaitTimeP95FilteredByKeyspaceShardInstance: vitess_ct.panel.consolidation_timings_seconds {
-      title: 'Consolidations wait time (p95)',
-      description: |||
-        Waits is a histogram variable that tracks various waits in the system.
-        Right now, the only category is "Consolidations".
-        A consolidation happens when one query waits for the results of an identical query already executing,
-        thereby saving the database from performing duplicate work.
-      |||,
-      targets: [
-        {
-          expr:
-            |||
-              histogram_quantile(
-                0.95,
-                sum by (le, instance)(
-                  rate(
-                    vttablet_waits_bucket{
-                      keyspace=~"$keyspace",
-                      shard=~"$shard",
-                      type="Consolidations",
-                      instance=~"$host"
-                    }[1m]
-                  )
-                )
-              ) 
-            |||,
-          legendFormat: '{{instance}}',
-        },
-      ],
-    },
-
-    //TODO CREATE A RECORDING RULE FOR THIS PROMETHEUS TARGET
-    vtgateToVtTabletCallTimeAvgFilteredByKeyspaceShardInstance: vitess_ct.panel.vtgate_to_vttablet_calls {
+    vtgateToVtTabletCallTimeAvgFilteredByInstance: vitess_ct.panel.vtgate_to_vttablet_calls {
       title: 'VtGate -> VtTablet Call Time (avg)',
       targets: [
         {
@@ -1814,19 +1026,13 @@ local vitess_ct = configuration_templates.prometheus_vitess;
             |||
               sum by (instance)(
                 rate(
-                  vtgate_vttablet_call_sum{
-                    keyspace=~"$keyspace",
-                    shard_name=~"$shard"
-                  }[1m]
+                  vtgate_vttablet_call_sum[1m]
                 )
               )
               /
               sum by (instance)(
                 rate(
-                  vtgate_vttablet_call_count{
-                    keyspace=~"$keyspace",
-                    shard_name=~"$shard"
-                  }[1m]
+                  vtgate_vttablet_call_count[1m]
                 )
               )
             |||,
@@ -1835,33 +1041,6 @@ local vitess_ct = configuration_templates.prometheus_vitess;
       ],
     },
 
-    //TODO CREATE A RECORDING RULE FOR THIS PROMETHEUS TARGET
-    vtgateToVtTabletCallTimeAvgFilteredByKeyspaceShardDBType: vitess_ct.panel.vtgate_to_vttablet_calls {
-      title: 'VtGate -> VtTablet Call Time by Shard (avg)',
-      targets: [
-        {
-          expr: |||
-            sum by (shard_name, db_type)(
-              rate(
-                vtgate_vttablet_call_sum{
-                  keyspace=~"$keyspace",
-                  shard_name=~"$shard"
-                }[1m]
-              )
-            ) / 
-            sum by (shard_name, db_type)(
-              rate(
-                vtgate_vttablet_call_count{
-                  keyspace=~"$keyspace",
-                  shard_name=~"$shard"
-                }[1m]
-              )
-            )
-          |||,
-          legendFormat: '{{shard_name}}-{{db_type}}',
-        },
-      ],
-    },
   },
 
   singlestats: {
@@ -1884,7 +1063,7 @@ local vitess_ct = configuration_templates.prometheus_vitess;
         {
           expr: |||
             sum (
-              vitess_mixin:vttablet_query_counts:irate1m
+              vitess_mixin:vttablet_query_counts:rate1m
             )
           |||,
           intervalFactor: 1,

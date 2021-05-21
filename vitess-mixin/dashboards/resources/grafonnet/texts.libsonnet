@@ -4,7 +4,7 @@ local grafana = import '../../../vendor/grafonnet/grafana.libsonnet';
 
 local text = grafana.text;
 
-// TODO: figure out how to make emoji works in jsonnet. They are not correctly handled
+// TODO: figure out how to make emoji work in jsonnet. They are not correctly handled
 {
 
   local footnote =
@@ -13,12 +13,8 @@ local text = grafana.text;
       If you want to contribute please visit [https://github.com/vitess/vitess-mixin](https://github.com/vitessio/vitess/tree/master/vitess-mixin)!
     |||,
 
-
-  local drill_down_note = 'Please use the data links in each panel to zoom into a specific tier or dimension.',
-
   local notes = {
     footnote: footnote,
-    drill_down_note: drill_down_note,
   },
 
   clusterOverview::
@@ -28,26 +24,11 @@ local text = grafana.text;
       content=|||
         #### Cluster overview
 
-        This is a general overview of our Vitess clusters. %(drill_down_note)s
+        This is a general overview of the Vitess clusters.
 
         %(footnote)s
       ||| % notes
     ),
-
-
-  keyspaceOverview::
-    text.new(
-      '',
-      mode='markdown',
-      content=|||
-        #### Keyspace overview
-
-        This is a general overview of our keyspaces where only drilldown by keyspace and table is allowed. %(drill_down_note)s
-
-        %(footnote)s
-      ||| % notes
-    ),
-
 
   vtgateOverview::
     text.new(
@@ -56,7 +37,7 @@ local text = grafana.text;
       content=|||
         #### vtgate overview
 
-        This is a general overview of our vtgate tier. %(drill_down_note)s
+        This is a general overview of the vtgate tier.
 
         %(footnote)s
       ||| % notes
@@ -68,9 +49,6 @@ local text = grafana.text;
       mode='markdown',
       content=|||
         #### vtgate host
-
-        This is a detailed view of our vtgate hosts with drilldowns by host.
-
         %s
       ||| % footnote,
     ),
@@ -81,9 +59,6 @@ local text = grafana.text;
       mode='markdown',
       content=|||
         #### vttablet host
-
-        This is a detailed view of our vttablet hosts with drilldowns by keyspace, shard and host.
-
         %s
       ||| % footnote,
     ),

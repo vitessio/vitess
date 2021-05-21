@@ -9,10 +9,11 @@
     vtgateNodeSelector: 'job="node-exporter-vitess-vtgate"',
     mysqlSelector: 'job="mysql"',
     defaultTimeFrom: 'now-30m',
+    vttabletMountpoint: '/mnt',
 
     // Datasource to use
-    dataSource: 'Prometheus_Vitess',
-    nodeDataSource: 'Prometheus_Node',
+    dataSource: 'Prometheus',
+    nodeDataSource: 'Prometheus',
 
     // Default config for the Grafana dashboards in the Vitess Mixin
     grafanaDashboardMetadataDefault: {
@@ -25,7 +26,7 @@
       title: 'vitess-mixin',
       tags: ['vitess-mixin'],
       keepTime: true,
-      includeVars: true,
+      includeVars: false,
     },
 
     // Grafana dashboard IDs are necessary for stable links for dashboards
@@ -42,12 +43,6 @@
         title: 'cluster - overview %(dashboardNameSuffix)s' % $._config.grafanaDashboardMetadataDefault,
         description: 'General cluster overview',
         dashboardTags: $._config.grafanaDashboardMetadataDefault.dashboardTags + ['overview', 'cluster'],
-      },
-      keyspaceOverview+: defaultDashboard {
-        uid: 'vitess-keyspace-overview',
-        title: 'keyspace - overview %(dashboardNameSuffix)s' % $._config.grafanaDashboardMetadataDefault,
-        description: 'General keyspace overview',
-        dashboardTags: $._config.grafanaDashboardMetadataDefault.dashboardTags + ['overview', 'keyspace'],
       },
       vtgateOverview+: defaultDashboard {
         uid: 'vitess-vtgate-overview',
