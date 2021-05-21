@@ -23,10 +23,12 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/sync2"
-
+	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/discovery"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vttablet/sandboxconn"
 )
 
@@ -44,26 +46,89 @@ func TestTracking(t *testing.T) {
 	waiter := &testWaiter{}
 	tracker.StartWithWaiter(waiter)
 	defer tracker.Stop()
-	result := sqltypes.MakeTestResult(
-		sqltypes.MakeTestFields("a|b|c", "varchar|varchar|varchar"),
-		"t|id|int",
-		"t|name|varchar",
-		"otherTbl|id|varchar",
-	)
-	sbc.SetResults([]*sqltypes.Result{result})
-
-	tableName := "t"
-	ch <- &discovery.TabletHealth{
-		Conn:          sbc,
-		Tablet:        tablet,
-		Target:        target,
-		Serving:       true,
-		TablesUpdated: []string{tableName, "otherTbl"},
+	testcases := []struct {
+		tName  string
+		result *sqltypes.Result
+		updTbl []string
+		exp    map[string][]vindexes.Column
+	}{
+		{
+			tName: "new tables",
+			result: sqltypes.MakeTestResult(
+				sqltypes.MakeTestFields("table_name|col_name|col_type", "varchar|varchar|varchar"),
+				"t1|id|int",
+				"t1|name|varchar",
+				"t2|id|varchar",
+			),
+			updTbl: []string{"t1", "t2"},
+			exp: map[string][]vindexes.Column{
+				"t1": {
+					{Name: sqlparser.NewColIdent("id"), Type: querypb.Type_INT32},
+					{Name: sqlparser.NewColIdent("name"), Type: querypb.Type_VARCHAR},
+				},
+				"t2": {
+					{Name: sqlparser.NewColIdent("id"), Type: querypb.Type_VARCHAR},
+				},
+			},
+		},
+		{
+			tName: "delete t1, updated t2 and new t3",
+			result: sqltypes.MakeTestResult(
+				sqltypes.MakeTestFields("table_name|col_name|col_type", "varchar|varchar|varchar"),
+				"t2|id|varchar",
+				"t2|name|varchar",
+				"t3|id|datetime",
+			),
+			updTbl: []string{"t1", "t2", "t3"},
+			exp: map[string][]vindexes.Column{
+				"t2": {
+					{Name: sqlparser.NewColIdent("id"), Type: querypb.Type_VARCHAR},
+					{Name: sqlparser.NewColIdent("name"), Type: querypb.Type_VARCHAR},
+				},
+				"t3": {
+					{Name: sqlparser.NewColIdent("id"), Type: querypb.Type_DATETIME},
+				},
+			},
+		},
+		{
+			tName: "new t4",
+			result: sqltypes.MakeTestResult(
+				sqltypes.MakeTestFields("table_name|col_name|col_type", "varchar|varchar|varchar"),
+				"t4|name|varchar",
+			),
+			updTbl: []string{"t4"},
+			exp: map[string][]vindexes.Column{
+				"t2": {
+					{Name: sqlparser.NewColIdent("id"), Type: querypb.Type_VARCHAR},
+					{Name: sqlparser.NewColIdent("name"), Type: querypb.Type_VARCHAR},
+				},
+				"t3": {
+					{Name: sqlparser.NewColIdent("id"), Type: querypb.Type_DATETIME},
+				},
+				"t4": {
+					{Name: sqlparser.NewColIdent("name"), Type: querypb.Type_VARCHAR},
+				},
+			},
+		},
 	}
-
-	waiter.wait()
-
-	assert.Contains(t, sbc.StringQueries(), "le query")
+	for _, tcase := range testcases {
+		t.Run(tcase.tName, func(t *testing.T) {
+			sbc.SetResults([]*sqltypes.Result{tcase.result})
+			waiter.reset()
+			ch <- &discovery.TabletHealth{
+				Conn:          sbc,
+				Tablet:        tablet,
+				Target:        target,
+				Serving:       true,
+				TablesUpdated: tcase.updTbl,
+			}
+			waiter.wait()
+			assert.Contains(t, sbc.StringQueries(), "le query")
+			for k, v := range tcase.exp {
+				utils.MustMatch(t, v, tracker.GetColumns("ks", k), "mismatch for table: ", k)
+			}
+		})
+	}
 }
 
 // this struct helps us test without time.Sleep
