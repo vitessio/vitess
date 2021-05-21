@@ -55,7 +55,7 @@ local config = import '../config.libsonnet';
         ],
       },
       {
-        name: 'vitess_mixin_7',
+        name: 'vitess_mixin_6',
         rules: [
           {
             record: 'vitess_mixin:vtgate_api_error_counts:rate1m',
@@ -64,7 +64,7 @@ local config = import '../config.libsonnet';
         ],
       },
       {
-        name: 'vitess_mixin_8',
+        name: 'vitess_mixin_7',
         rules: [
           {
             record: 'vitess_mixin:vtgate_api_count:rate1m',
@@ -73,7 +73,7 @@ local config = import '../config.libsonnet';
         ],
       },
       {
-        name: 'vitess_mixin_9',
+        name: 'vitess_mixin_8',
         rules: [
           {
             record: 'vitess_mixin:vtgate_api_error_counts_by_keyspace:rate1m',
@@ -82,7 +82,7 @@ local config = import '../config.libsonnet';
         ],
       },
       {
-        name: 'vitess_mixin_10',
+        name: 'vitess_mixin_9',
         rules: [
           {
             record: 'vitess_mixin:vtgate_api_count_by_keyspace:rate1m',
@@ -91,7 +91,7 @@ local config = import '../config.libsonnet';
         ],
       },
       {
-        name: 'vitess_mixin_12',
+        name: 'vitess_mixin_10',
         rules: [
           {
             record: 'vitess_mixin:vttablet_kills:rate1m',
@@ -100,7 +100,7 @@ local config = import '../config.libsonnet';
         ],
       },
       {
-        name: 'vitess_mixin_13',
+        name: 'vitess_mixin_11',
         rules: [
           {
             record: 'vitess_mixin:vtgate_vttablet_call_error_count_byinstance:rate1m',
@@ -109,7 +109,7 @@ local config = import '../config.libsonnet';
         ],
       },
       {
-        name: 'vitess_mixin_14',
+        name: 'vitess_mixin_12',
         rules: [
           {
             record: 'vitess_mixin:vtgate_api_error_counts_by_db_type:rate1m',
@@ -118,7 +118,7 @@ local config = import '../config.libsonnet';
         ],
       },
       {
-        name: 'vitess_mixin_15',
+        name: 'vitess_mixin_13',
         rules: [
           {
             record: 'vitess_mixin:vtgate_api_count_by_db_type:rate1m',
@@ -127,7 +127,7 @@ local config = import '../config.libsonnet';
         ],
       },
       {
-        name: 'vitess_mixin_16',
+        name: 'vitess_mixin_14',
         rules: [
           {
             record: 'vitess_mixin:vtgate_api_bucket_by_db_type:rate1m',
@@ -136,7 +136,7 @@ local config = import '../config.libsonnet';
         ],
       },
       {
-        name: 'vitess_mixin_19',
+        name: 'vitess_mixin_15',
         rules: [
           {
             record: 'vitess_mixin:vtgate_api_error_counts_by_operation:rate1m',
@@ -145,7 +145,7 @@ local config = import '../config.libsonnet';
         ],
       },
       {
-        name: 'vitess_mixin_20',
+        name: 'vitess_mixin_16',
         rules: [
           {
             record: 'vitess_mixin:vtgate_api_error_counts_by_code:rate1m',
@@ -154,7 +154,7 @@ local config = import '../config.libsonnet';
         ],
       },
       {
-        name: 'vitess_mixin_34',
+        name: 'vitess_mixin_17',
         rules: [
           {
             record: 'vitess_mixin:vttablet_queries_sum_by_keyspace_shard:rate1m',
@@ -163,7 +163,7 @@ local config = import '../config.libsonnet';
         ],
       },
       {
-        name: 'vitess_mixin_35',
+        name: 'vitess_mixin_18',
         rules: [
           {
             record: 'vitess_mixin:vttablet_queries_count_by_keyspace_shard:rate1m',
@@ -172,7 +172,7 @@ local config = import '../config.libsonnet';
         ],
       },
       {
-        name: 'vitess_mixin_43',
+        name: 'vitess_mixin_19',
         rules: [
           {
             record: 'vitess_mixin:vttablet_transactions_bucket_by_keyspace_shard:rate1m',
@@ -181,7 +181,7 @@ local config = import '../config.libsonnet';
         ],
       },
       {
-        name: 'vitess_mixin_45',
+        name: 'vitess_mixin_20',
         rules: [
           {
             record: 'vitess_mixin:process_start_time_seconds_by_instance_job:sum5m',
@@ -190,7 +190,7 @@ local config = import '../config.libsonnet';
         ],
       },
       {
-        name: 'vitess_mixin_46',
+        name: 'vitess_mixin_21',
         rules: [
           {
             record: 'vitess_mixin:vttablet_kills_by_instance:rate1m',
@@ -199,7 +199,7 @@ local config = import '../config.libsonnet';
         ],
       },
       {
-        name: 'vitess_mixin_47',
+        name: 'vitess_mixin_22',
         rules: [
           {
             record: 'vitess_mixin:vttablet_errors:rate1m',
@@ -208,7 +208,7 @@ local config = import '../config.libsonnet';
         ],
       },
       {
-        name: 'vitess_mixin_48',
+        name: 'vitess_mixin_23',
         rules: [
           {
             record: 'vitess_mixin:vtgate_queries_processed_by_table:rate1m',
