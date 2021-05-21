@@ -10,6 +10,7 @@ create table orders(oid int, cid int, pid int, mname varchar(128), price int, pr
 create table order_seq(id int, next_id bigint, cache bigint, primary key(id)) comment 'vitess_sequence';
 create table customer2(cid int, name varbinary(128), typ enum('individual','soho','enterprise'), sport set('football','cricket','baseball'),ts timestamp not null default current_timestamp, primary key(cid));
 create table customer_seq2(id int, next_id bigint, cache bigint, primary key(id)) comment 'vitess_sequence';
+create table tenant(tenant_id binary(16), name varbinary(16), primary key (tenant_id));
 `
 
 	initialProductVSchema = `
@@ -28,7 +29,8 @@ create table customer_seq2(id int, next_id bigint, cache bigint, primary key(id)
 	},
 	"order_seq": {
 		"type": "sequence"
-	}
+	},
+	"tenant": {}
   }
 }
 `
@@ -39,9 +41,12 @@ create table customer_seq2(id int, next_id bigint, cache bigint, primary key(id)
   "vindexes": {
 	    "reverse_bits": {
 	      "type": "reverse_bits"
-	    }
+	    },
+		"binary_md5": {
+          "type": "binary_md5"
+		}
 	  },
-   "tables": {
+   "tables":  {
 	    "customer": {
 	      "column_vindexes": [
 	        {
@@ -65,9 +70,16 @@ create table customer_seq2(id int, next_id bigint, cache bigint, primary key(id)
 	        "column": "cid",
 	        "sequence": "customer_seq2"
 	      }
-	    }
+	    },
+	  "tenant": {
+          "column_vindexes": [
+	        {
+	          "column": "tenant_id",
+	          "name": "binary_md5"
+	        }
+	      ]
+		}
    }
-  
 }
 `
 	merchantVSchema = `

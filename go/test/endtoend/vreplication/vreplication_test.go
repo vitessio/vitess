@@ -108,7 +108,9 @@ func TestBasicVreplicationWorkflow(t *testing.T) {
 	materializeRollup(t)
 
 	shardCustomer(t, true, []*Cell{defaultCell}, defaultCellName)
-
+	// the tenant table was to test a specific case with binary sharding keys. Drop it now so that we don't
+	// have to update the rest of the tests
+	execVtgateQuery(t, vtgateConn, "customer", "drop table tenant")
 	validateRollupReplicates(t)
 	shardOrders(t)
 	shardMerchant(t)
@@ -249,7 +251,7 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 			t.Fatal(err)
 		}
 
-		tables := "customer"
+		tables := "customer,tenant"
 		moveTables(t, sourceCellOrAlias, workflow, sourceKs, targetKs, tables)
 
 		// Assume we are operating on first cell
@@ -267,6 +269,7 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 		insertQuery1 := "insert into customer(cid, name) values(1001, 'tempCustomer1')"
 		matchInsertQuery1 := "insert into customer(cid, `name`) values (:vtg1, :vtg2)"
 		require.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, productTab, "product", insertQuery1, matchInsertQuery1))
+		execVtgateQuery(t, vtgateConn, "product", "update tenant set name='xyz'")
 		vdiff(t, ksWorkflow, "")
 		switchReadsDryRun(t, allCellNames, ksWorkflow, dryRunResultsReadCustomerShard)
 		switchReads(t, allCellNames, ksWorkflow)
