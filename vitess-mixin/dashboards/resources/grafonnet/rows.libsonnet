@@ -38,9 +38,9 @@ local row = grafana.row;
       collapse=true,
     ),
 
-  keyspaceShard::
+  tabletsQueries::
     row.new(
-      title='Keyspace/Shard',
+      title='Tablets/Queries',
     ),
 
   mysql::

@@ -1,20 +1,18 @@
 /** This is a configuration file containing metadata for vtgate grafana resources. */
 
 local config = import '../../../config.libsonnet';
-local datalinks = import '../datalinks.libsonnet';
+local configuration_templates = import './configuration_templates.libsonnet';
+local vitess_ct = configuration_templates.prometheus_vitess;
 
-// TODO: switch `vtgate_api_count` to the expensive `vtgate_queries_processed_by_table`
-// if we can't fix https://github.com/vitessio/vitess/issues/6193 on time
-
+// TODO: move local template variables and fields to ./configuration_templates.libsonnet.
 {
   //  ____                  _
   // |  _ \ __ _ _ __   ___| |___
   // | |_) / _` | '_ \ / _ \ / __|
   // |  __/ (_| | | | |  __/ \__ \
   // |_|   \__,_|_| |_|\___|_|___/
-  // TODO: add description for each panel.
-  // TODO: move local template variables to ./configuration_templates.libsonnet.
 
+  // TODO: add description for each panel.
   panels: {
 
     //Override default_panel values with custom configuration
@@ -38,310 +36,281 @@ local datalinks = import '../datalinks.libsonnet';
       legend_sort: 'max',
     },
 
-    vtgateRequests: panel_template {
-      title: 'Requests',
-      fill: 1,
-      targets: [
-        {
-          expr: |||
-            sum (
-              vitess_mixin:vtgate_api_count:irate1m
-            )
-          |||,
-          legendFormat: 'Requests',
-        },
-      ],
-      options: {
-        dataLinks: [
-          datalinks.vtgateOverview,
+    vtgateRequests:
+      panel_template
+      + vitess_ct.panel.null_as_zeros {
+        title: 'Requests',
+        fill: 1,
+        targets: [
+          {
+            expr: |||
+              sum (
+                vitess_mixin:vtgate_api_count:rate1m
+              )
+            |||,
+            legendFormat: 'Requests',
+          },
         ],
       },
-    },
 
-    vtgateRequestsByKeyspace: panel_template {
-      title: 'Requests (by keyspace)',
-      targets: [
-        {
-          expr: |||
-            sum by(keyspace)(
-              vitess_mixin:vtgate_queries_processed_by_keyspace:irate1m
-            )
-          ||| % config._config,
-          legendFormat: '{{keyspace}}',
-        },
-      ],
-      options: {
-        dataLinks: [
-          datalinks.vtgateOverview,
-          datalinks.keyspaceOverview,
+    vtgateRequestsByKeyspace:
+      panel_template +
+      vitess_ct.panel.null_as_zeros {
+        title: 'Requests (by keyspace)',
+        targets: [
+          {
+            expr: |||
+              sum by(keyspace)(
+                vitess_mixin:vtgate_api_count_by_keyspace:rate1m
+              )
+            ||| % config._config,
+            legendFormat: '{{keyspace}}',
+          },
         ],
       },
-    },
 
 
-    vtgateRequestsByDBType: panel_template {
-      title: 'Requests (by db_type)',
-      targets: [
-        {
-          expr: |||
-            sum by (db_type)(
-              vitess_mixin:vtgate_api_count_by_db_type:irate1m
-            )
-          |||,
-          legendFormat: '{{db_type}}',
-        },
-      ],
-      options: {
-        dataLinks: [
-          datalinks.vtgateOverview,
+    vtgateRequestsByDBType:
+      panel_template
+      + vitess_ct.panel.null_as_zeros {
+        title: 'Requests (by db_type)',
+        targets: [
+          {
+            expr: |||
+              sum by (db_type)(
+                vitess_mixin:vtgate_api_count_by_db_type:rate1m
+              )
+            |||,
+            legendFormat: '{{db_type}}',
+          },
         ],
       },
-    },
 
     //TODO CREATE A RECORDING RULE FOR THIS PROMETHEUS TARGET
-    vtgateRequestsByInstanceDBType: panel_template {
-      title: 'Requests (by db_type)',
-      fill: 0,
-      targets: [
-        {
-          expr: |||
-            sum by (instance, db_type)(
-              rate(
-                vtgate_api_count{
-                  instance=~"$host",
-                }[1m]
-              )
-            )
-          |||,
-          legendFormat: '{{instance}} - {{db_type}}',
-          intervalFactor: 1,
-        },
-      ],
-      options: {
-        dataLinks: [
-          datalinks.vtgateOverview,
-          datalinks.keyspaceOverview,
-        ],
-      },
-    },
-
-    //TODO CREATE A RECORDING RULE FOR THIS TARGET
-    vtgateRequestsByInstance: panel_template {
-      title: 'Requests',
-      fill: 0,
-      targets: [
-        {
-          expr:
-            |||
-              sum by (instance)(
+    vtgateRequestsByInstanceDBType:
+      panel_template
+      + vitess_ct.panel.null_as_zeros {
+        title: 'Requests (by db_type)',
+        fill: 0,
+        targets: [
+          {
+            expr: |||
+              sum by (instance, db_type)(
                 rate(
                   vtgate_api_count{
-                    instance=~'$host'
+                    instance=~"$host",
                   }[1m]
                 )
               )
             |||,
-          legendFormat: '{{instance}}',
-          intervalFactor: 1,
-        },
-      ],
-    },
-
-    vtgateErrorRate: panel_template {
-      title: 'Error rate',
-      format: 'percentunit',
-      fill: 1,
-      aliasColors: {
-        'Error rate': '#F2495C',
-      },
-      targets: [
-        {
-          expr: |||
-            sum (
-              vitess_mixin:vtgate_api_error_counts:irate1m)
-            /
-            sum (
-              vitess_mixin:vtgate_api_count:irate1m)
-          |||,
-          legendFormat: 'Error rate',
-        },
-      ],
-      options: {
-        dataLinks: [
-          datalinks.vtgateOverview,
+            legendFormat: '{{instance}} - {{db_type}}',
+            intervalFactor: 1,
+          },
         ],
       },
-    },
-
-    vtgateErrorRateByKeyspace: panel_template {
-      title: 'Error rate (by keyspace)',
-      format: 'percentunit',
-      targets: [
-        {
-          expr: |||
-            sum by(keyspace)(
-              vitess_mixin:vtgate_api_error_counts_by_keyspace:irate1m)
-            /
-            sum by(keyspace)(
-              vitess_mixin:vtgate_api_count_by_keyspace:irate1m)
-          |||,
-          legendFormat: '{{keyspace}}',
-        },
-      ],
-      options: {
-        dataLinks: [
-          datalinks.vtgateOverview,
-          datalinks.keyspaceOverview,
-        ],
-      },
-
-    },
-
-    vtgateErrorRateByDBType: panel_template {
-      title: 'Error rate (by db_type)',
-      format: 'percentunit',
-      targets: [
-        {
-          expr: |||
-            sum by (db_type)(
-              vitess_mixin:vtgate_api_error_counts_by_db_type:irate1m
-            )
-            /
-            sum by (db_type)(
-              vitess_mixin:vtgate_api_count_by_db_type:irate1m
-            )
-          ||| % config._config,
-          legendFormat: '{{db_type}}',
-        },
-      ],
-      options: {
-        dataLinks: [
-          datalinks.vtgateOverview,
-        ],
-      },
-    },
 
     //TODO CREATE A RECORDING RULE FOR THIS TARGET
-    vtgateErrorRateByInstance: panel_template {
-      title: 'Error rate',
-      fill: 0,
-      format: 'percentunit',
-      nullPointMode: 'null as zero',
-      targets: [
-        {
-          expr:
-            |||
-              sum by(instance)(
-                rate(
-                  vtgate_api_error_counts[1m]
-                  ) > 0
+    vtgateRequestsByInstance:
+      panel_template
+      + vitess_ct.panel.null_as_zeros {
+        title: 'Requests',
+        fill: 0,
+        targets: [
+          {
+            expr:
+              |||
+                sum by (instance)(
+                  rate(
+                    vtgate_api_count{
+                      instance=~'$host'
+                    }[1m]
+                  )
+                )
+              |||,
+            legendFormat: '{{instance}}',
+            intervalFactor: 1,
+          },
+        ],
+      },
+
+    vtgateErrorRate:
+      panel_template
+      + vitess_ct.panel.null_as_zeros {
+        title: 'Error rate',
+        format: 'percentunit',
+        fill: 1,
+        aliasColors: {
+          'Error rate': '#F2495C',
+        },
+        targets: [
+          {
+            expr: |||
+              sum (
+                vitess_mixin:vtgate_api_error_counts:rate1m)
+              /
+              sum (
+                vitess_mixin:vtgate_api_count:rate1m)
+            |||,
+            legendFormat: 'Error rate',
+          },
+        ],
+      },
+
+    vtgateErrorRateByKeyspace:
+      panel_template
+      + vitess_ct.panel.null_as_zeros {
+        title: 'Error rate (by keyspace)',
+        format: 'percentunit',
+        targets: [
+          {
+            expr: |||
+              sum by(keyspace)(
+                vitess_mixin:vtgate_api_error_counts_by_keyspace:rate1m)
+              /
+              sum by(keyspace)(
+                vitess_mixin:vtgate_api_count_by_keyspace:rate1m)
+            |||,
+            legendFormat: '{{keyspace}}',
+          },
+        ],
+      },
+
+    vtgateErrorRateByDBType:
+      panel_template
+      + vitess_ct.panel.null_as_zeros {
+        title: 'Error rate (by db_type)',
+        format: 'percentunit',
+        targets: [
+          {
+            expr: |||
+              sum by (db_type)(
+                vitess_mixin:vtgate_api_error_counts_by_db_type:rate1m
               )
               /
-              sum by(instance)(
-                rate(
-                  vtgate_api_count[1m]
-                )
+              sum by (db_type)(
+                vitess_mixin:vtgate_api_count_by_db_type:rate1m
               )
-            |||,
-          legendFormat: '{{instance}}',
-          intervalFactor: 1,
-        },
-      ],
-    },
+            ||| % config._config,
+            legendFormat: '{{db_type}}',
+          },
+        ],
+      },
+
+    //TODO CREATE A RECORDING RULE FOR THIS TARGET
+    vtgateErrorRateByInstance:
+      panel_template
+      + vitess_ct.panel.null_as_zeros {
+        title: 'Error rate',
+        fill: 0,
+        format: 'percentunit',
+        nullPointMode: 'null as zero',
+        targets: [
+          {
+            expr:
+              |||
+                sum by(instance)(
+                  rate(
+                    vtgate_api_error_counts[1m]
+                    ) > 0
+                )
+                /
+                sum by(instance)(
+                  rate(
+                    vtgate_api_count[1m]
+                  )
+                )
+              |||,
+            legendFormat: '{{instance}}',
+            intervalFactor: 1,
+          },
+        ],
+      },
 
     //TODO Create RECORDING RULES FOR THESE PROM TARGETS
-    vtgateErrorRateByInstanceDBType: panel_template {
-      title: 'Error rate (by db_type)',
-      fill: 0,
-      format: 'percentunit',
-      targets: [
-        {
-          expr:
-            |||
-              sum by(instance, db_type)(
-                rate(vtgate_api_error_counts{
-                    instance=~"$host"
-                  }[1m]
-                ) > 0
-              )
-              /
-              sum by(instance, db_type)(
-                rate(
-                  vtgate_api_count{
-                    instance=~"$host"
-                  }[1m]
+    vtgateErrorRateByInstanceDBType:
+      panel_template
+      + vitess_ct.panel.null_as_zeros {
+        title: 'Error rate (by db_type)',
+        fill: 0,
+        format: 'percentunit',
+        targets: [
+          {
+            expr:
+              |||
+                sum by(instance, db_type)(
+                  rate(vtgate_api_error_counts{
+                      instance=~"$host"
+                    }[1m]
+                  ) > 0
+                )
+                /
+                sum by(instance, db_type)(
+                  rate(
+                    vtgate_api_count{
+                      instance=~"$host"
+                    }[1m]
+                  )
+                )
+              |||,
+            legendFormat: '{{instance}} - {{db_type}}',
+            intervalFactor: 1,
+          },
+        ],
+      },
+
+    vtgateDurationP99:
+      panel_template
+      + vitess_ct.panel.null_as_zeros {
+        title: 'Duration 99th quantile',
+        fill: 1,
+        format: 's',
+        aliasColors: {
+          Duration: '#5794F2',
+        },
+        targets: [
+          {
+            expr: |||
+              histogram_quantile(
+                0.99,
+                sum by(le)(
+                  vitess_mixin:vtgate_api_bucket:rate1m
                 )
               )
             |||,
-          legendFormat: '{{instance}} - {{db_type}}',
-          intervalFactor: 1,
-        },
-      ],
-    },
-
-    vtgateDurationP99: panel_template {
-      title: 'Duration 99th quantile',
-      fill: 1,
-      format: 's',
-      aliasColors: {
-        Duration: '#5794F2',
+            legendFormat: 'Duration',
+          },
+        ],
       },
-      targets: [
-        {
-          expr: |||
-            histogram_quantile(
-              0.99,
-              sum by(le)(
-                vitess_mixin:vtgate_api_bucket:irate1m
+
+    vtgateDurationP99ByKeyspace:
+      panel_template
+      + vitess_ct.panel.null_as_zeros {
+        title: 'Duration 99th quantile (by keyspace)',
+        format: 's',
+        targets: [
+          {
+            expr: |||
+              histogram_quantile(
+                0.99,
+                sum by(keyspace,le)(
+                  vitess_mixin:vtgate_api_bucket_by_keyspace:rate1m
+                )
               )
-            )
-          |||,
-          legendFormat: 'Duration',
-        },
-      ],
-      options: {
-        dataLinks: [
-          datalinks.vtgateOverview,
+            ||| % config._config,
+            legendFormat: '{{keyspace}}',
+          },
         ],
       },
-    },
 
-    vtgateDurationP99ByKeyspace: panel_template {
-      title: 'Duration 99th quantile (by keyspace)',
-      format: 's',
-      targets: [
-        {
-          expr: |||
-            histogram_quantile(
-              0.99,
-              sum by(keyspace,le)(
-                vitess_mixin:vtgate_api_bucket_by_keyspace:irate1m
-              )
-            )
-          ||| % config._config,
-          legendFormat: '{{keyspace}}',
+    local vtgateDurationTemplate =
+      panel_template
+      + vitess_ct.panel.null_as_zeros {
+        fill: 1,
+        format: 's',
+        aliasColors: {
+          Duration: '#5794F2',
         },
-      ],
-      options: {
-        dataLinks: [
-          datalinks.vtgateOverview,
-          datalinks.keyspaceOverview,
-        ],
       },
-    },
-
-    local vtgateDurationTemplate = panel_template {
-      fill: 1,
-      format: 's',
-      aliasColors: {
-        Duration: '#5794F2',
-      },
-      options: {
-        dataLinks: [
-          datalinks.vtgateOverview,
-        ],
-      },
-    },
 
     //TODO crete a recording rule for this prometheus vitess target
     vtgateDurationP99ByInstance: vtgateDurationTemplate {
@@ -400,7 +369,7 @@ local datalinks = import '../datalinks.libsonnet';
             histogram_quantile(
               0.50,
               sum by(le)(
-                vitess_mixin:vtgate_api_bucket:irate1m
+                vitess_mixin:vtgate_api_bucket:rate1m
               )
             )
           |||,
@@ -441,7 +410,7 @@ local datalinks = import '../datalinks.libsonnet';
             histogram_quantile(
               0.95,
               sum by(le)(
-                vitess_mixin:vtgate_api_bucket:irate1m
+                vitess_mixin:vtgate_api_bucket:rate1m
               )
             )
           |||,
@@ -525,188 +494,125 @@ local datalinks = import '../datalinks.libsonnet';
       ],
     },
 
-    vtgateDurationP99ByDBType: panel_template {
-      title: 'Duration 99th quantile (by db_type)',
-      format: 's',
-      targets: [
-        {
-          expr: |||
-            histogram_quantile(
-              0.99,
-              sum by (db_type, le)(
-                vitess_mixin:vtgate_api_bucket_by_db_type:irate1m
+    vtgateDurationP99ByDBType:
+      panel_template
+      + vitess_ct.panel.null_as_zeros {
+        title: 'Duration 99th quantile (by db_type)',
+        format: 's',
+        targets: [
+          {
+            expr: |||
+              histogram_quantile(
+                0.99,
+                sum by (db_type, le)(
+                  vitess_mixin:vtgate_api_bucket_by_db_type:rate1m
+                )
               )
-            )
-          |||,
-          legendFormat: '{{db_type}}',
-        },
-      ],
-      options: {
-        dataLinks: [
-          datalinks.vtgateOverview,
+            |||,
+            legendFormat: '{{db_type}}',
+          },
         ],
       },
-    },
 
-    vtgateRequestsByTable: panel_template {
-      title: 'Requests (by table)',
-      targets: [
-        {
-          expr: |||
-            sum by (table)(
-              vitess_mixin:vtgate_queries_processed_by_keyspace_table:irate1m{
-                keyspace="$keyspace",
-                table=~"$table"
-              }
-            )
-            OR
-            vector(0)
-          ||| % config._config,
-          legendFormat: '{{table}}',
-        },
-      ],
-
-    },
-
-    vtgateRequestsByPlanType: panel_template {
-      title: 'Requests (by plan type)',
-      targets: [
-        {
-          expr: |||
-            sum by (plan)(
-              vitess_mixin:vtgate_queries_processed_by_keyspace_table_plan:irate1m{
-                keyspace="$keyspace",
-                table=~"$table"
-              }
-            )
-            OR
-            vector(0)
-          |||,
-          legendFormat: '{{plan}}',
-        },
-      ],
-
-    },
-
-    vtgateRequestsSuccessRateFilterByKeyspace: panel_template {
-      title: 'Requests success rate (by keyspace)',
-      fill: 1,
-      format: 'percent',
-      min: null,
-      max: 100,
-      targets: [
-        {
-          expr: |||
-            100 -
-            (
-              100 *
-              sum by (keyspace)(
-                vitess_mixin:vtgate_api_error_counts_by_keyspace:irate1m{
-                  keyspace="$keyspace"
-                }
+    vtgateErrorsByCode:
+      panel_template
+      + vitess_ct.panel.null_as_zeros {
+        title: 'Errors (by code)',
+        format: 'cps',
+        targets: [
+          {
+            expr: |||
+              sum by (code)(
+                vitess_mixin:vtgate_api_error_counts_by_code:rate1m
               )
-              /
-              sum by (keyspace)(
-                vitess_mixin:vtgate_api_count_by_keyspace:irate1m{
-                  keyspace="$keyspace"
-                }
-              )
-            )
-          |||,
-          legendFormat: 'Success rate',
-        },
-      ],
-    },
+            |||,
+            legendFormat: '{{code}}',
+          },
+        ],
 
-    vtgateErrorsByCode: panel_template {
-      title: 'Errors (by code)',
-      format: 'cps',
-      targets: [
-        {
-          expr: |||
-            sum by (code)(
-              vitess_mixin:vtgate_api_error_counts_by_code:irate1m
-            )
-          |||,
-          legendFormat: '{{code}}',
-        },
-      ],
-
-    },
+      },
 
     //TODO CREATE A RECORDING RULE FOR THIS PROM TARGET
-    vtgateErrorsByInstanceCode: panel_template {
-      title: 'Errors (by code)',
-      format: 'cps',
-      targets: [
-        {
-          expr: |||
-            sum by (instance,code)(
-              rate(
-                vtgate_api_error_counts{
-                  instance=~"$host"
-                }[1m]
+    vtgateErrorsByInstanceCode:
+      panel_template
+      + vitess_ct.panel.null_as_zeros {
+        title: 'Errors (by code)',
+        format: 'cps',
+        targets: [
+          {
+            expr: |||
+              sum by (instance,code)(
+                rate(
+                  vtgate_api_error_counts{
+                    instance=~"$host"
+                  }[1m]
+                )
               )
-            )
-          |||,
-          legendFormat: '{{instance}} - {{code}}',
-        },
-      ],
+            |||,
+            legendFormat: '{{instance}} - {{code}}',
+          },
+        ],
 
-    },
+      },
 
-    vtgateErrorsByOperation: panel_template {
-      title: 'Errors (by operation)',
-      format: 'cps',
-      targets: [
-        {
-          expr: |||
-            sum by (operation)(
-              vitess_mixin:vtgate_api_error_counts_by_operation:irate1m
-            )
-          |||,
-          legendFormat: '{{operation}}',
-        },
-      ],
+    vtgateErrorsByOperation:
+      panel_template
+      + vitess_ct.panel.null_as_zeros {
+        title: 'Errors (by operation)',
+        format: 'cps',
+        targets: [
+          {
+            expr: |||
+              sum by (operation)(
+                vitess_mixin:vtgate_api_error_counts_by_operation:rate1m
+              )
+            |||,
+            legendFormat: '{{operation}}',
+          },
+        ],
 
-    },
+      },
 
-    vtgateErrorsByDbtype: panel_template {
-      title: 'Errors (by db_type)',
-      format: 'cps',
-      targets: [
-        {
-          expr: |||
-            sum by (db_type)(
-              vitess_mixin:vtgate_api_error_counts_by_db_type:irate1m
-            )
-          |||,
-          legendFormat: '{{db_type}}',
-        },
-      ],
+    vtgateErrorsByDbtype:
+      panel_template
+      + vitess_ct.panel.null_as_zeros {
+        title: 'Errors (by db_type)',
+        format: 'cps',
+        targets: [
+          {
+            expr: |||
+              sum by (db_type)(
+                vitess_mixin:vtgate_api_error_counts_by_db_type:rate1m
+              )
+            |||,
+            legendFormat: '{{db_type}}',
+          },
+        ],
 
-    },
+      },
 
     //TODO CREATE RECORDING RULE FOR THIS PROM TARGET
-    vtgateErrorsByInstanceKeyspace: panel_template {
-      title: 'Errors (by keyspace)',
-      format: 'cps',
-      targets: [
-        {
-          expr: |||
-            sum by (instance,keyspace)(
-              rate(
-                vtgate_api_error_counts{
-                  instance=~"$host"
-                }[1m]
+    vtgateErrorsByInstanceKeyspace:
+      panel_template
+      + vitess_ct.panel.null_as_zeros {
+        title: 'Errors (by keyspace)',
+        format: 'cps',
+        targets: [
+          {
+            expr: |||
+              sum by (instance,keyspace)(
+                rate(
+                  vtgate_api_error_counts{
+                    instance=~"$host"
+                  }[1m]
+                )
               )
-            )
-          |||,
-          legendFormat: '{{keyspace}}',
-          intervalFactor: 1,
-        },
-      ],
-    },
+            |||,
+            legendFormat: '{{keyspace}}',
+            intervalFactor: 1,
+          },
+        ],
+      },
 
     vtgateRestart: {
       title: 'vtgate',
@@ -728,13 +634,13 @@ local datalinks = import '../datalinks.libsonnet';
       targets: [
         {
           expr: |||
-            sum (
-              vitess_mixin:process_start_time_seconds_by_job:sum5m{
+            sum by (instance)(
+              vitess_mixin:process_start_time_seconds_by_instance_job:sum5m{
                 %(vtgateSelector)s
               }
-            ) > 0
+            )
           ||| % config._config,
-          legendFormat: 'Restarts',
+          legendFormat: '{{instance}}',
         },
       ],
     },
@@ -748,7 +654,7 @@ local datalinks = import '../datalinks.libsonnet';
           expr:
             |||
               sum by(instance)(
-                irate(
+                rate(
                   go_gc_duration_seconds_count{
                     %(vtgateSelector)s
                   }[1m]
@@ -769,7 +675,7 @@ local datalinks = import '../datalinks.libsonnet';
           expr:
             |||
               sum by(instance)(
-                irate(
+                rate(
                   go_gc_duration_seconds_count{
                     %(vtgateSelector)s
                   }[1m]
@@ -789,7 +695,7 @@ local datalinks = import '../datalinks.libsonnet';
           expr:
             |||
               sum by(quantile)(
-                irate(
+                rate(
                   go_gc_duration_seconds{
                     %(vtgateSelector)s
                   }[1m]
@@ -825,7 +731,7 @@ local datalinks = import '../datalinks.libsonnet';
         {
           expr: |||
             sum (
-              vitess_mixin:vtgate_api_count:irate1m
+              vitess_mixin:vtgate_api_count:rate1m
             )
           |||,
           intervalFactor: 1,
@@ -847,7 +753,7 @@ local datalinks = import '../datalinks.libsonnet';
             1000 * histogram_quantile(
               0.99,
               sum by(le)(
-                vitess_mixin:vtgate_api_bucket:irate1m
+                vitess_mixin:vtgate_api_bucket:rate1m
               )
             )
           |||,

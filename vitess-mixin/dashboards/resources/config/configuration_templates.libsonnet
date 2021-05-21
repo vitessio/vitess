@@ -80,19 +80,6 @@ local config = import '../../../config.libsonnet';
         format: 's',
       },
 
-      consolidation_timings+: self.legend_min_max_avg + self.null_as_zeros {
-        legend_sort: 'avg',
-        legend_sortDesc: true,
-      },
-
-      consolidation_timings_seconds: self.consolidation_timings {
-        format: 's',
-      },
-
-      consolidation_timings_ops: self.consolidation_timings {
-        format: 'ops',
-      },
-
       vtgate_to_vttablet_calls: self.legend_min_max_avg + self.null_as_zeros {
         format: 's',
         legend_sortDesc: true,
@@ -122,12 +109,8 @@ local config = import '../../../config.libsonnet';
         legend_max: true,
       },
 
-      alerts_tablet: self.percent_panel {
-        format: 'percent',
-        legend_min: false,
-        legend_rightSide: true,
-        min: 70,
-        max: 100,
+      null_as_zeros+: self.default {
+        nullPointMode: 'null as zero',
       },
 
       vttablet_host_view: self.percent_panel {
@@ -152,70 +135,6 @@ local config = import '../../../config.libsonnet';
 
       performance_analysis_seconds+: self.performance_analysis_short {
         format: 's',
-      },
-    },
-  },
-  alerts: {
-    // Default values from https://github.com/grafana/grafonnet-lib/blob/2829dc6a4ddd0f7cebe2508bd89bf339dea9a9e6/grafonnet/graph_panel.libsonnet#L247
-    default: {
-      executionErrorState: 'alerting',
-      forDuration: '5m',
-      frequency: '60s',
-      handler: 1,
-      message: '',
-      noDataState: 'keep_state',
-      alertRuleTags: {},
-      prod+: {
-        notifications: [],
-        conditions: [],
-      },
-      dev+: self.prod {
-      },
-    },
-
-    no_data: self.default {
-      noDataState: 'no_data',
-    },
-
-    orc_default_alert: self.no_data {
-      executionErrorState: 'keep_state',
-      forDuration: '1m',
-      frequency: '1m',
-      prod+: {
-        notifications: [
-          { uid: 'alerts-vitess' },
-          { uid: 'pagerduty-vitess' },
-        ],
-      },
-      dev+: {
-        notifications: [
-          { uid: 'alerts-vitess-dev' },
-        ],
-      },
-    },
-
-    orc_bedrock_alert: self.default {
-      noDataState: 'alerting',
-      frequency: '1m',
-      prod+: {
-        notifications: [
-          { uid: 'alerts-vitess' },
-          { uid: 'pagerduty-vitess' },
-        ],
-        conditions: [
-          {
-            evaluatorParams: [1],
-            evaluatorType: 'lt',
-            operatorType: 'and',
-            queryTimeStart: '5m',
-            reducerType: 'max',
-          },
-        ],
-      },
-      dev+: self.prod {
-        notifications: [
-          { uid: 'alerts-vitess-dev' },
-        ],
       },
     },
   },

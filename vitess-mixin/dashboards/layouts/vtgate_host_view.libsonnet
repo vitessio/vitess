@@ -15,7 +15,7 @@ local config = import '../../config.libsonnet';
 
       helpers.dashboard.getDashboard(config._config.grafanaDashboardMetadata.vtgateHostView)
       .addTemplates([
-        templates.host,
+        templates.hostVtgate,
       ])
       .addLink(helpers.default.getDashboardLink(config._config.dashborardLinks))
       .addPanels([

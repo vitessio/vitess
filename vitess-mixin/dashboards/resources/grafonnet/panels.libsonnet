@@ -66,7 +66,7 @@ local prometheus = grafana.prometheus;
             %(vtctldSelector)s
           }
         ) > 0
-      |||,
+      ||| % config._config,
       legendFormat='{{instance}}'
     )),
 }

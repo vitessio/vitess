@@ -29,7 +29,7 @@ local prometheus = grafana.prometheus;
           100 
           -
           sum(
-            irate(
+            rate(
               vtgate_api_error_counts{
                 %(vtgateSelector)s
               }[$interval]
@@ -37,7 +37,7 @@ local prometheus = grafana.prometheus;
           )
           /
           sum(
-            irate(
+            rate(
               vtgate_api_count{
                 %(vtgateSelector)s
               }[$interval]
@@ -95,11 +95,11 @@ local prometheus = grafana.prometheus;
           -
           (
             sum (
-              vitess_mixin:vttablet_errors:irate1m
+              vitess_mixin:vttablet_errors:rate1m
             )
             /
             sum (
-              vitess_mixin:vttablet_query_counts:irate1m
+              vitess_mixin:vttablet_query_counts:rate1m
             )
           )
         ||| % config._config,
@@ -135,6 +135,7 @@ local prometheus = grafana.prometheus;
   keyspaceCount::
     singlestat.new(
       'keyspace',
+      description='count of keyspaces with active queries',
       datasource='%(dataSource)s' % config._config,
       valueFontSize='50%',
       valueName='current',
@@ -144,8 +145,7 @@ local prometheus = grafana.prometheus;
         |||
           count(
             count by (keyspace)(
-              vttablet_tablet_state{
-                %(vttabletSelector)s
+              vtgate_vttablet_call_count{
               }
             )
           )
@@ -214,7 +214,7 @@ local prometheus = grafana.prometheus;
       prometheus.target(
         |||
           sum (
-            vitess_mixin:mysql_global_status_queries:irate1m
+            vitess_mixin:mysql_global_status_queries:rate1m
           )
         |||,
         intervalFactor=1

@@ -1,4 +1,4 @@
-.PHONY: dashboards_out prometheus_alerts.yaml prometheus_rules.yaml test tools all e2e e2e-dev lint fmt
+.PHONY: dashboards_out prometheus_alerts.yaml prometheus_rules.yaml test tools all e2e e2e-dev e2e-compose-up e2e-compose-down lint fmt
 
 help: #: Show this message.
 	@echo "\nAvailable Targets:\n"
@@ -61,17 +61,31 @@ tools: tools.go
 	@jb update https://github.com/grafana/grafonnet-lib/grafonnet > /dev/null 2>&1
 
 
-E2E_GRAFANA_VERSION ?= 7.1.1
+E2E_GRAFANA_VERSION ?= 7.3.6
 
-e2e: # Run all end-to-end tests.
+e2e: #: Run all Grafana end-to-end tests.
 	GRAFANA_VERSION=${E2E_GRAFANA_VERSION} \
 	docker-compose -f e2e/docker-compose.yml up \
 		--abort-on-container-exit \
-		--exit-code-from e2e
+		--exit-code-from e2e \
+		--remove-orphans
 
-e2e-dev: # Run e2e tests in Cypress test runner.
+e2e-dev: #: Run Grafana e2e tests in Cypress test runner.
 	GRAFANA_VERSION=${E2E_GRAFANA_VERSION} \
 	DISPLAY=$$(ipconfig getifaddr en0):0 \
 	docker-compose -f e2e/docker-compose.dev.yml up \
 		--abort-on-container-exit \
-		--exit-code-from e2e
+		--exit-code-from e2e \
+		--remove-orphans
+
+e2e-compose-up: #: Run Grafana e2e environment  spining Prometheus and Vitess in the backend.
+	GRAFANA_VERSION=${E2E_GRAFANA_VERSION} \
+	COMPOSE_HTTP_TIMEOUT=200 \
+	DISPLAY=$$(ipconfig getifaddr en0):0 \
+	docker-compose -f e2e/docker-compose.vt.yml up \
+		--remove-orphans
+
+e2e-compose-down: #: Clean docker compose resources
+	@docker-compose -f e2e/docker-compose.vt.yml down -v --remove-orphans 
+	@rm e2e/grafana/provisioning/dashboards/*.json
+	@rm e2e/prometheus/prometheus_rules.yaml
