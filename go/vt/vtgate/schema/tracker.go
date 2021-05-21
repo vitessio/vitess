@@ -56,11 +56,11 @@ type waitFor interface {
 
 // Start starts the schema tracking.
 func (t *Tracker) Start() {
-	t.StartWithWaiter(&noWaiter{})
+	t.startWithWaiter(&noWaiter{})
 }
 
-// StartWithWaiter starts the schema tracking with a custom waitFor
-func (t *Tracker) StartWithWaiter(i waitFor) {
+// startWithWaiter starts the schema tracking with a custom waitFor
+func (t *Tracker) startWithWaiter(i waitFor) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.cancel = cancel
 	go func(ctx context.Context, t *Tracker) {

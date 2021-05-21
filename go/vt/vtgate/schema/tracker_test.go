@@ -44,7 +44,7 @@ func TestTracking(t *testing.T) {
 	ch := make(chan *discovery.TabletHealth)
 	tracker := NewTracker(ch)
 	waiter := &testWaiter{}
-	tracker.StartWithWaiter(waiter)
+	tracker.startWithWaiter(waiter)
 	defer tracker.Stop()
 	fields := sqltypes.MakeTestFields("table_name|col_name|col_type", "varchar|varchar|varchar")
 	testcases := []struct {
