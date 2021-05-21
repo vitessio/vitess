@@ -19,7 +19,7 @@ package schema
 import (
 	"testing"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/sync2"
@@ -46,74 +46,66 @@ func TestTracking(t *testing.T) {
 	waiter := &testWaiter{}
 	tracker.StartWithWaiter(waiter)
 	defer tracker.Stop()
+	fields := sqltypes.MakeTestFields("table_name|col_name|col_type", "varchar|varchar|varchar")
 	testcases := []struct {
 		tName  string
 		result *sqltypes.Result
 		updTbl []string
 		exp    map[string][]vindexes.Column
-	}{
-		{
-			tName: "new tables",
-			result: sqltypes.MakeTestResult(
-				sqltypes.MakeTestFields("table_name|col_name|col_type", "varchar|varchar|varchar"),
-				"t1|id|int",
-				"t1|name|varchar",
-				"t2|id|varchar",
-			),
-			updTbl: []string{"t1", "t2"},
-			exp: map[string][]vindexes.Column{
-				"t1": {
-					{Name: sqlparser.NewColIdent("id"), Type: querypb.Type_INT32},
-					{Name: sqlparser.NewColIdent("name"), Type: querypb.Type_VARCHAR},
-				},
-				"t2": {
-					{Name: sqlparser.NewColIdent("id"), Type: querypb.Type_VARCHAR},
-				},
-			},
+	}{{
+		tName: "new tables",
+		result: sqltypes.MakeTestResult(
+			fields,
+			"t1|id|int",
+			"t1|name|varchar",
+			"t2|id|varchar",
+		),
+		updTbl: []string{"t1", "t2"},
+		exp: map[string][]vindexes.Column{
+			"t1": {
+				{Name: sqlparser.NewColIdent("id"), Type: querypb.Type_INT32},
+				{Name: sqlparser.NewColIdent("name"), Type: querypb.Type_VARCHAR}},
+			"t2": {
+				{Name: sqlparser.NewColIdent("id"), Type: querypb.Type_VARCHAR}},
 		},
-		{
-			tName: "delete t1, updated t2 and new t3",
-			result: sqltypes.MakeTestResult(
-				sqltypes.MakeTestFields("table_name|col_name|col_type", "varchar|varchar|varchar"),
-				"t2|id|varchar",
-				"t2|name|varchar",
-				"t3|id|datetime",
-			),
-			updTbl: []string{"t1", "t2", "t3"},
-			exp: map[string][]vindexes.Column{
-				"t2": {
-					{Name: sqlparser.NewColIdent("id"), Type: querypb.Type_VARCHAR},
-					{Name: sqlparser.NewColIdent("name"), Type: querypb.Type_VARCHAR},
-				},
-				"t3": {
-					{Name: sqlparser.NewColIdent("id"), Type: querypb.Type_DATETIME},
-				},
-			},
+	}, {
+		tName: "delete t1, updated t2 and new t3",
+		result: sqltypes.MakeTestResult(
+			fields,
+			"t2|id|varchar",
+			"t2|name|varchar",
+			"t3|id|datetime",
+		),
+		updTbl: []string{"t1", "t2", "t3"},
+		exp: map[string][]vindexes.Column{
+			"t2": {
+				{Name: sqlparser.NewColIdent("id"), Type: querypb.Type_VARCHAR},
+				{Name: sqlparser.NewColIdent("name"), Type: querypb.Type_VARCHAR}},
+			"t3": {
+				{Name: sqlparser.NewColIdent("id"), Type: querypb.Type_DATETIME}},
 		},
-		{
-			tName: "new t4",
-			result: sqltypes.MakeTestResult(
-				sqltypes.MakeTestFields("table_name|col_name|col_type", "varchar|varchar|varchar"),
-				"t4|name|varchar",
-			),
-			updTbl: []string{"t4"},
-			exp: map[string][]vindexes.Column{
-				"t2": {
-					{Name: sqlparser.NewColIdent("id"), Type: querypb.Type_VARCHAR},
-					{Name: sqlparser.NewColIdent("name"), Type: querypb.Type_VARCHAR},
-				},
-				"t3": {
-					{Name: sqlparser.NewColIdent("id"), Type: querypb.Type_DATETIME},
-				},
-				"t4": {
-					{Name: sqlparser.NewColIdent("name"), Type: querypb.Type_VARCHAR},
-				},
-			},
+	}, {
+		tName: "new t4",
+		result: sqltypes.MakeTestResult(
+			fields,
+			"t4|name|varchar",
+		),
+		updTbl: []string{"t4"},
+		exp: map[string][]vindexes.Column{
+			"t2": {
+				{Name: sqlparser.NewColIdent("id"), Type: querypb.Type_VARCHAR},
+				{Name: sqlparser.NewColIdent("name"), Type: querypb.Type_VARCHAR}},
+			"t3": {
+				{Name: sqlparser.NewColIdent("id"), Type: querypb.Type_DATETIME}},
+			"t4": {
+				{Name: sqlparser.NewColIdent("name"), Type: querypb.Type_VARCHAR}},
 		},
+	},
 	}
 	for _, tcase := range testcases {
 		t.Run(tcase.tName, func(t *testing.T) {
 			sbc.SetResults([]*sqltypes.Result{tcase.result})
+			sbc.Queries = nil
 			waiter.reset()
 			ch <- &discovery.TabletHealth{
 				Conn:          sbc,
@@ -123,7 +115,7 @@ func TestTracking(t *testing.T) {
 				TablesUpdated: tcase.updTbl,
 			}
 			waiter.wait()
-			assert.Contains(t, sbc.StringQueries(), "le query")
+			require.Equal(t, 1, len(sbc.StringQueries()))
 			for k, v := range tcase.exp {
 				utils.MustMatch(t, v, tracker.GetColumns("ks", k), "mismatch for table: ", k)
 			}
