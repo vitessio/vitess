@@ -19,11 +19,14 @@ package schema
 import (
 	"testing"
 
-	"vitess.io/vitess/go/test/utils"
+	"github.com/stretchr/testify/assert"
+
+	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/sync2"
+
 	"vitess.io/vitess/go/vt/discovery"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vttablet/sandboxconn"
 )
 
@@ -37,20 +40,45 @@ func TestTracking(t *testing.T) {
 	tablet := &topodatapb.Tablet{}
 	sbc := sandboxconn.NewSandboxConn(tablet)
 	ch := make(chan *discovery.TabletHealth)
-	defer func() {
-		close(ch)
-	}()
 	tracker := NewTracker(ch)
-	tracker.Start()
+	waiter := &testWaiter{}
+	tracker.StartWithWaiter(waiter)
 	defer tracker.Stop()
+	result := sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("a|b|c", "varchar|varchar|varchar"),
+		"t|id|int",
+		"t|name|varchar",
+		"otherTbl|id|varchar",
+	)
+	sbc.SetResults([]*sqltypes.Result{result})
 
+	tableName := "t"
 	ch <- &discovery.TabletHealth{
-		Conn:    sbc,
-		Tablet:  tablet,
-		Target:  target,
-		Serving: true,
+		Conn:          sbc,
+		Tablet:        tablet,
+		Target:        target,
+		Serving:       true,
+		TablesUpdated: []string{tableName, "otherTbl"},
 	}
-	cols := tracker.GetColumns("ks", "t")
-	var expectedCols vindexes.Column
-	utils.MustMatch(t, expectedCols, cols, "")
+
+	waiter.wait()
+
+	assert.Contains(t, sbc.StringQueries(), "le query")
+}
+
+// this struct helps us test without time.Sleep
+type testWaiter struct {
+	wg sync2.AtomicBool
+}
+
+func (i *testWaiter) done() {
+	i.wg.Set(true)
+}
+func (i *testWaiter) reset() {
+	i.wg.Set(false)
+}
+func (i *testWaiter) wait() {
+	for !i.wg.Get() {
+		// busy loop until done
+	}
 }
