@@ -374,6 +374,7 @@ func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.V
 			if err != nil {
 				return err
 			}
+			mysqlrow = []sqltypes.Value{}
 			continue
 		}
 		// Compute lastpk here, because we'll need it

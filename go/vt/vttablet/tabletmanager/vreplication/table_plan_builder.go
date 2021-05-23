@@ -527,8 +527,10 @@ func (tpb *tablePlanBuilder) generateInsertStatement() *sqlparser.ParsedQuery {
 func (tpb *tablePlanBuilder) generateInsertPart(buf *sqlparser.TrackedBuffer) *sqlparser.ParsedQuery {
 	if tpb.onInsert == insertIgnore {
 		buf.Myprintf("insert ignore into %v(", tpb.name)
-	} else {
+	} else if tpb.onInsert == insertNormal {
 		buf.Myprintf("replace into %v(", tpb.name)
+	} else {
+		buf.Myprintf("insert into %v(", tpb.name)
 	}
 	separator := ""
 	for _, cexpr := range tpb.colExprs {
