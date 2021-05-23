@@ -300,7 +300,7 @@ func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.V
 	if err != nil {
 		return err
 	}
-	gtid, err := conn.streamWithLightweightSnapshot(rs.ctx, rs.plan.Table.Name, rs.sendQuery)
+	gtid, err := conn.streamWithoutSnapshot(rs.ctx, rs.plan.Table.Name, rs.sendQuery)
 	if err != nil {
 		return err
 	}
@@ -370,7 +370,7 @@ func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.V
 			}
 			rs.sendQuery = nextQuery
 			fmt.Printf("============= proceeeding with nextQuery: %v\n", nextQuery)
-			_, err = conn.streamWithLightweightSnapshot(rs.ctx, rs.plan.Table.Name, rs.sendQuery)
+			_, err = conn.streamWithoutSnapshot(rs.ctx, rs.plan.Table.Name, rs.sendQuery)
 			if err != nil {
 				return err
 			}
