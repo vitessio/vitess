@@ -117,10 +117,10 @@ func TestPlayerCopyCharPK(t *testing.T) {
 		"/update _vt.vreplication set message='Picked source tablet.*",
 		"/insert into _vt.copy_state",
 		"/update _vt.vreplication set state='Copying'",
-		"replace into dst(idc,val) values ('a\\0',1)",
+		"* into dst(idc,val) values ('a\\0',1)",
 		`/update _vt.copy_state set lastpk='fields:{name:\\"idc\\" type:BINARY} rows:{lengths:2 values:\\"a\\\\x00\\"}' where vrepl_id=.*`,
 		`update dst set val=3 where idc='a\0' and ('a\0') <= ('a\0')`,
-		"replace into dst(idc,val) values ('c\\0',2)",
+		"* into dst(idc,val) values ('c\\0',2)",
 		`/update _vt.copy_state set lastpk='fields:{name:\\"idc\\" type:BINARY} rows:{lengths:2 values:\\"c\\\\x00\\"}' where vrepl_id=.*`,
 		"/delete from _vt.copy_state.*dst",
 		"/update _vt.vreplication set state='Running'",
@@ -218,12 +218,12 @@ func TestPlayerCopyVarcharPKCaseInsensitive(t *testing.T) {
 		"/update _vt.vreplication set message='Picked source tablet.*",
 		"/insert into _vt.copy_state",
 		"/update _vt.vreplication set state='Copying'",
-		"replace into dst(idc,val) values ('a',1)",
+		"* into dst(idc,val) values ('a',1)",
 		`/update _vt.copy_state set lastpk='fields:{name:\\"idc\\" type:VARCHAR} rows:{lengths:1 values:\\"a\\"}' where vrepl_id=.*`,
 		`/replace into dst\(idc,val\) select 'B', 3 from dual where \( .* 'B' COLLATE .* \) <= \( .* 'a' COLLATE .* \)`,
-		"replace into dst(idc,val) values ('B',3)",
+		"* into dst(idc,val) values ('B',3)",
 		`/update _vt.copy_state set lastpk='fields:{name:\\"idc\\" type:VARCHAR} rows:{lengths:1 values:\\"B\\"}' where vrepl_id=.*`,
-		"replace into dst(idc,val) values ('c',2)",
+		"* into dst(idc,val) values ('c',2)",
 		`/update _vt.copy_state set lastpk='fields:{name:\\"idc\\" type:VARCHAR} rows:{lengths:1 values:\\"c\\"}' where vrepl_id=.*`,
 		"/delete from _vt.copy_state.*dst",
 		"/update _vt.vreplication set state='Running'",
@@ -322,10 +322,10 @@ func TestPlayerCopyVarcharCompositePKCaseSensitiveCollation(t *testing.T) {
 		"/update _vt.vreplication set message='Picked source tablet.*",
 		"/insert into _vt.copy_state",
 		"/update _vt.vreplication set state='Copying'",
-		"replace into dst(id,idc,idc2,val) values (1,'a','a',1)",
+		"* into dst(id,idc,idc2,val) values (1,'a','a',1)",
 		`/update _vt.copy_state set lastpk='fields:{name:\\"id\\" type:INT32} fields:{name:\\"idc\\" type:VARBINARY} fields:{name:\\"idc2\\" type:VARBINARY} rows:{lengths:1 lengths:1 lengths:1 values:\\"1aa\\"}' where vrepl_id=.*`,
 		`replace into dst(id,idc,idc2,val) select 1, 'B', 'B', 3 from dual where (1,'B','B') <= (1,'a','a')`,
-		"replace into dst(id,idc,idc2,val) values (1,'c','c',2)",
+		"* into dst(id,idc,idc2,val) values (1,'c','c',2)",
 		`/update _vt.copy_state set lastpk='fields:{name:\\"id\\" type:INT32} fields:{name:\\"idc\\" type:VARBINARY} fields:{name:\\"idc2\\" type:VARBINARY} rows:{lengths:1 lengths:1 lengths:1 values:\\"1cc\\"}' where vrepl_id=.*`,
 		"/delete from _vt.copy_state.*dst",
 		"/update _vt.vreplication set state='Running'",
@@ -395,7 +395,7 @@ func TestPlayerCopyTablesWithFK(t *testing.T) {
 		// The first fast-forward has no starting point. So, it just saves the current position.
 		"/update _vt.vreplication set pos=",
 		"begin",
-		"replace into dst1(id,id2) values (1,1), (2,2)",
+		"* into dst1(id,id2) values (1,1), (2,2)",
 		`/update _vt.copy_state set lastpk='fields:{name:\\"id\\" type:INT32} rows:{lengths:1 values:\\"2\\"}' where vrepl_id=.*`,
 		"commit",
 		// copy of dst1 is done: delete from copy_state.
@@ -407,7 +407,7 @@ func TestPlayerCopyTablesWithFK(t *testing.T) {
 		"commit",
 		// copy dst2
 		"begin",
-		"replace into dst2(id,id2) values (1,21), (2,22)",
+		"* into dst2(id,id2) values (1,21), (2,22)",
 		`/update _vt.copy_state set lastpk='fields:{name:\\"id\\" type:INT32} rows:{lengths:1 values:\\"2\\"}' where vrepl_id=.*`,
 		"commit",
 		// copy of dst1 is done: delete from copy_state.
@@ -500,7 +500,7 @@ func TestPlayerCopyTables(t *testing.T) {
 		// The first fast-forward has no starting point. So, it just saves the current position.
 		"/update _vt.vreplication set pos=",
 		"begin",
-		"replace into dst1(id,val) values (1,'aaa'), (2,'bbb')",
+		"* into dst1(id,val) values (1,'aaa'), (2,'bbb')",
 		`/update _vt.copy_state set lastpk='fields:{name:\\"id\\" type:INT32} rows:{lengths:1 values:\\"2\\"}' where vrepl_id=.*`,
 		"commit",
 		// copy of dst1 is done: delete from copy_state.
@@ -631,16 +631,16 @@ func TestPlayerCopyBigTable(t *testing.T) {
 		"/insert into _vt.copy_state",
 		// The first fast-forward has no starting point. So, it just saves the current position.
 		"/update _vt.vreplication set state='Copying'",
-		"replace into dst(id,val) values (1,'aaa')",
+		"* into dst(id,val) values (1,'aaa')",
 		`/update _vt.copy_state set lastpk='fields:{name:\\"id\\" type:INT32} rows:{lengths:1 values:\\"1\\"}' where vrepl_id=.*`,
 		// The next catchup executes the new row insert, but will be a no-op.
-		"replace into dst(id,val) select 3, 'ccc' from dual where (3) <= (1)",
+		"* into dst(id,val) select 3, 'ccc' from dual where (3) <= (1)",
 		// fastForward has nothing to add. Just saves position.
 		// Second row gets copied.
-		"replace into dst(id,val) values (2,'bbb')",
+		"* into dst(id,val) values (2,'bbb')",
 		`/update _vt.copy_state set lastpk='fields:{name:\\"id\\" type:INT32} rows:{lengths:1 values:\\"2\\"}' where vrepl_id=.*`,
 		// Third row copied without going back to catchup state.
-		"replace into dst(id,val) values (3,'ccc')",
+		"* into dst(id,val) values (3,'ccc')",
 		`/update _vt.copy_state set lastpk='fields:{name:\\"id\\" type:INT32} rows:{lengths:1 values:\\"3\\"}' where vrepl_id=.*`,
 		"/delete from _vt.copy_state.*dst",
 		// Copy is done. Go into running state.
@@ -746,16 +746,16 @@ func TestPlayerCopyWildcardRule(t *testing.T) {
 		"/insert into _vt.copy_state",
 		"/update _vt.vreplication set state='Copying'",
 		// The first fast-forward has no starting point. So, it just saves the current position.
-		"replace into src(id,val) values (1,'aaa')",
+		"* into src(id,val) values (1,'aaa')",
 		`/update _vt.copy_state set lastpk='fields:{name:\\"id\\" type:INT32} rows:{lengths:1 values:\\"1\\"}' where vrepl_id=.*`,
 		// The next catchup executes the new row insert, but will be a no-op.
-		"replace into src(id,val) select 3, 'ccc' from dual where (3) <= (1)",
+		"* into src(id,val) select 3, 'ccc' from dual where (3) <= (1)",
 		// fastForward has nothing to add. Just saves position.
 		// Second row gets copied.
-		"replace into src(id,val) values (2,'bbb')",
+		"* into src(id,val) values (2,'bbb')",
 		`/update _vt.copy_state set lastpk='fields:{name:\\"id\\" type:INT32} rows:{lengths:1 values:\\"2\\"}' where vrepl_id=.*`,
 		// Third row copied without going back to catchup state.
-		"replace into src(id,val) values (3,'ccc')",
+		"* into src(id,val) values (3,'ccc')",
 		`/update _vt.copy_state set lastpk='fields:{name:\\"id\\" type:INT32} rows:{lengths:1 values:\\"3\\"}' where vrepl_id=.*`,
 		"/delete from _vt.copy_state.*src",
 		// Copy is done. Go into running state.
@@ -883,23 +883,23 @@ func TestPlayerCopyTableContinuation(t *testing.T) {
 	expectNontxQueries(t, []string{
 		// Catchup
 		"/update _vt.vreplication set message='Picked source tablet.*",
-		"replace into dst1(id,val) select 1, 'insert in' from dual where (1,1) <= (6,6)",
-		"replace into dst1(id,val) select 7, 'insert out' from dual where (7,7) <= (6,6)",
+		"* into dst1(id,val) select 1, 'insert in' from dual where (1,1) <= (6,6)",
+		"* into dst1(id,val) select 7, 'insert out' from dual where (7,7) <= (6,6)",
 		"update dst1 set val='updated' where id=3 and (3,3) <= (6,6)",
 		"update dst1 set val='updated' where id=10 and (10,10) <= (6,6)",
 		"delete from dst1 where id=4 and (4,4) <= (6,6)",
 		"delete from dst1 where id=9 and (9,9) <= (6,6)",
 		"delete from dst1 where id=5 and (5,5) <= (6,6)",
-		"replace into dst1(id,val) select 5, 'move within' from dual where (5,10) <= (6,6)",
+		"* into dst1(id,val) select 5, 'move within' from dual where (5,10) <= (6,6)",
 		"delete from dst1 where id=6 and (6,6) <= (6,6)",
-		"replace into dst1(id,val) select 12, 'move out' from dual where (12,6) <= (6,6)",
+		"* into dst1(id,val) select 12, 'move out' from dual where (12,6) <= (6,6)",
 		"delete from dst1 where id=11 and (11,11) <= (6,6)",
-		"replace into dst1(id,val) select 4, 'move in' from dual where (4,11) <= (6,6)",
+		"* into dst1(id,val) select 4, 'move in' from dual where (4,11) <= (6,6)",
 		"update copied set val='bbb' where id=1",
 		// Fast-forward
 		"update dst1 set val='updated again' where id=3 and (3,3) <= (6,6)",
 		// Copy
-		"replace into dst1(id,val) values (7,'insert out'), (8,'no change'), (10,'updated'), (12,'move out')",
+		"* into dst1(id,val) values (7,'insert out'), (8,'no change'), (10,'updated'), (12,'move out')",
 		`/update _vt.copy_state set lastpk='fields:{name:\\"id1\\" type:INT32} fields:{name:\\"id2\\" type:INT32} rows:{lengths:2 lengths:1 values:\\"126\\"}' where vrepl_id=.*`,
 		"/delete from _vt.copy_state.*dst1",
 		// Copy again. There should be no events for catchup.
@@ -995,9 +995,9 @@ func TestPlayerCopyWildcardTableContinuation(t *testing.T) {
 		"/insert into _vt.vreplication",
 		"/update _vt.vreplication set state = 'Copying'",
 		"/update _vt.vreplication set message='Picked source tablet.*",
-		"replace into dst(id,val) select 4, 'new' from dual where (4) <= (2)",
+		"* into dst(id,val) select 4, 'new' from dual where (4) <= (2)",
 		// Copy
-		"replace into dst(id,val) values (3,'uncopied'), (4,'new')",
+		"* into dst(id,val) values (3,'uncopied'), (4,'new')",
 		`/update _vt.copy_state set lastpk.*`,
 		"/delete from _vt.copy_state.*dst",
 		"/update _vt.vreplication set state='Running'",
@@ -1082,7 +1082,7 @@ func TestPlayerCopyWildcardTableContinuationWithOptimizeInserts(t *testing.T) {
 		"/update _vt.vreplication set state = 'Copying'",
 		"/update _vt.vreplication set message='Picked source tablet.*",
 		// Copy
-		"replace into dst(id,val) values (3,'uncopied'), (4,'new')",
+		"* into dst(id,val) values (3,'uncopied'), (4,'new')",
 		`/update _vt.copy_state set lastpk.*`,
 		"/delete from _vt.copy_state.*dst",
 		"/update _vt.vreplication set state='Running'",
@@ -1188,7 +1188,7 @@ func TestPlayerCopyTablesStopAfterCopy(t *testing.T) {
 		// The first fast-forward has no starting point. So, it just saves the current position.
 		"/update _vt.vreplication set pos=",
 		"begin",
-		"replace into dst1(id,val) values (1,'aaa'), (2,'bbb')",
+		"* into dst1(id,val) values (1,'aaa'), (2,'bbb')",
 		`/update _vt.copy_state set lastpk='fields:{name:\\"id\\" type:INT32} rows:{lengths:1 values:\\"2\\"}' where vrepl_id=.*`,
 		"commit",
 		// copy of dst1 is done: delete from copy_state.
@@ -1267,7 +1267,7 @@ func TestPlayerCopyTableCancel(t *testing.T) {
 		// The first fast-forward has no starting point. So, it just saves the current position.
 		"/update _vt.vreplication set pos=",
 		"begin",
-		"replace into dst1(id,val) values (1,'aaa'), (2,'bbb')",
+		"* into dst1(id,val) values (1,'aaa'), (2,'bbb')",
 		`/update _vt.copy_state set lastpk='fields:{name:\\"id\\" type:INT32} rows:{lengths:1 values:\\"2\\"}' where vrepl_id=.*`,
 		"commit",
 		// copy of dst1 is done: delete from copy_state.

@@ -512,6 +512,8 @@ func expectDBClientQueries(t *testing.T, queries []string) {
 					panic(err)
 				}
 				match = result
+			} else if query[0] == '*' {
+				match = strings.Contains(got, query[1:])
 			} else {
 				match = (got == query)
 			}
@@ -569,6 +571,8 @@ func expectNontxQueries(t *testing.T, queries []string) {
 					panic(err)
 				}
 				match = result
+			} else if query[0] == '*' {
+				match = strings.Contains(got, query[1:])
 			} else {
 				match = (got == query)
 			}
