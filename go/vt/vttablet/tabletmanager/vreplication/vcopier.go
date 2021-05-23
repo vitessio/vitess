@@ -224,7 +224,6 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 	var bv map[string]*querypb.BindVariable
 	var sqlbuffer bytes2.Buffer
 	var moreRows bool
-	var lastGtid string
 	err = vc.vr.sourceVStreamer.VStreamRows(ctx, initialPlan.SendRule.Filter, lastpkpb, func(rows *binlogdatapb.VStreamRowsResponse) error {
 		for {
 			select {
@@ -239,14 +238,18 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 			}
 		}
 
-		lastGtid = rows.Gtid
+		if rows.Gtid != "" {
+			if err := vc.fastForward(ctx, copyState, rows.Gtid); err != nil {
+				return err
+			}
+		}
 		if vc.tablePlan == nil {
 			if len(rows.Fields) == 0 {
 				return fmt.Errorf("expecting field event first, got: %v", rows)
 			}
-			if err := vc.fastForward(ctx, copyState, rows.Gtid); err != nil {
-				return err
-			}
+			// if err := vc.fastForward(ctx, copyState, rows.Gtid); err != nil {
+			// 	return err
+			// }
 			fieldEvent := &binlogdatapb.FieldEvent{
 				TableName: initialPlan.SendRule.Match,
 				Fields:    rows.Fields,
@@ -275,11 +278,11 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 		_, err = vc.tablePlan.applyBulkInsert(&sqlbuffer, rows, func(sql string) (*sqltypes.Result, error) {
 			start := time.Now()
 			{
-				shortSql := sql
-				if len(shortSql) > 100 {
-					shortSql = shortSql[0:100]
+				shortSQL := sql
+				if len(shortSQL) > 100 {
+					shortSQL = shortSQL[0:100]
 				}
-				fmt.Printf("==================== sql=%v\n", shortSql)
+				fmt.Printf("==================== sql=%v\n", shortSQL)
 			}
 			qr, err := vc.vr.dbClient.ExecuteWithRetry(ctx, sql)
 			if err != nil {
@@ -335,9 +338,6 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 	}
 	if moreRows {
 		return nil
-	}
-	if err := vc.fastForward(ctx, copyState, lastGtid); err != nil {
-		return err
 	}
 	// Getting here means we are certain we are done with the copy, and we delete copy_state
 	log.Infof("Copy of %v finished at lastpk: %v", tableName, bv)
