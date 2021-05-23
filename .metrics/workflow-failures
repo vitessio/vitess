@@ -1,11 +1,3 @@
-2021-01-19T16:07:31Z,Cluster (18),https://github.com/vitessio/vitess/actions/runs/496423146
-2021-01-19T16:07:31Z,Cluster (19),https://github.com/vitessio/vitess/actions/runs/496423129
-2021-01-19T16:07:31Z,Cluster (20),https://github.com/vitessio/vitess/actions/runs/496423158
-2021-01-19T16:07:31Z,Cluster (21),https://github.com/vitessio/vitess/actions/runs/496423141
-2021-01-19T16:07:31Z,Cluster (22),https://github.com/vitessio/vitess/actions/runs/496423133
-2021-01-19T16:07:31Z,Cluster (23),https://github.com/vitessio/vitess/actions/runs/496423139
-2021-01-19T16:07:31Z,Cluster (24),https://github.com/vitessio/vitess/actions/runs/496423152
-2021-01-19T16:07:31Z,Cluster (26),https://github.com/vitessio/vitess/actions/runs/496423125
 2021-01-19T16:07:31Z,Cluster (27),https://github.com/vitessio/vitess/actions/runs/496423157
 2021-01-19T16:07:31Z,Unit Test (mariadb101),https://github.com/vitessio/vitess/actions/runs/496423127
 2021-01-19T16:07:31Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/496423132
@@ -9998,3 +9990,11 @@
 2021-05-23T05:41:09Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/868048901
 2021-05-23T05:41:09Z,endtoend,https://github.com/vitessio/vitess/actions/runs/868048884
 2021-05-23T05:41:09Z,unit_race,https://github.com/vitessio/vitess/actions/runs/868048876
+2021-05-23T05:57:42Z,Cluster (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/868071601
+2021-05-23T05:57:42Z,Unit Test (mariadb101),https://github.com/vitessio/vitess/actions/runs/868071612
+2021-05-23T05:57:42Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/868071603
+2021-05-23T05:57:42Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/868071628
+2021-05-23T05:57:42Z,Unit Test (mysql57),https://github.com/vitessio/vitess/actions/runs/868071597
+2021-05-23T05:57:42Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/868071582
+2021-05-23T05:57:42Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/868071613
+2021-05-23T05:57:42Z,unit_race,https://github.com/vitessio/vitess/actions/runs/868071579
