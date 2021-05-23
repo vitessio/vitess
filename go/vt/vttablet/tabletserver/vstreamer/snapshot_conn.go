@@ -64,6 +64,20 @@ func (conn *snapshotConn) streamWithoutSnapshot(ctx context.Context, table, quer
 
 // startSnapshot starts a streaming query with a snapshot view of the specified table.
 // It returns the gtid of the time when the snapshot was taken.
+func (conn *snapshotConn) streamWithLightweightSnapshot(ctx context.Context, table, query string) (gtid string, err error) {
+	fmt.Printf("======= streamWithSnapshot: sql=%v\n", query)
+	gtid, err = conn.startLightweightSnapshot(ctx, table)
+	if err != nil {
+		return "", err
+	}
+	if err := conn.ExecuteStreamFetch(query); err != nil {
+		return "", err
+	}
+	return gtid, nil
+}
+
+// startSnapshot starts a streaming query with a snapshot view of the specified table.
+// It returns the gtid of the time when the snapshot was taken.
 func (conn *snapshotConn) streamWithSnapshot(ctx context.Context, table, query string) (gtid string, err error) {
 	fmt.Printf("======= streamWithSnapshot: sql=%v\n", query)
 	gtid, err = conn.startSnapshot(ctx, table)
@@ -114,6 +128,27 @@ func (conn *snapshotConn) startSnapshot(ctx context.Context, table string) (gtid
 		return "", err
 	}
 	if _, err := conn.ExecuteFetch("set @@session.time_zone = '+00:00'", 1, false); err != nil {
+		return "", err
+	}
+	return mysql.EncodePosition(mpos), nil
+}
+
+// snapshot performs the snapshotting.
+func (conn *snapshotConn) startLightweightSnapshot(ctx context.Context, table string) (gtid string, err error) {
+	// Starting a transaction now will allow us to start the read later,
+	// which will happen after we release the lock on the table.
+	if _, err := conn.ExecuteFetch("set transaction isolation level repeatable read", 1, false); err != nil {
+		return "", err
+	}
+	if _, err := conn.ExecuteFetch("start transaction with consistent snapshot", 1, false); err != nil {
+		return "", err
+	}
+	if _, err := conn.ExecuteFetch("set @@session.time_zone = '+00:00'", 1, false); err != nil {
+		return "", err
+	}
+
+	mpos, err := conn.MasterPosition()
+	if err != nil {
 		return "", err
 	}
 	return mysql.EncodePosition(mpos), nil
