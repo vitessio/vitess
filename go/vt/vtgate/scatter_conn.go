@@ -367,7 +367,7 @@ func (stc *ScatterConn) StreamExecuteMulti(
 	bindVars []map[string]*querypb.BindVariable,
 	options *querypb.ExecuteOptions,
 	callback func(reply *sqltypes.Result) error,
-) error {
+) []error {
 	// mu protects fieldSent, callback and replyErr
 	var mu sync.Mutex
 	fieldSent := false
@@ -377,7 +377,7 @@ func (stc *ScatterConn) StreamExecuteMulti(
 			return stc.processOneStreamingResult(&mu, &fieldSent, qr, callback)
 		})
 	})
-	return allErrors.AggrError(vterrors.Aggregate)
+	return allErrors.GetErrors()
 }
 
 // timeTracker is a convenience wrapper used by MessageStream

@@ -353,7 +353,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <str> header_opt export_options manifest_opt overwrite_opt format_opt optionally_opt
 %type <str> fields_opts fields_opt_list fields_opt lines_opts lines_opt lines_opt_list
 %type <lock> lock_opt
-%type <columns> ins_column_list column_list column_list_opt
+%type <columns> ins_column_list column_list column_list_opt index_list
 %type <partitions> opt_partition_clause partition_list
 %type <updateExprs> on_dup_opt
 %type <updateExprs> update_list
@@ -2612,7 +2612,7 @@ show_statement:
   }
 | SHOW WARNINGS
   {
-    $$ = &Show{&ShowLegacy{Type: string($2), Scope: ImplicitScope}}
+    $$ = &Show{&ShowBasic{Command: Warnings}}
   }
 /* vitess_topo supports SHOW VITESS_SHARDS / SHOW VITESS_TABLETS */
 | SHOW vitess_topo like_or_where_opt
@@ -3282,6 +3282,24 @@ column_list:
     $$ = append($$, $3)
   }
 
+index_list:
+  sql_id
+  {
+    $$ = Columns{$1}
+  }
+| PRIMARY
+  {
+    $$ = Columns{NewColIdent(string($1))}
+  }
+| index_list ',' sql_id
+  {
+    $$ = append($$, $3)
+  }
+| index_list ',' PRIMARY
+  {
+    $$ = append($$, NewColIdent(string($3)))
+  }
+
 partition_list:
   sql_id
   {
@@ -3442,7 +3460,7 @@ index_hint_list:
   {
     $$ = nil
   }
-| USE INDEX openb column_list closeb
+| USE INDEX openb index_list closeb
   {
     $$ = &IndexHints{Type: UseOp, Indexes: $4}
   }
@@ -3450,11 +3468,11 @@ index_hint_list:
   {
     $$ = &IndexHints{Type: UseOp}
   }
-| IGNORE INDEX openb column_list closeb
+| IGNORE INDEX openb index_list closeb
   {
     $$ = &IndexHints{Type: IgnoreOp, Indexes: $4}
   }
-| FORCE INDEX openb column_list closeb
+| FORCE INDEX openb index_list closeb
   {
     $$ = &IndexHints{Type: ForceOp, Indexes: $4}
   }

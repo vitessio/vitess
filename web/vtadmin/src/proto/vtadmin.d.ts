@@ -2592,8 +2592,8 @@ export namespace vtadmin {
     /** Properties of a GetTabletRequest. */
     interface IGetTabletRequest {
 
-        /** GetTabletRequest hostname */
-        hostname?: (string|null);
+        /** GetTabletRequest alias */
+        alias?: (string|null);
 
         /** GetTabletRequest cluster_ids */
         cluster_ids?: (string[]|null);
@@ -2608,8 +2608,8 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.IGetTabletRequest);
 
-        /** GetTabletRequest hostname. */
-        public hostname: string;
+        /** GetTabletRequest alias. */
+        public alias: string;
 
         /** GetTabletRequest cluster_ids. */
         public cluster_ids: string[];

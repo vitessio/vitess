@@ -76,6 +76,15 @@ func transformRoutePlan(n *routePlan) (*route, error) {
 		tableNameMap[sqlparser.String(t.qtable.table.Name)] = nil
 	}
 
+	for _, predicate := range n.vindexPredicates {
+		switch predicate := predicate.(type) {
+		case *sqlparser.ComparisonExpr:
+			if predicate.Operator == sqlparser.InOp {
+				predicate.Right = sqlparser.ListArg(engine.ListVarName)
+			}
+		}
+	}
+
 	predicates := n.Predicates()
 	var where *sqlparser.Where
 	if predicates != nil {

@@ -553,3 +553,13 @@
     "ShardNameNeeded": true
   }
 }
+
+# show warnings
+"show warnings"
+{
+  "QueryType": "SHOW",
+  "Original": "show warnings",
+  "Instructions": {
+    "OperatorType": "SHOW WARNINGS"
+  }
+}

@@ -38,7 +38,7 @@ type Options struct {
 	// the zero value has compression enabled.
 	DisableCompression  bool
 	ExperimentalOptions struct {
-		TabletFQDNTmpl string
+		TabletURLTmpl string
 	}
 }
 

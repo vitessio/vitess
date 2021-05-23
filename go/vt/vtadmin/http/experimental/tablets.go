@@ -36,7 +36,7 @@ func TabletDebugVarsPassthrough(ctx context.Context, r vtadminhttp.Request, api 
 	vars := r.Vars()
 
 	tablet, err := api.Server().GetTablet(ctx, &vtadminpb.GetTabletRequest{
-		Hostname:   vars["tablet"],
+		Alias:      vars["tablet"],
 		ClusterIds: r.URL.Query()["cluster"],
 	})
 
@@ -49,7 +49,7 @@ func TabletDebugVarsPassthrough(ctx context.Context, r vtadminhttp.Request, api 
 }
 
 func getDebugVars(ctx context.Context, api *vtadminhttp.API, tablet *vtadminpb.Tablet) (map[string]interface{}, error) {
-	tmpl, err := template.New("tablet-fqdn").Parse(api.Options().ExperimentalOptions.TabletFQDNTmpl)
+	tmpl, err := template.New("tablet-fqdn").Parse(api.Options().ExperimentalOptions.TabletURLTmpl)
 	if err != nil {
 		return nil, err
 	}
