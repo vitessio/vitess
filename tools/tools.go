@@ -23,6 +23,7 @@ package tools
 import (
 	_ "github.com/GeertJohan/go.rice/rice"
 	_ "github.com/golang/mock/mockgen"
+	_ "github.com/planetscale/vtprotobuf/cmd/protoc-gen-go-vtproto"
 	_ "golang.org/x/lint"
 	_ "golang.org/x/tools/cmd/cover"
 	_ "golang.org/x/tools/cmd/goimports"
