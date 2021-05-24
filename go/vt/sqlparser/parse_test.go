@@ -1248,6 +1248,12 @@ var (
 			input:  "create table a (b1 bool not null primary key, b2 boolean not null)",
 			output: "create table a (\n\tb1 bool not null primary key,\n\tb2 boolean not null\n)",
 		}, {
+			input:  "create temporary table a (b1 bool not null primary key, b2 boolean not null)",
+			output: "create temporary table a (\n\tb1 bool not null primary key,\n\tb2 boolean not null\n)",
+		}, {
+			input:  "create temporary table if not exists a (\n\t`a` int\n)",
+			output: "create temporary table if not exists a (\n\ta int\n)",
+		}, {
 			input:  "create index a on b (id)",
 			output: "alter table b add index a (id)",
 		}, {

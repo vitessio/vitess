@@ -1568,6 +1568,9 @@ type DDL struct {
 
 	// ProcedureSpec is set for CREATE PROCEDURE operations
 	ProcedureSpec *ProcedureSpec
+
+	// Temporary is set for CREATE TEMPORARY TABLE operations.
+	Temporary bool
 }
 
 // ColumnOrder is used in some DDL statements to specify or change the order of a column in a schema.
@@ -1602,6 +1605,7 @@ const (
 	SpatialStr    = "spatial"
 	FulltextStr   = "fulltext"
 	SetStr        = "set"
+	TemporaryStr  = "temporary"
 )
 
 // Format formats the node.
@@ -1648,12 +1652,18 @@ func (node *DDL) Format(buf *TrackedBuffer) {
 			if node.IfNotExists {
 				notExists = " if not exists"
 			}
+
+			temporary := ""
+			if node.Temporary {
+				temporary = " " + TemporaryStr
+			}
+
 			if node.OptLike != nil {
-				buf.Myprintf("%s table%s %v %v", node.Action, notExists, node.Table, node.OptLike)
+				buf.Myprintf("%s%s table%s %v %v", node.Action, temporary, notExists, node.Table, node.OptLike)
 			} else if node.TableSpec != nil {
-				buf.Myprintf("%s table%s %v %v", node.Action, notExists, node.Table, node.TableSpec)
+				buf.Myprintf("%s%s table%s %v %v", node.Action, temporary, notExists, node.Table, node.TableSpec)
 			} else {
-				buf.Myprintf("%s table%s %v", node.Action, notExists, node.Table)
+				buf.Myprintf("%s%s table%s %v", node.Action, temporary, notExists, node.Table)
 			}
 		}
 	case DropStr:

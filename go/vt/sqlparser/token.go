@@ -422,6 +422,7 @@ var keywords = map[string]int{
 	"table_name":          TABLE_NAME,
 	"tables":              TABLES,
 	"terminated":          TERMINATED,
+	"temporary":		   TEMPORARY,
 	"text":                TEXT,
 	"than":                THAN,
 	"then":                THEN,

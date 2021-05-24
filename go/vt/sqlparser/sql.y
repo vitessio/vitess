@@ -204,7 +204,7 @@ func skipToEnd(yylex interface{}) {
 %token <bytes> STATUS VARIABLES WARNINGS
 %token <bytes> SEQUENCE
 %token <bytes> EACH ROW BEFORE FOLLOWS PRECEDES DEFINER INVOKER
-%token <bytes> INOUT OUT DETERMINISTIC CONTAINS READS MODIFIES SQL SECURITY
+%token <bytes> INOUT OUT DETERMINISTIC CONTAINS READS MODIFIES SQL SECURITY TEMPORARY
 
 // SIGNAL Tokens
 %token <bytes> CLASS_ORIGIN SUBCLASS_ORIGIN MESSAGE_TEXT MYSQL_ERRNO CONSTRAINT_CATALOG CONSTRAINT_SCHEMA
@@ -347,7 +347,7 @@ func skipToEnd(yylex interface{}) {
 %type <str> ignore_opt default_opt
 %type <str> full_opt from_database_opt tables_or_processlist columns_or_fields
 %type <showFilter> like_or_where_opt
-%type <byt> exists_opt not_exists_opt sql_calc_found_rows_opt
+%type <byt> exists_opt not_exists_opt sql_calc_found_rows_opt temp_opt
 %type <str> key_type key_type_opt
 %type <empty> non_add_drop_or_rename_operation
 %type <empty> to_opt to_or_as as_opt column_opt describe
@@ -1273,13 +1273,19 @@ statement_list_statement:
 | begin_end_block
 
 create_table_prefix:
-  CREATE TABLE not_exists_opt table_name
+  CREATE temp_opt TABLE not_exists_opt table_name
   {
     var ne bool
-    if $3 != 0 {
+    if $4 != 0 {
       ne = true
     }
-    $$ = &DDL{Action: CreateStr, Table: $4, IfNotExists: ne}
+
+    var neTemp bool
+    if $2 != 0 {
+      neTemp = true
+    }
+
+    $$ = &DDL{Action: CreateStr, Table: $5, IfNotExists: ne, Temporary: neTemp}
     setDDL(yylex, $$)
   }
 
@@ -4489,6 +4495,11 @@ for_from:
   FOR
 | FROM
 
+temp_opt:
+  { $$ = 0 }
+| TEMPORARY
+  { $$ = 1 }
+
 exists_opt:
   { $$ = 0 }
 | IF EXISTS
@@ -5008,6 +5019,7 @@ non_reserved_keyword:
 | SUBCLASS_ORIGIN
 | TABLES
 | TABLE_NAME
+| TEMPORARY
 | TEXT
 | THAN
 | THREAD_PRIORITY
