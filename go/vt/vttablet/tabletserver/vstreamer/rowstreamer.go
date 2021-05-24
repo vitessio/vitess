@@ -154,7 +154,6 @@ func (rs *rowStreamer) buildPlan() error {
 
 	directives := sqlparser.ExtractCommentDirectives(sel.Comments)
 	rs.strictSnapshot = directives.IsTrue("strictSnapshot")
-
 	return nil
 }
 

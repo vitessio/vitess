@@ -268,8 +268,17 @@ func buildTablePlan(tableName, filter string, pkInfoMap map[string][]*PrimaryKey
 			},
 		})
 	}
-	sendRule.Filter = sqlparser.String(tpb.sendSelect)
 
+	strictSnapshot := false
+	switch tpb.onInsert {
+	case insertOnDup, insertIgnore:
+		strictSnapshot = true
+	}
+	comments := sqlparser.Comments{
+		fmt.Sprintf(`/*vt+ strictSnapshot=%v */`, strictSnapshot),
+	}
+	tpb.sendSelect.Comments = comments
+	sendRule.Filter = sqlparser.String(tpb.sendSelect)
 	tablePlan := tpb.generate()
 	tablePlan.SendRule = sendRule
 	return tablePlan, nil
