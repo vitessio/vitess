@@ -528,6 +528,7 @@ func (tpb *tablePlanBuilder) generateInsertPart(buf *sqlparser.TrackedBuffer) *s
 	if tpb.onInsert == insertIgnore {
 		buf.Myprintf("insert ignore into %v(", tpb.name)
 	} else if tpb.onInsert == insertNormal {
+		// the condition (tpb.onInsert == insertNormal) is true when there is no GROUP BY
 		buf.Myprintf("replace into %v(", tpb.name)
 	} else {
 		buf.Myprintf("insert into %v(", tpb.name)

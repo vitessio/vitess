@@ -223,7 +223,6 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 	var updateCopyState *sqlparser.ParsedQuery
 	var bv map[string]*querypb.BindVariable
 	var sqlbuffer bytes2.Buffer
-	var moreRows bool
 	err = vc.vr.sourceVStreamer.VStreamRows(ctx, initialPlan.SendRule.Filter, lastpkpb, func(rows *binlogdatapb.VStreamRowsResponse) error {
 		for {
 			select {
@@ -322,7 +321,6 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 		if err := vc.vr.dbClient.Commit(); err != nil {
 			return err
 		}
-		moreRows = true
 		fmt.Printf("===========len(rows.Rows) : %v\n", len(rows.Rows))
 		return nil
 	})
@@ -335,9 +333,6 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 	}
 	if err != nil {
 		return err
-	}
-	if moreRows {
-		return nil
 	}
 	// Getting here means we are certain we are done with the copy, and we delete copy_state
 	log.Infof("Copy of %v finished at lastpk: %v", tableName, bv)
