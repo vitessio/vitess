@@ -56,6 +56,7 @@ type waitFor interface {
 
 // Start starts the schema tracking.
 func (t *Tracker) Start() {
+	log.Info("Starting schema tracking")
 	t.startWithWaiter(&noWaiter{})
 }
 
@@ -81,6 +82,7 @@ func (t *Tracker) startWithWaiter(i waitFor) {
 
 // Stop stops the schema tracking
 func (t *Tracker) Stop() {
+	log.Info("Stopping schema tracking")
 	t.cancel()
 }
 
@@ -95,14 +97,14 @@ func (t *Tracker) GetColumns(ks string, tbl string) []vindexes.Column {
 func (t *Tracker) updateSchema(th *discovery.TabletHealth) {
 	tables, err := sqltypes.BuildBindVariable(th.TablesUpdated)
 	if err != nil {
-		log.Errorf("failed to read updated tables from TabletHealth")
+		log.Errorf("failed to read updated tables from TabletHealth: %v", err)
 		return
 	}
 	bv := map[string]*querypb.BindVariable{"tableNames": tables}
 	res, err := th.Conn.Execute(t.ctx, th.Target, mysql.FetchUpdatedTables, bv, 0, 0, nil)
 	if err != nil {
 		// TODO: these tables should now become non-authoritative
-		log.Warningf("error fetching new schema for %s, making them non-authoritative")
+		log.Warningf("error fetching new schema for %v, making them non-authoritative: %v", th.TablesUpdated, err)
 		return
 	}
 

@@ -39,7 +39,11 @@ func TestTracking(t *testing.T) {
 		TabletType: topodatapb.TabletType_MASTER,
 		Cell:       "aa",
 	}
-	tablet := &topodatapb.Tablet{}
+	tablet := &topodatapb.Tablet{
+		Keyspace: target.Keyspace,
+		Shard:    target.Shard,
+		Type:     target.TabletType,
+	}
 	sbc := sandboxconn.NewSandboxConn(tablet)
 	ch := make(chan *discovery.TabletHealth)
 	tracker := NewTracker(ch)
