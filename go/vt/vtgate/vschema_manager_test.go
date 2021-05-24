@@ -13,20 +13,6 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
-//var ctx = context.Background()
-
-type fakeSchema struct {
-	t []SchemaTable
-}
-
-func (f fakeSchema) Tables(_ string) []SchemaTable {
-	return f.t
-}
-
-func (f fakeSchema) ColumnsFor(table string) []vindexes.Column {
-	panic("implement me")
-}
-
 func TestWatchSrvVSchema(t *testing.T) {
 	cols := []vindexes.Column{{
 		Name: sqlparser.NewColIdent("id"),
@@ -117,4 +103,12 @@ func TestWatchSrvVSchema(t *testing.T) {
 			utils.MustMatch(t, tcase.expected, ks.Tables)
 		})
 	}
+}
+
+type fakeSchema struct {
+	t []SchemaTable
+}
+
+func (f fakeSchema) Tables(_ string) []SchemaTable {
+	return f.t
 }
