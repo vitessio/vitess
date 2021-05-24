@@ -221,7 +221,6 @@ func (vp *vplayer) applyRowEvent(ctx context.Context, rowEvent *binlogdatapb.Row
 				if len(shortSQL) > 50 {
 					shortSQL = shortSQL[0:50]
 				}
-				fmt.Printf("============== applyRowEvent: %s\n", shortSQL)
 			}
 			qr, err := vp.vr.dbClient.ExecuteWithRetry(ctx, sql)
 			vp.vr.stats.QueryCount.Add(vp.phase, 1)

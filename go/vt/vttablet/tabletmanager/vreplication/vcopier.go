@@ -210,7 +210,6 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 		return fmt.Errorf("plan not found for table: %s, current plans are: %#v", tableName, plan.TargetTables)
 	}
 
-	fmt.Printf("============ copyPhaseDuration=%v\n", copyPhaseDuration)
 	ctx, cancel := context.WithTimeout(ctx, *copyPhaseDuration)
 	defer cancel()
 
@@ -227,7 +226,6 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 		for {
 			select {
 			case <-ctx.Done():
-				fmt.Printf("============ <-ctx.Done() lastpkpb=%v\n", lastpkpb)
 				return io.EOF
 			default:
 			}
@@ -281,7 +279,6 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 				if len(shortSQL) > 100 {
 					shortSQL = shortSQL[0:100]
 				}
-				fmt.Printf("==================== sql=%v\n", shortSQL)
 			}
 			qr, err := vc.vr.dbClient.ExecuteWithRetry(ctx, sql)
 			if err != nil {
@@ -321,7 +318,6 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 		if err := vc.vr.dbClient.Commit(); err != nil {
 			return err
 		}
-		fmt.Printf("===========len(rows.Rows) : %v\n", len(rows.Rows))
 		return nil
 	})
 	// If there was a timeout, return without an error.
@@ -346,10 +342,6 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 
 func (vc *vcopier) fastForward(ctx context.Context, copyState map[string]*sqltypes.Result, gtid string) error {
 	defer vc.vr.stats.PhaseTimings.Record("fastforward", time.Now())
-	fmt.Printf("========== fastForward: gtid=%v\n", gtid)
-	// if gtid == "" {
-	// 	return nil
-	// }
 	pos, err := mysql.DecodePosition(gtid)
 	if err != nil {
 		return err
