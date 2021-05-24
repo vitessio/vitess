@@ -40,6 +40,12 @@ type Tracker struct {
 	ctx      context.Context
 }
 
+// Table contains the table name and also, whether the information can be trusted about this table.
+type Table struct {
+	Name         string
+	UnknownState bool
+}
+
 // NewTracker creates the tracker object.
 func NewTracker(ch chan *discovery.TabletHealth) *Tracker {
 	return &Tracker{ch: ch, tableMap: map[string][]vindexes.Column{}}
