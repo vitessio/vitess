@@ -235,18 +235,13 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 			}
 		}
 
-		if rows.Gtid != "" {
-			if err := vc.fastForward(ctx, copyState, rows.Gtid); err != nil {
-				return err
-			}
-		}
 		if vc.tablePlan == nil {
 			if len(rows.Fields) == 0 {
 				return fmt.Errorf("expecting field event first, got: %v", rows)
 			}
-			// if err := vc.fastForward(ctx, copyState, rows.Gtid); err != nil {
-			// 	return err
-			// }
+			if err := vc.fastForward(ctx, copyState, rows.Gtid); err != nil {
+				return err
+			}
 			fieldEvent := &binlogdatapb.FieldEvent{
 				TableName: initialPlan.SendRule.Match,
 				Fields:    rows.Fields,
