@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"sync"
 
+	"vitess.io/vitess/go/vt/srvtopo"
+
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/vt/log"
@@ -35,9 +37,9 @@ var _ VSchemaOperator = (*VSchemaManager)(nil)
 // VSchemaManager is used to watch for updates to the vschema and to implement
 // the DDL commands to add / remove vindexes
 type VSchemaManager struct {
-	e                 *Executor
 	mu                sync.Mutex
 	currentSrvVschema *vschemapb.SrvVSchema
+	serv              srvtopo.Server
 }
 
 //GetCurrentVschema return the denormalized VSchema from SrvVSchema
@@ -64,8 +66,8 @@ func (vm *VSchemaManager) GetCurrentSrvVschema() *vschemapb.SrvVSchema {
 //
 // This function will wait until the first value has either been processed
 // or triggered an error before returning.
-func (vm *VSchemaManager) watchSrvVSchema(ctx context.Context, cell string) {
-	vm.e.serv.WatchSrvVSchema(ctx, cell, func(v *vschemapb.SrvVSchema, err error) {
+func (vm *VSchemaManager) watchSrvVSchema(ctx context.Context, cell string, saveVschema func(vschema *vindexes.VSchema, stats *VSchemaStats)) {
+	vm.serv.WatchSrvVSchema(ctx, cell, func(v *vschemapb.SrvVSchema, err error) {
 		// Create a closure to save the vschema. If the value
 		// passed is nil, it means we encountered an error and
 		// we don't know the real value. In this case, we want
@@ -121,13 +123,7 @@ func (vm *VSchemaManager) watchSrvVSchema(ctx context.Context, cell string) {
 		}
 		stats := NewVSchemaStats(vschema, errorMessage)
 
-		// save our value. if there was an error, then keep the
-		// existing vschema instead of overwriting it.
-		if v == nil && vm.e.vschema != nil {
-			vschema = vm.e.vschema
-		}
-
-		vm.e.SaveVSchema(vschema, stats)
+		saveVschema(vschema, stats)
 	})
 }
 
@@ -135,7 +131,7 @@ func (vm *VSchemaManager) watchSrvVSchema(ctx context.Context, cell string) {
 // the given keyspace is updated in the global topo, and the full SrvVSchema
 // is updated in all known cells.
 func (vm *VSchemaManager) UpdateVSchema(ctx context.Context, ksName string, vschema *vschemapb.SrvVSchema) error {
-	topoServer, err := vm.e.serv.GetTopoServer()
+	topoServer, err := vm.serv.GetTopoServer()
 	if err != nil {
 		return err
 	}

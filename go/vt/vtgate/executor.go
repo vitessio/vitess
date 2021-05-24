@@ -122,8 +122,8 @@ func NewExecutor(ctx context.Context, serv srvtopo.Server, cell string, resolver
 	}
 
 	vschemaacl.Init()
-	e.vm = &VSchemaManager{e: e}
-	e.vm.watchSrvVSchema(ctx, cell)
+	e.vm = &VSchemaManager{serv: serv}
+	e.vm.watchSrvVSchema(ctx, cell, e.SaveVSchema)
 
 	executorOnce.Do(func() {
 		stats.NewGaugeFunc("QueryPlanCacheLength", "Query plan cache length", func() int64 {
@@ -1140,7 +1140,9 @@ func (e *Executor) VSchema() *vindexes.VSchema {
 func (e *Executor) SaveVSchema(vschema *vindexes.VSchema, stats *VSchemaStats) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	e.vschema = vschema
+	if vschema != nil {
+		e.vschema = vschema
+	}
 	e.vschemaStats = stats
 	e.plans.Clear()
 
