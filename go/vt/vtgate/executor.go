@@ -122,8 +122,13 @@ func NewExecutor(ctx context.Context, serv srvtopo.Server, cell string, resolver
 	}
 
 	vschemaacl.Init()
-	e.vm = &VSchemaManager{serv: serv}
-	e.vm.watchSrvVSchema(ctx, cell, e.SaveVSchema)
+	// we subscribe to update from the VSchemaManager
+	e.vm = &VSchemaManager{
+		subscriber: e.SaveVSchema,
+		serv:       serv,
+		cell:       cell,
+	}
+	serv.WatchSrvVSchema(ctx, cell, e.vm.VSchemaUpdate)
 
 	executorOnce.Do(func() {
 		stats.NewGaugeFunc("QueryPlanCacheLength", "Query plan cache length", func() int64 {
