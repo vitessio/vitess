@@ -42,15 +42,6 @@ type VSchemaManager struct {
 	serv              srvtopo.Server
 }
 
-//GetCurrentVschema return the denormalized VSchema from SrvVSchema
-func (vm *VSchemaManager) GetCurrentVschema() (*vindexes.VSchema, error) {
-	srvVschema := vm.GetCurrentSrvVschema()
-	if srvVschema == nil {
-		return nil, nil
-	}
-	return vindexes.BuildVSchema(srvVschema)
-}
-
 // GetCurrentSrvVschema returns a copy of the latest SrvVschema from the
 // topo watch
 func (vm *VSchemaManager) GetCurrentSrvVschema() *vschemapb.SrvVSchema {
