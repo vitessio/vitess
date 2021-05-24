@@ -356,7 +356,9 @@ func TestExtractCommentDirectives(t *testing.T) {
 			}
 		})
 	}
+}
 
+func TestIsSet(t *testing.T) {
 	d := CommentDirectives{
 		"ONE_OPT": true,
 		"TWO_OPT": false,
@@ -369,25 +371,61 @@ func TestExtractCommentDirectives(t *testing.T) {
 	if !d.IsSet("ONE_OPT") {
 		t.Errorf("d.IsSet(ONE_OPT) should be true")
 	}
-
 	if d.IsSet("TWO_OPT") {
 		t.Errorf("d.IsSet(TWO_OPT) should be false")
 	}
-
 	if !d.IsSet("three") {
 		t.Errorf("d.IsSet(three) should be true")
 	}
-
 	if d.IsSet("four") {
 		t.Errorf("d.IsSet(four) should be false")
 	}
-
 	if d.IsSet("five") {
 		t.Errorf("d.IsSet(five) should be false")
 	}
-
 	if d.IsSet("six") {
 		t.Errorf("d.IsSet(six) should be false")
+	}
+}
+
+func TestIsTrue(t *testing.T) {
+	d := CommentDirectives{
+		"ONE_OPT": true,
+		"TWO_OPT": false,
+		"three":   1,
+		"four":    2,
+		"five":    0,
+		"six":     "true",
+		"seven":   "1",
+		"eight":   "0",
+	}
+
+	if !d.IsTrue("ONE_OPT") {
+		t.Errorf("d.IsSet(ONE_OPT) should be true")
+	}
+	if d.IsTrue("TWO_OPT") {
+		t.Errorf("d.IsSet(TWO_OPT) should be false")
+	}
+	if !d.IsTrue("three") {
+		t.Errorf("d.IsSet(three) should be true")
+	}
+	if d.IsTrue("four") {
+		t.Errorf("d.IsSet(four) should be false")
+	}
+	if d.IsTrue("five") {
+		t.Errorf("d.IsSet(five) should be false")
+	}
+	if !d.IsTrue("six") {
+		t.Errorf("d.IsSet(six) should be true")
+	}
+	if !d.IsTrue("seven") {
+		t.Errorf("d.IsSet(seven) should be true")
+	}
+	if d.IsTrue("eight") {
+		t.Errorf("d.IsSet(eight) should be false")
+	}
+	if d.IsTrue("no-such-key") {
+		t.Errorf("d.IsSet(no-such-key) should be false")
 	}
 }
 

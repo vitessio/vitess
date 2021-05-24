@@ -17,6 +17,7 @@ limitations under the License.
 package sqlparser
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 	"unicode"
@@ -275,6 +276,17 @@ func (d CommentDirectives) IsSet(key string) bool {
 		return intVal == 1
 	}
 	return false
+}
+
+// IsTrue checks the directive map for the named directive and returns
+// true if the directive is set and has a true value, which can be:
+// - true boolean
+// - 1 int
+// - a string that evaluates as true
+func (d CommentDirectives) IsTrue(key string) bool {
+	value := fmt.Sprintf("%v", d[key])
+	isTrue, _ := strconv.ParseBool(value)
+	return isTrue
 }
 
 // SkipQueryPlanCacheDirective returns true if skip query plan cache directive is set to true in query.

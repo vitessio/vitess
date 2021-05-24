@@ -126,7 +126,7 @@ func (rs *rowStreamer) Stream() error {
 func (rs *rowStreamer) buildPlan() error {
 	// This pre-parsing is required to extract the table name
 	// and create its metadata.
-	_, fromTable, err := analyzeSelect(rs.query)
+	sel, fromTable, err := analyzeSelect(rs.query)
 	if err != nil {
 		return err
 	}
@@ -151,7 +151,11 @@ func (rs *rowStreamer) buildPlan() error {
 	if err != nil {
 		return err
 	}
-	return err
+
+	directives := sqlparser.ExtractCommentDirectives(sel.Comments)
+	rs.strictSnapshot = directives.IsTrue("strictSnapshot")
+
+	return nil
 }
 
 func buildPKColumns(st *binlogdatapb.MinimalTable) ([]int, error) {
