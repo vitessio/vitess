@@ -166,14 +166,20 @@ func (vm *VSchemaManager) updateFromSchema(vschema *vindexes.VSchema) {
 			}
 			vTbl := ks.Tables[tbl.Name]
 			if vTbl == nil {
+				// a table that is unknown by the vschema. we add it as a normal table
 				ks.Tables[tbl.Name] = &vindexes.Table{
 					Name:                    sqlparser.NewTableIdent(tbl.Name),
 					Keyspace:                ks.Keyspace,
 					Columns:                 tbl.Columns,
 					ColumnListAuthoritative: true,
 				}
+				continue
+			}
+			if !vTbl.ColumnListAuthoritative {
+				// if we found the matching table and the vschema view of it is not authoritative, then we just update the columns of the table
+				vTbl.Columns = tbl.Columns
+				vTbl.ColumnListAuthoritative = true
 			}
 		}
-
 	}
 }
