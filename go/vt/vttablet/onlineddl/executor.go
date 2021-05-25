@@ -534,6 +534,8 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 	if err != nil {
 		return err
 	}
+	isVreplicationTestSuite := onlineDDL.StrategySetting().IsVreplicationTestSuite()
+
 	// come up with temporary name for swap table
 	swapTable, err := schema.CreateUUID()
 	if err != nil {
@@ -572,6 +574,19 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 	}
 	defer toggleWrites(true)
 
+	if isVreplicationTestSuite {
+		// The testing suite may inject queries internally from the server via a recurring EVENT.
+		// Those queries are unaffected by UpdateSourceBlacklistedTables() because they don't go through Vitess.
+		// We therefore hard-rename the table elsewhere, such that the queries will hard-fail.
+		beforeTableName := fmt.Sprintf("%s_before", onlineDDL.Table)
+		parsed := sqlparser.BuildParsedQuery(sqlRenameTable,
+			onlineDDL.Table, beforeTableName,
+		)
+		if _, err = e.execQuery(ctx, parsed.Query); err != nil {
+			return err
+		}
+	}
+
 	// Writes are now disabled on table. Read up-to-date vreplication info, specifically to get latest (and fixed) pos:
 	s, err = e.readVReplStream(ctx, s.workflow, false)
 	if err != nil {
@@ -598,12 +613,10 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 
 	// rename tables atomically (remember, writes on source tables are stopped)
 	{
-		if onlineDDL.StrategySetting().IsVreplicationTestSuite() {
+		if isVreplicationTestSuite {
 			// this is used in Vitess endtoend testing suite
-			beforeTableName := fmt.Sprintf("%s_before", onlineDDL.Table)
 			afterTableName := fmt.Sprintf("%s_after", onlineDDL.Table)
-			parsed := sqlparser.BuildParsedQuery(sqlRenameTwoTables,
-				onlineDDL.Table, beforeTableName,
+			parsed := sqlparser.BuildParsedQuery(sqlRenameTable,
 				vreplTable, afterTableName,
 			)
 			if _, err = e.execQuery(ctx, parsed.Query); err != nil {
