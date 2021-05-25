@@ -46,16 +46,9 @@ type VSchemaManager struct {
 	schema            SchemaInfo
 }
 
-// SchemaTable contains the table name, columns and the accuracy of the information.
-type SchemaTable struct {
-	Name    string
-	Columns []vindexes.Column
-	Unknown bool
-}
-
 // SchemaInfo is an interface to schema tracker.
 type SchemaInfo interface {
-	Tables(ks string) []SchemaTable
+	Tables(ks string) map[string][]vindexes.Column
 }
 
 // GetCurrentSrvVschema returns a copy of the latest SrvVschema from the
@@ -196,24 +189,23 @@ func (vm *VSchemaManager) buildAndEnhanceVSchema(v *vschemapb.SrvVSchema) (*vind
 
 func (vm *VSchemaManager) updateFromSchema(vschema *vindexes.VSchema) {
 	for ksName, ks := range vschema.Keyspaces {
-		for _, tbl := range vm.schema.Tables(ksName) {
-			if tbl.Unknown {
-				continue
-			}
-			vTbl := ks.Tables[tbl.Name]
+		m := vm.schema.Tables(ksName)
+
+		for tblName, columns := range m {
+			vTbl := ks.Tables[tblName]
 			if vTbl == nil {
 				// a table that is unknown by the vschema. we add it as a normal table
-				ks.Tables[tbl.Name] = &vindexes.Table{
-					Name:                    sqlparser.NewTableIdent(tbl.Name),
+				ks.Tables[tblName] = &vindexes.Table{
+					Name:                    sqlparser.NewTableIdent(tblName),
 					Keyspace:                ks.Keyspace,
-					Columns:                 tbl.Columns,
+					Columns:                 columns,
 					ColumnListAuthoritative: true,
 				}
 				continue
 			}
 			if !vTbl.ColumnListAuthoritative {
 				// if we found the matching table and the vschema view of it is not authoritative, then we just update the columns of the table
-				vTbl.Columns = tbl.Columns
+				vTbl.Columns = columns
 				vTbl.ColumnListAuthoritative = true
 			}
 		}
