@@ -30,25 +30,30 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
-// Tracker contains the required fields to perform schema tracking.
-type Tracker struct {
-	ch     chan *discovery.TabletHealth
-	cancel context.CancelFunc
+type (
+	keyspace  = string
+	tableName = string
 
-	mu       sync.Mutex
-	tableMap map[string][]vindexes.Column
-	ctx      context.Context
-}
+	// Tracker contains the required fields to perform schema tracking.
+	Tracker struct {
+		ch     chan *discovery.TabletHealth
+		cancel context.CancelFunc
 
-// Table contains the table name and also, whether the information can be trusted about this table.
-type Table struct {
-	Name         string
-	UnknownState bool
-}
+		mu     sync.Mutex
+		tables *tableMap
+		ctx    context.Context
+	}
+
+	// Table contains the table name and also, whether the information can be trusted about this table.
+	Table struct {
+		Name         string
+		UnknownState bool
+	}
+)
 
 // NewTracker creates the tracker object.
 func NewTracker(ch chan *discovery.TabletHealth) *Tracker {
-	return &Tracker{ch: ch, tableMap: map[string][]vindexes.Column{}}
+	return &Tracker{ch: ch, tables: &tableMap{m: map[keyspace]map[tableName][]vindexes.Column{}}}
 }
 
 // waitFor is an interface we use to make it possible to test this concurrent code
@@ -96,8 +101,8 @@ func (t *Tracker) Stop() {
 func (t *Tracker) GetColumns(ks string, tbl string) []vindexes.Column {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	key := ks + "." + tbl
-	return t.tableMap[key]
+
+	return t.tables.get(ks, tbl)
 }
 
 func (t *Tracker) updateSchema(th *discovery.TabletHealth) {
@@ -120,20 +125,19 @@ func (t *Tracker) updateSchema(th *discovery.TabletHealth) {
 	// first we empty all prior schema. deleted tables will not show up in the result,
 	// so this is the only chance to delete
 	for _, tbl := range th.TablesUpdated {
-		key := th.Target.Keyspace + "." + tbl
-		delete(t.tableMap, key)
+		t.tables.delete(th.Target.Keyspace, tbl)
 	}
 
 	for _, row := range res.Rows {
 		tbl := row[0].ToString()
 		colName := row[1].ToString()
 		colType := row[2].ToString()
-		key := th.Target.Keyspace + "." + tbl
 
 		cType := sqlparser.ColumnType{Type: colType}
 		col := vindexes.Column{Name: sqlparser.NewColIdent(colName), Type: cType.SQLType()}
+		cols := t.tables.get(th.Target.Keyspace, tbl)
 
-		t.tableMap[key] = append(t.tableMap[key], col)
+		t.tables.set(th.Target.Keyspace, tbl, append(cols, col))
 	}
 }
 
@@ -144,3 +148,32 @@ func (n *noWaiter) done() {}
 func (n *noWaiter) wait() {}
 
 func (n *noWaiter) reset() {}
+
+type tableMap struct {
+	m map[keyspace]map[tableName][]vindexes.Column
+}
+
+func (tm *tableMap) set(ks, tbl string, cols []vindexes.Column) {
+	m := tm.m[ks]
+	if m == nil {
+		m = make(map[tableName][]vindexes.Column)
+		tm.m[ks] = m
+	}
+	m[tbl] = cols
+}
+
+func (tm *tableMap) get(ks, tbl string) []vindexes.Column {
+	m := tm.m[ks]
+	if m == nil {
+		return nil
+	}
+	return m[tbl]
+}
+
+func (tm *tableMap) delete(ks, tbl string) {
+	m := tm.m[ks]
+	if m == nil {
+		return
+	}
+	delete(m, tbl)
+}
