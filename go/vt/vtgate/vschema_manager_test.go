@@ -30,12 +30,12 @@ func TestWatchSrvVSchema(t *testing.T) {
 	tcases := []struct {
 		name       string
 		srvVschema *vschemapb.SrvVSchema
-		st         []SchemaTable
+		schema     map[string][]vindexes.Column
 		expected   map[string]*vindexes.Table
 	}{{
 		name:       "Single table known by mysql schema and not by vschema",
 		srvVschema: &vschemapb.SrvVSchema{Keyspaces: map[string]*vschemapb.Keyspace{"ks": {}}},
-		st:         []SchemaTable{{Name: "tbl", Columns: cols}},
+		schema:     map[string][]vindexes.Column{"tbl": cols},
 		expected: map[string]*vindexes.Table{
 			"dual": dual,
 			"tbl": {
@@ -52,7 +52,7 @@ func TestWatchSrvVSchema(t *testing.T) {
 				"tbl": {}, // we know of it, but nothing else
 			},
 		}}},
-		st: []SchemaTable{{Name: "tbl", Columns: cols}},
+		schema: map[string][]vindexes.Column{"tbl": cols},
 		expected: map[string]*vindexes.Table{
 			"dual": dual,
 			"tbl": {
@@ -74,7 +74,7 @@ func TestWatchSrvVSchema(t *testing.T) {
 					ColumnListAuthoritative: true},
 			},
 		}}},
-		st: []SchemaTable{{Name: "tbl", Columns: cols}},
+		schema: map[string][]vindexes.Column{"tbl": cols},
 		expected: map[string]*vindexes.Table{
 			"dual": dual,
 			"tbl": {
@@ -94,7 +94,7 @@ func TestWatchSrvVSchema(t *testing.T) {
 	for _, tcase := range tcases {
 		t.Run("VSchemaUpdate - "+tcase.name, func(t *testing.T) {
 			vs = nil
-			vm.schema = fakeSchema{t: tcase.st}
+			vm.schema = &fakeSchema{t: tcase.schema}
 			vm.VSchemaUpdate(tcase.srvVschema, nil)
 
 			require.NotNil(t, vs)
@@ -104,7 +104,7 @@ func TestWatchSrvVSchema(t *testing.T) {
 		})
 		t.Run("Schema updated - "+tcase.name, func(t *testing.T) {
 			vs = nil
-			vm.schema = fakeSchema{t: tcase.st}
+			vm.schema = &fakeSchema{t: tcase.schema}
 			vm.currentSrvVschema = tcase.srvVschema
 			vm.Rebuild()
 
@@ -117,9 +117,11 @@ func TestWatchSrvVSchema(t *testing.T) {
 }
 
 type fakeSchema struct {
-	t []SchemaTable
+	t map[string][]vindexes.Column
 }
 
-func (f fakeSchema) Tables(_ string) []SchemaTable {
+var _ SchemaInfo = (*fakeSchema)(nil)
+
+func (f *fakeSchema) Tables(string) map[string][]vindexes.Column {
 	return f.t
 }
