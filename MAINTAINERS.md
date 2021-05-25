@@ -19,7 +19,7 @@ The following is the full list, alphabetically ordered.
 * Rohit Nayak ([rohit-nayak-ps](https://github.com/rohit-nayak-ps)) rohit@planetscale.com
 * Shlomi Noach ([shlomi-noach](https://github.com/shlomi-noach)) shlomi@planetscale.com
 * Sugu Sougoumarane ([sougou](https://github.com/sougou)) sougou@planetscale.com
-* Vicent Marti ((vmg])(https://github.com/vmg)) vmg@planetscale.com
+* Vicent Marti ([vmg])(https://github.com/vmg)) vmg@planetscale.com
 
 ## Areas of expertise
 
