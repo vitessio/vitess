@@ -111,14 +111,15 @@ var retainOnlineDDLTables = flag.Duration("retain_online_ddl_tables", 24*time.Ho
 var migrationNextCheckIntervals = []time.Duration{1 * time.Second, 5 * time.Second, 10 * time.Second, 20 * time.Second}
 
 const (
-	maxPasswordLength             = 32 // MySQL's *replication* password may not exceed 32 characters
-	staleMigrationMinutes         = 10
-	progressPctStarted    float64 = 0
-	progressPctFull       float64 = 100.0
-	etaSecondsUnknown             = -1
-	etaSecondsNow                 = 0
-	databasePoolSize              = 3
-	cutOverThreshold              = 3 * time.Second
+	maxPasswordLength                        = 32 // MySQL's *replication* password may not exceed 32 characters
+	staleMigrationMinutes                    = 10
+	progressPctStarted               float64 = 0
+	progressPctFull                  float64 = 100.0
+	etaSecondsUnknown                        = -1
+	etaSecondsNow                            = 0
+	databasePoolSize                         = 3
+	cutOverThreshold                         = 3 * time.Second
+	vreplicationTestSuiteWaitSeconds         = 5
 )
 
 var (
@@ -2123,6 +2124,9 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 	for _, row := range r.Named().Rows {
 		uuid := row["migration_uuid"].ToString()
 		strategy := schema.DDLStrategy(row["strategy"].ToString())
+		strategySettings := schema.NewDDLStrategySetting(strategy, row["options"].ToString())
+		elapsedSeconds := row.AsInt64("elapsed_seconds", 0)
+
 		switch strategy {
 		case schema.DDLStrategyOnline:
 			{
@@ -2130,6 +2134,10 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 				running, s, err := e.isVReplMigrationRunning(ctx, uuid)
 				if err != nil {
 					return countRunnning, cancellable, err
+				}
+				isVreplicationTestSuite := strategySettings.IsVreplicationTestSuite()
+				if isVreplicationTestSuite {
+					e.triggerNextCheckInterval()
 				}
 				if running {
 					// This VRepl migration may have started from outside this tablet, so
@@ -2140,6 +2148,13 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 					isReady, err := e.isVReplMigrationReadyToCutOver(ctx, s)
 					if err != nil {
 						return countRunnning, cancellable, err
+					}
+					if isReady && isVreplicationTestSuite {
+						// This is a endtoend test suite execution. We intentionally delay it by at least
+						// vreplicationTestSuiteWaitSeconds
+						if elapsedSeconds < vreplicationTestSuiteWaitSeconds {
+							isReady = false
+						}
 					}
 					if isReady {
 						if err := e.cutOverVReplMigration(ctx, s); err != nil {
