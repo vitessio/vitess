@@ -55,36 +55,6 @@ const (
 	renameTableTemplate = "_%.59s_old" // limit table name to 64 characters
 )
 
-// TrafficSwitchDirection specifies the switching direction.
-type TrafficSwitchDirection int
-
-// The following constants define the switching direction.
-const (
-	DirectionForward = TrafficSwitchDirection(iota)
-	DirectionBackward
-)
-
-// TableRemovalType specifies the way the a table will be removed
-type TableRemovalType int
-
-// The following consts define if DropSource will drop or rename the table
-const (
-	DropTable = TableRemovalType(iota)
-	RenameTable
-)
-
-func (trt TableRemovalType) String() string {
-	types := [...]string{
-		"DROP TABLE",
-		"RENAME TABLE",
-	}
-	if trt < DropTable || trt > RenameTable {
-		return "Unknown"
-	}
-
-	return types[trt]
-}
-
 // accessType specifies the type of access for a shard (allow/disallow writes).
 type accessType int
 
@@ -298,29 +268,29 @@ func (wr *Wrangler) doCellsHaveRdonlyTablets(ctx context.Context, cells []string
 }
 
 // SwitchReads is a generic way of switching read traffic for a resharding workflow.
-func (wr *Wrangler) SwitchReads(ctx context.Context, targetKeyspace, workflow string, servedTypes []topodatapb.TabletType,
-	cells []string, direction TrafficSwitchDirection, dryRun bool) (*[]string, error) {
+func (wr *Wrangler) SwitchReads(ctx context.Context, targetKeyspace, workflowName string, servedTypes []topodatapb.TabletType,
+	cells []string, direction workflow.TrafficSwitchDirection, dryRun bool) (*[]string, error) {
 
-	ts, ws, err := wr.getWorkflowState(ctx, targetKeyspace, workflow)
+	ts, ws, err := wr.getWorkflowState(ctx, targetKeyspace, workflowName)
 	if err != nil {
 		wr.Logger().Errorf("getWorkflowState failed: %v", err)
 		return nil, err
 	}
 	if ts == nil {
-		errorMsg := fmt.Sprintf("workflow %s not found in keyspace %s", workflow, targetKeyspace)
+		errorMsg := fmt.Sprintf("workflow %s not found in keyspace %s", workflowName, targetKeyspace)
 		wr.Logger().Errorf(errorMsg)
 		return nil, fmt.Errorf(errorMsg)
 	}
-	log.Infof("SwitchReads: %s.%s tt %+v, cells %+v, workflow state: %+v", targetKeyspace, workflow, servedTypes, cells, ws)
+	log.Infof("SwitchReads: %s.%s tt %+v, cells %+v, workflow state: %+v", targetKeyspace, workflowName, servedTypes, cells, ws)
 	var switchReplicas, switchRdonly bool
 	for _, servedType := range servedTypes {
 		if servedType != topodatapb.TabletType_REPLICA && servedType != topodatapb.TabletType_RDONLY {
 			return nil, fmt.Errorf("tablet type must be REPLICA or RDONLY: %v", servedType)
 		}
-		if direction == DirectionBackward && servedType == topodatapb.TabletType_REPLICA && len(ws.ReplicaCellsSwitched) == 0 {
+		if direction == workflow.DirectionBackward && servedType == topodatapb.TabletType_REPLICA && len(ws.ReplicaCellsSwitched) == 0 {
 			return nil, fmt.Errorf("requesting reversal of SwitchReads for REPLICAs but REPLICA reads have not been switched")
 		}
-		if direction == DirectionBackward && servedType == topodatapb.TabletType_RDONLY && len(ws.RdonlyCellsSwitched) == 0 {
+		if direction == workflow.DirectionBackward && servedType == topodatapb.TabletType_RDONLY && len(ws.RdonlyCellsSwitched) == 0 {
 			return nil, fmt.Errorf("requesting reversal of SwitchReads for RDONLYs but RDONLY reads have not been switched")
 		}
 		switch servedType {
@@ -662,8 +632,8 @@ func (wr *Wrangler) finalizeMigrateWorkflow(ctx context.Context, targetKeyspace,
 }
 
 // DropSources cleans up source tables, shards and blacklisted tables after a MoveTables/Reshard is completed
-func (wr *Wrangler) DropSources(ctx context.Context, targetKeyspace, workflow string, removalType TableRemovalType, keepData, force, dryRun bool) (*[]string, error) {
-	ts, err := wr.buildTrafficSwitcher(ctx, targetKeyspace, workflow)
+func (wr *Wrangler) DropSources(ctx context.Context, targetKeyspace, workflowName string, removalType workflow.TableRemovalType, keepData, force, dryRun bool) (*[]string, error) {
+	ts, err := wr.buildTrafficSwitcher(ctx, targetKeyspace, workflowName)
 	if err != nil {
 		wr.Logger().Errorf("buildTrafficSwitcher failed: %v", err)
 		return nil, err
@@ -861,7 +831,7 @@ func (ts *trafficSwitcher) compareShards(ctx context.Context, keyspace string, s
 	return nil
 }
 
-func (ts *trafficSwitcher) switchTableReads(ctx context.Context, cells []string, servedTypes []topodatapb.TabletType, direction TrafficSwitchDirection) error {
+func (ts *trafficSwitcher) switchTableReads(ctx context.Context, cells []string, servedTypes []topodatapb.TabletType, direction workflow.TrafficSwitchDirection) error {
 	log.Infof("switchTableReads: servedTypes: %+v, direction %t", servedTypes, direction)
 	rules, err := topotools.GetRoutingRules(ctx, ts.wr.ts)
 	if err != nil {
@@ -875,7 +845,7 @@ func (ts *trafficSwitcher) switchTableReads(ctx context.Context, cells []string,
 	for _, servedType := range servedTypes {
 		tt := strings.ToLower(servedType.String())
 		for _, table := range ts.tables {
-			if direction == DirectionForward {
+			if direction == workflow.DirectionForward {
 				log.Infof("Route direction forward")
 				toTarget := []string{ts.targetKeyspace + "." + table}
 				rules[table+"@"+tt] = toTarget
@@ -896,9 +866,9 @@ func (ts *trafficSwitcher) switchTableReads(ctx context.Context, cells []string,
 	return ts.wr.ts.RebuildSrvVSchema(ctx, cells)
 }
 
-func (ts *trafficSwitcher) switchShardReads(ctx context.Context, cells []string, servedTypes []topodatapb.TabletType, direction TrafficSwitchDirection) error {
+func (ts *trafficSwitcher) switchShardReads(ctx context.Context, cells []string, servedTypes []topodatapb.TabletType, direction workflow.TrafficSwitchDirection) error {
 	var fromShards, toShards []*topo.ShardInfo
-	if direction == DirectionForward {
+	if direction == workflow.DirectionForward {
 		fromShards, toShards = ts.sourceShards(), ts.targetShards()
 	} else {
 		fromShards, toShards = ts.targetShards(), ts.sourceShards()
@@ -1441,11 +1411,11 @@ func getRenameFileName(tableName string) string {
 	return fmt.Sprintf(renameTableTemplate, tableName)
 }
 
-func (ts *trafficSwitcher) removeSourceTables(ctx context.Context, removalType TableRemovalType) error {
+func (ts *trafficSwitcher) removeSourceTables(ctx context.Context, removalType workflow.TableRemovalType) error {
 	err := ts.forAllSources(func(source *workflow.MigrationSource) error {
 		for _, tableName := range ts.tables {
 			query := fmt.Sprintf("drop table %s.%s", source.GetPrimary().DbName(), tableName)
-			if removalType == DropTable {
+			if removalType == workflow.DropTable {
 				ts.wr.Logger().Infof("Dropping table %s.%s\n", source.GetPrimary().DbName(), tableName)
 			} else {
 				renameName := getRenameFileName(tableName)
