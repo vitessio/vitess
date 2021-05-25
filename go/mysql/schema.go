@@ -100,7 +100,13 @@ where table_schema = database()`
 from _vt.schemacopy 
 where table_schema = database() and 
 	table_name in :tableNames 
-order by ordinal_position`
+order by table_name, ordinal_position`
+
+	// FetchTables queries fetches all information about tables
+	FetchTables = `select table_name, column_name, data_type 
+from _vt.schemacopy 
+where table_schema = database() 
+order by table_name, ordinal_position`
 )
 
 // VTDatabaseInit contains all the schema creation queries needed to

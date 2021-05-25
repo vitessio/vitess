@@ -48,10 +48,17 @@ func TestTracking(t *testing.T) {
 	sbc := sandboxconn.NewSandboxConn(tablet)
 	ch := make(chan *discovery.TabletHealth)
 	tracker := NewTracker(ch)
+	fields := sqltypes.MakeTestFields("table_name|col_name|col_type", "varchar|varchar|varchar")
+	sbc.SetResults([]*sqltypes.Result{sqltypes.MakeTestResult(
+		fields,
+		"prior|id|int",
+	)})
+
+	err := tracker.LoadKeyspace(sbc, target)
+	require.NoError(t, err)
 
 	tracker.Start()
 	defer tracker.Stop()
-	fields := sqltypes.MakeTestFields("table_name|col_name|col_type", "varchar|varchar|varchar")
 	testcases := []struct {
 		tName  string
 		result *sqltypes.Result
@@ -72,16 +79,18 @@ func TestTracking(t *testing.T) {
 				{Name: sqlparser.NewColIdent("name"), Type: querypb.Type_VARCHAR}},
 			"t2": {
 				{Name: sqlparser.NewColIdent("id"), Type: querypb.Type_VARCHAR}},
+			"prior": {
+				{Name: sqlparser.NewColIdent("id"), Type: querypb.Type_INT32}},
 		},
 	}, {
-		tName: "delete t1, updated t2 and new t3",
+		tName: "delete t1 and prior, updated t2 and new t3",
 		result: sqltypes.MakeTestResult(
 			fields,
 			"t2|id|varchar",
 			"t2|name|varchar",
 			"t3|id|datetime",
 		),
-		updTbl: []string{"t1", "t2", "t3"},
+		updTbl: []string{"prior", "t1", "t2", "t3"},
 		exp: map[string][]vindexes.Column{
 			"t2": {
 				{Name: sqlparser.NewColIdent("id"), Type: querypb.Type_VARCHAR},

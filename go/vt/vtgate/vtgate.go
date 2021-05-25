@@ -26,6 +26,8 @@ import (
 	"strings"
 	"time"
 
+	"vitess.io/vitess/go/vt/key"
+
 	"context"
 
 	"vitess.io/vitess/go/acl"
@@ -202,6 +204,7 @@ func Init(ctx context.Context, serv srvtopo.Server, cell string, tabletTypesToWa
 		MaxMemoryUsage: *queryPlanCacheMemory,
 		LFU:            *queryPlanCacheLFU,
 	}
+	addKeyspaceToTracker(ctx, srvResolver, st, gw)
 
 	executor := NewExecutor(ctx, serv, cell, resolver, *normalizeQueries, *warnShardedOnly, *streamBufferSize, cacheCfg, st)
 
@@ -263,6 +266,24 @@ func Init(ctx context.Context, serv srvtopo.Server, cell string, tabletTypesToWa
 	initAPI(gw.hc)
 
 	return rpcVTGate
+}
+
+func addKeyspaceToTracker(ctx context.Context, srvResolver *srvtopo.Resolver, st *vtschema.Tracker, gw *TabletGateway) {
+	keyspaces, err := srvResolver.GetAllKeyspaces(ctx)
+	if err != nil {
+		log.Warningf("Unable to get all keyspaces: %v", err)
+		return
+	}
+	for _, keyspace := range keyspaces {
+		dest, err := srvResolver.ResolveDestination(ctx, keyspace, topodatapb.TabletType_MASTER, key.DestinationAnyShard{})
+		if err != nil {
+			log.Warningf("Unable to resolve destination: %v", err)
+		}
+		err = st.LoadKeyspace(gw, dest[0].Target)
+		if err != nil {
+			log.Warningf("Unable to add keyspace to tracker: %v", err)
+		}
+	}
 }
 
 func (vtg *VTGate) registerDebugHealthHandler() {

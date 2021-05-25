@@ -20,6 +20,8 @@ import (
 	"context"
 	"sync"
 
+	"vitess.io/vitess/go/vt/vttablet/queryservice"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -55,6 +57,16 @@ type (
 // NewTracker creates the tracker object.
 func NewTracker(ch chan *discovery.TabletHealth) *Tracker {
 	return &Tracker{ch: ch, tables: &tableMap{m: map[keyspace]map[tableName][]vindexes.Column{}}}
+}
+
+// LoadKeyspace loads the keyspace schema.
+func (t *Tracker) LoadKeyspace(conn queryservice.QueryService, target *querypb.Target) error {
+	res, err := conn.Execute(context.Background(), target, mysql.FetchTables, nil, 0, 0, nil)
+	if err != nil {
+		return err
+	}
+	t.updateTables(target.Keyspace, res)
+	return nil
 }
 
 // Start starts the schema tracking.
@@ -129,7 +141,10 @@ func (t *Tracker) updateSchema(th *discovery.TabletHealth) {
 	for _, tbl := range th.TablesUpdated {
 		t.tables.delete(th.Target.Keyspace, tbl)
 	}
+	t.updateTables(th.Target.Keyspace, res)
+}
 
+func (t *Tracker) updateTables(keyspace string, res *sqltypes.Result) {
 	for _, row := range res.Rows {
 		tbl := row[0].ToString()
 		colName := row[1].ToString()
@@ -137,9 +152,9 @@ func (t *Tracker) updateSchema(th *discovery.TabletHealth) {
 
 		cType := sqlparser.ColumnType{Type: colType}
 		col := vindexes.Column{Name: sqlparser.NewColIdent(colName), Type: cType.SQLType()}
-		cols := t.tables.get(th.Target.Keyspace, tbl)
+		cols := t.tables.get(keyspace, tbl)
 
-		t.tables.set(th.Target.Keyspace, tbl, append(cols, col))
+		t.tables.set(keyspace, tbl, append(cols, col))
 	}
 }
 
