@@ -92,10 +92,21 @@ func TestWatchSrvVSchema(t *testing.T) {
 		vs = vschema
 	}
 	for _, tcase := range tcases {
-		t.Run(tcase.name, func(t *testing.T) {
+		t.Run("VSchemaUpdate - "+tcase.name, func(t *testing.T) {
 			vs = nil
 			vm.schema = fakeSchema{t: tcase.st}
 			vm.VSchemaUpdate(tcase.srvVschema, nil)
+
+			require.NotNil(t, vs)
+			ks := vs.Keyspaces["ks"]
+			require.NotNil(t, ks, "keyspace was not found")
+			utils.MustMatch(t, tcase.expected, ks.Tables)
+		})
+		t.Run("Schema updated - "+tcase.name, func(t *testing.T) {
+			vs = nil
+			vm.schema = fakeSchema{t: tcase.st}
+			vm.currentSrvVschema = tcase.srvVschema
+			vm.Rebuild()
 
 			require.NotNil(t, vs)
 			ks := vs.Keyspaces["ks"]
