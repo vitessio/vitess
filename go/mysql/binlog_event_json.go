@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"math"
 
+	"vitess.io/vitess/go/vt/log"
+
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"github.com/spyzhov/ajson"
@@ -36,7 +38,7 @@ func jlog(tpl string, vals ...interface{}) {
 	if !jsonDebug {
 		return
 	}
-	fmt.Printf(tpl+"\n", vals...)
+	log.Infof("JSON:"+tpl+"\n", vals...)
 	_ = printASCIIBytes
 }
 
@@ -44,15 +46,15 @@ func printASCIIBytes(data []byte) {
 	if !jsonDebug {
 		return
 	}
-	fmt.Printf("\n\n%v\n[", data)
+	s := ""
 	for _, c := range data {
 		if c < 127 && c > 32 {
-			fmt.Printf("%c ", c)
+			s += fmt.Sprintf("%c ", c)
 		} else {
-			fmt.Printf("%02d ", c)
+			s += fmt.Sprintf("%02d ", c)
 		}
 	}
-	fmt.Printf("]\n")
+	log.Infof("[%s]", s)
 }
 
 //endregion
@@ -93,6 +95,7 @@ type BinlogJSON struct {
 
 func (jh *BinlogJSON) parse(data []byte) (node *ajson.Node, newPos int, err error) {
 	var pos int
+
 	typ := data[0]
 	jlog("Top level object is type %s\n", jsonDataTypeToString(uint(typ)))
 	pos++
@@ -496,6 +499,7 @@ type arrayPlugin struct {
 var _ jsonPlugin = (*arrayPlugin)(nil)
 
 func (ah arrayPlugin) getNode(typ jsonDataType, data []byte, pos int) (node *ajson.Node, newPos int, err error) {
+	jlog("JSON Array %s, len %d, data %+v", jsonDataTypeToString(uint(typ)), len(data), data)
 	//printAsciiBytes(data)
 	var nodes []*ajson.Node
 	var elem *ajson.Node
@@ -555,7 +559,7 @@ type objectPlugin struct {
 var _ jsonPlugin = (*objectPlugin)(nil)
 
 func (oh objectPlugin) getNode(typ jsonDataType, data []byte, pos int) (node *ajson.Node, newPos int, err error) {
-	jlog("JSON Type is %s", jsonDataTypeToString(uint(typ)))
+	jlog("JSON Type is %s, len %d, data %+v", jsonDataTypeToString(uint(typ)), len(data), data)
 	//printAsciiBytes(data)
 	nodes := make(map[string]*ajson.Node)
 	var elem *ajson.Node
@@ -570,6 +574,10 @@ func (oh objectPlugin) getNode(typ jsonDataType, data []byte, pos int) (node *aj
 		var keyOffset, keyLength int
 		keyOffset, pos = readInt(data, pos, large)
 		keyLength, pos = readInt(data, pos, false) // keyLength is always a 16-bit int
+		if keyOffset+1 >= len(data) || keyOffset+keyLength+1 > len(data) {
+			log.Errorf("unable to parse json value: %+v", data)
+			return nil, 0, fmt.Errorf("unable to parse json value: %+v", data)
+		}
 		keys[i] = string(data[keyOffset+1 : keyOffset+keyLength+1])
 	}
 
@@ -583,6 +591,9 @@ func (oh objectPlugin) getNode(typ jsonDataType, data []byte, pos int) (node *aj
 			}
 		} else {
 			offset, pos = readInt(data, pos, large)
+			if offset >= len(data) {
+				return nil, 0, fmt.Errorf("unable to parse json value: %+v", data)
+			}
 			newData := data[offset:]
 			elem, _, err = binlogJSON.getNode(typ, newData, 1) //newPos ignored because this is an offset into the "extra" section of the buffer
 			if err != nil {
