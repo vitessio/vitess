@@ -17,12 +17,13 @@ limitations under the License.
 package schema
 
 import (
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/discovery"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -47,8 +48,8 @@ func TestTracking(t *testing.T) {
 	sbc := sandboxconn.NewSandboxConn(tablet)
 	ch := make(chan *discovery.TabletHealth)
 	tracker := NewTracker(ch)
-	waiter := &testWaiter{}
-	tracker.startWithWaiter(waiter)
+
+	tracker.Start()
 	defer tracker.Stop()
 	fields := sqltypes.MakeTestFields("table_name|col_name|col_type", "varchar|varchar|varchar")
 	testcases := []struct {
@@ -110,7 +111,13 @@ func TestTracking(t *testing.T) {
 		t.Run(tcase.tName, func(t *testing.T) {
 			sbc.SetResults([]*sqltypes.Result{tcase.result})
 			sbc.Queries = nil
-			waiter.reset()
+
+			wg := sync.WaitGroup{}
+			wg.Add(1)
+			tracker.RegisterSignalReceiver(func() {
+				wg.Done()
+			})
+
 			ch <- &discovery.TabletHealth{
 				Conn:          sbc,
 				Tablet:        tablet,
@@ -118,7 +125,9 @@ func TestTracking(t *testing.T) {
 				Serving:       true,
 				TablesUpdated: tcase.updTbl,
 			}
-			waiter.wait()
+
+			require.False(t, waitTimeout(&wg, time.Second), "schema was updated but received no signal")
+
 			require.Equal(t, 1, len(sbc.StringQueries()))
 			for k, v := range tcase.exp {
 				utils.MustMatch(t, v, tracker.GetColumns("ks", k), "mismatch for table: ", k)
@@ -127,19 +136,16 @@ func TestTracking(t *testing.T) {
 	}
 }
 
-// this struct helps us test without time.Sleep
-type testWaiter struct {
-	wg sync2.AtomicBool
-}
-
-func (i *testWaiter) done() {
-	i.wg.Set(true)
-}
-func (i *testWaiter) reset() {
-	i.wg.Set(false)
-}
-func (i *testWaiter) wait() {
-	for !i.wg.Get() {
-		// busy loop until done
+func waitTimeout(wg *sync.WaitGroup, timeout time.Duration) bool {
+	c := make(chan struct{})
+	go func() {
+		defer close(c)
+		wg.Wait()
+	}()
+	select {
+	case <-c:
+		return false // completed normally
+	case <-time.After(timeout):
+		return true // timed out
 	}
 }

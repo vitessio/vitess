@@ -42,6 +42,7 @@ type (
 		mu     sync.Mutex
 		tables *tableMap
 		ctx    context.Context
+		signal func() // a function that we'll call whenever we have new schema data
 	}
 
 	// Table contains the table name and also, whether the information can be trusted about this table.
@@ -56,23 +57,9 @@ func NewTracker(ch chan *discovery.TabletHealth) *Tracker {
 	return &Tracker{ch: ch, tables: &tableMap{m: map[keyspace]map[tableName][]vindexes.Column{}}}
 }
 
-// waitFor is an interface we use to make it possible to test this concurrent code
-// without having to use time.Sleep. In production, these are empty methods that would
-// be called every time we have to fetch schema, which is not very often at all
-type waitFor interface {
-	done()
-	wait()
-	reset()
-}
-
 // Start starts the schema tracking.
 func (t *Tracker) Start() {
 	log.Info("Starting schema tracking")
-	t.startWithWaiter(&noWaiter{})
-}
-
-// startWithWaiter starts the schema tracking with a custom waitFor
-func (t *Tracker) startWithWaiter(i waitFor) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.cancel = cancel
 	go func(ctx context.Context, t *Tracker) {
@@ -81,7 +68,9 @@ func (t *Tracker) startWithWaiter(i waitFor) {
 			case th := <-t.ch:
 				if len(th.TablesUpdated) > 0 {
 					t.updateSchema(th)
-					i.done()
+					if t.signal != nil {
+						t.signal()
+					}
 				}
 			case <-ctx.Done():
 				close(t.ch)
@@ -103,6 +92,19 @@ func (t *Tracker) GetColumns(ks string, tbl string) []vindexes.Column {
 	defer t.mu.Unlock()
 
 	return t.tables.get(ks, tbl)
+}
+
+// Tables returns a map with the columns for all known tables in the keyspace
+func (t *Tracker) Tables(ks string) map[string][]vindexes.Column {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	m := t.tables.m[ks]
+	if m == nil {
+		return map[string][]vindexes.Column{} // we know nothing about this KS, so that is the info we can give out
+	}
+
+	return m
 }
 
 func (t *Tracker) updateSchema(th *discovery.TabletHealth) {
@@ -141,13 +143,10 @@ func (t *Tracker) updateSchema(th *discovery.TabletHealth) {
 	}
 }
 
-type noWaiter struct{}
-
-func (n *noWaiter) done() {}
-
-func (n *noWaiter) wait() {}
-
-func (n *noWaiter) reset() {}
+// RegisterSignalReceiver allows a function to register to be called when new schema is available
+func (t *Tracker) RegisterSignalReceiver(f func()) {
+	t.signal = f
+}
 
 type tableMap struct {
 	m map[keyspace]map[tableName][]vindexes.Column
