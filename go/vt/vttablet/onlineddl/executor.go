@@ -597,13 +597,27 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 
 	// rename tables atomically (remember, writes on source tables are stopped)
 	{
-		parsed := sqlparser.BuildParsedQuery(sqlSwapTables,
-			onlineDDL.Table, swapTable,
-			vreplTable, onlineDDL.Table,
-			swapTable, vreplTable,
-		)
-		if _, err = e.execQuery(ctx, parsed.Query); err != nil {
-			return err
+		if onlineDDL.StrategySetting().IsVreplicationTestSuite() {
+			// this is used in Vitess endtoend testing suite
+			beforeTableName := fmt.Sprintf("%s_before", onlineDDL.Table)
+			afterTableName := fmt.Sprintf("%s_after", onlineDDL.Table)
+			parsed := sqlparser.BuildParsedQuery(sqlRenameTwoTables,
+				onlineDDL.Table, beforeTableName,
+				vreplTable, afterTableName,
+			)
+			if _, err = e.execQuery(ctx, parsed.Query); err != nil {
+				return err
+			}
+		} else {
+			// Normal (non-testing) alter table
+			parsed := sqlparser.BuildParsedQuery(sqlSwapTables,
+				onlineDDL.Table, swapTable,
+				vreplTable, onlineDDL.Table,
+				swapTable, vreplTable,
+			)
+			if _, err = e.execQuery(ctx, parsed.Query); err != nil {
+				return err
+			}
 		}
 	}
 
