@@ -34,6 +34,7 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vtctl/workflow"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -153,54 +154,13 @@ func (ts *trafficSwitcher) ForAllTargets(f func(source *workflow.MigrationTarget
 func (wr *Wrangler) getCellsWithShardReadsSwitched(ctx context.Context, targetKeyspace string, si *topo.ShardInfo, tabletType string) (
 	cellsSwitched, cellsNotSwitched []string, err error) {
 
-	cells, err := wr.ts.GetCellInfoNames(ctx)
+	ttype, err := topoproto.ParseTabletType(tabletType)
 	if err != nil {
 		return nil, nil, err
 	}
-	for _, cell := range cells {
-		srvKeyspace, err := wr.ts.GetSrvKeyspace(ctx, cell, targetKeyspace)
-		if err != nil {
-			return nil, nil, err
-		}
-		// Checking one shard is enough.
-		var shardServedTypes []string
-		found := false
-		noControls := true
-		for _, partition := range srvKeyspace.GetPartitions() {
-			if !strings.EqualFold(partition.GetServedType().String(), tabletType) {
-				continue
-			}
 
-			// If reads and writes are both switched it is possible that the shard is not in the partition table
-			for _, shardReference := range partition.GetShardReferences() {
-				if key.KeyRangeEqual(shardReference.GetKeyRange(), si.GetKeyRange()) {
-					found = true
-					break
-				}
-			}
-
-			// It is possible that there are no tablet controls if the target shards are not yet serving
-			// or once reads and writes are both switched,
-			if len(partition.GetShardTabletControls()) == 0 {
-				noControls = true
-				break
-			}
-			for _, tabletControl := range partition.GetShardTabletControls() {
-				if key.KeyRangeEqual(tabletControl.GetKeyRange(), si.GetKeyRange()) {
-					if !tabletControl.GetQueryServiceDisabled() {
-						shardServedTypes = append(shardServedTypes, si.ShardName())
-					}
-					break
-				}
-			}
-		}
-		if found && (len(shardServedTypes) > 0 || noControls) {
-			cellsNotSwitched = append(cellsNotSwitched, cell)
-		} else {
-			cellsSwitched = append(cellsSwitched, cell)
-		}
-	}
-	return cellsSwitched, cellsNotSwitched, nil
+	s := workflow.NewServer(wr.ts, wr.tmc)
+	return s.GetCellsWithShardReadsSwitched(ctx, targetKeyspace, si, ttype)
 }
 
 // For MoveTables,  to check whether we have switched reads for a tablet type, we check whether the routing rule
@@ -208,52 +168,13 @@ func (wr *Wrangler) getCellsWithShardReadsSwitched(ctx context.Context, targetKe
 func (wr *Wrangler) getCellsWithTableReadsSwitched(ctx context.Context, targetKeyspace, table, tabletType string) (
 	cellsSwitched, cellsNotSwitched []string, err error) {
 
-	cells, err := wr.ts.GetCellInfoNames(ctx)
+	ttype, err := topoproto.ParseTabletType(tabletType)
 	if err != nil {
 		return nil, nil, err
 	}
-	getKeyspace := func(ruleTarget string) (string, error) {
-		arr := strings.Split(ruleTarget, ".")
-		if len(arr) != 2 {
-			return "", fmt.Errorf("rule target is not correctly formatted: %s", ruleTarget)
-		}
-		return arr[0], nil
-	}
-	for _, cell := range cells {
-		srvVSchema, err := wr.ts.GetSrvVSchema(ctx, cell)
-		if err != nil {
-			return nil, nil, err
-		}
-		rules := srvVSchema.RoutingRules.Rules
-		found := false
-		switched := false
-		for _, rule := range rules {
-			ruleName := fmt.Sprintf("%s.%s@%s", targetKeyspace, table, tabletType)
-			if rule.FromTable == ruleName {
-				found = true
-				for _, to := range rule.ToTables {
-					ks, err := getKeyspace(to)
-					if err != nil {
-						log.Errorf(err.Error())
-						return nil, nil, err
-					}
-					if ks == targetKeyspace {
-						switched = true
-						break // if one table in workflow is switched we are done
-					}
-				}
-			}
-			if found {
-				break
-			}
-		}
-		if switched {
-			cellsSwitched = append(cellsSwitched, cell)
-		} else {
-			cellsNotSwitched = append(cellsNotSwitched, cell)
-		}
-	}
-	return cellsSwitched, cellsNotSwitched, nil
+
+	s := workflow.NewServer(wr.ts, wr.tmc)
+	return s.GetCellsWithTableReadsSwitched(ctx, targetKeyspace, table, ttype)
 }
 
 func (wr *Wrangler) getWorkflowState(ctx context.Context, targetKeyspace, workflowName string) (*trafficSwitcher, *workflow.State, error) {
