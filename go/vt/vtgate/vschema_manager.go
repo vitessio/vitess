@@ -118,29 +118,23 @@ func (vm *VSchemaManager) VSchemaUpdate(v *vschemapb.SrvVSchema, err error) {
 
 	// keep a copy of the latest SrvVschema
 	vm.mu.Lock()
-	vm.currentSrvVschema = v
+	vm.currentSrvVschema = v // TODO: should we do this locking?
 	vm.mu.Unlock()
 
 	var vschema *vindexes.VSchema
-	if v != nil {
-		vschema, err = vindexes.BuildVSchema(v)
-		if err == nil {
-			if vm.schema != nil {
-				vm.updateFromSchema(vschema)
-			}
-		} else {
-			log.Warningf("Error creating VSchema for cell %v (will try again next update): %v", vm.cell, err)
-			err = fmt.Errorf("error creating VSchema for cell %v: %v", vm.cell, err)
-			if vschemaCounters != nil {
-				vschemaCounters.Add("Parsing", 1)
-			}
-		}
-	}
 	if v == nil {
 		// We encountered an error, build an empty vschema.
 		vschema, _ = vindexes.BuildVSchema(&vschemapb.SrvVSchema{})
+	} else {
+		vschema, err = vm.buildAndEnhanceVSchema(v)
 	}
 
+	if vm.subscriber != nil {
+		vm.subscriber(vschema, vSchemaStats(err, vschema))
+	}
+}
+
+func vSchemaStats(err error, vschema *vindexes.VSchema) *VSchemaStats {
 	// Build the display version. At this point, three cases:
 	// - v is nil, vschema is empty, and err is set:
 	//     1. when the watch returned an error.
@@ -153,9 +147,51 @@ func (vm *VSchemaManager) VSchemaUpdate(v *vschemapb.SrvVSchema, err error) {
 	}
 
 	stats := NewVSchemaStats(vschema, errorMessage)
-	if vm.subscriber != nil {
-		vm.subscriber(vschema, stats)
+	return stats
+}
+
+// Rebuild will rebuild and publish the new vschema.
+// This method should be called when the underlying schema has changed.
+func (vm *VSchemaManager) Rebuild() {
+	vm.mu.Lock()
+	v := vm.currentSrvVschema
+	vm.mu.Unlock()
+
+	var vschema *vindexes.VSchema
+	var err error
+
+	if v == nil {
+		// We encountered an error, we should always have a current vschema
+		log.Warning("got a schema changed signal with no loaded vschema. if this persist, something is wrong")
+		vschema, _ = vindexes.BuildVSchema(&vschemapb.SrvVSchema{})
+	} else {
+		vschema, err = vm.buildAndEnhanceVSchema(v)
+		if err != nil {
+			log.Error("failed to reload vschema after schema change")
+			return
+		}
 	}
+
+	if vm.subscriber != nil {
+		vm.subscriber(vschema, vSchemaStats(err, vschema))
+	}
+}
+
+// buildAndEnhanceVSchema builds a new VSchema and uses information from the schema tracker to update it
+func (vm *VSchemaManager) buildAndEnhanceVSchema(v *vschemapb.SrvVSchema) (*vindexes.VSchema, error) {
+	vschema, err := vindexes.BuildVSchema(v)
+	if err == nil {
+		if vm.schema != nil {
+			vm.updateFromSchema(vschema)
+		}
+	} else {
+		log.Warningf("Error creating VSchema for cell %v (will try again next update): %v", vm.cell, err)
+		err = fmt.Errorf("error creating VSchema for cell %v: %v", vm.cell, err)
+		if vschemaCounters != nil {
+			vschemaCounters.Add("Parsing", 1)
+		}
+	}
+	return vschema, err
 }
 
 func (vm *VSchemaManager) updateFromSchema(vschema *vindexes.VSchema) {
