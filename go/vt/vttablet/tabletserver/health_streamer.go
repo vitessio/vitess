@@ -306,6 +306,11 @@ func (hs *healthStreamer) reload() error {
 	hs.mu.Lock()
 	defer hs.mu.Unlock()
 
+	return hs.reloadLocked()
+}
+
+// reloadLocked reloads the schema from the underlying mysql without locking the mutex
+func (hs *healthStreamer) reloadLocked() error {
 	// Schema Reload to happen only on master.
 	if hs.state.Target.TabletType != topodatapb.TabletType_MASTER {
 		return nil

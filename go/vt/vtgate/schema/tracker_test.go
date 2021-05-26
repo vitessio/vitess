@@ -54,7 +54,7 @@ func TestTracking(t *testing.T) {
 		"prior|id|int",
 	)})
 
-	err := tracker.LoadKeyspace(sbc, target)
+	_, err := tracker.LoadKeyspace(sbc, target)
 	require.NoError(t, err)
 
 	tracker.Start()
