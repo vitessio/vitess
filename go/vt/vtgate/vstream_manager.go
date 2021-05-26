@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"math"
 	"sync"
 	"time"
 
@@ -90,7 +91,8 @@ type vstream struct {
 
 	rss []*srvtopo.ResolvedShard
 
-	eventCh chan []*binlogdatapb.VEvent
+	eventCh           chan []*binlogdatapb.VEvent
+	heartbeatInterval uint32
 }
 
 type journalEvent struct {
@@ -114,18 +116,18 @@ func (vsm *vstreamManager) VStream(ctx context.Context, tabletType topodatapb.Ta
 		return err
 	}
 	vs := &vstream{
-		vgtid:      vgtid,
-		tabletType: tabletType,
-		filter:     filter,
-		send:       send,
-		resolver:   vsm.resolver,
-		journaler:  make(map[int64]*journalEvent),
-
-		minimizeSkew:       flags.MinimizeSkew,
+		vgtid:              vgtid,
+		tabletType:         tabletType,
+		filter:             filter,
+		send:               send,
+		resolver:           vsm.resolver,
+		journaler:          make(map[int64]*journalEvent),
+		minimizeSkew:       flags.GetMinimizeSkew(),
 		skewTimeoutSeconds: 10 * 60,
 		timestamps:         make(map[string]int64),
 		vsm:                vsm,
 		eventCh:            make(chan []*binlogdatapb.VEvent),
+		heartbeatInterval:  flags.GetHeartbeatInterval(),
 	}
 	return vs.stream(ctx)
 }
@@ -220,7 +222,13 @@ func (vs *vstream) stream(ctx context.Context) error {
 }
 
 func (vs *vstream) sendEvents(ctx context.Context) {
-	heartbeatDuration := 1 * time.Second
+	var heartbeatDuration time.Duration
+	if vs.heartbeatInterval == 0 {
+		heartbeatDuration = time.Duration(math.MaxInt64) * time.Nanosecond // max time.Duration => 290 years
+	} else {
+		heartbeatDuration = time.Duration(vs.heartbeatInterval) * time.Second
+	}
+
 	timer := time.NewTicker(heartbeatDuration)
 	defer timer.Stop()
 
