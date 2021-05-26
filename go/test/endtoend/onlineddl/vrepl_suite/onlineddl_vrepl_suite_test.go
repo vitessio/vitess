@@ -199,6 +199,8 @@ func testSingle(t *testing.T, testName string) {
 		_, exists := readTestFile(t, testName, f)
 		require.True(t, exists)
 		mysqlClientExecFile(t, testName, f)
+		// ensure test table has been created:
+		getCreateTableStatement(t, tableName)
 	}
 
 	var migrationMessage string
