@@ -313,9 +313,13 @@ func (wr *Wrangler) checkIfPreviousJournalExists(ctx context.Context, mz *materi
 		return allErrors.AggrError(vterrors.Aggregate)
 	}
 
-	var mu sync.Mutex
-	var exists bool
-	var tablets []string
+	var (
+		mu      sync.Mutex
+		exists  bool
+		tablets []string
+		ws      = workflow.NewServer(wr.ts, wr.tmc)
+	)
+
 	err := forAllSources(func(si *topo.ShardInfo) error {
 		tablet, err := wr.ts.GetTablet(ctx, si.MasterAlias)
 		if err != nil {
@@ -324,7 +328,7 @@ func (wr *Wrangler) checkIfPreviousJournalExists(ctx context.Context, mz *materi
 		if tablet == nil {
 			return nil
 		}
-		_, exists, err = wr.checkIfJournalExistsOnTablet(ctx, tablet.Tablet, migrationID)
+		_, exists, err = ws.CheckReshardingJournalExistsOnTablet(ctx, tablet.Tablet, migrationID)
 		if err != nil {
 			return err
 		}

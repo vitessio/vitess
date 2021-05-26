@@ -26,10 +26,7 @@ import (
 	"sync"
 	"time"
 
-	"google.golang.org/protobuf/encoding/prototext"
-
 	"vitess.io/vitess/go/json2"
-	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/key"
@@ -1012,35 +1009,18 @@ func (ts *trafficSwitcher) switchShardReads(ctx context.Context, cells []string,
 	return nil
 }
 
-func (wr *Wrangler) checkIfJournalExistsOnTablet(ctx context.Context, tablet *topodatapb.Tablet, migrationID int64) (*binlogdatapb.Journal, bool, error) {
-	var exists bool
-	journal := &binlogdatapb.Journal{}
-	query := fmt.Sprintf("select val from _vt.resharding_journal where id=%v", migrationID)
-	p3qr, err := wr.tmc.VReplicationExec(ctx, tablet, query)
-	if err != nil {
-		return nil, false, err
-	}
-	if len(p3qr.Rows) != 0 {
-		qr := sqltypes.Proto3ToResult(p3qr)
-		if !exists {
-			if err := prototext.Unmarshal(qr.Rows[0][0].ToBytes(), journal); err != nil {
-				return nil, false, err
-			}
-			exists = true
-		}
-	}
-	return journal, exists, nil
-
-}
-
 // checkJournals returns true if at least one journal has been created.
 // If so, it also returns the list of sourceWorkflows that need to be switched.
 func (ts *trafficSwitcher) checkJournals(ctx context.Context) (journalsExist bool, sourceWorkflows []string, err error) {
-	var mu sync.Mutex
+	var (
+		ws = workflow.NewServer(ts.wr.ts, ts.wr.tmc)
+		mu sync.Mutex
+	)
+
 	err = ts.forAllSources(func(source *workflow.MigrationSource) error {
 		mu.Lock()
 		defer mu.Unlock()
-		journal, exists, err := ts.wr.checkIfJournalExistsOnTablet(ctx, source.GetPrimary().Tablet, ts.id)
+		journal, exists, err := ws.CheckReshardingJournalExistsOnTablet(ctx, source.GetPrimary().Tablet, ts.id)
 		if err != nil {
 			return err
 		}
