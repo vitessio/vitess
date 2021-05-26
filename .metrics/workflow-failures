@@ -1,4 +1,3 @@
-2021-01-21T07:09:19Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/500495512
 2021-01-21T07:09:19Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/500495478
 2021-01-21T07:09:19Z,endtoend,https://github.com/vitessio/vitess/actions/runs/500495485
 2021-01-21T07:09:19Z,unit_race,https://github.com/vitessio/vitess/actions/runs/500495493
@@ -9998,3 +9997,4 @@
 2021-05-26T14:38:27Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/878912381
 2021-05-26T14:38:27Z,local_example,https://github.com/vitessio/vitess/actions/runs/878912392
 2021-05-26T14:38:27Z,unit_race,https://github.com/vitessio/vitess/actions/runs/878912369
+2021-05-26T15:30:04Z,endtoend,https://github.com/vitessio/vitess/actions/runs/879085615
