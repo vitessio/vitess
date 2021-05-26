@@ -138,6 +138,7 @@ func NewExecutor(
 		subscriber: e.SaveVSchema,
 		serv:       serv,
 		cell:       cell,
+		schema:     e.schemaTracker,
 	}
 	serv.WatchSrvVSchema(ctx, cell, e.vm.VSchemaUpdate)
 
