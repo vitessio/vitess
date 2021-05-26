@@ -25,6 +25,7 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -163,6 +164,23 @@ func readTestFile(t *testing.T, testName string, fileName string) (content strin
 }
 
 func testSingle(t *testing.T, testName string) {
+
+	if ignoreVersions, exists := readTestFile(t, testName, "ignore_versions"); exists {
+		// ignoreVersions is a regexp
+		re, err := regexp.Compile(ignoreVersions)
+		require.NoError(t, err)
+
+		rs := mysqlExec(t, "select @@version as ver", "")
+		row := rs.Named().Row()
+		require.NotNil(t, row)
+		mysqlVersion := row["ver"].ToString()
+
+		if re.MatchString(mysqlVersion) {
+			t.Skipf("Skipping test due to ignore_versions=%s", ignoreVersions)
+			return
+		}
+	}
+
 	sqlMode := defaultSQLMode
 	if overrideSQLMode, exists := readTestFile(t, testName, "sql_mode"); exists {
 		sqlMode = overrideSQLMode
