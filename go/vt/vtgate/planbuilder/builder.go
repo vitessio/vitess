@@ -18,7 +18,6 @@ package planbuilder
 
 import (
 	"errors"
-	"flag"
 	"sort"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -34,10 +33,6 @@ import (
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-)
-
-var (
-	enableOnlineDDL = flag.Bool("enable_online_ddl", true, "Allow users to submit, review and control Online DDL")
 )
 
 // ContextVSchema defines the interface for this package to fetch
@@ -104,15 +99,15 @@ func TestBuilder(query string, vschema ContextVSchema) (*engine.Plan, error) {
 	}
 
 	reservedVars := sqlparser.NewReservedVars("vtg", reserved)
-	return BuildFromStmt(query, result.AST, reservedVars, vschema, result.BindVarNeeds)
+	return BuildFromStmt(query, result.AST, reservedVars, vschema, result.BindVarNeeds, true, true)
 }
 
 // ErrPlanNotSupported is an error for plan building not supported
 var ErrPlanNotSupported = errors.New("plan building not supported")
 
 // BuildFromStmt builds a plan based on the AST provided.
-func BuildFromStmt(query string, stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema ContextVSchema, bindVarNeeds *sqlparser.BindVarNeeds) (*engine.Plan, error) {
-	instruction, err := createInstructionFor(query, stmt, reservedVars, vschema)
+func BuildFromStmt(query string, stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema ContextVSchema, bindVarNeeds *sqlparser.BindVarNeeds, enableOnlineDDL, enableDirectDDL bool) (*engine.Plan, error) {
+	instruction, err := createInstructionFor(query, stmt, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
 	if err != nil {
 		return nil, err
 	}
@@ -150,7 +145,7 @@ func buildRoutePlan(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVa
 
 type selectPlanner func(query string) func(sqlparser.Statement, *sqlparser.ReservedVars, ContextVSchema) (engine.Primitive, error)
 
-func createInstructionFor(query string, stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema ContextVSchema) (engine.Primitive, error) {
+func createInstructionFor(query string, stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema ContextVSchema, enableOnlineDDL, enableDirectDDL bool) (engine.Primitive, error) {
 	switch stmt := stmt.(type) {
 	case *sqlparser.Select:
 		configuredPlanner, err := getConfiguredPlanner(vschema)
@@ -167,17 +162,17 @@ func createInstructionFor(query string, stmt sqlparser.Statement, reservedVars *
 	case *sqlparser.Union:
 		return buildRoutePlan(stmt, reservedVars, vschema, buildUnionPlan)
 	case sqlparser.DDLStatement:
-		return buildGeneralDDLPlan(query, stmt, reservedVars, vschema)
+		return buildGeneralDDLPlan(query, stmt, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
 	case *sqlparser.AlterMigration:
-		return buildAlterMigrationPlan(query, vschema)
+		return buildAlterMigrationPlan(query, vschema, enableOnlineDDL)
 	case *sqlparser.RevertMigration:
-		return buildRevertMigrationPlan(query, stmt, vschema)
+		return buildRevertMigrationPlan(query, stmt, vschema, enableOnlineDDL)
 	case *sqlparser.AlterVschema:
 		return buildVSchemaDDLPlan(stmt, vschema)
 	case *sqlparser.Use:
 		return buildUsePlan(stmt, vschema)
 	case sqlparser.Explain:
-		return buildExplainPlan(stmt, reservedVars, vschema)
+		return buildExplainPlan(stmt, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
 	case *sqlparser.OtherRead, *sqlparser.OtherAdmin:
 		return buildOtherReadAndAdmin(query, vschema)
 	case *sqlparser.Set:
@@ -201,6 +196,10 @@ func createInstructionFor(query string, stmt sqlparser.Statement, reservedVars *
 		return buildFlushPlan(stmt, vschema)
 	case *sqlparser.CallProc:
 		return buildCallProcPlan(stmt, vschema)
+	case *sqlparser.Stream:
+		return buildStreamPlan(stmt, vschema)
+	case *sqlparser.VStream:
+		return buildVStreamPlan(stmt, vschema)
 	}
 
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: unexpected statement type: %T", stmt)

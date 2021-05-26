@@ -38,6 +38,7 @@ import (
 
 // server is the gRPC implementation of the RPC server
 type server struct {
+	tabletmanagerservicepb.UnimplementedTabletManagerServer
 	// implementation of the tm to call
 	tm tabletmanager.RPCTM
 }
@@ -395,7 +396,7 @@ func (s *server) DemoteMaster(ctx context.Context, request *tabletmanagerdatapb.
 	response = &tabletmanagerdatapb.DemoteMasterResponse{}
 	masterStatus, err := s.tm.DemoteMaster(ctx)
 	if err == nil {
-		response.DeprecatedPosition = masterStatus.Position
+		response.DeprecatedPosition = masterStatus.Position //nolint
 		response.MasterStatus = masterStatus
 	}
 	return response, err
@@ -436,7 +437,7 @@ func (s *server) StopReplicationAndGetStatus(ctx context.Context, request *table
 	response = &tabletmanagerdatapb.StopReplicationAndGetStatusResponse{}
 	statusResponse, err := s.tm.StopReplicationAndGetStatus(ctx, request.StopReplicationMode)
 	if err == nil {
-		response.HybridStatus = statusResponse.HybridStatus
+		response.HybridStatus = statusResponse.HybridStatus //nolint
 		response.Status = statusResponse.Status
 
 	}
@@ -495,12 +496,12 @@ func (s *server) RestoreFromBackup(request *tabletmanagerdatapb.RestoreFromBacku
 func init() {
 	tabletmanager.RegisterTabletManagers = append(tabletmanager.RegisterTabletManagers, func(tm *tabletmanager.TabletManager) {
 		if servenv.GRPCCheckServiceMap("tabletmanager") {
-			tabletmanagerservicepb.RegisterTabletManagerServer(servenv.GRPCServer, &server{tm})
+			tabletmanagerservicepb.RegisterTabletManagerServer(servenv.GRPCServer, &server{tm: tm})
 		}
 	})
 }
 
 // RegisterForTest will register the RPC, to be used by test instances only
 func RegisterForTest(s *grpc.Server, tm *tabletmanager.TabletManager) {
-	tabletmanagerservicepb.RegisterTabletManagerServer(s, &server{tm})
+	tabletmanagerservicepb.RegisterTabletManagerServer(s, &server{tm: tm})
 }

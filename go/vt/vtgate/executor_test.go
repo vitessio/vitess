@@ -29,13 +29,14 @@ import (
 	"testing"
 	"time"
 
+	"google.golang.org/protobuf/proto"
+
 	"vitess.io/vitess/go/cache"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 
 	"vitess.io/vitess/go/vt/topo"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/google/go-cmp/cmp"
 
 	"vitess.io/vitess/go/mysql"
@@ -86,7 +87,7 @@ func TestExecutorMaxMemoryRowsExceeded(t *testing.T) {
 	executor, _, _, sbclookup := createLegacyExecutorEnv()
 	session := NewSafeSession(&vtgatepb.Session{TargetString: "@master"})
 	result := sqltypes.MakeTestResult(sqltypes.MakeTestFields("col", "int64"), "1", "2", "3", "4")
-	target := querypb.Target{}
+	target := &querypb.Target{}
 	fn := func(r *sqltypes.Result) error {
 		return nil
 	}
@@ -306,9 +307,9 @@ func TestExecutorAutocommit(t *testing.T) {
 	_, err := executor.Execute(ctx, "TestExecute", session, "select id from main1", nil)
 	require.NoError(t, err)
 	wantSession := &vtgatepb.Session{TargetString: "@master", InTransaction: true, FoundRows: 1, RowCount: -1}
-	testSession := *session.Session
+	testSession := proto.Clone(session.Session).(*vtgatepb.Session)
 	testSession.ShardSessions = nil
-	utils.MustMatch(t, wantSession, &testSession, "session does not match for autocommit=0")
+	utils.MustMatch(t, wantSession, testSession, "session does not match for autocommit=0")
 
 	logStats := testQueryLog(t, logChan, "TestExecute", "SELECT", "select id from main1", 1)
 	if logStats.CommitTime != 0 {
@@ -347,9 +348,9 @@ func TestExecutorAutocommit(t *testing.T) {
 	_, err = executor.Execute(ctx, "TestExecute", session, "update main1 set id=1", nil)
 	require.NoError(t, err)
 	wantSession = &vtgatepb.Session{InTransaction: true, Autocommit: true, TargetString: "@master", FoundRows: 0, RowCount: 1}
-	testSession = *session.Session
+	testSession = proto.Clone(session.Session).(*vtgatepb.Session)
 	testSession.ShardSessions = nil
-	utils.MustMatch(t, wantSession, &testSession, "session does not match for autocommit=1")
+	utils.MustMatch(t, wantSession, testSession, "session does not match for autocommit=1")
 	if got, want := sbclookup.CommitCount.Get(), startCount; got != want {
 		t.Errorf("Commit count: %d, want %d", got, want)
 	}
@@ -1113,7 +1114,7 @@ func TestExecutorDDL(t *testing.T) {
 
 	stmts := []string{
 		"create table t1(id bigint primary key)",
-		"alter table t2 add primary key id",
+		"alter table t2 add primary key (id)",
 		"rename table t2 to t3",
 		"truncate table t2",
 		"drop table t2",
@@ -1201,7 +1202,8 @@ func TestExecutorDDLFk(t *testing.T) {
 					require.NoError(t, err)
 					require.EqualValues(t, 1, sbc.ExecCount.Get())
 				} else {
-					require.EqualError(t, err, "foreign key constraint is not allowed")
+					require.Error(t, err)
+					require.Contains(t, err.Error(), "foreign key constraints are not allowed")
 				}
 			})
 		}
@@ -1368,10 +1370,10 @@ func TestExecutorVindexDDLACL(t *testing.T) {
 	// test that by default no users can perform the operation
 	stmt := "alter vschema create vindex test_hash using hash"
 	_, err := executor.Execute(ctxRedUser, "TestExecute", session, stmt, nil)
-	require.EqualError(t, err, `User 'redUser' is not allowed to perform vschema operations`)
+	require.EqualError(t, err, `User 'redUser' is not authorized to perform vschema operations`)
 
 	_, err = executor.Execute(ctxBlueUser, "TestExecute", session, stmt, nil)
-	require.EqualError(t, err, `User 'blueUser' is not allowed to perform vschema operations`)
+	require.EqualError(t, err, `User 'blueUser' is not authorized to perform vschema operations`)
 
 	// test when all users are enabled
 	*vschemaacl.AuthorizedDDLUsers = "%"
@@ -1390,7 +1392,7 @@ func TestExecutorVindexDDLACL(t *testing.T) {
 	*vschemaacl.AuthorizedDDLUsers = "orangeUser, blueUser, greenUser"
 	vschemaacl.Init()
 	_, err = executor.Execute(ctxRedUser, "TestExecute", session, stmt, nil)
-	require.EqualError(t, err, `User 'redUser' is not allowed to perform vschema operations`)
+	require.EqualError(t, err, `User 'redUser' is not authorized to perform vschema operations`)
 
 	stmt = "alter vschema create vindex test_hash3 using hash"
 	_, err = executor.Execute(ctxBlueUser, "TestExecute", session, stmt, nil)
@@ -1856,7 +1858,7 @@ func TestOlapSelectDatabase(t *testing.T) {
 	session := &vtgatepb.Session{Autocommit: true}
 
 	sql := `select database()`
-	target := querypb.Target{}
+	target := &querypb.Target{}
 	cbInvoked := false
 	cb := func(r *sqltypes.Result) error {
 		cbInvoked = true

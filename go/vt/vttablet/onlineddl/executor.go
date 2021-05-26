@@ -36,6 +36,10 @@ import (
 	"syscall"
 	"time"
 
+	"google.golang.org/protobuf/proto"
+
+	"google.golang.org/protobuf/encoding/prototext"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/textutil"
@@ -59,7 +63,6 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/vexec"
 
 	mysqldriver "github.com/go-sql-driver/mysql"
-	"github.com/golang/protobuf/proto"
 	"github.com/jmoiron/sqlx"
 	"github.com/skeema/tengo"
 )
@@ -105,7 +108,7 @@ var ghostOverridePath = flag.String("gh-ost-path", "", "override default gh-ost 
 var ptOSCOverridePath = flag.String("pt-osc-path", "", "override default pt-online-schema-change binary full path")
 var migrationCheckInterval = flag.Duration("migration_check_interval", 1*time.Minute, "Interval between migration checks")
 var retainOnlineDDLTables = flag.Duration("retain_online_ddl_tables", 24*time.Hour, "How long should vttablet keep an old migrated table before purging it")
-var migrationNextCheckIntervals = []time.Duration{1 * time.Second, 5 * time.Second}
+var migrationNextCheckIntervals = []time.Duration{1 * time.Second, 5 * time.Second, 10 * time.Second, 20 * time.Second}
 
 const (
 	maxPasswordLength             = 32 // MySQL's *replication* password may not exceed 32 characters
@@ -180,10 +183,10 @@ func newGCTableRetainTime() time.Time {
 }
 
 // NewExecutor creates a new gh-ost executor.
-func NewExecutor(env tabletenv.Env, tabletAlias topodatapb.TabletAlias, ts *topo.Server, tabletTypeFunc func() topodatapb.TabletType) *Executor {
+func NewExecutor(env tabletenv.Env, tabletAlias *topodatapb.TabletAlias, ts *topo.Server, tabletTypeFunc func() topodatapb.TabletType) *Executor {
 	return &Executor{
 		env:         env,
-		tabletAlias: &tabletAlias,
+		tabletAlias: proto.Clone(tabletAlias).(*topodatapb.TabletAlias),
 
 		pool: connpool.NewPool(env, "OnlineDDLExecutorPool", tabletenv.ConnPoolConfig{
 			Size:               databasePoolSize,
@@ -344,9 +347,15 @@ func (e *Executor) readMySQLVariables(ctx context.Context) (variables *mysqlVari
 	}
 	variables = &mysqlVariables{}
 
-	variables.host = row["hostname"].ToString()
+	if e.env.Config().DB.Host != "" {
+		variables.host = e.env.Config().DB.Host
+	} else {
+		variables.host = row["hostname"].ToString()
+	}
 
-	if port, err := row.ToInt64("port"); err != nil {
+	if e.env.Config().DB.Port != 0 {
+		variables.port = e.env.Config().DB.Port
+	} else if port, err := row.ToInt64("port"); err != nil {
 		return nil, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "could not parse @@global.port %v: %v", tm, err)
 	} else {
 		variables.port = int(port)
@@ -361,7 +370,8 @@ func (e *Executor) readMySQLVariables(ctx context.Context) (variables *mysqlVari
 	return variables, nil
 }
 
-// createOnlineDDLUser creates a gh-ost user account with all neccessary privileges and with a random password
+// createOnlineDDLUser creates a gh-ost or pt-osc user account with all
+// neccessary privileges and with a random password
 func (e *Executor) createOnlineDDLUser(ctx context.Context) (password string, err error) {
 	conn, err := dbconnpool.NewDBConnection(ctx, e.env.Config().DB.DbaConnector())
 	if err != nil {
@@ -376,6 +386,12 @@ func (e *Executor) createOnlineDDLUser(ctx context.Context) (password string, er
 		if _, err := conn.ExecuteFetch(parsed.Query, 0, false); err != nil {
 			return password, err
 		}
+	}
+	for _, query := range sqlGrantOnlineDDLSuper {
+		parsed := sqlparser.BuildParsedQuery(query, onlineDDLGrant)
+		conn.ExecuteFetch(parsed.Query, 0, false)
+		// We ignore failure, since we might not be able to grant
+		// SUPER privs (e.g. Aurora)
 	}
 	for _, query := range sqlGrantOnlineDDLUser {
 		parsed := sqlparser.BuildParsedQuery(query, onlineDDLGrant)
@@ -1635,12 +1651,12 @@ func (e *Executor) evaluateDeclarativeDiff(ctx context.Context, onlineDDL *schem
 // - what's the migration strategy?
 // The function invokes the appropriate handlers for each of those cases.
 func (e *Executor) executeMigration(ctx context.Context, onlineDDL *schema.OnlineDDL) error {
+	defer e.triggerNextCheckInterval()
 	failMigration := func(err error) error {
 		_ = e.updateMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusFailed)
 		if err != nil {
 			_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, err.Error())
 		}
-		e.triggerNextCheckInterval()
 		return err
 	}
 
@@ -1994,7 +2010,7 @@ func (e *Executor) readVReplStream(ctx context.Context, uuid string, okIfMissing
 		message:              row.AsString("message", ""),
 		bls:                  &binlogdatapb.BinlogSource{},
 	}
-	if err := proto.UnmarshalText(s.source, s.bls); err != nil {
+	if err := prototext.Unmarshal([]byte(s.source), s.bls); err != nil {
 		return nil, err
 	}
 	return s, nil

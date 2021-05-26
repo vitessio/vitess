@@ -16,12 +16,14 @@
 import * as React from 'react';
 import cx from 'classnames';
 
+import style from './DataCell.module.scss';
+
 interface Props
     extends React.DetailedHTMLProps<React.TdHTMLAttributes<HTMLTableDataCellElement>, HTMLTableDataCellElement> {}
 
 export const DataCell: React.FunctionComponent<Props> = ({ children, className, ...tdProps }) => {
     return (
-        <td {...tdProps} className={cx(className, 'font-family-monospace')}>
+        <td {...tdProps} className={cx(className, style.cell)}>
             {children}
         </td>
     );

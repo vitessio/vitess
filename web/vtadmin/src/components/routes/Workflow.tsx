@@ -13,9 +13,25 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import { useParams } from 'react-router-dom';
+import { useMemo } from 'react';
+import { groupBy, orderBy } from 'lodash-es';
+import { Link, useParams } from 'react-router-dom';
+
+import style from './Workflow.module.scss';
 import { useWorkflow } from '../../hooks/api';
-import { Code } from '../Code';
+import { formatStreamKey, getStreams, getStreamSource, getStreamTarget } from '../../util/workflows';
+import { DataCell } from '../dataTable/DataCell';
+import { DataTable } from '../dataTable/DataTable';
+import { ContentContainer } from '../layout/ContentContainer';
+import { NavCrumbs } from '../layout/NavCrumbs';
+import { WorkspaceHeader } from '../layout/WorkspaceHeader';
+import { WorkspaceTitle } from '../layout/WorkspaceTitle';
+import { StreamStatePip } from '../pips/StreamStatePip';
+import { formatAlias } from '../../util/tablets';
+import { useDocumentTitle } from '../../hooks/useDocumentTitle';
+import { formatDateTime } from '../../util/time';
+import { KeyspaceLink } from '../links/KeyspaceLink';
+import { TabletLink } from '../links/TabletLink';
 
 interface RouteParams {
     clusterID: string;
@@ -23,15 +39,119 @@ interface RouteParams {
     name: string;
 }
 
+const COLUMNS = ['Stream', 'Source', 'Target', 'Tablet'];
+
 export const Workflow = () => {
     const { clusterID, keyspace, name } = useParams<RouteParams>();
-    const { data } = useWorkflow({ clusterID, keyspace, name });
+    useDocumentTitle(`${name} (${keyspace})`);
 
-    // Placeholder
+    const { data } = useWorkflow({ clusterID, keyspace, name }, { refetchInterval: 1000 });
+
+    const streams = useMemo(() => {
+        const rows = getStreams(data).map((stream) => ({
+            key: formatStreamKey(stream),
+            ...stream,
+        }));
+
+        return orderBy(rows, 'streamKey');
+    }, [data]);
+
+    const streamsByState = groupBy(streams, 'state');
+
+    const renderRows = (rows: typeof streams) => {
+        return rows.map((row) => {
+            const href =
+                row.tablet && row.id
+                    ? `/workflow/${clusterID}/${keyspace}/${name}/stream/${row.tablet.cell}/${row.tablet.uid}/${row.id}`
+                    : null;
+
+            const source = getStreamSource(row);
+            const target = getStreamTarget(row, keyspace);
+
+            return (
+                <tr key={row.key}>
+                    <DataCell>
+                        <StreamStatePip state={row.state} />{' '}
+                        <Link className="font-weight-bold" to={href}>
+                            {row.key}
+                        </Link>
+                        <div className="font-size-small text-color-secondary">
+                            Updated {formatDateTime(row.time_updated?.seconds)}
+                        </div>
+                    </DataCell>
+                    <DataCell>
+                        {source ? (
+                            <KeyspaceLink
+                                clusterID={clusterID}
+                                name={row.binlog_source?.keyspace}
+                                shard={row.binlog_source?.shard}
+                            >
+                                {source}
+                            </KeyspaceLink>
+                        ) : (
+                            <span className="text-color-secondary">N/A</span>
+                        )}
+                    </DataCell>
+                    <DataCell>
+                        {target ? (
+                            <KeyspaceLink clusterID={clusterID} name={keyspace} shard={row.shard}>
+                                {source}
+                            </KeyspaceLink>
+                        ) : (
+                            <span className="text-color-secondary">N/A</span>
+                        )}
+                    </DataCell>
+                    <DataCell>
+                        <TabletLink alias={formatAlias(row.tablet)} clusterID={clusterID}>
+                            {formatAlias(row.tablet)}
+                        </TabletLink>
+                    </DataCell>
+                </tr>
+            );
+        });
+    };
+
     return (
         <div>
-            <h1>{name}</h1>
-            <Code code={JSON.stringify(data, null, 2)} />
+            <WorkspaceHeader>
+                <NavCrumbs>
+                    <Link to="/workflows">Workflows</Link>
+                </NavCrumbs>
+
+                <WorkspaceTitle className="font-family-monospace">{name}</WorkspaceTitle>
+                <div className={style.headingMeta}>
+                    <span>
+                        Cluster: <code>{clusterID}</code>
+                    </span>
+                    <span>
+                        Target keyspace:{' '}
+                        <KeyspaceLink clusterID={clusterID} name={keyspace}>
+                            <code>{keyspace}</code>
+                        </KeyspaceLink>
+                    </span>
+                </div>
+            </WorkspaceHeader>
+            <ContentContainer>
+                {/* TODO(doeg): add a protobuf enum for this (https://github.com/vitessio/vitess/projects/12#card-60190340) */}
+                {['Error', 'Copying', 'Running', 'Stopped'].map((streamState) => {
+                    if (!Array.isArray(streamsByState[streamState])) {
+                        return null;
+                    }
+
+                    return (
+                        <div className={style.streamTable} key={streamState}>
+                            <DataTable
+                                columns={COLUMNS}
+                                data={streamsByState[streamState]}
+                                // TODO(doeg): make pagination optional in DataTable https://github.com/vitessio/vitess/projects/12#card-60810231
+                                pageSize={1000}
+                                renderRows={renderRows}
+                                title={streamState}
+                            />
+                        </div>
+                    );
+                })}
+            </ContentContainer>
         </div>
     );
 };

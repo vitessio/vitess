@@ -27,10 +27,10 @@ import (
 	"syscall"
 	"time"
 
+	"google.golang.org/protobuf/encoding/prototext"
+
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
-
-	"github.com/golang/protobuf/proto"
 )
 
 // HealthChecker is a callback that impements a service-specific health check
@@ -211,17 +211,19 @@ func VtcomboProcess(env Environment, args *Config, mysql MySQLManager) *VtProces
 		charset = DefaultCharset
 	}
 
+	protoTopo, _ := prototext.Marshal(args.Topology)
 	vt.ExtraArgs = append(vt.ExtraArgs, []string{
 		"-db_charset", charset,
 		"-db_app_user", user,
 		"-db_app_password", pass,
 		"-db_dba_user", user,
 		"-db_dba_password", pass,
-		"-proto_topo", proto.CompactTextString(args.Topology),
+		"-proto_topo", string(protoTopo),
 		"-mycnf_server_id", "1",
 		"-mycnf_socket_file", socket,
 		"-normalize_queries",
 		"-enable_query_plan_field_caching=false",
+		"-dbddl_plugin", "vttest",
 	}...)
 
 	vt.ExtraArgs = append(vt.ExtraArgs, QueryServerArgs...)

@@ -25,7 +25,7 @@ import (
 
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
@@ -87,6 +87,8 @@ type vstream struct {
 	timestamps map[string]int64
 
 	vsm *vstreamManager
+
+	rss []*srvtopo.ResolvedShard
 }
 
 type journalEvent struct {
@@ -338,9 +340,13 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 		}
 
 		var eventss [][]*binlogdatapb.VEvent
-		rss, err := vs.resolver.ResolveDestination(ctx, sgtid.Keyspace, vs.tabletType, key.DestinationShard(sgtid.Shard))
-		if err != nil {
-			return err
+		var err error
+		rss := vs.rss
+		if vs.resolver != nil {
+			rss, err = vs.resolver.ResolveDestination(ctx, sgtid.Keyspace, vs.tabletType, key.DestinationShard(sgtid.Shard))
+			if err != nil {
+				return err
+			}
 		}
 		if len(rss) != 1 {
 			// Unreachable.

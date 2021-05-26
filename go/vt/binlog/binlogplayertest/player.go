@@ -24,7 +24,7 @@ import (
 
 	"context"
 
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/key"
@@ -126,7 +126,7 @@ func testStreamKeyRange(t *testing.T, bpc binlogplayer.Client) {
 		t.Fatalf("got error: %v", err)
 	} else {
 		if !proto.Equal(se, testBinlogTransaction) {
-			t.Errorf("got wrong result, got %v expected %v", *se, *testBinlogTransaction)
+			t.Errorf("got wrong result, got %v expected %v", se, testBinlogTransaction)
 		}
 	}
 	if se, err := stream.Recv(); err == nil {
@@ -192,7 +192,7 @@ func testStreamTables(t *testing.T, bpc binlogplayer.Client) {
 		t.Fatalf("got error: %v", err)
 	} else {
 		if !proto.Equal(se, testBinlogTransaction) {
-			t.Errorf("got wrong result, got %v expected %v", *se, *testBinlogTransaction)
+			t.Errorf("got wrong result, got %v expected %v", se, testBinlogTransaction)
 		}
 	}
 	if se, err := stream.Recv(); err == nil {

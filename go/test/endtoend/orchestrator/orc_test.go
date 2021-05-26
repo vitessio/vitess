@@ -456,7 +456,7 @@ func checkMasterTablet(t *testing.T, cluster *cluster.LocalProcessCluster, table
 			//if !streamHealthResponse.GetServing() {
 			//	log.Exitf("stream health not updated")
 			//}
-			assert.True(t, streamHealthResponse.GetServing(), "stream health: %v", streamHealthResponse)
+			assert.True(t, streamHealthResponse.GetServing(), "stream health: %v", &streamHealthResponse)
 			tabletType := streamHealthResponse.GetTarget().GetTabletType()
 			require.Equal(t, topodatapb.TabletType_MASTER, tabletType)
 			break

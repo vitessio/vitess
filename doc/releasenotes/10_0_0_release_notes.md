@@ -1,7 +1,9 @@
 This release complies with VEP-3 which removes the upgrade order requirement. Components can be upgraded in any order. It is recommended that the upgrade order should still be followed if possible, except to canary test the new version of VTGate before upgrading the rest of the components.
 
-
-The following PRs made changes to behaviors that clients might rely on. They should be reviewed carefully so that client code can be changed in concert with a Vitess release deployment.
+## Known Issues
+* Running binaries with `--version` or running `select @@version` from a MySQL client still shows `10.0.0-RC1`
+* Online DDL [cannot be used](https://github.com/vitessio/vitess/pull/7873#issuecomment-822798180) if you are using the keyspace filtering feature of VTGate
+* VReplication errors when a fixed-length binary column is used as the sharding key #8080
 
 ## Bugs Fixed
 
@@ -81,6 +83,13 @@ The following PRs made changes to behaviors that clients might rely on. They sho
 * VTGate: Show columns query on system schema #7729
 * VTGate: Disallow foreign key constraint on ddl #7780
 * VTGate: VTGate: support -enable_online_ddl flag #7694
+* VTGate: Default to false for system settings to be changed per session at the database connection level #7921
+* VTGate: vtctl: return error on invalid ddl_strategy #7924
+* VTGate: [10.0] Squashed backport of #7903 #7927
+* VTGate: [10.0] Fix bug with reserved connections to stale tablets #7935
+* VTGate: [10.0] Fix for keyspaces_to_watch regression #7936
+* VTGate: [10.0] Update healthy tablets correctly for primary down #7937
+* VTGate: [10.0] Allow modification of tablet unhealthy_threshold via debugEnv #7938
 
 ### Testing 
 * Fuzzing: Add vtctl fuzzer #7605
@@ -159,6 +168,7 @@ The following PRs made changes to behaviors that clients might rely on. They sho
 * VReplication: Error out if binlog compression is turned on #7670
 * VReplication: Tablet throttler: support for custom query & threshold #7541
 * VStream API: allow aligning streams from different shards to minimize skews across the streams #7626
+* VReplication: Backport 7809: Update rowlog for the API change made for the vstream skew alignment feature #7890
 
 ### OnlineDDL
 
@@ -172,6 +182,8 @@ The following PRs made changes to behaviors that clients might rely on. They sho
 * Online DDL: Declarative Online DDL #7725
 
 ### VTAdmin
+
+Vitess 10.0 introduces a highly-experimental multi-cluster admin API and web UI, called VTAdmin. Deploying the vtadmin-api and vtadmin-web components is completely opt-in. If you're interested in trying it out and providing early feedback, come find us in #feat-vtadmin in the Vitess slack. Note that VTAdmin relies on the new VtctldServer API, so you must be running the new grpc-vtctld service on your vtctlds in order to use it.
 
 * VTAdmin: Add vtadmin-web build flag for configuring fetch credentials #7414
 * VTAdmin: Add `cluster` field to vtadmin-api's /api/gates response #7425
@@ -199,7 +211,7 @@ The following PRs made changes to behaviors that clients might rely on. They sho
 * VTAdmin: [vtadmin] GetWorkflow(s) endpoints #7662
 * VTAdmin: [vitessdriver|vtadmin] Support Ping in vitessdriver, use in vtadmin to healthcheck connections during Dial #7709
 * VTAdmin: [vtadmin]  Add to local example #7699
-* VTAdmin: vtexplain lock #7724
+* VTAdmin: [vtexplain] lock #7724
 * VTAdmin: [vtadmin] Aggregate schema sizes #7751
 * VTAdmin: [vtadmin-web] Add comments + 'options' parameter to API hooks #7754
 * VTAdmin: [vtadmin-web] Add common max-width to infrastructure table views #7760
@@ -246,6 +258,9 @@ The following PRs made changes to behaviors that clients might rely on. They sho
 * Add vtorc binary for rpm,deb builds #7750
 * Fixes bug that prevents creation of logs directory #7761
 * [Java] Guava update to 31.1.1 #7764
+* make: build vitess as static binaries by default #7795 ← Potentially breaking change
+* make: build vitess as static binaries by default (10.0 backport) #7808
+* java: prepare java version for release 10.0 #7922
 
 ## Functionality Neutral Changes
 * VTGate: Remove unused key.Destination.IsUnique() #7565
@@ -258,4 +273,13 @@ The following PRs made changes to behaviors that clients might rely on. They sho
 * Removed unused tests for Wordpress installation #7516
 * Fix unit test fail after merge #7550
 * Add test with NULL input values for vindexes that did not have any. #7552
+
+
+## VtctldServer
+As part of an ongoing effort to transition from the VtctlServer gRPC API to the newer VtctldServer gRPC API, we have updated the local example to use the corresponding new vtctldclient to perform InitShardPrimary (formerly, InitShardMaster) operations.
+
+To enable the new VtctldServer in your vtctld components, update the -service_map flag to include grpc-vtctld. You may specify both grpc-vtctl,grpc-vtctld to gracefully transition.
+
+The migration is still underway, but you may begin to transition to the new client for migrated commands. For a full listing, refer either to proto/vtctlservice.proto or consult vtctldclient --help.
+
 

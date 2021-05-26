@@ -21,9 +21,9 @@ import (
 	"testing"
 	"time"
 
-	context "context"
+	"google.golang.org/protobuf/encoding/prototext"
 
-	"github.com/golang/protobuf/proto"
+	context "context"
 
 	automationpb "vitess.io/vitess/go/vt/proto/automation"
 )
@@ -90,7 +90,8 @@ func waitForClusterOperation(t *testing.T, scheduler *Scheduler, id string, expe
 			}
 			if expectedOutputLastTask != "" {
 				if got := lastTc.ParallelTasks[len(lastTc.ParallelTasks)-1].Output; !strings.Contains(got, expectedOutputLastTask) {
-					t.Fatalf("ClusterOperation finished but did not contain expected output. got: %v want: %v Full ClusterOperation details: %v", got, expectedOutputLastTask, proto.MarshalTextString(getDetailsResponse.ClusterOp))
+					protoText, _ := prototext.Marshal(getDetailsResponse.ClusterOp)
+					t.Fatalf("ClusterOperation finished but did not contain expected output. got: %v want: %v Full ClusterOperation details: %s", got, expectedOutputLastTask, protoText)
 				}
 			}
 			if expectedErrorLastTask != "" {
@@ -262,6 +263,7 @@ func TestTaskEmitsTaskWhichCannotBeInstantiated(t *testing.T) {
 
 	details := waitForClusterOperation(t, scheduler, enqueueResponse.Id, "emitted TestingEchoTask", "no implementation found for: TestingEchoTask")
 	if len(details.SerialTasks) != 1 {
-		t.Errorf("A task has been emitted, but it shouldn't. Details:\n%v", proto.MarshalTextString(details))
+		protoText, _ := prototext.Marshal(details)
+		t.Errorf("A task has been emitted, but it shouldn't. Details:\n%s", protoText)
 	}
 }

@@ -23,7 +23,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/encoding/prototext"
+
 	"k8s.io/apimachinery/pkg/util/sets"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -131,7 +132,7 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 		}
 
 		var bls binlogdatapb.BinlogSource
-		if err := proto.UnmarshalText(row[2].ToString(), &bls); err != nil {
+		if err := prototext.Unmarshal(row[2].ToBytes(), &bls); err != nil {
 			return err
 		}
 

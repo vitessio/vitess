@@ -423,6 +423,7 @@ func TestMain(m *testing.M) {
 		if err != nil {
 			return 1
 		}
+
 		vtParams = mysql.ConnParams{
 			Host: clusterInstance.Hostname,
 			Port: clusterInstance.VtgateMySQLPort,

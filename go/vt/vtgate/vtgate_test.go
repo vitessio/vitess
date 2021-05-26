@@ -17,9 +17,10 @@ limitations under the License.
 package vtgate
 
 import (
-	"reflect"
 	"strings"
 	"testing"
+
+	"google.golang.org/protobuf/proto"
 
 	"github.com/stretchr/testify/assert"
 
@@ -28,8 +29,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"context"
-
-	"github.com/golang/protobuf/proto"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/discovery"
@@ -109,9 +108,7 @@ func TestVTGateExecute(t *testing.T) {
 	}
 	want := *sandboxconn.SingleRowResult
 	want.StatusFlags = 0 // VTGate result set does not contain status flags in sqltypes.Result
-	if !reflect.DeepEqual(&want, qr) {
-		t.Errorf("want \n%+v, got \n%+v", sandboxconn.SingleRowResult, qr)
-	}
+	utils.MustMatch(t, &want, qr)
 	if !proto.Equal(sbc.Options[0], executeOptions) {
 		t.Errorf("got ExecuteOptions \n%+v, want \n%+v", sbc.Options[0], executeOptions)
 	}
@@ -136,9 +133,7 @@ func TestVTGateExecuteWithKeyspaceShard(t *testing.T) {
 	}
 	wantQr := *sandboxconn.SingleRowResult
 	wantQr.StatusFlags = 0 // VTGate result set does not contain status flags in sqltypes.Result
-	if !reflect.DeepEqual(&wantQr, qr) {
-		t.Errorf("want \n%+v, got \n%+v", sandboxconn.SingleRowResult, qr)
-	}
+	utils.MustMatch(t, &wantQr, qr)
 
 	// Invalid keyspace.
 	_, _, err = rpcVTGate.Execute(
@@ -149,7 +144,7 @@ func TestVTGateExecuteWithKeyspaceShard(t *testing.T) {
 		"select id from none",
 		nil,
 	)
-	want := "keyspace invalid_keyspace not found in vschema"
+	want := "Unknown database 'invalid_keyspace' in vschema"
 	assert.EqualError(t, err, want)
 
 	// Valid keyspace/shard.
@@ -164,9 +159,7 @@ func TestVTGateExecuteWithKeyspaceShard(t *testing.T) {
 	if err != nil {
 		t.Errorf("want nil, got %v", err)
 	}
-	if !reflect.DeepEqual(&wantQr, qr) {
-		t.Errorf("want \n%+v, got \n%+v", sandboxconn.SingleRowResult, qr)
-	}
+	utils.MustMatch(t, &wantQr, qr)
 
 	// Invalid keyspace/shard.
 	_, _, err = rpcVTGate.Execute(

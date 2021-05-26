@@ -74,6 +74,8 @@ func buildShowBasicPlan(show *sqlparser.ShowBasic, vschema ContextVSchema) (engi
 		return buildShowVGtidPlan(show, vschema)
 	case sqlparser.GtidExecGlobal:
 		return buildShowGtidPlan(show, vschema)
+	case sqlparser.Warnings:
+		return buildWarnings()
 	}
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unknown show query type %s", show.Command.ToString())
 
@@ -180,10 +182,10 @@ func buildDBPlan(show *sqlparser.ShowBasic, vschema ContextVSchema) (engine.Prim
 
 	if show.Command == sqlparser.Database {
 		//Hard code default databases
-		rows = append(rows, buildVarCharRow("information_schema"))
-		rows = append(rows, buildVarCharRow("mysql"))
-		rows = append(rows, buildVarCharRow("sys"))
-		rows = append(rows, buildVarCharRow("performance_schema"))
+		ks = append(ks, &vindexes.Keyspace{Name: "information_schema"},
+			&vindexes.Keyspace{Name: "mysql"},
+			&vindexes.Keyspace{Name: "sys"},
+			&vindexes.Keyspace{Name: "performance_schema"})
 	}
 
 	for _, v := range ks {
@@ -534,4 +536,32 @@ func buildShowGtidPlan(show *sqlparser.ShowBasic, vschema ContextVSchema) (engin
 		Query:             fmt.Sprintf(`select '%s' as db_name, @@global.gtid_executed as gtid_executed, :%s as shard`, ks.Name, engine.ShardName),
 		ShardNameNeeded:   true,
 	}, nil
+}
+
+func buildWarnings() (engine.Primitive, error) {
+
+	f := func(sa engine.SessionActions) (*sqltypes.Result, error) {
+		fields := []*querypb.Field{
+			{Name: "Level", Type: sqltypes.VarChar},
+			{Name: "Code", Type: sqltypes.Uint16},
+			{Name: "Message", Type: sqltypes.VarChar},
+		}
+
+		warns := sa.GetWarnings()
+		rows := make([][]sqltypes.Value, 0, len(warns))
+
+		for _, warn := range warns {
+			rows = append(rows, []sqltypes.Value{
+				sqltypes.NewVarChar("Warning"),
+				sqltypes.NewUint32(warn.Code),
+				sqltypes.NewVarChar(warn.Message),
+			})
+		}
+		return &sqltypes.Result{
+			Fields: fields,
+			Rows:   rows,
+		}, nil
+	}
+
+	return engine.NewSessionPrimitive("SHOW WARNINGS", f), nil
 }

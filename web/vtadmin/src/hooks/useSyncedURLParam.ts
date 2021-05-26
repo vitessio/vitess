@@ -43,7 +43,9 @@ export const useSyncedURLParam = (
     // (3) navigated away, and then (4) clicked a nav link back to /tablets, the "filter" parameter
     // parameter you typed in (2) will be lost, since it's only preserved on the history stack,
     // which is only traversable with the "back" button.
-    const { query, pushQuery, replaceQuery } = useURLQuery();
+
+    // Ensure we never parse booleans/numbers since the contract (noted above) is that the value is always a string.
+    const { query, pushQuery, replaceQuery } = useURLQuery({ parseBooleans: false, parseNumbers: false });
     const value = `${query[key] || ''}`;
 
     const updateValue = useCallback(

@@ -20,6 +20,7 @@ import (
 	"time"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/vtctl/workflow"
 
 	"context"
 )
@@ -80,15 +81,15 @@ func (r *switcher) changeRouting(ctx context.Context) error {
 }
 
 func (r *switcher) streamMigraterfinalize(ctx context.Context, ts *trafficSwitcher, workflows []string) error {
-	return streamMigraterfinalize(ctx, ts, workflows)
+	return workflow.StreamMigratorFinalize(ctx, ts, workflows)
 }
 
 func (r *switcher) createReverseVReplication(ctx context.Context) error {
 	return r.ts.createReverseVReplication(ctx)
 }
 
-func (r *switcher) migrateStreams(ctx context.Context, sm *streamMigrater) error {
-	return sm.migrateStreams(ctx)
+func (r *switcher) migrateStreams(ctx context.Context, sm *workflow.StreamMigrator) error {
+	return sm.MigrateStreams(ctx)
 }
 
 func (r *switcher) waitForCatchup(ctx context.Context, filteredReplicationWaitTime time.Duration) error {
@@ -99,11 +100,11 @@ func (r *switcher) stopSourceWrites(ctx context.Context) error {
 	return r.ts.stopSourceWrites(ctx)
 }
 
-func (r *switcher) stopStreams(ctx context.Context, sm *streamMigrater) ([]string, error) {
-	return sm.stopStreams(ctx)
+func (r *switcher) stopStreams(ctx context.Context, sm *workflow.StreamMigrator) ([]string, error) {
+	return sm.StopStreams(ctx)
 }
 
-func (r *switcher) cancelMigration(ctx context.Context, sm *streamMigrater) {
+func (r *switcher) cancelMigration(ctx context.Context, sm *workflow.StreamMigrator) {
 	r.ts.wr.Logger().Infof("Cancel was requested.")
 	r.ts.cancelMigration(ctx, sm)
 }

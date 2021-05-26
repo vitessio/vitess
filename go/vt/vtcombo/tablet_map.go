@@ -62,6 +62,7 @@ type comboTablet struct {
 	shard      string
 	tabletType topodatapb.TabletType
 	dbname     string
+	uid        uint32
 
 	// objects built at construction time
 	qsc tabletserver.Controller
@@ -81,7 +82,7 @@ func CreateTablet(ctx context.Context, ts *topo.Server, cell string, uid uint32,
 	log.Infof("Creating %v tablet %v for %v/%v", tabletType, topoproto.TabletAliasString(alias), keyspace, shard)
 	flag.Set("debug-url-prefix", fmt.Sprintf("/debug-%d", uid))
 
-	controller := tabletserver.NewServer(topoproto.TabletAliasString(alias), ts, *alias)
+	controller := tabletserver.NewServer(topoproto.TabletAliasString(alias), ts, alias)
 	initTabletType := tabletType
 	if tabletType == topodatapb.TabletType_MASTER {
 		initTabletType = topodatapb.TabletType_REPLICA
@@ -126,6 +127,7 @@ func CreateTablet(ctx context.Context, ts *topo.Server, cell string, uid uint32,
 		shard:      shard,
 		tabletType: tabletType,
 		dbname:     dbname,
+		uid:        uid,
 
 		qsc: controller,
 		tm:  tm,
@@ -135,7 +137,7 @@ func CreateTablet(ctx context.Context, ts *topo.Server, cell string, uid uint32,
 
 // InitTabletMap creates the action tms and associated data structures
 // for all tablets, based on the vttest proto parameter.
-func InitTabletMap(ts *topo.Server, tpb *vttestpb.VTTestTopology, mysqld mysqlctl.MysqlDaemon, dbcfgs *dbconfigs.DBConfigs, schemaDir string, mycnf *mysqlctl.Mycnf, ensureDatabase bool) error {
+func InitTabletMap(ts *topo.Server, tpb *vttestpb.VTTestTopology, mysqld mysqlctl.MysqlDaemon, dbcfgs *dbconfigs.DBConfigs, schemaDir string, ensureDatabase bool) (uint32, error) {
 	tabletMap = make(map[uint32]*comboTablet)
 
 	ctx := context.Background()
@@ -152,142 +154,16 @@ func InitTabletMap(ts *topo.Server, tpb *vttestpb.VTTestTopology, mysqld mysqlct
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, nil)
 	var uid uint32 = 1
 	for _, kpb := range tpb.Keyspaces {
-		keyspace := kpb.Name
-
-		// First parse the ShardingColumnType.
-		// Note if it's empty, we will return 'UNSET'.
-		sct, err := key.ParseKeyspaceIDType(kpb.ShardingColumnType)
+		var err error
+		uid, err = CreateKs(ctx, ts, tpb, mysqld, dbcfgs, schemaDir, kpb, ensureDatabase, uid, wr)
 		if err != nil {
-			return fmt.Errorf("parseKeyspaceIDType(%v) failed: %v", kpb.ShardingColumnType, err)
-		}
-
-		if kpb.ServedFrom != "" {
-			// if we have a redirect, create a completely redirected
-			// keyspace and no tablet
-			if err := ts.CreateKeyspace(ctx, keyspace, &topodatapb.Keyspace{
-				ShardingColumnName: kpb.ShardingColumnName,
-				ShardingColumnType: sct,
-				ServedFroms: []*topodatapb.Keyspace_ServedFrom{
-					{
-						TabletType: topodatapb.TabletType_MASTER,
-						Keyspace:   kpb.ServedFrom,
-					},
-					{
-						TabletType: topodatapb.TabletType_REPLICA,
-						Keyspace:   kpb.ServedFrom,
-					},
-					{
-						TabletType: topodatapb.TabletType_RDONLY,
-						Keyspace:   kpb.ServedFrom,
-					},
-				},
-			}); err != nil {
-				return fmt.Errorf("CreateKeyspace(%v) failed: %v", keyspace, err)
-			}
-		} else {
-			// create a regular keyspace
-			if err := ts.CreateKeyspace(ctx, keyspace, &topodatapb.Keyspace{
-				ShardingColumnName: kpb.ShardingColumnName,
-				ShardingColumnType: sct,
-			}); err != nil {
-				return fmt.Errorf("CreateKeyspace(%v) failed: %v", keyspace, err)
-			}
-
-			// iterate through the shards
-			for _, spb := range kpb.Shards {
-				shard := spb.Name
-				ts.CreateShard(ctx, keyspace, shard)
-				if err != nil {
-					return fmt.Errorf("CreateShard(%v:%v) failed: %v", keyspace, shard, err)
-				}
-
-				for _, cell := range tpb.Cells {
-					dbname := spb.DbNameOverride
-					if dbname == "" {
-						dbname = fmt.Sprintf("vt_%v_%v", keyspace, shard)
-					}
-
-					replicas := int(kpb.ReplicaCount)
-					if replicas == 0 {
-						// 2 replicas in order to ensure the master cell has a master and a replica
-						replicas = 2
-					}
-					rdonlys := int(kpb.RdonlyCount)
-					if rdonlys == 0 {
-						rdonlys = 1
-					}
-
-					if ensureDatabase {
-						// Create Database if not exist
-						conn, err := mysqld.GetDbaConnection(context.TODO())
-						if err != nil {
-							return fmt.Errorf("GetConnection failed: %v", err)
-						}
-						defer conn.Close()
-
-						_, err = conn.ExecuteFetch("CREATE DATABASE IF NOT EXISTS `"+dbname+"`", 1, false)
-						if err != nil {
-							return fmt.Errorf("error ensuring database exists: %v", err)
-						}
-
-					}
-					if cell == tpb.Cells[0] {
-						replicas--
-
-						// create the master
-						if err := CreateTablet(ctx, ts, cell, uid, keyspace, shard, dbname, topodatapb.TabletType_MASTER, mysqld, dbcfgs.Clone()); err != nil {
-							return err
-						}
-						uid++
-					}
-
-					for i := 0; i < replicas; i++ {
-						// create a replica tablet
-						if err := CreateTablet(ctx, ts, cell, uid, keyspace, shard, dbname, topodatapb.TabletType_REPLICA, mysqld, dbcfgs.Clone()); err != nil {
-							return err
-						}
-						uid++
-					}
-
-					for i := 0; i < rdonlys; i++ {
-						// create a rdonly tablet
-						if err := CreateTablet(ctx, ts, cell, uid, keyspace, shard, dbname, topodatapb.TabletType_RDONLY, mysqld, dbcfgs.Clone()); err != nil {
-							return err
-						}
-						uid++
-					}
-				}
-			}
-		}
-
-		// vschema for the keyspace
-		if schemaDir != "" {
-			f := path.Join(schemaDir, keyspace, "vschema.json")
-			if _, err := os.Stat(f); err == nil {
-				// load the vschema
-				formal, err := vindexes.LoadFormalKeyspace(f)
-				if err != nil {
-					return fmt.Errorf("cannot load vschema file %v for keyspace %v: %v", f, keyspace, err)
-				}
-
-				if err := ts.SaveVSchema(ctx, keyspace, formal); err != nil {
-					return fmt.Errorf("SaveVSchema(%v) failed: %v", keyspace, err)
-				}
-			} else {
-				log.Infof("File %v doesn't exist, skipping vschema for keyspace %v", f, keyspace)
-			}
-		}
-
-		// Rebuild the SrvKeyspace object, so we can support
-		// range-based sharding queries, and export the redirects.
-		if err := wr.RebuildKeyspaceGraph(ctx, keyspace, nil, false); err != nil {
-			return fmt.Errorf("cannot rebuild %v: %v", keyspace, err)
+			return 0, err
 		}
 	}
 
 	// Rebuild the SrvVSchema object
 	if err := ts.RebuildSrvVSchema(ctx, tpb.Cells); err != nil {
-		return fmt.Errorf("RebuildVSchemaGraph failed: %v", err)
+		return 0, fmt.Errorf("RebuildVSchemaGraph failed: %v", err)
 	}
 
 	// Register the tablet dialer for tablet server
@@ -299,12 +175,202 @@ func InitTabletMap(ts *topo.Server, tpb *vttestpb.VTTestTopology, mysqld mysqlct
 	for _, tablet := range tabletMap {
 		tabletInfo, err := ts.GetTablet(ctx, tablet.alias)
 		if err != nil {
-			return fmt.Errorf("cannot find tablet: %+v", tablet.alias)
+			return 0, fmt.Errorf("cannot find tablet: %+v", tablet.alias)
 		}
 		tmc.RunHealthCheck(ctx, tabletInfo.Tablet)
 	}
 
+	return uid, nil
+}
+
+// DeleteKs deletes keyspace, shards and tablets with mysql databases
+func DeleteKs(ctx context.Context, ts *topo.Server, ksName string, mysqld mysqlctl.MysqlDaemon, tpb *vttestpb.VTTestTopology) error {
+	for key, tablet := range tabletMap {
+		if tablet.keyspace == ksName {
+			delete(tabletMap, key)
+			tablet.tm.Stop()
+			tablet.tm.Close()
+			tablet.qsc.SchemaEngine().Close()
+			err := ts.DeleteTablet(ctx, tablet.alias)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	var ks *vttestpb.Keyspace
+	index := 0
+	for _, keyspace := range tpb.Keyspaces {
+		if keyspace.Name == ksName {
+			ks = keyspace
+			break
+		}
+		index++
+	}
+	if ks == nil {
+		return fmt.Errorf("database not found")
+	}
+
+	conn, err := mysqld.GetDbaConnection(ctx)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	for _, shard := range ks.Shards {
+		q := fmt.Sprintf("DROP DATABASE IF EXISTS `vt_%s_%s`", ksName, shard.GetName())
+		if _, err = conn.ExecuteFetch(q, 1, false); err != nil {
+			return err
+		}
+		if err := ts.DeleteShard(ctx, ksName, shard.GetName()); err != nil {
+			return err
+		}
+	}
+
+	if err = ts.DeleteKeyspace(ctx, ksName); err != nil {
+		return err
+	}
+
+	kss := tpb.Keyspaces             // to save on chars
+	copy(kss[index:], kss[index+1:]) // shift keyspaces to the left, overwriting the value to remove
+	tpb.Keyspaces = kss[:len(kss)-1] // shrink the slice by one
+
 	return nil
+}
+
+// CreateKs creates keyspace, shards and tablets with mysql database
+func CreateKs(ctx context.Context, ts *topo.Server, tpb *vttestpb.VTTestTopology, mysqld mysqlctl.MysqlDaemon, dbcfgs *dbconfigs.DBConfigs, schemaDir string, kpb *vttestpb.Keyspace, ensureDatabase bool, uid uint32, wr *wrangler.Wrangler) (uint32, error) {
+	keyspace := kpb.Name
+
+	// First parse the ShardingColumnType.
+	// Note if it's empty, we will return 'UNSET'.
+	sct, err := key.ParseKeyspaceIDType(kpb.ShardingColumnType)
+	if err != nil {
+		return 0, fmt.Errorf("parseKeyspaceIDType(%v) failed: %v", kpb.ShardingColumnType, err)
+	}
+
+	if kpb.ServedFrom != "" {
+		// if we have a redirect, create a completely redirected
+		// keyspace and no tablet
+		if err := ts.CreateKeyspace(ctx, keyspace, &topodatapb.Keyspace{
+			ShardingColumnName: kpb.ShardingColumnName,
+			ShardingColumnType: sct,
+			ServedFroms: []*topodatapb.Keyspace_ServedFrom{
+				{
+					TabletType: topodatapb.TabletType_MASTER,
+					Keyspace:   kpb.ServedFrom,
+				},
+				{
+					TabletType: topodatapb.TabletType_REPLICA,
+					Keyspace:   kpb.ServedFrom,
+				},
+				{
+					TabletType: topodatapb.TabletType_RDONLY,
+					Keyspace:   kpb.ServedFrom,
+				},
+			},
+		}); err != nil {
+			return 0, fmt.Errorf("CreateKeyspace(%v) failed: %v", keyspace, err)
+		}
+	} else {
+		// create a regular keyspace
+		if err := ts.CreateKeyspace(ctx, keyspace, &topodatapb.Keyspace{
+			ShardingColumnName: kpb.ShardingColumnName,
+			ShardingColumnType: sct,
+		}); err != nil {
+			return 0, fmt.Errorf("CreateKeyspace(%v) failed: %v", keyspace, err)
+		}
+
+		// iterate through the shards
+		for _, spb := range kpb.Shards {
+			shard := spb.Name
+			ts.CreateShard(ctx, keyspace, shard)
+			if err != nil {
+				return 0, fmt.Errorf("CreateShard(%v:%v) failed: %v", keyspace, shard, err)
+			}
+
+			for _, cell := range tpb.Cells {
+				dbname := spb.DbNameOverride
+				if dbname == "" {
+					dbname = fmt.Sprintf("vt_%v_%v", keyspace, shard)
+				}
+
+				replicas := int(kpb.ReplicaCount)
+				if replicas == 0 {
+					// 2 replicas in order to ensure the master cell has a master and a replica
+					replicas = 2
+				}
+				rdonlys := int(kpb.RdonlyCount)
+				if rdonlys == 0 {
+					rdonlys = 1
+				}
+
+				if ensureDatabase {
+					// Create Database if not exist
+					conn, err := mysqld.GetDbaConnection(context.TODO())
+					if err != nil {
+						return 0, fmt.Errorf("GetConnection failed: %v", err)
+					}
+					defer conn.Close()
+
+					_, err = conn.ExecuteFetch("CREATE DATABASE IF NOT EXISTS `"+dbname+"`", 1, false)
+					if err != nil {
+						return 0, fmt.Errorf("error ensuring database exists: %v", err)
+					}
+
+				}
+				if cell == tpb.Cells[0] {
+					replicas--
+
+					// create the master
+					if err := CreateTablet(ctx, ts, cell, uid, keyspace, shard, dbname, topodatapb.TabletType_MASTER, mysqld, dbcfgs.Clone()); err != nil {
+						return 0, err
+					}
+					uid++
+				}
+
+				for i := 0; i < replicas; i++ {
+					// create a replica tablet
+					if err := CreateTablet(ctx, ts, cell, uid, keyspace, shard, dbname, topodatapb.TabletType_REPLICA, mysqld, dbcfgs.Clone()); err != nil {
+						return 0, err
+					}
+					uid++
+				}
+
+				for i := 0; i < rdonlys; i++ {
+					// create a rdonly tablet
+					if err := CreateTablet(ctx, ts, cell, uid, keyspace, shard, dbname, topodatapb.TabletType_RDONLY, mysqld, dbcfgs.Clone()); err != nil {
+						return 0, err
+					}
+					uid++
+				}
+			}
+		}
+	}
+
+	// vschema for the keyspace
+	if schemaDir != "" {
+		f := path.Join(schemaDir, keyspace, "vschema.json")
+		if _, err := os.Stat(f); err == nil {
+			// load the vschema
+			formal, err := vindexes.LoadFormalKeyspace(f)
+			if err != nil {
+				return 0, fmt.Errorf("cannot load vschema file %v for keyspace %v: %v", f, keyspace, err)
+			}
+
+			if err := ts.SaveVSchema(ctx, keyspace, formal); err != nil {
+				return 0, fmt.Errorf("SaveVSchema(%v) failed: %v", keyspace, err)
+			}
+		} else {
+			log.Infof("File %v doesn't exist, skipping vschema for keyspace %v", f, keyspace)
+		}
+	}
+
+	// Rebuild the SrvKeyspace object, so we can support
+	// range-based sharding queries, and export the redirects.
+	if err := wr.RebuildKeyspaceGraph(ctx, keyspace, nil, false); err != nil {
+		return 0, fmt.Errorf("cannot rebuild %v: %v", keyspace, err)
+	}
+	return uid, nil
 }
 
 //

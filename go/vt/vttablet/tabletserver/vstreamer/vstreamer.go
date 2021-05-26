@@ -24,9 +24,9 @@ import (
 	"strings"
 	"time"
 
-	vtschema "vitess.io/vitess/go/vt/schema"
+	"google.golang.org/protobuf/encoding/prototext"
 
-	"github.com/golang/protobuf/proto"
+	vtschema "vitess.io/vitess/go/vt/schema"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
@@ -79,9 +79,6 @@ type vstreamer struct {
 	phase string
 	vse   *Engine
 }
-
-// CopyState contains the last PK for tables to be copied
-type CopyState map[string][]*sqltypes.Result
 
 // streamerPlan extends the original plan to also include
 // the TableMap, which comes from the binlog. It's used
@@ -785,7 +782,7 @@ nextrow:
 				continue
 			}
 			journal := &binlogdatapb.Journal{}
-			if err := proto.UnmarshalText(afterValues[i].ToString(), journal); err != nil {
+			if err := prototext.Unmarshal(afterValues[i].ToBytes(), journal); err != nil {
 				return nil, err
 			}
 			vevents = append(vevents, &binlogdatapb.VEvent{
@@ -874,10 +871,13 @@ func (vs *vstreamer) extractRowAndFilter(plan *streamerPlan, data []byte, dataCo
 			return false, nil, err
 		}
 		pos += l
+
 		values[colNum] = value
 		valueIndex++
 	}
-	return plan.filter(values)
+	filtered := make([]sqltypes.Value, len(plan.ColExprs))
+	ok, err := plan.filter(values, filtered)
+	return ok, filtered, err
 }
 
 func wrapError(err error, stopPos mysql.Position, vse *Engine) error {

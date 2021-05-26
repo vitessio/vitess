@@ -19,9 +19,9 @@ package topo
 import (
 	"path"
 
-	"context"
+	"google.golang.org/protobuf/proto"
 
-	"github.com/golang/protobuf/proto"
+	"context"
 
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -234,7 +234,7 @@ func (ts *Server) FindAllShardsInKeyspace(ctx context.Context, keyspace string) 
 			if IsErrType(err, NoNode) {
 				log.Warningf("GetShard(%v, %v) returned ErrNoNode, consider checking the topology.", keyspace, shard)
 			} else {
-				vterrors.Wrapf(err, "GetShard(%v, %v) failed", keyspace, shard)
+				return nil, vterrors.Wrapf(err, "GetShard(%v, %v) failed", keyspace, shard)
 			}
 		}
 		result[shard] = si

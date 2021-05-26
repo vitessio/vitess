@@ -21,6 +21,8 @@ import (
 	"errors"
 	"testing"
 
+	"vitess.io/vitess/go/test/utils"
+
 	"github.com/stretchr/testify/assert"
 
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -170,7 +172,7 @@ func TestQueryPlanExecute(t *testing.T) {
 			}
 
 			assert.NoError(t, err)
-			assert.Equal(t, tt.expected, qr)
+			utils.MustMatch(t, tt.expected, qr)
 		})
 	}
 }
@@ -326,7 +328,7 @@ func TestQueryPlanExecuteScatter(t *testing.T) {
 				resultsByAlias[tablet.AliasString()] = qr
 			}
 
-			assert.Equal(t, tt.expected, resultsByAlias)
+			utils.MustMatch(t, tt.expected, resultsByAlias)
 		})
 	}
 }

@@ -23,8 +23,10 @@ func (cached *BindVariable) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(84)
+		size += int64(96)
 	}
+	// field unknownFields []byte
+	size += int64(cap(cached.unknownFields))
 	// field Value []byte
 	size += int64(cap(cached.Value))
 	// field Values []*vitess.io/vitess/go/vt/proto/query.Value
@@ -34,8 +36,6 @@ func (cached *BindVariable) CachedSize(alloc bool) int64 {
 			size += elem.CachedSize(true)
 		}
 	}
-	// field XXX_unrecognized []byte
-	size += int64(cap(cached.XXX_unrecognized))
 	return size
 }
 func (cached *Field) CachedSize(alloc bool) int64 {
@@ -44,8 +44,10 @@ func (cached *Field) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(148)
+		size += int64(160)
 	}
+	// field unknownFields []byte
+	size += int64(cap(cached.unknownFields))
 	// field Name string
 	size += int64(len(cached.Name))
 	// field Table string
@@ -58,8 +60,6 @@ func (cached *Field) CachedSize(alloc bool) int64 {
 	size += int64(len(cached.OrgName))
 	// field ColumnType string
 	size += int64(len(cached.ColumnType))
-	// field XXX_unrecognized []byte
-	size += int64(cap(cached.XXX_unrecognized))
 	return size
 }
 func (cached *QueryWarning) CachedSize(alloc bool) int64 {
@@ -68,12 +68,12 @@ func (cached *QueryWarning) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(52)
+		size += int64(64)
 	}
+	// field unknownFields []byte
+	size += int64(cap(cached.unknownFields))
 	// field Message string
 	size += int64(len(cached.Message))
-	// field XXX_unrecognized []byte
-	size += int64(cap(cached.XXX_unrecognized))
 	return size
 }
 func (cached *Target) CachedSize(alloc bool) int64 {
@@ -82,16 +82,16 @@ func (cached *Target) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(84)
+		size += int64(96)
 	}
+	// field unknownFields []byte
+	size += int64(cap(cached.unknownFields))
 	// field Keyspace string
 	size += int64(len(cached.Keyspace))
 	// field Shard string
 	size += int64(len(cached.Shard))
 	// field Cell string
 	size += int64(len(cached.Cell))
-	// field XXX_unrecognized []byte
-	size += int64(cap(cached.XXX_unrecognized))
 	return size
 }
 func (cached *Value) CachedSize(alloc bool) int64 {
@@ -100,11 +100,11 @@ func (cached *Value) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(60)
+		size += int64(72)
 	}
+	// field unknownFields []byte
+	size += int64(cap(cached.unknownFields))
 	// field Value []byte
 	size += int64(cap(cached.Value))
-	// field XXX_unrecognized []byte
-	size += int64(cap(cached.XXX_unrecognized))
 	return size
 }

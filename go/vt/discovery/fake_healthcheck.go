@@ -21,7 +21,7 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/topo"
@@ -150,13 +150,6 @@ func (fhc *FakeHealthCheck) TabletConnection(alias *topodatapb.TabletAlias, targ
 	defer fhc.mu.RUnlock()
 	for _, item := range fhc.items {
 		if proto.Equal(alias, item.ts.Tablet.Alias) {
-			if !item.ts.Serving {
-				return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.NotServing)
-			}
-			if target != nil && !proto.Equal(item.ts.Target, target) {
-				return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "%s: target mismatch %v vs %v", vterrors.WrongTablet, item.ts.Target, target)
-			}
-
 			return item.ts.Conn, nil
 		}
 	}
