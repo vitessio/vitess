@@ -25,6 +25,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/schema"
+	"vitess.io/vitess/go/vt/sqlparser"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
 
@@ -108,15 +109,23 @@ func CheckCancelAllMigrations(t *testing.T, vtParams *mysql.ConnParams, expectCo
 
 // ReadMigrations reads migration entries
 func ReadMigrations(t *testing.T, vtParams *mysql.ConnParams, like string) *sqltypes.Result {
-	showQuery := fmt.Sprintf("show vitess_migrations like '%s'", like)
-	return VtgateExecQuery(t, vtParams, showQuery, "")
+	query, err := sqlparser.ParseAndBind("show vitess_migrations like %a",
+		sqltypes.StringBindVariable(like),
+	)
+	require.NoError(t, err)
+
+	return VtgateExecQuery(t, vtParams, query, "")
 }
 
 // CheckMigrationStatus verifies that the migration indicated by given UUID has the given expected status
 func CheckMigrationStatus(t *testing.T, vtParams *mysql.ConnParams, shards []cluster.Shard, uuid string, expectStatuses ...schema.OnlineDDLStatus) {
-	showQuery := fmt.Sprintf("show vitess_migrations like '%s'", uuid)
-	r := VtgateExecQuery(t, vtParams, showQuery, "")
-	fmt.Printf("# output for `%s`:\n", showQuery)
+	query, err := sqlparser.ParseAndBind("show vitess_migrations like %a",
+		sqltypes.StringBindVariable(uuid),
+	)
+	require.NoError(t, err)
+
+	r := VtgateExecQuery(t, vtParams, query, "")
+	fmt.Printf("# output for `%s`:\n", query)
 	PrintQueryResult(os.Stdout, r)
 
 	count := 0
