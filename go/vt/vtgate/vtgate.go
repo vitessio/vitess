@@ -91,6 +91,8 @@ var (
 	// flags to enable/disable online and direct DDL statements
 	enableOnlineDDL = flag.Bool("enable_online_ddl", true, "Allow users to submit, review and control Online DDL")
 	enableDirectDDL = flag.Bool("enable_direct_ddl", true, "Allow users to submit direct DDL statements")
+
+	enableSchemaChangeSignal = flag.Bool("schema_change_signal", false, "Enable the schema tracker")
 )
 
 func getTxMode() vtgatepb.TransactionMode {
@@ -135,7 +137,6 @@ type VTGate struct {
 	vsm      *vstreamManager
 	txConn   *TxConn
 	gw       Gateway
-	st       *vtschema.Tracker
 
 	// stats objects.
 	// TODO(sougou): This needs to be cleaned up. There
@@ -198,18 +199,27 @@ func Init(ctx context.Context, serv srvtopo.Server, cell string, tabletTypesToWa
 	srvResolver := srvtopo.NewResolver(serv, gw, cell)
 	resolver := NewResolver(srvResolver, serv, cell, sc)
 	vsm := newVStreamManager(srvResolver, serv, cell)
-	st := vtschema.NewTracker(gw.hc.Subscribe())
+
+	var st *vtschema.Tracker
+	if *enableSchemaChangeSignal {
+		st = vtschema.NewTracker(gw.hc.Subscribe())
+		addKeyspaceToTracker(ctx, srvResolver, st, gw)
+	}
+
 	cacheCfg := &cache.Config{
 		MaxEntries:     *queryPlanCacheSize,
 		MaxMemoryUsage: *queryPlanCacheMemory,
 		LFU:            *queryPlanCacheLFU,
 	}
-	addKeyspaceToTracker(ctx, srvResolver, st, gw)
 
 	executor := NewExecutor(ctx, serv, cell, resolver, *normalizeQueries, *warnShardedOnly, *streamBufferSize, cacheCfg, st)
 
 	// connect the schema tracker with the vschema manager
-	st.RegisterSignalReceiver(executor.vm.Rebuild)
+	if *enableSchemaChangeSignal {
+		st.RegisterSignalReceiver(executor.vm.Rebuild)
+	}
+
+	// TODO: call serv.WatchSrvVSchema here
 
 	rpcVTGate = &VTGate{
 		executor: executor,
@@ -217,7 +227,6 @@ func Init(ctx context.Context, serv srvtopo.Server, cell string, tabletTypesToWa
 		vsm:      vsm,
 		txConn:   tc,
 		gw:       gw,
-		st:       st,
 		timings: stats.NewMultiTimings(
 			"VtgateApi",
 			"VtgateApi timings",
