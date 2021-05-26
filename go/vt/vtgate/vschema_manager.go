@@ -40,6 +40,7 @@ var _ VSchemaOperator = (*VSchemaManager)(nil)
 type VSchemaManager struct {
 	mu                sync.Mutex
 	currentSrvVschema *vschemapb.SrvVSchema
+	currentVschema    *vindexes.VSchema
 	serv              srvtopo.Server
 	cell              string
 	subscriber        func(vschema *vindexes.VSchema, stats *VSchemaStats)
@@ -109,17 +110,21 @@ func (vm *VSchemaManager) VSchemaUpdate(v *vschemapb.SrvVSchema, err error) {
 		}
 	}
 
-	// keep a copy of the latest SrvVschema
 	vm.mu.Lock()
-	vm.currentSrvVschema = v // TODO: should we do this locking?
-	vm.mu.Unlock()
+	defer vm.mu.Unlock()
 
-	var vschema *vindexes.VSchema
+	// keep a copy of the latest SrvVschema and Vschema
+	vm.currentSrvVschema = v // TODO: should we do this locking?
+	vschema := vm.currentVschema
+
 	if v == nil {
 		// We encountered an error, build an empty vschema.
-		vschema, _ = vindexes.BuildVSchema(&vschemapb.SrvVSchema{})
+		if vm.currentVschema == nil {
+			vschema, _ = vindexes.BuildVSchema(&vschemapb.SrvVSchema{})
+		}
 	} else {
 		vschema, err = vm.buildAndEnhanceVSchema(v)
+		vm.currentVschema = vschema
 	}
 
 	if vm.subscriber != nil {
