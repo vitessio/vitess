@@ -106,6 +106,12 @@ func CheckCancelAllMigrations(t *testing.T, vtParams *mysql.ConnParams, expectCo
 	assert.Equal(t, expectCount, int(r.RowsAffected))
 }
 
+// ReadMigrations reads migration entries
+func ReadMigrations(t *testing.T, vtParams *mysql.ConnParams, like string) *sqltypes.Result {
+	showQuery := fmt.Sprintf("show vitess_migrations like '%s'", like)
+	return VtgateExecQuery(t, vtParams, showQuery, "")
+}
+
 // CheckMigrationStatus verifies that the migration indicated by given UUID has the given expected status
 func CheckMigrationStatus(t *testing.T, vtParams *mysql.ConnParams, shards []cluster.Shard, uuid string, expectStatuses ...schema.OnlineDDLStatus) {
 	showQuery := fmt.Sprintf("show vitess_migrations like '%s'", uuid)

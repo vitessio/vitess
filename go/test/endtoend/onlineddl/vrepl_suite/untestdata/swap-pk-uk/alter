@@ -1,0 +1,1 @@
+drop primary key, drop key its_uidx, add primary key (i, ts), add unique key id_uidx(id)

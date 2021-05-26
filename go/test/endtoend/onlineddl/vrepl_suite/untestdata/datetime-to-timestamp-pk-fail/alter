@@ -1,0 +1,1 @@
+change column t t timestamp default current_timestamp
