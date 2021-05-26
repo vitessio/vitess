@@ -73,7 +73,7 @@ func TestMain(m *testing.M) {
 		}
 
 		// List of users authorized to execute vschema ddl operations
-		clusterInstance.VtTabletExtraArgs = []string{"-queryserver-config-schema-change-signal", "-queryserver-config-schema-reload-time", "1"}
+		clusterInstance.VtTabletExtraArgs = []string{"-queryserver-config-schema-change-signal"}
 		clusterInstance.VtGateExtraArgs = []string{"-schema_change_signal"}
 
 		// Start keyspace
