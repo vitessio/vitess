@@ -33,6 +33,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/schema"
+	"vitess.io/vitess/go/vt/sqlparser"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/onlineddl"
@@ -209,6 +210,14 @@ func testSingle(t *testing.T, testName string) {
 	}
 	alterStatement := fmt.Sprintf("alter table %s %s", tableName, alterClause)
 	uuid := testOnlineDDLStatement(t, alterStatement, ddlStrategy, executeStrategy)
+
+	defer func() {
+		query, err := sqlparser.ParseAndBind("alter vitess_migration %a cancel",
+			sqltypes.StringBindVariable(uuid),
+		)
+		require.NoError(t, err)
+		onlineddl.VtgateExecQuery(t, &vtParams, query, "")
+	}()
 	row := waitForMigration(t, uuid, waitForMigrationTimeout)
 	// migration is complete
 	{
