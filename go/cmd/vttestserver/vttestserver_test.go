@@ -126,6 +126,41 @@ func TestPersistentMode(t *testing.T) {
 	assert.Equal(t, expectedRows, res.Rows)
 }
 
+func TestForeignKeys(t *testing.T) {
+	args := os.Args
+	conf := config
+	defer resetFlags(args, conf)
+
+	cluster, err := startCluster("-foreign_key_mode=allow")
+	assert.NoError(t, err)
+	defer cluster.TearDown()
+
+	err = execOnCluster(cluster, "test_keyspace", func(conn *mysql.Conn) error {
+		_, err := conn.ExecuteFetch(`CREATE TABLE test_table_2 (
+			id BIGINT,
+			test_table_id BIGINT,
+			FOREIGN KEY (test_table_id) REFERENCES test_table(id)
+		)`, 1, false)
+		return err
+	})
+	assert.NoError(t, err)
+
+	cluster.TearDown()
+	cluster, err = startCluster("-foreign_key_mode=disallow")
+	assert.NoError(t, err)
+	defer cluster.TearDown()
+
+	err = execOnCluster(cluster, "test_keyspace", func(conn *mysql.Conn) error {
+		_, err := conn.ExecuteFetch(`CREATE TABLE test_table_2 (
+			id BIGINT,
+			test_table_id BIGINT,
+			FOREIGN KEY (test_table_id) REFERENCES test_table(id)
+		)`, 1, false)
+		return err
+	})
+	assert.Error(t, err)
+}
+
 func TestCanVtGateExecute(t *testing.T) {
 	args := os.Args
 	conf := config
