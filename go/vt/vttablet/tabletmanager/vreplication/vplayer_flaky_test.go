@@ -2450,7 +2450,7 @@ func shouldRunJSONTests(t *testing.T, name string) bool {
 // in this test since we just need to do check for string equality
 func TestPlayerJSONDocs(t *testing.T) {
 	if !shouldRunJSONTests(t, "TestPlayerJSONDocs") {
-		t.Skip()
+		return
 	}
 	defer deleteTablet(addTablet(100))
 
@@ -2529,7 +2529,7 @@ func TestPlayerJSONDocs(t *testing.T) {
 // TestPlayerJSONTwoColumns tests for two json columns in a table
 func TestPlayerJSONTwoColumns(t *testing.T) {
 	if !shouldRunJSONTests(t, "TestPlayerJSONTwoColumns") {
-		t.Skip()
+		return
 	}
 	defer deleteTablet(addTablet(100))
 	execStatements(t, []string{
