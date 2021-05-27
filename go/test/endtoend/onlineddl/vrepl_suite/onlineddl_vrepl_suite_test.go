@@ -231,6 +231,7 @@ func testSingle(t *testing.T, testName string) {
 		// Nothing further to do. Migration isn't actually running
 		return
 	}
+	assert.NotEmpty(t, uuid)
 
 	defer func() {
 		query, err := sqlparser.ParseAndBind("alter vitess_migration %a cancel",
@@ -278,13 +279,19 @@ func testSingle(t *testing.T, testName string) {
 		selectBefore := fmt.Sprintf("select %s from %s %s", beforeColumns, beforeTableName, orderBy)
 		selectAfter := fmt.Sprintf("select %s from %s %s", afterColumns, afterTableName, orderBy)
 
-		selectBeforeRS := mysqlExec(t, selectBefore, "")
-		selectAfterRS := mysqlExec(t, selectAfter, "")
+		// selectBeforeRS := mysqlExec(t, selectBefore, "")
+		// selectAfterRS := mysqlExec(t, selectAfter, "")
+		// require.Equal(t, selectBeforeRS.Rows, selectAfterRS.Rows, "results mismatch: (%s) amd (%s)", selectBefore, selectAfter)
 
-		require.Equal(t, selectBeforeRS.Rows, selectAfterRS.Rows, "results mismatch: (%s) amd (%s)", selectBefore, selectAfter)
-		// selectBeforeFile := createTempScript(t, selectBefore)
-		// selectAfterFile := createTempScript(t, selectAfter)
+		selectBeforeFile := createTempScript(t, selectBefore)
+		defer os.Remove(selectBeforeFile)
+		beforeOutput := mysqlClientExecFile(t, "", selectBeforeFile)
 
+		selectAfterFile := createTempScript(t, selectAfter)
+		defer os.Remove(selectAfterFile)
+		afterOutput := mysqlClientExecFile(t, "", selectAfterFile)
+
+		require.Equal(t, beforeOutput, afterOutput, "results mismatch: (%s) amd (%s)", selectBefore, selectAfter)
 	}
 }
 
@@ -369,7 +376,11 @@ func mysqlClientExecFile(t *testing.T, testName string, fileName string) (output
 	require.NoError(t, err)
 	mysqlPath, err := exec.LookPath("mysql")
 	require.NoError(t, err)
-	filePath, _ := filepath.Abs(path.Join(testDataPath, testName, fileName))
+
+	filePath := fileName
+	if !filepath.IsAbs(fileName) {
+		filePath, _ = filepath.Abs(path.Join(testDataPath, testName, fileName))
+	}
 	params := mysqlParams()
 	bashCommand := fmt.Sprintf(`%s -u%s --socket=%s --database=%s < %s 2> /tmp/error.log`, mysqlPath, params.Uname, params.UnixSocket, params.DbName, filePath)
 	cmd, err := exec.Command(
@@ -391,4 +402,16 @@ func getCreateTableStatement(t *testing.T, tableName string) (statement string) 
 	assert.Equal(t, len(queryResult.Rows[0]), 2) // table name, create statement
 	statement = queryResult.Rows[0][1].ToString()
 	return statement
+}
+
+func createTempScript(t *testing.T, content string) (fileName string) {
+	f, err := ioutil.TempFile("", "vrepl-suite-")
+	require.NoError(t, err)
+
+	_, err = f.WriteString(content)
+	require.NoError(t, err)
+	err = f.Close()
+	require.NoError(t, err)
+
+	return f.Name()
 }
