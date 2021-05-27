@@ -96,26 +96,6 @@ func TestMain(m *testing.M) {
 	os.Exit(exitCode)
 }
 
-func TestTopoDownServingQuery(t *testing.T) {
-	defer cluster.PanicHandler(t)
-	ctx := context.Background()
-	vtParams := mysql.ConnParams{
-		Host: "localhost",
-		Port: clusterInstance.VtgateMySQLPort,
-	}
-	conn, err := mysql.Connect(ctx, &vtParams)
-	require.Nil(t, err)
-	defer conn.Close()
-
-	defer execute(t, conn, `delete from t1`)
-
-	execMulti(t, conn, `insert into t1(c1, c2, c3, c4) values (300,100,300,'abc'); ;; insert into t1(c1, c2, c3, c4) values (301,101,301,'abcd');;`)
-	assertMatches(t, conn, `select c1,c2,c3 from t1`, `[[INT64(300) INT64(100) INT64(300)] [INT64(301) INT64(101) INT64(301)]]`)
-	clusterInstance.TopoProcess.TearDown(clusterInstance.Cell, clusterInstance.OriginalVTDATAROOT, clusterInstance.CurrentVTDATAROOT, true, *clusterInstance.TopoFlavorString())
-	time.Sleep(3 * time.Second)
-	assertMatches(t, conn, `select c1,c2,c3 from t1`, `[[INT64(300) INT64(100) INT64(300)] [INT64(301) INT64(101) INT64(301)]]`)
-}
-
 func TestTopoRestart(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	ctx := context.Background()
@@ -136,7 +116,13 @@ func TestTopoRestart(t *testing.T) {
 
 	go func() {
 		clusterInstance.TopoProcess.TearDown(clusterInstance.Cell, clusterInstance.OriginalVTDATAROOT, clusterInstance.CurrentVTDATAROOT, true, *clusterInstance.TopoFlavorString())
+
+		// Some sleep to server few queries when topo is down.
+		time.Sleep(400 * time.Millisecond)
+
 		clusterInstance.TopoProcess.Setup(*clusterInstance.TopoFlavorString(), clusterInstance)
+
+		// topo is up now.
 		ch <- 1
 	}()
 
