@@ -1419,6 +1419,10 @@ unsigned_opt:
   {
     $$ = true
   }
+| SIGNED
+  {
+    $$ = false
+  }
 
 zero_fill_opt:
   {
