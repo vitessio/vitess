@@ -60,16 +60,14 @@ func NewTracker(ch chan *discovery.TabletHealth) *Tracker {
 }
 
 // LoadKeyspace loads the keyspace schema.
-func (t *Tracker) LoadKeyspace(conn queryservice.QueryService, target *querypb.Target) (bool, error) {
+func (t *Tracker) LoadKeyspace(conn queryservice.QueryService, target *querypb.Target) error {
 	res, err := conn.Execute(context.Background(), target, mysql.FetchTables, nil, 0, 0, nil)
 	if err != nil {
-		return false, err
-	}
-	if len(res.Rows) == 0 {
-		return false, nil
+		return err
 	}
 	t.updateTables(target.Keyspace, res)
-	return true, nil
+	log.Infof("finished loading schema for keyspace %s. Found %d tables", target.Keyspace, len(res.Rows))
+	return nil
 }
 
 // Start starts the schema tracking.

@@ -113,6 +113,8 @@ order by table_name, ordinal_position`
 var VTDatabaseInit = []string{
 	CreateVTDatabase,
 	CreateSchemaCopyTable,
+	ClearSchemaCopy,
+	InsertIntoSchemaCopy,
 }
 
 // BaseShowTablesFields contains the fields returned by a BaseShowTables or a BaseShowTablesForTable command.

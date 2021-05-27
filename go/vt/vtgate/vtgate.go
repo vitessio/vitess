@@ -289,14 +289,14 @@ func addKeyspaceToTracker(ctx context.Context, srvResolver *srvtopo.Resolver, st
 }
 
 func resolveAndLoadKeyspace(ctx context.Context, srvResolver *srvtopo.Resolver, st *vtschema.Tracker, gw *TabletGateway, keyspace string) {
-	for {
+	for { // TODO: we should not do this indefinitely
 		dest, err := srvResolver.ResolveDestination(ctx, keyspace, topodatapb.TabletType_MASTER, key.DestinationAllShards{})
 		if err != nil {
 			log.Warningf("Unable to resolve destination: %v", err)
 		}
 		for _, shard := range dest {
-			done, err := st.LoadKeyspace(gw, shard.Target)
-			if done && err == nil {
+			err := st.LoadKeyspace(gw, shard.Target)
+			if err == nil {
 				return
 			}
 			log.Warningf("Unable to add keyspace to tracker: %v", err)
