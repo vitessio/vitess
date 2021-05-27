@@ -26,10 +26,7 @@ import (
 	"sync"
 	"time"
 
-	"google.golang.org/protobuf/encoding/prototext"
-
 	"vitess.io/vitess/go/json2"
-	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/key"
@@ -306,7 +303,7 @@ func (wr *Wrangler) getWorkflowState(ctx context.Context, targetKeyspace, workfl
 			return nil, nil, err
 		}
 		ws.ReplicaCellsNotSwitched, ws.ReplicaCellsSwitched = cellsNotSwitched, cellsSwitched
-		rules, err := ts.wr.getRoutingRules(ctx)
+		rules, err := topotools.GetRoutingRules(ctx, ts.wr.ts)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -945,7 +942,7 @@ func (ts *trafficSwitcher) compareShards(ctx context.Context, keyspace string, s
 
 func (ts *trafficSwitcher) switchTableReads(ctx context.Context, cells []string, servedTypes []topodatapb.TabletType, direction TrafficSwitchDirection) error {
 	log.Infof("switchTableReads: servedTypes: %+v, direction %t", servedTypes, direction)
-	rules, err := ts.wr.getRoutingRules(ctx)
+	rules, err := topotools.GetRoutingRules(ctx, ts.wr.ts)
 	if err != nil {
 		return err
 	}
@@ -972,7 +969,7 @@ func (ts *trafficSwitcher) switchTableReads(ctx context.Context, cells []string,
 			}
 		}
 	}
-	if err := ts.wr.saveRoutingRules(ctx, rules); err != nil {
+	if err := topotools.SaveRoutingRules(ctx, ts.wr.ts, rules); err != nil {
 		return err
 	}
 	return ts.wr.ts.RebuildSrvVSchema(ctx, cells)
@@ -1012,35 +1009,18 @@ func (ts *trafficSwitcher) switchShardReads(ctx context.Context, cells []string,
 	return nil
 }
 
-func (wr *Wrangler) checkIfJournalExistsOnTablet(ctx context.Context, tablet *topodatapb.Tablet, migrationID int64) (*binlogdatapb.Journal, bool, error) {
-	var exists bool
-	journal := &binlogdatapb.Journal{}
-	query := fmt.Sprintf("select val from _vt.resharding_journal where id=%v", migrationID)
-	p3qr, err := wr.tmc.VReplicationExec(ctx, tablet, query)
-	if err != nil {
-		return nil, false, err
-	}
-	if len(p3qr.Rows) != 0 {
-		qr := sqltypes.Proto3ToResult(p3qr)
-		if !exists {
-			if err := prototext.Unmarshal(qr.Rows[0][0].ToBytes(), journal); err != nil {
-				return nil, false, err
-			}
-			exists = true
-		}
-	}
-	return journal, exists, nil
-
-}
-
 // checkJournals returns true if at least one journal has been created.
 // If so, it also returns the list of sourceWorkflows that need to be switched.
 func (ts *trafficSwitcher) checkJournals(ctx context.Context) (journalsExist bool, sourceWorkflows []string, err error) {
-	var mu sync.Mutex
+	var (
+		ws = workflow.NewServer(ts.wr.ts, ts.wr.tmc)
+		mu sync.Mutex
+	)
+
 	err = ts.forAllSources(func(source *workflow.MigrationSource) error {
 		mu.Lock()
 		defer mu.Unlock()
-		journal, exists, err := ts.wr.checkIfJournalExistsOnTablet(ctx, source.GetPrimary().Tablet, ts.id)
+		journal, exists, err := ws.CheckReshardingJournalExistsOnTablet(ctx, source.GetPrimary().Tablet, ts.id)
 		if err != nil {
 			return err
 		}
@@ -1333,7 +1313,7 @@ func (ts *trafficSwitcher) changeRouting(ctx context.Context) error {
 }
 
 func (ts *trafficSwitcher) changeWriteRoute(ctx context.Context) error {
-	rules, err := ts.wr.getRoutingRules(ctx)
+	rules, err := topotools.GetRoutingRules(ctx, ts.wr.ts)
 	if err != nil {
 		return err
 	}
@@ -1344,7 +1324,7 @@ func (ts *trafficSwitcher) changeWriteRoute(ctx context.Context) error {
 		rules[ts.sourceKeyspace+"."+table] = []string{ts.targetKeyspace + "." + table}
 		ts.wr.Logger().Infof("Add routing: %v %v", table, ts.sourceKeyspace+"."+table)
 	}
-	if err := ts.wr.saveRoutingRules(ctx, rules); err != nil {
+	if err := topotools.SaveRoutingRules(ctx, ts.wr.ts, rules); err != nil {
 		return err
 	}
 	return ts.wr.ts.RebuildSrvVSchema(ctx, nil)
@@ -1515,7 +1495,7 @@ func doValidateWorkflowHasCompleted(ctx context.Context, ts *trafficSwitcher) er
 	//check if table is routable
 	wg.Wait()
 	if ts.migrationType == binlogdatapb.MigrationType_TABLES {
-		rules, err := ts.wr.getRoutingRules(ctx)
+		rules, err := topotools.GetRoutingRules(ctx, ts.wr.ts)
 		if err != nil {
 			rec.RecordError(fmt.Errorf("could not get RoutingRules"))
 		}
@@ -1665,7 +1645,7 @@ func (ts *trafficSwitcher) dropTargetShards(ctx context.Context) error {
 }
 
 func (ts *trafficSwitcher) deleteRoutingRules(ctx context.Context) error {
-	rules, err := ts.wr.getRoutingRules(ctx)
+	rules, err := topotools.GetRoutingRules(ctx, ts.wr.ts)
 	if err != nil {
 		return err
 	}
@@ -1680,18 +1660,10 @@ func (ts *trafficSwitcher) deleteRoutingRules(ctx context.Context) error {
 		delete(rules, ts.sourceKeyspace+"."+table+"@replica")
 		delete(rules, ts.sourceKeyspace+"."+table+"@rdonly")
 	}
-	if err := ts.wr.saveRoutingRules(ctx, rules); err != nil {
+	if err := topotools.SaveRoutingRules(ctx, ts.wr.ts, rules); err != nil {
 		return err
 	}
 	return nil
-}
-
-func (wr *Wrangler) getRoutingRules(ctx context.Context) (map[string][]string, error) {
-	return topotools.GetRoutingRules(ctx, wr.ts)
-}
-
-func (wr *Wrangler) saveRoutingRules(ctx context.Context, rules map[string][]string) error {
-	return topotools.SaveRoutingRules(ctx, wr.ts, rules)
 }
 
 // addParticipatingTablesToKeyspace updates the vschema with the new tables that were created as part of the

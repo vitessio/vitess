@@ -31,6 +31,7 @@ import { formatAlias } from '../../util/tablets';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import { formatDateTime } from '../../util/time';
 import { KeyspaceLink } from '../links/KeyspaceLink';
+import { TabletLink } from '../links/TabletLink';
 
 interface RouteParams {
     clusterID: string;
@@ -100,7 +101,11 @@ export const Workflow = () => {
                             <span className="text-color-secondary">N/A</span>
                         )}
                     </DataCell>
-                    <DataCell>{formatAlias(row.tablet)}</DataCell>
+                    <DataCell>
+                        <TabletLink alias={formatAlias(row.tablet)} clusterID={clusterID}>
+                            {formatAlias(row.tablet)}
+                        </TabletLink>
+                    </DataCell>
                 </tr>
             );
         });
