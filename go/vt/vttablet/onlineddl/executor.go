@@ -1211,6 +1211,45 @@ func (e *Executor) readPendingMigrationsUUIDs(ctx context.Context) (uuids []stri
 	return uuids, err
 }
 
+// readTablePendingMigrationsUUIDs returns UUIDs for migrations on given table, that are in pending state (queued/ready/running)
+func (e *Executor) readTablePendingMigrationsUUIDs(ctx context.Context, table string) (uuids []string, err error) {
+	r, err := e.execQuery(ctx, sqlSelectPendingMigrations)
+	if err != nil {
+		return uuids, err
+	}
+	// we identify running migrations on requested table
+	for _, row := range r.Named().Rows {
+		pendingUUID := row["migration_uuid"].ToString()
+		pendingKeyspace := row["keyspace"].ToString()
+		pendingTable := row["mysql_table"].ToString()
+
+		if pendingKeyspace == e.keyspace && pendingTable == table {
+			uuids = append(uuids, pendingUUID)
+		}
+	}
+	return uuids, err
+}
+
+// getLastCompletedMigrationOnTable returns the UUID of the last successful migration to complete on given table, if any
+func (e *Executor) getLastCompletedMigrationOnTable(ctx context.Context, table string) (found bool, uuid string, err error) {
+	query, err := sqlparser.ParseAndBind(sqlSelectCompleteMigrationsOnTable,
+		sqltypes.StringBindVariable(e.keyspace),
+		sqltypes.StringBindVariable(table),
+	)
+	if err != nil {
+		return false, "", err
+	}
+	r, err := e.execQuery(ctx, query)
+	if err != nil {
+		return false, "", err
+	}
+	for _, row := range r.Named().Rows {
+		completeUUID := row["migration_uuid"].ToString()
+		return true, completeUUID, nil
+	}
+	return false, "", nil
+}
+
 // terminateMigration attempts to interrupt and hard-stop a running migration
 func (e *Executor) terminateMigration(ctx context.Context, onlineDDL *schema.OnlineDDL, lastMigrationUUID string) (foundRunning bool, err error) {
 	switch onlineDDL.Strategy {
@@ -1385,40 +1424,25 @@ func (e *Executor) validateMigrationRevertible(ctx context.Context, revertMigrat
 	}
 	{
 		// Validation: see if there's a pending migration on this table:
-		r, err := e.execQuery(ctx, sqlSelectPendingMigrations)
+		pendingUUIDs, err := e.readTablePendingMigrationsUUIDs(ctx, revertMigration.Table)
 		if err != nil {
 			return err
 		}
-		// we identify running migrations on requested table
-		for _, row := range r.Named().Rows {
-			pendingUUID := row["migration_uuid"].ToString()
-			keyspace := row["keyspace"].ToString()
-			table := row["mysql_table"].ToString()
-			status := schema.OnlineDDLStatus(row["migration_status"].ToString())
-
-			if keyspace == e.keyspace && table == revertMigration.Table {
-				return fmt.Errorf("can not revert migration %s on table %s because migration %s is in %s status. May only revert if all migrations on this table are completed or failed", revertMigration.UUID, revertMigration.Table, pendingUUID, status)
-			}
+		if len(pendingUUIDs) > 0 {
+			return fmt.Errorf("can not revert migration %s on table %s because migration %s is pending. May only revert if all migrations on this table are completed or failed", revertMigration.UUID, revertMigration.Table, pendingUUIDs[0])
 		}
-		{
-			// Validation: see that we're reverting the last successful migration on this table:
-			query, err := sqlparser.ParseAndBind(sqlSelectCompleteMigrationsOnTable,
-				sqltypes.StringBindVariable(e.keyspace),
-				sqltypes.StringBindVariable(revertMigration.Table),
-			)
-			if err != nil {
-				return err
-			}
-			r, err := e.execQuery(ctx, query)
-			if err != nil {
-				return err
-			}
-			for _, row := range r.Named().Rows {
-				completeUUID := row["migration_uuid"].ToString()
-				if completeUUID != revertMigration.UUID {
-					return fmt.Errorf("can not revert migration %s on table %s because it is not the last migration to complete on that table. The last migration to complete was %s", revertMigration.UUID, revertMigration.Table, completeUUID)
-				}
-			}
+	}
+	{
+		// Validation: see that we're reverting the last successful migration on this table:
+		found, completeUUID, err := e.getLastCompletedMigrationOnTable(ctx, revertMigration.Table)
+		if err != nil {
+			return err
+		}
+		if !found {
+			return fmt.Errorf("can not revert migration %s on table %s because it is not found to be completed", revertMigration.UUID, revertMigration.Table)
+		}
+		if completeUUID != revertMigration.UUID {
+			return fmt.Errorf("can not revert migration %s on table %s because it is not the last migration to complete on that table. The last migration to complete was %s", revertMigration.UUID, revertMigration.Table, completeUUID)
 		}
 	}
 	return nil
