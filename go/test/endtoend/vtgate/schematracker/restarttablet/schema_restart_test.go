@@ -85,6 +85,11 @@ func TestMain(m *testing.M) {
 			return 1
 		}
 
+		// restart the tablet so that the schema.Engine gets a chance to start with existing schema
+		if err := clusterInstance.Keyspaces[0].Shards[0].MasterTablet().RestartOnlyTablet(); err != nil {
+			return 1
+		}
+
 		// Start vtgate
 		if err := clusterInstance.StartVtgate(); err != nil {
 			clusterInstance.VtgateProcess = cluster.VtgateProcess{}
