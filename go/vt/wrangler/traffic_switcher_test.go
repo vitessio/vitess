@@ -17,6 +17,7 @@ limitations under the License.
 package wrangler
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"reflect"
@@ -25,15 +26,14 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
-
 	"github.com/stretchr/testify/require"
 
-	"context"
-
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topotools"
+
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	"vitess.io/vitess/go/vt/topo"
 )
 
 var (
@@ -1737,7 +1737,7 @@ func TestReverseVReplicationUpdateQuery(t *testing.T) {
 func checkRouting(t *testing.T, wr *Wrangler, want map[string][]string) {
 	t.Helper()
 	ctx := context.Background()
-	got, err := wr.getRoutingRules(ctx)
+	got, err := topotools.GetRoutingRules(ctx, wr.ts)
 	if err != nil {
 		t.Fatal(err)
 	}
