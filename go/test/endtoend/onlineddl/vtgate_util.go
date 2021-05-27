@@ -21,10 +21,12 @@ import (
 	"fmt"
 	"os"
 	"testing"
+	"time"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/schema"
+	"vitess.io/vitess/go/vt/sqlparser"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
 
@@ -138,4 +140,46 @@ func CheckMigrationArtifacts(t *testing.T, vtParams *mysql.ConnParams, shards []
 		hasArtifacts := (row["artifacts"].ToString() != "")
 		assert.Equal(t, expectArtifacts, hasArtifacts)
 	}
+}
+
+// ReadMigrations reads migration entries
+func ReadMigrations(t *testing.T, vtParams *mysql.ConnParams, like string) *sqltypes.Result {
+	query, err := sqlparser.ParseAndBind("show vitess_migrations like %a",
+		sqltypes.StringBindVariable(like),
+	)
+	require.NoError(t, err)
+
+	return VtgateExecQuery(t, vtParams, query, "")
+}
+
+// WaitForMigration waits for a given migration to either complete or fail.
+// Waiting times out after given duration.
+// The caller decides whether timeout is allowed; if not, the calling test fails.
+func WaitForMigration(t *testing.T, vtParams *mysql.ConnParams, uuid string, expectCount int, timeout time.Duration, errorIfIncomplete bool) *sqltypes.Result {
+	if uuid == "" {
+		return nil
+	}
+	var status string
+	sleepDuration := time.Second
+	for timeout > 0 {
+		rs := ReadMigrations(t, vtParams, uuid)
+		countComplete := 0
+		for _, row := range rs.Named().Rows {
+			status = row["migration_status"].ToString()
+			switch status {
+			case string(schema.OnlineDDLStatusComplete), string(schema.OnlineDDLStatusFailed):
+				// migration is complete, either successful or not
+				countComplete++
+			}
+		}
+		if countComplete == expectCount {
+			return rs
+		}
+		time.Sleep(sleepDuration)
+		timeout = timeout - sleepDuration
+	}
+	if errorIfIncomplete {
+		require.NoError(t, fmt.Errorf("timeout in waitForMigration(%s). status is: %s", uuid, status))
+	}
+	return nil
 }

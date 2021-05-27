@@ -482,7 +482,7 @@ func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy str
 	assert.NoError(t, err)
 
 	if !strategySetting.Strategy.IsDirect() {
-		time.Sleep(time.Second * 20)
+		onlineddl.WaitForMigration(t, &vtParams, uuid, len(clusterInstance.Keyspaces[0].Shards), time.Second*20, false)
 	}
 
 	if expectHint != "" {
@@ -504,7 +504,7 @@ func testRevertMigration(t *testing.T, revertUUID string) (uuid string) {
 	fmt.Println("# Generated UUID (for debug purposes):")
 	fmt.Printf("<%s>\n", uuid)
 
-	time.Sleep(time.Second * 20)
+	onlineddl.WaitForMigration(t, &vtParams, uuid, len(clusterInstance.Keyspaces[0].Shards), time.Second*20, false)
 	return uuid
 }
 

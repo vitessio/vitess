@@ -1689,6 +1689,43 @@ func (e *Executor) executeMigration(ctx context.Context, onlineDDL *schema.Onlin
 		return failMigration(err)
 	}
 
+	if onlineDDL.StrategySetting().IsCombineDuplicateDDL() {
+		// This migration runs on some table. Let's see if the last migration to complete on the same table,
+		// has the exact same SQL statement as this one.
+		// If so, and because this migration is flagged with -combine-duplicate-ddl, we implicitly mark it as complete.
+		sameSQLasLastCompletedMigration := func() (same bool, completedUUID string, err error) {
+			pendingUUIDs, err := e.readTablePendingMigrationsUUIDs(ctx, onlineDDL.Table)
+			if err != nil {
+				return false, "", err
+			}
+			if len(pendingUUIDs) > 0 {
+				return false, "", nil
+			}
+			found, completedUUID, err := e.getLastCompletedMigrationOnTable(ctx, onlineDDL.Table)
+			if err != nil {
+				return false, "", err
+			}
+			if !found {
+				return false, completedUUID, nil
+			}
+			completedMigration, _, err := e.readMigration(ctx, completedUUID)
+			if err != nil {
+				return false, completedUUID, err
+			}
+			return completedMigration.SQL == onlineDDL.SQL, completedUUID, nil
+		}
+		same, completedUUID, err := sameSQLasLastCompletedMigration()
+		if err != nil {
+			return err
+		}
+		if same {
+			// Yep. We mark this migration as implicitly complete
+			_ = e.onSchemaMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusComplete, false, progressPctFull, etaSecondsNow)
+			_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, fmt.Sprintf("duplicate DDL as %s", completedUUID))
+			return nil
+		}
+	}
+
 	if onlineDDL.StrategySetting().IsDeclarative() {
 		switch ddlAction {
 		case sqlparser.RevertDDLAction:

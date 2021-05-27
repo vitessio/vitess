@@ -141,6 +141,9 @@ var (
 	truncateStatement = `
 		TRUNCATE TABLE stress_test
 	`
+	// A trivial statement which must succeed and does not change the schema
+	trivialStatement = `
+		ALTER TABLE stress_test ENGINE=InnoDB`
 	writeMetrics WriteMetrics
 )
 
@@ -222,7 +225,8 @@ func TestSchemaChange(t *testing.T) {
 	shards := clusterInstance.Keyspaces[0].Shards
 	require.Equal(t, 1, len(shards))
 
-	declarativeStrategy := "online -declarative"
+	declarativeStrategy := "online -skip-topo -declarative"
+	combineDuplicateDDLStrategy := "online -skip-topo -combine-duplicate-ddl"
 	var uuids []string
 
 	// CREATE1
@@ -392,6 +396,7 @@ func TestSchemaChange(t *testing.T) {
 		checkTable(t, tableName, true)
 		testSelectTableMetrics(t)
 	})
+
 	t.Run("CREATE TABLE IF NOT EXISTS non-declarative is successful", func(t *testing.T) {
 		// IF NOT EXISTS is supported in non-declarative mode. Just verifying that the statement itself is good,
 		// so that the failure we tested for, above, actually tests the "declarative" logic, rather than some
@@ -399,6 +404,42 @@ func TestSchemaChange(t *testing.T) {
 		uuid := testOnlineDDLStatement(t, createIfNotExistsStatement, "online", "vtgate", "")
 		uuids = append(uuids, uuid)
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		// the table existed, so we expect no changes in this non-declarative DDL
+		checkMigratedTable(t, tableName, "create2")
+		checkTable(t, tableName, true)
+		testSelectTableMetrics(t)
+	})
+	t.Run("ALTER TABLE -combine-duplicate-ddl, 1st", func(t *testing.T) {
+		// Previous DDL is not identical to this one
+		lastUUID := uuids[len(uuids)-1]
+		uuid := testOnlineDDLStatement(t, trivialStatement, combineDuplicateDDLStrategy, "vtgate", "")
+		uuids = append(uuids, uuid)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+
+		rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
+		for _, row := range rs.Named().Rows {
+			message := row["message"].ToString()
+			require.NotContains(t, message, lastUUID)
+			require.NotContains(t, message, "duplicate DDL")
+		}
+		// the table existed, so we expect no changes in this non-declarative DDL
+		checkMigratedTable(t, tableName, "create2")
+		checkTable(t, tableName, true)
+		testSelectTableMetrics(t)
+	})
+	t.Run("ALTER TABLE -combine-duplicate-ddl, 2nd, duplicate ddl", func(t *testing.T) {
+		// Previous DDL is identical to this one
+		lastUUID := uuids[len(uuids)-1]
+		uuid := testOnlineDDLStatement(t, trivialStatement, combineDuplicateDDLStrategy, "vtgate", "")
+		uuids = append(uuids, uuid)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+
+		rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
+		for _, row := range rs.Named().Rows {
+			message := row["message"].ToString()
+			require.Contains(t, message, lastUUID)
+			require.Contains(t, message, "duplicate DDL")
+		}
 		// the table existed, so we expect no changes in this non-declarative DDL
 		checkMigratedTable(t, tableName, "create2")
 		checkTable(t, tableName, true)
@@ -426,7 +467,7 @@ func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy str
 	assert.NoError(t, err)
 
 	if !strategySetting.Strategy.IsDirect() {
-		time.Sleep(time.Second * 20)
+		onlineddl.WaitForMigration(t, &vtParams, uuid, len(clusterInstance.Keyspaces[0].Shards), time.Second*20, false)
 	}
 
 	if expectHint != "" {
@@ -448,7 +489,7 @@ func testRevertMigration(t *testing.T, revertUUID string) (uuid string) {
 	fmt.Println("# Generated UUID (for debug purposes):")
 	fmt.Printf("<%s>\n", uuid)
 
-	time.Sleep(time.Second * 20)
+	onlineddl.WaitForMigration(t, &vtParams, uuid, len(clusterInstance.Keyspaces[0].Shards), time.Second*20, false)
 	return uuid
 }
 

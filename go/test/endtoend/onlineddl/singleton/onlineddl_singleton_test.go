@@ -312,7 +312,7 @@ func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy str
 	fmt.Printf("<%s>\n", uuid)
 
 	if !strategySetting.Strategy.IsDirect() && !skipWait {
-		time.Sleep(time.Second * 20)
+		onlineddl.WaitForMigration(t, &vtParams, uuid, len(clusterInstance.Keyspaces[0].Shards), time.Second*20, false)
 	}
 
 	if expectError == "" && expectHint != "" {
@@ -349,7 +349,7 @@ func testRevertMigration(t *testing.T, revertUUID string, executeStrategy string
 		fmt.Printf("<%s>\n", uuid)
 	}
 	if !skipWait {
-		time.Sleep(time.Second * 20)
+		onlineddl.WaitForMigration(t, &vtParams, uuid, len(clusterInstance.Keyspaces[0].Shards), time.Second*20, false)
 	}
 	return uuid
 }

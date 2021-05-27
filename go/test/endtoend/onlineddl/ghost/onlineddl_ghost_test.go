@@ -325,7 +325,7 @@ func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy str
 	strategySetting, err := schema.ParseDDLStrategy(ddlStrategy)
 	assert.NoError(t, err)
 	if !strategySetting.Strategy.IsDirect() {
-		time.Sleep(time.Second * 20)
+		onlineddl.WaitForMigration(t, &vtParams, uuid, len(clusterInstance.Keyspaces[0].Shards), time.Second*20, false)
 	}
 
 	if expectHint != "" {
