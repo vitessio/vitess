@@ -2439,9 +2439,9 @@ func shouldRunJSONTests(t *testing.T, name string) bool {
 	}
 	if skipTest {
 		t.Logf("not running %s on %s", name, env.Flavor)
-		return true
+		return false
 	}
-	return false
+	return true
 }
 
 // TestPlayerJSONDocs validates more complex and 'large' json docs. It only validates that the data in the table
