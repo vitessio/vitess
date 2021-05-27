@@ -23,15 +23,13 @@ import (
 	"testing"
 	"time"
 
-	"google.golang.org/protobuf/proto"
-
-	"vitess.io/vitess/go/test/utils"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/protoutil"
+	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 	"vitess.io/vitess/go/vt/topo"
@@ -206,6 +204,119 @@ func TestAddCellsAlias(t *testing.T) {
 			ca, err := tt.ts.GetCellsAlias(ctx, tt.req.Name, true)
 			require.NoError(t, err, "failed to read new cells alias %s from topo", tt.req.Name)
 			utils.MustMatch(t, &topodatapb.CellsAlias{Cells: tt.req.Cells}, ca)
+		})
+	}
+}
+
+func TestApplyRoutingRules(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	tests := []struct {
+		name          string
+		cells         []string
+		req           *vtctldatapb.ApplyRoutingRulesRequest
+		expectedRules *vschemapb.RoutingRules
+		topoDown      bool
+		shouldErr     bool
+	}{
+		{
+			name:  "success",
+			cells: []string{"zone1"},
+			req: &vtctldatapb.ApplyRoutingRulesRequest{
+				RoutingRules: &vschemapb.RoutingRules{
+					Rules: []*vschemapb.RoutingRule{
+						{
+							FromTable: "t1",
+							ToTables:  []string{"t1", "t2"},
+						},
+					},
+				},
+			},
+			expectedRules: &vschemapb.RoutingRules{
+				Rules: []*vschemapb.RoutingRule{
+					{
+						FromTable: "t1",
+						ToTables:  []string{"t1", "t2"},
+					},
+				},
+			},
+		},
+		{
+			name:  "rebuild failed (bad cell)",
+			cells: []string{"zone1"},
+			req: &vtctldatapb.ApplyRoutingRulesRequest{
+				RoutingRules: &vschemapb.RoutingRules{
+					Rules: []*vschemapb.RoutingRule{
+						{
+							FromTable: "t1",
+							ToTables:  []string{"t1", "t2"},
+						},
+					},
+				},
+				RebuildCells: []string{"zone1", "zone2"},
+			},
+			shouldErr: true,
+		},
+		{
+			// this test case is exactly like the previous, but we don't fail
+			// because we don't rebuild the vschema graph (which would fail the
+			// way we've set up the test case with the bogus cell).
+			name:  "rebuild skipped",
+			cells: []string{"zone1"},
+			req: &vtctldatapb.ApplyRoutingRulesRequest{
+				RoutingRules: &vschemapb.RoutingRules{
+					Rules: []*vschemapb.RoutingRule{
+						{
+							FromTable: "t1",
+							ToTables:  []string{"t1", "t2"},
+						},
+					},
+				},
+				SkipRebuild:  true,
+				RebuildCells: []string{"zone1", "zone2"},
+			},
+			expectedRules: &vschemapb.RoutingRules{
+				Rules: []*vschemapb.RoutingRule{
+					{
+						FromTable: "t1",
+						ToTables:  []string{"t1", "t2"},
+					},
+				},
+			},
+			shouldErr: false,
+		},
+		{
+			name:      "topo down",
+			cells:     []string{"zone1"},
+			req:       &vtctldatapb.ApplyRoutingRulesRequest{},
+			topoDown:  true,
+			shouldErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			ts, factory := memorytopo.NewServerAndFactory(tt.cells...)
+			if tt.topoDown {
+				factory.SetError(errors.New("topo down for testing"))
+			}
+
+			vtctld := NewVtctldServer(ts)
+			_, err := vtctld.ApplyRoutingRules(ctx, tt.req)
+			if tt.shouldErr {
+				assert.Error(t, err)
+				return
+			}
+
+			require.NoError(t, err, "ApplyRoutingRules(%+v) failed", tt.req)
+
+			rr, err := ts.GetRoutingRules(ctx)
+			require.NoError(t, err, "failed to get routing rules from topo to compare")
+			utils.MustMatch(t, tt.expectedRules, rr)
 		})
 	}
 }
@@ -2678,6 +2789,76 @@ func TestGetKeyspaces(t *testing.T) {
 	assert.Error(t, err)
 }
 
+func TestGetRoutingRules(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	tests := []struct {
+		name      string
+		topoDown  bool
+		rrIn      *vschemapb.RoutingRules
+		expected  *vschemapb.RoutingRules
+		shouldErr bool
+	}{
+		{
+			name: "success",
+			rrIn: &vschemapb.RoutingRules{
+				Rules: []*vschemapb.RoutingRule{
+					{
+						FromTable: "t1",
+						ToTables:  []string{"t2", "t3"},
+					},
+				},
+			},
+			expected: &vschemapb.RoutingRules{
+				Rules: []*vschemapb.RoutingRule{
+					{
+						FromTable: "t1",
+						ToTables:  []string{"t2", "t3"},
+					},
+				},
+			},
+		},
+		{
+			name:     "empty routing rules",
+			rrIn:     nil,
+			expected: &vschemapb.RoutingRules{},
+		},
+		{
+			name:      "topo error",
+			topoDown:  true,
+			shouldErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			ts, factory := memorytopo.NewServerAndFactory()
+			if tt.rrIn != nil {
+				err := ts.SaveRoutingRules(ctx, tt.rrIn)
+				require.NoError(t, err, "could not save routing rules: %+v", tt.rrIn)
+			}
+
+			if tt.topoDown {
+				factory.SetError(errors.New("topo down for testing"))
+			}
+
+			vtctld := NewVtctldServer(ts)
+			resp, err := vtctld.GetRoutingRules(ctx, &vtctldatapb.GetRoutingRulesRequest{})
+			if tt.shouldErr {
+				assert.Error(t, err)
+				return
+			}
+
+			require.NoError(t, err)
+			utils.MustMatch(t, resp.RoutingRules, tt.expected)
+		})
+	}
+}
+
 func TestGetTablet(t *testing.T) {
 	t.Parallel()
 
@@ -3448,7 +3629,6 @@ func TestGetSrvVSchemas(t *testing.T) {
 			utils.MustMatch(t, tt.expected, resp)
 		})
 	}
-
 }
 
 func TestGetTablets(t *testing.T) {
@@ -4144,6 +4324,48 @@ func TestPlannedReparentShard(t *testing.T) {
 
 			assert.NoError(t, err)
 			testutil.AssertPlannedReparentShardResponsesEqual(t, tt.expected, resp)
+		})
+	}
+}
+
+func TestRebuildVSchemaGraph(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	req := &vtctldatapb.RebuildVSchemaGraphRequest{}
+	tests := []struct {
+		name      string
+		topoDown  bool
+		shouldErr bool
+	}{
+		{
+			name: "success",
+		},
+		{
+			name:      "topo down",
+			topoDown:  true,
+			shouldErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			ts, factory := memorytopo.NewServerAndFactory("zone1")
+			if tt.topoDown {
+				factory.SetError(errors.New("topo down for testing"))
+			}
+
+			vtctld := NewVtctldServer(ts)
+			_, err := vtctld.RebuildVSchemaGraph(ctx, req)
+			if tt.shouldErr {
+				assert.Error(t, err)
+				return
+			}
+
+			assert.NoError(t, err)
 		})
 	}
 }
