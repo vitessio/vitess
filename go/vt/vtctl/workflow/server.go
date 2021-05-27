@@ -118,7 +118,7 @@ func (s *Server) GetCellsWithShardReadsSwitched(
 	ctx context.Context,
 	keyspace string,
 	si *topo.ShardInfo,
-	ttype topodatapb.TabletType,
+	tabletType topodatapb.TabletType,
 ) (cellsSwitched []string, cellsNotSwitched []string, err error) {
 	cells, err := s.ts.GetCellInfoNames(ctx)
 	if err != nil {
@@ -139,11 +139,11 @@ func (s *Server) GetCellsWithShardReadsSwitched(
 		)
 
 		for _, partition := range srvks.GetPartitions() {
-			if ttype != partition.GetServedType() {
+			if tabletType != partition.GetServedType() {
 				continue
 			}
 
-			// If reads and writes are both switched it is passible that the
+			// If reads and writes are both switched it is possible that the
 			// shard is not in the partition table.
 			for _, shardReference := range partition.GetShardReferences() {
 				if key.KeyRangeEqual(shardReference.GetKeyRange(), si.GetKeyRange()) {
@@ -193,7 +193,7 @@ func (s *Server) GetCellsWithTableReadsSwitched(
 	ctx context.Context,
 	keyspace string,
 	table string,
-	ttype topodatapb.TabletType,
+	tabletType topodatapb.TabletType,
 ) (cellsSwitched []string, cellsNotSwitched []string, err error) {
 	cells, err := s.ts.GetCellInfoNames(ctx)
 	if err != nil {
@@ -221,7 +221,7 @@ func (s *Server) GetCellsWithTableReadsSwitched(
 		)
 
 		for _, rule := range srvVSchema.RoutingRules.Rules {
-			ruleName := fmt.Sprintf("%s.%s@%s", keyspace, table, strings.ToLower(ttype.String()))
+			ruleName := fmt.Sprintf("%s.%s@%s", keyspace, table, strings.ToLower(tabletType.String()))
 			if rule.FromTable == ruleName {
 				found = true
 
