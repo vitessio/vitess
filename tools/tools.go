@@ -23,6 +23,7 @@ package tools
 import (
 	_ "github.com/GeertJohan/go.rice/rice"
 	_ "github.com/golang/mock/mockgen"
+	_ "github.com/planetscale/vtprotobuf/cmd/protoc-gen-go-vtproto"
 	_ "golang.org/x/lint"
 	_ "golang.org/x/tools/cmd/cover"
 	_ "golang.org/x/tools/cmd/goimports"
@@ -30,4 +31,8 @@ import (
 	_ "google.golang.org/grpc/cmd/protoc-gen-go-grpc"
 	_ "google.golang.org/protobuf/cmd/protoc-gen-go"
 	_ "honnef.co/go/tools/cmd/staticcheck"
+	_ "k8s.io/code-generator/cmd/client-gen"
+	_ "k8s.io/code-generator/cmd/deepcopy-gen"
+	_ "k8s.io/code-generator/cmd/informer-gen"
+	_ "k8s.io/code-generator/cmd/lister-gen"
 )
