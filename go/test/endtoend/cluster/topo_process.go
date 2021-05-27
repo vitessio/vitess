@@ -161,6 +161,7 @@ type PortsInfo struct {
 	HTTP    int `json:"http"`
 	SerfLan int `json:"serf_lan"`
 	SerfWan int `json:"serf_wan"`
+	Server  int `json:"server"`
 }
 
 // SetupConsul spawns a new consul service and initializes it with the defaults.
@@ -184,6 +185,7 @@ func (topo *TopoProcess) SetupConsul(cluster *LocalProcessCluster) (err error) {
 			HTTP:    topo.Port,
 			SerfLan: cluster.GetAndReservePort(),
 			SerfWan: cluster.GetAndReservePort(),
+			Server:  cluster.GetAndReservePort(),
 		},
 		DataDir: topo.DataDirectory,
 		LogFile: logFile,
