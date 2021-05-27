@@ -382,7 +382,7 @@ func mysqlClientExecFile(t *testing.T, testName string, fileName string) (output
 		filePath, _ = filepath.Abs(path.Join(testDataPath, testName, fileName))
 	}
 	params := mysqlParams()
-	bashCommand := fmt.Sprintf(`%s -u%s --socket=%s --database=%s < %s 2> /tmp/error.log`, mysqlPath, params.Uname, params.UnixSocket, params.DbName, filePath)
+	bashCommand := fmt.Sprintf(`%s -u%s --socket=%s --database=%s -s -s < %s 2> /tmp/error.log`, mysqlPath, params.Uname, params.UnixSocket, params.DbName, filePath)
 	cmd, err := exec.Command(
 		bashPath,
 		"-c",
