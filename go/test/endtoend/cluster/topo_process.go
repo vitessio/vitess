@@ -205,7 +205,8 @@ func (topo *TopoProcess) SetupConsul(cluster *LocalProcessCluster) (err error) {
 		topo.Binary, "agent",
 		"-server",
 		"-ui",
-		"-bootstrap-expect=1",
+		"-bootstrap-expect", "1",
+		"-bind", "127.0.0.1",
 		"-config-file", configFile,
 	)
 
@@ -214,7 +215,7 @@ func (topo *TopoProcess) SetupConsul(cluster *LocalProcessCluster) (err error) {
 
 	topo.proc.Env = append(topo.proc.Env, os.Environ()...)
 
-	log.Infof("Starting consul with args %v", strings.Join(topo.proc.Args, " "))
+	log.Errorf("Starting consul with args %v", strings.Join(topo.proc.Args, " "))
 	err = topo.proc.Start()
 	if err != nil {
 		return
