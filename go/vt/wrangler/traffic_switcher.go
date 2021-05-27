@@ -121,30 +121,30 @@ func (ts *trafficSwitcher) ForAllTargets(f func(source *workflow.MigrationTarget
 
 // For a Reshard, to check whether we have switched reads for a tablet type, we check if any one of the source shards has
 // the query service disabled in its tablet control record
-func (wr *Wrangler) getCellsWithShardReadsSwitched(ctx context.Context, targetKeyspace string, si *topo.ShardInfo, tabletType string) (
+func (wr *Wrangler) getCellsWithShardReadsSwitched(ctx context.Context, targetKeyspace string, si *topo.ShardInfo, tabletTypeStr string) (
 	cellsSwitched, cellsNotSwitched []string, err error) {
 
-	ttype, err := topoproto.ParseTabletType(tabletType)
+	tabletType, err := topoproto.ParseTabletType(tabletTypeStr)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	s := workflow.NewServer(wr.ts, wr.tmc)
-	return s.GetCellsWithShardReadsSwitched(ctx, targetKeyspace, si, ttype)
+	return s.GetCellsWithShardReadsSwitched(ctx, targetKeyspace, si, tabletType)
 }
 
 // For MoveTables,  to check whether we have switched reads for a tablet type, we check whether the routing rule
 // for the tablet_type is pointing to the target keyspace
-func (wr *Wrangler) getCellsWithTableReadsSwitched(ctx context.Context, targetKeyspace, table, tabletType string) (
+func (wr *Wrangler) getCellsWithTableReadsSwitched(ctx context.Context, targetKeyspace, table, tabletTypeStr string) (
 	cellsSwitched, cellsNotSwitched []string, err error) {
 
-	ttype, err := topoproto.ParseTabletType(tabletType)
+	tabletType, err := topoproto.ParseTabletType(tabletTypeStr)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	s := workflow.NewServer(wr.ts, wr.tmc)
-	return s.GetCellsWithTableReadsSwitched(ctx, targetKeyspace, table, ttype)
+	return s.GetCellsWithTableReadsSwitched(ctx, targetKeyspace, table, tabletType)
 }
 
 func (wr *Wrangler) getWorkflowState(ctx context.Context, targetKeyspace, workflowName string) (*trafficSwitcher, *workflow.State, error) {
