@@ -41,6 +41,8 @@ service Vtctld {
   // cells within the group (alias). Only primary traffic can be routed across
   // cells not in the same group (alias).
   rpc AddCellsAlias(vtctldata.AddCellsAliasRequest) returns (vtctldata.AddCellsAliasResponse) {}; 
+  // ApplyRoutingRules applies the VSchema routing rules.
+  rpc ApplyRoutingRules(vtctldata.ApplyRoutingRulesRequest) returns (vtctldata.ApplyRoutingRulesResponse) {};
   // ChangeTabletType changes the db type for the specified tablet, if possible.
   // This is used primarily to arrange replicas, and it will not convert a
   // primary. For that, use InitShardPrimary.
@@ -90,6 +92,8 @@ service Vtctld {
   rpc GetKeyspace(vtctldata.GetKeyspaceRequest) returns (vtctldata.GetKeyspaceResponse) {};
   // GetKeyspaces returns the keyspace struct of all keyspaces in the topo.
   rpc GetKeyspaces(vtctldata.GetKeyspacesRequest) returns (vtctldata.GetKeyspacesResponse) {};
+  // GetRoutingRules returns the VSchema routing rules.
+  rpc GetRoutingRules(vtctldata.GetRoutingRulesRequest) returns (vtctldata.GetRoutingRulesResponse) {};
   // GetSchema returns the schema for a tablet, or just the schema for the
   // specified tables in that tablet.
   rpc GetSchema(vtctldata.GetSchemaRequest) returns (vtctldata.GetSchemaResponse) {};
@@ -126,6 +130,10 @@ service Vtctld {
   // current shard primary is in for promotion unless NewPrimary is explicitly
   // provided in the request.
   rpc PlannedReparentShard(vtctldata.PlannedReparentShardRequest) returns (vtctldata.PlannedReparentShardResponse) {};
+  // RebuildVSchemaGraph rebuilds the per-cell SrvVSchema from the global
+  // VSchema objects in the provided cells (or all cells in the topo none
+  // provided).
+  rpc RebuildVSchemaGraph(vtctldata.RebuildVSchemaGraphRequest) returns (vtctldata.RebuildVSchemaGraphResponse) {};
   // RemoveKeyspaceCell removes the specified cell from the Cells list for all
   // shards in the specified keyspace, as well as from the SrvKeyspace for that
   // keyspace in that cell.
