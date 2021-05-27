@@ -143,6 +143,21 @@ message AddCellsAliasRequest {
 message AddCellsAliasResponse {
 }
 
+message ApplyRoutingRulesRequest {
+  vschema.RoutingRules routing_rules = 1;
+  // SkipRebuild, if set, will cause ApplyRoutingRules to skip rebuilding the
+  // SrvVSchema objects in each cell in RebuildCells.
+  bool skip_rebuild = 2;
+  // RebuildCells limits the SrvVSchema rebuild to the specified cells. If not
+  // provided the SrvVSchema will be rebuilt in every cell in the topology.
+  //
+  // Ignored if SkipRebuild is set.
+  repeated string rebuild_cells = 3;
+}
+
+message ApplyRoutingRulesResponse {
+}
+
 message ChangeTabletTypeRequest {
   topodata.TabletAlias tablet_alias = 1;
   topodata.TabletType db_type = 2;
@@ -351,6 +366,13 @@ message GetKeyspaceResponse {
   Keyspace keyspace = 1;
 }
 
+message GetRoutingRulesRequest {
+}
+
+message GetRoutingRulesResponse {
+  vschema.RoutingRules routing_rules = 1;
+}
+
 message GetSchemaRequest {
   topodata.TabletAlias tablet_alias = 1;
   // Tables is a list of tables for which we should gather information. Each is
@@ -511,6 +533,15 @@ message PlannedReparentShardResponse {
   // up-to-date.
   topodata.TabletAlias promoted_primary = 3;
   repeated logutil.Event events = 4;
+}
+
+message RebuildVSchemaGraphRequest {
+  // Cells specifies the cells to rebuild the SrvVSchema objects for. If empty,
+  // RebuildVSchemaGraph rebuilds the SrvVSchema for every cell in the topo.
+  repeated string cells = 1;
+}
+
+message RebuildVSchemaGraphResponse {
 }
 
 message RemoveKeyspaceCellRequest {

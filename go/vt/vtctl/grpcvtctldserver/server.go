@@ -108,6 +108,11 @@ func (s *VtctldServer) AddCellsAlias(ctx context.Context, req *vtctldatapb.AddCe
 	return &vtctldatapb.AddCellsAliasResponse{}, nil
 }
 
+// ApplyRoutingRules is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) ApplyRoutingRules(ctx context.Context, req *vtctldatapb.ApplyRoutingRulesRequest) (*vtctldatapb.ApplyRoutingRulesResponse, error) {
+	panic("unimplemented!")
+}
+
 // ChangeTabletType is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) ChangeTabletType(ctx context.Context, req *vtctldatapb.ChangeTabletTypeRequest) (*vtctldatapb.ChangeTabletTypeResponse, error) {
 	ctx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
@@ -702,6 +707,11 @@ func (s *VtctldServer) GetSrvVSchemas(ctx context.Context, req *vtctldatapb.GetS
 	}, nil
 }
 
+// GetRoutingRules is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) GetRoutingRules(ctx context.Context, req *vtctldatapb.GetRoutingRulesRequest) (*vtctldatapb.GetRoutingRulesResponse, error) {
+	panic("unimplemented!")
+}
+
 // GetTablet is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) GetTablet(ctx context.Context, req *vtctldatapb.GetTabletRequest) (*vtctldatapb.GetTabletResponse, error) {
 	ti, err := s.ts.GetTablet(ctx, req.TabletAlias)
@@ -1193,6 +1203,11 @@ func (s *VtctldServer) PlannedReparentShard(ctx context.Context, req *vtctldatap
 	copy(resp.Events, logstream)
 
 	return resp, err
+}
+
+// RebuildVSchemaGraph is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) RebuildVSchemaGraph(ctx context.Context, req *vtctldatapb.RebuildVSchemaGraphRequest) (*vtctldatapb.RebuildVSchemaGraphResponse, error) {
+	panic("unimplemented!")
 }
 
 // RemoveKeyspaceCell is part of the vtctlservicepb.VtctldServer interface.
