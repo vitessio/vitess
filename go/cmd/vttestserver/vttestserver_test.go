@@ -161,6 +161,67 @@ func TestForeignKeys(t *testing.T) {
 	assert.Error(t, err)
 }
 
+func TestDDLModes(t *testing.T) {
+	args := os.Args
+	conf := config
+	defer resetFlags(args, conf)
+
+	cluster, err := startCluster("-enable_online_ddl=true")
+	assert.NoError(t, err)
+	defer cluster.TearDown()
+
+	err = execOnCluster(cluster, "test_keyspace", func(conn *mysql.Conn) error {
+		_, err := conn.ExecuteFetch("SET @@ddl_strategy='online';", 1, false)
+		assert.NoError(t, err)
+		_, err = conn.ExecuteFetch("ALTER TABLE test_table ADD COLUMN something_else VARCHAR(255) NOT NULL DEFAULT ''", 1, false)
+		assert.NoError(t, err)
+		return nil
+	})
+	assert.NoError(t, err)
+
+	cluster.TearDown()
+	cluster, err = startCluster("-enable_online_ddl=false")
+	assert.NoError(t, err)
+	defer cluster.TearDown()
+
+	err = execOnCluster(cluster, "test_keyspace", func(conn *mysql.Conn) error {
+		_, err := conn.ExecuteFetch("SET @@ddl_strategy='online';", 1, false)
+		assert.NoError(t, err)
+		_, err = conn.ExecuteFetch("ALTER TABLE test_table ADD COLUMN something_else VARCHAR(255) NOT NULL DEFAULT ''", 1, false)
+		return err
+	})
+	assert.Error(t, err)
+
+	cluster.TearDown()
+	cluster, err = startCluster("-enable_direct_ddl=true")
+	assert.NoError(t, err)
+	defer cluster.TearDown()
+
+	err = execOnCluster(cluster, "test_keyspace", func(conn *mysql.Conn) error {
+		_, err := conn.ExecuteFetch("SET @@ddl_strategy='direct';", 1, false)
+		assert.NoError(t, err)
+		_, err = conn.ExecuteFetch("ALTER TABLE test_table ADD COLUMN something_else VARCHAR(255) NOT NULL DEFAULT ''", 1, false)
+		assert.NoError(t, err)
+		_, err = conn.ExecuteFetch("SELECT something_else FROM test_table", 1, false)
+		assert.NoError(t, err)
+		return nil
+	})
+	assert.NoError(t, err)
+
+	cluster.TearDown()
+	cluster, err = startCluster("-enable_direct_ddl=false")
+	assert.NoError(t, err)
+	defer cluster.TearDown()
+
+	err = execOnCluster(cluster, "test_keyspace", func(conn *mysql.Conn) error {
+		_, err := conn.ExecuteFetch("SET @@ddl_strategy='direct';", 1, false)
+		assert.NoError(t, err)
+		_, err = conn.ExecuteFetch("ALTER TABLE test_table ADD COLUMN something_else VARCHAR(255) NOT NULL DEFAULT ''", 1, false)
+		return err
+	})
+	assert.Error(t, err)
+}
+
 func TestCanVtGateExecute(t *testing.T) {
 	args := os.Args
 	conf := config
