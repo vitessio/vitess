@@ -2427,78 +2427,9 @@ func TestTimestamp(t *testing.T) {
 	expectData(t, "t1", [][]string{{"1", want, want}})
 }
 
-func TestPlayerJSONTwoColumns(t *testing.T) {
-	defer deleteTablet(addTablet(100))
-	execStatements(t, []string{
-		"create table vitess_json2(id int auto_increment, val json, val2 json, primary key(id))",
-		fmt.Sprintf("create table %s.vitess_json2(id int, val json, val2 json, primary key(id))", vrepldb),
-	})
-	defer execStatements(t, []string{
-		"drop table vitess_json2",
-		fmt.Sprintf("drop table %s.vitess_json2", vrepldb),
-	})
-
-	env.SchemaEngine.Reload(context.Background())
-
-	filter := &binlogdatapb.Filter{
-		Rules: []*binlogdatapb.Rule{{
-			Match: "/.*",
-		}},
-	}
-	bls := &binlogdatapb.BinlogSource{
-		Keyspace: env.KeyspaceName,
-		Shard:    env.ShardName,
-		Filter:   filter,
-		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
-	}
-	cancel, _ := startVReplication(t, bls, "")
-	defer cancel()
-	type testcase struct {
-		name  string
-		input string
-		data  [][]string
-	}
-	var testcases []testcase
-	id := 0
-	var addTestCase = func(name, val, val2 string) {
-		id++
-		testcases = append(testcases, testcase{
-			name:  name,
-			input: fmt.Sprintf("insert into vitess_json2(val, val2) values (%s, %s)", encodeString(val), encodeString(val2)),
-			data: [][]string{
-				{strconv.Itoa(id), val, val2},
-			},
-		})
-	}
-	longString := strings.Repeat("aa", math.MaxInt16)
-	largeObject := fmt.Sprintf(singleLargeObjectTemplate, longString)
-	addTestCase("twoCols", jsonSingleDoc, largeObject)
-	id = 0
-	for _, tcase := range testcases {
-		t.Run(tcase.name, func(t *testing.T) {
-			id++
-			execStatements(t, []string{tcase.input})
-			want := []string{
-				"begin",
-				"/insert into vitess_json2",
-				"/update _vt.vreplication set pos=",
-				"commit",
-			}
-			expectDBClientQueries(t, want)
-			expectJSON(t, "vitess_json2", tcase.data, id, env.Mysqld.FetchSuperQuery)
-		})
-	}
-
-}
-
-// TestPlayerJSONDocs validates more complex and 'large' json docs. It only validates that the data in the table
-// TestPlayerTypes, above, also verifies the sql queries applied on the target. It is too painful to test the applied
-// sql for larger jsons because of the need to escape special characters, so we check larger jsons separately
-// in this test since we just need to do check for string equality
-func TestPlayerJSONDocs(t *testing.T) {
-	log.Errorf("TestPlayerJSON: flavor is %s", env.Flavor)
+func shouldRunJSONTests(t *testing.T, name string) bool {
 	skipTest := true
-	flavors := []string{"mysql80", "mysql57", "mysql56"}
+	flavors := []string{"mysql80", "mysql57"}
 	//flavors = append(flavors, "mysql56") // uncomment for local testing, in CI it fails on percona56
 	for _, flavor := range flavors {
 		if strings.EqualFold(env.Flavor, flavor) {
@@ -2507,10 +2438,20 @@ func TestPlayerJSONDocs(t *testing.T) {
 		}
 	}
 	if skipTest {
-		log.Warningf("not running TestPlayerJSONDocs")
-		return
+		t.Logf("not running %s on %s", name, env.Flavor)
+		return true
 	}
+	return false
+}
 
+// TestPlayerJSONDocs validates more complex and 'large' json docs. It only validates that the data in the table
+// TestPlayerTypes, above, also verifies the sql queries applied on the target. It is too painful to test the applied
+// sql for larger jsons because of the need to escape special characters, so we check larger jsons separately
+// in this test since we just need to do check for string equality
+func TestPlayerJSONDocs(t *testing.T) {
+	if !shouldRunJSONTests(t, "TestPlayerJSONDocs") {
+		t.Skip()
+	}
 	defer deleteTablet(addTablet(100))
 
 	execStatements(t, []string{
@@ -2583,6 +2524,74 @@ func TestPlayerJSONDocs(t *testing.T) {
 			expectJSON(t, "vitess_json", tcase.data, id, env.Mysqld.FetchSuperQuery)
 		})
 	}
+}
+
+// TestPlayerJSONTwoColumns tests for two json columns in a table
+func TestPlayerJSONTwoColumns(t *testing.T) {
+	if !shouldRunJSONTests(t, "TestPlayerJSONTwoColumns") {
+		t.Skip()
+	}
+	defer deleteTablet(addTablet(100))
+	execStatements(t, []string{
+		"create table vitess_json2(id int auto_increment, val json, val2 json, primary key(id))",
+		fmt.Sprintf("create table %s.vitess_json2(id int, val json, val2 json, primary key(id))", vrepldb),
+	})
+	defer execStatements(t, []string{
+		"drop table vitess_json2",
+		fmt.Sprintf("drop table %s.vitess_json2", vrepldb),
+	})
+
+	env.SchemaEngine.Reload(context.Background())
+
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match: "/.*",
+		}},
+	}
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace: env.KeyspaceName,
+		Shard:    env.ShardName,
+		Filter:   filter,
+		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
+	}
+	cancel, _ := startVReplication(t, bls, "")
+	defer cancel()
+	type testcase struct {
+		name  string
+		input string
+		data  [][]string
+	}
+	var testcases []testcase
+	id := 0
+	var addTestCase = func(name, val, val2 string) {
+		id++
+		testcases = append(testcases, testcase{
+			name:  name,
+			input: fmt.Sprintf("insert into vitess_json2(val, val2) values (%s, %s)", encodeString(val), encodeString(val2)),
+			data: [][]string{
+				{strconv.Itoa(id), val, val2},
+			},
+		})
+	}
+	longString := strings.Repeat("aa", math.MaxInt16)
+	largeObject := fmt.Sprintf(singleLargeObjectTemplate, longString)
+	addTestCase("twoCols", jsonSingleDoc, largeObject)
+	id = 0
+	for _, tcase := range testcases {
+		t.Run(tcase.name, func(t *testing.T) {
+			id++
+			execStatements(t, []string{tcase.input})
+			want := []string{
+				"begin",
+				"/insert into vitess_json2",
+				"/update _vt.vreplication set pos=",
+				"commit",
+			}
+			expectDBClientQueries(t, want)
+			expectJSON(t, "vitess_json2", tcase.data, id, env.Mysqld.FetchSuperQuery)
+		})
+	}
+
 }
 
 func TestVReplicationLogs(t *testing.T) {
