@@ -36,13 +36,14 @@ func TestIsDirect(t *testing.T) {
 
 func TestParseDDLStrategy(t *testing.T) {
 	tt := []struct {
-		strategyVariable string
-		strategy         DDLStrategy
-		options          string
-		isDeclarative    bool
-		isSingleton      bool
-		runtimeOptions   string
-		err              error
+		strategyVariable      string
+		strategy              DDLStrategy
+		options               string
+		isDeclarative         bool
+		isSingleton           bool
+		isCombineDuplicateDDL bool
+		runtimeOptions        string
+		err                   error
 	}{
 		{
 			strategyVariable: "direct",
@@ -90,6 +91,13 @@ func TestParseDDLStrategy(t *testing.T) {
 			runtimeOptions:   "",
 			isSingleton:      true,
 		},
+		{
+			strategyVariable:      "online -combine-duplicate-ddl",
+			strategy:              DDLStrategyOnline,
+			options:               "-combine-duplicate-ddl",
+			runtimeOptions:        "",
+			isCombineDuplicateDDL: true,
+		},
 	}
 	for _, ts := range tt {
 		setting, err := ParseDDLStrategy(ts.strategyVariable)
@@ -98,6 +106,7 @@ func TestParseDDLStrategy(t *testing.T) {
 		assert.Equal(t, ts.options, setting.Options)
 		assert.Equal(t, ts.isDeclarative, setting.IsDeclarative())
 		assert.Equal(t, ts.isSingleton, setting.IsSingleton())
+		assert.Equal(t, ts.isCombineDuplicateDDL, setting.IsCombineDuplicateDDL())
 
 		runtimeOptions := strings.Join(setting.RuntimeOptions(), " ")
 		assert.Equal(t, ts.runtimeOptions, runtimeOptions)
