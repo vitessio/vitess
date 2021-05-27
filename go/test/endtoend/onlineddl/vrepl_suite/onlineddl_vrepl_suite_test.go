@@ -47,7 +47,6 @@ var (
 	vtParams                mysql.ConnParams
 	evaluatedMysqlParams    *mysql.ConnParams
 	ddlStrategy             = "online -skip-topo -vreplication-test-suite"
-	executeStrategy         = "vtgate"
 	waitForMigrationTimeout = 20 * time.Second
 
 	hostname              = "localhost"
@@ -164,8 +163,9 @@ func readTestFile(t *testing.T, testName string, fileName string) (content strin
 	return strings.TrimSpace(string(b)), true
 }
 
+// testSingle is the main testing function for a single test in the suite.
+// It prepares the grounds, creates the test data, runs a migration, expects results/error, cleans up.
 func testSingle(t *testing.T, testName string) {
-
 	if ignoreVersions, exists := readTestFile(t, testName, "ignore_versions"); exists {
 		// ignoreVersions is a regexp
 		re, err := regexp.Compile(ignoreVersions)
@@ -202,6 +202,19 @@ func testSingle(t *testing.T, testName string) {
 		// ensure test table has been created:
 		getCreateTableStatement(t, tableName)
 	}
+	defer func() {
+		// destroy
+		f := "destroy.sql"
+		if _, exists := readTestFile(t, testName, f); exists {
+			mysqlClientExecFile(t, testName, f)
+		}
+	}()
+
+	var expectQueryFailure string
+	if content, exists := readTestFile(t, testName, "expect_query_failure"); exists {
+		// VTGate failure is expected!
+		expectQueryFailure = content
+	}
 
 	var migrationMessage string
 	var migrationStatus string
@@ -211,7 +224,13 @@ func testSingle(t *testing.T, testName string) {
 		alterClause = content
 	}
 	alterStatement := fmt.Sprintf("alter table %s %s", tableName, alterClause)
-	uuid := testOnlineDDLStatement(t, alterStatement, ddlStrategy, executeStrategy)
+	// Run the DDL!
+	uuid := testOnlineDDLStatement(t, alterStatement, ddlStrategy, expectQueryFailure)
+
+	if expectQueryFailure != "" {
+		// Nothing further to do. Migration isn't actually running
+		return
+	}
 
 	defer func() {
 		query, err := sqlparser.ParseAndBind("alter vitess_migration %a cancel",
@@ -225,13 +244,6 @@ func testSingle(t *testing.T, testName string) {
 	{
 		migrationStatus = row["migration_status"].ToString()
 		migrationMessage = row["message"].ToString()
-	}
-	{
-		// destroy
-		f := "destroy.sql"
-		if _, exists := readTestFile(t, testName, f); exists {
-			mysqlClientExecFile(t, testName, f)
-		}
 	}
 
 	if expectedErrorMessage, exists := readTestFile(t, testName, "expect_failure"); exists {
@@ -277,19 +289,14 @@ func testSingle(t *testing.T, testName string) {
 }
 
 // testOnlineDDLStatement runs an online DDL, ALTER statement
-func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy string, executeStrategy string) (uuid string) {
-	if executeStrategy == "vtgate" {
-		row := onlineddl.VtgateExecDDL(t, &vtParams, ddlStrategy, alterStatement, "").Named().Row()
-		if row != nil {
-			uuid = row.AsString("uuid", "")
-		}
-	} else {
-		var err error
-		uuid, err = clusterInstance.VtctlclientProcess.ApplySchemaWithOutput(keyspaceName, alterStatement, cluster.VtctlClientParams{DDLStrategy: ddlStrategy})
-		assert.NoError(t, err)
+func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy string, expectError string) (uuid string) {
+	qr := onlineddl.VtgateExecDDL(t, &vtParams, ddlStrategy, alterStatement, expectError)
+	if qr != nil {
+		row := qr.Named().Row()
+		require.NotNil(t, row)
+		uuid = row.AsString("uuid", "")
 	}
 	uuid = strings.TrimSpace(uuid)
-
 	return uuid
 }
 
