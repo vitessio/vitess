@@ -289,6 +289,11 @@ func addKeyspaceToTracker(ctx context.Context, srvResolver *srvtopo.Resolver, st
 }
 
 func resolveAndLoadKeyspace(ctx context.Context, srvResolver *srvtopo.Resolver, st *vtschema.Tracker, gw *TabletGateway, keyspace string) {
+	dest, err := srvResolver.ResolveDestination(ctx, keyspace, topodatapb.TabletType_MASTER, key.DestinationAllShards{})
+	if err != nil {
+		log.Warningf("Unable to resolve destination: %v", err)
+		return
+	}
 	timeout := time.After(5 * time.Second)
 	for {
 		select {
@@ -296,10 +301,6 @@ func resolveAndLoadKeyspace(ctx context.Context, srvResolver *srvtopo.Resolver, 
 			log.Fatal("Unable to get initial schema reload")
 			return
 		case <-time.After(500 * time.Millisecond):
-			dest, err := srvResolver.ResolveDestination(ctx, keyspace, topodatapb.TabletType_MASTER, key.DestinationAllShards{})
-			if err != nil {
-				log.Warningf("Unable to resolve destination: %v", err)
-			}
 			for _, shard := range dest {
 				err := st.LoadKeyspace(gw, shard.Target)
 				if err == nil {
