@@ -126,7 +126,7 @@ func TestTopoRestart(t *testing.T) {
 		ch <- 1
 	}()
 
-	timeOut := time.After(5 * time.Second)
+	timeOut := time.After(15 * time.Second)
 
 	for {
 		select {
