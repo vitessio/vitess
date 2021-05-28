@@ -200,10 +200,12 @@ func Init(ctx context.Context, serv srvtopo.Server, cell string, tabletTypesToWa
 	resolver := NewResolver(srvResolver, serv, cell, sc)
 	vsm := newVStreamManager(srvResolver, serv, cell)
 
+	var si SchemaInfo = nil
 	var st *vtschema.Tracker
 	if *enableSchemaChangeSignal {
 		st = vtschema.NewTracker(gw.hc.Subscribe())
 		addKeyspaceToTracker(ctx, srvResolver, st, gw)
+		si = st
 	}
 
 	cacheCfg := &cache.Config{
@@ -212,7 +214,7 @@ func Init(ctx context.Context, serv srvtopo.Server, cell string, tabletTypesToWa
 		LFU:            *queryPlanCacheLFU,
 	}
 
-	executor := NewExecutor(ctx, serv, cell, resolver, *normalizeQueries, *warnShardedOnly, *streamBufferSize, cacheCfg, st)
+	executor := NewExecutor(ctx, serv, cell, resolver, *normalizeQueries, *warnShardedOnly, *streamBufferSize, cacheCfg, si)
 
 	// connect the schema tracker with the vschema manager
 	if *enableSchemaChangeSignal {
@@ -261,10 +263,14 @@ func Init(ctx context.Context, serv srvtopo.Server, cell string, tabletTypesToWa
 		for _, f := range RegisterVTGates {
 			f(rpcVTGate)
 		}
-		st.Start()
+		if st != nil && *enableSchemaChangeSignal {
+			st.Start()
+		}
 	})
 	servenv.OnTerm(func() {
-		st.Stop()
+		if st != nil && *enableSchemaChangeSignal {
+			st.Stop()
+		}
 	})
 	rpcVTGate.registerDebugHealthHandler()
 	err := initQueryLogger(rpcVTGate)
