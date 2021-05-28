@@ -18,20 +18,20 @@ import { groupBy, orderBy } from 'lodash-es';
 import { Link, useParams } from 'react-router-dom';
 
 import style from './Workflow.module.scss';
-import { useWorkflow } from '../../hooks/api';
-import { formatStreamKey, getStreams, getStreamSource, getStreamTarget } from '../../util/workflows';
-import { DataCell } from '../dataTable/DataCell';
-import { DataTable } from '../dataTable/DataTable';
-import { ContentContainer } from '../layout/ContentContainer';
-import { NavCrumbs } from '../layout/NavCrumbs';
-import { WorkspaceHeader } from '../layout/WorkspaceHeader';
-import { WorkspaceTitle } from '../layout/WorkspaceTitle';
-import { StreamStatePip } from '../pips/StreamStatePip';
-import { formatAlias } from '../../util/tablets';
-import { useDocumentTitle } from '../../hooks/useDocumentTitle';
-import { formatDateTime } from '../../util/time';
-import { KeyspaceLink } from '../links/KeyspaceLink';
-import { TabletLink } from '../links/TabletLink';
+import { useWorkflow } from '../../../hooks/api';
+import { formatStreamKey, getStreams, getStreamSource, getStreamTarget } from '../../../util/workflows';
+import { DataCell } from '../../dataTable/DataCell';
+import { DataTable } from '../../dataTable/DataTable';
+import { ContentContainer } from '../../layout/ContentContainer';
+import { NavCrumbs } from '../../layout/NavCrumbs';
+import { WorkspaceHeader } from '../../layout/WorkspaceHeader';
+import { WorkspaceTitle } from '../../layout/WorkspaceTitle';
+import { StreamStatePip } from '../../pips/StreamStatePip';
+import { formatAlias } from '../../../util/tablets';
+import { useDocumentTitle } from '../../../hooks/useDocumentTitle';
+import { formatDateTime } from '../../../util/time';
+import { KeyspaceLink } from '../../links/KeyspaceLink';
+import { TabletLink } from '../../links/TabletLink';
 
 interface RouteParams {
     clusterID: string;
