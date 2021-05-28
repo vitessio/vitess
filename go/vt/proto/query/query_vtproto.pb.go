@@ -11,6 +11,7 @@ import (
 	io "io"
 	math "math"
 	bits "math/bits"
+	sync "sync"
 	topodata "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpc "vitess.io/vitess/go/vt/proto/vtrpc"
 )
@@ -4045,6 +4046,29 @@ func encodeVarint(dAtA []byte, offset int, v uint64) int {
 	dAtA[offset] = uint8(v)
 	return base
 }
+
+var vtprotoPool_Row = sync.Pool{
+	New: func() interface{} {
+		return &Row{}
+	},
+}
+
+func (m *Row) ResetVT() {
+	f0 := m.Lengths[:0]
+	f1 := m.Values[:0]
+	m.Reset()
+	m.Lengths = f0
+	m.Values = f1
+}
+func (m *Row) ReturnToVTPool() {
+	if m != nil {
+		m.ResetVT()
+		vtprotoPool_Row.Put(m)
+	}
+}
+func RowFromVTPool() *Row {
+	return vtprotoPool_Row.Get().(*Row)
+}
 func (m *Target) SizeVT() (n int) {
 	if m == nil {
 		return 0
@@ -7100,7 +7124,7 @@ func (m *Row) UnmarshalVT(dAtA []byte) error {
 					}
 				}
 				elementCount = count
-				if elementCount != 0 && len(m.Lengths) == 0 {
+				if elementCount != 0 && len(m.Lengths) == 0 && cap(m.Lengths) < elementCount {
 					m.Lengths = make([]int64, 0, elementCount)
 				}
 				for iNdEx < postIndex {
