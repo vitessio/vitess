@@ -115,6 +115,7 @@ func StartServer(connParams, connAppDebugParams mysql.ConnParams, dbName string)
 	config.TrackSchemaVersions = true
 	config.GracePeriods.ShutdownSeconds = 2
 	config.SchemaReloadIntervalSeconds = tabletenv.Seconds(2.1)
+	config.SignalSchemaChangeReloadIntervalSeconds = tabletenv.Seconds(5)
 	config.SignalWhenSchemaChange = true
 	gotBytes, _ := yaml2.Marshal(config)
 	log.Infof("Config:\n%s", gotBytes)
