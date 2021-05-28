@@ -83,12 +83,12 @@ export const App = () => {
                             <Workflows />
                         </Route>
 
-                        <Route exact path="/workflow/:clusterID/:keyspace/:name">
-                            <Workflow />
-                        </Route>
-
                         <Route path="/workflow/:clusterID/:keyspace/:workflowName/stream/:tabletCell/:tabletUID/:streamID">
                             <Stream />
+                        </Route>
+
+                        <Route path="/workflow/:clusterID/:keyspace/:name">
+                            <Workflow />
                         </Route>
 
                         <Route path="/debug">
