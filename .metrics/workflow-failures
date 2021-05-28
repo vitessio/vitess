@@ -1,5 +1,3 @@
-2021-01-30T23:27:59Z,Cluster (18),https://github.com/vitessio/vitess/actions/runs/524224600
-2021-01-30T23:27:59Z,Cluster (21),https://github.com/vitessio/vitess/actions/runs/524224585
 2021-01-30T23:27:59Z,Cluster (22),https://github.com/vitessio/vitess/actions/runs/524224582
 2021-01-30T23:27:59Z,Cluster (23),https://github.com/vitessio/vitess/actions/runs/524224591
 2021-01-30T23:27:59Z,Cluster (24),https://github.com/vitessio/vitess/actions/runs/524224597
@@ -9998,3 +9996,5 @@
 2021-05-28T11:24:48Z,local_example,https://github.com/vitessio/vitess/actions/runs/885410582
 2021-05-28T11:24:48Z,region_example,https://github.com/vitessio/vitess/actions/runs/885410603
 2021-05-28T11:24:48Z,unit_race,https://github.com/vitessio/vitess/actions/runs/885410561
+2021-05-28T12:53:42Z,Cluster (17),https://github.com/vitessio/vitess/actions/runs/885636776
+2021-05-28T13:19:10Z,Cluster (17),https://github.com/vitessio/vitess/actions/runs/885705802
