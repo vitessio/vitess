@@ -135,14 +135,6 @@ func (hs *healthStreamer) Open() {
 			}
 		})
 
-		// initial schema reload signal
-		if hs.signalWhenSchemaChange {
-			go func() {
-				if err := hs.reloadLocked(); err != nil {
-					log.Errorf("periodic schema reload failed in health stream: %v", err)
-				}
-			}()
-		}
 	}
 
 }
@@ -167,6 +159,11 @@ func (hs *healthStreamer) Stream(ctx context.Context, callback func(*querypb.Str
 		return vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "tabletserver is shutdown")
 	}
 	defer hs.unregister(ch)
+
+	// trigger the initial schema reload
+	if hs.signalWhenSchemaChange {
+		hs.ticks.Trigger()
+	}
 
 	for {
 		select {
@@ -316,12 +313,6 @@ func (hs *healthStreamer) SetUnhealthyThreshold(v time.Duration) {
 func (hs *healthStreamer) reload() error {
 	hs.mu.Lock()
 	defer hs.mu.Unlock()
-
-	return hs.reloadLocked()
-}
-
-// reloadLocked reloads the schema from the underlying mysql without locking the mutex
-func (hs *healthStreamer) reloadLocked() error {
 	// Schema Reload to happen only on master.
 	if hs.state.Target.TabletType != topodatapb.TabletType_MASTER {
 		return nil
