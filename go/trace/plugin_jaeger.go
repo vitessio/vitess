@@ -19,11 +19,13 @@ package trace
 import (
 	"flag"
 	"io"
+	"os"
 
 	"github.com/opentracing/opentracing-go"
 	"github.com/uber/jaeger-client-go"
 	"github.com/uber/jaeger-client-go/config"
 
+	"vitess.io/vitess/go/flagutil"
 	"vitess.io/vitess/go/vt/log"
 )
 
@@ -35,8 +37,14 @@ included but nothing Jaeger specific.
 
 var (
 	agentHost    = flag.String("jaeger-agent-host", "", "host and port to send spans to. if empty, no tracing will be done")
-	samplingRate = flag.Float64("tracing-sampling-rate", 0.1, "sampling rate for the probabilistic jaeger sampler")
+	samplingType = flagutil.NewOptionalString("const")
+	samplingRate = flagutil.NewOptionalFloat64(0.1)
 )
+
+func init() {
+	flag.Var(samplingType, "tracing-sampling-type", "sampling strategy to use for jaeger. possible values are 'const', 'probabilistic', 'rateLimiting', or 'remote'")
+	flag.Var(samplingRate, "tracing-sampling-rate", "sampling rate for the probabilistic jaeger sampler")
+}
 
 // newJagerTracerFromEnv will instantiate a tracingService implemented by Jaeger,
 // taking configuration from environment variables. Available properties are:
@@ -70,11 +78,25 @@ func newJagerTracerFromEnv(serviceName string) (tracingService, io.Closer, error
 		cfg.Reporter.LocalAgentHostPort = *agentHost
 	}
 	log.Infof("Tracing to: %v as %v", cfg.Reporter.LocalAgentHostPort, cfg.ServiceName)
-	cfg.Sampler = &config.SamplerConfig{
-		Type:  jaeger.SamplerTypeConst,
-		Param: *samplingRate,
+
+	if os.Getenv("JAEGER_SAMPLER_PARAM") == "" {
+		// If the environment variable was not set, we take the flag regardless
+		// of whether it was explicitly set on the command line.
+		cfg.Sampler.Param = samplingRate.Get()
+	} else if samplingRate.IsSet() {
+		// If the environment variable was set, but the user also explicitly
+		// passed the command line flag, the flag takes precedence.
+		cfg.Sampler.Param = samplingRate.Get()
 	}
-	log.Infof("Tracing sampling rate: %v", *samplingRate)
+
+	if samplingType.IsSet() {
+		cfg.Sampler.Type = samplingType.Get()
+	} else if cfg.Sampler.Type == "" {
+		log.Infof("-tracing-sampler-type was not set, and JAEGER_SAMPLER_TYPE was not set, defaulting to const sampler")
+		cfg.Sampler.Type = jaeger.SamplerTypeConst
+	}
+
+	log.Infof("Tracing sampler type %v (param: %v)", cfg.Sampler.Type, cfg.Sampler.Param)
 
 	tracer, closer, err := cfg.NewTracer()
 
