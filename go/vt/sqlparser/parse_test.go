@@ -658,6 +658,10 @@ var (
 		}, {
 			input: "select /* positional argument */ ? from t",
 		}, {
+			input: "select /* positional argument */ ? from t limit ?",
+			output:               "select /* positional argument */ :v1 from t limit :v2",
+			serializeSelectExprs: true,
+		}, {
 			input:                "select /* multiple positional arguments */ ?, ? from t",
 			output:               "select /* multiple positional arguments */ :v1, :v2 from t",
 			serializeSelectExprs: true,
@@ -703,9 +707,9 @@ var (
 		}, {
 			input: "select /* order by null */ 1 from t order by null",
 		}, {
-			input: "select /* limit a */ 1 from t limit a",
+			input: "select /* limit a */ 1 from t limit 3",
 		}, {
-			input: "select /* limit a,b */ 1 from t limit a, b",
+			input: "select /* limit a,b */ 1 from t limit 4, 5",
 		}, {
 			input:                "select /* binary unary */ a- -b from t",
 			output:               "select /* binary unary */ a - -b from t",
@@ -849,7 +853,7 @@ var (
 		}, {
 			input: "update /* order */ a set b = 3 order by c desc",
 		}, {
-			input: "update /* limit */ a set b = 3 limit c",
+			input: "update /* limit */ a set b = 3 limit 100",
 		}, {
 			input: "update /* bool in update */ a set b = true",
 		}, {
@@ -883,7 +887,7 @@ var (
 		}, {
 			input: "delete /* order */ from a order by b desc",
 		}, {
-			input: "delete /* limit */ from a limit b",
+			input: "delete /* limit */ from a limit 100",
 		}, {
 			input: "delete a from a join b on a.id = b.id where b.name = 'test'",
 		}, {
