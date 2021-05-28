@@ -1,8 +1,3 @@
-2021-01-30T23:27:59Z,Cluster (23),https://github.com/vitessio/vitess/actions/runs/524224591
-2021-01-30T23:27:59Z,Cluster (24),https://github.com/vitessio/vitess/actions/runs/524224597
-2021-01-30T23:27:59Z,Cluster (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/524224584
-2021-01-30T23:27:59Z,Unit Test (mariadb101),https://github.com/vitessio/vitess/actions/runs/524224603
-2021-01-30T23:27:59Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/524224608
 2021-01-30T23:27:59Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/524224611
 2021-01-30T23:27:59Z,Unit Test (mysql57),https://github.com/vitessio/vitess/actions/runs/524224595
 2021-01-30T23:27:59Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/524224607
@@ -9954,6 +9949,7 @@
 2021-05-28T11:15:20Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/885385488
 2021-05-28T11:15:20Z,cluster_initial_sharding_multi,https://github.com/vitessio/vitess/actions/runs/885385484
 2021-05-28T11:15:20Z,docker_test_1,https://github.com/vitessio/vitess/actions/runs/885385485
+2021-05-28T11:15:20Z,docker_test_2,https://github.com/vitessio/vitess/actions/runs/885385513
 2021-05-28T11:15:20Z,docker_test_3,https://github.com/vitessio/vitess/actions/runs/885385502
 2021-05-28T11:15:20Z,endtoend,https://github.com/vitessio/vitess/actions/runs/885385475
 2021-05-28T11:15:20Z,local_example,https://github.com/vitessio/vitess/actions/runs/885385496
@@ -9998,3 +9994,7 @@
 2021-05-28T12:53:42Z,Cluster (17),https://github.com/vitessio/vitess/actions/runs/885636776
 2021-05-28T13:19:10Z,Cluster (17),https://github.com/vitessio/vitess/actions/runs/885705802
 2021-05-28T13:59:48Z,Cluster (13),https://github.com/vitessio/vitess/actions/runs/885822459
+2021-05-28T14:39:55Z,Cluster (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/885943511
+2021-05-28T15:03:41Z,pr-labels,https://github.com/vitessio/vitess/actions/runs/886012710
+2021-05-28T15:03:51Z,pr-labels,https://github.com/vitessio/vitess/actions/runs/886013127
+2021-05-28T15:04:10Z,pr-labels,https://github.com/vitessio/vitess/actions/runs/886014281
