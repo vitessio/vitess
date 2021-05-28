@@ -338,7 +338,7 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 		}
 		c.recycleReadPacket()
 
-		if con, ok := c.conn.(*tls.Conn); ok {
+		if con, ok := c.Conn.(*tls.Conn); ok {
 			connState := con.ConnectionState()
 			tlsVerStr := tlsVersionToString(connState.Version)
 			if tlsVerStr != "" {
@@ -642,8 +642,8 @@ func (l *Listener) parseClientHandshakePacket(c *Conn, firstTime bool, data []by
 	// Check for SSL.
 	if firstTime && l.TLSConfig != nil && clientFlags&CapabilityClientSSL > 0 {
 		// Need to switch to TLS, and then re-read the packet.
-		conn := tls.Server(c.conn, l.TLSConfig)
-		c.conn = conn
+		conn := tls.Server(c.Conn, l.TLSConfig)
+		c.Conn = conn
 		c.bufferedReader.Reset(conn)
 		c.Capabilities |= CapabilityClientSSL
 		return "", "", nil, nil

@@ -17,6 +17,8 @@ limitations under the License.
 %{
 package sqlparser
 
+import "fmt"
+
 func setParseTree(yylex interface{}, stmt Statement) {
   yylex.(*Tokenizer).ParseTree = stmt
 }
@@ -99,8 +101,11 @@ func skipToEnd(yylex interface{}) {
   orderBy       OrderBy
   order         *Order
   limit         *Limit
-  setExprs      SetExprs
-  setExpr       *SetExpr
+  assignExprs   AssignmentExprs
+  assignExpr    *AssignmentExpr
+  setVarExprs   SetVarExprs
+  setVarExpr    *SetVarExpr
+  setScope      SetScope
   colIdent      ColIdent
   colIdents     []ColIdent
   tableIdent    TableIdent
@@ -199,7 +204,7 @@ func skipToEnd(yylex interface{}) {
 %token <bytes> STATUS VARIABLES WARNINGS
 %token <bytes> SEQUENCE
 %token <bytes> EACH ROW BEFORE FOLLOWS PRECEDES DEFINER INVOKER
-%token <bytes> INOUT OUT DETERMINISTIC CONTAINS READS MODIFIES SQL SECURITY
+%token <bytes> INOUT OUT DETERMINISTIC CONTAINS READS MODIFIES SQL SECURITY TEMPORARY
 
 // SIGNAL Tokens
 %token <bytes> CLASS_ORIGIN SUBCLASS_ORIGIN MESSAGE_TEXT MYSQL_ERRNO CONSTRAINT_CATALOG CONSTRAINT_SCHEMA
@@ -209,7 +214,7 @@ func skipToEnd(yylex interface{}) {
 %token <bytes> DECLARE CONDITION CURSOR CONTINUE EXIT UNDO HANDLER FOUND SQLWARNING SQLEXCEPTION
 
 // Transaction Tokens
-%token <bytes> BEGIN START TRANSACTION COMMIT ROLLBACK
+%token <bytes> BEGIN START TRANSACTION COMMIT ROLLBACK SAVEPOINT WORK RELEASE
 
 // Type Tokens
 %token <bytes> BIT TINYINT SMALLINT MEDIUMINT INT INTEGER BIGINT INTNUM
@@ -257,11 +262,12 @@ func skipToEnd(yylex interface{}) {
 %token <bytes> THREAD_PRIORITY TIES UNBOUNDED VCPU VISIBLE SYSTEM INFILE
 
 %type <statement> command
-%type <selStmt> select_statement base_select union_lhs union_rhs
+%type <selStmt> select_statement base_select base_select_no_cte union_lhs union_rhs
 %type <statement> stream_statement insert_statement update_statement delete_statement set_statement trigger_body
 %type <statement> create_statement rename_statement drop_statement truncate_statement flush_statement call_statement
 %type <statement> trigger_begin_end_block statement_list_statement case_statement if_statement signal_statement
 %type <statement> begin_end_block declare_statement resignal_statement
+%type <statement> savepoint_statement rollback_savepoint_statement release_savepoint_statement
 %type <statements> statement_list
 %type <caseStatementCases> case_statement_case_list
 %type <caseStatementCase> case_statement_case
@@ -330,16 +336,18 @@ func skipToEnd(yylex interface{}) {
 %type <str> lock_opt
 %type <columns> ins_column_list column_list column_list_opt
 %type <partitions> opt_partition_clause partition_list
-%type <setExprs> on_dup_opt
-%type <setExprs> set_list transaction_chars
+%type <assignExprs> on_dup_opt assignment_list
+%type <setVarExprs> set_list transaction_chars
 %type <bytes> charset_or_character_set
-%type <setExpr> set_expression transaction_char
+%type <assignExpr> assignment_expression
+%type <setVarExpr> set_expression set_expression_assignment transaction_char
+%type <setScope> set_scope_primary set_scope_secondary
 %type <str> isolation_level
 %type <bytes> for_from
 %type <str> ignore_opt default_opt
 %type <str> full_opt from_database_opt tables_or_processlist columns_or_fields
 %type <showFilter> like_or_where_opt
-%type <byt> exists_opt not_exists_opt sql_calc_found_rows_opt
+%type <byt> exists_opt not_exists_opt sql_calc_found_rows_opt temp_opt
 %type <str> key_type key_type_opt
 %type <empty> non_add_drop_or_rename_operation
 %type <empty> to_opt to_or_as as_opt column_opt describe
@@ -351,7 +359,7 @@ func skipToEnd(yylex interface{}) {
 %type <expr> charset_value
 %type <tableIdent> table_id reserved_table_id table_alias
 %type <str> charset
-%type <str> set_session_or_global show_session_or_global
+%type <str> show_session_or_global
 %type <convertType> convert_type
 %type <columnType> column_type  column_type_options
 %type <columnType> int_type decimal_type numeric_type time_type char_type spatial_type
@@ -437,6 +445,9 @@ command:
 | resignal_statement
 | call_statement
 | load_statement
+| savepoint_statement
+| rollback_savepoint_statement
+| release_savepoint_statement
 | /*empty*/
 {
   setParseTree(yylex, nil)
@@ -451,15 +462,10 @@ load_statement:
 select_statement:
   base_select order_by_opt limit_opt lock_opt
   {
-    sel := $1.(*Select)
-    sel.OrderBy = $2
-    sel.Limit = $3
-    sel.Lock = $4
-    $$ = sel
-  }
-| union_lhs union_op union_rhs order_by_opt limit_opt lock_opt
-  {
-    $$ = &Union{Type: $2, Left: $1, Right: $3, OrderBy: $4, Limit: $5, Lock: $6}
+    $1.SetOrderBy($2)
+    $1.SetLimit($3)
+    $1.SetLock($4)
+    $$ = $1
   }
 | SELECT comment_opt cache_opt NEXT num_val for_from table_name
   {
@@ -474,6 +480,23 @@ stream_statement:
 
 // base_select is an unparenthesized SELECT with no order by clause or beyond.
 base_select:
+  base_select_no_cte
+  {
+    $$ = $1
+  }
+| with_clause SELECT comment_opt cache_opt distinct_opt sql_calc_found_rows_opt straight_join_opt select_expression_list FROM table_references where_expression_opt group_by_opt having_opt
+  {
+    $$ = &Select{CommonTableExprs: $1, Comments: Comments($3), Cache: $4, Distinct: $5, Hints: $7, SelectExprs: $8, From: $10, Where: NewWhere(WhereStr, $11), GroupBy: GroupBy($12), Having: NewWhere(HavingStr, $13)}
+    if $6 == 1 {
+      $$.(*Select).CalcFoundRows = true
+    }
+  }
+| union_lhs union_op union_rhs
+  {
+    $$ = &Union{Type: $2, Left: $1, Right: $3}
+  }
+
+base_select_no_cte:
   SELECT comment_opt cache_opt distinct_opt sql_calc_found_rows_opt straight_join_opt select_expression_list where_expression_opt group_by_opt having_opt
   {
     $$ = &Select{Comments: Comments($2), Cache: $3, Distinct: $4, Hints: $6, SelectExprs: $7, From: TableExprs{&AliasedTableExpr{Expr:TableName{Name: NewTableIdent("dual")}}}, Where: NewWhere(WhereStr, $8), GroupBy: GroupBy($9), Having: NewWhere(HavingStr, $10)}
@@ -485,13 +508,6 @@ base_select:
   {
     $$ = &Select{Comments: Comments($2), Cache: $3, Distinct: $4, Hints: $6, SelectExprs: $7, From: $9, Where: NewWhere(WhereStr, $10), GroupBy: GroupBy($11), Having: NewWhere(HavingStr, $12)}
     if $5 == 1 {
-      $$.(*Select).CalcFoundRows = true
-    }
-  }
-| with_clause SELECT comment_opt cache_opt distinct_opt sql_calc_found_rows_opt straight_join_opt select_expression_list FROM table_references where_expression_opt group_by_opt having_opt
-  {
-    $$ = &Select{CommonTableExprs: $1, Comments: Comments($3), Cache: $4, Distinct: $5, Hints: $7, SelectExprs: $8, From: $10, Where: NewWhere(WhereStr, $11), GroupBy: GroupBy($12), Having: NewWhere(HavingStr, $13)}
-    if $6 == 1 {
       $$.(*Select).CalcFoundRows = true
     }
   }
@@ -523,16 +539,6 @@ common_table_expression:
   }
 
 union_lhs:
-  select_statement
-  {
-    $$ = $1
-  }
-| openb select_statement closeb
-  {
-    $$ = &ParenSelect{Select: $2}
-  }
-
-union_rhs:
   base_select
   {
     $$ = $1
@@ -542,6 +548,15 @@ union_rhs:
     $$ = &ParenSelect{Select: $2}
   }
 
+union_rhs:
+  base_select_no_cte
+  {
+    $$ = $1
+  }
+| openb select_statement closeb
+  {
+    $$ = &ParenSelect{Select: $2}
+  }
 
 insert_statement:
   insert_or_replace comment_opt ignore_opt into_table_name opt_partition_clause insert_data on_dup_opt
@@ -556,7 +571,7 @@ insert_statement:
     ins.OnDup = OnDup($7)
     $$ = ins
   }
-| insert_or_replace comment_opt ignore_opt into_table_name opt_partition_clause SET set_list on_dup_opt
+| insert_or_replace comment_opt ignore_opt into_table_name opt_partition_clause SET assignment_list on_dup_opt
   {
     cols := make(Columns, 0, len($7))
     vals := make(ValTuple, 0, len($8))
@@ -578,7 +593,7 @@ insert_or_replace:
   }
 
 update_statement:
-  UPDATE comment_opt ignore_opt table_references SET set_list where_expression_opt order_by_opt limit_opt
+  UPDATE comment_opt ignore_opt table_references SET assignment_list where_expression_opt order_by_opt limit_opt
   {
     $$ = &Update{Comments: Comments($2), Ignore: $3, TableExprs: $4, Exprs: $6, Where: NewWhere(WhereStr, $7), OrderBy: $8, Limit: $9}
   }
@@ -649,23 +664,25 @@ set_statement:
   {
     $$ = &Set{Comments: Comments($2), Exprs: $3}
   }
-| SET comment_opt set_session_or_global set_list
-  {
-    $$ = &Set{Comments: Comments($2), Scope: $3, Exprs: $4}
-  }
-| SET comment_opt set_session_or_global TRANSACTION transaction_chars
-  {
-    $$ = &Set{Comments: Comments($2), Scope: $3, Exprs: $5}
-  }
 | SET comment_opt TRANSACTION transaction_chars
   {
+    for i := 0; i < len($4); i++ {
+      $4[i].Scope = SetScope_None
+    }
     $$ = &Set{Comments: Comments($2), Exprs: $4}
+  }
+| SET comment_opt set_scope_primary TRANSACTION transaction_chars
+  {
+    for i := 0; i < len($5); i++ {
+      $5[i].Scope = $3
+    }
+    $$ = &Set{Comments: Comments($2), Exprs: $5}
   }
 
 transaction_chars:
   transaction_char
   {
-    $$ = SetExprs{$1}
+    $$ = SetVarExprs{$1}
   }
 | transaction_chars ',' transaction_char
   {
@@ -675,15 +692,15 @@ transaction_chars:
 transaction_char:
   ISOLATION LEVEL isolation_level
   {
-    $$ = &SetExpr{Name: NewColName(TransactionStr), Expr: NewStrVal([]byte($3))}
+    $$ = &SetVarExpr{Name: NewColName(TransactionStr), Expr: NewStrVal([]byte($3))}
   }
 | READ WRITE
   {
-    $$ = &SetExpr{Name: NewColName(TransactionStr), Expr: NewStrVal([]byte(TxReadWrite))}
+    $$ = &SetVarExpr{Name: NewColName(TransactionStr), Expr: NewStrVal([]byte(TxReadWrite))}
   }
 | READ ONLY
   {
-    $$ = &SetExpr{Name: NewColName(TransactionStr), Expr: NewStrVal([]byte(TxReadOnly))}
+    $$ = &SetVarExpr{Name: NewColName(TransactionStr), Expr: NewStrVal([]byte(TxReadOnly))}
   }
 
 isolation_level:
@@ -702,16 +719,6 @@ isolation_level:
 | SERIALIZABLE
   {
     $$ = IsolationLevelSerializable
-  }
-
-set_session_or_global:
-  SESSION
-  {
-    $$ = SessionStr
-  }
-| GLOBAL
-  {
-    $$ = GlobalStr
   }
 
 lexer_position:
@@ -1260,16 +1267,25 @@ statement_list_statement:
 | signal_statement
 | resignal_statement
 | call_statement
+| savepoint_statement
+| rollback_savepoint_statement
+| release_savepoint_statement
 | begin_end_block
 
 create_table_prefix:
-  CREATE TABLE not_exists_opt table_name
+  CREATE temp_opt TABLE not_exists_opt table_name
   {
     var ne bool
-    if $3 != 0 {
+    if $4 != 0 {
       ne = true
     }
-    $$ = &DDL{Action: CreateStr, Table: $4, IfNotExists: ne}
+
+    var neTemp bool
+    if $2 != 0 {
+      neTemp = true
+    }
+
+    $$ = &DDL{Action: CreateStr, Table: $5, IfNotExists: ne, Temporary: neTemp}
     setDDL(yylex, $$)
   }
 
@@ -2253,6 +2269,14 @@ alter_table_statement_part:
   {
     $$ = &DDL{Action: AlterStr, AutoIncSpec: &AutoIncSpec{Value: $3}}
   }
+| ALTER column_opt sql_id SET DEFAULT value_expression
+  {
+    $$ = &DDL{Action: AlterStr, DefaultSpec: &DefaultSpec{Action: SetStr, Column: $3, Value: $6}}
+  }
+| ALTER column_opt sql_id DROP DEFAULT
+  {
+    $$ = &DDL{Action: AlterStr, DefaultSpec: &DefaultSpec{Action: DropStr, Column: $3}}
+  }
 
 column_order_opt:
   {
@@ -2650,6 +2674,36 @@ rollback_statement:
   ROLLBACK
   {
     $$ = &Rollback{}
+  }
+
+savepoint_statement:
+  SAVEPOINT ID
+  {
+    $$ = &Savepoint{Identifier: string($2)}
+  }
+
+rollback_savepoint_statement:
+  ROLLBACK TO ID
+  {
+    $$ = &RollbackSavepoint{Identifier: string($3)}
+  }
+| ROLLBACK WORK TO ID
+  {
+    $$ = &RollbackSavepoint{Identifier: string($4)}
+  }
+| ROLLBACK TO SAVEPOINT ID
+  {
+    $$ = &RollbackSavepoint{Identifier: string($4)}
+  }
+| ROLLBACK WORK TO SAVEPOINT ID
+  {
+    $$ = &RollbackSavepoint{Identifier: string($5)}
+  }
+
+release_savepoint_statement:
+  RELEASE SAVEPOINT ID
+  {
+    $$ = &ReleaseSavepoint{Identifier: string($3)}
   }
 
 describe:
@@ -4277,7 +4331,7 @@ on_dup_opt:
   {
     $$ = nil
   }
-| ON DUPLICATE KEY UPDATE set_list
+| ON DUPLICATE KEY UPDATE assignment_list
   {
     $$ = $5
   }
@@ -4318,10 +4372,26 @@ tuple_expression:
     }
   }
 
+assignment_list:
+  assignment_expression
+  {
+    $$ = AssignmentExprs{$1}
+  }
+| assignment_list ',' assignment_expression
+  {
+    $$ = append($1, $3)
+  }
+
+assignment_expression:
+  column_name '=' expression
+  {
+    $$ = &AssignmentExpr{Name: $1, Expr: $3}
+  }
+
 set_list:
   set_expression
   {
-    $$ = SetExprs{$1}
+    $$ = SetVarExprs{$1}
   }
 | set_list ',' set_expression
   {
@@ -4329,21 +4399,84 @@ set_list:
   }
 
 set_expression:
-  column_name '=' ON
+  set_expression_assignment
   {
-    $$ = &SetExpr{Name: $1, Expr: NewStrVal([]byte("on"))}
+    colName, scope, err := VarScopeForColName($1.Name)
+    if err != nil {
+      yylex.Error(err.Error())
+      return 1
+    }
+    $1.Name = colName
+    $1.Scope = scope
+    $$ = $1
   }
-| column_name '=' OFF
+| set_scope_primary set_expression_assignment
   {
-    $$ = &SetExpr{Name: $1, Expr: NewStrVal([]byte("off"))}
+    _, scope, err := VarScopeForColName($2.Name)
+    if err != nil {
+      yylex.Error(err.Error())
+      return 1
+    } else if scope != SetScope_None {
+      yylex.Error(fmt.Sprintf("invalid system variable name `%s`", $2.Name.Name.val))
+      return 1
+    }
+    $2.Scope = $1
+    $$ = $2
   }
-| column_name '=' expression
+| set_scope_secondary set_expression_assignment
   {
-    $$ = &SetExpr{Name: $1, Expr: $3}
+    _, scope, err := VarScopeForColName($2.Name)
+    if err != nil {
+      yylex.Error(err.Error())
+      return 1
+    } else if scope != SetScope_None {
+      yylex.Error(fmt.Sprintf("invalid system variable name `%s`", $2.Name.Name.val))
+      return 1
+    }
+    $2.Scope = $1
+    $$ = $2
   }
 | charset_or_character_set charset_value collate_opt
   {
-    $$ = &SetExpr{Name: NewColName(string($1)), Expr: $2}
+    $$ = &SetVarExpr{Name: NewColName(string($1)), Expr: $2, Scope: SetScope_Session}
+  }
+
+set_scope_primary:
+  GLOBAL
+  {
+    $$ = SetScope_Global
+  }
+| SESSION
+  {
+    $$ = SetScope_Session
+  }
+
+set_scope_secondary:
+  LOCAL
+  {
+    $$ = SetScope_Session
+  }
+| PERSIST
+  {
+    $$ = SetScope_Persist
+  }
+| PERSIST_ONLY
+  {
+    $$ = SetScope_PersistOnly
+  }
+
+set_expression_assignment:
+  column_name '=' ON
+  {
+    $$ = &SetVarExpr{Name: $1, Expr: NewStrVal($3), Scope: SetScope_None}
+  }
+| column_name '=' OFF
+  {
+    $$ = &SetVarExpr{Name: $1, Expr: NewStrVal($3), Scope: SetScope_None}
+  }
+| column_name '=' expression
+  {
+    $$ = &SetVarExpr{Name: $1, Expr: $3, Scope: SetScope_None}
   }
 
 charset_or_character_set:
@@ -4372,6 +4505,11 @@ for_from:
   FOR
 | FROM
 
+temp_opt:
+  { $$ = 0 }
+| TEMPORARY
+  { $$ = 1 }
+
 exists_opt:
   { $$ = 0 }
 | IF EXISTS
@@ -4393,9 +4531,7 @@ ignore_number_opt:
   { $$ = NewIntVal($2) }
 
 non_add_drop_or_rename_operation:
-  ALTER
-  { $$ = struct{}{} }
-| CHARACTER
+  CHARACTER
   { $$ = struct{}{} }
 | COMMENT_KEYWORD
   { $$ = struct{}{} }
@@ -4853,6 +4989,7 @@ non_reserved_keyword:
 | REAL
 | REFERENCE
 | REFERENCES
+| RELEASE
 | REORGANIZE
 | REPAIR
 | REPEATABLE
@@ -4866,6 +5003,7 @@ non_reserved_keyword:
 | REUSE
 | ROLE
 | ROLLBACK
+| SAVEPOINT
 | SCHEMAS
 | SCHEMA_NAME
 | SECONDARY
@@ -4891,6 +5029,7 @@ non_reserved_keyword:
 | SUBCLASS_ORIGIN
 | TABLES
 | TABLE_NAME
+| TEMPORARY
 | TEXT
 | THAN
 | THREAD_PRIORITY
@@ -4917,6 +5056,7 @@ non_reserved_keyword:
 | VIEW
 | VISIBLE
 | WARNINGS
+| WORK
 | WRITE
 | YEAR
 | ZEROFILL
