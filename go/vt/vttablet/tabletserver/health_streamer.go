@@ -73,10 +73,11 @@ type healthStreamer struct {
 
 	history *history.History
 
-	ticks       *timer.Timer
-	dbConfig    dbconfigs.Connector
-	conns       *connpool.Pool
-	initSuccess bool
+	ticks                  *timer.Timer
+	dbConfig               dbconfigs.Connector
+	conns                  *connpool.Pool
+	initSuccess            bool
+	signalWhenSchemaChange bool
 }
 
 func newHealthStreamer(env tabletenv.Env, alias *topodatapb.TabletAlias) *healthStreamer {
@@ -105,9 +106,10 @@ func newHealthStreamer(env tabletenv.Env, alias *topodatapb.TabletAlias) *health
 			},
 		},
 
-		history: history.New(5),
-		ticks:   newTimer,
-		conns:   pool,
+		history:                history.New(5),
+		ticks:                  newTimer,
+		conns:                  pool,
+		signalWhenSchemaChange: env.Config().SignalWhenSchemaChange,
 	}
 }
 
@@ -132,6 +134,15 @@ func (hs *healthStreamer) Open() {
 				log.Errorf("periodic schema reload failed in health stream: %v", err)
 			}
 		})
+
+		// initial schema reload signal
+		if hs.signalWhenSchemaChange {
+			go func() {
+				if err := hs.reloadLocked(); err != nil {
+					log.Errorf("periodic schema reload failed in health stream: %v", err)
+				}
+			}()
+		}
 	}
 
 }

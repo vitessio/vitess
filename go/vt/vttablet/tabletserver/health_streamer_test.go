@@ -155,7 +155,7 @@ func TestReloadSchema(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 	config := newConfig(db)
-	config.SchemaReloadIntervalSeconds.Set(100 * time.Millisecond)
+	config.SignalSchemaChangeReloadIntervalSeconds.Set(100 * time.Millisecond)
 	config.SignalWhenSchemaChange = true
 
 	env := tabletenv.NewEnv(config, "ReplTrackerTest")
@@ -216,7 +216,7 @@ func TestDoesNotReloadSchema(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 	config := newConfig(db)
-	config.SchemaReloadIntervalSeconds.Set(100 * time.Millisecond)
+	config.SignalSchemaChangeReloadIntervalSeconds.Set(100 * time.Millisecond)
 	config.SignalWhenSchemaChange = false
 
 	env := tabletenv.NewEnv(config, "ReplTrackerTest")
@@ -260,6 +260,70 @@ func TestDoesNotReloadSchema(t *testing.T) {
 	}
 
 	assert.True(t, timeout, "should have timed out")
+}
+
+func TestInitialReloadSchema(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	config := newConfig(db)
+	// Setting the signal schema change reload interval to one minute
+	// that way we can test the initial reload trigger.
+	config.SignalSchemaChangeReloadIntervalSeconds.Set(1 * time.Minute)
+	config.SignalWhenSchemaChange = true
+
+	env := tabletenv.NewEnv(config, "ReplTrackerTest")
+	alias := &topodatapb.TabletAlias{
+		Cell: "cell",
+		Uid:  1,
+	}
+	blpFunc = testBlpFunc
+	hs := newHealthStreamer(env, alias)
+
+	target := &querypb.Target{TabletType: topodatapb.TabletType_MASTER}
+	configs := config.DB
+
+	db.AddQuery(mysql.CreateVTDatabase, &sqltypes.Result{})
+	db.AddQuery(mysql.CreateSchemaCopyTable, &sqltypes.Result{})
+	db.AddQueryPattern(mysql.ClearSchemaCopy+".*", &sqltypes.Result{})
+	db.AddQueryPattern(mysql.InsertIntoSchemaCopy+".*", &sqltypes.Result{})
+	db.AddQuery("begin", &sqltypes.Result{})
+	db.AddQuery("commit", &sqltypes.Result{})
+	db.AddQuery("rollback", &sqltypes.Result{})
+	db.AddQuery(mysql.DetectSchemaChange, sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields(
+			"table_name",
+			"varchar",
+		),
+		"product",
+		"users",
+	))
+
+	hs.InitDBConfig(target, configs.DbaWithDB())
+	hs.Open()
+	defer hs.Close()
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		hs.Stream(ctx, func(response *querypb.StreamHealthResponse) error {
+			if response.RealtimeStats.TableSchemaChanged != nil {
+				assert.Equal(t, []string{"product", "users"}, response.RealtimeStats.TableSchemaChanged)
+				wg.Done()
+			}
+			return nil
+		})
+	}()
+
+	c := make(chan struct{})
+	go func() {
+		defer close(c)
+		wg.Wait()
+	}()
+	select {
+	case <-c:
+	case <-time.After(1 * time.Second):
+		// should not timeout despite SignalSchemaChangeReloadIntervalSeconds being set to 1 minute
+		t.Errorf("timed out")
+	}
 }
 
 func testStream(hs *healthStreamer) (<-chan *querypb.StreamHealthResponse, context.CancelFunc) {
