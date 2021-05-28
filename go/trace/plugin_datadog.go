@@ -24,7 +24,7 @@ func newDatadogTracer(serviceName string) (tracingService, io.Closer, error) {
 		ddtracer.WithAgentAddr(*dataDogHost+":"+*dataDogPort),
 		ddtracer.WithServiceName(serviceName),
 		ddtracer.WithDebugMode(true),
-		ddtracer.WithSampler(ddtracer.NewRateSampler(*samplingRate)),
+		ddtracer.WithSampler(ddtracer.NewRateSampler(samplingRate.Get())),
 	)
 
 	opentracing.SetGlobalTracer(t)
