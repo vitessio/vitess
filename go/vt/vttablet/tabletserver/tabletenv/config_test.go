@@ -20,6 +20,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/test/utils"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -140,6 +142,7 @@ replicationTracker:
   heartbeatIntervalSeconds: 0.25
   mode: disable
 schemaReloadIntervalSeconds: 1800
+signalSchemaChangeReloadIntervalSeconds: 5
 streamBufferSize: 32768
 txPool:
   idleTimeoutSeconds: 1800
@@ -147,7 +150,7 @@ txPool:
   size: 20
   timeoutSeconds: 1
 `
-	assert.Equal(t, want, string(gotBytes))
+	utils.MustMatch(t, want, string(gotBytes))
 }
 
 func TestClone(t *testing.T) {
