@@ -283,7 +283,7 @@ func (c *Collection) Append(m Metric) error {
 	c.Lock()         //nolint SA5011: possible nil pointer dereference
 	defer c.Unlock() //nolint SA5011: possible nil pointer dereference
 	// we don't want to add nil metrics
-	if c == nil {
+	if c == nil { //nolint SA5011: redundant nil pointer check - maybe this was supposed to check if m == nil ?
 		return errors.New("Collection.Append: c == nil")
 	}
 	c.collection = append(c.collection, m)
