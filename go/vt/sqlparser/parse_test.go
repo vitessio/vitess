@@ -3697,7 +3697,23 @@ var (
 	}, {
 		input:  "set session other.@autocommit = true",
 		output: "invalid user variable declaration `@autocommit` at position 37 near 'true'",
-	}}
+	}, {
+		input:  "select * from foo limit -100",
+		output: "syntax error at position 26 near 'limit'",
+	}, {
+		input:  "select * from foo limit 1.0",
+		output: "syntax error at position 28 near '1.0'",
+	}, {
+		input:  "select * from foo limit 1+1",
+		output: "syntax error at position 27 near '1'",
+	}, {
+		input:  "select * from foo limit a",
+		output: "syntax error at position 26 near 'a'",
+	}, {
+		input:  "select * from foo limit '100'",
+		output: "syntax error at position 30 near '100'",
+	},
+	}
 )
 
 func TestErrors(t *testing.T) {
