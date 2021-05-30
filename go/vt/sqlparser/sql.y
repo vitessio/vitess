@@ -310,7 +310,7 @@ func skipToEnd(yylex interface{}) {
 %type <boolean> enforced_opt
 %type <str> compare
 %type <ins> insert_data
-%type <expr> value value_expression num_val as_of_opt
+%type <expr> value value_expression num_val as_of_opt integral_or_value_arg
 %type <expr> function_call_keyword function_call_nonkeyword function_call_generic function_call_conflict
 %type <expr> func_datetime_precision function_call_window function_call_aggregate_with_window
 %type <str> is_suffix
@@ -4238,17 +4238,27 @@ limit_opt:
   {
     $$ = nil
   }
-| LIMIT expression
+| LIMIT integral_or_value_arg
   {
     $$ = &Limit{Rowcount: $2}
   }
-| LIMIT expression ',' expression
+| LIMIT integral_or_value_arg ',' integral_or_value_arg
   {
     $$ = &Limit{Offset: $2, Rowcount: $4}
   }
-| LIMIT expression OFFSET expression
+| LIMIT integral_or_value_arg OFFSET integral_or_value_arg
   {
     $$ = &Limit{Offset: $4, Rowcount: $2}
+  }
+
+integral_or_value_arg:
+INTEGRAL
+  {
+    $$ = NewIntVal($1)
+  }
+| VALUE_ARG
+  {
+    $$ = NewValArg($1)
   }
 
 lock_opt:
