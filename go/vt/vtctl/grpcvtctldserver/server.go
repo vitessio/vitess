@@ -80,6 +80,16 @@ func NewVtctldServer(ts *topo.Server) *VtctldServer {
 	}
 }
 
+// AddCellInfo is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) AddCellInfo(ctx context.Context, req *vtctldatapb.AddCellInfoRequest) (*vtctldatapb.AddCellInfoResponse, error) {
+	panic("unimplemented!")
+}
+
+// AddCellsAlias is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) AddCellsAlias(ctx context.Context, req *vtctldatapb.AddCellsAliasRequest) (*vtctldatapb.AddCellsAliasResponse, error) {
+	panic("unimplemented!")
+}
+
 // ChangeTabletType is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) ChangeTabletType(ctx context.Context, req *vtctldatapb.ChangeTabletTypeRequest) (*vtctldatapb.ChangeTabletTypeResponse, error) {
 	ctx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
@@ -263,6 +273,16 @@ func (s *VtctldServer) CreateShard(ctx context.Context, req *vtctldatapb.CreateS
 		},
 		ShardAlreadyExists: shardExists,
 	}, nil
+}
+
+// DeleteCellInfo is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) DeleteCellInfo(ctx context.Context, req *vtctldatapb.DeleteCellInfoRequest) (*vtctldatapb.DeleteCellInfoResponse, error) {
+	panic("unimplemented!")
+}
+
+// DeleteCellsAlias is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) DeleteCellsAlias(ctx context.Context, req *vtctldatapb.DeleteCellsAliasRequest) (*vtctldatapb.DeleteCellsAliasResponse, error) {
+	panic("unimplemented!")
 }
 
 // DeleteKeyspace is part of the vtctlservicepb.VtctldServer interface.
@@ -1393,6 +1413,16 @@ func (s *VtctldServer) TabletExternallyReparented(ctx context.Context, req *vtct
 	event.DispatchUpdate(ev, "finished")
 
 	return resp, nil
+}
+
+// UpdateCellInfo is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) UpdateCellInfo(ctx context.Context, req *vtctldatapb.UpdateCellInfoRequest) (*vtctldatapb.UpdateCellInfoResponse, error) {
+	panic("unimplemented!")
+}
+
+// UpdateCellsAlias is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) UpdateCellsAlias(ctx context.Context, req *vtctldatapb.UpdateCellsAliasRequest) (*vtctldatapb.UpdateCellsAliasResponse, error) {
+	panic("unimplemented!")
 }
 
 // StartServer registers a VtctldServer for RPCs on the given gRPC server.
