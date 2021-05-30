@@ -82,12 +82,30 @@ func NewVtctldServer(ts *topo.Server) *VtctldServer {
 
 // AddCellInfo is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) AddCellInfo(ctx context.Context, req *vtctldatapb.AddCellInfoRequest) (*vtctldatapb.AddCellInfoResponse, error) {
-	panic("unimplemented!")
+	if req.CellInfo.Root == "" {
+		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "CellInfo.Root must be non-empty")
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+	defer cancel()
+
+	if err := s.ts.CreateCellInfo(ctx, req.Name, req.CellInfo); err != nil {
+		return nil, err
+	}
+
+	return &vtctldatapb.AddCellInfoResponse{}, nil
 }
 
 // AddCellsAlias is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) AddCellsAlias(ctx context.Context, req *vtctldatapb.AddCellsAliasRequest) (*vtctldatapb.AddCellsAliasResponse, error) {
-	panic("unimplemented!")
+	ctx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+	defer cancel()
+
+	if err := s.ts.CreateCellsAlias(ctx, req.Name, &topodatapb.CellsAlias{Cells: req.Cells}); err != nil {
+		return nil, err
+	}
+
+	return &vtctldatapb.AddCellsAliasResponse{}, nil
 }
 
 // ChangeTabletType is part of the vtctlservicepb.VtctldServer interface.
@@ -277,12 +295,26 @@ func (s *VtctldServer) CreateShard(ctx context.Context, req *vtctldatapb.CreateS
 
 // DeleteCellInfo is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) DeleteCellInfo(ctx context.Context, req *vtctldatapb.DeleteCellInfoRequest) (*vtctldatapb.DeleteCellInfoResponse, error) {
-	panic("unimplemented!")
+	ctx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+	defer cancel()
+
+	if err := s.ts.DeleteCellInfo(ctx, req.Name, req.Force); err != nil {
+		return nil, err
+	}
+
+	return &vtctldatapb.DeleteCellInfoResponse{}, nil
 }
 
 // DeleteCellsAlias is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) DeleteCellsAlias(ctx context.Context, req *vtctldatapb.DeleteCellsAliasRequest) (*vtctldatapb.DeleteCellsAliasResponse, error) {
-	panic("unimplemented!")
+	ctx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+	defer cancel()
+
+	if err := s.ts.DeleteCellsAlias(ctx, req.Name); err != nil {
+		return nil, err
+	}
+
+	return &vtctldatapb.DeleteCellsAliasResponse{}, nil
 }
 
 // DeleteKeyspace is part of the vtctlservicepb.VtctldServer interface.
@@ -1417,12 +1449,67 @@ func (s *VtctldServer) TabletExternallyReparented(ctx context.Context, req *vtct
 
 // UpdateCellInfo is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) UpdateCellInfo(ctx context.Context, req *vtctldatapb.UpdateCellInfoRequest) (*vtctldatapb.UpdateCellInfoResponse, error) {
-	panic("unimplemented!")
+	ctx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+	defer cancel()
+
+	var updatedCi *topodatapb.CellInfo
+	err := s.ts.UpdateCellInfoFields(ctx, req.Name, func(ci *topodatapb.CellInfo) error {
+		defer func() {
+			updatedCi = proto.Clone(ci).(*topodatapb.CellInfo)
+		}()
+
+		changed := false
+
+		if req.CellInfo.ServerAddress != "" && req.CellInfo.ServerAddress != ci.ServerAddress {
+			changed = true
+			ci.ServerAddress = req.CellInfo.ServerAddress
+		}
+
+		if req.CellInfo.Root != "" && req.CellInfo.Root != ci.Root {
+			changed = true
+			ci.Root = req.CellInfo.Root
+		}
+
+		if !changed {
+			return topo.NewError(topo.NoUpdateNeeded, req.Name)
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &vtctldatapb.UpdateCellInfoResponse{
+		Name:     req.Name,
+		CellInfo: updatedCi,
+	}, nil
 }
 
 // UpdateCellsAlias is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) UpdateCellsAlias(ctx context.Context, req *vtctldatapb.UpdateCellsAliasRequest) (*vtctldatapb.UpdateCellsAliasResponse, error) {
-	panic("unimplemented!")
+	ctx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+	defer cancel()
+
+	var updatedCa *topodatapb.CellsAlias
+	err := s.ts.UpdateCellsAlias(ctx, req.Name, func(ca *topodatapb.CellsAlias) error {
+		defer func() {
+			updatedCa = proto.Clone(ca).(*topodatapb.CellsAlias)
+		}()
+
+		ca.Cells = req.CellsAlias.Cells
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &vtctldatapb.UpdateCellsAliasResponse{
+		Name:       req.Name,
+		CellsAlias: updatedCa,
+	}, nil
 }
 
 // StartServer registers a VtctldServer for RPCs on the given gRPC server.
