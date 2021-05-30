@@ -127,6 +127,22 @@ message Workflow {
 
 /* Request/response types for VtctldServer */
 
+message AddCellInfoRequest {
+  string name = 1;
+  topodata.CellInfo cell_info = 2;
+}
+
+message AddCellInfoResponse {
+}
+
+message AddCellsAliasRequest {
+  string name = 1;
+  repeated string cells = 2;
+}
+
+message AddCellsAliasResponse {
+}
+
 message ChangeTabletTypeRequest {
   topodata.TabletAlias tablet_alias = 1;
   topodata.TabletType db_type = 2;
@@ -194,6 +210,21 @@ message CreateShardResponse {
   // ShardAlreadyExists is set if Force was specified in the request and the
   // shard already existed.
   bool shard_already_exists = 3;
+}
+
+message DeleteCellInfoRequest {
+  string name = 1;
+  bool force = 2;
+}
+
+message DeleteCellInfoResponse {
+}
+
+message DeleteCellsAliasRequest {
+  string name = 1;
+}
+
+message DeleteCellsAliasResponse {
 }
 
 message DeleteKeyspaceRequest {
@@ -283,19 +314,19 @@ message GetBackupsResponse {
   repeated mysqlctl.BackupInfo backups = 1;
 }
 
-message GetCellInfoNamesRequest {
-}
-
-message GetCellInfoNamesResponse {
-  repeated string names = 1;
-}
-
 message GetCellInfoRequest {
   string cell = 1;
 }
 
 message GetCellInfoResponse {
   topodata.CellInfo cell_info = 1;
+}
+
+message GetCellInfoNamesRequest {
+}
+
+message GetCellInfoNamesResponse {
+  repeated string names = 1;
 }
 
 message GetCellsAliasesRequest {
@@ -557,4 +588,24 @@ message TabletExternallyReparentedResponse {
   string shard = 2;
   topodata.TabletAlias new_primary = 3;
   topodata.TabletAlias old_primary = 4;
+}
+
+message UpdateCellInfoRequest {
+  string name = 1;
+  topodata.CellInfo cell_info = 2;
+}
+
+message UpdateCellInfoResponse {
+  string name = 1;
+  topodata.CellInfo cell_info = 2;
+}
+
+message UpdateCellsAliasRequest {
+  string name = 1;
+  topodata.CellsAlias cells_alias = 2;
+}
+
+message UpdateCellsAliasResponse {
+  string name = 1;
+  topodata.CellsAlias cells_alias = 2;
 }
