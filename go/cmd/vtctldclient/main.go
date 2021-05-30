@@ -25,13 +25,47 @@ import (
 	"vitess.io/vitess/go/vt/log"
 )
 
+var globalFlags = []string{
+	"alsologtostderr",
+	"datadog-agent-host",
+	"datadog-agent-port",
+	"grpc_auth_static_client_creds",
+	"grpc_compression",
+	"grpc_enable_tracing",
+	"grpc_initial_conn_window_size",
+	"grpc_initial_window_size",
+	"grpc_keepalive_time",
+	"grpc_keepalive_timeout",
+	"grpc_max_message_size",
+	"grpc_prometheus",
+	"jaeger-agent-host",
+	"log_backtrace_at",
+	"log_dir",
+	"log_err_stacks",
+	"log_rotate_max_size",
+	"logtostderr",
+	"pprof",
+	"remote_operation_timeout",
+	"stderrthreshold",
+	"tracer",
+	"tracing-sampling-rate",
+	"v",
+	"version",
+	"vtctld_grpc_ca",
+	"vtctld_grpc_cert",
+	"vtctld_grpc_key",
+	"vtctld_grpc_server_name",
+}
+
 func main() {
 	defer exit.Recover()
 
-	// Grab all those global flags across the codebase and shove 'em on in.
-	command.Root.PersistentFlags().AddGoFlagSet(flag.CommandLine)
+	for _, flagName := range globalFlags {
+		command.Root.PersistentFlags().AddGoFlag(flag.Lookup(flagName))
+	}
 
 	// hack to get rid of an "ERROR: logging before flag.Parse"
+	flag.CommandLine = flag.NewFlagSet("", flag.ContinueOnError)
 	args := os.Args[:]
 	os.Args = os.Args[:1]
 	flag.Parse()

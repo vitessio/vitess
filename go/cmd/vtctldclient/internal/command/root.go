@@ -26,6 +26,7 @@ import (
 
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vtctl/vtctldclient"
 )
 
@@ -72,6 +73,7 @@ var (
 		// all errors in cobra (just from being output, they still get
 		// propagated).
 		SilenceErrors: true,
+		Version:       servenv.AppVersion.String(),
 	}
 )
 
