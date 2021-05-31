@@ -38,6 +38,9 @@ type VTAdminClient interface {
 	GetSchema(ctx context.Context, in *GetSchemaRequest, opts ...grpc.CallOption) (*Schema, error)
 	// GetSchemas returns all schemas across the specified clusters.
 	GetSchemas(ctx context.Context, in *GetSchemasRequest, opts ...grpc.CallOption) (*GetSchemasResponse, error)
+	// GetSrvVSchema looks up a SrvVSchema (serving graph) for the given
+	// cell in the given cluster.
+	GetSrvVSchema(ctx context.Context, in *GetSrvVSchemaRequest, opts ...grpc.CallOption) (*SrvVSchema, error)
 	// GetTablet looks up a tablet by hostname across all clusters and returns
 	// the result.
 	GetTablet(ctx context.Context, in *GetTabletRequest, opts ...grpc.CallOption) (*Tablet, error)
@@ -122,6 +125,15 @@ func (c *vTAdminClient) GetSchema(ctx context.Context, in *GetSchemaRequest, opt
 func (c *vTAdminClient) GetSchemas(ctx context.Context, in *GetSchemasRequest, opts ...grpc.CallOption) (*GetSchemasResponse, error) {
 	out := new(GetSchemasResponse)
 	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/GetSchemas", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vTAdminClient) GetSrvVSchema(ctx context.Context, in *GetSrvVSchemaRequest, opts ...grpc.CallOption) (*SrvVSchema, error) {
+	out := new(SrvVSchema)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/GetSrvVSchema", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -215,6 +227,9 @@ type VTAdminServer interface {
 	GetSchema(context.Context, *GetSchemaRequest) (*Schema, error)
 	// GetSchemas returns all schemas across the specified clusters.
 	GetSchemas(context.Context, *GetSchemasRequest) (*GetSchemasResponse, error)
+	// GetSrvVSchema looks up a SrvVSchema (serving graph) for the given
+	// cell in the given cluster.
+	GetSrvVSchema(context.Context, *GetSrvVSchemaRequest) (*SrvVSchema, error)
 	// GetTablet looks up a tablet by hostname across all clusters and returns
 	// the result.
 	GetTablet(context.Context, *GetTabletRequest) (*Tablet, error)
@@ -259,6 +274,9 @@ func (UnimplementedVTAdminServer) GetSchema(context.Context, *GetSchemaRequest) 
 }
 func (UnimplementedVTAdminServer) GetSchemas(context.Context, *GetSchemasRequest) (*GetSchemasResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetSchemas not implemented")
+}
+func (UnimplementedVTAdminServer) GetSrvVSchema(context.Context, *GetSrvVSchemaRequest) (*SrvVSchema, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetSrvVSchema not implemented")
 }
 func (UnimplementedVTAdminServer) GetTablet(context.Context, *GetTabletRequest) (*Tablet, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetTablet not implemented")
@@ -416,6 +434,24 @@ func _VTAdmin_GetSchemas_Handler(srv interface{}, ctx context.Context, dec func(
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(VTAdminServer).GetSchemas(ctx, req.(*GetSchemasRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _VTAdmin_GetSrvVSchema_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetSrvVSchemaRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VTAdminServer).GetSrvVSchema(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtadmin.VTAdmin/GetSrvVSchema",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VTAdminServer).GetSrvVSchema(ctx, req.(*GetSrvVSchemaRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -580,6 +616,10 @@ var VTAdmin_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetSchemas",
 			Handler:    _VTAdmin_GetSchemas_Handler,
+		},
+		{
+			MethodName: "GetSrvVSchema",
+			Handler:    _VTAdmin_GetSrvVSchema_Handler,
 		},
 		{
 			MethodName: "GetTablet",

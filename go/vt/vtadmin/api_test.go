@@ -2498,6 +2498,174 @@ func TestGetSchemas(t *testing.T) {
 	})
 }
 
+func TestGetSrvVSchema(t *testing.T) {
+	t.Parallel()
+
+	// This test only tests a single-cluster environment. Testing multiple
+	// clusters significantly complicates the test logic in exchange for
+	// rapidly diminishing returns. :')
+	cell := "c0_cell1"
+	clusterID := "c0"
+	clusterName := "cluster0"
+
+	tests := []struct {
+		name       string
+		srvVSchema *vschemapb.SrvVSchema
+		req        *vtadminpb.GetSrvVSchemaRequest
+		expected   *vtadminpb.SrvVSchema
+		shouldErr  bool
+	}{
+		{
+			name: "single SrvVSchema",
+			srvVSchema: &vschemapb.SrvVSchema{
+				Keyspaces: map[string]*vschemapb.Keyspace{
+					"commerce": {
+						Tables: map[string]*vschemapb.Table{
+							"customer": {},
+						},
+					},
+					"customer": {
+						Tables: map[string]*vschemapb.Table{
+							"customer": {},
+						},
+					},
+				},
+				RoutingRules: &vschemapb.RoutingRules{
+					Rules: []*vschemapb.RoutingRule{
+						{
+							FromTable: "customer",
+							ToTables:  []string{"commerce.customer"},
+						},
+						{
+							FromTable: "customer@rdonly",
+							ToTables:  []string{"customer.customer"},
+						},
+						{
+							FromTable: "customer.customer",
+							ToTables:  []string{"commerce.customer"},
+						},
+					},
+				},
+			},
+			req: &vtadminpb.GetSrvVSchemaRequest{
+				Cell:      cell,
+				ClusterId: clusterID,
+			},
+			expected: &vtadminpb.SrvVSchema{
+				Cell: cell,
+				Cluster: &vtadminpb.Cluster{
+					Id:   clusterID,
+					Name: clusterName,
+				},
+				SrvVSchema: &vschemapb.SrvVSchema{
+					Keyspaces: map[string]*vschemapb.Keyspace{
+						"commerce": {
+							Tables: map[string]*vschemapb.Table{
+								"customer": {},
+							},
+						},
+						"customer": {
+							Tables: map[string]*vschemapb.Table{
+								"customer": {},
+							},
+						},
+					},
+					RoutingRules: &vschemapb.RoutingRules{
+						Rules: []*vschemapb.RoutingRule{
+							{
+								FromTable: "customer",
+								ToTables:  []string{"commerce.customer"},
+							},
+							{
+								FromTable: "customer@rdonly",
+								ToTables:  []string{"customer.customer"},
+							},
+							{
+								FromTable: "customer.customer",
+								ToTables:  []string{"commerce.customer"},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name:       "cluster doesn't exist",
+			srvVSchema: nil,
+			req: &vtadminpb.GetSrvVSchemaRequest{
+				Cell:      "doesnt-matter",
+				ClusterId: "doesnt-exist",
+			},
+			shouldErr: true,
+		},
+		{
+
+			name:       "cell doesn't exist",
+			srvVSchema: nil,
+			req: &vtadminpb.GetSrvVSchemaRequest{
+				Cell:      "doesnt-exist",
+				ClusterId: clusterID,
+			},
+			shouldErr: true,
+		},
+		{
+
+			name:       "cluster doesn't exist",
+			srvVSchema: nil,
+			req: &vtadminpb.GetSrvVSchemaRequest{
+				Cell:      cell,
+				ClusterId: clusterID,
+			},
+			shouldErr: true,
+		},
+	}
+
+	ctx := context.Background()
+
+	for _, tt := range tests {
+		tt := tt
+
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			toposerver := memorytopo.NewServer(cell)
+			tmc := testutil.TabletManagerClient{}
+
+			vtctldserver := testutil.NewVtctldServerWithTabletManagerClient(t, toposerver, &tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+				return grpcvtctldserver.NewVtctldServer(ts)
+			})
+
+			testutil.WithTestServer(t, vtctldserver, func(t *testing.T, vtctldClient vtctldclient.VtctldClient) {
+				if tt.srvVSchema != nil {
+					err := toposerver.UpdateSrvVSchema(ctx, cell, tt.srvVSchema)
+					require.NoError(t, err)
+				}
+
+				clusters := []*cluster.Cluster{
+					vtadmintestutil.BuildCluster(vtadmintestutil.TestClusterConfig{
+						Cluster: &vtadminpb.Cluster{
+							Id:   clusterID,
+							Name: clusterName,
+						},
+						VtctldClient: vtctldClient,
+					}),
+				}
+
+				api := NewAPI(clusters, grpcserver.Options{}, http.Options{})
+				resp, err := api.GetSrvVSchema(ctx, tt.req)
+
+				if tt.shouldErr {
+					assert.Error(t, err)
+					return
+				}
+
+				require.NoError(t, err)
+				assert.Equal(t, tt.expected, resp)
+			})
+		})
+	}
+}
+
 func TestGetTablet(t *testing.T) {
 	t.Parallel()
 

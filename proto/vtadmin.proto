@@ -51,6 +51,9 @@ service VTAdmin {
     rpc GetSchema(GetSchemaRequest) returns (Schema) {};
     // GetSchemas returns all schemas across the specified clusters.
     rpc GetSchemas(GetSchemasRequest) returns (GetSchemasResponse) {};
+    // GetSrvVSchema looks up a SrvVSchema (serving graph) for the given
+    // cell in the given cluster.
+    rpc GetSrvVSchema(GetSrvVSchemaRequest) returns (SrvVSchema) {};
     // GetTablet looks up a tablet by hostname across all clusters and returns
     // the result.
     rpc GetTablet(GetTabletRequest) returns (Tablet) {};
@@ -113,6 +116,12 @@ message Schema {
         uint64 data_length = 2;
         map<string, ShardTableSize> by_shard = 3;
     }
+}
+
+message SrvVSchema {
+    Cluster cluster = 1;
+    string cell = 2;
+    vschema.SrvVSchema srvVSchema = 3;
 }
 
 // Tablet groups the topo information of a tablet together with the Vitess
@@ -223,6 +232,11 @@ message GetSchemasResponse {
 message GetSchemaTableSizeOptions {
     bool aggregate_sizes = 1;
     bool include_non_serving_shards = 2;
+}
+
+message GetSrvVSchemaRequest {
+    string cluster_id = 1;
+    string cell = 2;
 }
 
 message GetTabletRequest {

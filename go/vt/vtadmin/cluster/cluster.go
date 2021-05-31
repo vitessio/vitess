@@ -513,6 +513,32 @@ func (c *Cluster) GetKeyspaces(ctx context.Context) ([]*vtadminpb.Keyspace, erro
 	return keyspaces, nil
 }
 
+// GetSrvVSchema returns a SrvVSchema serving graph in the cluster for the given cell.
+func (c *Cluster) GetSrvVSchema(ctx context.Context, cell string) (*vtadminpb.SrvVSchema, error) {
+	span, ctx := trace.NewSpan(ctx, "Cluster.GetVSchema")
+	defer span.Finish()
+
+	AnnotateSpan(c, span)
+	span.Annotate("cell", cell)
+
+	if err := c.Vtctld.Dial(ctx); err != nil {
+		return nil, fmt.Errorf("Vtctld.Dial failed for cluster = %s: %w", c.ID, err)
+	}
+
+	resp, err := c.Vtctld.GetSrvVSchema(ctx, &vtctldatapb.GetSrvVSchemaRequest{
+		Cell: cell,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return &vtadminpb.SrvVSchema{
+		Cell:       cell,
+		Cluster:    c.ToProto(),
+		SrvVSchema: resp.SrvVSchema,
+	}, nil
+}
+
 // GetTablets returns all tablets in the cluster.
 func (c *Cluster) GetTablets(ctx context.Context) ([]*vtadminpb.Tablet, error) {
 	span, ctx := trace.NewSpan(ctx, "Cluster.GetTablets")

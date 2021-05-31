@@ -282,6 +282,39 @@ $root.vtadmin = (function() {
          */
 
         /**
+         * Callback as used by {@link vtadmin.VTAdmin#getSrvVSchema}.
+         * @memberof vtadmin.VTAdmin
+         * @typedef GetSrvVSchemaCallback
+         * @type {function}
+         * @param {Error|null} error Error, if any
+         * @param {vtadmin.SrvVSchema} [response] SrvVSchema
+         */
+
+        /**
+         * Calls GetSrvVSchema.
+         * @function getSrvVSchema
+         * @memberof vtadmin.VTAdmin
+         * @instance
+         * @param {vtadmin.IGetSrvVSchemaRequest} request GetSrvVSchemaRequest message or plain object
+         * @param {vtadmin.VTAdmin.GetSrvVSchemaCallback} callback Node-style callback called with the error, if any, and SrvVSchema
+         * @returns {undefined}
+         * @variation 1
+         */
+        Object.defineProperty(VTAdmin.prototype.getSrvVSchema = function getSrvVSchema(request, callback) {
+            return this.rpcCall(getSrvVSchema, $root.vtadmin.GetSrvVSchemaRequest, $root.vtadmin.SrvVSchema, request, callback);
+        }, "name", { value: "GetSrvVSchema" });
+
+        /**
+         * Calls GetSrvVSchema.
+         * @function getSrvVSchema
+         * @memberof vtadmin.VTAdmin
+         * @instance
+         * @param {vtadmin.IGetSrvVSchemaRequest} request GetSrvVSchemaRequest message or plain object
+         * @returns {Promise<vtadmin.SrvVSchema>} Promise
+         * @variation 2
+         */
+
+        /**
          * Callback as used by {@link vtadmin.VTAdmin#getTablet}.
          * @memberof vtadmin.VTAdmin
          * @typedef GetTabletCallback
@@ -2120,6 +2153,248 @@ $root.vtadmin = (function() {
         })();
 
         return Schema;
+    })();
+
+    vtadmin.SrvVSchema = (function() {
+
+        /**
+         * Properties of a SrvVSchema.
+         * @memberof vtadmin
+         * @interface ISrvVSchema
+         * @property {vtadmin.ICluster|null} [cluster] SrvVSchema cluster
+         * @property {string|null} [cell] SrvVSchema cell
+         * @property {vschema.ISrvVSchema|null} [srvVSchema] SrvVSchema srvVSchema
+         */
+
+        /**
+         * Constructs a new SrvVSchema.
+         * @memberof vtadmin
+         * @classdesc Represents a SrvVSchema.
+         * @implements ISrvVSchema
+         * @constructor
+         * @param {vtadmin.ISrvVSchema=} [properties] Properties to set
+         */
+        function SrvVSchema(properties) {
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * SrvVSchema cluster.
+         * @member {vtadmin.ICluster|null|undefined} cluster
+         * @memberof vtadmin.SrvVSchema
+         * @instance
+         */
+        SrvVSchema.prototype.cluster = null;
+
+        /**
+         * SrvVSchema cell.
+         * @member {string} cell
+         * @memberof vtadmin.SrvVSchema
+         * @instance
+         */
+        SrvVSchema.prototype.cell = "";
+
+        /**
+         * SrvVSchema srvVSchema.
+         * @member {vschema.ISrvVSchema|null|undefined} srvVSchema
+         * @memberof vtadmin.SrvVSchema
+         * @instance
+         */
+        SrvVSchema.prototype.srvVSchema = null;
+
+        /**
+         * Creates a new SrvVSchema instance using the specified properties.
+         * @function create
+         * @memberof vtadmin.SrvVSchema
+         * @static
+         * @param {vtadmin.ISrvVSchema=} [properties] Properties to set
+         * @returns {vtadmin.SrvVSchema} SrvVSchema instance
+         */
+        SrvVSchema.create = function create(properties) {
+            return new SrvVSchema(properties);
+        };
+
+        /**
+         * Encodes the specified SrvVSchema message. Does not implicitly {@link vtadmin.SrvVSchema.verify|verify} messages.
+         * @function encode
+         * @memberof vtadmin.SrvVSchema
+         * @static
+         * @param {vtadmin.ISrvVSchema} message SrvVSchema message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        SrvVSchema.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.cluster != null && Object.hasOwnProperty.call(message, "cluster"))
+                $root.vtadmin.Cluster.encode(message.cluster, writer.uint32(/* id 1, wireType 2 =*/10).fork()).ldelim();
+            if (message.cell != null && Object.hasOwnProperty.call(message, "cell"))
+                writer.uint32(/* id 2, wireType 2 =*/18).string(message.cell);
+            if (message.srvVSchema != null && Object.hasOwnProperty.call(message, "srvVSchema"))
+                $root.vschema.SrvVSchema.encode(message.srvVSchema, writer.uint32(/* id 3, wireType 2 =*/26).fork()).ldelim();
+            return writer;
+        };
+
+        /**
+         * Encodes the specified SrvVSchema message, length delimited. Does not implicitly {@link vtadmin.SrvVSchema.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtadmin.SrvVSchema
+         * @static
+         * @param {vtadmin.ISrvVSchema} message SrvVSchema message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        SrvVSchema.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a SrvVSchema message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtadmin.SrvVSchema
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtadmin.SrvVSchema} SrvVSchema
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        SrvVSchema.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.SrvVSchema();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    message.cluster = $root.vtadmin.Cluster.decode(reader, reader.uint32());
+                    break;
+                case 2:
+                    message.cell = reader.string();
+                    break;
+                case 3:
+                    message.srvVSchema = $root.vschema.SrvVSchema.decode(reader, reader.uint32());
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a SrvVSchema message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtadmin.SrvVSchema
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtadmin.SrvVSchema} SrvVSchema
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        SrvVSchema.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a SrvVSchema message.
+         * @function verify
+         * @memberof vtadmin.SrvVSchema
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        SrvVSchema.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.cluster != null && message.hasOwnProperty("cluster")) {
+                var error = $root.vtadmin.Cluster.verify(message.cluster);
+                if (error)
+                    return "cluster." + error;
+            }
+            if (message.cell != null && message.hasOwnProperty("cell"))
+                if (!$util.isString(message.cell))
+                    return "cell: string expected";
+            if (message.srvVSchema != null && message.hasOwnProperty("srvVSchema")) {
+                var error = $root.vschema.SrvVSchema.verify(message.srvVSchema);
+                if (error)
+                    return "srvVSchema." + error;
+            }
+            return null;
+        };
+
+        /**
+         * Creates a SrvVSchema message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtadmin.SrvVSchema
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtadmin.SrvVSchema} SrvVSchema
+         */
+        SrvVSchema.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtadmin.SrvVSchema)
+                return object;
+            var message = new $root.vtadmin.SrvVSchema();
+            if (object.cluster != null) {
+                if (typeof object.cluster !== "object")
+                    throw TypeError(".vtadmin.SrvVSchema.cluster: object expected");
+                message.cluster = $root.vtadmin.Cluster.fromObject(object.cluster);
+            }
+            if (object.cell != null)
+                message.cell = String(object.cell);
+            if (object.srvVSchema != null) {
+                if (typeof object.srvVSchema !== "object")
+                    throw TypeError(".vtadmin.SrvVSchema.srvVSchema: object expected");
+                message.srvVSchema = $root.vschema.SrvVSchema.fromObject(object.srvVSchema);
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a SrvVSchema message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtadmin.SrvVSchema
+         * @static
+         * @param {vtadmin.SrvVSchema} message SrvVSchema
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        SrvVSchema.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.defaults) {
+                object.cluster = null;
+                object.cell = "";
+                object.srvVSchema = null;
+            }
+            if (message.cluster != null && message.hasOwnProperty("cluster"))
+                object.cluster = $root.vtadmin.Cluster.toObject(message.cluster, options);
+            if (message.cell != null && message.hasOwnProperty("cell"))
+                object.cell = message.cell;
+            if (message.srvVSchema != null && message.hasOwnProperty("srvVSchema"))
+                object.srvVSchema = $root.vschema.SrvVSchema.toObject(message.srvVSchema, options);
+            return object;
+        };
+
+        /**
+         * Converts this SrvVSchema to JSON.
+         * @function toJSON
+         * @memberof vtadmin.SrvVSchema
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        SrvVSchema.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return SrvVSchema;
     })();
 
     vtadmin.Tablet = (function() {
@@ -6021,6 +6296,216 @@ $root.vtadmin = (function() {
         };
 
         return GetSchemaTableSizeOptions;
+    })();
+
+    vtadmin.GetSrvVSchemaRequest = (function() {
+
+        /**
+         * Properties of a GetSrvVSchemaRequest.
+         * @memberof vtadmin
+         * @interface IGetSrvVSchemaRequest
+         * @property {string|null} [cluster_id] GetSrvVSchemaRequest cluster_id
+         * @property {string|null} [cell] GetSrvVSchemaRequest cell
+         */
+
+        /**
+         * Constructs a new GetSrvVSchemaRequest.
+         * @memberof vtadmin
+         * @classdesc Represents a GetSrvVSchemaRequest.
+         * @implements IGetSrvVSchemaRequest
+         * @constructor
+         * @param {vtadmin.IGetSrvVSchemaRequest=} [properties] Properties to set
+         */
+        function GetSrvVSchemaRequest(properties) {
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * GetSrvVSchemaRequest cluster_id.
+         * @member {string} cluster_id
+         * @memberof vtadmin.GetSrvVSchemaRequest
+         * @instance
+         */
+        GetSrvVSchemaRequest.prototype.cluster_id = "";
+
+        /**
+         * GetSrvVSchemaRequest cell.
+         * @member {string} cell
+         * @memberof vtadmin.GetSrvVSchemaRequest
+         * @instance
+         */
+        GetSrvVSchemaRequest.prototype.cell = "";
+
+        /**
+         * Creates a new GetSrvVSchemaRequest instance using the specified properties.
+         * @function create
+         * @memberof vtadmin.GetSrvVSchemaRequest
+         * @static
+         * @param {vtadmin.IGetSrvVSchemaRequest=} [properties] Properties to set
+         * @returns {vtadmin.GetSrvVSchemaRequest} GetSrvVSchemaRequest instance
+         */
+        GetSrvVSchemaRequest.create = function create(properties) {
+            return new GetSrvVSchemaRequest(properties);
+        };
+
+        /**
+         * Encodes the specified GetSrvVSchemaRequest message. Does not implicitly {@link vtadmin.GetSrvVSchemaRequest.verify|verify} messages.
+         * @function encode
+         * @memberof vtadmin.GetSrvVSchemaRequest
+         * @static
+         * @param {vtadmin.IGetSrvVSchemaRequest} message GetSrvVSchemaRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        GetSrvVSchemaRequest.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.cluster_id != null && Object.hasOwnProperty.call(message, "cluster_id"))
+                writer.uint32(/* id 1, wireType 2 =*/10).string(message.cluster_id);
+            if (message.cell != null && Object.hasOwnProperty.call(message, "cell"))
+                writer.uint32(/* id 2, wireType 2 =*/18).string(message.cell);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified GetSrvVSchemaRequest message, length delimited. Does not implicitly {@link vtadmin.GetSrvVSchemaRequest.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtadmin.GetSrvVSchemaRequest
+         * @static
+         * @param {vtadmin.IGetSrvVSchemaRequest} message GetSrvVSchemaRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        GetSrvVSchemaRequest.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a GetSrvVSchemaRequest message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtadmin.GetSrvVSchemaRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtadmin.GetSrvVSchemaRequest} GetSrvVSchemaRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        GetSrvVSchemaRequest.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.GetSrvVSchemaRequest();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    message.cluster_id = reader.string();
+                    break;
+                case 2:
+                    message.cell = reader.string();
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a GetSrvVSchemaRequest message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtadmin.GetSrvVSchemaRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtadmin.GetSrvVSchemaRequest} GetSrvVSchemaRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        GetSrvVSchemaRequest.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a GetSrvVSchemaRequest message.
+         * @function verify
+         * @memberof vtadmin.GetSrvVSchemaRequest
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        GetSrvVSchemaRequest.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.cluster_id != null && message.hasOwnProperty("cluster_id"))
+                if (!$util.isString(message.cluster_id))
+                    return "cluster_id: string expected";
+            if (message.cell != null && message.hasOwnProperty("cell"))
+                if (!$util.isString(message.cell))
+                    return "cell: string expected";
+            return null;
+        };
+
+        /**
+         * Creates a GetSrvVSchemaRequest message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtadmin.GetSrvVSchemaRequest
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtadmin.GetSrvVSchemaRequest} GetSrvVSchemaRequest
+         */
+        GetSrvVSchemaRequest.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtadmin.GetSrvVSchemaRequest)
+                return object;
+            var message = new $root.vtadmin.GetSrvVSchemaRequest();
+            if (object.cluster_id != null)
+                message.cluster_id = String(object.cluster_id);
+            if (object.cell != null)
+                message.cell = String(object.cell);
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a GetSrvVSchemaRequest message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtadmin.GetSrvVSchemaRequest
+         * @static
+         * @param {vtadmin.GetSrvVSchemaRequest} message GetSrvVSchemaRequest
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        GetSrvVSchemaRequest.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.defaults) {
+                object.cluster_id = "";
+                object.cell = "";
+            }
+            if (message.cluster_id != null && message.hasOwnProperty("cluster_id"))
+                object.cluster_id = message.cluster_id;
+            if (message.cell != null && message.hasOwnProperty("cell"))
+                object.cell = message.cell;
+            return object;
+        };
+
+        /**
+         * Converts this GetSrvVSchemaRequest to JSON.
+         * @function toJSON
+         * @memberof vtadmin.GetSrvVSchemaRequest
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        GetSrvVSchemaRequest.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return GetSrvVSchemaRequest;
     })();
 
     vtadmin.GetTabletRequest = (function() {

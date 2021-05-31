@@ -113,6 +113,7 @@ func NewAPI(clusters []*cluster.Cluster, opts grpcserver.Options, httpOpts vtadm
 	router.HandleFunc("/schema/{table}", httpAPI.Adapt(vtadminhttp.FindSchema)).Name("API.FindSchema")
 	router.HandleFunc("/schema/{cluster_id}/{keyspace}/{table}", httpAPI.Adapt(vtadminhttp.GetSchema)).Name("API.GetSchema")
 	router.HandleFunc("/schemas", httpAPI.Adapt(vtadminhttp.GetSchemas)).Name("API.GetSchemas")
+	router.HandleFunc("/srvvschema/{cluster_id}/{cell}", httpAPI.Adapt(vtadminhttp.GetSrvVSchema)).Name("API.GetSrvVSchema")
 	router.HandleFunc("/tablets", httpAPI.Adapt(vtadminhttp.GetTablets)).Name("API.GetTablets")
 	router.HandleFunc("/tablet/{tablet}", httpAPI.Adapt(vtadminhttp.GetTablet)).Name("API.GetTablet")
 	router.HandleFunc("/vschema/{cluster_id}/{keyspace}", httpAPI.Adapt(vtadminhttp.GetVSchema)).Name("API.GetVSchema")
@@ -516,6 +517,22 @@ func (api *API) getSchemas(ctx context.Context, c *cluster.Cluster, opts cluster
 	}
 
 	return schemas, nil
+}
+
+// GetSrvVSchema is part of the vtadminpb.VTAdminServer interface.
+func (api *API) GetSrvVSchema(ctx context.Context, req *vtadminpb.GetSrvVSchemaRequest) (*vtadminpb.SrvVSchema, error) {
+	span, ctx := trace.NewSpan(ctx, "API.GetSrvVSchema")
+	defer span.Finish()
+
+	span.Annotate("cluster_id", req.ClusterId)
+	span.Annotate("cell", req.Cell)
+
+	c, ok := api.clusterMap[req.ClusterId]
+	if !ok {
+		return nil, fmt.Errorf("%w: no cluster with id %s", errors.ErrUnsupportedCluster, req.ClusterId)
+	}
+
+	return c.GetSrvVSchema(ctx, req.Cell)
 }
 
 // GetTablet is part of the vtadminpb.VTAdminServer interface.
