@@ -131,6 +131,7 @@ func TestMysqlMaxCons(t *testing.T) {
 }
 
 func TestLargeNumberOfKeyspaces(t *testing.T) {
+	t.Skip("Skip test since it takes huge amount of space and github workflow exits with the error `No space left on device`")
 	dockerImages := []string{vttestserverMysql57image, vttestserverMysql80image}
 	for _, image := range dockerImages {
 		t.Run(image, func(t *testing.T) {
