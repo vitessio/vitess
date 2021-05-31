@@ -200,6 +200,16 @@ func (f *fakeVTGateService) StreamExecute(ctx context.Context, session *vtgatepb
 	return nil
 }
 
+// Prepare is part of the VTGateService interface
+func (f *fakeVTGateService) Prepare(ctx context.Context, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable) (*vtgatepb.Session, []*querypb.Field, error) {
+	panic("unimplemented")
+}
+
+// CloseSession is part of the VTGateService interface
+func (f *fakeVTGateService) CloseSession(ctx context.Context, session *vtgatepb.Session) error {
+	panic("unimplemented")
+}
+
 // ResolveTransaction is part of the VTGateService interface
 func (f *fakeVTGateService) ResolveTransaction(ctx context.Context, dtid string) error {
 	if f.hasError {
