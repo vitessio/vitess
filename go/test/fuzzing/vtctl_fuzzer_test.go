@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package planbuilder
+package fuzzing
 
 import (
 	"io/ioutil"
@@ -25,7 +25,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestFuzzAnalyze(t *testing.T) {
+func TestVtctlFuzzer(t *testing.T) {
 	directoryName := "fuzzdata"
 	files, err := ioutil.ReadDir(directoryName)
 	require.NoError(t, err)
@@ -40,7 +40,8 @@ func TestFuzzAnalyze(t *testing.T) {
 			}()
 			testcase, err := ioutil.ReadFile(path.Join(directoryName, file.Name()))
 			require.NoError(t, err)
-			FuzzAnalyse(testcase)
+			res := Fuzz(testcase)
+			require.Equal(t, 1, res)
 		})
 	}
 }
