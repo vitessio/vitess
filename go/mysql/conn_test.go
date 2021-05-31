@@ -179,6 +179,17 @@ func verifyPacketComms(t *testing.T, cConn, sConn *Conn, data []byte) {
 	}
 }
 
+func TestRawConnection(t *testing.T) {
+	listener, sConn, cConn := createSocketPair(t)
+	defer func() {
+		listener.Close()
+		sConn.Close()
+		cConn.Close()
+	}()
+	assert.IsType(t, &net.TCPConn{}, sConn.GetRawConn())
+	assert.IsType(t, &net.TCPConn{}, cConn.GetRawConn())
+}
+
 func TestPackets(t *testing.T) {
 	listener, sConn, cConn := createSocketPair(t)
 	defer func() {
