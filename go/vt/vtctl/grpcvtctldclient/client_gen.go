@@ -190,6 +190,15 @@ func (client *gRPCVtctldClient) GetSrvVSchema(ctx context.Context, in *vtctldata
 	return client.c.GetSrvVSchema(ctx, in, opts...)
 }
 
+// GetSrvVSchemas is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) GetSrvVSchemas(ctx context.Context, in *vtctldatapb.GetSrvVSchemasRequest, opts ...grpc.CallOption) (*vtctldatapb.GetSrvVSchemasResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.GetSrvVSchemas(ctx, in, opts...)
+}
+
 // GetTablet is part of the vtctlservicepb.VtctldClient interface.
 func (client *gRPCVtctldClient) GetTablet(ctx context.Context, in *vtctldatapb.GetTabletRequest, opts ...grpc.CallOption) (*vtctldatapb.GetTabletResponse, error) {
 	if client.c == nil {

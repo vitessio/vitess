@@ -65968,6 +65968,438 @@ $root.vtctldata = (function() {
         return GetSrvVSchemaResponse;
     })();
 
+    vtctldata.GetSrvVSchemasRequest = (function() {
+
+        /**
+         * Properties of a GetSrvVSchemasRequest.
+         * @memberof vtctldata
+         * @interface IGetSrvVSchemasRequest
+         * @property {Array.<string>|null} [cells] GetSrvVSchemasRequest cells
+         */
+
+        /**
+         * Constructs a new GetSrvVSchemasRequest.
+         * @memberof vtctldata
+         * @classdesc Represents a GetSrvVSchemasRequest.
+         * @implements IGetSrvVSchemasRequest
+         * @constructor
+         * @param {vtctldata.IGetSrvVSchemasRequest=} [properties] Properties to set
+         */
+        function GetSrvVSchemasRequest(properties) {
+            this.cells = [];
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * GetSrvVSchemasRequest cells.
+         * @member {Array.<string>} cells
+         * @memberof vtctldata.GetSrvVSchemasRequest
+         * @instance
+         */
+        GetSrvVSchemasRequest.prototype.cells = $util.emptyArray;
+
+        /**
+         * Creates a new GetSrvVSchemasRequest instance using the specified properties.
+         * @function create
+         * @memberof vtctldata.GetSrvVSchemasRequest
+         * @static
+         * @param {vtctldata.IGetSrvVSchemasRequest=} [properties] Properties to set
+         * @returns {vtctldata.GetSrvVSchemasRequest} GetSrvVSchemasRequest instance
+         */
+        GetSrvVSchemasRequest.create = function create(properties) {
+            return new GetSrvVSchemasRequest(properties);
+        };
+
+        /**
+         * Encodes the specified GetSrvVSchemasRequest message. Does not implicitly {@link vtctldata.GetSrvVSchemasRequest.verify|verify} messages.
+         * @function encode
+         * @memberof vtctldata.GetSrvVSchemasRequest
+         * @static
+         * @param {vtctldata.IGetSrvVSchemasRequest} message GetSrvVSchemasRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        GetSrvVSchemasRequest.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.cells != null && message.cells.length)
+                for (var i = 0; i < message.cells.length; ++i)
+                    writer.uint32(/* id 2, wireType 2 =*/18).string(message.cells[i]);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified GetSrvVSchemasRequest message, length delimited. Does not implicitly {@link vtctldata.GetSrvVSchemasRequest.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtctldata.GetSrvVSchemasRequest
+         * @static
+         * @param {vtctldata.IGetSrvVSchemasRequest} message GetSrvVSchemasRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        GetSrvVSchemasRequest.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a GetSrvVSchemasRequest message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtctldata.GetSrvVSchemasRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtctldata.GetSrvVSchemasRequest} GetSrvVSchemasRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        GetSrvVSchemasRequest.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.GetSrvVSchemasRequest();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 2:
+                    if (!(message.cells && message.cells.length))
+                        message.cells = [];
+                    message.cells.push(reader.string());
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a GetSrvVSchemasRequest message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtctldata.GetSrvVSchemasRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtctldata.GetSrvVSchemasRequest} GetSrvVSchemasRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        GetSrvVSchemasRequest.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a GetSrvVSchemasRequest message.
+         * @function verify
+         * @memberof vtctldata.GetSrvVSchemasRequest
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        GetSrvVSchemasRequest.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.cells != null && message.hasOwnProperty("cells")) {
+                if (!Array.isArray(message.cells))
+                    return "cells: array expected";
+                for (var i = 0; i < message.cells.length; ++i)
+                    if (!$util.isString(message.cells[i]))
+                        return "cells: string[] expected";
+            }
+            return null;
+        };
+
+        /**
+         * Creates a GetSrvVSchemasRequest message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtctldata.GetSrvVSchemasRequest
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtctldata.GetSrvVSchemasRequest} GetSrvVSchemasRequest
+         */
+        GetSrvVSchemasRequest.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtctldata.GetSrvVSchemasRequest)
+                return object;
+            var message = new $root.vtctldata.GetSrvVSchemasRequest();
+            if (object.cells) {
+                if (!Array.isArray(object.cells))
+                    throw TypeError(".vtctldata.GetSrvVSchemasRequest.cells: array expected");
+                message.cells = [];
+                for (var i = 0; i < object.cells.length; ++i)
+                    message.cells[i] = String(object.cells[i]);
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a GetSrvVSchemasRequest message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtctldata.GetSrvVSchemasRequest
+         * @static
+         * @param {vtctldata.GetSrvVSchemasRequest} message GetSrvVSchemasRequest
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        GetSrvVSchemasRequest.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.arrays || options.defaults)
+                object.cells = [];
+            if (message.cells && message.cells.length) {
+                object.cells = [];
+                for (var j = 0; j < message.cells.length; ++j)
+                    object.cells[j] = message.cells[j];
+            }
+            return object;
+        };
+
+        /**
+         * Converts this GetSrvVSchemasRequest to JSON.
+         * @function toJSON
+         * @memberof vtctldata.GetSrvVSchemasRequest
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        GetSrvVSchemasRequest.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return GetSrvVSchemasRequest;
+    })();
+
+    vtctldata.GetSrvVSchemasResponse = (function() {
+
+        /**
+         * Properties of a GetSrvVSchemasResponse.
+         * @memberof vtctldata
+         * @interface IGetSrvVSchemasResponse
+         * @property {Object.<string,vschema.ISrvVSchema>|null} [srv_v_schemas] GetSrvVSchemasResponse srv_v_schemas
+         */
+
+        /**
+         * Constructs a new GetSrvVSchemasResponse.
+         * @memberof vtctldata
+         * @classdesc Represents a GetSrvVSchemasResponse.
+         * @implements IGetSrvVSchemasResponse
+         * @constructor
+         * @param {vtctldata.IGetSrvVSchemasResponse=} [properties] Properties to set
+         */
+        function GetSrvVSchemasResponse(properties) {
+            this.srv_v_schemas = {};
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * GetSrvVSchemasResponse srv_v_schemas.
+         * @member {Object.<string,vschema.ISrvVSchema>} srv_v_schemas
+         * @memberof vtctldata.GetSrvVSchemasResponse
+         * @instance
+         */
+        GetSrvVSchemasResponse.prototype.srv_v_schemas = $util.emptyObject;
+
+        /**
+         * Creates a new GetSrvVSchemasResponse instance using the specified properties.
+         * @function create
+         * @memberof vtctldata.GetSrvVSchemasResponse
+         * @static
+         * @param {vtctldata.IGetSrvVSchemasResponse=} [properties] Properties to set
+         * @returns {vtctldata.GetSrvVSchemasResponse} GetSrvVSchemasResponse instance
+         */
+        GetSrvVSchemasResponse.create = function create(properties) {
+            return new GetSrvVSchemasResponse(properties);
+        };
+
+        /**
+         * Encodes the specified GetSrvVSchemasResponse message. Does not implicitly {@link vtctldata.GetSrvVSchemasResponse.verify|verify} messages.
+         * @function encode
+         * @memberof vtctldata.GetSrvVSchemasResponse
+         * @static
+         * @param {vtctldata.IGetSrvVSchemasResponse} message GetSrvVSchemasResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        GetSrvVSchemasResponse.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.srv_v_schemas != null && Object.hasOwnProperty.call(message, "srv_v_schemas"))
+                for (var keys = Object.keys(message.srv_v_schemas), i = 0; i < keys.length; ++i) {
+                    writer.uint32(/* id 1, wireType 2 =*/10).fork().uint32(/* id 1, wireType 2 =*/10).string(keys[i]);
+                    $root.vschema.SrvVSchema.encode(message.srv_v_schemas[keys[i]], writer.uint32(/* id 2, wireType 2 =*/18).fork()).ldelim().ldelim();
+                }
+            return writer;
+        };
+
+        /**
+         * Encodes the specified GetSrvVSchemasResponse message, length delimited. Does not implicitly {@link vtctldata.GetSrvVSchemasResponse.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtctldata.GetSrvVSchemasResponse
+         * @static
+         * @param {vtctldata.IGetSrvVSchemasResponse} message GetSrvVSchemasResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        GetSrvVSchemasResponse.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a GetSrvVSchemasResponse message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtctldata.GetSrvVSchemasResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtctldata.GetSrvVSchemasResponse} GetSrvVSchemasResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        GetSrvVSchemasResponse.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.GetSrvVSchemasResponse(), key, value;
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    if (message.srv_v_schemas === $util.emptyObject)
+                        message.srv_v_schemas = {};
+                    var end2 = reader.uint32() + reader.pos;
+                    key = "";
+                    value = null;
+                    while (reader.pos < end2) {
+                        var tag2 = reader.uint32();
+                        switch (tag2 >>> 3) {
+                        case 1:
+                            key = reader.string();
+                            break;
+                        case 2:
+                            value = $root.vschema.SrvVSchema.decode(reader, reader.uint32());
+                            break;
+                        default:
+                            reader.skipType(tag2 & 7);
+                            break;
+                        }
+                    }
+                    message.srv_v_schemas[key] = value;
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a GetSrvVSchemasResponse message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtctldata.GetSrvVSchemasResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtctldata.GetSrvVSchemasResponse} GetSrvVSchemasResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        GetSrvVSchemasResponse.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a GetSrvVSchemasResponse message.
+         * @function verify
+         * @memberof vtctldata.GetSrvVSchemasResponse
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        GetSrvVSchemasResponse.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.srv_v_schemas != null && message.hasOwnProperty("srv_v_schemas")) {
+                if (!$util.isObject(message.srv_v_schemas))
+                    return "srv_v_schemas: object expected";
+                var key = Object.keys(message.srv_v_schemas);
+                for (var i = 0; i < key.length; ++i) {
+                    var error = $root.vschema.SrvVSchema.verify(message.srv_v_schemas[key[i]]);
+                    if (error)
+                        return "srv_v_schemas." + error;
+                }
+            }
+            return null;
+        };
+
+        /**
+         * Creates a GetSrvVSchemasResponse message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtctldata.GetSrvVSchemasResponse
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtctldata.GetSrvVSchemasResponse} GetSrvVSchemasResponse
+         */
+        GetSrvVSchemasResponse.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtctldata.GetSrvVSchemasResponse)
+                return object;
+            var message = new $root.vtctldata.GetSrvVSchemasResponse();
+            if (object.srv_v_schemas) {
+                if (typeof object.srv_v_schemas !== "object")
+                    throw TypeError(".vtctldata.GetSrvVSchemasResponse.srv_v_schemas: object expected");
+                message.srv_v_schemas = {};
+                for (var keys = Object.keys(object.srv_v_schemas), i = 0; i < keys.length; ++i) {
+                    if (typeof object.srv_v_schemas[keys[i]] !== "object")
+                        throw TypeError(".vtctldata.GetSrvVSchemasResponse.srv_v_schemas: object expected");
+                    message.srv_v_schemas[keys[i]] = $root.vschema.SrvVSchema.fromObject(object.srv_v_schemas[keys[i]]);
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a GetSrvVSchemasResponse message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtctldata.GetSrvVSchemasResponse
+         * @static
+         * @param {vtctldata.GetSrvVSchemasResponse} message GetSrvVSchemasResponse
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        GetSrvVSchemasResponse.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.objects || options.defaults)
+                object.srv_v_schemas = {};
+            var keys2;
+            if (message.srv_v_schemas && (keys2 = Object.keys(message.srv_v_schemas)).length) {
+                object.srv_v_schemas = {};
+                for (var j = 0; j < keys2.length; ++j)
+                    object.srv_v_schemas[keys2[j]] = $root.vschema.SrvVSchema.toObject(message.srv_v_schemas[keys2[j]], options);
+            }
+            return object;
+        };
+
+        /**
+         * Converts this GetSrvVSchemasResponse to JSON.
+         * @function toJSON
+         * @memberof vtctldata.GetSrvVSchemasResponse
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        GetSrvVSchemasResponse.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return GetSrvVSchemasResponse;
+    })();
+
     vtctldata.GetTabletRequest = (function() {
 
         /**
