@@ -31,6 +31,8 @@ import { WorkspaceHeader } from '../layout/WorkspaceHeader';
 import { WorkspaceTitle } from '../layout/WorkspaceTitle';
 import { DataFilter } from '../dataTable/DataFilter';
 import { KeyspaceLink } from '../links/KeyspaceLink';
+import { TabletLink } from '../links/TabletLink';
+import { ExternalTabletLink } from '../links/ExternalTabletLink';
 
 export const Tablets = () => {
     useDocumentTitle('Tablets');
@@ -68,12 +70,20 @@ export const Tablets = () => {
                             )}
                         </KeyspaceLink>
                     </DataCell>
-                    <DataCell className="white-space-nowrap">
-                        <TabletServingPip state={t._raw.state} /> {t.type}
+                    <DataCell>
+                        <TabletLink alias={t.alias} className="font-weight-bold" clusterID={t._raw.cluster?.id}>
+                            {t.alias}
+                        </TabletLink>
                     </DataCell>
-                    <DataCell>{t.state}</DataCell>
-                    <DataCell>{t.alias}</DataCell>
-                    <DataCell>{t.hostname}</DataCell>
+                    <DataCell className="white-space-nowrap">{t.type}</DataCell>
+
+                    <DataCell>
+                        <TabletServingPip state={t._raw.state} /> {t.state}
+                    </DataCell>
+
+                    <DataCell>
+                        <ExternalTabletLink fqdn={`//${t._raw.FQDN}`}>{t.hostname}</ExternalTabletLink>
+                    </DataCell>
                 </tr>
             ));
         },
@@ -94,7 +104,7 @@ export const Tablets = () => {
                     value={filter || ''}
                 />
                 <DataTable
-                    columns={['Keyspace', 'Shard', 'Type', 'Tablet State', 'Alias', 'Hostname']}
+                    columns={['Keyspace', 'Shard', 'Alias', 'Type', 'Tablet State', 'Hostname']}
                     data={filteredData}
                     renderRows={renderRows}
                 />

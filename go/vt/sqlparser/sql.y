@@ -1419,6 +1419,10 @@ unsigned_opt:
   {
     $$ = true
   }
+| SIGNED
+  {
+    $$ = false
+  }
 
 zero_fill_opt:
   {
@@ -1515,7 +1519,7 @@ equal_opt:
   }
 
 index_info:
-  constraint_name_opt PRIMARY KEY
+  constraint_name_opt PRIMARY KEY name_opt
   {
     $$ = &IndexInfo{Type: string($2) + " " + string($3), ConstraintName: NewColIdent($1), Name: NewColIdent("PRIMARY"), Primary: true, Unique: true}
   }

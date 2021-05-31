@@ -220,7 +220,7 @@ func newTestTableMigraterCustom(ctx context.Context, t *testing.T, sourceShards,
 		)
 	}
 
-	if err := tme.wr.saveRoutingRules(ctx, map[string][]string{
+	if err := topotools.SaveRoutingRules(ctx, tme.wr.ts, map[string][]string{
 		"t1":     {"ks1.t1"},
 		"ks2.t1": {"ks1.t1"},
 		"t2":     {"ks1.t2"},
