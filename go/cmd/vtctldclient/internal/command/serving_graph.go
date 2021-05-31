@@ -105,9 +105,14 @@ func commandGetSrvVSchemas(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	data, err := cli.MarshalJSON(resp.SrvVSchemas)
-	if err != nil {
-		return err
+	// By default, an empty array will serialize as `null`, but `[]` is a little nicer.
+	data := []byte("[]")
+
+	if len(resp.SrvVSchemas) > 0 {
+		data, err = cli.MarshalJSON(resp.SrvVSchemas)
+		if err != nil {
+			return err
+		}
 	}
 
 	fmt.Printf("%s\n", data)
