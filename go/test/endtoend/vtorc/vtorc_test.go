@@ -204,7 +204,7 @@ func TestDownMaster(t *testing.T) {
 	}
 }
 
-func waitForReadOnlyValue(t *testing.T, curMaster *cluster.Vttablet, expectValue bool) (match bool) {
+func waitForReadOnlyValue(t *testing.T, curMaster *cluster.Vttablet, expectValue int64) (match bool) {
 	timeout := 15 * time.Second
 	startTime := time.Now()
 	for time.Since(startTime) < timeout {
@@ -212,7 +212,7 @@ func waitForReadOnlyValue(t *testing.T, curMaster *cluster.Vttablet, expectValue
 		require.NotNil(t, qr)
 		row := qr.Named().Row()
 		require.NotNil(t, row)
-		readOnly, err := row.ToBool("read_only")
+		readOnly, err := row.ToInt64("read_only")
 		require.NoError(t, err)
 		if readOnly == expectValue {
 			return true
@@ -242,7 +242,7 @@ func TestMasterReadOnly(t *testing.T) {
 	runSQL(t, "set global read_only=ON", curMaster, "")
 
 	// wait for repair
-	match := waitForReadOnlyValue(t, curMaster, false)
+	match := waitForReadOnlyValue(t, curMaster, 0)
 	require.True(t, match)
 }
 
@@ -274,7 +274,7 @@ func TestReplicaReadWrite(t *testing.T) {
 	runSQL(t, "set global read_only=OFF", replica, "")
 
 	// wait for repair
-	match := waitForReadOnlyValue(t, curMaster, true)
+	match := waitForReadOnlyValue(t, curMaster, 1)
 	require.True(t, match)
 }
 
