@@ -130,6 +130,46 @@ func TestMysqlMaxCons(t *testing.T) {
 	}
 }
 
+func TestLargeNumberOfKeyspaces(t *testing.T) {
+	dockerImages := []string{vttestserverMysql57image, vttestserverMysql80image}
+	for _, image := range dockerImages {
+		t.Run(image, func(t *testing.T) {
+			var keyspaces []string
+			var numShards []int
+			for i := 0; i < 100; i++ {
+				keyspaces = append(keyspaces, fmt.Sprintf("unsharded_ks%d", i))
+				numShards = append(numShards, 1)
+			}
+
+			vtest := newVttestserver(image, keyspaces, numShards, 100000, 33577)
+			err := vtest.startDockerImage()
+			require.NoError(t, err)
+			defer vtest.teardown()
+
+			// wait for the docker to be setup
+			time.Sleep(15 * time.Second)
+
+			ctx := context.Background()
+			vttestParams := mysql.ConnParams{
+				Host: "localhost",
+				Port: vtest.port,
+			}
+			conn, err := mysql.Connect(ctx, &vttestParams)
+			require.NoError(t, err)
+			defer conn.Close()
+
+			// assert that all the keyspaces are correctly setup
+			for _, keyspace := range keyspaces {
+				_, err = execute(t, conn, "create table "+keyspace+".t1(id int)")
+				require.NoError(t, err)
+				_, err = execute(t, conn, "insert into "+keyspace+".t1(id) values (10),(20),(30)")
+				require.NoError(t, err)
+				assertMatches(t, conn, "select * from "+keyspace+".t1", `[[INT32(10)] [INT32(20)] [INT32(30)]]`)
+			}
+		})
+	}
+}
+
 func execute(t *testing.T, conn *mysql.Conn, query string) (*sqltypes.Result, error) {
 	t.Helper()
 	return conn.ExecuteFetch(query, 1000, true)
