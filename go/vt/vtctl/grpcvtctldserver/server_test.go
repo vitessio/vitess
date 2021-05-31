@@ -3016,6 +3016,190 @@ func TestGetSrvVSchema(t *testing.T) {
 	assert.Error(t, err)
 }
 
+func TestGetSrvVSchemas(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		req       *vtctldatapb.GetSrvVSchemasRequest
+		expected  *vtctldatapb.GetSrvVSchemasResponse
+		topoErr   error
+		shouldErr bool
+	}{
+		{
+			name: "success",
+			req:  &vtctldatapb.GetSrvVSchemasRequest{},
+			expected: &vtctldatapb.GetSrvVSchemasResponse{
+				SrvVSchemas: map[string]*vschemapb.SrvVSchema{
+					"zone1": {
+						Keyspaces: map[string]*vschemapb.Keyspace{
+							"testkeyspace": {
+								Sharded:                true,
+								RequireExplicitRouting: false,
+							},
+						},
+						RoutingRules: &vschemapb.RoutingRules{
+							Rules: []*vschemapb.RoutingRule{},
+						},
+					},
+					"zone2": {
+						Keyspaces: map[string]*vschemapb.Keyspace{
+							"testkeyspace": {
+								Sharded:                true,
+								RequireExplicitRouting: false,
+							},
+							"unsharded": {
+								Sharded:                false,
+								RequireExplicitRouting: false,
+							},
+						},
+						RoutingRules: &vschemapb.RoutingRules{
+							Rules: []*vschemapb.RoutingRule{},
+						},
+					},
+					"zone3": {},
+				},
+			},
+		},
+		{
+			name: "filtering by cell",
+			req: &vtctldatapb.GetSrvVSchemasRequest{
+				Cells: []string{"zone2"},
+			},
+			expected: &vtctldatapb.GetSrvVSchemasResponse{
+				SrvVSchemas: map[string]*vschemapb.SrvVSchema{
+					"zone2": {
+						Keyspaces: map[string]*vschemapb.Keyspace{
+							"testkeyspace": {
+								Sharded:                true,
+								RequireExplicitRouting: false,
+							},
+							"unsharded": {
+								Sharded:                false,
+								RequireExplicitRouting: false,
+							},
+						},
+						RoutingRules: &vschemapb.RoutingRules{
+							Rules: []*vschemapb.RoutingRule{},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "no SrvVSchema for single cell",
+			req: &vtctldatapb.GetSrvVSchemasRequest{
+				Cells: []string{"zone3"},
+			},
+			expected: &vtctldatapb.GetSrvVSchemasResponse{
+				SrvVSchemas: map[string]*vschemapb.SrvVSchema{
+					"zone3": {},
+				},
+			},
+		},
+		{
+			name: "topology error",
+			req: &vtctldatapb.GetSrvVSchemasRequest{
+				Cells: []string{"zone2"},
+			},
+			topoErr:   assert.AnError,
+			shouldErr: true,
+		},
+		{
+			name: "cell doesn't exist",
+			req: &vtctldatapb.GetSrvVSchemasRequest{
+				Cells: []string{"doesnt-exist"},
+			},
+			expected: &vtctldatapb.GetSrvVSchemasResponse{
+				SrvVSchemas: map[string]*vschemapb.SrvVSchema{},
+			},
+		},
+		{
+			name: "one of many cells doesn't exist",
+			req: &vtctldatapb.GetSrvVSchemasRequest{
+				Cells: []string{"zone1", "doesnt-exist"},
+			},
+			expected: &vtctldatapb.GetSrvVSchemasResponse{
+				SrvVSchemas: map[string]*vschemapb.SrvVSchema{
+					"zone1": {
+						Keyspaces: map[string]*vschemapb.Keyspace{
+							"testkeyspace": {
+								Sharded:                true,
+								RequireExplicitRouting: false,
+							},
+						},
+						RoutingRules: &vschemapb.RoutingRules{
+							Rules: []*vschemapb.RoutingRule{},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			ctx := context.Background()
+			ts, topofactory := memorytopo.NewServerAndFactory("zone1", "zone2", "zone3")
+			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+				return NewVtctldServer(ts)
+			})
+
+			zone1SrvVSchema := &vschemapb.SrvVSchema{
+				Keyspaces: map[string]*vschemapb.Keyspace{
+					"testkeyspace": {
+						Sharded:                true,
+						RequireExplicitRouting: false,
+					},
+				},
+				RoutingRules: &vschemapb.RoutingRules{
+					Rules: []*vschemapb.RoutingRule{},
+				},
+			}
+
+			zone2SrvVSchema := &vschemapb.SrvVSchema{
+				Keyspaces: map[string]*vschemapb.Keyspace{
+					"testkeyspace": {
+						Sharded:                true,
+						RequireExplicitRouting: false,
+					},
+					"unsharded": {
+						Sharded:                false,
+						RequireExplicitRouting: false,
+					},
+				},
+				RoutingRules: &vschemapb.RoutingRules{
+					Rules: []*vschemapb.RoutingRule{},
+				},
+			}
+
+			err := ts.UpdateSrvVSchema(ctx, "zone1", zone1SrvVSchema)
+			require.NoError(t, err, "cannot add zone1 srv vschema")
+			err = ts.UpdateSrvVSchema(ctx, "zone2", zone2SrvVSchema)
+			require.NoError(t, err, "cannot add zone2 srv vschema")
+
+			if tt.topoErr != nil {
+				topofactory.SetError(tt.topoErr)
+			}
+
+			resp, err := vtctld.GetSrvVSchemas(ctx, tt.req)
+
+			if tt.shouldErr {
+				assert.Error(t, err)
+				return
+			}
+
+			assert.NoError(t, err)
+			utils.MustMatch(t, tt.expected, resp)
+		})
+	}
+
+}
+
 func TestGetTablets(t *testing.T) {
 	t.Parallel()
 

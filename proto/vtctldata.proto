@@ -372,6 +372,15 @@ message GetSrvVSchemaResponse {
   vschema.SrvVSchema srv_v_schema = 1;
 }
 
+message GetSrvVSchemasRequest {
+  repeated string cells = 2;
+}
+
+message GetSrvVSchemasResponse {  
+  // SrvVSchemas is a mapping of cell name to SrvVSchema
+  map<string, vschema.SrvVSchema> srv_v_schemas = 1;
+}
+
 message GetTabletRequest {
   topodata.TabletAlias tablet_alias = 1;
 }

@@ -611,6 +611,45 @@ func (s *VtctldServer) GetSrvVSchema(ctx context.Context, req *vtctldatapb.GetSr
 	}, nil
 }
 
+// GetSrvVSchemas is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) GetSrvVSchemas(ctx context.Context, req *vtctldatapb.GetSrvVSchemasRequest) (*vtctldatapb.GetSrvVSchemasResponse, error) {
+	allCells, err := s.ts.GetCellInfoNames(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	cells := allCells
+
+	// Omit any cell names in the request that don't map to existing cells
+	if len(req.Cells) > 0 {
+		s1 := sets.NewString(allCells...)
+		s2 := sets.NewString(req.Cells...)
+
+		cells = s1.Intersection(s2).List()
+	}
+
+	svs := make(map[string]*vschemapb.SrvVSchema, len(cells))
+
+	for _, cell := range cells {
+		sv, err := s.ts.GetSrvVSchema(ctx, cell)
+
+		if err != nil {
+			if !topo.IsErrType(err, topo.NoNode) {
+				return nil, err
+			}
+
+			log.Infof("no SrvVSchema for cell %s", cell)
+			sv = nil
+		}
+
+		svs[cell] = sv
+	}
+
+	return &vtctldatapb.GetSrvVSchemasResponse{
+		SrvVSchemas: svs,
+	}, nil
+}
+
 // GetTablet is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) GetTablet(ctx context.Context, req *vtctldatapb.GetTabletRequest) (*vtctldatapb.GetTabletResponse, error) {
 	ti, err := s.ts.GetTablet(ctx, req.TabletAlias)
