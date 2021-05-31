@@ -17,24 +17,25 @@ limitations under the License.
 package docker
 
 import (
+	"context"
+	"fmt"
 	"os"
-	"os/exec"
-	"path"
 	"testing"
+	"time"
 
-	"github.com/golang/glog"
-)
+	"github.com/google/go-cmp/cmp"
 
-const (
-	vttestserverMysql57image = "vttestserver-e2etest/mysql57"
-	vttestserverMysql80image = "vttestserver-e2etest/mysql80"
+	"vitess.io/vitess/go/sqltypes"
+
+	"vitess.io/vitess/go/mysql"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestMain(m *testing.M) {
 	exitCode := func() int {
 		err := makeVttestserverDockerImages()
 		if err != nil {
-			glog.Error(err.Error())
 			return 1
 		}
 		return m.Run()
@@ -42,34 +43,54 @@ func TestMain(m *testing.M) {
 	os.Exit(exitCode)
 }
 
-//makeVttestserverDockerImages creates the vttestserver docker images for both MySQL57 and MySQL80
-func makeVttestserverDockerImages() error {
-	mainVitessPath := path.Join(os.Getenv("PWD"), "../../../..")
-	dockerFilePath := path.Join(mainVitessPath, "docker/vttestserver/Dockerfile.mysql57")
-	cmd57 := exec.Command("docker", "build", "-f", dockerFilePath, "-t", vttestserverMysql57image, ".")
-	cmd57.Dir = mainVitessPath
-	err := cmd57.Start()
-	if err != nil {
-		return err
-	}
+func TestUnsharded(t *testing.T) {
+	dockerImages := []string{vttestserverMysql57image, vttestserverMysql80image}
+	for _, image := range dockerImages {
+		t.Run(image, func(t *testing.T) {
+			vtest := newVttestserver(image, []string{"unsharded_ks"}, []int{1}, 1000, 33577)
+			err := vtest.startDockerImage()
+			require.NoError(t, err)
+			defer vtest.teardown()
 
-	dockerFilePath = path.Join(mainVitessPath, "docker/vttestserver/Dockerfile.mysql80")
-	cmd80 := exec.Command("docker", "build", "-f", dockerFilePath, "-t", vttestserverMysql80image, ".")
-	cmd80.Dir = mainVitessPath
-	err = cmd80.Start()
-	if err != nil {
-		return err
-	}
+			// wait for the docker to be setup
+			time.Sleep(10 * time.Second)
 
-	err = cmd57.Wait()
-	if err != nil {
-		return err
+			ctx := context.Background()
+			vttestParams := mysql.ConnParams{
+				Host: "localhost",
+				Port: vtest.port,
+			}
+			conn, err := mysql.Connect(ctx, &vttestParams)
+			require.NoError(t, err)
+			defer conn.Close()
+			assertMatches(t, conn, "show databases", `[[VARCHAR("unsharded_ks")] [VARCHAR("information_schema")] [VARCHAR("mysql")] [VARCHAR("sys")] [VARCHAR("performance_schema")]]`)
+			_, err = execute(t, conn, "create table unsharded_ks.t1(id int)")
+			require.NoError(t, err)
+			_, err = execute(t, conn, "insert into unsharded_ks.t1(id) values (10),(20),(30)")
+			require.NoError(t, err)
+			assertMatches(t, conn, "select * from unsharded_ks.t1", `[[INT32(10)] [INT32(20)] [INT32(30)]]`)
+		})
 	}
+}
 
-	err = cmd80.Wait()
-	if err != nil {
-		return err
+func execute(t *testing.T, conn *mysql.Conn, query string) (*sqltypes.Result, error) {
+	t.Helper()
+	return conn.ExecuteFetch(query, 1000, true)
+}
+
+func checkedExec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
+	t.Helper()
+	qr, err := conn.ExecuteFetch(query, 1000, true)
+	require.NoError(t, err)
+	return qr
+}
+
+func assertMatches(t *testing.T, conn *mysql.Conn, query, expected string) {
+	t.Helper()
+	qr := checkedExec(t, conn, query)
+	got := fmt.Sprintf("%v", qr.Rows)
+	diff := cmp.Diff(expected, got)
+	if diff != "" {
+		t.Errorf("Query: %s (-want +got):\n%s", query, diff)
 	}
-
-	return nil
 }
