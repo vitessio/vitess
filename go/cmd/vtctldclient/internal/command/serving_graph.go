@@ -29,21 +29,27 @@ import (
 var (
 	// GetSrvKeyspaces makes a GetSrvKeyspaces gRPC call to a vtctld.
 	GetSrvKeyspaces = &cobra.Command{
-		Use:  "GetSrvKeyspaces <keyspace> [<cell> ...]",
-		Args: cobra.MinimumNArgs(1),
-		RunE: commandGetSrvKeyspaces,
+		Use:                   "GetSrvKeyspaces <keyspace> [<cell> ...]",
+		Short:                 "Returns the SrvKeyspaces for the given keyspace in one or more cells.",
+		Args:                  cobra.MinimumNArgs(1),
+		RunE:                  commandGetSrvKeyspaces,
+		DisableFlagsInUseLine: true,
 	}
 	// GetSrvVSchema makes a GetSrvVSchema gRPC call to a vtctld.
 	GetSrvVSchema = &cobra.Command{
-		Use:  "GetSrvVSchema cell",
-		Args: cobra.ExactArgs(1),
-		RunE: commandGetSrvVSchema,
+		Use:                   "GetSrvVSchema cell",
+		Short:                 "Returns the SrvVSchema for the given cell.",
+		Args:                  cobra.ExactArgs(1),
+		RunE:                  commandGetSrvVSchema,
+		DisableFlagsInUseLine: true,
 	}
 	// GetSrvVSchemas makes a GetSrvVSchemas gRPC call to a vtctld.
 	GetSrvVSchemas = &cobra.Command{
-		Use:  "GetSrvVSchemas [<cell> ...]",
-		Args: cobra.ArbitraryArgs,
-		RunE: commandGetSrvVSchemas,
+		Use:                   "GetSrvVSchemas [<cell> ...]",
+		Short:                 "Returns the SrvVSchema for all cells, optionally filtered by the given cells.",
+		Args:                  cobra.ArbitraryArgs,
+		RunE:                  commandGetSrvVSchemas,
+		DisableFlagsInUseLine: true,
 	}
 )
 
