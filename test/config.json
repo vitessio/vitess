@@ -337,6 +337,15 @@
 			"RetryMax": 0,
 			"Tags": []
 		},
+		"onlineddl_vrepl_suite": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/onlineddl/vrepl_suite"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "onlineddl_vrepl_suite",
+			"RetryMax": 0,
+			"Tags": []
+		},
 		"onlineddl_revert": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/onlineddl/revert"],
