@@ -304,7 +304,7 @@ func resolveAndLoadKeyspace(ctx context.Context, srvResolver *srvtopo.Resolver, 
 	for {
 		select {
 		case <-timeout:
-			log.Fatal("Unable to get initial schema reload")
+			log.Warningf("Unable to get initial schema reload")
 			return
 		case <-time.After(500 * time.Millisecond):
 			for _, shard := range dest {

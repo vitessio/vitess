@@ -138,6 +138,10 @@ func TestTracking(t *testing.T) {
 			require.False(t, waitTimeout(&wg, time.Second), "schema was updated but received no signal")
 
 			require.Equal(t, 1, len(sbc.StringQueries()))
+
+			_, keyspacePresent := tracker.tracked[target.Keyspace]
+			require.Equal(t, true, keyspacePresent)
+
 			for k, v := range tcase.exp {
 				utils.MustMatch(t, v, tracker.GetColumns("ks", k), "mismatch for table: ", k)
 			}
