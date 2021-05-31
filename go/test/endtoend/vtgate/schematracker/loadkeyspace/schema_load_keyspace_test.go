@@ -20,6 +20,7 @@ import (
 	"io/ioutil"
 	"path"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -74,12 +75,14 @@ func TestBlockedLoadKeyspace(t *testing.T) {
 	// Start vtgate with the schema_change_signal flag
 	clusterInstance.VtGateExtraArgs = []string{"-schema_change_signal"}
 	err = clusterInstance.StartVtgate()
-	require.Error(t, err)
-	logDir := clusterInstance.VtgateProcess.LogDir
-	clusterInstance.VtgateProcess = cluster.VtgateProcess{}
+	require.NoError(t, err)
 
-	// check fatal logs
-	all, err := ioutil.ReadFile(path.Join(logDir, "vtgate.FATAL"))
+	// wait for addKeyspaceToTracker to timeout
+	time.Sleep(10 * time.Second)
+
+	// check warning logs
+	logDir := clusterInstance.VtgateProcess.LogDir
+	all, err := ioutil.ReadFile(path.Join(logDir, "vtgate-stderr.txt"))
 	require.NoError(t, err)
 	require.Contains(t, string(all), "Unable to get initial schema reload")
 }

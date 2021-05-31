@@ -19,6 +19,7 @@ package schema
 import (
 	"context"
 	"sync"
+	"time"
 
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 
@@ -45,6 +46,10 @@ type (
 		tables *tableMap
 		ctx    context.Context
 		signal func() // a function that we'll call whenever we have new schema data
+
+		// map of keyspace currently tracked by the Tracker, the value of type time.Time
+		// defines when was the last time we tracked the keyspace.
+		tracked map[keyspace]time.Time
 	}
 
 	// Table contains the table name and also, whether the information can be trusted about this table.
@@ -56,7 +61,12 @@ type (
 
 // NewTracker creates the tracker object.
 func NewTracker(ch chan *discovery.TabletHealth) *Tracker {
-	return &Tracker{ch: ch, tables: &tableMap{m: map[keyspace]map[tableName][]vindexes.Column{}}}
+	return &Tracker{
+		ch:      ch,
+		tables:  &tableMap{m: map[keyspace]map[tableName][]vindexes.Column{}},
+		tracked: map[keyspace]time.Time{},
+		ctx:     context.Background(),
+	}
 }
 
 // LoadKeyspace loads the keyspace schema.
@@ -79,11 +89,18 @@ func (t *Tracker) Start() {
 		for {
 			select {
 			case th := <-t.ch:
-				if len(th.TablesUpdated) > 0 {
-					t.updateSchema(th)
-					if t.signal != nil {
-						t.signal()
+				// try to load the keyspace if it was not tracked before
+				if _, ok := t.tracked[th.Target.Keyspace]; !ok {
+					err := t.LoadKeyspace(th.Conn, th.Target)
+					if err != nil {
+						log.Warningf("Unable to add keyspace to tracker: %v", err)
+						continue
 					}
+				} else if len(th.TablesUpdated) > 0 {
+					t.updateSchema(th)
+				}
+				if t.signal != nil {
+					t.signal()
 				}
 			case <-ctx.Done():
 				close(t.ch)
@@ -146,6 +163,7 @@ func (t *Tracker) updateSchema(th *discovery.TabletHealth) {
 }
 
 func (t *Tracker) updateTables(keyspace string, res *sqltypes.Result) {
+	t.tracked[keyspace] = time.Now()
 	for _, row := range res.Rows {
 		tbl := row[0].ToString()
 		colName := row[1].ToString()
