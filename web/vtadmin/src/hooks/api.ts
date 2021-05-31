@@ -16,11 +16,13 @@
 import { useQuery, useQueryClient, UseQueryOptions } from 'react-query';
 import {
     fetchClusters,
+    fetchExperimentalTabletDebugVars,
     fetchGates,
     fetchKeyspaces,
     fetchSchema,
     FetchSchemaParams,
     fetchSchemas,
+    fetchTablet,
     fetchTablets,
     fetchVSchema,
     FetchVSchemaParams,
@@ -29,6 +31,7 @@ import {
     fetchWorkflows,
 } from '../api/http';
 import { vtadmin as pb } from '../proto/vtadmin';
+import { formatAlias } from '../util/tablets';
 
 /**
  * useClusters is a query hook that fetches all clusters VTAdmin is configured to discover.
@@ -59,6 +62,33 @@ export const useSchemas = (options?: UseQueryOptions<pb.Schema[], Error> | undef
  */
 export const useTablets = (options?: UseQueryOptions<pb.Tablet[], Error> | undefined) =>
     useQuery(['tablets'], fetchTablets, options);
+
+/**
+ * useTablet is a query hook that fetches a single tablet by alias.
+ */
+export const useTablet = (params: Parameters<typeof fetchTablet>[0], options?: UseQueryOptions<pb.Tablet, Error>) => {
+    const queryClient = useQueryClient();
+    return useQuery(['tablet', params], () => fetchTablet(params), {
+        initialData: () => {
+            const tablets = queryClient.getQueryData<pb.Tablet[]>('tablets');
+            return (tablets || []).find(
+                (t) => t.cluster?.id === params.clusterID && formatAlias(t.tablet?.alias) === params.alias
+            );
+        },
+        ...options,
+    });
+};
+
+export const useExperimentalTabletDebugVars = (
+    params: Parameters<typeof fetchExperimentalTabletDebugVars>[0],
+    options?: UseQueryOptions<any, Error>
+) => {
+    return useQuery(
+        ['experimental/tablet/debug/vars', params],
+        () => fetchExperimentalTabletDebugVars(params),
+        options
+    );
+};
 
 /**
  * useWorkflowsResponse is a query hook that fetches all workflows (by cluster) across every cluster.

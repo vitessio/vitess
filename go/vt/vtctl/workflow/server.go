@@ -24,7 +24,6 @@ import (
 	"time"
 
 	"google.golang.org/protobuf/encoding/prototext"
-
 	"k8s.io/apimachinery/pkg/util/sets"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -34,6 +33,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	"vitess.io/vitess/go/vt/proto/vttime"
 )
@@ -71,6 +71,37 @@ func NewServer(ts *topo.Server, tmc tmclient.TabletManagerClient) *Server {
 		ts:  ts,
 		tmc: tmc,
 	}
+}
+
+// CheckReshardingJournalExistsOnTablet returns the journal (or an empty
+// journal) and a boolean to indicate if the resharding_journal table exists on
+// the given tablet.
+//
+// (TODO:@ajm188) This should not be part of the final public API, and should
+// be un-exported after all places in package wrangler that call this have been
+// migrated over.
+func (s *Server) CheckReshardingJournalExistsOnTablet(ctx context.Context, tablet *topodatapb.Tablet, migrationID int64) (*binlogdatapb.Journal, bool, error) {
+	var (
+		journal binlogdatapb.Journal
+		exists  bool
+	)
+
+	query := fmt.Sprintf("select val from _vt.resharding_journal where id=%v", migrationID)
+	p3qr, err := s.tmc.VReplicationExec(ctx, tablet, query)
+	if err != nil {
+		return nil, false, err
+	}
+
+	if len(p3qr.Rows) != 0 {
+		qr := sqltypes.Proto3ToResult(p3qr)
+		if err := prototext.Unmarshal(qr.Rows[0][0].ToBytes(), &journal); err != nil {
+			return nil, false, err
+		}
+
+		exists = true
+	}
+
+	return &journal, exists, nil
 }
 
 // GetWorkflows returns a list of all workflows that exist in a given keyspace,
