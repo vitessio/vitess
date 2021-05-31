@@ -586,7 +586,7 @@ func (s *VtctldServer) GetSrvKeyspaces(ctx context.Context, req *vtctldatapb.Get
 				return nil, err
 			}
 
-			log.Infof("no srvkeyspace for keyspace %s in cell %s", req.Keyspace, cell)
+			log.Warningf("no srvkeyspace for keyspace %s in cell %s", req.Keyspace, cell)
 
 			srvKeyspace = nil
 		}
@@ -638,7 +638,7 @@ func (s *VtctldServer) GetSrvVSchemas(ctx context.Context, req *vtctldatapb.GetS
 				return nil, err
 			}
 
-			log.Infof("no SrvVSchema for cell %s", cell)
+			log.Warningf("no SrvVSchema for cell %s", cell)
 			sv = nil
 		}
 
