@@ -25,6 +25,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/schema"
+	"vitess.io/vitess/go/vt/sqlparser"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
 
@@ -138,4 +139,14 @@ func CheckMigrationArtifacts(t *testing.T, vtParams *mysql.ConnParams, shards []
 		hasArtifacts := (row["artifacts"].ToString() != "")
 		assert.Equal(t, expectArtifacts, hasArtifacts)
 	}
+}
+
+// ReadMigrations reads migration entries
+func ReadMigrations(t *testing.T, vtParams *mysql.ConnParams, like string) *sqltypes.Result {
+	query, err := sqlparser.ParseAndBind("show vitess_migrations like %a",
+		sqltypes.StringBindVariable(like),
+	)
+	require.NoError(t, err)
+
+	return VtgateExecQuery(t, vtParams, query, "")
 }
