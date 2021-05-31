@@ -73,6 +73,38 @@ func TestUnsharded(t *testing.T) {
 	}
 }
 
+func TestSharded(t *testing.T) {
+	dockerImages := []string{vttestserverMysql57image, vttestserverMysql80image}
+	for _, image := range dockerImages {
+		t.Run(image, func(t *testing.T) {
+			vtest := newVttestserver(image, []string{"ks"}, []int{2}, 1000, 33577)
+			err := vtest.startDockerImage()
+			require.NoError(t, err)
+			defer vtest.teardown()
+
+			// wait for the docker to be setup
+			time.Sleep(10 * time.Second)
+
+			ctx := context.Background()
+			vttestParams := mysql.ConnParams{
+				Host: "localhost",
+				Port: vtest.port,
+			}
+			conn, err := mysql.Connect(ctx, &vttestParams)
+			require.NoError(t, err)
+			defer conn.Close()
+			assertMatches(t, conn, "show databases", `[[VARCHAR("ks")] [VARCHAR("information_schema")] [VARCHAR("mysql")] [VARCHAR("sys")] [VARCHAR("performance_schema")]]`)
+			_, err = execute(t, conn, "create table ks.t1(id int)")
+			require.NoError(t, err)
+			_, err = execute(t, conn, "alter vschema on ks.t1 add vindex `binary_md5`(id) using `binary_md5`")
+			require.NoError(t, err)
+			_, err = execute(t, conn, "insert into ks.t1(id) values (10),(20),(30)")
+			require.NoError(t, err)
+			assertMatches(t, conn, "select id from ks.t1 order by id", `[[INT32(10)] [INT32(20)] [INT32(30)]]`)
+		})
+	}
+}
+
 func execute(t *testing.T, conn *mysql.Conn, query string) (*sqltypes.Result, error) {
 	t.Helper()
 	return conn.ExecuteFetch(query, 1000, true)
