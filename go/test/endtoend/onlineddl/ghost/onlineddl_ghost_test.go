@@ -74,11 +74,15 @@ var (
 		ALTER TABLE %s
 			DROP COLUMN ghost_col`
 	onlineDDLCreateTableStatement = `
-		CREATE TABLE %s (
-			id bigint NOT NULL,
-			online_ddl_create_col INT NOT NULL,
-			PRIMARY KEY (id)
-		) ENGINE=InnoDB;`
+			CREATE TABLE %s (
+				id bigint NOT NULL,
+				online_ddl_create_col INT NOT NULL,
+				PRIMARY KEY (id)
+			) ENGINE=InnoDB;`
+	noPKCreateTableStatement = `
+			CREATE TABLE %s (
+				online_ddl_create_col INT NOT NULL
+			) ENGINE=InnoDB;`
 	onlineDDLDropTableStatement = `
 		DROP TABLE %s`
 	onlineDDLDropTableIfExistsStatement = `
@@ -288,6 +292,16 @@ func TestSchemaChange(t *testing.T) {
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusFailed)
 		onlineddl.CheckCancelMigration(t, &vtParams, shards, uuid, false)
 		onlineddl.CheckRetryMigration(t, &vtParams, shards, uuid, true)
+	})
+	t.Run("Online CREATE no PK table, vtgate", func(t *testing.T) {
+		uuid := testOnlineDDLStatement(t, noPKCreateTableStatement, "gh-ost --skip-topo", "vtgate", "online_ddl_create_col")
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.CheckCancelMigration(t, &vtParams, shards, uuid, false)
+		onlineddl.CheckRetryMigration(t, &vtParams, shards, uuid, false)
+	})
+	t.Run("Fail ALTER for no PK table, vtgate", func(t *testing.T) {
+		uuid := testOnlineDDLStatement(t, alterTableTrivialStatement, "gh-ost --skip-topo", "vtgate", "")
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusFailed)
 	})
 }
 
