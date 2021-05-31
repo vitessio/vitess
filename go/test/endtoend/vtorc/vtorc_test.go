@@ -204,6 +204,24 @@ func TestDownMaster(t *testing.T) {
 	}
 }
 
+func waitForReadOnlyValue(t *testing.T, curMaster *cluster.Vttablet, expectValue bool) (match bool) {
+	timeout := 15 * time.Second
+	startTime := time.Now()
+	for time.Since(startTime) < timeout {
+		qr := runSQL(t, "select @@global.read_only as read_only", curMaster, "")
+		require.NotNil(t, qr)
+		row := qr.Named().Row()
+		require.NotNil(t, row)
+		readOnly, err := row.ToBool("read_only")
+		require.NoError(t, err)
+		if readOnly == expectValue {
+			return true
+		}
+		time.Sleep(time.Second)
+	}
+	return false
+}
+
 // 3. make master readonly, let orc repair
 func TestMasterReadOnly(t *testing.T) {
 	defer cluster.PanicHandler(t)
@@ -224,12 +242,8 @@ func TestMasterReadOnly(t *testing.T) {
 	runSQL(t, "set global read_only=ON", curMaster, "")
 
 	// wait for repair
-	// TODO(deepthi): wait for condition instead of sleep
-	time.Sleep(15 * time.Second)
-	qr := runSQL(t, "select @@global.read_only", curMaster, "")
-	require.NotNil(t, qr)
-	require.Equal(t, 1, len(qr.Rows))
-	require.Equal(t, "[[INT64(0)]]", fmt.Sprintf("%s", qr.Rows), qr.Rows)
+	match := waitForReadOnlyValue(t, curMaster, false)
+	require.True(t, match)
 }
 
 // 4. make replica ReadWrite, let orc repair
@@ -260,12 +274,8 @@ func TestReplicaReadWrite(t *testing.T) {
 	runSQL(t, "set global read_only=OFF", replica, "")
 
 	// wait for repair
-	// TODO(deepthi): wait for condition instead of sleep
-	time.Sleep(15 * time.Second)
-	qr := runSQL(t, "select @@global.read_only", replica, "")
-	require.NotNil(t, qr)
-	require.Equal(t, 1, len(qr.Rows))
-	require.Equal(t, "[[INT64(1)]]", fmt.Sprintf("%s", qr.Rows), qr.Rows)
+	match := waitForReadOnlyValue(t, curMaster, true)
+	require.True(t, match)
 }
 
 // 5. stop replication, let orc repair
