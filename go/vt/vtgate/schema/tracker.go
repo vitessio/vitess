@@ -89,6 +89,7 @@ func (t *Tracker) Start() {
 		for {
 			select {
 			case th := <-t.ch:
+				signal := false
 				// try to load the keyspace if it was not tracked before
 				if _, ok := t.tracked[th.Target.Keyspace]; !ok {
 					err := t.LoadKeyspace(th.Conn, th.Target)
@@ -96,10 +97,12 @@ func (t *Tracker) Start() {
 						log.Warningf("Unable to add keyspace to tracker: %v", err)
 						continue
 					}
+					signal = true
 				} else if len(th.TablesUpdated) > 0 {
 					t.updateSchema(th)
+					signal = true
 				}
-				if t.signal != nil {
+				if t.signal != nil && signal {
 					t.signal()
 				}
 			case <-ctx.Done():

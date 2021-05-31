@@ -149,6 +149,76 @@ func TestTracking(t *testing.T) {
 	}
 }
 
+func TestTrackingWithUntrackedKeyspace(t *testing.T) {
+	target := &querypb.Target{
+		Keyspace:   "ks",
+		Shard:      "0",
+		TabletType: topodatapb.TabletType_MASTER,
+		Cell:       "aa",
+	}
+	tablet := &topodatapb.Tablet{
+		Keyspace: target.Keyspace,
+		Shard:    target.Shard,
+		Type:     target.TabletType,
+	}
+	sbc := sandboxconn.NewSandboxConn(tablet)
+	ch := make(chan *discovery.TabletHealth)
+	tracker := NewTracker(ch)
+	fields := sqltypes.MakeTestFields("table_name|col_name|col_type", "varchar|varchar|varchar")
+
+	tracker.Start()
+	defer tracker.Stop()
+	testcases := []struct {
+		tName  string
+		result *sqltypes.Result
+		updTbl []string
+		exp    map[string][]vindexes.Column
+	}{{
+		tName: "existing tables",
+		result: sqltypes.MakeTestResult(
+			fields,
+			"prior|id|int",
+		),
+		updTbl: []string{"prior"},
+		exp: map[string][]vindexes.Column{
+			"prior": {
+				{Name: sqlparser.NewColIdent("id"), Type: querypb.Type_INT32}},
+		},
+	}}
+
+	for _, tcase := range testcases {
+		t.Run(tcase.tName, func(t *testing.T) {
+			sbc.SetResults([]*sqltypes.Result{tcase.result})
+			sbc.Queries = nil
+
+			wg := sync.WaitGroup{}
+			wg.Add(1)
+			tracker.RegisterSignalReceiver(func() {
+				wg.Done()
+			})
+
+			ch <- &discovery.TabletHealth{
+				Conn:          sbc,
+				Tablet:        tablet,
+				Target:        target,
+				Serving:       true,
+				TablesUpdated: tcase.updTbl,
+			}
+
+			require.False(t, waitTimeout(&wg, time.Second), "schema was updated but received no signal")
+
+			require.Equal(t, 1, len(sbc.StringQueries()))
+
+			_, keyspacePresent := tracker.tracked[target.Keyspace]
+			require.Equal(t, true, keyspacePresent)
+
+			for k, v := range tcase.exp {
+				utils.MustMatch(t, v, tracker.GetColumns("ks", k), "mismatch for table: ", k)
+			}
+		})
+	}
+}
+
 func waitTimeout(wg *sync.WaitGroup, timeout time.Duration) bool {
 	c := make(chan struct{})
 	go func() {

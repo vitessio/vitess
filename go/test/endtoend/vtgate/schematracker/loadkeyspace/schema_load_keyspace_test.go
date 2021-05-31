@@ -86,3 +86,70 @@ func TestBlockedLoadKeyspace(t *testing.T) {
 	require.NoError(t, err)
 	require.Contains(t, string(all), "Unable to get initial schema reload")
 }
+
+func TestLoadKeyspaceWithNoTablet(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	var err error
+
+	clusterInstance = cluster.NewCluster(cell, hostname)
+	defer clusterInstance.Teardown()
+
+	// Start topo server
+	err = clusterInstance.StartTopo()
+	require.NoError(t, err)
+
+	// create keyspace
+	keyspace := &cluster.Keyspace{
+		Name:      keyspaceName,
+		SchemaSQL: sqlSchema,
+	}
+	clusterInstance.VtTabletExtraArgs = []string{"-queryserver-config-schema-change-signal"}
+	err = clusterInstance.StartUnshardedKeyspace(*keyspace, 1, false)
+	require.NoError(t, err)
+
+	// teardown vttablets
+	for _, vttablet := range clusterInstance.Keyspaces[0].Shards[0].Vttablets {
+		err = vttablet.VttabletProcess.TearDown()
+		require.NoError(t, err)
+	}
+
+	// Start vtgate with the schema_change_signal flag
+	clusterInstance.VtGateExtraArgs = []string{"-schema_change_signal"}
+	err = clusterInstance.StartVtgate()
+	require.NoError(t, err)
+
+	// check warning logs
+	logDir := clusterInstance.VtgateProcess.LogDir
+	all, err := ioutil.ReadFile(path.Join(logDir, "vtgate-stderr.txt"))
+	require.NoError(t, err)
+	require.Contains(t, string(all), "Unable to get initial schema reload")
+}
+
+func TestNoInitialKeyspace(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	var err error
+
+	clusterInstance = cluster.NewCluster(cell, hostname)
+	defer clusterInstance.Teardown()
+
+	// Start topo server
+	err = clusterInstance.StartTopo()
+	require.NoError(t, err)
+
+	// Start vtgate with the schema_change_signal flag
+	clusterInstance.VtGateExtraArgs = []string{"-schema_change_signal"}
+	err = clusterInstance.StartVtgate()
+	require.NoError(t, err)
+
+	logDir := clusterInstance.VtgateProcess.LogDir
+
+	// teardown vtgate to flush logs
+	err = clusterInstance.VtgateProcess.TearDown()
+	require.NoError(t, err)
+	clusterInstance.VtgateProcess = cluster.VtgateProcess{}
+
+	// check info logs
+	all, err := ioutil.ReadFile(path.Join(logDir, "vtgate.INFO"))
+	require.NoError(t, err)
+	require.Contains(t, string(all), "No keyspace to load")
+}
