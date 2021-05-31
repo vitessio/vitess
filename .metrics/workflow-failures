@@ -1,5 +1,3 @@
-2021-02-01T05:25:44Z,region_example,https://github.com/vitessio/vitess/actions/runs/526738995
-2021-02-01T05:25:44Z,unit_race,https://github.com/vitessio/vitess/actions/runs/526739001
 2021-02-01T05:28:28Z,Cluster (14),https://github.com/vitessio/vitess/actions/runs/526744798
 2021-02-01T05:28:28Z,unit_race,https://github.com/vitessio/vitess/actions/runs/526744781
 2021-02-01T06:13:32Z,Cluster (16),https://github.com/vitessio/vitess/actions/runs/526831921
@@ -9997,4 +9995,6 @@
 2021-05-31T06:07:04Z,local_example,https://github.com/vitessio/vitess/actions/runs/891881981
 2021-05-31T06:07:04Z,region_example,https://github.com/vitessio/vitess/actions/runs/891881985
 2021-05-31T06:07:04Z,unit_race,https://github.com/vitessio/vitess/actions/runs/891881971
+2021-05-31T06:43:55Z,Cluster (vreplication_cellalias),https://github.com/vitessio/vitess/actions/runs/891970725
+2021-05-31T06:43:55Z,Cluster (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/891970716
 2021-05-31T06:43:55Z,pr-labels,https://github.com/vitessio/vitess/actions/runs/891970731
