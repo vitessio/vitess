@@ -105,6 +105,31 @@ func TestSharded(t *testing.T) {
 	}
 }
 
+func TestMysqlMaxCons(t *testing.T) {
+	dockerImages := []string{vttestserverMysql57image, vttestserverMysql80image}
+	for _, image := range dockerImages {
+		t.Run(image, func(t *testing.T) {
+			vtest := newVttestserver(image, []string{"ks"}, []int{2}, 100000, 33577)
+			err := vtest.startDockerImage()
+			require.NoError(t, err)
+			defer vtest.teardown()
+
+			// wait for the docker to be setup
+			time.Sleep(10 * time.Second)
+
+			ctx := context.Background()
+			vttestParams := mysql.ConnParams{
+				Host: "localhost",
+				Port: vtest.port,
+			}
+			conn, err := mysql.Connect(ctx, &vttestParams)
+			require.NoError(t, err)
+			defer conn.Close()
+			assertMatches(t, conn, "select @@max_connections", `[[UINT64(100000)]]`)
+		})
+	}
+}
+
 func execute(t *testing.T, conn *mysql.Conn, query string) (*sqltypes.Result, error) {
 	t.Helper()
 	return conn.ExecuteFetch(query, 1000, true)
