@@ -274,7 +274,7 @@ func TestReplicaReadWrite(t *testing.T) {
 	runSQL(t, "set global read_only=OFF", replica, "")
 
 	// wait for repair
-	match := waitForReadOnlyValue(t, curMaster, 1)
+	match := waitForReadOnlyValue(t, replica, 1)
 	require.True(t, match)
 }
 
