@@ -15,14 +15,14 @@
  */
 import { Link, useParams } from 'react-router-dom';
 
-import { useWorkflow } from '../../hooks/api';
-import { useDocumentTitle } from '../../hooks/useDocumentTitle';
-import { formatStreamKey, getStreams } from '../../util/workflows';
-import { Code } from '../Code';
-import { ContentContainer } from '../layout/ContentContainer';
-import { NavCrumbs } from '../layout/NavCrumbs';
-import { WorkspaceHeader } from '../layout/WorkspaceHeader';
-import { WorkspaceTitle } from '../layout/WorkspaceTitle';
+import { useWorkflow } from '../../../hooks/api';
+import { useDocumentTitle } from '../../../hooks/useDocumentTitle';
+import { formatStreamKey, getStreams } from '../../../util/workflows';
+import { Code } from '../../Code';
+import { ContentContainer } from '../../layout/ContentContainer';
+import { NavCrumbs } from '../../layout/NavCrumbs';
+import { WorkspaceHeader } from '../../layout/WorkspaceHeader';
+import { WorkspaceTitle } from '../../layout/WorkspaceTitle';
 import style from './Stream.module.scss';
 
 interface RouteParams {

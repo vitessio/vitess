@@ -579,6 +579,9 @@ func getFileParam(flag, flagFile, name string) (string, error) {
 func keyspaceParamsToKeyspaces(ctx context.Context, wr *wrangler.Wrangler, params []string) ([]string, error) {
 	result := make([]string, 0, len(params))
 	for _, param := range params {
+		if len(param) == 0 {
+			return nil, fmt.Errorf("empty keyspace param in list")
+		}
 		if param[0] == '/' {
 			// this is a topology-specific path
 			result = append(result, params...)

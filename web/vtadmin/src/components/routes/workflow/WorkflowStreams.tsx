@@ -13,26 +13,24 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import { useMemo } from 'react';
-import { groupBy, orderBy } from 'lodash-es';
-import { Link, useParams } from 'react-router-dom';
 
-import style from './Workflow.module.scss';
-import { useWorkflow } from '../../hooks/api';
-import { formatStreamKey, getStreams, getStreamSource, getStreamTarget } from '../../util/workflows';
-import { DataCell } from '../dataTable/DataCell';
-import { DataTable } from '../dataTable/DataTable';
-import { ContentContainer } from '../layout/ContentContainer';
-import { NavCrumbs } from '../layout/NavCrumbs';
-import { WorkspaceHeader } from '../layout/WorkspaceHeader';
-import { WorkspaceTitle } from '../layout/WorkspaceTitle';
-import { StreamStatePip } from '../pips/StreamStatePip';
-import { formatAlias } from '../../util/tablets';
-import { useDocumentTitle } from '../../hooks/useDocumentTitle';
-import { formatDateTime } from '../../util/time';
-import { KeyspaceLink } from '../links/KeyspaceLink';
+import { orderBy, groupBy } from 'lodash-es';
+import React, { useMemo } from 'react';
+import { Link } from 'react-router-dom';
 
-interface RouteParams {
+import style from './WorkflowStreams.module.scss';
+
+import { useWorkflow } from '../../../hooks/api';
+import { formatAlias } from '../../../util/tablets';
+import { formatDateTime } from '../../../util/time';
+import { getStreams, formatStreamKey, getStreamSource, getStreamTarget } from '../../../util/workflows';
+import { DataCell } from '../../dataTable/DataCell';
+import { DataTable } from '../../dataTable/DataTable';
+import { KeyspaceLink } from '../../links/KeyspaceLink';
+import { TabletLink } from '../../links/TabletLink';
+import { StreamStatePip } from '../../pips/StreamStatePip';
+
+interface Props {
     clusterID: string;
     keyspace: string;
     name: string;
@@ -40,10 +38,7 @@ interface RouteParams {
 
 const COLUMNS = ['Stream', 'Source', 'Target', 'Tablet'];
 
-export const Workflow = () => {
-    const { clusterID, keyspace, name } = useParams<RouteParams>();
-    useDocumentTitle(`${name} (${keyspace})`);
-
+export const WorkflowStreams = ({ clusterID, keyspace, name }: Props) => {
     const { data } = useWorkflow({ clusterID, keyspace, name }, { refetchInterval: 1000 });
 
     const streams = useMemo(() => {
@@ -100,7 +95,11 @@ export const Workflow = () => {
                             <span className="text-color-secondary">N/A</span>
                         )}
                     </DataCell>
-                    <DataCell>{formatAlias(row.tablet)}</DataCell>
+                    <DataCell>
+                        <TabletLink alias={formatAlias(row.tablet)} clusterID={clusterID}>
+                            {formatAlias(row.tablet)}
+                        </TabletLink>
+                    </DataCell>
                 </tr>
             );
         });
@@ -108,45 +107,25 @@ export const Workflow = () => {
 
     return (
         <div>
-            <WorkspaceHeader>
-                <NavCrumbs>
-                    <Link to="/workflows">Workflows</Link>
-                </NavCrumbs>
+            {/* TODO(doeg): add a protobuf enum for this (https://github.com/vitessio/vitess/projects/12#card-60190340) */}
+            {['Error', 'Copying', 'Running', 'Stopped'].map((streamState) => {
+                if (!Array.isArray(streamsByState[streamState])) {
+                    return null;
+                }
 
-                <WorkspaceTitle className="font-family-monospace">{name}</WorkspaceTitle>
-                <div className={style.headingMeta}>
-                    <span>
-                        Cluster: <code>{clusterID}</code>
-                    </span>
-                    <span>
-                        Target keyspace:{' '}
-                        <KeyspaceLink clusterID={clusterID} name={keyspace}>
-                            <code>{keyspace}</code>
-                        </KeyspaceLink>
-                    </span>
-                </div>
-            </WorkspaceHeader>
-            <ContentContainer>
-                {/* TODO(doeg): add a protobuf enum for this (https://github.com/vitessio/vitess/projects/12#card-60190340) */}
-                {['Error', 'Copying', 'Running', 'Stopped'].map((streamState) => {
-                    if (!Array.isArray(streamsByState[streamState])) {
-                        return null;
-                    }
-
-                    return (
-                        <div className={style.streamTable} key={streamState}>
-                            <DataTable
-                                columns={COLUMNS}
-                                data={streamsByState[streamState]}
-                                // TODO(doeg): make pagination optional in DataTable https://github.com/vitessio/vitess/projects/12#card-60810231
-                                pageSize={1000}
-                                renderRows={renderRows}
-                                title={streamState}
-                            />
-                        </div>
-                    );
-                })}
-            </ContentContainer>
+                return (
+                    <div className={style.streamTable} key={streamState}>
+                        <DataTable
+                            columns={COLUMNS}
+                            data={streamsByState[streamState]}
+                            // TODO(doeg): make pagination optional in DataTable https://github.com/vitessio/vitess/projects/12#card-60810231
+                            pageSize={1000}
+                            renderRows={renderRows}
+                            title={streamState}
+                        />
+                    </div>
+                );
+            })}
         </div>
     );
 };
