@@ -1,4 +1,3 @@
-2021-02-01T06:13:32Z,docker_test_2,https://github.com/vitessio/vitess/actions/runs/526831944
 2021-02-01T06:13:32Z,endtoend,https://github.com/vitessio/vitess/actions/runs/526831942
 2021-02-01T06:13:32Z,local_example,https://github.com/vitessio/vitess/actions/runs/526831925
 2021-02-01T06:13:32Z,region_example,https://github.com/vitessio/vitess/actions/runs/526831926
@@ -9997,4 +9996,5 @@
 2021-05-31T11:45:14Z,pr-labels,https://github.com/vitessio/vitess/actions/runs/892782936
 2021-05-31T11:49:24Z,Cluster (17),https://github.com/vitessio/vitess/actions/runs/892793996
 2021-05-31T11:49:24Z,Cluster (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/892794041
+2021-05-31T12:11:16Z,Cluster (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/892847289
 2021-05-31T12:11:17Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/892847323
