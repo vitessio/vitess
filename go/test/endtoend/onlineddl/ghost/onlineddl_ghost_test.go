@@ -74,15 +74,15 @@ var (
 		ALTER TABLE %s
 			DROP COLUMN ghost_col`
 	onlineDDLCreateTableStatement = `
-			CREATE TABLE %s (
-				id bigint NOT NULL,
-				online_ddl_create_col INT NOT NULL,
-				PRIMARY KEY (id)
-			) ENGINE=InnoDB;`
+		CREATE TABLE %s (
+			id bigint NOT NULL,
+			online_ddl_create_col INT NOT NULL,
+			PRIMARY KEY (id)
+		) ENGINE=InnoDB;`
 	noPKCreateTableStatement = `
-			CREATE TABLE %s (
-				online_ddl_create_col INT NOT NULL
-			) ENGINE=InnoDB;`
+		CREATE TABLE %s (
+			online_ddl_create_col INT NOT NULL
+		) ENGINE=InnoDB;`
 	onlineDDLDropTableStatement = `
 		DROP TABLE %s`
 	onlineDDLDropTableIfExistsStatement = `
