@@ -1036,6 +1036,9 @@ var (
 	}, {
 		input: "alter table a upgrade partitioning",
 	}, {
+		input:  "alter table t2 add primary key `zzz` (id)",
+		output: "alter table t2 add primary key (id)",
+	}, {
 		input:      "alter table a partition by range (id) (partition p0 values less than (10), partition p1 values less than (maxvalue))",
 		output:     "alter table a",
 		partialDDL: true,
@@ -1067,6 +1070,11 @@ var (
 		input: "alter table a add constraint b primary key (id)",
 	}, {
 		input: "alter table a add constraint b unique key (id)",
+	}, {
+		input:  "alter table t add column iii int signed not null",
+		output: "alter table t add column iii int not null",
+	}, {
+		input: "alter table t add column iii int unsigned not null",
 	}, {
 		input:  "alter table a add constraint b unique c (id)",
 		output: "alter table a add constraint b unique key c (id)",

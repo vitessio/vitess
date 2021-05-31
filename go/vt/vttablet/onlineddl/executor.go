@@ -111,14 +111,15 @@ var retainOnlineDDLTables = flag.Duration("retain_online_ddl_tables", 24*time.Ho
 var migrationNextCheckIntervals = []time.Duration{1 * time.Second, 5 * time.Second, 10 * time.Second, 20 * time.Second}
 
 const (
-	maxPasswordLength             = 32 // MySQL's *replication* password may not exceed 32 characters
-	staleMigrationMinutes         = 10
-	progressPctStarted    float64 = 0
-	progressPctFull       float64 = 100.0
-	etaSecondsUnknown             = -1
-	etaSecondsNow                 = 0
-	databasePoolSize              = 3
-	cutOverThreshold              = 3 * time.Second
+	maxPasswordLength                        = 32 // MySQL's *replication* password may not exceed 32 characters
+	staleMigrationMinutes                    = 10
+	progressPctStarted               float64 = 0
+	progressPctFull                  float64 = 100.0
+	etaSecondsUnknown                        = -1
+	etaSecondsNow                            = 0
+	databasePoolSize                         = 3
+	cutOverThreshold                         = 3 * time.Second
+	vreplicationTestSuiteWaitSeconds         = 5
 )
 
 var (
@@ -533,6 +534,8 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 	if err != nil {
 		return err
 	}
+	isVreplicationTestSuite := onlineDDL.StrategySetting().IsVreplicationTestSuite()
+
 	// come up with temporary name for swap table
 	swapTable, err := schema.CreateUUID()
 	if err != nil {
@@ -571,6 +574,19 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 	}
 	defer toggleWrites(true)
 
+	if isVreplicationTestSuite {
+		// The testing suite may inject queries internally from the server via a recurring EVENT.
+		// Those queries are unaffected by UpdateSourceBlacklistedTables() because they don't go through Vitess.
+		// We therefore hard-rename the table elsewhere, such that the queries will hard-fail.
+		beforeTableName := fmt.Sprintf("%s_before", onlineDDL.Table)
+		parsed := sqlparser.BuildParsedQuery(sqlRenameTable,
+			onlineDDL.Table, beforeTableName,
+		)
+		if _, err = e.execQuery(ctx, parsed.Query); err != nil {
+			return err
+		}
+	}
+
 	// Writes are now disabled on table. Read up-to-date vreplication info, specifically to get latest (and fixed) pos:
 	s, err = e.readVReplStream(ctx, s.workflow, false)
 	if err != nil {
@@ -597,13 +613,25 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 
 	// rename tables atomically (remember, writes on source tables are stopped)
 	{
-		parsed := sqlparser.BuildParsedQuery(sqlSwapTables,
-			onlineDDL.Table, swapTable,
-			vreplTable, onlineDDL.Table,
-			swapTable, vreplTable,
-		)
-		if _, err = e.execQuery(ctx, parsed.Query); err != nil {
-			return err
+		if isVreplicationTestSuite {
+			// this is used in Vitess endtoend testing suite
+			afterTableName := fmt.Sprintf("%s_after", onlineDDL.Table)
+			parsed := sqlparser.BuildParsedQuery(sqlRenameTable,
+				vreplTable, afterTableName,
+			)
+			if _, err = e.execQuery(ctx, parsed.Query); err != nil {
+				return err
+			}
+		} else {
+			// Normal (non-testing) alter table
+			parsed := sqlparser.BuildParsedQuery(sqlSwapTables,
+				onlineDDL.Table, swapTable,
+				vreplTable, onlineDDL.Table,
+				swapTable, vreplTable,
+			)
+			if _, err = e.execQuery(ctx, parsed.Query); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -2109,6 +2137,9 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 	for _, row := range r.Named().Rows {
 		uuid := row["migration_uuid"].ToString()
 		strategy := schema.DDLStrategy(row["strategy"].ToString())
+		strategySettings := schema.NewDDLStrategySetting(strategy, row["options"].ToString())
+		elapsedSeconds := row.AsInt64("elapsed_seconds", 0)
+
 		switch strategy {
 		case schema.DDLStrategyOnline:
 			{
@@ -2116,6 +2147,10 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 				running, s, err := e.isVReplMigrationRunning(ctx, uuid)
 				if err != nil {
 					return countRunnning, cancellable, err
+				}
+				isVreplicationTestSuite := strategySettings.IsVreplicationTestSuite()
+				if isVreplicationTestSuite {
+					e.triggerNextCheckInterval()
 				}
 				if running {
 					// This VRepl migration may have started from outside this tablet, so
@@ -2126,6 +2161,13 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 					isReady, err := e.isVReplMigrationReadyToCutOver(ctx, s)
 					if err != nil {
 						return countRunnning, cancellable, err
+					}
+					if isReady && isVreplicationTestSuite {
+						// This is a endtoend test suite execution. We intentionally delay it by at least
+						// vreplicationTestSuiteWaitSeconds
+						if elapsedSeconds < vreplicationTestSuiteWaitSeconds {
+							isReady = false
+						}
 					}
 					if isReady {
 						if err := e.cutOverVReplMigration(ctx, s); err != nil {
