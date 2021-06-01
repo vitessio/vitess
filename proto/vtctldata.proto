@@ -579,6 +579,23 @@ message RebuildVSchemaGraphRequest {
 message RebuildVSchemaGraphResponse {
 }
 
+message RefreshStateRequest {
+  topodata.TabletAlias tablet_alias = 1;
+}
+
+message RefreshStateResponse {
+}
+
+message RefreshStateByShardRequest {
+  string keyspace = 1;
+  string shard = 2;
+  repeated string cells = 3;
+}
+
+message RefreshStateByShardResponse {
+  bool is_partial_refresh = 1;
+}
+
 message RemoveKeyspaceCellRequest {
   string keyspace = 1;
   string cell = 2;
