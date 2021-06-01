@@ -53,10 +53,11 @@ var (
 	}
 	// RebuildVSchemaGraph makes a RebuildVSchemaGraph gRPC call to a vtctld.
 	RebuildVSchemaGraph = &cobra.Command{
-		Use:   "RebuildVSchemaGraph [--cells=c1,c2,...]",
-		Short: "Rebuilds the cell-specific SrvVSchema from the global VSchema objects in the provided cells (or all cells if none provided).",
-		Args:  cobra.NoArgs,
-		RunE:  commandRebuildVSchemaGraph,
+		Use:                   "RebuildVSchemaGraph [--cells=c1,c2,...]",
+		Short:                 "Rebuilds the cell-specific SrvVSchema from the global VSchema objects in the provided cells (or all cells if none provided).",
+		DisableFlagsInUseLine: true,
+		Args:                  cobra.NoArgs,
+		RunE:                  commandRebuildVSchemaGraph,
 	}
 )
 
