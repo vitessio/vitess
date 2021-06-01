@@ -18,8 +18,15 @@ package schema
 
 import (
 	"sync"
+	"time"
+
+	querypb "vitess.io/vitess/go/vt/proto/query"
 
 	"vitess.io/vitess/go/vt/discovery"
+)
+
+var (
+	consumeDelay = 1 * time.Second
 )
 
 type (
@@ -33,31 +40,30 @@ type (
 		update func(th *discovery.TabletHealth)
 		init   func(th *discovery.TabletHealth)
 		signal func()
+
+		shardVersionCount map[*querypb.Target]int
 	}
 )
 
 func (u *updateController) consume() {
 	for {
-		u.mu.Lock()
-		var item *discovery.TabletHealth
+		time.Sleep(consumeDelay)
 
+		u.mu.Lock()
 		if len(u.queue.items) == 0 {
 			u.queue = nil
 			u.mu.Unlock()
 			return
 		}
+
 		// todo: scan queue for multiple update from the same shard, be clever
-		item = u.queue.items[0]
-		u.queue.items = u.queue.items[1:]
+		item := u.getItemFromQueueLocked()
 		u.mu.Unlock()
 
 		if u.init != nil {
 			u.init(item)
 			u.init = nil
 		} else {
-			if len(item.TablesUpdated) == 0 {
-				continue
-			}
 			u.update(item)
 		}
 		if u.signal != nil {
@@ -66,9 +72,40 @@ func (u *updateController) consume() {
 	}
 }
 
+func (u *updateController) itemMatch(i, j int) bool {
+	left := u.queue.items[i]
+	right := u.queue.items[j]
+	return left.Target.Keyspace != right.Target.Keyspace
+}
+
+func (u *updateController) getItemFromQueueLocked() *discovery.TabletHealth {
+	item := u.queue.items[0]
+	i := 0
+	for ; i < len(u.queue.items) && u.itemMatch(0, i); i++ {
+		for _, table := range u.queue.items[i].TablesUpdated {
+			found := false
+			for _, itemTable := range item.TablesUpdated {
+				if itemTable == table {
+					found = true
+					break
+				}
+			}
+			if !found {
+				item.TablesUpdated = append(item.TablesUpdated, table)
+			}
+		}
+	}
+	u.queue.items = u.queue.items[i:]
+	return item
+}
+
 func (u *updateController) add(th *discovery.TabletHealth) {
 	u.mu.Lock()
 	defer u.mu.Unlock()
+
+	if len(th.TablesUpdated) == 0 && u.init == nil {
+		return
+	}
 	if u.queue == nil {
 		u.queue = &queue{}
 		go u.consume()
