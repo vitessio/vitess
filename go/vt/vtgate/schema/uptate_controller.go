@@ -35,8 +35,8 @@ type (
 	updateController struct {
 		mu     sync.Mutex
 		queue  *queue
-		update func(th *discovery.TabletHealth)
-		init   func(th *discovery.TabletHealth)
+		update func(th *discovery.TabletHealth) bool
+		init   func(th *discovery.TabletHealth) bool
 		signal func()
 	}
 )
@@ -56,13 +56,16 @@ func (u *updateController) consume() {
 		item := u.getItemFromQueueLocked()
 		u.mu.Unlock()
 
+		var success bool
 		if u.init != nil {
-			u.init(item)
-			u.init = nil
+			success = u.init(item)
+			if success {
+				u.init = nil
+			}
 		} else {
-			u.update(item)
+			success = u.update(item)
 		}
-		if u.signal != nil {
+		if success && u.signal != nil {
 			u.signal()
 		}
 	}

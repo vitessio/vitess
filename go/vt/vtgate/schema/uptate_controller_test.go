@@ -38,7 +38,7 @@ func TestMultipleUpdatesFromDifferentShards(t *testing.T) {
 		signalExpected, initExpected int
 		inputs                       []input
 		delay                        time.Duration
-		init                         bool
+		init, initFail, updateFail   bool
 	}
 	tests := []testCase{{
 		inputs: []input{{
@@ -88,15 +88,39 @@ func TestMultipleUpdatesFromDifferentShards(t *testing.T) {
 		signalExpected: 1,
 		initExpected:   1,
 		init:           true,
+	}, {
+		inputs: []input{{
+			shard:         "-80",
+			tablesUpdates: []string{"a"},
+		}, {
+			shard:         "80-",
+			tablesUpdates: []string{"a"},
+		}},
+		signalExpected: 0,
+		initExpected:   1,
+		init:           true,
+		initFail:       true,
+	}, {
+		inputs: []input{{
+			shard:         "-80",
+			tablesUpdates: []string{"a"},
+		}, {
+			shard:         "80-",
+			tablesUpdates: []string{"b"},
+		}},
+		updateTables:   []string{"a", "b"},
+		signalExpected: 0,
+		updateFail:     true,
 	},
 	}
 	consumeDelay = 5 * time.Millisecond
 	for i, test := range tests {
-		t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
+		t.Run(fmt.Sprintf("%d", i+1), func(t *testing.T) {
 			var signalNb, initNb int
 			var updatedTables []string
-			update := func(th *discovery.TabletHealth) {
+			update := func(th *discovery.TabletHealth) bool {
 				updatedTables = th.TablesUpdated
+				return !test.updateFail
 			}
 			signal := func() {
 				signalNb++
@@ -107,8 +131,9 @@ func TestMultipleUpdatesFromDifferentShards(t *testing.T) {
 			}
 
 			if test.init {
-				kUpdate.init = func(th *discovery.TabletHealth) {
+				kUpdate.init = func(th *discovery.TabletHealth) bool {
 					initNb++
+					return !test.initFail
 				}
 			}
 
