@@ -21,7 +21,6 @@ import (
 	"vitess.io/vitess/go/vt/orchestrator/db"
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/sqlutils"
-	orcraft "vitess.io/vitess/go/vt/orchestrator/raft"
 	"vitess.io/vitess/go/vt/orchestrator/util"
 )
 
@@ -104,9 +103,6 @@ func AttemptElection() (bool, error) {
 
 // GrabElection forcibly grabs leadership. Use with care!!
 func GrabElection() error {
-	if orcraft.IsRaftEnabled() {
-		return log.Errorf("Cannot GrabElection on raft setup")
-	}
 	_, err := db.ExecOrchestrator(`
 			replace into active_node (
 					anchor, hostname, token, first_seen_active, last_seen_active
@@ -121,15 +117,13 @@ func GrabElection() error {
 
 // Reelect clears the way for re-elections. Active node is immediately demoted.
 func Reelect() error {
-	if orcraft.IsRaftEnabled() {
-		orcraft.StepDown()
-	}
 	_, err := db.ExecOrchestrator(`delete from active_node where anchor = 1`)
 	return log.Errore(err)
 }
 
 // ElectedNode returns the details of the elected node, as well as answering the question "is this process the elected one"?
-func ElectedNode() (node NodeHealth, isElected bool, err error) {
+func ElectedNode() (node *NodeHealth, isElected bool, err error) {
+	node = &NodeHealth{}
 	query := `
 		select
 			hostname,

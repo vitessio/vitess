@@ -26,7 +26,6 @@ import (
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/sqlutils"
 	"vitess.io/vitess/go/vt/orchestrator/inst"
 	"vitess.io/vitess/go/vt/orchestrator/process"
-	orcraft "vitess.io/vitess/go/vt/orchestrator/raft"
 	"vitess.io/vitess/go/vt/orchestrator/util"
 )
 
@@ -241,11 +240,6 @@ func AttemptRecoveryRegistration(analysisEntry *inst.ReplicationAnalysis, failIf
 	topologyRecovery, err := writeTopologyRecovery(topologyRecovery)
 	if err != nil {
 		return nil, log.Errore(err)
-	}
-	if orcraft.IsRaftEnabled() {
-		if _, err := orcraft.PublishCommand("write-recovery", topologyRecovery); err != nil {
-			return nil, log.Errore(err)
-		}
 	}
 	return topologyRecovery, nil
 }

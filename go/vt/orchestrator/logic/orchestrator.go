@@ -17,7 +17,6 @@
 package logic
 
 import (
-	"fmt"
 	"math/rand"
 	"os"
 	"os/signal"
@@ -39,14 +38,11 @@ import (
 	"vitess.io/vitess/go/vt/orchestrator/kv"
 	ometrics "vitess.io/vitess/go/vt/orchestrator/metrics"
 	"vitess.io/vitess/go/vt/orchestrator/process"
-	orcraft "vitess.io/vitess/go/vt/orchestrator/raft"
 	"vitess.io/vitess/go/vt/orchestrator/util"
 )
 
 const (
-	discoveryMetricsName        = "DISCOVERY_METRICS"
-	yieldAfterUnhealthyDuration = 5 * config.HealthPollSeconds * time.Second
-	fatalAfterUnhealthyDuration = 30 * config.HealthPollSeconds * time.Second
+	discoveryMetricsName = "DISCOVERY_METRICS"
 )
 
 // discoveryQueue is a channel of deduplicated instanceKey-s
@@ -63,14 +59,11 @@ var discoveryQueueLengthGauge = metrics.NewGauge()
 var discoveryRecentCountGauge = metrics.NewGauge()
 var isElectedGauge = metrics.NewGauge()
 var isHealthyGauge = metrics.NewGauge()
-var isRaftHealthyGauge = metrics.NewGauge()
-var isRaftLeaderGauge = metrics.NewGauge()
 var discoveryMetrics = collection.CreateOrReturnCollection(discoveryMetricsName)
 
 var isElectedNode int64 = 0
 
 var recentDiscoveryOperationKeys *cache.Cache
-var pseudoGTIDPublishCache = cache.New(time.Minute, time.Second)
 var kvFoundCache = cache.New(10*time.Minute, time.Minute)
 
 func init() {
@@ -83,8 +76,6 @@ func init() {
 	metrics.Register("discoveries.recent_count", discoveryRecentCountGauge)
 	metrics.Register("elect.is_elected", isElectedGauge)
 	metrics.Register("health.is_healthy", isHealthyGauge)
-	metrics.Register("raft.is_healthy", isRaftHealthyGauge)
-	metrics.Register("raft.is_leader", isRaftLeaderGauge)
 
 	ometrics.OnMetricsTick(func() {
 		discoveryQueueLengthGauge.Update(int64(discoveryQueue.QueueLen()))
@@ -101,29 +92,13 @@ func init() {
 	ometrics.OnMetricsTick(func() {
 		isHealthyGauge.Update(atomic.LoadInt64(&process.LastContinousCheckHealthy))
 	})
-	ometrics.OnMetricsTick(func() {
-		var healthy int64
-		if orcraft.IsHealthy() {
-			healthy = 1
-		}
-		isRaftHealthyGauge.Update(healthy)
-	})
-	ometrics.OnMetricsTick(func() {
-		isRaftLeaderGauge.Update(atomic.LoadInt64(&isElectedNode))
-	})
 }
 
 func IsLeader() bool {
-	if orcraft.IsRaftEnabled() {
-		return orcraft.IsLeader()
-	}
 	return atomic.LoadInt64(&isElectedNode) == 1
 }
 
 func IsLeaderOrActive() bool {
-	if orcraft.IsRaftEnabled() {
-		return orcraft.IsPartOfQuorum()
-	}
 	return atomic.LoadInt64(&isElectedNode) == 1
 }
 
@@ -279,21 +254,7 @@ func DiscoverInstance(instanceKey inst.InstanceKey) {
 func onHealthTick() {
 	wasAlreadyElected := IsLeader()
 
-	if orcraft.IsRaftEnabled() {
-		if orcraft.IsLeader() {
-			atomic.StoreInt64(&isElectedNode, 1)
-		} else {
-			atomic.StoreInt64(&isElectedNode, 0)
-		}
-		if process.SinceLastGoodHealthCheck() > yieldAfterUnhealthyDuration {
-			log.Errorf("Heath test is failing for over %+v seconds. raft yielding", yieldAfterUnhealthyDuration.Seconds())
-			orcraft.Yield()
-		}
-		if process.SinceLastGoodHealthCheck() > fatalAfterUnhealthyDuration {
-			orcraft.FatalRaftError(fmt.Errorf("Node is unable to register health. Please check database connnectivity."))
-		}
-	}
-	if !orcraft.IsRaftEnabled() {
+	{
 		myIsElectedNode, err := process.AttemptElection()
 		if err != nil {
 			log.Errore(err)
@@ -346,20 +307,6 @@ func onHealthTick() {
 	}
 }
 
-// publishDiscoverMasters will publish to raft a discovery request for all known masters.
-// This makes for a best-effort keep-in-sync between raft nodes, where some may have
-// inconsistent data due to hosts being forgotten, for example.
-func publishDiscoverMasters() error {
-	instances, err := inst.ReadWriteableClustersMasters()
-	if err == nil {
-		for _, instance := range instances {
-			key := instance.Key
-			go orcraft.PublishCommand("discover", key)
-		}
-	}
-	return log.Errore(err)
-}
-
 // InjectPseudoGTIDOnWriters will inject a PseudoGTID entry on all writable, accessible,
 // supported writers.
 func InjectPseudoGTIDOnWriters() error {
@@ -372,16 +319,7 @@ func InjectPseudoGTIDOnWriters() error {
 		go func() {
 			if injected, _ := inst.CheckAndInjectPseudoGTIDOnWriter(instance); injected {
 				clusterName := instance.ClusterName
-				if orcraft.IsRaftEnabled() {
-					// We prefer not saturating our raft communication. Pseudo-GTID information is
-					// OK to be cached for a while.
-					if _, found := pseudoGTIDPublishCache.Get(clusterName); !found {
-						pseudoGTIDPublishCache.Set(clusterName, true, cache.DefaultExpiration)
-						orcraft.PublishCommand("injected-pseudo-gtid", clusterName)
-					}
-				} else {
-					inst.RegisterInjectedPseudoGTID(clusterName)
-				}
+				inst.RegisterInjectedPseudoGTID(clusterName)
 			}
 		}()
 	}
@@ -418,11 +356,7 @@ func SubmitMastersToKvStores(clusterName string, force bool) (kvPairs [](*kv.KVP
 	}
 	log.Debugf("kv.SubmitMastersToKvStores: submitKvPairs: %+v", len(submitKvPairs))
 	for _, kvPair := range submitKvPairs {
-		if orcraft.IsRaftEnabled() {
-			_, err = orcraft.PublishCommand("put-key-value", kvPair)
-		} else {
-			err = kv.PutKVPair(kvPair)
-		}
+		err := kv.PutKVPair(kvPair)
 		if err == nil {
 			submittedCount++
 		} else {
@@ -464,7 +398,6 @@ func ContinuousDiscovery() {
 	healthTick := time.Tick(config.HealthPollSeconds * time.Second)
 	instancePollTick := time.Tick(instancePollSecondsDuration())
 	caretakingTick := time.Tick(time.Minute)
-	raftCaretakingTick := time.Tick(10 * time.Minute)
 	recoveryTick := time.Tick(time.Duration(config.RecoveryPollSeconds) * time.Second)
 	autoPseudoGTIDTick := time.Tick(time.Duration(config.PseudoGTIDIntervalSeconds) * time.Second)
 	tabletTopoTick := OpenTabletDiscovery()
@@ -485,12 +418,6 @@ func ContinuousDiscovery() {
 	go acceptSignals()
 	go kv.InitKVStores()
 	inst.SetDurabilityPolicy(config.Config.Durability)
-	if config.Config.RaftEnabled {
-		if err := orcraft.Setup(NewCommandApplier(), NewSnapshotDataCreatorApplier(), process.ThisHostname); err != nil {
-			log.Fatale(err)
-		}
-		go orcraft.Monitor()
-	}
 
 	if *config.RuntimeCLIFlags.GrabElection {
 		process.GrabElection()
@@ -558,10 +485,6 @@ func ContinuousDiscovery() {
 					go inst.LoadHostnameResolveCache()
 				}
 			}()
-		case <-raftCaretakingTick:
-			if orcraft.IsRaftEnabled() && orcraft.IsLeader() {
-				go publishDiscoverMasters()
-			}
 		case <-recoveryTick:
 			go func() {
 				if IsLeaderOrActive() {

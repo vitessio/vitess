@@ -391,11 +391,7 @@ func (this *HttpWeb) registerWebRequest(m *martini.ClassicMartini, path string, 
 		fullPath = fmt.Sprintf("%s/", this.URLPrefix)
 	}
 
-	if config.Config.RaftEnabled {
-		m.Get(fullPath, raftReverseProxy, handler)
-	} else {
-		m.Get(fullPath, handler)
-	}
+	m.Get(fullPath, handler)
 }
 
 // RegisterRequests makes for the de-facto list of known Web calls
