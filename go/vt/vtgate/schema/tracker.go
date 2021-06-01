@@ -49,12 +49,6 @@ type (
 		// map of keyspace currently tracked
 		tracked map[keyspace]*updateController
 	}
-
-	// Table contains the table name and also, whether the information can be trusted about this table.
-	Table struct {
-		Name         string
-		UnknownState bool
-	}
 )
 
 // NewTracker creates the tracker object.
