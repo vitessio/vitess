@@ -108,6 +108,26 @@ func (s *VtctldServer) AddCellsAlias(ctx context.Context, req *vtctldatapb.AddCe
 	return &vtctldatapb.AddCellsAliasResponse{}, nil
 }
 
+// ApplyRoutingRules is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) ApplyRoutingRules(ctx context.Context, req *vtctldatapb.ApplyRoutingRulesRequest) (*vtctldatapb.ApplyRoutingRulesResponse, error) {
+	if err := s.ts.SaveRoutingRules(ctx, req.RoutingRules); err != nil {
+		return nil, err
+	}
+
+	resp := &vtctldatapb.ApplyRoutingRulesResponse{}
+
+	if req.SkipRebuild {
+		log.Warningf("Skipping rebuild of SrvVSchema, will need to run RebuildVSchemaGraph for changes to take effect")
+		return resp, nil
+	}
+
+	if err := s.ts.RebuildSrvVSchema(ctx, req.RebuildCells); err != nil {
+		return nil, vterrors.Wrapf(err, "RebuildSrvVSchema(%v) failed: %v", req.RebuildCells, err)
+	}
+
+	return resp, nil
+}
+
 // ChangeTabletType is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) ChangeTabletType(ctx context.Context, req *vtctldatapb.ChangeTabletTypeRequest) (*vtctldatapb.ChangeTabletTypeResponse, error) {
 	ctx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
@@ -555,6 +575,18 @@ func (s *VtctldServer) GetKeyspaces(ctx context.Context, req *vtctldatapb.GetKey
 	}
 
 	return &vtctldatapb.GetKeyspacesResponse{Keyspaces: keyspaces}, nil
+}
+
+// GetRoutingRules is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) GetRoutingRules(ctx context.Context, req *vtctldatapb.GetRoutingRulesRequest) (*vtctldatapb.GetRoutingRulesResponse, error) {
+	rr, err := s.ts.GetRoutingRules(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return &vtctldatapb.GetRoutingRulesResponse{
+		RoutingRules: rr,
+	}, nil
 }
 
 // GetSchema is part of the vtctlservicepb.VtctldServer interface.
@@ -1193,6 +1225,15 @@ func (s *VtctldServer) PlannedReparentShard(ctx context.Context, req *vtctldatap
 	copy(resp.Events, logstream)
 
 	return resp, err
+}
+
+// RebuildVSchemaGraph is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) RebuildVSchemaGraph(ctx context.Context, req *vtctldatapb.RebuildVSchemaGraphRequest) (*vtctldatapb.RebuildVSchemaGraphResponse, error) {
+	if err := s.ts.RebuildSrvVSchema(ctx, req.Cells); err != nil {
+		return nil, err
+	}
+
+	return &vtctldatapb.RebuildVSchemaGraphResponse{}, nil
 }
 
 // RemoveKeyspaceCell is part of the vtctlservicepb.VtctldServer interface.
