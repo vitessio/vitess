@@ -20,11 +20,6 @@ import (
 	"fmt"
 )
 
-const (
-	YieldCommand     = "yield"
-	YieldHintCommand = "yield-hint"
-)
-
 var RaftNotRunning error = fmt.Errorf("raft is not configured/running")
 
 // PublishCommand will distribute a command across the group
