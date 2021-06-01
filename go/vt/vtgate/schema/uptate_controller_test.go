@@ -102,9 +102,8 @@ func TestMultipleUpdatesFromDifferentShards(t *testing.T) {
 				signalNb++
 			}
 			kUpdate := updateController{
-				update:            update,
-				signal:            signal,
-				shardVersionCount: map[*querypb.Target]int{},
+				update: update,
+				signal: signal,
 			}
 
 			if test.init {
