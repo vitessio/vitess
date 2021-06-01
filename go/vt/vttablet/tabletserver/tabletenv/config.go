@@ -107,6 +107,7 @@ func init() {
 	flag.Int64Var(&currentConfig.QueryCacheMemory, "queryserver-config-query-cache-memory", defaultConfig.QueryCacheMemory, "query server query cache size in bytes, maximum amount of memory to be used for caching. vttablet analyzes every incoming query and generate a query plan, these plans are being cached in a lru cache. This config controls the capacity of the lru cache.")
 	flag.BoolVar(&currentConfig.QueryCacheLFU, "queryserver-config-query-cache-lfu", defaultConfig.QueryCacheLFU, "query server cache algorithm. when set to true, a new cache algorithm based on a TinyLFU admission policy will be used to improve cache behavior and prevent pollution from sparse queries")
 	SecondsVar(&currentConfig.SchemaReloadIntervalSeconds, "queryserver-config-schema-reload-time", defaultConfig.SchemaReloadIntervalSeconds, "query server schema reload time, how often vttablet reloads schemas from underlying MySQL instance in seconds. vttablet keeps table schemas in its own memory and periodically refreshes it from MySQL. This config controls the reload time.")
+	SecondsVar(&currentConfig.SignalSchemaChangeReloadIntervalSeconds, "queryserver-config-schema-change-signal-interval", defaultConfig.SignalSchemaChangeReloadIntervalSeconds, "query server schema change signal interval defines at which interval the query server shall send schema updates to vtgate.")
 	flag.BoolVar(&currentConfig.SignalWhenSchemaChange, "queryserver-config-schema-change-signal", defaultConfig.SignalWhenSchemaChange, "query server schema signal, will signal connected vtgates that schema has changed whenever this is detected.")
 	SecondsVar(&currentConfig.Oltp.QueryTimeoutSeconds, "queryserver-config-query-timeout", defaultConfig.Oltp.QueryTimeoutSeconds, "query server query timeout (in seconds), this is the query timeout in vttablet side. If a query takes more than this timeout, it will be killed.")
 	SecondsVar(&currentConfig.OltpReadPool.TimeoutSeconds, "queryserver-config-query-pool-timeout", defaultConfig.OltpReadPool.TimeoutSeconds, "query server query pool timeout (in seconds), it is how long vttablet waits for a connection from the query pool. If set to 0 (default) then the overall query timeout is used instead.")
@@ -243,21 +244,22 @@ type TabletConfig struct {
 	ReplicationTracker ReplicationTrackerConfig `json:"replicationTracker,omitempty"`
 
 	// Consolidator can be enable, disable, or notOnMaster. Default is enable.
-	Consolidator                string  `json:"consolidator,omitempty"`
-	PassthroughDML              bool    `json:"passthroughDML,omitempty"`
-	StreamBufferSize            int     `json:"streamBufferSize,omitempty"`
-	ConsolidatorStreamTotalSize int64   `json:"consolidatorStreamTotalSize,omitempty"`
-	ConsolidatorStreamQuerySize int64   `json:"consolidatorStreamQuerySize,omitempty"`
-	QueryCacheSize              int     `json:"queryCacheSize,omitempty"`
-	QueryCacheMemory            int64   `json:"queryCacheMemory,omitempty"`
-	QueryCacheLFU               bool    `json:"queryCacheLFU,omitempty"`
-	SchemaReloadIntervalSeconds Seconds `json:"schemaReloadIntervalSeconds,omitempty"`
-	WatchReplication            bool    `json:"watchReplication,omitempty"`
-	TrackSchemaVersions         bool    `json:"trackSchemaVersions,omitempty"`
-	TerseErrors                 bool    `json:"terseErrors,omitempty"`
-	MessagePostponeParallelism  int     `json:"messagePostponeParallelism,omitempty"`
-	CacheResultFields           bool    `json:"cacheResultFields,omitempty"`
-	SignalWhenSchemaChange      bool    `json:"signalWhenSchemaChange,omitempty"`
+	Consolidator                            string  `json:"consolidator,omitempty"`
+	PassthroughDML                          bool    `json:"passthroughDML,omitempty"`
+	StreamBufferSize                        int     `json:"streamBufferSize,omitempty"`
+	ConsolidatorStreamTotalSize             int64   `json:"consolidatorStreamTotalSize,omitempty"`
+	ConsolidatorStreamQuerySize             int64   `json:"consolidatorStreamQuerySize,omitempty"`
+	QueryCacheSize                          int     `json:"queryCacheSize,omitempty"`
+	QueryCacheMemory                        int64   `json:"queryCacheMemory,omitempty"`
+	QueryCacheLFU                           bool    `json:"queryCacheLFU,omitempty"`
+	SchemaReloadIntervalSeconds             Seconds `json:"schemaReloadIntervalSeconds,omitempty"`
+	SignalSchemaChangeReloadIntervalSeconds Seconds `json:"signalSchemaChangeReloadIntervalSeconds,omitempty"`
+	WatchReplication                        bool    `json:"watchReplication,omitempty"`
+	TrackSchemaVersions                     bool    `json:"trackSchemaVersions,omitempty"`
+	TerseErrors                             bool    `json:"terseErrors,omitempty"`
+	MessagePostponeParallelism              int     `json:"messagePostponeParallelism,omitempty"`
+	CacheResultFields                       bool    `json:"cacheResultFields,omitempty"`
+	SignalWhenSchemaChange                  bool    `json:"signalWhenSchemaChange,omitempty"`
 
 	ExternalConnections map[string]*dbconfigs.DBConfigs `json:"externalConnections,omitempty"`
 
@@ -457,14 +459,15 @@ var defaultConfig = TabletConfig{
 	// memory copies.  so with the encoding overhead, this seems to work
 	// great (the overhead makes the final packets on the wire about twice
 	// bigger than this).
-	StreamBufferSize:            32 * 1024,
-	QueryCacheSize:              int(cache.DefaultConfig.MaxEntries),
-	QueryCacheMemory:            cache.DefaultConfig.MaxMemoryUsage,
-	QueryCacheLFU:               cache.DefaultConfig.LFU,
-	SchemaReloadIntervalSeconds: 30 * 60,
-	MessagePostponeParallelism:  4,
-	CacheResultFields:           true,
-	SignalWhenSchemaChange:      false, // while this feature is experimental, the safe default is off
+	StreamBufferSize:                        32 * 1024,
+	QueryCacheSize:                          int(cache.DefaultConfig.MaxEntries),
+	QueryCacheMemory:                        cache.DefaultConfig.MaxMemoryUsage,
+	QueryCacheLFU:                           cache.DefaultConfig.LFU,
+	SchemaReloadIntervalSeconds:             30 * 60,
+	SignalSchemaChangeReloadIntervalSeconds: 5,
+	MessagePostponeParallelism:              4,
+	CacheResultFields:                       true,
+	SignalWhenSchemaChange:                  false, // while this feature is experimental, the safe default is off
 
 	EnableTxThrottler:           false,
 	TxThrottlerConfig:           defaultTxThrottlerConfig(),

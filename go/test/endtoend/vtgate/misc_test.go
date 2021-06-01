@@ -650,6 +650,18 @@ func TestQueryAndSubQWithLimit(t *testing.T) {
 	assert.Equal(t, 10, len(result.Rows))
 }
 
+func TestSchemaTracker(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+	// this query only works if we know which table the testId belongs to. The vschema does not contain
+	// this info, so we are testing that the schema tracker has added column info to the vschema
+	_, err = conn.ExecuteFetch(`select testId from t8 join t2`, 1000, true)
+	require.NoError(t, err)
+}
+
 func assertMatches(t *testing.T, conn *mysql.Conn, query, expected string) {
 	t.Helper()
 	qr := exec(t, conn, query)
