@@ -22,6 +22,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -189,4 +191,36 @@ func waitTimeout(wg *sync.WaitGroup, timeout time.Duration) bool {
 	case <-time.After(timeout):
 		return true // timed out
 	}
+}
+
+func TestTrackerGetKeyspaceUpdateController(t *testing.T) {
+	ks3 := &updateController{}
+	tracker := Tracker{
+		tracked: map[keyspace]*updateController{
+			"ks3": ks3,
+		},
+	}
+
+	th1 := &discovery.TabletHealth{
+		Target: &querypb.Target{Keyspace: "ks1"},
+	}
+	ks1 := tracker.getKeyspaceUpdateController(th1)
+
+	th2 := &discovery.TabletHealth{
+		Target: &querypb.Target{Keyspace: "ks2"},
+	}
+	ks2 := tracker.getKeyspaceUpdateController(th2)
+
+	th3 := &discovery.TabletHealth{
+		Target: &querypb.Target{Keyspace: "ks3"},
+	}
+
+	assert.NotEqual(t, ks1, ks2, "ks1 and ks2 should not be equal, belongs to different keyspace")
+	assert.Equal(t, ks1, tracker.getKeyspaceUpdateController(th1), "received different updateController")
+	assert.Equal(t, ks2, tracker.getKeyspaceUpdateController(th2), "received different updateController")
+	assert.Equal(t, ks3, tracker.getKeyspaceUpdateController(th3), "received different updateController")
+
+	assert.NotNil(t, ks1.init, "ks1 needs to be initialized")
+	assert.NotNil(t, ks2.init, "ks2 needs to be initialized")
+	assert.Nil(t, ks3.init, "ks3 already initialized")
 }
