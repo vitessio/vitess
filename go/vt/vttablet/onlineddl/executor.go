@@ -477,12 +477,12 @@ func (e *Executor) executeDirectly(ctx context.Context, onlineDDL *schema.Online
 }
 
 // validateTableForAlterAction checks whether a table is good to undergo a ALTER operation. It returns detailed error if not.
-func (e *Executor) validateTableForAlterAction(ctx context.Context, onlineDDL *schema.OnlineDDL) (err error) {
+func (e *Executor) validateTableForAlterAction(ctx context.Context, tableName string) (err error) {
 	// Validate table does not participate in foreign key relationship:
 	for _, fkQuery := range []string{selSelectCountFKParentConstraints, selSelectCountFKChildConstraints} {
 		query, err := sqlparser.ParseAndBind(fkQuery,
-			sqltypes.StringBindVariable(onlineDDL.Schema),
-			sqltypes.StringBindVariable(onlineDDL.Table),
+			sqltypes.StringBindVariable(e.dbName),
+			sqltypes.StringBindVariable(tableName),
 		)
 		if err != nil {
 			return err
@@ -497,7 +497,7 @@ func (e *Executor) validateTableForAlterAction(ctx context.Context, onlineDDL *s
 		}
 		countFKConstraints := row.AsInt64("num_fk_constraints", 0)
 		if countFKConstraints > 0 {
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "table %s participates in FOREIGN KEY constraint. foreign key constraints are not supported in online DDL", onlineDDL.Table)
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "table %s participates in FOREIGN KEY constraint. foreign key constraints are not supported in online DDL", tableName)
 		}
 	}
 	return nil
@@ -767,7 +767,7 @@ func (e *Executor) ExecuteWithVReplication(ctx context.Context, onlineDDL *schem
 		return err
 	}
 	if revertMigration == nil {
-		if err := e.validateTableForAlterAction(ctx, onlineDDL); err != nil {
+		if err := e.validateTableForAlterAction(ctx, v.targetTable); err != nil {
 			return err
 		}
 	}
