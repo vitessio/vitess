@@ -174,17 +174,6 @@
 			"RetryMax": 0,
 			"Tags": []
 		},
-		"docker": {
-			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/docker"],
-			"Command": [],
-			"Manual": false,
-			"Shard": "26",
-			"RetryMax": 0,
-			"Tags": [
-				"docker_images_test"
-			]
-		},
 		"prepare_statement": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/preparestmt"],
