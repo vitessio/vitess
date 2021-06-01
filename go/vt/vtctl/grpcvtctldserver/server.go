@@ -1521,6 +1521,16 @@ func (s *VtctldServer) RebuildVSchemaGraph(ctx context.Context, req *vtctldatapb
 	return &vtctldatapb.RebuildVSchemaGraphResponse{}, nil
 }
 
+// RefreshState is part of the vtctldservicepb.VtctldServer interface.
+func (s *VtctldServer) RefreshState(ctx context.Context, req *vtctldatapb.RefreshStateRequest) (*vtctldatapb.RefreshStateResponse, error) {
+	panic("unimplemented!")
+}
+
+// RefreshStateByShard is part of the vtctldservicepb.VtctldServer interface.
+func (s *VtctldServer) RefreshStateByShard(ctx context.Context, req *vtctldatapb.RefreshStateByShardRequest) (*vtctldatapb.RefreshStateByShardResponse, error) {
+	panic("unimplemented!")
+}
+
 // RemoveKeyspaceCell is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) RemoveKeyspaceCell(ctx context.Context, req *vtctldatapb.RemoveKeyspaceCellRequest) (*vtctldatapb.RemoveKeyspaceCellResponse, error) {
 	span, ctx := trace.NewSpan(ctx, "VtctldServer.RemoveKeyspaceCell")
