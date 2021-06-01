@@ -779,12 +779,12 @@
 			"RetryMax": 0,
 			"Tags": []
 		},
-		"orchestrator": {
+		"vtorc": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/orchestrator"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/vtorc"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "22",
+			"Shard": "vtorc",
 			"RetryMax": 0,
 			"Tags": []
 		},
