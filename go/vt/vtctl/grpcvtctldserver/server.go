@@ -21,7 +21,6 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
-	"strings"
 	"sync"
 	"time"
 
@@ -133,23 +132,23 @@ func (s *VtctldServer) ApplyRoutingRules(ctx context.Context, req *vtctldatapb.A
 // ApplyVSchema is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) ApplyVSchema(ctx context.Context, req *vtctldatapb.ApplyVSchemaRequest) (*vtctldatapb.ApplyVSchemaResponse, error) {
 	if _, err := s.ts.GetKeyspace(ctx, req.Keyspace); err != nil {
-		if strings.Contains(err.Error(), "node doesn't exist") {
+		if topo.IsErrType(err, topo.NoNode) {
 			return nil, fmt.Errorf("keyspace(%s) doesn't exist, check if the keyspace is initialized", req.Keyspace)
 		}
-		return nil, err
+		return nil, fmt.Errorf("GetKeyspace(%s) = %w", req.Keyspace, err)
 	}
 	if err := s.ts.SaveVSchema(ctx, req.Keyspace, req.VSchema); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("SaveVSchema(%s, %v) = %w", req.Keyspace, req.VSchema, err)
 	}
 
 	if !req.SkipRebuild {
-		if err := s.ts.RebuildSrvVSchema(ctx, nil); err != nil {
-			return nil, err
+		if err := s.ts.RebuildSrvVSchema(ctx, req.Cells); err != nil {
+			return nil, fmt.Errorf("RebuildSrvVSchema = %w", err)
 		}
 	}
 	updatedVS, err := s.ts.GetVSchema(ctx, req.Keyspace)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("GetKeyspace(%s) = %w", req.Keyspace, err)
 	}
 	return &vtctldatapb.ApplyVSchemaResponse{VSchema: updatedVS}, nil
 }

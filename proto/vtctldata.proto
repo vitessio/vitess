@@ -163,6 +163,7 @@ message ApplyVSchemaRequest {
   string keyspace = 1;
   vschema.Keyspace v_schema = 2;
   bool skip_rebuild = 3;
+  repeated string cells = 4;
 }
 
 message ApplyVSchemaResponse {
