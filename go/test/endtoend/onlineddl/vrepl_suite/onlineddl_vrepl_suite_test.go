@@ -33,6 +33,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/schema"
+	"vitess.io/vitess/go/vt/sqlparser"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/onlineddl"
@@ -46,7 +47,6 @@ var (
 	vtParams                mysql.ConnParams
 	evaluatedMysqlParams    *mysql.ConnParams
 	ddlStrategy             = "online -skip-topo -vreplication-test-suite"
-	executeStrategy         = "vtgate"
 	waitForMigrationTimeout = 20 * time.Second
 
 	hostname              = "localhost"
@@ -163,8 +163,9 @@ func readTestFile(t *testing.T, testName string, fileName string) (content strin
 	return strings.TrimSpace(string(b)), true
 }
 
+// testSingle is the main testing function for a single test in the suite.
+// It prepares the grounds, creates the test data, runs a migration, expects results/error, cleans up.
 func testSingle(t *testing.T, testName string) {
-
 	if ignoreVersions, exists := readTestFile(t, testName, "ignore_versions"); exists {
 		// ignoreVersions is a regexp
 		re, err := regexp.Compile(ignoreVersions)
@@ -198,6 +199,21 @@ func testSingle(t *testing.T, testName string) {
 		_, exists := readTestFile(t, testName, f)
 		require.True(t, exists)
 		mysqlClientExecFile(t, testName, f)
+		// ensure test table has been created:
+		getCreateTableStatement(t, tableName)
+	}
+	defer func() {
+		// destroy
+		f := "destroy.sql"
+		if _, exists := readTestFile(t, testName, f); exists {
+			mysqlClientExecFile(t, testName, f)
+		}
+	}()
+
+	var expectQueryFailure string
+	if content, exists := readTestFile(t, testName, "expect_query_failure"); exists {
+		// VTGate failure is expected!
+		expectQueryFailure = content
 	}
 
 	var migrationMessage string
@@ -208,19 +224,27 @@ func testSingle(t *testing.T, testName string) {
 		alterClause = content
 	}
 	alterStatement := fmt.Sprintf("alter table %s %s", tableName, alterClause)
-	uuid := testOnlineDDLStatement(t, alterStatement, ddlStrategy, executeStrategy)
+	// Run the DDL!
+	uuid := testOnlineDDLStatement(t, alterStatement, ddlStrategy, expectQueryFailure)
+
+	if expectQueryFailure != "" {
+		// Nothing further to do. Migration isn't actually running
+		return
+	}
+	assert.NotEmpty(t, uuid)
+
+	defer func() {
+		query, err := sqlparser.ParseAndBind("alter vitess_migration %a cancel",
+			sqltypes.StringBindVariable(uuid),
+		)
+		require.NoError(t, err)
+		onlineddl.VtgateExecQuery(t, &vtParams, query, "")
+	}()
 	row := waitForMigration(t, uuid, waitForMigrationTimeout)
 	// migration is complete
 	{
 		migrationStatus = row["migration_status"].ToString()
 		migrationMessage = row["message"].ToString()
-	}
-	{
-		// destroy
-		f := "destroy.sql"
-		if _, exists := readTestFile(t, testName, f); exists {
-			mysqlClientExecFile(t, testName, f)
-		}
 	}
 
 	if expectedErrorMessage, exists := readTestFile(t, testName, "expect_failure"); exists {
@@ -255,30 +279,31 @@ func testSingle(t *testing.T, testName string) {
 		selectBefore := fmt.Sprintf("select %s from %s %s", beforeColumns, beforeTableName, orderBy)
 		selectAfter := fmt.Sprintf("select %s from %s %s", afterColumns, afterTableName, orderBy)
 
-		selectBeforeRS := mysqlExec(t, selectBefore, "")
-		selectAfterRS := mysqlExec(t, selectAfter, "")
+		// selectBeforeRS := mysqlExec(t, selectBefore, "")
+		// selectAfterRS := mysqlExec(t, selectAfter, "")
+		// require.Equal(t, selectBeforeRS.Rows, selectAfterRS.Rows, "results mismatch: (%s) amd (%s)", selectBefore, selectAfter)
 
-		require.Equal(t, selectBeforeRS.Rows, selectAfterRS.Rows, "results mismatch: (%s) amd (%s)", selectBefore, selectAfter)
-		// selectBeforeFile := createTempScript(t, selectBefore)
-		// selectAfterFile := createTempScript(t, selectAfter)
+		selectBeforeFile := createTempScript(t, selectBefore)
+		defer os.Remove(selectBeforeFile)
+		beforeOutput := mysqlClientExecFile(t, "", selectBeforeFile)
 
+		selectAfterFile := createTempScript(t, selectAfter)
+		defer os.Remove(selectAfterFile)
+		afterOutput := mysqlClientExecFile(t, "", selectAfterFile)
+
+		require.Equal(t, beforeOutput, afterOutput, "results mismatch: (%s) amd (%s)", selectBefore, selectAfter)
 	}
 }
 
 // testOnlineDDLStatement runs an online DDL, ALTER statement
-func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy string, executeStrategy string) (uuid string) {
-	if executeStrategy == "vtgate" {
-		row := onlineddl.VtgateExecDDL(t, &vtParams, ddlStrategy, alterStatement, "").Named().Row()
-		if row != nil {
-			uuid = row.AsString("uuid", "")
-		}
-	} else {
-		var err error
-		uuid, err = clusterInstance.VtctlclientProcess.ApplySchemaWithOutput(keyspaceName, alterStatement, cluster.VtctlClientParams{DDLStrategy: ddlStrategy})
-		assert.NoError(t, err)
+func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy string, expectError string) (uuid string) {
+	qr := onlineddl.VtgateExecDDL(t, &vtParams, ddlStrategy, alterStatement, expectError)
+	if qr != nil {
+		row := qr.Named().Row()
+		require.NotNil(t, row)
+		uuid = row.AsString("uuid", "")
 	}
 	uuid = strings.TrimSpace(uuid)
-
 	return uuid
 }
 
@@ -351,9 +376,13 @@ func mysqlClientExecFile(t *testing.T, testName string, fileName string) (output
 	require.NoError(t, err)
 	mysqlPath, err := exec.LookPath("mysql")
 	require.NoError(t, err)
-	filePath, _ := filepath.Abs(path.Join(testDataPath, testName, fileName))
+
+	filePath := fileName
+	if !filepath.IsAbs(fileName) {
+		filePath, _ = filepath.Abs(path.Join(testDataPath, testName, fileName))
+	}
 	params := mysqlParams()
-	bashCommand := fmt.Sprintf(`%s -u%s --socket=%s --database=%s < %s 2> /tmp/error.log`, mysqlPath, params.Uname, params.UnixSocket, params.DbName, filePath)
+	bashCommand := fmt.Sprintf(`%s -u%s --socket=%s --database=%s -s -s < %s 2> /tmp/error.log`, mysqlPath, params.Uname, params.UnixSocket, params.DbName, filePath)
 	cmd, err := exec.Command(
 		bashPath,
 		"-c",
@@ -373,4 +402,16 @@ func getCreateTableStatement(t *testing.T, tableName string) (statement string) 
 	assert.Equal(t, len(queryResult.Rows[0]), 2) // table name, create statement
 	statement = queryResult.Rows[0][1].ToString()
 	return statement
+}
+
+func createTempScript(t *testing.T, content string) (fileName string) {
+	f, err := ioutil.TempFile("", "vrepl-suite-")
+	require.NoError(t, err)
+
+	_, err = f.WriteString(content)
+	require.NoError(t, err)
+	err = f.Close()
+	require.NoError(t, err)
+
+	return f.Name()
 }
