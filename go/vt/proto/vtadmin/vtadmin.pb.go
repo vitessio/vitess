@@ -1324,7 +1324,7 @@ type GetTabletRequest struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	// Unique tablet alias of the standard form: "$cell-$uid"
+	// Unique (per cluster) tablet alias of the standard form: "$cell-$uid"
 	Alias string `protobuf:"bytes,1,opt,name=alias,proto3" json:"alias,omitempty"`
 	// ClusterIDs is an optional parameter to narrow the scope of the search, if
 	// the caller knows which cluster the tablet may be in, or, to disamiguate if

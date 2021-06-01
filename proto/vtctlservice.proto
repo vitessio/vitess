@@ -83,8 +83,11 @@ service Vtctld {
   // GetSrvKeyspaces returns the SrvKeyspaces for a keyspace in one or more
   // cells.
   rpc GetSrvKeyspaces (vtctldata.GetSrvKeyspacesRequest) returns (vtctldata.GetSrvKeyspacesResponse) {};
-  // GetSrvVSchema returns a the SrvVSchema for a cell.
+  // GetSrvVSchema returns the SrvVSchema for a cell.
   rpc GetSrvVSchema(vtctldata.GetSrvVSchemaRequest) returns (vtctldata.GetSrvVSchemaResponse) {};
+  // GetSrvVSchemas returns a mapping from cell name to SrvVSchema for all cells,
+  // optionally filtered by cell name.
+  rpc GetSrvVSchemas(vtctldata.GetSrvVSchemasRequest) returns (vtctldata.GetSrvVSchemasResponse) {};
   // GetTablet returns information about a tablet.
   rpc GetTablet(vtctldata.GetTabletRequest) returns (vtctldata.GetTabletResponse) {};
   // GetTablets returns tablets, optionally filtered by keyspace and shard.
