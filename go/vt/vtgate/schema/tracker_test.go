@@ -50,6 +50,8 @@ func TestTracking(t *testing.T) {
 	}
 	fields := sqltypes.MakeTestFields("table_name|col_name|col_type", "varchar|varchar|varchar")
 
+	consumeDelay = 200 * time.Millisecond
+
 	type delta struct {
 		result *sqltypes.Result
 		updTbl []string
@@ -141,16 +143,27 @@ func TestTracking(t *testing.T) {
 			tracker.Start()
 			defer tracker.Stop()
 
-			var results []*sqltypes.Result
+			results := []*sqltypes.Result{{}}
 			for _, d := range tcase.deltas {
-				results = append(results, d.result)
+				for _, deltaRow := range d.result.Rows {
+					same := false
+					for _, row := range results[0].Rows {
+						if row[0].String() == deltaRow[0].String() && row[1].String() == deltaRow[1].String() {
+							same = true
+							break
+						}
+					}
+					if same == false {
+						results[0].Rows = append(results[0].Rows, deltaRow)
+					}
+				}
 			}
 
 			sbc.SetResults(results)
 			sbc.Queries = nil
 
 			wg := sync.WaitGroup{}
-			wg.Add(len(tcase.deltas))
+			wg.Add(1)
 			tracker.RegisterSignalReceiver(func() {
 				wg.Done()
 			})
@@ -167,7 +180,7 @@ func TestTracking(t *testing.T) {
 
 			require.False(t, waitTimeout(&wg, time.Second), "schema was updated but received no signal")
 
-			require.Equal(t, len(tcase.deltas), len(sbc.StringQueries()))
+			require.Equal(t, 1, len(sbc.StringQueries()))
 
 			_, keyspacePresent := tracker.tracked[target.Keyspace]
 			require.Equal(t, true, keyspacePresent)
