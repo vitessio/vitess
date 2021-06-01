@@ -107,11 +107,13 @@ func (t *Tracker) getKeyspaceUpdateController(th *discovery.TabletHealth) *updat
 
 	ksUpdater, ok := t.tracked[th.Target.Keyspace]
 	if !ok {
-		init := func(th *discovery.TabletHealth) {
+		init := func(th *discovery.TabletHealth) bool {
 			err := t.LoadKeyspace(th.Conn, th.Target)
 			if err != nil {
 				log.Warningf("Unable to add keyspace to tracker: %v", err)
+				return false
 			}
+			return true
 		}
 		ksUpdater = &updateController{update: t.updateSchema, init: init, signal: t.signal}
 		t.tracked[th.Target.Keyspace] = ksUpdater
@@ -146,18 +148,18 @@ func (t *Tracker) Tables(ks string) map[string][]vindexes.Column {
 	return m
 }
 
-func (t *Tracker) updateSchema(th *discovery.TabletHealth) {
+func (t *Tracker) updateSchema(th *discovery.TabletHealth) bool {
 	tables, err := sqltypes.BuildBindVariable(th.TablesUpdated)
 	if err != nil {
 		log.Errorf("failed to read updated tables from TabletHealth: %v", err)
-		return
+		return false
 	}
 	bv := map[string]*querypb.BindVariable{"tableNames": tables}
 	res, err := th.Conn.Execute(t.ctx, th.Target, mysql.FetchUpdatedTables, bv, 0, 0, nil)
 	if err != nil {
 		// TODO: these tables should now become non-authoritative
 		log.Warningf("error fetching new schema for %v, making them non-authoritative: %v", th.TablesUpdated, err)
-		return
+		return false
 	}
 
 	t.mu.Lock()
@@ -169,6 +171,7 @@ func (t *Tracker) updateSchema(th *discovery.TabletHealth) {
 		t.tables.delete(th.Target.Keyspace, tbl)
 	}
 	t.updateTables(th.Target.Keyspace, res)
+	return true
 }
 
 func (t *Tracker) updateTables(keyspace string, res *sqltypes.Result) {
