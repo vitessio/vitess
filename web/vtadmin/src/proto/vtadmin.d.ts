@@ -121,6 +121,34 @@ export namespace vtadmin {
         public getSchemas(request: vtadmin.IGetSchemasRequest): Promise<vtadmin.GetSchemasResponse>;
 
         /**
+         * Calls GetSrvVSchema.
+         * @param request GetSrvVSchemaRequest message or plain object
+         * @param callback Node-style callback called with the error, if any, and SrvVSchema
+         */
+        public getSrvVSchema(request: vtadmin.IGetSrvVSchemaRequest, callback: vtadmin.VTAdmin.GetSrvVSchemaCallback): void;
+
+        /**
+         * Calls GetSrvVSchema.
+         * @param request GetSrvVSchemaRequest message or plain object
+         * @returns Promise
+         */
+        public getSrvVSchema(request: vtadmin.IGetSrvVSchemaRequest): Promise<vtadmin.SrvVSchema>;
+
+        /**
+         * Calls GetSrvVSchemas.
+         * @param request GetSrvVSchemasRequest message or plain object
+         * @param callback Node-style callback called with the error, if any, and GetSrvVSchemasResponse
+         */
+        public getSrvVSchemas(request: vtadmin.IGetSrvVSchemasRequest, callback: vtadmin.VTAdmin.GetSrvVSchemasCallback): void;
+
+        /**
+         * Calls GetSrvVSchemas.
+         * @param request GetSrvVSchemasRequest message or plain object
+         * @returns Promise
+         */
+        public getSrvVSchemas(request: vtadmin.IGetSrvVSchemasRequest): Promise<vtadmin.GetSrvVSchemasResponse>;
+
+        /**
          * Calls GetTablet.
          * @param request GetTabletRequest message or plain object
          * @param callback Node-style callback called with the error, if any, and Tablet
@@ -269,6 +297,20 @@ export namespace vtadmin {
          * @param [response] GetSchemasResponse
          */
         type GetSchemasCallback = (error: (Error|null), response?: vtadmin.GetSchemasResponse) => void;
+
+        /**
+         * Callback as used by {@link vtadmin.VTAdmin#getSrvVSchema}.
+         * @param error Error, if any
+         * @param [response] SrvVSchema
+         */
+        type GetSrvVSchemaCallback = (error: (Error|null), response?: vtadmin.SrvVSchema) => void;
+
+        /**
+         * Callback as used by {@link vtadmin.VTAdmin#getSrvVSchemas}.
+         * @param error Error, if any
+         * @param [response] GetSrvVSchemasResponse
+         */
+        type GetSrvVSchemasCallback = (error: (Error|null), response?: vtadmin.GetSrvVSchemasResponse) => void;
 
         /**
          * Callback as used by {@link vtadmin.VTAdmin#getTablet}.
@@ -921,6 +963,108 @@ export namespace vtadmin {
              */
             public toJSON(): { [k: string]: any };
         }
+    }
+
+    /** Properties of a SrvVSchema. */
+    interface ISrvVSchema {
+
+        /** SrvVSchema cell */
+        cell?: (string|null);
+
+        /** SrvVSchema cluster */
+        cluster?: (vtadmin.ICluster|null);
+
+        /** SrvVSchema srv_v_schema */
+        srv_v_schema?: (vschema.ISrvVSchema|null);
+    }
+
+    /** Represents a SrvVSchema. */
+    class SrvVSchema implements ISrvVSchema {
+
+        /**
+         * Constructs a new SrvVSchema.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtadmin.ISrvVSchema);
+
+        /** SrvVSchema cell. */
+        public cell: string;
+
+        /** SrvVSchema cluster. */
+        public cluster?: (vtadmin.ICluster|null);
+
+        /** SrvVSchema srv_v_schema. */
+        public srv_v_schema?: (vschema.ISrvVSchema|null);
+
+        /**
+         * Creates a new SrvVSchema instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns SrvVSchema instance
+         */
+        public static create(properties?: vtadmin.ISrvVSchema): vtadmin.SrvVSchema;
+
+        /**
+         * Encodes the specified SrvVSchema message. Does not implicitly {@link vtadmin.SrvVSchema.verify|verify} messages.
+         * @param message SrvVSchema message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtadmin.ISrvVSchema, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified SrvVSchema message, length delimited. Does not implicitly {@link vtadmin.SrvVSchema.verify|verify} messages.
+         * @param message SrvVSchema message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtadmin.ISrvVSchema, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a SrvVSchema message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns SrvVSchema
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.SrvVSchema;
+
+        /**
+         * Decodes a SrvVSchema message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns SrvVSchema
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.SrvVSchema;
+
+        /**
+         * Verifies a SrvVSchema message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a SrvVSchema message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns SrvVSchema
+         */
+        public static fromObject(object: { [k: string]: any }): vtadmin.SrvVSchema;
+
+        /**
+         * Creates a plain object from a SrvVSchema message. Also converts values to other types if specified.
+         * @param message SrvVSchema
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtadmin.SrvVSchema, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this SrvVSchema to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
     }
 
     /** Properties of a Tablet. */
@@ -2488,6 +2632,288 @@ export namespace vtadmin {
 
         /**
          * Converts this GetSchemasResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a GetSrvVSchemaRequest. */
+    interface IGetSrvVSchemaRequest {
+
+        /** GetSrvVSchemaRequest cluster_id */
+        cluster_id?: (string|null);
+
+        /** GetSrvVSchemaRequest cell */
+        cell?: (string|null);
+    }
+
+    /** Represents a GetSrvVSchemaRequest. */
+    class GetSrvVSchemaRequest implements IGetSrvVSchemaRequest {
+
+        /**
+         * Constructs a new GetSrvVSchemaRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtadmin.IGetSrvVSchemaRequest);
+
+        /** GetSrvVSchemaRequest cluster_id. */
+        public cluster_id: string;
+
+        /** GetSrvVSchemaRequest cell. */
+        public cell: string;
+
+        /**
+         * Creates a new GetSrvVSchemaRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns GetSrvVSchemaRequest instance
+         */
+        public static create(properties?: vtadmin.IGetSrvVSchemaRequest): vtadmin.GetSrvVSchemaRequest;
+
+        /**
+         * Encodes the specified GetSrvVSchemaRequest message. Does not implicitly {@link vtadmin.GetSrvVSchemaRequest.verify|verify} messages.
+         * @param message GetSrvVSchemaRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtadmin.IGetSrvVSchemaRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified GetSrvVSchemaRequest message, length delimited. Does not implicitly {@link vtadmin.GetSrvVSchemaRequest.verify|verify} messages.
+         * @param message GetSrvVSchemaRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtadmin.IGetSrvVSchemaRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a GetSrvVSchemaRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns GetSrvVSchemaRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.GetSrvVSchemaRequest;
+
+        /**
+         * Decodes a GetSrvVSchemaRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns GetSrvVSchemaRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.GetSrvVSchemaRequest;
+
+        /**
+         * Verifies a GetSrvVSchemaRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a GetSrvVSchemaRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns GetSrvVSchemaRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtadmin.GetSrvVSchemaRequest;
+
+        /**
+         * Creates a plain object from a GetSrvVSchemaRequest message. Also converts values to other types if specified.
+         * @param message GetSrvVSchemaRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtadmin.GetSrvVSchemaRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this GetSrvVSchemaRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a GetSrvVSchemasRequest. */
+    interface IGetSrvVSchemasRequest {
+
+        /** GetSrvVSchemasRequest cluster_ids */
+        cluster_ids?: (string[]|null);
+
+        /** GetSrvVSchemasRequest cells */
+        cells?: (string[]|null);
+    }
+
+    /** Represents a GetSrvVSchemasRequest. */
+    class GetSrvVSchemasRequest implements IGetSrvVSchemasRequest {
+
+        /**
+         * Constructs a new GetSrvVSchemasRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtadmin.IGetSrvVSchemasRequest);
+
+        /** GetSrvVSchemasRequest cluster_ids. */
+        public cluster_ids: string[];
+
+        /** GetSrvVSchemasRequest cells. */
+        public cells: string[];
+
+        /**
+         * Creates a new GetSrvVSchemasRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns GetSrvVSchemasRequest instance
+         */
+        public static create(properties?: vtadmin.IGetSrvVSchemasRequest): vtadmin.GetSrvVSchemasRequest;
+
+        /**
+         * Encodes the specified GetSrvVSchemasRequest message. Does not implicitly {@link vtadmin.GetSrvVSchemasRequest.verify|verify} messages.
+         * @param message GetSrvVSchemasRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtadmin.IGetSrvVSchemasRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified GetSrvVSchemasRequest message, length delimited. Does not implicitly {@link vtadmin.GetSrvVSchemasRequest.verify|verify} messages.
+         * @param message GetSrvVSchemasRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtadmin.IGetSrvVSchemasRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a GetSrvVSchemasRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns GetSrvVSchemasRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.GetSrvVSchemasRequest;
+
+        /**
+         * Decodes a GetSrvVSchemasRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns GetSrvVSchemasRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.GetSrvVSchemasRequest;
+
+        /**
+         * Verifies a GetSrvVSchemasRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a GetSrvVSchemasRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns GetSrvVSchemasRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtadmin.GetSrvVSchemasRequest;
+
+        /**
+         * Creates a plain object from a GetSrvVSchemasRequest message. Also converts values to other types if specified.
+         * @param message GetSrvVSchemasRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtadmin.GetSrvVSchemasRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this GetSrvVSchemasRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a GetSrvVSchemasResponse. */
+    interface IGetSrvVSchemasResponse {
+
+        /** GetSrvVSchemasResponse srv_v_schemas */
+        srv_v_schemas?: (vtadmin.ISrvVSchema[]|null);
+    }
+
+    /** Represents a GetSrvVSchemasResponse. */
+    class GetSrvVSchemasResponse implements IGetSrvVSchemasResponse {
+
+        /**
+         * Constructs a new GetSrvVSchemasResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtadmin.IGetSrvVSchemasResponse);
+
+        /** GetSrvVSchemasResponse srv_v_schemas. */
+        public srv_v_schemas: vtadmin.ISrvVSchema[];
+
+        /**
+         * Creates a new GetSrvVSchemasResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns GetSrvVSchemasResponse instance
+         */
+        public static create(properties?: vtadmin.IGetSrvVSchemasResponse): vtadmin.GetSrvVSchemasResponse;
+
+        /**
+         * Encodes the specified GetSrvVSchemasResponse message. Does not implicitly {@link vtadmin.GetSrvVSchemasResponse.verify|verify} messages.
+         * @param message GetSrvVSchemasResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtadmin.IGetSrvVSchemasResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified GetSrvVSchemasResponse message, length delimited. Does not implicitly {@link vtadmin.GetSrvVSchemasResponse.verify|verify} messages.
+         * @param message GetSrvVSchemasResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtadmin.IGetSrvVSchemasResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a GetSrvVSchemasResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns GetSrvVSchemasResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.GetSrvVSchemasResponse;
+
+        /**
+         * Decodes a GetSrvVSchemasResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns GetSrvVSchemasResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.GetSrvVSchemasResponse;
+
+        /**
+         * Verifies a GetSrvVSchemasResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a GetSrvVSchemasResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns GetSrvVSchemasResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtadmin.GetSrvVSchemasResponse;
+
+        /**
+         * Creates a plain object from a GetSrvVSchemasResponse message. Also converts values to other types if specified.
+         * @param message GetSrvVSchemasResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtadmin.GetSrvVSchemasResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this GetSrvVSchemasResponse to JSON.
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
@@ -27514,6 +27940,186 @@ export namespace vtctldata {
 
         /**
          * Converts this GetSrvVSchemaResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a GetSrvVSchemasRequest. */
+    interface IGetSrvVSchemasRequest {
+
+        /** GetSrvVSchemasRequest cells */
+        cells?: (string[]|null);
+    }
+
+    /** Represents a GetSrvVSchemasRequest. */
+    class GetSrvVSchemasRequest implements IGetSrvVSchemasRequest {
+
+        /**
+         * Constructs a new GetSrvVSchemasRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IGetSrvVSchemasRequest);
+
+        /** GetSrvVSchemasRequest cells. */
+        public cells: string[];
+
+        /**
+         * Creates a new GetSrvVSchemasRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns GetSrvVSchemasRequest instance
+         */
+        public static create(properties?: vtctldata.IGetSrvVSchemasRequest): vtctldata.GetSrvVSchemasRequest;
+
+        /**
+         * Encodes the specified GetSrvVSchemasRequest message. Does not implicitly {@link vtctldata.GetSrvVSchemasRequest.verify|verify} messages.
+         * @param message GetSrvVSchemasRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IGetSrvVSchemasRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified GetSrvVSchemasRequest message, length delimited. Does not implicitly {@link vtctldata.GetSrvVSchemasRequest.verify|verify} messages.
+         * @param message GetSrvVSchemasRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IGetSrvVSchemasRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a GetSrvVSchemasRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns GetSrvVSchemasRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.GetSrvVSchemasRequest;
+
+        /**
+         * Decodes a GetSrvVSchemasRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns GetSrvVSchemasRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.GetSrvVSchemasRequest;
+
+        /**
+         * Verifies a GetSrvVSchemasRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a GetSrvVSchemasRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns GetSrvVSchemasRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.GetSrvVSchemasRequest;
+
+        /**
+         * Creates a plain object from a GetSrvVSchemasRequest message. Also converts values to other types if specified.
+         * @param message GetSrvVSchemasRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.GetSrvVSchemasRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this GetSrvVSchemasRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a GetSrvVSchemasResponse. */
+    interface IGetSrvVSchemasResponse {
+
+        /** GetSrvVSchemasResponse srv_v_schemas */
+        srv_v_schemas?: ({ [k: string]: vschema.ISrvVSchema }|null);
+    }
+
+    /** Represents a GetSrvVSchemasResponse. */
+    class GetSrvVSchemasResponse implements IGetSrvVSchemasResponse {
+
+        /**
+         * Constructs a new GetSrvVSchemasResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IGetSrvVSchemasResponse);
+
+        /** GetSrvVSchemasResponse srv_v_schemas. */
+        public srv_v_schemas: { [k: string]: vschema.ISrvVSchema };
+
+        /**
+         * Creates a new GetSrvVSchemasResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns GetSrvVSchemasResponse instance
+         */
+        public static create(properties?: vtctldata.IGetSrvVSchemasResponse): vtctldata.GetSrvVSchemasResponse;
+
+        /**
+         * Encodes the specified GetSrvVSchemasResponse message. Does not implicitly {@link vtctldata.GetSrvVSchemasResponse.verify|verify} messages.
+         * @param message GetSrvVSchemasResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IGetSrvVSchemasResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified GetSrvVSchemasResponse message, length delimited. Does not implicitly {@link vtctldata.GetSrvVSchemasResponse.verify|verify} messages.
+         * @param message GetSrvVSchemasResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IGetSrvVSchemasResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a GetSrvVSchemasResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns GetSrvVSchemasResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.GetSrvVSchemasResponse;
+
+        /**
+         * Decodes a GetSrvVSchemasResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns GetSrvVSchemasResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.GetSrvVSchemasResponse;
+
+        /**
+         * Verifies a GetSrvVSchemasResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a GetSrvVSchemasResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns GetSrvVSchemasResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.GetSrvVSchemasResponse;
+
+        /**
+         * Creates a plain object from a GetSrvVSchemasResponse message. Also converts values to other types if specified.
+         * @param message GetSrvVSchemasResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.GetSrvVSchemasResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this GetSrvVSchemasResponse to JSON.
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };

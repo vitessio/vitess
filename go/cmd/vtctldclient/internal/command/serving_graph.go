@@ -29,15 +29,27 @@ import (
 var (
 	// GetSrvKeyspaces makes a GetSrvKeyspaces gRPC call to a vtctld.
 	GetSrvKeyspaces = &cobra.Command{
-		Use:  "GetSrvKeyspaces <keyspace> [<cell> ...]",
-		Args: cobra.MinimumNArgs(1),
-		RunE: commandGetSrvKeyspaces,
+		Use:                   "GetSrvKeyspaces <keyspace> [<cell> ...]",
+		Short:                 "Returns the SrvKeyspaces for the given keyspace in one or more cells.",
+		Args:                  cobra.MinimumNArgs(1),
+		RunE:                  commandGetSrvKeyspaces,
+		DisableFlagsInUseLine: true,
 	}
 	// GetSrvVSchema makes a GetSrvVSchema gRPC call to a vtctld.
 	GetSrvVSchema = &cobra.Command{
-		Use:  "GetSrvVSchema cell",
-		Args: cobra.ExactArgs(1),
-		RunE: commandGetSrvVSchema,
+		Use:                   "GetSrvVSchema cell",
+		Short:                 "Returns the SrvVSchema for the given cell.",
+		Args:                  cobra.ExactArgs(1),
+		RunE:                  commandGetSrvVSchema,
+		DisableFlagsInUseLine: true,
+	}
+	// GetSrvVSchemas makes a GetSrvVSchemas gRPC call to a vtctld.
+	GetSrvVSchemas = &cobra.Command{
+		Use:                   "GetSrvVSchemas [<cell> ...]",
+		Short:                 "Returns the SrvVSchema for all cells, optionally filtered by the given cells.",
+		Args:                  cobra.ArbitraryArgs,
+		RunE:                  commandGetSrvVSchemas,
+		DisableFlagsInUseLine: true,
 	}
 )
 
@@ -87,7 +99,35 @@ func commandGetSrvVSchema(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+func commandGetSrvVSchemas(cmd *cobra.Command, args []string) error {
+	cli.FinishedParsing(cmd)
+
+	cells := cmd.Flags().Args()[0:]
+
+	resp, err := client.GetSrvVSchemas(commandCtx, &vtctldatapb.GetSrvVSchemasRequest{
+		Cells: cells,
+	})
+	if err != nil {
+		return err
+	}
+
+	// By default, an empty array will serialize as `null`, but `[]` is a little nicer.
+	data := []byte("[]")
+
+	if len(resp.SrvVSchemas) > 0 {
+		data, err = cli.MarshalJSON(resp.SrvVSchemas)
+		if err != nil {
+			return err
+		}
+	}
+
+	fmt.Printf("%s\n", data)
+
+	return nil
+}
+
 func init() {
 	Root.AddCommand(GetSrvKeyspaces)
 	Root.AddCommand(GetSrvVSchema)
+	Root.AddCommand(GetSrvVSchemas)
 }

@@ -98,7 +98,8 @@ type Executor struct {
 	normalize       bool
 	warnShardedOnly bool
 
-	vm *VSchemaManager
+	vm            *VSchemaManager
+	schemaTracker SchemaInfo
 }
 
 var executorOnce sync.Once
@@ -108,7 +109,16 @@ const pathScatterStats = "/debug/scatter_stats"
 const pathVSchema = "/debug/vschema"
 
 // NewExecutor creates a new Executor.
-func NewExecutor(ctx context.Context, serv srvtopo.Server, cell string, resolver *Resolver, normalize, warnOnShardedOnly bool, streamSize int, cacheCfg *cache.Config) *Executor {
+func NewExecutor(
+	ctx context.Context,
+	serv srvtopo.Server,
+	cell string,
+	resolver *Resolver,
+	normalize, warnOnShardedOnly bool,
+	streamSize int,
+	cacheCfg *cache.Config,
+	schemaTracker SchemaInfo,
+) *Executor {
 	e := &Executor{
 		serv:            serv,
 		cell:            cell,
@@ -119,11 +129,18 @@ func NewExecutor(ctx context.Context, serv srvtopo.Server, cell string, resolver
 		normalize:       normalize,
 		warnShardedOnly: warnOnShardedOnly,
 		streamSize:      streamSize,
+		schemaTracker:   schemaTracker,
 	}
 
 	vschemaacl.Init()
-	e.vm = &VSchemaManager{e: e}
-	e.vm.watchSrvVSchema(ctx, cell)
+	// we subscribe to update from the VSchemaManager
+	e.vm = &VSchemaManager{
+		subscriber: e.SaveVSchema,
+		serv:       serv,
+		cell:       cell,
+		schema:     e.schemaTracker,
+	}
+	serv.WatchSrvVSchema(ctx, cell, e.vm.VSchemaUpdate)
 
 	executorOnce.Do(func() {
 		stats.NewGaugeFunc("QueryPlanCacheLength", "Query plan cache length", func() int64 {
@@ -1140,7 +1157,9 @@ func (e *Executor) VSchema() *vindexes.VSchema {
 func (e *Executor) SaveVSchema(vschema *vindexes.VSchema, stats *VSchemaStats) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	e.vschema = vschema
+	if vschema != nil {
+		e.vschema = vschema
+	}
 	e.vschemaStats = stats
 	e.plans.Clear()
 

@@ -184,8 +184,11 @@ type VtctldClient interface {
 	// GetSrvKeyspaces returns the SrvKeyspaces for a keyspace in one or more
 	// cells.
 	GetSrvKeyspaces(ctx context.Context, in *vtctldata.GetSrvKeyspacesRequest, opts ...grpc.CallOption) (*vtctldata.GetSrvKeyspacesResponse, error)
-	// GetSrvVSchema returns a the SrvVSchema for a cell.
+	// GetSrvVSchema returns the SrvVSchema for a cell.
 	GetSrvVSchema(ctx context.Context, in *vtctldata.GetSrvVSchemaRequest, opts ...grpc.CallOption) (*vtctldata.GetSrvVSchemaResponse, error)
+	// GetSrvVSchemas returns a mapping from cell name to SrvVSchema for all cells,
+	// optionally filtered by cell name.
+	GetSrvVSchemas(ctx context.Context, in *vtctldata.GetSrvVSchemasRequest, opts ...grpc.CallOption) (*vtctldata.GetSrvVSchemasResponse, error)
 	// GetTablet returns information about a tablet.
 	GetTablet(ctx context.Context, in *vtctldata.GetTabletRequest, opts ...grpc.CallOption) (*vtctldata.GetTabletResponse, error)
 	// GetTablets returns tablets, optionally filtered by keyspace and shard.
@@ -405,6 +408,15 @@ func (c *vtctldClient) GetSrvVSchema(ctx context.Context, in *vtctldata.GetSrvVS
 	return out, nil
 }
 
+func (c *vtctldClient) GetSrvVSchemas(ctx context.Context, in *vtctldata.GetSrvVSchemasRequest, opts ...grpc.CallOption) (*vtctldata.GetSrvVSchemasResponse, error) {
+	out := new(vtctldata.GetSrvVSchemasResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/GetSrvVSchemas", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *vtctldClient) GetTablet(ctx context.Context, in *vtctldata.GetTabletRequest, opts ...grpc.CallOption) (*vtctldata.GetTabletResponse, error) {
 	out := new(vtctldata.GetTabletResponse)
 	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/GetTablet", in, out, opts...)
@@ -560,8 +572,11 @@ type VtctldServer interface {
 	// GetSrvKeyspaces returns the SrvKeyspaces for a keyspace in one or more
 	// cells.
 	GetSrvKeyspaces(context.Context, *vtctldata.GetSrvKeyspacesRequest) (*vtctldata.GetSrvKeyspacesResponse, error)
-	// GetSrvVSchema returns a the SrvVSchema for a cell.
+	// GetSrvVSchema returns the SrvVSchema for a cell.
 	GetSrvVSchema(context.Context, *vtctldata.GetSrvVSchemaRequest) (*vtctldata.GetSrvVSchemaResponse, error)
+	// GetSrvVSchemas returns a mapping from cell name to SrvVSchema for all cells,
+	// optionally filtered by cell name.
+	GetSrvVSchemas(context.Context, *vtctldata.GetSrvVSchemasRequest) (*vtctldata.GetSrvVSchemasResponse, error)
 	// GetTablet returns information about a tablet.
 	GetTablet(context.Context, *vtctldata.GetTabletRequest) (*vtctldata.GetTabletResponse, error)
 	// GetTablets returns tablets, optionally filtered by keyspace and shard.
@@ -669,6 +684,9 @@ func (UnimplementedVtctldServer) GetSrvKeyspaces(context.Context, *vtctldata.Get
 }
 func (UnimplementedVtctldServer) GetSrvVSchema(context.Context, *vtctldata.GetSrvVSchemaRequest) (*vtctldata.GetSrvVSchemaResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetSrvVSchema not implemented")
+}
+func (UnimplementedVtctldServer) GetSrvVSchemas(context.Context, *vtctldata.GetSrvVSchemasRequest) (*vtctldata.GetSrvVSchemasResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetSrvVSchemas not implemented")
 }
 func (UnimplementedVtctldServer) GetTablet(context.Context, *vtctldata.GetTabletRequest) (*vtctldata.GetTabletResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetTablet not implemented")
@@ -1040,6 +1058,24 @@ func _Vtctld_GetSrvVSchema_Handler(srv interface{}, ctx context.Context, dec fun
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Vtctld_GetSrvVSchemas_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.GetSrvVSchemasRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).GetSrvVSchemas(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/GetSrvVSchemas",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).GetSrvVSchemas(ctx, req.(*vtctldata.GetSrvVSchemasRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Vtctld_GetTablet_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(vtctldata.GetTabletRequest)
 	if err := dec(in); err != nil {
@@ -1316,6 +1352,10 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetSrvVSchema",
 			Handler:    _Vtctld_GetSrvVSchema_Handler,
+		},
+		{
+			MethodName: "GetSrvVSchemas",
+			Handler:    _Vtctld_GetSrvVSchemas_Handler,
 		},
 		{
 			MethodName: "GetTablet",
