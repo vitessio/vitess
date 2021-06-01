@@ -17,6 +17,7 @@ limitations under the License.
 package schema
 
 import (
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -45,34 +46,57 @@ func TestTracking(t *testing.T) {
 		Shard:    target.Shard,
 		Type:     target.TabletType,
 	}
-	sbc := sandboxconn.NewSandboxConn(tablet)
-	ch := make(chan *discovery.TabletHealth)
-	tracker := NewTracker(ch)
 	fields := sqltypes.MakeTestFields("table_name|col_name|col_type", "varchar|varchar|varchar")
-	sbc.SetResults([]*sqltypes.Result{sqltypes.MakeTestResult(
-		fields,
-		"prior|id|int",
-	)})
 
-	err := tracker.LoadKeyspace(sbc, target)
-	require.NoError(t, err)
-
-	tracker.Start()
-	defer tracker.Stop()
-	testcases := []struct {
-		tName  string
+	type delta struct {
 		result *sqltypes.Result
 		updTbl []string
+	}
+	var (
+		d0 = delta{
+			result: sqltypes.MakeTestResult(
+				fields,
+				"prior|id|int",
+			),
+			updTbl: []string{"prior"},
+		}
+
+		d1 = delta{
+			result: sqltypes.MakeTestResult(
+				fields,
+				"t1|id|int",
+				"t1|name|varchar",
+				"t2|id|varchar",
+			),
+			updTbl: []string{"t1", "t2"},
+		}
+
+		d2 = delta{
+			result: sqltypes.MakeTestResult(
+				fields,
+				"t2|id|varchar",
+				"t2|name|varchar",
+				"t3|id|datetime",
+			),
+			updTbl: []string{"prior", "t1", "t2", "t3"},
+		}
+
+		d3 = delta{
+			result: sqltypes.MakeTestResult(
+				fields,
+				"t4|name|varchar",
+			),
+			updTbl: []string{"t4"},
+		}
+	)
+
+	testcases := []struct {
+		tName  string
+		deltas []delta
 		exp    map[string][]vindexes.Column
 	}{{
-		tName: "new tables",
-		result: sqltypes.MakeTestResult(
-			fields,
-			"t1|id|int",
-			"t1|name|varchar",
-			"t2|id|varchar",
-		),
-		updTbl: []string{"t1", "t2"},
+		tName:  "new tables",
+		deltas: []delta{d0, d1},
 		exp: map[string][]vindexes.Column{
 			"t1": {
 				{Name: sqlparser.NewColIdent("id"), Type: querypb.Type_INT32},
@@ -83,14 +107,8 @@ func TestTracking(t *testing.T) {
 				{Name: sqlparser.NewColIdent("id"), Type: querypb.Type_INT32}},
 		},
 	}, {
-		tName: "delete t1 and prior, updated t2 and new t3",
-		result: sqltypes.MakeTestResult(
-			fields,
-			"t2|id|varchar",
-			"t2|name|varchar",
-			"t3|id|datetime",
-		),
-		updTbl: []string{"prior", "t1", "t2", "t3"},
+		tName:  "delete t1 and prior, updated t2 and new t3",
+		deltas: []delta{d0, d1, d2},
 		exp: map[string][]vindexes.Column{
 			"t2": {
 				{Name: sqlparser.NewColIdent("id"), Type: querypb.Type_VARCHAR},
@@ -99,12 +117,8 @@ func TestTracking(t *testing.T) {
 				{Name: sqlparser.NewColIdent("id"), Type: querypb.Type_DATETIME}},
 		},
 	}, {
-		tName: "new t4",
-		result: sqltypes.MakeTestResult(
-			fields,
-			"t4|name|varchar",
-		),
-		updTbl: []string{"t4"},
+		tName:  "new t4",
+		deltas: []delta{d0, d1, d2, d3},
 		exp: map[string][]vindexes.Column{
 			"t2": {
 				{Name: sqlparser.NewColIdent("id"), Type: querypb.Type_VARCHAR},
@@ -116,98 +130,42 @@ func TestTracking(t *testing.T) {
 		},
 	},
 	}
-	for _, tcase := range testcases {
-		t.Run(tcase.tName, func(t *testing.T) {
-			sbc.SetResults([]*sqltypes.Result{tcase.result})
+	for i, tcase := range testcases {
+		t.Run(fmt.Sprintf("%d - %s", i, tcase.tName), func(t *testing.T) {
+			sbc := sandboxconn.NewSandboxConn(tablet)
+			ch := make(chan *discovery.TabletHealth)
+			tracker := NewTracker(ch)
+
+			tracker.Start()
+			defer tracker.Stop()
+
+			var results []*sqltypes.Result
+			for _, d := range tcase.deltas {
+				results = append(results, d.result)
+			}
+
+			sbc.SetResults(results)
 			sbc.Queries = nil
 
 			wg := sync.WaitGroup{}
-			wg.Add(1)
+			wg.Add(len(tcase.deltas))
 			tracker.RegisterSignalReceiver(func() {
 				wg.Done()
 			})
 
-			ch <- &discovery.TabletHealth{
-				Conn:          sbc,
-				Tablet:        tablet,
-				Target:        target,
-				Serving:       true,
-				TablesUpdated: tcase.updTbl,
+			for _, d := range tcase.deltas {
+				ch <- &discovery.TabletHealth{
+					Conn:          sbc,
+					Tablet:        tablet,
+					Target:        target,
+					Serving:       true,
+					TablesUpdated: d.updTbl,
+				}
 			}
 
 			require.False(t, waitTimeout(&wg, time.Second), "schema was updated but received no signal")
 
-			require.Equal(t, 1, len(sbc.StringQueries()))
-
-			_, keyspacePresent := tracker.tracked[target.Keyspace]
-			require.Equal(t, true, keyspacePresent)
-
-			for k, v := range tcase.exp {
-				utils.MustMatch(t, v, tracker.GetColumns("ks", k), "mismatch for table: ", k)
-			}
-		})
-	}
-}
-
-func TestTrackingWithUntrackedKeyspace(t *testing.T) {
-	target := &querypb.Target{
-		Keyspace:   "ks",
-		Shard:      "0",
-		TabletType: topodatapb.TabletType_MASTER,
-		Cell:       "aa",
-	}
-	tablet := &topodatapb.Tablet{
-		Keyspace: target.Keyspace,
-		Shard:    target.Shard,
-		Type:     target.TabletType,
-	}
-	sbc := sandboxconn.NewSandboxConn(tablet)
-	ch := make(chan *discovery.TabletHealth)
-	tracker := NewTracker(ch)
-	fields := sqltypes.MakeTestFields("table_name|col_name|col_type", "varchar|varchar|varchar")
-
-	tracker.Start()
-	defer tracker.Stop()
-	testcases := []struct {
-		tName  string
-		result *sqltypes.Result
-		updTbl []string
-		exp    map[string][]vindexes.Column
-	}{{
-		tName: "existing tables",
-		result: sqltypes.MakeTestResult(
-			fields,
-			"prior|id|int",
-		),
-		updTbl: []string{"prior"},
-		exp: map[string][]vindexes.Column{
-			"prior": {
-				{Name: sqlparser.NewColIdent("id"), Type: querypb.Type_INT32}},
-		},
-	}}
-
-	for _, tcase := range testcases {
-		t.Run(tcase.tName, func(t *testing.T) {
-			sbc.SetResults([]*sqltypes.Result{tcase.result})
-			sbc.Queries = nil
-
-			wg := sync.WaitGroup{}
-			wg.Add(1)
-			tracker.RegisterSignalReceiver(func() {
-				wg.Done()
-			})
-
-			ch <- &discovery.TabletHealth{
-				Conn:          sbc,
-				Tablet:        tablet,
-				Target:        target,
-				Serving:       true,
-				TablesUpdated: tcase.updTbl,
-			}
-
-			require.False(t, waitTimeout(&wg, time.Second), "schema was updated but received no signal")
-
-			require.Equal(t, 1, len(sbc.StringQueries()))
+			require.Equal(t, len(tcase.deltas), len(sbc.StringQueries()))
 
 			_, keyspacePresent := tracker.tracked[target.Keyspace]
 			require.Equal(t, true, keyspacePresent)
