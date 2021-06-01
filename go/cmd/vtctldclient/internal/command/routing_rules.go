@@ -34,17 +34,19 @@ import (
 var (
 	// ApplyRoutingRules makes an ApplyRoutingRules gRPC call to a vtctld.
 	ApplyRoutingRules = &cobra.Command{
-		Use:   "ApplyRoutingRules {--rules RULES | --rules-file RULES_FILE} [--cells=c1,c2,...] [--skip-rebuild] [--dry-run]",
-		Short: "Applies the VSchema routing rules.",
-		Args:  cobra.NoArgs,
-		RunE:  commandApplyRoutingRules,
+		Use:                   "ApplyRoutingRules {--rules RULES | --rules-file RULES_FILE} [--cells=c1,c2,...] [--skip-rebuild] [--dry-run]",
+		Short:                 "Applies the VSchema routing rules.",
+		DisableFlagsInUseLine: true,
+		Args:                  cobra.NoArgs,
+		RunE:                  commandApplyRoutingRules,
 	}
 	// GetRoutingRules makes a GetRoutingRules gRPC call to a vtctld.
 	GetRoutingRules = &cobra.Command{
-		Use:   "GetRoutingRules",
-		Short: "Displays the VSchema routing rules.",
-		Args:  cobra.NoArgs,
-		RunE:  commandGetRoutingRules,
+		Use:                   "GetRoutingRules",
+		Short:                 "Displays the VSchema routing rules.",
+		DisableFlagsInUseLine: true,
+		Args:                  cobra.NoArgs,
+		RunE:                  commandGetRoutingRules,
 	}
 )
 

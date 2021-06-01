@@ -2859,47 +2859,6 @@ func TestGetRoutingRules(t *testing.T) {
 	}
 }
 
-func TestGetTablet(t *testing.T) {
-	t.Parallel()
-
-	ctx := context.Background()
-	ts := memorytopo.NewServer("cell1")
-	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-		return NewVtctldServer(ts)
-	})
-
-	tablet := &topodatapb.Tablet{
-		Alias: &topodatapb.TabletAlias{
-			Cell: "cell1",
-			Uid:  100,
-		},
-		Hostname: "localhost",
-		Keyspace: "testkeyspace",
-		Shard:    "-",
-		Type:     topodatapb.TabletType_REPLICA,
-	}
-
-	testutil.AddTablet(ctx, t, ts, tablet, nil)
-
-	resp, err := vtctld.GetTablet(ctx, &vtctldatapb.GetTabletRequest{
-		TabletAlias: &topodatapb.TabletAlias{
-			Cell: "cell1",
-			Uid:  100,
-		},
-	})
-	assert.NoError(t, err)
-	utils.MustMatch(t, resp.Tablet, tablet)
-
-	// not found
-	_, err = vtctld.GetTablet(ctx, &vtctldatapb.GetTabletRequest{
-		TabletAlias: &topodatapb.TabletAlias{
-			Cell: "cell1",
-			Uid:  101,
-		},
-	})
-	assert.Error(t, err)
-}
-
 func TestGetSchema(t *testing.T) {
 	ctx := context.Background()
 	ts := memorytopo.NewServer("zone1")
@@ -3629,6 +3588,47 @@ func TestGetSrvVSchemas(t *testing.T) {
 			utils.MustMatch(t, tt.expected, resp)
 		})
 	}
+}
+
+func TestGetTablet(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	ts := memorytopo.NewServer("cell1")
+	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+		return NewVtctldServer(ts)
+	})
+
+	tablet := &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: "cell1",
+			Uid:  100,
+		},
+		Hostname: "localhost",
+		Keyspace: "testkeyspace",
+		Shard:    "-",
+		Type:     topodatapb.TabletType_REPLICA,
+	}
+
+	testutil.AddTablet(ctx, t, ts, tablet, nil)
+
+	resp, err := vtctld.GetTablet(ctx, &vtctldatapb.GetTabletRequest{
+		TabletAlias: &topodatapb.TabletAlias{
+			Cell: "cell1",
+			Uid:  100,
+		},
+	})
+	assert.NoError(t, err)
+	utils.MustMatch(t, resp.Tablet, tablet)
+
+	// not found
+	_, err = vtctld.GetTablet(ctx, &vtctldatapb.GetTabletRequest{
+		TabletAlias: &topodatapb.TabletAlias{
+			Cell: "cell1",
+			Uid:  101,
+		},
+	})
+	assert.Error(t, err)
 }
 
 func TestGetTablets(t *testing.T) {
