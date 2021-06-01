@@ -740,10 +740,6 @@ func (e *Executor) ExecuteWithVReplication(ctx context.Context, onlineDDL *schem
 		return ErrExecutorNotWritableTablet
 	}
 
-	if err := e.validateTableForAlterAction(ctx, onlineDDL); err != nil {
-		return err
-	}
-
 	conn, err := dbconnpool.NewDBConnection(ctx, e.env.Config().DB.DbaWithDB())
 	if err != nil {
 		return err
@@ -769,6 +765,11 @@ func (e *Executor) ExecuteWithVReplication(ctx context.Context, onlineDDL *schem
 	}
 	if err := v.analyze(ctx, conn); err != nil {
 		return err
+	}
+	if revertMigration == nil {
+		if err := e.validateTableForAlterAction(ctx, onlineDDL); err != nil {
+			return err
+		}
 	}
 	if err := e.updateArtifacts(ctx, onlineDDL.UUID, v.targetTable); err != nil {
 		return err
