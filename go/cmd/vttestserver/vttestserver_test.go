@@ -135,7 +135,7 @@ func TestForeignKeysAndDDLModes(t *testing.T) {
 	assert.NoError(t, err)
 	defer cluster.TearDown()
 
-	err = execOnCluster(cluster, "test_keyspace", func(conn *mysql.Conn) error {
+	execOnCluster(cluster, "test_keyspace", func(conn *mysql.Conn) error {
 		_, err := conn.ExecuteFetch(`CREATE TABLE test_table_2 (
 			id BIGINT,
 			test_table_id BIGINT,
@@ -154,14 +154,13 @@ func TestForeignKeysAndDDLModes(t *testing.T) {
 		assert.NoError(t, err)
 		return nil
 	})
-	assert.NoError(t, err)
 
 	cluster.TearDown()
 	cluster, err = startCluster("-foreign_key_mode=disallow", "-enable_online_ddl=false", "-enable_direct_ddl=false")
 	assert.NoError(t, err)
 	defer cluster.TearDown()
 
-	err = execOnCluster(cluster, "test_keyspace", func(conn *mysql.Conn) error {
+	execOnCluster(cluster, "test_keyspace", func(conn *mysql.Conn) error {
 		_, err := conn.ExecuteFetch(`CREATE TABLE test_table_2 (
 			id BIGINT,
 			test_table_id BIGINT,
