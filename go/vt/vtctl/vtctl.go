@@ -3108,11 +3108,12 @@ func commandGetVSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 }
 
 func commandGetRoutingRules(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	rr, err := wr.TopoServer().GetRoutingRules(ctx)
+	resp, err := wr.VtctldServer().GetRoutingRules(ctx, &vtctldatapb.GetRoutingRulesRequest{})
 	if err != nil {
 		return err
 	}
-	b, err := json2.MarshalIndentPB(rr, "  ")
+
+	b, err := json2.MarshalIndentPB(resp.RoutingRules, "  ")
 	if err != nil {
 		wr.Logger().Printf("%v\n", err)
 		return err
@@ -3132,7 +3133,10 @@ func commandRebuildVSchemaGraph(ctx context.Context, wr *wrangler.Wrangler, subF
 		return fmt.Errorf("RebuildVSchemaGraph doesn't take any arguments")
 	}
 
-	return wr.TopoServer().RebuildSrvVSchema(ctx, cells)
+	_, err := wr.VtctldServer().RebuildVSchemaGraph(ctx, &vtctldatapb.RebuildVSchemaGraphRequest{
+		Cells: cells,
+	})
+	return err
 }
 
 func commandApplyVSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -3253,6 +3257,7 @@ func commandApplyRoutingRules(ctx context.Context, wr *wrangler.Wrangler, subFla
 	routingRules := subFlags.String("rules", "", "Specify rules as a string")
 	routingRulesFile := subFlags.String("rules_file", "", "Specify rules in a file")
 	skipRebuild := subFlags.Bool("skip_rebuild", false, "If set, do no rebuild the SrvSchema objects.")
+	dryRun := subFlags.Bool("dry-run", false, "Do not upload the routing rules, but print what actions would be taken")
 	var cells flagutil.StringListValue
 	subFlags.Var(&cells, "cells", "If specified, limits the rebuild to the cells, after upload. Ignored if skipRebuild is set.")
 
@@ -3281,20 +3286,47 @@ func commandApplyRoutingRules(ctx context.Context, wr *wrangler.Wrangler, subFla
 
 	b, err := json2.MarshalIndentPB(rr, "  ")
 	if err != nil {
-		wr.Logger().Errorf2(err, "Failed to marshal RoutingRules for display")
+		msg := &strings.Builder{}
+		if *dryRun {
+			msg.WriteString("DRY RUN: ")
+		}
+		msg.WriteString("Failed to marshal RoutingRules for display")
+
+		wr.Logger().Errorf2(err, msg.String())
 	} else {
-		wr.Logger().Printf("New RoutingRules object:\n%s\nIf this is not what you expected, check the input data (as JSON parsing will skip unexpected fields).\n", b)
+		msg := &strings.Builder{}
+		if *dryRun {
+			msg.WriteString("=== DRY RUN ===\n")
+		}
+		msg.WriteString(fmt.Sprintf("New RoutingRules object:\n%s\nIf this is not what you expected, check the input data (as JSON parsing will skip unexpected fields).\n", b))
+		if *dryRun {
+			msg.WriteString("=== (END) DRY RUN ===\n")
+		}
+
+		wr.Logger().Printf(msg.String())
 	}
 
-	if err := wr.TopoServer().SaveRoutingRules(ctx, rr); err != nil {
-		return err
+	if !*dryRun {
+		_, err = wr.VtctldServer().ApplyRoutingRules(ctx, &vtctldatapb.ApplyRoutingRulesRequest{
+			RoutingRules: rr,
+			SkipRebuild:  *skipRebuild,
+			RebuildCells: cells,
+		})
+		if err != nil {
+			return err
+		}
 	}
 
 	if *skipRebuild {
-		wr.Logger().Warningf("Skipping rebuild of SrvVSchema, will need to run RebuildVSchemaGraph for changes to take effect")
-		return nil
+		msg := &strings.Builder{}
+		if *dryRun {
+			msg.WriteString("DRY RUN: ")
+		}
+		msg.WriteString("Skipping rebuild of SrvVSchema, will need to run RebuildVSchemaGraph for changes to take effect")
+		wr.Logger().Warningf(msg.String())
 	}
-	return wr.TopoServer().RebuildSrvVSchema(ctx, cells)
+
+	return nil
 }
 
 func commandGetSrvKeyspaceNames(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
