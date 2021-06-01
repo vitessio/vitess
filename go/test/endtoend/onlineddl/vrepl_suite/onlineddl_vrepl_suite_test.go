@@ -60,7 +60,7 @@ var (
 )
 
 const (
-	testDataPath   = "testdata"
+	testDataPath   = "tmptestdata"
 	defaultSQLMode = "ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION"
 )
 
@@ -258,7 +258,7 @@ func testSingle(t *testing.T, testName string) {
 	require.Equal(t, string(schema.OnlineDDLStatusComplete), migrationStatus)
 
 	if content, exists := readTestFile(t, testName, "expect_table_structure"); exists {
-		createStatement := getCreateTableStatement(t, tableName)
+		createStatement := getCreateTableStatement(t, afterTableName)
 		assert.Contains(t, createStatement, content, "expected SHOW CREATE TABLE to contain text in 'expect_table_structure' file")
 	}
 

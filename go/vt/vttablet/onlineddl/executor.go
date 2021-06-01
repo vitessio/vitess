@@ -675,6 +675,27 @@ func (e *Executor) initVreplicationOriginalMigration(ctx context.Context, online
 	return v, nil
 }
 
+// postInitVreplicationOriginalMigration runs extra changes after a vreplication online DDL has been initialized.
+// This function is called after both source and target tables have been analyzed, so there's more information
+// about the two, and about the transition between the two.
+func (e *Executor) postInitVreplicationOriginalMigration(ctx context.Context, v *VRepl, conn *dbconnpool.DBConnection) (err error) {
+	if v.sourceAutoIncrement > 0 && !v.parser.IsAutoIncrementDefined() {
+		// Apply ALTER TABLE AUTO_INCREMENT=?
+		parsed := sqlparser.BuildParsedQuery(sqlAlterTableAutoIncrement, v.targetTable, ":auto_increment")
+		bindVars := map[string]*querypb.BindVariable{
+			"auto_increment": sqltypes.Uint64BindVariable(v.sourceAutoIncrement),
+		}
+		bound, err := parsed.GenerateQuery(bindVars, nil)
+		if err != nil {
+			return err
+		}
+		if _, err := conn.ExecuteFetch(bound, 0, false); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (e *Executor) initVreplicationRevertMigration(ctx context.Context, onlineDDL *schema.OnlineDDL, revertMigration *schema.OnlineDDL) (v *VRepl, err error) {
 	// Getting here we've already validated that migration is revertible
 
@@ -738,6 +759,13 @@ func (e *Executor) ExecuteWithVReplication(ctx context.Context, onlineDDL *schem
 	}
 	if err := v.analyze(ctx, conn); err != nil {
 		return err
+	}
+
+	if revertMigration == nil {
+		// Original ALTER TABLE request for vreplication
+		if err := e.postInitVreplicationOriginalMigration(ctx, v, conn); err != nil {
+			return err
+		}
 	}
 	if err := e.updateArtifacts(ctx, onlineDDL.UUID, v.targetTable); err != nil {
 		return err
