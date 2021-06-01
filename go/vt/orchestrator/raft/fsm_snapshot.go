@@ -25,12 +25,6 @@ type fsmSnapshot struct {
 	snapshotCreatorApplier SnapshotCreatorApplier
 }
 
-func newFsmSnapshot(snapshotCreatorApplier SnapshotCreatorApplier) *fsmSnapshot {
-	return &fsmSnapshot{
-		snapshotCreatorApplier: snapshotCreatorApplier,
-	}
-}
-
 // Persist
 func (f *fsmSnapshot) Persist(sink raft.SnapshotSink) error {
 	data, err := f.snapshotCreatorApplier.GetData()

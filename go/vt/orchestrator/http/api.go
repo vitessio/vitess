@@ -2790,188 +2790,6 @@ func (this *HttpAPI) Reelect(params martini.Params, r render.Render, req *http.R
 	Respond(r, &APIResponse{Code: OK, Message: "Set re-elections"})
 }
 
-// RaftAddPeer adds a new node to the raft cluster
-func (this *HttpAPI) RaftAddPeer(params martini.Params, r render.Render, req *http.Request, user auth.User) {
-	if !isAuthorizedForAction(req, user) {
-		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
-		return
-	}
-	if !orcraft.IsRaftEnabled() {
-		Respond(r, &APIResponse{Code: ERROR, Message: "raft-add-peer: not running with raft setup"})
-		return
-	}
-	addr, err := orcraft.AddPeer(params["addr"])
-
-	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("Cannot add raft peer: %+v", err)})
-		return
-	}
-
-	r.JSON(http.StatusOK, addr)
-}
-
-// RaftAddPeer removes a node fro the raft cluster
-func (this *HttpAPI) RaftRemovePeer(params martini.Params, r render.Render, req *http.Request, user auth.User) {
-	if !isAuthorizedForAction(req, user) {
-		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
-		return
-	}
-	if !orcraft.IsRaftEnabled() {
-		Respond(r, &APIResponse{Code: ERROR, Message: "raft-remove-peer: not running with raft setup"})
-		return
-	}
-	addr, err := orcraft.RemovePeer(params["addr"])
-
-	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("Cannot remove raft peer: %+v", err)})
-		return
-	}
-
-	r.JSON(http.StatusOK, addr)
-}
-
-// RaftYield yields to a specified host
-func (this *HttpAPI) RaftYield(params martini.Params, r render.Render, req *http.Request, user auth.User) {
-	if !isAuthorizedForAction(req, user) {
-		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
-		return
-	}
-	if !orcraft.IsRaftEnabled() {
-		Respond(r, &APIResponse{Code: ERROR, Message: "raft-yield: not running with raft setup"})
-		return
-	}
-	orcraft.PublishYield(params["node"])
-	Respond(r, &APIResponse{Code: OK, Message: "Asynchronously yielded"})
-}
-
-// RaftYieldHint yields to a host whose name contains given hint (e.g. DC)
-func (this *HttpAPI) RaftYieldHint(params martini.Params, r render.Render, req *http.Request, user auth.User) {
-	if !isAuthorizedForAction(req, user) {
-		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
-		return
-	}
-	if !orcraft.IsRaftEnabled() {
-		Respond(r, &APIResponse{Code: ERROR, Message: "raft-yield-hint: not running with raft setup"})
-		return
-	}
-	hint := params["hint"]
-	orcraft.PublishYieldHostnameHint(hint)
-	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Asynchronously yielded by hint %s", hint), Details: hint})
-}
-
-// RaftPeers returns the list of peers in a raft setup
-func (this *HttpAPI) RaftPeers(params martini.Params, r render.Render, req *http.Request, user auth.User) {
-	if !orcraft.IsRaftEnabled() {
-		Respond(r, &APIResponse{Code: ERROR, Message: "raft-nodes: not running with raft setup"})
-		return
-	}
-
-	peers, err := orcraft.GetPeers()
-	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("Cannot get raft peers: %+v", err)})
-		return
-	}
-
-	r.JSON(http.StatusOK, peers)
-}
-
-// RaftState returns the state of this raft node
-func (this *HttpAPI) RaftState(params martini.Params, r render.Render, req *http.Request, user auth.User) {
-	if !orcraft.IsRaftEnabled() {
-		Respond(r, &APIResponse{Code: ERROR, Message: "raft-state: not running with raft setup"})
-		return
-	}
-
-	state := orcraft.GetState().String()
-	r.JSON(http.StatusOK, state)
-}
-
-// RaftLeader returns the identify of the leader, if possible
-func (this *HttpAPI) RaftLeader(params martini.Params, r render.Render, req *http.Request, user auth.User) {
-	if !orcraft.IsRaftEnabled() {
-		Respond(r, &APIResponse{Code: ERROR, Message: "raft-leader: not running with raft setup"})
-		return
-	}
-
-	leader := orcraft.GetLeader()
-	r.JSON(http.StatusOK, leader)
-}
-
-// RaftHealth indicates whether this node is part of a healthy raft group
-func (this *HttpAPI) RaftHealth(params martini.Params, r render.Render, req *http.Request, user auth.User) {
-	if !orcraft.IsRaftEnabled() {
-		Respond(r, &APIResponse{Code: ERROR, Message: "raft-state: not running with raft setup"})
-		return
-	}
-	if !orcraft.IsHealthy() {
-		Respond(r, &APIResponse{Code: ERROR, Message: "unhealthy"})
-		return
-	}
-	r.JSON(http.StatusOK, "healthy")
-}
-
-// RaftStatus exports a status summary for a raft node
-func (this *HttpAPI) RaftStatus(params martini.Params, r render.Render, req *http.Request, user auth.User) {
-	if !orcraft.IsRaftEnabled() {
-		Respond(r, &APIResponse{Code: ERROR, Message: "raft-state: not running with raft setup"})
-		return
-	}
-	peers, err := orcraft.GetPeers()
-	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("Cannot get raft peers: %+v", err)})
-		return
-	}
-
-	status := struct {
-		RaftBind       string
-		RaftAdvertise  string
-		State          string
-		Healthy        bool
-		IsPartOfQuorum bool
-		Leader         string
-		LeaderURI      string
-		Peers          []string
-	}{
-		RaftBind:       orcraft.GetRaftBind(),
-		RaftAdvertise:  orcraft.GetRaftAdvertise(),
-		State:          orcraft.GetState().String(),
-		Healthy:        orcraft.IsHealthy(),
-		IsPartOfQuorum: orcraft.IsPartOfQuorum(),
-		Leader:         orcraft.GetLeader(),
-		LeaderURI:      orcraft.LeaderURI.Get(),
-		Peers:          peers,
-	}
-	r.JSON(http.StatusOK, status)
-}
-
-// RaftFollowerHealthReport is initiated by followers to report their identity and health to the raft leader.
-func (this *HttpAPI) RaftFollowerHealthReport(params martini.Params, r render.Render, req *http.Request, user auth.User) {
-	if !orcraft.IsRaftEnabled() {
-		Respond(r, &APIResponse{Code: ERROR, Message: "raft-state: not running with raft setup"})
-		return
-	}
-	err := orcraft.OnHealthReport(params["authenticationToken"], params["raftBind"], params["raftAdvertise"])
-	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("Cannot create snapshot: %+v", err)})
-		return
-	}
-	r.JSON(http.StatusOK, "health reported")
-}
-
-// RaftSnapshot instructs raft to take a snapshot
-func (this *HttpAPI) RaftSnapshot(params martini.Params, r render.Render, req *http.Request, user auth.User) {
-	if !orcraft.IsRaftEnabled() {
-		Respond(r, &APIResponse{Code: ERROR, Message: "raft-leader: not running with raft setup"})
-		return
-	}
-	err := orcraft.Snapshot()
-	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("Cannot create snapshot: %+v", err)})
-		return
-	}
-	r.JSON(http.StatusOK, "snapshot created")
-}
-
 // ReloadConfiguration reloads confiug settings (not all of which will apply after change)
 func (this *HttpAPI) ReloadConfiguration(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	if !isAuthorizedForAction(req, user) {
@@ -3581,11 +3399,7 @@ func (this *HttpAPI) registerSingleAPIRequest(m *martini.ClassicMartini, path st
 	registeredPaths = append(registeredPaths, path)
 	fullPath := fmt.Sprintf("%s/api/%s", this.URLPrefix, path)
 
-	if allowProxy && config.Config.RaftEnabled {
-		m.Get(fullPath, raftReverseProxy, handler)
-	} else {
-		m.Get(fullPath, handler)
-	}
+	m.Get(fullPath, handler)
 }
 
 func (this *HttpAPI) registerAPIRequestInternal(m *martini.ClassicMartini, path string, handler martini.Handler, allowProxy bool) {
@@ -3814,17 +3628,6 @@ func (this *HttpAPI) RegisterRequests(m *martini.ClassicMartini) {
 	this.registerAPIRequestNoProxy(m, "leader-check", this.LeaderCheck)
 	this.registerAPIRequestNoProxy(m, "leader-check/:errorStatusCode", this.LeaderCheck)
 	this.registerAPIRequestNoProxy(m, "grab-election", this.GrabElection)
-	this.registerAPIRequest(m, "raft-add-peer/:addr", this.RaftAddPeer)       // delegated to the raft leader
-	this.registerAPIRequest(m, "raft-remove-peer/:addr", this.RaftRemovePeer) // delegated to the raft leader
-	this.registerAPIRequestNoProxy(m, "raft-yield/:node", this.RaftYield)
-	this.registerAPIRequestNoProxy(m, "raft-yield-hint/:hint", this.RaftYieldHint)
-	this.registerAPIRequestNoProxy(m, "raft-peers", this.RaftPeers)
-	this.registerAPIRequestNoProxy(m, "raft-state", this.RaftState)
-	this.registerAPIRequestNoProxy(m, "raft-leader", this.RaftLeader)
-	this.registerAPIRequestNoProxy(m, "raft-health", this.RaftHealth)
-	this.registerAPIRequestNoProxy(m, "raft-status", this.RaftStatus)
-	this.registerAPIRequestNoProxy(m, "raft-snapshot", this.RaftSnapshot)
-	this.registerAPIRequestNoProxy(m, "raft-follower-health-report/:authenticationToken/:raftBind/:raftAdvertise", this.RaftFollowerHealthReport)
 	this.registerAPIRequestNoProxy(m, "reload-configuration", this.ReloadConfiguration)
 	this.registerAPIRequestNoProxy(m, "hostname-resolve-cache", this.HostnameResolveCache)
 	this.registerAPIRequestNoProxy(m, "reset-hostname-resolve-cache", this.ResetHostnameResolveCache)
