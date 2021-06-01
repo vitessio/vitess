@@ -20,8 +20,6 @@ import (
 	"sync"
 	"time"
 
-	querypb "vitess.io/vitess/go/vt/proto/query"
-
 	"vitess.io/vitess/go/vt/discovery"
 )
 
@@ -40,8 +38,6 @@ type (
 		update func(th *discovery.TabletHealth)
 		init   func(th *discovery.TabletHealth)
 		signal func()
-
-		shardVersionCount map[*querypb.Target]int
 	}
 )
 
@@ -72,16 +68,10 @@ func (u *updateController) consume() {
 	}
 }
 
-func (u *updateController) itemMatch(i, j int) bool {
-	left := u.queue.items[i]
-	right := u.queue.items[j]
-	return left.Target.Keyspace != right.Target.Keyspace
-}
-
 func (u *updateController) getItemFromQueueLocked() *discovery.TabletHealth {
 	item := u.queue.items[0]
 	i := 0
-	for ; i < len(u.queue.items) && u.itemMatch(0, i); i++ {
+	for ; i < len(u.queue.items); i++ {
 		for _, table := range u.queue.items[i].TablesUpdated {
 			found := false
 			for _, itemTable := range item.TablesUpdated {
@@ -95,6 +85,7 @@ func (u *updateController) getItemFromQueueLocked() *discovery.TabletHealth {
 			}
 		}
 	}
+	// emptying queue's items as all items from 0 to i (length of the queue) are merged
 	u.queue.items = u.queue.items[i:]
 	return item
 }
