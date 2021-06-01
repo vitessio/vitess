@@ -45,7 +45,10 @@ var (
 	ErrDirectDDLDisabled = errors.New("direct DDL is disabled")
 	// ErrOnlineDDLDisabled is returned when online DDL is disabled, and a user attempts to run an online DDL operation (submit, review, control)
 	ErrOnlineDDLDisabled = errors.New("online DDL is disabled")
-	ErrForeignKeyFound   = errors.New("Foreign key found")
+	// ErrForeignKeyFound indicates any finding of FOREIGN KEY clause in a DDL statement
+	ErrForeignKeyFound = errors.New("Foreign key found")
+	// ErrRenameTableFound indicates finding of ALTER TABLE...RENAME in ddl statement
+	ErrRenameTableFound = errors.New("RENAME clause found")
 )
 
 const (
@@ -53,13 +56,15 @@ const (
 	RevertActionStr           = "revert"
 )
 
-func errorOnFKWalk(node sqlparser.SQLNode) (kontinue bool, err error) {
+func validateWalk(node sqlparser.SQLNode) (kontinue bool, err error) {
 	switch node.(type) {
 	case *sqlparser.CreateTable, *sqlparser.AlterTable,
 		*sqlparser.TableSpec, *sqlparser.AddConstraintDefinition, *sqlparser.ConstraintDefinition:
 		return true, nil
 	case *sqlparser.ForeignKeyDefinition:
 		return false, ErrForeignKeyFound
+	case *sqlparser.RenameTableName:
+		return false, ErrRenameTableFound
 	}
 	return false, nil
 }
@@ -164,8 +169,13 @@ func onlineDDLStatementSanity(sql string, ddlStmt sqlparser.DDLStatement) error 
 		return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.SyntaxError, "cannot parse statement: %v", sql)
 	}
 
-	if err := sqlparser.Walk(errorOnFKWalk, ddlStmt); err == ErrForeignKeyFound {
-		return vterrors.Errorf(vtrpcpb.Code_ABORTED, "foreign key constraints are not supported in online DDL, see https://code.openark.org/blog/mysql/the-problem-with-mysql-foreign-key-constraints-in-online-schema-changes")
+	if err := sqlparser.Walk(validateWalk, ddlStmt); err != nil {
+		switch err {
+		case ErrForeignKeyFound:
+			return vterrors.Errorf(vtrpcpb.Code_ABORTED, "foreign key constraints are not supported in online DDL, see https://code.openark.org/blog/mysql/the-problem-with-mysql-foreign-key-constraints-in-online-schema-changes")
+		case ErrRenameTableFound:
+			return vterrors.Errorf(vtrpcpb.Code_ABORTED, "ALTER TABLE ... RENAME is not supported in online DDL")
+		}
 	}
 	return nil
 }
