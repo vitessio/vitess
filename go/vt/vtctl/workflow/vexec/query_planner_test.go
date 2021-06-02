@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/vtctl/workflow/vexec/testutil"
 )
@@ -122,7 +123,9 @@ func TestVReplicationQueryPlanner_planSelect(t *testing.T) {
 			qp, err := planner.PlanQuery(stmt)
 
 			assert.NoError(t, err)
-			assert.Equal(t, testutil.ParsedQueryFromString(t, tt.expectedPlannedQuery), qp.ParsedQuery)
+			fixedqp, ok := qp.(*FixedQueryPlan)
+			require.True(t, ok, "VReplicationQueryPlanner should always return a FixedQueryPlan from PlanQuery, got %T", qp)
+			assert.Equal(t, testutil.ParsedQueryFromString(t, tt.expectedPlannedQuery), fixedqp.ParsedQuery)
 		})
 	}
 }
@@ -179,7 +182,9 @@ func TestVReplicationQueryPlanner_planUpdate(t *testing.T) {
 				return
 			}
 
-			assert.Equal(t, testutil.ParsedQueryFromString(t, tt.expectedPlannedQuery), qp.ParsedQuery)
+			fixedqp, ok := qp.(*FixedQueryPlan)
+			require.True(t, ok, "VReplicationQueryPlanner should always return a FixedQueryPlan from PlanQuery, got %T", qp)
+			assert.Equal(t, testutil.ParsedQueryFromString(t, tt.expectedPlannedQuery), fixedqp.ParsedQuery)
 		})
 	}
 }
@@ -238,7 +243,9 @@ func TestVReplicationQueryPlanner_planDelete(t *testing.T) {
 				return
 			}
 
-			assert.Equal(t, testutil.ParsedQueryFromString(t, tt.expectedPlannedQuery), qp.ParsedQuery)
+			fixedqp, ok := qp.(*FixedQueryPlan)
+			require.True(t, ok, "VReplicationQueryPlanner should always return a FixedQueryPlan from PlanQuery, got %T", qp)
+			assert.Equal(t, testutil.ParsedQueryFromString(t, tt.expectedPlannedQuery), fixedqp.ParsedQuery)
 		})
 	}
 }
