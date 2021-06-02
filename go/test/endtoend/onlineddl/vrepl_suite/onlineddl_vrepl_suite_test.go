@@ -190,7 +190,7 @@ func testSingle(t *testing.T, testName string) {
 	_ = mysqlExec(t, sqlModeQuery, "")
 	_ = mysqlExec(t, "set @@global.event_scheduler=1", "")
 
-	_ = mysqlExec(t, fmt.Sprintf("drop table if exists %s, %s, %s", tableName, beforeTableName, afterTableName), "")
+	_ = mysqlExec(t, fmt.Sprintf("drop table if exists %s_child, %s, %s_parent, %s, %s;", tableName, tableName, tableName, beforeTableName, afterTableName), "")
 	_ = mysqlExec(t, fmt.Sprintf("drop event if exists %s", eventName), "")
 
 	{

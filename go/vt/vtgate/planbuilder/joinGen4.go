@@ -22,11 +22,11 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
-var _ logicalPlan = (*joinV4)(nil)
+var _ logicalPlan = (*joinGen4)(nil)
 
-// joinV4 is used to build a Join primitive.
-// It's used to build an inner join and only used by the V4 planner
-type joinV4 struct {
+// joinGen4 is used to build a Join primitive.
+// It's used to build an inner join and only used by the Gen4 planner
+type joinGen4 struct {
 	// Left and Right are the nodes for the join.
 	Left, Right logicalPlan
 	Cols        []int
@@ -34,51 +34,51 @@ type joinV4 struct {
 }
 
 // Order implements the logicalPlan interface
-func (j *joinV4) Order() int {
+func (j *joinGen4) Order() int {
 	panic("implement me")
 }
 
 // ResultColumns implements the logicalPlan interface
-func (j *joinV4) ResultColumns() []*resultColumn {
+func (j *joinGen4) ResultColumns() []*resultColumn {
 	panic("implement me")
 }
 
 // Reorder implements the logicalPlan interface
-func (j *joinV4) Reorder(i int) {
+func (j *joinGen4) Reorder(i int) {
 	panic("implement me")
 }
 
 // Wireup implements the logicalPlan interface
-func (j *joinV4) Wireup(lp logicalPlan, jt *jointab) error {
+func (j *joinGen4) Wireup(lp logicalPlan, jt *jointab) error {
 	panic("implement me")
 }
 
 // Wireup2 implements the logicalPlan interface
-func (j *joinV4) WireupV4(semTable *semantics.SemTable) error {
-	err := j.Left.WireupV4(semTable)
+func (j *joinGen4) WireupGen4(semTable *semantics.SemTable) error {
+	err := j.Left.WireupGen4(semTable)
 	if err != nil {
 		return err
 	}
-	return j.Right.WireupV4(semTable)
+	return j.Right.WireupGen4(semTable)
 }
 
 // SupplyVar implements the logicalPlan interface
-func (j *joinV4) SupplyVar(from, to int, col *sqlparser.ColName, varname string) {
+func (j *joinGen4) SupplyVar(from, to int, col *sqlparser.ColName, varname string) {
 	panic("implement me")
 }
 
 // SupplyCol implements the logicalPlan interface
-func (j *joinV4) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colNumber int) {
+func (j *joinGen4) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colNumber int) {
 	panic("implement me")
 }
 
 // SupplyWeightString implements the logicalPlan interface
-func (j *joinV4) SupplyWeightString(colNumber int) (weightcolNumber int, err error) {
+func (j *joinGen4) SupplyWeightString(colNumber int) (weightcolNumber int, err error) {
 	panic("implement me")
 }
 
 // Primitive implements the logicalPlan interface
-func (j *joinV4) Primitive() engine.Primitive {
+func (j *joinGen4) Primitive() engine.Primitive {
 	return &engine.Join{
 		Left:  j.Left.Primitive(),
 		Right: j.Right.Primitive(),
@@ -88,16 +88,16 @@ func (j *joinV4) Primitive() engine.Primitive {
 }
 
 // Inputs implements the logicalPlan interface
-func (j *joinV4) Inputs() []logicalPlan {
+func (j *joinGen4) Inputs() []logicalPlan {
 	panic("implement me")
 }
 
 // Rewrite implements the logicalPlan interface
-func (j *joinV4) Rewrite(inputs ...logicalPlan) error {
+func (j *joinGen4) Rewrite(inputs ...logicalPlan) error {
 	panic("implement me")
 }
 
 // Solves implements the logicalPlan interface
-func (j *joinV4) ContainsTables() semantics.TableSet {
+func (j *joinGen4) ContainsTables() semantics.TableSet {
 	return j.Left.ContainsTables().Merge(j.Right.ContainsTables())
 }
