@@ -2444,10 +2444,8 @@ func shouldRunJSONTests(t *testing.T, name string) bool {
 	return true
 }
 
-// TestPlayerJSONDocs validates more complex and 'large' json docs. It only validates that the data in the table
-// TestPlayerTypes, above, also verifies the sql queries applied on the target. It is too painful to test the applied
-// sql for larger jsons because of the need to escape special characters, so we check larger jsons separately
-// in this test since we just need to do check for string equality
+// TestPlayerJSONDocs validates more complex and 'large' json docs. It only validates that the data on target matches that on source.
+// TestPlayerTypes, above, also verifies the sql queries applied on the target.
 func TestPlayerJSONDocs(t *testing.T) {
 	if !shouldRunJSONTests(t, "TestPlayerJSONDocs") {
 		return
