@@ -17,14 +17,15 @@ limitations under the License.
 package wrangler
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"testing"
 	"time"
 
-	"context"
-
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/vtctl/workflow"
+
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
@@ -42,13 +43,13 @@ func TestStreamMigrateMainflow(t *testing.T) {
 	tme.expectNoPreviousJournals()
 
 	// Migrate reads
-	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", rdOnly, nil, DirectionForward, false)
+	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", rdOnly, nil, workflow.DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	tme.expectCheckJournals()
-	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", replica, nil, DirectionForward, false)
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", replica, nil, workflow.DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -182,7 +183,7 @@ func TestStreamMigrateMainflow(t *testing.T) {
 
 	tme.expectDeleteReverseVReplication()
 	tme.expectDeleteTargetVReplication()
-	if _, err := tme.wr.DropSources(ctx, tme.targetKeyspace, "test", DropTable, false, false, false); err != nil {
+	if _, err := tme.wr.DropSources(ctx, tme.targetKeyspace, "test", workflow.DropTable, false, false, false); err != nil {
 		t.Fatal(err)
 	}
 	verifyQueries(t, tme.allDBClients)
@@ -195,12 +196,12 @@ func TestStreamMigrateTwoStreams(t *testing.T) {
 
 	tme.expectNoPreviousJournals()
 	// Migrate reads
-	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", rdOnly, nil, DirectionForward, false)
+	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", rdOnly, nil, workflow.DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	tme.expectNoPreviousJournals()
-	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", replica, nil, DirectionForward, false)
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", replica, nil, workflow.DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -364,12 +365,12 @@ func TestStreamMigrateOneToMany(t *testing.T) {
 
 	tme.expectNoPreviousJournals()
 	// Migrate reads
-	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", rdOnly, nil, DirectionForward, false)
+	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", rdOnly, nil, workflow.DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	tme.expectNoPreviousJournals()
-	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", replica, nil, DirectionForward, false)
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", replica, nil, workflow.DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -497,12 +498,12 @@ func TestStreamMigrateManyToOne(t *testing.T) {
 
 	tme.expectNoPreviousJournals()
 	// Migrate reads
-	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", rdOnly, nil, DirectionForward, false)
+	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", rdOnly, nil, workflow.DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	tme.expectNoPreviousJournals()
-	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", replica, nil, DirectionForward, false)
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", replica, nil, workflow.DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -632,12 +633,12 @@ func TestStreamMigrateSyncSuccess(t *testing.T) {
 
 	tme.expectNoPreviousJournals()
 	// Migrate reads
-	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", rdOnly, nil, DirectionForward, false)
+	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", rdOnly, nil, workflow.DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	tme.expectNoPreviousJournals()
-	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", replica, nil, DirectionForward, false)
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", replica, nil, workflow.DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -824,12 +825,12 @@ func TestStreamMigrateSyncFail(t *testing.T) {
 
 	tme.expectNoPreviousJournals()
 	// Migrate reads
-	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", rdOnly, nil, DirectionForward, false)
+	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", rdOnly, nil, workflow.DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	tme.expectNoPreviousJournals()
-	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", replica, nil, DirectionForward, false)
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", replica, nil, workflow.DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -946,12 +947,12 @@ func TestStreamMigrateCancel(t *testing.T) {
 
 	tme.expectNoPreviousJournals()
 	// Migrate reads
-	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", rdOnly, nil, DirectionForward, false)
+	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", rdOnly, nil, workflow.DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	tme.expectNoPreviousJournals()
-	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", replica, nil, DirectionForward, false)
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", replica, nil, workflow.DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1051,12 +1052,12 @@ func TestStreamMigrateStoppedStreams(t *testing.T) {
 
 	tme.expectNoPreviousJournals()
 	// Migrate reads
-	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", rdOnly, nil, DirectionForward, false)
+	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", rdOnly, nil, workflow.DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	tme.expectNoPreviousJournals()
-	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", replica, nil, DirectionForward, false)
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", replica, nil, workflow.DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1110,12 +1111,12 @@ func TestStreamMigrateCancelWithStoppedStreams(t *testing.T) {
 
 	tme.expectNoPreviousJournals()
 	// Migrate reads
-	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", rdOnly, nil, DirectionForward, false)
+	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", rdOnly, nil, workflow.DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	tme.expectNoPreviousJournals()
-	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", replica, nil, DirectionForward, false)
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", replica, nil, workflow.DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1177,12 +1178,12 @@ func TestStreamMigrateStillCopying(t *testing.T) {
 
 	tme.expectNoPreviousJournals()
 	// Migrate reads
-	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", rdOnly, nil, DirectionForward, false)
+	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", rdOnly, nil, workflow.DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	tme.expectNoPreviousJournals()
-	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", replica, nil, DirectionForward, false)
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", replica, nil, workflow.DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1240,12 +1241,12 @@ func TestStreamMigrateEmptyWorkflow(t *testing.T) {
 
 	tme.expectNoPreviousJournals()
 	// Migrate reads
-	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", rdOnly, nil, DirectionForward, false)
+	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", rdOnly, nil, workflow.DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	tme.expectNoPreviousJournals()
-	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", replica, nil, DirectionForward, false)
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", replica, nil, workflow.DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1302,12 +1303,12 @@ func TestStreamMigrateDupWorkflow(t *testing.T) {
 
 	tme.expectNoPreviousJournals()
 	// Migrate reads
-	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", rdOnly, nil, DirectionForward, false)
+	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", rdOnly, nil, workflow.DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	tme.expectNoPreviousJournals()
-	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", replica, nil, DirectionForward, false)
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", replica, nil, workflow.DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1365,12 +1366,12 @@ func TestStreamMigrateStreamsMismatch(t *testing.T) {
 
 	tme.expectNoPreviousJournals()
 	// Migrate reads
-	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", rdOnly, nil, DirectionForward, false)
+	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", rdOnly, nil, workflow.DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	tme.expectNoPreviousJournals()
-	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", replica, nil, DirectionForward, false)
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", replica, nil, workflow.DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
