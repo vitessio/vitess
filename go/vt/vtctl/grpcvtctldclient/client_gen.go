@@ -28,18 +28,12 @@ import (
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
-<<<<<<< HEAD
 // AddCellInfo is part of the vtctlservicepb.VtctldClient interface.
 func (client *gRPCVtctldClient) AddCellInfo(ctx context.Context, in *vtctldatapb.AddCellInfoRequest, opts ...grpc.CallOption) (*vtctldatapb.AddCellInfoResponse, error) {
-=======
-// ApplyVSchema is part of the vtctlservicepb.VtctldClient interface.
-func (client *gRPCVtctldClient) ApplyVSchema(ctx context.Context, in *vtctldatapb.ApplyVSchemaRequest, opts ...grpc.CallOption) (*vtctldatapb.ApplyVSchemaResponse, error) {
->>>>>>> implement ApplyVSchema in grpc-vtctld
 	if client.c == nil {
 		return nil, status.Error(codes.Unavailable, connClosedMsg)
 	}
 
-<<<<<<< HEAD
 	return client.c.AddCellInfo(ctx, in, opts...)
 }
 
@@ -59,9 +53,15 @@ func (client *gRPCVtctldClient) ApplyRoutingRules(ctx context.Context, in *vtctl
 	}
 
 	return client.c.ApplyRoutingRules(ctx, in, opts...)
-=======
+}
+
+// ApplyVSchema is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) ApplyVSchema(ctx context.Context, in *vtctldatapb.ApplyVSchemaRequest, opts ...grpc.CallOption) (*vtctldatapb.ApplyVSchemaResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
 	return client.c.ApplyVSchema(ctx, in, opts...)
->>>>>>> implement ApplyVSchema in grpc-vtctld
 }
 
 // ChangeTabletType is part of the vtctlservicepb.VtctldClient interface.
