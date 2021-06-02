@@ -293,6 +293,14 @@ const (
 			AND ACTION_TIMING='AFTER'
 			AND LEFT(TRIGGER_NAME, 7)='pt_osc_'
 		`
+	sqlSelectColumnTypes = `select
+				*
+			from
+				information_schema.columns
+			where
+				table_schema=%a
+				and table_name=%a
+		`
 	sqlDropTrigger       = "DROP TRIGGER IF EXISTS `%a`.`%a`"
 	sqlShowTablesLike    = "SHOW TABLES LIKE '%a'"
 	sqlCreateTableLike   = "CREATE TABLE `%a` LIKE `%a`"
