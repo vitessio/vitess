@@ -541,6 +541,11 @@ func (s *VtctldServer) DeleteShards(ctx context.Context, req *vtctldatapb.Delete
 	return &vtctldatapb.DeleteShardsResponse{}, nil
 }
 
+// DeleteSrvVSchema is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) DeleteSrvVSchema(ctx context.Context, req *vtctldatapb.DeleteSrvVSchemaRequest) (*vtctldatapb.DeleteSrvVSchemaResponse, error) {
+	panic("unimplemented!")
+}
+
 // DeleteTablets is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) DeleteTablets(ctx context.Context, req *vtctldatapb.DeleteTabletsRequest) (*vtctldatapb.DeleteTabletsResponse, error) {
 	span, ctx := trace.NewSpan(ctx, "VtctldServer.DeleteTablets")
@@ -891,6 +896,11 @@ func (s *VtctldServer) GetShard(ctx context.Context, req *vtctldatapb.GetShardRe
 			Shard:    shard.Shard,
 		},
 	}, nil
+}
+
+// GetSrvKeyspaceNames is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) GetSrvKeyspaceNames(ctx context.Context, req *vtctldatapb.GetSrvKeyspaceNamesRequest) (*vtctldatapb.GetSrvKeyspaceNamesResponse, error) {
+	panic("unimplemented!")
 }
 
 // GetSrvKeyspaces is part of the vtctlservicepb.VtctldServer interface.
