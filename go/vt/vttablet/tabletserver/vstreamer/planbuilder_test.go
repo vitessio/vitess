@@ -664,3 +664,39 @@ func TestPlanBuilderFilterComparison(t *testing.T) {
 		})
 	}
 }
+
+func TestCompare(t *testing.T) {
+	type testcase struct {
+		opcode                   Opcode
+		columnValue, filterValue sqltypes.Value
+		want                     bool
+	}
+	int1 := sqltypes.NewInt32(1)
+	int2 := sqltypes.NewInt32(2)
+	testcases := []*testcase{
+		{opcode: Equal, columnValue: int1, filterValue: int1, want: true},
+		{opcode: Equal, columnValue: int1, filterValue: int2, want: false},
+		{opcode: Equal, columnValue: int1, filterValue: sqltypes.NULL, want: false},
+		{opcode: LessThan, columnValue: int2, filterValue: int1, want: false},
+		{opcode: LessThan, columnValue: int1, filterValue: int2, want: true},
+		{opcode: LessThan, columnValue: int1, filterValue: sqltypes.NULL, want: false},
+		{opcode: GreaterThan, columnValue: int2, filterValue: int1, want: true},
+		{opcode: GreaterThan, columnValue: int1, filterValue: int2, want: false},
+		{opcode: GreaterThan, columnValue: int1, filterValue: sqltypes.NULL, want: false},
+		{opcode: NotEqual, columnValue: int1, filterValue: int1, want: false},
+		{opcode: NotEqual, columnValue: int1, filterValue: int2, want: true},
+		{opcode: NotEqual, columnValue: sqltypes.NULL, filterValue: int1, want: false},
+		{opcode: LessThanEqual, columnValue: int1, filterValue: sqltypes.NULL, want: false},
+		{opcode: GreaterThanEqual, columnValue: int2, filterValue: int1, want: true},
+		{opcode: LessThanEqual, columnValue: int2, filterValue: int1, want: false},
+		{opcode: GreaterThanEqual, columnValue: int1, filterValue: int1, want: true},
+		{opcode: LessThanEqual, columnValue: int1, filterValue: int2, want: true},
+	}
+	for _, tc := range testcases {
+		t.Run("", func(t *testing.T) {
+			got, err := compare(tc.opcode, tc.columnValue, tc.filterValue)
+			require.NoError(t, err)
+			require.Equal(t, tc.want, got)
+		})
+	}
+}
