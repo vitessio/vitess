@@ -23,6 +23,7 @@ require (
 	github.com/cyberdelia/go-metrics-graphite v0.0.0-20161219230853-39f87cc3b432
 	github.com/dave/jennifer v1.4.1
 	github.com/evanphx/json-patch v4.5.0+incompatible
+	github.com/fsnotify/fsnotify v1.4.9
 	github.com/go-martini/martini v0.0.0-20170121215854-22fa46961aab
 	github.com/go-sql-driver/mysql v1.5.1-0.20210202043019-fe2230a8b20c
 	github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b

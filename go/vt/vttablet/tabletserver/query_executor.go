@@ -385,7 +385,7 @@ func (qre *QueryExecutor) checkPermissions() error {
 		remoteAddr = ci.RemoteAddr()
 		username = ci.Username()
 	}
-	action, desc := qre.plan.Rules.GetAction(remoteAddr, username, qre.bindVars)
+	action, desc := qre.plan.Rules.GetAction(remoteAddr, username, qre.bindVars, qre.marginComments)
 	switch action {
 	case rules.QRFail:
 		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "disallowed due to rule: %s", desc)
