@@ -54,6 +54,22 @@ var (
 		Args: cobra.NoArgs,
 		RunE: commandGetTablets,
 	}
+	// RefreshState makes a RefreshState gRPC call to a vtctld.
+	RefreshState = &cobra.Command{
+		Use:                   "RefreshState <alias>",
+		Short:                 "Reloads the tablet record on the specified tablet.",
+		DisableFlagsInUseLine: true,
+		Args:                  cobra.ExactArgs(1),
+		RunE:                  commandRefreshState,
+	}
+	// RefreshStateByShard makes a RefreshStateByShard gRPC call to a vtcld.
+	RefreshStateByShard = &cobra.Command{
+		Use:                   "RefreshStateByShard [--cell <cell1> ...] <keyspace/shard>",
+		Short:                 "Reloads the tablet record all tablets in the shard, optionally limited to the specified cells.",
+		DisableFlagsInUseLine: true,
+		Args:                  cobra.ExactArgs(1),
+		RunE:                  commandRefreshStateByShard,
+	}
 )
 
 var changeTabletTypeOptions = struct {
@@ -218,6 +234,60 @@ func commandGetTablets(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+func commandRefreshState(cmd *cobra.Command, args []string) error {
+	alias, err := topoproto.ParseTabletAlias(cmd.Flags().Arg(0))
+	if err != nil {
+		return err
+	}
+
+	cli.FinishedParsing(cmd)
+
+	_, err = client.RefreshState(commandCtx, &vtctldatapb.RefreshStateRequest{
+		TabletAlias: alias,
+	})
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("Refreshed state on %s\n", topoproto.TabletAliasString(alias))
+	return nil
+}
+
+var refreshStateByShardOptions = struct {
+	Cells []string
+}{}
+
+func commandRefreshStateByShard(cmd *cobra.Command, args []string) error {
+	keyspace, shard, err := topoproto.ParseKeyspaceShard(cmd.Flags().Arg(0))
+	if err != nil {
+		return err
+	}
+
+	cli.FinishedParsing(cmd)
+
+	resp, err := client.RefreshStateByShard(commandCtx, &vtctldatapb.RefreshStateByShardRequest{
+		Keyspace: keyspace,
+		Shard:    shard,
+		Cells:    refreshStateByShardOptions.Cells,
+	})
+	if err != nil {
+		return err
+	}
+
+	msg := &strings.Builder{}
+	msg.WriteString(fmt.Sprintf("Refreshed state on %s/%s", keyspace, shard))
+	if len(refreshStateByShardOptions.Cells) > 0 {
+		msg.WriteString(fmt.Sprintf(" in cells %s", strings.Join(refreshStateByShardOptions.Cells, ", ")))
+	}
+	msg.WriteByte('\n')
+	if resp.IsPartialRefresh {
+		msg.WriteString("State refresh was partial; some tablets in the shard may not have succeeded.\n")
+	}
+
+	fmt.Print(msg.String())
+	return nil
+}
+
 func init() {
 	ChangeTabletType.Flags().BoolVarP(&changeTabletTypeOptions.DryRun, "dry-run", "d", false, "Shows the proposed change without actually executing it")
 	Root.AddCommand(ChangeTabletType)
@@ -234,4 +304,9 @@ func init() {
 	GetTablets.Flags().StringVar(&getTabletsOptions.Format, "format", "awk", "Output format to use; valid choices are (json, awk)")
 	GetTablets.Flags().BoolVar(&getTabletsOptions.Strict, "strict", false, "Require all cells to return successful tablet data. Without --strict, tablet listings may be partial.")
 	Root.AddCommand(GetTablets)
+
+	Root.AddCommand(RefreshState)
+
+	RefreshStateByShard.Flags().StringSliceVarP(&refreshStateByShardOptions.Cells, "cells", "c", nil, "If specified, only call RefreshState on tablets in the specified cells. If empty, all cells are considered.")
+	Root.AddCommand(RefreshStateByShard)
 }
