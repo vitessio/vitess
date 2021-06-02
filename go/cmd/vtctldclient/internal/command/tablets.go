@@ -32,27 +32,53 @@ import (
 var (
 	// ChangeTabletType makes a ChangeTabletType gRPC call to a vtctld.
 	ChangeTabletType = &cobra.Command{
-		Use:  "ChangeTabletType [--dry-run] TABLET_ALIAS TABLET_TYPE",
-		Args: cobra.ExactArgs(2),
-		RunE: commandChangeTabletType,
+		Use:   "ChangeTabletType [--dry-run] <alias> <tablet-type>",
+		Short: "Changes the db type for the specified tablet, if possible.",
+		Long: `Changes the db type for the specified tablet, if possible.
+
+This command is used primarily to arrange replicas, and it will not convert a primary.
+NOTE: This command automatically updates the serving graph.`,
+		DisableFlagsInUseLine: true,
+		Args:                  cobra.ExactArgs(2),
+		RunE:                  commandChangeTabletType,
 	}
 	// DeleteTablets makes a DeleteTablets gRPC call to a vtctld.
 	DeleteTablets = &cobra.Command{
-		Use:  "DeleteTablets TABLET_ALIAS [ TABLET_ALIAS ... ]",
-		Args: cobra.MinimumNArgs(1),
-		RunE: commandDeleteTablets,
+		Use:                   "DeleteTablets <alias> [ <alias> ... ]",
+		Short:                 "Deletes tablet(s) from the topology.",
+		DisableFlagsInUseLine: true,
+		Args:                  cobra.MinimumNArgs(1),
+		RunE:                  commandDeleteTablets,
 	}
 	// GetTablet makes a GetTablet gRPC call to a vtctld.
 	GetTablet = &cobra.Command{
-		Use:  "GetTablet alias",
-		Args: cobra.ExactArgs(1),
-		RunE: commandGetTablet,
+		Use:                   "GetTablet <alias>",
+		Short:                 "Outputs a JSON structure that contains information about the tablet.",
+		DisableFlagsInUseLine: true,
+		Args:                  cobra.ExactArgs(1),
+		RunE:                  commandGetTablet,
 	}
 	// GetTablets makes a GetTablets gRPC call to a vtctld.
 	GetTablets = &cobra.Command{
-		Use:  "GetTablets [--strict] [{--cell $c1 [--cell $c2 ...], --keyspace $ks [--shard $shard], --tablet-alias $alias}]",
-		Args: cobra.NoArgs,
-		RunE: commandGetTablets,
+		Use:   "GetTablets [--strict] [{--cell $c1 [--cell $c2 ...], --keyspace $ks [--shard $shard], --tablet-alias $alias}]",
+		Short: "Looks up tablets according to filter criteria.",
+		Long: `Looks up tablets according to the filter criteria.
+
+If --tablet-alias is passed, none of the other filters (keyspace, shard, cell) may
+be passed, and tablets are looked up by tablet alias only.
+
+If --keyspace is passed, then all tablets in the keyspace are retrieved. The
+--shard flag may also be passed to further narrow the set of tablets to that
+<keyspace/shard>. Passing --shard without also passing --keyspace will fail.
+
+Passing --cell limits the set of tablets to those in the specified cells. The
+--cell flag accepts a CSV argument (e.g. --cell "c1,c2") and may be repeated
+(e.g. --cell "c1" --cell "c2").
+
+Valid output formats are "awk" and "json".`,
+		DisableFlagsInUseLine: true,
+		Args:                  cobra.NoArgs,
+		RunE:                  commandGetTablets,
 	}
 	// RefreshState makes a RefreshState gRPC call to a vtctld.
 	RefreshState = &cobra.Command{
