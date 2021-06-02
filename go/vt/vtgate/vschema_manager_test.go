@@ -84,6 +84,18 @@ func TestWatchSrvVSchema(t *testing.T) {
 				ColumnListAuthoritative: true,
 			},
 		},
+	}, {
+		name:   "empty srvVschema - schema change still applied",
+		schema: map[string][]vindexes.Column{"tbl": cols},
+		expected: map[string]*vindexes.Table{
+			"dual": dual,
+			"tbl": {
+				Name:                    sqlparser.NewTableIdent("tbl"),
+				Keyspace:                ks,
+				Columns:                 cols2,
+				ColumnListAuthoritative: true,
+			},
+		},
 	}}
 
 	vm := &VSchemaManager{}
@@ -99,8 +111,12 @@ func TestWatchSrvVSchema(t *testing.T) {
 
 			require.NotNil(t, vs)
 			ks := vs.Keyspaces["ks"]
-			require.NotNil(t, ks, "keyspace was not found")
-			utils.MustMatch(t, tcase.expected, ks.Tables)
+			if tcase.srvVschema != nil {
+				require.NotNil(t, ks, "keyspace was not found")
+				utils.MustMatch(t, tcase.expected, ks.Tables)
+			} else {
+				require.Nil(t, ks, "keyspace found")
+			}
 		})
 		t.Run("Schema updated - "+tcase.name, func(t *testing.T) {
 			vs = nil
@@ -110,8 +126,12 @@ func TestWatchSrvVSchema(t *testing.T) {
 
 			require.NotNil(t, vs)
 			ks := vs.Keyspaces["ks"]
-			require.NotNil(t, ks, "keyspace was not found")
-			utils.MustMatch(t, tcase.expected, ks.Tables)
+			if tcase.srvVschema != nil {
+				require.NotNil(t, ks, "keyspace was not found")
+				utils.MustMatch(t, tcase.expected, ks.Tables)
+			} else {
+				require.Nil(t, ks, "keyspace found")
+			}
 		})
 	}
 }
