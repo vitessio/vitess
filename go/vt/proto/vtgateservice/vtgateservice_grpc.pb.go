@@ -40,6 +40,12 @@ type VitessClient interface {
 	ResolveTransaction(ctx context.Context, in *vtgate.ResolveTransactionRequest, opts ...grpc.CallOption) (*vtgate.ResolveTransactionResponse, error)
 	// VStream streams binlog events from the requested sources.
 	VStream(ctx context.Context, in *vtgate.VStreamRequest, opts ...grpc.CallOption) (Vitess_VStreamClient, error)
+	// Prepare is used by the MySQL server plugin as part of supporting prepared statements.
+	Prepare(ctx context.Context, in *vtgate.PrepareRequest, opts ...grpc.CallOption) (*vtgate.PrepareResponse, error)
+	// CloseSession closes the session, rolling back any implicit transactions.
+	// This has the same effect as if a "rollback" statement was executed,
+	// but does not affect the query statistics.
+	CloseSession(ctx context.Context, in *vtgate.CloseSessionRequest, opts ...grpc.CallOption) (*vtgate.CloseSessionResponse, error)
 }
 
 type vitessClient struct {
@@ -141,6 +147,24 @@ func (x *vitessVStreamClient) Recv() (*vtgate.VStreamResponse, error) {
 	return m, nil
 }
 
+func (c *vitessClient) Prepare(ctx context.Context, in *vtgate.PrepareRequest, opts ...grpc.CallOption) (*vtgate.PrepareResponse, error) {
+	out := new(vtgate.PrepareResponse)
+	err := c.cc.Invoke(ctx, "/vtgateservice.Vitess/Prepare", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vitessClient) CloseSession(ctx context.Context, in *vtgate.CloseSessionRequest, opts ...grpc.CallOption) (*vtgate.CloseSessionResponse, error) {
+	out := new(vtgate.CloseSessionResponse)
+	err := c.cc.Invoke(ctx, "/vtgateservice.Vitess/CloseSession", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // VitessServer is the server API for Vitess service.
 // All implementations must embed UnimplementedVitessServer
 // for forward compatibility
@@ -166,6 +190,12 @@ type VitessServer interface {
 	ResolveTransaction(context.Context, *vtgate.ResolveTransactionRequest) (*vtgate.ResolveTransactionResponse, error)
 	// VStream streams binlog events from the requested sources.
 	VStream(*vtgate.VStreamRequest, Vitess_VStreamServer) error
+	// Prepare is used by the MySQL server plugin as part of supporting prepared statements.
+	Prepare(context.Context, *vtgate.PrepareRequest) (*vtgate.PrepareResponse, error)
+	// CloseSession closes the session, rolling back any implicit transactions.
+	// This has the same effect as if a "rollback" statement was executed,
+	// but does not affect the query statistics.
+	CloseSession(context.Context, *vtgate.CloseSessionRequest) (*vtgate.CloseSessionResponse, error)
 	mustEmbedUnimplementedVitessServer()
 }
 
@@ -187,6 +217,12 @@ func (UnimplementedVitessServer) ResolveTransaction(context.Context, *vtgate.Res
 }
 func (UnimplementedVitessServer) VStream(*vtgate.VStreamRequest, Vitess_VStreamServer) error {
 	return status.Errorf(codes.Unimplemented, "method VStream not implemented")
+}
+func (UnimplementedVitessServer) Prepare(context.Context, *vtgate.PrepareRequest) (*vtgate.PrepareResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Prepare not implemented")
+}
+func (UnimplementedVitessServer) CloseSession(context.Context, *vtgate.CloseSessionRequest) (*vtgate.CloseSessionResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CloseSession not implemented")
 }
 func (UnimplementedVitessServer) mustEmbedUnimplementedVitessServer() {}
 
@@ -297,6 +333,42 @@ func (x *vitessVStreamServer) Send(m *vtgate.VStreamResponse) error {
 	return x.ServerStream.SendMsg(m)
 }
 
+func _Vitess_Prepare_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtgate.PrepareRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VitessServer).Prepare(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtgateservice.Vitess/Prepare",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VitessServer).Prepare(ctx, req.(*vtgate.PrepareRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Vitess_CloseSession_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtgate.CloseSessionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VitessServer).CloseSession(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtgateservice.Vitess/CloseSession",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VitessServer).CloseSession(ctx, req.(*vtgate.CloseSessionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Vitess_ServiceDesc is the grpc.ServiceDesc for Vitess service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -315,6 +387,14 @@ var Vitess_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ResolveTransaction",
 			Handler:    _Vitess_ResolveTransaction_Handler,
+		},
+		{
+			MethodName: "Prepare",
+			Handler:    _Vitess_Prepare_Handler,
+		},
+		{
+			MethodName: "CloseSession",
+			Handler:    _Vitess_CloseSession_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{
