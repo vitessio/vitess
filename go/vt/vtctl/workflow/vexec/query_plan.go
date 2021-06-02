@@ -31,17 +31,28 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
-// QueryPlan wraps a planned query produced by a QueryPlanner. It is safe to
-// execute a QueryPlan repeatedly and in multiple goroutines.
-type QueryPlan struct {
+// QueryPlan defines the interface to executing a preprared vexec query on one
+// or more tablets. Implementations should ensure that it is safe to call the
+// various Execute* methods repeatedly and in multiple goroutines.
+type QueryPlan interface {
+	// Execute executes the planned query on a single target.
+	Execute(ctx context.Context, target *topo.TabletInfo) (*querypb.QueryResult, error)
+	// ExecuteScatter executes the planned query on the specified targets concurrently,
+	// returning a mapping of the target tablet to a querypb.QueryResult.
+	ExecuteScatter(ctx context.Context, targets ...*topo.TabletInfo) (map[*topo.TabletInfo]*querypb.QueryResult, error)
+}
+
+// FixedQueryPlan wraps a planned query produced by a QueryPlanner. It executes
+// the same query with the same bind vals, regardless of the target.
+type FixedQueryPlan struct {
 	ParsedQuery *sqlparser.ParsedQuery
 
 	workflow string
 	tmc      tmclient.TabletManagerClient
 }
 
-// Execute executes a QueryPlan on a single target.
-func (qp *QueryPlan) Execute(ctx context.Context, target *topo.TabletInfo) (qr *querypb.QueryResult, err error) {
+// Execute is part of the QueryPlan interface.
+func (qp *FixedQueryPlan) Execute(ctx context.Context, target *topo.TabletInfo) (qr *querypb.QueryResult, err error) {
 	if qp.ParsedQuery == nil {
 		return nil, fmt.Errorf("%w: call PlanQuery on a query planner first", ErrUnpreparedQuery)
 	}
@@ -62,10 +73,10 @@ func (qp *QueryPlan) Execute(ctx context.Context, target *topo.TabletInfo) (qr *
 	return qr, nil
 }
 
-// ExecuteScatter executes a QueryPlan on multiple targets concurrently,
-// returning a mapping of target tablet to querypb.QueryResult. Errors from
-// individual targets are aggregated into a singular error.
-func (qp *QueryPlan) ExecuteScatter(ctx context.Context, targets ...*topo.TabletInfo) (map[*topo.TabletInfo]*querypb.QueryResult, error) {
+// ExecuteScatter is part of the QueryPlan interface. For a FixedQueryPlan, the
+// exact same query is executed on each target, and errors from individual
+// targets are aggregated into a singular error.
+func (qp *FixedQueryPlan) ExecuteScatter(ctx context.Context, targets ...*topo.TabletInfo) (map[*topo.TabletInfo]*querypb.QueryResult, error) {
 	if qp.ParsedQuery == nil {
 		// This check is an "optimization" on error handling. We check here,
 		// even though we will check this during the individual Execute calls,

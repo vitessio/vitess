@@ -62,7 +62,7 @@ type QueryPlanner interface {
 
 	// PlanQuery constructs and returns a QueryPlan for a given statement. The
 	// resulting QueryPlan is suitable for repeated, concurrent use.
-	PlanQuery(stmt sqlparser.Statement) (*QueryPlan, error)
+	PlanQuery(stmt sqlparser.Statement) (QueryPlan, error)
 	// QueryParams returns a struct of column parameters the QueryPlanner uses.
 	// It is used primarily to abstract the adding of default WHERE clauses to
 	// queries by a private function of this package, and may be removed from
@@ -116,7 +116,7 @@ func NewVReplicationQueryPlanner(tmc tmclient.TabletManagerClient, workflow stri
 //
 // For DELETE queries, USING, PARTITION, ORDER BY, and LIMIT clauses are not
 // supported.
-func (planner *VReplicationQueryPlanner) PlanQuery(stmt sqlparser.Statement) (plan *QueryPlan, err error) {
+func (planner *VReplicationQueryPlanner) PlanQuery(stmt sqlparser.Statement) (plan QueryPlan, err error) {
 	switch stmt := stmt.(type) {
 	case *sqlparser.Select:
 		plan, err = planner.planSelect(stmt)
@@ -152,7 +152,7 @@ func (planner *VReplicationQueryPlanner) QueryParams() QueryParams {
 	}
 }
 
-func (planner *VReplicationQueryPlanner) planDelete(del *sqlparser.Delete) (*QueryPlan, error) {
+func (planner *VReplicationQueryPlanner) planDelete(del *sqlparser.Delete) (*FixedQueryPlan, error) {
 	if del.Targets != nil {
 		return nil, fmt.Errorf(
 			"%w: DELETE must not have USING clause (have: %v): %v",
@@ -186,27 +186,27 @@ func (planner *VReplicationQueryPlanner) planDelete(del *sqlparser.Delete) (*Que
 	buf := sqlparser.NewTrackedBuffer(nil)
 	buf.Myprintf("%v", del)
 
-	return &QueryPlan{
+	return &FixedQueryPlan{
 		ParsedQuery: buf.ParsedQuery(),
 		workflow:    planner.workflow,
 		tmc:         planner.tmc,
 	}, nil
 }
 
-func (planner *VReplicationQueryPlanner) planSelect(sel *sqlparser.Select) (*QueryPlan, error) {
+func (planner *VReplicationQueryPlanner) planSelect(sel *sqlparser.Select) (*FixedQueryPlan, error) {
 	sel.Where = addDefaultWheres(planner, sel.Where)
 
 	buf := sqlparser.NewTrackedBuffer(nil)
 	buf.Myprintf("%v", sel)
 
-	return &QueryPlan{
+	return &FixedQueryPlan{
 		ParsedQuery: buf.ParsedQuery(),
 		workflow:    planner.workflow,
 		tmc:         planner.tmc,
 	}, nil
 }
 
-func (planner *VReplicationQueryPlanner) planUpdate(upd *sqlparser.Update) (*QueryPlan, error) {
+func (planner *VReplicationQueryPlanner) planUpdate(upd *sqlparser.Update) (*FixedQueryPlan, error) {
 	if upd.OrderBy != nil || upd.Limit != nil {
 		return nil, fmt.Errorf(
 			"%w: UPDATE must not have explicit ordering (have: %v) or limit clauses (have: %v): %v",
@@ -235,7 +235,7 @@ func (planner *VReplicationQueryPlanner) planUpdate(upd *sqlparser.Update) (*Que
 	buf := sqlparser.NewTrackedBuffer(nil)
 	buf.Myprintf("%v", upd)
 
-	return &QueryPlan{
+	return &FixedQueryPlan{
 		ParsedQuery: buf.ParsedQuery(),
 		workflow:    planner.workflow,
 		tmc:         planner.tmc,
