@@ -132,7 +132,6 @@ var Vtctl_ServiceDesc = grpc.ServiceDesc{
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type VtctldClient interface {
-<<<<<<< HEAD
 	// AddCellInfo registers a local topology service in a new cell by creating
 	// the CellInfo with the provided parameters.
 	AddCellInfo(ctx context.Context, in *vtctldata.AddCellInfoRequest, opts ...grpc.CallOption) (*vtctldata.AddCellInfoResponse, error)
@@ -145,10 +144,8 @@ type VtctldClient interface {
 	AddCellsAlias(ctx context.Context, in *vtctldata.AddCellsAliasRequest, opts ...grpc.CallOption) (*vtctldata.AddCellsAliasResponse, error)
 	// ApplyRoutingRules applies the VSchema routing rules.
 	ApplyRoutingRules(ctx context.Context, in *vtctldata.ApplyRoutingRulesRequest, opts ...grpc.CallOption) (*vtctldata.ApplyRoutingRulesResponse, error)
-=======
 	// ApplyVSchema applies a vschema to a keyspace.
 	ApplyVSchema(ctx context.Context, in *vtctldata.ApplyVSchemaRequest, opts ...grpc.CallOption) (*vtctldata.ApplyVSchemaResponse, error)
->>>>>>> recompiled protos after rebase
 	// ChangeTabletType changes the db type for the specified tablet, if possible.
 	// This is used primarily to arrange replicas, and it will not convert a
 	// primary. For that, use InitShardPrimary.
@@ -282,7 +279,6 @@ func NewVtctldClient(cc grpc.ClientConnInterface) VtctldClient {
 	return &vtctldClient{cc}
 }
 
-<<<<<<< HEAD
 func (c *vtctldClient) AddCellInfo(ctx context.Context, in *vtctldata.AddCellInfoRequest, opts ...grpc.CallOption) (*vtctldata.AddCellInfoResponse, error) {
 	out := new(vtctldata.AddCellInfoResponse)
 	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/AddCellInfo", in, out, opts...)
@@ -304,11 +300,15 @@ func (c *vtctldClient) AddCellsAlias(ctx context.Context, in *vtctldata.AddCells
 func (c *vtctldClient) ApplyRoutingRules(ctx context.Context, in *vtctldata.ApplyRoutingRulesRequest, opts ...grpc.CallOption) (*vtctldata.ApplyRoutingRulesResponse, error) {
 	out := new(vtctldata.ApplyRoutingRulesResponse)
 	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/ApplyRoutingRules", in, out, opts...)
-=======
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *vtctldClient) ApplyVSchema(ctx context.Context, in *vtctldata.ApplyVSchemaRequest, opts ...grpc.CallOption) (*vtctldata.ApplyVSchemaResponse, error) {
 	out := new(vtctldata.ApplyVSchemaResponse)
 	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/ApplyVSchema", in, out, opts...)
->>>>>>> recompiled protos after rebase
 	if err != nil {
 		return nil, err
 	}
@@ -643,7 +643,6 @@ func (c *vtctldClient) UpdateCellsAlias(ctx context.Context, in *vtctldata.Updat
 // All implementations must embed UnimplementedVtctldServer
 // for forward compatibility
 type VtctldServer interface {
-<<<<<<< HEAD
 	// AddCellInfo registers a local topology service in a new cell by creating
 	// the CellInfo with the provided parameters.
 	AddCellInfo(context.Context, *vtctldata.AddCellInfoRequest) (*vtctldata.AddCellInfoResponse, error)
@@ -656,10 +655,8 @@ type VtctldServer interface {
 	AddCellsAlias(context.Context, *vtctldata.AddCellsAliasRequest) (*vtctldata.AddCellsAliasResponse, error)
 	// ApplyRoutingRules applies the VSchema routing rules.
 	ApplyRoutingRules(context.Context, *vtctldata.ApplyRoutingRulesRequest) (*vtctldata.ApplyRoutingRulesResponse, error)
-=======
 	// ApplyVSchema applies a vschema to a keyspace.
 	ApplyVSchema(context.Context, *vtctldata.ApplyVSchemaRequest) (*vtctldata.ApplyVSchemaResponse, error)
->>>>>>> recompiled protos after rebase
 	// ChangeTabletType changes the db type for the specified tablet, if possible.
 	// This is used primarily to arrange replicas, and it will not convert a
 	// primary. For that, use InitShardPrimary.
@@ -790,7 +787,6 @@ type VtctldServer interface {
 type UnimplementedVtctldServer struct {
 }
 
-<<<<<<< HEAD
 func (UnimplementedVtctldServer) AddCellInfo(context.Context, *vtctldata.AddCellInfoRequest) (*vtctldata.AddCellInfoResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method AddCellInfo not implemented")
 }
@@ -799,10 +795,9 @@ func (UnimplementedVtctldServer) AddCellsAlias(context.Context, *vtctldata.AddCe
 }
 func (UnimplementedVtctldServer) ApplyRoutingRules(context.Context, *vtctldata.ApplyRoutingRulesRequest) (*vtctldata.ApplyRoutingRulesResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ApplyRoutingRules not implemented")
-=======
+}
 func (UnimplementedVtctldServer) ApplyVSchema(context.Context, *vtctldata.ApplyVSchemaRequest) (*vtctldata.ApplyVSchemaResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ApplyVSchema not implemented")
->>>>>>> recompiled protos after rebase
 }
 func (UnimplementedVtctldServer) ChangeTabletType(context.Context, *vtctldata.ChangeTabletTypeRequest) (*vtctldata.ChangeTabletTypeResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ChangeTabletType not implemented")
@@ -925,18 +920,12 @@ func RegisterVtctldServer(s grpc.ServiceRegistrar, srv VtctldServer) {
 	s.RegisterService(&Vtctld_ServiceDesc, srv)
 }
 
-<<<<<<< HEAD
 func _Vtctld_AddCellInfo_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(vtctldata.AddCellInfoRequest)
-=======
-func _Vtctld_ApplyVSchema_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(vtctldata.ApplyVSchemaRequest)
->>>>>>> recompiled protos after rebase
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-<<<<<<< HEAD
 		return srv.(VtctldServer).AddCellInfo(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
@@ -981,7 +970,16 @@ func _Vtctld_ApplyRoutingRules_Handler(srv interface{}, ctx context.Context, dec
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(VtctldServer).ApplyRoutingRules(ctx, req.(*vtctldata.ApplyRoutingRulesRequest))
-=======
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Vtctld_ApplyVSchema_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.ApplyVSchemaRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
 		return srv.(VtctldServer).ApplyVSchema(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
@@ -990,7 +988,6 @@ func _Vtctld_ApplyRoutingRules_Handler(srv interface{}, ctx context.Context, dec
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(VtctldServer).ApplyVSchema(ctx, req.(*vtctldata.ApplyVSchemaRequest))
->>>>>>> recompiled protos after rebase
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1651,7 +1648,6 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 	HandlerType: (*VtctldServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-<<<<<<< HEAD
 			MethodName: "AddCellInfo",
 			Handler:    _Vtctld_AddCellInfo_Handler,
 		},
@@ -1662,10 +1658,10 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ApplyRoutingRules",
 			Handler:    _Vtctld_ApplyRoutingRules_Handler,
-=======
+		},
+		{
 			MethodName: "ApplyVSchema",
 			Handler:    _Vtctld_ApplyVSchema_Handler,
->>>>>>> recompiled protos after rebase
 		},
 		{
 			MethodName: "ChangeTabletType",
