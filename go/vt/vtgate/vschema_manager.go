@@ -159,15 +159,13 @@ func (vm *VSchemaManager) Rebuild() {
 	var err error
 
 	if v == nil {
-		// We encountered an error, we should always have a current vschema
-		log.Warning("got a schema changed signal with no loaded vschema. if this persist, something is wrong")
-		vschema, _ = vindexes.BuildVSchema(&vschemapb.SrvVSchema{})
-	} else {
-		vschema, err = vm.buildAndEnhanceVSchema(v)
-		if err != nil {
-			log.Error("failed to reload vschema after schema change")
-			return
-		}
+		v = &vschemapb.SrvVSchema{}
+	}
+
+	vschema, err = vm.buildAndEnhanceVSchema(v)
+	if err != nil {
+		log.Error("failed to reload vschema after schema change")
+		return
 	}
 
 	if vm.subscriber != nil {
