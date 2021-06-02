@@ -47,25 +47,23 @@ type (
 		ctx    context.Context
 		signal func() // a function that we'll call whenever we have new schema data
 
-		// map of keyspace currently tracked by the Tracker, the value of type time.Time
-		// defines when was the last time we tracked the keyspace.
-		tracked map[keyspace]time.Time
-	}
-
-	// Table contains the table name and also, whether the information can be trusted about this table.
-	Table struct {
-		Name         string
-		UnknownState bool
+		// map of keyspace currently tracked
+		tracked      map[keyspace]*updateController
+		consumeDelay time.Duration
 	}
 )
+
+// defaultConsumeDelay is the default time, the updateController will wait before checking the schema fetch request queue.
+const defaultConsumeDelay = 1 * time.Second
 
 // NewTracker creates the tracker object.
 func NewTracker(ch chan *discovery.TabletHealth) *Tracker {
 	return &Tracker{
-		ch:      ch,
-		tables:  &tableMap{m: map[keyspace]map[tableName][]vindexes.Column{}},
-		tracked: map[keyspace]time.Time{},
-		ctx:     context.Background(),
+		ctx:          context.Background(),
+		ch:           ch,
+		tables:       &tableMap{m: map[keyspace]map[tableName][]vindexes.Column{}},
+		tracked:      map[keyspace]*updateController{},
+		consumeDelay: defaultConsumeDelay,
 	}
 }
 
@@ -75,6 +73,8 @@ func (t *Tracker) LoadKeyspace(conn queryservice.QueryService, target *querypb.T
 	if err != nil {
 		return err
 	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
 	t.updateTables(target.Keyspace, res)
 	log.Infof("finished loading schema for keyspace %s. Found %d tables", target.Keyspace, len(res.Rows))
 	return nil
@@ -89,28 +89,36 @@ func (t *Tracker) Start() {
 		for {
 			select {
 			case th := <-t.ch:
-				signal := false
-				// try to load the keyspace if it was not tracked before
-				if _, ok := t.tracked[th.Target.Keyspace]; !ok {
-					err := t.LoadKeyspace(th.Conn, th.Target)
-					if err != nil {
-						log.Warningf("Unable to add keyspace to tracker: %v", err)
-						continue
-					}
-					signal = true
-				} else if len(th.TablesUpdated) > 0 {
-					t.updateSchema(th)
-					signal = true
-				}
-				if t.signal != nil && signal {
-					t.signal()
-				}
+				ksUpdater := t.getKeyspaceUpdateController(th)
+				ksUpdater.add(th)
 			case <-ctx.Done():
 				close(t.ch)
 				return
 			}
 		}
 	}(ctx, t)
+}
+
+// getKeyspaceUpdateController returns the updateController for the given keyspace
+// the updateController will be created if there was none.
+func (t *Tracker) getKeyspaceUpdateController(th *discovery.TabletHealth) *updateController {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	ksUpdater, ok := t.tracked[th.Target.Keyspace]
+	if !ok {
+		init := func(th *discovery.TabletHealth) bool {
+			err := t.LoadKeyspace(th.Conn, th.Target)
+			if err != nil {
+				log.Warningf("Unable to add keyspace to tracker: %v", err)
+				return false
+			}
+			return true
+		}
+		ksUpdater = &updateController{update: t.updateSchema, init: init, signal: t.signal, consumeDelay: t.consumeDelay}
+		t.tracked[th.Target.Keyspace] = ksUpdater
+	}
+	return ksUpdater
 }
 
 // Stop stops the schema tracking
@@ -140,18 +148,18 @@ func (t *Tracker) Tables(ks string) map[string][]vindexes.Column {
 	return m
 }
 
-func (t *Tracker) updateSchema(th *discovery.TabletHealth) {
+func (t *Tracker) updateSchema(th *discovery.TabletHealth) bool {
 	tables, err := sqltypes.BuildBindVariable(th.TablesUpdated)
 	if err != nil {
 		log.Errorf("failed to read updated tables from TabletHealth: %v", err)
-		return
+		return false
 	}
 	bv := map[string]*querypb.BindVariable{"tableNames": tables}
 	res, err := th.Conn.Execute(t.ctx, th.Target, mysql.FetchUpdatedTables, bv, 0, 0, nil)
 	if err != nil {
 		// TODO: these tables should now become non-authoritative
 		log.Warningf("error fetching new schema for %v, making them non-authoritative: %v", th.TablesUpdated, err)
-		return
+		return false
 	}
 
 	t.mu.Lock()
@@ -163,10 +171,10 @@ func (t *Tracker) updateSchema(th *discovery.TabletHealth) {
 		t.tables.delete(th.Target.Keyspace, tbl)
 	}
 	t.updateTables(th.Target.Keyspace, res)
+	return true
 }
 
 func (t *Tracker) updateTables(keyspace string, res *sqltypes.Result) {
-	t.tracked[keyspace] = time.Now()
 	for _, row := range res.Rows {
 		tbl := row[0].ToString()
 		colName := row[1].ToString()
