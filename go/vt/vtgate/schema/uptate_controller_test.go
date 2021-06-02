@@ -113,7 +113,6 @@ func TestMultipleUpdatesFromDifferentShards(t *testing.T) {
 		updateFail:     true,
 	},
 	}
-	consumeDelay = 5 * time.Millisecond
 	for i, test := range tests {
 		t.Run(fmt.Sprintf("%d", i+1), func(t *testing.T) {
 			var signalNb, initNb int
@@ -126,8 +125,9 @@ func TestMultipleUpdatesFromDifferentShards(t *testing.T) {
 				signalNb++
 			}
 			kUpdate := updateController{
-				update: update,
-				signal: signal,
+				update:       update,
+				signal:       signal,
+				consumeDelay: 5 * time.Millisecond,
 			}
 
 			if test.init {
