@@ -23,27 +23,24 @@ import (
 	"vitess.io/vitess/go/vt/discovery"
 )
 
-var (
-	consumeDelay = 1 * time.Second
-)
-
 type (
 	queue struct {
 		items []*discovery.TabletHealth
 	}
 
 	updateController struct {
-		mu     sync.Mutex
-		queue  *queue
-		update func(th *discovery.TabletHealth) bool
-		init   func(th *discovery.TabletHealth) bool
-		signal func()
+		mu           sync.Mutex
+		queue        *queue
+		consumeDelay time.Duration
+		update       func(th *discovery.TabletHealth) bool
+		init         func(th *discovery.TabletHealth) bool
+		signal       func()
 	}
 )
 
 func (u *updateController) consume() {
 	for {
-		time.Sleep(consumeDelay)
+		time.Sleep(u.consumeDelay)
 
 		u.mu.Lock()
 		if len(u.queue.items) == 0 {

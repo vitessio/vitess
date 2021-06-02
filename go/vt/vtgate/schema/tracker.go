@@ -19,6 +19,7 @@ package schema
 import (
 	"context"
 	"sync"
+	"time"
 
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 
@@ -47,17 +48,22 @@ type (
 		signal func() // a function that we'll call whenever we have new schema data
 
 		// map of keyspace currently tracked
-		tracked map[keyspace]*updateController
+		tracked      map[keyspace]*updateController
+		consumeDelay time.Duration
 	}
 )
+
+// defaultConsumeDelay is the default time, the updateController will wait before checking the schema fetch request queue.
+const defaultConsumeDelay = 1 * time.Second
 
 // NewTracker creates the tracker object.
 func NewTracker(ch chan *discovery.TabletHealth) *Tracker {
 	return &Tracker{
-		ch:      ch,
-		tables:  &tableMap{m: map[keyspace]map[tableName][]vindexes.Column{}},
-		tracked: map[keyspace]*updateController{},
-		ctx:     context.Background(),
+		ctx:          context.Background(),
+		ch:           ch,
+		tables:       &tableMap{m: map[keyspace]map[tableName][]vindexes.Column{}},
+		tracked:      map[keyspace]*updateController{},
+		consumeDelay: defaultConsumeDelay,
 	}
 }
 
@@ -109,7 +115,7 @@ func (t *Tracker) getKeyspaceUpdateController(th *discovery.TabletHealth) *updat
 			}
 			return true
 		}
-		ksUpdater = &updateController{update: t.updateSchema, init: init, signal: t.signal}
+		ksUpdater = &updateController{update: t.updateSchema, init: init, signal: t.signal, consumeDelay: t.consumeDelay}
 		t.tracked[th.Target.Keyspace] = ksUpdater
 	}
 	return ksUpdater

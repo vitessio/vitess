@@ -50,8 +50,6 @@ func TestTracking(t *testing.T) {
 	}
 	fields := sqltypes.MakeTestFields("table_name|col_name|col_type", "varchar|varchar|varchar")
 
-	consumeDelay = 200 * time.Millisecond
-
 	type delta struct {
 		result *sqltypes.Result
 		updTbl []string
@@ -139,7 +137,7 @@ func TestTracking(t *testing.T) {
 			sbc := sandboxconn.NewSandboxConn(tablet)
 			ch := make(chan *discovery.TabletHealth)
 			tracker := NewTracker(ch)
-
+			tracker.consumeDelay = 1 * time.Millisecond
 			tracker.Start()
 			defer tracker.Stop()
 
