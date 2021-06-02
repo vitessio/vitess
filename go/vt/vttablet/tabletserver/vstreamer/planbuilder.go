@@ -145,6 +145,11 @@ func getOpcode(comparison *sqlparser.ComparisonExpr) (Opcode, error) {
 
 // compare returns true after applying the comparison specified in the Filter to the actual data in the column
 func compare(comparison Opcode, columnValue, filterValue sqltypes.Value) (bool, error) {
+	// use null semantics: return false if either value is null
+	if columnValue.IsNull() || filterValue.IsNull() {
+		return false, nil
+	}
+	// at this point neither values can be null
 	// NullsafeCompare returns 0 if values match, -1 if columnValue < filterValue, 1 if columnValue > filterValue
 	result, err := evalengine.NullsafeCompare(columnValue, filterValue)
 	if err != nil {
