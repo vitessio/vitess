@@ -25,10 +25,11 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
-	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	"vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtctl/workflow"
+
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 )
 
 func getMoveTablesWorkflow(t *testing.T, cells, tabletTypes string) *VReplicationWorkflow {
@@ -249,7 +250,7 @@ func TestMoveTablesV2Complete(t *testing.T) {
 }
 
 func testSwitchForward(t *testing.T, wf *VReplicationWorkflow) error {
-	_, err := wf.SwitchTraffic(DirectionForward)
+	_, err := wf.SwitchTraffic(workflow.DirectionForward)
 	return err
 }
 
