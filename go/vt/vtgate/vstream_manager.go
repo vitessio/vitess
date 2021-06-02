@@ -244,6 +244,9 @@ func (vs *vstream) sendEvents(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
+			vs.once.Do(func() {
+				vs.err = fmt.Errorf("context canceled")
+			})
 			return
 		case evs := <-vs.eventCh:
 			if err := send(evs); err != nil {
