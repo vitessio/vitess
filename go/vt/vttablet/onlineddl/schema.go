@@ -316,10 +316,20 @@ const (
 	sqlDropTable         = "DROP TABLE `%a`"
 	sqlAlterTableOptions = "ALTER TABLE `%a` %s"
 	sqlShowColumnsFrom   = "SHOW COLUMNS FROM `%a`"
-	sqlStartVReplStream  = "UPDATE _vt.vreplication set state='Running' where db_name=%a and workflow=%a"
-	sqlStopVReplStream   = "UPDATE _vt.vreplication set state='Stopped' where db_name=%a and workflow=%a"
-	sqlDeleteVReplStream = "DELETE FROM _vt.vreplication where db_name=%a and workflow=%a"
-	sqlReadVReplStream   = `SELECT
+	sqlGetAutoIncrement  = `
+		SELECT
+			AUTO_INCREMENT
+		FROM INFORMATION_SCHEMA.TABLES
+		WHERE
+			TABLES.TABLE_SCHEMA=%a
+			AND TABLES.TABLE_NAME=%a
+			AND AUTO_INCREMENT IS NOT NULL
+		`
+	sqlAlterTableAutoIncrement = "ALTER TABLE `%s` AUTO_INCREMENT=%a"
+	sqlStartVReplStream        = "UPDATE _vt.vreplication set state='Running' where db_name=%a and workflow=%a"
+	sqlStopVReplStream         = "UPDATE _vt.vreplication set state='Stopped' where db_name=%a and workflow=%a"
+	sqlDeleteVReplStream       = "DELETE FROM _vt.vreplication where db_name=%a and workflow=%a"
+	sqlReadVReplStream         = `SELECT
 			id,
 			workflow,
 			source,
@@ -331,7 +341,6 @@ const (
 		FROM _vt.vreplication
 		WHERE
 			workflow=%a
-
 		`
 	sqlReadCountCopyState = `SELECT
 			count(*) as cnt

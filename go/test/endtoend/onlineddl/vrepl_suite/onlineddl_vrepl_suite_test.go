@@ -258,7 +258,7 @@ func testSingle(t *testing.T, testName string) {
 	require.Equal(t, string(schema.OnlineDDLStatusComplete), migrationStatus)
 
 	if content, exists := readTestFile(t, testName, "expect_table_structure"); exists {
-		createStatement := getCreateTableStatement(t, tableName)
+		createStatement := getCreateTableStatement(t, afterTableName)
 		assert.Contains(t, createStatement, content, "expected SHOW CREATE TABLE to contain text in 'expect_table_structure' file")
 	}
 
