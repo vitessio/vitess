@@ -33,7 +33,10 @@ import (
 // It only returns errors from looking up the tablet map from the topology;
 // errors returned from any RefreshState RPCs are logged and then ignored. Also,
 // any tablets without a .Hostname set in the topology are skipped.
-func RefreshTabletsByShard(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManagerClient, si *topo.ShardInfo, cells []string, logger logutil.Logger) error {
+//
+// However, on partial errors from the topology, or errors from a RefreshState
+// RPC will cause a boolean flag to be returned indicating only partial success.
+func RefreshTabletsByShard(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManagerClient, si *topo.ShardInfo, cells []string, logger logutil.Logger) (isPartialRefresh bool, err error) {
 	logger.Infof("RefreshTabletsByShard called on shard %v/%v", si.Keyspace(), si.ShardName())
 
 	tabletMap, err := ts.GetTabletMapForShardByCell(ctx, si.Keyspace(), si.ShardName(), cells)
@@ -42,12 +45,16 @@ func RefreshTabletsByShard(ctx context.Context, ts *topo.Server, tmc tmclient.Ta
 		// keep going
 	case topo.IsErrType(err, topo.PartialResult):
 		logger.Warningf("RefreshTabletsByShard: got partial result for shard %v/%v, may not refresh all tablets everywhere", si.Keyspace(), si.ShardName())
+		isPartialRefresh = true
 	default:
-		return err
+		return false, err
 	}
 
 	// Any errors from this point onward are ignored.
-	var wg sync.WaitGroup
+	var (
+		m  sync.Mutex
+		wg sync.WaitGroup
+	)
 	for _, ti := range tabletMap {
 		if ti.Hostname == "" {
 			// The tablet is not running, we don't have the host
@@ -66,12 +73,15 @@ func RefreshTabletsByShard(ctx context.Context, ts *topo.Server, tmc tmclient.Ta
 
 			if err := tmc.RefreshState(ctx, ti.Tablet); err != nil {
 				logger.Warningf("RefreshTabletsByShard: failed to refresh %v: %v", ti.AliasString(), err)
+				m.Lock()
+				isPartialRefresh = true
+				m.Unlock()
 			}
 		}(ti)
 	}
 
 	wg.Wait()
-	return nil
+	return isPartialRefresh, nil
 }
 
 // UpdateShardRecords updates the shard records based on 'from' or 'to'
@@ -111,7 +121,7 @@ func UpdateShardRecords(
 		// For 'to' shards, refresh to make them serve. The 'from' shards will
 		// be refreshed after traffic has migrated.
 		if !isFrom {
-			if err := RefreshTabletsByShard(ctx, ts, tmc, si, cells, logger); err != nil {
+			if _, err := RefreshTabletsByShard(ctx, ts, tmc, si, cells, logger); err != nil {
 				logger.Warningf("RefreshTabletsByShard(%v/%v, cells=%v) failed with %v; continuing ...", si.Keyspace(), si.ShardName(), cells, err)
 			}
 		}
