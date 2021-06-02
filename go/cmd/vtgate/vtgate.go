@@ -75,7 +75,7 @@ func CheckCellFlags(ctx context.Context, serv srvtopo.Server, cell string, cells
 	}
 
 	// cell valid check
-	if cell == "" || cell == "test_nj" {
+	if cell == "" {
 		return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "cell flag must be set")
 	}
 	hasCell := false
