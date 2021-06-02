@@ -80,7 +80,6 @@ func NewVtctldServer(ts *topo.Server) *VtctldServer {
 	}
 }
 
-
 // AddCellInfo is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) AddCellInfo(ctx context.Context, req *vtctldatapb.AddCellInfoRequest) (*vtctldatapb.AddCellInfoResponse, error) {
 	if req.CellInfo.Root == "" {

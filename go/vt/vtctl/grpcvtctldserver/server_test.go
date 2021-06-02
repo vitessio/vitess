@@ -44,10 +44,9 @@ import (
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
-	"vitess.io/vitess/go/vt/proto/vtctldata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	vtctlservicepb "vitess.io/vitess/go/vt/proto/vtctlservice"
-	"vitess.io/vitess/go/vt/proto/vttime"
+	vttime "vitess.io/vitess/go/vt/proto/vttime"
 )
 
 func init() {
@@ -141,7 +140,7 @@ func TestAddCellsAlias(t *testing.T) {
 		name      string
 		ts        *topo.Server
 		setup     func(ts *topo.Server) error
-		req       *vtctldata.AddCellsAliasRequest
+		req       *vtctldatapb.AddCellsAliasRequest
 		shouldErr bool
 	}{
 		{
@@ -319,6 +318,96 @@ func TestApplyRoutingRules(t *testing.T) {
 			utils.MustMatch(t, tt.expectedRules, rr)
 		})
 	}
+}
+
+func TestApplyVSchema(t *testing.T) {
+	//	t.Parallel()
+
+	ctx := context.Background()
+	ts := memorytopo.NewServer("zone1")
+	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+		return NewVtctldServer(ts)
+	})
+
+	t.Run("success", func(t *testing.T) {
+		//		t.Parallel()
+
+		testutil.AddKeyspace(ctx, t, ts, &vtctldatapb.Keyspace{
+			Name: "testkeyspace",
+			Keyspace: &topodatapb.Keyspace{
+				KeyspaceType: topodatapb.KeyspaceType_NORMAL,
+			},
+		})
+
+		err := ts.SaveVSchema(ctx, "testkeyspace", &vschemapb.Keyspace{
+			Sharded: true,
+			Vindexes: map[string]*vschemapb.Vindex{
+				"v1": {
+					Type: "hash",
+				},
+			},
+		})
+		require.NoError(t, err)
+
+		exp := &vtctldatapb.ApplyVSchemaResponse{
+			VSchema: &vschemapb.Keyspace{
+				Sharded: false,
+			},
+		}
+
+		res, err := vtctld.ApplyVSchema(ctx, &vtctldatapb.ApplyVSchemaRequest{
+			Keyspace: "testkeyspace",
+			VSchema: &vschemapb.Keyspace{
+				Sharded: false,
+			},
+		})
+		assert.NoError(t, err)
+		utils.MustMatch(t, exp, res)
+	})
+
+	t.Run("skip rebuild", func(t *testing.T) {
+		//		t.Parallel()
+
+		testutil.AddKeyspace(ctx, t, ts, &vtctldatapb.Keyspace{
+			Name: "rebuild",
+			Keyspace: &topodatapb.Keyspace{
+				KeyspaceType: topodatapb.KeyspaceType_NORMAL,
+			},
+		})
+
+		err := ts.SaveVSchema(ctx, "rebuild", &vschemapb.Keyspace{
+			Sharded: true,
+			Vindexes: map[string]*vschemapb.Vindex{
+				"v1": {
+					Type: "hash",
+				},
+			},
+		})
+		require.NoError(t, err)
+
+		exp := &vtctldatapb.ApplyVSchemaResponse{
+			VSchema: &vschemapb.Keyspace{
+				Sharded: false,
+			},
+		}
+
+		origSrvVSchema, err := vtctld.GetSrvVSchema(ctx, &vtctldatapb.GetSrvVSchemaRequest{Cell: "zone1"})
+		require.NoError(t, err)
+
+		res, err := vtctld.ApplyVSchema(ctx, &vtctldatapb.ApplyVSchemaRequest{
+			Keyspace: "rebuild",
+			VSchema: &vschemapb.Keyspace{
+				Sharded: false,
+			},
+			SkipRebuild: true,
+		})
+		assert.NoError(t, err)
+		utils.MustMatch(t, exp, res)
+
+		finalSrvVSchema, err := vtctld.GetSrvVSchema(ctx, &vtctldatapb.GetSrvVSchemaRequest{Cell: "zone1"})
+		require.NoError(t, err)
+		utils.MustMatch(t, origSrvVSchema.SrvVSchema, finalSrvVSchema.SrvVSchema)
+	})
 }
 
 func TestChangeTabletType(t *testing.T) {
@@ -1132,7 +1221,7 @@ func TestDeleteCellsAlias(t *testing.T) {
 		name      string
 		ts        *topo.Server
 		setup     func(ts *topo.Server) error
-		req       *vtctldata.DeleteCellsAliasRequest
+		req       *vtctldatapb.DeleteCellsAliasRequest
 		shouldErr bool
 	}{
 		{
