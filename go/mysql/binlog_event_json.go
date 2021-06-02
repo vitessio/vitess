@@ -30,6 +30,22 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
+/*
+
+References:
+
+* C source of mysql json data type implementation
+https://fossies.org/linux/mysql/sql/json_binary.cc
+
+* nice description of MySQL's json representation
+https://lafengnan.gitbooks.io/blog/content/mysql/chapter2.html
+
+* java/python connector links: useful for test cases and reverse engineering
+https://github.com/shyiko/mysql-binlog-connector-java/pull/119/files
+https://github.com/noplay/python-mysql-replication/blob/175df28cc8b536a68522ff9b09dc5440adad6094/pymysqlreplication/packet.py
+
+*/
+
 //region debug-only
 //TODO remove once the json refactor is tested live
 var jsonDebug = false
@@ -120,8 +136,9 @@ type BinlogJSON struct {
 	plugins map[jsonDataType]jsonPlugin
 }
 
-// parse decodes a value from the binlog. pos is a pointer that keeps track of the offset of the current node being parsed
+// parse decodes a value from the binlog
 func (jh *BinlogJSON) parse(data []byte) (node *ajson.Node, err error) {
+	// pos keeps track of the offset of the current node being parsed
 	pos := 0
 	typ := data[pos]
 	jlog("Top level object is type %s\n", jsonDataTypeToString(uint(typ)))
@@ -147,9 +164,9 @@ func (jh *BinlogJSON) getNode(typ jsonDataType, data []byte, pos int) (node *ajs
 
 //region enums
 
-// jsonDataType has the values used in the mysql json binary representation to denote types
-// We have string, literal(true/false/null), number, object or array types
-// large object => doc size > 64K: you get pointers instead of inline values
+// jsonDataType has the values used in the mysql json binary representation to denote types.
+// We have string, literal(true/false/null), number, object or array types.
+// large object => doc size > 64K: you get pointers instead of inline values.
 type jsonDataType byte
 
 // type mapping as defined by the mysql json representation
@@ -173,7 +190,7 @@ const (
 // literals in the binary json format can be one of three types: null, true, false
 type jsonDataLiteral byte
 
-// this is how mysql maps the three literals (null, true and false) in the binlog
+// this is how mysql maps the three literals in the binlog
 const (
 	jsonNullLiteral  = '\x00'
 	jsonTrueLiteral  = '\x01'
@@ -184,10 +201,10 @@ const (
 
 //region util funcs
 
-// in objects and arrays some values are inlined, others have offsets into the raw data
-// for all documents literals (true/false/null) and 16bit integers are inlined
-// for large documents 32bit integers are also inlined:
-// principle is that two byte values are inlined in small and four byte in large docs
+// in objects and arrays some values are inlined, other types have offsets into the raw data.
+// literals (true/false/null) and 16bit integers are always inlined.
+// for large documents 32bit integers are also inlined.
+// principle is that two byte values are inlined in "small", and four byte in "large" docs
 func isInline(typ jsonDataType, large bool) bool {
 	switch typ {
 	case jsonLiteral, jsonInt16, jsonUint16:
@@ -201,12 +218,12 @@ func isInline(typ jsonDataType, large bool) bool {
 }
 
 // readInt returns either a 32-bit or a 16-bit int from the passed buffer. Which one it is,
-// depends on whether the document is "large" or not
+// depends on whether the document is "large" or not.
 // JSON documents stored are considered "large" if the size of the stored json document is
-// more than 64K bytes. Values of non-inlined types are stored as offsets into the document
-// The int returned is either an offset into the raw data, count of elements or size of the represented data structure
-// (This design decision allows a fixed number of bytes to be used for representing object keys and array indices)
-// readInt also returns the new position (by advancing the position by the number of bytes read)
+// more than 64K bytes. Values of non-inlined types are stored as offsets into the document.
+// The int returned is either an (i) offset into the raw data, (ii) count of elements, or (iii) size of the represented data structure.
+// (This design decision allows a fixed number of bytes to be used for representing object keys and array indices.)
+// readInt also returns the new position (by advancing the position by the number of bytes read).
 func readInt(data []byte, pos int, large bool) (int, int) {
 	if large {
 		return int(data[pos]) +
@@ -223,7 +240,7 @@ func readInt(data []byte, pos int, large bool) (int, int) {
 // of an arbitrarily long string as implemented by the mysql server
 // https://github.com/mysql/mysql-server/blob/5.7/sql/json_binary.cc#L234
 // https://github.com/mysql/mysql-server/blob/8.0/sql/json_binary.cc#L283
-// readVariableLength also returns the new position (by advancing the position by the number of bytes read)
+// readVariableLength also returns the new position (by advancing the position by the number of bytes read).
 func readVariableLength(data []byte, pos int) (int, int) {
 	var bb byte
 	var length int
@@ -232,8 +249,8 @@ func readVariableLength(data []byte, pos int) (int, int) {
 		bb = data[pos]
 		pos++
 		length |= int(bb&0x7f) << (7 * idx)
-		// if the high bit is 1, the integer value of the byte will be negative
-		// high bit of 1 signifies that the next byte is part of the length encoding
+		// if the high bit is 1, the integer value of the byte will be negative.
+		// high bit of 1 signifies that the next byte is part of the length encoding.
 		if int8(bb) >= 0 {
 			break
 		}
@@ -242,7 +259,7 @@ func readVariableLength(data []byte, pos int) (int, int) {
 	return length, pos
 }
 
-// getElem returns the json value found inside json objects and arrays at provided position
+// getElem returns the json value found inside json objects and arrays at the provided position
 func getElem(data []byte, pos int, large bool) (*ajson.Node, int, error) {
 	var elem *ajson.Node
 	var err error
@@ -261,7 +278,7 @@ func getElem(data []byte, pos int, large bool) (*ajson.Node, int, error) {
 		}
 	} else {
 		offset, pos = readInt(data, pos, large)
-		if offset >= len(data) {
+		if offset >= len(data) { // consistency check, should only come here is there is a bug in the code
 			log.Errorf("unable to decode element")
 			return nil, 0, fmt.Errorf("unable to decode element: %+v", data)
 		}
@@ -410,8 +427,8 @@ type opaquePlugin struct {
 
 var _ jsonPlugin = (*opaquePlugin)(nil)
 
-// other types are stored as catch-all opaque types: documentation on these is sketchy
-// we currently know about and support date/time/datetime/decimal
+// other types are stored as catch-all opaque types: documentation on these is scarce.
+// we currently know about (and support) date/time/datetime/decimal.
 func (oh opaquePlugin) getNode(typ jsonDataType, data []byte, pos int) (node *ajson.Node, err error) {
 	dataType := data[pos]
 	start := 3       // account for length of stored value
@@ -526,7 +543,7 @@ type arrayPlugin struct {
 var _ jsonPlugin = (*arrayPlugin)(nil)
 
 // arrays are stored thus:
-// | type_identifier(2/3) | elem count | obj size | list of offsets+lengths of values | actual values |
+// | type_identifier(one of [2,3]) | elem count | obj size | list of offsets+lengths of values | actual values |
 func (ah arrayPlugin) getNode(typ jsonDataType, data []byte, pos int) (node *ajson.Node, err error) {
 	jlog("JSON Array %s, len %d", jsonDataTypeToString(uint(typ)), len(data))
 	var nodes []*ajson.Node
@@ -580,8 +597,7 @@ var _ jsonPlugin = (*objectPlugin)(nil)
 func (oh objectPlugin) getNode(typ jsonDataType, data []byte, pos int) (node *ajson.Node, err error) {
 	jlog("JSON Type is %s, len %d", jsonDataTypeToString(uint(typ)), len(data))
 
-	// "large" changes storage layout of element count, total object size,
-	// if "large" is true then all of these are 4 bytes. For "small" documents they are 2 bytes
+	// "large" decides number of bytes used to specify element count and total object size: 4 bytes for large, 2 for small
 	var large = typ == jsonLargeObject
 
 	var elementCount int // total number of elements (== keys) in this object map. (element can be another object: recursively handled)
@@ -599,7 +615,8 @@ func (oh objectPlugin) getNode(typ jsonDataType, data []byte, pos int) (node *aj
 		keyLength, pos = readInt(data, pos, false) // keyLength is always a 16-bit int
 
 		keyOffsetStart := keyOffset + 1
-		if keyOffsetStart >= len(data) || keyOffsetStart+keyLength > len(data) { // guards against out-of-bounds if logic is incorrect
+		// check that offsets are not out of bounds (can happen only if there is a bug in the parsing code)
+		if keyOffsetStart >= len(data) || keyOffsetStart+keyLength > len(data) {
 			log.Errorf("unable to decode object elements")
 			return nil, fmt.Errorf("unable to decode object elements: %v", data)
 		}
@@ -637,19 +654,3 @@ func newObjectPlugin() *objectPlugin {
 }
 
 //endregion
-
-/*
-
-References:
-
-* C source of mysql json data type implementation
-https://fossies.org/linux/mysql/sql/json_binary.cc
-
-* nice description of MySQL's json representation
-https://lafengnan.gitbooks.io/blog/content/mysql/chapter2.html
-
-* java/python connector links: useful for test cases and reverse engineering
-https://github.com/shyiko/mysql-binlog-connector-java/pull/119/files
-https://github.com/noplay/python-mysql-replication/blob/175df28cc8b536a68522ff9b09dc5440adad6094/pymysqlreplication/packet.py
-
-*/
