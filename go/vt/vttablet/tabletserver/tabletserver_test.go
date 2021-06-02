@@ -22,6 +22,8 @@ import (
 	"io"
 	"io/ioutil"
 	"math/rand"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"reflect"
 	"strings"
@@ -55,6 +57,62 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
+
+func TestTabletServerHealthz(t *testing.T) {
+	db, tsv := setupTabletServerTest(t, "")
+	defer tsv.StopService()
+	defer db.Close()
+
+	req, err := http.NewRequest("GET", "/healthz", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rr := httptest.NewRecorder()
+	handler := http.HandlerFunc(tsv.healthzHandler)
+	handler.ServeHTTP(rr, req)
+
+	expectedCode := http.StatusOK
+	if status := rr.Code; status != expectedCode {
+		t.Errorf("handler returned wrong status code: got %v want %v",
+			status, expectedCode)
+	}
+
+	expected := "ok\n"
+	if rr.Body.String() != expected {
+		t.Errorf("handler returned unexpected body: got %v want %v",
+			rr.Body.String(), expected)
+	}
+}
+
+func TestTabletServerHealthzNotConnected(t *testing.T) {
+	db, tsv := setupTabletServerTest(t, "")
+	defer tsv.StopService()
+	defer db.Close()
+
+	tsv.sm.SetServingType(topodatapb.TabletType_MASTER, time.Time{}, StateNotConnected, "test disconnected")
+
+	req, err := http.NewRequest("GET", "/healthz", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rr := httptest.NewRecorder()
+	handler := http.HandlerFunc(tsv.healthzHandler)
+	handler.ServeHTTP(rr, req)
+
+	expectedCode := http.StatusInternalServerError
+	if status := rr.Code; status != expectedCode {
+		t.Errorf("handler returned wrong status code: got %v want %v",
+			status, expectedCode)
+	}
+
+	expected := "500 internal server error: vttablet is not serving\n"
+	if rr.Body.String() != expected {
+		t.Errorf("handler returned unexpected body: got %v want %v",
+			rr.Body.String(), expected)
+	}
+}
 
 func TestBeginOnReplica(t *testing.T) {
 	db, tsv := setupTabletServerTest(t, "")
