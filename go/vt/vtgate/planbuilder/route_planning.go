@@ -91,7 +91,7 @@ func newBuildSelectPlan(sel *sqlparser.Select, vschema ContextVSchema) (engine.P
 		return nil, err
 	}
 
-	if err := plan.WireupV4(semTable); err != nil {
+	if err := plan.WireupGen4(semTable); err != nil {
 		return nil, err
 	}
 	return plan.Primitive(), nil
