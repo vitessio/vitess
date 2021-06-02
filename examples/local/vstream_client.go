@@ -46,7 +46,7 @@ func main() {
 				Shard:    "-80",
 				// Gtid "" is to stream from the start, "current" is to stream from the current gtid
 				// you can also specify a gtid to start with.
-				Gtid:     "", //"current"  // "MySQL56/36a89abd-978f-11eb-b312-04ed332e05c2:1-265"
+				Gtid: "", //"current"  // "MySQL56/36a89abd-978f-11eb-b312-04ed332e05c2:1-265"
 			}, {
 				Keyspace: "customer",
 				Shard:    "80-",
