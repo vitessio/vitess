@@ -76,9 +76,9 @@ endif
 	# build vtorc with CGO, because it depends on sqlite
 	CGO_ENABLED=1 go install $(EXTRA_BUILD_FLAGS) $(VT_GO_PARALLEL) -ldflags "$(shell tools/build_version_flags.sh)" ./go/cmd/vtorc/...
 
-# xbuild can be used to cross-compile Vitess client binaries
+# cross-build can be used to cross-compile Vitess client binaries
 # Outside of select client binaries (namely vtctlclient & vtexplain), cross-compiled Vitess Binaries are not recommended for production deployments
-# Usage: GOOS=darwin GOARCH=amd64 make xbuild
+# Usage: GOOS=darwin GOARCH=amd64 make cross-build
 cross-build:
 ifndef NOBANNER
 	echo $$(date): Building source tree
