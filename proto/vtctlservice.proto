@@ -31,6 +31,18 @@ service Vtctl {
 
 // Service Vtctld exposes gRPC endpoints for each vt command.
 service Vtctld {
+  // AddCellInfo registers a local topology service in a new cell by creating
+  // the CellInfo with the provided parameters.
+  rpc AddCellInfo(vtctldata.AddCellInfoRequest) returns (vtctldata.AddCellInfoResponse) {};
+  // AddCellsAlias defines a group of cells that can be referenced by a single
+  // name (the alias).
+  //
+  // When routing query traffic, replica/rdonly traffic can be routed across
+  // cells within the group (alias). Only primary traffic can be routed across
+  // cells not in the same group (alias).
+  rpc AddCellsAlias(vtctldata.AddCellsAliasRequest) returns (vtctldata.AddCellsAliasResponse) {}; 
+  // ApplyRoutingRules applies the VSchema routing rules.
+  rpc ApplyRoutingRules(vtctldata.ApplyRoutingRulesRequest) returns (vtctldata.ApplyRoutingRulesResponse) {};
   // ChangeTabletType changes the db type for the specified tablet, if possible.
   // This is used primarily to arrange replicas, and it will not convert a
   // primary. For that, use InitShardPrimary.
@@ -43,6 +55,11 @@ service Vtctld {
   rpc CreateKeyspace(vtctldata.CreateKeyspaceRequest) returns (vtctldata.CreateKeyspaceResponse) {};
   // CreateShard creates the specified shard in the topology.
   rpc CreateShard(vtctldata.CreateShardRequest) returns (vtctldata.CreateShardResponse) {};
+  // DeleteCellInfo deletes the CellInfo for the provided cell. The cell cannot
+  // be referenced by any Shard record in the topology.
+  rpc DeleteCellInfo(vtctldata.DeleteCellInfoRequest) returns (vtctldata.DeleteCellInfoResponse) {};
+  // DeleteCellsAlias deletes the CellsAlias for the provided alias.
+  rpc DeleteCellsAlias(vtctldata.DeleteCellsAliasRequest) returns (vtctldata.DeleteCellsAliasResponse) {};
   // DeleteKeyspace deletes the specified keyspace from the topology. In
   // recursive mode, it also recursively deletes all shards in the keyspace.
   // Otherwise, the keyspace must be empty (have no shards), or DeleteKeyspace
@@ -63,11 +80,11 @@ service Vtctld {
   rpc FindAllShardsInKeyspace(vtctldata.FindAllShardsInKeyspaceRequest) returns (vtctldata.FindAllShardsInKeyspaceResponse) {};
   // GetBackups returns all the backups for a shard.
   rpc GetBackups(vtctldata.GetBackupsRequest) returns (vtctldata.GetBackupsResponse) {};
+  // GetCellInfo returns the information for a cell.
+  rpc GetCellInfo(vtctldata.GetCellInfoRequest) returns (vtctldata.GetCellInfoResponse) {};
   // GetCellInfoNames returns all the cells for which we have a CellInfo object,
   // meaning we have a topology service registered.
   rpc GetCellInfoNames(vtctldata.GetCellInfoNamesRequest) returns (vtctldata.GetCellInfoNamesResponse) {};
-  // GetCellInfo returns the information for a cell.
-  rpc GetCellInfo(vtctldata.GetCellInfoRequest) returns (vtctldata.GetCellInfoResponse) {};
   // GetCellsAliases returns a mapping of cell alias to cells identified by that
   // alias.
   rpc GetCellsAliases(vtctldata.GetCellsAliasesRequest) returns (vtctldata.GetCellsAliasesResponse) {};
@@ -75,6 +92,8 @@ service Vtctld {
   rpc GetKeyspace(vtctldata.GetKeyspaceRequest) returns (vtctldata.GetKeyspaceResponse) {};
   // GetKeyspaces returns the keyspace struct of all keyspaces in the topo.
   rpc GetKeyspaces(vtctldata.GetKeyspacesRequest) returns (vtctldata.GetKeyspacesResponse) {};
+  // GetRoutingRules returns the VSchema routing rules.
+  rpc GetRoutingRules(vtctldata.GetRoutingRulesRequest) returns (vtctldata.GetRoutingRulesResponse) {};
   // GetSchema returns the schema for a tablet, or just the schema for the
   // specified tables in that tablet.
   rpc GetSchema(vtctldata.GetSchemaRequest) returns (vtctldata.GetSchemaResponse) {};
@@ -111,6 +130,10 @@ service Vtctld {
   // current shard primary is in for promotion unless NewPrimary is explicitly
   // provided in the request.
   rpc PlannedReparentShard(vtctldata.PlannedReparentShardRequest) returns (vtctldata.PlannedReparentShardResponse) {};
+  // RebuildVSchemaGraph rebuilds the per-cell SrvVSchema from the global
+  // VSchema objects in the provided cells (or all cells in the topo none
+  // provided).
+  rpc RebuildVSchemaGraph(vtctldata.RebuildVSchemaGraphRequest) returns (vtctldata.RebuildVSchemaGraphResponse) {};
   // RemoveKeyspaceCell removes the specified cell from the Cells list for all
   // shards in the specified keyspace, as well as from the SrvKeyspace for that
   // keyspace in that cell.
@@ -135,4 +158,12 @@ service Vtctld {
   // See the Reparenting guide for more information:
   // https://vitess.io/docs/user-guides/configuration-advanced/reparenting/#external-reparenting.
   rpc TabletExternallyReparented(vtctldata.TabletExternallyReparentedRequest) returns (vtctldata.TabletExternallyReparentedResponse) {};
+  // UpdateCellInfo updates the content of a CellInfo with the provided
+  // parameters. Empty values are ignored. If the cell does not exist, the
+  // CellInfo will be created.
+  rpc UpdateCellInfo(vtctldata.UpdateCellInfoRequest) returns (vtctldata.UpdateCellInfoResponse) {};
+  // UpdateCellsAlias updates the content of a CellsAlias with the provided
+  // parameters. Empty values are ignored. If the alias does not exist, the
+  // CellsAlias will be created.
+  rpc UpdateCellsAlias(vtctldata.UpdateCellsAliasRequest) returns (vtctldata.UpdateCellsAliasResponse) {};
 }

@@ -83,7 +83,6 @@ type iExecute interface {
 //VSchemaOperator is an interface to Vschema Operations
 type VSchemaOperator interface {
 	GetCurrentSrvVschema() *vschemapb.SrvVSchema
-	GetCurrentVschema() (*vindexes.VSchema, error)
 	UpdateVSchema(ctx context.Context, ksName string, vschema *vschemapb.SrvVSchema) error
 }
 
