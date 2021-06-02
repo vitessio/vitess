@@ -1534,19 +1534,21 @@ var okMessage = []byte("ok\n")
 // Health check
 // Returns ok if we are in the desired serving state
 func (tsv *TabletServer) registerHealthzHealthHandler() {
-	tsv.exporter.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
-		if err := acl.CheckAccessHTTP(r, acl.MONITORING); err != nil {
-			acl.SendError(w, err)
-			return
-		}
-		if tsv.sm.wantState == StateServing && !tsv.sm.IsServing() {
-			http.Error(w, "500 internal server error: vttablet is not serving", http.StatusInternalServerError)
-			return
-		}
-		w.Header().Set("Content-Length", fmt.Sprintf("%v", len(okMessage)))
-		w.WriteHeader(http.StatusOK)
-		w.Write(okMessage)
-	})
+	tsv.exporter.HandleFunc("/healthz", tsv.healthzHandler)
+}
+
+func (tsv *TabletServer) healthzHandler(w http.ResponseWriter, r *http.Request) {
+	if err := acl.CheckAccessHTTP(r, acl.MONITORING); err != nil {
+		acl.SendError(w, err)
+		return
+	}
+	if (tsv.sm.wantState == StateServing || tsv.sm.wantState == StateNotConnected) && !tsv.sm.IsServing() {
+		http.Error(w, "500 internal server error: vttablet is not serving", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Length", fmt.Sprintf("%v", len(okMessage)))
+	w.WriteHeader(http.StatusOK)
+	w.Write(okMessage)
 }
 
 // Query service health check
