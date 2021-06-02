@@ -71,8 +71,8 @@ type subqueryInfo struct {
 // origin is chosen as the default.
 func (pb *primitiveBuilder) findOrigin(expr sqlparser.Expr, reservedVars *sqlparser.ReservedVars) (pullouts []*pulloutSubquery, origin logicalPlan, pushExpr sqlparser.Expr, err error) {
 	// highestOrigin tracks the highest origin referenced by the expression.
-	// Default is the First.
-	highestOrigin := First(pb.plan)
+	// Default is the first.
+	highestOrigin := first(pb.plan)
 
 	// subqueries tracks the list of subqueries encountered.
 	var subqueries []subqueryInfo
