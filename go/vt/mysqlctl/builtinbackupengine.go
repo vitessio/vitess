@@ -174,7 +174,7 @@ func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, params BackupP
 				return false, vterrors.Wrap(err, "can't set read-only status")
 			}
 		}
-		replicationPosition, err = params.Mysqld.MasterPosition()
+		replicationPosition, err = params.Mysqld.PrimaryPosition()
 		if err != nil {
 			return false, vterrors.Wrap(err, "can't get master position")
 		}
@@ -240,7 +240,7 @@ func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, params BackupP
 		// Wait for a reliable value for SecondsBehindMaster from ReplicationStatus()
 
 		// We know that we stopped at replicationPosition.
-		// If MasterPosition is the same, that means no writes
+		// If PrimaryPosition is the same, that means no writes
 		// have happened to master, so we are up-to-date.
 		// Otherwise, we wait for replica's Position to change from
 		// the saved replicationPosition before proceeding

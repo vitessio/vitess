@@ -219,7 +219,7 @@ func (tm *TabletManager) abortMasterTerm(ctx context.Context, masterAlias *topod
 	log.Infof("Active reparents are enabled; converting MySQL to replica.")
 	demoteMasterCtx, cancelDemoteMaster := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
 	defer cancelDemoteMaster()
-	if _, err := tm.demoteMaster(demoteMasterCtx, false /* revertPartialFailure */); err != nil {
+	if _, err := tm.demotePrimary(demoteMasterCtx, false /* revertPartialFailure */); err != nil {
 		return vterrors.Wrap(err, "failed to demote master")
 	}
 	setMasterCtx, cancelSetMaster := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)

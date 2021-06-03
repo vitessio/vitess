@@ -39,7 +39,7 @@ func newFilePosFlavor() flavor {
 }
 
 // masterGTIDSet is part of the Flavor interface.
-func (flv *filePosFlavor) masterGTIDSet(c *Conn) (GTIDSet, error) {
+func (flv *filePosFlavor) primaryGTIDSet(c *Conn) (GTIDSet, error) {
 	qr, err := c.ExecuteFetch("SHOW MASTER STATUS", 100, true /* wantfields */)
 	if err != nil {
 		return nil, err
@@ -180,7 +180,7 @@ func (flv *filePosFlavor) setReplicationPositionCommands(pos Position) []string 
 }
 
 // setReplicationPositionCommands is part of the Flavor interface.
-func (flv *filePosFlavor) changeMasterArg() string {
+func (flv *filePosFlavor) changeReplicationSourceArg() string {
 	return "unsupported"
 }
 
@@ -214,25 +214,25 @@ func parseFilePosReplicationStatus(resultMap map[string]string) (ReplicationStat
 }
 
 // masterStatus is part of the Flavor interface.
-func (flv *filePosFlavor) masterStatus(c *Conn) (MasterStatus, error) {
+func (flv *filePosFlavor) primaryStatus(c *Conn) (PrimaryStatus, error) {
 	qr, err := c.ExecuteFetch("SHOW MASTER STATUS", 100, true /* wantfields */)
 	if err != nil {
-		return MasterStatus{}, err
+		return PrimaryStatus{}, err
 	}
 	if len(qr.Rows) == 0 {
 		// The query returned no data. We don't know how this could happen.
-		return MasterStatus{}, ErrNoMasterStatus
+		return PrimaryStatus{}, ErrNoPrimaryStatus
 	}
 
 	resultMap, err := resultToMap(qr)
 	if err != nil {
-		return MasterStatus{}, err
+		return PrimaryStatus{}, err
 	}
 
 	return parseFilePosMasterStatus(resultMap)
 }
 
-func parseFilePosMasterStatus(resultMap map[string]string) (MasterStatus, error) {
+func parseFilePosMasterStatus(resultMap map[string]string) (PrimaryStatus, error) {
 	status := parseMasterStatus(resultMap)
 
 	status.Position = status.FilePosition

@@ -100,7 +100,7 @@ func connectForReplication(cp dbconfigs.Connector) (*mysql.Conn, error) {
 func (bc *BinlogConnection) StartBinlogDumpFromCurrent(ctx context.Context) (mysql.Position, <-chan mysql.BinlogEvent, error) {
 	ctx, bc.cancel = context.WithCancel(ctx)
 
-	masterPosition, err := bc.Conn.MasterPosition()
+	masterPosition, err := bc.Conn.PrimaryPosition()
 	if err != nil {
 		return mysql.Position{}, nil, fmt.Errorf("failed to get master position: %v", err)
 	}

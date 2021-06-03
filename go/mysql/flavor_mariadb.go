@@ -41,7 +41,7 @@ var _ flavor = (*mariadbFlavor101)(nil)
 var _ flavor = (*mariadbFlavor102)(nil)
 
 // masterGTIDSet is part of the Flavor interface.
-func (mariadbFlavor) masterGTIDSet(c *Conn) (GTIDSet, error) {
+func (mariadbFlavor) primaryGTIDSet(c *Conn) (GTIDSet, error) {
 	qr, err := c.ExecuteFetch("SELECT @@GLOBAL.gtid_binlog_pos", 1, false)
 	if err != nil {
 		return nil, err
@@ -142,7 +142,7 @@ func (mariadbFlavor) setReplicationPositionCommands(pos Position) []string {
 }
 
 // setReplicationPositionCommands is part of the Flavor interface.
-func (mariadbFlavor) changeMasterArg() string {
+func (mariadbFlavor) changeReplicationSourceArg() string {
 	return "MASTER_USE_GTID = current_pos"
 }
 
@@ -179,23 +179,23 @@ func parseMariadbReplicationStatus(resultMap map[string]string) (ReplicationStat
 }
 
 // masterStatus is part of the Flavor interface.
-func (m mariadbFlavor) masterStatus(c *Conn) (MasterStatus, error) {
+func (m mariadbFlavor) primaryStatus(c *Conn) (PrimaryStatus, error) {
 	qr, err := c.ExecuteFetch("SHOW MASTER STATUS", 100, true /* wantfields */)
 	if err != nil {
-		return MasterStatus{}, err
+		return PrimaryStatus{}, err
 	}
 	if len(qr.Rows) == 0 {
 		// The query returned no data. We don't know how this could happen.
-		return MasterStatus{}, ErrNoMasterStatus
+		return PrimaryStatus{}, ErrNoPrimaryStatus
 	}
 
 	resultMap, err := resultToMap(qr)
 	if err != nil {
-		return MasterStatus{}, err
+		return PrimaryStatus{}, err
 	}
 
 	status := parseMasterStatus(resultMap)
-	status.Position.GTIDSet, err = m.masterGTIDSet(c)
+	status.Position.GTIDSet, err = m.primaryGTIDSet(c)
 	return status, err
 }
 

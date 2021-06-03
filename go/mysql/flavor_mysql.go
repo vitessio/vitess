@@ -44,7 +44,7 @@ var _ flavor = (*mysqlFlavor57)(nil)
 var _ flavor = (*mysqlFlavor80)(nil)
 
 // masterGTIDSet is part of the Flavor interface.
-func (mysqlFlavor) masterGTIDSet(c *Conn) (GTIDSet, error) {
+func (mysqlFlavor) primaryGTIDSet(c *Conn) (GTIDSet, error) {
 	// keep @@global as lowercase, as some servers like the Ripple binlog server only honors a lowercase `global` value
 	qr, err := c.ExecuteFetch("SELECT @@global.gtid_executed", 1, false)
 	if err != nil {
@@ -114,7 +114,7 @@ func (mysqlFlavor) setReplicationPositionCommands(pos Position) []string {
 }
 
 // setReplicationPositionCommands is part of the Flavor interface.
-func (mysqlFlavor) changeMasterArg() string {
+func (mysqlFlavor) changeReplicationSourceArg() string {
 	return "MASTER_AUTO_POSITION = 1"
 }
 
@@ -167,31 +167,31 @@ func parseMysqlReplicationStatus(resultMap map[string]string) (ReplicationStatus
 }
 
 // masterStatus is part of the Flavor interface.
-func (mysqlFlavor) masterStatus(c *Conn) (MasterStatus, error) {
+func (mysqlFlavor) primaryStatus(c *Conn) (PrimaryStatus, error) {
 	qr, err := c.ExecuteFetch("SHOW MASTER STATUS", 100, true /* wantfields */)
 	if err != nil {
-		return MasterStatus{}, err
+		return PrimaryStatus{}, err
 	}
 	if len(qr.Rows) == 0 {
 		// The query returned no data. We don't know how this could happen.
-		return MasterStatus{}, ErrNoMasterStatus
+		return PrimaryStatus{}, ErrNoPrimaryStatus
 	}
 
 	resultMap, err := resultToMap(qr)
 	if err != nil {
-		return MasterStatus{}, err
+		return PrimaryStatus{}, err
 	}
 
 	return parseMysqlMasterStatus(resultMap)
 }
 
-func parseMysqlMasterStatus(resultMap map[string]string) (MasterStatus, error) {
+func parseMysqlMasterStatus(resultMap map[string]string) (PrimaryStatus, error) {
 	status := parseMasterStatus(resultMap)
 
 	var err error
 	status.Position.GTIDSet, err = parseMysql56GTIDSet(resultMap["Executed_Gtid_Set"])
 	if err != nil {
-		return MasterStatus{}, vterrors.Wrapf(err, "MasterStatus can't parse MySQL 5.6 GTID (Executed_Gtid_Set: %#v)", resultMap["Executed_Gtid_Set"])
+		return PrimaryStatus{}, vterrors.Wrapf(err, "PrimaryStatus can't parse MySQL 5.6 GTID (Executed_Gtid_Set: %#v)", resultMap["Executed_Gtid_Set"])
 	}
 
 	return status, nil
