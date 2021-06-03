@@ -463,7 +463,9 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 					Type: binlogdatapb.VEventType_OTHER,
 				})
 			}
-			vs.se.ReloadAt(context.Background(), vs.pos)
+			if schema.MustReloadSchemaOnDDL(q.SQL, vs.cp.DBName()) {
+				vs.se.ReloadAt(context.Background(), vs.pos)
+			}
 		case sqlparser.StmtSavepoint:
 			mustSend := mustSendStmt(q, vs.cp.DBName())
 			if mustSend {
