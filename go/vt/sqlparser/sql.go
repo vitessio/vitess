@@ -10778,7 +10778,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:3515
 		{
-			yyLOCAL = &IsExpr{Operator: yyDollar[3].isExprOperatorUnion(), Expr: yyDollar[1].exprUnion()}
+			yyLOCAL = &IsExpr{Right: yyDollar[3].isExprOperatorUnion(), Left: yyDollar[1].exprUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 680:
