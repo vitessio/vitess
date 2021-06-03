@@ -290,7 +290,7 @@ func loadSchema(t testing.TB, filename string) *vindexes.VSchema {
 	if err != nil {
 		t.Fatal(err)
 	}
-	vschema, err := vindexes.BuildVSchema(formal)
+	vschema := vindexes.BuildVSchema(formal)
 	if err != nil {
 		t.Fatal(err)
 	}
