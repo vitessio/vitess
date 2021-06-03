@@ -18,7 +18,6 @@ package vtgate
 
 import (
 	"context"
-	"fmt"
 	"sync"
 
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -120,10 +119,10 @@ func (vm *VSchemaManager) VSchemaUpdate(v *vschemapb.SrvVSchema, err error) {
 	if v == nil {
 		// We encountered an error, build an empty vschema.
 		if vm.currentVschema == nil {
-			vschema, _ = vindexes.BuildVSchema(&vschemapb.SrvVSchema{})
+			vschema = vindexes.BuildVSchema(&vschemapb.SrvVSchema{})
 		}
 	} else {
-		vschema, err = vm.buildAndEnhanceVSchema(v)
+		vschema = vm.buildAndEnhanceVSchema(v)
 		vm.currentVschema = vschema
 	}
 
@@ -155,39 +154,27 @@ func (vm *VSchemaManager) Rebuild() {
 	v := vm.currentSrvVschema
 	vm.mu.Unlock()
 
-	var vschema *vindexes.VSchema
-	var err error
-
 	if v == nil {
-		v = &vschemapb.SrvVSchema{}
-	}
-
-	vschema, err = vm.buildAndEnhanceVSchema(v)
-	if err != nil {
-		log.Error("failed to reload vschema after schema change")
 		return
 	}
 
+	vschema := vm.buildAndEnhanceVSchema(v)
+	vm.mu.Lock()
+	vm.currentVschema = vschema
+	vm.mu.Unlock()
+
 	if vm.subscriber != nil {
-		vm.subscriber(vschema, vSchemaStats(err, vschema))
+		vm.subscriber(vschema, vSchemaStats(nil, vschema))
 	}
 }
 
 // buildAndEnhanceVSchema builds a new VSchema and uses information from the schema tracker to update it
-func (vm *VSchemaManager) buildAndEnhanceVSchema(v *vschemapb.SrvVSchema) (*vindexes.VSchema, error) {
-	vschema, err := vindexes.BuildVSchema(v)
-	if err == nil {
-		if vm.schema != nil {
-			vm.updateFromSchema(vschema)
-		}
-	} else {
-		log.Warningf("Error creating VSchema for cell %v (will try again next update): %v", vm.cell, err)
-		err = fmt.Errorf("error creating VSchema for cell %v: %v", vm.cell, err)
-		if vschemaCounters != nil {
-			vschemaCounters.Add("Parsing", 1)
-		}
+func (vm *VSchemaManager) buildAndEnhanceVSchema(v *vschemapb.SrvVSchema) *vindexes.VSchema {
+	vschema := vindexes.BuildVSchema(v)
+	if vm.schema != nil {
+		vm.updateFromSchema(vschema)
 	}
-	return vschema, err
+	return vschema
 }
 
 func (vm *VSchemaManager) updateFromSchema(vschema *vindexes.VSchema) {
