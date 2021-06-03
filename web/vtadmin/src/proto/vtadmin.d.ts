@@ -24307,6 +24307,12 @@ export namespace vtctldata {
 
             /** Stream copy_states */
             copy_states?: (vtctldata.Workflow.Stream.ICopyState[]|null);
+
+            /** Stream logs */
+            logs?: (vtctldata.Workflow.Stream.ILog[]|null);
+
+            /** Stream log_fetch_error */
+            log_fetch_error?: (string|null);
         }
 
         /** Represents a Stream. */
@@ -24353,6 +24359,12 @@ export namespace vtctldata {
 
             /** Stream copy_states. */
             public copy_states: vtctldata.Workflow.Stream.ICopyState[];
+
+            /** Stream logs. */
+            public logs: vtctldata.Workflow.Stream.ILog[];
+
+            /** Stream log_fetch_error. */
+            public log_fetch_error: string;
 
             /**
              * Creates a new Stream instance using the specified properties.
@@ -24518,6 +24530,138 @@ export namespace vtctldata {
 
                 /**
                  * Converts this CopyState to JSON.
+                 * @returns JSON object
+                 */
+                public toJSON(): { [k: string]: any };
+            }
+
+            /** Properties of a Log. */
+            interface ILog {
+
+                /** Log id */
+                id?: (number|Long|null);
+
+                /** Log stream_id */
+                stream_id?: (number|Long|null);
+
+                /** Log type */
+                type?: (string|null);
+
+                /** Log state */
+                state?: (string|null);
+
+                /** Log created_at */
+                created_at?: (vttime.ITime|null);
+
+                /** Log updated_at */
+                updated_at?: (vttime.ITime|null);
+
+                /** Log message */
+                message?: (string|null);
+
+                /** Log count */
+                count?: (number|Long|null);
+            }
+
+            /** Represents a Log. */
+            class Log implements ILog {
+
+                /**
+                 * Constructs a new Log.
+                 * @param [properties] Properties to set
+                 */
+                constructor(properties?: vtctldata.Workflow.Stream.ILog);
+
+                /** Log id. */
+                public id: (number|Long);
+
+                /** Log stream_id. */
+                public stream_id: (number|Long);
+
+                /** Log type. */
+                public type: string;
+
+                /** Log state. */
+                public state: string;
+
+                /** Log created_at. */
+                public created_at?: (vttime.ITime|null);
+
+                /** Log updated_at. */
+                public updated_at?: (vttime.ITime|null);
+
+                /** Log message. */
+                public message: string;
+
+                /** Log count. */
+                public count: (number|Long);
+
+                /**
+                 * Creates a new Log instance using the specified properties.
+                 * @param [properties] Properties to set
+                 * @returns Log instance
+                 */
+                public static create(properties?: vtctldata.Workflow.Stream.ILog): vtctldata.Workflow.Stream.Log;
+
+                /**
+                 * Encodes the specified Log message. Does not implicitly {@link vtctldata.Workflow.Stream.Log.verify|verify} messages.
+                 * @param message Log message or plain object to encode
+                 * @param [writer] Writer to encode to
+                 * @returns Writer
+                 */
+                public static encode(message: vtctldata.Workflow.Stream.ILog, writer?: $protobuf.Writer): $protobuf.Writer;
+
+                /**
+                 * Encodes the specified Log message, length delimited. Does not implicitly {@link vtctldata.Workflow.Stream.Log.verify|verify} messages.
+                 * @param message Log message or plain object to encode
+                 * @param [writer] Writer to encode to
+                 * @returns Writer
+                 */
+                public static encodeDelimited(message: vtctldata.Workflow.Stream.ILog, writer?: $protobuf.Writer): $protobuf.Writer;
+
+                /**
+                 * Decodes a Log message from the specified reader or buffer.
+                 * @param reader Reader or buffer to decode from
+                 * @param [length] Message length if known beforehand
+                 * @returns Log
+                 * @throws {Error} If the payload is not a reader or valid buffer
+                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
+                 */
+                public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.Workflow.Stream.Log;
+
+                /**
+                 * Decodes a Log message from the specified reader or buffer, length delimited.
+                 * @param reader Reader or buffer to decode from
+                 * @returns Log
+                 * @throws {Error} If the payload is not a reader or valid buffer
+                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
+                 */
+                public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.Workflow.Stream.Log;
+
+                /**
+                 * Verifies a Log message.
+                 * @param message Plain object to verify
+                 * @returns `null` if valid, otherwise the reason why it is not
+                 */
+                public static verify(message: { [k: string]: any }): (string|null);
+
+                /**
+                 * Creates a Log message from a plain object. Also converts values to their respective internal types.
+                 * @param object Plain object
+                 * @returns Log
+                 */
+                public static fromObject(object: { [k: string]: any }): vtctldata.Workflow.Stream.Log;
+
+                /**
+                 * Creates a plain object from a Log message. Also converts values to other types if specified.
+                 * @param message Log
+                 * @param [options] Conversion options
+                 * @returns Plain object
+                 */
+                public static toObject(message: vtctldata.Workflow.Stream.Log, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+                /**
+                 * Converts this Log to JSON.
                  * @returns JSON object
                  */
                 public toJSON(): { [k: string]: any };
@@ -25066,6 +25210,216 @@ export namespace vtctldata {
 
         /**
          * Converts this ApplyRoutingRulesResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of an ApplyVSchemaRequest. */
+    interface IApplyVSchemaRequest {
+
+        /** ApplyVSchemaRequest keyspace */
+        keyspace?: (string|null);
+
+        /** ApplyVSchemaRequest skip_rebuild */
+        skip_rebuild?: (boolean|null);
+
+        /** ApplyVSchemaRequest dry_run */
+        dry_run?: (boolean|null);
+
+        /** ApplyVSchemaRequest cells */
+        cells?: (string[]|null);
+
+        /** ApplyVSchemaRequest v_schema */
+        v_schema?: (vschema.IKeyspace|null);
+
+        /** ApplyVSchemaRequest sql */
+        sql?: (string|null);
+    }
+
+    /** Represents an ApplyVSchemaRequest. */
+    class ApplyVSchemaRequest implements IApplyVSchemaRequest {
+
+        /**
+         * Constructs a new ApplyVSchemaRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IApplyVSchemaRequest);
+
+        /** ApplyVSchemaRequest keyspace. */
+        public keyspace: string;
+
+        /** ApplyVSchemaRequest skip_rebuild. */
+        public skip_rebuild: boolean;
+
+        /** ApplyVSchemaRequest dry_run. */
+        public dry_run: boolean;
+
+        /** ApplyVSchemaRequest cells. */
+        public cells: string[];
+
+        /** ApplyVSchemaRequest v_schema. */
+        public v_schema?: (vschema.IKeyspace|null);
+
+        /** ApplyVSchemaRequest sql. */
+        public sql: string;
+
+        /**
+         * Creates a new ApplyVSchemaRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ApplyVSchemaRequest instance
+         */
+        public static create(properties?: vtctldata.IApplyVSchemaRequest): vtctldata.ApplyVSchemaRequest;
+
+        /**
+         * Encodes the specified ApplyVSchemaRequest message. Does not implicitly {@link vtctldata.ApplyVSchemaRequest.verify|verify} messages.
+         * @param message ApplyVSchemaRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IApplyVSchemaRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ApplyVSchemaRequest message, length delimited. Does not implicitly {@link vtctldata.ApplyVSchemaRequest.verify|verify} messages.
+         * @param message ApplyVSchemaRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IApplyVSchemaRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes an ApplyVSchemaRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ApplyVSchemaRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.ApplyVSchemaRequest;
+
+        /**
+         * Decodes an ApplyVSchemaRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ApplyVSchemaRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.ApplyVSchemaRequest;
+
+        /**
+         * Verifies an ApplyVSchemaRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates an ApplyVSchemaRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ApplyVSchemaRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.ApplyVSchemaRequest;
+
+        /**
+         * Creates a plain object from an ApplyVSchemaRequest message. Also converts values to other types if specified.
+         * @param message ApplyVSchemaRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.ApplyVSchemaRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ApplyVSchemaRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of an ApplyVSchemaResponse. */
+    interface IApplyVSchemaResponse {
+
+        /** ApplyVSchemaResponse v_schema */
+        v_schema?: (vschema.IKeyspace|null);
+    }
+
+    /** Represents an ApplyVSchemaResponse. */
+    class ApplyVSchemaResponse implements IApplyVSchemaResponse {
+
+        /**
+         * Constructs a new ApplyVSchemaResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IApplyVSchemaResponse);
+
+        /** ApplyVSchemaResponse v_schema. */
+        public v_schema?: (vschema.IKeyspace|null);
+
+        /**
+         * Creates a new ApplyVSchemaResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ApplyVSchemaResponse instance
+         */
+        public static create(properties?: vtctldata.IApplyVSchemaResponse): vtctldata.ApplyVSchemaResponse;
+
+        /**
+         * Encodes the specified ApplyVSchemaResponse message. Does not implicitly {@link vtctldata.ApplyVSchemaResponse.verify|verify} messages.
+         * @param message ApplyVSchemaResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IApplyVSchemaResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ApplyVSchemaResponse message, length delimited. Does not implicitly {@link vtctldata.ApplyVSchemaResponse.verify|verify} messages.
+         * @param message ApplyVSchemaResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IApplyVSchemaResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes an ApplyVSchemaResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ApplyVSchemaResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.ApplyVSchemaResponse;
+
+        /**
+         * Decodes an ApplyVSchemaResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ApplyVSchemaResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.ApplyVSchemaResponse;
+
+        /**
+         * Verifies an ApplyVSchemaResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates an ApplyVSchemaResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ApplyVSchemaResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.ApplyVSchemaResponse;
+
+        /**
+         * Creates a plain object from an ApplyVSchemaResponse message. Also converts values to other types if specified.
+         * @param message ApplyVSchemaResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.ApplyVSchemaResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ApplyVSchemaResponse to JSON.
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
