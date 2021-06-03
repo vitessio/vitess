@@ -704,6 +704,7 @@ func TestVSchemaTrackedForNewTables(t *testing.T) {
 	assertMatches(t, conn, "SHOW VSCHEMA TABLES", `[[VARCHAR("aggr_test")] [VARCHAR("dual")] [VARCHAR("new_table_tracked")] [VARCHAR("t1")] [VARCHAR("t1_id2_idx")] [VARCHAR("t2")] [VARCHAR("t2_id4_idx")] [VARCHAR("t3")] [VARCHAR("t3_id7_idx")] [VARCHAR("t4")] [VARCHAR("t4_id2_idx")] [VARCHAR("t5_null_vindex")] [VARCHAR("t6")] [VARCHAR("t6_id2_idx")] [VARCHAR("t7_fk")] [VARCHAR("t7_xxhash")] [VARCHAR("t7_xxhash_idx")] [VARCHAR("t8")] [VARCHAR("t9")] [VARCHAR("vstream_test")]]`)
 
 	// DML on new table
+	assertMatches(t, conn, "select id from new_table_tracked", `[]`)                         // select
 	exec(t, conn, `insert into new_table_tracked(id) values(0),(1)`)                         // insert initial data
 	assertMatches(t, conn, "select id from new_table_tracked", `[[INT64(0)] [INT64(1)]]`)    // select
 	assertMatches(t, conn, "select id from new_table_tracked where id = 1 ", `[[INT64(1)]]`) // select with WHERE clause
