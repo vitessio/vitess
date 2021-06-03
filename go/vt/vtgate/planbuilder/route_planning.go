@@ -361,6 +361,12 @@ func (rp *routePlan) searchForNewVindexes(predicates []sqlparser.Expr) (bool, er
 				if rp.isImpossibleNotIN(node) {
 					return false, nil
 				}
+			case sqlparser.LikeOp:
+				found, err := rp.planLikeOp(node)
+				if err != nil {
+					return false, err
+				}
+				newVindexFound = newVindexFound || found
 
 			default:
 				return false, semantics.Gen4NotSupportedF("%s", sqlparser.String(filter))
@@ -435,6 +441,29 @@ func (rp *routePlan) planInOp(node *sqlparser.ComparisonExpr) (bool, error) {
 		return v.Vindex, engine.SelectIN
 	}
 	return rp.haveMatchingVindex(node, column, value, opcode), err
+}
+
+func (rp *routePlan) planLikeOp(node *sqlparser.ComparisonExpr) (bool, error) {
+	column, ok := node.Left.(*sqlparser.ColName)
+	if !ok {
+		return false, nil
+	}
+
+	val, err := makePlanValue(node.Right)
+	if err != nil || val == nil {
+		return false, err
+	}
+
+	opcode := func(vindex *vindexes.ColumnVindex) (vindexes.Vindex, engine.RouteOpcode) {
+		if prefixable, ok := vindex.Vindex.(vindexes.Prefixable); ok {
+			return prefixable.PrefixVindex(), engine.SelectEqual
+		}
+
+		// if we can't use the vindex as a prefix-vindex, we can't use this vindex at all
+		return nil, engine.SelectScatter
+	}
+
+	return rp.haveMatchingVindex(node, column, *val, opcode), err
 }
 
 func (rp *routePlan) haveMatchingVindex(
