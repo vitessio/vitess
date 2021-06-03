@@ -274,23 +274,56 @@ type vindexPlusPredicates struct {
 	predicates []sqlparser.Expr
 }
 
-// addPredicate clones this routePlan and returns a new one with these predicates added to it. if the predicates can help,
+// addPredicate adds these predicates added to it. if the predicates can help,
 // they will improve the routeOpCode
 func (rp *routePlan) addPredicate(predicates ...sqlparser.Expr) error {
-	newVindexFound, err := rp.searchForNewVindexes(predicates)
-	if err != nil {
-		return err
-	}
+	if rp.canImprove() {
+		newVindexFound, err := rp.searchForNewVindexes(predicates)
+		if err != nil {
+			return err
+		}
 
-	// if we didn't open up any new vindex options, no need to enter here
-	if newVindexFound {
-		rp.pickBestAvailableVindex()
+		// if we didn't open up any new vindex options, no need to enter here
+		if newVindexFound {
+			rp.pickBestAvailableVindex()
+		}
 	}
 
 	// any predicates that cover more than a single table need to be added here
 	rp.predicates = append(rp.predicates, predicates...)
 
 	return nil
+}
+
+// canImprove returns true if additional predicates could help improving this plan
+func (rp *routePlan) canImprove() bool {
+	return rp.routeOpCode != engine.SelectNone
+}
+
+func (rp *routePlan) isImpossibleIN(node *sqlparser.ComparisonExpr) bool {
+	switch nodeR := node.Right.(type) {
+	case sqlparser.ValTuple:
+		// WHERE col IN (null)
+		if len(nodeR) == 1 && sqlparser.IsNull(nodeR[0]) {
+			rp.routeOpCode = engine.SelectNone
+			return true
+		}
+	}
+	return false
+}
+
+func (rp *routePlan) isImpossibleNotIN(node *sqlparser.ComparisonExpr) bool {
+	switch node := node.Right.(type) {
+	case sqlparser.ValTuple:
+		for _, n := range node {
+			if sqlparser.IsNull(n) {
+				rp.routeOpCode = engine.SelectNone
+				return true
+			}
+		}
+	}
+
+	return false
 }
 
 func (rp *routePlan) searchForNewVindexes(predicates []sqlparser.Expr) (bool, error) {
@@ -314,20 +347,19 @@ func (rp *routePlan) searchForNewVindexes(predicates []sqlparser.Expr) (bool, er
 				}
 				newVindexFound = newVindexFound || foundEqualOpVindex
 			case sqlparser.InOp:
-				switch nodeR := node.Right.(type) {
-				case sqlparser.ValTuple:
-					// WHERE col IN (null)
-					if len(nodeR) == 1 && sqlparser.IsNull(nodeR[0]) {
-						rp.routeOpCode = engine.SelectNone
-						return false, nil
-					}
+				if rp.isImpossibleIN(node) {
+					return false, nil
 				}
-
 				foundEqualOpVindex, err := rp.planInOp(node)
 				if err != nil {
 					return false, err
 				}
 				newVindexFound = newVindexFound || foundEqualOpVindex
+			case sqlparser.NotInOp:
+				// NOT IN is always a scatter, except when we can be sure it would return nothing
+				if rp.isImpossibleNotIN(node) {
+					return false, nil
+				}
 
 			default:
 				return false, semantics.Gen4NotSupportedF("%s", sqlparser.String(filter))

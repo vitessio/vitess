@@ -1762,6 +1762,27 @@ Gen4 plan same as above
     "Table": "music"
   }
 }
+Gen4 plan same as above
+
+# Single table with unique vindex match and NOT IN (null, 1, 2) predicates inverted
+"select id from music where id NOT IN (null, 1, 2) and user_id = 4"
+{
+  "QueryType": "SELECT",
+  "Original": "select id from music where id NOT IN (null, 1, 2) and user_id = 4",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectNone",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select id from music where 1 != 1",
+    "Query": "select id from music where id not in (null, 1, 2) and user_id = 4",
+    "Table": "music"
+  }
+}
+Gen4 plan same as above
+
 
 # query trying to query two different keyspaces at the same time
 "SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'user' AND TABLE_SCHEMA = 'main'"
