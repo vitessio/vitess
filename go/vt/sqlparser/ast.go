@@ -1794,8 +1794,8 @@ type (
 
 	// IsExpr represents an IS ... or an IS NOT ... expression.
 	IsExpr struct {
-		Operator IsExprOperator
-		Expr     Expr
+		Left  Expr
+		Right IsExprOperator
 	}
 
 	// IsExprOperator is an enum for IsExpr.Operator

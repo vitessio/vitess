@@ -960,7 +960,7 @@ func (node *RangeCond) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *IsExpr) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "%v %s", node.Expr, node.Operator.ToString())
+	buf.astPrintf(node, "%v %s", node.Left, node.Right.ToString())
 }
 
 // Format formats the node.

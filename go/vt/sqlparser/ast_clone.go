@@ -972,7 +972,7 @@ func CloneRefOfIsExpr(n *IsExpr) *IsExpr {
 		return nil
 	}
 	out := *n
-	out.Expr = CloneExpr(n.Expr)
+	out.Left = CloneExpr(n.Left)
 	return &out
 }
 

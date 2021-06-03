@@ -668,11 +668,11 @@ func (rb *route) computeEqualPlan(pb *primitiveBuilder, comparison *sqlparser.Co
 // computeIS computes the plan for an equality constraint.
 func (rb *route) computeISPlan(pb *primitiveBuilder, comparison *sqlparser.IsExpr) (opcode engine.RouteOpcode, vindex vindexes.SingleColumn, expr sqlparser.Expr) {
 	// we only handle IS NULL correct. IsExpr can contain other expressions as well
-	if comparison.Operator != sqlparser.IsNullOp {
+	if comparison.Right != sqlparser.IsNullOp {
 		return engine.SelectScatter, nil, nil
 	}
 
-	vindex = pb.st.Vindex(comparison.Expr, rb)
+	vindex = pb.st.Vindex(comparison.Left, rb)
 	// fallback to scatter gather if there is no vindex
 	if vindex == nil {
 		return engine.SelectScatter, nil, nil
