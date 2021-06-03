@@ -56,7 +56,7 @@ func TestEmergencyReparentShard(t *testing.T) {
 	goodReplica2 := NewFakeTablet(t, wr, "cell2", 3, topodatapb.TabletType_REPLICA, nil)
 
 	oldMaster.FakeMysqlDaemon.Replicating = false
-	oldMaster.FakeMysqlDaemon.CurrentMasterPosition = mysql.Position{
+	oldMaster.FakeMysqlDaemon.CurrentPrimaryPosition = mysql.Position{
 		GTIDSet: mysql.MariadbGTIDSet{
 			2: mysql.MariadbGTID{
 				Domain:   2,
@@ -73,7 +73,7 @@ func TestEmergencyReparentShard(t *testing.T) {
 	// new master
 	newMaster.FakeMysqlDaemon.ReadOnly = true
 	newMaster.FakeMysqlDaemon.Replicating = true
-	newMaster.FakeMysqlDaemon.CurrentMasterPosition = mysql.Position{
+	newMaster.FakeMysqlDaemon.CurrentPrimaryPosition = mysql.Position{
 		GTIDSet: mysql.MariadbGTIDSet{
 			2: mysql.MariadbGTID{
 				Domain:   2,
@@ -86,7 +86,7 @@ func TestEmergencyReparentShard(t *testing.T) {
 	newMaster.FakeMysqlDaemon.CurrentMasterFilePosition = mysql.Position{
 		GTIDSet: newMasterRelayLogPos,
 	}
-	newMaster.FakeMysqlDaemon.WaitMasterPosition = newMaster.FakeMysqlDaemon.CurrentMasterFilePosition
+	newMaster.FakeMysqlDaemon.WaitPrimaryPosition = newMaster.FakeMysqlDaemon.CurrentMasterFilePosition
 	newMaster.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"STOP SLAVE IO_THREAD",
 		"CREATE DATABASE IF NOT EXISTS _vt",
@@ -108,7 +108,7 @@ func TestEmergencyReparentShard(t *testing.T) {
 	// old master, will be scrapped
 	oldMaster.FakeMysqlDaemon.ReadOnly = false
 	oldMaster.FakeMysqlDaemon.ReplicationStatusError = mysql.ErrNotReplica
-	oldMaster.FakeMysqlDaemon.SetMasterInput = topoproto.MysqlAddr(newMaster.Tablet)
+	oldMaster.FakeMysqlDaemon.SetReplicationSourceInput = topoproto.MysqlAddr(newMaster.Tablet)
 	oldMaster.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"STOP SLAVE",
 	}
@@ -118,7 +118,7 @@ func TestEmergencyReparentShard(t *testing.T) {
 	// good replica 1 is replicating
 	goodReplica1.FakeMysqlDaemon.ReadOnly = true
 	goodReplica1.FakeMysqlDaemon.Replicating = true
-	goodReplica1.FakeMysqlDaemon.CurrentMasterPosition = mysql.Position{
+	goodReplica1.FakeMysqlDaemon.CurrentPrimaryPosition = mysql.Position{
 		GTIDSet: mysql.MariadbGTIDSet{
 			2: mysql.MariadbGTID{
 				Domain:   2,
@@ -131,8 +131,8 @@ func TestEmergencyReparentShard(t *testing.T) {
 	goodReplica1.FakeMysqlDaemon.CurrentMasterFilePosition = mysql.Position{
 		GTIDSet: goodReplica1RelayLogPos,
 	}
-	goodReplica1.FakeMysqlDaemon.WaitMasterPosition = goodReplica1.FakeMysqlDaemon.CurrentMasterFilePosition
-	goodReplica1.FakeMysqlDaemon.SetMasterInput = topoproto.MysqlAddr(newMaster.Tablet)
+	goodReplica1.FakeMysqlDaemon.WaitPrimaryPosition = goodReplica1.FakeMysqlDaemon.CurrentMasterFilePosition
+	goodReplica1.FakeMysqlDaemon.SetReplicationSourceInput = topoproto.MysqlAddr(newMaster.Tablet)
 	goodReplica1.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"STOP SLAVE IO_THREAD",
 		"STOP SLAVE",
@@ -145,7 +145,7 @@ func TestEmergencyReparentShard(t *testing.T) {
 	// good replica 2 is not replicating
 	goodReplica2.FakeMysqlDaemon.ReadOnly = true
 	goodReplica2.FakeMysqlDaemon.Replicating = false
-	goodReplica2.FakeMysqlDaemon.CurrentMasterPosition = mysql.Position{
+	goodReplica2.FakeMysqlDaemon.CurrentPrimaryPosition = mysql.Position{
 		GTIDSet: mysql.MariadbGTIDSet{
 			2: mysql.MariadbGTID{
 				Domain:   2,
@@ -158,8 +158,8 @@ func TestEmergencyReparentShard(t *testing.T) {
 	goodReplica2.FakeMysqlDaemon.CurrentMasterFilePosition = mysql.Position{
 		GTIDSet: goodReplica2RelayLogPos,
 	}
-	goodReplica2.FakeMysqlDaemon.WaitMasterPosition = goodReplica2.FakeMysqlDaemon.CurrentMasterFilePosition
-	goodReplica2.FakeMysqlDaemon.SetMasterInput = topoproto.MysqlAddr(newMaster.Tablet)
+	goodReplica2.FakeMysqlDaemon.WaitPrimaryPosition = goodReplica2.FakeMysqlDaemon.CurrentMasterFilePosition
+	goodReplica2.FakeMysqlDaemon.SetReplicationSourceInput = topoproto.MysqlAddr(newMaster.Tablet)
 	goodReplica2.StartActionLoop(t, wr)
 	goodReplica2.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"FAKE SET MASTER",
@@ -203,7 +203,7 @@ func TestEmergencyReparentShardMasterElectNotBest(t *testing.T) {
 	// new master
 	newMaster.FakeMysqlDaemon.Replicating = true
 	// this server has executed upto 455, which is the highest among replicas
-	newMaster.FakeMysqlDaemon.CurrentMasterPosition = mysql.Position{
+	newMaster.FakeMysqlDaemon.CurrentPrimaryPosition = mysql.Position{
 		GTIDSet: mysql.MariadbGTIDSet{
 			2: mysql.MariadbGTID{
 				Domain:   2,
@@ -214,7 +214,7 @@ func TestEmergencyReparentShardMasterElectNotBest(t *testing.T) {
 	}
 	// It has more transactions in its relay log, but not as many as
 	// moreAdvancedReplica
-	newMaster.FakeMysqlDaemon.CurrentMasterPosition = mysql.Position{
+	newMaster.FakeMysqlDaemon.CurrentPrimaryPosition = mysql.Position{
 		GTIDSet: mysql.MariadbGTIDSet{
 			2: mysql.MariadbGTID{
 				Domain:   2,
@@ -227,7 +227,7 @@ func TestEmergencyReparentShardMasterElectNotBest(t *testing.T) {
 	newMaster.FakeMysqlDaemon.CurrentMasterFilePosition = mysql.Position{
 		GTIDSet: newMasterRelayLogPos,
 	}
-	newMaster.FakeMysqlDaemon.WaitMasterPosition = newMaster.FakeMysqlDaemon.CurrentMasterFilePosition
+	newMaster.FakeMysqlDaemon.WaitPrimaryPosition = newMaster.FakeMysqlDaemon.CurrentMasterFilePosition
 	newMaster.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"STOP SLAVE IO_THREAD",
 	}
@@ -242,7 +242,7 @@ func TestEmergencyReparentShardMasterElectNotBest(t *testing.T) {
 	// more advanced replica
 	moreAdvancedReplica.FakeMysqlDaemon.Replicating = true
 	// position up to which this replica has executed is behind desired new master
-	moreAdvancedReplica.FakeMysqlDaemon.CurrentMasterPosition = mysql.Position{
+	moreAdvancedReplica.FakeMysqlDaemon.CurrentPrimaryPosition = mysql.Position{
 		GTIDSet: mysql.MariadbGTIDSet{
 			2: mysql.MariadbGTID{
 				Domain:   2,
@@ -252,7 +252,7 @@ func TestEmergencyReparentShardMasterElectNotBest(t *testing.T) {
 		},
 	}
 	// relay log position is more advanced than desired new master
-	moreAdvancedReplica.FakeMysqlDaemon.CurrentMasterPosition = mysql.Position{
+	moreAdvancedReplica.FakeMysqlDaemon.CurrentPrimaryPosition = mysql.Position{
 		GTIDSet: mysql.MariadbGTIDSet{
 			2: mysql.MariadbGTID{
 				Domain:   2,
@@ -265,7 +265,7 @@ func TestEmergencyReparentShardMasterElectNotBest(t *testing.T) {
 	moreAdvancedReplica.FakeMysqlDaemon.CurrentMasterFilePosition = mysql.Position{
 		GTIDSet: moreAdvancedReplicaLogPos,
 	}
-	moreAdvancedReplica.FakeMysqlDaemon.WaitMasterPosition = moreAdvancedReplica.FakeMysqlDaemon.CurrentMasterFilePosition
+	moreAdvancedReplica.FakeMysqlDaemon.WaitPrimaryPosition = moreAdvancedReplica.FakeMysqlDaemon.CurrentMasterFilePosition
 	moreAdvancedReplica.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"STOP SLAVE IO_THREAD",
 	}
