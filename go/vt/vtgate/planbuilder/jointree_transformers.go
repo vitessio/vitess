@@ -50,7 +50,7 @@ func transformJoinPlan(n *joinPlan, semTable *semantics.SemTable) (logicalPlan, 
 	if err != nil {
 		return nil, err
 	}
-	return &joinV4{
+	return &joinGen4{
 		Left:  lhs,
 		Right: rhs,
 		Cols:  n.columns,

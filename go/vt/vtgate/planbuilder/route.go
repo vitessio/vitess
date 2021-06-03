@@ -133,7 +133,7 @@ func (rb *route) SetLimit(limit *sqlparser.Limit) {
 }
 
 // Wireup2 implements the logicalPlan interface
-func (rb *route) WireupV4(semTable *semantics.SemTable) error {
+func (rb *route) WireupGen4(semTable *semantics.SemTable) error {
 	rb.prepareTheAST()
 
 	rb.eroute.Query = sqlparser.String(rb.Select)

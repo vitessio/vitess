@@ -121,6 +121,34 @@ export namespace vtadmin {
         public getSchemas(request: vtadmin.IGetSchemasRequest): Promise<vtadmin.GetSchemasResponse>;
 
         /**
+         * Calls GetSrvVSchema.
+         * @param request GetSrvVSchemaRequest message or plain object
+         * @param callback Node-style callback called with the error, if any, and SrvVSchema
+         */
+        public getSrvVSchema(request: vtadmin.IGetSrvVSchemaRequest, callback: vtadmin.VTAdmin.GetSrvVSchemaCallback): void;
+
+        /**
+         * Calls GetSrvVSchema.
+         * @param request GetSrvVSchemaRequest message or plain object
+         * @returns Promise
+         */
+        public getSrvVSchema(request: vtadmin.IGetSrvVSchemaRequest): Promise<vtadmin.SrvVSchema>;
+
+        /**
+         * Calls GetSrvVSchemas.
+         * @param request GetSrvVSchemasRequest message or plain object
+         * @param callback Node-style callback called with the error, if any, and GetSrvVSchemasResponse
+         */
+        public getSrvVSchemas(request: vtadmin.IGetSrvVSchemasRequest, callback: vtadmin.VTAdmin.GetSrvVSchemasCallback): void;
+
+        /**
+         * Calls GetSrvVSchemas.
+         * @param request GetSrvVSchemasRequest message or plain object
+         * @returns Promise
+         */
+        public getSrvVSchemas(request: vtadmin.IGetSrvVSchemasRequest): Promise<vtadmin.GetSrvVSchemasResponse>;
+
+        /**
          * Calls GetTablet.
          * @param request GetTabletRequest message or plain object
          * @param callback Node-style callback called with the error, if any, and Tablet
@@ -269,6 +297,20 @@ export namespace vtadmin {
          * @param [response] GetSchemasResponse
          */
         type GetSchemasCallback = (error: (Error|null), response?: vtadmin.GetSchemasResponse) => void;
+
+        /**
+         * Callback as used by {@link vtadmin.VTAdmin#getSrvVSchema}.
+         * @param error Error, if any
+         * @param [response] SrvVSchema
+         */
+        type GetSrvVSchemaCallback = (error: (Error|null), response?: vtadmin.SrvVSchema) => void;
+
+        /**
+         * Callback as used by {@link vtadmin.VTAdmin#getSrvVSchemas}.
+         * @param error Error, if any
+         * @param [response] GetSrvVSchemasResponse
+         */
+        type GetSrvVSchemasCallback = (error: (Error|null), response?: vtadmin.GetSrvVSchemasResponse) => void;
 
         /**
          * Callback as used by {@link vtadmin.VTAdmin#getTablet}.
@@ -921,6 +963,108 @@ export namespace vtadmin {
              */
             public toJSON(): { [k: string]: any };
         }
+    }
+
+    /** Properties of a SrvVSchema. */
+    interface ISrvVSchema {
+
+        /** SrvVSchema cell */
+        cell?: (string|null);
+
+        /** SrvVSchema cluster */
+        cluster?: (vtadmin.ICluster|null);
+
+        /** SrvVSchema srv_v_schema */
+        srv_v_schema?: (vschema.ISrvVSchema|null);
+    }
+
+    /** Represents a SrvVSchema. */
+    class SrvVSchema implements ISrvVSchema {
+
+        /**
+         * Constructs a new SrvVSchema.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtadmin.ISrvVSchema);
+
+        /** SrvVSchema cell. */
+        public cell: string;
+
+        /** SrvVSchema cluster. */
+        public cluster?: (vtadmin.ICluster|null);
+
+        /** SrvVSchema srv_v_schema. */
+        public srv_v_schema?: (vschema.ISrvVSchema|null);
+
+        /**
+         * Creates a new SrvVSchema instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns SrvVSchema instance
+         */
+        public static create(properties?: vtadmin.ISrvVSchema): vtadmin.SrvVSchema;
+
+        /**
+         * Encodes the specified SrvVSchema message. Does not implicitly {@link vtadmin.SrvVSchema.verify|verify} messages.
+         * @param message SrvVSchema message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtadmin.ISrvVSchema, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified SrvVSchema message, length delimited. Does not implicitly {@link vtadmin.SrvVSchema.verify|verify} messages.
+         * @param message SrvVSchema message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtadmin.ISrvVSchema, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a SrvVSchema message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns SrvVSchema
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.SrvVSchema;
+
+        /**
+         * Decodes a SrvVSchema message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns SrvVSchema
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.SrvVSchema;
+
+        /**
+         * Verifies a SrvVSchema message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a SrvVSchema message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns SrvVSchema
+         */
+        public static fromObject(object: { [k: string]: any }): vtadmin.SrvVSchema;
+
+        /**
+         * Creates a plain object from a SrvVSchema message. Also converts values to other types if specified.
+         * @param message SrvVSchema
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtadmin.SrvVSchema, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this SrvVSchema to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
     }
 
     /** Properties of a Tablet. */
@@ -2488,6 +2632,288 @@ export namespace vtadmin {
 
         /**
          * Converts this GetSchemasResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a GetSrvVSchemaRequest. */
+    interface IGetSrvVSchemaRequest {
+
+        /** GetSrvVSchemaRequest cluster_id */
+        cluster_id?: (string|null);
+
+        /** GetSrvVSchemaRequest cell */
+        cell?: (string|null);
+    }
+
+    /** Represents a GetSrvVSchemaRequest. */
+    class GetSrvVSchemaRequest implements IGetSrvVSchemaRequest {
+
+        /**
+         * Constructs a new GetSrvVSchemaRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtadmin.IGetSrvVSchemaRequest);
+
+        /** GetSrvVSchemaRequest cluster_id. */
+        public cluster_id: string;
+
+        /** GetSrvVSchemaRequest cell. */
+        public cell: string;
+
+        /**
+         * Creates a new GetSrvVSchemaRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns GetSrvVSchemaRequest instance
+         */
+        public static create(properties?: vtadmin.IGetSrvVSchemaRequest): vtadmin.GetSrvVSchemaRequest;
+
+        /**
+         * Encodes the specified GetSrvVSchemaRequest message. Does not implicitly {@link vtadmin.GetSrvVSchemaRequest.verify|verify} messages.
+         * @param message GetSrvVSchemaRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtadmin.IGetSrvVSchemaRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified GetSrvVSchemaRequest message, length delimited. Does not implicitly {@link vtadmin.GetSrvVSchemaRequest.verify|verify} messages.
+         * @param message GetSrvVSchemaRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtadmin.IGetSrvVSchemaRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a GetSrvVSchemaRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns GetSrvVSchemaRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.GetSrvVSchemaRequest;
+
+        /**
+         * Decodes a GetSrvVSchemaRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns GetSrvVSchemaRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.GetSrvVSchemaRequest;
+
+        /**
+         * Verifies a GetSrvVSchemaRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a GetSrvVSchemaRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns GetSrvVSchemaRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtadmin.GetSrvVSchemaRequest;
+
+        /**
+         * Creates a plain object from a GetSrvVSchemaRequest message. Also converts values to other types if specified.
+         * @param message GetSrvVSchemaRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtadmin.GetSrvVSchemaRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this GetSrvVSchemaRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a GetSrvVSchemasRequest. */
+    interface IGetSrvVSchemasRequest {
+
+        /** GetSrvVSchemasRequest cluster_ids */
+        cluster_ids?: (string[]|null);
+
+        /** GetSrvVSchemasRequest cells */
+        cells?: (string[]|null);
+    }
+
+    /** Represents a GetSrvVSchemasRequest. */
+    class GetSrvVSchemasRequest implements IGetSrvVSchemasRequest {
+
+        /**
+         * Constructs a new GetSrvVSchemasRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtadmin.IGetSrvVSchemasRequest);
+
+        /** GetSrvVSchemasRequest cluster_ids. */
+        public cluster_ids: string[];
+
+        /** GetSrvVSchemasRequest cells. */
+        public cells: string[];
+
+        /**
+         * Creates a new GetSrvVSchemasRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns GetSrvVSchemasRequest instance
+         */
+        public static create(properties?: vtadmin.IGetSrvVSchemasRequest): vtadmin.GetSrvVSchemasRequest;
+
+        /**
+         * Encodes the specified GetSrvVSchemasRequest message. Does not implicitly {@link vtadmin.GetSrvVSchemasRequest.verify|verify} messages.
+         * @param message GetSrvVSchemasRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtadmin.IGetSrvVSchemasRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified GetSrvVSchemasRequest message, length delimited. Does not implicitly {@link vtadmin.GetSrvVSchemasRequest.verify|verify} messages.
+         * @param message GetSrvVSchemasRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtadmin.IGetSrvVSchemasRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a GetSrvVSchemasRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns GetSrvVSchemasRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.GetSrvVSchemasRequest;
+
+        /**
+         * Decodes a GetSrvVSchemasRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns GetSrvVSchemasRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.GetSrvVSchemasRequest;
+
+        /**
+         * Verifies a GetSrvVSchemasRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a GetSrvVSchemasRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns GetSrvVSchemasRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtadmin.GetSrvVSchemasRequest;
+
+        /**
+         * Creates a plain object from a GetSrvVSchemasRequest message. Also converts values to other types if specified.
+         * @param message GetSrvVSchemasRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtadmin.GetSrvVSchemasRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this GetSrvVSchemasRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a GetSrvVSchemasResponse. */
+    interface IGetSrvVSchemasResponse {
+
+        /** GetSrvVSchemasResponse srv_v_schemas */
+        srv_v_schemas?: (vtadmin.ISrvVSchema[]|null);
+    }
+
+    /** Represents a GetSrvVSchemasResponse. */
+    class GetSrvVSchemasResponse implements IGetSrvVSchemasResponse {
+
+        /**
+         * Constructs a new GetSrvVSchemasResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtadmin.IGetSrvVSchemasResponse);
+
+        /** GetSrvVSchemasResponse srv_v_schemas. */
+        public srv_v_schemas: vtadmin.ISrvVSchema[];
+
+        /**
+         * Creates a new GetSrvVSchemasResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns GetSrvVSchemasResponse instance
+         */
+        public static create(properties?: vtadmin.IGetSrvVSchemasResponse): vtadmin.GetSrvVSchemasResponse;
+
+        /**
+         * Encodes the specified GetSrvVSchemasResponse message. Does not implicitly {@link vtadmin.GetSrvVSchemasResponse.verify|verify} messages.
+         * @param message GetSrvVSchemasResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtadmin.IGetSrvVSchemasResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified GetSrvVSchemasResponse message, length delimited. Does not implicitly {@link vtadmin.GetSrvVSchemasResponse.verify|verify} messages.
+         * @param message GetSrvVSchemasResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtadmin.IGetSrvVSchemasResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a GetSrvVSchemasResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns GetSrvVSchemasResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.GetSrvVSchemasResponse;
+
+        /**
+         * Decodes a GetSrvVSchemasResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns GetSrvVSchemasResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.GetSrvVSchemasResponse;
+
+        /**
+         * Verifies a GetSrvVSchemasResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a GetSrvVSchemasResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns GetSrvVSchemasResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtadmin.GetSrvVSchemasResponse;
+
+        /**
+         * Creates a plain object from a GetSrvVSchemasResponse message. Also converts values to other types if specified.
+         * @param message GetSrvVSchemasResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtadmin.GetSrvVSchemasResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this GetSrvVSchemasResponse to JSON.
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
@@ -24099,6 +24525,552 @@ export namespace vtctldata {
         }
     }
 
+    /** Properties of an AddCellInfoRequest. */
+    interface IAddCellInfoRequest {
+
+        /** AddCellInfoRequest name */
+        name?: (string|null);
+
+        /** AddCellInfoRequest cell_info */
+        cell_info?: (topodata.ICellInfo|null);
+    }
+
+    /** Represents an AddCellInfoRequest. */
+    class AddCellInfoRequest implements IAddCellInfoRequest {
+
+        /**
+         * Constructs a new AddCellInfoRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IAddCellInfoRequest);
+
+        /** AddCellInfoRequest name. */
+        public name: string;
+
+        /** AddCellInfoRequest cell_info. */
+        public cell_info?: (topodata.ICellInfo|null);
+
+        /**
+         * Creates a new AddCellInfoRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns AddCellInfoRequest instance
+         */
+        public static create(properties?: vtctldata.IAddCellInfoRequest): vtctldata.AddCellInfoRequest;
+
+        /**
+         * Encodes the specified AddCellInfoRequest message. Does not implicitly {@link vtctldata.AddCellInfoRequest.verify|verify} messages.
+         * @param message AddCellInfoRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IAddCellInfoRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified AddCellInfoRequest message, length delimited. Does not implicitly {@link vtctldata.AddCellInfoRequest.verify|verify} messages.
+         * @param message AddCellInfoRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IAddCellInfoRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes an AddCellInfoRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns AddCellInfoRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.AddCellInfoRequest;
+
+        /**
+         * Decodes an AddCellInfoRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns AddCellInfoRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.AddCellInfoRequest;
+
+        /**
+         * Verifies an AddCellInfoRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates an AddCellInfoRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns AddCellInfoRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.AddCellInfoRequest;
+
+        /**
+         * Creates a plain object from an AddCellInfoRequest message. Also converts values to other types if specified.
+         * @param message AddCellInfoRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.AddCellInfoRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this AddCellInfoRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of an AddCellInfoResponse. */
+    interface IAddCellInfoResponse {
+    }
+
+    /** Represents an AddCellInfoResponse. */
+    class AddCellInfoResponse implements IAddCellInfoResponse {
+
+        /**
+         * Constructs a new AddCellInfoResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IAddCellInfoResponse);
+
+        /**
+         * Creates a new AddCellInfoResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns AddCellInfoResponse instance
+         */
+        public static create(properties?: vtctldata.IAddCellInfoResponse): vtctldata.AddCellInfoResponse;
+
+        /**
+         * Encodes the specified AddCellInfoResponse message. Does not implicitly {@link vtctldata.AddCellInfoResponse.verify|verify} messages.
+         * @param message AddCellInfoResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IAddCellInfoResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified AddCellInfoResponse message, length delimited. Does not implicitly {@link vtctldata.AddCellInfoResponse.verify|verify} messages.
+         * @param message AddCellInfoResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IAddCellInfoResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes an AddCellInfoResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns AddCellInfoResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.AddCellInfoResponse;
+
+        /**
+         * Decodes an AddCellInfoResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns AddCellInfoResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.AddCellInfoResponse;
+
+        /**
+         * Verifies an AddCellInfoResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates an AddCellInfoResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns AddCellInfoResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.AddCellInfoResponse;
+
+        /**
+         * Creates a plain object from an AddCellInfoResponse message. Also converts values to other types if specified.
+         * @param message AddCellInfoResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.AddCellInfoResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this AddCellInfoResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of an AddCellsAliasRequest. */
+    interface IAddCellsAliasRequest {
+
+        /** AddCellsAliasRequest name */
+        name?: (string|null);
+
+        /** AddCellsAliasRequest cells */
+        cells?: (string[]|null);
+    }
+
+    /** Represents an AddCellsAliasRequest. */
+    class AddCellsAliasRequest implements IAddCellsAliasRequest {
+
+        /**
+         * Constructs a new AddCellsAliasRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IAddCellsAliasRequest);
+
+        /** AddCellsAliasRequest name. */
+        public name: string;
+
+        /** AddCellsAliasRequest cells. */
+        public cells: string[];
+
+        /**
+         * Creates a new AddCellsAliasRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns AddCellsAliasRequest instance
+         */
+        public static create(properties?: vtctldata.IAddCellsAliasRequest): vtctldata.AddCellsAliasRequest;
+
+        /**
+         * Encodes the specified AddCellsAliasRequest message. Does not implicitly {@link vtctldata.AddCellsAliasRequest.verify|verify} messages.
+         * @param message AddCellsAliasRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IAddCellsAliasRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified AddCellsAliasRequest message, length delimited. Does not implicitly {@link vtctldata.AddCellsAliasRequest.verify|verify} messages.
+         * @param message AddCellsAliasRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IAddCellsAliasRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes an AddCellsAliasRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns AddCellsAliasRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.AddCellsAliasRequest;
+
+        /**
+         * Decodes an AddCellsAliasRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns AddCellsAliasRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.AddCellsAliasRequest;
+
+        /**
+         * Verifies an AddCellsAliasRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates an AddCellsAliasRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns AddCellsAliasRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.AddCellsAliasRequest;
+
+        /**
+         * Creates a plain object from an AddCellsAliasRequest message. Also converts values to other types if specified.
+         * @param message AddCellsAliasRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.AddCellsAliasRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this AddCellsAliasRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of an AddCellsAliasResponse. */
+    interface IAddCellsAliasResponse {
+    }
+
+    /** Represents an AddCellsAliasResponse. */
+    class AddCellsAliasResponse implements IAddCellsAliasResponse {
+
+        /**
+         * Constructs a new AddCellsAliasResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IAddCellsAliasResponse);
+
+        /**
+         * Creates a new AddCellsAliasResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns AddCellsAliasResponse instance
+         */
+        public static create(properties?: vtctldata.IAddCellsAliasResponse): vtctldata.AddCellsAliasResponse;
+
+        /**
+         * Encodes the specified AddCellsAliasResponse message. Does not implicitly {@link vtctldata.AddCellsAliasResponse.verify|verify} messages.
+         * @param message AddCellsAliasResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IAddCellsAliasResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified AddCellsAliasResponse message, length delimited. Does not implicitly {@link vtctldata.AddCellsAliasResponse.verify|verify} messages.
+         * @param message AddCellsAliasResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IAddCellsAliasResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes an AddCellsAliasResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns AddCellsAliasResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.AddCellsAliasResponse;
+
+        /**
+         * Decodes an AddCellsAliasResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns AddCellsAliasResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.AddCellsAliasResponse;
+
+        /**
+         * Verifies an AddCellsAliasResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates an AddCellsAliasResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns AddCellsAliasResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.AddCellsAliasResponse;
+
+        /**
+         * Creates a plain object from an AddCellsAliasResponse message. Also converts values to other types if specified.
+         * @param message AddCellsAliasResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.AddCellsAliasResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this AddCellsAliasResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of an ApplyRoutingRulesRequest. */
+    interface IApplyRoutingRulesRequest {
+
+        /** ApplyRoutingRulesRequest routing_rules */
+        routing_rules?: (vschema.IRoutingRules|null);
+
+        /** ApplyRoutingRulesRequest skip_rebuild */
+        skip_rebuild?: (boolean|null);
+
+        /** ApplyRoutingRulesRequest rebuild_cells */
+        rebuild_cells?: (string[]|null);
+    }
+
+    /** Represents an ApplyRoutingRulesRequest. */
+    class ApplyRoutingRulesRequest implements IApplyRoutingRulesRequest {
+
+        /**
+         * Constructs a new ApplyRoutingRulesRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IApplyRoutingRulesRequest);
+
+        /** ApplyRoutingRulesRequest routing_rules. */
+        public routing_rules?: (vschema.IRoutingRules|null);
+
+        /** ApplyRoutingRulesRequest skip_rebuild. */
+        public skip_rebuild: boolean;
+
+        /** ApplyRoutingRulesRequest rebuild_cells. */
+        public rebuild_cells: string[];
+
+        /**
+         * Creates a new ApplyRoutingRulesRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ApplyRoutingRulesRequest instance
+         */
+        public static create(properties?: vtctldata.IApplyRoutingRulesRequest): vtctldata.ApplyRoutingRulesRequest;
+
+        /**
+         * Encodes the specified ApplyRoutingRulesRequest message. Does not implicitly {@link vtctldata.ApplyRoutingRulesRequest.verify|verify} messages.
+         * @param message ApplyRoutingRulesRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IApplyRoutingRulesRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ApplyRoutingRulesRequest message, length delimited. Does not implicitly {@link vtctldata.ApplyRoutingRulesRequest.verify|verify} messages.
+         * @param message ApplyRoutingRulesRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IApplyRoutingRulesRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes an ApplyRoutingRulesRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ApplyRoutingRulesRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.ApplyRoutingRulesRequest;
+
+        /**
+         * Decodes an ApplyRoutingRulesRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ApplyRoutingRulesRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.ApplyRoutingRulesRequest;
+
+        /**
+         * Verifies an ApplyRoutingRulesRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates an ApplyRoutingRulesRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ApplyRoutingRulesRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.ApplyRoutingRulesRequest;
+
+        /**
+         * Creates a plain object from an ApplyRoutingRulesRequest message. Also converts values to other types if specified.
+         * @param message ApplyRoutingRulesRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.ApplyRoutingRulesRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ApplyRoutingRulesRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of an ApplyRoutingRulesResponse. */
+    interface IApplyRoutingRulesResponse {
+    }
+
+    /** Represents an ApplyRoutingRulesResponse. */
+    class ApplyRoutingRulesResponse implements IApplyRoutingRulesResponse {
+
+        /**
+         * Constructs a new ApplyRoutingRulesResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IApplyRoutingRulesResponse);
+
+        /**
+         * Creates a new ApplyRoutingRulesResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ApplyRoutingRulesResponse instance
+         */
+        public static create(properties?: vtctldata.IApplyRoutingRulesResponse): vtctldata.ApplyRoutingRulesResponse;
+
+        /**
+         * Encodes the specified ApplyRoutingRulesResponse message. Does not implicitly {@link vtctldata.ApplyRoutingRulesResponse.verify|verify} messages.
+         * @param message ApplyRoutingRulesResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IApplyRoutingRulesResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ApplyRoutingRulesResponse message, length delimited. Does not implicitly {@link vtctldata.ApplyRoutingRulesResponse.verify|verify} messages.
+         * @param message ApplyRoutingRulesResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IApplyRoutingRulesResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes an ApplyRoutingRulesResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ApplyRoutingRulesResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.ApplyRoutingRulesResponse;
+
+        /**
+         * Decodes an ApplyRoutingRulesResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ApplyRoutingRulesResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.ApplyRoutingRulesResponse;
+
+        /**
+         * Verifies an ApplyRoutingRulesResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates an ApplyRoutingRulesResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ApplyRoutingRulesResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.ApplyRoutingRulesResponse;
+
+        /**
+         * Creates a plain object from an ApplyRoutingRulesResponse message. Also converts values to other types if specified.
+         * @param message ApplyRoutingRulesResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.ApplyRoutingRulesResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ApplyRoutingRulesResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
     /** Properties of a ChangeTabletTypeRequest. */
     interface IChangeTabletTypeRequest {
 
@@ -24736,6 +25708,360 @@ export namespace vtctldata {
 
         /**
          * Converts this CreateShardResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a DeleteCellInfoRequest. */
+    interface IDeleteCellInfoRequest {
+
+        /** DeleteCellInfoRequest name */
+        name?: (string|null);
+
+        /** DeleteCellInfoRequest force */
+        force?: (boolean|null);
+    }
+
+    /** Represents a DeleteCellInfoRequest. */
+    class DeleteCellInfoRequest implements IDeleteCellInfoRequest {
+
+        /**
+         * Constructs a new DeleteCellInfoRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IDeleteCellInfoRequest);
+
+        /** DeleteCellInfoRequest name. */
+        public name: string;
+
+        /** DeleteCellInfoRequest force. */
+        public force: boolean;
+
+        /**
+         * Creates a new DeleteCellInfoRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns DeleteCellInfoRequest instance
+         */
+        public static create(properties?: vtctldata.IDeleteCellInfoRequest): vtctldata.DeleteCellInfoRequest;
+
+        /**
+         * Encodes the specified DeleteCellInfoRequest message. Does not implicitly {@link vtctldata.DeleteCellInfoRequest.verify|verify} messages.
+         * @param message DeleteCellInfoRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IDeleteCellInfoRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified DeleteCellInfoRequest message, length delimited. Does not implicitly {@link vtctldata.DeleteCellInfoRequest.verify|verify} messages.
+         * @param message DeleteCellInfoRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IDeleteCellInfoRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a DeleteCellInfoRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns DeleteCellInfoRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.DeleteCellInfoRequest;
+
+        /**
+         * Decodes a DeleteCellInfoRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns DeleteCellInfoRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.DeleteCellInfoRequest;
+
+        /**
+         * Verifies a DeleteCellInfoRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a DeleteCellInfoRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns DeleteCellInfoRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.DeleteCellInfoRequest;
+
+        /**
+         * Creates a plain object from a DeleteCellInfoRequest message. Also converts values to other types if specified.
+         * @param message DeleteCellInfoRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.DeleteCellInfoRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this DeleteCellInfoRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a DeleteCellInfoResponse. */
+    interface IDeleteCellInfoResponse {
+    }
+
+    /** Represents a DeleteCellInfoResponse. */
+    class DeleteCellInfoResponse implements IDeleteCellInfoResponse {
+
+        /**
+         * Constructs a new DeleteCellInfoResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IDeleteCellInfoResponse);
+
+        /**
+         * Creates a new DeleteCellInfoResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns DeleteCellInfoResponse instance
+         */
+        public static create(properties?: vtctldata.IDeleteCellInfoResponse): vtctldata.DeleteCellInfoResponse;
+
+        /**
+         * Encodes the specified DeleteCellInfoResponse message. Does not implicitly {@link vtctldata.DeleteCellInfoResponse.verify|verify} messages.
+         * @param message DeleteCellInfoResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IDeleteCellInfoResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified DeleteCellInfoResponse message, length delimited. Does not implicitly {@link vtctldata.DeleteCellInfoResponse.verify|verify} messages.
+         * @param message DeleteCellInfoResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IDeleteCellInfoResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a DeleteCellInfoResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns DeleteCellInfoResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.DeleteCellInfoResponse;
+
+        /**
+         * Decodes a DeleteCellInfoResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns DeleteCellInfoResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.DeleteCellInfoResponse;
+
+        /**
+         * Verifies a DeleteCellInfoResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a DeleteCellInfoResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns DeleteCellInfoResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.DeleteCellInfoResponse;
+
+        /**
+         * Creates a plain object from a DeleteCellInfoResponse message. Also converts values to other types if specified.
+         * @param message DeleteCellInfoResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.DeleteCellInfoResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this DeleteCellInfoResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a DeleteCellsAliasRequest. */
+    interface IDeleteCellsAliasRequest {
+
+        /** DeleteCellsAliasRequest name */
+        name?: (string|null);
+    }
+
+    /** Represents a DeleteCellsAliasRequest. */
+    class DeleteCellsAliasRequest implements IDeleteCellsAliasRequest {
+
+        /**
+         * Constructs a new DeleteCellsAliasRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IDeleteCellsAliasRequest);
+
+        /** DeleteCellsAliasRequest name. */
+        public name: string;
+
+        /**
+         * Creates a new DeleteCellsAliasRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns DeleteCellsAliasRequest instance
+         */
+        public static create(properties?: vtctldata.IDeleteCellsAliasRequest): vtctldata.DeleteCellsAliasRequest;
+
+        /**
+         * Encodes the specified DeleteCellsAliasRequest message. Does not implicitly {@link vtctldata.DeleteCellsAliasRequest.verify|verify} messages.
+         * @param message DeleteCellsAliasRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IDeleteCellsAliasRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified DeleteCellsAliasRequest message, length delimited. Does not implicitly {@link vtctldata.DeleteCellsAliasRequest.verify|verify} messages.
+         * @param message DeleteCellsAliasRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IDeleteCellsAliasRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a DeleteCellsAliasRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns DeleteCellsAliasRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.DeleteCellsAliasRequest;
+
+        /**
+         * Decodes a DeleteCellsAliasRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns DeleteCellsAliasRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.DeleteCellsAliasRequest;
+
+        /**
+         * Verifies a DeleteCellsAliasRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a DeleteCellsAliasRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns DeleteCellsAliasRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.DeleteCellsAliasRequest;
+
+        /**
+         * Creates a plain object from a DeleteCellsAliasRequest message. Also converts values to other types if specified.
+         * @param message DeleteCellsAliasRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.DeleteCellsAliasRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this DeleteCellsAliasRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a DeleteCellsAliasResponse. */
+    interface IDeleteCellsAliasResponse {
+    }
+
+    /** Represents a DeleteCellsAliasResponse. */
+    class DeleteCellsAliasResponse implements IDeleteCellsAliasResponse {
+
+        /**
+         * Constructs a new DeleteCellsAliasResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IDeleteCellsAliasResponse);
+
+        /**
+         * Creates a new DeleteCellsAliasResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns DeleteCellsAliasResponse instance
+         */
+        public static create(properties?: vtctldata.IDeleteCellsAliasResponse): vtctldata.DeleteCellsAliasResponse;
+
+        /**
+         * Encodes the specified DeleteCellsAliasResponse message. Does not implicitly {@link vtctldata.DeleteCellsAliasResponse.verify|verify} messages.
+         * @param message DeleteCellsAliasResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IDeleteCellsAliasResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified DeleteCellsAliasResponse message, length delimited. Does not implicitly {@link vtctldata.DeleteCellsAliasResponse.verify|verify} messages.
+         * @param message DeleteCellsAliasResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IDeleteCellsAliasResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a DeleteCellsAliasResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns DeleteCellsAliasResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.DeleteCellsAliasResponse;
+
+        /**
+         * Decodes a DeleteCellsAliasResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns DeleteCellsAliasResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.DeleteCellsAliasResponse;
+
+        /**
+         * Verifies a DeleteCellsAliasResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a DeleteCellsAliasResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns DeleteCellsAliasResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.DeleteCellsAliasResponse;
+
+        /**
+         * Creates a plain object from a DeleteCellsAliasResponse message. Also converts values to other types if specified.
+         * @param message DeleteCellsAliasResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.DeleteCellsAliasResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this DeleteCellsAliasResponse to JSON.
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
@@ -25875,180 +27201,6 @@ export namespace vtctldata {
         public toJSON(): { [k: string]: any };
     }
 
-    /** Properties of a GetCellInfoNamesRequest. */
-    interface IGetCellInfoNamesRequest {
-    }
-
-    /** Represents a GetCellInfoNamesRequest. */
-    class GetCellInfoNamesRequest implements IGetCellInfoNamesRequest {
-
-        /**
-         * Constructs a new GetCellInfoNamesRequest.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: vtctldata.IGetCellInfoNamesRequest);
-
-        /**
-         * Creates a new GetCellInfoNamesRequest instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns GetCellInfoNamesRequest instance
-         */
-        public static create(properties?: vtctldata.IGetCellInfoNamesRequest): vtctldata.GetCellInfoNamesRequest;
-
-        /**
-         * Encodes the specified GetCellInfoNamesRequest message. Does not implicitly {@link vtctldata.GetCellInfoNamesRequest.verify|verify} messages.
-         * @param message GetCellInfoNamesRequest message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: vtctldata.IGetCellInfoNamesRequest, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified GetCellInfoNamesRequest message, length delimited. Does not implicitly {@link vtctldata.GetCellInfoNamesRequest.verify|verify} messages.
-         * @param message GetCellInfoNamesRequest message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: vtctldata.IGetCellInfoNamesRequest, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a GetCellInfoNamesRequest message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns GetCellInfoNamesRequest
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.GetCellInfoNamesRequest;
-
-        /**
-         * Decodes a GetCellInfoNamesRequest message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns GetCellInfoNamesRequest
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.GetCellInfoNamesRequest;
-
-        /**
-         * Verifies a GetCellInfoNamesRequest message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a GetCellInfoNamesRequest message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns GetCellInfoNamesRequest
-         */
-        public static fromObject(object: { [k: string]: any }): vtctldata.GetCellInfoNamesRequest;
-
-        /**
-         * Creates a plain object from a GetCellInfoNamesRequest message. Also converts values to other types if specified.
-         * @param message GetCellInfoNamesRequest
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: vtctldata.GetCellInfoNamesRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this GetCellInfoNamesRequest to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-    }
-
-    /** Properties of a GetCellInfoNamesResponse. */
-    interface IGetCellInfoNamesResponse {
-
-        /** GetCellInfoNamesResponse names */
-        names?: (string[]|null);
-    }
-
-    /** Represents a GetCellInfoNamesResponse. */
-    class GetCellInfoNamesResponse implements IGetCellInfoNamesResponse {
-
-        /**
-         * Constructs a new GetCellInfoNamesResponse.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: vtctldata.IGetCellInfoNamesResponse);
-
-        /** GetCellInfoNamesResponse names. */
-        public names: string[];
-
-        /**
-         * Creates a new GetCellInfoNamesResponse instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns GetCellInfoNamesResponse instance
-         */
-        public static create(properties?: vtctldata.IGetCellInfoNamesResponse): vtctldata.GetCellInfoNamesResponse;
-
-        /**
-         * Encodes the specified GetCellInfoNamesResponse message. Does not implicitly {@link vtctldata.GetCellInfoNamesResponse.verify|verify} messages.
-         * @param message GetCellInfoNamesResponse message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: vtctldata.IGetCellInfoNamesResponse, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified GetCellInfoNamesResponse message, length delimited. Does not implicitly {@link vtctldata.GetCellInfoNamesResponse.verify|verify} messages.
-         * @param message GetCellInfoNamesResponse message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: vtctldata.IGetCellInfoNamesResponse, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a GetCellInfoNamesResponse message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns GetCellInfoNamesResponse
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.GetCellInfoNamesResponse;
-
-        /**
-         * Decodes a GetCellInfoNamesResponse message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns GetCellInfoNamesResponse
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.GetCellInfoNamesResponse;
-
-        /**
-         * Verifies a GetCellInfoNamesResponse message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a GetCellInfoNamesResponse message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns GetCellInfoNamesResponse
-         */
-        public static fromObject(object: { [k: string]: any }): vtctldata.GetCellInfoNamesResponse;
-
-        /**
-         * Creates a plain object from a GetCellInfoNamesResponse message. Also converts values to other types if specified.
-         * @param message GetCellInfoNamesResponse
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: vtctldata.GetCellInfoNamesResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this GetCellInfoNamesResponse to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-    }
-
     /** Properties of a GetCellInfoRequest. */
     interface IGetCellInfoRequest {
 
@@ -26224,6 +27376,180 @@ export namespace vtctldata {
 
         /**
          * Converts this GetCellInfoResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a GetCellInfoNamesRequest. */
+    interface IGetCellInfoNamesRequest {
+    }
+
+    /** Represents a GetCellInfoNamesRequest. */
+    class GetCellInfoNamesRequest implements IGetCellInfoNamesRequest {
+
+        /**
+         * Constructs a new GetCellInfoNamesRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IGetCellInfoNamesRequest);
+
+        /**
+         * Creates a new GetCellInfoNamesRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns GetCellInfoNamesRequest instance
+         */
+        public static create(properties?: vtctldata.IGetCellInfoNamesRequest): vtctldata.GetCellInfoNamesRequest;
+
+        /**
+         * Encodes the specified GetCellInfoNamesRequest message. Does not implicitly {@link vtctldata.GetCellInfoNamesRequest.verify|verify} messages.
+         * @param message GetCellInfoNamesRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IGetCellInfoNamesRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified GetCellInfoNamesRequest message, length delimited. Does not implicitly {@link vtctldata.GetCellInfoNamesRequest.verify|verify} messages.
+         * @param message GetCellInfoNamesRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IGetCellInfoNamesRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a GetCellInfoNamesRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns GetCellInfoNamesRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.GetCellInfoNamesRequest;
+
+        /**
+         * Decodes a GetCellInfoNamesRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns GetCellInfoNamesRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.GetCellInfoNamesRequest;
+
+        /**
+         * Verifies a GetCellInfoNamesRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a GetCellInfoNamesRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns GetCellInfoNamesRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.GetCellInfoNamesRequest;
+
+        /**
+         * Creates a plain object from a GetCellInfoNamesRequest message. Also converts values to other types if specified.
+         * @param message GetCellInfoNamesRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.GetCellInfoNamesRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this GetCellInfoNamesRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a GetCellInfoNamesResponse. */
+    interface IGetCellInfoNamesResponse {
+
+        /** GetCellInfoNamesResponse names */
+        names?: (string[]|null);
+    }
+
+    /** Represents a GetCellInfoNamesResponse. */
+    class GetCellInfoNamesResponse implements IGetCellInfoNamesResponse {
+
+        /**
+         * Constructs a new GetCellInfoNamesResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IGetCellInfoNamesResponse);
+
+        /** GetCellInfoNamesResponse names. */
+        public names: string[];
+
+        /**
+         * Creates a new GetCellInfoNamesResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns GetCellInfoNamesResponse instance
+         */
+        public static create(properties?: vtctldata.IGetCellInfoNamesResponse): vtctldata.GetCellInfoNamesResponse;
+
+        /**
+         * Encodes the specified GetCellInfoNamesResponse message. Does not implicitly {@link vtctldata.GetCellInfoNamesResponse.verify|verify} messages.
+         * @param message GetCellInfoNamesResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IGetCellInfoNamesResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified GetCellInfoNamesResponse message, length delimited. Does not implicitly {@link vtctldata.GetCellInfoNamesResponse.verify|verify} messages.
+         * @param message GetCellInfoNamesResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IGetCellInfoNamesResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a GetCellInfoNamesResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns GetCellInfoNamesResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.GetCellInfoNamesResponse;
+
+        /**
+         * Decodes a GetCellInfoNamesResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns GetCellInfoNamesResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.GetCellInfoNamesResponse;
+
+        /**
+         * Verifies a GetCellInfoNamesResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a GetCellInfoNamesResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns GetCellInfoNamesResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.GetCellInfoNamesResponse;
+
+        /**
+         * Creates a plain object from a GetCellInfoNamesResponse message. Also converts values to other types if specified.
+         * @param message GetCellInfoNamesResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.GetCellInfoNamesResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this GetCellInfoNamesResponse to JSON.
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
@@ -26752,6 +28078,180 @@ export namespace vtctldata {
 
         /**
          * Converts this GetKeyspaceResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a GetRoutingRulesRequest. */
+    interface IGetRoutingRulesRequest {
+    }
+
+    /** Represents a GetRoutingRulesRequest. */
+    class GetRoutingRulesRequest implements IGetRoutingRulesRequest {
+
+        /**
+         * Constructs a new GetRoutingRulesRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IGetRoutingRulesRequest);
+
+        /**
+         * Creates a new GetRoutingRulesRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns GetRoutingRulesRequest instance
+         */
+        public static create(properties?: vtctldata.IGetRoutingRulesRequest): vtctldata.GetRoutingRulesRequest;
+
+        /**
+         * Encodes the specified GetRoutingRulesRequest message. Does not implicitly {@link vtctldata.GetRoutingRulesRequest.verify|verify} messages.
+         * @param message GetRoutingRulesRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IGetRoutingRulesRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified GetRoutingRulesRequest message, length delimited. Does not implicitly {@link vtctldata.GetRoutingRulesRequest.verify|verify} messages.
+         * @param message GetRoutingRulesRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IGetRoutingRulesRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a GetRoutingRulesRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns GetRoutingRulesRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.GetRoutingRulesRequest;
+
+        /**
+         * Decodes a GetRoutingRulesRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns GetRoutingRulesRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.GetRoutingRulesRequest;
+
+        /**
+         * Verifies a GetRoutingRulesRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a GetRoutingRulesRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns GetRoutingRulesRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.GetRoutingRulesRequest;
+
+        /**
+         * Creates a plain object from a GetRoutingRulesRequest message. Also converts values to other types if specified.
+         * @param message GetRoutingRulesRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.GetRoutingRulesRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this GetRoutingRulesRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a GetRoutingRulesResponse. */
+    interface IGetRoutingRulesResponse {
+
+        /** GetRoutingRulesResponse routing_rules */
+        routing_rules?: (vschema.IRoutingRules|null);
+    }
+
+    /** Represents a GetRoutingRulesResponse. */
+    class GetRoutingRulesResponse implements IGetRoutingRulesResponse {
+
+        /**
+         * Constructs a new GetRoutingRulesResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IGetRoutingRulesResponse);
+
+        /** GetRoutingRulesResponse routing_rules. */
+        public routing_rules?: (vschema.IRoutingRules|null);
+
+        /**
+         * Creates a new GetRoutingRulesResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns GetRoutingRulesResponse instance
+         */
+        public static create(properties?: vtctldata.IGetRoutingRulesResponse): vtctldata.GetRoutingRulesResponse;
+
+        /**
+         * Encodes the specified GetRoutingRulesResponse message. Does not implicitly {@link vtctldata.GetRoutingRulesResponse.verify|verify} messages.
+         * @param message GetRoutingRulesResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IGetRoutingRulesResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified GetRoutingRulesResponse message, length delimited. Does not implicitly {@link vtctldata.GetRoutingRulesResponse.verify|verify} messages.
+         * @param message GetRoutingRulesResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IGetRoutingRulesResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a GetRoutingRulesResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns GetRoutingRulesResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.GetRoutingRulesResponse;
+
+        /**
+         * Decodes a GetRoutingRulesResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns GetRoutingRulesResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.GetRoutingRulesResponse;
+
+        /**
+         * Verifies a GetRoutingRulesResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a GetRoutingRulesResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns GetRoutingRulesResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.GetRoutingRulesResponse;
+
+        /**
+         * Creates a plain object from a GetRoutingRulesResponse message. Also converts values to other types if specified.
+         * @param message GetRoutingRulesResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.GetRoutingRulesResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this GetRoutingRulesResponse to JSON.
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
@@ -27514,6 +29014,186 @@ export namespace vtctldata {
 
         /**
          * Converts this GetSrvVSchemaResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a GetSrvVSchemasRequest. */
+    interface IGetSrvVSchemasRequest {
+
+        /** GetSrvVSchemasRequest cells */
+        cells?: (string[]|null);
+    }
+
+    /** Represents a GetSrvVSchemasRequest. */
+    class GetSrvVSchemasRequest implements IGetSrvVSchemasRequest {
+
+        /**
+         * Constructs a new GetSrvVSchemasRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IGetSrvVSchemasRequest);
+
+        /** GetSrvVSchemasRequest cells. */
+        public cells: string[];
+
+        /**
+         * Creates a new GetSrvVSchemasRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns GetSrvVSchemasRequest instance
+         */
+        public static create(properties?: vtctldata.IGetSrvVSchemasRequest): vtctldata.GetSrvVSchemasRequest;
+
+        /**
+         * Encodes the specified GetSrvVSchemasRequest message. Does not implicitly {@link vtctldata.GetSrvVSchemasRequest.verify|verify} messages.
+         * @param message GetSrvVSchemasRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IGetSrvVSchemasRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified GetSrvVSchemasRequest message, length delimited. Does not implicitly {@link vtctldata.GetSrvVSchemasRequest.verify|verify} messages.
+         * @param message GetSrvVSchemasRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IGetSrvVSchemasRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a GetSrvVSchemasRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns GetSrvVSchemasRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.GetSrvVSchemasRequest;
+
+        /**
+         * Decodes a GetSrvVSchemasRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns GetSrvVSchemasRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.GetSrvVSchemasRequest;
+
+        /**
+         * Verifies a GetSrvVSchemasRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a GetSrvVSchemasRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns GetSrvVSchemasRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.GetSrvVSchemasRequest;
+
+        /**
+         * Creates a plain object from a GetSrvVSchemasRequest message. Also converts values to other types if specified.
+         * @param message GetSrvVSchemasRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.GetSrvVSchemasRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this GetSrvVSchemasRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a GetSrvVSchemasResponse. */
+    interface IGetSrvVSchemasResponse {
+
+        /** GetSrvVSchemasResponse srv_v_schemas */
+        srv_v_schemas?: ({ [k: string]: vschema.ISrvVSchema }|null);
+    }
+
+    /** Represents a GetSrvVSchemasResponse. */
+    class GetSrvVSchemasResponse implements IGetSrvVSchemasResponse {
+
+        /**
+         * Constructs a new GetSrvVSchemasResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IGetSrvVSchemasResponse);
+
+        /** GetSrvVSchemasResponse srv_v_schemas. */
+        public srv_v_schemas: { [k: string]: vschema.ISrvVSchema };
+
+        /**
+         * Creates a new GetSrvVSchemasResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns GetSrvVSchemasResponse instance
+         */
+        public static create(properties?: vtctldata.IGetSrvVSchemasResponse): vtctldata.GetSrvVSchemasResponse;
+
+        /**
+         * Encodes the specified GetSrvVSchemasResponse message. Does not implicitly {@link vtctldata.GetSrvVSchemasResponse.verify|verify} messages.
+         * @param message GetSrvVSchemasResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IGetSrvVSchemasResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified GetSrvVSchemasResponse message, length delimited. Does not implicitly {@link vtctldata.GetSrvVSchemasResponse.verify|verify} messages.
+         * @param message GetSrvVSchemasResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IGetSrvVSchemasResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a GetSrvVSchemasResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns GetSrvVSchemasResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.GetSrvVSchemasResponse;
+
+        /**
+         * Decodes a GetSrvVSchemasResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns GetSrvVSchemasResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.GetSrvVSchemasResponse;
+
+        /**
+         * Verifies a GetSrvVSchemasResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a GetSrvVSchemasResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns GetSrvVSchemasResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.GetSrvVSchemasResponse;
+
+        /**
+         * Creates a plain object from a GetSrvVSchemasResponse message. Also converts values to other types if specified.
+         * @param message GetSrvVSchemasResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.GetSrvVSchemasResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this GetSrvVSchemasResponse to JSON.
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
@@ -28695,6 +30375,180 @@ export namespace vtctldata {
         public toJSON(): { [k: string]: any };
     }
 
+    /** Properties of a RebuildVSchemaGraphRequest. */
+    interface IRebuildVSchemaGraphRequest {
+
+        /** RebuildVSchemaGraphRequest cells */
+        cells?: (string[]|null);
+    }
+
+    /** Represents a RebuildVSchemaGraphRequest. */
+    class RebuildVSchemaGraphRequest implements IRebuildVSchemaGraphRequest {
+
+        /**
+         * Constructs a new RebuildVSchemaGraphRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IRebuildVSchemaGraphRequest);
+
+        /** RebuildVSchemaGraphRequest cells. */
+        public cells: string[];
+
+        /**
+         * Creates a new RebuildVSchemaGraphRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns RebuildVSchemaGraphRequest instance
+         */
+        public static create(properties?: vtctldata.IRebuildVSchemaGraphRequest): vtctldata.RebuildVSchemaGraphRequest;
+
+        /**
+         * Encodes the specified RebuildVSchemaGraphRequest message. Does not implicitly {@link vtctldata.RebuildVSchemaGraphRequest.verify|verify} messages.
+         * @param message RebuildVSchemaGraphRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IRebuildVSchemaGraphRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified RebuildVSchemaGraphRequest message, length delimited. Does not implicitly {@link vtctldata.RebuildVSchemaGraphRequest.verify|verify} messages.
+         * @param message RebuildVSchemaGraphRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IRebuildVSchemaGraphRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a RebuildVSchemaGraphRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns RebuildVSchemaGraphRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.RebuildVSchemaGraphRequest;
+
+        /**
+         * Decodes a RebuildVSchemaGraphRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns RebuildVSchemaGraphRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.RebuildVSchemaGraphRequest;
+
+        /**
+         * Verifies a RebuildVSchemaGraphRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a RebuildVSchemaGraphRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns RebuildVSchemaGraphRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.RebuildVSchemaGraphRequest;
+
+        /**
+         * Creates a plain object from a RebuildVSchemaGraphRequest message. Also converts values to other types if specified.
+         * @param message RebuildVSchemaGraphRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.RebuildVSchemaGraphRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this RebuildVSchemaGraphRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a RebuildVSchemaGraphResponse. */
+    interface IRebuildVSchemaGraphResponse {
+    }
+
+    /** Represents a RebuildVSchemaGraphResponse. */
+    class RebuildVSchemaGraphResponse implements IRebuildVSchemaGraphResponse {
+
+        /**
+         * Constructs a new RebuildVSchemaGraphResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IRebuildVSchemaGraphResponse);
+
+        /**
+         * Creates a new RebuildVSchemaGraphResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns RebuildVSchemaGraphResponse instance
+         */
+        public static create(properties?: vtctldata.IRebuildVSchemaGraphResponse): vtctldata.RebuildVSchemaGraphResponse;
+
+        /**
+         * Encodes the specified RebuildVSchemaGraphResponse message. Does not implicitly {@link vtctldata.RebuildVSchemaGraphResponse.verify|verify} messages.
+         * @param message RebuildVSchemaGraphResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IRebuildVSchemaGraphResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified RebuildVSchemaGraphResponse message, length delimited. Does not implicitly {@link vtctldata.RebuildVSchemaGraphResponse.verify|verify} messages.
+         * @param message RebuildVSchemaGraphResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IRebuildVSchemaGraphResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a RebuildVSchemaGraphResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns RebuildVSchemaGraphResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.RebuildVSchemaGraphResponse;
+
+        /**
+         * Decodes a RebuildVSchemaGraphResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns RebuildVSchemaGraphResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.RebuildVSchemaGraphResponse;
+
+        /**
+         * Verifies a RebuildVSchemaGraphResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a RebuildVSchemaGraphResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns RebuildVSchemaGraphResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.RebuildVSchemaGraphResponse;
+
+        /**
+         * Creates a plain object from a RebuildVSchemaGraphResponse message. Also converts values to other types if specified.
+         * @param message RebuildVSchemaGraphResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.RebuildVSchemaGraphResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this RebuildVSchemaGraphResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
     /** Properties of a RemoveKeyspaceCellRequest. */
     interface IRemoveKeyspaceCellRequest {
 
@@ -29662,6 +31516,390 @@ export namespace vtctldata {
 
         /**
          * Converts this TabletExternallyReparentedResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of an UpdateCellInfoRequest. */
+    interface IUpdateCellInfoRequest {
+
+        /** UpdateCellInfoRequest name */
+        name?: (string|null);
+
+        /** UpdateCellInfoRequest cell_info */
+        cell_info?: (topodata.ICellInfo|null);
+    }
+
+    /** Represents an UpdateCellInfoRequest. */
+    class UpdateCellInfoRequest implements IUpdateCellInfoRequest {
+
+        /**
+         * Constructs a new UpdateCellInfoRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IUpdateCellInfoRequest);
+
+        /** UpdateCellInfoRequest name. */
+        public name: string;
+
+        /** UpdateCellInfoRequest cell_info. */
+        public cell_info?: (topodata.ICellInfo|null);
+
+        /**
+         * Creates a new UpdateCellInfoRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns UpdateCellInfoRequest instance
+         */
+        public static create(properties?: vtctldata.IUpdateCellInfoRequest): vtctldata.UpdateCellInfoRequest;
+
+        /**
+         * Encodes the specified UpdateCellInfoRequest message. Does not implicitly {@link vtctldata.UpdateCellInfoRequest.verify|verify} messages.
+         * @param message UpdateCellInfoRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IUpdateCellInfoRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified UpdateCellInfoRequest message, length delimited. Does not implicitly {@link vtctldata.UpdateCellInfoRequest.verify|verify} messages.
+         * @param message UpdateCellInfoRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IUpdateCellInfoRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes an UpdateCellInfoRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns UpdateCellInfoRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.UpdateCellInfoRequest;
+
+        /**
+         * Decodes an UpdateCellInfoRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns UpdateCellInfoRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.UpdateCellInfoRequest;
+
+        /**
+         * Verifies an UpdateCellInfoRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates an UpdateCellInfoRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns UpdateCellInfoRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.UpdateCellInfoRequest;
+
+        /**
+         * Creates a plain object from an UpdateCellInfoRequest message. Also converts values to other types if specified.
+         * @param message UpdateCellInfoRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.UpdateCellInfoRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this UpdateCellInfoRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of an UpdateCellInfoResponse. */
+    interface IUpdateCellInfoResponse {
+
+        /** UpdateCellInfoResponse name */
+        name?: (string|null);
+
+        /** UpdateCellInfoResponse cell_info */
+        cell_info?: (topodata.ICellInfo|null);
+    }
+
+    /** Represents an UpdateCellInfoResponse. */
+    class UpdateCellInfoResponse implements IUpdateCellInfoResponse {
+
+        /**
+         * Constructs a new UpdateCellInfoResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IUpdateCellInfoResponse);
+
+        /** UpdateCellInfoResponse name. */
+        public name: string;
+
+        /** UpdateCellInfoResponse cell_info. */
+        public cell_info?: (topodata.ICellInfo|null);
+
+        /**
+         * Creates a new UpdateCellInfoResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns UpdateCellInfoResponse instance
+         */
+        public static create(properties?: vtctldata.IUpdateCellInfoResponse): vtctldata.UpdateCellInfoResponse;
+
+        /**
+         * Encodes the specified UpdateCellInfoResponse message. Does not implicitly {@link vtctldata.UpdateCellInfoResponse.verify|verify} messages.
+         * @param message UpdateCellInfoResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IUpdateCellInfoResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified UpdateCellInfoResponse message, length delimited. Does not implicitly {@link vtctldata.UpdateCellInfoResponse.verify|verify} messages.
+         * @param message UpdateCellInfoResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IUpdateCellInfoResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes an UpdateCellInfoResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns UpdateCellInfoResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.UpdateCellInfoResponse;
+
+        /**
+         * Decodes an UpdateCellInfoResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns UpdateCellInfoResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.UpdateCellInfoResponse;
+
+        /**
+         * Verifies an UpdateCellInfoResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates an UpdateCellInfoResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns UpdateCellInfoResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.UpdateCellInfoResponse;
+
+        /**
+         * Creates a plain object from an UpdateCellInfoResponse message. Also converts values to other types if specified.
+         * @param message UpdateCellInfoResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.UpdateCellInfoResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this UpdateCellInfoResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of an UpdateCellsAliasRequest. */
+    interface IUpdateCellsAliasRequest {
+
+        /** UpdateCellsAliasRequest name */
+        name?: (string|null);
+
+        /** UpdateCellsAliasRequest cells_alias */
+        cells_alias?: (topodata.ICellsAlias|null);
+    }
+
+    /** Represents an UpdateCellsAliasRequest. */
+    class UpdateCellsAliasRequest implements IUpdateCellsAliasRequest {
+
+        /**
+         * Constructs a new UpdateCellsAliasRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IUpdateCellsAliasRequest);
+
+        /** UpdateCellsAliasRequest name. */
+        public name: string;
+
+        /** UpdateCellsAliasRequest cells_alias. */
+        public cells_alias?: (topodata.ICellsAlias|null);
+
+        /**
+         * Creates a new UpdateCellsAliasRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns UpdateCellsAliasRequest instance
+         */
+        public static create(properties?: vtctldata.IUpdateCellsAliasRequest): vtctldata.UpdateCellsAliasRequest;
+
+        /**
+         * Encodes the specified UpdateCellsAliasRequest message. Does not implicitly {@link vtctldata.UpdateCellsAliasRequest.verify|verify} messages.
+         * @param message UpdateCellsAliasRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IUpdateCellsAliasRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified UpdateCellsAliasRequest message, length delimited. Does not implicitly {@link vtctldata.UpdateCellsAliasRequest.verify|verify} messages.
+         * @param message UpdateCellsAliasRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IUpdateCellsAliasRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes an UpdateCellsAliasRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns UpdateCellsAliasRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.UpdateCellsAliasRequest;
+
+        /**
+         * Decodes an UpdateCellsAliasRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns UpdateCellsAliasRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.UpdateCellsAliasRequest;
+
+        /**
+         * Verifies an UpdateCellsAliasRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates an UpdateCellsAliasRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns UpdateCellsAliasRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.UpdateCellsAliasRequest;
+
+        /**
+         * Creates a plain object from an UpdateCellsAliasRequest message. Also converts values to other types if specified.
+         * @param message UpdateCellsAliasRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.UpdateCellsAliasRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this UpdateCellsAliasRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of an UpdateCellsAliasResponse. */
+    interface IUpdateCellsAliasResponse {
+
+        /** UpdateCellsAliasResponse name */
+        name?: (string|null);
+
+        /** UpdateCellsAliasResponse cells_alias */
+        cells_alias?: (topodata.ICellsAlias|null);
+    }
+
+    /** Represents an UpdateCellsAliasResponse. */
+    class UpdateCellsAliasResponse implements IUpdateCellsAliasResponse {
+
+        /**
+         * Constructs a new UpdateCellsAliasResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IUpdateCellsAliasResponse);
+
+        /** UpdateCellsAliasResponse name. */
+        public name: string;
+
+        /** UpdateCellsAliasResponse cells_alias. */
+        public cells_alias?: (topodata.ICellsAlias|null);
+
+        /**
+         * Creates a new UpdateCellsAliasResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns UpdateCellsAliasResponse instance
+         */
+        public static create(properties?: vtctldata.IUpdateCellsAliasResponse): vtctldata.UpdateCellsAliasResponse;
+
+        /**
+         * Encodes the specified UpdateCellsAliasResponse message. Does not implicitly {@link vtctldata.UpdateCellsAliasResponse.verify|verify} messages.
+         * @param message UpdateCellsAliasResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IUpdateCellsAliasResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified UpdateCellsAliasResponse message, length delimited. Does not implicitly {@link vtctldata.UpdateCellsAliasResponse.verify|verify} messages.
+         * @param message UpdateCellsAliasResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IUpdateCellsAliasResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes an UpdateCellsAliasResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns UpdateCellsAliasResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.UpdateCellsAliasResponse;
+
+        /**
+         * Decodes an UpdateCellsAliasResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns UpdateCellsAliasResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.UpdateCellsAliasResponse;
+
+        /**
+         * Verifies an UpdateCellsAliasResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates an UpdateCellsAliasResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns UpdateCellsAliasResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.UpdateCellsAliasResponse;
+
+        /**
+         * Creates a plain object from an UpdateCellsAliasResponse message. Also converts values to other types if specified.
+         * @param message UpdateCellsAliasResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.UpdateCellsAliasResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this UpdateCellsAliasResponse to JSON.
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };

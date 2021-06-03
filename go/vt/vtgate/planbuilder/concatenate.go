@@ -54,12 +54,12 @@ func (c *concatenate) Wireup(plan logicalPlan, jt *jointab) error {
 	return c.rhs.Wireup(plan, jt)
 }
 
-func (c *concatenate) WireupV4(semTable *semantics.SemTable) error {
-	err := c.lhs.WireupV4(semTable)
+func (c *concatenate) WireupGen4(semTable *semantics.SemTable) error {
+	err := c.lhs.WireupGen4(semTable)
 	if err != nil {
 		return err
 	}
-	return c.rhs.WireupV4(semTable)
+	return c.rhs.WireupGen4(semTable)
 }
 
 func (c *concatenate) SupplyVar(from, to int, col *sqlparser.ColName, varname string) {

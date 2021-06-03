@@ -1071,6 +1071,11 @@ var (
 	}, {
 		input: "alter table a add constraint b unique key (id)",
 	}, {
+		input:  "alter table t add column iii int signed not null",
+		output: "alter table t add column iii int not null",
+	}, {
+		input: "alter table t add column iii int unsigned not null",
+	}, {
 		input:  "alter table a add constraint b unique c (id)",
 		output: "alter table a add constraint b unique key c (id)",
 	}, {

@@ -213,6 +213,7 @@ java_test:
 install_protoc-gen-go:
 	go install google.golang.org/protobuf/cmd/protoc-gen-go
 	go install google.golang.org/grpc/cmd/protoc-gen-go-grpc
+	go install github.com/planetscale/vtprotobuf/cmd/protoc-gen-go-vtproto
 
 PROTO_SRCS = $(wildcard proto/*.proto)
 PROTO_SRC_NAMES = $(basename $(notdir $(PROTO_SRCS)))
@@ -230,6 +231,8 @@ $(PROTO_GO_OUTS): minimaltools install_protoc-gen-go proto/*.proto
 		$(VTROOT)/bin/protoc \
 		--go_out=. --plugin protoc-gen-go="${GOBIN}/protoc-gen-go" \
 		--go-grpc_out=. --plugin protoc-gen-go-grpc="${GOBIN}/protoc-gen-go-grpc" \
+		--go-vtproto_out=. --plugin protoc-gen-go-vtproto="${GOBIN}/protoc-gen-go-vtproto" \
+		--go-vtproto_opt=features=marshal+unmarshal+size \
 		-I${PWD}/dist/vt-protoc-3.6.1/include:proto proto/$${name}.proto; \
 	done
 	cp -Rf vitess.io/vitess/go/vt/proto/* go/vt/proto

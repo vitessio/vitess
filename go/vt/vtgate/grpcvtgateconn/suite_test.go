@@ -200,6 +200,40 @@ func (f *fakeVTGateService) StreamExecute(ctx context.Context, session *vtgatepb
 	return nil
 }
 
+// Prepare is part of the VTGateService interface
+func (f *fakeVTGateService) Prepare(ctx context.Context, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable) (*vtgatepb.Session, []*querypb.Field, error) {
+	if f.hasError {
+		return session, nil, errTestVtGateError
+	}
+	if f.panics {
+		panic(fmt.Errorf("test forced panic"))
+	}
+	f.checkCallerID(ctx, "Prepare")
+	execCase, ok := execMap[sql]
+	if !ok {
+		return session, nil, fmt.Errorf("no match for: %s", sql)
+	}
+	query := &queryExecute{
+		SQL:           sql,
+		BindVariables: bindVariables,
+		Session:       session,
+	}
+	if !query.equal(execCase.execQuery) {
+		f.t.Errorf("Prepare:\n%+v, want\n%+v", query, execCase.execQuery)
+		return session, nil, nil
+	}
+	if execCase.outSession != nil {
+		proto.Reset(session)
+		proto.Merge(session, execCase.outSession)
+	}
+	return session, execCase.result.Fields, nil
+}
+
+// CloseSession is part of the VTGateService interface
+func (f *fakeVTGateService) CloseSession(ctx context.Context, session *vtgatepb.Session) error {
+	panic("unimplemented")
+}
+
 // ResolveTransaction is part of the VTGateService interface
 func (f *fakeVTGateService) ResolveTransaction(ctx context.Context, dtid string) error {
 	if f.hasError {
@@ -260,12 +294,14 @@ func RunTests(t *testing.T, impl vtgateconn.Impl, fakeServer vtgateservice.VTGat
 	testExecute(t, session)
 	testStreamExecute(t, session)
 	testExecuteBatch(t, session)
+	testPrepare(t, session)
 
 	// force a panic at every call, then test that works
 	fs.panics = true
 	testExecutePanic(t, session)
 	testExecuteBatchPanic(t, session)
 	testStreamExecutePanic(t, session)
+	testPreparePanic(t, session)
 	fs.panics = false
 }
 
@@ -284,6 +320,7 @@ func RunErrorTests(t *testing.T, fakeServer vtgateservice.VTGateService) {
 	testExecuteError(t, session, fs)
 	testExecuteBatchError(t, session, fs)
 	testStreamExecuteError(t, session, fs)
+	testPrepareError(t, session, fs)
 	fs.hasError = false
 }
 
@@ -459,6 +496,34 @@ func testStreamExecutePanic(t *testing.T, session *vtgateconn.VTGateSession) {
 	if err == nil {
 		t.Fatalf("Received packets instead of panic?")
 	}
+	expectPanic(t, err)
+}
+
+func testPrepare(t *testing.T, session *vtgateconn.VTGateSession) {
+	ctx := newContext()
+	execCase := execMap["request1"]
+	_, err := session.Prepare(ctx, execCase.execQuery.SQL, execCase.execQuery.BindVariables)
+	require.NoError(t, err)
+	//if !qr.Equal(execCase.result) {
+	//	t.Errorf("Unexpected result from Execute: got\n%#v want\n%#v", qr, execCase.result)
+	//}
+
+	_, err = session.Prepare(ctx, "none", nil)
+	require.EqualError(t, err, "no match for: none")
+}
+
+func testPrepareError(t *testing.T, session *vtgateconn.VTGateSession, fake *fakeVTGateService) {
+	ctx := newContext()
+	execCase := execMap["errorRequst"]
+
+	_, err := session.Prepare(ctx, execCase.execQuery.SQL, execCase.execQuery.BindVariables)
+	verifyError(t, err, "Prepare")
+}
+
+func testPreparePanic(t *testing.T, session *vtgateconn.VTGateSession) {
+	ctx := newContext()
+	execCase := execMap["request1"]
+	_, err := session.Prepare(ctx, execCase.execQuery.SQL, execCase.execQuery.BindVariables)
 	expectPanic(t, err)
 }
 

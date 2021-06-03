@@ -73,17 +73,18 @@ type healthStreamer struct {
 
 	history *history.History
 
-	ticks       *timer.Timer
-	dbConfig    dbconfigs.Connector
-	conns       *connpool.Pool
-	initSuccess bool
+	ticks                  *timer.Timer
+	dbConfig               dbconfigs.Connector
+	conns                  *connpool.Pool
+	initSuccess            bool
+	signalWhenSchemaChange bool
 }
 
 func newHealthStreamer(env tabletenv.Env, alias *topodatapb.TabletAlias) *healthStreamer {
 	var newTimer *timer.Timer
 	var pool *connpool.Pool
 	if env.Config().SignalWhenSchemaChange {
-		reloadTime := env.Config().SchemaReloadIntervalSeconds.Get()
+		reloadTime := env.Config().SignalSchemaChangeReloadIntervalSeconds.Get()
 		newTimer = timer.NewTimer(reloadTime)
 		// We need one connection for the reloader.
 		pool = connpool.NewPool(env, "", tabletenv.ConnPoolConfig{
@@ -105,9 +106,10 @@ func newHealthStreamer(env tabletenv.Env, alias *topodatapb.TabletAlias) *health
 			},
 		},
 
-		history: history.New(5),
-		ticks:   newTimer,
-		conns:   pool,
+		history:                history.New(5),
+		ticks:                  newTimer,
+		conns:                  pool,
+		signalWhenSchemaChange: env.Config().SignalWhenSchemaChange,
 	}
 }
 
@@ -132,6 +134,7 @@ func (hs *healthStreamer) Open() {
 				log.Errorf("periodic schema reload failed in health stream: %v", err)
 			}
 		})
+
 	}
 
 }
@@ -156,6 +159,11 @@ func (hs *healthStreamer) Stream(ctx context.Context, callback func(*querypb.Str
 		return vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "tabletserver is shutdown")
 	}
 	defer hs.unregister(ch)
+
+	// trigger the initial schema reload
+	if hs.signalWhenSchemaChange {
+		hs.ticks.Trigger()
+	}
 
 	for {
 		select {
@@ -305,7 +313,6 @@ func (hs *healthStreamer) SetUnhealthyThreshold(v time.Duration) {
 func (hs *healthStreamer) reload() error {
 	hs.mu.Lock()
 	defer hs.mu.Unlock()
-
 	// Schema Reload to happen only on master.
 	if hs.state.Target.TabletType != topodatapb.TabletType_MASTER {
 		return nil

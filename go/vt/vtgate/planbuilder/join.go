@@ -154,12 +154,12 @@ func (jb *join) Wireup(plan logicalPlan, jt *jointab) error {
 }
 
 // Wireup2 implements the logicalPlan interface
-func (jb *join) WireupV4(semTable *semantics.SemTable) error {
-	err := jb.Right.WireupV4(semTable)
+func (jb *join) WireupGen4(semTable *semantics.SemTable) error {
+	err := jb.Right.WireupGen4(semTable)
 	if err != nil {
 		return err
 	}
-	return jb.Left.WireupV4(semTable)
+	return jb.Left.WireupGen4(semTable)
 }
 
 // SupplyVar implements the logicalPlan interface

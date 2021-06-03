@@ -25,6 +25,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/schema"
+	"vitess.io/vitess/go/vt/sqlparser"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
 
@@ -76,8 +77,11 @@ func VtgateExecDDL(t *testing.T, vtParams *mysql.ConnParams, ddlStrategy string,
 
 // CheckRetryMigration attempts to retry a migration, and expects success/failure by counting affected rows
 func CheckRetryMigration(t *testing.T, vtParams *mysql.ConnParams, shards []cluster.Shard, uuid string, expectRetryPossible bool) {
-	retryQuery := fmt.Sprintf("alter vitess_migration '%s' retry", uuid)
-	r := VtgateExecQuery(t, vtParams, retryQuery, "")
+	query, err := sqlparser.ParseAndBind("alter vitess_migration %a retry",
+		sqltypes.StringBindVariable(uuid),
+	)
+	require.NoError(t, err)
+	r := VtgateExecQuery(t, vtParams, query, "")
 
 	if expectRetryPossible {
 		assert.Equal(t, len(shards), int(r.RowsAffected))
@@ -88,8 +92,11 @@ func CheckRetryMigration(t *testing.T, vtParams *mysql.ConnParams, shards []clus
 
 // CheckCancelMigration attempts to cancel a migration, and expects success/failure by counting affected rows
 func CheckCancelMigration(t *testing.T, vtParams *mysql.ConnParams, shards []cluster.Shard, uuid string, expectCancelPossible bool) {
-	cancelQuery := fmt.Sprintf("alter vitess_migration '%s' cancel", uuid)
-	r := VtgateExecQuery(t, vtParams, cancelQuery, "")
+	query, err := sqlparser.ParseAndBind("alter vitess_migration %a cancel",
+		sqltypes.StringBindVariable(uuid),
+	)
+	require.NoError(t, err)
+	r := VtgateExecQuery(t, vtParams, query, "")
 
 	if expectCancelPossible {
 		assert.Equal(t, len(shards), int(r.RowsAffected))
@@ -106,11 +113,25 @@ func CheckCancelAllMigrations(t *testing.T, vtParams *mysql.ConnParams, expectCo
 	assert.Equal(t, expectCount, int(r.RowsAffected))
 }
 
+// ReadMigrations reads migration entries
+func ReadMigrations(t *testing.T, vtParams *mysql.ConnParams, like string) *sqltypes.Result {
+	query, err := sqlparser.ParseAndBind("show vitess_migrations like %a",
+		sqltypes.StringBindVariable(like),
+	)
+	require.NoError(t, err)
+
+	return VtgateExecQuery(t, vtParams, query, "")
+}
+
 // CheckMigrationStatus verifies that the migration indicated by given UUID has the given expected status
 func CheckMigrationStatus(t *testing.T, vtParams *mysql.ConnParams, shards []cluster.Shard, uuid string, expectStatuses ...schema.OnlineDDLStatus) {
-	showQuery := fmt.Sprintf("show vitess_migrations like '%s'", uuid)
-	r := VtgateExecQuery(t, vtParams, showQuery, "")
-	fmt.Printf("# output for `%s`:\n", showQuery)
+	query, err := sqlparser.ParseAndBind("show vitess_migrations like %a",
+		sqltypes.StringBindVariable(uuid),
+	)
+	require.NoError(t, err)
+
+	r := VtgateExecQuery(t, vtParams, query, "")
+	fmt.Printf("# output for `%s`:\n", query)
 	PrintQueryResult(os.Stdout, r)
 
 	count := 0
@@ -130,12 +151,21 @@ func CheckMigrationStatus(t *testing.T, vtParams *mysql.ConnParams, shards []clu
 
 // CheckMigrationArtifacts verifies given migration exists, and checks if it has artifacts
 func CheckMigrationArtifacts(t *testing.T, vtParams *mysql.ConnParams, shards []cluster.Shard, uuid string, expectArtifacts bool) {
-	showQuery := fmt.Sprintf("show vitess_migrations like '%s'", uuid)
-	r := VtgateExecQuery(t, vtParams, showQuery, "")
+	r := ReadMigrations(t, vtParams, uuid)
 
 	assert.Equal(t, len(shards), len(r.Named().Rows))
 	for _, row := range r.Named().Rows {
 		hasArtifacts := (row["artifacts"].ToString() != "")
 		assert.Equal(t, expectArtifacts, hasArtifacts)
 	}
+}
+
+// ReadMigrations reads migration entries
+func ReadMigrations(t *testing.T, vtParams *mysql.ConnParams, like string) *sqltypes.Result {
+	query, err := sqlparser.ParseAndBind("show vitess_migrations like %a",
+		sqltypes.StringBindVariable(like),
+	)
+	require.NoError(t, err)
+
+	return VtgateExecQuery(t, vtParams, query, "")
 }
