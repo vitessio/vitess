@@ -394,6 +394,9 @@ func (ins *Insert) getInsertShardedRoute(vcursor VCursor, bindVars map[string]*q
 	// keyspace ids. For regular inserts, a failure to find a route
 	// results in an error. For 'ignore' type inserts, the keyspace
 	// id is returned as nil, which is used later to drop the corresponding rows.
+	if len(vindexRowsValues) == 0 || len(ins.Table.ColumnVindexes) == 0 {
+		return nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] table without a primary vindex is not expectedd")
+	}
 	keyspaceIDs, err := ins.processPrimary(vcursor, vindexRowsValues[0], ins.Table.ColumnVindexes[0])
 	if err != nil {
 		return nil, nil, err
