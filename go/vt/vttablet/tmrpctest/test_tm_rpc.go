@@ -716,6 +716,14 @@ var testReplicationStatus = &replicationdatapb.Status{
 
 var testMasterStatus = &replicationdatapb.MasterStatus{Position: "MariaDB/1-345-789"}
 
+func (fra *fakeRPCTM) PrimaryStatus(ctx context.Context) (*replicationdatapb.MasterStatus, error) {
+	if fra.panics {
+		panic(fmt.Errorf("test-triggered panic"))
+	}
+	return testMasterStatus, nil
+}
+
+// Deprecated
 func (fra *fakeRPCTM) MasterStatus(ctx context.Context) (*replicationdatapb.MasterStatus, error) {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
@@ -742,6 +750,14 @@ func tmRPCTestReplicationStatusPanic(ctx context.Context, t *testing.T, client t
 
 var testReplicationPosition = "MariaDB/5-456-890"
 
+func (fra *fakeRPCTM) PrimaryPosition(ctx context.Context) (string, error) {
+	if fra.panics {
+		panic(fmt.Errorf("test-triggered panic"))
+	}
+	return testReplicationPosition, nil
+}
+
+// Deprecated
 func (fra *fakeRPCTM) MasterPosition(ctx context.Context) (string, error) {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
@@ -755,12 +771,12 @@ func (fra *fakeRPCTM) WaitForPosition(ctx context.Context, pos string) error {
 
 func tmRPCTestMasterPosition(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	rs, err := client.MasterPosition(ctx, tablet)
-	compareError(t, "MasterPosition", err, rs, testReplicationPosition)
+	compareError(t, "PrimaryPosition", err, rs, testReplicationPosition)
 }
 
 func tmRPCTestMasterPositionPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	_, err := client.MasterPosition(ctx, tablet)
-	expectHandleRPCPanic(t, "MasterPosition", false /*verbose*/, err)
+	expectHandleRPCPanic(t, "PrimaryPosition", false /*verbose*/, err)
 }
 
 var testStopReplicationCalled = false
@@ -934,6 +950,14 @@ func tmRPCTestResetReplicationPanic(ctx context.Context, t *testing.T, client tm
 	expectHandleRPCPanic(t, "ResetReplication", true /*verbose*/, err)
 }
 
+func (fra *fakeRPCTM) InitPrimary(ctx context.Context) (string, error) {
+	if fra.panics {
+		panic(fmt.Errorf("test-triggered panic"))
+	}
+	return testReplicationPosition, nil
+}
+
+// Deprecated
 func (fra *fakeRPCTM) InitMaster(ctx context.Context) (string, error) {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
@@ -1005,6 +1029,14 @@ func tmRPCTestInitReplicaPanic(ctx context.Context, t *testing.T, client tmclien
 	expectHandleRPCPanic(t, "InitReplica", true /*verbose*/, err)
 }
 
+func (fra *fakeRPCTM) DemotePrimary(ctx context.Context) (*replicationdatapb.MasterStatus, error) {
+	if fra.panics {
+		panic(fmt.Errorf("test-triggered panic"))
+	}
+	return testMasterStatus, nil
+}
+
+// Deprecated
 func (fra *fakeRPCTM) DemoteMaster(ctx context.Context) (*replicationdatapb.MasterStatus, error) {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
@@ -1024,6 +1056,14 @@ func tmRPCTestDemoteMasterPanic(ctx context.Context, t *testing.T, client tmclie
 
 var testUndoDemoteMasterCalled = false
 
+func (fra *fakeRPCTM) UndoDemotePrimary(ctx context.Context) error {
+	if fra.panics {
+		panic(fmt.Errorf("test-triggered panic"))
+	}
+	return nil
+}
+
+// Deprecated
 func (fra *fakeRPCTM) UndoDemoteMaster(ctx context.Context) error {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
@@ -1067,6 +1107,19 @@ func tmRPCTestReplicaWasPromotedPanic(ctx context.Context, t *testing.T, client 
 var testSetMasterCalled = false
 var testForceStartReplica = true
 
+func (fra *fakeRPCTM) SetReplicationSource(ctx context.Context, parent *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplica bool) error {
+	if fra.panics {
+		panic(fmt.Errorf("test-triggered panic"))
+	}
+	compare(fra.t, "SetMaster parent", parent, testMasterAlias)
+	compare(fra.t, "SetMaster timeCreatedNS", timeCreatedNS, testTimeCreatedNS)
+	compare(fra.t, "SetMaster waitPosition", waitPosition, testWaitPosition)
+	compare(fra.t, "SetMaster forceStartReplica", forceStartReplica, testForceStartReplica)
+	testSetMasterCalled = true
+	return nil
+}
+
+// Deprecated
 func (fra *fakeRPCTM) SetMaster(ctx context.Context, parent *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplica bool) error {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))

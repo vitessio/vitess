@@ -47,24 +47,24 @@ type MysqlDaemon interface {
 	StopReplication(hookExtraEnv map[string]string) error
 	StopIOThread(ctx context.Context) error
 	ReplicationStatus() (mysql.ReplicationStatus, error)
-	MasterStatus(ctx context.Context) (mysql.MasterStatus, error)
-	SetSemiSyncEnabled(master, replica bool) error
-	SemiSyncEnabled() (master, replica bool)
+	PrimaryStatus(ctx context.Context) (mysql.PrimaryStatus, error)
+	SetSemiSyncEnabled(source, replica bool) error
+	SemiSyncEnabled() (source, replica bool)
 	SemiSyncReplicationStatus() (bool, error)
 
 	// reparenting related methods
 	ResetReplication(ctx context.Context) error
-	MasterPosition() (mysql.Position, error)
+	PrimaryPosition() (mysql.Position, error)
 	IsReadOnly() (bool, error)
 	SetReadOnly(on bool) error
 	SetSuperReadOnly(on bool) error
 	SetReplicationPosition(ctx context.Context, pos mysql.Position) error
-	SetMaster(ctx context.Context, masterHost string, masterPort int, stopReplicationBefore bool, startReplicationAfter bool) error
+	SetReplicationSource(ctx context.Context, host string, port int, stopReplicationBefore bool, startReplicationAfter bool) error
 	WaitForReparentJournal(ctx context.Context, timeCreatedNS int64) error
 
-	WaitMasterPos(context.Context, mysql.Position) error
+	WaitSourcePos(context.Context, mysql.Position) error
 
-	// Promote makes the current server master. It will not change
+	// Promote makes the current server the primary. It will not change
 	// the read_only state of the server.
 	Promote(map[string]string) (mysql.Position, error)
 

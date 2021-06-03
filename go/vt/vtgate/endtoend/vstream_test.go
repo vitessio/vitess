@@ -65,7 +65,7 @@ func TestVStream(t *testing.T) {
 	gconn, conn, mconn, closeConnections := initialize(ctx, t)
 	defer closeConnections()
 
-	mpos, err := mconn.MasterPosition()
+	mpos, err := mconn.PrimaryPosition()
 	if err != nil {
 		t.Fatal(err)
 	}

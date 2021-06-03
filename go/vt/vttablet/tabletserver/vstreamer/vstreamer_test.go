@@ -2101,7 +2101,7 @@ func masterPosition(t *testing.T) string {
 		t.Fatal(err)
 	}
 	defer conn.Close()
-	pos, err := conn.MasterPosition()
+	pos, err := conn.PrimaryPosition()
 	if err != nil {
 		t.Fatal(err)
 	}
