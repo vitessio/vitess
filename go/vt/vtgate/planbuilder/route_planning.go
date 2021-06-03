@@ -382,12 +382,16 @@ func (rp *routePlan) searchForNewVindexes(predicates []sqlparser.Expr) (bool, er
 	return newVindexFound, nil
 }
 
-func equalOrEqualUnique(vindex *vindexes.ColumnVindex) (vindexes.Vindex, engine.RouteOpcode) {
+func justTheVindex(vindex *vindexes.ColumnVindex) vindexes.Vindex {
+	return vindex.Vindex
+}
+
+func equalOrEqualUnique(vindex *vindexes.ColumnVindex) engine.RouteOpcode {
 	if vindex.Vindex.IsUnique() {
-		return vindex.Vindex, engine.SelectEqualUnique
+		return engine.SelectEqualUnique
 	}
 
-	return vindex.Vindex, engine.SelectEqual
+	return engine.SelectEqual
 }
 
 func (rp *routePlan) planEqualOp(node *sqlparser.ComparisonExpr) (bool, error) {
@@ -406,7 +410,7 @@ func (rp *routePlan) planEqualOp(node *sqlparser.ComparisonExpr) (bool, error) {
 		return false, err
 	}
 
-	return rp.haveMatchingVindex(node, column, *val, equalOrEqualUnique), err
+	return rp.haveMatchingVindex(node, column, *val, equalOrEqualUnique, justTheVindex), err
 }
 
 func (rp *routePlan) planInOp(node *sqlparser.ComparisonExpr) (bool, error) {
@@ -430,10 +434,8 @@ func (rp *routePlan) planInOp(node *sqlparser.ComparisonExpr) (bool, error) {
 			return false, nil
 		}
 	}
-	opcode := func(v *vindexes.ColumnVindex) (vindexes.Vindex, engine.RouteOpcode) {
-		return v.Vindex, engine.SelectIN
-	}
-	return rp.haveMatchingVindex(node, column, value, opcode), err
+	opcode := func(*vindexes.ColumnVindex) engine.RouteOpcode { return engine.SelectIN }
+	return rp.haveMatchingVindex(node, column, value, opcode, justTheVindex), err
 }
 
 func (rp *routePlan) planLikeOp(node *sqlparser.ComparisonExpr) (bool, error) {
@@ -447,16 +449,17 @@ func (rp *routePlan) planLikeOp(node *sqlparser.ComparisonExpr) (bool, error) {
 		return false, err
 	}
 
-	opcode := func(vindex *vindexes.ColumnVindex) (vindexes.Vindex, engine.RouteOpcode) {
+	selectEqual := func(*vindexes.ColumnVindex) engine.RouteOpcode { return engine.SelectEqual }
+	vdx := func(vindex *vindexes.ColumnVindex) vindexes.Vindex {
 		if prefixable, ok := vindex.Vindex.(vindexes.Prefixable); ok {
-			return prefixable.PrefixVindex(), engine.SelectEqual
+			return prefixable.PrefixVindex()
 		}
 
 		// if we can't use the vindex as a prefix-vindex, we can't use this vindex at all
-		return nil, engine.SelectScatter
+		return nil
 	}
 
-	return rp.haveMatchingVindex(node, column, *val, opcode), err
+	return rp.haveMatchingVindex(node, column, *val, selectEqual, vdx), err
 }
 
 func (rp *routePlan) planIsExpr(node *sqlparser.IsExpr) (bool, error) {
@@ -473,7 +476,7 @@ func (rp *routePlan) planIsExpr(node *sqlparser.IsExpr) (bool, error) {
 		return false, err
 	}
 
-	return rp.haveMatchingVindex(node, column, *val, equalOrEqualUnique), err
+	return rp.haveMatchingVindex(node, column, *val, equalOrEqualUnique, justTheVindex), err
 }
 
 func makePlanValue(n sqlparser.Expr) (*sqltypes.PlanValue, error) {
@@ -493,7 +496,8 @@ func (rp *routePlan) haveMatchingVindex(
 	node sqlparser.Expr,
 	column *sqlparser.ColName,
 	value sqltypes.PlanValue,
-	opcode func(*vindexes.ColumnVindex) (vindexes.Vindex, engine.RouteOpcode),
+	opcode func(*vindexes.ColumnVindex) engine.RouteOpcode,
+	vfunc func(*vindexes.ColumnVindex) vindexes.Vindex,
 ) bool {
 	newVindexFound := false
 	for _, v := range rp.vindexPreds {
@@ -508,7 +512,8 @@ func (rp *routePlan) haveMatchingVindex(
 				// Vindex is covered if all the columns in the vindex have a associated predicate
 				covered := len(v.values) == len(v.colVindex.Columns)
 				if covered {
-					v.foundVindex, v.opcode = opcode(v.colVindex)
+					v.opcode = opcode(v.colVindex)
+					v.foundVindex = vfunc(v.colVindex)
 				}
 				newVindexFound = newVindexFound || covered
 			}
