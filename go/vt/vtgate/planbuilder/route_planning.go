@@ -371,9 +371,23 @@ func (rp *routePlan) searchForNewVindexes(predicates []sqlparser.Expr) (bool, er
 			default:
 				return false, semantics.Gen4NotSupportedF("%s", sqlparser.String(filter))
 			}
+		case *sqlparser.IsExpr:
+			found, err := rp.planIsExpr(node)
+			if err != nil {
+				return false, err
+			}
+			newVindexFound = newVindexFound || found
 		}
 	}
 	return newVindexFound, nil
+}
+
+func equalOrEqualUnique(vindex *vindexes.ColumnVindex) (vindexes.Vindex, engine.RouteOpcode) {
+	if vindex.Vindex.IsUnique() {
+		return vindex.Vindex, engine.SelectEqualUnique
+	}
+
+	return vindex.Vindex, engine.SelectEqual
 }
 
 func (rp *routePlan) planEqualOp(node *sqlparser.ComparisonExpr) (bool, error) {
@@ -392,28 +406,7 @@ func (rp *routePlan) planEqualOp(node *sqlparser.ComparisonExpr) (bool, error) {
 		return false, err
 	}
 
-	opcode := func(vindex *vindexes.ColumnVindex) (vindexes.Vindex, engine.RouteOpcode) {
-		if vindex.Vindex.IsUnique() {
-			return vindex.Vindex, engine.SelectEqualUnique
-		}
-
-		return vindex.Vindex, engine.SelectEqual
-	}
-
-	return rp.haveMatchingVindex(node, column, *val, opcode), err
-}
-
-func makePlanValue(n sqlparser.Expr) (*sqltypes.PlanValue, error) {
-	value, err := sqlparser.NewPlanValue(n)
-	if err != nil {
-		// if we are unable to create a PlanValue, we can't use a vindex, but we don't have to fail
-		if strings.Contains(err.Error(), "expression is too complex") {
-			return nil, nil
-		}
-		// something else went wrong, return the error
-		return nil, err
-	}
-	return &value, nil
+	return rp.haveMatchingVindex(node, column, *val, equalOrEqualUnique), err
 }
 
 func (rp *routePlan) planInOp(node *sqlparser.ComparisonExpr) (bool, error) {
@@ -466,8 +459,38 @@ func (rp *routePlan) planLikeOp(node *sqlparser.ComparisonExpr) (bool, error) {
 	return rp.haveMatchingVindex(node, column, *val, opcode), err
 }
 
+func (rp *routePlan) planIsExpr(node *sqlparser.IsExpr) (bool, error) {
+	// we only handle IS NULL correct. IsExpr can contain other expressions as well
+	if node.Right != sqlparser.IsNullOp {
+		return false, nil
+	}
+	column, ok := node.Left.(*sqlparser.ColName)
+	if !ok {
+		return false, nil
+	}
+	val, err := makePlanValue(&sqlparser.NullVal{})
+	if err != nil || val == nil {
+		return false, err
+	}
+
+	return rp.haveMatchingVindex(node, column, *val, equalOrEqualUnique), err
+}
+
+func makePlanValue(n sqlparser.Expr) (*sqltypes.PlanValue, error) {
+	value, err := sqlparser.NewPlanValue(n)
+	if err != nil {
+		// if we are unable to create a PlanValue, we can't use a vindex, but we don't have to fail
+		if strings.Contains(err.Error(), "expression is too complex") {
+			return nil, nil
+		}
+		// something else went wrong, return the error
+		return nil, err
+	}
+	return &value, nil
+}
+
 func (rp *routePlan) haveMatchingVindex(
-	node *sqlparser.ComparisonExpr,
+	node sqlparser.Expr,
 	column *sqlparser.ColName,
 	value sqltypes.PlanValue,
 	opcode func(*vindexes.ColumnVindex) (vindexes.Vindex, engine.RouteOpcode),

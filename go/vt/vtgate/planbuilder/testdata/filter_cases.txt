@@ -1664,6 +1664,7 @@ Gen4 plan same as above
     "Vindex": "music_user_map"
   }
 }
+Gen4 plan same as above
 
 # SELECT with IS NOT NULL
 "select id from music where id is not null"
