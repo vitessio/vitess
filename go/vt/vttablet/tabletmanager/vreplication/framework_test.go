@@ -97,6 +97,8 @@ func TestMain(m *testing.M) {
 		}
 		defer env.Close()
 
+		*vreplicationExperimentalFlags = 0
+
 		// engines cannot be initialized in testenv because it introduces
 		// circular dependencies.
 		streamerEngine = vstreamer.NewEngine(env.TabletEnv, env.SrvTopo, env.SchemaEngine, nil, env.Cells[0])
