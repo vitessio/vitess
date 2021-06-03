@@ -161,9 +161,11 @@ message ApplyRoutingRulesResponse {
 
 message ApplyVSchemaRequest {
   string keyspace = 1;
-  vschema.Keyspace v_schema = 2;
-  bool skip_rebuild = 3;
+  bool skip_rebuild = 2;
+  bool dry_run = 3;
   repeated string cells = 4;
+  vschema.Keyspace v_schema = 5;
+  string sql = 6;
 }
 
 message ApplyVSchemaResponse {
