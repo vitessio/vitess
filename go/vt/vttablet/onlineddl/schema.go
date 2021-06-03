@@ -56,6 +56,7 @@ const (
 	alterSchemaMigrationsTableMessage            = "ALTER TABLE _vt.schema_migrations add column message TEXT NOT NULL"
 	alterSchemaMigrationsTableTableCompleteIndex = "ALTER TABLE _vt.schema_migrations add KEY table_complete_idx (migration_status, keyspace(64), mysql_table(64), completed_timestamp)"
 	alterSchemaMigrationsTableETASeconds         = "ALTER TABLE _vt.schema_migrations add column eta_seconds bigint NOT NULL DEFAULT -1"
+	alterSchemaMigrationsTableRowsCopied         = "ALTER TABLE _vt.schema_migrations add column rows_copied bigint unsigned NOT NULL DEFAULT 0"
 
 	sqlInsertMigration = `INSERT IGNORE INTO _vt.schema_migrations (
 		migration_uuid,
@@ -102,6 +103,11 @@ const (
 	`
 	sqlUpdateMigrationETASeconds = `UPDATE _vt.schema_migrations
 			SET eta_seconds=%a
+		WHERE
+			migration_uuid=%a
+	`
+	sqlUpdateMigrationRowsCopied = `UPDATE _vt.schema_migrations
+			SET rows_copied=%a
 		WHERE
 			migration_uuid=%a
 	`
@@ -361,4 +367,5 @@ var applyDDL = []string{
 	alterSchemaMigrationsTableMessage,
 	alterSchemaMigrationsTableTableCompleteIndex,
 	alterSchemaMigrationsTableETASeconds,
+	alterSchemaMigrationsTableRowsCopied,
 }

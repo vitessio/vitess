@@ -50,6 +50,13 @@ var (
 			msg varchar(64),
 			PRIMARY KEY (id)
 		) ENGINE=InnoDB;`
+	insertStatements = []string{
+		`insert into %s (id, msg) values (3, 'three')`,
+		`insert into %s (id, msg) values (5, 'five')`,
+		`insert into %s (id, msg) values (7, 'seven')`,
+		`insert into %s (id, msg) values (11, 'eleven')`,
+		`insert into %s (id, msg) values (13, 'thirteen')`,
+	}
 	// To verify non online-DDL behavior
 	alterTableNormalStatement = `
 		ALTER TABLE %s
@@ -215,6 +222,16 @@ func TestSchemaChange(t *testing.T) {
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 		onlineddl.CheckCancelMigration(t, &vtParams, shards, uuid, false)
 		onlineddl.CheckRetryMigration(t, &vtParams, shards, uuid, false)
+
+		var totalRowsCopied uint64
+		// count sum of rows copied in all shards, that should be the total number of rows inserted to the table
+		rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
+		require.NotNil(t, rs)
+		for _, row := range rs.Named().Rows {
+			rowsCopied := row.AsUint64("rows_copied", 0)
+			totalRowsCopied += rowsCopied
+		}
+		require.Equal(t, uint64(len(insertStatements)), totalRowsCopied)
 	})
 	t.Run("successful online alter, vtctl", func(t *testing.T) {
 		uuid := testOnlineDDLStatement(t, alterTableTrivialStatement, "gh-ost", "vtctl", "ghost_col")
@@ -292,12 +309,19 @@ func TestSchemaChange(t *testing.T) {
 }
 
 func testWithInitialSchema(t *testing.T) {
-	// Create 4 tables
+	// Create 4 tables and populate them
 	var sqlQuery = "" //nolint
 	for i := 0; i < totalTableCount; i++ {
-		sqlQuery = fmt.Sprintf(createTable, fmt.Sprintf("vt_onlineddl_test_%02d", i))
+		tableName := fmt.Sprintf("vt_onlineddl_test_%02d", i)
+		sqlQuery = fmt.Sprintf(createTable, tableName)
 		err := clusterInstance.VtctlclientProcess.ApplySchema(keyspaceName, sqlQuery)
 		require.Nil(t, err)
+
+		for _, insert := range insertStatements {
+			insertQuery := fmt.Sprintf(insert, tableName)
+			r := onlineddl.VtgateExecQuery(t, &vtParams, insertQuery, "")
+			require.NotNil(t, r)
+		}
 	}
 
 	// Check if 4 tables are created
