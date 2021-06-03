@@ -1664,6 +1664,7 @@ Gen4 plan same as above
     "Vindex": "music_user_map"
   }
 }
+Gen4 plan same as above
 
 # SELECT with IS NOT NULL
 "select id from music where id is not null"
@@ -1762,6 +1763,27 @@ Gen4 plan same as above
     "Table": "music"
   }
 }
+Gen4 plan same as above
+
+# Single table with unique vindex match and NOT IN (null, 1, 2) predicates inverted
+"select id from music where id NOT IN (null, 1, 2) and user_id = 4"
+{
+  "QueryType": "SELECT",
+  "Original": "select id from music where id NOT IN (null, 1, 2) and user_id = 4",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectNone",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select id from music where 1 != 1",
+    "Query": "select id from music where id not in (null, 1, 2) and user_id = 4",
+    "Table": "music"
+  }
+}
+Gen4 plan same as above
+
 
 # query trying to query two different keyspaces at the same time
 "SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'user' AND TABLE_SCHEMA = 'main'"
@@ -1951,3 +1973,26 @@ Gen4 plan same as above
     "SysTableTableSchema": "[VARBINARY(\"ks\")]"
   }
 }
+
+# solving LIKE query with a CFC prefix vindex
+"select c2 from cfc_vindex_col where c1 like 'A%'"
+{
+  "QueryType": "SELECT",
+  "Original": "select c2 from cfc_vindex_col where c1 like 'A%'",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectEqual",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select c2 from cfc_vindex_col where 1 != 1",
+    "Query": "select c2 from cfc_vindex_col where c1 like 'A%'",
+    "Table": "cfc_vindex_col",
+    "Values": [
+      "A%"
+    ],
+    "Vindex": "cfc"
+  }
+}
+Gen4 plan same as above
