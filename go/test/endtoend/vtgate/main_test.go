@@ -142,6 +142,12 @@ create table t8(
 	testId bigint,
 	primary key(id8)
 ) Engine=InnoDB;
+
+create table t9(
+	id9 bigint,
+	testId bigint,
+	primary key(id9)
+) Engine=InnoDB;
 `
 
 	VSchema = `
@@ -381,6 +387,14 @@ create table t8(
       "column_vindexes": [
         {
           "column": "id8",
+          "name": "hash"
+        }
+      ]
+    },
+	"t9": {
+      "column_vindexes": [
+        {
+          "column": "id9",
           "name": "hash"
         }
       ]
