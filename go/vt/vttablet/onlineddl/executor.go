@@ -2725,7 +2725,7 @@ func (e *Executor) OnSchemaMigrationStatus(ctx context.Context,
 	if eta, err := strconv.ParseInt(etaParam, 10, 64); err == nil {
 		etaSeconds = eta
 	}
-	var rowsCopied int64 = 0
+	var rowsCopied int64
 	if rows, err := strconv.ParseInt(rowsCopiedParam, 10, 64); err == nil {
 		rowsCopied = rows
 	}
