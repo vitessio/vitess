@@ -3513,7 +3513,7 @@ expression:
   }
 | expression IS is_suffix
   {
-    $$ = &IsExpr{Operator: $3, Expr: $1}
+    $$ = &IsExpr{Left: $1, Right: $3}
   }
 | value_expression
   {
