@@ -18,10 +18,8 @@ package mysqlctl
 
 import (
 	"bytes"
-	"fmt"
 	"io"
 	"math/rand"
-	"strings"
 	"testing"
 
 	"vitess.io/vitess/go/vt/logutil"
@@ -116,41 +114,4 @@ func TestStripeRoundTrip(t *testing.T) {
 	test(1000, 30)
 	// Test block size and stripe count that don't evenly divide data size.
 	test(6000, 7)
-}
-
-func TestValidateExternalDecompressor(t *testing.T) {
-	tests := []struct {
-		cmdName string
-		path    string
-		errStr  string
-	}{
-		// this should not find an executable
-		{"non_existent_cmd", "", "executable file not found"},
-		// we expect ls to be on PATH as it is a basic command part of busybox and most containers
-		{"ls", "ls", ""},
-	}
-
-	for i, tt := range tests {
-		t.Run(fmt.Sprintf("Test #%d", i+1), func(t *testing.T) {
-			CmdName := tt.cmdName
-
-			path, err := validateExternalDecompressor(CmdName)
-
-			if tt.path != "" {
-				if !strings.HasSuffix(path, tt.path) {
-					t.Errorf("Expected path \"%s\" to include \"%s\"", path, tt.path)
-				}
-			}
-
-			if tt.errStr == "" {
-				if err != nil {
-					t.Errorf("Expected result \"%v\", got \"%v\"", "<nil>", err)
-				}
-			} else {
-				if !strings.Contains(fmt.Sprintf("%v", err), tt.errStr) {
-					t.Errorf("Expected result \"%v\", got \"%v\"", tt.errStr, err)
-				}
-			}
-		})
-	}
 }

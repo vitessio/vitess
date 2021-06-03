@@ -20,20 +20,17 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
-	"errors"
 	"flag"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
 	"path"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"sync"
 	"time"
-
-	"github.com/klauspost/pgzip"
-	"github.com/planetscale/pargzip"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/logutil"
@@ -64,9 +61,13 @@ var (
 	// striping mode
 	xtrabackupStripes         = flag.Uint("xtrabackup_stripes", 0, "If greater than 0, use data striping across this many destination files to parallelize data transfer and decompression")
 	xtrabackupStripeBlockSize = flag.Uint("xtrabackup_stripe_block_size", 102400, "Size in bytes of each block that gets sent to a given stripe before rotating to the next stripe")
+	// switch which compressor/decompressor to use
+	builtinCompressor   = flag.String("xtrabackup_builtin_compressor", "pgzip", "which builtin compressor engine to use")
+	builtinDecompressor = flag.String("xtrabackup_builtin_decompressor", "auto", "which builtin decompressor engine to use")
 	// use and external command to decompress the backups
-	decompressMethod     = flag.String("decompress_method", "builtin", "what decompressor to use [builtin|external]")
-	externalDecompressor = flag.String("external_decompressor", "", "command with arguments to which decompressor to run")
+	externalCompressor    = flag.String("xtrabackup_external_compressor", "", "command with arguments to use when decompressing a backup")
+	externalCompressorExt = flag.String("xtrabackup_external_compressor_extension", "", "which extension to use when using an external decompressor")
+	externalDecompressor  = flag.String("xtrabackup_external_decompressor", "", "command with arguments to use when compressing a backup")
 )
 
 const (
@@ -112,7 +113,16 @@ func (be *XtrabackupEngine) backupFileName() string {
 		fileName += *xtrabackupStreamMode
 	}
 	if *backupStorageCompress {
-		fileName += ".gz"
+		if *externalDecompressor != "" {
+			fileName += *externalCompressorExt
+		} else {
+			if ext, err := getExtensionFromEngine(*builtinCompressor); err != nil {
+				// there is a check for this, but just in case that fails, we set a extension to the file
+				fileName += ".unknown"
+			} else {
+				fileName += ext
+			}
+		}
 	}
 	return fileName
 }
@@ -134,6 +144,13 @@ func (be *XtrabackupEngine) ExecuteBackup(ctx context.Context, params BackupPara
 	if *xtrabackupUser == "" {
 		return false, vterrors.New(vtrpc.Code_INVALID_ARGUMENT, "xtrabackupUser must be specified.")
 	}
+
+	// an extension is required when using an external compressor
+	if *backupStorageCompress && *externalCompressor != "" && *externalCompressorExt == "" {
+		return false, vterrors.New(vtrpc.Code_INVALID_ARGUMENT,
+			"xtrabackup_external_compressor_extension not provided when using an external compressor")
+	}
+
 	// use a mysql connection to detect flavor at runtime
 	conn, err := params.Mysqld.GetDbaConnection(ctx)
 	if conn != nil && err == nil {
@@ -151,6 +168,7 @@ func (be *XtrabackupEngine) ExecuteBackup(ctx context.Context, params BackupPara
 	params.Logger.Infof("Detected MySQL flavor: %v", flavor)
 
 	backupFileName := be.backupFileName()
+	params.Logger.Infof("backup file name: %s", backupFileName)
 	numStripes := int(*xtrabackupStripes)
 
 	// Perform backups in a separate function, so deferred calls to Close() are
@@ -273,6 +291,7 @@ func (be *XtrabackupEngine) backupFiles(ctx context.Context, params BackupParams
 		return replicationPosition, vterrors.Wrap(err, "cannot create stderr pipe")
 	}
 
+	var extCompressorWaitGroup sync.WaitGroup
 	destWriters := []io.Writer{}
 	destBuffers := []*bufio.Writer{}
 	destCompressors := []io.WriteCloser{}
@@ -283,10 +302,20 @@ func (be *XtrabackupEngine) backupFiles(ctx context.Context, params BackupParams
 
 		// Create the gzip compression pipe, if necessary.
 		if *backupStorageCompress {
-			compressor := pargzip.NewWriter(writer)
-			compressor.ChunkSize = *backupCompressBlockSize
-			compressor.Parallel = *backupCompressBlocks
-			compressor.CompressionLevel = pargzip.BestSpeed
+			var compressor io.WriteCloser
+
+			if *externalCompressor != "" {
+				compressor, err = newExternalCompressor(ctx, *externalCompressor, writer, &extCompressorWaitGroup, params.Logger)
+				if err != nil {
+					return replicationPosition, err
+				}
+			} else {
+				compressor, err = newBuiltinCompressor(*builtinCompressor, writer, params.Logger)
+				if err != nil {
+					return replicationPosition, err
+				}
+			}
+
 			writer = compressor
 			destCompressors = append(destCompressors, compressor)
 		}
@@ -349,6 +378,10 @@ func (be *XtrabackupEngine) backupFiles(ctx context.Context, params BackupParams
 			return replicationPosition, vterrors.Wrap(err, "cannot close gzip compressor")
 		}
 	}
+
+	// Wait for any external compressor to finish processing their current input buffer and exit.
+	// If we skip this, we may not send the entire data when we flush below and can corrupt the backup
+	extCompressorWaitGroup.Wait()
 
 	// Flush the buffer to finish writing on destination.
 	for _, buffer := range destBuffers {
@@ -512,6 +545,9 @@ func (be *XtrabackupEngine) extractFiles(ctx context.Context, logger logutil.Log
 		baseFileName = be.backupFileName()
 	}
 
+	logger.Infof("backup file name: %s", baseFileName)
+	extension := filepath.Ext(baseFileName)
+
 	// Open the source files for reading.
 	srcFiles, err := readStripeFiles(ctx, bh, baseFileName, int(bm.NumStripes), logger)
 	if err != nil {
@@ -523,12 +559,7 @@ func (be *XtrabackupEngine) extractFiles(ctx context.Context, logger logutil.Log
 		}
 	}()
 
-	var (
-		decompressorCmd *exec.Cmd
-		decompressorWg  sync.WaitGroup
-	)
 	srcReaders := []io.Reader{}
-	srcDecompressors := []io.ReadCloser{}
 
 	for _, file := range srcFiles {
 		reader := io.Reader(file)
@@ -537,73 +568,31 @@ func (be *XtrabackupEngine) extractFiles(ctx context.Context, logger logutil.Log
 		if compressed {
 			var decompressor io.ReadCloser
 
-			switch *decompressMethod {
-			case "builtin":
-				logger.Infof("Using built-in decompressor")
-
-				decompressor, err = pgzip.NewReader(reader)
+			if *externalDecompressor != "" {
+				decompressor, err = newExternalDecompressor(ctx, *externalDecompressor, reader, logger)
 				if err != nil {
-					return vterrors.Wrap(err, "can't create gzip decompressor")
+					return err
 				}
-			case "external":
-				decompressorFlags := strings.Split(*externalDecompressor, " ")
-				if len(decompressorFlags) < 1 {
-					return vterrors.Wrap(err, "external_decompressor is empty")
-				}
-
-				decompressorCmdPath, err := validateExternalDecompressor(decompressorFlags[0])
+			} else {
+				decompressor, err = newBuiltinDecompressor(*builtinDecompressor, extension, reader, logger)
 				if err != nil {
-					return vterrors.Wrap(err, "could not validate external decompressor")
+					return err
 				}
 
-				decompressorCmd = exec.CommandContext(ctx, decompressorCmdPath, decompressorFlags[1:]...)
-				decompressorCmd.Stdin = reader
-
-				logger.Infof("Decompressing using %v", decompressorFlags)
-
-				decompressorOut, err := decompressorCmd.StdoutPipe()
-				if err != nil {
-					return vterrors.Wrap(err, "cannot create external decompressor stdout pipe")
-				}
-
-				decompressorErr, err := decompressorCmd.StderrPipe()
-				if err != nil {
-					return vterrors.Wrap(err, "cannot create external decompressor stderr pipe")
-				}
-
-				if err := decompressorCmd.Start(); err != nil {
-					return vterrors.Wrap(err, "can't start external decompressor")
-				}
-
-				decompressorWg.Add(1)
-				go scanLinesToLogger("decompressor stderr", decompressorErr, logger, decompressorWg.Done)
-
-				decompressor = decompressorOut
-
+				// we only need to close the builtin decompressors, because the externals will be automatically
+				// closed by the go func inside newExternalDecompressor
 				defer func() {
-					decompressorWg.Wait()
-					// log the exit status
-					if err := decompressorCmd.Wait(); err != nil {
-						vterrors.Wrap(err, "external decompressor failed")
+					if cerr := decompressor.Close(); cerr != nil {
+						logger.Errorf("failed to close gzip decompressor: %v", cerr)
 					}
 				}()
-			default:
-				return vterrors.Wrap(err, "unknown decompressor method")
 			}
 
-			srcDecompressors = append(srcDecompressors, decompressor)
 			reader = decompressor
 		}
 
 		srcReaders = append(srcReaders, reader)
 	}
-	defer func() {
-		for _, decompressor := range srcDecompressors {
-			if cerr := decompressor.Close(); cerr != nil {
-				logger.Errorf("failed to close gzip decompressor: %v", cerr)
-			}
-		}
-	}()
 
 	reader := stripeReader(srcReaders, int64(bm.StripeBlockSize))
 
@@ -881,15 +870,6 @@ func stripeReader(readers []io.Reader, blockSize int64) io.Reader {
 // xtrabackup can run while tablet is serving, hence false
 func (be *XtrabackupEngine) ShouldDrainForBackup() bool {
 	return false
-}
-
-// Validates if the external decompressor exists and return its path.
-func validateExternalDecompressor(cmd string) (string, error) {
-	if cmd == "" {
-		return "", errors.New("external compressor command is empty")
-	}
-
-	return exec.LookPath(cmd)
 }
 
 func init() {
