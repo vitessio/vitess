@@ -123,9 +123,10 @@ const (
 )
 
 var (
-	migrationLogFileName = "migration.log"
-	onlineDDLUser        = "vt-online-ddl-internal"
-	onlineDDLGrant       = fmt.Sprintf("'%s'@'%s'", onlineDDLUser, "%")
+	migrationLogFileName     = "migration.log"
+	migrationFailureFileName = "migration-failure.log"
+	onlineDDLUser            = "vt-online-ddl-internal"
+	onlineDDLGrant           = fmt.Sprintf("'%s'@'%s'", onlineDDLUser, "%")
 )
 
 type mysqlVariables struct {
@@ -879,12 +880,16 @@ password=${ONLINE_DDL_PASSWORD}
 	wrapperScriptContent := fmt.Sprintf(`#!/bin/bash
 ghost_log_path="%s"
 ghost_log_file="%s"
+ghost_log_failure_file="%s"
 
 mkdir -p "$ghost_log_path"
 
 export ONLINE_DDL_PASSWORD
 %s "$@" > "$ghost_log_path/$ghost_log_file" 2>&1
-	`, tempDir, migrationLogFileName, binaryFileName,
+exit_code=$?
+grep -o '\bFATAL\b.*' "$ghost_log_path/$ghost_log_file" | tail -1 > "$ghost_log_path/$ghost_log_failure_file"
+exit $exit_code
+	`, tempDir, migrationLogFileName, migrationFailureFileName, binaryFileName,
 	)
 	wrapperScriptFileName, err := createTempScript(tempDir, "gh-ost-wrapper.sh", wrapperScriptContent)
 	if err != nil {
@@ -984,6 +989,16 @@ export ONLINE_DDL_PASSWORD
 		_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, fmt.Sprintf("executing gh-ost --execute=%v", execute))
 		_, err := execCmd("bash", args, os.Environ(), "/tmp", nil, nil)
 		_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, fmt.Sprintf("executed gh-ost --execute=%v, err=%v", execute, err))
+		if err != nil {
+			// See if we can get more info from the failure file
+			if content, ferr := ioutil.ReadFile(path.Join(tempDir, migrationFailureFileName)); ferr == nil {
+				failureMessage := strings.TrimSpace(string(content))
+				if failureMessage != "" {
+					// This message was produced by gh-ost itself. It is more informative than the default "migration failed..." message. Overwrite.
+					return errors.New(failureMessage)
+				}
+			}
+		}
 		return err
 	}
 
