@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/assert"
@@ -671,6 +672,25 @@ func TestVSchemaTrackerInit(t *testing.T) {
 	qr := exec(t, conn, "SHOW VSCHEMA TABLES")
 	got := fmt.Sprintf("%v", qr.Rows)
 	want := `[[VARCHAR("aggr_test")] [VARCHAR("dual")] [VARCHAR("t1")] [VARCHAR("t1_id2_idx")] [VARCHAR("t2")] [VARCHAR("t2_id4_idx")] [VARCHAR("t3")] [VARCHAR("t3_id7_idx")] [VARCHAR("t4")] [VARCHAR("t4_id2_idx")] [VARCHAR("t5_null_vindex")] [VARCHAR("t6")] [VARCHAR("t6_id2_idx")] [VARCHAR("t7_fk")] [VARCHAR("t7_xxhash")] [VARCHAR("t7_xxhash_idx")] [VARCHAR("t8")] [VARCHAR("vstream_test")]]`
+	assert.Equal(t, want, got)
+}
+
+func TestVSchemaTrackedForNewTables(t *testing.T) {
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	// create a new table which is not part of the VSchema
+	exec(t, conn, `create table new_table_tracked(id bigint, name varchar(100), primary key(id)) Engine=InnoDB`)
+
+	// wait for vttablet's schema reload interval to pass
+	time.Sleep(2 * time.Second)
+
+	// check if the new table is part of the schema
+	qr := exec(t, conn, "SHOW VSCHEMA TABLES")
+	got := fmt.Sprintf("%v", qr.Rows)
+	want := `[[VARCHAR("aggr_test")] [VARCHAR("dual")] [VARCHAR("new_table_tracked")] [VARCHAR("t1")] [VARCHAR("t1_id2_idx")] [VARCHAR("t2")] [VARCHAR("t2_id4_idx")] [VARCHAR("t3")] [VARCHAR("t3_id7_idx")] [VARCHAR("t4")] [VARCHAR("t4_id2_idx")] [VARCHAR("t5_null_vindex")] [VARCHAR("t6")] [VARCHAR("t6_id2_idx")] [VARCHAR("t7_fk")] [VARCHAR("t7_xxhash")] [VARCHAR("t7_xxhash_idx")] [VARCHAR("t8")] [VARCHAR("vstream_test")]]`
 	assert.Equal(t, want, got)
 }
 
