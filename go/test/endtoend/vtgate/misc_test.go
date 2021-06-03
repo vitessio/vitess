@@ -671,8 +671,21 @@ func TestVSchemaTrackerInit(t *testing.T) {
 
 	qr := exec(t, conn, "SHOW VSCHEMA TABLES")
 	got := fmt.Sprintf("%v", qr.Rows)
-	want := `[[VARCHAR("aggr_test")] [VARCHAR("dual")] [VARCHAR("t1")] [VARCHAR("t1_id2_idx")] [VARCHAR("t2")] [VARCHAR("t2_id4_idx")] [VARCHAR("t3")] [VARCHAR("t3_id7_idx")] [VARCHAR("t4")] [VARCHAR("t4_id2_idx")] [VARCHAR("t5_null_vindex")] [VARCHAR("t6")] [VARCHAR("t6_id2_idx")] [VARCHAR("t7_fk")] [VARCHAR("t7_xxhash")] [VARCHAR("t7_xxhash_idx")] [VARCHAR("t8")] [VARCHAR("vstream_test")]]`
+	want := `[[VARCHAR("aggr_test")] [VARCHAR("dual")] [VARCHAR("t1")] [VARCHAR("t1_id2_idx")] [VARCHAR("t2")] [VARCHAR("t2_id4_idx")] [VARCHAR("t3")] [VARCHAR("t3_id7_idx")] [VARCHAR("t4")] [VARCHAR("t4_id2_idx")] [VARCHAR("t5_null_vindex")] [VARCHAR("t6")] [VARCHAR("t6_id2_idx")] [VARCHAR("t7_fk")] [VARCHAR("t7_xxhash")] [VARCHAR("t7_xxhash_idx")] [VARCHAR("t8")] [VARCHAR("t9")] [VARCHAR("vstream_test")]]`
 	assert.Equal(t, want, got)
+
+	// DML on existing table
+	exec(t, conn, "insert into t9(id9, testId) values(0,0),(1,1)") // insert initial data
+	result := exec(t, conn, `select id9 from t9 limit 100`)        // select
+	assert.Equal(t, 2, len(result.Rows))
+
+	exec(t, conn, "update t9 set testId = 42 where testId = 0") // update
+	assertMatches(t, conn, "select testId from t9", `[[INT64(42)] [INT64(1)]]`)
+
+	exec(t, conn, "delete from t9 where testId = 42") // delete
+	assertMatches(t, conn, "select testId from t9", `[[INT64(1)]]`)
+
+	assertMatches(t, conn, "select testId from t9 where testId = 1", `[[INT64(1)]]`) // select with WHERE clause
 }
 
 func TestVSchemaTrackedForNewTables(t *testing.T) {
@@ -685,13 +698,21 @@ func TestVSchemaTrackedForNewTables(t *testing.T) {
 	exec(t, conn, `create table new_table_tracked(id bigint, name varchar(100), primary key(id)) Engine=InnoDB`)
 
 	// wait for vttablet's schema reload interval to pass
-	time.Sleep(2 * time.Second)
+	time.Sleep(5 * time.Second)
 
 	// check if the new table is part of the schema
-	qr := exec(t, conn, "SHOW VSCHEMA TABLES")
-	got := fmt.Sprintf("%v", qr.Rows)
-	want := `[[VARCHAR("aggr_test")] [VARCHAR("dual")] [VARCHAR("new_table_tracked")] [VARCHAR("t1")] [VARCHAR("t1_id2_idx")] [VARCHAR("t2")] [VARCHAR("t2_id4_idx")] [VARCHAR("t3")] [VARCHAR("t3_id7_idx")] [VARCHAR("t4")] [VARCHAR("t4_id2_idx")] [VARCHAR("t5_null_vindex")] [VARCHAR("t6")] [VARCHAR("t6_id2_idx")] [VARCHAR("t7_fk")] [VARCHAR("t7_xxhash")] [VARCHAR("t7_xxhash_idx")] [VARCHAR("t8")] [VARCHAR("vstream_test")]]`
-	assert.Equal(t, want, got)
+	assertMatches(t, conn, "SHOW VSCHEMA TABLES", `[[VARCHAR("aggr_test")] [VARCHAR("dual")] [VARCHAR("new_table_tracked")] [VARCHAR("t1")] [VARCHAR("t1_id2_idx")] [VARCHAR("t2")] [VARCHAR("t2_id4_idx")] [VARCHAR("t3")] [VARCHAR("t3_id7_idx")] [VARCHAR("t4")] [VARCHAR("t4_id2_idx")] [VARCHAR("t5_null_vindex")] [VARCHAR("t6")] [VARCHAR("t6_id2_idx")] [VARCHAR("t7_fk")] [VARCHAR("t7_xxhash")] [VARCHAR("t7_xxhash_idx")] [VARCHAR("t8")] [VARCHAR("t9")] [VARCHAR("vstream_test")]]`)
+
+	// DML on new table
+	exec(t, conn, `insert into new_table_tracked(id) values(0),(1)`)                         // insert initial data
+	assertMatches(t, conn, "select id from new_table_tracked", `[[INT64(0)] [INT64(1)]]`)    // select
+	assertMatches(t, conn, "select id from new_table_tracked where id = 1 ", `[[INT64(1)]]`) // select with WHERE clause
+
+	exec(t, conn, `update new_table_tracked set name = "newName1" where id = 1`) // update
+	assertMatches(t, conn, "select name from new_table_tracked where id = 1 ", `[[VARCHAR("newName1")]]`)
+
+	exec(t, conn, "delete from new_table_tracked where id = 0") // delete
+	assertMatches(t, conn, "select id from new_table_tracked", `[[INT64(1)]]`)
 }
 
 func assertMatches(t *testing.T, conn *mysql.Conn, query, expected string) {

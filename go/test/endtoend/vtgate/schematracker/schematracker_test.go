@@ -62,7 +62,7 @@ func TestNewUnshardedTable(t *testing.T) {
 	}
 
 	// enabling and setting the schema reload time to one second
-	clusterInstance.VtTabletExtraArgs = []string{"-queryserver-config-schema-change-signal", "-queryserver-config-schema-change-signal-interval", "1"}
+	clusterInstance.VtTabletExtraArgs = []string{"-queryserver-config-schema-change-signal", "-queryserver-config-schema-change-signal-interval", "0.1"}
 	err = clusterInstance.StartUnshardedKeyspace(*keyspace, 1, false)
 	require.NoError(t, err)
 
@@ -90,7 +90,7 @@ func TestNewUnshardedTable(t *testing.T) {
 	exec(t, conn, `create table new_table_tracked(id bigint, name varchar(100), primary key(id)) Engine=InnoDB`)
 
 	// waiting for the vttablet's schema_reload interval to kick in
-	time.Sleep(2 * time.Second)
+	time.Sleep(5 * time.Second)
 
 	// ensuring our new table is in the schema
 	qr = exec(t, conn, "SHOW VSCHEMA TABLES")
