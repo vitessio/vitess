@@ -321,93 +321,135 @@ func TestApplyRoutingRules(t *testing.T) {
 }
 
 func TestApplyVSchema(t *testing.T) {
-	//	t.Parallel()
+	t.Parallel()
 
-	ctx := context.Background()
-	ts := memorytopo.NewServer("zone1")
-	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-		return NewVtctldServer(ts)
-	})
-
-	t.Run("success", func(t *testing.T) {
-		//		t.Parallel()
-
-		testutil.AddKeyspace(ctx, t, ts, &vtctldatapb.Keyspace{
-			Name: "testkeyspace",
-			Keyspace: &topodatapb.Keyspace{
-				KeyspaceType: topodatapb.KeyspaceType_NORMAL,
-			},
-		})
-
-		err := ts.SaveVSchema(ctx, "testkeyspace", &vschemapb.Keyspace{
-			Sharded: true,
-			Vindexes: map[string]*vschemapb.Vindex{
-				"v1": {
-					Type: "hash",
+	tests := []struct {
+		name      string
+		req       *vtctldatapb.ApplyVSchemaRequest
+		exp       *vtctldatapb.ApplyVSchemaResponse
+		shouldErr bool
+	}{
+		{
+			name: "normal",
+			req: &vtctldatapb.ApplyVSchemaRequest{
+				Keyspace: "testkeyspace",
+				VSchema: &vschemapb.Keyspace{
+					Sharded: false,
 				},
 			},
-		})
-		require.NoError(t, err)
-
-		exp := &vtctldatapb.ApplyVSchemaResponse{
-			VSchema: &vschemapb.Keyspace{
-				Sharded: false,
-			},
-		}
-
-		res, err := vtctld.ApplyVSchema(ctx, &vtctldatapb.ApplyVSchemaRequest{
-			Keyspace: "testkeyspace",
-			VSchema: &vschemapb.Keyspace{
-				Sharded: false,
-			},
-		})
-		assert.NoError(t, err)
-		utils.MustMatch(t, exp, res)
-	})
-
-	t.Run("skip rebuild", func(t *testing.T) {
-		//		t.Parallel()
-
-		testutil.AddKeyspace(ctx, t, ts, &vtctldatapb.Keyspace{
-			Name: "rebuild",
-			Keyspace: &topodatapb.Keyspace{
-				KeyspaceType: topodatapb.KeyspaceType_NORMAL,
-			},
-		})
-
-		err := ts.SaveVSchema(ctx, "rebuild", &vschemapb.Keyspace{
-			Sharded: true,
-			Vindexes: map[string]*vschemapb.Vindex{
-				"v1": {
-					Type: "hash",
+			exp: &vtctldatapb.ApplyVSchemaResponse{
+				VSchema: &vschemapb.Keyspace{
+					Sharded: false,
 				},
 			},
-		})
-		require.NoError(t, err)
-
-		exp := &vtctldatapb.ApplyVSchemaResponse{
-			VSchema: &vschemapb.Keyspace{
-				Sharded: false,
+			shouldErr: false,
+		}, {
+			name: "skip rebuild",
+			req: &vtctldatapb.ApplyVSchemaRequest{
+				Keyspace: "testkeyspace",
+				VSchema: &vschemapb.Keyspace{
+					Sharded: false,
+				},
+				SkipRebuild: true,
 			},
-		}
-
-		origSrvVSchema, err := vtctld.GetSrvVSchema(ctx, &vtctldatapb.GetSrvVSchemaRequest{Cell: "zone1"})
-		require.NoError(t, err)
-
-		res, err := vtctld.ApplyVSchema(ctx, &vtctldatapb.ApplyVSchemaRequest{
-			Keyspace: "rebuild",
-			VSchema: &vschemapb.Keyspace{
-				Sharded: false,
+			exp: &vtctldatapb.ApplyVSchemaResponse{
+				VSchema: &vschemapb.Keyspace{
+					Sharded: false,
+				},
 			},
-			SkipRebuild: true,
-		})
-		assert.NoError(t, err)
-		utils.MustMatch(t, exp, res)
+			shouldErr: false,
+		}, {
+			name: "both",
+			req: &vtctldatapb.ApplyVSchemaRequest{
+				Keyspace: "testkeyspace",
+				VSchema: &vschemapb.Keyspace{
+					Sharded: false,
+				},
+				Sql: "some vschema ddl here",
+			},
+			shouldErr: true,
+		}, {
+			name: "neither",
+			req: &vtctldatapb.ApplyVSchemaRequest{
+				Keyspace: "testkeyspace",
+			},
+			shouldErr: true,
+		}, {
+			name: "dry run",
+			req: &vtctldatapb.ApplyVSchemaRequest{
+				Keyspace: "testkeyspace",
+				VSchema: &vschemapb.Keyspace{
+					Sharded: false,
+				},
+				DryRun: true,
+			},
+			exp: &vtctldatapb.ApplyVSchemaResponse{
+				VSchema: &vschemapb.Keyspace{
+					Sharded: true,
+					Vindexes: map[string]*vschemapb.Vindex{
+						"v1": {
+							Type: "hash",
+						},
+					},
+				},
+			},
+			shouldErr: false,
+		},
+	}
 
-		finalSrvVSchema, err := vtctld.GetSrvVSchema(ctx, &vtctldatapb.GetSrvVSchemaRequest{Cell: "zone1"})
-		require.NoError(t, err)
-		utils.MustMatch(t, origSrvVSchema.SrvVSchema, finalSrvVSchema.SrvVSchema)
-	})
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			ctx := context.Background()
+			ts := memorytopo.NewServer("zone1")
+			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+				return NewVtctldServer(ts)
+			})
+
+			testutil.AddKeyspace(ctx, t, ts, &vtctldatapb.Keyspace{
+				Name: tt.req.Keyspace,
+				Keyspace: &topodatapb.Keyspace{
+					KeyspaceType: topodatapb.KeyspaceType_NORMAL,
+				},
+			})
+
+			err := ts.SaveVSchema(ctx, tt.req.Keyspace, &vschemapb.Keyspace{
+				Sharded: true,
+				Vindexes: map[string]*vschemapb.Vindex{
+					"v1": {
+						Type: "hash",
+					},
+				},
+			})
+			require.NoError(t, err)
+
+			origSrvVSchema, err := vtctld.GetSrvVSchema(ctx, &vtctldatapb.GetSrvVSchemaRequest{Cell: "zone1"})
+			require.NoError(t, err)
+
+			res, err := vtctld.ApplyVSchema(ctx, tt.req)
+			if tt.shouldErr {
+				assert.Error(t, err)
+				return
+			}
+
+			assert.NoError(t, err)
+			utils.MustMatch(t, tt.exp, res)
+
+			if tt.req.DryRun {
+				actual, err := ts.GetVSchema(ctx, tt.req.Keyspace)
+				require.NoError(t, err)
+				utils.MustMatch(t, res.VSchema, actual)
+			}
+
+			if tt.req.SkipRebuild {
+				finalSrvVSchema, err := vtctld.GetSrvVSchema(ctx, &vtctldatapb.GetSrvVSchemaRequest{Cell: "zone1"})
+				require.NoError(t, err)
+				utils.MustMatch(t, origSrvVSchema.SrvVSchema, finalSrvVSchema.SrvVSchema)
+			}
+		})
+	}
 }
 
 func TestChangeTabletType(t *testing.T) {
