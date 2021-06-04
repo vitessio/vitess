@@ -8,7 +8,6 @@ local vitess_ct = configuration_templates.prometheus_vitess;
   panels: {
 
     local panel_template = vitess_ct.panel.mysql_default,
-    local keyspace_overview_panel_template = vitess_ct.panel.vitess_keyspace_overview,
     local vttablet_host_view_panel_template = vitess_ct.panel.vitess_vttablet_host_view,
 
     // TODO Create a recording rule for the prometheus target.

@@ -57,7 +57,6 @@ The vitess mixin supports DEV/PROD configurations (Currently it is possible to e
   # Building Grafana dashboards...
 
   dashboards_out/cluster_overview.json
-  dashboards_out/keyspace_overview.json
   dashboards_out/vtgate_host_view.json
   dashboards_out/vtgate_overview.json
   dashboards_out/vttablet_host_view.json
@@ -73,7 +72,6 @@ The vitess mixin supports DEV/PROD configurations (Currently it is possible to e
   # Building Grafana dashboards...
 
   dashboards_out/cluster_overview.json
-  dashboards_out/keyspace_overview.json
   dashboards_out/vtgate_host_view.json
   dashboards_out/vtgate_overview.json
   dashboards_out/vttablet_host_view.json
@@ -255,7 +253,6 @@ This make target will format, lint, build all generated dashboards and recording
 
   # Checking prometheus_rules.yaml... OK
   # Checking cluster_overview.json... OK
-  # Checking keyspace_overview.json... OK
   # Checking vtgate_host_view.json... OK
   # Checking vtgate_overview.json... OK
   # Checking vttablet_host_view.json... OK

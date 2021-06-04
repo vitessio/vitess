@@ -11,7 +11,6 @@ local node_ct = configuration_templates.prometheus_node;
 
     local vtgate_panel_template = node_ct.panel.percent_panel,
     local vttablet_host_view_panel_template = node_ct.panel.vttablet_host_view,
-    local keyspace_overview_panel_template = node_ct.panel.keyspace_overview,
 
     CPUUsage:
       vtgate_panel_template

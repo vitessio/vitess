@@ -903,7 +903,7 @@ local vitess_ct = configuration_templates.prometheus_vitess;
 
     //TODO CREATE A RECORDING RULE FOR THIS PROMETHEUS TARGET
     vttabletGarbageCollectionDuration: vitess_ct.panel.go_gc_seconds {
-      title: 'GC Duration total per seconds',
+      title: 'GC Duration total per second',
       description: 'A summary of the pause duration of garbage collection cycles',
       targets: [
         {
