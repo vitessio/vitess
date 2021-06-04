@@ -668,7 +668,7 @@ local vitess_ct = configuration_templates.prometheus_vitess;
     },
     //TODO crete a recording rule for this prometheus vitess target
     vtgateGarbageCollectionDuration: garbage_collector_panel_template {
-      title: 'GC Duration total per seconds',
+      title: 'GC Duration total per second',
       description: 'A summary of the pause duration of garbage collection cycles',
       targets: [
         {

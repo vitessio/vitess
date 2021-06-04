@@ -51,14 +51,6 @@ local config = import '../../../config.libsonnet';
         sort: 'none',
       },
 
-      vitess_keyspace_overview+: self.mysql_default {
-        fill: 1,
-        min: null,
-        legend_current: true,
-        legend_min: true,
-        shared_tooltip: true,
-      },
-
       vitess_vttablet_host_view+: self.mysql_default {
         legend_current: true,
         legend_min: true,
@@ -117,14 +109,6 @@ local config = import '../../../config.libsonnet';
         legend_avg: true,
         legend_current: false,
         legend_sort: 'max',
-      },
-
-      keyspace_overview: self.percent_panel {
-        decimalsY1: 2,
-        legend_avg: true,
-        legend_current: false,
-        legend_sort: null,
-        legend_sortDesc: null,
       },
 
       performance_analysis_short: self.percent_panel {
