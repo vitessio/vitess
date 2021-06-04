@@ -142,13 +142,13 @@ func commandGetVSchema(cmd *cobra.Command, args []string) error {
 }
 
 func init() {
-	ApplyVSchema.Flags().StringVarP(&applyVSchemaOptions.VSchema, "vschema", "vschema", "", "VSchema")
-	ApplyVSchema.Flags().StringVarP(&applyVSchemaOptions.VSchemaFile, "vschema_file", "vschema_file", "", "VSchema File")
-	ApplyVSchema.Flags().StringVarP(&applyVSchemaOptions.SQL, "sql", "sql", "", "A VSchema DDL SQL statement, e.g. `alter table t add vindex hash(id)`")
-	ApplyVSchema.Flags().StringVarP(&applyVSchemaOptions.SQLFile, "sql_file", "sql_file", "", "A file containing VSchema DDL SQL")
-	ApplyVSchema.Flags().BoolVarP(&applyVSchemaOptions.DryRun, "dry-run", "dry-run", false, "If set, do not save the altered vschema, simply echo to console.")
-	ApplyVSchema.Flags().BoolVarP(&applyVSchemaOptions.SkipRebuild, "skip_rebuild", "skip_rebuild", false, "If set, do no rebuild the SrvSchema objects.")
-	ApplyVSchema.Flags().StringSliceVarP(&applyVSchemaOptions.Cells, "cells", "cells", nil, "If specified, limits the rebuild to the cells, after upload. Ignored if skipRebuild is set.")
+	ApplyVSchema.Flags().StringVar(&applyVSchemaOptions.VSchema, "vschema", "", "VSchema")
+	ApplyVSchema.Flags().StringVar(&applyVSchemaOptions.VSchemaFile, "vschema_file", "", "VSchema File")
+	ApplyVSchema.Flags().StringVar(&applyVSchemaOptions.SQL, "sql", "", "A VSchema DDL SQL statement, e.g. `alter table t add vindex hash(id)`")
+	ApplyVSchema.Flags().StringVar(&applyVSchemaOptions.SQLFile, "sql_file", "", "A file containing VSchema DDL SQL")
+	ApplyVSchema.Flags().BoolVar(&applyVSchemaOptions.DryRun, "dry-run", false, "If set, do not save the altered vschema, simply echo to console.")
+	ApplyVSchema.Flags().BoolVar(&applyVSchemaOptions.SkipRebuild, "skip_rebuild", false, "If set, do no rebuild the SrvSchema objects.")
+	ApplyVSchema.Flags().StringSliceVar(&applyVSchemaOptions.Cells, "cells", nil, "If specified, limits the rebuild to the cells, after upload. Ignored if skipRebuild is set.")
 	Root.AddCommand(ApplyVSchema)
 
 	Root.AddCommand(GetVSchema)
