@@ -385,12 +385,7 @@ func TestApplyVSchema(t *testing.T) {
 			},
 			exp: &vtctldatapb.ApplyVSchemaResponse{
 				VSchema: &vschemapb.Keyspace{
-					Sharded: true,
-					Vindexes: map[string]*vschemapb.Vindex{
-						"v1": {
-							Type: "hash",
-						},
-					},
+					Sharded: false,
 				},
 			},
 			shouldErr: false,
@@ -415,17 +410,33 @@ func TestApplyVSchema(t *testing.T) {
 				},
 			})
 
-			err := ts.SaveVSchema(ctx, tt.req.Keyspace, &vschemapb.Keyspace{
+			origVSchema := &vschemapb.Keyspace{
 				Sharded: true,
 				Vindexes: map[string]*vschemapb.Vindex{
 					"v1": {
 						Type: "hash",
 					},
 				},
-			})
+			}
+			err := ts.SaveVSchema(ctx, tt.req.Keyspace, origVSchema)
 			require.NoError(t, err)
 
-			origSrvVSchema, err := vtctld.GetSrvVSchema(ctx, &vtctldatapb.GetSrvVSchemaRequest{Cell: "zone1"})
+			origSrvVSchema := &vschemapb.SrvVSchema{
+				Keyspaces: map[string]*vschemapb.Keyspace{
+					"testkeyspace": {
+						Sharded: true,
+						Vindexes: map[string]*vschemapb.Vindex{
+							"v1": {
+								Type: "hash",
+							},
+						},
+					},
+				},
+				RoutingRules: &vschemapb.RoutingRules{
+					Rules: []*vschemapb.RoutingRule{},
+				},
+			}
+			err = ts.UpdateSrvVSchema(ctx, "zone1", origSrvVSchema)
 			require.NoError(t, err)
 
 			res, err := vtctld.ApplyVSchema(ctx, tt.req)
@@ -440,13 +451,26 @@ func TestApplyVSchema(t *testing.T) {
 			if tt.req.DryRun {
 				actual, err := ts.GetVSchema(ctx, tt.req.Keyspace)
 				require.NoError(t, err)
-				utils.MustMatch(t, res.VSchema, actual)
+				utils.MustMatch(t, origVSchema, actual)
 			}
 
-			if tt.req.SkipRebuild {
-				finalSrvVSchema, err := vtctld.GetSrvVSchema(ctx, &vtctldatapb.GetSrvVSchemaRequest{Cell: "zone1"})
-				require.NoError(t, err)
-				utils.MustMatch(t, origSrvVSchema.SrvVSchema, finalSrvVSchema.SrvVSchema)
+			finalSrvVSchema, err := ts.GetSrvVSchema(ctx, "zone1")
+			require.NoError(t, err)
+
+			if tt.req.SkipRebuild || tt.req.DryRun {
+				utils.MustMatch(t, origSrvVSchema, finalSrvVSchema)
+			} else {
+				changedSrvVSchema := &vschemapb.SrvVSchema{
+					Keyspaces: map[string]*vschemapb.Keyspace{
+						"testkeyspace": {
+							Sharded: false,
+						},
+					},
+					RoutingRules: &vschemapb.RoutingRules{
+						Rules: []*vschemapb.RoutingRule{},
+					},
+				}
+				utils.MustMatch(t, changedSrvVSchema, finalSrvVSchema)
 			}
 		})
 	}

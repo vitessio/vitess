@@ -168,7 +168,7 @@ func (s *VtctldServer) ApplyVSchema(ctx context.Context, req *vtctldatapb.ApplyV
 		vs = req.VSchema
 	}
 
-	if req.DryRun {
+	if req.DryRun { // we return what was passed in and parsed, rather than current
 		return &vtctldatapb.ApplyVSchemaResponse{VSchema: vs}, nil
 	}
 
