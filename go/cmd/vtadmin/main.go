@@ -56,7 +56,7 @@ var (
 		},
 		Run: run,
 		PostRun: func(cmd *cobra.Command, args []string) {
-			traceCloser.Close()
+			trace.LogErrorsWhenClosing(traceCloser)
 		},
 	}
 )
@@ -64,7 +64,7 @@ var (
 // fatal ensures the tracer is closed and final spans are sent before issuing
 // a log.Fatal call with the given args.
 func fatal(args ...interface{}) {
-	traceCloser.Close()
+	trace.LogErrorsWhenClosing(traceCloser)
 	log.Fatal(args...)
 }
 
