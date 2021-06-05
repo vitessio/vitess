@@ -370,7 +370,7 @@ func (tsv *TabletServer) StopService() {
 // connect to the database and serving traffic), or an error explaining
 // the unhealthiness otherwise.
 func (tsv *TabletServer) IsHealthy() error {
-	if tsv.IsServingType() {
+	if IsServingType(tsv.sm.Target().TabletType) {
 		_, err := tsv.Execute(
 			tabletenv.LocalContext(),
 			nil,
@@ -387,8 +387,8 @@ func (tsv *TabletServer) IsHealthy() error {
 
 // IsServingType returns true if the tablet type is one that should be serving to be healthy, or false if the tablet type
 // should not be serving in it's healthy state.
-func (tsv *TabletServer) IsServingType() bool {
-	switch tsv.sm.Target().TabletType {
+func IsServingType(tabletType topodatapb.TabletType) bool {
+	switch tabletType {
 	case topodatapb.TabletType_MASTER, topodatapb.TabletType_REPLICA, topodatapb.TabletType_BATCH, topodatapb.TabletType_EXPERIMENTAL:
 		return true
 	default:
@@ -1534,19 +1534,21 @@ var okMessage = []byte("ok\n")
 // Health check
 // Returns ok if we are in the desired serving state
 func (tsv *TabletServer) registerHealthzHealthHandler() {
-	tsv.exporter.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
-		if err := acl.CheckAccessHTTP(r, acl.MONITORING); err != nil {
-			acl.SendError(w, err)
-			return
-		}
-		if tsv.sm.wantState == StateServing && !tsv.sm.IsServing() {
-			http.Error(w, "500 internal server error: vttablet is not serving", http.StatusInternalServerError)
-			return
-		}
-		w.Header().Set("Content-Length", fmt.Sprintf("%v", len(okMessage)))
-		w.WriteHeader(http.StatusOK)
-		w.Write(okMessage)
-	})
+	tsv.exporter.HandleFunc("/healthz", tsv.healthzHandler)
+}
+
+func (tsv *TabletServer) healthzHandler(w http.ResponseWriter, r *http.Request) {
+	if err := acl.CheckAccessHTTP(r, acl.MONITORING); err != nil {
+		acl.SendError(w, err)
+		return
+	}
+	if (tsv.sm.wantState == StateServing || tsv.sm.wantState == StateNotConnected) && !tsv.sm.IsServing() {
+		http.Error(w, "500 internal server error: vttablet is not serving", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Length", fmt.Sprintf("%v", len(okMessage)))
+	w.WriteHeader(http.StatusOK)
+	w.Write(okMessage)
 }
 
 // Query service health check

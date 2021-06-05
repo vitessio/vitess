@@ -113,6 +113,8 @@ func NewAPI(clusters []*cluster.Cluster, opts grpcserver.Options, httpOpts vtadm
 	router.HandleFunc("/schema/{table}", httpAPI.Adapt(vtadminhttp.FindSchema)).Name("API.FindSchema")
 	router.HandleFunc("/schema/{cluster_id}/{keyspace}/{table}", httpAPI.Adapt(vtadminhttp.GetSchema)).Name("API.GetSchema")
 	router.HandleFunc("/schemas", httpAPI.Adapt(vtadminhttp.GetSchemas)).Name("API.GetSchemas")
+	router.HandleFunc("/srvvschema/{cluster_id}/{cell}", httpAPI.Adapt(vtadminhttp.GetSrvVSchema)).Name("API.GetSrvVSchema")
+	router.HandleFunc("/srvvschemas", httpAPI.Adapt(vtadminhttp.GetSrvVSchemas)).Name("API.GetSrvVSchemas")
 	router.HandleFunc("/tablets", httpAPI.Adapt(vtadminhttp.GetTablets)).Name("API.GetTablets")
 	router.HandleFunc("/tablet/{tablet}", httpAPI.Adapt(vtadminhttp.GetTablet)).Name("API.GetTablet")
 	router.HandleFunc("/vschema/{cluster_id}/{keyspace}", httpAPI.Adapt(vtadminhttp.GetVSchema)).Name("API.GetVSchema")
@@ -516,6 +518,66 @@ func (api *API) getSchemas(ctx context.Context, c *cluster.Cluster, opts cluster
 	}
 
 	return schemas, nil
+}
+
+// GetSrvVSchema is part of the vtadminpb.VTAdminServer interface.
+func (api *API) GetSrvVSchema(ctx context.Context, req *vtadminpb.GetSrvVSchemaRequest) (*vtadminpb.SrvVSchema, error) {
+	span, ctx := trace.NewSpan(ctx, "API.GetSrvVSchema")
+	defer span.Finish()
+
+	span.Annotate("cluster_id", req.ClusterId)
+	span.Annotate("cell", req.Cell)
+
+	c, ok := api.clusterMap[req.ClusterId]
+	if !ok {
+		return nil, fmt.Errorf("%w: %s", errors.ErrUnsupportedCluster, req.ClusterId)
+	}
+
+	return c.GetSrvVSchema(ctx, req.Cell)
+}
+
+// GetSrvVSchemas is part of the vtadminpb.VTAdminServer interface.
+func (api *API) GetSrvVSchemas(ctx context.Context, req *vtadminpb.GetSrvVSchemasRequest) (*vtadminpb.GetSrvVSchemasResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.GetSrvVSchemas")
+	defer span.Finish()
+
+	clusters, _ := api.getClustersForRequest(req.ClusterIds)
+
+	var (
+		svs []*vtadminpb.SrvVSchema
+		wg  sync.WaitGroup
+		er  concurrency.AllErrorRecorder
+		m   sync.Mutex
+	)
+
+	for _, c := range clusters {
+		wg.Add(1)
+
+		go func(c *cluster.Cluster) {
+			defer wg.Done()
+
+			s, err := c.GetSrvVSchemas(ctx, req.Cells)
+
+			if err != nil {
+				er.RecordError(err)
+				return
+			}
+
+			m.Lock()
+			svs = append(svs, s...)
+			m.Unlock()
+		}(c)
+	}
+
+	wg.Wait()
+
+	if er.HasErrors() {
+		return nil, er.Error()
+	}
+
+	return &vtadminpb.GetSrvVSchemasResponse{
+		SrvVSchemas: svs,
+	}, nil
 }
 
 // GetTablet is part of the vtadminpb.VTAdminServer interface.

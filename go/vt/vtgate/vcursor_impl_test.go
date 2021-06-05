@@ -32,10 +32,6 @@ func (f fakeVSchemaOperator) GetCurrentSrvVschema() *vschema.SrvVSchema {
 	panic("implement me")
 }
 
-func (f fakeVSchemaOperator) GetCurrentVschema() (*vindexes.VSchema, error) {
-	return f.vschema, nil
-}
-
 func (f fakeVSchemaOperator) UpdateVSchema(ctx context.Context, ksName string, vschema *vschema.SrvVSchema) error {
 	panic("implement me")
 }

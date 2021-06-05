@@ -348,7 +348,6 @@ func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error)
 	}
 
 	dbClient := vre.getDBClient(runAsAdmin)
-	vdbc := newVDBClient(dbClient, binlogplayer.NewStats())
 	if err := dbClient.Connect(); err != nil {
 		return nil, err
 	}
@@ -370,6 +369,7 @@ func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error)
 		if qr.InsertID == 0 {
 			return nil, fmt.Errorf("insert failed to generate an id")
 		}
+		vdbc := newVDBClient(dbClient, binlogplayer.NewStats())
 		for id := int(qr.InsertID); id < int(qr.InsertID)+plan.numInserts; id++ {
 			if ct := vre.controllers[id]; ct != nil {
 				// Unreachable. Just a failsafe.
@@ -414,6 +414,7 @@ func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error)
 		if err != nil {
 			return nil, err
 		}
+		vdbc := newVDBClient(dbClient, binlogplayer.NewStats())
 		for _, id := range ids {
 			params, err := readRow(dbClient, id)
 			if err != nil {
@@ -440,6 +441,7 @@ func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error)
 			return &sqltypes.Result{}, nil
 		}
 		// Stop and delete the current controllers.
+		vdbc := newVDBClient(dbClient, binlogplayer.NewStats())
 		for _, id := range ids {
 			if ct := vre.controllers[id]; ct != nil {
 				ct.Stop()

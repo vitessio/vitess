@@ -83,11 +83,9 @@ func createFuzzingSocketPair() (net.Listener, *Conn, *Conn) {
 type fuzztestRun struct{}
 
 func (t fuzztestRun) NewConnection(c *Conn) {
-	panic("implement me")
 }
 
 func (t fuzztestRun) ConnectionClosed(c *Conn) {
-	panic("implement me")
 }
 
 func (t fuzztestRun) ComQuery(c *Conn, query string, callback func(*sqltypes.Result) error) error {
@@ -99,7 +97,7 @@ func (t fuzztestRun) ComPrepare(c *Conn, query string, bindVars map[string]*quer
 }
 
 func (t fuzztestRun) ComStmtExecute(c *Conn, prepare *PrepareData, callback func(*sqltypes.Result) error) error {
-	panic("implement me")
+	return nil
 }
 
 func (t fuzztestRun) WarningCount(c *Conn) uint16 {
@@ -107,7 +105,6 @@ func (t fuzztestRun) WarningCount(c *Conn) uint16 {
 }
 
 func (t fuzztestRun) ComResetConnection(c *Conn) {
-	panic("implement me")
 }
 
 var _ Handler = (*fuzztestRun)(nil)

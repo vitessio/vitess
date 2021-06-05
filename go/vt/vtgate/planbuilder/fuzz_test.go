@@ -16,13 +16,31 @@ limitations under the License.
 
 package planbuilder
 
-import "testing"
+import (
+	"io/ioutil"
+	"path"
+	"runtime/debug"
+	"testing"
+
+	"github.com/stretchr/testify/require"
+)
 
 func TestFuzzAnalyze(t *testing.T) {
-	testcases := []string{"seT b=b"}
-	for _, testcase := range testcases {
-		t.Run(testcase, func(t *testing.T) {
-			FuzzAnalyse([]byte(testcase))
+	directoryName := "fuzzdata"
+	files, err := ioutil.ReadDir(directoryName)
+	require.NoError(t, err)
+	for _, file := range files {
+		t.Run(file.Name(), func(t *testing.T) {
+			defer func() {
+				r := recover()
+				if r != nil {
+					t.Error(r)
+					t.Fatal(string(debug.Stack()))
+				}
+			}()
+			testcase, err := ioutil.ReadFile(path.Join(directoryName, file.Name()))
+			require.NoError(t, err)
+			FuzzAnalyse(testcase)
 		})
 	}
 }

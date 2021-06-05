@@ -25,12 +25,13 @@ import { Clusters } from './routes/Clusters';
 import { Gates } from './routes/Gates';
 import { Keyspaces } from './routes/Keyspaces';
 import { Schemas } from './routes/Schemas';
-import { Schema } from './routes/Schema';
-import { Stream } from './routes/Stream';
+import { Schema } from './routes/schema/Schema';
+import { Stream } from './routes/stream/Stream';
 import { Workflows } from './routes/Workflows';
-import { Workflow } from './routes/Workflow';
+import { Workflow } from './routes/workflow/Workflow';
 import { VTExplain } from './routes/VTExplain';
 import { Keyspace } from './routes/keyspace/Keyspace';
+import { Tablet } from './routes/tablet/Tablet';
 
 export const App = () => {
     return (
@@ -70,6 +71,10 @@ export const App = () => {
                             <Tablets />
                         </Route>
 
+                        <Route path="/tablet/:clusterID/:alias">
+                            <Tablet />
+                        </Route>
+
                         <Route path="/vtexplain">
                             <VTExplain />
                         </Route>
@@ -78,12 +83,12 @@ export const App = () => {
                             <Workflows />
                         </Route>
 
-                        <Route exact path="/workflow/:clusterID/:keyspace/:name">
-                            <Workflow />
-                        </Route>
-
                         <Route path="/workflow/:clusterID/:keyspace/:workflowName/stream/:tabletCell/:tabletUID/:streamID">
                             <Stream />
+                        </Route>
+
+                        <Route path="/workflow/:clusterID/:keyspace/:name">
+                            <Workflow />
                         </Route>
 
                         <Route path="/debug">

@@ -26,10 +26,7 @@ import (
 	"sync"
 	"time"
 
-	"google.golang.org/protobuf/encoding/prototext"
-
 	"vitess.io/vitess/go/json2"
-	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/key"
@@ -37,6 +34,7 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vtctl/workflow"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -56,36 +54,6 @@ const (
 	// use pt-osc's naming convention, this format also ensures vstreamer ignores such tables
 	renameTableTemplate = "_%.59s_old" // limit table name to 64 characters
 )
-
-// TrafficSwitchDirection specifies the switching direction.
-type TrafficSwitchDirection int
-
-// The following constants define the switching direction.
-const (
-	DirectionForward = TrafficSwitchDirection(iota)
-	DirectionBackward
-)
-
-// TableRemovalType specifies the way the a table will be removed
-type TableRemovalType int
-
-// The following consts define if DropSource will drop or rename the table
-const (
-	DropTable = TableRemovalType(iota)
-	RenameTable
-)
-
-func (trt TableRemovalType) String() string {
-	types := [...]string{
-		"DROP TABLE",
-		"RENAME TABLE",
-	}
-	if trt < DropTable || trt > RenameTable {
-		return "Unknown"
-	}
-
-	return types[trt]
-}
 
 // accessType specifies the type of access for a shard (allow/disallow writes).
 type accessType int
@@ -153,110 +121,30 @@ func (ts *trafficSwitcher) ForAllTargets(f func(source *workflow.MigrationTarget
 
 // For a Reshard, to check whether we have switched reads for a tablet type, we check if any one of the source shards has
 // the query service disabled in its tablet control record
-func (wr *Wrangler) getCellsWithShardReadsSwitched(ctx context.Context, targetKeyspace string, si *topo.ShardInfo, tabletType string) (
+func (wr *Wrangler) getCellsWithShardReadsSwitched(ctx context.Context, targetKeyspace string, si *topo.ShardInfo, tabletTypeStr string) (
 	cellsSwitched, cellsNotSwitched []string, err error) {
 
-	cells, err := wr.ts.GetCellInfoNames(ctx)
+	tabletType, err := topoproto.ParseTabletType(tabletTypeStr)
 	if err != nil {
 		return nil, nil, err
 	}
-	for _, cell := range cells {
-		srvKeyspace, err := wr.ts.GetSrvKeyspace(ctx, cell, targetKeyspace)
-		if err != nil {
-			return nil, nil, err
-		}
-		// Checking one shard is enough.
-		var shardServedTypes []string
-		found := false
-		noControls := true
-		for _, partition := range srvKeyspace.GetPartitions() {
-			if !strings.EqualFold(partition.GetServedType().String(), tabletType) {
-				continue
-			}
 
-			// If reads and writes are both switched it is possible that the shard is not in the partition table
-			for _, shardReference := range partition.GetShardReferences() {
-				if key.KeyRangeEqual(shardReference.GetKeyRange(), si.GetKeyRange()) {
-					found = true
-					break
-				}
-			}
-
-			// It is possible that there are no tablet controls if the target shards are not yet serving
-			// or once reads and writes are both switched,
-			if len(partition.GetShardTabletControls()) == 0 {
-				noControls = true
-				break
-			}
-			for _, tabletControl := range partition.GetShardTabletControls() {
-				if key.KeyRangeEqual(tabletControl.GetKeyRange(), si.GetKeyRange()) {
-					if !tabletControl.GetQueryServiceDisabled() {
-						shardServedTypes = append(shardServedTypes, si.ShardName())
-					}
-					break
-				}
-			}
-		}
-		if found && (len(shardServedTypes) > 0 || noControls) {
-			cellsNotSwitched = append(cellsNotSwitched, cell)
-		} else {
-			cellsSwitched = append(cellsSwitched, cell)
-		}
-	}
-	return cellsSwitched, cellsNotSwitched, nil
+	s := workflow.NewServer(wr.ts, wr.tmc)
+	return s.GetCellsWithShardReadsSwitched(ctx, targetKeyspace, si, tabletType)
 }
 
 // For MoveTables,  to check whether we have switched reads for a tablet type, we check whether the routing rule
 // for the tablet_type is pointing to the target keyspace
-func (wr *Wrangler) getCellsWithTableReadsSwitched(ctx context.Context, targetKeyspace, table, tabletType string) (
+func (wr *Wrangler) getCellsWithTableReadsSwitched(ctx context.Context, targetKeyspace, table, tabletTypeStr string) (
 	cellsSwitched, cellsNotSwitched []string, err error) {
 
-	cells, err := wr.ts.GetCellInfoNames(ctx)
+	tabletType, err := topoproto.ParseTabletType(tabletTypeStr)
 	if err != nil {
 		return nil, nil, err
 	}
-	getKeyspace := func(ruleTarget string) (string, error) {
-		arr := strings.Split(ruleTarget, ".")
-		if len(arr) != 2 {
-			return "", fmt.Errorf("rule target is not correctly formatted: %s", ruleTarget)
-		}
-		return arr[0], nil
-	}
-	for _, cell := range cells {
-		srvVSchema, err := wr.ts.GetSrvVSchema(ctx, cell)
-		if err != nil {
-			return nil, nil, err
-		}
-		rules := srvVSchema.RoutingRules.Rules
-		found := false
-		switched := false
-		for _, rule := range rules {
-			ruleName := fmt.Sprintf("%s.%s@%s", targetKeyspace, table, tabletType)
-			if rule.FromTable == ruleName {
-				found = true
-				for _, to := range rule.ToTables {
-					ks, err := getKeyspace(to)
-					if err != nil {
-						log.Errorf(err.Error())
-						return nil, nil, err
-					}
-					if ks == targetKeyspace {
-						switched = true
-						break // if one table in workflow is switched we are done
-					}
-				}
-			}
-			if found {
-				break
-			}
-		}
-		if switched {
-			cellsSwitched = append(cellsSwitched, cell)
-		} else {
-			cellsNotSwitched = append(cellsNotSwitched, cell)
-		}
-	}
-	return cellsSwitched, cellsNotSwitched, nil
+
+	s := workflow.NewServer(wr.ts, wr.tmc)
+	return s.GetCellsWithTableReadsSwitched(ctx, targetKeyspace, table, tabletType)
 }
 
 func (wr *Wrangler) getWorkflowState(ctx context.Context, targetKeyspace, workflowName string) (*trafficSwitcher, *workflow.State, error) {
@@ -306,7 +194,7 @@ func (wr *Wrangler) getWorkflowState(ctx context.Context, targetKeyspace, workfl
 			return nil, nil, err
 		}
 		ws.ReplicaCellsNotSwitched, ws.ReplicaCellsSwitched = cellsNotSwitched, cellsSwitched
-		rules, err := ts.wr.getRoutingRules(ctx)
+		rules, err := topotools.GetRoutingRules(ctx, ts.wr.ts)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -380,29 +268,29 @@ func (wr *Wrangler) doCellsHaveRdonlyTablets(ctx context.Context, cells []string
 }
 
 // SwitchReads is a generic way of switching read traffic for a resharding workflow.
-func (wr *Wrangler) SwitchReads(ctx context.Context, targetKeyspace, workflow string, servedTypes []topodatapb.TabletType,
-	cells []string, direction TrafficSwitchDirection, dryRun bool) (*[]string, error) {
+func (wr *Wrangler) SwitchReads(ctx context.Context, targetKeyspace, workflowName string, servedTypes []topodatapb.TabletType,
+	cells []string, direction workflow.TrafficSwitchDirection, dryRun bool) (*[]string, error) {
 
-	ts, ws, err := wr.getWorkflowState(ctx, targetKeyspace, workflow)
+	ts, ws, err := wr.getWorkflowState(ctx, targetKeyspace, workflowName)
 	if err != nil {
 		wr.Logger().Errorf("getWorkflowState failed: %v", err)
 		return nil, err
 	}
 	if ts == nil {
-		errorMsg := fmt.Sprintf("workflow %s not found in keyspace %s", workflow, targetKeyspace)
+		errorMsg := fmt.Sprintf("workflow %s not found in keyspace %s", workflowName, targetKeyspace)
 		wr.Logger().Errorf(errorMsg)
 		return nil, fmt.Errorf(errorMsg)
 	}
-	log.Infof("SwitchReads: %s.%s tt %+v, cells %+v, workflow state: %+v", targetKeyspace, workflow, servedTypes, cells, ws)
+	log.Infof("SwitchReads: %s.%s tt %+v, cells %+v, workflow state: %+v", targetKeyspace, workflowName, servedTypes, cells, ws)
 	var switchReplicas, switchRdonly bool
 	for _, servedType := range servedTypes {
 		if servedType != topodatapb.TabletType_REPLICA && servedType != topodatapb.TabletType_RDONLY {
 			return nil, fmt.Errorf("tablet type must be REPLICA or RDONLY: %v", servedType)
 		}
-		if direction == DirectionBackward && servedType == topodatapb.TabletType_REPLICA && len(ws.ReplicaCellsSwitched) == 0 {
+		if direction == workflow.DirectionBackward && servedType == topodatapb.TabletType_REPLICA && len(ws.ReplicaCellsSwitched) == 0 {
 			return nil, fmt.Errorf("requesting reversal of SwitchReads for REPLICAs but REPLICA reads have not been switched")
 		}
-		if direction == DirectionBackward && servedType == topodatapb.TabletType_RDONLY && len(ws.RdonlyCellsSwitched) == 0 {
+		if direction == workflow.DirectionBackward && servedType == topodatapb.TabletType_RDONLY && len(ws.RdonlyCellsSwitched) == 0 {
 			return nil, fmt.Errorf("requesting reversal of SwitchReads for RDONLYs but RDONLY reads have not been switched")
 		}
 		switch servedType {
@@ -744,8 +632,8 @@ func (wr *Wrangler) finalizeMigrateWorkflow(ctx context.Context, targetKeyspace,
 }
 
 // DropSources cleans up source tables, shards and blacklisted tables after a MoveTables/Reshard is completed
-func (wr *Wrangler) DropSources(ctx context.Context, targetKeyspace, workflow string, removalType TableRemovalType, keepData, force, dryRun bool) (*[]string, error) {
-	ts, err := wr.buildTrafficSwitcher(ctx, targetKeyspace, workflow)
+func (wr *Wrangler) DropSources(ctx context.Context, targetKeyspace, workflowName string, removalType workflow.TableRemovalType, keepData, force, dryRun bool) (*[]string, error) {
+	ts, err := wr.buildTrafficSwitcher(ctx, targetKeyspace, workflowName)
 	if err != nil {
 		wr.Logger().Errorf("buildTrafficSwitcher failed: %v", err)
 		return nil, err
@@ -943,9 +831,9 @@ func (ts *trafficSwitcher) compareShards(ctx context.Context, keyspace string, s
 	return nil
 }
 
-func (ts *trafficSwitcher) switchTableReads(ctx context.Context, cells []string, servedTypes []topodatapb.TabletType, direction TrafficSwitchDirection) error {
+func (ts *trafficSwitcher) switchTableReads(ctx context.Context, cells []string, servedTypes []topodatapb.TabletType, direction workflow.TrafficSwitchDirection) error {
 	log.Infof("switchTableReads: servedTypes: %+v, direction %t", servedTypes, direction)
-	rules, err := ts.wr.getRoutingRules(ctx)
+	rules, err := topotools.GetRoutingRules(ctx, ts.wr.ts)
 	if err != nil {
 		return err
 	}
@@ -957,7 +845,7 @@ func (ts *trafficSwitcher) switchTableReads(ctx context.Context, cells []string,
 	for _, servedType := range servedTypes {
 		tt := strings.ToLower(servedType.String())
 		for _, table := range ts.tables {
-			if direction == DirectionForward {
+			if direction == workflow.DirectionForward {
 				log.Infof("Route direction forward")
 				toTarget := []string{ts.targetKeyspace + "." + table}
 				rules[table+"@"+tt] = toTarget
@@ -972,15 +860,15 @@ func (ts *trafficSwitcher) switchTableReads(ctx context.Context, cells []string,
 			}
 		}
 	}
-	if err := ts.wr.saveRoutingRules(ctx, rules); err != nil {
+	if err := topotools.SaveRoutingRules(ctx, ts.wr.ts, rules); err != nil {
 		return err
 	}
 	return ts.wr.ts.RebuildSrvVSchema(ctx, cells)
 }
 
-func (ts *trafficSwitcher) switchShardReads(ctx context.Context, cells []string, servedTypes []topodatapb.TabletType, direction TrafficSwitchDirection) error {
+func (ts *trafficSwitcher) switchShardReads(ctx context.Context, cells []string, servedTypes []topodatapb.TabletType, direction workflow.TrafficSwitchDirection) error {
 	var fromShards, toShards []*topo.ShardInfo
-	if direction == DirectionForward {
+	if direction == workflow.DirectionForward {
 		fromShards, toShards = ts.sourceShards(), ts.targetShards()
 	} else {
 		fromShards, toShards = ts.targetShards(), ts.sourceShards()
@@ -1012,35 +900,18 @@ func (ts *trafficSwitcher) switchShardReads(ctx context.Context, cells []string,
 	return nil
 }
 
-func (wr *Wrangler) checkIfJournalExistsOnTablet(ctx context.Context, tablet *topodatapb.Tablet, migrationID int64) (*binlogdatapb.Journal, bool, error) {
-	var exists bool
-	journal := &binlogdatapb.Journal{}
-	query := fmt.Sprintf("select val from _vt.resharding_journal where id=%v", migrationID)
-	p3qr, err := wr.tmc.VReplicationExec(ctx, tablet, query)
-	if err != nil {
-		return nil, false, err
-	}
-	if len(p3qr.Rows) != 0 {
-		qr := sqltypes.Proto3ToResult(p3qr)
-		if !exists {
-			if err := prototext.Unmarshal(qr.Rows[0][0].ToBytes(), journal); err != nil {
-				return nil, false, err
-			}
-			exists = true
-		}
-	}
-	return journal, exists, nil
-
-}
-
 // checkJournals returns true if at least one journal has been created.
 // If so, it also returns the list of sourceWorkflows that need to be switched.
 func (ts *trafficSwitcher) checkJournals(ctx context.Context) (journalsExist bool, sourceWorkflows []string, err error) {
-	var mu sync.Mutex
+	var (
+		ws = workflow.NewServer(ts.wr.ts, ts.wr.tmc)
+		mu sync.Mutex
+	)
+
 	err = ts.forAllSources(func(source *workflow.MigrationSource) error {
 		mu.Lock()
 		defer mu.Unlock()
-		journal, exists, err := ts.wr.checkIfJournalExistsOnTablet(ctx, source.GetPrimary().Tablet, ts.id)
+		journal, exists, err := ws.CheckReshardingJournalExistsOnTablet(ctx, source.GetPrimary().Tablet, ts.id)
 		if err != nil {
 			return err
 		}
@@ -1333,7 +1204,7 @@ func (ts *trafficSwitcher) changeRouting(ctx context.Context) error {
 }
 
 func (ts *trafficSwitcher) changeWriteRoute(ctx context.Context) error {
-	rules, err := ts.wr.getRoutingRules(ctx)
+	rules, err := topotools.GetRoutingRules(ctx, ts.wr.ts)
 	if err != nil {
 		return err
 	}
@@ -1344,7 +1215,7 @@ func (ts *trafficSwitcher) changeWriteRoute(ctx context.Context) error {
 		rules[ts.sourceKeyspace+"."+table] = []string{ts.targetKeyspace + "." + table}
 		ts.wr.Logger().Infof("Add routing: %v %v", table, ts.sourceKeyspace+"."+table)
 	}
-	if err := ts.wr.saveRoutingRules(ctx, rules); err != nil {
+	if err := topotools.SaveRoutingRules(ctx, ts.wr.ts, rules); err != nil {
 		return err
 	}
 	return ts.wr.ts.RebuildSrvVSchema(ctx, nil)
@@ -1515,7 +1386,7 @@ func doValidateWorkflowHasCompleted(ctx context.Context, ts *trafficSwitcher) er
 	//check if table is routable
 	wg.Wait()
 	if ts.migrationType == binlogdatapb.MigrationType_TABLES {
-		rules, err := ts.wr.getRoutingRules(ctx)
+		rules, err := topotools.GetRoutingRules(ctx, ts.wr.ts)
 		if err != nil {
 			rec.RecordError(fmt.Errorf("could not get RoutingRules"))
 		}
@@ -1540,11 +1411,11 @@ func getRenameFileName(tableName string) string {
 	return fmt.Sprintf(renameTableTemplate, tableName)
 }
 
-func (ts *trafficSwitcher) removeSourceTables(ctx context.Context, removalType TableRemovalType) error {
+func (ts *trafficSwitcher) removeSourceTables(ctx context.Context, removalType workflow.TableRemovalType) error {
 	err := ts.forAllSources(func(source *workflow.MigrationSource) error {
 		for _, tableName := range ts.tables {
 			query := fmt.Sprintf("drop table %s.%s", source.GetPrimary().DbName(), tableName)
-			if removalType == DropTable {
+			if removalType == workflow.DropTable {
 				ts.wr.Logger().Infof("Dropping table %s.%s\n", source.GetPrimary().DbName(), tableName)
 			} else {
 				renameName := getRenameFileName(tableName)
@@ -1665,7 +1536,7 @@ func (ts *trafficSwitcher) dropTargetShards(ctx context.Context) error {
 }
 
 func (ts *trafficSwitcher) deleteRoutingRules(ctx context.Context) error {
-	rules, err := ts.wr.getRoutingRules(ctx)
+	rules, err := topotools.GetRoutingRules(ctx, ts.wr.ts)
 	if err != nil {
 		return err
 	}
@@ -1680,18 +1551,10 @@ func (ts *trafficSwitcher) deleteRoutingRules(ctx context.Context) error {
 		delete(rules, ts.sourceKeyspace+"."+table+"@replica")
 		delete(rules, ts.sourceKeyspace+"."+table+"@rdonly")
 	}
-	if err := ts.wr.saveRoutingRules(ctx, rules); err != nil {
+	if err := topotools.SaveRoutingRules(ctx, ts.wr.ts, rules); err != nil {
 		return err
 	}
 	return nil
-}
-
-func (wr *Wrangler) getRoutingRules(ctx context.Context) (map[string][]string, error) {
-	return topotools.GetRoutingRules(ctx, wr.ts)
-}
-
-func (wr *Wrangler) saveRoutingRules(ctx context.Context, rules map[string][]string) error {
-	return topotools.SaveRoutingRules(ctx, wr.ts, rules)
 }
 
 // addParticipatingTablesToKeyspace updates the vschema with the new tables that were created as part of the

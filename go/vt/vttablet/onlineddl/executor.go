@@ -111,20 +111,22 @@ var retainOnlineDDLTables = flag.Duration("retain_online_ddl_tables", 24*time.Ho
 var migrationNextCheckIntervals = []time.Duration{1 * time.Second, 5 * time.Second, 10 * time.Second, 20 * time.Second}
 
 const (
-	maxPasswordLength             = 32 // MySQL's *replication* password may not exceed 32 characters
-	staleMigrationMinutes         = 10
-	progressPctStarted    float64 = 0
-	progressPctFull       float64 = 100.0
-	etaSecondsUnknown             = -1
-	etaSecondsNow                 = 0
-	databasePoolSize              = 3
-	cutOverThreshold              = 3 * time.Second
+	maxPasswordLength                        = 32 // MySQL's *replication* password may not exceed 32 characters
+	staleMigrationMinutes                    = 10
+	progressPctStarted               float64 = 0
+	progressPctFull                  float64 = 100.0
+	etaSecondsUnknown                        = -1
+	etaSecondsNow                            = 0
+	databasePoolSize                         = 3
+	cutOverThreshold                         = 3 * time.Second
+	vreplicationTestSuiteWaitSeconds         = 5
 )
 
 var (
-	migrationLogFileName = "migration.log"
-	onlineDDLUser        = "vt-online-ddl-internal"
-	onlineDDLGrant       = fmt.Sprintf("'%s'@'%s'", onlineDDLUser, "%")
+	migrationLogFileName     = "migration.log"
+	migrationFailureFileName = "migration-failure.log"
+	onlineDDLUser            = "vt-online-ddl-internal"
+	onlineDDLGrant           = fmt.Sprintf("'%s'@'%s'", onlineDDLUser, "%")
 )
 
 type mysqlVariables struct {
@@ -475,6 +477,33 @@ func (e *Executor) executeDirectly(ctx context.Context, onlineDDL *schema.Online
 	return acceptableErrorCodeFound, nil
 }
 
+// validateTableForAlterAction checks whether a table is good to undergo a ALTER operation. It returns detailed error if not.
+func (e *Executor) validateTableForAlterAction(ctx context.Context, onlineDDL *schema.OnlineDDL) (err error) {
+	// Validate table does not participate in foreign key relationship:
+	for _, fkQuery := range []string{selSelectCountFKParentConstraints, selSelectCountFKChildConstraints} {
+		query, err := sqlparser.ParseAndBind(fkQuery,
+			sqltypes.StringBindVariable(onlineDDL.Schema),
+			sqltypes.StringBindVariable(onlineDDL.Table),
+		)
+		if err != nil {
+			return err
+		}
+		r, err := e.execQuery(ctx, query)
+		if err != nil {
+			return err
+		}
+		row := r.Named().Row()
+		if row == nil {
+			return vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "unexpected result from INFORMATION_SCHEMA.KEY_COLUMN_USAGE query: %s", query)
+		}
+		countFKConstraints := row.AsInt64("num_fk_constraints", 0)
+		if countFKConstraints > 0 {
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "table %s participates in FOREIGN KEY constraint. foreign key constraints are not supported in online DDL", onlineDDL.Table)
+		}
+	}
+	return nil
+}
+
 // terminateVReplMigration stops vreplication, then removes the _vt.vreplication entry for the given migration
 func (e *Executor) terminateVReplMigration(ctx context.Context, uuid string) error {
 	tmClient := tmclient.NewTabletManagerClient()
@@ -533,6 +562,8 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 	if err != nil {
 		return err
 	}
+	isVreplicationTestSuite := onlineDDL.StrategySetting().IsVreplicationTestSuite()
+
 	// come up with temporary name for swap table
 	swapTable, err := schema.CreateUUID()
 	if err != nil {
@@ -571,6 +602,19 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 	}
 	defer toggleWrites(true)
 
+	if isVreplicationTestSuite {
+		// The testing suite may inject queries internally from the server via a recurring EVENT.
+		// Those queries are unaffected by UpdateSourceBlacklistedTables() because they don't go through Vitess.
+		// We therefore hard-rename the table elsewhere, such that the queries will hard-fail.
+		beforeTableName := fmt.Sprintf("%s_before", onlineDDL.Table)
+		parsed := sqlparser.BuildParsedQuery(sqlRenameTable,
+			onlineDDL.Table, beforeTableName,
+		)
+		if _, err = e.execQuery(ctx, parsed.Query); err != nil {
+			return err
+		}
+	}
+
 	// Writes are now disabled on table. Read up-to-date vreplication info, specifically to get latest (and fixed) pos:
 	s, err = e.readVReplStream(ctx, s.workflow, false)
 	if err != nil {
@@ -597,13 +641,25 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 
 	// rename tables atomically (remember, writes on source tables are stopped)
 	{
-		parsed := sqlparser.BuildParsedQuery(sqlSwapTables,
-			onlineDDL.Table, swapTable,
-			vreplTable, onlineDDL.Table,
-			swapTable, vreplTable,
-		)
-		if _, err = e.execQuery(ctx, parsed.Query); err != nil {
-			return err
+		if isVreplicationTestSuite {
+			// this is used in Vitess endtoend testing suite
+			afterTableName := fmt.Sprintf("%s_after", onlineDDL.Table)
+			parsed := sqlparser.BuildParsedQuery(sqlRenameTable,
+				vreplTable, afterTableName,
+			)
+			if _, err = e.execQuery(ctx, parsed.Query); err != nil {
+				return err
+			}
+		} else {
+			// Normal (non-testing) alter table
+			parsed := sqlparser.BuildParsedQuery(sqlSwapTables,
+				onlineDDL.Table, swapTable,
+				vreplTable, onlineDDL.Table,
+				swapTable, vreplTable,
+			)
+			if _, err = e.execQuery(ctx, parsed.Query); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -645,6 +701,27 @@ func (e *Executor) initVreplicationOriginalMigration(ctx context.Context, online
 	}
 	v = NewVRepl(onlineDDL.UUID, e.keyspace, e.shard, e.dbName, onlineDDL.Table, vreplTableName, alterOptions)
 	return v, nil
+}
+
+// postInitVreplicationOriginalMigration runs extra changes after a vreplication online DDL has been initialized.
+// This function is called after both source and target tables have been analyzed, so there's more information
+// about the two, and about the transition between the two.
+func (e *Executor) postInitVreplicationOriginalMigration(ctx context.Context, v *VRepl, conn *dbconnpool.DBConnection) (err error) {
+	if v.sourceAutoIncrement > 0 && !v.parser.IsAutoIncrementDefined() {
+		// Apply ALTER TABLE AUTO_INCREMENT=?
+		parsed := sqlparser.BuildParsedQuery(sqlAlterTableAutoIncrement, v.targetTable, ":auto_increment")
+		bindVars := map[string]*querypb.BindVariable{
+			"auto_increment": sqltypes.Uint64BindVariable(v.sourceAutoIncrement),
+		}
+		bound, err := parsed.GenerateQuery(bindVars, nil)
+		if err != nil {
+			return err
+		}
+		if _, err := conn.ExecuteFetch(bound, 0, false); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (e *Executor) initVreplicationRevertMigration(ctx context.Context, onlineDDL *schema.OnlineDDL, revertMigration *schema.OnlineDDL) (v *VRepl, err error) {
@@ -710,6 +787,16 @@ func (e *Executor) ExecuteWithVReplication(ctx context.Context, onlineDDL *schem
 	}
 	if err := v.analyze(ctx, conn); err != nil {
 		return err
+	}
+
+	if revertMigration == nil {
+		// Original ALTER TABLE request for vreplication
+		if err := e.validateTableForAlterAction(ctx, onlineDDL); err != nil {
+			return err
+		}
+		if err := e.postInitVreplicationOriginalMigration(ctx, v, conn); err != nil {
+			return err
+		}
 	}
 	if err := e.updateArtifacts(ctx, onlineDDL.UUID, v.targetTable); err != nil {
 		return err
@@ -793,12 +880,16 @@ password=${ONLINE_DDL_PASSWORD}
 	wrapperScriptContent := fmt.Sprintf(`#!/bin/bash
 ghost_log_path="%s"
 ghost_log_file="%s"
+ghost_log_failure_file="%s"
 
 mkdir -p "$ghost_log_path"
 
 export ONLINE_DDL_PASSWORD
 %s "$@" > "$ghost_log_path/$ghost_log_file" 2>&1
-	`, tempDir, migrationLogFileName, binaryFileName,
+exit_code=$?
+grep -o '\bFATAL\b.*' "$ghost_log_path/$ghost_log_file" | tail -1 > "$ghost_log_path/$ghost_log_failure_file"
+exit $exit_code
+	`, tempDir, migrationLogFileName, migrationFailureFileName, binaryFileName,
 	)
 	wrapperScriptFileName, err := createTempScript(tempDir, "gh-ost-wrapper.sh", wrapperScriptContent)
 	if err != nil {
@@ -898,6 +989,16 @@ export ONLINE_DDL_PASSWORD
 		_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, fmt.Sprintf("executing gh-ost --execute=%v", execute))
 		_, err := execCmd("bash", args, os.Environ(), "/tmp", nil, nil)
 		_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, fmt.Sprintf("executed gh-ost --execute=%v, err=%v", execute, err))
+		if err != nil {
+			// See if we can get more info from the failure file
+			if content, ferr := ioutil.ReadFile(path.Join(tempDir, migrationFailureFileName)); ferr == nil {
+				failureMessage := strings.TrimSpace(string(content))
+				if failureMessage != "" {
+					// This message was produced by gh-ost itself. It is more informative than the default "migration failed..." message. Overwrite.
+					return errors.New(failureMessage)
+				}
+			}
+		}
 		return err
 	}
 
@@ -2109,6 +2210,9 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 	for _, row := range r.Named().Rows {
 		uuid := row["migration_uuid"].ToString()
 		strategy := schema.DDLStrategy(row["strategy"].ToString())
+		strategySettings := schema.NewDDLStrategySetting(strategy, row["options"].ToString())
+		elapsedSeconds := row.AsInt64("elapsed_seconds", 0)
+
 		switch strategy {
 		case schema.DDLStrategyOnline:
 			{
@@ -2116,6 +2220,10 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 				running, s, err := e.isVReplMigrationRunning(ctx, uuid)
 				if err != nil {
 					return countRunnning, cancellable, err
+				}
+				isVreplicationTestSuite := strategySettings.IsVreplicationTestSuite()
+				if isVreplicationTestSuite {
+					e.triggerNextCheckInterval()
 				}
 				if running {
 					// This VRepl migration may have started from outside this tablet, so
@@ -2126,6 +2234,13 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 					isReady, err := e.isVReplMigrationReadyToCutOver(ctx, s)
 					if err != nil {
 						return countRunnning, cancellable, err
+					}
+					if isReady && isVreplicationTestSuite {
+						// This is a endtoend test suite execution. We intentionally delay it by at least
+						// vreplicationTestSuiteWaitSeconds
+						if elapsedSeconds < vreplicationTestSuiteWaitSeconds {
+							isReady = false
+						}
 					}
 					if isReady {
 						if err := e.cutOverVReplMigration(ctx, s); err != nil {

@@ -190,14 +190,7 @@ func (a *analyzer) tableSetFor(t *sqlparser.AliasedTableExpr) TableSet {
 func (a *analyzer) bindTable(alias *sqlparser.AliasedTableExpr, expr sqlparser.SimpleTableExpr) error {
 	switch t := expr.(type) {
 	case *sqlparser.DerivedTable:
-		a.push(newScope(nil))
-		if err := a.analyze(t.Select); err != nil {
-			return err
-		}
-		a.popScope()
-		scope := a.currentScope()
-		//dbName := "" // derived tables are always referenced only by their alias - they cannot be found using a fully qualified name
-		return scope.addTable(&TableInfo{})
+		return Gen4NotSupportedF("derived table")
 	case sqlparser.TableName:
 		tbl, vdx, _, _, _, err := a.si.FindTableOrVindex(t)
 		if err != nil {

@@ -47,7 +47,7 @@ func (dr *switcherDryRun) deleteRoutingRules(ctx context.Context) error {
 	return nil
 }
 
-func (dr *switcherDryRun) switchShardReads(ctx context.Context, cells []string, servedTypes []topodatapb.TabletType, direction TrafficSwitchDirection) error {
+func (dr *switcherDryRun) switchShardReads(ctx context.Context, cells []string, servedTypes []topodatapb.TabletType, direction workflow.TrafficSwitchDirection) error {
 	sourceShards := make([]string, 0)
 	targetShards := make([]string, 0)
 	for _, source := range dr.ts.sources {
@@ -58,7 +58,7 @@ func (dr *switcherDryRun) switchShardReads(ctx context.Context, cells []string, 
 	}
 	sort.Strings(sourceShards)
 	sort.Strings(targetShards)
-	if direction == DirectionForward {
+	if direction == workflow.DirectionForward {
 		dr.drLog.Log(fmt.Sprintf("Switch reads from keyspace %s to keyspace %s for shards %s to shards %s",
 			dr.ts.sourceKeyspace, dr.ts.targetKeyspace, strings.Join(sourceShards, ","), strings.Join(targetShards, ",")))
 	} else {
@@ -68,9 +68,9 @@ func (dr *switcherDryRun) switchShardReads(ctx context.Context, cells []string, 
 	return nil
 }
 
-func (dr *switcherDryRun) switchTableReads(ctx context.Context, cells []string, servedTypes []topodatapb.TabletType, direction TrafficSwitchDirection) error {
+func (dr *switcherDryRun) switchTableReads(ctx context.Context, cells []string, servedTypes []topodatapb.TabletType, direction workflow.TrafficSwitchDirection) error {
 	ks := dr.ts.targetKeyspace
-	if direction == DirectionBackward {
+	if direction == workflow.DirectionBackward {
 		ks = dr.ts.sourceKeyspace
 	}
 	var tabletTypes []string
@@ -225,7 +225,7 @@ func (dr *switcherDryRun) lockKeyspace(ctx context.Context, keyspace, _ string) 
 	}, nil
 }
 
-func (dr *switcherDryRun) removeSourceTables(ctx context.Context, removalType TableRemovalType) error {
+func (dr *switcherDryRun) removeSourceTables(ctx context.Context, removalType workflow.TableRemovalType) error {
 	logs := make([]string, 0)
 	for _, source := range dr.ts.sources {
 		for _, tableName := range dr.ts.tables {
@@ -234,7 +234,7 @@ func (dr *switcherDryRun) removeSourceTables(ctx context.Context, removalType Ta
 		}
 	}
 	action := "Dropping"
-	if removalType == RenameTable {
+	if removalType == workflow.RenameTable {
 		action = "Renaming"
 	}
 	if len(logs) > 0 {

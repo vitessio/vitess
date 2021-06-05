@@ -27,13 +27,14 @@ import { DataFilter } from '../../dataTable/DataFilter';
 import { useSyncedURLParam } from '../../../hooks/useSyncedURLParam';
 import { filterNouns } from '../../../util/filterNouns';
 import { ContentContainer } from '../../layout/ContentContainer';
+import { TabletLink } from '../../links/TabletLink';
 interface Props {
     keyspace: pb.Keyspace | null | undefined;
 }
 
 type ShardState = 'SERVING' | 'NOT_SERVING';
 
-const TABLE_COLUMNS = ['Shard', 'Tablet', 'Tablet State', 'Alias', 'Hostname'];
+const TABLE_COLUMNS = ['Shard', 'Alias', 'Tablet Type', 'Tablet State', 'Hostname'];
 const PAGE_SIZE = 16;
 
 export const KeyspaceShards = ({ keyspace }: Props) => {
@@ -87,10 +88,14 @@ export const KeyspaceShards = ({ keyspace }: Props) => {
                                 </DataCell>
                             )}
                             <DataCell>
-                                <TabletServingPip state={tablet._tabletStateEnum} /> {tablet.tabletType}
+                                <TabletLink alias={tablet.alias} clusterID={keyspace?.cluster?.id}>
+                                    {tablet.alias}
+                                </TabletLink>
                             </DataCell>
-                            <DataCell>{tablet.tabletState}</DataCell>
-                            <DataCell>{tablet.alias}</DataCell>
+                            <DataCell>{tablet.tabletType}</DataCell>
+                            <DataCell>
+                                <TabletServingPip state={tablet._tabletStateEnum} /> {tablet.tabletState}
+                            </DataCell>
                             <DataCell>{tablet.hostname}</DataCell>
                         </tr>
                     );
@@ -99,7 +104,7 @@ export const KeyspaceShards = ({ keyspace }: Props) => {
                 return acc;
             }, [] as JSX.Element[]);
         },
-        [filter, keyspace?.keyspace?.name]
+        [filter, keyspace?.cluster?.id, keyspace?.keyspace?.name]
     );
 
     if (!keyspace) {
