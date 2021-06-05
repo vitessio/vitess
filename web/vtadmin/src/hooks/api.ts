@@ -31,6 +31,7 @@ import {
     fetchWorkflows,
 } from '../api/http';
 import { vtadmin as pb } from '../proto/vtadmin';
+import { TabletDebugVars } from '../util/tabletDebugVars';
 import { formatAlias } from '../util/tablets';
 
 /**
@@ -81,7 +82,7 @@ export const useTablet = (params: Parameters<typeof fetchTablet>[0], options?: U
 
 export const useExperimentalTabletDebugVars = (
     params: Parameters<typeof fetchExperimentalTabletDebugVars>[0],
-    options?: UseQueryOptions<any, Error>
+    options?: UseQueryOptions<TabletDebugVars, Error>
 ) => {
     return useQuery(
         ['experimental/tablet/debug/vars', params],
