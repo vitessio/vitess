@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 
+	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -31,6 +32,14 @@ import (
 )
 
 func deleteShard(ctx context.Context, ts *topo.Server, keyspace string, shard string, recursive bool, evenIfServing bool) error {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.deleteShard")
+	defer span.Finish()
+
+	span.Annotate("keyspace", keyspace)
+	span.Annotate("shard", shard)
+	span.Annotate("recursive", recursive)
+	span.Annotate("even_if_serving", evenIfServing)
+
 	// Read the Shard object. If it's not in the topo, try to clean up the topo
 	// anyway.
 	shardInfo, err := ts.GetShard(ctx, keyspace, shard)
