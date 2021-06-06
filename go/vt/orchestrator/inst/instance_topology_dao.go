@@ -267,12 +267,6 @@ func StopReplicationNicely(instanceKey *InstanceKey, timeout time.Duration) (*In
 
 	_, err = ExecInstance(instanceKey, `stop slave`)
 	if err != nil {
-		// Patch; current MaxScale behavior for STOP SLAVE is to throw an error if replica already stopped.
-		if instance.isMaxScale() && err.Error() == "Error 1199: Slave connection is not running" {
-			err = nil
-		}
-	}
-	if err != nil {
 		return instance, log.Errore(err)
 	}
 
@@ -376,12 +370,6 @@ func StopReplication(instanceKey *InstanceKey) (*Instance, error) {
 		return instance, log.Errore(err)
 	}
 	_, err = ExecInstance(instanceKey, `stop slave`)
-	if err != nil {
-		// Patch; current MaxScale behavior for STOP SLAVE is to throw an error if replica already stopped.
-		if instance.isMaxScale() && err.Error() == "Error 1199: Slave connection is not running" {
-			err = nil
-		}
-	}
 	if err != nil {
 		return instance, log.Errore(err)
 	}

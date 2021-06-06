@@ -55,10 +55,6 @@ const (
 	backendDBConcurrency       = 20
 	retryInstanceFunctionCount = 5
 	retryInterval              = 500 * time.Millisecond
-	error1045AccessDenied      = "Error 1045: Access denied for user"
-	errorConnectionRefused     = "getsockopt: connection refused"
-	errorNoSuchHost            = "no such host"
-	errorIOTimeout             = "i/o timeout"
 )
 
 var instanceReadChan = make(chan bool, backendDBConcurrency)
@@ -216,73 +212,6 @@ func RetryInstanceFunction(f func() (*Instance, error)) (instance *Instance, err
 	return instance, err
 }
 
-// Is this an error which means that we shouldn't try going more queries for this discovery attempt?
-func unrecoverableError(err error) bool {
-	contains := []string{
-		error1045AccessDenied,
-		errorConnectionRefused,
-		errorIOTimeout,
-		errorNoSuchHost,
-	}
-	for _, k := range contains {
-		if strings.Contains(err.Error(), k) {
-			return true
-		}
-	}
-	return false
-}
-
-// Check if the instance is a MaxScale binlog server (a proxy not a real
-// MySQL server) and also update the resolved hostname
-func (instance *Instance) checkMaxScale(db *sql.DB, latency *stopwatch.NamedStopwatch) (isMaxScale bool, resolvedHostname string, err error) {
-	if config.Config.SkipMaxScaleCheck {
-		return isMaxScale, resolvedHostname, err
-	}
-
-	latency.Start("instance")
-	err = sqlutils.QueryRowsMap(db, "show variables like 'maxscale%'", func(m sqlutils.RowMap) error {
-		if m.GetString("Variable_name") == "MAXSCALE_VERSION" {
-			originalVersion := m.GetString("Value")
-			if originalVersion == "" {
-				originalVersion = m.GetString("value")
-			}
-			if originalVersion == "" {
-				originalVersion = "0.0.0"
-			}
-			instance.Version = originalVersion + "-maxscale"
-			instance.ServerID = 0
-			instance.ServerUUID = ""
-			instance.Uptime = 0
-			instance.Binlog_format = "INHERIT"
-			instance.ReadOnly = true
-			instance.LogBinEnabled = true
-			instance.LogReplicationUpdatesEnabled = true
-			resolvedHostname = instance.Key.Hostname
-			latency.Start("backend")
-			UpdateResolvedHostname(resolvedHostname, resolvedHostname)
-			latency.Stop("backend")
-			isMaxScale = true
-		}
-		return nil
-	})
-	latency.Stop("instance")
-
-	// Detect failed connection attempts and don't report the command
-	// we are executing as that might be confusing.
-	if err != nil {
-		if strings.Contains(err.Error(), error1045AccessDenied) {
-			accessDeniedCounter.Inc(1)
-		}
-		if unrecoverableError(err) {
-			logReadTopologyInstanceError(&instance.Key, "", err)
-		} else {
-			logReadTopologyInstanceError(&instance.Key, "show variables like 'maxscale%'", err)
-		}
-	}
-
-	return isMaxScale, resolvedHostname, err
-}
-
 // expectReplicationThreadsState expects both replication threads to be running, or both to be not running.
 // Specifically, it looks for both to be "Yes" or for both to be "No".
 func expectReplicationThreadsState(instanceKey *InstanceKey, expectedState ReplicationThreadState) (expectationMet bool, err error) {
@@ -323,10 +252,6 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 	partialSuccess := false
 	foundByShowSlaveHosts := false
 	resolvedHostname := ""
-	maxScaleMasterHostname := ""
-	isMaxScale := false
-	isMaxScale110 := false
-	slaveStatusFound := false
 	errorChan := make(chan error, 32)
 	var resolveErr error
 
@@ -361,42 +286,7 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 	}
 
 	instance.Key = *instanceKey
-
-	if isMaxScale, resolvedHostname, err = instance.checkMaxScale(db, latency); err != nil {
-		// We do not "goto Cleanup" here, although it should be the correct flow.
-		// Reason is 5.7's new security feature that requires GRANTs on performance_schema.session_variables.
-		// There is a wrong decision making in this design and the migration path to 5.7 will be difficult.
-		// I don't want orchestrator to put even more burden on this.
-		// If the statement errors, then we are unable to determine that this is maxscale, hence assume it is not.
-		// In which case there would be other queries sent to the server that are not affected by 5.7 behavior, and that will fail.
-
-		// Certain errors are not recoverable (for this discovery process) so it's fine to go to Cleanup
-		if unrecoverableError(err) {
-			goto Cleanup
-		}
-	}
-
-	if isMaxScale {
-		if strings.Contains(instance.Version, "1.1.0") {
-			isMaxScale110 = true
-
-			// Buggy buggy maxscale 1.1.0. Reported Master_Host can be corrupted.
-			// Therefore we (currently) take @@hostname (which is masquerading as master host anyhow)
-			err = db.QueryRow("select @@hostname").Scan(&maxScaleMasterHostname)
-			if err != nil {
-				goto Cleanup
-			}
-		}
-		if isMaxScale110 {
-			// Only this is supported:
-			db.QueryRow("select @@server_id").Scan(&instance.ServerID)
-		} else {
-			db.QueryRow("select @@global.server_id").Scan(&instance.ServerID)
-			db.QueryRow("select @@global.server_uuid").Scan(&instance.ServerUUID)
-		}
-	} else {
-		// NOT MaxScale
-
+	{
 		// We begin with a few operations we can run concurrently, and which do not depend on anything
 		{
 			waitGroup.Add(1)
@@ -569,10 +459,6 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 		instance.ReplicationIOThreadState = ReplicationThreadStateFromStatus(m.GetString("Slave_IO_Running"))
 		instance.ReplicationSQLThreadState = ReplicationThreadStateFromStatus(m.GetString("Slave_SQL_Running"))
 		instance.ReplicationIOThreadRuning = instance.ReplicationIOThreadState.IsRunning()
-		if isMaxScale110 {
-			// Covering buggy MaxScale 1.1.0
-			instance.ReplicationIOThreadRuning = instance.ReplicationIOThreadRuning && (m.GetString("Slave_IO_State") == "Binlog Dump")
-		}
 		instance.ReplicationSQLThreadRuning = instance.ReplicationSQLThreadState.IsRunning()
 		instance.ReadBinlogCoordinates.LogFile = m.GetString("Master_Log_File")
 		instance.ReadBinlogCoordinates.LogPos = m.GetInt64("Read_Master_Log_Pos")
@@ -591,11 +477,6 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 		instance.HasReplicationFilters = ((m.GetStringD("Replicate_Do_DB", "") != "") || (m.GetStringD("Replicate_Ignore_DB", "") != "") || (m.GetStringD("Replicate_Do_Table", "") != "") || (m.GetStringD("Replicate_Ignore_Table", "") != "") || (m.GetStringD("Replicate_Wild_Do_Table", "") != "") || (m.GetStringD("Replicate_Wild_Ignore_Table", "") != ""))
 
 		masterHostname := m.GetString("Master_Host")
-		if isMaxScale110 {
-			// Buggy buggy maxscale 1.1.0. Reported Master_Host can be corrupted.
-			// Therefore we (currently) take @@hostname (which is masquarading as master host anyhow)
-			masterHostname = maxScaleMasterHostname
-		}
 		masterKey, err := NewResolveInstanceKey(masterHostname, m.GetInt("Master_Port"))
 		if err != nil {
 			logReadTopologyInstanceError(instanceKey, "NewResolveInstanceKey", err)
@@ -616,7 +497,6 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 
 		instance.AllowTLS = (m.GetString("Master_SSL_Allowed") == "Yes")
 		// Not breaking the flow even on error
-		slaveStatusFound = true
 		return nil
 	})
 	if err != nil {
@@ -633,12 +513,8 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 			goto Cleanup
 		}
 	}
-	if isMaxScale && !slaveStatusFound {
-		err = fmt.Errorf("No 'SHOW SLAVE STATUS' output found for a MaxScale instance: %+v", instanceKey)
-		goto Cleanup
-	}
 
-	if config.Config.ReplicationLagQuery != "" && !isMaxScale {
+	if config.Config.ReplicationLagQuery != "" {
 		waitGroup.Add(1)
 		go func() {
 			defer waitGroup.Done()
@@ -662,22 +538,12 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 	// -------------------------------------------------------------------------
 
 	// Get replicas, either by SHOW SLAVE HOSTS or via PROCESSLIST
-	// MaxScale does not support PROCESSLIST, so SHOW SLAVE HOSTS is the only option
-	if config.Config.DiscoverByShowSlaveHosts || isMaxScale {
+	if config.Config.DiscoverByShowSlaveHosts {
 		err := sqlutils.QueryRowsMap(db, `show slave hosts`,
 			func(m sqlutils.RowMap) error {
-				// MaxScale 1.1 may trigger an error with this command, but
-				// also we may see issues if anything on the MySQL server locks up.
-				// Consequently it's important to validate the values received look
-				// good prior to calling ResolveHostname()
 				host := m.GetString("Host")
 				port := m.GetIntD("Port", 0)
 				if host == "" || port == 0 {
-					if isMaxScale && host == "" && port == 0 {
-						// MaxScale reports a bad response sometimes so ignore it.
-						// - seen in 1.1.0 and 1.4.3.4
-						return nil
-					}
 					// otherwise report the error to the caller
 					return fmt.Errorf("ReadTopologyInstance(%+v) 'show slave hosts' returned row with <host,port>: <%v,%v>", instanceKey, host, port)
 				}
@@ -694,7 +560,7 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 
 		logReadTopologyInstanceError(instanceKey, "show slave hosts", err)
 	}
-	if !foundByShowSlaveHosts && !isMaxScale {
+	if !foundByShowSlaveHosts {
 		// Either not configured to read SHOW SLAVE HOSTS or nothing was there.
 		// Discover by information_schema.processlist
 		waitGroup.Add(1)
@@ -752,7 +618,7 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 	}
 
 	// TODO(sougou): delete DetectDataCenterQuery
-	if config.Config.DetectDataCenterQuery != "" && !isMaxScale {
+	if config.Config.DetectDataCenterQuery != "" {
 		waitGroup.Add(1)
 		go func() {
 			defer waitGroup.Done()
@@ -763,7 +629,7 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 	instance.DataCenter = tablet.Alias.Cell
 
 	// TODO(sougou): use cell alias to identify regions.
-	if config.Config.DetectRegionQuery != "" && !isMaxScale {
+	if config.Config.DetectRegionQuery != "" {
 		waitGroup.Add(1)
 		go func() {
 			defer waitGroup.Done()
@@ -772,7 +638,7 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 		}()
 	}
 
-	if config.Config.DetectPhysicalEnvironmentQuery != "" && !isMaxScale {
+	if config.Config.DetectPhysicalEnvironmentQuery != "" {
 		waitGroup.Add(1)
 		go func() {
 			defer waitGroup.Done()
@@ -782,7 +648,7 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 	}
 
 	// TODO(sougou): delete DetectInstanceAliasQuery
-	if config.Config.DetectInstanceAliasQuery != "" && !isMaxScale {
+	if config.Config.DetectInstanceAliasQuery != "" {
 		waitGroup.Add(1)
 		go func() {
 			defer waitGroup.Done()
@@ -793,7 +659,7 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 	instance.InstanceAlias = topoproto.TabletAliasString(tablet.Alias)
 
 	// TODO(sougou): come up with a strategy for semi-sync
-	if config.Config.DetectSemiSyncEnforcedQuery != "" && !isMaxScale {
+	if config.Config.DetectSemiSyncEnforcedQuery != "" {
 		waitGroup.Add(1)
 		go func() {
 			defer waitGroup.Done()
@@ -819,7 +685,7 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 	// TODO(sougou): delete cluster_alias_override metadata
 	instance.SuggestedClusterAlias = fmt.Sprintf("%v:%v", tablet.Keyspace, tablet.Shard)
 
-	if instance.ReplicationDepth == 0 && config.Config.DetectClusterDomainQuery != "" && !isMaxScale {
+	if instance.ReplicationDepth == 0 && config.Config.DetectClusterDomainQuery != "" {
 		// Only need to do on masters
 		domainName := ""
 		if err := db.QueryRow(config.Config.DetectClusterDomainQuery).Scan(&domainName); err != nil {
