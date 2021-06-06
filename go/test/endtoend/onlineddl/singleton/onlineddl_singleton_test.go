@@ -274,14 +274,17 @@ func TestSchemaChange(t *testing.T) {
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 		checkTable(t, tableName, true)
 	})
-
-	// Last two tests (we run an incomplete migration)
-	t.Run("submit successful migration, no wait, vtgate", func(t *testing.T) {
-		_ = testOnlineDDLStatement(t, alterTableTrivialStatement, "gh-ost -singleton", "vtgate", "hint_col", "", true)
-	})
-	t.Run("fail submit migration, no wait, vtgate", func(t *testing.T) {
-		_ = testOnlineDDLStatement(t, alterTableTrivialStatement, "gh-ost -singleton", "vtgate", "hint_col", "rejected", true)
-	})
+	{
+		var noWaitUUID string
+		// Run migration without waiting
+		t.Run("submit successful migration, no wait, vtgate", func(t *testing.T) {
+			noWaitUUID = testOnlineDDLStatement(t, alterTableTrivialStatement, "gh-ost -singleton", "vtgate", "hint_col", "", true)
+		})
+		t.Run("fail submit migration, no wait, vtgate", func(t *testing.T) {
+			_ = testOnlineDDLStatement(t, alterTableTrivialStatement, "gh-ost -singleton", "vtgate", "hint_col", "rejected", true)
+		})
+		onlineddl.WaitForMigration(t, &vtParams, noWaitUUID, len(clusterInstance.Keyspaces[0].Shards), time.Second*20, false)
+	}
 }
 
 // testOnlineDDLStatement runs an online DDL, ALTER statement
