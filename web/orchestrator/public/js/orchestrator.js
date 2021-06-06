@@ -911,9 +911,6 @@ function renderInstanceElement(popoverElement, instance, renderType) {
         popoverElement.find("h3 div.pull-right").prepend('<span class="glyphicon glyphicon-globe" title="Using GTID"></span> ');
       }
     }
-    if (instance.UsingPseudoGTID) {
-      popoverElement.find("h3 div.pull-right").prepend('<span class="glyphicon glyphicon-globe" title="Using Pseudo GTID"></span> ');
-    }
     if (!instance.ReadOnly) {
       popoverElement.find("h3 div.pull-right").prepend('<span class="glyphicon glyphicon-pencil" title="Writeable"></span> ');
     }

@@ -99,7 +99,6 @@ var GroupReplicationNotSupportedErrors = map[uint16]bool{
 // instanceKeyInformativeClusterName is a non-authoritative cache; used for auditing or general purpose.
 var instanceKeyInformativeClusterName *cache.Cache
 var forgetInstanceKeys *cache.Cache
-var clusterInjectedPseudoGTIDCache *cache.Cache
 
 var accessDeniedCounter = metrics.NewCounter()
 var readTopologyInstanceCounter = metrics.NewCounter()
@@ -127,7 +126,6 @@ func initializeInstanceDao() {
 	instanceWriteBuffer = make(chan instanceUpdateObject, config.Config.InstanceWriteBufferSize)
 	instanceKeyInformativeClusterName = cache.New(time.Duration(config.Config.InstancePollSeconds/2)*time.Second, time.Second)
 	forgetInstanceKeys = cache.New(time.Duration(config.Config.InstancePollSeconds*3)*time.Second, time.Second)
-	clusterInjectedPseudoGTIDCache = cache.New(time.Minute, time.Second)
 	// spin off instance write buffer flushing
 	go func() {
 		flushTick := time.Tick(time.Duration(config.Config.InstanceFlushIntervalMilliseconds) * time.Millisecond) //nolint SA1015: using time.Tick leaks the underlying ticker
@@ -811,33 +809,6 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 		logReadTopologyInstanceError(instanceKey, "ReadInstanceClusterAttributes", err)
 	}
 
-	{
-		// Pseudo GTID
-		// Depends on ReadInstanceClusterAttributes above
-		instance.UsingPseudoGTID = false
-		if config.Config.AutoPseudoGTID {
-			var err error
-			instance.UsingPseudoGTID, err = isInjectedPseudoGTID(instance.ClusterName)
-			log.Errore(err)
-		} else if config.Config.DetectPseudoGTIDQuery != "" {
-			waitGroup.Add(1)
-			go func() {
-				defer waitGroup.Done()
-				if resultData, err := sqlutils.QueryResultData(db, config.Config.DetectPseudoGTIDQuery); err == nil {
-					if len(resultData) > 0 {
-						if len(resultData[0]) > 0 {
-							if resultData[0][0].Valid && resultData[0][0].String == "1" {
-								instance.UsingPseudoGTID = true
-							}
-						}
-					}
-				} else {
-					logReadTopologyInstanceError(instanceKey, "DetectPseudoGTIDQuery", err)
-				}
-			}()
-		}
-	}
-
 	// We need to update candidate_database_instance.
 	// We register the rule even if it hasn't changed,
 	// to bump the last_suggested time.
@@ -1144,7 +1115,6 @@ func readInstanceRow(m sqlutils.RowMap) *Instance {
 	instance.GtidPurged = m.GetString("gtid_purged")
 	instance.GtidErrant = m.GetString("gtid_errant")
 	instance.UsingMariaDBGTID = m.GetBool("mariadb_gtid")
-	instance.UsingPseudoGTID = m.GetBool("pseudo_gtid")
 	instance.SelfBinlogCoordinates.LogFile = m.GetString("binary_log_file")
 	instance.SelfBinlogCoordinates.LogPos = m.GetInt64("binary_log_pos")
 	instance.ReadBinlogCoordinates.LogFile = m.GetString("master_log_file")
@@ -2911,68 +2881,6 @@ func ReadHistoryClusterInstances(clusterName string, historyTimestampPattern str
 }
 
 // RecordInstanceCoordinatesHistory snapshots the binlog coordinates of instances
-func RecordInstanceCoordinatesHistory() error {
-	{
-		writeFunc := func() error {
-			_, err := db.ExecOrchestrator(`
-        	delete from database_instance_coordinates_history
-			where
-				recorded_timestamp < NOW() - INTERVAL ? MINUTE
-				`, (config.PseudoGTIDCoordinatesHistoryHeuristicMinutes + 2),
-			)
-			return log.Errore(err)
-		}
-		ExecDBWriteFunc(writeFunc)
-	}
-	writeFunc := func() error {
-		_, err := db.ExecOrchestrator(`
-			insert into
-				database_instance_coordinates_history (
-					hostname, port,	last_seen, recorded_timestamp,
-					binary_log_file, binary_log_pos, relay_log_file, relay_log_pos
-				)
-			select
-				hostname, port, last_seen, NOW(),
-				binary_log_file, binary_log_pos, relay_log_file, relay_log_pos
-			from
-				database_instance
-			where
-				(
-					binary_log_file != ''
-					or relay_log_file != ''
-				)
-				`,
-		)
-		return log.Errore(err)
-	}
-	return ExecDBWriteFunc(writeFunc)
-}
-
-// GetHeuristiclyRecentCoordinatesForInstance returns valid and reasonably recent coordinates for given instance.
-func GetHeuristiclyRecentCoordinatesForInstance(instanceKey *InstanceKey) (selfCoordinates *BinlogCoordinates, relayLogCoordinates *BinlogCoordinates, err error) {
-	query := `
-		select
-			binary_log_file, binary_log_pos, relay_log_file, relay_log_pos
-		from
-			database_instance_coordinates_history
-		where
-			hostname = ?
-			and port = ?
-			and recorded_timestamp <= NOW() - INTERVAL ? MINUTE
-		order by
-			recorded_timestamp desc
-			limit 1
-			`
-	err = db.QueryOrchestrator(query, sqlutils.Args(instanceKey.Hostname, instanceKey.Port, config.PseudoGTIDCoordinatesHistoryHeuristicMinutes), func(m sqlutils.RowMap) error {
-		selfCoordinates = &BinlogCoordinates{LogFile: m.GetString("binary_log_file"), LogPos: m.GetInt64("binary_log_pos")}
-		relayLogCoordinates = &BinlogCoordinates{LogFile: m.GetString("relay_log_file"), LogPos: m.GetInt64("relay_log_pos")}
-
-		return nil
-	})
-	return selfCoordinates, relayLogCoordinates, err
-}
-
-// RecordInstanceCoordinatesHistory snapshots the binlog coordinates of instances
 func RecordStaleInstanceBinlogCoordinates(instanceKey *InstanceKey, binlogCoordinates *BinlogCoordinates) error {
 	args := sqlutils.Args(
 		instanceKey.Hostname, instanceKey.Port,
@@ -3217,60 +3125,4 @@ func PopulateGroupReplicationInformation(instance *Instance, db *sql.DB) error {
 		}
 	}
 	return nil
-}
-
-// RegisterInjectedPseudoGTID
-func RegisterInjectedPseudoGTID(clusterName string) error {
-	query := `
-			insert into cluster_injected_pseudo_gtid (
-					cluster_name,
-					time_injected
-				) values (?, now())
-				on duplicate key update
-					cluster_name=values(cluster_name),
-					time_injected=now()
-				`
-	args := sqlutils.Args(clusterName)
-	writeFunc := func() error {
-		_, err := db.ExecOrchestrator(query, args...)
-		if err == nil {
-			clusterInjectedPseudoGTIDCache.Set(clusterName, true, cache.DefaultExpiration)
-		}
-		return log.Errore(err)
-	}
-	return ExecDBWriteFunc(writeFunc)
-}
-
-// ExpireInjectedPseudoGTID
-func ExpireInjectedPseudoGTID() error {
-	writeFunc := func() error {
-		_, err := db.ExecOrchestrator(`
-				delete from cluster_injected_pseudo_gtid
-				where time_injected < NOW() - INTERVAL ? MINUTE
-				`, config.PseudoGTIDExpireMinutes,
-		)
-		return log.Errore(err)
-	}
-	return ExecDBWriteFunc(writeFunc)
-}
-
-// isInjectedPseudoGTID reads from backend DB / cache
-func isInjectedPseudoGTID(clusterName string) (injected bool, err error) {
-	if injectedValue, found := clusterInjectedPseudoGTIDCache.Get(clusterName); found {
-		return injectedValue.(bool), err
-	}
-	query := `
-			select
-					count(*) as is_injected
-				from
-					cluster_injected_pseudo_gtid
-				where
-					cluster_name = ?
-			`
-	err = db.QueryOrchestrator(query, sqlutils.Args(clusterName), func(m sqlutils.RowMap) error {
-		injected = m.GetBool("is_injected")
-		return nil
-	})
-	clusterInjectedPseudoGTIDCache.Set(clusterName, injected, cache.DefaultExpiration)
-	return injected, log.Errore(err)
 }

@@ -219,52 +219,6 @@ func init() {
 
   (this command was previously named "multi-match-replicas")
 	`
-	CommandHelp["match-up"] = `
-  Transport the replica one level up the hierarchy, making it child of its grandparent. This is
-  similar in essence to move-up, only based on Pseudo-GTID. The master of the given instance
-  does not need to be alive or connected (and could in fact be crashed). It is never contacted.
-  Grandparent instance must be alive and accessible.
-  Examples:
-
-  orchestrator -c match-up -i replica.to.match.up.com:3306
-
-  orchestrator -c match-up
-      -i not given, implicitly assumed local hostname
-	`
-	CommandHelp["match-up-replicas"] = `
-  Matches replicas of the given instance one level up the topology, making them siblings of given instance.
-  This is a (faster) shortcut to executing match-up on all replicas of given instance. The instance need
-  not be alive / accessib;e / functional. It can be crashed.
-  Example:
-
-  orchestrator -c match-up-replicas -i replica.whose.subreplicas.will.match.up.com
-
-  orchestrator -c match-up-replicas -i replica.whose.subreplicas.will.match.up.com[:3306] --pattern=regexp.filter
-      only apply to those instances that match given regex
-	`
-	CommandHelp["rematch"] = `
-  Reconnect a replica onto its master, via PSeudo-GTID. The use case for this operation is a non-crash-safe
-  replication configuration (e.g. MySQL 5.5) with sync_binlog=1 and log_slave_updates. This operation
-  implies crash-safe-replication and makes it possible for the replica to reconnect. Example:
-
-  orchestrator -c rematch -i replica.to.rematch.under.its.master
-	`
-	CommandHelp["regroup-replicas"] = `
-  Given an instance (possibly a crashed one; it is never being accessed), pick one of its replica and make it
-  local master of its siblings, using Pseudo-GTID. It is uncertain that there *is* a replica that will be able to
-  become master to all its siblings. But if there is one, orchestrator will pick such one. There are many
-  constraints, most notably the replication positions of all replicas, whether they use log_slave_updates, and
-  otherwise version compatabilities etc.
-  As many replicas that can be regrouped under promoted slves are operated on. The rest are untouched.
-  This command is useful in the event of a crash. For example, in the event that a master dies, this operation
-  can promote a candidate replacement and set up the remaining topology to correctly replicate from that
-  replacement replica. Example:
-
-  orchestrator -c regroup-replicas -i instance.with.replicas.one.of.which.will.turn.local.master.if.possible
-
-  --debug is your friend.
-	`
-
 	CommandHelp["enable-gtid"] = `
   If possible, enable GTID replication. This works on Oracle (>= 5.6, gtid-mode=1) and MariaDB (>= 10.0).
   Replication is stopped for a short duration so as to reconfigure as GTID. In case of error replication remains
@@ -387,37 +341,6 @@ func init() {
 
       Purges binary logs until given log
 	`
-	CommandHelp["last-pseudo-gtid"] = `
-  Information command; an authoritative way of detecting whether a Pseudo-GTID event exist for an instance,
-  and if so, output the last Pseudo-GTID entry and its location. Example:
-
-  orchestrator -c last-pseudo-gtid -i instance.with.possible.pseudo-gtid.injection
-	`
-	CommandHelp["find-binlog-entry"] = `
-  Get binlog file:pos of entry given by --pattern (exact full match, not a regular expression) in a given instance.
-  This will search the instance's binary logs starting with most recent, and terminate as soon as an exact match is found.
-  The given input is not a regular expression. It must fully match the entry (not a substring).
-  This is most useful when looking for uniquely identifyable values, such as Pseudo-GTID. Example:
-
-  orchestrator -c find-binlog-entry -i instance.to.search.on.com --pattern "insert into my_data (my_column) values ('distinct_value_01234_56789')"
-
-      Prints out the binlog file:pos where the entry is found, or errors if unfound.
-	`
-	CommandHelp["correlate-binlog-pos"] = `
-  Given an instance (-i) and binlog coordinates (--binlog=file:pos), find the correlated coordinates in another instance (-d).
-  "Correlated coordinates" are those that present the same point-in-time of sequence of binary log events, untangling
-  the mess of different binlog file:pos coordinates on different servers.
-  This operation relies on Pseudo-GTID: your servers must have been pre-injected with PSeudo-GTID entries as these are
-  being used as binlog markers in the correlation process.
-  You must provide a valid file:pos in the binlogs of the source instance (-i), and in response get the correlated
-  coordinates in the binlogs of the destination instance (-d). This operation does not work on relay logs.
-  Example:
-
-  orchestrator -c correlate-binlog-pos  -i instance.with.binary.log.com --binlog=mysql-bin.002366:14127 -d other.instance.with.binary.logs.com
-
-      Prints out correlated coordinates, e.g.: "mysql-bin.002302:14220", or errors out.
-	`
-
 	CommandHelp["submit-pool-instances"] = `
   Submit a pool name with a list of instances in that pool. This removes any previous instances associated with
   that pool. Expecting comma delimited list of instances
