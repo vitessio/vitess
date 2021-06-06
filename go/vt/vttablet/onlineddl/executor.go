@@ -1320,7 +1320,7 @@ func (e *Executor) readPendingMigrationsUUIDs(ctx context.Context) (uuids []stri
 }
 
 // readTablePendingMigrationsUUIDs returns UUIDs for migrations on given table, that are in pending state (queued/ready/running)
-func (e *Executor) readTablePendingMigrationsUUIDs(ctx context.Context, table string) (uuids []string, err error) {
+func (e *Executor) readTablePendingMigrationsUUIDs(ctx context.Context, table string, excludeUUID string) (uuids []string, err error) {
 	query, err := sqlparser.ParseAndBind(sqlSelectPendingMigrations,
 		sqltypes.StringBindVariable(e.keyspace),
 	)
@@ -1334,7 +1334,9 @@ func (e *Executor) readTablePendingMigrationsUUIDs(ctx context.Context, table st
 		pendingTable := row["mysql_table"].ToString()
 
 		if pendingTable == table {
-			uuids = append(uuids, pendingUUID)
+			if pendingUUID != excludeUUID {
+				uuids = append(uuids, pendingUUID)
+			}
 		}
 	}
 	return uuids, err
@@ -1540,7 +1542,7 @@ func (e *Executor) validateMigrationRevertible(ctx context.Context, revertMigrat
 	}
 	{
 		// Validation: see if there's a pending migration on this table:
-		pendingUUIDs, err := e.readTablePendingMigrationsUUIDs(ctx, revertMigration.Table)
+		pendingUUIDs, err := e.readTablePendingMigrationsUUIDs(ctx, revertMigration.Table, revertMigration.UUID)
 		if err != nil {
 			return err
 		}
@@ -1787,12 +1789,12 @@ func (e *Executor) evaluateDeclarativeDiff(ctx context.Context, onlineDDL *schem
 // doesMigrationHaveSameSQLAsLastCompletedMigration checks, for a given migration, if last complete migration _on same table_ has the exact same SQL
 // as given migration. There must not be any pending migrations on same table.
 func (e *Executor) doesMigrationHaveSameSQLAsLastCompletedMigration(ctx context.Context, onlineDDL *schema.OnlineDDL) (same bool, completedUUID string, err error) {
-	pendingUUIDs, err := e.readTablePendingMigrationsUUIDs(ctx, onlineDDL.Table)
+	pendingUUIDs, err := e.readTablePendingMigrationsUUIDs(ctx, onlineDDL.Table, onlineDDL.UUID)
 	if err != nil {
 		return false, "", err
 	}
 	if len(pendingUUIDs) > 0 {
-		// there are pending migrations on same table; this is a no-match
+		// there are other pending migrations on same table; this is a no-match
 		return false, "", nil
 	}
 	found, completedUUID, err := e.getLastCompletedMigrationOnTable(ctx, onlineDDL.Table)
