@@ -313,18 +313,6 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			}
 			fmt.Printf("%s<%s\n", instanceKey.DisplayString(), destinationKey.DisplayString())
 		}
-	case registerCliCommand("move-equivalent", "Classic file:pos relocation", `Moves a replica beneath another server, based on previously recorded "equivalence coordinates"`):
-		{
-			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
-			if destinationKey == nil {
-				log.Fatal("Cannot deduce destination:", destination)
-			}
-			_, err := inst.MoveEquivalent(instanceKey, destinationKey)
-			if err != nil {
-				log.Fatale(err)
-			}
-			fmt.Printf("%s<%s\n", instanceKey.DisplayString(), destinationKey.DisplayString())
-		}
 	case registerCliCommand("repoint", "Classic file:pos relocation", `Make the given instance replicate from another instance without changing the binglog coordinates. Use with care`):
 		{
 			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)

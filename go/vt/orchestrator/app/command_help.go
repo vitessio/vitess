@@ -79,24 +79,6 @@ func init() {
   orchestrator -c move-below -d sibling.replica.under.which.to.move.com
       -i not given, implicitly assumed local hostname
 	`
-	CommandHelp["move-equivalent"] = `
-  Moves a replica beneath another server, based on previously recorded "equivalence coordinates". Such coordinates
-  are obtained whenever orchestrator issues a CHANGE MASTER TO. The "before" and "after" masters coordinates are
-  persisted. In such cases where the newly relocated replica is unable to replicate (e.g. firewall issues) it is then
-  easy to revert the relocation via "move-equivalent".
-  The command works if and only if orchestrator has an exact mapping between the replica's current replication coordinates
-  and some other coordinates.
-  Example:
-
-  orchestrator -c move-equivalent -i replica.to.revert.master.position.com -d master.to.move.to.com
-	`
-	CommandHelp["take-siblings"] = `
-  Turn all siblings of a replica into its sub-replicas. No action taken for siblings that cannot become
-  replicas of given instance (e.g. incompatible versions, binlog format etc.). This is a (faster) shortcut
-  to executing move-below for all siblings of the given instance. Example:
-
-  orchestrator -c take-siblings -i replica.whose.siblings.will.move.below.com
-	`
 	CommandHelp["take-master"] = `
   Turn an instance into a master of its own master; essentially switch the two. Replicas of each of the two
   involved instances are unaffected, and continue to replicate as they were.

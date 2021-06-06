@@ -940,32 +940,6 @@ func (this *HttpAPI) RelocateReplicas(params martini.Params, r render.Render, re
 	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Relocated %d replicas of %+v below %+v; %d errors: %+v", len(replicas), instanceKey, belowKey, len(errs), errs), Details: replicas})
 }
 
-// MoveEquivalent attempts to move an instance below another, baseed on known equivalence master coordinates
-func (this *HttpAPI) MoveEquivalent(params martini.Params, r render.Render, req *http.Request, user auth.User) {
-	if !isAuthorizedForAction(req, user) {
-		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
-		return
-	}
-	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
-	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
-		return
-	}
-	belowKey, err := this.getInstanceKey(params["belowHost"], params["belowPort"])
-	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
-		return
-	}
-
-	instance, err := inst.MoveEquivalent(&instanceKey, &belowKey)
-	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
-		return
-	}
-
-	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Instance %+v relocated via equivalence coordinates below %+v", instanceKey, belowKey), Details: instance})
-}
-
 // RegroupReplicas attempts to pick a replica of a given instance and make it take its siblings, using any
 // method possible (GTID, binlog servers)
 func (this *HttpAPI) RegroupReplicas(params martini.Params, r render.Render, req *http.Request, user auth.User) {
@@ -1219,33 +1193,6 @@ func (this *HttpAPI) RestartReplicationStatements(params martini.Params, r rende
 	}
 
 	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("statements for: %+v", instanceKey), Details: statements})
-}
-
-// MasterEquivalent provides (possibly empty) list of master coordinates equivalent to the given ones
-func (this *HttpAPI) MasterEquivalent(params martini.Params, r render.Render, req *http.Request, user auth.User) {
-	if !isAuthorizedForAction(req, user) {
-		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
-		return
-	}
-	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
-	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
-		return
-	}
-	coordinates, err := this.getBinlogCoordinates(params["logFile"], params["logPos"])
-	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
-		return
-	}
-	instanceCoordinates := &inst.InstanceBinlogCoordinates{Key: instanceKey, Coordinates: coordinates}
-
-	equivalentCoordinates, err := inst.GetEquivalentMasterCoordinates(instanceCoordinates)
-	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
-		return
-	}
-
-	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Found %+v equivalent coordinates", len(equivalentCoordinates)), Details: equivalentCoordinates})
 }
 
 // CanReplicateFrom attempts to move an instance below another via pseudo GTID matching of binlog entries
@@ -2893,13 +2840,11 @@ func (this *HttpAPI) RegisterRequests(m *martini.ClassicMartini) {
 	this.registerAPIRequest(m, "move-up/:host/:port", this.MoveUp)
 	this.registerAPIRequest(m, "move-up-slaves/:host/:port", this.MoveUpReplicas)
 	this.registerAPIRequest(m, "move-below/:host/:port/:siblingHost/:siblingPort", this.MoveBelow)
-	this.registerAPIRequest(m, "move-equivalent/:host/:port/:belowHost/:belowPort", this.MoveEquivalent)
 	this.registerAPIRequest(m, "repoint/:host/:port/:belowHost/:belowPort", this.Repoint)
 	this.registerAPIRequest(m, "repoint-slaves/:host/:port", this.RepointReplicas)
 	this.registerAPIRequest(m, "make-co-master/:host/:port", this.MakeCoMaster)
 	this.registerAPIRequest(m, "enslave-siblings/:host/:port", this.TakeSiblings)
 	this.registerAPIRequest(m, "enslave-master/:host/:port", this.TakeMaster)
-	this.registerAPIRequest(m, "master-equivalent/:host/:port/:logFile/:logPos", this.MasterEquivalent)
 
 	// Binlog server relocation:
 	this.registerAPIRequest(m, "regroup-slaves-bls/:host/:port", this.RegroupReplicasBinlogServers)
