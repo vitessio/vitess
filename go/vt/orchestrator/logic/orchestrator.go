@@ -28,7 +28,6 @@ import (
 	"github.com/rcrowley/go-metrics"
 	"github.com/sjmudd/stopwatch"
 
-	"vitess.io/vitess/go/vt/orchestrator/agent"
 	"vitess.io/vitess/go/vt/orchestrator/collection"
 	"vitess.io/vitess/go/vt/orchestrator/config"
 	"vitess.io/vitess/go/vt/orchestrator/discovery"
@@ -489,54 +488,5 @@ func ContinuousDiscovery() {
 		case <-tabletTopoTick:
 			go RefreshTablets()
 		}
-	}
-}
-
-func pollAgent(hostname string) error {
-	polledAgent, err := agent.GetAgent(hostname)
-	agent.UpdateAgentLastChecked(hostname)
-
-	if err != nil {
-		return log.Errore(err)
-	}
-
-	err = agent.UpdateAgentInfo(hostname, polledAgent)
-	if err != nil {
-		return log.Errore(err)
-	}
-
-	return nil
-}
-
-// ContinuousAgentsPoll starts an asynchronuous infinite process where agents are
-// periodically investigated and their status captured, and long since unseen agents are
-// purged and forgotten.
-func ContinuousAgentsPoll() {
-	log.Infof("Starting continuous agents poll")
-
-	go discoverSeededAgents()
-
-	tick := time.Tick(config.HealthPollSeconds * time.Second)
-	caretakingTick := time.Tick(time.Hour)
-	for range tick {
-		agentsHosts, _ := agent.ReadOutdatedAgentsHosts()
-		log.Debugf("outdated agents hosts: %+v", agentsHosts)
-		for _, hostname := range agentsHosts {
-			go pollAgent(hostname)
-		}
-		// See if we should also forget agents (lower frequency)
-		select {
-		case <-caretakingTick:
-			agent.ForgetLongUnseenAgents()
-			agent.FailStaleSeeds()
-		default:
-		}
-	}
-}
-
-func discoverSeededAgents() {
-	for seededAgent := range agent.SeededAgents {
-		instanceKey := &inst.InstanceKey{Hostname: seededAgent.Hostname, Port: int(seededAgent.MySQLPort)}
-		go inst.ReadTopologyInstance(instanceKey)
 	}
 }

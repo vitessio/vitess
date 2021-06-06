@@ -26,7 +26,6 @@ import (
 	"strings"
 	"time"
 
-	"vitess.io/vitess/go/vt/orchestrator/agent"
 	"vitess.io/vitess/go/vt/orchestrator/config"
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/util"
@@ -1444,15 +1443,6 @@ func Cli(command string, strict bool, instance string, destination string, owner
 				log.Fatale(err)
 			}
 			fmt.Println(replacement.Key.DisplayString())
-		}
-	case registerCliCommand("custom-command", "Agent", "Execute a custom command on the agent as defined in the agent conf"):
-		{
-			output, err := agent.CustomCommand(hostnameFlag, pattern)
-			if err != nil {
-				log.Fatale(err)
-			}
-
-			fmt.Printf("%v\n", output)
 		}
 	case registerCliCommand("disable-global-recoveries", "", `Disallow orchestrator from performing recoveries globally`):
 		{
