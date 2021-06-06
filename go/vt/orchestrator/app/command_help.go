@@ -89,7 +89,7 @@ func init() {
 	CommandHelp["repoint"] = `
   Make the given instance replicate from another instance without changing the binglog coordinates. There
   are little sanity checks to this and this is a risky operation. Use cases are: a rename of the master's
-  host, a corruption in relay-logs, move from beneath MaxScale & Binlog-server. Examples:
+  host, a corruption in relay-logs, move from beneath Binlog-server. Examples:
 
   orchestrator -c repoint -i replica.to.operate.on.com -d new.master.com
 

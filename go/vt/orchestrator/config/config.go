@@ -120,7 +120,6 @@ type Configuration struct {
 	InstanceWriteBufferSize                    int      // Instance write buffer size (max number of instances to flush in one INSERT ODKU)
 	BufferInstanceWrites                       bool     // Set to 'true' for write-optimization on backend table (compromise: writes can be stale and overwrite non stale data)
 	InstanceFlushIntervalMilliseconds          int      // Max interval between instance write buffer flushes
-	SkipMaxScaleCheck                          bool     // If you don't ever have MaxScale BinlogServer in your topology (and most people don't), set this to 'true' to save some pointless queries
 	UnseenInstanceForgetHours                  uint     // Number of hours after which an unseen instance is forgotten
 	SnapshotTopologiesIntervalHours            uint     // Interval in hour between snapshot-topologies invocation. Default: 0 (disabled)
 	DiscoveryMaxConcurrency                    uint     // Number of goroutines doing hosts discovery
@@ -290,7 +289,6 @@ func newConfiguration() *Configuration {
 		InstanceWriteBufferSize:                    100,
 		BufferInstanceWrites:                       false,
 		InstanceFlushIntervalMilliseconds:          100,
-		SkipMaxScaleCheck:                          true,
 		UnseenInstanceForgetHours:                  240,
 		SnapshotTopologiesIntervalHours:            0,
 		DiscoverByShowSlaveHosts:                   false,
