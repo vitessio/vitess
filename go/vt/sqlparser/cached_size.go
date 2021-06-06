@@ -1176,10 +1176,10 @@ func (cached *IsExpr) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(24)
+		size += int64(17)
 	}
-	// field Expr vitess.io/vitess/go/vt/sqlparser.Expr
-	if cc, ok := cached.Expr.(cachedObject); ok {
+	// field Left vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Left.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
 	return size

@@ -26,6 +26,7 @@ import (
 	"vitess.io/vitess/go/vt/wrangler"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
 // This file contains the CellsAliases command group for vtctl.
@@ -75,10 +76,11 @@ func commandAddCellsAlias(ctx context.Context, wr *wrangler.Wrangler, subFlags *
 	}
 
 	alias := subFlags.Arg(0)
-
-	return wr.TopoServer().CreateCellsAlias(ctx, alias, &topodatapb.CellsAlias{
+	_, err := wr.VtctldServer().AddCellsAlias(ctx, &vtctldatapb.AddCellsAliasRequest{
+		Name:  alias,
 		Cells: cells,
 	})
+	return err
 }
 
 func commandUpdateCellsAlias(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -96,11 +98,13 @@ func commandUpdateCellsAlias(ctx context.Context, wr *wrangler.Wrangler, subFlag
 	}
 
 	alias := subFlags.Arg(0)
-
-	return wr.TopoServer().UpdateCellsAlias(ctx, alias, func(ca *topodatapb.CellsAlias) error {
-		ca.Cells = cells
-		return nil
+	_, err := wr.VtctldServer().UpdateCellsAlias(ctx, &vtctldatapb.UpdateCellsAliasRequest{
+		Name: alias,
+		CellsAlias: &topodatapb.CellsAlias{
+			Cells: cells,
+		},
 	})
+	return err
 }
 
 func commandDeleteCellsAlias(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -112,7 +116,10 @@ func commandDeleteCellsAlias(ctx context.Context, wr *wrangler.Wrangler, subFlag
 	}
 	alias := subFlags.Arg(0)
 
-	return wr.TopoServer().DeleteCellsAlias(ctx, alias)
+	_, err := wr.VtctldServer().DeleteCellsAlias(ctx, &vtctldatapb.DeleteCellsAliasRequest{
+		Name: alias,
+	})
+	return err
 }
 
 func commandGetCellsAliases(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {

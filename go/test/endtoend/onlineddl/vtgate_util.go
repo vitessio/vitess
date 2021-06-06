@@ -114,16 +114,6 @@ func CheckCancelAllMigrations(t *testing.T, vtParams *mysql.ConnParams, expectCo
 	assert.Equal(t, expectCount, int(r.RowsAffected))
 }
 
-// ReadMigrations reads migration entries
-func ReadMigrations(t *testing.T, vtParams *mysql.ConnParams, like string) *sqltypes.Result {
-	query, err := sqlparser.ParseAndBind("show vitess_migrations like %a",
-		sqltypes.StringBindVariable(like),
-	)
-	require.NoError(t, err)
-
-	return VtgateExecQuery(t, vtParams, query, "")
-}
-
 // CheckMigrationStatus verifies that the migration indicated by given UUID has the given expected status
 func CheckMigrationStatus(t *testing.T, vtParams *mysql.ConnParams, shards []cluster.Shard, uuid string, expectStatuses ...schema.OnlineDDLStatus) {
 	query, err := sqlparser.ParseAndBind("show vitess_migrations like %a",
@@ -159,6 +149,16 @@ func CheckMigrationArtifacts(t *testing.T, vtParams *mysql.ConnParams, shards []
 		hasArtifacts := (row["artifacts"].ToString() != "")
 		assert.Equal(t, expectArtifacts, hasArtifacts)
 	}
+}
+
+// ReadMigrations reads migration entries
+func ReadMigrations(t *testing.T, vtParams *mysql.ConnParams, like string) *sqltypes.Result {
+	query, err := sqlparser.ParseAndBind("show vitess_migrations like %a",
+		sqltypes.StringBindVariable(like),
+	)
+	require.NoError(t, err)
+
+	return VtgateExecQuery(t, vtParams, query, "")
 }
 
 // WaitForMigration waits for a given migration to either complete or fail.

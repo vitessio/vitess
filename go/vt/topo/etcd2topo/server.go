@@ -40,6 +40,8 @@ import (
 	"strings"
 	"time"
 
+	"google.golang.org/grpc"
+
 	clientv3 "go.etcd.io/etcd/client/v3"
 	"go.etcd.io/etcd/pkg/v3/tlsutil"
 
@@ -116,11 +118,13 @@ func newTLSConfig(certPath, keyPath, caPath string) (*tls.Config, error) {
 	return tlscfg, nil
 }
 
+// NewServerWithOpts creates a new server with the provided TLS options
 func NewServerWithOpts(serverAddr, root, certPath, keyPath, caPath string) (*Server, error) {
 	// TODO: Rename this to NewServer and change NewServer to a name that signifies it uses the process-wide TLS settings.
 	config := clientv3.Config{
 		Endpoints:   strings.Split(serverAddr, ","),
 		DialTimeout: 5 * time.Second,
+		DialOptions: []grpc.DialOption{grpc.WithBlock()},
 	}
 
 	tlscfg, err := newTLSConfig(certPath, keyPath, caPath)

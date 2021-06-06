@@ -1493,3 +1493,8 @@ func (c *Conn) GetTLSClientCerts() []*x509.Certificate {
 	}
 	return nil
 }
+
+// GetRawConn returns the raw net.Conn for nefarious purposes.
+func (c *Conn) GetRawConn() net.Conn {
+	return c.conn
+}

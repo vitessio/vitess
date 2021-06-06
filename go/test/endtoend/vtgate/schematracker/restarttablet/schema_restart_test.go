@@ -73,7 +73,6 @@ func TestMain(m *testing.M) {
 		}
 
 		// List of users authorized to execute vschema ddl operations
-		clusterInstance.VtTabletExtraArgs = []string{"-queryserver-config-schema-change-signal"}
 		clusterInstance.VtGateExtraArgs = []string{"-schema_change_signal"}
 
 		// Start keyspace
@@ -86,7 +85,9 @@ func TestMain(m *testing.M) {
 		}
 
 		// restart the tablet so that the schema.Engine gets a chance to start with existing schema
-		if err := clusterInstance.Keyspaces[0].Shards[0].MasterTablet().RestartOnlyTablet(); err != nil {
+		tablet := clusterInstance.Keyspaces[0].Shards[0].MasterTablet()
+		tablet.VttabletProcess.ExtraArgs = []string{"-queryserver-config-schema-change-signal"}
+		if err := tablet.RestartOnlyTablet(); err != nil {
 			return 1
 		}
 

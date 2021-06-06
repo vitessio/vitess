@@ -114,6 +114,7 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
+	"vitess.io/vitess/go/vt/vtctl/workflow"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/wrangler"
 
@@ -1967,7 +1968,7 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 	}
 	action := subFlags.Arg(0)
 	ksWorkflow := subFlags.Arg(1)
-	target, workflow, err := splitKeyspaceWorkflow(ksWorkflow)
+	target, workflowName, err := splitKeyspaceWorkflow(ksWorkflow)
 	if err != nil {
 		return err
 	}
@@ -1979,7 +1980,7 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 
 	vrwp := &wrangler.VReplicationWorkflowParams{
 		TargetKeyspace: target,
-		Workflow:       workflow,
+		Workflow:       workflowName,
 		DryRun:         *dryRun,
 		AutoStart:      *autoStart,
 		StopAfterCopy:  *stopAfterCopy,
@@ -1987,11 +1988,11 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 
 	printDetails := func() error {
 		s := ""
-		res, err := wr.ShowWorkflow(ctx, workflow, target)
+		res, err := wr.ShowWorkflow(ctx, workflowName, target)
 		if err != nil {
 			return err
 		}
-		s += fmt.Sprintf("Following vreplication streams are running for workflow %s.%s:\n\n", target, workflow)
+		s += fmt.Sprintf("Following vreplication streams are running for workflow %s.%s:\n\n", target, workflowName)
 		for ksShard := range res.ShardStatuses {
 			statuses := res.ShardStatuses[ksShard].MasterReplicationStatuses
 			for _, st := range statuses {
@@ -2227,7 +2228,7 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 			}
 		}
 	case vReplicationWorkflowActionSwitchTraffic:
-		dryRunResults, err = wf.SwitchTraffic(wrangler.DirectionForward)
+		dryRunResults, err = wf.SwitchTraffic(workflow.DirectionForward)
 	case vReplicationWorkflowActionReverseTraffic:
 		dryRunResults, err = wf.ReverseTraffic()
 	case vReplicationWorkflowActionComplete:
@@ -2442,18 +2443,18 @@ func commandDropSources(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 	if subFlags.NArg() != 1 {
 		return fmt.Errorf("<keyspace.workflow> is required")
 	}
-	keyspace, workflow, err := splitKeyspaceWorkflow(subFlags.Arg(0))
+	keyspace, workflowName, err := splitKeyspaceWorkflow(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
 
-	removalType := wrangler.DropTable
+	removalType := workflow.DropTable
 	if *renameTables {
-		removalType = wrangler.RenameTable
+		removalType = workflow.RenameTable
 	}
 
-	_, _, _ = dryRun, keyspace, workflow
-	dryRunResults, err := wr.DropSources(ctx, keyspace, workflow, removalType, *keepData, false, *dryRun)
+	_, _, _ = dryRun, keyspace, workflowName
+	dryRunResults, err := wr.DropSources(ctx, keyspace, workflowName, removalType, *keepData, false, *dryRun)
 	if err != nil {
 		return err
 	}
@@ -2495,9 +2496,9 @@ func commandSwitchReads(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 	if *cellsStr != "" {
 		cells = strings.Split(*cellsStr, ",")
 	}
-	direction := wrangler.DirectionForward
+	direction := workflow.DirectionForward
 	if *reverse {
-		direction = wrangler.DirectionBackward
+		direction = workflow.DirectionBackward
 	}
 	if subFlags.NArg() != 1 {
 		return fmt.Errorf("<keyspace.workflow> is required")
@@ -3108,11 +3109,12 @@ func commandGetVSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 }
 
 func commandGetRoutingRules(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	rr, err := wr.TopoServer().GetRoutingRules(ctx)
+	resp, err := wr.VtctldServer().GetRoutingRules(ctx, &vtctldatapb.GetRoutingRulesRequest{})
 	if err != nil {
 		return err
 	}
-	b, err := json2.MarshalIndentPB(rr, "  ")
+
+	b, err := json2.MarshalIndentPB(resp.RoutingRules, "  ")
 	if err != nil {
 		wr.Logger().Printf("%v\n", err)
 		return err
@@ -3132,7 +3134,10 @@ func commandRebuildVSchemaGraph(ctx context.Context, wr *wrangler.Wrangler, subF
 		return fmt.Errorf("RebuildVSchemaGraph doesn't take any arguments")
 	}
 
-	return wr.TopoServer().RebuildSrvVSchema(ctx, cells)
+	_, err := wr.VtctldServer().RebuildVSchemaGraph(ctx, &vtctldatapb.RebuildVSchemaGraphRequest{
+		Cells: cells,
+	})
+	return err
 }
 
 func commandApplyVSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -3253,6 +3258,7 @@ func commandApplyRoutingRules(ctx context.Context, wr *wrangler.Wrangler, subFla
 	routingRules := subFlags.String("rules", "", "Specify rules as a string")
 	routingRulesFile := subFlags.String("rules_file", "", "Specify rules in a file")
 	skipRebuild := subFlags.Bool("skip_rebuild", false, "If set, do no rebuild the SrvSchema objects.")
+	dryRun := subFlags.Bool("dry-run", false, "Do not upload the routing rules, but print what actions would be taken")
 	var cells flagutil.StringListValue
 	subFlags.Var(&cells, "cells", "If specified, limits the rebuild to the cells, after upload. Ignored if skipRebuild is set.")
 
@@ -3281,20 +3287,47 @@ func commandApplyRoutingRules(ctx context.Context, wr *wrangler.Wrangler, subFla
 
 	b, err := json2.MarshalIndentPB(rr, "  ")
 	if err != nil {
-		wr.Logger().Errorf2(err, "Failed to marshal RoutingRules for display")
+		msg := &strings.Builder{}
+		if *dryRun {
+			msg.WriteString("DRY RUN: ")
+		}
+		msg.WriteString("Failed to marshal RoutingRules for display")
+
+		wr.Logger().Errorf2(err, msg.String())
 	} else {
-		wr.Logger().Printf("New RoutingRules object:\n%s\nIf this is not what you expected, check the input data (as JSON parsing will skip unexpected fields).\n", b)
+		msg := &strings.Builder{}
+		if *dryRun {
+			msg.WriteString("=== DRY RUN ===\n")
+		}
+		msg.WriteString(fmt.Sprintf("New RoutingRules object:\n%s\nIf this is not what you expected, check the input data (as JSON parsing will skip unexpected fields).\n", b))
+		if *dryRun {
+			msg.WriteString("=== (END) DRY RUN ===\n")
+		}
+
+		wr.Logger().Printf(msg.String())
 	}
 
-	if err := wr.TopoServer().SaveRoutingRules(ctx, rr); err != nil {
-		return err
+	if !*dryRun {
+		_, err = wr.VtctldServer().ApplyRoutingRules(ctx, &vtctldatapb.ApplyRoutingRulesRequest{
+			RoutingRules: rr,
+			SkipRebuild:  *skipRebuild,
+			RebuildCells: cells,
+		})
+		if err != nil {
+			return err
+		}
 	}
 
 	if *skipRebuild {
-		wr.Logger().Warningf("Skipping rebuild of SrvVSchema, will need to run RebuildVSchemaGraph for changes to take effect")
-		return nil
+		msg := &strings.Builder{}
+		if *dryRun {
+			msg.WriteString("DRY RUN: ")
+		}
+		msg.WriteString("Skipping rebuild of SrvVSchema, will need to run RebuildVSchemaGraph for changes to take effect")
+		wr.Logger().Warningf(msg.String())
 	}
-	return wr.TopoServer().RebuildSrvVSchema(ctx, cells)
+
+	return nil
 }
 
 func commandGetSrvKeyspaceNames(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {

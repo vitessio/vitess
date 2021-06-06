@@ -1,7 +1,9 @@
-drop table if exists gh_ost_test_child;
+set session foreign_key_checks=0;
+drop table if exists onlineddl_test_child;
 drop table if exists onlineddl_test;
-drop table if exists gh_ost_test_fk_parent;
-create table gh_ost_test_fk_parent (
+drop table if exists onlineddl_test_parent;
+set session foreign_key_checks=1;
+create table onlineddl_test_parent (
   id int auto_increment,
   ts timestamp,
   primary key(id)
@@ -11,10 +13,10 @@ create table onlineddl_test (
   i int not null,
   parent_id int not null,
   primary key(id),
-  constraint test_fk foreign key (parent_id) references gh_ost_test_fk_parent (id) on delete no action
+  constraint test_fk foreign key (parent_id) references onlineddl_test_parent (id) on delete no action
 ) auto_increment=1;
 
-insert into gh_ost_test_fk_parent (id) values (1),(2),(3);
+insert into onlineddl_test_parent (id) values (1),(2),(3);
 
 drop event if exists onlineddl_test;
 delimiter ;;

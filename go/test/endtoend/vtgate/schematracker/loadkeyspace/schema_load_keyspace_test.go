@@ -146,7 +146,6 @@ func TestNoInitialKeyspace(t *testing.T) {
 	// teardown vtgate to flush logs
 	err = clusterInstance.VtgateProcess.TearDown()
 	require.NoError(t, err)
-	clusterInstance.VtgateProcess = cluster.VtgateProcess{}
 
 	// check info logs
 	all, err := ioutil.ReadFile(path.Join(logDir, "vtgate.INFO"))

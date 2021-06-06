@@ -292,3 +292,48 @@ message VStreamRequest {
 message VStreamResponse {
   repeated binlogdata.VEvent events = 1;
 }
+
+// PrepareRequest is the payload to Prepare.
+message PrepareRequest {
+  // caller_id identifies the caller. This is the effective caller ID,
+  // set by the application to further identify the caller.
+  vtrpc.CallerID caller_id = 1;
+
+  // session carries the session state.
+  Session session = 2;
+
+  // query is the query and bind variables to execute.
+  query.BoundQuery query = 3;
+}
+
+// PrepareResponse is the returned value from Prepare.
+message PrepareResponse {
+  // error contains an application level error if necessary. Note the
+  // session may have changed, even when an error is returned (for
+  // instance if a database integrity error happened).
+  vtrpc.RPCError error = 1;
+
+  // session is the updated session information.
+  Session session = 2;
+
+  // fields contains the fields, only set if error is unset.
+  repeated query.Field fields = 3;
+}
+
+// CloseSessionRequest is the payload to CloseSession.
+message CloseSessionRequest {
+  // caller_id identifies the caller. This is the effective caller ID,
+  // set by the application to further identify the caller.
+  vtrpc.CallerID caller_id = 1;
+
+  // session carries the session state.
+  Session session = 2;
+}
+
+// CloseSessionResponse is the returned value from CloseSession.
+message CloseSessionResponse {
+  // error contains an application level error if necessary. Note the
+  // session may have changed, even when an error is returned (for
+  // instance if a database integrity error happened).
+  vtrpc.RPCError error = 1;
+}
