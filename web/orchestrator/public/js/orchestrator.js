@@ -605,7 +605,7 @@ function normalizeInstance(instance) {
   instance.isSeenRecently = instance.SecondsSinceLastSeen.Valid && instance.SecondsSinceLastSeen.Int64 <= 3600;
   instance.supportsGTID = instance.SupportsOracleGTID || instance.UsingMariaDBGTID;
   instance.usingGTID = instance.UsingOracleGTID || instance.UsingMariaDBGTID;
-  instance.isMaxScale = (instance.Version.indexOf("maxscale") >= 0);
+  instance.isMaxScale = false;
 
   // used by cluster-tree
   instance.children = [];
