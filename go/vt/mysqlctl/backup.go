@@ -246,6 +246,8 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 		return nil, vterrors.Wrap(err, "ListBackups failed")
 	}
 
+	metadataManager := &MetadataManager{}
+
 	if len(bhs) == 0 {
 		// There are no backups (not even broken/incomplete ones).
 		params.Logger.Errorf("no backup to restore on BackupStorage for directory %v. Starting up empty.", backupDir)
@@ -259,7 +261,7 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 			params.Logger.Errorf("error resetting replication: %v. Continuing", err)
 		}
 
-		if err := PopulateMetadataTables(params.Mysqld, params.LocalMetadata, params.DbName); err != nil {
+		if err := metadataManager.PopulateMetadataTables(params.Mysqld, params.LocalMetadata, params.DbName); err != nil {
 			params.Logger.Errorf("error populating metadata tables: %v. Continuing", err)
 
 		}
@@ -308,7 +310,7 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 	// Populate local_metadata before starting without --skip-networking,
 	// so it's there before we start announcing ourselves.
 	params.Logger.Infof("Restore: populating local_metadata")
-	err = PopulateMetadataTables(params.Mysqld, params.LocalMetadata, params.DbName)
+	err = metadataManager.PopulateMetadataTables(params.Mysqld, params.LocalMetadata, params.DbName)
 	if err != nil {
 		return nil, err
 	}

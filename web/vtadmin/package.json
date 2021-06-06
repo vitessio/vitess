@@ -17,6 +17,8 @@
     "classnames": "^2.2.6",
     "dayjs": "^1.10.4",
     "downshift": "^6.1.0",
+    "highcharts": "^9.1.0",
+    "highcharts-react-official": "^3.0.0",
     "history": "^5.0.0",
     "lodash-es": "^4.17.20",
     "node-sass": "^4.14.1",
