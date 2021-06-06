@@ -243,7 +243,7 @@ func removeShardCell(ctx context.Context, ts *topo.Server, cell string, keyspace
 		if recursive {
 			log.Infof("Deleting all tablets in cell %v in shard %v/%v", cell, keyspace, shardName)
 			for _, node := range replication.Nodes {
-				// We don't care about scraping our updating the replication
+				// We don't care about scrapping or updating the replication
 				// graph, because we're about to delete the entire replication
 				// graph.
 				log.Infof("Deleting tablet %v", topoproto.TabletAliasString(node.TabletAlias))
