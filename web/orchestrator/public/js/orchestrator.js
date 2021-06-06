@@ -264,7 +264,6 @@ function openNodeModal(node) {
   if (node.UnresolvedHostname) {
     addNodeModalDataAttribute("Unresolved hostname", node.UnresolvedHostname);
   }
-  $('#node_modal [data-btn-group=move-equivalent]').appendTo(hiddenZone);
   if (node.MasterKey.Hostname) {
     var td = addNodeModalDataAttribute("Master", node.masterTitle);
     if (node.IsDetachedMaster) {
@@ -293,24 +292,6 @@ function openNodeModal(node) {
     addNodeModalDataAttribute("SQL delay", node.SQLDelay);
 
     var masterCoordinatesEl = addNodeModalDataAttribute("Master coordinates", node.ExecBinlogCoordinates.LogFile + ":" + node.ExecBinlogCoordinates.LogPos);
-    $('#node_modal [data-btn-group=move-equivalent] ul').empty();
-    $.get(appUrl("/api/master-equivalent/") + node.MasterKey.Hostname + "/" + node.MasterKey.Port + "/" + node.ExecBinlogCoordinates.LogFile + "/" + node.ExecBinlogCoordinates.LogPos, function(equivalenceResult) {
-      if (!equivalenceResult.Details) {
-        return false;
-      }
-      equivalenceResult.Details.forEach(function(equivalence) {
-        if (equivalence.Key.Hostname == node.Key.Hostname && equivalence.Key.Port == node.Key.Port) {
-          // This very instance; will not move below itself
-          return;
-        }
-        var title = canonizeInstanceTitle(equivalence.Key.Hostname + ':' + equivalence.Key.Port);
-        $('#node_modal [data-btn-group=move-equivalent] ul').append('<li><a href="#" data-btn="move-equivalent" data-hostname="' + equivalence.Key.Hostname + '" data-port="' + equivalence.Key.Port + '">' + title + '</a></li>');
-      });
-
-      if ($('#node_modal [data-btn-group=move-equivalent] ul li').length) {
-        $('#node_modal [data-btn-group=move-equivalent]').appendTo(masterCoordinatesEl.find("div"));
-      }
-    }, "json");
     if (node.IsDetached) {
       $('#node_modal button[data-btn=detach-replica]').appendTo(hiddenZone)
       $('#node_modal button[data-btn=reattach-replica]').appendTo(masterCoordinatesEl.find("div"))
@@ -490,12 +471,6 @@ function openNodeModal(node) {
       }
     });
     return false;
-  });
-
-  $("body").on("click", "#node_modal a[data-btn=move-equivalent]", function(event) {
-    var targetHostname = $(event.target).attr("data-hostname");
-    var targetPort = $(event.target).attr("data-port");
-    apiCommand("/api/move-equivalent/" + node.Key.Hostname + "/" + node.Key.Port + "/" + targetHostname + "/" + targetPort);
   });
 
   if (node.IsDowntimed) {
