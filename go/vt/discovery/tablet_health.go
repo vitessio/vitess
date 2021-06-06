@@ -39,6 +39,9 @@ type TabletHealth struct {
 	MasterTermStartTime int64
 	LastError           error
 	Serving             bool
+
+	// TablesUpdated contains a list of all tables that we need to fetch new schema info for
+	TablesUpdated []string
 }
 
 // DeepEqual compares two TabletHealth. Since we include protos, we

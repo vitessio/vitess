@@ -62,7 +62,7 @@ type VReplicationWorkflowParams struct {
 	EnableReverseReplication, DryRun  bool
 	KeepData                          bool
 	Timeout                           time.Duration
-	Direction                         TrafficSwitchDirection
+	Direction                         workflow.TrafficSwitchDirection
 
 	// MoveTables specific
 	SourceKeyspace, Tables  string
@@ -240,7 +240,7 @@ func (vrw *VReplicationWorkflow) GetStreamCount() (int64, int64, []*WorkflowErro
 }
 
 // SwitchTraffic switches traffic in the direction passed for specified tablet_types
-func (vrw *VReplicationWorkflow) SwitchTraffic(direction TrafficSwitchDirection) (*[]string, error) {
+func (vrw *VReplicationWorkflow) SwitchTraffic(direction workflow.TrafficSwitchDirection) (*[]string, error) {
 	var dryRunResults []string
 	var rdDryRunResults, wrDryRunResults *[]string
 	var isCopyInProgress bool
@@ -294,7 +294,7 @@ func (vrw *VReplicationWorkflow) ReverseTraffic() (*[]string, error) {
 	if vrw.workflowType == MigrateWorkflow {
 		return nil, fmt.Errorf("invalid action for Migrate workflow: ReverseTraffic")
 	}
-	return vrw.SwitchTraffic(DirectionBackward)
+	return vrw.SwitchTraffic(workflow.DirectionBackward)
 }
 
 // Workflow errors
@@ -317,11 +317,11 @@ func (vrw *VReplicationWorkflow) Complete() (*[]string, error) {
 	if !ws.WritesSwitched || len(ws.ReplicaCellsNotSwitched) > 0 || len(ws.RdonlyCellsNotSwitched) > 0 {
 		return nil, fmt.Errorf(ErrWorkflowNotFullySwitched)
 	}
-	var renameTable TableRemovalType
+	var renameTable workflow.TableRemovalType
 	if vrw.params.RenameTables {
-		renameTable = RenameTable
+		renameTable = workflow.RenameTable
 	} else {
-		renameTable = DropTable
+		renameTable = workflow.DropTable
 	}
 	if dryRunResults, err = vrw.wr.DropSources(vrw.ctx, vrw.ws.TargetKeyspace, vrw.ws.Workflow, renameTable,
 		false, vrw.params.KeepData, vrw.params.DryRun); err != nil {
@@ -427,7 +427,7 @@ func (vrw *VReplicationWorkflow) switchWrites() (*[]string, error) {
 	var dryRunResults *[]string
 	var err error
 	log.Infof("In VReplicationWorkflow.switchWrites() for %+v", vrw)
-	if vrw.params.Direction == DirectionBackward {
+	if vrw.params.Direction == workflow.DirectionBackward {
 		keyspace := vrw.params.SourceKeyspace
 		vrw.params.SourceKeyspace = vrw.params.TargetKeyspace
 		vrw.params.TargetKeyspace = keyspace
@@ -435,7 +435,7 @@ func (vrw *VReplicationWorkflow) switchWrites() (*[]string, error) {
 		log.Infof("In VReplicationWorkflow.switchWrites(reverse) for %+v", vrw)
 	}
 	journalID, dryRunResults, err = vrw.wr.SwitchWrites(vrw.ctx, vrw.params.TargetKeyspace, vrw.params.Workflow, vrw.params.Timeout,
-		false, vrw.params.Direction == DirectionBackward, vrw.params.EnableReverseReplication, vrw.params.DryRun)
+		false, vrw.params.Direction == workflow.DirectionBackward, vrw.params.EnableReverseReplication, vrw.params.DryRun)
 	if err != nil {
 		return nil, err
 	}

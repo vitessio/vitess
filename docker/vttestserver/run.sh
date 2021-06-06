@@ -16,6 +16,14 @@
 
 # Setup the Vschema Folder
 /vt/setup_vschema_folder.sh "$KEYSPACES" "$NUM_SHARDS"
+
+# Set the maximum connections in the cnf file
+# use 1000 as the default if it is unspecified
+if [[ -z $MYSQL_MAX_CONNECTIONS ]]; then
+  MYSQL_MAX_CONNECTIONS=1000
+fi
+echo "max_connections = $MYSQL_MAX_CONNECTIONS" >> /vt/config/mycnf/default-fast.cnf
+
 # Run the vttestserver binary
 /vt/bin/vttestserver \
 	-port "$PORT" \

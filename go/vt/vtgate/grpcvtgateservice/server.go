@@ -179,6 +179,39 @@ func (vtg *VTGate) StreamExecute(request *vtgatepb.StreamExecuteRequest, stream 
 	return vterrors.ToGRPC(vtgErr)
 }
 
+// Prepare is the RPC version of vtgateservice.VTGateService method
+func (vtg *VTGate) Prepare(ctx context.Context, request *vtgatepb.PrepareRequest) (response *vtgatepb.PrepareResponse, err error) {
+	defer vtg.server.HandlePanic(&err)
+	ctx = withCallerIDContext(ctx, request.CallerId)
+
+	session := request.Session
+	if session == nil {
+		session = &vtgatepb.Session{Autocommit: true}
+	}
+
+	session, fields, err := vtg.server.Prepare(ctx, session, request.Query.Sql, request.Query.BindVariables)
+	return &vtgatepb.PrepareResponse{
+		Fields:  fields,
+		Session: session,
+		Error:   vterrors.ToVTRPC(err),
+	}, nil
+}
+
+// CloseSession is the RPC version of vtgateservice.VTGateService method
+func (vtg *VTGate) CloseSession(ctx context.Context, request *vtgatepb.CloseSessionRequest) (response *vtgatepb.CloseSessionResponse, err error) {
+	defer vtg.server.HandlePanic(&err)
+	ctx = withCallerIDContext(ctx, request.CallerId)
+
+	session := request.Session
+	if session == nil {
+		session = &vtgatepb.Session{Autocommit: true}
+	}
+	err = vtg.server.CloseSession(ctx, session)
+	return &vtgatepb.CloseSessionResponse{
+		Error: vterrors.ToVTRPC(err),
+	}, nil
+}
+
 // ResolveTransaction is the RPC version of vtgateservice.VTGateService method
 func (vtg *VTGate) ResolveTransaction(ctx context.Context, request *vtgatepb.ResolveTransactionRequest) (response *vtgatepb.ResolveTransactionResponse, err error) {
 	defer vtg.server.HandlePanic(&err)
