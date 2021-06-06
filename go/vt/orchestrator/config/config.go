@@ -226,10 +226,6 @@ type Configuration struct {
 	PostponeSlaveRecoveryOnLagMinutes          uint              // Synonym to PostponeReplicaRecoveryOnLagMinutes
 	PostponeReplicaRecoveryOnLagMinutes        uint              // On crash recovery, replicas that are lagging more than given minutes are only resurrected late in the recovery process, after master/IM has been elected and processes executed. Value of 0 disables this feature
 	OSCIgnoreHostnameFilters                   []string          // OSC replicas recommendation will ignore replica hostnames matching given patterns
-	GraphiteAddr                               string            // Optional; address of graphite port. If supplied, metrics will be written here
-	GraphitePath                               string            // Prefix for graphite path. May include {hostname} magic placeholder
-	GraphiteConvertHostnameDotsToUnderscores   bool              // If true, then hostname's dots are converted to underscores before being used in graphite path
-	GraphitePollSeconds                        int               // Graphite writes interval. 0 disables.
 	URLPrefix                                  string            // URL prefix to run orchestrator on non-root web path, e.g. /orchestrator to put it behind nginx.
 	DiscoveryIgnoreReplicaHostnameFilters      []string          // Regexp filters to apply to prevent auto-discovering new replicas. Usage: unreachable servers due to firewalls, applications which trigger binlog dumps
 	DiscoveryIgnoreMasterHostnameFilters       []string          // Regexp filters to apply to prevent auto-discovering a master. Usage: pointing your master temporarily to replicate seom data from external host
@@ -392,10 +388,6 @@ func newConfiguration() *Configuration {
 		DelayMasterPromotionIfSQLThreadNotUpToDate: true,
 		PostponeSlaveRecoveryOnLagMinutes:          0,
 		OSCIgnoreHostnameFilters:                   []string{},
-		GraphiteAddr:                               "",
-		GraphitePath:                               "",
-		GraphiteConvertHostnameDotsToUnderscores:   true,
-		GraphitePollSeconds:                        60,
 		URLPrefix:                                  "",
 		DiscoveryIgnoreReplicaHostnameFilters:      []string{},
 		ConsulAddress:                              "",
