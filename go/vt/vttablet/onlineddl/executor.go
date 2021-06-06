@@ -1228,7 +1228,13 @@ func (e *Executor) readMigration(ctx context.Context, uuid string) (onlineDDL *s
 
 // readPendingMigrationsUUIDs returns UUIDs for migrations in pending state (queued/ready/running)
 func (e *Executor) readPendingMigrationsUUIDs(ctx context.Context) (uuids []string, err error) {
-	r, err := e.execQuery(ctx, sqlSelectPendingMigrations)
+	query, err := sqlparser.ParseAndBind(sqlSelectPendingMigrations,
+		sqltypes.StringBindVariable(e.keyspace),
+	)
+	if err != nil {
+		return uuids, err
+	}
+	r, err := e.execQuery(ctx, query)
 	if err != nil {
 		return uuids, err
 	}
@@ -1241,24 +1247,26 @@ func (e *Executor) readPendingMigrationsUUIDs(ctx context.Context) (uuids []stri
 
 // readTablePendingMigrationsUUIDs returns UUIDs for migrations on given table, that are in pending state (queued/ready/running)
 func (e *Executor) readTablePendingMigrationsUUIDs(ctx context.Context, table string) (uuids []string, err error) {
-	r, err := e.execQuery(ctx, sqlSelectPendingMigrations)
+	query, err := sqlparser.ParseAndBind(sqlSelectPendingMigrations,
+		sqltypes.StringBindVariable(e.keyspace),
+	)
 	if err != nil {
 		return uuids, err
 	}
+	r, err := e.execQuery(ctx, query)
 	// we identify running migrations on requested table
 	for _, row := range r.Named().Rows {
 		pendingUUID := row["migration_uuid"].ToString()
-		pendingKeyspace := row["keyspace"].ToString()
 		pendingTable := row["mysql_table"].ToString()
 
-		if pendingKeyspace == e.keyspace && pendingTable == table {
+		if pendingTable == table {
 			uuids = append(uuids, pendingUUID)
 		}
 	}
 	return uuids, err
 }
 
-// getLastCompletedMigrationOnTable returns the UUID of the last successful migration to complete on given table, if any
+// getLastCompletedMigrationOnTable returns the UUID of the last migration to complete on given table, if any
 func (e *Executor) getLastCompletedMigrationOnTable(ctx context.Context, table string) (found bool, uuid string, err error) {
 	query, err := sqlparser.ParseAndBind(sqlSelectCompleteMigrationsOnTable,
 		sqltypes.StringBindVariable(e.keyspace),
@@ -1408,11 +1416,17 @@ func (e *Executor) scheduleNextMigration(ctx context.Context) error {
 	}
 
 	{
-		r, err := e.execQuery(ctx, sqlSelectCountReadyMigrations)
+
+		query, err := sqlparser.ParseAndBind(sqlSelectCountReadyMigrations,
+			sqltypes.StringBindVariable(e.keyspace),
+		)
 		if err != nil {
 			return err
 		}
-
+		r, err := e.execQuery(ctx, query)
+		if err != nil {
+			return err
+		}
 		row := r.Named().Row()
 		countReady, err := row.ToInt64("count_ready")
 		if err != nil {
@@ -1696,6 +1710,31 @@ func (e *Executor) evaluateDeclarativeDiff(ctx context.Context, onlineDDL *schem
 	return alterClause, nil
 }
 
+// doesMigrationHaveSameSQLAsLastCompletedMigration checks, for a given migration, if last complete migration _on same table_ has the exact same SQL
+// as given migration. There must not be any pending migrations on same table.
+func (e *Executor) doesMigrationHaveSameSQLAsLastCompletedMigration(ctx context.Context, onlineDDL *schema.OnlineDDL) (same bool, completedUUID string, err error) {
+	pendingUUIDs, err := e.readTablePendingMigrationsUUIDs(ctx, onlineDDL.Table)
+	if err != nil {
+		return false, "", err
+	}
+	if len(pendingUUIDs) > 0 {
+		// there are pending migrations on same table; this is a no-match
+		return false, "", nil
+	}
+	found, completedUUID, err := e.getLastCompletedMigrationOnTable(ctx, onlineDDL.Table)
+	if err != nil {
+		return false, "", err
+	}
+	if !found {
+		return false, completedUUID, nil
+	}
+	completedMigration, _, err := e.readMigration(ctx, completedUUID)
+	if err != nil {
+		return false, completedUUID, err
+	}
+	return completedMigration.SQL == onlineDDL.SQL, completedUUID, nil
+}
+
 // executeMigration executes a single migration. It analyzes the migration type:
 // - is it declarative?
 // - is it CREATE / DROP / ALTER?
@@ -1721,28 +1760,7 @@ func (e *Executor) executeMigration(ctx context.Context, onlineDDL *schema.Onlin
 		// This migration runs on some table. Let's see if the last migration to complete on the same table,
 		// has the exact same SQL statement as this one.
 		// If so, and because this migration is flagged with -combine-duplicate-ddl, we implicitly mark it as complete.
-		sameSQLasLastCompletedMigration := func() (same bool, completedUUID string, err error) {
-			pendingUUIDs, err := e.readTablePendingMigrationsUUIDs(ctx, onlineDDL.Table)
-			if err != nil {
-				return false, "", err
-			}
-			if len(pendingUUIDs) > 0 {
-				return false, "", nil
-			}
-			found, completedUUID, err := e.getLastCompletedMigrationOnTable(ctx, onlineDDL.Table)
-			if err != nil {
-				return false, "", err
-			}
-			if !found {
-				return false, completedUUID, nil
-			}
-			completedMigration, _, err := e.readMigration(ctx, completedUUID)
-			if err != nil {
-				return false, completedUUID, err
-			}
-			return completedMigration.SQL == onlineDDL.SQL, completedUUID, nil
-		}
-		same, completedUUID, err := sameSQLasLastCompletedMigration()
+		same, completedUUID, err := e.doesMigrationHaveSameSQLAsLastCompletedMigration(ctx, onlineDDL)
 		if err != nil {
 			return err
 		}
@@ -2276,15 +2294,14 @@ func (e *Executor) reviewStaleMigrations(ctx context.Context) error {
 	e.migrationMutex.Lock()
 	defer e.migrationMutex.Unlock()
 
-	parsed := sqlparser.BuildParsedQuery(sqlSelectStaleMigrations, ":minutes")
-	bindVars := map[string]*querypb.BindVariable{
-		"minutes": sqltypes.Int64BindVariable(staleMigrationMinutes),
-	}
-	bound, err := parsed.GenerateQuery(bindVars, nil)
+	query, err := sqlparser.ParseAndBind(sqlSelectStaleMigrations,
+		sqltypes.Int64BindVariable(staleMigrationMinutes),
+		sqltypes.StringBindVariable(e.keyspace),
+	)
 	if err != nil {
 		return err
 	}
-	r, err := e.execQuery(ctx, bound)
+	r, err := e.execQuery(ctx, query)
 	if err != nil {
 		return err
 	}

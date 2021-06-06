@@ -207,6 +207,7 @@ const (
 		FROM _vt.schema_migrations
 		WHERE
 			migration_status='ready'
+			AND keyspace=%a
 	`
 	sqlSelectStaleMigrations = `SELECT
 			migration_uuid
@@ -214,12 +215,15 @@ const (
 		WHERE
 			migration_status='running'
 			AND liveness_timestamp < NOW() - INTERVAL %a MINUTE
+			AND keyspace=%a
 	`
 	sqlSelectPendingMigrations = `SELECT
-			migration_uuid
+			migration_uuid,
+			mysql_table
 		FROM _vt.schema_migrations
 		WHERE
 			migration_status IN ('queued', 'ready', 'running')
+			AND keyspace=%a
 	`
 	sqlSelectUncollectedArtifacts = `SELECT
 			migration_uuid,
