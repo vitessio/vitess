@@ -51,6 +51,39 @@ var (
 	ErrNoStreams = errors.New("no streams found")
 )
 
+// TrafficSwitchDirection specifies the switching direction.
+type TrafficSwitchDirection int
+
+// The following constants define the switching direction.
+const (
+	DirectionForward = TrafficSwitchDirection(iota)
+	DirectionBackward
+)
+
+// TableRemovalType specifies the way the a table will be removed during a
+// DropSource for a MoveTables workflow.
+type TableRemovalType int
+
+// The following consts define if DropSource will drop or rename the table.
+const (
+	DropTable = TableRemovalType(iota)
+	RenameTable
+)
+
+var tableRemovalTypeStrs = [...]string{
+	"DROP TABLE",
+	"RENAME TABLE",
+}
+
+// String returns a string representation of a TableRemovalType
+func (trt TableRemovalType) String() string {
+	if trt < DropTable || trt > RenameTable {
+		return "Unknown"
+	}
+
+	return tableRemovalTypeStrs[trt]
+}
+
 // ITrafficSwitcher is a temporary hack to allow us to move streamMigrater out
 // of package wrangler without also needing to move trafficSwitcher in the same
 // changeset.

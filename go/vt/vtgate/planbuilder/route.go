@@ -133,7 +133,7 @@ func (rb *route) SetLimit(limit *sqlparser.Limit) {
 }
 
 // Wireup2 implements the logicalPlan interface
-func (rb *route) WireupV4(semTable *semantics.SemTable) error {
+func (rb *route) WireupGen4(semTable *semantics.SemTable) error {
 	rb.prepareTheAST()
 
 	rb.eroute.Query = sqlparser.String(rb.Select)
@@ -668,11 +668,11 @@ func (rb *route) computeEqualPlan(pb *primitiveBuilder, comparison *sqlparser.Co
 // computeIS computes the plan for an equality constraint.
 func (rb *route) computeISPlan(pb *primitiveBuilder, comparison *sqlparser.IsExpr) (opcode engine.RouteOpcode, vindex vindexes.SingleColumn, expr sqlparser.Expr) {
 	// we only handle IS NULL correct. IsExpr can contain other expressions as well
-	if comparison.Operator != sqlparser.IsNullOp {
+	if comparison.Right != sqlparser.IsNullOp {
 		return engine.SelectScatter, nil, nil
 	}
 
-	vindex = pb.st.Vindex(comparison.Expr, rb)
+	vindex = pb.st.Vindex(comparison.Left, rb)
 	// fallback to scatter gather if there is no vindex
 	if vindex == nil {
 		return engine.SelectScatter, nil, nil

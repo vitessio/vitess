@@ -27,6 +27,8 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/key"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtctl/workflow/vexec"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -102,6 +104,154 @@ func (s *Server) CheckReshardingJournalExistsOnTablet(ctx context.Context, table
 	}
 
 	return &journal, exists, nil
+}
+
+// GetCellsWithShardReadsSwitched returns the topo cells partitioned into two
+// slices: one with the cells where shard reads have been switched for the given
+// tablet type and one with the cells where shard reads have not been switched
+// for the given tablet type.
+//
+// This function is for use in Reshard, and "switched reads" is defined as if
+// any one of the source shards has the query service disabled in its tablet
+// control record.
+func (s *Server) GetCellsWithShardReadsSwitched(
+	ctx context.Context,
+	keyspace string,
+	si *topo.ShardInfo,
+	tabletType topodatapb.TabletType,
+) (cellsSwitched []string, cellsNotSwitched []string, err error) {
+	cells, err := s.ts.GetCellInfoNames(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	for _, cell := range cells {
+		srvks, err := s.ts.GetSrvKeyspace(ctx, cell, keyspace)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		// Checking one shard is enough.
+		var (
+			shardServedTypes []string
+			found            bool
+			noControls       bool
+		)
+
+		for _, partition := range srvks.GetPartitions() {
+			if tabletType != partition.GetServedType() {
+				continue
+			}
+
+			// If reads and writes are both switched it is possible that the
+			// shard is not in the partition table.
+			for _, shardReference := range partition.GetShardReferences() {
+				if key.KeyRangeEqual(shardReference.GetKeyRange(), si.GetKeyRange()) {
+					found = true
+					break
+				}
+			}
+
+			// It is possible that there are no tablet controls if the target
+			// shards are not yet serving, or once reads and writes are both
+			// switched.
+			if len(partition.GetShardTabletControls()) == 0 {
+				noControls = true
+				break
+			}
+
+			for _, tabletControl := range partition.GetShardTabletControls() {
+				if key.KeyRangeEqual(tabletControl.GetKeyRange(), si.GetKeyRange()) {
+					if !tabletControl.GetQueryServiceDisabled() {
+						shardServedTypes = append(shardServedTypes, si.ShardName())
+					}
+
+					break
+				}
+			}
+		}
+
+		if found && (len(shardServedTypes) > 0 || noControls) {
+			cellsNotSwitched = append(cellsNotSwitched, cell)
+		} else {
+			cellsSwitched = append(cellsSwitched, cell)
+		}
+	}
+
+	return cellsSwitched, cellsNotSwitched, nil
+}
+
+// GetCellsWithTableReadsSwitched returns the topo cells partitioned into two
+// slices: one with the cells where table reads have been switched for the given
+// tablet type and one with the cells where table reads have not been switched
+// for the given tablet type.
+//
+// This function is for use in MoveTables, and "switched reads" is defined as if
+// the routing rule for a (table, tablet_type) is pointing to the target
+// keyspace.
+func (s *Server) GetCellsWithTableReadsSwitched(
+	ctx context.Context,
+	keyspace string,
+	table string,
+	tabletType topodatapb.TabletType,
+) (cellsSwitched []string, cellsNotSwitched []string, err error) {
+	cells, err := s.ts.GetCellInfoNames(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	getKeyspace := func(ruleTarget string) (string, error) {
+		arr := strings.Split(ruleTarget, ".")
+		if len(arr) != 2 {
+			return "", fmt.Errorf("rule target is not correctly formatted: %s", ruleTarget)
+		}
+
+		return arr[0], nil
+	}
+
+	for _, cell := range cells {
+		srvVSchema, err := s.ts.GetSrvVSchema(ctx, cell)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		var (
+			found    bool
+			switched bool
+		)
+
+		for _, rule := range srvVSchema.RoutingRules.Rules {
+			ruleName := fmt.Sprintf("%s.%s@%s", keyspace, table, strings.ToLower(tabletType.String()))
+			if rule.FromTable == ruleName {
+				found = true
+
+				for _, to := range rule.ToTables {
+					ks, err := getKeyspace(to)
+					if err != nil {
+						log.Errorf(err.Error())
+						return nil, nil, err
+					}
+
+					if ks == keyspace {
+						switched = true
+						break // if one table in the workflow switched, we are done.
+					}
+				}
+			}
+
+			if found {
+				break
+			}
+		}
+
+		if switched {
+			cellsSwitched = append(cellsSwitched, cell)
+		} else {
+			cellsNotSwitched = append(cellsNotSwitched, cell)
+		}
+	}
+
+	return cellsSwitched, cellsNotSwitched, nil
 }
 
 // GetWorkflows returns a list of all workflows that exist in a given keyspace,

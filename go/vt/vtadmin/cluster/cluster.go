@@ -808,6 +808,66 @@ func (c *Cluster) getTabletsToQueryForSchemas(ctx context.Context, keyspace stri
 	return []*vtadminpb.Tablet{randomServingTablet}, nil
 }
 
+// GetSrvVSchema returns the SrvVSchema for a given cell in the cluster.
+func (c *Cluster) GetSrvVSchema(ctx context.Context, cell string) (*vtadminpb.SrvVSchema, error) {
+	span, ctx := trace.NewSpan(ctx, "Cluster.GetVSchema")
+	defer span.Finish()
+
+	AnnotateSpan(c, span)
+	span.Annotate("cell", cell)
+
+	if err := c.Vtctld.Dial(ctx); err != nil {
+		return nil, fmt.Errorf("Vtctld.Dial(cluster=%s) failed: %w", c.ID, err)
+	}
+
+	sv, err := c.Vtctld.GetSrvVSchema(ctx, &vtctldatapb.GetSrvVSchemaRequest{
+		Cell: cell,
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &vtadminpb.SrvVSchema{
+		Cell:       cell,
+		Cluster:    c.ToProto(),
+		SrvVSchema: sv.SrvVSchema,
+	}, nil
+}
+
+// GetSrvVSchemas returns the SrvVSchema for all cells in the cluster,
+// optionally filtered by cell.
+func (c *Cluster) GetSrvVSchemas(ctx context.Context, cells []string) ([]*vtadminpb.SrvVSchema, error) {
+	span, ctx := trace.NewSpan(ctx, "Cluster.GetVSchemas")
+	defer span.Finish()
+
+	AnnotateSpan(c, span)
+
+	if err := c.Vtctld.Dial(ctx); err != nil {
+		return nil, fmt.Errorf("Vtctld.Dial(cluster=%s) failed: %w", c.ID, err)
+	}
+
+	res, err := c.Vtctld.GetSrvVSchemas(ctx, &vtctldatapb.GetSrvVSchemasRequest{
+		Cells: cells,
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	svs := make([]*vtadminpb.SrvVSchema, 0)
+
+	for cell, s := range res.SrvVSchemas {
+		svs = append(svs, &vtadminpb.SrvVSchema{
+			Cell:       cell,
+			Cluster:    c.ToProto(),
+			SrvVSchema: s,
+		})
+	}
+
+	return svs, nil
+}
+
 // GetVSchema returns the vschema for a given keyspace in this cluster. The
 // caller is responsible for making at least one call to c.Vtctld.Dial prior to
 // calling this function.

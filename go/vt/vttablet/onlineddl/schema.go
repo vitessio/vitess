@@ -293,16 +293,43 @@ const (
 			AND ACTION_TIMING='AFTER'
 			AND LEFT(TRIGGER_NAME, 7)='pt_osc_'
 		`
+	selSelectCountFKParentConstraints = `
+		SELECT
+			COUNT(*) as num_fk_constraints
+		FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
+		WHERE
+			REFERENCED_TABLE_SCHEMA=%a AND REFERENCED_TABLE_NAME=%a
+			AND REFERENCED_TABLE_NAME IS NOT NULL
+	`
+	selSelectCountFKChildConstraints = `
+		SELECT
+			COUNT(*) as num_fk_constraints
+		FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
+		WHERE
+			TABLE_SCHEMA=%a AND TABLE_NAME=%a
+			AND REFERENCED_TABLE_NAME IS NOT NULL
+	`
+
 	sqlDropTrigger       = "DROP TRIGGER IF EXISTS `%a`.`%a`"
 	sqlShowTablesLike    = "SHOW TABLES LIKE '%a'"
 	sqlCreateTableLike   = "CREATE TABLE `%a` LIKE `%a`"
 	sqlDropTable         = "DROP TABLE `%a`"
 	sqlAlterTableOptions = "ALTER TABLE `%a` %s"
 	sqlShowColumnsFrom   = "SHOW COLUMNS FROM `%a`"
-	sqlStartVReplStream  = "UPDATE _vt.vreplication set state='Running' where db_name=%a and workflow=%a"
-	sqlStopVReplStream   = "UPDATE _vt.vreplication set state='Stopped' where db_name=%a and workflow=%a"
-	sqlDeleteVReplStream = "DELETE FROM _vt.vreplication where db_name=%a and workflow=%a"
-	sqlReadVReplStream   = `SELECT
+	sqlGetAutoIncrement  = `
+		SELECT
+			AUTO_INCREMENT
+		FROM INFORMATION_SCHEMA.TABLES
+		WHERE
+			TABLES.TABLE_SCHEMA=%a
+			AND TABLES.TABLE_NAME=%a
+			AND AUTO_INCREMENT IS NOT NULL
+		`
+	sqlAlterTableAutoIncrement = "ALTER TABLE `%s` AUTO_INCREMENT=%a"
+	sqlStartVReplStream        = "UPDATE _vt.vreplication set state='Running' where db_name=%a and workflow=%a"
+	sqlStopVReplStream         = "UPDATE _vt.vreplication set state='Stopped' where db_name=%a and workflow=%a"
+	sqlDeleteVReplStream       = "DELETE FROM _vt.vreplication where db_name=%a and workflow=%a"
+	sqlReadVReplStream         = `SELECT
 			id,
 			workflow,
 			source,
@@ -314,7 +341,6 @@ const (
 		FROM _vt.vreplication
 		WHERE
 			workflow=%a
-
 		`
 	sqlReadCountCopyState = `SELECT
 			count(*) as cnt

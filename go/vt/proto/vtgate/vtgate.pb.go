@@ -1231,6 +1231,253 @@ func (x *VStreamResponse) GetEvents() []*binlogdata.VEvent {
 	return nil
 }
 
+// PrepareRequest is the payload to Prepare.
+type PrepareRequest struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	// caller_id identifies the caller. This is the effective caller ID,
+	// set by the application to further identify the caller.
+	CallerId *vtrpc.CallerID `protobuf:"bytes,1,opt,name=caller_id,json=callerId,proto3" json:"caller_id,omitempty"`
+	// session carries the session state.
+	Session *Session `protobuf:"bytes,2,opt,name=session,proto3" json:"session,omitempty"`
+	// query is the query and bind variables to execute.
+	Query *query.BoundQuery `protobuf:"bytes,3,opt,name=query,proto3" json:"query,omitempty"`
+}
+
+func (x *PrepareRequest) Reset() {
+	*x = PrepareRequest{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_vtgate_proto_msgTypes[13]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *PrepareRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PrepareRequest) ProtoMessage() {}
+
+func (x *PrepareRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_vtgate_proto_msgTypes[13]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PrepareRequest.ProtoReflect.Descriptor instead.
+func (*PrepareRequest) Descriptor() ([]byte, []int) {
+	return file_vtgate_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *PrepareRequest) GetCallerId() *vtrpc.CallerID {
+	if x != nil {
+		return x.CallerId
+	}
+	return nil
+}
+
+func (x *PrepareRequest) GetSession() *Session {
+	if x != nil {
+		return x.Session
+	}
+	return nil
+}
+
+func (x *PrepareRequest) GetQuery() *query.BoundQuery {
+	if x != nil {
+		return x.Query
+	}
+	return nil
+}
+
+// PrepareResponse is the returned value from Prepare.
+type PrepareResponse struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	// error contains an application level error if necessary. Note the
+	// session may have changed, even when an error is returned (for
+	// instance if a database integrity error happened).
+	Error *vtrpc.RPCError `protobuf:"bytes,1,opt,name=error,proto3" json:"error,omitempty"`
+	// session is the updated session information.
+	Session *Session `protobuf:"bytes,2,opt,name=session,proto3" json:"session,omitempty"`
+	// fields contains the fields, only set if error is unset.
+	Fields []*query.Field `protobuf:"bytes,3,rep,name=fields,proto3" json:"fields,omitempty"`
+}
+
+func (x *PrepareResponse) Reset() {
+	*x = PrepareResponse{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_vtgate_proto_msgTypes[14]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *PrepareResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PrepareResponse) ProtoMessage() {}
+
+func (x *PrepareResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_vtgate_proto_msgTypes[14]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PrepareResponse.ProtoReflect.Descriptor instead.
+func (*PrepareResponse) Descriptor() ([]byte, []int) {
+	return file_vtgate_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *PrepareResponse) GetError() *vtrpc.RPCError {
+	if x != nil {
+		return x.Error
+	}
+	return nil
+}
+
+func (x *PrepareResponse) GetSession() *Session {
+	if x != nil {
+		return x.Session
+	}
+	return nil
+}
+
+func (x *PrepareResponse) GetFields() []*query.Field {
+	if x != nil {
+		return x.Fields
+	}
+	return nil
+}
+
+// CloseSessionRequest is the payload to CloseSession.
+type CloseSessionRequest struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	// caller_id identifies the caller. This is the effective caller ID,
+	// set by the application to further identify the caller.
+	CallerId *vtrpc.CallerID `protobuf:"bytes,1,opt,name=caller_id,json=callerId,proto3" json:"caller_id,omitempty"`
+	// session carries the session state.
+	Session *Session `protobuf:"bytes,2,opt,name=session,proto3" json:"session,omitempty"`
+}
+
+func (x *CloseSessionRequest) Reset() {
+	*x = CloseSessionRequest{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_vtgate_proto_msgTypes[15]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *CloseSessionRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CloseSessionRequest) ProtoMessage() {}
+
+func (x *CloseSessionRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_vtgate_proto_msgTypes[15]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CloseSessionRequest.ProtoReflect.Descriptor instead.
+func (*CloseSessionRequest) Descriptor() ([]byte, []int) {
+	return file_vtgate_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *CloseSessionRequest) GetCallerId() *vtrpc.CallerID {
+	if x != nil {
+		return x.CallerId
+	}
+	return nil
+}
+
+func (x *CloseSessionRequest) GetSession() *Session {
+	if x != nil {
+		return x.Session
+	}
+	return nil
+}
+
+// CloseSessionResponse is the returned value from CloseSession.
+type CloseSessionResponse struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	// error contains an application level error if necessary. Note the
+	// session may have changed, even when an error is returned (for
+	// instance if a database integrity error happened).
+	Error *vtrpc.RPCError `protobuf:"bytes,1,opt,name=error,proto3" json:"error,omitempty"`
+}
+
+func (x *CloseSessionResponse) Reset() {
+	*x = CloseSessionResponse{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_vtgate_proto_msgTypes[16]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *CloseSessionResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CloseSessionResponse) ProtoMessage() {}
+
+func (x *CloseSessionResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_vtgate_proto_msgTypes[16]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CloseSessionResponse.ProtoReflect.Descriptor instead.
+func (*CloseSessionResponse) Descriptor() ([]byte, []int) {
+	return file_vtgate_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *CloseSessionResponse) GetError() *vtrpc.RPCError {
+	if x != nil {
+		return x.Error
+	}
+	return nil
+}
+
 type Session_ShardSession struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
@@ -1246,7 +1493,7 @@ type Session_ShardSession struct {
 func (x *Session_ShardSession) Reset() {
 	*x = Session_ShardSession{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtgate_proto_msgTypes[13]
+		mi := &file_vtgate_proto_msgTypes[17]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -1259,7 +1506,7 @@ func (x *Session_ShardSession) String() string {
 func (*Session_ShardSession) ProtoMessage() {}
 
 func (x *Session_ShardSession) ProtoReflect() protoreflect.Message {
-	mi := &file_vtgate_proto_msgTypes[13]
+	mi := &file_vtgate_proto_msgTypes[17]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1527,7 +1774,36 @@ var file_vtgate_proto_rawDesc = []byte{
 	0x56, 0x53, 0x74, 0x72, 0x65, 0x61, 0x6d, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12,
 	0x2a, 0x0a, 0x06, 0x65, 0x76, 0x65, 0x6e, 0x74, 0x73, 0x18, 0x01, 0x20, 0x03, 0x28, 0x0b, 0x32,
 	0x12, 0x2e, 0x62, 0x69, 0x6e, 0x6c, 0x6f, 0x67, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x56, 0x45, 0x76,
-	0x65, 0x6e, 0x74, 0x52, 0x06, 0x65, 0x76, 0x65, 0x6e, 0x74, 0x73, 0x2a, 0x44, 0x0a, 0x0f, 0x54,
+	0x65, 0x6e, 0x74, 0x52, 0x06, 0x65, 0x76, 0x65, 0x6e, 0x74, 0x73, 0x22, 0x92, 0x01, 0x0a, 0x0e,
+	0x50, 0x72, 0x65, 0x70, 0x61, 0x72, 0x65, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x2c,
+	0x0a, 0x09, 0x63, 0x61, 0x6c, 0x6c, 0x65, 0x72, 0x5f, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28,
+	0x0b, 0x32, 0x0f, 0x2e, 0x76, 0x74, 0x72, 0x70, 0x63, 0x2e, 0x43, 0x61, 0x6c, 0x6c, 0x65, 0x72,
+	0x49, 0x44, 0x52, 0x08, 0x63, 0x61, 0x6c, 0x6c, 0x65, 0x72, 0x49, 0x64, 0x12, 0x29, 0x0a, 0x07,
+	0x73, 0x65, 0x73, 0x73, 0x69, 0x6f, 0x6e, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x0f, 0x2e,
+	0x76, 0x74, 0x67, 0x61, 0x74, 0x65, 0x2e, 0x53, 0x65, 0x73, 0x73, 0x69, 0x6f, 0x6e, 0x52, 0x07,
+	0x73, 0x65, 0x73, 0x73, 0x69, 0x6f, 0x6e, 0x12, 0x27, 0x0a, 0x05, 0x71, 0x75, 0x65, 0x72, 0x79,
+	0x18, 0x03, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x11, 0x2e, 0x71, 0x75, 0x65, 0x72, 0x79, 0x2e, 0x42,
+	0x6f, 0x75, 0x6e, 0x64, 0x51, 0x75, 0x65, 0x72, 0x79, 0x52, 0x05, 0x71, 0x75, 0x65, 0x72, 0x79,
+	0x22, 0x89, 0x01, 0x0a, 0x0f, 0x50, 0x72, 0x65, 0x70, 0x61, 0x72, 0x65, 0x52, 0x65, 0x73, 0x70,
+	0x6f, 0x6e, 0x73, 0x65, 0x12, 0x25, 0x0a, 0x05, 0x65, 0x72, 0x72, 0x6f, 0x72, 0x18, 0x01, 0x20,
+	0x01, 0x28, 0x0b, 0x32, 0x0f, 0x2e, 0x76, 0x74, 0x72, 0x70, 0x63, 0x2e, 0x52, 0x50, 0x43, 0x45,
+	0x72, 0x72, 0x6f, 0x72, 0x52, 0x05, 0x65, 0x72, 0x72, 0x6f, 0x72, 0x12, 0x29, 0x0a, 0x07, 0x73,
+	0x65, 0x73, 0x73, 0x69, 0x6f, 0x6e, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x0f, 0x2e, 0x76,
+	0x74, 0x67, 0x61, 0x74, 0x65, 0x2e, 0x53, 0x65, 0x73, 0x73, 0x69, 0x6f, 0x6e, 0x52, 0x07, 0x73,
+	0x65, 0x73, 0x73, 0x69, 0x6f, 0x6e, 0x12, 0x24, 0x0a, 0x06, 0x66, 0x69, 0x65, 0x6c, 0x64, 0x73,
+	0x18, 0x03, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x0c, 0x2e, 0x71, 0x75, 0x65, 0x72, 0x79, 0x2e, 0x46,
+	0x69, 0x65, 0x6c, 0x64, 0x52, 0x06, 0x66, 0x69, 0x65, 0x6c, 0x64, 0x73, 0x22, 0x6e, 0x0a, 0x13,
+	0x43, 0x6c, 0x6f, 0x73, 0x65, 0x53, 0x65, 0x73, 0x73, 0x69, 0x6f, 0x6e, 0x52, 0x65, 0x71, 0x75,
+	0x65, 0x73, 0x74, 0x12, 0x2c, 0x0a, 0x09, 0x63, 0x61, 0x6c, 0x6c, 0x65, 0x72, 0x5f, 0x69, 0x64,
+	0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x0f, 0x2e, 0x76, 0x74, 0x72, 0x70, 0x63, 0x2e, 0x43,
+	0x61, 0x6c, 0x6c, 0x65, 0x72, 0x49, 0x44, 0x52, 0x08, 0x63, 0x61, 0x6c, 0x6c, 0x65, 0x72, 0x49,
+	0x64, 0x12, 0x29, 0x0a, 0x07, 0x73, 0x65, 0x73, 0x73, 0x69, 0x6f, 0x6e, 0x18, 0x02, 0x20, 0x01,
+	0x28, 0x0b, 0x32, 0x0f, 0x2e, 0x76, 0x74, 0x67, 0x61, 0x74, 0x65, 0x2e, 0x53, 0x65, 0x73, 0x73,
+	0x69, 0x6f, 0x6e, 0x52, 0x07, 0x73, 0x65, 0x73, 0x73, 0x69, 0x6f, 0x6e, 0x22, 0x3d, 0x0a, 0x14,
+	0x43, 0x6c, 0x6f, 0x73, 0x65, 0x53, 0x65, 0x73, 0x73, 0x69, 0x6f, 0x6e, 0x52, 0x65, 0x73, 0x70,
+	0x6f, 0x6e, 0x73, 0x65, 0x12, 0x25, 0x0a, 0x05, 0x65, 0x72, 0x72, 0x6f, 0x72, 0x18, 0x01, 0x20,
+	0x01, 0x28, 0x0b, 0x32, 0x0f, 0x2e, 0x76, 0x74, 0x72, 0x70, 0x63, 0x2e, 0x52, 0x50, 0x43, 0x45,
+	0x72, 0x72, 0x6f, 0x72, 0x52, 0x05, 0x65, 0x72, 0x72, 0x6f, 0x72, 0x2a, 0x44, 0x0a, 0x0f, 0x54,
 	0x72, 0x61, 0x6e, 0x73, 0x61, 0x63, 0x74, 0x69, 0x6f, 0x6e, 0x4d, 0x6f, 0x64, 0x65, 0x12, 0x0f,
 	0x0a, 0x0b, 0x55, 0x4e, 0x53, 0x50, 0x45, 0x43, 0x49, 0x46, 0x49, 0x45, 0x44, 0x10, 0x00, 0x12,
 	0x0a, 0x0a, 0x06, 0x53, 0x49, 0x4e, 0x47, 0x4c, 0x45, 0x10, 0x01, 0x12, 0x09, 0x0a, 0x05, 0x4d,
@@ -1555,7 +1831,7 @@ func file_vtgate_proto_rawDescGZIP() []byte {
 }
 
 var file_vtgate_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_vtgate_proto_msgTypes = make([]protoimpl.MessageInfo, 16)
+var file_vtgate_proto_msgTypes = make([]protoimpl.MessageInfo, 20)
 var file_vtgate_proto_goTypes = []interface{}{
 	(TransactionMode)(0),               // 0: vtgate.TransactionMode
 	(CommitOrder)(0),                   // 1: vtgate.CommitOrder
@@ -1572,72 +1848,86 @@ var file_vtgate_proto_goTypes = []interface{}{
 	(*VStreamFlags)(nil),               // 12: vtgate.VStreamFlags
 	(*VStreamRequest)(nil),             // 13: vtgate.VStreamRequest
 	(*VStreamResponse)(nil),            // 14: vtgate.VStreamResponse
-	(*Session_ShardSession)(nil),       // 15: vtgate.Session.ShardSession
-	nil,                                // 16: vtgate.Session.UserDefinedVariablesEntry
-	nil,                                // 17: vtgate.Session.SystemVariablesEntry
-	(*query.ExecuteOptions)(nil),       // 18: query.ExecuteOptions
-	(*query.QueryWarning)(nil),         // 19: query.QueryWarning
-	(*vtrpc.CallerID)(nil),             // 20: vtrpc.CallerID
-	(*query.BoundQuery)(nil),           // 21: query.BoundQuery
-	(topodata.TabletType)(0),           // 22: topodata.TabletType
-	(*vtrpc.RPCError)(nil),             // 23: vtrpc.RPCError
-	(*query.QueryResult)(nil),          // 24: query.QueryResult
-	(*query.ResultWithError)(nil),      // 25: query.ResultWithError
-	(*binlogdata.VGtid)(nil),           // 26: binlogdata.VGtid
-	(*binlogdata.Filter)(nil),          // 27: binlogdata.Filter
-	(*binlogdata.VEvent)(nil),          // 28: binlogdata.VEvent
-	(*query.Target)(nil),               // 29: query.Target
-	(*topodata.TabletAlias)(nil),       // 30: topodata.TabletAlias
-	(*query.BindVariable)(nil),         // 31: query.BindVariable
+	(*PrepareRequest)(nil),             // 15: vtgate.PrepareRequest
+	(*PrepareResponse)(nil),            // 16: vtgate.PrepareResponse
+	(*CloseSessionRequest)(nil),        // 17: vtgate.CloseSessionRequest
+	(*CloseSessionResponse)(nil),       // 18: vtgate.CloseSessionResponse
+	(*Session_ShardSession)(nil),       // 19: vtgate.Session.ShardSession
+	nil,                                // 20: vtgate.Session.UserDefinedVariablesEntry
+	nil,                                // 21: vtgate.Session.SystemVariablesEntry
+	(*query.ExecuteOptions)(nil),       // 22: query.ExecuteOptions
+	(*query.QueryWarning)(nil),         // 23: query.QueryWarning
+	(*vtrpc.CallerID)(nil),             // 24: vtrpc.CallerID
+	(*query.BoundQuery)(nil),           // 25: query.BoundQuery
+	(topodata.TabletType)(0),           // 26: topodata.TabletType
+	(*vtrpc.RPCError)(nil),             // 27: vtrpc.RPCError
+	(*query.QueryResult)(nil),          // 28: query.QueryResult
+	(*query.ResultWithError)(nil),      // 29: query.ResultWithError
+	(*binlogdata.VGtid)(nil),           // 30: binlogdata.VGtid
+	(*binlogdata.Filter)(nil),          // 31: binlogdata.Filter
+	(*binlogdata.VEvent)(nil),          // 32: binlogdata.VEvent
+	(*query.Field)(nil),                // 33: query.Field
+	(*query.Target)(nil),               // 34: query.Target
+	(*topodata.TabletAlias)(nil),       // 35: topodata.TabletAlias
+	(*query.BindVariable)(nil),         // 36: query.BindVariable
 }
 var file_vtgate_proto_depIdxs = []int32{
-	15, // 0: vtgate.Session.shard_sessions:type_name -> vtgate.Session.ShardSession
-	18, // 1: vtgate.Session.options:type_name -> query.ExecuteOptions
+	19, // 0: vtgate.Session.shard_sessions:type_name -> vtgate.Session.ShardSession
+	22, // 1: vtgate.Session.options:type_name -> query.ExecuteOptions
 	0,  // 2: vtgate.Session.transaction_mode:type_name -> vtgate.TransactionMode
-	19, // 3: vtgate.Session.warnings:type_name -> query.QueryWarning
-	15, // 4: vtgate.Session.pre_sessions:type_name -> vtgate.Session.ShardSession
-	15, // 5: vtgate.Session.post_sessions:type_name -> vtgate.Session.ShardSession
-	16, // 6: vtgate.Session.user_defined_variables:type_name -> vtgate.Session.UserDefinedVariablesEntry
-	17, // 7: vtgate.Session.system_variables:type_name -> vtgate.Session.SystemVariablesEntry
-	15, // 8: vtgate.Session.lock_session:type_name -> vtgate.Session.ShardSession
+	23, // 3: vtgate.Session.warnings:type_name -> query.QueryWarning
+	19, // 4: vtgate.Session.pre_sessions:type_name -> vtgate.Session.ShardSession
+	19, // 5: vtgate.Session.post_sessions:type_name -> vtgate.Session.ShardSession
+	20, // 6: vtgate.Session.user_defined_variables:type_name -> vtgate.Session.UserDefinedVariablesEntry
+	21, // 7: vtgate.Session.system_variables:type_name -> vtgate.Session.SystemVariablesEntry
+	19, // 8: vtgate.Session.lock_session:type_name -> vtgate.Session.ShardSession
 	3,  // 9: vtgate.Session.read_after_write:type_name -> vtgate.ReadAfterWrite
-	20, // 10: vtgate.ExecuteRequest.caller_id:type_name -> vtrpc.CallerID
+	24, // 10: vtgate.ExecuteRequest.caller_id:type_name -> vtrpc.CallerID
 	2,  // 11: vtgate.ExecuteRequest.session:type_name -> vtgate.Session
-	21, // 12: vtgate.ExecuteRequest.query:type_name -> query.BoundQuery
-	22, // 13: vtgate.ExecuteRequest.tablet_type:type_name -> topodata.TabletType
-	18, // 14: vtgate.ExecuteRequest.options:type_name -> query.ExecuteOptions
-	23, // 15: vtgate.ExecuteResponse.error:type_name -> vtrpc.RPCError
+	25, // 12: vtgate.ExecuteRequest.query:type_name -> query.BoundQuery
+	26, // 13: vtgate.ExecuteRequest.tablet_type:type_name -> topodata.TabletType
+	22, // 14: vtgate.ExecuteRequest.options:type_name -> query.ExecuteOptions
+	27, // 15: vtgate.ExecuteResponse.error:type_name -> vtrpc.RPCError
 	2,  // 16: vtgate.ExecuteResponse.session:type_name -> vtgate.Session
-	24, // 17: vtgate.ExecuteResponse.result:type_name -> query.QueryResult
-	20, // 18: vtgate.ExecuteBatchRequest.caller_id:type_name -> vtrpc.CallerID
+	28, // 17: vtgate.ExecuteResponse.result:type_name -> query.QueryResult
+	24, // 18: vtgate.ExecuteBatchRequest.caller_id:type_name -> vtrpc.CallerID
 	2,  // 19: vtgate.ExecuteBatchRequest.session:type_name -> vtgate.Session
-	21, // 20: vtgate.ExecuteBatchRequest.queries:type_name -> query.BoundQuery
-	22, // 21: vtgate.ExecuteBatchRequest.tablet_type:type_name -> topodata.TabletType
-	18, // 22: vtgate.ExecuteBatchRequest.options:type_name -> query.ExecuteOptions
-	23, // 23: vtgate.ExecuteBatchResponse.error:type_name -> vtrpc.RPCError
+	25, // 20: vtgate.ExecuteBatchRequest.queries:type_name -> query.BoundQuery
+	26, // 21: vtgate.ExecuteBatchRequest.tablet_type:type_name -> topodata.TabletType
+	22, // 22: vtgate.ExecuteBatchRequest.options:type_name -> query.ExecuteOptions
+	27, // 23: vtgate.ExecuteBatchResponse.error:type_name -> vtrpc.RPCError
 	2,  // 24: vtgate.ExecuteBatchResponse.session:type_name -> vtgate.Session
-	25, // 25: vtgate.ExecuteBatchResponse.results:type_name -> query.ResultWithError
-	20, // 26: vtgate.StreamExecuteRequest.caller_id:type_name -> vtrpc.CallerID
-	21, // 27: vtgate.StreamExecuteRequest.query:type_name -> query.BoundQuery
-	22, // 28: vtgate.StreamExecuteRequest.tablet_type:type_name -> topodata.TabletType
-	18, // 29: vtgate.StreamExecuteRequest.options:type_name -> query.ExecuteOptions
+	29, // 25: vtgate.ExecuteBatchResponse.results:type_name -> query.ResultWithError
+	24, // 26: vtgate.StreamExecuteRequest.caller_id:type_name -> vtrpc.CallerID
+	25, // 27: vtgate.StreamExecuteRequest.query:type_name -> query.BoundQuery
+	26, // 28: vtgate.StreamExecuteRequest.tablet_type:type_name -> topodata.TabletType
+	22, // 29: vtgate.StreamExecuteRequest.options:type_name -> query.ExecuteOptions
 	2,  // 30: vtgate.StreamExecuteRequest.session:type_name -> vtgate.Session
-	24, // 31: vtgate.StreamExecuteResponse.result:type_name -> query.QueryResult
-	20, // 32: vtgate.ResolveTransactionRequest.caller_id:type_name -> vtrpc.CallerID
-	20, // 33: vtgate.VStreamRequest.caller_id:type_name -> vtrpc.CallerID
-	22, // 34: vtgate.VStreamRequest.tablet_type:type_name -> topodata.TabletType
-	26, // 35: vtgate.VStreamRequest.vgtid:type_name -> binlogdata.VGtid
-	27, // 36: vtgate.VStreamRequest.filter:type_name -> binlogdata.Filter
+	28, // 31: vtgate.StreamExecuteResponse.result:type_name -> query.QueryResult
+	24, // 32: vtgate.ResolveTransactionRequest.caller_id:type_name -> vtrpc.CallerID
+	24, // 33: vtgate.VStreamRequest.caller_id:type_name -> vtrpc.CallerID
+	26, // 34: vtgate.VStreamRequest.tablet_type:type_name -> topodata.TabletType
+	30, // 35: vtgate.VStreamRequest.vgtid:type_name -> binlogdata.VGtid
+	31, // 36: vtgate.VStreamRequest.filter:type_name -> binlogdata.Filter
 	12, // 37: vtgate.VStreamRequest.flags:type_name -> vtgate.VStreamFlags
-	28, // 38: vtgate.VStreamResponse.events:type_name -> binlogdata.VEvent
-	29, // 39: vtgate.Session.ShardSession.target:type_name -> query.Target
-	30, // 40: vtgate.Session.ShardSession.tablet_alias:type_name -> topodata.TabletAlias
-	31, // 41: vtgate.Session.UserDefinedVariablesEntry.value:type_name -> query.BindVariable
-	42, // [42:42] is the sub-list for method output_type
-	42, // [42:42] is the sub-list for method input_type
-	42, // [42:42] is the sub-list for extension type_name
-	42, // [42:42] is the sub-list for extension extendee
-	0,  // [0:42] is the sub-list for field type_name
+	32, // 38: vtgate.VStreamResponse.events:type_name -> binlogdata.VEvent
+	24, // 39: vtgate.PrepareRequest.caller_id:type_name -> vtrpc.CallerID
+	2,  // 40: vtgate.PrepareRequest.session:type_name -> vtgate.Session
+	25, // 41: vtgate.PrepareRequest.query:type_name -> query.BoundQuery
+	27, // 42: vtgate.PrepareResponse.error:type_name -> vtrpc.RPCError
+	2,  // 43: vtgate.PrepareResponse.session:type_name -> vtgate.Session
+	33, // 44: vtgate.PrepareResponse.fields:type_name -> query.Field
+	24, // 45: vtgate.CloseSessionRequest.caller_id:type_name -> vtrpc.CallerID
+	2,  // 46: vtgate.CloseSessionRequest.session:type_name -> vtgate.Session
+	27, // 47: vtgate.CloseSessionResponse.error:type_name -> vtrpc.RPCError
+	34, // 48: vtgate.Session.ShardSession.target:type_name -> query.Target
+	35, // 49: vtgate.Session.ShardSession.tablet_alias:type_name -> topodata.TabletAlias
+	36, // 50: vtgate.Session.UserDefinedVariablesEntry.value:type_name -> query.BindVariable
+	51, // [51:51] is the sub-list for method output_type
+	51, // [51:51] is the sub-list for method input_type
+	51, // [51:51] is the sub-list for extension type_name
+	51, // [51:51] is the sub-list for extension extendee
+	0,  // [0:51] is the sub-list for field type_name
 }
 
 func init() { file_vtgate_proto_init() }
@@ -1803,6 +2093,54 @@ func file_vtgate_proto_init() {
 			}
 		}
 		file_vtgate_proto_msgTypes[13].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*PrepareRequest); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_vtgate_proto_msgTypes[14].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*PrepareResponse); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_vtgate_proto_msgTypes[15].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*CloseSessionRequest); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_vtgate_proto_msgTypes[16].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*CloseSessionResponse); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_vtgate_proto_msgTypes[17].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*Session_ShardSession); i {
 			case 0:
 				return &v.state
@@ -1821,7 +2159,7 @@ func file_vtgate_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: file_vtgate_proto_rawDesc,
 			NumEnums:      2,
-			NumMessages:   16,
+			NumMessages:   20,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

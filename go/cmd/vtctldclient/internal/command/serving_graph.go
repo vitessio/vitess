@@ -51,6 +51,14 @@ var (
 		RunE:                  commandGetSrvVSchemas,
 		DisableFlagsInUseLine: true,
 	}
+	// RebuildVSchemaGraph makes a RebuildVSchemaGraph gRPC call to a vtctld.
+	RebuildVSchemaGraph = &cobra.Command{
+		Use:                   "RebuildVSchemaGraph [--cells=c1,c2,...]",
+		Short:                 "Rebuilds the cell-specific SrvVSchema from the global VSchema objects in the provided cells (or all cells if none provided).",
+		DisableFlagsInUseLine: true,
+		Args:                  cobra.NoArgs,
+		RunE:                  commandRebuildVSchemaGraph,
+	}
 )
 
 func commandGetSrvKeyspaces(cmd *cobra.Command, args []string) error {
@@ -126,8 +134,30 @@ func commandGetSrvVSchemas(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+var rebuildVSchemaGraphOptions = struct {
+	Cells []string
+}{}
+
+func commandRebuildVSchemaGraph(cmd *cobra.Command, args []string) error {
+	cli.FinishedParsing(cmd)
+
+	_, err := client.RebuildVSchemaGraph(commandCtx, &vtctldatapb.RebuildVSchemaGraphRequest{
+		Cells: rebuildVSchemaGraphOptions.Cells,
+	})
+	if err != nil {
+		return err
+	}
+
+	fmt.Println("RebuildVSchemaGraph: ok")
+
+	return nil
+}
+
 func init() {
 	Root.AddCommand(GetSrvKeyspaces)
 	Root.AddCommand(GetSrvVSchema)
 	Root.AddCommand(GetSrvVSchemas)
+
+	RebuildVSchemaGraph.Flags().StringSliceVarP(&rebuildVSchemaGraphOptions.Cells, "cells", "c", nil, "Specifies a comma-separated list of cells to look for tablets")
+	Root.AddCommand(RebuildVSchemaGraph)
 }

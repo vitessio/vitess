@@ -70,6 +70,7 @@ type VRepl struct {
 	sourceSharedColumns *vrepl.ColumnList
 	targetSharedColumns *vrepl.ColumnList
 	sharedColumnsMap    map[string]string
+	sourceAutoIncrement uint64
 
 	filterQuery string
 	bls         *binlogdatapb.BinlogSource
@@ -119,6 +120,27 @@ func (v *VRepl) getCandidateUniqueKeys(ctx context.Context, conn *dbconnpool.DBC
 		uniqueKeys = append(uniqueKeys, uniqueKey)
 	}
 	return uniqueKeys, nil
+}
+
+// readAutoIncrement reads the AUTO_INCREMENT vlaue, if any, for a give ntable
+func (v *VRepl) readAutoIncrement(ctx context.Context, conn *dbconnpool.DBConnection, tableName string) (autoIncrement uint64, err error) {
+	query, err := sqlparser.ParseAndBind(sqlGetAutoIncrement,
+		sqltypes.StringBindVariable(v.dbName),
+		sqltypes.StringBindVariable(tableName),
+	)
+	if err != nil {
+		return 0, err
+	}
+
+	rs, err := conn.ExecuteFetch(query, math.MaxInt64, true)
+	if err != nil {
+		return 0, err
+	}
+	for _, row := range rs.Named().Rows {
+		autoIncrement = row.AsUint64("AUTO_INCREMENT", 0)
+	}
+
+	return autoIncrement, nil
 }
 
 // readTableColumns reads column list from given table
@@ -269,6 +291,11 @@ func (v *VRepl) analyzeTables(ctx context.Context, conn *dbconnpool.DBConnection
 		// TODO(shlomi): need to carefully examine what happens when we extend/reduce a PRIMARY KEY
 		// is a column subset OK?
 		return fmt.Errorf("Found no shared PRIMARY KEY columns between `%s` and `%s`", v.sourceTable, v.targetTable)
+	}
+
+	v.sourceAutoIncrement, err = v.readAutoIncrement(ctx, conn, v.sourceTable)
+	if err != nil {
+		return err
 	}
 
 	return nil
