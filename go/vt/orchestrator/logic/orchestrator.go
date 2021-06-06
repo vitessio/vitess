@@ -392,7 +392,6 @@ func ContinuousDiscovery() {
 	var seedOnce sync.Once
 
 	go ometrics.InitMetrics()
-	go ometrics.InitGraphiteMetrics()
 	go acceptSignals()
 	go kv.InitKVStores()
 	inst.SetDurabilityPolicy(config.Config.Durability)
