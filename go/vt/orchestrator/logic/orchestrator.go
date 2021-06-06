@@ -17,7 +17,6 @@
 package logic
 
 import (
-	"math/rand"
 	"os"
 	"os/signal"
 	"sync"
@@ -307,25 +306,6 @@ func onHealthTick() {
 	}
 }
 
-// InjectPseudoGTIDOnWriters will inject a PseudoGTID entry on all writable, accessible,
-// supported writers.
-func InjectPseudoGTIDOnWriters() error {
-	instances, err := inst.ReadWriteableClustersMasters()
-	if err != nil {
-		return log.Errore(err)
-	}
-	for i := range rand.Perm(len(instances)) {
-		instance := instances[i]
-		go func() {
-			if injected, _ := inst.CheckAndInjectPseudoGTIDOnWriter(instance); injected {
-				clusterName := instance.ClusterName
-				inst.RegisterInjectedPseudoGTID(clusterName)
-			}
-		}()
-	}
-	return nil
-}
-
 // Write a cluster's master (or all clusters masters) to kv stores.
 // This should generally only happen once in a lifetime of a cluster. Otherwise KV
 // stores are updated via failovers.
@@ -399,7 +379,6 @@ func ContinuousDiscovery() {
 	instancePollTick := time.Tick(instancePollSecondsDuration())
 	caretakingTick := time.Tick(time.Minute)
 	recoveryTick := time.Tick(time.Duration(config.RecoveryPollSeconds) * time.Second)
-	autoPseudoGTIDTick := time.Tick(time.Duration(config.PseudoGTIDIntervalSeconds) * time.Second)
 	tabletTopoTick := OpenTabletDiscovery()
 	var recoveryEntrance int64
 	var snapshotTopologiesTick <-chan time.Time
@@ -441,17 +420,10 @@ func ContinuousDiscovery() {
 					go injectSeeds(&seedOnce)
 				}
 			}()
-		case <-autoPseudoGTIDTick:
-			go func() {
-				if config.Config.AutoPseudoGTID && IsLeader() {
-					go InjectPseudoGTIDOnWriters()
-				}
-			}()
 		case <-caretakingTick:
 			// Various periodic internal maintenance tasks
 			go func() {
 				if IsLeaderOrActive() {
-					go inst.RecordInstanceCoordinatesHistory()
 					go inst.ReviewUnseenInstances()
 					go inst.InjectUnseenMasters()
 
@@ -468,7 +440,6 @@ func ContinuousDiscovery() {
 					go inst.ExpireMasterPositionEquivalence()
 					go inst.ExpirePoolInstances()
 					go inst.FlushNontrivialResolveCacheToDatabase()
-					go inst.ExpireInjectedPseudoGTID()
 					go inst.ExpireStaleInstanceBinlogCoordinates()
 					go process.ExpireNodesHistory()
 					go process.ExpireAccessTokens()

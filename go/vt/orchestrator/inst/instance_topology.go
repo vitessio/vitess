@@ -611,11 +611,6 @@ func CheckMoveViaGTID(instance, otherInstance *Instance) (err error) {
 
 // moveInstanceBelowViaGTID will attempt moving given instance below another instance using either Oracle GTID or MariaDB GTID.
 func moveInstanceBelowViaGTID(instance, otherInstance *Instance) (*Instance, error) {
-	rinstance, _, _ := ReadInstance(&instance.Key)
-	if canMove, merr := rinstance.CanMoveViaMatch(); !canMove {
-		return instance, merr
-	}
-
 	if canReplicate, err := instance.CanReplicateFrom(otherInstance); !canReplicate {
 		return instance, err
 	}
@@ -1423,275 +1418,9 @@ func ErrantGTIDInjectEmpty(instanceKey *InstanceKey) (instance *Instance, cluste
 	return instance, clusterMaster, countInjectedTransactions, err
 }
 
-// FindLastPseudoGTIDEntry will search an instance's binary logs or relay logs for the last pseudo-GTID entry,
-// and return found coordinates as well as entry text
-func FindLastPseudoGTIDEntry(instance *Instance, recordedInstanceRelayLogCoordinates BinlogCoordinates, maxBinlogCoordinates *BinlogCoordinates, exhaustiveSearch bool, expectedBinlogFormat *string) (instancePseudoGtidCoordinates *BinlogCoordinates, instancePseudoGtidText string, err error) {
-
-	if config.Config.PseudoGTIDPattern == "" {
-		return instancePseudoGtidCoordinates, instancePseudoGtidText, fmt.Errorf("PseudoGTIDPattern not configured; cannot use Pseudo-GTID")
-	}
-
-	if instance.LogBinEnabled && instance.LogReplicationUpdatesEnabled && !*config.RuntimeCLIFlags.SkipBinlogSearch && (expectedBinlogFormat == nil || instance.Binlog_format == *expectedBinlogFormat) {
-		minBinlogCoordinates, _, _ := GetHeuristiclyRecentCoordinatesForInstance(&instance.Key)
-		// Well no need to search this instance's binary logs if it doesn't have any...
-		// With regard log-slave-updates, some edge cases are possible, like having this instance's log-slave-updates
-		// enabled/disabled (of course having restarted it)
-		// The approach is not to take chances. If log-slave-updates is disabled, fail and go for relay-logs.
-		// If log-slave-updates was just enabled then possibly no pseudo-gtid is found, and so again we will go
-		// for relay logs.
-		// Also, if master has STATEMENT binlog format, and the replica has ROW binlog format, then comparing binlog entries would urely fail if based on the replica's binary logs.
-		// Instead, we revert to the relay logs.
-		instancePseudoGtidCoordinates, instancePseudoGtidText, err = getLastPseudoGTIDEntryInInstance(instance, minBinlogCoordinates, maxBinlogCoordinates, exhaustiveSearch)
-	}
-	if err != nil || instancePseudoGtidCoordinates == nil {
-		minRelaylogCoordinates, _ := GetPreviousKnownRelayLogCoordinatesForInstance(instance)
-		// Unable to find pseudo GTID in binary logs.
-		// Then MAYBE we are lucky enough (chances are we are, if this replica did not crash) that we can
-		// extract the Pseudo GTID entry from the last (current) relay log file.
-		instancePseudoGtidCoordinates, instancePseudoGtidText, err = getLastPseudoGTIDEntryInRelayLogs(instance, minRelaylogCoordinates, recordedInstanceRelayLogCoordinates, exhaustiveSearch)
-	}
-	return instancePseudoGtidCoordinates, instancePseudoGtidText, err
-}
-
-// CorrelateBinlogCoordinates find out, if possible, the binlog coordinates of given otherInstance that correlate
-// with given coordinates of given instance.
-func CorrelateBinlogCoordinates(instance *Instance, binlogCoordinates *BinlogCoordinates, otherInstance *Instance) (*BinlogCoordinates, int, error) {
-	// We record the relay log coordinates just after the instance stopped since the coordinates can change upon
-	// a FLUSH LOGS/FLUSH RELAY LOGS (or a START SLAVE, though that's an altogether different problem) etc.
-	// We want to be on the safe side; we don't utterly trust that we are the only ones playing with the instance.
-	recordedInstanceRelayLogCoordinates := instance.RelaylogCoordinates
-	instancePseudoGtidCoordinates, instancePseudoGtidText, err := FindLastPseudoGTIDEntry(instance, recordedInstanceRelayLogCoordinates, binlogCoordinates, true, &otherInstance.Binlog_format)
-
-	if err != nil {
-		return nil, 0, err
-	}
-	entriesMonotonic := (config.Config.PseudoGTIDMonotonicHint != "") && strings.Contains(instancePseudoGtidText, config.Config.PseudoGTIDMonotonicHint)
-	minBinlogCoordinates, _, _ := GetHeuristiclyRecentCoordinatesForInstance(&otherInstance.Key)
-	otherInstancePseudoGtidCoordinates, err := SearchEntryInInstanceBinlogs(otherInstance, instancePseudoGtidText, entriesMonotonic, minBinlogCoordinates)
-	if err != nil {
-		return nil, 0, err
-	}
-
-	// We've found a match: the latest Pseudo GTID position within instance and its identical twin in otherInstance
-	// We now iterate the events in both, up to the completion of events in instance (recall that we looked for
-	// the last entry in instance, hence, assuming pseudo GTID entries are frequent, the amount of entries to read
-	// from instance is not long)
-	// The result of the iteration will be either:
-	// - bad conclusion that instance is actually more advanced than otherInstance (we find more entries in instance
-	//   following the pseudo gtid than we can match in otherInstance), hence we cannot ask instance to replicate
-	//   from otherInstance
-	// - good result: both instances are exactly in same shape (have replicated the exact same number of events since
-	//   the last pseudo gtid). Since they are identical, it is easy to point instance into otherInstance.
-	// - good result: the first position within otherInstance where instance has not replicated yet. It is easy to point
-	//   instance into otherInstance.
-	nextBinlogCoordinatesToMatch, countMatchedEvents, err := GetNextBinlogCoordinatesToMatch(instance, *instancePseudoGtidCoordinates,
-		recordedInstanceRelayLogCoordinates, binlogCoordinates, otherInstance, *otherInstancePseudoGtidCoordinates)
-	if err != nil {
-		return nil, 0, err
-	}
-	if countMatchedEvents == 0 {
-		err = fmt.Errorf("Unexpected: 0 events processed while iterating logs. Something went wrong; aborting. nextBinlogCoordinatesToMatch: %+v", nextBinlogCoordinatesToMatch)
-		return nil, 0, err
-	}
-	return nextBinlogCoordinatesToMatch, countMatchedEvents, nil
-}
-
-func CorrelateRelaylogCoordinates(instance *Instance, relaylogCoordinates *BinlogCoordinates, otherInstance *Instance) (instanceCoordinates, correlatedCoordinates, nextCoordinates *BinlogCoordinates, found bool, err error) {
-	// The two servers are expected to have the same master, or this doesn't work
-	if !instance.MasterKey.Equals(&otherInstance.MasterKey) {
-		return instanceCoordinates, correlatedCoordinates, nextCoordinates, found, log.Errorf("CorrelateRelaylogCoordinates requires sibling instances, however %+v has master %+v, and %+v has master %+v", instance.Key, instance.MasterKey, otherInstance.Key, otherInstance.MasterKey)
-	}
-	var binlogEvent *BinlogEvent
-	if relaylogCoordinates == nil {
-		instanceCoordinates = &instance.RelaylogCoordinates
-		if minCoordinates, err := GetPreviousKnownRelayLogCoordinatesForInstance(instance); err != nil {
-			return instanceCoordinates, correlatedCoordinates, nextCoordinates, found, err
-		} else if binlogEvent, err = GetLastExecutedEntryInRelayLogs(instance, minCoordinates, instance.RelaylogCoordinates); err != nil {
-			return instanceCoordinates, correlatedCoordinates, nextCoordinates, found, err
-		}
-	} else {
-		instanceCoordinates = relaylogCoordinates
-		relaylogCoordinates.Type = RelayLog
-		if binlogEvent, err = ReadBinlogEventAtRelayLogCoordinates(&instance.Key, relaylogCoordinates); err != nil {
-			return instanceCoordinates, correlatedCoordinates, nextCoordinates, found, err
-		}
-	}
-
-	_, minCoordinates, err := GetHeuristiclyRecentCoordinatesForInstance(&otherInstance.Key)
-	if err != nil {
-		return instanceCoordinates, correlatedCoordinates, nextCoordinates, found, err
-	}
-	correlatedCoordinates, nextCoordinates, found, err = SearchEventInRelayLogs(binlogEvent, otherInstance, minCoordinates, otherInstance.RelaylogCoordinates)
-	return instanceCoordinates, correlatedCoordinates, nextCoordinates, found, err
-}
-
-// MatchBelow will attempt moving instance indicated by instanceKey below its the one indicated by otherKey.
-// The refactoring is based on matching binlog entries, not on "classic" positions comparisons.
-// The "other instance" could be the sibling of the moving instance any of its ancestors. It may actually be
-// a cousin of some sort (though unlikely). The only important thing is that the "other instance" is more
-// advanced in replication than given instance.
-func MatchBelow(instanceKey, otherKey *InstanceKey, requireInstanceMaintenance bool) (*Instance, *BinlogCoordinates, error) {
-	instance, err := ReadTopologyInstance(instanceKey)
-	if err != nil {
-		return instance, nil, err
-	}
-	// Relocation of group secondaries makes no sense, group secondaries, by definition, always replicate from the group
-	// primary
-	if instance.IsReplicationGroupSecondary() {
-		return instance, nil, fmt.Errorf("MatchBelow: %+v is a secondary replication group member, hence, it cannot be relocated", *instanceKey)
-	}
-	if config.Config.PseudoGTIDPattern == "" {
-		return instance, nil, fmt.Errorf("PseudoGTIDPattern not configured; cannot use Pseudo-GTID")
-	}
-	if instanceKey.Equals(otherKey) {
-		return instance, nil, fmt.Errorf("MatchBelow: attempt to match an instance below itself %+v", *instanceKey)
-	}
-	otherInstance, err := ReadTopologyInstance(otherKey)
-	if err != nil {
-		return instance, nil, err
-	}
-
-	rinstance, _, _ := ReadInstance(&instance.Key)
-	if canMove, merr := rinstance.CanMoveViaMatch(); !canMove {
-		return instance, nil, merr
-	}
-
-	if canReplicate, err := instance.CanReplicateFrom(otherInstance); !canReplicate {
-		return instance, nil, err
-	}
-	var nextBinlogCoordinatesToMatch *BinlogCoordinates
-	var countMatchedEvents int
-
-	if otherInstance.IsBinlogServer() {
-		// A Binlog Server does not do all the SHOW BINLOG EVENTS stuff
-		err = fmt.Errorf("Cannot use PseudoGTID with Binlog Server %+v", otherInstance.Key)
-		goto Cleanup
-	}
-
-	log.Infof("Will match %+v below %+v", *instanceKey, *otherKey)
-
-	if requireInstanceMaintenance {
-		if maintenanceToken, merr := BeginMaintenance(instanceKey, GetMaintenanceOwner(), fmt.Sprintf("match below %+v", *otherKey)); merr != nil {
-			err = fmt.Errorf("Cannot begin maintenance on %+v: %v", *instanceKey, merr)
-			goto Cleanup
-		} else {
-			defer EndMaintenance(maintenanceToken)
-		}
-
-		// We don't require grabbing maintenance lock on otherInstance, but we do request
-		// that it is not already under maintenance.
-		if inMaintenance, merr := InMaintenance(&otherInstance.Key); merr != nil {
-			err = merr
-			goto Cleanup
-		} else if inMaintenance {
-			err = fmt.Errorf("Cannot match below %+v; it is in maintenance", otherInstance.Key)
-			goto Cleanup
-		}
-	}
-
-	log.Debugf("Stopping replica on %+v", *instanceKey)
-	instance, err = StopReplication(instanceKey)
-	if err != nil {
-		goto Cleanup
-	}
-
-	nextBinlogCoordinatesToMatch, countMatchedEvents, _ = CorrelateBinlogCoordinates(instance, nil, otherInstance)
-
-	if countMatchedEvents == 0 {
-		err = fmt.Errorf("Unexpected: 0 events processed while iterating logs. Something went wrong; aborting. nextBinlogCoordinatesToMatch: %+v", nextBinlogCoordinatesToMatch)
-		goto Cleanup
-	}
-	log.Debugf("%+v will match below %+v at %+v; validated events: %d", *instanceKey, *otherKey, *nextBinlogCoordinatesToMatch, countMatchedEvents)
-
-	// Drum roll...
-	_, err = ChangeMasterTo(instanceKey, otherKey, nextBinlogCoordinatesToMatch, false, GTIDHintDeny)
-	if err != nil {
-		goto Cleanup
-	}
-
-Cleanup:
-	instance, _ = StartReplication(instanceKey)
-	if err != nil {
-		return instance, nextBinlogCoordinatesToMatch, log.Errore(err)
-	}
-	// and we're done (pending deferred functions)
-	AuditOperation("match-below", instanceKey, fmt.Sprintf("matched %+v below %+v", *instanceKey, *otherKey))
-
-	return instance, nextBinlogCoordinatesToMatch, err
-}
-
-// RematchReplica will re-match a replica to its master, using pseudo-gtid
-func RematchReplica(instanceKey *InstanceKey, requireInstanceMaintenance bool) (*Instance, *BinlogCoordinates, error) {
-	instance, err := ReadTopologyInstance(instanceKey)
-	if err != nil {
-		return instance, nil, err
-	}
-	masterInstance, found, err := ReadInstance(&instance.MasterKey)
-	if err != nil || !found {
-		return instance, nil, err
-	}
-	return MatchBelow(instanceKey, &masterInstance.Key, requireInstanceMaintenance)
-}
-
-// MakeMaster will take an instance, make all its siblings its replicas (via pseudo-GTID) and make it master
-// (stop its replicaiton, make writeable).
-func MakeMaster(instanceKey *InstanceKey) (*Instance, error) {
-	instance, err := ReadTopologyInstance(instanceKey)
-	if err != nil {
-		return instance, err
-	}
-	masterInstance, err := ReadTopologyInstance(&instance.MasterKey)
-	if err == nil {
-		// If the read succeeded, check the master status.
-		if masterInstance.IsReplica() {
-			return instance, fmt.Errorf("MakeMaster: instance's master %+v seems to be replicating", masterInstance.Key)
-		}
-		if masterInstance.IsLastCheckValid {
-			return instance, fmt.Errorf("MakeMaster: instance's master %+v seems to be accessible", masterInstance.Key)
-		}
-	}
-	// Continue anyway if the read failed, because that means the master is
-	// inaccessible... So it's OK to do the promotion.
-	if !instance.SQLThreadUpToDate() {
-		return instance, fmt.Errorf("MakeMaster: instance's SQL thread must be up-to-date with I/O thread for %+v", *instanceKey)
-	}
-	siblings, err := ReadReplicaInstances(&masterInstance.Key)
-	if err != nil {
-		return instance, err
-	}
-	for _, sibling := range siblings {
-		if instance.ExecBinlogCoordinates.SmallerThan(&sibling.ExecBinlogCoordinates) {
-			return instance, fmt.Errorf("MakeMaster: instance %+v has more advanced sibling: %+v", *instanceKey, sibling.Key)
-		}
-	}
-
-	if maintenanceToken, merr := BeginMaintenance(instanceKey, GetMaintenanceOwner(), fmt.Sprintf("siblings match below this: %+v", *instanceKey)); merr != nil {
-		err = fmt.Errorf("Cannot begin maintenance on %+v: %v", *instanceKey, merr)
-		goto Cleanup
-	} else {
-		defer EndMaintenance(maintenanceToken)
-	}
-
-	_, _, err, _ = MultiMatchBelow(siblings, instanceKey, nil)
-	if err != nil {
-		goto Cleanup
-	}
-
-	SetReadOnly(instanceKey, false)
-
-Cleanup:
-	if err != nil {
-		return instance, log.Errore(err)
-	}
-	// and we're done (pending deferred functions)
-	AuditOperation("make-master", instanceKey, fmt.Sprintf("made master of %+v", *instanceKey))
-
-	return instance, err
-}
-
 // TakeSiblings is a convenience method for turning siblings of a replica to be its subordinates.
 // This operation is a syntatctic sugar on top relocate-replicas, which uses any available means to the objective:
-// GTID, Pseudo-GTID, binlog servers, standard replication...
+// GTID, binlog servers, standard replication...
 func TakeSiblings(instanceKey *InstanceKey) (instance *Instance, takenSiblings int, err error) {
 	instance, err = ReadTopologyInstance(instanceKey)
 	if err != nil {
@@ -1819,58 +1548,6 @@ Cleanup:
 	return instance, err
 }
 
-// MakeLocalMaster promotes a replica above its master, making it replica of its grandparent, while also enslaving its siblings.
-// This serves as a convenience method to recover replication when a local master fails; the instance promoted is one of its replicas,
-// which is most advanced among its siblings.
-// This method utilizes Pseudo GTID
-func MakeLocalMaster(instanceKey *InstanceKey) (*Instance, error) {
-	instance, err := ReadTopologyInstance(instanceKey)
-	if err != nil {
-		return instance, err
-	}
-	masterInstance, found, err := ReadInstance(&instance.MasterKey)
-	if err != nil || !found {
-		return instance, err
-	}
-	grandparentInstance, err := ReadTopologyInstance(&masterInstance.MasterKey)
-	if err != nil {
-		return instance, err
-	}
-	siblings, err := ReadReplicaInstances(&masterInstance.Key)
-	if err != nil {
-		return instance, err
-	}
-	for _, sibling := range siblings {
-		if instance.ExecBinlogCoordinates.SmallerThan(&sibling.ExecBinlogCoordinates) {
-			return instance, fmt.Errorf("MakeMaster: instance %+v has more advanced sibling: %+v", *instanceKey, sibling.Key)
-		}
-	}
-
-	instance, err = StopReplicationNicely(instanceKey, 0)
-	if err != nil {
-		goto Cleanup
-	}
-
-	_, _, err = MatchBelow(instanceKey, &grandparentInstance.Key, true)
-	if err != nil {
-		goto Cleanup
-	}
-
-	_, _, err, _ = MultiMatchBelow(siblings, instanceKey, nil)
-	if err != nil {
-		goto Cleanup
-	}
-
-Cleanup:
-	if err != nil {
-		return instance, log.Errore(err)
-	}
-	// and we're done (pending deferred functions)
-	AuditOperation("make-local-master", instanceKey, fmt.Sprintf("made master of %+v", *instanceKey))
-
-	return instance, err
-}
-
 // sortInstances shuffles given list of instances according to some logic
 func sortInstancesDataCenterHint(instances [](*Instance), dataCenterHint string) {
 	sort.Sort(sort.Reverse(NewInstancesSorterByExec(instances, dataCenterHint)))
@@ -1925,160 +1602,6 @@ func GetSortedReplicas(masterKey *InstanceKey, stopReplicationMethod StopReplica
 		return replicas, fmt.Errorf("No replicas found for %+v", *masterKey)
 	}
 	return replicas, err
-}
-
-// MultiMatchBelow will efficiently match multiple replicas below a given instance.
-// It is assumed that all given replicas are siblings
-func MultiMatchBelow(replicas [](*Instance), belowKey *InstanceKey, postponedFunctionsContainer *PostponedFunctionsContainer) (matchedReplicas [](*Instance), belowInstance *Instance, err error, errs []error) {
-	belowInstance, found, err := ReadInstance(belowKey)
-	if err != nil || !found {
-		return matchedReplicas, belowInstance, err, errs
-	}
-
-	replicas = RemoveInstance(replicas, belowKey)
-	if len(replicas) == 0 {
-		// Nothing to do
-		return replicas, belowInstance, err, errs
-	}
-
-	log.Infof("Will match %+v replicas below %+v via Pseudo-GTID, independently", len(replicas), belowKey)
-
-	barrier := make(chan *InstanceKey)
-	replicaMutex := &sync.Mutex{}
-
-	for _, replica := range replicas {
-		replica := replica
-
-		// Parallelize repoints
-		go func() {
-			defer func() { barrier <- &replica.Key }()
-			matchFunc := func() error {
-				replica, _, replicaErr := MatchBelow(&replica.Key, belowKey, true)
-
-				replicaMutex.Lock()
-				defer replicaMutex.Unlock()
-
-				if replicaErr == nil {
-					matchedReplicas = append(matchedReplicas, replica)
-				} else {
-					errs = append(errs, replicaErr)
-				}
-				return replicaErr
-			}
-			if shouldPostponeRelocatingReplica(replica, postponedFunctionsContainer) {
-				postponedFunctionsContainer.AddPostponedFunction(matchFunc, fmt.Sprintf("multi-match-below-independent %+v", replica.Key))
-				// We bail out and trust our invoker to later call upon this postponed function
-			} else {
-				ExecuteOnTopology(func() { matchFunc() })
-			}
-		}()
-	}
-	for range replicas {
-		<-barrier
-	}
-	if len(errs) == len(replicas) {
-		// All returned with error
-		return matchedReplicas, belowInstance, fmt.Errorf("MultiMatchBelowIndependently: Error on all %+v operations", len(errs)), errs
-	}
-	AuditOperation("multi-match-below-independent", belowKey, fmt.Sprintf("matched %d/%d replicas below %+v via Pseudo-GTID", len(matchedReplicas), len(replicas), belowKey))
-
-	return matchedReplicas, belowInstance, err, errs
-}
-
-// MultiMatchReplicas will match (via pseudo-gtid) all replicas of given master below given instance.
-func MultiMatchReplicas(masterKey *InstanceKey, belowKey *InstanceKey, pattern string) ([](*Instance), *Instance, error, []error) {
-	res := [](*Instance){}
-	errs := []error{}
-
-	belowInstance, err := ReadTopologyInstance(belowKey)
-	if err != nil {
-		// Can't access "below" ==> can't match replicas beneath it
-		return res, nil, err, errs
-	}
-
-	masterInstance, found, err := ReadInstance(masterKey)
-	if err != nil || !found {
-		return res, nil, err, errs
-	}
-
-	// See if we have a binlog server case (special handling):
-	binlogCase := false
-	if masterInstance.IsBinlogServer() && masterInstance.MasterKey.Equals(belowKey) {
-		// repoint-up
-		log.Debugf("MultiMatchReplicas: pointing replicas up from binlog server")
-		binlogCase = true
-	} else if belowInstance.IsBinlogServer() && belowInstance.MasterKey.Equals(masterKey) {
-		// repoint-down
-		log.Debugf("MultiMatchReplicas: pointing replicas down to binlog server")
-		binlogCase = true
-	} else if masterInstance.IsBinlogServer() && belowInstance.IsBinlogServer() && masterInstance.MasterKey.Equals(&belowInstance.MasterKey) {
-		// Both BLS, siblings
-		log.Debugf("MultiMatchReplicas: pointing replicas to binlong sibling")
-		binlogCase = true
-	}
-	if binlogCase {
-		replicas, err, errors := RepointReplicasTo(masterKey, pattern, belowKey)
-		// Bail out!
-		return replicas, masterInstance, err, errors
-	}
-
-	// Not binlog server
-
-	// replicas involved
-	replicas, err := ReadReplicaInstancesIncludingBinlogServerSubReplicas(masterKey)
-	if err != nil {
-		return res, belowInstance, err, errs
-	}
-	replicas = filterInstancesByPattern(replicas, pattern)
-	matchedReplicas, belowInstance, err, errs := MultiMatchBelow(replicas, &belowInstance.Key, nil)
-
-	if len(matchedReplicas) != len(replicas) {
-		err = fmt.Errorf("MultiMatchReplicas: only matched %d out of %d replicas of %+v; error is: %+v", len(matchedReplicas), len(replicas), *masterKey, err)
-	}
-	AuditOperation("multi-match-replicas", masterKey, fmt.Sprintf("matched %d replicas under %+v", len(matchedReplicas), *belowKey))
-
-	return matchedReplicas, belowInstance, err, errs
-}
-
-// MatchUp will move a replica up the replication chain, so that it becomes sibling of its master, via Pseudo-GTID
-func MatchUp(instanceKey *InstanceKey, requireInstanceMaintenance bool) (*Instance, *BinlogCoordinates, error) {
-	instance, found, err := ReadInstance(instanceKey)
-	if err != nil || !found {
-		return nil, nil, err
-	}
-	if !instance.IsReplica() {
-		return instance, nil, fmt.Errorf("instance is not a replica: %+v", instanceKey)
-	}
-	// Relocation of group secondaries makes no sense, group secondaries, by definition, always replicate from the group
-	// primary
-	if instance.IsReplicationGroupSecondary() {
-		return instance, nil, fmt.Errorf("MatchUp: %+v is a secondary replication group member, hence, it cannot be relocated", instance.Key)
-	}
-	master, found, err := ReadInstance(&instance.MasterKey)
-	if err != nil || !found {
-		return instance, nil, log.Errorf("Cannot get master for %+v. error=%+v", instance.Key, err)
-	}
-
-	if !master.IsReplica() {
-		return instance, nil, fmt.Errorf("master is not a replica itself: %+v", master.Key)
-	}
-
-	return MatchBelow(instanceKey, &master.MasterKey, requireInstanceMaintenance)
-}
-
-// MatchUpReplicas will move all replicas of given master up the replication chain,
-// so that they become siblings of their master.
-// This should be called when the local master dies, and all its replicas are to be resurrected via Pseudo-GTID
-func MatchUpReplicas(masterKey *InstanceKey, pattern string) ([](*Instance), *Instance, error, []error) {
-	res := [](*Instance){}
-	errs := []error{}
-
-	masterInstance, found, err := ReadInstance(masterKey)
-	if err != nil || !found {
-		return res, nil, err, errs
-	}
-
-	return MultiMatchReplicas(masterKey, &masterInstance.MasterKey, pattern)
 }
 
 func isGenerallyValidAsBinlogSource(replica *Instance) bool {
@@ -2306,88 +1829,6 @@ func GetCandidateReplicaOfBinlogServerTopology(masterKey *InstanceKey) (candidat
 	return candidateReplica, err
 }
 
-// RegroupReplicasPseudoGTID will choose a candidate replica of a given instance, and take its siblings using pseudo-gtid
-func RegroupReplicasPseudoGTID(
-	masterKey *InstanceKey,
-	returnReplicaEvenOnFailureToRegroup bool,
-	onCandidateReplicaChosen func(*Instance),
-	postponedFunctionsContainer *PostponedFunctionsContainer,
-	postponeAllMatchOperations func(*Instance, bool) bool,
-) (
-	aheadReplicas [](*Instance),
-	equalReplicas [](*Instance),
-	laterReplicas [](*Instance),
-	cannotReplicateReplicas [](*Instance),
-	candidateReplica *Instance,
-	err error,
-) {
-	candidateReplica, aheadReplicas, equalReplicas, laterReplicas, cannotReplicateReplicas, err = GetCandidateReplica(masterKey, true)
-	if err != nil {
-		if !returnReplicaEvenOnFailureToRegroup {
-			candidateReplica = nil
-		}
-		return aheadReplicas, equalReplicas, laterReplicas, cannotReplicateReplicas, candidateReplica, err
-	}
-
-	if config.Config.PseudoGTIDPattern == "" {
-		return aheadReplicas, equalReplicas, laterReplicas, cannotReplicateReplicas, candidateReplica, fmt.Errorf("PseudoGTIDPattern not configured; cannot use Pseudo-GTID")
-	}
-
-	if onCandidateReplicaChosen != nil {
-		onCandidateReplicaChosen(candidateReplica)
-	}
-
-	allMatchingFunc := func() error {
-		log.Debugf("RegroupReplicas: working on %d equals replicas", len(equalReplicas))
-		barrier := make(chan *InstanceKey)
-		for _, replica := range equalReplicas {
-			replica := replica
-			// This replica has the exact same executing coordinates as the candidate replica. This replica
-			// is *extremely* easy to attach below the candidate replica!
-			go func() {
-				defer func() { barrier <- &candidateReplica.Key }()
-				ExecuteOnTopology(func() {
-					ChangeMasterTo(&replica.Key, &candidateReplica.Key, &candidateReplica.SelfBinlogCoordinates, false, GTIDHintDeny)
-				})
-			}()
-		}
-		for range equalReplicas {
-			<-barrier
-		}
-
-		log.Debugf("RegroupReplicas: multi matching %d later replicas", len(laterReplicas))
-		// As for the laterReplicas, we'll have to apply pseudo GTID
-		laterReplicas, candidateReplica, err, _ = MultiMatchBelow(laterReplicas, &candidateReplica.Key, postponedFunctionsContainer)
-
-		operatedReplicas := append(equalReplicas, candidateReplica)
-		operatedReplicas = append(operatedReplicas, laterReplicas...)
-		log.Debugf("RegroupReplicas: starting %d replicas", len(operatedReplicas))
-		barrier = make(chan *InstanceKey)
-		for _, replica := range operatedReplicas {
-			replica := replica
-			go func() {
-				defer func() { barrier <- &candidateReplica.Key }()
-				ExecuteOnTopology(func() {
-					StartReplication(&replica.Key)
-				})
-			}()
-		}
-		for range operatedReplicas {
-			<-barrier
-		}
-		AuditOperation("regroup-replicas", masterKey, fmt.Sprintf("regrouped %+v replicas below %+v", len(operatedReplicas), *masterKey))
-		return err
-	}
-	if postponedFunctionsContainer != nil && postponeAllMatchOperations != nil && postponeAllMatchOperations(candidateReplica, false) {
-		postponedFunctionsContainer.AddPostponedFunction(allMatchingFunc, fmt.Sprintf("regroup-replicas-pseudo-gtid %+v", candidateReplica.Key))
-	} else {
-		err = allMatchingFunc()
-	}
-	log.Debugf("RegroupReplicas: done")
-	// aheadReplicas are lost (they were ahead in replication as compared to promoted replica)
-	return aheadReplicas, equalReplicas, laterReplicas, cannotReplicateReplicas, candidateReplica, err
-}
-
 func getMostUpToDateActiveBinlogServer(masterKey *InstanceKey) (mostAdvancedBinlogServer *Instance, binlogServerReplicas [](*Instance), err error) {
 	if binlogServerReplicas, err = ReadBinlogServerReplicaInstances(masterKey); err == nil && len(binlogServerReplicas) > 0 {
 		// Pick the most advanced binlog sever that is good to go
@@ -2403,88 +1844,6 @@ func getMostUpToDateActiveBinlogServer(masterKey *InstanceKey) (mostAdvancedBinl
 		}
 	}
 	return mostAdvancedBinlogServer, binlogServerReplicas, err
-}
-
-// RegroupReplicasPseudoGTIDIncludingSubReplicasOfBinlogServers uses Pseugo-GTID to regroup replicas
-// of given instance. The function also drill in to replicas of binlog servers that are replicating from given instance,
-// and other recursive binlog servers, as long as they're in the same binlog-server-family.
-func RegroupReplicasPseudoGTIDIncludingSubReplicasOfBinlogServers(
-	masterKey *InstanceKey,
-	returnReplicaEvenOnFailureToRegroup bool,
-	onCandidateReplicaChosen func(*Instance),
-	postponedFunctionsContainer *PostponedFunctionsContainer,
-	postponeAllMatchOperations func(*Instance, bool) bool,
-) (
-	aheadReplicas [](*Instance),
-	equalReplicas [](*Instance),
-	laterReplicas [](*Instance),
-	cannotReplicateReplicas [](*Instance),
-	candidateReplica *Instance,
-	err error,
-) {
-	// First, handle binlog server issues:
-	func() error {
-		log.Debugf("RegroupReplicasIncludingSubReplicasOfBinlogServers: starting on replicas of %+v", *masterKey)
-		// Find the most up to date binlog server:
-		mostUpToDateBinlogServer, binlogServerReplicas, err := getMostUpToDateActiveBinlogServer(masterKey)
-		if err != nil {
-			return log.Errore(err)
-		}
-		if mostUpToDateBinlogServer == nil {
-			log.Debugf("RegroupReplicasIncludingSubReplicasOfBinlogServers: no binlog server replicates from %+v", *masterKey)
-			// No binlog server; proceed as normal
-			return nil
-		}
-		log.Debugf("RegroupReplicasIncludingSubReplicasOfBinlogServers: most up to date binlog server of %+v: %+v", *masterKey, mostUpToDateBinlogServer.Key)
-
-		// Find the most up to date candidate replica:
-		candidateReplica, _, _, _, _, err := GetCandidateReplica(masterKey, true)
-		if err != nil {
-			return log.Errore(err)
-		}
-		if candidateReplica == nil {
-			log.Debugf("RegroupReplicasIncludingSubReplicasOfBinlogServers: no candidate replica for %+v", *masterKey)
-			// Let the followup code handle that
-			return nil
-		}
-		log.Debugf("RegroupReplicasIncludingSubReplicasOfBinlogServers: candidate replica of %+v: %+v", *masterKey, candidateReplica.Key)
-
-		if candidateReplica.ExecBinlogCoordinates.SmallerThan(&mostUpToDateBinlogServer.ExecBinlogCoordinates) {
-			log.Debugf("RegroupReplicasIncludingSubReplicasOfBinlogServers: candidate replica %+v coordinates smaller than binlog server %+v", candidateReplica.Key, mostUpToDateBinlogServer.Key)
-			// Need to align under binlog server...
-			candidateReplica, err = Repoint(&candidateReplica.Key, &mostUpToDateBinlogServer.Key, GTIDHintDeny)
-			if err != nil {
-				return log.Errore(err)
-			}
-			log.Debugf("RegroupReplicasIncludingSubReplicasOfBinlogServers: repointed candidate replica %+v under binlog server %+v", candidateReplica.Key, mostUpToDateBinlogServer.Key)
-			candidateReplica, err = StartReplicationUntilMasterCoordinates(&candidateReplica.Key, &mostUpToDateBinlogServer.ExecBinlogCoordinates)
-			if err != nil {
-				return log.Errore(err)
-			}
-			log.Debugf("RegroupReplicasIncludingSubReplicasOfBinlogServers: aligned candidate replica %+v under binlog server %+v", candidateReplica.Key, mostUpToDateBinlogServer.Key)
-			// and move back
-			candidateReplica, err = Repoint(&candidateReplica.Key, masterKey, GTIDHintDeny)
-			if err != nil {
-				return log.Errore(err)
-			}
-			log.Debugf("RegroupReplicasIncludingSubReplicasOfBinlogServers: repointed candidate replica %+v under master %+v", candidateReplica.Key, *masterKey)
-			return nil
-		}
-		// Either because it _was_ like that, or we _made_ it so,
-		// candidate replica is as/more up to date than all binlog servers
-		for _, binlogServer := range binlogServerReplicas {
-			log.Debugf("RegroupReplicasIncludingSubReplicasOfBinlogServers: matching replicas of binlog server %+v below %+v", binlogServer.Key, candidateReplica.Key)
-			// Right now sequentially.
-			// At this point just do what you can, don't return an error
-			MultiMatchReplicas(&binlogServer.Key, &candidateReplica.Key, "")
-			log.Debugf("RegroupReplicasIncludingSubReplicasOfBinlogServers: done matching replicas of binlog server %+v below %+v", binlogServer.Key, candidateReplica.Key)
-		}
-		log.Debugf("RegroupReplicasIncludingSubReplicasOfBinlogServers: done handling binlog regrouping for %+v; will proceed with normal RegroupReplicas", *masterKey)
-		AuditOperation("regroup-replicas-including-bls", masterKey, fmt.Sprintf("matched replicas of binlog server replicas of %+v under %+v", *masterKey, candidateReplica.Key))
-		return nil
-	}()
-	// Proceed to normal regroup:
-	return RegroupReplicasPseudoGTID(masterKey, returnReplicaEvenOnFailureToRegroup, onCandidateReplicaChosen, postponedFunctionsContainer, postponeAllMatchOperations)
 }
 
 // RegroupReplicasGTID will choose a candidate replica of a given instance, and take its siblings using GTID
@@ -2575,7 +1934,7 @@ func RegroupReplicasBinlogServers(masterKey *InstanceKey, returnReplicaEvenOnFai
 }
 
 // RegroupReplicas is a "smart" method of promoting one replica over the others ("promoting" it on top of its siblings)
-// This method decides which strategy to use: GTID, Pseudo-GTID, Binlog Servers.
+// This method decides which strategy to use: GTID, Binlog Servers.
 func RegroupReplicas(masterKey *InstanceKey, returnReplicaEvenOnFailureToRegroup bool,
 	onCandidateReplicaChosen func(*Instance),
 	postponedFunctionsContainer *PostponedFunctionsContainer) (
@@ -2602,16 +1961,12 @@ func RegroupReplicas(masterKey *InstanceKey, returnReplicaEvenOnFailureToRegroup
 	}
 	allGTID := true
 	allBinlogServers := true
-	allPseudoGTID := true
 	for _, replica := range replicas {
 		if !replica.UsingGTID() {
 			allGTID = false
 		}
 		if !replica.IsBinlogServer() {
 			allBinlogServers = false
-		}
-		if !replica.UsingPseudoGTID {
-			allPseudoGTID = false
 		}
 	}
 	if allGTID {
@@ -2624,17 +1979,11 @@ func RegroupReplicas(masterKey *InstanceKey, returnReplicaEvenOnFailureToRegroup
 		movedReplicas, candidateReplica, err := RegroupReplicasBinlogServers(masterKey, returnReplicaEvenOnFailureToRegroup)
 		return emptyReplicas, emptyReplicas, movedReplicas, cannotReplicateReplicas, candidateReplica, err
 	}
-	if allPseudoGTID {
-		log.Debugf("RegroupReplicas: using Pseudo-GTID to regroup replicas of %+v", *masterKey)
-		return RegroupReplicasPseudoGTID(masterKey, returnReplicaEvenOnFailureToRegroup, onCandidateReplicaChosen, postponedFunctionsContainer, nil)
-	}
-	// And, as last resort, we do PseudoGTID & binlog servers
-	log.Warningf("RegroupReplicas: unsure what method to invoke for %+v; trying Pseudo-GTID+Binlog Servers", *masterKey)
-	return RegroupReplicasPseudoGTIDIncludingSubReplicasOfBinlogServers(masterKey, returnReplicaEvenOnFailureToRegroup, onCandidateReplicaChosen, postponedFunctionsContainer, nil)
+	return emptyReplicas, emptyReplicas, emptyReplicas, emptyReplicas, instance, log.Errorf("No solution path found for RegroupReplicas")
 }
 
 // relocateBelowInternal is a protentially recursive function which chooses how to relocate an instance below another.
-// It may choose to use Pseudo-GTID, or normal binlog positions, or take advantage of binlog servers,
+// It may choose to use normal binlog positions, or take advantage of binlog servers,
 // or it may combine any of the above in a multi-step operation.
 func relocateBelowInternal(instance, other *Instance) (*Instance, error) {
 	if canReplicate, err := instance.CanReplicateFrom(other); !canReplicate {
@@ -2698,14 +2047,7 @@ func relocateBelowInternal(instance, other *Instance) (*Instance, error) {
 		return moveInstanceBelowViaGTID(instance, other)
 	}
 
-	// Next, try Pseudo-GTID
-	if instance.UsingPseudoGTID && other.UsingPseudoGTID {
-		// We prefer PseudoGTID to anything else because, while it takes longer to run, it does not issue
-		// a STOP SLAVE on any server other than "instance" itself.
-		instance, _, err := MatchBelow(&instance.Key, &other.Key, true)
-		return instance, err
-	}
-	// No Pseudo-GTID; cehck simple binlog file/pos operations:
+	// Check simple binlog file/pos operations:
 	if InstancesAreSiblings(instance, other) {
 		// If comastering, only move below if it's read-only
 		if !other.IsCoMaster || other.ReadOnly {
@@ -2730,7 +2072,7 @@ func relocateBelowInternal(instance, other *Instance) (*Instance, error) {
 
 // RelocateBelow will attempt moving instance indicated by instanceKey below another instance.
 // Orchestrator will try and figure out the best way to relocate the server. This could span normal
-// binlog-position, pseudo-gtid, repointing, binlog servers...
+// binlog-position, repointing, binlog servers...
 func RelocateBelow(instanceKey, otherKey *InstanceKey) (*Instance, error) {
 	instance, found, err := ReadInstance(instanceKey)
 	if err != nil || !found {
@@ -2761,11 +2103,10 @@ func RelocateBelow(instanceKey, otherKey *InstanceKey) (*Instance, error) {
 
 // relocateReplicasInternal is a protentially recursive function which chooses how to relocate
 // replicas of an instance below another.
-// It may choose to use Pseudo-GTID, or normal binlog positions, or take advantage of binlog servers,
+// It may choose to use normal binlog positions, or take advantage of binlog servers,
 // or it may combine any of the above in a multi-step operation.
 func relocateReplicasInternal(replicas [](*Instance), instance, other *Instance) ([](*Instance), error, []error) {
 	errs := []error{}
-	var err error
 	// simplest:
 	if instance.Key.Equals(&other.Key) {
 		// already the desired setup.
@@ -2811,27 +2152,13 @@ func relocateReplicasInternal(replicas [](*Instance), instance, other *Instance)
 		// Otherwise nothing was moved via GTID. Maybe we don't have any GTIDs, we continue.
 	}
 
-	// Pseudo GTID
-	if other.UsingPseudoGTID {
-		// Which replicas are using Pseudo GTID?
-		var pseudoGTIDReplicas [](*Instance)
-		for _, replica := range replicas {
-			_, _, hasToBeGTID := instancesAreGTIDAndCompatible(replica, other)
-			if replica.UsingPseudoGTID && !hasToBeGTID {
-				pseudoGTIDReplicas = append(pseudoGTIDReplicas, replica)
-			}
-		}
-		pseudoGTIDReplicas, _, err, errs = MultiMatchBelow(pseudoGTIDReplicas, &other.Key, nil)
-		return pseudoGTIDReplicas, err, errs
-	}
-
 	// Too complex
 	return nil, log.Errorf("Relocating %+v replicas of %+v below %+v turns to be too complex; please do it manually", len(replicas), instance.Key, other.Key), errs
 }
 
 // RelocateReplicas will attempt moving replicas of an instance indicated by instanceKey below another instance.
 // Orchestrator will try and figure out the best way to relocate the servers. This could span normal
-// binlog-position, pseudo-gtid, repointing, binlog servers...
+// binlog-position, repointing, binlog servers...
 func RelocateReplicas(instanceKey, otherKey *InstanceKey, pattern string) (replicas [](*Instance), other *Instance, err error, errs []error) {
 
 	instance, found, err := ReadInstance(instanceKey)

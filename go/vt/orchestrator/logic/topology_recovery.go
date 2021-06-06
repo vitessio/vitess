@@ -160,8 +160,8 @@ type MasterRecoveryType string
 const (
 	NotMasterRecovery          MasterRecoveryType = "NotMasterRecovery"
 	MasterRecoveryGTID         MasterRecoveryType = "MasterRecoveryGTID"
-	MasterRecoveryPseudoGTID   MasterRecoveryType = "MasterRecoveryPseudoGTID"
 	MasterRecoveryBinlogServer MasterRecoveryType = "MasterRecoveryBinlogServer"
+	MasterRecoveryUnknown      MasterRecoveryType = "MasterRecoveryUnknown"
 )
 
 var emergencyReadTopologyInstanceMap *cache.Cache
@@ -471,7 +471,7 @@ func recoverDeadMasterInBinlogServerTopology(topologyRecovery *TopologyRecovery)
 }
 
 func GetMasterRecoveryType(analysisEntry *inst.ReplicationAnalysis) (masterRecoveryType MasterRecoveryType) {
-	masterRecoveryType = MasterRecoveryPseudoGTID
+	masterRecoveryType = MasterRecoveryUnknown
 	if analysisEntry.OracleGTIDImmediateTopology || analysisEntry.MariaDBGTIDImmediateTopology {
 		masterRecoveryType = MasterRecoveryGTID
 	} else if analysisEntry.BinlogServerImmediateTopology {
@@ -523,15 +523,14 @@ func recoverDeadMaster(topologyRecovery *TopologyRecovery, candidateInstanceKey 
 		return false
 	}
 	switch topologyRecovery.RecoveryType {
+	case MasterRecoveryUnknown:
+		{
+			return false, nil, lostReplicas, topologyRecovery.AddError(log.Errorf("RecoveryType unknown/unsupported"))
+		}
 	case MasterRecoveryGTID:
 		{
 			AuditTopologyRecovery(topologyRecovery, "RecoverDeadMaster: regrouping replicas via GTID")
 			lostReplicas, _, cannotReplicateReplicas, promotedReplica, err = inst.RegroupReplicasGTID(failedInstanceKey, true, nil, &topologyRecovery.PostponedFunctionsContainer, promotedReplicaIsIdeal)
-		}
-	case MasterRecoveryPseudoGTID:
-		{
-			AuditTopologyRecovery(topologyRecovery, "RecoverDeadMaster: regrouping replicas via Pseudo-GTID")
-			lostReplicas, _, _, cannotReplicateReplicas, promotedReplica, err = inst.RegroupReplicasPseudoGTIDIncludingSubReplicasOfBinlogServers(failedInstanceKey, true, nil, &topologyRecovery.PostponedFunctionsContainer, promotedReplicaIsIdeal)
 		}
 	case MasterRecoveryBinlogServer:
 		{
@@ -1262,7 +1261,7 @@ func RecoverDeadCoMaster(topologyRecovery *TopologyRecovery, skipProcesses bool)
 
 	AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("RecoverDeadCoMaster: will recover %+v", *failedInstanceKey))
 
-	var coMasterRecoveryType MasterRecoveryType = MasterRecoveryPseudoGTID
+	var coMasterRecoveryType MasterRecoveryType = MasterRecoveryUnknown
 	if analysisEntry.OracleGTIDImmediateTopology || analysisEntry.MariaDBGTIDImmediateTopology {
 		coMasterRecoveryType = MasterRecoveryGTID
 	}
@@ -1271,13 +1270,13 @@ func RecoverDeadCoMaster(topologyRecovery *TopologyRecovery, skipProcesses bool)
 
 	var cannotReplicateReplicas [](*inst.Instance)
 	switch coMasterRecoveryType {
+	case MasterRecoveryUnknown:
+		{
+			return nil, lostReplicas, topologyRecovery.AddError(log.Errorf("RecoverDeadCoMaster: RecoveryType unknown/unsupported"))
+		}
 	case MasterRecoveryGTID:
 		{
 			lostReplicas, _, cannotReplicateReplicas, promotedReplica, err = inst.RegroupReplicasGTID(failedInstanceKey, true, nil, &topologyRecovery.PostponedFunctionsContainer, nil)
-		}
-	case MasterRecoveryPseudoGTID:
-		{
-			lostReplicas, _, _, cannotReplicateReplicas, promotedReplica, err = inst.RegroupReplicasPseudoGTIDIncludingSubReplicasOfBinlogServers(failedInstanceKey, true, nil, &topologyRecovery.PostponedFunctionsContainer, nil)
 		}
 	}
 	topologyRecovery.AddError(err)

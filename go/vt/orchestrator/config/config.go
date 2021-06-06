@@ -41,25 +41,20 @@ const (
 var configurationLoaded chan bool = make(chan bool)
 
 const (
-	HealthPollSeconds                            = 1
-	RaftHealthPollSeconds                        = 10
-	RecoveryPollSeconds                          = 1
-	ActiveNodeExpireSeconds                      = 5
-	BinlogFileHistoryDays                        = 1
-	MaintenanceOwner                             = "orchestrator"
-	AuditPageSize                                = 20
-	MaintenancePurgeDays                         = 7
-	MySQLTopologyMaxPoolConnections              = 3
-	MaintenanceExpireMinutes                     = 10
-	AgentHttpTimeoutSeconds                      = 60
-	PseudoGTIDCoordinatesHistoryHeuristicMinutes = 2
-	DebugMetricsIntervalSeconds                  = 10
-	PseudoGTIDSchema                             = "_pseudo_gtid_"
-	PseudoGTIDIntervalSeconds                    = 5
-	PseudoGTIDExpireMinutes                      = 60
-	StaleInstanceCoordinatesExpireSeconds        = 60
-	CheckAutoPseudoGTIDGrantsIntervalSeconds     = 60
-	SelectTrueQuery                              = "select 1"
+	HealthPollSeconds                     = 1
+	RaftHealthPollSeconds                 = 10
+	RecoveryPollSeconds                   = 1
+	ActiveNodeExpireSeconds               = 5
+	BinlogFileHistoryDays                 = 1
+	MaintenanceOwner                      = "orchestrator"
+	AuditPageSize                         = 20
+	MaintenancePurgeDays                  = 7
+	MySQLTopologyMaxPoolConnections       = 3
+	MaintenanceExpireMinutes              = 10
+	AgentHttpTimeoutSeconds               = 60
+	DebugMetricsIntervalSeconds           = 10
+	StaleInstanceCoordinatesExpireSeconds = 60
+	SelectTrueQuery                       = "select 1"
 )
 
 // Configuration makes for orchestrator configuration input, which can be provided by user via JSON formatted file.
@@ -198,13 +193,7 @@ type Configuration struct {
 	StaleSeedFailMinutes                       uint              // Number of minutes after which a stale (no progress) seed is considered failed.
 	SeedAcceptableBytesDiff                    int64             // Difference in bytes between seed source & target data size that is still considered as successful copy
 	SeedWaitSecondsBeforeSend                  int64             // Number of seconds for waiting before start send data command on agent
-	AutoPseudoGTID                             bool              // Should orchestrator automatically inject Pseudo-GTID entries to the masters
-	PseudoGTIDPattern                          string            // Pattern to look for in binary logs that makes for a unique entry (pseudo GTID). When empty, Pseudo-GTID based refactoring is disabled.
-	PseudoGTIDPatternIsFixedSubstring          bool              // If true, then PseudoGTIDPattern is not treated as regular expression but as fixed substring, and can boost search time
-	PseudoGTIDMonotonicHint                    string            // subtring in Pseudo-GTID entry which indicates Pseudo-GTID entries are expected to be monotonically increasing
-	DetectPseudoGTIDQuery                      string            // Optional query which is used to authoritatively decide whether pseudo gtid is enabled on instance
 	BinlogEventsChunkSize                      int               // Chunk size (X) for SHOW BINLOG|RELAYLOG EVENTS LIMIT ?,X statements. Smaller means less locking and mroe work to be done
-	SkipBinlogEventsContaining                 []string          // When scanning/comparing binlogs for Pseudo-GTID, skip entries containing given texts. These are NOT regular expressions (would consume too much CPU while scanning binlogs), just substrings to find.
 	ReduceReplicationAnalysisCount             bool              // When true, replication analysis will only report instances where possibility of handled problems is possible in the first place (e.g. will not report most leaf nodes, that are mostly uninteresting). When false, provides an entry for every known instance
 	FailureDetectionPeriodBlockMinutes         int               // The time for which an instance's failure discovery is kept "active", so as to avoid concurrent "discoveries" of the instance's failure; this preceeds any recovery process, if any.
 	RecoveryPeriodBlockMinutes                 int               // (supported for backwards compatibility but please use newer `RecoveryPeriodBlockSeconds` instead) The time for which an instance's recovery is kept "active", so as to avoid concurrent recoveries on smae instance as well as flapping
@@ -373,13 +362,7 @@ func newConfiguration() *Configuration {
 		StaleSeedFailMinutes:                       60,
 		SeedAcceptableBytesDiff:                    8192,
 		SeedWaitSecondsBeforeSend:                  2,
-		AutoPseudoGTID:                             false,
-		PseudoGTIDPattern:                          "",
-		PseudoGTIDPatternIsFixedSubstring:          false,
-		PseudoGTIDMonotonicHint:                    "",
-		DetectPseudoGTIDQuery:                      "",
 		BinlogEventsChunkSize:                      10000,
-		SkipBinlogEventsContaining:                 []string{},
 		ReduceReplicationAnalysisCount:             true,
 		FailureDetectionPeriodBlockMinutes:         60,
 		RecoveryPeriodBlockMinutes:                 60,
@@ -551,12 +534,6 @@ func (this *Configuration) postReadAdjustments() error {
 		// "some/prefix///" turns to "some/prefix/"
 		this.KVClusterMasterPrefix = strings.TrimRight(this.KVClusterMasterPrefix, "/")
 		this.KVClusterMasterPrefix = fmt.Sprintf("%s/", this.KVClusterMasterPrefix)
-	}
-	if this.AutoPseudoGTID {
-		this.PseudoGTIDPattern = "drop view if exists `_pseudo_gtid_`"
-		this.PseudoGTIDPatternIsFixedSubstring = true
-		this.PseudoGTIDMonotonicHint = "asc:"
-		this.DetectPseudoGTIDQuery = SelectTrueQuery
 	}
 	if this.HTTPAdvertise != "" {
 		u, err := url.Parse(this.HTTPAdvertise)

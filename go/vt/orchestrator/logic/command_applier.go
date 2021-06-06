@@ -43,7 +43,7 @@ func (applier *CommandApplier) ApplyCommand(op string, value []byte) interface{}
 	case "discover":
 		return applier.discover(value)
 	case "injected-pseudo-gtid":
-		return applier.injectedPseudoGTID(value)
+		return nil // depracated
 	case "forget":
 		return applier.forget(value)
 	case "forget-cluster":
@@ -94,15 +94,6 @@ func (applier *CommandApplier) discover(value []byte) interface{} {
 		return log.Errore(err)
 	}
 	DiscoverInstance(instanceKey)
-	return nil
-}
-
-func (applier *CommandApplier) injectedPseudoGTID(value []byte) interface{} {
-	var clusterName string
-	if err := json.Unmarshal(value, &clusterName); err != nil {
-		return log.Errore(err)
-	}
-	inst.RegisterInjectedPseudoGTID(clusterName)
 	return nil
 }
 
