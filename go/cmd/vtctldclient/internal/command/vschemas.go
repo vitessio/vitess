@@ -38,7 +38,7 @@ var (
 	}
 	// ApplyVSchema makes an ApplyVSchema gRPC call to a vtctld.
 	ApplyVSchema = &cobra.Command{
-		Use:                   "ApplyVSchema {-vschema=<vschema> || -vschema_file=<vschema file> || -sql=<sql> || -sql_file=<sql file>} [-cells=c1,c2,...] [-skip_rebuild] [-dry-run] <keyspace>",
+		Use:                   "ApplyVSchema {-vschema=<vschema> || -vschema-file=<vschema file> || -sql=<sql> || -sql-file=<sql file>} [-cells=c1,c2,...] [-skip-rebuild] [-dry-run] <keyspace>",
 		Args:                  cobra.ExactArgs(1),
 		DisableFlagsInUseLine: true,
 		RunE:                  commandApplyVSchema,
@@ -61,11 +61,11 @@ func commandApplyVSchema(cmd *cobra.Command, args []string) error {
 	jsonMode := (applyVSchemaOptions.VSchema != "") != (applyVSchemaOptions.VSchemaFile != "")
 
 	if sqlMode && jsonMode {
-		return fmt.Errorf("only one of the sql, sql_file, vschema, or vschema_file flags may be specified when calling the ApplyVSchema command")
+		return fmt.Errorf("only one of the sql, sql-file, vschema, or vschema-file flags may be specified when calling the ApplyVSchema command")
 	}
 
 	if !sqlMode && !jsonMode {
-		return fmt.Errorf("one of the sql, sql_file, vschema, or vschema_file flags must be specified when calling the ApplyVSchema command")
+		return fmt.Errorf("one of the sql, sql-file, vschema, or vschema-file flags must be specified when calling the ApplyVSchema command")
 	}
 
 	req := &vtctldatapb.ApplyVSchemaRequest{
@@ -143,11 +143,11 @@ func commandGetVSchema(cmd *cobra.Command, args []string) error {
 
 func init() {
 	ApplyVSchema.Flags().StringVar(&applyVSchemaOptions.VSchema, "vschema", "", "VSchema")
-	ApplyVSchema.Flags().StringVar(&applyVSchemaOptions.VSchemaFile, "vschema_file", "", "VSchema File")
+	ApplyVSchema.Flags().StringVar(&applyVSchemaOptions.VSchemaFile, "vschema-file", "", "VSchema File")
 	ApplyVSchema.Flags().StringVar(&applyVSchemaOptions.SQL, "sql", "", "A VSchema DDL SQL statement, e.g. `alter table t add vindex hash(id)`")
-	ApplyVSchema.Flags().StringVar(&applyVSchemaOptions.SQLFile, "sql_file", "", "A file containing VSchema DDL SQL")
+	ApplyVSchema.Flags().StringVar(&applyVSchemaOptions.SQLFile, "sql-file", "", "A file containing VSchema DDL SQL")
 	ApplyVSchema.Flags().BoolVar(&applyVSchemaOptions.DryRun, "dry-run", false, "If set, do not save the altered vschema, simply echo to console.")
-	ApplyVSchema.Flags().BoolVar(&applyVSchemaOptions.SkipRebuild, "skip_rebuild", false, "If set, do no rebuild the SrvSchema objects.")
+	ApplyVSchema.Flags().BoolVar(&applyVSchemaOptions.SkipRebuild, "skip-rebuild", false, "If set, do no rebuild the SrvSchema objects.")
 	ApplyVSchema.Flags().StringSliceVar(&applyVSchemaOptions.Cells, "cells", nil, "If specified, limits the rebuild to the cells, after upload. Ignored if skipRebuild is set.")
 	Root.AddCommand(ApplyVSchema)
 

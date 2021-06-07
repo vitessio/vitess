@@ -46,7 +46,7 @@ import (
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	vtctlservicepb "vitess.io/vitess/go/vt/proto/vtctlservice"
-	vttime "vitess.io/vitess/go/vt/proto/vttime"
+	"vitess.io/vitess/go/vt/proto/vttime"
 )
 
 func init() {
