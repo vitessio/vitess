@@ -70,18 +70,18 @@ func (u *updateController) consume() {
 
 func (u *updateController) getItemFromQueueLocked() *discovery.TabletHealth {
 	item := u.queue.items[0]
-	i := 0
+	i := 1
 	for ; i < len(u.queue.items); i++ {
-		for _, table := range u.queue.items[i].TablesUpdated {
+		for _, table := range u.queue.items[i].Stats.TableSchemaChanged {
 			found := false
-			for _, itemTable := range item.TablesUpdated {
+			for _, itemTable := range item.Stats.TableSchemaChanged {
 				if itemTable == table {
 					found = true
 					break
 				}
 			}
 			if !found {
-				item.TablesUpdated = append(item.TablesUpdated, table)
+				item.Stats.TableSchemaChanged = append(item.Stats.TableSchemaChanged, table)
 			}
 		}
 	}
@@ -94,7 +94,7 @@ func (u *updateController) add(th *discovery.TabletHealth) {
 	u.mu.Lock()
 	defer u.mu.Unlock()
 
-	if len(th.TablesUpdated) == 0 && u.init == nil {
+	if len(th.Stats.TableSchemaChanged) == 0 && u.init == nil {
 		return
 	}
 	if u.queue == nil {
