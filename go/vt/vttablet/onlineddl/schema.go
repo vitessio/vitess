@@ -299,6 +299,15 @@ const (
 			AND ACTION_TIMING='AFTER'
 			AND LEFT(TRIGGER_NAME, 7)='pt_osc_'
 		`
+	sqlSelectColumnTypes = `
+		select
+				*
+			from
+				information_schema.columns
+			where
+				table_schema=%a
+				and table_name=%a
+		`
 	selSelectCountFKParentConstraints = `
 		SELECT
 			COUNT(*) as num_fk_constraints
@@ -306,7 +315,7 @@ const (
 		WHERE
 			REFERENCED_TABLE_SCHEMA=%a AND REFERENCED_TABLE_NAME=%a
 			AND REFERENCED_TABLE_NAME IS NOT NULL
-	`
+		`
 	selSelectCountFKChildConstraints = `
 		SELECT
 			COUNT(*) as num_fk_constraints
@@ -314,8 +323,7 @@ const (
 		WHERE
 			TABLE_SCHEMA=%a AND TABLE_NAME=%a
 			AND REFERENCED_TABLE_NAME IS NOT NULL
-	`
-
+		`
 	sqlDropTrigger       = "DROP TRIGGER IF EXISTS `%a`.`%a`"
 	sqlShowTablesLike    = "SHOW TABLES LIKE '%a'"
 	sqlCreateTableLike   = "CREATE TABLE `%a` LIKE `%a`"
