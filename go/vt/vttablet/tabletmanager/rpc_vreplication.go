@@ -37,3 +37,8 @@ func (tm *TabletManager) VReplicationExec(ctx context.Context, query string) (*q
 func (tm *TabletManager) VReplicationWaitForPos(ctx context.Context, id int, pos string) error {
 	return tm.VREngine.WaitForPos(ctx, id, pos)
 }
+
+// GetVReplicationSource returns the source tablet uid of the vreplication
+func (tm *TabletManager) GetVReplicationSource(ctx context.Context, id int) (string, error) {
+	return tm.VREngine.GetVReplicationSource(ctx, id)
+}

@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/json2"
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/key"
@@ -970,10 +971,47 @@ func (ts *trafficSwitcher) waitForCatchup(ctx context.Context, filteredReplicati
 			target.GetPrimary().AliasString(), target.Position, target.GetShard().String())
 		bls := target.Sources[uid]
 		source := ts.sources[bls.Shard]
-		ts.wr.Logger().Infof("Before Catchup: waiting for keyspace:shard: %v:%v to reach source position %v, uid %d",
-			ts.targetKeyspace, target.GetShard().ShardName(), source.Position, uid)
-		if err := ts.wr.tmc.VReplicationWaitForPos(ctx, target.GetPrimary().Tablet, int(uid), source.Position); err != nil {
-			return err
+		filePosSource := false
+		pos, err := mysql.DecodePosition(source.Position)
+		if err == nil {
+			filePosSource = pos.MatchesFlavor(mysql.FilePosFlavorID)
+		}
+		// if source position is not filepos, wait for the source position directly
+		if !filePosSource {
+			ts.wr.Logger().Infof("Before Catchup: waiting for keyspace:shard: %v:%v to reach source position %v, uid %d",
+				ts.targetKeyspace, target.GetShard().ShardName(), source.Position, uid)
+			if err := ts.wr.tmc.VReplicationWaitForPos(ctx, target.GetPrimary().Tablet, int(uid), source.Position); err != nil {
+				return err
+			}
+		} else {
+			sourceTabletUID, err := ts.wr.tmc.GetVReplicationSource(ctx, target.GetPrimary().Tablet, int(uid))
+			if err != nil {
+				return err
+			}
+			alias, err := topoproto.ParseTabletAlias(sourceTabletUID)
+			if err != nil {
+				return err
+			}
+			sourceTablet, err := ts.wr.ts.GetTablet(ctx, alias)
+			if err != nil {
+				return err
+			}
+			sourcePos := source.Position
+			// if the source tablet of the vreplication is not primary tablet
+			if source.GetPrimary().Tablet.Alias.Uid != sourceTablet.Tablet.Alias.Uid {
+				if err := ts.wr.tmc.WaitForPosition(ctx, sourceTablet.Tablet, source.Position); err != nil {
+					return err
+				}
+				sourcePos, err = ts.wr.tmc.MasterPosition(ctx, sourceTablet.Tablet)
+				if err != nil {
+					return err
+				}
+			}
+			ts.wr.Logger().Infof("Before Catchup: waiting for keyspace:shard: %v:%v, source tablet %s, position on master %s, position on source %s",
+				ts.targetKeyspace, target.GetShard().ShardName(), sourceTabletUID, source.Position, sourcePos)
+			if err := ts.wr.tmc.VReplicationWaitForPos(ctx, target.GetPrimary().Tablet, int(uid), sourcePos); err != nil {
+				return nil
+			}
 		}
 		log.Infof("After catchup: target keyspace:shard: %v:%v, source position %v, uid %d",
 			ts.targetKeyspace, target.GetShard().ShardName(), source.Position, uid)

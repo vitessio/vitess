@@ -910,6 +910,29 @@ func tmRPCTestVReplicationWaitForPosPanic(ctx context.Context, t *testing.T, cli
 	expectHandleRPCPanic(t, "VReplicationWaitForPos", true /*verbose*/, err)
 }
 
+var (
+	testPid          = 4
+	testSourceTablet = "uid-000"
+)
+
+func (fra *fakeRPCTM) GetVReplicationSource(ctx context.Context, id int) (string, error) {
+	if fra.panics {
+		panic(fmt.Errorf("test-triggered panic"))
+	}
+	compare(fra.t, "VReplicationWaitForPos id", id, testPid)
+	return testSourceTablet, nil
+}
+
+func tmRPCTestGetVReplicationSource(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+	source, err := client.GetVReplicationSource(ctx, tablet, testPid)
+	compareError(t, "GetVReplicationSource", err, source, testSourceTablet)
+}
+
+func tmRPCTestGetVReplicationSourcePanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+	_, err := client.GetVReplicationSource(ctx, tablet, testPid)
+	expectHandleRPCPanic(t, "GetVReplicationSource", true /*verbose*/, err)
+}
+
 //
 // Reparenting related functions
 //
@@ -1284,6 +1307,7 @@ func Run(t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.T
 	// VReplication methods
 	tmRPCTestVReplicationExec(ctx, t, client, tablet)
 	tmRPCTestVReplicationWaitForPos(ctx, t, client, tablet)
+	tmRPCTestGetVReplicationSource(ctx, t, client, tablet)
 
 	// Reparenting related functions
 	tmRPCTestResetReplication(ctx, t, client, tablet)
@@ -1336,6 +1360,7 @@ func Run(t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.T
 	// VReplication methods
 	tmRPCTestVReplicationExecPanic(ctx, t, client, tablet)
 	tmRPCTestVReplicationWaitForPosPanic(ctx, t, client, tablet)
+	tmRPCTestGetVReplicationSourcePanic(ctx, t, client, tablet)
 
 	// Reparenting related functions
 	tmRPCTestResetReplicationPanic(ctx, t, client, tablet)

@@ -354,6 +354,14 @@ func (s *server) VReplicationWaitForPos(ctx context.Context, request *tabletmana
 	return &tabletmanagerdatapb.VReplicationWaitForPosResponse{}, err
 }
 
+func (s *server) GetVReplicationSource(ctx context.Context, request *tabletmanagerdatapb.GetVReplicationSourceRequest) (response *tabletmanagerdatapb.GetVReplicationSourceResponse, err error) {
+	defer s.tm.HandleRPCPanic(ctx, "GetVReplicationSource", request, response, true /*verbose*/, &err)
+	ctx = callinfo.GRPCCallInfo(ctx)
+	response = &tabletmanagerdatapb.GetVReplicationSourceResponse{}
+	response.SourceTablet, err = s.tm.GetVReplicationSource(ctx, int(request.Id))
+	return response, err
+}
+
 //
 // Reparenting related functions
 //

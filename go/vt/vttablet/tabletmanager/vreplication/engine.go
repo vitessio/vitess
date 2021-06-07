@@ -22,6 +22,7 @@ import (
 	"flag"
 	"fmt"
 	"sort"
+	"strconv"
 	"sync"
 	"time"
 
@@ -677,6 +678,15 @@ func (vre *Engine) transitionJournal(je *journalEvent) {
 		vre.controllers[id] = ct
 	}
 	log.Infof("Completed transition for journal:workload %v", je)
+}
+
+// GetVReplicationSource returns the source tablet uid
+func (vre *Engine) GetVReplicationSource(ctx context.Context, id int) (string, error) {
+	val, ok := vre.controllers[id]
+	if !ok {
+		return "", errors.New("cannot find vreplication " + strconv.Itoa(id))
+	}
+	return val.sourceTablet.Get(), nil
 }
 
 // WaitForPos waits for the replication to reach the specified position.

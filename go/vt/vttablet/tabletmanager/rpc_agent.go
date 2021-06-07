@@ -103,6 +103,7 @@ type RPCTM interface {
 	// VReplication API
 	VReplicationExec(ctx context.Context, query string) (*querypb.QueryResult, error)
 	VReplicationWaitForPos(ctx context.Context, id int, pos string) error
+	GetVReplicationSource(ctx context.Context, id int) (string, error)
 
 	// Reparenting related functions
 

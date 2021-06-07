@@ -68,6 +68,7 @@ type TabletManagerClient interface {
 	// VReplication API
 	VReplicationExec(ctx context.Context, in *tabletmanagerdata.VReplicationExecRequest, opts ...grpc.CallOption) (*tabletmanagerdata.VReplicationExecResponse, error)
 	VReplicationWaitForPos(ctx context.Context, in *tabletmanagerdata.VReplicationWaitForPosRequest, opts ...grpc.CallOption) (*tabletmanagerdata.VReplicationWaitForPosResponse, error)
+	GetVReplicationSource(ctx context.Context, in *tabletmanagerdata.GetVReplicationSourceRequest, opts ...grpc.CallOption) (*tabletmanagerdata.GetVReplicationSourceResponse, error)
 	// ResetReplication makes the target not replicating
 	ResetReplication(ctx context.Context, in *tabletmanagerdata.ResetReplicationRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ResetReplicationResponse, error)
 	// InitMaster initializes the tablet as a master
@@ -386,6 +387,15 @@ func (c *tabletManagerClient) VReplicationWaitForPos(ctx context.Context, in *ta
 	return out, nil
 }
 
+func (c *tabletManagerClient) GetVReplicationSource(ctx context.Context, in *tabletmanagerdata.GetVReplicationSourceRequest, opts ...grpc.CallOption) (*tabletmanagerdata.GetVReplicationSourceResponse, error) {
+	out := new(tabletmanagerdata.GetVReplicationSourceResponse)
+	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/GetVReplicationSource", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *tabletManagerClient) ResetReplication(ctx context.Context, in *tabletmanagerdata.ResetReplicationRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ResetReplicationResponse, error) {
 	out := new(tabletmanagerdata.ResetReplicationResponse)
 	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/ResetReplication", in, out, opts...)
@@ -611,6 +621,7 @@ type TabletManagerServer interface {
 	// VReplication API
 	VReplicationExec(context.Context, *tabletmanagerdata.VReplicationExecRequest) (*tabletmanagerdata.VReplicationExecResponse, error)
 	VReplicationWaitForPos(context.Context, *tabletmanagerdata.VReplicationWaitForPosRequest) (*tabletmanagerdata.VReplicationWaitForPosResponse, error)
+	GetVReplicationSource(context.Context, *tabletmanagerdata.GetVReplicationSourceRequest) (*tabletmanagerdata.GetVReplicationSourceResponse, error)
 	// ResetReplication makes the target not replicating
 	ResetReplication(context.Context, *tabletmanagerdata.ResetReplicationRequest) (*tabletmanagerdata.ResetReplicationResponse, error)
 	// InitMaster initializes the tablet as a master
@@ -739,6 +750,9 @@ func (UnimplementedTabletManagerServer) VReplicationExec(context.Context, *table
 }
 func (UnimplementedTabletManagerServer) VReplicationWaitForPos(context.Context, *tabletmanagerdata.VReplicationWaitForPosRequest) (*tabletmanagerdata.VReplicationWaitForPosResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method VReplicationWaitForPos not implemented")
+}
+func (UnimplementedTabletManagerServer) GetVReplicationSource(context.Context, *tabletmanagerdata.GetVReplicationSourceRequest) (*tabletmanagerdata.GetVReplicationSourceResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetVReplicationSource not implemented")
 }
 func (UnimplementedTabletManagerServer) ResetReplication(context.Context, *tabletmanagerdata.ResetReplicationRequest) (*tabletmanagerdata.ResetReplicationResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ResetReplication not implemented")
@@ -1353,6 +1367,24 @@ func _TabletManager_VReplicationWaitForPos_Handler(srv interface{}, ctx context.
 	return interceptor(ctx, in, info, handler)
 }
 
+func _TabletManager_GetVReplicationSource_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(tabletmanagerdata.GetVReplicationSourceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TabletManagerServer).GetVReplicationSource(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/tabletmanagerservice.TabletManager/GetVReplicationSource",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TabletManagerServer).GetVReplicationSource(ctx, req.(*tabletmanagerdata.GetVReplicationSourceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _TabletManager_ResetReplication_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(tabletmanagerdata.ResetReplicationRequest)
 	if err := dec(in); err != nil {
@@ -1741,6 +1773,10 @@ var TabletManager_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "VReplicationWaitForPos",
 			Handler:    _TabletManager_VReplicationWaitForPos_Handler,
+		},
+		{
+			MethodName: "GetVReplicationSource",
+			Handler:    _TabletManager_GetVReplicationSource_Handler,
 		},
 		{
 			MethodName: "ResetReplication",

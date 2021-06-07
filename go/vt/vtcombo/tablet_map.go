@@ -751,6 +751,10 @@ func (itmc *internalTabletManagerClient) VReplicationWaitForPos(ctx context.Cont
 	return fmt.Errorf("not implemented in vtcombo")
 }
 
+func (itmc *internalTabletManagerClient) GetVReplicationSource(ctx context.Context, tablet *topodatapb.Tablet, id int) (string, error) {
+	return "", fmt.Errorf("not implemented in vtcombo")
+}
+
 func (itmc *internalTabletManagerClient) ResetReplication(ctx context.Context, tablet *topodatapb.Tablet) error {
 	return fmt.Errorf("not implemented in vtcombo")
 }

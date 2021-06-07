@@ -357,6 +357,14 @@ message VReplicationWaitForPosRequest {
 message VReplicationWaitForPosResponse {
 }
 
+message GetVReplicationSourceRequest {
+  int64 id = 1;
+}
+
+message GetVReplicationSourceResponse {
+  string source_tablet = 1;
+}
+
 message InitMasterRequest {
 }
 

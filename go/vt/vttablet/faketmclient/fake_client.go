@@ -261,6 +261,11 @@ func (client *FakeTabletManagerClient) VReplicationWaitForPos(ctx context.Contex
 	return nil
 }
 
+// GetVReplicationSource is part of the tmclient.TabletManagerClient interface.
+func (client *FakeTabletManagerClient) GetVReplicationSource(ctx context.Context, tablet *topodatapb.Tablet, id int) (string, error) {
+	return "", nil
+}
+
 //
 // Reparenting related functions
 //
