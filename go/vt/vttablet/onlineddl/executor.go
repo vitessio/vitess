@@ -676,7 +676,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 	}()
 
 	// Tables are now swapped! Migration is successful
-	_ = e.onSchemaMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusComplete, false, progressPctFull, etaSecondsNow, rowsCopiedUnknown)
+	_ = e.onSchemaMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusComplete, false, progressPctFull, etaSecondsNow, s.rowsCopied)
 	return nil
 
 	// deferred function will re-enable writes now
@@ -2177,6 +2177,7 @@ func (e *Executor) isVReplMigrationReadyToCutOver(ctx context.Context, s *VReplS
 			return false, nil
 		}
 	}
+
 	return true, nil
 }
 
@@ -2236,6 +2237,7 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 					atomic.StoreInt64(&e.vreplMigrationRunning, 1)
 					_ = e.updateMigrationTimestamp(ctx, "liveness_timestamp", uuid)
 
+					_ = e.updateRowsCopied(ctx, uuid, s.rowsCopied)
 					_ = e.updateMigrationProgressByRowsCopied(ctx, uuid, s.rowsCopied)
 					_ = e.updateMigrationETASecondsByProgress(ctx, uuid)
 
