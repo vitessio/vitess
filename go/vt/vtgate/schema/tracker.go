@@ -164,7 +164,8 @@ func (t *Tracker) updateSchema(th *discovery.TabletHealth) bool {
 	bv := map[string]*querypb.BindVariable{"tableNames": tables}
 	res, err := th.Conn.Execute(t.ctx, th.Target, mysql.FetchUpdatedTables, bv, 0, 0, nil)
 	if err != nil {
-		// TODO: these tables should now become non-authoritative
+		t.tracked[th.Target.Keyspace].loaded = false
+		// TODO: optimize for the tables that got errored out.
 		log.Warningf("error fetching new schema for %v, making them non-authoritative: %v", tablesUpdated, err)
 		return false
 	}
