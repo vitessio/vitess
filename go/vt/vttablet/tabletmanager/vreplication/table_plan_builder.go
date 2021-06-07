@@ -547,6 +547,9 @@ func (tpb *tablePlanBuilder) generateValuesPart(buf *sqlparser.TrackedBuffer, bv
 		separator = ","
 		switch cexpr.operation {
 		case opExpr:
+			// if cexpr.colType == querypb.Type_ENUM {
+			// 	fmt.Printf("========= found ENUM type for %v\n", cexpr.expr)
+			// }
 			if cexpr.colType == querypb.Type_JSON {
 				buf.Myprintf("convert(%v using utf8mb4)", cexpr.expr)
 			} else {
@@ -632,6 +635,9 @@ func (tpb *tablePlanBuilder) generateUpdateStatement() *sqlparser.ParsedQuery {
 		separator = ", "
 		switch cexpr.operation {
 		case opExpr:
+			// if cexpr.colType == querypb.Type_ENUM {
+			// 	fmt.Printf("========= found ENUM type for %v\n", cexpr.expr)
+			// }
 			bvf.mode = bvAfter
 			if cexpr.colType == querypb.Type_JSON {
 				buf.Myprintf("convert(%v using utf8mb4)", cexpr.expr)
