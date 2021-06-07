@@ -471,6 +471,7 @@ func TestVDiffUnsharded(t *testing.T) {
 		dr: &DiffReport{
 			ProcessedRows: 3,
 			MatchingRows:  3,
+			TableName:     "t1",
 		},
 	}, {
 		id: "2",
@@ -487,6 +488,7 @@ func TestVDiffUnsharded(t *testing.T) {
 			ProcessedRows:   3,
 			MatchingRows:    1,
 			ExtraRowsTarget: 2,
+			TableName:       "t1",
 		},
 	}, {
 		id: "3",
@@ -503,6 +505,7 @@ func TestVDiffUnsharded(t *testing.T) {
 			ProcessedRows:   3,
 			MatchingRows:    1,
 			ExtraRowsSource: 2,
+			TableName:       "t1",
 		},
 	}, {
 		id: "4",
@@ -521,6 +524,7 @@ func TestVDiffUnsharded(t *testing.T) {
 			ProcessedRows:   3,
 			MatchingRows:    2,
 			ExtraRowsSource: 1,
+			TableName:       "t1",
 		},
 	}, {
 		id: "5",
@@ -539,6 +543,7 @@ func TestVDiffUnsharded(t *testing.T) {
 			ProcessedRows:   3,
 			MatchingRows:    2,
 			ExtraRowsTarget: 1,
+			TableName:       "t1",
 		},
 	}, {
 		id: "6",
@@ -558,6 +563,7 @@ func TestVDiffUnsharded(t *testing.T) {
 			ProcessedRows:  3,
 			MatchingRows:   2,
 			MismatchedRows: 1,
+			TableName:      "t1",
 		},
 	}}
 
@@ -632,6 +638,7 @@ func TestVDiffSharded(t *testing.T) {
 	wantdr := &DiffReport{
 		ProcessedRows: 3,
 		MatchingRows:  3,
+		TableName:     "t1",
 	}
 	assert.Equal(t, wantdr, dr["t1"])
 }
@@ -698,6 +705,7 @@ func TestVDiffAggregates(t *testing.T) {
 	wantdr := &DiffReport{
 		ProcessedRows: 5,
 		MatchingRows:  5,
+		TableName:     "t1",
 	}
 	assert.Equal(t, wantdr, dr["t1"])
 }
@@ -762,6 +770,7 @@ func TestVDiffPKWeightString(t *testing.T) {
 	wantdr := &DiffReport{
 		ProcessedRows: 4,
 		MatchingRows:  4,
+		TableName:     "t1",
 	}
 	assert.Equal(t, wantdr, dr["t1"])
 }
@@ -826,6 +835,7 @@ func TestVDiffNoPKWeightString(t *testing.T) {
 	wantdr := &DiffReport{
 		ProcessedRows: 4,
 		MatchingRows:  4,
+		TableName:     "t1",
 	}
 	assert.Equal(t, wantdr, dr["t1"])
 }

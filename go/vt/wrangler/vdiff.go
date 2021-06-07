@@ -57,6 +57,7 @@ type DiffReport struct {
 	MismatchedRows  int
 	ExtraRowsSource int
 	ExtraRowsTarget int
+	TableName       string
 }
 
 // vdiff contains the metadata for performing vdiff for one workflow.
@@ -218,6 +219,7 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflowName, sou
 		}
 		// Perform the diff of source and target streams.
 		dr, err := td.diff(ctx, df.ts.wr, &rowsToCompare)
+		dr.TableName = table
 		if err != nil {
 			return nil, vterrors.Wrap(err, "diff")
 		}
