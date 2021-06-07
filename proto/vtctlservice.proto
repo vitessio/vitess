@@ -43,6 +43,8 @@ service Vtctld {
   rpc AddCellsAlias(vtctldata.AddCellsAliasRequest) returns (vtctldata.AddCellsAliasResponse) {}; 
   // ApplyRoutingRules applies the VSchema routing rules.
   rpc ApplyRoutingRules(vtctldata.ApplyRoutingRulesRequest) returns (vtctldata.ApplyRoutingRulesResponse) {};
+  // ApplyVSchema applies a vschema to a keyspace.
+  rpc ApplyVSchema(vtctldata.ApplyVSchemaRequest) returns (vtctldata.ApplyVSchemaResponse) {};
   // ChangeTabletType changes the db type for the specified tablet, if possible.
   // This is used primarily to arrange replicas, and it will not convert a
   // primary. For that, use InitShardPrimary.
