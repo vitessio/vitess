@@ -198,6 +198,11 @@ func (t *Tracker) updateTables(keyspace string, res *sqltypes.Result) {
 
 // RegisterSignalReceiver allows a function to register to be called when new schema is available
 func (t *Tracker) RegisterSignalReceiver(f func()) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	for _, controller := range t.tracked {
+		controller.signal = f
+	}
 	t.signal = f
 }
 
