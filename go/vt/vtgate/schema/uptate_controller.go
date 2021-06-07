@@ -20,6 +20,8 @@ import (
 	"sync"
 	"time"
 
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+
 	"vitess.io/vitess/go/vt/discovery"
 )
 
@@ -91,6 +93,13 @@ func (u *updateController) getItemFromQueueLocked() *discovery.TabletHealth {
 func (u *updateController) add(th *discovery.TabletHealth) {
 	u.mu.Lock()
 	defer u.mu.Unlock()
+
+	// Received a health check from primary tablet that is it not reachable from VTGate.
+	// The connection will get reset and the tracker needs to reload the schema for the keyspace.
+	if th.Tablet.Type == topodatapb.TabletType_MASTER && !th.Serving {
+		u.loaded = false
+		return
+	}
 
 	if len(th.Stats.TableSchemaChanged) == 0 && u.loaded {
 		return

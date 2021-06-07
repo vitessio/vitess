@@ -22,6 +22,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/mysql"
+
 	"github.com/stretchr/testify/assert"
 
 	"github.com/stretchr/testify/require"
@@ -188,6 +190,74 @@ func TestTracking(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestTrackingUnHealthyTablet(t *testing.T) {
+	target := &querypb.Target{
+		Keyspace:   "ks",
+		Shard:      "-80",
+		TabletType: topodatapb.TabletType_MASTER,
+		Cell:       "aa",
+	}
+	tablet := &topodatapb.Tablet{
+		Keyspace: target.Keyspace,
+		Shard:    target.Shard,
+		Type:     target.TabletType,
+	}
+
+	sbc := sandboxconn.NewSandboxConn(tablet)
+	ch := make(chan *discovery.TabletHealth)
+	tracker := NewTracker(ch)
+	tracker.consumeDelay = 1 * time.Millisecond
+	tracker.Start()
+	defer tracker.Stop()
+
+	// the test are written in a way that it expects 3 signals to be sent from the tracker to the subscriber.
+	wg := sync.WaitGroup{}
+	wg.Add(3)
+	tracker.RegisterSignalReceiver(func() {
+		wg.Done()
+	})
+
+	tcases := []struct {
+		name          string
+		serving       bool
+		expectedQuery string
+		updatedTbls   []string
+	}{
+		{
+			name:    "initial load",
+			serving: true,
+		},
+		{
+			name:        "initial load",
+			serving:     true,
+			updatedTbls: []string{"a"},
+		},
+		{
+			name:    "non serving tablet",
+			serving: false,
+		},
+		{
+			name:    "now serving tablet",
+			serving: true,
+		},
+	}
+
+	sbc.SetResults([]*sqltypes.Result{{}, {}, {}})
+	for _, tcase := range tcases {
+		ch <- &discovery.TabletHealth{
+			Conn:    sbc,
+			Tablet:  tablet,
+			Target:  target,
+			Serving: tcase.serving,
+			Stats:   &querypb.RealtimeStats{TableSchemaChanged: tcase.updatedTbls},
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+
+	require.False(t, waitTimeout(&wg, time.Second), "schema was updated but received no signal")
+	require.Equal(t, []string{mysql.FetchTables, mysql.FetchUpdatedTables, mysql.FetchTables}, sbc.StringQueries())
 }
 
 func waitTimeout(wg *sync.WaitGroup, timeout time.Duration) bool {
