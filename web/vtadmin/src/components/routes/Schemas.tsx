@@ -23,26 +23,42 @@ import { useSyncedURLParam } from '../../hooks/useSyncedURLParam';
 import { filterNouns } from '../../util/filterNouns';
 import { formatBytes } from '../../util/formatBytes';
 import { getTableDefinitions } from '../../util/tableDefinitions';
-import { Button } from '../Button';
 import { DataCell } from '../dataTable/DataCell';
+import { DataFilter } from '../dataTable/DataFilter';
 import { DataTable } from '../dataTable/DataTable';
-import { Icons } from '../Icon';
-import { TextInput } from '../TextInput';
-import style from './Schemas.module.scss';
+import { ContentContainer } from '../layout/ContentContainer';
+import { WorkspaceHeader } from '../layout/WorkspaceHeader';
+import { WorkspaceTitle } from '../layout/WorkspaceTitle';
+import { KeyspaceLink } from '../links/KeyspaceLink';
+import { HelpTooltip } from '../tooltip/HelpTooltip';
 
 const TABLE_COLUMNS = [
     'Keyspace',
     'Table',
-    // TODO: add tooltips to explain that "approx." means something
-    // along the lines of "information_schema is an eventually correct
-    // statistical analysis, past results do not guarantee future performance,
-    // please consult an attorney and we are not a licensed medical professional".
-    // Namely, these numbers come from `information_schema`, which is never precisely
-    // correct for tables that have a high rate of updates. (The only way to get
-    // accurate numbers is to run `ANALYZE TABLE` on the tables periodically, which
-    // is out of scope for VTAdmin.)
-    <div className="text-align-right">Approx. Size</div>,
-    <div className="text-align-right">Approx. Rows</div>,
+    <div className="text-align-right">
+        Approx. Size{' '}
+        <HelpTooltip
+            text={
+                <span>
+                    Size is an approximate value derived from{' '}
+                    <span className="font-family-monospace">INFORMATION_SCHEMA</span>.
+                </span>
+            }
+        />
+    </div>,
+    <div className="text-align-right">
+        Approx. Rows{' '}
+        <HelpTooltip
+            text={
+                // c.f. https://dev.mysql.com/doc/refman/5.7/en/information-schema-tables-table.html
+                <span>
+                    Row count is an approximate value derived from{' '}
+                    <span className="font-family-monospace">INFORMATION_SCHEMA</span>. Actual values may vary by as much
+                    as 40% to 50%.
+                </span>
+            }
+        />
+    </div>,
 ];
 
 export const Schemas = () => {
@@ -75,8 +91,10 @@ export const Schemas = () => {
             return (
                 <tr key={idx}>
                     <DataCell>
-                        <div>{row.keyspace}</div>
-                        <div className="font-size-small text-color-secondary">{row.cluster}</div>
+                        <KeyspaceLink clusterID={row.clusterID} name={row.keyspace}>
+                            <div>{row.keyspace}</div>
+                            <div className="font-size-small text-color-secondary">{row.cluster}</div>
+                        </KeyspaceLink>
                     </DataCell>
                     <DataCell className="font-weight-bold">
                         {href ? <Link to={href}>{row.table}</Link> : row.table}
@@ -95,22 +113,20 @@ export const Schemas = () => {
         });
 
     return (
-        <div className="max-width-content">
-            <h1>Schemas</h1>
-            <div className={style.controls}>
-                <TextInput
+        <div>
+            <WorkspaceHeader>
+                <WorkspaceTitle>Schemas</WorkspaceTitle>
+            </WorkspaceHeader>
+            <ContentContainer>
+                <DataFilter
                     autoFocus
-                    iconLeft={Icons.search}
                     onChange={(e) => updateFilter(e.target.value)}
+                    onClear={() => updateFilter('')}
                     placeholder="Filter schemas"
                     value={filter || ''}
                 />
-                <Button disabled={!filter} onClick={() => updateFilter('')} secondary>
-                    Clear filters
-                </Button>
-            </div>
-
-            <DataTable columns={TABLE_COLUMNS} data={filteredData} renderRows={renderRows} />
+                <DataTable columns={TABLE_COLUMNS} data={filteredData} renderRows={renderRows} />
+            </ContentContainer>
         </div>
     );
 };

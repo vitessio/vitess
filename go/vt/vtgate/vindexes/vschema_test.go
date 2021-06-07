@@ -23,7 +23,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/proto"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -772,7 +773,7 @@ func TestVSchemaRoutingRules(t *testing.T) {
 				Error: errors.New("table t1 must be qualified"),
 			},
 			"badkeyspace": {
-				Error: errors.New("keyspace ks3 not found in vschema"),
+				Error: errors.New("Unknown database 'ks3' in vschema"),
 			},
 			"notfound": {
 				Error: errors.New("table t2 not found"),
@@ -2156,33 +2157,24 @@ func TestFindTable(t *testing.T) {
 	}
 	vschema, _ := BuildVSchema(&input)
 	_, err := vschema.FindTable("", "t1")
-	wantErr := "ambiguous table reference: t1"
-	if err == nil || err.Error() != wantErr {
-		t.Errorf("FindTable(\"\"): %v, want %s", err, wantErr)
-	}
+	require.EqualError(t, err, "ambiguous table reference: t1")
+
 	_, err = vschema.FindTable("", "none")
-	wantErr = "table none not found"
-	if err == nil || err.Error() != wantErr {
-		t.Errorf("FindTable(\"\"): %v, want %s", err, wantErr)
-	}
-	got, err := vschema.FindTable("", "ta")
-	if err != nil {
-		t.Error(err)
-		return
-	}
+	require.EqualError(t, err, "table none not found")
+
 	ta := &Table{
 		Name: sqlparser.NewTableIdent("ta"),
 		Keyspace: &Keyspace{
 			Name: "ksa",
 		},
 	}
-	if !reflect.DeepEqual(got, ta) {
-		t.Errorf("FindTable(\"t1a\"): %+v, want %+v", got, ta)
-	}
+	got, err := vschema.FindTable("", "ta")
+	require.NoError(t, err)
+	require.Equal(t, ta, got)
+
 	got, _ = vschema.FindTable("ksa", "ta")
-	if !reflect.DeepEqual(got, ta) {
-		t.Errorf("FindTable(\"t1a\"): %+v, want %+v", got, ta)
-	}
+	require.Equal(t, ta, got)
+
 	none := &Table{
 		Name: sqlparser.NewTableIdent("none"),
 		Keyspace: &Keyspace{
@@ -2190,19 +2182,13 @@ func TestFindTable(t *testing.T) {
 		},
 	}
 	got, _ = vschema.FindTable("ksa", "none")
-	if !reflect.DeepEqual(got, none) {
-		t.Errorf("FindTable(\"t1a\"): %+v, want %+v", got, none)
-	}
+	require.Equal(t, none, got)
+
 	_, err = vschema.FindTable("ksb", "none")
-	wantErr = "table none not found"
-	if err == nil || err.Error() != wantErr {
-		t.Errorf("FindTable(\"\"): %v, want %s", err, wantErr)
-	}
+	require.EqualError(t, err, "table none not found")
+
 	_, err = vschema.FindTable("none", "aa")
-	wantErr = "keyspace none not found in vschema"
-	if err == nil || err.Error() != wantErr {
-		t.Errorf("FindTable(\"\"): %v, want %s", err, wantErr)
-	}
+	require.EqualError(t, err, "Unknown database 'none' in vschema")
 }
 
 func TestFindTableOrVindex(t *testing.T) {

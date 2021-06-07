@@ -23,11 +23,13 @@ import (
 	"sync"
 	"time"
 
+	"google.golang.org/protobuf/proto"
+
+	"vitess.io/vitess/go/vt/schema"
+
 	"vitess.io/vitess/go/mysql"
 
 	"vitess.io/vitess/go/vt/sqlparser"
-
-	"github.com/golang/protobuf/proto"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
@@ -136,7 +138,7 @@ func (tr *Tracker) process(ctx context.Context) {
 	defer tr.env.LogError()
 	defer tr.wg.Done()
 	if err := tr.possiblyInsertInitialSchema(ctx); err != nil {
-		log.Errorf("possiblyInsertInitialSchema eror: %v", err)
+		log.Errorf("error inserting initial schema: %v", err)
 		return
 	}
 
@@ -153,10 +155,13 @@ func (tr *Tracker) process(ctx context.Context) {
 				if event.Type == binlogdatapb.VEventType_GTID {
 					gtid = event.Gtid
 				}
-				if event.Type == binlogdatapb.VEventType_DDL {
+				if event.Type == binlogdatapb.VEventType_DDL &&
+					MustReloadSchemaOnDDL(event.Statement, tr.engine.cp.DBName()) {
+
 					if err := tr.schemaUpdated(gtid, event.Statement, event.Timestamp); err != nil {
 						tr.env.Stats().ErrorCounters.Add(vtrpcpb.Code_INTERNAL.String(), 1)
-						log.Errorf("Error updating schema: %s", sqlparser.TruncateForLog(err.Error()))
+						log.Errorf("Error updating schema: %s for ddl %s, gtid %s",
+							sqlparser.TruncateForLog(err.Error()), event.Statement, gtid)
 					}
 				}
 			}
@@ -277,4 +282,30 @@ func encodeString(in string) string {
 	buf := bytes.NewBuffer(nil)
 	sqltypes.NewVarChar(in).EncodeSQL(buf)
 	return buf.String()
+}
+
+// MustReloadSchemaOnDDL returns true if the ddl is for the db which is part of the workflow and is not an online ddl artifact
+func MustReloadSchemaOnDDL(sql string, dbname string) bool {
+	ast, err := sqlparser.Parse(sql)
+	if err != nil {
+		return false
+	}
+	switch stmt := ast.(type) {
+	case sqlparser.DBDDLStatement:
+		return false
+	case sqlparser.DDLStatement:
+		table := stmt.GetTable()
+		if table.IsEmpty() {
+			return false
+		}
+		if !table.Qualifier.IsEmpty() && table.Qualifier.String() != dbname {
+			return false
+		}
+		tableName := table.Name.String()
+		if schema.IsOnlineDDLTableName(tableName) {
+			return false
+		}
+		return true
+	}
+	return false
 }

@@ -640,6 +640,40 @@ func TestShowGtid(t *testing.T) {
 	}
 }
 
+func TestQueryAndSubQWithLimit(t *testing.T) {
+	conn, err := mysql.Connect(context.Background(), &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	exec(t, conn, "insert into t1(id1, id2) values(0,0),(1,1),(2,2),(3, 3), (4, 4), (5, 5), (6, 6), (7, 7), (8, 8),(9,9)")
+	result := exec(t, conn, `select id1, id2 from t1 where id1 >= ( select id1 from t1 order by id1 asc limit 1) limit 100`)
+	assert.Equal(t, 10, len(result.Rows))
+}
+
+func TestSchemaTracker(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+	// this query only works if we know which table the testId belongs to. The vschema does not contain
+	// this info, so we are testing that the schema tracker has added column info to the vschema
+	_, err = conn.ExecuteFetch(`select testId from t8 join t2`, 1000, true)
+	require.NoError(t, err)
+}
+
+func TestVSchemaTrackerInit(t *testing.T) {
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	qr := exec(t, conn, "SHOW VSCHEMA TABLES")
+	got := fmt.Sprintf("%v", qr.Rows)
+	want := `[[VARCHAR("aggr_test")] [VARCHAR("dual")] [VARCHAR("t1")] [VARCHAR("t1_id2_idx")] [VARCHAR("t2")] [VARCHAR("t2_id4_idx")] [VARCHAR("t3")] [VARCHAR("t3_id7_idx")] [VARCHAR("t4")] [VARCHAR("t4_id2_idx")] [VARCHAR("t5_null_vindex")] [VARCHAR("t6")] [VARCHAR("t6_id2_idx")] [VARCHAR("t7_fk")] [VARCHAR("t7_xxhash")] [VARCHAR("t7_xxhash_idx")] [VARCHAR("t8")] [VARCHAR("vstream_test")]]`
+	assert.Equal(t, want, got)
+}
+
 func assertMatches(t *testing.T, conn *mysql.Conn, query, expected string) {
 	t.Helper()
 	qr := exec(t, conn, query)

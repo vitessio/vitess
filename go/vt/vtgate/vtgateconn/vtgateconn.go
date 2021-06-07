@@ -115,6 +115,13 @@ func (sn *VTGateSession) StreamExecute(ctx context.Context, query string, bindVa
 	return sn.impl.StreamExecute(ctx, sn.session, query, bindVars)
 }
 
+// Prepare performs a VTGate Prepare.
+func (sn *VTGateSession) Prepare(ctx context.Context, query string, bindVars map[string]*querypb.BindVariable) ([]*querypb.Field, error) {
+	session, fields, err := sn.impl.Prepare(ctx, sn.session, query, bindVars)
+	sn.session = session
+	return fields, err
+}
+
 //
 // The rest of this file is for the protocol implementations.
 //
@@ -130,6 +137,12 @@ type Impl interface {
 
 	// StreamExecute executes a streaming query on vtgate. This is a V3 function.
 	StreamExecute(ctx context.Context, session *vtgatepb.Session, query string, bindVars map[string]*querypb.BindVariable) (sqltypes.ResultStream, error)
+
+	// Prepare returns the fields information for the query as part of supporting prepare statements.
+	Prepare(ctx context.Context, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable) (*vtgatepb.Session, []*querypb.Field, error)
+
+	// CloseSession closes the session provided by rolling back any active transaction.
+	CloseSession(ctx context.Context, session *vtgatepb.Session) error
 
 	// ResolveTransaction resolves the specified 2pc transaction.
 	ResolveTransaction(ctx context.Context, dtid string) error

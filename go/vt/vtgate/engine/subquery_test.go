@@ -56,7 +56,7 @@ func TestSubqueryExecute(t *testing.T) {
 		t.Fatal(err)
 	}
 	prim.ExpectLog(t, []string{
-		`Execute a: type:INT64 value:"1"  true`,
+		`Execute a: type:INT64 value:"1" true`,
 	})
 	expectResult(t, "sq.Execute", r, sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
@@ -105,7 +105,7 @@ func TestSubqueryStreamExecute(t *testing.T) {
 		t.Fatal(err)
 	}
 	prim.ExpectLog(t, []string{
-		`StreamExecute a: type:INT64 value:"1"  true`,
+		`StreamExecute a: type:INT64 value:"1" true`,
 	})
 	expectResult(t, "sq.Execute", r, sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
@@ -154,8 +154,8 @@ func TestSubqueryGetFields(t *testing.T) {
 		t.Fatal(err)
 	}
 	prim.ExpectLog(t, []string{
-		`GetFields a: type:INT64 value:"1" `,
-		`Execute a: type:INT64 value:"1"  true`,
+		`GetFields a: type:INT64 value:"1"`,
+		`Execute a: type:INT64 value:"1" true`,
 	})
 	expectResult(t, "sq.Execute", r, sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(

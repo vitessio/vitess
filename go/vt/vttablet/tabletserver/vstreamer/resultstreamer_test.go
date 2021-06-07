@@ -47,8 +47,8 @@ func TestStreamResults(t *testing.T) {
 
 	query := "select id, val from t1 order by id"
 	wantStream := []string{
-		`rows:<lengths:1 lengths:3 values:"1aaa" > `,
-		`rows:<lengths:1 lengths:3 values:"2bbb" > `,
+		`rows:{lengths:1 lengths:3 values:"1aaa"}`,
+		`rows:{lengths:1 lengths:3 values:"2bbb"}`,
 	}
 	i := 0
 	ch := make(chan error)

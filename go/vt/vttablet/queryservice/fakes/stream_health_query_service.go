@@ -19,7 +19,7 @@ package fakes
 import (
 	"context"
 
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -43,17 +43,17 @@ const (
 type StreamHealthQueryService struct {
 	queryservice.QueryService
 	healthResponses chan *querypb.StreamHealthResponse
-	target          querypb.Target
+	target          *querypb.Target
 }
 
 var _ queryservice.QueryService = (*StreamHealthQueryService)(nil)
 
 // NewStreamHealthQueryService creates a new fake query service for the target.
-func NewStreamHealthQueryService(target querypb.Target) *StreamHealthQueryService {
+func NewStreamHealthQueryService(target *querypb.Target) *StreamHealthQueryService {
 	return &StreamHealthQueryService{
 		QueryService:    ErrorQueryService,
 		healthResponses: make(chan *querypb.StreamHealthResponse, 1000),
-		target:          target,
+		target:          proto.Clone(target).(*querypb.Target),
 	}
 }
 
@@ -81,7 +81,7 @@ func (q *StreamHealthQueryService) StreamHealth(ctx context.Context, callback fu
 // The response will have default values typical for a healthy tablet.
 func (q *StreamHealthQueryService) AddDefaultHealthResponse() {
 	q.healthResponses <- &querypb.StreamHealthResponse{
-		Target:  proto.Clone(&q.target).(*querypb.Target),
+		Target:  proto.Clone(q.target).(*querypb.Target),
 		Serving: true,
 		RealtimeStats: &querypb.RealtimeStats{
 			SecondsBehindMaster: DefaultSecondsBehindMaster,
@@ -93,7 +93,7 @@ func (q *StreamHealthQueryService) AddDefaultHealthResponse() {
 // Only "qps" is different in this message.
 func (q *StreamHealthQueryService) AddHealthResponseWithQPS(qps float64) {
 	q.healthResponses <- &querypb.StreamHealthResponse{
-		Target:  proto.Clone(&q.target).(*querypb.Target),
+		Target:  proto.Clone(q.target).(*querypb.Target),
 		Serving: true,
 		RealtimeStats: &querypb.RealtimeStats{
 			Qps:                 qps,
@@ -106,7 +106,7 @@ func (q *StreamHealthQueryService) AddHealthResponseWithQPS(qps float64) {
 // buffer channel. Only "seconds_behind_master" is different in this message.
 func (q *StreamHealthQueryService) AddHealthResponseWithSecondsBehindMaster(replicationLag uint32) {
 	q.healthResponses <- &querypb.StreamHealthResponse{
-		Target:  proto.Clone(&q.target).(*querypb.Target),
+		Target:  proto.Clone(q.target).(*querypb.Target),
 		Serving: true,
 		RealtimeStats: &querypb.RealtimeStats{
 			SecondsBehindMaster: replicationLag,
@@ -118,7 +118,7 @@ func (q *StreamHealthQueryService) AddHealthResponseWithSecondsBehindMaster(repl
 // buffer channel. Only "Serving" is different in this message.
 func (q *StreamHealthQueryService) AddHealthResponseWithNotServing() {
 	q.healthResponses <- &querypb.StreamHealthResponse{
-		Target:  proto.Clone(&q.target).(*querypb.Target),
+		Target:  proto.Clone(q.target).(*querypb.Target),
 		Serving: false,
 		RealtimeStats: &querypb.RealtimeStats{
 			SecondsBehindMaster: DefaultSecondsBehindMaster,

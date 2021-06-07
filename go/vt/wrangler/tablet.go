@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"time"
 
+	"google.golang.org/protobuf/proto"
+
 	"context"
 
 	"vitess.io/vitess/go/vt/key"
@@ -92,7 +94,7 @@ func (wr *Wrangler) InitTablet(ctx context.Context, tablet *topodatapb.Tablet, a
 		if oldTablet.Keyspace != tablet.Keyspace || oldTablet.Shard != tablet.Shard {
 			return fmt.Errorf("old tablet has shard %v/%v. Cannot override with shard %v/%v. Delete and re-add tablet if you want to change the tablet's keyspace/shard", oldTablet.Keyspace, oldTablet.Shard, tablet.Keyspace, tablet.Shard)
 		}
-		*(oldTablet.Tablet) = *tablet
+		oldTablet.Tablet = proto.Clone(tablet).(*topodatapb.Tablet)
 		if err := wr.ts.UpdateTablet(ctx, oldTablet); err != nil {
 			return fmt.Errorf("failed updating tablet %v: %v", topoproto.TabletAliasString(tablet.Alias), err)
 		}

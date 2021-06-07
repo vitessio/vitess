@@ -69,7 +69,7 @@ var _ vindexes.VCursor = (*vcursorImpl)(nil)
 type iExecute interface {
 	Execute(ctx context.Context, method string, session *SafeSession, s string, vars map[string]*querypb.BindVariable) (*sqltypes.Result, error)
 	ExecuteMultiShard(ctx context.Context, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, session *SafeSession, autocommit bool, ignoreMaxMemoryRows bool) (qr *sqltypes.Result, errs []error)
-	StreamExecuteMulti(ctx context.Context, s string, rss []*srvtopo.ResolvedShard, vars []map[string]*querypb.BindVariable, options *querypb.ExecuteOptions, callback func(reply *sqltypes.Result) error) error
+	StreamExecuteMulti(ctx context.Context, s string, rss []*srvtopo.ResolvedShard, vars []map[string]*querypb.BindVariable, options *querypb.ExecuteOptions, callback func(reply *sqltypes.Result) error) []error
 	ExecuteLock(ctx context.Context, rs *srvtopo.ResolvedShard, query *querypb.BoundQuery, session *SafeSession) (*sqltypes.Result, error)
 	Commit(ctx context.Context, safeSession *SafeSession) error
 	ExecuteMessageStream(ctx context.Context, rss []*srvtopo.ResolvedShard, name string, callback func(*sqltypes.Result) error) error
@@ -83,7 +83,6 @@ type iExecute interface {
 //VSchemaOperator is an interface to Vschema Operations
 type VSchemaOperator interface {
 	GetCurrentSrvVschema() *vschemapb.SrvVSchema
-	GetCurrentVschema() (*vindexes.VSchema, error)
 	UpdateVSchema(ctx context.Context, ksName string, vschema *vschemapb.SrvVSchema) error
 }
 
@@ -451,7 +450,7 @@ func (vc *vcursorImpl) ExecuteStandalone(query string, bindVars map[string]*quer
 }
 
 // StreamExeculteMulti is the streaming version of ExecuteMultiShard.
-func (vc *vcursorImpl) StreamExecuteMulti(query string, rss []*srvtopo.ResolvedShard, bindVars []map[string]*querypb.BindVariable, callback func(reply *sqltypes.Result) error) error {
+func (vc *vcursorImpl) StreamExecuteMulti(query string, rss []*srvtopo.ResolvedShard, bindVars []map[string]*querypb.BindVariable, callback func(reply *sqltypes.Result) error) []error {
 	atomic.AddUint64(&vc.logStats.ShardQueries, uint64(len(rss)))
 	return vc.executor.StreamExecuteMulti(vc.ctx, vc.marginComments.Leading+query+vc.marginComments.Trailing, rss, bindVars, vc.safeSession.Options, callback)
 }
@@ -690,6 +689,11 @@ func (vc *vcursorImpl) SetSessionTrackGTIDs(enable bool) {
 // HasCreatedTempTable implements the SessionActions interface
 func (vc *vcursorImpl) HasCreatedTempTable() {
 	vc.safeSession.GetOrCreateOptions().HasCreatedTempTables = true
+}
+
+// GetWarnings implements the SessionActions interface
+func (vc *vcursorImpl) GetWarnings() []*querypb.QueryWarning {
+	return vc.safeSession.GetWarnings()
 }
 
 // GetDBDDLPluginName implements the VCursor interface

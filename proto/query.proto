@@ -787,6 +787,9 @@ message RealtimeStats {
   // qps is the average QPS (queries per second) rate in the last XX seconds
   // where XX is usually 60 (See query_service_stats.go).
   double qps = 6;
+
+  // table_schema_changed is to provide list of tables that have schema changes detected by the tablet.
+  repeated string table_schema_changed = 7;
 }
 
 // AggregateStats contains information about the health of a group of

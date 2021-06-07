@@ -28,10 +28,13 @@ compile_go_fuzzer ./go/test/fuzzing FuzzParser parser_fuzzer
 compile_go_fuzzer ./go/mysql FuzzWritePacket write_packet_fuzzer
 compile_go_fuzzer ./go/mysql FuzzHandleNextCommand handle_next_command_fuzzer
 compile_go_fuzzer ./go/mysql FuzzReadQueryResults read_query_results_fuzzer
-
-
 compile_go_fuzzer ./go/mysql FuzzTLSServer fuzz_tls
 compile_go_fuzzer ./go/vt/vtgate/grpcvtgateconn Fuzz grpc_vtgate_fuzzer
+compile_go_fuzzer ./go/vt/vtgate/planbuilder FuzzAnalyse planbuilder_fuzzer
+
+mv ./go/vt/vtgate/engine/fake_vcursor_test.go \
+	./go/vt/vtgate/engine/fake_vcursor.go
+compile_go_fuzzer ./go/vt/vtgate/engine FuzzEngine engine_fuzzer
 
 # Build dictionaries
 cp $SRC/vitess/go/test/fuzzing/vtctl_fuzzer.dict $OUT/

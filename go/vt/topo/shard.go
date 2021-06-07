@@ -26,13 +26,13 @@ import (
 	"sync"
 	"time"
 
+	"google.golang.org/protobuf/proto"
+
 	"context"
 
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
-
-	"github.com/golang/protobuf/proto"
 
 	"vitess.io/vitess/go/event"
 	"vitess.io/vitess/go/trace"
@@ -618,8 +618,7 @@ func (ts *Server) FindAllTabletAliasesInShardByCell(ctx context.Context, keyspac
 	}
 
 	for _, a := range resultAsMap {
-		v := *a
-		result = append(result, &v)
+		result = append(result, proto.Clone(a).(*topodatapb.TabletAlias))
 	}
 	sort.Sort(topoproto.TabletAliasList(result))
 	return result, err

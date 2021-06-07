@@ -20,11 +20,7 @@ import (
 	"errors"
 	"fmt"
 
-	"vitess.io/vitess/go/sqltypes"
-
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
-
-	"vitess.io/vitess/go/vt/vtgate/semantics"
 
 	"vitess.io/vitess/go/vt/key"
 
@@ -100,122 +96,6 @@ func shouldRetryWithCNFRewriting(plan logicalPlan) bool {
 		len(routePlan.eroute.SysTableTableName) == 0 &&
 		len(routePlan.eroute.SysTableTableSchema) == 0
 
-}
-
-func pushProjection(expr *sqlparser.AliasedExpr, plan logicalPlan, semTable *semantics.SemTable) (int, error) {
-	switch node := plan.(type) {
-	case *route:
-		sel := node.Select.(*sqlparser.Select)
-		offset := len(sel.SelectExprs)
-		sel.SelectExprs = append(sel.SelectExprs, expr)
-		return offset, nil
-	case *joinV4:
-		lhsSolves := node.Left.ContainsTables()
-		rhsSolves := node.Right.ContainsTables()
-		deps := semTable.Dependencies(expr.Expr)
-		switch {
-		case deps.IsSolvedBy(lhsSolves):
-			offset, err := pushProjection(expr, node.Left, semTable)
-			if err != nil {
-				return 0, err
-			}
-			node.Cols = append(node.Cols, -(offset + 1))
-		case deps.IsSolvedBy(rhsSolves):
-			offset, err := pushProjection(expr, node.Right, semTable)
-			if err != nil {
-				return 0, err
-			}
-			node.Cols = append(node.Cols, offset+1)
-		default:
-			return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unknown dependencies for %s", sqlparser.String(expr))
-		}
-		return len(node.Cols) - 1, nil
-	default:
-		return 0, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%T not yet supported", node)
-	}
-}
-
-func planAggregations(qp *queryProjection, plan logicalPlan, semTable *semantics.SemTable) (logicalPlan, error) {
-	eaggr := &engine.OrderedAggregate{}
-	oa := &orderedAggregate{
-		resultsBuilder: newResultsBuilder(plan, eaggr),
-		eaggr:          eaggr,
-	}
-	for _, e := range qp.aggrExprs {
-		offset, err := pushProjection(e, plan, semTable)
-		if err != nil {
-			return nil, err
-		}
-		fExpr := e.Expr.(*sqlparser.FuncExpr)
-		opcode := engine.SupportedAggregates[fExpr.Name.Lowered()]
-		oa.eaggr.Aggregates = append(oa.eaggr.Aggregates, engine.AggregateParams{
-			Opcode: opcode,
-			Col:    offset,
-		})
-	}
-	return oa, nil
-}
-
-func planOrderBy(qp *queryProjection, plan logicalPlan, semTable *semantics.SemTable) (logicalPlan, error) {
-	switch plan := plan.(type) {
-	case *route:
-		for _, order := range qp.orderExprs {
-			offset, exists := qp.orderExprColMap[order]
-			if !exists {
-				return nil, semantics.Gen4NotSupportedF("order by column not exists in select list")
-			}
-			colName, ok := order.Expr.(*sqlparser.ColName)
-			if !ok {
-				return nil, semantics.Gen4NotSupportedF("order by non-column expression")
-			}
-
-			table := semTable.Dependencies(colName)
-			tableInfo, err := semTable.TableInfoFor(table)
-			if err != nil {
-				return nil, err
-			}
-			weightStringNeeded := true
-			for _, c := range tableInfo.Table.Columns {
-				if colName.Name.Equal(c.Name) {
-					if sqltypes.IsNumber(c.Type) {
-						weightStringNeeded = false
-					}
-					break
-				}
-			}
-
-			weightStringOffset := -1
-			if weightStringNeeded {
-				expr := &sqlparser.AliasedExpr{
-					Expr: &sqlparser.FuncExpr{
-						Name: sqlparser.NewColIdent("weight_string"),
-						Exprs: []sqlparser.SelectExpr{
-							&sqlparser.AliasedExpr{
-								Expr: order.Expr,
-							},
-						},
-					},
-				}
-				weightStringOffset, err = pushProjection(expr, plan, semTable)
-				if err != nil {
-					return nil, err
-				}
-			}
-			if weightStringOffset != -1 {
-				plan.eroute.TruncateColumnCount = len(qp.selectExprs) + len(qp.aggrExprs)
-			}
-
-			plan.eroute.OrderBy = append(plan.eroute.OrderBy, engine.OrderbyParams{
-				Col:             offset,
-				WeightStringCol: weightStringOffset,
-				Desc:            order.Direction == sqlparser.DescOrder,
-			})
-			plan.Select.AddOrder(order)
-		}
-		return plan, nil
-	default:
-		return nil, semantics.Gen4NotSupportedF("ordering on complex query")
-	}
 }
 
 var errSQLCalcFoundRows = vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.CantUseOptionHere, "Incorrect usage/placement of 'SQL_CALC_FOUND_ROWS'")

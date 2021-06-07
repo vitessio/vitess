@@ -1,0 +1,1 @@
+change e e enum('red', 'green', 'blue', 'orange', 'yellow') null default null collate 'utf8_bin'

@@ -22,6 +22,8 @@ import (
 	"sync"
 	"time"
 
+	"google.golang.org/protobuf/proto"
+
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/log"
@@ -81,7 +83,7 @@ type stateManager struct {
 	wantState      servingState
 	wantTabletType topodatapb.TabletType
 	state          servingState
-	target         querypb.Target
+	target         *querypb.Target
 	terTimestamp   time.Time
 	retrying       bool
 	replHealthy    bool
@@ -181,8 +183,8 @@ type (
 )
 
 // Init performs the second phase of initialization.
-func (sm *stateManager) Init(env tabletenv.Env, target querypb.Target) {
-	sm.target = target
+func (sm *stateManager) Init(env tabletenv.Env, target *querypb.Target) {
+	sm.target = proto.Clone(target).(*querypb.Target)
 	sm.transitioning = sync2.NewSemaphore(1, 0)
 	sm.checkMySQLThrottler = sync2.NewSemaphore(1, 0)
 	sm.timebombDuration = env.Config().OltpReadPool.TimeoutSeconds.Get() * 10
@@ -391,7 +393,7 @@ func (sm *stateManager) verifyTargetLocked(ctx context.Context, target *querypb.
 					return nil
 				}
 			}
-			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "%s: %v, want: %v or %v", vterrors.WrongTablet, sm.target.TabletType, sm.target.TabletType, sm.alsoAllow)
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "%s: %v, want: %v or %v", vterrors.WrongTablet, target.TabletType, sm.target.TabletType, sm.alsoAllow)
 		}
 	} else {
 		if !tabletenv.IsLocalContext(ctx) {
@@ -741,11 +743,10 @@ func (sm *stateManager) State() servingState {
 	return sm.state
 }
 
-func (sm *stateManager) Target() querypb.Target {
+func (sm *stateManager) Target() *querypb.Target {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
-	target := sm.target
-	return target
+	return proto.Clone(sm.target).(*querypb.Target)
 }
 
 // IsServingString returns the name of the current TabletServer state.

@@ -28,7 +28,7 @@ import (
 
 	"context"
 
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/key"
@@ -59,15 +59,17 @@ type tmState struct {
 	// Because mu can be held for long, we publish the current state
 	// of these variables into displayState, which can be accessed
 	// more freely even while tmState is busy transitioning.
-	mu                sync.Mutex
-	isOpen            bool
-	isResharding      bool
-	isInSrvKeyspace   bool
-	isShardServing    map[topodatapb.TabletType]bool
-	tabletControls    map[topodatapb.TabletType]bool
-	blacklistedTables map[topodatapb.TabletType][]string
-	tablet            *topodatapb.Tablet
-	isPublishing      bool
+	mu                       sync.Mutex
+	isOpen                   bool
+	isOpening                bool
+	isResharding             bool
+	isInSrvKeyspace          bool
+	isShardServing           map[topodatapb.TabletType]bool
+	tabletControls           map[topodatapb.TabletType]bool
+	blacklistedTables        map[topodatapb.TabletType][]string
+	tablet                   *topodatapb.Tablet
+	isPublishing             bool
+	hasCreatedMetadataTables bool
 
 	// displayState contains the current snapshot of the internal state
 	// and has its own mutex.
@@ -95,7 +97,9 @@ func (ts *tmState) Open() {
 	}
 
 	ts.isOpen = true
+	ts.isOpening = true
 	ts.updateLocked(ts.ctx)
+	ts.isOpening = false
 	ts.publishStateLocked(ts.ctx)
 }
 
@@ -235,6 +239,7 @@ func (ts *tmState) updateLocked(ctx context.Context) {
 	// before other services are shutdown.
 	reason := ts.canServe(ts.tablet.Type)
 	if reason != "" {
+		ts.populateLocalMetadataLocked()
 		log.Infof("Disabling query service: %v", reason)
 		if err := ts.tm.QueryServiceControl.SetServingType(ts.tablet.Type, terTime, false, reason); err != nil {
 			log.Errorf("SetServingType(serving=false) failed: %v", err)
@@ -276,6 +281,35 @@ func (ts *tmState) updateLocked(ctx context.Context) {
 		if err := ts.tm.QueryServiceControl.SetServingType(ts.tablet.Type, terTime, true, ""); err != nil {
 			log.Errorf("Cannot start query service: %v", err)
 		}
+
+		ts.populateLocalMetadataLocked()
+	}
+}
+
+func (ts *tmState) populateLocalMetadataLocked() {
+	if ts.tm.MetadataManager == nil {
+		return
+	}
+
+	if ts.isOpening && !*initPopulateMetadata {
+		return
+	}
+
+	localMetadata := ts.tm.getLocalMetadataValues(ts.tablet.Type)
+	dbName := topoproto.TabletDbName(ts.tablet)
+
+	if !ts.hasCreatedMetadataTables {
+		if err := ts.tm.MetadataManager.PopulateMetadataTables(ts.tm.MysqlDaemon, localMetadata, dbName); err != nil {
+			log.Errorf("PopulateMetadataTables(%v) failed: %v", localMetadata, err)
+			return
+		}
+
+		ts.hasCreatedMetadataTables = true
+		return
+	}
+
+	if err := ts.tm.MetadataManager.UpsertLocalMetadata(ts.tm.MysqlDaemon, localMetadata, dbName); err != nil {
+		log.Errorf("UpsertMetadataTables(%v) failed: %v", localMetadata, err)
 	}
 }
 
@@ -334,7 +368,8 @@ func (ts *tmState) publishStateLocked(ctx context.Context) {
 			log.Error(err)
 			return topo.NewError(topo.NoUpdateNeeded, "")
 		}
-		*tablet = *proto.Clone(ts.tablet).(*topodatapb.Tablet)
+		proto.Reset(tablet)
+		proto.Merge(tablet, ts.tablet)
 		return nil
 	})
 	if err != nil {
@@ -365,7 +400,8 @@ func (ts *tmState) retryPublish() {
 				log.Error(err)
 				return topo.NewError(topo.NoUpdateNeeded, "")
 			}
-			*tablet = *proto.Clone(ts.tablet).(*topodatapb.Tablet)
+			proto.Reset(tablet)
+			proto.Merge(tablet, ts.tablet)
 			return nil
 		})
 		cancel()

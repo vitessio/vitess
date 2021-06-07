@@ -213,6 +213,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfRangeCond(in)
 	case ReferenceAction:
 		return in
+	case *ReferenceDefinition:
+		return CloneRefOfReferenceDefinition(in)
 	case *Release:
 		return CloneRefOfRelease(in)
 	case *RenameIndex:
@@ -868,8 +870,8 @@ func CloneRefOfForeignKeyDefinition(n *ForeignKeyDefinition) *ForeignKeyDefiniti
 	}
 	out := *n
 	out.Source = CloneColumns(n.Source)
-	out.ReferencedTable = CloneTableName(n.ReferencedTable)
-	out.ReferencedColumns = CloneColumns(n.ReferencedColumns)
+	out.IndexName = CloneColIdent(n.IndexName)
+	out.ReferenceDefinition = CloneRefOfReferenceDefinition(n.ReferenceDefinition)
 	return &out
 }
 
@@ -970,7 +972,7 @@ func CloneRefOfIsExpr(n *IsExpr) *IsExpr {
 		return nil
 	}
 	out := *n
-	out.Expr = CloneExpr(n.Expr)
+	out.Left = CloneExpr(n.Left)
 	return &out
 }
 
@@ -1239,6 +1241,17 @@ func CloneRefOfRangeCond(n *RangeCond) *RangeCond {
 	out.Left = CloneExpr(n.Left)
 	out.From = CloneExpr(n.From)
 	out.To = CloneExpr(n.To)
+	return &out
+}
+
+// CloneRefOfReferenceDefinition creates a deep clone of the input.
+func CloneRefOfReferenceDefinition(n *ReferenceDefinition) *ReferenceDefinition {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.ReferencedTable = CloneTableName(n.ReferencedTable)
+	out.ReferencedColumns = CloneColumns(n.ReferencedColumns)
 	return &out
 }
 
@@ -2275,7 +2288,9 @@ func CloneRefOfColumnTypeOptions(n *ColumnTypeOptions) *ColumnTypeOptions {
 	out.Null = CloneRefOfBool(n.Null)
 	out.Default = CloneExpr(n.Default)
 	out.OnUpdate = CloneExpr(n.OnUpdate)
+	out.As = CloneExpr(n.As)
 	out.Comment = CloneRefOfLiteral(n.Comment)
+	out.Reference = CloneRefOfReferenceDefinition(n.Reference)
 	return &out
 }
 

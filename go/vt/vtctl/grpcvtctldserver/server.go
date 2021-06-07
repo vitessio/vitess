@@ -24,12 +24,15 @@ import (
 	"sync"
 	"time"
 
+	"google.golang.org/protobuf/proto"
+
 	"google.golang.org/grpc"
 	"k8s.io/apimachinery/pkg/util/sets"
 
 	"vitess.io/vitess/go/event"
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sqlescape"
+	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
@@ -61,6 +64,7 @@ const (
 
 // VtctldServer implements the Vtctld RPC service protocol.
 type VtctldServer struct {
+	vtctlservicepb.UnimplementedVtctldServer
 	ts  *topo.Server
 	tmc tmclient.TabletManagerClient
 	ws  *workflow.Server
@@ -77,8 +81,59 @@ func NewVtctldServer(ts *topo.Server) *VtctldServer {
 	}
 }
 
+// AddCellInfo is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) AddCellInfo(ctx context.Context, req *vtctldatapb.AddCellInfoRequest) (*vtctldatapb.AddCellInfoResponse, error) {
+	if req.CellInfo.Root == "" {
+		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "CellInfo.Root must be non-empty")
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+	defer cancel()
+
+	if err := s.ts.CreateCellInfo(ctx, req.Name, req.CellInfo); err != nil {
+		return nil, err
+	}
+
+	return &vtctldatapb.AddCellInfoResponse{}, nil
+}
+
+// AddCellsAlias is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) AddCellsAlias(ctx context.Context, req *vtctldatapb.AddCellsAliasRequest) (*vtctldatapb.AddCellsAliasResponse, error) {
+	ctx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+	defer cancel()
+
+	if err := s.ts.CreateCellsAlias(ctx, req.Name, &topodatapb.CellsAlias{Cells: req.Cells}); err != nil {
+		return nil, err
+	}
+
+	return &vtctldatapb.AddCellsAliasResponse{}, nil
+}
+
+// ApplyRoutingRules is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) ApplyRoutingRules(ctx context.Context, req *vtctldatapb.ApplyRoutingRulesRequest) (*vtctldatapb.ApplyRoutingRulesResponse, error) {
+	if err := s.ts.SaveRoutingRules(ctx, req.RoutingRules); err != nil {
+		return nil, err
+	}
+
+	resp := &vtctldatapb.ApplyRoutingRulesResponse{}
+
+	if req.SkipRebuild {
+		log.Warningf("Skipping rebuild of SrvVSchema, will need to run RebuildVSchemaGraph for changes to take effect")
+		return resp, nil
+	}
+
+	if err := s.ts.RebuildSrvVSchema(ctx, req.RebuildCells); err != nil {
+		return nil, vterrors.Wrapf(err, "RebuildSrvVSchema(%v) failed: %v", req.RebuildCells, err)
+	}
+
+	return resp, nil
+}
+
 // ChangeTabletType is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) ChangeTabletType(ctx context.Context, req *vtctldatapb.ChangeTabletTypeRequest) (*vtctldatapb.ChangeTabletTypeResponse, error) {
+	ctx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+	defer cancel()
+
 	tablet, err := s.ts.GetTablet(ctx, req.TabletAlias)
 	if err != nil {
 		return nil, err
@@ -89,12 +144,12 @@ func (s *VtctldServer) ChangeTabletType(ctx context.Context, req *vtctldatapb.Ch
 	}
 
 	if req.DryRun {
-		afterTablet := *tablet.Tablet
+		afterTablet := proto.Clone(tablet.Tablet).(*topodatapb.Tablet)
 		afterTablet.Type = req.DbType
 
 		return &vtctldatapb.ChangeTabletTypeResponse{
 			BeforeTablet: tablet.Tablet,
-			AfterTablet:  &afterTablet,
+			AfterTablet:  afterTablet,
 			WasDryRun:    true,
 		}, nil
 	}
@@ -259,6 +314,30 @@ func (s *VtctldServer) CreateShard(ctx context.Context, req *vtctldatapb.CreateS
 	}, nil
 }
 
+// DeleteCellInfo is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) DeleteCellInfo(ctx context.Context, req *vtctldatapb.DeleteCellInfoRequest) (*vtctldatapb.DeleteCellInfoResponse, error) {
+	ctx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+	defer cancel()
+
+	if err := s.ts.DeleteCellInfo(ctx, req.Name, req.Force); err != nil {
+		return nil, err
+	}
+
+	return &vtctldatapb.DeleteCellInfoResponse{}, nil
+}
+
+// DeleteCellsAlias is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) DeleteCellsAlias(ctx context.Context, req *vtctldatapb.DeleteCellsAliasRequest) (*vtctldatapb.DeleteCellsAliasResponse, error) {
+	ctx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+	defer cancel()
+
+	if err := s.ts.DeleteCellsAlias(ctx, req.Name); err != nil {
+		return nil, err
+	}
+
+	return &vtctldatapb.DeleteCellsAliasResponse{}, nil
+}
+
 // DeleteKeyspace is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) DeleteKeyspace(ctx context.Context, req *vtctldatapb.DeleteKeyspaceRequest) (*vtctldatapb.DeleteKeyspaceResponse, error) {
 	shards, err := s.ts.GetShardNames(ctx, req.Keyspace)
@@ -364,7 +443,7 @@ func (s *VtctldServer) EmergencyReparentShard(ctx context.Context, req *vtctldat
 		resp.Keyspace = ev.ShardInfo.Keyspace()
 		resp.Shard = ev.ShardInfo.ShardName()
 
-		if !topoproto.TabletAliasIsZero(ev.NewMaster.Alias) {
+		if ev.NewMaster != nil && !topoproto.TabletAliasIsZero(ev.NewMaster.Alias) {
 			resp.PromotedPrimary = ev.NewMaster.Alias
 		}
 	}
@@ -499,6 +578,18 @@ func (s *VtctldServer) GetKeyspaces(ctx context.Context, req *vtctldatapb.GetKey
 	return &vtctldatapb.GetKeyspacesResponse{Keyspaces: keyspaces}, nil
 }
 
+// GetRoutingRules is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) GetRoutingRules(ctx context.Context, req *vtctldatapb.GetRoutingRulesRequest) (*vtctldatapb.GetRoutingRulesResponse, error) {
+	rr, err := s.ts.GetRoutingRules(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return &vtctldatapb.GetRoutingRulesResponse{
+		RoutingRules: rr,
+	}, nil
+}
+
 // GetSchema is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) GetSchema(ctx context.Context, req *vtctldatapb.GetSchemaRequest) (*vtctldatapb.GetSchemaResponse, error) {
 	tablet, err := s.ts.GetTablet(ctx, req.TabletAlias)
@@ -580,7 +671,7 @@ func (s *VtctldServer) GetSrvKeyspaces(ctx context.Context, req *vtctldatapb.Get
 				return nil, err
 			}
 
-			log.Infof("no srvkeyspace for keyspace %s in cell %s", req.Keyspace, cell)
+			log.Warningf("no srvkeyspace for keyspace %s in cell %s", req.Keyspace, cell)
 
 			srvKeyspace = nil
 		}
@@ -602,6 +693,45 @@ func (s *VtctldServer) GetSrvVSchema(ctx context.Context, req *vtctldatapb.GetSr
 
 	return &vtctldatapb.GetSrvVSchemaResponse{
 		SrvVSchema: vschema,
+	}, nil
+}
+
+// GetSrvVSchemas is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) GetSrvVSchemas(ctx context.Context, req *vtctldatapb.GetSrvVSchemasRequest) (*vtctldatapb.GetSrvVSchemasResponse, error) {
+	allCells, err := s.ts.GetCellInfoNames(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	cells := allCells
+
+	// Omit any cell names in the request that don't map to existing cells
+	if len(req.Cells) > 0 {
+		s1 := sets.NewString(allCells...)
+		s2 := sets.NewString(req.Cells...)
+
+		cells = s1.Intersection(s2).List()
+	}
+
+	svs := make(map[string]*vschemapb.SrvVSchema, len(cells))
+
+	for _, cell := range cells {
+		sv, err := s.ts.GetSrvVSchema(ctx, cell)
+
+		if err != nil {
+			if !topo.IsErrType(err, topo.NoNode) {
+				return nil, err
+			}
+
+			log.Warningf("no SrvVSchema for cell %s", cell)
+			sv = nil
+		}
+
+		svs[cell] = sv
+	}
+
+	return &vtctldatapb.GetSrvVSchemasResponse{
+		SrvVSchemas: svs,
 	}, nil
 }
 
@@ -792,6 +922,12 @@ func (s *VtctldServer) GetVSchema(ctx context.Context, req *vtctldatapb.GetVSche
 
 // GetWorkflows is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflowsRequest) (*vtctldatapb.GetWorkflowsResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.GetWorkflows")
+	defer span.Finish()
+
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("active_only", req.ActiveOnly)
+
 	return s.ws.GetWorkflows(ctx, req)
 }
 
@@ -885,7 +1021,7 @@ func (s *VtctldServer) InitShardPrimaryLocked(
 	if !ok {
 		return fmt.Errorf("master-elect tablet %v is not in the shard", topoproto.TabletAliasString(req.PrimaryElectTabletAlias))
 	}
-	ev.NewMaster = *masterElectTabletInfo.Tablet
+	ev.NewMaster = proto.Clone(masterElectTabletInfo.Tablet).(*topodatapb.Tablet)
 
 	// Check the master is the only master is the shard, or -force was used.
 	_, masterTabletMap := topotools.SortedTabletMap(tabletMap)
@@ -1098,6 +1234,15 @@ func (s *VtctldServer) PlannedReparentShard(ctx context.Context, req *vtctldatap
 	return resp, err
 }
 
+// RebuildVSchemaGraph is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) RebuildVSchemaGraph(ctx context.Context, req *vtctldatapb.RebuildVSchemaGraphRequest) (*vtctldatapb.RebuildVSchemaGraphResponse, error) {
+	if err := s.ts.RebuildSrvVSchema(ctx, req.Cells); err != nil {
+		return nil, err
+	}
+
+	return &vtctldatapb.RebuildVSchemaGraphResponse{}, nil
+}
+
 // RemoveKeyspaceCell is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) RemoveKeyspaceCell(ctx context.Context, req *vtctldatapb.RemoveKeyspaceCellRequest) (*vtctldatapb.RemoveKeyspaceCellResponse, error) {
 	shards, err := s.ts.GetShardNames(ctx, req.Keyspace)
@@ -1148,7 +1293,7 @@ func (s *VtctldServer) ReparentTablet(ctx context.Context, req *vtctldatapb.Repa
 	}
 
 	if !shard.HasMaster() {
-		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "no master tablet for shard %v/%v", tablet.Keyspace, tablet.Shard)
+		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "no primary tablet for shard %v/%v", tablet.Keyspace, tablet.Shard)
 	}
 
 	shardPrimary, err := s.ts.GetTablet(ctx, shard.MasterAlias)
@@ -1161,7 +1306,11 @@ func (s *VtctldServer) ReparentTablet(ctx context.Context, req *vtctldatapb.Repa
 	}
 
 	if shardPrimary.Keyspace != tablet.Keyspace || shardPrimary.Shard != tablet.Shard {
-		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "master %v and potential replica %v not in same keypace shard (%v/%v)", topoproto.TabletAliasString(shard.MasterAlias), topoproto.TabletAliasString(req.Tablet), tablet.Keyspace, tablet.Shard)
+		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "primary %v and potential replica %v not in same keypace shard (%v/%v)", topoproto.TabletAliasString(shard.MasterAlias), topoproto.TabletAliasString(req.Tablet), tablet.Keyspace, tablet.Shard)
+	}
+
+	if topoproto.TabletAliasEqual(req.Tablet, shardPrimary.Alias) {
+		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "cannot ReparentTablet current shard primary (%v) onto itself", topoproto.TabletAliasString(req.Tablet))
 	}
 
 	if err := s.tmc.SetMaster(ctx, tablet.Tablet, shard.MasterAlias, 0, "", false); err != nil {
@@ -1320,8 +1469,8 @@ func (s *VtctldServer) TabletExternallyReparented(ctx context.Context, req *vtct
 	log.Infof("TabletExternallyReparented: executing tablet type change %v -> MASTER on %v", tablet.Type, topoproto.TabletAliasString(req.Tablet))
 	ev := &events.Reparent{
 		ShardInfo: *shard,
-		NewMaster: *tablet.Tablet,
-		OldMaster: topodatapb.Tablet{
+		NewMaster: proto.Clone(tablet.Tablet).(*topodatapb.Tablet),
+		OldMaster: &topodatapb.Tablet{
 			Alias: shard.MasterAlias,
 			Type:  topodatapb.TabletType_MASTER,
 		},
@@ -1344,6 +1493,71 @@ func (s *VtctldServer) TabletExternallyReparented(ctx context.Context, req *vtct
 	event.DispatchUpdate(ev, "finished")
 
 	return resp, nil
+}
+
+// UpdateCellInfo is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) UpdateCellInfo(ctx context.Context, req *vtctldatapb.UpdateCellInfoRequest) (*vtctldatapb.UpdateCellInfoResponse, error) {
+	ctx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+	defer cancel()
+
+	var updatedCi *topodatapb.CellInfo
+	err := s.ts.UpdateCellInfoFields(ctx, req.Name, func(ci *topodatapb.CellInfo) error {
+		defer func() {
+			updatedCi = proto.Clone(ci).(*topodatapb.CellInfo)
+		}()
+
+		changed := false
+
+		if req.CellInfo.ServerAddress != "" && req.CellInfo.ServerAddress != ci.ServerAddress {
+			changed = true
+			ci.ServerAddress = req.CellInfo.ServerAddress
+		}
+
+		if req.CellInfo.Root != "" && req.CellInfo.Root != ci.Root {
+			changed = true
+			ci.Root = req.CellInfo.Root
+		}
+
+		if !changed {
+			return topo.NewError(topo.NoUpdateNeeded, req.Name)
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &vtctldatapb.UpdateCellInfoResponse{
+		Name:     req.Name,
+		CellInfo: updatedCi,
+	}, nil
+}
+
+// UpdateCellsAlias is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) UpdateCellsAlias(ctx context.Context, req *vtctldatapb.UpdateCellsAliasRequest) (*vtctldatapb.UpdateCellsAliasResponse, error) {
+	ctx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+	defer cancel()
+
+	var updatedCa *topodatapb.CellsAlias
+	err := s.ts.UpdateCellsAlias(ctx, req.Name, func(ca *topodatapb.CellsAlias) error {
+		defer func() {
+			updatedCa = proto.Clone(ca).(*topodatapb.CellsAlias)
+		}()
+
+		ca.Cells = req.CellsAlias.Cells
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &vtctldatapb.UpdateCellsAliasResponse{
+		Name:       req.Name,
+		CellsAlias: updatedCa,
+	}, nil
 }
 
 // StartServer registers a VtctldServer for RPCs on the given gRPC server.

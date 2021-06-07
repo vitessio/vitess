@@ -133,6 +133,11 @@ type TabletManager struct {
 	UpdateStream        binlog.UpdateStreamControl
 	VREngine            *vreplication.Engine
 
+	// MetadataManager manages the local metadata tables for a tablet. It
+	// exists, and is exported, to support swapping a nil pointer in test code,
+	// in which case metadata creation/population is skipped.
+	MetadataManager *mysqlctl.MetadataManager
+
 	// tmState manages the TabletManager state.
 	tmState *tmState
 
@@ -273,7 +278,7 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, healthCheckInterval ti
 		return err
 	}
 
-	err = tm.QueryServiceControl.InitDBConfig(querypb.Target{
+	err = tm.QueryServiceControl.InitDBConfig(&querypb.Target{
 		Keyspace:   tablet.Keyspace,
 		Shard:      tablet.Shard,
 		TabletType: tablet.Type,
@@ -660,9 +665,12 @@ func (tm *TabletManager) handleRestore(ctx context.Context) (bool, error) {
 				return false, err
 			}
 		}
-		err := mysqlctl.PopulateMetadataTables(tm.MysqlDaemon, localMetadata, topoproto.TabletDbName(tablet))
-		if err != nil {
-			return false, vterrors.Wrap(err, "failed to -init_populate_metadata")
+
+		if tm.MetadataManager != nil {
+			err := tm.MetadataManager.PopulateMetadataTables(tm.MysqlDaemon, localMetadata, topoproto.TabletDbName(tablet))
+			if err != nil {
+				return false, vterrors.Wrap(err, "failed to -init_populate_metadata")
+			}
 		}
 	}
 	return false, nil
@@ -723,5 +731,11 @@ func (tm *TabletManager) BlacklistedTables() []string {
 
 // hookExtraEnv returns the map to pass to local hooks
 func (tm *TabletManager) hookExtraEnv() map[string]string {
-	return map[string]string{"TABLET_ALIAS": topoproto.TabletAliasString(tm.tabletAlias)}
+	tablet := tm.Tablet()
+
+	return map[string]string{
+		"TABLET_ALIAS": topoproto.TabletAliasString(tm.tabletAlias),
+		"KEYSPACE":     tablet.Keyspace,
+		"SHARD":        tablet.Shard,
+	}
 }

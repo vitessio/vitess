@@ -9,9 +9,6 @@
 * See the License for the specific language governing permissions and
 * limitations under the License.
 */
-.controls {
-  display: grid;
-  grid-gap: 8px;
-  grid-template-columns: 1fr min-content;
-  margin-bottom: 24px;
+.container {
+  max-width: 960px;
 }

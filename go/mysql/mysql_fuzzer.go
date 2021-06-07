@@ -83,11 +83,9 @@ func createFuzzingSocketPair() (net.Listener, *Conn, *Conn) {
 type fuzztestRun struct{}
 
 func (t fuzztestRun) NewConnection(c *Conn) {
-	panic("implement me")
 }
 
 func (t fuzztestRun) ConnectionClosed(c *Conn) {
-	panic("implement me")
 }
 
 func (t fuzztestRun) ComQuery(c *Conn, query string, callback func(*sqltypes.Result) error) error {
@@ -95,11 +93,11 @@ func (t fuzztestRun) ComQuery(c *Conn, query string, callback func(*sqltypes.Res
 }
 
 func (t fuzztestRun) ComPrepare(c *Conn, query string, bindVars map[string]*querypb.BindVariable) ([]*querypb.Field, error) {
-	panic("implement me")
+	return nil, nil
 }
 
 func (t fuzztestRun) ComStmtExecute(c *Conn, prepare *PrepareData, callback func(*sqltypes.Result) error) error {
-	panic("implement me")
+	return nil
 }
 
 func (t fuzztestRun) WarningCount(c *Conn) uint16 {
@@ -107,7 +105,6 @@ func (t fuzztestRun) WarningCount(c *Conn) uint16 {
 }
 
 func (t fuzztestRun) ComResetConnection(c *Conn) {
-	panic("implement me")
 }
 
 var _ Handler = (*fuzztestRun)(nil)
@@ -119,8 +116,8 @@ type fuzztestConn struct {
 }
 
 func (t fuzztestConn) Read(b []byte) (n int, err error) {
-	for j, i := range t.queryPacket {
-		b[j] = i
+	for i := 0; i < len(b) && i < len(t.queryPacket); i++ {
+		b[i] = t.queryPacket[i]
 	}
 	return len(b), nil
 }
@@ -205,6 +202,7 @@ func FuzzHandleNextCommand(data []byte) int {
 		pos:         -1,
 		queryPacket: data,
 	})
+	sConn.PrepareData = map[uint32]*PrepareData{}
 
 	handler := &fuzztestRun{}
 	_ = sConn.handleNextCommand(handler)

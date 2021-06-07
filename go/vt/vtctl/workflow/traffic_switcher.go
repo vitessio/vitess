@@ -26,14 +26,18 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/encoding/prototext"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 var (
@@ -46,6 +50,71 @@ var (
 	// target keyspace.
 	ErrNoStreams = errors.New("no streams found")
 )
+
+// TrafficSwitchDirection specifies the switching direction.
+type TrafficSwitchDirection int
+
+// The following constants define the switching direction.
+const (
+	DirectionForward = TrafficSwitchDirection(iota)
+	DirectionBackward
+)
+
+// TableRemovalType specifies the way the a table will be removed during a
+// DropSource for a MoveTables workflow.
+type TableRemovalType int
+
+// The following consts define if DropSource will drop or rename the table.
+const (
+	DropTable = TableRemovalType(iota)
+	RenameTable
+)
+
+var tableRemovalTypeStrs = [...]string{
+	"DROP TABLE",
+	"RENAME TABLE",
+}
+
+// String returns a string representation of a TableRemovalType
+func (trt TableRemovalType) String() string {
+	if trt < DropTable || trt > RenameTable {
+		return "Unknown"
+	}
+
+	return tableRemovalTypeStrs[trt]
+}
+
+// ITrafficSwitcher is a temporary hack to allow us to move streamMigrater out
+// of package wrangler without also needing to move trafficSwitcher in the same
+// changeset.
+//
+// After moving TrafficSwitcher to this package, this type should be removed,
+// and StreamMigrator should be updated to contain a field of type
+// *TrafficSwitcher instead of ITrafficSwitcher.
+type ITrafficSwitcher interface {
+	/* Functions that expose types and behavior contained in *wrangler.Wrangler */
+
+	TopoServer() *topo.Server
+	TabletManagerClient() tmclient.TabletManagerClient
+	Logger() logutil.Logger
+	// VReplicationExec here is used when we want the (*wrangler.Wrangler)
+	// implementation, which does a topo lookup on the tablet alias before
+	// calling the underlying TabletManagerClient RPC.
+	VReplicationExec(ctx context.Context, alias *topodatapb.TabletAlias, query string) (*querypb.QueryResult, error)
+
+	/* Functions that expose fields on the *wrangler.trafficSwitcher */
+
+	MigrationType() binlogdatapb.MigrationType
+	ReverseWorkflowName() string
+	SourceKeyspaceName() string
+	SourceKeyspaceSchema() *vindexes.KeyspaceSchema
+	WorkflowName() string
+
+	/* Functions that *wrangler.trafficSwitcher implements */
+
+	ForAllSources(f func(source *MigrationSource) error) error
+	ForAllTargets(f func(target *MigrationTarget) error) error
+}
 
 // TargetInfo contains the metadata for a set of targets involved in a workflow.
 type TargetInfo struct {
@@ -167,7 +236,7 @@ func BuildTargets(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManag
 			}
 
 			var bls binlogdatapb.BinlogSource
-			if err := proto.UnmarshalText(row[1].ToString(), &bls); err != nil {
+			if err := prototext.Unmarshal(row[1].ToBytes(), &bls); err != nil {
 				return nil, err
 			}
 

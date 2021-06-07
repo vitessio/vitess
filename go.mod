@@ -3,7 +3,7 @@ module vitess.io/vitess
 go 1.15
 
 require (
-	cloud.google.com/go/storage v1.0.0
+	cloud.google.com/go/storage v1.10.0
 	github.com/AdaLogics/go-fuzz-headers v0.0.0-20210330150358-dbd898e17899
 	github.com/Azure/azure-pipeline-go v0.2.2
 	github.com/Azure/azure-storage-blob-go v0.10.0
@@ -19,23 +19,19 @@ require (
 	github.com/cespare/xxhash/v2 v2.1.1
 	github.com/codahale/hdrhistogram v0.0.0-20161010025455-3a0bb77429bd // indirect
 	github.com/codegangsta/inject v0.0.0-20150114235600-33e0aa1cb7c0 // indirect
-	github.com/coreos/etcd v3.3.13+incompatible
-	github.com/coreos/go-systemd v0.0.0-20190719114852-fd7a80b32e1f // indirect
 	github.com/corpix/uarand v0.1.1 // indirect
 	github.com/cyberdelia/go-metrics-graphite v0.0.0-20161219230853-39f87cc3b432
 	github.com/dave/jennifer v1.4.1
 	github.com/evanphx/json-patch v4.5.0+incompatible
 	github.com/go-martini/martini v0.0.0-20170121215854-22fa46961aab
 	github.com/go-sql-driver/mysql v1.5.1-0.20210202043019-fe2230a8b20c
-	github.com/gogo/protobuf v1.3.1
 	github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b
-	github.com/golang/groupcache v0.0.0-20190702054246-869f871628b6 // indirect
-	github.com/golang/mock v1.3.1
-	github.com/golang/protobuf v1.3.3
+	github.com/golang/mock v1.5.0
+	github.com/golang/protobuf v1.5.2
 	github.com/golang/snappy v0.0.1
-	github.com/google/go-cmp v0.5.2
+	github.com/google/go-cmp v0.5.5
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510
-	github.com/google/uuid v1.1.1
+	github.com/google/uuid v1.1.2
 	github.com/googleapis/gnostic v0.2.0 // indirect
 	github.com/gorilla/handlers v1.5.1
 	github.com/gorilla/mux v1.8.0
@@ -77,7 +73,8 @@ require (
 	github.com/pires/go-proxyproto v0.0.0-20191211124218-517ecdf5bb2b
 	github.com/pkg/errors v0.9.1
 	github.com/planetscale/pargzip v0.0.0-20201116224723-90c7fc03ea8a
-	github.com/prometheus/client_golang v1.4.1
+	github.com/planetscale/vtprotobuf v0.0.0-20210521163914-5a02622d1e2a
+	github.com/prometheus/client_golang v1.5.1
 	github.com/prometheus/common v0.9.1
 	github.com/rcrowley/go-metrics v0.0.0-20200313005456-10cdbea86bc0
 	github.com/samuel/go-zookeeper v0.0.0-20200724154423-2164a8ac840e
@@ -88,7 +85,7 @@ require (
 	github.com/spf13/cobra v1.1.1
 	github.com/spf13/pflag v1.0.5
 	github.com/spyzhov/ajson v0.4.2
-	github.com/stretchr/testify v1.4.0
+	github.com/stretchr/testify v1.6.1
 	github.com/tchap/go-patricia v0.0.0-20160729071656-dd168db6051b
 	github.com/tebeka/selenium v0.9.9
 	github.com/tinylib/msgp v1.1.1 // indirect
@@ -96,16 +93,22 @@ require (
 	github.com/uber/jaeger-client-go v2.16.0+incompatible
 	github.com/uber/jaeger-lib v2.0.0+incompatible // indirect
 	github.com/z-division/go-zookeeper v0.0.0-20190128072838-6d7457066b9b
+	go.etcd.io/etcd/api/v3 v3.5.0-alpha.0
+	go.etcd.io/etcd/client/v3 v3.5.0-alpha.0
+	go.etcd.io/etcd/pkg/v3 v3.5.0-alpha.0
 	golang.org/x/crypto v0.0.0-20200622213623-75b288015ac9
-	golang.org/x/lint v0.0.0-20190930215403-16217165b5de
-	golang.org/x/net v0.0.0-20201021035429-f5854403a974
-	golang.org/x/oauth2 v0.0.0-20190604053449-0f29369cfe45
-	golang.org/x/sync v0.0.0-20201207232520-09787c993a3a
-	golang.org/x/text v0.3.3
-	golang.org/x/time v0.0.0-20190308202827-9d24e82272b4
-	golang.org/x/tools v0.0.0-20201202200335-bef1c476418a
-	google.golang.org/api v0.13.0
-	google.golang.org/grpc v1.29.1
+	golang.org/x/lint v0.0.0-20201208152925-83fdc39ff7b5
+	golang.org/x/net v0.0.0-20210316092652-d523dce5a7f4
+	golang.org/x/oauth2 v0.0.0-20210413134643-5e61552d6c78
+	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
+	golang.org/x/text v0.3.5
+	golang.org/x/time v0.0.0-20191024005414-555d28b269f0
+	golang.org/x/tools v0.1.0
+	google.golang.org/api v0.45.0
+	google.golang.org/grpc v1.37.0
+	google.golang.org/grpc/cmd/protoc-gen-go-grpc v1.1.0
+	google.golang.org/grpc/examples v0.0.0-20210430044426-28078834f35b
+	google.golang.org/protobuf v1.26.0
 	gopkg.in/DataDog/dd-trace-go.v1 v1.17.0
 	gopkg.in/asn1-ber.v1 v1.0.0-20181015200546-f715ec2f112d // indirect
 	gopkg.in/gcfg.v1 v1.2.3
@@ -113,12 +116,12 @@ require (
 	gopkg.in/warnings.v0 v0.1.2 // indirect
 	gopkg.in/yaml.v2 v2.4.0
 	gotest.tools v2.2.0+incompatible
-	honnef.co/go/tools v0.0.1-2019.2.3
+	honnef.co/go/tools v0.0.1-2020.1.4
 	k8s.io/apiextensions-apiserver v0.17.3
 	k8s.io/apimachinery v0.17.3
 	k8s.io/client-go v0.17.3
 	k8s.io/code-generator v0.17.3
-	sigs.k8s.io/yaml v1.1.0
+	sigs.k8s.io/yaml v1.2.0
 )
 
 replace github.com/skeema/tengo => github.com/planetscale/tengo v0.9.6-ps.v3

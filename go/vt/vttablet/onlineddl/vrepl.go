@@ -70,6 +70,7 @@ type VRepl struct {
 	sourceSharedColumns *vrepl.ColumnList
 	targetSharedColumns *vrepl.ColumnList
 	sharedColumnsMap    map[string]string
+	sourceAutoIncrement uint64
 
 	filterQuery string
 	bls         *binlogdatapb.BinlogSource
@@ -121,6 +122,27 @@ func (v *VRepl) getCandidateUniqueKeys(ctx context.Context, conn *dbconnpool.DBC
 	return uniqueKeys, nil
 }
 
+// readAutoIncrement reads the AUTO_INCREMENT vlaue, if any, for a give ntable
+func (v *VRepl) readAutoIncrement(ctx context.Context, conn *dbconnpool.DBConnection, tableName string) (autoIncrement uint64, err error) {
+	query, err := sqlparser.ParseAndBind(sqlGetAutoIncrement,
+		sqltypes.StringBindVariable(v.dbName),
+		sqltypes.StringBindVariable(tableName),
+	)
+	if err != nil {
+		return 0, err
+	}
+
+	rs, err := conn.ExecuteFetch(query, math.MaxInt64, true)
+	if err != nil {
+		return 0, err
+	}
+	for _, row := range rs.Named().Rows {
+		autoIncrement = row.AsUint64("AUTO_INCREMENT", 0)
+	}
+
+	return autoIncrement, nil
+}
+
 // readTableColumns reads column list from given table
 func (v *VRepl) readTableColumns(ctx context.Context, conn *dbconnpool.DBConnection, tableName string) (columns *vrepl.ColumnList, virtualColumns *vrepl.ColumnList, pkColumns *vrepl.ColumnList, err error) {
 	parsed := sqlparser.BuildParsedQuery(sqlShowColumnsFrom, tableName)
@@ -136,7 +158,7 @@ func (v *VRepl) readTableColumns(ctx context.Context, conn *dbconnpool.DBConnect
 		columnNames = append(columnNames, columnName)
 
 		extra := row.AsString("Extra", "")
-		if strings.Contains(extra, " GENERATED") {
+		if strings.Contains(extra, "VIRTUAL") {
 			virtualColumnNames = append(virtualColumnNames, columnName)
 		}
 
@@ -149,6 +171,64 @@ func (v *VRepl) readTableColumns(ctx context.Context, conn *dbconnpool.DBConnect
 		return nil, nil, nil, fmt.Errorf("Found 0 columns on `%s`", tableName)
 	}
 	return vrepl.NewColumnList(columnNames), vrepl.NewColumnList(virtualColumnNames), vrepl.NewColumnList(pkColumnNames), nil
+}
+
+// applyColumnTypes
+func (v *VRepl) applyColumnTypes(ctx context.Context, conn *dbconnpool.DBConnection, tableName string, columnsLists ...*vrepl.ColumnList) error {
+	query, err := sqlparser.ParseAndBind(sqlSelectColumnTypes,
+		sqltypes.StringBindVariable(v.dbName),
+		sqltypes.StringBindVariable(tableName),
+	)
+	if err != nil {
+		return err
+	}
+	rs, err := conn.ExecuteFetch(query, math.MaxInt64, true)
+	if err != nil {
+		return err
+	}
+	for _, row := range rs.Named().Rows {
+		columnName := row["COLUMN_NAME"].ToString()
+		columnType := row["COLUMN_TYPE"].ToString()
+		columnOctetLength := row.AsUint64("CHARACTER_OCTET_LENGTH", 0)
+
+		for _, columnsList := range columnsLists {
+			column := columnsList.GetColumn(columnName)
+			if column == nil {
+				continue
+			}
+
+			if strings.Contains(columnType, "unsigned") {
+				column.IsUnsigned = true
+			}
+			if strings.Contains(columnType, "mediumint") {
+				column.Type = vrepl.MediumIntColumnType
+			}
+			if strings.Contains(columnType, "timestamp") {
+				column.Type = vrepl.TimestampColumnType
+			}
+			if strings.Contains(columnType, "datetime") {
+				column.Type = vrepl.DateTimeColumnType
+			}
+			if strings.Contains(columnType, "json") {
+				column.Type = vrepl.JSONColumnType
+			}
+			if strings.Contains(columnType, "float") {
+				column.Type = vrepl.FloatColumnType
+			}
+			if strings.HasPrefix(columnType, "enum") {
+				column.Type = vrepl.EnumColumnType
+				column.EnumValues = vrepl.ParseEnumValues(columnType)
+			}
+			if strings.HasPrefix(columnType, "binary") {
+				column.Type = vrepl.BinaryColumnType
+				column.BinaryOctetLength = columnOctetLength
+			}
+			if charset := row.AsString("CHARACTER_SET_NAME", ""); charset != "" {
+				column.Charset = charset
+			}
+		}
+	}
+	return nil
 }
 
 // getSharedColumns returns the intersection of two lists of columns in same order as the first list
@@ -271,6 +351,18 @@ func (v *VRepl) analyzeTables(ctx context.Context, conn *dbconnpool.DBConnection
 		return fmt.Errorf("Found no shared PRIMARY KEY columns between `%s` and `%s`", v.sourceTable, v.targetTable)
 	}
 
+	if err := v.applyColumnTypes(ctx, conn, v.sourceTable, sourceColumns, sourceVirtualColumns, sourcePKColumns, v.sourceSharedColumns, v.sharedPKColumns); err != nil {
+		return err
+	}
+	if err := v.applyColumnTypes(ctx, conn, v.targetTable, targetColumns, targetVirtualColumns, targetPKColumns, v.targetSharedColumns); err != nil {
+		return err
+	}
+
+	v.sourceAutoIncrement, err = v.readAutoIncrement(ctx, conn, v.sourceTable)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -282,13 +374,21 @@ func (v *VRepl) generateFilterQuery(ctx context.Context) error {
 	}
 	var sb strings.Builder
 	sb.WriteString("select ")
-	for i, name := range v.sourceSharedColumns.Names() {
+	for i, col := range v.sourceSharedColumns.Columns() {
+		name := col.Name
 		targetName := v.sharedColumnsMap[name]
 
 		if i > 0 {
 			sb.WriteString(", ")
 		}
-		sb.WriteString(escapeName(name))
+		switch col.Type {
+		case vrepl.JSONColumnType:
+			sb.WriteString("convert(")
+			sb.WriteString(escapeName(name))
+			sb.WriteString(" using utf8mb4)")
+		default:
+			sb.WriteString(escapeName(name))
+		}
 		sb.WriteString(" as ")
 		sb.WriteString(escapeName(targetName))
 	}
