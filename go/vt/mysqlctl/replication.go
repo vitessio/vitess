@@ -190,11 +190,6 @@ func (mysqld *Mysqld) SetReadOnly(on bool) error {
 	return mysqld.ExecuteSuperQuery(context.TODO(), query)
 }
 
-var (
-	// ErrNotMaster means there is no master status
-	ErrNotMaster = errors.New("no master status")
-)
-
 // SetSuperReadOnly set/unset the super_read_only flag
 func (mysqld *Mysqld) SetSuperReadOnly(on bool) error {
 	query := "SET GLOBAL super_read_only = "

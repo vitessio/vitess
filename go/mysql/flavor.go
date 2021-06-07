@@ -57,7 +57,7 @@ const (
 // 1. Oracle MySQL 5.6, 5.7, 8.0, ...
 // 2. MariaDB 10.X
 type flavor interface {
-	// primaryGTIDSet returns the current GTIDSet of a server
+	// primaryGTIDSet returns the current GTIDSet of a server.
 	primaryGTIDSet(c *Conn) (GTIDSet, error)
 
 	// startReplicationCommand returns the command to start the replication.
@@ -176,7 +176,7 @@ func (c *Conn) IsMariaDB() bool {
 	return false
 }
 
-// PrimaryPosition returns the current master replication position.
+// PrimaryPosition returns the current primary's replication position.
 func (c *Conn) PrimaryPosition() (Position, error) {
 	gtidSet, err := c.flavor.primaryGTIDSet(c)
 	if err != nil {
@@ -350,8 +350,8 @@ func (c *Conn) ShowReplicationStatus() (ReplicationStatus, error) {
 	return c.flavor.status(c)
 }
 
-// parseMasterStatus parses the common fields of SHOW MASTER STATUS.
-func parseMasterStatus(fields map[string]string) PrimaryStatus {
+// parsePrimaryStatus parses the common fields of SHOW MASTER STATUS.
+func parsePrimaryStatus(fields map[string]string) PrimaryStatus {
 	status := PrimaryStatus{}
 
 	fileExecPosStr := fields["Position"]

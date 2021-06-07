@@ -43,7 +43,7 @@ var _ flavor = (*mysqlFlavor56)(nil)
 var _ flavor = (*mysqlFlavor57)(nil)
 var _ flavor = (*mysqlFlavor80)(nil)
 
-// masterGTIDSet is part of the Flavor interface.
+// primaryGTIDSet is part of the Flavor interface.
 func (mysqlFlavor) primaryGTIDSet(c *Conn) (GTIDSet, error) {
 	// keep @@global as lowercase, as some servers like the Ripple binlog server only honors a lowercase `global` value
 	qr, err := c.ExecuteFetch("SELECT @@global.gtid_executed", 1, false)
@@ -96,7 +96,7 @@ func (mysqlFlavor) sendBinlogDumpCommand(c *Conn, serverID uint32, startPos Posi
 func (mysqlFlavor) resetReplicationCommands(c *Conn) []string {
 	resetCommands := []string{
 		"STOP SLAVE",
-		"RESET SLAVE ALL", // "ALL" makes it forget master host:port.
+		"RESET SLAVE ALL", // "ALL" makes it forget source host:port.
 		"RESET MASTER",    // This will also clear gtid_executed and gtid_purged.
 	}
 	if c.SemiSyncExtensionLoaded() {
@@ -166,7 +166,7 @@ func parseMysqlReplicationStatus(resultMap map[string]string) (ReplicationStatus
 	return status, nil
 }
 
-// masterStatus is part of the Flavor interface.
+// primaryStatus is part of the Flavor interface.
 func (mysqlFlavor) primaryStatus(c *Conn) (PrimaryStatus, error) {
 	qr, err := c.ExecuteFetch("SHOW MASTER STATUS", 100, true /* wantfields */)
 	if err != nil {
@@ -182,11 +182,11 @@ func (mysqlFlavor) primaryStatus(c *Conn) (PrimaryStatus, error) {
 		return PrimaryStatus{}, err
 	}
 
-	return parseMysqlMasterStatus(resultMap)
+	return parseMysqlPrimaryStatus(resultMap)
 }
 
-func parseMysqlMasterStatus(resultMap map[string]string) (PrimaryStatus, error) {
-	status := parseMasterStatus(resultMap)
+func parseMysqlPrimaryStatus(resultMap map[string]string) (PrimaryStatus, error) {
+	status := parsePrimaryStatus(resultMap)
 
 	var err error
 	status.Position.GTIDSet, err = parseMysql56GTIDSet(resultMap["Executed_Gtid_Set"])

@@ -22,9 +22,9 @@ import (
 
 // PrimaryStatus holds replication information from SHOW MASTER STATUS.
 type PrimaryStatus struct {
-	// Position represents the master's GTID based position.
+	// Position represents the server's GTID based position.
 	Position Position
-	// FilePosition represents the master's file based position.
+	// FilePosition represents the server's file based position.
 	FilePosition Position
 }
 
