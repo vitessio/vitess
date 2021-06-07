@@ -89,7 +89,7 @@ func (pq *ParsedQuery) Append(buf *strings.Builder, bindVariables map[string]*qu
 // the fields in the row are in the same order as the placeholders in this query. The fields might include generated
 // columns which are dropped, by checking against skipFields, before binding the variables
 // note: there can be more fields than bind locations since extra columns might be requested from the source if not all
-// primary keys columns are not in the select list, for example. Also some values in the row may not correspond for
+// primary keys columns are present in the target table, for example. Also some values in the row may not correspond for
 // values from the database on the source: sum/count for aggregation queries, for example
 func (pq *ParsedQuery) AppendFromRow(buf *bytes2.Buffer, fields []*querypb.Field, row *querypb.Row, skipFields map[string]bool) error {
 	if len(fields) < len(pq.bindLocations) {
