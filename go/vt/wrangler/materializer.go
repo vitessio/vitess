@@ -1068,10 +1068,7 @@ func (mz *materializer) generateInserts(ctx context.Context) (string, error) {
 				} else {
 					sel.Where = &sqlparser.Where{
 						Type: sqlparser.WhereClause,
-						Expr: &sqlparser.FuncExpr{
-							Name:  sqlparser.NewColIdent("in_keyrange"),
-							Exprs: subExprs,
-						},
+						Expr: inKeyRange,
 					}
 				}
 
