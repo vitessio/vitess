@@ -22,6 +22,7 @@ import (
 	stderrors "errors"
 	"fmt"
 	"net/http"
+	"net/http/pprof"
 	stdsort "sort"
 	"strings"
 	"sync"
@@ -40,6 +41,7 @@ import (
 	"vitess.io/vitess/go/vt/vtadmin/errors"
 	"vitess.io/vitess/go/vt/vtadmin/grpcserver"
 	vtadminhttp "vitess.io/vitess/go/vt/vtadmin/http"
+	"vitess.io/vitess/go/vt/vtadmin/http/debug"
 	"vitess.io/vitess/go/vt/vtadmin/http/experimental"
 	vthandlers "vitess.io/vitess/go/vt/vtadmin/http/handlers"
 	"vitess.io/vitess/go/vt/vtadmin/sort"
@@ -125,6 +127,19 @@ func NewAPI(clusters []*cluster.Cluster, opts grpcserver.Options, httpOpts vtadm
 
 	experimentalRouter := router.PathPrefix("/experimental").Subrouter()
 	experimentalRouter.HandleFunc("/tablet/{tablet}/debug/vars", httpAPI.Adapt(experimental.TabletDebugVarsPassthrough)).Name("API.TabletDebugVarsPassthrough")
+
+	if !httpOpts.DisableDebug {
+		// Due to the way net/http/pprof insists on registering its handlers, we
+		// have to put these on the root router, and not on the /debug prefixed
+		// subrouter, which would make way more sense, but alas. Additional
+		// debug routes should still go on the /debug subrouter, though.
+		serv.Router().HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
+		serv.Router().HandleFunc("/debug/pprof/profile", pprof.Profile)
+		serv.Router().HandleFunc("/debug/pprof/symbol", pprof.Symbol)
+		serv.Router().PathPrefix("/debug/pprof").HandlerFunc(pprof.Index)
+		debugRouter := serv.Router().PathPrefix("/debug").Subrouter()
+		debugRouter.HandleFunc("/env", debug.Env)
+	}
 
 	// Middlewares are executed in order of addition. Our ordering (all
 	// middlewares being optional) is:
