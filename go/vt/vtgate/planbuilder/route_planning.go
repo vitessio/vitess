@@ -266,31 +266,65 @@ func (rp *routePlan) cost() int {
 
 // vindexPlusPredicates is a struct used to store all the predicates that the vindex can be used to query
 type vindexPlusPredicates struct {
-	vindex *vindexes.ColumnVindex
-	values []sqltypes.PlanValue
-	// Vindex is covered if all the columns in the vindex have an associated predicate
-	covered    bool
-	opcode     engine.RouteOpcode
-	predicates []sqlparser.Expr
+	colVindex *vindexes.ColumnVindex
+	values    []sqltypes.PlanValue
+
+	// when we have the predicates found, we also know how to interact with this vindex
+	foundVindex vindexes.Vindex
+	opcode      engine.RouteOpcode
+	predicates  []sqlparser.Expr
 }
 
-// addPredicate clones this routePlan and returns a new one with these predicates added to it. if the predicates can help,
+// addPredicate adds these predicates added to it. if the predicates can help,
 // they will improve the routeOpCode
 func (rp *routePlan) addPredicate(predicates ...sqlparser.Expr) error {
-	newVindexFound, err := rp.searchForNewVindexes(predicates)
-	if err != nil {
-		return err
-	}
+	if rp.canImprove() {
+		newVindexFound, err := rp.searchForNewVindexes(predicates)
+		if err != nil {
+			return err
+		}
 
-	// if we didn't open up any new vindex options, no need to enter here
-	if newVindexFound {
-		rp.pickBestAvailableVindex()
+		// if we didn't open up any new vindex options, no need to enter here
+		if newVindexFound {
+			rp.pickBestAvailableVindex()
+		}
 	}
 
 	// any predicates that cover more than a single table need to be added here
 	rp.predicates = append(rp.predicates, predicates...)
 
 	return nil
+}
+
+// canImprove returns true if additional predicates could help improving this plan
+func (rp *routePlan) canImprove() bool {
+	return rp.routeOpCode != engine.SelectNone
+}
+
+func (rp *routePlan) isImpossibleIN(node *sqlparser.ComparisonExpr) bool {
+	switch nodeR := node.Right.(type) {
+	case sqlparser.ValTuple:
+		// WHERE col IN (null)
+		if len(nodeR) == 1 && sqlparser.IsNull(nodeR[0]) {
+			rp.routeOpCode = engine.SelectNone
+			return true
+		}
+	}
+	return false
+}
+
+func (rp *routePlan) isImpossibleNotIN(node *sqlparser.ComparisonExpr) bool {
+	switch node := node.Right.(type) {
+	case sqlparser.ValTuple:
+		for _, n := range node {
+			if sqlparser.IsNull(n) {
+				rp.routeOpCode = engine.SelectNone
+				return true
+			}
+		}
+	}
+
+	return false
 }
 
 func (rp *routePlan) searchForNewVindexes(predicates []sqlparser.Expr) (bool, error) {
@@ -308,104 +342,196 @@ func (rp *routePlan) searchForNewVindexes(predicates []sqlparser.Expr) (bool, er
 
 			switch node.Operator {
 			case sqlparser.EqualOp:
-				column, ok := node.Left.(*sqlparser.ColName)
-				other := node.Right
-				if !ok {
-					column, ok = node.Right.(*sqlparser.ColName)
-					if !ok {
-						// either the LHS or RHS have to be a column to be useful for the vindex
-						continue
-					}
-					other = node.Left
-				}
-				value, err := sqlparser.NewPlanValue(other)
+				found, err := rp.planEqualOp(node)
 				if err != nil {
-					// if we are unable to create a PlanValue, we can't use a vindex, but we don't have to fail
-					if strings.Contains(err.Error(), "expression is too complex") {
-						continue
-					}
-					// something else went wrong, return the error
 					return false, err
 				}
-				// here we are searching for predicates in the form n.col = XYZ
-				// TODO(Manan,Andres): Remove the predicates that are repeated eg. Id=1 AND Id=1
-				for _, v := range rp.vindexPreds {
-					if v.covered {
-						// already covered by an earlier predicate
-						continue
-					}
-					if ok {
-						for _, col := range v.vindex.Columns {
-							// If the column for the predicate matches any column in the vindex add it to the list
-							if column.Name.Equal(col) {
-								v.values = append(v.values, value)
-								v.predicates = append(v.predicates, node)
-								// Vindex is covered if all the columns in the vindex have a associated predicate
-								v.covered = len(v.values) == len(v.vindex.Columns)
-								v.opcode = engine.SelectEqual
-								if v.vindex.Vindex.IsUnique() {
-									v.opcode = engine.SelectEqualUnique
-								}
-								newVindexFound = newVindexFound || v.covered
-							}
-						}
-					}
-				}
+				newVindexFound = newVindexFound || found
 			case sqlparser.InOp:
-				column, ok := node.Left.(*sqlparser.ColName)
-				if !ok {
-					continue
+				if rp.isImpossibleIN(node) {
+					return false, nil
 				}
-				value, err := sqlparser.NewPlanValue(node.Right)
+				found, err := rp.planInOp(node)
 				if err != nil {
-					// if we are unable to create a PlanValue, we can't use a vindex, but we don't have to fail
-					if strings.Contains(err.Error(), "expression is too complex") {
-						continue
-					}
-					// something else went wrong, return the error
 					return false, err
 				}
-				switch nodeR := node.Right.(type) {
-				case sqlparser.ValTuple:
-					if len(nodeR) == 1 && sqlparser.IsNull(nodeR[0]) {
-						rp.routeOpCode = engine.SelectNone
-						return false, nil
-					}
+				newVindexFound = newVindexFound || found
+			case sqlparser.NotInOp:
+				// NOT IN is always a scatter, except when we can be sure it would return nothing
+				if rp.isImpossibleNotIN(node) {
+					return false, nil
 				}
-				for _, v := range rp.vindexPreds {
-					if v.covered {
-						continue
-					}
-					for _, col := range v.vindex.Columns {
-						// If the column for the predicate matches any column in the vindex add it to the list
-						if column.Name.Equal(col) {
-							v.values = append(v.values, value)
-							v.predicates = append(v.predicates, node)
-							// Vindex is covered if all the columns in the vindex have a associated predicate
-							v.covered = len(v.values) == len(v.vindex.Columns)
-							v.opcode = engine.SelectIN
-							newVindexFound = newVindexFound || v.covered
-						}
-					}
+			case sqlparser.LikeOp:
+				found, err := rp.planLikeOp(node)
+				if err != nil {
+					return false, err
 				}
+				newVindexFound = newVindexFound || found
+
 			default:
 				return false, semantics.Gen4NotSupportedF("%s", sqlparser.String(filter))
 			}
+		case *sqlparser.IsExpr:
+			found, err := rp.planIsExpr(node)
+			if err != nil {
+				return false, err
+			}
+			newVindexFound = newVindexFound || found
 		}
 	}
 	return newVindexFound, nil
 }
 
+func justTheVindex(vindex *vindexes.ColumnVindex) vindexes.Vindex {
+	return vindex.Vindex
+}
+
+func equalOrEqualUnique(vindex *vindexes.ColumnVindex) engine.RouteOpcode {
+	if vindex.Vindex.IsUnique() {
+		return engine.SelectEqualUnique
+	}
+
+	return engine.SelectEqual
+}
+
+func (rp *routePlan) planEqualOp(node *sqlparser.ComparisonExpr) (bool, error) {
+	column, ok := node.Left.(*sqlparser.ColName)
+	other := node.Right
+	if !ok {
+		column, ok = node.Right.(*sqlparser.ColName)
+		if !ok {
+			// either the LHS or RHS have to be a column to be useful for the vindex
+			return false, nil
+		}
+		other = node.Left
+	}
+	val, err := makePlanValue(other)
+	if err != nil || val == nil {
+		return false, err
+	}
+
+	return rp.haveMatchingVindex(node, column, *val, equalOrEqualUnique, justTheVindex), err
+}
+
+func (rp *routePlan) planInOp(node *sqlparser.ComparisonExpr) (bool, error) {
+	column, ok := node.Left.(*sqlparser.ColName)
+	if !ok {
+		return false, nil
+	}
+	value, err := sqlparser.NewPlanValue(node.Right)
+	if err != nil {
+		// if we are unable to create a PlanValue, we can't use a vindex, but we don't have to fail
+		if strings.Contains(err.Error(), "expression is too complex") {
+			return false, nil
+		}
+		// something else went wrong, return the error
+		return false, err
+	}
+	switch nodeR := node.Right.(type) {
+	case sqlparser.ValTuple:
+		if len(nodeR) == 1 && sqlparser.IsNull(nodeR[0]) {
+			rp.routeOpCode = engine.SelectNone
+			return false, nil
+		}
+	}
+	opcode := func(*vindexes.ColumnVindex) engine.RouteOpcode { return engine.SelectIN }
+	return rp.haveMatchingVindex(node, column, value, opcode, justTheVindex), err
+}
+
+func (rp *routePlan) planLikeOp(node *sqlparser.ComparisonExpr) (bool, error) {
+	column, ok := node.Left.(*sqlparser.ColName)
+	if !ok {
+		return false, nil
+	}
+
+	val, err := makePlanValue(node.Right)
+	if err != nil || val == nil {
+		return false, err
+	}
+
+	selectEqual := func(*vindexes.ColumnVindex) engine.RouteOpcode { return engine.SelectEqual }
+	vdx := func(vindex *vindexes.ColumnVindex) vindexes.Vindex {
+		if prefixable, ok := vindex.Vindex.(vindexes.Prefixable); ok {
+			return prefixable.PrefixVindex()
+		}
+
+		// if we can't use the vindex as a prefix-vindex, we can't use this vindex at all
+		return nil
+	}
+
+	return rp.haveMatchingVindex(node, column, *val, selectEqual, vdx), err
+}
+
+func (rp *routePlan) planIsExpr(node *sqlparser.IsExpr) (bool, error) {
+	// we only handle IS NULL correct. IsExpr can contain other expressions as well
+	if node.Right != sqlparser.IsNullOp {
+		return false, nil
+	}
+	column, ok := node.Left.(*sqlparser.ColName)
+	if !ok {
+		return false, nil
+	}
+	val, err := makePlanValue(&sqlparser.NullVal{})
+	if err != nil || val == nil {
+		return false, err
+	}
+
+	return rp.haveMatchingVindex(node, column, *val, equalOrEqualUnique, justTheVindex), err
+}
+
+func makePlanValue(n sqlparser.Expr) (*sqltypes.PlanValue, error) {
+	value, err := sqlparser.NewPlanValue(n)
+	if err != nil {
+		// if we are unable to create a PlanValue, we can't use a vindex, but we don't have to fail
+		if strings.Contains(err.Error(), "expression is too complex") {
+			return nil, nil
+		}
+		// something else went wrong, return the error
+		return nil, err
+	}
+	return &value, nil
+}
+
+func (rp *routePlan) haveMatchingVindex(
+	node sqlparser.Expr,
+	column *sqlparser.ColName,
+	value sqltypes.PlanValue,
+	opcode func(*vindexes.ColumnVindex) engine.RouteOpcode,
+	vfunc func(*vindexes.ColumnVindex) vindexes.Vindex,
+) bool {
+	newVindexFound := false
+	for _, v := range rp.vindexPreds {
+		if v.foundVindex != nil {
+			continue
+		}
+		for _, col := range v.colVindex.Columns {
+			// If the column for the predicate matches any column in the vindex add it to the list
+			if column.Name.Equal(col) {
+				v.values = append(v.values, value)
+				v.predicates = append(v.predicates, node)
+				// Vindex is covered if all the columns in the vindex have a associated predicate
+				covered := len(v.values) == len(v.colVindex.Columns)
+				if covered {
+					v.opcode = opcode(v.colVindex)
+					v.foundVindex = vfunc(v.colVindex)
+				}
+				newVindexFound = newVindexFound || covered
+			}
+		}
+	}
+	return newVindexFound
+}
+
 // pickBestAvailableVindex goes over the available vindexes for this route and picks the best one available.
 func (rp *routePlan) pickBestAvailableVindex() {
 	for _, v := range rp.vindexPreds {
-		if !v.covered {
+		if v.foundVindex == nil {
 			continue
 		}
 		// Choose the minimum cost vindex from the ones which are covered
-		if rp.vindex == nil || v.vindex.Vindex.Cost() < rp.vindex.Cost() {
+		if rp.vindex == nil || v.colVindex.Vindex.Cost() < rp.vindex.Cost() {
 			rp.routeOpCode = v.opcode
-			rp.vindex = v.vindex.Vindex
+			rp.vindex = v.foundVindex
 			rp.vindexValues = v.values
 			rp.vindexPredicates = v.predicates
 		}
@@ -721,7 +847,7 @@ func createRoutePlan(table *queryTable, solves semantics.TableSet, vschema Conte
 	}
 
 	for _, columnVindex := range vschemaTable.ColumnVindexes {
-		plan.vindexPreds = append(plan.vindexPreds, &vindexPlusPredicates{vindex: columnVindex})
+		plan.vindexPreds = append(plan.vindexPreds, &vindexPlusPredicates{colVindex: columnVindex})
 	}
 
 	switch {

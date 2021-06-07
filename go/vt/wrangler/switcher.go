@@ -17,12 +17,12 @@ limitations under the License.
 package wrangler
 
 import (
+	"context"
 	"time"
 
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/vtctl/workflow"
 
-	"context"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 var _ iswitcher = (*switcher)(nil)
@@ -48,7 +48,7 @@ func (r *switcher) validateWorkflowHasCompleted(ctx context.Context) error {
 	return r.ts.validateWorkflowHasCompleted(ctx)
 }
 
-func (r *switcher) removeSourceTables(ctx context.Context, removalType TableRemovalType) error {
+func (r *switcher) removeSourceTables(ctx context.Context, removalType workflow.TableRemovalType) error {
 	return r.ts.removeSourceTables(ctx, removalType)
 }
 
@@ -56,11 +56,11 @@ func (r *switcher) dropSourceShards(ctx context.Context) error {
 	return r.ts.dropSourceShards(ctx)
 }
 
-func (r *switcher) switchShardReads(ctx context.Context, cells []string, servedTypes []topodatapb.TabletType, direction TrafficSwitchDirection) error {
+func (r *switcher) switchShardReads(ctx context.Context, cells []string, servedTypes []topodatapb.TabletType, direction workflow.TrafficSwitchDirection) error {
 	return r.ts.switchShardReads(ctx, cells, servedTypes, direction)
 }
 
-func (r *switcher) switchTableReads(ctx context.Context, cells []string, servedTypes []topodatapb.TabletType, direction TrafficSwitchDirection) error {
+func (r *switcher) switchTableReads(ctx context.Context, cells []string, servedTypes []topodatapb.TabletType, direction workflow.TrafficSwitchDirection) error {
 	return r.ts.switchTableReads(ctx, cells, servedTypes, direction)
 }
 

@@ -2248,8 +2248,8 @@ func (a *application) rewriteRefOfIsExpr(parent SQLNode, node *IsExpr, replacer 
 			return true
 		}
 	}
-	if !a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
-		parent.(*IsExpr).Expr = newNode.(Expr)
+	if !a.rewriteExpr(node, node.Left, func(newNode, parent SQLNode) {
+		parent.(*IsExpr).Left = newNode.(Expr)
 	}) {
 		return false
 	}
