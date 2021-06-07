@@ -207,7 +207,7 @@ func waitTimeout(wg *sync.WaitGroup, timeout time.Duration) bool {
 func TestTrackerGetKeyspaceUpdateController(t *testing.T) {
 	ks3 := &updateController{}
 	tracker := Tracker{
-		tracked: map[keyspace]*updateController{
+		tracked: map[keyspaceStr]*updateController{
 			"ks3": ks3,
 		},
 	}
@@ -231,7 +231,7 @@ func TestTrackerGetKeyspaceUpdateController(t *testing.T) {
 	assert.Equal(t, ks2, tracker.getKeyspaceUpdateController(th2), "received different updateController")
 	assert.Equal(t, ks3, tracker.getKeyspaceUpdateController(th3), "received different updateController")
 
-	assert.NotNil(t, ks1.init, "ks1 needs to be initialized")
-	assert.NotNil(t, ks2.init, "ks2 needs to be initialized")
-	assert.Nil(t, ks3.init, "ks3 already initialized")
+	assert.NotNil(t, ks1.reloadKeyspace, "ks1 needs to be initialized")
+	assert.NotNil(t, ks2.reloadKeyspace, "ks2 needs to be initialized")
+	assert.Nil(t, ks3.reloadKeyspace, "ks3 already initialized")
 }

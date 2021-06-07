@@ -29,12 +29,13 @@ type (
 	}
 
 	updateController struct {
-		mu           sync.Mutex
-		queue        *queue
-		consumeDelay time.Duration
-		update       func(th *discovery.TabletHealth) bool
-		init         func(th *discovery.TabletHealth) bool
-		signal       func()
+		mu             sync.Mutex
+		queue          *queue
+		consumeDelay   time.Duration
+		update         func(th *discovery.TabletHealth) bool
+		reloadKeyspace func(th *discovery.TabletHealth) bool
+		signal         func()
+		loaded         bool
 	}
 )
 
@@ -54,13 +55,10 @@ func (u *updateController) consume() {
 		u.mu.Unlock()
 
 		var success bool
-		if u.init != nil {
-			success = u.init(item)
-			if success {
-				u.init = nil
-			}
-		} else {
+		if u.loaded {
 			success = u.update(item)
+		} else {
+			success = u.reloadKeyspace(item)
 		}
 		if success && u.signal != nil {
 			u.signal()
@@ -94,7 +92,7 @@ func (u *updateController) add(th *discovery.TabletHealth) {
 	u.mu.Lock()
 	defer u.mu.Unlock()
 
-	if len(th.Stats.TableSchemaChanged) == 0 && u.init == nil {
+	if len(th.Stats.TableSchemaChanged) == 0 && u.loaded {
 		return
 	}
 	if u.queue == nil {
