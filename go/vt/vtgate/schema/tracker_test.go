@@ -168,11 +168,11 @@ func TestTracking(t *testing.T) {
 
 			for _, d := range tcase.deltas {
 				ch <- &discovery.TabletHealth{
-					Conn:          sbc,
-					Tablet:        tablet,
-					Target:        target,
-					Serving:       true,
-					TablesUpdated: d.updTbl,
+					Conn:    sbc,
+					Tablet:  tablet,
+					Target:  target,
+					Serving: true,
+					Stats:   &querypb.RealtimeStats{TableSchemaChanged: d.updTbl},
 				}
 			}
 

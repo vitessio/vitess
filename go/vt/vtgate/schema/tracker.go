@@ -149,7 +149,8 @@ func (t *Tracker) Tables(ks string) map[string][]vindexes.Column {
 }
 
 func (t *Tracker) updateSchema(th *discovery.TabletHealth) bool {
-	tables, err := sqltypes.BuildBindVariable(th.TablesUpdated)
+	tablesUpdated := th.Stats.TableSchemaChanged
+	tables, err := sqltypes.BuildBindVariable(tablesUpdated)
 	if err != nil {
 		log.Errorf("failed to read updated tables from TabletHealth: %v", err)
 		return false
@@ -158,7 +159,7 @@ func (t *Tracker) updateSchema(th *discovery.TabletHealth) bool {
 	res, err := th.Conn.Execute(t.ctx, th.Target, mysql.FetchUpdatedTables, bv, 0, 0, nil)
 	if err != nil {
 		// TODO: these tables should now become non-authoritative
-		log.Warningf("error fetching new schema for %v, making them non-authoritative: %v", th.TablesUpdated, err)
+		log.Warningf("error fetching new schema for %v, making them non-authoritative: %v", tablesUpdated, err)
 		return false
 	}
 
@@ -167,7 +168,7 @@ func (t *Tracker) updateSchema(th *discovery.TabletHealth) bool {
 
 	// first we empty all prior schema. deleted tables will not show up in the result,
 	// so this is the only chance to delete
-	for _, tbl := range th.TablesUpdated {
+	for _, tbl := range tablesUpdated {
 		t.tables.delete(th.Target.Keyspace, tbl)
 	}
 	t.updateTables(th.Target.Keyspace, res)

@@ -118,7 +118,7 @@ func TestMultipleUpdatesFromDifferentShards(t *testing.T) {
 			var signalNb, initNb int
 			var updatedTables []string
 			update := func(th *discovery.TabletHealth) bool {
-				updatedTables = th.TablesUpdated
+				updatedTables = th.Stats.TableSchemaChanged
 				return !test.updateFail
 			}
 			signal := func() {
@@ -148,10 +148,10 @@ func TestMultipleUpdatesFromDifferentShards(t *testing.T) {
 					Type:     target.TabletType,
 				}
 				d := &discovery.TabletHealth{
-					Tablet:        tablet,
-					Target:        target,
-					Serving:       true,
-					TablesUpdated: in.tablesUpdates,
+					Tablet:  tablet,
+					Target:  target,
+					Serving: true,
+					Stats:   &querypb.RealtimeStats{TableSchemaChanged: in.tablesUpdates},
 				}
 				if test.delay > 0 {
 					time.Sleep(test.delay)

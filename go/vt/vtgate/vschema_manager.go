@@ -154,7 +154,9 @@ func (vm *VSchemaManager) Rebuild() {
 	v := vm.currentSrvVschema
 	vm.mu.Unlock()
 
+	log.Infof("Received schema update")
 	if v == nil {
+		log.Infof("No vschema to enhance")
 		return
 	}
 
@@ -165,6 +167,7 @@ func (vm *VSchemaManager) Rebuild() {
 
 	if vm.subscriber != nil {
 		vm.subscriber(vschema, vSchemaStats(nil, vschema))
+		log.Infof("Sent vschema to subscriber")
 	}
 }
 
