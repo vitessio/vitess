@@ -121,10 +121,10 @@ Gen4 plan same as above
 }
 
 # select with partial scatter directive
-"select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ * from user"
+"select /*vt+ SCATTER_ERRORS_AS_WARNINGS */ * from user"
 {
   "QueryType": "SELECT",
-  "Original": "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ * from user",
+  "Original": "select /*vt+ SCATTER_ERRORS_AS_WARNINGS */ * from user",
   "Instructions": {
     "OperatorType": "Route",
     "Variant": "SelectScatter",
@@ -133,7 +133,8 @@ Gen4 plan same as above
       "Sharded": true
     },
     "FieldQuery": "select * from `user` where 1 != 1",
-    "Query": "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ * from `user`",
+    "Query": "select /*vt+ SCATTER_ERRORS_AS_WARNINGS */ * from `user`",
+    "ScatterErrorsAsWarnings": true,
     "Table": "`user`"
   }
 }
@@ -157,6 +158,7 @@ Gen4 plan same as above
         },
         "FieldQuery": "select count(*) from `user` where 1 != 1",
         "Query": "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ count(*) from `user`",
+        "ScatterErrorsAsWarnings": true,
         "Table": "`user`"
       }
     ]
@@ -182,6 +184,7 @@ Gen4 plan same as above
         },
         "FieldQuery": "select count(*) from `user` where 1 != 1",
         "Query": "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ count(*) from `user`",
+        "ScatterErrorsAsWarnings": true,
         "Table": "`user`"
       }
     ]
@@ -206,6 +209,7 @@ Gen4 plan same as above
         },
         "FieldQuery": "select * from `user` where 1 != 1",
         "Query": "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ * from `user` limit :__upper_limit",
+        "ScatterErrorsAsWarnings": true,
         "Table": "`user`"
       }
     ]

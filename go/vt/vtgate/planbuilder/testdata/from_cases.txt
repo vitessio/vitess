@@ -239,7 +239,7 @@ Gen4 plan same as above
 
 # routing rules bad table
 "select * from bad_table"
-"keyspace noks not found in vschema"
+"Unknown database 'noks' in vschema"
 Gen4 plan same as above
 
 # routing rules disabled table

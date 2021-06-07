@@ -16,5 +16,25 @@
 
 # Setup the Vschema Folder
 /vt/setup_vschema_folder.sh "$KEYSPACES" "$NUM_SHARDS"
+
+# Set the maximum connections in the cnf file
+# use 1000 as the default if it is unspecified
+if [[ -z $MYSQL_MAX_CONNECTIONS ]]; then
+  MYSQL_MAX_CONNECTIONS=1000
+fi
+echo "max_connections = $MYSQL_MAX_CONNECTIONS" >> /vt/config/mycnf/default-fast.cnf
+
 # Run the vttestserver binary
-/vt/bin/vttestserver -port "$PORT" -keyspaces "$KEYSPACES" -num_shards "$NUM_SHARDS" -mysql_bind_host "${MYSQL_BIND_HOST:-127.0.0.1}" -mysql_server_version "${MYSQL_SERVER_VERSION:-$1}" -charset "${CHARSET:-utf8mb4}" -vschema_ddl_authorized_users=% -schema_dir="/vt/schema/"
+/vt/bin/vttestserver \
+	-port "$PORT" \
+	-keyspaces "$KEYSPACES" \
+	-num_shards "$NUM_SHARDS" \
+	-mysql_bind_host "${MYSQL_BIND_HOST:-127.0.0.1}" \
+	-mysql_server_version "${MYSQL_SERVER_VERSION:-$1}" \
+	-charset "${CHARSET:-utf8mb4}" \
+	-foreign_key_mode "${FOREIGN_KEY_MODE:-allow}" \
+	-enable_online_ddl="${ENABLE_ONLINE_DDL:-true}" \
+	-enable_direct_ddl="${ENABLE_DIRECT_DDL:-true}" \
+	-vschema_ddl_authorized_users=% \
+	-schema_dir="/vt/schema/"
+

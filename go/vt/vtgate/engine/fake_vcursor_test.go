@@ -23,6 +23,7 @@ import (
 	"reflect"
 	"sort"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -51,6 +52,10 @@ var _ SessionActions = (*noopVCursor)(nil)
 // noopVCursor is used to build other vcursors.
 type noopVCursor struct {
 	ctx context.Context
+}
+
+func (t *noopVCursor) GetWarnings() []*querypb.QueryWarning {
+	panic("implement me")
 }
 
 func (t *noopVCursor) VStream(rss []*srvtopo.ResolvedShard, filter *binlogdatapb.Filter, gtid string, callback func(evs []*binlogdatapb.VEvent) error) error {
@@ -229,7 +234,7 @@ func (t *noopVCursor) ExecuteStandalone(query string, bindvars map[string]*query
 	panic("unimplemented")
 }
 
-func (t *noopVCursor) StreamExecuteMulti(query string, rss []*srvtopo.ResolvedShard, bindVars []map[string]*querypb.BindVariable, callback func(reply *sqltypes.Result) error) error {
+func (t *noopVCursor) StreamExecuteMulti(query string, rss []*srvtopo.ResolvedShard, bindVars []map[string]*querypb.BindVariable, callback func(reply *sqltypes.Result) error) []error {
 	panic("unimplemented")
 }
 
@@ -273,6 +278,7 @@ type loggingVCursor struct {
 	multiShardErrs []error
 
 	log []string
+	mu  sync.Mutex
 
 	resolvedTargetTabletType topodatapb.TabletType
 
@@ -399,13 +405,16 @@ func (f *loggingVCursor) ExecuteStandalone(query string, bindvars map[string]*qu
 	return f.nextResult()
 }
 
-func (f *loggingVCursor) StreamExecuteMulti(query string, rss []*srvtopo.ResolvedShard, bindVars []map[string]*querypb.BindVariable, callback func(reply *sqltypes.Result) error) error {
+func (f *loggingVCursor) StreamExecuteMulti(query string, rss []*srvtopo.ResolvedShard, bindVars []map[string]*querypb.BindVariable, callback func(reply *sqltypes.Result) error) []error {
+	f.mu.Lock()
 	f.log = append(f.log, fmt.Sprintf("StreamExecuteMulti %s %s", query, printResolvedShardsBindVars(rss, bindVars)))
 	r, err := f.nextResult()
+	f.mu.Unlock()
 	if err != nil {
-		return err
+		return []error{err}
 	}
-	return callback(r)
+
+	return []error{callback(r)}
 }
 
 func (f *loggingVCursor) ResolveDestinations(keyspace string, ids []*querypb.Value, destinations []key.Destination) ([]*srvtopo.ResolvedShard, [][]*querypb.Value, error) {
@@ -564,7 +573,10 @@ func printBindVars(bindvars map[string]*querypb.BindVariable) string {
 	}
 	sort.Strings(keys)
 	buf := &bytes.Buffer{}
-	for _, k := range keys {
+	for i, k := range keys {
+		if i > 0 {
+			fmt.Fprintf(buf, " ")
+		}
 		fmt.Fprintf(buf, "%s: %v", k, bindvars[k])
 	}
 	return buf.String()

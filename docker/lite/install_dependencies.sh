@@ -49,6 +49,7 @@ BASE_PACKAGES=(
     libatomic1
     libcurl4
     libdbd-mysql-perl
+    libwww-perl
     libev4
     libjemalloc2
     libtcmalloc-minimal4

@@ -43,6 +43,7 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/proto/vschema"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
@@ -916,6 +917,140 @@ func TestGetGates(t *testing.T) {
 	resp, err = api.GetGates(ctx, &vtadminpb.GetGatesRequest{})
 	assert.Error(t, err)
 	assert.Nil(t, resp)
+}
+
+func TestGetKeyspace(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name          string
+		clusterShards [][]*vtctldatapb.Shard
+		req           *vtadminpb.GetKeyspaceRequest
+		expected      *vtadminpb.Keyspace
+		shouldErr     bool
+	}{
+		{
+			clusterShards: [][]*vtctldatapb.Shard{
+				// cluster-0
+				{
+					{
+						Keyspace: "ks",
+						Name:     "-80",
+						Shard:    &topodatapb.Shard{},
+					},
+					{
+						Keyspace: "ks",
+						Name:     "80-",
+						Shard:    &topodatapb.Shard{},
+					},
+				},
+				// cluster-1
+				{
+					{
+						Keyspace: "ks",
+						Name:     "-",
+						Shard:    &topodatapb.Shard{},
+					},
+				},
+			},
+			req: &vtadminpb.GetKeyspaceRequest{
+				ClusterId: "cluster-1",
+				Keyspace:  "ks",
+			},
+			expected: &vtadminpb.Keyspace{
+				Cluster: &vtadminpb.Cluster{
+					Id:   "cluster-1",
+					Name: "cluster-1",
+				},
+				Keyspace: &vtctldatapb.Keyspace{
+					Name:     "ks",
+					Keyspace: &topodatapb.Keyspace{},
+				},
+				Shards: map[string]*vtctldatapb.Shard{
+					"-": {
+						Keyspace: "ks",
+						Name:     "-",
+						Shard:    &topodatapb.Shard{},
+					},
+				},
+			},
+		},
+		{
+			name: "nonexistent cluster",
+			clusterShards: [][]*vtctldatapb.Shard{
+				// cluster-0
+				{
+					{
+						Keyspace: "ks",
+						Name:     "-80",
+						Shard:    &topodatapb.Shard{},
+					},
+					{
+						Keyspace: "ks",
+						Name:     "80-",
+						Shard:    &topodatapb.Shard{},
+					},
+				},
+				// cluster-1
+				{
+					{
+						Keyspace: "ks",
+						Name:     "-",
+						Shard:    &topodatapb.Shard{},
+					},
+				},
+			},
+			req: &vtadminpb.GetKeyspaceRequest{
+				ClusterId: "cluster-2",
+			},
+			shouldErr: true,
+		},
+	}
+
+	ctx := context.Background()
+
+	for _, tt := range tests {
+		tt := tt
+
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			topos := make([]*topo.Server, len(tt.clusterShards))
+			vtctlds := make([]vtctlservicepb.VtctldServer, len(tt.clusterShards))
+
+			for i, shards := range tt.clusterShards {
+				ts := memorytopo.NewServer("cell1")
+				testutil.AddShards(ctx, t, ts, shards...)
+				topos[i] = ts
+				vtctlds[i] = testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+					return grpcvtctldserver.NewVtctldServer(ts)
+				})
+			}
+
+			testutil.WithTestServers(t, func(t *testing.T, clients ...vtctldclient.VtctldClient) {
+				clusters := make([]*cluster.Cluster, len(clients))
+				for i, client := range clients {
+					clusters[i] = vtadmintestutil.BuildCluster(vtadmintestutil.TestClusterConfig{
+						Cluster: &vtadminpb.Cluster{
+							Id:   fmt.Sprintf("cluster-%d", i),
+							Name: fmt.Sprintf("cluster-%d", i),
+						},
+						VtctldClient: client,
+					})
+				}
+
+				api := NewAPI(clusters, grpcserver.Options{}, http.Options{})
+				ks, err := api.GetKeyspace(ctx, tt.req)
+				if tt.shouldErr {
+					assert.Error(t, err)
+					return
+				}
+
+				assert.NoError(t, err)
+				assert.Equal(t, tt.expected, ks)
+			}, vtctlds...)
+		})
+	}
 }
 
 func TestGetKeyspaces(t *testing.T) {
@@ -1919,7 +2054,7 @@ func TestGetSchemas(t *testing.T) {
 				ClusterIds: []string{"nope"},
 			},
 			expected: &vtadminpb.GetSchemasResponse{
-				Schemas: []*vtadminpb.Schema{},
+				Schemas: nil,
 			},
 		},
 		{
@@ -1942,7 +2077,7 @@ func TestGetSchemas(t *testing.T) {
 			tabletSchemas: map[string]*tabletmanagerdatapb.SchemaDefinition{},
 			req:           &vtadminpb.GetSchemasRequest{},
 			expected: &vtadminpb.GetSchemasResponse{
-				Schemas: []*vtadminpb.Schema{},
+				Schemas: nil,
 			},
 		},
 		{
@@ -1985,7 +2120,7 @@ func TestGetSchemas(t *testing.T) {
 			},
 			req: &vtadminpb.GetSchemasRequest{},
 			expected: &vtadminpb.GetSchemasResponse{
-				Schemas: []*vtadminpb.Schema{},
+				Schemas: nil,
 			},
 		},
 	}
@@ -2064,7 +2199,7 @@ func TestGetSchemas(t *testing.T) {
 				resp, err := api.GetSchemas(ctx, tt.req)
 				require.NoError(t, err)
 
-				vtadmintestutil.AssertSchemaSlicesEqual(t, tt.expected.Schemas, resp.Schemas, tt.name)
+				vtadmintestutil.AssertSchemaSlicesEqual(t, tt.expected.Schemas, resp.Schemas)
 			}, vtctlds...)
 		})
 	}
@@ -2364,6 +2499,463 @@ func TestGetSchemas(t *testing.T) {
 	})
 }
 
+func TestGetSrvVSchema(t *testing.T) {
+	t.Parallel()
+
+	clusterID := "c0"
+	clusterName := "cluster0"
+
+	tests := []struct {
+		name  string
+		cells []string
+
+		// tt.cellSrvVSchemas maps cell name to the SrvVSchema for that cell.
+		// Not all cells in tt.cells necessarily map to a SrvVSchema.
+		cellSrvVSchemas map[string]*vschemapb.SrvVSchema
+		srvVSchema      *vschemapb.SrvVSchema
+		req             *vtadminpb.GetSrvVSchemaRequest
+		expected        *vtadminpb.SrvVSchema
+		shouldErr       bool
+	}{
+		{
+			name:  "success",
+			cells: []string{"zone0"},
+			cellSrvVSchemas: map[string]*vschemapb.SrvVSchema{
+				"zone0": {
+					Keyspaces: map[string]*vschemapb.Keyspace{
+						"commerce": {
+							Tables: map[string]*vschemapb.Table{
+								"customer": {},
+							},
+						},
+						"customer": {
+							Tables: map[string]*vschemapb.Table{
+								"customer": {},
+							},
+						},
+					},
+					RoutingRules: &vschemapb.RoutingRules{
+						Rules: []*vschemapb.RoutingRule{
+							{
+								FromTable: "customer",
+								ToTables:  []string{"commerce.customer"},
+							},
+							{
+								FromTable: "customer@rdonly",
+								ToTables:  []string{"customer.customer"},
+							},
+							{
+								FromTable: "customer.customer",
+								ToTables:  []string{"commerce.customer"},
+							},
+						},
+					},
+				},
+			},
+			req: &vtadminpb.GetSrvVSchemaRequest{
+				Cell:      "zone0",
+				ClusterId: clusterID,
+			},
+			expected: &vtadminpb.SrvVSchema{
+				Cell: "zone0",
+				Cluster: &vtadminpb.Cluster{
+					Id:   clusterID,
+					Name: clusterName,
+				},
+				SrvVSchema: &vschemapb.SrvVSchema{
+					Keyspaces: map[string]*vschemapb.Keyspace{
+						"commerce": {
+							Tables: map[string]*vschemapb.Table{
+								"customer": {},
+							},
+						},
+						"customer": {
+							Tables: map[string]*vschemapb.Table{
+								"customer": {},
+							},
+						},
+					},
+					RoutingRules: &vschemapb.RoutingRules{
+						Rules: []*vschemapb.RoutingRule{
+							{
+								FromTable: "customer",
+								ToTables:  []string{"commerce.customer"},
+							},
+							{
+								FromTable: "customer@rdonly",
+								ToTables:  []string{"customer.customer"},
+							},
+							{
+								FromTable: "customer.customer",
+								ToTables:  []string{"commerce.customer"},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name:       "cluster doesn't exist",
+			srvVSchema: nil,
+			req: &vtadminpb.GetSrvVSchemaRequest{
+				Cell:      "doesnt-matter",
+				ClusterId: "doesnt-exist",
+			},
+			shouldErr: true,
+		},
+		{
+
+			name:       "cell doesn't exist",
+			srvVSchema: nil,
+			req: &vtadminpb.GetSrvVSchemaRequest{
+				Cell:      "doesnt-exist",
+				ClusterId: clusterID,
+			},
+			shouldErr: true,
+		},
+	}
+
+	ctx := context.Background()
+
+	for _, tt := range tests {
+		tt := tt
+
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			tmc := testutil.TabletManagerClient{}
+
+			toposerver := memorytopo.NewServer(tt.cells...)
+
+			vtctldserver := testutil.NewVtctldServerWithTabletManagerClient(t, toposerver, &tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+				return grpcvtctldserver.NewVtctldServer(ts)
+			})
+
+			testutil.WithTestServer(t, vtctldserver, func(t *testing.T, vtctldClient vtctldclient.VtctldClient) {
+				for cell, svs := range tt.cellSrvVSchemas {
+					err := toposerver.UpdateSrvVSchema(ctx, cell, svs)
+					require.NoError(t, err)
+				}
+
+				clusters := []*cluster.Cluster{
+					vtadmintestutil.BuildCluster(vtadmintestutil.TestClusterConfig{
+						Cluster: &vtadminpb.Cluster{
+							Id:   clusterID,
+							Name: clusterName,
+						},
+						VtctldClient: vtctldClient,
+					}),
+				}
+
+				api := NewAPI(clusters, grpcserver.Options{}, http.Options{})
+				resp, err := api.GetSrvVSchema(ctx, tt.req)
+
+				if tt.shouldErr {
+					assert.Error(t, err)
+					return
+				}
+
+				require.NoError(t, err)
+				assert.Equal(t, tt.expected, resp)
+			})
+		})
+	}
+}
+
+func TestGetSrvVSchemas(t *testing.T) {
+	t.Parallel()
+
+	clusterID := "c0"
+	clusterName := "cluster0"
+
+	tests := []struct {
+		name  string
+		cells []string
+		// tt.cellSrvVSchemas maps cell name to the SrvVSchema for that cell.
+		// Not all cells in tt.cells necessarily map to a SrvVSchema.
+		cellSrvVSchemas map[string]*vschemapb.SrvVSchema
+		req             *vtadminpb.GetSrvVSchemasRequest
+		expected        *vtadminpb.GetSrvVSchemasResponse
+		shouldErr       bool
+	}{
+		{
+			name:  "returns all cells",
+			cells: []string{"zone0", "zone1"},
+			cellSrvVSchemas: map[string]*vschemapb.SrvVSchema{
+				"zone0": {
+					Keyspaces: map[string]*vschemapb.Keyspace{
+						"commerce": {
+							Tables: map[string]*vschemapb.Table{
+								"customer": {},
+							},
+						},
+						"customer": {
+							Tables: map[string]*vschemapb.Table{
+								"customer": {},
+							},
+						},
+					},
+					RoutingRules: &vschemapb.RoutingRules{
+						Rules: []*vschemapb.RoutingRule{
+							{
+								FromTable: "customer",
+								ToTables:  []string{"commerce.customer"},
+							},
+							{
+								FromTable: "customer@rdonly",
+								ToTables:  []string{"customer.customer"},
+							},
+							{
+								FromTable: "customer.customer",
+								ToTables:  []string{"commerce.customer"},
+							},
+						},
+					},
+				},
+				"zone1": {
+					Keyspaces:    map[string]*vschemapb.Keyspace{},
+					RoutingRules: &vschemapb.RoutingRules{},
+				},
+			},
+			req: &vtadminpb.GetSrvVSchemasRequest{},
+			expected: &vtadminpb.GetSrvVSchemasResponse{
+				SrvVSchemas: []*vtadminpb.SrvVSchema{
+					{
+						Cell: "zone0",
+						Cluster: &vtadminpb.Cluster{
+							Id:   clusterID,
+							Name: clusterName,
+						},
+						SrvVSchema: &vschema.SrvVSchema{
+							Keyspaces: map[string]*vschemapb.Keyspace{
+								"commerce": {
+									Tables: map[string]*vschemapb.Table{
+										"customer": {},
+									},
+								},
+								"customer": {
+									Tables: map[string]*vschemapb.Table{
+										"customer": {},
+									},
+								},
+							},
+							RoutingRules: &vschemapb.RoutingRules{
+								Rules: []*vschemapb.RoutingRule{
+									{
+										FromTable: "customer",
+										ToTables:  []string{"commerce.customer"},
+									},
+									{
+										FromTable: "customer@rdonly",
+										ToTables:  []string{"customer.customer"},
+									},
+									{
+										FromTable: "customer.customer",
+										ToTables:  []string{"commerce.customer"},
+									},
+								},
+							},
+						},
+					},
+					{
+						Cell: "zone1",
+						Cluster: &vtadminpb.Cluster{
+							Id:   clusterID,
+							Name: clusterName,
+						},
+						SrvVSchema: &vschema.SrvVSchema{
+							RoutingRules: &vschemapb.RoutingRules{},
+						},
+					},
+				},
+			},
+		},
+		{
+			name:  "filtering by cell",
+			cells: []string{"zone0", "zone1"},
+			cellSrvVSchemas: map[string]*vschemapb.SrvVSchema{
+				"zone0": {
+					Keyspaces: map[string]*vschemapb.Keyspace{
+						"commerce": {
+							Tables: map[string]*vschemapb.Table{
+								"customer": {},
+							},
+						},
+						"customer": {
+							Tables: map[string]*vschemapb.Table{
+								"customer": {},
+							},
+						},
+					},
+					RoutingRules: &vschemapb.RoutingRules{
+						Rules: []*vschemapb.RoutingRule{
+							{
+								FromTable: "customer",
+								ToTables:  []string{"commerce.customer"},
+							},
+							{
+								FromTable: "customer@rdonly",
+								ToTables:  []string{"customer.customer"},
+							},
+							{
+								FromTable: "customer.customer",
+								ToTables:  []string{"commerce.customer"},
+							},
+						},
+					},
+				},
+				"zone1": {
+					Keyspaces:    map[string]*vschemapb.Keyspace{},
+					RoutingRules: &vschemapb.RoutingRules{},
+				},
+			},
+			req: &vtadminpb.GetSrvVSchemasRequest{
+				Cells: []string{"zone1"},
+			},
+			expected: &vtadminpb.GetSrvVSchemasResponse{
+				SrvVSchemas: []*vtadminpb.SrvVSchema{
+					{
+						Cell: "zone1",
+						Cluster: &vtadminpb.Cluster{
+							Id:   clusterID,
+							Name: clusterName,
+						},
+						SrvVSchema: &vschema.SrvVSchema{
+							RoutingRules: &vschemapb.RoutingRules{},
+						},
+					},
+				},
+			},
+		},
+		{
+			name:  "filtering by nonexistent cell",
+			cells: []string{"zone0"},
+			cellSrvVSchemas: map[string]*vschemapb.SrvVSchema{
+				"zone0": {
+					Keyspaces:    map[string]*vschemapb.Keyspace{},
+					RoutingRules: &vschemapb.RoutingRules{},
+				},
+			},
+			req: &vtadminpb.GetSrvVSchemasRequest{
+				Cells: []string{"doesnt-exist"},
+			},
+			expected: &vtadminpb.GetSrvVSchemasResponse{},
+		},
+		{
+			name:  "filtering with nonexistent cell",
+			cells: []string{"zone0"},
+			cellSrvVSchemas: map[string]*vschemapb.SrvVSchema{
+				"zone0": {
+					Keyspaces:    map[string]*vschemapb.Keyspace{},
+					RoutingRules: &vschemapb.RoutingRules{},
+				},
+			},
+			req: &vtadminpb.GetSrvVSchemasRequest{
+				Cells: []string{"doesnt-exist", "zone0"},
+			},
+			expected: &vtadminpb.GetSrvVSchemasResponse{
+				SrvVSchemas: []*vtadminpb.SrvVSchema{
+					{
+						Cell: "zone0",
+						Cluster: &vtadminpb.Cluster{
+							Id:   clusterID,
+							Name: clusterName,
+						},
+						SrvVSchema: &vschema.SrvVSchema{
+							RoutingRules: &vschemapb.RoutingRules{},
+						},
+					},
+				},
+			},
+		},
+		{
+			name:  "existing cell without SrvVSchema",
+			cells: []string{"zone0", "zone1"},
+			cellSrvVSchemas: map[string]*vschemapb.SrvVSchema{
+				"zone0": {
+					Keyspaces:    map[string]*vschemapb.Keyspace{},
+					RoutingRules: &vschemapb.RoutingRules{},
+				},
+			},
+			req: &vtadminpb.GetSrvVSchemasRequest{
+				Cells: []string{"zone1"},
+			},
+			expected: &vtadminpb.GetSrvVSchemasResponse{
+				SrvVSchemas: []*vtadminpb.SrvVSchema{
+					{
+						Cell: "zone1",
+						Cluster: &vtadminpb.Cluster{
+							Id:   clusterID,
+							Name: clusterName,
+						},
+						SrvVSchema: &vschema.SrvVSchema{},
+					},
+				},
+			},
+		},
+		{
+			name:  "filtering by nonexistent cluster",
+			cells: []string{"zone0"},
+			cellSrvVSchemas: map[string]*vschemapb.SrvVSchema{
+				"zone0": {
+					Keyspaces:    map[string]*vschemapb.Keyspace{},
+					RoutingRules: &vschemapb.RoutingRules{},
+				},
+			},
+			req: &vtadminpb.GetSrvVSchemasRequest{
+				ClusterIds: []string{"doesnt-exist"},
+			},
+			expected: &vtadminpb.GetSrvVSchemasResponse{},
+		},
+	}
+
+	ctx := context.Background()
+
+	for _, tt := range tests {
+		tt := tt
+
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			tmc := testutil.TabletManagerClient{}
+
+			toposerver := memorytopo.NewServer(tt.cells...)
+
+			vtctldserver := testutil.NewVtctldServerWithTabletManagerClient(t, toposerver, &tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+				return grpcvtctldserver.NewVtctldServer(ts)
+			})
+
+			testutil.WithTestServer(t, vtctldserver, func(t *testing.T, vtctldClient vtctldclient.VtctldClient) {
+				for cell, svs := range tt.cellSrvVSchemas {
+					err := toposerver.UpdateSrvVSchema(ctx, cell, svs)
+					require.NoError(t, err)
+				}
+
+				clusters := []*cluster.Cluster{
+					vtadmintestutil.BuildCluster(vtadmintestutil.TestClusterConfig{
+						Cluster: &vtadminpb.Cluster{
+							Id:   clusterID,
+							Name: clusterName,
+						},
+						VtctldClient: vtctldClient,
+					}),
+				}
+
+				api := NewAPI(clusters, grpcserver.Options{}, http.Options{})
+				resp, err := api.GetSrvVSchemas(ctx, tt.req)
+
+				if tt.shouldErr {
+					assert.Error(t, err)
+					return
+				}
+
+				require.NoError(t, err)
+				vtadmintestutil.AssertSrvVSchemaSlicesEqual(t, tt.expected.SrvVSchemas, resp.SrvVSchemas)
+			})
+		})
+	}
+}
+
 func TestGetTablet(t *testing.T) {
 	t.Parallel()
 
@@ -2397,7 +2989,7 @@ func TestGetTablet(t *testing.T) {
 			},
 			dbconfigs: map[string]vtadmintestutil.Dbcfg{},
 			req: &vtadminpb.GetTabletRequest{
-				Hostname: "ks1-00-00-zone1-a",
+				Alias: "zone1-100",
 			},
 			expected: &vtadminpb.Tablet{
 				Cluster: &vtadminpb.Cluster{
@@ -2458,7 +3050,7 @@ func TestGetTablet(t *testing.T) {
 				"c1": {ShouldErr: true},
 			},
 			req: &vtadminpb.GetTabletRequest{
-				Hostname: "doesn't matter",
+				Alias: "doesn't matter",
 			},
 			expected:  nil,
 			shouldErr: true,
@@ -2501,7 +3093,7 @@ func TestGetTablet(t *testing.T) {
 			},
 			dbconfigs: map[string]vtadmintestutil.Dbcfg{},
 			req: &vtadminpb.GetTabletRequest{
-				Hostname:   "ks1-00-00-zone1-a",
+				Alias:      "zone1-100",
 				ClusterIds: []string{"c0"},
 			},
 			expected: &vtadminpb.Tablet{
@@ -2548,7 +3140,7 @@ func TestGetTablet(t *testing.T) {
 						State: vtadminpb.Tablet_SERVING,
 						Tablet: &topodatapb.Tablet{
 							Alias: &topodatapb.TabletAlias{
-								Uid:  200,
+								Uid:  100,
 								Cell: "zone1",
 							},
 							Hostname: "ks1-00-00-zone1-a",
@@ -2561,7 +3153,7 @@ func TestGetTablet(t *testing.T) {
 			},
 			dbconfigs: map[string]vtadmintestutil.Dbcfg{},
 			req: &vtadminpb.GetTabletRequest{
-				Hostname: "ks1-00-00-zone1-a",
+				Alias: "zone1-100",
 			},
 			expected:  nil,
 			shouldErr: true,
@@ -2574,7 +3166,7 @@ func TestGetTablet(t *testing.T) {
 			},
 			dbconfigs: map[string]vtadmintestutil.Dbcfg{},
 			req: &vtadminpb.GetTabletRequest{
-				Hostname: "ks1-00-00-zone1-a",
+				Alias: "zone1-100",
 			},
 			expected:  nil,
 			shouldErr: true,

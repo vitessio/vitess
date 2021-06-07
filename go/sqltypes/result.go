@@ -19,7 +19,7 @@ package sqltypes
 import (
 	"reflect"
 
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/proto"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
@@ -91,13 +91,10 @@ func (result *Result) Copy() *Result {
 		RowsAffected: result.RowsAffected,
 	}
 	if result.Fields != nil {
-		fieldsp := make([]*querypb.Field, len(result.Fields))
-		fields := make([]querypb.Field, len(result.Fields))
+		out.Fields = make([]*querypb.Field, len(result.Fields))
 		for i, f := range result.Fields {
-			fields[i] = *f
-			fieldsp[i] = &fields[i]
+			out.Fields[i] = proto.Clone(f).(*querypb.Field)
 		}
-		out.Fields = fieldsp
 	}
 	if result.Rows != nil {
 		out.Rows = make([][]Value, 0, len(result.Rows))

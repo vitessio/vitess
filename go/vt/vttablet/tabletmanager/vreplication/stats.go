@@ -321,7 +321,7 @@ func (st *vrStats) register() {
 			result := make(map[string]int64)
 			for _, ct := range st.controllers {
 				for key, val := range ct.blpStats.ErrorCounts.Counts() {
-					result[fmt.Sprintf("%d.%s", ct.id, key)] = val
+					result[fmt.Sprintf("%s.%d.%s", ct.workflow, ct.id, key)] = val
 				}
 			}
 			return result

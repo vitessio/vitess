@@ -17,6 +17,7 @@ limitations under the License.
 package engine
 
 import (
+	"errors"
 	"fmt"
 	"testing"
 
@@ -74,6 +75,7 @@ func TestSetTable(t *testing.T) {
 		expectedWarning  []*querypb.QueryWarning
 		expectedError    string
 		input            Primitive
+		execErr          error
 	}
 
 	tests := []testCase{
@@ -194,6 +196,25 @@ func TestSetTable(t *testing.T) {
 			expectedError: "Unexpected error, DestinationKeyspaceID mapping to multiple shards: DestinationAllShards()",
 		},
 		{
+			testName: "sysvar checkAndIgnore execute error",
+			setOps: []SetOp{
+				&SysVarCheckAndIgnore{
+					Name: "x",
+					Keyspace: &vindexes.Keyspace{
+						Name:    "ks",
+						Sharded: true,
+					},
+					TargetDestination: key.DestinationAnyShard{},
+					Expr:              "dummy_expr",
+				},
+			},
+			expectedQueryLog: []string{
+				`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
+				`ExecuteMultiShard ks.-20: select 1 from dual where @@x = dummy_expr {} false false`,
+			},
+			execErr: errors.New("some random error"),
+		},
+		{
 			testName: "udv ignore checkAndIgnore ",
 			setOps: []SetOp{
 				&UserDefinedVariable{
@@ -299,8 +320,9 @@ func TestSetTable(t *testing.T) {
 				Input: tc.input,
 			}
 			vc := &loggingVCursor{
-				shards:  []string{"-20", "20-"},
-				results: tc.qr,
+				shards:         []string{"-20", "20-"},
+				results:        tc.qr,
+				multiShardErrs: []error{tc.execErr},
 			}
 			_, err := set.Execute(vc, map[string]*querypb.BindVariable{}, false)
 			if tc.expectedError == "" {

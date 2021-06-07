@@ -17,7 +17,7 @@
 
 :root {
   /* Greyscale */
-  --grey75: #fafafa;
+  --grey75: #f8fafd;
   --grey200: #edf2f7;
   --grey400: #cbd5e0;
   --grey600: #718096;
@@ -89,8 +89,17 @@
   --textColorSecondary: #718096;
   --textColorDisabled: #cbd5e0;
 
+  /* TODO(doeg, someday): add a mixin to apply opacity to hex vars to re-use var(--backgroundInverted) */
+  --tooltipBackground: rgba(0, 0, 0, 0.85);
+
   /* A common bounding width for views that don't require the full viewport. */
-  --contentWidth: 1200px;
+  --contentWidth: 1400px;
+
+  /* Z-index */
+  --zIndexDefault: 0;
+  --zIndexLow: 10;
+  --zIndexMid: 100;
+  --zIndexHigh: 1000;
 }
 
 /* Dark theme */
@@ -111,6 +120,11 @@
   --textColorInverted: #17171b;
   --textColorSecondary: #cbd5e0;
   --textColorDisabled: #2d3748;
+  --tooltipBackground: rgba(255, 255, 255, 0.85);
+}
+
+* {
+  box-sizing: border-box;
 }
 
 html {
@@ -175,18 +189,33 @@ a:active {
 /* Tables */
 table {
   border-collapse: collapse;
-  margin-bottom: var(--tableCellPadding);
+  margin: var(--tableCellPadding) 0;
   width: 100%;
 }
 
+table caption {
+  background: var(--backgroundSecondary);
+  color: var(--textColorPrimary);
+  font-size: var(--fontSizeDefault);
+  font-weight: 500;
+  padding: 1.2rem var(--tableCellPadding) 0.8rem var(--tableCellPadding);
+  text-align: left;
+}
+
 table th {
-  font-size: var(--fontSizeSmall);
+  background: var(--backgroundSecondary);
+  border: solid 1px var(--backgroundSecondary);
+  border-bottom-color: var(--tableBorderColor);
+  color: var(--textColorSecondary);
+  font-size: var(--fontSizeDefault);
+  font-weight: 500;
   padding: 8px var(--tableCellPadding);
   text-align: left;
 }
 
 table tbody tr {
-  border: solid 1px var(--tableBorderColor);
+  border-bottom: solid 1px var(--tableBorderColor);
+  border-top: solid 1px var(--tableBorderColor);
 }
 
 table tbody td {

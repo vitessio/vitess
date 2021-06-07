@@ -17,28 +17,26 @@ limitations under the License.
 package vtgate
 
 import (
+	"context"
 	"fmt"
 	"reflect"
 	"strings"
 	"testing"
 
-	"vitess.io/vitess/go/test/utils"
-
 	"github.com/stretchr/testify/assert"
-
-	"context"
-
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/key"
+	"vitess.io/vitess/go/vt/srvtopo"
+	"vitess.io/vitess/go/vt/vterrors"
+
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/srvtopo"
-	"vitess.io/vitess/go/vt/vterrors"
 )
 
 // This file uses the sandbox_test framework.
@@ -153,11 +151,11 @@ func TestScatterConnStreamExecuteMulti(t *testing.T) {
 		}
 		bvs := make([]map[string]*querypb.BindVariable, len(rss))
 		qr := new(sqltypes.Result)
-		err = sc.StreamExecuteMulti(ctx, "query", rss, bvs, nil, func(r *sqltypes.Result) error {
+		errors := sc.StreamExecuteMulti(ctx, "query", rss, bvs, nil, func(r *sqltypes.Result) error {
 			qr.AppendResult(r)
 			return nil
 		})
-		return qr, err
+		return qr, vterrors.Aggregate(errors)
 	})
 }
 
@@ -387,15 +385,17 @@ func TestMultiExecs(t *testing.T) {
 	rss := []*srvtopo.ResolvedShard{
 		{
 			Target: &querypb.Target{
-				Keyspace: "TestMultiExecs",
-				Shard:    "0",
+				Keyspace:   "TestMultiExecs",
+				Shard:      "0",
+				TabletType: topodatapb.TabletType_REPLICA,
 			},
 			Gateway: sbc0,
 		},
 		{
 			Target: &querypb.Target{
-				Keyspace: "TestMultiExecs",
-				Shard:    "1",
+				Keyspace:   "TestMultiExecs",
+				Shard:      "1",
+				TabletType: topodatapb.TabletType_REPLICA,
 			},
 			Gateway: sbc1,
 		},
@@ -415,7 +415,8 @@ func TestMultiExecs(t *testing.T) {
 		},
 	}
 
-	_, _ = sc.ExecuteMultiShard(ctx, rss, queries, NewSafeSession(nil), false, false)
+	_, err := sc.ExecuteMultiShard(ctx, rss, queries, NewSafeSession(nil), false, false)
+	require.NoError(t, vterrors.Aggregate(err))
 	if len(sbc0.Queries) == 0 || len(sbc1.Queries) == 0 {
 		t.Fatalf("didn't get expected query")
 	}
