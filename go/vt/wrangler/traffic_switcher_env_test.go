@@ -404,7 +404,7 @@ func (tme *testMigraterEnv) createDBClients(ctx context.Context, t *testing.T) {
 
 func (tme *testMigraterEnv) setMasterPositions() {
 	for _, master := range tme.sourceMasters {
-		master.FakeMysqlDaemon.CurrentMasterPosition = mysql.Position{
+		master.FakeMysqlDaemon.CurrentPrimaryPosition = mysql.Position{
 			GTIDSet: mysql.MariadbGTIDSet{
 				5: mysql.MariadbGTID{
 					Domain:   5,
@@ -415,7 +415,7 @@ func (tme *testMigraterEnv) setMasterPositions() {
 		}
 	}
 	for _, master := range tme.targetMasters {
-		master.FakeMysqlDaemon.CurrentMasterPosition = mysql.Position{
+		master.FakeMysqlDaemon.CurrentPrimaryPosition = mysql.Position{
 			GTIDSet: mysql.MariadbGTIDSet{
 				5: mysql.MariadbGTID{
 					Domain:   5,

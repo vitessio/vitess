@@ -183,7 +183,7 @@ func (tr *Tracker) currentPosition(ctx context.Context) (mysql.Position, error) 
 		return mysql.Position{}, err
 	}
 	defer conn.Close()
-	return conn.MasterPosition()
+	return conn.PrimaryPosition()
 }
 
 func (tr *Tracker) isSchemaVersionTableEmpty(ctx context.Context) (bool, error) {
