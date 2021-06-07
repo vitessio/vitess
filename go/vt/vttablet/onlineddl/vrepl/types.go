@@ -170,6 +170,18 @@ func (l *ColumnList) Len() int {
 	return len(l.columns)
 }
 
+func (this *ColumnList) SetEnumToTextConversion(columnName string) {
+	this.GetColumn(columnName).EnumToTextConversion = true
+}
+
+func (this *ColumnList) IsEnumToTextConversion(columnName string) bool {
+	return this.GetColumn(columnName).EnumToTextConversion
+}
+
+func (this *ColumnList) SetEnumValues(columnName string, enumValues string) {
+	this.GetColumn(columnName).EnumValues = enumValues
+}
+
 // UniqueKey is the combination of a key's name and columns
 type UniqueKey struct {
 	Name            string

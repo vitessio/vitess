@@ -358,6 +358,15 @@ func (v *VRepl) analyzeTables(ctx context.Context, conn *dbconnpool.DBConnection
 		return err
 	}
 
+	for i := range v.sourceSharedColumns.Columns() {
+		column := v.sourceSharedColumns.Columns()[i]
+		mappedColumn := v.targetSharedColumns.Columns()[i]
+		if column.Name == mappedColumn.Name && column.Type == vrepl.EnumColumnType && mappedColumn.Charset != "" {
+			v.targetSharedColumns.SetEnumToTextConversion(column.Name)
+			v.targetSharedColumns.SetEnumValues(column.Name, column.EnumValues)
+		}
+	}
+
 	v.sourceAutoIncrement, err = v.readAutoIncrement(ctx, conn, v.sourceTable)
 	if err != nil {
 		return err
@@ -381,11 +390,11 @@ func (v *VRepl) generateFilterQuery(ctx context.Context) error {
 		if i > 0 {
 			sb.WriteString(", ")
 		}
-		switch col.Type {
-		case vrepl.JSONColumnType:
-			sb.WriteString("convert(")
-			sb.WriteString(escapeName(name))
-			sb.WriteString(" using utf8mb4)")
+		switch {
+		case col.Type == vrepl.JSONColumnType:
+			sb.WriteString(fmt.Sprintf("convert(%s using utf8mb4)", escapeName(name)))
+		case col.EnumToTextConversion:
+			sb.WriteString(fmt.Sprintf("ELT(%s, %s)", escapeName(name), col.EnumValues))
 		default:
 			sb.WriteString(escapeName(name))
 		}
