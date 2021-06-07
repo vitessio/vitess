@@ -140,7 +140,7 @@ func TestMysqlShouldGetMasterPosition(t *testing.T) {
 		Position:     Position{GTIDSet: Mysql56GTIDSet{sid: []interval{{start: 1, end: 5}}}},
 		FilePosition: Position{GTIDSet: filePosGTID{file: "source-bin.000003", pos: 1307}},
 	}
-	got, err := parseMysqlMasterStatus(resultMap)
+	got, err := parseMysqlPrimaryStatus(resultMap)
 	require.NoError(t, err)
 	assert.Equalf(t, got.Position.GTIDSet.String(), want.Position.GTIDSet.String(), "got Position: %v; want Position: %v", got.Position.GTIDSet, want.Position.GTIDSet)
 	assert.Equalf(t, got.FilePosition.GTIDSet.String(), want.FilePosition.GTIDSet.String(), "got FilePosition: %v; want FilePosition: %v", got.FilePosition.GTIDSet, want.FilePosition.GTIDSet)

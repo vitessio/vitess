@@ -100,20 +100,21 @@ func connectForReplication(cp dbconfigs.Connector) (*mysql.Conn, error) {
 func (bc *BinlogConnection) StartBinlogDumpFromCurrent(ctx context.Context) (mysql.Position, <-chan mysql.BinlogEvent, error) {
 	ctx, bc.cancel = context.WithCancel(ctx)
 
-	masterPosition, err := bc.Conn.PrimaryPosition()
+	position, err := bc.Conn.PrimaryPosition()
 	if err != nil {
-		return mysql.Position{}, nil, fmt.Errorf("failed to get master position: %v", err)
+		return mysql.Position{}, nil, fmt.Errorf("failed to get primary position: %v", err)
 	}
 
-	c, err := bc.StartBinlogDumpFromPosition(ctx, masterPosition)
-	return masterPosition, c, err
+	c, err := bc.StartBinlogDumpFromPosition(ctx, position)
+	return position, c, err
 }
 
 // StartBinlogDumpFromPosition requests a replication binlog dump from
-// the master mysqld at the given Position and then sends binlog
+// the replication source mysqld (typically the primary server in the cluster)
+// at the given Position and then sends binlog
 // events to the provided channel.
 // The stream will continue in the background, waiting for new events if
-// necessary, until the connection is closed, either by the master or
+// necessary, until the connection is closed, either by the replication source or
 // by canceling the context.
 //
 // Note the context is valid and used until eventChan is closed.
@@ -166,7 +167,7 @@ func (bc *BinlogConnection) streamEvents(ctx context.Context) chan mysql.BinlogE
 }
 
 // StartBinlogDumpFromBinlogBeforeTimestamp requests a replication
-// binlog dump from the master mysqld starting with a file that has
+// binlog dump from the source mysqld starting with a file that has
 // timestamps smaller than the provided timestamp, and then sends
 // binlog events to the provided channel.
 //
@@ -189,7 +190,7 @@ func (bc *BinlogConnection) streamEvents(ctx context.Context) chan mysql.BinlogE
 // given range.
 //
 // The stream will continue in the background, waiting for new events if
-// necessary, until the connection is closed, either by the master or
+// necessary, until the connection is closed, either by the source or
 // by canceling the context.
 //
 // Note the context is valid and used until eventChan is closed.

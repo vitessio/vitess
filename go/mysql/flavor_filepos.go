@@ -17,7 +17,6 @@ limitations under the License.
 package mysql
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"strconv"
@@ -38,14 +37,14 @@ func newFilePosFlavor() flavor {
 	return &filePosFlavor{}
 }
 
-// masterGTIDSet is part of the Flavor interface.
+// primaryGTIDSet is part of the Flavor interface.
 func (flv *filePosFlavor) primaryGTIDSet(c *Conn) (GTIDSet, error) {
 	qr, err := c.ExecuteFetch("SHOW MASTER STATUS", 100, true /* wantfields */)
 	if err != nil {
 		return nil, err
 	}
 	if len(qr.Rows) == 0 {
-		return nil, errors.New("no master status")
+		return nil, ErrNoPrimaryStatus
 	}
 
 	resultMap, err := resultToMap(qr)
@@ -233,7 +232,7 @@ func (flv *filePosFlavor) primaryStatus(c *Conn) (PrimaryStatus, error) {
 }
 
 func parseFilePosMasterStatus(resultMap map[string]string) (PrimaryStatus, error) {
-	status := parseMasterStatus(resultMap)
+	status := parsePrimaryStatus(resultMap)
 
 	status.Position = status.FilePosition
 
