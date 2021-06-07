@@ -70,23 +70,26 @@ func (u *updateController) consume() {
 
 func (u *updateController) getItemFromQueueLocked() *discovery.TabletHealth {
 	item := u.queue.items[0]
-	i := 1
-	for ; i < len(u.queue.items); i++ {
-		for _, table := range u.queue.items[i].Stats.TableSchemaChanged {
-			found := false
-			for _, itemTable := range item.Stats.TableSchemaChanged {
-				if itemTable == table {
-					found = true
-					break
+	itemsCount := len(u.queue.items)
+	// Only when we want to update selected tables.
+	if u.loaded {
+		for i := 1; i < itemsCount; i++ {
+			for _, table := range u.queue.items[i].Stats.TableSchemaChanged {
+				found := false
+				for _, itemTable := range item.Stats.TableSchemaChanged {
+					if itemTable == table {
+						found = true
+						break
+					}
 				}
-			}
-			if !found {
-				item.Stats.TableSchemaChanged = append(item.Stats.TableSchemaChanged, table)
+				if !found {
+					item.Stats.TableSchemaChanged = append(item.Stats.TableSchemaChanged, table)
+				}
 			}
 		}
 	}
 	// emptying queue's items as all items from 0 to i (length of the queue) are merged
-	u.queue.items = u.queue.items[i:]
+	u.queue.items = u.queue.items[itemsCount:]
 	return item
 }
 
