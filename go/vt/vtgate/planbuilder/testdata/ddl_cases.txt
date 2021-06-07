@@ -94,7 +94,7 @@
 
 #Alter table with unknown qualifier
 "alter table a.b ADD id int"
-"keyspace a not found in vschema"
+"Unknown database 'a' in vschema"
 
 # create db foo
 "create database foo"

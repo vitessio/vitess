@@ -26,8 +26,8 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
-func buildAlterMigrationPlan(query string, vschema ContextVSchema) (engine.Primitive, error) {
-	if !*enableOnlineDDL {
+func buildAlterMigrationPlan(query string, vschema ContextVSchema, enableOnlineDDL bool) (engine.Primitive, error) {
+	if !enableOnlineDDL {
 		return nil, schema.ErrOnlineDDLDisabled
 	}
 	dest, ks, tabletType, err := vschema.TargetDestination("")
@@ -53,8 +53,8 @@ func buildAlterMigrationPlan(query string, vschema ContextVSchema) (engine.Primi
 	}, nil
 }
 
-func buildRevertMigrationPlan(query string, stmt *sqlparser.RevertMigration, vschema ContextVSchema) (engine.Primitive, error) {
-	if !*enableOnlineDDL {
+func buildRevertMigrationPlan(query string, stmt *sqlparser.RevertMigration, vschema ContextVSchema, enableOnlineDDL bool) (engine.Primitive, error) {
+	if !enableOnlineDDL {
 		return nil, schema.ErrOnlineDDLDisabled
 	}
 	dest, ks, tabletType, err := vschema.TargetDestination("")

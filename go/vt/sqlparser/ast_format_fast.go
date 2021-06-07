@@ -653,7 +653,7 @@ func (ct *ColumnType) formatFast(buf *TrackedBuffer) {
 		buf.WriteByte(' ')
 		buf.WriteString(ct.Collate)
 	}
-	if ct.Options.Null != nil {
+	if ct.Options.Null != nil && ct.Options.As == nil {
 		if *ct.Options.Null {
 			buf.WriteByte(' ')
 			buf.WriteString(keywordStrings[NULL])
@@ -677,6 +677,32 @@ func (ct *ColumnType) formatFast(buf *TrackedBuffer) {
 		buf.WriteString(keywordStrings[UPDATE])
 		buf.WriteByte(' ')
 		ct.Options.OnUpdate.formatFast(buf)
+	}
+	if ct.Options.As != nil {
+		buf.WriteByte(' ')
+		buf.WriteString(keywordStrings[AS])
+		buf.WriteString(" (")
+		ct.Options.As.formatFast(buf)
+		buf.WriteByte(')')
+
+		if ct.Options.Storage == VirtualStorage {
+			buf.WriteByte(' ')
+			buf.WriteString(keywordStrings[VIRTUAL])
+		} else if ct.Options.Storage == StoredStorage {
+			buf.WriteByte(' ')
+			buf.WriteString(keywordStrings[STORED])
+		}
+		if ct.Options.Null != nil {
+			if *ct.Options.Null {
+				buf.WriteByte(' ')
+				buf.WriteString(keywordStrings[NULL])
+			} else {
+				buf.WriteByte(' ')
+				buf.WriteString(keywordStrings[NOT])
+				buf.WriteByte(' ')
+				buf.WriteString(keywordStrings[NULL])
+			}
+		}
 	}
 	if ct.Options.Autoincrement {
 		buf.WriteByte(' ')
@@ -719,6 +745,10 @@ func (ct *ColumnType) formatFast(buf *TrackedBuffer) {
 	if ct.Options.KeyOpt == colKey {
 		buf.WriteByte(' ')
 		buf.WriteString(keywordStrings[KEY])
+	}
+	if ct.Options.Reference != nil {
+		buf.WriteByte(' ')
+		ct.Options.Reference.formatFast(buf)
 	}
 }
 
@@ -838,18 +868,25 @@ func (a ReferenceAction) formatFast(buf *TrackedBuffer) {
 // formatFast formats the node.
 func (f *ForeignKeyDefinition) formatFast(buf *TrackedBuffer) {
 	buf.WriteString("foreign key ")
+	f.IndexName.formatFast(buf)
 	f.Source.formatFast(buf)
-	buf.WriteString(" references ")
-	f.ReferencedTable.formatFast(buf)
 	buf.WriteByte(' ')
-	f.ReferencedColumns.formatFast(buf)
-	if f.OnDelete != DefaultAction {
+	f.ReferenceDefinition.formatFast(buf)
+}
+
+// formatFast formats the node.
+func (ref *ReferenceDefinition) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("references ")
+	ref.ReferencedTable.formatFast(buf)
+	buf.WriteByte(' ')
+	ref.ReferencedColumns.formatFast(buf)
+	if ref.OnDelete != DefaultAction {
 		buf.WriteString(" on delete ")
-		f.OnDelete.formatFast(buf)
+		ref.OnDelete.formatFast(buf)
 	}
-	if f.OnUpdate != DefaultAction {
+	if ref.OnUpdate != DefaultAction {
 		buf.WriteString(" on update ")
-		f.OnUpdate.formatFast(buf)
+		ref.OnUpdate.formatFast(buf)
 	}
 }
 
@@ -1263,9 +1300,9 @@ func (node *RangeCond) formatFast(buf *TrackedBuffer) {
 
 // formatFast formats the node.
 func (node *IsExpr) formatFast(buf *TrackedBuffer) {
-	buf.printExpr(node, node.Expr, true)
+	buf.printExpr(node, node.Left, true)
 	buf.WriteByte(' ')
-	buf.WriteString(node.Operator.ToString())
+	buf.WriteString(node.Right.ToString())
 }
 
 // formatFast formats the node.

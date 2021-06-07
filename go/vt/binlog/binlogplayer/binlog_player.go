@@ -21,17 +21,20 @@ package binlogplayer
 
 import (
 	"bytes"
+	"compress/zlib"
+	"encoding/binary"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"math"
 	"sync"
 	"time"
 
+	"google.golang.org/protobuf/proto"
+
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"context"
-
-	"github.com/golang/protobuf/proto"
 
 	"vitess.io/vitess/go/history"
 	"vitess.io/vitess/go/mysql"
@@ -415,10 +418,10 @@ func (blp *BinlogPlayer) processTransaction(tx *binlogdatapb.BinlogTransaction) 
 				// needed during event playback. Here we also adjust so that playback
 				// proceeds, but in Vitess-land this usually means a misconfigured
 				// server or a misbehaving client, so we spam the logs with warnings.
-				log.Warningf("BinlogPlayer changing charset from %v to %v for statement %d in transaction %v", blp.currentCharset, stmtCharset, i, *tx)
+				log.Warningf("BinlogPlayer changing charset from %v to %v for statement %d in transaction %v", blp.currentCharset, stmtCharset, i, tx)
 				err = mysql.SetCharset(dbClient.dbConn, stmtCharset)
 				if err != nil {
-					return false, fmt.Errorf("can't set charset for statement %d in transaction %v: %v", i, *tx, err)
+					return false, fmt.Errorf("can't set charset for statement %d in transaction %v: %v", i, tx, err)
 				}
 				blp.currentCharset = stmtCharset
 			}
@@ -470,13 +473,13 @@ func (blp *BinlogPlayer) exec(sql string) (*sqltypes.Result, error) {
 //   transaction_timestamp alone (keeping the old value), and we don't
 //   change SecondsBehindMaster
 func (blp *BinlogPlayer) writeRecoveryPosition(tx *binlogdatapb.BinlogTransaction) error {
-	position, err := mysql.DecodePosition(tx.EventToken.Position)
+	position, err := DecodePosition(tx.EventToken.Position)
 	if err != nil {
 		return err
 	}
 
 	now := time.Now().Unix()
-	updateRecovery := GenerateUpdatePos(blp.uid, position, now, tx.EventToken.Timestamp, blp.blplStats.CopyRowCount.Get())
+	updateRecovery := GenerateUpdatePos(blp.uid, position, now, tx.EventToken.Timestamp, blp.blplStats.CopyRowCount.Get(), false)
 
 	qr, err := blp.exec(updateRecovery)
 	if err != nil {
@@ -557,6 +560,7 @@ var AlterVReplicationTable = []string{
 	"ALTER TABLE _vt.vreplication ADD COLUMN rows_copied BIGINT(20) NOT NULL DEFAULT 0",
 }
 
+// WithDDLInitialQueries contains the queries to be expected by the mock db client during tests
 var WithDDLInitialQueries = []string{
 	"SELECT db_name FROM _vt.vreplication LIMIT 0",
 	"SELECT rows_copied FROM _vt.vreplication LIMIT 0",
@@ -593,7 +597,7 @@ func ReadVRSettings(dbClient DBClient, uid uint32) (VRSettings, error) {
 	if err != nil {
 		return VRSettings{}, fmt.Errorf("failed to parse max_replication_lag column: %v", err)
 	}
-	startPos, err := mysql.DecodePosition(vrRow[0].ToString())
+	startPos, err := DecodePosition(vrRow[0].ToString())
 	if err != nil {
 		return VRSettings{}, fmt.Errorf("failed to parse pos column: %v", err)
 	}
@@ -630,16 +634,18 @@ func CreateVReplicationState(workflow string, source *binlogdatapb.BinlogSource,
 
 // GenerateUpdatePos returns a statement to update a value in the
 // _vt.vreplication table.
-func GenerateUpdatePos(uid uint32, pos mysql.Position, timeUpdated int64, txTimestamp int64, rowsCopied int64) string {
+func GenerateUpdatePos(uid uint32, pos mysql.Position, timeUpdated int64, txTimestamp int64, rowsCopied int64, compress bool) string {
+	strGTID := encodeString(mysql.EncodePosition(pos))
+	if compress {
+		strGTID = fmt.Sprintf("compress(%s)", strGTID)
+	}
 	if txTimestamp != 0 {
 		return fmt.Sprintf(
 			"update _vt.vreplication set pos=%v, time_updated=%v, transaction_timestamp=%v, rows_copied=%v, message='' where id=%v",
-			encodeString(mysql.EncodePosition(pos)), timeUpdated, txTimestamp, rowsCopied, uid)
+			strGTID, timeUpdated, txTimestamp, rowsCopied, uid)
 	}
-
 	return fmt.Sprintf(
-		"update _vt.vreplication set pos=%v, time_updated=%v, rows_copied=%v, message='' where id=%v",
-		encodeString(mysql.EncodePosition(pos)), timeUpdated, rowsCopied, uid)
+		"update _vt.vreplication set pos=%v, time_updated=%v, rows_copied=%v, message='' where id=%v", strGTID, timeUpdated, rowsCopied, uid)
 }
 
 // GenerateUpdateRowsCopied returns a statement to update the rows_copied value in the _vt.vreplication table.
@@ -706,6 +712,49 @@ func ReadVReplicationPos(index uint32) string {
 // given stream from the _vt.vreplication table.
 func ReadVReplicationStatus(index uint32) string {
 	return fmt.Sprintf("select pos, state, message from _vt.vreplication where id=%v", index)
+}
+
+// MysqlUncompress will uncompress a binary string in the format stored by mysql's compress() function
+// The first four bytes represent the size of the original string passed to compress()
+// Remaining part is the compressed string using zlib, which we uncompress here using golang's zlib library
+func MysqlUncompress(input string) []byte {
+	// consistency check
+	inputBytes := []byte(input)
+	if len(inputBytes) < 5 {
+		return nil
+	}
+
+	// determine length
+	dataLength := uint32(inputBytes[0]) + uint32(inputBytes[1])<<8 + uint32(inputBytes[2])<<16 + uint32(inputBytes[3])<<24
+	dataLengthBytes := make([]byte, 4)
+	binary.LittleEndian.PutUint32(dataLengthBytes, dataLength)
+	dataLength = binary.LittleEndian.Uint32(dataLengthBytes)
+
+	// uncompress using zlib
+	inputData := inputBytes[4:]
+	inputDataBuf := bytes.NewBuffer(inputData)
+	reader, err := zlib.NewReader(inputDataBuf)
+	if err != nil {
+		return nil
+	}
+	var outputBytes bytes.Buffer
+	io.Copy(&outputBytes, reader)
+	if outputBytes.Len() == 0 {
+		return nil
+	}
+	if dataLength != uint32(outputBytes.Len()) { // double check that the stored and uncompressed lengths match
+		return nil
+	}
+	return outputBytes.Bytes()
+}
+
+// DecodePosition attempts to uncompress the passed value first and if it fails tries to decode it as a valid GTID
+func DecodePosition(gtid string) (mysql.Position, error) {
+	b := MysqlUncompress(gtid)
+	if b != nil {
+		gtid = string(b)
+	}
+	return mysql.DecodePosition(gtid)
 }
 
 // StatsHistoryRecord is used to store a Message with timestamp

@@ -451,8 +451,12 @@ func encodeBytesSQLStringBuilder(val []byte, buf *strings.Builder) {
 func BufEncodeStringSQL(buf *strings.Builder, val string) {
 	buf.WriteByte('\'')
 	for _, ch := range val {
+		if ch > 255 {
+			buf.WriteRune(ch)
+			continue
+		}
 		if encodedChar := SQLEncodeMap[ch]; encodedChar == DontEscape {
-			buf.WriteByte(byte(ch))
+			buf.WriteRune(ch)
 		} else {
 			buf.WriteByte('\\')
 			buf.WriteByte(encodedChar)

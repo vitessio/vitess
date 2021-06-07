@@ -17,33 +17,28 @@ limitations under the License.
 package tabletmanager
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"io"
 	"time"
 
-	"vitess.io/vitess/go/vt/proto/vttime"
-
-	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
-
-	"vitess.io/vitess/go/vt/dbconfigs"
-
-	"vitess.io/vitess/go/vt/topo"
-	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vttablet/tmclient"
-
-	"context"
-
-	"vitess.io/vitess/go/vt/log"
-
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/vt/dbconfigs"
+	"vitess.io/vitess/go/vt/hook"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
+	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
+	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/proto/vttime"
 )
 
 // This file handles the initial backup restore upon startup.
@@ -88,10 +83,47 @@ func (tm *TabletManager) RestoreData(ctx context.Context, logger logutil.Logger,
 			log.Warningf("Orchestrator BeginMaintenance failed: %v", err)
 		}
 	}()
-	err := tm.restoreDataLocked(ctx, logger, waitForBackupInterval, deleteBeforeRestore)
+
+	var (
+		err       error
+		startTime time.Time
+	)
+
+	defer func() {
+		stopTime := time.Now()
+
+		h := hook.NewSimpleHook("vttablet_restore_done")
+		h.ExtraEnv = tm.hookExtraEnv()
+		h.ExtraEnv["TM_RESTORE_DATA_START_TS"] = startTime.UTC().Format(time.RFC3339)
+		h.ExtraEnv["TM_RESTORE_DATA_STOP_TS"] = stopTime.UTC().Format(time.RFC3339)
+		h.ExtraEnv["TM_RESTORE_DATA_DURATION"] = stopTime.Sub(startTime).String()
+
+		if err != nil {
+			h.ExtraEnv["TM_RESTORE_DATA_ERROR"] = err.Error()
+		}
+
+		// vttablet_restore_done is best-effort (for now?).
+		go func() {
+			// Package vthook already logs the stdout/stderr of hooks when they
+			// are run, so we don't duplicate that here.
+			hr := h.Execute()
+			switch hr.ExitStatus {
+			case hook.HOOK_SUCCESS:
+			case hook.HOOK_DOES_NOT_EXIST:
+				log.Info("No vttablet_restore_done hook.")
+			default:
+				log.Warning("vttablet_restore_done hook failed")
+			}
+		}()
+	}()
+
+	startTime = time.Now()
+
+	err = tm.restoreDataLocked(ctx, logger, waitForBackupInterval, deleteBeforeRestore)
 	if err != nil {
 		return err
 	}
+
 	// Tell Orchestrator we're no longer stopped on purpose.
 	// Do this in the background, as it's best-effort.
 	go func() {
@@ -152,7 +184,11 @@ func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.L
 	}
 	if !ok {
 		params.Logger.Infof("Attempting to restore, but mysqld already contains data. Assuming vttablet was just restarted.")
-		return mysqlctl.PopulateMetadataTables(params.Mysqld, params.LocalMetadata, params.DbName)
+		// (NOTE:@ajm188) the legacy behavior is to always populate the metadata
+		// tables in this branch. Since tm.MetadataManager could be nil, we
+		// create a new instance for use here.
+		metadataManager := &mysqlctl.MetadataManager{}
+		return metadataManager.PopulateMetadataTables(params.Mysqld, params.LocalMetadata, params.DbName)
 	}
 	// We should not become master after restore, because that would incorrectly
 	// start a new master term, and it's likely our data dir will be out of date.

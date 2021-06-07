@@ -82,6 +82,12 @@ func Parse2(sql string) (Statement, BindVars, error) {
 				return nil, nil, fmt.Errorf("extra characters encountered after end of DDL: '%s'", string(val))
 			}
 			log.Warningf("ignoring error parsing DDL '%s': %v", sql, tokenizer.LastError)
+			switch x := tokenizer.partialDDL.(type) {
+			case DBDDLStatement:
+				x.SetFullyParsed(false)
+			case DDLStatement:
+				x.SetFullyParsed(false)
+			}
 			tokenizer.ParseTree = tokenizer.partialDDL
 			return tokenizer.ParseTree, tokenizer.BindVars, nil
 		}

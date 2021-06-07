@@ -264,7 +264,7 @@ func (route *Route) execute(vcursor VCursor, bindVars map[string]*querypb.BindVa
 		rss, bvs, err = nil, nil, nil
 	default:
 		// Unreachable.
-		return nil, fmt.Errorf("unsupported query route: %v", route)
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unsupported query route: %v", route)
 	}
 	if err != nil {
 		return nil, err
@@ -282,25 +282,34 @@ func (route *Route) execute(vcursor VCursor, bindVars map[string]*querypb.BindVa
 	result, errs := vcursor.ExecuteMultiShard(rss, queries, false /* rollbackOnError */, false /* autocommit */)
 
 	if errs != nil {
-		if route.ScatterErrorsAsWarnings {
-			partialSuccessScatterQueries.Add(1)
-
-			for _, err := range errs {
-				if err != nil {
-					serr := mysql.NewSQLErrorFromError(err).(*mysql.SQLError)
-					vcursor.Session().RecordWarning(&querypb.QueryWarning{Code: uint32(serr.Num), Message: err.Error()})
-				}
-			}
-			// fall through
-		} else {
+		errs = filterOutNilErrors(errs)
+		if !route.ScatterErrorsAsWarnings || len(errs) == len(rss) {
 			return nil, vterrors.Aggregate(errs)
 		}
+
+		partialSuccessScatterQueries.Add(1)
+
+		for _, err := range errs {
+			serr := mysql.NewSQLErrorFromError(err).(*mysql.SQLError)
+			vcursor.Session().RecordWarning(&querypb.QueryWarning{Code: uint32(serr.Num), Message: err.Error()})
+		}
 	}
+
 	if len(route.OrderBy) == 0 {
 		return result, nil
 	}
 
 	return route.sort(result)
+}
+
+func filterOutNilErrors(errs []error) []error {
+	var errors []error
+	for _, err := range errs {
+		if err != nil {
+			errors = append(errors, err)
+		}
+	}
+	return errors
 }
 
 // StreamExecute performs a streaming exec.
@@ -347,12 +356,27 @@ func (route *Route) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.
 	}
 
 	if len(route.OrderBy) == 0 {
-		return vcursor.StreamExecuteMulti(route.Query, rss, bvs, func(qr *sqltypes.Result) error {
+		errs := vcursor.StreamExecuteMulti(route.Query, rss, bvs, func(qr *sqltypes.Result) error {
 			return callback(qr.Truncate(route.TruncateColumnCount))
 		})
+		if len(errs) > 0 {
+			if !route.ScatterErrorsAsWarnings || len(errs) == len(rss) {
+				return vterrors.Aggregate(errs)
+			}
+			partialSuccessScatterQueries.Add(1)
+			for _, err := range errs {
+				sErr := mysql.NewSQLErrorFromError(err).(*mysql.SQLError)
+				vcursor.Session().RecordWarning(&querypb.QueryWarning{Code: uint32(sErr.Num), Message: err.Error()})
+			}
+		}
+		return nil
 	}
 
 	// There is an order by. We have to merge-sort.
+	return route.mergeSort(vcursor, bindVars, wantfields, callback, rss, bvs)
+}
+
+func (route *Route) mergeSort(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error, rss []*srvtopo.ResolvedShard, bvs []map[string]*querypb.BindVariable) error {
 	prims := make([]StreamExecutor, 0, len(rss))
 	for i, rs := range rss {
 		prims = append(prims, &shardRoute{
@@ -362,8 +386,9 @@ func (route *Route) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.
 		})
 	}
 	ms := MergeSort{
-		Primitives: prims,
-		OrderBy:    route.OrderBy,
+		Primitives:              prims,
+		OrderBy:                 route.OrderBy,
+		ScatterErrorsAsWarnings: route.ScatterErrorsAsWarnings,
 	}
 	return ms.StreamExecute(vcursor, bindVars, wantfields, func(qr *sqltypes.Result) error {
 		return callback(qr.Truncate(route.TruncateColumnCount))
@@ -469,6 +494,11 @@ func (route *Route) routeInfoSchemaQuery(vcursor VCursor, bindVars map[string]*q
 	if tableName != "" {
 		rss, err := route.paramsRoutedTable(vcursor, bindVars, specifiedKS, tableName)
 		if err != nil {
+			// Only if keyspace is not found in vschema, we try with default keyspace.
+			// As the in the table_schema predicates for a keyspace 'ks' it can contain 'vt_ks'.
+			if vterrors.ErrState(err) == vterrors.BadDb {
+				return defaultRoute()
+			}
 			return nil, err
 		}
 		if rss != nil {
@@ -774,7 +804,9 @@ func (route *Route) description() PrimitiveDescription {
 	if route.TruncateColumnCount > 0 {
 		other["ResultColumns"] = route.TruncateColumnCount
 	}
-
+	if route.ScatterErrorsAsWarnings {
+		other["ScatterErrorsAsWarnings"] = true
+	}
 	return PrimitiveDescription{
 		OperatorType:      "Route",
 		Variant:           routeName[route.Opcode],

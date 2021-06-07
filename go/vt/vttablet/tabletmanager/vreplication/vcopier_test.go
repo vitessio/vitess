@@ -38,10 +38,10 @@ func TestPlayerCopyCharPK(t *testing.T) {
 	reset := vstreamer.AdjustPacketSize(1)
 	defer reset()
 
-	savedCopyTimeout := copyTimeout
-	// copyTimeout should be low enough to have time to send one row.
-	copyTimeout = 500 * time.Millisecond
-	defer func() { copyTimeout = savedCopyTimeout }()
+	savedCopyPhaseDuration := *copyPhaseDuration
+	// copyPhaseDuration should be low enough to have time to send one row.
+	*copyPhaseDuration = 500 * time.Millisecond
+	defer func() { *copyPhaseDuration = savedCopyPhaseDuration }()
 
 	savedWaitRetryTime := waitRetryTime
 	// waitRetry time should be very low to cause the wait loop to execute multipel times.
@@ -118,10 +118,10 @@ func TestPlayerCopyCharPK(t *testing.T) {
 		"/insert into _vt.copy_state",
 		"/update _vt.vreplication set state='Copying'",
 		"insert into dst(idc,val) values ('a\\0',1)",
-		`/update _vt.copy_state set lastpk='fields:<name:\\"idc\\" type:BINARY > rows:<lengths:2 values:\\"a\\\\000\\" > ' where vrepl_id=.*`,
-		`update dst set val=3 where idc=cast('a' as binary(2)) and ('a') <= ('a\0')`,
+		`/update _vt.copy_state set lastpk='fields:{name:\\"idc\\" type:BINARY} rows:{lengths:2 values:\\"a\\\\x00\\"}' where vrepl_id=.*`,
+		`update dst set val=3 where idc='a\0' and ('a\0') <= ('a\0')`,
 		"insert into dst(idc,val) values ('c\\0',2)",
-		`/update _vt.copy_state set lastpk='fields:<name:\\"idc\\" type:BINARY > rows:<lengths:2 values:\\"c\\\\000\\" > ' where vrepl_id=.*`,
+		`/update _vt.copy_state set lastpk='fields:{name:\\"idc\\" type:BINARY} rows:{lengths:2 values:\\"c\\\\x00\\"}' where vrepl_id=.*`,
 		"/delete from _vt.copy_state.*dst",
 		"/update _vt.vreplication set state='Running'",
 	})
@@ -139,10 +139,10 @@ func TestPlayerCopyVarcharPKCaseInsensitive(t *testing.T) {
 	reset := vstreamer.AdjustPacketSize(1)
 	defer reset()
 
-	savedCopyTimeout := copyTimeout
-	// copyTimeout should be low enough to have time to send one row.
-	copyTimeout = 500 * time.Millisecond
-	defer func() { copyTimeout = savedCopyTimeout }()
+	savedCopyPhaseDuration := *copyPhaseDuration
+	// copyPhaseDuration should be low enough to have time to send one row.
+	*copyPhaseDuration = 500 * time.Millisecond
+	defer func() { *copyPhaseDuration = savedCopyPhaseDuration }()
 
 	savedWaitRetryTime := waitRetryTime
 	// waitRetry time should be very low to cause the wait loop to execute multipel times.
@@ -219,12 +219,12 @@ func TestPlayerCopyVarcharPKCaseInsensitive(t *testing.T) {
 		"/insert into _vt.copy_state",
 		"/update _vt.vreplication set state='Copying'",
 		"insert into dst(idc,val) values ('a',1)",
-		`/update _vt.copy_state set lastpk='fields:<name:\\"idc\\" type:VARCHAR > rows:<lengths:1 values:\\"a\\" > ' where vrepl_id=.*`,
+		`/update _vt.copy_state set lastpk='fields:{name:\\"idc\\" type:VARCHAR} rows:{lengths:1 values:\\"a\\"}' where vrepl_id=.*`,
 		`/insert into dst\(idc,val\) select 'B', 3 from dual where \( .* 'B' COLLATE .* \) <= \( .* 'a' COLLATE .* \)`,
 		"insert into dst(idc,val) values ('B',3)",
-		`/update _vt.copy_state set lastpk='fields:<name:\\"idc\\" type:VARCHAR > rows:<lengths:1 values:\\"B\\" > ' where vrepl_id=.*`,
+		`/update _vt.copy_state set lastpk='fields:{name:\\"idc\\" type:VARCHAR} rows:{lengths:1 values:\\"B\\"}' where vrepl_id=.*`,
 		"insert into dst(idc,val) values ('c',2)",
-		`/update _vt.copy_state set lastpk='fields:<name:\\"idc\\" type:VARCHAR > rows:<lengths:1 values:\\"c\\" > ' where vrepl_id=.*`,
+		`/update _vt.copy_state set lastpk='fields:{name:\\"idc\\" type:VARCHAR} rows:{lengths:1 values:\\"c\\"}' where vrepl_id=.*`,
 		"/delete from _vt.copy_state.*dst",
 		"/update _vt.vreplication set state='Running'",
 	})
@@ -243,10 +243,10 @@ func TestPlayerCopyVarcharCompositePKCaseSensitiveCollation(t *testing.T) {
 	reset := vstreamer.AdjustPacketSize(1)
 	defer reset()
 
-	savedCopyTimeout := copyTimeout
-	// copyTimeout should be low enough to have time to send one row.
-	copyTimeout = 500 * time.Millisecond
-	defer func() { copyTimeout = savedCopyTimeout }()
+	savedCopyPhaseDuration := *copyPhaseDuration
+	// copyPhaseDuration should be low enough to have time to send one row.
+	*copyPhaseDuration = 500 * time.Millisecond
+	defer func() { *copyPhaseDuration = savedCopyPhaseDuration }()
 
 	savedWaitRetryTime := waitRetryTime
 	// waitRetry time should be very low to cause the wait loop to execute multipel times.
@@ -323,10 +323,10 @@ func TestPlayerCopyVarcharCompositePKCaseSensitiveCollation(t *testing.T) {
 		"/insert into _vt.copy_state",
 		"/update _vt.vreplication set state='Copying'",
 		"insert into dst(id,idc,idc2,val) values (1,'a','a',1)",
-		`/update _vt.copy_state set lastpk='fields:<name:\\"id\\" type:INT32 > fields:<name:\\"idc\\" type:VARBINARY > fields:<name:\\"idc2\\" type:VARBINARY > rows:<lengths:1 lengths:1 lengths:1 values:\\"1aa\\" > ' where vrepl_id=.*`,
+		`/update _vt.copy_state set lastpk='fields:{name:\\"id\\" type:INT32} fields:{name:\\"idc\\" type:VARBINARY} fields:{name:\\"idc2\\" type:VARBINARY} rows:{lengths:1 lengths:1 lengths:1 values:\\"1aa\\"}' where vrepl_id=.*`,
 		`insert into dst(id,idc,idc2,val) select 1, 'B', 'B', 3 from dual where (1,'B','B') <= (1,'a','a')`,
 		"insert into dst(id,idc,idc2,val) values (1,'c','c',2)",
-		`/update _vt.copy_state set lastpk='fields:<name:\\"id\\" type:INT32 > fields:<name:\\"idc\\" type:VARBINARY > fields:<name:\\"idc2\\" type:VARBINARY > rows:<lengths:1 lengths:1 lengths:1 values:\\"1cc\\" > ' where vrepl_id=.*`,
+		`/update _vt.copy_state set lastpk='fields:{name:\\"id\\" type:INT32} fields:{name:\\"idc\\" type:VARBINARY} fields:{name:\\"idc2\\" type:VARBINARY} rows:{lengths:1 lengths:1 lengths:1 values:\\"1cc\\"}' where vrepl_id=.*`,
 		"/delete from _vt.copy_state.*dst",
 		"/update _vt.vreplication set state='Running'",
 	})
@@ -396,7 +396,7 @@ func TestPlayerCopyTablesWithFK(t *testing.T) {
 		"/update _vt.vreplication set pos=",
 		"begin",
 		"insert into dst1(id,id2) values (1,1), (2,2)",
-		`/update _vt.copy_state set lastpk='fields:<name:\\"id\\" type:INT32 > rows:<lengths:1 values:\\"2\\" > ' where vrepl_id=.*`,
+		`/update _vt.copy_state set lastpk='fields:{name:\\"id\\" type:INT32} rows:{lengths:1 values:\\"2\\"}' where vrepl_id=.*`,
 		"commit",
 		// copy of dst1 is done: delete from copy_state.
 		"/delete from _vt.copy_state.*dst1",
@@ -408,7 +408,7 @@ func TestPlayerCopyTablesWithFK(t *testing.T) {
 		// copy dst2
 		"begin",
 		"insert into dst2(id,id2) values (1,21), (2,22)",
-		`/update _vt.copy_state set lastpk='fields:<name:\\"id\\" type:INT32 > rows:<lengths:1 values:\\"2\\" > ' where vrepl_id=.*`,
+		`/update _vt.copy_state set lastpk='fields:{name:\\"id\\" type:INT32} rows:{lengths:1 values:\\"2\\"}' where vrepl_id=.*`,
 		"commit",
 		// copy of dst1 is done: delete from copy_state.
 		"/delete from _vt.copy_state.*dst2",
@@ -501,7 +501,7 @@ func TestPlayerCopyTables(t *testing.T) {
 		"/update _vt.vreplication set pos=",
 		"begin",
 		"insert into dst1(id,val) values (1,'aaa'), (2,'bbb')",
-		`/update _vt.copy_state set lastpk='fields:<name:\\"id\\" type:INT32 > rows:<lengths:1 values:\\"2\\" > ' where vrepl_id=.*`,
+		`/update _vt.copy_state set lastpk='fields:{name:\\"id\\" type:INT32} rows:{lengths:1 values:\\"2\\"}' where vrepl_id=.*`,
 		"commit",
 		// copy of dst1 is done: delete from copy_state.
 		"/delete from _vt.copy_state.*dst1",
@@ -550,10 +550,10 @@ func TestPlayerCopyBigTable(t *testing.T) {
 	reset := vstreamer.AdjustPacketSize(1)
 	defer reset()
 
-	savedCopyTimeout := copyTimeout
-	// copyTimeout should be low enough to have time to send one row.
-	copyTimeout = 500 * time.Millisecond
-	defer func() { copyTimeout = savedCopyTimeout }()
+	savedCopyPhaseDuration := *copyPhaseDuration
+	// copyPhaseDuration should be low enough to have time to send one row.
+	*copyPhaseDuration = 500 * time.Millisecond
+	defer func() { *copyPhaseDuration = savedCopyPhaseDuration }()
 
 	savedWaitRetryTime := waitRetryTime
 	// waitRetry time shoulw be very low to cause the wait loop to execute multipel times.
@@ -632,16 +632,16 @@ func TestPlayerCopyBigTable(t *testing.T) {
 		// The first fast-forward has no starting point. So, it just saves the current position.
 		"/update _vt.vreplication set state='Copying'",
 		"insert into dst(id,val) values (1,'aaa')",
-		`/update _vt.copy_state set lastpk='fields:<name:\\"id\\" type:INT32 > rows:<lengths:1 values:\\"1\\" > ' where vrepl_id=.*`,
+		`/update _vt.copy_state set lastpk='fields:{name:\\"id\\" type:INT32} rows:{lengths:1 values:\\"1\\"}' where vrepl_id=.*`,
 		// The next catchup executes the new row insert, but will be a no-op.
 		"insert into dst(id,val) select 3, 'ccc' from dual where (3) <= (1)",
 		// fastForward has nothing to add. Just saves position.
 		// Second row gets copied.
 		"insert into dst(id,val) values (2,'bbb')",
-		`/update _vt.copy_state set lastpk='fields:<name:\\"id\\" type:INT32 > rows:<lengths:1 values:\\"2\\" > ' where vrepl_id=.*`,
+		`/update _vt.copy_state set lastpk='fields:{name:\\"id\\" type:INT32} rows:{lengths:1 values:\\"2\\"}' where vrepl_id=.*`,
 		// Third row copied without going back to catchup state.
 		"insert into dst(id,val) values (3,'ccc')",
-		`/update _vt.copy_state set lastpk='fields:<name:\\"id\\" type:INT32 > rows:<lengths:1 values:\\"3\\" > ' where vrepl_id=.*`,
+		`/update _vt.copy_state set lastpk='fields:{name:\\"id\\" type:INT32} rows:{lengths:1 values:\\"3\\"}' where vrepl_id=.*`,
 		"/delete from _vt.copy_state.*dst",
 		// Copy is done. Go into running state.
 		// All tables copied. Final catch up followed by Running state.
@@ -666,10 +666,10 @@ func TestPlayerCopyWildcardRule(t *testing.T) {
 	reset := vstreamer.AdjustPacketSize(1)
 	defer reset()
 
-	savedCopyTimeout := copyTimeout
-	// copyTimeout should be low enough to have time to send one row.
-	copyTimeout = 500 * time.Millisecond
-	defer func() { copyTimeout = savedCopyTimeout }()
+	savedCopyPhaseDuration := *copyPhaseDuration
+	// copyPhaseDuration should be low enough to have time to send one row.
+	*copyPhaseDuration = 500 * time.Millisecond
+	defer func() { *copyPhaseDuration = savedCopyPhaseDuration }()
 
 	savedWaitRetryTime := waitRetryTime
 	// waitRetry time shoulw be very low to cause the wait loop to execute multipel times.
@@ -747,16 +747,16 @@ func TestPlayerCopyWildcardRule(t *testing.T) {
 		"/update _vt.vreplication set state='Copying'",
 		// The first fast-forward has no starting point. So, it just saves the current position.
 		"insert into src(id,val) values (1,'aaa')",
-		`/update _vt.copy_state set lastpk='fields:<name:\\"id\\" type:INT32 > rows:<lengths:1 values:\\"1\\" > ' where vrepl_id=.*`,
+		`/update _vt.copy_state set lastpk='fields:{name:\\"id\\" type:INT32} rows:{lengths:1 values:\\"1\\"}' where vrepl_id=.*`,
 		// The next catchup executes the new row insert, but will be a no-op.
 		"insert into src(id,val) select 3, 'ccc' from dual where (3) <= (1)",
 		// fastForward has nothing to add. Just saves position.
 		// Second row gets copied.
 		"insert into src(id,val) values (2,'bbb')",
-		`/update _vt.copy_state set lastpk='fields:<name:\\"id\\" type:INT32 > rows:<lengths:1 values:\\"2\\" > ' where vrepl_id=.*`,
+		`/update _vt.copy_state set lastpk='fields:{name:\\"id\\" type:INT32} rows:{lengths:1 values:\\"2\\"}' where vrepl_id=.*`,
 		// Third row copied without going back to catchup state.
 		"insert into src(id,val) values (3,'ccc')",
-		`/update _vt.copy_state set lastpk='fields:<name:\\"id\\" type:INT32 > rows:<lengths:1 values:\\"3\\" > ' where vrepl_id=.*`,
+		`/update _vt.copy_state set lastpk='fields:{name:\\"id\\" type:INT32} rows:{lengths:1 values:\\"3\\"}' where vrepl_id=.*`,
 		"/delete from _vt.copy_state.*src",
 		// Copy is done. Go into running state.
 		"/update _vt.vreplication set state='Running'",
@@ -900,11 +900,11 @@ func TestPlayerCopyTableContinuation(t *testing.T) {
 		"update dst1 set val='updated again' where id=3 and (3,3) <= (6,6)",
 		// Copy
 		"insert into dst1(id,val) values (7,'insert out'), (8,'no change'), (10,'updated'), (12,'move out')",
-		`/update _vt.copy_state set lastpk='fields:<name:\\"id1\\" type:INT32 > fields:<name:\\"id2\\" type:INT32 > rows:<lengths:2 lengths:1 values:\\"126\\" > ' where vrepl_id=.*`,
+		`/update _vt.copy_state set lastpk='fields:{name:\\"id1\\" type:INT32} fields:{name:\\"id2\\" type:INT32} rows:{lengths:2 lengths:1 values:\\"126\\"}' where vrepl_id=.*`,
 		"/delete from _vt.copy_state.*dst1",
 		// Copy again. There should be no events for catchup.
 		"insert into not_copied(id,val) values (1,'bbb')",
-		`/update _vt.copy_state set lastpk='fields:<name:\\\"id\\\" type:INT32 > rows:<lengths:1 values:\\\"1\\\" > ' where vrepl_id=.*`,
+		`/update _vt.copy_state set lastpk='fields:{name:\\\"id\\\" type:INT32} rows:{lengths:1 values:\\\"1\\\"}' where vrepl_id=.*`,
 		"/delete from _vt.copy_state.*not_copied",
 		"/update _vt.vreplication set state='Running'",
 	})
@@ -1189,7 +1189,7 @@ func TestPlayerCopyTablesStopAfterCopy(t *testing.T) {
 		"/update _vt.vreplication set pos=",
 		"begin",
 		"insert into dst1(id,val) values (1,'aaa'), (2,'bbb')",
-		`/update _vt.copy_state set lastpk='fields:<name:\\"id\\" type:INT32 > rows:<lengths:1 values:\\"2\\" > ' where vrepl_id=.*`,
+		`/update _vt.copy_state set lastpk='fields:{name:\\"id\\" type:INT32} rows:{lengths:1 values:\\"2\\"}' where vrepl_id=.*`,
 		"commit",
 		// copy of dst1 is done: delete from copy_state.
 		"/delete from _vt.copy_state.*dst1",
@@ -1216,14 +1216,14 @@ func TestPlayerCopyTableCancel(t *testing.T) {
 	})
 	env.SchemaEngine.Reload(context.Background())
 
-	saveTimeout := copyTimeout
-	copyTimeout = 1 * time.Millisecond
-	defer func() { copyTimeout = saveTimeout }()
+	saveTimeout := *copyPhaseDuration
+	*copyPhaseDuration = 1 * time.Millisecond
+	defer func() { *copyPhaseDuration = saveTimeout }()
 
 	// Set a hook to reset the copy timeout after first call.
 	vstreamRowsHook = func(ctx context.Context) {
 		<-ctx.Done()
-		copyTimeout = saveTimeout
+		*copyPhaseDuration = saveTimeout
 		vstreamRowsHook = nil
 	}
 
@@ -1268,7 +1268,7 @@ func TestPlayerCopyTableCancel(t *testing.T) {
 		"/update _vt.vreplication set pos=",
 		"begin",
 		"insert into dst1(id,val) values (1,'aaa'), (2,'bbb')",
-		`/update _vt.copy_state set lastpk='fields:<name:\\"id\\" type:INT32 > rows:<lengths:1 values:\\"2\\" > ' where vrepl_id=.*`,
+		`/update _vt.copy_state set lastpk='fields:{name:\\"id\\" type:INT32} rows:{lengths:1 values:\\"2\\"}' where vrepl_id=.*`,
 		"commit",
 		// copy of dst1 is done: delete from copy_state.
 		"/delete from _vt.copy_state.*dst1",

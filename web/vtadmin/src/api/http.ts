@@ -171,6 +171,29 @@ export const fetchSchema = async ({ clusterID, keyspace, table }: FetchSchemaPar
     return pb.Schema.create(result);
 };
 
+export interface FetchTabletParams {
+    clusterID: string;
+    alias: string;
+}
+
+export const fetchTablet = async ({ clusterID, alias }: FetchTabletParams) => {
+    const { result } = await vtfetch(`/api/tablet/${alias}?cluster=${clusterID}`);
+
+    const err = pb.Tablet.verify(result);
+    if (err) throw Error(err);
+
+    return pb.Tablet.create(result);
+};
+
+export const fetchExperimentalTabletDebugVars = async ({ clusterID, alias }: FetchTabletParams) => {
+    if (!process.env.REACT_APP_ENABLE_EXPERIMENTAL_TABLET_DEBUG_VARS) {
+        return Promise.resolve({});
+    }
+
+    const { result } = await vtfetch(`/api/experimental/tablet/${alias}/debug/vars?cluster=${clusterID}`);
+    return result;
+};
+
 export const fetchTablets = async () =>
     vtfetchEntities({
         endpoint: '/api/tablets',
@@ -181,7 +204,6 @@ export const fetchTablets = async () =>
             return pb.Tablet.create(e);
         },
     });
-
 export interface FetchVSchemaParams {
     clusterID: string;
     keyspace: string;
@@ -212,4 +234,20 @@ export const fetchWorkflow = async (params: { clusterID: string; keyspace: strin
     if (err) throw Error(err);
 
     return pb.Workflow.create(result);
+};
+
+export const fetchVTExplain = async <R extends pb.IVTExplainRequest>({ cluster, keyspace, sql }: R) => {
+    // As an easy enhancement for later, we can also validate the request parameters on the front-end
+    // instead of defaulting to '', to save a round trip.
+    const req = new URLSearchParams();
+    req.append('cluster', cluster || '');
+    req.append('keyspace', keyspace || '');
+    req.append('sql', sql || '');
+
+    const { result } = await vtfetch(`/api/vtexplain?${req}`);
+
+    const err = pb.VTExplainResponse.verify(result);
+    if (err) throw Error(err);
+
+    return pb.VTExplainResponse.create(result);
 };

@@ -17,12 +17,15 @@ limitations under the License.
 package main
 
 import (
+	"context"
 	"flag"
+	"io"
 	"os"
 	"time"
 
 	"github.com/spf13/cobra"
 
+	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vtadmin"
 	"vitess.io/vitess/go/vt/vtadmin/cluster"
@@ -37,6 +40,8 @@ var (
 	clusterFileConfig    cluster.FileConfig
 	defaultClusterConfig cluster.Config
 
+	traceCloser io.Closer = &noopCloser{}
+
 	rootCmd = &cobra.Command{
 		Use: "vtadmin",
 		PreRun: func(cmd *cobra.Command, args []string) {
@@ -44,32 +49,68 @@ var (
 			os.Args = os.Args[0:1]
 			flag.Parse()
 			os.Args = tmp
-			// (TODO:@amason) Check opts.EnableTracing and trace boot time.
+
+			if opts.EnableTracing || httpOpts.EnableTracing {
+				startTracing(cmd)
+			}
 		},
 		Run: run,
+		PostRun: func(cmd *cobra.Command, args []string) {
+			trace.LogErrorsWhenClosing(traceCloser)
+		},
 	}
 )
 
+// fatal ensures the tracer is closed and final spans are sent before issuing
+// a log.Fatal call with the given args.
+func fatal(args ...interface{}) {
+	trace.LogErrorsWhenClosing(traceCloser)
+	log.Fatal(args...)
+}
+
+// startTracing checks the value of --tracer and then starts tracing, populating
+// the private global traceCloser
+func startTracing(cmd *cobra.Command) {
+	tracer, err := cmd.Flags().GetString("tracer")
+	if err != nil {
+		log.Warningf("not starting tracer; err: %s", err)
+		return
+	}
+
+	if tracer == "" || tracer == "noop" {
+		log.Warningf("starting tracing with noop tracer")
+	}
+
+	traceCloser = trace.StartTracing("vtadmin")
+}
+
 func run(cmd *cobra.Command, args []string) {
+	bootSpan, _ := trace.NewSpan(context.Background(), "vtadmin.boot")
+	defer bootSpan.Finish()
+
 	configs := clusterFileConfig.Combine(defaultClusterConfig, clusterConfigs)
 	clusters := make([]*cluster.Cluster, len(configs))
 
 	if len(configs) == 0 {
-		log.Fatal("must specify at least one cluster")
+		bootSpan.Finish()
+		fatal("must specify at least one cluster")
 	}
 
 	for i, cfg := range configs {
 		cluster, err := cfg.Cluster()
 		if err != nil {
-			log.Fatal(err)
+			bootSpan.Finish()
+			fatal(err)
 		}
 
 		clusters[i] = cluster
 	}
 
 	s := vtadmin.NewAPI(clusters, opts, httpOpts)
+	bootSpan.Finish()
+
 	if err := s.ListenAndServe(); err != nil {
-		log.Fatal(err)
+		fatal(err)
 	}
 }
 
@@ -81,14 +122,18 @@ func main() {
 	rootCmd.Flags().Var(&clusterFileConfig, "cluster-config", "path to a yaml cluster configuration. see clusters.example.yaml") // (TODO:@amason) provide example config.
 	rootCmd.Flags().Var(&defaultClusterConfig, "cluster-defaults", "default options for all clusters")
 
+	rootCmd.Flags().AddGoFlag(flag.Lookup("tracer"))                // defined in go/vt/trace
+	rootCmd.Flags().AddGoFlag(flag.Lookup("tracing-sampling-type")) // defined in go/vt/trace
+	rootCmd.Flags().AddGoFlag(flag.Lookup("tracing-sampling-rate")) // defined in go/vt/trace
 	rootCmd.Flags().BoolVar(&opts.EnableTracing, "grpc-tracing", false, "whether to enable tracing on the gRPC server")
 	rootCmd.Flags().BoolVar(&httpOpts.EnableTracing, "http-tracing", false, "whether to enable tracing on the HTTP server")
+
 	rootCmd.Flags().BoolVar(&httpOpts.DisableCompression, "http-no-compress", false, "whether to disable compression of HTTP API responses")
 	rootCmd.Flags().StringSliceVar(&httpOpts.CORSOrigins, "http-origin", []string{}, "repeated, comma-separated flag of allowed CORS origins. omit to disable CORS")
-	rootCmd.Flags().StringVar(&httpOpts.ExperimentalOptions.TabletFQDNTmpl,
-		"http-tablet-fqdn-tmpl",
-		"{{ .Tablet.Hostname }}:80",
-		"[EXPERIMENTAL] Go template string to generate a reachable http "+
+	rootCmd.Flags().StringVar(&httpOpts.ExperimentalOptions.TabletURLTmpl,
+		"http-tablet-url-tmpl",
+		"https://{{ .Tablet.Hostname }}:80",
+		"[EXPERIMENTAL] Go template string to generate a reachable http(s) "+
 			"address for a tablet. Currently used to make passthrough "+
 			"requests to /debug/vars endpoints.",
 	)
@@ -106,3 +151,7 @@ func main() {
 
 	log.Flush()
 }
+
+type noopCloser struct{}
+
+func (nc *noopCloser) Close() error { return nil }

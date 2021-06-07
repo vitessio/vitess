@@ -860,6 +860,9 @@ func (c *Conn) handleNextCommand(handler Handler) bool {
 		}
 		return false
 	}
+	if len(data) == 0 {
+		return false
+	}
 
 	switch data[0] {
 	case ComQuit:
@@ -1489,4 +1492,9 @@ func (c *Conn) GetTLSClientCerts() []*x509.Certificate {
 		return tlsConn.ConnectionState().PeerCertificates
 	}
 	return nil
+}
+
+// GetRawConn returns the raw net.Conn for nefarious purposes.
+func (c *Conn) GetRawConn() net.Conn {
+	return c.conn
 }

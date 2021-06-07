@@ -50,7 +50,7 @@ import (
 
 	"context"
 
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/stats"

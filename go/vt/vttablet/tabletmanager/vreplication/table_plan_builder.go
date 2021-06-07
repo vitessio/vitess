@@ -685,16 +685,6 @@ func (tpb *tablePlanBuilder) generateDeleteStatement() *sqlparser.ParsedQuery {
 	return buf.ParsedQuery()
 }
 
-// For binary(n) column types, the value in the where clause needs to be padded with nulls upto the length of the column
-// for MySQL comparison to work properly. This is achieved by casting it to the column type
-func castIfNecessary(buf *sqlparser.TrackedBuffer, cexpr *colExpr) {
-	if cexpr.dataType == "binary" {
-		buf.Myprintf("cast(%v as %s)", cexpr.expr, cexpr.columnType)
-		return
-	}
-	buf.Myprintf("%v", cexpr.expr)
-}
-
 func (tpb *tablePlanBuilder) generateWhere(buf *sqlparser.TrackedBuffer, bvf *bindvarFormatter) {
 	buf.WriteString(" where ")
 	bvf.mode = bvBefore
@@ -702,11 +692,11 @@ func (tpb *tablePlanBuilder) generateWhere(buf *sqlparser.TrackedBuffer, bvf *bi
 	for _, cexpr := range tpb.pkCols {
 		if _, ok := cexpr.expr.(*sqlparser.ColName); ok {
 			buf.Myprintf("%s%v=", separator, cexpr.colName)
-			castIfNecessary(buf, cexpr)
+			buf.Myprintf("%v", cexpr.expr)
 		} else {
 			// Parenthesize non-trivial expressions.
 			buf.Myprintf("%s%v=(", separator, cexpr.colName)
-			castIfNecessary(buf, cexpr)
+			buf.Myprintf("%v", cexpr.expr)
 			buf.Myprintf(")")
 		}
 		separator = " and "

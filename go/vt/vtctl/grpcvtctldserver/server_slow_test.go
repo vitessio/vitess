@@ -321,7 +321,7 @@ func TestEmergencyReparentShardSlow(t *testing.T) {
 			}
 
 			assert.NoError(t, err)
-			testutil.AssertEmergencyReparentShardResponsesEqual(t, *tt.expected, *resp)
+			testutil.AssertEmergencyReparentShardResponsesEqual(t, tt.expected, resp)
 		})
 	}
 }
@@ -590,7 +590,7 @@ func TestPlannedReparentShardSlow(t *testing.T) {
 			}
 
 			assert.NoError(t, err)
-			testutil.AssertPlannedReparentShardResponsesEqual(t, *tt.expected, *resp)
+			testutil.AssertPlannedReparentShardResponsesEqual(t, tt.expected, resp)
 		})
 	}
 }

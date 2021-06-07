@@ -56,6 +56,7 @@ const (
 	alterSchemaMigrationsTableMessage            = "ALTER TABLE _vt.schema_migrations add column message TEXT NOT NULL"
 	alterSchemaMigrationsTableTableCompleteIndex = "ALTER TABLE _vt.schema_migrations add KEY table_complete_idx (migration_status, keyspace(64), mysql_table(64), completed_timestamp)"
 	alterSchemaMigrationsTableETASeconds         = "ALTER TABLE _vt.schema_migrations add column eta_seconds bigint NOT NULL DEFAULT -1"
+	alterSchemaMigrationsTableRowsCopied         = "ALTER TABLE _vt.schema_migrations add column rows_copied bigint unsigned NOT NULL DEFAULT 0"
 	alterSchemaMigrationsTableTableRows          = "ALTER TABLE _vt.schema_migrations add column table_rows bigint NOT NULL DEFAULT 0"
 
 	sqlInsertMigration = `INSERT IGNORE INTO _vt.schema_migrations (
@@ -103,6 +104,11 @@ const (
 	`
 	sqlUpdateMigrationETASeconds = `UPDATE _vt.schema_migrations
 			SET eta_seconds=%a
+		WHERE
+			migration_uuid=%a
+	`
+	sqlUpdateMigrationRowsCopied = `UPDATE _vt.schema_migrations
+			SET rows_copied=%a
 		WHERE
 			migration_uuid=%a
 	`
@@ -210,7 +216,9 @@ const (
 	`
 	sqlSelectRunningMigrations = `SELECT
 			migration_uuid,
-			strategy
+			strategy,
+			options,
+			timestampdiff(second, started_timestamp, now()) as elapsed_seconds
 		FROM _vt.schema_migrations
 		WHERE
 			migration_status='running'
@@ -318,6 +326,31 @@ const (
 			AND ACTION_TIMING='AFTER'
 			AND LEFT(TRIGGER_NAME, 7)='pt_osc_'
 		`
+	sqlSelectColumnTypes = `
+		select
+				*
+			from
+				information_schema.columns
+			where
+				table_schema=%a
+				and table_name=%a
+		`
+	selSelectCountFKParentConstraints = `
+		SELECT
+			COUNT(*) as num_fk_constraints
+		FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
+		WHERE
+			REFERENCED_TABLE_SCHEMA=%a AND REFERENCED_TABLE_NAME=%a
+			AND REFERENCED_TABLE_NAME IS NOT NULL
+		`
+	selSelectCountFKChildConstraints = `
+		SELECT
+			COUNT(*) as num_fk_constraints
+		FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
+		WHERE
+			TABLE_SCHEMA=%a AND TABLE_NAME=%a
+			AND REFERENCED_TABLE_NAME IS NOT NULL
+		`
 	sqlDropTrigger       = "DROP TRIGGER IF EXISTS `%a`.`%a`"
 	sqlShowTablesLike    = "SHOW TABLES LIKE '%a'"
 	sqlCreateTableLike   = "CREATE TABLE `%a` LIKE `%a`"
@@ -325,10 +358,20 @@ const (
 	sqlAlterTableOptions = "ALTER TABLE `%a` %s"
 	sqlShowColumnsFrom   = "SHOW COLUMNS FROM `%a`"
 	sqlShowTableStatus   = "SHOW TABLE STATUS LIKE '%a'"
-	sqlStartVReplStream  = "UPDATE _vt.vreplication set state='Running' where db_name=%a and workflow=%a"
-	sqlStopVReplStream   = "UPDATE _vt.vreplication set state='Stopped' where db_name=%a and workflow=%a"
-	sqlDeleteVReplStream = "DELETE FROM _vt.vreplication where db_name=%a and workflow=%a"
-	sqlReadVReplStream   = `SELECT
+	sqlGetAutoIncrement  = `
+		SELECT
+			AUTO_INCREMENT
+		FROM INFORMATION_SCHEMA.TABLES
+		WHERE
+			TABLES.TABLE_SCHEMA=%a
+			AND TABLES.TABLE_NAME=%a
+			AND AUTO_INCREMENT IS NOT NULL
+		`
+	sqlAlterTableAutoIncrement = "ALTER TABLE `%s` AUTO_INCREMENT=%a"
+	sqlStartVReplStream        = "UPDATE _vt.vreplication set state='Running' where db_name=%a and workflow=%a"
+	sqlStopVReplStream         = "UPDATE _vt.vreplication set state='Stopped' where db_name=%a and workflow=%a"
+	sqlDeleteVReplStream       = "DELETE FROM _vt.vreplication where db_name=%a and workflow=%a"
+	sqlReadVReplStream         = `SELECT
 			id,
 			workflow,
 			source,
@@ -341,7 +384,6 @@ const (
 		FROM _vt.vreplication
 		WHERE
 			workflow=%a
-
 		`
 	sqlReadCountCopyState = `SELECT
 			count(*) as cnt
@@ -364,8 +406,11 @@ var (
 		`CREATE USER IF NOT EXISTS %s IDENTIFIED BY '%s'`,
 		`ALTER USER %s IDENTIFIED BY '%s'`,
 	}
+	sqlGrantOnlineDDLSuper = []string{
+		`GRANT SUPER ON *.* TO %s`,
+	}
 	sqlGrantOnlineDDLUser = []string{
-		`GRANT SUPER, REPLICATION SLAVE ON *.* TO %s`,
+		`GRANT PROCESS, REPLICATION SLAVE, REPLICATION CLIENT ON *.* TO %s`,
 		`GRANT ALTER, CREATE, DELETE, DROP, INDEX, INSERT, LOCK TABLES, SELECT, TRIGGER, UPDATE ON *.* TO %s`,
 	}
 	sqlDropOnlineDDLUser = `DROP USER IF EXISTS %s`
@@ -385,5 +430,6 @@ var applyDDL = []string{
 	alterSchemaMigrationsTableMessage,
 	alterSchemaMigrationsTableTableCompleteIndex,
 	alterSchemaMigrationsTableETASeconds,
+	alterSchemaMigrationsTableRowsCopied,
 	alterSchemaMigrationsTableTableRows,
 }

@@ -22,6 +22,8 @@ import (
 	"sort"
 	"strings"
 
+	"google.golang.org/protobuf/proto"
+
 	"vitess.io/vitess/go/bytes2"
 
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
@@ -72,9 +74,9 @@ func (rp *ReplicatorPlan) buildExecutionPlan(fieldEvent *binlogdatapb.FieldEvent
 		// bind var names.
 		tplanv.Fields = make([]*querypb.Field, 0, len(fieldEvent.Fields))
 		for _, fld := range fieldEvent.Fields {
-			trimmed := *fld
+			trimmed := proto.Clone(fld).(*querypb.Field)
 			trimmed.Name = strings.Trim(trimmed.Name, "`")
-			tplanv.Fields = append(tplanv.Fields, &trimmed)
+			tplanv.Fields = append(tplanv.Fields, trimmed)
 		}
 		return &tplanv, nil
 	}

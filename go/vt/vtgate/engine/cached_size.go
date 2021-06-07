@@ -90,7 +90,7 @@ func (cached *DDL) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(58)
+		size += int64(59)
 	}
 	// field Keyspace *vitess.io/vitess/go/vt/vtgate/vindexes.Keyspace
 	size += cached.Keyspace.CachedSize(true)
@@ -339,7 +339,7 @@ func (cached *MergeSort) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(48)
+		size += int64(49)
 	}
 	// field Primitives []vitess.io/vitess/go/vt/vtgate/engine.StreamExecutor
 	{
@@ -659,6 +659,18 @@ func (cached *Send) CachedSize(alloc bool) int64 {
 	}
 	// field Query string
 	size += int64(len(cached.Query))
+	return size
+}
+func (cached *SessionPrimitive) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(24)
+	}
+	// field name string
+	size += int64(len(cached.name))
 	return size
 }
 func (cached *Set) CachedSize(alloc bool) int64 {

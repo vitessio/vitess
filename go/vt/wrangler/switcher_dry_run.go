@@ -47,7 +47,7 @@ func (dr *switcherDryRun) deleteRoutingRules(ctx context.Context) error {
 	return nil
 }
 
-func (dr *switcherDryRun) switchShardReads(ctx context.Context, cells []string, servedTypes []topodatapb.TabletType, direction TrafficSwitchDirection) error {
+func (dr *switcherDryRun) switchShardReads(ctx context.Context, cells []string, servedTypes []topodatapb.TabletType, direction workflow.TrafficSwitchDirection) error {
 	sourceShards := make([]string, 0)
 	targetShards := make([]string, 0)
 	for _, source := range dr.ts.sources {
@@ -58,7 +58,7 @@ func (dr *switcherDryRun) switchShardReads(ctx context.Context, cells []string, 
 	}
 	sort.Strings(sourceShards)
 	sort.Strings(targetShards)
-	if direction == DirectionForward {
+	if direction == workflow.DirectionForward {
 		dr.drLog.Log(fmt.Sprintf("Switch reads from keyspace %s to keyspace %s for shards %s to shards %s",
 			dr.ts.sourceKeyspace, dr.ts.targetKeyspace, strings.Join(sourceShards, ","), strings.Join(targetShards, ",")))
 	} else {
@@ -68,9 +68,9 @@ func (dr *switcherDryRun) switchShardReads(ctx context.Context, cells []string, 
 	return nil
 }
 
-func (dr *switcherDryRun) switchTableReads(ctx context.Context, cells []string, servedTypes []topodatapb.TabletType, direction TrafficSwitchDirection) error {
+func (dr *switcherDryRun) switchTableReads(ctx context.Context, cells []string, servedTypes []topodatapb.TabletType, direction workflow.TrafficSwitchDirection) error {
 	ks := dr.ts.targetKeyspace
-	if direction == DirectionBackward {
+	if direction == workflow.DirectionBackward {
 		ks = dr.ts.sourceKeyspace
 	}
 	var tabletTypes []string
@@ -148,14 +148,16 @@ func (dr *switcherDryRun) createReverseVReplication(ctx context.Context) error {
 	return nil
 }
 
-func (dr *switcherDryRun) migrateStreams(ctx context.Context, sm *streamMigrater) error {
-	if len(sm.templates) == 0 {
+func (dr *switcherDryRun) migrateStreams(ctx context.Context, sm *workflow.StreamMigrator) error {
+	templates := sm.Templates()
+
+	if len(templates) == 0 {
 		return nil
 	}
 	logs := make([]string, 0)
 
 	dr.drLog.Log(fmt.Sprintf("Migrate streams to %s:", dr.ts.targetKeyspace))
-	for key, streams := range sm.streams {
+	for key, streams := range sm.Streams() {
 		for _, stream := range streams {
 			logs = append(logs, fmt.Sprintf("\tShard %s Id %d, Workflow %s, Pos %s, BinLogSource %v", key, stream.ID, stream.Workflow, mysql.EncodePosition(stream.Position), stream.BinlogSource))
 		}
@@ -166,7 +168,7 @@ func (dr *switcherDryRun) migrateStreams(ctx context.Context, sm *streamMigrater
 		logs = nil
 	}
 	for _, target := range dr.ts.targets {
-		tabletStreams := copyTabletStreams(sm.templates)
+		tabletStreams := templates
 		for _, vrs := range tabletStreams {
 			logs = append(logs, fmt.Sprintf("\t Keyspace %s, Shard %s, Tablet %d, Workflow %s, Id %d, Pos %v, BinLogSource %s",
 				vrs.BinlogSource.Keyspace, vrs.BinlogSource.Shard, target.GetPrimary().Alias.Uid, vrs.Workflow, vrs.ID, mysql.EncodePosition(vrs.Position), vrs.BinlogSource))
@@ -197,9 +199,9 @@ func (dr *switcherDryRun) stopSourceWrites(ctx context.Context) error {
 	return nil
 }
 
-func (dr *switcherDryRun) stopStreams(ctx context.Context, sm *streamMigrater) ([]string, error) {
+func (dr *switcherDryRun) stopStreams(ctx context.Context, sm *workflow.StreamMigrator) ([]string, error) {
 	logs := make([]string, 0)
-	for _, streams := range sm.streams {
+	for _, streams := range sm.Streams() {
 		for _, stream := range streams {
 			logs = append(logs, fmt.Sprintf("\tId %d Keyspace %s Shard %s Rules %s at Position %v",
 				stream.ID, stream.BinlogSource.Keyspace, stream.BinlogSource.Shard, stream.BinlogSource.Filter, stream.Position))
@@ -212,7 +214,7 @@ func (dr *switcherDryRun) stopStreams(ctx context.Context, sm *streamMigrater) (
 	return nil, nil
 }
 
-func (dr *switcherDryRun) cancelMigration(ctx context.Context, sm *streamMigrater) {
+func (dr *switcherDryRun) cancelMigration(ctx context.Context, sm *workflow.StreamMigrator) {
 	dr.drLog.Log("Cancel stream migrations as requested")
 }
 
@@ -223,7 +225,7 @@ func (dr *switcherDryRun) lockKeyspace(ctx context.Context, keyspace, _ string) 
 	}, nil
 }
 
-func (dr *switcherDryRun) removeSourceTables(ctx context.Context, removalType TableRemovalType) error {
+func (dr *switcherDryRun) removeSourceTables(ctx context.Context, removalType workflow.TableRemovalType) error {
 	logs := make([]string, 0)
 	for _, source := range dr.ts.sources {
 		for _, tableName := range dr.ts.tables {
@@ -232,7 +234,7 @@ func (dr *switcherDryRun) removeSourceTables(ctx context.Context, removalType Ta
 		}
 	}
 	action := "Dropping"
-	if removalType == RenameTable {
+	if removalType == workflow.RenameTable {
 		action = "Renaming"
 	}
 	if len(logs) > 0 {

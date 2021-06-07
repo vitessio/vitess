@@ -62,8 +62,8 @@ func TestPulloutSubqueryValueGood(t *testing.T) {
 
 	result, err := ps.Execute(nil, bindVars, false)
 	require.NoError(t, err)
-	sfp.ExpectLog(t, []string{`Execute aa: type:INT64 value:"1"  false`})
-	ufp.ExpectLog(t, []string{`Execute aa: type:INT64 value:"1" sq: type:INT64 value:"1"  false`})
+	sfp.ExpectLog(t, []string{`Execute aa: type:INT64 value:"1" false`})
+	ufp.ExpectLog(t, []string{`Execute aa: type:INT64 value:"1" sq: type:INT64 value:"1" false`})
 	expectResult(t, "ps.Execute", result, underlyingResult)
 }
 
@@ -160,7 +160,7 @@ func TestPulloutSubqueryInNotinGood(t *testing.T) {
 		t.Error(err)
 	}
 	sfp.ExpectLog(t, []string{`Execute  false`})
-	ufp.ExpectLog(t, []string{`Execute has_values: type:INT64 value:"1" sq: type:TUPLE values:<type:INT64 value:"1" > values:<type:INT64 value:"2" >  false`})
+	ufp.ExpectLog(t, []string{`Execute has_values: type:INT64 value:"1" sq: type:TUPLE values:{type:INT64 value:"1"} values:{type:INT64 value:"2"} false`})
 
 	// Test the NOT IN case just once even though it's common code.
 	sfp.rewind()
@@ -170,7 +170,7 @@ func TestPulloutSubqueryInNotinGood(t *testing.T) {
 		t.Error(err)
 	}
 	sfp.ExpectLog(t, []string{`Execute  false`})
-	ufp.ExpectLog(t, []string{`Execute has_values: type:INT64 value:"1" sq: type:TUPLE values:<type:INT64 value:"1" > values:<type:INT64 value:"2" >  false`})
+	ufp.ExpectLog(t, []string{`Execute has_values: type:INT64 value:"1" sq: type:TUPLE values:{type:INT64 value:"1"} values:{type:INT64 value:"2"} false`})
 }
 
 func TestPulloutSubqueryInNone(t *testing.T) {
@@ -196,7 +196,7 @@ func TestPulloutSubqueryInNone(t *testing.T) {
 		t.Error(err)
 	}
 	sfp.ExpectLog(t, []string{`Execute  false`})
-	ufp.ExpectLog(t, []string{`Execute has_values: type:INT64 value:"0" sq: type:TUPLE values:<type:INT64 value:"0" >  false`})
+	ufp.ExpectLog(t, []string{`Execute has_values: type:INT64 value:"0" sq: type:TUPLE values:{type:INT64 value:"0"} false`})
 }
 
 func TestPulloutSubqueryInBadColumns(t *testing.T) {
@@ -243,7 +243,7 @@ func TestPulloutSubqueryExists(t *testing.T) {
 		t.Error(err)
 	}
 	sfp.ExpectLog(t, []string{`Execute  false`})
-	ufp.ExpectLog(t, []string{`Execute has_values: type:INT64 value:"1"  false`})
+	ufp.ExpectLog(t, []string{`Execute has_values: type:INT64 value:"1" false`})
 }
 
 func TestPulloutSubqueryExistsNone(t *testing.T) {
@@ -268,7 +268,7 @@ func TestPulloutSubqueryExistsNone(t *testing.T) {
 		t.Error(err)
 	}
 	sfp.ExpectLog(t, []string{`Execute  false`})
-	ufp.ExpectLog(t, []string{`Execute has_values: type:INT64 value:"0"  false`})
+	ufp.ExpectLog(t, []string{`Execute has_values: type:INT64 value:"0" false`})
 }
 
 func TestPulloutSubqueryError(t *testing.T) {
@@ -318,8 +318,8 @@ func TestPulloutSubqueryStream(t *testing.T) {
 
 	result, err := wrapStreamExecute(ps, nil, bindVars, false)
 	require.NoError(t, err)
-	sfp.ExpectLog(t, []string{`Execute aa: type:INT64 value:"1"  false`})
-	ufp.ExpectLog(t, []string{`StreamExecute aa: type:INT64 value:"1" sq: type:INT64 value:"1"  false`})
+	sfp.ExpectLog(t, []string{`Execute aa: type:INT64 value:"1" false`})
+	ufp.ExpectLog(t, []string{`StreamExecute aa: type:INT64 value:"1" sq: type:INT64 value:"1" false`})
 	expectResult(t, "ps.StreamExecute", result, underlyingResult)
 }
 
@@ -349,8 +349,8 @@ func TestPulloutSubqueryGetFields(t *testing.T) {
 		t.Error(err)
 	}
 	ufp.ExpectLog(t, []string{
-		`GetFields aa: type:INT64 value:"1" has_values: type:INT64 value:"0" sq: type:TUPLE values:<type:INT64 value:"0" > `,
-		`Execute aa: type:INT64 value:"1" has_values: type:INT64 value:"0" sq: type:TUPLE values:<type:INT64 value:"0" >  true`,
+		`GetFields aa: type:INT64 value:"1" has_values: type:INT64 value:"0" sq: type:TUPLE values:{type:INT64 value:"0"}`,
+		`Execute aa: type:INT64 value:"1" has_values: type:INT64 value:"0" sq: type:TUPLE values:{type:INT64 value:"0"} true`,
 	})
 
 	ufp.rewind()
@@ -359,8 +359,8 @@ func TestPulloutSubqueryGetFields(t *testing.T) {
 		t.Error(err)
 	}
 	ufp.ExpectLog(t, []string{
-		`GetFields aa: type:INT64 value:"1" has_values: type:INT64 value:"0" sq: type:TUPLE values:<type:INT64 value:"0" > `,
-		`Execute aa: type:INT64 value:"1" has_values: type:INT64 value:"0" sq: type:TUPLE values:<type:INT64 value:"0" >  true`,
+		`GetFields aa: type:INT64 value:"1" has_values: type:INT64 value:"0" sq: type:TUPLE values:{type:INT64 value:"0"}`,
+		`Execute aa: type:INT64 value:"1" has_values: type:INT64 value:"0" sq: type:TUPLE values:{type:INT64 value:"0"} true`,
 	})
 
 	ufp.rewind()
@@ -369,7 +369,7 @@ func TestPulloutSubqueryGetFields(t *testing.T) {
 		t.Error(err)
 	}
 	ufp.ExpectLog(t, []string{
-		`GetFields aa: type:INT64 value:"1" has_values: type:INT64 value:"0" `,
-		`Execute aa: type:INT64 value:"1" has_values: type:INT64 value:"0"  true`,
+		`GetFields aa: type:INT64 value:"1" has_values: type:INT64 value:"0"`,
+		`Execute aa: type:INT64 value:"1" has_values: type:INT64 value:"0" true`,
 	})
 }

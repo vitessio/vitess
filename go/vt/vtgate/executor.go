@@ -98,7 +98,8 @@ type Executor struct {
 	normalize       bool
 	warnShardedOnly bool
 
-	vm *VSchemaManager
+	vm            *VSchemaManager
+	schemaTracker SchemaInfo
 }
 
 var executorOnce sync.Once
@@ -108,7 +109,16 @@ const pathScatterStats = "/debug/scatter_stats"
 const pathVSchema = "/debug/vschema"
 
 // NewExecutor creates a new Executor.
-func NewExecutor(ctx context.Context, serv srvtopo.Server, cell string, resolver *Resolver, normalize, warnOnShardedOnly bool, streamSize int, cacheCfg *cache.Config) *Executor {
+func NewExecutor(
+	ctx context.Context,
+	serv srvtopo.Server,
+	cell string,
+	resolver *Resolver,
+	normalize, warnOnShardedOnly bool,
+	streamSize int,
+	cacheCfg *cache.Config,
+	schemaTracker SchemaInfo,
+) *Executor {
 	e := &Executor{
 		serv:            serv,
 		cell:            cell,
@@ -119,11 +129,18 @@ func NewExecutor(ctx context.Context, serv srvtopo.Server, cell string, resolver
 		normalize:       normalize,
 		warnShardedOnly: warnOnShardedOnly,
 		streamSize:      streamSize,
+		schemaTracker:   schemaTracker,
 	}
 
 	vschemaacl.Init()
-	e.vm = &VSchemaManager{e: e}
-	e.vm.watchSrvVSchema(ctx, cell)
+	// we subscribe to update from the VSchemaManager
+	e.vm = &VSchemaManager{
+		subscriber: e.SaveVSchema,
+		serv:       serv,
+		cell:       cell,
+		schema:     e.schemaTracker,
+	}
+	serv.WatchSrvVSchema(ctx, cell, e.vm.VSchemaUpdate)
 
 	executorOnce.Do(func() {
 		stats.NewGaugeFunc("QueryPlanCacheLength", "Query plan cache length", func() int64 {
@@ -836,28 +853,6 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 			Fields: buildVarCharFields("Keyspace", "Name", "Type", "Params", "Owner"),
 			Rows:   rows,
 		}, nil
-	case sqlparser.KeywordString(sqlparser.WARNINGS):
-		fields := []*querypb.Field{
-			{Name: "Level", Type: sqltypes.VarChar},
-			{Name: "Code", Type: sqltypes.Uint16},
-			{Name: "Message", Type: sqltypes.VarChar},
-		}
-		rows := make([][]sqltypes.Value, 0)
-
-		if safeSession.Warnings != nil {
-			for _, warning := range safeSession.Warnings {
-				rows = append(rows, []sqltypes.Value{
-					sqltypes.NewVarChar("Warning"),
-					sqltypes.NewUint32(warning.Code),
-					sqltypes.NewVarChar(warning.Message),
-				})
-			}
-		}
-
-		return &sqltypes.Result{
-			Fields: fields,
-			Rows:   rows,
-		}, nil
 	}
 
 	// Any other show statement is passed through
@@ -1024,7 +1019,7 @@ func (e *Executor) handleOther(ctx context.Context, safeSession *SafeSession, sq
 }
 
 // StreamExecute executes a streaming query.
-func (e *Executor) StreamExecute(ctx context.Context, method string, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, target querypb.Target, callback func(*sqltypes.Result) error) (err error) {
+func (e *Executor) StreamExecute(ctx context.Context, method string, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, target *querypb.Target, callback func(*sqltypes.Result) error) (err error) {
 	logStats := NewLogStats(ctx, method, sql, bindVars)
 	defer logStats.Send()
 
@@ -1162,7 +1157,9 @@ func (e *Executor) VSchema() *vindexes.VSchema {
 func (e *Executor) SaveVSchema(vschema *vindexes.VSchema, stats *VSchemaStats) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	e.vschema = vschema
+	if vschema != nil {
+		e.vschema = vschema
+	}
 	e.vschemaStats = stats
 	e.plans.Clear()
 
@@ -1232,7 +1229,7 @@ func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.
 		return plan.(*engine.Plan), nil
 	}
 
-	plan, err := planbuilder.BuildFromStmt(query, statement, reservedVars, vcursor, bindVarNeeds)
+	plan, err := planbuilder.BuildFromStmt(query, statement, reservedVars, vcursor, bindVarNeeds, *enableOnlineDDL, *enableDirectDDL)
 	if err != nil {
 		return nil, err
 	}
@@ -1476,7 +1473,7 @@ func (e *Executor) ExecuteMultiShard(ctx context.Context, rss []*srvtopo.Resolve
 }
 
 // StreamExecuteMulti implements the IExecutor interface
-func (e *Executor) StreamExecuteMulti(ctx context.Context, query string, rss []*srvtopo.ResolvedShard, vars []map[string]*querypb.BindVariable, options *querypb.ExecuteOptions, callback func(reply *sqltypes.Result) error) error {
+func (e *Executor) StreamExecuteMulti(ctx context.Context, query string, rss []*srvtopo.ResolvedShard, vars []map[string]*querypb.BindVariable, options *querypb.ExecuteOptions, callback func(reply *sqltypes.Result) error) []error {
 	return e.scatterConn.StreamExecuteMulti(ctx, query, rss, vars, options, callback)
 }
 

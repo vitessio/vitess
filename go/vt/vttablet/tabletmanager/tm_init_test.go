@@ -20,12 +20,16 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/test/utils"
+
 	"context"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/fakesqldb"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/logutil"
@@ -335,7 +339,7 @@ func TestStartCheckMysql(t *testing.T) {
 	tm := &TabletManager{
 		BatchCtx:            context.Background(),
 		TopoServer:          ts,
-		MysqlDaemon:         &fakemysqldaemon.FakeMysqlDaemon{MysqlPort: sync2.NewAtomicInt32(-1)},
+		MysqlDaemon:         newTestMysqlDaemon(t, 1),
 		DBConfigs:           dbconfigs.NewTestDBConfigs(cp, cp, ""),
 		QueryServiceControl: tabletservermock.NewController(),
 	}
@@ -357,7 +361,7 @@ func TestStartFindMysqlPort(t *testing.T) {
 	cell := "cell1"
 	ts := memorytopo.NewServer(cell)
 	tablet := newTestTablet(t, 1, "ks", "0")
-	fmd := &fakemysqldaemon.FakeMysqlDaemon{MysqlPort: sync2.NewAtomicInt32(-1)}
+	fmd := newTestMysqlDaemon(t, -1)
 	tm := &TabletManager{
 		BatchCtx:            context.Background(),
 		TopoServer:          ts,
@@ -396,7 +400,7 @@ func TestStartFixesReplicationData(t *testing.T) {
 
 	sri, err := ts.GetShardReplication(ctx, cell, "ks", "0")
 	require.NoError(t, err)
-	assert.Equal(t, tabletAlias, sri.Nodes[0].TabletAlias)
+	utils.MustMatch(t, tabletAlias, sri.Nodes[0].TabletAlias)
 
 	// Remove the ShardReplication record, try to create the
 	// tablets again, make sure it's fixed.
@@ -412,7 +416,7 @@ func TestStartFixesReplicationData(t *testing.T) {
 
 	sri, err = ts.GetShardReplication(ctx, cell, "ks", "0")
 	require.NoError(t, err)
-	assert.Equal(t, tabletAlias, sri.Nodes[0].TabletAlias)
+	utils.MustMatch(t, tabletAlias, sri.Nodes[0].TabletAlias)
 }
 
 // This is a test to make sure a regression does not happen in the future.
@@ -504,6 +508,33 @@ func TestCheckTabletTypeResets(t *testing.T) {
 	tm.Stop()
 }
 
+func newTestMysqlDaemon(t *testing.T, port int32) *fakemysqldaemon.FakeMysqlDaemon {
+	t.Helper()
+
+	db := fakesqldb.New(t)
+	db.AddQueryPattern("SET @@.*", &sqltypes.Result{})
+	db.AddQueryPattern("BEGIN", &sqltypes.Result{})
+	db.AddQueryPattern("COMMIT", &sqltypes.Result{})
+
+	db.AddQueryPattern("CREATE DATABASE IF NOT EXISTS _vt", &sqltypes.Result{})
+	db.AddQueryPattern("CREATE TABLE IF NOT EXISTS _vt\\.(local|shard)_metadata.*", &sqltypes.Result{})
+
+	db.AddQueryPattern("ALTER TABLE _vt\\.local_metadata ADD COLUMN (db_name).*", &sqltypes.Result{})
+	db.AddQueryPattern("ALTER TABLE _vt\\.local_metadata DROP PRIMARY KEY, ADD PRIMARY KEY\\(name, db_name\\)", &sqltypes.Result{})
+	db.AddQueryPattern("ALTER TABLE _vt\\.local_metadata CHANGE value.*", &sqltypes.Result{})
+
+	db.AddQueryPattern("ALTER TABLE _vt\\.shard_metadata ADD COLUMN (db_name).*", &sqltypes.Result{})
+	db.AddQueryPattern("ALTER TABLE _vt\\.shard_metadata DROP PRIMARY KEY, ADD PRIMARY KEY\\(name, db_name\\)", &sqltypes.Result{})
+
+	db.AddQueryPattern("UPDATE _vt\\.(local|shard)_metadata SET db_name='.+' WHERE db_name=''", &sqltypes.Result{})
+	db.AddQueryPattern("INSERT INTO _vt\\.local_metadata \\(.+\\) VALUES \\(.+\\) ON DUPLICATE KEY UPDATE value ?= ?'.+'.*", &sqltypes.Result{})
+
+	mysqld := fakemysqldaemon.NewFakeMysqlDaemon(db)
+	mysqld.MysqlPort = sync2.NewAtomicInt32(port)
+
+	return mysqld
+}
+
 func newTestTM(t *testing.T, ts *topo.Server, uid int, keyspace, shard string) *TabletManager {
 	t.Helper()
 	ctx := context.Background()
@@ -511,7 +542,7 @@ func newTestTM(t *testing.T, ts *topo.Server, uid int, keyspace, shard string) *
 	tm := &TabletManager{
 		BatchCtx:            ctx,
 		TopoServer:          ts,
-		MysqlDaemon:         &fakemysqldaemon.FakeMysqlDaemon{MysqlPort: sync2.NewAtomicInt32(1)},
+		MysqlDaemon:         newTestMysqlDaemon(t, 1),
 		DBConfigs:           &dbconfigs.DBConfigs{},
 		QueryServiceControl: tabletservermock.NewController(),
 	}

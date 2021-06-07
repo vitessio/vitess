@@ -17,23 +17,17 @@ limitations under the License.
 package wrangler
 
 import (
-	"encoding/json"
+	"context"
 	"fmt"
-	"reflect"
 	"strings"
 	"testing"
 	"time"
 
-	"context"
-
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/vtctl/workflow"
+
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	"vitess.io/vitess/go/vt/proto/vschema"
-	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
-	"vitess.io/vitess/go/vt/vtctl/workflow"
-	"vitess.io/vitess/go/vt/vtgate/vindexes"
-	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 )
 
 var (
@@ -49,13 +43,13 @@ func TestStreamMigrateMainflow(t *testing.T) {
 	tme.expectNoPreviousJournals()
 
 	// Migrate reads
-	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", rdOnly, nil, DirectionForward, false)
+	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", rdOnly, nil, workflow.DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	tme.expectCheckJournals()
-	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", replica, nil, DirectionForward, false)
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", replica, nil, workflow.DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -189,7 +183,7 @@ func TestStreamMigrateMainflow(t *testing.T) {
 
 	tme.expectDeleteReverseVReplication()
 	tme.expectDeleteTargetVReplication()
-	if _, err := tme.wr.DropSources(ctx, tme.targetKeyspace, "test", DropTable, false, false, false); err != nil {
+	if _, err := tme.wr.DropSources(ctx, tme.targetKeyspace, "test", workflow.DropTable, false, false, false); err != nil {
 		t.Fatal(err)
 	}
 	verifyQueries(t, tme.allDBClients)
@@ -202,12 +196,12 @@ func TestStreamMigrateTwoStreams(t *testing.T) {
 
 	tme.expectNoPreviousJournals()
 	// Migrate reads
-	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", rdOnly, nil, DirectionForward, false)
+	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", rdOnly, nil, workflow.DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	tme.expectNoPreviousJournals()
-	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", replica, nil, DirectionForward, false)
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", replica, nil, workflow.DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -371,12 +365,12 @@ func TestStreamMigrateOneToMany(t *testing.T) {
 
 	tme.expectNoPreviousJournals()
 	// Migrate reads
-	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", rdOnly, nil, DirectionForward, false)
+	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", rdOnly, nil, workflow.DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	tme.expectNoPreviousJournals()
-	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", replica, nil, DirectionForward, false)
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", replica, nil, workflow.DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -504,12 +498,12 @@ func TestStreamMigrateManyToOne(t *testing.T) {
 
 	tme.expectNoPreviousJournals()
 	// Migrate reads
-	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", rdOnly, nil, DirectionForward, false)
+	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", rdOnly, nil, workflow.DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	tme.expectNoPreviousJournals()
-	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", replica, nil, DirectionForward, false)
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", replica, nil, workflow.DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -639,12 +633,12 @@ func TestStreamMigrateSyncSuccess(t *testing.T) {
 
 	tme.expectNoPreviousJournals()
 	// Migrate reads
-	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", rdOnly, nil, DirectionForward, false)
+	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", rdOnly, nil, workflow.DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	tme.expectNoPreviousJournals()
-	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", replica, nil, DirectionForward, false)
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", replica, nil, workflow.DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -831,12 +825,12 @@ func TestStreamMigrateSyncFail(t *testing.T) {
 
 	tme.expectNoPreviousJournals()
 	// Migrate reads
-	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", rdOnly, nil, DirectionForward, false)
+	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", rdOnly, nil, workflow.DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	tme.expectNoPreviousJournals()
-	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", replica, nil, DirectionForward, false)
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", replica, nil, workflow.DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -953,12 +947,12 @@ func TestStreamMigrateCancel(t *testing.T) {
 
 	tme.expectNoPreviousJournals()
 	// Migrate reads
-	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", rdOnly, nil, DirectionForward, false)
+	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", rdOnly, nil, workflow.DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	tme.expectNoPreviousJournals()
-	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", replica, nil, DirectionForward, false)
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", replica, nil, workflow.DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1058,12 +1052,12 @@ func TestStreamMigrateStoppedStreams(t *testing.T) {
 
 	tme.expectNoPreviousJournals()
 	// Migrate reads
-	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", rdOnly, nil, DirectionForward, false)
+	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", rdOnly, nil, workflow.DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	tme.expectNoPreviousJournals()
-	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", replica, nil, DirectionForward, false)
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", replica, nil, workflow.DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1117,12 +1111,12 @@ func TestStreamMigrateCancelWithStoppedStreams(t *testing.T) {
 
 	tme.expectNoPreviousJournals()
 	// Migrate reads
-	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", rdOnly, nil, DirectionForward, false)
+	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", rdOnly, nil, workflow.DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	tme.expectNoPreviousJournals()
-	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", replica, nil, DirectionForward, false)
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", replica, nil, workflow.DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1184,12 +1178,12 @@ func TestStreamMigrateStillCopying(t *testing.T) {
 
 	tme.expectNoPreviousJournals()
 	// Migrate reads
-	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", rdOnly, nil, DirectionForward, false)
+	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", rdOnly, nil, workflow.DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	tme.expectNoPreviousJournals()
-	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", replica, nil, DirectionForward, false)
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", replica, nil, workflow.DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1247,12 +1241,12 @@ func TestStreamMigrateEmptyWorkflow(t *testing.T) {
 
 	tme.expectNoPreviousJournals()
 	// Migrate reads
-	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", rdOnly, nil, DirectionForward, false)
+	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", rdOnly, nil, workflow.DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	tme.expectNoPreviousJournals()
-	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", replica, nil, DirectionForward, false)
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", replica, nil, workflow.DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1309,12 +1303,12 @@ func TestStreamMigrateDupWorkflow(t *testing.T) {
 
 	tme.expectNoPreviousJournals()
 	// Migrate reads
-	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", rdOnly, nil, DirectionForward, false)
+	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", rdOnly, nil, workflow.DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	tme.expectNoPreviousJournals()
-	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", replica, nil, DirectionForward, false)
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", replica, nil, workflow.DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1372,12 +1366,12 @@ func TestStreamMigrateStreamsMismatch(t *testing.T) {
 
 	tme.expectNoPreviousJournals()
 	// Migrate reads
-	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", rdOnly, nil, DirectionForward, false)
+	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", rdOnly, nil, workflow.DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	tme.expectNoPreviousJournals()
-	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", replica, nil, DirectionForward, false)
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", replica, nil, workflow.DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1435,323 +1429,4 @@ func TestStreamMigrateStreamsMismatch(t *testing.T) {
 		t.Errorf("SwitchWrites err: %v, must contain %v", err, want)
 	}
 	verifyQueries(t, tme.allDBClients)
-}
-
-func TestTemplatize(t *testing.T) {
-	tests := []struct {
-		in  []*workflow.VReplicationStream
-		out string
-		err string
-	}{{
-		// First test contains all fields.
-		in: []*workflow.VReplicationStream{{
-			ID:       1,
-			Workflow: "test",
-			BinlogSource: &binlogdatapb.BinlogSource{
-				Keyspace: "ks",
-				Shard:    "80-",
-				Filter: &binlogdatapb.Filter{
-					Rules: []*binlogdatapb.Rule{{
-						Match:  "t1",
-						Filter: "select * from t1 where in_keyrange('-80')",
-					}},
-				},
-			},
-		}},
-		out: `[{"ID":1,"Workflow":"test","Bls":{"keyspace":"ks","shard":"80-","filter":{"rules":[{"match":"t1","filter":"select * from t1 where in_keyrange('{{.}}')"}]}}}]`,
-	}, {
-		// Reference table.
-		in: []*workflow.VReplicationStream{{
-			BinlogSource: &binlogdatapb.BinlogSource{
-				Filter: &binlogdatapb.Filter{
-					Rules: []*binlogdatapb.Rule{{
-						Match:  "ref",
-						Filter: "",
-					}},
-				},
-			},
-		}},
-		out: "",
-	}, {
-		// Sharded table.
-		in: []*workflow.VReplicationStream{{
-			BinlogSource: &binlogdatapb.BinlogSource{
-				Filter: &binlogdatapb.Filter{
-					Rules: []*binlogdatapb.Rule{{
-						Match:  "t1",
-						Filter: "-80",
-					}},
-				},
-			},
-		}},
-		out: `[{"ID":0,"Workflow":"","Bls":{"filter":{"rules":[{"match":"t1","filter":"{{.}}"}]}}}]`,
-	}, {
-		// table not found
-		in: []*workflow.VReplicationStream{{
-			BinlogSource: &binlogdatapb.BinlogSource{
-				Filter: &binlogdatapb.Filter{
-					Rules: []*binlogdatapb.Rule{{
-						Match: "t3",
-					}},
-				},
-			},
-		}},
-		err: `table t3 not found in vschema`,
-	}, {
-		// sharded table with no filter
-		in: []*workflow.VReplicationStream{{
-			BinlogSource: &binlogdatapb.BinlogSource{
-				Filter: &binlogdatapb.Filter{
-					Rules: []*binlogdatapb.Rule{{
-						Match: "t1",
-					}},
-				},
-			},
-		}},
-		err: `rule match:"t1"  does not have a select expression in vreplication`,
-	}, {
-		// Excluded table.
-		in: []*workflow.VReplicationStream{{
-			BinlogSource: &binlogdatapb.BinlogSource{
-				Filter: &binlogdatapb.Filter{
-					Rules: []*binlogdatapb.Rule{{
-						Match:  "t1",
-						Filter: vreplication.ExcludeStr,
-					}},
-				},
-			},
-		}},
-		err: `unexpected rule in vreplication: match:"t1" filter:"exclude" `,
-	}, {
-		// Sharded table and ref table
-		in: []*workflow.VReplicationStream{{
-			BinlogSource: &binlogdatapb.BinlogSource{
-				Filter: &binlogdatapb.Filter{
-					Rules: []*binlogdatapb.Rule{{
-						Match:  "t1",
-						Filter: "-80",
-					}, {
-						Match:  "ref",
-						Filter: "",
-					}},
-				},
-			},
-		}},
-		err: `cannot migrate streams with a mix of reference and sharded tables: filter:<rules:<match:"t1" filter:"{{.}}" > rules:<match:"ref" > > `,
-	}, {
-		// Ref table and sharded table (different code path)
-		in: []*workflow.VReplicationStream{{
-			BinlogSource: &binlogdatapb.BinlogSource{
-				Filter: &binlogdatapb.Filter{
-					Rules: []*binlogdatapb.Rule{{
-						Match:  "ref",
-						Filter: "",
-					}, {
-						Match:  "t2",
-						Filter: "-80",
-					}},
-				},
-			},
-		}},
-		err: `cannot migrate streams with a mix of reference and sharded tables: filter:<rules:<match:"ref" > rules:<match:"t2" filter:"{{.}}" > > `,
-	}, {
-		// Ref table with select expression
-		in: []*workflow.VReplicationStream{{
-			BinlogSource: &binlogdatapb.BinlogSource{
-				Filter: &binlogdatapb.Filter{
-					Rules: []*binlogdatapb.Rule{{
-						Match:  "ref",
-						Filter: "select * from t1",
-					}},
-				},
-			},
-		}},
-		out: "",
-	}, {
-		// Select expresstion with no keyrange value
-		in: []*workflow.VReplicationStream{{
-			BinlogSource: &binlogdatapb.BinlogSource{
-				Filter: &binlogdatapb.Filter{
-					Rules: []*binlogdatapb.Rule{{
-						Match:  "t1",
-						Filter: "select * from t1",
-					}},
-				},
-			},
-		}},
-		out: `[{"ID":0,"Workflow":"","Bls":{"filter":{"rules":[{"match":"t1","filter":"select * from t1 where in_keyrange(c1, 'hash', '{{.}}')"}]}}}]`,
-	}, {
-		// Select expresstion with one keyrange value
-		in: []*workflow.VReplicationStream{{
-			BinlogSource: &binlogdatapb.BinlogSource{
-				Filter: &binlogdatapb.Filter{
-					Rules: []*binlogdatapb.Rule{{
-						Match:  "t1",
-						Filter: "select * from t1 where in_keyrange('-80')",
-					}},
-				},
-			},
-		}},
-		out: `[{"ID":0,"Workflow":"","Bls":{"filter":{"rules":[{"match":"t1","filter":"select * from t1 where in_keyrange('{{.}}')"}]}}}]`,
-	}, {
-		// Select expresstion with three keyrange values
-		in: []*workflow.VReplicationStream{{
-			BinlogSource: &binlogdatapb.BinlogSource{
-				Filter: &binlogdatapb.Filter{
-					Rules: []*binlogdatapb.Rule{{
-						Match:  "t1",
-						Filter: "select * from t1 where in_keyrange(col, vdx, '-80')",
-					}},
-				},
-			},
-		}},
-		out: `[{"ID":0,"Workflow":"","Bls":{"filter":{"rules":[{"match":"t1","filter":"select * from t1 where in_keyrange(col, vdx, '{{.}}')"}]}}}]`,
-	}, {
-		// syntax error
-		in: []*workflow.VReplicationStream{{
-			BinlogSource: &binlogdatapb.BinlogSource{
-				Filter: &binlogdatapb.Filter{
-					Rules: []*binlogdatapb.Rule{{
-						Match:  "t1",
-						Filter: "bad syntax",
-					}},
-				},
-			},
-		}},
-		err: "syntax error at position 4 near 'bad'",
-	}, {
-		// invalid statement
-		in: []*workflow.VReplicationStream{{
-			BinlogSource: &binlogdatapb.BinlogSource{
-				Filter: &binlogdatapb.Filter{
-					Rules: []*binlogdatapb.Rule{{
-						Match:  "t1",
-						Filter: "update t set a=1",
-					}},
-				},
-			},
-		}},
-		err: "unexpected query: update t set a=1",
-	}, {
-		// invalid in_keyrange
-		in: []*workflow.VReplicationStream{{
-			BinlogSource: &binlogdatapb.BinlogSource{
-				Filter: &binlogdatapb.Filter{
-					Rules: []*binlogdatapb.Rule{{
-						Match:  "t1",
-						Filter: "select * from t1 where in_keyrange(col, vdx, '-80', extra)",
-					}},
-				},
-			},
-		}},
-		err: "unexpected in_keyrange parameters: in_keyrange(col, vdx, '-80', extra)",
-	}, {
-		// * in_keyrange
-		in: []*workflow.VReplicationStream{{
-			BinlogSource: &binlogdatapb.BinlogSource{
-				Filter: &binlogdatapb.Filter{
-					Rules: []*binlogdatapb.Rule{{
-						Match:  "t1",
-						Filter: "select * from t1 where in_keyrange(*)",
-					}},
-				},
-			},
-		}},
-		err: "unexpected in_keyrange parameters: in_keyrange(*)",
-	}, {
-		// non-string in_keyrange
-		in: []*workflow.VReplicationStream{{
-			BinlogSource: &binlogdatapb.BinlogSource{
-				Filter: &binlogdatapb.Filter{
-					Rules: []*binlogdatapb.Rule{{
-						Match:  "t1",
-						Filter: "select * from t1 where in_keyrange(aa)",
-					}},
-				},
-			},
-		}},
-		err: "unexpected in_keyrange parameters: in_keyrange(aa)",
-	}, {
-		// '{{' in query
-		in: []*workflow.VReplicationStream{{
-			BinlogSource: &binlogdatapb.BinlogSource{
-				Filter: &binlogdatapb.Filter{
-					Rules: []*binlogdatapb.Rule{{
-						Match:  "t1",
-						Filter: "select '{{' from t1 where in_keyrange('-80')",
-					}},
-				},
-			},
-		}},
-		err: "cannot migrate queries that contain '{{' in their string: select '{{' from t1 where in_keyrange('-80')",
-	}}
-	vs := &vschemapb.Keyspace{
-		Sharded: true,
-		Vindexes: map[string]*vschema.Vindex{
-			"thash": {
-				Type: "hash",
-			},
-		},
-		Tables: map[string]*vschema.Table{
-			"t1": {
-				ColumnVindexes: []*vschema.ColumnVindex{{
-					Columns: []string{"c1"},
-					Name:    "thash",
-				}},
-			},
-			"t2": {
-				ColumnVindexes: []*vschema.ColumnVindex{{
-					Columns: []string{"c1"},
-					Name:    "thash",
-				}},
-			},
-			"ref": {
-				Type: vindexes.TypeReference,
-			},
-		},
-	}
-	ksschema, err := vindexes.BuildKeyspaceSchema(vs, "ks")
-	if err != nil {
-		t.Fatal(err)
-	}
-	ts := &trafficSwitcher{
-		sourceKSSchema: ksschema,
-	}
-	for _, tt := range tests {
-		sm := &streamMigrater{ts: ts}
-		out, err := sm.templatize(context.Background(), tt.in)
-		var gotErr string
-		if err != nil {
-			gotErr = err.Error()
-		}
-		if gotErr != tt.err {
-			t.Errorf("templatize(%v) err: %v, want %v", stringifyVRS(tt.in), err, tt.err)
-		}
-		got := stringifyVRS(out)
-		if !reflect.DeepEqual(tt.out, got) {
-			t.Errorf("templatize(%v):\n%v, want\n%v", stringifyVRS(tt.in), got, tt.out)
-		}
-	}
-}
-
-type testVRS struct {
-	ID       uint32
-	Workflow string
-	Bls      *binlogdatapb.BinlogSource
-}
-
-func stringifyVRS(in []*workflow.VReplicationStream) string {
-	if len(in) == 0 {
-		return ""
-	}
-	var converted []*testVRS
-	for _, vrs := range in {
-		converted = append(converted, &testVRS{
-			ID:       vrs.ID,
-			Workflow: vrs.Workflow,
-			Bls:      vrs.BinlogSource,
-		})
-	}
-	b, _ := json.Marshal(converted)
-	return string(b)
 }

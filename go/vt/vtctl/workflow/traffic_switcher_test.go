@@ -20,7 +20,18 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
+
+type testTrafficSwitcher struct {
+	ITrafficSwitcher
+	sourceKeyspaceSchema *vindexes.KeyspaceSchema
+}
+
+func (tts *testTrafficSwitcher) SourceKeyspaceSchema() *vindexes.KeyspaceSchema {
+	return tts.sourceKeyspaceSchema
+}
 
 func TestReverseWorkflowName(t *testing.T) {
 	tests := []struct {
