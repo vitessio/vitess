@@ -153,7 +153,7 @@ func resetBinlogClient() {
 
 func masterPosition(t *testing.T) string {
 	t.Helper()
-	pos, err := env.Mysqld.MasterPosition()
+	pos, err := env.Mysqld.PrimaryPosition()
 	if err != nil {
 		t.Fatal(err)
 	}

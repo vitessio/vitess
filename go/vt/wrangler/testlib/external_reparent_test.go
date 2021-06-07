@@ -89,7 +89,7 @@ func TestTabletExternallyReparentedBasic(t *testing.T) {
 		t.Fatalf("old master should be MASTER but is: %v", tablet.Type)
 	}
 
-	oldMaster.FakeMysqlDaemon.SetMasterInput = topoproto.MysqlAddr(newMaster.Tablet)
+	oldMaster.FakeMysqlDaemon.SetReplicationSourceInput = topoproto.MysqlAddr(newMaster.Tablet)
 	oldMaster.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"FAKE SET MASTER",
 		"START Replica",
@@ -168,7 +168,7 @@ func TestTabletExternallyReparentedToReplica(t *testing.T) {
 
 	// Second test: reparent to a replica, and pretend the old
 	// master is still good to go.
-	oldMaster.FakeMysqlDaemon.SetMasterInput = topoproto.MysqlAddr(newMaster.Tablet)
+	oldMaster.FakeMysqlDaemon.SetReplicationSourceInput = topoproto.MysqlAddr(newMaster.Tablet)
 	oldMaster.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"FAKE SET MASTER",
 		"START Replica",
@@ -246,7 +246,7 @@ func TestTabletExternallyReparentedWithDifferentMysqlPort(t *testing.T) {
 	newMaster.StartActionLoop(t, wr)
 	defer newMaster.StopActionLoop(t)
 
-	oldMaster.FakeMysqlDaemon.SetMasterInput = topoproto.MysqlAddr(newMaster.Tablet)
+	oldMaster.FakeMysqlDaemon.SetReplicationSourceInput = topoproto.MysqlAddr(newMaster.Tablet)
 	oldMaster.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"FAKE SET MASTER",
 		"START Replica",
@@ -327,7 +327,7 @@ func TestTabletExternallyReparentedContinueOnUnexpectedMaster(t *testing.T) {
 	newMaster.StartActionLoop(t, wr)
 	defer newMaster.StopActionLoop(t)
 
-	oldMaster.FakeMysqlDaemon.SetMasterInput = topoproto.MysqlAddr(newMaster.Tablet)
+	oldMaster.FakeMysqlDaemon.SetReplicationSourceInput = topoproto.MysqlAddr(newMaster.Tablet)
 	oldMaster.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"FAKE SET MASTER",
 		"START Replica",
@@ -404,7 +404,7 @@ func TestTabletExternallyReparentedRerun(t *testing.T) {
 	newMaster.StartActionLoop(t, wr)
 	defer newMaster.StopActionLoop(t)
 
-	oldMaster.FakeMysqlDaemon.SetMasterInput = topoproto.MysqlAddr(newMaster.Tablet)
+	oldMaster.FakeMysqlDaemon.SetReplicationSourceInput = topoproto.MysqlAddr(newMaster.Tablet)
 	oldMaster.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"FAKE SET MASTER",
 		"START Replica",
@@ -414,7 +414,7 @@ func TestTabletExternallyReparentedRerun(t *testing.T) {
 	oldMaster.StartActionLoop(t, wr)
 	defer oldMaster.StopActionLoop(t)
 
-	goodReplica.FakeMysqlDaemon.SetMasterInput = topoproto.MysqlAddr(newMaster.Tablet)
+	goodReplica.FakeMysqlDaemon.SetReplicationSourceInput = topoproto.MysqlAddr(newMaster.Tablet)
 	// On the good replica, we will respond to
 	// TabletActionReplicaWasRestarted.
 	goodReplica.StartActionLoop(t, wr)
