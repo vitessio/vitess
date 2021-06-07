@@ -16,18 +16,23 @@
 import { useQuery, useQueryClient, UseQueryOptions } from 'react-query';
 import {
     fetchClusters,
+    fetchExperimentalTabletDebugVars,
     fetchGates,
     fetchKeyspaces,
     fetchSchema,
     FetchSchemaParams,
     fetchSchemas,
+    fetchTablet,
     fetchTablets,
     fetchVSchema,
     FetchVSchemaParams,
+    fetchVTExplain,
     fetchWorkflow,
     fetchWorkflows,
 } from '../api/http';
 import { vtadmin as pb } from '../proto/vtadmin';
+import { TabletDebugVars } from '../util/tabletDebugVars';
+import { formatAlias } from '../util/tablets';
 
 /**
  * useClusters is a query hook that fetches all clusters VTAdmin is configured to discover.
@@ -58,6 +63,33 @@ export const useSchemas = (options?: UseQueryOptions<pb.Schema[], Error> | undef
  */
 export const useTablets = (options?: UseQueryOptions<pb.Tablet[], Error> | undefined) =>
     useQuery(['tablets'], fetchTablets, options);
+
+/**
+ * useTablet is a query hook that fetches a single tablet by alias.
+ */
+export const useTablet = (params: Parameters<typeof fetchTablet>[0], options?: UseQueryOptions<pb.Tablet, Error>) => {
+    const queryClient = useQueryClient();
+    return useQuery(['tablet', params], () => fetchTablet(params), {
+        initialData: () => {
+            const tablets = queryClient.getQueryData<pb.Tablet[]>('tablets');
+            return (tablets || []).find(
+                (t) => t.cluster?.id === params.clusterID && formatAlias(t.tablet?.alias) === params.alias
+            );
+        },
+        ...options,
+    });
+};
+
+export const useExperimentalTabletDebugVars = (
+    params: Parameters<typeof fetchExperimentalTabletDebugVars>[0],
+    options?: UseQueryOptions<TabletDebugVars, Error>
+) => {
+    return useQuery(
+        ['experimental/tablet/debug/vars', params],
+        () => fetchExperimentalTabletDebugVars(params),
+        options
+    );
+};
 
 /**
  * useWorkflowsResponse is a query hook that fetches all workflows (by cluster) across every cluster.
@@ -112,6 +144,13 @@ export const useSchema = (params: FetchSchemaParams, options?: UseQueryOptions<p
  */
 export const useVSchema = (params: FetchVSchemaParams, options?: UseQueryOptions<pb.VSchema, Error> | undefined) => {
     return useQuery(['vschema', params], () => fetchVSchema(params));
+};
+
+export const useVTExplain = (
+    params: Parameters<typeof fetchVTExplain>[0],
+    options?: UseQueryOptions<pb.VTExplainResponse, Error> | undefined
+) => {
+    return useQuery(['vtexplain', params], () => fetchVTExplain(params), { ...options });
 };
 
 /**

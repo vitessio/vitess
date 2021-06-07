@@ -23,8 +23,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
@@ -68,9 +68,9 @@ func TestMigrateTables(t *testing.T) {
 	require.NoError(t, err)
 	got := fmt.Sprintf("%v", vschema)
 	want := []string{
-		`keyspaces:<key:"sourceks" value:<> > keyspaces:<key:"targetks" value:<tables:<key:"t1" value:<> > > >`,
-		`rules:<from_table:"t1" to_tables:"sourceks.t1" >`,
-		`rules:<from_table:"targetks.t1" to_tables:"sourceks.t1" >`,
+		`keyspaces:{key:"sourceks" value:{}} keyspaces:{key:"targetks" value:{tables:{key:"t1" value:{}}}}`,
+		`rules:{from_table:"t1" to_tables:"sourceks.t1"}`,
+		`rules:{from_table:"targetks.t1" to_tables:"sourceks.t1"}`,
 	}
 	for _, wantstr := range want {
 		require.Contains(t, got, wantstr)
@@ -228,10 +228,10 @@ func TestMigrateVSchema(t *testing.T) {
 	vschema, err := env.wr.ts.GetSrvVSchema(ctx, env.cell)
 	require.NoError(t, err)
 	got := fmt.Sprintf("%v", vschema)
-	want := []string{`keyspaces:<key:"sourceks" value:<> >`,
-		`keyspaces:<key:"sourceks" value:<> > keyspaces:<key:"targetks" value:<tables:<key:"t1" value:<> > > >`,
-		`rules:<from_table:"t1" to_tables:"sourceks.t1" >`,
-		`rules:<from_table:"targetks.t1" to_tables:"sourceks.t1" >`,
+	want := []string{`keyspaces:{key:"sourceks" value:{}}`,
+		`keyspaces:{key:"sourceks" value:{}} keyspaces:{key:"targetks" value:{tables:{key:"t1" value:{}}}}`,
+		`rules:{from_table:"t1" to_tables:"sourceks.t1"}`,
+		`rules:{from_table:"targetks.t1" to_tables:"sourceks.t1"}`,
 	}
 	for _, wantstr := range want {
 		require.Contains(t, got, wantstr)
@@ -351,7 +351,7 @@ func TestCreateLookupVindexFull(t *testing.T) {
 	}
 	vschema, err := env.topoServ.GetVSchema(ctx, ms.SourceKeyspace)
 	require.NoError(t, err)
-	require.Equal(t, wantvschema, vschema)
+	utils.MustMatch(t, wantvschema, vschema)
 
 	wantvschema = &vschemapb.Keyspace{
 		Tables: map[string]*vschemapb.Table{
@@ -360,7 +360,7 @@ func TestCreateLookupVindexFull(t *testing.T) {
 	}
 	vschema, err = env.topoServ.GetVSchema(ctx, ms.TargetKeyspace)
 	require.NoError(t, err)
-	require.Equal(t, wantvschema, vschema)
+	utils.MustMatch(t, wantvschema, vschema)
 }
 
 func TestCreateLookupVindexCreateDDL(t *testing.T) {
@@ -1049,7 +1049,7 @@ func TestCreateLookupVindexTargetVSchema(t *testing.T) {
 			continue
 		}
 		require.NoError(t, err)
-		require.Equal(t, tcase.out, got, tcase.description)
+		utils.MustMatch(t, tcase.out, got, tcase.description)
 	}
 }
 
@@ -1587,11 +1587,11 @@ func TestMaterializerOneToOne(t *testing.T) {
 			`\(`+
 			`'workflow', `+
 			(`'keyspace:\\"sourceks\\" shard:\\"0\\" `+
-				`filter:<`+
-				`rules:<match:\\"t1\\" filter:\\"select.*t1\\" > `+
-				`rules:<match:\\"t2\\" filter:\\"select.*t3\\" > `+
-				`rules:<match:\\"t4\\" > `+
-				`> ', `)+
+				`filter:{`+
+				`rules:{match:\\"t1\\" filter:\\"select.*t1\\"} `+
+				`rules:{match:\\"t2\\" filter:\\"select.*t3\\"} `+
+				`rules:{match:\\"t4\\"}`+
+				`}', `)+
 			`'', [0-9]*, [0-9]*, 'zone1', 'master,rdonly', [0-9]*, 0, 'Stopped', 'vt_targetks'`+
 			`\)`+eol,
 		&sqltypes.Result{},
@@ -1625,9 +1625,9 @@ func TestMaterializerManyToOne(t *testing.T) {
 	env.tmc.expectVRQuery(
 		200,
 		insertPrefix+
-			`\('workflow', 'keyspace:\\"sourceks\\" shard:\\"-80\\" filter:<rules:<match:\\"t1\\" filter:\\"select.*t1\\" > rules:<match:\\"t2\\" filter:\\"select.*t3\\" > > ', '', [0-9]*, [0-9]*, '', '', [0-9]*, 0, 'Stopped', 'vt_targetks'\)`+
+			`\('workflow', 'keyspace:\\"sourceks\\" shard:\\"-80\\" filter:{rules:{match:\\"t1\\" filter:\\"select.*t1\\"} rules:{match:\\"t2\\" filter:\\"select.*t3\\"}}', '', [0-9]*, [0-9]*, '', '', [0-9]*, 0, 'Stopped', 'vt_targetks'\)`+
 			`, `+
-			`\('workflow', 'keyspace:\\"sourceks\\" shard:\\"80-\\" filter:<rules:<match:\\"t1\\" filter:\\"select.*t1\\" > rules:<match:\\"t2\\" filter:\\"select.*t3\\" > > ', '', [0-9]*, [0-9]*, '', '', [0-9]*, 0, 'Stopped', 'vt_targetks'\)`+
+			`\('workflow', 'keyspace:\\"sourceks\\" shard:\\"80-\\" filter:{rules:{match:\\"t1\\" filter:\\"select.*t1\\"} rules:{match:\\"t2\\" filter:\\"select.*t3\\"}}', '', [0-9]*, [0-9]*, '', '', [0-9]*, 0, 'Stopped', 'vt_targetks'\)`+
 			eol,
 		&sqltypes.Result{},
 	)
@@ -1678,13 +1678,13 @@ func TestMaterializerOneToMany(t *testing.T) {
 	env.tmc.expectVRQuery(
 		200,
 		insertPrefix+
-			`.*shard:\\"0\\" filter:<rules:<match:\\"t1\\" filter:\\"select.*t1 where in_keyrange\(c1.*targetks\.hash.*-80.*`,
+			`.*shard:\\"0\\" filter:{rules:{match:\\"t1\\" filter:\\"select.*t1 where in_keyrange\(c1.*targetks\.hash.*-80.*`,
 		&sqltypes.Result{},
 	)
 	env.tmc.expectVRQuery(
 		210,
 		insertPrefix+
-			`.*shard:\\"0\\" filter:<rules:<match:\\"t1\\" filter:\\"select.*t1 where in_keyrange\(c1.*targetks\.hash.*80-.*`,
+			`.*shard:\\"0\\" filter:{rules:{match:\\"t1\\" filter:\\"select.*t1 where in_keyrange\(c1.*targetks\.hash.*80-.*`,
 		&sqltypes.Result{},
 	)
 	env.tmc.expectVRQuery(200, mzUpdateQuery, &sqltypes.Result{})
@@ -1735,15 +1735,15 @@ func TestMaterializerManyToMany(t *testing.T) {
 	env.tmc.expectVRQuery(
 		200,
 		insertPrefix+
-			`.*shard:\\"-40\\" filter:<rules:<match:\\"t1\\" filter:\\"select.*t1 where in_keyrange\(c1.*targetks\.hash.*-80.*`+
-			`.*shard:\\"40-\\" filter:<rules:<match:\\"t1\\" filter:\\"select.*t1 where in_keyrange\(c1.*targetks\.hash.*-80.*`,
+			`.*shard:\\"-40\\" filter:{rules:{match:\\"t1\\" filter:\\"select.*t1 where in_keyrange\(c1.*targetks\.hash.*-80.*`+
+			`.*shard:\\"40-\\" filter:{rules:{match:\\"t1\\" filter:\\"select.*t1 where in_keyrange\(c1.*targetks\.hash.*-80.*`,
 		&sqltypes.Result{},
 	)
 	env.tmc.expectVRQuery(
 		210,
 		insertPrefix+
-			`.*shard:\\"-40\\" filter:<rules:<match:\\"t1\\" filter:\\"select.*t1 where in_keyrange\(c1.*targetks\.hash.*80-.*`+
-			`.*shard:\\"40-\\" filter:<rules:<match:\\"t1\\" filter:\\"select.*t1 where in_keyrange\(c1.*targetks\.hash.*80-.*`,
+			`.*shard:\\"-40\\" filter:{rules:{match:\\"t1\\" filter:\\"select.*t1 where in_keyrange\(c1.*targetks\.hash.*80-.*`+
+			`.*shard:\\"40-\\" filter:{rules:{match:\\"t1\\" filter:\\"select.*t1 where in_keyrange\(c1.*targetks\.hash.*80-.*`,
 		&sqltypes.Result{},
 	)
 	env.tmc.expectVRQuery(200, mzUpdateQuery, &sqltypes.Result{})
@@ -1797,13 +1797,13 @@ func TestMaterializerMulticolumnVindex(t *testing.T) {
 	env.tmc.expectVRQuery(
 		200,
 		insertPrefix+
-			`.*shard:\\"0\\" filter:<rules:<match:\\"t1\\" filter:\\"select.*t1 where in_keyrange\(c1, c2.*targetks\.region.*-80.*`,
+			`.*shard:\\"0\\" filter:{rules:{match:\\"t1\\" filter:\\"select.*t1 where in_keyrange\(c1, c2.*targetks\.region.*-80.*`,
 		&sqltypes.Result{},
 	)
 	env.tmc.expectVRQuery(
 		210,
 		insertPrefix+
-			`.*shard:\\"0\\" filter:<rules:<match:\\"t1\\" filter:\\"select.*t1 where in_keyrange\(c1, c2.*targetks\.region.*80-.*`,
+			`.*shard:\\"0\\" filter:{rules:{match:\\"t1\\" filter:\\"select.*t1 where in_keyrange\(c1, c2.*targetks\.region.*80-.*`,
 		&sqltypes.Result{},
 	)
 	env.tmc.expectVRQuery(200, mzUpdateQuery, &sqltypes.Result{})
@@ -1839,7 +1839,7 @@ func TestMaterializerDeploySchema(t *testing.T) {
 	env.tmc.expectVRQuery(
 		200,
 		insertPrefix+
-			`\('workflow', 'keyspace:\\"sourceks\\" shard:\\"0\\" filter:<rules:<match:\\"t1\\" filter:\\"select.*t1\\" > rules:<match:\\"t2\\" filter:\\"select.*t3\\" > > ', '', [0-9]*, [0-9]*, '', '', [0-9]*, 0, 'Stopped', 'vt_targetks'\)`+
+			`\('workflow', 'keyspace:\\"sourceks\\" shard:\\"0\\" filter:{rules:{match:\\"t1\\" filter:\\"select.*t1\\"} rules:{match:\\"t2\\" filter:\\"select.*t3\\"}}', '', [0-9]*, [0-9]*, '', '', [0-9]*, 0, 'Stopped', 'vt_targetks'\)`+
 			eol,
 		&sqltypes.Result{},
 	)
@@ -1877,7 +1877,7 @@ func TestMaterializerCopySchema(t *testing.T) {
 	env.tmc.expectVRQuery(
 		200,
 		insertPrefix+
-			`\('workflow', 'keyspace:\\"sourceks\\" shard:\\"0\\" filter:<rules:<match:\\"t1\\" filter:\\"select.*t1\\" > rules:<match:\\"t2\\" filter:\\"select.*t3\\" > > ', '', [0-9]*, [0-9]*, '', '', [0-9]*, 0, 'Stopped', 'vt_targetks'\)`+
+			`\('workflow', 'keyspace:\\"sourceks\\" shard:\\"0\\" filter:{rules:{match:\\"t1\\" filter:\\"select.*t1\\"} rules:{match:\\"t2\\" filter:\\"select.*t3\\"}}', '', [0-9]*, [0-9]*, '', '', [0-9]*, 0, 'Stopped', 'vt_targetks'\)`+
 			eol,
 		&sqltypes.Result{},
 	)
@@ -1934,13 +1934,13 @@ func TestMaterializerExplicitColumns(t *testing.T) {
 	env.tmc.expectVRQuery(
 		200,
 		insertPrefix+
-			`.*shard:\\"0\\" filter:<rules:<match:\\"t1\\" filter:\\"select.*t1 where in_keyrange\(c1, c2.*targetks\.region.*-80.*`,
+			`.*shard:\\"0\\" filter:{rules:{match:\\"t1\\" filter:\\"select.*t1 where in_keyrange\(c1, c2.*targetks\.region.*-80.*`,
 		&sqltypes.Result{},
 	)
 	env.tmc.expectVRQuery(
 		210,
 		insertPrefix+
-			`.*shard:\\"0\\" filter:<rules:<match:\\"t1\\" filter:\\"select.*t1 where in_keyrange\(c1, c2.*targetks\.region.*80-.*`,
+			`.*shard:\\"0\\" filter:{rules:{match:\\"t1\\" filter:\\"select.*t1 where in_keyrange\(c1, c2.*targetks\.region.*80-.*`,
 		&sqltypes.Result{},
 	)
 	env.tmc.expectVRQuery(200, mzUpdateQuery, &sqltypes.Result{})
@@ -1994,13 +1994,13 @@ func TestMaterializerRenamedColumns(t *testing.T) {
 	env.tmc.expectVRQuery(
 		200,
 		insertPrefix+
-			`.*shard:\\"0\\" filter:<rules:<match:\\"t1\\" filter:\\"select.*t1 where in_keyrange\(c3, c4.*targetks\.region.*-80.*`,
+			`.*shard:\\"0\\" filter:{rules:{match:\\"t1\\" filter:\\"select.*t1 where in_keyrange\(c3, c4.*targetks\.region.*-80.*`,
 		&sqltypes.Result{},
 	)
 	env.tmc.expectVRQuery(
 		210,
 		insertPrefix+
-			`.*shard:\\"0\\" filter:<rules:<match:\\"t1\\" filter:\\"select.*t1 where in_keyrange\(c3, c4.*targetks\.region.*80-.*`,
+			`.*shard:\\"0\\" filter:{rules:{match:\\"t1\\" filter:\\"select.*t1 where in_keyrange\(c3, c4.*targetks\.region.*80-.*`,
 		&sqltypes.Result{},
 	)
 	env.tmc.expectVRQuery(200, mzUpdateQuery, &sqltypes.Result{})

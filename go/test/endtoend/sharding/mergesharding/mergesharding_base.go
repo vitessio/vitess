@@ -340,8 +340,8 @@ func TestMergesharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 	require.NoError(t, err)
 	assert.Equal(t, 2, len(qr.Rows))
 	assert.Contains(t, fmt.Sprintf("%v", qr.Rows), "SplitClone")
-	assert.Contains(t, fmt.Sprintf("%v", qr.Rows), `"keyspace:\"ks\" shard:\"-40\" key_range:<end:\"\\200\" > "`)
-	assert.Contains(t, fmt.Sprintf("%v", qr.Rows), `"keyspace:\"ks\" shard:\"40-80\" key_range:<end:\"\\200\" > "`)
+	assert.Contains(t, fmt.Sprintf("%v", qr.Rows), `"keyspace:\"ks\" shard:\"-40\" key_range:{end:\"\\x80\"}"`)
+	assert.Contains(t, fmt.Sprintf("%v", qr.Rows), `"keyspace:\"ks\" shard:\"40-80\" key_range:{end:\"\\x80\"}"`)
 
 	// check the binlog players are running and exporting vars
 	sharding.CheckDestinationMaster(t, *shard3Master, []string{shard1Ks, shard0Ks}, *clusterInstance)

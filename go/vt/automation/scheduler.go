@@ -26,6 +26,8 @@ import (
 	"fmt"
 	"sync"
 
+	"vitess.io/vitess/go/vt/proto/automationservice"
+
 	"context"
 
 	"vitess.io/vitess/go/vt/log"
@@ -46,6 +48,8 @@ type taskCreator func(string) Task
 
 // Scheduler executes automation tasks and maintains the execution state.
 type Scheduler struct {
+	automationservice.UnimplementedAutomationServer
+
 	idGenerator IDGenerator
 
 	mu sync.Mutex
@@ -370,7 +374,7 @@ func (s *Scheduler) GetClusterOperationDetails(ctx context.Context, req *automat
 		return nil, err
 	}
 	return &automationpb.GetClusterOperationDetailsResponse{
-		ClusterOp: &clusterOp.ClusterOperation,
+		ClusterOp: clusterOp.ClusterOperation,
 	}, nil
 }
 

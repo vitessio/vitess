@@ -88,7 +88,7 @@ func TestStatusHtml(t *testing.T) {
 	testStats.controllers = map[int]*controller{
 		1: {
 			id: 1,
-			source: binlogdata.BinlogSource{
+			source: &binlogdata.BinlogSource{
 				Keyspace: "ks",
 				Shard:    "0",
 			},
@@ -98,7 +98,7 @@ func TestStatusHtml(t *testing.T) {
 		},
 		2: {
 			id: 2,
-			source: binlogdata.BinlogSource{
+			source: &binlogdata.BinlogSource{
 				Keyspace: "ks",
 				Shard:    "1",
 			},
@@ -127,7 +127,7 @@ func TestVReplicationStats(t *testing.T) {
 	testStats.controllers = map[int]*controller{
 		1: {
 			id: 1,
-			source: binlogdata.BinlogSource{
+			source: &binlogdata.BinlogSource{
 				Keyspace: "ks",
 				Shard:    "0",
 			},

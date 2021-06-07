@@ -29,20 +29,32 @@ type (
 	analyzer struct {
 		si SchemaInformation
 
-		Tables []*TableInfo
-		scopes []*scope
-
-		exprDeps map[sqlparser.Expr]TableSet
-		err      error
+		Tables    []*TableInfo
+		scopes    []*scope
+		exprDeps  map[sqlparser.Expr]TableSet
+		err       error
+		currentDb string
 	}
 )
 
 // newAnalyzer create the semantic analyzer
-func newAnalyzer(si SchemaInformation) *analyzer {
+func newAnalyzer(dbName string, si SchemaInformation) *analyzer {
 	return &analyzer{
-		exprDeps: map[sqlparser.Expr]TableSet{},
-		si:       si,
+		exprDeps:  map[sqlparser.Expr]TableSet{},
+		currentDb: dbName,
+		si:        si,
 	}
+}
+
+// Analyze analyzes the parsed query.
+func Analyze(statement sqlparser.Statement, currentDb string, si SchemaInformation) (*SemTable, error) {
+	analyzer := newAnalyzer(currentDb, si)
+	// Initial scope
+	err := analyzer.analyze(statement)
+	if err != nil {
+		return nil, err
+	}
+	return &SemTable{exprDependencies: analyzer.exprDeps, Tables: analyzer.Tables}, nil
 }
 
 // analyzeDown pushes new scopes when we encounter sub queries,
@@ -71,10 +83,14 @@ func (a *analyzer) analyzeDown(cursor *sqlparser.Cursor) bool {
 		t, err := a.resolveColumn(node, current)
 		if err != nil {
 			a.err = err
+		} else {
+			a.exprDeps[node] = t
 		}
-		a.exprDeps[node] = t
 	}
-	return a.shouldContinue()
+	// this is the visitor going down the tree. Returning false here would just not visit the children
+	// to the current node, but that is not what we want if we have encountered an error.
+	// In order to abort the whole visitation, we have to return true here and then return false in the `analyzeUp` method
+	return true
 }
 
 func (a *analyzer) resolveColumn(colName *sqlparser.ColName, current *scope) (TableSet, error) {
@@ -103,9 +119,6 @@ func (a *analyzer) analyzeTableExprs(tablExprs sqlparser.TableExprs) error {
 func (a *analyzer) analyzeTableExpr(tableExpr sqlparser.TableExpr) error {
 	switch table := tableExpr.(type) {
 	case *sqlparser.AliasedTableExpr:
-		if !table.As.IsEmpty() {
-			return Gen4NotSupportedF("table aliases")
-		}
 		return a.bindTable(table, table.Expr)
 	case *sqlparser.JoinTableExpr:
 		if table.Join != sqlparser.NormalJoinType {
@@ -125,16 +138,18 @@ func (a *analyzer) analyzeTableExpr(tableExpr sqlparser.TableExpr) error {
 
 // resolveQualifiedColumn handles `tabl.col` expressions
 func (a *analyzer) resolveQualifiedColumn(current *scope, expr *sqlparser.ColName) (*TableInfo, error) {
-	qualifier := expr.Qualifier.Name.String()
-
+	// search up the scope stack until we find a match
 	for current != nil {
-		tableExpr, found := current.tables[qualifier]
-		if found {
-			return tableExpr, nil
+		dbName := expr.Qualifier.Qualifier.String()
+		tableName := expr.Qualifier.Name.String()
+		for _, table := range current.tables {
+			if tableName == table.tableName &&
+				(dbName == table.dbName || (dbName == "" && (table.dbName == a.currentDb || a.currentDb == ""))) {
+				return table, nil
+			}
 		}
 		current = current.parent
 	}
-
 	return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadFieldError, "Unknown table referenced by '%s'", sqlparser.String(expr))
 }
 
@@ -175,13 +190,7 @@ func (a *analyzer) tableSetFor(t *sqlparser.AliasedTableExpr) TableSet {
 func (a *analyzer) bindTable(alias *sqlparser.AliasedTableExpr, expr sqlparser.SimpleTableExpr) error {
 	switch t := expr.(type) {
 	case *sqlparser.DerivedTable:
-		a.push(newScope(nil))
-		if err := a.analyze(t.Select); err != nil {
-			return err
-		}
-		a.popScope()
-		scope := a.currentScope()
-		return scope.addTable(alias.As.String(), &TableInfo{alias, nil})
+		return Gen4NotSupportedF("derived table")
 	case sqlparser.TableName:
 		tbl, vdx, _, _, _, err := a.si.FindTableOrVindex(t)
 		if err != nil {
@@ -191,12 +200,24 @@ func (a *analyzer) bindTable(alias *sqlparser.AliasedTableExpr, expr sqlparser.S
 			return Gen4NotSupportedF("vindex in FROM")
 		}
 		scope := a.currentScope()
-		table := &TableInfo{alias, tbl}
-		a.Tables = append(a.Tables, table)
-		if alias.As.IsEmpty() {
-			return scope.addTable(t.Name.String(), table)
+		dbName := t.Qualifier.String()
+		if dbName == "" {
+			dbName = a.currentDb
 		}
-		return scope.addTable(alias.As.String(), table)
+		var tableName string
+		if alias.As.IsEmpty() {
+			tableName = t.Name.String()
+		} else {
+			tableName = alias.As.String()
+		}
+		table := &TableInfo{
+			dbName:    dbName,
+			tableName: tableName,
+			ASTNode:   alias,
+			Table:     tbl,
+		}
+		a.Tables = append(a.Tables, table)
+		return scope.addTable(table)
 	}
 	return nil
 }
@@ -211,7 +232,7 @@ func (a *analyzer) analyzeUp(cursor *sqlparser.Cursor) bool {
 	case *sqlparser.Union, *sqlparser.Select:
 		a.popScope()
 	}
-	return true
+	return a.shouldContinue()
 }
 
 func (a *analyzer) shouldContinue() bool {

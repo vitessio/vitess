@@ -275,7 +275,7 @@ func (ct *ColumnType) SQLType() querypb.Type {
 	case keywordStrings[MULTIPOLYGON]:
 		return sqltypes.Geometry
 	}
-	panic("unimplemented type " + ct.Type)
+	return sqltypes.Null
 }
 
 // ParseParams parses the vindex parameter list, pulling out the special-case
@@ -1259,6 +1259,8 @@ func (ty ShowCommandType) ToString() string {
 		return VGtidExecGlobalStr
 	case VitessMigrations:
 		return VitessMigrationsStr
+	case Warnings:
+		return WarningsStr
 	case Keyspace:
 		return KeyspaceStr
 	default:

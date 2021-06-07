@@ -20,12 +20,11 @@ limitations under the License.
 package fakerpcvtgateconn
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"math/rand"
 	"reflect"
-
-	"context"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
@@ -158,6 +157,31 @@ func (a *streamExecuteAdapter) Recv() (*sqltypes.Result, error) {
 	return r, nil
 }
 
+// Prepare please see vtgateconn.Impl.Prepare
+func (conn *FakeVTGateConn) Prepare(ctx context.Context, session *vtgatepb.Session, sql string, bindVars map[string]*querypb.BindVariable) (*vtgatepb.Session, []*querypb.Field, error) {
+	response, ok := conn.execMap[sql]
+	if !ok {
+		return nil, nil, fmt.Errorf("no match for: %s", sql)
+	}
+	query := &queryExecute{
+		SQL:           sql,
+		BindVariables: bindVars,
+		Session:       session,
+	}
+	if !reflect.DeepEqual(query, response.execQuery) {
+		return nil, nil, fmt.Errorf(
+			"Prepare: %+v, want %+v", query, response.execQuery)
+	}
+	reply := *response.reply
+	s := newSession(true, "test_keyspace", []string{}, topodatapb.TabletType_MASTER)
+	return s, reply.Fields, nil
+}
+
+// CloseSession please see vtgateconn.Impl.CloseSession
+func (conn *FakeVTGateConn) CloseSession(ctx context.Context, session *vtgatepb.Session) error {
+	panic("not implemented")
+}
+
 // ResolveTransaction please see vtgateconn.Impl.ResolveTransaction
 func (conn *FakeVTGateConn) ResolveTransaction(ctx context.Context, dtid string) error {
 	return nil
@@ -197,4 +221,4 @@ func newSession(
 }
 
 // Make sure FakeVTGateConn implements vtgateconn.Impl
-var _ (vtgateconn.Impl) = (*FakeVTGateConn)(nil)
+var _ vtgateconn.Impl = (*FakeVTGateConn)(nil)

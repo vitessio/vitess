@@ -77,7 +77,7 @@ func (dbc *DBConnection) ExecuteStreamFetch(query string, callback func(*sqltype
 	qr := alloc()
 	byteCount := 0
 	for {
-		row, err := dbc.FetchNext()
+		row, err := dbc.FetchNext(nil)
 		if err != nil {
 			dbc.handleError(err)
 			return err

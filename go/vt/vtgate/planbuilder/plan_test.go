@@ -191,6 +191,7 @@ func TestPlan(t *testing.T) {
 	testFile(t, "ddl_cases_no_default_keyspace.txt", testOutputTempDir, vschemaWrapper, false)
 	testFile(t, "flush_cases_no_default_keyspace.txt", testOutputTempDir, vschemaWrapper, false)
 	testFile(t, "show_cases_no_default_keyspace.txt", testOutputTempDir, vschemaWrapper, false)
+	testFile(t, "stream_cases.txt", testOutputTempDir, vschemaWrapper, false)
 }
 
 func TestSysVarSetDisabled(t *testing.T) {
@@ -440,7 +441,7 @@ func escapeNewLines(in string) string {
 	return strings.ReplaceAll(in, "\n", "\\n")
 }
 
-func testFile(t *testing.T, filename, tempDir string, vschema *vschemaWrapper, checkV4equalPlan bool) {
+func testFile(t *testing.T, filename, tempDir string, vschema *vschemaWrapper, checkGen4equalPlan bool) {
 	var checkAllTests = false
 	t.Run(filename, func(t *testing.T) {
 		expected := &strings.Builder{}
@@ -477,14 +478,14 @@ func testFile(t *testing.T, filename, tempDir string, vschema *vschemaWrapper, c
 			//  - it produces a different but accepted plan - this is shown using the accepted plan
 			//  - or it produces a different plan that has not yet been accepted, or it fails to produce a plan
 			//       this is shown by not having any info at all after the result for the V3 planner
-			//       with this last expectation, it is an error if the V4 planner
+			//       with this last expectation, it is an error if the Gen4 planner
 			//       produces the same plan as the V3 planner does
-			testName := fmt.Sprintf("%d V4: %s", tcase.lineno, tcase.comments)
+			testName := fmt.Sprintf("%d Gen4: %s", tcase.lineno, tcase.comments)
 			if !empty || checkAllTests {
 				t.Run(testName, func(t *testing.T) {
 					if out != tcase.output2ndPlanner {
 						fail = true
-						t.Errorf("V4 - %s:%d\nDiff:\n%s\n[%s] \n[%s]", filename, tcase.lineno, cmp.Diff(tcase.output2ndPlanner, out), tcase.output, out)
+						t.Errorf("Gen4 - %s:%d\nDiff:\n%s\n[%s] \n[%s]", filename, tcase.lineno, cmp.Diff(tcase.output2ndPlanner, out), tcase.output, out)
 
 					}
 					if err != nil {
@@ -498,9 +499,9 @@ func testFile(t *testing.T, filename, tempDir string, vschema *vschemaWrapper, c
 					}
 				})
 			} else {
-				if out == tcase.output && checkV4equalPlan {
+				if out == tcase.output && checkGen4equalPlan {
 					t.Run(testName, func(t *testing.T) {
-						t.Errorf("V4 - %s:%d\nplanner produces same output as V3", filename, tcase.lineno)
+						t.Errorf("Gen4 - %s:%d\nplanner produces same output as V3", filename, tcase.lineno)
 					})
 				}
 			}
@@ -657,10 +658,10 @@ func BenchmarkPlanner(b *testing.B) {
 		b.Run(filename+"-v3", func(b *testing.B) {
 			benchmarkPlanner(b, V3, testCases, vschema)
 		})
-		b.Run(filename+"-v4", func(b *testing.B) {
+		b.Run(filename+"-gen4", func(b *testing.B) {
 			benchmarkPlanner(b, Gen4, testCases, vschema)
 		})
-		b.Run(filename+"-v4left2right", func(b *testing.B) {
+		b.Run(filename+"-gen4left2right", func(b *testing.B) {
 			benchmarkPlanner(b, Gen4Left2Right, testCases, vschema)
 		})
 	}

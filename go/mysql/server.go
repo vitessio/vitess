@@ -183,7 +183,7 @@ type Listener struct {
 	PreHandleFunc func(context.Context, net.Conn, uint32) (net.Conn, error)
 }
 
-// NewFromListener creares a new mysql listener from an existing net.Listener
+// NewFromListener creates a new mysql listener from an existing net.Listener
 func NewFromListener(l net.Listener, authServer AuthServer, handler Handler, connReadTimeout time.Duration, connWriteTimeout time.Duration) (*Listener, error) {
 	cfg := ListenerConfig{
 		Listener:           l,

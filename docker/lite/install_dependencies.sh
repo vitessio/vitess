@@ -49,6 +49,7 @@ BASE_PACKAGES=(
     libatomic1
     libcurl4
     libdbd-mysql-perl
+    libwww-perl
     libev4
     libjemalloc2
     libtcmalloc-minimal4
@@ -95,6 +96,7 @@ mysql80)
     mysql8_version=8.0.23
     do_fetch https://repo.mysql.com/apt/debian/pool/mysql-8.0/m/mysql-community/libmysqlclient21_${mysql8_version}-1debian10_amd64.deb /tmp/libmysqlclient21_${mysql8_version}-1debian10_amd64.deb
     do_fetch https://repo.mysql.com/apt/debian/pool/mysql-8.0/m/mysql-community/mysql-community-client-core_${mysql8_version}-1debian10_amd64.deb /tmp/mysql-community-client-core_${mysql8_version}-1debian10_amd64.deb
+    do_fetch https://repo.mysql.com/apt/debian/pool/mysql-8.0/m/mysql-community/mysql-community-client-plugins_${mysql8_version}-1debian10_amd64.deb /tmp/mysql-community-client-plugins_${mysql8_version}-1debian10_amd64.deb
     do_fetch https://repo.mysql.com/apt/debian/pool/mysql-8.0/m/mysql-community/mysql-community-client_${mysql8_version}-1debian10_amd64.deb /tmp/mysql-community-client_${mysql8_version}-1debian10_amd64.deb
     do_fetch https://repo.mysql.com/apt/debian/pool/mysql-8.0/m/mysql-community/mysql-client_${mysql8_version}-1debian10_amd64.deb /tmp/mysql-client_${mysql8_version}-1debian10_amd64.deb
     do_fetch https://repo.mysql.com/apt/debian/pool/mysql-8.0/m/mysql-community/mysql-community-server-core_${mysql8_version}-1debian10_amd64.deb /tmp/mysql-community-server-core_${mysql8_version}-1debian10_amd64.deb
@@ -103,6 +105,7 @@ mysql80)
     PACKAGES=(
         /tmp/libmysqlclient21_${mysql8_version}-1debian10_amd64.deb
         /tmp/mysql-community-client-core_${mysql8_version}-1debian10_amd64.deb
+        /tmp/mysql-community-client-plugins_${mysql8_version}-1debian10_amd64.deb
         /tmp/mysql-community-client_${mysql8_version}-1debian10_amd64.deb
         /tmp/mysql-client_${mysql8_version}-1debian10_amd64.deb
         /tmp/mysql-community-server-core_${mysql8_version}-1debian10_amd64.deb
@@ -230,6 +233,9 @@ esac
 # Install flavor-specific packages
 apt-get update
 for i in $(seq 1 $MAX_RETRY); do apt-get install -y --no-install-recommends "${PACKAGES[@]}" && break; done
+if [[ "$i" = "$MAX_RETRY" ]]; then
+    exit 1
+fi
 
 # Clean up files we won't need in the final image.
 rm -rf /var/lib/apt/lists/*

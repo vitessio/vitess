@@ -50,7 +50,7 @@ func transformJoinPlan(n *joinPlan, semTable *semantics.SemTable) (logicalPlan, 
 	if err != nil {
 		return nil, err
 	}
-	return &joinV4{
+	return &joinGen4{
 		Left:  lhs,
 		Right: rhs,
 		Cols:  n.columns,
@@ -74,6 +74,15 @@ func transformRoutePlan(n *routePlan) (*route, error) {
 		}
 		tablesForSelect = append(tablesForSelect, &alias)
 		tableNameMap[sqlparser.String(t.qtable.table.Name)] = nil
+	}
+
+	for _, predicate := range n.vindexPredicates {
+		switch predicate := predicate.(type) {
+		case *sqlparser.ComparisonExpr:
+			if predicate.Operator == sqlparser.InOp {
+				predicate.Right = sqlparser.ListArg(engine.ListVarName)
+			}
+		}
 	}
 
 	predicates := n.Predicates()

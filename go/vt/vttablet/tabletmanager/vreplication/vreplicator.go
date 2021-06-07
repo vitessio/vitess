@@ -43,11 +43,12 @@ var (
 	// between the two timeouts.
 	idleTimeout = 1100 * time.Millisecond
 
-	dbLockRetryDelay    = 1 * time.Second
-	relayLogMaxSize     = flag.Int("relay_log_max_size", 250000, "Maximum buffer size (in bytes) for VReplication target buffering. If single rows are larger than this, a single row is buffered at a time.")
-	relayLogMaxItems    = flag.Int("relay_log_max_items", 5000, "Maximum number of rows for VReplication target buffering.")
-	copyTimeout         = 1 * time.Hour
-	replicaLagTolerance = 10 * time.Second
+	dbLockRetryDelay = 1 * time.Second
+	relayLogMaxSize  = flag.Int("relay_log_max_size", 250000, "Maximum buffer size (in bytes) for VReplication target buffering. If single rows are larger than this, a single row is buffered at a time.")
+	relayLogMaxItems = flag.Int("relay_log_max_items", 5000, "Maximum number of rows for VReplication target buffering.")
+
+	copyPhaseDuration   = flag.Duration("vreplication_copy_phase_duration", 1*time.Hour, "Duration for each copy phase loop (before running the next catchup: default 1h)")
+	replicaLagTolerance = flag.Duration("vreplication_replica_lag_tolerance", 1*time.Minute, "Replica lag threshold duration: once lag is below this we switch from copy phase to the replication (streaming) phase")
 
 	// vreplicationHeartbeatUpdateInterval determines how often the time_updated column is updated if there are no real events on the source and the source
 	// vstream is only sending heartbeats for this long. Keep this low if you expect high QPS and are monitoring this column to alert about potential
@@ -59,9 +60,11 @@ var (
 	// to ensure that it satisfies liveness criteria implicitly expected by internal processes like Online DDL
 	vreplicationMinimumHeartbeatUpdateInterval = 60
 
-	vreplicationExperimentalFlags = flag.Int64("vreplication_experimental_flags", 0, "(Bitmask) of experimental features in vreplication to enable")
+	vreplicationExperimentalFlags = flag.Int64("vreplication_experimental_flags", 0x01, "(Bitmask) of experimental features in vreplication to enable")
 
 	vreplicationExperimentalFlagOptimizeInserts int64 = 1
+
+	vreplicationStoreCompressedGTID = flag.Bool("vreplication_store_compressed_gtid", false, "Store compressed gtids in the pos column of _vt.vreplication")
 )
 
 // vreplicator provides the core logic to start vreplication streams
@@ -72,8 +75,8 @@ type vreplicator struct {
 	// source
 	source          *binlogdatapb.BinlogSource
 	sourceVStreamer VStreamerClient
-
-	stats *binlogplayer.Stats
+	state           string
+	stats           *binlogplayer.Stats
 	// mysqld is used to fetch the local schema.
 	mysqld    mysqlctl.MysqlDaemon
 	pkInfoMap map[string][]*PrimaryKeyInfo
@@ -93,8 +96,9 @@ type vreplicator struct {
 //   "select * from t where in_keyrange(col1, 'hash', '-80')",
 //   "select col1, col2 from t where...",
 //   "select col1, keyspace_id() as ksid from t where...",
-//   "select id, count(*), sum(price) from t group by id".
-//   Only "in_keyrange" expressions are supported in the where clause.
+//   "select id, count(*), sum(price) from t group by id",
+//   "select * from t where customer_id=1 and val = 'newton'".
+//   Only "in_keyrange" expressions, integer and string comparisons are supported in the where clause.
 //   The select expressions can be any valid non-aggregate expressions,
 //   or count(*), or sum(col).
 //   If the target column name does not match the source expression, an
@@ -188,6 +192,15 @@ func (vr *vreplicator) replicate(ctx context.Context) error {
 			if err := newVCopier(vr).copyNext(ctx, settings); err != nil {
 				vr.stats.ErrorCounts.Add([]string{"Copy"}, 1)
 				return err
+			}
+			settings, numTablesToCopy, err = vr.readSettings(ctx)
+			if err != nil {
+				return err
+			}
+			if numTablesToCopy == 0 {
+				if err := vr.insertLog(LogCopyEnd, fmt.Sprintf("Copy phase completed at gtid %s", settings.StartPos)); err != nil {
+					return err
+				}
 			}
 		case settings.StartPos.IsZero():
 			if err := newVCopier(vr).initTablesForCopy(ctx); err != nil {
@@ -317,7 +330,14 @@ func (vr *vreplicator) setMessage(message string) error {
 	if _, err := vr.dbClient.Execute(query); err != nil {
 		return fmt.Errorf("could not set message: %v: %v", query, err)
 	}
+	if err := insertLog(vr.dbClient, LogMessage, vr.id, vr.state, message); err != nil {
+		return err
+	}
 	return nil
+}
+
+func (vr *vreplicator) insertLog(typ, message string) error {
+	return insertLog(vr.dbClient, typ, vr.id, vr.state, message)
 }
 
 func (vr *vreplicator) setState(state, message string) error {
@@ -332,6 +352,14 @@ func (vr *vreplicator) setState(state, message string) error {
 	if _, err := vr.dbClient.ExecuteFetch(query, 1); err != nil {
 		return fmt.Errorf("could not set state: %v: %v", query, err)
 	}
+	if state == vr.state {
+		return nil
+	}
+	if err := insertLog(vr.dbClient, LogStateChange, vr.id, state, message); err != nil {
+		return err
+	}
+	vr.state = state
+
 	return nil
 }
 

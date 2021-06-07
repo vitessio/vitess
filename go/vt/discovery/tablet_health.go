@@ -22,7 +22,7 @@ import (
 
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/vt/proto/query"
@@ -39,6 +39,9 @@ type TabletHealth struct {
 	MasterTermStartTime int64
 	LastError           error
 	Serving             bool
+
+	// TablesUpdated contains a list of all tables that we need to fetch new schema info for
+	TablesUpdated []string
 }
 
 // DeepEqual compares two TabletHealth. Since we include protos, we

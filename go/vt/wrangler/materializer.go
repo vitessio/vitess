@@ -25,14 +25,16 @@ import (
 	"sync"
 	"text/template"
 
+	"google.golang.org/protobuf/proto"
+
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/topotools"
+	"vitess.io/vitess/go/vt/vtctl/workflow"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"context"
-
-	"github.com/golang/protobuf/proto"
 
 	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/sqltypes"
@@ -158,7 +160,7 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 	if externalTopo == nil {
 		// Save routing rules before vschema. If we save vschema first, and routing rules
 		// fails to save, we may generate duplicate table errors.
-		rules, err := wr.getRoutingRules(ctx)
+		rules, err := topotools.GetRoutingRules(ctx, wr.ts)
 		if err != nil {
 			return err
 		}
@@ -174,7 +176,7 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 			rules[sourceKeyspace+"."+table+"@replica"] = toSource
 			rules[sourceKeyspace+"."+table+"@rdonly"] = toSource
 		}
-		if err := wr.saveRoutingRules(ctx, rules); err != nil {
+		if err := topotools.SaveRoutingRules(ctx, wr.ts, rules); err != nil {
 			return err
 		}
 		if vschema != nil {
@@ -311,9 +313,13 @@ func (wr *Wrangler) checkIfPreviousJournalExists(ctx context.Context, mz *materi
 		return allErrors.AggrError(vterrors.Aggregate)
 	}
 
-	var mu sync.Mutex
-	var exists bool
-	var tablets []string
+	var (
+		mu      sync.Mutex
+		exists  bool
+		tablets []string
+		ws      = workflow.NewServer(wr.ts, wr.tmc)
+	)
+
 	err := forAllSources(func(si *topo.ShardInfo) error {
 		tablet, err := wr.ts.GetTablet(ctx, si.MasterAlias)
 		if err != nil {
@@ -322,7 +328,7 @@ func (wr *Wrangler) checkIfPreviousJournalExists(ctx context.Context, mz *materi
 		if tablet == nil {
 			return nil
 		}
-		_, exists, err = wr.checkIfJournalExistsOnTablet(ctx, tablet.Tablet, migrationID)
+		_, exists, err = ws.CheckReshardingJournalExistsOnTablet(ctx, tablet.Tablet, migrationID)
 		if err != nil {
 			return err
 		}

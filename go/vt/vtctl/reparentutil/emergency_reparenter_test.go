@@ -1053,7 +1053,6 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 			err := erp.reparentShardLocked(ctx, ev, tt.keyspace, tt.shard, tt.opts)
 			if tt.shouldErr {
 				assert.Error(t, err)
-
 				return
 			}
 
@@ -1494,7 +1493,6 @@ func TestEmergencyReparenter_promoteNewPrimary(t *testing.T) {
 			err := erp.promoteNewPrimary(ctx, ev, tt.keyspace, tt.shard, tt.newPrimaryTabletAlias, tt.tabletMap, tt.statusMap, tt.opts)
 			if tt.shouldErr {
 				assert.Error(t, err)
-
 				return
 			}
 

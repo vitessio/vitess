@@ -1282,7 +1282,7 @@ func TestServerFlush(t *testing.T) {
 	}}
 	assert.Equal(t, want1, flds)
 
-	row, err := c.FetchNext()
+	row, err := c.FetchNext(nil)
 	require.NoError(t, err)
 	if duration, want := time.Since(start), 50*time.Millisecond; duration < want {
 		assert.Fail(t, "duration: %v, want > %v", duration, want)
@@ -1290,7 +1290,7 @@ func TestServerFlush(t *testing.T) {
 	want2 := []sqltypes.Value{sqltypes.MakeTrusted(querypb.Type_VARCHAR, []byte("delayed"))}
 	assert.Equal(t, want2, row)
 
-	row, err = c.FetchNext()
+	row, err = c.FetchNext(nil)
 	require.NoError(t, err)
 	assert.Nil(t, row)
 }

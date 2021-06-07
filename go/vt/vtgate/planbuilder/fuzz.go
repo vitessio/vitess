@@ -18,6 +18,8 @@ limitations under the License.
 package planbuilder
 
 import (
+	"fmt"
+
 	"vitess.io/vitess/go/vt/key"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -31,9 +33,13 @@ type fakeFuzzSI struct {
 	tables map[string]*vindexes.Table
 }
 
-// Helper func:
+// FindTableOrVindex is a helper func
 func (s *fakeFuzzSI) FindTableOrVindex(tablename sqlparser.TableName) (*vindexes.Table, vindexes.Vindex, string, topodatapb.TabletType, key.Destination, error) {
-	return s.tables[sqlparser.String(tablename)], nil, "", 0, nil, nil
+	table, found := s.tables[sqlparser.String(tablename)]
+	if !found {
+		return nil, nil, "", 0, nil, fmt.Errorf("fuzzer error - table not found")
+	}
+	return table, nil, "", 0, nil, nil
 }
 
 // FuzzAnalyse implements the fuzzer
@@ -42,10 +48,15 @@ func FuzzAnalyse(data []byte) int {
 	if err != nil {
 		return -1
 	}
-	semTable, err := semantics.Analyse(tree, &fakeFuzzSI{})
-	if err != nil {
+	switch stmt := tree.(type) {
+	case *sqlparser.Select:
+		semTable, err := semantics.Analyze(tree, "", &fakeFuzzSI{})
+		if err != nil {
+			return 0
+		}
+		_, _ = createQGFromSelect(stmt, semTable)
+	default:
 		return 0
 	}
-	_, _ = createQGFromSelect(tree.(*sqlparser.Select), semTable)
 	return 1
 }

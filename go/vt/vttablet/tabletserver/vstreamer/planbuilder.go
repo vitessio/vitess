@@ -112,52 +112,55 @@ func (plan *Plan) fields() []*querypb.Field {
 }
 
 // filter filters the row against the plan. It returns false if the row did not match.
-// If the row matched, it returns the columns to be sent.
-func (plan *Plan) filter(values []sqltypes.Value) (bool, []sqltypes.Value, error) {
+// The output of the filtering operation is stored in the 'result' argument because
+// filtering cannot be performed in-place. The result argument must be a slice of
+// length equal to ColExprs
+func (plan *Plan) filter(values, result []sqltypes.Value) (bool, error) {
+	if len(result) != len(plan.ColExprs) {
+		return false, fmt.Errorf("expected %d values in result slice", len(plan.ColExprs))
+	}
 	for _, filter := range plan.Filters {
 		switch filter.Opcode {
 		case Equal:
 			result, err := evalengine.NullsafeCompare(values[filter.ColNum], filter.Value)
 			if err != nil {
-				return false, nil, err
+				return false, err
 			}
 			if result != 0 {
-				return false, nil, nil
+				return false, nil
 			}
 		case VindexMatch:
-			ksid, err := getKeyspaceID(values, filter.Vindex, filter.VindexColumns)
+			ksid, err := getKeyspaceID(values, filter.Vindex, filter.VindexColumns, plan.Table.Fields)
 			if err != nil {
-				return false, nil, err
+				return false, err
 			}
 			if !key.KeyRangeContains(filter.KeyRange, ksid) {
-				return false, nil, nil
+				return false, nil
 			}
 		}
 	}
-
-	result := make([]sqltypes.Value, len(plan.ColExprs))
 	for i, colExpr := range plan.ColExprs {
 		if colExpr.ColNum == -1 {
 			result[i] = colExpr.FixedValue
 			continue
 		}
 		if colExpr.ColNum >= len(values) {
-			return false, nil, fmt.Errorf("index out of range, colExpr.ColNum: %d, len(values): %d", colExpr.ColNum, len(values))
+			return false, fmt.Errorf("index out of range, colExpr.ColNum: %d, len(values): %d", colExpr.ColNum, len(values))
 		}
 		if colExpr.Vindex == nil {
 			result[i] = values[colExpr.ColNum]
 		} else {
-			ksid, err := getKeyspaceID(values, colExpr.Vindex, colExpr.VindexColumns)
+			ksid, err := getKeyspaceID(values, colExpr.Vindex, colExpr.VindexColumns, plan.Table.Fields)
 			if err != nil {
-				return false, nil, err
+				return false, err
 			}
 			result[i] = sqltypes.MakeTrusted(sqltypes.VarBinary, []byte(ksid))
 		}
 	}
-	return true, result, nil
+	return true, nil
 }
 
-func getKeyspaceID(values []sqltypes.Value, vindex vindexes.Vindex, vindexColumns []int) (key.DestinationKeyspaceID, error) {
+func getKeyspaceID(values []sqltypes.Value, vindex vindexes.Vindex, vindexColumns []int, fields []*querypb.Field) (key.DestinationKeyspaceID, error) {
 	vindexValues := make([]sqltypes.Value, 0, len(vindexColumns))
 	for _, col := range vindexColumns {
 		vindexValues = append(vindexValues, values[col])

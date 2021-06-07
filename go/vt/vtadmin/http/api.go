@@ -36,17 +36,21 @@ type Options struct {
 	// DisableCompression specifies whether to turn off gzip compression for API
 	// endpoints. It is named as the negative (as opposed to EnableTracing) so
 	// the zero value has compression enabled.
-	DisableCompression bool
+	DisableCompression  bool
+	ExperimentalOptions struct {
+		TabletURLTmpl string
+	}
 }
 
 // API is used to power HTTP endpoint wrappers to the VTAdminServer interface.
 type API struct {
 	server vtadminpb.VTAdminServer
+	opts   Options
 }
 
 // NewAPI returns an HTTP API backed by the given VTAdminServer implementation.
-func NewAPI(server vtadminpb.VTAdminServer) *API {
-	return &API{server: server}
+func NewAPI(server vtadminpb.VTAdminServer, opts Options) *API {
+	return &API{server: server, opts: opts}
 }
 
 // VTAdminHandler is an HTTP endpoint handler that takes, via injection,
@@ -68,4 +72,14 @@ func (api *API) Adapt(handler VTAdminHandler) http.HandlerFunc {
 
 		handler(ctx, Request{r}, api).Write(w)
 	}
+}
+
+// Options returns a copy of the Options this API was configured with.
+func (api *API) Options() Options {
+	return api.opts
+}
+
+// Server returns the VTAdminServer wrapped by this API.
+func (api *API) Server() vtadminpb.VTAdminServer {
+	return api.server
 }

@@ -129,6 +129,7 @@ type Conn struct {
 
 	bufferedReader *bufio.Reader
 	flushTimer     *time.Timer
+	header         [packetHeaderSize]byte
 
 	// Keep track of how and of the buffer we allocated for an
 	// ephemeral packet on the read and write sides.
@@ -324,14 +325,13 @@ func (c *Conn) getReader() io.Reader {
 }
 
 func (c *Conn) readHeaderFrom(r io.Reader) (int, error) {
-	var header [packetHeaderSize]byte
 	// Note io.ReadFull will return two different types of errors:
 	// 1. if the socket is already closed, and the go runtime knows it,
 	//   then ReadFull will return an error (different than EOF),
 	//   something like 'read: connection reset by peer'.
 	// 2. if the socket is not closed while we start the read,
 	//   but gets closed after the read is started, we'll get io.EOF.
-	if _, err := io.ReadFull(r, header[:]); err != nil {
+	if _, err := io.ReadFull(r, c.header[:]); err != nil {
 		// The special casing of propagating io.EOF up
 		// is used by the server side only, to suppress an error
 		// message if a client just disconnects.
@@ -344,14 +344,14 @@ func (c *Conn) readHeaderFrom(r io.Reader) (int, error) {
 		return 0, vterrors.Wrapf(err, "io.ReadFull(header size) failed")
 	}
 
-	sequence := uint8(header[3])
+	sequence := uint8(c.header[3])
 	if sequence != c.sequence {
 		return 0, vterrors.Errorf(vtrpc.Code_INTERNAL, "invalid sequence, expected %v got %v", c.sequence, sequence)
 	}
 
 	c.sequence++
 
-	return int(uint32(header[0]) | uint32(header[1])<<8 | uint32(header[2])<<16), nil
+	return int(uint32(c.header[0]) | uint32(c.header[1])<<8 | uint32(c.header[2])<<16), nil
 }
 
 // readEphemeralPacket attempts to read a packet into buffer from sync.Pool.  Do
@@ -858,6 +858,9 @@ func (c *Conn) handleNextCommand(handler Handler) bool {
 		if err != io.EOF && !strings.Contains(err.Error(), "use of closed network connection") {
 			log.Errorf("Error reading packet from %s: %v", c, err)
 		}
+		return false
+	}
+	if len(data) == 0 {
 		return false
 	}
 
@@ -1489,4 +1492,9 @@ func (c *Conn) GetTLSClientCerts() []*x509.Certificate {
 		return tlsConn.ConnectionState().PeerCertificates
 	}
 	return nil
+}
+
+// GetRawConn returns the raw net.Conn for nefarious purposes.
+func (c *Conn) GetRawConn() net.Conn {
+	return c.conn
 }

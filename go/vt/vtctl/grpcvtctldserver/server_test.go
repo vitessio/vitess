@@ -25,9 +25,11 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/protoutil"
+	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 	"vitess.io/vitess/go/vt/topo"
@@ -42,6 +44,7 @@ import (
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
+	"vitess.io/vitess/go/vt/proto/vtctldata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	vtctlservicepb "vitess.io/vitess/go/vt/proto/vtctlservice"
 	"vitess.io/vitess/go/vt/proto/vttime"
@@ -61,6 +64,261 @@ func init() {
 	tmclient.RegisterTabletManagerClientFactory("grpcvtctldserver.test", func() tmclient.TabletManagerClient {
 		return nil
 	})
+}
+
+func TestAddCellInfo(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	tests := []struct {
+		name      string
+		ts        *topo.Server
+		req       *vtctldatapb.AddCellInfoRequest
+		shouldErr bool
+	}{
+		{
+			ts: memorytopo.NewServer("zone1"),
+			req: &vtctldatapb.AddCellInfoRequest{
+				Name: "zone2",
+				CellInfo: &topodatapb.CellInfo{
+					ServerAddress: ":2222",
+					Root:          "/zone2",
+				},
+			},
+		},
+		{
+			name: "cell already exists",
+			ts:   memorytopo.NewServer("zone1"),
+			req: &vtctldatapb.AddCellInfoRequest{
+				Name: "zone1",
+				CellInfo: &topodatapb.CellInfo{
+					ServerAddress: ":1111",
+					Root:          "/zone1",
+				},
+			},
+			shouldErr: true,
+		},
+		{
+			name: "no cell root",
+			ts:   memorytopo.NewServer("zone1"),
+			req: &vtctldatapb.AddCellInfoRequest{
+				Name: "zone2",
+				CellInfo: &topodatapb.CellInfo{
+					ServerAddress: ":2222",
+				},
+			},
+			shouldErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, tt.ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+				return NewVtctldServer(ts)
+			})
+			_, err := vtctld.AddCellInfo(ctx, tt.req)
+			if tt.shouldErr {
+				assert.Error(t, err)
+				return
+			}
+
+			require.NoError(t, err)
+			ci, err := tt.ts.GetCellInfo(ctx, tt.req.Name, true)
+			require.NoError(t, err, "failed to read new cell %s from topo", tt.req.Name)
+			utils.MustMatch(t, tt.req.CellInfo, ci)
+		})
+	}
+}
+
+func TestAddCellsAlias(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	tests := []struct {
+		name      string
+		ts        *topo.Server
+		setup     func(ts *topo.Server) error
+		req       *vtctldata.AddCellsAliasRequest
+		shouldErr bool
+	}{
+		{
+			ts: memorytopo.NewServer("zone1", "zone2", "zone3"),
+			req: &vtctldatapb.AddCellsAliasRequest{
+				Name:  "zone",
+				Cells: []string{"zone1", "zone2", "zone3"},
+			},
+		},
+		{
+			name: "alias exists",
+			ts:   memorytopo.NewServer("zone1", "zone2", "zone3"),
+			setup: func(ts *topo.Server) error {
+				return ts.CreateCellsAlias(ctx, "zone", &topodatapb.CellsAlias{
+					Cells: []string{"zone1", "zone2"},
+				})
+			},
+			req: &vtctldatapb.AddCellsAliasRequest{
+				Name:  "zone",
+				Cells: []string{"zone1", "zone2", "zone3"},
+			},
+			shouldErr: true,
+		},
+		{
+			name: "alias overlaps",
+			ts:   memorytopo.NewServer("zone1", "zone2", "zone3"),
+			setup: func(ts *topo.Server) error {
+				return ts.CreateCellsAlias(context.Background(), "zone_a", &topodatapb.CellsAlias{
+					Cells: []string{"zone1", "zone3"},
+				})
+			},
+			req: &vtctldatapb.AddCellsAliasRequest{
+				Name:  "zone_b",
+				Cells: []string{"zone1", "zone2", "zone3"},
+			},
+			shouldErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			if tt.setup != nil {
+				err := tt.setup(tt.ts)
+				require.NoError(t, err, "test setup failed")
+			}
+
+			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, tt.ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+				return NewVtctldServer(ts)
+			})
+			_, err := vtctld.AddCellsAlias(ctx, tt.req)
+			if tt.shouldErr {
+				assert.Error(t, err)
+				return
+			}
+
+			require.NoError(t, err)
+			ca, err := tt.ts.GetCellsAlias(ctx, tt.req.Name, true)
+			require.NoError(t, err, "failed to read new cells alias %s from topo", tt.req.Name)
+			utils.MustMatch(t, &topodatapb.CellsAlias{Cells: tt.req.Cells}, ca)
+		})
+	}
+}
+
+func TestApplyRoutingRules(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	tests := []struct {
+		name          string
+		cells         []string
+		req           *vtctldatapb.ApplyRoutingRulesRequest
+		expectedRules *vschemapb.RoutingRules
+		topoDown      bool
+		shouldErr     bool
+	}{
+		{
+			name:  "success",
+			cells: []string{"zone1"},
+			req: &vtctldatapb.ApplyRoutingRulesRequest{
+				RoutingRules: &vschemapb.RoutingRules{
+					Rules: []*vschemapb.RoutingRule{
+						{
+							FromTable: "t1",
+							ToTables:  []string{"t1", "t2"},
+						},
+					},
+				},
+			},
+			expectedRules: &vschemapb.RoutingRules{
+				Rules: []*vschemapb.RoutingRule{
+					{
+						FromTable: "t1",
+						ToTables:  []string{"t1", "t2"},
+					},
+				},
+			},
+		},
+		{
+			name:  "rebuild failed (bad cell)",
+			cells: []string{"zone1"},
+			req: &vtctldatapb.ApplyRoutingRulesRequest{
+				RoutingRules: &vschemapb.RoutingRules{
+					Rules: []*vschemapb.RoutingRule{
+						{
+							FromTable: "t1",
+							ToTables:  []string{"t1", "t2"},
+						},
+					},
+				},
+				RebuildCells: []string{"zone1", "zone2"},
+			},
+			shouldErr: true,
+		},
+		{
+			// this test case is exactly like the previous, but we don't fail
+			// because we don't rebuild the vschema graph (which would fail the
+			// way we've set up the test case with the bogus cell).
+			name:  "rebuild skipped",
+			cells: []string{"zone1"},
+			req: &vtctldatapb.ApplyRoutingRulesRequest{
+				RoutingRules: &vschemapb.RoutingRules{
+					Rules: []*vschemapb.RoutingRule{
+						{
+							FromTable: "t1",
+							ToTables:  []string{"t1", "t2"},
+						},
+					},
+				},
+				SkipRebuild:  true,
+				RebuildCells: []string{"zone1", "zone2"},
+			},
+			expectedRules: &vschemapb.RoutingRules{
+				Rules: []*vschemapb.RoutingRule{
+					{
+						FromTable: "t1",
+						ToTables:  []string{"t1", "t2"},
+					},
+				},
+			},
+			shouldErr: false,
+		},
+		{
+			name:      "topo down",
+			cells:     []string{"zone1"},
+			req:       &vtctldatapb.ApplyRoutingRulesRequest{},
+			topoDown:  true,
+			shouldErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			ts, factory := memorytopo.NewServerAndFactory(tt.cells...)
+			if tt.topoDown {
+				factory.SetError(errors.New("topo down for testing"))
+			}
+
+			vtctld := NewVtctldServer(ts)
+			_, err := vtctld.ApplyRoutingRules(ctx, tt.req)
+			if tt.shouldErr {
+				assert.Error(t, err)
+				return
+			}
+
+			require.NoError(t, err, "ApplyRoutingRules(%+v) failed", tt.req)
+
+			rr, err := ts.GetRoutingRules(ctx)
+			require.NoError(t, err, "failed to get routing rules from topo to compare")
+			utils.MustMatch(t, tt.expectedRules, rr)
+		})
+	}
 }
 
 func TestChangeTabletType(t *testing.T) {
@@ -240,7 +498,7 @@ func TestChangeTabletType(t *testing.T) {
 			}
 
 			assert.NoError(t, err)
-			assert.Equal(t, tt.expected, resp)
+			utils.MustMatch(t, tt.expected, resp)
 
 			// If we are testing a dry-run, then the tablet in the actual
 			// topo should match the BeforeTablet in the response. Otherwise,
@@ -261,7 +519,7 @@ func TestChangeTabletType(t *testing.T) {
 				resp.AfterTablet.Type,
 				resp.WasDryRun,
 			)
-			assert.Equal(t, expectedRealType, tablet.Type, msg)
+			utils.MustMatch(t, expectedRealType, tablet.Type, msg)
 		})
 	}
 
@@ -566,7 +824,7 @@ func TestCreateKeyspace(t *testing.T) {
 				return
 			}
 			assert.NoError(t, err)
-			assert.Equal(t, tt.expectedVSchema, vs)
+			utils.MustMatch(t, tt.expectedVSchema, vs)
 		})
 	}
 }
@@ -787,7 +1045,6 @@ func TestCreateShard(t *testing.T) {
 
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-
 			if tt.req == nil {
 				t.Skip("focusing on other tests")
 			}
@@ -815,7 +1072,115 @@ func TestCreateShard(t *testing.T) {
 			}
 
 			assert.NoError(t, err)
-			assert.Equal(t, tt.expected, resp)
+			utils.MustMatch(t, tt.expected, resp)
+		})
+	}
+}
+
+func TestDeleteCellInfo(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	tests := []struct {
+		name      string
+		ts        *topo.Server
+		req       *vtctldatapb.DeleteCellInfoRequest
+		shouldErr bool
+	}{
+		{
+			ts: memorytopo.NewServer("zone1", "zone2"),
+			req: &vtctldatapb.DeleteCellInfoRequest{
+				Name: "zone2",
+			},
+		},
+		{
+			name: "cell does not exist",
+			ts:   memorytopo.NewServer("zone1"),
+			req: &vtctldatapb.DeleteCellInfoRequest{
+				Name: "zone2",
+			},
+			shouldErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, tt.ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+				return NewVtctldServer(ts)
+			})
+			_, err := vtctld.DeleteCellInfo(ctx, tt.req)
+			if tt.shouldErr {
+				assert.Error(t, err)
+				return
+			}
+
+			require.NoError(t, err)
+			ci, err := tt.ts.GetCellInfo(ctx, tt.req.Name, true)
+			assert.True(t, topo.IsErrType(err, topo.NoNode), "expected cell %s to no longer exist; found %+v", tt.req.Name, ci)
+		})
+	}
+}
+
+func TestDeleteCellsAlias(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	tests := []struct {
+		name      string
+		ts        *topo.Server
+		setup     func(ts *topo.Server) error
+		req       *vtctldata.DeleteCellsAliasRequest
+		shouldErr bool
+	}{
+		{
+			ts: memorytopo.NewServer("zone1", "zone2"),
+			setup: func(ts *topo.Server) error {
+				return ts.CreateCellsAlias(ctx, "zone", &topodatapb.CellsAlias{
+					Cells: []string{"zone1", "zone2"},
+				})
+			},
+			req: &vtctldatapb.DeleteCellsAliasRequest{
+				Name: "zone",
+			},
+		},
+		{
+			name: "alias does not exist",
+			ts:   memorytopo.NewServer("zone1", "zone2"),
+			setup: func(ts *topo.Server) error {
+				return ts.CreateCellsAlias(ctx, "zone_a", &topodatapb.CellsAlias{
+					Cells: []string{"zone1", "zone2"},
+				})
+			},
+			req: &vtctldatapb.DeleteCellsAliasRequest{
+				Name: "zone_b",
+			},
+			shouldErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			if tt.setup != nil {
+				err := tt.setup(tt.ts)
+				require.NoError(t, err, "test setup failed")
+			}
+
+			vtctld := NewVtctldServer(tt.ts)
+			_, err := vtctld.DeleteCellsAlias(ctx, tt.req)
+			if tt.shouldErr {
+				assert.Error(t, err)
+				return
+			}
+
+			require.NoError(t, err)
+			ca, err := tt.ts.GetCellsAlias(ctx, tt.req.Name, true)
+			assert.True(t, topo.IsErrType(err, topo.NoNode), "expected cell alias %s to no longer exist; found %+v", tt.req.Name, ca)
 		})
 	}
 }
@@ -1010,7 +1375,7 @@ func TestDeleteKeyspace(t *testing.T) {
 					remainingShards[ks] = shards
 				}
 
-				assert.Equal(t, tt.expectedRemainingShards, remainingShards)
+				utils.MustMatch(t, tt.expectedRemainingShards, remainingShards)
 			}()
 
 			resp, err := vtctld.DeleteKeyspace(ctx, tt.req)
@@ -1021,7 +1386,7 @@ func TestDeleteKeyspace(t *testing.T) {
 			}
 
 			assert.NoError(t, err)
-			assert.Equal(t, tt.expected, resp)
+			utils.MustMatch(t, tt.expected, resp)
 		})
 	}
 }
@@ -1449,7 +1814,7 @@ func TestDeleteShards(t *testing.T) {
 			}
 
 			assert.NoError(t, err)
-			assert.Equal(t, tt.expected, resp)
+			utils.MustMatch(t, tt.expected, resp)
 		})
 	}
 }
@@ -1934,8 +2299,7 @@ func TestDeleteTablets(t *testing.T) {
 
 				resp, err := vtctld.GetTablets(ctx, &vtctldatapb.GetTabletsRequest{})
 				assert.NoError(t, err, "cannot look up tablets from topo after issuing DeleteTablets request")
-
-				assert.ElementsMatch(t, tt.expectedRemainingTablets, resp.Tablets)
+				testutil.AssertSameTablets(t, tt.expectedRemainingTablets, resp.Tablets)
 			}
 
 			// Run the test
@@ -1951,7 +2315,7 @@ func TestDeleteTablets(t *testing.T) {
 			}
 
 			assert.NoError(t, err)
-			assert.Equal(t, tt.expected, resp)
+			utils.MustMatch(t, tt.expected, resp)
 			checkRemainingTablets()
 		})
 	}
@@ -2149,7 +2513,7 @@ func TestEmergencyReparentShard(t *testing.T) {
 			}
 
 			assert.NoError(t, err)
-			testutil.AssertEmergencyReparentShardResponsesEqual(t, *tt.expected, *resp)
+			testutil.AssertEmergencyReparentShardResponsesEqual(t, tt.expected, resp)
 		})
 	}
 }
@@ -2191,7 +2555,7 @@ func TestFindAllShardsInKeyspace(t *testing.T) {
 		},
 	}
 
-	assert.Equal(t, expected, resp.Shards)
+	utils.MustMatch(t, expected, resp.Shards)
 
 	_, err = vtctld.FindAllShardsInKeyspace(ctx, &vtctldatapb.FindAllShardsInKeyspaceRequest{Keyspace: "nothing"})
 	assert.Error(t, err)
@@ -2226,7 +2590,7 @@ func TestGetBackups(t *testing.T) {
 		Shard:    "-",
 	})
 	assert.NoError(t, err)
-	assert.Equal(t, expected, resp)
+	utils.MustMatch(t, expected, resp)
 
 	t.Run("no backupstorage", func(t *testing.T) {
 		*backupstorage.BackupStorageImplementation = "doesnotexist"
@@ -2272,7 +2636,7 @@ func TestGetKeyspace(t *testing.T) {
 
 	ks, err := vtctld.GetKeyspace(ctx, &vtctldatapb.GetKeyspaceRequest{Keyspace: expected.Keyspace.Name})
 	assert.NoError(t, err)
-	assert.Equal(t, expected, ks)
+	utils.MustMatch(t, expected, ks)
 
 	_, err = vtctld.GetKeyspace(ctx, &vtctldatapb.GetKeyspaceRequest{Keyspace: "notfound"})
 	assert.Error(t, err)
@@ -2323,12 +2687,12 @@ func TestGetCellInfo(t *testing.T) {
 		ServerAddress: "example.com",
 		Root:          "vitess",
 	}
-	input := *expected // shallow copy
-	require.NoError(t, ts.CreateCellInfo(ctx, "cell1", &input))
+	input := proto.Clone(expected).(*topodatapb.CellInfo)
+	require.NoError(t, ts.CreateCellInfo(ctx, "cell1", input))
 
 	resp, err := vtctld.GetCellInfo(ctx, &vtctldatapb.GetCellInfoRequest{Cell: "cell1"})
 	assert.NoError(t, err)
-	assert.Equal(t, expected, resp.CellInfo)
+	utils.MustMatch(t, expected, resp.CellInfo)
 
 	_, err = vtctld.GetCellInfo(ctx, &vtctldatapb.GetCellInfoRequest{Cell: "does_not_exist"})
 	assert.Error(t, err)
@@ -2354,10 +2718,9 @@ func TestGetCellsAliases(t *testing.T) {
 	}
 
 	for i, alias := range []*topodatapb.CellsAlias{alias1, alias2} {
-		input := *alias // shallow copy
+		input := proto.Clone(alias).(*topodatapb.CellsAlias)
 		name := fmt.Sprintf("a%d", i+1)
-
-		require.NoError(t, ts.CreateCellsAlias(ctx, name, &input), "cannot create cells alias %d (idx = %d) = %+v", i+1, i, &input)
+		require.NoError(t, ts.CreateCellsAlias(ctx, name, input), "cannot create cells alias %d (idx = %d) = %+v", i+1, i, input)
 	}
 
 	expected := map[string]*topodatapb.CellsAlias{
@@ -2367,7 +2730,7 @@ func TestGetCellsAliases(t *testing.T) {
 
 	resp, err := vtctld.GetCellsAliases(ctx, &vtctldatapb.GetCellsAliasesRequest{})
 	assert.NoError(t, err)
-	assert.Equal(t, expected, resp.Aliases)
+	utils.MustMatch(t, expected, resp.Aliases)
 
 	ts, topofactory := memorytopo.NewServerAndFactory()
 	vtctld = testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
@@ -2418,7 +2781,7 @@ func TestGetKeyspaces(t *testing.T) {
 
 	resp, err = vtctld.GetKeyspaces(ctx, &vtctldatapb.GetKeyspacesRequest{})
 	assert.NoError(t, err)
-	assert.Equal(t, expected, resp.Keyspaces)
+	utils.MustMatch(t, expected, resp.Keyspaces)
 
 	topofactory.SetError(errors.New("error from toposerver"))
 
@@ -2426,45 +2789,74 @@ func TestGetKeyspaces(t *testing.T) {
 	assert.Error(t, err)
 }
 
-func TestGetTablet(t *testing.T) {
+func TestGetRoutingRules(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	ts := memorytopo.NewServer("cell1")
-	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-		return NewVtctldServer(ts)
-	})
-
-	tablet := &topodatapb.Tablet{
-		Alias: &topodatapb.TabletAlias{
-			Cell: "cell1",
-			Uid:  100,
+	tests := []struct {
+		name      string
+		topoDown  bool
+		rrIn      *vschemapb.RoutingRules
+		expected  *vschemapb.RoutingRules
+		shouldErr bool
+	}{
+		{
+			name: "success",
+			rrIn: &vschemapb.RoutingRules{
+				Rules: []*vschemapb.RoutingRule{
+					{
+						FromTable: "t1",
+						ToTables:  []string{"t2", "t3"},
+					},
+				},
+			},
+			expected: &vschemapb.RoutingRules{
+				Rules: []*vschemapb.RoutingRule{
+					{
+						FromTable: "t1",
+						ToTables:  []string{"t2", "t3"},
+					},
+				},
+			},
 		},
-		Hostname: "localhost",
-		Keyspace: "testkeyspace",
-		Shard:    "-",
-		Type:     topodatapb.TabletType_REPLICA,
+		{
+			name:     "empty routing rules",
+			rrIn:     nil,
+			expected: &vschemapb.RoutingRules{},
+		},
+		{
+			name:      "topo error",
+			topoDown:  true,
+			shouldErr: true,
+		},
 	}
 
-	testutil.AddTablet(ctx, t, ts, tablet, nil)
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 
-	resp, err := vtctld.GetTablet(ctx, &vtctldatapb.GetTabletRequest{
-		TabletAlias: &topodatapb.TabletAlias{
-			Cell: "cell1",
-			Uid:  100,
-		},
-	})
-	assert.NoError(t, err)
-	assert.Equal(t, resp.Tablet, tablet)
+			ts, factory := memorytopo.NewServerAndFactory()
+			if tt.rrIn != nil {
+				err := ts.SaveRoutingRules(ctx, tt.rrIn)
+				require.NoError(t, err, "could not save routing rules: %+v", tt.rrIn)
+			}
 
-	// not found
-	_, err = vtctld.GetTablet(ctx, &vtctldatapb.GetTabletRequest{
-		TabletAlias: &topodatapb.TabletAlias{
-			Cell: "cell1",
-			Uid:  101,
-		},
-	})
-	assert.Error(t, err)
+			if tt.topoDown {
+				factory.SetError(errors.New("topo down for testing"))
+			}
+
+			vtctld := NewVtctldServer(ts)
+			resp, err := vtctld.GetRoutingRules(ctx, &vtctldatapb.GetRoutingRulesRequest{})
+			if tt.shouldErr {
+				assert.Error(t, err)
+				return
+			}
+
+			require.NoError(t, err)
+			utils.MustMatch(t, resp.RoutingRules, tt.expected)
+		})
+	}
 }
 
 func TestGetSchema(t *testing.T) {
@@ -2655,7 +3047,7 @@ func TestGetSchema(t *testing.T) {
 			}
 
 			assert.NoError(t, err)
-			assert.Equal(t, tt.expected, resp)
+			utils.MustMatch(t, tt.expected, resp)
 		})
 	}
 }
@@ -2746,7 +3138,7 @@ func TestGetShard(t *testing.T) {
 				return
 			}
 
-			assert.Equal(t, tt.expected, resp)
+			utils.MustMatch(t, tt.expected, resp)
 		})
 	}
 }
@@ -2924,7 +3316,7 @@ func TestGetSrvKeyspaces(t *testing.T) {
 			}
 
 			assert.NoError(t, err)
-			assert.Equal(t, tt.expected, resp)
+			utils.MustMatch(t, tt.expected, resp)
 		})
 	}
 }
@@ -2983,7 +3375,7 @@ func TestGetSrvVSchema(t *testing.T) {
 	}
 	resp, err := vtctld.GetSrvVSchema(ctx, &vtctldatapb.GetSrvVSchemaRequest{Cell: "zone1"})
 	assert.NoError(t, err)
-	assert.Equal(t, expected.Keyspaces, resp.SrvVSchema.Keyspaces, "GetSrvVSchema(zone1) mismatch")
+	utils.MustMatch(t, expected.Keyspaces, resp.SrvVSchema.Keyspaces, "GetSrvVSchema(zone1) mismatch")
 	assert.ElementsMatch(t, expected.RoutingRules.Rules, resp.SrvVSchema.RoutingRules.Rules, "GetSrvVSchema(zone1) rules mismatch")
 
 	expected = &vschemapb.SrvVSchema{ // have to copy our structs because of proto marshal artifacts
@@ -3003,7 +3395,7 @@ func TestGetSrvVSchema(t *testing.T) {
 	}
 	resp, err = vtctld.GetSrvVSchema(ctx, &vtctldatapb.GetSrvVSchemaRequest{Cell: "zone2"})
 	assert.NoError(t, err)
-	assert.Equal(t, expected.Keyspaces, resp.SrvVSchema.Keyspaces, "GetSrvVSchema(zone2) mismatch %+v %+v", zone2SrvVSchema.Keyspaces["testkeyspace"], resp.SrvVSchema.Keyspaces["testkeyspace"])
+	utils.MustMatch(t, expected.Keyspaces, resp.SrvVSchema.Keyspaces, "GetSrvVSchema(zone2) mismatch")
 	assert.ElementsMatch(t, expected.RoutingRules.Rules, resp.SrvVSchema.RoutingRules.Rules, "GetSrvVSchema(zone2) rules mismatch")
 
 	resp, err = vtctld.GetSrvVSchema(ctx, &vtctldatapb.GetSrvVSchemaRequest{Cell: "dne"})
@@ -3012,6 +3404,230 @@ func TestGetSrvVSchema(t *testing.T) {
 
 	topofactory.SetError(assert.AnError)
 	_, err = vtctld.GetSrvVSchema(ctx, &vtctldatapb.GetSrvVSchemaRequest{Cell: "zone1"})
+	assert.Error(t, err)
+}
+
+func TestGetSrvVSchemas(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		req       *vtctldatapb.GetSrvVSchemasRequest
+		expected  *vtctldatapb.GetSrvVSchemasResponse
+		topoErr   error
+		shouldErr bool
+	}{
+		{
+			name: "success",
+			req:  &vtctldatapb.GetSrvVSchemasRequest{},
+			expected: &vtctldatapb.GetSrvVSchemasResponse{
+				SrvVSchemas: map[string]*vschemapb.SrvVSchema{
+					"zone1": {
+						Keyspaces: map[string]*vschemapb.Keyspace{
+							"testkeyspace": {
+								Sharded:                true,
+								RequireExplicitRouting: false,
+							},
+						},
+						RoutingRules: &vschemapb.RoutingRules{
+							Rules: []*vschemapb.RoutingRule{},
+						},
+					},
+					"zone2": {
+						Keyspaces: map[string]*vschemapb.Keyspace{
+							"testkeyspace": {
+								Sharded:                true,
+								RequireExplicitRouting: false,
+							},
+							"unsharded": {
+								Sharded:                false,
+								RequireExplicitRouting: false,
+							},
+						},
+						RoutingRules: &vschemapb.RoutingRules{
+							Rules: []*vschemapb.RoutingRule{},
+						},
+					},
+					"zone3": {},
+				},
+			},
+		},
+		{
+			name: "filtering by cell",
+			req: &vtctldatapb.GetSrvVSchemasRequest{
+				Cells: []string{"zone2"},
+			},
+			expected: &vtctldatapb.GetSrvVSchemasResponse{
+				SrvVSchemas: map[string]*vschemapb.SrvVSchema{
+					"zone2": {
+						Keyspaces: map[string]*vschemapb.Keyspace{
+							"testkeyspace": {
+								Sharded:                true,
+								RequireExplicitRouting: false,
+							},
+							"unsharded": {
+								Sharded:                false,
+								RequireExplicitRouting: false,
+							},
+						},
+						RoutingRules: &vschemapb.RoutingRules{
+							Rules: []*vschemapb.RoutingRule{},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "no SrvVSchema for single cell",
+			req: &vtctldatapb.GetSrvVSchemasRequest{
+				Cells: []string{"zone3"},
+			},
+			expected: &vtctldatapb.GetSrvVSchemasResponse{
+				SrvVSchemas: map[string]*vschemapb.SrvVSchema{
+					"zone3": {},
+				},
+			},
+		},
+		{
+			name: "topology error",
+			req: &vtctldatapb.GetSrvVSchemasRequest{
+				Cells: []string{"zone2"},
+			},
+			topoErr:   assert.AnError,
+			shouldErr: true,
+		},
+		{
+			name: "cell doesn't exist",
+			req: &vtctldatapb.GetSrvVSchemasRequest{
+				Cells: []string{"doesnt-exist"},
+			},
+			expected: &vtctldatapb.GetSrvVSchemasResponse{
+				SrvVSchemas: map[string]*vschemapb.SrvVSchema{},
+			},
+		},
+		{
+			name: "one of many cells doesn't exist",
+			req: &vtctldatapb.GetSrvVSchemasRequest{
+				Cells: []string{"zone1", "doesnt-exist"},
+			},
+			expected: &vtctldatapb.GetSrvVSchemasResponse{
+				SrvVSchemas: map[string]*vschemapb.SrvVSchema{
+					"zone1": {
+						Keyspaces: map[string]*vschemapb.Keyspace{
+							"testkeyspace": {
+								Sharded:                true,
+								RequireExplicitRouting: false,
+							},
+						},
+						RoutingRules: &vschemapb.RoutingRules{
+							Rules: []*vschemapb.RoutingRule{},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			ctx := context.Background()
+			ts, topofactory := memorytopo.NewServerAndFactory("zone1", "zone2", "zone3")
+			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+				return NewVtctldServer(ts)
+			})
+
+			zone1SrvVSchema := &vschemapb.SrvVSchema{
+				Keyspaces: map[string]*vschemapb.Keyspace{
+					"testkeyspace": {
+						Sharded:                true,
+						RequireExplicitRouting: false,
+					},
+				},
+				RoutingRules: &vschemapb.RoutingRules{
+					Rules: []*vschemapb.RoutingRule{},
+				},
+			}
+
+			zone2SrvVSchema := &vschemapb.SrvVSchema{
+				Keyspaces: map[string]*vschemapb.Keyspace{
+					"testkeyspace": {
+						Sharded:                true,
+						RequireExplicitRouting: false,
+					},
+					"unsharded": {
+						Sharded:                false,
+						RequireExplicitRouting: false,
+					},
+				},
+				RoutingRules: &vschemapb.RoutingRules{
+					Rules: []*vschemapb.RoutingRule{},
+				},
+			}
+
+			err := ts.UpdateSrvVSchema(ctx, "zone1", zone1SrvVSchema)
+			require.NoError(t, err, "cannot add zone1 srv vschema")
+			err = ts.UpdateSrvVSchema(ctx, "zone2", zone2SrvVSchema)
+			require.NoError(t, err, "cannot add zone2 srv vschema")
+
+			if tt.topoErr != nil {
+				topofactory.SetError(tt.topoErr)
+			}
+
+			resp, err := vtctld.GetSrvVSchemas(ctx, tt.req)
+
+			if tt.shouldErr {
+				assert.Error(t, err)
+				return
+			}
+
+			assert.NoError(t, err)
+			utils.MustMatch(t, tt.expected, resp)
+		})
+	}
+}
+
+func TestGetTablet(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	ts := memorytopo.NewServer("cell1")
+	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+		return NewVtctldServer(ts)
+	})
+
+	tablet := &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: "cell1",
+			Uid:  100,
+		},
+		Hostname: "localhost",
+		Keyspace: "testkeyspace",
+		Shard:    "-",
+		Type:     topodatapb.TabletType_REPLICA,
+	}
+
+	testutil.AddTablet(ctx, t, ts, tablet, nil)
+
+	resp, err := vtctld.GetTablet(ctx, &vtctldatapb.GetTabletRequest{
+		TabletAlias: &topodatapb.TabletAlias{
+			Cell: "cell1",
+			Uid:  100,
+		},
+	})
+	assert.NoError(t, err)
+	utils.MustMatch(t, resp.Tablet, tablet)
+
+	// not found
+	_, err = vtctld.GetTablet(ctx, &vtctldatapb.GetTabletRequest{
+		TabletAlias: &topodatapb.TabletAlias{
+			Cell: "cell1",
+			Uid:  101,
+		},
+	})
 	assert.Error(t, err)
 }
 
@@ -3471,7 +4087,7 @@ func TestGetTablets(t *testing.T) {
 			}
 
 			assert.NoError(t, err)
-			assert.ElementsMatch(t, tt.expected, resp.Tablets)
+			testutil.AssertSameTablets(t, tt.expected, resp.Tablets)
 		})
 	}
 }
@@ -3513,7 +4129,7 @@ func TestGetVSchema(t *testing.T) {
 			Keyspace: "testkeyspace",
 		})
 		assert.NoError(t, err)
-		assert.Equal(t, expected, resp)
+		utils.MustMatch(t, expected, resp)
 	})
 
 	t.Run("not found", func(t *testing.T) {
@@ -3707,7 +4323,49 @@ func TestPlannedReparentShard(t *testing.T) {
 			}
 
 			assert.NoError(t, err)
-			testutil.AssertPlannedReparentShardResponsesEqual(t, *tt.expected, *resp)
+			testutil.AssertPlannedReparentShardResponsesEqual(t, tt.expected, resp)
+		})
+	}
+}
+
+func TestRebuildVSchemaGraph(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	req := &vtctldatapb.RebuildVSchemaGraphRequest{}
+	tests := []struct {
+		name      string
+		topoDown  bool
+		shouldErr bool
+	}{
+		{
+			name: "success",
+		},
+		{
+			name:      "topo down",
+			topoDown:  true,
+			shouldErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			ts, factory := memorytopo.NewServerAndFactory("zone1")
+			if tt.topoDown {
+				factory.SetError(errors.New("topo down for testing"))
+			}
+
+			vtctld := NewVtctldServer(ts)
+			_, err := vtctld.RebuildVSchemaGraph(ctx, req)
+			if tt.shouldErr {
+				assert.Error(t, err)
+				return
+			}
+
+			assert.NoError(t, err)
 		})
 	}
 }
@@ -3895,7 +4553,7 @@ func TestRemoveKeyspaceCell(t *testing.T) {
 			}
 
 			assert.NoError(t, err)
-			assert.Equal(t, tt.expected, resp)
+			utils.MustMatch(t, tt.expected, resp)
 		})
 	}
 }
@@ -4199,7 +4857,7 @@ func TestRemoveShardCell(t *testing.T) {
 			}
 
 			assert.NoError(t, err)
-			assert.Equal(t, tt.expected, resp)
+			utils.MustMatch(t, tt.expected, resp)
 		})
 	}
 }
@@ -4581,6 +5239,44 @@ func TestReparentTablet(t *testing.T) {
 			shouldErr: true,
 		},
 		{
+			name: "requested tablet is shard primary",
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Type:     topodatapb.TabletType_MASTER,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+			},
+			shards: []*vtctldatapb.Shard{
+				{
+					Keyspace: "testkeyspace",
+					Name:     "-",
+					Shard: &topodatapb.Shard{
+						MasterAlias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+						MasterTermStartTime: &vttime.Time{
+							Seconds: 1010,
+						},
+						IsMasterServing: true,
+					},
+				},
+			},
+			req: &vtctldatapb.ReparentTabletRequest{
+				Tablet: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+			expected:  nil,
+			shouldErr: true,
+		},
+		{
 			name: "tmc.SetMaster failure",
 			tmc: &testutil.TabletManagerClient{
 				SetMasterResults: map[string]error{
@@ -4727,7 +5423,7 @@ func TestReparentTablet(t *testing.T) {
 			}
 
 			assert.NoError(t, err)
-			assert.Equal(t, tt.expected, resp)
+			utils.MustMatch(t, tt.expected, resp)
 		})
 	}
 }
@@ -5000,7 +5696,7 @@ func TestShardReplicationPositions(t *testing.T) {
 			}
 
 			assert.NoError(t, err)
-			assert.Equal(t, tt.expected, resp)
+			utils.MustMatch(t, tt.expected, resp)
 		})
 	}
 }
@@ -5406,7 +6102,7 @@ func TestTabletExternallyReparented(t *testing.T) {
 
 					resp, err := vtctld.GetTablets(ctx, &vtctldatapb.GetTabletsRequest{})
 					require.NoError(t, err, "cannot get all tablets in the topo")
-					assert.ElementsMatch(t, tt.expectedTopo, resp.Tablets)
+					testutil.AssertSameTablets(t, tt.expectedTopo, resp.Tablets)
 				}()
 			}
 
@@ -5417,7 +6113,307 @@ func TestTabletExternallyReparented(t *testing.T) {
 			}
 
 			assert.NoError(t, err)
-			assert.Equal(t, tt.expected, resp)
+			utils.MustMatch(t, tt.expected, resp)
+		})
+	}
+}
+
+func TestUpdateCellInfo(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	tests := []struct {
+		name           string
+		cells          map[string]*topodatapb.CellInfo
+		forceTopoError bool
+		req            *vtctldatapb.UpdateCellInfoRequest
+		expected       *vtctldatapb.UpdateCellInfoResponse
+		shouldErr      bool
+	}{
+		{
+			name: "update",
+			cells: map[string]*topodatapb.CellInfo{
+				"zone1": {
+					ServerAddress: ":1111",
+					Root:          "/zone1",
+				},
+			},
+			req: &vtctldatapb.UpdateCellInfoRequest{
+				Name: "zone1",
+				CellInfo: &topodatapb.CellInfo{
+					ServerAddress: ":0101",
+					Root:          "/zones/zone1",
+				},
+			},
+			expected: &vtctldatapb.UpdateCellInfoResponse{
+				Name: "zone1",
+				CellInfo: &topodatapb.CellInfo{
+					ServerAddress: ":0101",
+					Root:          "/zones/zone1",
+				},
+			},
+		},
+		{
+			name: "partial update",
+			cells: map[string]*topodatapb.CellInfo{
+				"zone1": {
+					ServerAddress: ":1111",
+					Root:          "/zone1",
+				},
+			},
+			req: &vtctldatapb.UpdateCellInfoRequest{
+				Name: "zone1",
+				CellInfo: &topodatapb.CellInfo{
+					Root: "/zones/zone1",
+				},
+			},
+			expected: &vtctldatapb.UpdateCellInfoResponse{
+				Name: "zone1",
+				CellInfo: &topodatapb.CellInfo{
+					ServerAddress: ":1111",
+					Root:          "/zones/zone1",
+				},
+			},
+		},
+		{
+			name: "no update",
+			cells: map[string]*topodatapb.CellInfo{
+				"zone1": {
+					ServerAddress: ":1111",
+					Root:          "/zone1",
+				},
+			},
+			req: &vtctldatapb.UpdateCellInfoRequest{
+				Name: "zone1",
+				CellInfo: &topodatapb.CellInfo{
+					Root: "/zone1",
+				},
+			},
+			expected: &vtctldatapb.UpdateCellInfoResponse{
+				Name: "zone1",
+				CellInfo: &topodatapb.CellInfo{
+					ServerAddress: ":1111",
+					Root:          "/zone1",
+				},
+			},
+		},
+		{
+			name: "cell not found",
+			cells: map[string]*topodatapb.CellInfo{
+				"zone1": {
+					ServerAddress: ":1111",
+					Root:          "/zone1",
+				},
+			},
+			req: &vtctldatapb.UpdateCellInfoRequest{
+				Name: "zone404",
+				CellInfo: &topodatapb.CellInfo{
+					ServerAddress: ":4040",
+					Root:          "/zone404",
+				},
+			},
+			expected: &vtctldatapb.UpdateCellInfoResponse{
+				Name: "zone404",
+				CellInfo: &topodatapb.CellInfo{
+					ServerAddress: ":4040",
+					Root:          "/zone404",
+				},
+			},
+		},
+		{
+			name: "cannot update",
+			cells: map[string]*topodatapb.CellInfo{
+				"zone1": {
+					ServerAddress: ":1111",
+					Root:          "/zone1",
+				},
+			},
+			forceTopoError: true,
+			req: &vtctldatapb.UpdateCellInfoRequest{
+				Name: "zone1",
+				CellInfo: &topodatapb.CellInfo{
+					Root: "/zone1",
+				},
+			},
+			expected:  nil,
+			shouldErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			ts, factory := memorytopo.NewServerAndFactory()
+			for name, cell := range tt.cells {
+				err := ts.CreateCellInfo(ctx, name, cell)
+				require.NoError(t, err, "failed to create cell %s: %+v for test", name, cell)
+			}
+
+			if tt.forceTopoError {
+				factory.SetError(fmt.Errorf("%w: topo down for testing", assert.AnError))
+			}
+
+			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+				return NewVtctldServer(ts)
+			})
+			resp, err := vtctld.UpdateCellInfo(ctx, tt.req)
+			if tt.shouldErr {
+				assert.Error(t, err)
+				return
+			}
+
+			require.NoError(t, err)
+			utils.MustMatch(t, tt.expected, resp)
+		})
+	}
+}
+
+func TestUpdateCellsAlias(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	tests := []struct {
+		name      string
+		cells     []string
+		aliases   map[string][]string
+		req       *vtctldatapb.UpdateCellsAliasRequest
+		expected  *vtctldatapb.UpdateCellsAliasResponse
+		shouldErr bool
+	}{
+		{
+			name: "remove one cell",
+			aliases: map[string][]string{
+				"zone": {
+					"zone1",
+					"zone2",
+					"zone3",
+				},
+			},
+			req: &vtctldatapb.UpdateCellsAliasRequest{
+				Name: "zone",
+				CellsAlias: &topodatapb.CellsAlias{
+					Cells: []string{"zone1", "zone2"},
+				},
+			},
+			expected: &vtctldatapb.UpdateCellsAliasResponse{
+				Name: "zone",
+				CellsAlias: &topodatapb.CellsAlias{
+					Cells: []string{"zone1", "zone2"},
+				},
+			},
+		},
+		{
+			name:  "add one cell",
+			cells: []string{"zone4"}, // all other cells get created via the aliases map
+			aliases: map[string][]string{
+				"zone": {
+					"zone1",
+					"zone2",
+					"zone3",
+				},
+			},
+			req: &vtctldatapb.UpdateCellsAliasRequest{
+				Name: "zone",
+				CellsAlias: &topodatapb.CellsAlias{
+					Cells: []string{
+						"zone1",
+						"zone2",
+						"zone3",
+						"zone4",
+					},
+				},
+			},
+			expected: &vtctldatapb.UpdateCellsAliasResponse{
+				Name: "zone",
+				CellsAlias: &topodatapb.CellsAlias{
+					Cells: []string{
+						"zone1",
+						"zone2",
+						"zone3",
+						"zone4",
+					},
+				},
+			},
+		},
+		{
+			name:  "alias does not exist",
+			cells: []string{"zone1", "zone2"},
+			req: &vtctldatapb.UpdateCellsAliasRequest{
+				Name: "zone",
+				CellsAlias: &topodatapb.CellsAlias{
+					Cells: []string{"zone1", "zone2"},
+				},
+			},
+			expected: &vtctldatapb.UpdateCellsAliasResponse{
+				Name: "zone",
+				CellsAlias: &topodatapb.CellsAlias{
+					Cells: []string{"zone1", "zone2"},
+				},
+			},
+		},
+		{
+			name: "invalid alias list",
+			aliases: map[string][]string{
+				"zone_a": {
+					"zone1",
+					"zone2",
+				},
+				"zone_b": {
+					"zone3",
+					"zone4",
+				},
+			},
+			req: &vtctldatapb.UpdateCellsAliasRequest{
+				Name: "zone_a",
+				CellsAlias: &topodatapb.CellsAlias{
+					Cells: []string{
+						"zone1",
+						"zone2",
+						"zone3", // this is invalid because it belongs to alias zone_b
+					},
+				},
+			},
+			shouldErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			ts := memorytopo.NewServer(tt.cells...)
+			for name, cells := range tt.aliases {
+				for _, cell := range cells {
+					// We use UpdateCellInfoFields rather than CreateCellInfo
+					// for the update-or-create behavior.
+					err := ts.UpdateCellInfoFields(ctx, cell, func(ci *topodatapb.CellInfo) error {
+						ci.Root = "/" + cell
+						ci.ServerAddress = cell + ":8080"
+						return nil
+					})
+					require.NoError(t, err, "failed to create cell %v", cell)
+				}
+
+				err := ts.CreateCellsAlias(ctx, name, &topodatapb.CellsAlias{
+					Cells: cells,
+				})
+				require.NoError(t, err, "failed to create cell alias %v (cells = %v)", name, cells)
+			}
+
+			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+				return NewVtctldServer(ts)
+			})
+			resp, err := vtctld.UpdateCellsAlias(ctx, tt.req)
+			if tt.shouldErr {
+				assert.Error(t, err)
+				return
+			}
+
+			require.NoError(t, err)
+			utils.MustMatch(t, tt.expected, resp)
 		})
 	}
 }

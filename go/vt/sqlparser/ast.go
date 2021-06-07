@@ -66,6 +66,7 @@ type (
 		SetFromTables(tables TableNames)
 		SetComments(comments Comments)
 		GetComments() Comments
+		SetFullyParsed(fullyParsed bool)
 		Statement
 	}
 
@@ -74,6 +75,7 @@ type (
 		iDBDDLStatement()
 		IsFullyParsed() bool
 		GetDatabaseName() string
+		SetFullyParsed(bool)
 		Statement
 	}
 
@@ -664,14 +666,25 @@ func (*TruncateTable) IsFullyParsed() bool {
 	return true
 }
 
+// SetFullyParsed implements the DDLStatement interface
+func (*TruncateTable) SetFullyParsed(bool) {}
+
 // IsFullyParsed implements the DDLStatement interface
 func (*RenameTable) IsFullyParsed() bool {
 	return true
 }
 
+// SetFullyParsed implements the DDLStatement interface
+func (node *RenameTable) SetFullyParsed(fullyParsed bool) {}
+
 // IsFullyParsed implements the DDLStatement interface
 func (node *CreateTable) IsFullyParsed() bool {
 	return node.FullyParsed
+}
+
+// SetFullyParsed implements the DDLStatement interface
+func (node *CreateTable) SetFullyParsed(fullyParsed bool) {
+	node.FullyParsed = fullyParsed
 }
 
 // IsFullyParsed implements the DDLStatement interface
@@ -679,25 +692,42 @@ func (node *AlterTable) IsFullyParsed() bool {
 	return node.FullyParsed
 }
 
+// SetFullyParsed implements the DDLStatement interface
+func (node *AlterTable) SetFullyParsed(fullyParsed bool) {
+	node.FullyParsed = fullyParsed
+}
+
 // IsFullyParsed implements the DDLStatement interface
 func (node *CreateView) IsFullyParsed() bool {
 	return true
 }
+
+// SetFullyParsed implements the DDLStatement interface
+func (node *CreateView) SetFullyParsed(fullyParsed bool) {}
 
 // IsFullyParsed implements the DDLStatement interface
 func (node *DropView) IsFullyParsed() bool {
 	return true
 }
 
+// SetFullyParsed implements the DDLStatement interface
+func (node *DropView) SetFullyParsed(fullyParsed bool) {}
+
 // IsFullyParsed implements the DDLStatement interface
 func (node *DropTable) IsFullyParsed() bool {
 	return true
 }
 
+// SetFullyParsed implements the DDLStatement interface
+func (node *DropTable) SetFullyParsed(fullyParsed bool) {}
+
 // IsFullyParsed implements the DDLStatement interface
 func (node *AlterView) IsFullyParsed() bool {
 	return true
 }
+
+// SetFullyParsed implements the DDLStatement interface
+func (node *AlterView) SetFullyParsed(fullyParsed bool) {}
 
 // IsTemporary implements the DDLStatement interface
 func (*TruncateTable) IsTemporary() bool {
@@ -1308,14 +1338,27 @@ func (node *DropDatabase) IsFullyParsed() bool {
 	return true
 }
 
+// SetFullyParsed implements the DBDDLStatement interface
+func (node *DropDatabase) SetFullyParsed(fullyParsed bool) {}
+
 // IsFullyParsed implements the DBDDLStatement interface
 func (node *CreateDatabase) IsFullyParsed() bool {
 	return node.FullyParsed
 }
 
+// SetFullyParsed implements the DBDDLStatement interface
+func (node *CreateDatabase) SetFullyParsed(fullyParsed bool) {
+	node.FullyParsed = fullyParsed
+}
+
 // IsFullyParsed implements the DBDDLStatement interface
 func (node *AlterDatabase) IsFullyParsed() bool {
 	return node.FullyParsed
+}
+
+// SetFullyParsed implements the DBDDLStatement interface
+func (node *AlterDatabase) SetFullyParsed(fullyParsed bool) {
+	node.FullyParsed = fullyParsed
 }
 
 // GetDatabaseName implements the DBDDLStatement interface
@@ -1458,6 +1501,9 @@ type ColumnType struct {
 	EnumValues []string
 }
 
+// ColumnStorage is an enum that defines the type of storage.
+type ColumnStorage int
+
 // ColumnTypeOptions are generic field options for a column type
 type ColumnTypeOptions struct {
 	/* We need Null to be *bool to distinguish 3 cases -
@@ -1471,7 +1517,11 @@ type ColumnTypeOptions struct {
 	Autoincrement bool
 	Default       Expr
 	OnUpdate      Expr
+	As            Expr
 	Comment       *Literal
+	Storage       ColumnStorage
+	// Reference stores a foreign key constraint for the given column
+	Reference *ReferenceDefinition
 
 	// Key specification
 	KeyOpt ColumnKeyOption
@@ -1529,7 +1579,13 @@ type (
 
 	// ForeignKeyDefinition describes a foreign key in a CREATE TABLE statement
 	ForeignKeyDefinition struct {
-		Source            Columns
+		Source              Columns
+		IndexName           ColIdent
+		ReferenceDefinition *ReferenceDefinition
+	}
+
+	// ReferenceDefinition describes the referenced tables and columns that the foreign key references
+	ReferenceDefinition struct {
 		ReferencedTable   TableName
 		ReferencedColumns Columns
 		OnDelete          ReferenceAction
@@ -1738,8 +1794,8 @@ type (
 
 	// IsExpr represents an IS ... or an IS NOT ... expression.
 	IsExpr struct {
-		Operator IsExprOperator
-		Expr     Expr
+		Left  Expr
+		Right IsExprOperator
 	}
 
 	// IsExprOperator is an enum for IsExpr.Operator

@@ -22,10 +22,10 @@ import (
 	"sync"
 	"testing"
 
+	"google.golang.org/protobuf/proto"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/golang/protobuf/proto"
 
 	"vitess.io/vitess/go/sqltypes"
 
@@ -702,7 +702,7 @@ func checkQueryInternal(t *testing.T, query string, sConn, cConn *Conn, result *
 			got.Fields = nil
 		}
 		for {
-			row, err := cConn.FetchNext()
+			row, err := cConn.FetchNext(nil)
 			if err != nil {
 				fatalError = fmt.Sprintf("FetchNext(%v) failed: %v", query, err)
 				return

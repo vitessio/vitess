@@ -121,10 +121,10 @@ Gen4 plan same as above
 }
 
 # select with partial scatter directive
-"select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ * from user"
+"select /*vt+ SCATTER_ERRORS_AS_WARNINGS */ * from user"
 {
   "QueryType": "SELECT",
-  "Original": "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ * from user",
+  "Original": "select /*vt+ SCATTER_ERRORS_AS_WARNINGS */ * from user",
   "Instructions": {
     "OperatorType": "Route",
     "Variant": "SelectScatter",
@@ -133,7 +133,8 @@ Gen4 plan same as above
       "Sharded": true
     },
     "FieldQuery": "select * from `user` where 1 != 1",
-    "Query": "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ * from `user`",
+    "Query": "select /*vt+ SCATTER_ERRORS_AS_WARNINGS */ * from `user`",
+    "ScatterErrorsAsWarnings": true,
     "Table": "`user`"
   }
 }
@@ -157,6 +158,7 @@ Gen4 plan same as above
         },
         "FieldQuery": "select count(*) from `user` where 1 != 1",
         "Query": "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ count(*) from `user`",
+        "ScatterErrorsAsWarnings": true,
         "Table": "`user`"
       }
     ]
@@ -182,6 +184,7 @@ Gen4 plan same as above
         },
         "FieldQuery": "select count(*) from `user` where 1 != 1",
         "Query": "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ count(*) from `user`",
+        "ScatterErrorsAsWarnings": true,
         "Table": "`user`"
       }
     ]
@@ -206,6 +209,7 @@ Gen4 plan same as above
         },
         "FieldQuery": "select * from `user` where 1 != 1",
         "Query": "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ * from `user` limit :__upper_limit",
+        "ScatterErrorsAsWarnings": true,
         "Table": "`user`"
       }
     ]
@@ -947,6 +951,7 @@ Gen4 plan same as above
     "Vindex": "user_index"
   }
 }
+Gen4 plan same as above
 
 # Column Aliasing with Column
 "select user0_.col as col0_ from user user0_ where id = 1 order by col0_ desc limit 3"
@@ -969,6 +974,7 @@ Gen4 plan same as above
     "Vindex": "user_index"
   }
 }
+Gen4 plan same as above
 
 # Booleans and parenthesis
 "select * from user where (id = 1) AND name = true limit 5"
@@ -1350,6 +1356,7 @@ Gen4 plan same as above
     "Table": "unsharded"
   }
 }
+Gen4 plan same as above
 
 # testing SingleRow Projection
 "select 42"

@@ -13,6 +13,7 @@
 # limitations under the License.
 
 MAKEFLAGS = -s
+GIT_STATUS := $(shell git status --porcelain)
 
 export GOBIN=$(PWD)/bin
 export GO111MODULE=on
@@ -75,9 +76,9 @@ endif
 	# build vtorc with CGO, because it depends on sqlite
 	CGO_ENABLED=1 go install $(EXTRA_BUILD_FLAGS) $(VT_GO_PARALLEL) -ldflags "$(shell tools/build_version_flags.sh)" ./go/cmd/vtorc/...
 
-# xbuild can be used to cross-compile Vitess client binaries
+# cross-build can be used to cross-compile Vitess client binaries
 # Outside of select client binaries (namely vtctlclient & vtexplain), cross-compiled Vitess Binaries are not recommended for production deployments
-# Usage: GOOS=darwin GOARCH=amd64 make xbuild
+# Usage: GOOS=darwin GOARCH=amd64 make cross-build
 cross-build:
 ifndef NOBANNER
 	echo $$(date): Building source tree
@@ -132,7 +133,7 @@ grpcvtctldclient: go/vt/proto/vtctlservice/vtctlservice.pb.go
 parser:
 	make -C go/vt/sqlparser
 
-codegen: asthelpergen sizegen parser
+codegen: asthelpergen sizegen parser astfmtgen
 
 visitor: asthelpergen
 	echo "make visitor has been replaced by make asthelpergen"
@@ -210,7 +211,9 @@ java_test:
 	VTROOT=${PWD} mvn -f java/pom.xml -B clean verify
 
 install_protoc-gen-go:
-	go install github.com/gogo/protobuf/protoc-gen-gofast
+	go install google.golang.org/protobuf/cmd/protoc-gen-go
+	go install google.golang.org/grpc/cmd/protoc-gen-go-grpc
+	go install github.com/planetscale/vtprotobuf/cmd/protoc-gen-go-vtproto
 
 PROTO_SRCS = $(wildcard proto/*.proto)
 PROTO_SRC_NAMES = $(basename $(notdir $(PROTO_SRCS)))
@@ -225,9 +228,12 @@ endif
 
 $(PROTO_GO_OUTS): minimaltools install_protoc-gen-go proto/*.proto
 	for name in $(PROTO_SRC_NAMES); do \
-		$(VTROOT)/bin/protoc --gofast_out=plugins=grpc:. --plugin protoc-gen-gofast="${GOBIN}/protoc-gen-gofast" \
-		-I${PWD}/dist/vt-protoc-3.6.1/include:proto proto/$${name}.proto && \
-		goimports -w vitess.io/vitess/go/vt/proto/$${name}/$${name}.pb.go; \
+		$(VTROOT)/bin/protoc \
+		--go_out=. --plugin protoc-gen-go="${GOBIN}/protoc-gen-go" \
+		--go-grpc_out=. --plugin protoc-gen-go-grpc="${GOBIN}/protoc-gen-go-grpc" \
+		--go-vtproto_out=. --plugin protoc-gen-go-vtproto="${GOBIN}/protoc-gen-go-vtproto" \
+		--go-vtproto_opt=features=marshal+unmarshal+size \
+		-I${PWD}/dist/vt-protoc-3.6.1/include:proto proto/$${name}.proto; \
 	done
 	cp -Rf vitess.io/vitess/go/vt/proto/* go/vt/proto
 	rm -rf vitess.io/vitess/go/vt/proto/
@@ -318,6 +324,43 @@ release: docker_base
 	echo "A git tag was created, you can push it with:"
 	echo "git push origin v$(VERSION)"
 	echo "Also, don't forget the upload releases/v$(VERSION).tar.gz file to GitHub releases"
+
+do_release:
+ifndef RELEASE_VERSION
+		echo "Set the env var RELEASE_VERSION with the release version"
+		exit 1
+endif
+ifndef DEV_VERSION
+		echo "Set the env var DEV_VERSION with the version the dev branch should have after release"
+		exit 1
+endif
+ifeq ($(strip $(GIT_STATUS)),)
+	echo so much clean
+else	
+	echo cannot do release with dirty git state
+	exit 1
+	echo so much win        
+endif
+# Pre checks passed. Let's change the current version
+	cd java && mvn versions:set -DnewVersion=$(RELEASE_VERSION)
+	echo package servenv > go/vt/servenv/version.go
+	echo  >> go/vt/servenv/version.go
+	echo const versionName = \"$(RELEASE_VERSION)\" >> go/vt/servenv/version.go
+	echo -n Pausing so relase notes can be added. Press enter to continue
+	read line
+	git add --all
+	git commit -n -s -m "Release commit for $(RELEASE_VERSION)" 
+	git tag -m Version\ $(RELEASE_VERSION) v$(RELEASE_VERSION)
+	cd java && mvn versions:set -DnewVersion=$(DEV_VERSION)
+	echo package servenv > go/vt/servenv/version.go
+	echo  >> go/vt/servenv/version.go
+	echo const versionName = \"$(DEV_VERSION)\" >> go/vt/servenv/version.go
+	git add --all
+	git commit -n -s -m "Back to dev mode"
+	echo "Release preparations successful" 
+	echo "A git tag was created, you can push it with:"
+	echo "   git push upstream v$(RELEASE_VERSION)"
+	echo "The git branch has also been updated. You need to push it and get it merged"
 
 tools:
 	echo $$(date): Installing dependencies
@@ -418,3 +461,6 @@ vtadmin_web_proto_types: vtadmin_web_install
 # is changed by adding a new test to an existing shard. Any new or modified files need to be committed into git
 generate_ci_workflows:
 	cd test && go run ci_workflow_gen.go && cd ..
+
+release-notes:
+	go run ./go/tools/release-notes -from $(FROM) -to $(TO)

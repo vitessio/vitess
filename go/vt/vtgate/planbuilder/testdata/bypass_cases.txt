@@ -156,3 +156,20 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+
+# create table
+"create /* test */ table t1(id bigint, primary key(id)) /* comments */"
+{
+  "QueryType": "DDL",
+  "Original": "create /* test */ table t1(id bigint, primary key(id)) /* comments */",
+  "Instructions": {
+    "OperatorType": "Send",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "TargetDestination": "Shard(-80)",
+    "Query": "create /* test */ table t1(id bigint, primary key(id)) /* comments */"
+  }
+}
+Gen4 plan same as above

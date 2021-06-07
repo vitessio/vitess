@@ -222,7 +222,7 @@ func buildDeletePlan(del *sqlparser.Delete) (*controllerPlan, error) {
 
 func buildSelectPlan(sel *sqlparser.Select) (*controllerPlan, error) {
 	switch sqlparser.String(sel.From) {
-	case vreplicationTableName, reshardingJournalTableName, copyStateTableName:
+	case vreplicationTableName, reshardingJournalTableName, copyStateTableName, vreplicationLogTableName:
 		return &controllerPlan{
 			opcode: selectQuery,
 		}, nil
