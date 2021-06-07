@@ -34,8 +34,8 @@ import (
 )
 
 type (
-	keyspace  = string
-	tableName = string
+	keyspaceStr  = string
+	tableNameStr = string
 
 	// Tracker contains the required fields to perform schema tracking.
 	Tracker struct {
@@ -48,7 +48,7 @@ type (
 		signal func() // a function that we'll call whenever we have new schema data
 
 		// map of keyspace currently tracked
-		tracked      map[keyspace]*updateController
+		tracked      map[keyspaceStr]*updateController
 		consumeDelay time.Duration
 	}
 )
@@ -61,8 +61,8 @@ func NewTracker(ch chan *discovery.TabletHealth) *Tracker {
 	return &Tracker{
 		ctx:          context.Background(),
 		ch:           ch,
-		tables:       &tableMap{m: map[keyspace]map[tableName][]vindexes.Column{}},
-		tracked:      map[keyspace]*updateController{},
+		tables:       &tableMap{m: map[keyspaceStr]map[tableNameStr][]vindexes.Column{}},
+		tracked:      map[keyspaceStr]*updateController{},
 		consumeDelay: defaultConsumeDelay,
 	}
 }
@@ -76,6 +76,7 @@ func (t *Tracker) LoadKeyspace(conn queryservice.QueryService, target *querypb.T
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	t.updateTables(target.Keyspace, res)
+	t.tracked[target.Keyspace].loaded = true
 	log.Infof("finished loading schema for keyspace %s. Found %d tables", target.Keyspace, len(res.Rows))
 	return nil
 }
@@ -105,20 +106,25 @@ func (t *Tracker) getKeyspaceUpdateController(th *discovery.TabletHealth) *updat
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
-	ksUpdater, ok := t.tracked[th.Target.Keyspace]
-	if !ok {
-		init := func(th *discovery.TabletHealth) bool {
-			err := t.LoadKeyspace(th.Conn, th.Target)
-			if err != nil {
-				log.Warningf("Unable to add keyspace to tracker: %v", err)
-				return false
-			}
-			return true
-		}
-		ksUpdater = &updateController{update: t.updateSchema, init: init, signal: t.signal, consumeDelay: t.consumeDelay}
+	ksUpdater, exists := t.tracked[th.Target.Keyspace]
+	if !exists {
+		ksUpdater = t.newUpdateController()
 		t.tracked[th.Target.Keyspace] = ksUpdater
 	}
 	return ksUpdater
+}
+
+func (t *Tracker) newUpdateController() *updateController {
+	return &updateController{update: t.updateSchema, reloadKeyspace: t.initKeyspace, signal: t.signal, consumeDelay: t.consumeDelay}
+}
+
+func (t *Tracker) initKeyspace(th *discovery.TabletHealth) bool {
+	err := t.LoadKeyspace(th.Conn, th.Target)
+	if err != nil {
+		log.Warningf("Unable to add keyspace to tracker: %v", err)
+		return false
+	}
+	return true
 }
 
 // Stop stops the schema tracking
@@ -194,14 +200,20 @@ func (t *Tracker) RegisterSignalReceiver(f func()) {
 	t.signal = f
 }
 
+// AddNewKeyspace adds keyspace to the tracker.
+func (t *Tracker) AddNewKeyspace(conn queryservice.QueryService, target *querypb.Target) error {
+	t.tracked[target.Keyspace] = t.newUpdateController()
+	return t.LoadKeyspace(conn, target)
+}
+
 type tableMap struct {
-	m map[keyspace]map[tableName][]vindexes.Column
+	m map[keyspaceStr]map[tableNameStr][]vindexes.Column
 }
 
 func (tm *tableMap) set(ks, tbl string, cols []vindexes.Column) {
 	m := tm.m[ks]
 	if m == nil {
-		m = make(map[tableName][]vindexes.Column)
+		m = make(map[tableNameStr][]vindexes.Column)
 		tm.m[ks] = m
 	}
 	m[tbl] = cols

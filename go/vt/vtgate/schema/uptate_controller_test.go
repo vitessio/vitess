@@ -128,13 +128,11 @@ func TestMultipleUpdatesFromDifferentShards(t *testing.T) {
 				update:       update,
 				signal:       signal,
 				consumeDelay: 5 * time.Millisecond,
-			}
-
-			if test.init {
-				kUpdate.init = func(th *discovery.TabletHealth) bool {
+				reloadKeyspace: func(th *discovery.TabletHealth) bool {
 					initNb++
 					return !test.initFail
-				}
+				},
+				loaded: !test.init,
 			}
 
 			for _, in := range test.inputs {
