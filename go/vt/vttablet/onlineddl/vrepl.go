@@ -224,6 +224,9 @@ func (v *VRepl) applyColumnTypes(ctx context.Context, conn *dbconnpool.DBConnect
 				column.BinaryOctetLength = columnOctetLength
 			}
 			if charset := row.AsString("CHARACTER_SET_NAME", ""); charset != "" {
+				if !strings.HasPrefix(charset, "utf8") {
+					return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Vitess does not support charset '%s'. Only utf8 and derivatives (like utf8mb4) are supported", charset)
+				}
 				column.Charset = charset
 			}
 		}
