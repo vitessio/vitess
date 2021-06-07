@@ -114,6 +114,7 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
+	"vitess.io/vitess/go/vt/vtctl/workflow"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/wrangler"
 
@@ -1967,7 +1968,7 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 	}
 	action := subFlags.Arg(0)
 	ksWorkflow := subFlags.Arg(1)
-	target, workflow, err := splitKeyspaceWorkflow(ksWorkflow)
+	target, workflowName, err := splitKeyspaceWorkflow(ksWorkflow)
 	if err != nil {
 		return err
 	}
@@ -1979,7 +1980,7 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 
 	vrwp := &wrangler.VReplicationWorkflowParams{
 		TargetKeyspace: target,
-		Workflow:       workflow,
+		Workflow:       workflowName,
 		DryRun:         *dryRun,
 		AutoStart:      *autoStart,
 		StopAfterCopy:  *stopAfterCopy,
@@ -1987,11 +1988,11 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 
 	printDetails := func() error {
 		s := ""
-		res, err := wr.ShowWorkflow(ctx, workflow, target)
+		res, err := wr.ShowWorkflow(ctx, workflowName, target)
 		if err != nil {
 			return err
 		}
-		s += fmt.Sprintf("Following vreplication streams are running for workflow %s.%s:\n\n", target, workflow)
+		s += fmt.Sprintf("Following vreplication streams are running for workflow %s.%s:\n\n", target, workflowName)
 		for ksShard := range res.ShardStatuses {
 			statuses := res.ShardStatuses[ksShard].MasterReplicationStatuses
 			for _, st := range statuses {
@@ -2227,7 +2228,7 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 			}
 		}
 	case vReplicationWorkflowActionSwitchTraffic:
-		dryRunResults, err = wf.SwitchTraffic(wrangler.DirectionForward)
+		dryRunResults, err = wf.SwitchTraffic(workflow.DirectionForward)
 	case vReplicationWorkflowActionReverseTraffic:
 		dryRunResults, err = wf.ReverseTraffic()
 	case vReplicationWorkflowActionComplete:
@@ -2442,18 +2443,18 @@ func commandDropSources(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 	if subFlags.NArg() != 1 {
 		return fmt.Errorf("<keyspace.workflow> is required")
 	}
-	keyspace, workflow, err := splitKeyspaceWorkflow(subFlags.Arg(0))
+	keyspace, workflowName, err := splitKeyspaceWorkflow(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
 
-	removalType := wrangler.DropTable
+	removalType := workflow.DropTable
 	if *renameTables {
-		removalType = wrangler.RenameTable
+		removalType = workflow.RenameTable
 	}
 
-	_, _, _ = dryRun, keyspace, workflow
-	dryRunResults, err := wr.DropSources(ctx, keyspace, workflow, removalType, *keepData, false, *dryRun)
+	_, _, _ = dryRun, keyspace, workflowName
+	dryRunResults, err := wr.DropSources(ctx, keyspace, workflowName, removalType, *keepData, false, *dryRun)
 	if err != nil {
 		return err
 	}
@@ -2495,9 +2496,9 @@ func commandSwitchReads(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 	if *cellsStr != "" {
 		cells = strings.Split(*cellsStr, ",")
 	}
-	direction := wrangler.DirectionForward
+	direction := workflow.DirectionForward
 	if *reverse {
-		direction = wrangler.DirectionBackward
+		direction = workflow.DirectionBackward
 	}
 	if subFlags.NArg() != 1 {
 		return fmt.Errorf("<keyspace.workflow> is required")

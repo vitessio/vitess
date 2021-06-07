@@ -1709,8 +1709,8 @@ func EqualsRefOfIsExpr(a, b *IsExpr) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return a.Operator == b.Operator &&
-		EqualsExpr(a.Expr, b.Expr)
+	return EqualsExpr(a.Left, b.Left) &&
+		a.Right == b.Right
 }
 
 // EqualsJoinCondition does deep equals between the two objects.
