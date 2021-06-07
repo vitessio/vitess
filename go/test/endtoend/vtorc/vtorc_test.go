@@ -40,48 +40,73 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
-func createCluster(t *testing.T, numReplicas int, numRdonly int, orcExtraArgs []string) *cluster.LocalProcessCluster {
-	keyspaceName := "ks"
-	shardName := "0"
-	keyspace := &cluster.Keyspace{Name: keyspaceName}
-	shard0 := &cluster.Shard{Name: shardName}
-	//dbName          = "vt_" + keyspaceName
-	//username        = "vt_dba"
-	hostname := "localhost"
-	cell1 := "zone1"
-	cell2 := "zone2"
-	tablets := []*cluster.Vttablet{}
-	clusterInstance := cluster.NewCluster(cell1, hostname)
+var (
+	clusterInstance *cluster.LocalProcessCluster
+	uidBase         = 100
+)
+
+const (
+	keyspaceName = "ks"
+	shardName    = "0"
+	hostname     = "localhost"
+	cell1        = "zone1"
+)
+
+// createClusterAndStartTopo starts the cluster and topology service
+func createClusterAndStartTopo() error {
+	clusterInstance = cluster.NewCluster(cell1, hostname)
 
 	// Start topo server
 	err := clusterInstance.StartTopo()
-	require.NoError(t, err)
+	if err != nil {
+		return err
+	}
 
-	// Adding another cell in the same cluster
-	err = clusterInstance.TopoProcess.ManageTopoDir("mkdir", "/vitess/"+cell2)
+	return nil
+}
+
+// startVtorc is used to start the orchestrator with the given extra arguments
+func startVtorc(t *testing.T, orcExtraArgs []string) {
+	// Start vtorc
+	clusterInstance.VtorcProcess = clusterInstance.NewOrcProcess(path.Join(os.Getenv("PWD"), "test_config.json"))
+	clusterInstance.VtorcProcess.ExtraArgs = orcExtraArgs
+	err := clusterInstance.VtorcProcess.Setup()
 	require.NoError(t, err)
-	err = clusterInstance.VtctlProcess.AddCellInfo(cell2)
+}
+
+// stopVtorc is used to stop the orchestrator
+func stopVtorc(t *testing.T) {
+	// Stop vtorc
+	err := clusterInstance.VtorcProcess.TearDown()
 	require.NoError(t, err)
+}
+
+// setupVttabletsAndVtorc is used to create the vttablets and start the orchestrator
+func setupVttabletsAndVtorc(t *testing.T, numReplicasReq int, numRdonlyReq int, orcExtraArgs []string) {
+	keyspace := &cluster.Keyspace{Name: keyspaceName}
+	shard0 := &cluster.Shard{Name: shardName}
 
 	// creating tablets by hand instead of using StartKeyspace because we don't want to call InitShardMaster
-	uidBase := 100
-	for i := 0; i < numReplicas; i++ {
-		tablets = append(tablets, clusterInstance.NewVttabletInstance("replica", uidBase+i, cell1))
+	var tablets []*cluster.Vttablet
+	for i := 0; i < numReplicasReq; i++ {
+		vttabletInstance := clusterInstance.NewVttabletInstance("replica", uidBase, cell1)
+		uidBase++
+		tablets = append(tablets, vttabletInstance)
 	}
-	for i := 0; i < numRdonly; i++ {
-		tablets = append(tablets, clusterInstance.NewVttabletInstance("rdonly", uidBase+numReplicas+i, cell1))
+	for i := 0; i < numRdonlyReq; i++ {
+		vttabletInstance := clusterInstance.NewVttabletInstance("rdonly", uidBase, cell1)
+		uidBase++
+		tablets = append(tablets, vttabletInstance)
 	}
-
 	clusterInstance.VtTabletExtraArgs = []string{
 		"-lock_tables_timeout", "5s",
 		"-disable_active_reparents",
 	}
-
 	// Initialize Cluster
 	shard0.Vttablets = tablets
-	err = clusterInstance.SetupCluster(keyspace, []cluster.Shard{*shard0})
+	clusterInstance.ReusingVTDATAROOT = true
+	err := clusterInstance.SetupCluster(keyspace, []cluster.Shard{*shard0})
 	require.NoError(t, err)
-
 	//Start MySql
 	var mysqlCtlProcessList []*exec.Cmd
 	for _, tablet := range shard0.Vttablets {
@@ -90,34 +115,45 @@ func createCluster(t *testing.T, numReplicas int, numRdonly int, orcExtraArgs []
 		require.NoError(t, err)
 		mysqlCtlProcessList = append(mysqlCtlProcessList, proc)
 	}
-
 	// Wait for mysql processes to start
 	for _, proc := range mysqlCtlProcessList {
 		err := proc.Wait()
 		require.NoError(t, err)
 	}
-
 	for _, tablet := range shard0.Vttablets {
 		// Reset status, don't wait for the tablet status. We will check it later
 		tablet.VttabletProcess.ServingStatus = ""
-
 		// Start the tablet
 		err := tablet.VttabletProcess.Setup()
 		require.NoError(t, err)
 	}
-
 	for _, tablet := range shard0.Vttablets {
 		err := tablet.VttabletProcess.WaitForTabletTypes([]string{"SERVING", "NOT_SERVING"})
 		require.NoError(t, err)
 	}
 
-	// Start vtorc
-	clusterInstance.VtorcProcess = clusterInstance.NewOrcProcess(path.Join(os.Getenv("PWD"), "test_config.json"))
-	clusterInstance.VtorcProcess.ExtraArgs = orcExtraArgs
-	err = clusterInstance.VtorcProcess.Setup()
-	require.NoError(t, err)
+	// start vtorc
+	startVtorc(t, orcExtraArgs)
+}
 
-	return clusterInstance
+func TestMain(m *testing.M) {
+	exitcode, err := func() (int, error) {
+		err := createClusterAndStartTopo()
+		if err != nil {
+			return 1, err
+		}
+		return m.Run(), nil
+	}()
+
+	cluster.PanicHandler(nil)
+	clusterInstance.Teardown()
+
+	if err != nil {
+		fmt.Printf("%v\n", err)
+		os.Exit(1)
+	} else {
+		os.Exit(exitcode)
+	}
 }
 
 // Cases to test:
@@ -126,15 +162,20 @@ func createCluster(t *testing.T, numReplicas int, numRdonly int, orcExtraArgs []
 // verify replication is setup
 func TestMasterElection(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	clusterInstance := createCluster(t, 1, 1, nil)
+	setupVttabletsAndVtorc(t, 1, 1, nil)
 	keyspace := &clusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 	defer func() {
-		clusterInstance.Teardown()
-		killTablets(t, shard0)
+		stopVtorc(t)
+		// remove all the tablets from the topology
+		for _, vttablet := range clusterInstance.Keyspaces[0].Shards[0].Vttablets {
+			_, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("DeleteTablet", "-allow_master", vttablet.Alias)
+			require.NoError(t, err)
+		}
+		killTablets(clusterInstance.Keyspaces[0].Shards[0].Vttablets)
+		clusterInstance.Keyspaces = nil
 	}()
 
-	//log.Exitf("error")
 	checkMasterTablet(t, clusterInstance, shard0.Vttablets[0])
 	checkReplication(t, clusterInstance, shard0.Vttablets[0], shard0.Vttablets[1:])
 }
@@ -145,15 +186,20 @@ func TestMasterElection(t *testing.T) {
 // verify replication is setup
 func TestSingleKeyspace(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	clusterInstance := createCluster(t, 1, 1, []string{"-clusters_to_watch", "ks"})
+	setupVttabletsAndVtorc(t, 1, 1, []string{"-clusters_to_watch", "ks"})
 	keyspace := &clusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 	defer func() {
-		clusterInstance.Teardown()
-		killTablets(t, shard0)
+		stopVtorc(t)
+		// remove all the tablets from the topology
+		for _, vttablet := range clusterInstance.Keyspaces[0].Shards[0].Vttablets {
+			_, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("DeleteTablet", "-allow_master", vttablet.Alias)
+			require.NoError(t, err)
+		}
+		killTablets(clusterInstance.Keyspaces[0].Shards[0].Vttablets)
+		clusterInstance.Keyspaces = nil
 	}()
 
-	//log.Exitf("error")
 	checkMasterTablet(t, clusterInstance, shard0.Vttablets[0])
 	checkReplication(t, clusterInstance, shard0.Vttablets[0], shard0.Vttablets[1:])
 }
@@ -164,15 +210,20 @@ func TestSingleKeyspace(t *testing.T) {
 // verify replication is setup
 func TestKeyspaceShard(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	clusterInstance := createCluster(t, 1, 1, []string{"-clusters_to_watch", "ks/0"})
+	setupVttabletsAndVtorc(t, 1, 1, []string{"-clusters_to_watch", "ks/0"})
 	keyspace := &clusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 	defer func() {
-		clusterInstance.Teardown()
-		killTablets(t, shard0)
+		stopVtorc(t)
+		// remove all the tablets from the topology
+		for _, vttablet := range clusterInstance.Keyspaces[0].Shards[0].Vttablets {
+			_, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("DeleteTablet", "-allow_master", vttablet.Alias)
+			require.NoError(t, err)
+		}
+		killTablets(clusterInstance.Keyspaces[0].Shards[0].Vttablets)
+		clusterInstance.Keyspaces = nil
 	}()
 
-	//log.Exitf("error")
 	checkMasterTablet(t, clusterInstance, shard0.Vttablets[0])
 	checkReplication(t, clusterInstance, shard0.Vttablets[0], shard0.Vttablets[1:])
 }
@@ -180,12 +231,18 @@ func TestKeyspaceShard(t *testing.T) {
 // 2. bring down master, let orc promote replica
 func TestDownMaster(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	clusterInstance := createCluster(t, 2, 0, nil)
+	setupVttabletsAndVtorc(t, 2, 0, nil)
 	keyspace := &clusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 	defer func() {
-		clusterInstance.Teardown()
-		killTablets(t, shard0)
+		stopVtorc(t)
+		// remove all the tablets from the topology
+		for _, vttablet := range clusterInstance.Keyspaces[0].Shards[0].Vttablets {
+			_, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("DeleteTablet", "-allow_master", vttablet.Alias)
+			require.NoError(t, err)
+		}
+		killTablets(clusterInstance.Keyspaces[0].Shards[0].Vttablets)
+		clusterInstance.Keyspaces = nil
 	}()
 	// find master from topo
 	curMaster := shardMasterTablet(t, clusterInstance, keyspace, shard0)
@@ -225,13 +282,18 @@ func waitForReadOnlyValue(t *testing.T, curMaster *cluster.Vttablet, expectValue
 // 3. make master readonly, let orc repair
 func TestMasterReadOnly(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	clusterInstance := createCluster(t, 2, 0, nil)
+	setupVttabletsAndVtorc(t, 2, 0, nil)
 	keyspace := &clusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 	defer func() {
-		clusterInstance.Teardown()
-		// Kill tablets
-		killTablets(t, shard0)
+		stopVtorc(t)
+		// remove all the tablets from the topology
+		for _, vttablet := range clusterInstance.Keyspaces[0].Shards[0].Vttablets {
+			_, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("DeleteTablet", "-allow_master", vttablet.Alias)
+			require.NoError(t, err)
+		}
+		killTablets(clusterInstance.Keyspaces[0].Shards[0].Vttablets)
+		clusterInstance.Keyspaces = nil
 	}()
 
 	// find master from topo
@@ -249,13 +311,18 @@ func TestMasterReadOnly(t *testing.T) {
 // 4. make replica ReadWrite, let orc repair
 func TestReplicaReadWrite(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	clusterInstance := createCluster(t, 2, 0, nil)
+	setupVttabletsAndVtorc(t, 2, 0, nil)
 	keyspace := &clusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 	defer func() {
-		clusterInstance.Teardown()
-		// Kill tablets
-		killTablets(t, shard0)
+		stopVtorc(t)
+		// remove all the tablets from the topology
+		for _, vttablet := range clusterInstance.Keyspaces[0].Shards[0].Vttablets {
+			_, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("DeleteTablet", "-allow_master", vttablet.Alias)
+			require.NoError(t, err)
+		}
+		killTablets(clusterInstance.Keyspaces[0].Shards[0].Vttablets)
+		clusterInstance.Keyspaces = nil
 	}()
 
 	// find master from topo
@@ -281,13 +348,18 @@ func TestReplicaReadWrite(t *testing.T) {
 // 5. stop replication, let orc repair
 func TestStopReplication(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	clusterInstance := createCluster(t, 2, 0, nil)
+	setupVttabletsAndVtorc(t, 2, 0, nil)
 	keyspace := &clusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 	defer func() {
-		clusterInstance.Teardown()
-		// Kill tablets
-		killTablets(t, shard0)
+		stopVtorc(t)
+		// remove all the tablets from the topology
+		for _, vttablet := range clusterInstance.Keyspaces[0].Shards[0].Vttablets {
+			_, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("DeleteTablet", "-allow_master", vttablet.Alias)
+			require.NoError(t, err)
+		}
+		killTablets(clusterInstance.Keyspaces[0].Shards[0].Vttablets)
+		clusterInstance.Keyspaces = nil
 	}()
 
 	// find master from topo
@@ -320,13 +392,18 @@ func TestStopReplication(t *testing.T) {
 // 6. setup replication from non-master, let orc repair
 func TestReplicationFromOtherReplica(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	clusterInstance := createCluster(t, 3, 0, nil)
+	setupVttabletsAndVtorc(t, 3, 0, nil)
 	keyspace := &clusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 	defer func() {
-		clusterInstance.Teardown()
-		// Kill tablets
-		killTablets(t, shard0)
+		stopVtorc(t)
+		// remove all the tablets from the topology
+		for _, vttablet := range clusterInstance.Keyspaces[0].Shards[0].Vttablets {
+			_, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("DeleteTablet", "-allow_master", vttablet.Alias)
+			require.NoError(t, err)
+		}
+		killTablets(clusterInstance.Keyspaces[0].Shards[0].Vttablets)
+		clusterInstance.Keyspaces = nil
 	}()
 
 	// find master from topo
@@ -371,13 +448,18 @@ func TestRepairAfterTER(t *testing.T) {
 	// test fails intermittently on CI, skip until it can be fixed.
 	t.SkipNow()
 	defer cluster.PanicHandler(t)
-	clusterInstance := createCluster(t, 2, 0, nil)
+	setupVttabletsAndVtorc(t, 2, 0, nil)
 	keyspace := &clusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 	defer func() {
-		clusterInstance.Teardown()
-		// Kill tablets
-		killTablets(t, shard0)
+		stopVtorc(t)
+		// remove all the tablets from the topology
+		for _, vttablet := range clusterInstance.Keyspaces[0].Shards[0].Vttablets {
+			_, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("DeleteTablet", "-allow_master", vttablet.Alias)
+			require.NoError(t, err)
+		}
+		killTablets(clusterInstance.Keyspaces[0].Shards[0].Vttablets)
+		clusterInstance.Keyspaces = nil
 	}()
 
 	// find master from topo
@@ -455,7 +537,7 @@ func checkMasterTablet(t *testing.T, cluster *cluster.LocalProcessCluster, table
 			continue
 		} else {
 			// allow time for tablet state to be updated after topo is updated
-			time.Sleep(time.Second)
+			time.Sleep(2 * time.Second)
 			// make sure the health stream is updated
 			result, err = cluster.VtctlclientProcess.ExecuteCommandWithOutput("VtTabletStreamHealth", "-count", "1", tablet.Alias)
 			require.NoError(t, err)
@@ -526,11 +608,10 @@ func validateTopology(t *testing.T, cluster *cluster.LocalProcessCluster, pingTa
 	}
 }
 
-func killTablets(t *testing.T, shard *cluster.Shard) {
-	for _, tablet := range shard.Vttablets {
+func killTablets(vttablets []*cluster.Vttablet) {
+	for _, tablet := range vttablets {
 		log.Infof("Calling TearDown on tablet %v", tablet.Alias)
-		err := tablet.VttabletProcess.TearDown()
-		require.NoError(t, err)
+		_ = tablet.VttabletProcess.TearDown()
 	}
 }
 
