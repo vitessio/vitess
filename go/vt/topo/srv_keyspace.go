@@ -23,7 +23,7 @@ import (
 	"path"
 	"sync"
 
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/proto"
 
 	"context"
 

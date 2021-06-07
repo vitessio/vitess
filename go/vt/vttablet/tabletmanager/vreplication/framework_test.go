@@ -33,7 +33,7 @@ import (
 
 	"context"
 
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
@@ -97,6 +97,8 @@ func TestMain(m *testing.M) {
 		}
 		defer env.Close()
 
+		*vreplicationExperimentalFlags = 0
+
 		// engines cannot be initialized in testenv because it introduces
 		// circular dependencies.
 		streamerEngine = vstreamer.NewEngine(env.TabletEnv, env.SrvTopo, env.SchemaEngine, nil, env.Cells[0])
@@ -121,10 +123,13 @@ func TestMain(m *testing.M) {
 		playerEngine = NewTestEngine(env.TopoServ, env.Cells[0], env.Mysqld, realDBClientFactory, realDBClientFactory, vrepldb, externalConfig)
 		playerEngine.Open(context.Background())
 		defer playerEngine.Close()
-
 		if err := env.Mysqld.ExecuteSuperQueryList(context.Background(), binlogplayer.CreateVReplicationTable()); err != nil {
 			fmt.Fprintf(os.Stderr, "%v", err)
 			return 1
+		}
+
+		for _, query := range binlogplayer.AlterVReplicationTable {
+			env.Mysqld.ExecuteSuperQuery(context.Background(), query)
 		}
 
 		if err := env.Mysqld.ExecuteSuperQuery(context.Background(), createCopyState); err != nil {

@@ -26,6 +26,8 @@ import (
 	"strings"
 	"time"
 
+	"vitess.io/vitess/go/vt/key"
+
 	"context"
 
 	"vitess.io/vitess/go/acl"
@@ -42,8 +44,9 @@ import (
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
-
 	"vitess.io/vitess/go/vt/vtgate/vtgateservice"
+
+	vtschema "vitess.io/vitess/go/vt/vtgate/schema"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -84,6 +87,12 @@ var (
 	warnShardedOnly   = flag.Bool("warn_sharded_only", false, "If any features that are only available in unsharded mode are used, query execution warnings will be added to the session")
 
 	foreignKeyMode = flag.String("foreign_key_mode", "allow", "This is to provide how to handle foreign key constraint in create/alter table. Valid values are: allow, disallow")
+
+	// flags to enable/disable online and direct DDL statements
+	enableOnlineDDL = flag.Bool("enable_online_ddl", true, "Allow users to submit, review and control Online DDL")
+	enableDirectDDL = flag.Bool("enable_direct_ddl", true, "Allow users to submit direct DDL statements")
+
+	enableSchemaChangeSignal = flag.Bool("schema_change_signal", false, "Enable the schema tracker")
 )
 
 func getTxMode() vtgatepb.TransactionMode {
@@ -190,14 +199,32 @@ func Init(ctx context.Context, serv srvtopo.Server, cell string, tabletTypesToWa
 	srvResolver := srvtopo.NewResolver(serv, gw, cell)
 	resolver := NewResolver(srvResolver, serv, cell, sc)
 	vsm := newVStreamManager(srvResolver, serv, cell)
+
+	var si SchemaInfo = nil
+	var st *vtschema.Tracker
+	if *enableSchemaChangeSignal {
+		st = vtschema.NewTracker(gw.hc.Subscribe())
+		addKeyspaceToTracker(ctx, srvResolver, st, gw)
+		si = st
+	}
+
 	cacheCfg := &cache.Config{
 		MaxEntries:     *queryPlanCacheSize,
 		MaxMemoryUsage: *queryPlanCacheMemory,
 		LFU:            *queryPlanCacheLFU,
 	}
 
+	executor := NewExecutor(ctx, serv, cell, resolver, *normalizeQueries, *warnShardedOnly, *streamBufferSize, cacheCfg, si)
+
+	// connect the schema tracker with the vschema manager
+	if *enableSchemaChangeSignal {
+		st.RegisterSignalReceiver(executor.vm.Rebuild)
+	}
+
+	// TODO: call serv.WatchSrvVSchema here
+
 	rpcVTGate = &VTGate{
-		executor: NewExecutor(ctx, serv, cell, resolver, *normalizeQueries, *warnShardedOnly, *streamBufferSize, cacheCfg),
+		executor: executor,
 		resolver: resolver,
 		vsm:      vsm,
 		txConn:   tc,
@@ -236,6 +263,14 @@ func Init(ctx context.Context, serv srvtopo.Server, cell string, tabletTypesToWa
 		for _, f := range RegisterVTGates {
 			f(rpcVTGate)
 		}
+		if st != nil && *enableSchemaChangeSignal {
+			st.Start()
+		}
+	})
+	servenv.OnTerm(func() {
+		if st != nil && *enableSchemaChangeSignal {
+			st.Stop()
+		}
 	})
 	rpcVTGate.registerDebugHealthHandler()
 	err := initQueryLogger(rpcVTGate)
@@ -246,6 +281,44 @@ func Init(ctx context.Context, serv srvtopo.Server, cell string, tabletTypesToWa
 	initAPI(gw.hc)
 
 	return rpcVTGate
+}
+
+func addKeyspaceToTracker(ctx context.Context, srvResolver *srvtopo.Resolver, st *vtschema.Tracker, gw *TabletGateway) {
+	keyspaces, err := srvResolver.GetAllKeyspaces(ctx)
+	if err != nil {
+		log.Warningf("Unable to get all keyspaces: %v", err)
+		return
+	}
+	if len(keyspaces) == 0 {
+		log.Infof("No keyspace to load")
+	}
+	for _, keyspace := range keyspaces {
+		resolveAndLoadKeyspace(ctx, srvResolver, st, gw, keyspace)
+	}
+}
+
+func resolveAndLoadKeyspace(ctx context.Context, srvResolver *srvtopo.Resolver, st *vtschema.Tracker, gw *TabletGateway, keyspace string) {
+	dest, err := srvResolver.ResolveDestination(ctx, keyspace, topodatapb.TabletType_MASTER, key.DestinationAllShards{})
+	if err != nil {
+		log.Warningf("Unable to resolve destination: %v", err)
+		return
+	}
+	timeout := time.After(5 * time.Second)
+	for {
+		select {
+		case <-timeout:
+			log.Warningf("Unable to get initial schema reload")
+			return
+		case <-time.After(500 * time.Millisecond):
+			for _, shard := range dest {
+				err := st.LoadKeyspace(gw, shard.Target)
+				if err == nil {
+					return
+				}
+				log.Warningf("Unable to add keyspace to tracker: %v", err)
+			}
+		}
+	}
 }
 
 func (vtg *VTGate) registerDebugHealthHandler() {
@@ -351,7 +424,7 @@ func (vtg *VTGate) StreamExecute(ctx context.Context, session *vtgatepb.Session,
 			NewSafeSession(session),
 			sql,
 			bindVariables,
-			querypb.Target{
+			&querypb.Target{
 				Keyspace:   destKeyspace,
 				TabletType: destTabletType,
 			},
@@ -538,7 +611,7 @@ func LegacyInit(ctx context.Context, hc discovery.LegacyHealthCheck, serv srvtop
 	}
 
 	rpcVTGate = &VTGate{
-		executor: NewExecutor(ctx, serv, cell, resolver, *normalizeQueries, *warnShardedOnly, *streamBufferSize, cacheCfg),
+		executor: NewExecutor(ctx, serv, cell, resolver, *normalizeQueries, *warnShardedOnly, *streamBufferSize, cacheCfg, nil),
 		resolver: resolver,
 		vsm:      vsm,
 		txConn:   tc,

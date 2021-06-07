@@ -22,6 +22,8 @@ import (
 	"sync"
 	"time"
 
+	"google.golang.org/protobuf/proto"
+
 	"k8s.io/apimachinery/pkg/util/sets"
 
 	"vitess.io/vitess/go/event"
@@ -335,8 +337,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		return err
 	}
 
-	ev.NewMaster = *tabletMap[winningPrimaryTabletAliasStr].Tablet
-
+	ev.NewMaster = proto.Clone(tabletMap[winningPrimaryTabletAliasStr].Tablet).(*topodatapb.Tablet)
 	return nil
 }
 

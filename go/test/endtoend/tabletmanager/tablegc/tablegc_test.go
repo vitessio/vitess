@@ -88,6 +88,7 @@ func TestMain(m *testing.M) {
 			"-heartbeat_enable",
 			"-heartbeat_interval", "250ms",
 			"-gc_check_interval", "5s",
+			"-gc_purge_check_interval", "5s",
 			"-table_gc_lifecycle", "hold,purge,evac,drop",
 		}
 		// We do not need semiSync for this test case.
@@ -323,7 +324,7 @@ func TestPurge(t *testing.T) {
 		checkTableRows(t, tableName, 1024)
 	}
 
-	time.Sleep(2 * time.Minute) // purgeReentranceInterval
+	time.Sleep(15 * time.Second) // purgeReentranceInterval
 	{
 		// We're now both beyond table's timestamp as well as a tableGC interval
 		exists, _, err := tableExists(tableName)

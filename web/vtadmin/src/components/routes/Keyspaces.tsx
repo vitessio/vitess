@@ -22,12 +22,14 @@ import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import { useSyncedURLParam } from '../../hooks/useSyncedURLParam';
 import { DataCell } from '../dataTable/DataCell';
 import { DataTable } from '../dataTable/DataTable';
-import { Button } from '../Button';
-import { Icons } from '../Icon';
-import { TextInput } from '../TextInput';
 import { Pip } from '../pips/Pip';
 import { filterNouns } from '../../util/filterNouns';
 import { getShardsByState } from '../../util/keyspaces';
+import { ContentContainer } from '../layout/ContentContainer';
+import { WorkspaceHeader } from '../layout/WorkspaceHeader';
+import { WorkspaceTitle } from '../layout/WorkspaceTitle';
+import { DataFilter } from '../dataTable/DataFilter';
+import { KeyspaceLink } from '../links/KeyspaceLink';
 
 export const Keyspaces = () => {
     useDocumentTitle('Keyspaces');
@@ -55,8 +57,10 @@ export const Keyspaces = () => {
         rows.map((row, idx) => (
             <tr key={idx}>
                 <DataCell>
-                    <div className="font-weight-bold">{row.name}</div>
-                    <div className="font-size-small text-color-secondary">{row.cluster}</div>
+                    <KeyspaceLink clusterID={row.clusterID} name={row.name}>
+                        <div className="font-weight-bold">{row.name}</div>
+                        <div className="font-size-small text-color-secondary">{row.cluster}</div>
+                    </KeyspaceLink>
                 </DataCell>
                 <DataCell>
                     {!!row.servingShards && (
@@ -75,21 +79,22 @@ export const Keyspaces = () => {
         ));
 
     return (
-        <div className="max-width-content">
-            <h1>Keyspaces</h1>
-            <div className={style.controls}>
-                <TextInput
+        <div>
+            <WorkspaceHeader>
+                <WorkspaceTitle>Keyspaces</WorkspaceTitle>
+            </WorkspaceHeader>
+            <ContentContainer>
+                <DataFilter
                     autoFocus
-                    iconLeft={Icons.search}
                     onChange={(e) => updateFilter(e.target.value)}
+                    onClear={() => updateFilter('')}
                     placeholder="Filter keyspaces"
                     value={filter || ''}
                 />
-                <Button disabled={!filter} onClick={() => updateFilter('')} secondary>
-                    Clear filters
-                </Button>
-            </div>
-            <DataTable columns={['Keyspace', 'Shards']} data={ksRows} renderRows={renderRows} />
+                <div className={style.container}>
+                    <DataTable columns={['Keyspace', 'Shards']} data={ksRows} renderRows={renderRows} />
+                </div>
+            </ContentContainer>
         </div>
     );
 };

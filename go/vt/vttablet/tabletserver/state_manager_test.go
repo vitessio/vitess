@@ -22,6 +22,10 @@ import (
 	"testing"
 	"time"
 
+	"google.golang.org/protobuf/proto"
+
+	"vitess.io/vitess/go/mysql/fakesqldb"
+
 	"context"
 
 	"github.com/stretchr/testify/assert"
@@ -494,7 +498,7 @@ func TestStateManagerCheckMySQL(t *testing.T) {
 func TestStateManagerValidations(t *testing.T) {
 	sm := newTestStateManager(t)
 	target := &querypb.Target{TabletType: topodatapb.TabletType_MASTER}
-	sm.target = *target
+	sm.target = proto.Clone(target).(*querypb.Target)
 
 	err := sm.StartRequest(ctx, target, false)
 	assert.Contains(t, err.Error(), "operation not allowed")
@@ -557,7 +561,7 @@ func TestStateManagerWaitForRequests(t *testing.T) {
 	sm := newTestStateManager(t)
 	defer sm.StopService()
 	target := &querypb.Target{TabletType: topodatapb.TabletType_MASTER}
-	sm.target = *target
+	sm.target = target
 	sm.timebombDuration = 10 * time.Second
 
 	sm.replHealthy = true
@@ -681,7 +685,7 @@ func newTestStateManager(t *testing.T) *stateManager {
 		statelessql: NewQueryList("stateless"),
 		statefulql:  NewQueryList("stateful"),
 		olapql:      NewQueryList("olap"),
-		hs:          newHealthStreamer(env, topodatapb.TabletAlias{}),
+		hs:          newHealthStreamer(env, &topodatapb.TabletAlias{}),
 		se:          &testSchemaEngine{},
 		rt:          &testReplTracker{lag: 1 * time.Second},
 		vstreamer:   &testSubcomponent{},
@@ -695,8 +699,8 @@ func newTestStateManager(t *testing.T) *stateManager {
 		throttler:   &testLagThrottler{},
 		tableGC:     &testTableGC{},
 	}
-	sm.Init(env, querypb.Target{})
-	sm.hs.InitDBConfig(querypb.Target{})
+	sm.Init(env, &querypb.Target{})
+	sm.hs.InitDBConfig(&querypb.Target{}, fakesqldb.New(t).ConnParams())
 	log.Infof("returning sm: %p", sm)
 	return sm
 }

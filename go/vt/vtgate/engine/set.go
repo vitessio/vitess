@@ -247,7 +247,11 @@ func (svci *SysVarCheckAndIgnore) Execute(vcursor VCursor, env evalengine.Expres
 	checkSysVarQuery := fmt.Sprintf("select 1 from dual where @@%s = %s", svci.Name, svci.Expr)
 	result, err := execShard(vcursor, checkSysVarQuery, env.BindVars, rss[0], false /* rollbackOnError */, false /* canAutocommit */)
 	if err != nil {
-		return err
+		// Rather than returning the error, we will just log the error
+		// as the intention for executing the query it to validate the current setting and eventually ignore it anyways.
+		// There is no benefit of returning the error back to client.
+		log.Warningf("unable to validate the current settings for '%s': %s", svci.Name, err.Error())
+		return nil
 	}
 	if len(result.Rows) == 0 {
 		log.Infof("Ignored inapplicable SET %v = %v", svci.Name, svci.Expr)

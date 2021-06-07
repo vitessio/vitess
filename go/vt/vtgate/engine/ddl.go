@@ -37,6 +37,7 @@ type DDL struct {
 	NormalDDL *Send
 	OnlineDDL *OnlineDDL
 
+	DirectDDLEnabled bool
 	OnlineDDLEnabled bool
 
 	CreateTempTable bool
@@ -98,14 +99,18 @@ func (ddl *DDL) Execute(vcursor VCursor, bindVars map[string]*query.BindVariable
 	}
 	ddl.OnlineDDL.DDLStrategySetting = ddlStrategySetting
 
-	if ddl.isOnlineSchemaDDL() {
+	switch {
+	case ddl.isOnlineSchemaDDL():
 		if !ddl.OnlineDDLEnabled {
 			return nil, schema.ErrOnlineDDLDisabled
 		}
 		return ddl.OnlineDDL.Execute(vcursor, bindVars, wantfields)
+	default: // non online-ddl
+		if !ddl.DirectDDLEnabled {
+			return nil, schema.ErrDirectDDLDisabled
+		}
+		return ddl.NormalDDL.Execute(vcursor, bindVars, wantfields)
 	}
-
-	return ddl.NormalDDL.Execute(vcursor, bindVars, wantfields)
 }
 
 // StreamExecute implements the Primitive interface

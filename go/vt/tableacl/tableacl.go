@@ -25,8 +25,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/tchap/go-patricia/patricia"
+	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/vt/log"
@@ -73,7 +73,7 @@ type tableACL struct {
 	// mutex protects entries, config, and callback
 	sync.RWMutex
 	entries aclEntries
-	config  tableaclpb.Config
+	config  *tableaclpb.Config
 	// callback is executed on successful reload.
 	callback func()
 	// ACL Factory override for testing
@@ -188,7 +188,7 @@ func (tacl *tableACL) Set(config *tableaclpb.Config) error {
 	}
 	tacl.Lock()
 	tacl.entries = entries
-	tacl.config = *config
+	tacl.config = proto.Clone(config).(*tableaclpb.Config)
 	callback := tacl.callback
 	tacl.Unlock()
 	if callback != nil {
@@ -277,7 +277,7 @@ func GetCurrentConfig() *tableaclpb.Config {
 func (tacl *tableACL) Config() *tableaclpb.Config {
 	tacl.RLock()
 	defer tacl.RUnlock()
-	return proto.Clone(&tacl.config).(*tableaclpb.Config)
+	return proto.Clone(tacl.config).(*tableaclpb.Config)
 }
 
 // Register registers an AclFactory.

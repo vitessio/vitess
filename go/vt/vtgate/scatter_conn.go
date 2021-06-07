@@ -24,7 +24,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
@@ -35,6 +35,7 @@ import (
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/buffer"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -217,27 +218,11 @@ func (stc *ScatterConn) ExecuteMultiShard(
 
 			qs, err = getQueryService(rs, info)
 			if err != nil {
-				// an error here could mean that the tablet we were targeting earlier has changed type.
-				// if we have a transaction, we'll have to fail, but if we only had a reserved connection,
-				// we can create a new reserved connection to a new tablet that is on the right shard
-				// and has the right type
-				switch info.actionNeeded {
-				case nothing:
-					info.actionNeeded = reserve
-				case begin:
-					info.actionNeeded = reserveBegin
-				default:
-					return nil, err
-				}
-				retry := checkAndResetShardSession(info, err, session)
-				if retry != newQS {
-					return nil, err
-				}
-				qs = rs.Gateway
+				return nil, err
 			}
 
 			retryRequest := func(exec func()) {
-				retry := checkAndResetShardSession(info, err, session)
+				retry := checkAndResetShardSession(info, err, session, rs.Target)
 				switch retry {
 				case newQS:
 					// Current tablet is not available, try querying new tablet using gateway.
@@ -263,11 +248,6 @@ func (stc *ScatterConn) ExecuteMultiShard(
 			case begin:
 				innerqr, transactionID, alias, err = qs.BeginExecute(ctx, rs.Target, session.Savepoints, queries[i].Sql, queries[i].BindVariables, reservedID, opts)
 				if err != nil {
-					if transactionID != 0 {
-						// if we had an open transaction, we can't repair anything and have to exit here.
-						// we still keep the transaction open - an error doesn't immediately close the transaction
-						break
-					}
 					retryRequest(func() {
 						// we seem to have lost our connection. it was a reserved connection, let's try to recreate it
 						info.actionNeeded = reserveBegin
@@ -304,13 +284,13 @@ func (stc *ScatterConn) ExecuteMultiShard(
 	return qr, allErrors.GetErrors()
 }
 
-func checkAndResetShardSession(info *shardActionInfo, err error, session *SafeSession) reset {
+func checkAndResetShardSession(info *shardActionInfo, err error, session *SafeSession, target *querypb.Target) reset {
 	retry := none
 	if info.reservedID != 0 && info.transactionID == 0 {
 		if wasConnectionClosed(err) {
 			retry = shard
 		}
-		if requireNewQS(err) {
+		if requireNewQS(err, target) {
 			retry = newQS
 		}
 	}
@@ -387,7 +367,7 @@ func (stc *ScatterConn) StreamExecuteMulti(
 	bindVars []map[string]*querypb.BindVariable,
 	options *querypb.ExecuteOptions,
 	callback func(reply *sqltypes.Result) error,
-) error {
+) []error {
 	// mu protects fieldSent, callback and replyErr
 	var mu sync.Mutex
 	fieldSent := false
@@ -397,7 +377,7 @@ func (stc *ScatterConn) StreamExecuteMulti(
 			return stc.processOneStreamingResult(&mu, &fieldSent, qr, callback)
 		})
 	})
-	return allErrors.AggrError(vterrors.Aggregate)
+	return allErrors.GetErrors()
 }
 
 // timeTracker is a convenience wrapper used by MessageStream
@@ -716,10 +696,11 @@ func wasConnectionClosed(err error) bool {
 		(sqlErr.Number() == mysql.ERQueryInterrupted && txClosed.MatchString(message))
 }
 
-func requireNewQS(err error) bool {
+func requireNewQS(err error, target *querypb.Target) bool {
 	code := vterrors.Code(err)
 	msg := err.Error()
-	return code == vtrpcpb.Code_FAILED_PRECONDITION && (vterrors.RxOp.MatchString(msg) || vterrors.RxWrongTablet.MatchString(msg))
+	return (code == vtrpcpb.Code_FAILED_PRECONDITION && (vterrors.RxOp.MatchString(msg) || vterrors.RxWrongTablet.MatchString(msg))) ||
+		(target != nil && target.TabletType == topodatapb.TabletType_MASTER && buffer.CausedByFailover(err))
 }
 
 // actionInfo looks at the current session, and returns information about what needs to be done for this tablet

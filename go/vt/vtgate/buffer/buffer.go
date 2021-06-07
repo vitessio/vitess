@@ -195,7 +195,7 @@ type RetryDoneFunc context.CancelFunc
 func (b *Buffer) WaitForFailoverEnd(ctx context.Context, keyspace, shard string, err error) (RetryDoneFunc, error) {
 	// If an err is given, it must be related to a failover.
 	// We never buffer requests with other errors.
-	if err != nil && !causedByFailover(err) {
+	if err != nil && !CausedByFailover(err) {
 		return nil, nil
 	}
 
@@ -257,32 +257,33 @@ func (b *Buffer) StatsUpdate(ts *discovery.LegacyTabletStats) {
 	sb.recordExternallyReparentedTimestamp(timestamp, ts.Tablet.Alias)
 }
 
-// causedByFailover returns true if "err" was supposedly caused by a failover.
+// CausedByFailover returns true if "err" was supposedly caused by a failover.
 // To simplify things, we've merged the detection for different MySQL flavors
 // in one function. Supported flavors: MariaDB, MySQL, Google internal.
-func causedByFailover(err error) bool {
+func CausedByFailover(err error) bool {
 	log.V(2).Infof("Checking error (type: %T) if it is caused by a failover. err: %v", err, err)
 
 	// TODO(sougou): Remove the INTERNAL check after rollout.
 	if code := vterrors.Code(err); code != vtrpcpb.Code_FAILED_PRECONDITION && code != vtrpcpb.Code_INTERNAL {
 		return false
 	}
+	errString := err.Error()
 	switch {
 	// All flavors.
-	case strings.Contains(err.Error(), "operation not allowed in state NOT_SERVING") ||
-		strings.Contains(err.Error(), "operation not allowed in state SHUTTING_DOWN") ||
+	case strings.Contains(errString, "operation not allowed in state NOT_SERVING") ||
+		strings.Contains(errString, "operation not allowed in state SHUTTING_DOWN") ||
 		// Match 1290 if -queryserver-config-terse-errors explicitly hid the error message
 		// (which it does to avoid logging the original query including any PII).
-		strings.Contains(err.Error(), "(errno 1290) (sqlstate HY000) during query:"):
+		strings.Contains(errString, "(errno 1290) (sqlstate HY000) during query:"):
 		return true
 	// MariaDB flavor.
-	case strings.Contains(err.Error(), "The MariaDB server is running with the --read-only option so it cannot execute this statement (errno 1290) (sqlstate HY000)"):
+	case strings.Contains(errString, "The MariaDB server is running with the --read-only option so it cannot execute this statement (errno 1290) (sqlstate HY000)"):
 		return true
 	// MySQL flavor.
-	case strings.Contains(err.Error(), "The MySQL server is running with the --read-only option so it cannot execute this statement (errno 1290) (sqlstate HY000)"):
+	case strings.Contains(errString, "The MySQL server is running with the --read-only option so it cannot execute this statement (errno 1290) (sqlstate HY000)"):
 		return true
 	// Google internal flavor.
-	case strings.Contains(err.Error(), "failover in progress (errno 1227) (sqlstate 42000)"):
+	case strings.Contains(errString, "failover in progress (errno 1227) (sqlstate 42000)"):
 		return true
 	}
 	return false

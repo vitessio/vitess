@@ -123,7 +123,7 @@ func vstreamEvents(executor *Executor, sql string) (qr *sqltypes.Result, err err
 		NewSafeSession(masterSession),
 		sql,
 		nil,
-		querypb.Target{
+		&querypb.Target{
 			Keyspace:   "TestUnsharded",
 			Shard:      "0",
 			TabletType: topodatapb.TabletType_MASTER,

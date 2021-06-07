@@ -13,9 +13,27 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-.controls {
+.shardList {
+  color: var(--textColorSecondary);
+  font-size: var(--fontSizeSmall);
+  max-width: 20rem;
+  padding-right: 24px;
+}
+
+.streams {
   display: grid;
   grid-gap: 8px;
-  grid-template-columns: 1fr min-content;
-  margin-bottom: 24px;
+  grid-template-columns: repeat(4, 60px);
+}
+
+.stream,
+.streamPlaceholder {
+  margin: 0 4px;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.streamPlaceholder {
+  color: var(--textColorSecondary);
+  text-align: center;
 }

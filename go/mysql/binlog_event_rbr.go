@@ -895,6 +895,18 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, styp querypb.Typ
 		l := int(data[pos])
 		mdata := data[pos+1 : pos+1+l]
 		if sqltypes.IsBinary(styp) {
+			// For binary(n) column types, mysql pads the data on the right with nulls. However the binlog event contains
+			// the data without this padding. This causes several issues:
+			//    * if a binary(n) column is part of the sharding key, the keyspace_id() returned during the copy phase
+			//      (where the value is the result of a mysql query) is different from the one during replication
+			//      (where the value is the one from the binlogs)
+			//    * mysql where clause comparisons do not do the right thing without padding
+			// So for fixed length binary() columns we right-pad it with nulls if necessary
+			if l < max {
+				paddedData := make([]byte, max)
+				copy(paddedData[:l], mdata)
+				mdata = paddedData
+			}
 			return sqltypes.MakeTrusted(querypb.Type_BINARY, mdata), l + 1, nil
 		}
 		return sqltypes.MakeTrusted(querypb.Type_VARCHAR, mdata), l + 1, nil

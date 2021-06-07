@@ -20,16 +20,19 @@ import { vtadmin as pb } from '../../proto/vtadmin';
 import { orderBy } from 'lodash-es';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import { DataTable } from '../dataTable/DataTable';
-import { TextInput } from '../TextInput';
-import { Icons } from '../Icon';
 import { filterNouns } from '../../util/filterNouns';
-import style from './Tablets.module.scss';
-import { Button } from '../Button';
 import { DataCell } from '../dataTable/DataCell';
 import { TabletServingPip } from '../pips/TabletServingPip';
 import { useSyncedURLParam } from '../../hooks/useSyncedURLParam';
 import { formatAlias, formatDisplayType, formatState, formatType } from '../../util/tablets';
 import { ShardServingPip } from '../pips/ShardServingPip';
+import { ContentContainer } from '../layout/ContentContainer';
+import { WorkspaceHeader } from '../layout/WorkspaceHeader';
+import { WorkspaceTitle } from '../layout/WorkspaceTitle';
+import { DataFilter } from '../dataTable/DataFilter';
+import { KeyspaceLink } from '../links/KeyspaceLink';
+import { TabletLink } from '../links/TabletLink';
+import { ExternalTabletLink } from '../links/ExternalTabletLink';
 
 export const Tablets = () => {
     useDocumentTitle('Tablets');
@@ -47,23 +50,40 @@ export const Tablets = () => {
             return rows.map((t, tdx) => (
                 <tr key={tdx}>
                     <DataCell>
-                        <div>{t.keyspace}</div>
-                        <div className="font-size-small text-color-secondary">{t.cluster}</div>
+                        <KeyspaceLink clusterID={t._raw.cluster?.id} name={t.keyspace}>
+                            <div>{t.keyspace}</div>
+                            <div className="font-size-small text-color-secondary">{t.cluster}</div>
+                        </KeyspaceLink>
                     </DataCell>
                     <DataCell>
-                        <ShardServingPip isLoading={ksQuery.isLoading} isServing={t.isShardServing} /> {t.shard}
-                        {ksQuery.isSuccess && (
-                            <div className="font-size-small text-color-secondary white-space-nowrap">
-                                {!t.isShardServing && 'NOT SERVING'}
-                            </div>
-                        )}
+                        <KeyspaceLink
+                            className="white-space-nowrap"
+                            clusterID={t._raw.cluster?.id}
+                            name={t.keyspace}
+                            shard={t.shard}
+                        >
+                            <ShardServingPip isLoading={ksQuery.isLoading} isServing={t.isShardServing} /> {t.shard}
+                            {ksQuery.isSuccess && (
+                                <div className="font-size-small text-color-secondary white-space-nowrap">
+                                    {!t.isShardServing && 'NOT SERVING'}
+                                </div>
+                            )}
+                        </KeyspaceLink>
                     </DataCell>
-                    <DataCell className="white-space-nowrap">
-                        <TabletServingPip state={t._raw.state} /> {t.type}
+                    <DataCell>
+                        <TabletLink alias={t.alias} className="font-weight-bold" clusterID={t._raw.cluster?.id}>
+                            {t.alias}
+                        </TabletLink>
                     </DataCell>
-                    <DataCell>{t.state}</DataCell>
-                    <DataCell>{t.alias}</DataCell>
-                    <DataCell>{t.hostname}</DataCell>
+                    <DataCell className="white-space-nowrap">{t.type}</DataCell>
+
+                    <DataCell>
+                        <TabletServingPip state={t._raw.state} /> {t.state}
+                    </DataCell>
+
+                    <DataCell>
+                        <ExternalTabletLink fqdn={`//${t._raw.FQDN}`}>{t.hostname}</ExternalTabletLink>
+                    </DataCell>
                 </tr>
             ));
         },
@@ -71,25 +91,24 @@ export const Tablets = () => {
     );
 
     return (
-        <div className="max-width-content">
-            <h1>Tablets</h1>
-            <div className={style.controls}>
-                <TextInput
+        <div>
+            <WorkspaceHeader>
+                <WorkspaceTitle>Tablets</WorkspaceTitle>
+            </WorkspaceHeader>
+            <ContentContainer>
+                <DataFilter
                     autoFocus
-                    iconLeft={Icons.search}
                     onChange={(e) => updateFilter(e.target.value)}
+                    onClear={() => updateFilter('')}
                     placeholder="Filter tablets"
                     value={filter || ''}
                 />
-                <Button disabled={!filter} onClick={() => updateFilter('')} secondary>
-                    Clear filters
-                </Button>
-            </div>
-            <DataTable
-                columns={['Keyspace', 'Shard', 'Type', 'Tablet State', 'Alias', 'Hostname']}
-                data={filteredData}
-                renderRows={renderRows}
-            />
+                <DataTable
+                    columns={['Keyspace', 'Shard', 'Alias', 'Type', 'Tablet State', 'Hostname']}
+                    data={filteredData}
+                    renderRows={renderRows}
+                />
+            </ContentContainer>
         </div>
     );
 };
@@ -114,7 +133,7 @@ export const formatRows = (
         const shard = shardName ? keyspace?.shards[shardName] : null;
 
         return {
-            alias: formatAlias(t),
+            alias: formatAlias(t.tablet?.alias),
             cluster: t.cluster?.name,
             hostname: t.tablet?.hostname,
             isShardServing: shard?.shard?.is_master_serving,

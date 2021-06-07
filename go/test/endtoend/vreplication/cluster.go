@@ -17,7 +17,7 @@ import (
 )
 
 var (
-	debug = false // set to true to always use local env vtdataroot for local debugging
+	debug = false // set to true for local debugging: this uses the local env vtdataroot and does not teardown clusters
 
 	originalVtdataroot    string
 	vtdataroot            string
@@ -40,6 +40,8 @@ type ClusterConfig struct {
 	tabletPortBase      int
 	tabletGrpcPortBase  int
 	tabletMysqlPortBase int
+
+	vreplicationCompressGTID bool
 }
 
 // VitessCluster represents all components within the test cluster
@@ -219,6 +221,17 @@ func (vc *VitessCluster) AddKeyspace(t *testing.T, cells []*Cell, ksName string,
 func (vc *VitessCluster) AddTablet(t testing.TB, cell *Cell, keyspace *Keyspace, shard *Shard, tabletType string, tabletID int) (*Tablet, *exec.Cmd, error) {
 	tablet := &Tablet{}
 
+	options := []string{
+		"-queryserver-config-schema-reload-time", "5",
+		"-enable-lag-throttler",
+		"-heartbeat_enable",
+		"-heartbeat_interval", "250ms",
+	} //FIXME: for multi-cell initial schema doesn't seem to load without "-queryserver-config-schema-reload-time"
+
+	if mainClusterConfig.vreplicationCompressGTID {
+		options = append(options, "-vreplication_store_compressed_gtid=true")
+	}
+
 	vttablet := cluster.VttabletProcessInstance(
 		vc.ClusterConfig.tabletPortBase+tabletID,
 		vc.ClusterConfig.tabletGrpcPortBase+tabletID,
@@ -231,12 +244,7 @@ func (vc *VitessCluster) AddTablet(t testing.TB, cell *Cell, keyspace *Keyspace,
 		vc.Topo.Port,
 		vc.ClusterConfig.hostname,
 		vc.ClusterConfig.tmpDir,
-		[]string{
-			"-queryserver-config-schema-reload-time", "5",
-			"-enable-lag-throttler",
-			"-heartbeat_enable",
-			"-heartbeat_interval", "250ms",
-		}, //FIXME: for multi-cell initial schema doesn't seem to load without "-queryserver-config-schema-reload-time"
+		options,
 		false)
 
 	require.NotNil(t, vttablet)
@@ -383,6 +391,9 @@ func (vc *VitessCluster) AddCell(t testing.TB, name string) (*Cell, error) {
 
 // TearDown brings down a cluster, deleting processes, removing topo keys
 func (vc *VitessCluster) TearDown(t testing.TB) {
+	if debug {
+		return
+	}
 	for _, cell := range vc.Cells {
 		for _, vtgate := range cell.Vtgates {
 			if err := vtgate.TearDown(); err != nil {

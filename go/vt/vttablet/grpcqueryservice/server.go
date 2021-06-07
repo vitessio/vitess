@@ -35,6 +35,7 @@ import (
 // query is the gRPC query service implementation.
 // It implements the queryservice.QueryServer interface.
 type query struct {
+	queryservicepb.UnimplementedQueryServer
 	server queryservice.QueryService
 }
 
@@ -446,5 +447,5 @@ func (q *query) Release(ctx context.Context, request *querypb.ReleaseRequest) (r
 
 // Register registers the implementation on the provide gRPC Server.
 func Register(s *grpc.Server, server queryservice.QueryService) {
-	queryservicepb.RegisterQueryServer(s, &query{server})
+	queryservicepb.RegisterQueryServer(s, &query{server: server})
 }

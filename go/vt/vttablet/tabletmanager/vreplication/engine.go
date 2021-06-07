@@ -25,7 +25,8 @@ import (
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/mysql"
+	"google.golang.org/protobuf/proto"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
@@ -141,6 +142,7 @@ func NewEngine(config *tabletenv.TabletConfig, ts *topo.Server, cell string, mys
 		ec:              newExternalConnector(config.ExternalConnections),
 		throttlerClient: throttle.NewBackgroundClient(lagThrottler, throttlerAppName, throttle.ThrottleCheckPrimaryWrite),
 	}
+
 	return vre
 }
 
@@ -346,7 +348,6 @@ func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error)
 	}
 
 	dbClient := vre.getDBClient(runAsAdmin)
-	vdbc := newVDBClient(dbClient, binlogplayer.NewStats())
 	if err := dbClient.Connect(); err != nil {
 		return nil, err
 	}
@@ -368,6 +369,7 @@ func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error)
 		if qr.InsertID == 0 {
 			return nil, fmt.Errorf("insert failed to generate an id")
 		}
+		vdbc := newVDBClient(dbClient, binlogplayer.NewStats())
 		for id := int(qr.InsertID); id < int(qr.InsertID)+plan.numInserts; id++ {
 			if ct := vre.controllers[id]; ct != nil {
 				// Unreachable. Just a failsafe.
@@ -412,6 +414,7 @@ func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error)
 		if err != nil {
 			return nil, err
 		}
+		vdbc := newVDBClient(dbClient, binlogplayer.NewStats())
 		for _, id := range ids {
 			params, err := readRow(dbClient, id)
 			if err != nil {
@@ -438,6 +441,7 @@ func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error)
 			return &sqltypes.Result{}, nil
 		}
 		// Stop and delete the current controllers.
+		vdbc := newVDBClient(dbClient, binlogplayer.NewStats())
 		for _, id := range ids {
 			if ct := vre.controllers[id]; ct != nil {
 				ct.Stop()
@@ -627,10 +631,10 @@ func (vre *Engine) transitionJournal(je *journalEvent) {
 	var newids []int
 	for _, shard := range shardGTIDs {
 		sgtid := je.shardGTIDs[shard]
-		bls := vre.controllers[refid].source
+		bls := proto.Clone(vre.controllers[refid].source).(*binlogdatapb.BinlogSource)
 		bls.Keyspace, bls.Shard = sgtid.Keyspace, sgtid.Shard
 		ig := NewInsertGenerator(binlogplayer.BlpRunning, vre.dbName)
-		ig.AddRow(params["workflow"], &bls, sgtid.Gtid, params["cell"], params["tablet_types"])
+		ig.AddRow(params["workflow"], bls, sgtid.Gtid, params["cell"], params["tablet_types"])
 		qr, err := withDDL.Exec(vre.ctx, ig.String(), dbClient.ExecuteFetch)
 		if err != nil {
 			log.Errorf("transitionJournal: %v", err)
@@ -678,7 +682,7 @@ func (vre *Engine) transitionJournal(je *journalEvent) {
 // WaitForPos waits for the replication to reach the specified position.
 func (vre *Engine) WaitForPos(ctx context.Context, id int, pos string) error {
 	start := time.Now()
-	mPos, err := mysql.DecodePosition(pos)
+	mPos, err := binlogplayer.DecodePosition(pos)
 	if err != nil {
 		return err
 	}
@@ -716,7 +720,7 @@ func (vre *Engine) WaitForPos(ctx context.Context, id int, pos string) error {
 		case len(qr.Rows) > 1 || len(qr.Rows[0]) != 3:
 			return fmt.Errorf("unexpected result: %v", qr)
 		}
-		current, err := mysql.DecodePosition(qr.Rows[0][0].ToString())
+		current, err := binlogplayer.DecodePosition(qr.Rows[0][0].ToString())
 		if err != nil {
 			return err
 		}
@@ -785,7 +789,19 @@ func readRow(dbClient binlogplayer.DBClient, id int) (map[string]string, error) 
 	if len(qr.Fields) != len(qr.Rows[0]) {
 		return nil, fmt.Errorf("fields don't match rows: %v", qr)
 	}
-	return rowToMap(qr, 0)
+	row, err := rowToMap(qr, 0)
+	if err != nil {
+		return nil, err
+	}
+	gtid, ok := row["pos"]
+	if ok {
+		b := binlogplayer.MysqlUncompress(gtid)
+		if b != nil {
+			gtid = string(b)
+			row["pos"] = gtid
+		}
+	}
+	return row, nil
 }
 
 // rowToMap converts a row into a map for easier processing.

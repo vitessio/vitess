@@ -242,7 +242,7 @@ func (exec *TabletExecutor) executeSQL(ctx context.Context, sql string, execResu
 	switch stmt := stmt.(type) {
 	case sqlparser.DDLStatement:
 		if exec.isOnlineSchemaDDL(stmt) {
-			onlineDDLs, err := schema.NewOnlineDDLs(exec.keyspace, stmt, exec.ddlStrategySetting, exec.requestContext)
+			onlineDDLs, err := schema.NewOnlineDDLs(exec.keyspace, sql, stmt, exec.ddlStrategySetting, exec.requestContext)
 			if err != nil {
 				execResult.ExecutorErr = err.Error()
 				return err

@@ -71,6 +71,7 @@ func (state txEngineState) String() string {
 type TxEngine struct {
 	env tabletenv.Env
 
+	// stateLock is to protect state and beginRequests changes.
 	stateLock sync.Mutex
 	state     txEngineState
 
@@ -90,6 +91,7 @@ type TxEngine struct {
 	txPool       *TxPool
 	preparedPool *TxPreparedPool
 	twoPC        *TwoPC
+	twoPCReady   sync.WaitGroup
 }
 
 // NewTxEngine creates a new TxEngine.
@@ -168,15 +170,21 @@ func (te *TxEngine) transition(state txEngineState) {
 		// If there are errors, we choose to raise an alert and
 		// continue anyway. Serving traffic is considered more important
 		// than blocking everything for the sake of a few transactions.
-		if err := te.twoPC.Open(te.env.Config().DB); err != nil {
-			te.env.Stats().InternalErrors.Add("TwopcOpen", 1)
-			log.Errorf("Could not open TwoPC engine: %v", err)
-		}
-		if err := te.prepareFromRedo(); err != nil {
-			te.env.Stats().InternalErrors.Add("TwopcResurrection", 1)
-			log.Errorf("Could not prepare transactions: %v", err)
-		}
-		te.startWatchdog()
+		// We do this async; so we do not end up blocking writes on
+		// failover for our setup tasks if using semi-sync replication.
+		te.twoPCReady.Add(1)
+		go func() {
+			defer te.twoPCReady.Done()
+			if err := te.twoPC.Open(te.env.Config().DB); err != nil {
+				te.env.Stats().InternalErrors.Add("TwopcOpen", 1)
+				log.Errorf("Could not open TwoPC engine: %v", err)
+			}
+			if err := te.prepareFromRedo(); err != nil {
+				te.env.Stats().InternalErrors.Add("TwopcResurrection", 1)
+				log.Errorf("Could not prepare transactions: %v", err)
+			}
+			te.startWatchdog()
+		}()
 	}
 }
 
@@ -196,6 +204,18 @@ func (te *TxEngine) Close() {
 	log.Info("TxEngine: closed")
 }
 
+func (te *TxEngine) isTxPoolAvailable(addToWaitGroup func(int)) error {
+	te.stateLock.Lock()
+	defer te.stateLock.Unlock()
+
+	canOpenTransactions := te.state == AcceptingReadOnly || te.state == AcceptingReadAndWrite
+	if !canOpenTransactions {
+		return vterrors.Errorf(vtrpc.Code_UNAVAILABLE, "tx engine can't accept new connections in state %v", te.state)
+	}
+	addToWaitGroup(1)
+	return nil
+}
+
 // Begin begins a transaction, and returns the associated transaction id and the
 // statement(s) used to execute the begin (if any).
 //
@@ -203,19 +223,10 @@ func (te *TxEngine) Close() {
 func (te *TxEngine) Begin(ctx context.Context, preQueries []string, reservedID int64, options *querypb.ExecuteOptions) (int64, string, error) {
 	span, ctx := trace.NewSpan(ctx, "TxEngine.Begin")
 	defer span.Finish()
-	te.stateLock.Lock()
-
-	canOpenTransactions := te.state == AcceptingReadOnly || te.state == AcceptingReadAndWrite
-	if !canOpenTransactions {
-		// We are not in a state where we can start new transactions. Abort.
-		te.stateLock.Unlock()
-		return 0, "", vterrors.Errorf(vtrpc.Code_UNAVAILABLE, "tx engine can't accept new transactions in state %v", te.state)
+	err := te.isTxPoolAvailable(te.beginRequests.Add)
+	if err != nil {
+		return 0, "", err
 	}
-
-	// By Add() to beginRequests, we block others from initiating state
-	// changes until we have finished adding this transaction
-	te.beginRequests.Add(1)
-	te.stateLock.Unlock()
 
 	defer te.beginRequests.Done()
 	conn, beginSQL, err := te.txPool.Begin(ctx, options, te.state == AcceptingReadOnly, reservedID, preQueries)
@@ -360,7 +371,7 @@ outer:
 	for _, preparedTx := range prepared {
 		txid, err := dtids.TransactionID(preparedTx.Dtid)
 		if err != nil {
-			log.Errorf("Error extracting transaction ID from ditd: %v", err)
+			log.Errorf("Error extracting transaction ID from dtid: %v", err)
 		}
 		if txid > maxid {
 			maxid = txid
@@ -390,7 +401,7 @@ outer:
 	for _, preparedTx := range failed {
 		txid, err := dtids.TransactionID(preparedTx.Dtid)
 		if err != nil {
-			log.Errorf("Error extracting transaction ID from ditd: %v", err)
+			log.Errorf("Error extracting transaction ID from dtid: %v", err)
 		}
 		if txid > maxid {
 			maxid = txid
@@ -398,7 +409,7 @@ outer:
 		te.preparedPool.SetFailed(preparedTx.Dtid)
 	}
 	te.txPool.AdjustLastID(maxid)
-	log.Infof("Prepared %d transactions, and registered %d failures.", len(prepared), len(failed))
+	log.Infof("TwoPC: Prepared %d transactions, and registered %d failures.", len(prepared), len(failed))
 	return allErr.Error()
 }
 
@@ -483,6 +494,12 @@ func (te *TxEngine) stopWatchdog() {
 func (te *TxEngine) ReserveBegin(ctx context.Context, options *querypb.ExecuteOptions, preQueries []string) (int64, error) {
 	span, ctx := trace.NewSpan(ctx, "TxEngine.ReserveBegin")
 	defer span.Finish()
+	err := te.isTxPoolAvailable(te.beginRequests.Add)
+	if err != nil {
+		return 0, err
+	}
+	defer te.beginRequests.Done()
+
 	conn, err := te.reserve(ctx, options, preQueries)
 	if err != nil {
 		return 0, err
@@ -497,11 +514,17 @@ func (te *TxEngine) ReserveBegin(ctx context.Context, options *querypb.ExecuteOp
 	return conn.ReservedID(), nil
 }
 
+var noop = func(int) {}
+
 // Reserve creates a reserved connection and returns the id to it
 func (te *TxEngine) Reserve(ctx context.Context, options *querypb.ExecuteOptions, txID int64, preQueries []string) (int64, error) {
 	span, ctx := trace.NewSpan(ctx, "TxEngine.Reserve")
 	defer span.Finish()
 	if txID == 0 {
+		err := te.isTxPoolAvailable(noop)
+		if err != nil {
+			return 0, err
+		}
 		conn, err := te.reserve(ctx, options, preQueries)
 		if err != nil {
 			return 0, err
@@ -525,16 +548,6 @@ func (te *TxEngine) Reserve(ctx context.Context, options *querypb.ExecuteOptions
 
 // Reserve creates a reserved connection and returns the id to it
 func (te *TxEngine) reserve(ctx context.Context, options *querypb.ExecuteOptions, preQueries []string) (*StatefulConnection, error) {
-	te.stateLock.Lock()
-
-	canOpenTransactions := te.state == AcceptingReadOnly || te.state == AcceptingReadAndWrite
-	if !canOpenTransactions {
-		// We are not in a state where we can start new transactions. Abort.
-		te.stateLock.Unlock()
-		return nil, vterrors.Errorf(vtrpc.Code_UNAVAILABLE, "cannot provide new connection in state %v", te.state)
-	}
-	te.stateLock.Unlock()
-
 	conn, err := te.txPool.scp.NewConn(ctx, options)
 	if err != nil {
 		return nil, err
