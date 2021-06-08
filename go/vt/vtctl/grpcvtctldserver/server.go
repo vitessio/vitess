@@ -25,9 +25,8 @@ import (
 	"sync"
 	"time"
 
-	"google.golang.org/protobuf/proto"
-
 	"google.golang.org/grpc"
+	"google.golang.org/protobuf/proto"
 	"k8s.io/apimachinery/pkg/util/sets"
 
 	"vitess.io/vitess/go/event"
@@ -152,6 +151,14 @@ func (s *VtctldServer) ApplyRoutingRules(ctx context.Context, req *vtctldatapb.A
 
 // ApplyVSchema is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) ApplyVSchema(ctx context.Context, req *vtctldatapb.ApplyVSchemaRequest) (*vtctldatapb.ApplyVSchemaResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.ApplyVSchema")
+	defer span.Finish()
+
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("cells", strings.Join(req.Cells, ","))
+	span.Annotate("skip_rebuild", req.SkipRebuild)
+	span.Annotate("dry_run", req.DryRun)
+
 	if _, err := s.ts.GetKeyspace(ctx, req.Keyspace); err != nil {
 		if topo.IsErrType(err, topo.NoNode) {
 			return nil, vterrors.Wrapf(err, "keyspace(%s) doesn't exist, check if the keyspace is initialized", req.Keyspace)
@@ -163,10 +170,14 @@ func (s *VtctldServer) ApplyVSchema(ctx context.Context, req *vtctldatapb.ApplyV
 		return nil, vterrors.New(vtrpc.Code_INVALID_ARGUMENT, "must pass exactly one of req.VSchema and req.Sql")
 	}
 
-	var vs *vschemapb.Keyspace
-	var err error
+	var (
+		vs  *vschemapb.Keyspace
+		err error
+	)
 
 	if req.Sql != "" {
+		span.Annotate("sql_mode", true)
+
 		stmt, err := sqlparser.Parse(req.Sql)
 		if err != nil {
 			return nil, vterrors.Wrapf(err, "Parse(%s)", req.Sql)
@@ -186,6 +197,7 @@ func (s *VtctldServer) ApplyVSchema(ctx context.Context, req *vtctldatapb.ApplyV
 			return nil, vterrors.Wrapf(err, "ApplyVSchemaDDL(%s,%v,%v)", req.Keyspace, vs, ddl)
 		}
 	} else { // "jsonMode"
+		span.Annotate("sql_mode", false)
 		vs = req.VSchema
 	}
 
