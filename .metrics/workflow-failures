@@ -1,4 +1,3 @@
-2021-02-09T07:21:51Z,docker_test_1,https://github.com/vitessio/vitess/actions/runs/550566085
 2021-02-09T07:21:51Z,docker_test_2,https://github.com/vitessio/vitess/actions/runs/550566074
 2021-02-09T07:21:51Z,docker_test_3,https://github.com/vitessio/vitess/actions/runs/550566090
 2021-02-09T07:21:51Z,local_example,https://github.com/vitessio/vitess/actions/runs/550566084
@@ -9996,5 +9995,6 @@
 2021-06-08T13:38:00Z,docker_test_2,https://github.com/vitessio/vitess/actions/runs/918466766
 2021-06-08T13:38:00Z,local_example,https://github.com/vitessio/vitess/actions/runs/918466743
 2021-06-08T13:38:00Z,local_example,https://github.com/vitessio/vitess/actions/runs/918466750
+2021-06-08T13:38:00Z,unit_race,https://github.com/vitessio/vitess/actions/runs/918466762
 2021-06-08T13:38:01Z,docker_test_3,https://github.com/vitessio/vitess/actions/runs/918466822
 2021-06-08T13:38:01Z,region_example,https://github.com/vitessio/vitess/actions/runs/918466830
