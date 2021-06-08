@@ -19,9 +19,7 @@ package inst
 import (
 	"errors"
 	"regexp"
-	"strings"
 
-	"vitess.io/vitess/go/vt/orchestrator/config"
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
 )
 
@@ -36,12 +34,6 @@ var eventInfoTransformations map[*regexp.Regexp]string = map[*regexp.Regexp]stri
 	regexp.MustCompile(`(table_id:) [0-9]+$`):        "$1 ###",        // table ids change cross servers
 	regexp.MustCompile(` X'([0-9a-fA-F]+)' COLLATE`): " 0x$1 COLLATE", // different ways to represent collate
 	regexp.MustCompile(`(BEGIN GTID [^ ]+) cid=.*`):  "$1",            // MariaDB GTID someimtes gets addition of "cid=...". Stripping
-}
-
-var skippedEventTypes map[string]bool = map[string]bool{
-	"Format_desc": true,
-	"Stop":        true,
-	"Rotate":      true,
 }
 
 type BinlogEvent struct {
@@ -146,36 +138,6 @@ func (this *BinlogEventCursor) nextEvent(numEmptyEventsEvents int) (*BinlogEvent
 		// entries in the next binlog (no further recursion) or we don't (immediate termination)
 		return this.nextEvent(numEmptyEventsEvents + 1)
 	}
-}
-
-// NextRealEvent returns the next event from binlog that is not meta/control event (these are start-of-binary-log,
-// rotate-binary-log etc.)
-func (this *BinlogEventCursor) nextRealEvent(recursionLevel int) (*BinlogEvent, error) {
-	if recursionLevel > maxEmptyEventsEvents {
-		log.Debugf("End of real events")
-		return nil, nil
-	}
-	event, err := this.nextEvent(0)
-	if err != nil {
-		return event, err
-	}
-	if event == nil {
-		return event, err
-	}
-
-	if _, found := skippedEventTypes[event.EventType]; found {
-		// Recursion will not be deep here. A few entries (end-of-binlog followed by start-of-bin-log) are possible,
-		// but we really don't expect a huge sequence of those.
-		return this.nextRealEvent(recursionLevel + 1)
-	}
-	for _, skipSubstring := range config.Config.SkipBinlogEventsContaining {
-		if strings.Contains(event.Info, skipSubstring) {
-			// Recursion might go deeper here.
-			return this.nextRealEvent(recursionLevel + 1)
-		}
-	}
-	event.NormalizeInfo()
-	return event, err
 }
 
 // NextCoordinates return the binlog coordinates of the next entry as yet unprocessed by the cursor.
