@@ -207,13 +207,13 @@ func KeyRangeEqual(left, right *topodatapb.KeyRange) bool {
 // This means that from a keyrange perspective -80 == 00-80 == 0000-8000 == 000000-800000
 // If we don't do this padding, we could run into issues when transitioning from keyranges
 // that use 2 bytes to 4 bytes.
-func addPadding(bytes []byte) []byte {
-	paddedRange := bytes
+func addPadding(kr []byte) []byte {
+	paddedKr := kr
 
-	for i := len(bytes); i < 8; i++ {
-		paddedRange = append(paddedRange, 0)
+	for i := len(kr); i < 8; i++ {
+		paddedKr = append(paddedKr, 0)
 	}
-	return paddedRange
+	return paddedKr
 }
 
 // KeyRangeStartSmaller returns true if right's keyrange start is _after_ left's start
