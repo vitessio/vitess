@@ -76,7 +76,7 @@ func (t *Tracker) LoadKeyspace(conn queryservice.QueryService, target *querypb.T
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	t.updateTables(target.Keyspace, res)
-	t.tracked[target.Keyspace].loaded = true
+	t.tracked[target.Keyspace].setLoaded(true)
 	log.Infof("finished loading schema for keyspace %s. Found %d tables", target.Keyspace, len(res.Rows))
 	return nil
 }
@@ -164,7 +164,7 @@ func (t *Tracker) updateSchema(th *discovery.TabletHealth) bool {
 	bv := map[string]*querypb.BindVariable{"tableNames": tables}
 	res, err := th.Conn.Execute(t.ctx, th.Target, mysql.FetchUpdatedTables, bv, 0, 0, nil)
 	if err != nil {
-		t.tracked[th.Target.Keyspace].loaded = false
+		t.tracked[th.Target.Keyspace].setLoaded(false)
 		// TODO: optimize for the tables that got errored out.
 		log.Warningf("error fetching new schema for %v, making them non-authoritative: %v", tablesUpdated, err)
 		return false

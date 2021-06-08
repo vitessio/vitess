@@ -137,8 +137,9 @@ func TestMultipleUpdatesFromDifferentShards(t *testing.T) {
 
 			for _, in := range test.inputs {
 				target := &querypb.Target{
-					Keyspace: "ks",
-					Shard:    in.shard,
+					Keyspace:   "ks",
+					Shard:      in.shard,
+					TabletType: topodatapb.TabletType_MASTER,
 				}
 				tablet := &topodatapb.Tablet{
 					Keyspace: target.Keyspace,
