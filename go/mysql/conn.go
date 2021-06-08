@@ -181,7 +181,6 @@ type PrepareData struct {
 	ParamsCount uint16
 	ParamsType  []int32
 	ColumnNames []string
-	BindVars    map[string]*querypb.BindVariable
 }
 
 // bufPool is used to allocate and free buffers in an efficient way.
@@ -921,7 +920,6 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 		if paramsCount > 0 {
 			prepare.ParamsCount = paramsCount
 			prepare.ParamsType = make([]int32, paramsCount)
-			prepare.BindVars = make(map[string]*querypb.BindVariable, paramsCount)
 		}
 
 		c.PrepareData[c.StatementID] = prepare
@@ -950,16 +948,8 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 				}
 			}()
 			queryStart := time.Now()
-			stmtID, _, err := c.parseComStmtExecute(c.PrepareData, data)
+			stmtID, _, bv, err := c.parseComStmtExecute(c.PrepareData, data)
 			c.recycleReadPacket()
-
-			if stmtID != uint32(0) {
-				defer func() {
-					// Allocate a new bindvar map every time since VTGate.Execute() mutates it.
-					prepare := c.PrepareData[stmtID]
-					prepare.BindVars = make(map[string]*querypb.BindVariable, prepare.ParamsCount)
-				}()
-			}
 
 			if err != nil {
 				if werr := c.writeErrorPacketFromError(err); werr != nil {
@@ -974,7 +964,7 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 			// sendFinished is set if the response should just be an OK packet.
 			sendFinished := false
 			prepare := c.PrepareData[stmtID]
-			err = handler.ComStmtExecute(c, prepare, func(qr *sqltypes.Result) error {
+			err = handler.ComStmtExecute(c, prepare, bv, func(qr *sqltypes.Result) error {
 				if sendFinished {
 					// Failsafe: Unreachable if server is well-behaved.
 					return io.EOF
@@ -1033,7 +1023,7 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 			return err
 		}
 	case ComStmtSendLongData:
-		stmtID, paramID, chunkData, ok := c.parseComStmtSendLongData(data)
+		stmtID, _, _, ok := c.parseComStmtSendLongData(data)
 		c.recycleReadPacket()
 		if !ok {
 			err := fmt.Errorf("error parsing statement send long data from client %v, returning error: %v", c.ConnectionID, data)
@@ -1041,29 +1031,11 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 			return err
 		}
 
-		prepare, ok := c.PrepareData[stmtID]
+		_, ok = c.PrepareData[stmtID]
 		if !ok {
 			err := fmt.Errorf("got wrong statement id from client %v, statement ID(%v) is not found from record", c.ConnectionID, stmtID)
 			log.Error(err.Error())
 			return err
-		}
-
-		if prepare.BindVars == nil ||
-			prepare.ParamsCount == uint16(0) ||
-			paramID >= prepare.ParamsCount {
-			err := fmt.Errorf("invalid parameter Number from client %v, statement: %v", c.ConnectionID, prepare.PrepareStmt)
-			log.Error(err.Error())
-			return err
-		}
-
-		chunk := make([]byte, len(chunkData))
-		copy(chunk, chunkData)
-
-		key := fmt.Sprintf("v%d", paramID+1)
-		if val, ok := prepare.BindVars[key]; ok {
-			val.Value = append(val.Value, chunk...)
-		} else {
-			prepare.BindVars[key] = sqltypes.BytesBindVariable(chunk)
 		}
 	case ComStmtClose:
 		stmtID, ok := c.parseComStmtClose(data)
@@ -1082,18 +1054,12 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 			}
 		}
 
-		prepare, ok := c.PrepareData[stmtID]
+		_, ok = c.PrepareData[stmtID]
 		if !ok {
 			log.Error("Commands were executed in an improper order from client %v, packet: %v", c.ConnectionID, data)
 			if err := c.writeErrorPacket(CRCommandsOutOfSync, SSUnknownComError, "commands were executed in an improper order: %v", data); err != nil {
 				log.Error("Error writing error packet to client: %v", err)
 				return err
-			}
-		}
-
-		if prepare.BindVars != nil {
-			for k := range prepare.BindVars {
-				prepare.BindVars[k] = nil
 			}
 		}
 

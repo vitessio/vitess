@@ -1627,10 +1627,7 @@ func TestUpdateEqualWithPrepare(t *testing.T) {
 	logChan := QueryLogger.Subscribe("Test")
 	defer QueryLogger.Unsubscribe(logChan)
 
-	_, err := executorPrepare(executor, "update music set a = :a0 where id = :id0", map[string]*querypb.BindVariable{
-		"a0":  sqltypes.Int64BindVariable(3),
-		"id0": sqltypes.Int64BindVariable(2),
-	})
+	_, err := executorPrepare(executor, "update music set a = :a0 where id = :id0")
 	require.NoError(t, err)
 
 	var wantQueries []*querypb.BoundQuery
@@ -1651,11 +1648,7 @@ func TestInsertShardedWithPrepare(t *testing.T) {
 	logChan := QueryLogger.Subscribe("Test")
 	defer QueryLogger.Unsubscribe(logChan)
 
-	_, err := executorPrepare(executor, "insert into user(id, v, name) values (:_Id0, 2, ':_name_0')", map[string]*querypb.BindVariable{
-		"_Id0":    sqltypes.Int64BindVariable(1),
-		"_name_0": sqltypes.BytesBindVariable([]byte("myname")),
-		"__seq0":  sqltypes.Int64BindVariable(1),
-	})
+	_, err := executorPrepare(executor, "insert into user(id, v, name) values (:_Id0, 2, ':_name_0')")
 	require.NoError(t, err)
 
 	var wantQueries []*querypb.BoundQuery
@@ -1674,9 +1667,7 @@ func TestInsertShardedWithPrepare(t *testing.T) {
 
 func TestDeleteEqualWithPrepare(t *testing.T) {
 	executor, sbc, _, sbclookup := createExecutorEnv()
-	_, err := executorPrepare(executor, "delete from user where id = :id0", map[string]*querypb.BindVariable{
-		"id0": sqltypes.Int64BindVariable(1),
-	})
+	_, err := executorPrepare(executor, "delete from user where id = :id0")
 	require.NoError(t, err)
 
 	var wantQueries []*querypb.BoundQuery

@@ -2,6 +2,7 @@ package vtgate
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"vitess.io/vitess/go/vt/proto/vschema"
@@ -205,7 +206,7 @@ func TestSetTarget(t *testing.T) {
 	}}
 
 	for i, tc := range tests {
-		t.Run(string(i)+"#"+tc.targetString, func(t *testing.T) {
+		t.Run(fmt.Sprintf("%d# %s", i, tc.targetString), func(t *testing.T) {
 			vc, _ := newVCursorImpl(context.Background(), NewSafeSession(&vtgatepb.Session{InTransaction: true}), sqlparser.MarginComments{}, nil, nil, &fakeVSchemaOperator{vschema: tc.vschema}, tc.vschema, nil)
 			vc.vschema = tc.vschema
 			err := vc.SetTarget(tc.targetString)

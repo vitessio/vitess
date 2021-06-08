@@ -432,7 +432,7 @@ func (db *DB) ComPrepare(c *mysql.Conn, query string) ([]*querypb.Field, error) 
 }
 
 // ComStmtExecute is part of the mysql.Handler interface.
-func (db *DB) ComStmtExecute(c *mysql.Conn, prepare *mysql.PrepareData, callback func(*sqltypes.Result) error) error {
+func (db *DB) ComStmtExecute(c *mysql.Conn, prepare *mysql.PrepareData, bindVars map[string]*querypb.BindVariable, callback func(*sqltypes.Result) error) error {
 	return nil
 }
 

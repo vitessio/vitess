@@ -224,7 +224,7 @@ func (th *testHandler) ComPrepare(c *Conn, query string) ([]*querypb.Field, erro
 	return nil, nil
 }
 
-func (th *testHandler) ComStmtExecute(c *Conn, prepare *PrepareData, callback func(*sqltypes.Result) error) error {
+func (th *testHandler) ComStmtExecute(c *Conn, prepare *PrepareData, bindVars map[string]*querypb.BindVariable, callback func(*sqltypes.Result) error) error {
 	return nil
 }
 

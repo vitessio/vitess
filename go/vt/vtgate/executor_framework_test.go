@@ -412,13 +412,12 @@ func executorExec(executor *Executor, sql string, bv map[string]*querypb.BindVar
 		bv)
 }
 
-func executorPrepare(executor *Executor, sql string, bv map[string]*querypb.BindVariable) ([]*querypb.Field, error) {
+func executorPrepare(executor *Executor, sql string) ([]*querypb.Field, error) {
 	return executor.Prepare(
 		context.Background(),
 		"TestExecute",
 		NewSafeSession(masterSession),
-		sql,
-		bv)
+		sql)
 }
 
 func executorStream(executor *Executor, sql string) (qr *sqltypes.Result, err error) {

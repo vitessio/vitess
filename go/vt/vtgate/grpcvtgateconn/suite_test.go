@@ -29,8 +29,11 @@ import (
 	"testing"
 
 	"github.com/golang/protobuf/proto"
+	"github.com/stretchr/testify/assert"
+
+	"context"
+
 	"github.com/stretchr/testify/require"
-	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/tb"
@@ -194,6 +197,31 @@ func (f *fakeVTGateService) StreamExecute(ctx context.Context, session *vtgatepb
 		}
 	}
 	return nil
+}
+
+// Prepare is part of the VTGateService interface
+func (f *fakeVTGateService) Prepare(ctx context.Context, session *vtgatepb.Session, sql string) (*vtgatepb.Session, []*querypb.Field, error) {
+	if f.hasError {
+		return session, nil, errTestVtGateError
+	}
+	if f.panics {
+		panic(fmt.Errorf("test forced panic"))
+	}
+	f.checkCallerID(ctx, "Prepare")
+	execCase, ok := execMap[sql]
+	if !ok {
+		return session, nil, fmt.Errorf("no match for: %s", sql)
+	}
+	assert.Equal(f.t, sql, execCase.execQuery.SQL)
+	if execCase.outSession != nil {
+		*session = *execCase.outSession
+	}
+	return session, execCase.result.Fields, nil
+}
+
+// CloseSession is part of the VTGateService interface
+func (f *fakeVTGateService) CloseSession(ctx context.Context, session *vtgatepb.Session) error {
+	panic("unimplemented")
 }
 
 // ResolveTransaction is part of the VTGateService interface

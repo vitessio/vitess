@@ -54,7 +54,7 @@ func (th *testHandler) ComPrepare(c *mysql.Conn, q string) ([]*querypb.Field, er
 func (th *testHandler) ComResetConnection(c *mysql.Conn) {
 }
 
-func (th *testHandler) ComStmtExecute(c *mysql.Conn, prepare *mysql.PrepareData, callback func(*sqltypes.Result) error) error {
+func (th *testHandler) ComStmtExecute(c *mysql.Conn, prepare *mysql.PrepareData, bindVars map[string]*querypb.BindVariable, callback func(*sqltypes.Result) error) error {
 	return nil
 }
 

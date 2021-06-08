@@ -518,7 +518,7 @@ func (c *Conn) parseComPrepare(data []byte) string {
 	return string(data[1:])
 }
 
-func (c *Conn) parseComStmtExecute(prepareData map[uint32]*PrepareData, data []byte) (uint32, byte, error) {
+func (c *Conn) parseComStmtExecute(prepareData map[uint32]*PrepareData, data []byte) (uint32, byte, map[string]*querypb.BindVariable, error) {
 	pos := 0
 	payload := data[1:]
 	bitMap := make([]byte, 0)
@@ -526,32 +526,32 @@ func (c *Conn) parseComStmtExecute(prepareData map[uint32]*PrepareData, data []b
 	// statement ID
 	stmtID, pos, ok := readUint32(payload, 0)
 	if !ok {
-		return 0, 0, NewSQLError(CRMalformedPacket, SSUnknownSQLState, "reading statement ID failed")
+		return 0, 0, nil, NewSQLError(CRMalformedPacket, SSUnknownSQLState, "reading statement ID failed")
 	}
 	prepare, ok := prepareData[stmtID]
 	if !ok {
-		return 0, 0, NewSQLError(CRCommandsOutOfSync, SSUnknownSQLState, "statement ID is not found from record")
+		return 0, 0, nil, NewSQLError(CRCommandsOutOfSync, SSUnknownSQLState, "statement ID is not found from record")
 	}
 
 	// cursor type flags
 	cursorType, pos, ok := readByte(payload, pos)
 	if !ok {
-		return stmtID, 0, NewSQLError(CRMalformedPacket, SSUnknownSQLState, "reading cursor type flags failed")
+		return stmtID, 0, nil, NewSQLError(CRMalformedPacket, SSUnknownSQLState, "reading cursor type flags failed")
 	}
 
 	// iteration count
 	iterCount, pos, ok := readUint32(payload, pos)
 	if !ok {
-		return stmtID, 0, NewSQLError(CRMalformedPacket, SSUnknownSQLState, "reading iteration count failed")
+		return stmtID, 0, nil, NewSQLError(CRMalformedPacket, SSUnknownSQLState, "reading iteration count failed")
 	}
 	if iterCount != uint32(1) {
-		return stmtID, 0, NewSQLError(CRMalformedPacket, SSUnknownSQLState, "iteration count is not equal to 1")
+		return stmtID, 0, nil, NewSQLError(CRMalformedPacket, SSUnknownSQLState, "iteration count is not equal to 1")
 	}
 
 	if prepare.ParamsCount > 0 {
 		bitMap, pos, ok = readBytes(payload, pos, int((prepare.ParamsCount+7)/8))
 		if !ok {
-			return stmtID, 0, NewSQLError(CRMalformedPacket, SSUnknownSQLState, "reading NULL-bitmap failed")
+			return stmtID, 0, nil, NewSQLError(CRMalformedPacket, SSUnknownSQLState, "reading NULL-bitmap failed")
 		}
 	}
 
@@ -561,32 +561,28 @@ func (c *Conn) parseComStmtExecute(prepareData map[uint32]*PrepareData, data []b
 		for i := uint16(0); i < prepare.ParamsCount; i++ {
 			mysqlType, pos, ok = readByte(payload, pos)
 			if !ok {
-				return stmtID, 0, NewSQLError(CRMalformedPacket, SSUnknownSQLState, "reading parameter type failed")
+				return stmtID, 0, nil, NewSQLError(CRMalformedPacket, SSUnknownSQLState, "reading parameter type failed")
 			}
 
 			flags, pos, ok = readByte(payload, pos)
 			if !ok {
-				return stmtID, 0, NewSQLError(CRMalformedPacket, SSUnknownSQLState, "reading parameter flags failed")
+				return stmtID, 0, nil, NewSQLError(CRMalformedPacket, SSUnknownSQLState, "reading parameter flags failed")
 			}
 
 			// convert MySQL type to internal type.
 			valType, err := sqltypes.MySQLToType(int64(mysqlType), int64(flags))
 			if err != nil {
-				return stmtID, 0, NewSQLError(CRMalformedPacket, SSUnknownSQLState, "MySQLToType(%v,%v) failed: %v", mysqlType, flags, err)
+				return stmtID, 0, nil, NewSQLError(CRMalformedPacket, SSUnknownSQLState, "MySQLToType(%v,%v) failed: %v", mysqlType, flags, err)
 			}
 
 			prepare.ParamsType[i] = int32(valType)
 		}
 	}
 
+	bindVars := make(map[string]*querypb.BindVariable, len(prepare.ParamsType))
 	for i := 0; i < len(prepare.ParamsType); i++ {
 		var val sqltypes.Value
 		parameterID := fmt.Sprintf("v%d", i+1)
-		if v, ok := prepare.BindVars[parameterID]; ok {
-			if v != nil {
-				continue
-			}
-		}
 
 		if (bitMap[i/8] & (1 << uint(i%8))) > 0 {
 			val, pos, ok = c.parseStmtArgs(nil, sqltypes.Null, pos)
@@ -594,13 +590,12 @@ func (c *Conn) parseComStmtExecute(prepareData map[uint32]*PrepareData, data []b
 			val, pos, ok = c.parseStmtArgs(payload, querypb.Type(prepare.ParamsType[i]), pos)
 		}
 		if !ok {
-			return stmtID, 0, NewSQLError(CRMalformedPacket, SSUnknownSQLState, "decoding parameter value failed: %v", prepare.ParamsType[i])
+			return stmtID, 0, nil, NewSQLError(CRMalformedPacket, SSUnknownSQLState, "decoding parameter value failed: %v", prepare.ParamsType[i])
 		}
 
-		prepare.BindVars[parameterID] = sqltypes.ValueBindVariable(val)
+		bindVars[parameterID] = sqltypes.ValueBindVariable(val)
 	}
-
-	return stmtID, cursorType, nil
+	return stmtID, cursorType, bindVars, nil
 }
 
 func (c *Conn) parseStmtArgs(data []byte, typ querypb.Type, pos int) (sqltypes.Value, int, bool) {

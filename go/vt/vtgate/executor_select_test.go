@@ -2112,18 +2112,13 @@ func TestSelectBindvarswithPrepare(t *testing.T) {
 	defer QueryLogger.Unsubscribe(logChan)
 
 	sql := "select id from user where id = :id"
-	_, err := executorPrepare(executor, sql, map[string]*querypb.BindVariable{
-		"id": sqltypes.Int64BindVariable(1),
-	})
+	_, err := executorPrepare(executor, sql)
 	require.NoError(t, err)
 
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select id from user where 1 != 1",
-		BindVariables: map[string]*querypb.BindVariable{"id": sqltypes.Int64BindVariable(1)},
+		Sql: "select id from user where 1 != 1",
 	}}
-	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
-		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, wantQueries)
-	}
+	require.Equal(t, sbc1.Queries[0].Sql, wantQueries[0].Sql)
 	if sbc2.Queries != nil {
 		t.Errorf("sbc2.Queries: %+v, want nil\n", sbc2.Queries)
 	}

@@ -352,28 +352,21 @@ func (vtg *VTGate) ResolveTransaction(ctx context.Context, dtid string) error {
 }
 
 // Prepare supports non-streaming prepare statement query with multi shards
-func (vtg *VTGate) Prepare(ctx context.Context, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable) (newSession *vtgatepb.Session, fld []*querypb.Field, err error) {
+func (vtg *VTGate) Prepare(ctx context.Context, session *vtgatepb.Session, sql string) (newSession *vtgatepb.Session, fld []*querypb.Field, err error) {
 	// In this context, we don't care if we can't fully parse destination
 	destKeyspace, destTabletType, _, _ := vtg.executor.ParseDestinationTarget(session.TargetString)
 	statsKey := []string{"Execute", destKeyspace, topoproto.TabletTypeLString(destTabletType)}
 	defer vtg.timings.Record(statsKey, time.Now())
 
-	if bvErr := sqltypes.ValidateBindVariables(bindVariables); bvErr != nil {
-		err = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", bvErr)
-		goto handleError
-	}
-
-	fld, err = vtg.executor.Prepare(ctx, "Prepare", NewSafeSession(session), sql, bindVariables)
+	fld, err = vtg.executor.Prepare(ctx, "Prepare", NewSafeSession(session), sql)
 	if err == nil {
 		vtg.rowsReturned.Add(statsKey, int64(len(fld)))
 		return session, fld, nil
 	}
 
-handleError:
 	query := map[string]interface{}{
-		"Sql":           sql,
-		"BindVariables": bindVariables,
-		"Session":       session,
+		"Sql":     sql,
+		"Session": session,
 	}
 	err = recordAndAnnotateError(err, statsKey, query, vtg.logExecute)
 	return session, nil, err

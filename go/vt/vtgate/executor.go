@@ -1452,9 +1452,9 @@ func checkLikeOpt(likeOpt string, colNames []string) (string, error) {
 }
 
 // Prepare executes a prepare statements.
-func (e *Executor) Prepare(ctx context.Context, method string, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable) (fld []*querypb.Field, err error) {
-	logStats := NewLogStats(ctx, method, sql, bindVars)
-	fld, err = e.prepare(ctx, safeSession, sql, bindVars, logStats)
+func (e *Executor) Prepare(ctx context.Context, method string, safeSession *SafeSession, sql string) (fld []*querypb.Field, err error) {
+	logStats := NewLogStats(ctx, method, sql, map[string]*querypb.BindVariable{})
+	fld, err = e.prepare(ctx, safeSession, sql, logStats)
 	logStats.Error = err
 
 	// The mysql plugin runs an implicit rollback whenever a connection closes.
@@ -1466,7 +1466,7 @@ func (e *Executor) Prepare(ctx context.Context, method string, safeSession *Safe
 	return fld, err
 }
 
-func (e *Executor) prepare(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, logStats *LogStats) ([]*querypb.Field, error) {
+func (e *Executor) prepare(ctx context.Context, safeSession *SafeSession, sql string, logStats *LogStats) ([]*querypb.Field, error) {
 	// Start an implicit transaction if necessary.
 	if !safeSession.Autocommit && !safeSession.InTransaction() {
 		if err := e.txConn.Begin(ctx, safeSession); err != nil {
@@ -1481,9 +1481,6 @@ func (e *Executor) prepare(ctx context.Context, safeSession *SafeSession, sql st
 
 	if safeSession.InTransaction() && destTabletType != topodatapb.TabletType_MASTER {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "transactions are supported only for master tablet types, current type: %v", destTabletType)
-	}
-	if bindVars == nil {
-		bindVars = make(map[string]*querypb.BindVariable)
 	}
 
 	stmtType := sqlparser.Preview(sql)
@@ -1502,12 +1499,12 @@ func (e *Executor) prepare(ctx context.Context, safeSession *SafeSession, sql st
 
 	switch stmtType {
 	case sqlparser.StmtSelect:
-		return e.handlePrepare(ctx, safeSession, sql, bindVars, destKeyspace, destTabletType, logStats)
+		return e.handlePrepare(ctx, safeSession, sql, logStats)
 	case sqlparser.StmtDDL, sqlparser.StmtBegin, sqlparser.StmtCommit, sqlparser.StmtRollback, sqlparser.StmtSet, sqlparser.StmtInsert, sqlparser.StmtReplace, sqlparser.StmtUpdate, sqlparser.StmtDelete,
 		sqlparser.StmtUse, sqlparser.StmtOther, sqlparser.StmtComment:
 		return nil, nil
 	case sqlparser.StmtShow:
-		res, err := e.handleShow(ctx, safeSession, sql, bindVars, dest, destKeyspace, destTabletType, logStats)
+		res, err := e.handleShow(ctx, safeSession, sql, map[string]*querypb.BindVariable{}, dest, destKeyspace, destTabletType, logStats)
 		if err != nil {
 			return nil, err
 		}
@@ -1516,8 +1513,9 @@ func (e *Executor) prepare(ctx context.Context, safeSession *SafeSession, sql st
 	return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unrecognized statement: %s", sql)
 }
 
-func (e *Executor) handlePrepare(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, destKeyspace string, destTabletType topodatapb.TabletType, logStats *LogStats) ([]*querypb.Field, error) {
+func (e *Executor) handlePrepare(ctx context.Context, safeSession *SafeSession, sql string, logStats *LogStats) ([]*querypb.Field, error) {
 	// V3 mode.
+	bindVars := map[string]*querypb.BindVariable{}
 	query, comments := sqlparser.SplitMarginComments(sql)
 	vcursor, _ := newVCursorImpl(ctx, safeSession, comments, e, logStats, e.vm, e.VSchema(), e.resolver.resolver)
 	plan, err := e.getPlan(

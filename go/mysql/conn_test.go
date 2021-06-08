@@ -19,12 +19,19 @@ package mysql
 import (
 	"bytes"
 	crypto_rand "crypto/rand"
+	"encoding/binary"
+	"fmt"
 	"math/rand"
 	"net"
 	"reflect"
+	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
+	"vitess.io/vitess/go/sqltypes"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 func createSocketPair(t *testing.T) (net.Listener, *Conn, *Conn) {
@@ -283,3 +290,180 @@ func TestEOFOrLengthEncodedIntFuzz(t *testing.T) {
 		}
 	}
 }
+
+func TestPrepareAndExecute(t *testing.T) {
+	packetDataArray := []struct {
+		bvType []byte
+		value  []byte
+	}{
+		{bvType: []byte{0x0f, 0x80}, value: []byte{0x03, 0x66, 0x6f, 0x6f}},
+		{bvType: []byte{0x0f, 0x80}, value: []byte{0x03, 0x66, 0x6f, 0x6f}},
+		{bvType: []byte{0x0f, 0x80}, value: []byte{0x03, 0x66, 0x6f, 0x6f}},
+		{bvType: []byte{0x0f, 0x80}, value: []byte{0x03, 0x66, 0x6f, 0x6f}},
+		{bvType: []byte{0x0f, 0x80}, value: []byte{0x03, 0x66, 0x6f, 0x6f}},
+	}
+
+	wg := sync.WaitGroup{}
+	wg.Add(len(packetDataArray))
+
+	for i, packetData := range packetDataArray {
+		packetData := packetData
+		go func(i int) {
+			execID := uint32(i + 1)
+			execIDBinary := make([]byte, 4)
+			binary.LittleEndian.PutUint32(execIDBinary, execID)
+
+			packet := []byte{0x21, 0x00, 0x00, 0x00, ComStmtExecute}
+			packet = append(packet, execIDBinary...)        // append exec stmt ID
+			packet = append(packet, 0x74)                   // append flag, CURSOR_TYPE_NO_CURSOR
+			packet = append(packet, 0x01, 0x00, 0x00, 0x00) // append iteration count, always 1
+			packet = append(packet, 0x76)                   // append bitMap
+			packet = append(packet, 0x01)                   // append params bound flag
+			packet = append(packet, packetData.bvType...)   // append bind variable type
+			packet = append(packet, packetData.value...)    // append bind variable values
+
+			conn := testConn{
+				writeToPass: []bool{false},
+				pos:         -1,
+				queryPacket: packet,
+			}
+			sConn := newConn(conn)
+			sConn.PrepareData = map[uint32]*PrepareData{execID: {
+				StatementID: execID,
+				ParamsCount: 1,
+				ParamsType:  []int32{int32(querypb.Type_VARBINARY)},
+				PrepareStmt: "select * from table where name = ?",
+				ColumnNames: []string{"name"},
+			}}
+
+			handler := &testRun{
+				t:   t,
+				err: fmt.Errorf("not used"),
+				expectedBindVarsValues: map[string][]byte{
+					"v1": packetData.value[1:],
+				},
+				done: func() {
+					wg.Done()
+				},
+			}
+			defer handler.done()
+			err := sConn.handleNextCommand(handler)
+			require.NoError(t, err)
+		}(i)
+	}
+	wg.Wait()
+}
+
+// real stmt execute, then do multiple with multiple BV values
+// check in the handler if all values are clean and correct
+
+type testRun struct {
+	t                      *testing.T
+	err                    error
+	expectedBindVarsValues map[string][]byte
+	done                   func()
+}
+
+func (t testRun) NewConnection(c *Conn) {
+	panic("implement me")
+}
+
+func (t testRun) ConnectionClosed(c *Conn) {
+	panic("implement me")
+}
+
+func (t testRun) ComQuery(c *Conn, query string, callback func(*sqltypes.Result) error) error {
+	if strings.Contains(query, "error") {
+		return t.err
+	}
+	if strings.Contains(query, "panic") {
+		panic("test panic attack!")
+	}
+	if strings.Contains(query, "twice") {
+		callback(selectRowsResult)
+	}
+	callback(selectRowsResult)
+	return nil
+}
+
+func (t testRun) ComPrepare(c *Conn, query string) ([]*querypb.Field, error) {
+	panic("implement me")
+}
+
+func (t testRun) ComStmtExecute(c *Conn, prepare *PrepareData, bindVars map[string]*querypb.BindVariable, callback func(*sqltypes.Result) error) error {
+	for key, val := range t.expectedBindVarsValues {
+		require.Equal(t.t, val, bindVars[key].Value, "execute statement bind variables values are different than what's expected")
+	}
+	return nil
+}
+
+func (t testRun) WarningCount(c *Conn) uint16 {
+	return 0
+}
+
+func (t testRun) ComResetConnection(c *Conn) {
+	panic("implement me")
+}
+
+var _ Handler = (*testRun)(nil)
+
+type testConn struct {
+	writeToPass []bool
+	pos         int
+	queryPacket []byte
+}
+
+func (t testConn) Read(b []byte) (n int, err error) {
+	for j, i := range t.queryPacket {
+		b[j] = i
+	}
+	return len(b), nil
+}
+
+func (t testConn) Write(b []byte) (n int, err error) {
+	t.pos = t.pos + 1
+	if t.writeToPass[t.pos] {
+		return 0, nil
+	}
+	return 0, fmt.Errorf("error in writing to connection")
+}
+
+func (t testConn) Close() error {
+	panic("implement me")
+}
+
+func (t testConn) LocalAddr() net.Addr {
+	panic("implement me")
+}
+
+func (t testConn) RemoteAddr() net.Addr {
+	return mockAddress{s: "a"}
+}
+
+func (t testConn) SetDeadline(t1 time.Time) error {
+	panic("implement me")
+}
+
+func (t testConn) SetReadDeadline(t1 time.Time) error {
+	panic("implement me")
+}
+
+func (t testConn) SetWriteDeadline(t1 time.Time) error {
+	panic("implement me")
+}
+
+var _ net.Conn = (*testConn)(nil)
+
+type mockAddress struct {
+	s string
+}
+
+func (m mockAddress) Network() string {
+	return m.s
+}
+
+func (m mockAddress) String() string {
+	return m.s
+}
+
+var _ net.Addr = (*mockAddress)(nil)
