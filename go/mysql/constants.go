@@ -68,9 +68,8 @@ const (
 	// CLIENT_ODBC 1 << 6
 	// No special behavior since 3.22.
 
-	// CLIENT_LOCAL_FILES 1 << 7
-	// Client can use LOCAL INFILE request of LOAD DATA|XML.
-	// We do not set it.
+	// CapabilityClientLocalFiles is CLIENT_LOCAL_FILES. We can use LOCAL INFILE request of LOAD DATA|XML.
+	CapabilityClientLocalFiles = 1 << 7
 
 	// CLIENT_IGNORE_SPACE 1 << 8
 	// Parser can ignore spaces before '('.
