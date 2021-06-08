@@ -20,16 +20,16 @@ import (
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 )
 
-// MasterStatus holds replication information from SHOW MASTER STATUS.
-type MasterStatus struct {
-	// Position represents the master's GTID based position.
+// PrimaryStatus holds replication information from SHOW MASTER STATUS.
+type PrimaryStatus struct {
+	// Position represents the server's GTID based position.
 	Position Position
-	// FilePosition represents the master's file based position.
+	// FilePosition represents the server's file based position.
 	FilePosition Position
 }
 
-// MasterStatusToProto translates a MasterStatus to proto3.
-func MasterStatusToProto(s MasterStatus) *replicationdatapb.MasterStatus {
+// PrimaryStatusToProto translates a PrimaryStatus to proto3.
+func PrimaryStatusToProto(s PrimaryStatus) *replicationdatapb.MasterStatus {
 	return &replicationdatapb.MasterStatus{
 		Position:     EncodePosition(s.Position),
 		FilePosition: EncodePosition(s.FilePosition),
