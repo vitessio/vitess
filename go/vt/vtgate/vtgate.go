@@ -311,7 +311,7 @@ func resolveAndLoadKeyspace(ctx context.Context, srvResolver *srvtopo.Resolver, 
 			return
 		case <-time.After(500 * time.Millisecond):
 			for _, shard := range dest {
-				err := st.LoadKeyspace(gw, shard.Target)
+				err := st.AddNewKeyspace(gw, shard.Target)
 				if err == nil {
 					return
 				}

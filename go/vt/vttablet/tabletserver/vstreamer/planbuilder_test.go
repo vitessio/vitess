@@ -83,10 +83,7 @@ func init() {
 			"ks": &kspb,
 		},
 	}
-	vschema, err := vindexes.BuildVSchema(srvVSchema)
-	if err != nil {
-		panic(err)
-	}
+	vschema := vindexes.BuildVSchema(srvVSchema)
 	testLocalVSchema = &localVSchema{
 		keyspace: "ks",
 		vschema:  vschema,
