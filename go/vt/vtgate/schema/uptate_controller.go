@@ -94,22 +94,35 @@ func (u *updateController) getItemFromQueueLocked() *discovery.TabletHealth {
 }
 
 func (u *updateController) add(th *discovery.TabletHealth) {
-	u.mu.Lock()
-	defer u.mu.Unlock()
+	// For non-primary tablet health, there is no schema tracking.
+	if th.Tablet.Type != topodatapb.TabletType_MASTER {
+		return
+	}
 
-	// Received a health check from primary tablet that is it not reachable from VTGate.
+	// Received a health check from primary tablet that is not reachable from VTGate.
 	// The connection will get reset and the tracker needs to reload the schema for the keyspace.
-	if th.Tablet.Type == topodatapb.TabletType_MASTER && !th.Serving {
+	if !th.Serving {
 		u.loaded = false
 		return
 	}
 
+	u.mu.Lock()
+	defer u.mu.Unlock()
+
+	// If the keyspace schema is loaded and there is no schema change detected. Then there is nothing to process.
 	if len(th.Stats.TableSchemaChanged) == 0 && u.loaded {
 		return
 	}
+
 	if u.queue == nil {
 		u.queue = &queue{}
 		go u.consume()
 	}
 	u.queue.items = append(u.queue.items, th)
+}
+
+func (u *updateController) setLoaded(loaded bool) {
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	u.loaded = loaded
 }
