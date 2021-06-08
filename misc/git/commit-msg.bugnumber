@@ -16,7 +16,7 @@ if grep -qE "^${bug_marker}[0-9]{8,}$|\bb\/[0-9]{8,}\b" "$msg_file"; then
   exit 0
 fi
 # b) Check other commits in the branch as well.
-if [[ -n "$(git log --no-merges -E --grep="^${bug_marker}[0-9]{8,}$|\bb\/[0-9]{8,}\b" master..)" ]]; then
+if [[ -n "$(git log --no-merges -E --grep="^${bug_marker}[0-9]{8,}$|\bb\/[0-9]{8,}\b" main..)" ]]; then
   exit 0
 fi
 

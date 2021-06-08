@@ -28,7 +28,7 @@ if grep -q "$bug_marker_line" "$msg_file"; then
 fi
 
 # Check other commits in the branch as well.
-if [[ -n "$(git log --no-merges -E --grep="^$bug_marker_line$|$bug_url" master..)" ]]; then
+if [[ -n "$(git log --no-merges -E --grep="^$bug_marker_line$|$bug_url" main..)" ]]; then
   echo "Note: Bug number found in branch name ($bug) but not adding it to this commit message because previous commits already include it."
   exit 0
 fi
