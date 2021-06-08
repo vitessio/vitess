@@ -26,7 +26,6 @@ import (
 	"strings"
 	"time"
 
-	"vitess.io/vitess/go/vt/orchestrator/agent"
 	"vitess.io/vitess/go/vt/orchestrator/config"
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/util"
@@ -66,9 +65,6 @@ var commandSynonyms = map[string]string{
 	"get-candidate-slave":         "get-candidate-replica",
 	"move-slaves-gtid":            "move-replicas-gtid",
 	"regroup-slaves-gtid":         "regroup-replicas-gtid",
-	"match-slaves":                "match-replicas",
-	"match-up-slaves":             "match-up-replicas",
-	"regroup-slaves-pgtid":        "regroup-replicas-pgtid",
 	"which-cluster-osc-slaves":    "which-cluster-osc-replicas",
 	"which-cluster-gh-ost-slaves": "which-cluster-gh-ost-replicas",
 	"which-slaves":                "which-replicas",
@@ -317,18 +313,6 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			}
 			fmt.Printf("%s<%s\n", instanceKey.DisplayString(), destinationKey.DisplayString())
 		}
-	case registerCliCommand("move-equivalent", "Classic file:pos relocation", `Moves a replica beneath another server, based on previously recorded "equivalence coordinates"`):
-		{
-			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
-			if destinationKey == nil {
-				log.Fatal("Cannot deduce destination:", destination)
-			}
-			_, err := inst.MoveEquivalent(instanceKey, destinationKey)
-			if err != nil {
-				log.Fatale(err)
-			}
-			fmt.Printf("%s<%s\n", instanceKey.DisplayString(), destinationKey.DisplayString())
-		}
 	case registerCliCommand("repoint", "Classic file:pos relocation", `Make the given instance replicate from another instance without changing the binglog coordinates. Use with care`):
 		{
 			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
@@ -452,99 +436,6 @@ func Cli(command string, strict bool, instance string, destination string, owner
 				log.Fatalf("Could not regroup replicas of %+v; error: %+v", *instanceKey, err)
 			}
 			fmt.Printf("%s lost: %d, moved: %d\n", promotedReplica.Key.DisplayString(), len(lostReplicas), len(movedReplicas))
-			if err != nil {
-				log.Fatale(err)
-			}
-		}
-		// Pseudo-GTID
-	case registerCliCommand("match", "Pseudo-GTID relocation", `Matches a replica beneath another (destination) instance using Pseudo-GTID`):
-		{
-			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
-			if destinationKey == nil {
-				log.Fatal("Cannot deduce destination:", destination)
-			}
-			_, _, err := inst.MatchBelow(instanceKey, destinationKey, true)
-			if err != nil {
-				log.Fatale(err)
-			}
-			fmt.Printf("%s<%s\n", instanceKey.DisplayString(), destinationKey.DisplayString())
-		}
-	case registerCliCommand("match-up", "Pseudo-GTID relocation", `Transport the replica one level up the hierarchy, making it child of its grandparent, using Pseudo-GTID`):
-		{
-			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
-			instance, _, err := inst.MatchUp(instanceKey, true)
-			if err != nil {
-				log.Fatale(err)
-			}
-			fmt.Printf("%s<%s\n", instanceKey.DisplayString(), instance.MasterKey.DisplayString())
-		}
-	case registerCliCommand("rematch", "Pseudo-GTID relocation", `Reconnect a replica onto its master, via PSeudo-GTID.`):
-		{
-			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
-			instance, _, err := inst.RematchReplica(instanceKey, true)
-			if err != nil {
-				log.Fatale(err)
-			}
-			fmt.Printf("%s<%s\n", instanceKey.DisplayString(), instance.MasterKey.DisplayString())
-		}
-	case registerCliCommand("match-replicas", "Pseudo-GTID relocation", `Matches all replicas of a given instance under another (destination) instance using Pseudo-GTID`):
-		{
-			// Move all replicas of "instance" beneath "destination"
-			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
-			if instanceKey == nil {
-				log.Fatal("Cannot deduce instance:", instance)
-			}
-			if destinationKey == nil {
-				log.Fatal("Cannot deduce destination:", destination)
-			}
-
-			matchedReplicas, _, err, errs := inst.MultiMatchReplicas(instanceKey, destinationKey, pattern)
-			if err != nil {
-				log.Fatale(err)
-			} else {
-				for _, e := range errs {
-					log.Errore(e)
-				}
-				for _, replica := range matchedReplicas {
-					fmt.Println(replica.Key.DisplayString())
-				}
-			}
-		}
-	case registerCliCommand("match-up-replicas", "Pseudo-GTID relocation", `Matches replicas of the given instance one level up the topology, making them siblings of given instance, using Pseudo-GTID`):
-		{
-			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
-			if instanceKey == nil {
-				log.Fatal("Cannot deduce instance:", instance)
-			}
-
-			matchedReplicas, _, err, errs := inst.MatchUpReplicas(instanceKey, pattern)
-			if err != nil {
-				log.Fatale(err)
-			} else {
-				for _, e := range errs {
-					log.Errore(e)
-				}
-				for _, replica := range matchedReplicas {
-					fmt.Println(replica.Key.DisplayString())
-				}
-			}
-		}
-	case registerCliCommand("regroup-replicas-pgtid", "Pseudo-GTID relocation", `Given an instance, pick one of its replica and make it local master of its siblings, using Pseudo-GTID.`):
-		{
-			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
-			if instanceKey == nil {
-				log.Fatal("Cannot deduce instance:", instance)
-			}
-			validateInstanceIsFound(instanceKey)
-
-			onCandidateReplicaChosen := func(candidateReplica *inst.Instance) { fmt.Println(candidateReplica.Key.DisplayString()) }
-			lostReplicas, equalReplicas, aheadReplicas, cannotReplicateReplicas, promotedReplica, err := inst.RegroupReplicasPseudoGTID(instanceKey, false, onCandidateReplicaChosen, postponedFunctionsContainer, nil)
-			lostReplicas = append(lostReplicas, cannotReplicateReplicas...)
-			postponedFunctionsContainer.Wait()
-			if promotedReplica == nil {
-				log.Fatalf("Could not regroup replicas of %+v; error: %+v", *instanceKey, err)
-			}
-			fmt.Printf("%s lost: %d, trivial: %d, pseudo-gtid: %d\n", promotedReplica.Key.DisplayString(), len(lostReplicas), len(equalReplicas), len(aheadReplicas))
 			if err != nil {
 				log.Fatale(err)
 			}
@@ -784,25 +675,6 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			}
 			fmt.Println(instanceKey.DisplayString())
 		}
-	case registerCliCommand("last-pseudo-gtid", "Binary logs", `Find latest Pseudo-GTID entry in instance's binary logs`):
-		{
-			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
-			if instanceKey == nil {
-				log.Fatalf("Unresolved instance")
-			}
-			instance, err := inst.ReadTopologyInstance(instanceKey)
-			if err != nil {
-				log.Fatale(err)
-			}
-			if instance == nil {
-				log.Fatalf("Instance not found: %+v", *instanceKey)
-			}
-			coordinates, text, err := inst.FindLastPseudoGTIDEntry(instance, instance.RelaylogCoordinates, nil, strict, nil)
-			if err != nil {
-				log.Fatale(err)
-			}
-			fmt.Printf("%+v:%s\n", *coordinates, text)
-		}
 	case registerCliCommand("locate-gtid-errant", "Binary logs", `List binary logs containing errant GTIDs`):
 		{
 			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
@@ -816,128 +688,6 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			for _, binlog := range errantBinlogs {
 				fmt.Println(binlog)
 			}
-		}
-	case registerCliCommand("last-executed-relay-entry", "Binary logs", `Find coordinates of last executed relay log entry`):
-		{
-			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
-			if instanceKey == nil {
-				log.Fatalf("Unresolved instance")
-			}
-			instance, err := inst.ReadTopologyInstance(instanceKey)
-			if err != nil {
-				log.Fatale(err)
-			}
-			if instance == nil {
-				log.Fatalf("Instance not found: %+v", *instanceKey)
-			}
-			minCoordinates, err := inst.GetPreviousKnownRelayLogCoordinatesForInstance(instance)
-			if err != nil {
-				log.Fatalf("Error reading last known coordinates for %+v: %+v", instance.Key, err)
-			}
-			binlogEvent, err := inst.GetLastExecutedEntryInRelayLogs(instance, minCoordinates, instance.RelaylogCoordinates)
-			if err != nil {
-				log.Fatale(err)
-			}
-			fmt.Printf("%+v:%d\n", *binlogEvent, binlogEvent.NextEventPos)
-		}
-	case registerCliCommand("correlate-relaylog-pos", "Binary logs", `Given an instance (-i) and relaylog coordinates (--binlog=file:pos), find the correlated coordinates in another instance's relay logs (-d)`):
-		{
-			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
-			if instanceKey == nil {
-				log.Fatalf("Unresolved instance")
-			}
-			instance, err := inst.ReadTopologyInstance(instanceKey)
-			if err != nil {
-				log.Fatale(err)
-			}
-			if instance == nil {
-				log.Fatalf("Instance not found: %+v", *instanceKey)
-			}
-			if destinationKey == nil {
-				log.Fatal("Cannot deduce target instance:", destination)
-			}
-			otherInstance, err := inst.ReadTopologyInstance(destinationKey)
-			if err != nil {
-				log.Fatale(err)
-			}
-			if otherInstance == nil {
-				log.Fatalf("Instance not found: %+v", *destinationKey)
-			}
-
-			var relaylogCoordinates *inst.BinlogCoordinates
-			if *config.RuntimeCLIFlags.BinlogFile != "" {
-				if relaylogCoordinates, err = inst.ParseBinlogCoordinates(*config.RuntimeCLIFlags.BinlogFile); err != nil {
-					log.Fatalf("Expecing --binlog argument as file:pos")
-				}
-			}
-			instanceCoordinates, correlatedCoordinates, nextCoordinates, _, err := inst.CorrelateRelaylogCoordinates(instance, relaylogCoordinates, otherInstance)
-			if err != nil {
-				log.Fatale(err)
-			}
-			fmt.Printf("%+v;%+v;%+v\n", *instanceCoordinates, *correlatedCoordinates, *nextCoordinates)
-		}
-	case registerCliCommand("find-binlog-entry", "Binary logs", `Get binlog file:pos of entry given by --pattern (exact full match, not a regular expression) in a given instance`):
-		{
-			if pattern == "" {
-				log.Fatal("No pattern given")
-			}
-			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
-			if instanceKey == nil {
-				log.Fatalf("Unresolved instance")
-			}
-			instance, err := inst.ReadTopologyInstance(instanceKey)
-			if err != nil {
-				log.Fatale(err)
-			}
-			if instance == nil {
-				log.Fatalf("Instance not found: %+v", *instanceKey)
-			}
-			coordinates, err := inst.SearchEntryInInstanceBinlogs(instance, pattern, false, nil)
-			if err != nil {
-				log.Fatale(err)
-			}
-			fmt.Printf("%+v\n", *coordinates)
-		}
-	case registerCliCommand("correlate-binlog-pos", "Binary logs", `Given an instance (-i) and binlog coordinates (--binlog=file:pos), find the correlated coordinates in another instance (-d)`):
-		{
-			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
-			if instanceKey == nil {
-				log.Fatalf("Unresolved instance")
-			}
-			instance, err := inst.ReadTopologyInstance(instanceKey)
-			if err != nil {
-				log.Fatale(err)
-			}
-			if instance == nil {
-				log.Fatalf("Instance not found: %+v", *instanceKey)
-			}
-			if !instance.LogBinEnabled {
-				log.Fatalf("Instance does not have binary logs: %+v", *instanceKey)
-			}
-			if destinationKey == nil {
-				log.Fatal("Cannot deduce target instance:", destination)
-			}
-			otherInstance, err := inst.ReadTopologyInstance(destinationKey)
-			if err != nil {
-				log.Fatale(err)
-			}
-			if otherInstance == nil {
-				log.Fatalf("Instance not found: %+v", *destinationKey)
-			}
-			var binlogCoordinates *inst.BinlogCoordinates
-			if *config.RuntimeCLIFlags.BinlogFile == "" {
-				binlogCoordinates = &instance.SelfBinlogCoordinates
-			} else {
-				if binlogCoordinates, err = inst.ParseBinlogCoordinates(*config.RuntimeCLIFlags.BinlogFile); err != nil {
-					log.Fatalf("Expecing --binlog argument as file:pos")
-				}
-			}
-
-			coordinates, _, err := inst.CorrelateBinlogCoordinates(instance, binlogCoordinates, otherInstance)
-			if err != nil {
-				log.Fatale(err)
-			}
-			fmt.Printf("%+v\n", *coordinates)
 		}
 		// Pool
 	case registerCliCommand("submit-pool-instances", "Pools", `Submit a pool name with a list of instances in that pool`):
@@ -1681,15 +1431,6 @@ func Cli(command string, strict bool, instance string, destination string, owner
 				log.Fatale(err)
 			}
 			fmt.Println(replacement.Key.DisplayString())
-		}
-	case registerCliCommand("custom-command", "Agent", "Execute a custom command on the agent as defined in the agent conf"):
-		{
-			output, err := agent.CustomCommand(hostnameFlag, pattern)
-			if err != nil {
-				log.Fatale(err)
-			}
-
-			fmt.Printf("%v\n", output)
 		}
 	case registerCliCommand("disable-global-recoveries", "", `Disallow orchestrator from performing recoveries globally`):
 		{
