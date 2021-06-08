@@ -38,6 +38,7 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 	"vitess.io/vitess/go/vt/mysqlctl/mysqlctlproto"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
@@ -127,6 +128,65 @@ func (s *VtctldServer) ApplyRoutingRules(ctx context.Context, req *vtctldatapb.A
 	}
 
 	return resp, nil
+}
+
+// ApplyVSchema is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) ApplyVSchema(ctx context.Context, req *vtctldatapb.ApplyVSchemaRequest) (*vtctldatapb.ApplyVSchemaResponse, error) {
+	if _, err := s.ts.GetKeyspace(ctx, req.Keyspace); err != nil {
+		if topo.IsErrType(err, topo.NoNode) {
+			return nil, vterrors.Wrapf(err, "keyspace(%s) doesn't exist, check if the keyspace is initialized", req.Keyspace)
+		}
+		return nil, vterrors.Wrapf(err, "GetKeyspace(%s)", req.Keyspace)
+	}
+
+	if (req.Sql != "" && req.VSchema != nil) || (req.Sql == "" && req.VSchema == nil) {
+		return nil, vterrors.New(vtrpc.Code_INVALID_ARGUMENT, "must pass exactly one of req.VSchema and req.Sql")
+	}
+
+	var vs *vschemapb.Keyspace
+	var err error
+
+	if req.Sql != "" {
+		stmt, err := sqlparser.Parse(req.Sql)
+		if err != nil {
+			return nil, vterrors.Wrapf(err, "Parse(%s)", req.Sql)
+		}
+		ddl, ok := stmt.(*sqlparser.AlterVschema)
+		if !ok {
+			return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "error parsing VSchema DDL statement `%s`", req.Sql)
+		}
+
+		vs, err = s.ts.GetVSchema(ctx, req.Keyspace)
+		if err != nil && !topo.IsErrType(err, topo.NoNode) {
+			return nil, vterrors.Wrapf(err, "GetVSchema(%s)", req.Keyspace)
+		} // otherwise, we keep the empty vschema object from above
+
+		vs, err = topotools.ApplyVSchemaDDL(req.Keyspace, vs, ddl)
+		if err != nil {
+			return nil, vterrors.Wrapf(err, "ApplyVSchemaDDL(%s,%v,%v)", req.Keyspace, vs, ddl)
+		}
+	} else { // "jsonMode"
+		vs = req.VSchema
+	}
+
+	if req.DryRun { // we return what was passed in and parsed, rather than current
+		return &vtctldatapb.ApplyVSchemaResponse{VSchema: vs}, nil
+	}
+
+	if err = s.ts.SaveVSchema(ctx, req.Keyspace, vs); err != nil {
+		return nil, vterrors.Wrapf(err, "SaveVSchema(%s, %v)", req.Keyspace, req.VSchema)
+	}
+
+	if !req.SkipRebuild {
+		if err := s.ts.RebuildSrvVSchema(ctx, req.Cells); err != nil {
+			return nil, vterrors.Wrapf(err, "RebuildSrvVSchema")
+		}
+	}
+	updatedVS, err := s.ts.GetVSchema(ctx, req.Keyspace)
+	if err != nil {
+		return nil, vterrors.Wrapf(err, "GetVSchema(%s)", req.Keyspace)
+	}
+	return &vtctldatapb.ApplyVSchemaResponse{VSchema: updatedVS}, nil
 }
 
 // ChangeTabletType is part of the vtctlservicepb.VtctldServer interface.
