@@ -357,6 +357,13 @@ func expectLogs(ctx context.Context, t *testing.T, query string, eventCh chan []
 			if !ok {
 				t.Fatal("expectLogs: not ok, stream ended early")
 			}
+			// Ignore unrelated gtid progress events that can race with the events that the test expects
+			if len(allevs) == 3 &&
+				allevs[0].Type == binlogdatapb.VEventType_BEGIN &&
+				allevs[1].Type == binlogdatapb.VEventType_GTID &&
+				allevs[2].Type == binlogdatapb.VEventType_COMMIT {
+				continue
+			}
 			for _, ev := range allevs {
 				// Ignore spurious heartbeats that can happen on slow machines.
 				if ev.Type == binlogdatapb.VEventType_HEARTBEAT {
