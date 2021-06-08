@@ -772,14 +772,12 @@ func (tpb *tablePlanBuilder) generatePKConstraint(buf *sqlparser.TrackedBuffer, 
 }
 
 func (tpb *tablePlanBuilder) isColumnGenerated(col sqlparser.ColIdent) bool {
-	isGenerated := false
 	for _, colInfo := range tpb.colInfos {
 		if col.EqualString(colInfo.Name) && colInfo.IsGenerated {
-			isGenerated = true
-			break
+			return true
 		}
 	}
-	return isGenerated
+	return false
 }
 
 // bindvarFormatter is a dual mode formatter. Its behavior

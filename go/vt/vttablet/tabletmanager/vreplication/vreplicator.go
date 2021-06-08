@@ -224,7 +224,7 @@ func (vr *vreplicator) replicate(ctx context.Context) error {
 	}
 }
 
-// ColumnInfo is used to store charset and collation for primary keys where applicable
+// ColumnInfo is used to store charset and collation
 type ColumnInfo struct {
 	Name        string
 	CharSet     string
@@ -292,8 +292,8 @@ func (vr *vreplicator) buildColInfoMap(ctx context.Context) (map[string][]*Colum
 					isPK = true
 				}
 			}
-			extra := row[5].ToString()
-			if strings.Contains(strings.ToLower(extra), "generated") {
+			extra := strings.ToLower(row[5].ToString())
+			if strings.Contains(extra, "generated") || strings.Contains(extra, "virtual") {
 				isGenerated = true
 			}
 			colInfo = append(colInfo, &ColumnInfo{
