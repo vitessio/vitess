@@ -205,10 +205,14 @@ func KeyRangeEqual(left, right *topodatapb.KeyRange) bool {
 // Any number with the highest bit set will be >= 0x8000000000000000, and will therefore
 // belong to shard 80-.
 // This means that from a keyrange perspective -80 == 00-80 == 0000-8000 == 000000-800000
-// If we don't do this padding, we could run into issues when transitioning from keyranges
+// If we don't add this padding, we could run into issues when transitioning from keyranges
 // that use 2 bytes to 4 bytes.
 func addPadding(kr []byte) []byte {
-	paddedKr := kr
+	paddedKr := make([]byte, 8)
+
+	for i := 0; i < len(kr); i++ {
+		paddedKr = append(paddedKr, kr[i])
+	}
 
 	for i := len(kr); i < 8; i++ {
 		paddedKr = append(paddedKr, 0)
