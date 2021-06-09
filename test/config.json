@@ -761,6 +761,15 @@
 			"RetryMax": 0,
 			"Tags": []
 		},
+		"vreplication_materialize": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "ShardedMaterialize"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vreplication_multicell",
+			"RetryMax": 0,
+			"Tags": []
+		},
 		"vreplication_cellalias": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "CellAlias"],
