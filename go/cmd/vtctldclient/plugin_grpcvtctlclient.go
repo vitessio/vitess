@@ -1,5 +1,5 @@
 /*
-Copyright 2020 The Vitess Authors.
+Copyright 2021 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -16,7 +16,7 @@ limitations under the License.
 
 package main
 
-// Imports and register the gRPC vtctl client.
+// Imports and registers the gRPC vtctl client.
 
 import (
 	_ "vitess.io/vitess/go/vt/vtctl/grpcvtctlclient"
