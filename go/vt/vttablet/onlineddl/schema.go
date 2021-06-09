@@ -56,6 +56,7 @@ const (
 	alterSchemaMigrationsTableMessage            = "ALTER TABLE _vt.schema_migrations add column message TEXT NOT NULL"
 	alterSchemaMigrationsTableTableCompleteIndex = "ALTER TABLE _vt.schema_migrations add KEY table_complete_idx (migration_status, keyspace(64), mysql_table(64), completed_timestamp)"
 	alterSchemaMigrationsTableETASeconds         = "ALTER TABLE _vt.schema_migrations add column eta_seconds bigint NOT NULL DEFAULT -1"
+	alterSchemaMigrationsTableRowsCopied         = "ALTER TABLE _vt.schema_migrations add column rows_copied bigint unsigned NOT NULL DEFAULT 0"
 
 	sqlInsertMigration = `INSERT IGNORE INTO _vt.schema_migrations (
 		migration_uuid,
@@ -102,6 +103,11 @@ const (
 	`
 	sqlUpdateMigrationETASeconds = `UPDATE _vt.schema_migrations
 			SET eta_seconds=%a
+		WHERE
+			migration_uuid=%a
+	`
+	sqlUpdateMigrationRowsCopied = `UPDATE _vt.schema_migrations
+			SET rows_copied=%a
 		WHERE
 			migration_uuid=%a
 	`
@@ -293,6 +299,15 @@ const (
 			AND ACTION_TIMING='AFTER'
 			AND LEFT(TRIGGER_NAME, 7)='pt_osc_'
 		`
+	sqlSelectColumnTypes = `
+		select
+				*
+			from
+				information_schema.columns
+			where
+				table_schema=%a
+				and table_name=%a
+		`
 	selSelectCountFKParentConstraints = `
 		SELECT
 			COUNT(*) as num_fk_constraints
@@ -300,7 +315,7 @@ const (
 		WHERE
 			REFERENCED_TABLE_SCHEMA=%a AND REFERENCED_TABLE_NAME=%a
 			AND REFERENCED_TABLE_NAME IS NOT NULL
-	`
+		`
 	selSelectCountFKChildConstraints = `
 		SELECT
 			COUNT(*) as num_fk_constraints
@@ -308,8 +323,7 @@ const (
 		WHERE
 			TABLE_SCHEMA=%a AND TABLE_NAME=%a
 			AND REFERENCED_TABLE_NAME IS NOT NULL
-	`
-
+		`
 	sqlDropTrigger       = "DROP TRIGGER IF EXISTS `%a`.`%a`"
 	sqlShowTablesLike    = "SHOW TABLES LIKE '%a'"
 	sqlCreateTableLike   = "CREATE TABLE `%a` LIKE `%a`"
@@ -387,4 +401,5 @@ var applyDDL = []string{
 	alterSchemaMigrationsTableMessage,
 	alterSchemaMigrationsTableTableCompleteIndex,
 	alterSchemaMigrationsTableETASeconds,
+	alterSchemaMigrationsTableRowsCopied,
 }

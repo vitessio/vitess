@@ -63,27 +63,8 @@ var (
 // and _vt.shard_metadata tables.
 type MetadataManager struct{}
 
-// CreateMetadataTables creates the metadata tables. See the package-level
-// function for more details.
-func (m *MetadataManager) CreateMetadataTables(mysqld MysqlDaemon, dbName string) error {
-	return CreateMetadataTables(mysqld, dbName)
-}
-
-// PopulateMetadataTables creates and fills the metadata tables. See the
-// package-level function for more details.
-func (m *MetadataManager) PopulateMetadataTables(mysqld MysqlDaemon, localMetadata map[string]string, dbName string) error {
-	return PopulateMetadataTables(mysqld, localMetadata, dbName)
-}
-
-// UpsertLocalMetadata adds the given metadata map to the _vt.local_metadata
-// table, updating any duplicate rows to the values in the map. See the package-
-// level function for more details.
-func (m *MetadataManager) UpsertLocalMetadata(mysqld MysqlDaemon, localMetadata map[string]string, dbName string) error {
-	return UpsertLocalMetadata(mysqld, localMetadata, dbName)
-}
-
-// CreateMetadataTables creates the _vt.local_metadata and _vt.shard_metadata
-// tables.
+// PopulateMetadataTables creates and fills the _vt.local_metadata table and
+// creates the _vt.shard_metadata table.
 //
 // _vt.local_metadata table is a per-tablet table that is never replicated.
 // This allows queries against local_metadata to return different values on
@@ -94,8 +75,45 @@ func (m *MetadataManager) UpsertLocalMetadata(mysqld MysqlDaemon, localMetadata 
 // created here to make it easier to create it on databases that were running
 // old version of Vitess, or databases that are getting converted to run under
 // Vitess.
-func CreateMetadataTables(mysqld MysqlDaemon, dbName string) error {
-	log.Infof("Creating _vt.local_metadata and _vt.shard_metadata tables ...")
+//
+// This function is semantically equivalent to calling createMetadataTables
+// followed immediately by upsertLocalMetadata.
+func (m *MetadataManager) PopulateMetadataTables(mysqld MysqlDaemon, localMetadata map[string]string, dbName string) error {
+	log.Infof("Populating _vt.local_metadata table...")
+
+	// Get a non-pooled DBA connection.
+	conn, err := mysqld.GetDbaConnection(context.TODO())
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	// Disable replication on this session. We close the connection after using
+	// it, so there's no need to re-enable replication when we're done.
+	if _, err := conn.ExecuteFetch("SET @@session.sql_log_bin = 0", 0, false); err != nil {
+		return err
+	}
+
+	// Create the database and table if necessary.
+	if err := createMetadataTables(conn, dbName); err != nil {
+		return err
+	}
+
+	// Populate local_metadata from the passed list of values.
+	return upsertLocalMetadata(conn, localMetadata, dbName)
+}
+
+// UpsertLocalMetadata adds the given metadata map to the _vt.local_metadata
+// table, updating any rows that exist for a given `_vt.local_metadata.name`
+// with the map value. The session that performs these upserts sets
+// sql_log_bin=0, as the _vt.local_metadata table is meant to never be
+// replicated.
+//
+// Callers are responsible for ensuring the _vt.local_metadata table exists
+// before calling this function, usually by calling CreateMetadataTables at
+// least once prior.
+func (m *MetadataManager) UpsertLocalMetadata(mysqld MysqlDaemon, localMetadata map[string]string, dbName string) error {
+	log.Infof("Upserting _vt.local_metadata ...")
 
 	conn, err := mysqld.GetDbaConnection(context.TODO())
 	if err != nil {
@@ -109,7 +127,7 @@ func CreateMetadataTables(mysqld MysqlDaemon, dbName string) error {
 		return err
 	}
 
-	return createMetadataTables(conn, dbName)
+	return upsertLocalMetadata(conn, localMetadata, dbName)
 }
 
 func createMetadataTables(conn *dbconnpool.DBConnection, dbName string) error {
@@ -174,37 +192,7 @@ func createShardMetadataTable(conn *dbconnpool.DBConnection, dbName string) erro
 	return nil
 }
 
-// PopulateMetadataTables creates and fills the _vt.local_metadata table and
-// creates _vt.shard_metadata table.
-//
-// This function is semantically equivalent to calling CreateMetadataTables
-// followed immediately by UpsertLocalMetadata.
-func PopulateMetadataTables(mysqld MysqlDaemon, localMetadata map[string]string, dbName string) error {
-	log.Infof("Populating _vt.local_metadata table...")
-
-	// Get a non-pooled DBA connection.
-	conn, err := mysqld.GetDbaConnection(context.TODO())
-	if err != nil {
-		return err
-	}
-	defer conn.Close()
-
-	// Disable replication on this session. We close the connection after using
-	// it, so there's no need to re-enable replication when we're done.
-	if _, err := conn.ExecuteFetch("SET @@session.sql_log_bin = 0", 0, false); err != nil {
-		return err
-	}
-
-	// Create the database and table if necessary.
-	if err := createMetadataTables(conn, dbName); err != nil {
-		return err
-	}
-
-	// Populate local_metadata from the passed list of values.
-	return upsertLocalMetadata(conn, localMetadata, dbName)
-}
-
-// UpsertLocalMetadata adds the given metadata map to the _vt.local_metadata
+// upsertLocalMetadata adds the given metadata map to the _vt.local_metadata
 // table, updating any rows that exist for a given `_vt.local_metadata.name`
 // with the map value. The session that performs these upserts sets
 // sql_log_bin=0, as the _vt.local_metadata table is meant to never be
@@ -213,24 +201,6 @@ func PopulateMetadataTables(mysqld MysqlDaemon, localMetadata map[string]string,
 // Callers are responsible for ensuring the _vt.local_metadata table exists
 // before calling this function, usually by calling CreateMetadataTables at
 // least once prior.
-func UpsertLocalMetadata(mysqld MysqlDaemon, localMetadata map[string]string, dbName string) error {
-	log.Infof("Upserting _vt.local_metadata ...")
-
-	conn, err := mysqld.GetDbaConnection(context.TODO())
-	if err != nil {
-		return err
-	}
-	defer conn.Close()
-
-	// Disable replication on this session. We close the connection after using
-	// it, so there's no need to re-enable replication when we're done.
-	if _, err := conn.ExecuteFetch("SET @@session.sql_log_bin = 0", 0, false); err != nil {
-		return err
-	}
-
-	return upsertLocalMetadata(conn, localMetadata, dbName)
-}
-
 func upsertLocalMetadata(conn *dbconnpool.DBConnection, localMetadata map[string]string, dbName string) error {
 	// Populate local_metadata from the passed list of values.
 	if _, err := conn.ExecuteFetch("BEGIN", 0, false); err != nil {

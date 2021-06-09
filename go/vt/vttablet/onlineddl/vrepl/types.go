@@ -29,9 +29,32 @@ import (
 	"strings"
 )
 
+// ColumnType indicated some MySQL data types
+type ColumnType int
+
+const (
+	UnknownColumnType ColumnType = iota
+	TimestampColumnType
+	DateTimeColumnType
+	EnumColumnType
+	MediumIntColumnType
+	JSONColumnType
+	FloatColumnType
+	BinaryColumnType
+)
+
 // Column represents a table column
 type Column struct {
-	Name string
+	Name                 string
+	IsUnsigned           bool
+	Charset              string
+	Type                 ColumnType
+	EnumValues           string
+	EnumToTextConversion bool
+
+	// add Octet length for binary type, fix bytes with suffix "00" get clipped in mysql binlog.
+	// https://github.com/github/gh-ost/issues/909
+	BinaryOctetLength uint64
 }
 
 // NewColumns creates a new column array from non empty names

@@ -162,7 +162,7 @@ type AutoIncrement struct {
 }
 
 // BuildVSchema builds a VSchema from a SrvVSchema.
-func BuildVSchema(source *vschemapb.SrvVSchema) (vschema *VSchema, err error) {
+func BuildVSchema(source *vschemapb.SrvVSchema) (vschema *VSchema) {
 	vschema = &VSchema{
 		RoutingRules:   make(map[string]*RoutingRule),
 		uniqueTables:   make(map[string]*Table),
@@ -173,7 +173,7 @@ func BuildVSchema(source *vschemapb.SrvVSchema) (vschema *VSchema, err error) {
 	resolveAutoIncrement(source, vschema)
 	addDual(vschema)
 	buildRoutingRule(source, vschema)
-	return vschema, nil
+	return vschema
 }
 
 // BuildKeyspaceSchema builds the vschema portion for one keyspace.

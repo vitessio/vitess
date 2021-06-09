@@ -9,6 +9,7 @@ import (
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	io "io"
 	bits "math/bits"
+	sync "sync"
 	query "vitess.io/vitess/go/vt/proto/query"
 	topodata "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpc "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -1883,6 +1884,35 @@ func encodeVarint(dAtA []byte, offset int, v uint64) int {
 	}
 	dAtA[offset] = uint8(v)
 	return base
+}
+
+var vtprotoPool_VStreamRowsResponse = sync.Pool{
+	New: func() interface{} {
+		return &VStreamRowsResponse{}
+	},
+}
+
+func (m *VStreamRowsResponse) ResetVT() {
+	f0 := m.Fields[:0]
+	f1 := m.Pkfields[:0]
+	for _, mm := range m.Rows {
+		mm.ResetVT()
+	}
+	f2 := m.Rows[:0]
+	m.Lastpk.ReturnToVTPool()
+	m.Reset()
+	m.Fields = f0
+	m.Pkfields = f1
+	m.Rows = f2
+}
+func (m *VStreamRowsResponse) ReturnToVTPool() {
+	if m != nil {
+		m.ResetVT()
+		vtprotoPool_VStreamRowsResponse.Put(m)
+	}
+}
+func VStreamRowsResponseFromVTPool() *VStreamRowsResponse {
+	return vtprotoPool_VStreamRowsResponse.Get().(*VStreamRowsResponse)
 }
 func (m *Charset) SizeVT() (n int) {
 	if m == nil {
@@ -6322,7 +6352,14 @@ func (m *VStreamRowsResponse) UnmarshalVT(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.Fields = append(m.Fields, &query.Field{})
+			if len(m.Fields) == cap(m.Fields) {
+				m.Fields = append(m.Fields, &query.Field{})
+			} else {
+				m.Fields = m.Fields[:len(m.Fields)+1]
+				if m.Fields[len(m.Fields)-1] == nil {
+					m.Fields[len(m.Fields)-1] = &query.Field{}
+				}
+			}
 			if err := m.Fields[len(m.Fields)-1].UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
@@ -6356,7 +6393,14 @@ func (m *VStreamRowsResponse) UnmarshalVT(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.Pkfields = append(m.Pkfields, &query.Field{})
+			if len(m.Pkfields) == cap(m.Pkfields) {
+				m.Pkfields = append(m.Pkfields, &query.Field{})
+			} else {
+				m.Pkfields = m.Pkfields[:len(m.Pkfields)+1]
+				if m.Pkfields[len(m.Pkfields)-1] == nil {
+					m.Pkfields[len(m.Pkfields)-1] = &query.Field{}
+				}
+			}
 			if err := m.Pkfields[len(m.Pkfields)-1].UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
@@ -6422,7 +6466,14 @@ func (m *VStreamRowsResponse) UnmarshalVT(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.Rows = append(m.Rows, &query.Row{})
+			if len(m.Rows) == cap(m.Rows) {
+				m.Rows = append(m.Rows, &query.Row{})
+			} else {
+				m.Rows = m.Rows[:len(m.Rows)+1]
+				if m.Rows[len(m.Rows)-1] == nil {
+					m.Rows[len(m.Rows)-1] = &query.Row{}
+				}
+			}
 			if err := m.Rows[len(m.Rows)-1].UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
@@ -6457,7 +6508,7 @@ func (m *VStreamRowsResponse) UnmarshalVT(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			if m.Lastpk == nil {
-				m.Lastpk = &query.Row{}
+				m.Lastpk = query.RowFromVTPool()
 			}
 			if err := m.Lastpk.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 				return err

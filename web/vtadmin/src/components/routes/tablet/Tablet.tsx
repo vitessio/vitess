@@ -13,16 +13,22 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import React from 'react';
-import { Link, useParams } from 'react-router-dom';
+
+import { Link, Redirect, Route, Switch, useParams, useRouteMatch } from 'react-router-dom';
 import { useExperimentalTabletDebugVars, useTablet } from '../../../hooks/api';
 import { useDocumentTitle } from '../../../hooks/useDocumentTitle';
+import { formatDisplayType, formatState } from '../../../util/tablets';
 import { Code } from '../../Code';
+import { ContentContainer } from '../../layout/ContentContainer';
 import { NavCrumbs } from '../../layout/NavCrumbs';
 import { WorkspaceHeader } from '../../layout/WorkspaceHeader';
 import { WorkspaceTitle } from '../../layout/WorkspaceTitle';
 import { ExternalTabletLink } from '../../links/ExternalTabletLink';
+import { TabletServingPip } from '../../pips/TabletServingPip';
+import { Tab } from '../../tabs/Tab';
+import { TabContainer } from '../../tabs/TabContainer';
 import style from './Tablet.module.scss';
+import { TabletCharts } from './TabletCharts';
 
 interface RouteParams {
     alias: string;
@@ -31,6 +37,7 @@ interface RouteParams {
 
 export const Tablet = () => {
     const { clusterID, alias } = useParams<RouteParams>();
+    const { path, url } = useRouteMatch();
 
     useDocumentTitle(alias);
 
@@ -75,22 +82,48 @@ export const Tablet = () => {
                     <span>
                         Cluster: <code>{clusterID}</code>
                     </span>
-                    <span>
-                        <ExternalTabletLink className="font-family-monospace" fqdn={tablet?.FQDN}>
-                            {tablet?.tablet?.hostname}
-                        </ExternalTabletLink>
-                    </span>
+                    {!!tablet && (
+                        <>
+                            <span className="font-family-monospace">
+                                <TabletServingPip state={tablet.state} /> {formatDisplayType(tablet)}
+                            </span>
+                            <span className="font-family-monospace">{formatState(tablet)}</span>
+                            <span>
+                                <ExternalTabletLink className="font-family-monospace" fqdn={tablet.FQDN}>
+                                    {tablet.tablet?.hostname}
+                                </ExternalTabletLink>
+                            </span>
+                        </>
+                    )}
                 </div>
             </WorkspaceHeader>
 
+            <ContentContainer>
+                <TabContainer>
+                    <Tab text="QPS" to={`${url}/qps`} />
+                    <Tab text="JSON" to={`${url}/json`} />
+                </TabContainer>
+
+                <Switch>
+                    <Route path={`${path}/qps`}>
+                        <TabletCharts alias={alias} clusterID={clusterID} />
+                    </Route>
+
+                    <Route path={`${path}/json`}>
+                        <div>
+                            <Code code={JSON.stringify(tablet, null, 2)} />
+
+                            {process.env.REACT_APP_ENABLE_EXPERIMENTAL_TABLET_DEBUG_VARS && (
+                                <Code code={JSON.stringify(debugVars, null, 2)} />
+                            )}
+                        </div>
+                    </Route>
+                    <Redirect from={path} to={`${path}/qps`} />
+                </Switch>
+            </ContentContainer>
+
             {/* TODO skeleton placeholder */}
             {!!tq.isLoading && <div className={style.placeholder}>Loading</div>}
-
-            <Code code={JSON.stringify(tablet, null, 2)} />
-
-            {process.env.REACT_APP_ENABLE_EXPERIMENTAL_TABLET_DEBUG_VARS && (
-                <Code code={JSON.stringify(debugVars, null, 2)} />
-            )}
         </div>
     );
 };

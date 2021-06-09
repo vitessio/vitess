@@ -64,7 +64,7 @@ func TestFilePosShouldGetMasterPosition(t *testing.T) {
 		"File":     "source-bin.000003",
 	}
 
-	want := MasterStatus{
+	want := PrimaryStatus{
 		Position:     Position{GTIDSet: filePosGTID{file: "source-bin.000003", pos: 1307}},
 		FilePosition: Position{GTIDSet: filePosGTID{file: "source-bin.000003", pos: 1307}},
 	}
