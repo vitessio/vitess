@@ -8,7 +8,6 @@ import (
 	"io"
 	"reflect"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -108,10 +107,7 @@ func TestExternalCompressors(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.compress, func(t *testing.T) {
-			var (
-				compressed, decompressed bytes.Buffer
-				wg                       sync.WaitGroup
-			)
+			var compressed, decompressed bytes.Buffer
 
 			reader := bytes.NewReader(data)
 
@@ -127,7 +123,7 @@ func TestExternalCompressors(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 			defer cancel()
 
-			compressor, err := newExternalCompressor(ctx, tt.compress, &compressed, &wg, logger)
+			compressor, err := newExternalCompressor(ctx, tt.compress, &compressed, logger)
 			if err != nil {
 				t.Error(err)
 				return
@@ -139,7 +135,6 @@ func TestExternalCompressors(t *testing.T) {
 				return
 			}
 			compressor.Close()
-			wg.Wait()
 
 			decompressor, err := newExternalDecompressor(ctx, tt.decompress, &compressed, logger)
 			if err != nil {
