@@ -516,7 +516,9 @@ func randSeq(n int) string {
 }
 
 func TestPrepareAndExecute(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	// this test starts a lot of clients that all send prepared statement parameter values
+	// and check that the handler received the correct input
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	for i := 0; i < 1000; i++ {
 		startGoRoutine(ctx, t, randSeq(i))
