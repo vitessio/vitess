@@ -1,4 +1,3 @@
-2021-02-09T16:48:11Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/551980422
 2021-02-09T16:48:11Z,gomod-tidy,https://github.com/vitessio/vitess/actions/runs/551980452
 2021-02-09T17:18:13Z,Cluster (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/552062835
 2021-02-09T20:05:36Z,Cluster (17),https://github.com/vitessio/vitess/actions/runs/552469734
@@ -9977,6 +9976,7 @@
 2021-06-09T10:40:05Z,unit_race,https://github.com/vitessio/vitess/actions/runs/921401111
 2021-06-09T10:46:12Z,Cluster (16),https://github.com/vitessio/vitess/actions/runs/921415709
 2021-06-09T10:46:12Z,Cluster (onlineddl_declarative),https://github.com/vitessio/vitess/actions/runs/921415715
+2021-06-09T10:46:12Z,Cluster (onlineddl_revert),https://github.com/vitessio/vitess/actions/runs/921415733
 2021-06-09T10:46:12Z,Cluster (onlineddl_singleton),https://github.com/vitessio/vitess/actions/runs/921415719
 2021-06-09T10:46:12Z,Cluster (onlineddl_vrepl),https://github.com/vitessio/vitess/actions/runs/921415710
 2021-06-09T10:46:12Z,Cluster (onlineddl_vrepl_stress),https://github.com/vitessio/vitess/actions/runs/921415747
