@@ -30,7 +30,7 @@ import (
 )
 
 // Utility function to write sql query as packets to test parseComPrepare
-func MockQueryPackets(t *testing.T, query string) []byte {
+func preparePacket(t *testing.T, query string) []byte {
 	data := make([]byte, len(query)+1+packetHeaderSize)
 	// Not sure if it makes a difference
 	pos := packetHeaderSize
@@ -127,7 +127,7 @@ func TestComStmtPrepare(t *testing.T) {
 	}()
 
 	sql := "select * from test_table where id = ?"
-	mockData := MockQueryPackets(t, sql)
+	mockData := preparePacket(t, sql)
 
 	if err := cConn.writePacket(mockData); err != nil {
 		t.Fatalf("writePacket failed: %v", err)
