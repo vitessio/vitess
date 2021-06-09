@@ -81,7 +81,7 @@ func (conn *snapshotConn) startSnapshot(ctx context.Context, table string) (gtid
 		log.Infof("Error locking table %s to read", tableIdent)
 		return "", err
 	}
-	mpos, err := lockConn.MasterPosition()
+	mpos, err := lockConn.PrimaryPosition()
 	if err != nil {
 		return "", err
 	}

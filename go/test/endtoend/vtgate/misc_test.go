@@ -663,29 +663,31 @@ func TestSchemaTracker(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func TestVSchemaTrackerInit(t *testing.T) {
+func TestVSchemaTrackerInitAndUpdate(t *testing.T) {
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
 
-	qr := exec(t, conn, "SHOW VSCHEMA TABLES")
-	got := fmt.Sprintf("%v", qr.Rows)
-	want := `[[VARCHAR("aggr_test")] [VARCHAR("dual")] [VARCHAR("t1")] [VARCHAR("t1_id2_idx")] [VARCHAR("t2")] [VARCHAR("t2_id4_idx")] [VARCHAR("t3")] [VARCHAR("t3_id7_idx")] [VARCHAR("t4")] [VARCHAR("t4_id2_idx")] [VARCHAR("t5_null_vindex")] [VARCHAR("t6")] [VARCHAR("t6_id2_idx")] [VARCHAR("t7_fk")] [VARCHAR("t7_xxhash")] [VARCHAR("t7_xxhash_idx")] [VARCHAR("t8")] [VARCHAR("t9")] [VARCHAR("vstream_test")]]`
-	assert.Equal(t, want, got)
+	assertMatches(t, conn, "SHOW VSCHEMA TABLES", `[[VARCHAR("aggr_test")] [VARCHAR("dual")] [VARCHAR("t1")] [VARCHAR("t1_id2_idx")] [VARCHAR("t2")] [VARCHAR("t2_id4_idx")] [VARCHAR("t3")] [VARCHAR("t3_id7_idx")] [VARCHAR("t4")] [VARCHAR("t4_id2_idx")] [VARCHAR("t5_null_vindex")] [VARCHAR("t6")] [VARCHAR("t6_id2_idx")] [VARCHAR("t7_fk")] [VARCHAR("t7_xxhash")] [VARCHAR("t7_xxhash_idx")] [VARCHAR("t8")] [VARCHAR("vstream_test")]]`)
 
-	// DML on existing table
-	exec(t, conn, "insert into t9(id9, testId) values(0,0),(1,1)") // insert initial data
-	result := exec(t, conn, `select id9 from t9 limit 100`)        // select
-	assert.Equal(t, 2, len(result.Rows))
+	// Init
+	_ = exec(t, conn, "create table test_sc (id bigint primary key)")
+	assertMatchesWithTimeout(t, conn,
+		"SHOW VSCHEMA TABLES",
+		`[[VARCHAR("aggr_test")] [VARCHAR("dual")] [VARCHAR("t1")] [VARCHAR("t1_id2_idx")] [VARCHAR("t2")] [VARCHAR("t2_id4_idx")] [VARCHAR("t3")] [VARCHAR("t3_id7_idx")] [VARCHAR("t4")] [VARCHAR("t4_id2_idx")] [VARCHAR("t5_null_vindex")] [VARCHAR("t6")] [VARCHAR("t6_id2_idx")] [VARCHAR("t7_fk")] [VARCHAR("t7_xxhash")] [VARCHAR("t7_xxhash_idx")] [VARCHAR("t8")] [VARCHAR("test_sc")] [VARCHAR("vstream_test")]]`,
+		100*time.Millisecond,
+		3*time.Second,
+		"test_sc not in vschema tables")
 
-	exec(t, conn, "update t9 set testId = 42 where testId = 0") // update
-	assertMatches(t, conn, "select testId from t9", `[[INT64(42)] [INT64(1)]]`)
-
-	exec(t, conn, "delete from t9 where testId = 42") // delete
-	assertMatches(t, conn, "select testId from t9", `[[INT64(1)]]`)
-
-	assertMatches(t, conn, "select testId from t9 where testId = 1", `[[INT64(1)]]`) // select with WHERE clause
+	// Tables Update via health check.
+	_ = exec(t, conn, "create table test_sc1 (id bigint primary key)")
+	assertMatchesWithTimeout(t, conn,
+		"SHOW VSCHEMA TABLES",
+		`[[VARCHAR("aggr_test")] [VARCHAR("dual")] [VARCHAR("t1")] [VARCHAR("t1_id2_idx")] [VARCHAR("t2")] [VARCHAR("t2_id4_idx")] [VARCHAR("t3")] [VARCHAR("t3_id7_idx")] [VARCHAR("t4")] [VARCHAR("t4_id2_idx")] [VARCHAR("t5_null_vindex")] [VARCHAR("t6")] [VARCHAR("t6_id2_idx")] [VARCHAR("t7_fk")] [VARCHAR("t7_xxhash")] [VARCHAR("t7_xxhash_idx")] [VARCHAR("t8")] [VARCHAR("test_sc")] [VARCHAR("test_sc1")] [VARCHAR("vstream_test")]]`,
+		100*time.Millisecond,
+		3*time.Second,
+		"test_sc1 not in vschema tables")
 }
 
 func TestVSchemaTrackedForNewTables(t *testing.T) {
@@ -723,6 +725,23 @@ func assertMatches(t *testing.T, conn *mysql.Conn, query, expected string) {
 	diff := cmp.Diff(expected, got)
 	if diff != "" {
 		t.Errorf("Query: %s (-want +got):\n%s", query, diff)
+	}
+}
+
+func assertMatchesWithTimeout(t *testing.T, conn *mysql.Conn, query, expected string, r time.Duration, d time.Duration, failureMsg string) {
+	t.Helper()
+	timeout := time.After(d)
+	diff := "actual and expectation does not match"
+	for len(diff) > 0 {
+		select {
+		case <-timeout:
+			require.Fail(t, failureMsg, diff)
+		case <-time.After(r):
+			qr := exec(t, conn, `SHOW VSCHEMA TABLES`)
+			diff = cmp.Diff(expected,
+				fmt.Sprintf("%v", qr.Rows))
+		}
+
 	}
 }
 func assertMatchesNoOrder(t *testing.T, conn *mysql.Conn, query, expected string) {

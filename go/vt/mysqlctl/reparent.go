@@ -116,5 +116,5 @@ func (mysqld *Mysqld) Promote(hookExtraEnv map[string]string) (mysql.Position, e
 	if err := mysqld.executeSuperQueryListConn(ctx, conn, cmds); err != nil {
 		return mysql.Position{}, err
 	}
-	return conn.MasterPosition()
+	return conn.PrimaryPosition()
 }

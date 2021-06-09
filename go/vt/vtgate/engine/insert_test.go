@@ -195,10 +195,7 @@ func TestInsertShardedSimple(t *testing.T) {
 			},
 		},
 	}
-	vs, err := vindexes.BuildVSchema(invschema)
-	if err != nil {
-		t.Fatal(err)
-	}
+	vs := vindexes.BuildVSchema(invschema)
 	ks := vs.Keyspaces["sharded"]
 
 	// A single row insert should be autocommitted
@@ -222,7 +219,7 @@ func TestInsertShardedSimple(t *testing.T) {
 	vc := newDMLTestVCursor("-20", "20-")
 	vc.shardForKsid = []string{"20-", "-20", "20-"}
 
-	_, err = ins.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	_, err := ins.Execute(vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -342,10 +339,7 @@ func TestInsertShardedFail(t *testing.T) {
 			},
 		},
 	}
-	vs, err := vindexes.BuildVSchema(invschema)
-	if err != nil {
-		t.Fatal(err)
-	}
+	vs := vindexes.BuildVSchema(invschema)
 	ks := vs.Keyspaces["sharded"]
 
 	ins := NewInsert(
@@ -369,7 +363,7 @@ func TestInsertShardedFail(t *testing.T) {
 	vc := &loggingVCursor{}
 
 	// The lookup will fail to map to a keyspace id.
-	_, err = ins.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	_, err := ins.Execute(vc, map[string]*querypb.BindVariable{}, false)
 	require.EqualError(t, err, `could not map [INT64(1)] to a keyspace id`)
 }
 
@@ -394,10 +388,7 @@ func TestInsertShardedGenerate(t *testing.T) {
 			},
 		},
 	}
-	vs, err := vindexes.BuildVSchema(invschema)
-	if err != nil {
-		t.Fatal(err)
-	}
+	vs := vindexes.BuildVSchema(invschema)
 	ks := vs.Keyspaces["sharded"]
 
 	ins := NewInsert(
@@ -519,10 +510,7 @@ func TestInsertShardedOwned(t *testing.T) {
 			},
 		},
 	}
-	vs, err := vindexes.BuildVSchema(invschema)
-	if err != nil {
-		t.Fatal(err)
-	}
+	vs := vindexes.BuildVSchema(invschema)
 	ks := vs.Keyspaces["sharded"]
 
 	ins := NewInsert(
@@ -583,7 +571,7 @@ func TestInsertShardedOwned(t *testing.T) {
 	vc := newDMLTestVCursor("-20", "20-")
 	vc.shardForKsid = []string{"20-", "-20", "20-"}
 
-	_, err = ins.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	_, err := ins.Execute(vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -646,10 +634,7 @@ func TestInsertShardedOwnedWithNull(t *testing.T) {
 			},
 		},
 	}
-	vs, err := vindexes.BuildVSchema(invschema)
-	if err != nil {
-		t.Fatal(err)
-	}
+	vs := vindexes.BuildVSchema(invschema)
 	ks := vs.Keyspaces["sharded"]
 
 	ins := NewInsert(
@@ -681,7 +666,7 @@ func TestInsertShardedOwnedWithNull(t *testing.T) {
 	vc := newDMLTestVCursor("-20", "20-")
 	vc.shardForKsid = []string{"20-", "-20", "20-"}
 
-	_, err = ins.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	_, err := ins.Execute(vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -728,10 +713,7 @@ func TestInsertShardedGeo(t *testing.T) {
 			},
 		},
 	}
-	vs, err := vindexes.BuildVSchema(invschema)
-	if err != nil {
-		t.Fatal(err)
-	}
+	vs := vindexes.BuildVSchema(invschema)
 	ks := vs.Keyspaces["sharded"]
 
 	ins := NewInsert(
@@ -774,7 +756,7 @@ func TestInsertShardedGeo(t *testing.T) {
 	vc := newDMLTestVCursor("-20", "20-")
 	vc.shardForKsid = []string{"20-", "-20"}
 
-	_, err = ins.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	_, err := ins.Execute(vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -843,10 +825,7 @@ func TestInsertShardedIgnoreOwned(t *testing.T) {
 			},
 		},
 	}
-	vs, err := vindexes.BuildVSchema(invschema)
-	if err != nil {
-		t.Fatal(err)
-	}
+	vs := vindexes.BuildVSchema(invschema)
 	ks := vs.Keyspaces["sharded"]
 
 	ins := NewInsert(
@@ -947,7 +926,7 @@ func TestInsertShardedIgnoreOwned(t *testing.T) {
 		ksid0,
 	}
 
-	_, err = ins.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	_, err := ins.Execute(vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1020,10 +999,7 @@ func TestInsertShardedIgnoreOwnedWithNull(t *testing.T) {
 			},
 		},
 	}
-	vs, err := vindexes.BuildVSchema(invschema)
-	if err != nil {
-		t.Fatal(err)
-	}
+	vs := vindexes.BuildVSchema(invschema)
 	ks := vs.Keyspaces["sharded"]
 
 	ins := NewInsert(
@@ -1067,7 +1043,7 @@ func TestInsertShardedIgnoreOwnedWithNull(t *testing.T) {
 		ksid0,
 	}
 
-	_, err = ins.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	_, err := ins.Execute(vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1122,10 +1098,7 @@ func TestInsertShardedUnownedVerify(t *testing.T) {
 			},
 		},
 	}
-	vs, err := vindexes.BuildVSchema(invschema)
-	if err != nil {
-		t.Fatal(err)
-	}
+	vs := vindexes.BuildVSchema(invschema)
 	ks := vs.Keyspaces["sharded"]
 
 	ins := NewInsert(
@@ -1202,7 +1175,7 @@ func TestInsertShardedUnownedVerify(t *testing.T) {
 		nonemptyResult,
 		nonemptyResult,
 	}
-	_, err = ins.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	_, err := ins.Execute(vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1264,10 +1237,7 @@ func TestInsertShardedIgnoreUnownedVerify(t *testing.T) {
 			},
 		},
 	}
-	vs, err := vindexes.BuildVSchema(invschema)
-	if err != nil {
-		t.Fatal(err)
-	}
+	vs := vindexes.BuildVSchema(invschema)
 	ks := vs.Keyspaces["sharded"]
 
 	ins := NewInsert(
@@ -1321,7 +1291,7 @@ func TestInsertShardedIgnoreUnownedVerify(t *testing.T) {
 		{},
 		nonemptyResult,
 	}
-	_, err = ins.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	_, err := ins.Execute(vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1376,10 +1346,7 @@ func TestInsertShardedIgnoreUnownedVerifyFail(t *testing.T) {
 			},
 		},
 	}
-	vs, err := vindexes.BuildVSchema(invschema)
-	if err != nil {
-		t.Fatal(err)
-	}
+	vs := vindexes.BuildVSchema(invschema)
 	ks := vs.Keyspaces["sharded"]
 
 	ins := NewInsert(
@@ -1410,7 +1377,7 @@ func TestInsertShardedIgnoreUnownedVerifyFail(t *testing.T) {
 
 	vc := newDMLTestVCursor("-20", "20-")
 
-	_, err = ins.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	_, err := ins.Execute(vc, map[string]*querypb.BindVariable{}, false)
 	require.EqualError(t, err, `values [[INT64(2)]] for column [c3] does not map to keyspace ids`)
 }
 
@@ -1457,10 +1424,7 @@ func TestInsertShardedUnownedReverseMap(t *testing.T) {
 			},
 		},
 	}
-	vs, err := vindexes.BuildVSchema(invschema)
-	if err != nil {
-		t.Fatal(err)
-	}
+	vs := vindexes.BuildVSchema(invschema)
 	ks := vs.Keyspaces["sharded"]
 
 	ins := NewInsert(
@@ -1533,7 +1497,7 @@ func TestInsertShardedUnownedReverseMap(t *testing.T) {
 		nonemptyResult,
 	}
 
-	_, err = ins.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	_, err := ins.Execute(vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1586,10 +1550,7 @@ func TestInsertShardedUnownedReverseMapFail(t *testing.T) {
 			},
 		},
 	}
-	vs, err := vindexes.BuildVSchema(invschema)
-	if err != nil {
-		t.Fatal(err)
-	}
+	vs := vindexes.BuildVSchema(invschema)
 	ks := vs.Keyspaces["sharded"]
 
 	ins := NewInsert(
@@ -1620,6 +1581,6 @@ func TestInsertShardedUnownedReverseMapFail(t *testing.T) {
 
 	vc := newDMLTestVCursor("-20", "20-")
 
-	_, err = ins.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	_, err := ins.Execute(vc, map[string]*querypb.BindVariable{}, false)
 	require.EqualError(t, err, `value must be supplied for column [c3]`)
 }

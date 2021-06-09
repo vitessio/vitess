@@ -97,6 +97,8 @@ func TestMain(m *testing.M) {
 		}
 		defer env.Close()
 
+		*vreplicationExperimentalFlags = 0
+
 		// engines cannot be initialized in testenv because it introduces
 		// circular dependencies.
 		streamerEngine = vstreamer.NewEngine(env.TabletEnv, env.SrvTopo, env.SchemaEngine, nil, env.Cells[0])
@@ -151,7 +153,7 @@ func resetBinlogClient() {
 
 func masterPosition(t *testing.T) string {
 	t.Helper()
-	pos, err := env.Mysqld.MasterPosition()
+	pos, err := env.Mysqld.PrimaryPosition()
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -13,14 +13,13 @@ require (
 	github.com/PuerkitoBio/goquery v1.5.1
 	github.com/aquarapid/vaultlib v0.5.1
 	github.com/armon/consul-api v0.0.0-20180202201655-eb2c6b5be1b6
-	github.com/armon/go-metrics v0.0.0-20190430140413-ec5e00d3c878
+	github.com/armon/go-metrics v0.0.0-20190430140413-ec5e00d3c878 // indirect
 	github.com/aws/aws-sdk-go v1.28.8
 	github.com/buger/jsonparser v0.0.0-20200322175846-f7e751efca13
 	github.com/cespare/xxhash/v2 v2.1.1
 	github.com/codahale/hdrhistogram v0.0.0-20161010025455-3a0bb77429bd // indirect
 	github.com/codegangsta/inject v0.0.0-20150114235600-33e0aa1cb7c0 // indirect
 	github.com/corpix/uarand v0.1.1 // indirect
-	github.com/cyberdelia/go-metrics-graphite v0.0.0-20161219230853-39f87cc3b432
 	github.com/dave/jennifer v1.4.1
 	github.com/evanphx/json-patch v4.5.0+incompatible
 	github.com/go-martini/martini v0.0.0-20170121215854-22fa46961aab
@@ -40,7 +39,7 @@ require (
 	github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0
 	github.com/hashicorp/consul/api v1.5.0
 	github.com/hashicorp/go-immutable-radix v1.1.0 // indirect
-	github.com/hashicorp/go-msgpack v0.5.5
+	github.com/hashicorp/go-msgpack v0.5.5 // indirect
 	github.com/hashicorp/go-sockaddr v1.0.2 // indirect
 	github.com/hashicorp/go-uuid v1.0.2 // indirect
 	github.com/hashicorp/serf v0.9.2 // indirect

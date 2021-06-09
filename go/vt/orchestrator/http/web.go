@@ -103,7 +103,6 @@ func (this *HttpWeb) Cluster(params martini.Params, r render.Render, req *http.R
 		"clusterName":                   clusterName,
 		"autoshow_problems":             true,
 		"contextMenuVisible":            true,
-		"pseudoGTIDModeEnabled":         (config.Config.PseudoGTIDPattern != ""),
 		"authorizedForAction":           isAuthorizedForAction(req, user),
 		"userId":                        getUserId(req, user),
 		"removeTextFromHostnameDisplay": config.Config.RemoveTextFromHostnameDisplay,
@@ -155,7 +154,6 @@ func (this *HttpWeb) ClusterPools(params martini.Params, r render.Render, req *h
 		"clusterName":                   clusterName,
 		"autoshow_problems":             false, // because pool screen by default expands all hosts
 		"contextMenuVisible":            true,
-		"pseudoGTIDModeEnabled":         (config.Config.PseudoGTIDPattern != ""),
 		"authorizedForAction":           isAuthorizedForAction(req, user),
 		"userId":                        getUserId(req, user),
 		"removeTextFromHostnameDisplay": config.Config.RemoveTextFromHostnameDisplay,
@@ -391,11 +389,7 @@ func (this *HttpWeb) registerWebRequest(m *martini.ClassicMartini, path string, 
 		fullPath = fmt.Sprintf("%s/", this.URLPrefix)
 	}
 
-	if config.Config.RaftEnabled {
-		m.Get(fullPath, raftReverseProxy, handler)
-	} else {
-		m.Get(fullPath, handler)
-	}
+	m.Get(fullPath, handler)
 }
 
 // RegisterRequests makes for the de-facto list of known Web calls
