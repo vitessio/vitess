@@ -65,9 +65,9 @@ var (
 	builtinCompressor   = flag.String("xtrabackup_builtin_compressor", "pgzip", "which builtin compressor engine to use")
 	builtinDecompressor = flag.String("xtrabackup_builtin_decompressor", "auto", "which builtin decompressor engine to use")
 	// use and external command to decompress the backups
-	externalCompressor    = flag.String("xtrabackup_external_compressor", "", "command with arguments to use when decompressing a backup")
-	externalCompressorExt = flag.String("xtrabackup_external_compressor_extension", "", "which extension to use when using an external decompressor")
-	externalDecompressor  = flag.String("xtrabackup_external_decompressor", "", "command with arguments to use when compressing a backup")
+	externalCompressorCmd   = flag.String("xtrabackup_external_compressor", "", "command with arguments to use when decompressing a backup")
+	externalCompressorExt   = flag.String("xtrabackup_external_compressor_extension", "", "which extension to use when using an external decompressor")
+	externalDecompressorCmd = flag.String("xtrabackup_external_decompressor", "", "command with arguments to use when compressing a backup")
 )
 
 const (
@@ -113,7 +113,7 @@ func (be *XtrabackupEngine) backupFileName() string {
 		fileName += *xtrabackupStreamMode
 	}
 	if *backupStorageCompress {
-		if *externalDecompressor != "" {
+		if *externalDecompressorCmd != "" {
 			fileName += *externalCompressorExt
 		} else {
 			if ext, err := getExtensionFromEngine(*builtinCompressor); err != nil {
@@ -146,7 +146,7 @@ func (be *XtrabackupEngine) ExecuteBackup(ctx context.Context, params BackupPara
 	}
 
 	// an extension is required when using an external compressor
-	if *backupStorageCompress && *externalCompressor != "" && *externalCompressorExt == "" {
+	if *backupStorageCompress && *externalCompressorCmd != "" && *externalCompressorExt == "" {
 		return false, vterrors.New(vtrpc.Code_INVALID_ARGUMENT,
 			"xtrabackup_external_compressor_extension not provided when using an external compressor")
 	}
@@ -291,7 +291,6 @@ func (be *XtrabackupEngine) backupFiles(ctx context.Context, params BackupParams
 		return replicationPosition, vterrors.Wrap(err, "cannot create stderr pipe")
 	}
 
-	var extCompressorWaitGroup sync.WaitGroup
 	destWriters := []io.Writer{}
 	destBuffers := []*bufio.Writer{}
 	destCompressors := []io.WriteCloser{}
@@ -304,16 +303,13 @@ func (be *XtrabackupEngine) backupFiles(ctx context.Context, params BackupParams
 		if *backupStorageCompress {
 			var compressor io.WriteCloser
 
-			if *externalCompressor != "" {
-				compressor, err = newExternalCompressor(ctx, *externalCompressor, writer, &extCompressorWaitGroup, params.Logger)
-				if err != nil {
-					return replicationPosition, err
-				}
+			if *externalCompressorCmd != "" {
+				compressor, err = newExternalCompressor(ctx, *externalCompressorCmd, writer, params.Logger)
 			} else {
 				compressor, err = newBuiltinCompressor(*builtinCompressor, writer, params.Logger)
-				if err != nil {
-					return replicationPosition, err
-				}
+			}
+			if err != nil {
+				return replicationPosition, vterrors.Wrap(err, "can't create compressor")
 			}
 
 			writer = compressor
@@ -375,13 +371,9 @@ func (be *XtrabackupEngine) backupFiles(ctx context.Context, params BackupParams
 	// Close compressor to flush it. After that all data is sent to the buffer.
 	for _, compressor := range destCompressors {
 		if err := compressor.Close(); err != nil {
-			return replicationPosition, vterrors.Wrap(err, "cannot close gzip compressor")
+			return replicationPosition, vterrors.Wrap(err, "cannot close compressor")
 		}
 	}
-
-	// Wait for any external compressor to finish processing their current input buffer and exit.
-	// If we skip this, we may not send the entire data when we flush below and can corrupt the backup
-	extCompressorWaitGroup.Wait()
 
 	// Flush the buffer to finish writing on destination.
 	for _, buffer := range destBuffers {
@@ -560,7 +552,7 @@ func (be *XtrabackupEngine) extractFiles(ctx context.Context, logger logutil.Log
 	}()
 
 	srcReaders := []io.Reader{}
-
+	srcDecompressors := []io.ReadCloser{}
 	for _, file := range srcFiles {
 		reader := io.Reader(file)
 
@@ -568,31 +560,28 @@ func (be *XtrabackupEngine) extractFiles(ctx context.Context, logger logutil.Log
 		if compressed {
 			var decompressor io.ReadCloser
 
-			if *externalDecompressor != "" {
-				decompressor, err = newExternalDecompressor(ctx, *externalDecompressor, reader, logger)
-				if err != nil {
-					return err
-				}
+			if *externalDecompressorCmd != "" {
+				decompressor, err = newExternalDecompressor(ctx, *externalDecompressorCmd, reader, logger)
 			} else {
 				decompressor, err = newBuiltinDecompressor(*builtinDecompressor, extension, reader, logger)
-				if err != nil {
-					return err
-				}
-
-				// we only need to close the builtin decompressors, because the externals will be automatically
-				// closed by the go func inside newExternalDecompressor
-				defer func() {
-					if cerr := decompressor.Close(); cerr != nil {
-						logger.Errorf("failed to close gzip decompressor: %v", cerr)
-					}
-				}()
+			}
+			if err != nil {
+				return vterrors.Wrap(err, "can't create decompressor")
 			}
 
+			srcDecompressors = append(srcDecompressors, decompressor)
 			reader = decompressor
 		}
 
 		srcReaders = append(srcReaders, reader)
 	}
+	defer func() {
+		for _, decompressor := range srcDecompressors {
+			if cerr := decompressor.Close(); cerr != nil {
+				logger.Errorf("failed to close decompressor: %v", cerr)
+			}
+		}
+	}()
 
 	reader := stripeReader(srcReaders, int64(bm.StripeBlockSize))
 

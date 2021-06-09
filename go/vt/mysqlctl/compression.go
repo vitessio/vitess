@@ -8,9 +8,9 @@ import (
 	"io"
 	"io/ioutil"
 	"os/exec"
-	"strings"
 	"sync"
 
+	"github.com/google/shlex"
 	"github.com/klauspost/compress/zstd"
 	"github.com/klauspost/pgzip"
 	"github.com/pierrec/lz4"
@@ -41,7 +41,7 @@ func getEngineFromExtension(extension string) (string, error) {
 		}
 	}
 
-	return "", fmt.Errorf("%w \"%s\"", errUnsupportedCompressionExtension, extension)
+	return "", fmt.Errorf("%w %q", errUnsupportedCompressionExtension, extension)
 }
 
 func getExtensionFromEngine(engine string) (string, error) {
@@ -53,7 +53,7 @@ func getExtensionFromEngine(engine string) (string, error) {
 		}
 	}
 
-	return "", fmt.Errorf("%w \"%s\"", errUnsupportedCompressionEngine, engine)
+	return "", fmt.Errorf("%w %q", errUnsupportedCompressionEngine, engine)
 }
 
 // Validates if the external decompressor exists and return its path.
@@ -66,7 +66,11 @@ func validateExternalCmd(cmd string) (string, error) {
 }
 
 func prepareExternalCompressionCmd(ctx context.Context, cmdStr string) (*exec.Cmd, error) {
-	cmdArgs := strings.Split(cmdStr, " ")
+	cmdArgs, err := shlex.Split(cmdStr)
+	if err != nil {
+		return nil, err
+	}
+
 	if len(cmdArgs) < 1 {
 		return nil, errors.New("external command is empty")
 	}
@@ -82,88 +86,73 @@ func prepareExternalCompressionCmd(ctx context.Context, cmdStr string) (*exec.Cm
 // This returns a writer that writes the compressed output of the external command to the provided writer.
 // It is important to wait on the WaitGroup provided to make sure that even after closing the writer,
 // the command will have processed its input buffer, otherwise not all data might have been written to the target writer.
-func newExternalCompressor(ctx context.Context, cmdStr string, writer io.Writer, wg *sync.WaitGroup, logger logutil.Logger) (compressor io.WriteCloser, err error) {
-	logger.Infof("Compressing using external command: \"%s\"", cmdStr)
+func newExternalCompressor(ctx context.Context, cmdStr string, writer io.Writer, logger logutil.Logger) (io.WriteCloser, error) {
+	logger.Infof("Compressing using external command: %q", cmdStr)
 
 	cmd, err := prepareExternalCompressionCmd(ctx, cmdStr)
 	if err != nil {
-		return compressor, vterrors.Wrap(err, "unable to start external command")
+		return nil, vterrors.Wrap(err, "unable to start external command")
 	}
+	compressor := &externalCompressor{cmd: cmd}
 
 	cmd.Stdout = writer
 
 	cmdIn, err := cmd.StdinPipe()
 	if err != nil {
-		return compressor, vterrors.Wrap(err, "cannot create external ompressor stdin pipe")
+		return nil, vterrors.Wrap(err, "cannot create external ompressor stdin pipe")
 	}
+
+	compressor.stdin = cmdIn
 
 	cmdErr, err := cmd.StderrPipe()
 	if err != nil {
-		return compressor, vterrors.Wrap(err, "cannot create external ompressor stderr pipe")
+		return nil, vterrors.Wrap(err, "cannot create external ompressor stderr pipe")
 	}
 
 	if err := cmd.Start(); err != nil {
-		return compressor, vterrors.Wrap(err, "can't start external decompressor")
+		return nil, vterrors.Wrap(err, "can't start external decompressor")
 	}
 
-	compressor = cmdIn
+	compressor.wg.Add(1) // one for the logger, another one for the go func below
+	go scanLinesToLogger("compressor stderr", cmdErr, logger, compressor.wg.Done)
 
-	wg.Add(2) // one for the logger, another one for the go func below
-	go scanLinesToLogger("compressor stderr", cmdErr, logger, wg.Done)
-
-	go func() {
-		// log the exit status
-		if err := cmd.Wait(); err != nil {
-			logger.Errorf("external compressor failed: %v", err)
-		}
-		wg.Done()
-	}()
-
-	return
+	return compressor, nil
 }
 
 // This returns a reader that reads the compressed input and passes it to the external command to be decompressed. Calls to its
 // Read() will return the uncompressed data until EOF.
-func newExternalDecompressor(ctx context.Context, cmdStr string, reader io.Reader, logger logutil.Logger) (decompressor io.ReadCloser, err error) {
-	var decompressorWg sync.WaitGroup
-
-	logger.Infof("Decompressing using external command: \"%s\"", cmdStr)
+func newExternalDecompressor(ctx context.Context, cmdStr string, reader io.Reader, logger logutil.Logger) (io.ReadCloser, error) {
+	logger.Infof("Decompressing using external command: %q", cmdStr)
 
 	cmd, err := prepareExternalCompressionCmd(ctx, cmdStr)
 	if err != nil {
-		return decompressor, vterrors.Wrap(err, "unable to start external command")
+		return nil, vterrors.Wrap(err, "unable to start external command")
 	}
+
+	decompressor := &externalDecompressor{cmd: cmd}
 
 	cmd.Stdin = reader
 
 	cmdOut, err := cmd.StdoutPipe()
 	if err != nil {
-		return decompressor, vterrors.Wrap(err, "cannot create external decompressor stdout pipe")
+		return nil, vterrors.Wrap(err, "cannot create external decompressor stdout pipe")
 	}
+
+	decompressor.stdout = cmdOut
 
 	cmdErr, err := cmd.StderrPipe()
 	if err != nil {
-		return decompressor, vterrors.Wrap(err, "cannot create external decompressor stderr pipe")
+		return nil, vterrors.Wrap(err, "cannot create external decompressor stderr pipe")
 	}
 
 	if err := cmd.Start(); err != nil {
-		return decompressor, vterrors.Wrap(err, "can't start external decompressor")
+		return nil, vterrors.Wrap(err, "can't start external decompressor")
 	}
 
-	decompressorWg.Add(1)
-	go scanLinesToLogger("decompressor stderr", cmdErr, logger, decompressorWg.Done)
+	decompressor.wg.Add(1)
+	go scanLinesToLogger("decompressor stderr", cmdErr, logger, decompressor.wg.Done)
 
-	decompressor = cmdOut
-
-	go func() {
-		decompressorWg.Wait()
-		// log the exit status
-		if err := cmd.Wait(); err != nil {
-			logger.Errorf("external compressor failed: %v", err)
-		}
-	}()
-
-	return
+	return decompressor, nil
 }
 
 // This returns a reader that will decompress the underlying provided reader and will use the specified supported engine (or
@@ -200,11 +189,11 @@ func newBuiltinDecompressor(engine, extension string, reader io.Reader, logger l
 
 		decompressor = d.IOReadCloser()
 	default:
-		err = fmt.Errorf("Unkown decompressor engine: \"%s\"", engine)
+		err = fmt.Errorf("Unkown decompressor engine: %q", engine)
 		return decompressor, err
 	}
 
-	logger.Infof("Decompressing backup using built-in engine \"%s\"", engine)
+	logger.Infof("Decompressing backup using built-in engine %q", engine)
 
 	return decompressor, err
 }
@@ -244,11 +233,52 @@ func newBuiltinCompressor(engine string, writer io.Writer, logger logutil.Logger
 
 		compressor = zst
 	default:
-		err = fmt.Errorf("Unkown compressor engine: \"%s\"", engine)
+		err = fmt.Errorf("Unkown compressor engine: %q", engine)
 		return compressor, err
 	}
 
-	logger.Infof("Compressing backup using built-in engine \"%s\"", engine)
+	logger.Infof("Compressing backup using built-in engine %q", engine)
 
 	return
+}
+
+// This struct wraps the underlying exec.Cmd and implements the io.WriteCloser interface.
+type externalCompressor struct {
+	cmd   *exec.Cmd
+	stdin io.WriteCloser
+	wg    sync.WaitGroup
+}
+
+func (e *externalCompressor) Write(p []byte) (n int, err error) {
+	return e.stdin.Write(p)
+}
+
+func (e *externalCompressor) Close() error {
+	if err := e.stdin.Close(); err != nil {
+		return err
+	}
+
+	// wait for the stderr to finish reading as well
+	e.wg.Wait()
+
+	return e.cmd.Wait()
+}
+
+// This struct wraps the underlying exec.Cmd and implements the io.ReadCloser interface.
+type externalDecompressor struct {
+	cmd    *exec.Cmd
+	stdout io.ReadCloser
+	wg     sync.WaitGroup
+}
+
+func (e *externalDecompressor) Read(p []byte) (n int, err error) {
+	return e.stdout.Read(p)
+}
+
+func (e *externalDecompressor) Close() error {
+	// wait for the stderr to finish reading as well
+	e.wg.Wait()
+
+	// exec.Cmd.Wait() will also close the stdout pipe, so we don't need to call it directly
+	return e.cmd.Wait()
 }
