@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"os"
 	"testing"
-	"time"
 
 	"github.com/google/go-cmp/cmp"
 
@@ -53,7 +52,8 @@ func TestUnsharded(t *testing.T) {
 			defer vtest.teardown()
 
 			// wait for the docker to be setup
-			time.Sleep(10 * time.Second)
+			err = vtest.waitUntilDockerHealthy(10)
+			require.NoError(t, err)
 
 			ctx := context.Background()
 			vttestParams := mysql.ConnParams{
@@ -83,7 +83,8 @@ func TestSharded(t *testing.T) {
 			defer vtest.teardown()
 
 			// wait for the docker to be setup
-			time.Sleep(10 * time.Second)
+			err = vtest.waitUntilDockerHealthy(10)
+			require.NoError(t, err)
 
 			ctx := context.Background()
 			vttestParams := mysql.ConnParams{
@@ -115,7 +116,8 @@ func TestMysqlMaxCons(t *testing.T) {
 			defer vtest.teardown()
 
 			// wait for the docker to be setup
-			time.Sleep(10 * time.Second)
+			err = vtest.waitUntilDockerHealthy(10)
+			require.NoError(t, err)
 
 			ctx := context.Background()
 			vttestParams := mysql.ConnParams{
@@ -147,7 +149,8 @@ func TestLargeNumberOfKeyspaces(t *testing.T) {
 			defer vtest.teardown()
 
 			// wait for the docker to be setup
-			time.Sleep(15 * time.Second)
+			err = vtest.waitUntilDockerHealthy(15)
+			require.NoError(t, err)
 
 			ctx := context.Background()
 			vttestParams := mysql.ConnParams{

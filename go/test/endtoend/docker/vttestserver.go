@@ -17,12 +17,14 @@ limitations under the License.
 package docker
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
 	"path"
 	"strconv"
 	"strings"
+	"time"
 )
 
 const (
@@ -63,7 +65,7 @@ func (v *vttestserver) startDockerImage() error {
 	cmd.Args = append(cmd.Args, "-e", fmt.Sprintf("NUM_SHARDS=%s", strings.Join(convertToStringSlice(v.numShards), ",")))
 	cmd.Args = append(cmd.Args, "-e", "MYSQL_BIND_HOST=0.0.0.0")
 	cmd.Args = append(cmd.Args, "-e", fmt.Sprintf("MYSQL_MAX_CONNECTIONS=%d", v.mysqlMaxConnecetions))
-	cmd.Args = append(cmd.Args, `--health-cmd="mysqladmin ping -h127.0.0.1 -P33577"`)
+	cmd.Args = append(cmd.Args, "--health-cmd", "mysqladmin ping -h127.0.0.1 -P33577")
 	cmd.Args = append(cmd.Args, "--health-interval=5s")
 	cmd.Args = append(cmd.Args, "--health-timeout=2s")
 	cmd.Args = append(cmd.Args, "--health-retries=5")
@@ -74,6 +76,45 @@ func (v *vttestserver) startDockerImage() error {
 		return err
 	}
 	return nil
+}
+
+// dockerStatus is a struct used to unmarshal json output from `docker inspect`
+type dockerStatus struct {
+	State struct {
+		Health struct {
+			Status string
+		}
+	}
+}
+
+// waitUntilDockerHealthy waits until the docker image is healthy. It takes in as argument the amount of seconds to wait before timeout
+func (v *vttestserver) waitUntilDockerHealthy(timeoutDelay int) error {
+	timeOut := time.After(time.Duration(timeoutDelay) * time.Second)
+
+	for {
+		select {
+		case <-timeOut:
+			// return error due to timeout
+			return fmt.Errorf("timed out waiting for docker image to start")
+		case <-time.After(time.Second):
+			cmd := exec.Command("docker", "inspect", "vttestserver-end2end-test")
+			out, err := cmd.Output()
+			if err != nil {
+				return err
+			}
+			var x []dockerStatus
+			err = json.Unmarshal(out, &x)
+			if err != nil {
+				return err
+			}
+			if len(x) > 0 {
+				status := x[0].State.Health.Status
+				if status == "healthy" {
+					return nil
+				}
+			}
+		}
+	}
 }
 
 // convertToStringSlice converts an integer slice to string slice
