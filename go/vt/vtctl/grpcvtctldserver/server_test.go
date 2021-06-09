@@ -304,7 +304,9 @@ func TestApplyRoutingRules(t *testing.T) {
 				factory.SetError(errors.New("topo down for testing"))
 			}
 
-			vtctld := NewVtctldServer(ts)
+			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+				return NewVtctldServer(ts)
+			})
 			_, err := vtctld.ApplyRoutingRules(ctx, tt.req)
 			if tt.shouldErr {
 				assert.Error(t, err)
