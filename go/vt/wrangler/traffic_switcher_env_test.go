@@ -314,9 +314,8 @@ func newTestShardMigrater(ctx context.Context, t *testing.T, sourceShards, targe
 	tme.startTablets(t)
 	tme.createDBClients(ctx, t)
 	tme.setMasterPositions()
-
 	for i, targetShard := range targetShards {
-		var rows []string
+		var rows, rowsRdOnly []string
 		for j, sourceShard := range sourceShards {
 			if !key.KeyRangesIntersect(tme.targetKeyRanges[i], tme.sourceKeyRanges[j]) {
 				continue
@@ -332,11 +331,17 @@ func newTestShardMigrater(ctx context.Context, t *testing.T, sourceShards, targe
 				},
 			}
 			rows = append(rows, fmt.Sprintf("%d|%v|||", j+1, bls))
+			rowsRdOnly = append(rows, fmt.Sprintf("%d|%v|||RDONLY", j+1, bls))
 		}
 		tme.dbTargetClients[i].addInvariant(vreplQueryks, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 			"id|source|message|cell|tablet_types",
 			"int64|varchar|varchar|varchar|varchar"),
 			rows...),
+		)
+		tme.dbTargetClients[i].addInvariant(vreplQueryks+"-rdonly", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+			"id|source|message|cell|tablet_types",
+			"int64|varchar|varchar|varchar|varchar"),
+			rowsRdOnly...),
 		)
 	}
 
