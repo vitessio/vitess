@@ -1,11 +1,11 @@
 # DO NOT MODIFY: THIS FILE IS GENERATED USING "make generate_ci_workflows"
 
-name: Cluster (vtgate_setstatement)
+name: Cluster (vtgate_gen4)
 on: [push, pull_request]
 jobs:
 
   build:
-    name: Run endtoend tests on Cluster (vtgate_setstatement)
+    name: Run endtoend tests on Cluster (vtgate_gen4)
     runs-on: ubuntu-18.04
 
     steps:
@@ -47,4 +47,4 @@ jobs:
       timeout-minutes: 30
       run: |
         source build.env
-        eatmydata -- go run test.go -docker=false -print-log -follow -shard vtgate_setstatement
+        eatmydata -- go run test.go -docker=false -print-log -follow -shard vtgate_gen4
