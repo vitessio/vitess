@@ -199,18 +199,21 @@ func (qg *queryGraph) collectPredicateTable(t sqlparser.TableExpr, predicate sql
 				}
 				qg.innerJoins[deps] = allPredicates
 			case sqlparser.LeftJoinType, sqlparser.RightJoinType:
-				outerJoinTable := outerJoinTables{}
-
-				// TODO: find a better & safer solution than type casting
+				var outerJoinTable outerJoinTables
+				var err error
 				if table.Join == sqlparser.LeftJoinType {
-					outerJoinTable.inner = semTable.TableSetFor(table.LeftExpr.(*sqlparser.AliasedTableExpr))
-					outerJoinTable.outer = semTable.TableSetFor(table.RightExpr.(*sqlparser.AliasedTableExpr))
+					outerJoinTable, err = qg.getOuterJoinTables(table.LeftExpr, table.RightExpr, right, left, semTable)
+					if err != nil {
+						return err
+					}
 				} else {
-					outerJoinTable.inner = semTable.TableSetFor(table.RightExpr.(*sqlparser.AliasedTableExpr))
-					outerJoinTable.outer = semTable.TableSetFor(table.LeftExpr.(*sqlparser.AliasedTableExpr))
+					outerJoinTable, err = qg.getOuterJoinTables(table.RightExpr, table.LeftExpr, left, right, semTable)
+					if err != nil {
+						return err
+					}
 				}
 
-				allPredicates, _ := qg.outerJoins[outerJoinTable]
+				allPredicates := qg.outerJoins[outerJoinTable]
 				allPredicates = append(allPredicates, predicate)
 				qg.outerJoins[outerJoinTable] = allPredicates
 			}
@@ -218,6 +221,50 @@ func (qg *queryGraph) collectPredicateTable(t sqlparser.TableExpr, predicate sql
 	}
 	err := qg.walkQGSubQueries(semTable, predicate)
 	return err
+}
+
+func (qg *queryGraph) getOuterJoinTables(lhs, rhs sqlparser.TableExpr, l, r extractor, semTable *semantics.SemTable) (outerJoinTables, error) {
+	t, err := l(lhs)
+	if err != nil {
+		return outerJoinTables{}, err
+	}
+	lft := semTable.TableSetFor(t)
+	t, err = r(rhs)
+	if err != nil {
+		return outerJoinTables{}, err
+	}
+	rgt := semTable.TableSetFor(t)
+	return outerJoinTables{
+		inner: lft,
+		outer: rgt,
+	}, nil
+}
+
+type extractor func(sqlparser.TableExpr) (*sqlparser.AliasedTableExpr, error)
+
+func left(tbl sqlparser.TableExpr) (*sqlparser.AliasedTableExpr, error) {
+	switch tbl := tbl.(type) {
+	case *sqlparser.AliasedTableExpr:
+		return tbl, nil
+	case *sqlparser.JoinTableExpr:
+		return left(tbl.LeftExpr)
+	case *sqlparser.ParenTableExpr:
+		return left(tbl.Exprs[0])
+	default:
+		return nil, semantics.Gen4NotSupportedF(sqlparser.String(tbl))
+	}
+}
+func right(tbl sqlparser.TableExpr) (*sqlparser.AliasedTableExpr, error) {
+	switch tbl := tbl.(type) {
+	case *sqlparser.AliasedTableExpr:
+		return tbl, nil
+	case *sqlparser.JoinTableExpr:
+		return right(tbl.RightExpr)
+	case *sqlparser.ParenTableExpr:
+		return right(tbl.Exprs[len(tbl.Exprs)])
+	default:
+		return nil, semantics.Gen4NotSupportedF(sqlparser.String(tbl))
+	}
 }
 
 func (qg *queryGraph) collectPredicate(predicate sqlparser.Expr, semTable *semantics.SemTable) error {

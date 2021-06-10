@@ -40,85 +40,6 @@ type tcase struct {
 	input, output string
 }
 
-var tcases = []tcase{{
-	input: "select * from t",
-	output: `{
-Tables:
-	1:t
-}`,
-}, {
-	input: "select t.c from t,y,z where t.c = y.c and (t.a = z.a or t.a = y.a) and 1 < 2",
-	output: `{
-Tables:
-	1:t
-	2:y
-	4:z
-JoinPredicates:
-	1:2 - t.c = y.c
-	1:2:4 - t.a = z.a or t.a = y.a
-ForAll: 1 < 2
-}`,
-}, {
-	input: "select t.c from t join y on t.id = y.t_id join z on t.id = z.t_id where t.name = 'foo' and y.col = 42 and z.baz = 101",
-	output: `{
-Tables:
-	1:t where t.` + "`name`" + ` = 'foo'
-	2:y where y.col = 42
-	4:z where z.baz = 101
-JoinPredicates:
-	1:2 - t.id = y.t_id
-	1:4 - t.id = z.t_id
-}`,
-}, {
-	input: "select t.c from t,y,z where t.name = 'foo' and y.col = 42 and z.baz = 101 and t.id = y.t_id and t.id = z.t_id",
-	output: `{
-Tables:
-	1:t where t.` + "`name`" + ` = 'foo'
-	2:y where y.col = 42
-	4:z where z.baz = 101
-JoinPredicates:
-	1:2 - t.id = y.t_id
-	1:4 - t.id = z.t_id
-}`,
-}, {
-	input: "select 1 from t where '1' = 1 and 12 = '12'",
-	output: `{
-Tables:
-	1:t
-ForAll: '1' = 1 and 12 = '12'
-}`,
-}, {
-	input: "select 1 from t where exists (select 1)",
-	output: `{
-Tables:
-	1:t
-ForAll: exists (select 1 from dual)
-SubQueries:
-(select 1 from dual) - 	{
-	Tables:
-		2:dual
-	}
-}`,
-}, {
-	input: "select 1 from a left join b on a.id = b.id",
-	output: `{
-Tables:
-	1:a
-	2:b
-OuterJoins:
-	(1, 2) - a.id = b.id
-}`,
-}, {
-	input: "select 1 from a right join b on a.id = b.id",
-	output: `{
-Tables:
-	1:a
-	2:b
-OuterJoins:
-	(2, 1) - a.id = b.id
-}`,
-}}
-
 func equals(left, right sqlparser.Expr) sqlparser.Expr {
 	return &sqlparser.ComparisonExpr{
 		Operator: sqlparser.EqualOp,
@@ -136,6 +57,130 @@ func tableName(name string) sqlparser.TableName {
 }
 
 func TestQueryGraph(t *testing.T) {
+	tcases := []tcase{{
+		input: "select * from t",
+		output: `{
+Tables:
+	1:t
+}`,
+	}, {
+		input: "select t.c from t,y,z where t.c = y.c and (t.a = z.a or t.a = y.a) and 1 < 2",
+		output: `{
+Tables:
+	1:t
+	2:y
+	4:z
+JoinPredicates:
+	1:2 - t.c = y.c
+	1:2:4 - t.a = z.a or t.a = y.a
+ForAll: 1 < 2
+}`,
+	}, {
+		input: "select t.c from t join y on t.id = y.t_id join z on t.id = z.t_id where t.name = 'foo' and y.col = 42 and z.baz = 101",
+		output: `{
+Tables:
+	1:t where t.` + "`name`" + ` = 'foo'
+	2:y where y.col = 42
+	4:z where z.baz = 101
+JoinPredicates:
+	1:2 - t.id = y.t_id
+	1:4 - t.id = z.t_id
+}`,
+	}, {
+		input: "select t.c from t,y,z where t.name = 'foo' and y.col = 42 and z.baz = 101 and t.id = y.t_id and t.id = z.t_id",
+		output: `{
+Tables:
+	1:t where t.` + "`name`" + ` = 'foo'
+	2:y where y.col = 42
+	4:z where z.baz = 101
+JoinPredicates:
+	1:2 - t.id = y.t_id
+	1:4 - t.id = z.t_id
+}`,
+	}, {
+		input: "select 1 from t where '1' = 1 and 12 = '12'",
+		output: `{
+Tables:
+	1:t
+ForAll: '1' = 1 and 12 = '12'
+}`,
+	}, {
+		input: "select 1 from t where exists (select 1)",
+		output: `{
+Tables:
+	1:t
+ForAll: exists (select 1 from dual)
+SubQueries:
+(select 1 from dual) - 	{
+	Tables:
+		2:dual
+	}
+}`,
+	}, {
+		input: "select 1 from a left join b on a.id = b.id",
+		output: `{
+Tables:
+	1:a
+	2:b
+OuterJoins:
+	inner: 1, outer: 2 - a.id = b.id
+}`,
+	}, {
+		input: "select 1 from a right join b on a.id = b.id",
+		output: `{
+Tables:
+	1:a
+	2:b
+OuterJoins:
+	inner: 2, outer: 1 - a.id = b.id
+}`,
+	}, {
+		input: "select 1 from a join b on a.id = b.id left join c on b.id = c.id",
+		output: `{
+Tables:
+	1:a
+	2:b
+	4:c
+JoinPredicates:
+	1:2 - a.id = b.id
+OuterJoins:
+	inner: 2, outer: 4 - b.id = c.id
+}`,
+	}, {
+		input: `select 1 from a right join b on a.id = b.id left join c on b.id = c.id`,
+		output: `{
+Tables:
+	1:a
+	2:b
+	4:c
+OuterJoins:
+	inner: 2, outer: 1 - a.id = b.id
+	inner: 2, outer: 4 - b.id = c.id
+}`,
+	}, {
+		input: `select 1 from a left join b on a.id = b.id left join c on b.id = c.id`,
+		output: `{
+Tables:
+	1:a
+	2:b
+	4:c
+OuterJoins:
+	inner: 1, outer: 2 - a.id = b.id
+	inner: 2, outer: 4 - b.id = c.id
+}`,
+	}, {
+		input: `select 1 from a right join b on a.id = b.id right join c on b.id = c.id`,
+		output: `{
+Tables:
+	1:a
+	2:b
+	4:c
+OuterJoins:
+	inner: 2, outer: 1 - a.id = b.id
+	inner: 4, outer: 2 - b.id = c.id
+}`,
+	}}
+
 	for i, tc := range tcases {
 		sql := tc.input
 		t.Run(fmt.Sprintf("%d %s", i, sql), func(t *testing.T) {
@@ -146,7 +191,9 @@ func TestQueryGraph(t *testing.T) {
 			qgraph, err := createQGFromSelect(tree.(*sqlparser.Select), semTable)
 			require.NoError(t, err)
 			assert.Equal(t, tc.output, qgraph.testString())
-			utils.MustMatch(t, tc.output, qgraph.testString(), "incorrect query graph")
+			if t.Failed() {
+				fmt.Println(qgraph.testString())
+			}
 		})
 	}
 }
@@ -240,7 +287,7 @@ func (qg *queryGraph) outerJoinsString() string {
 		for _, expr := range predicates {
 			expressions = append(expressions, sqlparser.String(expr))
 		}
-		tables := fmt.Sprintf("(%s, %s)", strings.Join(inner, ":"), strings.Join(outer, ":"))
+		tables := fmt.Sprintf("inner: %s, outer: %s", strings.Join(inner, ":"), strings.Join(outer, ":"))
 
 		exprConcat := strings.Join(expressions, " and ")
 		joinPreds = append(joinPreds, fmt.Sprintf("\t%s - %s", tables, exprConcat))
