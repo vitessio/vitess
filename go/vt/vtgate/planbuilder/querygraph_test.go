@@ -99,6 +99,24 @@ SubQueries:
 		2:dual
 	}
 }`,
+}, {
+	input: "select 1 from a left join b on a.id = b.id",
+	output: `{
+Tables:
+	1:a
+	2:b
+OuterJoins:
+	(1, 2) - a.id = b.id
+}`,
+}, {
+	input: "select 1 from a right join b on a.id = b.id",
+	output: `{
+Tables:
+	1:a
+	2:b
+OuterJoins:
+	(2, 1) - a.id = b.id
+}`,
 }}
 
 func equals(left, right sqlparser.Expr) sqlparser.Expr {
@@ -177,16 +195,16 @@ func (qt *queryTable) testString() string {
 func (qg *queryGraph) testString() string {
 	return fmt.Sprintf(`{
 Tables:
-%s%s%s%s
-}`, strings.Join(qg.tableNames(), "\n"), qg.crossPredicateString(), qg.noDepsString(), qg.subqueriesString())
+%s%s%s%s%s
+}`, strings.Join(qg.tableNames(), "\n"), qg.crossPredicateString(), qg.outerJoinsString(), qg.noDepsString(), qg.subqueriesString())
 }
 
 func (qg *queryGraph) crossPredicateString() string {
-	if len(qg.crossTable) == 0 {
+	if len(qg.innerJoins) == 0 {
 		return ""
 	}
 	var joinPreds []string
-	for deps, predicates := range qg.crossTable {
+	for deps, predicates := range qg.innerJoins {
 		var tables []string
 		for _, id := range deps.Constituents() {
 			tables = append(tables, fmt.Sprintf("%d", id))
@@ -201,6 +219,34 @@ func (qg *queryGraph) crossPredicateString() string {
 	}
 	sort.Strings(joinPreds)
 	return fmt.Sprintf("\nJoinPredicates:\n%s", strings.Join(joinPreds, "\n"))
+}
+
+func (qg *queryGraph) outerJoinsString() string {
+	if len(qg.outerJoins) == 0 {
+		return ""
+	}
+	var joinPreds []string
+	for deps, predicates := range qg.outerJoins {
+		var inner []string
+		for _, id := range deps.inner.Constituents() {
+			inner = append(inner, fmt.Sprintf("%d", id))
+		}
+		var outer []string
+		for _, id := range deps.outer.Constituents() {
+			outer = append(outer, fmt.Sprintf("%d", id))
+		}
+
+		var expressions []string
+		for _, expr := range predicates {
+			expressions = append(expressions, sqlparser.String(expr))
+		}
+		tables := fmt.Sprintf("(%s, %s)", strings.Join(inner, ":"), strings.Join(outer, ":"))
+
+		exprConcat := strings.Join(expressions, " and ")
+		joinPreds = append(joinPreds, fmt.Sprintf("\t%s - %s", tables, exprConcat))
+	}
+	sort.Strings(joinPreds)
+	return fmt.Sprintf("\nOuterJoins:\n%s", strings.Join(joinPreds, "\n"))
 }
 
 func (qg *queryGraph) tableNames() []string {
