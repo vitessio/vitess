@@ -104,7 +104,6 @@ func TestNewUnshardedTable(t *testing.T) {
 
 	// create a new table which is not part of the VSchema
 	exec(t, conn, `create table new_table_tracked(id bigint, name varchar(100), primary key(id)) Engine=InnoDB`)
-	defer exec(t, conn, `drop table new_table_tracked`)
 
 	// waiting for the vttablet's schema_reload interval to kick in
 	assertMatchesWithTimeout(t, conn,
@@ -122,6 +121,16 @@ func TestNewUnshardedTable(t *testing.T) {
 	exec(t, conn, `update new_table_tracked set name = "newName1"`)
 	exec(t, conn, "delete from new_table_tracked where id = 0")
 	assertMatches(t, conn, `select * from new_table_tracked`, `[[INT64(1) VARCHAR("newName1")]]`)
+
+	exec(t, conn, `drop table new_table_tracked`)
+
+	// waiting for the vttablet's schema_reload interval to kick in
+	assertMatchesWithTimeout(t, conn,
+		"SHOW VSCHEMA TABLES",
+		`[[VARCHAR("dual")] [VARCHAR("main")]]`,
+		100*time.Millisecond,
+		3*time.Second,
+		"new_table_tracked not in vschema tables")
 }
 
 func assertMatches(t *testing.T, conn *mysql.Conn, query, expected string) {
