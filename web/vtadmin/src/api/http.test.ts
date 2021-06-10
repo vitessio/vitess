@@ -17,8 +17,10 @@ import { rest } from 'msw';
 import { setupServer } from 'msw/node';
 
 import * as api from './http';
-import { vtadmin as pb } from '../proto/vtadmin';
-import { HTTP_RESPONSE_NOT_OK_ERROR, MALFORMED_HTTP_RESPONSE_ERROR } from './http';
+import { HTTP_RESPONSE_NOT_OK_ERROR, MALFORMED_HTTP_RESPONSE_ERROR } from '../errors/errorTypes';
+import * as errorHandler from '../errors/errorHandler';
+
+jest.mock('../errors/errorHandler');
 
 // This test suite uses Mock Service Workers (https://github.com/mswjs/msw)
 // to mock HTTP responses from vtadmin-api.
@@ -56,7 +58,9 @@ const TEST_PROCESS_ENV = {
 };
 
 beforeAll(() => {
-    process.env = { ...TEST_PROCESS_ENV };
+    // TypeScript can get a little cranky with the automatic
+    // string/boolean type conversions, hence this cast.
+    process.env = { ...TEST_PROCESS_ENV } as NodeJS.ProcessEnv;
 
     // Enable API mocking before tests.
     server.listen();
@@ -64,7 +68,7 @@ beforeAll(() => {
 
 afterEach(() => {
     // Reset the process.env to clear out any changes made in the tests.
-    process.env = { ...TEST_PROCESS_ENV };
+    process.env = { ...TEST_PROCESS_ENV } as NodeJS.ProcessEnv;
 
     jest.restoreAllMocks();
 
@@ -92,34 +96,52 @@ describe('api/http', () => {
 
         it('throws an error if response.ok is false', async () => {
             const endpoint = `/api/tablets`;
-            const response = { ok: false };
-            mockServerJson(endpoint, response);
+            const response = {
+                ok: false,
+                error: {
+                    code: 'oh_no',
+                    message: 'something went wrong',
+                },
+            };
 
-            expect.assertions(3);
+            // See https://mswjs.io/docs/recipes/mocking-error-responses
+            server.use(rest.get(endpoint, (req, res, ctx) => res(ctx.status(500), ctx.json(response))));
+
+            expect.assertions(5);
 
             try {
                 await api.fetchTablets();
             } catch (e) {
                 /* eslint-disable jest/no-conditional-expect */
                 expect(e.name).toEqual(HTTP_RESPONSE_NOT_OK_ERROR);
-                expect(e.message).toEqual(endpoint);
+                expect(e.message).toEqual('[status 500] /api/tablets: oh_no something went wrong');
                 expect(e.response).toEqual(response);
+
+                expect(errorHandler.notify).toHaveBeenCalledTimes(1);
+                expect(errorHandler.notify).toHaveBeenCalledWith(e);
                 /* eslint-enable jest/no-conditional-expect */
             }
         });
 
         it('throws an error on malformed JSON', async () => {
             const endpoint = `/api/tablets`;
-            server.use(rest.get(endpoint, (req, res, ctx) => res(ctx.body('this is fine'))));
+            server.use(
+                rest.get(endpoint, (req, res, ctx) =>
+                    res(ctx.status(504), ctx.body('<html><head><title>504 Gateway Time-out</title></head></html>'))
+                )
+            );
 
-            expect.assertions(2);
+            expect.assertions(4);
 
             try {
                 await api.vtfetch(endpoint);
             } catch (e) {
                 /* eslint-disable jest/no-conditional-expect */
-                expect(e.name).toEqual('SyntaxError');
-                expect(e.message.startsWith('Unexpected token')).toBeTruthy();
+                expect(e.name).toEqual(MALFORMED_HTTP_RESPONSE_ERROR);
+                expect(e.message).toEqual('[status 504] /api/tablets: Unexpected token < in JSON at position 0');
+
+                expect(errorHandler.notify).toHaveBeenCalledTimes(1);
+                expect(errorHandler.notify).toHaveBeenCalledWith(e);
                 /* eslint-enable jest/no-conditional-expect */
             }
         });
@@ -151,7 +173,9 @@ describe('api/http', () => {
 
                 await api.vtfetch(endpoint);
                 expect(global.fetch).toHaveBeenCalledTimes(1);
-                expect(global.fetch).toHaveBeenCalledWith(endpoint, { credentials: 'include' });
+                expect(global.fetch).toHaveBeenCalledWith(endpoint, {
+                    credentials: 'include',
+                });
 
                 jest.restoreAllMocks();
             });
@@ -165,7 +189,9 @@ describe('api/http', () => {
 
                 await api.vtfetch(endpoint);
                 expect(global.fetch).toHaveBeenCalledTimes(1);
-                expect(global.fetch).toHaveBeenCalledWith(endpoint, { credentials: undefined });
+                expect(global.fetch).toHaveBeenCalledWith(endpoint, {
+                    credentials: undefined,
+                });
 
                 jest.restoreAllMocks();
             });
@@ -187,6 +213,9 @@ describe('api/http', () => {
                         'Invalid fetch credentials property: nope. Must be undefined or one of omit, same-origin, include'
                     );
                     expect(global.fetch).toHaveBeenCalledTimes(0);
+
+                    expect(errorHandler.notify).toHaveBeenCalledTimes(1);
+                    expect(errorHandler.notify).toHaveBeenCalledWith(e);
                     /* eslint-enable jest/no-conditional-expect */
                 }
 
@@ -200,7 +229,7 @@ describe('api/http', () => {
             const endpoint = '/api/foos';
             mockServerJson(endpoint, { ok: true, result: { foos: null } });
 
-            expect.assertions(1);
+            expect.assertions(3);
 
             try {
                 await api.vtfetchEntities({
@@ -211,6 +240,9 @@ describe('api/http', () => {
             } catch (e) {
                 /* eslint-disable jest/no-conditional-expect */
                 expect(e.message).toMatch('expected entities to be an array, got null');
+
+                expect(errorHandler.notify).toHaveBeenCalledTimes(1);
+                expect(errorHandler.notify).toHaveBeenCalledWith(e);
                 /* eslint-enable jest/no-conditional-expect */
             }
         });
