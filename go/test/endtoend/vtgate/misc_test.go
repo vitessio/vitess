@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 	"testing"
-	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/assert"
@@ -651,73 +650,6 @@ func TestQueryAndSubQWithLimit(t *testing.T) {
 	assert.Equal(t, 10, len(result.Rows))
 }
 
-func TestSchemaTracker(t *testing.T) {
-	defer cluster.PanicHandler(t)
-	ctx := context.Background()
-	conn, err := mysql.Connect(ctx, &vtParams)
-	require.NoError(t, err)
-	defer conn.Close()
-	// this query only works if we know which table the testId belongs to. The vschema does not contain
-	// this info, so we are testing that the schema tracker has added column info to the vschema
-	_, err = conn.ExecuteFetch(`select testId from t8 join t2`, 1000, true)
-	require.NoError(t, err)
-}
-
-func TestVSchemaTrackerInitAndUpdate(t *testing.T) {
-	ctx := context.Background()
-	conn, err := mysql.Connect(ctx, &vtParams)
-	require.NoError(t, err)
-	defer conn.Close()
-
-	assertMatches(t, conn, "SHOW VSCHEMA TABLES", `[[VARCHAR("aggr_test")] [VARCHAR("dual")] [VARCHAR("t1")] [VARCHAR("t1_id2_idx")] [VARCHAR("t2")] [VARCHAR("t2_id4_idx")] [VARCHAR("t3")] [VARCHAR("t3_id7_idx")] [VARCHAR("t4")] [VARCHAR("t4_id2_idx")] [VARCHAR("t5_null_vindex")] [VARCHAR("t6")] [VARCHAR("t6_id2_idx")] [VARCHAR("t7_fk")] [VARCHAR("t7_xxhash")] [VARCHAR("t7_xxhash_idx")] [VARCHAR("t8")] [VARCHAR("t9")] [VARCHAR("vstream_test")]]`)
-
-	// Init
-	_ = exec(t, conn, "create table test_sc (id bigint primary key)")
-	assertMatchesWithTimeout(t, conn,
-		"SHOW VSCHEMA TABLES",
-		`[[VARCHAR("aggr_test")] [VARCHAR("dual")] [VARCHAR("t1")] [VARCHAR("t1_id2_idx")] [VARCHAR("t2")] [VARCHAR("t2_id4_idx")] [VARCHAR("t3")] [VARCHAR("t3_id7_idx")] [VARCHAR("t4")] [VARCHAR("t4_id2_idx")] [VARCHAR("t5_null_vindex")] [VARCHAR("t6")] [VARCHAR("t6_id2_idx")] [VARCHAR("t7_fk")] [VARCHAR("t7_xxhash")] [VARCHAR("t7_xxhash_idx")] [VARCHAR("t8")] [VARCHAR("t9")] [VARCHAR("test_sc")] [VARCHAR("vstream_test")]]`,
-		100*time.Millisecond,
-		3*time.Second,
-		"test_sc not in vschema tables")
-
-	// Tables Update via health check.
-	_ = exec(t, conn, "create table test_sc1 (id bigint primary key)")
-	assertMatchesWithTimeout(t, conn,
-		"SHOW VSCHEMA TABLES",
-		`[[VARCHAR("aggr_test")] [VARCHAR("dual")] [VARCHAR("t1")] [VARCHAR("t1_id2_idx")] [VARCHAR("t2")] [VARCHAR("t2_id4_idx")] [VARCHAR("t3")] [VARCHAR("t3_id7_idx")] [VARCHAR("t4")] [VARCHAR("t4_id2_idx")] [VARCHAR("t5_null_vindex")] [VARCHAR("t6")] [VARCHAR("t6_id2_idx")] [VARCHAR("t7_fk")] [VARCHAR("t7_xxhash")] [VARCHAR("t7_xxhash_idx")] [VARCHAR("t8")] [VARCHAR("t9")] [VARCHAR("test_sc")] [VARCHAR("test_sc1")] [VARCHAR("vstream_test")]]`,
-		100*time.Millisecond,
-		3*time.Second,
-		"test_sc1 not in vschema tables")
-}
-
-func TestVSchemaTrackedForNewTables(t *testing.T) {
-	ctx := context.Background()
-	conn, err := mysql.Connect(ctx, &vtParams)
-	require.NoError(t, err)
-	defer conn.Close()
-
-	// create a new table which is not part of the VSchema
-	exec(t, conn, `create table new_table_tracked(id bigint, name varchar(100), primary key(id)) Engine=InnoDB`)
-
-	// wait for vttablet's schema reload interval to pass
-	time.Sleep(5 * time.Second)
-
-	// check if the new table is part of the schema
-	assertMatches(t, conn, "SHOW VSCHEMA TABLES", `[[VARCHAR("aggr_test")] [VARCHAR("dual")] [VARCHAR("new_table_tracked")] [VARCHAR("t1")] [VARCHAR("t1_id2_idx")] [VARCHAR("t2")] [VARCHAR("t2_id4_idx")] [VARCHAR("t3")] [VARCHAR("t3_id7_idx")] [VARCHAR("t4")] [VARCHAR("t4_id2_idx")] [VARCHAR("t5_null_vindex")] [VARCHAR("t6")] [VARCHAR("t6_id2_idx")] [VARCHAR("t7_fk")] [VARCHAR("t7_xxhash")] [VARCHAR("t7_xxhash_idx")] [VARCHAR("t8")] [VARCHAR("t9")] [VARCHAR("vstream_test")]]`)
-
-	// DML on new table
-	assertMatches(t, conn, "select id from new_table_tracked", `[]`)                         // select
-	exec(t, conn, `insert into new_table_tracked(id) values(0),(1)`)                         // insert initial data
-	assertMatches(t, conn, "select id from new_table_tracked", `[[INT64(0)] [INT64(1)]]`)    // select
-	assertMatches(t, conn, "select id from new_table_tracked where id = 1 ", `[[INT64(1)]]`) // select with WHERE clause
-
-	exec(t, conn, `update new_table_tracked set name = "newName1" where id = 1`) // update
-	assertMatches(t, conn, "select name from new_table_tracked where id = 1 ", `[[VARCHAR("newName1")]]`)
-
-	exec(t, conn, "delete from new_table_tracked where id = 0") // delete
-	assertMatches(t, conn, "select id from new_table_tracked", `[[INT64(1)]]`)
-}
-
 func assertMatches(t *testing.T, conn *mysql.Conn, query, expected string) {
 	t.Helper()
 	qr := exec(t, conn, query)
@@ -728,22 +660,6 @@ func assertMatches(t *testing.T, conn *mysql.Conn, query, expected string) {
 	}
 }
 
-func assertMatchesWithTimeout(t *testing.T, conn *mysql.Conn, query, expected string, r time.Duration, d time.Duration, failureMsg string) {
-	t.Helper()
-	timeout := time.After(d)
-	diff := "actual and expectation does not match"
-	for len(diff) > 0 {
-		select {
-		case <-timeout:
-			require.Fail(t, failureMsg, diff)
-		case <-time.After(r):
-			qr := exec(t, conn, `SHOW VSCHEMA TABLES`)
-			diff = cmp.Diff(expected,
-				fmt.Sprintf("%v", qr.Rows))
-		}
-
-	}
-}
 func assertMatchesNoOrder(t *testing.T, conn *mysql.Conn, query, expected string) {
 	t.Helper()
 	qr := exec(t, conn, query)
