@@ -500,6 +500,9 @@ const (
 // Originally found in include/mysql/mysql_com.h
 // See http://dev.mysql.com/doc/internals/en/status-flags.html
 const (
+	// ServerInTransaction is SERVER_STATUS_IN_TRANS (a transaction is active)
+	ServerInTransaction = 0x0001
+
 	// ServerStatusAutocommit is SERVER_STATUS_AUTOCOMMIT.
 	ServerStatusAutocommit = 0x0002
 
