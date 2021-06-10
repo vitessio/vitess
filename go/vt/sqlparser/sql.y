@@ -1819,13 +1819,9 @@ table_option:
   {
     $$ = &TableOption{Name:string($1), Value:NewStrLiteral($3)}
   }
-| ENGINE equal_opt id_or_var
+| ENGINE equal_opt table_alias
   {
     $$ = &TableOption{Name:string($1), String:$3.String()}
-  }
-| ENGINE equal_opt STRING
-  {
-    $$ = &TableOption{Name:string($1), Value:NewStrLiteral($3)}
   }
 | INSERT_METHOD equal_opt insert_method_options
   {
