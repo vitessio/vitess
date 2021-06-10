@@ -1,11 +1,11 @@
 # DO NOT MODIFY: THIS FILE IS GENERATED USING "make generate_ci_workflows"
 
-name: Cluster (vtgate_sequence)
+name: Cluster (vtgate_vindex)
 on: [push, pull_request]
 jobs:
 
   build:
-    name: Run endtoend tests on Cluster (vtgate_sequence)
+    name: Run endtoend tests on Cluster (vtgate_vindex)
     runs-on: ubuntu-18.04
 
     steps:
@@ -47,4 +47,4 @@ jobs:
       timeout-minutes: 30
       run: |
         source build.env
-        eatmydata -- go run test.go -docker=false -print-log -follow -shard vtgate_sequence
+        eatmydata -- go run test.go -docker=false -print-log -follow -shard vtgate_vindex
