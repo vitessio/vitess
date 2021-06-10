@@ -25,6 +25,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"vitess.io/vitess/go/vt/log"
 )
 
 const (
@@ -52,7 +54,10 @@ func newVttestserver(dockerImage string, keyspaces []string, numShards []int, my
 
 func (v *vttestserver) teardown() {
 	cmd := exec.Command("docker", "rm", "--force", "vttestserver-end2end-test")
-	_ = cmd.Run()
+	err := cmd.Run()
+	if err != nil {
+		log.Errorf("docker teardown failed :- %s", err.Error())
+	}
 }
 
 // startDockerImage starts the docker image for the vttestserver
