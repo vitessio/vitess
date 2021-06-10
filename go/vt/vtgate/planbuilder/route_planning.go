@@ -698,7 +698,28 @@ func greedySolve(qg *queryGraph, semTable *semantics.SemTable, vschema ContextVS
 		return nil, err
 	}
 
-	crossJoinsOK := false
+	var innerJt, outerJt []joinTree
+	outers := semantics.TableSet(0)
+	for key := range qg.outerJoins {
+		outers = outers.Merge(key.outer)
+	}
+	for _, jt := range joinTrees {
+		if !jt.tables().IsOverlapping(outers) {
+			innerJt = append(innerJt, jt)
+		} else {
+			outerJt = append(outerJt, jt)
+		}
+	}
+
+	tree, err := mergeJoinTrees(qg, semTable, innerJt, planCache, false)
+	if err != nil {
+		return nil, err
+	}
+
+	return tree, nil
+}
+
+func mergeJoinTrees(qg *queryGraph, semTable *semantics.SemTable, joinTrees []joinTree, planCache cacheMap, crossJoinsOK bool) (joinTree, error) {
 	for len(joinTrees) > 1 {
 		bestTree, lIdx, rIdx, err := findBestJoinTree(qg, semTable, joinTrees, planCache, crossJoinsOK)
 		if err != nil {
@@ -722,7 +743,6 @@ func greedySolve(qg *queryGraph, semTable *semantics.SemTable, vschema ContextVS
 			crossJoinsOK = true
 		}
 	}
-
 	return joinTrees[0], nil
 }
 
