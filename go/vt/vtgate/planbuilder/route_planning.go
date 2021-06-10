@@ -55,6 +55,8 @@ func newBuildSelectPlan(sel *sqlparser.Select, vschema ContextVSchema) (engine.P
 		return nil, err
 	}
 
+	sel = expandStar(sel, semTable, vschema)
+
 	qgraph, err := createQGFromSelect(sel, semTable)
 	if err != nil {
 		return nil, err
@@ -95,6 +97,11 @@ func newBuildSelectPlan(sel *sqlparser.Select, vschema ContextVSchema) (engine.P
 		return nil, err
 	}
 	return plan.Primitive(), nil
+}
+
+func expandStar(sel *sqlparser.Select, semTable *semantics.SemTable, vschema semantics.SchemaInformation) *sqlparser.Select {
+	// TODO we could store in semTable whether there are any * in the query that needs expanding or not
+	return sel
 }
 
 func planLimit(limit *sqlparser.Limit, plan logicalPlan) (logicalPlan, error) {
