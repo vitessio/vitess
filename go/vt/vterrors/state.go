@@ -43,6 +43,7 @@ const (
 	InnodbReadOnly
 	WrongNumberOfColumnsInSelect
 	CantDoThisInTransaction
+	RequiresPrimaryKey
 
 	// not found
 	BadDb
