@@ -189,11 +189,11 @@ func validateDryRunResults(t *testing.T, output string, want []string) {
 		}
 		if !match {
 			fail = true
-			t.Logf("want %s, got %s\n", w, gotDryRun[i])
+			t.Fatalf("want %s, got %s\n", w, gotDryRun[i])
 		}
 	}
 	if fail {
-		t.Fatal("Dry run results don't match")
+		t.Fatalf("Dry run results don't match, want %s, got %s", want, gotDryRun)
 	}
 }
 
