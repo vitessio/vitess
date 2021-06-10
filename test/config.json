@@ -584,7 +584,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/buffer"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "17",
+			"Shard": "vtgate_buffer",
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -593,7 +593,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/concurrentdml"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "17",
+			"Shard": "vtgate_concurrentdml",
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -602,7 +602,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/schema"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "17",
+			"Shard": "vtgate_schema",
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -611,7 +611,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/sequence"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "17",
+			"Shard": "vtgate_sequence",
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -620,7 +620,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/reservedconn"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "17",
+			"Shard": "vtgate_setstatement",
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -629,7 +629,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/reservedconn/reconnect1"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "17",
+			"Shard": "vtgate_reservedconn",
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -638,7 +638,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/reservedconn/reconnect2"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "17",
+			"Shard": "vtgate_reservedconn",
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -647,7 +647,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/transaction"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "17",
+			"Shard": "vtgate_transaction",
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -656,7 +656,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/unsharded"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "17",
+			"Shard": "vtgate_unsharded",
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -665,7 +665,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/vschema"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "17",
+			"Shard": "vtgate_vschema",
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -674,7 +674,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/readafterwrite"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "17",
+			"Shard": "vtgate_readafterwrite",
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -701,7 +701,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/topotest/etcd2"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "17",
+			"Shard": "vtgate_topo",
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -710,7 +710,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/errors_as_warnings"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "17",
+			"Shard": "vtgate_topo",
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -737,7 +737,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/recovery/xtrabackup"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "17",
+			"Shard": "xb_recovery",
 			"RetryMax": 0,
 			"Tags": []
 		},
