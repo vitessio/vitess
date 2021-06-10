@@ -215,6 +215,9 @@ func (v *VRepl) applyColumnTypes(ctx context.Context, conn *dbconnpool.DBConnect
 			if strings.Contains(columnType, "float") {
 				column.Type = vrepl.FloatColumnType
 			}
+			if strings.Contains(columnType, "int") {
+				column.Type = vrepl.IntegerColumnType
+			}
 			if strings.HasPrefix(columnType, "enum") {
 				column.Type = vrepl.EnumColumnType
 				column.EnumValues = vrepl.ParseEnumValues(columnType)
@@ -224,10 +227,14 @@ func (v *VRepl) applyColumnTypes(ctx context.Context, conn *dbconnpool.DBConnect
 				column.BinaryOctetLength = columnOctetLength
 			}
 			if charset := row.AsString("CHARACTER_SET_NAME", ""); charset != "" {
-				if !strings.HasPrefix(charset, "utf8") {
-					return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Vitess does not support charset '%s'. Only utf8 and derivatives (like utf8mb4) are supported", charset)
-				}
+				// if !strings.HasPrefix(charset, "utf8") {
+				// 	return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Vitess does not support charset '%s'. Only utf8 and derivatives (like utf8mb4) are supported", charset)
+				// }
 				column.Charset = charset
+			}
+			if collation := row.AsString("COLLATION_NAME", ""); collation != "" {
+				column.Type = vrepl.StringColumnType
+				column.Collation = collation
 			}
 		}
 	}
@@ -386,9 +393,24 @@ func (v *VRepl) generateFilterQuery(ctx context.Context) error {
 		}
 		switch col.Type {
 		case vrepl.JSONColumnType:
-			sb.WriteString("convert(")
-			sb.WriteString(escapeName(name))
-			sb.WriteString(" using utf8mb4)")
+			sb.WriteString(fmt.Sprintf("convert(%s using utf8mb4)", escapeName(name)))
+		case vrepl.StringColumnType:
+			targetCol := v.targetSharedColumns.GetColumn(targetName)
+			if targetCol == nil {
+				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Cannot find target column %s", targetName)
+			}
+			if col.Collation != targetCol.Collation {
+				fmt.Printf("============ collcation change: %s => %s\n", col.Collation, targetCol.Collation)
+				if strings.HasPrefix(targetCol.Charset, "utf8") {
+					// sb.WriteString(fmt.Sprintf("cast(%s as binary)", escapeName(name)))
+					sb.WriteString(fmt.Sprintf("convert(convert(convert(%s USING %s) USING binary) USING %s)", escapeName(name), col.Charset, targetCol.Charset))
+					// sb.WriteString(fmt.Sprintf("convert(%s USING %s) COLLATE %s", escapeName(name), targetCol.Charset, targetCol.Collation))
+				} else {
+					sb.WriteString(fmt.Sprintf("convert(%s, char character set %s) COLLATE %s", escapeName(name), targetCol.Charset, targetCol.Collation))
+				}
+			} else {
+				sb.WriteString(escapeName(name))
+			}
 		default:
 			sb.WriteString(escapeName(name))
 		}

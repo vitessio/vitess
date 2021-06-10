@@ -41,6 +41,8 @@ const (
 	JSONColumnType
 	FloatColumnType
 	BinaryColumnType
+	StringColumnType
+	IntegerColumnType
 )
 
 // Column represents a table column
@@ -48,6 +50,7 @@ type Column struct {
 	Name                 string
 	IsUnsigned           bool
 	Charset              string
+	Collation            string
 	Type                 ColumnType
 	EnumValues           string
 	EnumToTextConversion bool

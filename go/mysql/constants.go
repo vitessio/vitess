@@ -626,6 +626,15 @@ var CharacterSetMap = map[string]uint8{
 	"eucjpms":  97,
 }
 
+// ReverseCharacterSetMap maps a charset integer code to charset name
+var ReverseCharacterSetMap = map[uint8]string{}
+
+func init() {
+	for c, i := range CharacterSetMap {
+		ReverseCharacterSetMap[i] = c
+	}
+}
+
 // IsNum returns true if a MySQL type is a numeric value.
 // It is the same as IS_NUM defined in mysql.h.
 func IsNum(typ uint8) bool {

@@ -200,6 +200,7 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 
 	log.Infof("Copying table %s, lastpk: %v", tableName, copyState[tableName])
 
+	fmt.Printf("============ buildReplicatorPlan( ivc.vr.source.Filter: %v\n", vc.vr.source.Filter)
 	plan, err := buildReplicatorPlan(vc.vr.source.Filter, vc.vr.pkInfoMap, nil, vc.vr.stats)
 	if err != nil {
 		return err
@@ -222,6 +223,7 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 	var updateCopyState *sqlparser.ParsedQuery
 	var bv map[string]*querypb.BindVariable
 	var sqlbuffer bytes2.Buffer
+	fmt.Printf("============ VStreamRows( initialPlan.SendRule.Filter: %v\n", initialPlan.SendRule.Filter)
 	err = vc.vr.sourceVStreamer.VStreamRows(ctx, initialPlan.SendRule.Filter, lastpkpb, func(rows *binlogdatapb.VStreamRowsResponse) error {
 		for {
 			select {

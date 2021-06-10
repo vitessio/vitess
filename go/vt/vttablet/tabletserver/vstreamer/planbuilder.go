@@ -48,6 +48,8 @@ type Plan struct {
 	// in the stream.
 	ColExprs []ColExpr
 
+	convertToBinary map[string]bool
+
 	// Filters is the list of filters to be applied to the columns
 	// of the table.
 	Filters []Filter
@@ -323,12 +325,14 @@ func buildTablePlan(ti *Table, vschema *localVSchema, query string) (*Plan, erro
 	}
 
 	plan := &Plan{
-		Table: ti,
+		Table:           ti,
+		convertToBinary: map[string]bool{},
 	}
 	if err := plan.analyzeWhere(vschema, sel.Where); err != nil {
 		log.Errorf("%s", err.Error())
 		return nil, err
 	}
+	fmt.Printf("========= buildTablePlan.analyzeExprs: sel.SelectExprs: %v, %v\n", len(sel.SelectExprs), sqlparser.String(sel.SelectExprs))
 	if err := plan.analyzeExprs(vschema, sel.SelectExprs); err != nil {
 		log.Errorf("%s", err.Error())
 		return nil, err
@@ -456,6 +460,7 @@ func (plan *Plan) analyzeExprs(vschema *localVSchema, selExprs sqlparser.SelectE
 }
 
 func (plan *Plan) analyzeExpr(vschema *localVSchema, selExpr sqlparser.SelectExpr) (cExpr ColExpr, err error) {
+	fmt.Printf("========= Plan: analyzeExpr selExpr s: %v\n", sqlparser.String(selExpr))
 	aliased, ok := selExpr.(*sqlparser.AliasedExpr)
 	if !ok {
 		return ColExpr{}, fmt.Errorf("unsupported: %v", sqlparser.String(selExpr))
@@ -519,6 +524,18 @@ func (plan *Plan) analyzeExpr(vschema *localVSchema, selExpr sqlparser.SelectExp
 			},
 			ColNum:     -1,
 			FixedValue: sqltypes.NewInt64(num),
+		}, nil
+	case *sqlparser.ConvertExpr, *sqlparser.ConvertUsingExpr:
+		colnum, err := findColumn(plan.Table, aliased.As)
+		fmt.Printf("========= findColumn2: %v, %v \n", colnum, err)
+		if err != nil {
+			return ColExpr{}, err
+		}
+		field := plan.Table.Fields[colnum]
+		plan.convertToBinary[field.Name] = true
+		return ColExpr{
+			ColNum: colnum,
+			Field:  field,
 		}, nil
 	default:
 		log.Infof("Unsupported expression: %v", inner)
