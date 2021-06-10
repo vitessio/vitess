@@ -93,6 +93,9 @@ Vitess 9.0 is not compatible with the previous release of the Vitess Kubernetes 
 * VTGate: Move auto_increment from reserved to non reserved keyword #7162
 * VTGate: Add only expr of aliasedExpr to weightstring function #7165
 * VTGate: [9.0] don't try to compare varchars in vtgate #7271
+* VTGate: Load Data From S3 #6823
+* VTGate: Unnest simple subqueries #6831
+* VTGate: Adding MySQL Check Constraints #6869
 * VTExplain: Add sequence table support for vtexplain #7186
 * VSchema: Support back-quoted names #7073
 * Healthcheck: healthy list should be recomputed when a tablet is removed #7176
@@ -120,6 +123,7 @@ Set statement support has been added in Vitess. There are [some system variables
 * VReplication: Set time zone to UTC while streaming rows #6845
 * VReplication: Materialization and character sets: Add test to verify/demo a workaround for charset issues while using string functions in filters #6847
 * VReplication: Tool to diagnose vreplication issues in production #6892
+* VReplication: Allow multiple blacklists for master #6816
 * VStreamer Field Event: add allowed values for set/enum #6981
 * VDiff: lock keyspace while snapshoting, restart target in case of errors #7012
 * VDiff: make enums comparable #6880
@@ -248,6 +252,7 @@ Automatically terminate migrations run by a failed tablet
 * goimport proto files correctly #7264
 * Cherry pick version of #7233 for release-9.0 #7265
 * Update Java version to 9.0 #7369
+* Adding curl as dependency #6965
 
 ## Functionality Neutral Changes
 
@@ -283,4 +288,4 @@ Automatically terminate migrations run by a failed tablet
 * Backport #7275: VReplication: Miscellaneous improvements #7349
 * Backport 7342: Workflow Show: use timeUpdated to calculate vreplication lag #7354
 * Backport 7361: vtctl: Add missing err checks for VReplication v2 #7363
-
+* Backport 7297: VStreamer Events: remove preceding zeroes from decimals in Row Events #7340
