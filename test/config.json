@@ -418,7 +418,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/sharding/resharding/v3"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "15",
+			"Shard": "resharding",
 			"RetryMax": 0,
 			"Tags": [
 				"worker_test"
@@ -429,7 +429,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/sharding/resharding/string"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "15",
+			"Shard": "resharding_bytes",
 			"RetryMax": 0,
 			"Tags": [
 				"worker_test"
