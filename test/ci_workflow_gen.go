@@ -79,6 +79,8 @@ var (
 		"vtgate_readafterwrite",
 		"vtgate_topo",
 		"xb_recovery",
+		"resharding",
+		"resharding_bytes",
 	}
 	// TODO: currently some percona tools including xtrabackup are installed on all clusters, we can possibly optimize
 	// this by only installing them in the required clusters
