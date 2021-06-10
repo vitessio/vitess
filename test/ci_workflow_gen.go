@@ -67,6 +67,18 @@ var (
 		"tabletmanager_throttler_custom_config",
 		"tabletmanager_tablegc",
 		"vtorc",
+		"vtgate_buffer",
+		"vtgate_concurrentdml",
+		"vtgate_schema",
+		"vtgate_sequence",
+		"vtgate_setstatement",
+		"vtgate_reservedconn",
+		"vtgate_transaction",
+		"vtgate_unsharded",
+		"vtgate_vschema",
+		"vtgate_readafterwrite",
+		"vtgate_topo",
+		"xb_recovery",
 	}
 	// TODO: currently some percona tools including xtrabackup are installed on all clusters, we can possibly optimize
 	// this by only installing them in the required clusters
