@@ -262,7 +262,7 @@ func skipToEnd(yylex interface{}) {
 %token <bytes> THREAD_PRIORITY TIES UNBOUNDED VCPU VISIBLE SYSTEM INFILE
 
 %type <statement> command
-%type <selStmt> select_statement base_select base_select_no_cte union_lhs union_rhs
+%type <selStmt>  create_query_expression select_statement base_select base_select_no_cte union_lhs union_rhs
 %type <statement> stream_statement insert_statement update_statement delete_statement set_statement trigger_body
 %type <statement> create_statement rename_statement drop_statement truncate_statement flush_statement call_statement
 %type <statement> trigger_begin_end_block statement_list_statement case_statement if_statement signal_statement
@@ -740,6 +740,12 @@ create_statement:
     }
     $$ = $1
   }
+  // TODO: Allow for table specs to be parsed here
+| create_table_prefix as_opt create_query_expression
+  {
+    $1.OptSelect = &OptSelect{Select: $3}
+    $$ = $1
+  }
 | create_table_prefix LIKE table_name
   {
     $1.OptLike = &OptLike{LikeTable: $3}
@@ -780,6 +786,16 @@ create_statement:
 | CREATE definer_opt PROCEDURE ID '(' proc_param_list_opt ')' characteristic_list_opt lexer_position statement_list_statement lexer_position
   {
     $$ = &DDL{Action: CreateStr, ProcedureSpec: &ProcedureSpec{Name: string($4), Definer: $2, Params: $6, Characteristics: $8, Body: $10}, SubStatementPositionStart: $9, SubStatementPositionEnd: $11 - 1}
+  }
+
+// TODO: Implement IGNORE, REPLACE, VALUES, and TABLE
+create_query_expression:
+  base_select_no_cte order_by_opt limit_opt lock_opt
+  {
+    $1.SetOrderBy($2)
+    $1.SetLimit($3)
+    $1.SetLock($4)
+    $$ = $1
   }
 
 proc_param_list_opt:
