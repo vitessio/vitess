@@ -20,6 +20,10 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/sqltypes"
+
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 
 	"github.com/stretchr/testify/assert"
@@ -121,4 +125,30 @@ func TestClone(t *testing.T) {
 	clonedRP.vindexPreds[0].foundVindex = &vindexes.Null{}
 	assert.NotNil(t, clonedRP.vindexPreds[0].foundVindex)
 	assert.Nil(t, original.vindexPreds[0].foundVindex)
+}
+
+func TestExpandStar(t *testing.T) {
+	ast, err := sqlparser.Parse("select * from tbl")
+	require.NoError(t, err)
+	schemaInfo := &fakeSI{
+		tables: map[string]*vindexes.Table{
+			"tbl": {
+				Columns: []vindexes.Column{{
+					Name: sqlparser.NewColIdent("a"),
+					Type: sqltypes.VarChar,
+				}, {
+					Name: sqlparser.NewColIdent("b"),
+					Type: sqltypes.VarChar,
+				}, {
+					Name: sqlparser.NewColIdent("c"),
+					Type: sqltypes.VarChar,
+				}},
+				ColumnListAuthoritative: true,
+			},
+		},
+	}
+	semState, err := semantics.Analyze(ast, "db", schemaInfo)
+	require.NoError(t, err)
+	expanded := expandStar(ast.(*sqlparser.Select), semState, schemaInfo)
+	assert.Equal(t, "select tbl.a, tbl.b, tbl.c from tbl", sqlparser.String(expanded))
 }
