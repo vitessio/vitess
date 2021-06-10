@@ -150,6 +150,9 @@ func skipToEnd(yylex interface{}) {
   Fields *Fields
   Lines	*Lines
   EnclosedBy *EnclosedBy
+  tableAndLockType *TableAndLockType
+  tableAndLockTypes TableAndLockTypes
+  lockType LockType
 }
 
 %token LEX_ERROR
@@ -225,8 +228,11 @@ func skipToEnd(yylex interface{}) {
 %token <bytes> BLOB TINYBLOB MEDIUMBLOB LONGBLOB JSON ENUM
 %token <bytes> GEOMETRY POINT LINESTRING POLYGON GEOMETRYCOLLECTION MULTIPOINT MULTILINESTRING MULTIPOLYGON
 
+// Lock tokens
+%token <bytes> LOCAL LOW_PRIORITY
+
 // Type Modifiers
-%token <bytes> NULLX AUTO_INCREMENT APPROXNUM SIGNED UNSIGNED ZEROFILL LOCAL
+%token <bytes> NULLX AUTO_INCREMENT APPROXNUM SIGNED UNSIGNED ZEROFILL
 
 // Supported SHOW tokens
 %token <bytes> COLLATION DATABASES SCHEMAS TABLES FULL PROCESSLIST COLUMNS FIELDS ENGINES PLUGINS
@@ -268,6 +274,7 @@ func skipToEnd(yylex interface{}) {
 %type <statement> trigger_begin_end_block statement_list_statement case_statement if_statement signal_statement
 %type <statement> begin_end_block declare_statement resignal_statement
 %type <statement> savepoint_statement rollback_savepoint_statement release_savepoint_statement
+%type <statement> lock_statement unlock_statement
 %type <statements> statement_list
 %type <caseStatementCases> case_statement_case_list
 %type <caseStatementCase> case_statement_case
@@ -401,6 +408,9 @@ func skipToEnd(yylex interface{}) {
 %type <Lines> lines_opt
 %type <EnclosedBy> enclosed_by_opt
 %type <sqlVal> terminated_by_opt starting_by_opt escaped_by_opt
+%type <tableAndLockTypes> lock_table_list
+%type <tableAndLockType> lock_table
+%type <lockType> lock_type
 
 %start any_command
 
@@ -448,6 +458,8 @@ command:
 | savepoint_statement
 | rollback_savepoint_statement
 | release_savepoint_statement
+| lock_statement
+| unlock_statement
 | /*empty*/
 {
   setParseTree(yylex, nil)
@@ -2778,14 +2790,6 @@ other_statement:
   {
     $$ = &OtherAdmin{}
   }
-| LOCK TABLES skip_to_end
-  {
-    $$ = &OtherAdmin{}
-  }
-| UNLOCK TABLES skip_to_end
-  {
-    $$ = &OtherAdmin{}
-  }
 
 flush_statement:
   FLUSH skip_to_end
@@ -4712,6 +4716,56 @@ starting_by_opt:
     $$ = NewStrVal($3)
   }
 
+lock_statement:
+  LOCK TABLES lock_table_list
+  {
+    $$ = &LockTables{Tables: $3}
+  }
+
+lock_table_list:
+  lock_table
+  {
+    $$ = TableAndLockTypes{$1}
+  }
+| lock_table_list ',' lock_table
+  {
+    $$ = append($1, $3)
+  }
+
+lock_table:
+  table_name lock_type
+  {
+    $$ = &TableAndLockType{Table:&AliasedTableExpr{Expr: $1}, Lock:$2}
+  }
+|  table_name AS table_alias lock_type
+  {
+    $$ = &TableAndLockType{Table:&AliasedTableExpr{Expr: $1, As: $3}, Lock:$4}
+  }
+
+lock_type:
+  READ
+  {
+    $$ = LockRead
+  }
+| READ LOCAL
+  {
+    $$ = LockReadLocal
+  }
+| WRITE
+  {
+    $$ = LockWrite
+  }
+| LOW_PRIORITY WRITE
+  {
+    $$ = LockLowPriorityWrite
+  }
+
+unlock_statement:
+  UNLOCK TABLES
+  {
+    $$ = &UnlockTables{}
+  }
+
 /*
   These are not all necessarily reserved in MySQL, but some are.
 
@@ -4952,6 +5006,7 @@ non_reserved_keyword:
 | LOCKED
 | LONGBLOB
 | LONGTEXT
+| LOW_PRIORITY
 | MASTER_COMPRESSION_ALGORITHMS
 | MASTER_PUBLIC_KEY_PATH
 | MASTER_TLS_CIPHERSUITES

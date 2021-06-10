@@ -376,6 +376,8 @@ func (*Load) iStatement()              {}
 func (*Savepoint) iStatement()         {}
 func (*RollbackSavepoint) iStatement() {}
 func (*ReleaseSavepoint) iStatement()  {}
+func (*LockTables) iStatement()        {}
+func (*UnlockTables) iStatement()      {}
 
 // ParenSelect can actually not be a top level statement,
 // but we have to allow it because it's a requirement
@@ -5346,6 +5348,86 @@ mustEscape:
 		}
 	}
 	buf.WriteByte('`')
+}
+
+// LockType is an enum for Lock Types
+type LockType string
+
+const (
+	LockRead             LockType = "read"
+	LockWrite            LockType = "write"
+	LockReadLocal        LockType = "read local"
+	LockLowPriorityWrite LockType = "low_priority write"
+)
+
+// TableAndLockType contains table and lock association
+type TableAndLockType struct {
+	Table TableExpr
+	Lock  LockType
+	SQLNode
+}
+
+func (node *TableAndLockType) Format(buf *TrackedBuffer) {
+	buf.Myprintf("%v %s", node.Table, string(node.Lock))
+}
+
+func (node *TableAndLockType) walkSubtree(visit Visit) error {
+	if node == nil {
+		return nil
+	}
+
+	return Walk(
+		visit,
+		node.Table)
+}
+
+type TableAndLockTypes []*TableAndLockType
+
+// LockTables represents the lock statement
+type LockTables struct {
+	Tables TableAndLockTypes
+	SQLNode
+}
+
+func (node *LockTables) Format(buf *TrackedBuffer) {
+	buf.WriteString("lock tables")
+	for i, lt := range node.Tables {
+		if i == 0 {
+			buf.Myprintf(" %v", lt)
+		} else {
+			buf.Myprintf(", %v", lt)
+		}
+	}
+}
+
+func (node *LockTables) walkSubtree(visit Visit) error {
+	if node == nil {
+		return nil
+	}
+
+	for _, t := range node.Tables {
+		err := Walk(visit, t)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// UnlockTables represents the unlock statement
+type UnlockTables struct{}
+
+func (node *UnlockTables) Format(buf *TrackedBuffer) {
+	buf.WriteString("unlock tables")
+}
+
+func (node *UnlockTables) walkSubtree(visit Visit) error {
+	if node == nil {
+		return nil
+	}
+
+	return nil
 }
 
 func compliantName(in string) string {

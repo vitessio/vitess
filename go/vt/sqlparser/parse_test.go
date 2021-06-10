@@ -1648,12 +1648,6 @@ var (
 			input:  "optimize foo",
 			output: "otheradmin",
 		}, {
-			input:  "lock tables foo",
-			output: "otheradmin",
-		}, {
-			input:  "unlock tables foo",
-			output: "otheradmin",
-		}, {
 			input: "select /* EQ true */ 1 from t where a = true",
 		}, {
 			input: "select /* EQ false */ 1 from t where a = false",
@@ -3528,6 +3522,44 @@ func TestCreateTableSelect(t *testing.T) {
 			continue
 		}
 		if got, want := String(tree.(*DDL)), tcase.output; got != want {
+			t.Errorf("Parse(%s):\n%s, want\n%s", tcase.input, got, want)
+		}
+	}
+}
+
+func TestLocks(t *testing.T) {
+	testCases := []struct {
+		input  string
+		output string
+	}{{
+		input:  "lock tables foo read",
+		output: "lock tables foo read",
+	}, {
+		input:  "LOCK TABLES `t1` READ",
+		output: "lock tables t1 read",
+	}, {
+		input:  "LOCK TABLES `mytable` as `t` WRITE",
+		output: "lock tables mytable as t write",
+	}, {
+		input:  "LOCK TABLES t1 WRITE, t2 READ",
+		output: "lock tables t1 write, t2 read",
+	}, {
+		input:  "LOCK TABLES t1 LOW_PRIORITY WRITE, t2 READ LOCAL",
+		output: "lock tables t1 low_priority write, t2 read local",
+	}, {
+		input:  "LOCK TABLES t1 as table1 LOW_PRIORITY WRITE, t2 as table2 READ LOCAL",
+		output: "lock tables t1 as table1 low_priority write, t2 as table2 read local",
+	}, {
+		input:  "UNLOCK TABLES",
+		output: "unlock tables",
+	}, {
+		input:  "LOCK TABLES `people` READ /*!32311 LOCAL */",
+		output: "lock tables people read local",
+	}}
+	for _, tcase := range testCases {
+		p, err := Parse(tcase.input)
+		require.NoError(t, err)
+		if got, want := String(p), tcase.output; got != want {
 			t.Errorf("Parse(%s):\n%s, want\n%s", tcase.input, got, want)
 		}
 	}
