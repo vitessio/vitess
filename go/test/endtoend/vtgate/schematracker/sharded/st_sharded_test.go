@@ -165,7 +165,7 @@ func TestMain(m *testing.M) {
 	os.Exit(exitCode)
 }
 
-func TestSchemaTracker(t *testing.T) {
+func TestAmbiguousColumnJoin(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
@@ -177,7 +177,7 @@ func TestSchemaTracker(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func TestVSchemaTrackerInitAndUpdate(t *testing.T) {
+func TestInitAndUpdate(t *testing.T) {
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
@@ -213,7 +213,7 @@ func TestVSchemaTrackerInitAndUpdate(t *testing.T) {
 
 }
 
-func TestVSchemaTrackedForNewTables(t *testing.T) {
+func TestDMLOnNewTable(t *testing.T) {
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
@@ -276,6 +276,7 @@ func assertMatchesWithTimeout(t *testing.T, conn *mysql.Conn, query, expected st
 
 	}
 }
+
 func assertMatchesNoOrder(t *testing.T, conn *mysql.Conn, query, expected string) {
 	t.Helper()
 	qr := exec(t, conn, query)
