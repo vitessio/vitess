@@ -26,7 +26,7 @@ var (
 	errUnsupportedCompressionEngine    = errors.New("unsupported engine")
 	errUnsupportedCompressionExtension = errors.New("unsupported extension")
 
-	// this is use by getEngineFromExtension() to figure out which engine to use in case the user didn't specify
+	// this is used by getEngineFromExtension() to figure out which engine to use in case the user didn't specify
 	engineExtensions = map[string][]string{
 		".gz":  {"pgzip", "pargzip"},
 		".lz4": {"lz4"},
@@ -84,8 +84,6 @@ func prepareExternalCompressionCmd(ctx context.Context, cmdStr string) (*exec.Cm
 }
 
 // This returns a writer that writes the compressed output of the external command to the provided writer.
-// It is important to wait on the WaitGroup provided to make sure that even after closing the writer,
-// the command will have processed its input buffer, otherwise not all data might have been written to the target writer.
 func newExternalCompressor(ctx context.Context, cmdStr string, writer io.Writer, logger logutil.Logger) (io.WriteCloser, error) {
 	logger.Infof("Compressing using external command: %q", cmdStr)
 
@@ -113,7 +111,7 @@ func newExternalCompressor(ctx context.Context, cmdStr string, writer io.Writer,
 		return nil, vterrors.Wrap(err, "can't start external decompressor")
 	}
 
-	compressor.wg.Add(1) // one for the logger, another one for the go func below
+	compressor.wg.Add(1) // we wait for the gorouting to finish when we call Close() on the writer
 	go scanLinesToLogger("compressor stderr", cmdErr, logger, compressor.wg.Done)
 
 	return compressor, nil
@@ -149,7 +147,7 @@ func newExternalDecompressor(ctx context.Context, cmdStr string, reader io.Reade
 		return nil, vterrors.Wrap(err, "can't start external decompressor")
 	}
 
-	decompressor.wg.Add(1)
+	decompressor.wg.Add(1) // we wait for the gorouting to finish when we call Close() on the reader
 	go scanLinesToLogger("decompressor stderr", cmdErr, logger, decompressor.wg.Done)
 
 	return decompressor, nil
@@ -198,7 +196,7 @@ func newBuiltinDecompressor(engine, extension string, reader io.Reader, logger l
 	return decompressor, err
 }
 
-// This return a writer that will compress the data using the specified engine before writing to the underlying writer.
+// This returns a writer that will compress the data using the specified engine before writing to the underlying writer.
 func newBuiltinCompressor(engine string, writer io.Writer, logger logutil.Logger) (compressor io.WriteCloser, err error) {
 	switch engine {
 	case "pgzip":
@@ -225,7 +223,6 @@ func newBuiltinCompressor(engine string, writer io.Writer, logger logutil.Logger
 
 		compressor = lz4Writer
 	case "zstd":
-		// compressor = zstd.NewWriterLevel(writer, *compressionLevel)
 		zst, err := zstd.NewWriter(writer, zstd.WithEncoderLevel(zstd.EncoderLevel(*compressionLevel)))
 		if err != nil {
 			return compressor, vterrors.Wrap(err, "cannot create zstd compressor")

@@ -23,12 +23,13 @@ require (
 	github.com/cyberdelia/go-metrics-graphite v0.0.0-20161219230853-39f87cc3b432
 	github.com/dave/jennifer v1.4.1
 	github.com/evanphx/json-patch v4.5.0+incompatible
+	github.com/frankban/quicktest v1.13.0 // indirect
 	github.com/go-martini/martini v0.0.0-20170121215854-22fa46961aab
 	github.com/go-sql-driver/mysql v1.5.1-0.20210202043019-fe2230a8b20c
 	github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b
 	github.com/golang/mock v1.5.0
-	github.com/golang/snappy v0.0.3
 	github.com/golang/protobuf v1.5.2
+	github.com/golang/snappy v0.0.3
 	github.com/google/go-cmp v0.5.5
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510
 	github.com/google/uuid v1.1.2
@@ -49,7 +50,6 @@ require (
 	github.com/imdario/mergo v0.3.6 // indirect
 	github.com/jmoiron/sqlx v1.2.0
 	github.com/klauspost/compress v1.13.0
-	github.com/klauspost/cpuid v1.2.0 // indirect
 	github.com/klauspost/pgzip v1.2.4
 	github.com/krishicks/yaml-patch v0.0.10
 	github.com/magiconair/properties v1.8.1
