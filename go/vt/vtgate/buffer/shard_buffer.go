@@ -22,6 +22,9 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/vttablet/queryservice"
+
 	"context"
 
 	"vitess.io/vitess/go/sync2"
@@ -468,7 +471,13 @@ func (sb *shardBuffer) remove(toRemove *entry) {
 	// Entry was already removed. Keep the queue as it is.
 }
 
-func (sb *shardBuffer) recordExternallyReparentedTimestamp(timestamp int64, alias *topodatapb.TabletAlias) {
+// readOnlyCheckMaxTime time for which we will keep checking the read_only value.
+const readOnlyCheckMaxTime = 500 * time.Millisecond
+
+// read_only is set to false almost immediately after master election, so a small wait is ok.
+const readOnlyCheckWaitTime = 2 * time.Millisecond
+
+func (sb *shardBuffer) recordExternallyReparentedTimestamp(timestamp int64, alias *topodatapb.TabletAlias, target *query.Target, conn queryservice.QueryService) {
 	// Fast path (read lock): Check if new timestamp is higher.
 	sb.mu.RLock()
 	if timestamp <= sb.externallyReparented {
@@ -496,6 +505,30 @@ func (sb *shardBuffer) recordExternallyReparentedTimestamp(timestamp int64, alia
 		}
 		sb.currentMaster = alias
 	}
+
+	// Check if master is set to read-write
+	if conn != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), readOnlyCheckMaxTime)
+		defer cancel()
+	foo:
+		for {
+			select {
+			case <-ctx.Done():
+				break foo
+			default:
+				qr, err := conn.Execute(ctx, target, "select @@read_only", nil, 0, 0, nil)
+				if err != nil {
+					log.Errorf("Error detected while validating the read_only value on primary: %v", err)
+				}
+				if qr.Rows[0][0].ToString() == "0" {
+					cancel()
+				}
+			}
+			// read_only is set to false almost immediately after master election, so a small wait is ok.
+			time.Sleep(readOnlyCheckWaitTime)
+		}
+	}
+
 	sb.stopBufferingLocked(stopFailoverEndDetected, "failover end detected")
 }
 

@@ -231,7 +231,7 @@ func (b *Buffer) ProcessMasterHealth(th *discovery.TabletHealth) {
 		// Buffer is shut down. Ignore all calls.
 		return
 	}
-	sb.recordExternallyReparentedTimestamp(timestamp, th.Tablet.Alias)
+	sb.recordExternallyReparentedTimestamp(timestamp, th.Tablet.Alias, th.Target, th.Conn)
 }
 
 // StatsUpdate keeps track of the "tablet_externally_reparented_timestamp" of
@@ -254,7 +254,7 @@ func (b *Buffer) StatsUpdate(ts *discovery.LegacyTabletStats) {
 		// Buffer is shut down. Ignore all calls.
 		return
 	}
-	sb.recordExternallyReparentedTimestamp(timestamp, ts.Tablet.Alias)
+	sb.recordExternallyReparentedTimestamp(timestamp, ts.Tablet.Alias, ts.Target, nil)
 }
 
 // CausedByFailover returns true if "err" was supposedly caused by a failover.
