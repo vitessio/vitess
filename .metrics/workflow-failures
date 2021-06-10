@@ -1,11 +1,3 @@
-2021-02-16T20:59:44Z,unit_race,https://github.com/vitessio/vitess/actions/runs/572840443
-2021-02-16T20:59:45Z,Cluster (14),https://github.com/vitessio/vitess/actions/runs/572840480
-2021-02-17T04:46:57Z,endtoend,https://github.com/vitessio/vitess/actions/runs/573777895
-2021-02-17T08:32:14Z,endtoend,https://github.com/vitessio/vitess/actions/runs/574226400
-2021-02-17T10:10:13Z,endtoend,https://github.com/vitessio/vitess/actions/runs/574464565
-2021-02-17T11:22:51Z,Cluster (14),https://github.com/vitessio/vitess/actions/runs/574644083
-2021-02-17T11:22:51Z,Cluster (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/574644063
-2021-02-17T11:44:02Z,Cluster (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/574696275
 2021-02-17T11:44:03Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/574696286
 2021-02-17T11:44:03Z,endtoend,https://github.com/vitessio/vitess/actions/runs/574696282
 2021-02-17T13:00:35Z,Cluster (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/574877198
@@ -9997,4 +9989,12 @@
 2021-06-10T13:37:34Z,Cluster (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/925297112
 2021-06-10T13:37:34Z,pr-labels,https://github.com/vitessio/vitess/actions/runs/925297114
 2021-06-10T13:37:54Z,Cluster (upgrade),https://github.com/vitessio/vitess/actions/runs/925298255
+2021-06-10T13:37:54Z,Cluster (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/925298266
+2021-06-10T13:37:54Z,Cluster (vreplication_cellalias),https://github.com/vitessio/vitess/actions/runs/925298279
 2021-06-10T13:37:54Z,Cluster (vreplication_multicell),https://github.com/vitessio/vitess/actions/runs/925298260
+2021-06-10T13:37:54Z,Cluster (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/925298284
+2021-06-10T13:53:48Z,pr-labels,https://github.com/vitessio/vitess/actions/runs/925345874
+2021-06-10T13:57:48Z,Cluster (onlineddl_ghost),https://github.com/vitessio/vitess/actions/runs/925357546
+2021-06-10T13:57:48Z,Cluster (onlineddl_singleton),https://github.com/vitessio/vitess/actions/runs/925357590
+2021-06-10T13:57:48Z,Cluster (onlineddl_vrepl_stress),https://github.com/vitessio/vitess/actions/runs/925357544
+2021-06-10T13:57:48Z,Cluster (upgrade),https://github.com/vitessio/vitess/actions/runs/925357587
