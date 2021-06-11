@@ -86,14 +86,18 @@ func (s *Server) Lock(ctx context.Context, dirPath, contents string) (topo.LockD
 
 	// We are the only ones trying to lock now.
 	lost, err := l.Lock(ctx.Done())
-	if err != nil {
+	if err != nil || lost == nil {
 		// Failed to lock, give up our slot in locks map.
 		// Close the channel to unblock anyone else.
 		s.mu.Lock()
 		delete(s.locks, lockPath)
 		s.mu.Unlock()
 		close(li.done)
-
+		// Consul will return empty leaderCh with nil error if we cannot get lock before the timeout
+		// therefore we return a timeout error here
+		if lost == nil {
+			return nil, topo.NewError(topo.Timeout, lockPath)
+		}
 		return nil, err
 	}
 
