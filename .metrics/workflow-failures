@@ -1,4 +1,3 @@
-2021-02-19T08:44:15Z,endtoend,https://github.com/vitessio/vitess/actions/runs/580873363
 2021-02-19T08:44:15Z,golangci-lint,https://github.com/vitessio/vitess/actions/runs/580873372
 2021-02-19T08:44:15Z,unit_race,https://github.com/vitessio/vitess/actions/runs/580873365
 2021-02-19T08:59:16Z,Unit Test (mariadb101),https://github.com/vitessio/vitess/actions/runs/580908787
@@ -9998,3 +9997,4 @@
 2021-06-11T04:00:13Z,Cluster (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/927309788
 2021-06-11T04:00:13Z,pr-labels,https://github.com/vitessio/vitess/actions/runs/927309775
 2021-06-11T05:04:10Z,pr-labels,https://github.com/vitessio/vitess/actions/runs/927417546
+2021-06-11T07:41:38Z,cluster_endtoend,https://github.com/vitessio/vitess/actions/runs/927779074
