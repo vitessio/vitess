@@ -43,6 +43,7 @@ type (
 	SemTable struct {
 		Tables           []*TableInfo
 		exprDependencies map[sqlparser.Expr]TableSet
+		selectScope      map[*sqlparser.Select]*scope
 	}
 
 	scope struct {
@@ -98,6 +99,12 @@ func (st *SemTable) Dependencies(expr sqlparser.Expr) TableSet {
 	st.exprDependencies[expr] = deps
 
 	return deps
+}
+
+// GetSelectTables returns the table in the select.
+func (st *SemTable) GetSelectTables(node *sqlparser.Select) []*TableInfo {
+	scope := st.selectScope[node]
+	return scope.tables
 }
 
 func newScope(parent *scope) *scope {
