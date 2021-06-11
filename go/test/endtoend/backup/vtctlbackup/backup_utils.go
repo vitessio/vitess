@@ -106,7 +106,7 @@ func LaunchCluster(setupType int, streamMode string, stripes int) (int, error) {
 	initDb, _ := ioutil.ReadFile(path.Join(os.Getenv("VTROOT"), "/config/init_db.sql"))
 	sql := string(initDb)
 	newInitDBFile = path.Join(localCluster.TmpDirectory, "init_db_with_passwords.sql")
-	sql = sql + initialsharding.GetPasswordUpdateSQL(localCluster)
+	sql = sql + initialsharding.GetPasswordUpdateSQL()
 	err = ioutil.WriteFile(newInitDBFile, []byte(sql), 0666)
 	if err != nil {
 		return 1, err
