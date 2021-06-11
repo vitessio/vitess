@@ -89,7 +89,7 @@ export const WorkflowStreams = ({ clusterID, keyspace, name }: Props) => {
                     <DataCell>
                         {target ? (
                             <KeyspaceLink clusterID={clusterID} name={keyspace} shard={row.shard}>
-                                {source}
+                                {target}
                             </KeyspaceLink>
                         ) : (
                             <span className="text-color-secondary">N/A</span>
