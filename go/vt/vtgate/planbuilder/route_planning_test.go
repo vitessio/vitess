@@ -128,11 +128,10 @@ func TestClone(t *testing.T) {
 }
 
 func TestExpandStar(t *testing.T) {
-	ast, err := sqlparser.Parse("select * from tbl")
-	require.NoError(t, err)
 	schemaInfo := &fakeSI{
 		tables: map[string]*vindexes.Table{
-			"tbl": {
+			"t1": {
+				Name: sqlparser.NewTableIdent("t1"),
 				Columns: []vindexes.Column{{
 					Name: sqlparser.NewColIdent("a"),
 					Type: sqltypes.VarChar,
@@ -145,10 +144,58 @@ func TestExpandStar(t *testing.T) {
 				}},
 				ColumnListAuthoritative: true,
 			},
+			"t2": {
+				Name: sqlparser.NewTableIdent("t2"),
+				Columns: []vindexes.Column{{
+					Name: sqlparser.NewColIdent("c1"),
+					Type: sqltypes.VarChar,
+				}, {
+					Name: sqlparser.NewColIdent("c2"),
+					Type: sqltypes.VarChar,
+				}},
+				ColumnListAuthoritative: true,
+			},
+			"t3": { // non authoritative table.
+				Name: sqlparser.NewTableIdent("t3"),
+				Columns: []vindexes.Column{{
+					Name: sqlparser.NewColIdent("col"),
+					Type: sqltypes.VarChar,
+				}},
+				ColumnListAuthoritative: false,
+			},
 		},
 	}
-	semState, err := semantics.Analyze(ast, "db", schemaInfo)
-	require.NoError(t, err)
-	expanded := expandStar(ast.(*sqlparser.Select), semState, schemaInfo)
-	assert.Equal(t, "select tbl.a, tbl.b, tbl.c from tbl", sqlparser.String(expanded))
+	cDB := "db"
+	tcases := []struct {
+		sql    string
+		expSQL string
+	}{{
+		sql:    "select * from t1",
+		expSQL: "select t1.a, t1.b, t1.c from t1",
+	}, {
+		sql:    "select t1.* from t1",
+		expSQL: "select t1.a, t1.b, t1.c from t1",
+	}, {
+		sql:    "select *, 42, t1.* from t1",
+		expSQL: "select t1.a, t1.b, t1.c, 42, t1.a, t1.b, t1.c from t1",
+	}, {
+		sql:    "select 42, t1.* from t1",
+		expSQL: "select 42, t1.a, t1.b, t1.c from t1",
+	}, {
+		sql:    "select * from t1, t2",
+		expSQL: "select t1.a, t1.b, t1.c, t2.c1, t2.c2 from t1, t2",
+	}, {
+		sql:    "select t1.* from t1, t2",
+		expSQL: "select t1.a, t1.b, t1.c from t1, t2",
+	}}
+	for _, tcase := range tcases {
+		t.Run(tcase.sql, func(t *testing.T) {
+			ast, err := sqlparser.Parse(tcase.sql)
+			require.NoError(t, err)
+			semState, err := semantics.Analyze(ast, cDB, schemaInfo)
+			require.NoError(t, err)
+			expanded := expandStar(ast.(*sqlparser.Select), semState)
+			assert.Equal(t, tcase.expSQL, sqlparser.String(expanded))
+		})
+	}
 }

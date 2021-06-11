@@ -55,7 +55,7 @@ func newBuildSelectPlan(sel *sqlparser.Select, vschema ContextVSchema) (engine.P
 		return nil, err
 	}
 
-	sel = expandStar(sel, semTable, vschema)
+	sel = expandStar(sel, semTable)
 
 	qgraph, err := createQGFromSelect(sel, semTable)
 	if err != nil {
@@ -99,8 +99,47 @@ func newBuildSelectPlan(sel *sqlparser.Select, vschema ContextVSchema) (engine.P
 	return plan.Primitive(), nil
 }
 
-func expandStar(sel *sqlparser.Select, semTable *semantics.SemTable, vschema semantics.SchemaInformation) *sqlparser.Select {
+func expandStar(sel *sqlparser.Select, semTable *semantics.SemTable) *sqlparser.Select {
 	// TODO we could store in semTable whether there are any * in the query that needs expanding or not
+
+	_ = sqlparser.Rewrite(sel, func(cursor *sqlparser.Cursor) bool {
+		switch node := cursor.Node().(type) {
+		case *sqlparser.Select:
+			tables := semTable.GetSelectTables(node)
+			var selExprs sqlparser.SelectExprs
+			for _, selectExpr := range node.SelectExprs {
+				_, isStarExpr := selectExpr.(*sqlparser.StarExpr)
+				if !isStarExpr {
+					selExprs = append(selExprs, selectExpr)
+					continue
+				}
+				//if !starExpr.TableName.IsEmpty() {
+				//	// TODO: only expand specific table
+				//}
+				var colNames sqlparser.SelectExprs
+				expandStar := true
+				for _, tbl := range tables {
+					if !tbl.Table.ColumnListAuthoritative {
+						expandStar = false
+						break
+					}
+					for _, col := range tbl.Table.Columns {
+						colNames = append(colNames, &sqlparser.AliasedExpr{
+							Expr: sqlparser.NewColNameWithQualifier(col.Name.String(), sqlparser.TableName{Name: tbl.Table.Name}),
+						})
+					}
+				}
+				if !expandStar {
+					selExprs = append(selExprs, selectExpr)
+					continue
+				}
+				selExprs = append(selExprs, colNames...)
+			}
+			node.SelectExprs = selExprs
+		}
+
+		return true
+	}, nil)
 	return sel
 }
 
