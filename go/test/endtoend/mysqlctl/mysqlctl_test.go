@@ -91,6 +91,7 @@ func initCluster(shardNames []string, totalTabletsRequired int) {
 				TabletUID: tabletUID,
 				HTTPPort:  clusterInstance.GetAndReservePort(),
 				GrpcPort:  clusterInstance.GetAndReservePort(),
+				DrpcPort:  clusterInstance.GetAndReservePort(),
 				MySQLPort: clusterInstance.GetAndReservePort(),
 				Alias:     fmt.Sprintf("%s-%010d", clusterInstance.Cell, tabletUID),
 			}

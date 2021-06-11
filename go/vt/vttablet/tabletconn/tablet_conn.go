@@ -35,7 +35,7 @@ var (
 
 var (
 	// TabletProtocol is exported for unit tests
-	TabletProtocol  = flag.String("tablet_protocol", "grpc", "how to talk to the vttablets")
+	TabletProtocol  = flag.String("tablet_protocol", "drpc", "how to talk to the vttablets")
 	VStreamProtocol = flag.String("vstream_protocol", "", "how to talk to the vttablets for vreplication")
 )
 

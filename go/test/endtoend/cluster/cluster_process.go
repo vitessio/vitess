@@ -261,6 +261,7 @@ func (cluster *LocalProcessCluster) StartKeyspace(keyspace Keyspace, shardNames 
 				Type:      "replica",
 				HTTPPort:  cluster.GetAndReservePort(),
 				GrpcPort:  cluster.GetAndReservePort(),
+				DrpcPort:  cluster.GetAndReservePort(),
 				MySQLPort: cluster.GetAndReservePort(),
 				Alias:     fmt.Sprintf("%s-%010d", cluster.Cell, tabletUID),
 			}
@@ -709,6 +710,7 @@ func (cluster *LocalProcessCluster) NewVttabletInstance(tabletType string, UID i
 		TabletUID: UID,
 		HTTPPort:  cluster.GetAndReservePort(),
 		GrpcPort:  cluster.GetAndReservePort(),
+		DrpcPort:  cluster.GetAndReservePort(),
 		MySQLPort: cluster.GetAndReservePort(),
 		Type:      tabletType,
 		Cell:      cell,
