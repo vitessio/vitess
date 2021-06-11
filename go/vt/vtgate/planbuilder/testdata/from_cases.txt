@@ -357,6 +357,7 @@ Gen4 plan same as above
     "Table": "unsharded"
   }
 }
+Gen4 plan same as above
 
 # Left join, multi-chunk
 "select u.col from user u left join unsharded m on u.a = m.b"
@@ -523,6 +524,7 @@ Gen4 plan same as above
     "Table": "unsharded"
   }
 }
+Gen4 plan same as above
 
 # Right join with a join LHS
 "select m1.col from unsharded as m1 join unsharded as m2 right join unsharded as m3 on m1.a=m2.b"
