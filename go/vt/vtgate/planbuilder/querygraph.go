@@ -73,6 +73,16 @@ func (qg *queryGraph) getPredicates(lhs, rhs semantics.TableSet) []sqlparser.Exp
 	return allExprs
 }
 
+func (qg *queryGraph) getOuterJoins(lhs, rhs semantics.TableSet) []sqlparser.Expr {
+	var allExprs []sqlparser.Expr
+	for tableSet, exprs := range qg.outerJoins {
+		if tableSet.outer.IsSolvedBy(rhs) && tableSet.inner.IsSolvedBy(lhs) {
+			allExprs = append(allExprs, exprs...)
+		}
+	}
+	return allExprs
+}
+
 func createQGFromSelect(sel *sqlparser.Select, semTable *semantics.SemTable) (*queryGraph, error) {
 	qg := newQueryGraph()
 	if err := qg.collectTables(sel.From, semTable); err != nil {

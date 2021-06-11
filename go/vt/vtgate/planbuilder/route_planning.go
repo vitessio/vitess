@@ -182,6 +182,13 @@ type (
 		qtable *queryTable
 		vtable *vindexes.Table
 	}
+
+	leftJoin struct {
+		// TODO: get rid of left
+		left, right *routeTable
+		expr        sqlparser.Expr
+	}
+
 	routePlan struct {
 		routeOpCode engine.RouteOpcode
 		solved      semantics.TableSet
@@ -193,6 +200,9 @@ type (
 
 		// predicates are the predicates evaluated by this plan
 		predicates []sqlparser.Expr
+
+		// leftJoins are the join conditions evaluated by this plan
+		leftJoins []leftJoin
 
 		// vindex and vindexValues is set if a vindex will be used for this route.
 		vindex           vindexes.Vindex
@@ -668,8 +678,18 @@ func breakPredicateInLHSandRHS(expr sqlparser.Expr, semTable *semantics.SemTable
 	return
 }
 
-func mergeOrJoin(lhs, rhs joinTree, joinPredicates []sqlparser.Expr, semTable *semantics.SemTable) (joinTree, error) {
-	newPlan := tryMerge(lhs, rhs, joinPredicates, semTable)
+func mergeOrInnerJoin(lhs, rhs joinTree, joinPredicates []sqlparser.Expr, semTable *semantics.SemTable) (joinTree, error) {
+	newPlan := tryInnerMerge(lhs, rhs, joinPredicates, semTable)
+	if newPlan != nil {
+		return newPlan, nil
+	}
+
+	tree := &joinPlan{lhs: lhs.clone(), rhs: rhs.clone()}
+	return pushPredicate2(joinPredicates, tree, semTable)
+}
+
+func mergeOrOuterJoin(lhs, rhs joinTree, joinPredicates []sqlparser.Expr, semTable *semantics.SemTable) (joinTree, error) {
+	newPlan := tryOuterMerge(lhs, rhs, joinPredicates, semTable)
 	if newPlan != nil {
 		return newPlan, nil
 	}
@@ -711,17 +731,24 @@ func greedySolve(qg *queryGraph, semTable *semantics.SemTable, vschema ContextVS
 		}
 	}
 
-	tree, err := mergeJoinTrees(qg, semTable, innerJt, planCache, false)
+	innerTree, err := mergeInnerJoinTrees(qg, semTable, innerJt, planCache, false)
 	if err != nil {
 		return nil, err
 	}
-
+	outerJt = append(outerJt, innerTree)
+	tree, err := mergeOuterJoinTrees(qg, semTable, outerJt, planCache, false)
+	if err != nil {
+		return nil, err
+	}
 	return tree, nil
 }
 
-func mergeJoinTrees(qg *queryGraph, semTable *semantics.SemTable, joinTrees []joinTree, planCache cacheMap, crossJoinsOK bool) (joinTree, error) {
+func mergeInnerJoinTrees(qg *queryGraph, semTable *semantics.SemTable, joinTrees []joinTree, planCache cacheMap, crossJoinsOK bool) (joinTree, error) {
+	if len(joinTrees) == 0 {
+		return nil, nil
+	}
 	for len(joinTrees) > 1 {
-		bestTree, lIdx, rIdx, err := findBestJoinTree(qg, semTable, joinTrees, planCache, crossJoinsOK)
+		bestTree, lIdx, rIdx, err := findBestInnerJoinTree(qg, semTable, joinTrees, planCache, crossJoinsOK)
 		if err != nil {
 			return nil, err
 		}
@@ -746,14 +773,44 @@ func mergeJoinTrees(qg *queryGraph, semTable *semantics.SemTable, joinTrees []jo
 	return joinTrees[0], nil
 }
 
-func (cm cacheMap) getJoinTreeFor(lhs, rhs joinTree, joinPredicates []sqlparser.Expr, semTable *semantics.SemTable) (joinTree, error) {
+func mergeOuterJoinTrees(qg *queryGraph, semTable *semantics.SemTable, joinTrees []joinTree, planCache cacheMap, crossJoinsOK bool) (joinTree, error) {
+	if len(joinTrees) == 0 {
+		return nil, nil
+	}
+	for len(joinTrees) > 1 {
+		bestTree, lIdx, rIdx, err := findBestOuterJoinTree(qg, semTable, joinTrees, planCache, crossJoinsOK)
+		if err != nil {
+			return nil, err
+		}
+		// if we found a best plan, we'll replace the two plans that were joined with the join plan created
+		if bestTree != nil {
+			// we need to remove the larger of the two plans first
+			if rIdx > lIdx {
+				joinTrees = removeAt(joinTrees, rIdx)
+				joinTrees = removeAt(joinTrees, lIdx)
+			} else {
+				joinTrees = removeAt(joinTrees, lIdx)
+				joinTrees = removeAt(joinTrees, rIdx)
+			}
+			joinTrees = append(joinTrees, bestTree)
+		} else {
+			// we will only fail to find a join plan when there are only cross joins left
+			// when that happens, we switch over to allow cross joins as well.
+			// this way we prioritize joining joinTrees with predicates first
+			crossJoinsOK = true
+		}
+	}
+	return joinTrees[0], nil
+}
+
+func (cm cacheMap) getInnerJoinTreeFor(lhs, rhs joinTree, joinPredicates []sqlparser.Expr, semTable *semantics.SemTable) (joinTree, error) {
 	solves := tableSetPair{left: lhs.tables(), right: rhs.tables()}
 	cachedPlan := cm[solves]
 	if cachedPlan != nil {
 		return cachedPlan, nil
 	}
 
-	join, err := mergeOrJoin(lhs, rhs, joinPredicates, semTable)
+	join, err := mergeOrInnerJoin(lhs, rhs, joinPredicates, semTable)
 	if err != nil {
 		return nil, err
 	}
@@ -761,7 +818,22 @@ func (cm cacheMap) getJoinTreeFor(lhs, rhs joinTree, joinPredicates []sqlparser.
 	return join, nil
 }
 
-func findBestJoinTree(
+func (cm cacheMap) getOuterJoinTreeFor(lhs, rhs joinTree, joinPredicates []sqlparser.Expr, semTable *semantics.SemTable) (joinTree, error) {
+	solves := tableSetPair{left: lhs.tables(), right: rhs.tables()}
+	cachedPlan := cm[solves]
+	if cachedPlan != nil {
+		return cachedPlan, nil
+	}
+
+	join, err := mergeOrOuterJoin(lhs, rhs, joinPredicates, semTable)
+	if err != nil {
+		return nil, err
+	}
+	cm[solves] = join
+	return join, nil
+}
+
+func findBestInnerJoinTree(
 	qg *queryGraph,
 	semTable *semantics.SemTable,
 	plans []joinTree,
@@ -780,7 +852,41 @@ func findBestJoinTree(
 				// cartesian product, which is almost always a bad idea
 				continue
 			}
-			plan, err := planCache.getJoinTreeFor(lhs, rhs, joinPredicates, semTable)
+			plan, err := planCache.getInnerJoinTreeFor(lhs, rhs, joinPredicates, semTable)
+			if err != nil {
+				return nil, 0, 0, err
+			}
+			if bestPlan == nil || plan.cost() < bestPlan.cost() {
+				bestPlan = plan
+				// remember which plans we based on, so we can remove them later
+				lIdx = i
+				rIdx = j
+			}
+		}
+	}
+	return bestPlan, lIdx, rIdx, nil
+}
+
+func findBestOuterJoinTree(
+	qg *queryGraph,
+	semTable *semantics.SemTable,
+	plans []joinTree,
+	planCache cacheMap,
+	crossJoinsOK bool,
+) (bestPlan joinTree, lIdx int, rIdx int, err error) {
+	for i, lhs := range plans {
+		for j, rhs := range plans {
+			if i == j {
+				continue
+			}
+			joinPredicates := qg.getOuterJoins(lhs.tables(), rhs.tables())
+			if len(joinPredicates) == 0 && !crossJoinsOK {
+				// if there are no predicates joining the two tables,
+				// creating a join between them would produce a
+				// cartesian product, which is almost always a bad idea
+				continue
+			}
+			plan, err := planCache.getOuterJoinTreeFor(lhs, rhs, joinPredicates, semTable)
 			if err != nil {
 				return nil, 0, 0, err
 			}
@@ -808,7 +914,7 @@ func leftToRightSolve(qg *queryGraph, semTable *semantics.SemTable, vschema Cont
 			continue
 		}
 		joinPredicates := qg.getPredicates(acc.tables(), plan.tables())
-		acc, err = mergeOrJoin(acc, plan, joinPredicates, semTable)
+		acc, err = mergeOrInnerJoin(acc, plan, joinPredicates, semTable)
 		if err != nil {
 			return nil, err
 		}
@@ -948,7 +1054,7 @@ func canMergeOnFilters(a, b *routePlan, joinPredicates []sqlparser.Expr, semTabl
 	return false
 }
 
-func tryMerge(a, b joinTree, joinPredicates []sqlparser.Expr, semTable *semantics.SemTable) joinTree {
+func tryInnerMerge(a, b joinTree, joinPredicates []sqlparser.Expr, semTable *semantics.SemTable) joinTree {
 	aRoute, ok := a.(*routePlan)
 	if !ok {
 		return nil
@@ -969,6 +1075,55 @@ func tryMerge(a, b joinTree, joinPredicates []sqlparser.Expr, semTable *semantic
 		predicates: append(
 			append(aRoute.predicates, bRoute.predicates...),
 			joinPredicates...),
+		keyspace:    aRoute.keyspace,
+		vindexPreds: append(aRoute.vindexPreds, bRoute.vindexPreds...),
+	}
+
+	switch aRoute.routeOpCode {
+	case engine.SelectUnsharded, engine.SelectDBA:
+		if aRoute.routeOpCode != bRoute.routeOpCode {
+			return nil
+		}
+	case engine.SelectScatter, engine.SelectEqualUnique:
+		if len(joinPredicates) == 0 {
+			// If we are doing two Scatters, we have to make sure that the
+			// joins are on the correct vindex to allow them to be merged
+			// no join predicates - no vindex
+			return nil
+		}
+
+		canMerge := canMergeOnFilters(aRoute, bRoute, joinPredicates, semTable)
+		if !canMerge {
+			return nil
+		}
+		r.pickBestAvailableVindex()
+	}
+
+	return r
+}
+
+func tryOuterMerge(a, b joinTree, joinPredicates []sqlparser.Expr, semTable *semantics.SemTable) joinTree {
+	aRoute, ok := a.(*routePlan)
+	if !ok {
+		return nil
+	}
+	bRoute, ok := b.(*routePlan)
+	if !ok {
+		return nil
+	}
+	if aRoute.keyspace != bRoute.keyspace {
+		return nil
+	}
+
+	newTabletSet := aRoute.solved | bRoute.solved
+	r := &routePlan{
+		routeOpCode: aRoute.routeOpCode,
+		solved:      newTabletSet,
+		leftJoins: append(aRoute.leftJoins, leftJoin{
+			left:  aRoute._tables[len(aRoute._tables)-1],
+			right: bRoute._tables[0],
+			expr:  joinPredicates[0],
+		}),
 		keyspace:    aRoute.keyspace,
 		vindexPreds: append(aRoute.vindexPreds, bRoute.vindexPreds...),
 	}
