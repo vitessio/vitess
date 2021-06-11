@@ -36,6 +36,7 @@ import (
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 	"vitess.io/vitess/go/vt/mysqlctl/mysqlctlproto"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -696,9 +697,14 @@ func (s *VtctldServer) GetBackups(ctx context.Context, req *vtctldatapb.GetBacku
 		bi.Shard = req.Shard
 
 		if req.Detailed {
-			if i >= backupsToSkipDetails { // nolint:staticcheck
-				// (TODO:@ajm188) Update backupengine/backupstorage implementations
-				// to get Status info for backups.
+			if i >= backupsToSkipDetails {
+				engine, status, err := mysqlctl.GetBackupInfo(ctx, bh)
+				if err != nil {
+					log.Warningf("error getting detailed backup info for %s/%s %s/%s: %s", bi.Keyspace, bi.Shard, bi.Directory, bi.Name, err)
+				}
+
+				bi.Engine = engine
+				bi.Status = status
 			}
 		}
 
