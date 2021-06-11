@@ -93,7 +93,7 @@ func (t *Tracker) Start() {
 				ksUpdater := t.getKeyspaceUpdateController(th)
 				ksUpdater.add(th)
 			case <-ctx.Done():
-				close(t.ch)
+				// closing of the channel happens outside the scope of the tracker. It is the responsibility of the one who created this tracker.
 				return
 			}
 		}
