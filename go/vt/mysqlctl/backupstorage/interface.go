@@ -77,6 +77,12 @@ type BackupHandle interface {
 	// ReadCloser is closed.
 	ReadFile(ctx context.Context, filename string) (io.ReadCloser, error)
 
+	// CheckFile checks if a file is included in a backup. Only works for
+	// read-only backups (created by ListBackups). Returns a boolean to indicate
+	// if the file exists, and an error. Variants of "file not found" errors do
+	// result in an error, but instead result in (false, nil).
+	CheckFile(ctx context.Context, filename string) (bool, error)
+
 	// concurrency.ErrorRecorder is embedded here to coordinate reporting and
 	// handling of errors among all the components involved in taking a backup.
 	concurrency.ErrorRecorder

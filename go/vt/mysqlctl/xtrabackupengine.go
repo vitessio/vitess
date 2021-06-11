@@ -39,6 +39,8 @@ import (
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
+
+	mysqlctlpb "vitess.io/vitess/go/vt/proto/mysqlctl"
 )
 
 // XtrabackupEngine encapsulates the logic of the xtrabackup engine
@@ -368,6 +370,31 @@ func (be *XtrabackupEngine) backupFiles(ctx context.Context, params BackupParams
 	}
 
 	return replicationPosition, nil
+}
+
+// GetBackupStatus is part of the BackupEngine interface.
+//
+// For xtrabackup, we currently (we may want to expand this later) define a
+// backup status as:
+// - manifest can be read but contains invalid json => INVALID
+// - the FileName in the manifest does not exist => INVALID
+// - the FileName in the manifest exists => VALID
+func (be *XtrabackupEngine) GetBackupStatus(ctx context.Context, bh backupstorage.BackupHandle, mfestBytes []byte) (mysqlctlpb.BackupInfo_Status, error) {
+	var manifest xtraBackupManifest
+	if err := json.Unmarshal(mfestBytes, &manifest); err != nil {
+		return mysqlctlpb.BackupInfo_INVALID, err
+	}
+
+	exists, err := bh.CheckFile(ctx, manifest.FileName)
+	if err != nil {
+		return mysqlctlpb.BackupInfo_INVALID, err
+	}
+
+	if !exists {
+		return mysqlctlpb.BackupInfo_INVALID, nil
+	}
+
+	return mysqlctlpb.BackupInfo_VALID, nil
 }
 
 // ExecuteRestore restores from a backup. Any error is returned.

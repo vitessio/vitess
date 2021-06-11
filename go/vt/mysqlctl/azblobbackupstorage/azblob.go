@@ -262,6 +262,11 @@ func (bh *AZBlobBackupHandle) ReadFile(ctx context.Context, filename string) (io
 	}), nil
 }
 
+// CheckFile is part of the BackupHandle interface. It is currently unimplemented.
+func (bh *AZBlobBackupHandle) CheckFile(ctx context.Context, filename string) (bool, error) {
+	return false, nil
+}
+
 // AZBlobBackupStorage structs implements the BackupStorage interface for AZBlob
 type AZBlobBackupStorage struct {
 }

@@ -106,6 +106,25 @@ func (fbh *FileBackupHandle) ReadFile(ctx context.Context, filename string) (io.
 	return os.Open(p)
 }
 
+// CheckFile is part of the BackupHandle interface.
+func (fbh *FileBackupHandle) CheckFile(ctx context.Context, filename string) (bool, error) {
+	if !fbh.readOnly {
+		return false, fmt.Errorf("CheckFile cannot be called on read-write backup")
+	}
+
+	p := path.Join(*FileBackupStorageRoot, fbh.dir, fbh.name, filename)
+	_, err := os.Stat(p)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return false, nil
+		}
+
+		return false, err
+	}
+
+	return true, nil
+}
+
 // FileBackupStorage implements BackupStorage for local file system.
 type FileBackupStorage struct{}
 

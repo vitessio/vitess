@@ -146,6 +146,12 @@ func (bh *CephBackupHandle) ReadFile(ctx context.Context, filename string) (io.R
 	return bh.client.GetObjectWithContext(ctx, bucket, object, minio.GetObjectOptions{})
 }
 
+// CheckFile is part of the BackupHandle interface. It is currently unimplemented.
+func (bh *CephBackupHandle) CheckFile(ctx context.Context, filename string) (bool, error) {
+	// (TODO) when we implement this, use bh.client.StatObject
+	return false, nil
+}
+
 // CephBackupStorage implements BackupStorage for Ceph Cloud Storage.
 type CephBackupStorage struct {
 	// client is the instance of the Ceph Cloud Storage Go client.

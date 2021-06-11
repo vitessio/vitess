@@ -42,6 +42,8 @@ import (
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
+
+	mysqlctlpb "vitess.io/vitess/go/vt/proto/mysqlctl"
 )
 
 const (
@@ -454,6 +456,14 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 	// Save the hash.
 	fe.Hash = hasher.HashString()
 	return nil
+}
+
+// GetBackupStatus is part of the BackupEngine interface.
+//
+// This is currently not implemented for builtinbackupengine, so we always
+// return UNKNOWN.
+func (be *BuiltinBackupEngine) GetBackupStatus(ctx context.Context, bh backupstorage.BackupHandle, mfestBytes []byte) (mysqlctlpb.BackupInfo_Status, error) {
+	return mysqlctlpb.BackupInfo_UNKNOWN, nil
 }
 
 // ExecuteRestore restores from a backup. If the restore is successful

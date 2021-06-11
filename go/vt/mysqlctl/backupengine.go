@@ -34,6 +34,8 @@ import (
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vterrors"
+
+	mysqlctlpb "vitess.io/vitess/go/vt/proto/mysqlctl"
 )
 
 var (
@@ -44,6 +46,10 @@ var (
 // BackupEngine is the interface to take a backup with a given engine.
 type BackupEngine interface {
 	ExecuteBackup(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle) (bool, error)
+	// GetBackupStatus returns the status of a given backup, according to the
+	// specifics of the particular backupengine implementation. See the comments
+	// on the various implementations for more information.
+	GetBackupStatus(ctx context.Context, bh backupstorage.BackupHandle, mfestBytes []byte) (mysqlctlpb.BackupInfo_Status, error)
 	ShouldDrainForBackup() bool
 }
 
@@ -119,6 +125,10 @@ var BackupRestoreEngineMap = make(map[string]BackupRestoreEngine)
 // This must only be called after flags have been parsed.
 func GetBackupEngine() (BackupEngine, error) {
 	name := *backupEngineImplementation
+	return getBackupEngine(name)
+}
+
+func getBackupEngine(name string) (BackupEngine, error) {
 	be, ok := BackupRestoreEngineMap[name]
 	if !ok {
 		return nil, vterrors.Errorf(vtrpc.Code_NOT_FOUND, "unknown BackupEngine implementation %q", name)

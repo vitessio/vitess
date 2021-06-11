@@ -17,9 +17,11 @@ limitations under the License.
 package mysqlctl
 
 import (
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -35,6 +37,7 @@ import (
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
 
+	mysqlctlpb "vitess.io/vitess/go/vt/proto/mysqlctl"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
@@ -139,6 +142,53 @@ func Backup(ctx context.Context, params BackupParams) error {
 	// The backup worked, so just return the finish error, if any.
 	backupDuration.Set(int64(time.Since(startTs).Seconds()))
 	return finishErr
+}
+
+// GetBackupInfo returns the name of the backupengine used to produce a given
+// backup, based on the MANIFEST file from the backup, and the Status of the
+// backup, based on the engine-specific definition of what makes a complete or
+// valid backup.
+func GetBackupInfo(ctx context.Context, bh backupstorage.BackupHandle) (engine string, status mysqlctlpb.BackupInfo_Status, err error) {
+	mfest, err := bh.ReadFile(ctx, backupManifestFileName)
+	if err != nil {
+		// (TODO|@ajm88): extend (backupstorage.BackupHandle).ReadFile to wrap
+		// certain errors as fs.ErrNotExist, and distinguish between INCOMPLETE
+		// (MANIFEST has not been written to storage) and INVALID (MANIFEST
+		// exists but can't be read/parsed).
+		return "", mysqlctlpb.BackupInfo_INCOMPLETE, err
+	}
+	defer mfest.Close()
+
+	mfestBytes, err := ioutil.ReadAll(mfest)
+	if err != nil {
+		return "", mysqlctlpb.BackupInfo_INVALID, err
+	}
+
+	// We unmarshal into a map here rather than using the GetBackupManifest
+	// because we are going to pass the raw mfestBytes to the particular
+	// backupengine implementation for further unmarshalling and processing.
+	//
+	// As a result, some of this code is duplicated with other functions in this
+	// package, but doing things this way has the benefit of minimizing extra
+	// calls to backupstorage.BackupHandle methods (which can be network-y and
+	// slow, or subject to external rate limits, etc).
+	var manifest map[string]interface{}
+	if err := json.Unmarshal(mfestBytes, &manifest); err != nil {
+		return "", mysqlctlpb.BackupInfo_INVALID, err
+	}
+
+	engine, ok := manifest["BackupMethod"].(string)
+	if !ok {
+		return "", mysqlctlpb.BackupInfo_INVALID, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "missing BackupMethod field in MANIFEST")
+	}
+
+	be, err := getBackupEngine(engine)
+	if err != nil {
+		return engine, mysqlctlpb.BackupInfo_COMPLETE, err
+	}
+
+	status, err = be.GetBackupStatus(ctx, bh, mfestBytes)
+	return engine, status, err
 }
 
 // ParseBackupName parses the backup name for a given dir/name, according to

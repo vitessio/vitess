@@ -42,6 +42,7 @@ import (
 	"context"
 
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/client"
 	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -205,6 +206,32 @@ func (bh *S3BackupHandle) ReadFile(ctx context.Context, filename string) (io.Rea
 		return nil, err
 	}
 	return out.Body, nil
+}
+
+// CheckFile is part of the backupstorage.BackupHandle interface.
+func (bh *S3BackupHandle) CheckFile(ctx context.Context, filename string) (bool, error) {
+	if !bh.readOnly {
+		return false, fmt.Errorf("CheckFile cannot be called on read-write backup")
+	}
+	object := objName(bh.dir, bh.name, filename)
+	_, err := bh.client.HeadObject(&s3.HeadObjectInput{
+		Bucket:               bucket,
+		Key:                  object,
+		SSECustomerAlgorithm: bh.bs.s3SSE.customerAlg,
+		SSECustomerKey:       bh.bs.s3SSE.customerKey,
+		SSECustomerKeyMD5:    bh.bs.s3SSE.customerMd5,
+	})
+	if err != nil {
+		if aerr, ok := err.(awserr.Error); ok {
+			if aerr.Code() == "NotFound" {
+				return false, nil
+			}
+		}
+
+		return false, err
+	}
+
+	return true, nil
 }
 
 var _ backupstorage.BackupHandle = (*S3BackupHandle)(nil)

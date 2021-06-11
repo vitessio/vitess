@@ -115,6 +115,11 @@ func (bh *GCSBackupHandle) ReadFile(ctx context.Context, filename string) (io.Re
 	return bh.client.Bucket(*bucket).Object(object).NewReader(ctx)
 }
 
+// CheckFile is part of the BackupHandle interface. It is currently unimplemented.
+func (bh *GCSBackupHandle) CheckFile(ctx context.Context, filename string) (bool, error) {
+	return false, nil
+}
+
 // GCSBackupStorage implements BackupStorage for Google Cloud Storage.
 type GCSBackupStorage struct {
 	// client is the instance of the Google Cloud Storage Go client.
