@@ -2425,6 +2425,26 @@ func (m *GetBackupsRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if m.DetailedLimit != 0 {
+		i = encodeVarint(dAtA, i, uint64(m.DetailedLimit))
+		i--
+		dAtA[i] = 0x28
+	}
+	if m.Detailed {
+		i--
+		if m.Detailed {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x20
+	}
+	if m.Limit != 0 {
+		i = encodeVarint(dAtA, i, uint64(m.Limit))
+		i--
+		dAtA[i] = 0x18
+	}
 	if len(m.Shard) > 0 {
 		i -= len(m.Shard)
 		copy(dAtA[i:], m.Shard)
@@ -6170,6 +6190,15 @@ func (m *GetBackupsRequest) SizeVT() (n int) {
 	l = len(m.Shard)
 	if l > 0 {
 		n += 1 + l + sov(uint64(l))
+	}
+	if m.Limit != 0 {
+		n += 1 + sov(uint64(m.Limit))
+	}
+	if m.Detailed {
+		n += 2
+	}
+	if m.DetailedLimit != 0 {
+		n += 1 + sov(uint64(m.DetailedLimit))
 	}
 	if m.unknownFields != nil {
 		n += len(m.unknownFields)
@@ -12945,6 +12974,64 @@ func (m *GetBackupsRequest) UnmarshalVT(dAtA []byte) error {
 			}
 			m.Shard = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
+		case 3:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Limit", wireType)
+			}
+			m.Limit = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.Limit |= uint32(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 4:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Detailed", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.Detailed = bool(v != 0)
+		case 5:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field DetailedLimit", wireType)
+			}
+			m.DetailedLimit = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.DetailedLimit |= uint32(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
 		default:
 			iNdEx = preIndex
 			skippy, err := skip(dAtA[iNdEx:])
