@@ -65747,6 +65747,9 @@ $root.vtctldata = (function() {
          * @interface IGetBackupsRequest
          * @property {string|null} [keyspace] GetBackupsRequest keyspace
          * @property {string|null} [shard] GetBackupsRequest shard
+         * @property {number|null} [limit] GetBackupsRequest limit
+         * @property {boolean|null} [detailed] GetBackupsRequest detailed
+         * @property {number|null} [detailed_limit] GetBackupsRequest detailed_limit
          */
 
         /**
@@ -65781,6 +65784,30 @@ $root.vtctldata = (function() {
         GetBackupsRequest.prototype.shard = "";
 
         /**
+         * GetBackupsRequest limit.
+         * @member {number} limit
+         * @memberof vtctldata.GetBackupsRequest
+         * @instance
+         */
+        GetBackupsRequest.prototype.limit = 0;
+
+        /**
+         * GetBackupsRequest detailed.
+         * @member {boolean} detailed
+         * @memberof vtctldata.GetBackupsRequest
+         * @instance
+         */
+        GetBackupsRequest.prototype.detailed = false;
+
+        /**
+         * GetBackupsRequest detailed_limit.
+         * @member {number} detailed_limit
+         * @memberof vtctldata.GetBackupsRequest
+         * @instance
+         */
+        GetBackupsRequest.prototype.detailed_limit = 0;
+
+        /**
          * Creates a new GetBackupsRequest instance using the specified properties.
          * @function create
          * @memberof vtctldata.GetBackupsRequest
@@ -65808,6 +65835,12 @@ $root.vtctldata = (function() {
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.keyspace);
             if (message.shard != null && Object.hasOwnProperty.call(message, "shard"))
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.shard);
+            if (message.limit != null && Object.hasOwnProperty.call(message, "limit"))
+                writer.uint32(/* id 3, wireType 0 =*/24).uint32(message.limit);
+            if (message.detailed != null && Object.hasOwnProperty.call(message, "detailed"))
+                writer.uint32(/* id 4, wireType 0 =*/32).bool(message.detailed);
+            if (message.detailed_limit != null && Object.hasOwnProperty.call(message, "detailed_limit"))
+                writer.uint32(/* id 5, wireType 0 =*/40).uint32(message.detailed_limit);
             return writer;
         };
 
@@ -65847,6 +65880,15 @@ $root.vtctldata = (function() {
                     break;
                 case 2:
                     message.shard = reader.string();
+                    break;
+                case 3:
+                    message.limit = reader.uint32();
+                    break;
+                case 4:
+                    message.detailed = reader.bool();
+                    break;
+                case 5:
+                    message.detailed_limit = reader.uint32();
                     break;
                 default:
                     reader.skipType(tag & 7);
@@ -65889,6 +65931,15 @@ $root.vtctldata = (function() {
             if (message.shard != null && message.hasOwnProperty("shard"))
                 if (!$util.isString(message.shard))
                     return "shard: string expected";
+            if (message.limit != null && message.hasOwnProperty("limit"))
+                if (!$util.isInteger(message.limit))
+                    return "limit: integer expected";
+            if (message.detailed != null && message.hasOwnProperty("detailed"))
+                if (typeof message.detailed !== "boolean")
+                    return "detailed: boolean expected";
+            if (message.detailed_limit != null && message.hasOwnProperty("detailed_limit"))
+                if (!$util.isInteger(message.detailed_limit))
+                    return "detailed_limit: integer expected";
             return null;
         };
 
@@ -65908,6 +65959,12 @@ $root.vtctldata = (function() {
                 message.keyspace = String(object.keyspace);
             if (object.shard != null)
                 message.shard = String(object.shard);
+            if (object.limit != null)
+                message.limit = object.limit >>> 0;
+            if (object.detailed != null)
+                message.detailed = Boolean(object.detailed);
+            if (object.detailed_limit != null)
+                message.detailed_limit = object.detailed_limit >>> 0;
             return message;
         };
 
@@ -65927,11 +65984,20 @@ $root.vtctldata = (function() {
             if (options.defaults) {
                 object.keyspace = "";
                 object.shard = "";
+                object.limit = 0;
+                object.detailed = false;
+                object.detailed_limit = 0;
             }
             if (message.keyspace != null && message.hasOwnProperty("keyspace"))
                 object.keyspace = message.keyspace;
             if (message.shard != null && message.hasOwnProperty("shard"))
                 object.shard = message.shard;
+            if (message.limit != null && message.hasOwnProperty("limit"))
+                object.limit = message.limit;
+            if (message.detailed != null && message.hasOwnProperty("detailed"))
+                object.detailed = message.detailed;
+            if (message.detailed_limit != null && message.hasOwnProperty("detailed_limit"))
+                object.detailed_limit = message.detailed_limit;
             return object;
         };
 
@@ -87244,6 +87310,12 @@ $root.mysqlctl = (function() {
          * @interface IBackupInfo
          * @property {string|null} [name] BackupInfo name
          * @property {string|null} [directory] BackupInfo directory
+         * @property {string|null} [keyspace] BackupInfo keyspace
+         * @property {string|null} [shard] BackupInfo shard
+         * @property {topodata.ITabletAlias|null} [tablet_alias] BackupInfo tablet_alias
+         * @property {vttime.ITime|null} [time] BackupInfo time
+         * @property {string|null} [engine] BackupInfo engine
+         * @property {mysqlctl.BackupInfo.Status|null} [status] BackupInfo status
          */
 
         /**
@@ -87278,6 +87350,54 @@ $root.mysqlctl = (function() {
         BackupInfo.prototype.directory = "";
 
         /**
+         * BackupInfo keyspace.
+         * @member {string} keyspace
+         * @memberof mysqlctl.BackupInfo
+         * @instance
+         */
+        BackupInfo.prototype.keyspace = "";
+
+        /**
+         * BackupInfo shard.
+         * @member {string} shard
+         * @memberof mysqlctl.BackupInfo
+         * @instance
+         */
+        BackupInfo.prototype.shard = "";
+
+        /**
+         * BackupInfo tablet_alias.
+         * @member {topodata.ITabletAlias|null|undefined} tablet_alias
+         * @memberof mysqlctl.BackupInfo
+         * @instance
+         */
+        BackupInfo.prototype.tablet_alias = null;
+
+        /**
+         * BackupInfo time.
+         * @member {vttime.ITime|null|undefined} time
+         * @memberof mysqlctl.BackupInfo
+         * @instance
+         */
+        BackupInfo.prototype.time = null;
+
+        /**
+         * BackupInfo engine.
+         * @member {string} engine
+         * @memberof mysqlctl.BackupInfo
+         * @instance
+         */
+        BackupInfo.prototype.engine = "";
+
+        /**
+         * BackupInfo status.
+         * @member {mysqlctl.BackupInfo.Status} status
+         * @memberof mysqlctl.BackupInfo
+         * @instance
+         */
+        BackupInfo.prototype.status = 0;
+
+        /**
          * Creates a new BackupInfo instance using the specified properties.
          * @function create
          * @memberof mysqlctl.BackupInfo
@@ -87305,6 +87425,18 @@ $root.mysqlctl = (function() {
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.name);
             if (message.directory != null && Object.hasOwnProperty.call(message, "directory"))
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.directory);
+            if (message.keyspace != null && Object.hasOwnProperty.call(message, "keyspace"))
+                writer.uint32(/* id 3, wireType 2 =*/26).string(message.keyspace);
+            if (message.shard != null && Object.hasOwnProperty.call(message, "shard"))
+                writer.uint32(/* id 4, wireType 2 =*/34).string(message.shard);
+            if (message.tablet_alias != null && Object.hasOwnProperty.call(message, "tablet_alias"))
+                $root.topodata.TabletAlias.encode(message.tablet_alias, writer.uint32(/* id 5, wireType 2 =*/42).fork()).ldelim();
+            if (message.time != null && Object.hasOwnProperty.call(message, "time"))
+                $root.vttime.Time.encode(message.time, writer.uint32(/* id 6, wireType 2 =*/50).fork()).ldelim();
+            if (message.engine != null && Object.hasOwnProperty.call(message, "engine"))
+                writer.uint32(/* id 7, wireType 2 =*/58).string(message.engine);
+            if (message.status != null && Object.hasOwnProperty.call(message, "status"))
+                writer.uint32(/* id 8, wireType 0 =*/64).int32(message.status);
             return writer;
         };
 
@@ -87344,6 +87476,24 @@ $root.mysqlctl = (function() {
                     break;
                 case 2:
                     message.directory = reader.string();
+                    break;
+                case 3:
+                    message.keyspace = reader.string();
+                    break;
+                case 4:
+                    message.shard = reader.string();
+                    break;
+                case 5:
+                    message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.uint32());
+                    break;
+                case 6:
+                    message.time = $root.vttime.Time.decode(reader, reader.uint32());
+                    break;
+                case 7:
+                    message.engine = reader.string();
+                    break;
+                case 8:
+                    message.status = reader.int32();
                     break;
                 default:
                     reader.skipType(tag & 7);
@@ -87386,6 +87536,36 @@ $root.mysqlctl = (function() {
             if (message.directory != null && message.hasOwnProperty("directory"))
                 if (!$util.isString(message.directory))
                     return "directory: string expected";
+            if (message.keyspace != null && message.hasOwnProperty("keyspace"))
+                if (!$util.isString(message.keyspace))
+                    return "keyspace: string expected";
+            if (message.shard != null && message.hasOwnProperty("shard"))
+                if (!$util.isString(message.shard))
+                    return "shard: string expected";
+            if (message.tablet_alias != null && message.hasOwnProperty("tablet_alias")) {
+                var error = $root.topodata.TabletAlias.verify(message.tablet_alias);
+                if (error)
+                    return "tablet_alias." + error;
+            }
+            if (message.time != null && message.hasOwnProperty("time")) {
+                var error = $root.vttime.Time.verify(message.time);
+                if (error)
+                    return "time." + error;
+            }
+            if (message.engine != null && message.hasOwnProperty("engine"))
+                if (!$util.isString(message.engine))
+                    return "engine: string expected";
+            if (message.status != null && message.hasOwnProperty("status"))
+                switch (message.status) {
+                default:
+                    return "status: enum value expected";
+                case 0:
+                case 1:
+                case 2:
+                case 3:
+                case 4:
+                    break;
+                }
             return null;
         };
 
@@ -87405,6 +87585,44 @@ $root.mysqlctl = (function() {
                 message.name = String(object.name);
             if (object.directory != null)
                 message.directory = String(object.directory);
+            if (object.keyspace != null)
+                message.keyspace = String(object.keyspace);
+            if (object.shard != null)
+                message.shard = String(object.shard);
+            if (object.tablet_alias != null) {
+                if (typeof object.tablet_alias !== "object")
+                    throw TypeError(".mysqlctl.BackupInfo.tablet_alias: object expected");
+                message.tablet_alias = $root.topodata.TabletAlias.fromObject(object.tablet_alias);
+            }
+            if (object.time != null) {
+                if (typeof object.time !== "object")
+                    throw TypeError(".mysqlctl.BackupInfo.time: object expected");
+                message.time = $root.vttime.Time.fromObject(object.time);
+            }
+            if (object.engine != null)
+                message.engine = String(object.engine);
+            switch (object.status) {
+            case "UNKNOWN":
+            case 0:
+                message.status = 0;
+                break;
+            case "INCOMPLETE":
+            case 1:
+                message.status = 1;
+                break;
+            case "COMPLETE":
+            case 2:
+                message.status = 2;
+                break;
+            case "INVALID":
+            case 3:
+                message.status = 3;
+                break;
+            case "VALID":
+            case 4:
+                message.status = 4;
+                break;
+            }
             return message;
         };
 
@@ -87424,11 +87642,29 @@ $root.mysqlctl = (function() {
             if (options.defaults) {
                 object.name = "";
                 object.directory = "";
+                object.keyspace = "";
+                object.shard = "";
+                object.tablet_alias = null;
+                object.time = null;
+                object.engine = "";
+                object.status = options.enums === String ? "UNKNOWN" : 0;
             }
             if (message.name != null && message.hasOwnProperty("name"))
                 object.name = message.name;
             if (message.directory != null && message.hasOwnProperty("directory"))
                 object.directory = message.directory;
+            if (message.keyspace != null && message.hasOwnProperty("keyspace"))
+                object.keyspace = message.keyspace;
+            if (message.shard != null && message.hasOwnProperty("shard"))
+                object.shard = message.shard;
+            if (message.tablet_alias != null && message.hasOwnProperty("tablet_alias"))
+                object.tablet_alias = $root.topodata.TabletAlias.toObject(message.tablet_alias, options);
+            if (message.time != null && message.hasOwnProperty("time"))
+                object.time = $root.vttime.Time.toObject(message.time, options);
+            if (message.engine != null && message.hasOwnProperty("engine"))
+                object.engine = message.engine;
+            if (message.status != null && message.hasOwnProperty("status"))
+                object.status = options.enums === String ? $root.mysqlctl.BackupInfo.Status[message.status] : message.status;
             return object;
         };
 
@@ -87442,6 +87678,26 @@ $root.mysqlctl = (function() {
         BackupInfo.prototype.toJSON = function toJSON() {
             return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
         };
+
+        /**
+         * Status enum.
+         * @name mysqlctl.BackupInfo.Status
+         * @enum {number}
+         * @property {number} UNKNOWN=0 UNKNOWN value
+         * @property {number} INCOMPLETE=1 INCOMPLETE value
+         * @property {number} COMPLETE=2 COMPLETE value
+         * @property {number} INVALID=3 INVALID value
+         * @property {number} VALID=4 VALID value
+         */
+        BackupInfo.Status = (function() {
+            var valuesById = {}, values = Object.create(valuesById);
+            values[valuesById[0] = "UNKNOWN"] = 0;
+            values[valuesById[1] = "INCOMPLETE"] = 1;
+            values[valuesById[2] = "COMPLETE"] = 2;
+            values[valuesById[3] = "INVALID"] = 3;
+            values[valuesById[4] = "VALID"] = 4;
+            return values;
+        })();
 
         return BackupInfo;
     })();

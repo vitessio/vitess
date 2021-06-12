@@ -27377,6 +27377,15 @@ export namespace vtctldata {
 
         /** GetBackupsRequest shard */
         shard?: (string|null);
+
+        /** GetBackupsRequest limit */
+        limit?: (number|null);
+
+        /** GetBackupsRequest detailed */
+        detailed?: (boolean|null);
+
+        /** GetBackupsRequest detailed_limit */
+        detailed_limit?: (number|null);
     }
 
     /** Represents a GetBackupsRequest. */
@@ -27393,6 +27402,15 @@ export namespace vtctldata {
 
         /** GetBackupsRequest shard. */
         public shard: string;
+
+        /** GetBackupsRequest limit. */
+        public limit: number;
+
+        /** GetBackupsRequest detailed. */
+        public detailed: boolean;
+
+        /** GetBackupsRequest detailed_limit. */
+        public detailed_limit: number;
 
         /**
          * Creates a new GetBackupsRequest instance using the specified properties.
@@ -36599,6 +36617,24 @@ export namespace mysqlctl {
 
         /** BackupInfo directory */
         directory?: (string|null);
+
+        /** BackupInfo keyspace */
+        keyspace?: (string|null);
+
+        /** BackupInfo shard */
+        shard?: (string|null);
+
+        /** BackupInfo tablet_alias */
+        tablet_alias?: (topodata.ITabletAlias|null);
+
+        /** BackupInfo time */
+        time?: (vttime.ITime|null);
+
+        /** BackupInfo engine */
+        engine?: (string|null);
+
+        /** BackupInfo status */
+        status?: (mysqlctl.BackupInfo.Status|null);
     }
 
     /** Represents a BackupInfo. */
@@ -36615,6 +36651,24 @@ export namespace mysqlctl {
 
         /** BackupInfo directory. */
         public directory: string;
+
+        /** BackupInfo keyspace. */
+        public keyspace: string;
+
+        /** BackupInfo shard. */
+        public shard: string;
+
+        /** BackupInfo tablet_alias. */
+        public tablet_alias?: (topodata.ITabletAlias|null);
+
+        /** BackupInfo time. */
+        public time?: (vttime.ITime|null);
+
+        /** BackupInfo engine. */
+        public engine: string;
+
+        /** BackupInfo status. */
+        public status: mysqlctl.BackupInfo.Status;
 
         /**
          * Creates a new BackupInfo instance using the specified properties.
@@ -36685,5 +36739,17 @@ export namespace mysqlctl {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+    }
+
+    namespace BackupInfo {
+
+        /** Status enum. */
+        enum Status {
+            UNKNOWN = 0,
+            INCOMPLETE = 1,
+            COMPLETE = 2,
+            INVALID = 3,
+            VALID = 4
+        }
     }
 }
