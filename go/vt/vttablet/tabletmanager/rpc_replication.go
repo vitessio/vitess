@@ -604,6 +604,8 @@ func (tm *TabletManager) setMasterLocked(ctx context.Context, parentAlias *topod
 				return err
 			}
 		}
+		// Clear replication sentinel flag for this replica
+		tm.replManager.setReplicationStopped(false)
 	}
 
 	return nil
@@ -736,6 +738,10 @@ func (tm *TabletManager) PromoteReplica(ctx context.Context) (string, error) {
 	if err := tm.changeTypeLocked(ctx, topodatapb.TabletType_MASTER, DBActionSetReadWrite); err != nil {
 		return "", err
 	}
+
+	// Clear replication sentinel flag for this master,
+	// or we might block replication the next time we demote it
+	tm.replManager.setReplicationStopped(false)
 
 	return mysql.EncodePosition(pos), nil
 }
