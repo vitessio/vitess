@@ -17,15 +17,46 @@ limitations under the License.
 package mysqlctlproto
 
 import (
+	"strings"
+	"time"
+
+	"vitess.io/vitess/go/protoutil"
+	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 
 	mysqlctlpb "vitess.io/vitess/go/vt/proto/mysqlctl"
 )
 
 // BackupHandleToProto returns a BackupInfo proto from a BackupHandle.
 func BackupHandleToProto(bh backupstorage.BackupHandle) *mysqlctlpb.BackupInfo {
-	return &mysqlctlpb.BackupInfo{
+	bi := &mysqlctlpb.BackupInfo{
 		Name:      bh.Name(),
 		Directory: bh.Directory(),
 	}
+
+	if parts := strings.Split(bi.Name, "."); len(parts) == 3 {
+		// parts[0]: date part of mysqlctl.BackupTimestampFormat
+		// parts[1]: time part of mysqlctl.BackupTimestampFormat
+		// parts[2]: tablet alias
+		timestamp := strings.Join(parts[:2], ".")
+		aliasStr := parts[2]
+
+		backupTime, err := time.Parse(mysqlctl.BackupTimestampFormat, timestamp)
+		if err != nil {
+			log.Errorf("error parsing backup time for %s/%s: %s", bi.Directory, bi.Name, err)
+		} else {
+			bi.Time = protoutil.TimeToProto(backupTime)
+		}
+
+		alias, err := topoproto.ParseTabletAlias(aliasStr)
+		if err != nil {
+			log.Errorf("error parsing tablet alias for %s/%s: %s", bi.Directory, bi.Name, err)
+		} else {
+			bi.TabletAlias = alias
+		}
+	}
+
+	return bi
 }
