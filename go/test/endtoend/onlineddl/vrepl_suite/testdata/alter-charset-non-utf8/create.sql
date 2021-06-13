@@ -5,8 +5,12 @@ create table onlineddl_test (
   t2 varchar(128)  charset latin1 collate latin1_swedish_ci,
   tutf8 varchar(128) charset utf8,
   tutf8mb4 varchar(128) charset utf8mb4,
+  tlatin1 varchar(128)  charset latin1 collate latin1_swedish_ci,
   primary key(id)
 ) auto_increment=1;
+
+insert into onlineddl_test values (null, md5(rand()), md5(rand()), md5(rand()), md5(rand()), md5(rand()));
+insert into onlineddl_test values (null, 'átesting', 'átesting', 'átesting', 'átesting', 'átesting');
 
 drop event if exists onlineddl_test;
 delimiter ;;
@@ -18,7 +22,6 @@ create event onlineddl_test
   enable
   do
 begin
-  insert into onlineddl_test values (null, md5(rand()), md5(rand()), md5(rand()), md5(rand()));
-  insert into onlineddl_test values (null, 'átesting', 'átesting', 'átesting', 'átesting');
-  insert into onlineddl_test values (null, 'testátest', 'testátest', 'testátest', '🍻😀');
+  insert into onlineddl_test values (null, md5(rand()), md5(rand()), md5(rand()), md5(rand()), md5(rand()));
+  insert into onlineddl_test values (null, 'átesting-binlog', 'átesting-binlog', 'átesting-binlog', 'átesting-binlog', 'átesting-binlog');
 end ;;

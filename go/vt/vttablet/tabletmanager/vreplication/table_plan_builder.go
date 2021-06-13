@@ -144,7 +144,7 @@ func buildReplicatorPlan(filter *binlogdatapb.Filter, colInfoMap map[string][]*C
 		if rule == nil {
 			continue
 		}
-		tablePlan, err := buildTablePlan(tableName, rule.Filter, colInfoMap, lastpk, stats)
+		tablePlan, err := buildTablePlan(tableName, rule.Filter, colInfoMap, lastpk, rule.ConvertCharset, stats)
 		if err != nil {
 			return nil, err
 		}
@@ -183,7 +183,7 @@ func MatchTable(tableName string, filter *binlogdatapb.Filter) (*binlogdatapb.Ru
 	return nil, nil
 }
 
-func buildTablePlan(tableName, filter string, colInfoMap map[string][]*ColumnInfo, lastpk *sqltypes.Result, stats *binlogplayer.Stats) (*TablePlan, error) {
+func buildTablePlan(tableName, filter string, colInfoMap map[string][]*ColumnInfo, lastpk *sqltypes.Result, convertCharset map[string](*binlogdatapb.CharsetConversion), stats *binlogplayer.Stats) (*TablePlan, error) {
 	query := filter
 	// generate equivalent select statement if filter is empty or a keyrange.
 	fmt.Printf("============ filter: %v\n", filter)
@@ -218,10 +218,11 @@ func buildTablePlan(tableName, filter string, colInfoMap map[string][]*ColumnInf
 		}
 		sendRule.Filter = query
 		tablePlan := &TablePlan{
-			TargetName: tableName,
-			SendRule:   sendRule,
-			Lastpk:     lastpk,
-			Stats:      stats,
+			TargetName:     tableName,
+			SendRule:       sendRule,
+			Lastpk:         lastpk,
+			Stats:          stats,
+			ConvertCharset: convertCharset,
 		}
 		return tablePlan, nil
 	}
@@ -278,6 +279,7 @@ func buildTablePlan(tableName, filter string, colInfoMap map[string][]*ColumnInf
 
 	tablePlan := tpb.generate()
 	tablePlan.SendRule = sendRule
+	tablePlan.ConvertCharset = convertCharset
 	return tablePlan, nil
 }
 
@@ -382,7 +384,7 @@ func (tpb *tablePlanBuilder) analyzeExpr(selExpr sqlparser.SelectExpr) (*colExpr
 	if expr, ok := aliased.Expr.(*sqlparser.ConvertUsingExpr); ok {
 		fmt.Printf("============ ConvertUsingExpr: %v\n", sqlparser.String(expr))
 		selExpr := &sqlparser.ConvertUsingExpr{
-			Type: "binary",
+			Type: "utf8mb4",
 			Expr: &sqlparser.ColName{Name: as},
 		}
 		fmt.Printf("============ ConvertUsingExpr generated: %v\n", sqlparser.String(selExpr))

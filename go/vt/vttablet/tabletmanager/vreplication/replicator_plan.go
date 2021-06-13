@@ -25,15 +25,15 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/bytes2"
-
-	"vitess.io/vitess/go/vt/binlog/binlogplayer"
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
-
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/sqlparser"
-
+	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
 
 // ReplicatorPlan is the execution plan for the replicator. It contains
@@ -194,9 +194,10 @@ type TablePlan struct {
 	Fields []*querypb.Field
 	// PKReferences is used to check if an event changed
 	// a primary key column (row move).
-	PKReferences []string
-	Stats        *binlogplayer.Stats
-	FieldsToSkip map[string]bool
+	PKReferences   []string
+	Stats          *binlogplayer.Stats
+	FieldsToSkip   map[string]bool
+	ConvertCharset map[string](*binlogdatapb.CharsetConversion)
 }
 
 // MarshalJSON performs a custom JSON Marshalling.
@@ -303,7 +304,47 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 		after = true
 		vals := sqltypes.MakeRowTrusted(tp.Fields, rowChange.After)
 		for i, field := range tp.Fields {
-			bindvars["a_"+field.Name] = sqltypes.ValueBindVariable(vals[i])
+			bindVal := func() (err error) {
+				if conversion, ok := tp.ConvertCharset[field.Name]; ok {
+					valString := vals[i].ToString()
+					fmt.Printf("=========== ConvertCharset[field.Name]: %v, %v \n", field.Name, conversion)
+					fmt.Printf("=========== s0: %v \n", valString)
+
+					fromEncoding, encodingOK := mysql.CharacterSetEncoding[conversion.FromCharset]
+					if !encodingOK {
+						return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Character set %s not supported for column %s", conversion.FromCharset, field.Name)
+					}
+					if fromEncoding != nil {
+						fmt.Printf("=========== ConvertCharset fromEncoding: %v, %v \n", field.Name, fromEncoding)
+						valString, err = fromEncoding.NewDecoder().String(valString)
+						if err != nil {
+							return err
+						}
+						fmt.Printf("=========== s1: %v \n", valString)
+					}
+
+					// // There is a request to encode given charset
+					// toEncoding, encodingOK := mysql.CharacterSetEncoding[conversion.ToCharset]
+					// if !encodingOK {
+					// 	return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Character set %s not supported for column %s", conversion.ToCharset, field.Name)
+					// }
+					// if toEncoding != nil {
+					// 	fmt.Printf("=========== ConvertCharset toEncoding: %v, %v \n", field.Name, toEncoding)
+					// 	valString, err = toEncoding.NewEncoder().String(valString)
+					// 	if err != nil {
+					// 		return err
+					// 	}
+					// 	fmt.Printf("=========== s2: %v \n", valString)
+					// }
+					bindvars["a_"+field.Name] = sqltypes.StringBindVariable(valString)
+					return nil
+				}
+				bindvars["a_"+field.Name] = sqltypes.ValueBindVariable(vals[i])
+				return nil
+			}
+			if err := bindVal(); err != nil {
+				return nil, err
+			}
 		}
 	}
 	switch {
