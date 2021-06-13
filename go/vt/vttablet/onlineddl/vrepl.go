@@ -35,6 +35,7 @@ import (
 	"vitess.io/vitess/go/vt/dbconnpool"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/onlineddl/vrepl"
@@ -73,6 +74,7 @@ type VRepl struct {
 	sourceAutoIncrement uint64
 
 	filterQuery string
+	enumTextMap map[string]string
 	bls         *binlogdatapb.BinlogSource
 
 	parser *vrepl.AlterTableParser
@@ -89,6 +91,7 @@ func NewVRepl(workflow, keyspace, shard, dbName, sourceTable, targetTable, alter
 		targetTable:  targetTable,
 		alterOptions: alterOptions,
 		parser:       vrepl.NewAlterTableParser(),
+		enumTextMap:  map[string]string{},
 	}
 }
 
@@ -217,7 +220,7 @@ func (v *VRepl) applyColumnTypes(ctx context.Context, conn *dbconnpool.DBConnect
 			}
 			if strings.HasPrefix(columnType, "enum") {
 				column.Type = vrepl.EnumColumnType
-				column.EnumValues = vrepl.ParseEnumValues(columnType)
+				column.EnumValues = schema.ParseEnumValues(columnType)
 			}
 			if strings.HasPrefix(columnType, "binary") {
 				column.Type = vrepl.BinaryColumnType
@@ -364,6 +367,7 @@ func (v *VRepl) analyzeTables(ctx context.Context, conn *dbconnpool.DBConnection
 		if column.Name == mappedColumn.Name && column.Type == vrepl.EnumColumnType && mappedColumn.Charset != "" {
 			v.targetSharedColumns.SetEnumToTextConversion(column.Name)
 			v.targetSharedColumns.SetEnumValues(column.Name, column.EnumValues)
+			v.enumTextMap[column.Name] = column.EnumValues
 		}
 	}
 
@@ -394,7 +398,10 @@ func (v *VRepl) generateFilterQuery(ctx context.Context) error {
 		case col.Type == vrepl.JSONColumnType:
 			sb.WriteString(fmt.Sprintf("convert(%s using utf8mb4)", escapeName(name)))
 		case col.EnumToTextConversion:
-			sb.WriteString(fmt.Sprintf("ELT(%s, %s)", escapeName(name), col.EnumValues))
+			// sb.WriteString(fmt.Sprintf("ELT(%s, %s)", escapeName(name), col.EnumValues))
+			// Enforce ENUM value to be textual
+			sb.WriteString(fmt.Sprintf("CONCAT(%s)", escapeName(name)))
+			// sb.WriteString(escapeName(name))
 		default:
 			sb.WriteString(escapeName(name))
 		}
@@ -419,6 +426,10 @@ func (v *VRepl) analyzeBinlogSource(ctx context.Context) {
 		Match:  v.targetTable,
 		Filter: v.filterQuery,
 	}
+	if len(v.enumTextMap) > 0 {
+		rule.EnumText = v.enumTextMap
+	}
+
 	bls.Filter.Rules = append(bls.Filter.Rules, rule)
 	v.bls = bls
 }
