@@ -35,6 +35,7 @@ func main() { // nolint:funlen
 	typeName := flag.String("type", "VtctldClient", "interface type to implement")
 	implType := flag.String("impl", "gRPCVtctldClient", "type implementing the interface")
 	pkgName := flag.String("targetpkg", "grpcvtctldclient", "package name to generate code for")
+	local := flag.Bool("local", false, "generate a local, in-process client rather than a grpcclient")
 	out := flag.String("out", "", "output destination. leave empty to use stdout")
 
 	flag.Parse()
@@ -153,6 +154,12 @@ func main() { // nolint:funlen
 	def := &ClientInterfaceDef{
 		PackageName: *pkgName,
 		Type:        *implType,
+		ClientName:  "grpcvtctldclient",
+	}
+
+	if *local {
+		def.ClientName = "localvtctldclient"
+		def.Local = true
 	}
 
 	for _, name := range importNames {
@@ -183,6 +190,8 @@ type ClientInterfaceDef struct {
 	Type        string
 	Imports     []*Import
 	Methods     []*Func
+	Local       bool
+	ClientName  string
 }
 
 // Import contains the meta information about a Go import.
