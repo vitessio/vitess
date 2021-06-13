@@ -304,9 +304,10 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 		after = true
 		vals := sqltypes.MakeRowTrusted(tp.Fields, rowChange.After)
 		for i, field := range tp.Fields {
+			val := &vals[i]
 			bindVal := func() (err error) {
-				if conversion, ok := tp.ConvertCharset[field.Name]; ok {
-					valString := vals[i].ToString()
+				if conversion, ok := tp.ConvertCharset[field.Name]; ok && !val.IsNull() {
+					valString := val.ToString()
 					fmt.Printf("=========== ConvertCharset[field.Name]: %v, %v \n", field.Name, conversion)
 					fmt.Printf("=========== s0: %v \n", valString)
 
@@ -339,7 +340,7 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 					bindvars["a_"+field.Name] = sqltypes.StringBindVariable(valString)
 					return nil
 				}
-				bindvars["a_"+field.Name] = sqltypes.ValueBindVariable(vals[i])
+				bindvars["a_"+field.Name] = sqltypes.ValueBindVariable(*val)
 				return nil
 			}
 			if err := bindVal(); err != nil {
