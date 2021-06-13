@@ -14,6 +14,8 @@
 
 MAKEFLAGS = -s
 
-generate:
-	go generate ./...
-	gofmt -w client_gen.go
+all: grpcvtctldclient
+
+grpcvtctldclient:
+	go generate ../$@/...
+	gofmt -w ../$@/client_gen.go
