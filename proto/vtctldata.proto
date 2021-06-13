@@ -117,10 +117,31 @@ message Workflow {
     vttime.Time time_updated = 10;
     string message = 11;
     repeated CopyState copy_states = 12;
+    repeated Log logs = 13;
+    // LogFetchError is set if we fail to fetch some logs for this stream. We
+    // will never fail to fetch workflows because we cannot fetch the logs, but
+    // we will still forward log-fetch errors to the caller, should that be
+    // relevant to the context in which they are fetching workflows.
+    //
+    // Note that this field being set does not necessarily mean that Logs is nil;
+    // if there are N logs that exist for the stream, and we fail to fetch the
+    // ith log, we will still return logs in [0, i) + (i, N].
+    string log_fetch_error = 14;
 
     message CopyState {
       string table = 1;
       string last_pk = 2;
+    }
+
+    message Log {
+      int64 id = 1;
+      int64 stream_id = 2;
+      string type = 3;
+      string state = 4;
+      vttime.Time created_at = 5;
+      vttime.Time updated_at = 6;
+      string message = 7;
+      int64 count = 8;
     }
   }
 }

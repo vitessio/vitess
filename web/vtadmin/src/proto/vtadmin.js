@@ -58372,6 +58372,8 @@ $root.vtctldata = (function() {
              * @property {vttime.ITime|null} [time_updated] Stream time_updated
              * @property {string|null} [message] Stream message
              * @property {Array.<vtctldata.Workflow.Stream.ICopyState>|null} [copy_states] Stream copy_states
+             * @property {Array.<vtctldata.Workflow.Stream.ILog>|null} [logs] Stream logs
+             * @property {string|null} [log_fetch_error] Stream log_fetch_error
              */
 
             /**
@@ -58384,6 +58386,7 @@ $root.vtctldata = (function() {
              */
             function Stream(properties) {
                 this.copy_states = [];
+                this.logs = [];
                 if (properties)
                     for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
                         if (properties[keys[i]] != null)
@@ -58487,6 +58490,22 @@ $root.vtctldata = (function() {
             Stream.prototype.copy_states = $util.emptyArray;
 
             /**
+             * Stream logs.
+             * @member {Array.<vtctldata.Workflow.Stream.ILog>} logs
+             * @memberof vtctldata.Workflow.Stream
+             * @instance
+             */
+            Stream.prototype.logs = $util.emptyArray;
+
+            /**
+             * Stream log_fetch_error.
+             * @member {string} log_fetch_error
+             * @memberof vtctldata.Workflow.Stream
+             * @instance
+             */
+            Stream.prototype.log_fetch_error = "";
+
+            /**
              * Creates a new Stream instance using the specified properties.
              * @function create
              * @memberof vtctldata.Workflow.Stream
@@ -58535,6 +58554,11 @@ $root.vtctldata = (function() {
                 if (message.copy_states != null && message.copy_states.length)
                     for (var i = 0; i < message.copy_states.length; ++i)
                         $root.vtctldata.Workflow.Stream.CopyState.encode(message.copy_states[i], writer.uint32(/* id 12, wireType 2 =*/98).fork()).ldelim();
+                if (message.logs != null && message.logs.length)
+                    for (var i = 0; i < message.logs.length; ++i)
+                        $root.vtctldata.Workflow.Stream.Log.encode(message.logs[i], writer.uint32(/* id 13, wireType 2 =*/106).fork()).ldelim();
+                if (message.log_fetch_error != null && Object.hasOwnProperty.call(message, "log_fetch_error"))
+                    writer.uint32(/* id 14, wireType 2 =*/114).string(message.log_fetch_error);
                 return writer;
             };
 
@@ -58606,6 +58630,14 @@ $root.vtctldata = (function() {
                         if (!(message.copy_states && message.copy_states.length))
                             message.copy_states = [];
                         message.copy_states.push($root.vtctldata.Workflow.Stream.CopyState.decode(reader, reader.uint32()));
+                        break;
+                    case 13:
+                        if (!(message.logs && message.logs.length))
+                            message.logs = [];
+                        message.logs.push($root.vtctldata.Workflow.Stream.Log.decode(reader, reader.uint32()));
+                        break;
+                    case 14:
+                        message.log_fetch_error = reader.string();
                         break;
                     default:
                         reader.skipType(tag & 7);
@@ -58692,6 +58724,18 @@ $root.vtctldata = (function() {
                             return "copy_states." + error;
                     }
                 }
+                if (message.logs != null && message.hasOwnProperty("logs")) {
+                    if (!Array.isArray(message.logs))
+                        return "logs: array expected";
+                    for (var i = 0; i < message.logs.length; ++i) {
+                        var error = $root.vtctldata.Workflow.Stream.Log.verify(message.logs[i]);
+                        if (error)
+                            return "logs." + error;
+                    }
+                }
+                if (message.log_fetch_error != null && message.hasOwnProperty("log_fetch_error"))
+                    if (!$util.isString(message.log_fetch_error))
+                        return "log_fetch_error: string expected";
                 return null;
             };
 
@@ -58758,6 +58802,18 @@ $root.vtctldata = (function() {
                         message.copy_states[i] = $root.vtctldata.Workflow.Stream.CopyState.fromObject(object.copy_states[i]);
                     }
                 }
+                if (object.logs) {
+                    if (!Array.isArray(object.logs))
+                        throw TypeError(".vtctldata.Workflow.Stream.logs: array expected");
+                    message.logs = [];
+                    for (var i = 0; i < object.logs.length; ++i) {
+                        if (typeof object.logs[i] !== "object")
+                            throw TypeError(".vtctldata.Workflow.Stream.logs: object expected");
+                        message.logs[i] = $root.vtctldata.Workflow.Stream.Log.fromObject(object.logs[i]);
+                    }
+                }
+                if (object.log_fetch_error != null)
+                    message.log_fetch_error = String(object.log_fetch_error);
                 return message;
             };
 
@@ -58774,8 +58830,10 @@ $root.vtctldata = (function() {
                 if (!options)
                     options = {};
                 var object = {};
-                if (options.arrays || options.defaults)
+                if (options.arrays || options.defaults) {
                     object.copy_states = [];
+                    object.logs = [];
+                }
                 if (options.defaults) {
                     if ($util.Long) {
                         var long = new $util.Long(0, 0, false);
@@ -58792,6 +58850,7 @@ $root.vtctldata = (function() {
                     object.transaction_timestamp = null;
                     object.time_updated = null;
                     object.message = "";
+                    object.log_fetch_error = "";
                 }
                 if (message.id != null && message.hasOwnProperty("id"))
                     if (typeof message.id === "number")
@@ -58823,6 +58882,13 @@ $root.vtctldata = (function() {
                     for (var j = 0; j < message.copy_states.length; ++j)
                         object.copy_states[j] = $root.vtctldata.Workflow.Stream.CopyState.toObject(message.copy_states[j], options);
                 }
+                if (message.logs && message.logs.length) {
+                    object.logs = [];
+                    for (var j = 0; j < message.logs.length; ++j)
+                        object.logs[j] = $root.vtctldata.Workflow.Stream.Log.toObject(message.logs[j], options);
+                }
+                if (message.log_fetch_error != null && message.hasOwnProperty("log_fetch_error"))
+                    object.log_fetch_error = message.log_fetch_error;
                 return object;
             };
 
@@ -59045,6 +59111,400 @@ $root.vtctldata = (function() {
                 };
 
                 return CopyState;
+            })();
+
+            Stream.Log = (function() {
+
+                /**
+                 * Properties of a Log.
+                 * @memberof vtctldata.Workflow.Stream
+                 * @interface ILog
+                 * @property {number|Long|null} [id] Log id
+                 * @property {number|Long|null} [stream_id] Log stream_id
+                 * @property {string|null} [type] Log type
+                 * @property {string|null} [state] Log state
+                 * @property {vttime.ITime|null} [created_at] Log created_at
+                 * @property {vttime.ITime|null} [updated_at] Log updated_at
+                 * @property {string|null} [message] Log message
+                 * @property {number|Long|null} [count] Log count
+                 */
+
+                /**
+                 * Constructs a new Log.
+                 * @memberof vtctldata.Workflow.Stream
+                 * @classdesc Represents a Log.
+                 * @implements ILog
+                 * @constructor
+                 * @param {vtctldata.Workflow.Stream.ILog=} [properties] Properties to set
+                 */
+                function Log(properties) {
+                    if (properties)
+                        for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                            if (properties[keys[i]] != null)
+                                this[keys[i]] = properties[keys[i]];
+                }
+
+                /**
+                 * Log id.
+                 * @member {number|Long} id
+                 * @memberof vtctldata.Workflow.Stream.Log
+                 * @instance
+                 */
+                Log.prototype.id = $util.Long ? $util.Long.fromBits(0,0,false) : 0;
+
+                /**
+                 * Log stream_id.
+                 * @member {number|Long} stream_id
+                 * @memberof vtctldata.Workflow.Stream.Log
+                 * @instance
+                 */
+                Log.prototype.stream_id = $util.Long ? $util.Long.fromBits(0,0,false) : 0;
+
+                /**
+                 * Log type.
+                 * @member {string} type
+                 * @memberof vtctldata.Workflow.Stream.Log
+                 * @instance
+                 */
+                Log.prototype.type = "";
+
+                /**
+                 * Log state.
+                 * @member {string} state
+                 * @memberof vtctldata.Workflow.Stream.Log
+                 * @instance
+                 */
+                Log.prototype.state = "";
+
+                /**
+                 * Log created_at.
+                 * @member {vttime.ITime|null|undefined} created_at
+                 * @memberof vtctldata.Workflow.Stream.Log
+                 * @instance
+                 */
+                Log.prototype.created_at = null;
+
+                /**
+                 * Log updated_at.
+                 * @member {vttime.ITime|null|undefined} updated_at
+                 * @memberof vtctldata.Workflow.Stream.Log
+                 * @instance
+                 */
+                Log.prototype.updated_at = null;
+
+                /**
+                 * Log message.
+                 * @member {string} message
+                 * @memberof vtctldata.Workflow.Stream.Log
+                 * @instance
+                 */
+                Log.prototype.message = "";
+
+                /**
+                 * Log count.
+                 * @member {number|Long} count
+                 * @memberof vtctldata.Workflow.Stream.Log
+                 * @instance
+                 */
+                Log.prototype.count = $util.Long ? $util.Long.fromBits(0,0,false) : 0;
+
+                /**
+                 * Creates a new Log instance using the specified properties.
+                 * @function create
+                 * @memberof vtctldata.Workflow.Stream.Log
+                 * @static
+                 * @param {vtctldata.Workflow.Stream.ILog=} [properties] Properties to set
+                 * @returns {vtctldata.Workflow.Stream.Log} Log instance
+                 */
+                Log.create = function create(properties) {
+                    return new Log(properties);
+                };
+
+                /**
+                 * Encodes the specified Log message. Does not implicitly {@link vtctldata.Workflow.Stream.Log.verify|verify} messages.
+                 * @function encode
+                 * @memberof vtctldata.Workflow.Stream.Log
+                 * @static
+                 * @param {vtctldata.Workflow.Stream.ILog} message Log message or plain object to encode
+                 * @param {$protobuf.Writer} [writer] Writer to encode to
+                 * @returns {$protobuf.Writer} Writer
+                 */
+                Log.encode = function encode(message, writer) {
+                    if (!writer)
+                        writer = $Writer.create();
+                    if (message.id != null && Object.hasOwnProperty.call(message, "id"))
+                        writer.uint32(/* id 1, wireType 0 =*/8).int64(message.id);
+                    if (message.stream_id != null && Object.hasOwnProperty.call(message, "stream_id"))
+                        writer.uint32(/* id 2, wireType 0 =*/16).int64(message.stream_id);
+                    if (message.type != null && Object.hasOwnProperty.call(message, "type"))
+                        writer.uint32(/* id 3, wireType 2 =*/26).string(message.type);
+                    if (message.state != null && Object.hasOwnProperty.call(message, "state"))
+                        writer.uint32(/* id 4, wireType 2 =*/34).string(message.state);
+                    if (message.created_at != null && Object.hasOwnProperty.call(message, "created_at"))
+                        $root.vttime.Time.encode(message.created_at, writer.uint32(/* id 5, wireType 2 =*/42).fork()).ldelim();
+                    if (message.updated_at != null && Object.hasOwnProperty.call(message, "updated_at"))
+                        $root.vttime.Time.encode(message.updated_at, writer.uint32(/* id 6, wireType 2 =*/50).fork()).ldelim();
+                    if (message.message != null && Object.hasOwnProperty.call(message, "message"))
+                        writer.uint32(/* id 7, wireType 2 =*/58).string(message.message);
+                    if (message.count != null && Object.hasOwnProperty.call(message, "count"))
+                        writer.uint32(/* id 8, wireType 0 =*/64).int64(message.count);
+                    return writer;
+                };
+
+                /**
+                 * Encodes the specified Log message, length delimited. Does not implicitly {@link vtctldata.Workflow.Stream.Log.verify|verify} messages.
+                 * @function encodeDelimited
+                 * @memberof vtctldata.Workflow.Stream.Log
+                 * @static
+                 * @param {vtctldata.Workflow.Stream.ILog} message Log message or plain object to encode
+                 * @param {$protobuf.Writer} [writer] Writer to encode to
+                 * @returns {$protobuf.Writer} Writer
+                 */
+                Log.encodeDelimited = function encodeDelimited(message, writer) {
+                    return this.encode(message, writer).ldelim();
+                };
+
+                /**
+                 * Decodes a Log message from the specified reader or buffer.
+                 * @function decode
+                 * @memberof vtctldata.Workflow.Stream.Log
+                 * @static
+                 * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+                 * @param {number} [length] Message length if known beforehand
+                 * @returns {vtctldata.Workflow.Stream.Log} Log
+                 * @throws {Error} If the payload is not a reader or valid buffer
+                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
+                 */
+                Log.decode = function decode(reader, length) {
+                    if (!(reader instanceof $Reader))
+                        reader = $Reader.create(reader);
+                    var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.Workflow.Stream.Log();
+                    while (reader.pos < end) {
+                        var tag = reader.uint32();
+                        switch (tag >>> 3) {
+                        case 1:
+                            message.id = reader.int64();
+                            break;
+                        case 2:
+                            message.stream_id = reader.int64();
+                            break;
+                        case 3:
+                            message.type = reader.string();
+                            break;
+                        case 4:
+                            message.state = reader.string();
+                            break;
+                        case 5:
+                            message.created_at = $root.vttime.Time.decode(reader, reader.uint32());
+                            break;
+                        case 6:
+                            message.updated_at = $root.vttime.Time.decode(reader, reader.uint32());
+                            break;
+                        case 7:
+                            message.message = reader.string();
+                            break;
+                        case 8:
+                            message.count = reader.int64();
+                            break;
+                        default:
+                            reader.skipType(tag & 7);
+                            break;
+                        }
+                    }
+                    return message;
+                };
+
+                /**
+                 * Decodes a Log message from the specified reader or buffer, length delimited.
+                 * @function decodeDelimited
+                 * @memberof vtctldata.Workflow.Stream.Log
+                 * @static
+                 * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+                 * @returns {vtctldata.Workflow.Stream.Log} Log
+                 * @throws {Error} If the payload is not a reader or valid buffer
+                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
+                 */
+                Log.decodeDelimited = function decodeDelimited(reader) {
+                    if (!(reader instanceof $Reader))
+                        reader = new $Reader(reader);
+                    return this.decode(reader, reader.uint32());
+                };
+
+                /**
+                 * Verifies a Log message.
+                 * @function verify
+                 * @memberof vtctldata.Workflow.Stream.Log
+                 * @static
+                 * @param {Object.<string,*>} message Plain object to verify
+                 * @returns {string|null} `null` if valid, otherwise the reason why it is not
+                 */
+                Log.verify = function verify(message) {
+                    if (typeof message !== "object" || message === null)
+                        return "object expected";
+                    if (message.id != null && message.hasOwnProperty("id"))
+                        if (!$util.isInteger(message.id) && !(message.id && $util.isInteger(message.id.low) && $util.isInteger(message.id.high)))
+                            return "id: integer|Long expected";
+                    if (message.stream_id != null && message.hasOwnProperty("stream_id"))
+                        if (!$util.isInteger(message.stream_id) && !(message.stream_id && $util.isInteger(message.stream_id.low) && $util.isInteger(message.stream_id.high)))
+                            return "stream_id: integer|Long expected";
+                    if (message.type != null && message.hasOwnProperty("type"))
+                        if (!$util.isString(message.type))
+                            return "type: string expected";
+                    if (message.state != null && message.hasOwnProperty("state"))
+                        if (!$util.isString(message.state))
+                            return "state: string expected";
+                    if (message.created_at != null && message.hasOwnProperty("created_at")) {
+                        var error = $root.vttime.Time.verify(message.created_at);
+                        if (error)
+                            return "created_at." + error;
+                    }
+                    if (message.updated_at != null && message.hasOwnProperty("updated_at")) {
+                        var error = $root.vttime.Time.verify(message.updated_at);
+                        if (error)
+                            return "updated_at." + error;
+                    }
+                    if (message.message != null && message.hasOwnProperty("message"))
+                        if (!$util.isString(message.message))
+                            return "message: string expected";
+                    if (message.count != null && message.hasOwnProperty("count"))
+                        if (!$util.isInteger(message.count) && !(message.count && $util.isInteger(message.count.low) && $util.isInteger(message.count.high)))
+                            return "count: integer|Long expected";
+                    return null;
+                };
+
+                /**
+                 * Creates a Log message from a plain object. Also converts values to their respective internal types.
+                 * @function fromObject
+                 * @memberof vtctldata.Workflow.Stream.Log
+                 * @static
+                 * @param {Object.<string,*>} object Plain object
+                 * @returns {vtctldata.Workflow.Stream.Log} Log
+                 */
+                Log.fromObject = function fromObject(object) {
+                    if (object instanceof $root.vtctldata.Workflow.Stream.Log)
+                        return object;
+                    var message = new $root.vtctldata.Workflow.Stream.Log();
+                    if (object.id != null)
+                        if ($util.Long)
+                            (message.id = $util.Long.fromValue(object.id)).unsigned = false;
+                        else if (typeof object.id === "string")
+                            message.id = parseInt(object.id, 10);
+                        else if (typeof object.id === "number")
+                            message.id = object.id;
+                        else if (typeof object.id === "object")
+                            message.id = new $util.LongBits(object.id.low >>> 0, object.id.high >>> 0).toNumber();
+                    if (object.stream_id != null)
+                        if ($util.Long)
+                            (message.stream_id = $util.Long.fromValue(object.stream_id)).unsigned = false;
+                        else if (typeof object.stream_id === "string")
+                            message.stream_id = parseInt(object.stream_id, 10);
+                        else if (typeof object.stream_id === "number")
+                            message.stream_id = object.stream_id;
+                        else if (typeof object.stream_id === "object")
+                            message.stream_id = new $util.LongBits(object.stream_id.low >>> 0, object.stream_id.high >>> 0).toNumber();
+                    if (object.type != null)
+                        message.type = String(object.type);
+                    if (object.state != null)
+                        message.state = String(object.state);
+                    if (object.created_at != null) {
+                        if (typeof object.created_at !== "object")
+                            throw TypeError(".vtctldata.Workflow.Stream.Log.created_at: object expected");
+                        message.created_at = $root.vttime.Time.fromObject(object.created_at);
+                    }
+                    if (object.updated_at != null) {
+                        if (typeof object.updated_at !== "object")
+                            throw TypeError(".vtctldata.Workflow.Stream.Log.updated_at: object expected");
+                        message.updated_at = $root.vttime.Time.fromObject(object.updated_at);
+                    }
+                    if (object.message != null)
+                        message.message = String(object.message);
+                    if (object.count != null)
+                        if ($util.Long)
+                            (message.count = $util.Long.fromValue(object.count)).unsigned = false;
+                        else if (typeof object.count === "string")
+                            message.count = parseInt(object.count, 10);
+                        else if (typeof object.count === "number")
+                            message.count = object.count;
+                        else if (typeof object.count === "object")
+                            message.count = new $util.LongBits(object.count.low >>> 0, object.count.high >>> 0).toNumber();
+                    return message;
+                };
+
+                /**
+                 * Creates a plain object from a Log message. Also converts values to other types if specified.
+                 * @function toObject
+                 * @memberof vtctldata.Workflow.Stream.Log
+                 * @static
+                 * @param {vtctldata.Workflow.Stream.Log} message Log
+                 * @param {$protobuf.IConversionOptions} [options] Conversion options
+                 * @returns {Object.<string,*>} Plain object
+                 */
+                Log.toObject = function toObject(message, options) {
+                    if (!options)
+                        options = {};
+                    var object = {};
+                    if (options.defaults) {
+                        if ($util.Long) {
+                            var long = new $util.Long(0, 0, false);
+                            object.id = options.longs === String ? long.toString() : options.longs === Number ? long.toNumber() : long;
+                        } else
+                            object.id = options.longs === String ? "0" : 0;
+                        if ($util.Long) {
+                            var long = new $util.Long(0, 0, false);
+                            object.stream_id = options.longs === String ? long.toString() : options.longs === Number ? long.toNumber() : long;
+                        } else
+                            object.stream_id = options.longs === String ? "0" : 0;
+                        object.type = "";
+                        object.state = "";
+                        object.created_at = null;
+                        object.updated_at = null;
+                        object.message = "";
+                        if ($util.Long) {
+                            var long = new $util.Long(0, 0, false);
+                            object.count = options.longs === String ? long.toString() : options.longs === Number ? long.toNumber() : long;
+                        } else
+                            object.count = options.longs === String ? "0" : 0;
+                    }
+                    if (message.id != null && message.hasOwnProperty("id"))
+                        if (typeof message.id === "number")
+                            object.id = options.longs === String ? String(message.id) : message.id;
+                        else
+                            object.id = options.longs === String ? $util.Long.prototype.toString.call(message.id) : options.longs === Number ? new $util.LongBits(message.id.low >>> 0, message.id.high >>> 0).toNumber() : message.id;
+                    if (message.stream_id != null && message.hasOwnProperty("stream_id"))
+                        if (typeof message.stream_id === "number")
+                            object.stream_id = options.longs === String ? String(message.stream_id) : message.stream_id;
+                        else
+                            object.stream_id = options.longs === String ? $util.Long.prototype.toString.call(message.stream_id) : options.longs === Number ? new $util.LongBits(message.stream_id.low >>> 0, message.stream_id.high >>> 0).toNumber() : message.stream_id;
+                    if (message.type != null && message.hasOwnProperty("type"))
+                        object.type = message.type;
+                    if (message.state != null && message.hasOwnProperty("state"))
+                        object.state = message.state;
+                    if (message.created_at != null && message.hasOwnProperty("created_at"))
+                        object.created_at = $root.vttime.Time.toObject(message.created_at, options);
+                    if (message.updated_at != null && message.hasOwnProperty("updated_at"))
+                        object.updated_at = $root.vttime.Time.toObject(message.updated_at, options);
+                    if (message.message != null && message.hasOwnProperty("message"))
+                        object.message = message.message;
+                    if (message.count != null && message.hasOwnProperty("count"))
+                        if (typeof message.count === "number")
+                            object.count = options.longs === String ? String(message.count) : message.count;
+                        else
+                            object.count = options.longs === String ? $util.Long.prototype.toString.call(message.count) : options.longs === Number ? new $util.LongBits(message.count.low >>> 0, message.count.high >>> 0).toNumber() : message.count;
+                    return object;
+                };
+
+                /**
+                 * Converts this Log to JSON.
+                 * @function toJSON
+                 * @memberof vtctldata.Workflow.Stream.Log
+                 * @instance
+                 * @returns {Object.<string,*>} JSON object
+                 */
+                Log.prototype.toJSON = function toJSON() {
+                    return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+                };
+
+                return Log;
             })();
 
             return Stream;
@@ -60226,6 +60686,518 @@ $root.vtctldata = (function() {
         };
 
         return ApplyRoutingRulesResponse;
+    })();
+
+    vtctldata.ApplyVSchemaRequest = (function() {
+
+        /**
+         * Properties of an ApplyVSchemaRequest.
+         * @memberof vtctldata
+         * @interface IApplyVSchemaRequest
+         * @property {string|null} [keyspace] ApplyVSchemaRequest keyspace
+         * @property {boolean|null} [skip_rebuild] ApplyVSchemaRequest skip_rebuild
+         * @property {boolean|null} [dry_run] ApplyVSchemaRequest dry_run
+         * @property {Array.<string>|null} [cells] ApplyVSchemaRequest cells
+         * @property {vschema.IKeyspace|null} [v_schema] ApplyVSchemaRequest v_schema
+         * @property {string|null} [sql] ApplyVSchemaRequest sql
+         */
+
+        /**
+         * Constructs a new ApplyVSchemaRequest.
+         * @memberof vtctldata
+         * @classdesc Represents an ApplyVSchemaRequest.
+         * @implements IApplyVSchemaRequest
+         * @constructor
+         * @param {vtctldata.IApplyVSchemaRequest=} [properties] Properties to set
+         */
+        function ApplyVSchemaRequest(properties) {
+            this.cells = [];
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * ApplyVSchemaRequest keyspace.
+         * @member {string} keyspace
+         * @memberof vtctldata.ApplyVSchemaRequest
+         * @instance
+         */
+        ApplyVSchemaRequest.prototype.keyspace = "";
+
+        /**
+         * ApplyVSchemaRequest skip_rebuild.
+         * @member {boolean} skip_rebuild
+         * @memberof vtctldata.ApplyVSchemaRequest
+         * @instance
+         */
+        ApplyVSchemaRequest.prototype.skip_rebuild = false;
+
+        /**
+         * ApplyVSchemaRequest dry_run.
+         * @member {boolean} dry_run
+         * @memberof vtctldata.ApplyVSchemaRequest
+         * @instance
+         */
+        ApplyVSchemaRequest.prototype.dry_run = false;
+
+        /**
+         * ApplyVSchemaRequest cells.
+         * @member {Array.<string>} cells
+         * @memberof vtctldata.ApplyVSchemaRequest
+         * @instance
+         */
+        ApplyVSchemaRequest.prototype.cells = $util.emptyArray;
+
+        /**
+         * ApplyVSchemaRequest v_schema.
+         * @member {vschema.IKeyspace|null|undefined} v_schema
+         * @memberof vtctldata.ApplyVSchemaRequest
+         * @instance
+         */
+        ApplyVSchemaRequest.prototype.v_schema = null;
+
+        /**
+         * ApplyVSchemaRequest sql.
+         * @member {string} sql
+         * @memberof vtctldata.ApplyVSchemaRequest
+         * @instance
+         */
+        ApplyVSchemaRequest.prototype.sql = "";
+
+        /**
+         * Creates a new ApplyVSchemaRequest instance using the specified properties.
+         * @function create
+         * @memberof vtctldata.ApplyVSchemaRequest
+         * @static
+         * @param {vtctldata.IApplyVSchemaRequest=} [properties] Properties to set
+         * @returns {vtctldata.ApplyVSchemaRequest} ApplyVSchemaRequest instance
+         */
+        ApplyVSchemaRequest.create = function create(properties) {
+            return new ApplyVSchemaRequest(properties);
+        };
+
+        /**
+         * Encodes the specified ApplyVSchemaRequest message. Does not implicitly {@link vtctldata.ApplyVSchemaRequest.verify|verify} messages.
+         * @function encode
+         * @memberof vtctldata.ApplyVSchemaRequest
+         * @static
+         * @param {vtctldata.IApplyVSchemaRequest} message ApplyVSchemaRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        ApplyVSchemaRequest.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.keyspace != null && Object.hasOwnProperty.call(message, "keyspace"))
+                writer.uint32(/* id 1, wireType 2 =*/10).string(message.keyspace);
+            if (message.skip_rebuild != null && Object.hasOwnProperty.call(message, "skip_rebuild"))
+                writer.uint32(/* id 2, wireType 0 =*/16).bool(message.skip_rebuild);
+            if (message.dry_run != null && Object.hasOwnProperty.call(message, "dry_run"))
+                writer.uint32(/* id 3, wireType 0 =*/24).bool(message.dry_run);
+            if (message.cells != null && message.cells.length)
+                for (var i = 0; i < message.cells.length; ++i)
+                    writer.uint32(/* id 4, wireType 2 =*/34).string(message.cells[i]);
+            if (message.v_schema != null && Object.hasOwnProperty.call(message, "v_schema"))
+                $root.vschema.Keyspace.encode(message.v_schema, writer.uint32(/* id 5, wireType 2 =*/42).fork()).ldelim();
+            if (message.sql != null && Object.hasOwnProperty.call(message, "sql"))
+                writer.uint32(/* id 6, wireType 2 =*/50).string(message.sql);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified ApplyVSchemaRequest message, length delimited. Does not implicitly {@link vtctldata.ApplyVSchemaRequest.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtctldata.ApplyVSchemaRequest
+         * @static
+         * @param {vtctldata.IApplyVSchemaRequest} message ApplyVSchemaRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        ApplyVSchemaRequest.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes an ApplyVSchemaRequest message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtctldata.ApplyVSchemaRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtctldata.ApplyVSchemaRequest} ApplyVSchemaRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        ApplyVSchemaRequest.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.ApplyVSchemaRequest();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    message.keyspace = reader.string();
+                    break;
+                case 2:
+                    message.skip_rebuild = reader.bool();
+                    break;
+                case 3:
+                    message.dry_run = reader.bool();
+                    break;
+                case 4:
+                    if (!(message.cells && message.cells.length))
+                        message.cells = [];
+                    message.cells.push(reader.string());
+                    break;
+                case 5:
+                    message.v_schema = $root.vschema.Keyspace.decode(reader, reader.uint32());
+                    break;
+                case 6:
+                    message.sql = reader.string();
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes an ApplyVSchemaRequest message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtctldata.ApplyVSchemaRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtctldata.ApplyVSchemaRequest} ApplyVSchemaRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        ApplyVSchemaRequest.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies an ApplyVSchemaRequest message.
+         * @function verify
+         * @memberof vtctldata.ApplyVSchemaRequest
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        ApplyVSchemaRequest.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.keyspace != null && message.hasOwnProperty("keyspace"))
+                if (!$util.isString(message.keyspace))
+                    return "keyspace: string expected";
+            if (message.skip_rebuild != null && message.hasOwnProperty("skip_rebuild"))
+                if (typeof message.skip_rebuild !== "boolean")
+                    return "skip_rebuild: boolean expected";
+            if (message.dry_run != null && message.hasOwnProperty("dry_run"))
+                if (typeof message.dry_run !== "boolean")
+                    return "dry_run: boolean expected";
+            if (message.cells != null && message.hasOwnProperty("cells")) {
+                if (!Array.isArray(message.cells))
+                    return "cells: array expected";
+                for (var i = 0; i < message.cells.length; ++i)
+                    if (!$util.isString(message.cells[i]))
+                        return "cells: string[] expected";
+            }
+            if (message.v_schema != null && message.hasOwnProperty("v_schema")) {
+                var error = $root.vschema.Keyspace.verify(message.v_schema);
+                if (error)
+                    return "v_schema." + error;
+            }
+            if (message.sql != null && message.hasOwnProperty("sql"))
+                if (!$util.isString(message.sql))
+                    return "sql: string expected";
+            return null;
+        };
+
+        /**
+         * Creates an ApplyVSchemaRequest message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtctldata.ApplyVSchemaRequest
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtctldata.ApplyVSchemaRequest} ApplyVSchemaRequest
+         */
+        ApplyVSchemaRequest.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtctldata.ApplyVSchemaRequest)
+                return object;
+            var message = new $root.vtctldata.ApplyVSchemaRequest();
+            if (object.keyspace != null)
+                message.keyspace = String(object.keyspace);
+            if (object.skip_rebuild != null)
+                message.skip_rebuild = Boolean(object.skip_rebuild);
+            if (object.dry_run != null)
+                message.dry_run = Boolean(object.dry_run);
+            if (object.cells) {
+                if (!Array.isArray(object.cells))
+                    throw TypeError(".vtctldata.ApplyVSchemaRequest.cells: array expected");
+                message.cells = [];
+                for (var i = 0; i < object.cells.length; ++i)
+                    message.cells[i] = String(object.cells[i]);
+            }
+            if (object.v_schema != null) {
+                if (typeof object.v_schema !== "object")
+                    throw TypeError(".vtctldata.ApplyVSchemaRequest.v_schema: object expected");
+                message.v_schema = $root.vschema.Keyspace.fromObject(object.v_schema);
+            }
+            if (object.sql != null)
+                message.sql = String(object.sql);
+            return message;
+        };
+
+        /**
+         * Creates a plain object from an ApplyVSchemaRequest message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtctldata.ApplyVSchemaRequest
+         * @static
+         * @param {vtctldata.ApplyVSchemaRequest} message ApplyVSchemaRequest
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        ApplyVSchemaRequest.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.arrays || options.defaults)
+                object.cells = [];
+            if (options.defaults) {
+                object.keyspace = "";
+                object.skip_rebuild = false;
+                object.dry_run = false;
+                object.v_schema = null;
+                object.sql = "";
+            }
+            if (message.keyspace != null && message.hasOwnProperty("keyspace"))
+                object.keyspace = message.keyspace;
+            if (message.skip_rebuild != null && message.hasOwnProperty("skip_rebuild"))
+                object.skip_rebuild = message.skip_rebuild;
+            if (message.dry_run != null && message.hasOwnProperty("dry_run"))
+                object.dry_run = message.dry_run;
+            if (message.cells && message.cells.length) {
+                object.cells = [];
+                for (var j = 0; j < message.cells.length; ++j)
+                    object.cells[j] = message.cells[j];
+            }
+            if (message.v_schema != null && message.hasOwnProperty("v_schema"))
+                object.v_schema = $root.vschema.Keyspace.toObject(message.v_schema, options);
+            if (message.sql != null && message.hasOwnProperty("sql"))
+                object.sql = message.sql;
+            return object;
+        };
+
+        /**
+         * Converts this ApplyVSchemaRequest to JSON.
+         * @function toJSON
+         * @memberof vtctldata.ApplyVSchemaRequest
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        ApplyVSchemaRequest.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return ApplyVSchemaRequest;
+    })();
+
+    vtctldata.ApplyVSchemaResponse = (function() {
+
+        /**
+         * Properties of an ApplyVSchemaResponse.
+         * @memberof vtctldata
+         * @interface IApplyVSchemaResponse
+         * @property {vschema.IKeyspace|null} [v_schema] ApplyVSchemaResponse v_schema
+         */
+
+        /**
+         * Constructs a new ApplyVSchemaResponse.
+         * @memberof vtctldata
+         * @classdesc Represents an ApplyVSchemaResponse.
+         * @implements IApplyVSchemaResponse
+         * @constructor
+         * @param {vtctldata.IApplyVSchemaResponse=} [properties] Properties to set
+         */
+        function ApplyVSchemaResponse(properties) {
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * ApplyVSchemaResponse v_schema.
+         * @member {vschema.IKeyspace|null|undefined} v_schema
+         * @memberof vtctldata.ApplyVSchemaResponse
+         * @instance
+         */
+        ApplyVSchemaResponse.prototype.v_schema = null;
+
+        /**
+         * Creates a new ApplyVSchemaResponse instance using the specified properties.
+         * @function create
+         * @memberof vtctldata.ApplyVSchemaResponse
+         * @static
+         * @param {vtctldata.IApplyVSchemaResponse=} [properties] Properties to set
+         * @returns {vtctldata.ApplyVSchemaResponse} ApplyVSchemaResponse instance
+         */
+        ApplyVSchemaResponse.create = function create(properties) {
+            return new ApplyVSchemaResponse(properties);
+        };
+
+        /**
+         * Encodes the specified ApplyVSchemaResponse message. Does not implicitly {@link vtctldata.ApplyVSchemaResponse.verify|verify} messages.
+         * @function encode
+         * @memberof vtctldata.ApplyVSchemaResponse
+         * @static
+         * @param {vtctldata.IApplyVSchemaResponse} message ApplyVSchemaResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        ApplyVSchemaResponse.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.v_schema != null && Object.hasOwnProperty.call(message, "v_schema"))
+                $root.vschema.Keyspace.encode(message.v_schema, writer.uint32(/* id 1, wireType 2 =*/10).fork()).ldelim();
+            return writer;
+        };
+
+        /**
+         * Encodes the specified ApplyVSchemaResponse message, length delimited. Does not implicitly {@link vtctldata.ApplyVSchemaResponse.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtctldata.ApplyVSchemaResponse
+         * @static
+         * @param {vtctldata.IApplyVSchemaResponse} message ApplyVSchemaResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        ApplyVSchemaResponse.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes an ApplyVSchemaResponse message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtctldata.ApplyVSchemaResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtctldata.ApplyVSchemaResponse} ApplyVSchemaResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        ApplyVSchemaResponse.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.ApplyVSchemaResponse();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    message.v_schema = $root.vschema.Keyspace.decode(reader, reader.uint32());
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes an ApplyVSchemaResponse message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtctldata.ApplyVSchemaResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtctldata.ApplyVSchemaResponse} ApplyVSchemaResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        ApplyVSchemaResponse.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies an ApplyVSchemaResponse message.
+         * @function verify
+         * @memberof vtctldata.ApplyVSchemaResponse
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        ApplyVSchemaResponse.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.v_schema != null && message.hasOwnProperty("v_schema")) {
+                var error = $root.vschema.Keyspace.verify(message.v_schema);
+                if (error)
+                    return "v_schema." + error;
+            }
+            return null;
+        };
+
+        /**
+         * Creates an ApplyVSchemaResponse message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtctldata.ApplyVSchemaResponse
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtctldata.ApplyVSchemaResponse} ApplyVSchemaResponse
+         */
+        ApplyVSchemaResponse.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtctldata.ApplyVSchemaResponse)
+                return object;
+            var message = new $root.vtctldata.ApplyVSchemaResponse();
+            if (object.v_schema != null) {
+                if (typeof object.v_schema !== "object")
+                    throw TypeError(".vtctldata.ApplyVSchemaResponse.v_schema: object expected");
+                message.v_schema = $root.vschema.Keyspace.fromObject(object.v_schema);
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from an ApplyVSchemaResponse message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtctldata.ApplyVSchemaResponse
+         * @static
+         * @param {vtctldata.ApplyVSchemaResponse} message ApplyVSchemaResponse
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        ApplyVSchemaResponse.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.defaults)
+                object.v_schema = null;
+            if (message.v_schema != null && message.hasOwnProperty("v_schema"))
+                object.v_schema = $root.vschema.Keyspace.toObject(message.v_schema, options);
+            return object;
+        };
+
+        /**
+         * Converts this ApplyVSchemaResponse to JSON.
+         * @function toJSON
+         * @memberof vtctldata.ApplyVSchemaResponse
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        ApplyVSchemaResponse.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return ApplyVSchemaResponse;
     })();
 
     vtctldata.ChangeTabletTypeRequest = (function() {
