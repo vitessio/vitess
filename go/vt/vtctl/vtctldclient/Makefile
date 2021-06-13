@@ -14,8 +14,12 @@
 
 MAKEFLAGS = -s
 
-all: grpcvtctldclient
+all: grpcvtctldclient localvtctldclient
 
 grpcvtctldclient:
+	go generate ../$@/...
+	gofmt -w ../$@/client_gen.go
+
+localvtctldclient:
 	go generate ../$@/...
 	gofmt -w ../$@/client_gen.go
