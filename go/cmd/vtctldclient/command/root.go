@@ -29,6 +29,9 @@ import (
 )
 
 var (
+	// VtctldClientProtocol is the protocol to use when creating the vtctldclient.VtctldClient.
+	VtctldClientProtocol = "grpc"
+
 	client        vtctldclient.VtctldClient
 	traceCloser   io.Closer
 	commandCtx    context.Context
@@ -43,13 +46,19 @@ var (
 		// command context for every command.
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) (err error) {
 			traceCloser = trace.StartTracing("vtctldclient")
-			if err := ensureServerArg(); err != nil {
-				return err
+			if VtctldClientProtocol != "local" {
+				if err := ensureServerArg(); err != nil {
+					return err
+				}
 			}
 
-			client, err = vtctldclient.New("grpc", server)
+			client, err = vtctldclient.New(VtctldClientProtocol, server)
 
-			commandCtx, commandCancel = context.WithTimeout(context.Background(), actionTimeout)
+			ctx := cmd.Context()
+			if ctx == nil {
+				ctx = context.Background()
+			}
+			commandCtx, commandCancel = context.WithTimeout(ctx, actionTimeout)
 			return err
 		},
 		// Similarly, PersistentPostRun cleans up the resources spawned by
