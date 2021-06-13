@@ -22,13 +22,12 @@ import (
 	"sort"
 	"strings"
 
-	"vitess.io/vitess/go/vt/binlog/binlogplayer"
-
-	querypb "vitess.io/vitess/go/vt/proto/query"
-
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/key"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
@@ -144,7 +143,7 @@ func buildReplicatorPlan(filter *binlogdatapb.Filter, pkInfoMap map[string][]*Pr
 		if rule == nil {
 			continue
 		}
-		tablePlan, err := buildTablePlan(tableName, rule.Filter, pkInfoMap, lastpk, stats)
+		tablePlan, err := buildTablePlan(tableName, rule.Filter, pkInfoMap, lastpk, rule.EnumText, stats)
 		if err != nil {
 			return nil, err
 		}
@@ -183,7 +182,7 @@ func MatchTable(tableName string, filter *binlogdatapb.Filter) (*binlogdatapb.Ru
 	return nil, nil
 }
 
-func buildTablePlan(tableName, filter string, pkInfoMap map[string][]*PrimaryKeyInfo, lastpk *sqltypes.Result, stats *binlogplayer.Stats) (*TablePlan, error) {
+func buildTablePlan(tableName, filter string, pkInfoMap map[string][]*PrimaryKeyInfo, lastpk *sqltypes.Result, enumTextMap map[string]string, stats *binlogplayer.Stats) (*TablePlan, error) {
 	query := filter
 	// generate equivalent select statement if filter is empty or a keyrange.
 	switch {
@@ -206,6 +205,12 @@ func buildTablePlan(tableName, filter string, pkInfoMap map[string][]*PrimaryKey
 		Match: fromTable,
 	}
 
+	enumValuesMap := map[string](map[string]string){}
+	for k, v := range enumTextMap {
+		tokensMap := schema.ParseEnumTokensMap(v)
+		enumValuesMap[k] = tokensMap
+	}
+
 	if expr, ok := sel.SelectExprs[0].(*sqlparser.StarExpr); ok {
 		// If it's a "select *", we return a partial plan, and complete
 		// it when we get back field info from the stream.
@@ -217,11 +222,13 @@ func buildTablePlan(tableName, filter string, pkInfoMap map[string][]*PrimaryKey
 		}
 		sendRule.Filter = query
 		tablePlan := &TablePlan{
-			TargetName: tableName,
-			SendRule:   sendRule,
-			Lastpk:     lastpk,
-			Stats:      stats,
+			TargetName:    tableName,
+			SendRule:      sendRule,
+			Lastpk:        lastpk,
+			Stats:         stats,
+			EnumValuesMap: enumValuesMap,
 		}
+
 		return tablePlan, nil
 	}
 
@@ -272,6 +279,7 @@ func buildTablePlan(tableName, filter string, pkInfoMap map[string][]*PrimaryKey
 
 	tablePlan := tpb.generate()
 	tablePlan.SendRule = sendRule
+	tablePlan.EnumValuesMap = enumValuesMap
 	return tablePlan, nil
 }
 
@@ -547,9 +555,6 @@ func (tpb *tablePlanBuilder) generateValuesPart(buf *sqlparser.TrackedBuffer, bv
 		separator = ","
 		switch cexpr.operation {
 		case opExpr:
-			// if cexpr.colType == querypb.Type_ENUM {
-			// 	fmt.Printf("========= found ENUM type for %v\n", cexpr.expr)
-			// }
 			if cexpr.colType == querypb.Type_JSON {
 				buf.Myprintf("convert(%v using utf8mb4)", cexpr.expr)
 			} else {
@@ -635,9 +640,6 @@ func (tpb *tablePlanBuilder) generateUpdateStatement() *sqlparser.ParsedQuery {
 		separator = ", "
 		switch cexpr.operation {
 		case opExpr:
-			// if cexpr.colType == querypb.Type_ENUM {
-			// 	fmt.Printf("========= found ENUM type for %v\n", cexpr.expr)
-			// }
 			bvf.mode = bvAfter
 			if cexpr.colType == querypb.Type_JSON {
 				buf.Myprintf("convert(%v using utf8mb4)", cexpr.expr)
