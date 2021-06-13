@@ -17,9 +17,9 @@ limitations under the License.
 package grpcqueryservice
 
 import (
-	"google.golang.org/grpc"
-
 	"context"
+
+	"google.golang.org/grpc"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/callerid"

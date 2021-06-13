@@ -21,12 +21,12 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
-	"google.golang.org/protobuf/proto"
-
 	"google.golang.org/grpc"
+	"google.golang.org/protobuf/proto"
 	"k8s.io/apimachinery/pkg/util/sets"
 
 	"vitess.io/vitess/go/event"
@@ -84,9 +84,16 @@ func NewVtctldServer(ts *topo.Server) *VtctldServer {
 
 // AddCellInfo is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) AddCellInfo(ctx context.Context, req *vtctldatapb.AddCellInfoRequest) (*vtctldatapb.AddCellInfoResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.AddCellInfo")
+	defer span.Finish()
+
 	if req.CellInfo.Root == "" {
 		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "CellInfo.Root must be non-empty")
 	}
+
+	span.Annotate("cell", req.Name)
+	span.Annotate("cell_root", req.CellInfo.Root)
+	span.Annotate("cell_address", req.CellInfo.ServerAddress)
 
 	ctx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
 	defer cancel()
@@ -100,6 +107,12 @@ func (s *VtctldServer) AddCellInfo(ctx context.Context, req *vtctldatapb.AddCell
 
 // AddCellsAlias is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) AddCellsAlias(ctx context.Context, req *vtctldatapb.AddCellsAliasRequest) (*vtctldatapb.AddCellsAliasResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.AddCellsAlias")
+	defer span.Finish()
+
+	span.Annotate("cells_alias", req.Name)
+	span.Annotate("cells", strings.Join(req.Cells, ","))
+
 	ctx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
 	defer cancel()
 
@@ -112,6 +125,12 @@ func (s *VtctldServer) AddCellsAlias(ctx context.Context, req *vtctldatapb.AddCe
 
 // ApplyRoutingRules is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) ApplyRoutingRules(ctx context.Context, req *vtctldatapb.ApplyRoutingRulesRequest) (*vtctldatapb.ApplyRoutingRulesResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.ApplyRoutingRules")
+	defer span.Finish()
+
+	span.Annotate("skip_rebuild", req.SkipRebuild)
+	span.Annotate("rebuild_cells", strings.Join(req.RebuildCells, ","))
+
 	if err := s.ts.SaveRoutingRules(ctx, req.RoutingRules); err != nil {
 		return nil, err
 	}
@@ -132,6 +151,14 @@ func (s *VtctldServer) ApplyRoutingRules(ctx context.Context, req *vtctldatapb.A
 
 // ApplyVSchema is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) ApplyVSchema(ctx context.Context, req *vtctldatapb.ApplyVSchemaRequest) (*vtctldatapb.ApplyVSchemaResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.ApplyVSchema")
+	defer span.Finish()
+
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("cells", strings.Join(req.Cells, ","))
+	span.Annotate("skip_rebuild", req.SkipRebuild)
+	span.Annotate("dry_run", req.DryRun)
+
 	if _, err := s.ts.GetKeyspace(ctx, req.Keyspace); err != nil {
 		if topo.IsErrType(err, topo.NoNode) {
 			return nil, vterrors.Wrapf(err, "keyspace(%s) doesn't exist, check if the keyspace is initialized", req.Keyspace)
@@ -143,10 +170,14 @@ func (s *VtctldServer) ApplyVSchema(ctx context.Context, req *vtctldatapb.ApplyV
 		return nil, vterrors.New(vtrpc.Code_INVALID_ARGUMENT, "must pass exactly one of req.VSchema and req.Sql")
 	}
 
-	var vs *vschemapb.Keyspace
-	var err error
+	var (
+		vs  *vschemapb.Keyspace
+		err error
+	)
 
 	if req.Sql != "" {
+		span.Annotate("sql_mode", true)
+
 		stmt, err := sqlparser.Parse(req.Sql)
 		if err != nil {
 			return nil, vterrors.Wrapf(err, "Parse(%s)", req.Sql)
@@ -166,6 +197,7 @@ func (s *VtctldServer) ApplyVSchema(ctx context.Context, req *vtctldatapb.ApplyV
 			return nil, vterrors.Wrapf(err, "ApplyVSchemaDDL(%s,%v,%v)", req.Keyspace, vs, ddl)
 		}
 	} else { // "jsonMode"
+		span.Annotate("sql_mode", false)
 		vs = req.VSchema
 	}
 
@@ -191,6 +223,13 @@ func (s *VtctldServer) ApplyVSchema(ctx context.Context, req *vtctldatapb.ApplyV
 
 // ChangeTabletType is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) ChangeTabletType(ctx context.Context, req *vtctldatapb.ChangeTabletTypeRequest) (*vtctldatapb.ChangeTabletTypeResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.ChangeTabletType")
+	defer span.Finish()
+
+	span.Annotate("tablet_alias", topoproto.TabletAliasString(req.TabletAlias))
+	span.Annotate("dry_run", req.DryRun)
+	span.Annotate("tablet_type", topoproto.TabletTypeLString(req.DbType))
+
 	ctx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
 	defer cancel()
 
@@ -198,6 +237,8 @@ func (s *VtctldServer) ChangeTabletType(ctx context.Context, req *vtctldatapb.Ch
 	if err != nil {
 		return nil, err
 	}
+
+	span.Annotate("before_tablet_type", topoproto.TabletTypeLString(tablet.Type))
 
 	if !topo.IsTrivialTypeChange(tablet.Type, req.DbType) {
 		return nil, fmt.Errorf("tablet %v type change %v -> %v is not an allowed transition for ChangeTabletType", req.TabletAlias, tablet.Type, req.DbType)
@@ -237,6 +278,16 @@ func (s *VtctldServer) ChangeTabletType(ctx context.Context, req *vtctldatapb.Ch
 
 // CreateKeyspace is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) CreateKeyspace(ctx context.Context, req *vtctldatapb.CreateKeyspaceRequest) (*vtctldatapb.CreateKeyspaceResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.CreateKeyspace")
+	defer span.Finish()
+
+	span.Annotate("keyspace", req.Name)
+	span.Annotate("keyspace_type", topoproto.KeyspaceTypeLString(req.Type))
+	span.Annotate("sharding_column_name", req.ShardingColumnName)
+	span.Annotate("sharding_column_type", topoproto.KeyspaceIDTypeLString(req.ShardingColumnType))
+	span.Annotate("force", req.Force)
+	span.Annotate("allow_empty_vschema", req.AllowEmptyVSchema)
+
 	switch req.Type {
 	case topodatapb.KeyspaceType_NORMAL:
 	case topodatapb.KeyspaceType_SNAPSHOT:
@@ -247,6 +298,9 @@ func (s *VtctldServer) CreateKeyspace(ctx context.Context, req *vtctldatapb.Crea
 		if req.SnapshotTime == nil {
 			return nil, errors.New("SnapshotTime is required for SNAPSHOT keyspaces")
 		}
+
+		span.Annotate("base_keyspace", req.BaseKeyspace)
+		span.Annotate("snapshot_time", req.SnapshotTime) // TODO: get a proper string repr
 	default:
 		return nil, fmt.Errorf("unknown keyspace type %v", req.Type)
 	}
@@ -325,6 +379,14 @@ func (s *VtctldServer) CreateKeyspace(ctx context.Context, req *vtctldatapb.Crea
 
 // CreateShard is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) CreateShard(ctx context.Context, req *vtctldatapb.CreateShardRequest) (*vtctldatapb.CreateShardResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.CreateShard")
+	defer span.Finish()
+
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("shard", req.ShardName)
+	span.Annotate("force", req.Force)
+	span.Annotate("include_parent", req.IncludeParent)
+
 	if req.IncludeParent {
 		log.Infof("Creating empty keyspace for %s", req.Keyspace)
 		if err := s.ts.CreateKeyspace(ctx, req.Keyspace, &topodatapb.Keyspace{}); err != nil {
@@ -376,6 +438,12 @@ func (s *VtctldServer) CreateShard(ctx context.Context, req *vtctldatapb.CreateS
 
 // DeleteCellInfo is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) DeleteCellInfo(ctx context.Context, req *vtctldatapb.DeleteCellInfoRequest) (*vtctldatapb.DeleteCellInfoResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.DeleteCellInfo")
+	defer span.Finish()
+
+	span.Annotate("cell", req.Name)
+	span.Annotate("force", req.Force)
+
 	ctx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
 	defer cancel()
 
@@ -388,6 +456,11 @@ func (s *VtctldServer) DeleteCellInfo(ctx context.Context, req *vtctldatapb.Dele
 
 // DeleteCellsAlias is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) DeleteCellsAlias(ctx context.Context, req *vtctldatapb.DeleteCellsAliasRequest) (*vtctldatapb.DeleteCellsAliasResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.DeleteCellsAlias")
+	defer span.Finish()
+
+	span.Annotate("cells_alias", req.Name)
+
 	ctx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
 	defer cancel()
 
@@ -400,6 +473,12 @@ func (s *VtctldServer) DeleteCellsAlias(ctx context.Context, req *vtctldatapb.De
 
 // DeleteKeyspace is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) DeleteKeyspace(ctx context.Context, req *vtctldatapb.DeleteKeyspaceRequest) (*vtctldatapb.DeleteKeyspaceResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.DeleteKeyspace")
+	defer span.Finish()
+
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("recursive", req.Recursive)
+
 	shards, err := s.ts.GetShardNames(ctx, req.Keyspace)
 	if err != nil {
 		return nil, err
@@ -446,6 +525,13 @@ func (s *VtctldServer) DeleteKeyspace(ctx context.Context, req *vtctldatapb.Dele
 
 // DeleteShards is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) DeleteShards(ctx context.Context, req *vtctldatapb.DeleteShardsRequest) (*vtctldatapb.DeleteShardsResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.DeleteShards")
+	defer span.Finish()
+
+	span.Annotate("num_shards", len(req.Shards))
+	span.Annotate("even_if_serving", req.EvenIfServing)
+	span.Annotate("recursive", req.Recursive)
+
 	for _, shard := range req.Shards {
 		if err := deleteShard(ctx, s.ts, shard.Keyspace, shard.Name, req.Recursive, req.EvenIfServing); err != nil {
 			return nil, err
@@ -457,6 +543,12 @@ func (s *VtctldServer) DeleteShards(ctx context.Context, req *vtctldatapb.Delete
 
 // DeleteTablets is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) DeleteTablets(ctx context.Context, req *vtctldatapb.DeleteTabletsRequest) (*vtctldatapb.DeleteTabletsResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.DeleteTablets")
+	defer span.Finish()
+
+	span.Annotate("num_tablets", len(req.TabletAliases))
+	span.Annotate("allow_primary", req.AllowPrimary)
+
 	for _, alias := range req.TabletAliases {
 		if err := deleteTablet(ctx, s.ts, alias, req.AllowPrimary); err != nil {
 			return nil, err
@@ -468,12 +560,24 @@ func (s *VtctldServer) DeleteTablets(ctx context.Context, req *vtctldatapb.Delet
 
 // EmergencyReparentShard is part of the vtctldservicepb.VtctldServer interface.
 func (s *VtctldServer) EmergencyReparentShard(ctx context.Context, req *vtctldatapb.EmergencyReparentShardRequest) (*vtctldatapb.EmergencyReparentShardResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.EmergencyReparentShard")
+	defer span.Finish()
+
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("shard", req.Shard)
+	span.Annotate("new_primary_alias", topoproto.TabletAliasString(req.NewPrimary))
+
+	ignoreReplicaAliases := topoproto.TabletAliasList(req.IgnoreReplicas).ToStringSlice()
+	span.Annotate("ignore_replicas", strings.Join(ignoreReplicaAliases, ","))
+
 	waitReplicasTimeout, ok, err := protoutil.DurationFromProto(req.WaitReplicasTimeout)
 	if err != nil {
 		return nil, err
 	} else if !ok {
 		waitReplicasTimeout = time.Second * 30
 	}
+
+	span.Annotate("wait_replicas_timeout_sec", waitReplicasTimeout.Seconds())
 
 	m := sync.RWMutex{}
 	logstream := []*logutilpb.Event{}
@@ -489,7 +593,7 @@ func (s *VtctldServer) EmergencyReparentShard(ctx context.Context, req *vtctldat
 		req.Shard,
 		reparentutil.EmergencyReparentOptions{
 			NewPrimaryAlias:     req.NewPrimary,
-			IgnoreReplicas:      sets.NewString(topoproto.TabletAliasList(req.IgnoreReplicas).ToStringSlice()...),
+			IgnoreReplicas:      sets.NewString(ignoreReplicaAliases...),
 			WaitReplicasTimeout: waitReplicasTimeout,
 		},
 	)
@@ -519,6 +623,11 @@ func (s *VtctldServer) EmergencyReparentShard(ctx context.Context, req *vtctldat
 
 // FindAllShardsInKeyspace is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) FindAllShardsInKeyspace(ctx context.Context, req *vtctldatapb.FindAllShardsInKeyspaceRequest) (*vtctldatapb.FindAllShardsInKeyspaceResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.FindAllShardsInKeyspace")
+	defer span.Finish()
+
+	span.Annotate("keyspace", req.Keyspace)
+
 	result, err := s.ts.FindAllShardsInKeyspace(ctx, req.Keyspace)
 	if err != nil {
 		return nil, err
@@ -540,14 +649,21 @@ func (s *VtctldServer) FindAllShardsInKeyspace(ctx context.Context, req *vtctlda
 
 // GetBackups is part of the vtctldservicepb.VtctldServer interface.
 func (s *VtctldServer) GetBackups(ctx context.Context, req *vtctldatapb.GetBackupsRequest) (*vtctldatapb.GetBackupsResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.GetBackups")
+	defer span.Finish()
+
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("shard", req.Shard)
+
 	bs, err := backupstorage.GetBackupStorage()
 	if err != nil {
 		return nil, err
 	}
-
 	defer bs.Close()
 
 	bucket := filepath.Join(req.Keyspace, req.Shard)
+	span.Annotate("backup_path", bucket)
+
 	bhs, err := bs.ListBackups(ctx, bucket)
 	if err != nil {
 		return nil, err
@@ -566,6 +682,9 @@ func (s *VtctldServer) GetBackups(ctx context.Context, req *vtctldatapb.GetBacku
 
 // GetCellInfoNames is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) GetCellInfoNames(ctx context.Context, req *vtctldatapb.GetCellInfoNamesRequest) (*vtctldatapb.GetCellInfoNamesResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.GetCellInfoNames")
+	defer span.Finish()
+
 	names, err := s.ts.GetCellInfoNames(ctx)
 	if err != nil {
 		return nil, err
@@ -576,9 +695,14 @@ func (s *VtctldServer) GetCellInfoNames(ctx context.Context, req *vtctldatapb.Ge
 
 // GetCellInfo is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) GetCellInfo(ctx context.Context, req *vtctldatapb.GetCellInfoRequest) (*vtctldatapb.GetCellInfoResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.GetCellInfo")
+	defer span.Finish()
+
 	if req.Cell == "" {
 		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "cell field is required")
 	}
+
+	span.Annotate("cell", req.Cell)
 
 	// We use a strong read, because users using this command want the latest
 	// data, and this is user-generated, not used in any automated process.
@@ -593,6 +717,9 @@ func (s *VtctldServer) GetCellInfo(ctx context.Context, req *vtctldatapb.GetCell
 
 // GetCellsAliases is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) GetCellsAliases(ctx context.Context, req *vtctldatapb.GetCellsAliasesRequest) (*vtctldatapb.GetCellsAliasesResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.GetCellsAliases")
+	defer span.Finish()
+
 	strongRead := true
 	aliases, err := s.ts.GetCellsAliases(ctx, strongRead)
 	if err != nil {
@@ -604,6 +731,11 @@ func (s *VtctldServer) GetCellsAliases(ctx context.Context, req *vtctldatapb.Get
 
 // GetKeyspace is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) GetKeyspace(ctx context.Context, req *vtctldatapb.GetKeyspaceRequest) (*vtctldatapb.GetKeyspaceResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.GetKeyspace")
+	defer span.Finish()
+
+	span.Annotate("keyspace", req.Keyspace)
+
 	keyspace, err := s.ts.GetKeyspace(ctx, req.Keyspace)
 	if err != nil {
 		return nil, err
@@ -619,6 +751,9 @@ func (s *VtctldServer) GetKeyspace(ctx context.Context, req *vtctldatapb.GetKeys
 
 // GetKeyspaces is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) GetKeyspaces(ctx context.Context, req *vtctldatapb.GetKeyspacesRequest) (*vtctldatapb.GetKeyspacesResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.GetKeyspaces")
+	defer span.Finish()
+
 	names, err := s.ts.GetKeyspaces(ctx)
 	if err != nil {
 		return nil, err
@@ -640,6 +775,9 @@ func (s *VtctldServer) GetKeyspaces(ctx context.Context, req *vtctldatapb.GetKey
 
 // GetRoutingRules is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) GetRoutingRules(ctx context.Context, req *vtctldatapb.GetRoutingRulesRequest) (*vtctldatapb.GetRoutingRulesResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.GetRoutingRules")
+	defer span.Finish()
+
 	rr, err := s.ts.GetRoutingRules(ctx)
 	if err != nil {
 		return nil, err
@@ -652,10 +790,21 @@ func (s *VtctldServer) GetRoutingRules(ctx context.Context, req *vtctldatapb.Get
 
 // GetSchema is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) GetSchema(ctx context.Context, req *vtctldatapb.GetSchemaRequest) (*vtctldatapb.GetSchemaResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.GetSchema")
+	defer span.Finish()
+
+	span.Annotate("tablet_alias", topoproto.TabletAliasString(req.TabletAlias))
+
 	tablet, err := s.ts.GetTablet(ctx, req.TabletAlias)
 	if err != nil {
 		return nil, fmt.Errorf("GetTablet(%v) failed: %w", req.TabletAlias, err)
 	}
+
+	span.Annotate("tables", strings.Join(req.Tables, ","))
+	span.Annotate("exclude_tables", strings.Join(req.ExcludeTables, ","))
+	span.Annotate("include_views", req.IncludeViews)
+	span.Annotate("table_names_only", req.TableNamesOnly)
+	span.Annotate("table_sizes_only", req.TableSizesOnly)
 
 	sd, err := s.tmc.GetSchema(ctx, tablet.Tablet, req.Tables, req.ExcludeTables, req.IncludeViews)
 	if err != nil {
@@ -694,6 +843,12 @@ func (s *VtctldServer) GetSchema(ctx context.Context, req *vtctldatapb.GetSchema
 
 // GetShard is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) GetShard(ctx context.Context, req *vtctldatapb.GetShardRequest) (*vtctldatapb.GetShardResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.GetShard")
+	defer span.Finish()
+
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("shard", req.ShardName)
+
 	shard, err := s.ts.GetShard(ctx, req.Keyspace, req.ShardName)
 	if err != nil {
 		return nil, err
@@ -710,6 +865,9 @@ func (s *VtctldServer) GetShard(ctx context.Context, req *vtctldatapb.GetShardRe
 
 // GetSrvKeyspaces is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) GetSrvKeyspaces(ctx context.Context, req *vtctldatapb.GetSrvKeyspacesRequest) (*vtctldatapb.GetSrvKeyspacesResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.GetSrvKeyspaces")
+	defer span.Finish()
+
 	cells := req.Cells
 
 	if len(cells) == 0 {
@@ -720,6 +878,8 @@ func (s *VtctldServer) GetSrvKeyspaces(ctx context.Context, req *vtctldatapb.Get
 			return nil, err
 		}
 	}
+
+	span.Annotate("cells", strings.Join(cells, ","))
 
 	srvKeyspaces := make(map[string]*topodatapb.SrvKeyspace, len(cells))
 
@@ -746,6 +906,11 @@ func (s *VtctldServer) GetSrvKeyspaces(ctx context.Context, req *vtctldatapb.Get
 
 // GetSrvVSchema is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) GetSrvVSchema(ctx context.Context, req *vtctldatapb.GetSrvVSchemaRequest) (*vtctldatapb.GetSrvVSchemaResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.GetSrvVSchema")
+	defer span.Finish()
+
+	span.Annotate("cell", req.Cell)
+
 	vschema, err := s.ts.GetSrvVSchema(ctx, req.Cell)
 	if err != nil {
 		return nil, err
@@ -758,6 +923,9 @@ func (s *VtctldServer) GetSrvVSchema(ctx context.Context, req *vtctldatapb.GetSr
 
 // GetSrvVSchemas is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) GetSrvVSchemas(ctx context.Context, req *vtctldatapb.GetSrvVSchemasRequest) (*vtctldatapb.GetSrvVSchemasResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.GetSrvVSchemas")
+	defer span.Finish()
+
 	allCells, err := s.ts.GetCellInfoNames(ctx)
 	if err != nil {
 		return nil, err
@@ -773,6 +941,7 @@ func (s *VtctldServer) GetSrvVSchemas(ctx context.Context, req *vtctldatapb.GetS
 		cells = s1.Intersection(s2).List()
 	}
 
+	span.Annotate("cells", strings.Join(cells, ","))
 	svs := make(map[string]*vschemapb.SrvVSchema, len(cells))
 
 	for _, cell := range cells {
@@ -797,6 +966,11 @@ func (s *VtctldServer) GetSrvVSchemas(ctx context.Context, req *vtctldatapb.GetS
 
 // GetTablet is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) GetTablet(ctx context.Context, req *vtctldatapb.GetTabletRequest) (*vtctldatapb.GetTabletResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.GetTablet")
+	defer span.Finish()
+
+	span.Annotate("tablet_alias", topoproto.TabletAliasString(req.TabletAlias))
+
 	ti, err := s.ts.GetTablet(ctx, req.TabletAlias)
 	if err != nil {
 		return nil, err
@@ -809,6 +983,12 @@ func (s *VtctldServer) GetTablet(ctx context.Context, req *vtctldatapb.GetTablet
 
 // GetTablets is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) GetTablets(ctx context.Context, req *vtctldatapb.GetTabletsRequest) (*vtctldatapb.GetTabletsResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.GetTablets")
+	defer span.Finish()
+
+	span.Annotate("cells", strings.Join(req.Cells, ","))
+	span.Annotate("strict", req.Strict)
+
 	// It is possible that an old primary has not yet updated its type in the
 	// topo. In that case, report its type as UNKNOWN. It used to be MASTER but
 	// is no longer the serving primary.
@@ -833,11 +1013,16 @@ func (s *VtctldServer) GetTablets(ctx context.Context, req *vtctldatapb.GetTable
 
 	switch {
 	case len(req.TabletAliases) > 0:
+		span.Annotate("tablet_aliases", strings.Join(topoproto.TabletAliasList(req.TabletAliases).ToStringSlice(), ","))
+
 		tabletMap, err = s.ts.GetTabletMap(ctx, req.TabletAliases)
 		if err != nil {
 			err = fmt.Errorf("GetTabletMap(%v) failed: %w", req.TabletAliases, err)
 		}
 	case req.Keyspace != "" && req.Shard != "":
+		span.Annotate("keyspace", req.Keyspace)
+		span.Annotate("shard", req.Shard)
+
 		tabletMap, err = s.ts.GetTabletMapForShard(ctx, req.Keyspace, req.Shard)
 		if err != nil {
 			err = fmt.Errorf("GetTabletMapForShard(%s, %s) failed: %w", req.Keyspace, req.Shard, err)
@@ -970,6 +1155,11 @@ func (s *VtctldServer) GetTablets(ctx context.Context, req *vtctldatapb.GetTable
 
 // GetVSchema is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) GetVSchema(ctx context.Context, req *vtctldatapb.GetVSchemaRequest) (*vtctldatapb.GetVSchemaResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.GetVSchema")
+	defer span.Finish()
+
+	span.Annotate("keyspace", req.Keyspace)
+
 	vschema, err := s.ts.GetVSchema(ctx, req.Keyspace)
 	if err != nil {
 		return nil, err
@@ -993,6 +1183,9 @@ func (s *VtctldServer) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWor
 
 // InitShardPrimary is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) InitShardPrimary(ctx context.Context, req *vtctldatapb.InitShardPrimaryRequest) (*vtctldatapb.InitShardPrimaryResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.InitShardPrimary")
+	defer span.Finish()
+
 	if req.Keyspace == "" {
 		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "keyspace field is required")
 	}
@@ -1008,6 +1201,11 @@ func (s *VtctldServer) InitShardPrimary(ctx context.Context, req *vtctldatapb.In
 		waitReplicasTimeout = time.Second * 30
 	}
 
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("shard", req.Shard)
+	span.Annotate("wait_replicas_timeout_sec", waitReplicasTimeout.Seconds())
+	span.Annotate("force", req.Force)
+
 	ctx, unlock, err := s.ts.LockShard(ctx, req.Keyspace, req.Shard, fmt.Sprintf("InitShardPrimary(%v)", topoproto.TabletAliasString(req.PrimaryElectTabletAlias)))
 	if err != nil {
 		return nil, err
@@ -1019,7 +1217,7 @@ func (s *VtctldServer) InitShardPrimary(ctx context.Context, req *vtctldatapb.In
 	logstream := []*logutilpb.Event{}
 
 	resp := &vtctldatapb.InitShardPrimaryResponse{}
-	err = s.InitShardPrimaryLocked(ctx, ev, req, waitReplicasTimeout, tmclient.NewTabletManagerClient(), logutil.NewCallbackLogger(func(e *logutilpb.Event) {
+	err = s.InitShardPrimaryLocked(ctx, ev, req, waitReplicasTimeout, s.tmc, logutil.NewCallbackLogger(func(e *logutilpb.Event) {
 		m.Lock()
 		defer m.Unlock()
 
@@ -1245,11 +1443,26 @@ func (s *VtctldServer) InitShardPrimaryLocked(
 
 // PlannedReparentShard is part of the vtctldservicepb.VtctldServer interface.
 func (s *VtctldServer) PlannedReparentShard(ctx context.Context, req *vtctldatapb.PlannedReparentShardRequest) (*vtctldatapb.PlannedReparentShardResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.PlannedReparentShard")
+	defer span.Finish()
+
 	waitReplicasTimeout, ok, err := protoutil.DurationFromProto(req.WaitReplicasTimeout)
 	if err != nil {
 		return nil, err
 	} else if !ok {
 		waitReplicasTimeout = time.Second * 30
+	}
+
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("shard", req.Shard)
+	span.Annotate("wait_replicas_timeout_sec", waitReplicasTimeout.Seconds())
+
+	if req.AvoidPrimary != nil {
+		span.Annotate("avoid_primary_alias", topoproto.TabletAliasString(req.AvoidPrimary))
+	}
+
+	if req.NewPrimary != nil {
+		span.Annotate("new_primary_alias", topoproto.TabletAliasString(req.NewPrimary))
 	}
 
 	m := sync.RWMutex{}
@@ -1296,6 +1509,11 @@ func (s *VtctldServer) PlannedReparentShard(ctx context.Context, req *vtctldatap
 
 // RebuildVSchemaGraph is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) RebuildVSchemaGraph(ctx context.Context, req *vtctldatapb.RebuildVSchemaGraphRequest) (*vtctldatapb.RebuildVSchemaGraphResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.RebuildVSchemaGraph")
+	defer span.Finish()
+
+	span.Annotate("cells", strings.Join(req.Cells, ","))
+
 	if err := s.ts.RebuildSrvVSchema(ctx, req.Cells); err != nil {
 		return nil, err
 	}
@@ -1305,6 +1523,14 @@ func (s *VtctldServer) RebuildVSchemaGraph(ctx context.Context, req *vtctldatapb
 
 // RemoveKeyspaceCell is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) RemoveKeyspaceCell(ctx context.Context, req *vtctldatapb.RemoveKeyspaceCellRequest) (*vtctldatapb.RemoveKeyspaceCellResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.RemoveKeyspaceCell")
+	defer span.Finish()
+
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("cell", req.Cell)
+	span.Annotate("force", req.Force)
+	span.Annotate("recursive", req.Recursive)
+
 	shards, err := s.ts.GetShardNames(ctx, req.Keyspace)
 	if err != nil {
 		return nil, err
@@ -1329,6 +1555,15 @@ func (s *VtctldServer) RemoveKeyspaceCell(ctx context.Context, req *vtctldatapb.
 
 // RemoveShardCell is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) RemoveShardCell(ctx context.Context, req *vtctldatapb.RemoveShardCellRequest) (*vtctldatapb.RemoveShardCellResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.RemoveShardCell")
+	defer span.Finish()
+
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("shard", req.ShardName)
+	span.Annotate("cell", req.Cell)
+	span.Annotate("force", req.Force)
+	span.Annotate("recursive", req.Recursive)
+
 	if err := removeShardCell(ctx, s.ts, req.Cell, req.Keyspace, req.ShardName, req.Recursive, req.Force); err != nil {
 		return nil, err
 	}
@@ -1338,9 +1573,14 @@ func (s *VtctldServer) RemoveShardCell(ctx context.Context, req *vtctldatapb.Rem
 
 // ReparentTablet is part of the vtctldservicepb.VtctldServer interface.
 func (s *VtctldServer) ReparentTablet(ctx context.Context, req *vtctldatapb.ReparentTabletRequest) (*vtctldatapb.ReparentTabletResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.ReparentTablet")
+	defer span.Finish()
+
 	if req.Tablet == nil {
 		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "tablet alias must not be nil")
 	}
+
+	span.Annotate("tablet_alias", topoproto.TabletAliasString(req.Tablet))
 
 	tablet, err := s.ts.GetTablet(ctx, req.Tablet)
 	if err != nil {
@@ -1386,6 +1626,12 @@ func (s *VtctldServer) ReparentTablet(ctx context.Context, req *vtctldatapb.Repa
 
 // ShardReplicationPositions is part of the vtctldservicepb.VtctldServer interface.
 func (s *VtctldServer) ShardReplicationPositions(ctx context.Context, req *vtctldatapb.ShardReplicationPositionsRequest) (*vtctldatapb.ShardReplicationPositionsResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.ShardReplicationPositions")
+	defer span.Finish()
+
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("shard", req.Shard)
+
 	tabletInfoMap, err := s.ts.GetTabletMapForShard(ctx, req.Keyspace, req.Shard)
 	if err != nil {
 		return nil, fmt.Errorf("GetTabletMapForShard(%s, %s) failed: %w", req.Keyspace, req.Shard, err)
@@ -1416,6 +1662,11 @@ func (s *VtctldServer) ShardReplicationPositions(ctx context.Context, req *vtctl
 
 			go func(ctx context.Context, alias string, tablet *topodatapb.Tablet) {
 				defer wg.Done()
+
+				span, ctx := trace.NewSpan(ctx, "VtctldServer.getPrimaryPosition")
+				defer span.Finish()
+
+				span.Annotate("tablet_alias", alias)
 
 				ctx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
 				defer cancel()
@@ -1453,6 +1704,11 @@ func (s *VtctldServer) ShardReplicationPositions(ctx context.Context, req *vtctl
 
 			go func(ctx context.Context, alias string, tablet *topodatapb.Tablet) {
 				defer wg.Done()
+
+				span, ctx := trace.NewSpan(ctx, "VtctldServer.getReplicationStatus")
+				defer span.Finish()
+
+				span.Annotate("tablet_alias", alias)
 
 				ctx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
 				defer cancel()
@@ -1497,9 +1753,14 @@ func (s *VtctldServer) ShardReplicationPositions(ctx context.Context, req *vtctl
 
 // TabletExternallyReparented is part of the vtctldservicepb.VtctldServer interface.
 func (s *VtctldServer) TabletExternallyReparented(ctx context.Context, req *vtctldatapb.TabletExternallyReparentedRequest) (*vtctldatapb.TabletExternallyReparentedResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.TabletExternallyReparented")
+	defer span.Finish()
+
 	if req.Tablet == nil {
 		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "TabletExternallyReparentedRequest.Tablet must not be nil")
 	}
+
+	span.Annotate("tablet_alias", topoproto.TabletAliasString(req.Tablet))
 
 	tablet, err := s.ts.GetTablet(ctx, req.Tablet)
 	if err != nil {
@@ -1557,6 +1818,13 @@ func (s *VtctldServer) TabletExternallyReparented(ctx context.Context, req *vtct
 
 // UpdateCellInfo is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) UpdateCellInfo(ctx context.Context, req *vtctldatapb.UpdateCellInfoRequest) (*vtctldatapb.UpdateCellInfoResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.UpdateCellInfo")
+	defer span.Finish()
+
+	span.Annotate("cell", req.Name)
+	span.Annotate("cell_server_address", req.CellInfo.ServerAddress)
+	span.Annotate("cell_root", req.CellInfo.Root)
+
 	ctx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
 	defer cancel()
 
@@ -1597,6 +1865,12 @@ func (s *VtctldServer) UpdateCellInfo(ctx context.Context, req *vtctldatapb.Upda
 
 // UpdateCellsAlias is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) UpdateCellsAlias(ctx context.Context, req *vtctldatapb.UpdateCellsAliasRequest) (*vtctldatapb.UpdateCellsAliasResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.UpdateCellsAlias")
+	defer span.Finish()
+
+	span.Annotate("cells_alias", req.Name)
+	span.Annotate("cells_alias_cells", strings.Join(req.CellsAlias.Cells, ","))
+
 	ctx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
 	defer cancel()
 

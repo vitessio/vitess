@@ -127,6 +127,11 @@ func getClusterConfig(idx int, dataRootDir string) *ClusterConfig {
 }
 
 func init() {
+	// for local debugging set this variable so that each run uses VTDATAROOT instead of a random dir
+	// and also does not teardown the cluster for inspecting logs and the databases
+	if os.Getenv("VREPLICATION_E2E_DEBUG") != "" {
+		debug = true
+	}
 	rand.Seed(time.Now().UTC().UnixNano())
 	originalVtdataroot = os.Getenv("VTDATAROOT")
 	var mainVtDataRoot string

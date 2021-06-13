@@ -32,7 +32,7 @@ import (
 )
 
 // ParsedQuery represents a parsed query where
-// bind locations are precompued for fast substitutions.
+// bind locations are precomputed for fast substitutions.
 type ParsedQuery struct {
 	Query         string
 	bindLocations []bindLocation
@@ -86,29 +86,57 @@ func (pq *ParsedQuery) Append(buf *strings.Builder, bindVariables map[string]*qu
 }
 
 // AppendFromRow behaves like Append but takes a querypb.Row directly, assuming that
-// the fields in the row are in the same order as the placeholders in this query.
-func (pq *ParsedQuery) AppendFromRow(buf *bytes2.Buffer, fields []*querypb.Field, row *querypb.Row) error {
+// the fields in the row are in the same order as the placeholders in this query. The fields might include generated
+// columns which are dropped, by checking against skipFields, before binding the variables
+// note: there can be more fields than bind locations since extra columns might be requested from the source if not all
+// primary keys columns are present in the target table, for example. Also some values in the row may not correspond for
+// values from the database on the source: sum/count for aggregation queries, for example
+func (pq *ParsedQuery) AppendFromRow(buf *bytes2.Buffer, fields []*querypb.Field, row *querypb.Row, skipFields map[string]bool) error {
 	if len(fields) < len(pq.bindLocations) {
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "wrong number of fields: got %d fields for %d bind locations ", len(fields), len(pq.bindLocations))
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "wrong number of fields: got %d fields for %d bind locations ",
+			len(fields), len(pq.bindLocations))
 	}
+
+	type colInfo struct {
+		typ    querypb.Type
+		length int64
+		offset int64
+	}
+	rowInfo := make([]*colInfo, 0)
+
+	offset := int64(0)
+	for i, field := range fields { // collect info required for fields to be bound
+		length := row.Lengths[i]
+		if !skipFields[strings.ToLower(field.Name)] {
+			rowInfo = append(rowInfo, &colInfo{
+				typ:    field.Type,
+				length: length,
+				offset: offset,
+			})
+		}
+		if length > 0 {
+			offset += row.Lengths[i]
+		}
+	}
+
+	// bind field values to locations
 	var offsetQuery int
-	var offsetRow int64
 	for i, loc := range pq.bindLocations {
+		col := rowInfo[i]
 		buf.WriteString(pq.Query[offsetQuery:loc.offset])
 
-		typ := fields[i].Type
+		typ := col.typ
 		if typ == querypb.Type_TUPLE {
 			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected Type_TUPLE for value %d", i)
 		}
 
-		length := row.Lengths[i]
+		length := col.length
 		if length < 0 {
 			// -1 means a null variable; serialize it directly
 			buf.WriteString("null")
 		} else {
-			vv := sqltypes.MakeTrusted(typ, row.Values[offsetRow:offsetRow+length])
+			vv := sqltypes.MakeTrusted(typ, row.Values[col.offset:col.offset+col.length])
 			vv.EncodeSQLBytes2(buf)
-			offsetRow += length
 		}
 
 		offsetQuery = loc.offset + loc.length
