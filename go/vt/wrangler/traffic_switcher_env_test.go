@@ -314,9 +314,8 @@ func newTestShardMigrater(ctx context.Context, t *testing.T, sourceShards, targe
 	tme.startTablets(t)
 	tme.createDBClients(ctx, t)
 	tme.setMasterPositions()
-
 	for i, targetShard := range targetShards {
-		var rows []string
+		var rows, rowsRdOnly []string
 		for j, sourceShard := range sourceShards {
 			if !key.KeyRangesIntersect(tme.targetKeyRanges[i], tme.sourceKeyRanges[j]) {
 				continue
@@ -332,11 +331,17 @@ func newTestShardMigrater(ctx context.Context, t *testing.T, sourceShards, targe
 				},
 			}
 			rows = append(rows, fmt.Sprintf("%d|%v|||", j+1, bls))
+			rowsRdOnly = append(rows, fmt.Sprintf("%d|%v|||RDONLY", j+1, bls))
 		}
 		tme.dbTargetClients[i].addInvariant(vreplQueryks, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 			"id|source|message|cell|tablet_types",
 			"int64|varchar|varchar|varchar|varchar"),
 			rows...),
+		)
+		tme.dbTargetClients[i].addInvariant(vreplQueryks+"-rdonly", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+			"id|source|message|cell|tablet_types",
+			"int64|varchar|varchar|varchar|varchar"),
+			rowsRdOnly...),
 		)
 	}
 
@@ -404,7 +409,7 @@ func (tme *testMigraterEnv) createDBClients(ctx context.Context, t *testing.T) {
 
 func (tme *testMigraterEnv) setMasterPositions() {
 	for _, master := range tme.sourceMasters {
-		master.FakeMysqlDaemon.CurrentMasterPosition = mysql.Position{
+		master.FakeMysqlDaemon.CurrentPrimaryPosition = mysql.Position{
 			GTIDSet: mysql.MariadbGTIDSet{
 				5: mysql.MariadbGTID{
 					Domain:   5,
@@ -415,7 +420,7 @@ func (tme *testMigraterEnv) setMasterPositions() {
 		}
 	}
 	for _, master := range tme.targetMasters {
-		master.FakeMysqlDaemon.CurrentMasterPosition = mysql.Position{
+		master.FakeMysqlDaemon.CurrentPrimaryPosition = mysql.Position{
 			GTIDSet: mysql.MariadbGTIDSet{
 				5: mysql.MariadbGTID{
 					Domain:   5,

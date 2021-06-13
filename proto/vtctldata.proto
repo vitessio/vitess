@@ -127,6 +127,7 @@ message Workflow {
 
 /* Request/response types for VtctldServer */
 
+
 message AddCellInfoRequest {
   string name = 1;
   topodata.CellInfo cell_info = 2;
@@ -156,6 +157,19 @@ message ApplyRoutingRulesRequest {
 }
 
 message ApplyRoutingRulesResponse {
+}
+
+message ApplyVSchemaRequest {
+  string keyspace = 1;
+  bool skip_rebuild = 2;
+  bool dry_run = 3;
+  repeated string cells = 4;
+  vschema.Keyspace v_schema = 5;
+  string sql = 6;
+}
+
+message ApplyVSchemaResponse {
+  vschema.Keyspace v_schema = 1;
 }
 
 message ChangeTabletTypeRequest {

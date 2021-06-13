@@ -32,3 +32,9 @@ const WrongTablet = "wrong tablet type"
 
 // RxWrongTablet regex for invalid tablet type error
 var RxWrongTablet = regexp.MustCompile("(wrong|invalid) tablet type")
+
+// Constants for error messages
+const (
+	// PrimaryVindexNotSet is the error message to be used when there is no primary vindex found on a table
+	PrimaryVindexNotSet = "table '%s' does not have a primary vindex"
+)

@@ -139,7 +139,7 @@ func (be *XtrabackupEngine) ExecuteBackup(ctx context.Context, params BackupPara
 	if err != nil {
 		return false, vterrors.Wrap(err, "unable to obtain a connection to the database")
 	}
-	pos, err := conn.MasterPosition()
+	pos, err := conn.PrimaryPosition()
 	if err != nil {
 		return false, vterrors.Wrap(err, "unable to obtain master position")
 	}

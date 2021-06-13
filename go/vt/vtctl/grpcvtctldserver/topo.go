@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 
+	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -31,6 +32,14 @@ import (
 )
 
 func deleteShard(ctx context.Context, ts *topo.Server, keyspace string, shard string, recursive bool, evenIfServing bool) error {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.deleteShard")
+	defer span.Finish()
+
+	span.Annotate("keyspace", keyspace)
+	span.Annotate("shard", shard)
+	span.Annotate("recursive", recursive)
+	span.Annotate("even_if_serving", evenIfServing)
+
 	// Read the Shard object. If it's not in the topo, try to clean up the topo
 	// anyway.
 	shardInfo, err := ts.GetShard(ctx, keyspace, shard)
@@ -81,6 +90,14 @@ func deleteShard(ctx context.Context, ts *topo.Server, keyspace string, shard st
 // distinct from the RemoveShardCell rpc. Despite having similar names, they are
 // **not** the same!
 func deleteShardCell(ctx context.Context, ts *topo.Server, keyspace string, shard string, cell string, recursive bool) error {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.deleteShardCell")
+	defer span.Finish()
+
+	span.Annotate("keyspace", keyspace)
+	span.Annotate("shard", shard)
+	span.Annotate("cell", cell)
+	span.Annotate("recursive", recursive)
+
 	var aliases []*topodatapb.TabletAlias
 
 	// Get the ShardReplication object for the cell. Collect all the tablets
@@ -156,6 +173,12 @@ func deleteShardCell(ctx context.Context, ts *topo.Server, keyspace string, shar
 }
 
 func deleteTablet(ctx context.Context, ts *topo.Server, alias *topodatapb.TabletAlias, allowPrimary bool) (err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.deleteTablet")
+	defer span.Finish()
+
+	span.Annotate("tablet_alias", topoproto.TabletAliasString(alias))
+	span.Annotate("allow_primary", allowPrimary)
+
 	tablet, err := ts.GetTablet(ctx, alias)
 	if err != nil {
 		return err
@@ -165,6 +188,8 @@ func deleteTablet(ctx context.Context, ts *topo.Server, alias *topodatapb.Tablet
 	if err != nil {
 		return err
 	}
+
+	span.Annotate("is_primary", isPrimary)
 
 	if isPrimary && !allowPrimary {
 		return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "cannot delete tablet %v as it is a master, pass AllowPrimary = true", topoproto.TabletAliasString(alias))
@@ -209,6 +234,15 @@ func deleteTablet(ctx context.Context, ts *topo.Server, alias *topodatapb.Tablet
 }
 
 func removeShardCell(ctx context.Context, ts *topo.Server, cell string, keyspace string, shardName string, recursive bool, force bool) error {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.removeShardCell")
+	defer span.Finish()
+
+	span.Annotate("keyspace", keyspace)
+	span.Annotate("shard", shardName)
+	span.Annotate("cell", cell)
+	span.Annotate("recursive", recursive)
+	span.Annotate("force", force)
+
 	shard, err := ts.GetShard(ctx, keyspace, shardName)
 	if err != nil {
 		return err
@@ -234,7 +268,7 @@ func removeShardCell(ctx context.Context, ts *topo.Server, cell string, keyspace
 		if recursive {
 			log.Infof("Deleting all tablets in cell %v in shard %v/%v", cell, keyspace, shardName)
 			for _, node := range replication.Nodes {
-				// We don't care about scraping our updating the replication
+				// We don't care about scrapping or updating the replication
 				// graph, because we're about to delete the entire replication
 				// graph.
 				log.Infof("Deleting tablet %v", topoproto.TabletAliasString(node.TabletAlias))

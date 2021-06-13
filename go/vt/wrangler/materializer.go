@@ -1032,7 +1032,6 @@ func (mz *materializer) generateInserts(ctx context.Context) (string, error) {
 			if !ok {
 				return "", fmt.Errorf("unrecognized statement: %s", ts.SourceExpression)
 			}
-
 			filter := ts.SourceExpression
 			if mz.targetVSchema.Keyspace.Sharded && mz.targetVSchema.Tables[ts.TargetTable].Type != vindexes.TypeReference {
 				cv, err := vindexes.FindBestColVindex(mz.targetVSchema.Tables[ts.TargetTable])
@@ -1054,12 +1053,23 @@ func (mz *materializer) generateInserts(ctx context.Context) (string, error) {
 				vindexName := fmt.Sprintf("%s.%s", mz.ms.TargetKeyspace, cv.Name)
 				subExprs = append(subExprs, &sqlparser.AliasedExpr{Expr: sqlparser.NewStrLiteral(vindexName)})
 				subExprs = append(subExprs, &sqlparser.AliasedExpr{Expr: sqlparser.NewStrLiteral("{{.keyrange}}")})
-				sel.Where = &sqlparser.Where{
-					Type: sqlparser.WhereClause,
-					Expr: &sqlparser.FuncExpr{
-						Name:  sqlparser.NewColIdent("in_keyrange"),
-						Exprs: subExprs,
-					},
+				inKeyRange := &sqlparser.FuncExpr{
+					Name:  sqlparser.NewColIdent("in_keyrange"),
+					Exprs: subExprs,
+				}
+				if sel.Where != nil {
+					sel.Where = &sqlparser.Where{
+						Type: sqlparser.WhereClause,
+						Expr: &sqlparser.AndExpr{
+							Left:  inKeyRange,
+							Right: sel.Where.Expr,
+						},
+					}
+				} else {
+					sel.Where = &sqlparser.Where{
+						Type: sqlparser.WhereClause,
+						Expr: inKeyRange,
+					}
 				}
 
 				filter = sqlparser.String(sel)

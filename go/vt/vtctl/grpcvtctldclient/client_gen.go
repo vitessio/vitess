@@ -55,6 +55,15 @@ func (client *gRPCVtctldClient) ApplyRoutingRules(ctx context.Context, in *vtctl
 	return client.c.ApplyRoutingRules(ctx, in, opts...)
 }
 
+// ApplyVSchema is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) ApplyVSchema(ctx context.Context, in *vtctldatapb.ApplyVSchemaRequest, opts ...grpc.CallOption) (*vtctldatapb.ApplyVSchemaResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.ApplyVSchema(ctx, in, opts...)
+}
+
 // ChangeTabletType is part of the vtctlservicepb.VtctldClient interface.
 func (client *gRPCVtctldClient) ChangeTabletType(ctx context.Context, in *vtctldatapb.ChangeTabletTypeRequest, opts ...grpc.CallOption) (*vtctldatapb.ChangeTabletTypeResponse, error) {
 	if client.c == nil {

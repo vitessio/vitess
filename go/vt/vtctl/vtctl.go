@@ -2132,9 +2132,14 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 			s := ""
 			var progress wrangler.TableCopyProgress
 			for table := range *copyProgress {
+				var rowCountPct, tableSizePct int64
 				progress = *(*copyProgress)[table]
-				rowCountPct := 100.0 * progress.TargetRowCount / progress.SourceRowCount
-				tableSizePct := 100.0 * progress.TargetTableSize / progress.SourceTableSize
+				if progress.SourceRowCount > 0 {
+					rowCountPct = 100.0 * progress.TargetRowCount / progress.SourceRowCount
+				}
+				if progress.SourceTableSize > 0 {
+					tableSizePct = 100.0 * progress.TargetTableSize / progress.SourceTableSize
+				}
 				s += fmt.Sprintf("%s: rows copied %d/%d (%d%%), size copied %d/%d (%d%%)\n",
 					table, progress.TargetRowCount, progress.SourceRowCount, rowCountPct,
 					progress.TargetTableSize, progress.SourceTableSize, tableSizePct)
