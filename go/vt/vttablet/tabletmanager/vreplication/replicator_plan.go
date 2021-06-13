@@ -25,15 +25,14 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/bytes2"
-
-	"vitess.io/vitess/go/vt/binlog/binlogplayer"
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
-
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/sqlparser"
-
+	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
 
 // ReplicatorPlan is the execution plan for the replicator. It contains
@@ -175,10 +174,11 @@ type TablePlan struct {
 	// If the plan is an insertIgnore type, then Insert
 	// and Update contain 'insert ignore' statements and
 	// Delete is nil.
-	Insert *sqlparser.ParsedQuery
-	Update *sqlparser.ParsedQuery
-	Delete *sqlparser.ParsedQuery
-	Fields []*querypb.Field
+	Insert        *sqlparser.ParsedQuery
+	Update        *sqlparser.ParsedQuery
+	Delete        *sqlparser.ParsedQuery
+	Fields        []*querypb.Field
+	EnumValuesMap map[string](map[string]string)
 	// PKReferences is used to check if an event changed
 	// a primary key column (row move).
 	PKReferences []string
@@ -289,7 +289,21 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 		after = true
 		vals := sqltypes.MakeRowTrusted(tp.Fields, rowChange.After)
 		for i, field := range tp.Fields {
-			bindvars["a_"+field.Name] = sqltypes.ValueBindVariable(vals[i])
+			if enumValues, ok := tp.EnumValuesMap[field.Name]; ok && vals[i].IsQuoted() {
+				// The fact that this fielkd has a EnumValuesMap entry, means we must
+				// use the enum's text value as opposed to the enum's numerical value.
+				// Once known use case is with Online DDL, when a column is converted from
+				// ENUM to a VARCHAR/TEXT.
+				// The above vals[i].IsQuoted()  helps us to exclude a NULL value
+				enumValue, enumValueOK := enumValues[vals[i].ToString()]
+				if !enumValueOK {
+					return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Invalid enum value: %v for field %s", vals[i], field.Name)
+				}
+				// get the enum text fir this val
+				bindvars["a_"+field.Name] = sqltypes.StringBindVariable(enumValue)
+			} else {
+				bindvars["a_"+field.Name] = sqltypes.ValueBindVariable(vals[i])
+			}
 		}
 	}
 	switch {
