@@ -399,10 +399,7 @@ func (v *VRepl) generateFilterQuery(ctx context.Context) error {
 		case col.Type == vrepl.JSONColumnType:
 			sb.WriteString(fmt.Sprintf("convert(%s using utf8mb4)", escapeName(name)))
 		case col.EnumToTextConversion:
-			// sb.WriteString(fmt.Sprintf("ELT(%s, %s)", escapeName(name), col.EnumValues))
-			// Enforce ENUM value to be textual
 			sb.WriteString(fmt.Sprintf("CONCAT(%s)", escapeName(name)))
-			// sb.WriteString(escapeName(name))
 		default:
 			sb.WriteString(escapeName(name))
 		}
