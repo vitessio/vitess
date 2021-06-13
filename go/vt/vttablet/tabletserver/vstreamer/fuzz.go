@@ -38,7 +38,7 @@ func Fuzz(data []byte) int {
 			"ks": &kspb,
 		},
 	}
-	vschema, err := vindexes.BuildVSchema(srvVSchema)
+	vschema := vindexes.BuildVSchema(srvVSchema)
 	if err != nil {
 		return -1
 	}

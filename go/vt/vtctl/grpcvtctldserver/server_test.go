@@ -304,7 +304,9 @@ func TestApplyRoutingRules(t *testing.T) {
 				factory.SetError(errors.New("topo down for testing"))
 			}
 
-			vtctld := NewVtctldServer(ts)
+			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+				return NewVtctldServer(ts)
+			})
 			_, err := vtctld.ApplyRoutingRules(ctx, tt.req)
 			if tt.shouldErr {
 				assert.Error(t, err)
@@ -1326,7 +1328,9 @@ func TestDeleteCellsAlias(t *testing.T) {
 				require.NoError(t, err, "test setup failed")
 			}
 
-			vtctld := NewVtctldServer(tt.ts)
+			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, tt.ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+				return NewVtctldServer(ts)
+			})
 			_, err := vtctld.DeleteCellsAlias(ctx, tt.req)
 			if tt.shouldErr {
 				assert.Error(t, err)
@@ -2717,6 +2721,8 @@ func TestFindAllShardsInKeyspace(t *testing.T) {
 }
 
 func TestGetBackups(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	ts := memorytopo.NewServer()
 	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
@@ -3001,7 +3007,9 @@ func TestGetRoutingRules(t *testing.T) {
 				factory.SetError(errors.New("topo down for testing"))
 			}
 
-			vtctld := NewVtctldServer(ts)
+			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+				return NewVtctldServer(ts)
+			})
 			resp, err := vtctld.GetRoutingRules(ctx, &vtctldatapb.GetRoutingRulesRequest{})
 			if tt.shouldErr {
 				assert.Error(t, err)
@@ -4513,7 +4521,9 @@ func TestRebuildVSchemaGraph(t *testing.T) {
 				factory.SetError(errors.New("topo down for testing"))
 			}
 
-			vtctld := NewVtctldServer(ts)
+			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+				return NewVtctldServer(ts)
+			})
 			_, err := vtctld.RebuildVSchemaGraph(ctx, req)
 			if tt.shouldErr {
 				assert.Error(t, err)

@@ -22,12 +22,12 @@ import (
 	"strconv"
 	"strings"
 
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/vt/log"
-
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
@@ -59,10 +59,20 @@ type Plan struct {
 type Opcode int
 
 const (
-	// Equal is used to filter an integer column on a specific value
+	// Equal is used to filter a comparable column on a specific value
 	Equal = Opcode(iota)
 	// VindexMatch is used for an in_keyrange() construct
 	VindexMatch
+	// LessThan is used to filter a comparable column if < specific value
+	LessThan
+	// LessThanEqual is used to filter a comparable column if <= specific value
+	LessThanEqual
+	// GreaterThan is used to filter a comparable column if > specific value
+	GreaterThan
+	// GreaterThanEqual is used to filter a comparable column if >= specific value
+	GreaterThanEqual
+	// NotEqual is used to filter a comparable column if != specific value
+	NotEqual
 )
 
 // Filter contains opcodes for filtering.
@@ -113,6 +123,72 @@ func (plan *Plan) fields() []*querypb.Field {
 	return fields
 }
 
+// getOpcode returns the equivalent planbuilder opcode for operators that are supported in Filters
+func getOpcode(comparison *sqlparser.ComparisonExpr) (Opcode, error) {
+	var opcode Opcode
+	switch comparison.Operator {
+	case sqlparser.EqualOp:
+		opcode = Equal
+	case sqlparser.LessThanOp:
+		opcode = LessThan
+	case sqlparser.LessEqualOp:
+		opcode = LessThanEqual
+	case sqlparser.GreaterThanOp:
+		opcode = GreaterThan
+	case sqlparser.GreaterEqualOp:
+		opcode = GreaterThanEqual
+	case sqlparser.NotEqualOp:
+		opcode = NotEqual
+	default:
+		return -1, fmt.Errorf("comparison operator %s not supported", comparison.Operator.ToString())
+	}
+	return opcode, nil
+}
+
+// compare returns true after applying the comparison specified in the Filter to the actual data in the column
+func compare(comparison Opcode, columnValue, filterValue sqltypes.Value) (bool, error) {
+	// use null semantics: return false if either value is null
+	if columnValue.IsNull() || filterValue.IsNull() {
+		return false, nil
+	}
+	// at this point neither values can be null
+	// NullsafeCompare returns 0 if values match, -1 if columnValue < filterValue, 1 if columnValue > filterValue
+	result, err := evalengine.NullsafeCompare(columnValue, filterValue)
+	if err != nil {
+		return false, err
+	}
+
+	switch comparison {
+	case Equal:
+		if result == 0 {
+			return true, nil
+		}
+	case NotEqual:
+		if result != 0 {
+			return true, nil
+		}
+	case LessThan:
+		if result == -1 {
+			return true, nil
+		}
+	case LessThanEqual:
+		if result <= 0 {
+			return true, nil
+		}
+	case GreaterThan:
+		if result == 1 {
+			return true, nil
+		}
+	case GreaterThanEqual:
+		if result >= 0 {
+			return true, nil
+		}
+	default:
+		return false, fmt.Errorf("comparison operator %d not supported", comparison)
+	}
+	return false, nil
+}
+
 // filter filters the row against the plan. It returns false if the row did not match.
 // The output of the filtering operation is stored in the 'result' argument because
 // filtering cannot be performed in-place. The result argument must be a slice of
@@ -123,20 +199,20 @@ func (plan *Plan) filter(values, result []sqltypes.Value) (bool, error) {
 	}
 	for _, filter := range plan.Filters {
 		switch filter.Opcode {
-		case Equal:
-			result, err := evalengine.NullsafeCompare(values[filter.ColNum], filter.Value)
-			if err != nil {
-				return false, err
-			}
-			if result != 0 {
-				return false, nil
-			}
 		case VindexMatch:
 			ksid, err := getKeyspaceID(values, filter.Vindex, filter.VindexColumns, plan.Table.Fields)
 			if err != nil {
 				return false, err
 			}
 			if !key.KeyRangeContains(filter.KeyRange, ksid) {
+				return false, nil
+			}
+		default:
+			match, err := compare(filter.Opcode, values[filter.ColNum], filter.Value)
+			if err != nil {
+				return false, err
+			}
+			if !match {
 				return false, nil
 			}
 		}
@@ -376,6 +452,10 @@ func (plan *Plan) analyzeWhere(vschema *localVSchema, where *sqlparser.Where) er
 	for _, expr := range exprs {
 		switch expr := expr.(type) {
 		case *sqlparser.ComparisonExpr:
+			opcode, err := getOpcode(expr)
+			if err != nil {
+				return err
+			}
 			qualifiedName, ok := expr.Left.(*sqlparser.ColName)
 			if !ok {
 				return fmt.Errorf("unexpected: %v", sqlparser.String(expr))
@@ -404,7 +484,7 @@ func (plan *Plan) analyzeWhere(vschema *localVSchema, where *sqlparser.Where) er
 				return err
 			}
 			plan.Filters = append(plan.Filters, Filter{
-				Opcode: Equal,
+				Opcode: opcode,
 				ColNum: colnum,
 				Value:  resolved,
 			})
