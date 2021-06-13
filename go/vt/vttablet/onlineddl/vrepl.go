@@ -364,7 +364,8 @@ func (v *VRepl) analyzeTables(ctx context.Context, conn *dbconnpool.DBConnection
 	for i := range v.sourceSharedColumns.Columns() {
 		column := v.sourceSharedColumns.Columns()[i]
 		mappedColumn := v.targetSharedColumns.Columns()[i]
-		if column.Name == mappedColumn.Name && column.Type == vrepl.EnumColumnType && mappedColumn.Charset != "" {
+		if column.Name == mappedColumn.Name && column.Type == vrepl.EnumColumnType && mappedColumn.Type != vrepl.EnumColumnType && mappedColumn.Charset != "" {
+			// A column is converted from ENUM type to textual type
 			v.targetSharedColumns.SetEnumToTextConversion(column.Name)
 			v.targetSharedColumns.SetEnumValues(column.Name, column.EnumValues)
 			v.enumTextMap[column.Name] = column.EnumValues
