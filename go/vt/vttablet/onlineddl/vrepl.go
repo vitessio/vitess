@@ -30,6 +30,7 @@ import (
 	"strconv"
 	"strings"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/dbconnpool"
@@ -76,19 +77,22 @@ type VRepl struct {
 	bls         *binlogdatapb.BinlogSource
 
 	parser *vrepl.AlterTableParser
+
+	convertCharset map[string](*binlogdatapb.CharsetConversion)
 }
 
 // NewVRepl creates a VReplication handler for Online DDL
 func NewVRepl(workflow, keyspace, shard, dbName, sourceTable, targetTable, alterOptions string) *VRepl {
 	return &VRepl{
-		workflow:     workflow,
-		keyspace:     keyspace,
-		shard:        shard,
-		dbName:       dbName,
-		sourceTable:  sourceTable,
-		targetTable:  targetTable,
-		alterOptions: alterOptions,
-		parser:       vrepl.NewAlterTableParser(),
+		workflow:       workflow,
+		keyspace:       keyspace,
+		shard:          shard,
+		dbName:         dbName,
+		sourceTable:    sourceTable,
+		targetTable:    targetTable,
+		alterOptions:   alterOptions,
+		parser:         vrepl.NewAlterTableParser(),
+		convertCharset: map[string](*binlogdatapb.CharsetConversion){},
 	}
 }
 
@@ -384,14 +388,14 @@ func (v *VRepl) generateFilterQuery(ctx context.Context) error {
 	}
 	var sb strings.Builder
 	sb.WriteString("select ")
-	for i, col := range v.sourceSharedColumns.Columns() {
-		name := col.Name
+	for i, sourceCol := range v.sourceSharedColumns.Columns() {
+		name := sourceCol.Name
 		targetName := v.sharedColumnsMap[name]
 
 		if i > 0 {
 			sb.WriteString(", ")
 		}
-		switch col.Type {
+		switch sourceCol.Type {
 		case vrepl.JSONColumnType:
 			sb.WriteString(fmt.Sprintf("convert(%s using utf8mb4)", escapeName(name)))
 		case vrepl.StringColumnType:
@@ -399,15 +403,52 @@ func (v *VRepl) generateFilterQuery(ctx context.Context) error {
 			if targetCol == nil {
 				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Cannot find target column %s", targetName)
 			}
-			if col.Collation != targetCol.Collation {
-				fmt.Printf("============ collcation change: %s => %s\n", col.Collation, targetCol.Collation)
-				if strings.HasPrefix(targetCol.Charset, "utf8") {
-					// sb.WriteString(fmt.Sprintf("cast(%s as binary)", escapeName(name)))
-					sb.WriteString(fmt.Sprintf("convert(%s USING %s)", escapeName(name), targetCol.Charset))
-					// sb.WriteString(fmt.Sprintf("convert(%s USING %s) COLLATE %s", escapeName(name), targetCol.Charset, targetCol.Collation))
-				} else {
-					sb.WriteString(fmt.Sprintf("convert(%s, char character set %s) COLLATE %s", escapeName(name), targetCol.Charset, targetCol.Collation))
+			if true || sourceCol.Collation != targetCol.Collation {
+				// sourceEncoding, ok := mysql.CharacterSetEncoding[sourceCol.Charset]
+				// if !ok {
+				// 	return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Character set %s not supported for column %s", sourceCol.Charset, sourceCol.Name)
+				// }
+				fromEncoding, ok := mysql.CharacterSetEncoding[sourceCol.Charset]
+				if !ok {
+					return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Character set %s not supported for column %s", sourceCol.Charset, sourceCol.Name)
 				}
+				toEncoding, ok := mysql.CharacterSetEncoding[targetCol.Charset]
+				if !ok {
+					return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Character set %s not supported for column %s", targetCol.Charset, targetCol.Name)
+				}
+				if fromEncoding != nil || toEncoding != nil {
+					// encoding can be nil for trivial charsets, like utf8, ascii, binary, etc.
+					v.convertCharset[targetName] = &binlogdatapb.CharsetConversion{
+						FromCharset: sourceCol.Charset,
+						ToCharset:   targetCol.Charset,
+					}
+					fmt.Printf("============ v.convertCharset[targetName]: %v,  %v\n", targetName, v.convertCharset[targetName])
+				}
+				fmt.Printf("============ collcation change: %s => %s\n", sourceCol.Collation, targetCol.Collation)
+				if strings.HasPrefix(sourceCol.Charset, "utf8") {
+					// sb.WriteString(escapeName(name))
+					sb.WriteString(fmt.Sprintf("convert(%s USING utf8mb4)", escapeName(name)))
+				} else {
+					// sb.WriteString(fmt.Sprintf("cast(%s as binary)", escapeName(name)))
+					sb.WriteString(fmt.Sprintf("convert(%s USING utf8mb4)", escapeName(name)))
+					// sb.WriteString(fmt.Sprintf("convert(%s USING %s)", escapeName(name), targetCol.Charset))
+					// sb.WriteString(fmt.Sprintf("convert(%s USING %s) COLLATE %s", escapeName(name), targetCol.Charset, targetCol.Collation))
+				}
+				// if strings.HasPrefix(targetCol.Charset, "utf8") {
+				// 	// sb.WriteString(fmt.Sprintf("cast(%s as binary)", escapeName(name)))
+				// 	sb.WriteString(fmt.Sprintf("convert(convert(%s USING binary) USING %s)", escapeName(name), targetCol.Charset))
+				// 	// sb.WriteString(fmt.Sprintf("convert(%s USING %s)", escapeName(name), targetCol.Charset))
+				// 	// sb.WriteString(fmt.Sprintf("convert(%s USING %s) COLLATE %s", escapeName(name), targetCol.Charset, targetCol.Collation))
+				// } else if strings.HasPrefix(sourceCol.Charset, "utf8") {
+				// 	// sb.WriteString(fmt.Sprintf("cast(%s as binary)", escapeName(name)))
+				// 	sb.WriteString(fmt.Sprintf("convert(%s USING %s)", escapeName(name), targetCol.Charset))
+				// 	// sb.WriteString(fmt.Sprintf("convert(%s USING %s)", escapeName(name), targetCol.Charset))
+				// 	// sb.WriteString(fmt.Sprintf("convert(%s USING %s) COLLATE %s", escapeName(name), targetCol.Charset, targetCol.Collation))
+				// } else {
+				// 	// sb.WriteString(fmt.Sprintf("convert(%s USING %s)", escapeName(name), targetCol.Charset))
+				// 	sb.WriteString(fmt.Sprintf("convert(%s USING %s) COLLATE %s", escapeName(name), targetCol.Charset, targetCol.Collation))
+				// 	// sb.WriteString(fmt.Sprintf("convert(convert(%s USING binary) USING %s) COLLATE %s", escapeName(name), targetCol.Charset, targetCol.Collation))
+				// }
 			} else {
 				sb.WriteString(escapeName(name))
 			}
@@ -434,6 +475,9 @@ func (v *VRepl) analyzeBinlogSource(ctx context.Context) {
 	rule := &binlogdatapb.Rule{
 		Match:  v.targetTable,
 		Filter: v.filterQuery,
+	}
+	if len(v.convertCharset) > 0 {
+		rule.ConvertCharset = v.convertCharset
 	}
 	bls.Filter.Rules = append(bls.Filter.Rules, rule)
 	v.bls = bls
