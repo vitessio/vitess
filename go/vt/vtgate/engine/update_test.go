@@ -652,10 +652,7 @@ func buildTestVSchema() *vindexes.VSchema {
 			},
 		},
 	}
-	vs, err := vindexes.BuildVSchema(invschema)
-	if err != nil {
-		panic(err)
-	}
+	vs := vindexes.BuildVSchema(invschema)
 	return vs
 }
 

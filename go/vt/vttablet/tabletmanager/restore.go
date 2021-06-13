@@ -340,7 +340,7 @@ func (tm *TabletManager) getGTIDFromTimestamp(ctx context.Context, pos mysql.Pos
 		return "", "", err
 	}
 	defer binlogConn.Close()
-	lastPos, err := binlogConn.MasterPosition()
+	lastPos, err := binlogConn.PrimaryPosition()
 	if err != nil {
 		return "", "", err
 	}
@@ -441,14 +441,14 @@ func (tm *TabletManager) catchupToGTID(ctx context.Context, afterGTIDPos string,
 		return vterrors.Wrap(err, fmt.Sprintf("failed to restart the replication until %s GTID", afterGTIDStr))
 	}
 	log.Infof("Waiting for position to reach", beforeGTIDPosParsed.GTIDSet.Last())
-	// Could not use `agent.MysqlDaemon.WaitMasterPos` as replication is stopped with `START SLAVE UNTIL SQL_BEFORE_GTIDS`
+	// Could not use `agent.MysqlDaemon.WaitSourcePos` as replication is stopped with `START SLAVE UNTIL SQL_BEFORE_GTIDS`
 	// this is as per https://dev.mysql.com/doc/refman/5.6/en/start-slave.html
 	// We need to wait until replication catches upto the specified afterGTIDPos
 	chGTIDCaughtup := make(chan bool)
 	go func() {
 		timeToWait := time.Now().Add(*timeoutForGTIDLookup)
 		for time.Now().Before(timeToWait) {
-			pos, err := tm.MysqlDaemon.MasterPosition()
+			pos, err := tm.MysqlDaemon.PrimaryPosition()
 			if err != nil {
 				chGTIDCaughtup <- false
 			}
@@ -530,8 +530,8 @@ func (tm *TabletManager) startReplication(ctx context.Context, pos mysql.Positio
 	}
 
 	// Set master and start replication.
-	if err := tm.MysqlDaemon.SetMaster(ctx, ti.Tablet.MysqlHostname, int(ti.Tablet.MysqlPort), false /* stopReplicationBefore */, !*mysqlctl.DisableActiveReparents /* startReplicationAfter */); err != nil {
-		return vterrors.Wrap(err, "MysqlDaemon.SetMaster failed")
+	if err := tm.MysqlDaemon.SetReplicationSource(ctx, ti.Tablet.MysqlHostname, int(ti.Tablet.MysqlPort), false /* stopReplicationBefore */, !*mysqlctl.DisableActiveReparents /* startReplicationAfter */); err != nil {
+		return vterrors.Wrap(err, "MysqlDaemon.SetReplicationSource failed")
 	}
 
 	// If active reparents are disabled, we don't restart replication. So it makes no sense to wait for an update on the replica.
@@ -541,7 +541,7 @@ func (tm *TabletManager) startReplication(ctx context.Context, pos mysql.Positio
 	}
 	// wait for reliable seconds behind master
 	// we have pos where we want to resume from
-	// if MasterPosition is the same, that means no writes
+	// if PrimaryPosition is the same, that means no writes
 	// have happened to master, so we are up-to-date
 	// otherwise, wait for replica's Position to change from
 	// the initial pos before proceeding

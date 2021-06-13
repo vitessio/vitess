@@ -57,7 +57,7 @@ func newVCopier(vr *vreplicator) *vcopier {
 func (vc *vcopier) initTablesForCopy(ctx context.Context) error {
 	defer vc.vr.dbClient.Rollback()
 
-	plan, err := buildReplicatorPlan(vc.vr.source.Filter, vc.vr.pkInfoMap, nil, vc.vr.stats)
+	plan, err := buildReplicatorPlan(vc.vr.source.Filter, vc.vr.colInfoMap, nil, vc.vr.stats)
 	if err != nil {
 		return err
 	}
@@ -200,7 +200,7 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 
 	log.Infof("Copying table %s, lastpk: %v", tableName, copyState[tableName])
 
-	plan, err := buildReplicatorPlan(vc.vr.source.Filter, vc.vr.pkInfoMap, nil, vc.vr.stats)
+	plan, err := buildReplicatorPlan(vc.vr.source.Filter, vc.vr.colInfoMap, nil, vc.vr.stats)
 	if err != nil {
 		return err
 	}
@@ -243,13 +243,13 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 			}
 			fieldEvent := &binlogdatapb.FieldEvent{
 				TableName: initialPlan.SendRule.Match,
-				Fields:    rows.Fields,
 			}
+			fieldEvent.Fields = append(fieldEvent.Fields, rows.Fields...)
 			vc.tablePlan, err = plan.buildExecutionPlan(fieldEvent)
 			if err != nil {
 				return err
 			}
-			pkfields = rows.Pkfields
+			pkfields = append(pkfields, rows.Pkfields...)
 			buf := sqlparser.NewTrackedBuffer(nil)
 			buf.Myprintf("update _vt.copy_state set lastpk=%a where vrepl_id=%s and table_name=%s", ":lastpk", strconv.Itoa(int(vc.vr.id)), encodeString(tableName))
 			updateCopyState = buf.ParsedQuery()
