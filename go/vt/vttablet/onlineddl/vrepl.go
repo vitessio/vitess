@@ -403,7 +403,7 @@ func (v *VRepl) generateFilterQuery(ctx context.Context) error {
 				fmt.Printf("============ collcation change: %s => %s\n", col.Collation, targetCol.Collation)
 				if strings.HasPrefix(targetCol.Charset, "utf8") {
 					// sb.WriteString(fmt.Sprintf("cast(%s as binary)", escapeName(name)))
-					sb.WriteString(fmt.Sprintf("convert(convert(convert(%s USING %s) USING binary) USING %s)", escapeName(name), col.Charset, targetCol.Charset))
+					sb.WriteString(fmt.Sprintf("convert(%s USING %s)", escapeName(name), targetCol.Charset))
 					// sb.WriteString(fmt.Sprintf("convert(%s USING %s) COLLATE %s", escapeName(name), targetCol.Charset, targetCol.Collation))
 				} else {
 					sb.WriteString(fmt.Sprintf("convert(%s, char character set %s) COLLATE %s", escapeName(name), targetCol.Charset, targetCol.Collation))
