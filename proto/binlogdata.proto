@@ -138,11 +138,13 @@ message Rule {
   // to be excluded.
   // TODO(sougou): support this on vstreamer side also.
   string filter = 2;
-  // EnumText: optional, list per enum column name, the list of textual values.
+  // ConvertEnumToText: optional, list per enum column name, the list of textual values.
   // When reading the binary log, all enum values are numeric. But sometimes it
   // is useful/needed to know what the textual mapping are.
   // Online DDL provides such use case.
-  map<string, string> enum_text = 3;
+
+  // Example: key="color", value="'red','green','blue'"
+  map<string, string> convert_enum_to_text = 3;
 }
 
 // Filter represents a list of ordered rules. The first
