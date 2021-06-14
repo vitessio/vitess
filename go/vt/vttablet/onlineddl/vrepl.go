@@ -231,9 +231,6 @@ func (v *VRepl) applyColumnTypes(ctx context.Context, conn *dbconnpool.DBConnect
 				column.BinaryOctetLength = columnOctetLength
 			}
 			if charset := row.AsString("CHARACTER_SET_NAME", ""); charset != "" {
-				// if !strings.HasPrefix(charset, "utf8") {
-				// 	return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Vitess does not support charset '%s'. Only utf8 and derivatives (like utf8mb4) are supported", charset)
-				// }
 				column.Charset = charset
 			}
 			if collation := row.AsString("COLLATION_NAME", ""); collation != "" {
@@ -404,10 +401,6 @@ func (v *VRepl) generateFilterQuery(ctx context.Context) error {
 				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Cannot find target column %s", targetName)
 			}
 			if true || sourceCol.Collation != targetCol.Collation {
-				// sourceEncoding, ok := mysql.CharacterSetEncoding[sourceCol.Charset]
-				// if !ok {
-				// 	return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Character set %s not supported for column %s", sourceCol.Charset, sourceCol.Name)
-				// }
 				fromEncoding, ok := mysql.CharacterSetEncoding[sourceCol.Charset]
 				if !ok {
 					return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Character set %s not supported for column %s", sourceCol.Charset, sourceCol.Name)
@@ -422,33 +415,8 @@ func (v *VRepl) generateFilterQuery(ctx context.Context) error {
 						FromCharset: sourceCol.Charset,
 						ToCharset:   targetCol.Charset,
 					}
-					fmt.Printf("============ v.convertCharset[targetName]: %v,  %v\n", targetName, v.convertCharset[targetName])
 				}
-				fmt.Printf("============ collcation change: %s => %s\n", sourceCol.Collation, targetCol.Collation)
-				if strings.HasPrefix(sourceCol.Charset, "utf8") {
-					// sb.WriteString(escapeName(name))
-					sb.WriteString(fmt.Sprintf("convert(%s USING utf8mb4)", escapeName(name)))
-				} else {
-					// sb.WriteString(fmt.Sprintf("cast(%s as binary)", escapeName(name)))
-					sb.WriteString(fmt.Sprintf("convert(%s USING utf8mb4)", escapeName(name)))
-					// sb.WriteString(fmt.Sprintf("convert(%s USING %s)", escapeName(name), targetCol.Charset))
-					// sb.WriteString(fmt.Sprintf("convert(%s USING %s) COLLATE %s", escapeName(name), targetCol.Charset, targetCol.Collation))
-				}
-				// if strings.HasPrefix(targetCol.Charset, "utf8") {
-				// 	// sb.WriteString(fmt.Sprintf("cast(%s as binary)", escapeName(name)))
-				// 	sb.WriteString(fmt.Sprintf("convert(convert(%s USING binary) USING %s)", escapeName(name), targetCol.Charset))
-				// 	// sb.WriteString(fmt.Sprintf("convert(%s USING %s)", escapeName(name), targetCol.Charset))
-				// 	// sb.WriteString(fmt.Sprintf("convert(%s USING %s) COLLATE %s", escapeName(name), targetCol.Charset, targetCol.Collation))
-				// } else if strings.HasPrefix(sourceCol.Charset, "utf8") {
-				// 	// sb.WriteString(fmt.Sprintf("cast(%s as binary)", escapeName(name)))
-				// 	sb.WriteString(fmt.Sprintf("convert(%s USING %s)", escapeName(name), targetCol.Charset))
-				// 	// sb.WriteString(fmt.Sprintf("convert(%s USING %s)", escapeName(name), targetCol.Charset))
-				// 	// sb.WriteString(fmt.Sprintf("convert(%s USING %s) COLLATE %s", escapeName(name), targetCol.Charset, targetCol.Collation))
-				// } else {
-				// 	// sb.WriteString(fmt.Sprintf("convert(%s USING %s)", escapeName(name), targetCol.Charset))
-				// 	sb.WriteString(fmt.Sprintf("convert(%s USING %s) COLLATE %s", escapeName(name), targetCol.Charset, targetCol.Collation))
-				// 	// sb.WriteString(fmt.Sprintf("convert(convert(%s USING binary) USING %s) COLLATE %s", escapeName(name), targetCol.Charset, targetCol.Collation))
-				// }
+				sb.WriteString(fmt.Sprintf("convert(%s USING utf8mb4)", escapeName(name)))
 			} else {
 				sb.WriteString(escapeName(name))
 			}
