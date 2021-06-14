@@ -92,6 +92,8 @@ export const useExperimentalTabletDebugVars = (
     );
 };
 
+// Future enhancement: add vtadmin-api endpoint to fetch /debug/vars
+// for multiple tablets in a single request. https://github.com/vitessio/vitess/projects/12#card-63086674
 export const useManyExperimentalTabletDebugVars = (
     params: FetchTabletParams[],
     defaultOptions: UseQueryOptions<TabletDebugVarsResponse, Error> = {}
