@@ -362,13 +362,14 @@ func (v *VRepl) analyzeTables(ctx context.Context, conn *dbconnpool.DBConnection
 	}
 
 	for i := range v.sourceSharedColumns.Columns() {
-		column := v.sourceSharedColumns.Columns()[i]
+		sourceColumn := v.sourceSharedColumns.Columns()[i]
 		mappedColumn := v.targetSharedColumns.Columns()[i]
-		if column.Name == mappedColumn.Name && column.Type == vrepl.EnumColumnType && mappedColumn.Type != vrepl.EnumColumnType && mappedColumn.Charset != "" {
+		if sourceColumn.Type == vrepl.EnumColumnType && mappedColumn.Type != vrepl.EnumColumnType && mappedColumn.Charset != "" {
 			// A column is converted from ENUM type to textual type
 			v.targetSharedColumns.SetEnumToTextConversion(mappedColumn.Name)
-			v.targetSharedColumns.SetEnumValues(mappedColumn.Name, column.EnumValues)
-			v.enumToTextMap[mappedColumn.Name] = column.EnumValues
+			v.targetSharedColumns.SetEnumValues(mappedColumn.Name, sourceColumn.EnumValues)
+
+			v.enumToTextMap[sourceColumn.Name] = sourceColumn.EnumValues
 		}
 	}
 
@@ -388,17 +389,17 @@ func (v *VRepl) generateFilterQuery(ctx context.Context) error {
 	}
 	var sb strings.Builder
 	sb.WriteString("select ")
-	for i, col := range v.sourceSharedColumns.Columns() {
-		name := col.Name
+	for i, sourceCol := range v.sourceSharedColumns.Columns() {
+		name := sourceCol.Name
 		targetName := v.sharedColumnsMap[name]
 
 		if i > 0 {
 			sb.WriteString(", ")
 		}
 		switch {
-		case col.Type == vrepl.JSONColumnType:
+		case sourceCol.Type == vrepl.JSONColumnType:
 			sb.WriteString(fmt.Sprintf("convert(%s using utf8mb4)", escapeName(name)))
-		case col.EnumToTextConversion:
+		case sourceCol.EnumToTextConversion:
 			sb.WriteString(fmt.Sprintf("CONCAT(%s)", escapeName(name)))
 		default:
 			sb.WriteString(escapeName(name))
