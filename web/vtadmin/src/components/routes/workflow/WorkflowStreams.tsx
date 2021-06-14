@@ -29,6 +29,7 @@ import { DataTable } from '../../dataTable/DataTable';
 import { KeyspaceLink } from '../../links/KeyspaceLink';
 import { TabletLink } from '../../links/TabletLink';
 import { StreamStatePip } from '../../pips/StreamStatePip';
+import { WorkflowStreamsLagChart } from '../../charts/WorkflowStreamsLagChart';
 
 interface Props {
     clusterID: string;
@@ -39,7 +40,7 @@ interface Props {
 const COLUMNS = ['Stream', 'Source', 'Target', 'Tablet'];
 
 export const WorkflowStreams = ({ clusterID, keyspace, name }: Props) => {
-    const { data } = useWorkflow({ clusterID, keyspace, name }, { refetchInterval: 1000 });
+    const { data } = useWorkflow({ clusterID, keyspace, name });
 
     const streams = useMemo(() => {
         const rows = getStreams(data).map((stream) => ({
@@ -107,6 +108,10 @@ export const WorkflowStreams = ({ clusterID, keyspace, name }: Props) => {
 
     return (
         <div>
+            <h3>Stream VReplication Lag</h3>
+            <WorkflowStreamsLagChart clusterID={clusterID} keyspace={keyspace} workflowName={name} />
+
+            <h3>Streams</h3>
             {/* TODO(doeg): add a protobuf enum for this (https://github.com/vitessio/vitess/projects/12#card-60190340) */}
             {['Error', 'Copying', 'Running', 'Stopped'].map((streamState) => {
                 if (!Array.isArray(streamsByState[streamState])) {
