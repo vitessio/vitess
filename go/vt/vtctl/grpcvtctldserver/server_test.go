@@ -2738,10 +2738,14 @@ func TestGetBackups(t *testing.T) {
 			{
 				Directory: "testkeyspace/-",
 				Name:      "backup1",
+				Keyspace:  "testkeyspace",
+				Shard:     "-",
 			},
 			{
 				Directory: "testkeyspace/-",
 				Name:      "backup2",
+				Keyspace:  "testkeyspace",
+				Shard:     "-",
 			},
 		},
 	}
@@ -2773,6 +2777,53 @@ func TestGetBackups(t *testing.T) {
 			Shard:    "-",
 		})
 		assert.Error(t, err)
+	})
+
+	t.Run("parsing times and aliases", func(t *testing.T) {
+		testutil.BackupStorage.Backups["ks2/-80"] = []string{
+			"2021-06-11.123456.zone1-101",
+		}
+
+		resp, err := vtctld.GetBackups(ctx, &vtctldatapb.GetBackupsRequest{
+			Keyspace: "ks2",
+			Shard:    "-80",
+		})
+		require.NoError(t, err)
+		expected := &vtctldatapb.GetBackupsResponse{
+			Backups: []*mysqlctlpb.BackupInfo{
+				{
+					Directory: "ks2/-80",
+					Name:      "2021-06-11.123456.zone1-101",
+					Keyspace:  "ks2",
+					Shard:     "-80",
+					Time:      protoutil.TimeToProto(time.Date(2021, time.June, 11, 12, 34, 56, 0, time.UTC)),
+					TabletAlias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  101,
+					},
+				},
+			},
+		}
+		utils.MustMatch(t, expected, resp)
+	})
+
+	t.Run("limiting", func(t *testing.T) {
+		unlimited, err := vtctld.GetBackups(ctx, &vtctldatapb.GetBackupsRequest{
+			Keyspace: "testkeyspace",
+			Shard:    "-",
+		})
+		require.NoError(t, err)
+
+		limited, err := vtctld.GetBackups(ctx, &vtctldatapb.GetBackupsRequest{
+			Keyspace: "testkeyspace",
+			Shard:    "-",
+			Limit:    1,
+		})
+		require.NoError(t, err)
+
+		assert.Equal(t, len(limited.Backups), 1, "expected limited backups to have length 1")
+		assert.Less(t, len(limited.Backups), len(unlimited.Backups), "expected limited backups to be less than unlimited")
+		utils.MustMatch(t, limited.Backups[0], unlimited.Backups[len(unlimited.Backups)-1], "expected limiting to keep N most recent")
 	})
 }
 

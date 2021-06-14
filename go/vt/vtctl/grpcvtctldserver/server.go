@@ -654,6 +654,9 @@ func (s *VtctldServer) GetBackups(ctx context.Context, req *vtctldatapb.GetBacku
 
 	span.Annotate("keyspace", req.Keyspace)
 	span.Annotate("shard", req.Shard)
+	span.Annotate("limit", req.Limit)
+	span.Annotate("detailed", req.Detailed)
+	span.Annotate("detailed_limit", req.DetailedLimit)
 
 	bs, err := backupstorage.GetBackupStorage()
 	if err != nil {
@@ -669,15 +672,42 @@ func (s *VtctldServer) GetBackups(ctx context.Context, req *vtctldatapb.GetBacku
 		return nil, err
 	}
 
-	resp := &vtctldatapb.GetBackupsResponse{
-		Backups: make([]*mysqlctlpb.BackupInfo, len(bhs)),
+	totalBackups := len(bhs)
+	if req.Limit > 0 {
+		totalBackups = int(req.Limit)
 	}
+
+	totalDetailedBackups := len(bhs)
+	if req.DetailedLimit > 0 {
+		totalDetailedBackups = int(req.DetailedLimit)
+	}
+
+	backups := make([]*mysqlctlpb.BackupInfo, 0, totalBackups)
+	backupsToSkip := len(bhs) - totalBackups
+	backupsToSkipDetails := totalBackups - totalDetailedBackups
 
 	for i, bh := range bhs {
-		resp.Backups[i] = mysqlctlproto.BackupHandleToProto(bh)
+		if i < backupsToSkip {
+			continue
+		}
+
+		bi := mysqlctlproto.BackupHandleToProto(bh)
+		bi.Keyspace = req.Keyspace
+		bi.Shard = req.Shard
+
+		if req.Detailed {
+			if i >= backupsToSkipDetails { // nolint:staticcheck
+				// (TODO:@ajm188) Update backupengine/backupstorage implementations
+				// to get Status info for backups.
+			}
+		}
+
+		backups = append(backups, bi)
 	}
 
-	return resp, nil
+	return &vtctldatapb.GetBackupsResponse{
+		Backups: backups,
+	}, nil
 }
 
 // GetCellInfoNames is part of the vtctlservicepb.VtctldServer interface.

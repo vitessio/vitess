@@ -358,6 +358,20 @@ message FindAllShardsInKeyspaceResponse {
 message GetBackupsRequest {
   string keyspace = 1;
   string shard = 2;
+  // Limit, if nonzero, will return only the most N recent backups.
+  uint32 limit = 3;
+  // Detailed indicates whether to use the backupengine, if supported, to
+  // populate additional fields, such as Engine and Status, on BackupInfo
+  // objects in the response. If not set, or if the backupengine does not
+  // support populating these fields, Engine will always be empty, and Status
+  // will always be UNKNOWN.
+  bool detailed = 4;
+  // DetailedLimit, if nonzero, will only populate additional fields (see Detailed)
+  // on the N most recent backups. The Limit field still dictates the total
+  // number of backup info objects returned, so, in reality, min(Limit, DetailedLimit)
+  // backup infos will have additional fields set, and any remaining backups
+  // will not.
+  uint32 detailed_limit = 5;
 }
 
 message GetBackupsResponse {
