@@ -137,6 +137,7 @@ func expandStar(sel *sqlparser.Select, semTable *semantics.SemTable) *sqlparser.
 						}
 					}
 					if !tbl.Table.ColumnListAuthoritative {
+						expandStar = false
 						break
 					}
 					expandStar = true
