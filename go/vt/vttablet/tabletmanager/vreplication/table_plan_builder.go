@@ -354,7 +354,6 @@ func analyzeSelectFrom(query string) (sel *sqlparser.Select, from string, err er
 func (tpb *tablePlanBuilder) analyzeExprs(selExprs sqlparser.SelectExprs) error {
 	for _, selExpr := range selExprs {
 		cexpr, err := tpb.analyzeExpr(selExpr)
-		fmt.Printf("============ selExpr: %v, cexpr.expr: %v\n", sqlparser.String(selExpr), sqlparser.String(cexpr.expr))
 		if err != nil {
 			return err
 		}
