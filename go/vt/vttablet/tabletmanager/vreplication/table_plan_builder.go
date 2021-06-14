@@ -186,7 +186,6 @@ func MatchTable(tableName string, filter *binlogdatapb.Filter) (*binlogdatapb.Ru
 func buildTablePlan(tableName, filter string, colInfoMap map[string][]*ColumnInfo, lastpk *sqltypes.Result, convertCharset map[string](*binlogdatapb.CharsetConversion), stats *binlogplayer.Stats) (*TablePlan, error) {
 	query := filter
 	// generate equivalent select statement if filter is empty or a keyrange.
-	fmt.Printf("============ filter: %v\n", filter)
 	switch {
 	case filter == "":
 		buf := sqlparser.NewTrackedBuffer(nil)
@@ -239,9 +238,6 @@ func buildTablePlan(tableName, filter string, colInfoMap map[string][]*ColumnInf
 		stats:      stats,
 	}
 
-	for _, s := range sel.SelectExprs {
-		fmt.Printf("============ SelectExpr: %v\n", sqlparser.String(s))
-	}
 	if err := tpb.analyzeExprs(sel.SelectExprs); err != nil {
 		return nil, err
 	}
