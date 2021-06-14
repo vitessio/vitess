@@ -15,6 +15,7 @@
  */
 
 import { useMemo } from 'react';
+
 import { useManyExperimentalTabletDebugVars, useWorkflow } from '../../hooks/api';
 import { vtadmin } from '../../proto/vtadmin';
 import { getStreamVReplicationLagTimeseries, QPS_REFETCH_INTERVAL } from '../../util/tabletDebugVars';
@@ -26,6 +27,10 @@ interface Props {
     keyspace: string;
     workflowName: string;
 }
+
+// Default min/max values (in seconds) for the y-axis when there is no data to show.
+const DEFAULT_Y_MAX = 5;
+const DEFAULT_Y_MIN = 0;
 
 export const WorkflowStreamsLagChart = ({ clusterID, keyspace, workflowName }: Props) => {
     const { data: workflow, ...wq } = useWorkflow({ clusterID, keyspace, name: workflowName });
@@ -44,12 +49,22 @@ export const WorkflowStreamsLagChart = ({ clusterID, keyspace, workflowName }: P
     const anyLoading = wq.isLoading || tabletQueries.some((q) => q.isLoading);
 
     const chartOptions: Highcharts.Options = useMemo(() => {
+        const series = formatSeries(workflow, tabletQueries);
+        const allSeriesEmpty = series.every((s) => !s.data?.length);
+
         return {
-            series: formatSeries(workflow, tabletQueries),
+            series,
             yAxis: {
                 labels: {
                     format: '{text} s',
                 },
+                // The desired behaviour is to show axes + grid lines
+                // even when there is no data to show. Unfortunately, setting
+                // softMin/softMax (which is more flexible) doesn't work with showEmpty.
+                // Instead, we must set explicit min/max, but only when all series are empty.
+                // If at least one series has data, allow min/max to be automatically calculated.
+                max: allSeriesEmpty ? DEFAULT_Y_MAX : null,
+                min: allSeriesEmpty ? DEFAULT_Y_MIN : null,
             },
         };
     }, [tabletQueries, workflow]);
@@ -57,10 +72,11 @@ export const WorkflowStreamsLagChart = ({ clusterID, keyspace, workflowName }: P
     return <Timeseries isLoading={anyLoading} options={chartOptions} />;
 };
 
+// Internal function, exported only for testing.
 export const formatSeries = (
     workflow: vtadmin.Workflow | null | undefined,
     tabletQueries: ReturnType<typeof useManyExperimentalTabletDebugVars>
-): Highcharts.SeriesOptionsType[] => {
+): Highcharts.SeriesLineOptions[] => {
     if (!workflow) {
         return [];
     }
@@ -68,9 +84,19 @@ export const formatSeries = (
     // Get streamKeys for streams in this workflow.
     const streamKeys = getStreams(workflow).map((s) => formatStreamKey(s));
 
-    return tabletQueries.reduce((acc, tq) => {
+    // Initialize the timeseries from the workflow, so that every stream in the workflow
+    // is shown in the legend, even if the /debug/vars data isn't (yet) available.
+    const seriesByStreamKey: { [streamKey: string]: Highcharts.SeriesLineOptions } = {};
+
+    streamKeys.forEach((streamKey) => {
+        if (streamKey) {
+            seriesByStreamKey[streamKey] = { data: [], name: streamKey, type: 'line' };
+        }
+    });
+
+    tabletQueries.forEach((tq) => {
         if (!tq.data) {
-            return acc;
+            return;
         }
 
         const tabletAlias = tq.data.params.alias;
@@ -84,15 +110,16 @@ export const formatSeries = (
                 return;
             }
 
-            // Don't graph series for streams that aren't in this workflow.
             const streamKey = `${tabletAlias}/${streamID}`;
-            if (streamKeys.indexOf(streamKey) < 0) {
+
+            // Don't graph series for streams that aren't in this workflow.
+            if (!(streamKey in seriesByStreamKey)) {
                 return;
             }
 
-            acc.push({ data: streamLagData, name: streamKey, type: 'line' });
+            seriesByStreamKey[streamKey].data = streamLagData;
         });
+    });
 
-        return acc;
-    }, [] as Highcharts.SeriesOptionsType[]);
+    return Object.values(seriesByStreamKey);
 };

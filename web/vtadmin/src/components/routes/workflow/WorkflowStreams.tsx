@@ -108,8 +108,12 @@ export const WorkflowStreams = ({ clusterID, keyspace, name }: Props) => {
 
     return (
         <div>
-            <h3>Stream VReplication Lag</h3>
-            <WorkflowStreamsLagChart clusterID={clusterID} keyspace={keyspace} workflowName={name} />
+            {process.env.REACT_APP_ENABLE_EXPERIMENTAL_TABLET_DEBUG_VARS && (
+                <>
+                    <h3>Stream VReplication Lag</h3>
+                    <WorkflowStreamsLagChart clusterID={clusterID} keyspace={keyspace} workflowName={name} />
+                </>
+            )}
 
             <h3>Streams</h3>
             {/* TODO(doeg): add a protobuf enum for this (https://github.com/vitessio/vitess/projects/12#card-60190340) */}
