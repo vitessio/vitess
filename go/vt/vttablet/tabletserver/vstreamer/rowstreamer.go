@@ -113,7 +113,6 @@ func (rs *rowStreamer) Stream() error {
 func (rs *rowStreamer) buildPlan() error {
 	// This pre-parsing is required to extract the table name
 	// and create its metadata.
-	fmt.Printf("========= analyzeSelect: %v\n", rs.query)
 	_, fromTable, err := analyzeSelect(rs.query)
 	if err != nil {
 		return err
@@ -140,7 +139,6 @@ func (rs *rowStreamer) buildPlan() error {
 		return err
 	}
 	rs.sendQuery, err = rs.buildSelect()
-	fmt.Printf("================= rs.sendQuery: %v\n", rs.sendQuery)
 	if err != nil {
 		return err
 	}
@@ -172,10 +170,7 @@ func (rs *rowStreamer) buildSelect() (string, error) {
 	prefix := ""
 	for _, col := range rs.plan.Table.Fields {
 		if rs.plan.isConvertColumnUsingUTF8(col.Name) {
-			// fmt.Printf("========== WOOHOO! convertToBinary for %v\n", col.Name)
-			// buf.Myprintf("%sconvert(convert(%v using binary) using utf8)", prefix, sqlparser.NewColIdent(col.Name))
 			buf.Myprintf("%sconvert(%v using utf8mb4)", prefix, sqlparser.NewColIdent(col.Name))
-			// buf.Myprintf("%s%v", prefix, sqlparser.NewColIdent(col.Name))
 		} else {
 			buf.Myprintf("%s%v", prefix, sqlparser.NewColIdent(col.Name))
 		}
