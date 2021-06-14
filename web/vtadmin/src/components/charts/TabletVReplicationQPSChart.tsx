@@ -37,7 +37,7 @@ export const TabletVReplicationQPSChart = ({ alias, clusterID }: Props) => {
     );
 
     const options = useMemo(() => {
-        const tsdata = getVReplicationQPSTimeseries(debugVars, query.dataUpdatedAt);
+        const tsdata = getVReplicationQPSTimeseries(debugVars?.data, query.dataUpdatedAt);
 
         const series: Highcharts.SeriesOptionsType[] = Object.entries(tsdata).map(([name, data]) => ({
             data,
