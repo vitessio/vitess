@@ -75,6 +75,7 @@ message BackupInfo {
 
   // The following fields are may or may not be currently set. Work is inflight
   // to fully-support these fields in all backupengine/storage implementations.
+  // See https://github.com/vitessio/vitess/issues/8332.
 
   // Engine is the name of the backupengine implementation used to create
   // this backup.
