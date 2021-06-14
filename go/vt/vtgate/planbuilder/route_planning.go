@@ -108,21 +108,38 @@ func expandStar(sel *sqlparser.Select, semTable *semantics.SemTable) *sqlparser.
 			tables := semTable.GetSelectTables(node)
 			var selExprs sqlparser.SelectExprs
 			for _, selectExpr := range node.SelectExprs {
-				_, isStarExpr := selectExpr.(*sqlparser.StarExpr)
+				starExpr, isStarExpr := selectExpr.(*sqlparser.StarExpr)
 				if !isStarExpr {
 					selExprs = append(selExprs, selectExpr)
 					continue
 				}
-				//if !starExpr.TableName.IsEmpty() {
-				//	// TODO: only expand specific table
-				//}
 				var colNames sqlparser.SelectExprs
-				expandStar := true
+				expandStar := false
 				for _, tbl := range tables {
+					if !starExpr.TableName.IsEmpty() {
+						if !tbl.ASTNode.As.IsEmpty() {
+							if !starExpr.TableName.Qualifier.IsEmpty() {
+								continue
+							}
+							if starExpr.TableName.Name.String() != tbl.ASTNode.As.String() {
+								continue
+							}
+						} else {
+							if !starExpr.TableName.Qualifier.IsEmpty() {
+								if starExpr.TableName.Qualifier.String() != tbl.Table.Keyspace.Name {
+									continue
+								}
+							}
+							tblName := tbl.ASTNode.Expr.(sqlparser.TableName)
+							if starExpr.TableName.Name.String() != tblName.Name.String() {
+								continue
+							}
+						}
+					}
 					if !tbl.Table.ColumnListAuthoritative {
-						expandStar = false
 						break
 					}
+					expandStar = true
 					for _, col := range tbl.Table.Columns {
 						colNames = append(colNames, &sqlparser.AliasedExpr{
 							Expr: sqlparser.NewColNameWithQualifier(col.Name.String(), sqlparser.TableName{Name: tbl.Table.Name}),
