@@ -303,20 +303,20 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 		after = true
 		vals := sqltypes.MakeRowTrusted(tp.Fields, rowChange.After)
 		for i, field := range tp.Fields {
-			if enumValues, ok := tp.EnumValuesMap[field.Name]; ok && vals[i].IsQuoted() {
+			val := &vals[i]
+			if enumValues, ok := tp.EnumValuesMap[field.Name]; ok && !val.IsNull() {
 				// The fact that this fielkd has a EnumValuesMap entry, means we must
 				// use the enum's text value as opposed to the enum's numerical value.
 				// Once known use case is with Online DDL, when a column is converted from
 				// ENUM to a VARCHAR/TEXT.
-				// The above vals[i].IsQuoted()  helps us to exclude a NULL value
-				enumValue, enumValueOK := enumValues[vals[i].ToString()]
+				enumValue, enumValueOK := enumValues[val.ToString()]
 				if !enumValueOK {
-					return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Invalid enum value: %v for field %s", vals[i], field.Name)
+					return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Invalid enum value: %v for field %s", val, field.Name)
 				}
 				// get the enum text fir this val
 				bindvars["a_"+field.Name] = sqltypes.StringBindVariable(enumValue)
 			} else {
-				bindvars["a_"+field.Name] = sqltypes.ValueBindVariable(vals[i])
+				bindvars["a_"+field.Name] = sqltypes.ValueBindVariable(*val)
 			}
 		}
 	}
