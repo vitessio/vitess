@@ -187,6 +187,12 @@ func TestExpandStar(t *testing.T) {
 	}, {
 		sql:    "select t1.* from t1, t2",
 		expSQL: "select t1.a, t1.b, t1.c from t1, t2",
+	}, {
+		sql:    "select *, t1.* from t1, t2",
+		expSQL: "select t1.a, t1.b, t1.c, t2.c1, t2.c2, t1.a, t1.b, t1.c from t1, t2",
+	}, { // TODO: This should fail on analyze step and should not reach down.
+		sql:    "select t3.* from t1, t2",
+		expSQL: "select t3.* from t1, t2",
 	}}
 	for _, tcase := range tcases {
 		t.Run(tcase.sql, func(t *testing.T) {
