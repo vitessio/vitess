@@ -288,6 +288,27 @@ func (tp *TablePlan) isOutsidePKRange(bindvars map[string]*querypb.BindVariable,
 	return false
 }
 
+// bindFieldVal returns a bind variable based on given field and value.
+// Most values will just bind directly. But some values may need manipulation:
+// - text values with charset conversion
+// - enum values converted to text via Online DDL
+// - ...any other future possible values
+func (tp *TablePlan) bindFieldVal(field *querypb.Field, val *sqltypes.Value) (*querypb.BindVariable, error) {
+	if enumValues, ok := tp.EnumValuesMap[field.Name]; ok && !val.IsNull() {
+		// The fact that this fielkd has a EnumValuesMap entry, means we must
+		// use the enum's text value as opposed to the enum's numerical value.
+		// Once known use case is with Online DDL, when a column is converted from
+		// ENUM to a VARCHAR/TEXT.
+		enumValue, enumValueOK := enumValues[val.ToString()]
+		if !enumValueOK {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Invalid enum value: %v for field %s", val, field.Name)
+		}
+		// get the enum text fir this val
+		return sqltypes.StringBindVariable(enumValue), nil
+	}
+	return sqltypes.ValueBindVariable(*val), nil
+}
+
 func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor func(string) (*sqltypes.Result, error)) (*sqltypes.Result, error) {
 	// MakeRowTrusted is needed here because Proto3ToResult is not convenient.
 	var before, after bool
@@ -304,20 +325,11 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 		vals := sqltypes.MakeRowTrusted(tp.Fields, rowChange.After)
 		for i, field := range tp.Fields {
 			val := &vals[i]
-			if enumValues, ok := tp.EnumValuesMap[field.Name]; ok && !val.IsNull() {
-				// The fact that this fielkd has a EnumValuesMap entry, means we must
-				// use the enum's text value as opposed to the enum's numerical value.
-				// Once known use case is with Online DDL, when a column is converted from
-				// ENUM to a VARCHAR/TEXT.
-				enumValue, enumValueOK := enumValues[val.ToString()]
-				if !enumValueOK {
-					return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Invalid enum value: %v for field %s", val, field.Name)
-				}
-				// get the enum text fir this val
-				bindvars["a_"+field.Name] = sqltypes.StringBindVariable(enumValue)
-			} else {
-				bindvars["a_"+field.Name] = sqltypes.ValueBindVariable(*val)
+			bindVar, err := tp.bindFieldVal(field, val)
+			if err != nil {
+				return nil, err
 			}
+			bindvars["a_"+field.Name] = bindVar
 		}
 	}
 	switch {
