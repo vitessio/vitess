@@ -269,9 +269,7 @@ func buildTablePlan(tableName, filter string, colInfoMap map[string][]*ColumnInf
 			},
 		})
 	}
-	fmt.Printf("============ sendSelect.SelectExprs [3]: %v\n", sqlparser.String(tpb.sendSelect.SelectExprs))
 	sendRule.Filter = sqlparser.String(tpb.sendSelect)
-	fmt.Printf("============ sendRule.Filter: %v\n", sendRule.Filter)
 
 	tablePlan := tpb.generate()
 	tablePlan.SendRule = sendRule
@@ -377,46 +375,20 @@ func (tpb *tablePlanBuilder) analyzeExpr(selExpr sqlparser.SelectExpr) (*colExpr
 		references: make(map[string]bool),
 	}
 	if expr, ok := aliased.Expr.(*sqlparser.ConvertUsingExpr); ok {
-		fmt.Printf("============ ConvertUsingExpr: %v\n", sqlparser.String(expr))
 		selExpr := &sqlparser.ConvertUsingExpr{
 			Type: "utf8mb4",
 			Expr: &sqlparser.ColName{Name: as},
 		}
-		fmt.Printf("============ ConvertUsingExpr generated: %v\n", sqlparser.String(selExpr))
 		cexpr.expr = expr
 		cexpr.operation = opExpr
 		tpb.sendSelect.SelectExprs = append(tpb.sendSelect.SelectExprs, &sqlparser.AliasedExpr{Expr: selExpr, As: as})
 		return cexpr, nil
 	}
 	if expr, ok := aliased.Expr.(*sqlparser.ConvertExpr); ok {
-		// convertAsBinary := fmt.Sprintf("convert(%s, binary) as %s", sqlparser.String(as), sqlparser.String(as))
-		// fmt.Printf("============ convertAsBinary: %v\n", convertAsBinary)
-		// convertAsBinaryExpr, err := sqlparser.Parse(convertAsBinary)
-		// fmt.Printf("============ convertAsBinaryExpr, err: %v, %v\n", convertAsBinaryExpr, err)
-		// if err != nil {
-		// 	return nil, err
-		// }
-		// expr, ok := convertAsBinaryExpr.(*sqlparser.ConvertExpr)
-		fmt.Printf("============ ConvertExpr: %v\n", sqlparser.String(expr))
-		fmt.Printf("============ ConvertExpr.Type: %v\n", expr.Type)
-		fmt.Printf("============ ConvertExpr.Type.Type: %v\n", expr.Type.Type)
-		fmt.Printf("============ ConvertExpr.Type.Charset: %v\n", expr.Type.Charset)
-		fmt.Printf("============ ConvertExpr.Expr: %v\n", expr.Expr)
-		// expr.Type:=
-		// type ConvertType struct {
-		// 	Type     string
-		// 	Length   *Literal
-		// 	Scale    *Literal
-		// 	Operator ConvertTypeOperator
-		// 	Charset  string
-		// }
-		// expr.Type = &sqlparser.ConvertType{Type: "binary"}
-		// expr.Expr = as
 		selExpr := &sqlparser.ConvertExpr{
 			Type: &sqlparser.ConvertType{Type: "binary"},
 			Expr: &sqlparser.ColName{Name: as},
 		}
-		fmt.Printf("============ ConvertExpr generated: %v\n", sqlparser.String(selExpr))
 		cexpr.expr = expr
 		cexpr.operation = opExpr
 		tpb.sendSelect.SelectExprs = append(tpb.sendSelect.SelectExprs, &sqlparser.AliasedExpr{Expr: selExpr, As: as})
