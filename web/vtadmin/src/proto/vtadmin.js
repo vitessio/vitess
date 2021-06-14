@@ -73717,6 +73717,794 @@ $root.vtctldata = (function() {
         return RebuildVSchemaGraphResponse;
     })();
 
+    vtctldata.RefreshStateRequest = (function() {
+
+        /**
+         * Properties of a RefreshStateRequest.
+         * @memberof vtctldata
+         * @interface IRefreshStateRequest
+         * @property {topodata.ITabletAlias|null} [tablet_alias] RefreshStateRequest tablet_alias
+         */
+
+        /**
+         * Constructs a new RefreshStateRequest.
+         * @memberof vtctldata
+         * @classdesc Represents a RefreshStateRequest.
+         * @implements IRefreshStateRequest
+         * @constructor
+         * @param {vtctldata.IRefreshStateRequest=} [properties] Properties to set
+         */
+        function RefreshStateRequest(properties) {
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * RefreshStateRequest tablet_alias.
+         * @member {topodata.ITabletAlias|null|undefined} tablet_alias
+         * @memberof vtctldata.RefreshStateRequest
+         * @instance
+         */
+        RefreshStateRequest.prototype.tablet_alias = null;
+
+        /**
+         * Creates a new RefreshStateRequest instance using the specified properties.
+         * @function create
+         * @memberof vtctldata.RefreshStateRequest
+         * @static
+         * @param {vtctldata.IRefreshStateRequest=} [properties] Properties to set
+         * @returns {vtctldata.RefreshStateRequest} RefreshStateRequest instance
+         */
+        RefreshStateRequest.create = function create(properties) {
+            return new RefreshStateRequest(properties);
+        };
+
+        /**
+         * Encodes the specified RefreshStateRequest message. Does not implicitly {@link vtctldata.RefreshStateRequest.verify|verify} messages.
+         * @function encode
+         * @memberof vtctldata.RefreshStateRequest
+         * @static
+         * @param {vtctldata.IRefreshStateRequest} message RefreshStateRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        RefreshStateRequest.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.tablet_alias != null && Object.hasOwnProperty.call(message, "tablet_alias"))
+                $root.topodata.TabletAlias.encode(message.tablet_alias, writer.uint32(/* id 1, wireType 2 =*/10).fork()).ldelim();
+            return writer;
+        };
+
+        /**
+         * Encodes the specified RefreshStateRequest message, length delimited. Does not implicitly {@link vtctldata.RefreshStateRequest.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtctldata.RefreshStateRequest
+         * @static
+         * @param {vtctldata.IRefreshStateRequest} message RefreshStateRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        RefreshStateRequest.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a RefreshStateRequest message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtctldata.RefreshStateRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtctldata.RefreshStateRequest} RefreshStateRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        RefreshStateRequest.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.RefreshStateRequest();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.uint32());
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a RefreshStateRequest message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtctldata.RefreshStateRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtctldata.RefreshStateRequest} RefreshStateRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        RefreshStateRequest.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a RefreshStateRequest message.
+         * @function verify
+         * @memberof vtctldata.RefreshStateRequest
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        RefreshStateRequest.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.tablet_alias != null && message.hasOwnProperty("tablet_alias")) {
+                var error = $root.topodata.TabletAlias.verify(message.tablet_alias);
+                if (error)
+                    return "tablet_alias." + error;
+            }
+            return null;
+        };
+
+        /**
+         * Creates a RefreshStateRequest message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtctldata.RefreshStateRequest
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtctldata.RefreshStateRequest} RefreshStateRequest
+         */
+        RefreshStateRequest.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtctldata.RefreshStateRequest)
+                return object;
+            var message = new $root.vtctldata.RefreshStateRequest();
+            if (object.tablet_alias != null) {
+                if (typeof object.tablet_alias !== "object")
+                    throw TypeError(".vtctldata.RefreshStateRequest.tablet_alias: object expected");
+                message.tablet_alias = $root.topodata.TabletAlias.fromObject(object.tablet_alias);
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a RefreshStateRequest message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtctldata.RefreshStateRequest
+         * @static
+         * @param {vtctldata.RefreshStateRequest} message RefreshStateRequest
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        RefreshStateRequest.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.defaults)
+                object.tablet_alias = null;
+            if (message.tablet_alias != null && message.hasOwnProperty("tablet_alias"))
+                object.tablet_alias = $root.topodata.TabletAlias.toObject(message.tablet_alias, options);
+            return object;
+        };
+
+        /**
+         * Converts this RefreshStateRequest to JSON.
+         * @function toJSON
+         * @memberof vtctldata.RefreshStateRequest
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        RefreshStateRequest.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return RefreshStateRequest;
+    })();
+
+    vtctldata.RefreshStateResponse = (function() {
+
+        /**
+         * Properties of a RefreshStateResponse.
+         * @memberof vtctldata
+         * @interface IRefreshStateResponse
+         */
+
+        /**
+         * Constructs a new RefreshStateResponse.
+         * @memberof vtctldata
+         * @classdesc Represents a RefreshStateResponse.
+         * @implements IRefreshStateResponse
+         * @constructor
+         * @param {vtctldata.IRefreshStateResponse=} [properties] Properties to set
+         */
+        function RefreshStateResponse(properties) {
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * Creates a new RefreshStateResponse instance using the specified properties.
+         * @function create
+         * @memberof vtctldata.RefreshStateResponse
+         * @static
+         * @param {vtctldata.IRefreshStateResponse=} [properties] Properties to set
+         * @returns {vtctldata.RefreshStateResponse} RefreshStateResponse instance
+         */
+        RefreshStateResponse.create = function create(properties) {
+            return new RefreshStateResponse(properties);
+        };
+
+        /**
+         * Encodes the specified RefreshStateResponse message. Does not implicitly {@link vtctldata.RefreshStateResponse.verify|verify} messages.
+         * @function encode
+         * @memberof vtctldata.RefreshStateResponse
+         * @static
+         * @param {vtctldata.IRefreshStateResponse} message RefreshStateResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        RefreshStateResponse.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            return writer;
+        };
+
+        /**
+         * Encodes the specified RefreshStateResponse message, length delimited. Does not implicitly {@link vtctldata.RefreshStateResponse.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtctldata.RefreshStateResponse
+         * @static
+         * @param {vtctldata.IRefreshStateResponse} message RefreshStateResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        RefreshStateResponse.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a RefreshStateResponse message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtctldata.RefreshStateResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtctldata.RefreshStateResponse} RefreshStateResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        RefreshStateResponse.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.RefreshStateResponse();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a RefreshStateResponse message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtctldata.RefreshStateResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtctldata.RefreshStateResponse} RefreshStateResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        RefreshStateResponse.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a RefreshStateResponse message.
+         * @function verify
+         * @memberof vtctldata.RefreshStateResponse
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        RefreshStateResponse.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            return null;
+        };
+
+        /**
+         * Creates a RefreshStateResponse message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtctldata.RefreshStateResponse
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtctldata.RefreshStateResponse} RefreshStateResponse
+         */
+        RefreshStateResponse.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtctldata.RefreshStateResponse)
+                return object;
+            return new $root.vtctldata.RefreshStateResponse();
+        };
+
+        /**
+         * Creates a plain object from a RefreshStateResponse message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtctldata.RefreshStateResponse
+         * @static
+         * @param {vtctldata.RefreshStateResponse} message RefreshStateResponse
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        RefreshStateResponse.toObject = function toObject() {
+            return {};
+        };
+
+        /**
+         * Converts this RefreshStateResponse to JSON.
+         * @function toJSON
+         * @memberof vtctldata.RefreshStateResponse
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        RefreshStateResponse.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return RefreshStateResponse;
+    })();
+
+    vtctldata.RefreshStateByShardRequest = (function() {
+
+        /**
+         * Properties of a RefreshStateByShardRequest.
+         * @memberof vtctldata
+         * @interface IRefreshStateByShardRequest
+         * @property {string|null} [keyspace] RefreshStateByShardRequest keyspace
+         * @property {string|null} [shard] RefreshStateByShardRequest shard
+         * @property {Array.<string>|null} [cells] RefreshStateByShardRequest cells
+         */
+
+        /**
+         * Constructs a new RefreshStateByShardRequest.
+         * @memberof vtctldata
+         * @classdesc Represents a RefreshStateByShardRequest.
+         * @implements IRefreshStateByShardRequest
+         * @constructor
+         * @param {vtctldata.IRefreshStateByShardRequest=} [properties] Properties to set
+         */
+        function RefreshStateByShardRequest(properties) {
+            this.cells = [];
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * RefreshStateByShardRequest keyspace.
+         * @member {string} keyspace
+         * @memberof vtctldata.RefreshStateByShardRequest
+         * @instance
+         */
+        RefreshStateByShardRequest.prototype.keyspace = "";
+
+        /**
+         * RefreshStateByShardRequest shard.
+         * @member {string} shard
+         * @memberof vtctldata.RefreshStateByShardRequest
+         * @instance
+         */
+        RefreshStateByShardRequest.prototype.shard = "";
+
+        /**
+         * RefreshStateByShardRequest cells.
+         * @member {Array.<string>} cells
+         * @memberof vtctldata.RefreshStateByShardRequest
+         * @instance
+         */
+        RefreshStateByShardRequest.prototype.cells = $util.emptyArray;
+
+        /**
+         * Creates a new RefreshStateByShardRequest instance using the specified properties.
+         * @function create
+         * @memberof vtctldata.RefreshStateByShardRequest
+         * @static
+         * @param {vtctldata.IRefreshStateByShardRequest=} [properties] Properties to set
+         * @returns {vtctldata.RefreshStateByShardRequest} RefreshStateByShardRequest instance
+         */
+        RefreshStateByShardRequest.create = function create(properties) {
+            return new RefreshStateByShardRequest(properties);
+        };
+
+        /**
+         * Encodes the specified RefreshStateByShardRequest message. Does not implicitly {@link vtctldata.RefreshStateByShardRequest.verify|verify} messages.
+         * @function encode
+         * @memberof vtctldata.RefreshStateByShardRequest
+         * @static
+         * @param {vtctldata.IRefreshStateByShardRequest} message RefreshStateByShardRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        RefreshStateByShardRequest.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.keyspace != null && Object.hasOwnProperty.call(message, "keyspace"))
+                writer.uint32(/* id 1, wireType 2 =*/10).string(message.keyspace);
+            if (message.shard != null && Object.hasOwnProperty.call(message, "shard"))
+                writer.uint32(/* id 2, wireType 2 =*/18).string(message.shard);
+            if (message.cells != null && message.cells.length)
+                for (var i = 0; i < message.cells.length; ++i)
+                    writer.uint32(/* id 3, wireType 2 =*/26).string(message.cells[i]);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified RefreshStateByShardRequest message, length delimited. Does not implicitly {@link vtctldata.RefreshStateByShardRequest.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtctldata.RefreshStateByShardRequest
+         * @static
+         * @param {vtctldata.IRefreshStateByShardRequest} message RefreshStateByShardRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        RefreshStateByShardRequest.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a RefreshStateByShardRequest message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtctldata.RefreshStateByShardRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtctldata.RefreshStateByShardRequest} RefreshStateByShardRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        RefreshStateByShardRequest.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.RefreshStateByShardRequest();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    message.keyspace = reader.string();
+                    break;
+                case 2:
+                    message.shard = reader.string();
+                    break;
+                case 3:
+                    if (!(message.cells && message.cells.length))
+                        message.cells = [];
+                    message.cells.push(reader.string());
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a RefreshStateByShardRequest message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtctldata.RefreshStateByShardRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtctldata.RefreshStateByShardRequest} RefreshStateByShardRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        RefreshStateByShardRequest.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a RefreshStateByShardRequest message.
+         * @function verify
+         * @memberof vtctldata.RefreshStateByShardRequest
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        RefreshStateByShardRequest.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.keyspace != null && message.hasOwnProperty("keyspace"))
+                if (!$util.isString(message.keyspace))
+                    return "keyspace: string expected";
+            if (message.shard != null && message.hasOwnProperty("shard"))
+                if (!$util.isString(message.shard))
+                    return "shard: string expected";
+            if (message.cells != null && message.hasOwnProperty("cells")) {
+                if (!Array.isArray(message.cells))
+                    return "cells: array expected";
+                for (var i = 0; i < message.cells.length; ++i)
+                    if (!$util.isString(message.cells[i]))
+                        return "cells: string[] expected";
+            }
+            return null;
+        };
+
+        /**
+         * Creates a RefreshStateByShardRequest message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtctldata.RefreshStateByShardRequest
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtctldata.RefreshStateByShardRequest} RefreshStateByShardRequest
+         */
+        RefreshStateByShardRequest.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtctldata.RefreshStateByShardRequest)
+                return object;
+            var message = new $root.vtctldata.RefreshStateByShardRequest();
+            if (object.keyspace != null)
+                message.keyspace = String(object.keyspace);
+            if (object.shard != null)
+                message.shard = String(object.shard);
+            if (object.cells) {
+                if (!Array.isArray(object.cells))
+                    throw TypeError(".vtctldata.RefreshStateByShardRequest.cells: array expected");
+                message.cells = [];
+                for (var i = 0; i < object.cells.length; ++i)
+                    message.cells[i] = String(object.cells[i]);
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a RefreshStateByShardRequest message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtctldata.RefreshStateByShardRequest
+         * @static
+         * @param {vtctldata.RefreshStateByShardRequest} message RefreshStateByShardRequest
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        RefreshStateByShardRequest.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.arrays || options.defaults)
+                object.cells = [];
+            if (options.defaults) {
+                object.keyspace = "";
+                object.shard = "";
+            }
+            if (message.keyspace != null && message.hasOwnProperty("keyspace"))
+                object.keyspace = message.keyspace;
+            if (message.shard != null && message.hasOwnProperty("shard"))
+                object.shard = message.shard;
+            if (message.cells && message.cells.length) {
+                object.cells = [];
+                for (var j = 0; j < message.cells.length; ++j)
+                    object.cells[j] = message.cells[j];
+            }
+            return object;
+        };
+
+        /**
+         * Converts this RefreshStateByShardRequest to JSON.
+         * @function toJSON
+         * @memberof vtctldata.RefreshStateByShardRequest
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        RefreshStateByShardRequest.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return RefreshStateByShardRequest;
+    })();
+
+    vtctldata.RefreshStateByShardResponse = (function() {
+
+        /**
+         * Properties of a RefreshStateByShardResponse.
+         * @memberof vtctldata
+         * @interface IRefreshStateByShardResponse
+         * @property {boolean|null} [is_partial_refresh] RefreshStateByShardResponse is_partial_refresh
+         */
+
+        /**
+         * Constructs a new RefreshStateByShardResponse.
+         * @memberof vtctldata
+         * @classdesc Represents a RefreshStateByShardResponse.
+         * @implements IRefreshStateByShardResponse
+         * @constructor
+         * @param {vtctldata.IRefreshStateByShardResponse=} [properties] Properties to set
+         */
+        function RefreshStateByShardResponse(properties) {
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * RefreshStateByShardResponse is_partial_refresh.
+         * @member {boolean} is_partial_refresh
+         * @memberof vtctldata.RefreshStateByShardResponse
+         * @instance
+         */
+        RefreshStateByShardResponse.prototype.is_partial_refresh = false;
+
+        /**
+         * Creates a new RefreshStateByShardResponse instance using the specified properties.
+         * @function create
+         * @memberof vtctldata.RefreshStateByShardResponse
+         * @static
+         * @param {vtctldata.IRefreshStateByShardResponse=} [properties] Properties to set
+         * @returns {vtctldata.RefreshStateByShardResponse} RefreshStateByShardResponse instance
+         */
+        RefreshStateByShardResponse.create = function create(properties) {
+            return new RefreshStateByShardResponse(properties);
+        };
+
+        /**
+         * Encodes the specified RefreshStateByShardResponse message. Does not implicitly {@link vtctldata.RefreshStateByShardResponse.verify|verify} messages.
+         * @function encode
+         * @memberof vtctldata.RefreshStateByShardResponse
+         * @static
+         * @param {vtctldata.IRefreshStateByShardResponse} message RefreshStateByShardResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        RefreshStateByShardResponse.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.is_partial_refresh != null && Object.hasOwnProperty.call(message, "is_partial_refresh"))
+                writer.uint32(/* id 1, wireType 0 =*/8).bool(message.is_partial_refresh);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified RefreshStateByShardResponse message, length delimited. Does not implicitly {@link vtctldata.RefreshStateByShardResponse.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtctldata.RefreshStateByShardResponse
+         * @static
+         * @param {vtctldata.IRefreshStateByShardResponse} message RefreshStateByShardResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        RefreshStateByShardResponse.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a RefreshStateByShardResponse message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtctldata.RefreshStateByShardResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtctldata.RefreshStateByShardResponse} RefreshStateByShardResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        RefreshStateByShardResponse.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.RefreshStateByShardResponse();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    message.is_partial_refresh = reader.bool();
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a RefreshStateByShardResponse message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtctldata.RefreshStateByShardResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtctldata.RefreshStateByShardResponse} RefreshStateByShardResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        RefreshStateByShardResponse.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a RefreshStateByShardResponse message.
+         * @function verify
+         * @memberof vtctldata.RefreshStateByShardResponse
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        RefreshStateByShardResponse.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.is_partial_refresh != null && message.hasOwnProperty("is_partial_refresh"))
+                if (typeof message.is_partial_refresh !== "boolean")
+                    return "is_partial_refresh: boolean expected";
+            return null;
+        };
+
+        /**
+         * Creates a RefreshStateByShardResponse message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtctldata.RefreshStateByShardResponse
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtctldata.RefreshStateByShardResponse} RefreshStateByShardResponse
+         */
+        RefreshStateByShardResponse.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtctldata.RefreshStateByShardResponse)
+                return object;
+            var message = new $root.vtctldata.RefreshStateByShardResponse();
+            if (object.is_partial_refresh != null)
+                message.is_partial_refresh = Boolean(object.is_partial_refresh);
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a RefreshStateByShardResponse message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtctldata.RefreshStateByShardResponse
+         * @static
+         * @param {vtctldata.RefreshStateByShardResponse} message RefreshStateByShardResponse
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        RefreshStateByShardResponse.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.defaults)
+                object.is_partial_refresh = false;
+            if (message.is_partial_refresh != null && message.hasOwnProperty("is_partial_refresh"))
+                object.is_partial_refresh = message.is_partial_refresh;
+            return object;
+        };
+
+        /**
+         * Converts this RefreshStateByShardResponse to JSON.
+         * @function toJSON
+         * @memberof vtctldata.RefreshStateByShardResponse
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        RefreshStateByShardResponse.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return RefreshStateByShardResponse;
+    })();
+
     vtctldata.RemoveKeyspaceCellRequest = (function() {
 
         /**

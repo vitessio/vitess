@@ -4535,6 +4535,294 @@ func TestRebuildVSchemaGraph(t *testing.T) {
 	}
 }
 
+func TestRefreshState(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	tests := []struct {
+		name              string
+		ts                *topo.Server
+		tablet            *topodatapb.Tablet
+		refreshStateError error
+		req               *vtctldatapb.RefreshStateRequest
+		shouldErr         bool
+	}{
+		{
+			name: "success",
+			ts:   memorytopo.NewServer("zone1"),
+			tablet: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+			refreshStateError: nil,
+			req: &vtctldatapb.RefreshStateRequest{
+				TabletAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+		},
+		{
+			name:      "tablet alias nil",
+			ts:        memorytopo.NewServer(),
+			req:       &vtctldatapb.RefreshStateRequest{},
+			shouldErr: true,
+		},
+		{
+			name: "tablet not found",
+			ts:   memorytopo.NewServer("zone1"),
+			tablet: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+			refreshStateError: nil,
+			req: &vtctldatapb.RefreshStateRequest{
+				TabletAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  400,
+				},
+			},
+			shouldErr: true,
+		},
+		{
+			name: "RefreshState failed",
+			ts:   memorytopo.NewServer("zone1"),
+			tablet: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+			refreshStateError: fmt.Errorf("%w: RefreshState failed", assert.AnError),
+			req: &vtctldatapb.RefreshStateRequest{
+				TabletAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+			shouldErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			var tmc testutil.TabletManagerClient
+			if tt.tablet != nil {
+				testutil.AddTablet(ctx, t, tt.ts, tt.tablet, nil)
+				tmc.RefreshStateResults = map[string]error{
+					topoproto.TabletAliasString(tt.tablet.Alias): tt.refreshStateError,
+				}
+			}
+
+			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, tt.ts, &tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+				return NewVtctldServer(ts)
+			})
+			_, err := vtctld.RefreshState(ctx, tt.req)
+			if tt.shouldErr {
+				assert.Error(t, err)
+				return
+			}
+
+			assert.NoError(t, err)
+		})
+	}
+}
+
+func TestRefreshStateByShard(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	tests := []struct {
+		name               string
+		ts                 *topo.Server
+		tablets            []*topodatapb.Tablet
+		refreshStateErrors []error // must have len(tablets)
+		req                *vtctldatapb.RefreshStateByShardRequest
+		expected           *vtctldatapb.RefreshStateByShardResponse
+		shouldErr          bool
+	}{
+		{
+			name: "success",
+			ts:   memorytopo.NewServer("zone1", "zone2"),
+			tablets: []*topodatapb.Tablet{
+				{
+					Hostname: "zone1-100",
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Keyspace: "ks",
+					Shard:    "-",
+				},
+				{
+					Hostname: "zone2-100",
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone2",
+						Uid:  100,
+					},
+					Keyspace: "ks",
+					Shard:    "-",
+				},
+			},
+			refreshStateErrors: []error{
+				nil, // zone1-100
+				nil, // zone2-100
+			},
+			req: &vtctldatapb.RefreshStateByShardRequest{
+				Keyspace: "ks",
+				Shard:    "-",
+			},
+			expected: &vtctldatapb.RefreshStateByShardResponse{},
+		},
+		{
+			name: "cell filtering",
+			ts:   memorytopo.NewServer("zone1", "zone2"),
+			tablets: []*topodatapb.Tablet{
+				{
+					Hostname: "zone1-100",
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Keyspace: "ks",
+					Shard:    "-",
+				},
+				{
+					Hostname: "zone2-100",
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone2",
+						Uid:  100,
+					},
+					Keyspace: "ks",
+					Shard:    "-",
+				},
+			},
+			refreshStateErrors: []error{
+				nil,
+				fmt.Errorf("%w: RefreshState failed on zone2-100", assert.AnError),
+			},
+			req: &vtctldatapb.RefreshStateByShardRequest{
+				Keyspace: "ks",
+				Shard:    "-",
+				Cells:    []string{"zone1"}, // If we didn't filter, we would get IsPartialRefresh=true because of the failure in zone2.
+			},
+			expected: &vtctldatapb.RefreshStateByShardResponse{
+				IsPartialRefresh: false,
+			},
+			shouldErr: false,
+		},
+		{
+			name: "partial result",
+			ts:   memorytopo.NewServer("zone1", "zone2"),
+			tablets: []*topodatapb.Tablet{
+				{
+					Hostname: "zone1-100",
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Keyspace: "ks",
+					Shard:    "-",
+				},
+				{
+					Hostname: "zone2-100",
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone2",
+						Uid:  100,
+					},
+					Keyspace: "ks",
+					Shard:    "-",
+				},
+			},
+			refreshStateErrors: []error{
+				nil,
+				fmt.Errorf("%w: RefreshState failed on zone2-100", assert.AnError),
+			},
+			req: &vtctldatapb.RefreshStateByShardRequest{
+				Keyspace: "ks",
+				Shard:    "-",
+			},
+			expected: &vtctldatapb.RefreshStateByShardResponse{
+				IsPartialRefresh: true,
+			},
+			shouldErr: false,
+		},
+		{
+			name:      "missing keyspace argument",
+			ts:        memorytopo.NewServer(),
+			req:       &vtctldatapb.RefreshStateByShardRequest{},
+			shouldErr: true,
+		},
+		{
+			name: "missing shard argument",
+			ts:   memorytopo.NewServer(),
+			req: &vtctldatapb.RefreshStateByShardRequest{
+				Keyspace: "ks",
+			},
+			shouldErr: true,
+		},
+		{
+			name: "shard not found",
+			ts:   memorytopo.NewServer("zone1"),
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Keyspace: "ks",
+					Shard:    "-80",
+				},
+			},
+			refreshStateErrors: []error{nil},
+			req: &vtctldatapb.RefreshStateByShardRequest{
+				Keyspace: "ks2",
+				Shard:    "-",
+			},
+			shouldErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			require.Equal(t, len(tt.tablets), len(tt.refreshStateErrors), "Invalid test case: must have one refreshStateError for each tablet")
+
+			tmc := &testutil.TabletManagerClient{
+				RefreshStateResults: make(map[string]error, len(tt.tablets)),
+			}
+			testutil.AddTablets(ctx, t, tt.ts, nil, tt.tablets...)
+			for i, tablet := range tt.tablets {
+				key := topoproto.TabletAliasString(tablet.Alias)
+				tmc.RefreshStateResults[key] = tt.refreshStateErrors[i]
+			}
+
+			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, tt.ts, tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+				return NewVtctldServer(ts)
+			})
+			resp, err := vtctld.RefreshStateByShard(ctx, tt.req)
+			if tt.shouldErr {
+				assert.Error(t, err)
+				return
+			}
+
+			require.NoError(t, err)
+			utils.MustMatch(t, tt.expected, resp)
+		})
+	}
+}
+
 func TestRemoveKeyspaceCell(t *testing.T) {
 	t.Parallel()
 
