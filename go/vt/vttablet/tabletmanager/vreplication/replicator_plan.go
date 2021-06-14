@@ -289,6 +289,33 @@ func (tp *TablePlan) isOutsidePKRange(bindvars map[string]*querypb.BindVariable,
 	return false
 }
 
+// bindFieldVal returns a bind variable based on given field and value.
+// Most values will just bind directly. But some values may need manipulation:
+// - text values with charset conversion
+// - enum values converted to text via Online DDL
+// - ...any other future possible values
+func (tp *TablePlan) bindFieldVal(field *querypb.Field, val *sqltypes.Value) (*querypb.BindVariable, error) {
+	if conversion, ok := tp.ConvertCharset[field.Name]; ok && !val.IsNull() {
+		// Non-null string value, for which we have a charset conversion instruction
+		valString := val.ToString()
+		fromEncoding, encodingOK := mysql.CharacterSetEncoding[conversion.FromCharset]
+		if !encodingOK {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Character set %s not supported for column %s", conversion.FromCharset, field.Name)
+		}
+		if fromEncoding != nil {
+			// As reminder, encoding can be nil for trivial charsets, like utf8 or ascii.
+			// encoding will be non-nil for charsets like latin1, gbk, etc.
+			var err error
+			valString, err = fromEncoding.NewDecoder().String(valString)
+			if err != nil {
+				return nil, err
+			}
+		}
+		return sqltypes.StringBindVariable(valString), nil
+	}
+	return sqltypes.ValueBindVariable(*val), nil
+}
+
 func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor func(string) (*sqltypes.Result, error)) (*sqltypes.Result, error) {
 	// MakeRowTrusted is needed here because Proto3ToResult is not convenient.
 	var before, after bool
@@ -305,47 +332,11 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 		vals := sqltypes.MakeRowTrusted(tp.Fields, rowChange.After)
 		for i, field := range tp.Fields {
 			val := &vals[i]
-			bindVal := func() (err error) {
-				if conversion, ok := tp.ConvertCharset[field.Name]; ok && !val.IsNull() {
-					valString := val.ToString()
-					fmt.Printf("=========== ConvertCharset[field.Name]: %v, %v \n", field.Name, conversion)
-					fmt.Printf("=========== s0: %v \n", valString)
-
-					fromEncoding, encodingOK := mysql.CharacterSetEncoding[conversion.FromCharset]
-					if !encodingOK {
-						return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Character set %s not supported for column %s", conversion.FromCharset, field.Name)
-					}
-					if fromEncoding != nil {
-						fmt.Printf("=========== ConvertCharset fromEncoding: %v, %v \n", field.Name, fromEncoding)
-						valString, err = fromEncoding.NewDecoder().String(valString)
-						if err != nil {
-							return err
-						}
-						fmt.Printf("=========== s1: %v \n", valString)
-					}
-
-					// // There is a request to encode given charset
-					// toEncoding, encodingOK := mysql.CharacterSetEncoding[conversion.ToCharset]
-					// if !encodingOK {
-					// 	return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Character set %s not supported for column %s", conversion.ToCharset, field.Name)
-					// }
-					// if toEncoding != nil {
-					// 	fmt.Printf("=========== ConvertCharset toEncoding: %v, %v \n", field.Name, toEncoding)
-					// 	valString, err = toEncoding.NewEncoder().String(valString)
-					// 	if err != nil {
-					// 		return err
-					// 	}
-					// 	fmt.Printf("=========== s2: %v \n", valString)
-					// }
-					bindvars["a_"+field.Name] = sqltypes.StringBindVariable(valString)
-					return nil
-				}
-				bindvars["a_"+field.Name] = sqltypes.ValueBindVariable(*val)
-				return nil
-			}
-			if err := bindVal(); err != nil {
+			bindVar, err := tp.bindFieldVal(field, val)
+			if err != nil {
 				return nil, err
 			}
+			bindvars["a_"+field.Name] = bindVar
 		}
 	}
 	switch {
