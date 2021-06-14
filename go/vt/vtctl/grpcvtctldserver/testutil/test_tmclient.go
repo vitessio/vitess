@@ -162,6 +162,8 @@ type TabletManagerClient struct {
 		Result string
 		Error  error
 	}
+	// keyed by tablet alias.
+	RefreshStateResults      map[string]error
 	ReplicationStatusDelays  map[string]time.Duration
 	ReplicationStatusResults map[string]struct {
 		Position *replicationdatapb.Status
@@ -364,6 +366,20 @@ func (fake *TabletManagerClient) PromoteReplica(ctx context.Context, tablet *top
 	}
 
 	return "", assert.AnError
+}
+
+// RefreshState is part of the tmclient.TabletManagerClient interface.
+func (fake *TabletManagerClient) RefreshState(ctx context.Context, tablet *topodatapb.Tablet) error {
+	if fake.RefreshStateResults == nil {
+		return fmt.Errorf("%w: no RefreshState results on fake TabletManagerClient", assert.AnError)
+	}
+
+	key := topoproto.TabletAliasString(tablet.Alias)
+	if err, ok := fake.RefreshStateResults[key]; ok {
+		return err
+	}
+
+	return fmt.Errorf("%w: no RefreshState result set for tablet %s", assert.AnError, key)
 }
 
 // ReplicationStatus is part of the tmclient.TabletManagerClient interface.
