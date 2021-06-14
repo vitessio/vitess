@@ -3058,6 +3058,21 @@ func TestCreateTable(t *testing.T) {
 	first_name varchar(10),
 	full_name varchar(255) as (concat(first_name, ' ', last_name)) virtual comment 'hello world'
 )`,
+		}, {
+			input: `create table non_reserved_keyword (id int(11)) ENGINE = MEMORY`,
+			output: `create table non_reserved_keyword (
+	id int(11)
+) ENGINE MEMORY`,
+		}, {
+			input: `create table non_reserved_keyword (id int(11)) ENGINE = MEDIUMTEXT`,
+			output: `create table non_reserved_keyword (
+	id int(11)
+) ENGINE MEDIUMTEXT`,
+		}, {
+			input: `create table t1 (id int(11)) ENGINE = FOOBAR`,
+			output: `create table t1 (
+	id int(11)
+) ENGINE FOOBAR`,
 		},
 	}
 	for _, test := range createTableQueries {
