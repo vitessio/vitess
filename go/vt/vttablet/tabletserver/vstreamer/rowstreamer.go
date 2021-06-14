@@ -171,7 +171,7 @@ func (rs *rowStreamer) buildSelect() (string, error) {
 	buf.Myprintf("select ")
 	prefix := ""
 	for _, col := range rs.plan.Table.Fields {
-		if rs.plan.convertToBinary[col.Name] {
+		if rs.plan.isConvertColumnUsingUTF8(col.Name) {
 			// fmt.Printf("========== WOOHOO! convertToBinary for %v\n", col.Name)
 			// buf.Myprintf("%sconvert(convert(%v using binary) using utf8)", prefix, sqlparser.NewColIdent(col.Name))
 			buf.Myprintf("%sconvert(%v using utf8mb4)", prefix, sqlparser.NewColIdent(col.Name))
