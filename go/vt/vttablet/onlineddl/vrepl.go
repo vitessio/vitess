@@ -400,7 +400,9 @@ func (v *VRepl) generateFilterQuery(ctx context.Context) error {
 			if targetCol == nil {
 				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Cannot find target column %s", targetName)
 			}
-			if true || sourceCol.Collation != targetCol.Collation {
+			{
+				// Check source and target charset/encoding. If needed, create
+				// a binlogdatapb.CharsetConversion entry (later written to vreplication)
 				fromEncoding, ok := mysql.CharacterSetEncoding[sourceCol.Charset]
 				if !ok {
 					return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Character set %s not supported for column %s", sourceCol.Charset, sourceCol.Name)
@@ -416,10 +418,9 @@ func (v *VRepl) generateFilterQuery(ctx context.Context) error {
 						ToCharset:   targetCol.Charset,
 					}
 				}
-				sb.WriteString(fmt.Sprintf("convert(%s USING utf8mb4)", escapeName(name)))
-			} else {
-				sb.WriteString(escapeName(name))
 			}
+			// We will always read strings as utf8mb4.
+			sb.WriteString(fmt.Sprintf("convert(%s USING utf8mb4)", escapeName(name)))
 		default:
 			sb.WriteString(escapeName(name))
 		}
