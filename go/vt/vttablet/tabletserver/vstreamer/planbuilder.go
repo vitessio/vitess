@@ -620,7 +620,7 @@ func (plan *Plan) analyzeExpr(vschema *localVSchema, selExpr sqlparser.SelectExp
 			ColNum:     -1,
 			FixedValue: sqltypes.NewInt64(num),
 		}, nil
-	case *sqlparser.ConvertExpr, *sqlparser.ConvertUsingExpr:
+	case *sqlparser.ConvertUsingExpr:
 		colnum, err := findColumn(plan.Table, aliased.As)
 		if err != nil {
 			return ColExpr{}, err
