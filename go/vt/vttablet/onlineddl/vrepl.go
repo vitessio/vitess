@@ -73,9 +73,9 @@ type VRepl struct {
 	sharedColumnsMap    map[string]string
 	sourceAutoIncrement uint64
 
-	filterQuery string
-	enumTextMap map[string]string
-	bls         *binlogdatapb.BinlogSource
+	filterQuery   string
+	enumToTextMap map[string]string
+	bls           *binlogdatapb.BinlogSource
 
 	parser *vrepl.AlterTableParser
 }
@@ -83,15 +83,15 @@ type VRepl struct {
 // NewVRepl creates a VReplication handler for Online DDL
 func NewVRepl(workflow, keyspace, shard, dbName, sourceTable, targetTable, alterOptions string) *VRepl {
 	return &VRepl{
-		workflow:     workflow,
-		keyspace:     keyspace,
-		shard:        shard,
-		dbName:       dbName,
-		sourceTable:  sourceTable,
-		targetTable:  targetTable,
-		alterOptions: alterOptions,
-		parser:       vrepl.NewAlterTableParser(),
-		enumTextMap:  map[string]string{},
+		workflow:      workflow,
+		keyspace:      keyspace,
+		shard:         shard,
+		dbName:        dbName,
+		sourceTable:   sourceTable,
+		targetTable:   targetTable,
+		alterOptions:  alterOptions,
+		parser:        vrepl.NewAlterTableParser(),
+		enumToTextMap: map[string]string{},
 	}
 }
 
@@ -368,7 +368,7 @@ func (v *VRepl) analyzeTables(ctx context.Context, conn *dbconnpool.DBConnection
 			// A column is converted from ENUM type to textual type
 			v.targetSharedColumns.SetEnumToTextConversion(mappedColumn.Name)
 			v.targetSharedColumns.SetEnumValues(mappedColumn.Name, column.EnumValues)
-			v.enumTextMap[mappedColumn.Name] = column.EnumValues
+			v.enumToTextMap[mappedColumn.Name] = column.EnumValues
 		}
 	}
 
@@ -424,8 +424,8 @@ func (v *VRepl) analyzeBinlogSource(ctx context.Context) {
 		Match:  v.targetTable,
 		Filter: v.filterQuery,
 	}
-	if len(v.enumTextMap) > 0 {
-		rule.EnumText = v.enumTextMap
+	if len(v.enumToTextMap) > 0 {
+		rule.ConvertEnumToText = v.enumToTextMap
 	}
 
 	bls.Filter.Rules = append(bls.Filter.Rules, rule)

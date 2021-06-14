@@ -431,9 +431,9 @@ func (m *Rule) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
-	if len(m.EnumText) > 0 {
-		for k := range m.EnumText {
-			v := m.EnumText[k]
+	if len(m.ConvertEnumToText) > 0 {
+		for k := range m.ConvertEnumToText {
+			v := m.ConvertEnumToText[k]
 			baseI := i
 			i -= len(v)
 			copy(dAtA[i:], v)
@@ -2095,8 +2095,8 @@ func (m *Rule) SizeVT() (n int) {
 	if l > 0 {
 		n += 1 + l + sov(uint64(l))
 	}
-	if len(m.EnumText) > 0 {
-		for k, v := range m.EnumText {
+	if len(m.ConvertEnumToText) > 0 {
+		for k, v := range m.ConvertEnumToText {
 			_ = k
 			_ = v
 			mapEntrySize := 1 + len(k) + sov(uint64(len(k))) + 1 + len(v) + sov(uint64(len(v)))
@@ -3630,7 +3630,7 @@ func (m *Rule) UnmarshalVT(dAtA []byte) error {
 			iNdEx = postIndex
 		case 3:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field EnumText", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field ConvertEnumToText", wireType)
 			}
 			var msglen int
 			for shift := uint(0); ; shift += 7 {
@@ -3657,8 +3657,8 @@ func (m *Rule) UnmarshalVT(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			if m.EnumText == nil {
-				m.EnumText = make(map[string]string)
+			if m.ConvertEnumToText == nil {
+				m.ConvertEnumToText = make(map[string]string)
 			}
 			var mapkey string
 			var mapvalue string
@@ -3753,7 +3753,7 @@ func (m *Rule) UnmarshalVT(dAtA []byte) error {
 					iNdEx += skippy
 				}
 			}
-			m.EnumText[mapkey] = mapvalue
+			m.ConvertEnumToText[mapkey] = mapvalue
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex

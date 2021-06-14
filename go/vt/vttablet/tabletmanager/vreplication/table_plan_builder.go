@@ -143,7 +143,7 @@ func buildReplicatorPlan(filter *binlogdatapb.Filter, colInfoMap map[string][]*C
 		if rule == nil {
 			continue
 		}
-		tablePlan, err := buildTablePlan(tableName, rule.Filter, colInfoMap, lastpk, rule.EnumText, stats)
+		tablePlan, err := buildTablePlan(tableName, rule.Filter, colInfoMap, lastpk, rule.ConvertEnumToText, stats)
 		if err != nil {
 			return nil, err
 		}
