@@ -1,4 +1,3 @@
-2021-02-23T22:38:50Z,check_make_sizegen,https://github.com/vitessio/vitess/actions/runs/594105820
 2021-02-23T22:38:50Z,gomod-tidy,https://github.com/vitessio/vitess/actions/runs/594105823
 2021-02-23T22:38:50Z,unit_race,https://github.com/vitessio/vitess/actions/runs/594105803
 2021-02-23T22:42:09Z,Cluster (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/594113796
@@ -9998,3 +9997,4 @@
 2021-06-15T15:42:59Z,golangci-lint,https://github.com/vitessio/vitess/actions/runs/939880639
 2021-06-15T15:42:59Z,unit_race,https://github.com/vitessio/vitess/actions/runs/939880631
 2021-06-15T20:35:57Z,Cluster (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/940650195
+2021-06-15T20:41:52Z,Cluster (18),https://github.com/vitessio/vitess/actions/runs/940664077
