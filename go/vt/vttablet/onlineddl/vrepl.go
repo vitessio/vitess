@@ -369,7 +369,7 @@ func (v *VRepl) analyzeTables(ctx context.Context, conn *dbconnpool.DBConnection
 	v.sourceSharedColumns, v.targetSharedColumns, v.sharedColumnsMap = v.getSharedColumns(sourceColumns, targetColumns, sourceVirtualColumns, targetVirtualColumns, v.parser.ColumnRenameMap())
 
 	v.sharedPKColumns = v.getSharedPKColumns(sourcePKColumns, targetPKColumns, v.parser.ColumnRenameMap())
-	pkMatches := (v.sharedPKColumns.Len() == sourcePKColumns.Len() && v.sharedPKColumns.Len() == targetPKColumns.Len())
+	pkMatches := (v.sharedPKColumns.Len() > 0 && v.sharedPKColumns.Len() == sourcePKColumns.Len() && v.sharedPKColumns.Len() == targetPKColumns.Len())
 	if !pkMatches {
 		// Has to be a 1:1 mapping for all columns
 		return fmt.Errorf("Found no shared PRIMARY KEY columns between `%s` and `%s`", v.sourceTable, v.targetTable)
