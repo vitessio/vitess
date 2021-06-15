@@ -500,8 +500,17 @@ func (tpb *tablePlanBuilder) analyzePK(colInfoMap map[string][]*ColumnInfo) erro
 		if !col.IsPK {
 			continue
 		}
+		if col.IsGenerated {
+			// It's possible that a GENERATED column is part of the PRIMARY KEY. That's valid.
+			// But then, we also know that we don't actually SELECT a GENERATED column, we just skip
+			// it silently and let it re-materialize by MySQL itself on the target.
+			continue
+		}
 		cexpr := tpb.findCol(sqlparser.NewColIdent(col.Name))
 		if cexpr == nil {
+			// TODO(shlomi): at some point in the futue we want to make this check stricter.
+			// We could be reading a generated column c1 which in turn selects some other column c2.
+			// We will want t oensure that `c2` is found in select list...
 			return fmt.Errorf("primary key column %v not found in select list", col)
 		}
 		if cexpr.operation != opExpr {
