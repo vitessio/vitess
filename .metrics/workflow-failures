@@ -1,10 +1,3 @@
-2021-02-23T09:23:57Z,Unit Test (mariadb101),https://github.com/vitessio/vitess/actions/runs/592065411
-2021-02-23T09:23:57Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/592065400
-2021-02-23T09:23:57Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/592065417
-2021-02-23T09:23:57Z,Unit Test (mysql57),https://github.com/vitessio/vitess/actions/runs/592065426
-2021-02-23T09:23:57Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/592065416
-2021-02-23T09:23:57Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/592065377
-2021-02-23T09:23:57Z,cluster_initial_sharding_multi,https://github.com/vitessio/vitess/actions/runs/592065381
 2021-02-23T09:23:57Z,docker_test_1,https://github.com/vitessio/vitess/actions/runs/592065405
 2021-02-23T09:23:57Z,docker_test_2,https://github.com/vitessio/vitess/actions/runs/592065382
 2021-02-23T09:23:57Z,docker_test_3,https://github.com/vitessio/vitess/actions/runs/592065396
@@ -9997,4 +9990,11 @@
 2021-06-14T22:08:29Z,Cluster (xb_recovery),https://github.com/vitessio/vitess/actions/runs/937329195
 2021-06-14T22:08:29Z,pr-labels,https://github.com/vitessio/vitess/actions/runs/937329143
 2021-06-15T00:27:48Z,pr-labels,https://github.com/vitessio/vitess/actions/runs/937609083
+2021-06-15T04:56:04Z,Cluster (upgrade),https://github.com/vitessio/vitess/actions/runs/938088251
+2021-06-15T04:56:04Z,Cluster (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/938088189
+2021-06-15T04:56:04Z,Cluster (xb_recovery),https://github.com/vitessio/vitess/actions/runs/938088195
+2021-06-15T04:56:04Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/938088206
 2021-06-15T04:56:04Z,pr-labels,https://github.com/vitessio/vitess/actions/runs/938088191
+2021-06-15T04:56:04Z,unit_race,https://github.com/vitessio/vitess/actions/runs/938088220
+2021-06-15T05:03:17Z,pr-labels,https://github.com/vitessio/vitess/actions/runs/938102195
+2021-06-15T05:03:29Z,pr-labels,https://github.com/vitessio/vitess/actions/runs/938102692
