@@ -941,11 +941,11 @@ func commandRefreshState(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 	if err != nil {
 		return err
 	}
-	tabletInfo, err := wr.TopoServer().GetTablet(ctx, tabletAlias)
-	if err != nil {
-		return err
-	}
-	return wr.TabletManagerClient().RefreshState(ctx, tabletInfo.Tablet)
+
+	_, err = wr.VtctldServer().RefreshState(ctx, &vtctldatapb.RefreshStateRequest{
+		TabletAlias: tabletAlias,
+	})
+	return err
 }
 
 func commandRefreshStateByShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -961,16 +961,18 @@ func commandRefreshStateByShard(ctx context.Context, wr *wrangler.Wrangler, subF
 	if err != nil {
 		return err
 	}
-	si, err := wr.TopoServer().GetShard(ctx, keyspace, shard)
-	if err != nil {
-		return err
-	}
 
 	var cells []string
 	if *cellsStr != "" {
 		cells = strings.Split(*cellsStr, ",")
 	}
-	return wr.RefreshTabletsByShard(ctx, si, cells)
+
+	_, err = wr.VtctldServer().RefreshStateByShard(ctx, &vtctldatapb.RefreshStateByShardRequest{
+		Keyspace: keyspace,
+		Shard:    shard,
+		Cells:    cells,
+	})
+	return err
 }
 
 func commandRunHealthCheck(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {

@@ -218,6 +218,9 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 		lastpkpb = sqltypes.ResultToProto3(lastpkqr)
 	}
 
+	rowsCopiedTicker := time.NewTicker(rowsCopiedUpdateInterval)
+	defer rowsCopiedTicker.Stop()
+
 	var pkfields []*querypb.Field
 	var updateCopyState *sqlparser.ParsedQuery
 	var bv map[string]*querypb.BindVariable
@@ -225,6 +228,9 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 	err = vc.vr.sourceVStreamer.VStreamRows(ctx, initialPlan.SendRule.Filter, lastpkpb, func(rows *binlogdatapb.VStreamRowsResponse) error {
 		for {
 			select {
+			case <-rowsCopiedTicker.C:
+				update := binlogplayer.GenerateUpdateRowsCopied(vc.vr.id, vc.vr.stats.CopyRowCount.Get())
+				_, _ = vc.vr.dbClient.Execute(update)
 			case <-ctx.Done():
 				return io.EOF
 			default:
@@ -234,7 +240,6 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 				break
 			}
 		}
-
 		if vc.tablePlan == nil {
 			if len(rows.Fields) == 0 {
 				return fmt.Errorf("expecting field event first, got: %v", rows)

@@ -173,6 +173,17 @@ func (l *ColumnList) Len() int {
 	return len(l.columns)
 }
 
+// SetEnumToTextConversion tells this column list that an enum is conveted to text
+func (l *ColumnList) SetEnumToTextConversion(columnName string, enumValues string) {
+	l.GetColumn(columnName).EnumToTextConversion = true
+	l.GetColumn(columnName).EnumValues = enumValues
+}
+
+// IsEnumToTextConversion tells whether an enum was converted to text
+func (l *ColumnList) IsEnumToTextConversion(columnName string) bool {
+	return l.GetColumn(columnName).EnumToTextConversion
+}
+
 // UniqueKey is the combination of a key's name and columns
 type UniqueKey struct {
 	Name            string
