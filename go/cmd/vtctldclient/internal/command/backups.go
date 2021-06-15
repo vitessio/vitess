@@ -36,8 +36,10 @@ var GetBackups = &cobra.Command{
 }
 
 var getBackupsOptions = struct {
-	Limit      uint32
-	OutputJSON bool
+	Limit         uint32
+	Detailed      bool
+	DetailedLimit uint32
+	OutputJSON    bool
 }{}
 
 func commandGetBackups(cmd *cobra.Command, args []string) error {
@@ -49,15 +51,17 @@ func commandGetBackups(cmd *cobra.Command, args []string) error {
 	cli.FinishedParsing(cmd)
 
 	resp, err := client.GetBackups(commandCtx, &vtctldatapb.GetBackupsRequest{
-		Keyspace: keyspace,
-		Shard:    shard,
-		Limit:    getBackupsOptions.Limit,
+		Keyspace:      keyspace,
+		Shard:         shard,
+		Limit:         getBackupsOptions.Limit,
+		Detailed:      getBackupsOptions.Detailed,
+		DetailedLimit: getBackupsOptions.DetailedLimit,
 	})
 	if err != nil {
 		return err
 	}
 
-	if getBackupsOptions.OutputJSON {
+	if getBackupsOptions.OutputJSON || getBackupsOptions.Detailed {
 		data, err := cli.MarshalJSON(resp)
 		if err != nil {
 			return err
@@ -80,5 +84,7 @@ func commandGetBackups(cmd *cobra.Command, args []string) error {
 func init() {
 	GetBackups.Flags().Uint32VarP(&getBackupsOptions.Limit, "limit", "l", 0, "Retrieve only the most recent N backups")
 	GetBackups.Flags().BoolVarP(&getBackupsOptions.OutputJSON, "json", "j", false, "Output backup info in JSON format rather than a list of backups")
+	GetBackups.Flags().BoolVar(&getBackupsOptions.Detailed, "detailed", false, "Get detailed backup info, such as the engine used for each backup, and its status. Implies --json.")
+	GetBackups.Flags().Uint32Var(&getBackupsOptions.DetailedLimit, "detailed-limit", 0, "Get detailed backup info for only the most recent N backups. Ignored if --detailed is not passed.")
 	Root.AddCommand(GetBackups)
 }
