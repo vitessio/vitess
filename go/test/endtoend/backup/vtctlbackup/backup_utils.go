@@ -29,6 +29,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/log"
+
 	"vitess.io/vitess/go/test/endtoend/sharding/initialsharding"
 
 	"vitess.io/vitess/go/vt/proto/topodata"
@@ -213,45 +215,34 @@ func TestBackup(t *testing.T, setupType int, streamMode string, stripes int) {
 	testMethods := []struct {
 		name   string
 		method func(t *testing.T)
-	}{
-		{
-			name: "TestReplicaBackup",
-			method: func(t *testing.T) {
-				vtctlBackup(t, "replica")
-			},
-		}, //
-		{
-			name: "TestRdonlyBackup",
-			method: func(t *testing.T) {
-				vtctlBackup(t, "rdonly")
-			},
-		}, //
-		{
-			name:   "TestMasterBackup",
-			method: masterBackup,
-		}, //
-		{
-			name:   "TestMasterReplicaSameBackup",
-			method: masterReplicaSameBackup,
-		}, //
-		{
-			name:   "TestRestoreOldMasterByRestart",
-			method: restoreOldMasterByRestart,
-		}, //
-		{
-			name:   "TestRestoreOldMasterInPlace",
-			method: restoreOldMasterInPlace,
-		}, //
-		{
-			name:   "TestTerminatedRestore",
-			method: terminatedRestore,
-		}, //
-	}
+	}{{
+		name:   "TestReplicaBackup",
+		method: func(t *testing.T) { vtctlBackup(t, "replica") },
+	}, {
+		name:   "TestRdonlyBackup",
+		method: func(t *testing.T) { vtctlBackup(t, "rdonly") },
+	}, {
+		name:   "TestMasterBackup",
+		method: masterBackup,
+	}, {
+		name:   "TestMasterReplicaSameBackup",
+		method: masterReplicaSameBackup,
+	}, {
+		name:   "TestRestoreOldMasterByRestart",
+		method: restoreOldMasterByRestart,
+	}, {
+		name:   "TestRestoreOldMasterInPlace",
+		method: restoreOldMasterInPlace,
+	}, {
+		name:   "TestTerminatedRestore",
+		method: terminatedRestore,
+	}}
 
 	defer cluster.PanicHandler(t)
 
 	// setup cluster for the testing
 	code, err := LaunchCluster(setupType, streamMode, stripes)
+	logExitError(err)
 	require.Nilf(t, err, "setup failed with status code %d", code)
 
 	// Teardown the cluster
@@ -261,8 +252,18 @@ func TestBackup(t *testing.T, setupType int, streamMode string, stripes int) {
 
 	for _, test := range testMethods {
 		t.Run(test.name, test.method)
+		_, err = master.VttabletProcess.QueryTablet("DROP TABLE vt_insert_test", keyspaceName, true)
+		require.Nil(t, err)
 	}
 
+}
+
+func logExitError(err error) {
+	if err != nil {
+		if err, ok := err.(*exec.ExitError); ok {
+			log.Errorf("stderr: %s", err.Stderr)
+		}
+	}
 }
 
 type restoreMethod func(t *testing.T, tablet *cluster.Vttablet)
@@ -285,6 +286,7 @@ func masterBackup(t *testing.T) {
 	localCluster.VerifyBackupCount(t, shardKsName, 0)
 
 	err = localCluster.VtctlclientProcess.ExecuteCommand("Backup", "-allow_master=true", master.Alias)
+	logExitError(err)
 	require.Nil(t, err)
 
 	backups := localCluster.VerifyBackupCount(t, shardKsName, 1)
@@ -318,6 +320,7 @@ func masterReplicaSameBackup(t *testing.T) {
 
 	// backup the replica
 	err := localCluster.VtctlclientProcess.ExecuteCommand("Backup", replica1.Alias)
+	logExitError(err)
 	require.Nil(t, err)
 
 	//  insert more data on the master
@@ -393,6 +396,7 @@ func testRestoreOldMaster(t *testing.T, method restoreMethod) {
 
 	// backup the replica
 	err := localCluster.VtctlclientProcess.ExecuteCommand("Backup", replica1.Alias)
+	logExitError(err)
 	require.Nil(t, err)
 
 	//  insert more data on the master
@@ -489,6 +493,7 @@ func terminatedRestore(t *testing.T) {
 
 	// backup the replica
 	err := localCluster.VtctlclientProcess.ExecuteCommand("Backup", replica1.Alias)
+	logExitError(err)
 	require.Nil(t, err)
 
 	//  insert more data on the master
@@ -545,6 +550,7 @@ func vtctlBackup(t *testing.T, tabletType string) {
 	verifyInitialReplication(t)
 
 	err := localCluster.VtctlclientProcess.ExecuteCommand("Backup", replica1.Alias)
+	logExitError(err)
 	require.Nil(t, err)
 
 	backups := localCluster.VerifyBackupCount(t, shardKsName, 1)
