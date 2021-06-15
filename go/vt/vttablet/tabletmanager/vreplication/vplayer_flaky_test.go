@@ -1902,7 +1902,9 @@ func TestPlayerIdleUpdate(t *testing.T) {
 		"insert into t1(id,val) values (1,'aaa')",
 		"/update _vt.vreplication set pos=",
 		"commit",
-	})
+	},
+		"/update _vt.vreplication set pos=",
+	)
 	// The above write will generate a new binlog event, and
 	// that event will loopback into player as an empty event.
 	// But it must not get saved until idleTimeout has passed.
