@@ -250,6 +250,7 @@ func TestSchemaChange(t *testing.T) {
 		uuid := testOnlineDDLStatement(t, alterTableSuccessfulStatement, "online", "vtgate", "vrepl_col")
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 		testRows(t)
+		testMigrationRowCount(t, uuid)
 		onlineddl.CheckCancelMigration(t, &vtParams, shards, uuid, false)
 		onlineddl.CheckRetryMigration(t, &vtParams, shards, uuid, false)
 	})
@@ -258,6 +259,7 @@ func TestSchemaChange(t *testing.T) {
 		uuid := testOnlineDDLStatement(t, alterTableTrivialStatement, "online", "vtctl", "vrepl_col")
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 		testRows(t)
+		testMigrationRowCount(t, uuid)
 		onlineddl.CheckCancelMigration(t, &vtParams, shards, uuid, false)
 		onlineddl.CheckRetryMigration(t, &vtParams, shards, uuid, false)
 	})
@@ -370,6 +372,21 @@ func testRows(t *testing.T) {
 	row := r.Named().Row()
 	require.NotNil(t, row)
 	require.Equal(t, countInserts, row.AsInt64("c", 0))
+}
+
+func testMigrationRowCount(t *testing.T, uuid string) {
+	insertMutex.Lock()
+	defer insertMutex.Unlock()
+
+	var totalRowsCopied uint64
+	// count sum of rows copied in all shards, that should be the total number of rows inserted to the table
+	rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
+	require.NotNil(t, rs)
+	for _, row := range rs.Named().Rows {
+		rowsCopied := row.AsUint64("rows_copied", 0)
+		totalRowsCopied += rowsCopied
+	}
+	require.Equal(t, uint64(countInserts), totalRowsCopied)
 }
 
 func testWithInitialSchema(t *testing.T) {

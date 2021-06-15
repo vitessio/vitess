@@ -109,3 +109,58 @@ func TestLegacyParseRevertUUID(t *testing.T) {
 		assert.Error(t, err)
 	}
 }
+
+func TestParseEnumValues(t *testing.T) {
+	{
+		inputs := []string{
+			`enum('x-small','small','medium','large','x-large')`,
+			`ENUM('x-small','small','medium','large','x-large')`,
+			`'x-small','small','medium','large','x-large'`,
+		}
+		for _, input := range inputs {
+			enumValues := ParseEnumValues(input)
+			assert.Equal(t, `'x-small','small','medium','large','x-large'`, enumValues)
+		}
+	}
+	{
+		inputs := []string{
+			``,
+			`abc`,
+			`func('x-small','small','medium','large','x-large')`,
+		}
+		for _, input := range inputs {
+			enumValues := ParseEnumValues(input)
+			assert.Equal(t, input, enumValues)
+		}
+	}
+}
+
+func TestParseEnumTokens(t *testing.T) {
+	inputs := []string{
+		`enum('x-small','small','medium','large','x-large')`,
+		`'x-small','small','medium','large','x-large'`,
+	}
+	for _, input := range inputs {
+		enumTokens := ParseEnumTokens(input)
+		expect := []string{"x-small", "small", "medium", "large", "x-large"}
+		assert.Equal(t, expect, enumTokens)
+	}
+}
+
+func TestParseEnumTokensMap(t *testing.T) {
+	inputs := []string{
+		`enum('x-small','small','medium','large','x-large')`,
+		`'x-small','small','medium','large','x-large'`,
+	}
+	for _, input := range inputs {
+		enumTokensMap := ParseEnumTokensMap(input)
+		expect := map[string]string{
+			"1": "x-small",
+			"2": "small",
+			"3": "medium",
+			"4": "large",
+			"5": "x-large",
+		}
+		assert.Equal(t, expect, enumTokensMap)
+	}
+}

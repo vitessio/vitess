@@ -35,6 +35,7 @@ import (
 	"vitess.io/vitess/go/vt/dbconnpool"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/onlineddl/vrepl"
@@ -51,6 +52,7 @@ type VReplStream struct {
 	transactionTimestamp int64
 	state                string
 	message              string
+	rowsCopied           int64
 	bls                  *binlogdatapb.BinlogSource
 }
 
@@ -64,6 +66,7 @@ type VRepl struct {
 	targetTable  string
 	pos          string
 	alterOptions string
+	tableRows    int64
 
 	sharedPKColumns *vrepl.ColumnList
 
@@ -72,8 +75,9 @@ type VRepl struct {
 	sharedColumnsMap    map[string]string
 	sourceAutoIncrement uint64
 
-	filterQuery string
-	bls         *binlogdatapb.BinlogSource
+	filterQuery   string
+	enumToTextMap map[string]string
+	bls           *binlogdatapb.BinlogSource
 
 	parser *vrepl.AlterTableParser
 }
@@ -81,14 +85,15 @@ type VRepl struct {
 // NewVRepl creates a VReplication handler for Online DDL
 func NewVRepl(workflow, keyspace, shard, dbName, sourceTable, targetTable, alterOptions string) *VRepl {
 	return &VRepl{
-		workflow:     workflow,
-		keyspace:     keyspace,
-		shard:        shard,
-		dbName:       dbName,
-		sourceTable:  sourceTable,
-		targetTable:  targetTable,
-		alterOptions: alterOptions,
-		parser:       vrepl.NewAlterTableParser(),
+		workflow:      workflow,
+		keyspace:      keyspace,
+		shard:         shard,
+		dbName:        dbName,
+		sourceTable:   sourceTable,
+		targetTable:   targetTable,
+		alterOptions:  alterOptions,
+		parser:        vrepl.NewAlterTableParser(),
+		enumToTextMap: map[string]string{},
 	}
 }
 
@@ -158,7 +163,7 @@ func (v *VRepl) readTableColumns(ctx context.Context, conn *dbconnpool.DBConnect
 		columnNames = append(columnNames, columnName)
 
 		extra := row.AsString("Extra", "")
-		if strings.Contains(extra, "VIRTUAL") {
+		if strings.Contains(extra, "VIRTUAL") || strings.Contains(extra, "GENERATED") {
 			virtualColumnNames = append(virtualColumnNames, columnName)
 		}
 
@@ -171,6 +176,21 @@ func (v *VRepl) readTableColumns(ctx context.Context, conn *dbconnpool.DBConnect
 		return nil, nil, nil, fmt.Errorf("Found 0 columns on `%s`", tableName)
 	}
 	return vrepl.NewColumnList(columnNames), vrepl.NewColumnList(virtualColumnNames), vrepl.NewColumnList(pkColumnNames), nil
+}
+
+// readTableStatus reads table status information
+func (v *VRepl) readTableStatus(ctx context.Context, conn *dbconnpool.DBConnection, tableName string) (tableRows int64, err error) {
+	parsed := sqlparser.BuildParsedQuery(sqlShowTableStatus, tableName)
+	rs, err := conn.ExecuteFetch(parsed.Query, math.MaxInt64, true)
+	if err != nil {
+		return 0, err
+	}
+	row := rs.Named().Row()
+	if row == nil {
+		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Cannot SHOW TABLE STATUS LIKE '%s'", tableName)
+	}
+	tableRows, err = row.ToInt64("Rows")
+	return tableRows, err
 }
 
 // applyColumnTypes
@@ -217,7 +237,7 @@ func (v *VRepl) applyColumnTypes(ctx context.Context, conn *dbconnpool.DBConnect
 			}
 			if strings.HasPrefix(columnType, "enum") {
 				column.Type = vrepl.EnumColumnType
-				column.EnumValues = vrepl.ParseEnumValues(columnType)
+				column.EnumValues = schema.ParseEnumValues(columnType)
 			}
 			if strings.HasPrefix(columnType, "binary") {
 				column.Type = vrepl.BinaryColumnType
@@ -332,7 +352,11 @@ func (v *VRepl) analyzeAlter(ctx context.Context) error {
 	return nil
 }
 
-func (v *VRepl) analyzeTables(ctx context.Context, conn *dbconnpool.DBConnection) error {
+func (v *VRepl) analyzeTables(ctx context.Context, conn *dbconnpool.DBConnection) (err error) {
+	v.tableRows, err = v.readTableStatus(ctx, conn, v.sourceTable)
+	if err != nil {
+		return err
+	}
 	// columns:
 	sourceColumns, sourceVirtualColumns, sourcePKColumns, err := v.readTableColumns(ctx, conn, v.sourceTable)
 	if err != nil {
@@ -358,6 +382,17 @@ func (v *VRepl) analyzeTables(ctx context.Context, conn *dbconnpool.DBConnection
 		return err
 	}
 
+	for i := range v.sourceSharedColumns.Columns() {
+		sourceColumn := v.sourceSharedColumns.Columns()[i]
+		mappedColumn := v.targetSharedColumns.Columns()[i]
+		if sourceColumn.Type == vrepl.EnumColumnType && mappedColumn.Type != vrepl.EnumColumnType && mappedColumn.Charset != "" {
+			// A column is converted from ENUM type to textual type
+			v.targetSharedColumns.SetEnumToTextConversion(mappedColumn.Name, sourceColumn.EnumValues)
+
+			v.enumToTextMap[sourceColumn.Name] = sourceColumn.EnumValues
+		}
+	}
+
 	v.sourceAutoIncrement, err = v.readAutoIncrement(ctx, conn, v.sourceTable)
 	if err != nil {
 		return err
@@ -374,18 +409,18 @@ func (v *VRepl) generateFilterQuery(ctx context.Context) error {
 	}
 	var sb strings.Builder
 	sb.WriteString("select ")
-	for i, col := range v.sourceSharedColumns.Columns() {
-		name := col.Name
+	for i, sourceCol := range v.sourceSharedColumns.Columns() {
+		name := sourceCol.Name
 		targetName := v.sharedColumnsMap[name]
 
 		if i > 0 {
 			sb.WriteString(", ")
 		}
-		switch col.Type {
-		case vrepl.JSONColumnType:
-			sb.WriteString("convert(")
-			sb.WriteString(escapeName(name))
-			sb.WriteString(" using utf8mb4)")
+		switch {
+		case sourceCol.Type == vrepl.JSONColumnType:
+			sb.WriteString(fmt.Sprintf("convert(%s using utf8mb4)", escapeName(name)))
+		case sourceCol.EnumToTextConversion:
+			sb.WriteString(fmt.Sprintf("CONCAT(%s)", escapeName(name)))
 		default:
 			sb.WriteString(escapeName(name))
 		}
@@ -410,6 +445,10 @@ func (v *VRepl) analyzeBinlogSource(ctx context.Context) {
 		Match:  v.targetTable,
 		Filter: v.filterQuery,
 	}
+	if len(v.enumToTextMap) > 0 {
+		rule.ConvertEnumToText = v.enumToTextMap
+	}
+
 	bls.Filter.Rules = append(bls.Filter.Rules, rule)
 	v.bls = bls
 }
