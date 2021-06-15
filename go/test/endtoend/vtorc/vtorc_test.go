@@ -152,9 +152,6 @@ func createVttablets() error {
 // removeVttabletsFromTopology removes all the vttablets from the topology
 func removeVttabletsFromTopology() error {
 	for _, vttablet := range clusterInstance.Keyspaces[0].Shards[0].Vttablets {
-		out, _ := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("GetTablet", vttablet.Alias)
-		log.Error("removeVttabletsFromTopology: ", out)
-
 		err := clusterInstance.VtctlclientProcess.ExecuteCommand("DeleteTablet", "-allow_master", vttablet.Alias)
 		if err != nil {
 			return err
@@ -234,6 +231,7 @@ func cleanAndAddVttablet(t *testing.T, vttablet *cluster.Vttablet) error {
 		"-port", fmt.Sprintf("%d", vttablet.VttabletProcess.Port),
 		"-grpc_port", fmt.Sprintf("%d", vttablet.VttabletProcess.GrpcPort),
 		"-hostname", vttablet.VttabletProcess.TabletHostname,
+		"-mysql_host", vttablet.VttabletProcess.TabletHostname,
 		"-mysql_port", fmt.Sprintf("%d", vttablet.MysqlctlProcess.MySQLPort),
 		"-keyspace", vttablet.VttabletProcess.Keyspace,
 		"-shard", vttablet.VttabletProcess.Shard,
@@ -242,9 +240,6 @@ func cleanAndAddVttablet(t *testing.T, vttablet *cluster.Vttablet) error {
 	if err != nil {
 		return err
 	}
-
-	out, _ := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("GetTablet", vttablet.Alias)
-	log.Error("cleanAndAddVttablet: ", out)
 
 	clusterInstance.Keyspaces[0].Shards[0].Vttablets = append(clusterInstance.Keyspaces[0].Shards[0].Vttablets, vttablet)
 	return nil
