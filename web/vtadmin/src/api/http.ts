@@ -18,6 +18,7 @@ import { vtadmin as pb } from '../proto/vtadmin';
 import * as errorHandler from '../errors/errorHandler';
 import { HttpFetchError, HttpResponseNotOkError, MalformedHttpResponseError } from '../errors/errorTypes';
 import { HttpOkResponse } from './responseTypes';
+import { TabletDebugVars } from '../util/tabletDebugVars';
 
 /**
  * vtfetch makes HTTP requests against the given vtadmin-api endpoint
@@ -188,13 +189,22 @@ export const fetchTablet = async ({ clusterID, alias }: FetchTabletParams) => {
     return pb.Tablet.create(result);
 };
 
-export const fetchExperimentalTabletDebugVars = async ({ clusterID, alias }: FetchTabletParams) => {
+export interface TabletDebugVarsResponse {
+    params: FetchTabletParams;
+    data?: TabletDebugVars;
+}
+
+export const fetchExperimentalTabletDebugVars = async (params: FetchTabletParams): Promise<TabletDebugVarsResponse> => {
     if (!process.env.REACT_APP_ENABLE_EXPERIMENTAL_TABLET_DEBUG_VARS) {
-        return Promise.resolve({});
+        return Promise.resolve({ params });
     }
 
+    const { clusterID, alias } = params;
     const { result } = await vtfetch(`/api/experimental/tablet/${alias}/debug/vars?cluster=${clusterID}`);
-    return result;
+
+    // /debug/vars doesn't contain cluster/tablet information, so we
+    // return that as part of the response.
+    return { params, data: result };
 };
 
 export const fetchTablets = async () =>
