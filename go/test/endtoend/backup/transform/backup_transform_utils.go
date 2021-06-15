@@ -250,7 +250,7 @@ func TestBackupTransformImpl(t *testing.T) {
 	replica2.VttabletProcess.ServingStatus = ""
 	err = replica2.VttabletProcess.Setup()
 	require.Nil(t, err)
-	err = replica2.VttabletProcess.WaitForTabletTypesForTimeout([]string{"SERVING"}, 25*time.Second)
+	err = replica2.VttabletProcess.WaitForTabletStatusesForTimeout([]string{"SERVING"}, 25*time.Second)
 	require.Nil(t, err)
 	defer replica2.VttabletProcess.TearDown()
 

@@ -205,7 +205,7 @@ func TestHealthCheckDrainedStateDoesNotShutdownQueryService(t *testing.T) {
 
 	//Wait if tablet is not in service state
 	defer cluster.PanicHandler(t)
-	err := rdonlyTablet.VttabletProcess.WaitForTabletType("SERVING")
+	err := rdonlyTablet.VttabletProcess.WaitForTabletStatus("SERVING")
 	require.NoError(t, err)
 
 	// Check tablet health
@@ -231,7 +231,7 @@ func TestHealthCheckDrainedStateDoesNotShutdownQueryService(t *testing.T) {
 	checkTabletType(t, rdonlyTablet.Alias, "DRAINED")
 
 	// Query service is still running.
-	err = rdonlyTablet.VttabletProcess.WaitForTabletType("SERVING")
+	err = rdonlyTablet.VttabletProcess.WaitForTabletStatus("SERVING")
 	require.NoError(t, err)
 
 	// Restart replication. Tablet will become healthy again.

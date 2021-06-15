@@ -509,7 +509,7 @@ func runShardTablets(t *testing.T, shardName string, tabletArr []*cluster.Vttabl
 	// set a replica or rdonly tablet back to NOT_SERVING.
 
 	for _, tablet := range tabletArr {
-		err = tablet.VttabletProcess.WaitForTabletType("SERVING")
+		err = tablet.VttabletProcess.WaitForTabletStatus("SERVING")
 		require.Nil(t, err)
 	}
 

@@ -522,7 +522,7 @@ func tlsLaunchRecoveryTablet(t *testing.T, tablet *cluster.Vttablet, tabletForBi
 	err = tablet.VttabletProcess.Setup()
 	require.NoError(t, err)
 
-	tablet.VttabletProcess.WaitForTabletTypesForTimeout([]string{"SERVING"}, 20*time.Second)
+	tablet.VttabletProcess.WaitForTabletStatusesForTimeout([]string{"SERVING"}, 20*time.Second)
 }
 
 func getCNFromCertPEM(filename string) string {

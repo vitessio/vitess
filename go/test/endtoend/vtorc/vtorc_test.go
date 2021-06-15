@@ -131,11 +131,21 @@ func createVttablets() error {
 		}
 	}
 	for _, tablet := range shard0.Vttablets {
-		err := tablet.VttabletProcess.WaitForTabletTypes([]string{"SERVING", "NOT_SERVING"})
+		err := tablet.VttabletProcess.WaitForTabletStatuses([]string{"SERVING", "NOT_SERVING"})
 		if err != nil {
 			return err
 		}
 	}
+
+	// we also need to wait for the tablet type to change from restore to replica, before we delete a tablet from the topology
+	// otherwise it will notice that their is no record for the tablet in the topology when it tries to update its state and shutdown itself!
+	for _, tablet := range shard0.Vttablets {
+		err := tablet.VttabletProcess.WaitForTabletTypes([]string{"replica", "rdonly"})
+		if err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -205,7 +215,7 @@ func setupVttabletsAndVtorc(t *testing.T, numReplicasReq int, numRdonlyReq int, 
 	}
 
 	for _, tablet := range clusterInstance.Keyspaces[0].Shards[0].Vttablets {
-		err = tablet.VttabletProcess.WaitForTabletTypes([]string{"SERVING", "NOT_SERVING"})
+		err = tablet.VttabletProcess.WaitForTabletStatuses([]string{"SERVING", "NOT_SERVING"})
 		require.NoError(t, err)
 	}
 
