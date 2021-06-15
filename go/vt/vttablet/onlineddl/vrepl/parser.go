@@ -19,7 +19,6 @@ var (
 	dropColumnRegexp     = regexp.MustCompile(`(?i)\bdrop\s+(column\s+|)([\S]+)$`)
 	renameTableRegexp    = regexp.MustCompile(`(?i)\brename\s+(to|as)\s+`)
 	autoIncrementRegexp  = regexp.MustCompile(`(?i)\bauto_increment[\s]*[=]?[\s]*([0-9]+)`)
-	enumValuesRegexp     = regexp.MustCompile("^enum[(](.*)[)]$")
 )
 
 // AlterTableParser is a parser tool for ALTER TABLE statements
@@ -198,12 +197,4 @@ func (p *AlterTableParser) GetAlterStatementOptions() string {
 // ColumnRenameMap returns the renamed column mapping
 func (p *AlterTableParser) ColumnRenameMap() map[string]string {
 	return p.columnRenameMap
-}
-
-// ParseEnumValues parses the comma delimited part of an enum column definition
-func ParseEnumValues(enumColumnType string) string {
-	if submatch := enumValuesRegexp.FindStringSubmatch(enumColumnType); len(submatch) > 0 {
-		return submatch[1]
-	}
-	return enumColumnType
 }
