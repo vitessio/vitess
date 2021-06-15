@@ -94,6 +94,7 @@ func loadMergedPRs(from, to string) (prs []string, authors []string, commitCount
 func parseGitLog(s string) (prs []string, authorCommits []string, commitCount int, err error) {
 	rx := regexp.MustCompile(`(.+)\t(.+)\t(.+)\t(.+)`)
 	mergePR := regexp.MustCompile(`Merge pull request #(\d+)`)
+	squashPR := regexp.MustCompile(`\(#(\d+)\)`)
 	authMap := map[string]string{} // here we will store email <-> gh user mappings
 	lines := strings.Split(s, "\n")
 	for _, line := range lines {
@@ -112,13 +113,19 @@ func parseGitLog(s string) (prs []string, authorCommits []string, commitCount in
 			continue
 		}
 
-		if len(parents) > lengthOfSingleSHA {
-			// if we have two parents, it means this is a merge commit. we only count non-merge commits
-			continue
+		if len(parents) <= lengthOfSingleSHA {
+			// we have a single parent, and the commit counts
+			commitCount++
+			if _, exists := authMap[authorEmail]; !exists {
+				authMap[authorEmail] = sha
+			}
 		}
-		commitCount++
-		if _, exists := authMap[authorEmail]; !exists {
-			authMap[authorEmail] = sha
+
+		squashed := squashPR.FindStringSubmatch(title)
+		if len(squashed) == 2 {
+			// this is a merged PR. remember the PR #
+			prs = append(prs, squashed[1])
+			continue
 		}
 	}
 
