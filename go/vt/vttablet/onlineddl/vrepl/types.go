@@ -60,6 +60,13 @@ type Column struct {
 	BinaryOctetLength uint64
 }
 
+// SetTypeIfUnknown will set a new column type only if the current type is unknown, otherwise silently skip
+func (c *Column) SetTypeIfUnknown(t ColumnType) {
+	if c.Type == UnknownColumnType {
+		c.Type = t
+	}
+}
+
 // NewColumns creates a new column array from non empty names
 func NewColumns(names []string) []Column {
 	result := []Column{}
