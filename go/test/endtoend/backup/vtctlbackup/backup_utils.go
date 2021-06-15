@@ -252,7 +252,7 @@ func TestBackup(t *testing.T, setupType int, streamMode string, stripes int) {
 
 	for _, test := range testMethods {
 		t.Run(test.name, test.method)
-		_, err = master.VttabletProcess.QueryTablet("DROP TABLE vt_insert_test", keyspaceName, true)
+		_, err = master.VttabletProcess.QueryTablet("DROP TABLE if exists vt_insert_test", keyspaceName, true)
 		require.Nil(t, err)
 	}
 
@@ -306,7 +306,7 @@ func masterBackup(t *testing.T) {
 	err = replica2.VttabletProcess.TearDown()
 	require.Nil(t, err)
 
-	_, err = master.VttabletProcess.QueryTablet("DROP TABLE vt_insert_test", keyspaceName, true)
+	_, err = master.VttabletProcess.QueryTablet("DROP TABLE if exists vt_insert_test", keyspaceName, true)
 	require.Nil(t, err)
 }
 
@@ -570,9 +570,8 @@ func vtctlBackup(t *testing.T, tabletType string) {
 
 	err = localCluster.VtctlclientProcess.ExecuteCommand("DeleteTablet", replica2.Alias)
 	require.Nil(t, err)
-	_, err = master.VttabletProcess.QueryTablet("DROP TABLE vt_insert_test", keyspaceName, true)
+	_, err = master.VttabletProcess.QueryTablet("DROP TABLE if exists vt_insert_test", keyspaceName, true)
 	require.Nil(t, err)
-
 }
 
 // This will create schema in master, insert some data to master and verify the same data in replica
