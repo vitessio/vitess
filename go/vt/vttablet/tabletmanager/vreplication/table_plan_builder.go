@@ -22,13 +22,12 @@ import (
 	"sort"
 	"strings"
 
-	"vitess.io/vitess/go/vt/binlog/binlogplayer"
-
-	querypb "vitess.io/vitess/go/vt/proto/query"
-
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/key"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
@@ -144,7 +143,7 @@ func buildReplicatorPlan(filter *binlogdatapb.Filter, colInfoMap map[string][]*C
 		if rule == nil {
 			continue
 		}
-		tablePlan, err := buildTablePlan(tableName, rule.Filter, colInfoMap, lastpk, rule.ConvertCharset, stats)
+		tablePlan, err := buildTablePlan(tableName, rule, colInfoMap, lastpk, stats)
 		if err != nil {
 			return nil, err
 		}
@@ -183,7 +182,8 @@ func MatchTable(tableName string, filter *binlogdatapb.Filter) (*binlogdatapb.Ru
 	return nil, nil
 }
 
-func buildTablePlan(tableName, filter string, colInfoMap map[string][]*ColumnInfo, lastpk *sqltypes.Result, convertCharset map[string](*binlogdatapb.CharsetConversion), stats *binlogplayer.Stats) (*TablePlan, error) {
+func buildTablePlan(tableName string, rule *binlogdatapb.Rule, colInfoMap map[string][]*ColumnInfo, lastpk *sqltypes.Result, stats *binlogplayer.Stats) (*TablePlan, error) {
+	filter := rule.Filter
 	query := filter
 	// generate equivalent select statement if filter is empty or a keyrange.
 	switch {
@@ -206,6 +206,12 @@ func buildTablePlan(tableName, filter string, colInfoMap map[string][]*ColumnInf
 		Match: fromTable,
 	}
 
+	enumValuesMap := map[string](map[string]string){}
+	for k, v := range rule.ConvertEnumToText {
+		tokensMap := schema.ParseEnumTokensMap(v)
+		enumValuesMap[k] = tokensMap
+	}
+
 	if expr, ok := sel.SelectExprs[0].(*sqlparser.StarExpr); ok {
 		// If it's a "select *", we return a partial plan, and complete
 		// it when we get back field info from the stream.
@@ -221,8 +227,10 @@ func buildTablePlan(tableName, filter string, colInfoMap map[string][]*ColumnInf
 			SendRule:       sendRule,
 			Lastpk:         lastpk,
 			Stats:          stats,
-			ConvertCharset: convertCharset,
+			EnumValuesMap:  enumValuesMap,
+			ConvertCharset: rule.ConvertCharset,
 		}
+
 		return tablePlan, nil
 	}
 
@@ -273,7 +281,8 @@ func buildTablePlan(tableName, filter string, colInfoMap map[string][]*ColumnInf
 
 	tablePlan := tpb.generate()
 	tablePlan.SendRule = sendRule
-	tablePlan.ConvertCharset = convertCharset
+	tablePlan.EnumValuesMap = enumValuesMap
+	tablePlan.ConvertCharset = rule.ConvertCharset
 	return tablePlan, nil
 }
 

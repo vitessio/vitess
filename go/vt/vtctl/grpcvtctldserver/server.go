@@ -654,6 +654,9 @@ func (s *VtctldServer) GetBackups(ctx context.Context, req *vtctldatapb.GetBacku
 
 	span.Annotate("keyspace", req.Keyspace)
 	span.Annotate("shard", req.Shard)
+	span.Annotate("limit", req.Limit)
+	span.Annotate("detailed", req.Detailed)
+	span.Annotate("detailed_limit", req.DetailedLimit)
 
 	bs, err := backupstorage.GetBackupStorage()
 	if err != nil {
@@ -669,15 +672,42 @@ func (s *VtctldServer) GetBackups(ctx context.Context, req *vtctldatapb.GetBacku
 		return nil, err
 	}
 
-	resp := &vtctldatapb.GetBackupsResponse{
-		Backups: make([]*mysqlctlpb.BackupInfo, len(bhs)),
+	totalBackups := len(bhs)
+	if req.Limit > 0 {
+		totalBackups = int(req.Limit)
 	}
+
+	totalDetailedBackups := len(bhs)
+	if req.DetailedLimit > 0 {
+		totalDetailedBackups = int(req.DetailedLimit)
+	}
+
+	backups := make([]*mysqlctlpb.BackupInfo, 0, totalBackups)
+	backupsToSkip := len(bhs) - totalBackups
+	backupsToSkipDetails := totalBackups - totalDetailedBackups
 
 	for i, bh := range bhs {
-		resp.Backups[i] = mysqlctlproto.BackupHandleToProto(bh)
+		if i < backupsToSkip {
+			continue
+		}
+
+		bi := mysqlctlproto.BackupHandleToProto(bh)
+		bi.Keyspace = req.Keyspace
+		bi.Shard = req.Shard
+
+		if req.Detailed {
+			if i >= backupsToSkipDetails { // nolint:staticcheck
+				// (TODO:@ajm188) Update backupengine/backupstorage implementations
+				// to get Status info for backups.
+			}
+		}
+
+		backups = append(backups, bi)
 	}
 
-	return resp, nil
+	return &vtctldatapb.GetBackupsResponse{
+		Backups: backups,
+	}, nil
 }
 
 // GetCellInfoNames is part of the vtctlservicepb.VtctldServer interface.
@@ -1519,6 +1549,64 @@ func (s *VtctldServer) RebuildVSchemaGraph(ctx context.Context, req *vtctldatapb
 	}
 
 	return &vtctldatapb.RebuildVSchemaGraphResponse{}, nil
+}
+
+// RefreshState is part of the vtctldservicepb.VtctldServer interface.
+func (s *VtctldServer) RefreshState(ctx context.Context, req *vtctldatapb.RefreshStateRequest) (*vtctldatapb.RefreshStateResponse, error) {
+	if req.TabletAlias == nil {
+		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "RefreshState requires a tablet alias")
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+	defer cancel()
+
+	tablet, err := s.ts.GetTablet(ctx, req.TabletAlias)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to get tablet %s: %w", topoproto.TabletAliasString(req.TabletAlias), err)
+	}
+
+	if err := s.tmc.RefreshState(ctx, tablet.Tablet); err != nil {
+		return nil, err
+	}
+
+	return &vtctldatapb.RefreshStateResponse{}, nil
+}
+
+// RefreshStateByShard is part of the vtctldservicepb.VtctldServer interface.
+func (s *VtctldServer) RefreshStateByShard(ctx context.Context, req *vtctldatapb.RefreshStateByShardRequest) (*vtctldatapb.RefreshStateByShardResponse, error) {
+	if req.Keyspace == "" {
+		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "RefreshStateByShard requires a keyspace")
+	}
+
+	if req.Shard == "" {
+		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "RefreshStateByShard requires a shard")
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+	defer cancel()
+
+	si, err := s.ts.GetShard(ctx, req.Keyspace, req.Shard)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to get shard %s/%s/: %w", req.Keyspace, req.Shard, err)
+	}
+
+	isPartial, err := topotools.RefreshTabletsByShard(ctx, s.ts, s.tmc, si, req.Cells, logutil.NewCallbackLogger(func(e *logutilpb.Event) {
+		switch e.Level {
+		case logutilpb.Level_WARNING:
+			log.Warningf(e.Value)
+		case logutilpb.Level_ERROR:
+			log.Errorf(e.Value)
+		default:
+			log.Infof(e.Value)
+		}
+	}))
+	if err != nil {
+		return nil, err
+	}
+
+	return &vtctldatapb.RefreshStateByShardResponse{
+		IsPartialRefresh: isPartial,
+	}, nil
 }
 
 // RemoveKeyspaceCell is part of the vtctlservicepb.VtctldServer interface.

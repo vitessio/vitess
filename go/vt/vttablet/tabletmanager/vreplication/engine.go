@@ -93,6 +93,9 @@ var tabletTypesStr = flag.String("vreplication_tablet_type", "MASTER,REPLICA", "
 // stop replicating.
 var waitRetryTime = 1 * time.Second
 
+// How frequently vcopier will update _vt.vreplication rows_copied
+var rowsCopiedUpdateInterval = 30 * time.Second
+
 // Engine is the engine for handling vreplication.
 type Engine struct {
 	// mu synchronizes isOpen, cancelRetry, controllers and wg.

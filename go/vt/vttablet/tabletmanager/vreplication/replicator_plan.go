@@ -188,10 +188,11 @@ type TablePlan struct {
 	// If the plan is an insertIgnore type, then Insert
 	// and Update contain 'insert ignore' statements and
 	// Delete is nil.
-	Insert *sqlparser.ParsedQuery
-	Update *sqlparser.ParsedQuery
-	Delete *sqlparser.ParsedQuery
-	Fields []*querypb.Field
+	Insert        *sqlparser.ParsedQuery
+	Update        *sqlparser.ParsedQuery
+	Delete        *sqlparser.ParsedQuery
+	Fields        []*querypb.Field
+	EnumValuesMap map[string](map[string]string)
 	// PKReferences is used to check if an event changed
 	// a primary key column (row move).
 	PKReferences   []string
@@ -312,6 +313,18 @@ func (tp *TablePlan) bindFieldVal(field *querypb.Field, val *sqltypes.Value) (*q
 			}
 		}
 		return sqltypes.StringBindVariable(valString), nil
+	}
+	if enumValues, ok := tp.EnumValuesMap[field.Name]; ok && !val.IsNull() {
+		// The fact that this fielkd has a EnumValuesMap entry, means we must
+		// use the enum's text value as opposed to the enum's numerical value.
+		// Once known use case is with Online DDL, when a column is converted from
+		// ENUM to a VARCHAR/TEXT.
+		enumValue, enumValueOK := enumValues[val.ToString()]
+		if !enumValueOK {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Invalid enum value: %v for field %s", val, field.Name)
+		}
+		// get the enum text fir this val
+		return sqltypes.StringBindVariable(enumValue), nil
 	}
 	return sqltypes.ValueBindVariable(*val), nil
 }
