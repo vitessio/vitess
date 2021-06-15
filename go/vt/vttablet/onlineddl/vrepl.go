@@ -51,6 +51,7 @@ type VReplStream struct {
 	transactionTimestamp int64
 	state                string
 	message              string
+	rowsCopied           int64
 	bls                  *binlogdatapb.BinlogSource
 }
 
@@ -64,6 +65,7 @@ type VRepl struct {
 	targetTable  string
 	pos          string
 	alterOptions string
+	tableRows    int64
 
 	sharedPKColumns *vrepl.ColumnList
 
@@ -171,6 +173,21 @@ func (v *VRepl) readTableColumns(ctx context.Context, conn *dbconnpool.DBConnect
 		return nil, nil, nil, fmt.Errorf("Found 0 columns on `%s`", tableName)
 	}
 	return vrepl.NewColumnList(columnNames), vrepl.NewColumnList(virtualColumnNames), vrepl.NewColumnList(pkColumnNames), nil
+}
+
+// readTableStatus reads table status information
+func (v *VRepl) readTableStatus(ctx context.Context, conn *dbconnpool.DBConnection, tableName string) (tableRows int64, err error) {
+	parsed := sqlparser.BuildParsedQuery(sqlShowTableStatus, tableName)
+	rs, err := conn.ExecuteFetch(parsed.Query, math.MaxInt64, true)
+	if err != nil {
+		return 0, err
+	}
+	row := rs.Named().Row()
+	if row == nil {
+		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Cannot SHOW TABLE STATUS LIKE '%s'", tableName)
+	}
+	tableRows, err = row.ToInt64("Rows")
+	return tableRows, err
 }
 
 // applyColumnTypes
@@ -332,7 +349,11 @@ func (v *VRepl) analyzeAlter(ctx context.Context) error {
 	return nil
 }
 
-func (v *VRepl) analyzeTables(ctx context.Context, conn *dbconnpool.DBConnection) error {
+func (v *VRepl) analyzeTables(ctx context.Context, conn *dbconnpool.DBConnection) (err error) {
+	v.tableRows, err = v.readTableStatus(ctx, conn, v.sourceTable)
+	if err != nil {
+		return err
+	}
 	// columns:
 	sourceColumns, sourceVirtualColumns, sourcePKColumns, err := v.readTableColumns(ctx, conn, v.sourceTable)
 	if err != nil {

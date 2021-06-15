@@ -57,6 +57,7 @@ const (
 	alterSchemaMigrationsTableTableCompleteIndex = "ALTER TABLE _vt.schema_migrations add KEY table_complete_idx (migration_status, keyspace(64), mysql_table(64), completed_timestamp)"
 	alterSchemaMigrationsTableETASeconds         = "ALTER TABLE _vt.schema_migrations add column eta_seconds bigint NOT NULL DEFAULT -1"
 	alterSchemaMigrationsTableRowsCopied         = "ALTER TABLE _vt.schema_migrations add column rows_copied bigint unsigned NOT NULL DEFAULT 0"
+	alterSchemaMigrationsTableTableRows          = "ALTER TABLE _vt.schema_migrations add column table_rows bigint NOT NULL DEFAULT 0"
 
 	sqlInsertMigration = `INSERT IGNORE INTO _vt.schema_migrations (
 		migration_uuid,
@@ -148,6 +149,32 @@ const (
 	`
 	sqlUpdateMessage = `UPDATE _vt.schema_migrations
 			SET message=%a
+		WHERE
+			migration_uuid=%a
+	`
+	sqlUpdateMigrationTableRows = `UPDATE _vt.schema_migrations
+			SET table_rows=%a
+		WHERE
+			migration_uuid=%a
+	`
+	sqlUpdateMigrationProgressByRowsCopied = `UPDATE _vt.schema_migrations
+			SET
+				progress=CASE
+					WHEN table_rows=0 THEN 100
+					ELSE LEAST(100, 100*%a/table_rows)
+				END
+		WHERE
+			migration_uuid=%a
+	`
+	sqlUpdateMigrationETASecondsByProgress = `UPDATE _vt.schema_migrations
+			SET
+				eta_seconds=CASE
+					WHEN progress=0 THEN -1
+					WHEN table_rows=0 THEN 0
+					ELSE GREATEST(0,
+						TIMESTAMPDIFF(SECOND, started_timestamp, NOW())*((100/progress)-1)
+					)
+				END
 		WHERE
 			migration_uuid=%a
 	`
@@ -330,6 +357,7 @@ const (
 	sqlDropTable         = "DROP TABLE `%a`"
 	sqlAlterTableOptions = "ALTER TABLE `%a` %s"
 	sqlShowColumnsFrom   = "SHOW COLUMNS FROM `%a`"
+	sqlShowTableStatus   = "SHOW TABLE STATUS LIKE '%a'"
 	sqlGetAutoIncrement  = `
 		SELECT
 			AUTO_INCREMENT
@@ -351,7 +379,8 @@ const (
 			time_updated,
 			transaction_timestamp,
 			state,
-			message
+			message,
+			rows_copied
 		FROM _vt.vreplication
 		WHERE
 			workflow=%a
@@ -402,4 +431,5 @@ var applyDDL = []string{
 	alterSchemaMigrationsTableTableCompleteIndex,
 	alterSchemaMigrationsTableETASeconds,
 	alterSchemaMigrationsTableRowsCopied,
+	alterSchemaMigrationsTableTableRows,
 }

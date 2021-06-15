@@ -653,6 +653,11 @@ func GenerateUpdatePos(uid uint32, pos mysql.Position, timeUpdated int64, txTime
 		"update _vt.vreplication set pos=%v, time_updated=%v, rows_copied=%v, message='' where id=%v", strGTID, timeUpdated, rowsCopied, uid)
 }
 
+// GenerateUpdateRowsCopied returns a statement to update the rows_copied value in the _vt.vreplication table.
+func GenerateUpdateRowsCopied(uid uint32, rowsCopied int64) string {
+	return fmt.Sprintf("update _vt.vreplication set rows_copied=%v where id=%v", rowsCopied, uid)
+}
+
 // GenerateUpdateTime returns a statement to update time_updated in the _vt.vreplication table.
 func GenerateUpdateTime(uid uint32, timeUpdated int64) (string, error) {
 	if timeUpdated == 0 {
