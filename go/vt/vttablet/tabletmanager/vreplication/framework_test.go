@@ -529,7 +529,7 @@ func expectDBClientQueries(t *testing.T, queries []string, skippableOnce ...stri
 						}
 					}
 				}
-				t.Errorf("query:\n%q, does not match query %d:\n%q", got, i, query)
+				t.Errorf("query:\n%q, does not match expected query %d:\n%q", got, i, query)
 			}
 		case <-time.After(5 * time.Second):
 			t.Errorf("no query received, expecting %s", query)
