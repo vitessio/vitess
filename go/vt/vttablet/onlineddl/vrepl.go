@@ -30,6 +30,7 @@ import (
 	"strconv"
 	"strings"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/dbconnpool"
@@ -80,20 +81,23 @@ type VRepl struct {
 	bls           *binlogdatapb.BinlogSource
 
 	parser *vrepl.AlterTableParser
+
+	convertCharset map[string](*binlogdatapb.CharsetConversion)
 }
 
 // NewVRepl creates a VReplication handler for Online DDL
 func NewVRepl(workflow, keyspace, shard, dbName, sourceTable, targetTable, alterOptions string) *VRepl {
 	return &VRepl{
-		workflow:      workflow,
-		keyspace:      keyspace,
-		shard:         shard,
-		dbName:        dbName,
-		sourceTable:   sourceTable,
-		targetTable:   targetTable,
-		alterOptions:  alterOptions,
-		parser:        vrepl.NewAlterTableParser(),
-		enumToTextMap: map[string]string{},
+		workflow:       workflow,
+		keyspace:       keyspace,
+		shard:          shard,
+		dbName:         dbName,
+		sourceTable:    sourceTable,
+		targetTable:    targetTable,
+		alterOptions:   alterOptions,
+		parser:         vrepl.NewAlterTableParser(),
+		enumToTextMap:  map[string]string{},
+		convertCharset: map[string](*binlogdatapb.CharsetConversion){},
 	}
 }
 
@@ -217,34 +221,39 @@ func (v *VRepl) applyColumnTypes(ctx context.Context, conn *dbconnpool.DBConnect
 				continue
 			}
 
+			column.Type = vrepl.UnknownColumnType
 			if strings.Contains(columnType, "unsigned") {
 				column.IsUnsigned = true
 			}
 			if strings.Contains(columnType, "mediumint") {
-				column.Type = vrepl.MediumIntColumnType
+				column.SetTypeIfUnknown(vrepl.MediumIntColumnType)
 			}
 			if strings.Contains(columnType, "timestamp") {
-				column.Type = vrepl.TimestampColumnType
+				column.SetTypeIfUnknown(vrepl.TimestampColumnType)
 			}
 			if strings.Contains(columnType, "datetime") {
-				column.Type = vrepl.DateTimeColumnType
+				column.SetTypeIfUnknown(vrepl.DateTimeColumnType)
 			}
 			if strings.Contains(columnType, "json") {
-				column.Type = vrepl.JSONColumnType
+				column.SetTypeIfUnknown(vrepl.JSONColumnType)
 			}
 			if strings.Contains(columnType, "float") {
-				column.Type = vrepl.FloatColumnType
+				column.SetTypeIfUnknown(vrepl.FloatColumnType)
 			}
 			if strings.HasPrefix(columnType, "enum") {
-				column.Type = vrepl.EnumColumnType
+				column.SetTypeIfUnknown(vrepl.EnumColumnType)
 				column.EnumValues = schema.ParseEnumValues(columnType)
 			}
 			if strings.HasPrefix(columnType, "binary") {
-				column.Type = vrepl.BinaryColumnType
+				column.SetTypeIfUnknown(vrepl.BinaryColumnType)
 				column.BinaryOctetLength = columnOctetLength
 			}
 			if charset := row.AsString("CHARACTER_SET_NAME", ""); charset != "" {
 				column.Charset = charset
+			}
+			if collation := row.AsString("COLLATION_NAME", ""); collation != "" {
+				column.SetTypeIfUnknown(vrepl.StringColumnType)
+				column.Collation = collation
 			}
 		}
 	}
@@ -417,10 +426,36 @@ func (v *VRepl) generateFilterQuery(ctx context.Context) error {
 			sb.WriteString(", ")
 		}
 		switch {
-		case sourceCol.Type == vrepl.JSONColumnType:
-			sb.WriteString(fmt.Sprintf("convert(%s using utf8mb4)", escapeName(name)))
 		case sourceCol.EnumToTextConversion:
 			sb.WriteString(fmt.Sprintf("CONCAT(%s)", escapeName(name)))
+		case sourceCol.Type == vrepl.JSONColumnType:
+			sb.WriteString(fmt.Sprintf("convert(%s using utf8mb4)", escapeName(name)))
+		case sourceCol.Type == vrepl.StringColumnType:
+			targetCol := v.targetSharedColumns.GetColumn(targetName)
+			if targetCol == nil {
+				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Cannot find target column %s", targetName)
+			}
+			{
+				// Check source and target charset/encoding. If needed, create
+				// a binlogdatapb.CharsetConversion entry (later written to vreplication)
+				fromEncoding, ok := mysql.CharacterSetEncoding[sourceCol.Charset]
+				if !ok {
+					return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Character set %s not supported for column %s", sourceCol.Charset, sourceCol.Name)
+				}
+				toEncoding, ok := mysql.CharacterSetEncoding[targetCol.Charset]
+				if !ok {
+					return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Character set %s not supported for column %s", targetCol.Charset, targetCol.Name)
+				}
+				if fromEncoding != nil || toEncoding != nil {
+					// encoding can be nil for trivial charsets, like utf8, ascii, binary, etc.
+					v.convertCharset[targetName] = &binlogdatapb.CharsetConversion{
+						FromCharset: sourceCol.Charset,
+						ToCharset:   targetCol.Charset,
+					}
+				}
+			}
+			// We will always read strings as utf8mb4.
+			sb.WriteString(fmt.Sprintf("convert(%s using utf8mb4)", escapeName(name)))
 		default:
 			sb.WriteString(escapeName(name))
 		}
@@ -444,6 +479,9 @@ func (v *VRepl) analyzeBinlogSource(ctx context.Context) {
 	rule := &binlogdatapb.Rule{
 		Match:  v.targetTable,
 		Filter: v.filterQuery,
+	}
+	if len(v.convertCharset) > 0 {
+		rule.ConvertCharset = v.convertCharset
 	}
 	if len(v.enumToTextMap) > 0 {
 		rule.ConvertEnumToText = v.enumToTextMap
