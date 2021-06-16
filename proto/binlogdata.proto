@@ -115,6 +115,14 @@ message StreamTablesResponse {
   BinlogTransaction binlog_transaction = 1;
 }
 
+// CharsetConversion represent a conversion of text from one charset to another
+message CharsetConversion {
+  // FromCharset is the charset name from which we convert the text (e.g. latin1)
+  string from_charset = 1;
+  // ToCharset is the charset name to which we convert the text (e.g. utf8mb4)
+  string to_charset = 2;
+}
+
 // Rule represents one rule in a Filter.
 message Rule {
   // Match can be a table name or a regular expression.
@@ -145,6 +153,12 @@ message Rule {
 
   // Example: key="color", value="'red','green','blue'"
   map<string, string> convert_enum_to_text = 3;
+
+  // ConvertCharset: optional mapping, between column name and a CharsetConversion.
+  // This hints to vreplication that columns are encoded from/to non-trivial charsets
+  // The map is only populated when either "from" or "to" charset of a column are non-trivial
+  // trivial charsets are utf8 and ascii variants.
+  map<string, CharsetConversion> convert_charset = 4;
 }
 
 // Filter represents a list of ordered rules. The first

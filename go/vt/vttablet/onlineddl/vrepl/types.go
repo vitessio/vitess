@@ -41,6 +41,8 @@ const (
 	JSONColumnType
 	FloatColumnType
 	BinaryColumnType
+	StringColumnType
+	IntegerColumnType
 )
 
 // Column represents a table column
@@ -48,6 +50,7 @@ type Column struct {
 	Name                 string
 	IsUnsigned           bool
 	Charset              string
+	Collation            string
 	Type                 ColumnType
 	EnumValues           string
 	EnumToTextConversion bool
@@ -55,6 +58,13 @@ type Column struct {
 	// add Octet length for binary type, fix bytes with suffix "00" get clipped in mysql binlog.
 	// https://github.com/github/gh-ost/issues/909
 	BinaryOctetLength uint64
+}
+
+// SetTypeIfUnknown will set a new column type only if the current type is unknown, otherwise silently skip
+func (c *Column) SetTypeIfUnknown(t ColumnType) {
+	if c.Type == UnknownColumnType {
+		c.Type = t
+	}
 }
 
 // NewColumns creates a new column array from non empty names
