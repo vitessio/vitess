@@ -154,7 +154,7 @@ func removeVttabletsFromTopology() error {
 	for _, vttablet := range clusterInstance.Keyspaces[0].Shards[0].Vttablets {
 		tabletType := vttablet.VttabletProcess.GetTabletType()
 		if tabletType == "master" {
-			err := clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", vttablet.Alias, vttablet.Type)
+			err := clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", "-force", vttablet.Alias, vttablet.Type)
 			if err != nil {
 				return err
 			}

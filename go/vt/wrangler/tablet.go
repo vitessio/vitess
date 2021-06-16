@@ -158,14 +158,14 @@ func (wr *Wrangler) DeleteTablet(ctx context.Context, tabletAlias *topodatapb.Ta
 //
 // Note we don't update the master record in the Shard here, as we
 // can't ChangeType from and out of master anyway.
-func (wr *Wrangler) ChangeTabletType(ctx context.Context, tabletAlias *topodatapb.TabletAlias, tabletType topodatapb.TabletType) error {
+func (wr *Wrangler) ChangeTabletType(ctx context.Context, tabletAlias *topodatapb.TabletAlias, tabletType topodatapb.TabletType, force bool) error {
 	// Load tablet to find endpoint, and keyspace and shard assignment.
 	ti, err := wr.ts.GetTablet(ctx, tabletAlias)
 	if err != nil {
 		return err
 	}
 
-	if !topo.IsTrivialTypeChange(ti.Type, tabletType) {
+	if !force && !topo.IsTrivialTypeChange(ti.Type, tabletType) {
 		return fmt.Errorf("tablet %v type change %v -> %v is not an allowed transition for ChangeTabletType", tabletAlias, ti.Type, tabletType)
 	}
 
