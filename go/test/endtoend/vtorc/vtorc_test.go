@@ -52,7 +52,7 @@ const (
 	shardName    = "0"
 	hostname     = "localhost"
 	cell1        = "zone1"
-	numReplicas  = 3
+	numReplicas  = 4
 	numRdonly    = 1
 )
 
@@ -330,6 +330,17 @@ func TestDownMaster(t *testing.T) {
 	// Make the current master database unavailable.
 	err := curMaster.MysqlctlProcess.Stop()
 	require.NoError(t, err)
+	defer func() {
+		// we remove the tablet from our global list since its mysqlctl process has stopped and cannot be reused for other tests
+		for i, tablet := range replicaTablets {
+			if tablet == curMaster {
+				// remove this tablet since its mysql has stopped
+				replicaTablets = append(replicaTablets[:i], replicaTablets[i+1:]...)
+				killTablets([]*cluster.Vttablet{curMaster})
+				return
+			}
+		}
+	}()
 
 	for _, tablet := range shard0.Vttablets {
 		// we know we have only two tablets, so the "other" one must be the new master
