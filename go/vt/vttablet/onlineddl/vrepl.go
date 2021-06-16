@@ -279,6 +279,12 @@ func (v *VRepl) getSharedColumns(sourceColumns, targetColumns *vrepl.ColumnList,
 				break
 			}
 		}
+		for droppedColumn := range v.parser.DroppedColumnsMap() {
+			if strings.EqualFold(sourceColumn, droppedColumn) {
+				isSharedColumn = false
+				break
+			}
+		}
 		for _, virtualColumn := range sourceVirtualColumns.Names() {
 			// virtual/generated columns on source are silently skipped
 			if strings.EqualFold(sourceColumn, virtualColumn) {
