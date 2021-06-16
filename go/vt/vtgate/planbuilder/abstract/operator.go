@@ -22,8 +22,16 @@ import (
 )
 
 type (
+	// Operator forms the tree of operators that form the input for the gen4 planner
+	// An operator can be:
+	//  *  QueryGraph - which represents a group of tables and predicates that can be evaluated in any order
+	//     while still preserving the results
+	//	*  OuterJoin - A left/right join. These can't be evaluated in any order, so we keep them separate
 	Operator interface {
+		// TableID returns a TableSet of the tables contained within
 		TableID() semantics.TableSet
+
+		// Pushes a predicate to the closest possibe operator
 		PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) error
 	}
 )
@@ -66,9 +74,9 @@ func getOperatorFromTableExpr(tableExpr sqlparser.TableExpr, semTable *semantics
 				inner, outer = outer, inner
 			}
 			op := &OuterJoin{
-				Inner: inner,
-				Outer: outer,
-				Exp:   tableExpr.Condition.On,
+				Inner:     inner,
+				Outer:     outer,
+				Predicate: tableExpr.Condition.On,
 			}
 			return op, nil
 		default:
@@ -97,6 +105,7 @@ func crossJoin(exprs sqlparser.TableExprs, semTable *semantics.SemTable) (Operat
 	return output, nil
 }
 
+// CreateOperatorFromSelect creates an operator tree that represents the input SELECT query
 func CreateOperatorFromSelect(sel *sqlparser.Select, semTable *semantics.SemTable) (Operator, error) {
 	op, err := crossJoin(sel.From, semTable)
 	if err != nil {

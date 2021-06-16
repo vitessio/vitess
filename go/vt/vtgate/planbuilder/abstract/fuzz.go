@@ -54,7 +54,8 @@ func FuzzAnalyse(data []byte) int {
 		if err != nil {
 			return 0
 		}
-		_, _ = CreateQGFromSelect(stmt, semTable)
+		_, _ = CreateOperatorFromSelect(stmt, semTable)
+
 	default:
 		return 0
 	}

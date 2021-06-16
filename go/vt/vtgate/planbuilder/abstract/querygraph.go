@@ -59,6 +59,7 @@ type (
 	}
 )
 
+// PushPredicate implements the Operator interface
 func (qg *QueryGraph) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) error {
 	for _, e := range sqlparser.SplitAndExpression(nil, expr) {
 		err := qg.collectPredicate(e, semTable)
@@ -69,6 +70,7 @@ func (qg *QueryGraph) PushPredicate(expr sqlparser.Expr, semTable *semantics.Sem
 	return nil
 }
 
+// TableID implements the Operator interface
 func (qg *QueryGraph) TableID() semantics.TableSet {
 	var ts semantics.TableSet
 	for _, table := range qg.Tables {
@@ -77,6 +79,7 @@ func (qg *QueryGraph) TableID() semantics.TableSet {
 	return ts
 }
 
+// GetPredicates returns the predicates that are applicable for the two given TableSets
 func (qg *QueryGraph) GetPredicates(lhs, rhs semantics.TableSet) []sqlparser.Expr {
 	var allExprs []sqlparser.Expr
 	for tableSet, exprs := range qg.innerJoins {
@@ -89,6 +92,7 @@ func (qg *QueryGraph) GetPredicates(lhs, rhs semantics.TableSet) []sqlparser.Exp
 	return allExprs
 }
 
+// CreateQGFromSelect TODO remove this
 func CreateQGFromSelect(sel *sqlparser.Select, semTable *semantics.SemTable) (*QueryGraph, error) {
 	qg := newQueryGraph()
 	if err := qg.collectTables(sel.From, semTable); err != nil {
@@ -104,6 +108,7 @@ func CreateQGFromSelect(sel *sqlparser.Select, semTable *semantics.SemTable) (*Q
 	return qg, nil
 }
 
+// CreateQGFromSelectStatement TODO remove this
 func CreateQGFromSelectStatement(selStmt sqlparser.SelectStatement, semTable *semantics.SemTable) ([]*QueryGraph, error) {
 	switch stmt := selStmt.(type) {
 	case *sqlparser.Select:

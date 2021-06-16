@@ -21,13 +21,13 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
-type (
-	OuterJoin struct {
-		Inner, Outer Operator
-		Exp          sqlparser.Expr
-	}
-)
+// OuterJoin represents an outerjoin.
+type OuterJoin struct {
+	Inner, Outer Operator
+	Predicate    sqlparser.Expr
+}
 
+// PushPredicate implements the Operator interface
 func (oj *OuterJoin) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) error {
 	deps := semTable.Dependencies(expr)
 	if deps.IsSolvedBy(oj.Inner.TableID()) {
@@ -39,6 +39,7 @@ func (oj *OuterJoin) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemT
 	}
 }
 
+// TableID implements the Operator interface
 func (oj *OuterJoin) TableID() semantics.TableSet {
 	return oj.Outer.TableID().Merge(oj.Inner.TableID())
 }
