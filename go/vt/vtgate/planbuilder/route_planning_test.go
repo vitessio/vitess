@@ -122,3 +122,19 @@ func TestClone(t *testing.T) {
 	assert.NotNil(t, clonedRP.vindexPreds[0].foundVindex)
 	assert.Nil(t, original.vindexPreds[0].foundVindex)
 }
+
+func equals(left, right sqlparser.Expr) sqlparser.Expr {
+	return &sqlparser.ComparisonExpr{
+		Operator: sqlparser.EqualOp,
+		Left:     left,
+		Right:    right,
+	}
+}
+
+func colName(table, column string) *sqlparser.ColName {
+	return &sqlparser.ColName{Name: sqlparser.NewColIdent(column), Qualifier: tableName(table)}
+}
+
+func tableName(name string) sqlparser.TableName {
+	return sqlparser.TableName{Name: sqlparser.NewTableIdent(name)}
+}

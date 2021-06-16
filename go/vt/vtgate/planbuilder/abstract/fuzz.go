@@ -15,7 +15,7 @@ limitations under the License.
 */
 // +build gofuzz
 
-package planbuilder
+package abstract
 
 import (
 	"fmt"
@@ -54,7 +54,7 @@ func FuzzAnalyse(data []byte) int {
 		if err != nil {
 			return 0
 		}
-		_, _ = createQGFromSelect(stmt, semTable)
+		_, _ = CreateQGFromSelect(stmt, semTable)
 	default:
 		return 0
 	}
