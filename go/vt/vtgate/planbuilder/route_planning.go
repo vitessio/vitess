@@ -198,10 +198,9 @@ type (
 		vtable *vindexes.Table
 	}
 
-	leftJoin struct {
-		// TODO: get rid of left
-		left, right *routeTable
-		expr        sqlparser.Expr
+	outerTable struct {
+		tbl  *routeTable
+		pred sqlparser.Expr
 	}
 
 	routePlan struct {
@@ -217,7 +216,7 @@ type (
 		predicates []sqlparser.Expr
 
 		// leftJoins are the join conditions evaluated by this plan
-		leftJoins []leftJoin
+		leftJoins []*outerTable
 
 		// vindex and vindexValues is set if a vindex will be used for this route.
 		vindex           vindexes.Vindex
@@ -1034,13 +1033,15 @@ func createRoutePlanForInner(aRoute *routePlan, newTabletSet semantics.TableSet,
 }
 
 func createRoutePlanForOuter(aRoute, bRoute *routePlan, newTabletSet semantics.TableSet, joinPredicates []sqlparser.Expr) *routePlan {
+	r := bRoute._tables[0]
+
 	return &routePlan{
 		routeOpCode: aRoute.routeOpCode,
 		solved:      newTabletSet,
-		leftJoins: append(aRoute.leftJoins, leftJoin{
-			left:  aRoute._tables[len(aRoute._tables)-1],
-			right: bRoute._tables[0],
-			expr:  joinPredicates[0],
+		_tables:     aRoute._tables,
+		leftJoins: append(aRoute.leftJoins, &outerTable{
+			tbl:  r,
+			pred: joinPredicates[0],
 		}),
 		keyspace:    aRoute.keyspace,
 		vindexPreds: append(aRoute.vindexPreds, bRoute.vindexPreds...),

@@ -86,16 +86,23 @@ func transformRoutePlan(n *routePlan) (*route, error) {
 	}
 
 	for _, leftJoin := range n.leftJoins {
+		var lft sqlparser.TableExpr
+		if len(tablesForSelect) == 1 {
+			lft = tablesForSelect[0]
+		} else {
+			lft = &sqlparser.ParenTableExpr{Exprs: tablesForSelect}
+		}
+
 		joinExpr := &sqlparser.JoinTableExpr{
 			Join: sqlparser.LeftJoinType,
 			Condition: sqlparser.JoinCondition{
-				On: leftJoin.expr,
+				On: leftJoin.pred,
 			},
-			RightExpr: leftJoin.right.qtable.Alias,
-			LeftExpr:  leftJoin.left.qtable.Alias,
+			RightExpr: leftJoin.tbl.qtable.Alias,
+			LeftExpr:  lft,
 		}
-		tablesForSelect = append(tablesForSelect, joinExpr)
-		tableNameMap[sqlparser.String(leftJoin.right.qtable.Table.Name)] = nil
+		tablesForSelect = sqlparser.TableExprs{joinExpr}
+		tableNameMap[sqlparser.String(leftJoin.tbl.qtable.Table.Name)] = nil
 	}
 
 	predicates := n.Predicates()
