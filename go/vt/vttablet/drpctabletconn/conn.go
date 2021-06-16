@@ -6,16 +6,17 @@ import (
 	"net"
 	"sync"
 
-	"vitess.io/vitess/go/vt/callerid"
-
+	"storj.io/drpc"
 	"storj.io/drpc/drpcconn"
 
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/callerid"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	queryservicepb "vitess.io/vitess/go/vt/proto/queryservice"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/vttablet/drpctabletconn/drpcpool"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
 )
@@ -30,7 +31,7 @@ type dRPCQueryClient struct {
 
 	// mu protects the next fields
 	mu sync.RWMutex
-	cc *drpcconn.Conn
+	cc drpc.Conn
 	c  queryservicepb.DRPCQueryClient
 }
 
@@ -738,6 +739,19 @@ func (conn *dRPCQueryClient) Close(_ context.Context) error {
 }
 
 func DialTablet(tablet *topodatapb.Tablet, failFast bool) (queryservice.QueryService, error) {
+	cc := drpcpool.OpenConnectionPool(func(ctx context.Context) (drpc.Conn, error) {
+		return dialTablet1(tablet, failFast)
+	})
+
+	c := queryservicepb.NewDRPCQueryClient(cc)
+	return &dRPCQueryClient{
+		tablet: tablet,
+		cc:     cc,
+		c:      c,
+	}, nil
+}
+
+func dialTablet1(tablet *topodatapb.Tablet, failFast bool) (drpc.Conn, error) {
 	var addr string
 	if drpcPort, ok := tablet.PortMap["drpc"]; ok {
 		addr = netutil.JoinHostPort(tablet.Hostname, drpcPort)
@@ -751,12 +765,5 @@ func DialTablet(tablet *topodatapb.Tablet, failFast bool) (queryservice.QuerySer
 	}
 
 	// TODO: tls
-
-	cc := drpcconn.New(rawconn)
-	c := queryservicepb.NewDRPCQueryClient(cc)
-	return &dRPCQueryClient{
-		tablet: tablet,
-		cc:     cc,
-		c:      c,
-	}, nil
+	return drpcconn.New(rawconn), nil
 }
