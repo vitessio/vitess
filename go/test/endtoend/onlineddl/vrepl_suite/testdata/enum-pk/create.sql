@@ -2,9 +2,13 @@ drop table if exists onlineddl_test;
 create table onlineddl_test (
   id int auto_increment,
   i int not null,
-  e enum('red', 'green', 'blue', 'orange') not null default 'red' collate 'utf8_bin',
+  e enum('red', 'green', 'blue', 'orange', 'yellow', 'grey', 'black') not null default 'red' collate 'utf8_bin',
   primary key(id, e)
 ) auto_increment=1;
+
+insert into onlineddl_test values (null, 2, 'yellow');
+insert into onlineddl_test values (null, 3, 'grey');
+insert into onlineddl_test values (11, 5, 'yellow');
 
 drop event if exists onlineddl_test;
 delimiter ;;
@@ -16,6 +20,8 @@ create event onlineddl_test
   enable
   do
 begin
+  update onlineddl_test set e='black' where e='grey';
+  update onlineddl_test set e='black' where id=11;
   insert into onlineddl_test values (null, 11, 'red');
   set @last_insert_id := last_insert_id();
   insert into onlineddl_test values (@last_insert_id, 11, 'green');
