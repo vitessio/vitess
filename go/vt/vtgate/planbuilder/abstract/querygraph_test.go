@@ -226,8 +226,8 @@ func (qt *QueryTable) testString() string {
 func (qg *QueryGraph) testString() string {
 	return fmt.Sprintf(`{
 Tables:
-%s%s%s%s%s
-}`, strings.Join(qg.tableNames(), "\n"), qg.crossPredicateString(), qg.outerJoinsString(), qg.noDepsString(), qg.subqueriesString())
+%s%s%s%s
+}`, strings.Join(qg.tableNames(), "\n"), qg.crossPredicateString(), qg.noDepsString(), qg.subqueriesString())
 }
 
 func (qg *QueryGraph) crossPredicateString() string {
@@ -250,34 +250,6 @@ func (qg *QueryGraph) crossPredicateString() string {
 	}
 	sort.Strings(joinPreds)
 	return fmt.Sprintf("\nJoinPredicates:\n%s", strings.Join(joinPreds, "\n"))
-}
-
-func (qg *QueryGraph) outerJoinsString() string {
-	if len(qg.OuterJoins) == 0 {
-		return ""
-	}
-	var joinPreds []string
-	for deps, predicates := range qg.OuterJoins {
-		var inner []string
-		for _, id := range deps.inner.Constituents() {
-			inner = append(inner, fmt.Sprintf("%d", id))
-		}
-		var outer []string
-		for _, id := range deps.Outer.Constituents() {
-			outer = append(outer, fmt.Sprintf("%d", id))
-		}
-
-		var expressions []string
-		for _, expr := range predicates {
-			expressions = append(expressions, sqlparser.String(expr))
-		}
-		tables := fmt.Sprintf("inner: %s, outer: %s", strings.Join(inner, ":"), strings.Join(outer, ":"))
-
-		exprConcat := strings.Join(expressions, " and ")
-		joinPreds = append(joinPreds, fmt.Sprintf("\t%s - %s", tables, exprConcat))
-	}
-	sort.Strings(joinPreds)
-	return fmt.Sprintf("\nOuterJoins:\n%s", strings.Join(joinPreds, "\n"))
 }
 
 func (qg *QueryGraph) tableNames() []string {

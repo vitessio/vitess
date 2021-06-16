@@ -680,13 +680,8 @@ func breakPredicateInLHSandRHS(expr sqlparser.Expr, semTable *semantics.SemTable
 	return
 }
 
-func mergeOrJoin(lhs, rhs joinTree, joinPredicates []sqlparser.Expr, semTable *semantics.SemTable, inner bool) (joinTree, error) {
-	var newPlan joinTree
-	if inner {
-		newPlan = tryInnerMerge(lhs, rhs, joinPredicates, semTable)
-	} else {
-		newPlan = tryOuterMerge(lhs, rhs, joinPredicates, semTable)
-	}
+func mergeOrJoin(lhs, rhs joinTree, joinPredicates []sqlparser.Expr, semTable *semantics.SemTable) (joinTree, error) {
+	newPlan := tryInnerMerge(lhs, rhs, joinPredicates, semTable)
 	if newPlan != nil {
 		return newPlan, nil
 	}
@@ -715,37 +710,19 @@ func greedySolve(qg *abstract.QueryGraph, semTable *semantics.SemTable, vschema 
 		return nil, err
 	}
 
-	var innerJt, outerJt []joinTree
-	outers := semantics.TableSet(0)
-	for key := range qg.OuterJoins {
-		outers = outers.Merge(key.Outer)
-	}
-	for _, jt := range joinTrees {
-		if !jt.tables().IsOverlapping(outers) {
-			innerJt = append(innerJt, jt)
-		} else {
-			outerJt = append(outerJt, jt)
-		}
-	}
-
-	innerTree, err := mergeJoinTrees(qg, semTable, innerJt, planCache, true, false)
-	if err != nil {
-		return nil, err
-	}
-	outerJt = append(outerJt, innerTree)
-	tree, err := mergeJoinTrees(qg, semTable, outerJt, planCache, false, false)
+	tree, err := mergeJoinTrees(qg, semTable, joinTrees, planCache, false)
 	if err != nil {
 		return nil, err
 	}
 	return tree, nil
 }
 
-func mergeJoinTrees(qg *abstract.QueryGraph, semTable *semantics.SemTable, joinTrees []joinTree, planCache cacheMap, inner, crossJoinsOK bool) (joinTree, error) {
+func mergeJoinTrees(qg *abstract.QueryGraph, semTable *semantics.SemTable, joinTrees []joinTree, planCache cacheMap, crossJoinsOK bool) (joinTree, error) {
 	if len(joinTrees) == 0 {
 		return nil, nil
 	}
 	for len(joinTrees) > 1 {
-		bestTree, lIdx, rIdx, err := findBestJoinTree(qg, semTable, joinTrees, planCache, inner, crossJoinsOK)
+		bestTree, lIdx, rIdx, err := findBestJoinTree(qg, semTable, joinTrees, planCache, crossJoinsOK)
 		if err != nil {
 			return nil, err
 		}
@@ -770,14 +747,14 @@ func mergeJoinTrees(qg *abstract.QueryGraph, semTable *semantics.SemTable, joinT
 	return joinTrees[0], nil
 }
 
-func (cm cacheMap) getJoinTreeFor(lhs, rhs joinTree, joinPredicates []sqlparser.Expr, semTable *semantics.SemTable, inner bool) (joinTree, error) {
+func (cm cacheMap) getJoinTreeFor(lhs, rhs joinTree, joinPredicates []sqlparser.Expr, semTable *semantics.SemTable) (joinTree, error) {
 	solves := tableSetPair{left: lhs.tables(), right: rhs.tables()}
 	cachedPlan := cm[solves]
 	if cachedPlan != nil {
 		return cachedPlan, nil
 	}
 
-	join, err := mergeOrJoin(lhs, rhs, joinPredicates, semTable, inner)
+	join, err := mergeOrJoin(lhs, rhs, joinPredicates, semTable)
 	if err != nil {
 		return nil, err
 	}
@@ -790,26 +767,21 @@ func findBestJoinTree(
 	semTable *semantics.SemTable,
 	plans []joinTree,
 	planCache cacheMap,
-	inner, crossJoinsOK bool,
+	crossJoinsOK bool,
 ) (bestPlan joinTree, lIdx int, rIdx int, err error) {
 	for i, lhs := range plans {
 		for j, rhs := range plans {
 			if i == j {
 				continue
 			}
-			var joinPredicates []sqlparser.Expr
-			if inner {
-				joinPredicates = qg.GetPredicates(lhs.tables(), rhs.tables())
-			} else {
-				joinPredicates = qg.GetOuterJoins(lhs.tables(), rhs.tables())
-			}
+			joinPredicates := qg.GetPredicates(lhs.tables(), rhs.tables())
 			if len(joinPredicates) == 0 && !crossJoinsOK {
 				// if there are no predicates joining the two tables,
 				// creating a join between them would produce a
 				// cartesian product, which is almost always a bad idea
 				continue
 			}
-			plan, err := planCache.getJoinTreeFor(lhs, rhs, joinPredicates, semTable, inner)
+			plan, err := planCache.getJoinTreeFor(lhs, rhs, joinPredicates, semTable)
 			if err != nil {
 				return nil, 0, 0, err
 			}
@@ -838,7 +810,7 @@ func leftToRightSolve(qg *abstract.QueryGraph, semTable *semantics.SemTable, vsc
 		}
 		joinPredicates := qg.GetPredicates(acc.tables(), plan.tables())
 		// TODO: handle outer
-		acc, err = mergeOrJoin(acc, plan, joinPredicates, semTable, true)
+		acc, err = mergeOrJoin(acc, plan, joinPredicates, semTable)
 		if err != nil {
 			return nil, err
 		}
@@ -993,21 +965,6 @@ func tryInnerMerge(a, b joinTree, joinPredicates []sqlparser.Expr, semTable *sem
 	return r
 }
 
-func tryOuterMerge(a, b joinTree, joinPredicates []sqlparser.Expr, semTable *semantics.SemTable) joinTree {
-	aRoute, bRoute := joinTreesToRoutes(a, b)
-	if aRoute == nil || bRoute == nil {
-		return nil
-	}
-
-	newTabletSet := aRoute.solved | bRoute.solved
-	r := createRoutePlanForOuter(aRoute, bRoute, newTabletSet, joinPredicates)
-
-	if ok := ensureMerge(aRoute, bRoute, r, joinPredicates, semTable); !ok {
-		return nil
-	}
-	return r
-}
-
 func ensureMerge(aRoute, bRoute, r *routePlan, joinPredicates []sqlparser.Expr, semTable *semantics.SemTable) bool {
 	switch aRoute.routeOpCode {
 	case engine.SelectUnsharded, engine.SelectDBA:
@@ -1054,20 +1011,6 @@ func createRoutePlanForInner(aRoute *routePlan, newTabletSet semantics.TableSet,
 		predicates: append(
 			append(aRoute.predicates, bRoute.predicates...),
 			joinPredicates...),
-		keyspace:    aRoute.keyspace,
-		vindexPreds: append(aRoute.vindexPreds, bRoute.vindexPreds...),
-	}
-}
-
-func createRoutePlanForOuter(aRoute, bRoute *routePlan, newTabletSet semantics.TableSet, joinPredicates []sqlparser.Expr) *routePlan {
-	return &routePlan{
-		routeOpCode: aRoute.routeOpCode,
-		solved:      newTabletSet,
-		leftJoins: append(aRoute.leftJoins, leftJoin{
-			left:  aRoute._tables[len(aRoute._tables)-1],
-			right: bRoute._tables[0],
-			expr:  joinPredicates[0],
-		}),
 		keyspace:    aRoute.keyspace,
 		vindexPreds: append(aRoute.vindexPreds, bRoute.vindexPreds...),
 	}

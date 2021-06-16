@@ -1,5 +1,5 @@
 /*
-Copyright 2020 The Vitess Authors.
+Copyright 2021 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -39,8 +39,6 @@ type (
 		// innerJoins contains the predicates that need multiple Tables
 		innerJoins map[semantics.TableSet][]sqlparser.Expr
 
-		OuterJoins map[outerJoinTables][]sqlparser.Expr
-
 		// noDeps contains the predicates that can be evaluated anywhere.
 		noDeps sqlparser.Expr
 
@@ -61,22 +59,20 @@ type (
 	}
 )
 
+func (qg *QueryGraph) TableID() semantics.TableSet {
+	var ts semantics.TableSet
+	for _, table := range qg.Tables {
+		ts = ts.Merge(table.TableID)
+	}
+	return ts
+}
+
 func (qg *QueryGraph) GetPredicates(lhs, rhs semantics.TableSet) []sqlparser.Expr {
 	var allExprs []sqlparser.Expr
 	for tableSet, exprs := range qg.innerJoins {
 		if tableSet.IsSolvedBy(lhs|rhs) &&
 			tableSet.IsOverlapping(rhs) &&
 			tableSet.IsOverlapping(lhs) {
-			allExprs = append(allExprs, exprs...)
-		}
-	}
-	return allExprs
-}
-
-func (qg *QueryGraph) GetOuterJoins(lhs, rhs semantics.TableSet) []sqlparser.Expr {
-	var allExprs []sqlparser.Expr
-	for tableSet, exprs := range qg.OuterJoins {
-		if tableSet.Outer.IsSolvedBy(rhs) && tableSet.inner.IsSolvedBy(lhs) {
 			allExprs = append(allExprs, exprs...)
 		}
 	}
@@ -129,7 +125,6 @@ func CreateQGFromSelectStatement(selStmt sqlparser.SelectStatement, semTable *se
 func newQueryGraph() *QueryGraph {
 	return &QueryGraph{
 		innerJoins: map[semantics.TableSet][]sqlparser.Expr{},
-		OuterJoins: map[outerJoinTables][]sqlparser.Expr{},
 		Subqueries: map[*sqlparser.Subquery][]*QueryGraph{},
 	}
 }
@@ -209,23 +204,7 @@ func (qg *QueryGraph) collectPredicateTable(t sqlparser.TableExpr, predicate sql
 				}
 				qg.innerJoins[deps] = allPredicates
 			case sqlparser.LeftJoinType, sqlparser.RightJoinType:
-				var outerJoinTable outerJoinTables
-				var err error
-				if table.Join == sqlparser.LeftJoinType {
-					outerJoinTable, err = qg.getOuterJoinTables(table.LeftExpr, table.RightExpr, right, left, semTable)
-					if err != nil {
-						return err
-					}
-				} else {
-					outerJoinTable, err = qg.getOuterJoinTables(table.RightExpr, table.LeftExpr, left, right, semTable)
-					if err != nil {
-						return err
-					}
-				}
-
-				allPredicates := qg.OuterJoins[outerJoinTable]
-				allPredicates = append(allPredicates, predicate)
-				qg.OuterJoins[outerJoinTable] = allPredicates
+				break
 			}
 		}
 	}
