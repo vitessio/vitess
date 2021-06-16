@@ -154,14 +154,9 @@ func removeVttabletsFromTopology() error {
 	for _, vttablet := range clusterInstance.Keyspaces[0].Shards[0].Vttablets {
 		tabletType := vttablet.VttabletProcess.GetTabletType()
 		if tabletType == "master" {
-			err := clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", vttablet.Alias, vttablet.Type)
-			if err != nil {
-				return err
-			}
-
-			err = vttablet.VttabletProcess.WaitForTabletTypes([]string{vttablet.Type})
-			if err != nil {
-				return err
+			err2 := demoteMasterTablet(vttablet)
+			if err2 != nil {
+				return err2
 			}
 		}
 
@@ -172,6 +167,16 @@ func removeVttabletsFromTopology() error {
 	}
 	clusterInstance.Keyspaces[0].Shards[0].Vttablets = nil
 	return nil
+}
+
+func demoteMasterTablet(vttablet *cluster.Vttablet) error {
+	err := clusterInstance.VtctlclientProcess.ExecuteCommand("DemoteMasterTablet", vttablet.Alias)
+	if err != nil {
+		return err
+	}
+
+	err = vttablet.VttabletProcess.WaitForTabletTypes([]string{vttablet.Type})
+	return err
 }
 
 // startVtorc is used to start the orchestrator with the given extra arguments
@@ -231,6 +236,8 @@ func setupVttabletsAndVtorc(t *testing.T, numReplicasReq int, numRdonlyReq int, 
 func cleanAndAddVttablet(t *testing.T, vttablet *cluster.Vttablet) error {
 	// remove the database if it exists
 	runSQL(t, "DROP DATABASE IF EXISTS vt_ks", vttablet, "")
+	// stop the replication
+	runSQL(t, "STOP SLAVE", vttablet, "")
 	// reset the binlog
 	runSQL(t, "RESET MASTER", vttablet, "")
 

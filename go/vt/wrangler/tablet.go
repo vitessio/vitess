@@ -153,6 +153,46 @@ func (wr *Wrangler) DeleteTablet(ctx context.Context, tabletAlias *topodatapb.Ta
 	return nil
 }
 
+// DemoteMasterTablet demotes a master tablet.
+func (wr *Wrangler) DemoteMasterTablet(ctx context.Context, tabletAlias *topodatapb.TabletAlias) (err error) {
+	// load the tablet, see if we'll need to rebuild
+	ti, err := wr.ts.GetTablet(ctx, tabletAlias)
+	if err != nil {
+		return err
+	}
+
+	wasMaster, err := wr.isMasterTablet(ctx, ti)
+	if err != nil {
+		return err
+	}
+
+	if !wasMaster {
+		return fmt.Errorf("tablet %v is not a master tablet", topoproto.TabletAliasString(tabletAlias))
+	}
+
+	// update the Shard object if the master was scrapped.
+	// We lock the shard to not conflict with reparent operations.
+	ctx, unlock, lockErr := wr.ts.LockShard(ctx, ti.Keyspace, ti.Shard, fmt.Sprintf("DemoteMasterTablet(%v)", topoproto.TabletAliasString(tabletAlias)))
+	if lockErr != nil {
+		return lockErr
+	}
+	defer unlock(&err)
+
+	// update the shard record's master
+	if _, err := wr.ts.UpdateShardFields(ctx, ti.Keyspace, ti.Shard, func(si *topo.ShardInfo) error {
+		if !topoproto.TabletAliasEqual(si.MasterAlias, tabletAlias) {
+			wr.Logger().Warningf("Deleting master %v from shard %v/%v but master in Shard object was %v", topoproto.TabletAliasString(tabletAlias), ti.Keyspace, ti.Shard, topoproto.TabletAliasString(si.MasterAlias))
+			return topo.NewError(topo.NoUpdateNeeded, si.Keyspace()+"/"+si.ShardName())
+		}
+		si.MasterAlias = nil
+		return nil
+	}); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // ChangeTabletType changes the type of tablet and recomputes all
 // necessary derived paths in the serving graph, if necessary.
 //
