@@ -182,8 +182,8 @@ var commands = []commandGroup{
 				"<tablet alias>",
 				"Stops replication on the specified tablet."},
 			{"ChangeTabletType", commandChangeTabletType,
-				"[-dry-run] [-force] <tablet alias> <tablet type>",
-				"Changes the db type for the specified tablet, if possible. This command is used primarily to arrange replicas, and it should be used to convert a master cautiously.\n" +
+				"[-dry-run] <tablet alias> <tablet type>",
+				"Changes the db type for the specified tablet, if possible. This command is used primarily to arrange replicas, and it will not convert a master.\n" +
 					"NOTE: This command automatically updates the serving graph.\n"},
 			{"Ping", commandPing,
 				"<tablet alias>",
@@ -876,7 +876,6 @@ func commandStopReplication(ctx context.Context, wr *wrangler.Wrangler, subFlags
 
 func commandChangeTabletType(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	dryRun := subFlags.Bool("dry-run", false, "Lists the proposed change without actually executing it")
-	force := subFlags.Bool("force", false, "Do not check if the change requested is safe or not. Should be used to convert master cautiously.")
 
 	if err := subFlags.Parse(args); err != nil {
 		return err
@@ -902,7 +901,7 @@ func commandChangeTabletType(ctx context.Context, wr *wrangler.Wrangler, subFlag
 		if err != nil {
 			return fmt.Errorf("failed reading tablet %v: %v", tabletAlias, err)
 		}
-		if !(*force) && !topo.IsTrivialTypeChange(ti.Type, newType) {
+		if !topo.IsTrivialTypeChange(ti.Type, newType) {
 			return fmt.Errorf("invalid type transition %v: %v -> %v", tabletAlias, ti.Type, newType)
 		}
 		wr.Logger().Printf("- %v\n", fmtTabletAwkable(ti))
@@ -910,7 +909,7 @@ func commandChangeTabletType(ctx context.Context, wr *wrangler.Wrangler, subFlag
 		wr.Logger().Printf("+ %v\n", fmtTabletAwkable(ti))
 		return nil
 	}
-	return wr.ChangeTabletType(ctx, tabletAlias, newType, *force)
+	return wr.ChangeTabletType(ctx, tabletAlias, newType)
 }
 
 func commandPing(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
