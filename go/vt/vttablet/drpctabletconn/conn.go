@@ -6,6 +6,8 @@ import (
 	"net"
 	"sync"
 
+	"vitess.io/vitess/go/vt/vttablet/grpctabletconn"
+
 	"storj.io/drpc"
 	"storj.io/drpc/drpcconn"
 
@@ -23,6 +25,7 @@ import (
 
 func init() {
 	tabletconn.RegisterDialer("drpc", DialTablet)
+	tabletconn.RegisterDialer("drpc,grpc", DialTabletFallback)
 }
 
 type dRPCQueryClient struct {
@@ -750,6 +753,13 @@ func DialTablet(tablet *topodatapb.Tablet, failFast bool) (queryservice.QuerySer
 		cc:     cc,
 		c:      c,
 	}, nil
+}
+
+func DialTabletFallback(tablet *topodatapb.Tablet, failFast bool) (queryservice.QueryService, error) {
+	if _, ok := tablet.PortMap["drpc"]; ok {
+		return DialTablet(tablet, failFast)
+	}
+	return grpctabletconn.DialTablet(tablet, failFast)
 }
 
 func dialTablet1(tablet *topodatapb.Tablet, failFast bool) (drpc.Conn, error) {
