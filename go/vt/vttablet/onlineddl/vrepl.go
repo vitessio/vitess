@@ -391,13 +391,24 @@ func (v *VRepl) analyzeTables(ctx context.Context, conn *dbconnpool.DBConnection
 		return err
 	}
 
+	for _, sourcePKColumn := range v.sharedPKColumns.Columns() {
+		mappedColumn := v.targetSharedColumns.GetColumn(sourcePKColumn.Name)
+		if sourcePKColumn.Type == vrepl.EnumColumnType && mappedColumn.Type == vrepl.EnumColumnType {
+			// An ENUM as part of PRIMARY KEY. We must convert it to text because OMG that's complicated.
+			// There's a scenario where a query may modify the enum value (and it's bad practice, seeing
+			// that it's part of the PK, but it's still valid), and in that case we must have the string value
+			// to be able to DELETE the old row
+			v.targetSharedColumns.SetEnumToTextConversion(mappedColumn.Name, sourcePKColumn.EnumValues)
+			v.enumToTextMap[sourcePKColumn.Name] = sourcePKColumn.EnumValues
+		}
+	}
+
 	for i := range v.sourceSharedColumns.Columns() {
 		sourceColumn := v.sourceSharedColumns.Columns()[i]
 		mappedColumn := v.targetSharedColumns.Columns()[i]
 		if sourceColumn.Type == vrepl.EnumColumnType && mappedColumn.Type != vrepl.EnumColumnType && mappedColumn.Charset != "" {
 			// A column is converted from ENUM type to textual type
 			v.targetSharedColumns.SetEnumToTextConversion(mappedColumn.Name, sourceColumn.EnumValues)
-
 			v.enumToTextMap[sourceColumn.Name] = sourceColumn.EnumValues
 		}
 	}
