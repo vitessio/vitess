@@ -196,7 +196,7 @@ func testString(op Operator) string {
 	case *OuterJoin:
 		leftStr := indent(testString(op.Inner))
 		rightStr := indent(testString(op.Outer))
-		return fmt.Sprintf("OuterJoin: {\n\tInner: %s\n\tOuter: %s\n\tPredicate: %s\n}", leftStr, rightStr, sqlparser.String(op.Exp))
+		return fmt.Sprintf("OuterJoin: {\n\tInner: %s\n\tOuter: %s\n\tPredicate: %s\n}", leftStr, rightStr, sqlparser.String(op.Predicate))
 	}
 	return "implement me"
 }

@@ -65,7 +65,7 @@ func createJoinTree(opTree abstract.Operator, semTable *semantics.SemTable, vsch
 		if err != nil {
 			return nil, err
 		}
-		return mergeOrJoin(treeInner, treeOuter, []sqlparser.Expr{op.Exp}, semTable, false)
+		return mergeOrJoin(treeInner, treeOuter, []sqlparser.Expr{op.Predicate}, semTable, false)
 	default:
 		return nil, semantics.Gen4NotSupportedF("createJoinTree")
 	}
