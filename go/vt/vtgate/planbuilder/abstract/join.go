@@ -22,23 +22,27 @@ import (
 )
 
 type (
-	OuterJoin struct {
-		Inner, Outer Operator
-		Exp          sqlparser.Expr
+	Join struct {
+		LHS, RHS Operator
+		Exp      sqlparser.Expr
 	}
 )
 
-func (oj *OuterJoin) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) error {
+func (j *Join) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) error {
 	deps := semTable.Dependencies(expr)
-	if deps.IsSolvedBy(oj.Inner.TableID()) {
-		return oj.Inner.PushPredicate(expr, semTable)
-	} else if deps.IsSolvedBy(oj.Outer.TableID()) {
-		return oj.Outer.PushPredicate(expr, semTable)
-	} else {
-		return semantics.Gen4NotSupportedF("what the what!?")
+	switch {
+	case deps.IsSolvedBy(j.LHS.TableID()):
+		return j.LHS.PushPredicate(expr, semTable)
+	case deps.IsSolvedBy(j.RHS.TableID()):
+		return j.RHS.PushPredicate(expr, semTable)
+	case deps.IsSolvedBy(j.LHS.TableID().Merge(j.RHS.TableID())):
+		j.Exp = sqlparser.AndExpressions(j.Exp, expr)
+		return nil
 	}
+
+	return semantics.Gen4NotSupportedF("still not sure what to do with this predicate")
 }
 
-func (oj *OuterJoin) TableID() semantics.TableSet {
-	return oj.Outer.TableID().Merge(oj.Inner.TableID())
+func (j *Join) TableID() semantics.TableSet {
+	return j.RHS.TableID().Merge(j.LHS.TableID())
 }

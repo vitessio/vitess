@@ -59,6 +59,16 @@ type (
 	}
 )
 
+func (qg *QueryGraph) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) error {
+	for _, e := range sqlparser.SplitAndExpression(nil, expr) {
+		err := qg.collectPredicate(e, semTable)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (qg *QueryGraph) TableID() semantics.TableSet {
 	var ts semantics.TableSet
 	for _, table := range qg.Tables {
