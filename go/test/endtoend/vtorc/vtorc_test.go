@@ -152,7 +152,20 @@ func createVttablets() error {
 // removeVttabletsFromTopology removes all the vttablets from the topology
 func removeVttabletsFromTopology() error {
 	for _, vttablet := range clusterInstance.Keyspaces[0].Shards[0].Vttablets {
-		err := clusterInstance.VtctlclientProcess.ExecuteCommand("DeleteTablet", "-allow_master", vttablet.Alias)
+		tabletType := vttablet.VttabletProcess.GetTabletType()
+		if tabletType == "master" {
+			err := clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", vttablet.Alias, vttablet.Type)
+			if err != nil {
+				return err
+			}
+
+			err = vttablet.VttabletProcess.WaitForTabletTypes([]string{vttablet.Type})
+			if err != nil {
+				return err
+			}
+		}
+
+		err := clusterInstance.VtctlclientProcess.ExecuteCommand("DeleteTablet", vttablet.Alias)
 		if err != nil {
 			return err
 		}
@@ -209,11 +222,6 @@ func setupVttabletsAndVtorc(t *testing.T, numReplicasReq int, numRdonlyReq int, 
 
 	if numRdonlyReq > 0 || numReplicasReq > 0 {
 		t.Fatalf("more than available tablets requested. Please increase the constants numReplicas or numRdonly")
-	}
-
-	for _, tablet := range clusterInstance.Keyspaces[0].Shards[0].Vttablets {
-		err = tablet.VttabletProcess.WaitForTabletStatuses([]string{"SERVING", "NOT_SERVING"})
-		require.NoError(t, err)
 	}
 
 	// start vtorc
