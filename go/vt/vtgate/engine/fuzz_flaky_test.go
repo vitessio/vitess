@@ -81,7 +81,7 @@ func createVSchema() (vschema *vindexes.VSchema, err error) {
 			},
 		},
 	}
-	vs, err := vindexes.BuildVSchema(invschema)
+	vs := vindexes.BuildVSchema(invschema)
 	if err != nil {
 		return nil, err
 	}

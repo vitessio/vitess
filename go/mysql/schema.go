@@ -99,7 +99,7 @@ where table_schema = database()`
 	FetchUpdatedTables = `select table_name, column_name, data_type 
 from _vt.schemacopy 
 where table_schema = database() and 
-	table_name in :tableNames 
+	table_name in ::tableNames 
 order by table_name, ordinal_position`
 
 	// FetchTables queries fetches all information about tables

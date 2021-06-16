@@ -21,9 +21,11 @@ import (
 	"errors"
 	"fmt"
 
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -37,6 +39,9 @@ const (
 	// SchemaMigrationsTableName is the unqualified name of the schema
 	// migrations table supported by vexec.
 	SchemaMigrationsTableName = "schema_migrations"
+	// VReplicationLogTableName is the unqualified name of the vreplication_log
+	// table supported by vexec.
+	VReplicationLogTableName = "vreplication_log"
 	// VReplicationTableName is the unqualified name of the vreplication table
 	// supported by vexec.
 	VReplicationTableName = "vreplication"
@@ -208,10 +213,46 @@ func (vx *VExec) GetPlanner(ctx context.Context, table string) (QueryPlanner, er
 	switch table {
 	case qualifiedTableName(VReplicationTableName):
 		return NewVReplicationQueryPlanner(vx.tmc, vx.workflow, vx.primaries[0].DbName()), nil
+	case qualifiedTableName(VReplicationLogTableName):
+		results, err := vx.QueryContext(ctx, "select id from _vt.vreplication")
+		if err != nil {
+			return nil, err
+		}
+
+		tabletStreamIDMap := make(map[string][]int64, len(results))
+
+		for tablet, p3qr := range results {
+			qr := sqltypes.Proto3ToResult(p3qr)
+			aliasStr := tablet.AliasString()
+			tabletStreamIDMap[aliasStr] = make([]int64, len(qr.Rows))
+
+			for i, row := range qr.Rows {
+				id, err := evalengine.ToInt64(row[0])
+				if err != nil {
+					return nil, err
+				}
+
+				tabletStreamIDMap[aliasStr][i] = id
+			}
+		}
+
+		return NewVReplicationLogQueryPlanner(vx.tmc, tabletStreamIDMap), nil
 	case qualifiedTableName(SchemaMigrationsTableName):
 		return nil, errors.New("Schema Migrations not yet supported in new workflow package")
 	default:
 		return nil, fmt.Errorf("%w: %v", ErrUnsupportedTable, table)
+	}
+}
+
+// WithWorkflow returns a copy of VExec with the Workflow field updated. Used so
+// callers to reuse a VExec's primaries list without needing to initialize a new
+// VExec instance.
+func (vx *VExec) WithWorkflow(workflow string) *VExec {
+	return &VExec{
+		ts:        vx.ts,
+		tmc:       vx.tmc,
+		primaries: vx.primaries,
+		workflow:  workflow,
 	}
 }
 

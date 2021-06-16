@@ -55,6 +55,15 @@ func (client *gRPCVtctldClient) ApplyRoutingRules(ctx context.Context, in *vtctl
 	return client.c.ApplyRoutingRules(ctx, in, opts...)
 }
 
+// ApplyVSchema is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) ApplyVSchema(ctx context.Context, in *vtctldatapb.ApplyVSchemaRequest, opts ...grpc.CallOption) (*vtctldatapb.ApplyVSchemaResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.ApplyVSchema(ctx, in, opts...)
+}
+
 // ChangeTabletType is part of the vtctlservicepb.VtctldClient interface.
 func (client *gRPCVtctldClient) ChangeTabletType(ctx context.Context, in *vtctldatapb.ChangeTabletTypeRequest, opts ...grpc.CallOption) (*vtctldatapb.ChangeTabletTypeResponse, error) {
 	if client.c == nil {
@@ -314,6 +323,24 @@ func (client *gRPCVtctldClient) RebuildVSchemaGraph(ctx context.Context, in *vtc
 	}
 
 	return client.c.RebuildVSchemaGraph(ctx, in, opts...)
+}
+
+// RefreshState is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) RefreshState(ctx context.Context, in *vtctldatapb.RefreshStateRequest, opts ...grpc.CallOption) (*vtctldatapb.RefreshStateResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.RefreshState(ctx, in, opts...)
+}
+
+// RefreshStateByShard is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) RefreshStateByShard(ctx context.Context, in *vtctldatapb.RefreshStateByShardRequest, opts ...grpc.CallOption) (*vtctldatapb.RefreshStateByShardResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.RefreshStateByShard(ctx, in, opts...)
 }
 
 // RemoveKeyspaceCell is part of the vtctlservicepb.VtctldClient interface.

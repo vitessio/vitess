@@ -118,7 +118,7 @@ func TestMultipleUpdatesFromDifferentShards(t *testing.T) {
 			var signalNb, initNb int
 			var updatedTables []string
 			update := func(th *discovery.TabletHealth) bool {
-				updatedTables = th.TablesUpdated
+				updatedTables = th.Stats.TableSchemaChanged
 				return !test.updateFail
 			}
 			signal := func() {
@@ -128,19 +128,18 @@ func TestMultipleUpdatesFromDifferentShards(t *testing.T) {
 				update:       update,
 				signal:       signal,
 				consumeDelay: 5 * time.Millisecond,
-			}
-
-			if test.init {
-				kUpdate.init = func(th *discovery.TabletHealth) bool {
+				reloadKeyspace: func(th *discovery.TabletHealth) bool {
 					initNb++
 					return !test.initFail
-				}
+				},
+				loaded: !test.init,
 			}
 
 			for _, in := range test.inputs {
 				target := &querypb.Target{
-					Keyspace: "ks",
-					Shard:    in.shard,
+					Keyspace:   "ks",
+					Shard:      in.shard,
+					TabletType: topodatapb.TabletType_MASTER,
 				}
 				tablet := &topodatapb.Tablet{
 					Keyspace: target.Keyspace,
@@ -148,10 +147,10 @@ func TestMultipleUpdatesFromDifferentShards(t *testing.T) {
 					Type:     target.TabletType,
 				}
 				d := &discovery.TabletHealth{
-					Tablet:        tablet,
-					Target:        target,
-					Serving:       true,
-					TablesUpdated: in.tablesUpdates,
+					Tablet:  tablet,
+					Target:  target,
+					Serving: true,
+					Stats:   &querypb.RealtimeStats{TableSchemaChanged: in.tablesUpdates},
 				}
 				if test.delay > 0 {
 					time.Sleep(test.delay)
