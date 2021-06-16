@@ -100,69 +100,6 @@ SubQueries:
 		2:dual
 	}
 }`,
-	}, {
-		input: "select 1 from a left join b on a.id = b.id",
-		output: `{
-Tables:
-	1:a
-	2:b
-OuterJoins:
-	inner: 1, outer: 2 - a.id = b.id
-}`,
-	}, {
-		input: "select 1 from a right join b on a.id = b.id",
-		output: `{
-Tables:
-	1:a
-	2:b
-OuterJoins:
-	inner: 2, outer: 1 - a.id = b.id
-}`,
-	}, {
-		input: "select 1 from a join b on a.id = b.id left join c on b.id = c.id",
-		output: `{
-Tables:
-	1:a
-	2:b
-	4:c
-JoinPredicates:
-	1:2 - a.id = b.id
-OuterJoins:
-	inner: 2, outer: 4 - b.id = c.id
-}`,
-	}, {
-		input: `select 1 from a right join b on a.id = b.id left join c on b.id = c.id`,
-		output: `{
-Tables:
-	1:a
-	2:b
-	4:c
-OuterJoins:
-	inner: 2, outer: 1 - a.id = b.id
-	inner: 2, outer: 4 - b.id = c.id
-}`,
-	}, {
-		input: `select 1 from a left join b on a.id = b.id left join c on b.id = c.id`,
-		output: `{
-Tables:
-	1:a
-	2:b
-	4:c
-OuterJoins:
-	inner: 1, outer: 2 - a.id = b.id
-	inner: 2, outer: 4 - b.id = c.id
-}`,
-	}, {
-		input: `select 1 from a right join b on a.id = b.id right join c on b.id = c.id`,
-		output: `{
-Tables:
-	1:a
-	2:b
-	4:c
-OuterJoins:
-	inner: 2, outer: 1 - a.id = b.id
-	inner: 4, outer: 2 - b.id = c.id
-}`,
 	}}
 
 	for i, tc := range tcases {

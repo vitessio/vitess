@@ -323,6 +323,17 @@ func SplitAndExpression(filters []Expr, node Expr) []Expr {
 	return append(filters, node)
 }
 
+// AndExpressions ands together two expression, minimising the expr when possible
+func AndExpressions(a, b Expr) Expr {
+	if a == nil {
+		return b
+	}
+	if b == nil {
+		return a
+	}
+	return &AndExpr{Left: a, Right: b}
+}
+
 // TableFromStatement returns the qualified table name for the query.
 // This works only for select statements.
 func TableFromStatement(sql string) (TableName, error) {

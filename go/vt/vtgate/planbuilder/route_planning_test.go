@@ -99,7 +99,7 @@ func TestMergeJoins(t *testing.T) {
 	}}
 	for i, tc := range tests {
 		t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
-			result := tryInnerMerge(tc.l, tc.r, tc.predicates, semantics.NewSemTable())
+			result := tryMerge(tc.l, tc.r, tc.predicates, semantics.NewSemTable(), true)
 			assert.Equal(t, tc.expected, result)
 		})
 	}
