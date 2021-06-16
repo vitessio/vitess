@@ -317,15 +317,18 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 		before = true
 		vals := sqltypes.MakeRowTrusted(tp.Fields, rowChange.Before)
 		for i, field := range tp.Fields {
-			bindvars["b_"+field.Name] = sqltypes.ValueBindVariable(vals[i])
+			bindVar, err := tp.bindFieldVal(field, &vals[i])
+			if err != nil {
+				return nil, err
+			}
+			bindvars["b_"+field.Name] = bindVar
 		}
 	}
 	if rowChange.After != nil {
 		after = true
 		vals := sqltypes.MakeRowTrusted(tp.Fields, rowChange.After)
 		for i, field := range tp.Fields {
-			val := &vals[i]
-			bindVar, err := tp.bindFieldVal(field, val)
+			bindVar, err := tp.bindFieldVal(field, &vals[i])
 			if err != nil {
 				return nil, err
 			}
@@ -352,6 +355,7 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 			if _, err := execParsedQuery(tp.Delete, bindvars, executor); err != nil {
 				return nil, err
 			}
+
 		}
 		return execParsedQuery(tp.Insert, bindvars, executor)
 	}
