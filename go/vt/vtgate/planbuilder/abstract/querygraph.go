@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package planbuilder
+package abstract
 
 import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -25,43 +25,43 @@ import (
 
 type (
 	/*
-	 queryGraph represents the FROM and WHERE parts of a query.
+	 QueryGraph represents the FROM and WHERE parts of a query.
 	 It is an intermediate representation of the query that makes it easier for the planner
 	 to find all possible join combinations. Instead of storing the query information in a form that is close
 	 to the syntax (AST), we extract the interesting parts into a graph form with the nodes being tables in the FROM
 	 clause and the edges between them being predicates. We keep predicates in a hash map keyed by the dependencies of
 	 the predicate. This makes it very fast to look up connections between tables in the query.
 	*/
-	queryGraph struct {
-		// the tables, including predicates that only depend on this particular table
-		tables []*queryTable
+	QueryGraph struct {
+		// the Tables, including predicates that only depend on this particular table
+		Tables []*QueryTable
 
-		// innerJoins contains the predicates that need multiple tables
+		// innerJoins contains the predicates that need multiple Tables
 		innerJoins map[semantics.TableSet][]sqlparser.Expr
 
-		outerJoins map[outerJoinTables][]sqlparser.Expr
+		OuterJoins map[outerJoinTables][]sqlparser.Expr
 
 		// noDeps contains the predicates that can be evaluated anywhere.
 		noDeps sqlparser.Expr
 
-		// subqueries contains the subqueries that depend on this query graph
-		subqueries map[*sqlparser.Subquery][]*queryGraph
+		// Subqueries contains the Subqueries that depend on this query graph
+		Subqueries map[*sqlparser.Subquery][]*QueryGraph
 	}
 
 	outerJoinTables struct {
-		inner, outer semantics.TableSet
+		inner, Outer semantics.TableSet
 	}
 
-	// queryTable is a single FROM table, including all predicates particular to this table
-	queryTable struct {
-		tableID    semantics.TableSet
-		alias      *sqlparser.AliasedTableExpr
-		table      sqlparser.TableName
-		predicates []sqlparser.Expr
+	// QueryTable is a single FROM table, including all predicates particular to this table
+	QueryTable struct {
+		TableID    semantics.TableSet
+		Alias      *sqlparser.AliasedTableExpr
+		Table      sqlparser.TableName
+		Predicates []sqlparser.Expr
 	}
 )
 
-func (qg *queryGraph) getPredicates(lhs, rhs semantics.TableSet) []sqlparser.Expr {
+func (qg *QueryGraph) GetPredicates(lhs, rhs semantics.TableSet) []sqlparser.Expr {
 	var allExprs []sqlparser.Expr
 	for tableSet, exprs := range qg.innerJoins {
 		if tableSet.IsSolvedBy(lhs|rhs) &&
@@ -73,17 +73,17 @@ func (qg *queryGraph) getPredicates(lhs, rhs semantics.TableSet) []sqlparser.Exp
 	return allExprs
 }
 
-func (qg *queryGraph) getOuterJoins(lhs, rhs semantics.TableSet) []sqlparser.Expr {
+func (qg *QueryGraph) GetOuterJoins(lhs, rhs semantics.TableSet) []sqlparser.Expr {
 	var allExprs []sqlparser.Expr
-	for tableSet, exprs := range qg.outerJoins {
-		if tableSet.outer.IsSolvedBy(rhs) && tableSet.inner.IsSolvedBy(lhs) {
+	for tableSet, exprs := range qg.OuterJoins {
+		if tableSet.Outer.IsSolvedBy(rhs) && tableSet.inner.IsSolvedBy(lhs) {
 			allExprs = append(allExprs, exprs...)
 		}
 	}
 	return allExprs
 }
 
-func createQGFromSelect(sel *sqlparser.Select, semTable *semantics.SemTable) (*queryGraph, error) {
+func CreateQGFromSelect(sel *sqlparser.Select, semTable *semantics.SemTable) (*QueryGraph, error) {
 	qg := newQueryGraph()
 	if err := qg.collectTables(sel.From, semTable); err != nil {
 		return nil, err
@@ -98,21 +98,21 @@ func createQGFromSelect(sel *sqlparser.Select, semTable *semantics.SemTable) (*q
 	return qg, nil
 }
 
-func createQGFromSelectStatement(selStmt sqlparser.SelectStatement, semTable *semantics.SemTable) ([]*queryGraph, error) {
+func CreateQGFromSelectStatement(selStmt sqlparser.SelectStatement, semTable *semantics.SemTable) ([]*QueryGraph, error) {
 	switch stmt := selStmt.(type) {
 	case *sqlparser.Select:
-		qg, err := createQGFromSelect(stmt, semTable)
+		qg, err := CreateQGFromSelect(stmt, semTable)
 		if err != nil {
 			return nil, err
 		}
-		return []*queryGraph{qg}, err
+		return []*QueryGraph{qg}, err
 	case *sqlparser.Union:
-		qg, err := createQGFromSelectStatement(stmt.FirstStatement, semTable)
+		qg, err := CreateQGFromSelectStatement(stmt.FirstStatement, semTable)
 		if err != nil {
 			return nil, err
 		}
 		for _, sel := range stmt.UnionSelects {
-			qgr, err := createQGFromSelectStatement(sel.Statement, semTable)
+			qgr, err := CreateQGFromSelectStatement(sel.Statement, semTable)
 			if err != nil {
 				return nil, err
 			}
@@ -120,26 +120,26 @@ func createQGFromSelectStatement(selStmt sqlparser.SelectStatement, semTable *se
 		}
 		return qg, nil
 	case *sqlparser.ParenSelect:
-		return createQGFromSelectStatement(stmt.Select, semTable)
+		return CreateQGFromSelectStatement(stmt.Select, semTable)
 	}
 
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] not reachable %T", selStmt)
 }
 
-func newQueryGraph() *queryGraph {
-	return &queryGraph{
+func newQueryGraph() *QueryGraph {
+	return &QueryGraph{
 		innerJoins: map[semantics.TableSet][]sqlparser.Expr{},
-		outerJoins: map[outerJoinTables][]sqlparser.Expr{},
-		subqueries: map[*sqlparser.Subquery][]*queryGraph{},
+		OuterJoins: map[outerJoinTables][]sqlparser.Expr{},
+		Subqueries: map[*sqlparser.Subquery][]*QueryGraph{},
 	}
 }
 
-func (qg *queryGraph) collectTable(t sqlparser.TableExpr, semTable *semantics.SemTable) error {
+func (qg *QueryGraph) collectTable(t sqlparser.TableExpr, semTable *semantics.SemTable) error {
 	switch table := t.(type) {
 	case *sqlparser.AliasedTableExpr:
 		tableName := table.Expr.(sqlparser.TableName)
-		qt := &queryTable{alias: table, table: tableName, tableID: semTable.TableSetFor(table)}
-		qg.tables = append(qg.tables, qt)
+		qt := &QueryTable{Alias: table, Table: tableName, TableID: semTable.TableSetFor(table)}
+		qg.Tables = append(qg.Tables, qt)
 	case *sqlparser.JoinTableExpr:
 		if err := qg.collectTable(table.LeftExpr, semTable); err != nil {
 			return err
@@ -148,7 +148,7 @@ func (qg *queryGraph) collectTable(t sqlparser.TableExpr, semTable *semantics.Se
 			return err
 		}
 		if table.Condition.On != nil {
-			for _, predicate := range splitAndExpression(nil, table.Condition.On) {
+			for _, predicate := range sqlparser.SplitAndExpression(nil, table.Condition.On) {
 				err := qg.collectPredicateTable(t, predicate, semTable)
 				if err != nil {
 					return err
@@ -165,7 +165,7 @@ func (qg *queryGraph) collectTable(t sqlparser.TableExpr, semTable *semantics.Se
 	return nil
 }
 
-func (qg *queryGraph) collectTables(t sqlparser.TableExprs, semTable *semantics.SemTable) error {
+func (qg *QueryGraph) collectTables(t sqlparser.TableExprs, semTable *semantics.SemTable) error {
 	for _, expr := range t {
 		if err := qg.collectTable(expr, semTable); err != nil {
 			return err
@@ -174,8 +174,8 @@ func (qg *queryGraph) collectTables(t sqlparser.TableExprs, semTable *semantics.
 	return nil
 }
 
-func (qg *queryGraph) collectPredicates(sel *sqlparser.Select, semTable *semantics.SemTable) error {
-	predicates := splitAndExpression(nil, sel.Where.Expr)
+func (qg *QueryGraph) collectPredicates(sel *sqlparser.Select, semTable *semantics.SemTable) error {
+	predicates := sqlparser.SplitAndExpression(nil, sel.Where.Expr)
 
 	for _, predicate := range predicates {
 		err := qg.collectPredicate(predicate, semTable)
@@ -186,7 +186,7 @@ func (qg *queryGraph) collectPredicates(sel *sqlparser.Select, semTable *semanti
 	return nil
 }
 
-func (qg *queryGraph) collectPredicateTable(t sqlparser.TableExpr, predicate sqlparser.Expr, semTable *semantics.SemTable) error {
+func (qg *QueryGraph) collectPredicateTable(t sqlparser.TableExpr, predicate sqlparser.Expr, semTable *semantics.SemTable) error {
 	deps := semTable.Dependencies(predicate)
 	switch deps.NumberOfTables() {
 	case 0:
@@ -223,9 +223,9 @@ func (qg *queryGraph) collectPredicateTable(t sqlparser.TableExpr, predicate sql
 					}
 				}
 
-				allPredicates := qg.outerJoins[outerJoinTable]
+				allPredicates := qg.OuterJoins[outerJoinTable]
 				allPredicates = append(allPredicates, predicate)
-				qg.outerJoins[outerJoinTable] = allPredicates
+				qg.OuterJoins[outerJoinTable] = allPredicates
 			}
 		}
 	}
@@ -233,7 +233,7 @@ func (qg *queryGraph) collectPredicateTable(t sqlparser.TableExpr, predicate sql
 	return err
 }
 
-func (qg *queryGraph) getOuterJoinTables(lhs, rhs sqlparser.TableExpr, l, r extractor, semTable *semantics.SemTable) (outerJoinTables, error) {
+func (qg *QueryGraph) getOuterJoinTables(lhs, rhs sqlparser.TableExpr, l, r extractor, semTable *semantics.SemTable) (outerJoinTables, error) {
 	t, err := l(lhs)
 	if err != nil {
 		return outerJoinTables{}, err
@@ -246,7 +246,7 @@ func (qg *queryGraph) getOuterJoinTables(lhs, rhs sqlparser.TableExpr, l, r extr
 	rgt := semTable.TableSetFor(t)
 	return outerJoinTables{
 		inner: lft,
-		outer: rgt,
+		Outer: rgt,
 	}, nil
 }
 
@@ -277,7 +277,7 @@ func right(tbl sqlparser.TableExpr) (*sqlparser.AliasedTableExpr, error) {
 	}
 }
 
-func (qg *queryGraph) collectPredicate(predicate sqlparser.Expr, semTable *semantics.SemTable) error {
+func (qg *QueryGraph) collectPredicate(predicate sqlparser.Expr, semTable *semantics.SemTable) error {
 	deps := semTable.Dependencies(predicate)
 	switch deps.NumberOfTables() {
 	case 0:
@@ -300,32 +300,32 @@ func (qg *queryGraph) collectPredicate(predicate sqlparser.Expr, semTable *seman
 	return err
 }
 
-func (qg *queryGraph) walkQGSubQueries(semTable *semantics.SemTable, predicate sqlparser.Expr) error {
+func (qg *QueryGraph) walkQGSubQueries(semTable *semantics.SemTable, predicate sqlparser.Expr) error {
 	return sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 		switch subQuery := node.(type) {
 		case *sqlparser.Subquery:
 
-			qgr, err := createQGFromSelectStatement(subQuery.Select, semTable)
+			qgr, err := CreateQGFromSelectStatement(subQuery.Select, semTable)
 			if err != nil {
 				return false, err
 			}
-			qg.subqueries[subQuery] = qgr
+			qg.Subqueries[subQuery] = qgr
 		}
 		return true, nil
 	}, predicate)
 }
 
-func (qg *queryGraph) addToSingleTable(table semantics.TableSet, predicate sqlparser.Expr) bool {
-	for _, t := range qg.tables {
-		if table == t.tableID {
-			t.predicates = append(t.predicates, predicate)
+func (qg *QueryGraph) addToSingleTable(table semantics.TableSet, predicate sqlparser.Expr) bool {
+	for _, t := range qg.Tables {
+		if table == t.TableID {
+			t.Predicates = append(t.Predicates, predicate)
 			return true
 		}
 	}
 	return false
 }
 
-func (qg *queryGraph) addNoDepsPredicate(predicate sqlparser.Expr) {
+func (qg *QueryGraph) addNoDepsPredicate(predicate sqlparser.Expr) {
 	if qg.noDeps == nil {
 		qg.noDeps = predicate
 	} else {

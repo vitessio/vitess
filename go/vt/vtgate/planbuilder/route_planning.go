@@ -21,6 +21,8 @@ import (
 	"sort"
 	"strings"
 
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/abstract"
+
 	"vitess.io/vitess/go/sqltypes"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -55,11 +57,11 @@ func newBuildSelectPlan(sel *sqlparser.Select, vschema ContextVSchema) (engine.P
 		return nil, err
 	}
 
-	qgraph, err := createQGFromSelect(sel, semTable)
+	qgraph, err := abstract.CreateQGFromSelect(sel, semTable)
 	if err != nil {
 		return nil, err
 	}
-	if len(qgraph.subqueries) > 0 {
+	if len(qgraph.Subqueries) > 0 {
 		return nil, semantics.Gen4NotSupportedF("subquery")
 	}
 
@@ -179,7 +181,7 @@ type (
 		pushOutputColumns([]*sqlparser.ColName, *semantics.SemTable) int
 	}
 	routeTable struct {
-		qtable *queryTable
+		qtable *abstract.QueryTable
 		vtable *vindexes.Table
 	}
 
@@ -706,7 +708,7 @@ type (
 	and removes the two inputs to this cheapest plan and instead adds the join.
 	As an optimization, it first only considers joining tables that have predicates defined between them
 */
-func greedySolve(qg *queryGraph, semTable *semantics.SemTable, vschema ContextVSchema) (joinTree, error) {
+func greedySolve(qg *abstract.QueryGraph, semTable *semantics.SemTable, vschema ContextVSchema) (joinTree, error) {
 	joinTrees, err := seedPlanList(qg, semTable, vschema)
 	planCache := cacheMap{}
 	if err != nil {
@@ -715,8 +717,8 @@ func greedySolve(qg *queryGraph, semTable *semantics.SemTable, vschema ContextVS
 
 	var innerJt, outerJt []joinTree
 	outers := semantics.TableSet(0)
-	for key := range qg.outerJoins {
-		outers = outers.Merge(key.outer)
+	for key := range qg.OuterJoins {
+		outers = outers.Merge(key.Outer)
 	}
 	for _, jt := range joinTrees {
 		if !jt.tables().IsOverlapping(outers) {
@@ -738,7 +740,7 @@ func greedySolve(qg *queryGraph, semTable *semantics.SemTable, vschema ContextVS
 	return tree, nil
 }
 
-func mergeJoinTrees(qg *queryGraph, semTable *semantics.SemTable, joinTrees []joinTree, planCache cacheMap, inner, crossJoinsOK bool) (joinTree, error) {
+func mergeJoinTrees(qg *abstract.QueryGraph, semTable *semantics.SemTable, joinTrees []joinTree, planCache cacheMap, inner, crossJoinsOK bool) (joinTree, error) {
 	if len(joinTrees) == 0 {
 		return nil, nil
 	}
@@ -784,7 +786,7 @@ func (cm cacheMap) getJoinTreeFor(lhs, rhs joinTree, joinPredicates []sqlparser.
 }
 
 func findBestJoinTree(
-	qg *queryGraph,
+	qg *abstract.QueryGraph,
 	semTable *semantics.SemTable,
 	plans []joinTree,
 	planCache cacheMap,
@@ -797,9 +799,9 @@ func findBestJoinTree(
 			}
 			var joinPredicates []sqlparser.Expr
 			if inner {
-				joinPredicates = qg.getPredicates(lhs.tables(), rhs.tables())
+				joinPredicates = qg.GetPredicates(lhs.tables(), rhs.tables())
 			} else {
-				joinPredicates = qg.getOuterJoins(lhs.tables(), rhs.tables())
+				joinPredicates = qg.GetOuterJoins(lhs.tables(), rhs.tables())
 			}
 			if len(joinPredicates) == 0 && !crossJoinsOK {
 				// if there are no predicates joining the two tables,
@@ -822,7 +824,7 @@ func findBestJoinTree(
 	return bestPlan, lIdx, rIdx, nil
 }
 
-func leftToRightSolve(qg *queryGraph, semTable *semantics.SemTable, vschema ContextVSchema) (joinTree, error) {
+func leftToRightSolve(qg *abstract.QueryGraph, semTable *semantics.SemTable, vschema ContextVSchema) (joinTree, error) {
 	plans, err := seedPlanList(qg, semTable, vschema)
 	if err != nil {
 		return nil, err
@@ -834,7 +836,7 @@ func leftToRightSolve(qg *queryGraph, semTable *semantics.SemTable, vschema Cont
 			acc = plan
 			continue
 		}
-		joinPredicates := qg.getPredicates(acc.tables(), plan.tables())
+		joinPredicates := qg.GetPredicates(acc.tables(), plan.tables())
 		// TODO: handle outer
 		acc, err = mergeOrJoin(acc, plan, joinPredicates, semTable, true)
 		if err != nil {
@@ -846,12 +848,12 @@ func leftToRightSolve(qg *queryGraph, semTable *semantics.SemTable, vschema Cont
 }
 
 // seedPlanList returns a routePlan for each table in the qg
-func seedPlanList(qg *queryGraph, semTable *semantics.SemTable, vschema ContextVSchema) ([]joinTree, error) {
-	plans := make([]joinTree, len(qg.tables))
+func seedPlanList(qg *abstract.QueryGraph, semTable *semantics.SemTable, vschema ContextVSchema) ([]joinTree, error) {
+	plans := make([]joinTree, len(qg.Tables))
 
 	// we start by seeding the table with the single routes
-	for i, table := range qg.tables {
-		solves := semTable.TableSetFor(table.alias)
+	for i, table := range qg.Tables {
+		solves := semTable.TableSetFor(table.Alias)
 		plan, err := createRoutePlan(table, solves, vschema)
 		if err != nil {
 			return nil, err
@@ -865,24 +867,24 @@ func removeAt(plans []joinTree, idx int) []joinTree {
 	return append(plans[:idx], plans[idx+1:]...)
 }
 
-func createRoutePlan(table *queryTable, solves semantics.TableSet, vschema ContextVSchema) (*routePlan, error) {
-	vschemaTable, _, _, _, _, err := vschema.FindTableOrVindex(table.table)
+func createRoutePlan(table *abstract.QueryTable, solves semantics.TableSet, vschema ContextVSchema) (*routePlan, error) {
+	vschemaTable, _, _, _, _, err := vschema.FindTableOrVindex(table.Table)
 	if err != nil {
 		return nil, err
 	}
-	if vschemaTable.Name.String() != table.table.Name.String() {
+	if vschemaTable.Name.String() != table.Table.Name.String() {
 		// we are dealing with a routed table
-		name := table.table.Name
-		table.table.Name = vschemaTable.Name
-		astTable, ok := table.alias.Expr.(sqlparser.TableName)
+		name := table.Table.Name
+		table.Table.Name = vschemaTable.Name
+		astTable, ok := table.Alias.Expr.(sqlparser.TableName)
 		if !ok {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] a derived table should never be a routed table")
 		}
 		realTableName := sqlparser.NewTableIdent(vschemaTable.Name.String())
 		astTable.Name = realTableName
-		if table.alias.As.IsEmpty() {
+		if table.Alias.As.IsEmpty() {
 			// if the user hasn't specified an alias, we'll insert one here so the old table name still works
-			table.alias.As = sqlparser.NewTableIdent(name.String())
+			table.Alias.As = sqlparser.NewTableIdent(name.String())
 		}
 	}
 	plan := &routePlan{
@@ -914,7 +916,7 @@ func createRoutePlan(table *queryTable, solves semantics.TableSet, vschema Conte
 	default:
 		plan.routeOpCode = engine.SelectScatter
 	}
-	err = plan.addPredicate(table.predicates...)
+	err = plan.addPredicate(table.Predicates...)
 	if err != nil {
 		return nil, err
 	}
@@ -929,7 +931,7 @@ func findColumnVindex(a *routePlan, exp sqlparser.Expr, sem *semantics.SemTable)
 	}
 	leftDep := sem.Dependencies(left)
 	for _, table := range a._tables {
-		if leftDep.IsSolvedBy(table.qtable.tableID) {
+		if leftDep.IsSolvedBy(table.qtable.TableID) {
 			for _, vindex := range table.vtable.ColumnVindexes {
 				singCol, isSingle := vindex.Vindex.(vindexes.SingleColumn)
 				if isSingle && vindex.Columns[0].Equal(left.Name) {
@@ -1078,7 +1080,7 @@ func (r routeTables) Len() int {
 }
 
 func (r routeTables) Less(i, j int) bool {
-	return r[i].qtable.tableID < r[j].qtable.tableID
+	return r[i].qtable.TableID < r[j].qtable.TableID
 }
 
 func (r routeTables) Swap(i, j int) {

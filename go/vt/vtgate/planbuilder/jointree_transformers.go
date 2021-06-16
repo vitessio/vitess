@@ -69,11 +69,11 @@ func transformRoutePlan(n *routePlan) (*route, error) {
 				Name: t.vtable.Name,
 			},
 			Partitions: nil,
-			As:         t.qtable.alias.As,
+			As:         t.qtable.Alias.As,
 			Hints:      nil,
 		}
 		tablesForSelect = append(tablesForSelect, &alias)
-		tableNameMap[sqlparser.String(t.qtable.table.Name)] = nil
+		tableNameMap[sqlparser.String(t.qtable.Table.Name)] = nil
 	}
 
 	for _, predicate := range n.vindexPredicates {
@@ -91,11 +91,11 @@ func transformRoutePlan(n *routePlan) (*route, error) {
 			Condition: sqlparser.JoinCondition{
 				On: leftJoin.expr,
 			},
-			RightExpr: leftJoin.right.qtable.alias,
-			LeftExpr:  leftJoin.left.qtable.alias,
+			RightExpr: leftJoin.right.qtable.Alias,
+			LeftExpr:  leftJoin.left.qtable.Alias,
 		}
 		tablesForSelect = append(tablesForSelect, joinExpr)
-		tableNameMap[sqlparser.String(leftJoin.right.qtable.table.Name)] = nil
+		tableNameMap[sqlparser.String(leftJoin.right.qtable.Table.Name)] = nil
 	}
 
 	predicates := n.Predicates()

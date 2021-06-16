@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package planbuilder
+package abstract
 
 import (
 	"fmt"
@@ -38,22 +38,6 @@ import (
 
 type tcase struct {
 	input, output string
-}
-
-func equals(left, right sqlparser.Expr) sqlparser.Expr {
-	return &sqlparser.ComparisonExpr{
-		Operator: sqlparser.EqualOp,
-		Left:     left,
-		Right:    right,
-	}
-}
-
-func colName(table, column string) *sqlparser.ColName {
-	return &sqlparser.ColName{Name: sqlparser.NewColIdent(column), Qualifier: tableName(table)}
-}
-
-func tableName(name string) sqlparser.TableName {
-	return sqlparser.TableName{Name: sqlparser.NewTableIdent(name)}
 }
 
 func TestQueryGraph(t *testing.T) {
@@ -188,7 +172,7 @@ OuterJoins:
 			require.NoError(t, err)
 			semTable, err := semantics.Analyze(tree, "", &fakeSI{})
 			require.NoError(t, err)
-			qgraph, err := createQGFromSelect(tree.(*sqlparser.Select), semTable)
+			qgraph, err := CreateQGFromSelect(tree.(*sqlparser.Select), semTable)
 			require.NoError(t, err)
 			assert.Equal(t, tc.output, qgraph.testString())
 			if t.Failed() {
@@ -203,7 +187,7 @@ func TestString(t *testing.T) {
 	require.NoError(t, err)
 	semTable, err := semantics.Analyze(tree, "", &fakeSI{})
 	require.NoError(t, err)
-	qgraph, err := createQGFromSelect(tree.(*sqlparser.Select), semTable)
+	qgraph, err := CreateQGFromSelect(tree.(*sqlparser.Select), semTable)
 	require.NoError(t, err)
 	utils.MustMatch(t, `{
 Tables:
@@ -222,13 +206,13 @@ SubQueries:
 }`, qgraph.testString())
 }
 
-func (qt *queryTable) testString() string {
+func (qt *QueryTable) testString() string {
 	var alias string
-	if !qt.alias.As.IsEmpty() {
-		alias = " AS " + sqlparser.String(qt.alias.As)
+	if !qt.Alias.As.IsEmpty() {
+		alias = " AS " + sqlparser.String(qt.Alias.As)
 	}
 	var preds []string
-	for _, predicate := range qt.predicates {
+	for _, predicate := range qt.Predicates {
 		preds = append(preds, sqlparser.String(predicate))
 	}
 	var where string
@@ -236,17 +220,17 @@ func (qt *queryTable) testString() string {
 		where = " where " + strings.Join(preds, " and ")
 	}
 
-	return fmt.Sprintf("\t%d:%s%s%s", qt.tableID, sqlparser.String(qt.table), alias, where)
+	return fmt.Sprintf("\t%d:%s%s%s", qt.TableID, sqlparser.String(qt.Table), alias, where)
 }
 
-func (qg *queryGraph) testString() string {
+func (qg *QueryGraph) testString() string {
 	return fmt.Sprintf(`{
 Tables:
 %s%s%s%s%s
 }`, strings.Join(qg.tableNames(), "\n"), qg.crossPredicateString(), qg.outerJoinsString(), qg.noDepsString(), qg.subqueriesString())
 }
 
-func (qg *queryGraph) crossPredicateString() string {
+func (qg *QueryGraph) crossPredicateString() string {
 	if len(qg.innerJoins) == 0 {
 		return ""
 	}
@@ -268,18 +252,18 @@ func (qg *queryGraph) crossPredicateString() string {
 	return fmt.Sprintf("\nJoinPredicates:\n%s", strings.Join(joinPreds, "\n"))
 }
 
-func (qg *queryGraph) outerJoinsString() string {
-	if len(qg.outerJoins) == 0 {
+func (qg *QueryGraph) outerJoinsString() string {
+	if len(qg.OuterJoins) == 0 {
 		return ""
 	}
 	var joinPreds []string
-	for deps, predicates := range qg.outerJoins {
+	for deps, predicates := range qg.OuterJoins {
 		var inner []string
 		for _, id := range deps.inner.Constituents() {
 			inner = append(inner, fmt.Sprintf("%d", id))
 		}
 		var outer []string
-		for _, id := range deps.outer.Constituents() {
+		for _, id := range deps.Outer.Constituents() {
 			outer = append(outer, fmt.Sprintf("%d", id))
 		}
 
@@ -296,20 +280,20 @@ func (qg *queryGraph) outerJoinsString() string {
 	return fmt.Sprintf("\nOuterJoins:\n%s", strings.Join(joinPreds, "\n"))
 }
 
-func (qg *queryGraph) tableNames() []string {
+func (qg *QueryGraph) tableNames() []string {
 	var tables []string
-	for _, t := range qg.tables {
+	for _, t := range qg.Tables {
 		tables = append(tables, t.testString())
 	}
 	return tables
 }
 
-func (qg *queryGraph) subqueriesString() string {
-	if len(qg.subqueries) == 0 {
+func (qg *QueryGraph) subqueriesString() string {
+	if len(qg.Subqueries) == 0 {
 		return ""
 	}
 	var graphs []string
-	for sq, qgraphs := range qg.subqueries {
+	for sq, qgraphs := range qg.Subqueries {
 		key := sqlparser.String(sq)
 		for _, inner := range qgraphs {
 			str := inner.testString()
@@ -323,7 +307,7 @@ func (qg *queryGraph) subqueriesString() string {
 	return fmt.Sprintf("\nSubQueries:\n%s", strings.Join(graphs, "\n"))
 }
 
-func (qg *queryGraph) noDepsString() string {
+func (qg *QueryGraph) noDepsString() string {
 	if qg.noDeps == nil {
 		return ""
 	}
