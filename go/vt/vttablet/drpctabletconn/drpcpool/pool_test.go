@@ -45,7 +45,7 @@ func TestGet(t *testing.T) {
 type emptyConn struct{ drpc.Conn }
 
 func (emptyConn) Close() error              { return nil }
-func (emptyConn) Closed() <-chan struct{}   { return nil }
+func (emptyConn) Closed() bool              { return false }
 func (emptyConn) Transport() drpc.Transport { return emptyTransport{} }
 
 func (emptyConn) Invoke(ctx context.Context, rpc string, enc drpc.Encoding, in, out drpc.Message) error {

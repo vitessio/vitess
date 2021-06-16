@@ -742,6 +742,7 @@ func DialTablet(tablet *topodatapb.Tablet, failFast bool) (queryservice.QuerySer
 	cc := drpcpool.OpenConnectionPool(func(ctx context.Context) (drpc.Conn, error) {
 		return dialTablet1(tablet, failFast)
 	})
+	cc.SetMaxOpenConns(64)
 
 	c := queryservicepb.NewDRPCQueryClient(cc)
 	return &dRPCQueryClient{
