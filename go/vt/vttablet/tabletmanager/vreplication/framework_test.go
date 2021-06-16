@@ -153,7 +153,7 @@ func resetBinlogClient() {
 
 func masterPosition(t *testing.T) string {
 	t.Helper()
-	pos, err := env.Mysqld.MasterPosition()
+	pos, err := env.Mysqld.PrimaryPosition()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -481,12 +481,24 @@ func shouldIgnoreQuery(query string) bool {
 	return heartbeatRe.MatchString(query)
 }
 
-func expectDBClientQueries(t *testing.T, queries []string) {
+func expectDBClientQueries(t *testing.T, queries []string, skippableOnce ...string) {
 	extraQueries := withDDL.DDLs()
 	extraQueries = append(extraQueries, withDDLInitialQueries...)
 	// Either 'queries' or 'queriesWithDDLs' must match globalDBQueries
 	t.Helper()
 	failed := false
+	skippedOnce := false
+
+	queryMatch := func(query string, got string) bool {
+		if query[0] == '/' {
+			result, err := regexp.MatchString(query[1:], got)
+			if err != nil {
+				panic(err)
+			}
+			return result
+		}
+		return (got == query)
+	}
 	for i, query := range queries {
 		if failed {
 			t.Errorf("no query received, expecting %s", query)
@@ -507,18 +519,17 @@ func expectDBClientQueries(t *testing.T, queries []string) {
 				}
 			}
 
-			var match bool
-			if query[0] == '/' {
-				result, err := regexp.MatchString(query[1:], got)
-				if err != nil {
-					panic(err)
+			if !queryMatch(query, got) {
+				if !skippedOnce {
+					// let's see if "got" is a skippable query
+					for _, skippable := range skippableOnce {
+						if queryMatch(skippable, got) {
+							skippedOnce = true
+							goto retry
+						}
+					}
 				}
-				match = result
-			} else {
-				match = (got == query)
-			}
-			if !match {
-				t.Errorf("query:\n%q, does not match query %d:\n%q", got, i, query)
+				t.Errorf("query:\n%q, does not match expected query %d:\n%q", got, i, query)
 			}
 		case <-time.After(5 * time.Second):
 			t.Errorf("no query received, expecting %s", query)

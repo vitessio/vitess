@@ -78,8 +78,8 @@ type vreplicator struct {
 	state           string
 	stats           *binlogplayer.Stats
 	// mysqld is used to fetch the local schema.
-	mysqld    mysqlctl.MysqlDaemon
-	pkInfoMap map[string][]*PrimaryKeyInfo
+	mysqld     mysqlctl.MysqlDaemon
+	colInfoMap map[string][]*ColumnInfo
 
 	originalFKCheckSetting int64
 }
@@ -154,11 +154,11 @@ func (vr *vreplicator) Replicate(ctx context.Context) error {
 }
 
 func (vr *vreplicator) replicate(ctx context.Context) error {
-	pkInfo, err := vr.buildPkInfoMap(ctx)
+	colInfo, err := vr.buildColInfoMap(ctx)
 	if err != nil {
 		return err
 	}
-	vr.pkInfoMap = pkInfo
+	vr.colInfoMap = colInfo
 	if err := vr.getSettingFKCheck(); err != nil {
 		return err
 	}
@@ -224,22 +224,24 @@ func (vr *vreplicator) replicate(ctx context.Context) error {
 	}
 }
 
-// PrimaryKeyInfo is used to store charset and collation for primary keys where applicable
-type PrimaryKeyInfo struct {
-	Name       string
-	CharSet    string
-	Collation  string
-	DataType   string
-	ColumnType string
+// ColumnInfo is used to store charset and collation
+type ColumnInfo struct {
+	Name        string
+	CharSet     string
+	Collation   string
+	DataType    string
+	ColumnType  string
+	IsPK        bool
+	IsGenerated bool
 }
 
-func (vr *vreplicator) buildPkInfoMap(ctx context.Context) (map[string][]*PrimaryKeyInfo, error) {
+func (vr *vreplicator) buildColInfoMap(ctx context.Context) (map[string][]*ColumnInfo, error) {
 	schema, err := vr.mysqld.GetSchema(ctx, vr.dbClient.DBName(), []string{"/.*/"}, nil, false)
 	if err != nil {
 		return nil, err
 	}
-	queryTemplate := "select character_set_name, collation_name, column_name, data_type, column_type from information_schema.columns where table_schema=%s and table_name=%s;"
-	pkInfoMap := make(map[string][]*PrimaryKeyInfo)
+	queryTemplate := "select character_set_name, collation_name, column_name, data_type, column_type, extra from information_schema.columns where table_schema=%s and table_name=%s;"
+	colInfoMap := make(map[string][]*ColumnInfo)
 	for _, td := range schema.TableDefinitions {
 
 		query := fmt.Sprintf(queryTemplate, encodeString(vr.dbClient.DBName()), encodeString(td.Name))
@@ -257,47 +259,56 @@ func (vr *vreplicator) buildPkInfoMap(ctx context.Context) (map[string][]*Primar
 		} else {
 			pks = td.Columns
 		}
-		var pkInfos []*PrimaryKeyInfo
-		for _, pk := range pks {
+		var colInfo []*ColumnInfo
+		for _, row := range qr.Rows {
 			charSet := ""
 			collation := ""
+			columnName := ""
+			isPK := false
+			isGenerated := false
 			var dataType, columnType string
-			for _, row := range qr.Rows {
-				columnName := row[2].ToString()
-				if strings.EqualFold(columnName, pk) {
-					var currentField *querypb.Field
-					for _, field := range td.Fields {
-						if field.Name == pk {
-							currentField = field
-							break
-						}
-					}
-					if currentField == nil {
-						continue
-					}
-					dataType = row[3].ToString()
-					columnType = row[4].ToString()
-					if sqltypes.IsText(currentField.Type) {
-						charSet = row[0].ToString()
-						collation = row[1].ToString()
-					}
+			columnName = row[2].ToString()
+			var currentField *querypb.Field
+			for _, field := range td.Fields {
+				if field.Name == columnName {
+					currentField = field
 					break
 				}
 			}
-			if dataType == "" || columnType == "" {
-				return nil, fmt.Errorf("no dataType/columnType found in information_schema.columns for table %s, column %s", td.Name, pk)
+			if currentField == nil {
+				continue
 			}
-			pkInfos = append(pkInfos, &PrimaryKeyInfo{
-				Name:       pk,
-				CharSet:    charSet,
-				Collation:  collation,
-				DataType:   dataType,
-				ColumnType: columnType,
+			dataType = row[3].ToString()
+			columnType = row[4].ToString()
+			if sqltypes.IsText(currentField.Type) {
+				charSet = row[0].ToString()
+				collation = row[1].ToString()
+			}
+			if dataType == "" || columnType == "" {
+				return nil, fmt.Errorf("no dataType/columnType found in information_schema.columns for table %s, column %s", td.Name, columnName)
+			}
+			for _, pk := range pks {
+				if columnName == pk {
+					isPK = true
+				}
+			}
+			extra := strings.ToLower(row[5].ToString())
+			if strings.Contains(extra, "generated") || strings.Contains(extra, "virtual") {
+				isGenerated = true
+			}
+			colInfo = append(colInfo, &ColumnInfo{
+				Name:        columnName,
+				CharSet:     charSet,
+				Collation:   collation,
+				DataType:    dataType,
+				ColumnType:  columnType,
+				IsPK:        isPK,
+				IsGenerated: isGenerated,
 			})
 		}
-		pkInfoMap[td.Name] = pkInfos
+		colInfoMap[td.Name] = colInfo
 	}
-	return pkInfoMap, nil
+	return colInfoMap, nil
 }
 
 func (vr *vreplicator) readSettings(ctx context.Context) (settings binlogplayer.VRSettings, numTablesToCopy int64, err error) {

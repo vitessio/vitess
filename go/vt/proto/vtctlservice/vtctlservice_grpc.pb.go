@@ -144,6 +144,8 @@ type VtctldClient interface {
 	AddCellsAlias(ctx context.Context, in *vtctldata.AddCellsAliasRequest, opts ...grpc.CallOption) (*vtctldata.AddCellsAliasResponse, error)
 	// ApplyRoutingRules applies the VSchema routing rules.
 	ApplyRoutingRules(ctx context.Context, in *vtctldata.ApplyRoutingRulesRequest, opts ...grpc.CallOption) (*vtctldata.ApplyRoutingRulesResponse, error)
+	// ApplyVSchema applies a vschema to a keyspace.
+	ApplyVSchema(ctx context.Context, in *vtctldata.ApplyVSchemaRequest, opts ...grpc.CallOption) (*vtctldata.ApplyVSchemaResponse, error)
 	// ChangeTabletType changes the db type for the specified tablet, if possible.
 	// This is used primarily to arrange replicas, and it will not convert a
 	// primary. For that, use InitShardPrimary.
@@ -235,6 +237,10 @@ type VtctldClient interface {
 	// VSchema objects in the provided cells (or all cells in the topo none
 	// provided).
 	RebuildVSchemaGraph(ctx context.Context, in *vtctldata.RebuildVSchemaGraphRequest, opts ...grpc.CallOption) (*vtctldata.RebuildVSchemaGraphResponse, error)
+	// RefreshState reloads the tablet record on the specified tablet.
+	RefreshState(ctx context.Context, in *vtctldata.RefreshStateRequest, opts ...grpc.CallOption) (*vtctldata.RefreshStateResponse, error)
+	// RefreshStateByShard calls RefreshState on all the tablets in the given shard.
+	RefreshStateByShard(ctx context.Context, in *vtctldata.RefreshStateByShardRequest, opts ...grpc.CallOption) (*vtctldata.RefreshStateByShardResponse, error)
 	// RemoveKeyspaceCell removes the specified cell from the Cells list for all
 	// shards in the specified keyspace, as well as from the SrvKeyspace for that
 	// keyspace in that cell.
@@ -298,6 +304,15 @@ func (c *vtctldClient) AddCellsAlias(ctx context.Context, in *vtctldata.AddCells
 func (c *vtctldClient) ApplyRoutingRules(ctx context.Context, in *vtctldata.ApplyRoutingRulesRequest, opts ...grpc.CallOption) (*vtctldata.ApplyRoutingRulesResponse, error) {
 	out := new(vtctldata.ApplyRoutingRulesResponse)
 	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/ApplyRoutingRules", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vtctldClient) ApplyVSchema(ctx context.Context, in *vtctldata.ApplyVSchemaRequest, opts ...grpc.CallOption) (*vtctldata.ApplyVSchemaResponse, error) {
+	out := new(vtctldata.ApplyVSchemaResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/ApplyVSchema", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -565,6 +580,24 @@ func (c *vtctldClient) RebuildVSchemaGraph(ctx context.Context, in *vtctldata.Re
 	return out, nil
 }
 
+func (c *vtctldClient) RefreshState(ctx context.Context, in *vtctldata.RefreshStateRequest, opts ...grpc.CallOption) (*vtctldata.RefreshStateResponse, error) {
+	out := new(vtctldata.RefreshStateResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/RefreshState", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vtctldClient) RefreshStateByShard(ctx context.Context, in *vtctldata.RefreshStateByShardRequest, opts ...grpc.CallOption) (*vtctldata.RefreshStateByShardResponse, error) {
+	out := new(vtctldata.RefreshStateByShardResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/RefreshStateByShard", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *vtctldClient) RemoveKeyspaceCell(ctx context.Context, in *vtctldata.RemoveKeyspaceCellRequest, opts ...grpc.CallOption) (*vtctldata.RemoveKeyspaceCellResponse, error) {
 	out := new(vtctldata.RemoveKeyspaceCellResponse)
 	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/RemoveKeyspaceCell", in, out, opts...)
@@ -644,6 +677,8 @@ type VtctldServer interface {
 	AddCellsAlias(context.Context, *vtctldata.AddCellsAliasRequest) (*vtctldata.AddCellsAliasResponse, error)
 	// ApplyRoutingRules applies the VSchema routing rules.
 	ApplyRoutingRules(context.Context, *vtctldata.ApplyRoutingRulesRequest) (*vtctldata.ApplyRoutingRulesResponse, error)
+	// ApplyVSchema applies a vschema to a keyspace.
+	ApplyVSchema(context.Context, *vtctldata.ApplyVSchemaRequest) (*vtctldata.ApplyVSchemaResponse, error)
 	// ChangeTabletType changes the db type for the specified tablet, if possible.
 	// This is used primarily to arrange replicas, and it will not convert a
 	// primary. For that, use InitShardPrimary.
@@ -735,6 +770,10 @@ type VtctldServer interface {
 	// VSchema objects in the provided cells (or all cells in the topo none
 	// provided).
 	RebuildVSchemaGraph(context.Context, *vtctldata.RebuildVSchemaGraphRequest) (*vtctldata.RebuildVSchemaGraphResponse, error)
+	// RefreshState reloads the tablet record on the specified tablet.
+	RefreshState(context.Context, *vtctldata.RefreshStateRequest) (*vtctldata.RefreshStateResponse, error)
+	// RefreshStateByShard calls RefreshState on all the tablets in the given shard.
+	RefreshStateByShard(context.Context, *vtctldata.RefreshStateByShardRequest) (*vtctldata.RefreshStateByShardResponse, error)
 	// RemoveKeyspaceCell removes the specified cell from the Cells list for all
 	// shards in the specified keyspace, as well as from the SrvKeyspace for that
 	// keyspace in that cell.
@@ -782,6 +821,9 @@ func (UnimplementedVtctldServer) AddCellsAlias(context.Context, *vtctldata.AddCe
 }
 func (UnimplementedVtctldServer) ApplyRoutingRules(context.Context, *vtctldata.ApplyRoutingRulesRequest) (*vtctldata.ApplyRoutingRulesResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ApplyRoutingRules not implemented")
+}
+func (UnimplementedVtctldServer) ApplyVSchema(context.Context, *vtctldata.ApplyVSchemaRequest) (*vtctldata.ApplyVSchemaResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ApplyVSchema not implemented")
 }
 func (UnimplementedVtctldServer) ChangeTabletType(context.Context, *vtctldata.ChangeTabletTypeRequest) (*vtctldata.ChangeTabletTypeResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ChangeTabletType not implemented")
@@ -870,6 +912,12 @@ func (UnimplementedVtctldServer) PlannedReparentShard(context.Context, *vtctldat
 func (UnimplementedVtctldServer) RebuildVSchemaGraph(context.Context, *vtctldata.RebuildVSchemaGraphRequest) (*vtctldata.RebuildVSchemaGraphResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RebuildVSchemaGraph not implemented")
 }
+func (UnimplementedVtctldServer) RefreshState(context.Context, *vtctldata.RefreshStateRequest) (*vtctldata.RefreshStateResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RefreshState not implemented")
+}
+func (UnimplementedVtctldServer) RefreshStateByShard(context.Context, *vtctldata.RefreshStateByShardRequest) (*vtctldata.RefreshStateByShardResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RefreshStateByShard not implemented")
+}
 func (UnimplementedVtctldServer) RemoveKeyspaceCell(context.Context, *vtctldata.RemoveKeyspaceCellRequest) (*vtctldata.RemoveKeyspaceCellResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RemoveKeyspaceCell not implemented")
 }
@@ -954,6 +1002,24 @@ func _Vtctld_ApplyRoutingRules_Handler(srv interface{}, ctx context.Context, dec
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(VtctldServer).ApplyRoutingRules(ctx, req.(*vtctldata.ApplyRoutingRulesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Vtctld_ApplyVSchema_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.ApplyVSchemaRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).ApplyVSchema(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/ApplyVSchema",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).ApplyVSchema(ctx, req.(*vtctldata.ApplyVSchemaRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1480,6 +1546,42 @@ func _Vtctld_RebuildVSchemaGraph_Handler(srv interface{}, ctx context.Context, d
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Vtctld_RefreshState_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.RefreshStateRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).RefreshState(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/RefreshState",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).RefreshState(ctx, req.(*vtctldata.RefreshStateRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Vtctld_RefreshStateByShard_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.RefreshStateByShardRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).RefreshStateByShard(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/RefreshStateByShard",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).RefreshStateByShard(ctx, req.(*vtctldata.RefreshStateByShardRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Vtctld_RemoveKeyspaceCell_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(vtctldata.RemoveKeyspaceCellRequest)
 	if err := dec(in); err != nil {
@@ -1626,6 +1728,10 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _Vtctld_ApplyRoutingRules_Handler,
 		},
 		{
+			MethodName: "ApplyVSchema",
+			Handler:    _Vtctld_ApplyVSchema_Handler,
+		},
+		{
 			MethodName: "ChangeTabletType",
 			Handler:    _Vtctld_ChangeTabletType_Handler,
 		},
@@ -1740,6 +1846,14 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RebuildVSchemaGraph",
 			Handler:    _Vtctld_RebuildVSchemaGraph_Handler,
+		},
+		{
+			MethodName: "RefreshState",
+			Handler:    _Vtctld_RefreshState_Handler,
+		},
+		{
+			MethodName: "RefreshStateByShard",
+			Handler:    _Vtctld_RefreshStateByShard_Handler,
 		},
 		{
 			MethodName: "RemoveKeyspaceCell",

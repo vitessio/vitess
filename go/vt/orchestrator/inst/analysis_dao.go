@@ -188,7 +188,6 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 		MIN(
 			master_instance.binlog_server
 		) AS is_binlog_server,
-		MIN(master_instance.pseudo_gtid) AS is_pseudo_gtid,
 		MIN(
 			master_instance.supports_oracle_gtid
 		) AS supports_oracle_gtid,
@@ -431,7 +430,6 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 		a.MariaDBGTIDImmediateTopology = countValidMariaDBGTIDReplicas == a.CountValidReplicas && a.CountValidReplicas > 0
 		countValidBinlogServerReplicas := m.GetUint("count_valid_binlog_server_replicas")
 		a.BinlogServerImmediateTopology = countValidBinlogServerReplicas == a.CountValidReplicas && a.CountValidReplicas > 0
-		a.PseudoGTIDImmediateTopology = m.GetBool("is_pseudo_gtid")
 		a.SemiSyncMasterEnabled = m.GetBool("semi_sync_master_enabled")
 		a.SemiSyncMasterStatus = m.GetBool("semi_sync_master_status")
 		a.SemiSyncReplicaEnabled = m.GetBool("semi_sync_replica_enabled")
@@ -694,8 +692,7 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 			if a.IsMaster && a.CountReplicas > 1 &&
 				!a.OracleGTIDImmediateTopology &&
 				!a.MariaDBGTIDImmediateTopology &&
-				!a.BinlogServerImmediateTopology &&
-				!a.PseudoGTIDImmediateTopology {
+				!a.BinlogServerImmediateTopology {
 				a.StructureAnalysis = append(a.StructureAnalysis, NoFailoverSupportStructureWarning)
 			}
 			if a.IsMaster && a.CountStatementBasedLoggingReplicas > 0 && a.CountMixedBasedLoggingReplicas > 0 {
