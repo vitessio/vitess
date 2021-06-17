@@ -35,7 +35,7 @@ import (
 	"context"
 
 	"github.com/z-division/go-zookeeper/zk"
-	"golang.org/x/crypto/ssh/terminal"
+	"golang.org/x/term"
 
 	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/vt/log"
@@ -558,7 +558,7 @@ func cmdCat(ctx context.Context, subFlags *flag.FlagSet, args []string) error {
 			decoded = string(data)
 		}
 		fmt.Print(decoded)
-		if len(decoded) > 0 && decoded[len(decoded)-1] != '\n' && (terminal.IsTerminal(int(os.Stdout.Fd())) || *longListing) {
+		if len(decoded) > 0 && decoded[len(decoded)-1] != '\n' && (term.IsTerminal(int(os.Stdout.Fd())) || *longListing) {
 			fmt.Print("\n")
 		}
 	}

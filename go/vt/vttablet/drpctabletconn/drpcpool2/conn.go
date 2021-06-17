@@ -14,12 +14,10 @@ import (
 
 // poolConn grabs a connection from the pool for every invoke/stream.
 type poolConn struct {
-	closed  int32 // atomic where 1 == true
-	closeCh chan struct{}
-
-	pk   poolKey
-	dial Dialer
-	pool *Pool
+	closed int32 // atomic where 1 == true
+	pk     poolKey
+	dial   Dialer
+	pool   *Pool
 }
 
 // Close marks the poolConn as closed and will not allow future calls to Invoke or NewStream
