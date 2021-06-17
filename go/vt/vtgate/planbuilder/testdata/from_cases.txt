@@ -2584,3 +2584,36 @@ Gen4 plan same as above
     "SysTableTableSchema": "[VARBINARY(\"performance_schema\")]"
   }
 }
+
+# query with parens is planned correctly
+"select m1.col from (unsharded as m1, unsharded as m2)"
+{
+  "QueryType": "SELECT",
+  "Original": "select m1.col from (unsharded as m1, unsharded as m2)",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select m1.col from (unsharded as m1, unsharded as m2) where 1 != 1",
+    "Query": "select m1.col from (unsharded as m1, unsharded as m2)",
+    "Table": "unsharded"
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select m1.col from (unsharded as m1, unsharded as m2)",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select m1.col from unsharded as m1, unsharded as m2 where 1 != 1",
+    "Query": "select m1.col from unsharded as m1, unsharded as m2",
+    "Table": "unsharded"
+  }
+}

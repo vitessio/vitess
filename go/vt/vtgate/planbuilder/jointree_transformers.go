@@ -64,16 +64,10 @@ func transformRoutePlan(n *routePlan) (*route, error) {
 
 	sort.Sort(n._tables)
 	for _, t := range n._tables {
-		alias := sqlparser.AliasedTableExpr{
-			Expr: sqlparser.TableName{
-				Name: t.vtable.Name,
-			},
-			Partitions: nil,
-			As:         t.qtable.Alias.As,
-			Hints:      nil,
+		tablesForSelect = append(tablesForSelect, relToTableExpr(t))
+		for _, name := range t.tableNames() {
+			tableNameMap[name] = nil
 		}
-		tablesForSelect = append(tablesForSelect, &alias)
-		tableNameMap[sqlparser.String(t.qtable.Table.Name)] = nil
 	}
 
 	for _, predicate := range n.vindexPredicates {
@@ -93,16 +87,18 @@ func transformRoutePlan(n *routePlan) (*route, error) {
 			lft = &sqlparser.ParenTableExpr{Exprs: tablesForSelect}
 		}
 
+		rightExpr := relToTableExpr(leftJoin.tbl)
 		joinExpr := &sqlparser.JoinTableExpr{
 			Join: sqlparser.LeftJoinType,
 			Condition: sqlparser.JoinCondition{
 				On: leftJoin.pred,
 			},
-			RightExpr: leftJoin.tbl.qtable.Alias,
+			RightExpr: rightExpr,
 			LeftExpr:  lft,
 		}
 		tablesForSelect = sqlparser.TableExprs{joinExpr}
-		tableNameMap[sqlparser.String(leftJoin.tbl.qtable.Table.Name)] = nil
+		// todo: add table
+		// tableNameMap[sqlparser.String()] = nil
 	}
 
 	predicates := n.Predicates()
@@ -142,4 +138,36 @@ func transformRoutePlan(n *routePlan) (*route, error) {
 		},
 		tables: n.solved,
 	}, nil
+}
+
+func relToTableExpr(t relation) sqlparser.TableExpr {
+	switch t := t.(type) {
+	case *routeTable:
+		return &sqlparser.AliasedTableExpr{
+			Expr: sqlparser.TableName{
+				Name: t.vtable.Name,
+			},
+			Partitions: nil,
+			As:         t.qtable.Alias.As,
+			Hints:      nil,
+		}
+	case parenTables:
+		tables := sqlparser.TableExprs{}
+		for _, t := range t {
+			tableExpr := relToTableExpr(t)
+			tables = append(tables, tableExpr)
+		}
+		return &sqlparser.ParenTableExpr{Exprs: tables}
+	case *leJoin:
+		return &sqlparser.JoinTableExpr{
+			LeftExpr:  relToTableExpr(t.a),
+			Join:      sqlparser.NormalJoinType,
+			RightExpr: relToTableExpr(t.b),
+			Condition: sqlparser.JoinCondition{
+				On: t.pred,
+			},
+		}
+	default:
+		panic("should never happen")
+	}
 }
