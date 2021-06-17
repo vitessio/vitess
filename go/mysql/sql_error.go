@@ -163,6 +163,7 @@ var stateToMysqlCode = map[vterrors.State]struct {
 	vterrors.AccessDeniedError:            {num: ERAccessDeniedError, state: SSAccessDeniedError},
 	vterrors.BadDb:                        {num: ERBadDb, state: SSClientError},
 	vterrors.BadFieldError:                {num: ERBadFieldError, state: SSBadFieldError},
+	vterrors.BadTableError:                {num: ERBadTable, state: SSUnknownTable},
 	vterrors.CantUseOptionHere:            {num: ERCantUseOptionHere, state: SSClientError},
 	vterrors.DataOutOfRange:               {num: ERDataOutOfRange, state: SSDataOutOfRange},
 	vterrors.DbCreateExists:               {num: ERDbCreateExists, state: SSUnknownSQLState},

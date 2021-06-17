@@ -55,7 +55,10 @@ func newBuildSelectPlan(sel *sqlparser.Select, vschema ContextVSchema) (engine.P
 		return nil, err
 	}
 
-	sel = expandStar(sel, semTable)
+	sel, err = expandStar(sel, semTable)
+	if err != nil {
+		return nil, err
+	}
 
 	qgraph, err := createQGFromSelect(sel, semTable)
 	if err != nil {
@@ -99,66 +102,100 @@ func newBuildSelectPlan(sel *sqlparser.Select, vschema ContextVSchema) (engine.P
 	return plan.Primitive(), nil
 }
 
-func expandStar(sel *sqlparser.Select, semTable *semantics.SemTable) *sqlparser.Select {
-	// TODO we could store in semTable whether there are any * in the query that needs expanding or not
+type starRewriter struct {
+	err      error
+	semTable *semantics.SemTable
+}
 
-	_ = sqlparser.Rewrite(sel, func(cursor *sqlparser.Cursor) bool {
-		switch node := cursor.Node().(type) {
-		case *sqlparser.Select:
-			tables := semTable.GetSelectTables(node)
-			var selExprs sqlparser.SelectExprs
-			for _, selectExpr := range node.SelectExprs {
-				starExpr, isStarExpr := selectExpr.(*sqlparser.StarExpr)
-				if !isStarExpr {
-					selExprs = append(selExprs, selectExpr)
-					continue
-				}
-				var colNames sqlparser.SelectExprs
-				expandStar := false
-				for _, tbl := range tables {
-					if !starExpr.TableName.IsEmpty() {
-						if !tbl.ASTNode.As.IsEmpty() {
-							if !starExpr.TableName.Qualifier.IsEmpty() {
-								continue
-							}
-							if starExpr.TableName.Name.String() != tbl.ASTNode.As.String() {
-								continue
-							}
-						} else {
-							if !starExpr.TableName.Qualifier.IsEmpty() {
-								if starExpr.TableName.Qualifier.String() != tbl.Table.Keyspace.Name {
-									continue
-								}
-							}
-							tblName := tbl.ASTNode.Expr.(sqlparser.TableName)
-							if starExpr.TableName.Name.String() != tblName.Name.String() {
+func (sr *starRewriter) starRewrite(cursor *sqlparser.Cursor) bool {
+	switch node := cursor.Node().(type) {
+	case *sqlparser.Select:
+		tables := sr.semTable.GetSelectTables(node)
+		var selExprs sqlparser.SelectExprs
+		for _, selectExpr := range node.SelectExprs {
+			starExpr, isStarExpr := selectExpr.(*sqlparser.StarExpr)
+			if !isStarExpr {
+				selExprs = append(selExprs, selectExpr)
+				continue
+			}
+			expStar := &expandStarInfo{
+				tblColMap: map[*sqlparser.AliasedTableExpr]sqlparser.SelectExprs{},
+			}
+			var colNames sqlparser.SelectExprs
+			unknownTbl := true
+			for _, tbl := range tables {
+				if !starExpr.TableName.IsEmpty() {
+					if !tbl.ASTNode.As.IsEmpty() {
+						if !starExpr.TableName.Qualifier.IsEmpty() {
+							continue
+						}
+						if starExpr.TableName.Name.String() != tbl.ASTNode.As.String() {
+							continue
+						}
+					} else {
+						if !starExpr.TableName.Qualifier.IsEmpty() {
+							if starExpr.TableName.Qualifier.String() != tbl.Table.Keyspace.Name {
 								continue
 							}
 						}
-					}
-					if !tbl.Table.ColumnListAuthoritative {
-						expandStar = false
-						break
-					}
-					expandStar = true
-					for _, col := range tbl.Table.Columns {
-						colNames = append(colNames, &sqlparser.AliasedExpr{
-							Expr: sqlparser.NewColNameWithQualifier(col.Name.String(), sqlparser.TableName{Name: tbl.Table.Name}),
-						})
+						tblName := tbl.ASTNode.Expr.(sqlparser.TableName)
+						if starExpr.TableName.Name.String() != tblName.Name.String() {
+							continue
+						}
 					}
 				}
-				if !expandStar {
-					selExprs = append(selExprs, selectExpr)
-					continue
+				unknownTbl = false
+				if tbl.Table == nil || !tbl.Table.ColumnListAuthoritative {
+					expStar.proceed = false
+					break
 				}
-				selExprs = append(selExprs, colNames...)
+				expStar.proceed = true
+				tblName, err := tbl.ASTNode.TableName()
+				if err != nil {
+					sr.err = err
+					return false
+				}
+				for _, col := range tbl.Table.Columns {
+					colNames = append(colNames, &sqlparser.AliasedExpr{
+						Expr: sqlparser.NewColNameWithQualifier(col.Name.String(), tblName),
+						As:   sqlparser.NewColIdent(col.Name.String()),
+					})
+				}
+				expStar.tblColMap[tbl.ASTNode] = colNames
 			}
-			node.SelectExprs = selExprs
+			if unknownTbl {
+				// This will only happen for case when starExpr has qualifier.
+				sr.err = vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadDb, "Unknown table '%s'", sqlparser.String(starExpr.TableName))
+				return false
+			}
+			if !expStar.proceed {
+				selExprs = append(selExprs, selectExpr)
+				continue
+			}
+			selExprs = append(selExprs, colNames...)
+			for tbl, cols := range expStar.tblColMap {
+				sr.semTable.AddExprs(tbl, cols)
+			}
 		}
+		node.SelectExprs = selExprs
+	}
+	return true
+}
 
-		return true
-	}, nil)
-	return sel
+type expandStarInfo struct {
+	proceed   bool
+	tblColMap map[*sqlparser.AliasedTableExpr]sqlparser.SelectExprs
+}
+
+func expandStar(sel *sqlparser.Select, semTable *semantics.SemTable) (*sqlparser.Select, error) {
+	// TODO we could store in semTable whether there are any * in the query that needs expanding or not
+	sr := &starRewriter{semTable: semTable}
+
+	_ = sqlparser.Rewrite(sel, sr.starRewrite, nil)
+	if sr.err != nil {
+		return nil, sr.err
+	}
+	return sel, nil
 }
 
 func planLimit(limit *sqlparser.Limit, plan logicalPlan) (logicalPlan, error) {
