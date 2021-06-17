@@ -6,7 +6,7 @@ import (
 	"net"
 	"sync"
 
-	"vitess.io/vitess/go/vt/vttablet/grpctabletconn"
+	"vitess.io/vitess/go/vt/vttablet/drpctabletconn/drpcpool2"
 
 	"storj.io/drpc"
 	"storj.io/drpc/drpcconn"
@@ -741,11 +741,31 @@ func (conn *dRPCQueryClient) Close(_ context.Context) error {
 	return cc.Close()
 }
 
+var globalPool *drpcpool2.Pool
+var globalPoolInit sync.Once
+
 func DialTablet(tablet *topodatapb.Tablet, failFast bool) (queryservice.QueryService, error) {
-	cc := drpcpool.OpenConnectionPool(func(ctx context.Context) (drpc.Conn, error) {
-		return dialTablet1(tablet, failFast)
-	})
-	cc.SetMaxOpenConns(64)
+	var cc drpc.Conn
+
+	if false {
+		cp := drpcpool.OpenConnectionPool(func(ctx context.Context) (drpc.Conn, error) {
+			return dialTablet1(tablet, failFast)
+		})
+		cp.SetMaxOpenConns(64)
+		cc = cp
+	} else {
+		var err error
+		globalPoolInit.Do(func() {
+			globalPool = drpcpool2.New(drpcpool2.Options{})
+		})
+
+		cc, err = globalPool.Get(context.Background(), tablet.String(), nil, func(ctx context.Context) (drpc.Conn, error) {
+			return dialTablet1(tablet, failFast)
+		})
+		if err != nil {
+			return nil, err
+		}
+	}
 
 	c := queryservicepb.NewDRPCQueryClient(cc)
 	return &dRPCQueryClient{
@@ -759,7 +779,7 @@ func DialTabletFallback(tablet *topodatapb.Tablet, failFast bool) (queryservice.
 	if _, ok := tablet.PortMap["drpc"]; ok {
 		return DialTablet(tablet, failFast)
 	}
-	return grpctabletconn.DialTablet(tablet, failFast)
+	return tabletconn.GetDialerForProtocol("grpc")(tablet, failFast)
 }
 
 func dialTablet1(tablet *topodatapb.Tablet, failFast bool) (drpc.Conn, error) {

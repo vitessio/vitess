@@ -91,10 +91,11 @@ require (
 	github.com/uber/jaeger-client-go v2.16.0+incompatible
 	github.com/uber/jaeger-lib v2.0.0+incompatible // indirect
 	github.com/z-division/go-zookeeper v0.0.0-20190128072838-6d7457066b9b
+	github.com/zeebo/errs v1.2.2
 	go.etcd.io/etcd/api/v3 v3.5.0-alpha.0
 	go.etcd.io/etcd/client/v3 v3.5.0-alpha.0
 	go.etcd.io/etcd/pkg/v3 v3.5.0-alpha.0
-	golang.org/x/crypto v0.0.0-20200622213623-75b288015ac9
+	golang.org/x/crypto v0.0.0-20210415154028-4f45737414dc
 	golang.org/x/lint v0.0.0-20201208152925-83fdc39ff7b5
 	golang.org/x/net v0.0.0-20210316092652-d523dce5a7f4
 	golang.org/x/oauth2 v0.0.0-20210413134643-5e61552d6c78
@@ -120,6 +121,7 @@ require (
 	k8s.io/client-go v0.17.3
 	k8s.io/code-generator v0.17.3
 	sigs.k8s.io/yaml v1.2.0
+	storj.io/common v0.0.0-20210601214904-24681cb3da97
 	storj.io/drpc v0.0.23
 )
 
