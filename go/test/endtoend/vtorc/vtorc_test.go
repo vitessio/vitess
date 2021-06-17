@@ -235,14 +235,17 @@ func setupVttabletsAndVtorc(t *testing.T, numReplicasReq int, numRdonlyReq int, 
 
 func cleanAndAddVttablet(t *testing.T, vttablet *cluster.Vttablet) error {
 	// remove the database if it exists
-	runSQL(t, "DROP DATABASE IF EXISTS vt_ks", vttablet, "")
+	_, err := runSQL(t, "DROP DATABASE IF EXISTS vt_ks", vttablet, "")
+	require.NoError(t, err)
 	// stop the replication
-	runSQL(t, "STOP SLAVE", vttablet, "")
+	_, err = runSQL(t, "STOP SLAVE", vttablet, "")
+	require.NoError(t, err)
 	// reset the binlog
-	runSQL(t, "RESET MASTER", vttablet, "")
+	_, err = runSQL(t, "RESET MASTER", vttablet, "")
+	require.NoError(t, err)
 
 	// add the vttablet to the topology
-	err := clusterInstance.VtctlclientProcess.ExecuteCommand("InitTablet",
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("InitTablet",
 		"-port", fmt.Sprintf("%d", vttablet.VttabletProcess.Port),
 		"-grpc_port", fmt.Sprintf("%d", vttablet.VttabletProcess.GrpcPort),
 		"-hostname", vttablet.VttabletProcess.TabletHostname,
@@ -362,7 +365,8 @@ func waitForReadOnlyValue(t *testing.T, curMaster *cluster.Vttablet, expectValue
 	timeout := 15 * time.Second
 	startTime := time.Now()
 	for time.Since(startTime) < timeout {
-		qr := runSQL(t, "select @@global.read_only as read_only", curMaster, "")
+		qr, err := runSQL(t, "select @@global.read_only as read_only", curMaster, "")
+		require.NoError(t, err)
 		require.NotNil(t, qr)
 		row := qr.Named().Row()
 		require.NotNil(t, row)
@@ -388,7 +392,8 @@ func TestMasterReadOnly(t *testing.T) {
 	assert.NotNil(t, curMaster, "should have elected a master")
 
 	// Make the current master database read-only.
-	runSQL(t, "set global read_only=ON", curMaster, "")
+	_, err := runSQL(t, "set global read_only=ON", curMaster, "")
+	require.NoError(t, err)
 
 	// wait for repair
 	match := waitForReadOnlyValue(t, curMaster, 0)
@@ -415,7 +420,8 @@ func TestReplicaReadWrite(t *testing.T) {
 		}
 	}
 	// Make the replica database read-write.
-	runSQL(t, "set global read_only=OFF", replica, "")
+	_, err := runSQL(t, "set global read_only=OFF", replica, "")
+	require.NoError(t, err)
 
 	// wait for repair
 	match := waitForReadOnlyValue(t, replica, 1)
@@ -614,7 +620,8 @@ func checkReplication(t *testing.T, clusterInstance *cluster.LocalProcessCluster
 		primary key (id)
 		) Engine=InnoDB
 		`
-	runSQL(t, sqlSchema, master, "vt_ks")
+	_, err := runSQL(t, sqlSchema, master, "vt_ks")
+	require.NoError(t, err)
 	confirmReplication(t, master, replicas)
 }
 
@@ -623,7 +630,8 @@ func confirmReplication(t *testing.T, master *cluster.Vttablet, replicas []*clus
 	n := 2 // random value ...
 	// insert data into the new master, check the connected replica work
 	insertSQL := fmt.Sprintf("insert into vt_insert_test(id, msg) values (%d, 'test %d')", n, n)
-	runSQL(t, insertSQL, master, "vt_ks")
+	_, err := runSQL(t, insertSQL, master, "vt_ks")
+	require.NoError(t, err)
 	time.Sleep(100 * time.Millisecond)
 	for _, tab := range replicas {
 		err := checkInsertedValues(t, tab, n)
@@ -635,16 +643,12 @@ func checkInsertedValues(t *testing.T, tablet *cluster.Vttablet, index int) erro
 	// wait until it gets the data
 	timeout := time.Now().Add(10 * time.Second)
 	for time.Now().Before(timeout) {
-		qr := runSQL(t, "show databases", tablet, "")
-		// only run the select query if the database is created, otherwise wait
-		// the six expected databases are - [information_schema, _vt, mysql, performance_schema, sys, vt_ks]
-		// alternately we can check explicitly for the value vt_ks in the output
-		if len(qr.Rows) == 6 {
-			selectSQL := fmt.Sprintf("select msg from vt_insert_test where id=%d", index)
-			qr = runSQL(t, selectSQL, tablet, "vt_ks")
-			if len(qr.Rows) == 1 {
-				return nil
-			}
+		selectSQL := fmt.Sprintf("select msg from vt_insert_test where id=%d", index)
+		qr, err := runSQL(t, selectSQL, tablet, "vt_ks")
+		// The error may be not nil, if the replication has not caught upto the point where the table exists.
+		// We can safely skip this error and retry reading after wait
+		if err == nil && len(qr.Rows) == 1 {
+			return nil
 		}
 		time.Sleep(300 * time.Millisecond)
 	}
@@ -679,7 +683,7 @@ func getMysqlConnParam(tablet *cluster.Vttablet, db string) mysql.ConnParams {
 	return connParams
 }
 
-func runSQL(t *testing.T, sql string, tablet *cluster.Vttablet, db string) *sqltypes.Result {
+func runSQL(t *testing.T, sql string, tablet *cluster.Vttablet, db string) (*sqltypes.Result, error) {
 	// Get Connection
 	tabletParams := getMysqlConnParam(tablet, db)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -692,9 +696,7 @@ func runSQL(t *testing.T, sql string, tablet *cluster.Vttablet, db string) *sqlt
 	return execute(t, conn, sql)
 }
 
-func execute(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
+func execute(t *testing.T, conn *mysql.Conn, query string) (*sqltypes.Result, error) {
 	t.Helper()
-	qr, err := conn.ExecuteFetch(query, 1000, true)
-	require.Nil(t, err)
-	return qr
+	return conn.ExecuteFetch(query, 1000, true)
 }
