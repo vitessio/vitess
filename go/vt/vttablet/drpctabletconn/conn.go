@@ -6,6 +6,9 @@ import (
 	"net"
 	"sync"
 
+	"storj.io/drpc/drpcmanager"
+	"storj.io/drpc/drpcstream"
+
 	"vitess.io/vitess/go/vt/vttablet/drpctabletconn/drpcpool2"
 
 	"storj.io/drpc"
@@ -18,7 +21,6 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	queryservicepb "vitess.io/vitess/go/vt/proto/queryservice"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	"vitess.io/vitess/go/vt/vttablet/drpctabletconn/drpcpool"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
 )
@@ -745,26 +747,15 @@ var globalPool *drpcpool2.Pool
 var globalPoolInit sync.Once
 
 func DialTablet(tablet *topodatapb.Tablet, failFast bool) (queryservice.QueryService, error) {
-	var cc drpc.Conn
+	globalPoolInit.Do(func() {
+		globalPool = drpcpool2.New(drpcpool2.Options{})
+	})
 
-	if false {
-		cp := drpcpool.OpenConnectionPool(func(ctx context.Context) (drpc.Conn, error) {
-			return dialTablet1(tablet, failFast)
-		})
-		cp.SetMaxOpenConns(64)
-		cc = cp
-	} else {
-		var err error
-		globalPoolInit.Do(func() {
-			globalPool = drpcpool2.New(drpcpool2.Options{})
-		})
-
-		cc, err = globalPool.Get(context.Background(), tablet.String(), nil, func(ctx context.Context) (drpc.Conn, error) {
-			return dialTablet1(tablet, failFast)
-		})
-		if err != nil {
-			return nil, err
-		}
+	cc, err := globalPool.Get(context.Background(), tablet.String(), nil, func(ctx context.Context) (drpc.Conn, error) {
+		return dialTablet1(tablet, failFast)
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	c := queryservicepb.NewDRPCQueryClient(cc)
@@ -796,5 +787,11 @@ func dialTablet1(tablet *topodatapb.Tablet, failFast bool) (drpc.Conn, error) {
 	}
 
 	// TODO: tls
-	return drpcconn.New(rawconn), nil
+	return drpcconn.NewWithOptions(rawconn, drpcconn.Options{
+		drpcmanager.Options{
+			Stream: drpcstream.Options{
+				ManualFlush: true,
+			},
+		},
+	}), nil
 }

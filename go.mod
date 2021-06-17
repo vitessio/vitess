@@ -122,7 +122,7 @@ require (
 	k8s.io/code-generator v0.17.3
 	sigs.k8s.io/yaml v1.2.0
 	storj.io/common v0.0.0-20210601214904-24681cb3da97
-	storj.io/drpc v0.0.23
+	storj.io/drpc v0.0.24-0.20210616165335-d1f6d9c810e3
 )
 
 replace github.com/skeema/tengo => github.com/planetscale/tengo v0.9.6-ps.v3

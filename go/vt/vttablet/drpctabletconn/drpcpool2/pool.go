@@ -38,8 +38,15 @@ func New(opts Options) *Pool {
 		Expiration:  opts.IdleExpiration,
 		Capacity:    opts.Capacity,
 		KeyCapacity: opts.KeyCapacity,
-		Stale:       func(conn interface{}) bool { return conn.(drpc.Conn).Closed() },
-		Close:       func(conn interface{}) error { return conn.(drpc.Conn).Close() },
+		Stale: func(conn interface{}) bool {
+			select {
+			case <-conn.(drpc.Conn).Closed():
+				return true
+			default:
+				return false
+			}
+		},
+		Close: func(conn interface{}) error { return conn.(drpc.Conn).Close() },
 	})}
 
 	// As much as I dislike finalizers, especially for cases where it handles

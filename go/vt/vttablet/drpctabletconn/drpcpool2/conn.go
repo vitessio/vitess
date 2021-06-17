@@ -32,8 +32,8 @@ func (c *poolConn) isClosed() bool {
 	return atomic.LoadInt32(&c.closed) != 0
 }
 
-func (c *poolConn) Closed() bool {
-	return c.isClosed()
+func (c *poolConn) Closed() <-chan struct{} {
+	return nil
 }
 
 // Invoke acquires a connection from the pool, dialing if necessary, and issues the Invoke on that

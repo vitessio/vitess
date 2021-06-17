@@ -76,6 +76,15 @@ func (dc *conn) expired(timeout time.Duration) bool {
 	return dc.createdAt.Add(timeout).Before(nowFunc())
 }
 
+func (dc *conn) Closed() bool {
+	select {
+	case <-dc.ci.Closed():
+		return true
+	default:
+		return false
+	}
+}
+
 func (dc *conn) Close() error {
 	return dc.ci.Close()
 }
@@ -122,7 +131,7 @@ func (pool *ConnectionPool) conn(ctx context.Context, strategy connReuseStrategy
 		}
 		pool.mu.Unlock()
 
-		if conn.ci.Closed() {
+		if conn.Closed() {
 			conn.Close()
 			return nil, errBadConn
 		}
@@ -185,7 +194,7 @@ func (pool *ConnectionPool) conn(ctx context.Context, strategy connReuseStrategy
 				return nil, ret.err
 			}
 
-			if ret.conn.ci.Closed() {
+			if ret.conn.Closed() {
 				ret.conn.Close()
 				return nil, errBadConn
 			}
@@ -318,7 +327,7 @@ var putConnHook func(*ConnectionPool, *conn)
 // err is optionally the last error that occurred on this connection.
 func (pool *ConnectionPool) putConn(dc *conn, err error) {
 	if err != errBadConn {
-		if dc.ci.Closed() {
+		if dc.Closed() {
 			err = errBadConn
 		}
 	}
