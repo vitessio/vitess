@@ -635,10 +635,16 @@ func checkInsertedValues(t *testing.T, tablet *cluster.Vttablet, index int) erro
 	// wait until it gets the data
 	timeout := time.Now().Add(10 * time.Second)
 	for time.Now().Before(timeout) {
-		selectSQL := fmt.Sprintf("select msg from vt_insert_test where id=%d", index)
-		qr := runSQL(t, selectSQL, tablet, "vt_ks")
-		if len(qr.Rows) == 1 {
-			return nil
+		qr := runSQL(t, "show databases", tablet, "")
+		// only run the select query if the database is created, otherwise wait
+		// the six expected databases are - [information_schema, _vt, mysql, performance_schema, sys, vt_ks]
+		// alternately we can check explicitly for the value vt_ks in the output
+		if len(qr.Rows) == 6 {
+			selectSQL := fmt.Sprintf("select msg from vt_insert_test where id=%d", index)
+			qr = runSQL(t, selectSQL, tablet, "vt_ks")
+			if len(qr.Rows) == 1 {
+				return nil
+			}
 		}
 		time.Sleep(300 * time.Millisecond)
 	}
