@@ -118,54 +118,9 @@ func (sr *starRewriter) starRewrite(cursor *sqlparser.Cursor) bool {
 				selExprs = append(selExprs, selectExpr)
 				continue
 			}
-			expStar := &expandStarInfo{
-				tblColMap: map[*sqlparser.AliasedTableExpr]sqlparser.SelectExprs{},
-			}
-			var colNames sqlparser.SelectExprs
-			unknownTbl := true
-			for _, tbl := range tables {
-				if !starExpr.TableName.IsEmpty() {
-					if !tbl.ASTNode.As.IsEmpty() {
-						if !starExpr.TableName.Qualifier.IsEmpty() {
-							continue
-						}
-						if starExpr.TableName.Name.String() != tbl.ASTNode.As.String() {
-							continue
-						}
-					} else {
-						if !starExpr.TableName.Qualifier.IsEmpty() {
-							if starExpr.TableName.Qualifier.String() != tbl.Table.Keyspace.Name {
-								continue
-							}
-						}
-						tblName := tbl.ASTNode.Expr.(sqlparser.TableName)
-						if starExpr.TableName.Name.String() != tblName.Name.String() {
-							continue
-						}
-					}
-				}
-				unknownTbl = false
-				if tbl.Table == nil || !tbl.Table.ColumnListAuthoritative {
-					expStar.proceed = false
-					break
-				}
-				expStar.proceed = true
-				tblName, err := tbl.ASTNode.TableName()
-				if err != nil {
-					sr.err = err
-					return false
-				}
-				for _, col := range tbl.Table.Columns {
-					colNames = append(colNames, &sqlparser.AliasedExpr{
-						Expr: sqlparser.NewColNameWithQualifier(col.Name.String(), tblName),
-						As:   sqlparser.NewColIdent(col.Name.String()),
-					})
-				}
-				expStar.tblColMap[tbl.ASTNode] = colNames
-			}
-			if unknownTbl {
-				// This will only happen for case when starExpr has qualifier.
-				sr.err = vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadDb, "Unknown table '%s'", sqlparser.String(starExpr.TableName))
+			colNames, expStar, err := expandTableColumns(tables, starExpr)
+			if err != nil {
+				sr.err = err
 				return false
 			}
 			if !expStar.proceed {
@@ -180,6 +135,60 @@ func (sr *starRewriter) starRewrite(cursor *sqlparser.Cursor) bool {
 		node.SelectExprs = selExprs
 	}
 	return true
+}
+
+func expandTableColumns(tables []*semantics.TableInfo, starExpr *sqlparser.StarExpr) (sqlparser.SelectExprs, *expandStarInfo, error) {
+	unknownTbl := true
+	var colNames sqlparser.SelectExprs
+	expStar := &expandStarInfo{
+		tblColMap: map[*sqlparser.AliasedTableExpr]sqlparser.SelectExprs{},
+	}
+
+	for _, tbl := range tables {
+		if !starExpr.TableName.IsEmpty() {
+			if !tbl.ASTNode.As.IsEmpty() {
+				if !starExpr.TableName.Qualifier.IsEmpty() {
+					continue
+				}
+				if starExpr.TableName.Name.String() != tbl.ASTNode.As.String() {
+					continue
+				}
+			} else {
+				if !starExpr.TableName.Qualifier.IsEmpty() {
+					if starExpr.TableName.Qualifier.String() != tbl.Table.Keyspace.Name {
+						continue
+					}
+				}
+				tblName := tbl.ASTNode.Expr.(sqlparser.TableName)
+				if starExpr.TableName.Name.String() != tblName.Name.String() {
+					continue
+				}
+			}
+		}
+		unknownTbl = false
+		if tbl.Table == nil || !tbl.Table.ColumnListAuthoritative {
+			expStar.proceed = false
+			break
+		}
+		expStar.proceed = true
+		tblName, err := tbl.ASTNode.TableName()
+		if err != nil {
+			return nil, nil, err
+		}
+		for _, col := range tbl.Table.Columns {
+			colNames = append(colNames, &sqlparser.AliasedExpr{
+				Expr: sqlparser.NewColNameWithQualifier(col.Name.String(), tblName),
+				As:   sqlparser.NewColIdent(col.Name.String()),
+			})
+		}
+		expStar.tblColMap[tbl.ASTNode] = colNames
+	}
+
+	if unknownTbl {
+		// This will only happen for case when starExpr has qualifier.
+		return nil, nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadDb, "Unknown table '%s'", sqlparser.String(starExpr.TableName))
+	}
+	return colNames, expStar, nil
 }
 
 type expandStarInfo struct {
