@@ -243,6 +243,10 @@ func LockShard(instanceKey inst.InstanceKey) (func(*error), error) {
 	if instanceKey.Hostname == "" {
 		return nil, errors.New("Can't lock shard: instance is unspecified")
 	}
+	val := atomic.LoadInt32(&hasReceivedSIGTERM)
+	if val > 0 {
+		return nil, errors.New("Can't lock shard: SIGTERM received")
+	}
 
 	tablet, err := inst.ReadTablet(instanceKey)
 	if err != nil {
