@@ -121,7 +121,7 @@ func acceptSignals() {
 				config.Reload()
 				discoveryMetrics.SetExpirePeriod(time.Duration(config.Config.DiscoveryCollectionRetentionSeconds) * time.Second)
 			case syscall.SIGTERM:
-				log.Infof("Received SIGTERM. Shutting down orchestrator")
+				log.Infof("Received SIGTERM. Starting shutdown")
 				atomic.StoreInt32(&hasReceivedSIGTERM, 1)
 				discoveryMetrics.StopAutoExpiration()
 				// probably should poke other go routines to stop cleanly here ...
@@ -142,6 +142,7 @@ func acceptSignals() {
 						}
 					}
 				}()
+				log.Infof("Shutting down orchestrator")
 				os.Exit(0)
 			}
 		}

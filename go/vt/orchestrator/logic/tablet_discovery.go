@@ -256,10 +256,14 @@ func LockShard(instanceKey inst.InstanceKey) (func(*error), error) {
 	defer cancel()
 	atomic.AddInt32(&shardsLockCounter, 1)
 	_, unlock, err := ts.LockShard(ctx, tablet.Keyspace, tablet.Shard, "Orc Recovery")
+	if err != nil {
+		atomic.AddInt32(&shardsLockCounter, -1)
+		return nil, err
+	}
 	return func(e *error) {
 		defer atomic.AddInt32(&shardsLockCounter, -1)
 		unlock(e)
-	}, err
+	}, nil
 }
 
 // TabletRefresh refreshes the tablet info.
