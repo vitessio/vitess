@@ -150,7 +150,7 @@ func (wr *Wrangler) DeleteTablet(ctx context.Context, tabletAlias *topodatapb.Ta
 		return err
 	}
 
-	return nil
+	return
 }
 
 // DemoteMasterTablet demotes a master tablet.
@@ -190,7 +190,7 @@ func (wr *Wrangler) DemoteMasterTablet(ctx context.Context, tabletAlias *topodat
 		return err
 	}
 
-	return nil
+	return
 }
 
 // ChangeTabletType changes the type of tablet and recomputes all

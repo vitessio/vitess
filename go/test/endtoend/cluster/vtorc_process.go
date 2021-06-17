@@ -60,7 +60,7 @@ func (orc *VtorcProcess) Setup() (err error) {
 	orc.proc.Args = append(orc.proc.Args, orc.ExtraArgs...)
 	orc.proc.Args = append(orc.proc.Args, "-alsologtostderr", "http")
 
-	errFile, _ := os.Create(path.Join(orc.LogDir, "orc-stderr.txt"))
+	errFile, _ := os.Create(path.Join(orc.LogDir, "orc-stderr.txt"+time.Now().String()))
 	orc.proc.Stderr = errFile
 
 	orc.proc.Env = append(orc.proc.Env, os.Environ()...)
@@ -95,7 +95,7 @@ func (orc *VtorcProcess) TearDown() error {
 		orc.proc = nil
 		return nil
 
-	case <-time.After(10 * time.Second):
+	case <-time.After(30 * time.Second):
 		_ = orc.proc.Process.Kill()
 		orc.proc = nil
 		return <-orc.exit
