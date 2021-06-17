@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"testing"
 
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/abstract"
+
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 
 	"github.com/stretchr/testify/assert"
@@ -121,6 +123,51 @@ func TestClone(t *testing.T) {
 	clonedRP.vindexPreds[0].foundVindex = &vindexes.Null{}
 	assert.NotNil(t, clonedRP.vindexPreds[0].foundVindex)
 	assert.Nil(t, original.vindexPreds[0].foundVindex)
+}
+
+func TestCreateRoutePlanForOuter(t *testing.T) {
+	assert := assert.New(t)
+	m1 := &routeTable{
+		qtable: &abstract.QueryTable{
+			TableID: semantics.TableSet(1),
+			Table:   sqlparser.TableName{},
+		},
+		vtable: &vindexes.Table{},
+	}
+	m2 := &routeTable{
+		qtable: &abstract.QueryTable{
+			TableID: semantics.TableSet(2),
+			Table:   sqlparser.TableName{},
+		},
+		vtable: &vindexes.Table{},
+	}
+	m3 := &routeTable{
+		qtable: &abstract.QueryTable{
+			TableID: semantics.TableSet(4),
+			Table:   sqlparser.TableName{},
+		},
+		vtable: &vindexes.Table{},
+	}
+	a := &routePlan{
+		routeOpCode: engine.SelectUnsharded,
+		solved:      semantics.TableSet(1),
+		_tables:     []relation{m1},
+	}
+	col1 := sqlparser.NewColNameWithQualifier("id", sqlparser.TableName{
+		Name: sqlparser.NewTableIdent("m1"),
+	})
+	col2 := sqlparser.NewColNameWithQualifier("id", sqlparser.TableName{
+		Name: sqlparser.NewTableIdent("m2"),
+	})
+	b := &routePlan{
+		routeOpCode: engine.SelectUnsharded,
+		solved:      semantics.TableSet(6),
+		_tables:     []relation{m2, m3},
+		predicates:  []sqlparser.Expr{equals(col1, col2)},
+	}
+	semTable := &semantics.SemTable{}
+	merge := tryMerge(a, b, []sqlparser.Expr{}, semTable, false)
+	assert.NotNil(merge)
 }
 
 func equals(left, right sqlparser.Expr) sqlparser.Expr {
