@@ -168,7 +168,7 @@ func (a *analyzer) resolveUnQualifiedColumn(current *scope, expr *sqlparser.ColN
 
 	var tblInfo *TableInfo
 	for _, tbl := range current.tables {
-		if !tbl.Table.ColumnListAuthoritative {
+		if tbl.Table == nil || !tbl.Table.ColumnListAuthoritative {
 			return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.NonUniqError, fmt.Sprintf("Column '%s' in field list is ambiguous", sqlparser.String(expr)))
 		}
 		for _, col := range tbl.Table.Columns {
