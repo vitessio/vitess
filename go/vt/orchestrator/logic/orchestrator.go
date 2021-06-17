@@ -124,6 +124,22 @@ func acceptSignals() {
 				discoveryMetrics.StopAutoExpiration()
 				// probably should poke other go routines to stop cleanly here ...
 				inst.AuditOperation("shutdown", nil, "Triggered via SIGTERM")
+				timeout := time.After(*shutdownWaitTime)
+				func() {
+					for {
+						count := atomic.LoadInt32(&shardsLockCounter)
+						if count == 0 {
+							return
+						}
+						select {
+						case <-timeout:
+							log.Infof("wait for lock release timed out. Some locks might not have been released.")
+							return
+						default:
+							time.Sleep(100 * time.Millisecond)
+						}
+					}
+				}()
 				os.Exit(0)
 			}
 		}
