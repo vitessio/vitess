@@ -19,6 +19,7 @@ package topo
 import (
 	"fmt"
 	"path"
+	"sort"
 	"sync"
 	"time"
 
@@ -231,6 +232,14 @@ func (ts *Server) GetTablet(ctx context.Context, alias *topodatapb.TabletAlias) 
 		return nil, err
 	}
 
+	return ts.getTablet(ctx, conn, alias)
+}
+
+// getTablet contains the logic of getting a tablet out of the topo after
+// getting or creating a conn. It is an optimization to reduce contention on the
+// mutex in ConnForCell in calls that look up many tablets (such as GetTabletMap).
+// It generates trace spans.
+func (ts *Server) getTablet(ctx context.Context, conn Conn, alias *topodatapb.TabletAlias) (*TabletInfo, error) {
 	span, ctx := trace.NewSpan(ctx, "TopoServer.GetTablet")
 	span.Annotate("tablet", topoproto.TabletAliasString(alias))
 	defer span.Finish()
@@ -415,18 +424,65 @@ func (ts *Server) GetTabletMap(ctx context.Context, tabletAliases []*topodatapb.
 	span.Annotate("num_tablets", len(tabletAliases))
 	defer span.Finish()
 
-	wg := sync.WaitGroup{}
-	mutex := sync.Mutex{}
+	// Sort the aliases by cell, ascending. We do this so we know that all tablets
+	// for the same cell will appear sequentially, so we can use a cached Conn
+	// without needing a map and synchronizing.
+	aliasesByCell := make([]*topodatapb.TabletAlias, len(tabletAliases))
+	copy(aliasesByCell, tabletAliases)
+	sort.SliceStable(aliasesByCell, func(i, j int) bool {
+		return aliasesByCell[i].Cell < aliasesByCell[j].Cell
+	})
 
-	tabletMap := make(map[string]*TabletInfo)
-	var someError error
+	var (
+		// Synchronization
+		m  sync.Mutex
+		wg sync.WaitGroup
+
+		// Results
+		tabletMap = make(map[string]*TabletInfo)
+		someError error
+
+		// ConnForCell optimization
+		lastCell *string
+		lastConn Conn
+	)
 
 	for _, tabletAlias := range tabletAliases {
+		if lastCell != nil {
+			if tabletAlias.Cell != *lastCell {
+				// Finished processing all aliases is lastCell, set lastConn to
+				// nil so we get one for the next cell.
+				lastCell = &tabletAlias.Cell
+				lastConn = nil
+			}
+		} else {
+			// first iteration
+			lastCell = &tabletAlias.Cell
+		}
+
+		if lastConn == nil {
+			conn, err := ts.ConnForCell(ctx, *lastCell)
+			if err != nil {
+				log.Warningf("%v: %v", tabletAlias, err)
+				if !IsErrType(err, NoNode) {
+					m.Lock() // lock here to avoid racing with the goroutines below that will also try to set someError
+					someError = NewError(PartialResult, "")
+					m.Unlock()
+				}
+
+				// Skip this tablet. Note that if there are multiple tablets in
+				// the same cell, we will likely hit this path multiple times.
+				continue
+			}
+
+			lastConn = conn
+		}
+
 		wg.Add(1)
-		go func(tabletAlias *topodatapb.TabletAlias) {
+		go func(conn Conn, tabletAlias *topodatapb.TabletAlias) {
 			defer wg.Done()
-			tabletInfo, err := ts.GetTablet(ctx, tabletAlias)
-			mutex.Lock()
+			tabletInfo, err := ts.getTablet(ctx, conn, tabletAlias)
+			m.Lock()
 			if err != nil {
 				log.Warningf("%v: %v", tabletAlias, err)
 				// There can be data races removing nodes - ignore them for now.
@@ -436,8 +492,8 @@ func (ts *Server) GetTabletMap(ctx context.Context, tabletAliases []*topodatapb.
 			} else {
 				tabletMap[topoproto.TabletAliasString(tabletAlias)] = tabletInfo
 			}
-			mutex.Unlock()
-		}(tabletAlias)
+			m.Unlock()
+		}(lastConn, tabletAlias)
 	}
 	wg.Wait()
 	return tabletMap, someError
