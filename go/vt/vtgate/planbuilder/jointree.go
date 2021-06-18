@@ -1,3 +1,19 @@
+/*
+Copyright 2021 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package planbuilder
 
 import (
@@ -26,7 +42,7 @@ type (
 	}
 
 	relation interface {
-		tableId() semantics.TableSet
+		tableID() semantics.TableSet
 		tableNames() []string
 	}
 
@@ -93,9 +109,9 @@ var _ relation = (*routeTable)(nil)
 var _ relation = (*leJoin)(nil)
 var _ relation = (parenTables)(nil)
 
-func (rp *routeTable) tableId() semantics.TableSet { return rp.qtable.TableID }
+func (rp *routeTable) tableID() semantics.TableSet { return rp.qtable.TableID }
 
-func (rp *leJoin) tableId() semantics.TableSet { return rp.a.tableId().Merge(rp.b.tableId()) }
+func (rp *leJoin) tableID() semantics.TableSet { return rp.a.tableID().Merge(rp.b.tableID()) }
 
 func (rp *leJoin) tableNames() []string {
 	return append(rp.a.tableNames(), rp.b.tableNames()...)
@@ -113,10 +129,10 @@ func (p parenTables) tableNames() []string {
 	return result
 }
 
-func (p parenTables) tableId() semantics.TableSet {
+func (p parenTables) tableID() semantics.TableSet {
 	res := semantics.TableSet(0)
 	for _, r := range p {
-		res = res.Merge(r.tableId())
+		res = res.Merge(r.tableID())
 	}
 	return res
 }

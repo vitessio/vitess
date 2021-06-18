@@ -165,7 +165,7 @@ func TestCreateRoutePlanForOuter(t *testing.T) {
 		_tables:     []relation{m2, m3},
 		predicates:  []sqlparser.Expr{equals(col1, col2)},
 	}
-	semTable := &semantics.SemTable{}
+	semTable := semantics.NewSemTable()
 	merge := tryMerge(a, b, []sqlparser.Expr{}, semTable, false)
 	assert.NotNil(merge)
 }

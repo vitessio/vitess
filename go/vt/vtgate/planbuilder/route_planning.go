@@ -603,38 +603,46 @@ func createRoutePlanForInner(aRoute *routePlan, bRoute *routePlan, newTabletSet 
 	}
 }
 
+func findTables(deps semantics.TableSet, tables parenTables) (relation, relation, parenTables) {
+	foundTables := parenTables{}
+	newTables := parenTables{}
+
+	for i, t := range tables {
+		if t.tableID().IsSolvedBy(deps) {
+			foundTables = append(foundTables, t)
+			if len(foundTables) == 2 {
+				return foundTables[0], foundTables[1], append(newTables, tables[i:])
+			}
+		} else {
+			newTables = append(newTables, t)
+		}
+	}
+	return nil, nil, tables
+}
+
 func createRoutePlanForOuter(aRoute, bRoute *routePlan, semTable *semantics.SemTable, newTabletSet semantics.TableSet, joinPredicates []sqlparser.Expr) *routePlan {
 	// create relation slice with all tables
 	tables := bRoute._tables
 	// we are doing an outer join where the outer part contains multiple tables - we have to turn the outer part into a join or two
 	for _, predicate := range bRoute.predicates {
 		deps := semTable.Dependencies(predicate)
-		if deps.NumberOfTables() == 2 {
-			var aTbl, bTbl relation
-
-			// find the tables
-			var newTables parenTables
-			for _, t := range tables {
-				if t.tableId().IsSolvedBy(deps) {
-					if aTbl == nil {
-						aTbl = t
-					} else if bTbl == nil {
-						bTbl = t
-					}
-				} else {
-					newTables = append(newTables, t)
-				}
-			}
-			tables = newTables
-
-			if aTbl != nil && bTbl != nil {
-				tables = append(tables, &leJoin{
-					a:    aTbl,
-					b:    bTbl,
-					pred: predicate,
-				})
-			}
+		aTbl, bTbl, newTables := findTables(deps, tables)
+		tables = newTables
+		if aTbl != nil && bTbl != nil {
+			tables = append(tables, &leJoin{
+				a:    aTbl,
+				b:    bTbl,
+				pred: predicate,
+			})
 		}
+	}
+
+	var outer relation
+	if len(tables) == 1 {
+		// if we have a single relation, no need to put it inside parens
+		outer = tables[0]
+	} else {
+		outer = tables
 	}
 
 	return &routePlan{
@@ -642,8 +650,8 @@ func createRoutePlanForOuter(aRoute, bRoute *routePlan, semTable *semantics.SemT
 		solved:      newTabletSet,
 		_tables:     aRoute._tables,
 		leftJoins: append(aRoute.leftJoins, &outerTable{
-			tbl:  tables,
-			pred: joinPredicates[0],
+			tbl:  outer,
+			pred: sqlparser.AndExpressions(joinPredicates...),
 		}),
 		keyspace:    aRoute.keyspace,
 		vindexPreds: append(aRoute.vindexPreds, bRoute.vindexPreds...),
@@ -657,7 +665,7 @@ func (p parenTables) Len() int {
 }
 
 func (p parenTables) Less(i, j int) bool {
-	return p[i].tableId() < p[j].tableId()
+	return p[i].tableID() < p[j].tableID()
 }
 
 func (p parenTables) Swap(i, j int) {

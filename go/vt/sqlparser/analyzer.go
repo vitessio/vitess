@@ -324,14 +324,23 @@ func SplitAndExpression(filters []Expr, node Expr) []Expr {
 }
 
 // AndExpressions ands together two expression, minimising the expr when possible
-func AndExpressions(a, b Expr) Expr {
-	if a == nil {
-		return b
+func AndExpressions(exprs ...Expr) Expr {
+	switch len(exprs) {
+	case 0:
+		return nil
+	case 1:
+		return exprs[0]
+	default:
+		result := (Expr)(nil)
+		for _, expr := range exprs {
+			if result == nil {
+				result = expr
+			} else {
+				result = &AndExpr{Left: result, Right: expr}
+			}
+		}
+		return result
 	}
-	if b == nil {
-		return a
-	}
-	return &AndExpr{Left: a, Right: b}
 }
 
 // TableFromStatement returns the qualified table name for the query.
