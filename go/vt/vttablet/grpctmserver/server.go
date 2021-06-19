@@ -502,6 +502,6 @@ func init() {
 }
 
 // RegisterForTest will register the RPC, to be used by test instances only
-func RegisterForTest(s *grpc.Server, tm *tabletmanager.TabletManager) {
+func RegisterForTest(s *grpc.Server, tm tabletmanager.RPCTM) {
 	tabletmanagerservicepb.RegisterTabletManagerServer(s, &server{tm: tm})
 }
