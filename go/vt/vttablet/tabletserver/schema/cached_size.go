@@ -17,6 +17,12 @@ limitations under the License.
 
 package schema
 
+import (
+	"math"
+	"reflect"
+	"unsafe"
+)
+
 func (cached *MessageInfo) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -44,13 +50,15 @@ func (cached *SequenceInfo) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
+//go:nocheckptr
 func (cached *Table) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(104)
+		size += int64(112)
 	}
 	// field Name vitess.io/vitess/go/vt/sqlparser.TableIdent
 	size += cached.Name.CachedSize(false)
@@ -64,6 +72,23 @@ func (cached *Table) CachedSize(alloc bool) int64 {
 	// field PKColumns []int
 	{
 		size += int64(cap(cached.PKColumns)) * int64(8)
+	}
+	// field UKColumns map[string][]int
+	if cached.UKColumns != nil {
+		size += int64(48)
+		hmap := reflect.ValueOf(cached.UKColumns)
+		numBuckets := int(math.Pow(2, float64((*(*uint8)(unsafe.Pointer(hmap.Pointer() + uintptr(9)))))))
+		numOldBuckets := (*(*uint16)(unsafe.Pointer(hmap.Pointer() + uintptr(10))))
+		size += int64(numOldBuckets * 336)
+		if len(cached.UKColumns) > 0 || numBuckets > 1 {
+			size += int64(numBuckets * 336)
+		}
+		for k, v := range cached.UKColumns {
+			size += int64(len(k))
+			{
+				size += int64(cap(v)) * int64(8)
+			}
+		}
 	}
 	// field SequenceInfo *vitess.io/vitess/go/vt/vttablet/tabletserver/schema.SequenceInfo
 	size += cached.SequenceInfo.CachedSize(true)
