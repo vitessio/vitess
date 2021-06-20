@@ -299,6 +299,7 @@ func (be *XtrabackupEngine) backupFiles(ctx context.Context, params BackupParams
 	// the replication position. Note that if we don't read stderr as we go, the
 	// xtrabackup process gets blocked when the write buffer fills up.
 	stderrBuilder := &strings.Builder{}
+	posBuilder := &strings.Builder{}
 	stderrDone := make(chan struct{})
 	go func() {
 		defer close(stderrDone)
@@ -318,7 +319,7 @@ func (be *XtrabackupEngine) backupFiles(ctx context.Context, params BackupParams
 				}
 				capture = true
 			}
-			fmt.Fprintln(stderrBuilder, line)
+			fmt.Fprintln(posBuilder, line)
 		}
 		if err := scanner.Err(); err != nil {
 			params.Logger.Errorf("error reading from xtrabackup stderr: %v", err)
@@ -362,7 +363,8 @@ func (be *XtrabackupEngine) backupFiles(ctx context.Context, params BackupParams
 		return replicationPosition, vterrors.Wrap(err, fmt.Sprintf("xtrabackup failed with error. Output=%s", sterrOutput))
 	}
 
-	replicationPosition, rerr := findReplicationPosition(sterrOutput, flavor, params.Logger)
+	posOutput := posBuilder.String()
+	replicationPosition, rerr := findReplicationPosition(posOutput, flavor, params.Logger)
 	if rerr != nil {
 		return replicationPosition, vterrors.Wrap(rerr, "backup failed trying to find replication position")
 	}

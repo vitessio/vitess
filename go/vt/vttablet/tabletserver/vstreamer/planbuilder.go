@@ -48,6 +48,8 @@ type Plan struct {
 	// in the stream.
 	ColExprs []ColExpr
 
+	convertUsingUTF8Columns map[string]bool
+
 	// Filters is the list of filters to be applied to the columns
 	// of the table.
 	Filters []Filter
@@ -440,6 +442,24 @@ func analyzeSelect(query string) (sel *sqlparser.Select, fromTable sqlparser.Tab
 	return sel, fromTable, nil
 }
 
+// isConvertColumnUsingUTF8 returns 'true' when given column needs to be converted as UTF8
+// while read from source table
+func (plan *Plan) isConvertColumnUsingUTF8(columnName string) bool {
+	if plan.convertUsingUTF8Columns == nil {
+		return false
+	}
+	return plan.convertUsingUTF8Columns[columnName]
+}
+
+// setConvertColumnUsingUTF8 marks given column as needs to be converted as UTF8
+// while read from source table
+func (plan *Plan) setConvertColumnUsingUTF8(columnName string) {
+	if plan.convertUsingUTF8Columns == nil {
+		plan.convertUsingUTF8Columns = map[string]bool{}
+	}
+	plan.convertUsingUTF8Columns[columnName] = true
+}
+
 func (plan *Plan) analyzeWhere(vschema *localVSchema, where *sqlparser.Where) error {
 	if where == nil {
 		return nil
@@ -599,6 +619,17 @@ func (plan *Plan) analyzeExpr(vschema *localVSchema, selExpr sqlparser.SelectExp
 			},
 			ColNum:     -1,
 			FixedValue: sqltypes.NewInt64(num),
+		}, nil
+	case *sqlparser.ConvertUsingExpr:
+		colnum, err := findColumn(plan.Table, aliased.As)
+		if err != nil {
+			return ColExpr{}, err
+		}
+		field := plan.Table.Fields[colnum]
+		plan.setConvertColumnUsingUTF8(field.Name)
+		return ColExpr{
+			ColNum: colnum,
+			Field:  field,
 		}, nil
 	default:
 		log.Infof("Unsupported expression: %v", inner)

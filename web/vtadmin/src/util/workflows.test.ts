@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 import { vtadmin as pb } from '../proto/vtadmin';
-import { getStreams } from './workflows';
+import { getStreams, getStreamTablets } from './workflows';
 
 describe('getStreams', () => {
     const tests: {
@@ -67,6 +67,53 @@ describe('getStreams', () => {
         '%s',
         (name: string, input: Parameters<typeof getStreams>, expected: ReturnType<typeof getStreams>) => {
             expect(getStreams(...input)).toEqual(expected);
+        }
+    );
+});
+
+describe('getStreamTablets', () => {
+    const tests: {
+        name: string;
+        input: Parameters<typeof getStreamTablets>;
+        expected: ReturnType<typeof getStreamTablets>;
+    }[] = [
+        {
+            name: 'should return a set of unique tablet aliases',
+            input: [
+                pb.Workflow.create({
+                    workflow: {
+                        shard_streams: {
+                            '-80/us_east_1a-123456': {
+                                streams: [
+                                    { id: 1, shard: '-80', tablet: { cell: 'us_east_1a', uid: 123456 } },
+                                    { id: 2, shard: '-80', tablet: { cell: 'us_east_1a', uid: 123456 } },
+                                ],
+                            },
+                            '80-/us_east_1a-789012': {
+                                streams: [{ id: 1, shard: '80-', tablet: { cell: 'us_east_1a', uid: 789012 } }],
+                            },
+                        },
+                    },
+                }),
+            ],
+            expected: ['us_east_1a-123456', 'us_east_1a-789012'],
+        },
+        {
+            name: 'should handle empty workflow',
+            input: [pb.Workflow.create()],
+            expected: [],
+        },
+        {
+            name: 'should handle null input',
+            input: [null],
+            expected: [],
+        },
+    ];
+
+    test.each(tests.map(Object.values))(
+        '%s',
+        (name: string, input: Parameters<typeof getStreamTablets>, expected: ReturnType<typeof getStreamTablets>) => {
+            expect(getStreamTablets(...input)).toEqual(expected);
         }
     );
 });
