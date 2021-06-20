@@ -114,6 +114,17 @@ type Table struct {
 	Fields []*querypb.Field
 }
 
+// FindColumn finds a column in the table. It returns the index if found.
+// Otherwise, it returns -1.
+func (ta *Table) FindColumn(name sqlparser.ColIdent) int {
+	for i, col := range ta.Fields {
+		if name.EqualString(col.Name) {
+			return i
+		}
+	}
+	return -1
+}
+
 // fields returns the fields for the plan.
 func (plan *Plan) fields() []*querypb.Field {
 	fields := make([]*querypb.Field, len(plan.ColExprs))
