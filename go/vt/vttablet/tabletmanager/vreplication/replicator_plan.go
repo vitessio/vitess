@@ -127,7 +127,7 @@ func (rp *ReplicatorPlan) buildFromFields(tableName string, lastpk *sqltypes.Res
 		tpb.colExprs = append(tpb.colExprs, cexpr)
 	}
 	// The following actions are a subset of buildTablePlan.
-	if err := tpb.analyzePK(rp.ColInfoMap); err != nil {
+	if err := tpb.analyzePK(rp.ColInfoMap[tableName]); err != nil {
 		return nil, err
 	}
 	return tpb.generate(), nil
