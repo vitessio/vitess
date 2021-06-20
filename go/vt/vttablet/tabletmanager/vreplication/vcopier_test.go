@@ -1280,3 +1280,84 @@ func TestPlayerCopyTableCancel(t *testing.T) {
 		{"2", "bbb"},
 	})
 }
+
+func TestPlayerCopyTablesWithGeneratedColumn(t *testing.T) {
+	flavor := strings.ToLower(env.Flavor)
+	// Disable tests on percona (which identifies as mysql56) and mariadb platforms in CI since they
+	// generated columns support was added in 5.7 and mariadb added mysql compatible generated columns in 10.2
+	if !strings.Contains(flavor, "mysql57") && !strings.Contains(flavor, "mysql80") {
+		return
+	}
+	defer deleteTablet(addTablet(100))
+
+	execStatements(t, []string{
+		"create table src1(id int, val varbinary(128), val2 varbinary(128) as (concat(id, val)), val3 varbinary(128) as (concat(val, id)), id2 int, primary key(id))",
+		"insert into src1(id, val, id2) values(2, 'bbb', 20), (1, 'aaa', 10)",
+		fmt.Sprintf("create table %s.dst1(id int, val varbinary(128), val2 varbinary(128) as (concat(id, val)), val3 varbinary(128), id2 int, primary key(id))", vrepldb),
+		"create table src2(id int, val varbinary(128), val2 varbinary(128) as (concat(id, val)), val3 varbinary(128) as (concat(val, id)), id2 int, primary key(id))",
+		"insert into src2(id, val, id2) values(2, 'bbb', 20), (1, 'aaa', 10)",
+		fmt.Sprintf("create table %s.dst2(val3 varbinary(128), val varbinary(128), id2 int)", vrepldb),
+	})
+	defer execStatements(t, []string{
+		"drop table src1",
+		fmt.Sprintf("drop table %s.dst1", vrepldb),
+		"drop table src2",
+		fmt.Sprintf("drop table %s.dst2", vrepldb),
+	})
+	env.SchemaEngine.Reload(context.Background())
+
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "dst1",
+			Filter: "select * from src1",
+		}, {
+			Match:  "dst2",
+			Filter: "select val3, val, id2 from src2",
+		}},
+	}
+
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace: env.KeyspaceName,
+		Shard:    env.ShardName,
+		Filter:   filter,
+		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
+	}
+	query := binlogplayer.CreateVReplicationState("test", bls, "", binlogplayer.VReplicationInit, playerEngine.dbName)
+	qr, err := playerEngine.Exec(query)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		query := fmt.Sprintf("delete from _vt.vreplication where id = %d", qr.InsertID)
+		if _, err := playerEngine.Exec(query); err != nil {
+			t.Fatal(err)
+		}
+		expectDeleteQueries(t)
+	}()
+
+	expectNontxQueries(t, []string{
+		// Create the list of tables to copy and transition to Copying state.
+		"/insert into _vt.vreplication",
+		"/update _vt.vreplication set message=",
+		"/insert into _vt.copy_state",
+		"/update _vt.vreplication set state",
+		// The first fast-forward has no starting point. So, it just saves the current position.
+		"insert into dst1(id,val,val3,id2) values (1,'aaa','aaa1',10), (2,'bbb','bbb2',20)",
+		`/update _vt.copy_state set lastpk='fields:<name:\\"id\\" type:INT32 > rows:<lengths:1 values:\\"2\\" > ' where vrepl_id=.*`,
+		// copy of dst1 is done: delete from copy_state.
+		"/delete from _vt.copy_state.*dst1",
+		"insert into dst2(val3,val,id2) values ('aaa1','aaa',10), ('bbb2','bbb',20)",
+		`/update _vt.copy_state set lastpk='fields:<name:\\"id\\" type:INT32 > rows:<lengths:1 values:\\"2\\" > ' where vrepl_id=.*`,
+		// copy of dst2 is done: delete from copy_state.
+		"/delete from _vt.copy_state.*dst2",
+		"/update _vt.vreplication set state",
+	})
+	expectData(t, "dst1", [][]string{
+		{"1", "aaa", "1aaa", "aaa1", "10"},
+		{"2", "bbb", "2bbb", "bbb2", "20"},
+	})
+	expectData(t, "dst2", [][]string{
+		{"aaa1", "aaa", "10"},
+		{"bbb2", "bbb", "20"},
+	})
+}

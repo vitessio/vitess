@@ -98,9 +98,9 @@ aquarapTEST@gmail.com	Fix mysql80 docker build with dep.	a28591577b8d432b9c5d78a
 TEST@planetscale.com	Revert "docker/lite/install_dependencies.sh:  Upgrade MySQL 8 to 8.0.24"	7858ff46545cff749b3663c92ae90ef27a5dfbc2	27a5dfbc2
 TEST@planetscale.com	docker/lite/install_dependencies.sh:  Upgrade MySQL 8 to 8.0.24	c91d46782933292941a846fef2590ff1a6fa193f	a6fa193f`
 
-	prs, authorCommits, count, err := parseGitLog(in)
+	prs, authorCommits, nonMergeCommits, err := parseGitLog(in)
 	require.NoError(t, err)
-	assert.Equal(t, []string{"7629", "7831", "7912", "7943", "7951", "7959", "7964", "7968", "7970"}, prs)
-	assert.Equal(t, []string{"385d0b327", "3b744e782", "4a0a943b0", "538709da5", "616f5562c", "6b9a731a2", "e5242a88a", "edac2baf8"}, authorCommits)
-	assert.Equal(t, 28, count)
+	assert.Equal(t, prs, []string{"7629", "7831", "7912", "7934", "7943", "7951", "7959", "7964", "7968", "7970"})
+	assert.Equal(t, authorCommits, []string{"385d0b327", "3b744e782", "4a0a943b0", "538709da5", "616f5562c", "6b9a731a2", "e5242a88a", "edac2baf8"})
+	assert.Equal(t, 28, nonMergeCommits)
 }

@@ -191,6 +191,7 @@ var stateToMysqlCode = map[vterrors.State]struct {
 	vterrors.WrongValueForVar:             {num: ERWrongValueForVar, state: SSClientError},
 	vterrors.ServerNotAvailable:           {num: ERServerIsntAvailable, state: SSNetError},
 	vterrors.CantDoThisInTransaction:      {num: ERCantDoThisDuringAnTransaction, state: SSCantDoThisDuringAnTransaction},
+	vterrors.RequiresPrimaryKey:           {num: ERRequiresPrimaryKey, state: SSClientError},
 	vterrors.NoSuchSession:                {num: ERUnknownComError, state: SSNetError},
 }
 
