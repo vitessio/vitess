@@ -34,15 +34,18 @@ type (
 		exprDeps  map[sqlparser.Expr]TableSet
 		err       error
 		currentDb string
+
+		selectScope map[*sqlparser.Select]*scope
 	}
 )
 
 // newAnalyzer create the semantic analyzer
 func newAnalyzer(dbName string, si SchemaInformation) *analyzer {
 	return &analyzer{
-		exprDeps:  map[sqlparser.Expr]TableSet{},
-		currentDb: dbName,
-		si:        si,
+		exprDeps:    map[sqlparser.Expr]TableSet{},
+		selectScope: map[*sqlparser.Select]*scope{},
+		currentDb:   dbName,
+		si:          si,
 	}
 }
 
@@ -54,7 +57,7 @@ func Analyze(statement sqlparser.Statement, currentDb string, si SchemaInformati
 	if err != nil {
 		return nil, err
 	}
-	return &SemTable{exprDependencies: analyzer.exprDeps, Tables: analyzer.Tables}, nil
+	return &SemTable{exprDependencies: analyzer.exprDeps, Tables: analyzer.Tables, selectScope: analyzer.selectScope}, nil
 }
 
 // analyzeDown pushes new scopes when we encounter sub queries,
@@ -65,6 +68,7 @@ func (a *analyzer) analyzeDown(cursor *sqlparser.Cursor) bool {
 	switch node := n.(type) {
 	case *sqlparser.Select:
 		a.push(newScope(current))
+		a.selectScope[node] = a.currentScope()
 		if err := a.analyzeTableExprs(node.From); err != nil {
 			a.err = err
 			return false
@@ -87,6 +91,7 @@ func (a *analyzer) analyzeDown(cursor *sqlparser.Cursor) bool {
 			a.exprDeps[node] = t
 		}
 	}
+
 	// this is the visitor going down the tree. Returning false here would just not visit the children
 	// to the current node, but that is not what we want if we have encountered an error.
 	// In order to abort the whole visitation, we have to return true here and then return false in the `analyzeUp` method
@@ -163,7 +168,7 @@ func (a *analyzer) resolveUnQualifiedColumn(current *scope, expr *sqlparser.ColN
 
 	var tblInfo *TableInfo
 	for _, tbl := range current.tables {
-		if !tbl.Table.ColumnListAuthoritative {
+		if tbl.Table == nil || !tbl.Table.ColumnListAuthoritative {
 			return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.NonUniqError, fmt.Sprintf("Column '%s' in field list is ambiguous", sqlparser.String(expr)))
 		}
 		for _, col := range tbl.Table.Columns {
