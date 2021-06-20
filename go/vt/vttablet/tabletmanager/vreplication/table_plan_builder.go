@@ -143,7 +143,11 @@ func buildReplicatorPlan(filter *binlogdatapb.Filter, colInfoMap map[string][]*C
 		if rule == nil {
 			continue
 		}
-		tablePlan, err := buildTablePlan(tableName, rule, colInfoMap, lastpk, stats)
+		colInfos, ok := colInfoMap[tableName]
+		if !ok {
+			return nil, fmt.Errorf("table %s not found in schema", tableName)
+		}
+		tablePlan, err := buildTablePlan(tableName, rule, colInfos, lastpk, stats)
 		if err != nil {
 			return nil, err
 		}
@@ -182,7 +186,7 @@ func MatchTable(tableName string, filter *binlogdatapb.Filter) (*binlogdatapb.Ru
 	return nil, nil
 }
 
-func buildTablePlan(tableName string, rule *binlogdatapb.Rule, colInfoMap map[string][]*ColumnInfo, lastpk *sqltypes.Result, stats *binlogplayer.Stats) (*TablePlan, error) {
+func buildTablePlan(tableName string, rule *binlogdatapb.Rule, colInfos []*ColumnInfo, lastpk *sqltypes.Result, stats *binlogplayer.Stats) (*TablePlan, error) {
 	filter := rule.Filter
 	query := filter
 	// generate equivalent select statement if filter is empty or a keyrange.
@@ -242,7 +246,7 @@ func buildTablePlan(tableName string, rule *binlogdatapb.Rule, colInfoMap map[st
 		},
 		selColumns: make(map[string]bool),
 		lastpk:     lastpk,
-		colInfos:   colInfoMap[tableName],
+		colInfos:   colInfos,
 		stats:      stats,
 	}
 
@@ -264,7 +268,7 @@ func buildTablePlan(tableName string, rule *binlogdatapb.Rule, colInfoMap map[st
 	if err := tpb.analyzeGroupBy(sel.GroupBy); err != nil {
 		return nil, err
 	}
-	if err := tpb.analyzePK(colInfoMap); err != nil {
+	if err := tpb.analyzePK(colInfos); err != nil {
 		return nil, err
 	}
 
@@ -276,6 +280,16 @@ func buildTablePlan(tableName string, rule *binlogdatapb.Rule, colInfoMap map[st
 				Expr: sqlparser.NewIntLiteral("1"),
 			},
 		})
+	}
+	commentsList := []string{}
+	if rule.UniqueKey != "" {
+		commentsList = append(commentsList, fmt.Sprintf(`ukName="%s"`, rule.UniqueKey))
+	}
+	if len(commentsList) > 0 {
+		comments := sqlparser.Comments{
+			fmt.Sprintf(`/*vt+ %s */`, strings.Join(commentsList, " ")),
+		}
+		tpb.sendSelect.Comments = comments
 	}
 	sendRule.Filter = sqlparser.String(tpb.sendSelect)
 
@@ -504,11 +518,7 @@ func (tpb *tablePlanBuilder) analyzeGroupBy(groupBy sqlparser.GroupBy) error {
 }
 
 // analyzePK builds tpb.pkCols.
-func (tpb *tablePlanBuilder) analyzePK(colInfoMap map[string][]*ColumnInfo) error {
-	cols, ok := colInfoMap[tpb.name.String()]
-	if !ok {
-		return fmt.Errorf("table %s not found in schema", tpb.name)
-	}
+func (tpb *tablePlanBuilder) analyzePK(cols []*ColumnInfo) error {
 	for _, col := range cols {
 		if !col.IsPK {
 			continue
