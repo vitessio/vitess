@@ -166,23 +166,20 @@ func (nz *normalizer) convertComparison(node *ComparisonExpr) {
 	}
 	// The RHS is a tuple of values.
 	// Make a list bindvar.
-	bvals := &querypb.BindVariable{
-		Type: querypb.Type_TUPLE,
-	}
+	var mappedTuple ValTuple
+	mappedTuple = make([]Expr, 0, len(tupleVals))
 	for _, val := range tupleVals {
 		bval := nz.sqlToBindvar(val)
 		if bval == nil {
 			return
 		}
-		bvals.Values = append(bvals.Values, &querypb.Value{
-			Type:  bval.Type,
-			Value: bval.Value,
-		})
+		bvname := nz.reserved.nextUnusedVar()
+		nz.bindVars[bvname] = bval
+		mappedTuple = append(mappedTuple, NewArgument(bvname))
 	}
-	bvname := nz.reserved.nextUnusedVar()
-	nz.bindVars[bvname] = bvals
+
 	// Modify RHS to be a list bindvar.
-	node.Right = ListArg(bvname)
+	node.Right = mappedTuple
 }
 
 func (nz *normalizer) sqlToBindvar(node SQLNode) *querypb.BindVariable {

@@ -18,6 +18,7 @@ package planbuilder
 
 import (
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -28,15 +29,15 @@ func (pb *primitiveBuilder) findSysInfoRoutingPredicates(expr sqlparser.Expr, ru
 	if err != nil {
 		return err
 	}
-	if out == nil {
+	if len(out) == 0 {
 		// we didn't find a predicate to use for routing, so we just exit early
 		return nil
 	}
 
 	if isTableSchema {
-		rut.eroute.SysTableTableSchema = append(rut.eroute.SysTableTableSchema, out)
+		rut.eroute.SysTableTableSchema = append(rut.eroute.SysTableTableSchema, out...)
 	} else {
-		rut.eroute.SysTableTableName = append(rut.eroute.SysTableTableName, out)
+		rut.eroute.SysTableTableName = append(rut.eroute.SysTableTableName, out...)
 	}
 
 	return nil
@@ -73,7 +74,7 @@ func isTableNameCol(col *sqlparser.ColName) bool {
 	return col.Name.EqualString("table_name")
 }
 
-func extractInfoSchemaRoutingPredicate(in sqlparser.Expr) (bool, evalengine.Expr, error) {
+func extractInfoSchemaRoutingPredicate(in sqlparser.Expr) (bool, []evalengine.Expr, error) {
 	switch cmp := in.(type) {
 	case *sqlparser.ComparisonExpr:
 		if cmp.Operator == sqlparser.EqualOp {
@@ -95,8 +96,59 @@ func extractInfoSchemaRoutingPredicate(in sqlparser.Expr) (bool, evalengine.Expr
 					name = engine.BvTableName
 				}
 				replaceOther(sqlparser.NewArgument(name))
-				return isSchemaName, evalExpr, nil
+				return isSchemaName, []evalengine.Expr{evalExpr}, nil
 			}
+		} else if cmp.Operator == sqlparser.InOp {
+			isSchema, isTable := isTableSchemaOrName(cmp.Left)
+			// should be either table schema or table name
+			if !isSchema && !isTable {
+				return false, nil, nil
+			}
+			// left side has to be the schema, i.e (1, 2) IN schema is not allowed.
+			if cmp.Left == nil {
+				return false, nil, nil
+			}
+			var name string
+			if isSchema {
+				name = sqltypes.BvSchemaName
+			} else {
+				name = engine.BvTableName
+			}
+			// TODO(Scott): other types like ColName is possible, need to be handled correctly later.
+			var expressions []sqlparser.Expr
+			switch cmp.Right.(type) {
+			case sqlparser.ValTuple:
+				expressions = cmp.Right.(sqlparser.ValTuple)
+			case sqlparser.ListArg:
+				log.Errorf("Unsupport list args of in clause, need to be fixed %v", cmp.Right)
+				return false, nil, nil
+			default:
+				return false, nil, nil
+			}
+
+			// nameTuples are the tuples of __vtschemaname or database()
+			var nameTuples sqlparser.ValTuple
+			nameTuples = make([]sqlparser.Expr, 0, len(expressions))
+			valueTuples := make([]evalengine.Expr, 0, len(expressions))
+			for _, expr := range expressions {
+				if shouldRewrite(expr) {
+					nameTuples = append(nameTuples, sqlparser.Argument(name))
+					evalExpr, err := sqlparser.Convert(expr)
+					if err != nil {
+						if err == sqlparser.ErrExprNotSupported {
+							// This just means we can't rewrite this particular expression,
+							// not that we have to exit altogether
+							return false, nil, nil
+						}
+						return false, nil, err
+					}
+					valueTuples = append(valueTuples, evalExpr)
+				} else {
+					nameTuples = append(nameTuples, expr)
+				}
+			}
+			cmp.Right = nameTuples
+			return isSchema, valueTuples, nil
 		}
 	}
 	return false, nil, nil

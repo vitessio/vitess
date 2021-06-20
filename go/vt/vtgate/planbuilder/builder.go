@@ -93,11 +93,11 @@ func TestBuilder(query string, vschema ContextVSchema) (*engine.Plan, error) {
 	if err != nil {
 		return nil, err
 	}
+	// TODO(Scott): the actual execution path go through prepareAST first to normalize the variables. which is different than this one.
 	result, err := sqlparser.RewriteAST(stmt, "")
 	if err != nil {
 		return nil, err
 	}
-
 	reservedVars := sqlparser.NewReservedVars("vtg", reserved)
 	return BuildFromStmt(query, result.AST, reservedVars, vschema, result.BindVarNeeds, true, true)
 }

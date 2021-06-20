@@ -80,7 +80,7 @@ releases
 /dist/
 /vthook/
 /bin/
-/vtdataroot/
+*vtdataroot/
 venv
 
 .scannerwork

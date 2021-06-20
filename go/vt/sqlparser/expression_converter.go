@@ -71,7 +71,6 @@ func Convert(e Expr) (evalengine.Expr, error) {
 			Left:  left,
 			Right: right,
 		}, nil
-
 	}
 	return nil, ErrExprNotSupported
 }

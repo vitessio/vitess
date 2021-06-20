@@ -1803,6 +1803,24 @@ Gen4 plan same as above
   }
 }
 
+# query trying to query keyspace in clause
+"SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA IN ('user')"
+{
+  "QueryType": "SELECT",
+  "Original": "SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA IN ('user')",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectDBA",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select * from INFORMATION_SCHEMA.`TABLES` where 1 != 1",
+    "Query": "select * from INFORMATION_SCHEMA.`TABLES` where TABLE_SCHEMA in (:__vtschemaname)",
+    "SysTableTableSchema": "[VARBINARY(\"user\")]"
+  }
+}
+
 # information_schema query using database() func
 "SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = database()"
 {
