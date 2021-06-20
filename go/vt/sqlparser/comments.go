@@ -17,6 +17,7 @@ limitations under the License.
 package sqlparser
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 	"unicode"
@@ -275,6 +276,19 @@ func (d CommentDirectives) IsSet(key string) bool {
 		return intVal == 1
 	}
 	return false
+}
+
+// GetString gets a directive value as string, with default value if not found
+func (d CommentDirectives) GetString(key string, defaultVal string) string {
+	val, ok := d[key]
+	if !ok {
+		return defaultVal
+	}
+	stringVal := fmt.Sprintf("%v", val)
+	if unquoted, err := strconv.Unquote(stringVal); err == nil {
+		stringVal = unquoted
+	}
+	return stringVal
 }
 
 // SkipQueryPlanCacheDirective returns true if skip query plan cache directive is set to true in query.
