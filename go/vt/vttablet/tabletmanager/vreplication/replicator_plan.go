@@ -375,7 +375,6 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 			if _, err := execParsedQuery(tp.Delete, bindvars, executor); err != nil {
 				return nil, err
 			}
-
 		}
 		return execParsedQuery(tp.Insert, bindvars, executor)
 	}
