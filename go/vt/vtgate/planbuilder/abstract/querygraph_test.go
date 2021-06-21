@@ -213,8 +213,8 @@ func (qg *QueryGraph) subqueriesString() string {
 }
 
 func (qg *QueryGraph) noDepsString() string {
-	if qg.noDeps == nil {
+	if qg.NoDeps == nil {
 		return ""
 	}
-	return fmt.Sprintf("\nForAll: %s", sqlparser.String(qg.noDeps))
+	return fmt.Sprintf("\nForAll: %s", sqlparser.String(qg.NoDeps))
 }

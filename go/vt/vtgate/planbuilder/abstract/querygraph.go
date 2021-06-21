@@ -38,8 +38,8 @@ type (
 		// innerJoins contains the predicates that need multiple Tables
 		innerJoins map[semantics.TableSet][]sqlparser.Expr
 
-		// noDeps contains the predicates that can be evaluated anywhere.
-		noDeps sqlparser.Expr
+		// NoDeps contains the predicates that can be evaluated anywhere.
+		NoDeps sqlparser.Expr
 
 		// Subqueries contains the Subqueries that depend on this query graph
 		Subqueries map[*sqlparser.Subquery][]*QueryGraph
@@ -296,11 +296,11 @@ func (qg *QueryGraph) addToSingleTable(table semantics.TableSet, predicate sqlpa
 }
 
 func (qg *QueryGraph) addNoDepsPredicate(predicate sqlparser.Expr) {
-	if qg.noDeps == nil {
-		qg.noDeps = predicate
+	if qg.NoDeps == nil {
+		qg.NoDeps = predicate
 	} else {
-		qg.noDeps = &sqlparser.AndExpr{
-			Left:  qg.noDeps,
+		qg.NoDeps = &sqlparser.AndExpr{
+			Left:  qg.NoDeps,
 			Right: predicate,
 		}
 	}

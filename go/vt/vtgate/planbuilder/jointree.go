@@ -482,21 +482,7 @@ func (rp *routePlan) pickBestAvailableVindex() {
 
 // Predicates takes all known predicates for this route and ANDs them together
 func (rp *routePlan) Predicates() sqlparser.Expr {
-	var result sqlparser.Expr
-	add := func(e sqlparser.Expr) {
-		if result == nil {
-			result = e
-			return
-		}
-		result = &sqlparser.AndExpr{
-			Left:  result,
-			Right: e,
-		}
-	}
-	for _, p := range rp.predicates {
-		add(p)
-	}
-	return result
+	return sqlparser.AndExpressions(rp.predicates...)
 }
 
 func (rp *routePlan) pushOutputColumns(col []*sqlparser.ColName, _ *semantics.SemTable) []int {
@@ -536,6 +522,7 @@ func (jp *joinPlan) pushOutputColumns(columns []*sqlparser.ColName, semTable *se
 	var toTheLeft []bool
 	var lhs, rhs []*sqlparser.ColName
 	for _, col := range columns {
+		col.Qualifier.Qualifier = sqlparser.NewTableIdent("")
 		if semTable.Dependencies(col).IsSolvedBy(jp.lhs.tables()) {
 			lhs = append(lhs, col)
 			toTheLeft = append(toTheLeft, true)
