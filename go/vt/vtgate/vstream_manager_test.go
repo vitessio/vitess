@@ -122,7 +122,7 @@ func TestVStreamSkew(t *testing.T) {
 				vgtid.ShardGtids = append(vgtid.ShardGtids, &binlogdatapb.ShardGtid{Keyspace: name, Gtid: "pos", Shard: "20-40"})
 				go stream(sbc1, shard1, tcase.numEventsPerShard, tcase.shard1idx)
 			}
-			ch := startVStream(ctx, t, vsm, vgtid, true)
+			ch := startVStream(ctx, t, vsm, vgtid, &vtgatepb.VStreamFlags{MinimizeSkew: true})
 			var receivedEvents []*binlogdatapb.VEvent
 			for len(receivedEvents) < int(want) {
 				select {
@@ -317,7 +317,7 @@ func TestVStreamMulti(t *testing.T) {
 			Gtid:     "pos",
 		}},
 	}
-	ch := startVStream(ctx, t, vsm, vgtid, false)
+	ch := startVStream(ctx, t, vsm, vgtid, nil)
 	<-ch
 	response := <-ch
 	var got *binlogdatapb.VGtid
@@ -380,7 +380,7 @@ func TestVStreamRetry(t *testing.T) {
 	assert.Equal(t, 2, count)
 }
 
-func TestVStreamHeartbeat(t *testing.T) {
+func TestVStreamShouldNotSendSourceHeartbeats(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -424,7 +424,7 @@ func TestVStreamHeartbeat(t *testing.T) {
 			Gtid:     "pos",
 		}},
 	}
-	ch := startVStream(ctx, t, vsm, vgtid, false)
+	ch := startVStream(ctx, t, vsm, vgtid, nil)
 	verifyEvents(t, ch, want)
 }
 
@@ -506,7 +506,7 @@ func TestVStreamJournalOneToMany(t *testing.T) {
 			Gtid:     "pos",
 		}},
 	}
-	ch := startVStream(ctx, t, vsm, vgtid, false)
+	ch := startVStream(ctx, t, vsm, vgtid, nil)
 	verifyEvents(t, ch, want1)
 
 	// The following two events from the different shards can come in any order.
@@ -617,7 +617,7 @@ func TestVStreamJournalManyToOne(t *testing.T) {
 			Gtid:     "pos1020",
 		}},
 	}
-	ch := startVStream(ctx, t, vsm, vgtid, false)
+	ch := startVStream(ctx, t, vsm, vgtid, nil)
 	// The following two events from the different shards can come in any order.
 	// But the resulting VGTID should be the same after both are received.
 	<-ch
@@ -763,7 +763,7 @@ func TestVStreamJournalNoMatch(t *testing.T) {
 			Gtid:     "pos",
 		}},
 	}
-	ch := startVStream(ctx, t, vsm, vgtid, false)
+	ch := startVStream(ctx, t, vsm, vgtid, nil)
 	verifyEvents(t, ch, want1, wantjn1, want2, wantjn2, want3)
 }
 
@@ -993,16 +993,70 @@ func TestResolveVStreamParams(t *testing.T) {
 
 }
 
+func TestVStreamIdleHeartbeat(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	name := "TestVStream"
+	_ = createSandbox(name)
+	hc := discovery.NewFakeHealthCheck()
+	vsm := newTestVStreamManager(hc, new(sandboxTopo), "aa")
+	hc.AddTestTablet("aa", "1.1.1.1", 1001, name, "-20", topodatapb.TabletType_MASTER, true, 1, nil)
+	vgtid := &binlogdatapb.VGtid{
+		ShardGtids: []*binlogdatapb.ShardGtid{{
+			Keyspace: name,
+			Shard:    "-20",
+			Gtid:     "pos",
+		}},
+	}
+
+	type testcase struct {
+		name              string
+		heartbeatInterval uint32
+		want              int
+	}
+
+	// each test waits for 4.5 seconds, hence expected #heartbeats = floor(4.5/heartbeatInterval)
+	testcases := []testcase{
+		{"off", 0, 0},
+		{"on:1s", 1, 4},
+		{"on:2s", 2, 2},
+	}
+	for _, tcase := range testcases {
+		t.Run(tcase.name, func(t *testing.T) {
+			heartbeatCount := 0
+
+			go func() {
+				vsm.VStream(ctx, topodatapb.TabletType_MASTER, vgtid, nil, &vtgatepb.VStreamFlags{HeartbeatInterval: tcase.heartbeatInterval},
+					func(events []*binlogdatapb.VEvent) error {
+						for _, event := range events {
+							if event.Type == binlogdatapb.VEventType_HEARTBEAT {
+								heartbeatCount++
+							}
+						}
+						return nil
+					})
+			}()
+			time.Sleep(time.Duration(4500) * time.Millisecond)
+			require.Equalf(t, heartbeatCount, tcase.want, "got %d, want %d", heartbeatCount, tcase.want)
+		})
+	}
+	cancel()
+}
+
 func newTestVStreamManager(hc discovery.HealthCheck, serv srvtopo.Server, cell string) *vstreamManager {
 	gw := NewTabletGateway(context.Background(), hc, serv, cell)
 	srvResolver := srvtopo.NewResolver(serv, gw, cell)
 	return newVStreamManager(srvResolver, serv, cell)
 }
 
-func startVStream(ctx context.Context, t *testing.T, vsm *vstreamManager, vgtid *binlogdatapb.VGtid, minimizeSkew bool) <-chan *binlogdatapb.VStreamResponse {
+func startVStream(ctx context.Context, t *testing.T, vsm *vstreamManager, vgtid *binlogdatapb.VGtid, flags *vtgatepb.VStreamFlags) <-chan *binlogdatapb.VStreamResponse {
+	if flags == nil {
+		flags = &vtgatepb.VStreamFlags{}
+	}
 	ch := make(chan *binlogdatapb.VStreamResponse)
 	go func() {
-		_ = vsm.VStream(ctx, topodatapb.TabletType_MASTER, vgtid, nil, &vtgatepb.VStreamFlags{MinimizeSkew: true}, func(events []*binlogdatapb.VEvent) error {
+		_ = vsm.VStream(ctx, topodatapb.TabletType_MASTER, vgtid, nil, flags, func(events []*binlogdatapb.VEvent) error {
 			ch <- &binlogdatapb.VStreamResponse{Events: events}
 			return nil
 		})

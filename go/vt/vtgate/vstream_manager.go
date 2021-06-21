@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"math"
 	"sync"
 	"time"
 
@@ -222,15 +221,20 @@ func (vs *vstream) stream(ctx context.Context) error {
 }
 
 func (vs *vstream) sendEvents(ctx context.Context) {
-	var heartbeatDuration time.Duration
-	if vs.heartbeatInterval == 0 {
-		heartbeatDuration = time.Duration(math.MaxInt64) * time.Nanosecond // max time.Duration => 290 years
-	} else {
-		heartbeatDuration = time.Duration(vs.heartbeatInterval) * time.Second
-	}
+	var heartbeat <-chan time.Time
+	var resetHeartbeat func()
 
-	timer := time.NewTicker(heartbeatDuration)
-	defer timer.Stop()
+	if vs.heartbeatInterval == 0 {
+		heartbeat = make(chan time.Time)
+		resetHeartbeat = func() {}
+	} else {
+		d := time.Duration(vs.heartbeatInterval) * time.Second
+		timer := time.NewTicker(d)
+		defer timer.Stop()
+
+		heartbeat = timer.C
+		resetHeartbeat = func() { timer.Reset(d) }
+	}
 
 	send := func(evs []*binlogdatapb.VEvent) error {
 		if err := vs.send(evs); err != nil {
@@ -255,8 +259,8 @@ func (vs *vstream) sendEvents(ctx context.Context) {
 				})
 				return
 			}
-			timer.Reset(heartbeatDuration)
-		case t := <-timer.C:
+			resetHeartbeat()
+		case t := <-heartbeat:
 			now := t.UnixNano()
 			evs := []*binlogdatapb.VEvent{{
 				Type:        binlogdatapb.VEventType_HEARTBEAT,
