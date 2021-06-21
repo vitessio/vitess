@@ -18,26 +18,28 @@ package planbuilder
 
 import (
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
 
 func (pb *primitiveBuilder) findSysInfoRoutingPredicates(expr sqlparser.Expr, rut *route) error {
-	isTableSchema, out, err := extractInfoSchemaRoutingPredicate(expr)
+	tableSchemas, tableNames, err := extractInfoSchemaRoutingPredicate(expr)
 	if err != nil {
 		return err
 	}
-	if len(out) == 0 {
+	if len(tableSchemas) == 0 && len(tableNames) == 0 {
 		// we didn't find a predicate to use for routing, so we just exit early
 		return nil
 	}
 
-	if isTableSchema {
-		rut.eroute.SysTableTableSchema = append(rut.eroute.SysTableTableSchema, out...)
-	} else {
-		rut.eroute.SysTableTableName = append(rut.eroute.SysTableTableName, out...)
+	if len(tableSchemas) > 0 {
+		rut.eroute.SysTableTableSchema = append(rut.eroute.SysTableTableSchema, tableSchemas...)
+	}
+
+	if len(tableNames) > 0 {
+		rut.eroute.SysTableTableName = append(rut.eroute.SysTableTableName, tableNames...)
 	}
 
 	return nil
@@ -74,7 +76,7 @@ func isTableNameCol(col *sqlparser.ColName) bool {
 	return col.Name.EqualString("table_name")
 }
 
-func extractInfoSchemaRoutingPredicate(in sqlparser.Expr) (bool, []evalengine.Expr, error) {
+func extractInfoSchemaRoutingPredicate(in sqlparser.Expr) ([]evalengine.Expr, []evalengine.Expr, error) {
 	switch cmp := in.(type) {
 	case *sqlparser.ComparisonExpr:
 		if cmp.Operator == sqlparser.EqualOp {
@@ -85,73 +87,146 @@ func extractInfoSchemaRoutingPredicate(in sqlparser.Expr) (bool, []evalengine.Ex
 					if err == sqlparser.ErrExprNotSupported {
 						// This just means we can't rewrite this particular expression,
 						// not that we have to exit altogether
-						return false, nil, nil
+						return nil, nil, nil
 					}
-					return false, nil, err
+					return nil, nil, err
 				}
-				var name string
+				exprs := []evalengine.Expr{evalExpr}
 				if isSchemaName {
-					name = sqltypes.BvSchemaName
-				} else {
-					name = engine.BvTableName
+					replaceOther(sqlparser.NewArgument(sqltypes.BvSchemaName))
+					return exprs, nil, nil
 				}
-				replaceOther(sqlparser.NewArgument(name))
-				return isSchemaName, []evalengine.Expr{evalExpr}, nil
+				replaceOther(sqlparser.NewArgument(engine.BvTableName))
+				return nil, exprs, nil
 			}
-		} else if cmp.Operator == sqlparser.InOp {
-			isSchema, isTable := isTableSchemaOrName(cmp.Left)
-			// should be either table schema or table name
-			if !isSchema && !isTable {
-				return false, nil, nil
+		} else if cmp.Operator == sqlparser.InOp || cmp.Operator == sqlparser.NotInOp {
+			// left side has to be the column, i.e (1, 2) IN column is not allowed.
+			// At least one column has to be DB name or table name.
+			colNames := checkAndSplitColumns(cmp.Left)
+			if colNames == nil {
+				return nil, nil, nil
 			}
-			// left side has to be the schema, i.e (1, 2) IN schema is not allowed.
-			if cmp.Left == nil {
-				return false, nil, nil
-			}
-			var name string
-			if isSchema {
-				name = sqltypes.BvSchemaName
-			} else {
-				name = engine.BvTableName
-			}
-			// TODO(Scott): other types like ColName is possible, need to be handled correctly later.
-			var expressions []sqlparser.Expr
-			switch cmp.Right.(type) {
-			case sqlparser.ValTuple:
-				expressions = cmp.Right.(sqlparser.ValTuple)
-			case sqlparser.ListArg:
-				log.Infof("List Args of in clause is unsupport, please check if the statement is incorrectly normalized %v", cmp.Right.(sqlparser.ListArg))
-				return false, nil, nil
-			default:
-				return false, nil, nil
+			valTuples := splitVals(cmp.Right, len(colNames))
+			// check if the val tuples format is correct.
+			if valTuples == nil {
+				return nil, nil, nil
 			}
 
-			// nameTuples are the tuples of __vtschemaname or database()
-			var nameTuples sqlparser.ValTuple
-			nameTuples = make([]sqlparser.Expr, 0, len(expressions))
-			valueTuples := make([]evalengine.Expr, 0, len(expressions))
-			for _, expr := range expressions {
-				if shouldRewrite(expr) {
-					nameTuples = append(nameTuples, sqlparser.Argument(name))
-					evalExpr, err := sqlparser.Convert(expr)
-					if err != nil {
-						if err == sqlparser.ErrExprNotSupported {
-							// This just means we can't rewrite this particular expression,
-							// not that we have to exit altogether
-							return false, nil, nil
-						}
-						return false, nil, err
-					}
-					valueTuples = append(valueTuples, evalExpr)
+			sysTableSchemas := make([]evalengine.Expr, 0, len(valTuples))
+			sysTableNames := make([]evalengine.Expr, 0, len(valTuples))
+			for index, col := range colNames {
+				isSchema, isTable := isTableSchemaOrName(col)
+				var name string
+				if isSchema {
+					name = sqltypes.BvSchemaName
+				} else if isTable {
+					name = engine.BvTableName
 				} else {
-					nameTuples = append(nameTuples, expr)
+					// only need to rewrite the SysTable and SysSchema
+					continue
+				}
+
+				for _, tuple := range valTuples {
+					expr := tuple[index]
+					if shouldRewrite(expr) {
+						tuple[index] = sqlparser.Argument(name)
+						evalExpr, err := sqlparser.Convert(expr)
+						if err != nil {
+							if err == sqlparser.ErrExprNotSupported {
+								// This just means we can't rewrite this particular expression,
+								// not that we have to exit altogether
+								return nil, nil, nil
+							}
+							return nil, nil, err
+						}
+						if isSchema {
+							sysTableSchemas = append(sysTableSchemas, evalExpr)
+						} else if isTable {
+							sysTableNames = append(sysTableNames, evalExpr)
+						}
+					}
 				}
 			}
-			cmp.Right = nameTuples
-			return isSchema, valueTuples, nil
+			// construct right side, rows of tuples of __vtschemaname or database()
+			cmp.Right = populateValTuple(valTuples, len(colNames))
+			return sysTableSchemas, sysTableNames, nil
 		}
 	}
-	return false, nil, nil
+	return nil, nil, nil
+}
+
+func populateValTuple(valTuples []sqlparser.ValTuple, numOfCol int) sqlparser.ValTuple {
+	var retValTuples sqlparser.ValTuple
+	retValTuples = make([]sqlparser.Expr, 0, len(valTuples))
+	for _, tuple := range valTuples {
+		if numOfCol == 1 {
+			// only one col per row, of colName type.
+			retValTuples = append(retValTuples, tuple[0])
+		} else {
+			retValTuples = append(retValTuples, tuple)
+		}
+	}
+	return retValTuples
+}
+
+// Convert the right side of In ops to a list of rows.
+func splitVals(e sqlparser.Expr, numOfCols int) []sqlparser.ValTuple {
+	// could either be (1, 2, 3) or ((1,2), (3,5))
+	expressions, ok := e.(sqlparser.ValTuple)
+	if !ok {
+		log.Errorf("Unsupported type, expecting val tuple %v", e)
+		return nil
+	}
+	valTuples := make([]sqlparser.ValTuple, 0, len(expressions))
+
+	for _, tuple := range expressions {
+		if numOfCols == 1 {
+			// values could be literal, float or other types.
+			valTuple := []sqlparser.Expr{tuple}
+			valTuples = append(valTuples, valTuple)
+		} else {
+			valTuple, ok := tuple.(sqlparser.ValTuple)
+			if !ok {
+				log.Errorf("Unsupported type, expecting a list of val tuple %v", tuple)
+				return nil
+			}
+			valTuples = append(valTuples, valTuple)
+		}
+
+	}
+	return valTuples
+}
+
+// Convert the left side of In ops to a list of columns.
+func checkAndSplitColumns(e sqlparser.Expr) []*sqlparser.ColName {
+	colNames := make([]*sqlparser.ColName, 0)
+	switch cols := e.(type) {
+	case sqlparser.ValTuple:
+		for _, col := range cols {
+			colName, ok := col.(*sqlparser.ColName)
+			if !ok {
+				log.Infof("left side of (not) in operator could not be converted to a list of col names. %v", col)
+				return nil
+			}
+			colNames = append(colNames, colName)
+		}
+	case *sqlparser.ColName:
+		colNames = append(colNames, cols)
+	default:
+		// unexpected left side of the in ops.
+		return nil
+	}
+	containDBName := false
+	containTableName := false
+	for _, col := range colNames {
+		containDBName = containDBName || isDbNameCol(col)
+		containTableName = containTableName || isTableNameCol(col)
+	}
+	if !containDBName && !containTableName {
+		log.Infof("left side of (not) in operator don't have a DB name or table name, don't need to rewrite. ")
+		return nil
+	}
+	return colNames
 }
 
 func shouldRewrite(e sqlparser.Expr) bool {

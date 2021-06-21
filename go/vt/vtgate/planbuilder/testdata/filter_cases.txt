@@ -1839,6 +1839,24 @@ Gen4 plan same as above
   }
 }
 
+# query trying to query keyspace not in clause with multiple values
+"SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA NOT IN ('user','main')"
+{
+  "QueryType": "SELECT",
+  "Original": "SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA NOT IN ('user','main')",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectDBA",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select * from INFORMATION_SCHEMA.`TABLES` where 1 != 1",
+    "Query": "select * from INFORMATION_SCHEMA.`TABLES` where TABLE_SCHEMA not in (:__vtschemaname, :__vtschemaname)",
+    "SysTableTableSchema": "[VARBINARY(\"user\"), VARBINARY(\"main\")]"
+  }
+}
+
 # query trying to query keyspace in clause with multiple values
 "SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA IN ('user','main',database())"
 {
@@ -1857,7 +1875,7 @@ Gen4 plan same as above
   }
 }
 
-# schema name and table name of in clause.
+# And two in-clause of sys table.
 "SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA IN ('ks') AND TABLE_NAME IN ('route1')"
 {
   "QueryType": "SELECT",
@@ -1873,6 +1891,44 @@ Gen4 plan same as above
     "Query": "select * from INFORMATION_SCHEMA.`TABLES` where TABLE_SCHEMA in (:__vtschemaname) and TABLE_NAME in (:__vttablename)",
     "SysTableTableName": "[VARBINARY(\"route1\")]",
     "SysTableTableSchema": "[VARBINARY(\"ks\")]"
+  }
+}
+
+# schema name and table name of composite in clause.
+"SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE (TABLE_SCHEMA, TABLE_NAME) IN (('ks', 'route1'))"
+{
+  "QueryType": "SELECT",
+  "Original": "SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE (TABLE_SCHEMA, TABLE_NAME) IN (('ks', 'route1'))",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectDBA",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select * from INFORMATION_SCHEMA.`TABLES` where 1 != 1",
+    "Query": "select * from INFORMATION_SCHEMA.`TABLES` where (TABLE_SCHEMA, TABLE_NAME) in ((:__vtschemaname, :__vttablename))",
+    "SysTableTableName": "[VARBINARY(\"route1\")]",
+    "SysTableTableSchema": "[VARBINARY(\"ks\")]"
+  }
+}
+
+# schema name and table name of composite NOT in clause.
+"SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE (TABLE_SCHEMA, TABLE_NAME) NOT IN (('ks', 'route1'),('ks1','route2'))"
+{
+  "QueryType": "SELECT",
+  "Original": "SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE (TABLE_SCHEMA, TABLE_NAME) NOT IN (('ks', 'route1'),('ks1','route2'))",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectDBA",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select * from INFORMATION_SCHEMA.`TABLES` where 1 != 1",
+    "Query": "select * from INFORMATION_SCHEMA.`TABLES` where (TABLE_SCHEMA, TABLE_NAME) not in ((:__vtschemaname, :__vttablename), (:__vtschemaname, :__vttablename))",
+    "SysTableTableName": "[VARBINARY(\"route1\"), VARBINARY(\"route2\")]",
+    "SysTableTableSchema": "[VARBINARY(\"ks\"), VARBINARY(\"ks1\")]"
   }
 }
 
