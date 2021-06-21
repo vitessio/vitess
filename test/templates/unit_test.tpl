@@ -9,7 +9,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v1
       with:
-        go-version: 1.15
+        go-version: 1.13
 
     - name: Check out code
       uses: actions/checkout@v2
@@ -36,18 +36,6 @@ jobs:
         sudo deluser mysql
         sudo rm -rf /var/lib/mysql
         sudo rm -rf /etc/mysql
-
-        {{if (eq .Platform "percona56")}}
-
-        # percona56
-        sudo rm -rf /var/lib/mysql
-        sudo apt install -y gnupg2
-        wget https://repo.percona.com/apt/percona-release_latest.$(lsb_release -sc)_all.deb
-        sudo dpkg -i percona-release_latest.$(lsb_release -sc)_all.deb
-        sudo apt update
-        sudo DEBIAN_FRONTEND="noninteractive" apt-get install -y percona-server-server-5.6 percona-server-client-5.6
-
-        {{end}}
 
         {{if (eq .Platform "mysql80")}}
 
