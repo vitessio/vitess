@@ -198,31 +198,26 @@ func splitVals(e sqlparser.Expr, numOfCols int) []sqlparser.ValTuple {
 }
 
 // Convert the left side of In ops to a list of columns.
-func checkAndSplitColumns(e sqlparser.Expr) []*sqlparser.ColName {
-	colNames := make([]*sqlparser.ColName, 0)
+func checkAndSplitColumns(e sqlparser.Expr) []sqlparser.Expr {
+	colNames := make([]sqlparser.Expr, 0)
 	switch cols := e.(type) {
 	case sqlparser.ValTuple:
-		for _, col := range cols {
-			colName, ok := col.(*sqlparser.ColName)
-			if !ok {
-				log.Infof("left side of (not) in operator could not be converted to a list of col names. %v", col)
-				return nil
-			}
-			colNames = append(colNames, colName)
-		}
+		colNames = cols
 	case *sqlparser.ColName:
 		colNames = append(colNames, cols)
 	default:
 		// unexpected left side of the in ops.
 		return nil
 	}
-	containDBName := false
-	containTableName := false
+	containSystemTable := false
 	for _, col := range colNames {
-		containDBName = containDBName || isDbNameCol(col)
-		containTableName = containTableName || isTableNameCol(col)
+		containsDB, containsTable := isTableSchemaOrName(col)
+		if containsDB || containsTable {
+			containSystemTable = true
+			break
+		}
 	}
-	if !containDBName && !containTableName {
+	if !containSystemTable {
 		log.Infof("left side of (not) in operator don't have a DB name or table name, don't need to rewrite. ")
 		return nil
 	}

@@ -1932,6 +1932,25 @@ Gen4 plan same as above
   }
 }
 
+# schema name and table name of composite in clause.
+"SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE (TABLE_SCHEMA, TABLE_NAME, LOWER(COLUMN_NAME)) IN (('ks', 'route1', 'col'))"
+{
+  "QueryType": "SELECT",
+  "Original": "SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE (TABLE_SCHEMA, TABLE_NAME, LOWER(COLUMN_NAME)) IN (('ks', 'route1', 'col'))",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectDBA",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select * from INFORMATION_SCHEMA.`TABLES` where 1 != 1",
+    "Query": "select * from INFORMATION_SCHEMA.`TABLES` where (TABLE_SCHEMA, TABLE_NAME, LOWER(COLUMN_NAME)) in ((:__vtschemaname, :__vttablename, 'col'))",
+    "SysTableTableName": "[VARBINARY(\"route1\")]",
+    "SysTableTableSchema": "[VARBINARY(\"ks\")]"
+  }
+}
+
 # information_schema query using database() func
 "SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = database()"
 {
