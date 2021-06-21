@@ -256,8 +256,8 @@ func (vs *vstream) sendEvents(ctx context.Context) {
 				return
 			}
 			timer.Reset(heartbeatDuration)
-		case <-timer.C:
-			now := time.Now().UnixNano()
+		case t := <-timer.C:
+			now := t.UnixNano()
 			evs := []*binlogdatapb.VEvent{{
 				Type:        binlogdatapb.VEventType_HEARTBEAT,
 				Timestamp:   now / 1e9,
