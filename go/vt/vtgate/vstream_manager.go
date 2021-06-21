@@ -250,6 +250,9 @@ func (vs *vstream) sendEvents(ctx context.Context) {
 			return
 		case evs := <-vs.eventCh:
 			if err := send(evs); err != nil {
+				vs.once.Do(func() {
+					vs.err = err
+				})
 				return
 			}
 			timer.Reset(heartbeatDuration)
@@ -261,6 +264,9 @@ func (vs *vstream) sendEvents(ctx context.Context) {
 				CurrentTime: now,
 			}}
 			if err := send(evs); err != nil {
+				vs.once.Do(func() {
+					vs.err = err
+				})
 				return
 			}
 		}
