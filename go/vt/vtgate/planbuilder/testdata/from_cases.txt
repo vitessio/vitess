@@ -108,6 +108,21 @@ Gen4 plan same as above
     "Table": "unsharded"
   }
 }
+{
+  "QueryType": "SELECT",
+  "Original": "select m1.col from unsharded as m1 join unsharded as m2",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select m1.col from unsharded as m1, unsharded as m2 where 1 != 1",
+    "Query": "select m1.col from unsharded as m1, unsharded as m2",
+    "Table": "unsharded"
+  }
+}
 
 # Multi-table, multi-chunk
 "select music.col from user join music"
