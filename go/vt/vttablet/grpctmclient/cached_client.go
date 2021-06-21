@@ -17,6 +17,7 @@ limitations under the License.
 package grpctmclient
 
 import (
+	"container/heap"
 	"context"
 	"flag"
 	"io"
@@ -26,8 +27,8 @@ import (
 	"google.golang.org/grpc"
 
 	"vitess.io/vitess/go/netutil"
+	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/sync2"
-	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
@@ -36,325 +37,302 @@ import (
 )
 
 var (
-	defaultPoolCapacity      = flag.Int("tablet_manager_grpc_connpool_size", 10, "number of tablets to keep tmclient connections open to")
-	defaultPoolIdleTimeout   = flag.Duration("tablet_manager_grpc_connpool_idle_timeout", time.Second*30, "how long to leave a connection in the tmclient connpool. acquiring a connection resets this period for that connection")
-	defaultPoolWaitTimeout   = flag.Duration("tablet_manager_grpc_connpool_wait_timeout", time.Millisecond*50, "how long to wait for a connection from the tmclient connpool")
-	defaultPoolSweepInterval = flag.Duration("tablet_manager_grpc_connpool_sweep_interval", time.Second*30, "how often to clean up and close unused tmclient connections that exceed the idle timeout")
+	defaultPoolCapacity = flag.Int("tablet_manager_grpc_connpool_size", 100, "number of tablets to keep tmclient connections open to")
 )
 
 func init() {
 	tmclient.RegisterTabletManagerClientFactory("grpc-cached", func() tmclient.TabletManagerClient {
-		return NewCachedClient(*defaultPoolCapacity, *defaultPoolIdleTimeout, *defaultPoolWaitTimeout, *defaultPoolSweepInterval)
+		return NewCachedConnClient(*defaultPoolCapacity)
 	})
 }
 
-type pooledTMC struct {
+// closeFunc allows a standalone function to implement io.Closer, similar to
+// how http.HandlerFunc allows standalone functions to implement http.Handler.
+type closeFunc func() error
+
+func (fn closeFunc) Close() error {
+	return fn()
+}
+
+var _ io.Closer = (*closeFunc)(nil)
+
+type cachedConn struct {
 	tabletmanagerservicepb.TabletManagerClient
 	cc *grpc.ClientConn
 
-	m              sync.RWMutex // protects lastAccessTime and refs
 	lastAccessTime time.Time
 	refs           int
+
+	index int
+	key   string
 }
 
-// newPooledConn returns a pooledTMC dialed to the given address, and with the
-// equivalent of having called aquire() on it exactly once.
-func newPooledConn(addr string) (*pooledTMC, error) {
+// cachedConns provides a priority queue implementation for O(log n) connection
+// eviction management. It is a nearly verbatim copy of the priority queue
+// sample at https://golang.org/pkg/container/heap/#pkg-overview, with the
+// Less function changed such that connections with refs==0 get pushed to the
+// front of the queue, because those are the connections we are going to want
+// to evict.
+type cachedConns []*cachedConn
+
+var _ heap.Interface = (*cachedConns)(nil)
+
+// Len is part of the sort.Interface interface and is used by container/heap
+// functions.
+func (queue cachedConns) Len() int { return len(queue) }
+
+// Less is part of the sort.Interface interface and is used by container/heap
+// functions.
+func (queue cachedConns) Less(i, j int) bool {
+	left, right := queue[i], queue[j]
+	if left.refs == right.refs {
+		// break ties by access time.
+		// more stale connections have higher priority for removal
+		// this condition is equvalent to:
+		//		left.lastAccessTime <= right.lastAccessTime
+		return !left.lastAccessTime.After(right.lastAccessTime)
+	}
+
+	// connections with fewer refs have higher priority for removal
+	return left.refs < right.refs
+}
+
+// Swap is part of the sort.Interface interface and is used by container/heap
+// functions.
+func (queue cachedConns) Swap(i, j int) {
+	queue[i], queue[j] = queue[j], queue[i]
+	queue[i].index = i
+	queue[j].index = j
+}
+
+// Push is part of the container/heap.Interface interface.
+func (queue *cachedConns) Push(x interface{}) {
+	n := len(*queue)
+	conn := x.(*cachedConn)
+	conn.index = n
+	*queue = append(*queue, conn)
+}
+
+// Pop is part of the container/heap.Interface interface.
+func (queue *cachedConns) Pop() interface{} {
+	old := *queue
+	n := len(old)
+	conn := old[n-1]
+	old[n-1] = nil  // avoid memory leak
+	conn.index = -1 // for safety
+	*queue = old[0 : n-1]
+
+	return conn
+}
+
+type cachedConnDialer struct {
+	m            sync.RWMutex
+	conns        map[string]*cachedConn
+	qMu          sync.Mutex
+	queue        cachedConns
+	connWaitSema *sync2.Semaphore
+}
+
+var dialerStats = struct {
+	ConnReuse            *stats.Gauge
+	ConnNew              *stats.Gauge
+	DialTimeouts         *stats.Gauge
+	DialTimings          *stats.Timings
+	EvictionQueueTimings *stats.Timings
+}{
+	ConnReuse:    stats.NewGauge("tabletmanagerclient_cachedconn_reuse", "number of times a call to dial() was able to reuse an existing connection"),
+	ConnNew:      stats.NewGauge("tabletmanagerclient_cachedconn_new", "number of times a call to dial() resulted in a dialing a new grpc clientconn"),
+	DialTimeouts: stats.NewGauge("tabletmanagerclient_cachedconn_dial_timeouts", "number of context timeouts during dial()"),
+	DialTimings:  stats.NewTimings("tabletmanagerclient_cachedconn_dialtimings", "timings for various dial paths", "path", "rlock_fast", "sema_fast", "sema_poll"),
+	// TODO: add timings for heap operations (push, pop, fix)
+}
+
+// NewCachedConnClient returns a grpc Client using the priority queue cache
+// dialer implementation.
+func NewCachedConnClient(capacity int) *Client {
+	dialer := &cachedConnDialer{
+		conns:        make(map[string]*cachedConn, capacity),
+		queue:        make(cachedConns, 0, capacity),
+		connWaitSema: sync2.NewSemaphore(capacity, 0),
+	}
+
+	heap.Init(&dialer.queue)
+	return &Client{dialer}
+}
+
+var _ dialer = (*cachedConnDialer)(nil)
+
+func (dialer *cachedConnDialer) dial(ctx context.Context, tablet *topodatapb.Tablet) (tabletmanagerservicepb.TabletManagerClient, io.Closer, error) {
+	start := time.Now()
+
+	addr := getTabletAddr(tablet)
+	dialer.m.RLock()
+	if conn, ok := dialer.conns[addr]; ok {
+		defer func() {
+			dialerStats.DialTimings.Add("rlock_fast", time.Since(start))
+		}()
+		defer dialer.m.RUnlock()
+		return dialer.redial(conn)
+	}
+	dialer.m.RUnlock()
+
+	if dialer.connWaitSema.TryAcquire() {
+		defer func() {
+			dialerStats.DialTimings.Add("sema_fast", time.Since(start))
+		}()
+		dialer.m.Lock()
+		defer dialer.m.Unlock()
+
+		// Check if another goroutine managed to dial a conn for the same addr
+		// while we were waiting for the write lock. This is identical to the
+		// read-lock section above.
+		if conn, ok := dialer.conns[addr]; ok {
+			return dialer.redial(conn)
+		}
+
+		return dialer.newdial(addr, true /* manage queue lock */)
+	}
+
+	defer func() {
+		dialerStats.DialTimings.Add("sema_poll", time.Since(start))
+	}()
+
+	for {
+		select {
+		case <-ctx.Done():
+			dialerStats.DialTimeouts.Add(1)
+			return nil, nil, ctx.Err()
+		default:
+			dialer.m.Lock()
+			if conn, ok := dialer.conns[addr]; ok {
+				// Someone else dialed this addr while we were polling. No need
+				// to evict anyone else, just reuse the existing conn.
+				defer dialer.m.Unlock()
+				return dialer.redial(conn)
+			}
+
+			dialer.qMu.Lock()
+			conn := dialer.queue[0]
+			if conn.refs != 0 {
+				dialer.qMu.Unlock()
+				dialer.m.Unlock()
+				continue
+			}
+
+			// We're going to return from this point
+			defer dialer.m.Unlock()
+			defer dialer.qMu.Unlock()
+			heap.Pop(&dialer.queue)
+			delete(dialer.conns, conn.key)
+			conn.cc.Close()
+
+			return dialer.newdial(addr, false /* manage queue lock */)
+		}
+	}
+}
+
+// newdial creates a new cached connection, and updates the cache and eviction
+// queue accordingly. This must be called only while holding the write lock on
+// dialer.m as well as after having successfully acquired the dialer.connWaitSema. If newdial fails to create the underlying
+// gRPC connection, it will make a call to Release the connWaitSema for other
+// newdial calls.
+//
+// It returns the three-tuple of client-interface, closer, and error that the
+// main dial func returns.
+func (dialer *cachedConnDialer) newdial(addr string, manageQueueLock bool) (tabletmanagerservicepb.TabletManagerClient, io.Closer, error) {
+	dialerStats.ConnNew.Add(1)
+
 	opt, err := grpcclient.SecureDialOption(*cert, *key, *ca, *name)
 	if err != nil {
-		return nil, err
+		dialer.connWaitSema.Release()
+		return nil, nil, err
 	}
 
 	cc, err := grpcclient.Dial(addr, grpcclient.FailFast(false), opt)
 	if err != nil {
-		return nil, err
+		dialer.connWaitSema.Release()
+		return nil, nil, err
 	}
 
-	return &pooledTMC{
+	// In the case where dial is evicting a connection from the cache, we
+	// already have a lock on the eviction queue. Conversely, in the case where
+	// we are able to create a new connection without evicting (because the
+	// cache is not yet full), we don't have the queue lock yet.
+	if manageQueueLock {
+		dialer.qMu.Lock()
+		defer dialer.qMu.Unlock()
+	}
+
+	conn := &cachedConn{
 		TabletManagerClient: tabletmanagerservicepb.NewTabletManagerClient(cc),
 		cc:                  cc,
 		lastAccessTime:      time.Now(),
 		refs:                1,
-	}, nil
+		index:               -1, // gets set by call to Push
+		key:                 addr,
+	}
+	heap.Push(&dialer.queue, conn)
+	dialer.conns[addr] = conn
+
+	return dialer.connWithCloser(conn)
 }
 
-func (tmc *pooledTMC) acquire() {
-	tmc.m.Lock()
-	defer tmc.m.Unlock()
+// redial takes an already-dialed connection in the cache does all the work of
+// lending that connection out to one more caller. this should only ever be
+// called while holding at least the RLock on dialer.m (but the write lock is
+// fine too), to prevent the connection from getting evicted out from under us.
+//
+// It returns the three-tuple of client-interface, closer, and error that the
+// main dial func returns.
+func (dialer *cachedConnDialer) redial(conn *cachedConn) (tabletmanagerservicepb.TabletManagerClient, io.Closer, error) {
+	dialerStats.ConnReuse.Add(1)
 
-	tmc.refs++
-	tmc.lastAccessTime = time.Now()
+	dialer.qMu.Lock()
+	defer dialer.qMu.Unlock()
+
+	conn.lastAccessTime = time.Now()
+	conn.refs++
+	heap.Fix(&dialer.queue, conn.index)
+
+	return dialer.connWithCloser(conn)
 }
 
-func (tmc *pooledTMC) release() {
-	tmc.m.Lock()
-	defer tmc.m.Unlock()
+// connWithCloser returns the three-tuple expected by the main dial func, where
+// the closer handles the correct state management for updating the conns place
+// in the eviction queue.
+func (dialer *cachedConnDialer) connWithCloser(conn *cachedConn) (tabletmanagerservicepb.TabletManagerClient, io.Closer, error) {
+	return conn, closeFunc(func() error {
+		dialer.qMu.Lock()
+		defer dialer.qMu.Unlock()
 
-	tmc.refs--
-	if tmc.refs < 0 {
-		panic("release() called on unacquired pooled tabletmanager conn")
-	}
+		conn.refs--
+		heap.Fix(&dialer.queue, conn.index)
+		return nil
+	}), nil
 }
 
-// Close implements io.Closer for a pooledTMC. It is a wrapper around release()
-// which never returns an error, but will panic if called on a pooledTMC that
-// has not been acquire()'d.
-func (tmc *pooledTMC) Close() error {
-	tmc.release()
-	return nil
-}
+// Close closes all currently cached connections, ***regardless of whether
+// those connections are in use***. Calling Close therefore will fail any RPCs
+// using currently lent-out connections, and, furthermore, will invalidate the
+// io.Closer that was returned for that connection from dialer.dial().
+//
+// As a result, it is not safe to reuse a cachedConnDialer after calling Close,
+// and you should instead obtain a new one by calling either
+// tmclient.TabletManagerClient() with
+// TabletManagerProtocol set to "grpc-cached", or by calling
+// grpctmclient.NewCachedConnClient directly.
+func (dialer *cachedConnDialer) Close() {
+	dialer.m.Lock()
+	defer dialer.m.Unlock()
+	dialer.qMu.Lock()
+	defer dialer.qMu.Unlock()
 
-type cachedClient struct {
-	capacity    int
-	idleTimeout time.Duration
-	waitTimeout time.Duration
-
-	// sema gates the addition of new connections to the cache
-	sema *sync2.Semaphore
-
-	m     sync.RWMutex // protects conns map
-	conns map[string]*pooledTMC
-
-	janitor *janitor
-}
-
-// NewCachedClient returns a Client using the cachedClient dialer implementation.
-// Because all connections are cached/pooled, it does not implement poolDialer,
-// and grpctmclient.Client will use pooled connections for all RPCs.
-func NewCachedClient(capacity int, idleTimeout time.Duration, waitTimeout time.Duration, sweepInterval time.Duration) *Client {
-	cc := &cachedClient{
-		capacity:    capacity,
-		idleTimeout: idleTimeout,
-		waitTimeout: waitTimeout,
-		sema:        sync2.NewSemaphore(capacity, waitTimeout),
-		conns:       make(map[string]*pooledTMC, capacity),
-		janitor: &janitor{
-			ch:    make(chan *struct{}, 10), // TODO: flag
-			timer: timer.NewTimer(sweepInterval),
-		},
-	}
-
-	cc.janitor.client = cc
-	go cc.janitor.run()
-
-	return &Client{
-		dialer: cc,
-	}
-}
-
-func (client *cachedClient) dial(ctx context.Context, tablet *topodatapb.Tablet) (tabletmanagerservicepb.TabletManagerClient, io.Closer, error) {
-	addr := getTabletAddr(tablet)
-
-	client.m.RLock()
-	if conn, ok := client.conns[addr]; ok {
-		// Fast path, we have a conn for this addr in the cache. Mark it as
-		// acquired and return it.
-		defer client.m.RUnlock()
-		conn.acquire()
-
-		return conn, conn, nil
-	}
-	client.m.RUnlock()
-
-	// Slow path, we're going to see if there's a free slot. If so, we'll claim
-	// it and dial a new conn. If not, we're going to have to wait or timeout.
-	// We don't hold the lock while we're polling.
-	ctx, cancel := context.WithTimeout(ctx, client.waitTimeout)
-	defer cancel()
-
-	dial := func(addr string) (conn *pooledTMC, closer io.Closer, err error) {
-		client.m.Lock()
-		defer client.m.Unlock()
-
-		defer func() {
-			// If we failed to dial a new conn for any reason, release our spot
-			// in the sema so another dial can take its place.
-			if err != nil {
-				client.sema.Release()
-			}
-		}()
-
-		select {
-		case <-ctx.Done(): // We timed out waiting for the write lock, bail.
-			return nil, nil, ctx.Err() // TODO: wrap
-		default:
-		}
-
-		conn, err = newPooledConn(addr)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		client.conns[addr] = conn
-		return conn, conn, nil
-	}
-
-	if client.sema.TryAcquire() {
-		return dial(addr)
-	}
-
-	select {
-	// Non-blocking signal to the janitor that it should consider sweeping soon.
-	case client.janitor.ch <- sentinel:
-	default:
-	}
-
-	if !client.sema.AcquireContext(ctx) {
-		return nil, nil, ctx.Err()
-	}
-
-	return dial(addr)
-}
-
-func (client *cachedClient) Close() {
-	client.m.Lock()
-	defer client.m.Unlock()
-
-	close(client.janitor.ch)
-	client.sweepFnLocked(func(conn *pooledTMC) (bool, bool) {
-		return true, false
-	})
-}
-
-func (client *cachedClient) sweep2(f func(conn *pooledTMC) (bool, bool)) {
-	client.m.RLock()
-
-	var toFree []string
-	for key, conn := range client.conns {
-		conn.m.RLock()
-		shouldFree, stopSweep := f(conn)
-		conn.m.RUnlock()
-
-		if shouldFree {
-			toFree = append(toFree, key)
-		}
-
-		if stopSweep {
-			break
-		}
-	}
-
-	client.m.RUnlock()
-
-	if len(toFree) > 0 {
-		client.m.Lock()
-		defer client.m.Unlock()
-
-		for _, key := range toFree {
-			conn, ok := client.conns[key]
-			if !ok {
-				continue
-			}
-
-			conn.m.Lock()
-			// check the condition again, things may have changed since we
-			// transitioned from the read lock to the write lock
-			shouldFree, _ := f(conn)
-			if !shouldFree {
-				conn.m.Unlock()
-				continue
-			}
-
-			conn.cc.Close()
-			conn.m.Unlock()
-			delete(client.conns, key)
-			client.sema.Release()
-		}
-	}
-}
-
-func (client *cachedClient) sweep() {
-	now := time.Now()
-	client.sweep2(func(conn *pooledTMC) (bool, bool) {
-		return conn.refs == 0 && conn.lastAccessTime.Add(client.idleTimeout).Before(now), false
-	})
-}
-
-func (client *cachedClient) sweepFnLocked(f func(conn *pooledTMC) (shouldFree bool, stopSweep bool)) {
-	for key, conn := range client.conns {
-		conn.m.Lock()
-		shouldFree, stopSweep := f(conn)
-		if !shouldFree {
-			conn.m.Unlock()
-			if stopSweep {
-				return
-			}
-
-			continue
-		}
-
+	for dialer.queue.Len() > 0 {
+		conn := dialer.queue.Pop().(*cachedConn)
 		conn.cc.Close()
-		delete(client.conns, key)
-		client.sema.Release()
-		conn.m.Unlock()
-
-		if stopSweep {
-			return
-		}
+		delete(dialer.conns, conn.key)
+		dialer.connWaitSema.Release()
 	}
-}
-
-var sentinel = &struct{}{}
-
-type janitor struct {
-	ch     chan *struct{}
-	client *cachedClient
-	timer  *timer.Timer
-
-	m         sync.Mutex
-	sweeping  bool
-	lastSweep time.Time
-}
-
-func (j *janitor) run() {
-	j.timer.Start(j.sweep)
-	defer j.timer.Stop()
-
-	for s := range j.ch {
-		if s == nil {
-			break
-		}
-
-		scan := true
-		t := time.NewTimer(time.Millisecond * 50) // TODO: flag
-		for scan {
-			select {
-			case <-t.C:
-				scan = false
-			case s := <-j.ch:
-				if s == nil {
-					scan = false
-				}
-			default:
-				scan = false
-			}
-		}
-
-		t.Stop()
-		j.sweep()
-	}
-}
-
-func (j *janitor) sweep() {
-	j.m.Lock()
-	if j.sweeping {
-		j.m.Unlock()
-		return
-	}
-
-	if j.lastSweep.Add(time.Millisecond * 10 /* TODO: flag */).After(time.Now()) {
-		j.m.Unlock()
-		return
-	}
-
-	j.sweeping = true
-	j.m.Unlock()
-
-	j.client.sweep()
-	j.m.Lock()
-	j.sweeping = false
-	j.lastSweep = time.Now()
-	j.m.Unlock()
 }
 
 func getTabletAddr(tablet *topodatapb.Tablet) string {

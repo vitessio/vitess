@@ -87,6 +87,13 @@ type poolDialer interface {
 // Connections are produced by the dialer implementation, which is either the
 // grpcClient implementation, which reuses connections only for ExecuteFetch and
 // otherwise makes single-purpose connections that are closed after use.
+//
+// In order to more efficiently use the underlying tcp connections, you can
+// instead use the cachedConnDialer implementation by specifying
+//		-tablet_manager_protocol "grpc-cached"
+// The cachedConnDialer keeps connections to up to -tablet_manager_grpc_connpool_size distinct
+// tablets open at any given time, for faster per-RPC call time, and less
+// connection churn.
 type Client struct {
 	dialer dialer
 }
