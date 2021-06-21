@@ -430,16 +430,15 @@ Gen4 plan same as above
   }
 }
 
-
 # Three-way left join
-"select user.col from user left join unsharded as m1 on user.col = m1.co left join unsharded as m2 on m1.col = m2.col"
+"select user.col, m2.foo from user left join unsharded as m1 on user.col = m1.col left join unsharded as m2 on m1.col = m2.col"
 {
   "QueryType": "SELECT",
-  "Original": "select user.col from user left join unsharded as m1 on user.col = m1.co left join unsharded as m2 on m1.col = m2.col",
+  "Original": "select user.col, m2.foo from user left join unsharded as m1 on user.col = m1.col left join unsharded as m2 on m1.col = m2.col",
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "LeftJoin",
-    "JoinColumnIndexes": "-1",
+    "JoinColumnIndexes": "-1,1",
     "TableName": "`user`_unsharded_unsharded",
     "Inputs": [
       {
@@ -467,7 +466,7 @@ Gen4 plan same as above
               "Sharded": false
             },
             "FieldQuery": "select m1.col from unsharded as m1 where 1 != 1",
-            "Query": "select m1.col from unsharded as m1 where m1.co = :user_col",
+            "Query": "select m1.col from unsharded as m1 where m1.col = :user_col",
             "Table": "unsharded"
           }
         ]
@@ -479,8 +478,61 @@ Gen4 plan same as above
           "Name": "main",
           "Sharded": false
         },
-        "FieldQuery": "select 1 from unsharded as m2 where 1 != 1",
-        "Query": "select 1 from unsharded as m2 where m2.col = :m1_col",
+        "FieldQuery": "select m2.foo from unsharded as m2 where 1 != 1",
+        "Query": "select m2.foo from unsharded as m2 where m2.col = :m1_col",
+        "Table": "unsharded"
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select user.col, m2.foo from user left join unsharded as m1 on user.col = m1.col left join unsharded as m2 on m1.col = m2.col",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "LeftJoin",
+    "JoinColumnIndexes": "-2,1",
+    "TableName": "`user`_unsharded_unsharded",
+    "Inputs": [
+      {
+        "OperatorType": "Join",
+        "Variant": "LeftJoin",
+        "JoinColumnIndexes": "1,-1",
+        "TableName": "`user`_unsharded",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select `user`.col from `user` where 1 != 1",
+            "Query": "select `user`.col from `user`",
+            "Table": "`user`"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectUnsharded",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "FieldQuery": "select m1.col from unsharded as m1 where 1 != 1",
+            "Query": "select m1.col from unsharded as m1 where m1.col = :user_col",
+            "Table": "unsharded"
+          }
+        ]
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectUnsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select m2.foo from unsharded as m2 where 1 != 1",
+        "Query": "select m2.foo from unsharded as m2 where m2.col = :m1_col",
         "Table": "unsharded"
       }
     ]

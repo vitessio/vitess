@@ -32,6 +32,13 @@ func pushProjection(expr *sqlparser.AliasedExpr, plan logicalPlan, semTable *sem
 	switch node := plan.(type) {
 	case *route:
 		sel := node.Select.(*sqlparser.Select)
+		for i, selectExpr := range sel.SelectExprs {
+			if selectExpr, ok := selectExpr.(*sqlparser.AliasedExpr); ok {
+				if sqlparser.EqualsExpr(selectExpr.Expr, expr.Expr) {
+					return i, nil
+				}
+			}
+		}
 		offset := len(sel.SelectExprs)
 		sel.SelectExprs = append(sel.SelectExprs, expr)
 		return offset, nil
