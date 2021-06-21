@@ -543,6 +543,39 @@ func TestRepairAfterTER(t *testing.T) {
 	checkReplication(t, clusterInstance, newMaster, []*cluster.Vttablet{curMaster})
 }
 
+// 7. make instance A replicates from B and B from A, wait for repair
+func TestCircularReplication(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	setupVttabletsAndVtorc(t, 2, 0, nil)
+	keyspace := &clusterInstance.Keyspaces[0]
+	shard0 := &keyspace.Shards[0]
+
+	// find master from topo
+	curMaster := shardMasterTablet(t, clusterInstance, keyspace, shard0)
+	assert.NotNil(t, curMaster, "should have elected a master")
+
+	var replica *cluster.Vttablet
+	for _, tablet := range shard0.Vttablets {
+		// we know we have only two tablets, so the "other" one must be the new master
+		if tablet.Alias != curMaster.Alias {
+			replica = tablet
+			break
+		}
+	}
+
+	changeMasterCommands := fmt.Sprintf("RESET SLAVE;"+
+		"CHANGE MASTER TO MASTER_HOST='%s', MASTER_PORT=%d, MASTER_USER='vt_repl', MASTER_AUTO_POSITION = 1;"+
+		"START SLAVE;", replica.VttabletProcess.TabletHostname, replica.MySQLPort)
+
+	_, err := runSQL(t, changeMasterCommands, curMaster, "")
+	require.NoError(t, err)
+
+	// wait for repair
+	time.Sleep(15 * time.Second)
+	// check replication is setup correctly
+	checkReplication(t, clusterInstance, curMaster, []*cluster.Vttablet{replica})
+}
+
 func shardMasterTablet(t *testing.T, cluster *cluster.LocalProcessCluster, keyspace *cluster.Keyspace, shard *cluster.Shard) *cluster.Vttablet {
 	start := time.Now()
 	for {
