@@ -343,7 +343,6 @@ func TestVStreamMulti(t *testing.T) {
 }
 
 func TestVStreamRetry(t *testing.T) {
-	t.Skip("temporarily skip test, which is failing on this PR")
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -361,7 +360,6 @@ func TestVStreamRetry(t *testing.T) {
 	sbc0.AddVStreamEvents(nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "bb"))
 	sbc0.AddVStreamEvents(nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cc"))
 	sbc0.AddVStreamEvents(nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "final error"))
-
 	count := 0
 	vgtid := &binlogdatapb.VGtid{
 		ShardGtids: []*binlogdatapb.ShardGtid{{
@@ -374,11 +372,12 @@ func TestVStreamRetry(t *testing.T) {
 		count++
 		return nil
 	})
-	assert.Equal(t, 2, count)
 	wantErr := "final error"
 	if err == nil || !strings.Contains(err.Error(), wantErr) {
 		t.Errorf("vstream end: %v, must contain %v", err.Error(), wantErr)
 	}
+	time.Sleep(100 * time.Millisecond) // wait for goroutine within VStream to finish
+	assert.Equal(t, 2, count)
 }
 
 func TestVStreamHeartbeat(t *testing.T) {
