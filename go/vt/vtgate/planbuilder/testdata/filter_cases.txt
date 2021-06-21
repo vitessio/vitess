@@ -1857,6 +1857,25 @@ Gen4 plan same as above
   }
 }
 
+# schema name and table name of in clause.
+"SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA IN ('ks') AND TABLE_NAME IN ('route1')"
+{
+  "QueryType": "SELECT",
+  "Original": "SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA IN ('ks') AND TABLE_NAME IN ('route1')",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectDBA",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select * from INFORMATION_SCHEMA.`TABLES` where 1 != 1",
+    "Query": "select * from INFORMATION_SCHEMA.`TABLES` where TABLE_SCHEMA in (:__vtschemaname) and TABLE_NAME in (:__vttablename)",
+    "SysTableTableName": "[VARBINARY(\"route1\")]",
+    "SysTableTableSchema": "[VARBINARY(\"ks\")]"
+  }
+}
+
 # information_schema query using database() func
 "SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = database()"
 {
