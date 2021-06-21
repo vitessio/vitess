@@ -395,6 +395,41 @@ Gen4 plan same as above
     ]
   }
 }
+{
+  "QueryType": "SELECT",
+  "Original": "select u.col from user u left join unsharded m on u.a = m.b",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "LeftJoin",
+    "JoinColumnIndexes": "-2",
+    "TableName": "`user`_unsharded",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select u.a, u.col from `user` as u where 1 != 1",
+        "Query": "select u.a, u.col from `user` as u",
+        "Table": "`user`"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectUnsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select 1 from unsharded as m where 1 != 1",
+        "Query": "select 1 from unsharded as m where m.b = :u_a",
+        "Table": "unsharded"
+      }
+    ]
+  }
+}
+
 
 # Three-way left join
 "select user.col from user left join unsharded as m1 on user.col = m1.co left join unsharded as m2 on m1.col = m2.col"

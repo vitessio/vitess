@@ -50,11 +50,16 @@ func transformJoinPlan(n *joinPlan, semTable *semantics.SemTable) (logicalPlan, 
 	if err != nil {
 		return nil, err
 	}
+	opCode := engine.InnerJoin
+	if n.outer {
+		opCode = engine.OuterJoin
+	}
 	return &joinGen4{
-		Left:  lhs,
-		Right: rhs,
-		Cols:  n.columns,
-		Vars:  n.vars,
+		Left:   lhs,
+		Right:  rhs,
+		Cols:   n.columns,
+		Vars:   n.vars,
+		Opcode: opCode,
 	}, nil
 }
 
