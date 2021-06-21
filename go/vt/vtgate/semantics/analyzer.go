@@ -204,6 +204,9 @@ func (a *analyzer) bindTable(alias *sqlparser.AliasedTableExpr, expr sqlparser.S
 	case *sqlparser.DerivedTable:
 		return Gen4NotSupportedF("derived table")
 	case sqlparser.TableName:
+		if sqlparser.SystemSchema(t.Qualifier.String()) {
+			return Gen4NotSupportedF("system tables")
+		}
 		tbl, vdx, _, _, _, err := a.si.FindTableOrVindex(t)
 		if err != nil {
 			return err
