@@ -1,4 +1,3 @@
-2021-03-04T16:02:21Z,region_example,https://github.com/vitessio/vitess/actions/runs/621585652
 2021-03-04T16:02:42Z,Cluster (11),https://github.com/vitessio/vitess/actions/runs/621586791
 2021-03-04T16:02:42Z,Cluster (13),https://github.com/vitessio/vitess/actions/runs/621586807
 2021-03-04T16:02:42Z,Cluster (14),https://github.com/vitessio/vitess/actions/runs/621586804
@@ -9998,3 +9997,4 @@
 2021-06-21T14:24:27Z,Cluster (22),https://github.com/vitessio/vitess/actions/runs/957394436
 2021-06-21T14:24:27Z,local_example,https://github.com/vitessio/vitess/actions/runs/957394446
 2021-06-21T14:24:27Z,unit,https://github.com/vitessio/vitess/actions/runs/957394438
+2021-06-21T15:33:01Z,gomod-tidy,https://github.com/vitessio/vitess/actions/runs/957609982
