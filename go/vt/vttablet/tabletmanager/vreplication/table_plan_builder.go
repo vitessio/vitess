@@ -143,7 +143,7 @@ func buildReplicatorPlan(filter *binlogdatapb.Filter, colInfoMap map[string][]*C
 		if rule == nil {
 			continue
 		}
-		tablePlan, err := buildTablePlan(tableName, rule.Filter, colInfoMap, lastpk, rule.ConvertEnumToText, stats)
+		tablePlan, err := buildTablePlan(tableName, rule, colInfoMap, lastpk, stats)
 		if err != nil {
 			return nil, err
 		}
@@ -182,7 +182,8 @@ func MatchTable(tableName string, filter *binlogdatapb.Filter) (*binlogdatapb.Ru
 	return nil, nil
 }
 
-func buildTablePlan(tableName, filter string, colInfoMap map[string][]*ColumnInfo, lastpk *sqltypes.Result, enumTextMap map[string]string, stats *binlogplayer.Stats) (*TablePlan, error) {
+func buildTablePlan(tableName string, rule *binlogdatapb.Rule, colInfoMap map[string][]*ColumnInfo, lastpk *sqltypes.Result, stats *binlogplayer.Stats) (*TablePlan, error) {
+	filter := rule.Filter
 	query := filter
 	// generate equivalent select statement if filter is empty or a keyrange.
 	switch {
@@ -206,7 +207,7 @@ func buildTablePlan(tableName, filter string, colInfoMap map[string][]*ColumnInf
 	}
 
 	enumValuesMap := map[string](map[string]string){}
-	for k, v := range enumTextMap {
+	for k, v := range rule.ConvertEnumToText {
 		tokensMap := schema.ParseEnumTokensMap(v)
 		enumValuesMap[k] = tokensMap
 	}
@@ -222,11 +223,12 @@ func buildTablePlan(tableName, filter string, colInfoMap map[string][]*ColumnInf
 		}
 		sendRule.Filter = query
 		tablePlan := &TablePlan{
-			TargetName:    tableName,
-			SendRule:      sendRule,
-			Lastpk:        lastpk,
-			Stats:         stats,
-			EnumValuesMap: enumValuesMap,
+			TargetName:     tableName,
+			SendRule:       sendRule,
+			Lastpk:         lastpk,
+			Stats:          stats,
+			EnumValuesMap:  enumValuesMap,
+			ConvertCharset: rule.ConvertCharset,
 		}
 
 		return tablePlan, nil
@@ -280,6 +282,7 @@ func buildTablePlan(tableName, filter string, colInfoMap map[string][]*ColumnInf
 	tablePlan := tpb.generate()
 	tablePlan.SendRule = sendRule
 	tablePlan.EnumValuesMap = enumValuesMap
+	tablePlan.ConvertCharset = rule.ConvertCharset
 	return tablePlan, nil
 }
 
@@ -380,6 +383,17 @@ func (tpb *tablePlanBuilder) analyzeExpr(selExpr sqlparser.SelectExpr) (*colExpr
 		colName:    as,
 		references: make(map[string]bool),
 	}
+	if expr, ok := aliased.Expr.(*sqlparser.ConvertUsingExpr); ok {
+		selExpr := &sqlparser.ConvertUsingExpr{
+			Type: "utf8mb4",
+			Expr: &sqlparser.ColName{Name: as},
+		}
+		cexpr.expr = expr
+		cexpr.operation = opExpr
+		tpb.sendSelect.SelectExprs = append(tpb.sendSelect.SelectExprs, &sqlparser.AliasedExpr{Expr: selExpr, As: as})
+		cexpr.references[as.Lowered()] = true
+		return cexpr, nil
+	}
 	if expr, ok := aliased.Expr.(*sqlparser.FuncExpr); ok {
 		if expr.Distinct {
 			return nil, fmt.Errorf("unexpected: %v", sqlparser.String(expr))
@@ -424,7 +438,6 @@ func (tpb *tablePlanBuilder) analyzeExpr(selExpr sqlparser.SelectExpr) (*colExpr
 	err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 		switch node := node.(type) {
 		case *sqlparser.ColName:
-
 			if !node.Qualifier.IsEmpty() {
 				return false, fmt.Errorf("unsupported qualifier for column: %v", sqlparser.String(node))
 			}

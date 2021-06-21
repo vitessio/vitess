@@ -7,9 +7,6 @@ create table onlineddl_test (
   primary key(id)
 ) auto_increment=1;
 
-insert into onlineddl_test values (null, 'átesting');
-
-
 insert into onlineddl_test values (null, 'Hello world, Καλημέρα κόσμε, コンニチハ', 'átesting0', 'initial');
 
 drop event if exists onlineddl_test;
