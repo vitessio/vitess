@@ -38,7 +38,7 @@ type (
 		// creates a copy of the joinTree that can be updated without changing the original
 		clone() joinTree
 
-		pushOutputColumns([]*sqlparser.ColName, *semantics.SemTable) int
+		pushOutputColumns([]*sqlparser.ColName, *semantics.SemTable) []int
 	}
 
 	relation interface {
@@ -499,10 +499,20 @@ func (rp *routePlan) Predicates() sqlparser.Expr {
 	return result
 }
 
-func (rp *routePlan) pushOutputColumns(col []*sqlparser.ColName, _ *semantics.SemTable) int {
-	newCol := len(rp.columns)
-	rp.columns = append(rp.columns, col...)
-	return newCol
+func (rp *routePlan) pushOutputColumns(col []*sqlparser.ColName, _ *semantics.SemTable) []int {
+	idxs := make([]int, len(col))
+outer:
+	for i, newCol := range col {
+		for j, existingCol := range rp.columns {
+			if sqlparser.EqualsExpr(newCol, existingCol) {
+				idxs[i] = j
+				continue outer
+			}
+		}
+		idxs[i] = len(rp.columns)
+		rp.columns = append(rp.columns, newCol)
+	}
+	return idxs
 }
 
 func (jp *joinPlan) tables() semantics.TableSet {
@@ -522,8 +532,7 @@ func (jp *joinPlan) clone() joinTree {
 	return result
 }
 
-func (jp *joinPlan) pushOutputColumns(columns []*sqlparser.ColName, semTable *semantics.SemTable) int {
-	resultIdx := len(jp.columns)
+func (jp *joinPlan) pushOutputColumns(columns []*sqlparser.ColName, semTable *semantics.SemTable) []int {
 	var toTheLeft []bool
 	var lhs, rhs []*sqlparser.ColName
 	for _, col := range columns {
@@ -536,16 +545,18 @@ func (jp *joinPlan) pushOutputColumns(columns []*sqlparser.ColName, semTable *se
 		}
 	}
 	lhsOffset := jp.lhs.pushOutputColumns(lhs, semTable)
-	rhsOffset := -jp.rhs.pushOutputColumns(rhs, semTable)
-
-	for _, left := range toTheLeft {
-		if left {
-			jp.columns = append(jp.columns, lhsOffset)
-			lhsOffset++
+	rhsOffset := jp.rhs.pushOutputColumns(rhs, semTable)
+	outputColumns := make([]int, len(toTheLeft))
+	var l, r int
+	for i, isLeft := range toTheLeft {
+		outputColumns[i] = i
+		if isLeft {
+			jp.columns = append(jp.columns, -lhsOffset[l]-1)
+			l++
 		} else {
-			jp.columns = append(jp.columns, rhsOffset)
-			rhsOffset--
+			jp.columns = append(jp.columns, rhsOffset[r]+1)
+			r++
 		}
 	}
-	return resultIdx
+	return outputColumns
 }
