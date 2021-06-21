@@ -551,13 +551,13 @@ func TestCircularReplication(t *testing.T) {
 	shard0 := &keyspace.Shards[0]
 
 	// find master from topo
-	curMaster := shardMasterTablet(t, clusterInstance, keyspace, shard0)
-	assert.NotNil(t, curMaster, "should have elected a master")
+	master := shardMasterTablet(t, clusterInstance, keyspace, shard0)
+	assert.NotNil(t, master, "should have elected a master")
 
 	var replica *cluster.Vttablet
 	for _, tablet := range shard0.Vttablets {
 		// we know we have only two tablets, so the "other" one must be the new master
-		if tablet.Alias != curMaster.Alias {
+		if tablet.Alias != master.Alias {
 			replica = tablet
 			break
 		}
@@ -567,13 +567,14 @@ func TestCircularReplication(t *testing.T) {
 		"CHANGE MASTER TO MASTER_HOST='%s', MASTER_PORT=%d, MASTER_USER='vt_repl', MASTER_AUTO_POSITION = 1;"+
 		"START SLAVE;", replica.VttabletProcess.TabletHostname, replica.MySQLPort)
 
-	_, err := runSQL(t, changeMasterCommands, curMaster, "")
+	_, err := runSQL(t, changeMasterCommands, master, "")
 	require.NoError(t, err)
 
 	// wait for repair
-	time.Sleep(15 * time.Second)
+	err = waitForReplicationToStop(t, master)
+	require.NoError(t, err)
 	// check replication is setup correctly
-	checkReplication(t, clusterInstance, curMaster, []*cluster.Vttablet{replica})
+	checkReplication(t, clusterInstance, master, []*cluster.Vttablet{replica})
 }
 
 func shardMasterTablet(t *testing.T, cluster *cluster.LocalProcessCluster, keyspace *cluster.Keyspace, shard *cluster.Shard) *cluster.Vttablet {
@@ -686,6 +687,25 @@ func checkInsertedValues(t *testing.T, tablet *cluster.Vttablet, index int) erro
 		time.Sleep(300 * time.Millisecond)
 	}
 	return fmt.Errorf("data is not yet replicated")
+}
+
+func waitForReplicationToStop(t *testing.T, vttablet *cluster.Vttablet) error {
+	timeout := time.After(15 * time.Second)
+	for {
+		select {
+		case <-timeout:
+			return fmt.Errorf("timedout: waiting for master to stop replication")
+		default:
+			res, err := runSQL(t, "SHOW SLAVE STATUS", vttablet, "")
+			if err != nil {
+				return err
+			}
+			if len(res.Rows) == 0 {
+				return nil
+			}
+			time.Sleep(1 * time.Second)
+		}
+	}
 }
 
 func validateTopology(t *testing.T, cluster *cluster.LocalProcessCluster, pingTablets bool) {
