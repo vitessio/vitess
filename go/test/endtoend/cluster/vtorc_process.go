@@ -52,6 +52,7 @@ func (orc *VtorcProcess) Setup() (err error) {
 		"-topo_global_server_address", orc.TopoGlobalAddress,
 		"-topo_global_root", orc.TopoGlobalRoot,
 		"-config", orc.Config,
+		"-orc_web_dir", path.Join(os.Getenv("VTROOT"), "web", "orchestrator"),
 	)
 	if *isCoverage {
 		orc.proc.Args = append(orc.proc.Args, "-test.coverprofile="+getCoveragePath("orc.out"))
