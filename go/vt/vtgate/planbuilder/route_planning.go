@@ -310,6 +310,8 @@ func pushPredicate2(exprs []sqlparser.Expr, tree joinTree, semTable *semantics.S
 		return plan, nil
 
 	case *joinPlan:
+		node = node.clone().(*joinPlan)
+
 		// we break up the predicates so that colnames from the LHS are replaced by arguments
 		var rhsPreds []sqlparser.Expr
 		var lhsColumns []*sqlparser.ColName
@@ -327,9 +329,11 @@ func pushPredicate2(exprs []sqlparser.Expr, tree joinTree, semTable *semantics.S
 		if err != nil {
 			return nil, err
 		}
+
 		return &joinPlan{
-			lhs: node.lhs,
-			rhs: rhsPlan,
+			lhs:   node.lhs,
+			rhs:   rhsPlan,
+			outer: node.outer,
 		}, nil
 	default:
 		panic(fmt.Sprintf("BUG: unknown type %T", node))
@@ -370,7 +374,7 @@ func mergeOrJoin(lhs, rhs joinTree, joinPredicates []sqlparser.Expr, semTable *s
 		return newPlan, nil
 	}
 
-	tree := &joinPlan{lhs: lhs.clone(), rhs: rhs.clone()}
+	tree := &joinPlan{lhs: lhs.clone(), rhs: rhs.clone(), outer: !inner}
 	return pushPredicate2(joinPredicates, tree, semTable)
 }
 

@@ -96,7 +96,10 @@ type (
 		// arguments that need to be copied from the LHS/RHS
 		vars map[string]int
 
+		// the children of this plan
 		lhs, rhs joinTree
+
+		outer bool
 	}
 
 	parenTables []relation
@@ -512,8 +515,9 @@ func (jp *joinPlan) cost() int {
 
 func (jp *joinPlan) clone() joinTree {
 	result := &joinPlan{
-		lhs: jp.lhs.clone(),
-		rhs: jp.rhs.clone(),
+		lhs:   jp.lhs.clone(),
+		rhs:   jp.rhs.clone(),
+		outer: jp.outer,
 	}
 	return result
 }

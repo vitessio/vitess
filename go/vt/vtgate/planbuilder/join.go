@@ -81,11 +81,11 @@ func newJoin(lpb, rpb *primitiveBuilder, ajoin *sqlparser.JoinTableExpr, reserve
 	// external references, and the FROM clause doesn't allow duplicates,
 	// it's safe to perform this conversion and still expect the same behavior.
 
-	opcode := engine.NormalJoin
+	opcode := engine.InnerJoin
 	if ajoin != nil {
 		switch {
 		case ajoin.Join == sqlparser.LeftJoinType:
-			opcode = engine.LeftJoin
+			opcode = engine.OuterJoin
 
 			// For left joins, we have to push the ON clause into the RHS.
 			// We do this before creating the join primitive.
@@ -113,7 +113,7 @@ func newJoin(lpb, rpb *primitiveBuilder, ajoin *sqlparser.JoinTableExpr, reserve
 		},
 	}
 	lpb.plan.Reorder(0)
-	if ajoin == nil || opcode == engine.LeftJoin {
+	if ajoin == nil || opcode == engine.OuterJoin {
 		return nil
 	}
 	return lpb.pushFilter(ajoin.Condition.On, sqlparser.WhereStr, reservedVars)

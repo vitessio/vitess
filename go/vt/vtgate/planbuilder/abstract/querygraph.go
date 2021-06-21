@@ -24,13 +24,12 @@ import (
 )
 
 type (
-	/*
-	 QueryGraph represents the FROM and WHERE parts of a query.
-	 It is an intermediate representation of the query that makes it easier for the planner
-	 to find all possible join combinations. Instead of storing the query information in a form that is close
-	 to the syntax (AST), we extract the interesting parts into a graph form with the nodes being tables in the FROM
-	 clause and the edges between them being predicates. We keep predicates in a hash map keyed by the dependencies of
-	 the predicate. This makes it very fast to look up connections between tables in the query.
+	/*QueryGraph represents the FROM and WHERE parts of a query.
+	It is an intermediate representation of the query that makes it easier for the planner
+	to find all possible join combinations. Instead of storing the query information in a form that is close
+	to the syntax (AST), we extract the interesting parts into a graph form with the nodes being tables in the FROM
+	clause and the edges between them being predicates. We keep predicates in a hash map keyed by the dependencies of
+	the predicate. This makes it very fast to look up connections between tables in the query.
 	*/
 	QueryGraph struct {
 		// the Tables, including predicates that only depend on this particular table
@@ -44,10 +43,6 @@ type (
 
 		// Subqueries contains the Subqueries that depend on this query graph
 		Subqueries map[*sqlparser.Subquery][]*QueryGraph
-	}
-
-	outerJoinTables struct {
-		inner, Outer semantics.TableSet
 	}
 
 	// QueryTable is a single FROM table, including all predicates particular to this table
@@ -226,25 +221,6 @@ func (qg *QueryGraph) collectPredicateTable(t sqlparser.TableExpr, predicate sql
 	err := qg.walkQGSubQueries(semTable, predicate)
 	return err
 }
-
-func (qg *QueryGraph) getOuterJoinTables(lhs, rhs sqlparser.TableExpr, l, r extractor, semTable *semantics.SemTable) (outerJoinTables, error) {
-	t, err := l(lhs)
-	if err != nil {
-		return outerJoinTables{}, err
-	}
-	lft := semTable.TableSetFor(t)
-	t, err = r(rhs)
-	if err != nil {
-		return outerJoinTables{}, err
-	}
-	rgt := semTable.TableSetFor(t)
-	return outerJoinTables{
-		inner: lft,
-		Outer: rgt,
-	}, nil
-}
-
-type extractor func(sqlparser.TableExpr) (*sqlparser.AliasedTableExpr, error)
 
 func left(tbl sqlparser.TableExpr) (*sqlparser.AliasedTableExpr, error) {
 	switch tbl := tbl.(type) {
