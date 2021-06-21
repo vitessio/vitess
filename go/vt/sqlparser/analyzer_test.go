@@ -237,6 +237,67 @@ func TestGetTableName(t *testing.T) {
 	}
 }
 
+func TestCanNormalize(t *testing.T) {
+	testcases := []struct {
+		in  string
+		out bool
+	}{{
+		in:  "select * from t",
+		out: true,
+	}, {
+		in:  "select * from t.t",
+		out: true,
+	}, {
+		in:  "select * from (select * from t) as tt",
+		out: true,
+	}, {
+		in:  "describe t",
+		out: false,
+	}, {
+		in:  "select * from information_schema.views",
+		out: false,
+	}, {
+		in:  "select * from information_schema.tables",
+		out: false,
+	}, {
+		in:  "select * from information_schema.columns",
+		out: false,
+	}, {
+		in:  "select * from performance_schema.users",
+		out: false,
+	}, {
+		in:  "select * from sys.version_patch",
+		out: false,
+	}, {
+		in:  "select * from mysql.user",
+		out: false,
+	}, {
+		in:  "select * from (select * from information_schema.columns) as tt",
+		out: true,
+	}, {
+		in:  "select * from information_schema.columns as info join t on info.a = t.t",
+		out: false,
+	}, {
+		in:  "select * from information_schema.columns as info join sys.version_patch",
+		out: false,
+	}, {
+		in:  "SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA IN ('commerce')",
+		out: false,
+	}}
+
+	for _, tc := range testcases {
+		tree, err := Parse(tc.in)
+		if err != nil {
+			t.Error(err)
+			continue
+		}
+		out := CanNormalize(tree)
+		if out != tc.out {
+			t.Errorf("CanNormalize('%v'): %v, want %v", tc.in, out, tc.out)
+		}
+	}
+}
+
 func TestIsColName(t *testing.T) {
 	testcases := []struct {
 		in  Expr

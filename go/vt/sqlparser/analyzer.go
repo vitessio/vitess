@@ -120,9 +120,35 @@ func ASTToStatementType(stmt Statement) StatementType {
 
 //CanNormalize takes Statement and returns if the statement can be normalized.
 func CanNormalize(stmt Statement) bool {
-	switch stmt.(type) {
-	case *Select, *Union, *Insert, *Update, *Delete, *Set, *CallProc, *Stream: // TODO: we could merge this logic into ASTrewriter
+	switch s := stmt.(type) {
+	case *Select:
+		// Skip the system table normalization, normalization will cause schemaname replacement chaos.
+		return !containSystemTable(s.From)
+	case *Union, *Insert, *Update, *Delete, *Set, *CallProc, *Stream: // TODO: we could merge this logic into ASTrewriter
 		return true
+	}
+	return false
+}
+
+func containSystemTable(tableExprs TableExprs) bool {
+	if len(tableExprs) == 1 {
+		return isSystemTable(tableExprs[0])
+	}
+	return isSystemTable(tableExprs[0]) || containSystemTable(tableExprs[1:])
+}
+
+func isSystemTable(expr TableExpr) bool {
+	switch tableExpr := expr.(type) {
+	case *AliasedTableExpr:
+		switch table := tableExpr.Expr.(type) {
+		// Derived table possible, but we will leave it for now.
+		case TableName:
+			return SystemSchema(table.Qualifier.String())
+		}
+	case *ParenTableExpr:
+		return containSystemTable(tableExpr.Exprs)
+	case *JoinTableExpr:
+		return isSystemTable(tableExpr.LeftExpr) || isSystemTable(tableExpr.RightExpr)
 	}
 	return false
 }

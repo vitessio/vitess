@@ -120,7 +120,7 @@ func extractInfoSchemaRoutingPredicate(in sqlparser.Expr) (bool, []evalengine.Ex
 			case sqlparser.ValTuple:
 				expressions = cmp.Right.(sqlparser.ValTuple)
 			case sqlparser.ListArg:
-				log.Errorf("Unsupport list args of in clause, need to be fixed %v", cmp.Right)
+				log.Infof("List Args of in clause is unsupport, please check if the statement is incorrectly normalized %v", cmp.Right.(sqlparser.ListArg))
 				return false, nil, nil
 			default:
 				return false, nil, nil
