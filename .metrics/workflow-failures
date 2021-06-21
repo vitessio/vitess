@@ -1,7 +1,3 @@
-2021-03-04T16:02:21Z,endtoend,https://github.com/vitessio/vitess/actions/runs/621585624
-2021-03-04T16:02:21Z,golangci-lint,https://github.com/vitessio/vitess/actions/runs/621585650
-2021-03-04T16:02:21Z,local_example,https://github.com/vitessio/vitess/actions/runs/621585625
-2021-03-04T16:02:21Z,local_example,https://github.com/vitessio/vitess/actions/runs/621585658
 2021-03-04T16:02:21Z,region_example,https://github.com/vitessio/vitess/actions/runs/621585652
 2021-03-04T16:02:42Z,Cluster (11),https://github.com/vitessio/vitess/actions/runs/621586791
 2021-03-04T16:02:42Z,Cluster (13),https://github.com/vitessio/vitess/actions/runs/621586807
@@ -9993,8 +9989,12 @@
 2021-06-21T12:17:03Z,Cluster (tabletmanager_tablegc),https://github.com/vitessio/vitess/actions/runs/957014735
 2021-06-21T13:51:38Z,Cluster (upgrade),https://github.com/vitessio/vitess/actions/runs/957289303
 2021-06-21T14:24:27Z,Cluster (11),https://github.com/vitessio/vitess/actions/runs/957394417
+2021-06-21T14:24:27Z,Cluster (13),https://github.com/vitessio/vitess/actions/runs/957394447
+2021-06-21T14:24:27Z,Cluster (15),https://github.com/vitessio/vitess/actions/runs/957394434
+2021-06-21T14:24:27Z,Cluster (16),https://github.com/vitessio/vitess/actions/runs/957394442
 2021-06-21T14:24:27Z,Cluster (17),https://github.com/vitessio/vitess/actions/runs/957394421
 2021-06-21T14:24:27Z,Cluster (20),https://github.com/vitessio/vitess/actions/runs/957394450
+2021-06-21T14:24:27Z,Cluster (21),https://github.com/vitessio/vitess/actions/runs/957394410
 2021-06-21T14:24:27Z,Cluster (22),https://github.com/vitessio/vitess/actions/runs/957394436
 2021-06-21T14:24:27Z,local_example,https://github.com/vitessio/vitess/actions/runs/957394446
 2021-06-21T14:24:27Z,unit,https://github.com/vitessio/vitess/actions/runs/957394438
