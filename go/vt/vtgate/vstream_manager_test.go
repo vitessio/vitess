@@ -994,9 +994,6 @@ func TestResolveVStreamParams(t *testing.T) {
 }
 
 func TestVStreamIdleHeartbeat(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
 	name := "TestVStream"
 	_ = createSandbox(name)
 	hc := discovery.NewFakeHealthCheck()
@@ -1015,7 +1012,6 @@ func TestVStreamIdleHeartbeat(t *testing.T) {
 		heartbeatInterval uint32
 		want              int
 	}
-
 	// each test waits for 4.5 seconds, hence expected #heartbeats = floor(4.5/heartbeatInterval)
 	testcases := []testcase{
 		{"off", 0, 0},
@@ -1024,11 +1020,14 @@ func TestVStreamIdleHeartbeat(t *testing.T) {
 	}
 	for _, tcase := range testcases {
 		t.Run(tcase.name, func(t *testing.T) {
-			heartbeatCount := 0
-
+			var mu sync.Mutex
+			var heartbeatCount int
+			ctx, cancel := context.WithCancel(context.Background())
 			go func() {
 				vsm.VStream(ctx, topodatapb.TabletType_MASTER, vgtid, nil, &vtgatepb.VStreamFlags{HeartbeatInterval: tcase.heartbeatInterval},
 					func(events []*binlogdatapb.VEvent) error {
+						mu.Lock()
+						defer mu.Unlock()
 						for _, event := range events {
 							if event.Type == binlogdatapb.VEventType_HEARTBEAT {
 								heartbeatCount++
@@ -1038,10 +1037,12 @@ func TestVStreamIdleHeartbeat(t *testing.T) {
 					})
 			}()
 			time.Sleep(time.Duration(4500) * time.Millisecond)
+			mu.Lock()
+			defer mu.Unlock()
 			require.Equalf(t, heartbeatCount, tcase.want, "got %d, want %d", heartbeatCount, tcase.want)
+			cancel()
 		})
 	}
-	cancel()
 }
 
 func newTestVStreamManager(hc discovery.HealthCheck, serv srvtopo.Server, cell string) *vstreamManager {
