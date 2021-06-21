@@ -297,6 +297,7 @@ func (tp *TablePlan) isOutsidePKRange(bindvars map[string]*querypb.BindVariable,
 // - ...any other future possible values
 func (tp *TablePlan) bindFieldVal(field *querypb.Field, val *sqltypes.Value) (*querypb.BindVariable, error) {
 	if conversion, ok := tp.ConvertCharset[field.Name]; ok && !val.IsNull() {
+		fmt.Printf("============== conversion for %v: from %v to %v\n", field.Name, conversion.FromCharset, conversion.ToCharset)
 		// Non-null string value, for which we have a charset conversion instruction
 		valString := val.ToString()
 		fromEncoding, encodingOK := mysql.CharacterSetEncoding[conversion.FromCharset]

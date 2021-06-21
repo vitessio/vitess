@@ -83,6 +83,18 @@ from information_schema.columns as ISC
 		ISC.ordinal_position = c.ordinal_position
 where c.table_schema = database() AND ISC.table_schema is null`
 
+	// FetchTableColumn queries information about columns in a given table
+	FetchTableColumns = `select
+	column_name as column_name, data_type as data_type, character_set_name as character_set_name,
+	(data_type rlike '.*int') as is_int,
+	(data_type rlike '.*text' or data_type rlike '.*char') as is_string,
+	(character_set_name rlike 'utf8.*') as is_utf8,
+	(data_type='enum') as is_enum
+from information_schema.columns
+where table_schema = database() and
+	table_name=%a
+order by ordinal_position`
+
 	// DetectSchemaChange query detects if there is any schema change from previous copy.
 	DetectSchemaChange = detectChangeColumns + " UNION " + detectNewColumns + " UNION " + detectRemoveColumns
 

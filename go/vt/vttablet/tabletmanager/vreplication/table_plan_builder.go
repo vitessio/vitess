@@ -383,17 +383,6 @@ func (tpb *tablePlanBuilder) analyzeExpr(selExpr sqlparser.SelectExpr) (*colExpr
 		colName:    as,
 		references: make(map[string]bool),
 	}
-	if expr, ok := aliased.Expr.(*sqlparser.ConvertUsingExpr); ok {
-		selExpr := &sqlparser.ConvertUsingExpr{
-			Type: "utf8mb4",
-			Expr: &sqlparser.ColName{Name: as},
-		}
-		cexpr.expr = expr
-		cexpr.operation = opExpr
-		tpb.sendSelect.SelectExprs = append(tpb.sendSelect.SelectExprs, &sqlparser.AliasedExpr{Expr: selExpr, As: as})
-		cexpr.references[as.Lowered()] = true
-		return cexpr, nil
-	}
 	if expr, ok := aliased.Expr.(*sqlparser.FuncExpr); ok {
 		if expr.Distinct {
 			return nil, fmt.Errorf("unexpected: %v", sqlparser.String(expr))

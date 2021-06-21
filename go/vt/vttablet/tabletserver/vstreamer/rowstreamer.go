@@ -19,8 +19,10 @@ package vstreamer
 import (
 	"context"
 	"fmt"
+	"math"
 	"time"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
@@ -62,26 +64,28 @@ type rowStreamer struct {
 	send    func(*binlogdatapb.VStreamRowsResponse) error
 	vschema *localVSchema
 
-	plan      *Plan
-	pkColumns []int
-	sendQuery string
-	vse       *Engine
-	pktsize   PacketSizer
+	plan          *Plan
+	pkColumns     []int
+	toUTF8Columns map[string]bool
+	sendQuery     string
+	vse           *Engine
+	pktsize       PacketSizer
 }
 
 func newRowStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine, query string, lastpk []sqltypes.Value, vschema *localVSchema, send func(*binlogdatapb.VStreamRowsResponse) error, vse *Engine) *rowStreamer {
 	ctx, cancel := context.WithCancel(ctx)
 	return &rowStreamer{
-		ctx:     ctx,
-		cancel:  cancel,
-		cp:      cp,
-		se:      se,
-		query:   query,
-		lastpk:  lastpk,
-		send:    send,
-		vschema: vschema,
-		vse:     vse,
-		pktsize: DefaultPacketSizer(),
+		ctx:           ctx,
+		cancel:        cancel,
+		cp:            cp,
+		se:            se,
+		query:         query,
+		lastpk:        lastpk,
+		send:          send,
+		vschema:       vschema,
+		vse:           vse,
+		pktsize:       DefaultPacketSizer(),
+		toUTF8Columns: make(map[string]bool),
 	}
 }
 
@@ -134,6 +138,10 @@ func (rs *rowStreamer) buildPlan() error {
 		log.Errorf("%s", err.Error())
 		return err
 	}
+	err = rs.buildTextualColumns()
+	if err != nil {
+		return err
+	}
 	rs.pkColumns, err = buildPKColumns(st)
 	if err != nil {
 		return err
@@ -143,6 +151,38 @@ func (rs *rowStreamer) buildPlan() error {
 		return err
 	}
 	return err
+}
+
+func (rs *rowStreamer) buildTextualColumns() error {
+	fmt.Printf("========== buildTextualColumns\n")
+	conn, err := snapshotConnect(rs.ctx, rs.cp)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	query, err := sqlparser.ParseAndBind(mysql.FetchTableColumns,
+		sqltypes.StringBindVariable(rs.plan.Table.Name),
+	)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("========== query=%s\n", query)
+	r, err := conn.ExecuteFetch(query, math.MaxInt64, true)
+	if err != nil {
+		return err
+	}
+
+	for _, row := range r.Named().Rows {
+		colName := row["column_name"].ToString()
+		isString := row.AsBool("is_string", false)
+		isUtf8 := row.AsBool("is_utf8", false)
+		if isString && !isUtf8 {
+			log.Infof("========== rs.toUTF8Columns[colName]:%s\n", colName)
+			rs.toUTF8Columns[colName] = true
+		}
+	}
+	return nil
 }
 
 func buildPKColumns(st *binlogdatapb.MinimalTable) ([]int, error) {
@@ -169,8 +209,8 @@ func (rs *rowStreamer) buildSelect() (string, error) {
 	buf.Myprintf("select ")
 	prefix := ""
 	for _, col := range rs.plan.Table.Fields {
-		if rs.plan.isConvertColumnUsingUTF8(col.Name) {
-			buf.Myprintf("%sconvert(%v using utf8mb4)", prefix, sqlparser.NewColIdent(col.Name))
+		if rs.toUTF8Columns[col.Name] {
+			buf.Myprintf("%sconvert(%v using utf8mb4) as %v", prefix, sqlparser.NewColIdent(col.Name), sqlparser.NewColIdent(col.Name))
 		} else {
 			buf.Myprintf("%s%v", prefix, sqlparser.NewColIdent(col.Name))
 		}
@@ -212,6 +252,7 @@ func (rs *rowStreamer) buildSelect() (string, error) {
 
 func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.VStreamRowsResponse) error) error {
 	log.Infof("Streaming query: %v\n", rs.sendQuery)
+	fmt.Printf("============== Streaming query: %v\n", rs.sendQuery)
 	gtid, err := conn.streamWithSnapshot(rs.ctx, rs.plan.Table.Name, rs.sendQuery)
 	if err != nil {
 		return err
@@ -230,6 +271,10 @@ func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.V
 		}
 	}
 
+	for _, f := range rs.plan.fields() {
+		fmt.Printf("========= streamrows field: name=%v\n", f.Name)
+		fmt.Printf("========= streamrows field: %v\n", f)
+	}
 	err = send(&binlogdatapb.VStreamRowsResponse{
 		Fields:   rs.plan.fields(),
 		Pkfields: pkfields,

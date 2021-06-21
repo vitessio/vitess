@@ -472,6 +472,7 @@ func (v *VRepl) generateFilterQuery(ctx context.Context) error {
 				}
 			}
 			// We will always read strings as utf8mb4.
+			// sb.WriteString(escapeName(name))
 			sb.WriteString(fmt.Sprintf("convert(%s using utf8mb4)", escapeName(name)))
 		default:
 			sb.WriteString(escapeName(name))

@@ -250,10 +250,19 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 			fieldEvent := &binlogdatapb.FieldEvent{
 				TableName: initialPlan.SendRule.Match,
 			}
+
+			for _, f := range rows.Fields {
+				fmt.Printf("========= vcopier field: name=%v\n", f.Name)
+				fmt.Printf("========= vcopier field: %v\n", f)
+			}
 			fieldEvent.Fields = append(fieldEvent.Fields, rows.Fields...)
 			vc.tablePlan, err = plan.buildExecutionPlan(fieldEvent)
 			if err != nil {
 				return err
+			}
+			for _, f := range rows.Pkfields {
+				fmt.Printf("========= vcopier pkfields: name=%v\n", f.Name)
+				fmt.Printf("========= vcopier pkfields: %v\n", f)
 			}
 			pkfields = append(pkfields, rows.Pkfields...)
 			buf := sqlparser.NewTrackedBuffer(nil)
