@@ -25,6 +25,7 @@ const (
 
 	// invalid argument
 	BadFieldError
+	BadTableError
 	CantUseOptionHere
 	DataOutOfRange
 	EmptyQuery

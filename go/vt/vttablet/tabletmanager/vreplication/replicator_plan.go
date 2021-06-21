@@ -25,6 +25,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/bytes2"
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -194,9 +195,10 @@ type TablePlan struct {
 	EnumValuesMap map[string](map[string]string)
 	// PKReferences is used to check if an event changed
 	// a primary key column (row move).
-	PKReferences []string
-	Stats        *binlogplayer.Stats
-	FieldsToSkip map[string]bool
+	PKReferences   []string
+	Stats          *binlogplayer.Stats
+	FieldsToSkip   map[string]bool
+	ConvertCharset map[string](*binlogdatapb.CharsetConversion)
 }
 
 // MarshalJSON performs a custom JSON Marshalling.
@@ -294,6 +296,24 @@ func (tp *TablePlan) isOutsidePKRange(bindvars map[string]*querypb.BindVariable,
 // - enum values converted to text via Online DDL
 // - ...any other future possible values
 func (tp *TablePlan) bindFieldVal(field *querypb.Field, val *sqltypes.Value) (*querypb.BindVariable, error) {
+	if conversion, ok := tp.ConvertCharset[field.Name]; ok && !val.IsNull() {
+		// Non-null string value, for which we have a charset conversion instruction
+		valString := val.ToString()
+		fromEncoding, encodingOK := mysql.CharacterSetEncoding[conversion.FromCharset]
+		if !encodingOK {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Character set %s not supported for column %s", conversion.FromCharset, field.Name)
+		}
+		if fromEncoding != nil {
+			// As reminder, encoding can be nil for trivial charsets, like utf8 or ascii.
+			// encoding will be non-nil for charsets like latin1, gbk, etc.
+			var err error
+			valString, err = fromEncoding.NewDecoder().String(valString)
+			if err != nil {
+				return nil, err
+			}
+		}
+		return sqltypes.StringBindVariable(valString), nil
+	}
 	if enumValues, ok := tp.EnumValuesMap[field.Name]; ok && !val.IsNull() {
 		// The fact that this fielkd has a EnumValuesMap entry, means we must
 		// use the enum's text value as opposed to the enum's numerical value.
@@ -317,15 +337,18 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 		before = true
 		vals := sqltypes.MakeRowTrusted(tp.Fields, rowChange.Before)
 		for i, field := range tp.Fields {
-			bindvars["b_"+field.Name] = sqltypes.ValueBindVariable(vals[i])
+			bindVar, err := tp.bindFieldVal(field, &vals[i])
+			if err != nil {
+				return nil, err
+			}
+			bindvars["b_"+field.Name] = bindVar
 		}
 	}
 	if rowChange.After != nil {
 		after = true
 		vals := sqltypes.MakeRowTrusted(tp.Fields, rowChange.After)
 		for i, field := range tp.Fields {
-			val := &vals[i]
-			bindVar, err := tp.bindFieldVal(field, val)
+			bindVar, err := tp.bindFieldVal(field, &vals[i])
 			if err != nil {
 				return nil, err
 			}
