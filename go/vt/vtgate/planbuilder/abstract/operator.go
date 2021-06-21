@@ -130,7 +130,7 @@ func createJoin(LHS, RHS Operator) Operator {
 		op := &QueryGraph{
 			Tables:     append(lqg.Tables, rqg.Tables...),
 			innerJoins: map[semantics.TableSet][]sqlparser.Expr{},
-			noDeps:     sqlparser.AndExpressions(lqg.noDeps, rqg.noDeps),
+			NoDeps:     sqlparser.AndExpressions(lqg.NoDeps, rqg.NoDeps),
 		}
 		for k, v := range lqg.innerJoins {
 			op.innerJoins[k] = v

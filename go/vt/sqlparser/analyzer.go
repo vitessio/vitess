@@ -332,11 +332,20 @@ func AndExpressions(exprs ...Expr) Expr {
 		return exprs[0]
 	default:
 		result := (Expr)(nil)
-		for _, expr := range exprs {
+		for i, expr := range exprs {
 			if result == nil {
 				result = expr
 			} else {
-				result = &AndExpr{Left: result, Right: expr}
+				found := false
+				for j, ex := range exprs {
+					if i != j && EqualsExpr(expr, ex) {
+						found = true
+						break
+					}
+				}
+				if !found {
+					result = &AndExpr{Left: result, Right: expr}
+				}
 			}
 		}
 		return result

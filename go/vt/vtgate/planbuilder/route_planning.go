@@ -257,12 +257,7 @@ func planLimit(limit *sqlparser.Limit, plan logicalPlan) (logicalPlan, error) {
 func planHorizon(sel *sqlparser.Select, plan logicalPlan, semTable *semantics.SemTable) (logicalPlan, error) {
 	rb, ok := plan.(*route)
 	if ok && rb.isSingleShard() {
-		ast := rb.Select.(*sqlparser.Select)
-		ast.Distinct = sel.Distinct
-		ast.GroupBy = sel.GroupBy
-		ast.OrderBy = sel.OrderBy
-		ast.SelectExprs = sel.SelectExprs
-		ast.Comments = sel.Comments
+		createSingleShardRoutePlan(sel, rb)
 		return plan, nil
 	}
 
@@ -297,6 +292,20 @@ func planHorizon(sel *sqlparser.Select, plan logicalPlan, semTable *semantics.Se
 	}
 
 	return plan, nil
+}
+
+func createSingleShardRoutePlan(sel *sqlparser.Select, rb *route) {
+	ast := rb.Select.(*sqlparser.Select)
+	ast.Distinct = sel.Distinct
+	ast.GroupBy = sel.GroupBy
+	ast.OrderBy = sel.OrderBy
+	ast.Comments = sel.Comments
+	ast.SelectExprs = sel.SelectExprs
+	for i, expr := range ast.SelectExprs {
+		if aliasedExpr, ok := expr.(*sqlparser.AliasedExpr); ok {
+			ast.SelectExprs[i] = removeQualifierFromColName(aliasedExpr)
+		}
+	}
 }
 
 func pushPredicate2(exprs []sqlparser.Expr, tree joinTree, semTable *semantics.SemTable) (joinTree, error) {
@@ -351,6 +360,7 @@ func breakPredicateInLHSandRHS(expr sqlparser.Expr, semTable *semantics.SemTable
 				return false
 			}
 			if deps.IsSolvedBy(lhs) {
+				node.Qualifier.Qualifier = sqlparser.NewTableIdent("")
 				columns = append(columns, node)
 				arg := sqlparser.NewArgument(node.CompliantName())
 				cursor.Replace(arg)
@@ -516,6 +526,9 @@ func seedPlanList(qg *abstract.QueryGraph, semTable *semantics.SemTable, vschema
 		plan, err := createRoutePlan(table, solves, vschema)
 		if err != nil {
 			return nil, err
+		}
+		if qg.NoDeps != nil {
+			plan.predicates = append(plan.predicates, sqlparser.SplitAndExpression(nil, qg.NoDeps)...)
 		}
 		plans[i] = plan
 	}

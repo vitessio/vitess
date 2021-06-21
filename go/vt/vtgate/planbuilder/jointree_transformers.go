@@ -119,7 +119,10 @@ func transformRoutePlan(n *routePlan) (*route, error) {
 
 	var expressions sqlparser.SelectExprs
 	for _, col := range n.columns {
-		expressions = append(expressions, &sqlparser.AliasedExpr{Expr: col})
+		expressions = append(expressions, &sqlparser.AliasedExpr{
+			Expr: col,
+			As:   sqlparser.ColIdent{},
+		})
 	}
 
 	var tableNames []string
