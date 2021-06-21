@@ -173,7 +173,7 @@ JoinPredicates:
 		t.Run(fmt.Sprintf("%d %s", i, sql), func(t *testing.T) {
 			tree, err := sqlparser.Parse(sql)
 			require.NoError(t, err)
-			semTable, err := semantics.Analyze(tree, "", &fakeSI{})
+			semTable, err := semantics.Analyze(tree, "", &semantics.FakeSI{})
 			require.NoError(t, err)
 			optree, err := CreateOperatorFromSelect(tree.(*sqlparser.Select), semTable)
 			require.NoError(t, err)

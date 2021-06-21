@@ -163,6 +163,7 @@ var stateToMysqlCode = map[vterrors.State]struct {
 	vterrors.AccessDeniedError:            {num: ERAccessDeniedError, state: SSAccessDeniedError},
 	vterrors.BadDb:                        {num: ERBadDb, state: SSClientError},
 	vterrors.BadFieldError:                {num: ERBadFieldError, state: SSBadFieldError},
+	vterrors.BadTableError:                {num: ERBadTable, state: SSUnknownTable},
 	vterrors.CantUseOptionHere:            {num: ERCantUseOptionHere, state: SSClientError},
 	vterrors.DataOutOfRange:               {num: ERDataOutOfRange, state: SSDataOutOfRange},
 	vterrors.DbCreateExists:               {num: ERDbCreateExists, state: SSUnknownSQLState},
@@ -190,6 +191,7 @@ var stateToMysqlCode = map[vterrors.State]struct {
 	vterrors.WrongValueForVar:             {num: ERWrongValueForVar, state: SSClientError},
 	vterrors.ServerNotAvailable:           {num: ERServerIsntAvailable, state: SSNetError},
 	vterrors.CantDoThisInTransaction:      {num: ERCantDoThisDuringAnTransaction, state: SSCantDoThisDuringAnTransaction},
+	vterrors.RequiresPrimaryKey:           {num: ERRequiresPrimaryKey, state: SSClientError},
 	vterrors.NoSuchSession:                {num: ERUnknownComError, state: SSNetError},
 }
 

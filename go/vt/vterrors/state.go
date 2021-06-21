@@ -25,6 +25,7 @@ const (
 
 	// invalid argument
 	BadFieldError
+	BadTableError
 	CantUseOptionHere
 	DataOutOfRange
 	EmptyQuery
@@ -43,6 +44,7 @@ const (
 	InnodbReadOnly
 	WrongNumberOfColumnsInSelect
 	CantDoThisInTransaction
+	RequiresPrimaryKey
 
 	// not found
 	BadDb

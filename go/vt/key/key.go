@@ -194,8 +194,30 @@ func KeyRangeEqual(left, right *topodatapb.KeyRange) bool {
 	if right == nil {
 		return len(left.Start) == 0 && len(left.End) == 0
 	}
-	return bytes.Equal(left.Start, right.Start) &&
-		bytes.Equal(left.End, right.End)
+	return bytes.Equal(addPadding(left.Start), addPadding(right.Start)) &&
+		bytes.Equal(addPadding(left.End), addPadding(right.End))
+}
+
+// addPadding adds padding to make sure keyrange represents an 8 byte integer.
+// From Vitess docs:
+// A hash vindex produces an 8-byte number.
+// This means that all numbers less than 0x8000000000000000 will fall in shard -80.
+// Any number with the highest bit set will be >= 0x8000000000000000, and will therefore
+// belong to shard 80-.
+// This means that from a keyrange perspective -80 == 00-80 == 0000-8000 == 000000-800000
+// If we don't add this padding, we could run into issues when transitioning from keyranges
+// that use 2 bytes to 4 bytes.
+func addPadding(kr []byte) []byte {
+	paddedKr := make([]byte, 8)
+
+	for i := 0; i < len(kr); i++ {
+		paddedKr = append(paddedKr, kr[i])
+	}
+
+	for i := len(kr); i < 8; i++ {
+		paddedKr = append(paddedKr, 0)
+	}
+	return paddedKr
 }
 
 // KeyRangeStartSmaller returns true if right's keyrange start is _after_ left's start
@@ -217,7 +239,7 @@ func KeyRangeStartEqual(left, right *topodatapb.KeyRange) bool {
 	if right == nil {
 		return len(left.Start) == 0
 	}
-	return bytes.Equal(left.Start, right.Start)
+	return bytes.Equal(addPadding(left.Start), addPadding(right.Start))
 }
 
 // KeyRangeEndEqual returns true if both key ranges have the same end
@@ -228,7 +250,7 @@ func KeyRangeEndEqual(left, right *topodatapb.KeyRange) bool {
 	if right == nil {
 		return len(left.End) == 0
 	}
-	return bytes.Equal(left.End, right.End)
+	return bytes.Equal(addPadding(left.End), addPadding(right.End))
 }
 
 // For more info on the following functions, see:

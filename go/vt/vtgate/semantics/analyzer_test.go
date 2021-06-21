@@ -22,8 +22,6 @@ import (
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 
-	"vitess.io/vitess/go/vt/key"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
 	"github.com/stretchr/testify/assert"
@@ -99,7 +97,7 @@ func TestBindingSingleTable(t *testing.T) {
 			t.Run(query, func(t *testing.T) {
 				parse, err := sqlparser.Parse(query)
 				require.NoError(t, err)
-				_, err = Analyze(parse, "d", &fakeSI{})
+				_, err = Analyze(parse, "d", &FakeSI{})
 				require.Error(t, err)
 			})
 		}
@@ -139,8 +137,8 @@ func TestBindingSingleAliasedTable(t *testing.T) {
 			t.Run(query, func(t *testing.T) {
 				parse, err := sqlparser.Parse(query)
 				require.NoError(t, err)
-				_, err = Analyze(parse, "", &fakeSI{
-					tables: map[string]*vindexes.Table{
+				_, err = Analyze(parse, "", &FakeSI{
+					Tables: map[string]*vindexes.Table{
 						"t": {Name: sqlparser.NewTableIdent("t")},
 					},
 				})
@@ -235,8 +233,8 @@ func TestBindingMultiTable(t *testing.T) {
 			t.Run(query, func(t *testing.T) {
 				parse, err := sqlparser.Parse(query)
 				require.NoError(t, err)
-				_, err = Analyze(parse, "d", &fakeSI{
-					tables: map[string]*vindexes.Table{
+				_, err = Analyze(parse, "d", &FakeSI{
+					Tables: map[string]*vindexes.Table{
 						"tabl": {Name: sqlparser.NewTableIdent("tabl")},
 						"foo":  {Name: sqlparser.NewTableIdent("foo")},
 					},
@@ -271,7 +269,7 @@ func TestNotUniqueTableName(t *testing.T) {
 				t.Skip("derived tables not implemented")
 			}
 			parse, _ := sqlparser.Parse(query)
-			_, err := Analyze(parse, "test", &fakeSI{})
+			_, err := Analyze(parse, "test", &FakeSI{})
 			require.Error(t, err)
 			require.Contains(t, err.Error(), "Not unique table/alias")
 		})
@@ -286,7 +284,7 @@ func TestMissingTable(t *testing.T) {
 	for _, query := range queries {
 		t.Run(query, func(t *testing.T) {
 			parse, _ := sqlparser.Parse(query)
-			_, err := Analyze(parse, "", &fakeSI{})
+			_, err := Analyze(parse, "", &FakeSI{})
 			require.Error(t, err)
 			require.Contains(t, err.Error(), "Unknown table")
 		})
@@ -364,7 +362,7 @@ func TestUnknownColumnMap2(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			si := &fakeSI{tables: test.schema}
+			si := &FakeSI{Tables: test.schema}
 			_, err := Analyze(parse, "", si)
 			if test.err {
 				require.Error(t, err)
@@ -379,21 +377,11 @@ func parseAndAnalyze(t *testing.T, query, dbName string) (sqlparser.Statement, *
 	t.Helper()
 	parse, err := sqlparser.Parse(query)
 	require.NoError(t, err)
-	semTable, err := Analyze(parse, dbName, &fakeSI{
-		tables: map[string]*vindexes.Table{
+	semTable, err := Analyze(parse, dbName, &FakeSI{
+		Tables: map[string]*vindexes.Table{
 			"t": {Name: sqlparser.NewTableIdent("t")},
 		},
 	})
 	require.NoError(t, err)
 	return parse, semTable
-}
-
-var _ SchemaInformation = (*fakeSI)(nil)
-
-type fakeSI struct {
-	tables map[string]*vindexes.Table
-}
-
-func (s *fakeSI) FindTableOrVindex(tablename sqlparser.TableName) (*vindexes.Table, vindexes.Vindex, string, topodatapb.TabletType, key.Destination, error) {
-	return s.tables[sqlparser.String(tablename)], nil, "", 0, nil, nil
 }

@@ -669,8 +669,8 @@ func TestBuildPlayerPlan(t *testing.T) {
 		err: "group by expression is not allowed to reference an aggregate expression: a",
 	}}
 
-	PrimaryKeyInfos := map[string][]*PrimaryKeyInfo{
-		"t1": {&PrimaryKeyInfo{Name: "c1"}},
+	PrimaryKeyInfos := map[string][]*ColumnInfo{
+		"t1": {&ColumnInfo{Name: "c1", IsPK: true}},
 	}
 
 	copyState := map[string]*sqltypes.Result{
@@ -711,9 +711,9 @@ func TestBuildPlayerPlan(t *testing.T) {
 }
 
 func TestBuildPlayerPlanNoDup(t *testing.T) {
-	PrimaryKeyInfos := map[string][]*PrimaryKeyInfo{
-		"t1": {&PrimaryKeyInfo{Name: "c1"}},
-		"t2": {&PrimaryKeyInfo{Name: "c2"}},
+	PrimaryKeyInfos := map[string][]*ColumnInfo{
+		"t1": {&ColumnInfo{Name: "c1"}},
+		"t2": {&ColumnInfo{Name: "c2"}},
 	}
 	input := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
@@ -732,9 +732,9 @@ func TestBuildPlayerPlanNoDup(t *testing.T) {
 }
 
 func TestBuildPlayerPlanExclude(t *testing.T) {
-	PrimaryKeyInfos := map[string][]*PrimaryKeyInfo{
-		"t1": {&PrimaryKeyInfo{Name: "c1"}},
-		"t2": {&PrimaryKeyInfo{Name: "c2"}},
+	PrimaryKeyInfos := map[string][]*ColumnInfo{
+		"t1": {&ColumnInfo{Name: "c1"}},
+		"t2": {&ColumnInfo{Name: "c2"}},
 	}
 	input := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
