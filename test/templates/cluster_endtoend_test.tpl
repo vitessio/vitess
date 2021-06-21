@@ -9,7 +9,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v1
       with:
-        go-version: 1.15
+        go-version: 1.13
 
     - name: Check out code
       uses: actions/checkout@v2
