@@ -279,10 +279,6 @@ func testSingle(t *testing.T, testName string) {
 		selectBefore := fmt.Sprintf("select %s from %s %s", beforeColumns, beforeTableName, orderBy)
 		selectAfter := fmt.Sprintf("select %s from %s %s", afterColumns, afterTableName, orderBy)
 
-		// selectBeforeRS := mysqlExec(t, selectBefore, "")
-		// selectAfterRS := mysqlExec(t, selectAfter, "")
-		// require.Equal(t, selectBeforeRS.Rows, selectAfterRS.Rows, "results mismatch: (%s) amd (%s)", selectBefore, selectAfter)
-
 		selectBeforeFile := createTempScript(t, selectBefore)
 		defer os.Remove(selectBeforeFile)
 		beforeOutput := mysqlClientExecFile(t, "", selectBeforeFile)
@@ -291,7 +287,7 @@ func testSingle(t *testing.T, testName string) {
 		defer os.Remove(selectAfterFile)
 		afterOutput := mysqlClientExecFile(t, "", selectAfterFile)
 
-		require.Equal(t, beforeOutput, afterOutput, "results mismatch: (%s) amd (%s)", selectBefore, selectAfter)
+		require.Equal(t, beforeOutput, afterOutput, "results mismatch: (%s) and (%s)", selectBefore, selectAfter)
 	}
 }
 
