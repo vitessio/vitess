@@ -22,6 +22,10 @@ import (
 	"strings"
 	"time"
 
+	"vitess.io/vitess/go/vt/topotools"
+
+	"vitess.io/vitess/go/vt/topo"
+
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 
 	"context"
@@ -359,6 +363,63 @@ func (tm *TabletManager) DemotePrimary(ctx context.Context) (*replicationdatapb.
 // DemoteMaster is the old version of DemotePrimary
 func (tm *TabletManager) DemoteMaster(ctx context.Context) (*replicationdatapb.MasterStatus, error) {
 	return tm.DemotePrimary(ctx)
+}
+
+// DemotePrimaryAndUpdateTopo is like DemotePrimary, but it also updates the topo server.
+// The order in which we do this is -
+// 1. Update the shard record in the topo
+// 2. Next we update the tablet record in the topo
+// 3. We call demotePrimary to make changes to the local data and make changes to MySQL too
+// This ordering is followed because the tablet record in the topo server is the authoritative source of information if the tablet is a master or not.
+func (tm *TabletManager) DemotePrimaryAndUpdateTopo(ctx context.Context) (*replicationdatapb.MasterStatus, error) {
+	// update shard record first
+	err := tm.deleteMasterTabletFromShardRecordInTopo(ctx)
+	if err != nil {
+		return nil, err
+	}
+	// next change the tablet record
+	err = tm.updateTabletRecordInTopoDemote(ctx)
+	if err != nil {
+		return nil, err
+	}
+	// finally demotePrimary
+	return tm.demotePrimary(ctx, true)
+}
+
+func (tm *TabletManager) deleteMasterTabletFromShardRecordInTopo(ctx context.Context) (err error) {
+	tablet := tm.Tablet()
+	// We lock the shard to not conflict with reparent operations.
+	ctx, unlock, lockErr := tm.TopoServer.LockShard(ctx, tablet.Keyspace, tablet.Shard, fmt.Sprintf("deleteMasterTabletFromShardRecordInTopo(%v)", topoproto.TabletAliasString(tablet.Alias)))
+	if lockErr != nil {
+		return lockErr
+	}
+	defer unlock(&err)
+	// update the shard record's master
+	if _, err := tm.TopoServer.UpdateShardFields(ctx, tablet.Keyspace, tablet.Shard, func(si *topo.ShardInfo) error {
+		if !topoproto.TabletAliasEqual(si.MasterAlias, tablet.Alias) {
+			return topo.NewError(topo.NoUpdateNeeded, si.Keyspace()+"/"+si.ShardName())
+		}
+		si.MasterAlias = nil
+		return nil
+	}); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (tm *TabletManager) updateTabletRecordInTopoDemote(ctx context.Context) error {
+	ctx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+	defer cancel()
+	tmTablet := tm.Tablet()
+	_, err := tm.TopoServer.UpdateTabletFields(ctx, tmTablet.Alias, func(tablet *topodatapb.Tablet) error {
+		if err := topotools.CheckOwnership(tablet, tmTablet); err != nil {
+			return err
+		}
+		tablet.Type = tm.baseTabletType
+		tablet.MasterTermStartTime = nil
+		return nil
+	})
+	return err
 }
 
 // demotePrimary implements DemotePrimary with an additional, private option.

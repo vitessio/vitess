@@ -535,7 +535,7 @@ func newTestMysqlDaemon(t *testing.T, port int32) *fakemysqldaemon.FakeMysqlDaem
 	return mysqld
 }
 
-func newTestTM(t *testing.T, ts *topo.Server, uid int, keyspace, shard string) *TabletManager {
+func newTestTM(t *testing.T, ts *topo.Server, uid uint32, keyspace, shard string) *TabletManager {
 	t.Helper()
 	ctx := context.Background()
 	tablet := newTestTablet(t, uid, keyspace, shard)
@@ -563,7 +563,7 @@ func newTestTM(t *testing.T, ts *topo.Server, uid int, keyspace, shard string) *
 	return tm
 }
 
-func newTestTablet(t *testing.T, uid int, keyspace, shard string) *topodatapb.Tablet {
+func newTestTablet(t *testing.T, uid uint32, keyspace, shard string) *topodatapb.Tablet {
 	shard, keyRange, err := topo.ValidateShardName(shard)
 	require.NoError(t, err)
 	return &topodatapb.Tablet{
