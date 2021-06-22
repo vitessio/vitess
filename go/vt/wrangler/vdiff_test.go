@@ -749,15 +749,6 @@ func TestVDiffSharded(t *testing.T) {
 	})
 	defer env.close()
 
-	// schm := &tabletmanagerdatapb.SchemaDefinition{
-	// 	TableDefinitions: []*tabletmanagerdatapb.TableDefinition{{
-	// 		Name:              "t1",
-	// 		Columns:           []string{"c1", "c2"},
-	// 		PrimaryKeyColumns: []string{"c1"},
-	// 		Fields:            sqltypes.MakeTestFields("c1|c2", "int64|int64"),
-	// 	}},
-	// }
-
 	schmWithGhostTable := &tabletmanagerdatapb.SchemaDefinition{
 		TableDefinitions: []*tabletmanagerdatapb.TableDefinition{{
 			Name:              "t1",
