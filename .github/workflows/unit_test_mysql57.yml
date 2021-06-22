@@ -1,12 +1,13 @@
-name: unit_race
+# DO NOT MODIFY: THIS FILE IS GENERATED USING "make generate_ci_workflows"
+
+name: Unit Test (mysql57)
 on: [push, pull_request]
 jobs:
 
-  build:
-    name: Unit Test (Race)
+  test:
     runs-on: ubuntu-18.04
-    steps:
 
+    steps:
     - name: Set up Go
       uses: actions/setup-go@v1
       with:
@@ -17,11 +18,17 @@ jobs:
 
     - name: Get dependencies
       run: |
+        export DEBIAN_FRONTEND="noninteractive"
         sudo apt-get update
-        sudo apt-get install -y mysql-server mysql-client make unzip g++ curl git wget eatmydata
+
+        # mysql57
+        sudo apt-get install -y mysql-server mysql-client
+
+        sudo apt-get install -y make unzip g++ curl git wget ant openjdk-8-jdk eatmydata
         sudo service mysql stop
+        sudo bash -c "echo '/usr/sbin/mysqld { }' > /etc/apparmor.d/usr.sbin.mysqld" # https://bugs.launchpad.net/ubuntu/+source/mariadb-10.1/+bug/1806263
         sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
-        sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
+        sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld || echo "could not remove mysqld profile"
 
         mkdir -p dist bin
         curl -L https://github.com/coreos/etcd/releases/download/v3.3.10/etcd-v3.3.10-linux-amd64.tar.gz | tar -zxC dist
@@ -33,7 +40,7 @@ jobs:
       run: |
         make tools
 
-    - name: unit_race
+    - name: Run test
       timeout-minutes: 30
       run: |
-        eatmydata -- make unit_test_race
+        eatmydata -- make unit_test
