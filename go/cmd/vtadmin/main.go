@@ -123,9 +123,10 @@ func main() {
 	rootCmd.Flags().Var(&clusterFileConfig, "cluster-config", "path to a yaml cluster configuration. see clusters.example.yaml") // (TODO:@amason) provide example config.
 	rootCmd.Flags().Var(&defaultClusterConfig, "cluster-defaults", "default options for all clusters")
 
-	rootCmd.Flags().AddGoFlag(flag.Lookup("tracer"))                // defined in go/vt/trace
-	rootCmd.Flags().AddGoFlag(flag.Lookup("tracing-sampling-type")) // defined in go/vt/trace
-	rootCmd.Flags().AddGoFlag(flag.Lookup("tracing-sampling-rate")) // defined in go/vt/trace
+	rootCmd.Flags().AddGoFlag(flag.Lookup("tracer"))                 // defined in go/vt/trace
+	rootCmd.Flags().AddGoFlag(flag.Lookup("tracing-enable-logging")) // defined in go/vt/trace
+	rootCmd.Flags().AddGoFlag(flag.Lookup("tracing-sampling-type"))  // defined in go/vt/trace
+	rootCmd.Flags().AddGoFlag(flag.Lookup("tracing-sampling-rate"))  // defined in go/vt/trace
 	rootCmd.Flags().BoolVar(&opts.EnableTracing, "grpc-tracing", false, "whether to enable tracing on the gRPC server")
 	rootCmd.Flags().BoolVar(&httpOpts.EnableTracing, "http-tracing", false, "whether to enable tracing on the HTTP server")
 
