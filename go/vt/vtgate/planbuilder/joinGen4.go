@@ -17,7 +17,9 @@ limitations under the License.
 package planbuilder
 
 import (
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
@@ -89,15 +91,20 @@ func (j *joinGen4) Primitive() engine.Primitive {
 
 // Inputs implements the logicalPlan interface
 func (j *joinGen4) Inputs() []logicalPlan {
-	panic("implement me")
+	return []logicalPlan{j.Left, j.Right}
 }
 
 // Rewrite implements the logicalPlan interface
 func (j *joinGen4) Rewrite(inputs ...logicalPlan) error {
-	panic("implement me")
+	if len(inputs) != 2 {
+		return vterrors.New(vtrpcpb.Code_INTERNAL, "wrong number of children")
+	}
+	j.Left = inputs[0]
+	j.Right = inputs[1]
+	return nil
 }
 
-// Solves implements the logicalPlan interface
+// ContainsTables implements the logicalPlan interface
 func (j *joinGen4) ContainsTables() semantics.TableSet {
 	return j.Left.ContainsTables().Merge(j.Right.ContainsTables())
 }
