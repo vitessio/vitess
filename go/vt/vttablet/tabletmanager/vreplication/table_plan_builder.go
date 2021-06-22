@@ -277,11 +277,11 @@ func buildTablePlan(tableName string, rule *binlogdatapb.Rule, colInfos []*Colum
 	if err := tpb.analyzeGroupBy(sel.GroupBy); err != nil {
 		return nil, err
 	}
-	pkColsInfo, err := tpb.getPKColsInfo(tableName, rule.UniqueKey, colInfos)
+	pkColsInfo, err := tpb.getPKColsInfo(tableName, rule.TargetUniqueKey, colInfos)
 	if err != nil {
 		return nil, err
 	}
-	fmt.Printf("======== zzzz reevaluated pkColsInfo %s:%s to be:\n", tableName, rule.UniqueKey)
+	fmt.Printf("======== zzzz reevaluated pkColsInfo %s:%s to be:\n", tableName, rule.TargetUniqueKey)
 	for _, c := range pkColsInfo {
 		fmt.Printf("========      name=%v isPK=%v\n", c.Name, c.IsPK)
 	}
@@ -299,8 +299,8 @@ func buildTablePlan(tableName string, rule *binlogdatapb.Rule, colInfos []*Colum
 		})
 	}
 	commentsList := []string{}
-	if rule.UniqueKey != "" {
-		commentsList = append(commentsList, fmt.Sprintf(`ukName="%s"`, rule.UniqueKey))
+	if rule.SourceUniqueKey != "" {
+		commentsList = append(commentsList, fmt.Sprintf(`ukName="%s"`, rule.SourceUniqueKey))
 	}
 	if len(commentsList) > 0 {
 		comments := sqlparser.Comments{

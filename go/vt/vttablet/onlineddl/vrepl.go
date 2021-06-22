@@ -76,9 +76,10 @@ type VRepl struct {
 	sharedColumnsMap    map[string]string
 	sourceAutoIncrement uint64
 
-	sourceUniqueKeys [](*vrepl.UniqueKey)
-	targetUniqueKeys [](*vrepl.UniqueKey)
-	chosenUniqueKey  *vrepl.UniqueKey
+	sourceUniqueKeys      [](*vrepl.UniqueKey)
+	targetUniqueKeys      [](*vrepl.UniqueKey)
+	chosenSourceUniqueKey *vrepl.UniqueKey
+	chosenTargetUniqueKey *vrepl.UniqueKey
 
 	filterQuery   string
 	enumToTextMap map[string]string
@@ -136,7 +137,9 @@ func (v *VRepl) getCandidateUniqueKeys(ctx context.Context, conn *dbconnpool.DBC
 }
 
 // getSharedUniqueKeys returns the unique keys shared between the two source&target tables
-func getSharedUniqueKeys(sourceUniqueKeys, targetUniqueKeys [](*vrepl.UniqueKey), columnRenameMap map[string]string) (sharedUniqueKeys [](*vrepl.UniqueKey), bestUniqueKey *vrepl.UniqueKey) {
+func getSharedUniqueKeys(sourceUniqueKeys, targetUniqueKeys [](*vrepl.UniqueKey), columnRenameMap map[string]string) (chosenSourceUniqueKey, chosenTargetUniqueKey *vrepl.UniqueKey) {
+	type ukPair struct{ source, target *vrepl.UniqueKey }
+	var sharedUKPairs []*ukPair
 	for _, sourceUniqueKey := range sourceUniqueKeys {
 		for _, targetUniqueKey := range targetUniqueKeys {
 			uniqueKeyMatches := func() bool {
@@ -157,17 +160,23 @@ func getSharedUniqueKeys(sourceUniqueKeys, targetUniqueKeys [](*vrepl.UniqueKey)
 				return true
 			}
 			if uniqueKeyMatches() {
-				sharedUniqueKeys = append(sharedUniqueKeys, sourceUniqueKey)
+				sharedUKPairs = append(sharedUKPairs, &ukPair{source: sourceUniqueKey, target: targetUniqueKey})
 			}
 		}
 	}
 	// Now that we know what the shared unique keys are, let's find the "best" shared one.
-	for _, potentialUniqueKey := range sharedUniqueKeys {
-		if !potentialUniqueKey.HasNullable {
-			return sharedUniqueKeys, potentialUniqueKey
+	// Source and target unique keys can have different name, ven though they cover the exact same
+	// columns and in same order.
+	for _, pair := range sharedUKPairs {
+		if pair.source.HasNullable {
+			continue
 		}
+		if pair.target.HasNullable {
+			continue
+		}
+		return pair.source, pair.target
 	}
-	return sharedUniqueKeys, nil
+	return nil, nil
 }
 
 // readAutoIncrement reads the AUTO_INCREMENT vlaue, if any, for a give ntable
@@ -428,14 +437,16 @@ func (v *VRepl) analyzeTables(ctx context.Context, conn *dbconnpool.DBConnection
 		}
 	}
 	fmt.Printf("========== calculating potentialUniqueKey\n")
-	_, v.chosenUniqueKey = getSharedUniqueKeys(v.sourceUniqueKeys, v.targetUniqueKeys, v.parser.ColumnRenameMap())
-	if v.chosenUniqueKey == nil {
+	v.chosenSourceUniqueKey, v.chosenTargetUniqueKey = getSharedUniqueKeys(v.sourceUniqueKeys, v.targetUniqueKeys, v.parser.ColumnRenameMap())
+	if v.chosenSourceUniqueKey == nil || v.chosenTargetUniqueKey == nil {
 		return fmt.Errorf("Found no shared, not nullable, unique keys between `%s` and `%s`", v.sourceTable, v.targetTable)
 	}
 	{
-		fmt.Printf("========== chosenUniqueKey: %v\n", v.chosenUniqueKey.String())
+		fmt.Printf("========== chosenSourceUniqueKey: %v\n", v.chosenSourceUniqueKey.String())
+		fmt.Printf("========== chosenTargetUniqueKey: %v\n", v.chosenTargetUniqueKey.String())
 	}
-	v.sharedPKColumns = &v.chosenUniqueKey.Columns
+	// chosen source & target unique keys have exact columns in same order
+	v.sharedPKColumns = &v.chosenSourceUniqueKey.Columns
 	{
 		fmt.Printf("========== sharedPKColumns: %v\n", v.sharedPKColumns.Names())
 	}
@@ -544,9 +555,10 @@ func (v *VRepl) analyzeBinlogSource(ctx context.Context) {
 		StopAfterCopy: false,
 	}
 	rule := &binlogdatapb.Rule{
-		Match:     v.targetTable,
-		Filter:    v.filterQuery,
-		UniqueKey: v.chosenUniqueKey.Name,
+		Match:           v.targetTable,
+		Filter:          v.filterQuery,
+		SourceUniqueKey: v.chosenSourceUniqueKey.Name,
+		TargetUniqueKey: v.chosenTargetUniqueKey.Name,
 	}
 	if len(v.convertCharset) > 0 {
 		rule.ConvertCharset = v.convertCharset
