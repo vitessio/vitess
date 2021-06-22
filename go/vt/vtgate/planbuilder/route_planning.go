@@ -100,12 +100,12 @@ func optimizeQuery(opTree abstract.Operator, semTable *semantics.SemTable, vsche
 		default:
 			return greedySolve(op, semTable, vschema)
 		}
-	case *abstract.OuterJoin:
-		treeInner, err := optimizeQuery(op.Inner, semTable, vschema)
+	case *abstract.LeftJoin:
+		treeInner, err := optimizeQuery(op.Left, semTable, vschema)
 		if err != nil {
 			return nil, err
 		}
-		treeOuter, err := optimizeQuery(op.Outer, semTable, vschema)
+		treeOuter, err := optimizeQuery(op.Right, semTable, vschema)
 		if err != nil {
 			return nil, err
 		}
@@ -308,7 +308,7 @@ func createSingleShardRoutePlan(sel *sqlparser.Select, rb *route) {
 	}
 }
 
-func pushPredicate2(exprs []sqlparser.Expr, tree joinTree, semTable *semantics.SemTable) (joinTree, error) {
+func pushJoinPredicate(exprs []sqlparser.Expr, tree joinTree, semTable *semantics.SemTable) (joinTree, error) {
 	switch node := tree.(type) {
 	case *routePlan:
 		plan := node.clone().(*routePlan)
@@ -334,7 +334,7 @@ func pushPredicate2(exprs []sqlparser.Expr, tree joinTree, semTable *semantics.S
 			rhsPreds = append(rhsPreds, predicate)
 		}
 		node.pushOutputColumns(lhsColumns, semTable)
-		rhsPlan, err := pushPredicate2(rhsPreds, node.rhs, semTable)
+		rhsPlan, err := pushJoinPredicate(rhsPreds, node.rhs, semTable)
 		if err != nil {
 			return nil, err
 		}
@@ -385,7 +385,7 @@ func mergeOrJoin(lhs, rhs joinTree, joinPredicates []sqlparser.Expr, semTable *s
 	}
 
 	tree := &joinPlan{lhs: lhs.clone(), rhs: rhs.clone(), outer: !inner}
-	return pushPredicate2(joinPredicates, tree, semTable)
+	return pushJoinPredicate(joinPredicates, tree, semTable)
 }
 
 type (
@@ -757,8 +757,8 @@ func createRoutePlanForOuter(aRoute, bRoute *routePlan, semTable *semantics.SemT
 		tables = newTables
 		if aTbl != nil && bTbl != nil {
 			tables = append(tables, &leJoin{
-				a:    aTbl,
-				b:    bTbl,
+				lhs:  aTbl,
+				rhs:  bTbl,
 				pred: predicate,
 			})
 		}

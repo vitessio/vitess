@@ -102,7 +102,7 @@ func TestJoinExecute(t *testing.T) {
 	// Left Join
 	leftPrim.rewind()
 	rightPrim.rewind()
-	jn.Opcode = OuterJoin
+	jn.Opcode = LeftJoin
 	r, err = jn.Execute(&noopVCursor{}, bv, true)
 	if err != nil {
 		t.Fatal(err)
@@ -404,7 +404,7 @@ func TestJoinStreamExecute(t *testing.T) {
 	// Left Join
 	leftPrim.rewind()
 	rightPrim.rewind()
-	jn.Opcode = OuterJoin
+	jn.Opcode = LeftJoin
 	r, err = wrapStreamExecute(jn, nil, map[string]*querypb.BindVariable{}, true)
 	if err != nil {
 		t.Fatal(err)

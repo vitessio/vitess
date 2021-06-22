@@ -82,7 +82,7 @@ func (jn *Join) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariab
 		for _, rrow := range rresult.Rows {
 			result.Rows = append(result.Rows, joinRows(lrow, rrow, jn.Cols))
 		}
-		if jn.Opcode == OuterJoin && len(rresult.Rows) == 0 {
+		if jn.Opcode == LeftJoin && len(rresult.Rows) == 0 {
 			result.Rows = append(result.Rows, joinRows(lrow, nil, jn.Cols))
 		}
 		if vcursor.ExceedsMaxMemoryRows(len(result.Rows)) {
@@ -121,7 +121,7 @@ func (jn *Join) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.Bind
 			if err != nil {
 				return err
 			}
-			if jn.Opcode == OuterJoin && !rowSent {
+			if jn.Opcode == LeftJoin && !rowSent {
 				result := &sqltypes.Result{}
 				result.Rows = [][]sqltypes.Value{joinRows(
 					lrow,
@@ -207,7 +207,7 @@ type JoinOpcode int
 // This is the list of JoinOpcode values.
 const (
 	InnerJoin = JoinOpcode(iota)
-	OuterJoin
+	LeftJoin
 )
 
 func (code JoinOpcode) String() string {

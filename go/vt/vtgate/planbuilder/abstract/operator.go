@@ -26,7 +26,7 @@ type (
 	// An operator can be:
 	//  *  QueryGraph - which represents a group of tables and predicates that can be evaluated in any order
 	//     while still preserving the results
-	//	*  OuterJoin - A left/right join. These can't be evaluated in any order, so we keep them separate
+	//	*  LeftJoin - A left join. These can't be evaluated in any order, so we keep them separate
 	Operator interface {
 		// TableID returns a TableSet of the tables contained within
 		TableID() semantics.TableSet
@@ -73,9 +73,9 @@ func getOperatorFromTableExpr(tableExpr sqlparser.TableExpr, semTable *semantics
 			if tableExpr.Join == sqlparser.RightJoinType {
 				inner, outer = outer, inner
 			}
-			op := &OuterJoin{
-				Inner:     inner,
-				Outer:     outer,
+			op := &LeftJoin{
+				Left:      inner,
+				Right:     outer,
 				Predicate: tableExpr.Condition.On,
 			}
 			return op, nil

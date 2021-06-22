@@ -47,8 +47,8 @@ type (
 	}
 
 	leJoin struct {
-		a, b relation
-		pred sqlparser.Expr
+		lhs, rhs relation
+		pred     sqlparser.Expr
 	}
 
 	routeTable struct {
@@ -114,10 +114,10 @@ var _ relation = (parenTables)(nil)
 
 func (rp *routeTable) tableID() semantics.TableSet { return rp.qtable.TableID }
 
-func (rp *leJoin) tableID() semantics.TableSet { return rp.a.tableID().Merge(rp.b.tableID()) }
+func (rp *leJoin) tableID() semantics.TableSet { return rp.lhs.tableID().Merge(rp.rhs.tableID()) }
 
 func (rp *leJoin) tableNames() []string {
-	return append(rp.a.tableNames(), rp.b.tableNames()...)
+	return append(rp.lhs.tableNames(), rp.rhs.tableNames()...)
 }
 
 func (rp *routeTable) tableNames() []string {

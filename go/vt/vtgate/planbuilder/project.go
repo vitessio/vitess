@@ -45,7 +45,7 @@ func planProjection(pb *primitiveBuilder, in logicalPlan, expr *sqlparser.Aliase
 			node.Left = newLeft
 		} else {
 			// Pushing of non-trivial expressions not allowed for RHS of left joins.
-			if _, ok := expr.Expr.(*sqlparser.ColName); !ok && node.ejoin.Opcode == engine.OuterJoin {
+			if _, ok := expr.Expr.(*sqlparser.ColName); !ok && node.ejoin.Opcode == engine.LeftJoin {
 				return nil, nil, 0, errors.New("unsupported: cross-shard left join and column expressions")
 			}
 
