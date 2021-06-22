@@ -53,6 +53,8 @@ type tablePlanBuilder struct {
 	lastpk     *sqltypes.Result
 	colInfos   []*ColumnInfo
 	stats      *binlogplayer.Stats
+
+	recalculatePKColsInfo recalculatePKColsInfoFunc
 }
 
 // colExpr describes the processing to be performed to
@@ -106,6 +108,8 @@ const (
 	insertIgnore
 )
 
+type recalculatePKColsInfoFunc func(tableName string, uniqueKeyName string, colInfos []*ColumnInfo) (pkColInfos []*ColumnInfo, err error)
+
 // buildReplicatorPlan builds a ReplicatorPlan for the tables that match the filter.
 // The filter is matched against the target schema. For every table matched,
 // a table-specific rule is built to be sent to the source. We don't send the
@@ -122,7 +126,9 @@ const (
 // The TablePlan built is a partial plan. The full plan for a table is built
 // when we receive field information from events or rows sent by the source.
 // buildExecutionPlan is the function that builds the full plan.
-func buildReplicatorPlan(filter *binlogdatapb.Filter, colInfoMap map[string][]*ColumnInfo, copyState map[string]*sqltypes.Result, stats *binlogplayer.Stats) (*ReplicatorPlan, error) {
+func buildReplicatorPlan(filter *binlogdatapb.Filter, colInfoMap map[string][]*ColumnInfo, copyState map[string]*sqltypes.Result, stats *binlogplayer.Stats,
+	recalculatePKColsInfo recalculatePKColsInfoFunc,
+) (*ReplicatorPlan, error) {
 	plan := &ReplicatorPlan{
 		VStreamFilter: &binlogdatapb.Filter{FieldEventMode: filter.FieldEventMode},
 		TargetTables:  make(map[string]*TablePlan),
@@ -147,7 +153,7 @@ func buildReplicatorPlan(filter *binlogdatapb.Filter, colInfoMap map[string][]*C
 		if !ok {
 			return nil, fmt.Errorf("table %s not found in schema", tableName)
 		}
-		tablePlan, err := buildTablePlan(tableName, rule, colInfos, lastpk, stats)
+		tablePlan, err := buildTablePlan(tableName, rule, colInfos, lastpk, stats, recalculatePKColsInfo)
 		if err != nil {
 			return nil, err
 		}
@@ -186,7 +192,9 @@ func MatchTable(tableName string, filter *binlogdatapb.Filter) (*binlogdatapb.Ru
 	return nil, nil
 }
 
-func buildTablePlan(tableName string, rule *binlogdatapb.Rule, colInfos []*ColumnInfo, lastpk *sqltypes.Result, stats *binlogplayer.Stats) (*TablePlan, error) {
+func buildTablePlan(tableName string, rule *binlogdatapb.Rule, colInfos []*ColumnInfo, lastpk *sqltypes.Result, stats *binlogplayer.Stats,
+	recalculatePKColsInfo recalculatePKColsInfoFunc,
+) (*TablePlan, error) {
 	filter := rule.Filter
 	query := filter
 	// generate equivalent select statement if filter is empty or a keyrange.
@@ -244,10 +252,11 @@ func buildTablePlan(tableName string, rule *binlogdatapb.Rule, colInfos []*Colum
 			From:  sel.From,
 			Where: sel.Where,
 		},
-		selColumns: make(map[string]bool),
-		lastpk:     lastpk,
-		colInfos:   colInfos,
-		stats:      stats,
+		selColumns:            make(map[string]bool),
+		lastpk:                lastpk,
+		colInfos:              colInfos,
+		stats:                 stats,
+		recalculatePKColsInfo: recalculatePKColsInfo,
 	}
 
 	if err := tpb.analyzeExprs(sel.SelectExprs); err != nil {
@@ -268,7 +277,15 @@ func buildTablePlan(tableName string, rule *binlogdatapb.Rule, colInfos []*Colum
 	if err := tpb.analyzeGroupBy(sel.GroupBy); err != nil {
 		return nil, err
 	}
-	if err := tpb.analyzePK(colInfos); err != nil {
+	pkColsInfo, err := tpb.getPKColsInfo(tableName, rule.UniqueKey, colInfos)
+	if err != nil {
+		return nil, err
+	}
+	fmt.Printf("======== zzzz reevaluated pkColsInfo %s:%s to be:\n", tableName, rule.UniqueKey)
+	for _, c := range pkColsInfo {
+		fmt.Printf("========      name=%v isPK=%v\n", c.Name, c.IsPK)
+	}
+	if err := tpb.analyzePK(pkColsInfo); err != nil {
 		return nil, err
 	}
 
@@ -405,6 +422,7 @@ func (tpb *tablePlanBuilder) analyzeExpr(selExpr sqlparser.SelectExpr) (*colExpr
 		cexpr.expr = expr
 		cexpr.operation = opExpr
 		tpb.sendSelect.SelectExprs = append(tpb.sendSelect.SelectExprs, &sqlparser.AliasedExpr{Expr: selExpr, As: as})
+		cexpr.references[as.Lowered()] = true
 		return cexpr, nil
 	}
 	if expr, ok := aliased.Expr.(*sqlparser.FuncExpr); ok {
@@ -517,7 +535,21 @@ func (tpb *tablePlanBuilder) analyzeGroupBy(groupBy sqlparser.GroupBy) error {
 	return nil
 }
 
+func (tpb *tablePlanBuilder) getPKColsInfo(tableName string, uniqueKeyName string, colInfos []*ColumnInfo) (pkColsInfo []*ColumnInfo, err error) {
+	if uniqueKeyName == "" || uniqueKeyName == "PRIMARY" {
+		// No PK override
+		return colInfos, nil
+	}
+	if tpb.recalculatePKColsInfo == nil {
+		return colInfos, nil
+	}
+	// A unique key is specified. We will re-assess colInfos based on the unique key
+	return tpb.recalculatePKColsInfo(tableName, uniqueKeyName, colInfos)
+}
+
 // analyzePK builds tpb.pkCols.
+// Input cols must include all columns which participate in the PRIMARY KEY or the chosen UniqueKey. It's OK to also include columns not in the key.
+// InputCols should be ordered according to key ordinal. e.g. if "UNIQUE KEY(c5,c2)" then we expect c5 to come before c2
 func (tpb *tablePlanBuilder) analyzePK(cols []*ColumnInfo) error {
 	for _, col := range cols {
 		if !col.IsPK {
