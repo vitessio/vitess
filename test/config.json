@@ -339,7 +339,7 @@
 		},
 		"onlineddl_vrepl_suite": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/onlineddl/vrepl_suite"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/onlineddl/vrepl_suite", "-timeout", "30m"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "onlineddl_vrepl_suite",
