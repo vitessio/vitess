@@ -76,8 +76,6 @@ type VRepl struct {
 	sharedColumnsMap    map[string]string
 	sourceAutoIncrement uint64
 
-	sourceUniqueKeys      [](*vrepl.UniqueKey)
-	targetUniqueKeys      [](*vrepl.UniqueKey)
 	chosenSourceUniqueKey *vrepl.UniqueKey
 	chosenTargetUniqueKey *vrepl.UniqueKey
 
@@ -418,26 +416,26 @@ func (v *VRepl) analyzeTables(ctx context.Context, conn *dbconnpool.DBConnection
 	v.sourceSharedColumns, v.targetSharedColumns, v.sharedColumnsMap = v.getSharedColumns(sourceColumns, targetColumns, sourceVirtualColumns, targetVirtualColumns, v.parser.ColumnRenameMap())
 
 	// unique keys
-	v.sourceUniqueKeys, err = v.readTableUniqueKeys(ctx, conn, v.sourceTable)
+	sourceUniqueKeys, err := v.readTableUniqueKeys(ctx, conn, v.sourceTable)
 	if err != nil {
 		return err
 	}
 	{
-		for _, u := range v.sourceUniqueKeys {
+		for _, u := range sourceUniqueKeys {
 			fmt.Printf("========== sourceUniqueKey: %v\n", u.String())
 		}
 	}
-	v.targetUniqueKeys, err = v.readTableUniqueKeys(ctx, conn, v.targetTable)
+	targetUniqueKeys, err := v.readTableUniqueKeys(ctx, conn, v.targetTable)
 	if err != nil {
 		return err
 	}
 	{
-		for _, u := range v.targetUniqueKeys {
+		for _, u := range targetUniqueKeys {
 			fmt.Printf("========== targetUniqueKey: %v\n", u.String())
 		}
 	}
 	fmt.Printf("========== calculating potentialUniqueKey\n")
-	v.chosenSourceUniqueKey, v.chosenTargetUniqueKey = getSharedUniqueKeys(v.sourceUniqueKeys, v.targetUniqueKeys, v.parser.ColumnRenameMap())
+	v.chosenSourceUniqueKey, v.chosenTargetUniqueKey = getSharedUniqueKeys(sourceUniqueKeys, targetUniqueKeys, v.parser.ColumnRenameMap())
 	if v.chosenSourceUniqueKey == nil || v.chosenTargetUniqueKey == nil {
 		return fmt.Errorf("Found no shared, not nullable, unique keys between `%s` and `%s`", v.sourceTable, v.targetTable)
 	}
