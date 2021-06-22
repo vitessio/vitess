@@ -1996,3 +1996,44 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+
+
+"select * from samecolvin where col = :col"
+{
+  "QueryType": "SELECT",
+  "Original": "select * from samecolvin where col = :col",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select col from samecolvin where 1 != 1",
+    "Query": "select col from samecolvin where col = :col",
+    "Table": "samecolvin",
+    "Values": [
+      ":col"
+    ],
+    "Vindex": "vindex1"
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select * from samecolvin where col = :col",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select samecolvin.col as col from samecolvin where 1 != 1",
+    "Query": "select samecolvin.col as col from samecolvin where col = :col",
+    "Table": "samecolvin",
+    "Values": [
+      ":col"
+    ],
+    "Vindex": "vindex1"
+  }
+}
