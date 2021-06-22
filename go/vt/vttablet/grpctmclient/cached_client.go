@@ -140,11 +140,11 @@ var dialerStats = struct {
 	DialTimings          *stats.Timings
 	EvictionQueueTimings *stats.Timings
 }{
-	ConnReuse:    stats.NewGauge("tabletmanagerclient_cachedconn_reuse", "number of times a call to dial() was able to reuse an existing connection"),
-	ConnNew:      stats.NewGauge("tabletmanagerclient_cachedconn_new", "number of times a call to dial() resulted in a dialing a new grpc clientconn"),
-	DialTimeouts: stats.NewGauge("tabletmanagerclient_cachedconn_dial_timeouts", "number of context timeouts during dial()"),
-	DialTimings:  stats.NewTimings("tabletmanagerclient_cachedconn_dialtimings", "timings for various dial paths", "path", "rlock_fast", "sema_fast", "sema_poll"),
-	// TODO: add timings for heap operations (push, pop, fix)
+	ConnReuse:            stats.NewGauge("tabletmanagerclient_cachedconn_reuse", "number of times a call to dial() was able to reuse an existing connection"),
+	ConnNew:              stats.NewGauge("tabletmanagerclient_cachedconn_new", "number of times a call to dial() resulted in a dialing a new grpc clientconn"),
+	DialTimeouts:         stats.NewGauge("tabletmanagerclient_cachedconn_dial_timeouts", "number of context timeouts during dial()"),
+	DialTimings:          stats.NewTimings("tabletmanagerclient_cachedconn_dialtimings", "timings for various dial paths", "path", "rlock_fast", "sema_fast", "sema_poll"),
+	EvictionQueueTimings: stats.NewTimings("tabletmanagerclient_cachedconn_eviction_queue_timings", "timings for eviction queue management operations", "operation", "init", "push", "pop", "fix"),
 }
 
 // NewCachedConnClient returns a grpc Client using the priority queue cache
@@ -156,7 +156,7 @@ func NewCachedConnClient(capacity int) *Client {
 		connWaitSema: sync2.NewSemaphore(capacity, 0),
 	}
 
-	heap.Init(&dialer.queue)
+	dialer.heapInit()
 	return &Client{dialer}
 }
 
@@ -164,17 +164,12 @@ var _ dialer = (*cachedConnDialer)(nil)
 
 func (dialer *cachedConnDialer) dial(ctx context.Context, tablet *topodatapb.Tablet) (tabletmanagerservicepb.TabletManagerClient, io.Closer, error) {
 	start := time.Now()
-
 	addr := getTabletAddr(tablet)
-	dialer.m.RLock()
-	if conn, ok := dialer.conns[addr]; ok {
-		defer func() {
-			dialerStats.DialTimings.Add("rlock_fast", time.Since(start))
-		}()
-		defer dialer.m.RUnlock()
-		return dialer.redial(conn)
+
+	if client, closer, found, err := dialer.tryFromCache(addr, dialer.m.RLocker()); found {
+		dialerStats.DialTimings.Add("rlock_fast", time.Since(start))
+		return client, closer, err
 	}
-	dialer.m.RUnlock()
 
 	if dialer.connWaitSema.TryAcquire() {
 		defer func() {
@@ -186,8 +181,8 @@ func (dialer *cachedConnDialer) dial(ctx context.Context, tablet *topodatapb.Tab
 		// Check if another goroutine managed to dial a conn for the same addr
 		// while we were waiting for the write lock. This is identical to the
 		// read-lock section above.
-		if conn, ok := dialer.conns[addr]; ok {
-			return dialer.redial(conn)
+		if client, closer, found, err := dialer.tryFromCache(addr, nil); found {
+			return client, closer, err
 		}
 
 		return dialer.newdial(addr, true /* manage queue lock */)
@@ -203,32 +198,77 @@ func (dialer *cachedConnDialer) dial(ctx context.Context, tablet *topodatapb.Tab
 			dialerStats.DialTimeouts.Add(1)
 			return nil, nil, ctx.Err()
 		default:
-			dialer.m.Lock()
-			if conn, ok := dialer.conns[addr]; ok {
-				// Someone else dialed this addr while we were polling. No need
-				// to evict anyone else, just reuse the existing conn.
-				defer dialer.m.Unlock()
-				return dialer.redial(conn)
+			if client, closer, found, err := dialer.pollOnce(addr); found {
+				return client, closer, err
 			}
-
-			dialer.qMu.Lock()
-			conn := dialer.queue[0]
-			if conn.refs != 0 {
-				dialer.qMu.Unlock()
-				dialer.m.Unlock()
-				continue
-			}
-
-			// We're going to return from this point
-			defer dialer.m.Unlock()
-			defer dialer.qMu.Unlock()
-			heap.Pop(&dialer.queue)
-			delete(dialer.conns, conn.key)
-			conn.cc.Close()
-
-			return dialer.newdial(addr, false /* manage queue lock */)
 		}
 	}
+}
+
+// tryFromCache tries to get a connection from the cache, performing a redial
+// on that connection if it exists. It returns a TabletManagerClient impl, an
+// io.Closer, a flag to indicate whether a connection was found in the cache,
+// and an error, which is always nil.
+//
+// In addition to the addr being dialed, tryFromCache takes a sync.Locker which,
+// if not nil, will be used to wrap the lookup and redial in that lock. This
+// function can be called in situations where the conns map is locked
+// externally (like in pollOnce), so we do not want to manage the locks here. In
+// other cases (like in the rlock_fast path of dial()), we pass in the RLocker
+// to ensure we have a read lock on the cache for the duration of the call.
+func (dialer *cachedConnDialer) tryFromCache(addr string, locker sync.Locker) (client tabletmanagerservicepb.TabletManagerClient, closer io.Closer, found bool, err error) {
+	if locker != nil {
+		locker.Lock()
+		defer locker.Unlock()
+	}
+
+	if conn, ok := dialer.conns[addr]; ok {
+		client, closer, err := dialer.redial(conn)
+		return client, closer, ok, err
+	}
+
+	return nil, nil, false, nil
+}
+
+// pollOnce is called on each iteration of the polling loop in dial(). It:
+// - locks the conns cache for writes
+// - attempts to get a connection from the cache. If found, redial() it and exit.
+// - locks the queue
+// - peeks at the head of the eviction queue. if the peeked conn has no refs, it
+//   is unused, and can be evicted to make room for the new connection to addr.
+//   If the peeked conn has refs, exit.
+// - pops the conn we just peeked from the queue, delete it from the cache, and
+//   close the underlying ClientConn for that conn.
+// - attempt a newdial. if the newdial fails, it will release a slot on the
+//   connWaitSema, so another dial() call can successfully acquire it to dial
+//   a new conn. if the newdial succeeds, we will have evicted one conn, but
+//   added another, so the net change is 0, and no changes to the connWaitSema
+//   are made.
+//
+// It returns a TabletManagerClient impl, an io.Closer, a flag to indicate
+// whether the dial() poll loop should exit, and an error.
+func (dialer *cachedConnDialer) pollOnce(addr string) (client tabletmanagerservicepb.TabletManagerClient, closer io.Closer, found bool, err error) {
+	dialer.m.Lock()
+	defer dialer.m.Unlock()
+
+	if client, closer, found, err := dialer.tryFromCache(addr, nil); found {
+		return client, closer, found, err
+	}
+
+	dialer.qMu.Lock()
+	defer dialer.qMu.Unlock()
+
+	conn := dialer.queue[0]
+	if conn.refs != 0 {
+		return nil, nil, false, nil
+	}
+
+	dialer.heapPop()
+	delete(dialer.conns, conn.key)
+	conn.cc.Close()
+
+	client, closer, err = dialer.newdial(addr, false /* manage queue lock */)
+	return client, closer, true, err
 }
 
 // newdial creates a new cached connection, and updates the cache and eviction
@@ -271,7 +311,7 @@ func (dialer *cachedConnDialer) newdial(addr string, manageQueueLock bool) (tabl
 		index:               -1, // gets set by call to Push
 		key:                 addr,
 	}
-	heap.Push(&dialer.queue, conn)
+	dialer.heapPush(conn)
 	dialer.conns[addr] = conn
 
 	return dialer.connWithCloser(conn)
@@ -292,7 +332,7 @@ func (dialer *cachedConnDialer) redial(conn *cachedConn) (tabletmanagerservicepb
 
 	conn.lastAccessTime = time.Now()
 	conn.refs++
-	heap.Fix(&dialer.queue, conn.index)
+	dialer.heapFix(conn.index)
 
 	return dialer.connWithCloser(conn)
 }
@@ -306,9 +346,37 @@ func (dialer *cachedConnDialer) connWithCloser(conn *cachedConn) (tabletmanagers
 		defer dialer.qMu.Unlock()
 
 		conn.refs--
-		heap.Fix(&dialer.queue, conn.index)
+		dialer.heapFix(conn.index)
 		return nil
 	}), nil
+}
+
+// Functions to wrap queue operations to record timings for them.
+
+func (dialer *cachedConnDialer) heapInit() {
+	start := time.Now()
+	heap.Init(&dialer.queue)
+	dialerStats.EvictionQueueTimings.Add("init", time.Since(start))
+}
+
+func (dialer *cachedConnDialer) heapFix(index int) {
+	start := time.Now()
+	heap.Fix(&dialer.queue, index)
+	dialerStats.EvictionQueueTimings.Add("fix", time.Since(start))
+}
+
+func (dialer *cachedConnDialer) heapPop() interface{} {
+	start := time.Now()
+	x := heap.Pop(&dialer.queue)
+	dialerStats.EvictionQueueTimings.Add("pop", time.Since(start))
+
+	return x
+}
+
+func (dialer *cachedConnDialer) heapPush(conn *cachedConn) {
+	start := time.Now()
+	heap.Push(&dialer.queue, conn)
+	dialerStats.EvictionQueueTimings.Add("push", time.Since(start))
 }
 
 // Close closes all currently cached connections, ***regardless of whether

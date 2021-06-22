@@ -55,6 +55,9 @@ func init() {
 	tmclient.RegisterTabletManagerClientFactory("grpc", func() tmclient.TabletManagerClient {
 		return NewClient()
 	})
+	tmclient.RegisterTabletManagerClientFactory("grpc-oneshot", func() tmclient.TabletManagerClient {
+		return NewClient()
+	})
 }
 
 type tmc struct {
