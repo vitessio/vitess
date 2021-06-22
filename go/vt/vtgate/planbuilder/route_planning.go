@@ -259,6 +259,16 @@ func planHorizon(sel *sqlparser.Select, plan logicalPlan, semTable *semantics.Se
 		}
 	}
 
+	for _, expr := range qp.aggrExprs {
+		funcExpr, ok := expr.Expr.(*sqlparser.FuncExpr)
+		if !ok {
+			return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "expected an aggregation here")
+		}
+		if funcExpr.Distinct {
+			return nil, semantics.Gen4NotSupportedF("distinct aggregation")
+		}
+	}
+
 	if len(qp.aggrExprs) > 0 {
 		plan, err = planAggregations(qp, plan, semTable)
 		if err != nil {
