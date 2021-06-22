@@ -1,4 +1,4 @@
-#!/bin/bash
+!/bin/bash
 
 # This is a script that gets run as part of the Dockerfile build
 # to install dependencies for the vitess/lite family of images.
@@ -11,9 +11,7 @@ FLAVOR="$1"
 export DEBIAN_FRONTEND=noninteractive
 
 KEYSERVERS=(
-    ha.pool.sks-keyservers.net
     keyserver.ubuntu.com
-    hkp://p80.pool.sks-keyservers.net:80
     hkp://keyserver.ubuntu.com:80
 )
 
