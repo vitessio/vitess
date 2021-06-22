@@ -19,6 +19,7 @@ package grpctmclient
 import (
 	"context"
 	"fmt"
+	"io"
 	"math/rand"
 	"net"
 	"os"
@@ -218,4 +219,66 @@ func TestCachedConnClient(t *testing.T) {
 	assert.Less(t, float64(errors)/float64(attempts), 0.001, fmt.Sprintf("fewer than 0.1%% of dial attempts should fail (attempts = %d, errors = %d, max running procs = %d)", attempts, errors, procs))
 	assert.Less(t, errors, int64(1), "at least one dial attempt failed (attempts = %d, errors = %d)", attempts, errors)
 	assert.Less(t, longestDial.Milliseconds(), int64(50))
+}
+
+func TestCachedConnClient_evictions(t *testing.T) {
+	tmserv := tmrpctest.NewFakeRPCTM(t)
+	tablets := make([]*topodatapb.Tablet, 5)
+	for i := 0; i < len(tablets); i++ {
+		addr, shutdown := grpcTestServer(t, tmserv)
+		defer shutdown()
+
+		tablets[i] = &topodatapb.Tablet{
+			Alias: &topodatapb.TabletAlias{
+				Cell: "test",
+				Uid:  uint32(addr.Port),
+			},
+			Hostname: addr.IP.String(),
+			PortMap: map[string]int32{
+				"grpc": int32(addr.Port),
+			},
+		}
+	}
+
+	testCtx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	connHoldContext, connHoldCancel := context.WithCancel(testCtx)
+
+	client := NewCachedConnClient(len(tablets) - 1)
+	for i := 0; i < len(tablets)-1; i++ {
+		_, closer, err := client.dialer.dial(context.Background(), tablets[i])
+		t.Logf("holding connection open to %d", tablets[i].Alias.Uid)
+		require.NoError(t, err)
+
+		ctx := testCtx
+		if i == 0 {
+			ctx = connHoldContext
+		}
+		go func(ctx context.Context, closer io.Closer) {
+			// Hold on to one connection until the test is done.
+			// In the case of tablets[0], hold on to the connection until we
+			// signal to close it.
+			<-ctx.Done()
+			closer.Close()
+		}(ctx, closer)
+	}
+
+	dialCtx, dialCancel := context.WithTimeout(testCtx, time.Millisecond*50)
+	defer dialCancel()
+
+	err := client.Ping(dialCtx, tablets[0]) // this should take the rlock_fast path
+	assert.NoError(t, err, "could not redial on inuse cached connection")
+
+	err = client.Ping(dialCtx, tablets[4]) // this will enter the poll loop until context timeout
+	assert.Error(t, err, "should have timed out waiting for an eviction, while all conns were held")
+
+	// free up a connection
+	connHoldCancel()
+
+	dialCtx, dialCancel = context.WithTimeout(testCtx, time.Millisecond*100)
+	defer dialCancel()
+
+	err = client.Ping(dialCtx, tablets[4]) // this will enter the poll loop and evict a connection
+	assert.NoError(t, err, "should have evicted a conn and succeeded to dial")
 }
