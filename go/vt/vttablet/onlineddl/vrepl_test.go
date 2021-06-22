@@ -212,6 +212,7 @@ func TestGetSharedUniqueKeys(t *testing.T) {
 			expectTargetUK: &vrepl.UniqueKey{Name: "uidx12A", Columns: *columns12A},
 		},
 		{
+			// enforce mapping from c3 to ca; will not match c3<->c3
 			name: "no match identical column names",
 			sourceUKs: []*vrepl.UniqueKey{
 				{Name: "uidx1", Columns: *columns1},
