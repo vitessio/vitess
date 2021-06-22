@@ -90,6 +90,15 @@ func (a *analyzer) analyzeDown(cursor *sqlparser.Cursor) bool {
 		} else {
 			a.exprDeps[node] = t
 		}
+	case *sqlparser.FuncExpr:
+		if node.Distinct {
+			err := vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "syntax error: %s", sqlparser.String(node))
+			if len(node.Exprs) != 1 {
+				a.err = err
+			} else if _, ok := node.Exprs[0].(*sqlparser.AliasedExpr); !ok {
+				a.err = err
+			}
+		}
 	}
 
 	// this is the visitor going down the tree. Returning false here would just not visit the children
