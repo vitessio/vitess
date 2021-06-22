@@ -76,6 +76,10 @@ type VRepl struct {
 	sharedColumnsMap    map[string]string
 	sourceAutoIncrement uint64
 
+	sourceUniqueKeys [](*vrepl.UniqueKey)
+	targetUniqueKeys [](*vrepl.UniqueKey)
+	chosenUniqueKey  *vrepl.UniqueKey
+
 	filterQuery   string
 	enumToTextMap map[string]string
 	bls           *binlogdatapb.BinlogSource
@@ -131,6 +135,41 @@ func (v *VRepl) getCandidateUniqueKeys(ctx context.Context, conn *dbconnpool.DBC
 	return uniqueKeys, nil
 }
 
+// getSharedUniqueKeys returns the unique keys shared between the two source&target tables
+func getSharedUniqueKeys(sourceUniqueKeys, targetUniqueKeys [](*vrepl.UniqueKey), columnRenameMap map[string]string) (sharedUniqueKeys [](*vrepl.UniqueKey), bestUniqueKey *vrepl.UniqueKey) {
+	for _, sourceUniqueKey := range sourceUniqueKeys {
+		for _, targetUniqueKey := range targetUniqueKeys {
+			uniqueKeyMatches := func() bool {
+				// Compare two unique keys
+				if sourceUniqueKey.Columns.Len() != targetUniqueKey.Columns.Len() {
+					return false
+				}
+				// Expect same columns, same order, potentially column name mapping
+				sourceUniqueKeyNames := sourceUniqueKey.Columns.Names()
+				targetUniqueKeyNames := targetUniqueKey.Columns.Names()
+				for i := range sourceUniqueKeyNames {
+					sourceColumnName := sourceUniqueKeyNames[i]
+					targetColumnName := targetUniqueKeyNames[i]
+					if !strings.EqualFold(sourceColumnName, targetColumnName) && !strings.EqualFold(columnRenameMap[sourceColumnName], targetColumnName) {
+						return false
+					}
+				}
+				return true
+			}
+			if uniqueKeyMatches() {
+				sharedUniqueKeys = append(sharedUniqueKeys, sourceUniqueKey)
+			}
+		}
+	}
+	// Now that we know what the shared unique keys are, let's find the "best" shared one.
+	for _, potentialUniqueKey := range sharedUniqueKeys {
+		if !potentialUniqueKey.HasNullable {
+			return sharedUniqueKeys, potentialUniqueKey
+		}
+	}
+	return sharedUniqueKeys, nil
+}
+
 // readAutoIncrement reads the AUTO_INCREMENT vlaue, if any, for a give ntable
 func (v *VRepl) readAutoIncrement(ctx context.Context, conn *dbconnpool.DBConnection, tableName string) (autoIncrement uint64, err error) {
 	query, err := sqlparser.ParseAndBind(sqlGetAutoIncrement,
@@ -180,6 +219,33 @@ func (v *VRepl) readTableColumns(ctx context.Context, conn *dbconnpool.DBConnect
 		return nil, nil, nil, fmt.Errorf("Found 0 columns on `%s`", tableName)
 	}
 	return vrepl.NewColumnList(columnNames), vrepl.NewColumnList(virtualColumnNames), vrepl.NewColumnList(pkColumnNames), nil
+}
+
+// readTableUniqueKeys reads all unique keys from a given table, by order of usefulness/performance: PRIMARY first, integers are better, non-null are better
+func (v *VRepl) readTableUniqueKeys(ctx context.Context, conn *dbconnpool.DBConnection, tableName string) (uniqueKeys []*vrepl.UniqueKey, err error) {
+	query, err := sqlparser.ParseAndBind(sqlSelectUniqueKeys,
+		sqltypes.StringBindVariable(v.dbName),
+		sqltypes.StringBindVariable(tableName),
+		sqltypes.StringBindVariable(v.dbName),
+		sqltypes.StringBindVariable(tableName),
+	)
+	if err != nil {
+		return nil, err
+	}
+	rs, err := conn.ExecuteFetch(query, math.MaxInt64, true)
+	if err != nil {
+		return nil, err
+	}
+	for _, row := range rs.Named().Rows {
+		uniqueKey := &vrepl.UniqueKey{
+			Name:            row.AsString("index_name", ""),
+			Columns:         *vrepl.ParseColumnList(row.AsString("column_names", "")),
+			HasNullable:     row.AsBool("has_nullable", false),
+			IsAutoIncrement: row.AsBool("is_auto_increment", false),
+		}
+		uniqueKeys = append(uniqueKeys, uniqueKey)
+	}
+	return uniqueKeys, nil
 }
 
 // readTableStatus reads table status information
@@ -316,47 +382,6 @@ func (v *VRepl) getSharedColumns(sourceColumns, targetColumns *vrepl.ColumnList,
 	return vrepl.NewColumnList(sharedColumnNames), vrepl.NewColumnList(mappedSharedColumnNames), sharedColumnsMap
 }
 
-// getSharedPKColumns returns the intersection of PRIMARY KEY columns (taking renaming into consideration) between source and target tables
-func (v *VRepl) getSharedPKColumns(sourcePKColumns, targetPKColumns *vrepl.ColumnList, columnRenameMap map[string]string) (
-	sharedPKColumns *vrepl.ColumnList,
-) {
-	sharedColumnNames := []string{}
-	for _, sourceColumn := range sourcePKColumns.Names() {
-		isSharedColumn := false
-		for _, targetColumn := range targetPKColumns.Names() {
-			if strings.EqualFold(sourceColumn, targetColumn) {
-				// both tables have this column. Good start.
-				isSharedColumn = true
-				break
-			}
-			if strings.EqualFold(columnRenameMap[sourceColumn], targetColumn) {
-				// column in source is renamed in target
-				isSharedColumn = true
-				break
-			}
-		}
-		if isSharedColumn {
-			sharedColumnNames = append(sharedColumnNames, sourceColumn)
-		}
-	}
-	return vrepl.NewColumnList(sharedColumnNames)
-}
-
-// getSharedUniqueKeys returns the intersection of two given unique keys,
-// testing by list of columns
-func (v *VRepl) getSharedUniqueKeys(sourceUniqueKeys, targetUniqueKeys [](*vrepl.UniqueKey)) (uniqueKeys [](*vrepl.UniqueKey), err error) {
-	// We actually do NOT rely on key name, just on the set of columns. This is because maybe
-	// the ALTER is on the name itself...
-	for _, sourceUniqueKey := range sourceUniqueKeys {
-		for _, targetUniqueKey := range targetUniqueKeys {
-			if sourceUniqueKey.Columns.EqualsByNames(&targetUniqueKey.Columns) {
-				uniqueKeys = append(uniqueKeys, sourceUniqueKey)
-			}
-		}
-	}
-	return uniqueKeys, nil
-}
-
 func (v *VRepl) analyzeAlter(ctx context.Context) error {
 	if err := v.parser.ParseAlterStatement(v.alterOptions); err != nil {
 		return err
@@ -383,11 +408,36 @@ func (v *VRepl) analyzeTables(ctx context.Context, conn *dbconnpool.DBConnection
 	}
 	v.sourceSharedColumns, v.targetSharedColumns, v.sharedColumnsMap = v.getSharedColumns(sourceColumns, targetColumns, sourceVirtualColumns, targetVirtualColumns, v.parser.ColumnRenameMap())
 
-	v.sharedPKColumns = v.getSharedPKColumns(sourcePKColumns, targetPKColumns, v.parser.ColumnRenameMap())
-	if v.sharedPKColumns.Len() == 0 {
-		// TODO(shlomi): need to carefully examine what happens when we extend/reduce a PRIMARY KEY
-		// is a column subset OK?
-		return fmt.Errorf("Found no shared PRIMARY KEY columns between `%s` and `%s`", v.sourceTable, v.targetTable)
+	// unique keys
+	v.sourceUniqueKeys, err = v.readTableUniqueKeys(ctx, conn, v.sourceTable)
+	if err != nil {
+		return err
+	}
+	{
+		for _, u := range v.sourceUniqueKeys {
+			fmt.Printf("========== sourceUniqueKey: %v\n", u.String())
+		}
+	}
+	v.targetUniqueKeys, err = v.readTableUniqueKeys(ctx, conn, v.targetTable)
+	if err != nil {
+		return err
+	}
+	{
+		for _, u := range v.targetUniqueKeys {
+			fmt.Printf("========== targetUniqueKey: %v\n", u.String())
+		}
+	}
+	fmt.Printf("========== calculating potentialUniqueKey\n")
+	_, v.chosenUniqueKey = getSharedUniqueKeys(v.sourceUniqueKeys, v.targetUniqueKeys, v.parser.ColumnRenameMap())
+	if v.chosenUniqueKey == nil {
+		return fmt.Errorf("Found no shared, not nullable, unique keys between `%s` and `%s`", v.sourceTable, v.targetTable)
+	}
+	{
+		fmt.Printf("========== chosenUniqueKey: %v\n", v.chosenUniqueKey.String())
+	}
+	v.sharedPKColumns = &v.chosenUniqueKey.Columns
+	{
+		fmt.Printf("========== sharedPKColumns: %v\n", v.sharedPKColumns.Names())
 	}
 
 	if err := v.applyColumnTypes(ctx, conn, v.sourceTable, sourceColumns, sourceVirtualColumns, sourcePKColumns, v.sourceSharedColumns, v.sharedPKColumns); err != nil {
@@ -494,8 +544,9 @@ func (v *VRepl) analyzeBinlogSource(ctx context.Context) {
 		StopAfterCopy: false,
 	}
 	rule := &binlogdatapb.Rule{
-		Match:  v.targetTable,
-		Filter: v.filterQuery,
+		Match:     v.targetTable,
+		Filter:    v.filterQuery,
+		UniqueKey: v.chosenUniqueKey.Name,
 	}
 	if len(v.convertCharset) > 0 {
 		rule.ConvertCharset = v.convertCharset
