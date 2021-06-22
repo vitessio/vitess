@@ -37,7 +37,7 @@ import (
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
-	vtschema "vitess.io/vitess/go/vt/schema"
+	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -245,7 +245,7 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflowName, sou
 	jsonOutput := ""
 	for table, td := range df.differs {
 		// Skip internal operation tables for vdiff
-		if vtschema.IsInternalOperationTableName(table) {
+		if schema.IsInternalOperationTableName(table) {
 			continue
 		}
 		if err := df.diffTable(ctx, wr, table, td, filteredReplicationWaitTime); err != nil {
