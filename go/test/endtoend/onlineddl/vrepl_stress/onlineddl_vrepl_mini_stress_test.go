@@ -90,23 +90,29 @@ var (
 	cell                  = "zone1"
 	schemaChangeDirectory = ""
 	tableName             = `stress_test`
-	createStatement       = `
+	cleanupStatement      = `
+		DROP TABLE IF EXISTS stress_test
+	`
+	createStatement = `
 		CREATE TABLE stress_test (
 			id bigint(20) not null,
+			id_negative bigint(20) not null,
 			rand_val varchar(32) null default '',
 			hint_col varchar(64) not null default '',
 			created_timestamp timestamp not null default current_timestamp,
 			updates int unsigned not null default 0,
 			PRIMARY KEY (id),
+			UNIQUE KEY id_neg_uidx(id_negative),
 			key created_idx(created_timestamp),
 			key updates_idx(updates)
 		) ENGINE=InnoDB
 	`
-	alterHintStatement = `
-		ALTER TABLE stress_test modify hint_col varchar(64) not null default '%s'
-	`
+	alterHintStatements = []string{
+		`ALTER TABLE stress_test modify hint_col varchar(64) not null default '%s'`,
+		`ALTER TABLE stress_test DROP PRIMARY KEY, ADD PRIMARY KEY (id, id_negative), modify hint_col varchar(64) not null default '%s'`,
+	}
 	insertRowStatement = `
-		INSERT IGNORE INTO stress_test (id, rand_val) VALUES (%d, left(md5(rand()), 8))
+		INSERT IGNORE INTO stress_test (id, id_negative, rand_val) VALUES (%d, %d, left(md5(rand()), 8))
 	`
 	updateRowStatement = `
 		UPDATE stress_test SET updates=updates+1 WHERE id=%d
@@ -207,80 +213,87 @@ func TestSchemaChange(t *testing.T) {
 	shards := clusterInstance.Keyspaces[0].Shards
 	require.Equal(t, 1, len(shards))
 
-	t.Run("create schema", func(t *testing.T) {
-		assert.Equal(t, 1, len(clusterInstance.Keyspaces[0].Shards))
-		testWithInitialSchema(t)
-	})
-	for i := 0; i < countIterations; i++ {
-		// This first tests the general functionality of initializing the table with data,
-		// no concurrency involved. Just counting.
-		testName := fmt.Sprintf("init table %d/%d", (i + 1), countIterations)
+	for iStatement, alterHintStatement := range alterHintStatements {
+		testName := fmt.Sprintf("ALTER %d/%d", (iStatement + 1), len(alterHintStatements))
 		t.Run(testName, func(t *testing.T) {
-			initTable(t)
-			testSelectTableMetrics(t)
-		})
-	}
-	for i := 0; i < countIterations; i++ {
-		// This tests running a workload on the table, then comparing expected metrics with
-		// actual table metrics. All this without any ALTER TABLE: this is to validate
-		// that our testing/metrics logic is sound in the first place.
-		testName := fmt.Sprintf("workload without ALTER TABLE %d/%d", (i + 1), countIterations)
-		t.Run(testName, func(t *testing.T) {
-			ctx, cancel := context.WithCancel(context.Background())
-			initTable(t)
-			var wg sync.WaitGroup
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				runMultipleConnections(ctx, t)
-			}()
-			time.Sleep(5 * time.Second)
-			cancel() // will cause runMultipleConnections() to terminate
-			wg.Wait()
-			testSelectTableMetrics(t)
-		})
-	}
-	t.Run("ALTER TABLE without workload", func(t *testing.T) {
-		// A single ALTER TABLE. Generally this is covered in endtoend/onlineddl_vrepl,
-		// but we wish to verify the ALTER statement used in these tests is sound
-		initTable(t)
-		hint := "hint-alter-without-workload"
-		uuid := testOnlineDDLStatement(t, fmt.Sprintf(alterHintStatement, hint), "online", "vtgate", hint)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
-		testSelectTableMetrics(t)
-	})
+			t.Run("create schema", func(t *testing.T) {
+				assert.Equal(t, 1, len(clusterInstance.Keyspaces[0].Shards))
+				testWithInitialSchema(t)
+			})
+			for i := 0; i < countIterations; i++ {
+				// This first tests the general functionality of initializing the table with data,
+				// no concurrency involved. Just counting.
+				testName := fmt.Sprintf("init table %d/%d", (i + 1), countIterations)
+				t.Run(testName, func(t *testing.T) {
+					initTable(t)
+					testSelectTableMetrics(t)
+				})
+			}
+			for i := 0; i < countIterations; i++ {
+				// This tests running a workload on the table, then comparing expected metrics with
+				// actual table metrics. All this without any ALTER TABLE: this is to validate
+				// that our testing/metrics logic is sound in the first place.
+				testName := fmt.Sprintf("workload without ALTER TABLE %d/%d", (i + 1), countIterations)
+				t.Run(testName, func(t *testing.T) {
+					ctx, cancel := context.WithCancel(context.Background())
+					initTable(t)
+					var wg sync.WaitGroup
+					wg.Add(1)
+					go func() {
+						defer wg.Done()
+						runMultipleConnections(ctx, t)
+					}()
+					time.Sleep(5 * time.Second)
+					cancel() // will cause runMultipleConnections() to terminate
+					wg.Wait()
+					testSelectTableMetrics(t)
+				})
+			}
+			t.Run("ALTER TABLE without workload", func(t *testing.T) {
+				// A single ALTER TABLE. Generally this is covered in endtoend/onlineddl_vrepl,
+				// but we wish to verify the ALTER statement used in these tests is sound
+				initTable(t)
+				hint := "hint-alter-without-workload"
+				uuid := testOnlineDDLStatement(t, fmt.Sprintf(alterHintStatement, hint), "online", "vtgate", hint)
+				onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+				testSelectTableMetrics(t)
+			})
 
-	for i := 0; i < countIterations; i++ {
-		// Finally, this is the real test:
-		// We populate a table, and begin a concurrent workload (this is the "mini stress")
-		// We then ALTER TABLE via vreplication.
-		// Once convinced ALTER TABLE is complete, we stop the workload.
-		// We then compare expected metrics with table metrics. If they agree, then
-		// the vreplication/ALTER TABLE did not corrupt our data and we are happy.
-		testName := fmt.Sprintf("ALTER TABLE with workload %d/%d", (i + 1), countIterations)
-		t.Run(testName, func(t *testing.T) {
-			ctx, cancel := context.WithCancel(context.Background())
-			initTable(t)
-			var wg sync.WaitGroup
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				runMultipleConnections(ctx, t)
-			}()
-			hint := fmt.Sprintf("hint-alter-with-workload-%d", i)
-			uuid := testOnlineDDLStatement(t, fmt.Sprintf(alterHintStatement, hint), "online", "vtgate", hint)
-			onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
-			cancel() // will cause runMultipleConnections() to terminate
-			wg.Wait()
-			testSelectTableMetrics(t)
+			for i := 0; i < countIterations; i++ {
+				// Finally, this is the real test:
+				// We populate a table, and begin a concurrent workload (this is the "mini stress")
+				// We then ALTER TABLE via vreplication.
+				// Once convinced ALTER TABLE is complete, we stop the workload.
+				// We then compare expected metrics with table metrics. If they agree, then
+				// the vreplication/ALTER TABLE did not corrupt our data and we are happy.
+				testName := fmt.Sprintf("ALTER TABLE with workload %d/%d", (i + 1), countIterations)
+				t.Run(testName, func(t *testing.T) {
+					ctx, cancel := context.WithCancel(context.Background())
+					initTable(t)
+					var wg sync.WaitGroup
+					wg.Add(1)
+					go func() {
+						defer wg.Done()
+						runMultipleConnections(ctx, t)
+					}()
+					hint := fmt.Sprintf("hint-alter-with-workload-%d", i)
+					uuid := testOnlineDDLStatement(t, fmt.Sprintf(alterHintStatement, hint), "online", "vtgate", hint)
+					onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+					cancel() // will cause runMultipleConnections() to terminate
+					wg.Wait()
+					testSelectTableMetrics(t)
+				})
+			}
 		})
 	}
 }
 
 func testWithInitialSchema(t *testing.T) {
 	// Create the stress table
-	err := clusterInstance.VtctlclientProcess.ApplySchema(keyspaceName, createStatement)
-	require.Nil(t, err)
+	for _, statement := range []string{cleanupStatement, createStatement} {
+		err := clusterInstance.VtctlclientProcess.ApplySchema(keyspaceName, statement)
+		require.Nil(t, err)
+	}
 
 	// Check if table is created
 	checkTable(t, tableName)
@@ -351,7 +364,7 @@ func getCreateTableStatement(t *testing.T, tablet *cluster.Vttablet, tableName s
 
 func generateInsert(t *testing.T, conn *mysql.Conn) error {
 	id := rand.Int31n(int32(maxTableRows))
-	query := fmt.Sprintf(insertRowStatement, id)
+	query := fmt.Sprintf(insertRowStatement, id, -id)
 	qr, err := conn.ExecuteFetch(query, 1000, true)
 
 	func() {
