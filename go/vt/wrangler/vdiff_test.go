@@ -749,7 +749,7 @@ func TestVDiffSharded(t *testing.T) {
 	})
 	defer env.close()
 
-	schmWithGhostTable := &tabletmanagerdatapb.SchemaDefinition{
+	schm := &tabletmanagerdatapb.SchemaDefinition{
 		TableDefinitions: []*tabletmanagerdatapb.TableDefinition{{
 			Name:              "t1",
 			Columns:           []string{"c1", "c2"},
@@ -764,7 +764,7 @@ func TestVDiffSharded(t *testing.T) {
 			}},
 	}
 
-	env.tmc.schema = schmWithGhostTable
+	env.tmc.schema = schm
 
 	query := "select c1, c2 from t1 order by c1 asc"
 	fields := sqltypes.MakeTestFields(
