@@ -242,13 +242,10 @@ func planHorizon(sel *sqlparser.Select, plan logicalPlan, semTable *semantics.Se
 		return plan, nil
 	}
 
-	// TODO real horizon planning to be done
-	if sel.Distinct {
-		return nil, semantics.Gen4NotSupportedF("DISTINCT")
+	if err := checkUnsupportedConstructs(sel); err != nil {
+		return nil, err
 	}
-	if sel.GroupBy != nil {
-		return nil, semantics.Gen4NotSupportedF("GROUP BY")
-	}
+
 	qp, err := createQPFromSelect(sel)
 	if err != nil {
 		return nil, err
@@ -283,6 +280,19 @@ func planHorizon(sel *sqlparser.Select, plan logicalPlan, semTable *semantics.Se
 	}
 
 	return plan, nil
+}
+
+func checkUnsupportedConstructs(sel *sqlparser.Select) error {
+	if sel.Distinct {
+		return semantics.Gen4NotSupportedF("DISTINCT")
+	}
+	if sel.GroupBy != nil {
+		return semantics.Gen4NotSupportedF("GROUP BY")
+	}
+	if sel.Having != nil {
+		return semantics.Gen4NotSupportedF("HAVING")
+	}
+	return nil
 }
 
 type (
