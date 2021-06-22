@@ -872,6 +872,46 @@
     ]
   }
 }
+{
+  "QueryType": "SELECT",
+  "Original": "select u.id, e.id from user u join user_extra e where e.id = u.col limit 10",
+  "Instructions": {
+    "OperatorType": "Limit",
+    "Count": 10,
+    "Inputs": [
+      {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "-2,1",
+        "TableName": "`user`_user_extra",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select u.col, u.id from `user` as u where 1 != 1",
+            "Query": "select u.col, u.id from `user` as u limit :__upper_limit",
+            "Table": "`user`"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select e.id from user_extra as e where 1 != 1",
+            "Query": "select e.id from user_extra as e where e.id = :u_col limit :__upper_limit",
+            "Table": "user_extra"
+          }
+        ]
+      }
+    ]
+  }
+}
 
 # Wire-up in subquery
 "select 1 from user where id in (select u.id, e.id from user u join user_extra e where e.id = u.col limit 10)"
