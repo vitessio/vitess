@@ -1,4 +1,4 @@
-!/bin/bash
+#!/bin/bash
 
 # This is a script that gets run as part of the Dockerfile build
 # to install dependencies for the vitess/lite family of images.
