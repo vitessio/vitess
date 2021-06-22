@@ -99,6 +99,9 @@ func (a *analyzer) analyzeDown(cursor *sqlparser.Cursor) bool {
 				a.err = err
 			}
 		}
+		if sqlparser.IsLockingFunc(node) {
+			a.err = Gen4NotSupportedF("locking functions")
+		}
 	}
 
 	// this is the visitor going down the tree. Returning false here would just not visit the children
