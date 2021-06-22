@@ -18,6 +18,7 @@ package abstract
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"testing"
 
@@ -78,18 +79,6 @@ JoinPredicates:
 Tables:
 	1:t
 ForAll: '1' = 1 and 12 = '12'
-}`,
-	}, {
-		input: "select 1 from t where exists (select 1)",
-		output: `QueryGraph: {
-Tables:
-	1:t
-ForAll: exists (select 1 from dual)
-SubQueries:
-(select 1 from dual) - 	{
-	Tables:
-		2:dual
-	}
 }`,
 	}, {
 		input: "select 1 from t left join s on t.id = s.id",
@@ -207,4 +196,65 @@ func indent(s string) string {
 		lines[i] = "\t" + line
 	}
 	return strings.Join(lines, "\n")
+}
+
+func (qt *QueryTable) testString() string {
+	var alias string
+	if !qt.Alias.As.IsEmpty() {
+		alias = " AS " + sqlparser.String(qt.Alias.As)
+	}
+	var preds []string
+	for _, predicate := range qt.Predicates {
+		preds = append(preds, sqlparser.String(predicate))
+	}
+	var where string
+	if len(preds) > 0 {
+		where = " where " + strings.Join(preds, " and ")
+	}
+
+	return fmt.Sprintf("\t%d:%s%s%s", qt.TableID, sqlparser.String(qt.Table), alias, where)
+}
+
+func (qg *QueryGraph) testString() string {
+	return fmt.Sprintf(`{
+Tables:
+%s%s%s
+}`, strings.Join(qg.tableNames(), "\n"), qg.crossPredicateString(), qg.noDepsString())
+}
+
+func (qg *QueryGraph) crossPredicateString() string {
+	if len(qg.innerJoins) == 0 {
+		return ""
+	}
+	var joinPreds []string
+	for deps, predicates := range qg.innerJoins {
+		var tables []string
+		for _, id := range deps.Constituents() {
+			tables = append(tables, fmt.Sprintf("%d", id))
+		}
+		var expressions []string
+		for _, expr := range predicates {
+			expressions = append(expressions, sqlparser.String(expr))
+		}
+		tableConcat := strings.Join(tables, ":")
+		exprConcat := strings.Join(expressions, " and ")
+		joinPreds = append(joinPreds, fmt.Sprintf("\t%s - %s", tableConcat, exprConcat))
+	}
+	sort.Strings(joinPreds)
+	return fmt.Sprintf("\nJoinPredicates:\n%s", strings.Join(joinPreds, "\n"))
+}
+
+func (qg *QueryGraph) tableNames() []string {
+	var tables []string
+	for _, t := range qg.Tables {
+		tables = append(tables, t.testString())
+	}
+	return tables
+}
+
+func (qg *QueryGraph) noDepsString() string {
+	if qg.NoDeps == nil {
+		return ""
+	}
+	return fmt.Sprintf("\nForAll: %s", sqlparser.String(qg.NoDeps))
 }
