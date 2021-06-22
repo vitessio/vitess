@@ -160,10 +160,12 @@ message Rule {
   // trivial charsets are utf8 and ascii variants.
   map<string, CharsetConversion> convert_charset = 4;
 
-  // UniqueKey is the name of the index used to iterate the table. It dictates the order
-  // by which rowstream reads the table, and the order & logic by which vvopier and vplayer
-  // apply rows
-  string unique_key = 5;
+  // SourceUniqueKey is the name of the index used to iterate the table. It dictates the order
+  // by which rowstream reads the table
+  string source_unique_key = 5;
+
+  // TargetUniqueKey is the name of the index by vcopier and vplayer to apply rows
+  string target_unique_key = 6;
 }
 
 // Filter represents a list of ordered rules. The first
