@@ -67,8 +67,8 @@ func transformRoutePlan(n *routePlan) (*route, error) {
 	var tablesForSelect sqlparser.TableExprs
 	tableNameMap := map[string]interface{}{}
 
-	sort.Sort(n._tables)
-	for _, t := range n._tables {
+	sort.Sort(n.tables)
+	for _, t := range n.tables {
 		tablesForSelect = append(tablesForSelect, relToTableExpr(t))
 		for _, name := range t.tableNames() {
 			tableNameMap[name] = nil

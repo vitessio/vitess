@@ -29,8 +29,8 @@ import (
 
 type (
 	joinTree interface {
-		// tables returns the table identifiers that are solved by this plan
-		tables() semantics.TableSet
+		// tableID returns the table identifiers that are solved by this plan
+		tableID() semantics.TableSet
 
 		// cost is simply the number of routes in the joinTree
 		cost() int
@@ -66,9 +66,9 @@ type (
 		solved      semantics.TableSet
 		keyspace    *vindexes.Keyspace
 
-		// _tables contains all the tables that are solved by this plan.
+		// tables contains all the tables that are solved by this plan.
 		// the tables also contain any predicates that only depend on that particular table
-		_tables parenTables
+		tables parenTables
 
 		// predicates are the predicates evaluated by this plan
 		predicates []sqlparser.Expr
@@ -173,7 +173,7 @@ func (rp *routePlan) clone() joinTree {
 }
 
 // tables implements the joinTree interface
-func (rp *routePlan) tables() semantics.TableSet {
+func (rp *routePlan) tableID() semantics.TableSet {
 	return rp.solved
 }
 
@@ -501,8 +501,8 @@ outer:
 	return idxs
 }
 
-func (jp *joinPlan) tables() semantics.TableSet {
-	return jp.lhs.tables() | jp.rhs.tables()
+func (jp *joinPlan) tableID() semantics.TableSet {
+	return jp.lhs.tableID() | jp.rhs.tableID()
 }
 
 func (jp *joinPlan) cost() int {
@@ -523,7 +523,7 @@ func (jp *joinPlan) pushOutputColumns(columns []*sqlparser.ColName, semTable *se
 	var lhs, rhs []*sqlparser.ColName
 	for _, col := range columns {
 		col.Qualifier.Qualifier = sqlparser.NewTableIdent("")
-		if semTable.Dependencies(col).IsSolvedBy(jp.lhs.tables()) {
+		if semTable.Dependencies(col).IsSolvedBy(jp.lhs.tableID()) {
 			lhs = append(lhs, col)
 			toTheLeft = append(toTheLeft, true)
 		} else {
