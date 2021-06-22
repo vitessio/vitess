@@ -27,10 +27,12 @@
     ]
   }
 }
+Gen4 plan same as above
 
 # Flush statement with flush options
 "flush no_write_to_binlog hosts, logs"
 "keyspace not specified"
+Gen4 plan same as above
 
 # Flush statement with routing rules
 "flush local tables route1, route2"
@@ -61,10 +63,12 @@
     ]
   }
 }
+Gen4 plan same as above
 
 # Incorrect tables in flush
 "flush tables user.a with read lock"
 "table a not found"
+Gen4 plan same as above
 
 # Unknown tables in unsharded keyspaces are allowed
 "flush tables main.a with read lock"
@@ -81,6 +85,7 @@
     "Query": "flush tables a with read lock"
   }
 }
+Gen4 plan same as above
 
 # Flush statement with 3 keyspaces
 "flush local tables user, unsharded_a, user_extra, unsharded_tab with read lock"
@@ -120,3 +125,4 @@
     ]
   }
 }
+Gen4 plan same as above
