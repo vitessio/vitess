@@ -52,7 +52,7 @@ func transformJoinPlan(n *joinPlan, semTable *semantics.SemTable) (logicalPlan, 
 	}
 	opCode := engine.InnerJoin
 	if n.outer {
-		opCode = engine.OuterJoin
+		opCode = engine.LeftJoin
 	}
 	return &joinGen4{
 		Left:   lhs,
@@ -168,9 +168,9 @@ func relToTableExpr(t relation) sqlparser.TableExpr {
 		return &sqlparser.ParenTableExpr{Exprs: tables}
 	case *leJoin:
 		return &sqlparser.JoinTableExpr{
-			LeftExpr:  relToTableExpr(t.a),
+			LeftExpr:  relToTableExpr(t.lhs),
 			Join:      sqlparser.NormalJoinType,
-			RightExpr: relToTableExpr(t.b),
+			RightExpr: relToTableExpr(t.rhs),
 			Condition: sqlparser.JoinCondition{
 				On: t.pred,
 			},

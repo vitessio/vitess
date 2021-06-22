@@ -35,7 +35,7 @@ func planFilter(pb *primitiveBuilder, input logicalPlan, filter sqlparser.Expr, 
 		if node.isOnLeft(origin.Order()) {
 			in = node.Left
 		} else {
-			if node.ejoin.Opcode == engine.OuterJoin {
+			if node.ejoin.Opcode == engine.LeftJoin {
 				return nil, errors.New("unsupported: cross-shard left join and where clause")
 			}
 			isLeft = false

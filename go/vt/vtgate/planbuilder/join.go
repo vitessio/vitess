@@ -85,7 +85,7 @@ func newJoin(lpb, rpb *primitiveBuilder, ajoin *sqlparser.JoinTableExpr, reserve
 	if ajoin != nil {
 		switch {
 		case ajoin.Join == sqlparser.LeftJoinType:
-			opcode = engine.OuterJoin
+			opcode = engine.LeftJoin
 
 			// For left joins, we have to push the ON clause into the RHS.
 			// We do this before creating the join primitive.
@@ -113,7 +113,7 @@ func newJoin(lpb, rpb *primitiveBuilder, ajoin *sqlparser.JoinTableExpr, reserve
 		},
 	}
 	lpb.plan.Reorder(0)
-	if ajoin == nil || opcode == engine.OuterJoin {
+	if ajoin == nil || opcode == engine.LeftJoin {
 		return nil
 	}
 	return lpb.pushFilter(ajoin.Condition.On, sqlparser.WhereStr, reservedVars)
