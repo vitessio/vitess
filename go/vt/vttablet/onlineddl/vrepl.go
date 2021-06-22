@@ -151,7 +151,11 @@ func getSharedUniqueKeys(sourceUniqueKeys, targetUniqueKeys [](*vrepl.UniqueKey)
 				for i := range sourceUniqueKeyNames {
 					sourceColumnName := sourceUniqueKeyNames[i]
 					targetColumnName := targetUniqueKeyNames[i]
-					if !strings.EqualFold(sourceColumnName, targetColumnName) && !strings.EqualFold(columnRenameMap[sourceColumnName], targetColumnName) {
+					mappedSourceColumnName := sourceColumnName
+					if mapped, ok := columnRenameMap[sourceColumnName]; ok {
+						mappedSourceColumnName = mapped
+					}
+					if !strings.EqualFold(mappedSourceColumnName, targetColumnName) {
 						return false
 					}
 				}
