@@ -19,6 +19,8 @@ package vreplication
 import (
 	"flag"
 	"fmt"
+	"math"
+	"sort"
 	"strings"
 	"time"
 
@@ -33,6 +35,7 @@ import (
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
+	"vitess.io/vitess/go/vt/sqlparser"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
@@ -243,7 +246,6 @@ func (vr *vreplicator) buildColInfoMap(ctx context.Context) (map[string][]*Colum
 	queryTemplate := "select character_set_name, collation_name, column_name, data_type, column_type, extra from information_schema.columns where table_schema=%s and table_name=%s;"
 	colInfoMap := make(map[string][]*ColumnInfo)
 	for _, td := range schema.TableDefinitions {
-
 		query := fmt.Sprintf(queryTemplate, encodeString(vr.dbClient.DBName()), encodeString(td.Name))
 		qr, err := vr.mysqld.FetchSuperQuery(ctx, query)
 		if err != nil {
@@ -403,4 +405,37 @@ func (vr *vreplicator) resetFKCheckAfterCopy() error {
 func (vr *vreplicator) clearFKCheck() error {
 	_, err := vr.dbClient.Execute("set foreign_key_checks=0;")
 	return err
+}
+
+func (vr *vreplicator) recalculatePKColsInfo(tableName string, uniqueKeyName string, colInfos []*ColumnInfo) (pkColInfos []*ColumnInfo, err error) {
+	pkColInfos = colInfos[:]
+	columnOrderMap := map[string]int64{}
+	for _, colInfo := range pkColInfos {
+		columnOrderMap[colInfo.Name] = math.MaxInt64
+	}
+
+	query, err := sqlparser.ParseAndBind(mysql.BaseShowTableUniqueKey,
+		sqltypes.StringBindVariable(tableName),
+		sqltypes.StringBindVariable(uniqueKeyName),
+	)
+	if err != nil {
+		return nil, err
+	}
+	fmt.Printf("========== query=%s\n", query)
+	r, err := vr.dbClient.ExecuteFetch(query, math.MaxInt64)
+	if err != nil {
+		return nil, err
+	}
+
+	isPKMap := map[string]bool{}
+	for i, row := range r.Named().Rows {
+		colName := row["column_name"].ToString()
+		columnOrderMap[colName] = int64(i)
+		isPKMap[colName] = true
+	}
+	sort.Slice(pkColInfos, func(i, j int) bool { return columnOrderMap[pkColInfos[i].Name] < columnOrderMap[pkColInfos[j].Name] })
+	for i := range pkColInfos {
+		pkColInfos[i].IsPK = isPKMap[pkColInfos[i].Name]
+	}
+	return pkColInfos, nil
 }
