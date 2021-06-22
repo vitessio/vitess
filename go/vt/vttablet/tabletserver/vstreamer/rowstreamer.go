@@ -19,17 +19,20 @@ package vstreamer
 import (
 	"context"
 	"fmt"
+	"math"
 	"time"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vtgate/vindexes"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
-
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 )
 
 // RowStreamer exposes an externally usable interface to rowStreamer.
@@ -64,6 +67,7 @@ type rowStreamer struct {
 
 	plan      *Plan
 	pkColumns []int
+	ukName    string
 	sendQuery string
 	vse       *Engine
 	pktsize   PacketSizer
@@ -113,7 +117,7 @@ func (rs *rowStreamer) Stream() error {
 func (rs *rowStreamer) buildPlan() error {
 	// This pre-parsing is required to extract the table name
 	// and create its metadata.
-	_, fromTable, err := analyzeSelect(rs.query)
+	sel, fromTable, err := analyzeSelect(rs.query)
 	if err != nil {
 		return err
 	}
@@ -134,7 +138,11 @@ func (rs *rowStreamer) buildPlan() error {
 		log.Errorf("%s", err.Error())
 		return err
 	}
-	rs.pkColumns, err = buildPKColumns(st)
+
+	directives := sqlparser.ExtractCommentDirectives(sel.Comments)
+	rs.ukName = directives.GetString("ukName", "")
+
+	rs.pkColumns, err = rs.buildPKColumns(st)
 	if err != nil {
 		return err
 	}
@@ -145,7 +153,47 @@ func (rs *rowStreamer) buildPlan() error {
 	return err
 }
 
-func buildPKColumns(st *binlogdatapb.MinimalTable) ([]int, error) {
+func (rs *rowStreamer) buildPKColumnsFromUniqueKey() ([]int, error) {
+	var pkColumns = make([]int, 0)
+	fmt.Printf("========== rs.ukName=%s\n", rs.ukName)
+	// We wish to utilize a UNIQUE KEY which is not the PRIMARY KEY/
+	// For PRIMARY KEY, we already know what columns partiipate in the key,
+	// but for any other key, we need to go ahead and inspect the table/key definition
+	conn, err := snapshotConnect(rs.ctx, rs.cp)
+	if err != nil {
+		return pkColumns, err
+	}
+	defer conn.Close()
+
+	query, err := sqlparser.ParseAndBind(mysql.BaseShowTableUniqueKey,
+		sqltypes.StringBindVariable(rs.plan.Table.Name),
+		sqltypes.StringBindVariable(rs.ukName),
+	)
+	if err != nil {
+		return pkColumns, err
+	}
+	fmt.Printf("========== query=%s\n", query)
+	r, err := conn.ExecuteFetch(query, math.MaxInt64, true)
+	if err != nil {
+		return pkColumns, err
+	}
+
+	for _, row := range r.Named().Rows {
+		colName := row["column_name"].ToString()
+		index := rs.plan.Table.FindColumn(sqlparser.NewColIdent(colName))
+		if index < 0 {
+			return pkColumns, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "column %v is listed as unique key, but not present in table %v", colName, rs.plan.Table.Name)
+		}
+		pkColumns = append(pkColumns, index)
+	}
+	fmt.Printf("========== pkColumns=%v\n", pkColumns)
+	return pkColumns, nil
+}
+
+func (rs *rowStreamer) buildPKColumns(st *binlogdatapb.MinimalTable) ([]int, error) {
+	if rs.ukName != "" && rs.ukName != "PRIMARY" {
+		return rs.buildPKColumnsFromUniqueKey()
+	}
 	var pkColumns = make([]int, 0)
 	if len(st.PKColumns) == 0 {
 		pkColumns = make([]int, len(st.Fields))
@@ -211,6 +259,7 @@ func (rs *rowStreamer) buildSelect() (string, error) {
 }
 
 func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.VStreamRowsResponse) error) error {
+	fmt.Printf("===================Streaming query: %v\n", rs.sendQuery)
 	log.Infof("Streaming query: %v\n", rs.sendQuery)
 	gtid, err := conn.streamWithSnapshot(rs.ctx, rs.plan.Table.Name, rs.sendQuery)
 	if err != nil {
