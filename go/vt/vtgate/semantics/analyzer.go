@@ -67,6 +67,9 @@ func (a *analyzer) analyzeDown(cursor *sqlparser.Cursor) bool {
 	n := cursor.Node()
 	switch node := n.(type) {
 	case *sqlparser.Select:
+		if node.Having != nil {
+			a.err = Gen4NotSupportedF("HAVING")
+		}
 		a.push(newScope(current))
 		a.selectScope[node] = a.currentScope()
 		if err := a.analyzeTableExprs(node.From); err != nil {
