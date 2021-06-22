@@ -407,13 +407,26 @@ func (vr *vreplicator) clearFKCheck() error {
 	return err
 }
 
-func (vr *vreplicator) recalculatePKColsInfo(tableName string, uniqueKeyName string, colInfos []*ColumnInfo) (pkColInfos []*ColumnInfo, err error) {
+func recalculatePKColsInfoByColumnNames(uniqueKeyColumnNames []string, colInfos []*ColumnInfo) (pkColInfos []*ColumnInfo) {
 	pkColInfos = colInfos[:]
 	columnOrderMap := map[string]int64{}
 	for _, colInfo := range pkColInfos {
 		columnOrderMap[colInfo.Name] = math.MaxInt64
 	}
 
+	isPKMap := map[string]bool{}
+	for i, colName := range uniqueKeyColumnNames {
+		columnOrderMap[colName] = int64(i)
+		isPKMap[colName] = true
+	}
+	sort.SliceStable(pkColInfos, func(i, j int) bool { return columnOrderMap[pkColInfos[i].Name] < columnOrderMap[pkColInfos[j].Name] })
+	for i := range pkColInfos {
+		pkColInfos[i].IsPK = isPKMap[pkColInfos[i].Name]
+	}
+	return pkColInfos
+}
+
+func (vr *vreplicator) recalculatePKColsInfo(tableName string, uniqueKeyName string, colInfos []*ColumnInfo) (pkColInfos []*ColumnInfo, err error) {
 	query, err := sqlparser.ParseAndBind(mysql.BaseShowTableUniqueKey,
 		sqltypes.StringBindVariable(tableName),
 		sqltypes.StringBindVariable(uniqueKeyName),
@@ -427,15 +440,10 @@ func (vr *vreplicator) recalculatePKColsInfo(tableName string, uniqueKeyName str
 		return nil, err
 	}
 
-	isPKMap := map[string]bool{}
-	for i, row := range r.Named().Rows {
+	var uniqueKeyColumnNames []string
+	for _, row := range r.Named().Rows {
 		colName := row["column_name"].ToString()
-		columnOrderMap[colName] = int64(i)
-		isPKMap[colName] = true
+		uniqueKeyColumnNames = append(uniqueKeyColumnNames, colName)
 	}
-	sort.Slice(pkColInfos, func(i, j int) bool { return columnOrderMap[pkColInfos[i].Name] < columnOrderMap[pkColInfos[j].Name] })
-	for i := range pkColInfos {
-		pkColInfos[i].IsPK = isPKMap[pkColInfos[i].Name]
-	}
-	return pkColInfos, nil
+	return recalculatePKColsInfoByColumnNames(uniqueKeyColumnNames, colInfos), nil
 }
