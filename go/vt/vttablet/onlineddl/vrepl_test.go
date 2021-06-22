@@ -18,6 +18,7 @@ var (
 	columns12  = vrepl.ParseColumnList("c1,c2")
 	columns123 = vrepl.ParseColumnList("c1,c2,c3")
 	columns21  = vrepl.ParseColumnList("c2,c1")
+	columns12A = vrepl.ParseColumnList("c1,c2,ca")
 )
 
 func TestGetSharedUniqueKeys(t *testing.T) {
@@ -189,11 +190,41 @@ func TestGetSharedUniqueKeys(t *testing.T) {
 			targetUKs: []*vrepl.UniqueKey{
 				{Name: "uidx21", Columns: *columns21},
 				{Name: "uidx123other", Columns: *columns123},
-				{Name: "uidxother", Columns: *columns12, HasNullable: true},
+				{Name: "uidx12", Columns: *columns12, HasNullable: true},
 			},
 			renameMap:      map[string]string{},
 			expectSourceUK: &vrepl.UniqueKey{Name: "uidx123", Columns: *columns123},
 			expectTargetUK: &vrepl.UniqueKey{Name: "uidx123other", Columns: *columns123},
+		},
+		{
+			name: "match different column names",
+			sourceUKs: []*vrepl.UniqueKey{
+				{Name: "uidx1", Columns: *columns1},
+				{Name: "uidx12", Columns: *columns12},
+				{Name: "uidx123", Columns: *columns123},
+			},
+			targetUKs: []*vrepl.UniqueKey{
+				{Name: "uidx21", Columns: *columns21},
+				{Name: "uidx12A", Columns: *columns12A},
+			},
+			renameMap:      map[string]string{"c3": "ca"},
+			expectSourceUK: &vrepl.UniqueKey{Name: "uidx123", Columns: *columns123},
+			expectTargetUK: &vrepl.UniqueKey{Name: "uidx12A", Columns: *columns12A},
+		},
+		{
+			name: "no match different column names",
+			sourceUKs: []*vrepl.UniqueKey{
+				{Name: "uidx1", Columns: *columns1},
+				{Name: "uidx12", Columns: *columns12},
+				{Name: "uidx123", Columns: *columns123},
+			},
+			targetUKs: []*vrepl.UniqueKey{
+				{Name: "uidx21", Columns: *columns21},
+				{Name: "uidx12A", Columns: *columns12A},
+			},
+			renameMap:      map[string]string{"c3": "cx"},
+			expectSourceUK: nil,
+			expectTargetUK: nil,
 		},
 	}
 
