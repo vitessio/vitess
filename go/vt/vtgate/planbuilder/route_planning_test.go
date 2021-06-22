@@ -155,7 +155,7 @@ func TestCreateRoutePlanForOuter(t *testing.T) {
 	a := &routePlan{
 		routeOpCode: engine.SelectUnsharded,
 		solved:      semantics.TableSet(1),
-		_tables:     []relation{m1},
+		tables:      []relation{m1},
 	}
 	col1 := sqlparser.NewColNameWithQualifier("id", sqlparser.TableName{
 		Name: sqlparser.NewTableIdent("m1"),
@@ -166,7 +166,7 @@ func TestCreateRoutePlanForOuter(t *testing.T) {
 	b := &routePlan{
 		routeOpCode: engine.SelectUnsharded,
 		solved:      semantics.TableSet(6),
-		_tables:     []relation{m2, m3},
+		tables:      []relation{m2, m3},
 		predicates:  []sqlparser.Expr{equals(col1, col2)},
 	}
 	semTable := semantics.NewSemTable()

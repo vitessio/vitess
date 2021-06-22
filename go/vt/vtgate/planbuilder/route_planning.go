@@ -324,7 +324,7 @@ func pushPredicate2(exprs []sqlparser.Expr, tree joinTree, semTable *semantics.S
 		// we break up the predicates so that colnames from the LHS are replaced by arguments
 		var rhsPreds []sqlparser.Expr
 		var lhsColumns []*sqlparser.ColName
-		lhsSolves := node.lhs.tables()
+		lhsSolves := node.lhs.tableID()
 		for _, expr := range exprs {
 			cols, predicate, err := breakPredicateInLHSandRHS(expr, semTable, lhsSolves)
 			if err != nil {
@@ -446,7 +446,7 @@ func mergeJoinTrees(qg *abstract.QueryGraph, semTable *semantics.SemTable, joinT
 }
 
 func (cm cacheMap) getJoinTreeFor(lhs, rhs joinTree, joinPredicates []sqlparser.Expr, semTable *semantics.SemTable) (joinTree, error) {
-	solves := tableSetPair{left: lhs.tables(), right: rhs.tables()}
+	solves := tableSetPair{left: lhs.tableID(), right: rhs.tableID()}
 	cachedPlan := cm[solves]
 	if cachedPlan != nil {
 		return cachedPlan, nil
@@ -472,7 +472,7 @@ func findBestJoinTree(
 			if i == j {
 				continue
 			}
-			joinPredicates := qg.GetPredicates(lhs.tables(), rhs.tables())
+			joinPredicates := qg.GetPredicates(lhs.tableID(), rhs.tableID())
 			if len(joinPredicates) == 0 && !crossJoinsOK {
 				// if there are no predicates joining the two tables,
 				// creating a join between them would produce a
@@ -506,7 +506,7 @@ func leftToRightSolve(qg *abstract.QueryGraph, semTable *semantics.SemTable, vsc
 			acc = plan
 			continue
 		}
-		joinPredicates := qg.GetPredicates(acc.tables(), plan.tables())
+		joinPredicates := qg.GetPredicates(acc.tableID(), plan.tableID())
 		acc, err = mergeOrJoinInner(acc, plan, joinPredicates, semTable)
 		if err != nil {
 			return nil, err
@@ -561,7 +561,7 @@ func createRoutePlan(table *abstract.QueryTable, solves semantics.TableSet, vsch
 	}
 	plan := &routePlan{
 		solved: solves,
-		_tables: []relation{&routeTable{
+		tables: []relation{&routeTable{
 			qtable: table,
 			vtable: vschemaTable,
 		}},
@@ -605,7 +605,7 @@ func findColumnVindex(a *routePlan, exp sqlparser.Expr, sem *semantics.SemTable)
 
 	var singCol vindexes.SingleColumn
 
-	_ = a._tables.visit(func(table *routeTable) error {
+	_ = a.tables.visit(func(table *routeTable) error {
 		if leftDep.IsSolvedBy(table.qtable.TableID) {
 			for _, vindex := range table.vtable.ColumnVindexes {
 				sC, isSingle := vindex.Vindex.(vindexes.SingleColumn)
@@ -713,14 +713,14 @@ func joinTreesToRoutes(a, b joinTree) (*routePlan, *routePlan) {
 func createRoutePlanForInner(aRoute *routePlan, bRoute *routePlan, newTabletSet semantics.TableSet, joinPredicates []sqlparser.Expr) *routePlan {
 	var tables parenTables
 	if !aRoute.hasOuterjoins() {
-		tables = append(aRoute._tables, bRoute._tables...)
+		tables = append(aRoute.tables, bRoute.tables...)
 	} else {
-		tables = append(parenTables{aRoute._tables}, bRoute._tables...)
+		tables = append(parenTables{aRoute.tables}, bRoute.tables...)
 	}
 	return &routePlan{
 		routeOpCode: aRoute.routeOpCode,
 		solved:      newTabletSet,
-		_tables:     tables,
+		tables:      tables,
 		predicates: append(
 			append(aRoute.predicates, bRoute.predicates...),
 			joinPredicates...),
@@ -749,7 +749,7 @@ func findTables(deps semantics.TableSet, tables parenTables) (relation, relation
 
 func createRoutePlanForOuter(aRoute, bRoute *routePlan, semTable *semantics.SemTable, newTabletSet semantics.TableSet, joinPredicates []sqlparser.Expr) *routePlan {
 	// create relation slice with all tables
-	tables := bRoute._tables
+	tables := bRoute.tables
 	// we are doing an outer join where the outer part contains multiple tables - we have to turn the outer part into a join or two
 	for _, predicate := range bRoute.predicates {
 		deps := semTable.Dependencies(predicate)
@@ -775,7 +775,7 @@ func createRoutePlanForOuter(aRoute, bRoute *routePlan, semTable *semantics.SemT
 	return &routePlan{
 		routeOpCode: aRoute.routeOpCode,
 		solved:      newTabletSet,
-		_tables:     aRoute._tables,
+		tables:      aRoute.tables,
 		leftJoins: append(aRoute.leftJoins, &outerTable{
 			tbl:  outer,
 			pred: sqlparser.AndExpressions(joinPredicates...),
