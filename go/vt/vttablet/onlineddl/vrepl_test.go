@@ -212,6 +212,21 @@ func TestGetSharedUniqueKeys(t *testing.T) {
 			expectTargetUK: &vrepl.UniqueKey{Name: "uidx12A", Columns: *columns12A},
 		},
 		{
+			name: "no match identical column names",
+			sourceUKs: []*vrepl.UniqueKey{
+				{Name: "uidx1", Columns: *columns1},
+				{Name: "uidx12", Columns: *columns12},
+				{Name: "uidx123", Columns: *columns123},
+			},
+			targetUKs: []*vrepl.UniqueKey{
+				{Name: "uidx21", Columns: *columns21},
+				{Name: "uidx123", Columns: *columns123},
+			},
+			renameMap:      map[string]string{"c3": "ca"},
+			expectSourceUK: nil,
+			expectTargetUK: nil,
+		},
+		{
 			name: "no match different column names",
 			sourceUKs: []*vrepl.UniqueKey{
 				{Name: "uidx1", Columns: *columns1},
