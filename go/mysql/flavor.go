@@ -36,6 +36,9 @@ var (
 
 	// ErrNoPrimaryStatus means no status was returned by ShowPrimaryStatus().
 	ErrNoPrimaryStatus = errors.New("no master status")
+
+	// ErrNoGroupStatus means no status for group replication.
+	ErrNoGroupStatus = errors.New("no group status")
 )
 
 const (
