@@ -1,0 +1,63 @@
+#!/bin/bash
+# Copyright 2019 The Vitess Authors.
+# 
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+# 
+#     http://www.apache.org/licenses/LICENSE-2.0
+# 
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# git gofmt pre-commit hook
+#
+# To use, store as .git/hooks/pre-commit inside your repository and make sure
+# it has execute permissions.
+#
+# This script does not handle file names that contain spaces.
+gofiles=$(git diff --cached --name-only --diff-filter=ACM | grep '^go/.*\.go$')
+
+[ -z "$gofiles" ] && exit 0
+unformatted=$(gofmt -s -l $gofiles 2>&1)
+[ -z "$unformatted" ] && exit 0
+
+# Some files are not gofmt'd. Print command to fix them and fail.
+
+# Deduplicate files first in case a file has multiple errors.
+files=$(
+  # Split the "gofmt" output on newlines only.
+  OLDIFS=$IFS
+  IFS='
+'
+  for line in $unformatted; do
+    # Strip everything after the first ':', including it.
+    # Example output for $line:
+    #   go/vt/vttablet/tabletserver/txserializer/tx_serializer_test.go:241:60: expected ';', found 'IDENT' wg
+    echo ${line/:*/}
+  done |
+    # Remove duplicates.
+    sort -u
+  IFS=$OLDIFS
+)
+
+echo >&2
+echo >&2 "Go files must be formatted with gofmt. Please run:"
+echo >&2
+echo >&2 -n "  gofmt -s -w"
+
+for f in $files; do
+  # Print " \" after the "gofmt" above and each filename (except for the last one).
+  echo >&2 " \\"
+  echo >&2 -n "    $PWD/$f"
+done
+echo >&2
+
+echo >&2
+echo >&2 "If gofmt fails and outputs errors, you have to fix them manually."
+echo >&2
+
+exit 1
