@@ -76,10 +76,11 @@ const (
 	GroupReplicationMemberRolePrimary   = "PRIMARY"
 	GroupReplicationMemberRoleSecondary = "SECONDARY"
 	// Group member states
-	GroupReplicationMemberStateOnline     = "ONLINE"
-	GroupReplicationMemberStateRecovering = "RECOVERING"
-	GroupReplicationMemberStateOffline    = "OFFLINE"
-	GroupReplicationMemberStateError      = "ERROR"
+	GroupReplicationMemberStateOnline      = "ONLINE"
+	GroupReplicationMemberStateRecovering  = "RECOVERING"
+	GroupReplicationMemberStateUnreachable = "UNREACHABLE"
+	GroupReplicationMemberStateOffline     = "OFFLINE"
+	GroupReplicationMemberStateError       = "ERROR"
 )
 
 // We use this map to identify whether the query failed because the server does not support group replication or due
