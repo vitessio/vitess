@@ -3210,6 +3210,22 @@ func TestCreateTable(t *testing.T) {
 			"	check (a != b)\n" +
 			")",
 	}, {
+		// we don't support named primary keys currently
+		input: "create table t (\n" +
+			"	id int auto_increment,\n" +
+			"	username varchar,\n" +
+			"	a int,\n" +
+			"	b int,\n" +
+			"	constraint a_positive primary key (a, b)\n" +
+			")",
+		output: "create table t (\n" +
+			"	id int auto_increment,\n" +
+			"	username varchar,\n" +
+			"	a int,\n" +
+			"	b int,\n" +
+			"	primary key (a, b)\n" +
+			")",
+	}, {
 		// test utc_date with and without ()
 		input: "create table t (\n" +
 			"	time1 timestamp default utc_date,\n" +
