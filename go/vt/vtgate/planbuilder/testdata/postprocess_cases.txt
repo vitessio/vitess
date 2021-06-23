@@ -822,6 +822,7 @@ Gen4 plan same as above
 # Order by, qualified '*' expression, name mismatched.
 "select user.* from user where id = 5 order by e.col"
 "symbol e.col not found"
+Gen4 plan same as above
 
 # Order by, invalid column number
 "select col from user order by 18446744073709551616"
