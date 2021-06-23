@@ -36,6 +36,7 @@ import (
 
 var (
 	consulAuthClientStaticFile = flag.String("consul_auth_static_file", "", "JSON File to read the topos/tokens from.")
+	maxConnsPerHost            = flag.Int("consultopo_max_conns_per_host", 0, "limit the MaxConnsPerHost used in the consul client's http Transport. Zero means no limit.")
 )
 
 // ClientAuthCred credential to use for consul clusters
@@ -118,6 +119,10 @@ func NewServer(cell, serverAddr, root string) (*Server, error) {
 		} else {
 			log.Warningf("Client auth not configured for cell: %v", cell)
 		}
+	}
+
+	if *maxConnsPerHost > 0 {
+		cfg.Transport.MaxConnsPerHost = *maxConnsPerHost
 	}
 
 	client, err := api.NewClient(cfg)
