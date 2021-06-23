@@ -57,8 +57,8 @@ type (
 	}
 
 	outerTable struct {
-		tbl  relation
-		pred sqlparser.Expr
+		right relation
+		pred  sqlparser.Expr
 	}
 
 	routePlan struct {
@@ -66,7 +66,7 @@ type (
 		solved      semantics.TableSet
 		keyspace    *vindexes.Keyspace
 
-		// tables contains all the tables that are solved by this plan.
+		// tables contains inner tables that are solved by this plan.
 		// the tables also contain any predicates that only depend on that particular table
 		tables parenTables
 

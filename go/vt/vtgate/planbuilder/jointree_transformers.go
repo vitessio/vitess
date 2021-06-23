@@ -69,7 +69,11 @@ func transformRoutePlan(n *routePlan) (*route, error) {
 
 	sort.Sort(n.tables)
 	for _, t := range n.tables {
-		tablesForSelect = append(tablesForSelect, relToTableExpr(t))
+		tableExpr, err := relToTableExpr(t)
+		if err != nil {
+			return nil, err
+		}
+		tablesForSelect = append(tablesForSelect, tableExpr)
 		for _, name := range t.tableNames() {
 			tableNameMap[name] = nil
 		}
@@ -92,7 +96,10 @@ func transformRoutePlan(n *routePlan) (*route, error) {
 			lft = &sqlparser.ParenTableExpr{Exprs: tablesForSelect}
 		}
 
-		rightExpr := relToTableExpr(leftJoin.tbl)
+		rightExpr, err := relToTableExpr(leftJoin.right)
+		if err != nil {
+			return nil, err
+		}
 		joinExpr := &sqlparser.JoinTableExpr{
 			Join: sqlparser.LeftJoinType,
 			Condition: sqlparser.JoinCondition{
@@ -148,7 +155,7 @@ func transformRoutePlan(n *routePlan) (*route, error) {
 	}, nil
 }
 
-func relToTableExpr(t relation) sqlparser.TableExpr {
+func relToTableExpr(t relation) (sqlparser.TableExpr, error) {
 	switch t := t.(type) {
 	case *routeTable:
 		return &sqlparser.AliasedTableExpr{
@@ -158,24 +165,35 @@ func relToTableExpr(t relation) sqlparser.TableExpr {
 			Partitions: nil,
 			As:         t.qtable.Alias.As,
 			Hints:      nil,
-		}
+		}, nil
 	case parenTables:
 		tables := sqlparser.TableExprs{}
 		for _, t := range t {
-			tableExpr := relToTableExpr(t)
+			tableExpr, err := relToTableExpr(t)
+			if err != nil {
+				return nil, err
+			}
 			tables = append(tables, tableExpr)
 		}
-		return &sqlparser.ParenTableExpr{Exprs: tables}
+		return &sqlparser.ParenTableExpr{Exprs: tables}, nil
 	case *leJoin:
+		lExpr, err := relToTableExpr(t.lhs)
+		if err != nil {
+			return nil, err
+		}
+		rExpr, err := relToTableExpr(t.rhs)
+		if err != nil {
+			return nil, err
+		}
 		return &sqlparser.JoinTableExpr{
-			LeftExpr:  relToTableExpr(t.lhs),
+			LeftExpr:  lExpr,
 			Join:      sqlparser.NormalJoinType,
-			RightExpr: relToTableExpr(t.rhs),
+			RightExpr: rExpr,
 			Condition: sqlparser.JoinCondition{
 				On: t.pred,
 			},
-		}
+		}, nil
 	default:
-		panic("should never happen")
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unknown relation type: %T", t)
 	}
 }
