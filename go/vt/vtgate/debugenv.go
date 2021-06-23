@@ -1,5 +1,5 @@
 /*
-Copyright 2020 The Vitess Authors.
+Copyright 2021 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package tabletserver
+package vtgate
 
 import (
 	"encoding/json"
@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/acl"
+	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/log"
 )
 
@@ -47,6 +48,38 @@ var (
 		<td><input type="submit" name="Action" value="Modify"></input></td>
 	</form></tr>
 	`))
+	gridTable = []byte(`<!DOCTYPE html>
+	<style type="text/css">
+			table.gridtable {
+				font-family: verdana,arial,sans-serif;
+				font-size: 11px;
+				border-width: 1px;
+				border-collapse: collapse; table-layout:fixed; overflow: hidden;
+			}
+			table.gridtable th {
+				border-width: 1px;
+				padding: 8px;
+				border-style: solid;
+				background-color: #dedede;
+				white-space: nowrap;
+			}
+			table.gridtable td {
+				border-width: 1px;
+				padding: 5px;
+				border-style: solid;
+			}
+			table.gridtable th {
+				padding-left: 2em;
+				padding-right: 2em;
+			}
+	</style>
+	`)
+	startTable = []byte(`
+	<table class="gridtable">
+	`)
+	endTable = []byte(`
+	</table>
+	`)
 )
 
 type envValue struct {
@@ -54,7 +87,7 @@ type envValue struct {
 	Value   string
 }
 
-func debugEnvHandler(tsv *TabletServer, w http.ResponseWriter, r *http.Request) {
+func debugEnvHandler(vtg *VTGate, w http.ResponseWriter, r *http.Request) {
 	if err := acl.CheckAccessHTTP(r, acl.ADMIN); err != nil {
 		acl.SendError(w, err)
 		return
@@ -82,37 +115,13 @@ func debugEnvHandler(tsv *TabletServer, w http.ResponseWriter, r *http.Request) 
 			f(durationVal)
 			msg = fmt.Sprintf("Setting %v to: %v", varname, value)
 		}
-		setFloat64Val := func(f func(float64)) {
-			fval, err := strconv.ParseFloat(value, 64)
-			if err != nil {
-				msg = fmt.Sprintf("Failed setting value for %v: %v", varname, err)
-				return
-			}
-			f(fval)
-			msg = fmt.Sprintf("Setting %v to: %v", varname, value)
-		}
 		switch varname {
-		case "PoolSize":
-			setIntVal(tsv.SetPoolSize)
-		case "StreamPoolSize":
-			setIntVal(tsv.SetStreamPoolSize)
-		case "TxPoolSize":
-			setIntVal(tsv.SetTxPoolSize)
-		case "QueryCacheCapacity":
-			setIntVal(tsv.SetQueryPlanCacheCap)
-		case "MaxResultSize":
-			setIntVal(tsv.SetMaxResultSize)
-		case "WarnResultSize":
-			setIntVal(tsv.SetWarnResultSize)
-		case "UnhealthyThreshold":
-			setDurationVal(tsv.Config().Healthcheck.UnhealthyThresholdSeconds.Set)
-			setDurationVal(tsv.hs.SetUnhealthyThreshold)
-			setDurationVal(tsv.sm.SetUnhealthyThreshold)
-		case "ThrottleMetricThreshold":
-			setFloat64Val(tsv.SetThrottleMetricThreshold)
-		case "Consolidator":
-			tsv.SetConsolidatorMode(value)
-			msg = fmt.Sprintf("Setting %v to: %v", varname, value)
+		case "discovery_low_replication_lag":
+			setDurationVal(discovery.SetLowReplicationLag)
+		case "discovery_high_replication_lag_minimum_serving":
+			setDurationVal(discovery.SetHighReplicationLagMinServing)
+		case "min_num_tablets":
+			setIntVal(discovery.SetMinNumTablets)
 		}
 	}
 
@@ -129,24 +138,9 @@ func debugEnvHandler(tsv *TabletServer, w http.ResponseWriter, r *http.Request) 
 			Value:   fmt.Sprintf("%v", f()),
 		})
 	}
-	addFloat64Var := func(varname string, f func() float64) {
-		vars = append(vars, envValue{
-			VarName: varname,
-			Value:   fmt.Sprintf("%v", f()),
-		})
-	}
-	addIntVar("PoolSize", tsv.PoolSize)
-	addIntVar("StreamPoolSize", tsv.StreamPoolSize)
-	addIntVar("TxPoolSize", tsv.TxPoolSize)
-	addIntVar("QueryCacheCapacity", tsv.QueryPlanCacheCap)
-	addIntVar("MaxResultSize", tsv.MaxResultSize)
-	addIntVar("WarnResultSize", tsv.WarnResultSize)
-	addDurationVar("UnhealthyThreshold", tsv.Config().Healthcheck.UnhealthyThresholdSeconds.Get)
-	addFloat64Var("ThrottleMetricThreshold", tsv.ThrottleMetricThreshold)
-	vars = append(vars, envValue{
-		VarName: "Consolidator",
-		Value:   tsv.ConsolidatorMode(),
-	})
+	addDurationVar("discovery_low_replication_lag", discovery.GetLowReplicationLag)
+	addDurationVar("discovery_high_replication_lag_minimum_serving", discovery.GetHighReplicationLagMinServing)
+	addIntVar("min_num_tablets", discovery.GetMinNumTablets)
 
 	format := r.FormValue("format")
 	if format == "json" {
@@ -159,7 +153,6 @@ func debugEnvHandler(tsv *TabletServer, w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// gridTable is reused from twopcz.go.
 	w.Write(gridTable)
 	w.Write([]byte("<h3>Internal Variables</h3>\n"))
 	if msg != "" {
