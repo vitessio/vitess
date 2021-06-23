@@ -209,8 +209,8 @@ func fetchStatusForGroupReplication(c *Conn, query string, onResult func([]sqlty
 
 // masterStatus returns the result of 'SHOW MASTER STATUS',
 // with parsed executed position.
-func (mysqlGRFlavor) masterStatus(c *Conn) (MasterStatus, error) {
-	return mysqlFlavor{}.masterStatus(c)
+func (mysqlGRFlavor) masterStatus(c *Conn) (PrimaryStatus, error) {
+	return mysqlFlavor{}.primaryStatus(c)
 }
 
 func (mysqlGRFlavor) baseShowTablesWithSizes() string {
