@@ -265,7 +265,7 @@ func extractTableName(stmt sqlparser.Statement) (string, error) {
 	case *sqlparser.Insert:
 		return sqlparser.String(stmt.Table), nil
 	case *sqlparser.Select:
-		return sqlparser.String(stmt.From), nil
+		return sqlparser.ToString(stmt.From), nil
 	}
 
 	return "", fmt.Errorf("%w: %+v", ErrUnsupportedQuery, sqlparser.String(stmt))

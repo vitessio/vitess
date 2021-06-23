@@ -2685,6 +2685,7 @@ Gen4 plan same as above
 # verify ',' vs JOIN precedence
 "select u1.a from unsharded u1, unsharded u2 join unsharded u3 on u1.a = u2.a"
 "symbol u1.a not found"
+Gen4 plan same as above
 
 # first expression fails for ',' join (code coverage: ensure error is returned)
 "select user.foo.col from user.foo, user"

@@ -72,15 +72,17 @@ func (a *analyzer) analyzeDown(cursor *sqlparser.Cursor) bool {
 		}
 		a.push(newScope(current))
 		a.selectScope[node] = a.currentScope()
-		if err := a.analyzeTableExprs(node.From); err != nil {
-			a.err = err
-			return false
-		}
 	case *sqlparser.DerivedTable:
 		a.err = Gen4NotSupportedF("derived tables")
-	case *sqlparser.TableExprs:
-		// this has already been visited when we encountered the SELECT struct
-		return false
+	case sqlparser.TableExpr:
+		_, isSelect := cursor.Parent().(*sqlparser.Select)
+		if isSelect {
+			a.push(newScope(nil))
+		}
+		switch node := node.(type) {
+		case *sqlparser.AliasedTableExpr:
+			a.err = a.bindTable(node, node.Expr)
+		}
 
 	// we don't need to push new scope for sub queries since we do that for SELECT and UNION
 
@@ -261,6 +263,21 @@ func (a *analyzer) analyzeUp(cursor *sqlparser.Cursor) bool {
 	switch cursor.Node().(type) {
 	case *sqlparser.Union, *sqlparser.Select:
 		a.popScope()
+	case sqlparser.TableExpr:
+		_, isSelect := cursor.Parent().(*sqlparser.Select)
+		if isSelect {
+			curScope := a.currentScope()
+			a.popScope()
+			earlierScope := a.currentScope()
+			// copy curScope into the earlierScope
+			for _, table := range curScope.tables {
+				err := earlierScope.addTable(table)
+				if err != nil {
+					a.err = err
+					break
+				}
+			}
+		}
 	}
 	return a.shouldContinue()
 }
