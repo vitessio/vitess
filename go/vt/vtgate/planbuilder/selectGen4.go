@@ -32,6 +32,12 @@ func pushProjection(expr *sqlparser.AliasedExpr, plan logicalPlan, semTable *sem
 	switch node := plan.(type) {
 	case *route:
 		sel := node.Select.(*sqlparser.Select)
+		i := checkIfAlreadyExists(expr, sel)
+		if i != -1 {
+			return i, nil
+		}
+		expr = removeQualifierFromColName(expr)
+
 		offset := len(sel.SelectExprs)
 		sel.SelectExprs = append(sel.SelectExprs, expr)
 		return offset, nil
@@ -59,6 +65,26 @@ func pushProjection(expr *sqlparser.AliasedExpr, plan logicalPlan, semTable *sem
 	default:
 		return 0, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%T not yet supported", node)
 	}
+}
+
+func removeQualifierFromColName(expr *sqlparser.AliasedExpr) *sqlparser.AliasedExpr {
+	if _, ok := expr.Expr.(*sqlparser.ColName); ok {
+		expr = sqlparser.CloneRefOfAliasedExpr(expr)
+		col := expr.Expr.(*sqlparser.ColName)
+		col.Qualifier.Qualifier = sqlparser.NewTableIdent("")
+	}
+	return expr
+}
+
+func checkIfAlreadyExists(expr *sqlparser.AliasedExpr, sel *sqlparser.Select) int {
+	for i, selectExpr := range sel.SelectExprs {
+		if selectExpr, ok := selectExpr.(*sqlparser.AliasedExpr); ok {
+			if sqlparser.EqualsExpr(selectExpr.Expr, expr.Expr) {
+				return i
+			}
+		}
+	}
+	return -1
 }
 
 func planAggregations(qp *queryProjection, plan logicalPlan, semTable *semantics.SemTable) (logicalPlan, error) {
