@@ -777,8 +777,8 @@ func createRoutePlanForOuter(aRoute, bRoute *routePlan, semTable *semantics.SemT
 		solved:      newTabletSet,
 		tables:      aRoute.tables,
 		leftJoins: append(aRoute.leftJoins, &outerTable{
-			tbl:  outer,
-			pred: sqlparser.AndExpressions(joinPredicates...),
+			right: outer,
+			pred:  sqlparser.AndExpressions(joinPredicates...),
 		}),
 		keyspace:    aRoute.keyspace,
 		vindexPreds: append(aRoute.vindexPreds, bRoute.vindexPreds...),
