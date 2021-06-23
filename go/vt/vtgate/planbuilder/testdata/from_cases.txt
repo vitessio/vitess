@@ -2702,11 +2702,13 @@ Gen4 plan same as above
 
 # duplicate symbols
 "select user.id from user join user"
-"duplicate symbol: `user`"
+"Not unique table/alias: 'user'"
+Gen4 plan same as above
 
 # duplicate symbols for merging routes
 "select user.id from user join user_extra user on user.id = user.user_id"
-"duplicate symbol: `user`"
+"Not unique table/alias: 'user'"
+Gen4 plan same as above
 
 # non-existent table
 "select c from t"

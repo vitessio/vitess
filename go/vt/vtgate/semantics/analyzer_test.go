@@ -17,6 +17,7 @@ limitations under the License.
 package semantics
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -228,6 +229,7 @@ func TestBindingMultiTable(t *testing.T) {
 			"select 1 from d.tabl, d.foo as tabl",
 			"select 1 from d.tabl, d.tabl",
 			"select 1 from d.tabl, tabl",
+			"select 1 from user join user_extra user",
 		}
 		for _, query := range queries {
 			t.Run(query, func(t *testing.T) {
@@ -239,6 +241,7 @@ func TestBindingMultiTable(t *testing.T) {
 						"foo":  {Name: sqlparser.NewTableIdent("foo")},
 					},
 				})
+				fmt.Println(err)
 				require.Error(t, err)
 			})
 		}
