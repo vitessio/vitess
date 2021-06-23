@@ -273,6 +273,7 @@ func Init(ctx context.Context, serv srvtopo.Server, cell string, tabletTypesToWa
 		}
 	})
 	rpcVTGate.registerDebugHealthHandler()
+	rpcVTGate.registerDebugEnvHandler()
 	err := initQueryLogger(rpcVTGate)
 	if err != nil {
 		log.Fatalf("error initializing query logger: %v", err)
@@ -319,6 +320,12 @@ func resolveAndLoadKeyspace(ctx context.Context, srvResolver *srvtopo.Resolver, 
 			}
 		}
 	}
+}
+
+func (vtg *VTGate) registerDebugEnvHandler() {
+	http.HandleFunc("/debug/env", func(w http.ResponseWriter, r *http.Request) {
+		debugEnvHandler(vtg, w, r)
+	})
 }
 
 func (vtg *VTGate) registerDebugHealthHandler() {

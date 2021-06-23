@@ -141,17 +141,24 @@ func (a *analyzer) analyzeTableExpr(tableExpr sqlparser.TableExpr) error {
 	case *sqlparser.AliasedTableExpr:
 		return a.bindTable(table, table.Expr)
 	case *sqlparser.JoinTableExpr:
-		if table.Join != sqlparser.NormalJoinType {
-			return Gen4NotSupportedF("join type %s", table.Join.ToString())
-		}
+		return a.analyzeJoinTableExpr(table)
+	case *sqlparser.ParenTableExpr:
+		return a.analyzeTableExprs(table.Exprs)
+	}
+	return nil
+}
+
+func (a *analyzer) analyzeJoinTableExpr(table *sqlparser.JoinTableExpr) error {
+	switch table.Join {
+	case sqlparser.NormalJoinType, sqlparser.LeftJoinType, sqlparser.RightJoinType:
 		if err := a.analyzeTableExpr(table.LeftExpr); err != nil {
 			return err
 		}
 		if err := a.analyzeTableExpr(table.RightExpr); err != nil {
 			return err
 		}
-	case *sqlparser.ParenTableExpr:
-		return a.analyzeTableExprs(table.Exprs)
+	default:
+		return Gen4NotSupportedF("join type %s", table.Join.ToString())
 	}
 	return nil
 }
