@@ -105,15 +105,17 @@ func (tm *TabletManager) shardSyncLoop(ctx context.Context, notifyChan <-chan st
 			}
 			// If we think we're master, check if we need to update the shard record.
 			// Fetch the start time from the record we just got, because the tm's tablet can change.
-			masterAlias, err := syncShardMaster(ctx, tm.TopoServer, tablet, logutil.ProtoToTime(tablet.MasterTermStartTime))
+			masterAlias, haveOutdatedInfo, err := syncShardMaster(ctx, tm.TopoServer, tablet, logutil.ProtoToTime(tablet.MasterTermStartTime))
 			if err != nil {
 				log.Errorf("Failed to sync shard record: %v", err)
 				// Start retry timer and go back to sleep.
 				retryChan = time.After(*shardSyncRetryDelay)
 				continue
 			}
-			if !topoproto.TabletAliasEqual(masterAlias, tablet.Alias) {
-				// Another master has taken over while we still think we're master.
+			if haveOutdatedInfo {
+				// Someone updated the masterTermStartTime while we still think we're master.
+				// This means that we should abort our term, since someone else must have claimed mastership
+				// and wrote to the shard record
 				if err := tm.abortMasterTerm(ctx, masterAlias); err != nil {
 					log.Errorf("Failed to abort master term: %v", err)
 					// Start retry timer and go back to sleep.
@@ -154,11 +156,12 @@ func (tm *TabletManager) shardSyncLoop(ctx context.Context, notifyChan <-chan st
 // If the shard record indicates a new master has taken over, this returns
 // success (we successfully synchronized), but the returned masterAlias will be
 // different from the input tablet.Alias.
-func syncShardMaster(ctx context.Context, ts *topo.Server, tablet *topodatapb.Tablet, masterTermStartTime time.Time) (masterAlias *topodatapb.TabletAlias, err error) {
+func syncShardMaster(ctx context.Context, ts *topo.Server, tablet *topodatapb.Tablet, masterTermStartTime time.Time) (masterAlias *topodatapb.TabletAlias, haveOutdatedInfo bool, err error) {
 	ctx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
 	defer cancel()
 
 	var shardInfo *topo.ShardInfo
+	haveOutdatedInfo = false
 	_, err = ts.UpdateShardFields(ctx, tablet.Keyspace, tablet.Shard, func(si *topo.ShardInfo) error {
 		lastTerm := si.GetMasterTermStartTime()
 
@@ -168,6 +171,8 @@ func syncShardMaster(ctx context.Context, ts *topo.Server, tablet *topodatapb.Ta
 
 		// Only attempt an update if our term is more recent.
 		if !masterTermStartTime.After(lastTerm) {
+			// In this case, we have outdated information
+			haveOutdatedInfo = true
 			return topo.NewError(topo.NoUpdateNeeded, si.ShardName())
 		}
 
@@ -178,10 +183,10 @@ func syncShardMaster(ctx context.Context, ts *topo.Server, tablet *topodatapb.Ta
 		return nil
 	})
 	if err != nil {
-		return nil, err
+		return nil, haveOutdatedInfo, err
 	}
 
-	return shardInfo.MasterAlias, nil
+	return shardInfo.MasterAlias, haveOutdatedInfo, nil
 }
 
 // abortMasterTerm is called when we unexpectedly lost mastership.
