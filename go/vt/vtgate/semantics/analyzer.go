@@ -129,42 +129,6 @@ func (a *analyzer) resolveColumn(colName *sqlparser.ColName, current *scope) (Ta
 	return a.tableSetFor(t.ASTNode), nil
 }
 
-func (a *analyzer) analyzeTableExprs(tablExprs sqlparser.TableExprs) error {
-	for _, tableExpr := range tablExprs {
-		if err := a.analyzeTableExpr(tableExpr); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (a *analyzer) analyzeTableExpr(tableExpr sqlparser.TableExpr) error {
-	switch table := tableExpr.(type) {
-	case *sqlparser.AliasedTableExpr:
-		return a.bindTable(table, table.Expr)
-	case *sqlparser.JoinTableExpr:
-		return a.analyzeJoinTableExpr(table)
-	case *sqlparser.ParenTableExpr:
-		return a.analyzeTableExprs(table.Exprs)
-	}
-	return nil
-}
-
-func (a *analyzer) analyzeJoinTableExpr(table *sqlparser.JoinTableExpr) error {
-	switch table.Join {
-	case sqlparser.NormalJoinType, sqlparser.LeftJoinType, sqlparser.RightJoinType:
-		if err := a.analyzeTableExpr(table.LeftExpr); err != nil {
-			return err
-		}
-		if err := a.analyzeTableExpr(table.RightExpr); err != nil {
-			return err
-		}
-	default:
-		return Gen4NotSupportedF("join type %s", table.Join.ToString())
-	}
-	return nil
-}
-
 // resolveQualifiedColumn handles `tabl.col` expressions
 func (a *analyzer) resolveQualifiedColumn(current *scope, expr *sqlparser.ColName) (*TableInfo, error) {
 	// search up the scope stack until we find a match
