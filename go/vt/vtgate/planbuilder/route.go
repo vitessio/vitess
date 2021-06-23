@@ -445,7 +445,7 @@ func (rb *route) JoinCanMerge(pb *primitiveBuilder, rrb *route, ajoin *sqlparser
 	if ajoin == nil {
 		return false
 	}
-	for _, filter := range splitAndExpression(nil, ajoin.Condition.On) {
+	for _, filter := range sqlparser.SplitAndExpression(nil, ajoin.Condition.On) {
 		if rb.canMergeOnFilter(pb, rrb, filter) {
 			return true
 		}

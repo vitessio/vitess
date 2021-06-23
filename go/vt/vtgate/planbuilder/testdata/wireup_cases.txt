@@ -367,7 +367,7 @@
       {
         "OperatorType": "Join",
         "Variant": "Join",
-        "JoinColumnIndexes": "-3",
+        "JoinColumnIndexes": "-2",
         "TableName": "`user`_`user`",
         "Inputs": [
           {
@@ -377,8 +377,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select u1.col, u1.col, u1.id from `user` as u1 where 1 != 1",
-            "Query": "select u1.col, u1.col, u1.id from `user` as u1",
+            "FieldQuery": "select u1.col, u1.id from `user` as u1 where 1 != 1",
+            "Query": "select u1.col, u1.id from `user` as u1",
             "Table": "`user`"
           },
           {
@@ -519,7 +519,7 @@
           {
             "OperatorType": "Join",
             "Variant": "Join",
-            "JoinColumnIndexes": "-3",
+            "JoinColumnIndexes": "-2",
             "TableName": "`user`_`user`",
             "Inputs": [
               {
@@ -529,8 +529,8 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select u1.col, u1.col, u1.id from `user` as u1 where 1 != 1",
-                "Query": "select u1.col, u1.col, u1.id from `user` as u1",
+                "FieldQuery": "select u1.col, u1.id from `user` as u1 where 1 != 1",
+                "Query": "select u1.col, u1.id from `user` as u1",
                 "Table": "`user`"
               },
               {
@@ -630,7 +630,7 @@
       {
         "OperatorType": "Join",
         "Variant": "Join",
-        "JoinColumnIndexes": "1,-3",
+        "JoinColumnIndexes": "-1,-2",
         "TableName": "`user`_`user`",
         "Inputs": [
           {
@@ -640,8 +640,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select u1.col, u1.col, u1.id from `user` as u1 where 1 != 1",
-            "Query": "select u1.col, u1.col, u1.id from `user` as u1",
+            "FieldQuery": "select u1.col, u1.id from `user` as u1 where 1 != 1",
+            "Query": "select u1.col, u1.id from `user` as u1",
             "Table": "`user`"
           },
           {

@@ -31,6 +31,7 @@ var _ logicalPlan = (*joinGen4)(nil)
 type joinGen4 struct {
 	// Left and Right are the nodes for the join.
 	Left, Right logicalPlan
+	Opcode      engine.JoinOpcode
 	Cols        []int
 	Vars        map[string]int
 }
@@ -55,7 +56,7 @@ func (j *joinGen4) Wireup(lp logicalPlan, jt *jointab) error {
 	panic("implement me")
 }
 
-// Wireup2 implements the logicalPlan interface
+// WireupGen4 implements the logicalPlan interface
 func (j *joinGen4) WireupGen4(semTable *semantics.SemTable) error {
 	err := j.Left.WireupGen4(semTable)
 	if err != nil {
@@ -82,10 +83,11 @@ func (j *joinGen4) SupplyWeightString(colNumber int) (weightcolNumber int, err e
 // Primitive implements the logicalPlan interface
 func (j *joinGen4) Primitive() engine.Primitive {
 	return &engine.Join{
-		Left:  j.Left.Primitive(),
-		Right: j.Right.Primitive(),
-		Cols:  j.Cols,
-		Vars:  j.Vars,
+		Left:   j.Left.Primitive(),
+		Right:  j.Right.Primitive(),
+		Cols:   j.Cols,
+		Vars:   j.Vars,
+		Opcode: j.Opcode,
 	}
 }
 

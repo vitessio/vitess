@@ -1396,6 +1396,7 @@ Gen4 plan same as above
     "Table": "dual"
   }
 }
+Gen4 plan same as above
 
 # testing SingleRow Projection with arithmetics
 "select 42+2"
