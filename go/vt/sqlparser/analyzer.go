@@ -337,8 +337,8 @@ func AndExpressions(exprs ...Expr) Expr {
 				result = expr
 			} else {
 				found := false
-				for j, ex := range exprs {
-					if i != j && EqualsExpr(expr, ex) {
+				for j := 0; j < i; j++ {
+					if EqualsExpr(expr, exprs[j]) {
 						found = true
 						break
 					}
