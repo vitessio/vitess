@@ -2694,6 +2694,7 @@ Gen4 plan same as above
 # table names should be case-sensitive
 "select unsharded.id from unsharded where Unsharded.val = 1"
 "symbol Unsharded.val not found"
+Gen4 plan same as above
 
 # implicit table reference for sharded keyspace
 "select user.foo.col from user.foo"
