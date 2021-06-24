@@ -225,6 +225,7 @@ Gen4 plan same as above
     "Query": "create view view_a as select col from `user` join user_extra on `user`.id = user_extra.user_id"
   }
 }
+Gen4 error: Column 'col' in field list is ambiguous
 
 # create view with join that can be solved in each shard separately
 "create view user.view_a as select user.id from user join user_extra on user.id = user_extra.user_id"
