@@ -355,11 +355,7 @@ func (rp *routePlan) planEqualOp(node *sqlparser.ComparisonExpr) (bool, error) {
 	return rp.haveMatchingVindex(node, column, *val, equalOrEqualUnique, justTheVindex), err
 }
 
-func (rp *routePlan) planInOp(node *sqlparser.ComparisonExpr) (bool, error) {
-	column, ok := node.Left.(*sqlparser.ColName)
-	if !ok {
-		return false, nil
-	}
+func (rp *routePlan) planSimpleInOp(node *sqlparser.ComparisonExpr, left *sqlparser.ColName) (bool, error) {
 	value, err := sqlparser.NewPlanValue(node.Right)
 	if err != nil {
 		// if we are unable to create a PlanValue, we can't use a vindex, but we don't have to fail
@@ -377,7 +373,54 @@ func (rp *routePlan) planInOp(node *sqlparser.ComparisonExpr) (bool, error) {
 		}
 	}
 	opcode := func(*vindexes.ColumnVindex) engine.RouteOpcode { return engine.SelectIN }
-	return rp.haveMatchingVindex(node, column, value, opcode, justTheVindex), err
+	return rp.haveMatchingVindex(node, left, value, opcode, justTheVindex), err
+}
+
+func (rp *routePlan) planCompositeInOp(node *sqlparser.ComparisonExpr, left sqlparser.ValTuple) (bool, error) {
+	right, rightIsValTuple := node.Right.(sqlparser.ValTuple)
+	if !rightIsValTuple {
+		return false, nil
+	}
+
+	for i, expr := range left {
+		if col, isColName := expr.(*sqlparser.ColName); isColName {
+			// check if left col is a vindex
+			if !rp.hasVindex(col) {
+				continue
+			}
+
+			rightVals := make(sqlparser.ValTuple, len(right))
+			for j, currRight := range right {
+				switch currRight := currRight.(type) {
+				case sqlparser.ValTuple:
+					rightVals[j] = currRight[i]
+				default:
+					return false, nil
+				}
+			}
+			newPlanValues, err := makePlanValue(rightVals)
+			if newPlanValues == nil || err != nil {
+				return false, err
+			}
+
+			opcode := func(*vindexes.ColumnVindex) engine.RouteOpcode { return engine.SelectMultiEqual }
+			newVindex := rp.haveMatchingVindex(node, col, *newPlanValues, opcode, justTheVindex)
+			if newVindex {
+				return true, nil
+			}
+		}
+	}
+	return false, nil
+}
+
+func (rp *routePlan) planInOp(node *sqlparser.ComparisonExpr) (bool, error) {
+	switch left := node.Left.(type) {
+	case *sqlparser.ColName:
+		return rp.planSimpleInOp(node, left)
+	case sqlparser.ValTuple:
+		return rp.planCompositeInOp(node, left)
+	}
+	return false, nil
 }
 
 func (rp *routePlan) planLikeOp(node *sqlparser.ComparisonExpr) (bool, error) {
@@ -432,6 +475,17 @@ func makePlanValue(n sqlparser.Expr) (*sqltypes.PlanValue, error) {
 		return nil, err
 	}
 	return &value, nil
+}
+
+func (rp routePlan) hasVindex(column *sqlparser.ColName) bool {
+	for _, v := range rp.vindexPreds {
+		for _, col := range v.colVindex.Columns {
+			if column.Name.Equal(col) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func (rp *routePlan) haveMatchingVindex(
