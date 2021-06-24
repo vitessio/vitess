@@ -155,12 +155,16 @@ func WaitForMigrationStatus(t *testing.T, vtParams *mysql.ConnParams, shards []c
 	startTime := time.Now()
 	lastKnownStatus := ""
 	for time.Since(startTime) < timeout {
+		countMatchedShards := 0
 		r := VtgateExecQuery(t, vtParams, query, "")
 		for _, row := range r.Named().Rows {
 			lastKnownStatus = row["migration_status"].ToString()
 			if row["migration_uuid"].ToString() == uuid && statusesMap[lastKnownStatus] {
-				return schema.OnlineDDLStatus(lastKnownStatus)
+				countMatchedShards++
 			}
+		}
+		if countMatchedShards == len(shards) {
+			return schema.OnlineDDLStatus(lastKnownStatus)
 		}
 		time.Sleep(1 * time.Second)
 	}
