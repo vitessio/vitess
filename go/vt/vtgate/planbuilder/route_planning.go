@@ -625,7 +625,7 @@ func findColumnVindex(a *routePlan, exp sqlparser.Expr, sem *semantics.SemTable)
 
 	var singCol vindexes.SingleColumn
 
-	_ = a.tables.visit(func(table *routeTable) error {
+	_ = visitTables(a.tables, func(table *routeTable) error {
 		if leftDep.IsSolvedBy(table.qtable.TableID) {
 			for _, vindex := range table.vtable.ColumnVindexes {
 				sC, isSingle := vindex.Vindex.(vindexes.SingleColumn)

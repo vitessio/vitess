@@ -564,6 +564,25 @@ Gen4 plan same as above
     "Vindex": "user_index"
   }
 }
+{
+  "QueryType": "SELECT",
+  "Original": "select user_extra.id from user join user_extra on user.id = user_extra.user_id where user.id = 5",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select user_extra.id from `user`, user_extra where 1 != 1",
+    "Query": "select user_extra.id from `user`, user_extra where `user`.id = 5 and `user`.id = user_extra.user_id",
+    "Table": "`user`, user_extra",
+    "Values": [
+      5
+    ],
+    "Vindex": "user_index"
+  }
+}
 
 # Multi-table unique vindex constraint on right table
 "select user_extra.id from user join user_extra on user.id = user_extra.user_id where user_extra.user_id = 5"
@@ -608,6 +627,7 @@ Gen4 plan same as above
     "Vindex": "user_index"
   }
 }
+Gen4 plan same as above
 
 # Multi-table unique vindex constraint on left-joined right table
 "select user_extra.id from user left join user_extra on user.id = user_extra.user_id where user_extra.user_id = 5"
@@ -717,6 +737,48 @@ Gen4 plan same as above
     ]
   }
 }
+{
+  "QueryType": "SELECT",
+  "Original": "select user_extra.id from user join user_extra on user.col = user_extra.col where user.id = 5 and user_extra.user_id = 5",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "1",
+    "TableName": "`user`_user_extra",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectEqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select `user`.col from `user` where 1 != 1",
+        "Query": "select `user`.col from `user` where `user`.id = 5",
+        "Table": "`user`",
+        "Values": [
+          5
+        ],
+        "Vindex": "user_index"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectEqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select user_extra.id from user_extra where 1 != 1",
+        "Query": "select user_extra.id from user_extra where user_extra.user_id = 5 and user_extra.col = :user_col",
+        "Table": "user_extra",
+        "Values": [
+          5
+        ],
+        "Vindex": "user_index"
+      }
+    ]
+  }
+}
 
 # Multi-route with cross-route constraint
 "select user_extra.id from user join user_extra on user.col = user_extra.col where user_extra.user_id = user.col"
@@ -791,6 +853,40 @@ Gen4 plan same as above
         },
         "FieldQuery": "select user_extra.id from user_extra where 1 != 1",
         "Query": "select user_extra.id from user_extra where user_extra.col = :user_col",
+        "Table": "user_extra"
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select user_extra.id from user join user_extra on user.col = user_extra.col where 1 = 1",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "1",
+    "TableName": "`user`_user_extra",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select `user`.col from `user` where 1 != 1",
+        "Query": "select `user`.col from `user` where 1 = 1",
+        "Table": "`user`"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select user_extra.id from user_extra where 1 != 1",
+        "Query": "select user_extra.id from user_extra where 1 = 1 and user_extra.col = :user_col",
         "Table": "user_extra"
       }
     ]
@@ -1288,7 +1384,6 @@ Gen4 plan same as above
 # unresolved symbol in inner subquery.
 "select id from user where id = :a and user.col in (select user_extra.col from user_extra where user_extra.user_id = :a and foo.id = 1)"
 "symbol foo.id not found"
-Gen4 plan same as above
 
 # outer and inner subquery route by same outermost column value
 "select id2 from user uu where id in (select id from user where id = uu.id and user.col in (select user_extra.col from user_extra where user_extra.user_id = uu.id))"

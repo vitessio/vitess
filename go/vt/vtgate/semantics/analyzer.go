@@ -79,6 +79,8 @@ func (a *analyzer) analyzeDown(cursor *sqlparser.Cursor) bool {
 		a.selectScope[node] = a.currentScope()
 	case *sqlparser.DerivedTable:
 		a.err = Gen4NotSupportedF("derived tables")
+	case *sqlparser.Subquery:
+		a.err = Gen4NotSupportedF("subquery")
 	case sqlparser.TableExpr:
 		_, isSelect := cursor.Parent().(*sqlparser.Select)
 		if isSelect {
