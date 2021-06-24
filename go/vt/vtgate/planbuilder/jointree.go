@@ -382,6 +382,7 @@ func (rp *routePlan) planCompositeInOp(node *sqlparser.ComparisonExpr, left sqlp
 		return false, nil
 	}
 
+	foundVindex := false
 	for i, expr := range left {
 		if col, isColName := expr.(*sqlparser.ColName); isColName {
 			// check if left col is a vindex
@@ -405,12 +406,10 @@ func (rp *routePlan) planCompositeInOp(node *sqlparser.ComparisonExpr, left sqlp
 
 			opcode := func(*vindexes.ColumnVindex) engine.RouteOpcode { return engine.SelectMultiEqual }
 			newVindex := rp.haveMatchingVindex(node, col, *newPlanValues, opcode, justTheVindex)
-			if newVindex {
-				return true, nil
-			}
+			foundVindex = newVindex || foundVindex
 		}
 	}
-	return false, nil
+	return foundVindex, nil
 }
 
 func (rp *routePlan) planInOp(node *sqlparser.ComparisonExpr) (bool, error) {
