@@ -238,7 +238,11 @@ func TestWithDefaultKeyspaceFromFile(t *testing.T) {
 	// We are testing this separately so we can set a default keyspace
 	testOutputTempDir, err := ioutil.TempDir("", "plan_test")
 	require.NoError(t, err)
-	defer os.RemoveAll(testOutputTempDir)
+	defer func() {
+		if !t.Failed() {
+			_ = os.RemoveAll(testOutputTempDir)
+		}
+	}()
 	vschema := &vschemaWrapper{
 		v: loadSchema(t, "schema_test.json"),
 		keyspace: &vindexes.Keyspace{
