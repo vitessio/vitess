@@ -352,6 +352,7 @@ Gen4 plan same as above
     "Vindex": "name_user_map"
   }
 }
+Gen4 plan same as above
 
 # Composite IN: tuple inside tuple, but no match in tuple
 "select id from user where (name, (col1, col2)) in (('aa', ('bb', 'cc')), ('dd', ('ee', 'ff')))"
