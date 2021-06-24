@@ -169,9 +169,8 @@ var (
 )
 
 const (
-	maxTableRows    = 4096
-	maxConcurrency  = 5
-	countIterations = 5
+	maxTableRows   = 4096
+	maxConcurrency = 5
 )
 
 func getTablet() *cluster.Vttablet {
@@ -345,10 +344,8 @@ func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy str
 	strategySetting, err := schema.ParseDDLStrategy(ddlStrategy)
 	assert.NoError(t, err)
 
-	status := schema.OnlineDDLStatusReady
-	if strategySetting.Strategy.IsDirect() {
-		status = schema.OnlineDDLStatusComplete
-	} else {
+	status := schema.OnlineDDLStatusComplete
+	if !strategySetting.Strategy.IsDirect() {
 		status = onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, 20*time.Second, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
 		fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 	}
