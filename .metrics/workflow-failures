@@ -1,4 +1,3 @@
-2021-03-04T18:19:53Z,docker_test_2,https://github.com/vitessio/vitess/actions/runs/621973387
 2021-03-04T18:19:53Z,docker_test_3,https://github.com/vitessio/vitess/actions/runs/621973388
 2021-03-04T18:19:53Z,local_example,https://github.com/vitessio/vitess/actions/runs/621973354
 2021-03-04T18:19:53Z,region_example,https://github.com/vitessio/vitess/actions/runs/621973377
@@ -9998,3 +9997,4 @@
 2021-06-24T08:29:57Z,Cluster (vreplication_cellalias),https://github.com/vitessio/vitess/actions/runs/967264466
 2021-06-24T08:29:57Z,local_example,https://github.com/vitessio/vitess/actions/runs/967264468
 2021-06-24T08:42:28Z,pr-labels,https://github.com/vitessio/vitess/actions/runs/967299533
+2021-06-24T09:25:56Z,pr-labels,https://github.com/vitessio/vitess/actions/runs/967429588
