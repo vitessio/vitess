@@ -86,6 +86,11 @@ var (
 			alterStatement:   "engine=innodb",
 		},
 		{
+			name:             "negative PK",
+			prepareStatement: "drop primary key, add primary key (id_negative)",
+			alterStatement:   "engine=innodb",
+		},
+		{
 			name:             "negative UK, no PK",
 			prepareStatement: "add unique key negative_uidx(id_negative)",
 			alterStatement:   "drop primary key",
@@ -99,6 +104,11 @@ var (
 			name:             "text UK, no PK",
 			prepareStatement: "add unique key text_uidx(rand_text(40))",
 			alterStatement:   "drop primary key",
+		},
+		{
+			name:             "text UK, different PK",
+			prepareStatement: "add unique key text_uidx(rand_text(40))",
+			alterStatement:   "drop primary key, add primary key (id, id_negative)",
 		},
 		{
 			name:             "multicolumn UK 1, no PK",
@@ -116,9 +126,19 @@ var (
 			alterStatement:   "drop primary key",
 		},
 		{
-			name:             "multiple UK choices",
+			name:             "multicolumn UK 4, different PK",
+			prepareStatement: "add unique key text_uidx(rand_num, rand_text(40))",
+			alterStatement:   "drop primary key, add primary key (id, id_negative)",
+		},
+		{
+			name:             "multiple UK choices 1",
 			prepareStatement: "add unique key text_uidx(rand_num, rand_text(40)), add unique key negative_uidx(id_negative)",
 			alterStatement:   "drop primary key, add primary key(updates, id)",
+		},
+		{
+			name:             "multiple UK choices 2",
+			prepareStatement: "add unique key text_uidx(rand_num, rand_text(40)), add unique key negative_uidx(id_negative)",
+			alterStatement:   "drop primary key, add primary key(id, id_negative)",
 		},
 		{
 			name:             "multiple UK choices including nullable",
@@ -153,6 +173,9 @@ var (
 	`
 	selectCountFromTable = `
 		SELECT count(*) as c FROM stress_test
+	`
+	selectCountFromTableBefore = `
+		SELECT count(*) as c FROM stress_test_after
 	`
 	selectCountFromTableAfter = `
 		SELECT count(*) as c FROM stress_test_after
@@ -305,7 +328,7 @@ func TestSchemaChange(t *testing.T) {
 				cancel() // will cause runMultipleConnections() to terminate
 				wg.Wait()
 				if !testcase.expectFailure {
-					testSelectTableMetrics(t)
+					testCompareBeforeAfterTables(t)
 				}
 			})
 		})
@@ -511,33 +534,50 @@ func initTable(t *testing.T) {
 	}
 }
 
-func testSelectTableMetrics(t *testing.T) {
+// testCompareBeforeAfterTables validates that stress_test_before and stress_test_after contents are non empty and completely identical
+func testCompareBeforeAfterTables(t *testing.T) {
+	var countBefore int64
+	{
+		// Validate after table is populated
+		rs := onlineddl.VtgateExecQuery(t, &vtParams, selectCountFromTableBefore, "")
+		row := rs.Named().Row()
+		require.NotNil(t, row)
+
+		countBefore = row.AsInt64("c", 0)
+		require.NotZero(t, countBefore)
+		require.Less(t, countBefore, int64(maxTableRows))
+
+		fmt.Printf("# count rows in table (before): %d\n", countBefore)
+	}
+	var countAfter int64
 	{
 		// Validate after table is populated
 		rs := onlineddl.VtgateExecQuery(t, &vtParams, selectCountFromTableAfter, "")
 		row := rs.Named().Row()
 		require.NotNil(t, row)
 
-		count := row.AsInt64("c", 0)
-		require.NotZero(t, count)
-		require.Less(t, count, int64(maxTableRows))
+		countAfter = row.AsInt64("c", 0)
+		require.NotZero(t, countAfter)
+		require.Less(t, countAfter, int64(maxTableRows))
 
-		fmt.Printf("# count rows in table (after): %d\n", count)
+		fmt.Printf("# count rows in table (after): %d\n", countAfter)
 	}
 
 	{
 		selectBeforeFile := onlineddl.CreateTempScript(t, selectBeforeTable)
 		defer os.Remove(selectBeforeFile)
 		beforeOutput := onlineddl.MysqlClientExecFile(t, mysqlParams(), "", "", selectBeforeFile)
+		beforeOutput = strings.TrimSpace(beforeOutput)
+		require.NotEmpty(t, beforeOutput)
+		assert.Equal(t, countBefore, int64(len(strings.Split(beforeOutput, "\n"))))
 
 		selectAfterFile := onlineddl.CreateTempScript(t, selectAfterTable)
 		defer os.Remove(selectAfterFile)
 		afterOutput := onlineddl.MysqlClientExecFile(t, mysqlParams(), "", "", selectAfterFile)
+		afterOutput = strings.TrimSpace(afterOutput)
+		require.NotEmpty(t, afterOutput)
+		assert.Equal(t, countAfter, int64(len(strings.Split(afterOutput, "\n"))))
 
 		require.Equal(t, beforeOutput, afterOutput, "results mismatch: (%s) and (%s)", selectBeforeTable, selectAfterTable)
 	}
-
-	// rsBefore := onlineddl.VtgateExecQuery(t, &vtParams, selectBeforeTable, "")
-	// rsAfter := onlineddl.VtgateExecQuery(t, &vtParams, selectAfterTable, "")
-	// assert.Equal(t, rsBefore.Rows, rsAfter.Rows)
 }
