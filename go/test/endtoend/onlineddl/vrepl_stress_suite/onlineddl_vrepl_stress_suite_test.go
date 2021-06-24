@@ -14,6 +14,17 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+/*
+	This endtoend suite tests VReplication based Online DDL under stress (concurrent INSERT/UPDATE/DELETE queries),
+	and looks for before/after table data to be identical.
+	This suite specifically targets choice of unique key: PRIMARY vs non-PRIMARY, numeric, textual, compound.
+	The scenarios caused by this suite cause VReplication to iterate the table in:
+	- expected incremental order (id)
+	- expected decremental order (negative id values)
+	- random order (random textual checksums)
+	- other
+*/
+
 package vreplstress
 
 import (
@@ -566,14 +577,14 @@ func testCompareBeforeAfterTables(t *testing.T) {
 	{
 		selectBeforeFile := onlineddl.CreateTempScript(t, selectBeforeTable)
 		defer os.Remove(selectBeforeFile)
-		beforeOutput := onlineddl.MysqlClientExecFile(t, mysqlParams(), "", "", selectBeforeFile)
+		beforeOutput := onlineddl.MysqlClientExecFile(t, mysqlParams(), os.TempDir(), "", selectBeforeFile)
 		beforeOutput = strings.TrimSpace(beforeOutput)
 		require.NotEmpty(t, beforeOutput)
 		assert.Equal(t, countBefore, int64(len(strings.Split(beforeOutput, "\n"))))
 
 		selectAfterFile := onlineddl.CreateTempScript(t, selectAfterTable)
 		defer os.Remove(selectAfterFile)
-		afterOutput := onlineddl.MysqlClientExecFile(t, mysqlParams(), "", "", selectAfterFile)
+		afterOutput := onlineddl.MysqlClientExecFile(t, mysqlParams(), os.TempDir(), "", selectAfterFile)
 		afterOutput = strings.TrimSpace(afterOutput)
 		require.NotEmpty(t, afterOutput)
 		assert.Equal(t, countAfter, int64(len(strings.Split(afterOutput, "\n"))))
