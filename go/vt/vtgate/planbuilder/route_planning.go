@@ -46,6 +46,11 @@ func gen4Planner(_ string) func(sqlparser.Statement, *sqlparser.ReservedVars, Co
 }
 
 func newBuildSelectPlan(sel *sqlparser.Select, vschema ContextVSchema) (engine.Primitive, error) {
+
+	directives := sqlparser.ExtractCommentDirectives(sel.Comments)
+	if len(directives) > 0 {
+		return nil, semantics.Gen4NotSupportedF("comment directives")
+	}
 	keyspace, err := vschema.DefaultKeyspace()
 	if err != nil {
 		return nil, err
