@@ -727,7 +727,16 @@ func (rb *route) computeCompositeINPlan(pb *primitiveBuilder, comparison *sqlpar
 // iterateCompositeIN recursively walks the LHS tuple of the IN clause looking
 // for column names. For those that match a vindex, it builds a multi-value plan
 // using the corresponding values in the RHS. It returns the best of the plans built.
-func (rb *route) iterateCompositeIN(pb *primitiveBuilder, comparison *sqlparser.ComparisonExpr, coordinates []int, tuple sqlparser.ValTuple) (opcode engine.RouteOpcode, vindex vindexes.SingleColumn, values sqlparser.Expr) {
+// (1, (2, (col, 3))) IN ((1,(2,(43,3))), )
+// 1 = [0]
+// 2 = [1,0]
+// col = [1,1,0]
+func (rb *route) iterateCompositeIN(
+	pb *primitiveBuilder,
+	comparison *sqlparser.ComparisonExpr,
+	coordinates []int,
+	tuple sqlparser.ValTuple,
+) (opcode engine.RouteOpcode, vindex vindexes.SingleColumn, values sqlparser.Expr) {
 	opcode = engine.SelectScatter
 
 	cindex := len(coordinates)

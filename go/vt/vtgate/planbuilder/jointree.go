@@ -381,12 +381,25 @@ func (rp *routePlan) planCompositeInOp(node *sqlparser.ComparisonExpr, left sqlp
 	if !rightIsValTuple {
 		return false, nil
 	}
+	return rp.planCompositeInOpRecursive(node, left, right, nil)
+}
 
+func (rp *routePlan) planCompositeInOpRecursive(node *sqlparser.ComparisonExpr, left, right sqlparser.ValTuple, coordinates []int) (bool, error) {
 	foundVindex := false
+	cindex := len(coordinates)
+	coordinates = append(coordinates, 0)
 	for i, expr := range left {
-		if col, isColName := expr.(*sqlparser.ColName); isColName {
+		coordinates[cindex] = i
+		switch expr := expr.(type) {
+		case sqlparser.ValTuple:
+			ok, err := rp.planCompositeInOpRecursive(node, expr, right, coordinates)
+			if err != nil {
+				return false, err
+			}
+			return ok || foundVindex, nil
+		case *sqlparser.ColName:
 			// check if left col is a vindex
-			if !rp.hasVindex(col) {
+			if !rp.hasVindex(expr) {
 				continue
 			}
 
@@ -394,7 +407,11 @@ func (rp *routePlan) planCompositeInOp(node *sqlparser.ComparisonExpr, left sqlp
 			for j, currRight := range right {
 				switch currRight := currRight.(type) {
 				case sqlparser.ValTuple:
-					rightVals[j] = currRight[i]
+					val := tupleAccess(currRight, coordinates)
+					if val == nil {
+						return false, nil
+					}
+					rightVals[j] = val
 				default:
 					return false, nil
 				}
@@ -405,7 +422,7 @@ func (rp *routePlan) planCompositeInOp(node *sqlparser.ComparisonExpr, left sqlp
 			}
 
 			opcode := func(*vindexes.ColumnVindex) engine.RouteOpcode { return engine.SelectMultiEqual }
-			newVindex := rp.haveMatchingVindex(node, col, *newPlanValues, opcode, justTheVindex)
+			newVindex := rp.haveMatchingVindex(node, expr, *newPlanValues, opcode, justTheVindex)
 			foundVindex = newVindex || foundVindex
 		}
 	}
