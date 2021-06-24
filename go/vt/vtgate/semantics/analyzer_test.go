@@ -346,12 +346,12 @@ func TestUnknownColumnMap2(t *testing.T) {
 		{
 			name:   "non authoritative columns - one authoritative and one not",
 			schema: map[string]*vindexes.Table{"a": &nonAuthoritativeTblA, "b": &authoritativeTblB},
-			err:    true,
+			err:    false,
 		},
 		{
 			name:   "non authoritative columns - one authoritative and one not",
 			schema: map[string]*vindexes.Table{"a": &authoritativeTblA, "b": &nonAuthoritativeTblB},
-			err:    true,
+			err:    false,
 		},
 		{
 			name:   "authoritative columns",
@@ -361,6 +361,43 @@ func TestUnknownColumnMap2(t *testing.T) {
 		{
 			name:   "authoritative columns with overlap",
 			schema: map[string]*vindexes.Table{"a": &authoritativeTblAWithConflict, "b": &authoritativeTblB},
+			err:    true,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			si := &FakeSI{Tables: test.schema}
+			tbl, err := Analyze(parse, "", si)
+			require.NoError(t, err)
+
+			if test.err {
+				require.Error(t, tbl.ProjectionErr)
+			} else {
+				require.NoError(t, tbl.ProjectionErr)
+			}
+		})
+	}
+}
+
+func TestUnknownPredicate(t *testing.T) {
+	query := "select 1 from a, b where col = 1"
+	authoritativeTblA := &vindexes.Table{
+		Name: sqlparser.NewTableIdent("a"),
+	}
+	authoritativeTblB := &vindexes.Table{
+		Name: sqlparser.NewTableIdent("b"),
+	}
+
+	parse, _ := sqlparser.Parse(query)
+
+	tests := []struct {
+		name   string
+		schema map[string]*vindexes.Table
+		err    bool
+	}{
+		{
+			name:   "no info about tables",
+			schema: map[string]*vindexes.Table{"a": authoritativeTblA, "b": authoritativeTblB},
 			err:    true,
 		},
 	}

@@ -261,6 +261,10 @@ func planLimit(limit *sqlparser.Limit, plan logicalPlan) (logicalPlan, error) {
 
 func planHorizon(sel *sqlparser.Select, plan logicalPlan, semTable *semantics.SemTable) (logicalPlan, error) {
 	rb, ok := plan.(*route)
+	if !ok && semTable.ProjectionErr != nil {
+		return nil, semTable.ProjectionErr
+	}
+
 	if ok && rb.isSingleShard() {
 		createSingleShardRoutePlan(sel, rb)
 		return plan, nil
@@ -275,7 +279,7 @@ func planHorizon(sel *sqlparser.Select, plan logicalPlan, semTable *semantics.Se
 		return nil, err
 	}
 	for _, e := range qp.selectExprs {
-		if _, err := pushProjection(e, plan, semTable); err != nil {
+		if _, err := pushProjection(e, plan, semTable, true); err != nil {
 			return nil, err
 		}
 	}

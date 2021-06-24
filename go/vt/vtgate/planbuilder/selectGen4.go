@@ -28,9 +28,18 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
-func pushProjection(expr *sqlparser.AliasedExpr, plan logicalPlan, semTable *semantics.SemTable) (int, error) {
+func pushProjection(expr *sqlparser.AliasedExpr, plan logicalPlan, semTable *semantics.SemTable, inner bool) (int, error) {
 	switch node := plan.(type) {
 	case *route:
+		value, err := makePlanValue(expr.Expr)
+		if err != nil {
+			return 0, err
+		}
+		_, isColName := expr.Expr.(*sqlparser.ColName)
+		badExpr := value == nil && !isColName
+		if !inner && badExpr {
+			return 0, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: cross-shard left join and column expressions")
+		}
 		sel := node.Select.(*sqlparser.Select)
 		i := checkIfAlreadyExists(expr, sel)
 		if i != -1 {
@@ -47,13 +56,13 @@ func pushProjection(expr *sqlparser.AliasedExpr, plan logicalPlan, semTable *sem
 		deps := semTable.Dependencies(expr.Expr)
 		switch {
 		case deps.IsSolvedBy(lhsSolves):
-			offset, err := pushProjection(expr, node.Left, semTable)
+			offset, err := pushProjection(expr, node.Left, semTable, inner)
 			if err != nil {
 				return 0, err
 			}
 			node.Cols = append(node.Cols, -(offset + 1))
 		case deps.IsSolvedBy(rhsSolves):
-			offset, err := pushProjection(expr, node.Right, semTable)
+			offset, err := pushProjection(expr, node.Right, semTable, inner && node.Opcode != engine.LeftJoin)
 			if err != nil {
 				return 0, err
 			}
@@ -94,7 +103,7 @@ func planAggregations(qp *queryProjection, plan logicalPlan, semTable *semantics
 		eaggr:          eaggr,
 	}
 	for _, e := range qp.aggrExprs {
-		offset, err := pushProjection(e, plan, semTable)
+		offset, err := pushProjection(e, plan, semTable, true)
 		if err != nil {
 			return nil, err
 		}
@@ -123,7 +132,7 @@ func planOrderBy(qp *queryProjection, plan logicalPlan, semTable *semantics.SemT
 					Expr: order.Expr,
 				}
 				var err error
-				offset, err = pushProjection(expr, plan, semTable)
+				offset, err = pushProjection(expr, plan, semTable, true)
 				if err != nil {
 					return nil, err
 				}
@@ -157,7 +166,7 @@ func planOrderBy(qp *queryProjection, plan logicalPlan, semTable *semantics.SemT
 						},
 					},
 				}
-				weightStringOffset, err = pushProjection(expr, plan, semTable)
+				weightStringOffset, err = pushProjection(expr, plan, semTable, true)
 				if err != nil {
 					return nil, err
 				}
