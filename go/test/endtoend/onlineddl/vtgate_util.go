@@ -19,8 +19,10 @@ package onlineddl
 import (
 	"context"
 	"fmt"
+	"math"
 	"os"
 	"testing"
+	"time"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
@@ -42,7 +44,7 @@ func VtgateExecQuery(t *testing.T, vtParams *mysql.ConnParams, query string, exp
 	require.Nil(t, err)
 	defer conn.Close()
 
-	qr, err := conn.ExecuteFetch(query, 1000, true)
+	qr, err := conn.ExecuteFetch(query, math.MaxInt64, true)
 	if expectError == "" {
 		require.NoError(t, err)
 	} else {
@@ -137,6 +139,32 @@ func CheckMigrationStatus(t *testing.T, vtParams *mysql.ConnParams, shards []clu
 		}
 	}
 	assert.Equal(t, len(shards), count)
+}
+
+// WaitForMigrationStatus waits for a migration to reach either provided statuses (returns immediately), or eventually time out
+func WaitForMigrationStatus(t *testing.T, vtParams *mysql.ConnParams, shards []cluster.Shard, uuid string, timeout time.Duration, expectStatuses ...schema.OnlineDDLStatus) schema.OnlineDDLStatus {
+	query, err := sqlparser.ParseAndBind("show vitess_migrations like %a",
+		sqltypes.StringBindVariable(uuid),
+	)
+	require.NoError(t, err)
+
+	statusesMap := map[string]bool{}
+	for _, status := range expectStatuses {
+		statusesMap[string(status)] = true
+	}
+	startTime := time.Now()
+	lastKnownStatus := ""
+	for time.Since(startTime) < timeout {
+		r := VtgateExecQuery(t, vtParams, query, "")
+		for _, row := range r.Named().Rows {
+			lastKnownStatus = row["migration_status"].ToString()
+			if row["migration_uuid"].ToString() == uuid && statusesMap[lastKnownStatus] {
+				return schema.OnlineDDLStatus(lastKnownStatus)
+			}
+		}
+		time.Sleep(1 * time.Second)
+	}
+	return schema.OnlineDDLStatus(lastKnownStatus)
 }
 
 // CheckMigrationArtifacts verifies given migration exists, and checks if it has artifacts
