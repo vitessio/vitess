@@ -169,10 +169,13 @@ func syncShardMaster(ctx context.Context, ts *topo.Server, tablet *topodatapb.Ta
 		// We can't use the return value of UpdateShardFields because it might be nil.
 		shardInfo = si
 
+		if masterTermStartTime.Before(lastTerm) {
+			// In this case, we have outdated information, we will demote ourself
+			haveOutdatedInfo = true
+		}
+
 		// Only attempt an update if our term is more recent.
 		if !masterTermStartTime.After(lastTerm) {
-			// In this case, we have outdated information
-			haveOutdatedInfo = true
 			return topo.NewError(topo.NoUpdateNeeded, si.ShardName())
 		}
 
@@ -230,8 +233,14 @@ func (tm *TabletManager) abortMasterTerm(ctx context.Context, masterAlias *topod
 	setMasterCtx, cancelSetMaster := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
 	defer cancelSetMaster()
 	log.Infof("Attempting to reparent self to new master %v.", masterAliasStr)
-	if err := tm.SetMaster(setMasterCtx, masterAlias, 0, "", true); err != nil {
-		return vterrors.Wrap(err, "failed to reparent self to new master")
+	if masterAlias == nil {
+		if err := tm.tmState.ChangeTabletType(ctx, topodatapb.TabletType_REPLICA, DBActionNone); err != nil {
+			return err
+		}
+	} else {
+		if err := tm.SetMaster(setMasterCtx, masterAlias, 0, "", true); err != nil {
+			return vterrors.Wrap(err, "failed to reparent self to new master")
+		}
 	}
 	return nil
 }
