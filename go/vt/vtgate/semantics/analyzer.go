@@ -89,10 +89,15 @@ func (a *analyzer) analyzeDown(cursor *sqlparser.Cursor) bool {
 		switch node := node.(type) {
 		case *sqlparser.AliasedTableExpr:
 			a.err = a.bindTable(node, node.Expr)
+		case *sqlparser.JoinTableExpr:
+			if node.Condition.Using != nil {
+				a.err = vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: join with USING(column_list) clause for complex queries")
+			}
+			if node.Join == sqlparser.NaturalJoinType || node.Join == sqlparser.NaturalRightJoinType || node.Join == sqlparser.NaturalLeftJoinType {
+				a.err = vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: "+node.Join.ToString())
+			}
+
 		}
-
-	// we don't need to push new scope for sub queries since we do that for SELECT and UNION
-
 	case *sqlparser.Union:
 		a.push(newScope(current))
 	case *sqlparser.ColName:
@@ -163,7 +168,7 @@ func (a *analyzer) resolveUnQualifiedColumn(current *scope, expr *sqlparser.ColN
 
 	var tblInfo *TableInfo
 	for _, tbl := range current.tables {
-		if tbl.Table == nil || !tbl.Table.ColumnListAuthoritative {
+		if tbl.Table == nil {
 			return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.NonUniqError, fmt.Sprintf("Column '%s' in field list is ambiguous", sqlparser.String(expr)))
 		}
 		for _, col := range tbl.Table.Columns {

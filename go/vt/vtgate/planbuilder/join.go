@@ -17,8 +17,6 @@ limitations under the License.
 package planbuilder
 
 import (
-	"errors"
-
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -100,7 +98,7 @@ func newJoin(lpb, rpb *primitiveBuilder, ajoin *sqlparser.JoinTableExpr, reserve
 				return err
 			}
 		case ajoin.Condition.Using != nil:
-			return errors.New("unsupported: join with USING(column_list) clause for complex queries")
+			return vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: join with USING(column_list) clause for complex queries")
 		}
 	}
 	lpb.plan = &join{
