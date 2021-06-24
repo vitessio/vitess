@@ -67,17 +67,22 @@ func (a *analyzer) analyzeDown(cursor *sqlparser.Cursor) bool {
 	n := cursor.Node()
 	switch node := n.(type) {
 	case *sqlparser.Select:
+		if node.Having != nil {
+			a.err = Gen4NotSupportedF("HAVING")
+		}
 		a.push(newScope(current))
 		a.selectScope[node] = a.currentScope()
-		if err := a.analyzeTableExprs(node.From); err != nil {
-			a.err = err
-			return false
-		}
 	case *sqlparser.DerivedTable:
 		a.err = Gen4NotSupportedF("derived tables")
-	case *sqlparser.TableExprs:
-		// this has already been visited when we encountered the SELECT struct
-		return false
+	case sqlparser.TableExpr:
+		_, isSelect := cursor.Parent().(*sqlparser.Select)
+		if isSelect {
+			a.push(newScope(nil))
+		}
+		switch node := node.(type) {
+		case *sqlparser.AliasedTableExpr:
+			a.err = a.bindTable(node, node.Expr)
+		}
 
 	// we don't need to push new scope for sub queries since we do that for SELECT and UNION
 
@@ -89,6 +94,18 @@ func (a *analyzer) analyzeDown(cursor *sqlparser.Cursor) bool {
 			a.err = err
 		} else {
 			a.exprDeps[node] = t
+		}
+	case *sqlparser.FuncExpr:
+		if node.Distinct {
+			err := vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "syntax error: %s", sqlparser.String(node))
+			if len(node.Exprs) != 1 {
+				a.err = err
+			} else if _, ok := node.Exprs[0].(*sqlparser.AliasedExpr); !ok {
+				a.err = err
+			}
+		}
+		if sqlparser.IsLockingFunc(node) {
+			a.err = Gen4NotSupportedF("locking functions")
 		}
 	}
 
@@ -112,42 +129,6 @@ func (a *analyzer) resolveColumn(colName *sqlparser.ColName, current *scope) (Ta
 	return a.tableSetFor(t.ASTNode), nil
 }
 
-func (a *analyzer) analyzeTableExprs(tablExprs sqlparser.TableExprs) error {
-	for _, tableExpr := range tablExprs {
-		if err := a.analyzeTableExpr(tableExpr); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (a *analyzer) analyzeTableExpr(tableExpr sqlparser.TableExpr) error {
-	switch table := tableExpr.(type) {
-	case *sqlparser.AliasedTableExpr:
-		return a.bindTable(table, table.Expr)
-	case *sqlparser.JoinTableExpr:
-		return a.analyzeJoinTableExpr(table)
-	case *sqlparser.ParenTableExpr:
-		return a.analyzeTableExprs(table.Exprs)
-	}
-	return nil
-}
-
-func (a *analyzer) analyzeJoinTableExpr(table *sqlparser.JoinTableExpr) error {
-	switch table.Join {
-	case sqlparser.NormalJoinType, sqlparser.LeftJoinType, sqlparser.RightJoinType:
-		if err := a.analyzeTableExpr(table.LeftExpr); err != nil {
-			return err
-		}
-		if err := a.analyzeTableExpr(table.RightExpr); err != nil {
-			return err
-		}
-	default:
-		return Gen4NotSupportedF("join type %s", table.Join.ToString())
-	}
-	return nil
-}
-
 // resolveQualifiedColumn handles `tabl.col` expressions
 func (a *analyzer) resolveQualifiedColumn(current *scope, expr *sqlparser.ColName) (*TableInfo, error) {
 	// search up the scope stack until we find a match
@@ -162,7 +143,7 @@ func (a *analyzer) resolveQualifiedColumn(current *scope, expr *sqlparser.ColNam
 		}
 		current = current.parent
 	}
-	return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadFieldError, "Unknown table referenced by '%s'", sqlparser.String(expr))
+	return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadFieldError, "symbol %s not found", sqlparser.String(expr))
 }
 
 // resolveUnQualifiedColumn
@@ -246,6 +227,21 @@ func (a *analyzer) analyzeUp(cursor *sqlparser.Cursor) bool {
 	switch cursor.Node().(type) {
 	case *sqlparser.Union, *sqlparser.Select:
 		a.popScope()
+	case sqlparser.TableExpr:
+		_, isSelect := cursor.Parent().(*sqlparser.Select)
+		if isSelect {
+			curScope := a.currentScope()
+			a.popScope()
+			earlierScope := a.currentScope()
+			// copy curScope into the earlierScope
+			for _, table := range curScope.tables {
+				err := earlierScope.addTable(table)
+				if err != nil {
+					a.err = err
+					break
+				}
+			}
+		}
 	}
 	return a.shouldContinue()
 }

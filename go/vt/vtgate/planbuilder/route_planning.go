@@ -261,13 +261,10 @@ func planHorizon(sel *sqlparser.Select, plan logicalPlan, semTable *semantics.Se
 		return plan, nil
 	}
 
-	// TODO real horizon planning to be done
-	if sel.Distinct {
-		return nil, semantics.Gen4NotSupportedF("DISTINCT")
+	if err := checkUnsupportedConstructs(sel); err != nil {
+		return nil, err
 	}
-	if sel.GroupBy != nil {
-		return nil, semantics.Gen4NotSupportedF("GROUP BY")
-	}
+
 	qp, err := createQPFromSelect(sel)
 	if err != nil {
 		return nil, err
@@ -275,6 +272,16 @@ func planHorizon(sel *sqlparser.Select, plan logicalPlan, semTable *semantics.Se
 	for _, e := range qp.selectExprs {
 		if _, err := pushProjection(e, plan, semTable); err != nil {
 			return nil, err
+		}
+	}
+
+	for _, expr := range qp.aggrExprs {
+		funcExpr, ok := expr.Expr.(*sqlparser.FuncExpr)
+		if !ok {
+			return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "expected an aggregation here")
+		}
+		if funcExpr.Distinct {
+			return nil, semantics.Gen4NotSupportedF("distinct aggregation")
 		}
 	}
 
@@ -306,6 +313,19 @@ func createSingleShardRoutePlan(sel *sqlparser.Select, rb *route) {
 			ast.SelectExprs[i] = removeQualifierFromColName(aliasedExpr)
 		}
 	}
+}
+
+func checkUnsupportedConstructs(sel *sqlparser.Select) error {
+	if sel.Distinct {
+		return semantics.Gen4NotSupportedF("DISTINCT")
+	}
+	if sel.GroupBy != nil {
+		return semantics.Gen4NotSupportedF("GROUP BY")
+	}
+	if sel.Having != nil {
+		return semantics.Gen4NotSupportedF("HAVING")
+	}
+	return nil
 }
 
 func pushJoinPredicate(exprs []sqlparser.Expr, tree joinTree, semTable *semantics.SemTable) (joinTree, error) {

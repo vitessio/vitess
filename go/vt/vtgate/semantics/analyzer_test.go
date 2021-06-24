@@ -213,6 +213,9 @@ func TestBindingMultiTable(t *testing.T) {
 		}, {
 			query: "select b.t.col from b.t, t",
 			deps:  T0,
+		}, {
+			query: "select u1.a + u2.a from u1, u2",
+			deps:  T0 | T1,
 		}}
 		for _, query := range queries {
 			t.Run(query.query, func(t *testing.T) {
@@ -228,6 +231,7 @@ func TestBindingMultiTable(t *testing.T) {
 			"select 1 from d.tabl, d.foo as tabl",
 			"select 1 from d.tabl, d.tabl",
 			"select 1 from d.tabl, tabl",
+			"select 1 from user join user_extra user",
 		}
 		for _, query := range queries {
 			t.Run(query, func(t *testing.T) {
@@ -286,7 +290,7 @@ func TestMissingTable(t *testing.T) {
 			parse, _ := sqlparser.Parse(query)
 			_, err := Analyze(parse, "", &FakeSI{})
 			require.Error(t, err)
-			require.Contains(t, err.Error(), "Unknown table")
+			require.Contains(t, err.Error(), "symbol t.col not found")
 		})
 	}
 }
@@ -368,6 +372,34 @@ func TestUnknownColumnMap2(t *testing.T) {
 				require.Error(t, err)
 			} else {
 				require.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestScoping(t *testing.T) {
+	queries := []struct {
+		query        string
+		errorMessage string
+	}{
+		{
+			query:        "select 1 from u1, u2 left join u3 on u1.a = u2.a",
+			errorMessage: "symbol u1.a not found",
+		},
+	}
+	for _, query := range queries {
+		t.Run(query.query, func(t *testing.T) {
+			parse, err := sqlparser.Parse(query.query)
+			require.NoError(t, err)
+			_, err = Analyze(parse, "user", &FakeSI{
+				Tables: map[string]*vindexes.Table{
+					"t": {Name: sqlparser.NewTableIdent("t")},
+				},
+			})
+			if query.errorMessage == "" {
+				require.NoError(t, err)
+			} else {
+				require.EqualError(t, err, query.errorMessage)
 			}
 		})
 	}
