@@ -19,8 +19,12 @@ package tabletmanager
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"testing"
 	"time"
+
+	"vitess.io/vitess/go/protoutil"
+	"vitess.io/vitess/go/vt/proto/vttime"
 
 	"github.com/stretchr/testify/assert"
 
@@ -60,43 +64,59 @@ func TestShardSync(t *testing.T) {
 	assert.NotNil(t, ti.MasterTermStartTime)
 
 	// wait for syncing to work correctly
-	time.Sleep(1 * time.Second)
-
 	// this should also have updated the shard record since it is a more recent operation
-	// We check here that the shard record and the tablet record are in sync.
-	si, err := ts.GetShard(ctx, keyspace, shard)
-	require.NoError(t, err)
-	assert.Equal(t, ti.Alias, si.MasterAlias)
-	assert.Equal(t, ti.MasterTermStartTime, si.MasterTermStartTime)
+	// We check here that the shard record and the tablet record are in sync
+	checkShardRecordWithTimeout(ctx, t, ts, ti.Alias, ti.MasterTermStartTime, 1*time.Second)
 
 	// even if try to update the shard record with the old timestamp, it should be reverted again
 	updateMasterInfoInShardRecord(ctx, t, tm, nil, originalTime)
 
-	// wait for syncing to work correctly
-	time.Sleep(1 * time.Second)
-
 	// this should have also updated the shard record because of the timestamp.
-	si, err = ts.GetShard(ctx, keyspace, shard)
-	require.NoError(t, err)
-	assert.Equal(t, ti.Alias, si.MasterAlias)
-	assert.Equal(t, ti.MasterTermStartTime, si.MasterTermStartTime)
+	checkShardRecordWithTimeout(ctx, t, ts, ti.Alias, ti.MasterTermStartTime, 1*time.Second)
 
 	// updating the shard record with the latest time should trigger an update in the tablet
-	updateMasterInfoInShardRecord(ctx, t, tm, nil, time.Now())
-
-	// wait for syncing to work correctly
-	time.Sleep(1 * time.Second)
-
-	// verify that the tablet record has been updated
-	ti, err = ts.GetTablet(ctx, tm.tabletAlias)
-	require.NoError(t, err)
-	assert.Equal(t, topodata.TabletType_REPLICA, ti.Type)
-	assert.Nil(t, ti.MasterTermStartTime)
+	newTime := time.Now()
+	updateMasterInfoInShardRecord(ctx, t, tm, nil, newTime)
 
 	// this should not have updated.
-	si, err = ts.GetShard(ctx, keyspace, shard)
-	require.NoError(t, err)
-	assert.Nil(t, si.MasterAlias)
+	checkShardRecordWithTimeout(ctx, t, ts, nil, protoutil.TimeToProto(newTime), 1*time.Second)
+
+	// verify that the tablet record has been updated
+	checkTabletRecordWithTimeout(ctx, t, ts, tm.tabletAlias, topodata.TabletType_REPLICA, nil, 1*time.Second)
+}
+
+func checkShardRecordWithTimeout(ctx context.Context, t *testing.T, ts *topo.Server, tabletAlias *topodata.TabletAlias, masterStartTime *vttime.Time, timeToWait time.Duration) {
+	timeOut := time.After(timeToWait)
+	for {
+		select {
+		case <-timeOut:
+			t.Fatalf("timed out: waiting for shard record to update")
+		default:
+			si, err := ts.GetShard(ctx, keyspace, shard)
+			require.NoError(t, err)
+			if reflect.DeepEqual(tabletAlias, si.MasterAlias) && reflect.DeepEqual(masterStartTime, si.MasterTermStartTime) {
+				return
+			}
+			time.Sleep(100 * time.Millisecond)
+		}
+	}
+}
+
+func checkTabletRecordWithTimeout(ctx context.Context, t *testing.T, ts *topo.Server, tabletAlias *topodata.TabletAlias, tabletType topodata.TabletType, masterStartTime *vttime.Time, timeToWait time.Duration) {
+	timeOut := time.After(timeToWait)
+	for {
+		select {
+		case <-timeOut:
+			t.Fatalf("timed out: waiting for tablet record to update")
+		default:
+			ti, err := ts.GetTablet(ctx, tabletAlias)
+			require.NoError(t, err)
+			if reflect.DeepEqual(tabletType, ti.Type) && reflect.DeepEqual(masterStartTime, ti.MasterTermStartTime) {
+				return
+			}
+			time.Sleep(100 * time.Millisecond)
+		}
+	}
 }
 
 func updateMasterInfoInShardRecord(ctx context.Context, t *testing.T, tm *TabletManager, masterAlias *topodata.TabletAlias, time time.Time) {
