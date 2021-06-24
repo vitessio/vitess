@@ -63,6 +63,11 @@ func Analyze(statement sqlparser.Statement, currentDb string, si SchemaInformati
 // analyzeDown pushes new scopes when we encounter sub queries,
 // and resolves the table a column is using
 func (a *analyzer) analyzeDown(cursor *sqlparser.Cursor) bool {
+	// If we have an error we keep on going down the tree without checking for anything else
+	// this way we can abort when we come back up.
+	if !a.shouldContinue() {
+		return true
+	}
 	current := a.currentScope()
 	n := cursor.Node()
 	switch node := n.(type) {
@@ -224,6 +229,9 @@ func (a *analyzer) analyze(statement sqlparser.Statement) error {
 }
 
 func (a *analyzer) analyzeUp(cursor *sqlparser.Cursor) bool {
+	if !a.shouldContinue() {
+		return false
+	}
 	switch cursor.Node().(type) {
 	case *sqlparser.Union, *sqlparser.Select:
 		a.popScope()
