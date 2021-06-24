@@ -19,6 +19,7 @@ package grpcvtctldserver
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/log"
@@ -217,7 +218,7 @@ func deleteTablet(ctx context.Context, ts *topo.Server, alias *topodatapb.Tablet
 			}
 
 			si.MasterAlias = nil
-
+			si.SetMasterTermStartTime(time.Now())
 			return nil
 		}); err != nil {
 			return err
