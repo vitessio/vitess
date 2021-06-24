@@ -192,10 +192,10 @@ var (
 		SELECT count(*) as c FROM stress_test_after
 	`
 	selectBeforeTable = `
-		SELECT * FROM stress_test_before order by id
+		SELECT * FROM stress_test_before order by id, id_negative, rand_text, rand_num
 	`
 	selectAfterTable = `
-		SELECT * FROM stress_test_after order by id
+		SELECT * FROM stress_test_after order by id, id_negative, rand_text, rand_num
 	`
 	truncateStatement = `
 		TRUNCATE TABLE stress_test
