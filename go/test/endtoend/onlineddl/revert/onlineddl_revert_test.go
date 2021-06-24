@@ -488,7 +488,7 @@ func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy str
 		fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 	}
 
-	if expectHint != "" {
+	if expectHint != "" && status == schema.OnlineDDLStatusComplete {
 		checkMigratedTable(t, tableName, expectHint)
 	}
 	return uuid
