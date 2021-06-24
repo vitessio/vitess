@@ -141,20 +141,31 @@ func (p parenTables) tableID() semantics.TableSet {
 }
 
 // visit will traverse the route tables, going inside parenTables and visiting all routeTables
-func (p parenTables) visit(f func(tbl *routeTable) error) error {
-	for _, r := range p {
-		switch r := r.(type) {
-		case *routeTable:
-			err := f(r)
-			if err != nil {
-				return err
-			}
-		case parenTables:
-			err := r.visit(f)
+func visitTables(r relation, f func(tbl *routeTable) error) error {
+	switch r := r.(type) {
+	case *routeTable:
+		err := f(r)
+		if err != nil {
+			return err
+		}
+	case parenTables:
+		for _, r := range r {
+			err := visitTables(r, f)
 			if err != nil {
 				return err
 			}
 		}
+		return nil
+	case *leJoin:
+		err := visitTables(r.lhs, f)
+		if err != nil {
+			return err
+		}
+		err = visitTables(r.rhs, f)
+		if err != nil {
+			return err
+		}
+		return nil
 	}
 	return nil
 }
@@ -552,7 +563,12 @@ func (rp *routePlan) pickBestAvailableVindex() {
 
 // Predicates takes all known predicates for this route and ANDs them together
 func (rp *routePlan) Predicates() sqlparser.Expr {
-	return sqlparser.AndExpressions(rp.predicates...)
+	predicates := rp.predicates
+	_ = visitTables(rp.tables, func(tbl *routeTable) error {
+		predicates = append(predicates, tbl.qtable.Predicates...)
+		return nil
+	})
+	return sqlparser.AndExpressions(predicates...)
 }
 
 func (rp *routePlan) pushOutputColumns(col []*sqlparser.ColName, _ *semantics.SemTable) []int {
