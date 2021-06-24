@@ -201,9 +201,9 @@ type (
 		Distinct         bool
 		StraightJoinHint bool
 		SQLCalcFoundRows bool
+		From             []TableExpr
 		Comments         Comments
 		SelectExprs      SelectExprs
-		From             TableExprs
 		Where            *Where
 		GroupBy          GroupBy
 		Having           *Where
