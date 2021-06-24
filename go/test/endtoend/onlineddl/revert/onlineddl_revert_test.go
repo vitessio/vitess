@@ -482,13 +482,12 @@ func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy str
 	strategySetting, err := schema.ParseDDLStrategy(ddlStrategy)
 	assert.NoError(t, err)
 
-	status := schema.OnlineDDLStatusComplete
 	if !strategySetting.Strategy.IsDirect() {
-		status = onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, 20*time.Second, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+		status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, 20*time.Second, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
 		fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 	}
 
-	if expectHint != "" && status == schema.OnlineDDLStatusComplete {
+	if expectHint != "" {
 		checkMigratedTable(t, tableName, expectHint)
 	}
 	return uuid
