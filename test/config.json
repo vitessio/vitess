@@ -330,7 +330,7 @@
 		},
 		"onlineddl_vrepl_stress": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/onlineddl/vrepl_stress", "-timeout", "30m"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/onlineddl/vrepl_stress"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "onlineddl_vrepl_stress",
@@ -343,6 +343,15 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "onlineddl_vrepl_suite",
+			"RetryMax": 0,
+			"Tags": []
+		},
+		"onlineddl_vrepl_stress_suite": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/onlineddl/vrepl_stress_suite"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "onlineddl_vrepl_stress_suite",
 			"RetryMax": 0,
 			"Tags": []
 		},
