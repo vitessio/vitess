@@ -216,7 +216,6 @@ func deleteTablet(ctx context.Context, ts *topo.Server, alias *topodatapb.Tablet
 
 				return topo.NewError(topo.NoUpdateNeeded, si.Keyspace()+"/"+si.ShardName())
 			}
-
 			si.MasterAlias = nil
 			si.SetMasterTermStartTime(time.Now())
 			return nil
