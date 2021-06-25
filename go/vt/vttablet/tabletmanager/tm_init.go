@@ -337,22 +337,27 @@ func (tm *TabletManager) Close() {
 	tm.stopShardSync()
 	tm.stopRebuildKeyspace()
 
-	// cleanup initialized fields in the tablet entry
-	f := func(tablet *topodatapb.Tablet) error {
-		if err := topotools.CheckOwnership(tm.Tablet(), tablet); err != nil {
-			return err
+	topoOpCtx, topoOpCancel := context.WithTimeout(context.Background(), *topo.RemoteOperationTimeout)
+	defer topoOpCancel()
+
+	tablet := tm.Tablet()
+	if tablet.Type == topodatapb.TabletType_MASTER {
+		if _, err := tm.TopoServer.UpdateTabletFields(topoOpCtx, tm.tabletAlias, func(tablet *topodatapb.Tablet) error {
+			// cleanup initialized fields in the tablet entry
+			if err := topotools.CheckOwnership(tm.Tablet(), tablet); err != nil {
+				return err
+			}
+			tablet.Hostname = ""
+			tablet.MysqlHostname = ""
+			tablet.PortMap = nil
+			return nil
+		}); err != nil {
+			log.Warningf("Failed to update tablet record, may contain stale identifiers: %v", err)
 		}
-		tablet.Hostname = ""
-		tablet.MysqlHostname = ""
-		tablet.PortMap = nil
-		return nil
-	}
-
-	updateCtx, updateCancel := context.WithTimeout(context.Background(), *topo.RemoteOperationTimeout)
-	defer updateCancel()
-
-	if _, err := tm.TopoServer.UpdateTabletFields(updateCtx, tm.tabletAlias, f); err != nil {
-		log.Warningf("Failed to update tablet record, may contain stale identifiers: %v", err)
+	} else {
+		if err := tm.TopoServer.DeleteTablet(topoOpCtx, tm.tabletAlias); err != nil {
+			log.Warningf("Failed to delete tablet record: %v", err)
+		}
 	}
 
 	tm.tmState.Close()
