@@ -1,4 +1,3 @@
-2021-03-04T19:44:25Z,golangci-lint,https://github.com/vitessio/vitess/actions/runs/622191097
 2021-03-04T19:44:25Z,unit_race,https://github.com/vitessio/vitess/actions/runs/622191092
 2021-03-04T19:44:26Z,Unit Test (mariadb101),https://github.com/vitessio/vitess/actions/runs/622191129
 2021-03-04T19:44:26Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/622191128
@@ -9998,3 +9997,4 @@
 2021-06-24T22:09:34Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/969527455
 2021-06-24T22:09:34Z,endtoend,https://github.com/vitessio/vitess/actions/runs/969527453
 2021-06-24T22:09:34Z,pr-labels,https://github.com/vitessio/vitess/actions/runs/969527407
+2021-06-25T04:45:29Z,Cluster (upgrade),https://github.com/vitessio/vitess/actions/runs/970287569
