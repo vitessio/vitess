@@ -30,13 +30,11 @@ import (
 
 	"k8s.io/apimachinery/pkg/util/sets"
 
-	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
-	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtadmin/cluster/discovery"
 	"vitess.io/vitess/go/vt/vtadmin/errors"
@@ -411,13 +409,13 @@ func (c *Cluster) findWorkflows(ctx context.Context, keyspaces []string, opts Fi
 }
 
 // GetBackups returns a ClusterBackups object for all backups in the cluster.
-func (c *Cluster) GetBackups(ctx context.Context) ([]*vtadminpb.ClusterBackup, error) {
+func (c *Cluster) GetBackups(ctx context.Context, req *vtadminpb.GetBackupsRequest) ([]*vtadminpb.ClusterBackup, error) {
 	span, ctx := trace.NewSpan(ctx, "Cluster.GetBackups")
 	defer span.Finish()
 
 	AnnotateSpan(c, span)
 
-	keyspaces, err := c.GetKeyspaces(ctx)
+	shardsByKeyspace, err := c.getShardSets(ctx, req.Keyspaces, req.KeyspaceShards)
 	if err != nil {
 		return nil, err
 	}
@@ -430,61 +428,34 @@ func (c *Cluster) GetBackups(ctx context.Context) ([]*vtadminpb.ClusterBackup, e
 		clusterProto = c.ToProto()
 	)
 
-	for _, ks := range keyspaces {
-		for _, shard := range ks.Shards {
+	for ks, shardSet := range shardsByKeyspace {
+		for _, shard := range shardSet.List() {
 			wg.Add(1)
 
-			go func(shard *vtctldatapb.Shard) {
+			go func(keyspace, shard string) {
 				defer wg.Done()
 
 				span, ctx := trace.NewSpan(ctx, "Cluster.getBackupsForShard")
 				defer span.Finish()
 
 				AnnotateSpan(c, span)
-				span.Annotate("keyspace", shard.Keyspace)
-				span.Annotate("shard", shard.Name)
+				span.Annotate("keyspace", keyspace)
+				span.Annotate("shard", shard)
 
 				resp, err := c.Vtctld.GetBackups(ctx, &vtctldatapb.GetBackupsRequest{
-					Keyspace: shard.Keyspace,
-					Shard:    shard.Name,
+					Keyspace:      keyspace,
+					Shard:         shard,
+					Limit:         req.RequestOptions.Limit,
+					Detailed:      req.RequestOptions.Detailed,
+					DetailedLimit: req.RequestOptions.DetailedLimit,
 				})
 				if err != nil {
-					rec.RecordError(fmt.Errorf("GetBackups(%s/%s): %w", shard.Keyspace, shard.Name, err))
+					rec.RecordError(fmt.Errorf("GetBackups(%s/%s): %w", keyspace, shard, err))
 					return
 				}
 
 				shardBackups := make([]*vtadminpb.ClusterBackup, len(resp.Backups))
-
-				for i, bh := range resp.Backups {
-					backup := &vtadminpb.Backup{
-						Keyspace:  shard.Keyspace,
-						Shard:     shard.Name,
-						Name:      bh.Name,
-						Directory: bh.Directory,
-					}
-
-					if parts := strings.Split(backup.Name, "."); len(parts) == 3 {
-						// parts[0]: date part of mysqlctl.BackupTimestampFormat
-						// parts[1]: time part of mysqlctl.BackupTimestampFormat
-						// parts[2]: tablet alias
-						timestamp := strings.Join(parts[:2], ".")
-						aliasStr := parts[2]
-
-						backupTime, err := time.Parse(mysqlctl.BackupTimestampFormat, timestamp)
-						if err != nil {
-							log.Errorf("error parsing backup time for %s/%s (%s): %s", shard.Keyspace, shard.Name, backup.Name, err)
-						} else {
-							backup.Time = protoutil.TimeToProto(backupTime)
-						}
-
-						alias, err := topoproto.ParseTabletAlias(aliasStr)
-						if err != nil {
-							log.Errorf("error parsing tablet alias for %s/% (%s): %s", shard.Keyspace, shard.Name, backup.Name, err)
-						} else {
-							backup.TabletAlias = alias
-						}
-					}
-
+				for i, backup := range resp.Backups {
 					shardBackups[i] = &vtadminpb.ClusterBackup{
 						Cluster: clusterProto,
 						Backup:  backup,
@@ -495,7 +466,7 @@ func (c *Cluster) GetBackups(ctx context.Context) ([]*vtadminpb.ClusterBackup, e
 				defer m.Unlock()
 
 				backups = append(backups, shardBackups...)
-			}(shard)
+			}(ks, shard)
 		}
 	}
 
@@ -506,6 +477,119 @@ func (c *Cluster) GetBackups(ctx context.Context) ([]*vtadminpb.ClusterBackup, e
 	}
 
 	return backups, nil
+}
+
+func (c *Cluster) getShardSets(ctx context.Context, keyspaces []string, keyspaceShards []string) (map[string]sets.String, error) {
+	shardsByKeyspace := map[string]sets.String{}
+
+	// Add any explicitly-requested keyspace/shards to their respective set.
+	for _, ksShard := range keyspaceShards {
+		ks, shard, err := topoproto.ParseKeyspaceShard(ksShard)
+		if err != nil {
+			return nil, err
+		}
+
+		if _, ok := shardsByKeyspace[ks]; !ok {
+			shardsByKeyspace[ks] = sets.NewString(shard)
+			continue
+		}
+
+		shardsByKeyspace[ks].Insert(shard)
+	}
+
+	switch len(keyspaces) {
+	case 0:
+		if len(keyspaceShards) == 0 {
+			// If we weren't explicitly requested to get any keyspaces, or any
+			// keyspace/shards, then return a mapping of every keyspace to every
+			// shard in that keyspace.
+			kss, err := c.GetKeyspaces(ctx)
+			if err != nil {
+				return nil, err
+			}
+
+			for _, ks := range kss {
+				shardsByKeyspace[ks.Keyspace.Name] = sets.NewString()
+				for _, shard := range ks.Shards {
+					shardsByKeyspace[ks.Keyspace.Name].Insert(shard.Name)
+				}
+			}
+		}
+		// The implied else-branch here would be the for-loop we optimistically
+		// did at the beginning of this function, which is to range over the
+		// keyspaceShards list and group shard sets by keyspace.
+	default:
+		// For any explicitly-requested keyspace, get it and add its shards to
+		// the final mapping.
+		//
+		// Before spawning a GetKeyspace call, we first check if we already have
+		// a shard set for that keyspace, as well as if we've kicked off another
+		// goroutine for that keyspace already. This covers two cases. First,
+		// if a keyspace was duplicated (e.g. getShardSets(ctx, []string{"ks1", "ks1"}, nil))
+		// we only make one remote RPC. Second, the keyspaceShards list included
+		// one or more shards for that keyspace, the explicit shard list takes
+		// precedence.
+		//
+		// If a keyspace does not exist for the cluster, it is logged and ignored.
+		var (
+			m     sync.Mutex
+			wg    sync.WaitGroup
+			rec   concurrency.AllErrorRecorder
+			ksSet = sets.NewString() // avoid duplicate requests
+		)
+
+		for _, name := range keyspaces {
+			if ksSet.Has(name) {
+				continue
+			}
+
+			ksSet.Insert(name)
+
+			m.Lock() // avoid races with the goroutines we're spawning.
+			if _, ok := shardsByKeyspace[name]; ok {
+				m.Unlock()
+				continue
+			}
+			m.Unlock()
+
+			wg.Add(1)
+			go func(name string) {
+				defer wg.Done()
+
+				ks, err := c.GetKeyspace(ctx, name)
+				if err != nil {
+					if strings.Contains(err.Error(), "node doesn't exist") {
+						// (TODO:@ajm188) Make better use of error codes on the
+						// vtctld side, and we can do better checking here.
+						// Since this is on the client-side of an RPC we can't
+						// even use topo.IsErrType(topo.NoNode) :(
+						log.Warningf("getShardSets(): keyspace %s does not exist in cluster %s", name, c.ID)
+						return
+					}
+
+					rec.RecordError(err)
+					return
+				}
+
+				shardSet := sets.NewString()
+				for _, shard := range ks.Shards {
+					shardSet.Insert(shard.Name)
+				}
+
+				m.Lock()
+				defer m.Unlock()
+				shardsByKeyspace[name] = shardSet
+			}(name)
+		}
+
+		wg.Wait()
+
+		if rec.HasErrors() {
+			return nil, rec.Error()
+		}
+	}
+
+	return shardsByKeyspace, nil
 }
 
 // GetGates returns the list of all VTGates in the cluster.

@@ -274,7 +274,7 @@ func (api *API) GetBackups(ctx context.Context, req *vtadminpb.GetBackupsRequest
 		go func(c *cluster.Cluster) {
 			defer wg.Done()
 
-			bs, err := c.GetBackups(ctx)
+			bs, err := c.GetBackups(ctx, req)
 			if err != nil {
 				rec.RecordError(err)
 				return
