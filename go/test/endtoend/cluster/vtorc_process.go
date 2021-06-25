@@ -18,6 +18,7 @@ limitations under the License.
 package cluster
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path"
@@ -61,7 +62,7 @@ func (orc *VtorcProcess) Setup() (err error) {
 	orc.proc.Args = append(orc.proc.Args, orc.ExtraArgs...)
 	orc.proc.Args = append(orc.proc.Args, "-alsologtostderr", "http")
 
-	errFile, _ := os.Create(path.Join(orc.LogDir, "orc-stderr.txt"+time.Now().String()))
+	errFile, _ := os.Create(path.Join(orc.LogDir, fmt.Sprintf("orc-stderr-%d.txt", time.Now().UnixNano())))
 	orc.proc.Stderr = errFile
 
 	orc.proc.Env = append(orc.proc.Env, os.Environ()...)
