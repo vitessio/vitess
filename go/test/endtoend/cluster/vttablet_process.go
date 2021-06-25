@@ -230,9 +230,9 @@ func (vttablet *VttabletProcess) WaitForTabletTypes(expectedTypes []string) erro
 
 // WaitForTabletStatusesForTimeout waits till the tablet reaches to any of the provided statuses
 func (vttablet *VttabletProcess) WaitForTabletStatusesForTimeout(expectedStatuses []string, timeout time.Duration) error {
-	timeToWait := time.Now().Add(timeout)
+	waitUntil := time.Now().Add(timeout)
 	var status string
-	for time.Now().Before(timeToWait) {
+	for time.Now().Before(waitUntil) {
 		status = vttablet.GetTabletStatus()
 		if contains(expectedStatuses, status) {
 			return nil
@@ -250,9 +250,9 @@ func (vttablet *VttabletProcess) WaitForTabletStatusesForTimeout(expectedStatuse
 
 // WaitForTabletTypesForTimeout waits till the tablet reaches to any of the provided types
 func (vttablet *VttabletProcess) WaitForTabletTypesForTimeout(expectedTypes []string, timeout time.Duration) error {
-	timeToWait := time.Now().Add(timeout)
+	waitUntil := time.Now().Add(timeout)
 	var tabletType string
-	for time.Now().Before(timeToWait) {
+	for time.Now().Before(waitUntil) {
 		tabletType = vttablet.GetTabletType()
 		if contains(expectedTypes, tabletType) {
 			return nil
