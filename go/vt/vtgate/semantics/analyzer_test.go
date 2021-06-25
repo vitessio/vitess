@@ -31,13 +31,15 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
+const T0 TableSet = 0
+
 const (
 	// Just here to make outputs more readable
-	T0 TableSet = 1 << iota
-	T1
+	T1 TableSet = 1 << iota
 	T2
-	_ // T3 is not used in the tests
-	T4
+	T3
+	_ // T4 is not used in the tests
+	T5
 )
 
 func extract(in *sqlparser.Select, idx int) sqlparser.Expr {
@@ -59,7 +61,7 @@ from x as t`
 	s1 := semTable.Dependencies(extract(sel2, 0))
 
 	// if scoping works as expected, we should be able to see the inner table being used by the inner expression
-	assert.Equal(t, T1, s1)
+	assert.Equal(t, T2, s1)
 }
 
 func TestBindingSingleTable(t *testing.T) {
@@ -81,7 +83,7 @@ func TestBindingSingleTable(t *testing.T) {
 				assert.EqualValues(t, 1, ts)
 
 				d := semTable.Dependencies(extract(sel, 0))
-				require.Equal(t, T0, d, query)
+				require.Equal(t, T1, d, query)
 			})
 		}
 	})
@@ -99,6 +101,43 @@ func TestBindingSingleTable(t *testing.T) {
 				require.NoError(t, err)
 				_, err = Analyze(parse, "d", &FakeSI{})
 				require.Error(t, err)
+			})
+		}
+	})
+}
+
+func TestOrderByBindingSingleTable(t *testing.T) {
+	t.Run("positive tests", func(t *testing.T) {
+		tcases := []struct {
+			sql  string
+			deps TableSet
+		}{{
+			"select col from tabl order by col",
+			T1,
+		}, {
+			"select col from tabl order by tabl.col",
+			T1,
+		}, {
+
+			"select col from tabl order by d.tabl.col",
+			T1,
+		}, {
+			"select col from tabl order by 1",
+			T1,
+		}, {
+			"select col as c from tabl order by c",
+			T1,
+		}, {
+			"select 1 as c from tabl order by c",
+			T0,
+		}}
+		for _, tc := range tcases {
+			t.Run(tc.sql, func(t *testing.T) {
+				stmt, semTable := parseAndAnalyze(t, tc.sql, "d")
+				sel, _ := stmt.(*sqlparser.Select)
+				order := sel.OrderBy[0].Expr
+				d := semTable.Dependencies(order)
+				require.Equal(t, tc.deps, d, tc.sql)
 			})
 		}
 	})
@@ -122,7 +161,7 @@ func TestBindingSingleAliasedTable(t *testing.T) {
 				assert.EqualValues(t, 1, ts)
 
 				d := semTable.Dependencies(extract(sel, 0))
-				require.Equal(t, T0, d, query)
+				require.Equal(t, T1, d, query)
 			})
 		}
 	})
@@ -165,8 +204,8 @@ func TestUnion(t *testing.T) {
 
 	d1 := semTable.Dependencies(extract(sel1, 0))
 	d2 := semTable.Dependencies(extract(sel2, 0))
-	assert.Equal(t, T0, d1)
-	assert.Equal(t, T1, d2)
+	assert.Equal(t, T1, d1)
+	assert.Equal(t, T2, d2)
 }
 
 func TestBindingMultiTable(t *testing.T) {
@@ -178,44 +217,44 @@ func TestBindingMultiTable(t *testing.T) {
 		}
 		queries := []testCase{{
 			query: "select t.col from t, s",
-			deps:  T0,
-		}, {
-			query: "select s.col from t join s",
 			deps:  T1,
 		}, {
+			query: "select s.col from t join s",
+			deps:  T2,
+		}, {
 			query: "select max(t.col+s.col) from t, s",
-			deps:  T0 | T1,
+			deps:  T1 | T2,
 		}, {
 			query: "select max(t.col+s.col) from t join s",
-			deps:  T0 | T1,
+			deps:  T1 | T2,
 		}, {
 			query: "select case t.col when s.col then r.col else u.col end from t, s, r, w, u",
-			deps:  T0 | T1 | T2 | T4,
+			deps:  T1 | T2 | T3 | T5,
 			// }, {
 			//	// make sure that we don't let sub-query Dependencies leak out by mistake
 			//	query: "select t.col + (select 42 from s) from t",
-			//	deps:  T0,
+			//	deps:  T1,
 			// }, {
 			//	query: "select (select 42 from s where r.id = s.id) from r",
-			//	deps:  T0 | T1,
+			//	deps:  T1 | T2,
 		}, {
 			query: "select X.col from t as X, s as S",
-			deps:  T0,
+			deps:  T1,
 		}, {
 			query: "select X.col+S.col from t as X, s as S",
-			deps:  T0 | T1,
+			deps:  T1 | T2,
 		}, {
 			query: "select max(X.col+S.col) from t as X, s as S",
-			deps:  T0 | T1,
+			deps:  T1 | T2,
 		}, {
 			query: "select max(X.col+s.col) from t as X, s",
-			deps:  T0 | T1,
+			deps:  T1 | T2,
 		}, {
 			query: "select b.t.col from b.t, t",
-			deps:  T0,
+			deps:  T1,
 		}, {
 			query: "select u1.a + u2.a from u1, u2",
-			deps:  T0 | T1,
+			deps:  T1 | T2,
 		}}
 		for _, query := range queries {
 			t.Run(query.query, func(t *testing.T) {
@@ -256,7 +295,7 @@ func TestBindingSingleDepPerTable(t *testing.T) {
 
 	d := semTable.Dependencies(extract(sel, 0))
 	assert.Equal(t, 1, d.NumberOfTables(), "size wrong")
-	assert.Equal(t, T0, d)
+	assert.Equal(t, T1, d)
 }
 
 func TestNotUniqueTableName(t *testing.T) {

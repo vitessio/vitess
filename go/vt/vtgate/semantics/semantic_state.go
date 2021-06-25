@@ -35,6 +35,8 @@ type (
 		Name() (sqlparser.TableName, error)
 		GetExpr() *sqlparser.AliasedTableExpr
 		GetColumns() []ColumnInfo
+		IsVirtual() bool
+		DepsFor(col *sqlparser.ColName, org originable, single bool) *TableSet
 	}
 
 	// ColumnInfo contains information about columns
@@ -57,6 +59,11 @@ type (
 		Table     *vindexes.Table
 	}
 
+	vTableInfo struct {
+		columnNames []string
+		cols        []sqlparser.Expr
+	}
+
 	// TableSet is how a set of tables is expressed.
 	// Tables get unique bits assigned in the order that they are encountered during semantic analysis
 	TableSet uint64 // we can only join 64 tables with this underlying data type
@@ -73,8 +80,9 @@ type (
 	}
 
 	scope struct {
-		parent *scope
-		tables []TableInfo
+		parent      *scope
+		selectExprs sqlparser.SelectExprs
+		tables      []TableInfo
 	}
 
 	// SchemaInformation is used tp provide table information from Vschema.
@@ -83,8 +91,88 @@ type (
 	}
 )
 
+func (v *vTableInfo) DepsFor(col *sqlparser.ColName, org originable, single bool) *TableSet {
+	if !col.Qualifier.IsEmpty() {
+		return nil
+	}
+	for i, colName := range v.columnNames {
+		if col.Name.String() == colName {
+			ts := org.depsForExpr(v.cols[i])
+			return &ts
+		}
+	}
+	return nil
+}
+
+func (a *AliasedTable) DepsFor(col *sqlparser.ColName, org originable, single bool) *TableSet {
+	if single {
+		ts := org.tableSetFor(a.ASTNode)
+		return &ts
+	}
+	for _, info := range a.GetColumns() {
+		if col.Name.String() == info.Name {
+			ts := org.tableSetFor(a.ASTNode)
+			return &ts
+		}
+	}
+	return nil
+}
+
+func (r *RealTable) DepsFor(col *sqlparser.ColName, org originable, single bool) *TableSet {
+	if single {
+		ts := org.tableSetFor(r.ASTNode)
+		return &ts
+	}
+	for _, info := range r.GetColumns() {
+		if col.Name.String() == info.Name {
+			ts := org.tableSetFor(r.ASTNode)
+			return &ts
+		}
+	}
+	return nil
+}
+
+func (v *vTableInfo) IsVirtual() bool {
+	return true
+}
+
+func (a *AliasedTable) IsVirtual() bool {
+	return false
+}
+
+func (r *RealTable) IsVirtual() bool {
+	return false
+}
+
 var _ TableInfo = (*RealTable)(nil)
 var _ TableInfo = (*AliasedTable)(nil)
+var _ TableInfo = (*vTableInfo)(nil)
+
+func (v *vTableInfo) Matches(name sqlparser.TableName) bool {
+	return false
+}
+
+func (v *vTableInfo) Authoritative() bool {
+	return true
+}
+
+func (v *vTableInfo) Name() (sqlparser.TableName, error) {
+	return sqlparser.TableName{}, nil
+}
+
+func (v *vTableInfo) GetExpr() *sqlparser.AliasedTableExpr {
+	return nil
+}
+
+func (v *vTableInfo) GetColumns() []ColumnInfo {
+	cols := make([]ColumnInfo, 0, len(v.columnNames))
+	for _, col := range v.columnNames {
+		cols = append(cols, ColumnInfo{
+			Name: col,
+		})
+	}
+	return cols
+}
 
 func vindexTableToColumnInfo(tbl *vindexes.Table) []ColumnInfo {
 	if tbl == nil {
