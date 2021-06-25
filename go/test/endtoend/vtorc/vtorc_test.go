@@ -273,9 +273,10 @@ func TestMain(m *testing.M) {
 	}()
 
 	cluster.PanicHandler(nil)
-	clusterInstance.Teardown()
 	killTablets(replicaTablets)
 	killTablets(rdonlyTablets)
+	clusterInstance.Keyspaces[0].Shards[0].Vttablets = nil
+	clusterInstance.Teardown()
 
 	if err != nil {
 		fmt.Printf("%v\n", err)
@@ -720,6 +721,8 @@ func validateTopology(t *testing.T, cluster *cluster.LocalProcessCluster, pingTa
 
 func killTablets(vttablets []*cluster.Vttablet) {
 	for _, tablet := range vttablets {
+		log.Infof("Shutting down MySQL for %v", tablet.Alias)
+		_ = tablet.MysqlctlProcess.Stop()
 		log.Infof("Calling TearDown on tablet %v", tablet.Alias)
 		_ = tablet.VttabletProcess.TearDown()
 	}
