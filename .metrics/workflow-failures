@@ -1,5 +1,3 @@
-2021-03-04T20:49:26Z,Cluster (22),https://github.com/vitessio/vitess/actions/runs/622343040
-2021-03-04T20:49:26Z,Cluster (23),https://github.com/vitessio/vitess/actions/runs/622343067
 2021-03-04T20:49:26Z,Cluster (24),https://github.com/vitessio/vitess/actions/runs/622343063
 2021-03-04T20:49:26Z,Cluster (26),https://github.com/vitessio/vitess/actions/runs/622343074
 2021-03-04T20:49:26Z,Cluster (27),https://github.com/vitessio/vitess/actions/runs/622343058
@@ -9997,4 +9995,6 @@
 2021-06-25T09:05:53Z,Cluster (vtgate_vindex),https://github.com/vitessio/vitess/actions/runs/970872433
 2021-06-25T09:05:53Z,Cluster (vtgate_vschema),https://github.com/vitessio/vitess/actions/runs/970872443
 2021-06-25T09:05:53Z,Cluster (xb_recovery),https://github.com/vitessio/vitess/actions/runs/970872481
+2021-06-25T09:05:53Z,docker_test_1,https://github.com/vitessio/vitess/actions/runs/970872478
 2021-06-25T09:05:53Z,gomod-tidy,https://github.com/vitessio/vitess/actions/runs/970872430
+2021-06-25T09:08:59Z,Cluster (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/970882652
