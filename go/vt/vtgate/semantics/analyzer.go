@@ -18,6 +18,7 @@ package semantics
 
 import (
 	"fmt"
+	"strconv"
 
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
@@ -85,16 +86,19 @@ func (a *analyzer) analyzeDown(cursor *sqlparser.Cursor) bool {
 	current := a.currentScope()
 	n := cursor.Node()
 	switch node := n.(type) {
-	case sqlparser.SelectExprs:
-		if isParentSelect(cursor) {
-			a.inProjection = append(a.inProjection, true)
-		}
 	case *sqlparser.Select:
 		if node.Having != nil {
 			a.setError(Gen4NotSupportedF("HAVING"))
 		}
-		a.push(newScope(current))
-		a.rScope[node] = a.currentScope()
+
+		currScope := newScope(current)
+		a.push(currScope)
+
+		// Needed for order by with Literal to find the Expression.
+		currScope.selectExprs = node.SelectExprs
+
+		a.rScope[node] = currScope
+		a.wScope[node] = newScope(nil)
 	case *sqlparser.DerivedTable:
 		a.setError(Gen4NotSupportedF("derived tables"))
 	case *sqlparser.Subquery:
@@ -117,6 +121,76 @@ func (a *analyzer) analyzeDown(cursor *sqlparser.Cursor) bool {
 		}
 	case *sqlparser.Union:
 		a.push(newScope(current))
+	case sqlparser.SelectExprs:
+		if isParentSelect(cursor) {
+			a.inProjection = append(a.inProjection, true)
+		}
+		sel, ok := cursor.Parent().(*sqlparser.Select)
+		if !ok {
+			break
+		}
+
+		wScope, exists := a.wScope[sel]
+		if !exists {
+			break
+		}
+
+		vTbl := &vTableInfo{}
+		for _, selectExpr := range node {
+			expr, ok := selectExpr.(*sqlparser.AliasedExpr)
+			if !ok {
+				continue
+			}
+			vTbl.cols = append(vTbl.cols, expr.Expr)
+			if !expr.As.IsEmpty() {
+				vTbl.columnNames = append(vTbl.columnNames, expr.As.String())
+			} else {
+				vTbl.columnNames = append(vTbl.columnNames, sqlparser.String(expr))
+			}
+		}
+		wScope.tables = append(wScope.tables, vTbl)
+	case sqlparser.OrderBy:
+		sel, ok := cursor.Parent().(*sqlparser.Select)
+		if !ok {
+			break
+		}
+		nScope := newScope(a.currentScope())
+		a.push(nScope)
+		wScope := a.wScope[sel]
+		nScope.tables = append(nScope.tables, wScope.tables...)
+	case *sqlparser.Order:
+		l, ok := node.Expr.(*sqlparser.Literal)
+		if !ok {
+			break
+		}
+		if l.Type != sqlparser.IntVal {
+			break
+		}
+		currScope := a.currentScope()
+		num, err := strconv.Atoi(l.Val)
+		if err != nil {
+			a.err = err
+			break
+		}
+		if num < 1 || num > len(currScope.selectExprs) {
+			a.err = vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadFieldError, "Unknown column '%d' in 'order clause'", num)
+		}
+
+		expr, ok := currScope.selectExprs[num-1].(*sqlparser.AliasedExpr)
+		if !ok {
+			break
+		}
+
+		var deps TableSet
+		_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+			expr, ok := node.(sqlparser.Expr)
+			if ok {
+				deps = deps.Merge(a.exprDeps[expr])
+			}
+			return true, nil
+		}, expr.Expr)
+
+		a.exprDeps[node.Expr] = deps
 	case *sqlparser.ColName:
 		t, err := a.resolveColumn(node, current)
 		if err != nil {
@@ -150,10 +224,10 @@ func isParentSelect(cursor *sqlparser.Cursor) bool {
 }
 
 func (a *analyzer) resolveColumn(colName *sqlparser.ColName, current *scope) (TableSet, error) {
-	var t TableInfo
+	var t TableInfo // select a.col as x, x-1 from a join b on a.id = b.id order by x
 	var err error
 	if colName.Qualifier.IsEmpty() {
-		t, err = a.resolveUnQualifiedColumn(current, colName)
+		return a.resolveUnQualifiedColumn(current, colName)
 	} else {
 		t, err = a.resolveQualifiedColumn(current, colName)
 	}
@@ -180,24 +254,29 @@ func (a *analyzer) resolveQualifiedColumn(current *scope, expr *sqlparser.ColNam
 	return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadFieldError, "symbol %s not found", sqlparser.String(expr))
 }
 
-// resolveUnQualifiedColumn
-func (a *analyzer) resolveUnQualifiedColumn(current *scope, expr *sqlparser.ColName) (TableInfo, error) {
-	if len(current.tables) == 1 {
-		return current.tables[0], nil
-	}
+type originable interface {
+	tableSetFor(t *sqlparser.AliasedTableExpr) TableSet
+	depsForExpr(expr sqlparser.Expr) TableSet
+}
 
-	var tblInfo TableInfo
+func (a *analyzer) depsForExpr(expr sqlparser.Expr) TableSet {
+	return a.exprDeps[expr]
+}
+
+// resolveUnQualifiedColumn
+func (a *analyzer) resolveUnQualifiedColumn(current *scope, expr *sqlparser.ColName) (TableSet, error) {
+	var tsp *TableSet
 	for _, tbl := range current.tables {
-		for _, col := range tbl.GetColumns() {
-			if expr.Name.String() == col.Name {
-				if tblInfo != nil {
-					return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.NonUniqError, fmt.Sprintf("Column '%s' in field list is ambiguous", sqlparser.String(expr)))
-				}
-				tblInfo = tbl
-			}
+		ts := tbl.DepsFor(expr, a, len(current.tables) == 1)
+		if ts != nil && tsp != nil {
+			return 0, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.NonUniqError, fmt.Sprintf("Column '%s' in field list is ambiguous", sqlparser.String(expr)))
 		}
+		tsp = ts
 	}
-	return tblInfo, nil
+	if tsp == nil {
+		return 0, nil
+	}
+	return *tsp, nil
 }
 
 func (a *analyzer) tableSetFor(t *sqlparser.AliasedTableExpr) TableSet {
@@ -267,7 +346,7 @@ func (a *analyzer) analyzeUp(cursor *sqlparser.Cursor) bool {
 		if isParentSelect(cursor) {
 			a.popProjection()
 		}
-	case *sqlparser.Union, *sqlparser.Select:
+	case *sqlparser.Union, *sqlparser.Select, sqlparser.OrderBy:
 		a.popScope()
 	case sqlparser.TableExpr:
 		if isParentSelect(cursor) {
@@ -284,6 +363,7 @@ func (a *analyzer) analyzeUp(cursor *sqlparser.Cursor) bool {
 			}
 		}
 	}
+
 	return a.shouldContinue()
 }
 
