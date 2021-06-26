@@ -7,6 +7,7 @@ import (
 	"math/rand"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -318,6 +319,7 @@ func TestRepairShardHasInactiveGroup(t *testing.T) {
 			}
 			inputMap := make(map[int]testGroupInput)
 			pingable := make(map[string]bool)
+			var lock sync.Mutex
 			db.
 				EXPECT().
 				// RepairShardHasNoGroup is fixed by calling BootstrapGroupLocked
@@ -388,11 +390,13 @@ func TestRepairShardHasInactiveGroup(t *testing.T) {
 						if target.Hostname == "" || target.Port == 0 {
 							return errors.New("invalid mysql instance key")
 						}
+						lock.Lock()
 						view := inputMap[target.Port]
 						view.groupState = []db2.TestGroupState{
 							{MemberHost: testHost, MemberPort: strconv.Itoa(target.Port), MemberState: "OFFLINE", MemberRole: ""},
 						}
 						inputMap[target.Port] = view
+						lock.Unlock()
 						return nil
 					}).
 					AnyTimes()
@@ -1096,6 +1100,7 @@ func TestRepairBackoffError(t *testing.T) {
 			}
 			inputMap := make(map[int]testGroupInput)
 			pingable := make(map[string]bool)
+			var lock sync.Mutex
 			db.
 				EXPECT().
 				BootstrapGroupLocked(&inst.InstanceKey{Hostname: testHost, Port: tt.expectedCandidatePort}).
@@ -1162,11 +1167,13 @@ func TestRepairBackoffError(t *testing.T) {
 					EXPECT().
 					StopGroupLocked(gomock.Any()).
 					DoAndReturn(func(target *inst.InstanceKey) error {
+						lock.Lock()
 						view := inputMap[target.Port]
 						view.groupState = []db2.TestGroupState{
 							{MemberHost: testHost, MemberPort: strconv.Itoa(target.Port), MemberState: "OFFLINE", MemberRole: ""},
 						}
 						inputMap[target.Port] = view
+						lock.Unlock()
 						return nil
 					}).
 					AnyTimes()
