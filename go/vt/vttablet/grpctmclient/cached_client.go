@@ -248,6 +248,7 @@ func (dialer *cachedConnDialer) newdial(addr string) (tabletmanagerservicepb.Tab
 		// close this connection and reuse the existing one. by doing this, we can keep
 		// the actual Dial out of the global lock and significantly increase throughput
 		cc.Close()
+		dialer.connWaitSema.Release()
 		return dialer.redialLocked(conn)
 	}
 
