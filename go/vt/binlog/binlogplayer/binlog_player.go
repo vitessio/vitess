@@ -563,6 +563,7 @@ var AlterVReplicationTable = []string{
 	"ALTER TABLE _vt.vreplication MODIFY source BLOB NOT NULL",
 	"ALTER TABLE _vt.vreplication ADD KEY workflow_idx (workflow(64))",
 	"ALTER TABLE _vt.vreplication ADD COLUMN rows_copied BIGINT(20) NOT NULL DEFAULT 0",
+	"ALTER TABLE _vt.vreplication ADD COLUMN tags VARBINARY(1024) NOT NULL DEFAULT ''",
 }
 
 // WithDDLInitialQueries contains the queries to be expected by the mock db client during tests
