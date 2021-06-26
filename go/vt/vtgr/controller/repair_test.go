@@ -398,17 +398,7 @@ func TestRepairShardHasInactiveGroup(t *testing.T) {
 					AnyTimes()
 				tmc.
 					EXPECT().
-					Ping(gomock.Any(), &topodatapb.Tablet{
-						Alias:               tablet.Alias,
-						Hostname:            tablet.Hostname,
-						Keyspace:            tablet.Keyspace,
-						Shard:               tablet.Shard,
-						Type:                tablet.Type,
-						Tags:                tablet.Tags,
-						MysqlHostname:       tablet.MysqlHostname,
-						MysqlPort:           tablet.MysqlPort,
-						MasterTermStartTime: tablet.MasterTermStartTime,
-					}).
+					Ping(gomock.Any(), gomock.Any()).
 					DoAndReturn(func(_ context.Context, t *topodatapb.Tablet) error {
 						if !pingable[t.Alias.String()] {
 							return errors.New("unreachable")
@@ -575,17 +565,7 @@ func TestRepairWrongPrimaryTablet(t *testing.T) {
 			if candidate != nil {
 				tmc.
 					EXPECT().
-					ChangeType(gomock.Any(), &topodatapb.Tablet{
-						Alias:               candidate.Alias,
-						Hostname:            candidate.Hostname,
-						Keyspace:            candidate.Keyspace,
-						Shard:               candidate.Shard,
-						Type:                topodatapb.TabletType_REPLICA,
-						Tags:                candidate.Tags,
-						MysqlHostname:       candidate.MysqlHostname,
-						MysqlPort:           candidate.MysqlPort,
-						MasterTermStartTime: candidate.MasterTermStartTime,
-					}, topodatapb.TabletType_MASTER).
+					ChangeType(gomock.Any(), gomock.Any(), topodatapb.TabletType_MASTER).
 					Return(nil).
 					Times(expectedCalls)
 			}
@@ -806,10 +786,14 @@ func TestRepairUnreachablePrimary(t *testing.T) {
 				ChangeType(gomock.Any(), gomock.Any(), topodatapb.TabletType_MASTER).
 				Return(nil).
 				Times(expectedCalls)
+			status := make(map[int32]struct {
+				pingalbe bool
+				gtid     mysql.GTIDSet
+			})
 			for i, input := range tt {
 				tablet := buildTabletInfo(uint32(i), testHost, input.port, input.ttype, time.Now())
 				testutil.AddTablet(ctx, t, ts, tablet.Tablet, nil)
-				var status = struct {
+				status[tablet.MysqlPort] = struct {
 					pingalbe bool
 					gtid     mysql.GTIDSet
 				}{
@@ -823,24 +807,14 @@ func TestRepairUnreachablePrimary(t *testing.T) {
 						if target.Hostname == "" || target.Port == 0 {
 							return nil, errors.New("invalid mysql instance key")
 						}
-						return status.gtid, nil
+						return status[int32(target.Port)].gtid, nil
 					}).
 					AnyTimes()
 				tmc.
 					EXPECT().
-					Ping(gomock.Any(), &topodatapb.Tablet{
-						Alias:               tablet.Alias,
-						Hostname:            tablet.Hostname,
-						Keyspace:            tablet.Keyspace,
-						Shard:               tablet.Shard,
-						Type:                tablet.Type,
-						Tags:                tablet.Tags,
-						MysqlHostname:       tablet.MysqlHostname,
-						MysqlPort:           tablet.MysqlPort,
-						MasterTermStartTime: tablet.MasterTermStartTime,
-					}).
+					Ping(gomock.Any(), gomock.Any()).
 					DoAndReturn(func(_ context.Context, t *topodatapb.Tablet) error {
-						if !status.pingalbe {
+						if !status[t.MysqlPort].pingalbe {
 							return errors.New("unreachable")
 						}
 						return nil
@@ -1198,17 +1172,7 @@ func TestRepairBackoffError(t *testing.T) {
 					AnyTimes()
 				tmc.
 					EXPECT().
-					Ping(gomock.Any(), &topodatapb.Tablet{
-						Alias:               tablet.Alias,
-						Hostname:            tablet.Hostname,
-						Keyspace:            tablet.Keyspace,
-						Shard:               tablet.Shard,
-						Type:                tablet.Type,
-						Tags:                tablet.Tags,
-						MysqlHostname:       tablet.MysqlHostname,
-						MysqlPort:           tablet.MysqlPort,
-						MasterTermStartTime: tablet.MasterTermStartTime,
-					}).
+					Ping(gomock.Any(), gomock.Any()).
 					DoAndReturn(func(_ context.Context, t *topodatapb.Tablet) error {
 						if !pingable[input.alias] {
 							return errors.New("unreachable")

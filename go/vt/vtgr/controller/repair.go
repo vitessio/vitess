@@ -379,18 +379,20 @@ func (shard *GRShard) findFailoverCandidate(ctx context.Context) (*grInstance, e
 	if err != nil {
 		log.Warningf("Errors when fetch all GTID with fanout for failover: %v", err)
 	}
-	unreachableAlias := make(map[string]struct{})
 	shard.fanout(func(instance *grInstance, wg *sync.WaitGroup, er concurrency.ErrorRecorder) {
 		defer wg.Done()
 		if !shard.instanceReachable(ctx, instance) {
 			log.Errorf("%v is not reachable via ping", instance.alias)
-			unreachableAlias[instance.alias] = struct{}{}
+			shard.shardStatusCollector.recordProblematics(instance)
+			shard.shardStatusCollector.recordUnreachables(instance)
 		}
 	})
 	var candidate *grInstance
 	candidate, err = shard.findFailoverCandidateFromRecorder(ctx, gtidRecorder, func(c context.Context, instance *grInstance) bool {
-		if _, ok := unreachableAlias[instance.alias]; ok {
-			return false
+		for _, unreachable := range shard.shardStatusCollector.status.Unreachables {
+			if unreachable == instance.alias {
+				return false
+			}
 		}
 		return true
 	})
