@@ -209,7 +209,7 @@ var (
 
 const (
 	maxTableRows   = 4096
-	maxConcurrency = 5
+	maxConcurrency = 10
 )
 
 func getTablet() *cluster.Vttablet {
@@ -496,7 +496,7 @@ func runSingleConnection(ctx context.Context, t *testing.T, done *int64) {
 			}
 		}
 		assert.Nil(t, err)
-		time.Sleep(10 * time.Millisecond)
+		time.Sleep(5 * time.Millisecond)
 	}
 }
 
