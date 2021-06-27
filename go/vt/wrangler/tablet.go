@@ -139,6 +139,7 @@ func (wr *Wrangler) DeleteTablet(ctx context.Context, tabletAlias *topodatapb.Ta
 				return topo.NewError(topo.NoUpdateNeeded, si.Keyspace()+"/"+si.ShardName())
 			}
 			si.MasterAlias = nil
+			si.SetMasterTermStartTime(time.Now())
 			return nil
 		}); err != nil {
 			return err
