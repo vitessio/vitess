@@ -17,7 +17,9 @@ limitations under the License.
 package planbuilder
 
 import (
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
@@ -29,6 +31,7 @@ var _ logicalPlan = (*joinGen4)(nil)
 type joinGen4 struct {
 	// Left and Right are the nodes for the join.
 	Left, Right logicalPlan
+	Opcode      engine.JoinOpcode
 	Cols        []int
 	Vars        map[string]int
 }
@@ -53,7 +56,7 @@ func (j *joinGen4) Wireup(lp logicalPlan, jt *jointab) error {
 	panic("implement me")
 }
 
-// Wireup2 implements the logicalPlan interface
+// WireupGen4 implements the logicalPlan interface
 func (j *joinGen4) WireupGen4(semTable *semantics.SemTable) error {
 	err := j.Left.WireupGen4(semTable)
 	if err != nil {
@@ -80,24 +83,30 @@ func (j *joinGen4) SupplyWeightString(colNumber int) (weightcolNumber int, err e
 // Primitive implements the logicalPlan interface
 func (j *joinGen4) Primitive() engine.Primitive {
 	return &engine.Join{
-		Left:  j.Left.Primitive(),
-		Right: j.Right.Primitive(),
-		Cols:  j.Cols,
-		Vars:  j.Vars,
+		Left:   j.Left.Primitive(),
+		Right:  j.Right.Primitive(),
+		Cols:   j.Cols,
+		Vars:   j.Vars,
+		Opcode: j.Opcode,
 	}
 }
 
 // Inputs implements the logicalPlan interface
 func (j *joinGen4) Inputs() []logicalPlan {
-	panic("implement me")
+	return []logicalPlan{j.Left, j.Right}
 }
 
 // Rewrite implements the logicalPlan interface
 func (j *joinGen4) Rewrite(inputs ...logicalPlan) error {
-	panic("implement me")
+	if len(inputs) != 2 {
+		return vterrors.New(vtrpcpb.Code_INTERNAL, "wrong number of children")
+	}
+	j.Left = inputs[0]
+	j.Right = inputs[1]
+	return nil
 }
 
-// Solves implements the logicalPlan interface
+// ContainsTables implements the logicalPlan interface
 func (j *joinGen4) ContainsTables() semantics.TableSet {
 	return j.Left.ContainsTables().Merge(j.Right.ContainsTables())
 }

@@ -163,7 +163,7 @@ func checkFKError(vschema ContextVSchema, ddlStatement sqlparser.DDLStatement) e
 		fk := &fkContraint{}
 		_ = sqlparser.Walk(fk.FkWalk, ddlStatement)
 		if fk.found {
-			return vterrors.Errorf(vtrpcpb.Code_ABORTED, "foreign key constraints are not allowed, see https://code.openark.org/blog/mysql/the-problem-with-mysql-foreign-key-constraints-in-online-schema-changes")
+			return vterrors.Errorf(vtrpcpb.Code_ABORTED, "foreign key constraints are not allowed, see https://vitess.io/blog/2021-06-15-online-ddl-why-no-fk/")
 		}
 	}
 	return nil
