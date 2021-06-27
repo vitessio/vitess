@@ -153,6 +153,7 @@ func (rs *rowStreamer) buildPlan() error {
 	return err
 }
 
+// buildPKColumnsFromUniqueKey assumes a unique key is indicated,
 func (rs *rowStreamer) buildPKColumnsFromUniqueKey() ([]int, error) {
 	var pkColumns = make([]int, 0)
 	fmt.Printf("========== rs.ukName=%s\n", rs.ukName)
@@ -259,7 +260,6 @@ func (rs *rowStreamer) buildSelect() (string, error) {
 }
 
 func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.VStreamRowsResponse) error) error {
-	fmt.Printf("===================Streaming query: %v\n", rs.sendQuery)
 	log.Infof("Streaming query: %v\n", rs.sendQuery)
 	gtid, err := conn.streamWithSnapshot(rs.ctx, rs.plan.Table.Name, rs.sendQuery)
 	if err != nil {
