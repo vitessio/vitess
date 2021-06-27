@@ -52,10 +52,14 @@ import (
 )
 
 type testcase struct {
-	name             string
+	// name is a human readable name for the test
+	name string
+	// prepareStatement modifies the table (direct strategy) before it gets populated
 	prepareStatement string
-	alterStatement   string
-	expectFailure    bool
+	// alterStatement is the online statement used in the test
+	alterStatement string
+	// expectFailure is typically false. If true then we do not compare table data results
+	expectFailure bool
 }
 
 var (
@@ -87,7 +91,8 @@ var (
 			hint_col varchar(64) not null default '',
 			created_timestamp timestamp not null default current_timestamp,
 			updates int unsigned not null default 0,
-			PRIMARY KEY (id)
+			PRIMARY KEY (id),
+			KEY id_idx(id)
 		) ENGINE=InnoDB
 	`
 	testCases = []testcase{
@@ -244,12 +249,16 @@ func TestMain(m *testing.M) {
 			"-online_ddl_check_interval", "3s",
 		}
 
+		// -vstream_packet_size is set to a small value that ensures we get multiple stream iterations,
+		// thereby examining lastPK on vcopier side. We will be iterating tables using non-PK order throughout
+		// this test suite, and so the low setting ensures we hit the more interesting code paths.
 		clusterInstance.VtTabletExtraArgs = []string{
 			"-enable-lag-throttler",
 			"-throttle_threshold", "1s",
 			"-heartbeat_enable",
 			"-heartbeat_interval", "250ms",
 			"-migration_check_interval", "5s",
+			"-vstream_packet_size", "4096", // Keep this value small and below 10k to ensure multilple vstream iterations
 		}
 		clusterInstance.VtGateExtraArgs = []string{
 			"-ddl_strategy", "online",
