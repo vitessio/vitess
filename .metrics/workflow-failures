@@ -1,4 +1,3 @@
-2021-03-04T20:49:26Z,local_example,https://github.com/vitessio/vitess/actions/runs/622343046
 2021-03-04T20:49:26Z,local_example,https://github.com/vitessio/vitess/actions/runs/622343061
 2021-03-04T20:49:26Z,region_example,https://github.com/vitessio/vitess/actions/runs/622343054
 2021-03-04T20:49:26Z,unit_race,https://github.com/vitessio/vitess/actions/runs/622343053
@@ -9996,5 +9995,6 @@
 2021-06-27T08:29:51Z,unit_race,https://github.com/vitessio/vitess/actions/runs/975859480
 2021-06-27T10:16:23Z,local_example,https://github.com/vitessio/vitess/actions/runs/976017851
 2021-06-27T10:16:23Z,pr-labels,https://github.com/vitessio/vitess/actions/runs/976017833
+2021-06-27T10:20:46Z,Cluster (onlineddl_vrepl_stress_suite),https://github.com/vitessio/vitess/actions/runs/976024340
 2021-06-27T10:20:46Z,Cluster (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/976024293
 2021-06-27T10:20:46Z,Cluster (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/976024316
