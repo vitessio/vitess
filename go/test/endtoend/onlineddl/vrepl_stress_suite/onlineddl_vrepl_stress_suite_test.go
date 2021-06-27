@@ -73,6 +73,8 @@ var (
 	keyspaceName          = "ks"
 	cell                  = "zone1"
 	shards                []cluster.Shard
+	opOrder               int64
+	opOrderMutex          sync.Mutex
 	schemaChangeDirectory = ""
 	tableName             = "stress_test"
 	afterTableName        = "stress_test_after"
@@ -88,6 +90,7 @@ var (
 			rand_text varchar(40) not null default '',
 			rand_num bigint unsigned not null,
 			nullable_num int default null,
+			op_order bigint unsigned not null default 0,
 			hint_col varchar(64) not null default '',
 			created_timestamp timestamp not null default current_timestamp,
 			updates int unsigned not null default 0,
@@ -100,6 +103,11 @@ var (
 			name:             "trivial PK",
 			prepareStatement: "",
 			alterStatement:   "engine=innodb",
+		},
+		{
+			name:             "UK similar to PK, no PK",
+			prepareStatement: "add unique key id_uidx(id)",
+			alterStatement:   "drop primary key",
 		},
 		{
 			name:             "negative PK",
@@ -127,38 +135,43 @@ var (
 			alterStatement:   "drop primary key, add primary key (id, id_negative)",
 		},
 		{
-			name:             "multicolumn UK 1, no PK",
-			prepareStatement: "add unique key text_uidx(rand_text(40), id_negative)",
+			name:             "compound UK 1 by text, no PK",
+			prepareStatement: "add unique key compound_uidx(rand_text(40), id_negative)",
 			alterStatement:   "drop primary key",
 		},
 		{
-			name:             "multicolumn UK 2, no PK",
-			prepareStatement: "add unique key text_uidx(id_negative, rand_text(40))",
+			name:             "compound UK 2 by negative, no PK",
+			prepareStatement: "add unique key compound_uidx(id_negative, rand_text(40))",
 			alterStatement:   "drop primary key",
 		},
 		{
-			name:             "multicolumn UK 3, no PK",
-			prepareStatement: "add unique key text_uidx(rand_num, rand_text(40))",
+			name:             "compound UK 3 by ascending int, no PK",
+			prepareStatement: "add unique key compound_uidx(id, rand_num, rand_text(40))",
 			alterStatement:   "drop primary key",
 		},
 		{
-			name:             "multicolumn UK 4, different PK",
-			prepareStatement: "add unique key text_uidx(rand_num, rand_text(40))",
+			name:             "compound UK 4 by rand int, no PK",
+			prepareStatement: "add unique key compound_uidx(rand_num, rand_text(40))",
+			alterStatement:   "drop primary key",
+		},
+		{
+			name:             "compound UK 5 by rand int, different PK",
+			prepareStatement: "add unique key compound_uidx(rand_num, rand_text(40))",
 			alterStatement:   "drop primary key, add primary key (id, id_negative)",
 		},
 		{
 			name:             "multiple UK choices 1",
-			prepareStatement: "add unique key text_uidx(rand_num, rand_text(40)), add unique key negative_uidx(id_negative)",
+			prepareStatement: "add unique key compound_uidx(rand_num, rand_text(40)), add unique key negative_uidx(id_negative)",
 			alterStatement:   "drop primary key, add primary key(updates, id)",
 		},
 		{
 			name:             "multiple UK choices 2",
-			prepareStatement: "add unique key text_uidx(rand_num, rand_text(40)), add unique key negative_uidx(id_negative)",
+			prepareStatement: "add unique key compound_uidx(rand_num, rand_text(40)), add unique key negative_uidx(id_negative)",
 			alterStatement:   "drop primary key, add primary key(id, id_negative)",
 		},
 		{
 			name:             "multiple UK choices including nullable",
-			prepareStatement: "add unique key text_uidx(rand_num, rand_text(40)), add unique key nullable_uidx(nullable_num, id_negative), add unique key negative_uidx(id_negative)",
+			prepareStatement: "add unique key compound_uidx(rand_num, rand_text(40)), add unique key nullable_uidx(nullable_num, id_negative), add unique key negative_uidx(id_negative)",
 			alterStatement:   "drop primary key, add primary key(updates, id)",
 		},
 		{
@@ -179,10 +192,10 @@ var (
 	`
 
 	insertRowStatement = `
-		INSERT IGNORE INTO stress_test (id, id_negative, rand_text, rand_num) VALUES (%d, %d, concat(left(md5(rand()), 8), '_', %d), floor(rand()*1000000))
+		INSERT IGNORE INTO stress_test (id, id_negative, rand_text, rand_num, op_order) VALUES (%d, %d, concat(left(md5(rand()), 8), '_', %d), floor(rand()*1000000), %d)
 	`
 	updateRowStatement = `
-		UPDATE stress_test SET updates=updates+1 WHERE id=%d
+		UPDATE stress_test SET op_order=%d, updates=updates+1 WHERE id=%d
 	`
 	deleteRowStatement = `
 		DELETE FROM stress_test WHERE id=%d
@@ -191,10 +204,16 @@ var (
 		SELECT count(*) as c FROM stress_test
 	`
 	selectCountFromTableBefore = `
-		SELECT count(*) as c FROM stress_test_after
+		SELECT count(*) as c FROM stress_test_before
 	`
 	selectCountFromTableAfter = `
 		SELECT count(*) as c FROM stress_test_after
+	`
+	selectMaxOpOrderFromTableBefore = `
+		SELECT MAX(op_order) as m FROM stress_test_before
+	`
+	selectMaxOpOrderFromTableAfter = `
+		SELECT MAX(op_order) as m FROM stress_test_after
 	`
 	selectBeforeTable = `
 		SELECT * FROM stress_test_before order by id, id_negative, rand_text, rand_num
@@ -209,8 +228,21 @@ var (
 
 const (
 	maxTableRows   = 4096
-	maxConcurrency = 10
+	maxConcurrency = 20
 )
+
+func resetOpOrder() {
+	opOrderMutex.Lock()
+	defer opOrderMutex.Unlock()
+	opOrder = 0
+}
+
+func nextOpOrder() int64 {
+	opOrderMutex.Lock()
+	defer opOrderMutex.Unlock()
+	opOrder++
+	return opOrder
+}
 
 func getTablet() *cluster.Vttablet {
 	return clusterInstance.Keyspaces[0].Shards[0].Vttablets[0]
@@ -312,6 +344,13 @@ func TestSchemaChange(t *testing.T) {
 	for _, testcase := range testCases {
 		require.NotEmpty(t, testcase.name)
 		t.Run(testcase.name, func(t *testing.T) {
+			t.Run("cancel pending migrations", func(t *testing.T) {
+				cancelQuery := "alter vitess_migration cancel all"
+				r := onlineddl.VtgateExecQuery(t, &vtParams, cancelQuery, "")
+				if r.RowsAffected > 0 {
+					fmt.Printf("# Cancelled migrations (for debug purposes): %d\n", r.RowsAffected)
+				}
+			})
 			t.Run("create schema", func(t *testing.T) {
 				assert.Equal(t, 1, len(clusterInstance.Keyspaces[0].Shards))
 				testWithInitialSchema(t)
@@ -435,7 +474,7 @@ func getCreateTableStatement(t *testing.T, tablet *cluster.Vttablet, tableName s
 
 func generateInsert(t *testing.T, conn *mysql.Conn) error {
 	id := rand.Int31n(int32(maxTableRows))
-	query := fmt.Sprintf(insertRowStatement, id, -id, id)
+	query := fmt.Sprintf(insertRowStatement, id, -id, id, nextOpOrder())
 	qr, err := conn.ExecuteFetch(query, 1000, true)
 	if err == nil && qr != nil {
 		assert.Less(t, qr.RowsAffected, uint64(2))
@@ -445,7 +484,7 @@ func generateInsert(t *testing.T, conn *mysql.Conn) error {
 
 func generateUpdate(t *testing.T, conn *mysql.Conn) error {
 	id := rand.Int31n(int32(maxTableRows))
-	query := fmt.Sprintf(updateRowStatement, id)
+	query := fmt.Sprintf(updateRowStatement, nextOpOrder(), id)
 	qr, err := conn.ExecuteFetch(query, 1000, true)
 	if err == nil && qr != nil {
 		assert.Less(t, qr.RowsAffected, uint64(2))
@@ -496,7 +535,7 @@ func runSingleConnection(ctx context.Context, t *testing.T, done *int64) {
 			}
 		}
 		assert.Nil(t, err)
-		time.Sleep(5 * time.Millisecond)
+		time.Sleep(2 * time.Millisecond)
 	}
 }
 
@@ -526,6 +565,8 @@ func initTable(t *testing.T) {
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)
 	defer conn.Close()
+
+	resetOpOrder()
 
 	_, err = conn.ExecuteFetch(truncateStatement, 1000, true)
 	require.Nil(t, err)
@@ -581,6 +622,22 @@ func testCompareBeforeAfterTables(t *testing.T) {
 		require.Less(t, countAfter, int64(maxTableRows))
 
 		fmt.Printf("# count rows in table (after): %d\n", countAfter)
+	}
+	{
+		rs := onlineddl.VtgateExecQuery(t, &vtParams, selectMaxOpOrderFromTableBefore, "")
+		row := rs.Named().Row()
+		require.NotNil(t, row)
+
+		maxOpOrder := row.AsInt64("m", 0)
+		fmt.Printf("# max op_order in table (before): %d\n", maxOpOrder)
+	}
+	{
+		rs := onlineddl.VtgateExecQuery(t, &vtParams, selectMaxOpOrderFromTableAfter, "")
+		row := rs.Named().Row()
+		require.NotNil(t, row)
+
+		maxOpOrder := row.AsInt64("m", 0)
+		fmt.Printf("# max op_order in table (after): %d\n", maxOpOrder)
 	}
 
 	{
