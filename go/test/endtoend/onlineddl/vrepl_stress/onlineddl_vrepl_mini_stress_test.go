@@ -85,6 +85,8 @@ var (
 	clusterInstance *cluster.LocalProcessCluster
 	vtParams        mysql.ConnParams
 
+	opOrder               int64
+	opOrderMutex          sync.Mutex
 	hostname              = "localhost"
 	keyspaceName          = "ks"
 	cell                  = "zone1"
@@ -94,6 +96,7 @@ var (
 		CREATE TABLE stress_test (
 			id bigint(20) not null,
 			rand_val varchar(32) null default '',
+			op_order bigint unsigned not null default 0,
 			hint_col varchar(64) not null default '',
 			created_timestamp timestamp not null default current_timestamp,
 			updates int unsigned not null default 0,
@@ -106,10 +109,10 @@ var (
 		ALTER TABLE stress_test modify hint_col varchar(64) not null default '%s'
 	`
 	insertRowStatement = `
-		INSERT IGNORE INTO stress_test (id, rand_val) VALUES (%d, left(md5(rand()), 8))
+		INSERT IGNORE INTO stress_test (id, rand_val, op_order) VALUES (%d, left(md5(rand()), 8), %d)
 	`
 	updateRowStatement = `
-		UPDATE stress_test SET updates=updates+1 WHERE id=%d
+		UPDATE stress_test SET op_order=%d, updates=updates+1 WHERE id=%d
 	`
 	deleteRowStatement = `
 		DELETE FROM stress_test WHERE id=%d AND updates=1
@@ -118,6 +121,9 @@ var (
 	selectCountRowsStatement = `
 		SELECT COUNT(*) AS num_rows, CAST(SUM(updates) AS SIGNED) AS sum_updates FROM stress_test
 	`
+	selectMaxOpOrder = `
+		SELECT MAX(op_order) as m FROM stress_test
+	`
 	truncateStatement = `
 		TRUNCATE TABLE stress_test
 	`
@@ -125,10 +131,24 @@ var (
 )
 
 const (
-	maxTableRows    = 4096
-	maxConcurrency  = 5
-	countIterations = 5
+	maxTableRows                  = 4096
+	maxConcurrency                = 20
+	singleConnectionSleepInterval = 2 * time.Millisecond
+	countIterations               = 5
 )
+
+func resetOpOrder() {
+	opOrderMutex.Lock()
+	defer opOrderMutex.Unlock()
+	opOrder = 0
+}
+
+func nextOpOrder() int64 {
+	opOrderMutex.Lock()
+	defer opOrderMutex.Unlock()
+	opOrder++
+	return opOrder
+}
 
 func TestMain(m *testing.M) {
 	defer cluster.PanicHandler(nil)
@@ -351,7 +371,7 @@ func getCreateTableStatement(t *testing.T, tablet *cluster.Vttablet, tableName s
 
 func generateInsert(t *testing.T, conn *mysql.Conn) error {
 	id := rand.Int31n(int32(maxTableRows))
-	query := fmt.Sprintf(insertRowStatement, id)
+	query := fmt.Sprintf(insertRowStatement, id, nextOpOrder())
 	qr, err := conn.ExecuteFetch(query, 1000, true)
 
 	func() {
@@ -375,7 +395,7 @@ func generateInsert(t *testing.T, conn *mysql.Conn) error {
 
 func generateUpdate(t *testing.T, conn *mysql.Conn) error {
 	id := rand.Int31n(int32(maxTableRows))
-	query := fmt.Sprintf(updateRowStatement, id)
+	query := fmt.Sprintf(updateRowStatement, nextOpOrder(), id)
 	qr, err := conn.ExecuteFetch(query, 1000, true)
 
 	func() {
@@ -451,7 +471,7 @@ func runSingleConnection(ctx context.Context, t *testing.T, done *int64) {
 			}
 		}
 		assert.Nil(t, err)
-		time.Sleep(10 * time.Millisecond)
+		time.Sleep(singleConnectionSleepInterval)
 	}
 }
 
@@ -482,6 +502,7 @@ func initTable(t *testing.T) {
 	require.Nil(t, err)
 	defer conn.Close()
 
+	resetOpOrder()
 	writeMetrics.Clear()
 	_, err = conn.ExecuteFetch(truncateStatement, 1000, true)
 	require.Nil(t, err)
@@ -500,6 +521,15 @@ func initTable(t *testing.T) {
 func testSelectTableMetrics(t *testing.T) {
 	writeMetrics.mu.Lock()
 	defer writeMetrics.mu.Unlock()
+
+	{
+		rs := onlineddl.VtgateExecQuery(t, &vtParams, selectMaxOpOrder, "")
+		row := rs.Named().Row()
+		require.NotNil(t, row)
+
+		maxOpOrder := row.AsInt64("m", 0)
+		fmt.Printf("# max op_order in table: %d\n", maxOpOrder)
+	}
 
 	log.Infof("%s", writeMetrics.String())
 
