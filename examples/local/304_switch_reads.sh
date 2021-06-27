@@ -18,5 +18,4 @@
 
 source ./env.sh
 
-vtctlclient SwitchReads -tablet_type=rdonly customer.cust2cust
-vtctlclient SwitchReads -tablet_type=replica customer.cust2cust
+vtctlclient Reshard -tablet_types=rdonly,replica SwitchTraffic customer.cust2cust
