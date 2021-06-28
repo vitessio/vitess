@@ -64,14 +64,14 @@ func (sr *starRewriter) starRewrite(cursor *sqlparser.Cursor) bool {
 	return true
 }
 
-func expandTableColumns(itables []semantics.TableInfo, starExpr *sqlparser.StarExpr) (sqlparser.SelectExprs, *expandStarInfo, error) {
+func expandTableColumns(tables []semantics.TableInfo, starExpr *sqlparser.StarExpr) (sqlparser.SelectExprs, *expandStarInfo, error) {
 	unknownTbl := true
 	var colNames sqlparser.SelectExprs
 	expStar := &expandStarInfo{
 		tblColMap: map[*sqlparser.AliasedTableExpr]sqlparser.SelectExprs{},
 	}
 
-	for _, tbl := range itables {
+	for _, tbl := range tables {
 		if !starExpr.TableName.IsEmpty() && !tbl.Matches(starExpr.TableName) {
 			continue
 		}
