@@ -27,11 +27,23 @@ import (
 )
 
 type (
-	// TableInfo contains the alias table expr and vindex table
-	TableInfo struct {
+	TableInfo interface {
+		Matches(name sqlparser.TableName) bool
+		Authoritative() bool
+	}
+
+	// RealTable contains the alias table expr and vindex table
+	RealTable struct {
 		dbName, tableName string
 		ASTNode           *sqlparser.AliasedTableExpr
 		Table             *vindexes.Table
+	}
+
+	// AliasedTable contains the alias table expr and vindex table
+	AliasedTable struct {
+		tableName string
+		ASTNode   *sqlparser.AliasedTableExpr
+		Table     *vindexes.Table
 	}
 
 	// TableSet is how a set of tables is expressed.
@@ -41,14 +53,16 @@ type (
 
 	// SemTable contains semantic analysis information about the query.
 	SemTable struct {
-		Tables           []*TableInfo
+		Tables           []*RealTable
+		ITables          []TableInfo
 		exprDependencies map[sqlparser.Expr]TableSet
 		selectScope      map[*sqlparser.Select]*scope
 	}
 
 	scope struct {
-		parent *scope
-		tables []*TableInfo
+		parent  *scope
+		tables  []*RealTable
+		itables []TableInfo
 	}
 
 	// SchemaInformation is used tp provide table information from Vschema.
@@ -56,6 +70,27 @@ type (
 		FindTableOrVindex(tablename sqlparser.TableName) (*vindexes.Table, vindexes.Vindex, string, topodatapb.TabletType, key.Destination, error)
 	}
 )
+
+func (a *AliasedTable) Authoritative() bool {
+	return a.Table != nil && a.Table.ColumnListAuthoritative
+}
+
+func (a *AliasedTable) Matches(name sqlparser.TableName) bool {
+	return a.tableName == name.Name.String() && name.Qualifier.IsEmpty()
+}
+
+func (r *RealTable) Authoritative() bool {
+	return r.Table != nil && r.Table.ColumnListAuthoritative
+}
+
+func (r *RealTable) Matches(name sqlparser.TableName) bool {
+	if !name.Qualifier.IsEmpty() {
+		if r.dbName != name.Qualifier.String() {
+			return false
+		}
+	}
+	return r.tableName == name.Name.String()
+}
 
 // NewSemTable creates a new empty SemTable
 func NewSemTable() *SemTable {
@@ -73,7 +108,7 @@ func (st *SemTable) TableSetFor(t *sqlparser.AliasedTableExpr) TableSet {
 }
 
 // TableInfoFor returns the table info for the table set. It should contains only single table.
-func (st *SemTable) TableInfoFor(id TableSet) (*TableInfo, error) {
+func (st *SemTable) TableInfoFor(id TableSet) (*RealTable, error) {
 	if id.NumberOfTables() > 1 {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] should only be used for single tables")
 	}
@@ -102,9 +137,14 @@ func (st *SemTable) Dependencies(expr sqlparser.Expr) TableSet {
 }
 
 // GetSelectTables returns the table in the select.
-func (st *SemTable) GetSelectTables(node *sqlparser.Select) []*TableInfo {
+func (st *SemTable) GetSelectTables(node *sqlparser.Select) []*RealTable {
 	scope := st.selectScope[node]
 	return scope.tables
+}
+
+func (st *SemTable) GetSelectITables(node *sqlparser.Select) []TableInfo {
+	scope := st.selectScope[node]
+	return scope.itables
 }
 
 // AddExprs adds new select exprs to the SemTable.
@@ -119,7 +159,7 @@ func newScope(parent *scope) *scope {
 	return &scope{parent: parent}
 }
 
-func (s *scope) addTable(table *TableInfo) error {
+func (s *scope) addTable(info TableInfo, table *RealTable) error {
 	for _, scopeTable := range s.tables {
 		b := scopeTable.tableName == table.tableName
 		b2 := scopeTable.dbName == table.dbName
@@ -129,6 +169,7 @@ func (s *scope) addTable(table *TableInfo) error {
 	}
 
 	s.tables = append(s.tables, table)
+	s.itables = append(s.itables, info)
 	return nil
 }
 
