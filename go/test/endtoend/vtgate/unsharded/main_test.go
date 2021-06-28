@@ -445,7 +445,8 @@ func TestDeleteAlias(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
-	exec(t, conn, "delete t from t1 t where t.c1 = 1")
+	exec(t, conn, "delete t1 from t1 where c1 = 1")
+	exec(t, conn, "delete t.* from t1 t where t.c1 = 1")
 }
 
 func exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
