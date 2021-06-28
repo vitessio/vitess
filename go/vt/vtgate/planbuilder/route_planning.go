@@ -46,6 +46,11 @@ func gen4Planner(_ string) func(sqlparser.Statement, *sqlparser.ReservedVars, Co
 }
 
 func newBuildSelectPlan(sel *sqlparser.Select, vschema ContextVSchema) (engine.Primitive, error) {
+
+	directives := sqlparser.ExtractCommentDirectives(sel.Comments)
+	if len(directives) > 0 {
+		return nil, semantics.Gen4NotSupportedF("comment directives")
+	}
 	keyspace, err := vschema.DefaultKeyspace()
 	if err != nil {
 		return nil, err
@@ -256,6 +261,10 @@ func planLimit(limit *sqlparser.Limit, plan logicalPlan) (logicalPlan, error) {
 
 func planHorizon(sel *sqlparser.Select, plan logicalPlan, semTable *semantics.SemTable) (logicalPlan, error) {
 	rb, ok := plan.(*route)
+	if !ok && semTable.ProjectionErr != nil {
+		return nil, semTable.ProjectionErr
+	}
+
 	if ok && rb.isSingleShard() {
 		createSingleShardRoutePlan(sel, rb)
 		return plan, nil
@@ -270,7 +279,7 @@ func planHorizon(sel *sqlparser.Select, plan logicalPlan, semTable *semantics.Se
 		return nil, err
 	}
 	for _, e := range qp.selectExprs {
-		if _, err := pushProjection(e, plan, semTable); err != nil {
+		if _, err := pushProjection(e, plan, semTable, true); err != nil {
 			return nil, err
 		}
 	}
@@ -625,7 +634,7 @@ func findColumnVindex(a *routePlan, exp sqlparser.Expr, sem *semantics.SemTable)
 
 	var singCol vindexes.SingleColumn
 
-	_ = a.tables.visit(func(table *routeTable) error {
+	_ = visitTables(a.tables, func(table *routeTable) error {
 		if leftDep.IsSolvedBy(table.qtable.TableID) {
 			for _, vindex := range table.vtable.ColumnVindexes {
 				sC, isSingle := vindex.Vindex.(vindexes.SingleColumn)

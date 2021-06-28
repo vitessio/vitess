@@ -141,20 +141,31 @@ func (p parenTables) tableID() semantics.TableSet {
 }
 
 // visit will traverse the route tables, going inside parenTables and visiting all routeTables
-func (p parenTables) visit(f func(tbl *routeTable) error) error {
-	for _, r := range p {
-		switch r := r.(type) {
-		case *routeTable:
-			err := f(r)
-			if err != nil {
-				return err
-			}
-		case parenTables:
-			err := r.visit(f)
+func visitTables(r relation, f func(tbl *routeTable) error) error {
+	switch r := r.(type) {
+	case *routeTable:
+		err := f(r)
+		if err != nil {
+			return err
+		}
+	case parenTables:
+		for _, r := range r {
+			err := visitTables(r, f)
 			if err != nil {
 				return err
 			}
 		}
+		return nil
+	case *leJoin:
+		err := visitTables(r.lhs, f)
+		if err != nil {
+			return err
+		}
+		err = visitTables(r.rhs, f)
+		if err != nil {
+			return err
+		}
+		return nil
 	}
 	return nil
 }
@@ -355,11 +366,7 @@ func (rp *routePlan) planEqualOp(node *sqlparser.ComparisonExpr) (bool, error) {
 	return rp.haveMatchingVindex(node, column, *val, equalOrEqualUnique, justTheVindex), err
 }
 
-func (rp *routePlan) planInOp(node *sqlparser.ComparisonExpr) (bool, error) {
-	column, ok := node.Left.(*sqlparser.ColName)
-	if !ok {
-		return false, nil
-	}
+func (rp *routePlan) planSimpleInOp(node *sqlparser.ComparisonExpr, left *sqlparser.ColName) (bool, error) {
 	value, err := sqlparser.NewPlanValue(node.Right)
 	if err != nil {
 		// if we are unable to create a PlanValue, we can't use a vindex, but we don't have to fail
@@ -377,7 +384,70 @@ func (rp *routePlan) planInOp(node *sqlparser.ComparisonExpr) (bool, error) {
 		}
 	}
 	opcode := func(*vindexes.ColumnVindex) engine.RouteOpcode { return engine.SelectIN }
-	return rp.haveMatchingVindex(node, column, value, opcode, justTheVindex), err
+	return rp.haveMatchingVindex(node, left, value, opcode, justTheVindex), err
+}
+
+func (rp *routePlan) planCompositeInOp(node *sqlparser.ComparisonExpr, left sqlparser.ValTuple) (bool, error) {
+	right, rightIsValTuple := node.Right.(sqlparser.ValTuple)
+	if !rightIsValTuple {
+		return false, nil
+	}
+	return rp.planCompositeInOpRecursive(node, left, right, nil)
+}
+
+func (rp *routePlan) planCompositeInOpRecursive(node *sqlparser.ComparisonExpr, left, right sqlparser.ValTuple, coordinates []int) (bool, error) {
+	foundVindex := false
+	cindex := len(coordinates)
+	coordinates = append(coordinates, 0)
+	for i, expr := range left {
+		coordinates[cindex] = i
+		switch expr := expr.(type) {
+		case sqlparser.ValTuple:
+			ok, err := rp.planCompositeInOpRecursive(node, expr, right, coordinates)
+			if err != nil {
+				return false, err
+			}
+			return ok || foundVindex, nil
+		case *sqlparser.ColName:
+			// check if left col is a vindex
+			if !rp.hasVindex(expr) {
+				continue
+			}
+
+			rightVals := make(sqlparser.ValTuple, len(right))
+			for j, currRight := range right {
+				switch currRight := currRight.(type) {
+				case sqlparser.ValTuple:
+					val := tupleAccess(currRight, coordinates)
+					if val == nil {
+						return false, nil
+					}
+					rightVals[j] = val
+				default:
+					return false, nil
+				}
+			}
+			newPlanValues, err := makePlanValue(rightVals)
+			if newPlanValues == nil || err != nil {
+				return false, err
+			}
+
+			opcode := func(*vindexes.ColumnVindex) engine.RouteOpcode { return engine.SelectMultiEqual }
+			newVindex := rp.haveMatchingVindex(node, expr, *newPlanValues, opcode, justTheVindex)
+			foundVindex = newVindex || foundVindex
+		}
+	}
+	return foundVindex, nil
+}
+
+func (rp *routePlan) planInOp(node *sqlparser.ComparisonExpr) (bool, error) {
+	switch left := node.Left.(type) {
+	case *sqlparser.ColName:
+		return rp.planSimpleInOp(node, left)
+	case sqlparser.ValTuple:
+		return rp.planCompositeInOp(node, left)
+	}
+	return false, nil
 }
 
 func (rp *routePlan) planLikeOp(node *sqlparser.ComparisonExpr) (bool, error) {
@@ -434,6 +504,17 @@ func makePlanValue(n sqlparser.Expr) (*sqltypes.PlanValue, error) {
 	return &value, nil
 }
 
+func (rp routePlan) hasVindex(column *sqlparser.ColName) bool {
+	for _, v := range rp.vindexPreds {
+		for _, col := range v.colVindex.Columns {
+			if column.Name.Equal(col) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func (rp *routePlan) haveMatchingVindex(
 	node sqlparser.Expr,
 	column *sqlparser.ColName,
@@ -482,7 +563,12 @@ func (rp *routePlan) pickBestAvailableVindex() {
 
 // Predicates takes all known predicates for this route and ANDs them together
 func (rp *routePlan) Predicates() sqlparser.Expr {
-	return sqlparser.AndExpressions(rp.predicates...)
+	predicates := rp.predicates
+	_ = visitTables(rp.tables, func(tbl *routeTable) error {
+		predicates = append(predicates, tbl.qtable.Predicates...)
+		return nil
+	})
+	return sqlparser.AndExpressions(predicates...)
 }
 
 func (rp *routePlan) pushOutputColumns(col []*sqlparser.ColName, _ *semantics.SemTable) []int {
