@@ -28,6 +28,7 @@ import (
 )
 
 type (
+	// TableInfo contains information about tables
 	TableInfo interface {
 		Matches(name sqlparser.TableName) bool
 		Authoritative() bool
@@ -36,6 +37,7 @@ type (
 		GetColumns() []ColumnInfo
 	}
 
+	// ColumnInfo contains information about columns
 	ColumnInfo struct {
 		Name string
 		Type querypb.Type
@@ -92,42 +94,52 @@ func vindexTableToColumnInfo(tbl *vindexes.Table) []ColumnInfo {
 	return cols
 }
 
+// GetColumns implements the TableInfo interface
 func (a *AliasedTable) GetColumns() []ColumnInfo {
 	return vindexTableToColumnInfo(a.Table)
 }
 
+// GetExpr implements the TableInfo interface
 func (a *AliasedTable) GetExpr() *sqlparser.AliasedTableExpr {
 	return a.ASTNode
 }
 
+// Name implements the TableInfo interface
 func (a *AliasedTable) Name() (sqlparser.TableName, error) {
 	return a.ASTNode.TableName()
 }
 
+// Authoritative implements the TableInfo interface
 func (a *AliasedTable) Authoritative() bool {
 	return a.Table != nil && a.Table.ColumnListAuthoritative
 }
 
+// Matches implements the TableInfo interface
 func (a *AliasedTable) Matches(name sqlparser.TableName) bool {
 	return a.tableName == name.Name.String() && name.Qualifier.IsEmpty()
 }
 
+// GetColumns implements the TableInfo interface
 func (r *RealTable) GetColumns() []ColumnInfo {
 	return vindexTableToColumnInfo(r.Table)
 }
 
+// GetExpr implements the TableInfo interface
 func (r *RealTable) GetExpr() *sqlparser.AliasedTableExpr {
 	return r.ASTNode
 }
 
+// Name implements the TableInfo interface
 func (r *RealTable) Name() (sqlparser.TableName, error) {
 	return r.ASTNode.TableName()
 }
 
+// Authoritative implements the TableInfo interface
 func (r *RealTable) Authoritative() bool {
 	return r.Table != nil && r.Table.ColumnListAuthoritative
 }
 
+// Matches implements the TableInfo interface
 func (r *RealTable) Matches(name sqlparser.TableName) bool {
 	if !name.Qualifier.IsEmpty() {
 		if r.dbName != name.Qualifier.String() {
@@ -181,6 +193,7 @@ func (st *SemTable) Dependencies(expr sqlparser.Expr) TableSet {
 	return deps
 }
 
+// GetSelectTables returns the table in the select.
 func (st *SemTable) GetSelectTables(node *sqlparser.Select) []TableInfo {
 	scope := st.selectScope[node]
 	return scope.tables
