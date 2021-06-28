@@ -355,7 +355,7 @@ func (tm *TabletManager) Close() {
 			log.Warningf("Failed to update tablet record, may contain stale identifiers: %v", err)
 		}
 	} else {
-		if err := tm.TopoServer.DeleteTablet(topoOpCtx, tm.tabletAlias); err != nil {
+		if err := topotools.DeleteTablet(topoOpCtx, tm.TopoServer, tablet); err != nil {
 			log.Warningf("Failed to delete tablet record: %v", err)
 		}
 	}

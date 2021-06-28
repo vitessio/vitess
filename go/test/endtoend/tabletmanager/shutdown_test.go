@@ -60,6 +60,16 @@ func TestShutdown(t *testing.T) {
 	// check that its record is not deleted
 	// we do not delete the record of the master tablet
 	checkTabletExistenceInTopo(t, []string{masterTablet.Alias}, []string{replicaTablet.Alias, rdonlyTablet.Alias})
+
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("DeleteTablet", "-allow_master", masterTablet.Alias)
+	require.NoError(t, err)
+
+	// check that the master record is deleted too
+	checkTabletExistenceInTopo(t, nil, []string{masterTablet.Alias, replicaTablet.Alias, rdonlyTablet.Alias})
+
+	// also check that removing shard cell should work, since we deleted all the tablets
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("RemoveShardCell", keyspaceShard, cell)
+	require.Nil(t, err)
 }
 
 // getAllTabletsInTopo gets all the tablets in the topology for the cell
