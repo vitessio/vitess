@@ -69,13 +69,15 @@ type (
 	TableSet uint64 // we can only join 64 tables with this underlying data type
 	// TODO : change uint64 to struct to support arbitrary number of tables.
 
+	ExprDependencies map[sqlparser.Expr]TableSet
+
 	// SemTable contains semantic analysis information about the query.
 	SemTable struct {
 		Tables []TableInfo
 		// ProjectionErr stores the error that we got during the semantic analysis of the SelectExprs.
 		// This is only a real error if we are unable to plan the query as a single route
 		ProjectionErr    error
-		exprDependencies map[sqlparser.Expr]TableSet
+		exprDependencies ExprDependencies
 		selectScope      map[*sqlparser.Select]*scope
 	}
 
@@ -268,7 +270,11 @@ func (st *SemTable) TableInfoFor(id TableSet) (TableInfo, error) {
 
 // Dependencies return the table dependencies of the expression.
 func (st *SemTable) Dependencies(expr sqlparser.Expr) TableSet {
-	deps, found := st.exprDependencies[expr]
+	return st.exprDependencies.Dependencies(expr)
+}
+
+func (d ExprDependencies) Dependencies(expr sqlparser.Expr) TableSet {
+	deps, found := d[expr]
 	if found {
 		return deps
 	}
@@ -276,14 +282,12 @@ func (st *SemTable) Dependencies(expr sqlparser.Expr) TableSet {
 	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 		colName, ok := node.(*sqlparser.ColName)
 		if ok {
-			set := st.exprDependencies[colName]
+			set := d[colName]
 			deps |= set
 		}
 		return true, nil
 	}, expr)
-
-	st.exprDependencies[expr] = deps
-
+	d[expr] = deps
 	return deps
 }
 
