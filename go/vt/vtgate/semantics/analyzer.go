@@ -34,7 +34,7 @@ type (
 
 		Tables       []TableInfo
 		scopes       []*scope
-		exprDeps     map[sqlparser.Expr]TableSet
+		exprDeps     ExprDependencies
 		err          error
 		currentDb    string
 		inProjection []bool
@@ -150,14 +150,7 @@ func (a *analyzer) analyzeDown(cursor *sqlparser.Cursor) bool {
 		}
 		wScope.tables = append(wScope.tables, vTbl)
 	case sqlparser.OrderBy:
-		sel, ok := cursor.Parent().(*sqlparser.Select)
-		if !ok {
-			break
-		}
-		nScope := newScope(a.currentScope())
-		a.push(nScope)
-		wScope := a.wScope[sel]
-		nScope.tables = append(nScope.tables, wScope.tables...)
+		a.changeScopeForOrderBy(cursor)
 	case *sqlparser.Order:
 		l, ok := node.Expr.(*sqlparser.Literal)
 		if !ok {
@@ -218,6 +211,25 @@ func (a *analyzer) analyzeDown(cursor *sqlparser.Cursor) bool {
 	return true
 }
 
+func (a *analyzer) changeScopeForOrderBy(cursor *sqlparser.Cursor) {
+	sel, ok := cursor.Parent().(*sqlparser.Select)
+	if !ok {
+		return
+	}
+	// In ORDER BY, we can see both the scope in the FROM part of the query, and the SELECT columns created
+	// so before walking the rest of the tree, we change the scope to match this behaviour
+	incomingScope := a.currentScope()
+	nScope := newScope(incomingScope)
+	a.push(nScope)
+	wScope := a.wScope[sel]
+	nScope.tables = append(nScope.tables, wScope.tables...)
+	nScope.selectExprs = incomingScope.selectExprs
+
+	if a.rScope[sel] != incomingScope {
+		panic("BUG: scope counts did not match")
+	}
+}
+
 func isParentSelect(cursor *sqlparser.Cursor) bool {
 	_, isSelect := cursor.Parent().(*sqlparser.Select)
 	return isSelect
@@ -260,7 +272,7 @@ type originable interface {
 }
 
 func (a *analyzer) depsForExpr(expr sqlparser.Expr) TableSet {
-	return a.exprDeps[expr]
+	return a.exprDeps.Dependencies(expr)
 }
 
 // resolveUnQualifiedColumn
@@ -271,7 +283,9 @@ func (a *analyzer) resolveUnQualifiedColumn(current *scope, expr *sqlparser.ColN
 		if ts != nil && tsp != nil {
 			return 0, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.NonUniqError, fmt.Sprintf("Column '%s' in field list is ambiguous", sqlparser.String(expr)))
 		}
-		tsp = ts
+		if ts != nil {
+			tsp = ts
+		}
 	}
 	if tsp == nil {
 		return 0, nil
