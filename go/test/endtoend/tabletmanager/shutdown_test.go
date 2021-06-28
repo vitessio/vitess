@@ -33,6 +33,9 @@ func TestShutdown(t *testing.T) {
 	// shutdown the vttablet process of the replica tablet
 	err := replicaTablet.VttabletProcess.TearDown()
 	require.NoError(t, err)
+	defer func() {
+		_ = replicaTablet.VttabletProcess.Setup()
+	}()
 
 	// check that its record in the topology has deleted
 	checkTabletExistenceInTopo(t, []string{masterTablet.Alias, rdonlyTablet.Alias}, []string{replicaTablet.Alias})
@@ -40,6 +43,9 @@ func TestShutdown(t *testing.T) {
 	// now shutdown the read only tablet
 	err = rdonlyTablet.VttabletProcess.TearDown()
 	require.NoError(t, err)
+	defer func() {
+		_ = rdonlyTablet.VttabletProcess.Setup()
+	}()
 
 	// check that its record is also deleted
 	checkTabletExistenceInTopo(t, []string{masterTablet.Alias}, []string{replicaTablet.Alias, rdonlyTablet.Alias})
@@ -47,6 +53,9 @@ func TestShutdown(t *testing.T) {
 	// now shutdown the master tablet
 	err = masterTablet.VttabletProcess.TearDown()
 	require.NoError(t, err)
+	defer func() {
+		_ = masterTablet.VttabletProcess.Setup()
+	}()
 
 	// check that its record is not deleted
 	// we do not delete the record of the master tablet
