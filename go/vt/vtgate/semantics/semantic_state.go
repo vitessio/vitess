@@ -64,7 +64,10 @@ type (
 
 	// SemTable contains semantic analysis information about the query.
 	SemTable struct {
-		Tables           []TableInfo
+		Tables []TableInfo
+		// ProjectionErr stores the error that we got during the semantic analysis of the SelectExprs.
+		// This is only a real error if we are unable to plan the query as a single route
+		ProjectionErr    error
 		exprDependencies map[sqlparser.Expr]TableSet
 		selectScope      map[*sqlparser.Select]*scope
 	}
@@ -84,6 +87,9 @@ var _ TableInfo = (*RealTable)(nil)
 var _ TableInfo = (*AliasedTable)(nil)
 
 func vindexTableToColumnInfo(tbl *vindexes.Table) []ColumnInfo {
+	if tbl == nil {
+		return nil
+	}
 	cols := make([]ColumnInfo, 0, len(tbl.Columns))
 	for _, col := range tbl.Columns {
 		cols = append(cols, ColumnInfo{

@@ -29,8 +29,8 @@ import (
 )
 
 func TestExpandStar(t *testing.T) {
-	schemaInfo := &fakeSI{
-		tables: map[string]*vindexes.Table{
+	schemaInfo := &semantics.FakeSI{
+		Tables: map[string]*vindexes.Table{
 			"t1": {
 				Name: sqlparser.NewTableIdent("t1"),
 				Columns: []vindexes.Column{{
@@ -126,7 +126,7 @@ func TestExpandStar(t *testing.T) {
 }
 
 func TestSemTableDependenciesAfterExpandStar(t *testing.T) {
-	schemaInfo := &fakeSI{tables: map[string]*vindexes.Table{
+	schemaInfo := &semantics.FakeSI{Tables: map[string]*vindexes.Table{
 		"t1": {
 			Name: sqlparser.NewTableIdent("t1"),
 			Columns: []vindexes.Column{{

@@ -1108,7 +1108,7 @@ func (td *tableDiffer) genDebugQueryDiff(sel *sqlparser.Select, row []sqltypes.V
 		sel.SelectExprs.Format(buf)
 	}
 	buf.Myprintf(" from ")
-	sel.From.Format(buf)
+	buf.Myprintf(sqlparser.ToString(sel.From))
 	buf.Myprintf(" where ")
 	for i, pkI := range td.selectPks {
 		sel.SelectExprs[pkI].Format(buf)

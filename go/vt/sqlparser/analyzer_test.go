@@ -167,6 +167,76 @@ func TestSplitAndExpression(t *testing.T) {
 	}
 }
 
+func TestAndExpressions(t *testing.T) {
+	greaterThanExpr := &ComparisonExpr{
+		Operator: GreaterThanOp,
+		Left: &ColName{
+			Name: NewColIdent("val"),
+			Qualifier: TableName{
+				Name: NewTableIdent("a"),
+			},
+		},
+		Right: &ColName{
+			Name: NewColIdent("val"),
+			Qualifier: TableName{
+				Name: NewTableIdent("b"),
+			},
+		},
+	}
+	equalExpr := &ComparisonExpr{
+		Operator: EqualOp,
+		Left: &ColName{
+			Name: NewColIdent("id"),
+			Qualifier: TableName{
+				Name: NewTableIdent("a"),
+			},
+		},
+		Right: &ColName{
+			Name: NewColIdent("id"),
+			Qualifier: TableName{
+				Name: NewTableIdent("b"),
+			},
+		},
+	}
+	testcases := []struct {
+		name           string
+		expressions    Exprs
+		expectedOutput Expr
+	}{
+		{
+			name:           "empty input",
+			expressions:    nil,
+			expectedOutput: nil,
+		}, {
+			name: "two equal inputs",
+			expressions: Exprs{
+				greaterThanExpr,
+				equalExpr,
+				equalExpr,
+			},
+			expectedOutput: &AndExpr{
+				Left:  greaterThanExpr,
+				Right: equalExpr,
+			},
+		},
+		{
+			name: "two equal inputs",
+			expressions: Exprs{
+				equalExpr,
+				equalExpr,
+			},
+			expectedOutput: equalExpr,
+		},
+	}
+
+	for _, testcase := range testcases {
+		t.Run(testcase.name, func(t *testing.T) {
+			output := AndExpressions(testcase.expressions...)
+			assert.Equal(t, String(testcase.expectedOutput), String(output))
+		})
+	}
+}
+
 func TestTableFromStatement(t *testing.T) {
 	testcases := []struct {
 		in, out string

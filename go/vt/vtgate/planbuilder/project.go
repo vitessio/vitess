@@ -20,7 +20,7 @@ import (
 	"errors"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	"vitess.io/vitess/go/vt/proto/vtrpc"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -46,7 +46,7 @@ func planProjection(pb *primitiveBuilder, in logicalPlan, expr *sqlparser.Aliase
 		} else {
 			// Pushing of non-trivial expressions not allowed for RHS of left joins.
 			if _, ok := expr.Expr.(*sqlparser.ColName); !ok && node.ejoin.Opcode == engine.LeftJoin {
-				return nil, nil, 0, errors.New("unsupported: cross-shard left join and column expressions")
+				return nil, nil, 0, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: cross-shard left join and column expressions")
 			}
 
 			newRight, col, colNumber, err := planProjection(pb, node.Right, expr, origin)
@@ -167,5 +167,5 @@ func planProjection(pb *primitiveBuilder, in logicalPlan, expr *sqlparser.Aliase
 		return node, rc, len(node.resultColumns) - 1, nil
 
 	}
-	return nil, nil, 0, vterrors.Errorf(vtrpc.Code_UNIMPLEMENTED, "[BUG] unreachable %T.projection", in)
+	return nil, nil, 0, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "[BUG] unreachable %T.projection", in)
 }
