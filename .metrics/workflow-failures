@@ -1,9 +1,3 @@
-2021-03-04T20:55:44Z,check_formatting,https://github.com/vitessio/vitess/actions/runs/622354616
-2021-03-04T20:55:44Z,golangci-lint,https://github.com/vitessio/vitess/actions/runs/622354614
-2021-03-04T21:03:51Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/622371178
-2021-03-04T21:04:08Z,Cluster (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/622371963
-2021-03-04T22:33:06Z,endtoend,https://github.com/vitessio/vitess/actions/runs/622581373
-2021-03-04T22:33:06Z,unit_race,https://github.com/vitessio/vitess/actions/runs/622581402
 2021-03-04T22:55:12Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/622632935
 2021-03-05T02:15:58Z,Cluster (11),https://github.com/vitessio/vitess/actions/runs/623057253
 2021-03-05T02:15:58Z,Cluster (17),https://github.com/vitessio/vitess/actions/runs/623057243
@@ -9991,10 +9985,16 @@
 2021-06-28T10:16:25Z,docker_test_1,https://github.com/vitessio/vitess/actions/runs/978597507
 2021-06-28T10:16:25Z,endtoend,https://github.com/vitessio/vitess/actions/runs/978597509
 2021-06-28T10:17:08Z,Cluster (11),https://github.com/vitessio/vitess/actions/runs/978599799
+2021-06-28T10:17:08Z,Cluster (14),https://github.com/vitessio/vitess/actions/runs/978599778
 2021-06-28T10:17:08Z,Cluster (16),https://github.com/vitessio/vitess/actions/runs/978599825
+2021-06-28T10:17:08Z,Cluster (21),https://github.com/vitessio/vitess/actions/runs/978599795
 2021-06-28T10:17:08Z,Cluster (resharding),https://github.com/vitessio/vitess/actions/runs/978599754
 2021-06-28T10:17:08Z,Cluster (resharding_bytes),https://github.com/vitessio/vitess/actions/runs/978599775
 2021-06-28T10:17:08Z,docker_test_1,https://github.com/vitessio/vitess/actions/runs/978599768
 2021-06-28T10:17:08Z,endtoend,https://github.com/vitessio/vitess/actions/runs/978599766
 2021-06-28T10:35:50Z,Cluster (resharding),https://github.com/vitessio/vitess/actions/runs/978652209
+2021-06-28T10:35:50Z,Cluster (resharding_bytes),https://github.com/vitessio/vitess/actions/runs/978652259
+2021-06-28T10:35:50Z,Cluster (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/978652218
+2021-06-28T10:35:50Z,Unit Test (mariadb101),https://github.com/vitessio/vitess/actions/runs/978652241
 2021-06-28T10:35:50Z,endtoend,https://github.com/vitessio/vitess/actions/runs/978652245
+2021-06-28T10:39:36Z,pr-labels,https://github.com/vitessio/vitess/actions/runs/978662398
