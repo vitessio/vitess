@@ -179,13 +179,6 @@ func TestUnShardedRecoveryAfterSharding(t *testing.T) {
 	// remove the original tablets in the original shard
 	removeTablets(t, []*cluster.Vttablet{master, replica1, rdOnly})
 
-	for _, tablet := range []*cluster.Vttablet{replica1, rdOnly} {
-		err = localCluster.VtctlclientProcess.ExecuteCommand("DeleteTablet", tablet.Alias)
-		require.NoError(t, err)
-	}
-	err = localCluster.VtctlclientProcess.ExecuteCommand("DeleteTablet", "-allow_master", master.Alias)
-	require.NoError(t, err)
-
 	// rebuild the serving graph, all mentions of the old shards should be gone
 	err = localCluster.VtctlclientProcess.ExecuteCommand("RebuildKeyspaceGraph", "test_keyspace")
 	require.NoError(t, err)
@@ -313,13 +306,6 @@ func TestShardedRecovery(t *testing.T) {
 
 	// remove the original tablets in the original shard
 	removeTablets(t, []*cluster.Vttablet{master, replica1, rdOnly})
-
-	for _, tablet := range []*cluster.Vttablet{replica1, rdOnly} {
-		err = localCluster.VtctlclientProcess.ExecuteCommand("DeleteTablet", tablet.Alias)
-		require.NoError(t, err)
-	}
-	err = localCluster.VtctlclientProcess.ExecuteCommand("DeleteTablet", "-allow_master", master.Alias)
-	require.NoError(t, err)
 
 	// rebuild the serving graph, all mentions of the old shards should be gone
 	err = localCluster.VtctlclientProcess.ExecuteCommand("RebuildKeyspaceGraph", "test_keyspace")

@@ -487,16 +487,6 @@ func TestMergesharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 	}
 	wg.Wait()
 
-	for _, tablet := range []cluster.Vttablet{*shard0Replica, *shard1Replica, *shard0Rdonly, *shard1Rdonly} {
-		err = clusterInstance.VtctlclientProcess.ExecuteCommand("DeleteTablet", tablet.Alias)
-		require.NoError(t, err)
-	}
-
-	for _, tablet := range []cluster.Vttablet{*shard0Master, *shard1Master} {
-		err = clusterInstance.VtctlclientProcess.ExecuteCommand("DeleteTablet", "-allow_master", tablet.Alias)
-		require.NoError(t, err)
-	}
-
 	// rebuild the serving graph, all mentions of the old shards should be gone
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("RebuildKeyspaceGraph", keyspaceName)
 	require.NoError(t, err)

@@ -929,13 +929,6 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 	}
 	wg.Wait()
 
-	for _, tablet := range []cluster.Vttablet{*shard1Replica1, *shard1Replica2, *shard1Rdonly, *shard1RdonlyZ2} {
-		err = clusterInstance.VtctlclientProcess.ExecuteCommand("DeleteTablet", tablet.Alias)
-		require.Nil(t, err)
-	}
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("DeleteTablet", "-allow_master", shard1Master.Alias)
-	require.Nil(t, err)
-
 	// rebuild the serving graph, all mentions of the old shards should be gone
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("RebuildKeyspaceGraph", keyspaceName)
 	require.Nil(t, err)
