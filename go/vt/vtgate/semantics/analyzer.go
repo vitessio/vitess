@@ -19,6 +19,8 @@ package semantics
 import (
 	"fmt"
 
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
+
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -29,7 +31,8 @@ type (
 	analyzer struct {
 		si SchemaInformation
 
-		Tables    []*TableInfo
+		Tables    []*RealTable
+		ITables   []TableInfo
 		scopes    []*scope
 		exprDeps  map[sqlparser.Expr]TableSet
 		err       error
@@ -99,7 +102,7 @@ func (a *analyzer) analyzeDown(cursor *sqlparser.Cursor) bool {
 }
 
 func (a *analyzer) resolveColumn(colName *sqlparser.ColName, current *scope) (TableSet, error) {
-	var t *TableInfo
+	var t *RealTable
 	var err error
 	if colName.Qualifier.IsEmpty() {
 		t, err = a.resolveUnQualifiedColumn(current, colName)
@@ -142,7 +145,7 @@ func (a *analyzer) analyzeTableExpr(tableExpr sqlparser.TableExpr) error {
 }
 
 // resolveQualifiedColumn handles `tabl.col` expressions
-func (a *analyzer) resolveQualifiedColumn(current *scope, expr *sqlparser.ColName) (*TableInfo, error) {
+func (a *analyzer) resolveQualifiedColumn(current *scope, expr *sqlparser.ColName) (*RealTable, error) {
 	// search up the scope stack until we find a match
 	for current != nil {
 		dbName := expr.Qualifier.Qualifier.String()
@@ -159,14 +162,14 @@ func (a *analyzer) resolveQualifiedColumn(current *scope, expr *sqlparser.ColNam
 }
 
 // resolveUnQualifiedColumn
-func (a *analyzer) resolveUnQualifiedColumn(current *scope, expr *sqlparser.ColName) (*TableInfo, error) {
+func (a *analyzer) resolveUnQualifiedColumn(current *scope, expr *sqlparser.ColName) (*RealTable, error) {
 	if len(current.tables) == 1 {
 		for _, tableExpr := range current.tables {
 			return tableExpr, nil
 		}
 	}
 
-	var tblInfo *TableInfo
+	var tblInfo *RealTable
 	for _, tbl := range current.tables {
 		if tbl.Table == nil || !tbl.Table.ColumnListAuthoritative {
 			return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.NonUniqError, fmt.Sprintf("Column '%s' in field list is ambiguous", sqlparser.String(expr)))
@@ -192,6 +195,34 @@ func (a *analyzer) tableSetFor(t *sqlparser.AliasedTableExpr) TableSet {
 	panic("unknown table")
 }
 
+func (a *analyzer) createTable(t sqlparser.TableName, alias *sqlparser.AliasedTableExpr, tbl *vindexes.Table) (TableInfo, *RealTable) {
+	dbName := t.Qualifier.String()
+	if dbName == "" {
+		dbName = a.currentDb
+	}
+	if alias.As.IsEmpty() {
+		realTable := &RealTable{
+			dbName:    dbName,
+			tableName: t.Name.String(),
+			ASTNode:   alias,
+			Table:     tbl,
+		}
+		return realTable, realTable
+	}
+	s := alias.As.String()
+	aliasedTable := &AliasedTable{
+		tableName: s,
+		ASTNode:   alias,
+		Table:     tbl,
+	}
+	return aliasedTable, &RealTable{
+		dbName:    dbName,
+		tableName: s,
+		ASTNode:   alias,
+		Table:     tbl,
+	}
+}
+
 func (a *analyzer) bindTable(alias *sqlparser.AliasedTableExpr, expr sqlparser.SimpleTableExpr) error {
 	switch t := expr.(type) {
 	case *sqlparser.DerivedTable:
@@ -205,24 +236,11 @@ func (a *analyzer) bindTable(alias *sqlparser.AliasedTableExpr, expr sqlparser.S
 			return Gen4NotSupportedF("vindex in FROM")
 		}
 		scope := a.currentScope()
-		dbName := t.Qualifier.String()
-		if dbName == "" {
-			dbName = a.currentDb
-		}
-		var tableName string
-		if alias.As.IsEmpty() {
-			tableName = t.Name.String()
-		} else {
-			tableName = alias.As.String()
-		}
-		table := &TableInfo{
-			dbName:    dbName,
-			tableName: tableName,
-			ASTNode:   alias,
-			Table:     tbl,
-		}
+		tableInfo, table := a.createTable(t, alias, tbl)
+
 		a.Tables = append(a.Tables, table)
-		return scope.addTable(table)
+		a.ITables = append(a.ITables, tableInfo)
+		return scope.addTable(tableInfo, table)
 	}
 	return nil
 }
