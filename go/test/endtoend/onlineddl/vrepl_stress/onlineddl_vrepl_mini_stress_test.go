@@ -91,6 +91,7 @@ var (
 	onlineDDLStrategy     = "online -vreplication-test-suite -skip-topo"
 	hostname              = "localhost"
 	keyspaceName          = "ks"
+	shards                []cluster.Shard
 	cell                  = "zone1"
 	schemaChangeDirectory = ""
 	tableName             = `stress_test`
@@ -267,7 +268,7 @@ func TestMain(m *testing.M) {
 func TestSchemaChange(t *testing.T) {
 	defer cluster.PanicHandler(t)
 
-	shards := clusterInstance.Keyspaces[0].Shards
+	shards = clusterInstance.Keyspaces[0].Shards
 	require.Equal(t, 1, len(shards))
 
 	t.Run("create schema", func(t *testing.T) {
@@ -324,20 +325,28 @@ func TestSchemaChange(t *testing.T) {
 		testName := fmt.Sprintf("ALTER TABLE with workload %d/%d", (i + 1), countIterations)
 		t.Run(testName, func(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
-			testWithInitialSchema(t)
-			initTable(t)
-			var wg sync.WaitGroup
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				runMultipleConnections(ctx, t)
-			}()
-			hint := fmt.Sprintf("hint-alter-with-workload-%d", i)
-			uuid := testOnlineDDLStatement(t, fmt.Sprintf(alterHintStatement, hint), onlineDDLStrategy, "vtgate", hint)
-			onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
-			cancel() // will cause runMultipleConnections() to terminate
-			wg.Wait()
-			testSelectTableMetricsAfterMigration(t)
+			t.Run("create schema", func(t *testing.T) {
+				testWithInitialSchema(t)
+			})
+			t.Run("init table", func(t *testing.T) {
+				initTable(t)
+			})
+			t.Run("migrate", func(t *testing.T) {
+				var wg sync.WaitGroup
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					runMultipleConnections(ctx, t)
+				}()
+				hint := fmt.Sprintf("hint-alter-with-workload-%d", i)
+				uuid := testOnlineDDLStatement(t, fmt.Sprintf(alterHintStatement, hint), onlineDDLStrategy, "vtgate", hint)
+				onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+				cancel() // will cause runMultipleConnections() to terminate
+				wg.Wait()
+			})
+			t.Run("validate metrics", func(t *testing.T) {
+				testSelectTableMetricsAfterMigration(t)
+			})
 		})
 	}
 }
@@ -375,7 +384,8 @@ func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy str
 	assert.NoError(t, err)
 
 	if !strategySetting.Strategy.IsDirect() {
-		time.Sleep(time.Second * 20)
+		status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, 30*time.Second, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+		fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 	}
 
 	if expectHint != "" {
