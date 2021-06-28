@@ -200,14 +200,15 @@ func newScope(parent *scope) *scope {
 }
 
 func (s *scope) addTable(info TableInfo, table *RealTable) error {
-	for _, scopeTable := range s.tables {
-		b := scopeTable.tableName == table.tableName
-		b2 := scopeTable.dbName == table.dbName
-		if b && b2 {
+	for _, scopeTable := range s.itables {
+		scopeTableName, err := scopeTable.Name()
+		if err != nil {
+			return err
+		}
+		if info.Matches(scopeTableName) {
 			return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.NonUniqTable, "Not unique table/alias: '%s'", table.tableName)
 		}
 	}
-
 	s.tables = append(s.tables, table)
 	s.itables = append(s.itables, info)
 	return nil
