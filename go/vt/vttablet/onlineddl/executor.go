@@ -505,6 +505,18 @@ func (e *Executor) validateTableForAlterAction(ctx context.Context, onlineDDL *s
 	return nil
 }
 
+// primaryPosition returns the MySQL/MariaDB position (typically GTID pos) on the tablet
+func (e *Executor) primaryPosition(ctx context.Context) (pos mysql.Position, err error) {
+	conn, err := dbconnpool.NewDBConnection(ctx, e.env.Config().DB.DbaWithDB())
+	if err != nil {
+		return pos, err
+	}
+	defer conn.Close()
+
+	pos, err = conn.PrimaryPosition()
+	return pos, err
+}
+
 // terminateVReplMigration stops vreplication, then removes the _vt.vreplication entry for the given migration
 func (e *Executor) terminateVReplMigration(ctx context.Context, uuid string) error {
 	tmClient := tmclient.NewTabletManagerClient()
@@ -606,7 +618,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 	if isVreplicationTestSuite {
 		// The testing suite may inject queries internally from the server via a recurring EVENT.
 		// Those queries are unaffected by UpdateSourceBlacklistedTables() because they don't go through Vitess.
-		// We therefore hard-rename the table elsewhere, such that the queries will hard-fail.
+		// We therefore hard-rename the table here, such that the queries will hard-fail.
 		beforeTableName := fmt.Sprintf("%s_before", onlineDDL.Table)
 		parsed := sqlparser.BuildParsedQuery(sqlRenameTable,
 			onlineDDL.Table, beforeTableName,
@@ -614,6 +626,10 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 		if _, err = e.execQuery(ctx, parsed.Query); err != nil {
 			return err
 		}
+	}
+	postWritesPos, err := e.primaryPosition(ctx)
+	if err != nil {
+		return err
 	}
 
 	// Writes are now disabled on table. Read up-to-date vreplication info, specifically to get latest (and fixed) pos:
@@ -626,12 +642,13 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 		ctx, cancel := context.WithTimeout(ctx, 2*cutOverThreshold)
 		defer cancel()
 		// Wait for target to reach the up-to-date pos
-		if err := tmClient.VReplicationWaitForPos(ctx, tablet.Tablet, int(s.id), s.pos); err != nil {
+		if err := tmClient.VReplicationWaitForPos(ctx, tablet.Tablet, int(s.id), mysql.EncodePosition(postWritesPos)); err != nil {
 			return err
 		}
 		// Target is now in sync with source!
 		return nil
 	}
+	log.Infof("VReplication migration %v waiting for position %v", s.workflow, mysql.EncodePosition(postWritesPos))
 	if err := waitForPos(); err != nil {
 		return err
 	}
