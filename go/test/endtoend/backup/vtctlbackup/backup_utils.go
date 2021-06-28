@@ -472,6 +472,8 @@ func stopAllTablets() {
 	var mysqlProcs []*exec.Cmd
 	for _, tablet := range []*cluster.Vttablet{master, replica1, replica2} {
 		tablet.VttabletProcess.TearDown()
+		// We ignore the error here because for non primary tablets the record would already be deleted by teardown
+		localCluster.VtctlclientProcess.ExecuteCommand("DeleteTablet", "-allow_master", tablet.Alias)
 		if tablet.MysqlctldProcess.TabletUID > 0 {
 			tablet.MysqlctldProcess.Stop()
 			continue
