@@ -474,12 +474,10 @@ func stopAllTablets() {
 		tablet.VttabletProcess.TearDown()
 		if tablet.MysqlctldProcess.TabletUID > 0 {
 			tablet.MysqlctldProcess.Stop()
-			localCluster.VtctlclientProcess.ExecuteCommand("DeleteTablet", "-allow_master", tablet.Alias)
 			continue
 		}
 		proc, _ := tablet.MysqlctlProcess.StopProcess()
 		mysqlProcs = append(mysqlProcs, proc)
-		localCluster.VtctlclientProcess.ExecuteCommand("DeleteTablet", "-allow_master", tablet.Alias)
 	}
 	for _, proc := range mysqlProcs {
 		proc.Wait()
@@ -573,8 +571,6 @@ func vtctlBackup(t *testing.T, tabletType string) {
 	err = replica2.VttabletProcess.TearDown()
 	require.Nil(t, err)
 
-	err = localCluster.VtctlclientProcess.ExecuteCommand("DeleteTablet", replica2.Alias)
-	require.Nil(t, err)
 	_, err = master.VttabletProcess.QueryTablet("DROP TABLE vt_insert_test", keyspaceName, true)
 	require.Nil(t, err)
 
