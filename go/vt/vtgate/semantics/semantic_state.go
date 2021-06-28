@@ -30,6 +30,13 @@ type (
 	TableInfo interface {
 		Matches(name sqlparser.TableName) bool
 		Authoritative() bool
+		Name() (sqlparser.TableName, error)
+		GetExpr() *sqlparser.AliasedTableExpr
+		GetColumns() []ColumnInfo
+	}
+
+	ColumnInfo struct {
+		Name string
 	}
 
 	// RealTable contains the alias table expr and vindex table
@@ -71,12 +78,49 @@ type (
 	}
 )
 
+var _ TableInfo = (*RealTable)(nil)
+var _ TableInfo = (*AliasedTable)(nil)
+
+func vindexTableToColumnInfo(tbl *vindexes.Table) []ColumnInfo {
+	cols := make([]ColumnInfo, 0, len(tbl.Columns))
+	for _, col := range tbl.Columns {
+		cols = append(cols, ColumnInfo{
+			Name: col.Name.String(),
+		})
+	}
+	return cols
+}
+
+func (a *AliasedTable) GetColumns() []ColumnInfo {
+	return vindexTableToColumnInfo(a.Table)
+}
+
+func (a *AliasedTable) GetExpr() *sqlparser.AliasedTableExpr {
+	return a.ASTNode
+}
+
+func (a *AliasedTable) Name() (sqlparser.TableName, error) {
+	return a.ASTNode.TableName()
+}
+
 func (a *AliasedTable) Authoritative() bool {
 	return a.Table != nil && a.Table.ColumnListAuthoritative
 }
 
 func (a *AliasedTable) Matches(name sqlparser.TableName) bool {
 	return a.tableName == name.Name.String() && name.Qualifier.IsEmpty()
+}
+
+func (r *RealTable) GetColumns() []ColumnInfo {
+	return vindexTableToColumnInfo(r.Table)
+}
+
+func (r *RealTable) GetExpr() *sqlparser.AliasedTableExpr {
+	return r.ASTNode
+}
+
+func (r *RealTable) Name() (sqlparser.TableName, error) {
+	return r.ASTNode.TableName()
 }
 
 func (r *RealTable) Authoritative() bool {
@@ -136,13 +180,7 @@ func (st *SemTable) Dependencies(expr sqlparser.Expr) TableSet {
 	return deps
 }
 
-// GetSelectTables returns the table in the select.
-func (st *SemTable) GetSelectTables(node *sqlparser.Select) []*RealTable {
-	scope := st.selectScope[node]
-	return scope.tables
-}
-
-func (st *SemTable) GetSelectITables(node *sqlparser.Select) []TableInfo {
+func (st *SemTable) GetSelectTables(node *sqlparser.Select) []TableInfo {
 	scope := st.selectScope[node]
 	return scope.itables
 }

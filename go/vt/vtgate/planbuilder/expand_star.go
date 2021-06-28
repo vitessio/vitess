@@ -38,7 +38,6 @@ func (sr *starRewriter) starRewrite(cursor *sqlparser.Cursor) bool {
 	switch node := cursor.Node().(type) {
 	case *sqlparser.Select:
 		tables := sr.semTable.GetSelectTables(node)
-		itables := sr.semTable.GetSelectITables(node)
 		var selExprs sqlparser.SelectExprs
 		for _, selectExpr := range node.SelectExprs {
 			starExpr, isStarExpr := selectExpr.(*sqlparser.StarExpr)
@@ -46,7 +45,7 @@ func (sr *starRewriter) starRewrite(cursor *sqlparser.Cursor) bool {
 				selExprs = append(selExprs, selectExpr)
 				continue
 			}
-			colNames, expStar, err := expandTableColumns(itables, tables, starExpr)
+			colNames, expStar, err := expandTableColumns(tables, starExpr)
 			if err != nil {
 				sr.err = err
 				return false
@@ -65,35 +64,34 @@ func (sr *starRewriter) starRewrite(cursor *sqlparser.Cursor) bool {
 	return true
 }
 
-func expandTableColumns(itables []semantics.TableInfo, tables []*semantics.RealTable, starExpr *sqlparser.StarExpr) (sqlparser.SelectExprs, *expandStarInfo, error) {
+func expandTableColumns(itables []semantics.TableInfo, starExpr *sqlparser.StarExpr) (sqlparser.SelectExprs, *expandStarInfo, error) {
 	unknownTbl := true
 	var colNames sqlparser.SelectExprs
 	expStar := &expandStarInfo{
 		tblColMap: map[*sqlparser.AliasedTableExpr]sqlparser.SelectExprs{},
 	}
 
-	for i, tbl := range itables {
+	for _, tbl := range itables {
 		if !starExpr.TableName.IsEmpty() && !tbl.Matches(starExpr.TableName) {
 			continue
 		}
-		table := tables[i]
 		unknownTbl = false
 		if !tbl.Authoritative() {
 			expStar.proceed = false
 			break
 		}
 		expStar.proceed = true
-		tblName, err := table.ASTNode.TableName()
+		tblName, err := tbl.Name()
 		if err != nil {
 			return nil, nil, err
 		}
-		for _, col := range table.Table.Columns {
+		for _, col := range tbl.GetColumns() {
 			colNames = append(colNames, &sqlparser.AliasedExpr{
-				Expr: sqlparser.NewColNameWithQualifier(col.Name.String(), tblName),
-				As:   sqlparser.NewColIdent(col.Name.String()),
+				Expr: sqlparser.NewColNameWithQualifier(col.Name, tblName),
+				As:   sqlparser.NewColIdent(col.Name),
 			})
 		}
-		expStar.tblColMap[table.ASTNode] = colNames
+		expStar.tblColMap[tbl.GetExpr()] = colNames
 	}
 
 	if unknownTbl {
