@@ -150,7 +150,6 @@ func TestBindingSingleAliasedTable(t *testing.T) {
 			"select tabl.col from X as tabl",
 			"select col from d.X as tabl",
 			"select tabl.col from d.X as tabl",
-			"select d.tabl.col from d.X as tabl",
 		}
 		for _, query := range queries {
 			t.Run(query, func(t *testing.T) {
@@ -171,6 +170,7 @@ func TestBindingSingleAliasedTable(t *testing.T) {
 			"select d.X.col from d.X as tabl",
 			"select d.tabl.col from X as tabl",
 			"select d.tabl.col from ks.X as tabl",
+			"select d.tabl.col from d.X as tabl",
 		}
 		for _, query := range queries {
 			t.Run(query, func(t *testing.T) {
@@ -267,7 +267,6 @@ func TestBindingMultiTable(t *testing.T) {
 
 	t.Run("negative tests", func(t *testing.T) {
 		queries := []string{
-			"select 1 from d.tabl, d.foo as tabl",
 			"select 1 from d.tabl, d.tabl",
 			"select 1 from d.tabl, tabl",
 			"select 1 from user join user_extra user",
@@ -375,12 +374,12 @@ func TestUnknownColumnMap2(t *testing.T) {
 		{
 			name:   "no info about tables",
 			schema: map[string]*vindexes.Table{"a": {}, "b": {}},
-			err:    true,
+			err:    false,
 		},
 		{
 			name:   "non authoritative columns",
 			schema: map[string]*vindexes.Table{"a": &nonAuthoritativeTblA, "b": &nonAuthoritativeTblA},
-			err:    true,
+			err:    false,
 		},
 		{
 			name:   "non authoritative columns - one authoritative and one not",
@@ -437,7 +436,7 @@ func TestUnknownPredicate(t *testing.T) {
 		{
 			name:   "no info about tables",
 			schema: map[string]*vindexes.Table{"a": authoritativeTblA, "b": authoritativeTblB},
-			err:    true,
+			err:    false,
 		},
 	}
 	for _, test := range tests {
