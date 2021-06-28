@@ -37,17 +37,19 @@ type (
 		err       error
 		currentDb string
 
-		selectScope map[*sqlparser.Select]*scope
+		rScope map[*sqlparser.Select]*scope
+		wScope map[*sqlparser.Select]*scope
 	}
 )
 
 // newAnalyzer create the semantic analyzer
 func newAnalyzer(dbName string, si SchemaInformation) *analyzer {
 	return &analyzer{
-		exprDeps:    map[sqlparser.Expr]TableSet{},
-		selectScope: map[*sqlparser.Select]*scope{},
-		currentDb:   dbName,
-		si:          si,
+		exprDeps:  map[sqlparser.Expr]TableSet{},
+		rScope:    map[*sqlparser.Select]*scope{},
+		wScope:    map[*sqlparser.Select]*scope{},
+		currentDb: dbName,
+		si:        si,
 	}
 }
 
@@ -59,7 +61,7 @@ func Analyze(statement sqlparser.Statement, currentDb string, si SchemaInformati
 	if err != nil {
 		return nil, err
 	}
-	return &SemTable{exprDependencies: analyzer.exprDeps, Tables: analyzer.Tables, selectScope: analyzer.selectScope}, nil
+	return &SemTable{exprDependencies: analyzer.exprDeps, Tables: analyzer.Tables, selectScope: analyzer.rScope}, nil
 }
 
 // analyzeDown pushes new scopes when we encounter sub queries,
@@ -70,7 +72,7 @@ func (a *analyzer) analyzeDown(cursor *sqlparser.Cursor) bool {
 	switch node := n.(type) {
 	case *sqlparser.Select:
 		a.push(newScope(current))
-		a.selectScope[node] = a.currentScope()
+		a.rScope[node] = a.currentScope()
 		if err := a.analyzeTableExprs(node.From); err != nil {
 			a.err = err
 			return false
