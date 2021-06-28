@@ -31,8 +31,7 @@ type (
 	analyzer struct {
 		si SchemaInformation
 
-		Tables    []*RealTable
-		ITables   []TableInfo
+		Tables    []TableInfo
 		scopes    []*scope
 		exprDeps  map[sqlparser.Expr]TableSet
 		err       error
@@ -60,7 +59,7 @@ func Analyze(statement sqlparser.Statement, currentDb string, si SchemaInformati
 	if err != nil {
 		return nil, err
 	}
-	return &SemTable{exprDependencies: analyzer.exprDeps, Tables: analyzer.ITables, selectScope: analyzer.selectScope}, nil
+	return &SemTable{exprDependencies: analyzer.exprDeps, Tables: analyzer.Tables, selectScope: analyzer.selectScope}, nil
 }
 
 // analyzeDown pushes new scopes when we encounter sub queries,
@@ -102,7 +101,7 @@ func (a *analyzer) analyzeDown(cursor *sqlparser.Cursor) bool {
 }
 
 func (a *analyzer) resolveColumn(colName *sqlparser.ColName, current *scope) (TableSet, error) {
-	var t *RealTable
+	var t TableInfo
 	var err error
 	if colName.Qualifier.IsEmpty() {
 		t, err = a.resolveUnQualifiedColumn(current, colName)
@@ -112,7 +111,7 @@ func (a *analyzer) resolveColumn(colName *sqlparser.ColName, current *scope) (Ta
 	if err != nil {
 		return 0, err
 	}
-	return a.tableSetFor(t.ASTNode), nil
+	return a.tableSetFor(t.GetExpr()), nil
 }
 
 func (a *analyzer) analyzeTableExprs(tablExprs sqlparser.TableExprs) error {
@@ -145,14 +144,11 @@ func (a *analyzer) analyzeTableExpr(tableExpr sqlparser.TableExpr) error {
 }
 
 // resolveQualifiedColumn handles `tabl.col` expressions
-func (a *analyzer) resolveQualifiedColumn(current *scope, expr *sqlparser.ColName) (*RealTable, error) {
+func (a *analyzer) resolveQualifiedColumn(current *scope, expr *sqlparser.ColName) (TableInfo, error) {
 	// search up the scope stack until we find a match
 	for current != nil {
-		dbName := expr.Qualifier.Qualifier.String()
-		tableName := expr.Qualifier.Name.String()
 		for _, table := range current.tables {
-			if tableName == table.tableName &&
-				(dbName == table.dbName || (dbName == "" && (table.dbName == a.currentDb || a.currentDb == ""))) {
+			if table.Matches(expr.Qualifier) {
 				return table, nil
 			}
 		}
@@ -162,20 +158,18 @@ func (a *analyzer) resolveQualifiedColumn(current *scope, expr *sqlparser.ColNam
 }
 
 // resolveUnQualifiedColumn
-func (a *analyzer) resolveUnQualifiedColumn(current *scope, expr *sqlparser.ColName) (*RealTable, error) {
+func (a *analyzer) resolveUnQualifiedColumn(current *scope, expr *sqlparser.ColName) (TableInfo, error) {
 	if len(current.tables) == 1 {
-		for _, tableExpr := range current.tables {
-			return tableExpr, nil
-		}
+		return current.tables[0], nil
 	}
 
-	var tblInfo *RealTable
+	var tblInfo TableInfo
 	for _, tbl := range current.tables {
-		if tbl.Table == nil || !tbl.Table.ColumnListAuthoritative {
+		if !tbl.Authoritative() {
 			return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.NonUniqError, fmt.Sprintf("Column '%s' in field list is ambiguous", sqlparser.String(expr)))
 		}
-		for _, col := range tbl.Table.Columns {
-			if expr.Name.Equal(col.Name) {
+		for _, col := range tbl.GetColumns() {
+			if expr.Name.String() == col.Name {
 				if tblInfo != nil {
 					return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.NonUniqError, fmt.Sprintf("Column '%s' in field list is ambiguous", sqlparser.String(expr)))
 				}
@@ -188,36 +182,28 @@ func (a *analyzer) resolveUnQualifiedColumn(current *scope, expr *sqlparser.ColN
 
 func (a *analyzer) tableSetFor(t *sqlparser.AliasedTableExpr) TableSet {
 	for i, t2 := range a.Tables {
-		if t == t2.ASTNode {
+		if t == t2.GetExpr() {
 			return TableSet(1 << i)
 		}
 	}
 	panic("unknown table")
 }
 
-func (a *analyzer) createTable(t sqlparser.TableName, alias *sqlparser.AliasedTableExpr, tbl *vindexes.Table) (TableInfo, *RealTable) {
+func (a *analyzer) createTable(t sqlparser.TableName, alias *sqlparser.AliasedTableExpr, tbl *vindexes.Table) TableInfo {
 	dbName := t.Qualifier.String()
 	if dbName == "" {
 		dbName = a.currentDb
 	}
 	if alias.As.IsEmpty() {
-		realTable := &RealTable{
+		return &RealTable{
 			dbName:    dbName,
 			tableName: t.Name.String(),
 			ASTNode:   alias,
 			Table:     tbl,
 		}
-		return realTable, realTable
 	}
-	s := alias.As.String()
-	aliasedTable := &AliasedTable{
-		tableName: s,
-		ASTNode:   alias,
-		Table:     tbl,
-	}
-	return aliasedTable, &RealTable{
-		dbName:    dbName,
-		tableName: s,
+	return &AliasedTable{
+		tableName: alias.As.String(),
 		ASTNode:   alias,
 		Table:     tbl,
 	}
@@ -236,11 +222,10 @@ func (a *analyzer) bindTable(alias *sqlparser.AliasedTableExpr, expr sqlparser.S
 			return Gen4NotSupportedF("vindex in FROM")
 		}
 		scope := a.currentScope()
-		tableInfo, table := a.createTable(t, alias, tbl)
+		tableInfo := a.createTable(t, alias, tbl)
 
-		a.Tables = append(a.Tables, table)
-		a.ITables = append(a.ITables, tableInfo)
-		return scope.addTable(tableInfo, table)
+		a.Tables = append(a.Tables, tableInfo)
+		return scope.addTable(tableInfo)
 	}
 	return nil
 }

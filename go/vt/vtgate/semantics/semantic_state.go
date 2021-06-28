@@ -68,9 +68,8 @@ type (
 	}
 
 	scope struct {
-		parent  *scope
-		tables  []*RealTable
-		itables []TableInfo
+		parent *scope
+		tables []TableInfo
 	}
 
 	// SchemaInformation is used tp provide table information from Vschema.
@@ -184,7 +183,7 @@ func (st *SemTable) Dependencies(expr sqlparser.Expr) TableSet {
 
 func (st *SemTable) GetSelectTables(node *sqlparser.Select) []TableInfo {
 	scope := st.selectScope[node]
-	return scope.itables
+	return scope.tables
 }
 
 // AddExprs adds new select exprs to the SemTable.
@@ -199,18 +198,17 @@ func newScope(parent *scope) *scope {
 	return &scope{parent: parent}
 }
 
-func (s *scope) addTable(info TableInfo, table *RealTable) error {
-	for _, scopeTable := range s.itables {
+func (s *scope) addTable(info TableInfo) error {
+	for _, scopeTable := range s.tables {
 		scopeTableName, err := scopeTable.Name()
 		if err != nil {
 			return err
 		}
 		if info.Matches(scopeTableName) {
-			return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.NonUniqTable, "Not unique table/alias: '%s'", table.tableName)
+			return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.NonUniqTable, "Not unique table/alias: '%s'", scopeTableName.Name.String())
 		}
 	}
-	s.tables = append(s.tables, table)
-	s.itables = append(s.itables, info)
+	s.tables = append(s.tables, info)
 	return nil
 }
 
