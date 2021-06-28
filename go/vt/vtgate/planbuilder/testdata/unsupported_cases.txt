@@ -40,30 +40,37 @@ Gen4 plan same as above
 # natural join
 "select * from user natural join user_extra"
 "unsupported: natural join"
+Gen4 plan same as above
 
 # join with USING construct
 "select * from user join user_extra using(id)"
 "unsupported: join with USING(column_list) clause for complex queries"
+Gen4 plan same as above
 
 # join with USING construct with 3 tables
 "select user.id from user join user_extra using(id) join music using(id2)"
 "unsupported: join with USING(column_list) clause for complex queries"
+Gen4 plan same as above
 
 # natural left join
 "select * from user natural left join user_extra"
 "unsupported: natural left join"
+Gen4 plan same as above
 
 # natural right join
 "select * from user natural right join user_extra"
 "unsupported: natural right join"
+Gen4 plan same as above
 
 # left join with expressions
 "select user.id, user_extra.col+1 from user left join user_extra on user.col = user_extra.col"
 "unsupported: cross-shard left join and column expressions"
+Gen4 plan same as above
 
 # left join with expressions, with three-way join (different code path)
 "select user.id, user_extra.col+1 from user left join user_extra on user.col = user_extra.col join user_extra e"
 "unsupported: cross-shard left join and column expressions"
+Gen4 plan same as above
 
 # left join where clauses
 "select user.id from user left join user_extra on user.col = user_extra.col where user_extra.col = 5"

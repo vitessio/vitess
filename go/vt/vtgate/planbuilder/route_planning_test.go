@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"testing"
 
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/abstract"
+
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 
 	"github.com/stretchr/testify/assert"
@@ -99,7 +101,7 @@ func TestMergeJoins(t *testing.T) {
 	}}
 	for i, tc := range tests {
 		t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
-			result := tryMerge(tc.l, tc.r, tc.predicates, semantics.NewSemTable())
+			result := tryMerge(tc.l, tc.r, tc.predicates, semantics.NewSemTable(), true)
 			assert.Equal(t, tc.expected, result)
 		})
 	}
@@ -121,4 +123,65 @@ func TestClone(t *testing.T) {
 	clonedRP.vindexPreds[0].foundVindex = &vindexes.Null{}
 	assert.NotNil(t, clonedRP.vindexPreds[0].foundVindex)
 	assert.Nil(t, original.vindexPreds[0].foundVindex)
+}
+
+func TestCreateRoutePlanForOuter(t *testing.T) {
+	assert := assert.New(t)
+	m1 := &routeTable{
+		qtable: &abstract.QueryTable{
+			TableID: semantics.TableSet(1),
+			Table:   sqlparser.TableName{},
+		},
+		vtable: &vindexes.Table{},
+	}
+	m2 := &routeTable{
+		qtable: &abstract.QueryTable{
+			TableID: semantics.TableSet(2),
+			Table:   sqlparser.TableName{},
+		},
+		vtable: &vindexes.Table{},
+	}
+	m3 := &routeTable{
+		qtable: &abstract.QueryTable{
+			TableID: semantics.TableSet(4),
+			Table:   sqlparser.TableName{},
+		},
+		vtable: &vindexes.Table{},
+	}
+	a := &routePlan{
+		routeOpCode: engine.SelectUnsharded,
+		solved:      semantics.TableSet(1),
+		tables:      []relation{m1},
+	}
+	col1 := sqlparser.NewColNameWithQualifier("id", sqlparser.TableName{
+		Name: sqlparser.NewTableIdent("m1"),
+	})
+	col2 := sqlparser.NewColNameWithQualifier("id", sqlparser.TableName{
+		Name: sqlparser.NewTableIdent("m2"),
+	})
+	b := &routePlan{
+		routeOpCode: engine.SelectUnsharded,
+		solved:      semantics.TableSet(6),
+		tables:      []relation{m2, m3},
+		predicates:  []sqlparser.Expr{equals(col1, col2)},
+	}
+	semTable := semantics.NewSemTable()
+	merge := tryMerge(a, b, []sqlparser.Expr{}, semTable, false)
+	assert.NotNil(merge)
+}
+
+func equals(left, right sqlparser.Expr) sqlparser.Expr {
+	return &sqlparser.ComparisonExpr{
+		Operator: sqlparser.EqualOp,
+		Left:     left,
+		Right:    right,
+	}
+}
+
+func colName(table, column string) *sqlparser.ColName {
+	return &sqlparser.ColName{Name: sqlparser.NewColIdent(column), Qualifier: tableName(table)}
+}
+
+func tableName(name string) sqlparser.TableName {
+	return sqlparser.TableName{Name: sqlparser.NewTableIdent(name)}
 }
