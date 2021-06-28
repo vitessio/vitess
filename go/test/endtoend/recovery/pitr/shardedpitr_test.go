@@ -315,6 +315,10 @@ func performResharding(t *testing.T) {
 	// remove the original tablets in the original shard
 	removeTablets(t, []*cluster.Vttablet{master, replica})
 
+	// We need to delete the tablet record for a master tablet, since it is not deleted on its own
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("DeleteTablet", "-allow_master", master.Alias)
+	require.NoError(t, err)
+
 	// rebuild the serving graph, all mentions of the old shards should be gone
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("RebuildKeyspaceGraph", "ks")
 	require.NoError(t, err)

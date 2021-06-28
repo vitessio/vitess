@@ -928,6 +928,9 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 		}(tablet)
 	}
 	wg.Wait()
+	// We need to delete the tablet record for a master tablet, since it is not deleted on its own
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("DeleteTablet", "-allow_master", shard1Master.Alias)
+	require.NoError(t, err)
 
 	// rebuild the serving graph, all mentions of the old shards should be gone
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("RebuildKeyspaceGraph", keyspaceName)

@@ -298,5 +298,10 @@ func tearDown(t *testing.T, initMysql bool) {
 		//require.Nil(t, err)
 
 		resetTabletDirectory(t, tablet, initMysql)
+		if tablet.Alias == (*master).Alias {
+			// We need to delete the tablet record for a master tablet, since it is not deleted on its own
+			err := localCluster.VtctlclientProcess.ExecuteCommand("DeleteTablet", "-allow_master", master.Alias)
+			require.NoError(t, err)
+		}
 	}
 }
