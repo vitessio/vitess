@@ -126,9 +126,10 @@ var (
 )
 
 const (
-	maxTableRows    = 4096
-	maxConcurrency  = 5
-	countIterations = 5
+	maxTableRows                  = 4096
+	maxConcurrency                = 20
+	singleConnectionSleepInterval = 2 * time.Millisecond
+	countIterations               = 5
 )
 
 func TestMain(m *testing.M) {
@@ -453,7 +454,7 @@ func runSingleConnection(ctx context.Context, t *testing.T, done *int64) {
 			}
 		}
 		assert.Nil(t, err)
-		time.Sleep(10 * time.Millisecond)
+		time.Sleep(singleConnectionSleepInterval)
 	}
 }
 
