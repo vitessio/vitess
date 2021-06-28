@@ -227,8 +227,9 @@ var (
 )
 
 const (
-	maxTableRows   = 4096
-	maxConcurrency = 20
+	maxTableRows                  = 4096
+	maxConcurrency                = 20
+	singleConnectionSleepInterval = 2 * time.Millisecond
 )
 
 func resetOpOrder() {
@@ -428,7 +429,7 @@ func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy str
 
 	status := schema.OnlineDDLStatusComplete
 	if !strategySetting.Strategy.IsDirect() {
-		status = onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, 20*time.Second, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+		status = onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, 30*time.Second, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
 		fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 	}
 
@@ -535,7 +536,7 @@ func runSingleConnection(ctx context.Context, t *testing.T, done *int64) {
 			}
 		}
 		assert.Nil(t, err)
-		time.Sleep(2 * time.Millisecond)
+		time.Sleep(singleConnectionSleepInterval)
 	}
 }
 
