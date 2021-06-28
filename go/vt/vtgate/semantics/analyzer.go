@@ -60,7 +60,7 @@ func Analyze(statement sqlparser.Statement, currentDb string, si SchemaInformati
 	if err != nil {
 		return nil, err
 	}
-	return &SemTable{exprDependencies: analyzer.exprDeps, Tables: analyzer.Tables, selectScope: analyzer.selectScope}, nil
+	return &SemTable{exprDependencies: analyzer.exprDeps, Tables: analyzer.ITables, selectScope: analyzer.selectScope}, nil
 }
 
 // analyzeDown pushes new scopes when we encounter sub queries,

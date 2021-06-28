@@ -18,6 +18,7 @@ package semantics
 
 import (
 	"vitess.io/vitess/go/vt/key"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -37,6 +38,7 @@ type (
 
 	ColumnInfo struct {
 		Name string
+		Type querypb.Type
 	}
 
 	// RealTable contains the alias table expr and vindex table
@@ -60,8 +62,7 @@ type (
 
 	// SemTable contains semantic analysis information about the query.
 	SemTable struct {
-		Tables           []*RealTable
-		ITables          []TableInfo
+		Tables           []TableInfo
 		exprDependencies map[sqlparser.Expr]TableSet
 		selectScope      map[*sqlparser.Select]*scope
 	}
@@ -86,6 +87,7 @@ func vindexTableToColumnInfo(tbl *vindexes.Table) []ColumnInfo {
 	for _, col := range tbl.Columns {
 		cols = append(cols, ColumnInfo{
 			Name: col.Name.String(),
+			Type: col.Type,
 		})
 	}
 	return cols
@@ -141,10 +143,10 @@ func NewSemTable() *SemTable {
 	return &SemTable{exprDependencies: map[sqlparser.Expr]TableSet{}}
 }
 
-// TableSetFor returns the bitmask for this particular tableshoe
+// TableSetFor returns the bitmask for this particular table
 func (st *SemTable) TableSetFor(t *sqlparser.AliasedTableExpr) TableSet {
 	for idx, t2 := range st.Tables {
-		if t == t2.ASTNode {
+		if t == t2.GetExpr() {
 			return 1 << idx
 		}
 	}
@@ -152,7 +154,7 @@ func (st *SemTable) TableSetFor(t *sqlparser.AliasedTableExpr) TableSet {
 }
 
 // TableInfoFor returns the table info for the table set. It should contains only single table.
-func (st *SemTable) TableInfoFor(id TableSet) (*RealTable, error) {
+func (st *SemTable) TableInfoFor(id TableSet) (TableInfo, error) {
 	if id.NumberOfTables() > 1 {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] should only be used for single tables")
 	}
