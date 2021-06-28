@@ -300,7 +300,7 @@ func (vttablet *VttabletProcess) TearDown() error {
 		vttablet.proc = nil
 		return nil
 
-	case <-time.After(10 * time.Second):
+	case <-time.After(30 * time.Second):
 		vttablet.proc.Process.Kill()
 		vttablet.proc = nil
 		return <-vttablet.exit
