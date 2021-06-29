@@ -102,9 +102,9 @@ func (dialer *cachedConnDialer) sortEvictionsLocked() {
 		sort.Slice(dialer.evict, func(i, j int) bool {
 			left, right := dialer.evict[i], dialer.evict[j]
 			if left.refs == right.refs {
-				return left.lastAccessTime.After(right.lastAccessTime)
+				return right.lastAccessTime.After(left.lastAccessTime)
 			}
-			return left.refs > right.refs
+			return right.refs > left.refs
 		})
 		dialer.evictSorted = true
 	}
@@ -202,13 +202,13 @@ func (dialer *cachedConnDialer) pollOnce(addr string) (client tabletmanagerservi
 
 	dialer.sortEvictionsLocked()
 
-	conn := dialer.evict[len(dialer.evict)-1]
+	conn := dialer.evict[0]
 	if conn.refs != 0 {
 		dialer.m.Unlock()
 		return nil, nil, false, nil
 	}
 
-	dialer.evict = dialer.evict[:len(dialer.evict)-1]
+	dialer.evict = dialer.evict[1:]
 	delete(dialer.conns, conn.addr)
 	conn.cc.Close()
 	dialer.m.Unlock()
@@ -260,7 +260,7 @@ func (dialer *cachedConnDialer) newdial(addr string) (tabletmanagerservicepb.Tab
 		addr:                addr,
 	}
 	dialer.evict = append(dialer.evict, conn)
-	dialer.evictSorted = false
+	// dialer.evictSorted = false -- no need to do this here
 	dialer.conns[addr] = conn
 
 	return dialer.connWithCloser(conn)
