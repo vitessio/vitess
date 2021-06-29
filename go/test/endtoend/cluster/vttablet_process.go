@@ -307,6 +307,16 @@ func (vttablet *VttabletProcess) TearDown() error {
 	}
 }
 
+// Kill kills the running vttablet service
+func (vttablet *VttabletProcess) Kill() {
+	if vttablet.proc == nil || vttablet.exit == nil {
+		return
+	}
+	vttablet.proc.Process.Kill()
+	vttablet.proc = nil
+	<-vttablet.exit
+}
+
 // CreateDB creates the database for keyspace
 func (vttablet *VttabletProcess) CreateDB(keyspace string) error {
 	_, _ = vttablet.QueryTablet(fmt.Sprintf("drop database IF EXISTS vt_%s", keyspace), keyspace, false)

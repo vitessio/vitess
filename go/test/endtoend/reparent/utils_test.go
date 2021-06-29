@@ -461,10 +461,9 @@ func checkInsertedValues(ctx context.Context, t *testing.T, tablet *cluster.Vtta
 // region tablet operations
 
 func stopTablet(t *testing.T, tab *cluster.Vttablet, stopDatabase bool) {
-	err := tab.VttabletProcess.TearDown()
-	require.NoError(t, err)
+	tab.VttabletProcess.Kill()
 	if stopDatabase {
-		err = tab.MysqlctlProcess.Stop()
+		err := tab.MysqlctlProcess.Stop()
 		require.NoError(t, err)
 	}
 }
