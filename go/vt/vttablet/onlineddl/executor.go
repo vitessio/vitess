@@ -119,7 +119,7 @@ const (
 	etaSecondsNow                            = 0
 	rowsCopiedUnknown                        = 0
 	databasePoolSize                         = 3
-	vreplicationCutOverThreshold             = 3 * time.Second
+	vreplicationCutOverThreshold             = 5 * time.Second
 	vreplicationTestSuiteWaitSeconds         = 5
 )
 
