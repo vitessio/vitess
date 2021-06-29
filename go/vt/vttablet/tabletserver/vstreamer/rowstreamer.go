@@ -156,7 +156,6 @@ func (rs *rowStreamer) buildPlan() error {
 // buildPKColumnsFromUniqueKey assumes a unique key is indicated,
 func (rs *rowStreamer) buildPKColumnsFromUniqueKey() ([]int, error) {
 	var pkColumns = make([]int, 0)
-	fmt.Printf("========== rs.ukName=%s\n", rs.ukName)
 	// We wish to utilize a UNIQUE KEY which is not the PRIMARY KEY/
 	// For PRIMARY KEY, we already know what columns partiipate in the key,
 	// but for any other key, we need to go ahead and inspect the table/key definition
@@ -173,7 +172,6 @@ func (rs *rowStreamer) buildPKColumnsFromUniqueKey() ([]int, error) {
 	if err != nil {
 		return pkColumns, err
 	}
-	fmt.Printf("========== query=%s\n", query)
 	r, err := conn.ExecuteFetch(query, math.MaxInt64, true)
 	if err != nil {
 		return pkColumns, err
@@ -187,7 +185,6 @@ func (rs *rowStreamer) buildPKColumnsFromUniqueKey() ([]int, error) {
 		}
 		pkColumns = append(pkColumns, index)
 	}
-	fmt.Printf("========== pkColumns=%v\n", pkColumns)
 	return pkColumns, nil
 }
 
@@ -219,7 +216,7 @@ func (rs *rowStreamer) buildSelect() (string, error) {
 	prefix := ""
 	for _, col := range rs.plan.Table.Fields {
 		if rs.plan.isConvertColumnUsingUTF8(col.Name) {
-			buf.Myprintf("%sconvert(%v using utf8mb4)", prefix, sqlparser.NewColIdent(col.Name))
+			buf.Myprintf("%sconvert(%v using utf8mb4) as %v", prefix, sqlparser.NewColIdent(col.Name), sqlparser.NewColIdent(col.Name))
 		} else {
 			buf.Myprintf("%s%v", prefix, sqlparser.NewColIdent(col.Name))
 		}
