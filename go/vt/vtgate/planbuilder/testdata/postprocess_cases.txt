@@ -385,6 +385,28 @@ Gen4 plan same as above
 # ORDER BY invalid col number on scatter
 "select col from user order by 2"
 "column number out of range: 2"
+Gen4 error: Unknown column '2' in 'order clause'
+
+# ORDER BY column offset
+"select id as foo from music order by 1"
+{
+  "QueryType": "SELECT",
+  "Original": "select id as foo from music order by 1",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select id as foo, weight_string(id) from music where 1 != 1",
+    "OrderBy": "0 ASC",
+    "Query": "select id as foo, weight_string(id) from music order by 1 asc",
+    "ResultColumns": 1,
+    "Table": "music"
+  }
+}
+Gen4 plan same as above
 
 # ORDER BY NULL
 "select col from user order by null"
@@ -1191,6 +1213,27 @@ Gen4 plan same as above
     "OrderBy": "0 ASC",
     "Query": "select id as foo, weight_string(id) from music order by foo asc",
     "ResultColumns": 1,
+    "Table": "music"
+  }
+}
+Gen4 plan same as above
+
+# column alias for a table column in order by
+"select id as foo, id2 as id from music order by id"
+{
+  "QueryType": "SELECT",
+  "Original": "select id as foo, id2 as id from music order by id",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select id as foo, id2 as id, weight_string(id2) from music where 1 != 1",
+    "OrderBy": "1 ASC",
+    "Query": "select id as foo, id2 as id, weight_string(id2) from music order by id asc",
+    "ResultColumns": 2,
     "Table": "music"
   }
 }
