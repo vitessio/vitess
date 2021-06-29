@@ -119,7 +119,7 @@ const (
 	etaSecondsNow                            = 0
 	rowsCopiedUnknown                        = 0
 	databasePoolSize                         = 3
-	cutOverThreshold                         = 3 * time.Second
+	vreplicationCutOverThreshold             = 3 * time.Second
 	vreplicationTestSuiteWaitSeconds         = 5
 )
 
@@ -632,6 +632,8 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 		return err
 	}
 
+	_ = e.updateMigrationTimestamp(ctx, "liveness_timestamp", s.workflow)
+
 	// Writes are now disabled on table. Read up-to-date vreplication info, specifically to get latest (and fixed) pos:
 	s, err = e.readVReplStream(ctx, s.workflow, false)
 	if err != nil {
@@ -639,7 +641,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 	}
 
 	waitForPos := func() error {
-		ctx, cancel := context.WithTimeout(ctx, 2*cutOverThreshold)
+		ctx, cancel := context.WithTimeout(ctx, 2*vreplicationCutOverThreshold)
 		defer cancel()
 		// Wait for target to reach the up-to-date pos
 		if err := tmClient.VReplicationWaitForPos(ctx, tablet.Tablet, int(s.id), mysql.EncodePosition(postWritesPos)); err != nil {
@@ -648,7 +650,6 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 		// Target is now in sync with source!
 		return nil
 	}
-	log.Infof("VReplication migration %v waiting for position %v", s.workflow, mysql.EncodePosition(postWritesPos))
 	if err := waitForPos(); err != nil {
 		return err
 	}
@@ -2161,13 +2162,13 @@ func (e *Executor) isVReplMigrationReadyToCutOver(ctx context.Context, s *VReplS
 		}
 		timeNow := time.Now()
 		timeUpdated := time.Unix(s.timeUpdated, 0)
-		if durationDiff(timeNow, timeUpdated) > cutOverThreshold {
+		if durationDiff(timeNow, timeUpdated) > vreplicationCutOverThreshold {
 			return false, nil
 		}
 		// Let's look at transaction timestamp. This gets written by any ongoing
 		// writes on the server (whether on this table or any other table)
 		transactionTimestamp := time.Unix(s.transactionTimestamp, 0)
-		if durationDiff(timeNow, transactionTimestamp) > cutOverThreshold {
+		if durationDiff(timeNow, transactionTimestamp) > vreplicationCutOverThreshold {
 			return false, nil
 		}
 	}
