@@ -33,9 +33,6 @@ func TestShutdown(t *testing.T) {
 	// shutdown the vttablet process of the replica tablet
 	err := replicaTablet.VttabletProcess.TearDown()
 	require.NoError(t, err)
-	defer func() {
-		_ = replicaTablet.VttabletProcess.Setup()
-	}()
 
 	// check that its record in the topology has deleted
 	checkTabletExistenceInTopo(t, []string{masterTablet.Alias, rdonlyTablet.Alias}, []string{replicaTablet.Alias})
@@ -43,9 +40,6 @@ func TestShutdown(t *testing.T) {
 	// now shutdown the read only tablet
 	err = rdonlyTablet.VttabletProcess.TearDown()
 	require.NoError(t, err)
-	defer func() {
-		_ = rdonlyTablet.VttabletProcess.Setup()
-	}()
 
 	// check that its record is also deleted
 	checkTabletExistenceInTopo(t, []string{masterTablet.Alias}, []string{replicaTablet.Alias, rdonlyTablet.Alias})
@@ -53,23 +47,26 @@ func TestShutdown(t *testing.T) {
 	// now shutdown the master tablet
 	err = masterTablet.VttabletProcess.TearDown()
 	require.NoError(t, err)
-	defer func() {
-		_ = masterTablet.VttabletProcess.Setup()
-	}()
 
 	// check that its record is not deleted
 	// we do not delete the record of the master tablet
 	checkTabletExistenceInTopo(t, []string{masterTablet.Alias}, []string{replicaTablet.Alias, rdonlyTablet.Alias})
 
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("DeleteTablet", "-allow_master", masterTablet.Alias)
+	rdonlyTablet.VttabletProcess.ServingStatus = "SERVING"
+	replicaTablet.VttabletProcess.ServingStatus = "SERVING"
+	masterTablet.VttabletProcess.ServingStatus = "SERVING"
+
+	// bring all the three tablets up again
+	err = rdonlyTablet.VttabletProcess.Setup()
+	require.NoError(t, err)
+	err = replicaTablet.VttabletProcess.Setup()
+	require.NoError(t, err)
+	err = masterTablet.VttabletProcess.Setup()
 	require.NoError(t, err)
 
-	// check that the master record is deleted too
-	checkTabletExistenceInTopo(t, nil, []string{masterTablet.Alias, replicaTablet.Alias, rdonlyTablet.Alias})
-
-	// also check that removing shard cell should work, since we deleted all the tablets
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("RemoveShardCell", keyspaceShard, cell)
-	require.Nil(t, err)
+	// validate that the topology is up and all the tablets are reachable
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("Validate", "-ping-tablets")
+	require.NoError(t, err)
 }
 
 // getAllTabletsInTopo gets all the tablets in the topology for the cell
