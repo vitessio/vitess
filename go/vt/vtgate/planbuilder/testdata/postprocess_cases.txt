@@ -1238,3 +1238,43 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+
+# ordering on the left side of the join
+"select name from user, music order by name"
+{
+  "QueryType": "SELECT",
+  "Original": "select name from user, music order by name",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "-1",
+    "TableName": "`user`_music",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select `name`, weight_string(`name`) from `user` where 1 != 1",
+        "OrderBy": "0 ASC",
+        "Query": "select `name`, weight_string(`name`) from `user` order by `name` asc",
+        "ResultColumns": 1,
+        "Table": "`user`"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select 1 from music where 1 != 1",
+        "Query": "select 1 from music",
+        "Table": "music"
+      }
+    ]
+  }
+}
+Gen4 plan same as above
