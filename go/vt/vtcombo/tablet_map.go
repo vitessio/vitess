@@ -187,13 +187,16 @@ func InitTabletMap(ts *topo.Server, tpb *vttestpb.VTTestTopology, mysqld mysqlct
 func DeleteKs(ctx context.Context, ts *topo.Server, ksName string, mysqld mysqlctl.MysqlDaemon, tpb *vttestpb.VTTestTopology) error {
 	for key, tablet := range tabletMap {
 		if tablet.keyspace == ksName {
+			isMaster := tablet.tm.Tablet().Type == topodatapb.TabletType_MASTER
 			delete(tabletMap, key)
 			tablet.tm.Stop()
 			tablet.tm.Close()
 			tablet.qsc.SchemaEngine().Close()
-			err := ts.DeleteTablet(ctx, tablet.alias)
-			if err != nil {
-				return err
+			if isMaster {
+				err := ts.DeleteTablet(ctx, tablet.alias)
+				if err != nil {
+					return err
+				}
 			}
 		}
 	}
