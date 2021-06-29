@@ -17,6 +17,7 @@ var (
 	columns1   = vrepl.ParseColumnList("c1")
 	columns12  = vrepl.ParseColumnList("c1,c2")
 	columns123 = vrepl.ParseColumnList("c1,c2,c3")
+	columns2   = vrepl.ParseColumnList("c2")
 	columns21  = vrepl.ParseColumnList("c2,c1")
 	columns12A = vrepl.ParseColumnList("c1,c2,ca")
 )
@@ -249,6 +250,325 @@ func TestGetSharedUniqueKeys(t *testing.T) {
 			sourceUK, targetUK := getSharedUniqueKeys(tc.sourceUKs, tc.targetUKs, tc.renameMap)
 			assert.Equal(t, tc.expectSourceUK, sourceUK)
 			assert.Equal(t, tc.expectTargetUK, targetUK)
+		})
+	}
+}
+
+func TestAddedUniqueKeys(t *testing.T) {
+	emptyUniqueKeys := []*vrepl.UniqueKey{}
+	tt := []struct {
+		name                 string
+		sourceUKs, targetUKs [](*vrepl.UniqueKey)
+		renameMap            map[string]string
+		expectAddedUKs       [](*vrepl.UniqueKey)
+	}{
+		{
+			name:           "empty",
+			sourceUKs:      emptyUniqueKeys,
+			targetUKs:      emptyUniqueKeys,
+			renameMap:      map[string]string{},
+			expectAddedUKs: emptyUniqueKeys,
+		},
+		{
+			name: "UK removed",
+			sourceUKs: []*vrepl.UniqueKey{
+				{Name: "PRIMARY", Columns: *columns1},
+			},
+			targetUKs:      emptyUniqueKeys,
+			renameMap:      map[string]string{},
+			expectAddedUKs: emptyUniqueKeys,
+		},
+		{
+			name:      "UK added",
+			sourceUKs: emptyUniqueKeys,
+			targetUKs: []*vrepl.UniqueKey{
+				{Name: "PRIMARY", Columns: *columns1},
+			},
+			renameMap: map[string]string{},
+			expectAddedUKs: []*vrepl.UniqueKey{
+				{Name: "PRIMARY", Columns: *columns1},
+			},
+		},
+		{
+			name: "single identical",
+			sourceUKs: []*vrepl.UniqueKey{
+				{Name: "PRIMARY", Columns: *columns1},
+			},
+			targetUKs: []*vrepl.UniqueKey{
+				{Name: "PRIMARY", Columns: *columns1},
+			},
+			renameMap:      map[string]string{},
+			expectAddedUKs: emptyUniqueKeys,
+		},
+		{
+			name: "single identical non pk",
+			sourceUKs: []*vrepl.UniqueKey{
+				{Name: "uidx", Columns: *columns1},
+			},
+			targetUKs: []*vrepl.UniqueKey{
+				{Name: "uidx", Columns: *columns1},
+			},
+			renameMap:      map[string]string{},
+			expectAddedUKs: emptyUniqueKeys,
+		},
+		{
+			name: "single identical, source is nullable",
+			sourceUKs: []*vrepl.UniqueKey{
+				{Name: "uidx", Columns: *columns1, HasNullable: true},
+			},
+			targetUKs: []*vrepl.UniqueKey{
+				{Name: "uidx", Columns: *columns1},
+			},
+			renameMap:      map[string]string{},
+			expectAddedUKs: emptyUniqueKeys,
+		},
+		{
+			name: "single identical, target is nullable",
+			sourceUKs: []*vrepl.UniqueKey{
+				{Name: "uidx", Columns: *columns1},
+			},
+			targetUKs: []*vrepl.UniqueKey{
+				{Name: "uidx", Columns: *columns1, HasNullable: true},
+			},
+			renameMap:      map[string]string{},
+			expectAddedUKs: emptyUniqueKeys,
+		},
+		{
+			name: "expand columns: not considered added",
+			sourceUKs: []*vrepl.UniqueKey{
+				{Name: "uidx", Columns: *columns1},
+			},
+			targetUKs: []*vrepl.UniqueKey{
+				{Name: "uidx", Columns: *columns12},
+			},
+			renameMap:      map[string]string{},
+			expectAddedUKs: emptyUniqueKeys,
+		},
+		{
+			name: "expand columns, different order: not considered added",
+			sourceUKs: []*vrepl.UniqueKey{
+				{Name: "uidx", Columns: *columns1},
+			},
+			targetUKs: []*vrepl.UniqueKey{
+				{Name: "uidx", Columns: *columns21},
+			},
+			renameMap:      map[string]string{},
+			expectAddedUKs: emptyUniqueKeys,
+		},
+		{
+			name: "reduced columns: considered added",
+			sourceUKs: []*vrepl.UniqueKey{
+				{Name: "uidx", Columns: *columns12},
+			},
+			targetUKs: []*vrepl.UniqueKey{
+				{Name: "uidx", Columns: *columns1},
+			},
+			renameMap: map[string]string{},
+			expectAddedUKs: []*vrepl.UniqueKey{
+				{Name: "uidx", Columns: *columns1},
+			},
+		},
+		{
+			name: "reduced columns, multiple: considered added",
+			sourceUKs: []*vrepl.UniqueKey{
+				{Name: "uidx12", Columns: *columns12},
+				{Name: "uidx123", Columns: *columns123},
+				{Name: "uidx2", Columns: *columns2},
+			},
+			targetUKs: []*vrepl.UniqueKey{
+				{Name: "uidx", Columns: *columns1},
+			},
+			renameMap: map[string]string{},
+			expectAddedUKs: []*vrepl.UniqueKey{
+				{Name: "uidx", Columns: *columns1},
+			},
+		},
+		{
+			name: "different order: not considered added",
+			sourceUKs: []*vrepl.UniqueKey{
+				{Name: "uidx", Columns: *columns12},
+			},
+			targetUKs: []*vrepl.UniqueKey{
+				{Name: "uidx", Columns: *columns21},
+			},
+			renameMap:      map[string]string{},
+			expectAddedUKs: emptyUniqueKeys,
+		},
+		{
+			name: "no match, different columns",
+			sourceUKs: []*vrepl.UniqueKey{
+				{Name: "uidx1", Columns: *columns1},
+			},
+			targetUKs: []*vrepl.UniqueKey{
+				{Name: "uidx2", Columns: *columns2},
+			},
+			renameMap: map[string]string{},
+			expectAddedUKs: []*vrepl.UniqueKey{
+				{Name: "uidx2", Columns: *columns2},
+			},
+		},
+		{
+			name: "one match, one expand",
+			sourceUKs: []*vrepl.UniqueKey{
+				{Name: "uidx", Columns: *columns1},
+				{Name: "uidx123", Columns: *columns123},
+			},
+			targetUKs: []*vrepl.UniqueKey{
+				{Name: "uidx", Columns: *columns12},
+				{Name: "uidx123", Columns: *columns123},
+			},
+			renameMap:      map[string]string{},
+			expectAddedUKs: emptyUniqueKeys,
+		},
+		{
+			name: "exact match from multiple options",
+			sourceUKs: []*vrepl.UniqueKey{
+				{Name: "uidx", Columns: *columns1},
+				{Name: "uidx123", Columns: *columns123},
+				{Name: "uidx12", Columns: *columns12},
+			},
+			targetUKs: []*vrepl.UniqueKey{
+				{Name: "uidx12", Columns: *columns12},
+				{Name: "uidx", Columns: *columns12},
+				{Name: "uidx123", Columns: *columns123},
+			},
+			renameMap:      map[string]string{},
+			expectAddedUKs: emptyUniqueKeys,
+		},
+		{
+			name: "exact match from multiple options reorder",
+			sourceUKs: []*vrepl.UniqueKey{
+				{Name: "uidx12", Columns: *columns12},
+				{Name: "uidx", Columns: *columns1},
+				{Name: "uidx123", Columns: *columns123},
+			},
+			targetUKs: []*vrepl.UniqueKey{
+				{Name: "uidx", Columns: *columns21},
+				{Name: "uidx123", Columns: *columns123},
+				{Name: "uidx12", Columns: *columns12},
+			},
+			renameMap:      map[string]string{},
+			expectAddedUKs: emptyUniqueKeys,
+		},
+		{
+			name: "match different names",
+			sourceUKs: []*vrepl.UniqueKey{
+				{Name: "uidx1", Columns: *columns1},
+				{Name: "uidx12", Columns: *columns12},
+				{Name: "uidx123", Columns: *columns123},
+			},
+			targetUKs: []*vrepl.UniqueKey{
+				{Name: "uidx21", Columns: *columns21},
+				{Name: "uidx123", Columns: *columns123},
+				{Name: "uidxother", Columns: *columns12},
+			},
+			renameMap:      map[string]string{},
+			expectAddedUKs: emptyUniqueKeys,
+		},
+		{
+			name: "match different names, nullable",
+			sourceUKs: []*vrepl.UniqueKey{
+				{Name: "uidx1", Columns: *columns1},
+				{Name: "uidx12", Columns: *columns12},
+				{Name: "uidx123", Columns: *columns123},
+			},
+			targetUKs: []*vrepl.UniqueKey{
+				{Name: "uidx21", Columns: *columns21},
+				{Name: "uidx123other", Columns: *columns123},
+				{Name: "uidx12", Columns: *columns12, HasNullable: true},
+			},
+			renameMap:      map[string]string{},
+			expectAddedUKs: emptyUniqueKeys,
+		},
+		{
+			name: "match different column names, expand",
+			sourceUKs: []*vrepl.UniqueKey{
+				{Name: "uidx1", Columns: *columns1},
+				{Name: "uidx12", Columns: *columns12},
+				{Name: "uidx123", Columns: *columns123},
+			},
+			targetUKs: []*vrepl.UniqueKey{
+				{Name: "uidx21", Columns: *columns21},
+				{Name: "uidx12A", Columns: *columns12A},
+			},
+			renameMap:      map[string]string{"c3": "ca"},
+			expectAddedUKs: emptyUniqueKeys,
+		},
+		{
+			name: "match different column names, no expand",
+			sourceUKs: []*vrepl.UniqueKey{
+				{Name: "uidx123", Columns: *columns123},
+			},
+			targetUKs: []*vrepl.UniqueKey{
+				{Name: "uidx12A", Columns: *columns12A},
+			},
+			renameMap:      map[string]string{"c3": "ca"},
+			expectAddedUKs: emptyUniqueKeys,
+		},
+		{
+			// enforce mapping from c3 to ca; will not match c3<->c3
+			name: "no match identical column names, expand",
+			sourceUKs: []*vrepl.UniqueKey{
+				{Name: "uidx1", Columns: *columns1},
+				{Name: "uidx12", Columns: *columns12},
+				{Name: "uidx123", Columns: *columns123},
+			},
+			targetUKs: []*vrepl.UniqueKey{
+				{Name: "uidx21", Columns: *columns21},
+				{Name: "uidx123", Columns: *columns123},
+			},
+			renameMap: map[string]string{"c3": "ca"},
+			// 123 expands 12, so even though 3 is mapped to A, 123 is still not more constrained.
+			expectAddedUKs: emptyUniqueKeys,
+		},
+		{
+			// enforce mapping from c3 to ca; will not match c3<->c3
+			name: "no match identical column names, no expand",
+			sourceUKs: []*vrepl.UniqueKey{
+				{Name: "uidx123", Columns: *columns123},
+			},
+			targetUKs: []*vrepl.UniqueKey{
+				{Name: "uidx123", Columns: *columns123},
+			},
+			renameMap: map[string]string{"c3": "ca"},
+			expectAddedUKs: []*vrepl.UniqueKey{
+				{Name: "uidx123", Columns: *columns123},
+			},
+		},
+		{
+			name: "no match for different column names, expand",
+			sourceUKs: []*vrepl.UniqueKey{
+				{Name: "uidx1", Columns: *columns1},
+				{Name: "uidx12", Columns: *columns12},
+				{Name: "uidx123", Columns: *columns123},
+			},
+			targetUKs: []*vrepl.UniqueKey{
+				{Name: "uidx21", Columns: *columns21},
+				{Name: "uidx12A", Columns: *columns12A},
+			},
+			renameMap: map[string]string{"c3": "cx"},
+			// 123 expands 12, so even though 3 is mapped to A, 123 is still not more constrained.
+			expectAddedUKs: emptyUniqueKeys,
+		},
+		{
+			name: "no match for different column names, no expand",
+			sourceUKs: []*vrepl.UniqueKey{
+				{Name: "uidx123", Columns: *columns123},
+			},
+			targetUKs: []*vrepl.UniqueKey{
+				{Name: "uidx12A", Columns: *columns12A},
+			},
+			renameMap: map[string]string{"c3": "cx"},
+			expectAddedUKs: []*vrepl.UniqueKey{
+				{Name: "uidx12A", Columns: *columns12A},
+			},
+		},
+	}
+
+	for _, tc := range tt {
+		t.Run(tc.name, func(t *testing.T) {
+			addedUKs := addedUniqueKeys(tc.sourceUKs, tc.targetUKs, tc.renameMap)
+			assert.Equal(t, tc.expectAddedUKs, addedUKs)
 		})
 	}
 }

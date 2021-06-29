@@ -181,6 +181,61 @@ func getSharedUniqueKeys(sourceUniqueKeys, targetUniqueKeys [](*vrepl.UniqueKey)
 	return nil, nil
 }
 
+func sourceUniqueKeyAsOrMoreConstrainedThanTarget(sourceUniqueKey, targetUniqueKey *vrepl.UniqueKey, columnRenameMap map[string]string) bool {
+	// Compare two unique keys
+	if sourceUniqueKey.Columns.Len() > targetUniqueKey.Columns.Len() {
+		// source can't be more constrained if it covers *more* columns
+		return false
+	}
+	// we know that len(sourceUniqueKeyNames) <= len(targetUniqueKeyNames)
+	sourceUniqueKeyNames := sourceUniqueKey.Columns.Names()
+	targetUniqueKeyNames := targetUniqueKey.Columns.Names()
+	// source is more constrained than target if every column in source is also in target, order is immaterial
+	for i := range sourceUniqueKeyNames {
+		sourceColumnName := sourceUniqueKeyNames[i]
+		mappedSourceColumnName := sourceColumnName
+		if mapped, ok := columnRenameMap[sourceColumnName]; ok {
+			mappedSourceColumnName = mapped
+		}
+		columnFoundInTarget := func() bool {
+			for _, targetColumnName := range targetUniqueKeyNames {
+				if strings.EqualFold(mappedSourceColumnName, targetColumnName) {
+					return true
+				}
+			}
+			return false
+		}
+		if !columnFoundInTarget() {
+			return false
+		}
+	}
+	return true
+}
+
+// addedUniqueKeys returns the unique key constraints added in target. This does not necessarily mean that the unique key itself is new,
+// rather that there's a new, stricter constraint on a set of columns, that didn't exist before. Example:
+//   before: unique key `my_key`(c1, c2, c3); after: unique key `my_key`(c1, c2)
+//   The constraint on (c1, c2) is new; and `my_key` in target table ("after") is considered a new key
+// Order of columns is immaterial to uniqueness of column combination.
+func addedUniqueKeys(sourceUniqueKeys, targetUniqueKeys [](*vrepl.UniqueKey), columnRenameMap map[string]string) (addedUKs [](*vrepl.UniqueKey)) {
+	addedUKs = [](*vrepl.UniqueKey){}
+	for _, targetUniqueKey := range targetUniqueKeys {
+		foundAsOrMoreConstrainingSourceKey := func() bool {
+			for _, sourceUniqueKey := range sourceUniqueKeys {
+				if sourceUniqueKeyAsOrMoreConstrainedThanTarget(sourceUniqueKey, targetUniqueKey, columnRenameMap) {
+					// target key does not add a new constraint
+					return true
+				}
+			}
+			return false
+		}
+		if !foundAsOrMoreConstrainingSourceKey() {
+			addedUKs = append(addedUKs, targetUniqueKey)
+		}
+	}
+	return addedUKs
+}
+
 // readAutoIncrement reads the AUTO_INCREMENT vlaue, if any, for a give ntable
 func (v *VRepl) readAutoIncrement(ctx context.Context, conn *dbconnpool.DBConnection, tableName string) (autoIncrement uint64, err error) {
 	query, err := sqlparser.ParseAndBind(sqlGetAutoIncrement,
