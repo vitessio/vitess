@@ -1,4 +1,4 @@
-name: ci
+name: build_github_docker
 on:
   push:
     branches:
@@ -20,7 +20,13 @@ jobs:
           password: ${{ secrets.DOCKERHUB_PASSWORD }}
       - name: Build and push
         uses: docker/build-push-action@v2
+        id: buildPush
+        continue-on-error: true
         with:
           context: ./docker/lite/
           push: true
           tags: vitess/github:latest
+      - uses: 2428392/gh-determine-status-action
+        id: buildPush
+        with:
+          outcome: success
