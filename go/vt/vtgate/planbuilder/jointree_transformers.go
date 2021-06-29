@@ -83,7 +83,10 @@ func transformRoutePlan(n *routePlan) (*route, error) {
 		switch predicate := predicate.(type) {
 		case *sqlparser.ComparisonExpr:
 			if predicate.Operator == sqlparser.InOp {
-				predicate.Right = sqlparser.ListArg(engine.ListVarName)
+				switch predicate.Left.(type) {
+				case *sqlparser.ColName:
+					predicate.Right = sqlparser.ListArg(engine.ListVarName)
+				}
 			}
 		}
 	}

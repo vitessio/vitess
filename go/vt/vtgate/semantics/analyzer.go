@@ -29,13 +29,15 @@ type (
 	analyzer struct {
 		si SchemaInformation
 
-		Tables    []*TableInfo
-		scopes    []*scope
-		exprDeps  map[sqlparser.Expr]TableSet
-		err       error
-		currentDb string
+		Tables       []*TableInfo
+		scopes       []*scope
+		exprDeps     map[sqlparser.Expr]TableSet
+		err          error
+		currentDb    string
+		inProjection []bool
 
 		selectScope map[*sqlparser.Select]*scope
+		projErr     error
 	}
 )
 
@@ -57,41 +59,65 @@ func Analyze(statement sqlparser.Statement, currentDb string, si SchemaInformati
 	if err != nil {
 		return nil, err
 	}
-	return &SemTable{exprDependencies: analyzer.exprDeps, Tables: analyzer.Tables, selectScope: analyzer.selectScope}, nil
+	return &SemTable{exprDependencies: analyzer.exprDeps, Tables: analyzer.Tables, selectScope: analyzer.selectScope, ProjectionErr: analyzer.projErr}, nil
+}
+
+func (a *analyzer) setError(err error) {
+	if len(a.inProjection) > 0 && vterrors.ErrState(err) == vterrors.NonUniqError {
+		a.projErr = err
+	} else {
+		a.err = err
+	}
 }
 
 // analyzeDown pushes new scopes when we encounter sub queries,
 // and resolves the table a column is using
 func (a *analyzer) analyzeDown(cursor *sqlparser.Cursor) bool {
+	// If we have an error we keep on going down the tree without checking for anything else
+	// this way we can abort when we come back up.
+	if !a.shouldContinue() {
+		return true
+	}
 	current := a.currentScope()
 	n := cursor.Node()
 	switch node := n.(type) {
+	case sqlparser.SelectExprs:
+		if isParentSelect(cursor) {
+			a.inProjection = append(a.inProjection, true)
+			fmt.Println(len(a.inProjection))
+		}
 	case *sqlparser.Select:
 		if node.Having != nil {
-			a.err = Gen4NotSupportedF("HAVING")
+			a.setError(Gen4NotSupportedF("HAVING"))
 		}
 		a.push(newScope(current))
 		a.selectScope[node] = a.currentScope()
 	case *sqlparser.DerivedTable:
-		a.err = Gen4NotSupportedF("derived tables")
+		a.setError(Gen4NotSupportedF("derived tables"))
+	case *sqlparser.Subquery:
+		a.setError(Gen4NotSupportedF("subquery"))
 	case sqlparser.TableExpr:
-		_, isSelect := cursor.Parent().(*sqlparser.Select)
-		if isSelect {
+		if isParentSelect(cursor) {
 			a.push(newScope(nil))
 		}
 		switch node := node.(type) {
 		case *sqlparser.AliasedTableExpr:
-			a.err = a.bindTable(node, node.Expr)
+			a.setError(a.bindTable(node, node.Expr))
+		case *sqlparser.JoinTableExpr:
+			if node.Condition.Using != nil {
+				a.setError(vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: join with USING(column_list) clause for complex queries"))
+			}
+			if node.Join == sqlparser.NaturalJoinType || node.Join == sqlparser.NaturalRightJoinType || node.Join == sqlparser.NaturalLeftJoinType {
+				a.setError(vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: "+node.Join.ToString()))
+			}
+
 		}
-
-	// we don't need to push new scope for sub queries since we do that for SELECT and UNION
-
 	case *sqlparser.Union:
 		a.push(newScope(current))
 	case *sqlparser.ColName:
 		t, err := a.resolveColumn(node, current)
 		if err != nil {
-			a.err = err
+			a.setError(err)
 		} else {
 			a.exprDeps[node] = t
 		}
@@ -99,13 +125,13 @@ func (a *analyzer) analyzeDown(cursor *sqlparser.Cursor) bool {
 		if node.Distinct {
 			err := vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "syntax error: %s", sqlparser.String(node))
 			if len(node.Exprs) != 1 {
-				a.err = err
+				a.setError(err)
 			} else if _, ok := node.Exprs[0].(*sqlparser.AliasedExpr); !ok {
-				a.err = err
+				a.setError(err)
 			}
 		}
 		if sqlparser.IsLockingFunc(node) {
-			a.err = Gen4NotSupportedF("locking functions")
+			a.setError(Gen4NotSupportedF("locking functions"))
 		}
 	}
 
@@ -113,6 +139,11 @@ func (a *analyzer) analyzeDown(cursor *sqlparser.Cursor) bool {
 	// to the current node, but that is not what we want if we have encountered an error.
 	// In order to abort the whole visitation, we have to return true here and then return false in the `analyzeUp` method
 	return true
+}
+
+func isParentSelect(cursor *sqlparser.Cursor) bool {
+	_, isSelect := cursor.Parent().(*sqlparser.Select)
+	return isSelect
 }
 
 func (a *analyzer) resolveColumn(colName *sqlparser.ColName, current *scope) (TableSet, error) {
@@ -125,6 +156,9 @@ func (a *analyzer) resolveColumn(colName *sqlparser.ColName, current *scope) (Ta
 	}
 	if err != nil {
 		return 0, err
+	}
+	if t == nil {
+		return 0, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.NonUniqError, fmt.Sprintf("Column '%s' in field list is ambiguous", sqlparser.String(colName)))
 	}
 	return a.tableSetFor(t.ASTNode), nil
 }
@@ -156,7 +190,7 @@ func (a *analyzer) resolveUnQualifiedColumn(current *scope, expr *sqlparser.ColN
 
 	var tblInfo *TableInfo
 	for _, tbl := range current.tables {
-		if tbl.Table == nil || !tbl.Table.ColumnListAuthoritative {
+		if tbl.Table == nil {
 			return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.NonUniqError, fmt.Sprintf("Column '%s' in field list is ambiguous", sqlparser.String(expr)))
 		}
 		for _, col := range tbl.Table.Columns {
@@ -224,12 +258,18 @@ func (a *analyzer) analyze(statement sqlparser.Statement) error {
 }
 
 func (a *analyzer) analyzeUp(cursor *sqlparser.Cursor) bool {
+	if !a.shouldContinue() {
+		return false
+	}
 	switch cursor.Node().(type) {
+	case sqlparser.SelectExprs:
+		if isParentSelect(cursor) {
+			a.popProjection()
+		}
 	case *sqlparser.Union, *sqlparser.Select:
 		a.popScope()
 	case sqlparser.TableExpr:
-		_, isSelect := cursor.Parent().(*sqlparser.Select)
-		if isSelect {
+		if isParentSelect(cursor) {
 			curScope := a.currentScope()
 			a.popScope()
 			earlierScope := a.currentScope()
@@ -237,13 +277,17 @@ func (a *analyzer) analyzeUp(cursor *sqlparser.Cursor) bool {
 			for _, table := range curScope.tables {
 				err := earlierScope.addTable(table)
 				if err != nil {
-					a.err = err
+					a.setError(err)
 					break
 				}
 			}
 		}
 	}
 	return a.shouldContinue()
+}
+
+func (a *analyzer) popProjection() {
+	a.inProjection = a.inProjection[:len(a.inProjection)-1]
 }
 
 func (a *analyzer) shouldContinue() bool {
