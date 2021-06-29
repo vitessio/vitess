@@ -106,7 +106,6 @@ func (vp *vplayer) play(ctx context.Context) error {
 		return nil
 	}
 
-	fmt.Printf("============= buildReplicatorPlan from vplayer\n")
 	plan, err := buildReplicatorPlan(vp.vr.source.Filter, vp.vr.colInfoMap, vp.copyState, vp.vr.stats, vp.vr.recalculatePKColsInfo)
 	if err != nil {
 		vp.vr.stats.ErrorCounts.Add([]string{"Plan"}, 1)

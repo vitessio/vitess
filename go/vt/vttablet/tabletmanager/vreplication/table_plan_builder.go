@@ -281,10 +281,6 @@ func buildTablePlan(tableName string, rule *binlogdatapb.Rule, colInfos []*Colum
 	if err != nil {
 		return nil, err
 	}
-	fmt.Printf("======== zzzz reevaluated pkColsInfo %s:%s to be:\n", tableName, rule.TargetUniqueKey)
-	for _, c := range pkColsInfo {
-		fmt.Printf("========      name=%v isPK=%v\n", c.Name, c.IsPK)
-	}
 	if err := tpb.analyzePK(pkColsInfo); err != nil {
 		return nil, err
 	}
