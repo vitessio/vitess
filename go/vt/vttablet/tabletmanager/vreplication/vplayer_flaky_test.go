@@ -2737,7 +2737,6 @@ func expectJSON(t *testing.T, table string, values [][]string, id int, exec func
 		want, err := ajson.Unmarshal([]byte(row[1]))
 		require.NoError(t, err)
 		match, err := got.Eq(want)
-		//log.Infof(">>>>>>>> got \n-----\n%s\n------\n, want \n-----\n%s\n------\n", got, want)
 		require.NoError(t, err)
 		require.True(t, match)
 	}
