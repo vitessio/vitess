@@ -473,7 +473,8 @@ var (
 	sqlDropOnlineDDLUser = `DROP USER IF EXISTS %s`
 )
 
-var applyDDL = []string{
+// ApplyDDL ddls to be applied at the start
+var ApplyDDL = []string{
 	sqlCreateSidecarDB,
 	sqlCreateSchemaMigrationsTable,
 	alterSchemaMigrationsTableRetries,
