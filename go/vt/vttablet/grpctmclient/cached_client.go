@@ -128,6 +128,7 @@ func (dialer *cachedConnDialer) dial(ctx context.Context, tablet *topodatapb.Tab
 		// while we were waiting for the write lock. This is identical to the
 		// read-lock section above.
 		if client, closer, found, err := dialer.tryFromCache(addr, &dialer.m); found {
+			dialer.connWaitSema.Release()
 			return client, closer, err
 		}
 		return dialer.newdial(addr)
