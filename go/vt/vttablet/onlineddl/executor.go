@@ -233,7 +233,7 @@ func (e *Executor) initSchema(ctx context.Context) error {
 	}
 	defer conn.Recycle()
 
-	for _, ddl := range applyDDL {
+	for _, ddl := range ApplyDDL {
 		_, err := conn.Exec(ctx, ddl, math.MaxInt32, false)
 		if mysql.IsSchemaApplyError(err) {
 			continue
