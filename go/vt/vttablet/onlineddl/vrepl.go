@@ -424,34 +424,16 @@ func (v *VRepl) analyzeTables(ctx context.Context, conn *dbconnpool.DBConnection
 	if err != nil {
 		return err
 	}
-	{
-		for _, u := range sourceUniqueKeys {
-			fmt.Printf("========== sourceUniqueKey: %v\n", u.String())
-		}
-	}
 	targetUniqueKeys, err := v.readTableUniqueKeys(ctx, conn, v.targetTable)
 	if err != nil {
 		return err
 	}
-	{
-		for _, u := range targetUniqueKeys {
-			fmt.Printf("========== targetUniqueKey: %v\n", u.String())
-		}
-	}
-	fmt.Printf("========== calculating potentialUniqueKey\n")
 	v.chosenSourceUniqueKey, v.chosenTargetUniqueKey = getSharedUniqueKeys(sourceUniqueKeys, targetUniqueKeys, v.parser.ColumnRenameMap())
 	if v.chosenSourceUniqueKey == nil || v.chosenTargetUniqueKey == nil {
 		return fmt.Errorf("Found no shared, not nullable, unique keys between `%s` and `%s`", v.sourceTable, v.targetTable)
 	}
-	{
-		fmt.Printf("========== chosenSourceUniqueKey: %v\n", v.chosenSourceUniqueKey.String())
-		fmt.Printf("========== chosenTargetUniqueKey: %v\n", v.chosenTargetUniqueKey.String())
-	}
 	// chosen source & target unique keys have exact columns in same order
 	v.sharedPKColumns = &v.chosenSourceUniqueKey.Columns
-	{
-		fmt.Printf("========== sharedPKColumns: %v\n", v.sharedPKColumns.Names())
-	}
 
 	if err := v.applyColumnTypes(ctx, conn, v.sourceTable, sourceColumns, sourceVirtualColumns, sourcePKColumns, v.sourceSharedColumns, v.sharedPKColumns); err != nil {
 		return err
@@ -515,27 +497,27 @@ func (v *VRepl) generateFilterQuery(ctx context.Context) error {
 			if targetCol == nil {
 				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Cannot find target column %s", targetName)
 			}
-			{
-				// Check source and target charset/encoding. If needed, create
-				// a binlogdatapb.CharsetConversion entry (later written to vreplication)
-				fromEncoding, ok := mysql.CharacterSetEncoding[sourceCol.Charset]
-				if !ok {
-					return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Character set %s not supported for column %s", sourceCol.Charset, sourceCol.Name)
-				}
-				toEncoding, ok := mysql.CharacterSetEncoding[targetCol.Charset]
-				if !ok {
-					return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Character set %s not supported for column %s", targetCol.Charset, targetCol.Name)
-				}
-				if fromEncoding != nil || toEncoding != nil {
-					// encoding can be nil for trivial charsets, like utf8, ascii, binary, etc.
-					v.convertCharset[targetName] = &binlogdatapb.CharsetConversion{
-						FromCharset: sourceCol.Charset,
-						ToCharset:   targetCol.Charset,
-					}
-				}
+			// Check source and target charset/encoding. If needed, create
+			// a binlogdatapb.CharsetConversion entry (later written to vreplication)
+			fromEncoding, ok := mysql.CharacterSetEncoding[sourceCol.Charset]
+			if !ok {
+				return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Character set %s not supported for column %s", sourceCol.Charset, sourceCol.Name)
 			}
-			// We will always read strings as utf8mb4.
-			sb.WriteString(fmt.Sprintf("convert(%s using utf8mb4)", escapeName(name)))
+			toEncoding, ok := mysql.CharacterSetEncoding[targetCol.Charset]
+			if !ok {
+				return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Character set %s not supported for column %s", targetCol.Charset, targetCol.Name)
+			}
+			if fromEncoding == nil && toEncoding == nil {
+				// Both source and target have trivial charsets
+				sb.WriteString(escapeName(name))
+			} else {
+				// encoding can be nil for trivial charsets, like utf8, ascii, binary, etc.
+				v.convertCharset[targetName] = &binlogdatapb.CharsetConversion{
+					FromCharset: sourceCol.Charset,
+					ToCharset:   targetCol.Charset,
+				}
+				sb.WriteString(fmt.Sprintf("convert(%s using utf8mb4)", escapeName(name)))
+			}
 		default:
 			sb.WriteString(escapeName(name))
 		}
