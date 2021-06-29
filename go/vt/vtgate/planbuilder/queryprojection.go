@@ -72,7 +72,15 @@ func createQPFromSelect(sel *sqlparser.Select) (*queryProjection, error) {
 				qp.orderExprColMap[order] = offset
 				break
 			}
-			// TODO: handle alias and column offset
+			colExpr, isColName := order.Expr.(*sqlparser.ColName)
+			isAliasExpr := !expr.As.IsEmpty()
+			if isAliasExpr && isColName && colExpr.Qualifier.IsEmpty() {
+				if colExpr.Name.Equal(expr.As) {
+					qp.orderExprColMap[order] = offset
+					break
+				}
+			}
+			// TODO: column offset
 		}
 	}
 
