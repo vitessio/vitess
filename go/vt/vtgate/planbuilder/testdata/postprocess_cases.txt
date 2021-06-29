@@ -1174,3 +1174,24 @@ Gen4 plan same as above
 "select id from user limit 1+1"
 "unexpected expression in LIMIT: expression is too complex '1 + 1'"
 Gen4 plan same as above
+
+# order by column alias
+"select id as foo from music order by foo"
+{
+  "QueryType": "SELECT",
+  "Original": "select id as foo from music order by foo",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select id as foo, weight_string(id) from music where 1 != 1",
+    "OrderBy": "0 ASC",
+    "Query": "select id as foo, weight_string(id) from music order by foo asc",
+    "ResultColumns": 1,
+    "Table": "music"
+  }
+}
+Gen4 plan same as above

@@ -123,20 +123,24 @@ func planOrderBy(qp *queryProjection, plan logicalPlan, semTable *semantics.SemT
 		additionalColAdded := false
 		for _, order := range qp.orderExprs {
 			offset, exists := qp.orderExprColMap[order]
-			colName, ok := order.Expr.(*sqlparser.ColName)
-			if !ok {
-				return nil, semantics.Gen4NotSupportedF("order by non-column expression")
-			}
+			var weightStringExpr sqlparser.Expr
 			if !exists {
 				expr := &sqlparser.AliasedExpr{
 					Expr: order.Expr,
 				}
 				var err error
 				offset, err = pushProjection(expr, plan, semTable, true)
+				weightStringExpr = order.Expr
 				if err != nil {
 					return nil, err
 				}
 				additionalColAdded = true
+			} else {
+				weightStringExpr = qp.selectExprs[offset].Expr
+			}
+			colName, ok := weightStringExpr.(*sqlparser.ColName)
+			if !ok {
+				return nil, semantics.Gen4NotSupportedF("order by non-column expression")
 			}
 
 			table := semTable.Dependencies(colName)
@@ -161,7 +165,7 @@ func planOrderBy(qp *queryProjection, plan logicalPlan, semTable *semantics.SemT
 						Name: sqlparser.NewColIdent("weight_string"),
 						Exprs: []sqlparser.SelectExpr{
 							&sqlparser.AliasedExpr{
-								Expr: order.Expr,
+								Expr: weightStringExpr,
 							},
 						},
 					},
