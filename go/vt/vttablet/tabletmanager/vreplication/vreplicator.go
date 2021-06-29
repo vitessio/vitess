@@ -434,7 +434,6 @@ func (vr *vreplicator) recalculatePKColsInfo(tableName string, uniqueKeyName str
 	if err != nil {
 		return nil, err
 	}
-	fmt.Printf("========== query=%s\n", query)
 	r, err := vr.dbClient.ExecuteFetch(query, math.MaxInt64)
 	if err != nil {
 		return nil, err

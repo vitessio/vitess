@@ -64,9 +64,6 @@ func (vc *vcopier) initTablesForCopy(ctx context.Context) error {
 	if err := vc.vr.dbClient.Begin(); err != nil {
 		return err
 	}
-	for t := range plan.TargetTables {
-		fmt.Printf("================ plan.TargetTable: %v\n", t)
-	}
 	// Insert the table list only if at least one table matches.
 	if len(plan.TargetTables) != 0 {
 		var buf strings.Builder
@@ -203,7 +200,6 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 
 	log.Infof("Copying table %s, lastpk: %v", tableName, copyState[tableName])
 
-	fmt.Printf("============= buildReplicatorPlan from vcopier\n")
 	plan, err := buildReplicatorPlan(vc.vr.source.Filter, vc.vr.colInfoMap, nil, vc.vr.stats, vc.vr.recalculatePKColsInfo)
 	if err != nil {
 		return err
@@ -259,11 +255,7 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 			if err != nil {
 				return err
 			}
-			fmt.Printf("=========== buildExecutionPlan: %v\n", "ok")
 			pkfields = append(pkfields, rows.Pkfields...)
-			for _, f := range rows.Pkfields {
-				fmt.Printf("=========== copyTable: f=%v\n", f.Name)
-			}
 			buf := sqlparser.NewTrackedBuffer(nil)
 			buf.Myprintf("update _vt.copy_state set lastpk=%a where vrepl_id=%s and table_name=%s", ":lastpk", strconv.Itoa(int(vc.vr.id)), encodeString(tableName))
 			updateCopyState = buf.ParsedQuery()
@@ -282,6 +274,7 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 		}
 		_, err = vc.tablePlan.applyBulkInsert(&sqlbuffer, rows, func(sql string) (*sqltypes.Result, error) {
 			start := time.Now()
+
 			qr, err := vc.vr.dbClient.ExecuteWithRetry(ctx, sql)
 			if err != nil {
 				return nil, err
@@ -300,7 +293,6 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 			Fields: pkfields,
 			Rows:   []*querypb.Row{rows.Lastpk},
 		})
-		fmt.Printf("=============== rows.Lastpk: %v\n", rows.Lastpk)
 		if err != nil {
 			return err
 		}
