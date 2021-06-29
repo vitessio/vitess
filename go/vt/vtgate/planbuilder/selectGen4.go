@@ -120,76 +120,103 @@ func planAggregations(qp *queryProjection, plan logicalPlan, semTable *semantics
 func planOrderBy(qp *queryProjection, plan logicalPlan, semTable *semantics.SemTable) (logicalPlan, error) {
 	switch plan := plan.(type) {
 	case *route:
-		additionalColAdded := false
-		for _, order := range qp.orderExprs {
-			offset, exists := qp.orderExprColMap[order]
-			var weightStringExpr sqlparser.Expr
-			if !exists {
-				expr := &sqlparser.AliasedExpr{
-					Expr: order.Expr,
-				}
-				var err error
-				offset, err = pushProjection(expr, plan, semTable, true)
-				weightStringExpr = order.Expr
-				if err != nil {
-					return nil, err
-				}
-				additionalColAdded = true
-			} else {
-				weightStringExpr = qp.selectExprs[offset].Expr
-			}
-			colName, ok := weightStringExpr.(*sqlparser.ColName)
-			if !ok {
-				return nil, semantics.Gen4NotSupportedF("order by non-column expression")
-			}
-
-			table := semTable.Dependencies(colName)
-			tbl, err := semTable.TableInfoFor(table)
-			if err != nil {
-				return nil, err
-			}
-			weightStringNeeded := true
-			for _, c := range tbl.GetColumns() {
-				if colName.Name.String() == c.Name {
-					if sqltypes.IsNumber(c.Type) {
-						weightStringNeeded = false
-					}
-					break
-				}
-			}
-
-			weightStringOffset := -1
-			if weightStringNeeded {
-				expr := &sqlparser.AliasedExpr{
-					Expr: &sqlparser.FuncExpr{
-						Name: sqlparser.NewColIdent("weight_string"),
-						Exprs: []sqlparser.SelectExpr{
-							&sqlparser.AliasedExpr{
-								Expr: weightStringExpr,
-							},
-						},
-					},
-				}
-				weightStringOffset, err = pushProjection(expr, plan, semTable, true)
-				if err != nil {
-					return nil, err
-				}
-				additionalColAdded = true
-			}
-
-			plan.eroute.OrderBy = append(plan.eroute.OrderBy, engine.OrderbyParams{
-				Col:             offset,
-				WeightStringCol: weightStringOffset,
-				Desc:            order.Direction == sqlparser.DescOrder,
-			})
-			plan.Select.AddOrder(order)
-		}
-		if additionalColAdded {
-			plan.eroute.TruncateColumnCount = len(qp.selectExprs) + len(qp.aggrExprs)
-		}
-
-		return plan, nil
+		return planOrderByForRoute(qp, plan, semTable)
+	case *joinGen4:
+		return planOrderByForJoin(qp, plan, semTable)
 	default:
 		return nil, semantics.Gen4NotSupportedF("ordering on complex query")
 	}
+}
+
+func planOrderByForRoute(qp *queryProjection, plan *route, semTable *semantics.SemTable) (logicalPlan, error) {
+	additionalColAdded := false
+	for _, order := range qp.orderExprs {
+		offset, exists := qp.orderExprColMap[order]
+		var weightStringExpr sqlparser.Expr
+		if !exists {
+			expr := &sqlparser.AliasedExpr{
+				Expr: order.Expr,
+			}
+			var err error
+			offset, err = pushProjection(expr, plan, semTable, true)
+			weightStringExpr = order.Expr
+			if err != nil {
+				return nil, err
+			}
+			additionalColAdded = true
+		} else {
+			weightStringExpr = qp.selectExprs[offset].Expr
+		}
+		colName, ok := weightStringExpr.(*sqlparser.ColName)
+		if !ok {
+			return nil, semantics.Gen4NotSupportedF("order by non-column expression")
+		}
+
+		table := semTable.Dependencies(colName)
+		tbl, err := semTable.TableInfoFor(table)
+		if err != nil {
+			return nil, err
+		}
+		weightStringNeeded := true
+		for _, c := range tbl.GetColumns() {
+			if colName.Name.String() == c.Name {
+				if sqltypes.IsNumber(c.Type) {
+					weightStringNeeded = false
+				}
+				break
+			}
+		}
+
+		weightStringOffset := -1
+		if weightStringNeeded {
+			expr := &sqlparser.AliasedExpr{
+				Expr: &sqlparser.FuncExpr{
+					Name: sqlparser.NewColIdent("weight_string"),
+					Exprs: []sqlparser.SelectExpr{
+						&sqlparser.AliasedExpr{
+							Expr: weightStringExpr,
+						},
+					},
+				},
+			}
+			weightStringOffset, err = pushProjection(expr, plan, semTable, true)
+			if err != nil {
+				return nil, err
+			}
+			additionalColAdded = true
+		}
+
+		plan.eroute.OrderBy = append(plan.eroute.OrderBy, engine.OrderbyParams{
+			Col:             offset,
+			WeightStringCol: weightStringOffset,
+			Desc:            order.Direction == sqlparser.DescOrder,
+		})
+		plan.Select.AddOrder(order)
+	}
+	if additionalColAdded {
+		plan.eroute.TruncateColumnCount = len(qp.selectExprs) + len(qp.aggrExprs)
+	}
+
+	return plan, nil
+}
+
+func planOrderByForJoin(qp *queryProjection, plan *joinGen4, semTable *semantics.SemTable) (logicalPlan, error) {
+	isAllLeft := true
+	var err error
+	for _, expr := range qp.orderExprs {
+		exprDependencies := semTable.Dependencies(expr.Expr)
+		if exprDependencies.IsSolvedBy(plan.Left.ContainsTables()) {
+			plan.Left, err = planOrderBy(qp, plan.Left, semTable)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			isAllLeft = false
+			break
+		}
+	}
+	if isAllLeft {
+		return plan, nil
+	}
+	return nil, semantics.Gen4NotSupportedF("ordering on vtgate")
 }
