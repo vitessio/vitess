@@ -167,6 +167,7 @@ func (a *analyzer) analyzeDown(cursor *sqlparser.Cursor) bool {
 		}
 		if num < 1 || num > len(currScope.selectExprs) {
 			a.err = vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadFieldError, "Unknown column '%d' in 'order clause'", num)
+			break
 		}
 
 		expr, ok := currScope.selectExprs[num-1].(*sqlparser.AliasedExpr)
@@ -236,13 +237,10 @@ func isParentSelect(cursor *sqlparser.Cursor) bool {
 }
 
 func (a *analyzer) resolveColumn(colName *sqlparser.ColName, current *scope) (TableSet, error) {
-	var t TableInfo // select a.col as x, x-1 from a join b on a.id = b.id order by x
-	var err error
 	if colName.Qualifier.IsEmpty() {
 		return a.resolveUnQualifiedColumn(current, colName)
-	} else {
-		t, err = a.resolveQualifiedColumn(current, colName)
 	}
+	t, err := a.resolveQualifiedColumn(current, colName)
 	if err != nil {
 		return 0, err
 	}

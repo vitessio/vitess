@@ -17,6 +17,8 @@ limitations under the License.
 package planbuilder
 
 import (
+	"strconv"
+
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -66,22 +68,9 @@ func createQPFromSelect(sel *sqlparser.Select) (*queryProjection, error) {
 	qp.orderExprs = sel.OrderBy
 
 	allExpr := append(qp.selectExprs, qp.aggrExprs...)
+
 	for _, order := range sel.OrderBy {
-		for offset, expr := range allExpr {
-			if sqlparser.EqualsExpr(order.Expr, expr.Expr) {
-				qp.orderExprColMap[order] = offset
-				break
-			}
-			colExpr, isColName := order.Expr.(*sqlparser.ColName)
-			isAliasExpr := !expr.As.IsEmpty()
-			if isAliasExpr && isColName && colExpr.Qualifier.IsEmpty() {
-				if colExpr.Name.Equal(expr.As) {
-					qp.orderExprColMap[order] = offset
-					break
-				}
-			}
-			// TODO: column offset
-		}
+		findOrderExprInAllExprs(order, allExpr, qp)
 	}
 
 	if sel.GroupBy == nil || sel.OrderBy == nil {
@@ -89,4 +78,35 @@ func createQPFromSelect(sel *sqlparser.Select) (*queryProjection, error) {
 	}
 
 	return qp, nil
+}
+
+func findOrderExprInAllExprs(order *sqlparser.Order, allExpr []*sqlparser.AliasedExpr, qp *queryProjection) {
+	colExpr, isColName := order.Expr.(*sqlparser.ColName)
+	// Case 1: Order by expression is an aliased expression in the select clause
+	// Eg - select id as foo from music order by foo
+	if isColName && colExpr.Qualifier.IsEmpty() {
+		for offset, expr := range allExpr {
+			isAliasExpr := !expr.As.IsEmpty()
+			if isAliasExpr && colExpr.Name.Equal(expr.As) {
+				qp.orderExprColMap[order] = offset
+				return
+			}
+		}
+	}
+	// Case 2: Order by is the column offset to be used from the select expressions
+	// Eg - select id from music order by 1
+	literalExpr, isLiteral := order.Expr.(*sqlparser.Literal)
+	if isLiteral && literalExpr.Type == sqlparser.IntVal {
+		num, _ := strconv.Atoi(literalExpr.Val)
+		qp.orderExprColMap[order] = num - 1
+	} else {
+		// Case 3: Order by is an expression that we already have in the select expression
+		// Eg - select id from music order by id
+		for offset, expr := range allExpr {
+			if sqlparser.EqualsExpr(order.Expr, expr.Expr) {
+				qp.orderExprColMap[order] = offset
+				return
+			}
+		}
+	}
 }
