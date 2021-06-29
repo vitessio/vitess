@@ -165,7 +165,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %token LEX_ERROR
 %left <str> UNION
 %token <str> SELECT STREAM VSTREAM INSERT UPDATE DELETE FROM WHERE GROUP HAVING ORDER BY LIMIT OFFSET FOR
-%token <str> ALL DISTINCT AS EXISTS ASC DESC INTO DUPLICATE KEY DEFAULT SET LOCK UNLOCK KEYS DO CALL
+%token <str> ALL DISTINCT AS EXISTS ASC DESC INTO DUPLICATE DEFAULT SET LOCK UNLOCK KEYS DO CALL
 %token <str> DISTINCTROW PARSER GENERATED ALWAYS
 %token <str> OUTFILE S3 DATA LOAD LINES TERMINATED ESCAPED ENCLOSED
 %token <str> DUMPFILE CSV HEADER MANIFEST OVERWRITE STARTING OPTIONALLY
@@ -185,6 +185,13 @@ func bindVariable(yylex yyLexer, bvar string) {
 // it's better to have these listed in the correct order. Also, we don't
 // support all operators yet.
 // * NOTE: If you change anything here, update precedence.go as well *
+%nonassoc <str> LOWER_THAN_CHARSET
+%nonassoc <str> CHARSET
+/*
+  Resolve column attribute ambiguity -- force precedence of "UNIQUE KEY" against
+  simple "UNIQUE" and "KEY" attributes:
+*/
+%right <str> UNIQUE KEY
 %left <str> OR
 %left <str> XOR
 %left <str> AND
@@ -211,7 +218,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 // DDL Tokens
 %token <str> CREATE ALTER DROP RENAME ANALYZE ADD FLUSH CHANGE MODIFY
 %token <str> REVERT
-%token <str> SCHEMA TABLE INDEX VIEW TO IGNORE IF UNIQUE PRIMARY COLUMN SPATIAL FULLTEXT KEY_BLOCK_SIZE CHECK INDEXES
+%token <str> SCHEMA TABLE INDEX VIEW TO IGNORE IF PRIMARY COLUMN SPATIAL FULLTEXT KEY_BLOCK_SIZE CHECK INDEXES
 %token <str> ACTION CASCADE CONSTRAINT FOREIGN NO REFERENCES RESTRICT
 %token <str> SHOW DESCRIBE EXPLAIN DATE ESCAPE REPAIR OPTIMIZE TRUNCATE COALESCE EXCHANGE REBUILD PARTITIONING REMOVE
 %token <str> MAXVALUE PARTITION REORGANIZE LESS THAN PROCEDURE TRIGGER
@@ -243,7 +250,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %token <str> VGTID_EXECUTED VITESS_KEYSPACES VITESS_METADATA VITESS_MIGRATIONS VITESS_SHARDS VITESS_TABLETS VSCHEMA
 
 // SET tokens
-%token <str> NAMES CHARSET GLOBAL SESSION ISOLATION LEVEL READ WRITE ONLY REPEATABLE COMMITTED UNCOMMITTED SERIALIZABLE
+%token <str> NAMES GLOBAL SESSION ISOLATION LEVEL READ WRITE ONLY REPEATABLE COMMITTED UNCOMMITTED SERIALIZABLE
 
 // Functions
 %token <str> CURRENT_TIMESTAMP DATABASE CURRENT_DATE
@@ -374,7 +381,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <str> reserved_keyword non_reserved_keyword
 %type <colIdent> sql_id reserved_sql_id col_alias as_ci_opt
 %type <expr> charset_value
-%type <tableIdent> table_id reserved_table_id table_alias as_opt_id table_id_opt from_database_opt
+%type <tableIdent> table_id reserved_table_id table_alias as_opt_id from_database_opt
 %type <empty> as_opt work_opt savepoint_opt
 %type <empty> skip_to_end ddl_skip_to_end
 %type <str> charset
@@ -938,6 +945,7 @@ create_options:
   }
 
 default_optional:
+  /* empty */ %prec LOWER_THAN_CHARSET 
   {
     $$ = false
   }
@@ -2156,7 +2164,7 @@ alter_statement:
   {
     $$ = &AlterView{ViewName: $7.ToViewName(), Algorithm:$3, Definer: $4 ,Security:$5, Columns:$8, Select: $10, CheckOption: $11 }
   }
-| alter_database_prefix table_id_opt create_options
+| alter_database_prefix table_id create_options
   {
     $1.FullyParsed = true
     $1.DBName = $2
@@ -2168,6 +2176,13 @@ alter_statement:
     $1.FullyParsed = true
     $1.DBName = $2
     $1.UpdateDataDirectory = true
+    $$ = $1
+  }
+| alter_database_prefix create_options
+  {
+    $1.FullyParsed = true
+    $1.DBName = NewTableIdent("")
+    $1.AlterOptions = $2
     $$ = $1
   }
 | ALTER comment_opt VSCHEMA CREATE VINDEX table_name vindex_type_opt vindex_params_opt
@@ -4837,15 +4852,6 @@ table_id:
     $$ = NewTableIdent(string($1))
   }
 
-table_id_opt:
-  {
-    $$ = NewTableIdent("")
-  }
-| table_id
-  {
-    $$ = $1
-  }
-
 reserved_table_id:
   table_id
 | reserved_keyword
@@ -4899,7 +4905,6 @@ reserved_keyword:
 | DIV
 | DROP
 | ELSE
-| END
 | ESCAPE
 | EXISTS
 | EXPLAIN
@@ -5062,6 +5067,7 @@ non_reserved_keyword:
 | DISABLE
 | DISCARD
 | DISK
+| DO
 | DOUBLE
 | DUMPFILE
 | DUPLICATE
@@ -5069,6 +5075,7 @@ non_reserved_keyword:
 | ENABLE
 | ENCLOSED
 | ENCRYPTION
+| END
 | ENFORCED
 | ENGINE
 | ENGINES
@@ -5089,6 +5096,7 @@ non_reserved_keyword:
 | FLUSH
 | FOLLOWING
 | FORMAT
+| FULL
 | FUNCTION
 | GENERAL
 | GEOMCOLLECTION
@@ -5231,6 +5239,7 @@ non_reserved_keyword:
 | STATS_SAMPLE_PAGES
 | STATUS
 | STORAGE
+| STREAM
 | TABLES
 | TABLESPACE
 | TEMPORARY
@@ -5278,6 +5287,7 @@ non_reserved_keyword:
 | VSCHEMA
 | WARNINGS
 | WITHOUT
+| WORK
 | YEAR
 | ZEROFILL
 
