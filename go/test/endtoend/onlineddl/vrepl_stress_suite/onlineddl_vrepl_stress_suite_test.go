@@ -170,6 +170,11 @@ var (
 			alterStatement:   "drop primary key, add primary key(id, id_negative)",
 		},
 		{
+			name:             "multiple UK choices including nullable with PK",
+			prepareStatement: "add unique key compound_uidx(rand_num, rand_text(40)), add unique key nullable_uidx(nullable_num, id_negative), add unique key negative_uidx(id_negative)",
+			alterStatement:   "drop primary key, drop key negative_uidx, add primary key(id_negative)",
+		},
+		{
 			name:             "multiple UK choices including nullable",
 			prepareStatement: "add unique key compound_uidx(rand_num, rand_text(40)), add unique key nullable_uidx(nullable_num, id_negative), add unique key negative_uidx(id_negative)",
 			alterStatement:   "drop primary key, add primary key(updates, id)",
