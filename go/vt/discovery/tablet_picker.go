@@ -23,6 +23,8 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/stats"
+
 	"vitess.io/vitess/go/vt/topo/topoproto"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -41,6 +43,7 @@ import (
 var (
 	tabletPickerRetryDelay   = 30 * time.Second
 	muTabletPickerRetryDelay sync.Mutex
+	globalTPStats            *tabletPickerStats
 )
 
 // GetTabletPickerRetryDelay synchronizes changes to tabletPickerRetryDelay. Used in tests only at the moment
@@ -108,9 +111,9 @@ func (tp *TabletPicker) PickForStreaming(ctx context.Context) (*topodatapb.Table
 		default:
 		}
 		candidates := tp.GetMatchingTablets(ctx)
-
 		if len(candidates) == 0 {
 			// if no candidates were found, sleep and try again
+			tp.incNoTabletFoundStat()
 			log.Infof("No tablet found for streaming, shard %s.%s, cells %v, tabletTypes %v, sleeping for %d seconds",
 				tp.keyspace, tp.shard, tp.cells, tp.tabletTypes, int(GetTabletPickerRetryDelay()/1e9))
 			timer := time.NewTimer(GetTabletPickerRetryDelay())
@@ -133,6 +136,7 @@ func (tp *TabletPicker) PickForStreaming(ctx context.Context) (*topodatapb.Table
 				log.Warningf("unable to connect to tablet for alias %v", ti.Alias)
 				candidates = append(candidates[:idx], candidates[idx+1:]...)
 				if len(candidates) == 0 {
+					tp.incNoTabletFoundStat()
 					break
 				}
 				continue
@@ -226,4 +230,25 @@ func (tp *TabletPicker) GetMatchingTablets(ctx context.Context) []*topo.TabletIn
 func init() {
 	// TODO(sougou): consolidate this call to be once per process.
 	rand.Seed(time.Now().UnixNano())
+	globalTPStats = newTabletPickerStats()
+}
+
+type tabletPickerStats struct {
+	mu                 sync.Mutex
+	noTabletFoundError *stats.CountersWithMultiLabels
+}
+
+func newTabletPickerStats() *tabletPickerStats {
+	tpStats := &tabletPickerStats{}
+	tpStats.noTabletFoundError = stats.NewCountersWithMultiLabels("TabletPickerNoTabletFoundErrorCount", "", []string{"cells", "keyspace", "shard", "types"})
+	return tpStats
+}
+
+func (tp *TabletPicker) incNoTabletFoundStat() {
+	globalTPStats.mu.Lock()
+	defer globalTPStats.mu.Unlock()
+	cells := strings.Join(tp.cells, "_")
+	tabletTypes := strings.Join(topoproto.MakeStringTypeList(tp.tabletTypes), "_")
+	labels := []string{cells, tp.keyspace, tp.shard, tabletTypes}
+	globalTPStats.noTabletFoundError.Add(labels, 1)
 }
