@@ -218,7 +218,18 @@ func TestRepairShardHasInactiveGroup(t *testing.T) {
 			}, true, getMysql56GTIDSet(sid1, "1-10"), topodatapb.TabletType_REPLICA},
 			{alias1, testHost, testPort1, "group", []db2.TestGroupState{
 				{MemberHost: "", MemberPort: "NULL", MemberState: "OFFLINE", MemberRole: ""},
+			}, true, getMysql56GTIDSet(sid1, "1-9"), topodatapb.TabletType_MASTER},
+			{alias2, testHost, testPort2, "group", []db2.TestGroupState{
+				{MemberHost: "", MemberPort: "NULL", MemberState: "OFFLINE", MemberRole: ""},
 			}, true, getMysql56GTIDSet(sid1, "1-9"), topodatapb.TabletType_REPLICA},
+		},
+		{"unreachable rebootstrap candidate", "vtgr repair: test_cell-0000000000 is unreachable", 0}: {
+			{alias0, testHost, testPort0, "group", []db2.TestGroupState{
+				{MemberHost: "", MemberPort: "NULL", MemberState: "OFFLINE", MemberRole: ""},
+			}, false, getMysql56GTIDSet(sid1, "1-10"), topodatapb.TabletType_REPLICA},
+			{alias1, testHost, testPort1, "group", []db2.TestGroupState{
+				{MemberHost: "", MemberPort: "NULL", MemberState: "OFFLINE", MemberRole: ""},
+			}, true, getMysql56GTIDSet(sid1, "1-9"), topodatapb.TabletType_MASTER},
 			{alias2, testHost, testPort2, "group", []db2.TestGroupState{
 				{MemberHost: "", MemberPort: "NULL", MemberState: "OFFLINE", MemberRole: ""},
 			}, true, getMysql56GTIDSet(sid1, "1-9"), topodatapb.TabletType_REPLICA},
