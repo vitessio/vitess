@@ -174,7 +174,7 @@ func planHorizon(sel *sqlparser.Select, plan logicalPlan, semTable *semantics.Se
 		return nil, err
 	}
 	for _, e := range qp.selectExprs {
-		if _, err := pushProjection(e, plan, semTable, true); err != nil {
+		if _, _, err := pushProjection(e, plan, semTable, true); err != nil {
 			return nil, err
 		}
 	}
