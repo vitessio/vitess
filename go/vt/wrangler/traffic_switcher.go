@@ -1128,7 +1128,7 @@ func (ts *trafficSwitcher) createReverseVReplication(ctx context.Context) error 
 					}
 					// TODO(sougou): handle degenerate cases like sequence, etc.
 					// We currently assume the primary vindex is the best way to filter, which may not be true.
-					inKeyrange = fmt.Sprintf(" where in_keyrange(%s, '%s', '%s')", sqlparser.String(vtable.ColumnVindexes[0].Columns[0]), vtable.ColumnVindexes[0].Type, key.KeyRangeString(source.GetShard().KeyRange))
+					inKeyrange = fmt.Sprintf(" where in_keyrange(%s, '%s.%s', '%s')", sqlparser.String(vtable.ColumnVindexes[0].Columns[0]), ts.sourceKeyspace, vtable.ColumnVindexes[0].Name, key.KeyRangeString(source.GetShard().KeyRange))
 				}
 				filter = fmt.Sprintf("select * from %s%s", rule.Match, inKeyrange)
 			}

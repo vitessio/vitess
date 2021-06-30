@@ -801,6 +801,12 @@ var (
 	}, {
 		input: "delete /* limit */ from a limit b",
 	}, {
+		input:  "delete /* alias where */ t.* from a as t where t.id = 2",
+		output: "delete /* alias where */ t from a as t where t.id = 2",
+	}, {
+		input:  "delete t.* from t, t1",
+		output: "delete t from t, t1",
+	}, {
 		input:  "delete a from a join b on a.id = b.id where b.name = 'test'",
 		output: "delete a from a join b on a.id = b.id where b.`name` = 'test'",
 	}, {

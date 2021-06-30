@@ -150,7 +150,10 @@ func init() {
 	vindexes.Register("costly", newCostlyIndex)
 }
 
-const samePlanMarker = "Gen4 plan same as above\n"
+const (
+	samePlanMarker  = "Gen4 plan same as above\n"
+	gen4ErrorPrefix = "Gen4 error: "
+)
 
 func TestPlan(t *testing.T) {
 	vschemaWrapper := &vschemaWrapper{
@@ -235,7 +238,11 @@ func TestWithDefaultKeyspaceFromFile(t *testing.T) {
 	// We are testing this separately so we can set a default keyspace
 	testOutputTempDir, err := ioutil.TempDir("", "plan_test")
 	require.NoError(t, err)
-	defer os.RemoveAll(testOutputTempDir)
+	defer func() {
+		if !t.Failed() {
+			_ = os.RemoveAll(testOutputTempDir)
+		}
+	}()
 	vschema := &vschemaWrapper{
 		v: loadSchema(t, "schema_test.json"),
 		keyspace: &vindexes.Keyspace{
@@ -472,6 +479,9 @@ func testFile(t *testing.T, filename, tempDir string, vschema *vschemaWrapper, c
 
 			vschema.version = Gen4
 			out, err := getPlanOutput(tcase, vschema)
+			if err != nil && tcase.output2ndPlanner == "" && strings.HasPrefix(err.Error(), "gen4 does not yet support") {
+				continue
+			}
 
 			// our expectation for the new planner on this query is one of three
 			//  - it produces the same plan as V3 - this is shown using empty brackets: {\n}
@@ -604,9 +614,11 @@ func iterateExecFile(name string) (testCaseIterator chan testCase) {
 			if err != nil && err != io.EOF {
 				panic(fmt.Sprintf("error reading file %s line# %d: %s", name, lineno, err.Error()))
 			}
-			if len(binput) > 0 && string(binput) == samePlanMarker {
+			nextLine := string(binput)
+			switch {
+			case nextLine == samePlanMarker:
 				output2Planner = output
-			} else if len(binput) > 0 && (binput[0] == '"' || binput[0] == '{') {
+			case strings.HasPrefix(nextLine, "{"):
 				output2Planner = append(output2Planner, binput...)
 				for {
 					l, err := r.ReadBytes('\n')
@@ -624,8 +636,9 @@ func iterateExecFile(name string) (testCaseIterator chan testCase) {
 						break
 					}
 				}
+			case strings.HasPrefix(nextLine, gen4ErrorPrefix):
+				output2Planner = []byte(nextLine[len(gen4ErrorPrefix) : len(nextLine)-1])
 			}
-
 			testCaseIterator <- testCase{
 				file:             name,
 				lineno:           lineno,

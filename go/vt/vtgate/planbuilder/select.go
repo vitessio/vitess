@@ -362,7 +362,7 @@ func isOnlyDual(sel *sqlparser.Select) bool {
 // pushes it down, and updates the route info if the new constraint improves
 // the primitive. This function can push to a WHERE or HAVING clause.
 func (pb *primitiveBuilder) pushFilter(in sqlparser.Expr, whereType string, reservedVars *sqlparser.ReservedVars) error {
-	filters := splitAndExpression(nil, in)
+	filters := sqlparser.SplitAndExpression(nil, in)
 	reorderBySubquery(filters)
 	for _, filter := range filters {
 		pullouts, origin, expr, err := pb.findOrigin(filter, reservedVars)
@@ -377,7 +377,7 @@ func (pb *primitiveBuilder) pushFilter(in sqlparser.Expr, whereType string, rese
 			}
 		}
 		// The returned expression may be complex. Resplit before pushing.
-		for _, subexpr := range splitAndExpression(nil, expr) {
+		for _, subexpr := range sqlparser.SplitAndExpression(nil, expr) {
 			pb.plan, err = planFilter(pb, pb.plan, subexpr, whereType, origin)
 			if err != nil {
 				return err
