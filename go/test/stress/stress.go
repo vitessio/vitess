@@ -36,7 +36,7 @@ const (
 )
 
 type (
-	result struct {
+	Result struct {
 		countSelect int
 		countInsert int
 	}
@@ -55,7 +55,7 @@ type (
 	}
 )
 
-func (r result) printQPS(seconds float64) {
+func (r Result) PrintQPS(seconds float64) {
 	fmt.Printf(`QPS:
 	select: %d
 	insert: %d
@@ -85,7 +85,7 @@ func createTables(t *testing.T, params mysql.ConnParams, nb int) []*table {
 	return tbls
 }
 
-func Start(t *testing.T, params mysql.ConnParams, duration time.Duration, done chan result) {
+func Start(t *testing.T, params mysql.ConnParams, duration time.Duration, done chan Result) {
 	fmt.Println("Starting load testing ...")
 
 	s := stresser{
@@ -95,19 +95,19 @@ func Start(t *testing.T, params mysql.ConnParams, duration time.Duration, done c
 		duration:   duration,
 	}
 
-	resultCh := make(chan result, s.maxClient)
+	resultCh := make(chan Result, s.maxClient)
 
 	for i := 0; i < s.maxClient; i++ {
 		go s.startStressClient(t, resultCh)
 	}
 
-	perClientResults := make([]result, 0, s.maxClient)
+	perClientResults := make([]Result, 0, s.maxClient)
 	for i := 0; i < s.maxClient; i++ {
 		newResult := <-resultCh
 		perClientResults = append(perClientResults, newResult)
 	}
 
-	var finalResult result
+	var finalResult Result
 	for _, r := range perClientResults {
 		finalResult.countSelect += r.countSelect
 		finalResult.countInsert += r.countInsert
@@ -115,11 +115,11 @@ func Start(t *testing.T, params mysql.ConnParams, duration time.Duration, done c
 	done <- finalResult
 }
 
-func (s *stresser) startStressClient(t *testing.T, resultCh chan result) {
+func (s *stresser) startStressClient(t *testing.T, resultCh chan Result) {
 	conn := newClient(t, s.connParams)
 	defer conn.Close()
 
-	var res result
+	var res Result
 
 	timeout := time.After(s.duration)
 	for {
