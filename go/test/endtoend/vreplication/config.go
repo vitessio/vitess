@@ -42,7 +42,7 @@ create table tenant(tenant_id binary(16), name varbinary(16), primary key (tenan
 	    "reverse_bits": {
 	      "type": "reverse_bits"
 	    },
-		"binary_md5": {
+		"bmd5": {
           "type": "binary_md5"
 		}
 	  },
@@ -75,7 +75,7 @@ create table tenant(tenant_id binary(16), name varbinary(16), primary key (tenan
           "column_vindexes": [
 	        {
 	          "column": "tenant_id",
-	          "name": "binary_md5"
+	          "name": "bmd5"
 	        }
 	      ]
 		}

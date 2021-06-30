@@ -1339,3 +1339,15 @@ func handleUnaryMinus(expr Expr) Expr {
 func encodeSQLString(val string) string {
 	return sqltypes.EncodeStringSQL(val)
 }
+
+// ToString prints the list of table expressions as a string
+// To be used as an alternate for String for []TableExpr
+func ToString(exprs []TableExpr) string {
+	buf := NewTrackedBuffer(nil)
+	prefix := ""
+	for _, expr := range exprs {
+		buf.astPrintf(nil, "%s%v", prefix, expr)
+		prefix = ", "
+	}
+	return buf.String()
+}

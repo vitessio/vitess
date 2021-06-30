@@ -2168,7 +2168,7 @@ Gen4 plan same as above
     "KsidVindex": "user_index",
     "MultiShardAutocommit": false,
     "OwnedVindexQuery": "select user_id, id from music where id = 1 for update",
-    "Query": "delete music from music where id = 1",
+    "Query": "delete from music where id = 1",
     "Table": "music",
     "Values": [
       1
@@ -2389,4 +2389,41 @@ Gen4 plan same as above
     "Table": "user_extra"
   }
 }
+Gen4 plan same as above
+
+# multi-table delete with single table
+"delete u.* from user u where u.id * u.col = u.foo"
+{
+  "QueryType": "DELETE",
+  "Original": "delete u.* from user u where u.id * u.col = u.foo",
+  "Instructions": {
+    "OperatorType": "Delete",
+    "Variant": "Scatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetTabletType": "MASTER",
+    "KsidVindex": "user_index",
+    "MultiShardAutocommit": false,
+    "OwnedVindexQuery": "select Id, `Name`, Costly from `user` where `user`.id * `user`.col = `user`.foo for update",
+    "Query": "delete from `user` where `user`.id * `user`.col = `user`.foo",
+    "Table": "user"
+  }
+}
+Gen4 plan same as above
+
+# delete with unknown reference
+"delete music from user where id = 1"
+"Unknown table 'music' in MULTI DELETE"
+Gen4 plan same as above
+
+# delete with derived tables
+"delete music from (select * from user) music where id = 1"
+"The target table music of the DELETE is not updatable"
+Gen4 plan same as above
+
+# delete with derived tables with unknown table
+"delete user from (select * from user) music where id = 1"
+"Unknown table 'user' in MULTI DELETE"
 Gen4 plan same as above
