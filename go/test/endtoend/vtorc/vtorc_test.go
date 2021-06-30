@@ -149,8 +149,8 @@ func createVttablets() error {
 	return nil
 }
 
-// removeVttabletsFromTopology removes all the vttablets from the topology
-func removeVttabletsFromTopology() error {
+// shutdownVttablets shuts down all the vttablets and removes them from the topology
+func shutdownVttablets() error {
 	for _, vttablet := range clusterInstance.Keyspaces[0].Shards[0].Vttablets {
 		tabletType := vttablet.VttabletProcess.GetTabletType()
 		if tabletType == "master" {
@@ -160,7 +160,11 @@ func removeVttabletsFromTopology() error {
 			}
 		}
 
-		err := clusterInstance.VtctlclientProcess.ExecuteCommand("DeleteTablet", vttablet.Alias)
+		err := vttablet.VttabletProcess.TearDown()
+		if err != nil {
+			return err
+		}
+		err = clusterInstance.VtctlclientProcess.ExecuteCommand("DeleteTablet", vttablet.Alias)
 		if err != nil {
 			return err
 		}
@@ -204,14 +208,14 @@ func setupVttabletsAndVtorc(t *testing.T, numReplicasReq int, numRdonlyReq int, 
 	stopVtorc(t)
 
 	// remove all the vttablets so that each test can add the amount that they require
-	err := removeVttabletsFromTopology()
+	err := shutdownVttablets()
 	require.NoError(t, err)
 
 	for _, tablet := range replicaTablets {
 		if numReplicasReq == 0 {
 			break
 		}
-		err = cleanAndAddVttablet(t, tablet)
+		err = cleanAndStartVttablet(t, tablet)
 		require.NoError(t, err)
 		numReplicasReq--
 	}
@@ -220,7 +224,7 @@ func setupVttabletsAndVtorc(t *testing.T, numReplicasReq int, numRdonlyReq int, 
 		if numRdonlyReq == 0 {
 			break
 		}
-		err = cleanAndAddVttablet(t, tablet)
+		err = cleanAndStartVttablet(t, tablet)
 		require.NoError(t, err)
 		numRdonlyReq--
 	}
@@ -233,7 +237,7 @@ func setupVttabletsAndVtorc(t *testing.T, numReplicasReq int, numRdonlyReq int, 
 	startVtorc(t, orcExtraArgs)
 }
 
-func cleanAndAddVttablet(t *testing.T, vttablet *cluster.Vttablet) error {
+func cleanAndStartVttablet(t *testing.T, vttablet *cluster.Vttablet) error {
 	// remove the database if it exists
 	_, err := runSQL(t, "DROP DATABASE IF EXISTS vt_ks", vttablet, "")
 	require.NoError(t, err)
@@ -244,20 +248,9 @@ func cleanAndAddVttablet(t *testing.T, vttablet *cluster.Vttablet) error {
 	_, err = runSQL(t, "RESET MASTER", vttablet, "")
 	require.NoError(t, err)
 
-	// add the vttablet to the topology
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("InitTablet",
-		"-port", fmt.Sprintf("%d", vttablet.VttabletProcess.Port),
-		"-grpc_port", fmt.Sprintf("%d", vttablet.VttabletProcess.GrpcPort),
-		"-hostname", vttablet.VttabletProcess.TabletHostname,
-		"-mysql_host", vttablet.VttabletProcess.TabletHostname,
-		"-mysql_port", fmt.Sprintf("%d", vttablet.MysqlctlProcess.MySQLPort),
-		"-keyspace", vttablet.VttabletProcess.Keyspace,
-		"-shard", vttablet.VttabletProcess.Shard,
-		vttablet.Alias,
-		vttablet.VttabletProcess.TabletType)
-	if err != nil {
-		return err
-	}
+	// start the vttablet
+	err = vttablet.VttabletProcess.Setup()
+	require.NoError(t, err)
 
 	clusterInstance.Keyspaces[0].Shards[0].Vttablets = append(clusterInstance.Keyspaces[0].Shards[0].Vttablets, vttablet)
 	return nil
