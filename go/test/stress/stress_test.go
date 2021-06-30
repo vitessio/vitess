@@ -85,13 +85,21 @@ func TestMain(m *testing.M) {
 func TestSimpleStressTest(t *testing.T) {
 	defer cluster.PanicHandler(t)
 
+	stressDone := make(chan result)
+	stressDuration := 10 * time.Second
+
 	// Stress generator
-	// TODO: start on its own goroutine
-	Start(t, vtParams, 30*time.Second)
+	go Start(t, vtParams, stressDuration, stressDone)
 
 	// TODO: wait for the cluster to be stressed enough
 
 	// TODO: start end-to-end tests
 
-	// TODO: gather results from the stress generator (QPS, failure/success rate)
+	timeout := time.After(45 * time.Second)
+	select {
+	case res := <-stressDone:
+		res.printQPS(stressDuration.Seconds())
+	case <-timeout:
+		t.Fatalf("Test timed out")
+	}
 }
