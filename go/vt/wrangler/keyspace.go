@@ -1359,7 +1359,8 @@ func (wr *Wrangler) SetKeyspaceServedFrom(ctx context.Context, keyspace string, 
 
 // RefreshTabletsByShard calls RefreshState on all the tablets in a given shard.
 func (wr *Wrangler) RefreshTabletsByShard(ctx context.Context, si *topo.ShardInfo, cells []string) error {
-	return topotools.RefreshTabletsByShard(ctx, wr.ts, wr.tmc, si, cells, wr.Logger())
+	_, err := topotools.RefreshTabletsByShard(ctx, wr.ts, wr.tmc, si, cells, wr.Logger())
+	return err
 }
 
 // DeleteKeyspace will do all the necessary changes in the topology server

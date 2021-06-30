@@ -941,11 +941,11 @@ func commandRefreshState(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 	if err != nil {
 		return err
 	}
-	tabletInfo, err := wr.TopoServer().GetTablet(ctx, tabletAlias)
-	if err != nil {
-		return err
-	}
-	return wr.TabletManagerClient().RefreshState(ctx, tabletInfo.Tablet)
+
+	_, err = wr.VtctldServer().RefreshState(ctx, &vtctldatapb.RefreshStateRequest{
+		TabletAlias: tabletAlias,
+	})
+	return err
 }
 
 func commandRefreshStateByShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -961,16 +961,18 @@ func commandRefreshStateByShard(ctx context.Context, wr *wrangler.Wrangler, subF
 	if err != nil {
 		return err
 	}
-	si, err := wr.TopoServer().GetShard(ctx, keyspace, shard)
-	if err != nil {
-		return err
-	}
 
 	var cells []string
 	if *cellsStr != "" {
 		cells = strings.Split(*cellsStr, ",")
 	}
-	return wr.RefreshTabletsByShard(ctx, si, cells)
+
+	_, err = wr.VtctldServer().RefreshStateByShard(ctx, &vtctldatapb.RefreshStateByShardRequest{
+		Keyspace: keyspace,
+		Shard:    shard,
+		Cells:    cells,
+	})
+	return err
 }
 
 func commandRunHealthCheck(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -2132,9 +2134,14 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 			s := ""
 			var progress wrangler.TableCopyProgress
 			for table := range *copyProgress {
+				var rowCountPct, tableSizePct int64
 				progress = *(*copyProgress)[table]
-				rowCountPct := 100.0 * progress.TargetRowCount / progress.SourceRowCount
-				tableSizePct := 100.0 * progress.TargetTableSize / progress.SourceTableSize
+				if progress.SourceRowCount > 0 {
+					rowCountPct = 100.0 * progress.TargetRowCount / progress.SourceRowCount
+				}
+				if progress.SourceTableSize > 0 {
+					tableSizePct = 100.0 * progress.TargetTableSize / progress.SourceTableSize
+				}
 				s += fmt.Sprintf("%s: rows copied %d/%d (%d%%), size copied %d/%d (%d%%)\n",
 					table, progress.TargetRowCount, progress.SourceRowCount, rowCountPct,
 					progress.TargetTableSize, progress.SourceTableSize, tableSizePct)

@@ -185,7 +185,11 @@ func (rs *rowStreamer) buildSelect(startWithPk []sqltypes.Value) (string, error)
 	buf.Myprintf("select ")
 	prefix := ""
 	for _, col := range rs.plan.Table.Fields {
-		buf.Myprintf("%s%v", prefix, sqlparser.NewColIdent(col.Name))
+		if rs.plan.isConvertColumnUsingUTF8(col.Name) {
+			buf.Myprintf("%sconvert(%v using utf8mb4)", prefix, sqlparser.NewColIdent(col.Name))
+		} else {
+			buf.Myprintf("%s%v", prefix, sqlparser.NewColIdent(col.Name))
+		}
 		prefix = ", "
 	}
 	wherePrinted := false

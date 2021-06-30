@@ -29,9 +29,42 @@ import (
 	"strings"
 )
 
+// ColumnType indicated some MySQL data types
+type ColumnType int
+
+const (
+	UnknownColumnType ColumnType = iota
+	TimestampColumnType
+	DateTimeColumnType
+	EnumColumnType
+	MediumIntColumnType
+	JSONColumnType
+	FloatColumnType
+	BinaryColumnType
+	StringColumnType
+	IntegerColumnType
+)
+
 // Column represents a table column
 type Column struct {
-	Name string
+	Name                 string
+	IsUnsigned           bool
+	Charset              string
+	Collation            string
+	Type                 ColumnType
+	EnumValues           string
+	EnumToTextConversion bool
+
+	// add Octet length for binary type, fix bytes with suffix "00" get clipped in mysql binlog.
+	// https://github.com/github/gh-ost/issues/909
+	BinaryOctetLength uint64
+}
+
+// SetTypeIfUnknown will set a new column type only if the current type is unknown, otherwise silently skip
+func (c *Column) SetTypeIfUnknown(t ColumnType) {
+	if c.Type == UnknownColumnType {
+		c.Type = t
+	}
 }
 
 // NewColumns creates a new column array from non empty names
@@ -145,6 +178,17 @@ func (l *ColumnList) IsSubsetOf(other *ColumnList) bool {
 // Len returns the length of this list
 func (l *ColumnList) Len() int {
 	return len(l.columns)
+}
+
+// SetEnumToTextConversion tells this column list that an enum is conveted to text
+func (l *ColumnList) SetEnumToTextConversion(columnName string, enumValues string) {
+	l.GetColumn(columnName).EnumToTextConversion = true
+	l.GetColumn(columnName).EnumValues = enumValues
+}
+
+// IsEnumToTextConversion tells whether an enum was converted to text
+func (l *ColumnList) IsEnumToTextConversion(columnName string) bool {
+	return l.GetColumn(columnName).EnumToTextConversion
 }
 
 // UniqueKey is the combination of a key's name and columns

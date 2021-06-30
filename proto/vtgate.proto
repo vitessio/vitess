@@ -271,7 +271,10 @@ message ResolveTransactionResponse {
 }
 
 message VStreamFlags {
+  // align streams
   bool minimize_skew = 1;
+  // how often heartbeats must be sent when idle (seconds)
+  uint32 heartbeat_interval = 2;
 }
 
 // VStreamRequest is the payload for VStream.

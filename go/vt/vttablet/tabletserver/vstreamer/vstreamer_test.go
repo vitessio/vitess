@@ -1922,6 +1922,54 @@ func TestFilteredMultipleWhere(t *testing.T) {
 	runCases(t, filter, testcases, "", nil)
 }
 
+// TestGeneratedColumns just confirms that generated columns are sent in a vstream as expected
+func TestGeneratedColumns(t *testing.T) {
+	flavor := strings.ToLower(env.Flavor)
+	// Disable tests on percona (which identifies as mysql56) and mariadb platforms in CI since they
+	// generated columns support was added in 5.7 and mariadb added mysql compatible generated columns in 10.2
+	if !strings.Contains(flavor, "mysql57") && !strings.Contains(flavor, "mysql80") {
+		return
+	}
+	execStatements(t, []string{
+		"create table t1(id int, val varbinary(6), val2 varbinary(6) as (concat(id, val)), val3 varbinary(6) as (concat(val, id)), id2 int, primary key(id))",
+	})
+	defer execStatements(t, []string{
+		"drop table t1",
+	})
+	engine.se.Reload(context.Background())
+	queries := []string{
+		"begin",
+		"insert into t1(id, val, id2) values (1, 'aaa', 10)",
+		"insert into t1(id, val, id2) values (2, 'bbb', 20)",
+		"commit",
+	}
+
+	fe := &TestFieldEvent{
+		table: "t1",
+		db:    "vttest",
+		cols: []*TestColumn{
+			{name: "id", dataType: "INT32", colType: "", len: 11, charset: 63},
+			{name: "val", dataType: "VARBINARY", colType: "", len: 6, charset: 63},
+			{name: "val2", dataType: "VARBINARY", colType: "", len: 6, charset: 63},
+			{name: "val3", dataType: "VARBINARY", colType: "", len: 6, charset: 63},
+			{name: "id2", dataType: "INT32", colType: "", len: 11, charset: 63},
+		},
+	}
+
+	testcases := []testcase{{
+		input: queries,
+		output: [][]string{{
+			`begin`,
+			fe.String(),
+			`type:ROW row_event:<table_name:"t1" row_changes:<after:<lengths:1 lengths:3 lengths:4 lengths:4 lengths:2 values:"1aaa1aaaaaa110" > > > `,
+			`type:ROW row_event:<table_name:"t1" row_changes:<after:<lengths:1 lengths:3 lengths:4 lengths:4 lengths:2 values:"2bbb2bbbbbb220" > > > `,
+			`gtid`,
+			`commit`,
+		}},
+	}}
+	runCases(t, nil, testcases, "current", nil)
+}
+
 func runCases(t *testing.T, filter *binlogdatapb.Filter, testcases []testcase, position string, tablePK []*binlogdatapb.TableLastPK) {
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -2101,7 +2149,7 @@ func masterPosition(t *testing.T) string {
 		t.Fatal(err)
 	}
 	defer conn.Close()
-	pos, err := conn.MasterPosition()
+	pos, err := conn.PrimaryPosition()
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -25,9 +25,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/require"
-
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
@@ -299,6 +298,11 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 			printShardPositions(vc, ksShards)
 			switchWrites(t, reverseKsWorkflow, false)
 
+			output, err := vc.VtctlClient.ExecuteCommandWithOutput("Workflow", ksWorkflow, "show")
+			require.NoError(t, err)
+			require.Contains(t, output, "'customer.reverse_bits'")
+			require.Contains(t, output, "'customer.bmd5'")
+
 			insertQuery1 = "insert into customer(cid, name) values(1002, 'tempCustomer5')"
 			require.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, productTab, "product", insertQuery1, matchInsertQuery1))
 			// both inserts go into 80-, this tests the edge-case where a stream (-80) has no relevant new events after the previous switch
@@ -314,7 +318,7 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 			dropSourcesDryRun(t, ksWorkflow, true, dryRunResultsDropSourcesRenameCustomerShard)
 
 			var exists bool
-			exists, err := checkIfBlacklistExists(t, vc, "product:0", "customer")
+			exists, err = checkIfBlacklistExists(t, vc, "product:0", "customer")
 			require.NoError(t, err, "Error getting blacklist for customer:0")
 			require.True(t, exists)
 			dropSources(t, ksWorkflow)

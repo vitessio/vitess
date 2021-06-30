@@ -1342,3 +1342,4 @@ Gen4 plan same as above
 # syntax error detected by planbuilder
 "select count(distinct *) from user"
 "syntax error: count(distinct *)"
+Gen4 plan same as above

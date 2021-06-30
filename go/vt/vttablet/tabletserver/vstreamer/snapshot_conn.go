@@ -50,7 +50,7 @@ func (conn *snapshotConn) streamWithoutSnapshot(ctx context.Context, table, quer
 	if _, err := conn.ExecuteFetch("set @@session.time_zone = '+00:00'", 1, false); err != nil {
 		return "", err
 	}
-	mpos, err := conn.MasterPosition()
+	mpos, err := conn.PrimaryPosition()
 	if err != nil {
 		return "", err
 	}
@@ -98,7 +98,7 @@ func (conn *snapshotConn) startSnapshot(ctx context.Context, table string) (gtid
 		log.Infof("Error locking table %s to read", tableIdent)
 		return "", err
 	}
-	mpos, err := lockConn.MasterPosition()
+	mpos, err := lockConn.PrimaryPosition()
 	if err != nil {
 		return "", err
 	}

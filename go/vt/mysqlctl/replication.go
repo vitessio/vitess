@@ -190,11 +190,6 @@ func (mysqld *Mysqld) SetReadOnly(on bool) error {
 	return mysqld.ExecuteSuperQuery(context.TODO(), query)
 }
 
-var (
-	// ErrNotMaster means there is no master status
-	ErrNotMaster = errors.New("no master status")
-)
-
 // SetSuperReadOnly set/unset the super_read_only flag
 func (mysqld *Mysqld) SetSuperReadOnly(on bool) error {
 	query := "SET GLOBAL super_read_only = "
@@ -206,8 +201,8 @@ func (mysqld *Mysqld) SetSuperReadOnly(on bool) error {
 	return mysqld.ExecuteSuperQuery(context.TODO(), query)
 }
 
-// WaitMasterPos lets replicas wait to given replication position
-func (mysqld *Mysqld) WaitMasterPos(ctx context.Context, targetPos mysql.Position) error {
+// WaitSourcePos lets replicas wait to given replication position
+func (mysqld *Mysqld) WaitSourcePos(ctx context.Context, targetPos mysql.Position) error {
 	// Get a connection.
 	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
 	if err != nil {
@@ -223,9 +218,9 @@ func (mysqld *Mysqld) WaitMasterPos(ctx context.Context, targetPos mysql.Positio
 		// If we are the master, WaitUntilFilePositionCommand will fail.
 		// But position is most likely reached. So, check the position
 		// first.
-		mpos, err := conn.MasterFilePosition()
+		mpos, err := conn.PrimaryFilePosition()
 		if err != nil {
-			return fmt.Errorf("WaitMasterPos: MasterFilePosition failed: %v", err)
+			return fmt.Errorf("WaitSourcePos: PrimaryFilePosition failed: %v", err)
 		}
 		if mpos.AtLeast(targetPos) {
 			return nil
@@ -241,9 +236,9 @@ func (mysqld *Mysqld) WaitMasterPos(ctx context.Context, targetPos mysql.Positio
 		// If we are the master, WaitUntilPositionCommand will fail.
 		// But position is most likely reached. So, check the position
 		// first.
-		mpos, err := conn.MasterPosition()
+		mpos, err := conn.PrimaryPosition()
 		if err != nil {
-			return fmt.Errorf("WaitMasterPos: MasterPosition failed: %v", err)
+			return fmt.Errorf("WaitSourcePos: PrimaryPosition failed: %v", err)
 		}
 		if mpos.AtLeast(targetPos) {
 			return nil
@@ -285,26 +280,26 @@ func (mysqld *Mysqld) ReplicationStatus() (mysql.ReplicationStatus, error) {
 	return conn.ShowReplicationStatus()
 }
 
-// MasterStatus returns the master replication statuses
-func (mysqld *Mysqld) MasterStatus(ctx context.Context) (mysql.MasterStatus, error) {
+// PrimaryStatus returns the master replication statuses
+func (mysqld *Mysqld) PrimaryStatus(ctx context.Context) (mysql.PrimaryStatus, error) {
 	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
 	if err != nil {
-		return mysql.MasterStatus{}, err
+		return mysql.PrimaryStatus{}, err
 	}
 	defer conn.Recycle()
 
-	return conn.ShowMasterStatus()
+	return conn.ShowPrimaryStatus()
 }
 
-// MasterPosition returns the master replication position.
-func (mysqld *Mysqld) MasterPosition() (mysql.Position, error) {
+// PrimaryPosition returns the master replication position.
+func (mysqld *Mysqld) PrimaryPosition() (mysql.Position, error) {
 	conn, err := getPoolReconnect(context.TODO(), mysqld.dbaPool)
 	if err != nil {
 		return mysql.Position{}, err
 	}
 	defer conn.Recycle()
 
-	return conn.MasterPosition()
+	return conn.PrimaryPosition()
 }
 
 // SetReplicationPosition sets the replication position at which the replica will resume
@@ -321,9 +316,9 @@ func (mysqld *Mysqld) SetReplicationPosition(ctx context.Context, pos mysql.Posi
 	return mysqld.executeSuperQueryListConn(ctx, conn, cmds)
 }
 
-// SetMaster makes the provided host / port the master. It optionally
+// SetReplicationSource makes the provided host / port the master. It optionally
 // stops replication before, and starts it after.
-func (mysqld *Mysqld) SetMaster(ctx context.Context, masterHost string, masterPort int, replicationStopBefore bool, replicationStartAfter bool) error {
+func (mysqld *Mysqld) SetReplicationSource(ctx context.Context, masterHost string, masterPort int, replicationStopBefore bool, replicationStartAfter bool) error {
 	params, err := mysqld.dbcfgs.ReplConnector().MysqlParams()
 	if err != nil {
 		return err
@@ -338,7 +333,7 @@ func (mysqld *Mysqld) SetMaster(ctx context.Context, masterHost string, masterPo
 	if replicationStopBefore {
 		cmds = append(cmds, conn.StopReplicationCommand())
 	}
-	smc := conn.SetMasterCommand(params, masterHost, masterPort, int(masterConnectRetry.Seconds()))
+	smc := conn.SetReplicationSourceCommand(params, masterHost, masterPort, int(masterConnectRetry.Seconds()))
 	cmds = append(cmds, smc)
 	if replicationStartAfter {
 		cmds = append(cmds, conn.StartReplicationCommand())

@@ -31,6 +31,7 @@ import (
 	"vitess.io/vitess/go/vt/vtadmin/cluster"
 	"vitess.io/vitess/go/vt/vtadmin/grpcserver"
 	vtadminhttp "vitess.io/vitess/go/vt/vtadmin/http"
+	"vitess.io/vitess/go/vt/vtadmin/http/debug"
 )
 
 var (
@@ -56,7 +57,7 @@ var (
 		},
 		Run: run,
 		PostRun: func(cmd *cobra.Command, args []string) {
-			traceCloser.Close()
+			trace.LogErrorsWhenClosing(traceCloser)
 		},
 	}
 )
@@ -64,7 +65,7 @@ var (
 // fatal ensures the tracer is closed and final spans are sent before issuing
 // a log.Fatal call with the given args.
 func fatal(args ...interface{}) {
-	traceCloser.Close()
+	trace.LogErrorsWhenClosing(traceCloser)
 	log.Fatal(args...)
 }
 
@@ -122,13 +123,17 @@ func main() {
 	rootCmd.Flags().Var(&clusterFileConfig, "cluster-config", "path to a yaml cluster configuration. see clusters.example.yaml") // (TODO:@amason) provide example config.
 	rootCmd.Flags().Var(&defaultClusterConfig, "cluster-defaults", "default options for all clusters")
 
-	rootCmd.Flags().AddGoFlag(flag.Lookup("tracer"))                // defined in go/vt/trace
-	rootCmd.Flags().AddGoFlag(flag.Lookup("tracing-sampling-type")) // defined in go/vt/trace
-	rootCmd.Flags().AddGoFlag(flag.Lookup("tracing-sampling-rate")) // defined in go/vt/trace
+	rootCmd.Flags().AddGoFlag(flag.Lookup("tracer"))                 // defined in go/vt/trace
+	rootCmd.Flags().AddGoFlag(flag.Lookup("tracing-enable-logging")) // defined in go/vt/trace
+	rootCmd.Flags().AddGoFlag(flag.Lookup("tracing-sampling-type"))  // defined in go/vt/trace
+	rootCmd.Flags().AddGoFlag(flag.Lookup("tracing-sampling-rate"))  // defined in go/vt/trace
 	rootCmd.Flags().BoolVar(&opts.EnableTracing, "grpc-tracing", false, "whether to enable tracing on the gRPC server")
 	rootCmd.Flags().BoolVar(&httpOpts.EnableTracing, "http-tracing", false, "whether to enable tracing on the HTTP server")
 
 	rootCmd.Flags().BoolVar(&httpOpts.DisableCompression, "http-no-compress", false, "whether to disable compression of HTTP API responses")
+	rootCmd.Flags().BoolVar(&httpOpts.DisableDebug, "http-no-debug", false, "whether to disable /debug/pprof/* and /debug/env HTTP endpoints")
+	rootCmd.Flags().Var(&debug.OmitEnv, "http-debug-omit-env", "name of an environment variable to omit from /debug/env, if http debug endpoints are enabled. specify multiple times to omit multiple env vars")
+	rootCmd.Flags().Var(&debug.SanitizeEnv, "http-debug-sanitize-env", "name of an environment variable to sanitize in /debug/env, if http debug endpoints are enabled. specify multiple times to sanitize multiple env vars")
 	rootCmd.Flags().StringSliceVar(&httpOpts.CORSOrigins, "http-origin", []string{}, "repeated, comma-separated flag of allowed CORS origins. omit to disable CORS")
 	rootCmd.Flags().StringVar(&httpOpts.ExperimentalOptions.TabletURLTmpl,
 		"http-tablet-url-tmpl",

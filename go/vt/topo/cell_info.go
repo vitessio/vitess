@@ -17,12 +17,12 @@ limitations under the License.
 package topo
 
 import (
+	"context"
 	"path"
 	"strings"
 
 	"google.golang.org/protobuf/proto"
-
-	"context"
+	"k8s.io/apimachinery/pkg/util/sets"
 
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -176,37 +176,52 @@ func (ts *Server) GetKnownCells(ctx context.Context) ([]string, error) {
 // ExpandCells takes a comma-separated list of cells and returns an array of cell names
 // Aliases are expanded and an empty string returns all cells
 func (ts *Server) ExpandCells(ctx context.Context, cells string) ([]string, error) {
-	var err error
-	var outputCells []string
-	inputCells := strings.Split(cells, ",")
+	var (
+		err         error
+		inputCells  []string
+		outputCells = sets.NewString() // Use a set to dedupe if the input cells list includes an alias and a cell in that alias.
+	)
+
 	if cells == "" {
 		inputCells, err = ts.GetCellInfoNames(ctx)
 		if err != nil {
 			return nil, err
 		}
+	} else {
+		inputCells = strings.Split(cells, ",")
+	}
+
+	expandCell := func(ctx context.Context, cell string) error {
+		shortCtx, cancel := context.WithTimeout(ctx, *RemoteOperationTimeout)
+		defer cancel()
+
+		_, err := ts.GetCellInfo(shortCtx, cell, false /* strongRead */)
+		if err != nil {
+			// Not a valid cell name. Check whether it is an alias.
+			shortCtx, cancel := context.WithTimeout(ctx, *RemoteOperationTimeout)
+			defer cancel()
+
+			alias, err2 := ts.GetCellsAlias(shortCtx, cell, false /* strongRead */)
+			if err2 != nil {
+				return err // return the original err to indicate the cell does not exist
+			}
+
+			// Expand the alias cells list into the final set.
+			outputCells.Insert(alias.Cells...)
+			return nil
+		}
+
+		// Valid cell.
+		outputCells.Insert(cell)
+		return nil
 	}
 
 	for _, cell := range inputCells {
 		cell2 := strings.TrimSpace(cell)
-		shortCtx, cancel := context.WithTimeout(ctx, *RemoteOperationTimeout)
-		defer cancel()
-		_, err := ts.GetCellInfo(shortCtx, cell2, false)
-		if err != nil {
-			// not a valid cell, check whether it is a cell alias
-			shortCtx, cancel := context.WithTimeout(ctx, *RemoteOperationTimeout)
-			defer cancel()
-			alias, err2 := ts.GetCellsAlias(shortCtx, cell2, false)
-			// if we get an error, either cellAlias doesn't exist or it isn't a cell alias at all. Ignore and continue
-			if err2 == nil {
-				outputCells = append(outputCells, alias.Cells...)
-			}
-			if err != nil {
-				return nil, err
-			}
-		} else {
-			// valid cell, add it to our list
-			outputCells = append(outputCells, cell2)
+		if err := expandCell(ctx, cell2); err != nil {
+			return nil, err
 		}
 	}
-	return outputCells, nil
+
+	return outputCells.List(), nil
 }

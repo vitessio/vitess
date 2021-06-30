@@ -25,6 +25,7 @@ const (
 
 	// invalid argument
 	BadFieldError
+	BadTableError
 	CantUseOptionHere
 	DataOutOfRange
 	EmptyQuery
@@ -32,6 +33,7 @@ const (
 	IncorrectGlobalLocalVar
 	NonUniqError
 	NonUniqTable
+	NonUpdateableTable
 	SyntaxError
 	WrongGroupField
 	WrongTypeForVar
@@ -43,6 +45,7 @@ const (
 	InnodbReadOnly
 	WrongNumberOfColumnsInSelect
 	CantDoThisInTransaction
+	RequiresPrimaryKey
 
 	// not found
 	BadDb

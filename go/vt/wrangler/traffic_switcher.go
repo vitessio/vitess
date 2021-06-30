@@ -26,6 +26,8 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/vt/discovery"
+
 	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/concurrency"
@@ -367,8 +369,52 @@ func (wr *Wrangler) SwitchReads(ctx context.Context, targetKeyspace, workflowNam
 	return sw.logs(), nil
 }
 
+func (wr *Wrangler) areTabletsAvailableToStreamFrom(ctx context.Context, ts *trafficSwitcher, keyspace string, shards []*topo.ShardInfo) error {
+	var cells []string
+	tabletTypes := ts.optTabletTypes
+	if ts.optCells != "" {
+		cells = strings.Split(ts.optCells, ",")
+	}
+	// FIXME: currently there is a default setting in the tablet that is used if user does not specify a tablet type,
+	// we use the value specified in the tablet flag `-vreplication_tablet_type`
+	// but ideally we should populate the vreplication table with a default value when we setup the workflow
+	if tabletTypes == "" {
+		tabletTypes = "MASTER,REPLICA"
+	}
+
+	var wg sync.WaitGroup
+	allErrors := &concurrency.AllErrorRecorder{}
+	for _, shard := range shards {
+		wg.Add(1)
+		go func(cells []string, keyspace string, shard *topo.ShardInfo) {
+			defer wg.Done()
+			if cells == nil {
+				cells = append(cells, shard.MasterAlias.Cell)
+			}
+			tp, err := discovery.NewTabletPicker(wr.ts, cells, keyspace, shard.ShardName(), tabletTypes)
+			if err != nil {
+				allErrors.RecordError(err)
+				return
+			}
+			tablets := tp.GetMatchingTablets(ctx)
+			if len(tablets) == 0 {
+				allErrors.RecordError(fmt.Errorf("no tablet found to source data in keyspace %s, shard %s", keyspace, shard.ShardName()))
+				return
+			}
+		}(cells, keyspace, shard)
+	}
+
+	wg.Wait()
+	if allErrors.HasErrors() {
+		log.Errorf("%s", allErrors.Error())
+		return allErrors.Error()
+	}
+	return nil
+}
+
 // SwitchWrites is a generic way of migrating write traffic for a resharding workflow.
-func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflowName string, timeout time.Duration, cancel, reverse, reverseReplication bool, dryRun bool) (journalID int64, dryRunResults *[]string, err error) {
+func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflowName string, timeout time.Duration,
+	cancel, reverse, reverseReplication bool, dryRun bool) (journalID int64, dryRunResults *[]string, err error) {
 	ts, ws, err := wr.getWorkflowState(ctx, targetKeyspace, workflowName)
 	_ = ws
 	if err != nil {
@@ -397,6 +443,13 @@ func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflowNa
 	if err := ts.validate(ctx); err != nil {
 		ts.wr.Logger().Errorf("validate failed: %v", err)
 		return 0, nil, err
+	}
+
+	if reverseReplication {
+		err := wr.areTabletsAvailableToStreamFrom(ctx, ts, ts.targetKeyspace, ts.targetShards())
+		if err != nil {
+			return 0, nil, err
+		}
 	}
 
 	// Need to lock both source and target keyspaces.
@@ -1075,7 +1128,7 @@ func (ts *trafficSwitcher) createReverseVReplication(ctx context.Context) error 
 					}
 					// TODO(sougou): handle degenerate cases like sequence, etc.
 					// We currently assume the primary vindex is the best way to filter, which may not be true.
-					inKeyrange = fmt.Sprintf(" where in_keyrange(%s, '%s', '%s')", sqlparser.String(vtable.ColumnVindexes[0].Columns[0]), vtable.ColumnVindexes[0].Type, key.KeyRangeString(source.GetShard().KeyRange))
+					inKeyrange = fmt.Sprintf(" where in_keyrange(%s, '%s.%s', '%s')", sqlparser.String(vtable.ColumnVindexes[0].Columns[0]), ts.sourceKeyspace, vtable.ColumnVindexes[0].Name, key.KeyRangeString(source.GetShard().KeyRange))
 				}
 				filter = fmt.Sprintf("select * from %s%s", rule.Match, inKeyrange)
 			}

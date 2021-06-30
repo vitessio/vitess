@@ -19,8 +19,10 @@ package schema
 import (
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 
+	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
@@ -51,6 +53,8 @@ var (
 	}
 	createTableRegexp     = regexp.MustCompile(`(?s)(?i)(CREATE\s+TABLE\s+)` + "`" + `([^` + "`" + `]+)` + "`" + `(\s*[(].*$)`)
 	revertStatementRegexp = regexp.MustCompile(`(?i)^revert\s+([\S]*)$`)
+
+	enumValuesRegexp = regexp.MustCompile("(?i)^enum[(](.*)[)]$")
 )
 
 // ReplaceTableNameInCreateTableStatement returns a modified CREATE TABLE statement, such that the table name is replaced with given name.
@@ -100,4 +104,36 @@ func legacyParseRevertUUID(sql string) (uuid string, err error) {
 		return "", fmt.Errorf("Not an online DDL UUID: '%s'", uuid)
 	}
 	return uuid, nil
+}
+
+// ParseEnumValues parses the comma delimited part of an enum column definition
+func ParseEnumValues(enumColumnType string) string {
+	if submatch := enumValuesRegexp.FindStringSubmatch(enumColumnType); len(submatch) > 0 {
+		return submatch[1]
+	}
+	return enumColumnType
+}
+
+// ParseEnumTokens parses the comma delimited part of an enum column definition and
+// returns the (unquoted) text values
+func ParseEnumTokens(enumValues string) []string {
+	enumValues = ParseEnumValues(enumValues)
+	tokens := textutil.SplitDelimitedList(enumValues)
+	for i := range tokens {
+		if strings.HasPrefix(tokens[i], `'`) && strings.HasSuffix(tokens[i], `'`) {
+			tokens[i] = strings.Trim(tokens[i], `'`)
+		}
+	}
+	return tokens
+}
+
+// ParseEnumTokensMap parses the comma delimited part of an enum column definition
+// and returns a map where ["1"] is the first token, and ["<n>"] is th elast token
+func ParseEnumTokensMap(enumValues string) map[string]string {
+	tokens := ParseEnumTokens(enumValues)
+	tokensMap := map[string]string{}
+	for i, token := range tokens {
+		tokensMap[strconv.Itoa(i+1)] = token
+	}
+	return tokensMap
 }

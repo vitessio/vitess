@@ -21,7 +21,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -87,8 +86,7 @@ func TestFindColVindex(t *testing.T) {
 			},
 		},
 	}
-	vschema, err := vindexes.BuildVSchema(testSrvVSchema)
-	require.NoError(t, err)
+	vschema := vindexes.BuildVSchema(testSrvVSchema)
 
 	testcases := []struct {
 		keyspace   string
@@ -151,8 +149,7 @@ func TestFindOrCreateVindex(t *testing.T) {
 			},
 		},
 	}
-	vschema, err := vindexes.BuildVSchema(testSrvVSchema)
-	require.NoError(t, err)
+	vschema := vindexes.BuildVSchema(testSrvVSchema)
 
 	lvs := &localVSchema{
 		keyspace: "ks1",
@@ -207,8 +204,7 @@ func TestFindTable(t *testing.T) {
 			},
 		},
 	}
-	vschema, err := vindexes.BuildVSchema(testSrvVSchema)
-	require.NoError(t, err)
+	vschema := vindexes.BuildVSchema(testSrvVSchema)
 
 	testcases := []struct {
 		keyspace  string

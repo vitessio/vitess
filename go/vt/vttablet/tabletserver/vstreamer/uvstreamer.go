@@ -338,7 +338,7 @@ func (uvs *uvstreamer) currentPosition() (mysql.Position, error) {
 		return mysql.Position{}, err
 	}
 	defer conn.Close()
-	return conn.MasterPosition()
+	return conn.PrimaryPosition()
 }
 
 func (uvs *uvstreamer) init() error {
