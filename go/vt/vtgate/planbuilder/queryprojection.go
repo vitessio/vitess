@@ -26,11 +26,8 @@ import (
 )
 
 type queryProjection struct {
-	selectExprs             []*sqlparser.AliasedExpr
-	aggrExprs               []*sqlparser.AliasedExpr
-	groupOrderingCommonExpr map[sqlparser.Expr]*sqlparser.Order
-
-	orderExprs sqlparser.OrderBy
+	selectExprs []*sqlparser.AliasedExpr
+	aggrExprs   []*sqlparser.AliasedExpr
 
 	// orderExprColMap keeps a map between the Order object and the offset into the select expressions list
 	orderExprColMap map[*sqlparser.Order]int
@@ -38,8 +35,7 @@ type queryProjection struct {
 
 func newQueryProjection() *queryProjection {
 	return &queryProjection{
-		groupOrderingCommonExpr: map[sqlparser.Expr]*sqlparser.Order{},
-		orderExprColMap:         map[*sqlparser.Order]int{},
+		orderExprColMap: map[*sqlparser.Order]int{},
 	}
 }
 
@@ -64,8 +60,6 @@ func createQPFromSelect(sel *sqlparser.Select) (*queryProjection, error) {
 		}
 		qp.selectExprs = append(qp.selectExprs, exp)
 	}
-
-	qp.orderExprs = sel.OrderBy
 
 	allExpr := append(qp.selectExprs, qp.aggrExprs...)
 
