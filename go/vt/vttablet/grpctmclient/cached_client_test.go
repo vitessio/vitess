@@ -22,9 +22,7 @@ import (
 	"io"
 	"math/rand"
 	"net"
-	"os"
 	"runtime"
-	"runtime/pprof"
 	"sync"
 	"testing"
 	"time"
@@ -64,47 +62,11 @@ func grpcTestServer(t testing.TB, tm tabletmanager.RPCTM) (*net.TCPAddr, func())
 	}
 }
 
-func BenchmarkCachedConnClient(b *testing.B) {
-	tmserv := tmrpctest.NewFakeRPCTM(b)
-	tablets := make([]*topodatapb.Tablet, 4)
-	for i := 0; i < len(tablets); i++ {
-		addr, shutdown := grpcTestServer(b, tmserv)
-		defer shutdown()
-
-		tablets[i] = &topodatapb.Tablet{
-			Alias: &topodatapb.TabletAlias{
-				Cell: "test",
-				Uid:  uint32(addr.Port),
-			},
-			Hostname: addr.IP.String(),
-			PortMap: map[string]int32{
-				"grpc": int32(addr.Port),
-			},
-		}
-	}
-
-	b.ResetTimer()
-	client := NewCachedConnClient(5)
-	defer client.Close()
-
-	for i := 0; i < b.N; i++ {
-		ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*100)
-		x := rand.Intn(len(tablets))
-		err := client.Ping(ctx, tablets[x])
-		if err != nil {
-			b.Errorf("error pinging tablet %v: %w", tablets[x].Hostname, err)
-		}
-
-		cancel()
-	}
-}
-
 func BenchmarkCachedConnClientSteadyState(b *testing.B) {
 	tmserv := tmrpctest.NewFakeRPCTM(b)
 	tablets := make([]*topodatapb.Tablet, 1000)
 	for i := 0; i < len(tablets); i++ {
 		addr, shutdown := grpcTestServer(b, tmserv)
-		// b.Cleanup(shutdown)
 		defer shutdown()
 
 		tablets[i] = &topodatapb.Tablet{
@@ -120,7 +82,6 @@ func BenchmarkCachedConnClientSteadyState(b *testing.B) {
 	}
 
 	client := NewCachedConnClient(100)
-	// b.Cleanup(client.Close)
 	defer client.Close()
 
 	// fill the pool
@@ -174,7 +135,6 @@ func BenchmarkCachedConnClientSteadyStateRedials(b *testing.B) {
 	tablets := make([]*topodatapb.Tablet, 1000)
 	for i := 0; i < len(tablets); i++ {
 		addr, shutdown := grpcTestServer(b, tmserv)
-		// b.Cleanup(shutdown)
 		defer shutdown()
 
 		tablets[i] = &topodatapb.Tablet{
@@ -190,7 +150,6 @@ func BenchmarkCachedConnClientSteadyStateRedials(b *testing.B) {
 	}
 
 	client := NewCachedConnClient(1000)
-	// b.Cleanup(client.Close)
 	defer client.Close()
 
 	// fill the pool
@@ -244,7 +203,7 @@ func BenchmarkCachedConnClientSteadyStateEvictions(b *testing.B) {
 	tablets := make([]*topodatapb.Tablet, 1000)
 	for i := 0; i < len(tablets); i++ {
 		addr, shutdown := grpcTestServer(b, tmserv)
-		b.Cleanup(shutdown)
+		defer shutdown()
 
 		tablets[i] = &topodatapb.Tablet{
 			Alias: &topodatapb.TabletAlias{
@@ -259,7 +218,7 @@ func BenchmarkCachedConnClientSteadyStateEvictions(b *testing.B) {
 	}
 
 	client := NewCachedConnClient(100)
-	b.Cleanup(client.Close)
+	defer client.Close()
 
 	// fill the pool
 	for i := 0; i < 100; i++ {
@@ -313,17 +272,6 @@ func BenchmarkCachedConnClientSteadyStateEvictions(b *testing.B) {
 
 func TestCachedConnClient(t *testing.T) {
 	t.Parallel()
-
-	if os.Getenv("VT_PPROF_TEST") != "" {
-		file, err := os.Create(fmt.Sprintf("%s.profile.out", t.Name()))
-		require.NoError(t, err)
-		defer file.Close()
-		if err := pprof.StartCPUProfile(file); err != nil {
-			t.Errorf("failed to start cpu profile: %v", err)
-			return
-		}
-		defer pprof.StopCPUProfile()
-	}
 
 	testCtx, testCancel := context.WithCancel(context.Background())
 	wg := sync.WaitGroup{}
