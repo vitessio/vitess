@@ -508,6 +508,7 @@ func TestVDiffUnsharded(t *testing.T) {
 		dr: &DiffReport{
 			ProcessedRows: 3,
 			MatchingRows:  3,
+			TableName:     "t1",
 		},
 	}, {
 		id: "2",
@@ -524,6 +525,7 @@ func TestVDiffUnsharded(t *testing.T) {
 			ProcessedRows:   3,
 			MatchingRows:    1,
 			ExtraRowsTarget: 2,
+			TableName:       "t1",
 			ExtraRowsTargetSample: []*RowDiff{
 				{
 					Row: map[string]sqltypes.Value{
@@ -549,6 +551,7 @@ func TestVDiffUnsharded(t *testing.T) {
 			ProcessedRows:   3,
 			MatchingRows:    1,
 			ExtraRowsSource: 2,
+			TableName:       "t1",
 			ExtraRowsSourceSample: []*RowDiff{
 				{
 					Row: map[string]sqltypes.Value{
@@ -576,6 +579,7 @@ func TestVDiffUnsharded(t *testing.T) {
 			ProcessedRows:   3,
 			MatchingRows:    2,
 			ExtraRowsSource: 1,
+			TableName:       "t1",
 			ExtraRowsSourceSample: []*RowDiff{
 				{
 					Row: map[string]sqltypes.Value{
@@ -603,6 +607,7 @@ func TestVDiffUnsharded(t *testing.T) {
 			ProcessedRows:   3,
 			MatchingRows:    2,
 			ExtraRowsTarget: 1,
+			TableName:       "t1",
 			ExtraRowsTargetSample: []*RowDiff{
 				{
 					Row: map[string]sqltypes.Value{
@@ -631,6 +636,7 @@ func TestVDiffUnsharded(t *testing.T) {
 			ProcessedRows:  3,
 			MatchingRows:   2,
 			MismatchedRows: 1,
+			TableName:      "t1",
 			MismatchedRowsSample: []*DiffMismatch{
 				{
 					Source: &RowDiff{Row: map[string]sqltypes.Value{
@@ -667,6 +673,7 @@ func TestVDiffUnsharded(t *testing.T) {
 			ProcessedRows:  3,
 			MatchingRows:   2,
 			MismatchedRows: 1,
+			TableName:      "t1",
 			MismatchedRowsSample: []*DiffMismatch{
 				{
 					Source: &RowDiff{Row: map[string]sqltypes.Value{
@@ -701,6 +708,7 @@ func TestVDiffUnsharded(t *testing.T) {
 			ProcessedRows:  3,
 			MatchingRows:   2,
 			MismatchedRows: 1,
+			TableName:      "t1",
 			MismatchedRowsSample: []*DiffMismatch{
 				{
 					Source: &RowDiff{Row: map[string]sqltypes.Value{
@@ -793,6 +801,7 @@ func TestVDiffSharded(t *testing.T) {
 	wantdr := &DiffReport{
 		ProcessedRows: 3,
 		MatchingRows:  3,
+		TableName:     "t1",
 	}
 	assert.Equal(t, wantdr, dr["t1"])
 }
@@ -859,6 +868,7 @@ func TestVDiffAggregates(t *testing.T) {
 	wantdr := &DiffReport{
 		ProcessedRows: 5,
 		MatchingRows:  5,
+		TableName:     "t1",
 	}
 	assert.Equal(t, wantdr, dr["t1"])
 }
@@ -923,6 +933,7 @@ func TestVDiffPKWeightString(t *testing.T) {
 	wantdr := &DiffReport{
 		ProcessedRows: 4,
 		MatchingRows:  4,
+		TableName:     "t1",
 	}
 	assert.Equal(t, wantdr, dr["t1"])
 }
@@ -987,6 +998,7 @@ func TestVDiffNoPKWeightString(t *testing.T) {
 	wantdr := &DiffReport{
 		ProcessedRows: 4,
 		MatchingRows:  4,
+		TableName:     "t1",
 	}
 	assert.Equal(t, wantdr, dr["t1"])
 }
@@ -1242,6 +1254,7 @@ func TestVDiffNullWeightString(t *testing.T) {
 		dr: &DiffReport{
 			ProcessedRows: 3,
 			MatchingRows:  3,
+			TableName:     "t1",
 		},
 	}, {
 		name: "must not match",
@@ -1259,6 +1272,7 @@ func TestVDiffNullWeightString(t *testing.T) {
 		dr: &DiffReport{
 			ProcessedRows:  3,
 			MismatchedRows: 3,
+			TableName:      "t1",
 			MismatchedRowsSample: []*DiffMismatch{
 				{
 					Source: &RowDiff{Row: map[string]sqltypes.Value{
@@ -1323,6 +1337,7 @@ func TestVDiffNullWeightString(t *testing.T) {
 		dr: &DiffReport{
 			ProcessedRows:  1,
 			MismatchedRows: 1,
+			TableName:      "t1",
 			MismatchedRowsSample: []*DiffMismatch{
 				{
 					Source: &RowDiff{Row: map[string]sqltypes.Value{

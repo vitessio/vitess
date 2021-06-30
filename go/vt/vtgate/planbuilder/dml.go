@@ -56,7 +56,7 @@ func getDMLRouting(where *sqlparser.Where, table *vindexes.Table) (engine.DMLOpc
 		}
 	}
 	if ksidVindex == nil {
-		return engine.Scatter, nil, "", nil, nil, vterrors.New(vtrpcpb.Code_INTERNAL, "table without a primary vindex is not expected")
+		return engine.Scatter, nil, "", nil, nil, vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.RequiresPrimaryKey, vterrors.PrimaryVindexNotSet, table.Name)
 	}
 	return engine.Scatter, ksidVindex, ksidCol, nil, nil, nil
 }
@@ -65,7 +65,7 @@ func getDMLRouting(where *sqlparser.Where, table *vindexes.Table) (engine.DMLOpc
 // constraint on the specified column that can be used to
 // decide on a route.
 func getMatch(node sqlparser.Expr, col sqlparser.ColIdent) (pv sqltypes.PlanValue, ok bool) {
-	filters := splitAndExpression(nil, node)
+	filters := sqlparser.SplitAndExpression(nil, node)
 	for _, filter := range filters {
 		comparison, ok := filter.(*sqlparser.ComparisonExpr)
 		if !ok {

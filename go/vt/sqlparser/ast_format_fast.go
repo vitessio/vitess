@@ -48,7 +48,12 @@ func (node *Select) formatFast(buf *TrackedBuffer) {
 	node.SelectExprs.formatFast(buf)
 	buf.WriteString(" from ")
 
-	node.From.formatFast(buf)
+	prefix := ""
+	for _, expr := range node.From {
+		buf.WriteString(prefix)
+		expr.formatFast(buf)
+		prefix = ", "
+	}
 
 	node.Where.formatFast(buf)
 
@@ -1300,9 +1305,9 @@ func (node *RangeCond) formatFast(buf *TrackedBuffer) {
 
 // formatFast formats the node.
 func (node *IsExpr) formatFast(buf *TrackedBuffer) {
-	buf.printExpr(node, node.Expr, true)
+	buf.printExpr(node, node.Left, true)
 	buf.WriteByte(' ')
-	buf.WriteString(node.Operator.ToString())
+	buf.WriteString(node.Right.ToString())
 }
 
 // formatFast formats the node.

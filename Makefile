@@ -76,9 +76,9 @@ endif
 	# build vtorc with CGO, because it depends on sqlite
 	CGO_ENABLED=1 go install $(EXTRA_BUILD_FLAGS) $(VT_GO_PARALLEL) -ldflags "$(shell tools/build_version_flags.sh)" ./go/cmd/vtorc/...
 
-# xbuild can be used to cross-compile Vitess client binaries
+# cross-build can be used to cross-compile Vitess client binaries
 # Outside of select client binaries (namely vtctlclient & vtexplain), cross-compiled Vitess Binaries are not recommended for production deployments
-# Usage: GOOS=darwin GOARCH=amd64 make xbuild
+# Usage: GOOS=darwin GOARCH=amd64 make cross-build
 cross-build:
 ifndef NOBANNER
 	echo $$(date): Building source tree
@@ -232,7 +232,9 @@ $(PROTO_GO_OUTS): minimaltools install_protoc-gen-go proto/*.proto
 		--go_out=. --plugin protoc-gen-go="${GOBIN}/protoc-gen-go" \
 		--go-grpc_out=. --plugin protoc-gen-go-grpc="${GOBIN}/protoc-gen-go-grpc" \
 		--go-vtproto_out=. --plugin protoc-gen-go-vtproto="${GOBIN}/protoc-gen-go-vtproto" \
-		--go-vtproto_opt=features=marshal+unmarshal+size \
+		--go-vtproto_opt=features=marshal+unmarshal+size+pool \
+		--go-vtproto_opt=pool=vitess.io/vitess/go/vt/proto/query.Row \
+		--go-vtproto_opt=pool=vitess.io/vitess/go/vt/proto/binlogdata.VStreamRowsResponse \
 		-I${PWD}/dist/vt-protoc-3.6.1/include:proto proto/$${name}.proto; \
 	done
 	cp -Rf vitess.io/vitess/go/vt/proto/* go/vt/proto

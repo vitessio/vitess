@@ -134,7 +134,7 @@ func (e *Executor) WriteScatterStats(w http.ResponseWriter) {
 	}
 
 	t := template.New("template")
-	t, err = t.Parse(html)
+	t, err = t.Parse(statsHTML)
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
@@ -153,7 +153,7 @@ func (e *Executor) WriteScatterStats(w http.ResponseWriter) {
 
 }
 
-const html = `
+const statsHTML = `
 <thead>
 	<tr>
 		<th>Query</th>

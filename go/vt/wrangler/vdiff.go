@@ -63,6 +63,7 @@ type DiffReport struct {
 	ExtraRowsTarget       int
 	ExtraRowsTargetSample []*RowDiff
 	MismatchedRowsSample  []*DiffMismatch
+	TableName             string
 }
 
 // DiffMismatch is a sample of row diffs between source and target.
@@ -247,6 +248,7 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflowName, sou
 		}
 		// Perform the diff of source and target streams.
 		dr, err := td.diff(ctx, df.ts.wr, &rowsToCompare, debug, onlyPks)
+		dr.TableName = table
 		if err != nil {
 			return nil, vterrors.Wrap(err, "diff")
 		}
@@ -1106,7 +1108,7 @@ func (td *tableDiffer) genDebugQueryDiff(sel *sqlparser.Select, row []sqltypes.V
 		sel.SelectExprs.Format(buf)
 	}
 	buf.Myprintf(" from ")
-	sel.From.Format(buf)
+	buf.Myprintf(sqlparser.ToString(sel.From))
 	buf.Myprintf(" where ")
 	for i, pkI := range td.selectPks {
 		sel.SelectExprs[pkI].Format(buf)

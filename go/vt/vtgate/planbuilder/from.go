@@ -356,7 +356,7 @@ func (pb *primitiveBuilder) join(rpb *primitiveBuilder, ajoin *sqlparser.JoinTab
 	}
 	ajoin.Condition.On = expr
 	pb.addPullouts(pullouts)
-	for _, filter := range splitAndExpression(nil, ajoin.Condition.On) {
+	for _, filter := range sqlparser.SplitAndExpression(nil, ajoin.Condition.On) {
 		lRoute.UpdatePlan(pb, filter)
 	}
 	return nil

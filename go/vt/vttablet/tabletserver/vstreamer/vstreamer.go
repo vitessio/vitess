@@ -102,7 +102,7 @@ type streamerPlan struct {
 //   "select * from t where in_keyrange(col1, 'hash', '-80')",
 //   "select col1, col2 from t where...",
 //   "select col1, keyspace_id() from t where...".
-//   Only "in_keyrange" expressions are supported in the where clause.
+//   Only "in_keyrange" and limited comparison operators (see enum Opcode in planbuilder.go) are supported in the where clause.
 //   Other constructs like joins, group by, etc. are not supported.
 // vschema: the current vschema. This value can later be changed through the SetVSchema method.
 // send: callback function to send events.
@@ -463,7 +463,9 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 					Type: binlogdatapb.VEventType_OTHER,
 				})
 			}
-			vs.se.ReloadAt(context.Background(), vs.pos)
+			if schema.MustReloadSchemaOnDDL(q.SQL, vs.cp.DBName()) {
+				vs.se.ReloadAt(context.Background(), vs.pos)
+			}
 		case sqlparser.StmtSavepoint:
 			mustSend := mustSendStmt(q, vs.cp.DBName())
 			if mustSend {
@@ -868,6 +870,8 @@ func (vs *vstreamer) extractRowAndFilter(plan *streamerPlan, data []byte, dataCo
 		}
 		value, l, err := mysql.CellValue(data, pos, plan.TableMap.Types[colNum], plan.TableMap.Metadata[colNum], plan.Table.Fields[colNum].Type)
 		if err != nil {
+			log.Errorf("extractRowAndFilter: %s, table: %s, colNum: %d, fields: %+v, current values: %+v",
+				err, plan.Table.Name, colNum, plan.Table.Fields, values)
 			return false, nil, err
 		}
 		pos += l

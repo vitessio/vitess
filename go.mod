@@ -13,14 +13,13 @@ require (
 	github.com/PuerkitoBio/goquery v1.5.1
 	github.com/aquarapid/vaultlib v0.5.1
 	github.com/armon/consul-api v0.0.0-20180202201655-eb2c6b5be1b6
-	github.com/armon/go-metrics v0.0.0-20190430140413-ec5e00d3c878
+	github.com/armon/go-metrics v0.0.0-20190430140413-ec5e00d3c878 // indirect
 	github.com/aws/aws-sdk-go v1.28.8
 	github.com/buger/jsonparser v0.0.0-20200322175846-f7e751efca13
 	github.com/cespare/xxhash/v2 v2.1.1
 	github.com/codahale/hdrhistogram v0.0.0-20161010025455-3a0bb77429bd // indirect
 	github.com/codegangsta/inject v0.0.0-20150114235600-33e0aa1cb7c0 // indirect
 	github.com/corpix/uarand v0.1.1 // indirect
-	github.com/cyberdelia/go-metrics-graphite v0.0.0-20161219230853-39f87cc3b432
 	github.com/dave/jennifer v1.4.1
 	github.com/evanphx/json-patch v4.5.0+incompatible
 	github.com/go-martini/martini v0.0.0-20170121215854-22fa46961aab
@@ -40,7 +39,7 @@ require (
 	github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0
 	github.com/hashicorp/consul/api v1.5.0
 	github.com/hashicorp/go-immutable-radix v1.1.0 // indirect
-	github.com/hashicorp/go-msgpack v0.5.5
+	github.com/hashicorp/go-msgpack v0.5.5 // indirect
 	github.com/hashicorp/go-sockaddr v1.0.2 // indirect
 	github.com/hashicorp/go-uuid v1.0.2 // indirect
 	github.com/hashicorp/serf v0.9.2 // indirect
@@ -73,19 +72,19 @@ require (
 	github.com/pires/go-proxyproto v0.0.0-20191211124218-517ecdf5bb2b
 	github.com/pkg/errors v0.9.1
 	github.com/planetscale/pargzip v0.0.0-20201116224723-90c7fc03ea8a
+	github.com/planetscale/tengo v0.9.6-ps.v4
 	github.com/planetscale/vtprotobuf v0.0.0-20210521163914-5a02622d1e2a
-	github.com/prometheus/client_golang v1.5.1
-	github.com/prometheus/common v0.9.1
+	github.com/prometheus/client_golang v1.11.0
+	github.com/prometheus/common v0.26.0
 	github.com/rcrowley/go-metrics v0.0.0-20200313005456-10cdbea86bc0
 	github.com/samuel/go-zookeeper v0.0.0-20200724154423-2164a8ac840e
 	github.com/satori/go.uuid v1.2.0 // indirect
 	github.com/sjmudd/stopwatch v0.0.0-20170613150411-f380bf8a9be1
-	github.com/skeema/tengo v0.0.0-00010101000000-000000000000
 	github.com/soheilhy/cmux v0.1.4
 	github.com/spf13/cobra v1.1.1
 	github.com/spf13/pflag v1.0.5
 	github.com/spyzhov/ajson v0.4.2
-	github.com/stretchr/testify v1.6.1
+	github.com/stretchr/testify v1.7.0
 	github.com/tchap/go-patricia v0.0.0-20160729071656-dd168db6051b
 	github.com/tebeka/selenium v0.9.9
 	github.com/tinylib/msgp v1.1.1 // indirect
@@ -93,19 +92,19 @@ require (
 	github.com/uber/jaeger-client-go v2.16.0+incompatible
 	github.com/uber/jaeger-lib v2.0.0+incompatible // indirect
 	github.com/z-division/go-zookeeper v0.0.0-20190128072838-6d7457066b9b
-	go.etcd.io/etcd/api/v3 v3.5.0-alpha.0
-	go.etcd.io/etcd/client/v3 v3.5.0-alpha.0
-	go.etcd.io/etcd/pkg/v3 v3.5.0-alpha.0
+	go.etcd.io/etcd/api/v3 v3.5.0
+	go.etcd.io/etcd/client/pkg/v3 v3.5.0
+	go.etcd.io/etcd/client/v3 v3.5.0
 	golang.org/x/crypto v0.0.0-20200622213623-75b288015ac9
-	golang.org/x/lint v0.0.0-20201208152925-83fdc39ff7b5
-	golang.org/x/net v0.0.0-20210316092652-d523dce5a7f4
+	golang.org/x/lint v0.0.0-20210508222113-6edffad5e616
+	golang.org/x/net v0.0.0-20210405180319-a5a99cb37ef4
 	golang.org/x/oauth2 v0.0.0-20210413134643-5e61552d6c78
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
 	golang.org/x/text v0.3.5
 	golang.org/x/time v0.0.0-20191024005414-555d28b269f0
-	golang.org/x/tools v0.1.0
+	golang.org/x/tools v0.1.2
 	google.golang.org/api v0.45.0
-	google.golang.org/grpc v1.37.0
+	google.golang.org/grpc v1.38.0
 	google.golang.org/grpc/cmd/protoc-gen-go-grpc v1.1.0
 	google.golang.org/grpc/examples v0.0.0-20210430044426-28078834f35b
 	google.golang.org/protobuf v1.26.0
@@ -124,4 +123,4 @@ require (
 	sigs.k8s.io/yaml v1.2.0
 )
 
-replace github.com/skeema/tengo => github.com/planetscale/tengo v0.9.6-ps.v3
+replace google.golang.org/grpc => google.golang.org/grpc v1.37.0

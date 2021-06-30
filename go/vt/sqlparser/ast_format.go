@@ -43,9 +43,16 @@ func (node *Select) Format(buf *TrackedBuffer) {
 		buf.WriteString(SQLCalcFoundRowsStr)
 	}
 
-	buf.astPrintf(node, "%v from %v%v%v%v%v%v%s%v",
-		node.SelectExprs,
-		node.From, node.Where,
+	buf.astPrintf(node, "%v from ", node.SelectExprs)
+
+	prefix := ""
+	for _, expr := range node.From {
+		buf.astPrintf(node, "%s%v", prefix, expr)
+		prefix = ", "
+	}
+
+	buf.astPrintf(node, "%v%v%v%v%v%s%v",
+		node.Where,
 		node.GroupBy, node.Having, node.OrderBy,
 		node.Limit, node.Lock.ToString(), node.Into)
 }
@@ -960,7 +967,7 @@ func (node *RangeCond) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *IsExpr) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "%v %s", node.Expr, node.Operator.ToString())
+	buf.astPrintf(node, "%v %s", node.Left, node.Right.ToString())
 }
 
 // Format formats the node.

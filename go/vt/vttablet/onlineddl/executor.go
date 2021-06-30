@@ -64,7 +64,7 @@ import (
 
 	mysqldriver "github.com/go-sql-driver/mysql"
 	"github.com/jmoiron/sqlx"
-	"github.com/skeema/tengo"
+	"github.com/planetscale/tengo"
 )
 
 var (
@@ -117,6 +117,7 @@ const (
 	progressPctFull                  float64 = 100.0
 	etaSecondsUnknown                        = -1
 	etaSecondsNow                            = 0
+	rowsCopiedUnknown                        = 0
 	databasePoolSize                         = 3
 	cutOverThreshold                         = 3 * time.Second
 	vreplicationTestSuiteWaitSeconds         = 5
@@ -453,7 +454,7 @@ func (e *Executor) executeDirectly(ctx context.Context, onlineDDL *schema.Online
 	}
 	defer conn.Close()
 
-	_ = e.onSchemaMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusRunning, false, progressPctStarted, etaSecondsUnknown)
+	_ = e.onSchemaMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusRunning, false, progressPctStarted, etaSecondsUnknown, rowsCopiedUnknown)
 	_, err = conn.ExecuteFetch(onlineDDL.SQL, 0, false)
 
 	if err != nil {
@@ -472,7 +473,7 @@ func (e *Executor) executeDirectly(ctx context.Context, onlineDDL *schema.Online
 	if err != nil {
 		return false, err
 	}
-	_ = e.onSchemaMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusComplete, false, progressPctFull, etaSecondsNow)
+	_ = e.onSchemaMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusComplete, false, progressPctFull, etaSecondsNow, rowsCopiedUnknown)
 
 	return acceptableErrorCodeFound, nil
 }
@@ -675,7 +676,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 	}()
 
 	// Tables are now swapped! Migration is successful
-	_ = e.onSchemaMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusComplete, false, progressPctFull, etaSecondsNow)
+	_ = e.onSchemaMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusComplete, false, progressPctFull, etaSecondsNow, s.rowsCopied)
 	return nil
 
 	// deferred function will re-enable writes now
@@ -770,7 +771,7 @@ func (e *Executor) ExecuteWithVReplication(ctx context.Context, onlineDDL *schem
 
 	atomic.StoreInt64(&e.vreplMigrationRunning, 1)
 	e.lastMigrationUUID = onlineDDL.UUID
-	if err := e.onSchemaMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusRunning, false, progressPctStarted, etaSecondsUnknown); err != nil {
+	if err := e.onSchemaMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusRunning, false, progressPctStarted, etaSecondsUnknown, rowsCopiedUnknown); err != nil {
 		return err
 	}
 
@@ -788,7 +789,9 @@ func (e *Executor) ExecuteWithVReplication(ctx context.Context, onlineDDL *schem
 	if err := v.analyze(ctx, conn); err != nil {
 		return err
 	}
-
+	if err := e.updateMigrationTableRows(ctx, onlineDDL.UUID, v.tableRows); err != nil {
+		return err
+	}
 	if revertMigration == nil {
 		// Original ALTER TABLE request for vreplication
 		if err := e.validateTableForAlterAction(ctx, onlineDDL); err != nil {
@@ -898,7 +901,7 @@ exit $exit_code
 	}
 	onHookContent := func(status schema.OnlineDDLStatus) string {
 		return fmt.Sprintf(`#!/bin/bash
-	curl --max-time 10 -s 'http://localhost:%d/schema-migration/report-status?uuid=%s&status=%s&dryrun='"$GH_OST_DRY_RUN"'&progress='"$GH_OST_PROGRESS"'&eta='"$GH_OST_ETA_SECONDS"
+	curl --max-time 10 -s 'http://localhost:%d/schema-migration/report-status?uuid=%s&status=%s&dryrun='"$GH_OST_DRY_RUN"'&progress='"$GH_OST_PROGRESS"'&eta='"$GH_OST_ETA_SECONDS"'&rowscopied='"$GH_OST_COPIED_ROWS"
 			`, *servenv.Port, onlineDDL.UUID, string(status))
 	}
 	if _, err := createTempScript(tempDir, "gh-ost-on-startup", onHookContent(schema.OnlineDDLStatusRunning)); err != nil {
@@ -1569,7 +1572,7 @@ func (e *Executor) executeRevert(ctx context.Context, onlineDDL *schema.OnlineDD
 			}
 			if len(artifactTables) == 0 {
 				// This indicates no table was actually created. this must have been a CREATE TABLE IF NOT EXISTS where the table already existed.
-				_ = e.onSchemaMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusComplete, false, progressPctFull, etaSecondsNow)
+				_ = e.onSchemaMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusComplete, false, progressPctFull, etaSecondsNow, rowsCopiedUnknown)
 			}
 
 			for _, artifactTable := range artifactTables {
@@ -1600,7 +1603,7 @@ func (e *Executor) executeRevert(ctx context.Context, onlineDDL *schema.OnlineDD
 			}
 			if len(artifactTables) == 0 {
 				// Could happen on `DROP TABLE IF EXISTS` where the table did not exist...
-				_ = e.onSchemaMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusComplete, false, progressPctFull, etaSecondsNow)
+				_ = e.onSchemaMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusComplete, false, progressPctFull, etaSecondsNow, rowsCopiedUnknown)
 			}
 			for _, artifactTable := range artifactTables {
 				if err := e.updateArtifacts(ctx, onlineDDL.UUID, artifactTable); err != nil {
@@ -1785,7 +1788,7 @@ func (e *Executor) executeMigration(ctx context.Context, onlineDDL *schema.Onlin
 				// table does exist, so this declarative DROP turns out to really be an actual DROP. No further action is needed here
 			} else {
 				// table does not exist. We mark this DROP as implicitly sucessful
-				_ = e.onSchemaMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusComplete, false, progressPctFull, etaSecondsNow)
+				_ = e.onSchemaMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusComplete, false, progressPctFull, etaSecondsNow, rowsCopiedUnknown)
 				_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, "no change")
 				return nil
 			}
@@ -1816,7 +1819,7 @@ func (e *Executor) executeMigration(ctx context.Context, onlineDDL *schema.Onlin
 				}
 				if alterClause == "" {
 					// No diff! We mark this CREATE as implicitly sucessful
-					_ = e.onSchemaMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusComplete, false, progressPctFull, etaSecondsNow)
+					_ = e.onSchemaMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusComplete, false, progressPctFull, etaSecondsNow, rowsCopiedUnknown)
 					_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, "no change")
 					return nil
 				}
@@ -2109,6 +2112,7 @@ func (e *Executor) readVReplStream(ctx context.Context, uuid string, okIfMissing
 		transactionTimestamp: row.AsInt64("transaction_timestamp", 0),
 		state:                row.AsString("state", ""),
 		message:              row.AsString("message", ""),
+		rowsCopied:           row.AsInt64("rows_copied", 0),
 		bls:                  &binlogdatapb.BinlogSource{},
 	}
 	if err := prototext.Unmarshal([]byte(s.source), s.bls); err != nil {
@@ -2173,6 +2177,7 @@ func (e *Executor) isVReplMigrationReadyToCutOver(ctx context.Context, s *VReplS
 			return false, nil
 		}
 	}
+
 	return true, nil
 }
 
@@ -2231,6 +2236,11 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 					// migrationMutex lock and it's now safe to ensure vreplMigrationRunning is 1
 					atomic.StoreInt64(&e.vreplMigrationRunning, 1)
 					_ = e.updateMigrationTimestamp(ctx, "liveness_timestamp", uuid)
+
+					_ = e.updateRowsCopied(ctx, uuid, s.rowsCopied)
+					_ = e.updateMigrationProgressByRowsCopied(ctx, uuid, s.rowsCopied)
+					_ = e.updateMigrationETASecondsByProgress(ctx, uuid)
+
 					isReady, err := e.isVReplMigrationReadyToCutOver(ctx, s)
 					if err != nil {
 						return countRunnning, cancellable, err
@@ -2578,7 +2588,7 @@ func (e *Executor) updateMySQLTable(ctx context.Context, uuid string, tableName 
 	return err
 }
 
-func (e *Executor) updateETASeconds(ctx context.Context, uuid string, etaSeconds int64) error {
+func (e *Executor) updateMigrationETASeconds(ctx context.Context, uuid string, etaSeconds int64) error {
 	query, err := sqlparser.ParseAndBind(sqlUpdateMigrationETASeconds,
 		sqltypes.Int64BindVariable(etaSeconds),
 		sqltypes.StringBindVariable(uuid),
@@ -2599,6 +2609,58 @@ func (e *Executor) updateMigrationProgress(ctx context.Context, uuid string, pro
 	}
 	query, err := sqlparser.ParseAndBind(sqlUpdateMigrationProgress,
 		sqltypes.Float64BindVariable(progress),
+		sqltypes.StringBindVariable(uuid),
+	)
+	if err != nil {
+		return err
+	}
+	_, err = e.execQuery(ctx, query)
+	return err
+}
+
+func (e *Executor) updateMigrationProgressByRowsCopied(ctx context.Context, uuid string, rowsCopied int64) error {
+	query, err := sqlparser.ParseAndBind(sqlUpdateMigrationProgressByRowsCopied,
+		sqltypes.Int64BindVariable(rowsCopied),
+		sqltypes.StringBindVariable(uuid),
+	)
+	if err != nil {
+		return err
+	}
+	_, err = e.execQuery(ctx, query)
+	return err
+}
+
+func (e *Executor) updateMigrationETASecondsByProgress(ctx context.Context, uuid string) error {
+	query, err := sqlparser.ParseAndBind(sqlUpdateMigrationETASecondsByProgress,
+		sqltypes.StringBindVariable(uuid),
+	)
+	if err != nil {
+		return err
+	}
+	_, err = e.execQuery(ctx, query)
+	return err
+}
+
+func (e *Executor) updateMigrationTableRows(ctx context.Context, uuid string, tableRows int64) error {
+	query, err := sqlparser.ParseAndBind(sqlUpdateMigrationTableRows,
+		sqltypes.Int64BindVariable(tableRows),
+		sqltypes.StringBindVariable(uuid),
+	)
+	if err != nil {
+		return err
+	}
+	_, err = e.execQuery(ctx, query)
+	return err
+}
+
+func (e *Executor) updateRowsCopied(ctx context.Context, uuid string, rowsCopied int64) error {
+	if rowsCopied <= 0 {
+		// Number of rows can only be positive. Zero or negative must mean "no information" and
+		// we don't update the table value.
+		return nil
+	}
+	query, err := sqlparser.ParseAndBind(sqlUpdateMigrationRowsCopied,
+		sqltypes.Int64BindVariable(rowsCopied),
 		sqltypes.StringBindVariable(uuid),
 	)
 	if err != nil {
@@ -2714,7 +2776,8 @@ func (e *Executor) SubmitMigration(
 }
 
 // onSchemaMigrationStatus is called when a status is set/changed for a running migration
-func (e *Executor) onSchemaMigrationStatus(ctx context.Context, uuid string, status schema.OnlineDDLStatus, dryRun bool, progressPct float64, etaSeconds int64) (err error) {
+func (e *Executor) onSchemaMigrationStatus(ctx context.Context,
+	uuid string, status schema.OnlineDDLStatus, dryRun bool, progressPct float64, etaSeconds int64, rowsCopied int64) (err error) {
 	if dryRun && status != schema.OnlineDDLStatusFailed {
 		// We don't consider dry-run reports unless there's a failure
 		return nil
@@ -2750,10 +2813,12 @@ func (e *Executor) onSchemaMigrationStatus(ctx context.Context, uuid string, sta
 	if err = e.updateMigrationProgress(ctx, uuid, progressPct); err != nil {
 		return err
 	}
-	if err = e.updateETASeconds(ctx, uuid, etaSeconds); err != nil {
+	if err = e.updateMigrationETASeconds(ctx, uuid, etaSeconds); err != nil {
 		return err
 	}
-
+	if err := e.updateRowsCopied(ctx, uuid, rowsCopied); err != nil {
+		return err
+	}
 	if !dryRun {
 		switch status {
 		case schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed:
@@ -2765,7 +2830,8 @@ func (e *Executor) onSchemaMigrationStatus(ctx context.Context, uuid string, sta
 }
 
 // OnSchemaMigrationStatus is called by TabletServer's API, which is invoked by a running gh-ost migration's hooks.
-func (e *Executor) OnSchemaMigrationStatus(ctx context.Context, uuidParam, statusParam, dryrunParam, progressParam, etaParam string) (err error) {
+func (e *Executor) OnSchemaMigrationStatus(ctx context.Context,
+	uuidParam, statusParam, dryrunParam, progressParam, etaParam, rowsCopiedParam string) (err error) {
 	status := schema.OnlineDDLStatus(statusParam)
 	dryRun := (dryrunParam == "true")
 	var progressPct float64
@@ -2776,8 +2842,12 @@ func (e *Executor) OnSchemaMigrationStatus(ctx context.Context, uuidParam, statu
 	if eta, err := strconv.ParseInt(etaParam, 10, 64); err == nil {
 		etaSeconds = eta
 	}
+	var rowsCopied int64
+	if rows, err := strconv.ParseInt(rowsCopiedParam, 10, 64); err == nil {
+		rowsCopied = rows
+	}
 
-	return e.onSchemaMigrationStatus(ctx, uuidParam, status, dryRun, progressPct, etaSeconds)
+	return e.onSchemaMigrationStatus(ctx, uuidParam, status, dryRun, progressPct, etaSeconds, rowsCopied)
 }
 
 // VExec is called by a VExec invocation

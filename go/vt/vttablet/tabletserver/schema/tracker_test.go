@@ -61,7 +61,7 @@ func TestTracker(t *testing.T) {
 			},
 			{
 				Type:      binlogdatapb.VEventType_GTID,
-				Statement: "",
+				Statement: "", // This event should cause an error updating schema since gtid is bad
 			}, {
 				Type:      binlogdatapb.VEventType_DDL,
 				Statement: ddl1,
@@ -84,9 +84,8 @@ func TestTracker(t *testing.T) {
 	<-vs.done
 	cancel()
 	tracker.Close()
-	// Two of those events should have caused an error.
 	final := env.Stats().ErrorCounters.Counts()["INTERNAL"]
-	require.Equal(t, initial+2, final)
+	require.Equal(t, initial+1, final)
 	require.True(t, initialSchemaInserted)
 }
 
@@ -148,4 +147,28 @@ func (f *fakeVstreamer) Stream(ctx context.Context, startPos string, tablePKs []
 	close(f.done)
 	<-ctx.Done()
 	return nil
+}
+
+func TestMustReloadSchemaOnDDL(t *testing.T) {
+	type testcase struct {
+		query  string
+		dbname string
+		want   bool
+	}
+	db1, db2 := "db1", "db2"
+	testcases := []*testcase{
+		{"create table x(i int);", db1, true},
+		{"bad", db2, false},
+		{"create table db2.x(i int);", db2, true},
+		{"create table db1.x(i int);", db2, false},
+		{"create table _vt.x(i int);", db1, false},
+		{"DROP VIEW IF EXISTS `pseudo_gtid`.`_pseudo_gtid_hint__asc:55B364E3:0000000000056EE2:6DD57B85`", db2, false},
+		{"create database db1;", db1, false},
+		{"create table db1._4e5dcf80_354b_11eb_82cd_f875a4d24e90_20201203114014_gho(i int);", db1, false},
+	}
+	for _, tc := range testcases {
+		t.Run("", func(t *testing.T) {
+			require.Equal(t, tc.want, MustReloadSchemaOnDDL(tc.query, tc.dbname))
+		})
+	}
 }

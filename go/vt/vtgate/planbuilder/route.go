@@ -445,7 +445,7 @@ func (rb *route) JoinCanMerge(pb *primitiveBuilder, rrb *route, ajoin *sqlparser
 	if ajoin == nil {
 		return false
 	}
-	for _, filter := range splitAndExpression(nil, ajoin.Condition.On) {
+	for _, filter := range sqlparser.SplitAndExpression(nil, ajoin.Condition.On) {
 		if rb.canMergeOnFilter(pb, rrb, filter) {
 			return true
 		}
@@ -668,11 +668,11 @@ func (rb *route) computeEqualPlan(pb *primitiveBuilder, comparison *sqlparser.Co
 // computeIS computes the plan for an equality constraint.
 func (rb *route) computeISPlan(pb *primitiveBuilder, comparison *sqlparser.IsExpr) (opcode engine.RouteOpcode, vindex vindexes.SingleColumn, expr sqlparser.Expr) {
 	// we only handle IS NULL correct. IsExpr can contain other expressions as well
-	if comparison.Operator != sqlparser.IsNullOp {
+	if comparison.Right != sqlparser.IsNullOp {
 		return engine.SelectScatter, nil, nil
 	}
 
-	vindex = pb.st.Vindex(comparison.Expr, rb)
+	vindex = pb.st.Vindex(comparison.Left, rb)
 	// fallback to scatter gather if there is no vindex
 	if vindex == nil {
 		return engine.SelectScatter, nil, nil
@@ -727,7 +727,12 @@ func (rb *route) computeCompositeINPlan(pb *primitiveBuilder, comparison *sqlpar
 // iterateCompositeIN recursively walks the LHS tuple of the IN clause looking
 // for column names. For those that match a vindex, it builds a multi-value plan
 // using the corresponding values in the RHS. It returns the best of the plans built.
-func (rb *route) iterateCompositeIN(pb *primitiveBuilder, comparison *sqlparser.ComparisonExpr, coordinates []int, tuple sqlparser.ValTuple) (opcode engine.RouteOpcode, vindex vindexes.SingleColumn, values sqlparser.Expr) {
+func (rb *route) iterateCompositeIN(
+	pb *primitiveBuilder,
+	comparison *sqlparser.ComparisonExpr,
+	coordinates []int,
+	tuple sqlparser.ValTuple,
+) (opcode engine.RouteOpcode, vindex vindexes.SingleColumn, values sqlparser.Expr) {
 	opcode = engine.SelectScatter
 
 	cindex := len(coordinates)

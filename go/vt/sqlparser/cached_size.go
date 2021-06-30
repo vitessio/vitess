@@ -1176,10 +1176,10 @@ func (cached *IsExpr) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(24)
+		size += int64(17)
 	}
-	// field Expr vitess.io/vitess/go/vt/sqlparser.Expr
-	if cc, ok := cached.Expr.(cachedObject); ok {
+	// field Left vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Left.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
 	return size
@@ -1676,6 +1676,15 @@ func (cached *Select) CachedSize(alloc bool) int64 {
 	}
 	// field Cache *bool
 	size += int64(1)
+	// field From []vitess.io/vitess/go/vt/sqlparser.TableExpr
+	{
+		size += int64(cap(cached.From)) * int64(16)
+		for _, elem := range cached.From {
+			if cc, ok := elem.(cachedObject); ok {
+				size += cc.CachedSize(true)
+			}
+		}
+	}
 	// field Comments vitess.io/vitess/go/vt/sqlparser.Comments
 	{
 		size += int64(cap(cached.Comments)) * int64(16)
@@ -1687,15 +1696,6 @@ func (cached *Select) CachedSize(alloc bool) int64 {
 	{
 		size += int64(cap(cached.SelectExprs)) * int64(16)
 		for _, elem := range cached.SelectExprs {
-			if cc, ok := elem.(cachedObject); ok {
-				size += cc.CachedSize(true)
-			}
-		}
-	}
-	// field From vitess.io/vitess/go/vt/sqlparser.TableExprs
-	{
-		size += int64(cap(cached.From)) * int64(16)
-		for _, elem := range cached.From {
 			if cc, ok := elem.(cachedObject); ok {
 				size += cc.CachedSize(true)
 			}

@@ -1206,7 +1206,7 @@ func VisitRefOfIsExpr(in *IsExpr, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	if err := VisitExpr(in.Expr, f); err != nil {
+	if err := VisitExpr(in.Left, f); err != nil {
 		return err
 	}
 	return nil
@@ -1679,13 +1679,15 @@ func VisitRefOfSelect(in *Select, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
+	for _, el := range in.From {
+		if err := VisitTableExpr(el, f); err != nil {
+			return err
+		}
+	}
 	if err := VisitComments(in.Comments, f); err != nil {
 		return err
 	}
 	if err := VisitSelectExprs(in.SelectExprs, f); err != nil {
-		return err
-	}
-	if err := VisitTableExprs(in.From, f); err != nil {
 		return err
 	}
 	if err := VisitRefOfWhere(in.Where, f); err != nil {

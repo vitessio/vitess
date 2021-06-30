@@ -1819,13 +1819,9 @@ table_option:
   {
     $$ = &TableOption{Name:string($1), Value:NewStrLiteral($3)}
   }
-| ENGINE equal_opt id_or_var
+| ENGINE equal_opt table_alias
   {
     $$ = &TableOption{Name:string($1), String:$3.String()}
-  }
-| ENGINE equal_opt STRING
-  {
-    $$ = &TableOption{Name:string($1), Value:NewStrLiteral($3)}
   }
 | INSERT_METHOD equal_opt insert_method_options
   {
@@ -3513,7 +3509,7 @@ expression:
   }
 | expression IS is_suffix
   {
-    $$ = &IsExpr{Operator: $3, Expr: $1}
+    $$ = &IsExpr{Left: $1, Right: $3}
   }
 | value_expression
   {

@@ -2248,8 +2248,8 @@ func (a *application) rewriteRefOfIsExpr(parent SQLNode, node *IsExpr, replacer 
 			return true
 		}
 	}
-	if !a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
-		parent.(*IsExpr).Expr = newNode.(Expr)
+	if !a.rewriteExpr(node, node.Left, func(newNode, parent SQLNode) {
+		parent.(*IsExpr).Left = newNode.(Expr)
 	}) {
 		return false
 	}
@@ -3320,6 +3320,15 @@ func (a *application) rewriteRefOfSelect(parent SQLNode, node *Select, replacer 
 			return true
 		}
 	}
+	for x, el := range node.From {
+		if !a.rewriteTableExpr(node, el, func(idx int) replacerFunc {
+			return func(newNode, parent SQLNode) {
+				parent.(*Select).From[idx] = newNode.(TableExpr)
+			}
+		}(x)) {
+			return false
+		}
+	}
 	if !a.rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
 		parent.(*Select).Comments = newNode.(Comments)
 	}) {
@@ -3327,11 +3336,6 @@ func (a *application) rewriteRefOfSelect(parent SQLNode, node *Select, replacer 
 	}
 	if !a.rewriteSelectExprs(node, node.SelectExprs, func(newNode, parent SQLNode) {
 		parent.(*Select).SelectExprs = newNode.(SelectExprs)
-	}) {
-		return false
-	}
-	if !a.rewriteTableExprs(node, node.From, func(newNode, parent SQLNode) {
-		parent.(*Select).From = newNode.(TableExprs)
 	}) {
 		return false
 	}

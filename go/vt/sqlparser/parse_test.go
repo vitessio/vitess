@@ -801,6 +801,12 @@ var (
 	}, {
 		input: "delete /* limit */ from a limit b",
 	}, {
+		input:  "delete /* alias where */ t.* from a as t where t.id = 2",
+		output: "delete /* alias where */ t from a as t where t.id = 2",
+	}, {
+		input:  "delete t.* from t, t1",
+		output: "delete t from t, t1",
+	}, {
 		input:  "delete a from a join b on a.id = b.id where b.name = 'test'",
 		output: "delete a from a join b on a.id = b.id where b.`name` = 'test'",
 	}, {
@@ -3058,6 +3064,21 @@ func TestCreateTable(t *testing.T) {
 	first_name varchar(10),
 	full_name varchar(255) as (concat(first_name, ' ', last_name)) virtual comment 'hello world'
 )`,
+		}, {
+			input: `create table non_reserved_keyword (id int(11)) ENGINE = MEMORY`,
+			output: `create table non_reserved_keyword (
+	id int(11)
+) ENGINE MEMORY`,
+		}, {
+			input: `create table non_reserved_keyword (id int(11)) ENGINE = MEDIUMTEXT`,
+			output: `create table non_reserved_keyword (
+	id int(11)
+) ENGINE MEDIUMTEXT`,
+		}, {
+			input: `create table t1 (id int(11)) ENGINE = FOOBAR`,
+			output: `create table t1 (
+	id int(11)
+) ENGINE FOOBAR`,
 		},
 	}
 	for _, test := range createTableQueries {
