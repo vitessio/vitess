@@ -329,6 +329,7 @@ func TestPickError(t *testing.T) {
 	defer cancel()
 	_, err = tp.PickForStreaming(ctx)
 	require.EqualError(t, err, "context has expired")
+	require.Greater(t, globalTPStats.noTabletFoundError.Counts()["cell.ks.0.replica"], int64(0))
 }
 
 type pickerTestEnv struct {
