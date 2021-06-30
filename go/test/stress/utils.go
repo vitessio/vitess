@@ -18,7 +18,6 @@ package stress
 
 import (
 	"context"
-	"fmt"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -28,11 +27,11 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 )
 
-func assertMatches(t *testing.T, conn *mysql.Conn, query, expected string) {
+func assertLength(t *testing.T, conn *mysql.Conn, query string, expectedLength int) {
 	t.Helper()
 	qr := exec(t, conn, query)
-	got := fmt.Sprintf("%v", qr.Rows)
-	diff := cmp.Diff(expected, got)
+	got := len(qr.Rows)
+	diff := cmp.Diff(expectedLength, got)
 	if diff != "" {
 		t.Errorf("Query: %s (-want +got):\n%s", query, diff)
 	}

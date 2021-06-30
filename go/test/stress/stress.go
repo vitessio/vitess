@@ -24,26 +24,79 @@ import (
 	"vitess.io/vitess/go/mysql"
 )
 
-type result struct {
-	countSelect int
+const (
+	templateNewTable = `create table %s (
+	id bigint,
+	val varchar(64),
+	primary key (id)
+) Engine=InnoDB
+`
+)
+
+type (
+	result struct {
+		countSelect int
+	}
+
+	table struct {
+		name string
+		// rows int
+	}
+
+	stresser struct {
+		tbls       []table
+		connParams mysql.ConnParams
+		maxClient  int
+		duration   time.Duration
+	}
+)
+
+func (r result) printQPS(seconds float64) {
+	fmt.Printf(`QPS:
+select: %d
+`, r.countSelect/int(seconds))
+}
+
+func generateNewTables(nb int) []table {
+	tbls := make([]table, 0, nb)
+	for i := 0; i < nb; i++ {
+		tbls = append(tbls, table{
+			name: fmt.Sprintf("stress_t%d", i),
+		})
+	}
+	return tbls
+}
+
+func createTables(t *testing.T, params mysql.ConnParams, nb int) []table {
+	conn := newClient(t, params)
+	defer conn.Close()
+
+	tbls := generateNewTables(nb)
+	for _, tbl := range tbls {
+		exec(t, conn, fmt.Sprintf(templateNewTable, tbl.name))
+	}
+	return tbls
 }
 
 func Start(t *testing.T, params mysql.ConnParams) {
-	insertInitialTable(t, params)
-
 	fmt.Println("Starting load testing ...")
 
-	clientLimit := 5
-	duration := 2 * time.Second
+	s := stresser{
+		tbls:       createTables(t, params, 20),
+		connParams: params,
+		maxClient:  5,
+		duration:   2 * time.Second,
+	}
+	insertInitialTable(t, params)
 
-	resultCh := make(chan result, clientLimit)
+	resultCh := make(chan result, s.maxClient)
 
-	for i := 0; i < clientLimit; i++ {
-		go startStressClient(t, duration, resultCh, params)
+	for i := 0; i < s.maxClient; i++ {
+		go s.startStressClient(t, resultCh)
 	}
 
-	perClientResults := make([]result, 0, clientLimit)
-	for i := 0; i < clientLimit; i++ {
+	perClientResults := make([]result, 0, s.maxClient)
+	for i := 0; i < s.maxClient; i++ {
 		newResult := <-resultCh
 		perClientResults = append(perClientResults, newResult)
 	}
@@ -52,13 +105,26 @@ func Start(t *testing.T, params mysql.ConnParams) {
 	for _, r := range perClientResults {
 		finalResult.countSelect += r.countSelect
 	}
-	finalResult.printQPS(duration.Seconds())
+	finalResult.printQPS(s.duration.Seconds())
 }
 
-func (r result) printQPS(seconds float64) {
-	fmt.Printf(`QPS:
-select: %d
-`, r.countSelect/int(seconds))
+func (s *stresser) startStressClient(t *testing.T, resultCh chan result) {
+	conn := newClient(t, s.connParams)
+	defer conn.Close()
+
+	var res result
+
+	timeout := time.After(s.duration)
+	for {
+		select {
+		case <-timeout:
+			resultCh <- res
+			return
+		case <-time.After(1 * time.Microsecond): // selects
+			assertLength(t, conn, `select id from main`, 2)
+			res.countSelect++
+		}
+	}
 }
 
 func insertInitialTable(t *testing.T, params mysql.ConnParams) {
@@ -67,23 +133,4 @@ func insertInitialTable(t *testing.T, params mysql.ConnParams) {
 
 	// TODO: move to `insert` case
 	exec(t, conn, `insert into main(id, val) values(0,'test'),(1,'value')`)
-}
-
-func startStressClient(t *testing.T, duration time.Duration, resultCh chan result, params mysql.ConnParams) {
-	conn := newClient(t, params)
-	defer conn.Close()
-
-	var res result
-
-	timeout := time.After(duration)
-	for {
-		select {
-		case <-timeout:
-			resultCh <- res
-			return
-		case <-time.After(1 * time.Microsecond): // selects
-			assertMatches(t, conn, `select id from main`, `[[INT64(0)] [INT64(1)]]`)
-			res.countSelect++
-		}
-	}
 }
