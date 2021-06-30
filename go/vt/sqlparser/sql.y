@@ -187,10 +187,8 @@ func bindVariable(yylex yyLexer, bvar string) {
 // * NOTE: If you change anything here, update precedence.go as well *
 %nonassoc <str> LOWER_THAN_CHARSET
 %nonassoc <str> CHARSET
-/*
-  Resolve column attribute ambiguity -- force precedence of "UNIQUE KEY" against
-  simple "UNIQUE" and "KEY" attributes:
-*/
+%nonassoc <str> HIGH_THAN_CHARSET
+// Resolve column attribute ambiguity.
 %right <str> UNIQUE KEY
 %left <str> OR
 %left <str> XOR
@@ -381,7 +379,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <str> reserved_keyword non_reserved_keyword
 %type <colIdent> sql_id reserved_sql_id col_alias as_ci_opt
 %type <expr> charset_value
-%type <tableIdent> table_id reserved_table_id table_alias as_opt_id from_database_opt
+%type <tableIdent> table_id reserved_table_id table_alias as_opt_id table_id_opt from_database_opt
 %type <empty> as_opt work_opt savepoint_opt
 %type <empty> skip_to_end ddl_skip_to_end
 %type <str> charset
@@ -1053,7 +1051,7 @@ generated_always_opt:
   }
 
 // There is a shift reduce conflict that arises here because UNIQUE and KEY are column_type_option and so is UNIQUE KEY.
-// So in the state "column_type_options UNIQUE. KEY" there is a shift-reduce conflict.
+// So in the state "column_type_options UNIQUE. KEY" there is a shift-reduce conflict(resovled by "%rigth <str> UNIQUE KEY").
 // This has been added to emulate what MySQL does. The previous architecture was such that the order of the column options
 // was specific (as stated in the MySQL guide) and did not accept arbitrary order options. For example NOT NULL DEFAULT 1 and not DEFAULT 1 NOT NULL
 column_attribute_list_opt:
@@ -2164,7 +2162,7 @@ alter_statement:
   {
     $$ = &AlterView{ViewName: $7.ToViewName(), Algorithm:$3, Definer: $4 ,Security:$5, Columns:$8, Select: $10, CheckOption: $11 }
   }
-| alter_database_prefix table_id create_options
+| alter_database_prefix table_id_opt create_options
   {
     $1.FullyParsed = true
     $1.DBName = $2
@@ -2176,13 +2174,6 @@ alter_statement:
     $1.FullyParsed = true
     $1.DBName = $2
     $1.UpdateDataDirectory = true
-    $$ = $1
-  }
-| alter_database_prefix create_options
-  {
-    $1.FullyParsed = true
-    $1.DBName = NewTableIdent("")
-    $1.AlterOptions = $2
     $$ = $1
   }
 | ALTER comment_opt VSCHEMA CREATE VINDEX table_name vindex_type_opt vindex_params_opt
@@ -4850,6 +4841,16 @@ table_id:
 | non_reserved_keyword
   {
     $$ = NewTableIdent(string($1))
+  }
+
+table_id_opt:
+  /* empty */ %prec LOWER_THAN_CHARSET
+  {
+    $$ = NewTableIdent("")
+  }
+| table_id
+  {
+    $$ = $1
   }
 
 reserved_table_id:
