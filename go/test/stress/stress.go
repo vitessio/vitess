@@ -38,12 +38,13 @@ const (
 type (
 	result struct {
 		countSelect int
+		countInsert int
 	}
 
 	table struct {
-		name string
-		rows int
-		mu   sync.Mutex
+		name         string
+		rows, nextID int
+		mu           sync.Mutex
 	}
 
 	stresser struct {
@@ -56,8 +57,11 @@ type (
 
 func (r result) printQPS(seconds float64) {
 	fmt.Printf(`QPS:
-select: %d
-`, r.countSelect/int(seconds))
+	select: %d
+	insert: %d
+	---------
+	total:	%d
+`, r.countSelect/int(seconds), r.countInsert/int(seconds), r.countInsert+r.countSelect/int(seconds))
 }
 
 func generateNewTables(nb int) []*table {
@@ -81,16 +85,15 @@ func createTables(t *testing.T, params mysql.ConnParams, nb int) []*table {
 	return tbls
 }
 
-func Start(t *testing.T, params mysql.ConnParams) {
+func Start(t *testing.T, params mysql.ConnParams, duration time.Duration) {
 	fmt.Println("Starting load testing ...")
 
 	s := stresser{
 		tbls:       createTables(t, params, 100),
 		connParams: params,
-		maxClient:  5,
-		duration:   2 * time.Second,
+		maxClient:  10,
+		duration:   duration,
 	}
-	insertInitialTable(t, params)
 
 	resultCh := make(chan result, s.maxClient)
 
@@ -107,6 +110,7 @@ func Start(t *testing.T, params mysql.ConnParams) {
 	var finalResult result
 	for _, r := range perClientResults {
 		finalResult.countSelect += r.countSelect
+		finalResult.countInsert += r.countInsert
 	}
 	finalResult.printQPS(s.duration.Seconds())
 }
@@ -123,6 +127,15 @@ func (s *stresser) startStressClient(t *testing.T, resultCh chan result) {
 		case <-timeout:
 			resultCh <- res
 			return
+		case <-time.After(15 * time.Microsecond): // inserts
+			tblI := rand.Int() % len(s.tbls)
+			s.tbls[tblI].mu.Lock()
+			query := fmt.Sprintf("insert into %s(id, val) values(%d, 'name')", s.tbls[tblI].name, s.tbls[tblI].nextID)
+			s.tbls[tblI].nextID++
+			s.tbls[tblI].rows++
+			exec(t, conn, query)
+			s.tbls[tblI].mu.Unlock()
+			res.countInsert++
 		case <-time.After(1 * time.Microsecond): // selects
 			tblI := rand.Int() % len(s.tbls)
 			s.tbls[tblI].mu.Lock()
@@ -136,12 +149,4 @@ func (s *stresser) startStressClient(t *testing.T, resultCh chan result) {
 			res.countSelect++
 		}
 	}
-}
-
-func insertInitialTable(t *testing.T, params mysql.ConnParams) {
-	conn := newClient(t, params)
-	defer conn.Close()
-
-	// TODO: move to `insert` case
-	exec(t, conn, `insert into main(id, val) values(0,'test'),(1,'value')`)
 }

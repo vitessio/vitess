@@ -20,6 +20,7 @@ import (
 	"flag"
 	"os"
 	"testing"
+	"time"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
@@ -86,7 +87,7 @@ func TestSimpleStressTest(t *testing.T) {
 
 	// Stress generator
 	// TODO: start on its own goroutine
-	Start(t, vtParams)
+	Start(t, vtParams, 30*time.Second)
 
 	// TODO: wait for the cluster to be stressed enough
 
