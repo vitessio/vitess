@@ -85,7 +85,7 @@ func createTables(t *testing.T, params mysql.ConnParams, nb int) []*table {
 	return tbls
 }
 
-func Start(t *testing.T, params mysql.ConnParams, duration time.Duration) {
+func Start(t *testing.T, params mysql.ConnParams, duration time.Duration, done chan result) {
 	fmt.Println("Starting load testing ...")
 
 	s := stresser{
@@ -112,7 +112,7 @@ func Start(t *testing.T, params mysql.ConnParams, duration time.Duration) {
 		finalResult.countSelect += r.countSelect
 		finalResult.countInsert += r.countInsert
 	}
-	finalResult.printQPS(s.duration.Seconds())
+	done <- finalResult
 }
 
 func (s *stresser) startStressClient(t *testing.T, resultCh chan result) {
@@ -127,26 +127,36 @@ func (s *stresser) startStressClient(t *testing.T, resultCh chan result) {
 		case <-timeout:
 			resultCh <- res
 			return
-		case <-time.After(15 * time.Microsecond): // inserts
-			tblI := rand.Int() % len(s.tbls)
-			s.tbls[tblI].mu.Lock()
-			query := fmt.Sprintf("insert into %s(id, val) values(%d, 'name')", s.tbls[tblI].name, s.tbls[tblI].nextID)
-			s.tbls[tblI].nextID++
-			s.tbls[tblI].rows++
-			exec(t, conn, query)
-			s.tbls[tblI].mu.Unlock()
+		case <-time.After(15 * time.Microsecond):
+			s.insertToRandomTable(t, conn)
 			res.countInsert++
-		case <-time.After(1 * time.Microsecond): // selects
-			tblI := rand.Int() % len(s.tbls)
-			s.tbls[tblI].mu.Lock()
-			query := fmt.Sprintf("select * from %s limit 500", s.tbls[tblI].name)
-			expLength := s.tbls[tblI].rows
-			if expLength > 500 {
-				expLength = 500
-			}
-			assertLength(t, conn, query, expLength)
-			s.tbls[tblI].mu.Unlock()
+		case <-time.After(1 * time.Microsecond):
+			s.selectFromRandomTable(t, conn)
 			res.countSelect++
 		}
 	}
+}
+
+func (s *stresser) insertToRandomTable(t *testing.T, conn *mysql.Conn) {
+	tblI := rand.Int() % len(s.tbls)
+	s.tbls[tblI].mu.Lock()
+	defer s.tbls[tblI].mu.Unlock()
+
+	query := fmt.Sprintf("insert into %s(id, val) values(%d, 'name')", s.tbls[tblI].name, s.tbls[tblI].nextID)
+	s.tbls[tblI].nextID++
+	s.tbls[tblI].rows++
+	exec(t, conn, query)
+}
+
+func (s *stresser) selectFromRandomTable(t *testing.T, conn *mysql.Conn) {
+	tblI := rand.Int() % len(s.tbls)
+	s.tbls[tblI].mu.Lock()
+	defer s.tbls[tblI].mu.Unlock()
+
+	query := fmt.Sprintf("select * from %s limit 500", s.tbls[tblI].name)
+	expLength := s.tbls[tblI].rows
+	if expLength > 500 {
+		expLength = 500
+	}
+	assertLength(t, conn, query, expLength)
 }
