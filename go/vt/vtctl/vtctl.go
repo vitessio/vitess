@@ -169,9 +169,6 @@ var commands = []commandGroup{
 			{"DeleteTablet", commandDeleteTablet,
 				"[-allow_master] <tablet alias> ...",
 				"Deletes tablet(s) from the topology."},
-			{"DemoteMasterTablet", commandDemoteMasterTablet,
-				"<tablet alias> ...",
-				"Demotes master tablet(s) to primary Use with caution. Can leave the shard with no master."},
 			{"SetReadOnly", commandSetReadOnly,
 				"<tablet alias>",
 				"Sets the tablet as read-only."},
@@ -795,26 +792,6 @@ func commandDeleteTablet(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 	}
 	for _, tabletAlias := range tabletAliases {
 		if err := wr.DeleteTablet(ctx, tabletAlias, *allowMaster); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func commandDemoteMasterTablet(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	if err := subFlags.Parse(args); err != nil {
-		return err
-	}
-	if subFlags.NArg() == 0 {
-		return fmt.Errorf("the <tablet alias> argument must be used to specify at least one tablet when calling the DemoteMasterTablet command")
-	}
-
-	tabletAliases, err := tabletParamsToTabletAliases(subFlags.Args())
-	if err != nil {
-		return err
-	}
-	for _, tabletAlias := range tabletAliases {
-		if err := wr.DemoteMasterTablet(ctx, tabletAlias); err != nil {
 			return err
 		}
 	}

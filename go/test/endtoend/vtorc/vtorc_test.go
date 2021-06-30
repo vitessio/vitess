@@ -25,6 +25,12 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/topo"
+	_ "vitess.io/vitess/go/vt/topo/consultopo"
+	_ "vitess.io/vitess/go/vt/topo/etcd2topo"
+	_ "vitess.io/vitess/go/vt/topo/k8stopo"
+	_ "vitess.io/vitess/go/vt/topo/zk2topo"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 
@@ -42,6 +48,7 @@ import (
 
 var (
 	clusterInstance *cluster.LocalProcessCluster
+	ts              *topo.Server
 	replicaTablets  []*cluster.Vttablet
 	rdonlyTablets   []*cluster.Vttablet
 	uidBase         = 100
@@ -72,6 +79,8 @@ func createClusterAndStartTopo() error {
 		return err
 	}
 
+	// create topo server connection
+	ts, err = topo.OpenServer(*clusterInstance.TopoFlavorString(), clusterInstance.VtctlProcess.TopoGlobalAddress, clusterInstance.VtctlProcess.TopoGlobalRoot)
 	return err
 }
 
@@ -151,19 +160,28 @@ func createVttablets() error {
 
 // shutdownVttablets shuts down all the vttablets and removes them from the topology
 func shutdownVttablets() error {
-	for _, vttablet := range clusterInstance.Keyspaces[0].Shards[0].Vttablets {
-		tabletType := vttablet.VttabletProcess.GetTabletType()
-		if tabletType == "master" {
-			err := demoteMasterTablet(vttablet)
-			if err != nil {
-				return err
-			}
-		}
+	// demote the primary tablet if there is
+	err := demotePrimaryTablet()
+	if err != nil {
+		return err
+	}
 
+	for _, vttablet := range clusterInstance.Keyspaces[0].Shards[0].Vttablets {
+		// if a tablet is already shutdown, we dont need to do anything
+		if vttablet.VttabletProcess.IsShutdown() {
+			continue
+		}
+		// wait for primary tablet to demote. For all others, it will not wait
+		err = vttablet.VttabletProcess.WaitForTabletTypes([]string{vttablet.Type})
+		if err != nil {
+			return err
+		}
+		// Stop the vttablets
 		err := vttablet.VttabletProcess.TearDown()
 		if err != nil {
 			return err
 		}
+		// Remove the tablet record for this tablet
 		err = clusterInstance.VtctlclientProcess.ExecuteCommand("DeleteTablet", vttablet.Alias)
 		if err != nil {
 			return err
@@ -173,14 +191,24 @@ func shutdownVttablets() error {
 	return nil
 }
 
-func demoteMasterTablet(vttablet *cluster.Vttablet) error {
-	err := clusterInstance.VtctlclientProcess.ExecuteCommand("DemoteMasterTablet", vttablet.Alias)
-	if err != nil {
+// demotePrimaryTablet demotes the primary tablet for our shard
+func demotePrimaryTablet() (err error) {
+	// lock the shard
+	ctx, unlock, lockErr := ts.LockShard(context.Background(), keyspaceName, shardName, "demotePrimaryTablet-vtorc-endtoend-test")
+	if lockErr != nil {
+		return lockErr
+	}
+	defer unlock(&err)
+
+	// update the shard record's master
+	if _, err = ts.UpdateShardFields(ctx, keyspaceName, shardName, func(si *topo.ShardInfo) error {
+		si.MasterAlias = nil
+		si.SetMasterTermStartTime(time.Now())
+		return nil
+	}); err != nil {
 		return err
 	}
-
-	err = vttablet.VttabletProcess.WaitForTabletTypes([]string{vttablet.Type})
-	return err
+	return
 }
 
 // startVtorc is used to start the orchestrator with the given extra arguments

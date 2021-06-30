@@ -499,6 +499,11 @@ func (vttablet *VttabletProcess) BulkLoad(t testing.TB, db, table string, bulkIn
 		bufFinish.Sub(bufStart), end.Sub(bufFinish), end.Sub(bufStart))
 }
 
+// IsShutdown returns whether a vttablet is shutdown or not
+func (vttablet *VttabletProcess) IsShutdown() bool {
+	return vttablet.proc == nil
+}
+
 // VttabletProcessInstance returns a VttabletProcess handle for vttablet process
 // configured with the given Config.
 // The process must be manually started by calling setup()
