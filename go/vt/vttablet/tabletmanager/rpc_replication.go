@@ -236,6 +236,11 @@ func (tm *TabletManager) ResetReplication(ctx context.Context) error {
 	return tm.MysqlDaemon.ResetReplication(ctx)
 }
 
+// InitMaster enables writes and returns the replication position.
+func (tm *TabletManager) InitMaster(ctx context.Context) (string, error) {
+	return tm.InitPrimary(ctx)
+}
+
 // InitPrimary enables writes and returns the replication position.
 func (tm *TabletManager) InitPrimary(ctx context.Context) (string, error) {
 	log.Infof("InitPrimary")
