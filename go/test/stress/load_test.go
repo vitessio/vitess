@@ -93,17 +93,23 @@ func TestSimpleStressTest(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
+	// initial table
 	exec(t, conn, `insert into main(id, val) values(0,'test'),(1,'value')`)
 
 	fmt.Println("Starting load testing ...")
 
-	timeout := time.After(1 * time.Second)
+	var selectCount int
+
+	duration := 1 * time.Second
+	timeout := time.After(duration)
 	for {
 		select {
 		case <-timeout:
+			fmt.Println("QPS:", selectCount/int(duration.Seconds()))
 			return
-		case <-time.After(10 * time.Millisecond):
-			go assertMatches(t, conn, `select id from main`, `[[INT64(0)] [INT64(1)]]`)
+		case <-time.After(1 * time.Microsecond):
+			assertMatches(t, conn, `select id from main`, `[[INT64(0)] [INT64(1)]]`)
+			selectCount++
 		}
 	}
 }
