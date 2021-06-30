@@ -330,13 +330,6 @@ func (shard *GRShard) getGTIDSetFromAll(skipMaster bool) (*groupGTIDRecorder, *c
 }
 
 func (shard *GRShard) findRebootstrapCandidate(ctx context.Context) (*grInstance, error) {
-	// Do a quick check if we can reuse primary tablet as the candidate directly
-	primary := shard.findShardPrimaryTablet()
-	isPrimaryReachable, err := shard.isPrimaryReachable(ctx)
-	if err == nil && isPrimaryReachable {
-		log.Infof("Pick primary tablet %v as candidate to bootstrap", primary.alias)
-		return primary, nil
-	}
 	gtidRecorder, errorRecorder, err := shard.getGTIDSetFromAll(false)
 	if err != nil {
 		log.Errorf("Failed to get gtid from all: %v", err)
