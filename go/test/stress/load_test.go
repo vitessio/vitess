@@ -32,6 +32,10 @@ import (
 	"vitess.io/vitess/go/test/endtoend/cluster"
 )
 
+type result struct {
+	countSelect int
+}
+
 var (
 	clusterInstance *cluster.LocalProcessCluster
 	vtParams        mysql.ConnParams
@@ -91,18 +95,32 @@ func TestSimpleStressTest(t *testing.T) {
 
 	fmt.Println("Starting load testing ...")
 
-	clientLimit := 2
-	duration := 1 * time.Second
+	clientLimit := 5
+	duration := 2 * time.Second
 
-	done := make(chan bool, clientLimit)
-
-	for i := 0; i < clientLimit; i++ {
-		go startStressClient(t, duration, done)
-	}
+	resultCh := make(chan result, clientLimit)
 
 	for i := 0; i < clientLimit; i++ {
-		<-done
+		go startStressClient(t, duration, resultCh)
 	}
+
+	perClientResults := make([]result, 0, clientLimit)
+	for i := 0; i < clientLimit; i++ {
+		newResult := <-resultCh
+		perClientResults = append(perClientResults, newResult)
+	}
+
+	var finalResult result
+	for _, r := range perClientResults {
+		finalResult.countSelect += r.countSelect
+	}
+	finalResult.printQPS(duration.Seconds())
+}
+
+func (r result) printQPS(seconds float64) {
+	fmt.Printf(`QPS:
+select: %d
+`, r.countSelect/int(seconds))
 }
 
 func insertInitialTable(t *testing.T) {
@@ -115,24 +133,23 @@ func insertInitialTable(t *testing.T) {
 	exec(t, conn, `insert into main(id, val) values(0,'test'),(1,'value')`)
 }
 
-func startStressClient(t *testing.T, duration time.Duration, done chan bool) {
+func startStressClient(t *testing.T, duration time.Duration, resultCh chan result) {
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
 
-	var selectCount int
+	var res result
 
 	timeout := time.After(duration)
 	for {
 		select {
 		case <-timeout:
-			fmt.Println("QPS:", selectCount/int(duration.Seconds()))
-			done <- true
+			resultCh <- res
 			return
 		case <-time.After(1 * time.Microsecond): // selects
 			assertMatches(t, conn, `select id from main`, `[[INT64(0)] [INT64(1)]]`)
-			selectCount++
+			res.countSelect++
 		}
 	}
 }
