@@ -261,6 +261,19 @@ func setupVttabletsAndVtorc(t *testing.T, numReplicasReq int, numRdonlyReq int, 
 		t.Fatalf("more than available tablets requested. Please increase the constants numReplicas or numRdonly")
 	}
 
+	// wait for the tablets to come up properly
+	for _, tablet := range clusterInstance.Keyspaces[0].Shards[0].Vttablets {
+		// Reset status, don't wait for the tablet status. We will check it later
+		tablet.VttabletProcess.ServingStatus = ""
+		// Start the tablet
+		err := tablet.VttabletProcess.Setup()
+		require.NoError(t, err)
+	}
+	for _, tablet := range clusterInstance.Keyspaces[0].Shards[0].Vttablets {
+		err := tablet.VttabletProcess.WaitForTabletStatuses([]string{"SERVING", "NOT_SERVING"})
+		require.NoError(t, err)
+	}
+
 	// start vtorc
 	startVtorc(t, orcExtraArgs)
 }
