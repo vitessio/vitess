@@ -187,7 +187,6 @@ func bindVariable(yylex yyLexer, bvar string) {
 // * NOTE: If you change anything here, update precedence.go as well *
 %nonassoc <str> LOWER_THAN_CHARSET
 %nonassoc <str> CHARSET
-%nonassoc <str> HIGH_THAN_CHARSET
 // Resolve column attribute ambiguity.
 %right <str> UNIQUE KEY
 %left <str> OR
