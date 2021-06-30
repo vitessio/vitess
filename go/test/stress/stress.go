@@ -18,6 +18,8 @@ package stress
 
 import (
 	"fmt"
+	"math/rand"
+	"sync"
 	"testing"
 	"time"
 
@@ -40,11 +42,12 @@ type (
 
 	table struct {
 		name string
-		// rows int
+		rows int
+		mu   sync.Mutex
 	}
 
 	stresser struct {
-		tbls       []table
+		tbls       []*table
 		connParams mysql.ConnParams
 		maxClient  int
 		duration   time.Duration
@@ -57,17 +60,17 @@ select: %d
 `, r.countSelect/int(seconds))
 }
 
-func generateNewTables(nb int) []table {
-	tbls := make([]table, 0, nb)
+func generateNewTables(nb int) []*table {
+	tbls := make([]*table, 0, nb)
 	for i := 0; i < nb; i++ {
-		tbls = append(tbls, table{
+		tbls = append(tbls, &table{
 			name: fmt.Sprintf("stress_t%d", i),
 		})
 	}
 	return tbls
 }
 
-func createTables(t *testing.T, params mysql.ConnParams, nb int) []table {
+func createTables(t *testing.T, params mysql.ConnParams, nb int) []*table {
 	conn := newClient(t, params)
 	defer conn.Close()
 
@@ -82,7 +85,7 @@ func Start(t *testing.T, params mysql.ConnParams) {
 	fmt.Println("Starting load testing ...")
 
 	s := stresser{
-		tbls:       createTables(t, params, 20),
+		tbls:       createTables(t, params, 100),
 		connParams: params,
 		maxClient:  5,
 		duration:   2 * time.Second,
@@ -121,7 +124,15 @@ func (s *stresser) startStressClient(t *testing.T, resultCh chan result) {
 			resultCh <- res
 			return
 		case <-time.After(1 * time.Microsecond): // selects
-			assertLength(t, conn, `select id from main`, 2)
+			tblI := rand.Int() % len(s.tbls)
+			s.tbls[tblI].mu.Lock()
+			query := fmt.Sprintf("select * from %s limit 500", s.tbls[tblI].name)
+			expLength := s.tbls[tblI].rows
+			if expLength > 500 {
+				expLength = 500
+			}
+			assertLength(t, conn, query, expLength)
+			s.tbls[tblI].mu.Unlock()
 			res.countSelect++
 		}
 	}
