@@ -117,37 +117,25 @@ func planAggregations(qp *queryProjection, plan logicalPlan, semTable *semantics
 	return oa, nil
 }
 
-func planOrderBy(qp *queryProjection, plan logicalPlan, semTable *semantics.SemTable) (logicalPlan, error) {
+func planOrderBy(qp *queryProjection, orderExprs sqlparser.OrderBy, plan logicalPlan, semTable *semantics.SemTable) (logicalPlan, error) {
 	switch plan := plan.(type) {
 	case *route:
-		return planOrderByForRoute(qp, plan, semTable)
+		return planOrderByForRoute(qp, orderExprs, plan, semTable)
 	case *joinGen4:
-		return planOrderByForJoin(qp, plan, semTable)
+		return planOrderByForJoin(qp, orderExprs, plan, semTable)
 	default:
 		return nil, semantics.Gen4NotSupportedF("ordering on complex query")
 	}
 }
 
-func planOrderByForRoute(qp *queryProjection, plan *route, semTable *semantics.SemTable) (logicalPlan, error) {
-	additionalColAdded := false
-	for _, order := range qp.orderExprs {
-		offset, exists := qp.orderExprColMap[order]
-		var weightStringExpr sqlparser.Expr
-		if !exists {
-			expr := &sqlparser.AliasedExpr{
-				Expr: order.Expr,
-			}
-			var err error
-			offset, err = pushProjection(expr, plan, semTable, true)
-			weightStringExpr = order.Expr
-			if err != nil {
-				return nil, err
-			}
-			additionalColAdded = true
-		} else {
-			weightStringExpr = qp.selectExprs[offset].Expr
+func planOrderByForRoute(qp *queryProjection, orderExprs sqlparser.OrderBy, plan *route, semTable *semantics.SemTable) (logicalPlan, error) {
+	origColCount := plan.Select.GetColumnCount()
+	for _, order := range orderExprs {
+		offset, expr, err := getOrProjectExpr(qp, plan, semTable, order)
+		if err != nil {
+			return nil, err
 		}
-		colName, ok := weightStringExpr.(*sqlparser.ColName)
+		colName, ok := expr.(*sqlparser.ColName)
 		if !ok {
 			return nil, semantics.Gen4NotSupportedF("order by non-column expression")
 		}
@@ -157,33 +145,14 @@ func planOrderByForRoute(qp *queryProjection, plan *route, semTable *semantics.S
 		if err != nil {
 			return nil, err
 		}
-		weightStringNeeded := true
-		for _, c := range tbl.GetColumns() {
-			if colName.Name.String() == c.Name {
-				if sqltypes.IsNumber(c.Type) {
-					weightStringNeeded = false
-				}
-				break
-			}
-		}
+		weightStringNeeded := needsWeightString(tbl, colName)
 
 		weightStringOffset := -1
 		if weightStringNeeded {
-			expr := &sqlparser.AliasedExpr{
-				Expr: &sqlparser.FuncExpr{
-					Name: sqlparser.NewColIdent("weight_string"),
-					Exprs: []sqlparser.SelectExpr{
-						&sqlparser.AliasedExpr{
-							Expr: weightStringExpr,
-						},
-					},
-				},
-			}
-			weightStringOffset, err = pushProjection(expr, plan, semTable, true)
+			weightStringOffset, err = pushExpression(plan, expr, semTable)
 			if err != nil {
 				return nil, err
 			}
-			additionalColAdded = true
 		}
 
 		plan.eroute.OrderBy = append(plan.eroute.OrderBy, engine.OrderbyParams{
@@ -193,30 +162,76 @@ func planOrderByForRoute(qp *queryProjection, plan *route, semTable *semantics.S
 		})
 		plan.Select.AddOrder(order)
 	}
-	if additionalColAdded {
-		plan.eroute.TruncateColumnCount = len(qp.selectExprs) + len(qp.aggrExprs)
+	if origColCount != plan.Select.GetColumnCount() {
+		plan.eroute.TruncateColumnCount = origColCount
 	}
 
 	return plan, nil
 }
 
-func planOrderByForJoin(qp *queryProjection, plan *joinGen4, semTable *semantics.SemTable) (logicalPlan, error) {
+func pushExpression(plan *route, expr sqlparser.Expr, semTable *semantics.SemTable) (int, error) {
+	aliasedExpr := &sqlparser.AliasedExpr{
+		Expr: &sqlparser.FuncExpr{
+			Name: sqlparser.NewColIdent("weight_string"),
+			Exprs: []sqlparser.SelectExpr{
+				&sqlparser.AliasedExpr{
+					Expr: expr,
+				},
+			},
+		},
+	}
+	return pushProjection(aliasedExpr, plan, semTable, true)
+}
+
+func needsWeightString(tbl semantics.TableInfo, colName *sqlparser.ColName) bool {
+	for _, c := range tbl.GetColumns() {
+		if colName.Name.String() == c.Name {
+			return !sqltypes.IsNumber(c.Type)
+		}
+	}
+	return true // we didn't find the column. better to add just to be safe1
+}
+
+// getOrProjectExpr either gets the offset to the expression if it is already projected,
+// or pushes the projection if needed
+func getOrProjectExpr(qp *queryProjection, plan *route, semTable *semantics.SemTable, order *sqlparser.Order) (offset int, expr sqlparser.Expr, err error) {
+	offset, exists := qp.orderExprColMap[order]
+	if exists {
+		// we are ordering by an expression that is already part of the output
+		return offset, qp.selectExprs[offset].Expr, nil
+	}
+
+	aliasedExpr := &sqlparser.AliasedExpr{Expr: order.Expr}
+	offset, err = pushProjection(aliasedExpr, plan, semTable, true)
+	if err != nil {
+		return 0, nil, err
+	}
+
+	return offset, order.Expr, nil
+}
+
+func planOrderByForJoin(qp *queryProjection, orderExprs sqlparser.OrderBy, plan *joinGen4, semTable *semantics.SemTable) (logicalPlan, error) {
 	isAllLeft := true
 	var err error
-	for _, expr := range qp.orderExprs {
+	for _, expr := range orderExprs {
 		exprDependencies := semTable.Dependencies(expr.Expr)
-		if exprDependencies.IsSolvedBy(plan.Left.ContainsTables()) {
-			plan.Left, err = planOrderBy(qp, plan.Left, semTable)
-			if err != nil {
-				return nil, err
-			}
-		} else {
+		if !exprDependencies.IsSolvedBy(plan.Left.ContainsTables()) {
 			isAllLeft = false
 			break
 		}
 	}
 	if isAllLeft {
+		plan.Left, err = planOrderBy(qp, orderExprs, plan.Left, semTable)
+		if err != nil {
+			return nil, err
+		}
 		return plan, nil
 	}
-	return nil, semantics.Gen4NotSupportedF("ordering on vtgate")
+
+	return &memorySortGen4{
+		orderBy:             nil,
+		input:               plan,
+		truncateColumnCount: 0,
+	}, nil
+
 }
