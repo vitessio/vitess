@@ -415,6 +415,7 @@
     ]
   }
 }
+Gen4 plan same as above
 
 # Order by for join, on text column in RHS.
 "select u.a, u.textcol1, un.col2 from unsharded un join user u order by u.textcol1, un.col2"
@@ -459,6 +460,7 @@
     ]
   }
 }
+Gen4 plan same as above
 
 # order by for vindex func
 "select id, keyspace_id, range_start, range_end from user_index where id = :id order by range_start"
