@@ -418,7 +418,7 @@ Gen4 error: Unknown column '2' in 'order clause'
     },
     "FieldQuery": "select id as foo, weight_string(id) from music where 1 != 1",
     "OrderBy": "0 ASC",
-    "Query": "select id as foo, weight_string(id) from music order by id asc",
+    "Query": "select id as foo, weight_string(id) from music order by foo asc",
     "ResultColumns": 1,
     "Table": "music"
   }
