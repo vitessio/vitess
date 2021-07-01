@@ -27,7 +27,6 @@ import (
 	"time"
 
 	"google.golang.org/protobuf/proto"
-
 	"k8s.io/apimachinery/pkg/util/sets"
 
 	"vitess.io/vitess/go/textutil"
