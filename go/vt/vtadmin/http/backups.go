@@ -36,7 +36,7 @@ func GetBackups(ctx context.Context, r Request, api *API) *JSONResponse {
 		rec.RecordError(err)
 	}
 
-	detailed, err := r.ParseQueryParamAsBool("detailed", false)
+	detailed, err := r.ParseQueryParamAsBool("detailed", true)
 	if err != nil {
 		rec.RecordError(err)
 	}
