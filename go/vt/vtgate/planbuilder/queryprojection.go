@@ -28,15 +28,16 @@ import (
 type queryProjection struct {
 	selectExprs []*sqlparser.AliasedExpr
 	aggrExprs   []*sqlparser.AliasedExpr
+	orderExprs  []orderBy
+}
 
-	// orderExprColMap keeps a map between the Order object and the offset into the select expressions list
-	orderExprColMap map[*sqlparser.Order]int
+type orderBy struct {
+	inner         *sqlparser.Order
+	weightStrExpr sqlparser.Expr
 }
 
 func newQueryProjection() *queryProjection {
-	return &queryProjection{
-		orderExprColMap: map[*sqlparser.Order]int{},
-	}
+	return &queryProjection{}
 }
 
 func createQPFromSelect(sel *sqlparser.Select) (*queryProjection, error) {
@@ -64,7 +65,7 @@ func createQPFromSelect(sel *sqlparser.Select) (*queryProjection, error) {
 	allExpr := append(qp.selectExprs, qp.aggrExprs...)
 
 	for _, order := range sel.OrderBy {
-		findOrderExprInAllExprs(order, allExpr, qp)
+		qp.addOrderBy(order, allExpr)
 	}
 
 	if sel.GroupBy == nil || sel.OrderBy == nil {
@@ -74,33 +75,41 @@ func createQPFromSelect(sel *sqlparser.Select) (*queryProjection, error) {
 	return qp, nil
 }
 
-func findOrderExprInAllExprs(order *sqlparser.Order, allExpr []*sqlparser.AliasedExpr, qp *queryProjection) {
-	colExpr, isColName := order.Expr.(*sqlparser.ColName)
-	// Case 1: Order by expression is an aliased expression in the select clause
-	// Eg - select id as foo from music order by foo
-	if isColName && colExpr.Qualifier.IsEmpty() {
-		for offset, expr := range allExpr {
-			isAliasExpr := !expr.As.IsEmpty()
-			if isAliasExpr && colExpr.Name.Equal(expr.As) {
-				qp.orderExprColMap[order] = offset
-				return
-			}
-		}
-	}
-	// Case 2: Order by is the column offset to be used from the select expressions
+func (qp *queryProjection) addOrderBy(order *sqlparser.Order, allExpr []*sqlparser.AliasedExpr) {
+	// Order by is the column offset to be used from the select expressions
 	// Eg - select id from music order by 1
 	literalExpr, isLiteral := order.Expr.(*sqlparser.Literal)
 	if isLiteral && literalExpr.Type == sqlparser.IntVal {
 		num, _ := strconv.Atoi(literalExpr.Val)
-		qp.orderExprColMap[order] = num - 1
-	} else {
-		// Case 3: Order by is an expression that we already have in the select expression
-		// Eg - select id from music order by id
-		for offset, expr := range allExpr {
-			if sqlparser.EqualsExpr(order.Expr, expr.Expr) {
-				qp.orderExprColMap[order] = offset
+		qp.orderExprs = append(qp.orderExprs, orderBy{
+			inner: &sqlparser.Order{
+				Expr:      allExpr[num-1].Expr,
+				Direction: order.Direction,
+			},
+			weightStrExpr: allExpr[num-1].Expr,
+		})
+		return
+	}
+
+	// If the ORDER BY is against a column alias, we need to remember the expression
+	// behind the alias. The weightstring(.) calls needs to be done against that expression and not the alias.
+	// Eg - select music.foo as bar, weightstring(music.foo) from music order by bar
+	colExpr, isColName := order.Expr.(*sqlparser.ColName)
+	if isColName && colExpr.Qualifier.IsEmpty() {
+		for _, expr := range allExpr {
+			isAliasExpr := !expr.As.IsEmpty()
+			if isAliasExpr && colExpr.Name.Equal(expr.As) {
+				qp.orderExprs = append(qp.orderExprs, orderBy{
+					inner:         order,
+					weightStrExpr: expr.Expr,
+				})
 				return
 			}
 		}
 	}
+
+	qp.orderExprs = append(qp.orderExprs, orderBy{
+		inner:         order,
+		weightStrExpr: order.Expr,
+	})
 }

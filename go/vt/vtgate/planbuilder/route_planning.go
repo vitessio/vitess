@@ -196,7 +196,7 @@ func planHorizon(sel *sqlparser.Select, plan logicalPlan, semTable *semantics.Se
 		}
 	}
 	if len(sel.OrderBy) > 0 {
-		plan, err = planOrderBy(qp, sel.OrderBy, plan, semTable)
+		plan, err = planOrderBy(qp, qp.orderExprs, plan, semTable)
 		if err != nil {
 			return nil, err
 		}
