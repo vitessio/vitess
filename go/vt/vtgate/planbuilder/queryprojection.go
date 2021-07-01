@@ -81,12 +81,20 @@ func (qp *queryProjection) addOrderBy(order *sqlparser.Order, allExpr []*sqlpars
 	literalExpr, isLiteral := order.Expr.(*sqlparser.Literal)
 	if isLiteral && literalExpr.Type == sqlparser.IntVal {
 		num, _ := strconv.Atoi(literalExpr.Val)
+		aliasedExpr := allExpr[num-1]
+		expr := aliasedExpr.Expr
+		if !aliasedExpr.As.IsEmpty() {
+			// the column is aliased, so we'll add an expression ordering by the alias and not the underlying expression
+			expr = &sqlparser.ColName{
+				Name: aliasedExpr.As,
+			}
+		}
 		qp.orderExprs = append(qp.orderExprs, orderBy{
 			inner: &sqlparser.Order{
-				Expr:      allExpr[num-1].Expr,
+				Expr:      expr,
 				Direction: order.Direction,
 			},
-			weightStrExpr: allExpr[num-1].Expr,
+			weightStrExpr: aliasedExpr.Expr,
 		})
 		return
 	}

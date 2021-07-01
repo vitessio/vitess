@@ -102,9 +102,18 @@ func removeQualifierFromColName(expr *sqlparser.AliasedExpr) *sqlparser.AliasedE
 func checkIfAlreadyExists(expr *sqlparser.AliasedExpr, sel *sqlparser.Select) int {
 	for i, selectExpr := range sel.SelectExprs {
 		if selectExpr, ok := selectExpr.(*sqlparser.AliasedExpr); ok {
-			if sqlparser.EqualsExpr(selectExpr.Expr, expr.Expr) {
-				return i
+			if selectExpr.As.IsEmpty() {
+				// we don't have an alias, so we can compare the expressions
+				if sqlparser.EqualsExpr(selectExpr.Expr, expr.Expr) {
+					return i
+				}
+				// we have an aliased column, so let's check if the expression is matching the alias
+			} else if colName, ok := expr.Expr.(*sqlparser.ColName); ok {
+				if selectExpr.As.Equal(colName.Name) {
+					return i
+				}
 			}
+
 		}
 	}
 	return -1
@@ -145,7 +154,7 @@ func planOrderBy(qp *queryProjection, orderExprs []orderBy, plan logicalPlan, se
 func planOrderByForRoute(orderExprs []orderBy, plan *route, semTable *semantics.SemTable) (logicalPlan, error) {
 	origColCount := plan.Select.GetColumnCount()
 	for _, order := range orderExprs {
-		expr := order.weightStrExpr
+		expr := order.inner.Expr
 		offset, err := wrapExprAndPush(expr, plan, semTable)
 		if err != nil {
 			return nil, err
@@ -164,7 +173,7 @@ func planOrderByForRoute(orderExprs []orderBy, plan *route, semTable *semantics.
 
 		weightStringOffset := -1
 		if weightStringNeeded {
-			weightStringOffset, err = wrapExprAndPush(weightStringFor(expr), plan, semTable)
+			weightStringOffset, err = wrapExprAndPush(weightStringFor(order.weightStrExpr), plan, semTable)
 			if err != nil {
 				return nil, err
 			}
@@ -233,7 +242,7 @@ func planOrderByForJoin(qp *queryProjection, orderExprs []orderBy, plan *joinGen
 
 	for _, order := range orderExprs {
 		expr := order.inner.Expr
-		offset, err := wrapExprAndPush(order.inner.Expr, plan, semTable)
+		offset, err := wrapExprAndPush(expr, plan, semTable)
 		if err != nil {
 			return nil, err
 		}
