@@ -406,7 +406,23 @@ Gen4 error: Unknown column '2' in 'order clause'
     "Table": "music"
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select id as foo from music order by 1",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select id as foo, weight_string(id) from music where 1 != 1",
+    "OrderBy": "0 ASC",
+    "Query": "select id as foo, weight_string(id) from music order by id asc",
+    "ResultColumns": 1,
+    "Table": "music"
+  }
+}
 
 # ORDER BY NULL
 "select col from user order by null"

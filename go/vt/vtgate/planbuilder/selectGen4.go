@@ -131,7 +131,7 @@ func planAggregations(qp *queryProjection, plan logicalPlan, semTable *semantics
 	return oa, nil
 }
 
-func planOrderBy(qp *queryProjection, orderExprs sqlparser.OrderBy, plan logicalPlan, semTable *semantics.SemTable) (logicalPlan, error) {
+func planOrderBy(qp *queryProjection, orderExprs []orderBy, plan logicalPlan, semTable *semantics.SemTable) (logicalPlan, error) {
 	switch plan := plan.(type) {
 	case *route:
 		return planOrderByForRoute(orderExprs, plan, semTable)
@@ -142,15 +142,15 @@ func planOrderBy(qp *queryProjection, orderExprs sqlparser.OrderBy, plan logical
 	}
 }
 
-func planOrderByForRoute(orderExprs sqlparser.OrderBy, plan *route, semTable *semantics.SemTable) (logicalPlan, error) {
+func planOrderByForRoute(orderExprs []orderBy, plan *route, semTable *semantics.SemTable) (logicalPlan, error) {
 	origColCount := plan.Select.GetColumnCount()
 	for _, order := range orderExprs {
-		expr := order.Expr
+		expr := order.weightStrExpr
 		offset, err := wrapExprAndPush(expr, plan, semTable)
 		if err != nil {
 			return nil, err
 		}
-		colName, ok := expr.(*sqlparser.ColName)
+		colName, ok := order.inner.Expr.(*sqlparser.ColName)
 		if !ok {
 			return nil, semantics.Gen4NotSupportedF("order by non-column expression")
 		}
@@ -173,9 +173,9 @@ func planOrderByForRoute(orderExprs sqlparser.OrderBy, plan *route, semTable *se
 		plan.eroute.OrderBy = append(plan.eroute.OrderBy, engine.OrderbyParams{
 			Col:             offset,
 			WeightStringCol: weightStringOffset,
-			Desc:            order.Direction == sqlparser.DescOrder,
+			Desc:            order.inner.Direction == sqlparser.DescOrder,
 		})
-		plan.Select.AddOrder(order)
+		plan.Select.AddOrder(order.inner)
 	}
 	if origColCount != plan.Select.GetColumnCount() {
 		plan.eroute.TruncateColumnCount = origColCount
@@ -211,7 +211,7 @@ func wrapExprAndPush(exp sqlparser.Expr, plan logicalPlan, semTable *semantics.S
 	return offset, err
 }
 
-func planOrderByForJoin(qp *queryProjection, orderExprs sqlparser.OrderBy, plan *joinGen4, semTable *semantics.SemTable) (logicalPlan, error) {
+func planOrderByForJoin(qp *queryProjection, orderExprs []orderBy, plan *joinGen4, semTable *semantics.SemTable) (logicalPlan, error) {
 	if allLeft(orderExprs, semTable, plan.Left.ContainsTables()) {
 		newLeft, err := planOrderBy(qp, orderExprs, plan.Left, semTable)
 		if err != nil {
@@ -231,9 +231,9 @@ func planOrderByForJoin(qp *queryProjection, orderExprs sqlparser.OrderBy, plan 
 		eMemorySort: primitive,
 	}
 
-	for _, order := range orderExprs { // order by user.firstName + user.LastName
-		expr := order.Expr
-		offset, err := wrapExprAndPush(order.Expr, plan, semTable)
+	for _, order := range orderExprs {
+		expr := order.inner.Expr
+		offset, err := wrapExprAndPush(order.inner.Expr, plan, semTable)
 		if err != nil {
 			return nil, err
 		}
@@ -250,7 +250,7 @@ func planOrderByForJoin(qp *queryProjection, orderExprs sqlparser.OrderBy, plan 
 
 		weightStringOffset := -1
 		if needsWeightString(tbl, col) {
-			weightStringOffset, err = wrapExprAndPush(weightStringFor(expr), plan, semTable)
+			weightStringOffset, err = wrapExprAndPush(weightStringFor(order.weightStrExpr), plan, semTable)
 			if err != nil {
 				return nil, err
 			}
@@ -259,7 +259,7 @@ func planOrderByForJoin(qp *queryProjection, orderExprs sqlparser.OrderBy, plan 
 		ms.eMemorySort.OrderBy = append(ms.eMemorySort.OrderBy, engine.OrderbyParams{
 			Col:               offset,
 			WeightStringCol:   weightStringOffset,
-			Desc:              order.Direction == sqlparser.DescOrder,
+			Desc:              order.inner.Direction == sqlparser.DescOrder,
 			StarColFixedIndex: offset,
 		})
 	}
@@ -268,9 +268,9 @@ func planOrderByForJoin(qp *queryProjection, orderExprs sqlparser.OrderBy, plan 
 
 }
 
-func allLeft(orderExprs sqlparser.OrderBy, semTable *semantics.SemTable, lhsTables semantics.TableSet) bool {
+func allLeft(orderExprs []orderBy, semTable *semantics.SemTable, lhsTables semantics.TableSet) bool {
 	for _, expr := range orderExprs {
-		exprDependencies := semTable.Dependencies(expr.Expr)
+		exprDependencies := semTable.Dependencies(expr.inner.Expr)
 		if !exprDependencies.IsSolvedBy(lhsTables) {
 			return false
 		}
