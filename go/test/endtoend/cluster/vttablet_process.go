@@ -119,8 +119,8 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 	}
 
 	vttablet.proc.Args = append(vttablet.proc.Args, vttablet.ExtraArgs...)
-
-	errFile, _ := os.Create(path.Join(vttablet.LogDir, vttablet.TabletPath+"-vttablet-stderr.txt"))
+	fname := path.Join(vttablet.LogDir, vttablet.TabletPath+"-vttablet-stderr.txt")
+	errFile, _ := os.Create(fname)
 	vttablet.proc.Stderr = errFile
 
 	vttablet.proc.Env = append(vttablet.proc.Env, os.Environ()...)
@@ -141,6 +141,10 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 
 	if vttablet.ServingStatus != "" {
 		if err = vttablet.WaitForTabletType(vttablet.ServingStatus); err != nil {
+			errFileContent, _ := ioutil.ReadFile(fname)
+			if errFileContent != nil {
+				log.Infof("vttablet error:\n%s\n", string(errFileContent))
+			}
 			return fmt.Errorf("process '%s' timed out after 10s (err: %s)", vttablet.Name, err)
 		}
 	}
@@ -301,8 +305,11 @@ func (vttablet *VttabletProcess) TearDown() error {
 		return nil
 
 	case <-time.After(10 * time.Second):
-		vttablet.proc.Process.Kill()
-		vttablet.proc = nil
+		proc := vttablet.proc
+		if proc != nil {
+			vttablet.proc.Process.Kill()
+			vttablet.proc = nil
+		}
 		return <-vttablet.exit
 	}
 }
@@ -404,7 +411,7 @@ func (vttablet *VttabletProcess) WaitForVReplicationToCatchup(t testing.TB, work
 	for ind, query := range queries {
 		waitDuration := 500 * time.Millisecond
 		for duration > 0 {
-			t.Logf("Executing query %s on %s", query, vttablet.Name)
+			log.Infof("Executing query %s on %s", query, vttablet.Name)
 			lastChecked = time.Now()
 			qr, err := conn.ExecuteFetch(query, 1000, true)
 			if err != nil {
@@ -413,7 +420,7 @@ func (vttablet *VttabletProcess) WaitForVReplicationToCatchup(t testing.TB, work
 			if qr != nil && qr.Rows != nil && len(qr.Rows) > 0 && fmt.Sprintf("%v", qr.Rows[0]) == string(results[ind]) {
 				break
 			} else {
-				t.Logf("In WaitForVReplicationToCatchup: %s %+v", query, qr.Rows)
+				log.Infof("In WaitForVReplicationToCatchup: %s %+v", query, qr.Rows)
 			}
 			time.Sleep(waitDuration)
 			duration -= waitDuration
@@ -422,7 +429,7 @@ func (vttablet *VttabletProcess) WaitForVReplicationToCatchup(t testing.TB, work
 			t.Fatalf("WaitForVReplicationToCatchup timed out for workflow %s, keyspace %s", workflow, database)
 		}
 	}
-	t.Logf("WaitForVReplicationToCatchup succeeded at %v", lastChecked)
+	log.Infof("WaitForVReplicationToCatchup succeeded at %v", lastChecked)
 }
 
 // BulkLoad performs a bulk load of rows into a given vttablet.
@@ -433,7 +440,7 @@ func (vttablet *VttabletProcess) BulkLoad(t testing.TB, db, table string, bulkIn
 	}
 	defer os.Remove(tmpbulk.Name())
 
-	t.Logf("create temporary file for bulk loading %q", tmpbulk.Name())
+	log.Infof("create temporary file for bulk loading %q", tmpbulk.Name())
 	bufStart := time.Now()
 
 	bulkBuffer := bufio.NewWriter(tmpbulk)
@@ -442,7 +449,7 @@ func (vttablet *VttabletProcess) BulkLoad(t testing.TB, db, table string, bulkIn
 
 	pos, _ := tmpbulk.Seek(0, 1)
 	bufFinish := time.Now()
-	t.Logf("bulk loading %d bytes from %q...", pos, tmpbulk.Name())
+	log.Infof("bulk loading %d bytes from %q...", pos, tmpbulk.Name())
 
 	if err := tmpbulk.Close(); err != nil {
 		t.Fatal(err)
@@ -461,7 +468,7 @@ func (vttablet *VttabletProcess) BulkLoad(t testing.TB, db, table string, bulkIn
 	}
 
 	end := time.Now()
-	t.Logf("bulk insert successful (write tmp file = %v, mysql bulk load = %v, total = %v",
+	log.Infof("bulk insert successful (write tmp file = %v, mysql bulk load = %v, total = %v",
 		bufFinish.Sub(bufStart), end.Sub(bufFinish), end.Sub(bufStart))
 }
 
