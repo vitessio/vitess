@@ -25,6 +25,8 @@ type VTAdminClient interface {
 	// An error occurs if either no table exists across any of the clusters with
 	// the specified table name, or if multiple tables exist with that name.
 	FindSchema(ctx context.Context, in *FindSchemaRequest, opts ...grpc.CallOption) (*Schema, error)
+	// GetBackups returns backups grouped by cluster.
+	GetBackups(ctx context.Context, in *GetBackupsRequest, opts ...grpc.CallOption) (*GetBackupsResponse, error)
 	// GetClusters returns all configured clusters.
 	GetClusters(ctx context.Context, in *GetClustersRequest, opts ...grpc.CallOption) (*GetClustersResponse, error)
 	// GetGates returns all gates across all the specified clusters.
@@ -72,6 +74,15 @@ func NewVTAdminClient(cc grpc.ClientConnInterface) VTAdminClient {
 func (c *vTAdminClient) FindSchema(ctx context.Context, in *FindSchemaRequest, opts ...grpc.CallOption) (*Schema, error) {
 	out := new(Schema)
 	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/FindSchema", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vTAdminClient) GetBackups(ctx context.Context, in *GetBackupsRequest, opts ...grpc.CallOption) (*GetBackupsResponse, error) {
+	out := new(GetBackupsResponse)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/GetBackups", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -224,6 +235,8 @@ type VTAdminServer interface {
 	// An error occurs if either no table exists across any of the clusters with
 	// the specified table name, or if multiple tables exist with that name.
 	FindSchema(context.Context, *FindSchemaRequest) (*Schema, error)
+	// GetBackups returns backups grouped by cluster.
+	GetBackups(context.Context, *GetBackupsRequest) (*GetBackupsResponse, error)
 	// GetClusters returns all configured clusters.
 	GetClusters(context.Context, *GetClustersRequest) (*GetClustersResponse, error)
 	// GetGates returns all gates across all the specified clusters.
@@ -267,6 +280,9 @@ type UnimplementedVTAdminServer struct {
 
 func (UnimplementedVTAdminServer) FindSchema(context.Context, *FindSchemaRequest) (*Schema, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method FindSchema not implemented")
+}
+func (UnimplementedVTAdminServer) GetBackups(context.Context, *GetBackupsRequest) (*GetBackupsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetBackups not implemented")
 }
 func (UnimplementedVTAdminServer) GetClusters(context.Context, *GetClustersRequest) (*GetClustersResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetClusters not implemented")
@@ -340,6 +356,24 @@ func _VTAdmin_FindSchema_Handler(srv interface{}, ctx context.Context, dec func(
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(VTAdminServer).FindSchema(ctx, req.(*FindSchemaRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _VTAdmin_GetBackups_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetBackupsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VTAdminServer).GetBackups(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtadmin.VTAdmin/GetBackups",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VTAdminServer).GetBackups(ctx, req.(*GetBackupsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -624,6 +658,10 @@ var VTAdmin_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "FindSchema",
 			Handler:    _VTAdmin_FindSchema_Handler,
+		},
+		{
+			MethodName: "GetBackups",
+			Handler:    _VTAdmin_GetBackups_Handler,
 		},
 		{
 			MethodName: "GetClusters",
