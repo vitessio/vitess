@@ -1,4 +1,3 @@
-2021-03-09T09:17:42Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/635246221
 2021-03-09T13:40:03Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/635948124
 2021-03-09T14:07:32Z,Unit Test (mariadb101),https://github.com/vitessio/vitess/actions/runs/636019609
 2021-03-09T15:36:01Z,.github/workflows/check_runs_analysis.yaml,https://github.com/vitessio/vitess/actions/runs/636278402
@@ -9995,6 +9994,7 @@
 2021-07-02T18:38:31Z,Unit Test (mysql57),https://github.com/vitessio/vitess/actions/runs/994547117
 2021-07-02T18:38:31Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/994547151
 2021-07-02T18:38:31Z,golangci-lint,https://github.com/vitessio/vitess/actions/runs/994547128
+2021-07-02T18:54:29Z,Cluster (21),https://github.com/vitessio/vitess/actions/runs/994579377
 2021-07-02T18:54:29Z,Cluster (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/994579426
 2021-07-02T18:54:29Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/994579443
 2021-07-02T18:58:00Z,Cluster (onlineddl_revert),https://github.com/vitessio/vitess/actions/runs/994588023
