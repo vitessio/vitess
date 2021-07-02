@@ -21,6 +21,7 @@ option go_package = "vitess.io/vitess/go/vt/proto/vtadmin";
 
 package vtadmin;
 
+import "mysqlctl.proto";
 import "tabletmanagerdata.proto";
 import "topodata.proto";
 import "vschema.proto";
@@ -38,6 +39,8 @@ service VTAdmin {
     // An error occurs if either no table exists across any of the clusters with
     // the specified table name, or if multiple tables exist with that name.
     rpc FindSchema(FindSchemaRequest) returns (Schema) {};
+    // GetBackups returns backups grouped by cluster.
+    rpc GetBackups(GetBackupsRequest) returns (GetBackupsResponse) {};
     // GetClusters returns all configured clusters.
     rpc GetClusters(GetClustersRequest) returns (GetClustersResponse) {};
     // GetGates returns all gates across all the specified clusters.
@@ -80,6 +83,11 @@ service VTAdmin {
 message Cluster {
     string id = 1;
     string name = 2;
+}
+
+message ClusterBackup {
+    Cluster cluster = 1;
+    mysqlctl.BackupInfo backup = 2;
 }
 
 message ClusterWorkflows {
@@ -185,6 +193,28 @@ message FindSchemaRequest {
     string table = 1;
     repeated string cluster_ids = 2;
     GetSchemaTableSizeOptions table_size_options = 3;
+}
+
+message GetBackupsRequest {
+    repeated string cluster_ids = 1;
+    // Keyspaces, if set, limits backups to just the specified keyspaces.
+    // Applies to all clusters in the request.
+    repeated string keyspaces = 2;
+    // KeyspaceShards, if set, limits backups to just the specified
+    // keyspace/shards. Applies to all clusters in the request.
+    //
+    // This field takes precedence over Keyspaces. If KeyspaceShards is set,
+    // Keyspaces is ignored.
+    repeated string keyspace_shards = 3;
+    // RequestOptions controls the per-shard request options when making
+    // GetBackups requests to vtctlds. Note that the Keyspace and Shard fields
+    // of this field are ignored; it is used only to specify Limit and Detailed
+    // fields.
+    vtctldata.GetBackupsRequest request_options = 4;
+}
+
+message GetBackupsResponse {
+    repeated ClusterBackup backups = 1;
 }
 
 message GetClustersRequest {}
