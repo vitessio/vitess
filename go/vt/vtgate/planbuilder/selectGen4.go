@@ -122,8 +122,12 @@ func checkIfAlreadyExists(expr *sqlparser.AliasedExpr, sel *sqlparser.Select) in
 func planAggregations(qp *queryProjection, plan logicalPlan, semTable *semantics.SemTable) (logicalPlan, error) {
 	eaggr := &engine.OrderedAggregate{}
 	oa := &orderedAggregate{
-		resultsBuilder: newResultsBuilder(plan, eaggr),
-		eaggr:          eaggr,
+		resultsBuilder: resultsBuilder{
+			logicalPlanCommon: newBuilderCommon(plan),
+			weightStrings:     make(map[*resultColumn]int),
+			truncater:         eaggr,
+		},
+		eaggr: eaggr,
 	}
 	for _, e := range qp.aggrExprs {
 		offset, _, err := pushProjection(e, plan, semTable, true)
