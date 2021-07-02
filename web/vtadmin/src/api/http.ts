@@ -116,6 +116,17 @@ export const vtfetchEntities = async <T>(opts: {
     return entities.map(opts.transform);
 };
 
+export const fetchBackups = async () =>
+    vtfetchEntities({
+        endpoint: '/api/backups',
+        extract: (res) => res.result.backups,
+        transform: (e) => {
+            const err = pb.ClusterBackup.verify(e);
+            if (err) throw Error(err);
+            return pb.ClusterBackup.create(e);
+        },
+    });
+
 export const fetchClusters = async () =>
     vtfetchEntities({
         endpoint: '/api/clusters',
