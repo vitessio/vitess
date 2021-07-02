@@ -120,6 +120,23 @@ Gen4 plan same as above
 # order by with ambiguous column reference ; valid in MySQL
 "select id, id from user order by id"
 "ambiguous symbol reference: id"
+{
+  "QueryType": "SELECT",
+  "Original": "select id, id from user order by id",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select id, weight_string(id) from `user` where 1 != 1",
+    "OrderBy": "0 ASC",
+    "Query": "select id, weight_string(id) from `user` order by id asc",
+    "ResultColumns": 1,
+    "Table": "`user`"
+  }
+}
 
 # scatter aggregate with ambiguous aliases
 "select distinct a, b as a from user"

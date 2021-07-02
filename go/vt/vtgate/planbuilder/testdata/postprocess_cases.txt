@@ -299,6 +299,23 @@ Gen4 plan same as above
     "Table": "authoritative"
   }
 }
+{
+  "QueryType": "SELECT",
+  "Original": "select * from authoritative order by user_id",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select authoritative.user_id as user_id, authoritative.col1 as col1, authoritative.col2 as col2, weight_string(authoritative.user_id) from authoritative where 1 != 1",
+    "OrderBy": "0 ASC",
+    "Query": "select authoritative.user_id as user_id, authoritative.col1 as col1, authoritative.col2 as col2, weight_string(authoritative.user_id) from authoritative order by user_id asc",
+    "ResultColumns": 3,
+    "Table": "authoritative"
+  }
+}
 
 # ORDER BY works for select * from authoritative table
 "select * from authoritative order by col1"
@@ -613,6 +630,50 @@ Gen4 error: Unknown column '2' in 'order clause'
     ]
   }
 }
+{
+  "QueryType": "SELECT",
+  "Original": "select user.col1 as a, user.col2, music.col3 from user, music where user.id = music.id and user.id = 1 order by a",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "-2,-3,1",
+    "TableName": "`user`_music",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectEqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select `user`.id, `user`.col1 as a, `user`.col2, weight_string(`user`.col1) from `user` where 1 != 1",
+        "OrderBy": "1 ASC",
+        "Query": "select `user`.id, `user`.col1 as a, `user`.col2, weight_string(`user`.col1) from `user` where `user`.id = 1 order by a asc",
+        "ResultColumns": 3,
+        "Table": "`user`",
+        "Values": [
+          1
+        ],
+        "Vindex": "user_index"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectEqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select music.col3 from music where 1 != 1",
+        "Query": "select music.col3 from music where music.id = :user_id",
+        "Table": "music",
+        "Values": [
+          ":user_id"
+        ],
+        "Vindex": "music_user_map"
+      }
+    ]
+  }
+}
 
 # ORDER BY NULL after pull-out subquery
 "select col from user where col in (select col2 from user) order by null"
@@ -869,6 +930,7 @@ Gen4 plan same as above
 # Order by, out of range column number
 "select col from user order by 2"
 "column number out of range: 2"
+"Unknown column '2' in 'order clause'"
 
 # Order by, '*' expression with qualified reference and using collate
 "select * from user where id = 5 order by user.col collate utf8_general_ci"
@@ -1073,6 +1135,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4 plan same as above
 
 # limit for scatter
 "select col from user limit 1"
