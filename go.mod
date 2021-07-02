@@ -1,6 +1,6 @@
 module vitess.io/vitess
 
-go 1.15
+go 1.16
 
 require (
 	cloud.google.com/go/storage v1.10.0
@@ -72,6 +72,7 @@ require (
 	github.com/pires/go-proxyproto v0.0.0-20191211124218-517ecdf5bb2b
 	github.com/pkg/errors v0.9.1
 	github.com/planetscale/pargzip v0.0.0-20201116224723-90c7fc03ea8a
+	github.com/planetscale/tengo v0.9.6-ps.v4
 	github.com/planetscale/vtprotobuf v0.0.0-20210521163914-5a02622d1e2a
 	github.com/prometheus/client_golang v1.11.0
 	github.com/prometheus/common v0.26.0
@@ -79,7 +80,6 @@ require (
 	github.com/samuel/go-zookeeper v0.0.0-20200724154423-2164a8ac840e
 	github.com/satori/go.uuid v1.2.0 // indirect
 	github.com/sjmudd/stopwatch v0.0.0-20170613150411-f380bf8a9be1
-	github.com/skeema/tengo v0.0.0-00010101000000-000000000000
 	github.com/soheilhy/cmux v0.1.4
 	github.com/spf13/cobra v1.1.1
 	github.com/spf13/pflag v1.0.5
@@ -122,7 +122,5 @@ require (
 	k8s.io/code-generator v0.17.3
 	sigs.k8s.io/yaml v1.2.0
 )
-
-replace github.com/skeema/tengo => github.com/planetscale/tengo v0.9.6-ps.v3
 
 replace google.golang.org/grpc => google.golang.org/grpc v1.37.0
