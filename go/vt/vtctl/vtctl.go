@@ -3515,9 +3515,10 @@ func commandWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.
 	var results map[*topo.TabletInfo]*sqltypes.Result
 	if action == "tags" {
 		tags := ""
-		if subFlags.NArg() == 3 {
-			tags = strings.ToLower(subFlags.Arg(2))
+		if subFlags.NArg() != 3 {
+			return fmt.Errorf("tags incorrectly specified, usage: Workflow keyspace.workflow tags <tags>")
 		}
+		tags = strings.ToLower(subFlags.Arg(2))
 		results, err = wr.WorkflowTagAction(ctx, keyspace, workflow, tags)
 		if err != nil {
 			return err
