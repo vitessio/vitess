@@ -146,51 +146,48 @@ func parseOne(cfg *Config, name string, val string) error {
 	case "tablet-fqdn-tmpl":
 		cfg.TabletFQDNTmplStr = val
 	default:
-		if strings.HasPrefix(name, "vtsql-") {
+		switch {
+		case strings.HasPrefix(name, "vtsql-"):
 			if cfg.VtSQLFlags == nil {
 				cfg.VtSQLFlags = map[string]string{}
 			}
 
 			cfg.VtSQLFlags[strings.TrimPrefix(name, "vtsql-")] = val
-
-			return nil
-		} else if strings.HasPrefix(name, "vtctld-") {
+		case strings.HasPrefix(name, "vtctld-"):
 			if cfg.VtctldFlags == nil {
 				cfg.VtctldFlags = map[string]string{}
 			}
 
 			cfg.VtctldFlags[strings.TrimPrefix(name, "vtctld-")] = val
-
-			return nil
-		}
-
-		match := discoveryFlagRegexp.FindStringSubmatch(name)
-		if match == nil {
-			// not a discovery flag
-			log.Warningf("Attempted to parse %q as a discovery flag, ignoring ...", name)
-			return nil
-		}
-
-		var impl, flag string
-
-		for i, g := range discoveryFlagRegexp.SubexpNames() {
-			switch g {
-			case "impl":
-				impl = match[i]
-			case "flag":
-				flag = match[i]
+		default:
+			match := discoveryFlagRegexp.FindStringSubmatch(name)
+			if match == nil {
+				// not a discovery flag
+				log.Warningf("Attempted to parse %q as a discovery flag, ignoring ...", name)
+				return nil
 			}
-		}
 
-		if cfg.DiscoveryFlagsByImpl == nil {
-			cfg.DiscoveryFlagsByImpl = map[string]map[string]string{}
-		}
+			var impl, flag string
 
-		if cfg.DiscoveryFlagsByImpl[impl] == nil {
-			cfg.DiscoveryFlagsByImpl[impl] = map[string]string{}
-		}
+			for i, g := range discoveryFlagRegexp.SubexpNames() {
+				switch g {
+				case "impl":
+					impl = match[i]
+				case "flag":
+					flag = match[i]
+				}
+			}
 
-		cfg.DiscoveryFlagsByImpl[impl][flag] = val
+			if cfg.DiscoveryFlagsByImpl == nil {
+				cfg.DiscoveryFlagsByImpl = map[string]map[string]string{}
+			}
+
+			if cfg.DiscoveryFlagsByImpl[impl] == nil {
+				cfg.DiscoveryFlagsByImpl[impl] = map[string]string{}
+			}
+
+			cfg.DiscoveryFlagsByImpl[impl][flag] = val
+		}
 	}
 
 	return nil
