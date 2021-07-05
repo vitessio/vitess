@@ -896,6 +896,11 @@ func (c *Conn) handleNextCommand(handler Handler) bool {
 	case ComResetConnection:
 		c.handleComResetConnection(handler)
 		return true
+	case ComFieldList:
+		c.recycleReadPacket()
+		if !c.writeErrorAndLog(ERUnknownComError, SSNetError, "command handling not implemented yet: %v", data[0]) {
+			return false
+		}
 
 	default:
 		log.Errorf("Got unhandled packet (default) from %s, returning error: %v", c, data)
