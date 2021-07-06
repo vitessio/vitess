@@ -1,5 +1,5 @@
 /*
-Copyright 2019 The Vitess Authors.
+Copyright 2021 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -19,6 +19,10 @@ package mysql
 import (
 	"fmt"
 	"math"
+
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+
+	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/sqltypes"
 )
@@ -202,7 +206,7 @@ func fetchStatusForGroupReplication(c *Conn, query string, onResult func([]sqlty
 		return ErrNoGroupStatus
 	}
 	if len(qr.Rows) > 1 {
-		return fmt.Errorf("unexpected results for %v: %v", query, qr.Rows)
+		return vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected results for %v: %v", query, qr.Rows)
 	}
 	return onResult(qr.Rows[0])
 }
