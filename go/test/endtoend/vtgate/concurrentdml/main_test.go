@@ -255,9 +255,8 @@ func TestInsertIgnoreOnLookupUniqueVindex(t *testing.T) {
 	// Stress generator
 	vtParamsStress := vtParams
 	vtParamsStress.DbName = unsKs
-	stressDone := make(chan stress.Result)
-	stressDuration := 10 * time.Second
-	go stress.Start(t, vtParamsStress, stressDuration, stressDone)
+	s := stress.New(t, vtParamsStress, 10*time.Second)
+	s.Start()
 
 	// end-to-end test
 	conn, err := mysql.Connect(ctx, &vtParams)
@@ -279,13 +278,7 @@ func TestInsertIgnoreOnLookupUniqueVindex(t *testing.T) {
 	assert.Equal(t, qr1.Rows, qr2.Rows, "")
 
 	// check results
-	timeout := time.After(45 * time.Second)
-	select {
-	case res := <-stressDone:
-		res.PrintQPS(stressDuration.Seconds())
-	case <-timeout:
-		t.Fatalf("Test timed out")
-	}
+	s.Wait(45 * time.Second)
 }
 
 func TestOpenTxBlocksInSerial(t *testing.T) {
