@@ -19,7 +19,6 @@ package planbuilder
 import (
 	"errors"
 	"fmt"
-	"runtime"
 	"strconv"
 	"strings"
 
@@ -389,10 +388,6 @@ func ResultFromNumber(rcs []*resultColumn, val *sqlparser.Literal, caller string
 		return 0, fmt.Errorf("error parsing column number: %s", sqlparser.String(val))
 	}
 	if num < 1 || num > int64(len(rcs)) {
-		_, file, no, ok := runtime.Caller(1)
-		if ok {
-			fmt.Printf("called from %s#%d\n", file, no)
-		}
 		return 0, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadFieldError, "Unknown column '%d' in '%s'", num, caller)
 	}
 	return int(num - 1), nil
