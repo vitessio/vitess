@@ -32,6 +32,7 @@ import { Workflow } from './routes/workflow/Workflow';
 import { VTExplain } from './routes/VTExplain';
 import { Keyspace } from './routes/keyspace/Keyspace';
 import { Tablet } from './routes/tablet/Tablet';
+import { Backups } from './routes/Backups';
 
 export const App = () => {
     return (
@@ -43,6 +44,10 @@ export const App = () => {
 
                 <div className={style.mainContainer}>
                     <Switch>
+                        <Route path="/backups">
+                            <Backups />
+                        </Route>
+
                         <Route path="/clusters">
                             <Clusters />
                         </Route>
