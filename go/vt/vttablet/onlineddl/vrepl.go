@@ -236,6 +236,15 @@ func addedUniqueKeys(sourceUniqueKeys, targetUniqueKeys [](*vrepl.UniqueKey), co
 	return addedUKs
 }
 
+// removedUniqueKeys returns the list of unique key constraints _removed_ going from source to target.
+func removedUniqueKeys(sourceUniqueKeys, targetUniqueKeys [](*vrepl.UniqueKey), columnRenameMap map[string]string) (removedUKs [](*vrepl.UniqueKey)) {
+	reverseColumnRenameMap := map[string]string{}
+	for k, v := range columnRenameMap {
+		reverseColumnRenameMap[v] = k
+	}
+	return addedUniqueKeys(targetUniqueKeys, sourceUniqueKeys, reverseColumnRenameMap)
+}
+
 // readAutoIncrement reads the AUTO_INCREMENT vlaue, if any, for a give ntable
 func (v *VRepl) readAutoIncrement(ctx context.Context, conn *dbconnpool.DBConnection, tableName string) (autoIncrement uint64, err error) {
 	query, err := sqlparser.ParseAndBind(sqlGetAutoIncrement,

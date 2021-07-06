@@ -261,13 +261,15 @@ func TestAddedUniqueKeys(t *testing.T) {
 		sourceUKs, targetUKs [](*vrepl.UniqueKey)
 		renameMap            map[string]string
 		expectAddedUKs       [](*vrepl.UniqueKey)
+		expectRemovedUKs     [](*vrepl.UniqueKey)
 	}{
 		{
-			name:           "empty",
-			sourceUKs:      emptyUniqueKeys,
-			targetUKs:      emptyUniqueKeys,
-			renameMap:      map[string]string{},
-			expectAddedUKs: emptyUniqueKeys,
+			name:             "empty",
+			sourceUKs:        emptyUniqueKeys,
+			targetUKs:        emptyUniqueKeys,
+			renameMap:        map[string]string{},
+			expectAddedUKs:   emptyUniqueKeys,
+			expectRemovedUKs: emptyUniqueKeys,
 		},
 		{
 			name: "UK removed",
@@ -277,6 +279,9 @@ func TestAddedUniqueKeys(t *testing.T) {
 			targetUKs:      emptyUniqueKeys,
 			renameMap:      map[string]string{},
 			expectAddedUKs: emptyUniqueKeys,
+			expectRemovedUKs: []*vrepl.UniqueKey{
+				{Name: "PRIMARY", Columns: *columns1},
+			},
 		},
 		{
 			name:      "UK added",
@@ -288,6 +293,7 @@ func TestAddedUniqueKeys(t *testing.T) {
 			expectAddedUKs: []*vrepl.UniqueKey{
 				{Name: "PRIMARY", Columns: *columns1},
 			},
+			expectRemovedUKs: emptyUniqueKeys,
 		},
 		{
 			name: "single identical",
@@ -297,8 +303,9 @@ func TestAddedUniqueKeys(t *testing.T) {
 			targetUKs: []*vrepl.UniqueKey{
 				{Name: "PRIMARY", Columns: *columns1},
 			},
-			renameMap:      map[string]string{},
-			expectAddedUKs: emptyUniqueKeys,
+			renameMap:        map[string]string{},
+			expectAddedUKs:   emptyUniqueKeys,
+			expectRemovedUKs: emptyUniqueKeys,
 		},
 		{
 			name: "single identical non pk",
@@ -308,8 +315,9 @@ func TestAddedUniqueKeys(t *testing.T) {
 			targetUKs: []*vrepl.UniqueKey{
 				{Name: "uidx", Columns: *columns1},
 			},
-			renameMap:      map[string]string{},
-			expectAddedUKs: emptyUniqueKeys,
+			renameMap:        map[string]string{},
+			expectAddedUKs:   emptyUniqueKeys,
+			expectRemovedUKs: emptyUniqueKeys,
 		},
 		{
 			name: "single identical, source is nullable",
@@ -319,8 +327,9 @@ func TestAddedUniqueKeys(t *testing.T) {
 			targetUKs: []*vrepl.UniqueKey{
 				{Name: "uidx", Columns: *columns1},
 			},
-			renameMap:      map[string]string{},
-			expectAddedUKs: emptyUniqueKeys,
+			renameMap:        map[string]string{},
+			expectAddedUKs:   emptyUniqueKeys,
+			expectRemovedUKs: emptyUniqueKeys,
 		},
 		{
 			name: "single identical, target is nullable",
@@ -330,8 +339,9 @@ func TestAddedUniqueKeys(t *testing.T) {
 			targetUKs: []*vrepl.UniqueKey{
 				{Name: "uidx", Columns: *columns1, HasNullable: true},
 			},
-			renameMap:      map[string]string{},
-			expectAddedUKs: emptyUniqueKeys,
+			renameMap:        map[string]string{},
+			expectAddedUKs:   emptyUniqueKeys,
+			expectRemovedUKs: emptyUniqueKeys,
 		},
 		{
 			name: "expand columns: not considered added",
@@ -343,6 +353,9 @@ func TestAddedUniqueKeys(t *testing.T) {
 			},
 			renameMap:      map[string]string{},
 			expectAddedUKs: emptyUniqueKeys,
+			expectRemovedUKs: []*vrepl.UniqueKey{
+				{Name: "uidx", Columns: *columns1},
+			},
 		},
 		{
 			name: "expand columns, different order: not considered added",
@@ -354,6 +367,9 @@ func TestAddedUniqueKeys(t *testing.T) {
 			},
 			renameMap:      map[string]string{},
 			expectAddedUKs: emptyUniqueKeys,
+			expectRemovedUKs: []*vrepl.UniqueKey{
+				{Name: "uidx", Columns: *columns1},
+			},
 		},
 		{
 			name: "reduced columns: considered added",
@@ -367,6 +383,7 @@ func TestAddedUniqueKeys(t *testing.T) {
 			expectAddedUKs: []*vrepl.UniqueKey{
 				{Name: "uidx", Columns: *columns1},
 			},
+			expectRemovedUKs: emptyUniqueKeys,
 		},
 		{
 			name: "reduced columns, multiple: considered added",
@@ -382,6 +399,9 @@ func TestAddedUniqueKeys(t *testing.T) {
 			expectAddedUKs: []*vrepl.UniqueKey{
 				{Name: "uidx", Columns: *columns1},
 			},
+			expectRemovedUKs: []*vrepl.UniqueKey{
+				{Name: "uidx2", Columns: *columns2},
+			},
 		},
 		{
 			name: "different order: not considered added",
@@ -391,8 +411,9 @@ func TestAddedUniqueKeys(t *testing.T) {
 			targetUKs: []*vrepl.UniqueKey{
 				{Name: "uidx", Columns: *columns21},
 			},
-			renameMap:      map[string]string{},
-			expectAddedUKs: emptyUniqueKeys,
+			renameMap:        map[string]string{},
+			expectAddedUKs:   emptyUniqueKeys,
+			expectRemovedUKs: emptyUniqueKeys,
 		},
 		{
 			name: "no match, different columns",
@@ -405,6 +426,9 @@ func TestAddedUniqueKeys(t *testing.T) {
 			renameMap: map[string]string{},
 			expectAddedUKs: []*vrepl.UniqueKey{
 				{Name: "uidx2", Columns: *columns2},
+			},
+			expectRemovedUKs: []*vrepl.UniqueKey{
+				{Name: "uidx1", Columns: *columns1},
 			},
 		},
 		{
@@ -419,6 +443,9 @@ func TestAddedUniqueKeys(t *testing.T) {
 			},
 			renameMap:      map[string]string{},
 			expectAddedUKs: emptyUniqueKeys,
+			expectRemovedUKs: []*vrepl.UniqueKey{
+				{Name: "uidx", Columns: *columns1},
+			},
 		},
 		{
 			name: "exact match from multiple options",
@@ -434,6 +461,9 @@ func TestAddedUniqueKeys(t *testing.T) {
 			},
 			renameMap:      map[string]string{},
 			expectAddedUKs: emptyUniqueKeys,
+			expectRemovedUKs: []*vrepl.UniqueKey{
+				{Name: "uidx", Columns: *columns1},
+			},
 		},
 		{
 			name: "exact match from multiple options reorder",
@@ -449,6 +479,9 @@ func TestAddedUniqueKeys(t *testing.T) {
 			},
 			renameMap:      map[string]string{},
 			expectAddedUKs: emptyUniqueKeys,
+			expectRemovedUKs: []*vrepl.UniqueKey{
+				{Name: "uidx", Columns: *columns1},
+			},
 		},
 		{
 			name: "match different names",
@@ -464,6 +497,9 @@ func TestAddedUniqueKeys(t *testing.T) {
 			},
 			renameMap:      map[string]string{},
 			expectAddedUKs: emptyUniqueKeys,
+			expectRemovedUKs: []*vrepl.UniqueKey{
+				{Name: "uidx1", Columns: *columns1},
+			},
 		},
 		{
 			name: "match different names, nullable",
@@ -479,6 +515,9 @@ func TestAddedUniqueKeys(t *testing.T) {
 			},
 			renameMap:      map[string]string{},
 			expectAddedUKs: emptyUniqueKeys,
+			expectRemovedUKs: []*vrepl.UniqueKey{
+				{Name: "uidx1", Columns: *columns1},
+			},
 		},
 		{
 			name: "match different column names, expand",
@@ -493,6 +532,9 @@ func TestAddedUniqueKeys(t *testing.T) {
 			},
 			renameMap:      map[string]string{"c3": "ca"},
 			expectAddedUKs: emptyUniqueKeys,
+			expectRemovedUKs: []*vrepl.UniqueKey{
+				{Name: "uidx1", Columns: *columns1},
+			},
 		},
 		{
 			name: "match different column names, no expand",
@@ -502,8 +544,9 @@ func TestAddedUniqueKeys(t *testing.T) {
 			targetUKs: []*vrepl.UniqueKey{
 				{Name: "uidx12A", Columns: *columns12A},
 			},
-			renameMap:      map[string]string{"c3": "ca"},
-			expectAddedUKs: emptyUniqueKeys,
+			renameMap:        map[string]string{"c3": "ca"},
+			expectAddedUKs:   emptyUniqueKeys,
+			expectRemovedUKs: emptyUniqueKeys,
 		},
 		{
 			// enforce mapping from c3 to ca; will not match c3<->c3
@@ -520,6 +563,9 @@ func TestAddedUniqueKeys(t *testing.T) {
 			renameMap: map[string]string{"c3": "ca"},
 			// 123 expands 12, so even though 3 is mapped to A, 123 is still not more constrained.
 			expectAddedUKs: emptyUniqueKeys,
+			expectRemovedUKs: []*vrepl.UniqueKey{
+				{Name: "uidx1", Columns: *columns1},
+			},
 		},
 		{
 			// enforce mapping from c3 to ca; will not match c3<->c3
@@ -534,6 +580,7 @@ func TestAddedUniqueKeys(t *testing.T) {
 			expectAddedUKs: []*vrepl.UniqueKey{
 				{Name: "uidx123", Columns: *columns123},
 			},
+			expectRemovedUKs: emptyUniqueKeys,
 		},
 		{
 			name: "no match for different column names, expand",
@@ -547,8 +594,11 @@ func TestAddedUniqueKeys(t *testing.T) {
 				{Name: "uidx12A", Columns: *columns12A},
 			},
 			renameMap: map[string]string{"c3": "cx"},
-			// 123 expands 12, so even though 3 is mapped to A, 123 is still not more constrained.
+			// 123 expands 12, so even though 3 is mapped to x, 123 is still not more constrained.
 			expectAddedUKs: emptyUniqueKeys,
+			expectRemovedUKs: []*vrepl.UniqueKey{
+				{Name: "uidx1", Columns: *columns1},
+			},
 		},
 		{
 			name: "no match for different column names, no expand",
@@ -562,6 +612,9 @@ func TestAddedUniqueKeys(t *testing.T) {
 			expectAddedUKs: []*vrepl.UniqueKey{
 				{Name: "uidx12A", Columns: *columns12A},
 			},
+			expectRemovedUKs: []*vrepl.UniqueKey{
+				{Name: "uidx123", Columns: *columns123},
+			},
 		},
 	}
 
@@ -569,6 +622,8 @@ func TestAddedUniqueKeys(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			addedUKs := addedUniqueKeys(tc.sourceUKs, tc.targetUKs, tc.renameMap)
 			assert.Equal(t, tc.expectAddedUKs, addedUKs)
+			removedUKs := removedUniqueKeys(tc.sourceUKs, tc.targetUKs, tc.renameMap)
+			assert.Equal(t, tc.expectRemovedUKs, removedUKs)
 		})
 	}
 }
