@@ -165,7 +165,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %token LEX_ERROR
 %left <str> UNION
 %token <str> SELECT STREAM VSTREAM INSERT UPDATE DELETE FROM WHERE GROUP HAVING ORDER BY LIMIT OFFSET FOR
-%token <str> ALL DISTINCT AS EXISTS ASC DESC INTO DUPLICATE KEY DEFAULT SET LOCK UNLOCK KEYS DO CALL
+%token <str> ALL DISTINCT AS EXISTS ASC DESC INTO DUPLICATE DEFAULT SET LOCK UNLOCK KEYS DO CALL
 %token <str> DISTINCTROW PARSER GENERATED ALWAYS
 %token <str> OUTFILE S3 DATA LOAD LINES TERMINATED ESCAPED ENCLOSED
 %token <str> DUMPFILE CSV HEADER MANIFEST OVERWRITE STARTING OPTIONALLY
@@ -185,6 +185,10 @@ func bindVariable(yylex yyLexer, bvar string) {
 // it's better to have these listed in the correct order. Also, we don't
 // support all operators yet.
 // * NOTE: If you change anything here, update precedence.go as well *
+%nonassoc <str> LOWER_THAN_CHARSET
+%nonassoc <str> CHARSET
+// Resolve column attribute ambiguity.
+%right <str> UNIQUE KEY
 %left <str> OR
 %left <str> XOR
 %left <str> AND
@@ -211,7 +215,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 // DDL Tokens
 %token <str> CREATE ALTER DROP RENAME ANALYZE ADD FLUSH CHANGE MODIFY
 %token <str> REVERT
-%token <str> SCHEMA TABLE INDEX VIEW TO IGNORE IF UNIQUE PRIMARY COLUMN SPATIAL FULLTEXT KEY_BLOCK_SIZE CHECK INDEXES
+%token <str> SCHEMA TABLE INDEX VIEW TO IGNORE IF PRIMARY COLUMN SPATIAL FULLTEXT KEY_BLOCK_SIZE CHECK INDEXES
 %token <str> ACTION CASCADE CONSTRAINT FOREIGN NO REFERENCES RESTRICT
 %token <str> SHOW DESCRIBE EXPLAIN DATE ESCAPE REPAIR OPTIMIZE TRUNCATE COALESCE EXCHANGE REBUILD PARTITIONING REMOVE
 %token <str> MAXVALUE PARTITION REORGANIZE LESS THAN PROCEDURE TRIGGER
@@ -243,7 +247,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %token <str> VGTID_EXECUTED VITESS_KEYSPACES VITESS_METADATA VITESS_MIGRATIONS VITESS_SHARDS VITESS_TABLETS VSCHEMA
 
 // SET tokens
-%token <str> NAMES CHARSET GLOBAL SESSION ISOLATION LEVEL READ WRITE ONLY REPEATABLE COMMITTED UNCOMMITTED SERIALIZABLE
+%token <str> NAMES GLOBAL SESSION ISOLATION LEVEL READ WRITE ONLY REPEATABLE COMMITTED UNCOMMITTED SERIALIZABLE
 
 // Functions
 %token <str> CURRENT_TIMESTAMP DATABASE CURRENT_DATE
@@ -938,6 +942,7 @@ create_options:
   }
 
 default_optional:
+  /* empty */ %prec LOWER_THAN_CHARSET 
   {
     $$ = false
   }
@@ -1045,7 +1050,7 @@ generated_always_opt:
   }
 
 // There is a shift reduce conflict that arises here because UNIQUE and KEY are column_type_option and so is UNIQUE KEY.
-// So in the state "column_type_options UNIQUE. KEY" there is a shift-reduce conflict.
+// So in the state "column_type_options UNIQUE. KEY" there is a shift-reduce conflict(resovled by "%rigth <str> UNIQUE KEY").
 // This has been added to emulate what MySQL does. The previous architecture was such that the order of the column options
 // was specific (as stated in the MySQL guide) and did not accept arbitrary order options. For example NOT NULL DEFAULT 1 and not DEFAULT 1 NOT NULL
 column_attribute_list_opt:
@@ -4838,6 +4843,7 @@ table_id:
   }
 
 table_id_opt:
+  /* empty */ %prec LOWER_THAN_CHARSET
   {
     $$ = NewTableIdent("")
   }
@@ -4899,7 +4905,6 @@ reserved_keyword:
 | DIV
 | DROP
 | ELSE
-| END
 | ESCAPE
 | EXISTS
 | EXPLAIN
@@ -5062,6 +5067,7 @@ non_reserved_keyword:
 | DISABLE
 | DISCARD
 | DISK
+| DO
 | DOUBLE
 | DUMPFILE
 | DUPLICATE
@@ -5069,6 +5075,7 @@ non_reserved_keyword:
 | ENABLE
 | ENCLOSED
 | ENCRYPTION
+| END
 | ENFORCED
 | ENGINE
 | ENGINES
@@ -5089,6 +5096,7 @@ non_reserved_keyword:
 | FLUSH
 | FOLLOWING
 | FORMAT
+| FULL
 | FUNCTION
 | GENERAL
 | GEOMCOLLECTION
@@ -5231,6 +5239,7 @@ non_reserved_keyword:
 | STATS_SAMPLE_PAGES
 | STATUS
 | STORAGE
+| STREAM
 | TABLES
 | TABLESPACE
 | TEMPORARY
@@ -5278,6 +5287,7 @@ non_reserved_keyword:
 | VSCHEMA
 | WARNINGS
 | WITHOUT
+| WORK
 | YEAR
 | ZEROFILL
 
