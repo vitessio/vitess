@@ -167,21 +167,20 @@ func shutdownVttablets() error {
 	}
 
 	for _, vttablet := range clusterInstance.Keyspaces[0].Shards[0].Vttablets {
-		// if a tablet is already shutdown, we dont need to do anything
-		if vttablet.VttabletProcess.IsShutdown() {
-			continue
+		// we need to stop a vttablet only if it is not shutdown
+		if !vttablet.VttabletProcess.IsShutdown() {
+			// wait for primary tablet to demote. For all others, it will not wait
+			err = vttablet.VttabletProcess.WaitForTabletTypes([]string{vttablet.Type})
+			if err != nil {
+				return err
+			}
+			// Stop the vttablets
+			err := vttablet.VttabletProcess.TearDown()
+			if err != nil {
+				return err
+			}
+			// Remove the tablet record for this tablet
 		}
-		// wait for primary tablet to demote. For all others, it will not wait
-		err = vttablet.VttabletProcess.WaitForTabletTypes([]string{vttablet.Type})
-		if err != nil {
-			return err
-		}
-		// Stop the vttablets
-		err := vttablet.VttabletProcess.TearDown()
-		if err != nil {
-			return err
-		}
-		// Remove the tablet record for this tablet
 		err = clusterInstance.VtctlclientProcess.ExecuteCommand("DeleteTablet", vttablet.Alias)
 		if err != nil {
 			return err
@@ -741,12 +740,23 @@ func waitForReplicationToStop(t *testing.T, vttablet *cluster.Vttablet) error {
 }
 
 func validateTopology(t *testing.T, cluster *cluster.LocalProcessCluster, pingTablets bool) {
-	if pingTablets {
-		out, err := cluster.VtctlclientProcess.ExecuteCommandWithOutput("Validate", "-ping-tablets=true")
-		require.NoError(t, err, out)
-	} else {
-		err := cluster.VtctlclientProcess.ExecuteCommand("Validate")
-		require.NoError(t, err)
+	ch := make(chan interface{})
+	go func() {
+		if pingTablets {
+			out, err := cluster.VtctlclientProcess.ExecuteCommandWithOutput("Validate", "-ping-tablets=true")
+			require.NoError(t, err, out)
+		} else {
+			err := cluster.VtctlclientProcess.ExecuteCommand("Validate")
+			require.NoError(t, err)
+		}
+		ch <- true
+	}()
+
+	select {
+	case <-ch:
+		return
+	case <-time.After(120 * time.Second):
+		t.Fatal("time out waiting for validation to finish")
 	}
 }
 
