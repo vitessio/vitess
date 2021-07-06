@@ -47,11 +47,13 @@ type (
 		mu           sync.Mutex
 	}
 
-	stresser struct {
+	Stresser struct {
+		doneCh     chan Result
 		tbls       []*table
 		connParams mysql.ConnParams
 		maxClient  int
 		duration   time.Duration
+		t          *testing.T
 	}
 )
 
@@ -61,7 +63,7 @@ func (r Result) PrintQPS(seconds float64) {
 	insert: %d
 	---------
 	total:	%d
-`, r.countSelect/int(seconds), r.countInsert/int(seconds), r.countInsert+r.countSelect/int(seconds))
+`, r.countSelect/int(seconds), r.countInsert/int(seconds), (r.countInsert+r.countSelect)/int(seconds))
 }
 
 func generateNewTables(nb int) []*table {
@@ -85,20 +87,26 @@ func createTables(t *testing.T, params mysql.ConnParams, nb int) []*table {
 	return tbls
 }
 
-func Start(t *testing.T, params mysql.ConnParams, duration time.Duration, done chan Result) {
-	fmt.Println("Starting load testing ...")
-
-	s := stresser{
-		tbls:       createTables(t, params, 100),
-		connParams: params,
-		maxClient:  10,
+func New(t *testing.T, conn mysql.ConnParams, duration time.Duration) *Stresser {
+	return &Stresser{
+		doneCh:     make(chan Result),
+		t:          t,
+		connParams: conn,
 		duration:   duration,
+		maxClient:  10,
 	}
+}
 
+func (s *Stresser) Start() {
+	fmt.Println("Starting load testing ...")
+	s.tbls = createTables(s.t, s.connParams, 100)
+	go s.startClients()
+}
+
+func (s *Stresser) startClients() {
 	resultCh := make(chan Result, s.maxClient)
-
 	for i := 0; i < s.maxClient; i++ {
-		go s.startStressClient(t, resultCh)
+		go s.startStressClient(resultCh)
 	}
 
 	perClientResults := make([]Result, 0, s.maxClient)
@@ -112,11 +120,11 @@ func Start(t *testing.T, params mysql.ConnParams, duration time.Duration, done c
 		finalResult.countSelect += r.countSelect
 		finalResult.countInsert += r.countInsert
 	}
-	done <- finalResult
+	s.doneCh <- finalResult
 }
 
-func (s *stresser) startStressClient(t *testing.T, resultCh chan Result) {
-	conn := newClient(t, s.connParams)
+func (s *Stresser) startStressClient(resultCh chan Result) {
+	conn := newClient(s.t, s.connParams)
 	defer conn.Close()
 
 	var res Result
@@ -128,16 +136,16 @@ func (s *stresser) startStressClient(t *testing.T, resultCh chan Result) {
 			resultCh <- res
 			return
 		case <-time.After(15 * time.Microsecond):
-			s.insertToRandomTable(t, conn)
+			s.insertToRandomTable(conn)
 			res.countInsert++
 		case <-time.After(1 * time.Microsecond):
-			s.selectFromRandomTable(t, conn)
+			s.selectFromRandomTable(conn)
 			res.countSelect++
 		}
 	}
 }
 
-func (s *stresser) insertToRandomTable(t *testing.T, conn *mysql.Conn) {
+func (s *Stresser) insertToRandomTable(conn *mysql.Conn) {
 	tblI := rand.Int() % len(s.tbls)
 	s.tbls[tblI].mu.Lock()
 	defer s.tbls[tblI].mu.Unlock()
@@ -145,10 +153,10 @@ func (s *stresser) insertToRandomTable(t *testing.T, conn *mysql.Conn) {
 	query := fmt.Sprintf("insert into %s(id, val) values(%d, 'name')", s.tbls[tblI].name, s.tbls[tblI].nextID)
 	s.tbls[tblI].nextID++
 	s.tbls[tblI].rows++
-	exec(t, conn, query)
+	exec(s.t, conn, query)
 }
 
-func (s *stresser) selectFromRandomTable(t *testing.T, conn *mysql.Conn) {
+func (s *Stresser) selectFromRandomTable(conn *mysql.Conn) {
 	tblI := rand.Int() % len(s.tbls)
 	s.tbls[tblI].mu.Lock()
 	defer s.tbls[tblI].mu.Unlock()
@@ -158,5 +166,15 @@ func (s *stresser) selectFromRandomTable(t *testing.T, conn *mysql.Conn) {
 	if expLength > 500 {
 		expLength = 500
 	}
-	assertLength(t, conn, query, expLength)
+	assertLength(s.t, conn, query, expLength)
+}
+
+func (s *Stresser) Wait(timeout time.Duration) {
+	timeoutCh := time.After(timeout)
+	select {
+	case res := <-s.doneCh:
+		res.PrintQPS(s.duration.Seconds())
+	case <-timeoutCh:
+		s.t.Fatalf("Test timed out")
+	}
 }

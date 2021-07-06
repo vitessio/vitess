@@ -85,19 +85,11 @@ func TestMain(m *testing.M) {
 func TestSimpleStressTest(t *testing.T) {
 	defer cluster.PanicHandler(t)
 
-	stressDone := make(chan Result)
-	stressDuration := 10 * time.Second
+	s := New(t, vtParams, 10*time.Second)
 
-	// Stress generator
-	go Start(t, vtParams, stressDuration, stressDone)
+	s.Start()
 
 	// Vitess end-to-end test here
 
-	timeout := time.After(45 * time.Second)
-	select {
-	case res := <-stressDone:
-		res.PrintQPS(stressDuration.Seconds())
-	case <-timeout:
-		t.Fatalf("Test timed out")
-	}
+	s.Wait(45 * time.Second)
 }
