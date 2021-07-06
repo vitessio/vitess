@@ -16,7 +16,6 @@ MAKEFLAGS = -s
 GIT_STATUS := $(shell git status --porcelain)
 
 export GOBIN=$(PWD)/bin
-export GO111MODULE=on
 export REWRITER=go/vt/sqlparser/rewriter.go
 
 # Disabled parallel processing of target prerequisites to avoid that integration tests are racing each other (e.g. for ports) and may fail.
