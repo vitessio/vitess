@@ -2942,6 +2942,9 @@ func commandOnlineDDL(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag
 		}
 	case "revert":
 		{
+			deprecationMessage := `OnlineDDL 'revert' command will be deprecated in version v12. Use "REVERT VITESS_MIGRATION '<uuid>'" SQL command`
+			log.Warningf(deprecationMessage)
+
 			if arg == "" {
 				return fmt.Errorf("UUID required")
 			}
@@ -3445,6 +3448,9 @@ func commandHelp(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Flag
 }
 
 func commandVExec(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	deprecationMessage := `VExec command will be deprecated in version v12. For Online DDL control, use "vtctl OnlineDDL" commands or SQL syntax`
+	log.Warningf(deprecationMessage)
+
 	json := subFlags.Bool("json", false, "Output JSON instead of human-readable table")
 	dryRun := subFlags.Bool("dry_run", false, "Does a dry run of VExec and only reports the final query and list of masters on which it will be applied")
 	if err := subFlags.Parse(args); err != nil {
