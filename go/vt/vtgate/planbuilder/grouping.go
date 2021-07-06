@@ -68,7 +68,7 @@ func planGroupBy(pb *primitiveBuilder, input logicalPlan, groupBy sqlparser.Grou
 					return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: in scatter query: group by column must reference column in SELECT list")
 				}
 			case *sqlparser.Literal:
-				num, err := ResultFromNumber(node.resultColumns, e)
+				num, err := ResultFromNumber(node.resultColumns, e, "group statement")
 				if err != nil {
 					return nil, err
 				}

@@ -319,6 +319,55 @@
     ]
   }
 }
+{
+  "QueryType": "SELECT",
+  "Original": "select user.col1 as a, user.col2 b, music.col3 c from user, music where user.id = music.id and user.id = 1 order by c",
+  "Instructions": {
+    "OperatorType": "Sort",
+    "Variant": "Memory",
+    "OrderBy": "2 ASC",
+    "Inputs": [
+      {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "-2,-3,1,2",
+        "TableName": "`user`_music",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectEqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select `user`.id, `user`.col1 as a, `user`.col2 as b from `user` where 1 != 1",
+            "Query": "select `user`.id, `user`.col1 as a, `user`.col2 as b from `user` where `user`.id = 1",
+            "Table": "`user`",
+            "Values": [
+              1
+            ],
+            "Vindex": "user_index"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectEqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select music.col3 as c, weight_string(music.col3) from music where 1 != 1",
+            "Query": "select music.col3 as c, weight_string(music.col3) from music where music.id = :user_id",
+            "Table": "music",
+            "Values": [
+              ":user_id"
+            ],
+            "Vindex": "music_user_map"
+          }
+        ]
+      }
+    ]
+  }
+}
 
 # Order by for join, with mixed cross-shard ordering
 "select user.col1 as a, user.col2, music.col3 from user join music on user.id = music.id where user.id = 1 order by 1 asc, 3 desc, 2 asc"
@@ -345,6 +394,55 @@
             },
             "FieldQuery": "select `user`.col1 as a, `user`.col2, weight_string(`user`.col1), weight_string(`user`.col2), `user`.id from `user` where 1 != 1",
             "Query": "select `user`.col1 as a, `user`.col2, weight_string(`user`.col1), weight_string(`user`.col2), `user`.id from `user` where `user`.id = 1",
+            "Table": "`user`",
+            "Values": [
+              1
+            ],
+            "Vindex": "user_index"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectEqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select music.col3, weight_string(music.col3) from music where 1 != 1",
+            "Query": "select music.col3, weight_string(music.col3) from music where music.id = :user_id",
+            "Table": "music",
+            "Values": [
+              ":user_id"
+            ],
+            "Vindex": "music_user_map"
+          }
+        ]
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select user.col1 as a, user.col2, music.col3 from user join music on user.id = music.id where user.id = 1 order by 1 asc, 3 desc, 2 asc",
+  "Instructions": {
+    "OperatorType": "Sort",
+    "Variant": "Memory",
+    "OrderBy": "0 ASC, 2 DESC, 1 ASC",
+    "Inputs": [
+      {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "-2,-3,1,-4,2,-5",
+        "TableName": "`user`_music",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectEqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select `user`.id, `user`.col1 as a, `user`.col2, weight_string(`user`.col1), weight_string(`user`.col2) from `user` where 1 != 1",
+            "Query": "select `user`.id, `user`.col1 as a, `user`.col2, weight_string(`user`.col1), weight_string(`user`.col2) from `user` where `user`.id = 1",
             "Table": "`user`",
             "Values": [
               1
@@ -415,6 +513,7 @@
     ]
   }
 }
+Gen4 plan same as above
 
 # Order by for join, on text column in RHS.
 "select u.a, u.textcol1, un.col2 from unsharded un join user u order by u.textcol1, un.col2"
@@ -459,6 +558,7 @@
     ]
   }
 }
+Gen4 plan same as above
 
 # order by for vindex func
 "select id, keyspace_id, range_start, range_end from user_index where id = :id order by range_start"
