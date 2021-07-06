@@ -25,6 +25,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/test/stress"
+
 	"github.com/google/go-cmp/cmp"
 
 	"github.com/stretchr/testify/assert"
@@ -249,6 +251,15 @@ func TestInsertIgnoreOnLookupUniqueVindex(t *testing.T) {
 		Host: "localhost",
 		Port: clusterInstance.VtgateMySQLPort,
 	}
+
+	// Stress generator
+	vtParamsStress := vtParams
+	vtParamsStress.DbName = unsKs
+	stressDone := make(chan stress.Result)
+	stressDuration := 10 * time.Second
+	go stress.Start(t, vtParamsStress, stressDuration, stressDone)
+
+	// end-to-end test
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)
 	defer conn.Close()
@@ -266,6 +277,15 @@ func TestInsertIgnoreOnLookupUniqueVindex(t *testing.T) {
 	qr2 := exec(t, conn, `select c2.keyspace_id, c3.keyspace_id from lookup_t1 c2, lookup_t2 c3`)
 	// To ensure lookup vindex is not updated.
 	assert.Equal(t, qr1.Rows, qr2.Rows, "")
+
+	// check results
+	timeout := time.After(45 * time.Second)
+	select {
+	case res := <-stressDone:
+		res.PrintQPS(stressDuration.Seconds())
+	case <-timeout:
+		t.Fatalf("Test timed out")
+	}
 }
 
 func TestOpenTxBlocksInSerial(t *testing.T) {
