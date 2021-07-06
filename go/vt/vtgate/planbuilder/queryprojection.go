@@ -62,16 +62,15 @@ func createQPFromSelect(sel *sqlparser.Select) (*queryProjection, error) {
 		qp.selectExprs = append(qp.selectExprs, exp)
 	}
 
+	if len(qp.selectExprs) > 0 && len(qp.aggrExprs) > 0 {
+		return nil, semantics.Gen4NotSupportedF("aggregation and non-aggregation expressions, together are not supported in cross-shard query")
+	}
+
 	allExpr := append(qp.selectExprs, qp.aggrExprs...)
 
 	for _, order := range sel.OrderBy {
 		qp.addOrderBy(order, allExpr)
 	}
-
-	if sel.GroupBy == nil || sel.OrderBy == nil {
-		return qp, nil
-	}
-
 	return qp, nil
 }
 

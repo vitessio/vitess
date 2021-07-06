@@ -336,6 +336,23 @@ Gen4 plan same as above
     "Table": "authoritative"
   }
 }
+{
+  "QueryType": "SELECT",
+  "Original": "select * from authoritative order by col1",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select authoritative.user_id as user_id, authoritative.col1 as col1, authoritative.col2 as col2, weight_string(authoritative.col1) from authoritative where 1 != 1",
+    "OrderBy": "1 ASC",
+    "Query": "select authoritative.user_id as user_id, authoritative.col1 as col1, authoritative.col2 as col2, weight_string(authoritative.col1) from authoritative order by col1 asc",
+    "ResultColumns": 3,
+    "Table": "authoritative"
+  }
+}
 
 # ORDER BY on scatter with text column
 "select a, textcol1, b from user order by a, textcol1, b"
@@ -358,7 +375,7 @@ Gen4 plan same as above
 }
 Gen4 plan same as above
 
-# ORDER BY on scatter with text column, qualified name
+# ORDER BY on scatter with text column, qualified name TODO: can plan better
 "select a, user.textcol1, b from user order by a, textcol1, b"
 {
   "QueryType": "SELECT",
@@ -373,6 +390,23 @@ Gen4 plan same as above
     "FieldQuery": "select a, `user`.textcol1, b, weight_string(a), weight_string(`user`.textcol1), weight_string(b) from `user` where 1 != 1",
     "OrderBy": "0 ASC, 1 ASC, 2 ASC",
     "Query": "select a, `user`.textcol1, b, weight_string(a), weight_string(`user`.textcol1), weight_string(b) from `user` order by a asc, textcol1 asc, b asc",
+    "ResultColumns": 3,
+    "Table": "`user`"
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select a, user.textcol1, b from user order by a, textcol1, b",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select a, `user`.textcol1, b, weight_string(a), textcol1, weight_string(textcol1), weight_string(b) from `user` where 1 != 1",
+    "OrderBy": "0 ASC, 4 ASC, 2 ASC",
+    "Query": "select a, `user`.textcol1, b, weight_string(a), textcol1, weight_string(textcol1), weight_string(b) from `user` order by a asc, textcol1 asc, b asc",
     "ResultColumns": 3,
     "Table": "`user`"
   }
@@ -401,8 +435,8 @@ Gen4 plan same as above
 
 # ORDER BY invalid col number on scatter
 "select col from user order by 2"
-"column number out of range: 2"
-Gen4 error: Unknown column '2' in 'order clause'
+"Unknown column '2' in 'order clause'"
+Gen4 plan same as above
 
 # ORDER BY column offset
 "select id as foo from music order by 1"
@@ -929,8 +963,8 @@ Gen4 plan same as above
 
 # Order by, out of range column number
 "select col from user order by 2"
-"column number out of range: 2"
 "Unknown column '2' in 'order clause'"
+Gen4 plan same as above
 
 # Order by, '*' expression with qualified reference and using collate
 "select * from user where id = 5 order by user.col collate utf8_general_ci"
@@ -1357,3 +1391,128 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+
+# aggregation and non-aggregations column without group by
+"select count(id), num from user"
+{
+  "QueryType": "SELECT",
+  "Original": "select count(id), num from user",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Ordered",
+    "Aggregates": "count(0)",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select count(id), num from `user` where 1 != 1",
+        "Query": "select count(id), num from `user`",
+        "Table": "`user`"
+      }
+    ]
+  }
+}
+"gen4 does not yet support: aggregation and non-aggregation expressions, together are not supported in cross-shard query"
+
+# aggregation and non-aggregations column with order by
+"select count(id), num from user order by 2"
+{
+  "QueryType": "SELECT",
+  "Original": "select count(id), num from user order by 2",
+  "Instructions": {
+    "OperatorType": "Sort",
+    "Variant": "Memory",
+    "OrderBy": "1 ASC",
+    "Inputs": [
+      {
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "Aggregates": "count(0)",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select count(id), num, weight_string(num) from `user` where 1 != 1",
+            "Query": "select count(id), num, weight_string(num) from `user`",
+            "Table": "`user`"
+          }
+        ]
+      }
+    ]
+  }
+}
+"gen4 does not yet support: aggregation and non-aggregation expressions, together are not supported in cross-shard query"
+
+# aggregation and non-aggregations column with group by
+"select count(id), num from user group by 2"
+{
+  "QueryType": "SELECT",
+  "Original": "select count(id), num from user group by 2",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Ordered",
+    "Aggregates": "count(0)",
+    "GroupBy": "1",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select count(id), num, weight_string(num) from `user` where 1 != 1 group by 2",
+        "OrderBy": "1 ASC",
+        "Query": "select count(id), num, weight_string(num) from `user` group by 2 order by num asc",
+        "ResultColumns": 2,
+        "Table": "`user`"
+      }
+    ]
+  }
+}
+"gen4 does not yet support: aggregation and non-aggregation expressions, together are not supported in cross-shard query"
+
+# aggregation and non-aggregations column with group by and order by
+"select count(id), num from user group by 2 order by 1"
+{
+  "QueryType": "SELECT",
+  "Original": "select count(id), num from user group by 2 order by 1",
+  "Instructions": {
+    "OperatorType": "Sort",
+    "Variant": "Memory",
+    "OrderBy": "0 ASC",
+    "Inputs": [
+      {
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "Aggregates": "count(0)",
+        "GroupBy": "1",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select count(id), num, weight_string(num) from `user` where 1 != 1 group by 2",
+            "OrderBy": "1 ASC",
+            "Query": "select count(id), num, weight_string(num) from `user` group by 2 order by num asc",
+            "ResultColumns": 2,
+            "Table": "`user`"
+          }
+        ]
+      }
+    ]
+  }
+}
+"gen4 does not yet support: aggregation and non-aggregation expressions, together are not supported in cross-shard query"
+
