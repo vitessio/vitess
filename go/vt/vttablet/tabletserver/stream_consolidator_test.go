@@ -53,7 +53,7 @@ type consolidationTest struct {
 	streamItems     []*sqltypes.Result
 
 	leaderCallback func(StreamCallback) error
-	leaderCalls    int
+	leaderCalls    uint64
 
 	results []*consolidationResult
 }
@@ -71,7 +71,7 @@ func generateResultSizes(size, count int) (r []*sqltypes.Result) {
 }
 
 func (ct *consolidationTest) leader(stream StreamCallback) error {
-	ct.leaderCalls++
+	atomic.AddUint64(&ct.leaderCalls, 1)
 	if ct.leaderCallback != nil {
 		return ct.leaderCallback(stream)
 	}
@@ -160,7 +160,7 @@ func TestConsolidatorSimple(t *testing.T) {
 		}
 	})
 
-	require.Equal(t, 1, ct.leaderCalls)
+	require.Equal(t, uint64(1), ct.leaderCalls)
 
 	for _, results := range ct.results {
 		require.Len(t, results.items, ct.streamItemCount)
@@ -282,7 +282,7 @@ func TestConsolidatorDelayedListener(t *testing.T) {
 		}
 	})
 
-	require.Equal(t, 1, ct.leaderCalls)
+	require.Equal(t, uint64(1), ct.leaderCalls)
 
 	for worker, results := range ct.results {
 		if worker == 3 {
@@ -312,7 +312,7 @@ func TestConsolidatorMemoryLimits(t *testing.T) {
 			}
 		})
 
-		require.Equal(t, 4, ct.leaderCalls)
+		require.Equal(t, uint64(4), ct.leaderCalls)
 
 		for _, results := range ct.results {
 			require.Len(t, results.items, ct.streamItemCount)
@@ -336,7 +336,7 @@ func TestConsolidatorMemoryLimits(t *testing.T) {
 			}
 		})
 
-		require.Equal(t, 2, ct.leaderCalls)
+		require.Equal(t, uint64(2), ct.leaderCalls)
 
 		for _, results := range ct.results {
 			require.Len(t, results.items, ct.streamItemCount)
@@ -362,7 +362,7 @@ func TestConsolidatorMemoryLimits(t *testing.T) {
 			return "select 1", func(_ *sqltypes.Result) error { return nil }
 		})
 
-		require.Equal(t, 2, ct.leaderCalls)
+		require.Equal(t, uint64(2), ct.leaderCalls)
 
 		for _, results := range ct.results {
 			require.Len(t, results.items, 10)
@@ -393,7 +393,7 @@ func TestConsolidatorMemoryLimits(t *testing.T) {
 			return "select 1", func(_ *sqltypes.Result) error { return nil }
 		})
 
-		require.Equal(t, 4, ct.leaderCalls)
+		require.Equal(t, uint64(4), ct.leaderCalls)
 
 		for _, results := range ct.results {
 			require.Len(t, results.items, 10)
