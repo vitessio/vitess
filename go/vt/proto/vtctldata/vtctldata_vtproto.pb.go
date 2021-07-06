@@ -673,11 +673,13 @@ func (m *Workflow_Stream) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		copy(dAtA[i:], m.unknownFields)
 	}
 	if len(m.Tags) > 0 {
-		i -= len(m.Tags)
-		copy(dAtA[i:], m.Tags)
-		i = encodeVarint(dAtA, i, uint64(len(m.Tags)))
-		i--
-		dAtA[i] = 0x7a
+		for iNdEx := len(m.Tags) - 1; iNdEx >= 0; iNdEx-- {
+			i -= len(m.Tags[iNdEx])
+			copy(dAtA[i:], m.Tags[iNdEx])
+			i = encodeVarint(dAtA, i, uint64(len(m.Tags[iNdEx])))
+			i--
+			dAtA[i] = 0x7a
+		}
 	}
 	if len(m.LogFetchError) > 0 {
 		i -= len(m.LogFetchError)
@@ -5563,9 +5565,11 @@ func (m *Workflow_Stream) SizeVT() (n int) {
 	if l > 0 {
 		n += 1 + l + sov(uint64(l))
 	}
-	l = len(m.Tags)
-	if l > 0 {
-		n += 1 + l + sov(uint64(l))
+	if len(m.Tags) > 0 {
+		for _, s := range m.Tags {
+			l = len(s)
+			n += 1 + l + sov(uint64(l))
+		}
 	}
 	if m.unknownFields != nil {
 		n += len(m.unknownFields)
@@ -9369,7 +9373,7 @@ func (m *Workflow_Stream) UnmarshalVT(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.Tags = string(dAtA[iNdEx:postIndex])
+			m.Tags = append(m.Tags, string(dAtA[iNdEx:postIndex]))
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
