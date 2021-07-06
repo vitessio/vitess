@@ -50,12 +50,7 @@ import (
 const repairGroupSize = 2
 
 func TestRepairShardHasNoGroup(t *testing.T) {
-	type testcase struct {
-		name          string
-		expectedCalls int
-		errorMsg      string
-	}
-	var testcases = map[testcase][]struct {
+	type data struct {
 		alias      string
 		mysqlhost  string
 		mysqlport  int
@@ -63,8 +58,14 @@ func TestRepairShardHasNoGroup(t *testing.T) {
 		readOnly   bool
 		groupInput []db2.TestGroupState
 		ttype      topodatapb.TabletType
+	}
+	var testcases = []struct {
+		name          string
+		expectedCalls int
+		errorMsg      string
+		inputs        []data
 	}{
-		{"shard without group", 1, ""}: {
+		{"shard without group", 1, "", []data{
 			{alias0, testHost, testPort0, "", true, []db2.TestGroupState{
 				{MemberHost: "", MemberPort: "NULL", MemberState: "OFFLINE", MemberRole: ""},
 			}, topodatapb.TabletType_REPLICA},
@@ -74,8 +75,8 @@ func TestRepairShardHasNoGroup(t *testing.T) {
 			{alias2, testHost, testPort2, "", true, []db2.TestGroupState{
 				{MemberHost: "", MemberPort: "NULL", MemberState: "OFFLINE", MemberRole: ""},
 			}, topodatapb.TabletType_REPLICA},
-		},
-		{"healthy shard", 0, ""}: {
+		}},
+		{"healthy shard", 0, "", []data{
 			{alias0, testHost, testPort0, "group", false, []db2.TestGroupState{
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort0), MemberState: "ONLINE", MemberRole: "PRIMARY"},
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort1), MemberState: "ONLINE", MemberRole: "SECONDARY"},
@@ -91,8 +92,8 @@ func TestRepairShardHasNoGroup(t *testing.T) {
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort1), MemberState: "ONLINE", MemberRole: "SECONDARY"},
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort2), MemberState: "ONLINE", MemberRole: "SECONDARY"},
 			}, topodatapb.TabletType_REPLICA},
-		},
-		{"no active member for group", 0, ""}: { // this should rebootstrap a group by DiagnoseTypeShardHasInactiveGroup
+		}},
+		{"no active member for group", 0, "", []data{ // this should rebootstrap a group by DiagnoseTypeShardHasInactiveGroup
 			{alias0, testHost, testPort0, "group", true, []db2.TestGroupState{
 				{MemberHost: "", MemberPort: "NULL", MemberState: "OFFLINE", MemberRole: ""},
 			}, topodatapb.TabletType_REPLICA},
@@ -102,8 +103,8 @@ func TestRepairShardHasNoGroup(t *testing.T) {
 			{alias2, testHost, testPort2, "", true, []db2.TestGroupState{
 				{MemberHost: "", MemberPort: "NULL", MemberState: "OFFLINE", MemberRole: "SECONDARY"},
 			}, topodatapb.TabletType_REPLICA},
-		},
-		{"raise error for unreachable primary", 0, ""}: { // shoud be ShardHasInactiveGroup
+		}},
+		{"raise error for unreachable primary", 0, "", []data{ // shoud be ShardHasInactiveGroup
 			{alias0, testHost, testPort0, "group", true, []db2.TestGroupState{
 				{MemberHost: "", MemberPort: "NULL", MemberState: "OFFLINE", MemberRole: ""},
 			}, topodatapb.TabletType_REPLICA},
@@ -114,8 +115,8 @@ func TestRepairShardHasNoGroup(t *testing.T) {
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort0), MemberState: "UNREACHABLE", MemberRole: "PRIMARY"},
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort2), MemberState: "ONLINE", MemberRole: "SECONDARY"},
 			}, topodatapb.TabletType_REPLICA},
-		},
-		{"raise error without bootstrap with only one reachable node", 0, "vtgr repair: unsafe to bootstrap group"}: {
+		}},
+		{"raise error without bootstrap with only one reachable node", 0, "vtgr repair: unsafe to bootstrap group", []data{
 			{alias0, "", 0, "group", true, []db2.TestGroupState{
 				{MemberHost: "", MemberPort: "NULL", MemberState: "OFFLINE", MemberRole: ""},
 			}, topodatapb.TabletType_REPLICA},
@@ -125,11 +126,11 @@ func TestRepairShardHasNoGroup(t *testing.T) {
 			{alias2, "", testPort2, "", true, []db2.TestGroupState{
 				{MemberHost: "", MemberPort: "NULL", MemberState: "OFFLINE", MemberRole: ""},
 			}, topodatapb.TabletType_REPLICA},
-		},
+		}},
 	}
 	tablets := make(map[string]*topo.TabletInfo)
-	for n, tt := range testcases {
-		t.Run(n.name, func(t *testing.T) {
+	for _, tt := range testcases {
+		t.Run(tt.name, func(t *testing.T) {
 			ctx := context.Background()
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
@@ -169,8 +170,8 @@ func TestRepairShardHasNoGroup(t *testing.T) {
 					inputMap[target.Port] = input
 					return nil
 				}).
-				Times(n.expectedCalls)
-			for i, input := range tt {
+				Times(tt.expectedCalls)
+			for i, input := range tt.inputs {
 				tablet := buildTabletInfo(uint32(i), input.mysqlhost, testPort0+i, input.ttype, time.Now())
 				testutil.AddTablet(ctx, t, ts, tablet.Tablet, nil)
 				tablets[input.alias] = tablet
@@ -202,23 +203,17 @@ func TestRepairShardHasNoGroup(t *testing.T) {
 			shard := NewGRShard("ks", "0", nil, tmc, ts, db, cfg, testPort0)
 			shard.UpdateTabletsInShardWithLock(ctx)
 			_, err := shard.Repair(ctx, DiagnoseTypeShardHasNoGroup)
-			if n.errorMsg == "" {
+			if tt.errorMsg == "" {
 				assert.NoError(t, err)
 			} else {
-				assert.EqualError(t, err, n.errorMsg)
+				assert.EqualError(t, err, tt.errorMsg)
 			}
 		})
 	}
 }
 
 func TestRepairShardHasInactiveGroup(t *testing.T) {
-	type testcase struct {
-		name                  string
-		errorMsg              string
-		expectedCandidatePort int
-	}
-	sid1 := "3e11fa47-71ca-11e1-9e33-c80aa9429562"
-	var testcases = map[testcase][]struct {
+	type data struct {
 		alias      string
 		mysqlhost  string
 		mysqlport  int
@@ -227,8 +222,15 @@ func TestRepairShardHasInactiveGroup(t *testing.T) {
 		pingable   bool
 		gtid       mysql.GTIDSet
 		ttype      topodatapb.TabletType
+	}
+	sid1 := "3e11fa47-71ca-11e1-9e33-c80aa9429562"
+	var testcases = []struct {
+		name                  string
+		errorMsg              string
+		expectedCandidatePort int
+		inputs                []data
 	}{
-		{"shard has inactive group", "", testPort0}: {
+		{"shard has inactive group", "", testPort0, []data{
 			{alias0, testHost, testPort0, "group", []db2.TestGroupState{
 				{MemberHost: "", MemberPort: "NULL", MemberState: "OFFLINE", MemberRole: ""},
 			}, true, getMysql56GTIDSet(sid1, "1-10"), topodatapb.TabletType_REPLICA},
@@ -238,8 +240,8 @@ func TestRepairShardHasInactiveGroup(t *testing.T) {
 			{alias2, testHost, testPort2, "group", []db2.TestGroupState{
 				{MemberHost: "", MemberPort: "NULL", MemberState: "OFFLINE", MemberRole: ""},
 			}, true, getMysql56GTIDSet(sid1, "1-9"), topodatapb.TabletType_REPLICA},
-		},
-		{"unreachable rebootstrap candidate", "vtgr repair: test_cell-0000000000 is unreachable", 0}: {
+		}},
+		{"unreachable rebootstrap candidate", "vtgr repair: test_cell-0000000000 is unreachable", 0, []data{
 			{alias0, testHost, testPort0, "group", []db2.TestGroupState{
 				{MemberHost: "", MemberPort: "NULL", MemberState: "OFFLINE", MemberRole: ""},
 			}, false, getMysql56GTIDSet(sid1, "1-10"), topodatapb.TabletType_REPLICA},
@@ -249,8 +251,8 @@ func TestRepairShardHasInactiveGroup(t *testing.T) {
 			{alias2, testHost, testPort2, "group", []db2.TestGroupState{
 				{MemberHost: "", MemberPort: "NULL", MemberState: "OFFLINE", MemberRole: ""},
 			}, true, getMysql56GTIDSet(sid1, "1-9"), topodatapb.TabletType_REPLICA},
-		},
-		{"inactive shard with empty gtid", "", testPort0}: {
+		}},
+		{"inactive shard with empty gtid", "", testPort0, []data{
 			{alias0, testHost, testPort0, "group", []db2.TestGroupState{
 				{MemberHost: "", MemberPort: "NULL", MemberState: "OFFLINE", MemberRole: ""},
 			}, true, getMysql56GTIDSet(sid1, "1-10"), topodatapb.TabletType_REPLICA},
@@ -260,8 +262,8 @@ func TestRepairShardHasInactiveGroup(t *testing.T) {
 			{alias2, testHost, testPort2, "group", []db2.TestGroupState{
 				{MemberHost: "", MemberPort: "NULL", MemberState: "OFFLINE", MemberRole: ""},
 			}, true, getMysql56GTIDSet("", ""), topodatapb.TabletType_REPLICA},
-		},
-		{"shard has more than one group", "vtgr repair: fail to refreshSQLGroup: group has split brain", 0}: { // vtgr raises error
+		}},
+		{"shard has more than one group", "vtgr repair: fail to refreshSQLGroup: group has split brain", 0, []data{ // vtgr raises error
 			{alias0, testHost, testPort0, "group1", []db2.TestGroupState{
 				{MemberHost: "", MemberPort: "NULL", MemberState: "OFFLINE", MemberRole: ""},
 			}, true, getMysql56GTIDSet(sid1, "1-9"), topodatapb.TabletType_REPLICA},
@@ -271,8 +273,8 @@ func TestRepairShardHasInactiveGroup(t *testing.T) {
 			{alias2, testHost, testPort2, "group1", []db2.TestGroupState{
 				{MemberHost: "", MemberPort: "NULL", MemberState: "OFFLINE", MemberRole: ""},
 			}, true, getMysql56GTIDSet(sid1, "1-9"), topodatapb.TabletType_REPLICA},
-		},
-		{"shard has inconsistent gtids", "vtgr repair: found more than one failover candidates by GTID set for ks/0", 0}: { // vtgr raises error
+		}},
+		{"shard has inconsistent gtids", "vtgr repair: found more than one failover candidates by GTID set for ks/0", 0, []data{ // vtgr raises error
 			{alias0, testHost, testPort0, "group", []db2.TestGroupState{
 				{MemberHost: "", MemberPort: "NULL", MemberState: "OFFLINE", MemberRole: ""},
 			}, true, getMysql56GTIDSet("264a8230-67d2-11eb-acdd-0a8d91f24125", "1-9"), topodatapb.TabletType_REPLICA},
@@ -282,8 +284,8 @@ func TestRepairShardHasInactiveGroup(t *testing.T) {
 			{alias2, testHost, testPort2, "group", []db2.TestGroupState{
 				{MemberHost: "", MemberPort: "NULL", MemberState: "OFFLINE", MemberRole: ""},
 			}, true, getMysql56GTIDSet(sid1, "1-9"), topodatapb.TabletType_REPLICA},
-		},
-		{"error on one unreachable mysql", "invalid mysql instance key", 0}: {
+		}},
+		{"error on one unreachable mysql", "invalid mysql instance key", 0, []data{
 			{alias0, "", 0, "group", []db2.TestGroupState{
 				{MemberHost: "", MemberPort: "NULL", MemberState: "OFFLINE", MemberRole: ""},
 			}, true, getMysql56GTIDSet(sid1, "1-11"), topodatapb.TabletType_REPLICA},
@@ -293,8 +295,8 @@ func TestRepairShardHasInactiveGroup(t *testing.T) {
 			{alias2, testHost, testPort2, "group", []db2.TestGroupState{
 				{MemberHost: "", MemberPort: "NULL", MemberState: "OFFLINE", MemberRole: ""},
 			}, true, getMysql56GTIDSet(sid1, "1-9"), topodatapb.TabletType_REPLICA},
-		},
-		{"error on one unreachable tablet", "vtgr repair: test_cell-0000000000 is unreachable", 0}: {
+		}},
+		{"error on one unreachable tablet", "vtgr repair: test_cell-0000000000 is unreachable", 0, []data{
 			{alias0, testHost, testPort0, "group", []db2.TestGroupState{
 				{MemberHost: "", MemberPort: "NULL", MemberState: "OFFLINE", MemberRole: ""},
 			}, false, getMysql56GTIDSet(sid1, "1-10"), topodatapb.TabletType_REPLICA},
@@ -304,8 +306,8 @@ func TestRepairShardHasInactiveGroup(t *testing.T) {
 			{alias2, testHost, testPort2, "group", []db2.TestGroupState{
 				{MemberHost: "", MemberPort: "NULL", MemberState: "OFFLINE", MemberRole: ""},
 			}, true, getMysql56GTIDSet(sid1, "1-9"), topodatapb.TabletType_REPLICA},
-		},
-		{"shard has active member", "", 0}: { // vtgr sees an active node it should not try to bootstrap
+		}},
+		{"shard has active member", "", 0, []data{ // vtgr sees an active node it should not try to bootstrap
 			{alias0, testHost, testPort0, "group", []db2.TestGroupState{
 				{MemberHost: "", MemberPort: "NULL", MemberState: "OFFLINE", MemberRole: ""},
 			}, true, getMysql56GTIDSet(sid1, "1-10"), topodatapb.TabletType_REPLICA},
@@ -315,8 +317,8 @@ func TestRepairShardHasInactiveGroup(t *testing.T) {
 			{alias2, testHost, testPort2, "group", []db2.TestGroupState{
 				{MemberHost: "", MemberPort: "NULL", MemberState: "OFFLINE", MemberRole: ""},
 			}, true, getMysql56GTIDSet(sid1, "1-9"), topodatapb.TabletType_REPLICA},
-		},
-		{"shard has active member but more than one group", "vtgr repair: fail to refreshSQLGroup: group has split brain", 0}: { // split brain should overweight active member diagnose
+		}},
+		{"shard has active member but more than one group", "vtgr repair: fail to refreshSQLGroup: group has split brain", 0, []data{ // split brain should overweight active member diagnose
 			{alias0, testHost, testPort0, "group1", []db2.TestGroupState{
 				{MemberHost: "", MemberPort: "NULL", MemberState: "OFFLINE", MemberRole: ""},
 			}, true, getMysql56GTIDSet(sid1, "1-10"), topodatapb.TabletType_REPLICA},
@@ -326,11 +328,11 @@ func TestRepairShardHasInactiveGroup(t *testing.T) {
 			{alias2, testHost, testPort2, "group2", []db2.TestGroupState{
 				{MemberHost: "", MemberPort: "NULL", MemberState: "OFFLINE", MemberRole: ""},
 			}, true, getMysql56GTIDSet(sid1, "1-9"), topodatapb.TabletType_REPLICA},
-		},
+		}},
 	}
 	tablets := make(map[string]*topo.TabletInfo)
-	for n, tt := range testcases {
-		t.Run(n.name, func(t *testing.T) {
+	for _, tt := range testcases {
+		t.Run(tt.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 			ctx := context.Background()
@@ -341,7 +343,7 @@ func TestRepairShardHasInactiveGroup(t *testing.T) {
 			tmc := NewMockGRTmcClient(ctrl)
 			db := db2.NewMockAgent(ctrl)
 			expectedCalls := 0
-			if n.expectedCandidatePort != 0 {
+			if tt.expectedCandidatePort != 0 {
 				expectedCalls = 1
 			}
 			inputMap := make(map[int]testGroupInput)
@@ -350,7 +352,7 @@ func TestRepairShardHasInactiveGroup(t *testing.T) {
 			db.
 				EXPECT().
 				// RepairShardHasNoGroup is fixed by calling BootstrapGroupLocked
-				BootstrapGroupLocked(&inst.InstanceKey{Hostname: testHost, Port: n.expectedCandidatePort}).
+				BootstrapGroupLocked(&inst.InstanceKey{Hostname: testHost, Port: tt.expectedCandidatePort}).
 				DoAndReturn(func(target *inst.InstanceKey) error {
 					if target.Hostname == "" || target.Port == 0 {
 						return errors.New("invalid mysql instance key")
@@ -377,7 +379,7 @@ func TestRepairShardHasInactiveGroup(t *testing.T) {
 					return nil
 				}).
 				Times(expectedCalls)
-			for i, input := range tt {
+			for i, input := range tt.inputs {
 				tablet := buildTabletInfo(uint32(i), input.mysqlhost, input.mysqlport, input.ttype, time.Now())
 				testutil.AddTablet(ctx, t, ts, tablet.Tablet, nil)
 				tablets[input.alias] = tablet
@@ -441,111 +443,112 @@ func TestRepairShardHasInactiveGroup(t *testing.T) {
 			cfg := &config.VTGRConfig{GroupSize: repairGroupSize, MinNumReplica: 2, BackoffErrorWaitTimeSeconds: 1, BootstrapWaitTimeSeconds: 1}
 			shard := NewGRShard("ks", "0", nil, tmc, ts, db, cfg, testPort0)
 			_, err := shard.Repair(ctx, DiagnoseTypeShardHasInactiveGroup)
-			if n.errorMsg == "" {
+			if tt.errorMsg == "" {
 				assert.NoError(t, err)
 			} else {
-				assert.Error(t, err, n.errorMsg)
-				assert.True(t, strings.Contains(err.Error(), n.errorMsg), err.Error())
+				assert.Error(t, err, tt.errorMsg)
+				assert.True(t, strings.Contains(err.Error(), tt.errorMsg), err.Error())
 			}
 		})
 	}
 }
 
 func TestRepairWrongPrimaryTablet(t *testing.T) {
-	type testcase struct {
-		name                  string
-		errorMsg              string
-		expectedCandidatePort int
-	}
-	var testcases = map[testcase][]struct {
+	type data struct {
 		alias      string
-		mysqlhost  string
 		mysqlport  int
 		groupName  string
 		groupInput []db2.TestGroupState
 		ttype      topodatapb.TabletType
+	}
+
+	var testcases = []struct {
+		name                  string
+		errorMsg              string
+		expectedCandidatePort int
+		inputs                []data
 	}{
-		{"fix no primary tablet in shard", "", testPort0}: {
-			{alias0, testHost, testPort0, "group", []db2.TestGroupState{
+		{"fix no primary tablet in shard", "", testPort0, []data{
+			{alias0, testPort0, "group", []db2.TestGroupState{
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort0), MemberState: "ONLINE", MemberRole: "PRIMARY"},
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort1), MemberState: "ONLINE", MemberRole: "SECONDARY"},
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort2), MemberState: "ONLINE", MemberRole: "SECONDARY"},
 			}, topodatapb.TabletType_REPLICA},
-			{alias1, testHost, testPort1, "group", []db2.TestGroupState{
+			{alias1, testPort1, "group", []db2.TestGroupState{
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort0), MemberState: "ONLINE", MemberRole: "PRIMARY"},
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort1), MemberState: "ONLINE", MemberRole: "SECONDARY"},
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort2), MemberState: "ONLINE", MemberRole: "SECONDARY"},
 			}, topodatapb.TabletType_REPLICA},
-			{alias2, testHost, testPort2, "group", []db2.TestGroupState{
+			{alias2, testPort2, "group", []db2.TestGroupState{
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort0), MemberState: "ONLINE", MemberRole: "PRIMARY"},
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort1), MemberState: "ONLINE", MemberRole: "SECONDARY"},
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort2), MemberState: "ONLINE", MemberRole: "SECONDARY"},
 			}, topodatapb.TabletType_REPLICA},
-		},
-		{"fix wrong primary tablet", "", testPort0}: {
-			{alias0, testHost, testPort0, "group", []db2.TestGroupState{
+		}},
+		{"fix wrong primary tablet", "", testPort0, []data{
+			{alias0, testPort0, "group", []db2.TestGroupState{
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort0), MemberState: "ONLINE", MemberRole: "PRIMARY"},
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort1), MemberState: "ONLINE", MemberRole: "SECONDARY"},
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort2), MemberState: "ONLINE", MemberRole: "SECONDARY"},
 			}, topodatapb.TabletType_REPLICA},
-			{alias1, testHost, testPort1, "group", []db2.TestGroupState{
+			{alias1, testPort1, "group", []db2.TestGroupState{
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort0), MemberState: "ONLINE", MemberRole: "PRIMARY"},
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort1), MemberState: "ONLINE", MemberRole: "SECONDARY"},
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort2), MemberState: "ONLINE", MemberRole: "SECONDARY"},
 			}, topodatapb.TabletType_MASTER},
-			{alias2, testHost, testPort2, "group", []db2.TestGroupState{
+			{alias2, testPort2, "group", []db2.TestGroupState{
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort0), MemberState: "ONLINE", MemberRole: "PRIMARY"},
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort1), MemberState: "ONLINE", MemberRole: "SECONDARY"},
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort2), MemberState: "ONLINE", MemberRole: "SECONDARY"},
 			}, topodatapb.TabletType_REPLICA},
-		},
-		{"fix shard if there is an unreachable secondary", "", testPort0}: {
-			{alias0, testHost, testPort0, "group", []db2.TestGroupState{
+		}},
+		{"fix shard if there is an unreachable secondary", "", testPort0, []data{
+			{alias0, testPort0, "group", []db2.TestGroupState{
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort0), MemberState: "ONLINE", MemberRole: "PRIMARY"},
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort1), MemberState: "ONLINE", MemberRole: "SECONDARY"},
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort2), MemberState: "UNREACHABLE", MemberRole: "SECONDARY"},
 			}, topodatapb.TabletType_REPLICA},
-			{alias1, testHost, testPort1, "group", []db2.TestGroupState{
+			{alias1, testPort1, "group", []db2.TestGroupState{
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort0), MemberState: "ONLINE", MemberRole: "PRIMARY"},
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort1), MemberState: "ONLINE", MemberRole: "SECONDARY"},
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort2), MemberState: "UNREACHABLE", MemberRole: "SECONDARY"},
 			}, topodatapb.TabletType_MASTER},
-			{alias2, testHost, testPort2, "group", []db2.TestGroupState{
+			{alias2, testPort2, "group", []db2.TestGroupState{
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort0), MemberState: "ONLINE", MemberRole: "PRIMARY"},
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort2), MemberState: "UNREACHABLE", MemberRole: "SECONDARY"},
 			}, topodatapb.TabletType_REPLICA},
-		},
-		{"diagnose as ShardHasInactiveGroup if quorum number of not online", "", 0}: {
-			{alias0, testHost, testPort0, "group", []db2.TestGroupState{
+		}},
+		{"diagnose as ShardHasInactiveGroup if quorum number of not online", "", 0, []data{
+			{alias0, testPort0, "group", []db2.TestGroupState{
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort0), MemberState: "UNREACHABLE", MemberRole: "PRIMARY"},
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort1), MemberState: "UNREACHABLE", MemberRole: "SECONDARY"},
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort2), MemberState: "ONLINE", MemberRole: "SECONDARY"},
 			}, topodatapb.TabletType_REPLICA},
-			{alias1, testHost, testPort1, "group", []db2.TestGroupState{
+			{alias1, testPort1, "group", []db2.TestGroupState{
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort1), MemberState: "UNREACHABLE", MemberRole: "SECONDARY"},
 			}, topodatapb.TabletType_MASTER},
-			{alias2, testHost, testPort2, "group", []db2.TestGroupState{
+			{alias2, testPort2, "group", []db2.TestGroupState{
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort0), MemberState: "UNREACHABLE", MemberRole: "PRIMARY"},
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort2), MemberState: "ONLINE", MemberRole: "SECONDARY"},
 			}, topodatapb.TabletType_REPLICA},
-		},
-		{"tolerate failed nodes", "", testPort0}: {
-			{alias0, testHost, testPort0, "group", []db2.TestGroupState{
+		}},
+		{"tolerate failed nodes", "", testPort0, []data{
+			{alias0, testPort0, "group", []db2.TestGroupState{
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort0), MemberState: "ONLINE", MemberRole: "PRIMARY"},
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort1), MemberState: "UNREACHABLE", MemberRole: "SECONDARY"},
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort2), MemberState: "ERROR", MemberRole: "SECONDARY"},
 			}, topodatapb.TabletType_REPLICA},
-			{alias1, "", 0, "group", []db2.TestGroupState{}, topodatapb.TabletType_MASTER},
-			{alias2, "", 0, "group", []db2.TestGroupState{}, topodatapb.TabletType_REPLICA},
-		},
-		{"raise error if all nodes failed", "", 0}: { // diagnose as DiagnoseTypeShardNetworkPartition
-			{alias0, "", 0, "group", []db2.TestGroupState{}, topodatapb.TabletType_REPLICA},
-			{alias1, "", 0, "group", []db2.TestGroupState{}, topodatapb.TabletType_MASTER},
-			{alias2, "", 0, "group", []db2.TestGroupState{}, topodatapb.TabletType_REPLICA},
-		},
+			{alias1, 0, "group", []db2.TestGroupState{}, topodatapb.TabletType_MASTER},
+			{alias2, 0, "group", []db2.TestGroupState{}, topodatapb.TabletType_REPLICA},
+		}},
+		{"raise error if all nodes failed", "", 0, []data{ // diagnose as DiagnoseTypeShardNetworkPartition
+			{alias0, 0, "group", []db2.TestGroupState{}, topodatapb.TabletType_REPLICA},
+			{alias1, 0, "group", []db2.TestGroupState{}, topodatapb.TabletType_MASTER},
+			{alias2, 0, "group", []db2.TestGroupState{}, topodatapb.TabletType_REPLICA},
+		}},
 	}
-	for n, tt := range testcases {
-		t.Run(n.name, func(t *testing.T) {
+	for _, tt := range testcases {
+		t.Run(tt.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 			ctx := context.Background()
@@ -562,12 +565,12 @@ func TestRepairWrongPrimaryTablet(t *testing.T) {
 				Return(nil).
 				AnyTimes()
 			expectedCalls := 0
-			if n.expectedCandidatePort != 0 {
+			if tt.expectedCandidatePort != 0 {
 				expectedCalls = 1
 			}
 			var candidate *topo.TabletInfo
 			inputMap := make(map[string]testGroupInput)
-			for i, input := range tt {
+			for i, input := range tt.inputs {
 				tablet := buildTabletInfo(uint32(i), testHost, input.mysqlport, input.ttype, time.Now())
 				testutil.AddTablet(ctx, t, ts, tablet.Tablet, nil)
 				tablets[input.alias] = tablet
@@ -577,7 +580,7 @@ func TestRepairWrongPrimaryTablet(t *testing.T) {
 					input.groupInput,
 					nil,
 				}
-				if expectedCalls > 0 && input.mysqlport == n.expectedCandidatePort {
+				if expectedCalls > 0 && input.mysqlport == tt.expectedCandidatePort {
 					candidate = tablet
 				}
 				db.
@@ -603,31 +606,32 @@ func TestRepairWrongPrimaryTablet(t *testing.T) {
 			cfg := &config.VTGRConfig{GroupSize: repairGroupSize, MinNumReplica: 2, BackoffErrorWaitTimeSeconds: 1, BootstrapWaitTimeSeconds: 1}
 			shard := NewGRShard("ks", "0", nil, tmc, ts, db, cfg, testPort0)
 			_, err := shard.Repair(ctx, DiagnoseTypeWrongPrimaryTablet)
-			if n.errorMsg == "" {
+			if tt.errorMsg == "" {
 				assert.NoError(t, err)
 			} else {
 				assert.Error(t, err)
-				assert.True(t, strings.Contains(err.Error(), n.errorMsg), err.Error())
+				assert.True(t, strings.Contains(err.Error(), tt.errorMsg), err.Error())
 			}
 		})
 	}
 }
 
 func TestRepairUnconnectedReplica(t *testing.T) {
-	type testcase struct {
-		name                  string
-		errorMsg              string
-		expectedCandidatePort int
-	}
-	var testcases = map[testcase][]struct {
+	type data struct {
 		alias      string
 		port       int
 		groupName  string
 		readOnly   bool
 		groupInput []db2.TestGroupState
 		ttype      topodatapb.TabletType
+	}
+	var testcases = []struct {
+		name                  string
+		errorMsg              string
+		expectedCandidatePort int
+		inputs                []data
 	}{
-		{"fix unconnected replica tablet", "", testPort2}: {
+		{"fix unconnected replica tablet", "", testPort2, []data{
 			{alias0, testPort0, "group", false, []db2.TestGroupState{
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort0), MemberState: "ONLINE", MemberRole: "PRIMARY"},
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort1), MemberState: "ONLINE", MemberRole: "SECONDARY"},
@@ -639,8 +643,8 @@ func TestRepairUnconnectedReplica(t *testing.T) {
 			{alias2, testPort2, "", true, []db2.TestGroupState{
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort2), MemberState: "OFFLINE", MemberRole: ""},
 			}, topodatapb.TabletType_REPLICA},
-		},
-		{"do nothing if shard has wrong primary tablet", "", 0}: { // this should be diagnosed as DiagnoseTypeWrongPrimaryTablet instead
+		}},
+		{"do nothing if shard has wrong primary tablet", "", 0, []data{ // this should be diagnosed as DiagnoseTypeWrongPrimaryTablet instead
 			{alias0, testPort0, "group", true, []db2.TestGroupState{
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort0), MemberState: "ONLINE", MemberRole: "SECONDARY"},
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort1), MemberState: "ONLINE", MemberRole: "PRIMARY"},
@@ -652,8 +656,8 @@ func TestRepairUnconnectedReplica(t *testing.T) {
 			{alias2, testPort2, "", true, []db2.TestGroupState{
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort2), MemberState: "OFFLINE", MemberRole: ""},
 			}, topodatapb.TabletType_REPLICA},
-		},
-		{"fix replica in ERROR state", "", testPort2}: {
+		}},
+		{"fix replica in ERROR state", "", testPort2, []data{
 			{alias0, testPort0, "group", false, []db2.TestGroupState{
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort0), MemberState: "ONLINE", MemberRole: "PRIMARY"},
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort1), MemberState: "ONLINE", MemberRole: "SECONDARY"},
@@ -665,8 +669,8 @@ func TestRepairUnconnectedReplica(t *testing.T) {
 			{alias2, testPort2, "group", true, []db2.TestGroupState{
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort2), MemberState: "ERROR", MemberRole: ""},
 			}, topodatapb.TabletType_REPLICA},
-		},
-		{"fix replica with two nodes in ERROR state", "", 0}: { // InsufficientGroupSize
+		}},
+		{"fix replica with two nodes in ERROR state", "", 0, []data{ // InsufficientGroupSize
 			{alias0, testPort0, "group", false, []db2.TestGroupState{
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort0), MemberState: "ONLINE", MemberRole: "PRIMARY"},
 			}, topodatapb.TabletType_MASTER},
@@ -677,10 +681,10 @@ func TestRepairUnconnectedReplica(t *testing.T) {
 			{alias2, testPort2, "group", true, []db2.TestGroupState{
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort2), MemberState: "ERROR", MemberRole: "SECONDARY"},
 			}, topodatapb.TabletType_REPLICA},
-		},
+		}},
 	}
-	for n, tt := range testcases {
-		t.Run(n.name, func(t *testing.T) {
+	for _, tt := range testcases {
+		t.Run(tt.name, func(t *testing.T) {
 			rand.Seed(1)
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
@@ -697,20 +701,20 @@ func TestRepairUnconnectedReplica(t *testing.T) {
 				Ping(gomock.Any(), gomock.Any()).
 				Return(nil).
 				AnyTimes()
-			if n.expectedCandidatePort != 0 {
+			if tt.expectedCandidatePort != 0 {
 				db.
 					EXPECT().
-					StopGroupLocked(gomock.Eq(&inst.InstanceKey{Hostname: testHost, Port: n.expectedCandidatePort})).
+					StopGroupLocked(gomock.Eq(&inst.InstanceKey{Hostname: testHost, Port: tt.expectedCandidatePort})).
 					Return(nil).
 					AnyTimes()
 				db.
 					EXPECT().
-					JoinGroupLocked(gomock.Eq(&inst.InstanceKey{Hostname: testHost, Port: n.expectedCandidatePort}), gomock.Any()).
+					JoinGroupLocked(gomock.Eq(&inst.InstanceKey{Hostname: testHost, Port: tt.expectedCandidatePort}), gomock.Any()).
 					Return(nil).
 					Times(1)
 			}
 			inputMap := make(map[string]testGroupInput)
-			for i, input := range tt {
+			for i, input := range tt.inputs {
 				tablet := buildTabletInfo(uint32(i), testHost, input.port, input.ttype, time.Now())
 				testutil.AddTablet(ctx, t, ts, tablet.Tablet, nil)
 				tablets[input.alias] = tablet
@@ -736,53 +740,53 @@ func TestRepairUnconnectedReplica(t *testing.T) {
 			cfg := &config.VTGRConfig{GroupSize: repairGroupSize, MinNumReplica: 2, BackoffErrorWaitTimeSeconds: 1, BootstrapWaitTimeSeconds: 1}
 			shard := NewGRShard("ks", "0", nil, tmc, ts, db, cfg, testPort0)
 			_, err := shard.Repair(ctx, DiagnoseTypeUnconnectedReplica)
-			if n.errorMsg == "" {
+			if tt.errorMsg == "" {
 				assert.NoError(t, err)
 			} else {
 				assert.Error(t, err)
-				assert.True(t, strings.Contains(err.Error(), n.errorMsg), err.Error())
+				assert.True(t, strings.Contains(err.Error(), tt.errorMsg), err.Error())
 			}
 		})
 	}
 }
 
 func TestRepairUnreachablePrimary(t *testing.T) {
-	type testcase struct {
-		name                  string
-		errorMsg              string
-		expectedCandidatePort int
-	}
-	sid := "3e11fa47-71ca-11e1-9e33-c80aa9429562"
-	var testcases = map[testcase][]struct {
-		alias    string
+	type data struct {
 		port     int
 		pingalbe bool
 		gtid     mysql.GTIDSet
 		ttype    topodatapb.TabletType
-	}{
-		{"primary is unreachable", "", testPort1}: {
-			{alias0, testPort0, false, getMysql56GTIDSet(sid, "1-11"), topodatapb.TabletType_MASTER},
-			{alias1, testPort1, true, getMysql56GTIDSet(sid, "1-10"), topodatapb.TabletType_REPLICA},
-			{alias2, testPort2, true, getMysql56GTIDSet(sid, "1-9"), topodatapb.TabletType_REPLICA},
-		},
-		{"failover to reachable node when primary is unreachable", "", testPort2}: {
-			{alias0, testPort0, false, getMysql56GTIDSet(sid, "1-11"), topodatapb.TabletType_MASTER},
-			{alias1, testPort1, false, getMysql56GTIDSet(sid, "1-10"), topodatapb.TabletType_REPLICA},
-			{alias2, testPort2, true, getMysql56GTIDSet(sid, "1-9"), topodatapb.TabletType_REPLICA},
-		},
-		{"do nothing if replica is unreachable", "", 0}: {
-			{alias0, testPort0, true, getMysql56GTIDSet(sid, "1-10"), topodatapb.TabletType_MASTER},
-			{alias1, testPort1, false, getMysql56GTIDSet(sid, "1-10"), topodatapb.TabletType_REPLICA},
-			{alias2, testPort2, false, getMysql56GTIDSet(sid, "1-9"), topodatapb.TabletType_REPLICA},
-		},
-		{"raise error if gtid divergence", "vtgr repair: found more than one failover candidates by GTID set for ks/0", 0}: {
-			{alias0, testPort0, false, getMysql56GTIDSet(sid, "1-10"), topodatapb.TabletType_MASTER},
-			{alias1, testPort1, true, getMysql56GTIDSet("264a8230-67d2-11eb-acdd-0a8d91f24125", "1-10"), topodatapb.TabletType_REPLICA},
-			{alias2, testPort2, true, getMysql56GTIDSet(sid, "1-9"), topodatapb.TabletType_REPLICA},
-		},
 	}
-	for n, tt := range testcases {
-		t.Run(n.name, func(t *testing.T) {
+	sid := "3e11fa47-71ca-11e1-9e33-c80aa9429562"
+	var testcases = []struct {
+		name                  string
+		errorMsg              string
+		expectedCandidatePort int
+		inputs                []data
+	}{
+		{"primary is unreachable", "", testPort1, []data{
+			{testPort0, false, getMysql56GTIDSet(sid, "1-11"), topodatapb.TabletType_MASTER},
+			{testPort1, true, getMysql56GTIDSet(sid, "1-10"), topodatapb.TabletType_REPLICA},
+			{testPort2, true, getMysql56GTIDSet(sid, "1-9"), topodatapb.TabletType_REPLICA},
+		}},
+		{"failover to reachable node when primary is unreachable", "", testPort2, []data{
+			{testPort0, false, getMysql56GTIDSet(sid, "1-11"), topodatapb.TabletType_MASTER},
+			{testPort1, false, getMysql56GTIDSet(sid, "1-10"), topodatapb.TabletType_REPLICA},
+			{testPort2, true, getMysql56GTIDSet(sid, "1-9"), topodatapb.TabletType_REPLICA},
+		}},
+		{"do nothing if replica is unreachable", "", 0, []data{
+			{testPort0, true, getMysql56GTIDSet(sid, "1-10"), topodatapb.TabletType_MASTER},
+			{testPort1, false, getMysql56GTIDSet(sid, "1-10"), topodatapb.TabletType_REPLICA},
+			{testPort2, false, getMysql56GTIDSet(sid, "1-9"), topodatapb.TabletType_REPLICA},
+		}},
+		{"raise error if gtid divergence", "vtgr repair: found more than one failover candidates by GTID set for ks/0", 0, []data{
+			{testPort0, false, getMysql56GTIDSet(sid, "1-10"), topodatapb.TabletType_MASTER},
+			{testPort1, true, getMysql56GTIDSet("264a8230-67d2-11eb-acdd-0a8d91f24125", "1-10"), topodatapb.TabletType_REPLICA},
+			{testPort2, true, getMysql56GTIDSet(sid, "1-9"), topodatapb.TabletType_REPLICA},
+		}},
+	}
+	for _, tt := range testcases {
+		t.Run(tt.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 			ctx := context.Background()
@@ -804,12 +808,12 @@ func TestRepairUnreachablePrimary(t *testing.T) {
 				}).
 				AnyTimes()
 			expectedCalls := 0
-			if n.expectedCandidatePort != 0 {
+			if tt.expectedCandidatePort != 0 {
 				expectedCalls = 1
 			}
 			db.
 				EXPECT().
-				Failover(&inst.InstanceKey{Hostname: testHost, Port: n.expectedCandidatePort}).
+				Failover(&inst.InstanceKey{Hostname: testHost, Port: tt.expectedCandidatePort}).
 				Return(nil).
 				Times(expectedCalls)
 			tmc.
@@ -821,7 +825,7 @@ func TestRepairUnreachablePrimary(t *testing.T) {
 				pingalbe bool
 				gtid     mysql.GTIDSet
 			})
-			for i, input := range tt {
+			for i, input := range tt.inputs {
 				tablet := buildTabletInfo(uint32(i), testHost, input.port, input.ttype, time.Now())
 				testutil.AddTablet(ctx, t, ts, tablet.Tablet, nil)
 				status[tablet.MysqlPort] = struct {
@@ -855,29 +859,30 @@ func TestRepairUnreachablePrimary(t *testing.T) {
 			cfg := &config.VTGRConfig{GroupSize: repairGroupSize, MinNumReplica: 2, BackoffErrorWaitTimeSeconds: 1, BootstrapWaitTimeSeconds: 1}
 			shard := NewGRShard("ks", "0", nil, tmc, ts, db, cfg, testPort0)
 			_, err := shard.Repair(ctx, DiagnoseTypeUnreachablePrimary)
-			if n.errorMsg == "" {
+			if tt.errorMsg == "" {
 				assert.NoError(t, err)
 			} else {
-				assert.Error(t, err, n.errorMsg)
-				assert.True(t, strings.Contains(err.Error(), n.errorMsg))
+				assert.Error(t, err, tt.errorMsg)
+				assert.True(t, strings.Contains(err.Error(), tt.errorMsg))
 			}
 		})
 	}
 }
 
 func TestRepairInsufficientGroupSize(t *testing.T) {
-	type testcase struct {
-		name                  string
-		errorMsg              string
-		expectedCandidatePort int
-	}
-	var testcases = map[testcase][]struct {
+	type data struct {
 		alias      string
 		readOnly   bool
 		groupInput []db2.TestGroupState
 		ttype      topodatapb.TabletType
+	}
+	var testcases = []struct {
+		name                  string
+		errorMsg              string
+		expectedCandidatePort int
+		inputs                []data
 	}{
-		{"fix insufficient group size", "", testPort0}: {
+		{"fix insufficient group size", "", testPort0, []data{
 			{alias0, false, []db2.TestGroupState{
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort0), MemberState: "ONLINE", MemberRole: "PRIMARY"},
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort1), MemberState: "RECOVERING", MemberRole: "SECONDARY"},
@@ -893,10 +898,10 @@ func TestRepairInsufficientGroupSize(t *testing.T) {
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort1), MemberState: "RECOVERING", MemberRole: "SECONDARY"},
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort2), MemberState: "RECOVERING", MemberRole: "SECONDARY"},
 			}, topodatapb.TabletType_REPLICA},
-		},
+		}},
 	}
-	for n, tt := range testcases {
-		t.Run(n.name, func(t *testing.T) {
+	for _, tt := range testcases {
+		t.Run(tt.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 			ctx := context.Background()
@@ -912,15 +917,15 @@ func TestRepairInsufficientGroupSize(t *testing.T) {
 				Ping(gomock.Any(), gomock.Any()).
 				Return(nil).
 				AnyTimes()
-			if n.expectedCandidatePort != 0 {
+			if tt.expectedCandidatePort != 0 {
 				db.
 					EXPECT().
-					SetSuperReadOnly(gomock.Eq(&inst.InstanceKey{Hostname: testHost, Port: n.expectedCandidatePort}), true).
+					SetSuperReadOnly(gomock.Eq(&inst.InstanceKey{Hostname: testHost, Port: tt.expectedCandidatePort}), true).
 					Return(nil).
 					Times(1)
 			}
 			inputMap := make(map[string]testGroupInput)
-			for i, input := range tt {
+			for i, input := range tt.inputs {
 				tablet := buildTabletInfo(uint32(i), testHost, testPort0+i, input.ttype, time.Now())
 				testutil.AddTablet(ctx, t, ts, tablet.Tablet, nil)
 				tablets[input.alias] = tablet
@@ -946,30 +951,31 @@ func TestRepairInsufficientGroupSize(t *testing.T) {
 			cfg := &config.VTGRConfig{GroupSize: repairGroupSize, MinNumReplica: 2, BackoffErrorWaitTimeSeconds: 1, BootstrapWaitTimeSeconds: 1}
 			shard := NewGRShard("ks", "0", nil, tmc, ts, db, cfg, testPort0)
 			_, err := shard.Repair(ctx, DiagnoseTypeInsufficientGroupSize)
-			if n.errorMsg == "" {
+			if tt.errorMsg == "" {
 				assert.NoError(t, err)
 			} else {
 				assert.Error(t, err)
-				assert.True(t, strings.Contains(err.Error(), n.errorMsg), err.Error())
+				assert.True(t, strings.Contains(err.Error(), tt.errorMsg), err.Error())
 			}
 		})
 	}
 }
 
 func TestRepairReadOnlyShard(t *testing.T) {
-	type testcase struct {
-		name                  string
-		errorMsg              string
-		expectedCandidatePort int
-	}
-	var testcases = map[testcase][]struct {
+	type data struct {
 		alias      string
 		port       int
 		readOnly   bool
 		groupInput []db2.TestGroupState
 		ttype      topodatapb.TabletType
+	}
+	var testcases = []struct {
+		name                  string
+		errorMsg              string
+		expectedCandidatePort int
+		inputs                []data
 	}{
-		{"fix readonly shard", "", testPort0}: {
+		{"fix readonly shard", "", testPort0, []data{
 			{alias0, testPort0, true, []db2.TestGroupState{
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort0), MemberState: "ONLINE", MemberRole: "PRIMARY"},
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort1), MemberState: "ONLINE", MemberRole: "SECONDARY"},
@@ -985,8 +991,8 @@ func TestRepairReadOnlyShard(t *testing.T) {
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort1), MemberState: "ONLINE", MemberRole: "SECONDARY"},
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort2), MemberState: "RECOVERING", MemberRole: "SECONDARY"},
 			}, topodatapb.TabletType_REPLICA},
-		},
-		{"do nothing if primary is not read only", "", 0}: {
+		}},
+		{"do nothing if primary is not read only", "", 0, []data{
 			{alias0, testPort0, false, []db2.TestGroupState{
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort0), MemberState: "ONLINE", MemberRole: "PRIMARY"},
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort1), MemberState: "ONLINE", MemberRole: "SECONDARY"},
@@ -1002,10 +1008,10 @@ func TestRepairReadOnlyShard(t *testing.T) {
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort1), MemberState: "ONLINE", MemberRole: "SECONDARY"},
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort2), MemberState: "RECOVERING", MemberRole: "SECONDARY"},
 			}, topodatapb.TabletType_REPLICA},
-		},
+		}},
 	}
-	for n, tt := range testcases {
-		t.Run(n.name, func(t *testing.T) {
+	for _, tt := range testcases {
+		t.Run(tt.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 			ctx := context.Background()
@@ -1021,15 +1027,15 @@ func TestRepairReadOnlyShard(t *testing.T) {
 				Ping(gomock.Any(), gomock.Any()).
 				Return(nil).
 				AnyTimes()
-			if n.expectedCandidatePort != 0 {
+			if tt.expectedCandidatePort != 0 {
 				db.
 					EXPECT().
-					SetSuperReadOnly(gomock.Eq(&inst.InstanceKey{Hostname: testHost, Port: n.expectedCandidatePort}), false).
+					SetSuperReadOnly(gomock.Eq(&inst.InstanceKey{Hostname: testHost, Port: tt.expectedCandidatePort}), false).
 					Return(nil).
 					Times(1)
 			}
 			inputMap := make(map[string]testGroupInput)
-			for i, input := range tt {
+			for i, input := range tt.inputs {
 				tablet := buildTabletInfo(uint32(i), testHost, input.port, input.ttype, time.Now())
 				testutil.AddTablet(ctx, t, ts, tablet.Tablet, nil)
 				tablets[input.alias] = tablet
@@ -1055,11 +1061,11 @@ func TestRepairReadOnlyShard(t *testing.T) {
 			cfg := &config.VTGRConfig{GroupSize: repairGroupSize, MinNumReplica: 2, BackoffErrorWaitTimeSeconds: 1, BootstrapWaitTimeSeconds: 1}
 			shard := NewGRShard("ks", "0", nil, tmc, ts, db, cfg, testPort0)
 			_, err := shard.Repair(ctx, DiagnoseTypeReadOnlyShard)
-			if n.errorMsg == "" {
+			if tt.errorMsg == "" {
 				assert.NoError(t, err)
 			} else {
 				assert.Error(t, err)
-				assert.True(t, strings.Contains(err.Error(), n.errorMsg), err.Error())
+				assert.True(t, strings.Contains(err.Error(), tt.errorMsg), err.Error())
 			}
 		})
 	}
