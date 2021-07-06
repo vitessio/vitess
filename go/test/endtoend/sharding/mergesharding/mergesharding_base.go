@@ -27,14 +27,11 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/sqltypes"
-
 	"vitess.io/vitess/go/mysql"
-
-	"github.com/prometheus/common/log"
-
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/sharding"
+	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/proto/topodata"
 
@@ -360,7 +357,7 @@ func TestMergesharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 
 	// testing filtered replication: insert a bunch of data on shard 1, check we get most of it after a few seconds,
 	// wait for binlog server timeout, check we get all of it.
-	log.Debug("Inserting lots of data on source shard")
+	log.Info("Inserting lots of data on source shard")
 	insertLots(t, 100, 0, tableName, fixedParentID, keyspaceName)
 
 	//Checking 100 percent of data is sent quickly
@@ -380,7 +377,7 @@ func TestMergesharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 	clusterInstance.VtworkerProcess.Cell = cell
 
 	// Compare using SplitDiff
-	log.Debug("Running vtworker SplitDiff")
+	log.Info("Running vtworker SplitDiff")
 	err = clusterInstance.VtworkerProcess.ExecuteVtworkerCommand(clusterInstance.GetAndReservePort(),
 		clusterInstance.GetAndReservePort(),
 		"--use_v3_resharding_mode=true",
@@ -396,7 +393,7 @@ func TestMergesharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", shard3Rdonly.Alias, "rdonly")
 	require.NoError(t, err)
 
-	log.Debug("Running vtworker SplitDiff on second half")
+	log.Info("Running vtworker SplitDiff on second half")
 
 	err = clusterInstance.VtworkerProcess.ExecuteVtworkerCommand(clusterInstance.GetAndReservePort(),
 		clusterInstance.GetAndReservePort(),
@@ -418,7 +415,7 @@ func TestMergesharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 		"VtTabletStreamHealth",
 		"-count", "1", shard3Master.Alias)
 	require.NoError(t, err)
-	log.Debug("Got health: ", streamHealth)
+	log.Info("Got health: ", streamHealth)
 
 	var streamHealthResponse querypb.StreamHealthResponse
 	err = json.Unmarshal([]byte(streamHealth), &streamHealthResponse)
