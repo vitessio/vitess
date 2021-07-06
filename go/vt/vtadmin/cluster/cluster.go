@@ -29,6 +29,7 @@ import (
 	"google.golang.org/protobuf/proto"
 	"k8s.io/apimachinery/pkg/util/sets"
 
+	"vitess.io/vitess/go/pools"
 	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/concurrency"
@@ -64,6 +65,11 @@ type Cluster struct {
 
 	// Fields for generating FQDNs for tablets
 	TabletFQDNTmpl *template.Template
+
+	backupReadPool   *pools.RPCPool
+	schemaReadPool   *pools.RPCPool
+	topoReadPool     *pools.RPCPool
+	workflowReadPool *pools.RPCPool
 }
 
 // New creates a new Cluster from a Config.
@@ -107,6 +113,11 @@ func New(cfg Config) (*Cluster, error) {
 			return nil, fmt.Errorf("failed to parse tablet fqdn template %s: %w", cfg.TabletFQDNTmplStr, err)
 		}
 	}
+
+	cluster.backupReadPool = cfg.BackupReadPoolConfig.NewReadPool()
+	cluster.schemaReadPool = cfg.SchemaReadPoolConfig.NewReadPool()
+	cluster.topoReadPool = cfg.TopoReadPoolConfig.NewReadPool()
+	cluster.workflowReadPool = cfg.WorkflowReadPoolConfig.NewReadPool()
 
 	return cluster, nil
 }
