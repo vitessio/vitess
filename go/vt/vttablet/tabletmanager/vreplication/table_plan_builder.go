@@ -53,8 +53,6 @@ type tablePlanBuilder struct {
 	lastpk     *sqltypes.Result
 	colInfos   []*ColumnInfo
 	stats      *binlogplayer.Stats
-
-	recalculatePKColsInfo recalculatePKColsInfoFunc
 }
 
 // colExpr describes the processing to be performed to
@@ -108,8 +106,6 @@ const (
 	insertIgnore
 )
 
-type recalculatePKColsInfoFunc func(tableName string, uniqueKeyName string, colInfos []*ColumnInfo) (pkColInfos []*ColumnInfo, err error)
-
 // buildReplicatorPlan builds a ReplicatorPlan for the tables that match the filter.
 // The filter is matched against the target schema. For every table matched,
 // a table-specific rule is built to be sent to the source. We don't send the
@@ -126,9 +122,7 @@ type recalculatePKColsInfoFunc func(tableName string, uniqueKeyName string, colI
 // The TablePlan built is a partial plan. The full plan for a table is built
 // when we receive field information from events or rows sent by the source.
 // buildExecutionPlan is the function that builds the full plan.
-func buildReplicatorPlan(filter *binlogdatapb.Filter, colInfoMap map[string][]*ColumnInfo, copyState map[string]*sqltypes.Result, stats *binlogplayer.Stats,
-	recalculatePKColsInfo recalculatePKColsInfoFunc,
-) (*ReplicatorPlan, error) {
+func buildReplicatorPlan(filter *binlogdatapb.Filter, colInfoMap map[string][]*ColumnInfo, copyState map[string]*sqltypes.Result, stats *binlogplayer.Stats) (*ReplicatorPlan, error) {
 	plan := &ReplicatorPlan{
 		VStreamFilter: &binlogdatapb.Filter{FieldEventMode: filter.FieldEventMode},
 		TargetTables:  make(map[string]*TablePlan),
@@ -153,7 +147,7 @@ func buildReplicatorPlan(filter *binlogdatapb.Filter, colInfoMap map[string][]*C
 		if !ok {
 			return nil, fmt.Errorf("table %s not found in schema", tableName)
 		}
-		tablePlan, err := buildTablePlan(tableName, rule, colInfos, lastpk, stats, recalculatePKColsInfo)
+		tablePlan, err := buildTablePlan(tableName, rule, colInfos, lastpk, stats)
 		if err != nil {
 			return nil, err
 		}
@@ -192,9 +186,7 @@ func MatchTable(tableName string, filter *binlogdatapb.Filter) (*binlogdatapb.Ru
 	return nil, nil
 }
 
-func buildTablePlan(tableName string, rule *binlogdatapb.Rule, colInfos []*ColumnInfo, lastpk *sqltypes.Result, stats *binlogplayer.Stats,
-	recalculatePKColsInfo recalculatePKColsInfoFunc,
-) (*TablePlan, error) {
+func buildTablePlan(tableName string, rule *binlogdatapb.Rule, colInfos []*ColumnInfo, lastpk *sqltypes.Result, stats *binlogplayer.Stats) (*TablePlan, error) {
 	filter := rule.Filter
 	query := filter
 	// generate equivalent select statement if filter is empty or a keyrange.
@@ -252,11 +244,10 @@ func buildTablePlan(tableName string, rule *binlogdatapb.Rule, colInfos []*Colum
 			From:  sel.From,
 			Where: sel.Where,
 		},
-		selColumns:            make(map[string]bool),
-		lastpk:                lastpk,
-		colInfos:              colInfos,
-		stats:                 stats,
-		recalculatePKColsInfo: recalculatePKColsInfo,
+		selColumns: make(map[string]bool),
+		lastpk:     lastpk,
+		colInfos:   colInfos,
+		stats:      stats,
 	}
 
 	if err := tpb.analyzeExprs(sel.SelectExprs); err != nil {
@@ -277,10 +268,7 @@ func buildTablePlan(tableName string, rule *binlogdatapb.Rule, colInfos []*Colum
 	if err := tpb.analyzeGroupBy(sel.GroupBy); err != nil {
 		return nil, err
 	}
-	pkColsInfo, err := tpb.getPKColsInfo(tableName, rule.TargetUniqueKey, colInfos)
-	if err != nil {
-		return nil, err
-	}
+	pkColsInfo := tpb.getPKColsInfo(rule.TargetUniqueKeyColumns, colInfos)
 	if err := tpb.analyzePK(pkColsInfo); err != nil {
 		return nil, err
 	}
@@ -295,8 +283,8 @@ func buildTablePlan(tableName string, rule *binlogdatapb.Rule, colInfos []*Colum
 		})
 	}
 	commentsList := []string{}
-	if rule.SourceUniqueKey != "" {
-		commentsList = append(commentsList, fmt.Sprintf(`ukName="%s"`, rule.SourceUniqueKey))
+	if len(rule.SourceUniqueKeyColumns) > 0 {
+		commentsList = append(commentsList, fmt.Sprintf(`ukColumns="%s"`, strings.Join(rule.SourceUniqueKeyColumns, ",")))
 	}
 	if len(commentsList) > 0 {
 		comments := sqlparser.Comments{
@@ -530,16 +518,13 @@ func (tpb *tablePlanBuilder) analyzeGroupBy(groupBy sqlparser.GroupBy) error {
 	return nil
 }
 
-func (tpb *tablePlanBuilder) getPKColsInfo(tableName string, uniqueKeyName string, colInfos []*ColumnInfo) (pkColsInfo []*ColumnInfo, err error) {
-	if uniqueKeyName == "" || uniqueKeyName == "PRIMARY" {
+func (tpb *tablePlanBuilder) getPKColsInfo(uniqueKeyColumns []string, colInfos []*ColumnInfo) (pkColsInfo []*ColumnInfo) {
+	if len(uniqueKeyColumns) == 0 {
 		// No PK override
-		return colInfos, nil
-	}
-	if tpb.recalculatePKColsInfo == nil {
-		return colInfos, nil
+		return colInfos
 	}
 	// A unique key is specified. We will re-assess colInfos based on the unique key
-	return tpb.recalculatePKColsInfo(tableName, uniqueKeyName, colInfos)
+	return recalculatePKColsInfoByColumnNames(uniqueKeyColumns, colInfos)
 }
 
 // analyzePK builds tpb.pkCols.

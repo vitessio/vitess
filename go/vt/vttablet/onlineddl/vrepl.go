@@ -539,10 +539,10 @@ func (v *VRepl) analyzeBinlogSource(ctx context.Context) {
 		StopAfterCopy: false,
 	}
 	rule := &binlogdatapb.Rule{
-		Match:           v.targetTable,
-		Filter:          v.filterQuery,
-		SourceUniqueKey: v.chosenSourceUniqueKey.Name,
-		TargetUniqueKey: v.chosenTargetUniqueKey.Name,
+		Match:                  v.targetTable,
+		Filter:                 v.filterQuery,
+		SourceUniqueKeyColumns: v.chosenSourceUniqueKey.Columns.Names(),
+		TargetUniqueKeyColumns: v.chosenTargetUniqueKey.Columns.Names(),
 	}
 	if len(v.convertCharset) > 0 {
 		rule.ConvertCharset = v.convertCharset
