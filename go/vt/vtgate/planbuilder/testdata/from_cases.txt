@@ -1755,6 +1755,29 @@ Gen4 plan same as above
   }
 }
 
+# recursive derived table lookups
+"select id from (select id from (select id from user) as u) as t where id = 5"
+{
+  "QueryType": "SELECT",
+  "Original": "select id from (select id from (select id from user) as u) as t where id = 5",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select id from (select id from (select id from `user` where 1 != 1) as u where 1 != 1) as t where 1 != 1",
+    "Query": "select id from (select id from (select id from `user`) as u) as t where id = 5",
+    "Table": "`user`",
+    "Values": [
+      5
+    ],
+    "Vindex": "user_index"
+  }
+}
+
+
 # merge subqueries with single-shard routes
 "select u.col, e.col from (select col from user where id = 5) as u join (select col from user_extra where user_id = 5) as e"
 {

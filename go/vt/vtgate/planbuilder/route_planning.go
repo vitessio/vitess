@@ -131,111 +131,6 @@ func optimizeQuery(opTree abstract.Operator, semTable *semantics.SemTable, vsche
 	}
 }
 
-type starRewriter struct {
-	err      error
-	semTable *semantics.SemTable
-}
-
-func (sr *starRewriter) starRewrite(cursor *sqlparser.Cursor) bool {
-	switch node := cursor.Node().(type) {
-	case *sqlparser.Select:
-		tables := sr.semTable.GetSelectTables(node)
-		var selExprs sqlparser.SelectExprs
-		for _, selectExpr := range node.SelectExprs {
-			starExpr, isStarExpr := selectExpr.(*sqlparser.StarExpr)
-			if !isStarExpr {
-				selExprs = append(selExprs, selectExpr)
-				continue
-			}
-			colNames, expStar, err := expandTableColumns(tables, starExpr)
-			if err != nil {
-				sr.err = err
-				return false
-			}
-			if !expStar.proceed {
-				selExprs = append(selExprs, selectExpr)
-				continue
-			}
-			selExprs = append(selExprs, colNames...)
-			for tbl, cols := range expStar.tblColMap {
-				sr.semTable.AddExprs(tbl, cols)
-			}
-		}
-		node.SelectExprs = selExprs
-	}
-	return true
-}
-
-func expandTableColumns(tables []*semantics.TableInfo, starExpr *sqlparser.StarExpr) (sqlparser.SelectExprs, *expandStarInfo, error) {
-	unknownTbl := true
-	var colNames sqlparser.SelectExprs
-	expStar := &expandStarInfo{
-		tblColMap: map[*sqlparser.AliasedTableExpr]sqlparser.SelectExprs{},
-	}
-
-	for _, tbl := range tables {
-		if !starExpr.TableName.IsEmpty() {
-			if !tbl.ASTNode.As.IsEmpty() {
-				if !starExpr.TableName.Qualifier.IsEmpty() {
-					continue
-				}
-				if starExpr.TableName.Name.String() != tbl.ASTNode.As.String() {
-					continue
-				}
-			} else {
-				if !starExpr.TableName.Qualifier.IsEmpty() {
-					if starExpr.TableName.Qualifier.String() != tbl.Table.Keyspace.Name {
-						continue
-					}
-				}
-				tblName := tbl.ASTNode.Expr.(sqlparser.TableName)
-				if starExpr.TableName.Name.String() != tblName.Name.String() {
-					continue
-				}
-			}
-		}
-		unknownTbl = false
-		if tbl.Table == nil || !tbl.Table.ColumnListAuthoritative {
-			expStar.proceed = false
-			break
-		}
-		expStar.proceed = true
-		tblName, err := tbl.ASTNode.TableName()
-		if err != nil {
-			return nil, nil, err
-		}
-		for _, col := range tbl.Table.Columns {
-			colNames = append(colNames, &sqlparser.AliasedExpr{
-				Expr: sqlparser.NewColNameWithQualifier(col.Name.String(), tblName),
-				As:   sqlparser.NewColIdent(col.Name.String()),
-			})
-		}
-		expStar.tblColMap[tbl.ASTNode] = colNames
-	}
-
-	if unknownTbl {
-		// This will only happen for case when starExpr has qualifier.
-		return nil, nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadDb, "Unknown table '%s'", sqlparser.String(starExpr.TableName))
-	}
-	return colNames, expStar, nil
-}
-
-type expandStarInfo struct {
-	proceed   bool
-	tblColMap map[*sqlparser.AliasedTableExpr]sqlparser.SelectExprs
-}
-
-func expandStar(sel *sqlparser.Select, semTable *semantics.SemTable) (*sqlparser.Select, error) {
-	// TODO we could store in semTable whether there are any * in the query that needs expanding or not
-	sr := &starRewriter{semTable: semTable}
-
-	_ = sqlparser.Rewrite(sel, sr.starRewrite, nil)
-	if sr.err != nil {
-		return nil, sr.err
-	}
-	return sel, nil
-}
-
 func planLimit(limit *sqlparser.Limit, plan logicalPlan) (logicalPlan, error) {
 	if limit == nil {
 		return plan, nil
@@ -279,7 +174,7 @@ func planHorizon(sel *sqlparser.Select, plan logicalPlan, semTable *semantics.Se
 		return nil, err
 	}
 	for _, e := range qp.selectExprs {
-		if _, err := pushProjection(e, plan, semTable, true); err != nil {
+		if _, _, err := pushProjection(e, plan, semTable, true); err != nil {
 			return nil, err
 		}
 	}
@@ -301,7 +196,7 @@ func planHorizon(sel *sqlparser.Select, plan logicalPlan, semTable *semantics.Se
 		}
 	}
 	if len(sel.OrderBy) > 0 {
-		plan, err = planOrderBy(qp, plan, semTable)
+		plan, err = planOrderBy(qp, qp.orderExprs, plan, semTable)
 		if err != nil {
 			return nil, err
 		}
