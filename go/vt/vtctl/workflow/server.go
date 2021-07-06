@@ -356,7 +356,10 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 		message := row[10].ToString()
 
 		tags := row[11].ToString()
-
+		var tagArray []string
+		if tags != "" {
+			tagArray = strings.Split(tags, ",")
+		}
 		stream := &vtctldatapb.Workflow_Stream{
 			Id:           id,
 			Shard:        tablet.Shard,
@@ -373,7 +376,7 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 				Seconds: timeUpdatedSeconds,
 			},
 			Message: message,
-			Tags:    tags,
+			Tags:    tagArray,
 		}
 
 		stream.CopyStates, err = s.getWorkflowCopyStates(ctx, tablet, id)
