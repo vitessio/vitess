@@ -51,11 +51,23 @@ func (s *Server) Lock(ctx context.Context, dirPath, contents string) (topo.LockD
 
 	lockPath := path.Join(s.root, dirPath, locksFilename)
 
-	// Build the lock structure.
-	l, err := s.client.LockOpts(&api.LockOptions{
+	lockOpts := &api.LockOptions{
 		Key:   lockPath,
 		Value: []byte(contents),
-	})
+		SessionOpts: &api.SessionEntry{
+			Name: api.DefaultLockSessionName,
+			TTL:  api.DefaultLockSessionTTL,
+		},
+	}
+	lockOpts.SessionOpts.Checks = s.lockChecks
+	if s.lockDelay > 0 {
+		lockOpts.SessionOpts.LockDelay = s.lockDelay
+	}
+	if s.lockTTL != "" {
+		lockOpts.SessionOpts.TTL = s.lockTTL
+	}
+	// Build the lock structure.
+	l, err := s.client.LockOpts(lockOpts)
 	if err != nil {
 		return nil, err
 	}
