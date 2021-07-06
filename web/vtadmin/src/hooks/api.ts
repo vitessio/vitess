@@ -15,6 +15,7 @@
  */
 import { useQueries, useQuery, useQueryClient, UseQueryOptions, UseQueryResult } from 'react-query';
 import {
+    fetchBackups,
     fetchClusters,
     fetchExperimentalTabletDebugVars,
     fetchGates,
@@ -34,6 +35,12 @@ import {
 } from '../api/http';
 import { vtadmin as pb } from '../proto/vtadmin';
 import { formatAlias } from '../util/tablets';
+
+/**
+ * useBackups is a query hook that fetches all backups across every cluster.
+ */
+export const useBackups = (options?: UseQueryOptions<pb.ClusterBackup[], Error> | undefined) =>
+    useQuery(['backups'], fetchBackups, options);
 
 /**
  * useClusters is a query hook that fetches all clusters VTAdmin is configured to discover.

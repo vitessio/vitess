@@ -36,7 +36,7 @@ import { KeyspaceLink } from '../links/KeyspaceLink';
 
 export const Workflows = () => {
     useDocumentTitle('Workflows');
-    const { data } = useWorkflows({ refetchInterval: 1000 });
+    const { data } = useWorkflows();
     const { value: filter, updateValue: updateFilter } = useSyncedURLParam('filter');
 
     const sortedData = React.useMemo(() => {
