@@ -189,7 +189,7 @@ func (vr *vreplicator) replicate(ctx context.Context) error {
 				log.Warningf("Unable to clear FK check %v", err)
 				return err
 			}
-			if err := newVCopier(vr).copyNext(ctx, settings); err != nil {
+			if err := newVCopier(vr).copyNext(ctx); err != nil {
 				vr.stats.ErrorCounts.Add([]string{"Copy"}, 1)
 				return err
 			}
