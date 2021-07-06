@@ -1,8 +1,1 @@
 # Add your test case here for debugging and run go test -run=One.
-"select num, count(id) from user"
-{
-
-}
-{
-
-}
