@@ -24,6 +24,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/util/sets"
 
+	"vitess.io/vitess/go/pools"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtadmin/vtctldclient/fakevtctldclient"
 	"vitess.io/vitess/go/vt/vtctl/vtctldclient"
@@ -119,6 +120,7 @@ func Test_getShardSets(t *testing.T) {
 				},
 			},
 		},
+		topoReadPool: pools.NewRPCPool(5, 0, nil),
 	}
 	require.NoError(t, c.Vtctld.Dial(context.Background()))
 

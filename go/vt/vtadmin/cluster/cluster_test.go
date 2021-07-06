@@ -148,7 +148,7 @@ func TestFindTablet(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			cluster := testutil.BuildCluster(testutil.TestClusterConfig{
+			cluster := testutil.BuildCluster(t, testutil.TestClusterConfig{
 				Cluster: &vtadminpb.Cluster{
 					Id:   "c0",
 					Name: "cluster0",
@@ -359,7 +359,7 @@ func TestFindTablets(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			cluster := testutil.BuildCluster(testutil.TestClusterConfig{
+			cluster := testutil.BuildCluster(t, testutil.TestClusterConfig{
 				Cluster: &vtadminpb.Cluster{
 					Id:   "c0",
 					Name: "cluster0",
@@ -505,7 +505,7 @@ func TestGetSchema(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			c := testutil.BuildCluster(testutil.TestClusterConfig{
+			c := testutil.BuildCluster(t, testutil.TestClusterConfig{
 				Cluster: &vtadminpb.Cluster{
 					Id:   fmt.Sprintf("c%d", i),
 					Name: fmt.Sprintf("cluster%d", i),
@@ -562,7 +562,7 @@ func TestGetSchema(t *testing.T) {
 			},
 		}
 
-		c := testutil.BuildCluster(testutil.TestClusterConfig{
+		c := testutil.BuildCluster(t, testutil.TestClusterConfig{
 			Cluster: &vtadminpb.Cluster{
 				Id:   "c0",
 				Name: "cluster0",
@@ -1518,7 +1518,7 @@ func TestGetSchema(t *testing.T) {
 					t.SkipNow()
 				}
 
-				c := testutil.BuildCluster(tt.cfg)
+				c := testutil.BuildCluster(t, tt.cfg)
 				schema, err := c.GetSchema(ctx, tt.keyspace, tt.opts)
 				if tt.shouldErr {
 					assert.Error(t, err)
@@ -1917,7 +1917,7 @@ func TestFindWorkflows(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			c := testutil.BuildCluster(tt.cfg)
+			c := testutil.BuildCluster(t, tt.cfg)
 			workflows, err := c.FindWorkflows(ctx, tt.keyspaces, tt.opts)
 			if tt.shouldErr {
 				assert.Error(t, err)
@@ -2030,7 +2030,7 @@ func TestGetVSchema(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			cluster := testutil.BuildCluster(tt.cfg)
+			cluster := testutil.BuildCluster(t, tt.cfg)
 			err := cluster.Vtctld.Dial(ctx)
 			require.NoError(t, err, "could not dial test vtctld")
 
@@ -2190,7 +2190,7 @@ func TestGetWorkflow(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			c := testutil.BuildCluster(tt.cfg)
+			c := testutil.BuildCluster(t, tt.cfg)
 			workflow, err := c.GetWorkflow(ctx, tt.keyspace, tt.workflow, tt.opts)
 			if tt.shouldErr {
 				assert.Error(t, err)
@@ -2356,7 +2356,7 @@ func TestGetWorkflows(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			c := testutil.BuildCluster(tt.cfg)
+			c := testutil.BuildCluster(t, tt.cfg)
 			workflows, err := c.GetWorkflows(ctx, tt.keyspaces, tt.opts)
 			if tt.shouldErr {
 				assert.Error(t, err)
