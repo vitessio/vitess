@@ -21,6 +21,7 @@ import (
 	"fmt"
 )
 
+// Errors returned by API endpoints.
 var (
 	// ErrAmbiguousSchema occurs when more than one schema is found for a given
 	// set of filter criteria.
@@ -49,4 +50,11 @@ var (
 	ErrNoWorkflow = errors.New("no such workflow")
 	// ErrUnsupportedCluster occurs when a cluster parameter is invalid.
 	ErrUnsupportedCluster = errors.New("unsupported cluster(s)")
+)
+
+// Errors returned by cluster setup and flag parsing.
+var (
+	// ErrNoFlag occurs when cluster config parsing encounters a flag specified
+	// in the DSN that is not defined.
+	ErrNoFlag = errors.New("flag provided but not defined")
 )

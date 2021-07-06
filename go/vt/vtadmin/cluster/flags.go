@@ -17,6 +17,7 @@ limitations under the License.
 package cluster
 
 import (
+	"fmt"
 	"regexp"
 	"strings"
 
@@ -159,6 +160,50 @@ func parseOne(cfg *Config, name string, val string) error {
 			}
 
 			cfg.VtctldFlags[strings.TrimPrefix(name, "vtctld-")] = val
+		case strings.HasPrefix(name, "backup-read-pool-"):
+			if cfg.BackupReadPoolConfig == nil {
+				cfg.BackupReadPoolConfig = &RPCPoolConfig{
+					Size:        -1,
+					WaitTimeout: -1,
+				}
+			}
+
+			if err := cfg.BackupReadPoolConfig.parseFlag(strings.TrimPrefix(name, "backup-read-pool-"), val); err != nil {
+				return fmt.Errorf("error parsing %s: %w", name, err)
+			}
+		case strings.HasPrefix(name, "schema-read-pool-"):
+			if cfg.BackupReadPoolConfig == nil {
+				cfg.BackupReadPoolConfig = &RPCPoolConfig{
+					Size:        -1,
+					WaitTimeout: -1,
+				}
+			}
+
+			if err := cfg.SchemaReadPoolConfig.parseFlag(strings.TrimPrefix(name, "schema-read-pool-"), val); err != nil {
+				return fmt.Errorf("error parsing %s: %w", name, err)
+			}
+		case strings.HasPrefix(name, "topo-read-pool-"):
+			if cfg.TopoReadPoolConfig == nil {
+				cfg.TopoReadPoolConfig = &RPCPoolConfig{
+					Size:        -1,
+					WaitTimeout: -1,
+				}
+			}
+
+			if err := cfg.TopoReadPoolConfig.parseFlag(strings.TrimPrefix(name, "topo-read-pool-"), val); err != nil {
+				return fmt.Errorf("error parsing %s: %w", name, err)
+			}
+		case strings.HasPrefix(name, "workflow-read-pool-"):
+			if cfg.WorkflowReadPoolConfig == nil {
+				cfg.WorkflowReadPoolConfig = &RPCPoolConfig{
+					Size:        -1,
+					WaitTimeout: -1,
+				}
+			}
+
+			if err := cfg.WorkflowReadPoolConfig.parseFlag(strings.TrimPrefix(name, "workflow-read-pool-"), val); err != nil {
+				return fmt.Errorf("error parsing %s: %w", name, err)
+			}
 		default:
 			match := discoveryFlagRegexp.FindStringSubmatch(name)
 			if match == nil {
