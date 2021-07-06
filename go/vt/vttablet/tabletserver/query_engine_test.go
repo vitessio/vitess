@@ -165,6 +165,7 @@ func TestGetMessageStreamPlan(t *testing.T) {
 
 func assertPlanCacheSize(t *testing.T, qe *QueryEngine, expected int) {
 	var size int
+	qe.plans.Wait()
 	qe.plans.ForEach(func(_ interface{}) bool {
 		size++
 		return true
