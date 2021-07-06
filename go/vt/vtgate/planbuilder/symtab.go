@@ -19,6 +19,7 @@ package planbuilder
 import (
 	"errors"
 	"fmt"
+	"runtime"
 	"strconv"
 	"strings"
 
@@ -379,7 +380,7 @@ func (st *symtab) searchTables(col *sqlparser.ColName) (*column, error) {
 
 // ResultFromNumber returns the result column index based on the column
 // order expression.
-func ResultFromNumber(rcs []*resultColumn, val *sqlparser.Literal) (int, error) {
+func ResultFromNumber(rcs []*resultColumn, val *sqlparser.Literal, caller string) (int, error) {
 	if val.Type != sqlparser.IntVal {
 		return 0, errors.New("column number is not an int")
 	}
@@ -388,7 +389,11 @@ func ResultFromNumber(rcs []*resultColumn, val *sqlparser.Literal) (int, error) 
 		return 0, fmt.Errorf("error parsing column number: %s", sqlparser.String(val))
 	}
 	if num < 1 || num > int64(len(rcs)) {
-		return 0, fmt.Errorf("column number out of range: %d", num)
+		_, file, no, ok := runtime.Caller(1)
+		if ok {
+			fmt.Printf("called from %s#%d\n", file, no)
+		}
+		return 0, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadFieldError, "Unknown column '%d' in '%s'", num, caller)
 	}
 	return int(num - 1), nil
 }
