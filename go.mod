@@ -124,5 +124,3 @@ require (
 	k8s.io/code-generator v0.17.3
 	sigs.k8s.io/yaml v1.2.0
 )
-
-replace google.golang.org/grpc => google.golang.org/grpc v1.37.0
