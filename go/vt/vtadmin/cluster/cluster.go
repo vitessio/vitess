@@ -27,7 +27,6 @@ import (
 	"time"
 
 	"google.golang.org/protobuf/proto"
-
 	"k8s.io/apimachinery/pkg/util/sets"
 
 	"vitess.io/vitess/go/textutil"
@@ -406,6 +405,190 @@ func (c *Cluster) findWorkflows(ctx context.Context, keyspaces []string, opts Fi
 		Workflows: results,
 		Warnings:  rec.ErrorStrings(),
 	}, nil
+}
+
+// GetBackups returns a ClusterBackups object for all backups in the cluster.
+func (c *Cluster) GetBackups(ctx context.Context, req *vtadminpb.GetBackupsRequest) ([]*vtadminpb.ClusterBackup, error) {
+	span, ctx := trace.NewSpan(ctx, "Cluster.GetBackups")
+	defer span.Finish()
+
+	AnnotateSpan(c, span)
+
+	shardsByKeyspace, err := c.getShardSets(ctx, req.Keyspaces, req.KeyspaceShards)
+	if err != nil {
+		return nil, err
+	}
+
+	var (
+		m            sync.Mutex
+		wg           sync.WaitGroup
+		rec          concurrency.AllErrorRecorder
+		backups      []*vtadminpb.ClusterBackup
+		clusterProto = c.ToProto()
+	)
+
+	for ks, shardSet := range shardsByKeyspace {
+		for _, shard := range shardSet.List() {
+			wg.Add(1)
+
+			go func(keyspace, shard string) {
+				defer wg.Done()
+
+				span, ctx := trace.NewSpan(ctx, "Cluster.getBackupsForShard")
+				defer span.Finish()
+
+				AnnotateSpan(c, span)
+				span.Annotate("keyspace", keyspace)
+				span.Annotate("shard", shard)
+
+				resp, err := c.Vtctld.GetBackups(ctx, &vtctldatapb.GetBackupsRequest{
+					Keyspace:      keyspace,
+					Shard:         shard,
+					Limit:         req.RequestOptions.Limit,
+					Detailed:      req.RequestOptions.Detailed,
+					DetailedLimit: req.RequestOptions.DetailedLimit,
+				})
+				if err != nil {
+					rec.RecordError(fmt.Errorf("GetBackups(%s/%s): %w", keyspace, shard, err))
+					return
+				}
+
+				shardBackups := make([]*vtadminpb.ClusterBackup, len(resp.Backups))
+				for i, backup := range resp.Backups {
+					shardBackups[i] = &vtadminpb.ClusterBackup{
+						Cluster: clusterProto,
+						Backup:  backup,
+					}
+				}
+
+				m.Lock()
+				defer m.Unlock()
+
+				backups = append(backups, shardBackups...)
+			}(ks, shard)
+		}
+	}
+
+	wg.Wait()
+
+	if rec.HasErrors() {
+		return nil, rec.Error()
+	}
+
+	return backups, nil
+}
+
+func (c *Cluster) getShardSets(ctx context.Context, keyspaces []string, keyspaceShards []string) (map[string]sets.String, error) {
+	shardsByKeyspace := map[string]sets.String{}
+
+	if len(keyspaces) == 0 && len(keyspaceShards) == 0 {
+		// Special case: if nothing was explicitly passed, get all shards in
+		// all keyspaces.
+		kss, err := c.GetKeyspaces(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		for _, ks := range kss {
+			shardsByKeyspace[ks.Keyspace.Name] = sets.NewString()
+			for _, shard := range ks.Shards {
+				shardsByKeyspace[ks.Keyspace.Name].Insert(shard.Name)
+			}
+		}
+
+		return shardsByKeyspace, nil
+	}
+
+	for _, ksShard := range keyspaceShards {
+		ks, shard, err := topoproto.ParseKeyspaceShard(ksShard)
+		if err != nil {
+			return nil, err
+		}
+
+		if _, ok := shardsByKeyspace[ks]; !ok {
+			shardsByKeyspace[ks] = sets.NewString(shard)
+			continue
+		}
+
+		shardsByKeyspace[ks].Insert(shard)
+	}
+
+	for _, ks := range keyspaces {
+		// For each keyspace specified, if it was also one of the keyspaceShards,
+		// we added the set in the above loop, so nothing to do. If not, add an
+		// empty set to indicate we should take all shards in the GetKeyspace
+		// section below.
+		if _, ok := shardsByKeyspace[ks]; !ok {
+			shardsByKeyspace[ks] = sets.NewString()
+		}
+	}
+
+	var (
+		m   sync.Mutex
+		wg  sync.WaitGroup
+		rec concurrency.AllErrorRecorder
+	)
+
+	m.Lock() // lock the map while we're iterating over it
+
+	for ksName, shardSet := range shardsByKeyspace {
+		wg.Add(1)
+
+		go func(ksName string, shardSet sets.String) {
+			defer wg.Done()
+
+			keyspace, err := c.GetKeyspace(ctx, ksName)
+			if err != nil {
+				if strings.Contains(err.Error(), "node doesn't exist") {
+					// (TODO:@ajm188) Make better use of error codes on the
+					// vtctld side, and we can do better checking here.
+					// Since this is on the client-side of an RPC we can't
+					// even use topo.IsErrType(topo.NoNode) :(
+					log.Warningf("getShardSets(): keyspace %s does not exist in cluster %s", ksName, c.ID)
+					m.Lock()
+					defer m.Unlock()
+
+					delete(shardsByKeyspace, ksName)
+					return
+				}
+
+				rec.RecordError(err)
+				return
+			}
+
+			fullShardSet := sets.NewString()
+			for _, shard := range keyspace.Shards {
+				fullShardSet.Insert(shard.Name)
+			}
+
+			if shardSet.Len() == 0 {
+				m.Lock()
+				defer m.Unlock()
+
+				shardsByKeyspace[ksName] = fullShardSet
+				return
+			}
+
+			overlap := shardSet.Intersection(fullShardSet)
+			if overlap.Len() != shardSet.Len() {
+				log.Warningf("getShardSets(): keyspace %s is missing specified shards in cluster %s: %v", ksName, c.ID, shardSet.Difference(overlap).List())
+			}
+
+			m.Lock()
+			defer m.Unlock()
+
+			shardsByKeyspace[ksName] = overlap
+		}(ksName, shardSet)
+	}
+
+	m.Unlock()
+	wg.Wait()
+
+	if rec.HasErrors() {
+		return nil, rec.Error()
+	}
+
+	return shardsByKeyspace, nil
 }
 
 // GetGates returns the list of all VTGates in the cluster.

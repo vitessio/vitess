@@ -25,7 +25,13 @@ import * as errorHandler from './errors/errorHandler';
 
 errorHandler.initialize();
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+    defaultOptions: {
+        queries: {
+            refetchOnWindowFocus: false,
+        },
+    },
+});
 
 ReactDOM.render(
     <React.StrictMode>
