@@ -524,6 +524,8 @@ func TestVStreamCopyWithDifferentFilters(t *testing.T) {
 	wg.Add(1)
 	ctx2, cancel2 := context.WithDeadline(ctx, time.Now().Add(10*time.Second))
 	defer cancel2()
+
+	var errGoroutine error
 	go func() {
 		defer wg.Done()
 		engine.Stream(ctx2, "", nil, filter, func(evs []*binlogdatapb.VEvent) error {
@@ -545,7 +547,8 @@ func TestVStreamCopyWithDifferentFilters(t *testing.T) {
 					got := ev.String()
 					want := expectedEvents[i]
 					if !strings.HasPrefix(got, want) {
-						t.Fatalf("Event %d did not match, want %s, got %s", i, want, got)
+						errGoroutine = fmt.Errorf("Event %d did not match, want %s, got %s", i, want, got)
+						return errGoroutine
 					}
 				}
 
@@ -555,6 +558,9 @@ func TestVStreamCopyWithDifferentFilters(t *testing.T) {
 		})
 	}()
 	wg.Wait()
+	if errGoroutine != nil {
+		t.Fatalf(errGoroutine.Error())
+	}
 }
 
 func TestFilteredVarBinary(t *testing.T) {

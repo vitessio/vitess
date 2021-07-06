@@ -19,10 +19,9 @@ package vstreamer
 import (
 	"context"
 	"fmt"
-	"math"
+	"strings"
 	"time"
 
-	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
@@ -65,12 +64,12 @@ type rowStreamer struct {
 	send    func(*binlogdatapb.VStreamRowsResponse) error
 	vschema *localVSchema
 
-	plan      *Plan
-	pkColumns []int
-	ukName    string
-	sendQuery string
-	vse       *Engine
-	pktsize   PacketSizer
+	plan          *Plan
+	pkColumns     []int
+	ukColumnNames []string
+	sendQuery     string
+	vse           *Engine
+	pktsize       PacketSizer
 }
 
 func newRowStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine, query string, lastpk []sqltypes.Value, vschema *localVSchema, send func(*binlogdatapb.VStreamRowsResponse) error, vse *Engine) *rowStreamer {
@@ -140,7 +139,9 @@ func (rs *rowStreamer) buildPlan() error {
 	}
 
 	directives := sqlparser.ExtractCommentDirectives(sel.Comments)
-	rs.ukName = directives.GetString("ukName", "")
+	if s := directives.GetString("ukColumns", ""); s != "" {
+		rs.ukColumnNames = strings.Split(s, ",")
+	}
 
 	rs.pkColumns, err = rs.buildPKColumns(st)
 	if err != nil {
@@ -157,28 +158,8 @@ func (rs *rowStreamer) buildPlan() error {
 func (rs *rowStreamer) buildPKColumnsFromUniqueKey() ([]int, error) {
 	var pkColumns = make([]int, 0)
 	// We wish to utilize a UNIQUE KEY which is not the PRIMARY KEY/
-	// For PRIMARY KEY, we already know what columns partiipate in the key,
-	// but for any other key, we need to go ahead and inspect the table/key definition
-	conn, err := snapshotConnect(rs.ctx, rs.cp)
-	if err != nil {
-		return pkColumns, err
-	}
-	defer conn.Close()
 
-	query, err := sqlparser.ParseAndBind(mysql.BaseShowTableUniqueKey,
-		sqltypes.StringBindVariable(rs.plan.Table.Name),
-		sqltypes.StringBindVariable(rs.ukName),
-	)
-	if err != nil {
-		return pkColumns, err
-	}
-	r, err := conn.ExecuteFetch(query, math.MaxInt64, true)
-	if err != nil {
-		return pkColumns, err
-	}
-
-	for _, row := range r.Named().Rows {
-		colName := row["column_name"].ToString()
+	for _, colName := range rs.ukColumnNames {
 		index := rs.plan.Table.FindColumn(sqlparser.NewColIdent(colName))
 		if index < 0 {
 			return pkColumns, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "column %v is listed as unique key, but not present in table %v", colName, rs.plan.Table.Name)
@@ -189,7 +170,7 @@ func (rs *rowStreamer) buildPKColumnsFromUniqueKey() ([]int, error) {
 }
 
 func (rs *rowStreamer) buildPKColumns(st *binlogdatapb.MinimalTable) ([]int, error) {
-	if rs.ukName != "" && rs.ukName != "PRIMARY" {
+	if len(rs.ukColumnNames) > 0 {
 		return rs.buildPKColumnsFromUniqueKey()
 	}
 	var pkColumns = make([]int, 0)
