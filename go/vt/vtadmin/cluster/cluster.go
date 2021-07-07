@@ -1289,6 +1289,7 @@ func (c *Cluster) findTablets(ctx context.Context, filter func(*vtadminpb.Tablet
 	return vtadminproto.FilterTablets(filter, tablets, n), nil
 }
 
+// Debug returns a map of debug information for a cluster.
 func (c *Cluster) Debug() map[string]interface{} {
 	return map[string]interface{}{
 		"cluster": c.ToProto(),
