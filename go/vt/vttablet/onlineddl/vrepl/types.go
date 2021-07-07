@@ -180,6 +180,17 @@ func (l *ColumnList) Len() int {
 	return len(l.columns)
 }
 
+// MappedNamesColumnList returns a column list based on this list, with names possibly mapped by given map
+func (l *ColumnList) MappedNamesColumnList(columnNamesMap map[string]string) *ColumnList {
+	names := l.Names()
+	for i := range names {
+		if mappedName, ok := columnNamesMap[names[i]]; ok {
+			names[i] = mappedName
+		}
+	}
+	return NewColumnList(names)
+}
+
 // SetEnumToTextConversion tells this column list that an enum is conveted to text
 func (l *ColumnList) SetEnumToTextConversion(columnName string, enumValues string) {
 	l.GetColumn(columnName).EnumToTextConversion = true
