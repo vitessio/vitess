@@ -103,36 +103,6 @@ func NewVRepl(workflow, keyspace, shard, dbName, sourceTable, targetTable, alter
 	}
 }
 
-// getCandidateUniqueKeys investigates a table and returns the list of unique keys
-// candidate for chunking
-func (v *VRepl) getCandidateUniqueKeys(ctx context.Context, conn *dbconnpool.DBConnection, tableName string) (uniqueKeys [](*vrepl.UniqueKey), err error) {
-
-	query, err := sqlparser.ParseAndBind(sqlShowColumnsFrom,
-		sqltypes.StringBindVariable(v.dbName),
-		sqltypes.StringBindVariable(tableName),
-		sqltypes.StringBindVariable(v.dbName),
-		sqltypes.StringBindVariable(tableName),
-	)
-	if err != nil {
-		return uniqueKeys, err
-	}
-
-	rs, err := conn.ExecuteFetch(query, math.MaxInt64, true)
-	if err != nil {
-		return nil, err
-	}
-	for _, row := range rs.Named().Rows {
-		uniqueKey := &vrepl.UniqueKey{
-			Name:            row.AsString("INDEX_NAME", ""),
-			Columns:         *vrepl.ParseColumnList(row.AsString("COLUMN_NAMES", "")),
-			HasNullable:     row.AsBool("has_nullable", false),
-			IsAutoIncrement: row.AsBool("is_auto_increment", false),
-		}
-		uniqueKeys = append(uniqueKeys, uniqueKey)
-	}
-	return uniqueKeys, nil
-}
-
 // getSharedUniqueKeys returns the unique keys shared between the two source&target tables
 func getSharedUniqueKeys(sourceUniqueKeys, targetUniqueKeys [](*vrepl.UniqueKey), columnRenameMap map[string]string) (chosenSourceUniqueKey, chosenTargetUniqueKey *vrepl.UniqueKey) {
 	type ukPair struct{ source, target *vrepl.UniqueKey }
@@ -166,7 +136,7 @@ func getSharedUniqueKeys(sourceUniqueKeys, targetUniqueKeys [](*vrepl.UniqueKey)
 		}
 	}
 	// Now that we know what the shared unique keys are, let's find the "best" shared one.
-	// Source and target unique keys can have different name, ven though they cover the exact same
+	// Source and target unique keys can have different name, even though they cover the exact same
 	// columns and in same order.
 	for _, pair := range sharedUKPairs {
 		if pair.source.HasNullable {
@@ -247,6 +217,16 @@ func (v *VRepl) readTableUniqueKeys(ctx context.Context, conn *dbconnpool.DBConn
 		return nil, err
 	}
 	for _, row := range rs.Named().Rows {
+		if row.AsBool("is_float", false) {
+			// float & double data types are imprecise and we cannot use them while iterating unique keys
+			continue
+		}
+		if row.AsBool("has_nullable", false) {
+			// NULLable columns in a unique key means the set of values is not really unique (two identical rows with NULLs are allowed).
+			// Thus, we cannot use this unique key for iteration.
+			continue
+		}
+
 		uniqueKey := &vrepl.UniqueKey{
 			Name:            row.AsString("index_name", ""),
 			Columns:         *vrepl.ParseColumnList(row.AsString("column_names", "")),
