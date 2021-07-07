@@ -32,6 +32,7 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/dbconnpool"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -68,8 +69,6 @@ type VRepl struct {
 	pos          string
 	alterOptions string
 	tableRows    int64
-
-	sharedPKColumns *vrepl.ColumnList
 
 	sourceSharedColumns *vrepl.ColumnList
 	targetSharedColumns *vrepl.ColumnList
@@ -424,25 +423,31 @@ func (v *VRepl) analyzeTables(ctx context.Context, conn *dbconnpool.DBConnection
 	if err != nil {
 		return err
 	}
+	if len(sourceUniqueKeys) == 0 {
+		return fmt.Errorf("Found no possible unique key on `%s`", v.sourceTable)
+	}
 	targetUniqueKeys, err := v.readTableUniqueKeys(ctx, conn, v.targetTable)
 	if err != nil {
 		return err
+	}
+	if len(targetUniqueKeys) == 0 {
+		return fmt.Errorf("Found no possible unique key on `%s`", v.targetTable)
 	}
 	v.chosenSourceUniqueKey, v.chosenTargetUniqueKey = getSharedUniqueKeys(sourceUniqueKeys, targetUniqueKeys, v.parser.ColumnRenameMap())
 	if v.chosenSourceUniqueKey == nil || v.chosenTargetUniqueKey == nil {
 		return fmt.Errorf("Found no shared, not nullable, unique keys between `%s` and `%s`", v.sourceTable, v.targetTable)
 	}
 	// chosen source & target unique keys have exact columns in same order
-	v.sharedPKColumns = &v.chosenSourceUniqueKey.Columns
+	sharedPKColumns := &v.chosenSourceUniqueKey.Columns
 
-	if err := v.applyColumnTypes(ctx, conn, v.sourceTable, sourceColumns, sourceVirtualColumns, sourcePKColumns, v.sourceSharedColumns, v.sharedPKColumns); err != nil {
+	if err := v.applyColumnTypes(ctx, conn, v.sourceTable, sourceColumns, sourceVirtualColumns, sourcePKColumns, v.sourceSharedColumns, sharedPKColumns); err != nil {
 		return err
 	}
 	if err := v.applyColumnTypes(ctx, conn, v.targetTable, targetColumns, targetVirtualColumns, targetPKColumns, v.targetSharedColumns); err != nil {
 		return err
 	}
 
-	for _, sourcePKColumn := range v.sharedPKColumns.Columns() {
+	for _, sourcePKColumn := range sharedPKColumns.Columns() {
 		mappedColumn := v.targetSharedColumns.GetColumn(sourcePKColumn.Name)
 		if sourcePKColumn.Type == vrepl.EnumColumnType && mappedColumn.Type == vrepl.EnumColumnType {
 			// An ENUM as part of PRIMARY KEY. We must convert it to text because OMG that's complicated.
@@ -541,8 +546,8 @@ func (v *VRepl) analyzeBinlogSource(ctx context.Context) {
 	rule := &binlogdatapb.Rule{
 		Match:                  v.targetTable,
 		Filter:                 v.filterQuery,
-		SourceUniqueKeyColumns: v.chosenSourceUniqueKey.Columns.Names(),
-		TargetUniqueKeyColumns: v.chosenTargetUniqueKey.Columns.Names(),
+		SourceUniqueKeyColumns: textutil.EscapeJoin(v.chosenSourceUniqueKey.Columns.Names(), ","),
+		TargetUniqueKeyColumns: textutil.EscapeJoin(v.chosenTargetUniqueKey.Columns.Names(), ","),
 	}
 	if len(v.convertCharset) > 0 {
 		rule.ConvertCharset = v.convertCharset

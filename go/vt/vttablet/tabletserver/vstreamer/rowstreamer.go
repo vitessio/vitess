@@ -19,10 +19,10 @@ package vstreamer
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -140,7 +140,10 @@ func (rs *rowStreamer) buildPlan() error {
 
 	directives := sqlparser.ExtractCommentDirectives(sel.Comments)
 	if s := directives.GetString("ukColumns", ""); s != "" {
-		rs.ukColumnNames = strings.Split(s, ",")
+		rs.ukColumnNames, err = textutil.SplitUnescape(s, ",")
+		if err != nil {
+			return err
+		}
 	}
 
 	rs.pkColumns, err = rs.buildPKColumns(st)

@@ -23,6 +23,7 @@ import (
 	"strings"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/key"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -268,7 +269,11 @@ func buildTablePlan(tableName string, rule *binlogdatapb.Rule, colInfos []*Colum
 	if err := tpb.analyzeGroupBy(sel.GroupBy); err != nil {
 		return nil, err
 	}
-	pkColsInfo := tpb.getPKColsInfo(rule.TargetUniqueKeyColumns, colInfos)
+	targetKeyColumnNames, err := textutil.SplitUnescape(rule.TargetUniqueKeyColumns, ",")
+	if err != nil {
+		return nil, err
+	}
+	pkColsInfo := tpb.getPKColsInfo(targetKeyColumnNames, colInfos)
 	if err := tpb.analyzePK(pkColsInfo); err != nil {
 		return nil, err
 	}
@@ -284,7 +289,7 @@ func buildTablePlan(tableName string, rule *binlogdatapb.Rule, colInfos []*Colum
 	}
 	commentsList := []string{}
 	if len(rule.SourceUniqueKeyColumns) > 0 {
-		commentsList = append(commentsList, fmt.Sprintf(`ukColumns="%s"`, strings.Join(rule.SourceUniqueKeyColumns, ",")))
+		commentsList = append(commentsList, fmt.Sprintf(`ukColumns="%s"`, rule.SourceUniqueKeyColumns))
 	}
 	if len(commentsList) > 0 {
 		comments := sqlparser.Comments{
