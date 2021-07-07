@@ -56,6 +56,7 @@ type (
 		maxClient  int
 		duration   time.Duration
 		t          *testing.T
+		finish     bool
 	}
 )
 
@@ -153,7 +154,9 @@ func (s *Stresser) startStressClient(resultCh chan Result) {
 	var res Result
 
 	timeout := time.After(s.duration)
-	for {
+
+outer:
+	for !s.finish {
 		if connParams != s.connParams {
 			connParams = s.connParams
 			conn.Close()
@@ -161,14 +164,14 @@ func (s *Stresser) startStressClient(resultCh chan Result) {
 		}
 		select {
 		case <-timeout:
-			resultCh <- res
-			return
+			break outer
 		case <-time.After(15 * time.Microsecond):
 			s.insertToRandomTable(conn, &res)
 		case <-time.After(1 * time.Microsecond):
 			s.selectFromRandomTable(conn, &res)
 		}
 	}
+	resultCh <- res
 }
 
 func (s *Stresser) insertToRandomTable(conn *mysql.Conn, r *Result) {
@@ -209,6 +212,8 @@ func (s *Stresser) Wait(timeout time.Duration) {
 	case res := <-s.doneCh:
 		res.PrintQPS(s.duration.Seconds())
 	case <-timeoutCh:
-		s.t.Fatalf("Test timed out")
+		s.finish = true
+		res := <-s.doneCh
+		res.PrintQPS(s.duration.Seconds())
 	}
 }

@@ -63,5 +63,5 @@ func TestStressReparentDownMaster(t *testing.T) {
 	checkMasterTablet(t, tab2)
 	confirmReplication(t, tab2, []*cluster.Vttablet{tab3, tab4})
 
-	s.Wait(120 * time.Second)
+	s.Wait(10 * time.Second)
 }
