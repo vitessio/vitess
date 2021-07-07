@@ -138,43 +138,12 @@ func NewAPI(clusters []*cluster.Cluster, opts grpcserver.Options, httpOpts vtadm
 		serv.Router().HandleFunc("/debug/pprof/profile", pprof.Profile)
 		serv.Router().HandleFunc("/debug/pprof/symbol", pprof.Symbol)
 		serv.Router().PathPrefix("/debug/pprof").HandlerFunc(pprof.Index)
+
+		dapi := &debugAPI{api}
 		debugRouter := serv.Router().PathPrefix("/debug").Subrouter()
 		debugRouter.HandleFunc("/env", debug.Env)
-		debugRouter.HandleFunc("/cluster/{cluster}", func(w http.ResponseWriter, r *http.Request) {
-			name := mux.Vars(r)["cluster"]
-			c, ok := api.clusterMap[name]
-			if !ok {
-				w.WriteHeader(http.StatusNotFound)
-				w.Write([]byte(fmt.Sprintf("no cluster named %s\n", name)))
-				return
-			}
-
-			data, err := json.Marshal(c.Debug())
-			if err != nil {
-				w.WriteHeader(http.StatusInternalServerError)
-				w.Write([]byte(fmt.Sprintf("could not marshal cluster debug map: %s\n", err)))
-				return
-			}
-
-			w.Write(data)
-			w.Write([]byte("\n"))
-		})
-		debugRouter.HandleFunc("/clusters", func(w http.ResponseWriter, r *http.Request) {
-			m := make(map[string]map[string]interface{}, len(api.clusters))
-			for _, c := range api.clusters {
-				m[c.ID] = c.Debug()
-			}
-
-			data, err := json.Marshal(m)
-			if err != nil {
-				w.WriteHeader(http.StatusInternalServerError)
-				w.Write([]byte(fmt.Sprintf("could not marshal cluster debug map: %s\n", err)))
-				return
-			}
-
-			w.Write(data)
-			w.Write([]byte("\n"))
-		})
+		debugRouter.HandleFunc("/cluster/{cluster_id}", debug.Cluster(dapi))
+		debugRouter.HandleFunc("/clusters", debug.Clusters(dapi))
 	}
 
 	// Middlewares are executed in order of addition. Our ordering (all
