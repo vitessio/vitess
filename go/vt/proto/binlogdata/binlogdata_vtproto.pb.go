@@ -479,22 +479,18 @@ func (m *Rule) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		copy(dAtA[i:], m.unknownFields)
 	}
 	if len(m.TargetUniqueKeyColumns) > 0 {
-		for iNdEx := len(m.TargetUniqueKeyColumns) - 1; iNdEx >= 0; iNdEx-- {
-			i -= len(m.TargetUniqueKeyColumns[iNdEx])
-			copy(dAtA[i:], m.TargetUniqueKeyColumns[iNdEx])
-			i = encodeVarint(dAtA, i, uint64(len(m.TargetUniqueKeyColumns[iNdEx])))
-			i--
-			dAtA[i] = 0x32
-		}
+		i -= len(m.TargetUniqueKeyColumns)
+		copy(dAtA[i:], m.TargetUniqueKeyColumns)
+		i = encodeVarint(dAtA, i, uint64(len(m.TargetUniqueKeyColumns)))
+		i--
+		dAtA[i] = 0x32
 	}
 	if len(m.SourceUniqueKeyColumns) > 0 {
-		for iNdEx := len(m.SourceUniqueKeyColumns) - 1; iNdEx >= 0; iNdEx-- {
-			i -= len(m.SourceUniqueKeyColumns[iNdEx])
-			copy(dAtA[i:], m.SourceUniqueKeyColumns[iNdEx])
-			i = encodeVarint(dAtA, i, uint64(len(m.SourceUniqueKeyColumns[iNdEx])))
-			i--
-			dAtA[i] = 0x2a
-		}
+		i -= len(m.SourceUniqueKeyColumns)
+		copy(dAtA[i:], m.SourceUniqueKeyColumns)
+		i = encodeVarint(dAtA, i, uint64(len(m.SourceUniqueKeyColumns)))
+		i--
+		dAtA[i] = 0x2a
 	}
 	if len(m.ConvertCharset) > 0 {
 		for k := range m.ConvertCharset {
@@ -2225,17 +2221,13 @@ func (m *Rule) SizeVT() (n int) {
 			n += mapEntrySize + 1 + sov(uint64(mapEntrySize))
 		}
 	}
-	if len(m.SourceUniqueKeyColumns) > 0 {
-		for _, s := range m.SourceUniqueKeyColumns {
-			l = len(s)
-			n += 1 + l + sov(uint64(l))
-		}
+	l = len(m.SourceUniqueKeyColumns)
+	if l > 0 {
+		n += 1 + l + sov(uint64(l))
 	}
-	if len(m.TargetUniqueKeyColumns) > 0 {
-		for _, s := range m.TargetUniqueKeyColumns {
-			l = len(s)
-			n += 1 + l + sov(uint64(l))
-		}
+	l = len(m.TargetUniqueKeyColumns)
+	if l > 0 {
+		n += 1 + l + sov(uint64(l))
 	}
 	if m.unknownFields != nil {
 		n += len(m.unknownFields)
@@ -4163,7 +4155,7 @@ func (m *Rule) UnmarshalVT(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.SourceUniqueKeyColumns = append(m.SourceUniqueKeyColumns, string(dAtA[iNdEx:postIndex]))
+			m.SourceUniqueKeyColumns = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		case 6:
 			if wireType != 2 {
@@ -4195,7 +4187,7 @@ func (m *Rule) UnmarshalVT(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.TargetUniqueKeyColumns = append(m.TargetUniqueKeyColumns, string(dAtA[iNdEx:postIndex]))
+			m.TargetUniqueKeyColumns = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
