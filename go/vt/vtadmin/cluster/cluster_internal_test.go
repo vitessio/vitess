@@ -39,7 +39,6 @@ type vtctldProxy struct {
 }
 
 func (fake *vtctldProxy) Dial(ctx context.Context) error { return fake.dialErr }
-func (fake *vtctldProxy) Hostname() string               { return "fake" }
 
 func Test_getShardSets(t *testing.T) {
 	t.Parallel()
