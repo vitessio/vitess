@@ -27,24 +27,28 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 )
 
-func assertLength(t *testing.T, conn *mysql.Conn, query string, expectedLength int) bool {
-	t.Helper()
-	qr := exec(t, conn, query)
+func (s *Stresser) assertLength(conn *mysql.Conn, query string, expectedLength int) bool {
+	s.t.Helper()
+	qr := s.exec(conn, query)
 	if qr == nil {
 		return false
 	}
 	if diff := cmp.Diff(expectedLength, len(qr.Rows)); diff != "" {
-		t.Logf("Query: %s (-want +got):\n%s", query, diff)
+		if s.log {
+			s.t.Logf("Query: %s (-want +got):\n%s", query, diff)
+		}
 		return false
 	}
 	return true
 }
 
-func exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
-	t.Helper()
+func (s *Stresser) exec(conn *mysql.Conn, query string) *sqltypes.Result {
+	s.t.Helper()
 	qr, err := conn.ExecuteFetch(query, 1000, true)
 	if err != nil {
-		t.Logf("Err: %s, for query: %s", err.Error(), query)
+		if s.log {
+			s.t.Logf("Err: %s, for query: %s", err.Error(), query)
+		}
 		return nil
 	}
 	return qr

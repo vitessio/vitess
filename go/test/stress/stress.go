@@ -50,13 +50,13 @@ type (
 	}
 
 	Stresser struct {
-		doneCh     chan Result
-		tbls       []*table
-		connParams *mysql.ConnParams
-		maxClient  int
-		duration   time.Duration
-		t          *testing.T
-		finish     bool
+		doneCh      chan Result
+		tbls        []*table
+		connParams  *mysql.ConnParams
+		maxClient   int
+		duration    time.Duration
+		t           *testing.T
+		finish, log bool
 	}
 )
 
@@ -91,13 +91,13 @@ func generateNewTables(nb int) []*table {
 	return tbls
 }
 
-func createTables(t *testing.T, params *mysql.ConnParams, nb int) []*table {
-	conn := newClient(t, params)
+func (s *Stresser) createTables(nb int) []*table {
+	conn := newClient(s.t, s.connParams)
 	defer conn.Close()
 
 	tbls := generateNewTables(nb)
 	for _, tbl := range tbls {
-		exec(t, conn, fmt.Sprintf(templateNewTable, tbl.name))
+		s.exec(conn, fmt.Sprintf(templateNewTable, tbl.name))
 	}
 	return tbls
 }
@@ -107,19 +107,20 @@ func (s *Stresser) SetConn(conn *mysql.ConnParams) *Stresser {
 	return s
 }
 
-func New(t *testing.T, conn *mysql.ConnParams, duration time.Duration) *Stresser {
+func New(t *testing.T, conn *mysql.ConnParams, duration time.Duration, enableLog bool) *Stresser {
 	return &Stresser{
 		doneCh:     make(chan Result),
 		t:          t,
 		connParams: conn,
 		duration:   duration,
 		maxClient:  10,
+		log:        enableLog,
 	}
 }
 
 func (s *Stresser) Start() *Stresser {
 	fmt.Println("Starting load testing ...")
-	s.tbls = createTables(s.t, s.connParams, 100)
+	s.tbls = s.createTables(100)
 	go s.startClients()
 	return s
 }
@@ -180,7 +181,7 @@ func (s *Stresser) insertToRandomTable(conn *mysql.Conn, r *Result) {
 	defer s.tbls[tblI].mu.Unlock()
 
 	query := fmt.Sprintf("insert into %s(id, val) values(%d, 'name')", s.tbls[tblI].name, s.tbls[tblI].nextID)
-	if exec(s.t, conn, query) != nil {
+	if s.exec(conn, query) != nil {
 		s.tbls[tblI].nextID++
 		s.tbls[tblI].rows++
 		r.countInsert++
@@ -199,7 +200,7 @@ func (s *Stresser) selectFromRandomTable(conn *mysql.Conn, r *Result) {
 	if expLength > 500 {
 		expLength = 500
 	}
-	if assertLength(s.t, conn, query, expLength) {
+	if s.assertLength(conn, query, expLength) {
 		r.countSelect++
 	} else {
 		r.countSelectFailed++
