@@ -53,7 +53,7 @@ type consolidationTest struct {
 	streamItems     []*sqltypes.Result
 
 	leaderCallback func(StreamCallback) error
-	leaderCalls    int
+	leaderCalls    uint64
 
 	results []*consolidationResult
 }
@@ -71,7 +71,7 @@ func generateResultSizes(size, count int) (r []*sqltypes.Result) {
 }
 
 func (ct *consolidationTest) leader(stream StreamCallback) error {
-	ct.leaderCalls++
+	atomic.AddUint64(&ct.leaderCalls, 1)
 	if ct.leaderCallback != nil {
 		return ct.leaderCallback(stream)
 	}
@@ -160,7 +160,7 @@ func TestConsolidatorSimple(t *testing.T) {
 		}
 	})
 
-	require.Equal(t, 1, ct.leaderCalls)
+	require.Equal(t, uint64(1), ct.leaderCalls)
 
 	for _, results := range ct.results {
 		require.Len(t, results.items, ct.streamItemCount)
@@ -282,7 +282,7 @@ func TestConsolidatorDelayedListener(t *testing.T) {
 		}
 	})
 
-	require.Equal(t, 1, ct.leaderCalls)
+	require.Equal(t, uint64(1), ct.leaderCalls)
 
 	for worker, results := range ct.results {
 		if worker == 3 {
@@ -298,7 +298,6 @@ func TestConsolidatorDelayedListener(t *testing.T) {
 }
 
 func TestConsolidatorMemoryLimits(t *testing.T) {
-	t.Skip("temporarily skipping test since it is failing consistently for all PRs") //HACK, TODO
 	t.Run("rows too large", func(t *testing.T) {
 		ct := consolidationTest{
 			cc:              NewStreamConsolidator(128*1024, 32, nocleanup),
@@ -313,7 +312,7 @@ func TestConsolidatorMemoryLimits(t *testing.T) {
 			}
 		})
 
-		require.Equal(t, 4, ct.leaderCalls)
+		require.Equal(t, uint64(4), ct.leaderCalls)
 
 		for _, results := range ct.results {
 			require.Len(t, results.items, ct.streamItemCount)
@@ -324,20 +323,20 @@ func TestConsolidatorMemoryLimits(t *testing.T) {
 	t.Run("two-phase consolidation (time)", func(t *testing.T) {
 		ct := consolidationTest{
 			cc:              NewStreamConsolidator(128*1024, 2*1024, nocleanup),
-			streamItemDelay: 10 * time.Millisecond,
+			streamItemDelay: 2 * time.Millisecond,
 			streamItemCount: 10,
 		}
 
 		ct.run(10, func(worker int) (string, StreamCallback) {
 			if worker > 4 {
-				time.Sleep(110 * time.Millisecond)
+				time.Sleep(50 * time.Millisecond)
 			}
 			return "select 1", func(_ *sqltypes.Result) error {
 				return nil
 			}
 		})
 
-		require.Equal(t, 2, ct.leaderCalls)
+		require.Equal(t, uint64(2), ct.leaderCalls)
 
 		for _, results := range ct.results {
 			require.Len(t, results.items, ct.streamItemCount)
@@ -363,7 +362,7 @@ func TestConsolidatorMemoryLimits(t *testing.T) {
 			return "select 1", func(_ *sqltypes.Result) error { return nil }
 		})
 
-		require.Equal(t, 2, ct.leaderCalls)
+		require.Equal(t, uint64(2), ct.leaderCalls)
 
 		for _, results := range ct.results {
 			require.Len(t, results.items, 10)
@@ -394,7 +393,7 @@ func TestConsolidatorMemoryLimits(t *testing.T) {
 			return "select 1", func(_ *sqltypes.Result) error { return nil }
 		})
 
-		require.Equal(t, 4, ct.leaderCalls)
+		require.Equal(t, uint64(4), ct.leaderCalls)
 
 		for _, results := range ct.results {
 			require.Len(t, results.items, 10)
