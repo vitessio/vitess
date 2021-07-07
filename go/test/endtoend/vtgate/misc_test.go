@@ -510,6 +510,17 @@ func TestSubQueryOnTopOfSubQuery(t *testing.T) {
 	assertMatches(t, conn, "select id1 from t1 where id1 not in (select id3 from t2) and id2 in (select id4 from t2)", `[[INT64(3)] [INT64(4)]]`)
 }
 
+func TestFunctionInDefault(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	exec(t, conn, `create table function_default (x varchar(25) DEFAULT (TRIM(" check ")))`)
+	defer exec(t, conn, "drop table function_default")
+}
+
 func assertMatches(t *testing.T, conn *mysql.Conn, query, expected string) {
 	t.Helper()
 	qr := exec(t, conn, query)

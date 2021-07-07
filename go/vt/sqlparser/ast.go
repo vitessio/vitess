@@ -2220,7 +2220,14 @@ func (ct *ColumnType) Format(buf *TrackedBuffer) {
 		opts = append(opts, keywordStrings[NOT], keywordStrings[NULL])
 	}
 	if ct.Default != nil {
-		opts = append(opts, keywordStrings[DEFAULT], String(ct.Default))
+		opts = append(opts, keywordStrings[DEFAULT])
+		_, isLiteral := ct.Default.(*Literal)
+		_, isNullVal := ct.Default.(*NullVal)
+		if isLiteral || isNullVal {
+			opts = append(opts, String(ct.Default))
+		} else {
+			opts = append(opts, "("+String(ct.Default)+")")
+		}
 	}
 	if ct.OnUpdate != nil {
 		opts = append(opts, keywordStrings[ON], keywordStrings[UPDATE], String(ct.OnUpdate))
