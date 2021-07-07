@@ -72,6 +72,15 @@ select count(*) from user where name in ('a', 'b', 'c', 'd', 'e', 'f', 'g', 'h',
 11 ks_sharded/-40: select count(*) from `user` where `name` in ('a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j') limit 10001 /* scatter aggregate */
 
 ----------------------------------------------------------------------
+select count(*) from customer where email in ('a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j') /* scatter aggregate with batching */
+
+1 ks_sharded/-40: select email, user_id from email_customer_map where email in ('f', 'g', 'i', 'j') limit 10001 /* scatter aggregate with batching */
+1 ks_sharded/40-80: select email, user_id from email_customer_map where email in ('b', 'c', 'h') limit 10001 /* scatter aggregate with batching */
+1 ks_sharded/80-c0: select email, user_id from email_customer_map where email in ('e') limit 10001 /* scatter aggregate with batching */
+1 ks_sharded/c0-: select email, user_id from email_customer_map where email in ('a', 'd') limit 10001 /* scatter aggregate with batching */
+2 ks_sharded/-40: select count(*) from customer where email in ('a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j') limit 10001 /* scatter aggregate with batching */
+
+----------------------------------------------------------------------
 select name, count(*) from user group by name /* scatter aggregate */
 
 1 ks_sharded/-40: select `name`, count(*) from `user` group by `name` limit 10001 /* scatter aggregate */
