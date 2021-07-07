@@ -38,6 +38,7 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtadmin/cluster/discovery"
+	"vitess.io/vitess/go/vt/vtadmin/debug"
 	"vitess.io/vitess/go/vt/vtadmin/errors"
 	"vitess.io/vitess/go/vt/vtadmin/vtadminproto"
 	"vitess.io/vitess/go/vt/vtadmin/vtctldclient"
@@ -1291,7 +1292,7 @@ func (c *Cluster) findTablets(ctx context.Context, filter func(*vtadminpb.Tablet
 
 // Debug returns a map of debug information for a cluster.
 func (c *Cluster) Debug() map[string]interface{} {
-	return map[string]interface{}{
+	m := map[string]interface{}{
 		"cluster": c.ToProto(),
 		"config":  c.cfg,
 		"pools": map[string]json.RawMessage{
@@ -1301,4 +1302,14 @@ func (c *Cluster) Debug() map[string]interface{} {
 			"workflow_read_pool": json.RawMessage(c.workflowReadPool.StatsJSON()),
 		},
 	}
+
+	if vtsql, ok := c.DB.(debug.Debuggable); ok {
+		m["vtsql"] = vtsql.Debug()
+	}
+
+	if vtctld, ok := c.Vtctld.(debug.Debuggable); ok {
+		m["vtctld"] = vtctld.Debug()
+	}
+
+	return m
 }
