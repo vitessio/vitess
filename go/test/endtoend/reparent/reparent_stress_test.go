@@ -38,7 +38,7 @@ func TestStressReparentDownMaster(t *testing.T) {
 
 	// connects to vtgate
 	params := mysql.ConnParams{Port: clusterInstance.VtgateMySQLPort, Host: "localhost", DbName: "ks"}
-	s := stress.New(t, &params, 60*time.Second).Start()
+	s := stress.New(t, &params, 60*time.Second, false).Start()
 
 	// Make the current master agent and database unavailable.
 	stopTablet(t, tab1, true)
