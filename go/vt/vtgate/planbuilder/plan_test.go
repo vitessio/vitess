@@ -217,10 +217,11 @@ func TestOne(t *testing.T) {
 	testFile(t, "onecase.txt", "", vschema, true)
 }
 
-func TestBypassPlanningFromFile(t *testing.T) {
+func TestBypassPlanningShardTargetFromFile(t *testing.T) {
 	testOutputTempDir, err := ioutil.TempDir("", "plan_test")
 	require.NoError(t, err)
 	defer os.RemoveAll(testOutputTempDir)
+
 	vschema := &vschemaWrapper{
 		v: loadSchema(t, "schema_test.json"),
 		keyspace: &vindexes.Keyspace{
@@ -228,10 +229,28 @@ func TestBypassPlanningFromFile(t *testing.T) {
 			Sharded: false,
 		},
 		tabletType: topodatapb.TabletType_MASTER,
-		dest:       key.DestinationShard("-80"),
+		dest:       key.DestinationShard("-80")}
+
+	testFile(t, "bypass_shard_cases.txt", testOutputTempDir, vschema, true)
+}
+func TestBypassPlanningKeyrangeTargetFromFile(t *testing.T) {
+	testOutputTempDir, err := ioutil.TempDir("", "plan_test")
+	require.NoError(t, err)
+	defer os.RemoveAll(testOutputTempDir)
+
+	keyRange, _ := key.ParseShardingSpec("-")
+
+	vschema := &vschemaWrapper{
+		v: loadSchema(t, "schema_test.json"),
+		keyspace: &vindexes.Keyspace{
+			Name:    "main",
+			Sharded: false,
+		},
+		tabletType: topodatapb.TabletType_MASTER,
+		dest:       key.DestinationExactKeyRange{KeyRange: keyRange[0]},
 	}
 
-	testFile(t, "bypass_cases.txt", testOutputTempDir, vschema, true)
+	testFile(t, "bypass_keyrange_cases.txt", testOutputTempDir, vschema, true)
 }
 
 func TestWithDefaultKeyspaceFromFile(t *testing.T) {

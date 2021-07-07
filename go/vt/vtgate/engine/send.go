@@ -183,6 +183,9 @@ func (s *Send) description() PrimitiveDescription {
 	if s.ShardNameNeeded {
 		other["ShardNameNeeded"] = true
 	}
+	if s.MultishardAutocommit {
+		other["MultishardAutocommit"] = true
+	}
 	return PrimitiveDescription{
 		OperatorType:      "Send",
 		Keyspace:          s.Keyspace,
