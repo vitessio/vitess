@@ -362,6 +362,7 @@ const (
 		COLUMNS.DATA_TYPE as data_type,
 		COLUMNS.CHARACTER_SET_NAME as character_set_name,
 		LOCATE('auto_increment', EXTRA) > 0 as is_auto_increment,
+		(DATA_TYPE='float' OR DATA_TYPE='double') AS is_float,
 		has_nullable
 	FROM INFORMATION_SCHEMA.COLUMNS INNER JOIN (
 		SELECT
