@@ -37,10 +37,11 @@ func buildPlanForBypass(stmt sqlparser.Statement, vschema ContextVSchema) (engin
 		return nil, err
 	}
 	return &engine.Send{
-		Keyspace:          keyspace,
-		TargetDestination: vschema.Destination(),
-		Query:             sqlparser.String(stmt),
-		IsDML:             sqlparser.IsDMLStatement(stmt),
-		SingleShardOnly:   false,
+		Keyspace:             keyspace,
+		TargetDestination:    vschema.Destination(),
+		Query:                sqlparser.String(stmt),
+		IsDML:                sqlparser.IsDMLStatement(stmt),
+		SingleShardOnly:      false,
+		MultishardAutocommit: sqlparser.MultiShardAutocommitDirective(stmt),
 	}, nil
 }
