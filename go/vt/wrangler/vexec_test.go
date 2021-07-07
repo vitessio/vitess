@@ -236,6 +236,7 @@ func TestWorkflowListStreams(t *testing.T) {
 					"TransactionTimestamp": 0,
 					"TimeUpdated": 1234,
 					"Message": "",
+					"Tags": "",
 					"CopyState": [
 						{
 							"Table": "t1",
@@ -271,6 +272,7 @@ func TestWorkflowListStreams(t *testing.T) {
 					"TransactionTimestamp": 0,
 					"TimeUpdated": 1234,
 					"Message": "",
+					"Tags": "",
 					"CopyState": [
 						{
 							"Table": "t1",
