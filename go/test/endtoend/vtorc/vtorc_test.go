@@ -275,8 +275,10 @@ func setupVttabletsAndVtorc(t *testing.T, numReplicasReq int, numRdonlyReq int, 
 }
 
 func cleanAndStartVttablet(t *testing.T, vttablet *cluster.Vttablet) error {
-	// remove the database if it exists
+	// remove the databases if they exist
 	_, err := runSQL(t, "DROP DATABASE IF EXISTS vt_ks", vttablet, "")
+	require.NoError(t, err)
+	_, err = runSQL(t, "DROP DATABASE IF EXISTS _vt", vttablet, "")
 	require.NoError(t, err)
 	// stop the replication
 	_, err = runSQL(t, "STOP SLAVE", vttablet, "")
