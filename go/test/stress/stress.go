@@ -37,10 +37,10 @@ const (
 
 type (
 	Result struct {
-		countSelect       int
-		countSelectFailed int
-		countInsert       int
-		countInsertFailed int
+		selects     int
+		selectsFail int
+		inserts     int
+		insertsFail int
 	}
 
 	table struct {
@@ -60,25 +60,25 @@ type (
 	}
 )
 
-func (r Result) PrintQPS(seconds float64) {
+func (r Result) PrintResults(seconds float64) {
 	fmt.Printf(`QPS:
-	select: %d (failed: %d)
-	insert: %d (failed: %d)
+	select: %d, failed: %d, sum: %d
+	insert: %d, failed: %d, sum: %d
 	---------
-	total:	%d (failed: %d)
+	total:	%d, failed: %d, sum: %d
 	
 Queries:
-	select: %d (failed: %d)
-	insert: %d (failed: %d)
+	select: %d, failed: %d, sum: %d
+	insert: %d, failed: %d, sum: %d
 	---------
-	total:	%d (failed: %d)
+	total:	%d, failed: %d, sum: %d
 	
-`, r.countSelect/int(seconds), r.countSelectFailed/int(seconds),
-		r.countInsert/int(seconds), r.countInsertFailed/int(seconds),
-		(r.countInsert+r.countSelect)/int(seconds), (r.countInsertFailed+r.countSelectFailed)/int(seconds),
-		r.countSelect, r.countSelectFailed,
-		r.countInsert, r.countInsertFailed,
-		r.countInsert+r.countSelect, r.countInsertFailed+r.countSelectFailed)
+`, r.selects/int(seconds), r.selectsFail/int(seconds), r.selects/int(seconds)+r.selectsFail/int(seconds),
+		r.inserts/int(seconds), r.insertsFail/int(seconds), r.inserts/int(seconds)+r.insertsFail/int(seconds),
+		(r.inserts+r.selects)/int(seconds), (r.insertsFail+r.selectsFail)/int(seconds), (r.inserts+r.selects)/int(seconds)+(r.insertsFail+r.selectsFail)/int(seconds),
+		r.selects, r.selectsFail, r.selects+r.selectsFail,
+		r.inserts, r.insertsFail, r.inserts+r.insertsFail,
+		r.inserts+r.selects, r.insertsFail+r.selectsFail, r.inserts+r.selects+r.insertsFail+r.selectsFail)
 }
 
 func generateNewTables(nb int) []*table {
@@ -139,10 +139,10 @@ func (s *Stresser) startClients() {
 
 	var finalResult Result
 	for _, r := range perClientResults {
-		finalResult.countSelect += r.countSelect
-		finalResult.countSelectFailed += r.countSelectFailed
-		finalResult.countInsert += r.countInsert
-		finalResult.countInsertFailed += r.countInsertFailed
+		finalResult.selects += r.selects
+		finalResult.selectsFail += r.selectsFail
+		finalResult.inserts += r.inserts
+		finalResult.insertsFail += r.insertsFail
 	}
 	s.doneCh <- finalResult
 }
@@ -184,9 +184,9 @@ func (s *Stresser) insertToRandomTable(conn *mysql.Conn, r *Result) {
 	if s.exec(conn, query) != nil {
 		s.tbls[tblI].nextID++
 		s.tbls[tblI].rows++
-		r.countInsert++
+		r.inserts++
 	} else {
-		r.countInsertFailed++
+		r.insertsFail++
 	}
 }
 
@@ -201,9 +201,9 @@ func (s *Stresser) selectFromRandomTable(conn *mysql.Conn, r *Result) {
 		expLength = 500
 	}
 	if s.assertLength(conn, query, expLength) {
-		r.countSelect++
+		r.selects++
 	} else {
-		r.countSelectFailed++
+		r.selectsFail++
 	}
 }
 
@@ -211,10 +211,10 @@ func (s *Stresser) Wait(timeout time.Duration) {
 	timeoutCh := time.After(timeout)
 	select {
 	case res := <-s.doneCh:
-		res.PrintQPS(s.duration.Seconds())
+		res.PrintResults(s.duration.Seconds())
 	case <-timeoutCh:
 		s.finish = true
 		res := <-s.doneCh
-		res.PrintQPS(s.duration.Seconds())
+		res.PrintResults(s.duration.Seconds())
 	}
 }
