@@ -48,6 +48,9 @@ type Send struct {
 	// ShardNameNeeded specified that the shard name is added to the bind variables
 	ShardNameNeeded bool
 
+	// MultishardAutocommit specifies that a multishard transaction query can autocommit
+	MultishardAutocommit bool
+
 	noInputs
 }
 
@@ -108,7 +111,7 @@ func (s *Send) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariabl
 
 	canAutocommit := false
 	if s.IsDML {
-		canAutocommit = len(rss) == 1 && vcursor.AutocommitApproval()
+		canAutocommit = (len(rss) == 1 || s.MultishardAutocommit) && vcursor.AutocommitApproval()
 	}
 
 	rollbackOnError := s.IsDML // for non-dml queries, there's no need to do a rollback
