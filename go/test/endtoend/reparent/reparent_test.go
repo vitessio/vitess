@@ -327,7 +327,7 @@ func reparentFromOutside(t *testing.T, downMaster bool) {
 	checkReparentFromOutside(t, tab2, downMaster, baseTime)
 
 	if !downMaster {
-		err := tab1.VttabletProcess.TearDown()
+		err := tab1.VttabletProcess.TearDownWithTimeout(30 * time.Second)
 		require.NoError(t, err)
 	}
 }
