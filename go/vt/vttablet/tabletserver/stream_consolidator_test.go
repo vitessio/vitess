@@ -323,13 +323,13 @@ func TestConsolidatorMemoryLimits(t *testing.T) {
 	t.Run("two-phase consolidation (time)", func(t *testing.T) {
 		ct := consolidationTest{
 			cc:              NewStreamConsolidator(128*1024, 2*1024, nocleanup),
-			streamItemDelay: 10 * time.Millisecond,
+			streamItemDelay: 2 * time.Millisecond,
 			streamItemCount: 10,
 		}
 
 		ct.run(10, func(worker int) (string, StreamCallback) {
 			if worker > 4 {
-				time.Sleep(110 * time.Millisecond)
+				time.Sleep(50 * time.Millisecond)
 			}
 			return "select 1", func(_ *sqltypes.Result) error {
 				return nil
