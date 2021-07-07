@@ -150,6 +150,17 @@ func getSharedUniqueKeys(sourceUniqueKeys, targetUniqueKeys [](*vrepl.UniqueKey)
 	return nil, nil
 }
 
+// getUniqueKeyCoveredByColumns returns the first unique key from given list, whose columns all appear
+// in given column list.
+func getUniqueKeyCoveredByColumns(uniqueKeys [](*vrepl.UniqueKey), columns *vrepl.ColumnList) (chosenUniqueKey *vrepl.UniqueKey) {
+	for _, uniqueKey := range uniqueKeys {
+		if uniqueKey.Columns.IsSubsetOf(columns) {
+			return uniqueKey
+		}
+	}
+	return nil
+}
+
 // readAutoIncrement reads the AUTO_INCREMENT vlaue, if any, for a give ntable
 func (v *VRepl) readAutoIncrement(ctx context.Context, conn *dbconnpool.DBConnection, tableName string) (autoIncrement uint64, err error) {
 	query, err := sqlparser.ParseAndBind(sqlGetAutoIncrement,
@@ -415,7 +426,14 @@ func (v *VRepl) analyzeTables(ctx context.Context, conn *dbconnpool.DBConnection
 	}
 	v.chosenSourceUniqueKey, v.chosenTargetUniqueKey = getSharedUniqueKeys(sourceUniqueKeys, targetUniqueKeys, v.parser.ColumnRenameMap())
 	if v.chosenSourceUniqueKey == nil {
-		v.chosenSourceUniqueKey = sourceUniqueKeys[0]
+		// VReplication supports completely different unique keys on source and target, covering
+		// some/completely different columns. The only condition is that the key on source
+		// must use columns which all exist on target table.
+		v.chosenSourceUniqueKey = getUniqueKeyCoveredByColumns(sourceUniqueKeys, v.sourceSharedColumns)
+		if v.chosenSourceUniqueKey == nil {
+			// Still no luck.
+			return fmt.Errorf("Found no possible unique key on `%s` whose columns are in target table `%s`", v.sourceTable, v.targetTable)
+		}
 	}
 	if v.chosenTargetUniqueKey == nil {
 		v.chosenTargetUniqueKey = targetUniqueKeys[0]
@@ -529,11 +547,16 @@ func (v *VRepl) analyzeBinlogSource(ctx context.Context) {
 		Filter:        &binlogdatapb.Filter{},
 		StopAfterCopy: false,
 	}
+
+	encodeColumns := func(columns *vrepl.ColumnList) string {
+		return textutil.EscapeJoin(columns.Names(), ",")
+	}
 	rule := &binlogdatapb.Rule{
-		Match:                  v.targetTable,
-		Filter:                 v.filterQuery,
-		SourceUniqueKeyColumns: textutil.EscapeJoin(v.chosenSourceUniqueKey.Columns.Names(), ","),
-		TargetUniqueKeyColumns: textutil.EscapeJoin(v.chosenTargetUniqueKey.Columns.Names(), ","),
+		Match:                        v.targetTable,
+		Filter:                       v.filterQuery,
+		SourceUniqueKeyColumns:       encodeColumns(&v.chosenSourceUniqueKey.Columns),
+		TargetUniqueKeyColumns:       encodeColumns(&v.chosenTargetUniqueKey.Columns),
+		SourceUniqueKeyTargetColumns: encodeColumns(v.chosenSourceUniqueKey.Columns.MappedNamesColumnList(v.sharedColumnsMap)),
 	}
 	if len(v.convertCharset) > 0 {
 		rule.ConvertCharset = v.convertCharset

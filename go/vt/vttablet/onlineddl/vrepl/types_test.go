@@ -98,3 +98,35 @@ func TestIsSubsetOf(t *testing.T) {
 		)
 	}
 }
+
+func TestMappedNamesColumnList(t *testing.T) {
+	tt := []struct {
+		columns  *ColumnList
+		namesMap map[string]string
+		expected *ColumnList
+	}{
+		{
+			columns:  ParseColumnList("a,b,c"),
+			namesMap: map[string]string{},
+			expected: ParseColumnList("a,b,c"),
+		},
+		{
+			columns:  ParseColumnList("a,b,c"),
+			namesMap: map[string]string{"x": "y"},
+			expected: ParseColumnList("a,b,c"),
+		},
+		{
+			columns:  ParseColumnList("a,b,c"),
+			namesMap: map[string]string{"a": "x", "c": "y"},
+			expected: ParseColumnList("x,b,y"),
+		},
+	}
+	for _, tc := range tt {
+		name := fmt.Sprintf("%v:%v", tc.columns.Names(), tc.namesMap)
+		t.Run(name, func(t *testing.T) {
+			mappedNames := tc.columns.MappedNamesColumnList(tc.namesMap)
+			assert.Equal(t, tc.expected, mappedNames)
+		},
+		)
+	}
+}
