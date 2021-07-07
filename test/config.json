@@ -453,6 +453,15 @@
 			"RetryMax": 0,
 			"Tags": []
 		},
+		"stress": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/stress"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "16",
+			"RetryMax": 0,
+			"Tags": []
+		},
 		"tabletgateway_buffer": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/tabletgateway/buffer"],

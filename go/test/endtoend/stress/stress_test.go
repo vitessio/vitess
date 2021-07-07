@@ -21,6 +21,7 @@ import (
 	"os"
 	"testing"
 	"time"
+	"vitess.io/vitess/go/test/stress"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
@@ -85,7 +86,7 @@ func TestMain(m *testing.M) {
 func TestSimpleStressTest(t *testing.T) {
 	defer cluster.PanicHandler(t)
 
-	s := New(t, &vtParams, 10*time.Second)
+	s := stress.New(t, &vtParams, 10*time.Second)
 
 	s.Start()
 
