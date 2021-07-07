@@ -85,7 +85,7 @@ func TestMain(m *testing.M) {
 func TestSimpleStressTest(t *testing.T) {
 	defer cluster.PanicHandler(t)
 
-	s := New(t, vtParams, 10*time.Second)
+	s := New(t, &vtParams, 10*time.Second)
 
 	s.Start()
 

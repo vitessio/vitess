@@ -37,8 +37,10 @@ const (
 
 type (
 	Result struct {
-		countSelect int
-		countInsert int
+		countSelect       int
+		countSelectFailed int
+		countInsert       int
+		countInsertFailed int
 	}
 
 	table struct {
@@ -50,7 +52,7 @@ type (
 	Stresser struct {
 		doneCh     chan Result
 		tbls       []*table
-		connParams mysql.ConnParams
+		connParams *mysql.ConnParams
 		maxClient  int
 		duration   time.Duration
 		t          *testing.T
@@ -59,11 +61,23 @@ type (
 
 func (r Result) PrintQPS(seconds float64) {
 	fmt.Printf(`QPS:
-	select: %d
-	insert: %d
+	select: %d (failed: %d)
+	insert: %d (failed: %d)
 	---------
-	total:	%d
-`, r.countSelect/int(seconds), r.countInsert/int(seconds), (r.countInsert+r.countSelect)/int(seconds))
+	total:	%d (failed: %d)
+	
+Queries:
+	select: %d (failed: %d)
+	insert: %d (failed: %d)
+	---------
+	total:	%d (failed: %d)
+	
+`, r.countSelect/int(seconds), r.countSelectFailed/int(seconds),
+		r.countInsert/int(seconds), r.countInsertFailed/int(seconds),
+		(r.countInsert+r.countSelect)/int(seconds), (r.countInsertFailed+r.countSelectFailed)/int(seconds),
+		r.countSelect, r.countSelectFailed,
+		r.countInsert, r.countInsertFailed,
+		r.countInsert+r.countSelect, r.countInsertFailed+r.countSelectFailed)
 }
 
 func generateNewTables(nb int) []*table {
@@ -76,7 +90,7 @@ func generateNewTables(nb int) []*table {
 	return tbls
 }
 
-func createTables(t *testing.T, params mysql.ConnParams, nb int) []*table {
+func createTables(t *testing.T, params *mysql.ConnParams, nb int) []*table {
 	conn := newClient(t, params)
 	defer conn.Close()
 
@@ -87,7 +101,12 @@ func createTables(t *testing.T, params mysql.ConnParams, nb int) []*table {
 	return tbls
 }
 
-func New(t *testing.T, conn mysql.ConnParams, duration time.Duration) *Stresser {
+func (s *Stresser) SetConn(conn *mysql.ConnParams) *Stresser {
+	s.connParams = conn
+	return s
+}
+
+func New(t *testing.T, conn *mysql.ConnParams, duration time.Duration) *Stresser {
 	return &Stresser{
 		doneCh:     make(chan Result),
 		t:          t,
@@ -97,10 +116,11 @@ func New(t *testing.T, conn mysql.ConnParams, duration time.Duration) *Stresser 
 	}
 }
 
-func (s *Stresser) Start() {
+func (s *Stresser) Start() *Stresser {
 	fmt.Println("Starting load testing ...")
 	s.tbls = createTables(s.t, s.connParams, 100)
 	go s.startClients()
+	return s
 }
 
 func (s *Stresser) startClients() {
@@ -118,45 +138,55 @@ func (s *Stresser) startClients() {
 	var finalResult Result
 	for _, r := range perClientResults {
 		finalResult.countSelect += r.countSelect
+		finalResult.countSelectFailed += r.countSelectFailed
 		finalResult.countInsert += r.countInsert
+		finalResult.countInsertFailed += r.countInsertFailed
 	}
 	s.doneCh <- finalResult
 }
 
 func (s *Stresser) startStressClient(resultCh chan Result) {
-	conn := newClient(s.t, s.connParams)
+	connParams := s.connParams
+	conn := newClient(s.t, connParams)
 	defer conn.Close()
 
 	var res Result
 
 	timeout := time.After(s.duration)
 	for {
+		if connParams != s.connParams {
+			connParams = s.connParams
+			conn.Close()
+			conn = newClient(s.t, connParams)
+		}
 		select {
 		case <-timeout:
 			resultCh <- res
 			return
 		case <-time.After(15 * time.Microsecond):
-			s.insertToRandomTable(conn)
-			res.countInsert++
+			s.insertToRandomTable(conn, &res)
 		case <-time.After(1 * time.Microsecond):
-			s.selectFromRandomTable(conn)
-			res.countSelect++
+			s.selectFromRandomTable(conn, &res)
 		}
 	}
 }
 
-func (s *Stresser) insertToRandomTable(conn *mysql.Conn) {
+func (s *Stresser) insertToRandomTable(conn *mysql.Conn, r *Result) {
 	tblI := rand.Int() % len(s.tbls)
 	s.tbls[tblI].mu.Lock()
 	defer s.tbls[tblI].mu.Unlock()
 
 	query := fmt.Sprintf("insert into %s(id, val) values(%d, 'name')", s.tbls[tblI].name, s.tbls[tblI].nextID)
-	s.tbls[tblI].nextID++
-	s.tbls[tblI].rows++
-	exec(s.t, conn, query)
+	if exec(s.t, conn, query) != nil {
+		s.tbls[tblI].nextID++
+		s.tbls[tblI].rows++
+		r.countInsert++
+	} else {
+		r.countInsertFailed++
+	}
 }
 
-func (s *Stresser) selectFromRandomTable(conn *mysql.Conn) {
+func (s *Stresser) selectFromRandomTable(conn *mysql.Conn, r *Result) {
 	tblI := rand.Int() % len(s.tbls)
 	s.tbls[tblI].mu.Lock()
 	defer s.tbls[tblI].mu.Unlock()
@@ -166,7 +196,11 @@ func (s *Stresser) selectFromRandomTable(conn *mysql.Conn) {
 	if expLength > 500 {
 		expLength = 500
 	}
-	assertLength(s.t, conn, query, expLength)
+	if assertLength(s.t, conn, query, expLength) {
+		r.countSelect++
+	} else {
+		r.countSelectFailed++
+	}
 }
 
 func (s *Stresser) Wait(timeout time.Duration) {
