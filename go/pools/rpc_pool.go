@@ -79,6 +79,8 @@ func (pool *RPCPool) Release() { pool.rp.Put(rpc) }
 // It waits for all slots to be freed via Release.
 func (pool *RPCPool) Close() { pool.rp.Close() }
 
+func (pool *RPCPool) StatsJSON() string { return pool.rp.StatsJSON() }
+
 type _rpc struct{}
 
 var rpc = &_rpc{}
