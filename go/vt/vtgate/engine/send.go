@@ -159,6 +159,9 @@ func (s *Send) description() PrimitiveDescription {
 		"IsDML":           s.IsDML,
 		"SingleShardOnly": s.SingleShardOnly,
 	}
+	if s.MultishardAutocommit {
+		other["MultishardAutocommit"] = true
+	}
 	return PrimitiveDescription{
 		OperatorType:      "Send",
 		Keyspace:          s.Keyspace,
