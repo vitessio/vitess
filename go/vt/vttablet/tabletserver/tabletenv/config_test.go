@@ -214,7 +214,7 @@ func TestFlags(t *testing.T) {
 			TransactionLimitByPrincipal: true,
 		},
 		EnforceStrictTransTables: true,
-		EnableOnlineDDLExecutor:  true,
+		EnableOnlineDDL:          true,
 		DB:                       &dbconfigs.DBConfigs{},
 	}
 	assert.Equal(t, want.DB, currentConfig.DB)
