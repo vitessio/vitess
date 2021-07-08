@@ -43,11 +43,13 @@ var (
 	localDbPort = flag.Int("db_port", 0, "local mysql port, set this to enable local fast check")
 )
 
-// VTGR manages VTGR
+// VTGR is the interface to manage the component to set up group replication with Vitess.
+// The main goal of it is to reconcile MySQL group and the Vitess topology.
+// Caller should use OpenTabletDiscovery to create the VTGR instance.
 type VTGR struct {
-	// Shards are all the shards that a VTGR is monitored
-	// caller can choose to iterate the shards to scan and repair for more granule control (e.g., stats report)
-	// instead of calling ScanAndRepair() directly
+	// Shards are all the shards that a VTGR is monitoring.
+	// Caller can choose to iterate the shards to scan and repair for more granular control (e.g., stats report)
+	// instead of calling ScanAndRepair() directly.
 	Shards []*controller.GRShard
 	topo   controller.GRTopo
 	tmc    tmclient.TabletManagerClient
@@ -63,7 +65,7 @@ func newVTGR(ctx context.Context, ts controller.GRTopo, tmc tmclient.TabletManag
 }
 
 // OpenTabletDiscovery opens connection with topo server
-// and triggers the first round of controller based on parameter
+// and triggers the first round of controller based on specified cells and keyspace/shards.
 func OpenTabletDiscovery(ctx context.Context, cellsToWatch, clustersToWatch []string) *VTGR {
 	if *vtgrConfigFile == "" {
 		log.Fatal("vtgr_config is required")
@@ -89,7 +91,7 @@ func OpenTabletDiscovery(ctx context.Context, cellsToWatch, clustersToWatch []st
 			// Assume this is a keyspace and find all shards in keyspace
 			shardNames, err := vtgr.topo.GetShardNames(ctx, ks)
 			if err != nil {
-				// Log the errr and continue
+				// Log the error and continue
 				log.Errorf("Error fetching shards for keyspace %v: %v", ks, err)
 				continue
 			}

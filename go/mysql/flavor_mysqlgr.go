@@ -47,36 +47,34 @@ func (mysqlGRFlavor) startReplicationCommand() string {
 	return ""
 }
 
-// restartReplicationCommands returns the commands to stop, reset and start the replication.
-// for mysqlGRFlavor we don't need this functionality
+// restartReplicationCommands is disabled in mysqlGRFlavor
 func (mysqlGRFlavor) restartReplicationCommands() []string {
 	return []string{}
 }
 
-// startReplicationUntilAfter will restart replication, but only allow it
-// to run until `pos` is reached. After reaching pos, replication will be stopped again
+// startReplicationUntilAfter is disabled in mysqlGRFlavor
 func (mysqlGRFlavor) startReplicationUntilAfter(pos Position) string {
 	return ""
 }
 
 // stopReplicationCommand returns the command to stop the replication.
+// we return empty here since `STOP GROUP_REPLICATION` should be called by
+// the external orchestrator
 func (mysqlGRFlavor) stopReplicationCommand() string {
-	return "STOP GROUP_REPLICATION"
+	return ""
 }
 
-// stopIOThreadCommand returns the command to stop the replica's io thread only.
+// stopIOThreadCommand is disabled in mysqlGRFlavor
 func (mysqlGRFlavor) stopIOThreadCommand() string {
 	return ""
 }
 
-// resetReplicationCommands returns the commands to completely reset
-// replication on the host.
+// resetReplicationCommands is disabled in mysqlGRFlavor
 func (mysqlGRFlavor) resetReplicationCommands(c *Conn) []string {
 	return []string{}
 }
 
-// setReplicationPositionCommands returns the commands to set the
-// replication position at which the replica will resume.
+// setReplicationPositionCommands is disabled in mysqlGRFlavor
 func (mysqlGRFlavor) setReplicationPositionCommands(pos Position) []string {
 	return []string{}
 }

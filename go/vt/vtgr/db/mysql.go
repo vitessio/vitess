@@ -23,7 +23,7 @@ import (
 	"strconv"
 	"strings"
 
-	gouuid "github.com/pborman/uuid"
+	gouuid "github.com/google/uuid"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/log"
@@ -34,7 +34,7 @@ import (
 )
 
 var (
-	configFile     = flag.String("db_config", "", "db config file name")
+	configFilePath = flag.String("db_config", "", "full path to db config file that will be used by VTGR")
 	dbFlavor       = flag.String("db_flavor", "MySQL56", "mysql flavor override")
 	mysqlGroupPort = flag.Int("gr_port", 33061, "port to bootstrap a mysql group")
 
@@ -116,8 +116,8 @@ type GroupView struct {
 	UnresolvedMembers []*GroupMember
 }
 
-// SQLAgentImp implements sqlAgent
-type SQLAgentImp struct {
+// SQLAgentImpl implements Agent
+type SQLAgentImpl struct {
 	config   *config.Configuration
 	dbFlavor string
 }
@@ -138,17 +138,17 @@ func NewGroupMember(state, role, host string, port int, readonly bool) *GroupMem
 	}
 }
 
-// NewVTGRSqlAgent creates a SQLAgentImp
-func NewVTGRSqlAgent() *SQLAgentImp {
+// NewVTGRSqlAgent creates a SQLAgentImpl
+func NewVTGRSqlAgent() *SQLAgentImpl {
 	var conf *config.Configuration
-	if (*configFile) != "" {
-		log.Infof("use config from %v", *configFile)
-		conf = config.ForceRead(*configFile)
+	if (*configFilePath) != "" {
+		log.Infof("use config from %v", *configFilePath)
+		conf = config.ForceRead(*configFilePath)
 	} else {
 		log.Warningf("use default config")
 		conf = config.Config
 	}
-	agent := &SQLAgentImp{
+	agent := &SQLAgentImpl{
 		config:   conf,
 		dbFlavor: *dbFlavor,
 	}
@@ -156,7 +156,7 @@ func NewVTGRSqlAgent() *SQLAgentImp {
 }
 
 // BootstrapGroupLocked implements Agent interface
-func (agent *SQLAgentImp) BootstrapGroupLocked(instanceKey *inst.InstanceKey) error {
+func (agent *SQLAgentImpl) BootstrapGroupLocked(instanceKey *inst.InstanceKey) error {
 	if instanceKey == nil {
 		return errors.New("nil instance key for bootstrap")
 	}
@@ -171,7 +171,7 @@ func (agent *SQLAgentImp) BootstrapGroupLocked(instanceKey *inst.InstanceKey) er
 	// If there is a group name stored locally, we should try to reuse it
 	// for port, we will override with a new one
 	if uuid == "" {
-		uuid = gouuid.NewUUID().String()
+		uuid = gouuid.New().String()
 		log.Infof("Try to bootstrap with a new uuid")
 	}
 	log.Infof("Bootstrap group on %v with %v", instanceKey.Hostname, uuid)
@@ -195,13 +195,13 @@ func (agent *SQLAgentImp) BootstrapGroupLocked(instanceKey *inst.InstanceKey) er
 }
 
 // StopGroupLocked implements Agent interface
-func (agent *SQLAgentImp) StopGroupLocked(instanceKey *inst.InstanceKey) error {
+func (agent *SQLAgentImpl) StopGroupLocked(instanceKey *inst.InstanceKey) error {
 	cmd := "stop group_replication"
 	return execInstanceWithTopo(instanceKey, cmd)
 }
 
 // SetReadOnly implements Agent interface
-func (agent *SQLAgentImp) SetReadOnly(instanceKey *inst.InstanceKey, readOnly bool) error {
+func (agent *SQLAgentImpl) SetReadOnly(instanceKey *inst.InstanceKey, readOnly bool) error {
 	// Setting super_read_only ON implicitly forces read_only ON
 	// Setting read_only OFF implicitly forces super_read_only OFF
 	// https://www.perconaicom/blog/2016/09/27/using-the-super_read_only-system-variable/
@@ -213,7 +213,7 @@ func (agent *SQLAgentImp) SetReadOnly(instanceKey *inst.InstanceKey, readOnly bo
 
 // JoinGroupLocked implements Agent interface
 // Note: caller should grab the lock before calling this
-func (agent *SQLAgentImp) JoinGroupLocked(instanceKey *inst.InstanceKey, primaryInstanceKey *inst.InstanceKey) error {
+func (agent *SQLAgentImpl) JoinGroupLocked(instanceKey *inst.InstanceKey, primaryInstanceKey *inst.InstanceKey) error {
 	var numExistingMembers int
 	var uuid string
 	query := `select count(*) as count, @@group_replication_group_name as group_name
@@ -273,7 +273,7 @@ func (agent *SQLAgentImp) JoinGroupLocked(instanceKey *inst.InstanceKey, primary
 }
 
 // Failover implements Agent interface
-func (agent *SQLAgentImp) Failover(instance *inst.InstanceKey) error {
+func (agent *SQLAgentImpl) Failover(instance *inst.InstanceKey) error {
 	var memberUUID string
 	query := `select member_id
 		from performance_schema.replication_group_members
@@ -296,7 +296,7 @@ func (agent *SQLAgentImp) Failover(instance *inst.InstanceKey) error {
 }
 
 // FetchGroupView implements Agent interface
-func (agent *SQLAgentImp) FetchGroupView(alias string, instanceKey *inst.InstanceKey) (*GroupView, error) {
+func (agent *SQLAgentImpl) FetchGroupView(alias string, instanceKey *inst.InstanceKey) (*GroupView, error) {
 	view := NewGroupView(alias, instanceKey.Hostname, instanceKey.Port)
 	var groupName string
 	var isReadOnly bool
@@ -345,7 +345,7 @@ func (view *GroupView) GetPrimaryView() (string, int, bool) {
 	return "", 0, false
 }
 
-func (agent *SQLAgentImp) getGroupNameAndMemberState(instanceKey *inst.InstanceKey) (string, string, error) {
+func (agent *SQLAgentImpl) getGroupNameAndMemberState(instanceKey *inst.InstanceKey) (string, string, error) {
 	// If there is an instance that is unreachable but we still have quorum, GR will remove it from
 	// the replication_group_members and Failover if it is the primary node
 	// If the state becomes UNREACHABLE it indicates there is a network partition inside the group
@@ -378,7 +378,7 @@ func (agent *SQLAgentImp) getGroupNameAndMemberState(instanceKey *inst.InstanceK
 }
 
 // FetchApplierGTIDSet implements Agent interface
-func (agent *SQLAgentImp) FetchApplierGTIDSet(instanceKey *inst.InstanceKey) (mysql.GTIDSet, error) {
+func (agent *SQLAgentImpl) FetchApplierGTIDSet(instanceKey *inst.InstanceKey) (mysql.GTIDSet, error) {
 	var gtidSet string
 	// TODO: should we also take group_replication_recovery as well?
 	query := `select gtid_subtract(concat(received_transaction_set, ',', @@global.gtid_executed), '') as gtid_set
