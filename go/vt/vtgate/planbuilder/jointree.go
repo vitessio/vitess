@@ -61,6 +61,13 @@ type (
 		pred  sqlparser.Expr
 	}
 
+	// cost is used to make it easy to compare the cost of two plans with each other
+	cost struct {
+		vindexCost int
+		isUnique   bool
+		opCode     engine.RouteOpcode
+	}
+
 	routePlan struct {
 		routeOpCode engine.RouteOpcode
 		solved      semantics.TableSet
@@ -76,7 +83,8 @@ type (
 		// leftJoins are the join conditions evaluated by this plan
 		leftJoins []*outerTable
 
-		// vindex and vindexValues is set if a vindex will be used for this route.
+		// these fields are set if a vindex will be used for this route
+		currentCost      cost // currentCost tracks the cost of the chosen access method
 		vindex           vindexes.Vindex
 		vindexValues     []sqltypes.PlanValue
 		vindexPredicates []sqlparser.Expr
@@ -226,6 +234,28 @@ type vindexPlusPredicates struct {
 	foundVindex vindexes.Vindex
 	opcode      engine.RouteOpcode
 	predicates  []sqlparser.Expr
+}
+
+// costFor
+func costFor(values []sqltypes.PlanValue, foundVindex vindexes.Vindex, opcode engine.RouteOpcode) cost {
+	switch opcode {
+	// For these opcodes, we should not have a vindex, so we just return the opcode as the cost
+	case engine.SelectUnsharded, engine.SelectNext, engine.SelectDBA, engine.SelectReference, engine.SelectNone, engine.SelectScatter:
+		return cost{
+			opCode: opcode,
+		}
+	}
+
+	// if we have a multiplier that is non-zero, we should have a vindex
+	if foundVindex == nil {
+		panic("expected a vindex")
+	}
+
+	return cost{
+		vindexCost: foundVindex.Cost(),
+		isUnique:   foundVindex.IsUnique(),
+		opCode:     opcode,
+	}
 }
 
 // addPredicate adds these predicates added to it. if the predicates can help,
@@ -552,7 +582,9 @@ func (rp *routePlan) pickBestAvailableVindex() {
 			continue
 		}
 		// Choose the minimum cost vindex from the ones which are covered
-		if rp.vindex == nil || v.colVindex.Vindex.Cost() < rp.vindex.Cost() {
+		thisCost := costFor(v.values, v.foundVindex, v.opcode)
+		if rp.vindex == nil || less(thisCost, rp.currentCost) {
+			rp.currentCost = thisCost
 			rp.routeOpCode = v.opcode
 			rp.vindex = v.foundVindex
 			rp.vindexValues = v.values
@@ -632,4 +664,26 @@ func (jp *joinPlan) pushOutputColumns(columns []*sqlparser.ColName, semTable *se
 		}
 	}
 	return outputColumns
+}
+
+var opCodeVal = map[engine.RouteOpcode]int{
+	engine.SelectEqualUnique: 1,
+	engine.SelectEqual:       2,
+	engine.SelectIN:          3,
+	engine.SelectMultiEqual:  4,
+	engine.SelectScatter:     5,
+}
+
+// less compares two costs and returns true if the first cost is cheaper than the second
+func less(c1, c2 cost) bool {
+	switch {
+	case opCodeVal[c1.opCode] < opCodeVal[c2.opCode]:
+		return true
+	case opCodeVal[c1.opCode] > opCodeVal[c2.opCode]:
+		return false
+	case c1.isUnique == c2.isUnique:
+		return c1.vindexCost <= c2.vindexCost
+	default:
+		return c1.isUnique
+	}
 }
