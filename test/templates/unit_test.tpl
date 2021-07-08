@@ -1,7 +1,10 @@
 name: {{.Name}}
 on: [push, pull_request]
-jobs:
+concurrency:
+  group: ${{"{{"}} github.ref {{"}}"}}
+  cancel-in-progress: true
 
+jobs:
   test:
     runs-on: ubuntu-18.04
 
