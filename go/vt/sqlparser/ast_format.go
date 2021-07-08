@@ -464,7 +464,14 @@ func (ct *ColumnType) Format(buf *TrackedBuffer) {
 		}
 	}
 	if ct.Options.Default != nil {
-		buf.astPrintf(ct, " %s %v", keywordStrings[DEFAULT], ct.Options.Default)
+		buf.WriteString(" " + keywordStrings[DEFAULT])
+		_, isLiteral := ct.Options.Default.(*Literal)
+		_, isNullVal := ct.Options.Default.(*NullVal)
+		if isLiteral || isNullVal {
+			buf.astPrintf(ct, " %v", ct.Options.Default)
+		} else {
+			buf.astPrintf(ct, " (%v)", ct.Options.Default)
+		}
 	}
 	if ct.Options.OnUpdate != nil {
 		buf.astPrintf(ct, " %s %s %v", keywordStrings[ON], keywordStrings[UPDATE], ct.Options.OnUpdate)

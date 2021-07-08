@@ -64,6 +64,7 @@ var (
 		"onlineddl_declarative",
 		"tabletmanager_throttler",
 		"tabletmanager_throttler_custom_config",
+		"mysql80",
 	}
 	// TODO: currently some percona tools including xtrabackup are installed on all clusters, we can possibly optimize
 	// this by only installing them in the required clusters
@@ -72,6 +73,7 @@ var (
 		"18",
 		"24",
 	}
+	clustersRequiringUbuntu20 = "mysql80"
 )
 
 type unitTest struct {
@@ -81,6 +83,7 @@ type unitTest struct {
 type clusterTest struct {
 	Name, Shard                  string
 	MakeTools, InstallXtraBackup bool
+	Ubuntu20                     bool
 }
 
 func mergeBlankLines(buf *bytes.Buffer) string {
@@ -143,6 +146,13 @@ func generateClusterWorkflows() {
 		for _, xtraBackupCluster := range xtraBackupClusters {
 			if xtraBackupCluster == cluster {
 				test.InstallXtraBackup = true
+				break
+			}
+		}
+		ubuntu20Clusters := parseList(clustersRequiringUbuntu20)
+		for _, ubuntu20Cluster := range ubuntu20Clusters {
+			if ubuntu20Cluster == cluster {
+				test.Ubuntu20 = true
 				break
 			}
 		}
