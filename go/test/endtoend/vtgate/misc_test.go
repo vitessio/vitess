@@ -521,7 +521,7 @@ func TestFunctionInDefault(t *testing.T) {
 	// this query fails because mysql57 does not support functions in default clause
 	require.Error(t, err)
 	exec(t, conn, `create table function_default (x varchar(25) DEFAULT "check")`)
-	defer exec(t, conn, "drop table function_default")
+	exec(t, conn, "drop table function_default")
 }
 
 func assertMatches(t *testing.T, conn *mysql.Conn, query, expected string) {

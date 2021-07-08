@@ -36,7 +36,10 @@ func TestFunctionInDefault(t *testing.T) {
 	defer conn.Close()
 
 	exec(t, conn, `create table function_default (x varchar(25) DEFAULT (TRIM(" check ")))`)
-	defer exec(t, conn, "drop table function_default")
+	exec(t, conn, "drop table function_default")
+
+	exec(t, conn, `create table function_default (x varchar(25) DEFAULT "check")`)
+	exec(t, conn, "drop table function_default")
 }
 
 func exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
