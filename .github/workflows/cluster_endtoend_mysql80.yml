@@ -1,9 +1,11 @@
-name: {{.Name}}
+# DO NOT MODIFY: THIS FILE IS GENERATED USING "make generate_ci_workflows"
+
+name: Cluster (mysql80)
 on: [push, pull_request]
 jobs:
 
   build:
-    {{if .Ubuntu20}}runs-on: ubuntu-20.04{{else}}runs-on: ubuntu-18.04{{end}}
+    runs-on: ubuntu-20.04
 
     steps:
     - name: Set up Go
@@ -24,26 +26,14 @@ jobs:
         sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
         go mod download
 
-        {{if .InstallXtraBackup}}
-
         wget https://repo.percona.com/apt/percona-release_latest.$(lsb_release -sc)_all.deb
         sudo apt-get install -y gnupg2
         sudo dpkg -i percona-release_latest.$(lsb_release -sc)_all.deb
         sudo apt-get update
         sudo apt-get install percona-xtrabackup-24
 
-        {{end}}
-
-    {{if .MakeTools}}
-
-    - name: Installing zookeeper and consul
-      run: |
-          make tools
-
-    {{end}}
-
     - name: Run cluster endtoend test
       timeout-minutes: 30
       run: |
         source build.env
-        eatmydata -- go run test.go -docker=false -print-log -follow -shard {{.Shard}}
+        eatmydata -- go run test.go -docker=false -print-log -follow -shard mysql80
