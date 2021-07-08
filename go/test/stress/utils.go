@@ -34,7 +34,7 @@ func (s *Stresser) assertLength(conn *mysql.Conn, query string, expectedLength i
 		return false
 	}
 	if diff := cmp.Diff(expectedLength, len(qr.Rows)); diff != "" {
-		if s.log {
+		if s.cfg.PrintErrLogs {
 			s.t.Logf("Query: %s (-want +got):\n%s", query, diff)
 		}
 		return false
@@ -46,7 +46,7 @@ func (s *Stresser) exec(conn *mysql.Conn, query string) *sqltypes.Result {
 	s.t.Helper()
 	qr, err := conn.ExecuteFetch(query, 1000, true)
 	if err != nil {
-		if s.log {
+		if s.cfg.PrintErrLogs {
 			s.t.Logf("Err: %s, for query: %s", err.Error(), query)
 		}
 		return nil
