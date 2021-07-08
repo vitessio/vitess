@@ -252,7 +252,7 @@ func (shard *GRShard) stopAndRebootstrap(ctx context.Context) error {
 	// Before bootstrap the group, we need to stop group first
 	// abort aggressively here as soon as we encounter an error
 	// StopGroupLocked will check if instance is NOT in "ONLINE"/"RECOVERING" state (i.e., UNREACHABLE, ERROR or OFFLINE)
-	errorRecorder := shard.fanout(func(instance *grInstance, wg *sync.WaitGroup, er concurrency.ErrorRecorder) {
+	errorRecorder := shard.forAllInstances(func(instance *grInstance, wg *sync.WaitGroup, er concurrency.ErrorRecorder) {
 		defer wg.Done()
 		status := shard.sqlGroup.GetStatus(instance.instanceKey)
 		if status != nil && status.State == db.OFFLINE {
@@ -318,9 +318,9 @@ func (shard *GRShard) getGTIDSetFromAll(skipMaster bool) (*groupGTIDRecorder, *c
 	}
 	gtidRecorder := &groupGTIDRecorder{}
 	// Iterate through all the instances in the shard and find the one with largest GTID set with best effort
-	// We wrap it with fanout so that the failover can continue if there is a host
+	// We wrap it with forAllInstances so that the failover can continue if there is a host
 	// that is unreachable
-	errorRecorder := shard.fanout(func(instance *grInstance, wg *sync.WaitGroup, er concurrency.ErrorRecorder) {
+	errorRecorder := shard.forAllInstances(func(instance *grInstance, wg *sync.WaitGroup, er concurrency.ErrorRecorder) {
 		defer wg.Done()
 		if skipMaster && instance.instanceKey.Hostname == mysqlPrimaryHost && instance.instanceKey.Port == mysqlPrimaryPort {
 			log.Infof("Skip %v to failover to a non-primary node", mysqlPrimaryHost)
@@ -354,12 +354,12 @@ func (shard *GRShard) findRebootstrapCandidate(ctx context.Context) (*grInstance
 	err = errorRecorder.Error()
 	// We cannot tolerate any error from mysql during a rebootstrap.
 	if err != nil {
-		log.Errorf("Failed to fetch all GTID with fanout for rebootstrap: %v", err)
+		log.Errorf("Failed to fetch all GTID with forAllInstances for rebootstrap: %v", err)
 		return nil, err
 	}
 	candidate, err := shard.findFailoverCandidateFromRecorder(ctx, gtidRecorder, nil)
 	if err != nil {
-		log.Errorf("Failed to find rebootstrap candidate by GTID after fanout: %v", err)
+		log.Errorf("Failed to find rebootstrap candidate by GTID after forAllInstances: %v", err)
 		return nil, err
 	}
 	if candidate == nil {
@@ -386,9 +386,9 @@ func (shard *GRShard) findFailoverCandidate(ctx context.Context) (*grInstance, e
 	// Failover within the group is safe, finding the largest GTID is an optimization.
 	// therefore we don't check error from errorRecorder just log it
 	if err != nil {
-		log.Warningf("Errors when fetch all GTID with fanout for failover: %v", err)
+		log.Warningf("Errors when fetch all GTID with forAllInstances for failover: %v", err)
 	}
-	shard.fanout(func(instance *grInstance, wg *sync.WaitGroup, er concurrency.ErrorRecorder) {
+	shard.forAllInstances(func(instance *grInstance, wg *sync.WaitGroup, er concurrency.ErrorRecorder) {
 		defer wg.Done()
 		if !shard.instanceReachable(ctx, instance) {
 			log.Errorf("%v is not reachable via ping", instance.alias)
@@ -406,7 +406,7 @@ func (shard *GRShard) findFailoverCandidate(ctx context.Context) (*grInstance, e
 		return true
 	})
 	if err != nil {
-		log.Errorf("Failed to find failover candidate by GTID after fanout: %v", err)
+		log.Errorf("Failed to find failover candidate by GTID after forAllInstances: %v", err)
 		return nil, err
 	}
 	if candidate == nil {

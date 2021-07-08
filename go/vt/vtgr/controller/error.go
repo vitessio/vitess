@@ -19,7 +19,7 @@ package controller
 import "errors"
 
 var (
-	errMissingPrimaryTablet = errors.New("no_primary_tablet_available")
-	errMissingGroup         = errors.New("no_mysql_group")
+	errMissingPrimaryTablet = errors.New("no primary tablet available")
+	errMissingGroup         = errors.New("no mysql group")
 	errForceAbortBootstrap  = errors.New("force abort bootstrap")
 )

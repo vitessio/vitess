@@ -395,8 +395,8 @@ func (shard *GRShard) primaryTabletAlias() string {
 	return primary.alias
 }
 
-// disconnectedInstance iterate all known the replica records
-// and pull mysql to see if the group replication is setup on it
+// disconnectedInstance iterates all known the replica records
+// and checks mysql to see if the group replication is setup on it
 func (shard *GRShard) disconnectedInstance() (*grInstance, error) {
 	primaryInstance := shard.findShardPrimaryTablet()
 	// if there is no primary, we should recover from DiagnoseTypeWrongPrimaryTablet
@@ -503,15 +503,15 @@ func isHostPortValid(host string, port int) bool {
 	return host != "" && port != 0
 }
 
-// We use fanout in two cases:
+// We use forAllInstances in two cases:
 // 1. FetchGroupView GTIDs to find a candidate for failover.
 // If a node is not healthy it should not be considered as a failover candidate
 //
 // 2. FetchGroupView group member status to see if we need to bootstrap a group,
 // either for the first time or rebuild a group after all the nodes are died.
 //
-// caller will be responsible to decide if they want to tolerate errors from the fanout call
-func (shard *GRShard) fanout(task func(instance *grInstance, wg *sync.WaitGroup, er concurrency.ErrorRecorder)) *concurrency.AllErrorRecorder {
+// caller will be responsible to decide if they want to tolerate errors from the forAllInstances call
+func (shard *GRShard) forAllInstances(task func(instance *grInstance, wg *sync.WaitGroup, er concurrency.ErrorRecorder)) *concurrency.AllErrorRecorder {
 	errorRecord := concurrency.AllErrorRecorder{}
 	shard.shardStatusCollector.clear()
 	var wg sync.WaitGroup
@@ -521,7 +521,7 @@ func (shard *GRShard) fanout(task func(instance *grInstance, wg *sync.WaitGroup,
 	}
 	wg.Wait()
 	if len(errorRecord.Errors) > 0 {
-		log.Errorf("get errors in fanout call: %v", errorRecord.Error())
+		log.Errorf("get errors in forAllInstances call: %v", errorRecord.Error())
 	}
 	return &errorRecord
 }
@@ -546,12 +546,12 @@ func unreachableError(err error) bool {
 	return false
 }
 
-// refreshSQLGroup hits all instances and render a SQL group locally for later diagnoses
+// refreshSQLGroup hits all instances and renders a SQL group locally for later diagnoses
 // the SQL group contains a list of "views" for the group from all the available nodes
 func (shard *GRShard) refreshSQLGroup() error {
 	// reset views in sql group
 	shard.sqlGroup.clear()
-	er := shard.fanout(func(instance *grInstance, wg *sync.WaitGroup, er concurrency.ErrorRecorder) {
+	er := shard.forAllInstances(func(instance *grInstance, wg *sync.WaitGroup, er concurrency.ErrorRecorder) {
 		defer wg.Done()
 		view, err := shard.dbAgent.FetchGroupView(instance.alias, instance.instanceKey)
 		// We just log error here because we rely on mysql tells us if it is happy or not
