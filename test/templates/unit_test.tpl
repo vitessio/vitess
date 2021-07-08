@@ -1,7 +1,7 @@
 name: {{.Name}}
 on: [push, pull_request]
 concurrency:
-  group: ${{"{{"}} github.head_ref {{"}}"}}
+  group: ${{"{{"}} github.ref {{"}}"}}
   cancel-in-progress: true
 
 jobs:
