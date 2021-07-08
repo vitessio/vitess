@@ -36,13 +36,6 @@ const (
 )
 
 type (
-	Result struct {
-		selects     int
-		selectsFail int
-		inserts     int
-		insertsFail int
-	}
-
 	table struct {
 		name         string
 		rows, nextID int
@@ -59,27 +52,6 @@ type (
 		finish, log bool
 	}
 )
-
-func (r Result) PrintResults(seconds float64) {
-	fmt.Printf(`QPS:
-	select: %d, failed: %d, sum: %d
-	insert: %d, failed: %d, sum: %d
-	---------
-	total:	%d, failed: %d, sum: %d
-	
-Queries:
-	select: %d, failed: %d, sum: %d
-	insert: %d, failed: %d, sum: %d
-	---------
-	total:	%d, failed: %d, sum: %d
-	
-`, r.selects/int(seconds), r.selectsFail/int(seconds), r.selects/int(seconds)+r.selectsFail/int(seconds),
-		r.inserts/int(seconds), r.insertsFail/int(seconds), r.inserts/int(seconds)+r.insertsFail/int(seconds),
-		(r.inserts+r.selects)/int(seconds), (r.insertsFail+r.selectsFail)/int(seconds), (r.inserts+r.selects)/int(seconds)+(r.insertsFail+r.selectsFail)/int(seconds),
-		r.selects, r.selectsFail, r.selects+r.selectsFail,
-		r.inserts, r.insertsFail, r.inserts+r.insertsFail,
-		r.inserts+r.selects, r.insertsFail+r.selectsFail, r.inserts+r.selects+r.insertsFail+r.selectsFail)
-}
 
 func generateNewTables(nb int) []*table {
 	tbls := make([]*table, 0, nb)
@@ -139,10 +111,8 @@ func (s *Stresser) startClients() {
 
 	var finalResult Result
 	for _, r := range perClientResults {
-		finalResult.selects += r.selects
-		finalResult.selectsFail += r.selectsFail
-		finalResult.inserts += r.inserts
-		finalResult.insertsFail += r.insertsFail
+		finalResult.inserts = sumQueryCounts(finalResult.inserts, r.inserts)
+		finalResult.selects = sumQueryCounts(finalResult.selects, r.selects)
 	}
 	s.doneCh <- finalResult
 }
@@ -184,9 +154,9 @@ func (s *Stresser) insertToRandomTable(conn *mysql.Conn, r *Result) {
 	if s.exec(conn, query) != nil {
 		s.tbls[tblI].nextID++
 		s.tbls[tblI].rows++
-		r.inserts++
+		r.inserts.success++
 	} else {
-		r.insertsFail++
+		r.inserts.failure++
 	}
 }
 
@@ -201,9 +171,9 @@ func (s *Stresser) selectFromRandomTable(conn *mysql.Conn, r *Result) {
 		expLength = 500
 	}
 	if s.assertLength(conn, query, expLength) {
-		r.selects++
+		r.selects.success++
 	} else {
-		r.selectsFail++
+		r.selects.failure++
 	}
 }
 
@@ -211,10 +181,10 @@ func (s *Stresser) Wait(timeout time.Duration) {
 	timeoutCh := time.After(timeout)
 	select {
 	case res := <-s.doneCh:
-		res.PrintResults(s.duration.Seconds())
+		res.Print(s.duration.Seconds())
 	case <-timeoutCh:
 		s.finish = true
 		res := <-s.doneCh
-		res.PrintResults(s.duration.Seconds())
+		res.Print(s.duration.Seconds())
 	}
 }
