@@ -542,13 +542,15 @@ func (v *VRepl) generateFilterQuery(ctx context.Context) error {
 		sb.WriteString(" as ")
 		sb.WriteString(escapeName(targetName))
 	}
-	for _, extraCol := range v.extraTargetUniqueKeyColumns.Columns() {
-		// Columns that appear in target's unique key but not in source table.
-		// We append a "NULL as col_name" to the filter's SELECT query so that
-		// the vreplication mechanism is satisfied that the column exists. It's
-		// a cheat/hack to make vreplication happy.
-		sb.WriteString(", NULL as ")
-		sb.WriteString(escapeName(extraCol.Name))
+	if v.extraTargetUniqueKeyColumns != nil {
+		for _, extraCol := range v.extraTargetUniqueKeyColumns.Columns() {
+			// Columns that appear in target's unique key but not in source table.
+			// We append a "NULL as col_name" to the filter's SELECT query so that
+			// the vreplication mechanism is satisfied that the column exists. It's
+			// a cheat/hack to make vreplication happy.
+			sb.WriteString(", NULL as ")
+			sb.WriteString(escapeName(extraCol.Name))
+		}
 	}
 	sb.WriteString(" from ")
 	sb.WriteString(escapeName(v.sourceTable))
