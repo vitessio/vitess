@@ -1245,7 +1245,8 @@ func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.
 	if !skipQueryPlanCache && !sqlparser.SkipQueryPlanCacheDirective(statement) && sqlparser.CachePlan(statement) {
 		e.plans.Set(planKey, plan)
 	}
-	return plan, nil
+
+	return e.checkThatPlanIsValid(plan)
 }
 
 // skipQueryPlanCache extracts SkipQueryPlanCache from session
@@ -1519,4 +1520,24 @@ func (e *Executor) startVStream(ctx context.Context, rss []*srvtopo.ResolvedShar
 	}
 	vs.stream(ctx)
 	return nil
+}
+
+func (e *Executor) checkThatPlanIsValid(plan *engine.Plan) (*engine.Plan, error) {
+	if e.allowScatter {
+		return plan, nil
+	}
+	// we go over all the primitives in the plan, searching for a route that is of SelectScatter opcode
+	badPrimitive := engine.Find(func(node engine.Primitive) bool {
+		router, ok := node.(*engine.Route)
+		if !ok {
+			return false
+		}
+		return router.Opcode == engine.SelectScatter
+	}, plan.Instructions)
+
+	if badPrimitive == nil {
+		return plan, nil
+	}
+
+	return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "plan includes scatter, which is disallowed using the `no_scatter` command line argument")
 }
