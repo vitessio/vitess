@@ -17,6 +17,7 @@ limitations under the License.
 package mysql
 
 import (
+	"errors"
 	"fmt"
 	"math"
 
@@ -29,6 +30,9 @@ import (
 
 // GRFlavorID is the string identifier for the MysqlGR flavor.
 const GRFlavorID = "MysqlGR"
+
+// ErrNoGroupStatus means no status for group replication.
+var ErrNoGroupStatus = errors.New("no group status")
 
 // mysqlGRFlavor implements the Flavor interface for Mysql.
 type mysqlGRFlavor struct {
