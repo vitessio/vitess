@@ -1,6 +1,3 @@
-2021-03-12T05:45:56Z,Cluster (21),https://github.com/vitessio/vitess/actions/runs/645215010
-2021-03-12T05:45:56Z,Cluster (22),https://github.com/vitessio/vitess/actions/runs/645215022
-2021-03-12T05:45:56Z,Cluster (23),https://github.com/vitessio/vitess/actions/runs/645215037
 2021-03-12T05:45:56Z,Cluster (24),https://github.com/vitessio/vitess/actions/runs/645215002
 2021-03-12T05:45:56Z,Cluster (26),https://github.com/vitessio/vitess/actions/runs/645215039
 2021-03-12T05:45:56Z,Cluster (27),https://github.com/vitessio/vitess/actions/runs/645215024
@@ -9998,3 +9995,6 @@
 2021-07-08T06:38:23Z,docker_test_1,https://github.com/vitessio/vitess/actions/runs/1010660874
 2021-07-08T06:38:23Z,docker_test_2,https://github.com/vitessio/vitess/actions/runs/1010660886
 2021-07-08T06:38:23Z,docker_test_3,https://github.com/vitessio/vitess/actions/runs/1010660878
+2021-07-08T07:09:37Z,Cluster (16),https://github.com/vitessio/vitess/actions/runs/1010736873
+2021-07-08T07:09:37Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/1010736865
+2021-07-08T07:23:03Z,endtoend,https://github.com/vitessio/vitess/actions/runs/1010773480
