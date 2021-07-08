@@ -602,9 +602,12 @@ func (tpb *tablePlanBuilder) analyzeExtraSourcePkCols(colInfos []*ColumnInfo, so
 		if cexpr := findCol(sqlparser.NewColIdent(col.Name), tpb.colExprs); cexpr != nil {
 			tpb.extraSourcePkCols = append(tpb.extraSourcePkCols, cexpr)
 		} else {
-			// We shouldn't get here in any normal scenario. If a column is part of colInfos,
-			// then it must also exist in tpb.colExprs.
-			return fmt.Errorf("column %s not found in table expressions", col.Name)
+			// Column not found
+			if !col.IsGenerated {
+				// We shouldn't get here in any normal scenario. If a column is part of colInfos,
+				// then it must also exist in tpb.colExprs.
+				return fmt.Errorf("column %s not found in table expressions", col.Name)
+			}
 		}
 	}
 	return nil
