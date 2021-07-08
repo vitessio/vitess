@@ -42,6 +42,8 @@ type (
 		mu           sync.Mutex
 	}
 
+	// Stresser is responsible for stressing a Vitess cluster.
+	// It can be configured through the use of Config.
 	Stresser struct {
 		cfg      *Config
 		doneCh   chan Result
@@ -52,22 +54,43 @@ type (
 		finish   bool
 	}
 
+	// Config contains all of the Stresser configuration.
 	Config struct {
-		StopAfter       time.Duration
-		PrintErrLogs    bool
-		NumberOfTables  int
+		// MaximumDuration for which each client can stress the cluster.
+		MaximumDuration time.Duration
+
+		// PrintErrLogs enables or disables the rendering of MySQL error logs.
+		PrintErrLogs bool
+
+		// NumberOfTables to create in the cluster.
+		NumberOfTables int
+
+		// TableNamePrefix defines which prefix will be used for name of the auto-generated tables.
 		TableNamePrefix string
-		InsertInterval  time.Duration
-		DeleteInterval  time.Duration
-		SelectInterval  time.Duration
-		SelectLimit     int
-		ConnParams      *mysql.ConnParams
-		MaxClient       int
+
+		// InsertInterval defines at which interval each insert queries should be sent.
+		InsertInterval time.Duration
+
+		// DeleteInterval defines at which interval each delete queries should be sent.
+		DeleteInterval time.Duration
+
+		// SelectInterval defines at which interval each select queries should be sent.
+		SelectInterval time.Duration
+
+		// SelectLimit defines the maximum number of row select queries can query at once.
+		SelectLimit int
+
+		// ConnParams is the mysql.ConnParams that should be use to create new clients.
+		ConnParams *mysql.ConnParams
+
+		// MaxClient is the maximum number of concurrent client stressing the cluster.
+		MaxClient int
 	}
 )
 
+// DefaultConfig is the default configuration used by the stresser.
 var DefaultConfig = &Config{
-	StopAfter:       30 * time.Second,
+	MaximumDuration: 120 * time.Second,
 	PrintErrLogs:    false,
 	NumberOfTables:  100,
 	TableNamePrefix: "stress_t",
@@ -78,6 +101,7 @@ var DefaultConfig = &Config{
 	MaxClient:       10,
 }
 
+// New creates a new Stresser based on the given Config.
 func New(t *testing.T, cfg *Config) *Stresser {
 	return &Stresser{
 		cfg:    cfg,
@@ -86,11 +110,45 @@ func New(t *testing.T, cfg *Config) *Stresser {
 	}
 }
 
-func generateNewTables(nb int) []*table {
+// Stop the stresser immediately and print the results.
+func (s *Stresser) Stop() {
+	s.StopAfter(0)
+}
+
+// StopAfter stops the stresser after a given duration and print the results.
+func (s *Stresser) StopAfter(after time.Duration) {
+	timeoutCh := time.After(after)
+	select {
+	case res := <-s.doneCh:
+		res.Print(s.duration.Seconds())
+	case <-timeoutCh:
+		s.finish = true
+		res := <-s.doneCh
+		res.Print(s.duration.Seconds())
+	}
+}
+
+// SetConn allows us to change the mysql.ConnParams of our stresser at runtime.
+// Setting a new mysql.ConnParams will automatically create new mysql client using
+// the new configuration.
+func (s *Stresser) SetConn(conn *mysql.ConnParams) *Stresser {
+	s.cfg.ConnParams = conn
+	return s
+}
+
+// Start the stresser.
+func (s *Stresser) Start() *Stresser {
+	fmt.Println("Starting load testing ...")
+	s.tbls = s.createTables(100)
+	go s.startClients()
+	return s
+}
+
+func generateNewTables(prefix string, nb int) []*table {
 	tbls := make([]*table, 0, nb)
 	for i := 0; i < nb; i++ {
 		tbls = append(tbls, &table{
-			name: fmt.Sprintf("stress_t%d", i),
+			name: fmt.Sprintf("%s%d", prefix, i),
 		})
 	}
 	return tbls
@@ -100,23 +158,11 @@ func (s *Stresser) createTables(nb int) []*table {
 	conn := newClient(s.t, s.cfg.ConnParams)
 	defer conn.Close()
 
-	tbls := generateNewTables(nb)
+	tbls := generateNewTables(s.cfg.TableNamePrefix, nb)
 	for _, tbl := range tbls {
 		s.exec(conn, fmt.Sprintf(templateNewTable, tbl.name))
 	}
 	return tbls
-}
-
-func (s *Stresser) SetConn(conn *mysql.ConnParams) *Stresser {
-	s.cfg.ConnParams = conn
-	return s
-}
-
-func (s *Stresser) Start() *Stresser {
-	fmt.Println("Starting load testing ...")
-	s.tbls = s.createTables(100)
-	go s.startClients()
-	return s
 }
 
 func (s *Stresser) startClients() {
@@ -150,7 +196,7 @@ func (s *Stresser) startStressClient(resultCh chan Result) {
 
 	var res Result
 
-	timeout := time.After(s.cfg.StopAfter)
+	timeout := time.After(s.cfg.MaximumDuration - time.Since(s.start))
 
 outer:
 	for !s.finish {
@@ -208,26 +254,14 @@ func (s *Stresser) selectFromRandomTable(conn *mysql.Conn, r *Result) {
 	s.tbls[tblI].mu.Lock()
 	defer s.tbls[tblI].mu.Unlock()
 
-	query := fmt.Sprintf("select * from %s limit 500", s.tbls[tblI].name)
+	query := fmt.Sprintf("select * from %s limit %d", s.tbls[tblI].name, s.cfg.SelectLimit)
 	expLength := s.tbls[tblI].rows
-	if expLength > 500 {
-		expLength = 500
+	if expLength > s.cfg.SelectLimit {
+		expLength = s.cfg.SelectLimit
 	}
 	if s.assertLength(conn, query, expLength) {
 		r.selects.success++
 	} else {
 		r.selects.failure++
-	}
-}
-
-func (s *Stresser) Wait(timeout time.Duration) {
-	timeoutCh := time.After(timeout)
-	select {
-	case res := <-s.doneCh:
-		res.Print(s.duration.Seconds())
-	case <-timeoutCh:
-		s.finish = true
-		res := <-s.doneCh
-		res.Print(s.duration.Seconds())
 	}
 }

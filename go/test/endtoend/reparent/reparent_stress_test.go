@@ -49,7 +49,7 @@ func TestStressMasterToSpareStateChangeImpossible(t *testing.T) {
 	require.Error(t, err, out)
 	require.Contains(t, out, "type change MASTER -> SPARE is not an allowed transition for ChangeTabletType")
 
-	s.Wait(10 * time.Second)
+	s.StopAfter(10 * time.Second)
 }
 
 func TestStressReparentDownMaster(t *testing.T) {
@@ -93,7 +93,7 @@ func TestStressReparentDownMaster(t *testing.T) {
 	confirmReplication(t, tab2, []*cluster.Vttablet{tab3, tab4})
 	resurrectTablet(ctx, t, tab1)
 
-	s.Wait(30 * time.Second)
+	s.StopAfter(30 * time.Second)
 }
 
 func TestStressReparentNoChoiceDownMaster(t *testing.T) {
@@ -136,7 +136,7 @@ func TestStressReparentNoChoiceDownMaster(t *testing.T) {
 	// bring back the old master as a replica, check that it catches up
 	resurrectTablet(ctx, t, tab1)
 
-	s.Wait(30 * time.Second)
+	s.StopAfter(30 * time.Second)
 }
 
 func TestStressReparentIgnoreReplicas(t *testing.T) {
@@ -186,7 +186,7 @@ func TestStressReparentIgnoreReplicas(t *testing.T) {
 	// bring back the old master as a replica, check that it catches up
 	resurrectTablet(ctx, t, tab1)
 
-	s.Wait(30 * time.Second)
+	s.StopAfter(30 * time.Second)
 }
 
 func TestStressReparentCrossCell(t *testing.T) {
@@ -208,7 +208,7 @@ func TestStressReparentCrossCell(t *testing.T) {
 	validateTopology(t, false)
 	checkMasterTablet(t, tab4)
 
-	s.Wait(30 * time.Second)
+	s.StopAfter(30 * time.Second)
 }
 
 func TestStressReparentGraceful(t *testing.T) {
@@ -240,7 +240,7 @@ func TestStressReparentGraceful(t *testing.T) {
 
 	confirmReplication(t, tab2, []*cluster.Vttablet{tab1, tab3, tab4})
 
-	s.Wait(30 * time.Second)
+	s.StopAfter(30 * time.Second)
 }
 
 func TestStressReparentReplicaOffline(t *testing.T) {
@@ -264,7 +264,7 @@ func TestStressReparentReplicaOffline(t *testing.T) {
 	assert.Contains(t, out, fmt.Sprintf("tablet %s failed to SetMaster", tab4.Alias))
 	checkMasterTablet(t, tab2)
 
-	s.Wait(30 * time.Second)
+	s.StopAfter(30 * time.Second)
 }
 
 func TestStressReparentAvoid(t *testing.T) {
@@ -305,7 +305,7 @@ func TestStressReparentAvoid(t *testing.T) {
 	validateTopology(t, false)
 	checkMasterTablet(t, tab2)
 
-	s.Wait(30 * time.Second)
+	s.StopAfter(30 * time.Second)
 }
 
 func TestStressReparentFromOutside(t *testing.T) {
@@ -321,7 +321,7 @@ func TestStressReparentFromOutside(t *testing.T) {
 	s := stress.New(t, stress.DefaultConfig).Start()
 
 	reparentFromOutside(t, false)
-	s.Wait(30 * time.Second)
+	s.StopAfter(30 * time.Second)
 }
 
 func TestStressReparentFromOutsideWithNoMaster(t *testing.T) {
@@ -348,7 +348,7 @@ func TestStressReparentFromOutsideWithNoMaster(t *testing.T) {
 		err = tablet.MysqlctlProcess.Start()
 		require.NoError(t, err)
 	}
-	s.Wait(30 * time.Second)
+	s.StopAfter(30 * time.Second)
 }
 
 func TestStressChangeTypeSemiSync(t *testing.T) {
@@ -418,7 +418,7 @@ func TestStressChangeTypeSemiSync(t *testing.T) {
 	require.NoError(t, err)
 	checkDBvar(ctx, t, rdonly2, "rpl_semi_sync_slave_enabled", "ON")
 	checkDBstatus(ctx, t, rdonly2, "Rpl_semi_sync_slave_status", "ON")
-	s.Wait(30 * time.Second)
+	s.StopAfter(30 * time.Second)
 }
 
 func TestStressReparentDoesntHangIfMasterFails(t *testing.T) {
@@ -444,5 +444,5 @@ func TestStressReparentDoesntHangIfMasterFails(t *testing.T) {
 	out, err := prs(t, tab2)
 	require.Error(t, err)
 	assert.Contains(t, out, "primary failed to PopulateReparentJournal")
-	s.Wait(30 * time.Second)
+	s.StopAfter(30 * time.Second)
 }

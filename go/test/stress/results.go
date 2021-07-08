@@ -24,6 +24,7 @@ type (
 		failure int
 	}
 
+	// Result holds the result for a stress test.
 	Result struct {
 		selects, inserts, deletes queryCount
 	}
@@ -60,6 +61,7 @@ func sumQueryCounts(qcs ...queryCount) queryCount {
 	return qc
 }
 
+// Print renders the results held by Result.
 func (r Result) Print(seconds float64) {
 	allQCs := sumQueryCounts(r.selects, r.inserts, r.deletes)
 	fmt.Printf(`QPS:
