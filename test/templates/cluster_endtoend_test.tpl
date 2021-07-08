@@ -1,12 +1,9 @@
-name: cluster_endtoend
+name: {{.Name}}
 on: [push, pull_request]
 jobs:
 
   build:
-    runs-on: ubuntu-18.04
-    strategy:
-      matrix:
-        name: [11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 26, 27]
+    {{if .Ubuntu20}}runs-on: ubuntu-20.04{{else}}runs-on: ubuntu-18.04{{end}}
 
     steps:
     - name: Set up Go
@@ -26,22 +23,27 @@ jobs:
         sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
         sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
         go mod download
+
+        {{if .InstallXtraBackup}}
+
         wget https://repo.percona.com/apt/percona-release_latest.$(lsb_release -sc)_all.deb
         sudo apt-get install -y gnupg2
         sudo dpkg -i percona-release_latest.$(lsb_release -sc)_all.deb
         sudo apt-get update
         sudo apt-get install percona-xtrabackup-24
 
+        {{end}}
+
+    {{if .MakeTools}}
+
     - name: Installing zookeeper and consul
       run: |
-        # Only running for shard 18 and 24 where we need to install consul and zookeeper
-        if [[ ${{matrix.name}} == 18 || ${{matrix.name}} == 24 ]]; then
           make tools
-        fi
 
-    - name: sharded cluster_endtoend
+    {{end}}
+
+    - name: Run cluster endtoend test
       timeout-minutes: 30
       run: |
         source build.env
-        eatmydata -- go run test.go -docker=false -print-log -follow -shard ${{matrix.name}}
-        
+        eatmydata -- go run test.go -docker=false -print-log -follow -shard {{.Shard}}

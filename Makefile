@@ -13,6 +13,7 @@
 # limitations under the License.
 
 MAKEFLAGS = -s
+GIT_STATUS := $(shell git status --porcelain)
 
 export GOBIN=$(PWD)/bin
 export GO111MODULE=on
@@ -22,7 +23,7 @@ export REWRITER=go/vt/sqlparser/rewriter.go
 # Since we are not using this Makefile for compilation, limiting parallelism will not increase build time.
 .NOTPARALLEL:
 
-.PHONY: all build install test clean unit_test unit_test_cover unit_test_race integration_test proto proto_banner site_test site_integration_test docker_bootstrap docker_test docker_unit_test java_test reshard_tests e2e_test e2e_test_race minimaltools tools web_bootstrap web_build web_start
+.PHONY: all build install test clean unit_test unit_test_cover unit_test_race integration_test proto proto_banner site_test site_integration_test docker_bootstrap docker_test docker_unit_test java_test reshard_tests e2e_test e2e_test_race minimaltools tools web_bootstrap web_build web_start generate_ci_workflows
 
 all: build
 
@@ -268,6 +269,37 @@ release: docker_base
 	echo "git push origin v$(VERSION)"
 	echo "Also, don't forget the upload releases/v$(VERSION).tar.gz file to GitHub releases"
 
+do_release:
+ifndef RELEASE_VERSION
+		echo "Set the env var RELEASE_VERSION with the release version"
+		exit 1
+endif
+ifndef DEV_VERSION
+		echo "Set the env var DEV_VERSION with the version the dev branch should have after release"
+		exit 1
+endif
+ifeq ($(strip $(GIT_STATUS)),)
+	echo so much clean
+else	
+	echo cannot do release with dirty git state
+	exit 1
+	echo so much win        
+endif
+# Pre checks passed. Let's change the current version
+	cd java && mvn versions:set -DnewVersion=$(RELEASE_VERSION)
+	echo -n Pausing so relase notes can be added. Press enter to continue
+	read line
+	git add --all
+	git commit -n -s -m "Release commit for $(RELEASE_VERSION)" 
+	git tag -m Version\ $(RELEASE_VERSION) v$(RELEASE_VERSION)
+	cd java && mvn versions:set -DnewVersion=$(DEV_VERSION)
+	git add --all
+	git commit -n -s -m "Back to dev mode"
+	echo "Release preparations successful" 
+	echo "A git tag was created, you can push it with:"
+	echo "   git push upstream v$(RELEASE_VERSION)"
+	echo "The git branch has also been updated. You need to push it and get it merged"
+
 tools:
 	echo $$(date): Installing dependencies
 	./bootstrap.sh
@@ -317,7 +349,7 @@ web_build: web_bootstrap
 web_start: web_bootstrap
 	cd web/vtctld2 && npm run start
 
-vtadmin_web_install: 
+vtadmin_web_install:
 	cd web/vtadmin && npm install
 
 # Generate JavaScript/TypeScript bindings for vtadmin-web from the Vitess .proto files.
@@ -325,3 +357,9 @@ vtadmin_web_install:
 # While vtadmin-web is new and unstable, however, we can keep it out of the critical build path.
 vtadmin_web_proto_types: vtadmin_web_install
 	./web/vtadmin/bin/generate-proto-types.sh
+
+# Generate github CI actions workflow files for unit tests and cluster endtoend tests based on templates in the test/templates directory
+# Needs to be called if the templates change or if a new test "shard" is created. We do not need to rebuild tests if only the test/config.json
+# is changed by adding a new test to an existing shard. Any new or modified files need to be committed into git
+generate_ci_workflows:
+	cd test && go run ci_workflow_gen.go && cd ..

@@ -857,7 +857,11 @@ func (c *Conn) parseComStmtSendLongData(data []byte) (uint32, uint16, []byte, bo
 		return 0, 0, nil, false
 	}
 
-	return statementID, paramID, data[pos:], true
+	chunkData := data[pos:]
+	chunk := make([]byte, len(chunkData))
+	copy(chunk, chunkData)
+
+	return statementID, paramID, chunk, true
 }
 
 func (c *Conn) parseComStmtClose(data []byte) (uint32, bool) {
