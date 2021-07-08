@@ -2,8 +2,11 @@
 
 name: Unit Test (mariadb101)
 on: [push, pull_request]
-jobs:
+concurrency:
+  group: ${{ github.head_ref }}
+  cancel-in-progress: true
 
+jobs:
   test:
     runs-on: ubuntu-18.04
 

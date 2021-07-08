@@ -1,7 +1,10 @@
 name: {{.Name}}
 on: [push, pull_request]
-jobs:
+concurrency:
+  group: ${{"{{"}} github.head_ref {{"}}"}}
+  cancel-in-progress: true
 
+jobs:
   build:
     name: Run endtoend tests on {{.Name}}
     runs-on: ubuntu-18.04
