@@ -213,9 +213,9 @@ func fetchStatusForGroupReplication(c *Conn, query string, onResult func([]sqlty
 	return onResult(qr.Rows[0])
 }
 
-// masterStatus returns the result of 'SHOW MASTER STATUS',
+// primarymasterStatusStatus returns the result of 'SHOW MASTER STATUS',
 // with parsed executed position.
-func (mysqlGRFlavor) masterStatus(c *Conn) (PrimaryStatus, error) {
+func (mysqlGRFlavor) primaryStatus(c *Conn) (PrimaryStatus, error) {
 	return mysqlFlavor{}.primaryStatus(c)
 }
 
