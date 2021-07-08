@@ -1082,6 +1082,12 @@ var (
 		input:  "create table function_default (x varchar(25) default (trim(' check ')))",
 		output: "create table function_default (\n\tx varchar(25) default (trim(' check '))\n)",
 	}, {
+		input:  "create table function_default (x varchar(25) default (((trim(' check ')))))",
+		output: "create table function_default (\n\tx varchar(25) default (trim(' check '))\n)",
+	}, {
+		input:  "create table function_default3 (x bool DEFAULT (true AND false));",
+		output: "create table function_default3 (\n\tx bool default (true and false)\n)",
+	}, {
 		input:  "create table a (\n\t`a` int\n)",
 		output: "create table a (\n\ta int\n)",
 	}, {
