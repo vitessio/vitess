@@ -20,7 +20,6 @@ import (
 	"flag"
 	"os"
 	"testing"
-	"time"
 
 	"vitess.io/vitess/go/test/stress"
 
@@ -87,11 +86,12 @@ func TestMain(m *testing.M) {
 func TestSimpleStressTest(t *testing.T) {
 	defer cluster.PanicHandler(t)
 
-	s := stress.New(t, &vtParams, 10*time.Second, true)
+	stress.DefaultConfig.ConnParams = &vtParams
+	s := stress.New(t, stress.DefaultConfig)
 
 	s.Start()
 
 	// Vitess end-to-end test here
 
-	s.Wait(45 * time.Second)
+	s.Stop()
 }
