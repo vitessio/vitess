@@ -517,7 +517,10 @@ func TestFunctionInDefault(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
-	exec(t, conn, `create table function_default (x varchar(25) DEFAULT (TRIM(" check ")))`)
+	_, err = conn.ExecuteFetch(`create table function_default (x varchar(25) DEFAULT (TRIM(" check ")))`, 1000, true)
+	// this query fails because mysql57 does not support functions in default clause
+	require.Error(t, err)
+	exec(t, conn, `create table function_default (x varchar(25) DEFAULT "check")`)
 	defer exec(t, conn, "drop table function_default")
 }
 

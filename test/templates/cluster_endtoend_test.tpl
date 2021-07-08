@@ -3,7 +3,11 @@ on: [push, pull_request]
 jobs:
 
   build:
+    {{if .Ubuntu20}}
+    runs-on: ubuntu-20.04
+    {{else}}
     runs-on: ubuntu-18.04
+    {{end}}
 
     steps:
     - name: Set up Go
