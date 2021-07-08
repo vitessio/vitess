@@ -2553,3 +2553,22 @@ func TestStreamOrderByLimitWithMultipleResults(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 	assert.GreaterOrEqual(t, before, runtime.NumGoroutine(), "left open goroutines lingering")
 }
+
+func TestSelectScatterFails(t *testing.T) {
+	cell := "aa"
+	hc := discovery.NewFakeHealthCheck()
+	s := createSandbox("TestExecutor")
+	s.VSchema = executorVSchema
+	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
+	serv := new(sandboxTopo)
+	resolver := newTestResolver(hc, serv, cell)
+	executor := createExecutor(serv, cell, resolver)
+	executor.allowScatter = false
+	logChan := QueryLogger.Subscribe("Test")
+	defer QueryLogger.Unsubscribe(logChan)
+
+	sql := "select id from user"
+	_, err := executorExec(executor, sql, nil)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "scatter")
+}
