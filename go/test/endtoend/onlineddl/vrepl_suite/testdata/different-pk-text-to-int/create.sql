@@ -3,7 +3,7 @@ create table onlineddl_test (
   uu varchar(64) not null,
   ts timestamp,
   primary key(uu)
-) auto_increment=1;
+);
 
 insert into onlineddl_test values (uuid(), now());
 
