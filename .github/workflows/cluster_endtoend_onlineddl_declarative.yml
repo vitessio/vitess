@@ -2,8 +2,11 @@
 
 name: Cluster (onlineddl_declarative)
 on: [push, pull_request]
-jobs:
+concurrency:
+  group: ${{ github.ref }}
+  cancel-in-progress: true
 
+jobs:
   build:
     name: Run endtoend tests on Cluster (onlineddl_declarative)
     runs-on: ubuntu-18.04

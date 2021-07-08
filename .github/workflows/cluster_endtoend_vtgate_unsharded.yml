@@ -2,8 +2,11 @@
 
 name: Cluster (vtgate_unsharded)
 on: [push, pull_request]
-jobs:
+concurrency:
+  group: ${{ github.ref }}
+  cancel-in-progress: true
 
+jobs:
   build:
     name: Run endtoend tests on Cluster (vtgate_unsharded)
     runs-on: ubuntu-18.04
