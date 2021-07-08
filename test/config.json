@@ -446,7 +446,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/versionupgrade", "-keep-data", "-force-vtdataroot", "/tmp/vtdataroot/vtroot_10901", "-force-port-start", "11900", "-force-base-tablet-uid", "1190"],
 			"Command": [],
 			"Manual": false,
-			"Shard": 28,
+			"Shard": "28",
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -520,7 +520,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/reservedconn/reconnect1"],
 			"Command": [],
 			"Manual": false,
-			"Shard": 17,
+			"Shard": "17",
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -529,7 +529,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/reservedconn/reconnect2"],
 			"Command": [],
 			"Manual": false,
-			"Shard": 17,
+			"Shard": "17",
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -547,7 +547,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/unsharded"],
 			"Command": [],
 			"Manual": false,
-			"Shard": 17,
+			"Shard": "17",
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -565,7 +565,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/readafterwrite"],
 			"Command": [],
 			"Manual": false,
-			"Shard": 17,
+			"Shard": "17",
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -574,7 +574,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/topotest/zk2", "--topo-flavor=zk2"],
 			"Command": [],
 			"Manual": false,
-			"Shard": 25,
+			"Shard": "25",
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -583,7 +583,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/topotest/consul", "--topo-flavor=consul"],
 			"Command": [],
 			"Manual": false,
-			"Shard": 18,
+			"Shard": "18",
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -592,7 +592,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/topotest/etcd2"],
 			"Command": [],
 			"Manual": false,
-			"Shard": 17,
+			"Shard": "17",
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -675,7 +675,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/vault"],
 			"Command": [],
 			"Manual": false,
-			"Shard": 23,
+			"Shard": "23",
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -684,7 +684,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestBasicV2Workflows"],
 			"Command": [],
 			"Manual": false,
-			"Shard": 21,
+			"Shard": "vreplication_v2",
 			"RetryMax": 3,
 			"Tags": []
 		}
