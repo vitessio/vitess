@@ -151,7 +151,7 @@ func (wr *Wrangler) DeleteTablet(ctx context.Context, tabletAlias *topodatapb.Ta
 		return err
 	}
 
-	return
+	return nil
 }
 
 // ChangeTabletType changes the type of tablet and recomputes all
