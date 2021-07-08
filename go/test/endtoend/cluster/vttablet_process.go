@@ -140,7 +140,7 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 	}()
 
 	if vttablet.ServingStatus != "" {
-		if err = vttablet.WaitForTabletType(vttablet.ServingStatus); err != nil {
+		if err = vttablet.WaitForTabletStatus(vttablet.ServingStatus); err != nil {
 			errFileContent, _ := ioutil.ReadFile(fname)
 			if errFileContent != nil {
 				log.Infof("vttablet error:\n%s\n", string(errFileContent))
@@ -208,23 +208,37 @@ func (vttablet *VttabletProcess) GetTabletStatus() string {
 	return ""
 }
 
-// WaitForTabletType waits for 10 second till expected type reached
-func (vttablet *VttabletProcess) WaitForTabletType(expectedType string) error {
-	return vttablet.WaitForTabletTypesForTimeout([]string{expectedType}, 10*time.Second)
+// GetTabletType returns the tablet type as seen in /debug/vars TabletType
+func (vttablet *VttabletProcess) GetTabletType() string {
+	resultMap := vttablet.GetVars()
+	if resultMap != nil {
+		return reflect.ValueOf(resultMap["TabletType"]).String()
+	}
+	return ""
 }
 
-// WaitForTabletTypes waits for 10 second till expected type reached
+// WaitForTabletStatus waits for 10 second till expected status is reached
+func (vttablet *VttabletProcess) WaitForTabletStatus(expectedStatus string) error {
+	return vttablet.WaitForTabletStatusesForTimeout([]string{expectedStatus}, 10*time.Second)
+}
+
+// WaitForTabletStatuses waits for 10 second till one of expected statuses is reached
+func (vttablet *VttabletProcess) WaitForTabletStatuses(expectedStatuses []string) error {
+	return vttablet.WaitForTabletStatusesForTimeout(expectedStatuses, 10*time.Second)
+}
+
+// WaitForTabletTypes waits for 10 second till one of expected statuses is reached
 func (vttablet *VttabletProcess) WaitForTabletTypes(expectedTypes []string) error {
 	return vttablet.WaitForTabletTypesForTimeout(expectedTypes, 10*time.Second)
 }
 
-// WaitForTabletTypesForTimeout waits till the tablet reaches to any of the provided status
-func (vttablet *VttabletProcess) WaitForTabletTypesForTimeout(expectedTypes []string, timeout time.Duration) error {
-	timeToWait := time.Now().Add(timeout)
+// WaitForTabletStatusesForTimeout waits till the tablet reaches to any of the provided statuses
+func (vttablet *VttabletProcess) WaitForTabletStatusesForTimeout(expectedStatuses []string, timeout time.Duration) error {
+	waitUntil := time.Now().Add(timeout)
 	var status string
-	for time.Now().Before(timeToWait) {
+	for time.Now().Before(waitUntil) {
 		status = vttablet.GetTabletStatus()
-		if contains(expectedTypes, status) {
+		if contains(expectedStatuses, status) {
 			return nil
 		}
 		select {
@@ -235,7 +249,27 @@ func (vttablet *VttabletProcess) WaitForTabletTypesForTimeout(expectedTypes []st
 		}
 	}
 	return fmt.Errorf("Vttablet %s, current status = %s, expected status [%s] not reached, details: %v",
-		vttablet.TabletPath, status, strings.Join(expectedTypes, ","), vttablet.GetStatusDetails())
+		vttablet.TabletPath, status, strings.Join(expectedStatuses, ","), vttablet.GetStatusDetails())
+}
+
+// WaitForTabletTypesForTimeout waits till the tablet reaches to any of the provided types
+func (vttablet *VttabletProcess) WaitForTabletTypesForTimeout(expectedTypes []string, timeout time.Duration) error {
+	waitUntil := time.Now().Add(timeout)
+	var tabletType string
+	for time.Now().Before(waitUntil) {
+		tabletType = vttablet.GetTabletType()
+		if contains(expectedTypes, tabletType) {
+			return nil
+		}
+		select {
+		case err := <-vttablet.exit:
+			return fmt.Errorf("process '%s' exited prematurely (err: %s)", vttablet.Name, err)
+		default:
+			time.Sleep(300 * time.Millisecond)
+		}
+	}
+	return fmt.Errorf("Vttablet %s, current type = %s, expected type [%s] not reached, status details: %v",
+		vttablet.TabletPath, tabletType, strings.Join(expectedTypes, ","), vttablet.GetStatusDetails())
 }
 
 func contains(arr []string, str string) bool {
@@ -470,6 +504,11 @@ func (vttablet *VttabletProcess) BulkLoad(t testing.TB, db, table string, bulkIn
 	end := time.Now()
 	log.Infof("bulk insert successful (write tmp file = %v, mysql bulk load = %v, total = %v",
 		bufFinish.Sub(bufStart), end.Sub(bufFinish), end.Sub(bufStart))
+}
+
+// IsShutdown returns whether a vttablet is shutdown or not
+func (vttablet *VttabletProcess) IsShutdown() bool {
+	return vttablet.proc == nil
 }
 
 // VttabletProcessInstance returns a VttabletProcess handle for vttablet process
