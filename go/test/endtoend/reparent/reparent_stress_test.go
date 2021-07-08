@@ -93,7 +93,7 @@ func TestStressReparentDownMaster(t *testing.T) {
 	confirmReplication(t, tab2, []*cluster.Vttablet{tab3, tab4})
 	resurrectTablet(ctx, t, tab1)
 
-	s.Wait(10 * time.Second)
+	s.Wait(30 * time.Second)
 }
 
 func TestStressReparentNoChoiceDownMaster(t *testing.T) {

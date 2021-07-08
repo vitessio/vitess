@@ -113,6 +113,7 @@ func (s *Stresser) startClients() {
 	for _, r := range perClientResults {
 		finalResult.inserts = sumQueryCounts(finalResult.inserts, r.inserts)
 		finalResult.selects = sumQueryCounts(finalResult.selects, r.selects)
+		finalResult.deletes = sumQueryCounts(finalResult.deletes, r.deletes)
 	}
 	s.doneCh <- finalResult
 }
@@ -136,6 +137,8 @@ outer:
 		select {
 		case <-timeout:
 			break outer
+		case <-time.After(30 * time.Microsecond):
+			s.deleteFromRandomTable(conn, &res)
 		case <-time.After(15 * time.Microsecond):
 			s.insertToRandomTable(conn, &res)
 		case <-time.After(1 * time.Microsecond):
@@ -143,6 +146,21 @@ outer:
 		}
 	}
 	resultCh <- res
+}
+
+func (s *Stresser) deleteFromRandomTable(conn *mysql.Conn, r *Result) {
+	tblI := rand.Int() % len(s.tbls)
+	s.tbls[tblI].mu.Lock()
+	defer s.tbls[tblI].mu.Unlock()
+
+	query := fmt.Sprintf("delete from %s where id = %d", s.tbls[tblI].name, s.tbls[tblI].nextID-1)
+	if s.exec(conn, query) != nil {
+		s.tbls[tblI].nextID--
+		s.tbls[tblI].rows--
+		r.deletes.success++
+	} else {
+		r.deletes.failure++
+	}
 }
 
 func (s *Stresser) insertToRandomTable(conn *mysql.Conn, r *Result) {

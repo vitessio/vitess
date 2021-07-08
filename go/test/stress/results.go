@@ -55,23 +55,27 @@ func sumQueryCounts(qcs ...queryCount) queryCount {
 }
 
 func (r Result) Print(seconds float64) {
-	allQCs := sumQueryCounts(r.selects, r.inserts)
+	allQCs := sumQueryCounts(r.selects, r.inserts, r.deletes)
 	fmt.Printf(`QPS:
 	select: %d, failed: %d, sum: %d
 	insert: %d, failed: %d, sum: %d
+	delete: %d, failed: %d, sum: %d
 	---------
 	total:	%d, failed: %d, sum: %d
 	
 Queries:
 	select: %d, failed: %d, sum: %d
 	insert: %d, failed: %d, sum: %d
+	delete: %d, failed: %d, sum: %d
 	---------
 	total:	%d, failed: %d, sum: %d
 	
 `, r.selects.successQPS(seconds), r.selects.failureQPS(seconds), r.selects.totalQPS(seconds),
 		r.inserts.successQPS(seconds), r.inserts.failureQPS(seconds), r.inserts.totalQPS(seconds),
+		r.deletes.successQPS(seconds), r.deletes.failureQPS(seconds), r.deletes.totalQPS(seconds),
 		allQCs.successQPS(seconds), allQCs.failureQPS(seconds), allQCs.totalQPS(seconds),
 		r.selects.success, r.selects.failure, r.selects.sum(),
 		r.inserts.success, r.inserts.failure, r.inserts.sum(),
+		r.deletes.success, r.deletes.failure, r.deletes.sum(),
 		allQCs.success, allQCs.failure, allQCs.sum())
 }
