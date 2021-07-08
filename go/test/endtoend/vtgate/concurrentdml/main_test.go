@@ -255,7 +255,8 @@ func TestInsertIgnoreOnLookupUniqueVindex(t *testing.T) {
 	// Stress generator
 	vtParamsStress := vtParams
 	vtParamsStress.DbName = unsKs
-	s := stress.New(t, &vtParamsStress, 10*time.Second, false)
+	stress.DefaultConfig.ConnParams = &vtParamsStress
+	s := stress.New(t, stress.DefaultConfig)
 	s.Start()
 
 	// end-to-end test

@@ -43,15 +43,48 @@ type (
 	}
 
 	Stresser struct {
-		doneCh      chan Result
-		tbls        []*table
-		connParams  *mysql.ConnParams
-		maxClient   int
-		duration    time.Duration
-		t           *testing.T
-		finish, log bool
+		cfg      *Config
+		doneCh   chan Result
+		tbls     []*table
+		duration time.Duration
+		start    time.Time
+		t        *testing.T
+		finish   bool
+	}
+
+	Config struct {
+		StopAfter       time.Duration
+		PrintErrLogs    bool
+		NumberOfTables  int
+		TableNamePrefix string
+		InsertInterval  time.Duration
+		DeleteInterval  time.Duration
+		SelectInterval  time.Duration
+		SelectLimit     int
+		ConnParams      *mysql.ConnParams
+		MaxClient       int
 	}
 )
+
+var DefaultConfig = &Config{
+	StopAfter:       30 * time.Second,
+	PrintErrLogs:    false,
+	NumberOfTables:  100,
+	TableNamePrefix: "stress_t",
+	InsertInterval:  10 * time.Microsecond,
+	DeleteInterval:  15 * time.Microsecond,
+	SelectInterval:  2 * time.Microsecond,
+	SelectLimit:     500,
+	MaxClient:       10,
+}
+
+func New(t *testing.T, cfg *Config) *Stresser {
+	return &Stresser{
+		cfg:    cfg,
+		doneCh: make(chan Result),
+		t:      t,
+	}
+}
 
 func generateNewTables(nb int) []*table {
 	tbls := make([]*table, 0, nb)
@@ -64,7 +97,7 @@ func generateNewTables(nb int) []*table {
 }
 
 func (s *Stresser) createTables(nb int) []*table {
-	conn := newClient(s.t, s.connParams)
+	conn := newClient(s.t, s.cfg.ConnParams)
 	defer conn.Close()
 
 	tbls := generateNewTables(nb)
@@ -75,19 +108,8 @@ func (s *Stresser) createTables(nb int) []*table {
 }
 
 func (s *Stresser) SetConn(conn *mysql.ConnParams) *Stresser {
-	s.connParams = conn
+	s.cfg.ConnParams = conn
 	return s
-}
-
-func New(t *testing.T, conn *mysql.ConnParams, duration time.Duration, enableLog bool) *Stresser {
-	return &Stresser{
-		doneCh:     make(chan Result),
-		t:          t,
-		connParams: conn,
-		duration:   duration,
-		maxClient:  10,
-		log:        enableLog,
-	}
 }
 
 func (s *Stresser) Start() *Stresser {
@@ -98,16 +120,19 @@ func (s *Stresser) Start() *Stresser {
 }
 
 func (s *Stresser) startClients() {
-	resultCh := make(chan Result, s.maxClient)
-	for i := 0; i < s.maxClient; i++ {
+	s.start = time.Now()
+
+	resultCh := make(chan Result, s.cfg.MaxClient)
+	for i := 0; i < s.cfg.MaxClient; i++ {
 		go s.startStressClient(resultCh)
 	}
 
-	perClientResults := make([]Result, 0, s.maxClient)
-	for i := 0; i < s.maxClient; i++ {
+	perClientResults := make([]Result, 0, s.cfg.MaxClient)
+	for i := 0; i < s.cfg.MaxClient; i++ {
 		newResult := <-resultCh
 		perClientResults = append(perClientResults, newResult)
 	}
+	s.duration = time.Since(s.start)
 
 	var finalResult Result
 	for _, r := range perClientResults {
@@ -119,29 +144,29 @@ func (s *Stresser) startClients() {
 }
 
 func (s *Stresser) startStressClient(resultCh chan Result) {
-	connParams := s.connParams
+	connParams := s.cfg.ConnParams
 	conn := newClient(s.t, connParams)
 	defer conn.Close()
 
 	var res Result
 
-	timeout := time.After(s.duration)
+	timeout := time.After(s.cfg.StopAfter)
 
 outer:
 	for !s.finish {
-		if connParams != s.connParams {
-			connParams = s.connParams
+		if connParams != s.cfg.ConnParams {
+			connParams = s.cfg.ConnParams
 			conn.Close()
 			conn = newClient(s.t, connParams)
 		}
 		select {
 		case <-timeout:
 			break outer
-		case <-time.After(30 * time.Microsecond):
+		case <-time.After(s.cfg.DeleteInterval):
 			s.deleteFromRandomTable(conn, &res)
-		case <-time.After(15 * time.Microsecond):
+		case <-time.After(s.cfg.InsertInterval):
 			s.insertToRandomTable(conn, &res)
-		case <-time.After(1 * time.Microsecond):
+		case <-time.After(s.cfg.SelectInterval):
 			s.selectFromRandomTable(conn, &res)
 		}
 	}
