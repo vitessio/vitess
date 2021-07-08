@@ -257,7 +257,7 @@ func (e *Executor) InitDBConfig(keyspace, shard, dbName string) {
 func (e *Executor) Open() error {
 	e.initMutex.Lock()
 	defer e.initMutex.Unlock()
-	if e.isOpen || !e.env.Config().EnableOnlineDDLExecutor {
+	if e.isOpen || !e.env.Config().EnableOnlineDDL {
 		return nil
 	}
 	e.pool.Open(e.env.Config().DB.AppWithDB(), e.env.Config().DB.DbaWithDB(), e.env.Config().DB.AppDebugWithDB())
