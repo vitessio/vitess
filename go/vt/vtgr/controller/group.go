@@ -23,10 +23,8 @@ import (
 	"sync"
 
 	"vitess.io/vitess/go/stats"
-
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/orchestrator/inst"
-
 	"vitess.io/vitess/go/vt/vtgr/db"
 )
 

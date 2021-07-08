@@ -23,21 +23,15 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver/testutil"
-
-	"vitess.io/vitess/go/vt/topo/memorytopo"
-
-	"vitess.io/vitess/go/vt/vtgr/config"
-
-	"vitess.io/vitess/go/vt/logutil"
-
+	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 
+	"vitess.io/vitess/go/vt/logutil"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-
 	"vitess.io/vitess/go/vt/topo"
-
-	"github.com/golang/mock/gomock"
+	"vitess.io/vitess/go/vt/topo/memorytopo"
+	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver/testutil"
+	"vitess.io/vitess/go/vt/vtgr/config"
 )
 
 func TestRefreshTabletsInShard(t *testing.T) {

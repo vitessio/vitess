@@ -24,9 +24,6 @@ import (
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/vt/topo"
-	"vitess.io/vitess/go/vt/vtgr/db"
-
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/mysql"
@@ -34,7 +31,9 @@ import (
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/log"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgr/db"
 )
 
 var (
