@@ -666,22 +666,11 @@ func costFor(foundVindex vindexes.Vindex, opcode engine.RouteOpcode) cost {
 	}
 }
 
-// opCodePrecedence tracks the order that op codes are compared to each other
-var opCodePrecedence = map[engine.RouteOpcode]int{
-	engine.SelectEqualUnique: 1,
-	engine.SelectEqual:       2,
-	engine.SelectIN:          3,
-	engine.SelectMultiEqual:  4,
-	engine.SelectScatter:     5,
-}
-
 // less compares two costs and returns true if the first cost is cheaper than the second
 func less(c1, c2 cost) bool {
-	precedence1 := opCodePrecedence[c1.opCode]
-	precedence2 := opCodePrecedence[c2.opCode]
 	switch {
-	case precedence1 != precedence2:
-		return precedence1 < precedence2
+	case c1.opCode != c2.opCode:
+		return c1.opCode < c2.opCode
 	case c1.isUnique == c2.isUnique:
 		return c1.vindexCost <= c2.vindexCost
 	default:
