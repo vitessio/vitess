@@ -1246,7 +1246,7 @@ func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.
 		e.plans.Set(planKey, plan)
 	}
 
-	return e.checkThatPlanIsValid(plan)
+	return e.checkThatPlanIsValid(stmt, plan)
 }
 
 // skipQueryPlanCache extracts SkipQueryPlanCache from session
@@ -1522,8 +1522,9 @@ func (e *Executor) startVStream(ctx context.Context, rss []*srvtopo.ResolvedShar
 	return nil
 }
 
-func (e *Executor) checkThatPlanIsValid(plan *engine.Plan) (*engine.Plan, error) {
-	if e.allowScatter {
+func (e *Executor) checkThatPlanIsValid(stmt sqlparser.Statement, plan *engine.Plan) (*engine.Plan, error) {
+	directive := sqlparser.AllowScatterDirective(stmt)
+	if e.allowScatter || directive {
 		return plan, nil
 	}
 	// we go over all the primitives in the plan, searching for a route that is of SelectScatter opcode

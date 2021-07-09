@@ -2562,13 +2562,34 @@ func TestSelectScatterFails(t *testing.T) {
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
 	serv := new(sandboxTopo)
 	resolver := newTestResolver(hc, serv, cell)
+
+	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
+	for i, shard := range shards {
+		sbc := hc.AddTestTablet(cell, shard, 1, "TestExecutor", shard, topodatapb.TabletType_MASTER, true, 1, nil)
+		sbc.SetResults([]*sqltypes.Result{{
+			Fields: []*querypb.Field{
+				{Name: "col1", Type: sqltypes.Int32},
+				{Name: "col2", Type: sqltypes.Int32},
+				{Name: "weight_string(col2)", Type: sqltypes.VarBinary},
+			},
+			InsertID: 0,
+			Rows: [][]sqltypes.Value{{
+				sqltypes.NewInt32(1),
+				sqltypes.NewInt32(int32(i % 4)),
+				sqltypes.NULL,
+			}},
+		}})
+	}
+
 	executor := createExecutor(serv, cell, resolver)
 	executor.allowScatter = false
 	logChan := QueryLogger.Subscribe("Test")
 	defer QueryLogger.Unsubscribe(logChan)
 
-	sql := "select id from user"
-	_, err := executorExec(executor, sql, nil)
+	_, err := executorExec(executor, "select id from user", nil)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "scatter")
+
+	_, err = executorExec(executor, "select /*vt+ ALLOW_SCATTER */ id from user", nil)
+	require.NoError(t, err)
 }
