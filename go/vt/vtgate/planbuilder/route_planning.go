@@ -173,28 +173,20 @@ func planHorizon(sel *sqlparser.Select, plan logicalPlan, semTable *semantics.Se
 	if err != nil {
 		return nil, err
 	}
-	for _, e := range qp.selectExprs {
-		if _, _, err := pushProjection(e, plan, semTable, true); err != nil {
-			return nil, err
-		}
-	}
 
-	for _, expr := range qp.aggrExprs {
-		funcExpr, ok := expr.Expr.(*sqlparser.FuncExpr)
-		if !ok {
-			return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "expected an aggregation here")
-		}
-		if funcExpr.Distinct {
-			return nil, semantics.Gen4NotSupportedF("distinct aggregation")
-		}
-	}
-
-	if len(qp.aggrExprs) > 0 {
+	if qp.hasAggr {
 		plan, err = planAggregations(qp, plan, semTable)
 		if err != nil {
 			return nil, err
 		}
+	} else {
+		for _, e := range qp.selectExprs {
+			if _, _, err := pushProjection(e.col, plan, semTable, true); err != nil {
+				return nil, err
+			}
+		}
 	}
+
 	if len(sel.OrderBy) > 0 {
 		plan, err = planOrderBy(qp, qp.orderExprs, plan, semTable)
 		if err != nil {
@@ -222,9 +214,6 @@ func createSingleShardRoutePlan(sel *sqlparser.Select, rb *route) {
 func checkUnsupportedConstructs(sel *sqlparser.Select) error {
 	if sel.Distinct {
 		return semantics.Gen4NotSupportedF("DISTINCT")
-	}
-	if sel.GroupBy != nil {
-		return semantics.Gen4NotSupportedF("GROUP BY")
 	}
 	if sel.Having != nil {
 		return semantics.Gen4NotSupportedF("HAVING")
