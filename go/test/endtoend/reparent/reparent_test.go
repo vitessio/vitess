@@ -163,6 +163,7 @@ func TestReparentIgnoreReplicas(t *testing.T) {
 
 	cfg := stress.DefaultConfig
 	cfg.ConnParams = &mysql.ConnParams{Port: clusterInstance.VtgateMySQLPort, Host: "localhost", DbName: "ks"}
+	cfg.AllowFailure = true
 	s := stress.New(t, cfg).Start()
 
 	ctx := context.Background()
