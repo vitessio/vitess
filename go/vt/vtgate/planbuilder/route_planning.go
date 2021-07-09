@@ -169,26 +169,26 @@ func planHorizon(sel *sqlparser.Select, plan logicalPlan, semTable *semantics.Se
 		return nil, err
 	}
 
-	qp, err := createQPFromSelect(sel)
+	qp, err := abstract.CreateQPFromSelect(sel)
 	if err != nil {
 		return nil, err
 	}
 
-	if qp.hasAggr {
+	if qp.HasAggr {
 		plan, err = planAggregations(qp, plan, semTable)
 		if err != nil {
 			return nil, err
 		}
 	} else {
-		for _, e := range qp.selectExprs {
-			if _, _, err := pushProjection(e.col, plan, semTable, true); err != nil {
+		for _, e := range qp.SelectExprs {
+			if _, _, err := pushProjection(e.Col, plan, semTable, true); err != nil {
 				return nil, err
 			}
 		}
 	}
 
 	if len(sel.OrderBy) > 0 {
-		plan, err = planOrderBy(qp, qp.orderExprs, plan, semTable)
+		plan, err = planOrderBy(qp, qp.OrderExprs, plan, semTable)
 		if err != nil {
 			return nil, err
 		}

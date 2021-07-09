@@ -1366,3 +1366,23 @@ func ToString(exprs []TableExpr) string {
 	}
 	return buf.String()
 }
+
+// ContainsAggregation returns true if the expression contains aggregation
+func ContainsAggregation(e Expr) bool {
+	hasAggregates := false
+	_ = Walk(func(node SQLNode) (kontinue bool, err error) {
+		switch node := node.(type) {
+		case *FuncExpr:
+			if node.IsAggregate() {
+				hasAggregates = true
+				return false, nil
+			}
+		case *GroupConcatExpr:
+			hasAggregates = true
+			return false, nil
+		}
+		return true, nil
+	}, e)
+	return hasAggregates
+
+}

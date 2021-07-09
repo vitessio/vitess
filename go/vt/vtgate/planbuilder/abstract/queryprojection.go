@@ -14,11 +14,10 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package planbuilder
+package abstract
 
 import (
 	"strconv"
-
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -26,27 +25,27 @@ import (
 )
 
 type se struct {
-	col  *sqlparser.AliasedExpr
-	aggr bool
+	Col  *sqlparser.AliasedExpr
+	Aggr bool
 }
 
-type queryProjection struct {
-	selectExprs  []se
-	hasAggr      bool
-	groupByExprs sqlparser.Exprs
-	orderExprs   []orderBy
+type QueryProjection struct {
+	SelectExprs  []se
+	HasAggr      bool
+	GroupByExprs sqlparser.Exprs
+	OrderExprs   []OrderBy
 }
 
-type orderBy struct {
-	inner         *sqlparser.Order
-	weightStrExpr sqlparser.Expr
+type OrderBy struct {
+	Inner         *sqlparser.Order
+	WeightStrExpr sqlparser.Expr
 }
 
-func newQueryProjection() *queryProjection {
-	return &queryProjection{}
+func newQueryProjection() *QueryProjection {
+	return &QueryProjection{}
 }
 
-func createQPFromSelect(sel *sqlparser.Select) (*queryProjection, error) {
+func CreateQPFromSelect(sel *sqlparser.Select) (*QueryProjection, error) {
 	qp := newQueryProjection()
 
 	hasNonAggr := false
@@ -63,39 +62,40 @@ func createQPFromSelect(sel *sqlparser.Select) (*queryProjection, error) {
 			if fExpr.Distinct {
 				return nil, semantics.Gen4NotSupportedF("distinct aggregation")
 			}
-			qp.hasAggr = true
-			qp.selectExprs = append(qp.selectExprs, se{
-				col:  exp,
-				aggr: true,
+			qp.HasAggr = true
+			qp.SelectExprs = append(qp.SelectExprs, se{
+				Col:  exp,
+				Aggr: true,
 			})
 			continue
 		}
-		if nodeHasAggregates(exp.Expr) {
+		
+		if sqlparser.ContainsAggregation(exp.Expr) {
 			return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: in scatter query: complex aggregate expression")
 		}
 		hasNonAggr = true
-		qp.selectExprs = append(qp.selectExprs, se{col: exp})
+		qp.SelectExprs = append(qp.SelectExprs, se{Col: exp})
 	}
 
-	if hasNonAggr && qp.hasAggr && sel.GroupBy == nil {
+	if hasNonAggr && qp.HasAggr && sel.GroupBy == nil {
 		return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.MixOfGroupFuncAndFields, "Mixing of aggregation and non-aggregation columns is not allowed if there is no GROUP BY clause")
 	}
 
-	qp.groupByExprs = sqlparser.Exprs(sel.GroupBy)
+	qp.GroupByExprs = sqlparser.Exprs(sel.GroupBy)
 
 	for _, order := range sel.OrderBy {
-		qp.addOrderBy(order, qp.selectExprs)
+		qp.addOrderBy(order, qp.SelectExprs)
 	}
 	return qp, nil
 }
 
-func (qp *queryProjection) addOrderBy(order *sqlparser.Order, allExpr []se) {
+func (qp *QueryProjection) addOrderBy(order *sqlparser.Order, allExpr []se) {
 	// Order by is the column offset to be used from the select expressions
 	// Eg - select id from music order by 1
 	literalExpr, isLiteral := order.Expr.(*sqlparser.Literal)
 	if isLiteral && literalExpr.Type == sqlparser.IntVal {
 		num, _ := strconv.Atoi(literalExpr.Val)
-		aliasedExpr := allExpr[num-1].col
+		aliasedExpr := allExpr[num-1].Col
 		expr := aliasedExpr.Expr
 		if !aliasedExpr.As.IsEmpty() {
 			// the column is aliased, so we'll add an expression ordering by the alias and not the underlying expression
@@ -103,12 +103,12 @@ func (qp *queryProjection) addOrderBy(order *sqlparser.Order, allExpr []se) {
 				Name: aliasedExpr.As,
 			}
 		}
-		qp.orderExprs = append(qp.orderExprs, orderBy{
-			inner: &sqlparser.Order{
+		qp.OrderExprs = append(qp.OrderExprs, OrderBy{
+			Inner: &sqlparser.Order{
 				Expr:      expr,
 				Direction: order.Direction,
 			},
-			weightStrExpr: aliasedExpr.Expr,
+			WeightStrExpr: aliasedExpr.Expr,
 		})
 		return
 	}
@@ -119,19 +119,19 @@ func (qp *queryProjection) addOrderBy(order *sqlparser.Order, allExpr []se) {
 	colExpr, isColName := order.Expr.(*sqlparser.ColName)
 	if isColName && colExpr.Qualifier.IsEmpty() {
 		for _, selectExpr := range allExpr {
-			isAliasExpr := !selectExpr.col.As.IsEmpty()
-			if isAliasExpr && colExpr.Name.Equal(selectExpr.col.As) {
-				qp.orderExprs = append(qp.orderExprs, orderBy{
-					inner:         order,
-					weightStrExpr: selectExpr.col.Expr,
+			isAliasExpr := !selectExpr.Col.As.IsEmpty()
+			if isAliasExpr && colExpr.Name.Equal(selectExpr.Col.As) {
+				qp.OrderExprs = append(qp.OrderExprs, OrderBy{
+					Inner:         order,
+					WeightStrExpr: selectExpr.Col.Expr,
 				})
 				return
 			}
 		}
 	}
 
-	qp.orderExprs = append(qp.orderExprs, orderBy{
-		inner:         order,
-		weightStrExpr: order.Expr,
+	qp.OrderExprs = append(qp.OrderExprs, OrderBy{
+		Inner:         order,
+		WeightStrExpr: order.Expr,
 	})
 }
