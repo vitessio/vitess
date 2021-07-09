@@ -18,6 +18,7 @@ package planbuilder
 
 import (
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/abstract"
 
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 
@@ -119,7 +120,7 @@ func checkIfAlreadyExists(expr *sqlparser.AliasedExpr, sel *sqlparser.Select) in
 	return -1
 }
 
-func planAggregations(qp *queryProjection, plan logicalPlan, semTable *semantics.SemTable) (logicalPlan, error) {
+func planAggregations(qp *abstract.QueryProjection, plan logicalPlan, semTable *semantics.SemTable) (logicalPlan, error) {
 	eaggr := &engine.OrderedAggregate{}
 	oa := &orderedAggregate{
 		resultsBuilder: resultsBuilder{
@@ -129,13 +130,13 @@ func planAggregations(qp *queryProjection, plan logicalPlan, semTable *semantics
 		},
 		eaggr: eaggr,
 	}
-	for _, e := range qp.selectExprs {
-		offset, _, err := pushProjection(e.col, plan, semTable, true)
+	for _, e := range qp.SelectExprs {
+		offset, _, err := pushProjection(e.Col, plan, semTable, true)
 		if err != nil {
 			return nil, err
 		}
-		if e.aggr {
-			fExpr := e.col.Expr.(*sqlparser.FuncExpr)
+		if e.Aggr {
+			fExpr := e.Col.Expr.(*sqlparser.FuncExpr)
 			opcode := engine.SupportedAggregates[fExpr.Name.Lowered()]
 			oa.eaggr.Aggregates = append(oa.eaggr.Aggregates, engine.AggregateParams{
 				Opcode: opcode,
@@ -144,7 +145,7 @@ func planAggregations(qp *queryProjection, plan logicalPlan, semTable *semantics
 		}
 	}
 
-	for _, groupExpr := range qp.groupByExprs {
+	for _, groupExpr := range qp.GroupByExprs {
 		if err := planGroupByGen4(groupExpr, oa, semTable); err != nil {
 			return nil, err
 		}
@@ -178,7 +179,7 @@ func planGroupByGen4(groupExpr sqlparser.Expr, plan logicalPlan, semTable *seman
 	}
 }
 
-func planOrderBy(qp *queryProjection, orderExprs []orderBy, plan logicalPlan, semTable *semantics.SemTable) (logicalPlan, error) {
+func planOrderBy(qp *abstract.QueryProjection, orderExprs []abstract.OrderBy, plan logicalPlan, semTable *semantics.SemTable) (logicalPlan, error) {
 	switch plan := plan.(type) {
 	case *route:
 		return planOrderByForRoute(orderExprs, plan, semTable)
@@ -189,10 +190,10 @@ func planOrderBy(qp *queryProjection, orderExprs []orderBy, plan logicalPlan, se
 	}
 }
 
-func planOrderByForRoute(orderExprs []orderBy, plan *route, semTable *semantics.SemTable) (logicalPlan, error) {
+func planOrderByForRoute(orderExprs []abstract.OrderBy, plan *route, semTable *semantics.SemTable) (logicalPlan, error) {
 	origColCount := plan.Select.GetColumnCount()
 	for _, order := range orderExprs {
-		offset, weightStringOffset, err := funcName(order.inner.Expr, order.weightStrExpr, plan, semTable)
+		offset, weightStringOffset, err := funcName(order.Inner.Expr, order.WeightStrExpr, plan, semTable)
 		if err != nil {
 			return nil, err
 		}
@@ -200,9 +201,9 @@ func planOrderByForRoute(orderExprs []orderBy, plan *route, semTable *semantics.
 		plan.eroute.OrderBy = append(plan.eroute.OrderBy, engine.OrderbyParams{
 			Col:             offset,
 			WeightStringCol: weightStringOffset,
-			Desc:            order.inner.Direction == sqlparser.DescOrder,
+			Desc:            order.Inner.Direction == sqlparser.DescOrder,
 		})
-		plan.Select.AddOrder(order.inner)
+		plan.Select.AddOrder(order.Inner)
 	}
 	if origColCount != plan.Select.GetColumnCount() {
 		plan.eroute.TruncateColumnCount = origColCount
@@ -259,7 +260,7 @@ func needsWeightString(tbl semantics.TableInfo, colName *sqlparser.ColName) bool
 	return true // we didn't find the column. better to add just to be safe1
 }
 
-func planOrderByForJoin(qp *queryProjection, orderExprs []orderBy, plan *joinGen4, semTable *semantics.SemTable) (logicalPlan, error) {
+func planOrderByForJoin(qp *abstract.QueryProjection, orderExprs []abstract.OrderBy, plan *joinGen4, semTable *semantics.SemTable) (logicalPlan, error) {
 	if allLeft(orderExprs, semTable, plan.Left.ContainsTables()) {
 		newLeft, err := planOrderBy(qp, orderExprs, plan.Left, semTable)
 		if err != nil {
@@ -280,7 +281,7 @@ func planOrderByForJoin(qp *queryProjection, orderExprs []orderBy, plan *joinGen
 	}
 
 	for _, order := range orderExprs {
-		offset, weightStringOffset, err := funcName(order.inner.Expr, order.weightStrExpr, plan, semTable)
+		offset, weightStringOffset, err := funcName(order.Inner.Expr, order.WeightStrExpr, plan, semTable)
 		if err != nil {
 			return nil, err
 		}
@@ -288,7 +289,7 @@ func planOrderByForJoin(qp *queryProjection, orderExprs []orderBy, plan *joinGen
 		ms.eMemorySort.OrderBy = append(ms.eMemorySort.OrderBy, engine.OrderbyParams{
 			Col:               offset,
 			WeightStringCol:   weightStringOffset,
-			Desc:              order.inner.Direction == sqlparser.DescOrder,
+			Desc:              order.Inner.Direction == sqlparser.DescOrder,
 			StarColFixedIndex: offset,
 		})
 	}
@@ -297,9 +298,9 @@ func planOrderByForJoin(qp *queryProjection, orderExprs []orderBy, plan *joinGen
 
 }
 
-func allLeft(orderExprs []orderBy, semTable *semantics.SemTable, lhsTables semantics.TableSet) bool {
+func allLeft(orderExprs []abstract.OrderBy, semTable *semantics.SemTable, lhsTables semantics.TableSet) bool {
 	for _, expr := range orderExprs {
-		exprDependencies := semTable.Dependencies(expr.inner.Expr)
+		exprDependencies := semTable.Dependencies(expr.Inner.Expr)
 		if !exprDependencies.IsSolvedBy(lhsTables) {
 			return false
 		}
