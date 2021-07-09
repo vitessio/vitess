@@ -52,12 +52,16 @@ type (
 		start    time.Time
 		t        *testing.T
 		finish   bool
+		cfgMu    sync.Mutex
 	}
 
 	// Config contains all of the Stresser configuration.
 	Config struct {
-		// MaximumDuration for which each client can stress the cluster.
+		// MaximumDuration during which each client can stress the cluster.
 		MaximumDuration time.Duration
+
+		// MinimumDuration during which each client must stress the cluster.
+		MinimumDuration time.Duration
 
 		// PrintErrLogs enables or disables the rendering of MySQL error logs.
 		PrintErrLogs bool
@@ -85,12 +89,18 @@ type (
 
 		// MaxClient is the maximum number of concurrent client stressing the cluster.
 		MaxClient int
+
+		// AllowFailure determines whether failing queries are allowed or not.
+		// All queries that fail while this setting is set to true will not be counted
+		// by Stresser.Stop's assertion.
+		AllowFailure bool
 	}
 )
 
 // DefaultConfig is the default configuration used by the stresser.
 var DefaultConfig = Config{
 	MaximumDuration: 120 * time.Second,
+	MinimumDuration: 1 * time.Second,
 	PrintErrLogs:    false,
 	NumberOfTables:  100,
 	TableNamePrefix: "stress_t",
@@ -99,6 +109,14 @@ var DefaultConfig = Config{
 	SelectInterval:  2 * time.Microsecond,
 	SelectLimit:     500,
 	MaxClient:       10,
+	AllowFailure:    false,
+}
+
+// AllowFailure will set the AllowFailure setting to the given value.
+func (s *Stresser) AllowFailure(allow bool) {
+	s.cfgMu.Lock()
+	defer s.cfgMu.Unlock()
+	s.cfg.AllowFailure = allow
 }
 
 // New creates a new Stresser based on the given Config.
@@ -110,21 +128,37 @@ func New(t *testing.T, cfg Config) *Stresser {
 	}
 }
 
-// Stop the stresser immediately and print the results.
+// Stop the Stresser immediately after Config.MinimumDuration is reached.
+// To override Config.MinimumDuration, one can call Stresser.StopAfter with
+// a value of 0.
+// Once the Stresser has stopped, the function asserts that all results are
+// successful, and then prints them to the standard output.
 func (s *Stresser) Stop() {
-	s.StopAfter(0)
+	if time.Since(s.start) > s.cfg.MinimumDuration {
+		s.StopAfter(0)
+	} else {
+		s.StopAfter(s.cfg.MinimumDuration - time.Since(s.start))
+	}
 }
 
-// StopAfter stops the stresser after a given duration and print the results.
+// StopAfter stops the Stresser after the given duration. The function will then
+// assert that all the results are successful, and then prints them to the standard
+// output.
 func (s *Stresser) StopAfter(after time.Duration) {
 	timeoutCh := time.After(after)
 	select {
 	case res := <-s.doneCh:
 		res.Print(s.duration.Seconds())
+		if !res.assert() {
+			s.t.Errorf("Requires no failed queries")
+		}
 	case <-timeoutCh:
 		s.finish = true
 		res := <-s.doneCh
 		res.Print(s.duration.Seconds())
+		if !res.assert() {
+			s.t.Errorf("Requires no failed queries")
+		}
 	}
 }
 
@@ -132,6 +166,8 @@ func (s *Stresser) StopAfter(after time.Duration) {
 // Setting a new mysql.ConnParams will automatically create new mysql client using
 // the new configuration.
 func (s *Stresser) SetConn(conn *mysql.ConnParams) *Stresser {
+	s.cfgMu.Lock()
+	defer s.cfgMu.Unlock()
 	s.cfg.ConnParams = conn
 	return s
 }
@@ -140,6 +176,7 @@ func (s *Stresser) SetConn(conn *mysql.ConnParams) *Stresser {
 func (s *Stresser) Start() *Stresser {
 	fmt.Println("Starting load testing ...")
 	s.tbls = s.createTables(100)
+	s.start = time.Now()
 	go s.startClients()
 	return s
 }
@@ -166,15 +203,14 @@ func (s *Stresser) createTables(nb int) []*table {
 }
 
 func (s *Stresser) startClients() {
-	s.start = time.Now()
-
-	resultCh := make(chan Result, s.cfg.MaxClient)
-	for i := 0; i < s.cfg.MaxClient; i++ {
+	maxClient := s.cfg.MaxClient
+	resultCh := make(chan Result, maxClient)
+	for i := 0; i < maxClient; i++ {
 		go s.startStressClient(resultCh)
 	}
 
-	perClientResults := make([]Result, 0, s.cfg.MaxClient)
-	for i := 0; i < s.cfg.MaxClient; i++ {
+	perClientResults := make([]Result, 0, maxClient)
+	for i := 0; i < maxClient; i++ {
 		newResult := <-resultCh
 		perClientResults = append(perClientResults, newResult)
 	}
@@ -190,7 +226,10 @@ func (s *Stresser) startClients() {
 }
 
 func (s *Stresser) startStressClient(resultCh chan Result) {
+	s.cfgMu.Lock()
 	connParams := s.cfg.ConnParams
+	s.cfgMu.Unlock()
+
 	conn := newClient(s.t, connParams)
 	defer conn.Close()
 
@@ -200,11 +239,13 @@ func (s *Stresser) startStressClient(resultCh chan Result) {
 
 outer:
 	for !s.finish {
+		s.cfgMu.Lock()
 		if connParams != s.cfg.ConnParams {
 			connParams = s.cfg.ConnParams
 			conn.Close()
 			conn = newClient(s.t, connParams)
 		}
+		s.cfgMu.Unlock()
 		select {
 		case <-timeout:
 			break outer
@@ -224,6 +265,11 @@ func (s *Stresser) deleteFromRandomTable(conn *mysql.Conn, r *Result) {
 	s.tbls[tblI].mu.Lock()
 	defer s.tbls[tblI].mu.Unlock()
 
+	// no row to delete
+	if s.tbls[tblI].rows == 0 {
+		return
+	}
+
 	query := fmt.Sprintf("delete from %s where id = %d", s.tbls[tblI].name, s.tbls[tblI].nextID-1)
 	if s.exec(conn, query) != nil {
 		s.tbls[tblI].nextID--
@@ -231,6 +277,11 @@ func (s *Stresser) deleteFromRandomTable(conn *mysql.Conn, r *Result) {
 		r.deletes.success++
 	} else {
 		r.deletes.failure++
+		s.cfgMu.Lock()
+		if !s.cfg.AllowFailure {
+			r.deletes.meaningfulFailure++
+		}
+		s.cfgMu.Unlock()
 	}
 }
 
@@ -246,6 +297,11 @@ func (s *Stresser) insertToRandomTable(conn *mysql.Conn, r *Result) {
 		r.inserts.success++
 	} else {
 		r.inserts.failure++
+		s.cfgMu.Lock()
+		if !s.cfg.AllowFailure {
+			r.inserts.meaningfulFailure++
+		}
+		s.cfgMu.Unlock()
 	}
 }
 
@@ -253,6 +309,11 @@ func (s *Stresser) selectFromRandomTable(conn *mysql.Conn, r *Result) {
 	tblI := rand.Int() % len(s.tbls)
 	s.tbls[tblI].mu.Lock()
 	defer s.tbls[tblI].mu.Unlock()
+
+	// no row to select
+	if s.tbls[tblI].rows == 0 {
+		return
+	}
 
 	query := fmt.Sprintf("select * from %s limit %d", s.tbls[tblI].name, s.cfg.SelectLimit)
 	expLength := s.tbls[tblI].rows
@@ -263,5 +324,10 @@ func (s *Stresser) selectFromRandomTable(conn *mysql.Conn, r *Result) {
 		r.selects.success++
 	} else {
 		r.selects.failure++
+		s.cfgMu.Lock()
+		if !s.cfg.AllowFailure {
+			r.selects.meaningfulFailure++
+		}
+		s.cfgMu.Unlock()
 	}
 }
