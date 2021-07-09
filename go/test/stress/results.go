@@ -25,8 +25,8 @@ type (
 		meaningfulFailure int
 	}
 
-	// Result holds the result for a stress test.
-	Result struct {
+	// result holds the result for a stress test.
+	result struct {
 		selects, inserts, deletes queryCount
 	}
 )
@@ -70,12 +70,12 @@ func sumQueryCounts(qcs ...queryCount) queryCount {
 	return qc
 }
 
-func (r Result) assert() bool {
+func (r result) assert() bool {
 	return r.selects.meaningfulFailure == 0 && r.deletes.meaningfulFailure == 0 && r.inserts.meaningfulFailure == 0
 }
 
-// Print renders the results held by Result.
-func (r Result) Print(seconds float64) {
+// print renders the results held by result.
+func (r result) print(seconds float64) {
 	allQCs := sumQueryCounts(r.selects, r.inserts, r.deletes)
 	fmt.Printf(`QPS:
 	select: %d | failed: %d (including %d meaningful failures) | sum: %d

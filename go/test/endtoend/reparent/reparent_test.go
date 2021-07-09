@@ -58,7 +58,7 @@ func TestMasterToSpareStateChangeImpossible(t *testing.T) {
 	require.Error(t, err, out)
 	require.Contains(t, out, "type change MASTER -> SPARE is not an allowed transition for ChangeTabletType")
 
-	s.StopAfter(10 * time.Second)
+	s.Stop()
 }
 
 func TestReparentDownMaster(t *testing.T) {
@@ -105,7 +105,7 @@ func TestReparentDownMaster(t *testing.T) {
 	confirmReplication(t, tab2, []*cluster.Vttablet{tab3, tab4})
 	resurrectTablet(ctx, t, tab1)
 
-	s.StopAfter(10 * time.Second)
+	s.StopAfter(3 * time.Second)
 }
 
 func TestReparentNoChoiceDownMaster(t *testing.T) {
@@ -149,7 +149,7 @@ func TestReparentNoChoiceDownMaster(t *testing.T) {
 	// bring back the old master as a replica, check that it catches up
 	resurrectTablet(ctx, t, tab1)
 
-	s.StopAfter(10 * time.Second)
+	s.StopAfter(3 * time.Second)
 }
 
 func TestReparentIgnoreReplicas(t *testing.T) {
@@ -204,7 +204,7 @@ func TestReparentIgnoreReplicas(t *testing.T) {
 	// bring back the old master as a replica, check that it catches up
 	resurrectTablet(ctx, t, tab1)
 
-	s.StopAfter(15 * time.Second)
+	s.StopAfter(5 * time.Second)
 }
 
 func TestReparentCrossCell(t *testing.T) {
@@ -227,7 +227,7 @@ func TestReparentCrossCell(t *testing.T) {
 	validateTopology(t, false)
 	checkMasterTablet(t, tab4)
 
-	s.StopAfter(10 * time.Second)
+	s.StopAfter(3 * time.Second)
 }
 
 func TestReparentGraceful(t *testing.T) {
@@ -263,7 +263,7 @@ func TestReparentGraceful(t *testing.T) {
 
 	confirmReplication(t, tab2, []*cluster.Vttablet{tab1, tab3, tab4})
 
-	s.StopAfter(10 * time.Second)
+	s.StopAfter(3 * time.Second)
 }
 
 func TestReparentReplicaOffline(t *testing.T) {
@@ -291,7 +291,7 @@ func TestReparentReplicaOffline(t *testing.T) {
 
 	checkMasterTablet(t, tab2)
 
-	s.StopAfter(10 * time.Second)
+	s.StopAfter(3 * time.Second)
 }
 
 func TestReparentAvoid(t *testing.T) {
@@ -334,7 +334,7 @@ func TestReparentAvoid(t *testing.T) {
 	validateTopology(t, false)
 	checkMasterTablet(t, tab2)
 
-	s.StopAfter(10 * time.Second)
+	s.StopAfter(3 * time.Second)
 }
 
 func TestReparentFromOutside(t *testing.T) {
@@ -351,7 +351,7 @@ func TestReparentFromOutside(t *testing.T) {
 	s := stress.New(t, cfg).Start()
 
 	reparentFromOutside(t, false)
-	s.StopAfter(10 * time.Second)
+	s.StopAfter(3 * time.Second)
 }
 
 func TestReparentFromOutsideWithNoMaster(t *testing.T) {
@@ -379,7 +379,7 @@ func TestReparentFromOutsideWithNoMaster(t *testing.T) {
 		err = tablet.MysqlctlProcess.Start()
 		require.NoError(t, err)
 	}
-	s.StopAfter(10 * time.Second)
+	s.StopAfter(3 * time.Second)
 }
 
 func reparentFromOutside(t *testing.T, downMaster bool) {

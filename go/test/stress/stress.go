@@ -27,6 +27,8 @@ import (
 )
 
 const (
+	// Template used to create new table in the database.
+	// TODO: have dynamic schemas
 	templateNewTable = `create table %s (
 	id bigint,
 	val varchar(64),
@@ -46,7 +48,7 @@ type (
 	// It can be configured through the use of Config.
 	Stresser struct {
 		cfg      Config
-		doneCh   chan Result
+		doneCh   chan result
 		tbls     []*table
 		duration time.Duration
 		start    time.Time
@@ -113,6 +115,10 @@ var DefaultConfig = Config{
 }
 
 // AllowFailure will set the AllowFailure setting to the given value.
+// Allowing failure means that all incoming queries that fail will be
+// counted in result's QPS and total queries, however they will not
+// be marked as "meaningful failure". Meaningful failures represent the
+// failures that must fail the current test.
 func (s *Stresser) AllowFailure(allow bool) {
 	s.cfgMu.Lock()
 	defer s.cfgMu.Unlock()
@@ -123,12 +129,12 @@ func (s *Stresser) AllowFailure(allow bool) {
 func New(t *testing.T, cfg Config) *Stresser {
 	return &Stresser{
 		cfg:    cfg,
-		doneCh: make(chan Result),
+		doneCh: make(chan result),
 		t:      t,
 	}
 }
 
-// Stop the Stresser immediately after Config.MinimumDuration is reached.
+// Stop the Stresser immediately once Config.MinimumDuration is reached.
 // To override Config.MinimumDuration, one can call Stresser.StopAfter with
 // a value of 0.
 // Once the Stresser has stopped, the function asserts that all results are
@@ -142,7 +148,7 @@ func (s *Stresser) Stop() {
 }
 
 // StopAfter stops the Stresser after the given duration. The function will then
-// assert that all the results are successful, and then prints them to the standard
+// assert that all the results are successful, and finally prints them to the standard
 // output.
 func (s *Stresser) StopAfter(after time.Duration) {
 	if s.start.Second() == 0 {
@@ -152,22 +158,22 @@ func (s *Stresser) StopAfter(after time.Duration) {
 	timeoutCh := time.After(after)
 	select {
 	case res := <-s.doneCh:
-		res.Print(s.duration.Seconds())
+		res.print(s.duration.Seconds())
 		if !res.assert() {
 			s.t.Errorf("Requires no failed queries")
 		}
 	case <-timeoutCh:
 		s.finish = true
 		res := <-s.doneCh
-		res.Print(s.duration.Seconds())
+		res.print(s.duration.Seconds())
 		if !res.assert() {
 			s.t.Errorf("Requires no failed queries")
 		}
 	}
 }
 
-// SetConn allows us to change the mysql.ConnParams of our stresser at runtime.
-// Setting a new mysql.ConnParams will automatically create new mysql client using
+// SetConn allows us to change the mysql.ConnParams of a Stresser at runtime.
+// Setting a new mysql.ConnParams will automatically create new MySQL client using
 // the new configuration.
 func (s *Stresser) SetConn(conn *mysql.ConnParams) *Stresser {
 	s.cfgMu.Lock()
@@ -176,10 +182,21 @@ func (s *Stresser) SetConn(conn *mysql.ConnParams) *Stresser {
 	return s
 }
 
-// Start the stresser.
+// Start stressing the Vitess cluster.
+// This method will start by creating the MySQL tables in the Vitess cluster based
+// on the maximum number of table set through Config.NumberOfTables.
+// The method will then start a goroutine that will spawn one or more clients.
+// These clients will be responsible for stressing the cluster until Config.MaximumDuration
+// is reached, or until Stresser.Stop() or Stresser.StopAfter() are called.
+//
+// This method returns a pointer to its Stresser to allow chained function call, like:
+//
+// 		s := stress.New(t, cfg).Start()
+//		s.Stop()
+//
 func (s *Stresser) Start() *Stresser {
 	fmt.Println("Starting load testing ...")
-	s.tbls = s.createTables(100)
+	s.tbls = s.createTables(s.cfg.NumberOfTables)
 	s.start = time.Now()
 	go s.startClients()
 	return s
@@ -206,21 +223,31 @@ func (s *Stresser) createTables(nb int) []*table {
 	return tbls
 }
 
+// startClients is responsible for concurrently starting all the clients,
+// fetching their results, and computing a single final result which is
+// then publish in Stresser.doneCh.
 func (s *Stresser) startClients() {
 	maxClient := s.cfg.MaxClient
-	resultCh := make(chan Result, maxClient)
+	resultCh := make(chan result, maxClient)
+
+	// Start the concurrent clients.
 	for i := 0; i < maxClient; i++ {
 		go s.startStressClient(resultCh)
 	}
 
-	perClientResults := make([]Result, 0, maxClient)
+	// Wait for the different clients to publish their results.
+	perClientResults := make([]result, 0, maxClient)
 	for i := 0; i < maxClient; i++ {
 		newResult := <-resultCh
 		perClientResults = append(perClientResults, newResult)
 	}
+
+	// Calculate how long it took for all the client to finish stressing
+	// the cluster.
 	s.duration = time.Since(s.start)
 
-	var finalResult Result
+	// Based on all the clients' results, compute a single result.
+	var finalResult result
 	for _, r := range perClientResults {
 		finalResult.inserts = sumQueryCounts(finalResult.inserts, r.inserts)
 		finalResult.selects = sumQueryCounts(finalResult.selects, r.selects)
@@ -229,7 +256,12 @@ func (s *Stresser) startClients() {
 	s.doneCh <- finalResult
 }
 
-func (s *Stresser) startStressClient(resultCh chan Result) {
+// startStressClient creates a client that will stress the cluster.
+// This function is supposed to be called as many times as we want
+// to have concurrent clients stressing the cluster.
+// Once the client is done stressing the cluster, results are published
+// in the given chan result.
+func (s *Stresser) startStressClient(resultCh chan result) {
 	s.cfgMu.Lock()
 	connParams := s.cfg.ConnParams
 	s.cfgMu.Unlock()
@@ -237,12 +269,19 @@ func (s *Stresser) startStressClient(resultCh chan Result) {
 	conn := newClient(s.t, connParams)
 	defer conn.Close()
 
-	var res Result
+	var res result
 
+	// Create a timeout based on the Stresser maximum duration and the time
+	// that has already elapsed since the Stresser was started.
 	timeout := time.After(s.cfg.MaximumDuration - time.Since(s.start))
 
 outer:
 	for !s.finish {
+
+		// Update the connection parameters is Stresser has new ones, and
+		// create a new client using the new parameters.
+		// This allows us to change the target (server we are stressing) at
+		// runtime without having to create a new Stresser.
 		s.cfgMu.Lock()
 		if connParams != s.cfg.ConnParams {
 			connParams = s.cfg.ConnParams
@@ -250,8 +289,9 @@ outer:
 			conn = newClient(s.t, connParams)
 		}
 		s.cfgMu.Unlock()
+
 		select {
-		case <-timeout:
+		case <-timeout: // Case where the Stresser has reached its maximum duration
 			break outer
 		case <-time.After(s.cfg.DeleteInterval):
 			s.deleteFromRandomTable(conn, &res)
@@ -264,7 +304,9 @@ outer:
 	resultCh <- res
 }
 
-func (s *Stresser) deleteFromRandomTable(conn *mysql.Conn, r *Result) {
+// deleteFromRandomTable will delete the last row of a random table.
+// If the random table contains no row, the query will not be sent.
+func (s *Stresser) deleteFromRandomTable(conn *mysql.Conn, r *result) {
 	tblI := rand.Int() % len(s.tbls)
 	s.tbls[tblI].mu.Lock()
 	defer s.tbls[tblI].mu.Unlock()
@@ -289,7 +331,8 @@ func (s *Stresser) deleteFromRandomTable(conn *mysql.Conn, r *Result) {
 	}
 }
 
-func (s *Stresser) insertToRandomTable(conn *mysql.Conn, r *Result) {
+// insertToRandomTable inserts a new row into a random table.
+func (s *Stresser) insertToRandomTable(conn *mysql.Conn, r *result) {
 	tblI := rand.Int() % len(s.tbls)
 	s.tbls[tblI].mu.Lock()
 	defer s.tbls[tblI].mu.Unlock()
@@ -309,7 +352,9 @@ func (s *Stresser) insertToRandomTable(conn *mysql.Conn, r *Result) {
 	}
 }
 
-func (s *Stresser) selectFromRandomTable(conn *mysql.Conn, r *Result) {
+// selectFromRandomTable selects all the rows (up to Config.SelectLimit) of a
+// random table. If the table contains no row, the query will not be sent.
+func (s *Stresser) selectFromRandomTable(conn *mysql.Conn, r *result) {
 	tblI := rand.Int() % len(s.tbls)
 	s.tbls[tblI].mu.Lock()
 	defer s.tbls[tblI].mu.Unlock()
