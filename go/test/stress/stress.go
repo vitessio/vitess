@@ -45,7 +45,7 @@ type (
 	// Stresser is responsible for stressing a Vitess cluster.
 	// It can be configured through the use of Config.
 	Stresser struct {
-		cfg      *Config
+		cfg      Config
 		doneCh   chan Result
 		tbls     []*table
 		duration time.Duration
@@ -89,7 +89,7 @@ type (
 )
 
 // DefaultConfig is the default configuration used by the stresser.
-var DefaultConfig = &Config{
+var DefaultConfig = Config{
 	MaximumDuration: 120 * time.Second,
 	PrintErrLogs:    false,
 	NumberOfTables:  100,
@@ -102,7 +102,7 @@ var DefaultConfig = &Config{
 }
 
 // New creates a new Stresser based on the given Config.
-func New(t *testing.T, cfg *Config) *Stresser {
+func New(t *testing.T, cfg Config) *Stresser {
 	return &Stresser{
 		cfg:    cfg,
 		doneCh: make(chan Result),

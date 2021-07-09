@@ -31,17 +31,17 @@ type (
 )
 
 func (qc queryCount) successQPS(seconds float64) int {
-	if seconds == 0 {
+	if seconds <= 0 {
 		return 0
 	}
-	return qc.success / int(seconds)
+	return int(float64(qc.success) / seconds)
 }
 
 func (qc queryCount) failureQPS(seconds float64) int {
-	if seconds == 0 {
+	if seconds <= 0 {
 		return 0
 	}
-	return qc.failure / int(seconds)
+	return int(float64(qc.failure) / seconds)
 }
 
 func (qc queryCount) totalQPS(seconds float64) int {
