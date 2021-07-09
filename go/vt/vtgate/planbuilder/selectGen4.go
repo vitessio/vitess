@@ -129,19 +129,53 @@ func planAggregations(qp *queryProjection, plan logicalPlan, semTable *semantics
 		},
 		eaggr: eaggr,
 	}
-	for _, e := range qp.aggrExprs {
-		offset, _, err := pushProjection(e, plan, semTable, true)
+	for _, e := range qp.selectExprs {
+		offset, _, err := pushProjection(e.col, plan, semTable, true)
 		if err != nil {
 			return nil, err
 		}
-		fExpr := e.Expr.(*sqlparser.FuncExpr)
-		opcode := engine.SupportedAggregates[fExpr.Name.Lowered()]
-		oa.eaggr.Aggregates = append(oa.eaggr.Aggregates, engine.AggregateParams{
-			Opcode: opcode,
-			Col:    offset,
-		})
+		if e.aggr {
+			fExpr := e.col.Expr.(*sqlparser.FuncExpr)
+			opcode := engine.SupportedAggregates[fExpr.Name.Lowered()]
+			oa.eaggr.Aggregates = append(oa.eaggr.Aggregates, engine.AggregateParams{
+				Opcode: opcode,
+				Col:    offset,
+			})
+		}
+	}
+
+	for _, groupExpr := range qp.groupByExprs {
+		if err := planGroupByGen4(groupExpr, oa, semTable); err != nil {
+			return nil, err
+		}
 	}
 	return oa, nil
+}
+
+func planGroupByGen4(groupExpr sqlparser.Expr, plan logicalPlan, semTable *semantics.SemTable) error {
+	switch node := plan.(type) {
+	case *route:
+		sel := node.Select.(*sqlparser.Select)
+		sel.GroupBy = append(sel.GroupBy, groupExpr)
+		return nil
+	case *orderedAggregate:
+		offset, weightStringOffset, err := funcName(groupExpr, groupExpr, node.input, semTable)
+		if err != nil {
+			return err
+		}
+		if weightStringOffset == -1 {
+			node.eaggr.Keys = append(node.eaggr.Keys, offset)
+		} else {
+			node.eaggr.Keys = append(node.eaggr.Keys, weightStringOffset)
+		}
+		err = planGroupByGen4(groupExpr, node.input, semTable)
+		if err != nil {
+			return err
+		}
+		return nil
+	default:
+		return semantics.Gen4NotSupportedF("group by on: %T", plan)
+	}
 }
 
 func planOrderBy(qp *queryProjection, orderExprs []orderBy, plan logicalPlan, semTable *semantics.SemTable) (logicalPlan, error) {
@@ -158,29 +192,9 @@ func planOrderBy(qp *queryProjection, orderExprs []orderBy, plan logicalPlan, se
 func planOrderByForRoute(orderExprs []orderBy, plan *route, semTable *semantics.SemTable) (logicalPlan, error) {
 	origColCount := plan.Select.GetColumnCount()
 	for _, order := range orderExprs {
-		expr := order.inner.Expr
-		offset, err := wrapExprAndPush(expr, plan, semTable)
+		offset, weightStringOffset, err := funcName(order.inner.Expr, order.weightStrExpr, plan, semTable)
 		if err != nil {
 			return nil, err
-		}
-		colName, ok := order.inner.Expr.(*sqlparser.ColName)
-		if !ok {
-			return nil, semantics.Gen4NotSupportedF("order by non-column expression")
-		}
-
-		table := semTable.Dependencies(colName)
-		tbl, err := semTable.TableInfoFor(table)
-		if err != nil {
-			return nil, err
-		}
-		weightStringNeeded := needsWeightString(tbl, colName)
-
-		weightStringOffset := -1
-		if weightStringNeeded {
-			weightStringOffset, err = wrapExprAndPush(weightStringFor(order.weightStrExpr), plan, semTable)
-			if err != nil {
-				return nil, err
-			}
 		}
 
 		plan.eroute.OrderBy = append(plan.eroute.OrderBy, engine.OrderbyParams{
@@ -195,6 +209,33 @@ func planOrderByForRoute(orderExprs []orderBy, plan *route, semTable *semantics.
 	}
 
 	return plan, nil
+}
+
+func funcName(expr sqlparser.Expr, weightStrExpr sqlparser.Expr, plan logicalPlan, semTable *semantics.SemTable) (int, int, error) {
+	offset, _, err := pushProjection(&sqlparser.AliasedExpr{Expr: expr}, plan, semTable, true)
+	if err != nil {
+		return 0, 0, err
+	}
+	colName, ok := expr.(*sqlparser.ColName)
+	if !ok {
+		return 0, 0, semantics.Gen4NotSupportedF("group by/order by non-column expression")
+	}
+
+	table := semTable.Dependencies(colName)
+	tbl, err := semTable.TableInfoFor(table)
+	if err != nil {
+		return 0, 0, err
+	}
+	weightStringNeeded := needsWeightString(tbl, colName)
+
+	weightStringOffset := -1
+	if weightStringNeeded {
+		weightStringOffset, _, err = pushProjection(&sqlparser.AliasedExpr{Expr: weightStringFor(weightStrExpr)}, plan, semTable, true)
+		if err != nil {
+			return 0, 0, err
+		}
+	}
+	return offset, weightStringOffset, nil
 }
 
 func weightStringFor(expr sqlparser.Expr) sqlparser.Expr {
@@ -218,12 +259,6 @@ func needsWeightString(tbl semantics.TableInfo, colName *sqlparser.ColName) bool
 	return true // we didn't find the column. better to add just to be safe1
 }
 
-func wrapExprAndPush(exp sqlparser.Expr, plan logicalPlan, semTable *semantics.SemTable) (int, error) {
-	aliasedExpr := &sqlparser.AliasedExpr{Expr: exp}
-	offset, _, err := pushProjection(aliasedExpr, plan, semTable, true)
-	return offset, err
-}
-
 func planOrderByForJoin(qp *queryProjection, orderExprs []orderBy, plan *joinGen4, semTable *semantics.SemTable) (logicalPlan, error) {
 	if allLeft(orderExprs, semTable, plan.Left.ContainsTables()) {
 		newLeft, err := planOrderBy(qp, orderExprs, plan.Left, semTable)
@@ -245,28 +280,9 @@ func planOrderByForJoin(qp *queryProjection, orderExprs []orderBy, plan *joinGen
 	}
 
 	for _, order := range orderExprs {
-		expr := order.inner.Expr
-		offset, err := wrapExprAndPush(expr, plan, semTable)
+		offset, weightStringOffset, err := funcName(order.inner.Expr, order.weightStrExpr, plan, semTable)
 		if err != nil {
 			return nil, err
-		}
-
-		table := semTable.Dependencies(expr)
-		tbl, err := semTable.TableInfoFor(table)
-		if err != nil {
-			return nil, err
-		}
-		col, isCol := expr.(*sqlparser.ColName)
-		if !isCol {
-			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "order by complex expression not supported")
-		}
-
-		weightStringOffset := -1
-		if needsWeightString(tbl, col) {
-			weightStringOffset, err = wrapExprAndPush(weightStringFor(order.weightStrExpr), plan, semTable)
-			if err != nil {
-				return nil, err
-			}
 		}
 
 		ms.eMemorySort.OrderBy = append(ms.eMemorySort.OrderBy, engine.OrderbyParams{

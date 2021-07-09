@@ -1,1 +1,27 @@
-# Add your test case here for debugging and run go test -run=One.
+# simpe group by
+"select intcol, count(*) from user group by intcol"
+{
+  "QueryType": "SELECT",
+  "Original": "select intcol, count(*) from user group by intcol",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Ordered",
+    "Aggregates": "count(1)",
+    "GroupBy": "0",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select intcol, count(*) from `user` where 1 != 1 group by intcol",
+        "OrderBy": "0 ASC",
+        "Query": "select intcol, count(*) from `user` group by intcol order by intcol asc",
+        "Table": "`user`"
+      }
+    ]
+  }
+}
+Gen4 plan same as above

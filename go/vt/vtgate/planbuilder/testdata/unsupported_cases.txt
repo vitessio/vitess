@@ -491,3 +491,29 @@ Gen4 plan same as above
 # create view with incompatible keyspaces
 "create view main.view_a as select * from user.user_extra"
 "Select query does not belong to the same keyspace as the view statement"
+
+# aggr and non-aggr without group by (with query does not give useful result out)
+"select id, count(*) from user"
+{
+  "QueryType": "SELECT",
+  "Original": "select id, count(*) from user",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Ordered",
+    "Aggregates": "count(1)",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id, count(*) from `user` where 1 != 1",
+        "Query": "select id, count(*) from `user`",
+        "Table": "`user`"
+      }
+    ]
+  }
+}
+Gen4 error: Mixing of aggregation and non-aggregation columns is not allowed if there is no GROUP BY clause

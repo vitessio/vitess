@@ -39,6 +39,7 @@ const (
 	WrongTypeForVar
 	WrongValueForVar
 	LockOrActiveTransaction
+	MixOfGroupFuncAndFields
 
 	// failed precondition
 	NoDB
