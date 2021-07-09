@@ -22,6 +22,9 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/test/stress"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -43,16 +46,33 @@ func TestMasterToSpareStateChangeImpossible(t *testing.T) {
 	setupReparentCluster(t)
 	defer teardownCluster()
 
+	err := clusterInstance.StartVtgate()
+	require.NoError(t, err)
+
+	cfg := stress.DefaultConfig
+	cfg.ConnParams = &mysql.ConnParams{Port: clusterInstance.VtgateMySQLPort, Host: "localhost", DbName: "ks"}
+	s := stress.New(t, cfg).Start()
+
 	// We cannot change a master to spare
 	out, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("ChangeTabletType", tab1.Alias, "spare")
 	require.Error(t, err, out)
 	require.Contains(t, out, "type change MASTER -> SPARE is not an allowed transition for ChangeTabletType")
+
+	s.StopAfter(10 * time.Second)
 }
 
 func TestReparentDownMaster(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	setupReparentCluster(t)
 	defer teardownCluster()
+
+	err := clusterInstance.StartVtgate()
+	require.NoError(t, err)
+
+	cfg := stress.DefaultConfig
+	cfg.ConnParams = &mysql.ConnParams{Port: clusterInstance.VtgateMySQLPort, Host: "localhost", DbName: "ks"}
+	cfg.AllowFailure = true
+	s := stress.New(t, cfg).Start()
 
 	ctx := context.Background()
 
@@ -61,7 +81,7 @@ func TestReparentDownMaster(t *testing.T) {
 
 	// Perform a planned reparent operation, will try to contact
 	// the current master and fail somewhat quickly
-	_, err := prsWithTimeout(t, tab2, false, "1s", "5s")
+	_, err = prsWithTimeout(t, tab2, false, "1s", "5s")
 	require.Error(t, err)
 
 	validateTopology(t, false)
@@ -70,6 +90,8 @@ func TestReparentDownMaster(t *testing.T) {
 	out, err := ers(t, tab2, "30s")
 	log.Infof("EmergencyReparentShard Output: %v", out)
 	require.NoError(t, err)
+
+	s.AllowFailure(false)
 
 	// Check that old master tablet is left around for human intervention.
 	confirmOldMasterIsHangingAround(t)
@@ -82,6 +104,8 @@ func TestReparentDownMaster(t *testing.T) {
 	checkMasterTablet(t, tab2)
 	confirmReplication(t, tab2, []*cluster.Vttablet{tab3, tab4})
 	resurrectTablet(ctx, t, tab1)
+
+	s.StopAfter(10 * time.Second)
 }
 
 func TestReparentNoChoiceDownMaster(t *testing.T) {
@@ -89,6 +113,15 @@ func TestReparentNoChoiceDownMaster(t *testing.T) {
 	setupReparentCluster(t)
 	defer teardownCluster()
 	var err error
+
+	err = clusterInstance.StartVtgate()
+	require.NoError(t, err)
+
+	cfg := stress.DefaultConfig
+	cfg.ConnParams = &mysql.ConnParams{Port: clusterInstance.VtgateMySQLPort, Host: "localhost", DbName: "ks"}
+	cfg.AllowFailure = true
+	s := stress.New(t, cfg).Start()
+
 	ctx := context.Background()
 
 	confirmReplication(t, tab1, []*cluster.Vttablet{tab2, tab3, tab4})
@@ -115,6 +148,8 @@ func TestReparentNoChoiceDownMaster(t *testing.T) {
 
 	// bring back the old master as a replica, check that it catches up
 	resurrectTablet(ctx, t, tab1)
+
+	s.StopAfter(10 * time.Second)
 }
 
 func TestReparentIgnoreReplicas(t *testing.T) {
@@ -122,9 +157,19 @@ func TestReparentIgnoreReplicas(t *testing.T) {
 	setupReparentCluster(t)
 	defer teardownCluster()
 	var err error
+
+	err = clusterInstance.StartVtgate()
+	require.NoError(t, err)
+
+	cfg := stress.DefaultConfig
+	cfg.ConnParams = &mysql.ConnParams{Port: clusterInstance.VtgateMySQLPort, Host: "localhost", DbName: "ks"}
+	s := stress.New(t, cfg).Start()
+
 	ctx := context.Background()
 
 	confirmReplication(t, tab1, []*cluster.Vttablet{tab2, tab3, tab4})
+
+	s.AllowFailure(true)
 
 	// Make the current master agent and database unavailable.
 	stopTablet(t, tab1, true)
@@ -139,6 +184,8 @@ func TestReparentIgnoreReplicas(t *testing.T) {
 	// Now let's run it again, but set the command to ignore the unreachable replica.
 	out, err = ersIgnoreTablet(t, nil, "30s", tab3)
 	require.Nil(t, err, out)
+
+	s.AllowFailure(false)
 
 	// We'll bring back the replica we took down.
 	restartTablet(t, tab3)
@@ -155,6 +202,8 @@ func TestReparentIgnoreReplicas(t *testing.T) {
 
 	// bring back the old master as a replica, check that it catches up
 	resurrectTablet(ctx, t, tab1)
+
+	s.StopAfter(15 * time.Second)
 }
 
 func TestReparentCrossCell(t *testing.T) {
@@ -162,12 +211,22 @@ func TestReparentCrossCell(t *testing.T) {
 	setupReparentCluster(t)
 	defer teardownCluster()
 
+	err := clusterInstance.StartVtgate()
+	require.NoError(t, err)
+
+	cfg := stress.DefaultConfig
+	cfg.ConnParams = &mysql.ConnParams{Port: clusterInstance.VtgateMySQLPort, Host: "localhost", DbName: "ks"}
+	cfg.AllowFailure = true
+	s := stress.New(t, cfg).Start()
+
 	// Perform a graceful reparent operation to another cell.
-	_, err := prs(t, tab4)
+	_, err = prs(t, tab4)
 	require.NoError(t, err)
 
 	validateTopology(t, false)
 	checkMasterTablet(t, tab4)
+
+	s.StopAfter(10 * time.Second)
 }
 
 func TestReparentGraceful(t *testing.T) {
@@ -175,15 +234,26 @@ func TestReparentGraceful(t *testing.T) {
 	setupReparentCluster(t)
 	defer teardownCluster()
 
+	err := clusterInstance.StartVtgate()
+	require.NoError(t, err)
+
+	cfg := stress.DefaultConfig
+	cfg.ConnParams = &mysql.ConnParams{Port: clusterInstance.VtgateMySQLPort, Host: "localhost", DbName: "ks"}
+	s := stress.New(t, cfg).Start()
+
 	// Run this to make sure it succeeds.
 	strArray := getShardReplicationPositions(t, keyspaceName, shardName, false)
 	assert.Equal(t, 4, len(strArray))         // one master, three replicas
 	assert.Contains(t, strArray[0], "master") // master first
 
+	s.AllowFailure(true)
+
 	// Perform a graceful reparent operation
 	prs(t, tab2)
 	validateTopology(t, false)
 	checkMasterTablet(t, tab2)
+
+	s.AllowFailure(false)
 
 	// A graceful reparent to the same master should be idempotent.
 	prs(t, tab2)
@@ -191,12 +261,22 @@ func TestReparentGraceful(t *testing.T) {
 	checkMasterTablet(t, tab2)
 
 	confirmReplication(t, tab2, []*cluster.Vttablet{tab1, tab3, tab4})
+
+	s.StopAfter(10 * time.Second)
 }
 
 func TestReparentReplicaOffline(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	setupReparentCluster(t)
 	defer teardownCluster()
+
+	err := clusterInstance.StartVtgate()
+	require.NoError(t, err)
+
+	cfg := stress.DefaultConfig
+	cfg.ConnParams = &mysql.ConnParams{Port: clusterInstance.VtgateMySQLPort, Host: "localhost", DbName: "ks"}
+	cfg.AllowFailure = true
+	s := stress.New(t, cfg).Start()
 
 	// Kill one tablet so we seem offline
 	stopTablet(t, tab4, true)
@@ -205,22 +285,37 @@ func TestReparentReplicaOffline(t *testing.T) {
 	out, err := prsWithTimeout(t, tab2, false, "", "31s")
 	require.Error(t, err)
 	assert.Contains(t, out, fmt.Sprintf("tablet %s failed to SetMaster", tab4.Alias))
+
+	s.AllowFailure(false)
+
 	checkMasterTablet(t, tab2)
+
+	s.StopAfter(10 * time.Second)
 }
 
 func TestReparentAvoid(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	setupReparentCluster(t)
 	defer teardownCluster()
+
+	err := clusterInstance.StartVtgate()
+	require.NoError(t, err)
+
+	cfg := stress.DefaultConfig
+	cfg.ConnParams = &mysql.ConnParams{Port: clusterInstance.VtgateMySQLPort, Host: "localhost", DbName: "ks"}
+	s := stress.New(t, cfg).Start()
+
 	deleteTablet(t, tab3)
 
 	// Perform a reparent operation with avoid_master pointing to non-master. It
 	// should succeed without doing anything.
-	_, err := prsAvoid(t, tab2)
+	_, err = prsAvoid(t, tab2)
 	require.NoError(t, err)
 
 	validateTopology(t, false)
 	checkMasterTablet(t, tab1)
+
+	s.AllowFailure(true)
 
 	// Perform a reparent operation with avoid_master pointing to master.
 	_, err = prsAvoid(t, tab1)
@@ -237,19 +332,40 @@ func TestReparentAvoid(t *testing.T) {
 	assert.Contains(t, out, "cannot find a tablet to reparent to")
 	validateTopology(t, false)
 	checkMasterTablet(t, tab2)
+
+	s.StopAfter(10 * time.Second)
 }
 
 func TestReparentFromOutside(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	setupReparentCluster(t)
 	defer teardownCluster()
+
+	err := clusterInstance.StartVtgate()
+	require.NoError(t, err)
+
+	cfg := stress.DefaultConfig
+	cfg.ConnParams = &mysql.ConnParams{Port: clusterInstance.VtgateMySQLPort, Host: "localhost", DbName: "ks"}
+	cfg.AllowFailure = true
+	s := stress.New(t, cfg).Start()
+
 	reparentFromOutside(t, false)
+	s.StopAfter(10 * time.Second)
 }
 
 func TestReparentFromOutsideWithNoMaster(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	setupReparentCluster(t)
 	defer teardownCluster()
+
+	err := clusterInstance.StartVtgate()
+	require.NoError(t, err)
+
+	cfg := stress.DefaultConfig
+	cfg.ConnParams = &mysql.ConnParams{Port: clusterInstance.VtgateMySQLPort, Host: "localhost", DbName: "ks"}
+	cfg.AllowFailure = true
+	s := stress.New(t, cfg).Start()
+
 	reparentFromOutside(t, true)
 
 	// FIXME: @Deepthi: is this needed, since we teardown the cluster, does this achieve any additional test coverage?
@@ -262,6 +378,7 @@ func TestReparentFromOutsideWithNoMaster(t *testing.T) {
 		err = tablet.MysqlctlProcess.Start()
 		require.NoError(t, err)
 	}
+	s.StopAfter(10 * time.Second)
 }
 
 func reparentFromOutside(t *testing.T, downMaster bool) {
@@ -312,7 +429,7 @@ func reparentFromOutside(t *testing.T, downMaster bool) {
 
 	// To test the downMaster, we kill the old master first and delete its tablet record
 	if downMaster {
-		err := tab1.VttabletProcess.TearDown()
+		err := tab1.VttabletProcess.TearDownWithTimeout(30 * time.Second)
 		require.NoError(t, err)
 		err = clusterInstance.VtctlclientProcess.ExecuteCommand("DeleteTablet",
 			"-allow_master", tab1.Alias)
@@ -336,10 +453,22 @@ func TestReparentWithDownReplica(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	setupReparentCluster(t)
 	defer teardownCluster()
+
+	err := clusterInstance.StartVtgate()
+	require.NoError(t, err)
+
+	cfg := stress.DefaultConfig
+	cfg.ConnParams = &mysql.ConnParams{Port: clusterInstance.VtgateMySQLPort, Host: "localhost", DbName: "ks"}
+	cfg.AllowFailure = true
+	cfg.SelectInterval = 100 * time.Microsecond
+	cfg.InsertInterval = 200 * time.Microsecond
+	cfg.DeleteInterval = 500 * time.Microsecond
+	s := stress.New(t, cfg).Start()
+
 	ctx := context.Background()
 
 	// Stop replica mysql Process
-	err := tab3.MysqlctlProcess.Stop()
+	err = tab3.MysqlctlProcess.Stop()
 	require.NoError(t, err)
 
 	// Perform a graceful reparent operation. It will fail as one tablet is down.
@@ -362,19 +491,30 @@ func TestReparentWithDownReplica(t *testing.T) {
 	// wait until it gets the data
 	err = checkInsertedValues(ctx, t, tab3, 2)
 	require.NoError(t, err)
+
+	s.StopAfter(5 * time.Second)
 }
 
 func TestChangeTypeSemiSync(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	setupReparentCluster(t)
 	defer teardownCluster()
+
+	err := clusterInstance.StartVtgate()
+	require.NoError(t, err)
+
+	cfg := stress.DefaultConfig
+	cfg.ConnParams = &mysql.ConnParams{Port: clusterInstance.VtgateMySQLPort, Host: "localhost", DbName: "ks"}
+	cfg.AllowFailure = true
+	s := stress.New(t, cfg).Start()
+
 	ctx := context.Background()
 
 	// Create new names for tablets, so this test is less confusing.
 	master, replica, rdonly1, rdonly2 := tab1, tab2, tab3, tab4
 
 	// Updated rdonly tablet and set tablet type to rdonly
-	err := clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", rdonly1.Alias, "rdonly")
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", rdonly1.Alias, "rdonly")
 	require.NoError(t, err)
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", rdonly2.Alias, "rdonly")
 	require.NoError(t, err)
@@ -424,6 +564,8 @@ func TestChangeTypeSemiSync(t *testing.T) {
 	require.NoError(t, err)
 	checkDBvar(ctx, t, rdonly2, "rpl_semi_sync_slave_enabled", "ON")
 	checkDBstatus(ctx, t, rdonly2, "Rpl_semi_sync_slave_status", "ON")
+
+	s.Stop()
 }
 
 func TestReparentDoesntHangIfMasterFails(t *testing.T) {
@@ -431,9 +573,17 @@ func TestReparentDoesntHangIfMasterFails(t *testing.T) {
 	setupReparentCluster(t)
 	defer teardownCluster()
 
+	err := clusterInstance.StartVtgate()
+	require.NoError(t, err)
+
+	cfg := stress.DefaultConfig
+	cfg.ConnParams = &mysql.ConnParams{Port: clusterInstance.VtgateMySQLPort, Host: "localhost", DbName: "ks"}
+	cfg.AllowFailure = true
+	s := stress.New(t, cfg).Start()
+
 	// Change the schema of the _vt.reparent_journal table, so that
 	// inserts into it will fail. That will make the master fail.
-	_, err := tab1.VttabletProcess.QueryTabletWithDB(
+	_, err = tab1.VttabletProcess.QueryTabletWithDB(
 		"ALTER TABLE reparent_journal DROP COLUMN replication_position", "_vt")
 	require.NoError(t, err)
 
@@ -442,4 +592,6 @@ func TestReparentDoesntHangIfMasterFails(t *testing.T) {
 	out, err := prs(t, tab2)
 	require.Error(t, err)
 	assert.Contains(t, out, "primary failed to PopulateReparentJournal")
+
+	s.Stop()
 }
