@@ -662,10 +662,19 @@ func (ct *ColumnType) formatFast(buf *TrackedBuffer) {
 		}
 	}
 	if ct.Options.Default != nil {
-		buf.WriteByte(' ')
+		buf.WriteString(" ")
 		buf.WriteString(keywordStrings[DEFAULT])
-		buf.WriteByte(' ')
-		ct.Options.Default.formatFast(buf)
+
+		_, isLiteral := ct.Options.Default.(*Literal)
+		_, isNullVal := ct.Options.Default.(*NullVal)
+		if isLiteral || isNullVal {
+			buf.WriteByte(' ')
+			ct.Options.Default.formatFast(buf)
+		} else {
+			buf.WriteString(" (")
+			ct.Options.Default.formatFast(buf)
+			buf.WriteByte(')')
+		}
 	}
 	if ct.Options.OnUpdate != nil {
 		buf.WriteByte(' ')

@@ -544,6 +544,15 @@
 			"RetryMax": 0,
 			"Tags": []
 		},
+		"vtgate_mysql80": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/mysql80"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "mysql80",
+			"RetryMax": 0,
+			"Tags": []
+		},
 		"vtgate_sequence": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/sequence"],
