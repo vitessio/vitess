@@ -110,6 +110,7 @@ func TestStressReparentNoChoiceDownMaster(t *testing.T) {
 	// connects to vtgate
 	cfg := stress.DefaultConfig
 	cfg.ConnParams = &mysql.ConnParams{Port: clusterInstance.VtgateMySQLPort, Host: "localhost", DbName: "ks"}
+	cfg.AllowFailure = true
 	s := stress.New(t, cfg).Start()
 
 	ctx := context.Background()
@@ -122,6 +123,8 @@ func TestStressReparentNoChoiceDownMaster(t *testing.T) {
 	// Run forced reparent operation, this should now proceed unimpeded.
 	out, err := ers(t, nil, "61s")
 	require.NoError(t, err, out)
+
+	s.AllowFailure(false)
 
 	// Check that old master tablet is left around for human intervention.
 	confirmOldMasterIsHangingAround(t)
@@ -139,7 +142,7 @@ func TestStressReparentNoChoiceDownMaster(t *testing.T) {
 	// bring back the old master as a replica, check that it catches up
 	resurrectTablet(ctx, t, tab1)
 
-	s.StopAfter(30 * time.Second)
+	s.StopAfter(10 * time.Second)
 }
 
 func TestStressReparentIgnoreReplicas(t *testing.T) {

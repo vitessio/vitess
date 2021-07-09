@@ -20,8 +20,9 @@ import "fmt"
 
 type (
 	queryCount struct {
-		success int
-		failure int
+		success           int
+		failure           int
+		meaningfulFailure int
 	}
 
 	// Result holds the result for a stress test.
@@ -44,6 +45,13 @@ func (qc queryCount) failureQPS(seconds float64) int {
 	return int(float64(qc.failure) / seconds)
 }
 
+func (qc queryCount) meaningfulFailureQPS(seconds float64) int {
+	if seconds <= 0 {
+		return 0
+	}
+	return int(float64(qc.meaningfulFailure) / seconds)
+}
+
 func (qc queryCount) totalQPS(seconds float64) int {
 	return qc.successQPS(seconds) + qc.failureQPS(seconds)
 }
@@ -57,33 +65,38 @@ func sumQueryCounts(qcs ...queryCount) queryCount {
 	for _, qci := range qcs {
 		qc.success += qci.success
 		qc.failure += qci.failure
+		qc.meaningfulFailure += qci.meaningfulFailure
 	}
 	return qc
+}
+
+func (r Result) assert() bool {
+	return r.selects.meaningfulFailure == 0 && r.deletes.meaningfulFailure == 0 && r.inserts.meaningfulFailure == 0
 }
 
 // Print renders the results held by Result.
 func (r Result) Print(seconds float64) {
 	allQCs := sumQueryCounts(r.selects, r.inserts, r.deletes)
 	fmt.Printf(`QPS:
-	select: %d, failed: %d, sum: %d
-	insert: %d, failed: %d, sum: %d
-	delete: %d, failed: %d, sum: %d
+	select: %d | failed: %d (including %d meaningful failures) | sum: %d
+	insert: %d | failed: %d (including %d meaningful failures) | sum: %d
+	delete: %d | failed: %d (including %d meaningful failures) | sum: %d
 	---------
-	total:	%d, failed: %d, sum: %d
-	
+	total:	%d | failed: %d (including %d meaningful failures) | sum: %d
+
 Queries:
-	select: %d, failed: %d, sum: %d
-	insert: %d, failed: %d, sum: %d
-	delete: %d, failed: %d, sum: %d
+	select: %d | failed: %d (including %d meaningful failures) | sum: %d
+	insert: %d | failed: %d (including %d meaningful failures) | sum: %d
+	delete: %d | failed: %d (including %d meaningful failures) | sum: %d
 	---------
-	total:	%d, failed: %d, sum: %d
+	total:	%d | failed: %d (including %d meaningful failures) | sum: %d
 	
-`, r.selects.successQPS(seconds), r.selects.failureQPS(seconds), r.selects.totalQPS(seconds),
-		r.inserts.successQPS(seconds), r.inserts.failureQPS(seconds), r.inserts.totalQPS(seconds),
-		r.deletes.successQPS(seconds), r.deletes.failureQPS(seconds), r.deletes.totalQPS(seconds),
-		allQCs.successQPS(seconds), allQCs.failureQPS(seconds), allQCs.totalQPS(seconds),
-		r.selects.success, r.selects.failure, r.selects.sum(),
-		r.inserts.success, r.inserts.failure, r.inserts.sum(),
-		r.deletes.success, r.deletes.failure, r.deletes.sum(),
-		allQCs.success, allQCs.failure, allQCs.sum())
+`, r.selects.successQPS(seconds), r.selects.failureQPS(seconds), r.selects.meaningfulFailureQPS(seconds), r.selects.totalQPS(seconds),
+		r.inserts.successQPS(seconds), r.inserts.failureQPS(seconds), r.inserts.meaningfulFailureQPS(seconds), r.inserts.totalQPS(seconds),
+		r.deletes.successQPS(seconds), r.deletes.failureQPS(seconds), r.deletes.meaningfulFailureQPS(seconds), r.deletes.totalQPS(seconds),
+		allQCs.successQPS(seconds), allQCs.failureQPS(seconds), allQCs.meaningfulFailureQPS(seconds), allQCs.totalQPS(seconds),
+		r.selects.success, r.selects.failure, r.selects.meaningfulFailure, r.selects.sum(),
+		r.inserts.success, r.inserts.failure, r.inserts.meaningfulFailure, r.inserts.sum(),
+		r.deletes.success, r.deletes.failure, r.deletes.meaningfulFailure, r.deletes.sum(),
+		allQCs.success, allQCs.failure, allQCs.meaningfulFailure, allQCs.sum())
 }
