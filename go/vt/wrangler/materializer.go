@@ -747,7 +747,10 @@ func (wr *Wrangler) ExternalizeVindex(ctx context.Context, qualifiedVindexName s
 
 	// Remove the write_only param and save the source vschema.
 	delete(sourceVindex.Params, "write_only")
-	return wr.ts.SaveVSchema(ctx, sourceKeyspace, sourceVSchema)
+	if err := wr.ts.SaveVSchema(ctx, sourceKeyspace, sourceVSchema); err != nil {
+		return err
+	}
+	return wr.ts.RebuildSrvVSchema(ctx, nil)
 }
 
 //
