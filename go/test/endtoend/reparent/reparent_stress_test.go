@@ -41,8 +41,9 @@ func TestStressMasterToSpareStateChangeImpossible(t *testing.T) {
 	require.NoError(t, err)
 
 	// connects to vtgate
-	stress.DefaultConfig.ConnParams = &mysql.ConnParams{Port: clusterInstance.VtgateMySQLPort, Host: "localhost", DbName: "ks"}
-	s := stress.New(t, stress.DefaultConfig).Start()
+	cfg := stress.DefaultConfig
+	cfg.ConnParams = &mysql.ConnParams{Port: clusterInstance.VtgateMySQLPort, Host: "localhost", DbName: "ks"}
+	s := stress.New(t, cfg).Start()
 
 	// We cannot change a master to spare
 	out, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("ChangeTabletType", tab1.Alias, "spare")
@@ -61,8 +62,9 @@ func TestStressReparentDownMaster(t *testing.T) {
 	require.NoError(t, err)
 
 	// connects to vtgate
-	stress.DefaultConfig.ConnParams = &mysql.ConnParams{Port: clusterInstance.VtgateMySQLPort, Host: "localhost", DbName: "ks"}
-	s := stress.New(t, stress.DefaultConfig).Start()
+	cfg := stress.DefaultConfig
+	cfg.ConnParams = &mysql.ConnParams{Port: clusterInstance.VtgateMySQLPort, Host: "localhost", DbName: "ks"}
+	s := stress.New(t, cfg).Start()
 
 	ctx := context.Background()
 
@@ -106,8 +108,9 @@ func TestStressReparentNoChoiceDownMaster(t *testing.T) {
 	require.NoError(t, err)
 
 	// connects to vtgate
-	stress.DefaultConfig.ConnParams = &mysql.ConnParams{Port: clusterInstance.VtgateMySQLPort, Host: "localhost", DbName: "ks"}
-	s := stress.New(t, stress.DefaultConfig).Start()
+	cfg := stress.DefaultConfig
+	cfg.ConnParams = &mysql.ConnParams{Port: clusterInstance.VtgateMySQLPort, Host: "localhost", DbName: "ks"}
+	s := stress.New(t, cfg).Start()
 
 	ctx := context.Background()
 
@@ -149,8 +152,9 @@ func TestStressReparentIgnoreReplicas(t *testing.T) {
 	require.NoError(t, err)
 
 	// connects to vtgate
-	stress.DefaultConfig.ConnParams = &mysql.ConnParams{Port: clusterInstance.VtgateMySQLPort, Host: "localhost", DbName: "ks"}
-	s := stress.New(t, stress.DefaultConfig).Start()
+	cfg := stress.DefaultConfig
+	cfg.ConnParams = &mysql.ConnParams{Port: clusterInstance.VtgateMySQLPort, Host: "localhost", DbName: "ks"}
+	s := stress.New(t, cfg).Start()
 
 	ctx := context.Background()
 
@@ -198,8 +202,9 @@ func TestStressReparentCrossCell(t *testing.T) {
 	require.NoError(t, err)
 
 	// connects to vtgate
-	stress.DefaultConfig.ConnParams = &mysql.ConnParams{Port: clusterInstance.VtgateMySQLPort, Host: "localhost", DbName: "ks"}
-	s := stress.New(t, stress.DefaultConfig).Start()
+	cfg := stress.DefaultConfig
+	cfg.ConnParams = &mysql.ConnParams{Port: clusterInstance.VtgateMySQLPort, Host: "localhost", DbName: "ks"}
+	s := stress.New(t, cfg).Start()
 
 	// Perform a graceful reparent operation to another cell.
 	_, err = prs(t, tab4)
@@ -220,8 +225,9 @@ func TestStressReparentGraceful(t *testing.T) {
 	require.NoError(t, err)
 
 	// connects to vtgate
-	stress.DefaultConfig.ConnParams = &mysql.ConnParams{Port: clusterInstance.VtgateMySQLPort, Host: "localhost", DbName: "ks"}
-	s := stress.New(t, stress.DefaultConfig).Start()
+	cfg := stress.DefaultConfig
+	cfg.ConnParams = &mysql.ConnParams{Port: clusterInstance.VtgateMySQLPort, Host: "localhost", DbName: "ks"}
+	s := stress.New(t, cfg).Start()
 
 	// Run this to make sure it succeeds.
 	strArray := getShardReplicationPositions(t, keyspaceName, shardName, false)
@@ -252,8 +258,9 @@ func TestStressReparentReplicaOffline(t *testing.T) {
 	require.NoError(t, err)
 
 	// connects to vtgate
-	stress.DefaultConfig.ConnParams = &mysql.ConnParams{Port: clusterInstance.VtgateMySQLPort, Host: "localhost", DbName: "ks"}
-	s := stress.New(t, stress.DefaultConfig).Start()
+	cfg := stress.DefaultConfig
+	cfg.ConnParams = &mysql.ConnParams{Port: clusterInstance.VtgateMySQLPort, Host: "localhost", DbName: "ks"}
+	s := stress.New(t, cfg).Start()
 
 	// Kill one tablet so we seem offline
 	stopTablet(t, tab4, true)
@@ -276,8 +283,9 @@ func TestStressReparentAvoid(t *testing.T) {
 	require.NoError(t, err)
 
 	// connects to vtgate
-	stress.DefaultConfig.ConnParams = &mysql.ConnParams{Port: clusterInstance.VtgateMySQLPort, Host: "localhost", DbName: "ks"}
-	s := stress.New(t, stress.DefaultConfig).Start()
+	cfg := stress.DefaultConfig
+	cfg.ConnParams = &mysql.ConnParams{Port: clusterInstance.VtgateMySQLPort, Host: "localhost", DbName: "ks"}
+	s := stress.New(t, cfg).Start()
 
 	deleteTablet(t, tab3)
 
@@ -317,8 +325,9 @@ func TestStressReparentFromOutside(t *testing.T) {
 	require.NoError(t, err)
 
 	// connects to vtgate
-	stress.DefaultConfig.ConnParams = &mysql.ConnParams{Port: clusterInstance.VtgateMySQLPort, Host: "localhost", DbName: "ks"}
-	s := stress.New(t, stress.DefaultConfig).Start()
+	cfg := stress.DefaultConfig
+	cfg.ConnParams = &mysql.ConnParams{Port: clusterInstance.VtgateMySQLPort, Host: "localhost", DbName: "ks"}
+	s := stress.New(t, cfg).Start()
 
 	reparentFromOutside(t, false)
 	s.StopAfter(30 * time.Second)
@@ -333,8 +342,9 @@ func TestStressReparentFromOutsideWithNoMaster(t *testing.T) {
 	require.NoError(t, err)
 
 	// connects to vtgate
-	stress.DefaultConfig.ConnParams = &mysql.ConnParams{Port: clusterInstance.VtgateMySQLPort, Host: "localhost", DbName: "ks"}
-	s := stress.New(t, stress.DefaultConfig).Start()
+	cfg := stress.DefaultConfig
+	cfg.ConnParams = &mysql.ConnParams{Port: clusterInstance.VtgateMySQLPort, Host: "localhost", DbName: "ks"}
+	s := stress.New(t, cfg).Start()
 
 	reparentFromOutside(t, true)
 
@@ -361,8 +371,9 @@ func TestStressChangeTypeSemiSync(t *testing.T) {
 	require.NoError(t, err)
 
 	// connects to vtgate
-	stress.DefaultConfig.ConnParams = &mysql.ConnParams{Port: clusterInstance.VtgateMySQLPort, Host: "localhost", DbName: "ks"}
-	s := stress.New(t, stress.DefaultConfig).Start()
+	cfg := stress.DefaultConfig
+	cfg.ConnParams = &mysql.ConnParams{Port: clusterInstance.VtgateMySQLPort, Host: "localhost", DbName: "ks"}
+	s := stress.New(t, cfg).Start()
 
 	// Create new names for tablets, so this test is less confusing.
 	master, replica, rdonly1, rdonly2 := tab1, tab2, tab3, tab4
@@ -430,8 +441,9 @@ func TestStressReparentDoesntHangIfMasterFails(t *testing.T) {
 	require.NoError(t, err)
 
 	// connects to vtgate
-	stress.DefaultConfig.ConnParams = &mysql.ConnParams{Port: clusterInstance.VtgateMySQLPort, Host: "localhost", DbName: "ks"}
-	s := stress.New(t, stress.DefaultConfig).Start()
+	cfg := stress.DefaultConfig
+	cfg.ConnParams = &mysql.ConnParams{Port: clusterInstance.VtgateMySQLPort, Host: "localhost", DbName: "ks"}
+	s := stress.New(t, cfg).Start()
 
 	// Change the schema of the _vt.reparent_journal table, so that
 	// inserts into it will fail. That will make the master fail.

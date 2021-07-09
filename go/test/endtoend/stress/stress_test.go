@@ -86,8 +86,9 @@ func TestMain(m *testing.M) {
 func TestSimpleStressTest(t *testing.T) {
 	defer cluster.PanicHandler(t)
 
-	stress.DefaultConfig.ConnParams = &vtParams
-	s := stress.New(t, stress.DefaultConfig)
+	cfg := stress.DefaultConfig
+	cfg.ConnParams = &vtParams
+	s := stress.New(t, cfg)
 
 	s.Start()
 
