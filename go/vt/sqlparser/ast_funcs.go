@@ -1264,6 +1264,17 @@ func (lock LockOptionType) ToString() string {
 	}
 }
 
+// isExprAliasForCurrentTimeStamp returns true if the Expr provided is an alias for CURRENT_TIMESTAMP
+func isExprAliasForCurrentTimeStamp(expr Expr) bool {
+	switch node := expr.(type) {
+	case *FuncExpr:
+		return node.Name.EqualString("current_timestamp") || node.Name.EqualString("now") || node.Name.EqualString("localtimestamp") || node.Name.EqualString("localtime")
+	case *CurTimeFuncExpr:
+		return node.Name.EqualString("current_timestamp") || node.Name.EqualString("now") || node.Name.EqualString("localtimestamp") || node.Name.EqualString("localtime")
+	}
+	return false
+}
+
 // AtCount represents the '@' count in ColIdent
 type AtCount int
 
