@@ -44,8 +44,30 @@ type (
 		mu           sync.Mutex
 	}
 
-	// Stresser is responsible for stressing a Vitess cluster.
-	// It can be configured through the use of Config.
+	// Stresser is responsible for stressing a Vitess cluster based on a given Config.
+	// Stressing a Vitess cluster is achieved by spawning several clients that continuously
+	// send queries to the cluster.
+	//
+	// The Stresser uses SELECT, INSERT and DELETE statements to stress the cluster. Queries
+	// are made against tables that are generated when calling Stresser.Start().
+	// For each query, we keep its status (failed or succeeded) and at the end of the stress,
+	// when calling Stresser.Stop() or Stresser.StopAfter(), we assert that all queries have
+	// succeeded, otherwise the Stresser will fail the test.
+	//
+	// This behavior can be changed by the use of Stresser.AllowFailure(bool) and the AllowFailure
+	// field of Config.
+	//
+	// Below is an a sample usage of the Stresser:
+	//
+	//		// copy the DefaultConfig and set your own mysql.ConnParams
+	//		cfg := stress.DefaultConfig
+	//		cfg.ConnParams = &mysql.ConnParams{Port: 8888, Host: "localhost", DbName: "ks"}
+	//		s := stress.New(t, cfg).Start()
+	//
+	//		// your end to end test here
+	//
+	//		s.Stop() // stop the Stresser and assert its results
+	//
 	Stresser struct {
 		cfg      Config
 		doneCh   chan result

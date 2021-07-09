@@ -51,6 +51,7 @@ func TestMasterToSpareStateChangeImpossible(t *testing.T) {
 
 	cfg := stress.DefaultConfig
 	cfg.ConnParams = &mysql.ConnParams{Port: clusterInstance.VtgateMySQLPort, Host: "localhost", DbName: "ks"}
+	cfg.MaxClient = 2
 	s := stress.New(t, cfg).Start()
 
 	// We cannot change a master to spare
@@ -72,6 +73,7 @@ func TestReparentDownMaster(t *testing.T) {
 	cfg := stress.DefaultConfig
 	cfg.ConnParams = &mysql.ConnParams{Port: clusterInstance.VtgateMySQLPort, Host: "localhost", DbName: "ks"}
 	cfg.AllowFailure = true
+	cfg.MaxClient = 1
 	s := stress.New(t, cfg).Start()
 
 	ctx := context.Background()
@@ -120,6 +122,7 @@ func TestReparentNoChoiceDownMaster(t *testing.T) {
 	cfg := stress.DefaultConfig
 	cfg.ConnParams = &mysql.ConnParams{Port: clusterInstance.VtgateMySQLPort, Host: "localhost", DbName: "ks"}
 	cfg.AllowFailure = true
+	cfg.MaxClient = 1
 	s := stress.New(t, cfg).Start()
 
 	ctx := context.Background()
@@ -164,6 +167,7 @@ func TestReparentIgnoreReplicas(t *testing.T) {
 	cfg := stress.DefaultConfig
 	cfg.ConnParams = &mysql.ConnParams{Port: clusterInstance.VtgateMySQLPort, Host: "localhost", DbName: "ks"}
 	cfg.AllowFailure = true
+	cfg.MaxClient = 1
 	s := stress.New(t, cfg).Start()
 
 	ctx := context.Background()
@@ -218,6 +222,7 @@ func TestReparentCrossCell(t *testing.T) {
 	cfg := stress.DefaultConfig
 	cfg.ConnParams = &mysql.ConnParams{Port: clusterInstance.VtgateMySQLPort, Host: "localhost", DbName: "ks"}
 	cfg.AllowFailure = true
+	cfg.MaxClient = 1
 	s := stress.New(t, cfg).Start()
 
 	// Perform a graceful reparent operation to another cell.
@@ -240,6 +245,7 @@ func TestReparentGraceful(t *testing.T) {
 
 	cfg := stress.DefaultConfig
 	cfg.ConnParams = &mysql.ConnParams{Port: clusterInstance.VtgateMySQLPort, Host: "localhost", DbName: "ks"}
+	cfg.MaxClient = 1
 	s := stress.New(t, cfg).Start()
 
 	// Run this to make sure it succeeds.
@@ -277,6 +283,7 @@ func TestReparentReplicaOffline(t *testing.T) {
 	cfg := stress.DefaultConfig
 	cfg.ConnParams = &mysql.ConnParams{Port: clusterInstance.VtgateMySQLPort, Host: "localhost", DbName: "ks"}
 	cfg.AllowFailure = true
+	cfg.MaxClient = 1
 	s := stress.New(t, cfg).Start()
 
 	// Kill one tablet so we seem offline
@@ -304,6 +311,7 @@ func TestReparentAvoid(t *testing.T) {
 
 	cfg := stress.DefaultConfig
 	cfg.ConnParams = &mysql.ConnParams{Port: clusterInstance.VtgateMySQLPort, Host: "localhost", DbName: "ks"}
+	cfg.MaxClient = 1
 	s := stress.New(t, cfg).Start()
 
 	deleteTablet(t, tab3)
@@ -348,6 +356,7 @@ func TestReparentFromOutside(t *testing.T) {
 	cfg := stress.DefaultConfig
 	cfg.ConnParams = &mysql.ConnParams{Port: clusterInstance.VtgateMySQLPort, Host: "localhost", DbName: "ks"}
 	cfg.AllowFailure = true
+	cfg.MaxClient = 1
 	s := stress.New(t, cfg).Start()
 
 	reparentFromOutside(t, false)
@@ -365,6 +374,7 @@ func TestReparentFromOutsideWithNoMaster(t *testing.T) {
 	cfg := stress.DefaultConfig
 	cfg.ConnParams = &mysql.ConnParams{Port: clusterInstance.VtgateMySQLPort, Host: "localhost", DbName: "ks"}
 	cfg.AllowFailure = true
+	cfg.MaxClient = 1
 	s := stress.New(t, cfg).Start()
 
 	reparentFromOutside(t, true)
@@ -464,6 +474,7 @@ func TestReparentWithDownReplica(t *testing.T) {
 	cfg.SelectInterval = 100 * time.Microsecond
 	cfg.InsertInterval = 200 * time.Microsecond
 	cfg.DeleteInterval = 500 * time.Microsecond
+	cfg.MaxClient = 1
 	s := stress.New(t, cfg).Start()
 
 	ctx := context.Background()
@@ -507,6 +518,7 @@ func TestChangeTypeSemiSync(t *testing.T) {
 	cfg := stress.DefaultConfig
 	cfg.ConnParams = &mysql.ConnParams{Port: clusterInstance.VtgateMySQLPort, Host: "localhost", DbName: "ks"}
 	cfg.AllowFailure = true
+	cfg.MaxClient = 1
 	s := stress.New(t, cfg).Start()
 
 	ctx := context.Background()
@@ -580,6 +592,7 @@ func TestReparentDoesntHangIfMasterFails(t *testing.T) {
 	cfg := stress.DefaultConfig
 	cfg.ConnParams = &mysql.ConnParams{Port: clusterInstance.VtgateMySQLPort, Host: "localhost", DbName: "ks"}
 	cfg.AllowFailure = true
+	cfg.MaxClient = 1
 	s := stress.New(t, cfg).Start()
 
 	// Change the schema of the _vt.reparent_journal table, so that
