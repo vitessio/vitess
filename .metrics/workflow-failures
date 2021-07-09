@@ -1,11 +1,3 @@
-2021-03-15T10:32:53Z,Unit Test (mariadb101),https://github.com/vitessio/vitess/actions/runs/653829846
-2021-03-15T10:32:53Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/653829861
-2021-03-15T10:32:53Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/653829843
-2021-03-15T10:32:53Z,Unit Test (mysql57),https://github.com/vitessio/vitess/actions/runs/653829839
-2021-03-15T10:32:53Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/653829857
-2021-03-15T10:32:53Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/653829859
-2021-03-15T10:32:53Z,check_make_sizegen,https://github.com/vitessio/vitess/actions/runs/653829855
-2021-03-15T10:32:53Z,unit_race,https://github.com/vitessio/vitess/actions/runs/653829841
 2021-03-15T13:05:49Z,cluster_endtoend,https://github.com/vitessio/vitess/actions/runs/654237922
 2021-03-15T13:05:49Z,unit,https://github.com/vitessio/vitess/actions/runs/654237915
 2021-03-15T13:13:46Z,Cluster (17),https://github.com/vitessio/vitess/actions/runs/654261038
@@ -9997,4 +9989,12 @@
 2021-07-09T06:54:40Z,Cluster (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/1014282318
 2021-07-09T06:54:40Z,Unit Test (mariadb101),https://github.com/vitessio/vitess/actions/runs/1014282289
 2021-07-09T06:54:40Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/1014282324
+2021-07-09T06:59:31Z,Cluster (onlineddl_declarative),https://github.com/vitessio/vitess/actions/runs/1014293679
 2021-07-09T06:59:31Z,Unit Test (mariadb101),https://github.com/vitessio/vitess/actions/runs/1014293690
+2021-07-09T06:59:31Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/1014293705
+2021-07-09T06:59:31Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/1014293704
+2021-07-09T06:59:31Z,Unit Test (mysql57),https://github.com/vitessio/vitess/actions/runs/1014293701
+2021-07-09T06:59:31Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/1014293655
+2021-07-09T06:59:31Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/1014293676
+2021-07-09T06:59:31Z,unit_race,https://github.com/vitessio/vitess/actions/runs/1014293697
+2021-07-09T07:04:21Z,Unit Test (mariadb101),https://github.com/vitessio/vitess/actions/runs/1014307429
