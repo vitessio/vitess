@@ -145,6 +145,10 @@ func (s *Stresser) Stop() {
 // assert that all the results are successful, and then prints them to the standard
 // output.
 func (s *Stresser) StopAfter(after time.Duration) {
+	if s.start.Second() == 0 {
+		s.t.Log("Load testing was not started.")
+		return
+	}
 	timeoutCh := time.After(after)
 	select {
 	case res := <-s.doneCh:
