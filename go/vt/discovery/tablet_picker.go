@@ -181,6 +181,7 @@ func (tp *TabletPicker) GetMatchingTablets(ctx context.Context) []*topo.TabletIn
 		defer cancel()
 		si, err := tp.ts.GetShard(shortCtx, tp.keyspace, tp.shard)
 		if err != nil {
+			log.Errorf("error getting shard %s/%s: %s", tp.keyspace, tp.shard, err.Error())
 			return nil
 		}
 		aliases = append(aliases, si.MasterAlias)
