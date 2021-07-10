@@ -17,7 +17,10 @@ limitations under the License.
 package mysql
 
 import (
+	"crypto/rsa"
 	"crypto/tls"
+	"crypto/x509"
+	"encoding/pem"
 	"fmt"
 	"net"
 	"strconv"
@@ -235,6 +238,7 @@ func (c *Conn) clientHandshake(characterSet uint8, params *ConnParams) error {
 		return err
 	}
 	c.fillFlavor(params)
+	c.salt = salt
 
 	// Sanity check.
 	if capabilities&CapabilityClientProtocol41 == 0 {
@@ -291,7 +295,12 @@ func (c *Conn) clientHandshake(characterSet uint8, params *ConnParams) error {
 	}
 
 	// Password encryption.
-	scrambledPassword := ScramblePassword(salt, []byte(params.Pass))
+	var scrambledPassword []byte
+	if c.authPluginName == CachingSha2Password {
+		scrambledPassword = ScrambleCachingSha2Password(salt, []byte(params.Pass))
+	} else {
+		scrambledPassword = ScrambleMysqlNativePassword(salt, []byte(params.Pass))
+	}
 
 	// Client Session Tracking Capability.
 	if params.Flags&CapabilityClientSessionTrack == CapabilityClientSessionTrack {
@@ -310,54 +319,8 @@ func (c *Conn) clientHandshake(characterSet uint8, params *ConnParams) error {
 	}
 
 	// Read the server response.
-	response, err := c.readPacket()
-	if err != nil {
-		return NewSQLError(CRServerLost, SSUnknownSQLState, "%v", err)
-	}
-	switch response[0] {
-	case OKPacket:
-		// OK packet, we are authenticated. Save the user, keep going.
-		c.User = params.Uname
-	case AuthSwitchRequestPacket:
-		// Server is asking to use a different auth method. We
-		// only support cleartext plugin.
-		pluginName, salt, err := parseAuthSwitchRequest(response)
-		if err != nil {
-			return NewSQLError(CRServerHandshakeErr, SSUnknownSQLState, "cannot parse auth switch request: %v", err)
-		}
-
-		if pluginName == MysqlClearPassword {
-			// Write the cleartext password packet.
-			if err := c.writeClearTextPassword(params); err != nil {
-				return err
-			}
-		} else if pluginName == MysqlNativePassword {
-			// Write the mysql_native_password packet.
-			if err := c.writeMysqlNativePassword(params, salt); err != nil {
-				return err
-			}
-		} else {
-			return NewSQLError(CRServerHandshakeErr, SSUnknownSQLState, "server asked for unsupported auth method: %v", pluginName)
-		}
-
-		// Wait for OK packet.
-		response, err = c.readPacket()
-		if err != nil {
-			return NewSQLError(CRServerLost, SSUnknownSQLState, "%v", err)
-		}
-		switch response[0] {
-		case OKPacket:
-			// OK packet, we are authenticated. Save the user, keep going.
-			c.User = params.Uname
-		case ErrPacket:
-			return ParseErrorPacket(response)
-		default:
-			return NewSQLError(CRServerHandshakeErr, SSUnknownSQLState, "initial server response cannot be parsed: %v", response)
-		}
-	case ErrPacket:
-		return ParseErrorPacket(response)
-	default:
-		return NewSQLError(CRServerHandshakeErr, SSUnknownSQLState, "initial server response cannot be parsed: %v", response)
+	if err := c.handleAuthResponse(params); err != nil {
+		return err
 	}
 
 	// If the server didn't support DbName in its handshake, set
@@ -515,10 +478,7 @@ func (c *Conn) parseInitialHandshakePacket(data []byte) (uint32, []byte, error) 
 			// 5.6.2 that don't have a null terminated string.
 			authPluginName = string(data[pos : len(data)-1])
 		}
-
-		if authPluginName != MysqlNativePassword {
-			return 0, nil, NewSQLError(CRMalformedPacket, SSUnknownSQLState, "parseInitialHandshakePacket: only support %v auth plugin name, but got %v", MysqlNativePassword, authPluginName)
-		}
+		c.authPluginName = authPluginName
 	}
 
 	return capabilities, authPluginData, nil
@@ -603,7 +563,7 @@ func (c *Conn) writeHandshakeResponse41(capabilities uint32, scrambledPassword [
 			lenNullString(params.Uname) +
 			// length of scrambled password is handled below.
 			len(scrambledPassword) +
-			21 + // "mysql_native_password" string.
+			len(c.authPluginName) +
 			1 // terminating zero.
 
 	// Add the DB name if the server supports it.
@@ -652,7 +612,7 @@ func (c *Conn) writeHandshakeResponse41(capabilities uint32, scrambledPassword [
 	}
 
 	// Assume native client during response
-	pos = writeNullString(data, pos, MysqlNativePassword)
+	pos = writeNullString(data, pos, c.authPluginName)
 
 	// Sanity-check the length.
 	if pos != len(data) {
@@ -663,6 +623,110 @@ func (c *Conn) writeHandshakeResponse41(capabilities uint32, scrambledPassword [
 		return NewSQLError(CRServerLost, SSUnknownSQLState, "cannot send HandshakeResponse41: %v", err)
 	}
 	return nil
+}
+
+// handleAuthResponse parses server's response after client sends the password for authentication
+// and handles next steps for AuthSwitchRequestPacket and AuthMoreDataPacket.
+func (c *Conn) handleAuthResponse(params *ConnParams) error {
+	response, err := c.readPacket()
+	if err != nil {
+		return NewSQLError(CRServerLost, SSUnknownSQLState, "%v", err)
+	}
+
+	switch response[0] {
+	case OKPacket:
+		// OK packet, we are authenticated. Save the user, keep going.
+		c.User = params.Uname
+	case AuthSwitchRequestPacket:
+		// Server is asking to use a different auth method
+		if err = c.handleAuthSwitchPacket(params, response); err != nil {
+			return err
+		}
+	case AuthMoreDataPacket:
+		// Server is requesting more data - maybe un-scrambled password
+		if err := c.handleAuthMoreDataPacket(response[1], params); err != nil {
+			return err
+		}
+	case ErrPacket:
+		return ParseErrorPacket(response)
+	default:
+		return NewSQLError(CRServerHandshakeErr, SSUnknownSQLState, "initial server response cannot be parsed: %v", response)
+	}
+
+	return nil
+}
+
+// handleAuthSwitchPacket scrambles password for the plugin requested by the server and retries authentication
+func (c *Conn) handleAuthSwitchPacket(params *ConnParams, response []byte) error {
+	var err error
+	var salt []byte
+	c.authPluginName, salt, err = parseAuthSwitchRequest(response)
+	if err != nil {
+		return NewSQLError(CRServerHandshakeErr, SSUnknownSQLState, "cannot parse auth switch request: %v", err)
+	}
+	if salt != nil {
+		c.salt = salt
+	}
+	switch c.authPluginName {
+	case MysqlClearPassword:
+		if err := c.writeClearTextPassword(params); err != nil {
+			return err
+		}
+	case MysqlNativePassword:
+		scrambledPassword := ScrambleMysqlNativePassword(c.salt, []byte(params.Pass))
+		if err := c.writeScrambledPassword(scrambledPassword); err != nil {
+			return err
+		}
+	case CachingSha2Password:
+		scrambledPassword := ScrambleCachingSha2Password(c.salt, []byte(params.Pass))
+		if err := c.writeScrambledPassword(scrambledPassword); err != nil {
+			return err
+		}
+	default:
+		return NewSQLError(CRServerHandshakeErr, SSUnknownSQLState, "server asked for unsupported auth method: %v", c.authPluginName)
+	}
+
+	// The response could be an OKPacket, AuthMoreDataPacket or ErrPacket
+	return c.handleAuthResponse(params)
+}
+
+// handleAuthMoreDataPacket handles response of CachingSha2Password authentication and sends full password to the
+// server if requested
+func (c *Conn) handleAuthMoreDataPacket(data byte, params *ConnParams) error {
+	switch data {
+	case CachingSha2FastAuth:
+		// User credentials are verified using the cache ("Fast" path).
+		// Next packet should be an OKPacket
+		return c.handleAuthResponse(params)
+	case CachingSha2FullAuth:
+		// User credentials are not cached, we have to exchange full password.
+		if c.Capabilities&CapabilityClientSSL > 0 || params.UnixSocket != "" {
+			// If we are using an SSL connection or Unix socket, write clear text password
+			if err := c.writeClearTextPassword(params); err != nil {
+				return err
+			}
+		} else {
+			// If we are not using an SSL connection or Unix socket, we have to fetch a public key
+			// from the server to encrypt password
+			pub, err := c.requestPublicKey()
+			if err != nil {
+				return err
+			}
+			// Encrypt password with public key
+			enc, err := EncryptPasswordWithPublicKey(c.salt, []byte(params.Pass), pub)
+			if err != nil {
+				return vterrors.Errorf(vtrpc.Code_INTERNAL, "error encrypting password with public key: %v", err)
+			}
+			// Write encrypted password
+			if err := c.writeScrambledPassword(enc); err != nil {
+				return err
+			}
+		}
+		// Next packet should either be an OKPacket or ErrPacket
+		return c.handleAuthResponse(params)
+	default:
+		return NewSQLError(CRServerHandshakeErr, SSUnknownSQLState, "cannot parse AuthMoreDataPacket: %v", data)
+	}
 }
 
 func parseAuthSwitchRequest(data []byte) (string, []byte, error) {
@@ -680,6 +744,34 @@ func parseAuthSwitchRequest(data []byte) (string, []byte, error) {
 	return pluginName, salt, nil
 }
 
+// requestPublicKey requests a public key from the server
+func (c *Conn) requestPublicKey() (rsaKey *rsa.PublicKey, err error) {
+	// get public key from server
+	data, pos := c.startEphemeralPacketWithHeader(1)
+	data[pos] = 0x02
+	if err := c.writeEphemeralPacket(); err != nil {
+		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "error sending public key request packet: %v", err)
+	}
+
+	response, err := c.readPacket()
+	if err != nil {
+		return nil, NewSQLError(CRServerLost, SSUnknownSQLState, "%v", err)
+	}
+
+	// Server should respond with a AuthMoreDataPacket containing the public key
+	if response[0] != AuthMoreDataPacket {
+		return nil, ParseErrorPacket(response)
+	}
+
+	block, _ := pem.Decode(response[1:])
+	pub, err := x509.ParsePKIXPublicKey(block.Bytes)
+	if err != nil {
+		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "failed to parse public key from server: %v", err)
+	}
+
+	return pub.(*rsa.PublicKey), nil
+}
+
 // writeClearTextPassword writes the clear text password.
 // Returns a SQLError.
 func (c *Conn) writeClearTextPassword(params *ConnParams) error {
@@ -693,15 +785,14 @@ func (c *Conn) writeClearTextPassword(params *ConnParams) error {
 	return c.writeEphemeralPacket()
 }
 
-// writeMysqlNativePassword writes the encrypted mysql_native_password format
+// writeScrambledPassword writes the encrypted mysql_native_password format
 // Returns a SQLError.
-func (c *Conn) writeMysqlNativePassword(params *ConnParams, salt []byte) error {
-	scrambledPassword := ScramblePassword(salt, []byte(params.Pass))
+func (c *Conn) writeScrambledPassword(scrambledPassword []byte) error {
 	data, pos := c.startEphemeralPacketWithHeader(len(scrambledPassword))
 	pos += copy(data[pos:], scrambledPassword)
 	// Sanity check.
 	if pos != len(data) {
-		return vterrors.Errorf(vtrpc.Code_INTERNAL, "error building MysqlNativePassword packet: got %v bytes expected %v", pos, len(data))
+		return vterrors.Errorf(vtrpc.Code_INTERNAL, "error building %v packet: got %v bytes expected %v", c.authPluginName, pos, len(data))
 	}
 	return c.writeEphemeralPacket()
 }

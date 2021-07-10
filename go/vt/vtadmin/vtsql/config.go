@@ -17,14 +17,14 @@ limitations under the License.
 package vtsql
 
 import (
-	"bytes"
 	"fmt"
-	"text/template"
+	"time"
 
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/vtadmin/cluster/discovery"
+	"vitess.io/vitess/go/vt/vtadmin/credentials"
 
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
 )
@@ -34,6 +34,8 @@ type Config struct {
 	Discovery     discovery.Discovery
 	DiscoveryTags []string
 	Credentials   Credentials
+
+	DialPingTimeout time.Duration
 
 	// CredentialsPath is used only to power vtadmin debug endpoints; there may
 	// be a better way where we don't need to put this in the config, because
@@ -66,6 +68,8 @@ func Parse(cluster *vtadminpb.Cluster, disco discovery.Discovery, args []string)
 func (c *Config) Parse(args []string) error {
 	fs := pflag.NewFlagSet("", pflag.ContinueOnError)
 
+	fs.DurationVar(&c.DialPingTimeout, "dial-ping-timeout", time.Millisecond*500,
+		"Timeout to use when pinging an existing connection during calls to Dial.")
 	fs.StringSliceVar(&c.DiscoveryTags, "discovery-tags", []string{},
 		"repeated, comma-separated list of tags to use when discovering a vtgate to connect to. "+
 			"the semantics of the tags may depend on the specific discovery implementation used")
@@ -83,7 +87,7 @@ func (c *Config) Parse(args []string) error {
 	var creds *grpcclient.StaticAuthClientCreds
 
 	if *credentialsTmplStr != "" {
-		_creds, path, err := c.loadCredentialsFromTemplate(*credentialsTmplStr)
+		_creds, path, err := credentials.LoadFromTemplate(*credentialsTmplStr, c)
 		if err != nil {
 			return fmt.Errorf("cannot load credentials from path template %s: %w", *credentialsTmplStr, err)
 		}
@@ -106,29 +110,4 @@ func (c *Config) Parse(args []string) error {
 	}
 
 	return nil
-}
-
-func (c Config) loadCredentialsFromTemplate(tmplStr string) (*grpcclient.StaticAuthClientCreds, string, error) {
-	path, err := c.renderTemplate(tmplStr)
-	if err != nil {
-		return nil, "", err
-	}
-
-	creds, err := loadCredentials(path)
-
-	return creds, path, err
-}
-
-func (c Config) renderTemplate(tmplStr string) (string, error) {
-	tmpl, err := template.New("").Parse(tmplStr)
-	if err != nil {
-		return "", err
-	}
-
-	buf := bytes.NewBuffer(nil)
-	if err := tmpl.Execute(buf, &c); err != nil {
-		return "", err
-	}
-
-	return buf.String(), nil
 }

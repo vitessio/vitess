@@ -9,7 +9,7 @@
       "Name": "user",
       "Sharded": true
     },
-    "Query": "create view a as select * from user"
+    "Query": "create view a as select * from `user`"
   }
 }
 
@@ -24,7 +24,7 @@
       "Name": "user",
       "Sharded": true
     },
-    "Query": "create view a as select * from user"
+    "Query": "create view a as select * from `user`"
   }
 }
 
@@ -39,7 +39,7 @@
       "Name": "user",
       "Sharded": true
     },
-    "Query": "create view view_a as select 1 from user"
+    "Query": "create view view_a as select 1 from `user`"
   }
 }
 
@@ -54,7 +54,7 @@
       "Name": "user",
       "Sharded": true
     },
-    "Query": "create view view_a as select user.* from user"
+    "Query": "create view view_a as select `user`.* from `user`"
   }
 }
 
@@ -69,7 +69,7 @@
       "Name": "user",
       "Sharded": true
     },
-    "Query": "create view view_a as select * from user"
+    "Query": "create view view_a as select * from `user`"
   }
 }
 
@@ -84,7 +84,7 @@
       "Name": "user",
       "Sharded": true
     },
-    "Query": "create view view_a as select user.* from user"
+    "Query": "create view view_a as select `user`.* from `user`"
   }
 }
 
@@ -144,7 +144,7 @@
       "Name": "user",
       "Sharded": true
     },
-    "Query": "create view view_a as select * from authoritative join user on authoritative.user_id = user.id"
+    "Query": "create view view_a as select * from authoritative join `user` on authoritative.user_id = `user`.id"
   }
 }
 
@@ -159,7 +159,7 @@
       "Name": "user",
       "Sharded": true
     },
-    "Query": "create view view_a as select user.id, a.*, user.col1 from authoritative as a join user on a.user_id = user.id"
+    "Query": "create view view_a as select `user`.id, a.*, `user`.col1 from authoritative as a join `user` on a.user_id = `user`.id"
   }
 }
 
@@ -174,7 +174,7 @@
       "Name": "user",
       "Sharded": true
     },
-    "Query": "create view view_a as select col from user join user_extra on user.id = user_extra.user_id"
+    "Query": "create view view_a as select col from `user` join user_extra on `user`.id = user_extra.user_id"
   }
 }
 
@@ -189,7 +189,7 @@
       "Name": "user",
       "Sharded": true
     },
-    "Query": "create view view_a as select user.id from user join user_extra on user.id = user_extra.user_id"
+    "Query": "create view view_a as select `user`.id from `user` join user_extra on `user`.id = user_extra.user_id"
   }
 }
 
@@ -234,7 +234,7 @@
       "Name": "user",
       "Sharded": true
     },
-    "Query": "create view view_a as select user.col, user_extra.id + user_extra.col from user join user_extra on user.id = user_extra.user_id"
+    "Query": "create view view_a as select `user`.col, user_extra.id + user_extra.col from `user` join user_extra on `user`.id = user_extra.user_id"
   }
 }
 
@@ -249,7 +249,7 @@
       "Name": "user",
       "Sharded": true
     },
-    "Query": "create view view_a as select /* comment */ user.col from user join user_extra on user.id = user_extra.user_id"
+    "Query": "create view view_a as select /* comment */ `user`.col from `user` join user_extra on `user`.id = user_extra.user_id"
   }
 }
 
@@ -264,7 +264,7 @@
       "Name": "user",
       "Sharded": true
     },
-    "Query": "create view view_a as select user.col from user join user_extra on user.id = user_extra.user_id for update"
+    "Query": "create view view_a as select `user`.col from `user` join user_extra on `user`.id = user_extra.user_id for update"
   }
 }
 
@@ -279,7 +279,7 @@
       "Name": "user",
       "Sharded": true
     },
-    "Query": "create view view_a as select user.Col, user_extra.Id from user join user_extra on user.id = user_extra.user_id"
+    "Query": "create view view_a as select `user`.Col, user_extra.Id from `user` join user_extra on `user`.id = user_extra.user_id"
   }
 }
 
@@ -298,7 +298,7 @@
       "Name": "user",
       "Sharded": true
     },
-    "Query": "create view view_a as select * from user where id = 0x04"
+    "Query": "create view view_a as select * from `user` where id = 0x04"
   }
 }
 
@@ -313,7 +313,7 @@
       "Name": "user",
       "Sharded": true
     },
-    "Query": "create view view_a as select * from user where `name` = 'abc' and id = 4 limit 5"
+    "Query": "create view view_a as select * from `user` where `name` = 'abc' and id = 4 limit 5"
   }
 }
 
@@ -328,7 +328,7 @@
       "Name": "user",
       "Sharded": true
     },
-    "Query": "create view view_a as select * from user where id = 4 and `name` = 'abc' limit 5"
+    "Query": "create view view_a as select * from `user` where id = 4 and `name` = 'abc' limit 5"
   }
 }
 
@@ -343,7 +343,7 @@
       "Name": "user",
       "Sharded": true
     },
-    "Query": "create view view_a as select * from user where id = 4 and `name` = 'abc' limit 5"
+    "Query": "create view view_a as select * from `user` where id = 4 and `name` = 'abc' limit 5"
   }
 }
 
@@ -358,7 +358,7 @@
       "Name": "user",
       "Sharded": true
     },
-    "Query": "create view view_a as select user0_.col as col0_ from user as user0_ where id = 1 order by user0_.col asc"
+    "Query": "create view view_a as select user0_.col as col0_ from `user` as user0_ where id = 1 order by user0_.col asc"
   }
 }
 
@@ -373,7 +373,7 @@
       "Name": "user",
       "Sharded": true
     },
-    "Query": "create view view_a as select user0_.col as col0_ from user as user0_ where id = 1 order by col0_ desc"
+    "Query": "create view view_a as select user0_.col as col0_ from `user` as user0_ where id = 1 order by col0_ desc"
   }
 }
 
@@ -388,7 +388,7 @@
       "Name": "user",
       "Sharded": true
     },
-    "Query": "create view view_a as select * from user where id = 1 and `name` = true"
+    "Query": "create view view_a as select * from `user` where id = 1 and `name` = true"
   }
 }
 
@@ -403,7 +403,7 @@
       "Name": "user",
       "Sharded": true
     },
-    "Query": "create view view_a as select * from music where user_id = 1 union select * from user where id = 1"
+    "Query": "create view view_a as select * from music where user_id = 1 union select * from `user` where id = 1"
   }
 }
 
@@ -418,7 +418,7 @@
       "Name": "user",
       "Sharded": true
     },
-    "Query": "create view view_a as select 42 from user"
+    "Query": "create view view_a as select 42 from `user`"
   }
 }
 
@@ -448,7 +448,7 @@
       "Name": "user",
       "Sharded": true
     },
-    "Query": "alter table user add index a (id)"
+    "Query": "alter table `user` add index a (id)"
   }
 }
 
@@ -463,7 +463,7 @@
       "Name": "user",
       "Sharded": true
     },
-    "Query": "alter table user add column id int"
+    "Query": "alter table `user` add column id int"
   }
 }
 
@@ -478,7 +478,7 @@
       "Name": "user",
       "Sharded": true
     },
-    "Query": "alter view user_extra as select * from user"
+    "Query": "alter view user_extra as select * from `user`"
   }
 }
 
@@ -497,7 +497,7 @@
       "Name": "user",
       "Sharded": true
     },
-    "Query": "drop table user, user_extra"
+    "Query": "drop table `user`, user_extra"
   }
 }
 
@@ -520,7 +520,7 @@
       "Name": "user",
       "Sharded": true
     },
-    "Query": "drop view user, user_extra"
+    "Query": "drop view `user`, user_extra"
   }
 }
 
@@ -531,3 +531,41 @@
 # drop view with unknown view
 "drop view unknown"
 "keyspace not specified"
+
+# Truncate table without qualifier
+"truncate user_extra"
+{
+  "QueryType": "DDL",
+  "Original": "truncate user_extra",
+  "Instructions": {
+    "OperatorType": "DDL",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "truncate table user_extra"
+  }
+}
+
+# Rename table
+"rename table user_extra to b"
+{
+  "QueryType": "DDL",
+  "Original": "rename table user_extra to b",
+  "Instructions": {
+    "OperatorType": "DDL",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "rename table user_extra to b"
+  }
+}
+
+# Rename table with different keyspace tables
+"rename table user_extra to b, main.a to b"
+"Tables or Views specified in the query do not belong to the same destination"
+
+# Rename table with change in keyspace name
+"rename table user_extra to main.b"
+"Changing schema from 'user' to 'main' is not allowed"

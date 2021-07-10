@@ -69,7 +69,7 @@ type subqueryInfo struct {
 //
 // If an expression has no references to the current query, then the left-most
 // origin is chosen as the default.
-func (pb *primitiveBuilder) findOrigin(expr sqlparser.Expr) (pullouts []*pulloutSubquery, origin logicalPlan, pushExpr sqlparser.Expr, err error) {
+func (pb *primitiveBuilder) findOrigin(expr sqlparser.Expr, reservedVars sqlparser.BindVars) (pullouts []*pulloutSubquery, origin logicalPlan, pushExpr sqlparser.Expr, err error) {
 	// highestOrigin tracks the highest origin referenced by the expression.
 	// Default is the First.
 	highestOrigin := First(pb.plan)
@@ -104,11 +104,11 @@ func (pb *primitiveBuilder) findOrigin(expr sqlparser.Expr) (pullouts []*pullout
 			spb := newPrimitiveBuilder(pb.vschema, pb.jt)
 			switch stmt := node.Select.(type) {
 			case *sqlparser.Select:
-				if err := spb.processSelect(stmt, pb.st, ""); err != nil {
+				if err := spb.processSelect(stmt, reservedVars, pb.st, ""); err != nil {
 					return false, err
 				}
 			case *sqlparser.Union:
-				if err := spb.processUnion(stmt, pb.st); err != nil {
+				if err := spb.processUnion(stmt, reservedVars, pb.st); err != nil {
 					return false, err
 				}
 			default:
@@ -156,7 +156,7 @@ func (pb *primitiveBuilder) findOrigin(expr sqlparser.Expr) (pullouts []*pullout
 		construct, ok := constructsMap[sqi.ast]
 		if !ok {
 			// (subquery) -> :_sq
-			expr = sqlparser.ReplaceExpr(expr, sqi.ast, sqlparser.NewArgument([]byte(":"+sqName)))
+			expr = sqlparser.ReplaceExpr(expr, sqi.ast, sqlparser.NewArgument(":"+sqName))
 			pullouts = append(pullouts, newPulloutSubquery(engine.PulloutValue, sqName, hasValues, sqi.plan))
 			continue
 		}
@@ -170,9 +170,9 @@ func (pb *primitiveBuilder) findOrigin(expr sqlparser.Expr) (pullouts []*pullout
 					Right:    sqlparser.ListArg("::" + sqName),
 				}
 				left := &sqlparser.ComparisonExpr{
-					Left:     sqlparser.NewArgument([]byte(":" + hasValues)),
+					Left:     sqlparser.NewArgument(":" + hasValues),
 					Operator: sqlparser.EqualOp,
-					Right:    sqlparser.NewIntLiteral([]byte("1")),
+					Right:    sqlparser.NewIntLiteral("1"),
 				}
 				newExpr := &sqlparser.AndExpr{
 					Left:  left,
@@ -183,9 +183,9 @@ func (pb *primitiveBuilder) findOrigin(expr sqlparser.Expr) (pullouts []*pullout
 			} else {
 				// a not in (subquery) -> (:__sq_has_values = 0 or (a not in ::__sq))
 				left := &sqlparser.ComparisonExpr{
-					Left:     sqlparser.NewArgument([]byte(":" + hasValues)),
+					Left:     sqlparser.NewArgument(":" + hasValues),
 					Operator: sqlparser.EqualOp,
-					Right:    sqlparser.NewIntLiteral([]byte("0")),
+					Right:    sqlparser.NewIntLiteral("0"),
 				}
 				right := &sqlparser.ComparisonExpr{
 					Operator: construct.Operator,
@@ -201,7 +201,7 @@ func (pb *primitiveBuilder) findOrigin(expr sqlparser.Expr) (pullouts []*pullout
 			}
 		case *sqlparser.ExistsExpr:
 			// exists (subquery) -> :__sq_has_values
-			expr = sqlparser.ReplaceExpr(expr, construct, sqlparser.NewArgument([]byte(":"+hasValues)))
+			expr = sqlparser.ReplaceExpr(expr, construct, sqlparser.NewArgument(":"+hasValues))
 			pullouts = append(pullouts, newPulloutSubquery(engine.PulloutExists, sqName, hasValues, sqi.plan))
 		}
 	}
@@ -221,7 +221,7 @@ func hasSubquery(node sqlparser.SQLNode) bool {
 	return has
 }
 
-func (pb *primitiveBuilder) finalizeUnshardedDMLSubqueries(nodes ...sqlparser.SQLNode) bool {
+func (pb *primitiveBuilder) finalizeUnshardedDMLSubqueries(reservedVars sqlparser.BindVars, nodes ...sqlparser.SQLNode) bool {
 	var keyspace string
 	if rb, ok := pb.plan.(*route); ok {
 		keyspace = rb.eroute.Keyspace.Name
@@ -243,7 +243,7 @@ func (pb *primitiveBuilder) finalizeUnshardedDMLSubqueries(nodes ...sqlparser.SQ
 					return true, nil
 				}
 				spb := newPrimitiveBuilder(pb.vschema, pb.jt)
-				if err := spb.processSelect(nodeType, pb.st, ""); err != nil {
+				if err := spb.processSelect(nodeType, reservedVars, pb.st, ""); err != nil {
 					samePlan = false
 					return false, err
 				}
@@ -264,7 +264,7 @@ func (pb *primitiveBuilder) finalizeUnshardedDMLSubqueries(nodes ...sqlparser.SQ
 					return true, nil
 				}
 				spb := newPrimitiveBuilder(pb.vschema, pb.jt)
-				if err := spb.processUnion(nodeType, pb.st); err != nil {
+				if err := spb.processUnion(nodeType, reservedVars, pb.st); err != nil {
 					samePlan = false
 					return false, err
 				}
@@ -299,7 +299,7 @@ func valEqual(a, b sqlparser.Expr) bool {
 		if !ok {
 			return false
 		}
-		return bytes.Equal(a, b)
+		return a == b
 	case *sqlparser.Literal:
 		b, ok := b.(*sqlparser.Literal)
 		if !ok {
@@ -309,7 +309,7 @@ func valEqual(a, b sqlparser.Expr) bool {
 		case sqlparser.StrVal:
 			switch b.Type {
 			case sqlparser.StrVal:
-				return bytes.Equal(a.Val, b.Val)
+				return a.Val == b.Val
 			case sqlparser.HexVal:
 				return hexEqual(b, a)
 			}
@@ -317,7 +317,7 @@ func valEqual(a, b sqlparser.Expr) bool {
 			return hexEqual(a, b)
 		case sqlparser.IntVal:
 			if b.Type == (sqlparser.IntVal) {
-				return bytes.Equal(a.Val, b.Val)
+				return a.Val == b.Val
 			}
 		}
 	}
@@ -331,7 +331,7 @@ func hexEqual(a, b *sqlparser.Literal) bool {
 	}
 	switch b.Type {
 	case sqlparser.StrVal:
-		return bytes.Equal(v, b.Val)
+		return bytes.Equal(v, b.Bytes())
 	case sqlparser.HexVal:
 		v2, err := b.HexDecode()
 		if err != nil {

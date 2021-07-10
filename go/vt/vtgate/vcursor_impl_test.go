@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
+	"strconv"
 	"testing"
 
 	"vitess.io/vitess/go/vt/proto/vschema"
@@ -165,35 +166,37 @@ func TestDestinationKeyspace(t *testing.T) {
 		vschema:       vschemaWith1KS,
 		targetString:  "ks2",
 		qualifier:     "",
-		expectedError: "no keyspace with name [ks2] found",
+		expectedError: "Unknown database 'ks2' in vschema",
 	}, {
 		vschema:       vschemaWith1KS,
 		targetString:  "ks2:-80",
 		qualifier:     "",
-		expectedError: "no keyspace with name [ks2] found",
+		expectedError: "Unknown database 'ks2' in vschema",
 	}, {
 		vschema:       vschemaWith1KS,
 		targetString:  "",
 		qualifier:     "ks2",
-		expectedError: "no keyspace with name [ks2] found",
+		expectedError: "Unknown database 'ks2' in vschema",
 	}, {
 		vschema:       vschemaWith2KS,
 		targetString:  "",
-		expectedError: "keyspace not specified",
+		expectedError: errNoKeyspace.Error(),
 	}}
 
-	for _, tc := range tests {
-		impl, _ := newVCursorImpl(context.Background(), NewSafeSession(&vtgatepb.Session{TargetString: tc.targetString}), sqlparser.MarginComments{}, nil, nil, &fakeVSchemaOperator{vschema: tc.vschema}, tc.vschema, nil, nil)
-		impl.vschema = tc.vschema
-		dest, keyspace, tabletType, err := impl.TargetDestination(tc.qualifier)
-		if tc.expectedError == "" {
-			require.NoError(t, err)
-			require.Equal(t, tc.expectedDest, dest)
-			require.Equal(t, tc.expectedKeyspace, keyspace.Name)
-			require.Equal(t, tc.expectedTabletType, tabletType)
-		} else {
-			require.EqualError(t, err, tc.expectedError)
-		}
+	for i, tc := range tests {
+		t.Run(strconv.Itoa(i)+tc.targetString, func(t *testing.T) {
+			impl, _ := newVCursorImpl(context.Background(), NewSafeSession(&vtgatepb.Session{TargetString: tc.targetString}), sqlparser.MarginComments{}, nil, nil, &fakeVSchemaOperator{vschema: tc.vschema}, tc.vschema, nil, nil, false)
+			impl.vschema = tc.vschema
+			dest, keyspace, tabletType, err := impl.TargetDestination(tc.qualifier)
+			if tc.expectedError == "" {
+				require.NoError(t, err)
+				require.Equal(t, tc.expectedDest, dest)
+				require.Equal(t, tc.expectedKeyspace, keyspace.Name)
+				require.Equal(t, tc.expectedTabletType, tabletType)
+			} else {
+				require.EqualError(t, err, tc.expectedError)
+			}
+		})
 	}
 }
 
@@ -231,16 +234,16 @@ func TestSetTarget(t *testing.T) {
 	}, {
 		vschema:       vschemaWith2KS,
 		targetString:  "ks3",
-		expectedError: "Unknown database 'ks3' (errno 1049) (sqlstate 42000)",
+		expectedError: "Unknown database 'ks3'",
 	}, {
 		vschema:       vschemaWith2KS,
 		targetString:  "ks2@replica",
-		expectedError: "cannot change to a non-master type in the middle of a transaction: REPLICA",
+		expectedError: "Can't execute the given command because you have an active transaction",
 	}}
 
 	for i, tc := range tests {
 		t.Run(fmt.Sprintf("%d#%s", i, tc.targetString), func(t *testing.T) {
-			vc, _ := newVCursorImpl(context.Background(), NewSafeSession(&vtgatepb.Session{InTransaction: true}), sqlparser.MarginComments{}, nil, nil, &fakeVSchemaOperator{vschema: tc.vschema}, tc.vschema, nil, nil)
+			vc, _ := newVCursorImpl(context.Background(), NewSafeSession(&vtgatepb.Session{InTransaction: true}), sqlparser.MarginComments{}, nil, nil, &fakeVSchemaOperator{vschema: tc.vschema}, tc.vschema, nil, nil, false)
 			vc.vschema = tc.vschema
 			err := vc.SetTarget(tc.targetString)
 			if tc.expectedError == "" {
@@ -282,7 +285,7 @@ func TestPlanPrefixKey(t *testing.T) {
 		t.Run(fmt.Sprintf("%d#%s", i, tc.targetString), func(t *testing.T) {
 			ss := NewSafeSession(&vtgatepb.Session{InTransaction: false})
 			ss.SetTargetString(tc.targetString)
-			vc, err := newVCursorImpl(context.Background(), ss, sqlparser.MarginComments{}, nil, nil, &fakeVSchemaOperator{vschema: tc.vschema}, tc.vschema, srvtopo.NewResolver(&fakeTopoServer{}, nil, ""), nil)
+			vc, err := newVCursorImpl(context.Background(), ss, sqlparser.MarginComments{}, nil, nil, &fakeVSchemaOperator{vschema: tc.vschema}, tc.vschema, srvtopo.NewResolver(&fakeTopoServer{}, nil, ""), nil, false)
 			require.NoError(t, err)
 			vc.vschema = tc.vschema
 			require.Equal(t, tc.expectedPlanPrefixKey, vc.planPrefixKey())
@@ -301,7 +304,7 @@ func TestFirstSortedKeyspace(t *testing.T) {
 			ks3Schema.Keyspace.Name: ks3Schema,
 		}}
 
-	vc, err := newVCursorImpl(context.Background(), NewSafeSession(nil), sqlparser.MarginComments{}, nil, nil, &fakeVSchemaOperator{vschema: vschemaWith2KS}, vschemaWith2KS, srvtopo.NewResolver(&fakeTopoServer{}, nil, ""), nil)
+	vc, err := newVCursorImpl(context.Background(), NewSafeSession(nil), sqlparser.MarginComments{}, nil, nil, &fakeVSchemaOperator{vschema: vschemaWith2KS}, vschemaWith2KS, srvtopo.NewResolver(&fakeTopoServer{}, nil, ""), nil, false)
 	require.NoError(t, err)
 	ks, err := vc.FirstSortedKeyspace()
 	require.NoError(t, err)

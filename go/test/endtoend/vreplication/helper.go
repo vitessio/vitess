@@ -36,9 +36,9 @@ func execQuery(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
 	return qr
 }
 
-func getConnection(t *testing.T, port int) *mysql.Conn {
+func getConnection(t *testing.T, hostname string, port int) *mysql.Conn {
 	vtParams := mysql.ConnParams{
-		Host:  globalConfig.hostname,
+		Host:  hostname,
 		Port:  port,
 		Uname: "vt_dba",
 	}

@@ -1,0 +1,151 @@
+/**
+ * Copyright 2021 The Vitess Authors.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+.container {
+  display: inline-block;
+  position: relative;
+}
+
+.toggle {
+  background: var(--backgroundPrimary);
+  border: solid 2px var(--colorDisabled);
+  border-radius: 6px;
+  box-sizing: border-box;
+  color: var(--textColorPrimary);
+  cursor: pointer;
+  display: block;
+  font-family: var(--fontFamilyPrimary);
+  font-size: var(--fontSizeBody);
+  height: var(--inputHeightMedium);
+  min-width: 16rem;
+  padding: 0 40px 0 12px;
+  position: relative;
+  text-align: left;
+  transition: all 0.1s ease-in-out;
+  white-space: nowrap;
+}
+
+.placeholder .toggle {
+  color: var(--textColorSecondary);
+}
+
+.open .toggle,
+.toggle:active,
+.toggle:focus {
+  border-color: var(--colorPrimary);
+  outline: none;
+}
+
+.toggle:disabled {
+  background: var(--backgroundSecondary);
+  border-color: var(--backgroundSecondaryHighlight);
+  color: var(--textColorSecondary);
+  cursor: not-allowed;
+}
+
+.large .toggle {
+  font-size: var(--fontSizeLarge);
+  height: var(--inputHeightLarge);
+  min-width: 24rem;
+  padding: 0 16px;
+}
+
+.chevron {
+  height: 20px;
+  position: absolute;
+  top: calc(50% - 10px);
+  right: 4px;
+}
+
+.dropdown {
+  background: var(--backgroundPrimary);
+  border: solid 2px var(--colorDisabled);
+  border-radius: 6px;
+  box-sizing: border-box;
+  margin: 4px 0 0 0;
+  height: min-content;
+  max-height: 420px;
+  overflow: auto;
+  outline: none;
+  padding: 8px 0;
+  min-width: 100%;
+  position: absolute;
+  z-index: 1000;
+}
+
+.menu {
+  list-style-type: none;
+  margin: 0;
+  outline: none;
+  padding: 0;
+}
+
+.menu li {
+  line-height: 32px;
+  padding: 4px 12px;
+
+  &:hover {
+    background: var(--backgroundPrimaryHighlight);
+    cursor: pointer;
+  }
+
+  &.active {
+    background: var(--backgroundPrimaryHighlight);
+  }
+}
+
+.large .menu li {
+  font-size: var(--fontSizeLarge);
+  min-width: 24rem;
+  padding: 8px 16px;
+}
+
+.clear {
+  background: none;
+  border: none;
+  box-sizing: border-box;
+  color: var(--textColorSecondary);
+  cursor: pointer;
+  display: block;
+  font-family: var(--fontFamilyPrimary);
+  font-size: var(--fontSizeBody);
+  min-width: 16rem;
+  padding: 4px 12px;
+  position: relative;
+  text-align: left;
+  transition: all 0.1s ease-in-out;
+  white-space: nowrap;
+  width: 100%;
+
+  &:hover,
+  &:active,
+  &:focus {
+    background: var(--backgroundPrimaryHighlight);
+  }
+}
+
+.large .clear {
+  font-size: var(--fontSizeLarge);
+  padding: 8px 16px;
+}
+
+.emptyContainer {
+  outline: none;
+  padding: 8px 12px;
+}
+
+.emptyPlaceholder {
+  color: var(--textColorSecondary);
+}

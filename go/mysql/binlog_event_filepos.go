@@ -212,6 +212,10 @@ func (ev filePosFakeEvent) IsPseudo() bool {
 	return false
 }
 
+func (ev filePosFakeEvent) IsCompressed() bool {
+	return false
+}
+
 //----------------------------------------------------------------------------
 
 // filePosGTIDEvent is a fake GTID event for filePos.

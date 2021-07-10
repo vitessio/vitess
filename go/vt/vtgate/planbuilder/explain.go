@@ -20,26 +20,53 @@ import (
 	"strings"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/key"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
-func extractQuery(m map[string]interface{}) string {
-	queryObj, ok := m["Query"]
-	if !ok {
-		return ""
+// Builds an explain-plan for the given Primitive
+func buildExplainPlan(stmt sqlparser.Explain, reservedVars sqlparser.BindVars, vschema ContextVSchema) (engine.Primitive, error) {
+	switch explain := stmt.(type) {
+	case *sqlparser.ExplainTab:
+		return explainTabPlan(explain, vschema)
+	case *sqlparser.ExplainStmt:
+		if explain.Type == sqlparser.VitessType {
+			return buildVitessTypePlan(explain, reservedVars, vschema)
+		}
+		return buildOtherReadAndAdmin(sqlparser.String(explain), vschema)
 	}
-	query, ok := queryObj.(string)
-	if !ok {
-		return ""
-	}
-
-	return query
+	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unexpected explain type: %T", stmt)
 }
 
-// Builds an explain-plan for the given Primitive
-func buildExplainPlan(input engine.Primitive) (engine.Primitive, error) {
-	descriptions := treeLines(engine.PrimitiveToPlanDescription(input))
+func explainTabPlan(explain *sqlparser.ExplainTab, vschema ContextVSchema) (engine.Primitive, error) {
+	table, _, _, _, destination, err := vschema.FindTableOrVindex(explain.Table)
+	if err != nil {
+		return nil, err
+	}
+	explain.Table.Qualifier = sqlparser.NewTableIdent("")
+
+	if destination == nil {
+		destination = key.DestinationAnyShard{}
+	}
+
+	return &engine.Send{
+		Keyspace:          table.Keyspace,
+		TargetDestination: destination,
+		Query:             sqlparser.String(explain),
+		SingleShardOnly:   true,
+	}, nil
+}
+
+func buildVitessTypePlan(explain *sqlparser.ExplainStmt, reservedVars sqlparser.BindVars, vschema ContextVSchema) (engine.Primitive, error) {
+	innerInstruction, err := createInstructionFor(sqlparser.String(explain.Statement), explain.Statement, reservedVars, vschema)
+	if err != nil {
+		return nil, err
+	}
+	descriptions := treeLines(engine.PrimitiveToPlanDescription(innerInstruction))
 
 	var rows [][]sqltypes.Value
 	for _, line := range descriptions {
@@ -72,6 +99,19 @@ func buildExplainPlan(input engine.Primitive) (engine.Primitive, error) {
 	}
 
 	return engine.NewRowsPrimitive(rows, fields), nil
+}
+
+func extractQuery(m map[string]interface{}) string {
+	queryObj, ok := m["Query"]
+	if !ok {
+		return ""
+	}
+	query, ok := queryObj.(string)
+	if !ok {
+		return ""
+	}
+
+	return query
 }
 
 type description struct {

@@ -11,7 +11,7 @@
 
   <groupId>io.vitess</groupId>
   <artifactId>vitess-parent</artifactId>
-  <version>9.0.3-SNAPSHOT</version>
+  <version>10.0.2</version>
   <packaging>pom</packaging>
 
   <name>Vitess Java Client libraries [Parent]</name>
@@ -94,7 +94,7 @@
       <dependency>
         <groupId>com.google.guava</groupId>
         <artifactId>guava</artifactId>
-        <version>26.0-jre</version>
+        <version>30.1.1-jre</version>
       </dependency>
       <dependency>
         <groupId>com.google.protobuf</groupId>

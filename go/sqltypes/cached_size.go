@@ -40,6 +40,7 @@ func (cached *PlanValue) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
 func (cached *Result) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -71,6 +72,7 @@ func (cached *Result) CachedSize(alloc bool) int64 {
 	size += int64(len(cached.SessionStateChanges))
 	return size
 }
+
 func (cached *Value) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)

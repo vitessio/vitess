@@ -66,6 +66,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/txserializer"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/txthrottler"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer"
+	"vitess.io/vitess/go/vt/vttablet/vexec"
 )
 
 // logPoolFull is for throttling transaction / query pool full messages in the log.
@@ -157,13 +158,21 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 
 	tsOnce.Do(func() { srvTopoServer = srvtopo.NewResilientServer(topoServer, "TabletSrvTopo") })
 
+	tabletTypeFunc := func() topodatapb.TabletType {
+		if tsv.sm == nil {
+			return topodatapb.TabletType_UNKNOWN
+		}
+		return tsv.sm.Target().TabletType
+	}
+
 	tsv.statelessql = NewQueryList("oltp-stateless")
 	tsv.statefulql = NewQueryList("oltp-stateful")
 	tsv.olapql = NewQueryList("olap")
+	tsv.lagThrottler = throttle.NewThrottler(tsv, topoServer, tabletTypeFunc)
 	tsv.hs = newHealthStreamer(tsv, alias)
 	tsv.se = schema.NewEngine(tsv)
 	tsv.rt = repltracker.NewReplTracker(tsv, alias)
-	tsv.vstreamer = vstreamer.NewEngine(tsv, srvTopoServer, tsv.se, alias.Cell)
+	tsv.vstreamer = vstreamer.NewEngine(tsv, srvTopoServer, tsv.se, tsv.lagThrottler, alias.Cell)
 	tsv.tracker = schema.NewTracker(tsv, tsv.vstreamer, tsv.se)
 	tsv.watcher = NewBinlogWatcher(tsv, tsv.vstreamer, tsv.config)
 	tsv.qe = NewQueryEngine(tsv, tsv.se)
@@ -171,14 +180,7 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 	tsv.te = NewTxEngine(tsv)
 	tsv.messager = messager.NewEngine(tsv, tsv.se, tsv.vstreamer)
 
-	tabletTypeFunc := func() topodatapb.TabletType {
-		if tsv.sm == nil {
-			return topodatapb.TabletType_UNKNOWN
-		}
-		return tsv.sm.Target().TabletType
-	}
 	tsv.onlineDDLExecutor = onlineddl.NewExecutor(tsv, alias, topoServer, tabletTypeFunc)
-	tsv.lagThrottler = throttle.NewThrottler(tsv, topoServer, tabletTypeFunc)
 	tsv.tableGC = gc.NewTableGC(tsv, topoServer, tabletTypeFunc, tsv.lagThrottler)
 
 	tsv.sm = &stateManager{
@@ -397,6 +399,32 @@ func (tsv *TabletServer) ReloadSchema(ctx context.Context) error {
 	return tsv.se.Reload(ctx)
 }
 
+// WaitForSchemaReset blocks the TabletServer until there's been at least `timeout` duration without
+// any schema changes. This is useful for tests that need to wait for all the currently existing schema
+// changes to finish being applied.
+func (tsv *TabletServer) WaitForSchemaReset(timeout time.Duration) {
+	onSchemaChange := make(chan struct{}, 1)
+	tsv.se.RegisterNotifier("_tsv_wait", func(_ map[string]*schema.Table, _, _, _ []string) {
+		onSchemaChange <- struct{}{}
+	})
+	defer tsv.se.UnregisterNotifier("_tsv_wait")
+
+	after := time.NewTimer(timeout)
+	defer after.Stop()
+
+	for {
+		select {
+		case <-after.C:
+			return
+		case <-onSchemaChange:
+			if !after.Stop() {
+				<-after.C
+			}
+			after.Reset(timeout)
+		}
+	}
+}
+
 // ClearQueryPlanCache clears internal query plan cache
 func (tsv *TabletServer) ClearQueryPlanCache() {
 	// We should ideally bracket this with start & endErequest,
@@ -411,7 +439,7 @@ func (tsv *TabletServer) QueryService() queryservice.QueryService {
 }
 
 // OnlineDDLExecutor returns the onlineddl.Executor part of TabletServer.
-func (tsv *TabletServer) OnlineDDLExecutor() *onlineddl.Executor {
+func (tsv *TabletServer) OnlineDDLExecutor() vexec.Executor {
 	return tsv.onlineDDLExecutor
 }
 
@@ -715,10 +743,15 @@ func (tsv *TabletServer) Execute(ctx context.Context, target *querypb.Target, sq
 			result = result.StripMetadata(sqltypes.IncludeFieldsOrDefault(options))
 
 			// Change database name in mysql output to the keyspace name
-			if sqltypes.IncludeFieldsOrDefault(options) == querypb.ExecuteOptions_ALL {
-				for _, f := range result.Fields {
-					if f.Database != "" {
-						f.Database = tsv.sm.target.Keyspace
+			if tsv.sm.target.Keyspace != tsv.config.DB.DBName && sqltypes.IncludeFieldsOrDefault(options) == querypb.ExecuteOptions_ALL {
+				switch qre.plan.PlanID {
+				case planbuilder.PlanSelect, planbuilder.PlanSelectImpossible:
+					dbName := tsv.config.DB.DBName
+					ksName := tsv.sm.target.Keyspace
+					for _, f := range result.Fields {
+						if f.Database == dbName {
+							f.Database = ksName
+						}
 					}
 				}
 			}
@@ -1557,7 +1590,7 @@ func (tsv *TabletServer) registerMigrationStatusHandler() {
 	tsv.exporter.HandleFunc("/schema-migration/report-status", func(w http.ResponseWriter, r *http.Request) {
 		ctx := tabletenv.LocalContext()
 		query := r.URL.Query()
-		if err := tsv.onlineDDLExecutor.OnSchemaMigrationStatus(ctx, query.Get("uuid"), query.Get("status"), query.Get("dryrun"), query.Get("progress")); err != nil {
+		if err := tsv.onlineDDLExecutor.OnSchemaMigrationStatus(ctx, query.Get("uuid"), query.Get("status"), query.Get("dryrun"), query.Get("progress"), query.Get("eta")); err != nil {
 			http.Error(w, fmt.Sprintf("not ok: %v", err), http.StatusInternalServerError)
 			return
 		}
@@ -1565,35 +1598,39 @@ func (tsv *TabletServer) registerMigrationStatusHandler() {
 	})
 }
 
-// registerThrottlerCheckHandler registers a throttler "check" request
-func (tsv *TabletServer) registerThrottlerCheckHandler() {
-	tsv.exporter.HandleFunc("/throttler/check", func(w http.ResponseWriter, r *http.Request) {
-		ctx := tabletenv.LocalContext()
-		remoteAddr := r.Header.Get("X-Forwarded-For")
-		if remoteAddr == "" {
-			remoteAddr = r.RemoteAddr
-			remoteAddr = strings.Split(remoteAddr, ":")[0]
-		}
-		appName := r.URL.Query().Get("app")
-		if appName == "" {
-			appName = throttle.DefaultAppName
-		}
-		flags := &throttle.CheckFlags{
-			LowPriority: (r.URL.Query().Get("p") == "low"),
-		}
-		checkResult := tsv.lagThrottler.Check(ctx, appName, remoteAddr, flags)
-		if checkResult.StatusCode == http.StatusNotFound && flags.OKIfNotExists {
-			checkResult.StatusCode = http.StatusOK // 200
-		}
+// registerThrottlerCheckHandlers registers throttler "check" requests
+func (tsv *TabletServer) registerThrottlerCheckHandlers() {
+	handle := func(path string, checkType throttle.ThrottleCheckType) {
+		tsv.exporter.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
+			ctx := tabletenv.LocalContext()
+			remoteAddr := r.Header.Get("X-Forwarded-For")
+			if remoteAddr == "" {
+				remoteAddr = r.RemoteAddr
+				remoteAddr = strings.Split(remoteAddr, ":")[0]
+			}
+			appName := r.URL.Query().Get("app")
+			if appName == "" {
+				appName = throttle.DefaultAppName
+			}
+			flags := &throttle.CheckFlags{
+				LowPriority: (r.URL.Query().Get("p") == "low"),
+			}
+			checkResult := tsv.lagThrottler.CheckByType(ctx, appName, remoteAddr, flags, checkType)
+			if checkResult.StatusCode == http.StatusNotFound && flags.OKIfNotExists {
+				checkResult.StatusCode = http.StatusOK // 200
+			}
 
-		if r.Method == http.MethodGet {
-			w.Header().Set("Content-Type", "application/json")
-		}
-		w.WriteHeader(checkResult.StatusCode)
-		if r.Method == http.MethodGet {
-			json.NewEncoder(w).Encode(checkResult)
-		}
-	})
+			if r.Method == http.MethodGet {
+				w.Header().Set("Content-Type", "application/json")
+			}
+			w.WriteHeader(checkResult.StatusCode)
+			if r.Method == http.MethodGet {
+				json.NewEncoder(w).Encode(checkResult)
+			}
+		})
+	}
+	handle("/throttler/check", throttle.ThrottleCheckPrimaryWrite)
+	handle("/throttler/check-self", throttle.ThrottleCheckSelf)
 }
 
 // registerThrottlerStatusHandler registers a throttler "status" request
@@ -1606,10 +1643,34 @@ func (tsv *TabletServer) registerThrottlerStatusHandler() {
 	})
 }
 
+// registerThrottlerThrottleAppHandler registers a throttler "throttle-app" request
+func (tsv *TabletServer) registerThrottlerThrottleAppHandler() {
+	tsv.exporter.HandleFunc("/throttler/throttle-app", func(w http.ResponseWriter, r *http.Request) {
+		appName := r.URL.Query().Get("app")
+		d, err := time.ParseDuration(r.URL.Query().Get("duration"))
+		if err != nil {
+			http.Error(w, fmt.Sprintf("not ok: %v", err), http.StatusInternalServerError)
+			return
+		}
+		appThrottle := tsv.lagThrottler.ThrottleApp(appName, time.Now().Add(d), 1)
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(appThrottle)
+	})
+	tsv.exporter.HandleFunc("/throttler/unthrottle-app", func(w http.ResponseWriter, r *http.Request) {
+		appName := r.URL.Query().Get("app")
+		appThrottle := tsv.lagThrottler.UnthrottleApp(appName)
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(appThrottle)
+	})
+}
+
 // registerThrottlerHandlers registers all throttler handlers
 func (tsv *TabletServer) registerThrottlerHandlers() {
-	tsv.registerThrottlerCheckHandler()
+	tsv.registerThrottlerCheckHandlers()
 	tsv.registerThrottlerStatusHandler()
+	tsv.registerThrottlerThrottleAppHandler()
 }
 
 func (tsv *TabletServer) registerDebugEnvHandler() {
@@ -1622,6 +1683,13 @@ func (tsv *TabletServer) registerDebugEnvHandler() {
 // Only to be used for testing.
 func (tsv *TabletServer) EnableHeartbeat(enabled bool) {
 	tsv.rt.EnableHeartbeat(enabled)
+}
+
+// EnableThrottler forces throttler to be on or off.
+// When throttler is off, it responds to all check requests with HTTP 200 OK
+// Only to be used for testing.
+func (tsv *TabletServer) EnableThrottler(enabled bool) {
+	tsv.Config().EnableLagThrottler = enabled
 }
 
 // SetTracking forces tracking to be on or off.
@@ -1690,9 +1758,19 @@ func (tsv *TabletServer) SetQueryPlanCacheCap(val int) {
 	tsv.qe.SetQueryPlanCacheCap(val)
 }
 
-// QueryPlanCacheCap returns the pool size.
+// QueryPlanCacheCap returns the plan cache capacity
 func (tsv *TabletServer) QueryPlanCacheCap() int {
-	return int(tsv.qe.QueryPlanCacheCap())
+	return tsv.qe.QueryPlanCacheCap()
+}
+
+// QueryPlanCacheLen returns the plan cache length
+func (tsv *TabletServer) QueryPlanCacheLen() int {
+	return tsv.qe.QueryPlanCacheLen()
+}
+
+// QueryPlanCacheWait waits until the query plan cache has processed all recent queries
+func (tsv *TabletServer) QueryPlanCacheWait() {
+	tsv.qe.plans.Wait()
 }
 
 // SetMaxResultSize changes the max result size to the specified value.
@@ -1768,5 +1846,5 @@ func skipQueryPlanCache(options *querypb.ExecuteOptions) bool {
 	if options == nil {
 		return false
 	}
-	return options.SkipQueryPlanCache
+	return options.SkipQueryPlanCache || options.HasCreatedTempTables
 }

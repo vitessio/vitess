@@ -17,6 +17,7 @@ limitations under the License.
 package mysql
 
 import (
+	"context"
 	"crypto/tls"
 	"fmt"
 	"io/ioutil"
@@ -28,8 +29,6 @@ import (
 	"sync"
 	"testing"
 	"time"
-
-	"context"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -65,7 +64,6 @@ var selectRowsResult = &sqltypes.Result{
 			sqltypes.MakeTrusted(querypb.Type_VARCHAR, []byte("nicer name")),
 		},
 	},
-	RowsAffected: 2,
 }
 
 type testHandler struct {
@@ -112,7 +110,7 @@ func (th *testHandler) NewConnection(c *Conn) {
 	th.lastConn = c
 }
 
-func (th *testHandler) ConnectionClosed(c *Conn) {
+func (th *testHandler) ConnectionClosed(_ *Conn) {
 }
 
 func (th *testHandler) ComQuery(c *Conn, query string, callback func(*sqltypes.Result) error) error {
@@ -244,9 +242,7 @@ func getHostPort(t *testing.T, a net.Addr) (string, int) {
 	// For the host name, we resolve 'localhost' into an address.
 	// This works around a few travis issues where IPv6 is not 100% enabled.
 	hosts, err := net.LookupHost("localhost")
-	if err != nil {
-		t.Fatalf("LookupHost(localhost) failed: %v", err)
-	}
+	require.NoError(t, err, "LookupHost(localhost) failed")
 	host := hosts[0]
 	port := a.(*net.TCPAddr).Port
 	t.Logf("listening on address '%v' port %v", host, port)
@@ -265,14 +261,10 @@ func TestConnectionFromListener(t *testing.T) {
 	// Make sure we can create our own net.Listener for use with the mysql
 	// listener
 	listener, err := net.Listen("tcp", ":0")
-	if err != nil {
-		t.Fatalf("net.Listener failed: %v", err)
-	}
+	require.NoError(t, err, "net.Listener failed")
 
 	l, err := NewFromListener(listener, authServer, th, 0, 0)
-	if err != nil {
-		t.Fatalf("NewListener failed: %v", err)
-	}
+	require.NoError(t, err, "NewListener failed")
 	defer l.Close()
 	go l.Accept()
 
@@ -287,9 +279,7 @@ func TestConnectionFromListener(t *testing.T) {
 	}
 
 	c, err := Connect(context.Background(), params)
-	if err != nil {
-		t.Errorf("Should be able to connect to server but found error: %v", err)
-	}
+	require.NoError(t, err, "Should be able to connect to server")
 	c.Close()
 }
 
@@ -303,9 +293,7 @@ func TestConnectionWithoutSourceHost(t *testing.T) {
 	}}
 	defer authServer.close()
 	l, err := NewListener("tcp", ":0", authServer, th, 0, 0, false)
-	if err != nil {
-		t.Fatalf("NewListener failed: %v", err)
-	}
+	require.NoError(t, err, "NewListener failed")
 	defer l.Close()
 	go l.Accept()
 
@@ -320,9 +308,7 @@ func TestConnectionWithoutSourceHost(t *testing.T) {
 	}
 
 	c, err := Connect(context.Background(), params)
-	if err != nil {
-		t.Errorf("Should be able to connect to server but found error: %v", err)
-	}
+	require.NoError(t, err, "Should be able to connect to server")
 	c.Close()
 }
 
@@ -340,9 +326,7 @@ func TestConnectionWithSourceHost(t *testing.T) {
 	defer authServer.close()
 
 	l, err := NewListener("tcp", ":0", authServer, th, 0, 0, false)
-	if err != nil {
-		t.Fatalf("NewListener failed: %v", err)
-	}
+	require.NoError(t, err, "NewListener failed")
 	defer l.Close()
 	go l.Accept()
 
@@ -358,9 +342,7 @@ func TestConnectionWithSourceHost(t *testing.T) {
 
 	_, err = Connect(context.Background(), params)
 	// target is localhost, should not work from tcp connection
-	if err == nil {
-		t.Errorf("Should be able to connect to server but found error: %v", err)
-	}
+	require.EqualError(t, err, "Access denied for user 'user1' (errno 1045) (sqlstate 28000)", "Should not be able to connect to server")
 }
 
 func TestConnectionUseMysqlNativePasswordWithSourceHost(t *testing.T) {
@@ -377,9 +359,7 @@ func TestConnectionUseMysqlNativePasswordWithSourceHost(t *testing.T) {
 	defer authServer.close()
 
 	l, err := NewListener("tcp", ":0", authServer, th, 0, 0, false)
-	if err != nil {
-		t.Fatalf("NewListener failed: %v", err)
-	}
+	require.NoError(t, err, "NewListener failed")
 	defer l.Close()
 	go l.Accept()
 
@@ -395,9 +375,7 @@ func TestConnectionUseMysqlNativePasswordWithSourceHost(t *testing.T) {
 
 	_, err = Connect(context.Background(), params)
 	// target is localhost, should not work from tcp connection
-	if err == nil {
-		t.Errorf("Should be able to connect to server but found error: %v", err)
-	}
+	require.EqualError(t, err, "Access denied for user 'user1' (errno 1045) (sqlstate 28000)", "Should not be able to connect to server")
 }
 
 func TestConnectionUnixSocket(t *testing.T) {
@@ -414,15 +392,12 @@ func TestConnectionUnixSocket(t *testing.T) {
 	defer authServer.close()
 
 	unixSocket, err := ioutil.TempFile("", "mysql_vitess_test.sock")
-	if err != nil {
-		t.Fatalf("Failed to create temp file")
-	}
+	require.NoError(t, err, "Failed to create temp file")
+
 	os.Remove(unixSocket.Name())
 
 	l, err := NewListener("unix", unixSocket.Name(), authServer, th, 0, 0, false)
-	if err != nil {
-		t.Fatalf("NewListener failed: %v", err)
-	}
+	require.NoError(t, err, "NewListener failed")
 	defer l.Close()
 	go l.Accept()
 
@@ -434,9 +409,7 @@ func TestConnectionUnixSocket(t *testing.T) {
 	}
 
 	c, err := Connect(context.Background(), params)
-	if err != nil {
-		t.Errorf("Should be able to connect to server but found error: %v", err)
-	}
+	require.NoError(t, err, "Should be able to connect to server")
 	c.Close()
 }
 
@@ -450,9 +423,7 @@ func TestClientFoundRows(t *testing.T) {
 	}}
 	defer authServer.close()
 	l, err := NewListener("tcp", ":0", authServer, th, 0, 0, false)
-	if err != nil {
-		t.Fatalf("NewListener failed: %v", err)
-	}
+	require.NoError(t, err, "NewListener failed")
 	defer l.Close()
 	go l.Accept()
 
@@ -468,28 +439,18 @@ func TestClientFoundRows(t *testing.T) {
 
 	// Test without flag.
 	c, err := Connect(context.Background(), params)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err, "Connect failed")
 	foundRows := th.LastConn().Capabilities & CapabilityClientFoundRows
-	if foundRows != 0 {
-		t.Errorf("FoundRows flag: %x, second bit must be 0", th.LastConn().Capabilities)
-	}
+	assert.Equal(t, uint32(0), foundRows, "FoundRows flag: %x, second bit must be 0", th.LastConn().Capabilities)
 	c.Close()
-	if !c.IsClosed() {
-		t.Errorf("IsClosed returned true on Close-d connection.")
-	}
+	assert.True(t, c.IsClosed(), "IsClosed should be true on Close-d connection.")
 
 	// Test with flag.
 	params.Flags |= CapabilityClientFoundRows
 	c, err = Connect(context.Background(), params)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err, "Connect failed")
 	foundRows = th.LastConn().Capabilities & CapabilityClientFoundRows
-	if foundRows == 0 {
-		t.Errorf("FoundRows flag: %x, second bit must be set", th.LastConn().Capabilities)
-	}
+	assert.NotZero(t, foundRows, "FoundRows flag: %x, second bit must be set", th.LastConn().Capabilities)
 	c.Close()
 }
 
@@ -497,6 +458,9 @@ func TestConnCounts(t *testing.T) {
 	th := &testHandler{}
 
 	initialNumUsers := len(connCountPerUser.Counts())
+
+	// FIXME: we should be able to ResetAll counters instead of computing a delta, but it doesn't work for some reason
+	// connCountPerUser.ResetAll()
 
 	user := "anotherNotYetConnectedUser1"
 	passwd := "password1"
@@ -508,9 +472,7 @@ func TestConnCounts(t *testing.T) {
 	}}
 	defer authServer.close()
 	l, err := NewListener("tcp", ":0", authServer, th, 0, 0, false)
-	if err != nil {
-		t.Fatalf("NewListener failed: %v", err)
-	}
+	require.NoError(t, err, "NewListener failed")
 	defer l.Close()
 	go l.Accept()
 
@@ -525,27 +487,18 @@ func TestConnCounts(t *testing.T) {
 	}
 
 	c, err := Connect(context.Background(), params)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err, "Connect failed")
 
 	connCounts := connCountPerUser.Counts()
-	if l := len(connCounts); l-initialNumUsers != 1 {
-		t.Errorf("Expected 1 new user, got %d", l)
-	}
+	assert.Equal(t, 1, len(connCounts)-initialNumUsers)
 	checkCountsForUser(t, user, 1)
 
 	// Test with a second new connection.
 	c2, err := Connect(context.Background(), params)
-	if err != nil {
-		t.Fatal(err)
-	}
-
+	require.NoError(t, err)
 	connCounts = connCountPerUser.Counts()
 	// There is still only one new user.
-	if l2 := len(connCounts); l2-initialNumUsers != 1 {
-		t.Errorf("Expected 1 new user, got %d", l2)
-	}
+	assert.Equal(t, 1, len(connCounts)-initialNumUsers)
 	checkCountsForUser(t, user, 2)
 
 	// Test after closing connections. time.Sleep lets it work, but seems flakey.
@@ -562,13 +515,8 @@ func checkCountsForUser(t *testing.T, user string, expected int64) {
 	connCounts := connCountPerUser.Counts()
 
 	userCount, ok := connCounts[user]
-	if ok {
-		if userCount != expected {
-			t.Errorf("Expected connection count for user to be %d, got %d", expected, userCount)
-		}
-	} else {
-		t.Errorf("No count found for user %s", user)
-	}
+	assert.True(t, ok, "No count found for user %s", user)
+	assert.Equal(t, expected, userCount)
 }
 
 func TestServer(t *testing.T) {
@@ -582,7 +530,7 @@ func TestServer(t *testing.T) {
 	defer authServer.close()
 	l, err := NewListener("tcp", ":0", authServer, th, 0, 0, false)
 	require.NoError(t, err)
-	l.SlowConnectWarnThreshold.Set(time.Duration(time.Nanosecond * 1))
+	l.SlowConnectWarnThreshold.Set(time.Nanosecond * 1)
 	defer l.Close()
 	go l.Accept()
 
@@ -600,23 +548,19 @@ func TestServer(t *testing.T) {
 	output, err := runMysqlWithErr(t, params, "select rows")
 	require.NoError(t, err)
 
-	if !strings.Contains(output, "nice name") ||
-		!strings.Contains(output, "nicer name") ||
-		!strings.Contains(output, "2 rows in set") {
-		t.Errorf("Unexpected output for 'select rows'")
-	}
+	assert.Contains(t, output, "nice name", "Unexpected output for 'select rows'")
+	assert.Contains(t, output, "nicer name", "Unexpected output for 'select rows'")
+	assert.Contains(t, output, "2 rows in set", "Unexpected output for 'select rows'")
 	assert.NotContains(t, output, "warnings")
 
 	// Run a 'select rows' command with warnings
 	th.SetWarnings(13)
 	output, err = runMysqlWithErr(t, params, "select rows")
 	require.NoError(t, err)
-	if !strings.Contains(output, "nice name") ||
-		!strings.Contains(output, "nicer name") ||
-		!strings.Contains(output, "2 rows in set") ||
-		!strings.Contains(output, "13 warnings") {
-		t.Errorf("Unexpected output for 'select rows': %v", output)
-	}
+	assert.Contains(t, output, "nice name", "Unexpected output for 'select rows'")
+	assert.Contains(t, output, "nicer name", "Unexpected output for 'select rows'")
+	assert.Contains(t, output, "2 rows in set", "Unexpected output for 'select rows'")
+	assert.Contains(t, output, "13 warnings", "Unexpected output for 'select rows'")
 	th.SetWarnings(0)
 
 	// If there's an error after streaming has started,
@@ -624,64 +568,50 @@ func TestServer(t *testing.T) {
 	th.SetErr(NewSQLError(ERUnknownComError, SSUnknownComError, "forced error after send"))
 	output, err = runMysqlWithErr(t, params, "error after send")
 	require.Error(t, err)
-	if !strings.Contains(output, "ERROR 2013 (HY000)") ||
-		!strings.Contains(output, "Lost connection to MySQL server during query") {
-		t.Errorf("Unexpected output for 'panic'")
-	}
+	assert.Contains(t, output, "ERROR 2013 (HY000)", "Unexpected output for 'panic'")
+	assert.Contains(t, output, "Lost connection to MySQL server during query", "Unexpected output for 'panic'")
 
 	// Run an 'insert' command, no rows, but rows affected.
 	output, err = runMysqlWithErr(t, params, "insert")
 	require.NoError(t, err)
-	if !strings.Contains(output, "Query OK, 123 rows affected") {
-		t.Errorf("Unexpected output for 'insert'")
-	}
+	assert.Contains(t, output, "Query OK, 123 rows affected", "Unexpected output for 'insert'")
 
 	// Run a 'schema echo' command, to make sure db name is right.
 	params.DbName = "XXXfancyXXX"
 	output, err = runMysqlWithErr(t, params, "schema echo")
 	require.NoError(t, err)
-	if !strings.Contains(output, params.DbName) {
-		t.Errorf("Unexpected output for 'schema echo'")
-	}
+	assert.Contains(t, output, params.DbName, "Unexpected output for 'schema echo'")
 
 	// Sanity check: make sure this didn't go through SSL
 	output, err = runMysqlWithErr(t, params, "ssl echo")
 	require.NoError(t, err)
-	if !strings.Contains(output, "ssl_flag") ||
-		!strings.Contains(output, "OFF") ||
-		!strings.Contains(output, "1 row in set") {
-		t.Errorf("Unexpected output for 'ssl echo': %v", output)
-	}
+	assert.Contains(t, output, "ssl_flag")
+	assert.Contains(t, output, "OFF")
+	assert.Contains(t, output, "1 row in set", "Unexpected output for 'ssl echo': %v", output)
 
 	// UserData check: checks the server user data is correct.
 	output, err = runMysqlWithErr(t, params, "userData echo")
 	require.NoError(t, err)
-	if !strings.Contains(output, "user1") ||
-		!strings.Contains(output, "user_data") ||
-		!strings.Contains(output, "userData1") {
-		t.Errorf("Unexpected output for 'userData echo': %v", output)
-	}
+	assert.Contains(t, output, "user1")
+	assert.Contains(t, output, "user_data")
+	assert.Contains(t, output, "userData1", "Unexpected output for 'userData echo': %v", output)
 
 	// Permissions check: check a bad password is rejected.
 	params.Pass = "bad"
 	output, err = runMysqlWithErr(t, params, "select rows")
 	require.Error(t, err)
-	if !strings.Contains(output, "1045") ||
-		!strings.Contains(output, "28000") ||
-		!strings.Contains(output, "Access denied") {
-		t.Errorf("Unexpected output for invalid password: %v", output)
-	}
+	assert.Contains(t, output, "1045")
+	assert.Contains(t, output, "28000")
+	assert.Contains(t, output, "Access denied", "Unexpected output for invalid password: %v", output)
 
 	// Permissions check: check an unknown user is rejected.
 	params.Pass = "password1"
 	params.Uname = "user2"
 	output, err = runMysqlWithErr(t, params, "select rows")
 	require.Error(t, err)
-	if !strings.Contains(output, "1045") ||
-		!strings.Contains(output, "28000") ||
-		!strings.Contains(output, "Access denied") {
-		t.Errorf("Unexpected output for invalid password: %v", output)
-	}
+	assert.Contains(t, output, "1045")
+	assert.Contains(t, output, "28000")
+	assert.Contains(t, output, "Access denied", "Unexpected output for invalid password: %v", output)
 
 	// Uncomment to leave setup up for a while, to run tests manually.
 	//	fmt.Printf("Listening to server on host '%v' port '%v'.\n", host, port)
@@ -698,10 +628,8 @@ func TestServerStats(t *testing.T) {
 	}}
 	defer authServer.close()
 	l, err := NewListener("tcp", ":0", authServer, th, 0, 0, false)
-	if err != nil {
-		t.Fatalf("NewListener failed: %v", err)
-	}
-	l.SlowConnectWarnThreshold.Set(time.Duration(time.Nanosecond * 1))
+	require.NoError(t, err)
+	l.SlowConnectWarnThreshold.Set(time.Nanosecond * 1)
 	defer l.Close()
 	go l.Accept()
 
@@ -724,13 +652,11 @@ func TestServerStats(t *testing.T) {
 	// Run an 'error' command.
 	th.SetErr(NewSQLError(ERUnknownComError, SSUnknownComError, "forced query error"))
 	output, ok := runMysql(t, params, "error")
-	if ok {
-		t.Fatalf("mysql should have failed: %v", output)
-	}
-	if !strings.Contains(output, "ERROR 1047 (08S01)") ||
-		!strings.Contains(output, "forced query error") {
-		t.Errorf("Unexpected output for 'error': %v", output)
-	}
+	require.False(t, ok, "mysql should have failed: %v", output)
+
+	assert.Contains(t, output, "ERROR 1047 (08S01)")
+	assert.Contains(t, output, "forced query error", "Unexpected output for 'error': %v", output)
+
 	assert.EqualValues(t, 0, connCount.Get(), "connCount")
 	assert.EqualValues(t, 1, connAccept.Get(), "connAccept")
 	assert.EqualValues(t, 1, connSlow.Get(), "connSlow")
@@ -744,22 +670,18 @@ func TestServerStats(t *testing.T) {
 	gotTimingCounts := timings.Counts()
 	for key, got := range gotTimingCounts {
 		expected := expectedTimingDeltas[key]
-		if got < expected {
-			t.Errorf("Expected Timing count delta %s should be >= %d, got %d", key, expected, got)
-		}
+		assert.GreaterOrEqual(t, got, expected, "Expected Timing count delta %s should be >= %d, got %d", key, expected, got)
 	}
 
 	// Set the slow connect threshold to something high that we don't expect to trigger
-	l.SlowConnectWarnThreshold.Set(time.Duration(time.Second * 1))
+	l.SlowConnectWarnThreshold.Set(time.Second * 1)
 
 	// Run a 'panic' command, other side should panic, recover and
 	// close the connection.
 	output, err = runMysqlWithErr(t, params, "panic")
 	require.Error(t, err)
-	if !strings.Contains(output, "ERROR 2013 (HY000)") ||
-		!strings.Contains(output, "Lost connection to MySQL server during query") {
-		t.Errorf("Unexpected output for 'panic'")
-	}
+	assert.Contains(t, output, "ERROR 2013 (HY000)")
+	assert.Contains(t, output, "Lost connection to MySQL server during query", "Unexpected output for 'panic': %v", output)
 
 	assert.EqualValues(t, 0, connCount.Get(), "connCount")
 	assert.EqualValues(t, 2, connAccept.Get(), "connAccept")
@@ -780,9 +702,7 @@ func TestClearTextServer(t *testing.T) {
 	authServer.method = MysqlClearPassword
 	defer authServer.close()
 	l, err := NewListener("tcp", ":0", authServer, th, 0, 0, false)
-	if err != nil {
-		t.Fatalf("NewListener failed: %v", err)
-	}
+	require.NoError(t, err)
 	defer l.Close()
 	go l.Accept()
 
@@ -809,16 +729,14 @@ func TestClearTextServer(t *testing.T) {
 		if isMariaDB {
 			t.Logf("mysql should have failed but returned: %v\nbut letting it go on MariaDB", output)
 		} else {
-			t.Fatalf("mysql should have failed but returned: %v", output)
+			require.Fail(t, "mysql should have failed but returned: %v", output)
 		}
 	} else {
 		if strings.Contains(output, "No such file or directory") {
 			t.Logf("skipping mysql clear text tests, as the clear text plugin cannot be loaded: %v", err)
 			return
 		}
-		if !strings.Contains(output, "plugin not enabled") {
-			t.Errorf("Unexpected output for 'select rows': %v", output)
-		}
+		assert.Contains(t, output, "plugin not enabled", "Unexpected output for 'select rows': %v", output)
 	}
 
 	// Now enable clear text plugin in client, but server requires SSL.
@@ -827,34 +745,23 @@ func TestClearTextServer(t *testing.T) {
 		sql = enableCleartextPluginPrefix + sql
 	}
 	output, ok = runMysql(t, params, sql)
-	if ok {
-		t.Fatalf("mysql should have failed but returned: %v", output)
-	}
-	if !strings.Contains(output, "Cannot use clear text authentication over non-SSL connections") {
-		t.Errorf("Unexpected output for 'select rows': %v", output)
-	}
+	assert.False(t, ok, "mysql should have failed but returned: %v", output)
+	assert.Contains(t, output, "Cannot use clear text authentication over non-SSL connections", "Unexpected output for 'select rows': %v", output)
 
 	// Now enable clear text plugin, it should now work.
 	l.AllowClearTextWithoutTLS.Set(true)
 	output, ok = runMysql(t, params, sql)
-	if !ok {
-		t.Fatalf("mysql failed: %v", output)
-	}
-	if !strings.Contains(output, "nice name") ||
-		!strings.Contains(output, "nicer name") ||
-		!strings.Contains(output, "2 rows in set") {
-		t.Errorf("Unexpected output for 'select rows'")
-	}
+	require.True(t, ok, "mysql failed: %v", output)
+
+	assert.Contains(t, output, "nice name", "Unexpected output for 'select rows'")
+	assert.Contains(t, output, "nicer name", "Unexpected output for 'select rows'")
+	assert.Contains(t, output, "2 rows in set", "Unexpected output for 'select rows'")
 
 	// Change password, make sure server rejects us.
 	params.Pass = "bad"
 	output, ok = runMysql(t, params, sql)
-	if ok {
-		t.Fatalf("mysql should have failed but returned: %v", output)
-	}
-	if !strings.Contains(output, "Access denied for user 'user1'") {
-		t.Errorf("Unexpected output for 'select rows': %v", output)
-	}
+	assert.False(t, ok, "mysql should have failed but returned: %v", output)
+	assert.Contains(t, output, "Access denied for user 'user1'", "Unexpected output for 'select rows': %v", output)
 }
 
 // TestDialogServer creates a Server that uses the dialog plugin on the client.
@@ -869,9 +776,7 @@ func TestDialogServer(t *testing.T) {
 	authServer.method = MysqlDialog
 	defer authServer.close()
 	l, err := NewListener("tcp", ":0", authServer, th, 0, 0, false)
-	if err != nil {
-		t.Fatalf("NewListener failed: %v", err)
-	}
+	require.NoError(t, err)
 	l.AllowClearTextWithoutTLS.Set(true)
 	defer l.Close()
 	go l.Accept()
@@ -891,14 +796,10 @@ func TestDialogServer(t *testing.T) {
 		t.Logf("skipping dialog plugin tests, as the dialog plugin cannot be loaded: %v", err)
 		return
 	}
-	if !ok {
-		t.Fatalf("mysql failed: %v", output)
-	}
-	if !strings.Contains(output, "nice name") ||
-		!strings.Contains(output, "nicer name") ||
-		!strings.Contains(output, "2 rows in set") {
-		t.Errorf("Unexpected output for 'select rows': %v", output)
-	}
+	require.True(t, ok, "mysql failed: %v", output)
+	assert.Contains(t, output, "nice name", "Unexpected output for 'select rows': %v", output)
+	assert.Contains(t, output, "nicer name", "Unexpected output for 'select rows': %v", output)
+	assert.Contains(t, output, "2 rows in set", "Unexpected output for 'select rows': %v", output)
 }
 
 // TestTLSServer creates a Server with TLS support, then uses mysql
@@ -917,24 +818,18 @@ func TestTLSServer(t *testing.T) {
 	// a check that the common name of the certificate matches the
 	// server host name we connect to.
 	l, err := NewListener("tcp", ":0", authServer, th, 0, 0, false)
-	if err != nil {
-		t.Fatalf("NewListener failed: %v", err)
-	}
+	require.NoError(t, err)
 	defer l.Close()
 
 	// Make sure hostname is added as an entry to /etc/hosts, otherwise ssl handshake will fail
 	host, err := os.Hostname()
-	if err != nil {
-		t.Fatalf("Failed to get os Hostname: %v", err)
-	}
+	require.NoError(t, err)
 
 	port := l.Addr().(*net.TCPAddr).Port
 
 	// Create the certs.
 	root, err := ioutil.TempDir("", "TestTLSServer")
-	if err != nil {
-		t.Fatalf("TempDir failed: %v", err)
-	}
+	require.NoError(t, err)
 	defer os.RemoveAll(root)
 	tlstest.CreateCA(root)
 	tlstest.CreateSignedCert(root, tlstest.CA, "01", "server", host)
@@ -944,13 +839,13 @@ func TestTLSServer(t *testing.T) {
 	serverConfig, err := vttls.ServerConfig(
 		path.Join(root, "server-cert.pem"),
 		path.Join(root, "server-key.pem"),
-		path.Join(root, "ca-cert.pem"))
-	if err != nil {
-		t.Fatalf("TLSServerConfig failed: %v", err)
-	}
+		path.Join(root, "ca-cert.pem"),
+		"")
+	require.NoError(t, err)
 	l.TLSConfig.Store(serverConfig)
 	go l.Accept()
 
+	connCountByTLSVer.ResetAll()
 	// Setup the right parameters.
 	params := &ConnParams{
 		Host:  host,
@@ -967,13 +862,9 @@ func TestTLSServer(t *testing.T) {
 	// Run a 'select rows' command with results.
 	conn, err := Connect(context.Background(), params)
 	//output, ok := runMysql(t, params, "select rows")
-	if err != nil {
-		t.Fatalf("mysql failed: %v", err)
-	}
+	require.NoError(t, err)
 	results, err := conn.ExecuteFetch("select rows", 1000, true)
-	if err != nil {
-		t.Fatalf("mysql fetch failed: %v", err)
-	}
+	require.NoError(t, err)
 	output := ""
 	for _, row := range results.Rows {
 		r := make([]string, 0)
@@ -983,27 +874,20 @@ func TestTLSServer(t *testing.T) {
 		output = output + strings.Join(r, ",") + "\n"
 	}
 
-	if results.Rows[0][1].ToString() != "nice name" ||
-		results.Rows[1][1].ToString() != "nicer name" ||
-		len(results.Rows) != 2 {
-		t.Errorf("Unexpected output for 'select rows': %v", output)
-	}
+	assert.Equal(t, "nice name", results.Rows[0][1].ToString())
+	assert.Equal(t, "nicer name", results.Rows[1][1].ToString())
+	assert.Equal(t, 2, len(results.Rows))
 
 	// make sure this went through SSL
 	results, err = conn.ExecuteFetch("ssl echo", 1000, true)
-	if err != nil {
-		t.Fatalf("mysql fetch failed: %v", err)
-	}
-	if results.Rows[0][0].ToString() != "ON" {
-		t.Errorf("Unexpected output for 'ssl echo': %v", results)
-	}
+	require.NoError(t, err)
+	assert.Equal(t, "ON", results.Rows[0][0].ToString())
 
 	// Find out which TLS version the connection actually used,
 	// so we can check that the corresponding counter was incremented.
 	tlsVersion := conn.conn.(*tls.Conn).ConnectionState().Version
 
 	checkCountForTLSVer(t, tlsVersionToString(tlsVersion), 1)
-	checkCountForTLSVer(t, versionNoTLS, 0)
 	conn.Close()
 
 }
@@ -1024,24 +908,18 @@ func TestTLSRequired(t *testing.T) {
 	// a check that the common name of the certificate matches the
 	// server host name we connect to.
 	l, err := NewListener("tcp", ":0", authServer, th, 0, 0, false)
-	if err != nil {
-		t.Fatalf("NewListener failed: %v", err)
-	}
+	require.NoError(t, err)
 	defer l.Close()
 
 	// Make sure hostname is added as an entry to /etc/hosts, otherwise ssl handshake will fail
 	host, err := os.Hostname()
-	if err != nil {
-		t.Fatalf("Failed to get os Hostname: %v", err)
-	}
+	require.NoError(t, err)
 
 	port := l.Addr().(*net.TCPAddr).Port
 
 	// Create the certs.
 	root, err := ioutil.TempDir("", "TestTLSRequired")
-	if err != nil {
-		t.Fatalf("TempDir failed: %v", err)
-	}
+	require.NoError(t, err)
 	defer os.RemoveAll(root)
 	tlstest.CreateCA(root)
 	tlstest.CreateSignedCert(root, tlstest.CA, "01", "server", host)
@@ -1050,10 +928,9 @@ func TestTLSRequired(t *testing.T) {
 	serverConfig, err := vttls.ServerConfig(
 		path.Join(root, "server-cert.pem"),
 		path.Join(root, "server-key.pem"),
-		path.Join(root, "ca-cert.pem"))
-	if err != nil {
-		t.Fatalf("TLSServerConfig failed: %v", err)
-	}
+		path.Join(root, "ca-cert.pem"),
+		"")
+	require.NoError(t, err)
 	l.TLSConfig.Store(serverConfig)
 	l.RequireSecureTransport = true
 	go l.Accept()
@@ -1066,9 +943,10 @@ func TestTLSRequired(t *testing.T) {
 		Pass:  "password1",
 	}
 	conn, err := Connect(context.Background(), params)
-	if err == nil {
-		t.Fatal("mysql should have failed")
-	}
+	require.NotNil(t, err)
+	require.Contains(t, err.Error(), "Code: UNAVAILABLE")
+	require.Contains(t, err.Error(), "server does not allow insecure connections, client must use SSL/TLS")
+	require.Contains(t, err.Error(), "(errno 1105) (sqlstate HY000)")
 	if conn != nil {
 		conn.Close()
 	}
@@ -1081,9 +959,7 @@ func TestTLSRequired(t *testing.T) {
 	params.SslKey = path.Join(root, "client-key.pem")
 
 	conn, err = Connect(context.Background(), params)
-	if err != nil {
-		t.Fatalf("mysql failed: %v", err)
-	}
+	require.NoError(t, err)
 	if conn != nil {
 		conn.Close()
 	}
@@ -1092,13 +968,8 @@ func TestTLSRequired(t *testing.T) {
 func checkCountForTLSVer(t *testing.T, version string, expected int64) {
 	connCounts := connCountByTLSVer.Counts()
 	count, ok := connCounts[version]
-	if ok {
-		if count != expected {
-			t.Errorf("Expected connection count for version %s to be %d, got %d", version, expected, count)
-		}
-	} else {
-		t.Errorf("No count for version %s found in %v", version, connCounts)
-	}
+	assert.True(t, ok, "No count found for version %s", version)
+	assert.Equal(t, expected, count, "Unexpected connection count for version %s", version)
 }
 
 func TestErrorCodes(t *testing.T) {
@@ -1111,9 +982,7 @@ func TestErrorCodes(t *testing.T) {
 	}}
 	defer authServer.close()
 	l, err := NewListener("tcp", ":0", authServer, th, 0, 0, false)
-	if err != nil {
-		t.Fatalf("NewListener failed: %v", err)
-	}
+	require.NoError(t, err)
 	defer l.Close()
 	go l.Accept()
 
@@ -1129,9 +998,7 @@ func TestErrorCodes(t *testing.T) {
 
 	ctx := context.Background()
 	client, err := Connect(ctx, params)
-	if err != nil {
-		t.Fatalf("error in connect: %v", err)
-	}
+	require.NoError(t, err)
 
 	// Test that the right mysql errno/sqlstate are returned for various
 	// internal vitess errors
@@ -1152,9 +1019,9 @@ func TestErrorCodes(t *testing.T) {
 		{
 			err: vterrors.Errorf(
 				vtrpcpb.Code_INVALID_ARGUMENT,
-				"(errno %v) (sqlstate %v) invalid argument with errno", ERDupEntry, SSDupKey),
+				"(errno %v) (sqlstate %v) invalid argument with errno", ERDupEntry, SSConstraintViolation),
 			code:     ERDupEntry,
-			sqlState: SSDupKey,
+			sqlState: SSConstraintViolation,
 			text:     "invalid argument with errno",
 		},
 		{
@@ -1162,7 +1029,7 @@ func TestErrorCodes(t *testing.T) {
 				vtrpcpb.Code_DEADLINE_EXCEEDED,
 				"connection deadline exceeded"),
 			code:     ERQueryInterrupted,
-			sqlState: SSUnknownSQLState,
+			sqlState: SSQueryInterrupted,
 			text:     "deadline exceeded",
 		},
 		{
@@ -1170,7 +1037,7 @@ func TestErrorCodes(t *testing.T) {
 				vtrpcpb.Code_RESOURCE_EXHAUSTED,
 				"query pool timeout"),
 			code:     ERTooManyUserConnections,
-			sqlState: SSUnknownSQLState,
+			sqlState: SSClientError,
 			text:     "resource exhausted",
 		},
 		{
@@ -1182,27 +1049,17 @@ func TestErrorCodes(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		th.SetErr(NewSQLErrorFromError(test.err))
-		result, err := client.ExecuteFetch("error", 100, false)
-		if err == nil {
-			t.Fatalf("mysql should have failed but returned: %v", result)
-		}
-		serr, ok := err.(*SQLError)
-		if !ok {
-			t.Fatalf("mysql should have returned a SQLError")
-		}
+		t.Run(test.err.Error(), func(t *testing.T) {
+			th.SetErr(NewSQLErrorFromError(test.err))
+			rs, err := client.ExecuteFetch("error", 100, false)
+			require.Error(t, err, "mysql should have failed but returned: %v", rs)
+			serr, ok := err.(*SQLError)
+			require.True(t, ok, "mysql should have returned a SQLError")
 
-		if serr.Number() != test.code {
-			t.Errorf("error in %s: want code %v got %v", test.text, test.code, serr.Number())
-		}
-
-		if serr.SQLState() != test.sqlState {
-			t.Errorf("error in %s: want sqlState %v got %v", test.text, test.sqlState, serr.SQLState())
-		}
-
-		if !strings.Contains(serr.Error(), test.err.Error()) {
-			t.Errorf("error in %s: want err %v got %v", test.text, test.err.Error(), serr.Error())
-		}
+			assert.Equal(t, test.code, serr.Number(), "error in %s: want code %v got %v", test.text, test.code, serr.Number())
+			assert.Equal(t, test.sqlState, serr.SQLState(), "error in %s: want sqlState %v got %v", test.text, test.sqlState, serr.SQLState())
+			assert.Contains(t, serr.Error(), test.err.Error())
+		})
 	}
 }
 
@@ -1219,13 +1076,9 @@ func runMysql(t *testing.T, params *ConnParams, command string) (string, bool) {
 }
 func runMysqlWithErr(t *testing.T, params *ConnParams, command string) (string, error) {
 	dir, err := vtenv.VtMysqlRoot()
-	if err != nil {
-		t.Fatalf("vtenv.VtMysqlRoot failed: %v", err)
-	}
+	require.NoError(t, err)
 	name, err := binaryPath(dir, "mysql")
-	if err != nil {
-		t.Fatalf("binaryPath failed: %v", err)
-	}
+	require.NoError(t, err)
 	// The args contain '-v' 3 times, to switch to very verbose output.
 	// In particular, it has the message:
 	// Query OK, 1 row affected (0.00 sec)
@@ -1307,9 +1160,7 @@ func TestListenerShutdown(t *testing.T) {
 	}}
 	defer authServer.close()
 	l, err := NewListener("tcp", ":0", authServer, th, 0, 0, false)
-	if err != nil {
-		t.Fatalf("NewListener failed: %v", err)
-	}
+	require.NoError(t, err)
 	defer l.Close()
 	go l.Accept()
 
@@ -1322,43 +1173,29 @@ func TestListenerShutdown(t *testing.T) {
 		Uname: "user1",
 		Pass:  "password1",
 	}
-	initialconnRefuse := connRefuse.Get()
+	connRefuse.Reset()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	conn, err := Connect(ctx, params)
-	if err != nil {
-		t.Fatalf("Can't connect to listener: %v", err)
-	}
+	require.NoError(t, err)
 
-	if err := conn.Ping(); err != nil {
-		t.Fatalf("Ping failed: %v", err)
-	}
+	err = conn.Ping()
+	require.NoError(t, err)
 
 	l.Shutdown()
 
-	if connRefuse.Get()-initialconnRefuse != 1 {
-		t.Errorf("Expected connRefuse delta=1, got %d", connRefuse.Get()-initialconnRefuse)
-	}
+	assert.EqualValues(t, 1, connRefuse.Get(), "connRefuse")
 
-	if err := conn.Ping(); err != nil {
-		sqlErr, ok := err.(*SQLError)
-		if !ok {
-			t.Fatalf("Wrong error type: %T", err)
-		}
-		if sqlErr.Number() != ERServerShutdown {
-			t.Fatalf("Unexpected sql error code: %d", sqlErr.Number())
-		}
-		if sqlErr.SQLState() != SSServerShutdown {
-			t.Fatalf("Unexpected error sql state: %s", sqlErr.SQLState())
-		}
-		if sqlErr.Message != "Server shutdown in progress" {
-			t.Fatalf("Unexpected error message: %s", sqlErr.Message)
-		}
-	} else {
-		t.Fatalf("Ping should fail after shutdown")
-	}
+	err = conn.Ping()
+	require.EqualError(t, err, "Server shutdown in progress (errno 1053) (sqlstate 08S01)")
+	sqlErr, ok := err.(*SQLError)
+	require.True(t, ok, "Wrong error type: %T", err)
+
+	require.Equal(t, ERServerShutdown, sqlErr.Number())
+	require.Equal(t, SSNetError, sqlErr.SQLState())
+	require.Equal(t, "Server shutdown in progress", sqlErr.Message)
 }
 
 func TestParseConnAttrs(t *testing.T) {
@@ -1380,20 +1217,12 @@ func TestParseConnAttrs(t *testing.T) {
 		0x72, 0x6f, 0x67, 0x72, 0x61, 0x6d, 0x5f, 0x6e, 0x61, 0x6d, 0x65, 0x05, 0x6d, 0x79, 0x73, 0x71, 0x6c}
 
 	attrs, pos, err := parseConnAttrs(data, 0)
-	if err != nil {
-		t.Fatalf("Failed to read connection attributes: %v", err)
-	}
-	if pos != 113 {
-		t.Fatalf("Unexpeded pos after reading connection attributes: %d instead of 113", pos)
-	}
+	require.NoError(t, err)
+	require.Equal(t, 113, pos)
 	for k, v := range expected {
-		if val, ok := attrs[k]; ok {
-			if val != v {
-				t.Fatalf("Unexpected value found in attrs for key %s: got %s expected %s", k, val, v)
-			}
-		} else {
-			t.Fatalf("Error reading key %s from connection attributes: attrs: %-v", k, attrs)
-		}
+		val, ok := attrs[k]
+		require.True(t, ok, "Error reading key %s from connection attributes: attrs: %-v", k, attrs)
+		require.Equal(t, v, val, "Unexpected value found in attrs for key %s", k)
 	}
 }
 
@@ -1425,7 +1254,7 @@ func TestServerFlush(t *testing.T) {
 	flds, err := c.Fields()
 	require.NoError(t, err)
 	if duration, want := time.Since(start), 20*time.Millisecond; duration < *mysqlServerFlushDelay || duration > want {
-		t.Errorf("duration: %v, want between %v and %v", duration, *mysqlServerFlushDelay, want)
+		assert.Fail(t, "duration: %v, want between %v and %v", duration, *mysqlServerFlushDelay, want)
 	}
 	want1 := []*querypb.Field{{
 		Name: "result",
@@ -1436,7 +1265,7 @@ func TestServerFlush(t *testing.T) {
 	row, err := c.FetchNext()
 	require.NoError(t, err)
 	if duration, want := time.Since(start), 50*time.Millisecond; duration < want {
-		t.Errorf("duration: %v, want > %v", duration, want)
+		assert.Fail(t, "duration: %v, want > %v", duration, want)
 	}
 	want2 := []sqltypes.Value{sqltypes.MakeTrusted(querypb.Type_VARCHAR, []byte("delayed"))}
 	assert.Equal(t, want2, row)

@@ -20,6 +20,8 @@ import (
 	"errors"
 	"fmt"
 
+	"vitess.io/vitess/go/vt/vtgate/semantics"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -81,8 +83,9 @@ func newMemorySort(plan logicalPlan, orderBy sqlparser.OrderBy) (*memorySort, er
 			return nil, fmt.Errorf("unsupported: memory sort: order by must reference a column in the select list: %s", sqlparser.String(order))
 		}
 		ob := engine.OrderbyParams{
-			Col:  colNumber,
-			Desc: order.Direction == sqlparser.DescOrder,
+			Col:             colNumber,
+			WeightStringCol: -1,
+			Desc:            order.Direction == sqlparser.DescOrder,
 		}
 		ms.eMemorySort.OrderBy = append(ms.eMemorySort.OrderBy, ob)
 	}
@@ -108,20 +111,29 @@ func (ms *memorySort) SetLimit(limit *sqlparser.Limit) error {
 func (ms *memorySort) Wireup(plan logicalPlan, jt *jointab) error {
 	for i, orderby := range ms.eMemorySort.OrderBy {
 		rc := ms.resultColumns[orderby.Col]
-		if sqltypes.IsText(rc.column.typ) {
+		// Add a weight_string column if we know that the column is a textual column or if its type is unknown
+		if sqltypes.IsText(rc.column.typ) || rc.column.typ == sqltypes.Null {
 			// If a weight string was previously requested, reuse it.
 			if weightcolNumber, ok := ms.weightStrings[rc]; ok {
-				ms.eMemorySort.OrderBy[i].Col = weightcolNumber
+				ms.eMemorySort.OrderBy[i].WeightStringCol = weightcolNumber
 				continue
 			}
 			weightcolNumber, err := ms.input.SupplyWeightString(orderby.Col)
 			if err != nil {
+				_, isUnsupportedErr := err.(UnsupportedSupplyWeightString)
+				if isUnsupportedErr {
+					continue
+				}
 				return err
 			}
 			ms.weightStrings[rc] = weightcolNumber
-			ms.eMemorySort.OrderBy[i].Col = weightcolNumber
+			ms.eMemorySort.OrderBy[i].WeightStringCol = weightcolNumber
 			ms.eMemorySort.TruncateColumnCount = len(ms.resultColumns)
 		}
 	}
 	return ms.input.Wireup(plan, jt)
+}
+
+func (ms *memorySort) WireupV4(semTable *semantics.SemTable) error {
+	return ms.input.WireupV4(semTable)
 }

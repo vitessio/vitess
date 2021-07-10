@@ -1,20 +1,48 @@
 package planbuilder
 
 import (
-	"vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/vindexes"
-
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
+
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 // Error messages for CreateView queries
 const (
 	ViewDifferentKeyspace string = "Select query does not belong to the same keyspace as the view statement"
 	ViewComplex           string = "Complex select queries are not supported in create or alter view statements"
+	DifferentDestinations string = "Tables or Views specified in the query do not belong to the same destination"
 )
+
+type fkStrategy int
+
+const (
+	fkAllow fkStrategy = iota
+	fkDisallow
+)
+
+var fkStrategyMap = map[string]fkStrategy{
+	"allow":    fkAllow,
+	"disallow": fkDisallow,
+}
+
+type fkContraint struct {
+	found bool
+}
+
+func (fk *fkContraint) FkWalk(node sqlparser.SQLNode) (kontinue bool, err error) {
+	switch node.(type) {
+	case *sqlparser.CreateTable, *sqlparser.AlterTable,
+		*sqlparser.TableSpec, *sqlparser.AddConstraintDefinition, *sqlparser.ConstraintDefinition:
+		return true, nil
+	case *sqlparser.ForeignKeyDefinition:
+		fk.found = true
+	}
+	return false, nil
+}
 
 // buildGeneralDDLPlan builds a general DDL plan, which can be either normal DDL or online DDL.
 // The two behave compeltely differently, and have two very different primitives.
@@ -23,83 +51,71 @@ const (
 // a session context. It's only when we Execute() the primitive that we have that context.
 // This is why we return a compound primitive (DDL) which contains fully populated primitives (Send & OnlineDDL),
 // and which chooses which of the two to invoke at runtime.
-func buildGeneralDDLPlan(sql string, ddlStatement sqlparser.DDLStatement, vschema ContextVSchema) (engine.Primitive, error) {
-	if vschema.Destination() != nil {
-		return buildByPassDDLPlan(sql, vschema)
-	}
-
-	normalDDLPlan, onlineDDLPlan, err := buildDDLPlans(sql, ddlStatement, vschema)
+func buildGeneralDDLPlan(sql string, ddlStatement sqlparser.DDLStatement, reservedVars sqlparser.BindVars, vschema ContextVSchema) (engine.Primitive, error) {
+	normalDDLPlan, onlineDDLPlan, err := buildDDLPlans(sql, ddlStatement, reservedVars, vschema)
 	if err != nil {
 		return nil, err
+	}
+
+	if ddlStatement.IsTemporary() {
+		err := vschema.ErrorIfShardedF(normalDDLPlan.Keyspace, "temporary table", "Temporary table not supported in sharded database %s", normalDDLPlan.Keyspace.Name)
+		if err != nil {
+			return nil, err
+		}
+		onlineDDLPlan = nil // emptying this so it does not accidentally gets used somewhere
 	}
 
 	return &engine.DDL{
-		Keyspace:  normalDDLPlan.Keyspace,
-		SQL:       normalDDLPlan.Query,
-		DDL:       ddlStatement,
-		NormalDDL: normalDDLPlan,
-		OnlineDDL: onlineDDLPlan,
+		Keyspace:         normalDDLPlan.Keyspace,
+		SQL:              normalDDLPlan.Query,
+		DDL:              ddlStatement,
+		NormalDDL:        normalDDLPlan,
+		OnlineDDL:        onlineDDLPlan,
+		OnlineDDLEnabled: *enableOnlineDDL,
+
+		CreateTempTable: ddlStatement.IsTemporary(),
 	}, nil
 }
 
-func buildByPassDDLPlan(sql string, vschema ContextVSchema) (engine.Primitive, error) {
-	keyspace, err := vschema.DefaultKeyspace()
-	if err != nil {
-		return nil, err
-	}
-	return &engine.Send{
-		Keyspace:          keyspace,
-		TargetDestination: vschema.Destination(),
-		Query:             sql,
-	}, nil
-}
-
-func buildDDLPlans(sql string, ddlStatement sqlparser.DDLStatement, vschema ContextVSchema) (*engine.Send, *engine.OnlineDDL, error) {
+func buildDDLPlans(sql string, ddlStatement sqlparser.DDLStatement, reservedVars sqlparser.BindVars, vschema ContextVSchema) (*engine.Send, *engine.OnlineDDL, error) {
 	var destination key.Destination
 	var keyspace *vindexes.Keyspace
 	var err error
 
 	switch ddl := ddlStatement.(type) {
-	case *sqlparser.CreateIndex, *sqlparser.AlterTable:
-		// For Create index and Alter Table, the table must already exist
+	case *sqlparser.AlterTable, *sqlparser.TruncateTable:
+		err = checkFKError(vschema, ddlStatement)
+		if err != nil {
+			return nil, nil, err
+		}
+		// For Alter Table and other statements, the table must already exist
 		// We should find the target of the query from this tables location
 		destination, keyspace, err = findTableDestinationAndKeyspace(vschema, ddlStatement)
-		if err != nil {
-			return nil, nil, err
-		}
-	case *sqlparser.DDL:
-		// For DDL, it is only required that the keyspace exist
-		// We should remove the keyspace name from the table name, as the database name in MySQL might be different than the keyspace name
-		destination, keyspace, _, err = vschema.TargetDestination(ddlStatement.GetTable().Qualifier.String())
-		if err != nil {
-			return nil, nil, err
-		}
-		ddlStatement.SetTable("", ddlStatement.GetTable().Name.String())
 	case *sqlparser.CreateView:
-		destination, keyspace, err = buildCreateView(vschema, ddl)
-		if err != nil {
-			return nil, nil, err
-		}
+		destination, keyspace, err = buildCreateView(vschema, ddl, reservedVars)
 	case *sqlparser.AlterView:
-		destination, keyspace, err = buildAlterView(vschema, ddl)
+		destination, keyspace, err = buildAlterView(vschema, ddl, reservedVars)
+	case *sqlparser.CreateTable:
+		err = checkFKError(vschema, ddlStatement)
 		if err != nil {
 			return nil, nil, err
 		}
-	case *sqlparser.CreateTable:
 		destination, keyspace, _, err = vschema.TargetDestination(ddlStatement.GetTable().Qualifier.String())
+		if err != nil {
+			return nil, nil, err
+		}
 		// Remove the keyspace name as the database name might be different.
 		ddlStatement.SetTable("", ddlStatement.GetTable().Name.String())
-		if err != nil {
-			return nil, nil, err
-		}
 	case *sqlparser.DropView, *sqlparser.DropTable:
 		destination, keyspace, err = buildDropViewOrTable(vschema, ddlStatement)
-		if err != nil {
-			return nil, nil, err
-		}
-
+	case *sqlparser.RenameTable:
+		destination, keyspace, err = buildRenameTable(vschema, ddl)
 	default:
-		return nil, nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "BUG: unexpected statement type: %T", ddlStatement)
+		return nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unexpected ddl statement type: %T", ddlStatement)
+	}
+
+	if err != nil {
+		return nil, nil, err
 	}
 
 	if destination == nil {
@@ -123,6 +139,17 @@ func buildDDLPlans(sql string, ddlStatement sqlparser.DDLStatement, vschema Cont
 			DDL:      ddlStatement,
 			SQL:      query,
 		}, nil
+}
+
+func checkFKError(vschema ContextVSchema, ddlStatement sqlparser.DDLStatement) error {
+	if fkStrategyMap[vschema.ForeignKeyMode()] == fkDisallow {
+		fk := &fkContraint{}
+		_ = sqlparser.Walk(fk.FkWalk, ddlStatement)
+		if fk.found {
+			return vterrors.Errorf(vtrpcpb.Code_ABORTED, "foreign key constraint is not allowed")
+		}
+	}
+	return nil
 }
 
 func findTableDestinationAndKeyspace(vschema ContextVSchema, ddlStatement sqlparser.DDLStatement) (key.Destination, *vindexes.Keyspace, error) {
@@ -150,7 +177,7 @@ func findTableDestinationAndKeyspace(vschema ContextVSchema, ddlStatement sqlpar
 	return destination, keyspace, nil
 }
 
-func buildAlterView(vschema ContextVSchema, ddl *sqlparser.AlterView) (key.Destination, *vindexes.Keyspace, error) {
+func buildAlterView(vschema ContextVSchema, ddl *sqlparser.AlterView, reservedVars sqlparser.BindVars) (key.Destination, *vindexes.Keyspace, error) {
 	// For Alter View, we require that the view exist and the select query can be satisfied within the keyspace itself
 	// We should remove the keyspace name from the table name, as the database name in MySQL might be different than the keyspace name
 	destination, keyspace, err := findTableDestinationAndKeyspace(vschema, ddl)
@@ -159,21 +186,21 @@ func buildAlterView(vschema ContextVSchema, ddl *sqlparser.AlterView) (key.Desti
 	}
 
 	var selectPlan engine.Primitive
-	selectPlan, err = createInstructionFor(sqlparser.String(ddl.Select), ddl.Select, vschema)
+	selectPlan, err = createInstructionFor(sqlparser.String(ddl.Select), ddl.Select, reservedVars, vschema)
 	if err != nil {
 		return nil, nil, err
 	}
 	routePlan, isRoute := selectPlan.(*engine.Route)
 	if !isRoute {
-		return nil, nil, vterrors.New(vtrpc.Code_INVALID_ARGUMENT, ViewComplex)
+		return nil, nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, ViewComplex)
 	}
 	if keyspace.Name != routePlan.GetKeyspaceName() {
-		return nil, nil, vterrors.New(vtrpc.Code_INVALID_ARGUMENT, ViewDifferentKeyspace)
+		return nil, nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, ViewDifferentKeyspace)
 	}
 	if routePlan.Opcode != engine.SelectUnsharded && routePlan.Opcode != engine.SelectEqualUnique && routePlan.Opcode != engine.SelectScatter {
-		return nil, nil, vterrors.New(vtrpc.Code_INVALID_ARGUMENT, ViewComplex)
+		return nil, nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, ViewComplex)
 	}
-	sqlparser.Rewrite(ddl.Select, func(cursor *sqlparser.Cursor) bool {
+	_ = sqlparser.Rewrite(ddl.Select, func(cursor *sqlparser.Cursor) bool {
 		switch tableName := cursor.Node().(type) {
 		case sqlparser.TableName:
 			cursor.Replace(sqlparser.TableName{
@@ -185,7 +212,7 @@ func buildAlterView(vschema ContextVSchema, ddl *sqlparser.AlterView) (key.Desti
 	return destination, keyspace, nil
 }
 
-func buildCreateView(vschema ContextVSchema, ddl *sqlparser.CreateView) (key.Destination, *vindexes.Keyspace, error) {
+func buildCreateView(vschema ContextVSchema, ddl *sqlparser.CreateView, reservedVars sqlparser.BindVars) (key.Destination, *vindexes.Keyspace, error) {
 	// For Create View, we require that the keyspace exist and the select query can be satisfied within the keyspace itself
 	// We should remove the keyspace name from the table name, as the database name in MySQL might be different than the keyspace name
 	destination, keyspace, _, err := vschema.TargetDestination(ddl.ViewName.Qualifier.String())
@@ -195,21 +222,21 @@ func buildCreateView(vschema ContextVSchema, ddl *sqlparser.CreateView) (key.Des
 	ddl.ViewName.Qualifier = sqlparser.NewTableIdent("")
 
 	var selectPlan engine.Primitive
-	selectPlan, err = createInstructionFor(sqlparser.String(ddl.Select), ddl.Select, vschema)
+	selectPlan, err = createInstructionFor(sqlparser.String(ddl.Select), ddl.Select, reservedVars, vschema)
 	if err != nil {
 		return nil, nil, err
 	}
 	routePlan, isRoute := selectPlan.(*engine.Route)
 	if !isRoute {
-		return nil, nil, vterrors.New(vtrpc.Code_INVALID_ARGUMENT, ViewComplex)
+		return nil, nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, ViewComplex)
 	}
 	if keyspace.Name != routePlan.GetKeyspaceName() {
-		return nil, nil, vterrors.New(vtrpc.Code_INVALID_ARGUMENT, ViewDifferentKeyspace)
+		return nil, nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, ViewDifferentKeyspace)
 	}
 	if routePlan.Opcode != engine.SelectUnsharded && routePlan.Opcode != engine.SelectEqualUnique && routePlan.Opcode != engine.SelectScatter {
-		return nil, nil, vterrors.New(vtrpc.Code_INVALID_ARGUMENT, ViewComplex)
+		return nil, nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, ViewComplex)
 	}
-	sqlparser.Rewrite(ddl.Select, func(cursor *sqlparser.Cursor) bool {
+	_ = sqlparser.Rewrite(ddl.Select, func(cursor *sqlparser.Cursor) bool {
 		switch tableName := cursor.Node().(type) {
 		case sqlparser.TableName:
 			cursor.Replace(sqlparser.TableName{
@@ -257,7 +284,63 @@ func buildDropViewOrTable(vschema ContextVSchema, ddlStatement sqlparser.DDLStat
 			keyspace = keyspaceTab
 		}
 		if destination != destinationTab || keyspace != keyspaceTab {
-			return nil, nil, vterrors.New(vtrpc.Code_INVALID_ARGUMENT, "Tables or Views specified in the query do not belong to the same destination")
+			return nil, nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, DifferentDestinations)
+		}
+	}
+	return destination, keyspace, nil
+}
+
+func buildRenameTable(vschema ContextVSchema, renameTable *sqlparser.RenameTable) (key.Destination, *vindexes.Keyspace, error) {
+	var destination key.Destination
+	var keyspace *vindexes.Keyspace
+
+	for _, tabPair := range renameTable.TablePairs {
+		var destinationFrom key.Destination
+		var keyspaceFrom *vindexes.Keyspace
+		var table *vindexes.Table
+		var err error
+		table, _, _, _, destinationFrom, err = vschema.FindTableOrVindex(tabPair.FromTable)
+
+		if err != nil {
+			_, isNotFound := err.(vindexes.NotFoundError)
+			if !isNotFound {
+				return nil, nil, err
+			}
+		}
+		if table == nil {
+			destinationFrom, keyspaceFrom, _, err = vschema.TargetDestination(tabPair.FromTable.Qualifier.String())
+			if err != nil {
+				return nil, nil, err
+			}
+			tabPair.FromTable = sqlparser.TableName{
+				Name: tabPair.FromTable.Name,
+			}
+		} else {
+			keyspaceFrom = table.Keyspace
+			tabPair.FromTable = sqlparser.TableName{
+				Name: table.Name,
+			}
+		}
+
+		if tabPair.ToTable.Qualifier.String() != "" {
+			_, keyspaceTo, _, err := vschema.TargetDestination(tabPair.ToTable.Qualifier.String())
+			if err != nil {
+				return nil, nil, err
+			}
+			if keyspaceTo.Name != keyspaceFrom.Name {
+				return nil, nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.ForbidSchemaChange, "Changing schema from '%s' to '%s' is not allowed", keyspaceFrom.Name, keyspaceTo.Name)
+			}
+			tabPair.ToTable = sqlparser.TableName{
+				Name: tabPair.ToTable.Name,
+			}
+		}
+
+		if destination == nil && keyspace == nil {
+			destination = destinationFrom
+			keyspace = keyspaceFrom
+		}
+		if destination != destinationFrom || keyspace != keyspaceFrom {
+			return nil, nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, DifferentDestinations)
 		}
 	}
 	return destination, keyspace, nil

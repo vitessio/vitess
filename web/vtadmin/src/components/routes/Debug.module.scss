@@ -1,0 +1,53 @@
+.container section {
+  margin-bottom: 64px;
+}
+
+.buttonContainer {
+  column-gap: 16px;
+  display: grid;
+  grid-template-columns: repeat(4, min-content);
+  row-gap: 24px;
+}
+
+.iconContainer {
+  column-gap: 0;
+  display: grid;
+  grid-template-columns: repeat(12, min-content);
+  row-gap: 0;
+}
+
+.icon {
+  fill: var(--colorPrimary);
+  padding: 16px;
+  transition: fill 0.1s ease-in-out;
+
+  &:hover {
+    background: var(--backgroundSecondaryHighlight);
+    fill: var(--colorPrimary200);
+  }
+}
+
+.inputContainer {
+  display: grid;
+  grid-template-columns: 100%;
+  row-gap: 16px;
+  max-width: 640px;
+}
+
+.inputRow {
+  display: grid;
+  grid-template-columns: 1fr min-content min-content;
+  column-gap: 8px;
+  max-width: 100%;
+}
+
+.dropdownContainer {
+  display: grid;
+  grid-gap: 8px;
+}
+
+.dropdownRow {
+  display: grid;
+  grid-gap: 8px;
+  grid-template-columns: repeat(4, min-content);
+}

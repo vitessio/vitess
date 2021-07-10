@@ -24,6 +24,7 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
@@ -76,6 +77,10 @@ type Engine struct {
 
 	// dbCreationFailed is for preventing log spam.
 	dbCreationFailed bool
+
+	tableFileSizeGauge      *stats.GaugesWithSingleLabel
+	tableAllocatedSizeGauge *stats.GaugesWithSingleLabel
+	innoDbReadRowsGauge     *stats.Gauge
 }
 
 // NewEngine creates a new Engine.
@@ -93,6 +98,9 @@ func NewEngine(env tabletenv.Env) *Engine {
 		reloadTime: reloadTime,
 	}
 	_ = env.Exporter().NewGaugeDurationFunc("SchemaReloadTime", "vttablet keeps table schemas in its own memory and periodically refreshes it from MySQL. This config controls the reload time.", se.ticks.Interval)
+	se.tableFileSizeGauge = env.Exporter().NewGaugesWithSingleLabel("TableFileSize", "tracks table file size", "Table")
+	se.tableAllocatedSizeGauge = env.Exporter().NewGaugesWithSingleLabel("TableAllocatedSize", "tracks table allocated size", "Table")
+	se.innoDbReadRowsGauge = env.Exporter().NewGauge("InnodbRowsRead", "number of rows read by mysql")
 
 	env.Exporter().HandleFunc("/debug/schema", se.handleDebugSchema)
 	env.Exporter().HandleFunc("/schemaz", func(w http.ResponseWriter, r *http.Request) {
@@ -284,9 +292,7 @@ func (se *Engine) ReloadAt(ctx context.Context, pos mysql.Position) error {
 
 // reload reloads the schema. It can also be used to initialize it.
 func (se *Engine) reload(ctx context.Context) error {
-	//start := time.Now()
 	defer func() {
-		//log.Infof("Time taken to load the schema: %v", time.Since(start))
 		se.env.LogError()
 	}()
 
@@ -305,7 +311,12 @@ func (se *Engine) reload(ctx context.Context) error {
 	if se.SkipMetaCheck {
 		return nil
 	}
-	tableData, err := conn.Exec(ctx, mysql.BaseShowTables, maxTableCount, false)
+	tableData, err := conn.Exec(ctx, conn.BaseShowTables(), maxTableCount, false)
+	if err != nil {
+		return err
+	}
+
+	err = se.updateInnoDBRowsRead(ctx, conn)
 	if err != nil {
 		return err
 	}
@@ -321,19 +332,32 @@ func (se *Engine) reload(ctx context.Context) error {
 		tableName := row[0].ToString()
 		curTables[tableName] = true
 		createTime, _ := evalengine.ToInt64(row[2])
+		fileSize, _ := evalengine.ToUint64(row[4])
+		allocatedSize, _ := evalengine.ToUint64(row[5])
+
+		// publish the size metrics
+		se.tableFileSizeGauge.Set(tableName, int64(fileSize))
+		se.tableAllocatedSizeGauge.Set(tableName, int64(allocatedSize))
+
 		// TODO(sougou); find a better way detect changed tables. This method
 		// seems unreliable. The endtoend test flags all tables as changed.
-		if _, ok := se.tables[tableName]; ok && createTime < se.lastChange {
+		tbl, isInTablesMap := se.tables[tableName]
+		if isInTablesMap && createTime < se.lastChange {
+			tbl.FileSize = fileSize
+			tbl.AllocatedSize = allocatedSize
 			continue
 		}
+
 		log.V(2).Infof("Reading schema for table: %s", tableName)
-		table, err := LoadTable(conn, tableName, row[1].ToString(), row[3].ToString())
+		table, err := LoadTable(conn, tableName, row[3].ToString())
 		if err != nil {
 			rec.RecordError(err)
 			continue
 		}
+		table.FileSize = fileSize
+		table.AllocatedSize = allocatedSize
 		changedTables[tableName] = table
-		if _, ok := se.tables[tableName]; ok {
+		if isInTablesMap {
 			altered = append(altered, tableName)
 		} else {
 			created = append(created, tableName)
@@ -346,11 +370,10 @@ func (se *Engine) reload(ctx context.Context) error {
 	// Compute and handle dropped tables.
 	var dropped []string
 	for tableName := range se.tables {
-		if curTables[tableName] {
-			continue
+		if !curTables[tableName] {
+			dropped = append(dropped, tableName)
+			delete(se.tables, tableName)
 		}
-		dropped = append(dropped, tableName)
-		delete(se.tables, tableName)
 	}
 
 	// Populate PKColumns for changed tables.
@@ -367,6 +390,25 @@ func (se *Engine) reload(ctx context.Context) error {
 		log.Infof("schema engine created %v, altered %v, dropped %v", created, altered, dropped)
 	}
 	se.broadcast(created, altered, dropped)
+	return nil
+}
+
+func (se *Engine) updateInnoDBRowsRead(ctx context.Context, conn *connpool.DBConn) error {
+	readRowsData, err := conn.Exec(ctx, mysql.ShowRowsRead, 10, false)
+	if err != nil {
+		return err
+	}
+
+	if len(readRowsData.Rows) == 1 && len(readRowsData.Rows[0]) == 2 {
+		value, err := evalengine.ToInt64(readRowsData.Rows[0][1])
+		if err != nil {
+			return err
+		}
+
+		se.innoDbReadRowsGauge.Set(value)
+	} else {
+		log.Warningf("got strange results from 'show status': %v", readRowsData.Rows)
+	}
 	return nil
 }
 
@@ -512,10 +554,10 @@ func (se *Engine) handleDebugSchema(response http.ResponseWriter, request *http.
 		acl.SendError(response, err)
 		return
 	}
-	se.handleHTTPSchema(response, request)
+	se.handleHTTPSchema(response)
 }
 
-func (se *Engine) handleHTTPSchema(response http.ResponseWriter, request *http.Request) {
+func (se *Engine) handleHTTPSchema(response http.ResponseWriter) {
 	// Ensure schema engine is Open. If vttablet came up in a non_serving role,
 	// the schema engine may not have been initialized.
 	err := se.Open()

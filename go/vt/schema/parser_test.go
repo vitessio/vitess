@@ -89,3 +89,48 @@ func TestNormalizeOnlineDDL(t *testing.T) {
 		})
 	}
 }
+
+func TestReplaceTableNameInCreateTableStatement(t *testing.T) {
+	replacementTableName := `my_table`
+	tt := []struct {
+		stmt    string
+		expect  string
+		isError bool
+	}{
+		{
+			stmt:    "CREATE TABLE tbl (id int)",
+			isError: true,
+		},
+		{
+			stmt:   "CREATE TABLE `tbl` (id int)",
+			expect: "CREATE TABLE `my_table` (id int)",
+		},
+		{
+			stmt:   "CREATE     TABLE     `tbl`    (id int)",
+			expect: "CREATE     TABLE     `my_table`    (id int)",
+		},
+		{
+			stmt:   "create table `tbl` (id int)",
+			expect: "create table `my_table` (id int)",
+		},
+		{
+			stmt:    "CREATE TABLE `schema`.`tbl` (id int)",
+			isError: true,
+		},
+		{
+			stmt:    "CREATE TABLE IF NOT EXISTS `tbl` (id int)",
+			isError: true,
+		},
+	}
+	for _, ts := range tt {
+		t.Run(ts.stmt, func(*testing.T) {
+			result, err := ReplaceTableNameInCreateTableStatement(ts.stmt, replacementTableName)
+			if ts.isError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, ts.expect, result)
+			}
+		})
+	}
+}

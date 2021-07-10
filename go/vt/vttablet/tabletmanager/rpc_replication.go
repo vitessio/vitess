@@ -22,6 +22,8 @@ import (
 	"strings"
 	"time"
 
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+
 	"context"
 
 	"vitess.io/vitess/go/mysql"
@@ -583,6 +585,10 @@ func (tm *TabletManager) setMasterLocked(ctx context.Context, parentAlias *topod
 	}
 	// Update the master address only if needed.
 	// We don't want to interrupt replication for no reason.
+	if parentAlias == nil {
+		// if there is no master in the shard, return an error so that we can retry
+		return vterrors.New(vtrpc.Code_FAILED_PRECONDITION, "Shard masterAlias is nil")
+	}
 	parent, err := tm.TopoServer.GetTablet(ctx, parentAlias)
 	if err != nil {
 		return err

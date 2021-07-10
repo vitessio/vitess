@@ -23,37 +23,38 @@ import (
 var (
 	debug = false // set to true to always use local env vtdataroot for local debugging
 
-	originalVtdataroot string
-	vtdataroot         string
+	originalVtdataroot    string
+	vtdataroot            string
+	mainClusterConfig     *ClusterConfig
+	externalClusterConfig *ClusterConfig
 )
 
-var globalConfig = struct {
-	hostname        string
-	topoPort        int
-	vtctldPort      int
-	vtctldGrpcPort  int
-	tmpDir          string
-	vtgatePort      int
-	vtgateGrpcPort  int
-	vtgateMySQLPort int
-	tabletTypes     string
-}{"localhost", 2379, 15000, 15999, vtdataroot + "/tmp",
-	15001, 15991, 15306, "MASTER,REPLICA"}
-
-var (
-	tabletPortBase      = 15000
-	tabletGrpcPortBase  = 20000
-	tabletMysqlPortBase = 25000
-)
+// ClusterConfig defines the parameters like ports, tmpDir, tablet types which uniquely define a vitess cluster
+type ClusterConfig struct {
+	hostname            string
+	topoPort            int
+	vtctldPort          int
+	vtctldGrpcPort      int
+	vtdataroot          string
+	tmpDir              string
+	vtgatePort          int
+	vtgateGrpcPort      int
+	vtgateMySQLPort     int
+	tabletTypes         string
+	tabletPortBase      int
+	tabletGrpcPortBase  int
+	tabletMysqlPortBase int
+}
 
 // VitessCluster represents all components within the test cluster
 type VitessCluster struct {
-	Name        string
-	Cells       map[string]*Cell
-	Topo        *cluster.TopoProcess
-	Vtctld      *cluster.VtctldProcess
-	Vtctl       *cluster.VtctlProcess
-	VtctlClient *cluster.VtctlClientProcess
+	ClusterConfig *ClusterConfig
+	Name          string
+	Cells         map[string]*Cell
+	Topo          *cluster.TopoProcess
+	Vtctld        *cluster.VtctldProcess
+	Vtctl         *cluster.VtctlProcess
+	VtctlClient   *cluster.VtctlClientProcess
 }
 
 // Cell represents a Vitess cell within the test cluster
@@ -85,37 +86,66 @@ type Tablet struct {
 	DbServer *cluster.MysqlctlProcess
 }
 
-func init() {
-	originalVtdataroot = os.Getenv("VTDATAROOT")
-}
-
-func initGlobals() {
-	rand.Seed(time.Now().UTC().UnixNano())
+func setTempVtDataRoot() string {
 	dirSuffix := 100000 + rand.Intn(999999-100000) // 6 digits
 	if debug {
 		vtdataroot = originalVtdataroot
 	} else {
 		vtdataroot = path.Join(originalVtdataroot, fmt.Sprintf("vreple2e_%d", dirSuffix))
 	}
-	globalConfig.tmpDir = vtdataroot + "/tmp"
 	if _, err := os.Stat(vtdataroot); os.IsNotExist(err) {
 		os.Mkdir(vtdataroot, 0700)
 	}
 	_ = os.Setenv("VTDATAROOT", vtdataroot)
 	fmt.Printf("VTDATAROOT is %s\n", vtdataroot)
+	return vtdataroot
 }
 
-// NewVitessCluster creates an entire VitessCluster for e2e testing
-func NewVitessCluster(name string) (cluster *VitessCluster, err error) {
-	return &VitessCluster{Name: name, Cells: make(map[string]*Cell)}, nil
+func getClusterConfig(idx int, dataRootDir string) *ClusterConfig {
+	basePort := 15000
+	etcdPort := 2379
+
+	basePort += idx * 10000
+	etcdPort += idx * 10000
+	if _, err := os.Stat(dataRootDir); os.IsNotExist(err) {
+		os.Mkdir(dataRootDir, 0700)
+	}
+
+	return &ClusterConfig{
+		hostname:            "localhost",
+		topoPort:            etcdPort,
+		vtctldPort:          basePort,
+		vtctldGrpcPort:      basePort + 999,
+		tmpDir:              dataRootDir + "/tmp",
+		vtgatePort:          basePort + 1,
+		vtgateGrpcPort:      basePort + 991,
+		vtgateMySQLPort:     basePort + 306,
+		tabletTypes:         "master",
+		vtdataroot:          dataRootDir,
+		tabletPortBase:      basePort + 1000,
+		tabletGrpcPortBase:  basePort + 1991,
+		tabletMysqlPortBase: basePort + 1306,
+	}
 }
 
-// InitCluster creates the global processes needed for a cluster
-func InitCluster(t *testing.T, cellNames []string) *VitessCluster {
-	initGlobals()
-	vc, _ := NewVitessCluster("Vdemo")
+func init() {
+	rand.Seed(time.Now().UTC().UnixNano())
+	originalVtdataroot = os.Getenv("VTDATAROOT")
+	var mainVtDataRoot string
+	if debug {
+		mainVtDataRoot = originalVtdataroot
+	} else {
+		mainVtDataRoot = setTempVtDataRoot()
+	}
+	mainClusterConfig = getClusterConfig(0, mainVtDataRoot)
+	externalClusterConfig = getClusterConfig(1, mainVtDataRoot+"/ext")
+}
+
+// NewVitessCluster starts a basic cluster with vtgate, vtctld and the topo
+func NewVitessCluster(t *testing.T, name string, cellNames []string, clusterConfig *ClusterConfig) *VitessCluster {
+	vc := &VitessCluster{Name: name, Cells: make(map[string]*Cell), ClusterConfig: clusterConfig}
 	require.NotNil(t, vc)
-	topo := cluster.TopoProcessInstance(globalConfig.topoPort, globalConfig.topoPort*10, globalConfig.hostname, "etcd2", "global")
+	topo := cluster.TopoProcessInstance(vc.ClusterConfig.topoPort, vc.ClusterConfig.topoPort+1, vc.ClusterConfig.hostname, "etcd2", "global")
 
 	require.NotNil(t, topo)
 	require.Nil(t, topo.Setup("etcd2", nil))
@@ -125,14 +155,14 @@ func InitCluster(t *testing.T, cellNames []string) *VitessCluster {
 		topo.ManageTopoDir("mkdir", "/vitess/"+cellName)
 	}
 
-	vtctld := cluster.VtctldProcessInstance(globalConfig.vtctldPort, globalConfig.vtctldGrpcPort,
-		globalConfig.topoPort, globalConfig.hostname, globalConfig.tmpDir)
+	vtctld := cluster.VtctldProcessInstance(vc.ClusterConfig.vtctldPort, vc.ClusterConfig.vtctldGrpcPort,
+		vc.ClusterConfig.topoPort, vc.ClusterConfig.hostname, vc.ClusterConfig.tmpDir)
 	vc.Vtctld = vtctld
 	require.NotNil(t, vc.Vtctld)
 	// use first cell as `-cell`
 	vc.Vtctld.Setup(cellNames[0])
 
-	vc.Vtctl = cluster.VtctlProcessInstance(globalConfig.topoPort, globalConfig.hostname)
+	vc.Vtctl = cluster.VtctlProcessInstance(vc.ClusterConfig.topoPort, vc.ClusterConfig.hostname)
 	require.NotNil(t, vc.Vtctl)
 	for _, cellName := range cellNames {
 		vc.Vtctl.AddCellInfo(cellName)
@@ -141,7 +171,7 @@ func InitCluster(t *testing.T, cellNames []string) *VitessCluster {
 		require.NotNil(t, cell)
 	}
 
-	vc.VtctlClient = cluster.VtctlClientProcessInstance(globalConfig.hostname, vc.Vtctld.GrpcPort, globalConfig.tmpDir)
+	vc.VtctlClient = cluster.VtctlClientProcessInstance(vc.ClusterConfig.hostname, vc.Vtctld.GrpcPort, vc.ClusterConfig.tmpDir)
 	require.NotNil(t, vc.VtctlClient)
 
 	return vc
@@ -194,23 +224,29 @@ func (vc *VitessCluster) AddTablet(t *testing.T, cell *Cell, keyspace *Keyspace,
 	tablet := &Tablet{}
 
 	vttablet := cluster.VttabletProcessInstance(
-		tabletPortBase+tabletID,
-		tabletGrpcPortBase+tabletID,
+		vc.ClusterConfig.tabletPortBase+tabletID,
+		vc.ClusterConfig.tabletGrpcPortBase+tabletID,
 		tabletID,
 		cell.Name,
 		shard.Name,
 		keyspace.Name,
-		globalConfig.vtctldPort,
+		vc.ClusterConfig.vtctldPort,
 		tabletType,
 		vc.Topo.Port,
-		globalConfig.hostname,
-		globalConfig.tmpDir,
-		[]string{"-queryserver-config-schema-reload-time", "5"}, //FIXME: for multi-cell initial schema doesn't seem to load without this
+		vc.ClusterConfig.hostname,
+		vc.ClusterConfig.tmpDir,
+		[]string{
+			"-queryserver-config-schema-reload-time", "5",
+			"-enable-lag-throttler",
+			"-heartbeat_enable",
+			"-heartbeat_interval", "250ms",
+		}, //FIXME: for multi-cell initial schema doesn't seem to load without "-queryserver-config-schema-reload-time"
 		false)
+
 	require.NotNil(t, vttablet)
 	vttablet.SupportsBackup = false
 
-	tablet.DbServer = cluster.MysqlCtlProcessInstance(tabletID, tabletMysqlPortBase+tabletID, globalConfig.tmpDir)
+	tablet.DbServer = cluster.MysqlCtlProcessInstance(tabletID, vc.ClusterConfig.tabletMysqlPortBase+tabletID, vc.ClusterConfig.tmpDir)
 	require.NotNil(t, tablet.DbServer)
 	tablet.DbServer.InitMysql = true
 	proc, err := tablet.DbServer.StartProcess()
@@ -325,15 +361,15 @@ func (vc *VitessCluster) DeleteShard(t *testing.T, cellName string, ksName strin
 // StartVtgate starts a vtgate process
 func (vc *VitessCluster) StartVtgate(t *testing.T, cell *Cell, cellsToWatch string) {
 	vtgate := cluster.VtgateProcessInstance(
-		globalConfig.vtgatePort,
-		globalConfig.vtgateGrpcPort,
-		globalConfig.vtgateMySQLPort,
+		vc.ClusterConfig.vtgatePort,
+		vc.ClusterConfig.vtgateGrpcPort,
+		vc.ClusterConfig.vtgateMySQLPort,
 		cell.Name,
 		cellsToWatch,
-		globalConfig.hostname,
-		globalConfig.tabletTypes,
-		globalConfig.topoPort,
-		globalConfig.tmpDir,
+		vc.ClusterConfig.hostname,
+		vc.ClusterConfig.tabletTypes,
+		vc.ClusterConfig.topoPort,
+		vc.ClusterConfig.tmpDir,
 		[]string{"-tablet_refresh_interval", "10ms"})
 	require.NotNil(t, vtgate)
 	if err := vtgate.Setup(); err != nil {

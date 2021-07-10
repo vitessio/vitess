@@ -125,7 +125,8 @@ func TestSSLConnection(t *testing.T) {
 	serverConfig, err := vttls.ServerConfig(
 		path.Join(root, "server-cert.pem"),
 		path.Join(root, "server-key.pem"),
-		path.Join(root, "ca-cert.pem"))
+		path.Join(root, "ca-cert.pem"),
+		"")
 	if err != nil {
 		t.Fatalf("TLSServerConfig failed: %v", err)
 	}

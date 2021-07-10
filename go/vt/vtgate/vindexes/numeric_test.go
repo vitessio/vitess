@@ -53,6 +53,7 @@ func TestNumericMap(t *testing.T) {
 		sqltypes.NewInt64(7),
 		sqltypes.NewInt64(8),
 		sqltypes.NewInt32(8),
+		sqltypes.NULL,
 	})
 	require.NoError(t, err)
 	want := []key.Destination{
@@ -66,6 +67,7 @@ func TestNumericMap(t *testing.T) {
 		key.DestinationKeyspaceID([]byte("\x00\x00\x00\x00\x00\x00\x00\x07")),
 		key.DestinationKeyspaceID([]byte("\x00\x00\x00\x00\x00\x00\x00\x08")),
 		key.DestinationKeyspaceID([]byte("\x00\x00\x00\x00\x00\x00\x00\x08")),
+		key.DestinationNone{},
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("Map(): %+v, want %+v", got, want)
@@ -84,10 +86,7 @@ func TestNumericVerify(t *testing.T) {
 
 	// Failure test
 	_, err = numeric.Verify(nil, []sqltypes.Value{sqltypes.NewVarBinary("aa")}, [][]byte{nil})
-	wantErr := "Numeric.Verify: could not parse value: 'aa'"
-	if err == nil || err.Error() != wantErr {
-		t.Errorf("hash.Verify err: %v, want %s", err, wantErr)
-	}
+	require.EqualError(t, err, "could not parse value: 'aa'")
 }
 
 func TestNumericReverseMap(t *testing.T) {

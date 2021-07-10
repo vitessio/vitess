@@ -51,11 +51,11 @@ func TestDeleteUnsharded(t *testing.T) {
 	// Failure cases
 	vc = &loggingVCursor{shardErr: errors.New("shard_error")}
 	_, err = del.Execute(vc, map[string]*querypb.BindVariable{}, false)
-	expectError(t, "Execute", err, "execDeleteUnsharded: shard_error")
+	require.EqualError(t, err, "shard_error")
 
 	vc = &loggingVCursor{}
 	_, err = del.Execute(vc, map[string]*querypb.BindVariable{}, false)
-	expectError(t, "Execute", err, "Keyspace does not have exactly one shard: []")
+	require.EqualError(t, err, "cannot send query to multiple shards for un-sharded database: []")
 }
 
 func TestDeleteEqual(t *testing.T) {
@@ -84,7 +84,7 @@ func TestDeleteEqual(t *testing.T) {
 	// Failure case
 	del.Values = []sqltypes.PlanValue{{Key: "aa"}}
 	_, err = del.Execute(vc, map[string]*querypb.BindVariable{}, false)
-	expectError(t, "Execute", err, "execDeleteEqual: missing bind var aa")
+	require.EqualError(t, err, "missing bind var aa")
 }
 
 func TestDeleteEqualNoRoute(t *testing.T) {
@@ -137,7 +137,7 @@ func TestDeleteEqualNoScatter(t *testing.T) {
 
 	vc := newDMLTestVCursor("0")
 	_, err := del.Execute(vc, map[string]*querypb.BindVariable{}, false)
-	expectError(t, "Execute", err, "execDeleteEqual: cannot map vindex to unique keyspace id: DestinationKeyRange(-)")
+	require.EqualError(t, err, "cannot map vindex to unique keyspace id: DestinationKeyRange(-)")
 }
 
 func TestDeleteOwnedVindex(t *testing.T) {
@@ -245,13 +245,13 @@ func TestDeleteSharded(t *testing.T) {
 	// Failure case
 	vc = &loggingVCursor{shardErr: errors.New("shard_error")}
 	_, err = del.Execute(vc, map[string]*querypb.BindVariable{}, false)
-	expectError(t, "Execute", err, "execDeleteScatter: shard_error")
+	require.EqualError(t, err, "shard_error")
 }
 
 func TestDeleteNoStream(t *testing.T) {
 	del := &Delete{}
 	err := del.StreamExecute(nil, nil, false, nil)
-	expectError(t, "StreamExecute", err, `query "" cannot be used for streaming`)
+	require.EqualError(t, err, `query "" cannot be used for streaming`)
 }
 
 func TestDeleteScatterOwnedVindex(t *testing.T) {

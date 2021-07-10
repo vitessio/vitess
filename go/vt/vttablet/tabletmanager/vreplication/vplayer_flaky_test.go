@@ -38,6 +38,40 @@ import (
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
 
+func TestHeartbeatFrequencyFlag(t *testing.T) {
+	origVReplicationHeartbeatUpdateInterval := *vreplicationHeartbeatUpdateInterval
+	defer func() {
+		*vreplicationHeartbeatUpdateInterval = origVReplicationHeartbeatUpdateInterval
+	}()
+
+	stats := binlogplayer.NewStats()
+	vp := &vplayer{vr: &vreplicator{dbClient: newVDBClient(realDBClientFactory(), stats), stats: stats}}
+
+	type testcount struct {
+		count      int
+		mustUpdate bool
+	}
+	type testcase struct {
+		name     string
+		interval int
+		counts   []testcount
+	}
+	testcases := []*testcase{
+		{"default frequency", 1, []testcount{{count: 0, mustUpdate: false}, {1, true}}},
+		{"custom frequency", 4, []testcount{{count: 0, mustUpdate: false}, {count: 3, mustUpdate: false}, {4, true}}},
+		{"minumum frequency", 61, []testcount{{count: 59, mustUpdate: false}, {count: 60, mustUpdate: true}, {61, true}}},
+	}
+	for _, tcase := range testcases {
+		t.Run(tcase.name, func(t *testing.T) {
+			*vreplicationHeartbeatUpdateInterval = tcase.interval
+			for _, tcount := range tcase.counts {
+				vp.numAccumulatedHeartbeats = tcount.count
+				require.Equal(t, tcount.mustUpdate, vp.mustUpdateCurrentTime())
+			}
+		})
+	}
+}
+
 func TestVReplicationTimeUpdated(t *testing.T) {
 	ctx := context.Background()
 	defer deleteTablet(addTablet(100))
@@ -1270,7 +1304,16 @@ func TestPlayerRowMove(t *testing.T) {
 
 func TestPlayerTypes(t *testing.T) {
 	log.Errorf("TestPlayerTypes: flavor is %s", env.Flavor)
-
+	enableJSONColumnTesting := false
+	flavor := strings.ToLower(env.Flavor)
+	// Disable tests on percona (which identifies as mysql56) and mariadb platforms in CI since they
+	// either don't support JSON or JSON support is not enabled by default
+	if strings.Contains(flavor, "mysql57") || strings.Contains(flavor, "mysql80") {
+		log.Infof("Running JSON column type tests on flavor %s", flavor)
+		enableJSONColumnTesting = true
+	} else {
+		log.Warningf("Not running JSON column type tests on flavor %s", flavor)
+	}
 	defer deleteTablet(addTablet(100))
 
 	execStatements(t, []string{
@@ -1303,7 +1346,7 @@ func TestPlayerTypes(t *testing.T) {
 		"drop table binary_pk",
 		fmt.Sprintf("drop table %s.binary_pk", vrepldb),
 	})
-	if strings.Contains(env.Flavor, "mysql57") {
+	if enableJSONColumnTesting {
 		execStatements(t, []string{
 			"create table vitess_json(id int auto_increment, val1 json, val2 json, val3 json, val4 json, val5 json, primary key(id))",
 			fmt.Sprintf("create table %s.vitess_json(id int, val1 json, val2 json, val3 json, val4 json, val5 json, primary key(id))", vrepldb),
@@ -1386,8 +1429,7 @@ func TestPlayerTypes(t *testing.T) {
 			{"a\000\000\000", "bbb"},
 		},
 	}}
-
-	if strings.Contains(env.Flavor, "mysql57") {
+	if enableJSONColumnTesting {
 		testcases = append(testcases, testcase{
 			input: "insert into vitess_json(val1,val2,val3,val4,val5) values (null,'{}','123','{\"a\":[42,100]}', '{\"foo\":\"bar\"}')",
 			output: "insert into vitess_json(id,val1,val2,val3,val4,val5) values (1," +
@@ -1396,6 +1438,14 @@ func TestPlayerTypes(t *testing.T) {
 			table: "vitess_json",
 			data: [][]string{
 				{"1", "", "{}", "123", `{"a": [42, 100]}`, `{"foo": "bar"}`},
+			},
+		})
+		testcases = append(testcases, testcase{
+			input:  "update vitess_json set val4 = '{\"a\": [98, 123]}', val5 = convert(x'7b7d' using utf8mb4)",
+			output: "update vitess_json set val1=convert(null using utf8mb4), val2=convert('{}' using utf8mb4), val3=convert('123' using utf8mb4), val4=convert('{\\\"a\\\":[98,123]}' using utf8mb4), val5=convert('{}' using utf8mb4) where id=1",
+			table:  "vitess_json",
+			data: [][]string{
+				{"1", "", "{}", "123", `{"a": [98, 123]}`, `{}`},
 			},
 		})
 	}

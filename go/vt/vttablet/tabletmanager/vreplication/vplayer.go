@@ -59,6 +59,9 @@ type vplayer struct {
 	lastTimestampNs int64
 	// timeOffsetNs keeps track of the clock difference with respect to source tablet.
 	timeOffsetNs int64
+	// numAccumulatedHeartbeats keeps track of how many heartbeats have been received since we updated the time_updated column of _vt.vreplication
+	numAccumulatedHeartbeats int
+
 	// canAcceptStmtEvents is set to true if the current player can accept events in statement mode. Only true for filters that are match all.
 	canAcceptStmtEvents bool
 
@@ -189,6 +192,7 @@ func (vp *vplayer) fetchAndApply(ctx context.Context) (err error) {
 	}
 }
 
+// applyStmtEvent applies an actual DML statement received from the source, directly onto the backend database
 func (vp *vplayer) applyStmtEvent(ctx context.Context, event *binlogdatapb.VEvent) error {
 	sql := event.Statement
 	if sql == "" {
@@ -227,6 +231,7 @@ func (vp *vplayer) applyRowEvent(ctx context.Context, rowEvent *binlogdatapb.Row
 }
 
 func (vp *vplayer) updatePos(ts int64) (posReached bool, err error) {
+	vp.numAccumulatedHeartbeats = 0
 	update := binlogplayer.GenerateUpdatePos(vp.vr.id, vp.pos, time.Now().Unix(), ts)
 	if _, err := vp.vr.dbClient.Execute(update); err != nil {
 		return false, fmt.Errorf("error %v updating position", err)
@@ -246,9 +251,7 @@ func (vp *vplayer) updatePos(ts int64) (posReached bool, err error) {
 	return posReached, nil
 }
 
-func (vp *vplayer) recordHeartbeat() (err error) {
-	tm := time.Now().Unix()
-	vp.vr.stats.RecordHeartbeat(tm)
+func (vp *vplayer) updateCurrentTime(tm int64) error {
 	update, err := binlogplayer.GenerateUpdateTime(vp.vr.id, tm)
 	if err != nil {
 		return err
@@ -259,7 +262,20 @@ func (vp *vplayer) recordHeartbeat() (err error) {
 	return nil
 }
 
-// applyEvents is the main thread that applies the events. It has the following use
+func (vp *vplayer) mustUpdateCurrentTime() bool {
+	return vp.numAccumulatedHeartbeats >= *vreplicationHeartbeatUpdateInterval ||
+		vp.numAccumulatedHeartbeats >= vreplicationMinimumHeartbeatUpdateInterval
+}
+
+func (vp *vplayer) recordHeartbeat() error {
+	tm := time.Now().Unix()
+	vp.vr.stats.RecordHeartbeat(tm)
+	if !vp.mustUpdateCurrentTime() {
+		return nil
+	}
+	vp.numAccumulatedHeartbeats = 0
+	return vp.updateCurrentTime(tm)
+}
 
 // applyEvents is the main thread that applies the events. It has the following use
 // cases to take into account:
@@ -319,6 +335,11 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 	defer vp.vr.stats.VReplicationLags.Add(strconv.Itoa(int(vp.vr.id)), math.MaxInt64)
 	var sbm int64 = -1
 	for {
+		// check throttler.
+		if !vp.vr.vre.throttlerClient.ThrottleCheckOKOrWait(ctx) {
+			continue
+		}
+
 		items, err := relay.Fetch()
 		if err != nil {
 			return err
@@ -606,11 +627,13 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 		return io.EOF
 	case binlogdatapb.VEventType_HEARTBEAT:
 		if !vp.vr.dbClient.InTransaction {
+			vp.numAccumulatedHeartbeats++
 			err := vp.recordHeartbeat()
 			if err != nil {
 				return err
 			}
 		}
 	}
+
 	return nil
 }

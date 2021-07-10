@@ -24,6 +24,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	"github.com/olekukonko/tablewriter"
@@ -190,7 +191,7 @@ func qualifiedTableName(tableName string) string {
 // getPlanner returns a specific planner appropriate for the queried table
 func (vx *vexec) getPlanner(ctx context.Context) error {
 	switch vx.tableName {
-	case qualifiedTableName(schemaMigrationsTableName):
+	case qualifiedTableName(schema.SchemaMigrationsTableName):
 		vx.planner = newSchemaMigrationsPlanner(vx)
 	case qualifiedTableName(vreplicationTableName):
 		vx.planner = newVReplicationPlanner(vx)
@@ -254,7 +255,7 @@ func (vx *vexec) addDefaultWheres(planner vexecPlanner, where *sqlparser.Where) 
 		expr := &sqlparser.ComparisonExpr{
 			Left:     &sqlparser.ColName{Name: sqlparser.NewColIdent(plannerParams.dbNameColumn)},
 			Operator: sqlparser.EqualOp,
-			Right:    sqlparser.NewStrLiteral([]byte(vx.masters[0].DbName())),
+			Right:    sqlparser.NewStrLiteral(vx.masters[0].DbName()),
 		}
 		if newWhere == nil {
 			newWhere = &sqlparser.Where{
@@ -272,7 +273,7 @@ func (vx *vexec) addDefaultWheres(planner vexecPlanner, where *sqlparser.Where) 
 		expr := &sqlparser.ComparisonExpr{
 			Left:     &sqlparser.ColName{Name: sqlparser.NewColIdent(plannerParams.workflowColumn)},
 			Operator: sqlparser.EqualOp,
-			Right:    sqlparser.NewStrLiteral([]byte(vx.workflow)),
+			Right:    sqlparser.NewStrLiteral(vx.workflow),
 		}
 		newWhere.Expr = &sqlparser.AndExpr{
 			Left:  newWhere.Expr,

@@ -245,7 +245,6 @@ func (dg *DiscoveryGateway) CacheStatus() TabletCacheStatusList {
 // a resharding event, and set the re-resolve bit and let the upper layers
 // re-resolve and retry.
 func (dg *DiscoveryGateway) withRetry(ctx context.Context, target *querypb.Target, unused queryservice.QueryService, name string, inTransaction bool, inner func(ctx context.Context, target *querypb.Target, conn queryservice.QueryService) (bool, error)) error {
-	var tabletLastUsed *topodatapb.Tablet
 	var err error
 	invalidTablets := make(map[string]bool)
 
@@ -300,7 +299,7 @@ func (dg *DiscoveryGateway) withRetry(ctx context.Context, target *querypb.Targe
 
 		if len(tablets) == 0 {
 			// fail fast if there is no tablet
-			err = vterrors.New(vtrpcpb.Code_UNAVAILABLE, "no valid tablet")
+			err = vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "no healthy tablet available for '%s'", target.String())
 			break
 		}
 		shuffleTablets(dg.localCell, tablets)
@@ -322,7 +321,6 @@ func (dg *DiscoveryGateway) withRetry(ctx context.Context, target *querypb.Targe
 		}
 
 		// execute
-		tabletLastUsed = ts.Tablet
 		conn := dg.hc.GetConnection(ts.Key)
 		if conn == nil {
 			err = vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "no connection for key %v tablet %+v", ts.Key, ts.Tablet)
@@ -340,7 +338,7 @@ func (dg *DiscoveryGateway) withRetry(ctx context.Context, target *querypb.Targe
 		}
 		break
 	}
-	return NewShardError(err, target, tabletLastUsed)
+	return NewShardError(err, target)
 }
 
 func shuffleTablets(cell string, tablets []discovery.LegacyTabletStats) {

@@ -21,6 +21,8 @@ import (
 	"os/exec"
 	"strings"
 
+	"vitess.io/vitess/go/vt/vterrors"
+
 	"vitess.io/vitess/go/vt/log"
 )
 
@@ -61,9 +63,10 @@ func (vtctlclient *VtctlClientProcess) ApplySchemaWithOutput(Keyspace string, SQ
 }
 
 // ApplySchema applies SQL schema to the keyspace
-func (vtctlclient *VtctlClientProcess) ApplySchema(Keyspace string, SQL string) (err error) {
-	_, err = vtctlclient.ApplySchemaWithOutput(Keyspace, SQL, "direct")
-	return err
+func (vtctlclient *VtctlClientProcess) ApplySchema(Keyspace string, SQL string) error {
+	message, err := vtctlclient.ApplySchemaWithOutput(Keyspace, SQL, "direct")
+
+	return vterrors.Wrap(err, message)
 }
 
 // ApplyVSchema applies vitess schema (JSON format) to the keyspace
@@ -116,6 +119,25 @@ func (vtctlclient *VtctlClientProcess) OnlineDDLRetryMigration(Keyspace, uuid st
 		Keyspace,
 		"retry",
 		uuid,
+	)
+}
+
+// OnlineDDLRevertMigration reverts a given migration uuid
+func (vtctlclient *VtctlClientProcess) OnlineDDLRevertMigration(Keyspace, uuid string) (result string, err error) {
+	return vtctlclient.ExecuteCommandWithOutput(
+		"OnlineDDL",
+		Keyspace,
+		"revert",
+		uuid,
+	)
+}
+
+// VExec runs a VExec query
+func (vtctlclient *VtctlClientProcess) VExec(Keyspace, workflow, query string) (result string, err error) {
+	return vtctlclient.ExecuteCommandWithOutput(
+		"VExec",
+		fmt.Sprintf("%s.%s", Keyspace, workflow),
+		query,
 	)
 }
 

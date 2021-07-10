@@ -67,5 +67,5 @@ func TestUpdateTargetGetFields(t *testing.T) {
 	updateTarget := &UpdateTarget{}
 	vc := &noopVCursor{}
 	_, err := updateTarget.GetFields(vc, map[string]*querypb.BindVariable{})
-	require.EqualError(t, err, "use cannot be used for get fields")
+	require.EqualError(t, err, "[BUG] GetFields not reachable for use statement")
 }

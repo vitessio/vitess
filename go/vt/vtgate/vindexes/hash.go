@@ -29,7 +29,6 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
-	"vitess.io/vitess/go/vt/vterrors"
 )
 
 var (
@@ -103,7 +102,7 @@ func (vind *Hash) Verify(_ VCursor, ids []sqltypes.Value, ksids [][]byte) ([]boo
 	for i := range ids {
 		num, err := evalengine.ToUint64(ids[i])
 		if err != nil {
-			return nil, vterrors.Wrap(err, "hash.Verify")
+			return nil, err
 		}
 		out[i] = bytes.Equal(vhash(num), ksids[i])
 	}

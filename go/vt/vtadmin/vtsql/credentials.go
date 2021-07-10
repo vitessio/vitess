@@ -17,9 +17,6 @@ limitations under the License.
 package vtsql
 
 import (
-	"encoding/json"
-	"io/ioutil"
-
 	"google.golang.org/grpc/credentials"
 
 	"vitess.io/vitess/go/vt/grpcclient"
@@ -53,18 +50,4 @@ func (creds *StaticAuthCredentials) GetEffectiveUsername() string {
 // GetUsername is part of the Credentials interface.
 func (creds *StaticAuthCredentials) GetUsername() string {
 	return creds.Username
-}
-
-func loadCredentials(path string) (*grpcclient.StaticAuthClientCreds, error) {
-	data, err := ioutil.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-
-	var creds grpcclient.StaticAuthClientCreds
-	if err := json.Unmarshal(data, &creds); err != nil {
-		return nil, err
-	}
-
-	return &creds, nil
 }

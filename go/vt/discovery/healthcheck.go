@@ -450,8 +450,14 @@ func (hc *HealthCheckImpl) updateHealth(th *TabletHealth, prevTarget *query.Targ
 			}
 		}
 	case isPrimary && !isPrimaryUp:
-		// No healthy master tablet
-		hc.healthy[targetKey] = []*TabletHealth{}
+		if healthy, ok := hc.healthy[targetKey]; ok && len(healthy) > 0 {
+			// isPrimary is true here therefore we should only have 1 tablet in healthy
+			alias := tabletAliasString(topoproto.TabletAliasString(healthy[0].Tablet.Alias))
+			// Clear healthy list for primary if the existing tablet is down
+			if alias == tabletAlias {
+				hc.healthy[targetKey] = []*TabletHealth{}
+			}
+		}
 	}
 
 	if !trivialUpdate {

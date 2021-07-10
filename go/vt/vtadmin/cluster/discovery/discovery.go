@@ -33,6 +33,9 @@ var (
 	// ErrNoVTGates should be returned from DiscoverVTGate* methods when they
 	// are unable to find any vtgates for the given filter/query/tags.
 	ErrNoVTGates = errors.New("no vtgates found")
+	// ErrNoVtctlds should be returned from DiscoverVtctld* methods when they
+	// are unable to find any vtctlds for the given filter/query/tags.
+	ErrNoVtctlds = errors.New("no vtctlds found")
 )
 
 // Discovery defines the interface that service discovery plugins must
@@ -53,6 +56,21 @@ type Discovery interface {
 	// Tags can optionally be used to filter gates. Order of the gates is not
 	// specified by the interface, and can be implementation-specific.
 	DiscoverVTGates(ctx context.Context, tags []string) ([]*vtadminpb.VTGate, error)
+	// DiscoverVtctld returns a vtctld found in the discovery service.
+	// Tags can optionally be used to filter the set of potential vtctlds
+	// further. Which vtctld in a set of found vtctlds is returned is not
+	// specified by the interface, and can be implementation-specific.
+	DiscoverVtctld(ctx context.Context, tags []string) (*vtadminpb.Vtctld, error)
+	// DiscoverVtctldAddr returns the address of a vtctld found in the discovery
+	// service. Tags can optionally be used to filter the set of potential
+	// vtctlds further. Which vtctld in a set of potential vtctld is used to
+	// return an address is not specified by the interface, and can be
+	// implementation-specific.
+	DiscoverVtctldAddr(ctx context.Context, tags []string) (string, error)
+	// DiscoverVtctlds returns a list of vtctlds found in the discovery service.
+	// Tags can optionally be used to filter vtctlds. Order of the vtctlds is
+	// not specified by the interface, and can be implementation-specific.
+	DiscoverVtctlds(ctx context.Context, tags []string) ([]*vtadminpb.Vtctld, error)
 }
 
 // Factory represents a function that can create a Discovery implementation.
@@ -91,5 +109,5 @@ func New(impl string, cluster *vtadminpb.Cluster, args []string) (Discovery, err
 
 func init() { // nolint:gochecknoinits
 	Register("consul", NewConsul)
-	Register("staticFile", NewStaticFile)
+	Register("staticfile", NewStaticFile)
 }

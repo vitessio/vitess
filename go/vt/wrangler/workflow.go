@@ -22,6 +22,7 @@ type VReplicationWorkflowType int
 const (
 	MoveTablesWorkflow = VReplicationWorkflowType(iota)
 	ReshardWorkflow
+	MigrateWorkflow
 )
 
 // Workflow state display strings
@@ -54,6 +55,7 @@ func (vrw *VReplicationWorkflow) String() string {
 
 // VReplicationWorkflowParams stores args and options passed to a VReplicationWorkflow command
 type VReplicationWorkflowParams struct {
+	WorkflowType                      VReplicationWorkflowType
 	Workflow, TargetKeyspace          string
 	Cells, TabletTypes, ExcludeTables string
 	EnableReverseReplication, DryRun  bool
@@ -68,6 +70,10 @@ type VReplicationWorkflowParams struct {
 	// Reshard specific
 	SourceShards, TargetShards []string
 	SkipSchemaCopy             bool
+	AutoStart, StopAfterCopy   bool
+
+	// Migrate specific
+	ExternalCluster string
 }
 
 // NewVReplicationWorkflow sets up a MoveTables or Reshard workflow based on options provided, deduces the state of the
@@ -165,7 +171,7 @@ func (vrw *VReplicationWorkflow) Create(ctx context.Context) error {
 		return fmt.Errorf("workflow has already been created, state is %s", vrw.CachedState())
 	}
 	switch vrw.workflowType {
-	case MoveTablesWorkflow:
+	case MoveTablesWorkflow, MigrateWorkflow:
 		err = vrw.initMoveTables()
 	case ReshardWorkflow:
 		excludeTables := strings.Split(vrw.params.ExcludeTables, ",")
@@ -240,7 +246,7 @@ func (vrw *VReplicationWorkflow) GetStreamCount() (int64, int64, []*WorkflowErro
 	return totalStreams, runningStreams, workflowErrors, nil
 }
 
-// SwitchTraffic switches traffic forward for tablet_types passed
+// SwitchTraffic switches traffic in the direction passed for specified tablet_types
 func (vrw *VReplicationWorkflow) SwitchTraffic(direction TrafficSwitchDirection) (*[]string, error) {
 	var dryRunResults []string
 	var rdDryRunResults, wrDryRunResults *[]string
@@ -250,6 +256,9 @@ func (vrw *VReplicationWorkflow) SwitchTraffic(direction TrafficSwitchDirection)
 
 	if !vrw.Exists() {
 		return nil, fmt.Errorf("workflow has not yet been started")
+	}
+	if vrw.workflowType == MigrateWorkflow {
+		return nil, fmt.Errorf("invalid action for Migrate workflow: SwitchTraffic")
 	}
 
 	isCopyInProgress, err = vrw.IsCopyInProgress()
@@ -289,6 +298,9 @@ func (vrw *VReplicationWorkflow) ReverseTraffic() (*[]string, error) {
 	if !vrw.Exists() {
 		return nil, fmt.Errorf("workflow has not yet been started")
 	}
+	if vrw.workflowType == MigrateWorkflow {
+		return nil, fmt.Errorf("invalid action for Migrate workflow: ReverseTraffic")
+	}
 	return vrw.SwitchTraffic(DirectionBackward)
 }
 
@@ -300,7 +312,15 @@ const (
 
 // Complete cleans up a successful workflow
 func (vrw *VReplicationWorkflow) Complete() (*[]string, error) {
+	var dryRunResults *[]string
+	var err error
 	ws := vrw.ws
+
+	if vrw.workflowType == MigrateWorkflow {
+		return vrw.wr.finalizeMigrateWorkflow(vrw.ctx, ws.TargetKeyspace, ws.Workflow, vrw.params.Tables,
+			false, vrw.params.KeepData, vrw.params.DryRun)
+	}
+
 	if !ws.WritesSwitched || len(ws.ReplicaCellsNotSwitched) > 0 || len(ws.RdonlyCellsNotSwitched) > 0 {
 		return nil, fmt.Errorf(ErrWorkflowNotFullySwitched)
 	}
@@ -310,10 +330,8 @@ func (vrw *VReplicationWorkflow) Complete() (*[]string, error) {
 	} else {
 		renameTable = DropTable
 	}
-	var dryRunResults *[]string
-	var err error
-	if dryRunResults, err = vrw.wr.DropSources(vrw.ctx, vrw.ws.TargetKeyspace, vrw.ws.Workflow, renameTable, vrw.params.KeepData,
-		false, vrw.params.DryRun); err != nil {
+	if dryRunResults, err = vrw.wr.DropSources(vrw.ctx, vrw.ws.TargetKeyspace, vrw.ws.Workflow, renameTable,
+		false, vrw.params.KeepData, vrw.params.DryRun); err != nil {
 		return nil, err
 	}
 	return dryRunResults, nil
@@ -322,6 +340,12 @@ func (vrw *VReplicationWorkflow) Complete() (*[]string, error) {
 // Cancel deletes all artifacts from a workflow which has not yet been switched
 func (vrw *VReplicationWorkflow) Cancel() error {
 	ws := vrw.ws
+	if vrw.workflowType == MigrateWorkflow {
+		_, err := vrw.wr.finalizeMigrateWorkflow(vrw.ctx, ws.TargetKeyspace, ws.Workflow, "",
+			true, vrw.params.KeepData, vrw.params.DryRun)
+		return err
+	}
+
 	if ws.WritesSwitched || len(ws.ReplicaCellsSwitched) > 0 || len(ws.RdonlyCellsSwitched) > 0 {
 		return fmt.Errorf(ErrWorkflowPartiallySwitched)
 	}
@@ -377,13 +401,14 @@ func (vrw *VReplicationWorkflow) parseTabletTypes() (hasReplica, hasRdonly, hasM
 func (vrw *VReplicationWorkflow) initMoveTables() error {
 	log.Infof("In VReplicationWorkflow.initMoveTables() for %+v", vrw)
 	return vrw.wr.MoveTables(vrw.ctx, vrw.params.Workflow, vrw.params.SourceKeyspace, vrw.params.TargetKeyspace,
-		vrw.params.Tables, vrw.params.Cells, vrw.params.TabletTypes, vrw.params.AllTables, vrw.params.ExcludeTables)
+		vrw.params.Tables, vrw.params.Cells, vrw.params.TabletTypes, vrw.params.AllTables, vrw.params.ExcludeTables,
+		vrw.params.AutoStart, vrw.params.StopAfterCopy, vrw.params.ExternalCluster)
 }
 
 func (vrw *VReplicationWorkflow) initReshard() error {
 	log.Infof("In VReplicationWorkflow.initReshard() for %+v", vrw)
 	return vrw.wr.Reshard(vrw.ctx, vrw.params.TargetKeyspace, vrw.params.Workflow, vrw.params.SourceShards,
-		vrw.params.TargetShards, vrw.params.SkipSchemaCopy, vrw.params.Cells, vrw.params.TabletTypes)
+		vrw.params.TargetShards, vrw.params.SkipSchemaCopy, vrw.params.Cells, vrw.params.TabletTypes, vrw.params.AutoStart, vrw.params.StopAfterCopy)
 }
 
 func (vrw *VReplicationWorkflow) switchReads() (*[]string, error) {

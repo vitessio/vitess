@@ -24,6 +24,10 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/vt/key"
+
 	"context"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -55,7 +59,36 @@ var (
 //----------------------------------------------
 // testResharderEnv
 
-func newTestResharderEnv(sources, targets []string) *testResharderEnv {
+func getPartition(t *testing.T, shards []string) *topodatapb.SrvKeyspace_KeyspacePartition {
+	partition := &topodatapb.SrvKeyspace_KeyspacePartition{
+		ServedType:      topodatapb.TabletType_MASTER,
+		ShardReferences: []*topodatapb.ShardReference{},
+	}
+	for _, shard := range shards {
+		keyRange, err := key.ParseShardingSpec(shard)
+		require.NoError(t, err)
+		require.Equal(t, 1, len(keyRange))
+		partition.ShardReferences = append(partition.ShardReferences, &topodatapb.ShardReference{
+			Name:     shard,
+			KeyRange: keyRange[0],
+		})
+	}
+	return partition
+}
+func initTopo(t *testing.T, topo *topo.Server, keyspace string, sources, targets, cells []string) {
+	ctx := context.Background()
+	srvKeyspace := &topodatapb.SrvKeyspace{
+		Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{},
+	}
+	srvKeyspace.Partitions = append(srvKeyspace.Partitions, getPartition(t, sources))
+	srvKeyspace.Partitions = append(srvKeyspace.Partitions, getPartition(t, targets))
+	for _, cell := range cells {
+		topo.UpdateSrvKeyspace(ctx, cell, keyspace, srvKeyspace)
+	}
+	topo.ValidateSrvKeyspace(ctx, keyspace, strings.Join(cells, ","))
+}
+
+func newTestResharderEnv(t *testing.T, sources, targets []string) *testResharderEnv {
 	env := &testResharderEnv{
 		keyspace: "ks",
 		workflow: "resharderTest",
@@ -67,7 +100,7 @@ func newTestResharderEnv(sources, targets []string) *testResharderEnv {
 		tmc:      newTestResharderTMClient(),
 	}
 	env.wr = New(logutil.NewConsoleLogger(), env.topoServ, env.tmc)
-
+	initTopo(t, env.topoServ, "ks", sources, targets, []string{"cell"})
 	tabletID := 100
 	for _, shard := range sources {
 		_ = env.addTablet(tabletID, env.keyspace, shard, topodatapb.TabletType_MASTER)

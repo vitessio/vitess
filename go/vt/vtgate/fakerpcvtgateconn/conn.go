@@ -164,7 +164,9 @@ func (conn *FakeVTGateConn) ResolveTransaction(ctx context.Context, dtid string)
 }
 
 // VStream streams binlog events.
-func (conn *FakeVTGateConn) VStream(ctx context.Context, tabletType topodatapb.TabletType, vgtid *binlogdatapb.VGtid, filter *binlogdatapb.Filter) (vtgateconn.VStreamReader, error) {
+func (conn *FakeVTGateConn) VStream(ctx context.Context, tabletType topodatapb.TabletType, vgtid *binlogdatapb.VGtid,
+	filter *binlogdatapb.Filter, flags *vtgatepb.VStreamFlags) (vtgateconn.VStreamReader, error) {
+
 	return nil, fmt.Errorf("NYI")
 }
 

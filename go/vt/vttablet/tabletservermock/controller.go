@@ -28,11 +28,11 @@ import (
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
-	"vitess.io/vitess/go/vt/vttablet/onlineddl"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
+	"vitess.io/vitess/go/vt/vttablet/vexec"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -176,7 +176,7 @@ func (tqsc *Controller) ReloadSchema(ctx context.Context) error {
 }
 
 // OnlineDDLExecutor is part of the tabletserver.Controller interface
-func (tqsc *Controller) OnlineDDLExecutor() *onlineddl.Executor {
+func (tqsc *Controller) OnlineDDLExecutor() vexec.Executor {
 	return nil
 }
 

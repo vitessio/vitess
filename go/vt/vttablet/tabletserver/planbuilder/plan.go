@@ -30,7 +30,7 @@ import (
 )
 
 var (
-	execLimit = &sqlparser.Limit{Rowcount: sqlparser.NewArgument([]byte(":#maxLimit"))}
+	execLimit = &sqlparser.Limit{Rowcount: sqlparser.NewArgument(":#maxLimit")}
 
 	// PassthroughDMLs will return plans that pass-through the DMLs without changing them.
 	PassthroughDMLs = false
@@ -44,7 +44,6 @@ type PlanType int
 // The following are PlanType values.
 const (
 	PlanSelect PlanType = iota
-	PlanSelectLock
 	PlanNextval
 	PlanSelectImpossible
 	PlanInsert
@@ -65,18 +64,21 @@ const (
 	PlanSavepoint
 	PlanRelease
 	PlanSRollback
-	PlanShowTables
+	PlanShow
 	// PlanLoad is for Load data statements
 	PlanLoad
+	// PlanFlush is for FLUSH statements
+	PlanFlush
 	PlanLockTables
 	PlanUnlockTables
+	PlanCallProc
+	PlanAlterMigration
 	NumPlans
 )
 
 // Must exactly match order of plan constants.
 var planName = []string{
 	"Select",
-	"SelectLock",
 	"Nextval",
 	"SelectImpossible",
 	"Insert",
@@ -94,10 +96,13 @@ var planName = []string{
 	"Savepoint",
 	"Release",
 	"RollbackSavepoint",
-	"ShowTables",
+	"Show",
 	"Load",
+	"Flush",
 	"LockTables",
 	"UnlockTables",
+	"CallProcedure",
+	"AlterMigration",
 }
 
 func (pt PlanType) String() string {
@@ -129,7 +134,7 @@ func PlanByNameIC(s string) (pt PlanType, ok bool) {
 
 // IsSelect returns true if PlanType is about a select query.
 func (pt PlanType) IsSelect() bool {
-	return pt == PlanSelect || pt == PlanSelectLock || pt == PlanSelectImpossible
+	return pt == PlanSelect || pt == PlanSelectImpossible
 }
 
 // MarshalJSON returns a json string for PlanType.
@@ -159,6 +164,9 @@ type Plan struct {
 	// WhereClause is set for DMLs. It is used by the hot row protection
 	// to serialize e.g. UPDATEs going to the same row.
 	WhereClause *sqlparser.ParsedQuery
+
+	// FullStmt can be used when the query does not operate on tables
+	FullStmt sqlparser.Statement
 }
 
 // TableName returns the table name for the plan.
@@ -206,9 +214,11 @@ func Build(statement sqlparser.Statement, tables map[string]*schema.Table, isRes
 			fullQuery = GenerateFullQuery(stmt)
 		}
 		plan = &Plan{PlanID: PlanDDL, FullQuery: fullQuery}
+	case *sqlparser.AlterMigration:
+		plan, err = &Plan{PlanID: PlanAlterMigration, FullStmt: stmt}, nil
 	case *sqlparser.Show:
 		plan, err = analyzeShow(stmt, dbName)
-	case *sqlparser.OtherRead, *sqlparser.Explain:
+	case *sqlparser.OtherRead, sqlparser.Explain:
 		plan, err = &Plan{PlanID: PlanOtherRead}, nil
 	case *sqlparser.OtherAdmin:
 		plan, err = &Plan{PlanID: PlanOtherAdmin}, nil
@@ -220,6 +230,10 @@ func Build(statement sqlparser.Statement, tables map[string]*schema.Table, isRes
 		plan, err = &Plan{PlanID: PlanSRollback}, nil
 	case *sqlparser.Load:
 		plan, err = &Plan{PlanID: PlanLoad}, nil
+	case *sqlparser.Flush:
+		plan, err = &Plan{PlanID: PlanFlush, FullQuery: GenerateFullQuery(stmt)}, nil
+	case *sqlparser.CallProc:
+		plan, err = &Plan{PlanID: PlanCallProc, FullQuery: GenerateFullQuery(stmt)}, nil
 	default:
 		return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "invalid SQL")
 	}
@@ -256,7 +270,7 @@ func BuildStreaming(sql string, tables map[string]*schema.Table, isReservedConn 
 			return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "select with lock not allowed for streaming")
 		}
 		plan.Table = lookupTable(stmt.From, tables)
-	case *sqlparser.OtherRead, *sqlparser.Show, *sqlparser.Union:
+	case *sqlparser.OtherRead, *sqlparser.Show, *sqlparser.Union, *sqlparser.CallProc, sqlparser.Explain:
 		// pass
 	default:
 		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "'%v' not allowed for streaming", sqlparser.String(stmt))
@@ -296,11 +310,7 @@ func checkForPoolingUnsafeConstructs(expr sqlparser.SQLNode) error {
 	return sqlparser.Walk(func(in sqlparser.SQLNode) (kontinue bool, err error) {
 		switch node := in.(type) {
 		case *sqlparser.Set:
-			for _, setExpr := range node.Exprs {
-				if setExpr.Name.AtCount() > 0 {
-					return false, genError(node)
-				}
-			}
+			return false, genError(node)
 		case *sqlparser.FuncExpr:
 			if sqlparser.IsLockingFunc(node) {
 				return false, genError(node)

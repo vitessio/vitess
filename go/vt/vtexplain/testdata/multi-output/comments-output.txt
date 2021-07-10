@@ -1,41 +1,41 @@
 ----------------------------------------------------------------------
 SELECT * from user
 
-1 ks_sharded/-40: select * from user limit 10001
-1 ks_sharded/40-80: select * from user limit 10001
-1 ks_sharded/80-c0: select * from user limit 10001
-1 ks_sharded/c0-: select * from user limit 10001
+1 ks_sharded/-40: select * from `user` limit 10001
+1 ks_sharded/40-80: select * from `user` limit 10001
+1 ks_sharded/80-c0: select * from `user` limit 10001
+1 ks_sharded/c0-: select * from `user` limit 10001
 
 ----------------------------------------------------------------------
 select /* ; */ 1 from user
 
-1 ks_sharded/-40: select /* ; */ 1 from user limit 10001
-1 ks_sharded/40-80: select /* ; */ 1 from user limit 10001
-1 ks_sharded/80-c0: select /* ; */ 1 from user limit 10001
-1 ks_sharded/c0-: select /* ; */ 1 from user limit 10001
+1 ks_sharded/-40: select /* ; */ 1 from `user` limit 10001
+1 ks_sharded/40-80: select /* ; */ 1 from `user` limit 10001
+1 ks_sharded/80-c0: select /* ; */ 1 from `user` limit 10001
+1 ks_sharded/c0-: select /* ; */ 1 from `user` limit 10001
 
 ----------------------------------------------------------------------
 select 1 from user where x=';'
 
-1 ks_sharded/-40: select 1 from user where x = ';' limit 10001
-1 ks_sharded/40-80: select 1 from user where x = ';' limit 10001
-1 ks_sharded/80-c0: select 1 from user where x = ';' limit 10001
-1 ks_sharded/c0-: select 1 from user where x = ';' limit 10001
+1 ks_sharded/-40: select 1 from `user` where x = ';' limit 10001
+1 ks_sharded/40-80: select 1 from `user` where x = ';' limit 10001
+1 ks_sharded/80-c0: select 1 from `user` where x = ';' limit 10001
+1 ks_sharded/c0-: select 1 from `user` where x = ';' limit 10001
 
 ----------------------------------------------------------------------
 select 1 from user where x='/* hello */'
 
-1 ks_sharded/-40: select 1 from user where x = '/* hello */' limit 10001
-1 ks_sharded/40-80: select 1 from user where x = '/* hello */' limit 10001
-1 ks_sharded/80-c0: select 1 from user where x = '/* hello */' limit 10001
-1 ks_sharded/c0-: select 1 from user where x = '/* hello */' limit 10001
+1 ks_sharded/-40: select 1 from `user` where x = '/* hello */' limit 10001
+1 ks_sharded/40-80: select 1 from `user` where x = '/* hello */' limit 10001
+1 ks_sharded/80-c0: select 1 from `user` where x = '/* hello */' limit 10001
+1 ks_sharded/c0-: select 1 from `user` where x = '/* hello */' limit 10001
 
 ----------------------------------------------------------------------
 select 1 from user where x='/* ; */'
 
-1 ks_sharded/-40: select 1 from user where x = '/* ; */' limit 10001
-1 ks_sharded/40-80: select 1 from user where x = '/* ; */' limit 10001
-1 ks_sharded/80-c0: select 1 from user where x = '/* ; */' limit 10001
-1 ks_sharded/c0-: select 1 from user where x = '/* ; */' limit 10001
+1 ks_sharded/-40: select 1 from `user` where x = '/* ; */' limit 10001
+1 ks_sharded/40-80: select 1 from `user` where x = '/* ; */' limit 10001
+1 ks_sharded/80-c0: select 1 from `user` where x = '/* ; */' limit 10001
+1 ks_sharded/c0-: select 1 from `user` where x = '/* ; */' limit 10001
 
 ----------------------------------------------------------------------

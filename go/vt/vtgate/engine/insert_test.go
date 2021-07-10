@@ -20,6 +20,8 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
@@ -55,11 +57,11 @@ func TestInsertUnsharded(t *testing.T) {
 	// Failure cases
 	vc = &loggingVCursor{shardErr: errors.New("shard_error")}
 	_, err = ins.Execute(vc, map[string]*querypb.BindVariable{}, false)
-	expectError(t, "Execute", err, "execInsertUnsharded: shard_error")
+	require.EqualError(t, err, `shard_error`)
 
 	vc = &loggingVCursor{}
 	_, err = ins.Execute(vc, map[string]*querypb.BindVariable{}, false)
-	expectError(t, "Execute", err, "Keyspace does not have exactly one shard: []")
+	require.EqualError(t, err, `Keyspace does not have exactly one shard: []`)
 }
 
 func TestInsertUnshardedGenerate(t *testing.T) {
@@ -368,7 +370,7 @@ func TestInsertShardedFail(t *testing.T) {
 
 	// The lookup will fail to map to a keyspace id.
 	_, err = ins.Execute(vc, map[string]*querypb.BindVariable{}, false)
-	expectError(t, "Execute", err, "execInsertSharded: getInsertShardedRoute: could not map [INT64(1)] to a keyspace id")
+	require.EqualError(t, err, `could not map [INT64(1)] to a keyspace id`)
 }
 
 func TestInsertShardedGenerate(t *testing.T) {
@@ -910,7 +912,7 @@ func TestInsertShardedIgnoreOwned(t *testing.T) {
 		" suffix",
 	)
 
-	ksid0_lookup := sqltypes.MakeTestResult(
+	ksid0Lookup := sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
 			"from|to",
 			"int64|varbinary",
@@ -931,7 +933,7 @@ func TestInsertShardedIgnoreOwned(t *testing.T) {
 	vc.shardForKsid = []string{"20-", "-20"}
 	vc.results = []*sqltypes.Result{
 		// primary vindex lookups: fail row 2.
-		ksid0_lookup,
+		ksid0Lookup,
 		// insert lkp2
 		noresult,
 		// fail one verification (row 3)
@@ -1409,7 +1411,7 @@ func TestInsertShardedIgnoreUnownedVerifyFail(t *testing.T) {
 	vc := newDMLTestVCursor("-20", "20-")
 
 	_, err = ins.Execute(vc, map[string]*querypb.BindVariable{}, false)
-	expectError(t, "Execute", err, "execInsertSharded: getInsertShardedRoute: values [[INT64(2)]] for column [c3] does not map to keyspace ids")
+	require.EqualError(t, err, `values [[INT64(2)]] for column [c3] does not map to keyspace ids`)
 }
 
 func TestInsertShardedUnownedReverseMap(t *testing.T) {
@@ -1619,5 +1621,5 @@ func TestInsertShardedUnownedReverseMapFail(t *testing.T) {
 	vc := newDMLTestVCursor("-20", "20-")
 
 	_, err = ins.Execute(vc, map[string]*querypb.BindVariable{}, false)
-	expectError(t, "Execute", err, "execInsertSharded: getInsertShardedRoute: value must be supplied for column [c3]")
+	require.EqualError(t, err, `value must be supplied for column [c3]`)
 }

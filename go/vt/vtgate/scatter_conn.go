@@ -169,7 +169,7 @@ func (stc *ScatterConn) ExecuteMultiShard(
 ) (qr *sqltypes.Result, errs []error) {
 
 	if len(rss) != len(queries) {
-		return nil, []error{vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: got mismatched number of queries and shards")}
+		return nil, []error{vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] got mismatched number of queries and shards")}
 	}
 
 	// mu protects qr
@@ -267,7 +267,7 @@ func (stc *ScatterConn) ExecuteMultiShard(
 			case reserveBegin:
 				innerqr, transactionID, reservedID, alias, err = qs.ReserveBeginExecute(ctx, rs.Target, session.SetPreQueries(), queries[i].Sql, queries[i].BindVariables, opts)
 			default:
-				return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: unexpected actionNeeded on ScatterConn#ExecuteMultiShard %v", info.actionNeeded)
+				return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unexpected actionNeeded on query execution: %v", info.actionNeeded)
 			}
 			// We need to new shard info irrespective of the error.
 			newInfo := info.updateTransactionAndReservedID(transactionID, reservedID, alias)
@@ -286,7 +286,7 @@ func (stc *ScatterConn) ExecuteMultiShard(
 	)
 
 	if !ignoreMaxMemoryRows && len(qr.Rows) > *maxMemoryRows {
-		return nil, []error{mysql.NewSQLError(mysql.ERNetPacketTooLarge, "", "in-memory row count exceeded allowed limit of %d", *maxMemoryRows)}
+		return nil, []error{vterrors.NewErrorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.NetPacketTooLarge, "in-memory row count exceeded allowed limit of %d", *maxMemoryRows)}
 	}
 
 	return qr, allErrors.GetErrors()
@@ -312,7 +312,7 @@ func getQueryService(rs *srvtopo.ResolvedShard, info *shardActionInfo) (queryser
 	_, usingLegacyGw := rs.Gateway.(*DiscoveryGateway)
 	if usingLegacyGw &&
 		(info.actionNeeded == reserve || info.actionNeeded == reserveBegin) {
-		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "reserved connections are not supported on old gen gateway")
+		return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "reserved connections are not supported on old gen gateway")
 	}
 	if usingLegacyGw || info.alias == nil {
 		return rs.Gateway, nil
@@ -331,7 +331,7 @@ func (stc *ScatterConn) processOneStreamingResult(mu *sync.Mutex, fieldSent *boo
 	} else {
 		if len(qr.Fields) == 0 {
 			// Unreachable: this can happen only if vttablet misbehaves.
-			return vterrors.New(vtrpcpb.Code_INTERNAL, "received rows before fields for shard")
+			return vterrors.New(vtrpcpb.Code_INTERNAL, "received rows before fields")
 		}
 		*fieldSent = true
 	}
@@ -662,7 +662,7 @@ func (stc *ScatterConn) ExecuteLock(
 	switch info.actionNeeded {
 	case nothing:
 		if reservedID == 0 {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: reservedID zero not expected %v", reservedID)
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] reserved id zero not expected %v", reservedID)
 		}
 		qr, err = qs.Execute(ctx, rs.Target, query.Sql, query.BindVariables, 0 /* transactionID */, reservedID, opts)
 		if err != nil && wasConnectionClosed(err) {
@@ -684,7 +684,7 @@ func (stc *ScatterConn) ExecuteLock(
 			})
 		}
 	default:
-		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: unexpected actionNeeded on ScatterConn#ExecuteLock %v", info.actionNeeded)
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unexpected actionNeeded on lock execution: %v", info.actionNeeded)
 	}
 
 	if err != nil {
@@ -749,7 +749,7 @@ func lockInfo(target *querypb.Target, session *SafeSession) (*shardActionInfo, e
 	}
 
 	if !proto.Equal(target, session.LockSession.Target) {
-		return nil, vterrors.Errorf(vtrpcpb.Code_ALREADY_EXISTS, "target does match the existing lock session target: (%v, %v)", target, session.LockSession.Target)
+		return nil, vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "target does match the existing lock session target: (%v, %v)", target, session.LockSession.Target)
 	}
 
 	return &shardActionInfo{

@@ -54,11 +54,11 @@ func TestUpdateUnsharded(t *testing.T) {
 	// Failure cases
 	vc = &loggingVCursor{shardErr: errors.New("shard_error")}
 	_, err = upd.Execute(vc, map[string]*querypb.BindVariable{}, false)
-	expectError(t, "Execute", err, "execUpdateUnsharded: shard_error")
+	require.EqualError(t, err, `shard_error`)
 
 	vc = &loggingVCursor{}
 	_, err = upd.Execute(vc, map[string]*querypb.BindVariable{}, false)
-	expectError(t, "Execute", err, "Keyspace does not have exactly one shard: []")
+	require.EqualError(t, err, `Keyspace does not have exactly one shard: []`)
 }
 
 func TestUpdateEqual(t *testing.T) {
@@ -87,7 +87,7 @@ func TestUpdateEqual(t *testing.T) {
 	// Failure case
 	upd.Values = []sqltypes.PlanValue{{Key: "aa"}}
 	_, err = upd.Execute(vc, map[string]*querypb.BindVariable{}, false)
-	expectError(t, "Execute", err, "execUpdateEqual: missing bind var aa")
+	require.EqualError(t, err, `missing bind var aa`)
 }
 
 func TestUpdateScatter(t *testing.T) {
@@ -189,7 +189,7 @@ func TestUpdateEqualNoScatter(t *testing.T) {
 
 	vc := newDMLTestVCursor("0")
 	_, err := upd.Execute(vc, map[string]*querypb.BindVariable{}, false)
-	expectError(t, "Execute", err, "execUpdateEqual: cannot map vindex to unique keyspace id: DestinationKeyRange(-)")
+	require.EqualError(t, err, `cannot map vindex to unique keyspace id: DestinationKeyRange(-)`)
 }
 
 func TestUpdateEqualChangedVindex(t *testing.T) {
@@ -598,7 +598,7 @@ func TestUpdateInChangedVindex(t *testing.T) {
 func TestUpdateNoStream(t *testing.T) {
 	upd := &Update{}
 	err := upd.StreamExecute(nil, nil, false, nil)
-	expectError(t, "StreamExecute", err, `query "" cannot be used for streaming`)
+	require.EqualError(t, err, `query "" cannot be used for streaming`)
 }
 
 func buildTestVSchema() *vindexes.VSchema {

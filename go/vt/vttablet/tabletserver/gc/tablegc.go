@@ -22,12 +22,12 @@ import (
 	"fmt"
 	"math"
 	"math/rand"
-	"net/http"
 	"sort"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/log"
@@ -43,9 +43,6 @@ import (
 const (
 	leaderCheckInterval     = 5 * time.Second
 	purgeReentranceInterval = 1 * time.Minute
-	// throttleCheckDuration controls both how frequently the throttler is checked. as well as
-	// how long to sleep if throttler blocks us
-	throttleCheckDuration = 250 * time.Millisecond
 	// evacHours is a hard coded, reasonable time for a table to spend in EVAC state
 	evacHours        = 72
 	throttlerAppName = "tablegc"
@@ -58,12 +55,9 @@ var checkInterval = flag.Duration("gc_check_interval", 1*time.Hour, "Interval be
 var gcLifecycle = flag.String("table_gc_lifecycle", "hold,purge,evac,drop", "States for a DROP TABLE garbage collection cycle. Default is 'hold,purge,evac,drop', use any subset ('drop' implcitly always included)")
 
 var (
-	sqlPurgeTable   = `delete from %a limit 50`
-	sqlShowVtTables = `show tables like '\_vt\_%'`
-	sqlDropTable    = "drop table if exists `%a`"
-	throttleFlags   = &throttle.CheckFlags{
-		LowPriority: true,
-	}
+	sqlPurgeTable       = `delete from %a limit 50`
+	sqlShowVtTables     = `show tables like '\_vt\_%'`
+	sqlDropTable        = "drop table if exists `%a`"
 	purgeReentranceFlag int64
 )
 
@@ -91,16 +85,15 @@ type TableGC struct {
 	shard    string
 	dbName   string
 
-	lagThrottler *throttle.Throttler
-	isPrimary    int64
-	isOpen       int64
+	isPrimary int64
+	isOpen    int64
+
+	throttlerClient *throttle.Client
 
 	env            tabletenv.Env
 	pool           *connpool.Pool
 	tabletTypeFunc func() topodatapb.TabletType
 	ts             *topo.Server
-
-	lastSuccessfulThrottleCheck time.Time
 
 	initMutex  sync.Mutex
 	purgeMutex sync.Mutex
@@ -130,9 +123,9 @@ type GCStatus struct {
 // NewTableGC creates a table collector
 func NewTableGC(env tabletenv.Env, ts *topo.Server, tabletTypeFunc func() topodatapb.TabletType, lagThrottler *throttle.Throttler) *TableGC {
 	collector := &TableGC{
-		lagThrottler: lagThrottler,
-		isPrimary:    0,
-		isOpen:       0,
+		throttlerClient: throttle.NewBackgroundClient(lagThrottler, throttlerAppName, throttle.ThrottleCheckPrimaryWrite),
+		isPrimary:       0,
+		isOpen:          0,
 
 		env:            env,
 		tabletTypeFunc: tabletTypeFunc,
@@ -437,11 +430,33 @@ func (collector *TableGC) purge(ctx context.Context) (tableName string, err erro
 	// This saves a lot of load from the replication stream, avoiding excessive lags. It also
 	// avoids excessive IO on the replicas.
 	// (note that the user may skip the PURGE step if they want, but the step is on by default)
-	if _, err := conn.ExecuteFetch("SET sql_log_bin = OFF", 0, false); err != nil {
+
+	// However, disabling SQL_LOG_BIN requires SUPER privileges, and we don't know that we have that.
+	// Any externally managed database might not give SUPER privileges to the vitess accounts, and this is known to be the case for Amazon Aurora.
+	// We therefore disable log bin on best-effort basis. The logic is still fine and sound if binary logging
+	// is left enabled. We just lose some optimization.
+	disableLogBin := func() (bool, error) {
+		_, err := conn.ExecuteFetch("SET sql_log_bin = OFF", 0, false)
+		if err == nil {
+			return true, nil
+		}
+		if merr, ok := err.(*mysql.SQLError); ok {
+			if merr.Num == mysql.ERSpecifiedAccessDenied {
+				// We do not have privileges to disable binary logging. That's fine, we're on best effort,
+				// so we're going to silently ignore this error.
+				return false, nil
+			}
+		}
+		// We do not tolerate other errors, though.
+		return false, err
+	}
+	sqlLogBinDisabled, err := disableLogBin()
+	if err != nil {
 		return tableName, err
 	}
+
 	defer func() {
-		if !conn.IsClosed() {
+		if sqlLogBinDisabled && !conn.IsClosed() {
 			if _, err := conn.ExecuteFetch("SET sql_log_bin = ON", 0, false); err != nil {
 				log.Errorf("TableGC: error setting sql_log_bin = ON: %+v", err)
 				// a followup defer() will run conn.Close() at any case.
@@ -451,15 +466,8 @@ func (collector *TableGC) purge(ctx context.Context) (tableName string, err erro
 
 	log.Infof("TableGC: purge begin for %s", tableName)
 	for {
-		if time.Since(collector.lastSuccessfulThrottleCheck) > throttleCheckDuration {
-			// It's time to run a throttler check
-			checkResult := collector.lagThrottler.Check(ctx, throttlerAppName, "", throttleFlags)
-			if checkResult.StatusCode != http.StatusOK {
-				// sorry, we got throttled. Back off, sleep, try again
-				time.Sleep(throttleCheckDuration)
-				continue
-			}
-			collector.lastSuccessfulThrottleCheck = time.Now()
+		if !collector.throttlerClient.ThrottleCheckOKOrWait(ctx) {
+			continue
 		}
 		// OK, we're clear to go!
 

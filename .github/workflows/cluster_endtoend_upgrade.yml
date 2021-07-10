@@ -3,8 +3,9 @@ on: [push, pull_request]
 jobs:
 
   build:
+    if: github.repository == 'vitessio/vitess'
     name: Run endtoend tests on Cluster (upgrade)
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-latest
 
     steps:
     - name: Set up Go
@@ -12,15 +13,25 @@ jobs:
       with:
         go-version: 1.15
 
-    - name: Check out v8.0.0
+    - name: Tune the OS
+      run: |
+        echo '1024 65535' | sudo tee -a /proc/sys/net/ipv4/ip_local_port_range
+
+    # TEMPORARY WHILE GITHUB FIXES THIS https://github.com/actions/virtual-environments/issues/3185
+    - name: Add the current IP address, long hostname and short hostname record to /etc/hosts file
+      run: |
+        echo -e "$(ip addr show eth0 | grep "inet\b" | awk '{print $2}' | cut -d/ -f1)\t$(hostname -f) $(hostname -s)" | sudo tee -a /etc/hosts
+    # DON'T FORGET TO REMOVE CODE ABOVE WHEN ISSUE IS ADRESSED!
+
+    - name: Check out v9.0.0
       uses: actions/checkout@v2
       with:
-        ref: v8.0.0
+        ref: v9.0.0
 
     - name: Get dependencies
       run: |
         # This prepares general purpose binary dependencies
-        # as well as v8.0.0 specific go modules
+        # as well as v9.0.0 specific go modules
         sudo apt-get update
         sudo apt-get install -y mysql-server mysql-client make unzip g++ etcd curl git wget eatmydata
         sudo service mysql stop
@@ -35,28 +46,28 @@ jobs:
         sudo apt-get update
         sudo apt-get install percona-xtrabackup-24
 
-    - name: Building v8.0.0 binaries
+    - name: Building v9.0.0 binaries
       timeout-minutes: 10
       run: |
-        # We build v8.0.0 binaries and save them in a temporary location
+        # We build v9.0.0 binaries and save them in a temporary location
         source build.env
         make build
-        mkdir -p /tmp/vitess-build-v8.0.0/
-        cp -R bin /tmp/vitess-build-v8.0.0/
+        mkdir -p /tmp/vitess-build-v9.0.0/
+        cp -R bin /tmp/vitess-build-v9.0.0/
 
     - name: Check out HEAD
       uses: actions/checkout@v2
 
-    - name: Run cluster endtoend test v8.0.0 (create cluster)
+    - name: Run cluster endtoend test v9.0.0 (create cluster)
       timeout-minutes: 5
       run: |
-        # By checking out we deleted bin/ directory. We now restore our pre-built v8.0.0 binaries
-        cp -R /tmp/vitess-build-v8.0.0/bin .
+        # By checking out we deleted bin/ directory. We now restore our pre-built v9.0.0 binaries
+        cp -R /tmp/vitess-build-v9.0.0/bin .
         # create the directory where we store test data; ensure it is empty:
         rm -rf /tmp/vtdataroot
         mkdir -p /tmp/vtdataroot
         source build.env
-        # We pass -skip-build so that we use the v8.0.0 binaries, not HEAD binaries
+        # We pass -skip-build so that we use the v9.0.0 binaries, not HEAD binaries
         eatmydata -- go run test.go -skip-build -keep-data -docker=false -print-log -follow -shard 28
 
     - name: Check out HEAD
@@ -73,7 +84,7 @@ jobs:
         mkdir -p /tmp/vitess-build-head/
         cp -R bin /tmp/vitess-build-head/
 
-    - name: Run cluster endtoend test HEAD based on v8.0.0 data (upgrade path)
+    - name: Run cluster endtoend test HEAD based on v9.0.0 data (upgrade path)
       timeout-minutes: 5
       run: |
         # /tmp/vtdataroot exists from previous test
@@ -94,11 +105,11 @@ jobs:
         eatmydata -- go run test.go -skip-build -keep-data -docker=false -print-log -follow -shard 28
 
 
-    - name: Run cluster endtoend test v8.0.0 based on HEAD data (downgrade path)
+    - name: Run cluster endtoend test v9.0.0 based on HEAD data (downgrade path)
       timeout-minutes: 5
       run: |
         # /tmp/vtdataroot exists from previous test
-        cp -R /tmp/vitess-build-v8.0.0/bin .
+        cp -R /tmp/vitess-build-v9.0.0/bin .
 
         source build.env
         # We again built manually and there's no need for the test to build.

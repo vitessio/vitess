@@ -20,12 +20,12 @@ limitations under the License.
 package vtexplain
 
 import (
+	"context"
 	"fmt"
 
+	"vitess.io/vitess/go/cache"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
-
-	"context"
 
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -69,8 +69,7 @@ func initVtgateExecutor(vSchemaStr, ksShardMapStr string, opts *Options) error {
 	vtgateSession.TargetString = opts.Target
 
 	streamSize := 10
-	queryPlanCacheSize := int64(10)
-	vtgateExecutor = vtgate.NewExecutor(context.Background(), explainTopo, vtexplainCell, resolver, opts.Normalize, streamSize, queryPlanCacheSize)
+	vtgateExecutor = vtgate.NewExecutor(context.Background(), explainTopo, vtexplainCell, resolver, opts.Normalize, false /*do not warn for sharded only*/, streamSize, cache.DefaultConfig)
 
 	return nil
 }
@@ -201,11 +200,12 @@ func vtgateExecute(sql string) ([]*engine.Plan, map[string]*TabletActions, error
 	}
 
 	var plans []*engine.Plan
-	for _, item := range planCache.Items() {
-		plan := item.Value.(*engine.Plan)
+	planCache.ForEach(func(value interface{}) bool {
+		plan := value.(*engine.Plan)
 		plan.ExecTime = 0
 		plans = append(plans, plan)
-	}
+		return true
+	})
 	planCache.Clear()
 
 	tabletActions := make(map[string]*TabletActions)

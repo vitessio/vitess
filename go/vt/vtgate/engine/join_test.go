@@ -76,7 +76,7 @@ func TestJoinExecute(t *testing.T) {
 			"bv": 1,
 		},
 	}
-	r, err := jn.Execute(noopVCursor{}, bv, true)
+	r, err := jn.Execute(&noopVCursor{}, bv, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -103,7 +103,7 @@ func TestJoinExecute(t *testing.T) {
 	leftPrim.rewind()
 	rightPrim.rewind()
 	jn.Opcode = LeftJoin
-	r, err = jn.Execute(noopVCursor{}, bv, true)
+	r, err = jn.Execute(&noopVCursor{}, bv, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -194,7 +194,7 @@ func TestJoinExecuteMaxMemoryRows(t *testing.T) {
 			},
 		}
 		testIgnoreMaxMemoryRows = test.ignoreMaxMemoryRows
-		_, err := jn.Execute(noopVCursor{}, bv, true)
+		_, err := jn.Execute(&noopVCursor{}, bv, true)
 		if testIgnoreMaxMemoryRows {
 			require.NoError(t, err)
 		} else {
@@ -235,7 +235,7 @@ func TestJoinExecuteNoResult(t *testing.T) {
 			"bv": 1,
 		},
 	}
-	r, err := jn.Execute(noopVCursor{}, map[string]*querypb.BindVariable{}, true)
+	r, err := jn.Execute(&noopVCursor{}, map[string]*querypb.BindVariable{}, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -265,8 +265,8 @@ func TestJoinExecuteErrors(t *testing.T) {
 		Opcode: NormalJoin,
 		Left:   leftPrim,
 	}
-	_, err := jn.Execute(noopVCursor{}, map[string]*querypb.BindVariable{}, true)
-	expectError(t, "jn.Execute", err, "left err")
+	_, err := jn.Execute(&noopVCursor{}, map[string]*querypb.BindVariable{}, true)
+	require.EqualError(t, err, "left err")
 
 	// Error on right query
 	leftPrim = &fakePrimitive{
@@ -295,8 +295,8 @@ func TestJoinExecuteErrors(t *testing.T) {
 			"bv": 1,
 		},
 	}
-	_, err = jn.Execute(noopVCursor{}, map[string]*querypb.BindVariable{}, true)
-	expectError(t, "jn.Execute", err, "right err")
+	_, err = jn.Execute(&noopVCursor{}, map[string]*querypb.BindVariable{}, true)
+	require.EqualError(t, err, "right err")
 
 	// Error on right getfields
 	leftPrim = &fakePrimitive{
@@ -322,8 +322,8 @@ func TestJoinExecuteErrors(t *testing.T) {
 			"bv": 1,
 		},
 	}
-	_, err = jn.Execute(noopVCursor{}, map[string]*querypb.BindVariable{}, true)
-	expectError(t, "jn.Execute", err, "right err")
+	_, err = jn.Execute(&noopVCursor{}, map[string]*querypb.BindVariable{}, true)
+	require.EqualError(t, err, "right err")
 }
 
 func TestJoinStreamExecute(t *testing.T) {
@@ -502,7 +502,7 @@ func TestGetFieldsErrors(t *testing.T) {
 		},
 	}
 	_, err := jn.GetFields(nil, map[string]*querypb.BindVariable{})
-	expectError(t, "jn.GetFields", err, "left err")
+	require.EqualError(t, err, "left err")
 
 	jn.Left = &fakePrimitive{
 		results: []*sqltypes.Result{
@@ -515,5 +515,5 @@ func TestGetFieldsErrors(t *testing.T) {
 		},
 	}
 	_, err = jn.GetFields(nil, map[string]*querypb.BindVariable{})
-	expectError(t, "jn.GetFields", err, "right err")
+	require.EqualError(t, err, "right err")
 }

@@ -18,17 +18,22 @@ package servenv
 
 import (
 	"fmt"
+	"net"
 	"net/http"
 	"net/url"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"vitess.io/vitess/go/event"
-	"vitess.io/vitess/go/proc"
 	"vitess.io/vitess/go/vt/log"
 )
 
 var (
 	onCloseHooks event.Hooks
+	// ExitChan waits for a signal that tells the process to terminate
+	ExitChan chan os.Signal
 )
 
 // Run starts listening for RPC and HTTP requests,
@@ -40,13 +45,16 @@ func Run(port int) {
 	serveGRPC()
 	serveSocketFile()
 
-	l, err := proc.Listen(fmt.Sprintf("%v", port))
+	l, err := net.Listen("tcp", fmt.Sprintf(":%v", port))
 	if err != nil {
 		log.Exit(err)
 	}
 	go http.Serve(l, nil)
 
-	proc.Wait()
+	ExitChan = make(chan os.Signal, 1)
+	signal.Notify(ExitChan, syscall.SIGTERM, syscall.SIGINT)
+	// Wait for signal
+	<-ExitChan
 	l.Close()
 
 	startTime := time.Now()

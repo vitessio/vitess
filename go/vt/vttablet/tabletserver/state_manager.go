@@ -122,7 +122,7 @@ type stateManager struct {
 	checkMySQLThrottler *sync2.Semaphore
 
 	timebombDuration      time.Duration
-	unhealthyThreshold    time.Duration
+	unhealthyThreshold    sync2.AtomicDuration
 	shutdownGracePeriod   time.Duration
 	transitionGracePeriod time.Duration
 }
@@ -187,7 +187,7 @@ func (sm *stateManager) Init(env tabletenv.Env, target querypb.Target) {
 	sm.checkMySQLThrottler = sync2.NewSemaphore(1, 0)
 	sm.timebombDuration = env.Config().OltpReadPool.TimeoutSeconds.Get() * 10
 	sm.hcticks = timer.NewTimer(env.Config().Healthcheck.IntervalSeconds.Get())
-	sm.unhealthyThreshold = env.Config().Healthcheck.UnhealthyThresholdSeconds.Get()
+	sm.unhealthyThreshold = sync2.NewAtomicDuration(env.Config().Healthcheck.UnhealthyThresholdSeconds.Get())
 	sm.shutdownGracePeriod = env.Config().GracePeriods.ShutdownSeconds.Get()
 	sm.transitionGracePeriod = env.Config().GracePeriods.TransitionSeconds.Get()
 }
@@ -445,7 +445,6 @@ func (sm *stateManager) serveNonMaster(wantTabletType topodatapb.TabletType) err
 
 	sm.ddle.Close()
 	sm.tableGC.Close()
-	sm.throttler.Close()
 	sm.messager.Close()
 	sm.tracker.Close()
 	sm.se.MakeNonMaster()
@@ -457,6 +456,7 @@ func (sm *stateManager) serveNonMaster(wantTabletType topodatapb.TabletType) err
 	sm.te.AcceptReadOnly()
 	sm.rt.MakeNonMaster()
 	sm.watcher.Open()
+	sm.throttler.Open()
 	sm.setState(wantTabletType, StateServing)
 	return nil
 }
@@ -627,7 +627,7 @@ func (sm *stateManager) refreshReplHealthLocked() (time.Duration, error) {
 		}
 		sm.replHealthy = false
 	} else {
-		if lag > sm.unhealthyThreshold {
+		if lag > sm.unhealthyThreshold.Get() {
 			if sm.replHealthy {
 				log.Infof("Going unhealthy due to high replication lag: %v", lag)
 			}
@@ -754,4 +754,8 @@ func (sm *stateManager) IsServingString() string {
 		return "SERVING"
 	}
 	return "NOT_SERVING"
+}
+
+func (sm *stateManager) SetUnhealthyThreshold(v time.Duration) {
+	sm.unhealthyThreshold.Set(v)
 }

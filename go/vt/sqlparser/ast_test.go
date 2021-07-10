@@ -105,6 +105,28 @@ func TestSelect(t *testing.T) {
 	}
 }
 
+func TestUpdate(t *testing.T) {
+	tree, err := Parse("update t set a = 1")
+	require.NoError(t, err)
+
+	upd, ok := tree.(*Update)
+	require.True(t, ok)
+
+	upd.AddWhere(&ComparisonExpr{
+		Left:     &ColName{Name: NewColIdent("b")},
+		Operator: EqualOp,
+		Right:    NewIntLiteral("2"),
+	})
+	assert.Equal(t, "update t set a = 1 where b = 2", String(upd))
+
+	upd.AddWhere(&ComparisonExpr{
+		Left:     &ColName{Name: NewColIdent("c")},
+		Operator: EqualOp,
+		Right:    NewIntLiteral("3"),
+	})
+	assert.Equal(t, "update t set a = 1 where b = 2 and c = 3", String(upd))
+}
+
 func TestRemoveHints(t *testing.T) {
 	for _, query := range []string{
 		"select * from t use index (i)",
@@ -187,30 +209,29 @@ func TestDDL(t *testing.T) {
 		affected: []string{"a"},
 	}, {
 		query: "rename table a to b",
-		output: &DDL{
-			Action: RenameDDLAction,
-			FromTables: TableNames{
-				TableName{Name: NewTableIdent("a")},
-			},
-			ToTables: TableNames{
-				TableName{Name: NewTableIdent("b")},
+		output: &RenameTable{
+			TablePairs: []*RenameTablePair{
+				{
+					FromTable: TableName{Name: NewTableIdent("a")},
+					ToTable:   TableName{Name: NewTableIdent("b")},
+				},
 			},
 		},
 		affected: []string{"a", "b"},
 	}, {
 		query: "rename table a to b, c to d",
-		output: &DDL{
-			Action: RenameDDLAction,
-			FromTables: TableNames{
-				TableName{Name: NewTableIdent("a")},
-				TableName{Name: NewTableIdent("c")},
-			},
-			ToTables: TableNames{
-				TableName{Name: NewTableIdent("b")},
-				TableName{Name: NewTableIdent("d")},
+		output: &RenameTable{
+			TablePairs: []*RenameTablePair{
+				{
+					FromTable: TableName{Name: NewTableIdent("a")},
+					ToTable:   TableName{Name: NewTableIdent("b")},
+				}, {
+					FromTable: TableName{Name: NewTableIdent("c")},
+					ToTable:   TableName{Name: NewTableIdent("d")},
+				},
 			},
 		},
-		affected: []string{"a", "c", "b", "d"},
+		affected: []string{"a", "b", "c", "d"},
 	}, {
 		query: "drop table a",
 		output: &DropTable{
@@ -266,7 +287,7 @@ func TestSetAutocommitON(t *testing.T) {
 			t.Errorf("SET statement value is not StrVal: %T", v)
 		}
 
-		if !bytes.Equal([]byte("on"), v.Val) {
+		if "on" != v.Val {
 			t.Errorf("SET statement value want: on, got: %s", v.Val)
 		}
 	default:
@@ -291,7 +312,7 @@ func TestSetAutocommitON(t *testing.T) {
 			t.Errorf("SET statement value is not StrVal: %T", v)
 		}
 
-		if !bytes.Equal([]byte("on"), v.Val) {
+		if "on" != v.Val {
 			t.Errorf("SET statement value want: on, got: %s", v.Val)
 		}
 	default:
@@ -318,7 +339,7 @@ func TestSetAutocommitOFF(t *testing.T) {
 			t.Errorf("SET statement value is not StrVal: %T", v)
 		}
 
-		if !bytes.Equal([]byte("off"), v.Val) {
+		if "off" != v.Val {
 			t.Errorf("SET statement value want: on, got: %s", v.Val)
 		}
 	default:
@@ -343,7 +364,7 @@ func TestSetAutocommitOFF(t *testing.T) {
 			t.Errorf("SET statement value is not StrVal: %T", v)
 		}
 
-		if !bytes.Equal([]byte("off"), v.Val) {
+		if "off" != v.Val {
 			t.Errorf("SET statement value want: on, got: %s", v.Val)
 		}
 	default:
@@ -387,8 +408,8 @@ func TestIsAggregate(t *testing.T) {
 func TestIsImpossible(t *testing.T) {
 	f := ComparisonExpr{
 		Operator: NotEqualOp,
-		Left:     newIntLiteral("1"),
-		Right:    newIntLiteral("1"),
+		Left:     NewIntLiteral("1"),
+		Right:    NewIntLiteral("1"),
 	}
 	if !f.IsImpossible() {
 		t.Error("IsImpossible: false, want true")
@@ -396,8 +417,8 @@ func TestIsImpossible(t *testing.T) {
 
 	f = ComparisonExpr{
 		Operator: EqualOp,
-		Left:     newIntLiteral("1"),
-		Right:    newIntLiteral("1"),
+		Left:     NewIntLiteral("1"),
+		Right:    NewIntLiteral("1"),
 	}
 	if f.IsImpossible() {
 		t.Error("IsImpossible: true, want false")
@@ -405,8 +426,8 @@ func TestIsImpossible(t *testing.T) {
 
 	f = ComparisonExpr{
 		Operator: NotEqualOp,
-		Left:     newIntLiteral("1"),
-		Right:    newIntLiteral("2"),
+		Left:     NewIntLiteral("1"),
+		Right:    NewIntLiteral("2"),
 	}
 	if f.IsImpossible() {
 		t.Error("IsImpossible: true, want false")
@@ -535,7 +556,7 @@ func TestReplaceExpr(t *testing.T) {
 		in:  "select * from t where case a when b then c when d then c else (select a from b) end",
 		out: "case a when b then c when d then c else :a end",
 	}}
-	to := NewArgument([]byte(":a"))
+	to := NewArgument(":a")
 	for _, tcase := range tcases {
 		tree, err := Parse(tcase.in)
 		if err != nil {
@@ -665,7 +686,7 @@ func TestHexDecode(t *testing.T) {
 		out: "encoding/hex: odd length hex string",
 	}}
 	for _, tc := range testcase {
-		out, err := newHexLiteral(tc.in).HexDecode()
+		out, err := NewHexLiteral(tc.in).HexDecode()
 		if err != nil {
 			if err.Error() != tc.out {
 				t.Errorf("Decode(%q): %v, want %s", tc.in, err, tc.out)
@@ -801,4 +822,33 @@ func TestShowTableStatus(t *testing.T) {
 	tree, err := Parse(query)
 	require.NoError(t, err)
 	require.NotNil(t, tree)
+}
+
+func BenchmarkStringTraces(b *testing.B) {
+	for _, trace := range []string{"django_queries.txt", "lobsters.sql.gz"} {
+		b.Run(trace, func(b *testing.B) {
+			queries := loadQueries(b, trace)
+			if len(queries) > 10000 {
+				queries = queries[:10000]
+			}
+
+			parsed := make([]Statement, 0, len(queries))
+			for _, q := range queries {
+				pp, err := Parse(q)
+				if err != nil {
+					b.Fatal(err)
+				}
+				parsed = append(parsed, pp)
+			}
+
+			b.ResetTimer()
+			b.ReportAllocs()
+
+			for i := 0; i < b.N; i++ {
+				for _, stmt := range parsed {
+					_ = String(stmt)
+				}
+			}
+		})
+	}
 }

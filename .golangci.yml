@@ -1,5 +1,7 @@
 run:
   timeout: 10m
+  skip-dirs:
+    - go/vt/topo/k8stopo/client
 
 linters-settings:
   goimports:
@@ -22,6 +24,12 @@ linters:
     # Extras
     - gofmt
     - goimports
+
+issues:
+  exclude-rules:
+    - path: '^go/vt/proto/'
+      linters:
+      - goimports
 
 # https://github.com/golangci/golangci/wiki/Configuration
 service:

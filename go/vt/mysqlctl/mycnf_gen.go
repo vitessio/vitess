@@ -92,7 +92,12 @@ func TabletDir(uid uint32) string {
 	if *tabletDir != "" {
 		return fmt.Sprintf("%s/%s", env.VtDataRoot(), *tabletDir)
 	}
-	return fmt.Sprintf("%s/vt_%010d", env.VtDataRoot(), uid)
+	return DefaultTabletDirAtRoot(env.VtDataRoot(), uid)
+}
+
+// DefaultTabletDirAtRoot returns the default directory for a tablet given a UID and a VtDataRoot variable
+func DefaultTabletDirAtRoot(dataRoot string, uid uint32) string {
+	return fmt.Sprintf("%s/vt_%010d", dataRoot, uid)
 }
 
 // MycnfFile returns the default location of the my.cnf file.

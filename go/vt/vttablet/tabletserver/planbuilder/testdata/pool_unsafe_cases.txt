@@ -19,5 +19,13 @@
 "release_lock('foo') not allowed without a reserved connections"
 
 # setting system variables must happen inside reserved connections
-"set @sql_safe_updates = false"
-"set @sql_safe_updates = false not allowed without a reserved connections"
+"set sql_safe_updates = false"
+"set sql_safe_updates = false not allowed without a reserved connections"
+
+# setting system variables must happen inside reserved connections
+"set @@sql_safe_updates = false"
+"set @@sql_safe_updates = false not allowed without a reserved connections"
+
+# setting system variables must happen inside reserved connections
+"set @udv = false"
+"set @udv = false not allowed without a reserved connections"

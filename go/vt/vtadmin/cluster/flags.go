@@ -150,6 +150,12 @@ func parseOne(cfg *Config, name string, val string) error {
 			cfg.VtSQLFlags[strings.TrimPrefix(name, "vtsql-")] = val
 
 			return nil
+		} else if strings.HasPrefix(name, "vtctld-") {
+			if cfg.VtctldFlags == nil {
+				cfg.VtctldFlags = map[string]string{}
+			}
+
+			cfg.VtctldFlags[strings.TrimPrefix(name, "vtctld-")] = val
 		}
 
 		match := discoveryFlagRegexp.FindStringSubmatch(name)

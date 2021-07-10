@@ -19,8 +19,6 @@ package engine
 import (
 	"sync"
 
-	"vitess.io/vitess/go/mysql"
-
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -42,12 +40,20 @@ func (c *Concatenate) RouteType() string {
 
 // GetKeyspaceName specifies the Keyspace that this primitive routes to
 func (c *Concatenate) GetKeyspaceName() string {
-	return formatTwoOptionsNicely(c.Sources[0].GetKeyspaceName(), c.Sources[1].GetKeyspaceName())
+	res := c.Sources[0].GetKeyspaceName()
+	for i := 1; i < len(c.Sources); i++ {
+		res = formatTwoOptionsNicely(res, c.Sources[i].GetKeyspaceName())
+	}
+	return res
 }
 
 // GetTableName specifies the table that this primitive routes to.
 func (c *Concatenate) GetTableName() string {
-	return formatTwoOptionsNicely(c.Sources[0].GetTableName(), c.Sources[1].GetTableName())
+	res := c.Sources[0].GetTableName()
+	for i := 1; i < len(c.Sources); i++ {
+		res = formatTwoOptionsNicely(res, c.Sources[i].GetTableName())
+	}
+	return res
 }
 
 func formatTwoOptionsNicely(a, b string) string {
@@ -57,49 +63,62 @@ func formatTwoOptionsNicely(a, b string) string {
 	return a + "_" + b
 }
 
+var errWrongNumberOfColumnsInSelect = vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.WrongNumberOfColumnsInSelect, "The used SELECT statements have a different number of columns")
+
 // Execute performs a non-streaming exec.
 func (c *Concatenate) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	lhs, rhs, err := c.execSources(vcursor, bindVars, wantfields)
+	res, err := c.execSources(vcursor, bindVars, wantfields)
 	if err != nil {
 		return nil, err
 	}
 
-	fields, err := c.getFields(lhs.Fields, rhs.Fields)
+	fields, err := c.getFields(res)
 	if err != nil {
 		return nil, err
 	}
 
-	if len(lhs.Rows) > 0 &&
-		len(rhs.Rows) > 0 &&
-		len(lhs.Rows[0]) != len(rhs.Rows[0]) {
-		return nil, mysql.NewSQLError(mysql.ERWrongNumberOfColumnsInSelect, "21000", "The used SELECT statements have a different number of columns")
+	var rowsAffected uint64 = 0
+	var rows [][]sqltypes.Value
+
+	for _, r := range res {
+		rowsAffected += r.RowsAffected
+
+		if len(rows) > 0 &&
+			len(r.Rows) > 0 &&
+			len(rows[0]) != len(r.Rows[0]) {
+			return nil, errWrongNumberOfColumnsInSelect
+		}
+
+		rows = append(rows, r.Rows...)
 	}
 
 	return &sqltypes.Result{
 		Fields:       fields,
-		RowsAffected: lhs.RowsAffected + rhs.RowsAffected,
-		Rows:         append(lhs.Rows, rhs.Rows...),
+		RowsAffected: rowsAffected,
+		Rows:         rows,
 	}, nil
 }
 
-func (c *Concatenate) getFields(a, b []*querypb.Field) ([]*querypb.Field, error) {
-	switch {
-	case a != nil && b != nil:
-		err := compareFields(a, b)
+func (c *Concatenate) getFields(res []*sqltypes.Result) ([]*querypb.Field, error) {
+	var resFields []*querypb.Field
+	for _, r := range res {
+		fields := r.Fields
+		if fields == nil {
+			continue
+		}
+		if resFields == nil {
+			resFields = fields
+			continue
+		}
+		err := compareFields(fields, resFields)
 		if err != nil {
 			return nil, err
 		}
-		return a, nil
-	case a != nil:
-		return a, nil
-	case b != nil:
-		return b, nil
 	}
-
-	return nil, nil
+	return resFields, nil
 }
-func (c *Concatenate) execSources(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, *sqltypes.Result, error) {
-	results := make([]*sqltypes.Result, 2)
+func (c *Concatenate) execSources(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) ([]*sqltypes.Result, error) {
+	results := make([]*sqltypes.Result, len(c.Sources))
 	g, restoreCtx := vcursor.ErrorGroupCancellableContext()
 	defer restoreCtx()
 	for i, source := range c.Sources {
@@ -115,9 +134,9 @@ func (c *Concatenate) execSources(vcursor VCursor, bindVars map[string]*querypb.
 	}
 
 	if err := g.Wait(); err != nil {
-		return nil, nil, vterrors.Wrap(err, "Concatenate.Execute")
+		return nil, err
 	}
-	return results[0], results[1], nil
+	return results, nil
 }
 
 // StreamExecute performs a streaming exec.
@@ -177,25 +196,32 @@ func (c *Concatenate) StreamExecute(vcursor VCursor, bindVars map[string]*queryp
 
 // GetFields fetches the field info.
 func (c *Concatenate) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	lhs, err := c.Sources[0].GetFields(vcursor, bindVars)
-	if err != nil {
-		return nil, err
-	}
-	rhs, err := c.Sources[1].GetFields(vcursor, bindVars)
-	if err != nil {
-		return nil, err
-	}
-	err = compareFields(lhs.Fields, rhs.Fields)
+	res, err := c.Sources[0].GetFields(vcursor, bindVars)
 	if err != nil {
 		return nil, err
 	}
 
-	return lhs, nil
+	for i := 1; i < len(c.Sources); i++ {
+		result, err := c.Sources[i].GetFields(vcursor, bindVars)
+		if err != nil {
+			return nil, err
+		}
+		err = compareFields(result.Fields, res.Fields)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return res, nil
 }
 
 //NeedsTransaction returns whether a transaction is needed for this primitive
 func (c *Concatenate) NeedsTransaction() bool {
-	return c.Sources[0].NeedsTransaction() || c.Sources[1].NeedsTransaction()
+	for _, source := range c.Sources {
+		if source.NeedsTransaction() {
+			return true
+		}
+	}
+	return false
 }
 
 // Inputs returns the input primitives for this
@@ -209,12 +235,12 @@ func (c *Concatenate) description() PrimitiveDescription {
 
 func compareFields(fields1 []*querypb.Field, fields2 []*querypb.Field) error {
 	if len(fields1) != len(fields2) {
-		return mysql.NewSQLError(mysql.ERWrongNumberOfColumnsInSelect, "21000", "The used SELECT statements have a different number of columns")
+		return errWrongNumberOfColumnsInSelect
 	}
 	for i, field2 := range fields2 {
 		field1 := fields1[i]
 		if field1.Type != field2.Type {
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "column field type does not match for name: (%v, %v) types: (%v, %v)", field1.Name, field2.Name, field1.Type, field2.Type)
+			return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "merging field of different types is not supported, name: (%v, %v) types: (%v, %v)", field1.Name, field2.Name, field1.Type, field2.Type)
 		}
 	}
 	return nil

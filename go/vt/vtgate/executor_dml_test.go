@@ -50,7 +50,7 @@ func TestUpdateEqual(t *testing.T) {
 	_, err := executorExec(executor, "update user set a=2 where id = 1", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "update user set a = 2 where id = 1",
+		Sql:           "update `user` set a = 2 where id = 1",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
@@ -65,7 +65,7 @@ func TestUpdateEqual(t *testing.T) {
 	_, err = executorExec(executor, "update user set a=2 where id = 3", nil)
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql:           "update user set a = 2 where id = 3",
+		Sql:           "update `user` set a = 2 where id = 3",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	if !reflect.DeepEqual(sbc2.Queries, wantQueries) {
@@ -225,10 +225,10 @@ func TestUpdateMultiOwned(t *testing.T) {
 		t.Fatal(err)
 	}
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select id, a, b, c, d, e, f, a = 1 and b = 2, e = 3 and f = 4 from user where id = 1 for update",
+		Sql:           "select id, a, b, c, d, e, f, a = 1 and b = 2, e = 3 and f = 4 from `user` where id = 1 for update",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}, {
-		Sql:           "update user set a = 1, b = 2, f = 4, e = 3 where id = 1",
+		Sql:           "update `user` set a = 1, b = 2, f = 4, e = 3 where id = 1",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
@@ -277,7 +277,7 @@ func TestUpdateComments(t *testing.T) {
 	_, err := executorExec(executor, "update user set a=2 where id = 1 /* trailing */", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "update user set a = 2 where id = 1 /* trailing */",
+		Sql:           "update `user` set a = 2 where id = 1 /* trailing */",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
@@ -295,7 +295,7 @@ func TestUpdateNormalize(t *testing.T) {
 	_, err := executorExec(executor, "/* leading */ update user set a=2 where id = 1 /* trailing */", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql: "/* leading */ update user set a = :vtg1 where id = :vtg2 /* trailing */",
+		Sql: "/* leading */ update `user` set a = :vtg1 where id = :vtg2 /* trailing */",
 		BindVariables: map[string]*querypb.BindVariable{
 			"vtg1": sqltypes.TestBindVariable(int64(2)),
 			"vtg2": sqltypes.TestBindVariable(int64(1)),
@@ -314,7 +314,7 @@ func TestUpdateNormalize(t *testing.T) {
 	_, err = executorExec(executor, "/* leading */ update user set a=2 where id = 1 /* trailing */", nil)
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql: "/* leading */ update user set a = :vtg1 where id = :vtg2 /* trailing */",
+		Sql: "/* leading */ update `user` set a = :vtg1 where id = :vtg2 /* trailing */",
 		BindVariables: map[string]*querypb.BindVariable{
 			"vtg1": sqltypes.TestBindVariable(int64(2)),
 			"vtg2": sqltypes.TestBindVariable(int64(1)),
@@ -344,10 +344,10 @@ func TestDeleteEqual(t *testing.T) {
 	_, err := executorExec(executor, "delete from user where id = 1", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select Id, `name` from user where id = 1 for update",
+		Sql:           "select Id, `name` from `user` where id = 1 for update",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}, {
-		Sql:           "delete from user where id = 1",
+		Sql:           "delete from `user` where id = 1",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	if !reflect.DeepEqual(sbc.Queries, wantQueries) {
@@ -371,10 +371,10 @@ func TestDeleteEqual(t *testing.T) {
 	_, err = executorExec(executor, "delete from user where id = 1", nil)
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql:           "select Id, `name` from user where id = 1 for update",
+		Sql:           "select Id, `name` from `user` where id = 1 for update",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}, {
-		Sql:           "delete from user where id = 1",
+		Sql:           "delete from `user` where id = 1",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	if !reflect.DeepEqual(sbc.Queries, wantQueries) {
@@ -529,10 +529,10 @@ func TestDeleteComments(t *testing.T) {
 	_, err := executorExec(executor, "delete from user where id = 1 /* trailing */", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select Id, `name` from user where id = 1 for update /* trailing */",
+		Sql:           "select Id, `name` from `user` where id = 1 for update /* trailing */",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}, {
-		Sql:           "delete from user where id = 1 /* trailing */",
+		Sql:           "delete from `user` where id = 1 /* trailing */",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	if !reflect.DeepEqual(sbc.Queries, wantQueries) {
@@ -560,7 +560,7 @@ func TestInsertSharded(t *testing.T) {
 	_, err := executorExec(executor, "insert into user(id, v, name) values (1, 2, 'myname')", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql: "insert into user(id, v, `name`) values (:_Id_0, 2, :_name_0)",
+		Sql: "insert into `user`(id, v, `name`) values (:_Id_0, 2, :_name_0)",
 		BindVariables: map[string]*querypb.BindVariable{
 			"_Id_0":   sqltypes.Int64BindVariable(1),
 			"_name_0": sqltypes.BytesBindVariable([]byte("myname")),
@@ -592,7 +592,7 @@ func TestInsertSharded(t *testing.T) {
 	_, err = executorExec(executor, "insert into user(id, v, name) values (3, 2, 'myname2')", nil)
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql: "insert into user(id, v, `name`) values (:_Id_0, 2, :_name_0)",
+		Sql: "insert into `user`(id, v, `name`) values (:_Id_0, 2, :_name_0)",
 		BindVariables: map[string]*querypb.BindVariable{
 			"_Id_0":   sqltypes.Int64BindVariable(3),
 			"__seq0":  sqltypes.Int64BindVariable(3),
@@ -637,10 +637,7 @@ func TestInsertShardedKeyrange(t *testing.T) {
 
 	// If a unique vindex returns a keyrange, we fail the insert
 	_, err := executorExec(executor, "insert into keyrange_table(krcol_unique, krcol) values(1, 1)", nil)
-	want := "execInsertSharded: getInsertShardedRoute: could not map [INT64(1)] to a unique keyspace id: DestinationKeyRange(-10)"
-	if err == nil || err.Error() != want {
-		t.Errorf("executorExec error: %v, want %s", err, want)
-	}
+	require.EqualError(t, err, "could not map [INT64(1)] to a unique keyspace id: DestinationKeyRange(-10)")
 }
 
 func TestInsertShardedAutocommitLookup(t *testing.T) {
@@ -694,7 +691,7 @@ func TestInsertShardedAutocommitLookup(t *testing.T) {
 	_, err := executorExec(executor, "insert into user(id, v, name) values (1, 2, 'myname')", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql: "insert into user(id, v, `name`) values (:_Id_0, 2, :_name_0)",
+		Sql: "insert into `user`(id, v, `name`) values (:_Id_0, 2, :_name_0)",
 		BindVariables: map[string]*querypb.BindVariable{
 			"_Id_0":   sqltypes.Int64BindVariable(1),
 			"_name_0": sqltypes.BytesBindVariable([]byte("myname")),
@@ -955,7 +952,7 @@ func TestInsertComments(t *testing.T) {
 	_, err := executorExec(executor, "insert into user(id, v, name) values (1, 2, 'myname') /* trailing */", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql: "insert into user(id, v, `name`) values (:_Id_0, 2, :_name_0) /* trailing */",
+		Sql: "insert into `user`(id, v, `name`) values (:_Id_0, 2, :_name_0) /* trailing */",
 		BindVariables: map[string]*querypb.BindVariable{
 			"_Id_0":   sqltypes.Int64BindVariable(1),
 			"_name_0": sqltypes.BytesBindVariable([]byte("myname")),
@@ -993,7 +990,7 @@ func TestInsertGeneratorSharded(t *testing.T) {
 	result, err := executorExec(executor, "insert into user(v, `name`) values (2, 'myname')", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql: "insert into user(v, `name`, id) values (2, :_name_0, :_Id_0)",
+		Sql: "insert into `user`(v, `name`, id) values (2, :_name_0, :_Id_0)",
 		BindVariables: map[string]*querypb.BindVariable{
 			"_Id_0":   sqltypes.Int64BindVariable(1),
 			"__seq0":  sqltypes.Int64BindVariable(1),
@@ -1014,11 +1011,11 @@ func TestInsertGeneratorSharded(t *testing.T) {
 		},
 	}}
 	utils.MustMatch(t, wantQueries, sbclookup.Queries, "sbclookup.Queries")
-	wantResult := *sandboxconn.SingleRowResult
-	wantResult.InsertID = 1
-	if !result.Equal(&wantResult) {
-		t.Errorf("result: %+v, want %+v", result, &wantResult)
+	wantResult := &sqltypes.Result{
+		InsertID:     1,
+		RowsAffected: 1,
 	}
+	utils.MustMatch(t, wantResult, result)
 }
 
 func TestInsertAutoincSharded(t *testing.T) {
@@ -1066,11 +1063,11 @@ func TestInsertGeneratorUnsharded(t *testing.T) {
 	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
 		t.Errorf("sbclookup.Queries: \n%#v, want \n%#v\n", sbclookup.Queries, wantQueries)
 	}
-	wantResult := *sandboxconn.SingleRowResult
-	wantResult.InsertID = 1
-	if !result.Equal(&wantResult) {
-		t.Errorf("result: %+v, want %+v", result, &wantResult)
+	wantResult := &sqltypes.Result{
+		InsertID:     1,
+		RowsAffected: 1,
 	}
+	utils.MustMatch(t, wantResult, result)
 }
 
 func TestInsertAutoincUnsharded(t *testing.T) {
@@ -1163,11 +1160,11 @@ func TestInsertLookupOwnedGenerator(t *testing.T) {
 	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
 		t.Errorf("sbclookup.Queries:\n%+v, want\n%+v\n", sbclookup.Queries, wantQueries)
 	}
-	wantResult := *sandboxconn.SingleRowResult
-	wantResult.InsertID = 4
-	if !result.Equal(&wantResult) {
-		t.Errorf("result:\n%+v, want\n%+v", result, &wantResult)
+	wantResult := &sqltypes.Result{
+		InsertID:     4,
+		RowsAffected: 1,
 	}
+	utils.MustMatch(t, wantResult, result)
 }
 
 func TestInsertLookupUnowned(t *testing.T) {
@@ -1243,10 +1240,7 @@ func TestInsertPartialFail1(t *testing.T) {
 		"insert into user(id, v, name) values (1, 2, 'myname')",
 		nil,
 	)
-	want := "execInsertSharded:"
-	if err == nil || !strings.HasPrefix(err.Error(), want) {
-		t.Errorf("insert first DML fail: %v, must start with %s", err, want)
-	}
+	require.Error(t, err)
 }
 
 // If a statement gets broken up into two, and the second one fails
@@ -1277,7 +1271,7 @@ func TestMultiInsertSharded(t *testing.T) {
 	_, err := executorExec(executor, "insert into user(id, v, name) values (1, 1, 'myname1'),(3, 3, 'myname3')", nil)
 	require.NoError(t, err)
 	wantQueries1 := []*querypb.BoundQuery{{
-		Sql: "insert into user(id, v, `name`) values (:_Id_0, 1, :_name_0)",
+		Sql: "insert into `user`(id, v, `name`) values (:_Id_0, 1, :_name_0)",
 		BindVariables: map[string]*querypb.BindVariable{
 			"_Id_0":   sqltypes.Int64BindVariable(1),
 			"_name_0": sqltypes.BytesBindVariable([]byte("myname1")),
@@ -1289,7 +1283,7 @@ func TestMultiInsertSharded(t *testing.T) {
 	}}
 
 	wantQueries2 := []*querypb.BoundQuery{{
-		Sql: "insert into user(id, v, `name`) values (:_Id_1, 3, :_name_1)",
+		Sql: "insert into `user`(id, v, `name`) values (:_Id_1, 3, :_name_1)",
 		BindVariables: map[string]*querypb.BindVariable{
 			"_Id_0":   sqltypes.Int64BindVariable(1),
 			"_name_0": sqltypes.BytesBindVariable([]byte("myname1")),
@@ -1326,7 +1320,7 @@ func TestMultiInsertSharded(t *testing.T) {
 	_, err = executorExec(executor, "insert into user(id, v, name) values (1, 1, 'myname1'),(2, 2, 'myname2')", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql: "insert into user(id, v, `name`) values (:_Id_0, 1, :_name_0),(:_Id_1, 2, :_name_1)",
+		Sql: "insert into `user`(id, v, `name`) values (:_Id_0, 1, :_name_0),(:_Id_1, 2, :_name_1)",
 		BindVariables: map[string]*querypb.BindVariable{
 			"_Id_0":   sqltypes.Int64BindVariable(1),
 			"__seq0":  sqltypes.Int64BindVariable(1),
@@ -1432,11 +1426,11 @@ func TestMultiInsertGenerator(t *testing.T) {
 		},
 	}}
 	utils.MustMatch(t, wantQueries, sbclookup.Queries, "sbclookup.Queries")
-	wantResult := *sandboxconn.SingleRowResult
-	wantResult.InsertID = 1
-	if !result.Equal(&wantResult) {
-		t.Errorf("result: %+v, want %+v", result, &wantResult)
+	wantResult := &sqltypes.Result{
+		InsertID:     1,
+		RowsAffected: 1,
 	}
+	utils.MustMatch(t, wantResult, result)
 }
 
 func TestMultiInsertGeneratorSparse(t *testing.T) {
@@ -1484,11 +1478,11 @@ func TestMultiInsertGeneratorSparse(t *testing.T) {
 		},
 	}}
 	utils.MustMatch(t, wantQueries, sbclookup.Queries, "sbclookup.Queries")
-	wantResult := *sandboxconn.SingleRowResult
-	wantResult.InsertID = 1
-	if !result.Equal(&wantResult) {
-		t.Errorf("result: %+v, want %+v", result, &wantResult)
+	wantResult := &sqltypes.Result{
+		InsertID:     1,
+		RowsAffected: 1,
 	}
+	utils.MustMatch(t, wantResult, result)
 }
 
 func TestInsertBadAutoInc(t *testing.T) {
@@ -1611,7 +1605,7 @@ func TestKeyDestRangeQuery(t *testing.T) {
 	masterSession.TargetString = "TestExecutor[-]"
 	_, err := executorExec(executor, insertInput, nil)
 
-	require.EqualError(t, err, "range queries not supported for inserts: TestExecutor[-]")
+	require.EqualError(t, err, "range queries are not allowed for insert statement: TestExecutor[-]")
 
 	masterSession.TargetString = ""
 }
@@ -1704,7 +1698,7 @@ func TestUpdateLastInsertID(t *testing.T) {
 	_, err := executorExec(executor, sql, map[string]*querypb.BindVariable{})
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql: "update user set a = :__lastInsertId where id = :vtg1",
+		Sql: "update `user` set a = :__lastInsertId where id = :vtg1",
 		BindVariables: map[string]*querypb.BindVariable{
 			"__lastInsertId": sqltypes.Uint64BindVariable(43),
 			"vtg1":           sqltypes.Int64BindVariable(1)},
@@ -1747,8 +1741,7 @@ func TestReservedConnDML(t *testing.T) {
 	defer QueryLogger.Unsubscribe(logChan)
 
 	ctx := context.Background()
-	*sysVarSetEnabled = true
-	session := NewAutocommitSession(&vtgatepb.Session{})
+	session := NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true})
 
 	_, err := executor.Execute(ctx, "TestReservedConnDML", session, "use "+KsTestUnsharded, nil)
 	require.NoError(t, err)
@@ -1779,7 +1772,7 @@ func TestReservedConnDML(t *testing.T) {
 	_, err = executor.Execute(ctx, "TestReservedConnDML", session, "begin", nil)
 	require.NoError(t, err)
 
-	sbc.EphemeralShardErr = mysql.NewSQLError(mysql.CRServerGone, mysql.SSUnknownSQLState, "connection gone")
+	sbc.EphemeralShardErr = mysql.NewSQLError(mysql.CRServerGone, mysql.SSNetError, "connection gone")
 	// as the first time the query fails due to connection loss i.e. reserved conn lost. It will be recreated to set statement will be executed again.
 	wantQueries = append(wantQueries,
 		&querypb.BoundQuery{Sql: "set @@default_week_format = 1", BindVariables: map[string]*querypb.BindVariable{}},

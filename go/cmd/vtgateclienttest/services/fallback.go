@@ -56,8 +56,8 @@ func (c fallbackClient) ResolveTransaction(ctx context.Context, dtid string) err
 	return c.fallback.ResolveTransaction(ctx, dtid)
 }
 
-func (c fallbackClient) VStream(ctx context.Context, tabletType topodatapb.TabletType, vgtid *binlogdatapb.VGtid, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
-	return c.fallback.VStream(ctx, tabletType, vgtid, filter, send)
+func (c fallbackClient) VStream(ctx context.Context, tabletType topodatapb.TabletType, vgtid *binlogdatapb.VGtid, filter *binlogdatapb.Filter, flags *vtgatepb.VStreamFlags, send func([]*binlogdatapb.VEvent) error) error {
+	return c.fallback.VStream(ctx, tabletType, vgtid, filter, flags, send)
 }
 
 func (c fallbackClient) HandlePanic(err *error) {

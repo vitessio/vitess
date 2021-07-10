@@ -28,6 +28,8 @@ import (
 )
 
 func TestDiscoverVTGate(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name      string
 		contents  []byte
@@ -89,15 +91,21 @@ func TestDiscoverVTGate(t *testing.T) {
 		},
 	}
 
+	ctx := context.Background()
+
 	for _, tt := range tests {
+		tt := tt
+
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			disco := &StaticFileDiscovery{}
 			err := disco.parseConfig(tt.contents)
 			require.NoError(t, err)
 
-			gate, err := disco.DiscoverVTGate(context.Background(), tt.tags)
+			gate, err := disco.DiscoverVTGate(ctx, tt.tags)
 			if tt.shouldErr {
-				assert.Error(t, err, assert.AnError)
+				assert.Error(t, err)
 				return
 			}
 
@@ -108,6 +116,8 @@ func TestDiscoverVTGate(t *testing.T) {
 }
 
 func TestDiscoverVTGates(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name     string
 		contents []byte
@@ -226,25 +236,269 @@ func TestDiscoverVTGates(t *testing.T) {
 		},
 	}
 
+	ctx := context.Background()
+
 	for _, tt := range tests {
+		tt := tt
+
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			disco := &StaticFileDiscovery{}
 
 			err := disco.parseConfig(tt.contents)
 			if tt.shouldErrConfig {
-				assert.Error(t, err, assert.AnError)
+				assert.Error(t, err)
 			} else {
 				require.NoError(t, err)
 			}
 
-			gates, err := disco.DiscoverVTGates(context.Background(), tt.tags)
+			gates, err := disco.DiscoverVTGates(ctx, tt.tags)
 			if tt.shouldErr {
-				assert.Error(t, err, assert.AnError)
+				assert.Error(t, err)
 				return
 			}
 
 			assert.NoError(t, err)
 			assert.ElementsMatch(t, tt.expected, gates)
+		})
+	}
+}
+
+func TestDiscoverVtctld(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		contents  []byte
+		expected  *vtadminpb.Vtctld
+		tags      []string
+		shouldErr bool
+	}{
+		{
+			name:      "empty config",
+			contents:  []byte(`{}`),
+			expected:  nil,
+			shouldErr: true,
+		},
+		{
+			name: "one vtctld",
+			contents: []byte(`
+				{
+					"vtctlds": [{
+						"host": {
+							"hostname": "127.0.0.1:12345"
+						}
+					}]
+				}
+			`),
+			expected: &vtadmin.Vtctld{
+				Hostname: "127.0.0.1:12345",
+			},
+		},
+		{
+			name: "filtered by tags (one match)",
+			contents: []byte(`
+				{
+					"vtctlds": [
+						{
+							"host": {
+								"hostname": "127.0.0.1:11111"
+							},
+							"tags": ["cell:cellA"]
+						}, 
+						{
+							"host": {
+								"hostname": "127.0.0.1:22222"
+							},
+							"tags": ["cell:cellB"]
+						},
+						{
+							"host": {
+								"hostname": "127.0.0.1:33333"
+							},
+							"tags": ["cell:cellA"]
+						}
+					]
+				}
+			`),
+			expected: &vtadminpb.Vtctld{
+				Hostname: "127.0.0.1:22222",
+			},
+			tags: []string{"cell:cellB"},
+		},
+	}
+
+	ctx := context.Background()
+
+	for _, tt := range tests {
+		tt := tt
+
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			disco := &StaticFileDiscovery{}
+			err := disco.parseConfig(tt.contents)
+			require.NoError(t, err)
+
+			vtctld, err := disco.DiscoverVtctld(ctx, tt.tags)
+			if tt.shouldErr {
+				assert.Error(t, err)
+				return
+			}
+
+			assert.NoError(t, err)
+			assert.Equal(t, tt.expected, vtctld)
+		})
+	}
+}
+
+func TestDiscoverVtctlds(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		contents []byte
+		tags     []string
+		expected []*vtadminpb.Vtctld
+		// True if the test should produce an error on the DiscoverVTGates call
+		shouldErr bool
+		// True if the test should produce an error on the disco.parseConfig step
+		shouldErrConfig bool
+	}{
+		{
+			name:      "empty config",
+			contents:  []byte(`{}`),
+			expected:  []*vtadminpb.Vtctld{},
+			shouldErr: false,
+		},
+		{
+			name: "no tags",
+			contents: []byte(`
+				{
+					"vtctlds": [
+						{
+							"host": {
+								"hostname": "127.0.0.1:12345"
+							}
+						},
+						{
+							"host": {
+								"hostname": "127.0.0.1:67890"
+							}
+						}
+					]
+				}
+			`),
+			expected: []*vtadminpb.Vtctld{
+				{Hostname: "127.0.0.1:12345"},
+				{Hostname: "127.0.0.1:67890"},
+			},
+			shouldErr: false,
+		},
+		{
+			name: "filtered by tags",
+			contents: []byte(`
+				{
+					"vtctlds": [
+						{
+							"host": {
+								"hostname": "127.0.0.1:11111"
+							},
+							"tags": ["cell:cellA"]
+						},
+						{
+							"host": {
+								"hostname": "127.0.0.1:22222"
+							},
+							"tags": ["cell:cellB"]
+						},
+						{
+							"host": {
+								"hostname": "127.0.0.1:33333"
+							},
+							"tags": ["cell:cellA"]
+						}
+					]
+				}
+			`),
+			tags: []string{"cell:cellA"},
+			expected: []*vtadminpb.Vtctld{
+				{Hostname: "127.0.0.1:11111"},
+				{Hostname: "127.0.0.1:33333"},
+			},
+			shouldErr: false,
+		},
+		{
+			name: "filtered by multiple tags",
+			contents: []byte(`
+				{
+					"vtctlds": [
+						{
+							"host": {
+								"hostname": "127.0.0.1:11111"
+							},
+							"tags": ["cell:cellA"]
+						},
+						{
+							"host": {
+								"hostname": "127.0.0.1:22222"
+							},
+							"tags": ["cell:cellA", "pool:poolZ"]
+						},
+						{
+							"host": {
+								"hostname": "127.0.0.1:33333"
+							},
+							"tags": ["pool:poolZ"]
+						}
+					]
+				}
+			`),
+			tags: []string{"cell:cellA", "pool:poolZ"},
+			expected: []*vtadminpb.Vtctld{
+				{Hostname: "127.0.0.1:22222"},
+			},
+			shouldErr: false,
+		},
+		{
+			name: "invalid json",
+			contents: []byte(`
+				{
+					"vtctlds": "malformed"
+				}
+			`),
+			tags:            []string{},
+			shouldErr:       false,
+			shouldErrConfig: true,
+		},
+	}
+
+	ctx := context.Background()
+
+	for _, tt := range tests {
+		tt := tt
+
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			disco := &StaticFileDiscovery{}
+
+			err := disco.parseConfig(tt.contents)
+			if tt.shouldErrConfig {
+				assert.Error(t, err)
+			} else {
+				require.NoError(t, err)
+			}
+
+			vtctlds, err := disco.DiscoverVtctlds(ctx, tt.tags)
+			if tt.shouldErr {
+				assert.Error(t, err)
+				return
+			}
+
+			assert.NoError(t, err)
+			assert.ElementsMatch(t, tt.expected, vtctlds)
 		})
 	}
 }

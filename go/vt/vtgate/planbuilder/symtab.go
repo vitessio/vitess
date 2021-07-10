@@ -22,6 +22,9 @@ import (
 	"strconv"
 	"strings"
 
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
@@ -564,9 +567,37 @@ func newResultColumn(expr *sqlparser.AliasedExpr, origin logicalPlan) *resultCol
 	} else {
 		// We don't generate an alias if the expression is non-trivial.
 		// Just to be safe, generate an anonymous column for the expression.
+		typ, err := GetReturnType(expr.Expr)
 		rc.column = &column{
 			origin: origin,
 		}
+		if err == nil {
+			rc.column.typ = typ
+		}
 	}
 	return rc
+}
+
+// GetReturnType returns the type of the select expression that MySQL will return
+func GetReturnType(input sqlparser.Expr) (querypb.Type, error) {
+	switch node := input.(type) {
+	case *sqlparser.FuncExpr:
+		functionName := strings.ToUpper(node.Name.String())
+		switch functionName {
+		case "ABS":
+			// Returned value depends on the return type of the input
+			if len(node.Exprs) == 1 {
+				expr, isAliasedExpr := node.Exprs[0].(*sqlparser.AliasedExpr)
+				if isAliasedExpr {
+					return GetReturnType(expr.Expr)
+				}
+			}
+		case "COUNT":
+			return querypb.Type_INT64, nil
+		}
+	case *sqlparser.ColName:
+		col := node.Metadata.(*column)
+		return col.typ, nil
+	}
+	return 0, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "cannot evaluate return type for %T", input)
 }

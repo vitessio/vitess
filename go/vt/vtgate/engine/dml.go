@@ -103,11 +103,11 @@ func (op DMLOpcode) String() string {
 func resolveMultiValueShards(vcursor VCursor, keyspace *vindexes.Keyspace, query string, bindVars map[string]*querypb.BindVariable, pv sqltypes.PlanValue, vindex vindexes.SingleColumn) ([]*srvtopo.ResolvedShard, []*querypb.BoundQuery, error) {
 	keys, err := pv.ResolveList(bindVars)
 	if err != nil {
-		return nil, nil, vterrors.Wrap(err, "execDeleteIn")
+		return nil, nil, err
 	}
 	rss, err := resolveMultiShard(vcursor, vindex, keyspace, keys)
 	if err != nil {
-		return nil, nil, vterrors.Wrap(err, "execDeleteIn")
+		return nil, nil, err
 	}
 	queries := make([]*querypb.BoundQuery, len(rss))
 	for i := range rss {

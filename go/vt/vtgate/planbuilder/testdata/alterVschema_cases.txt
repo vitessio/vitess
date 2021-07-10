@@ -24,7 +24,7 @@
       "Name": "user",
       "Sharded": true
     },
-    "query": "alter vschema create vindex user.hash_vdx using hash"
+    "query": "alter vschema create vindex `user`.hash_vdx using hash"
   }
 }
 
@@ -84,7 +84,7 @@
       "Name": "user",
       "Sharded": true
     },
-    "query": "alter vschema on user.a add auto_increment id using a_seq"
+    "query": "alter vschema on `user`.a add auto_increment id using a_seq"
   }
 }
 

@@ -61,6 +61,7 @@ type LogStats struct {
 	TransactionID        int64
 	ReservedID           int64
 	Error                error
+	CachedPlan           bool
 }
 
 // NewLogStats constructs a new LogStats with supplied Method and ctx
@@ -181,7 +182,7 @@ func (stats *LogStats) CallInfo() (string, string) {
 // Logf formats the log record to the given writer, either as
 // tab-separated list of logged fields or as JSON.
 func (stats *LogStats) Logf(w io.Writer, params url.Values) error {
-	if !streamlog.ShouldEmitLog(stats.OriginalSQL) {
+	if !streamlog.ShouldEmitLog(stats.OriginalSQL, uint64(stats.RowsAffected), uint64(len(stats.Rows))) {
 		return nil
 	}
 

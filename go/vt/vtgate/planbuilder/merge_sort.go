@@ -19,6 +19,7 @@ package planbuilder
 import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 var _ logicalPlan = (*mergeSort)(nil)
@@ -65,15 +66,20 @@ func (ms *mergeSort) Wireup(plan logicalPlan, jt *jointab) error {
 	rb := ms.input.(*route)
 	for i, orderby := range rb.eroute.OrderBy {
 		rc := ms.resultColumns[orderby.Col]
-		if sqltypes.IsText(rc.column.typ) {
+		// Add a weight_string column if we know that the column is a textual column or if its type is unknown
+		if sqltypes.IsText(rc.column.typ) || rc.column.typ == sqltypes.Null {
 			// If a weight string was previously requested, reuse it.
 			if colNumber, ok := ms.weightStrings[rc]; ok {
-				rb.eroute.OrderBy[i].Col = colNumber
+				rb.eroute.OrderBy[i].WeightStringCol = colNumber
 				continue
 			}
 			var err error
-			rb.eroute.OrderBy[i].Col, err = rb.SupplyWeightString(orderby.Col)
+			rb.eroute.OrderBy[i].WeightStringCol, err = rb.SupplyWeightString(orderby.Col)
 			if err != nil {
+				_, isUnsupportedErr := err.(UnsupportedSupplyWeightString)
+				if isUnsupportedErr {
+					continue
+				}
 				return err
 			}
 			ms.truncateColumnCount = len(ms.resultColumns)
@@ -81,4 +87,8 @@ func (ms *mergeSort) Wireup(plan logicalPlan, jt *jointab) error {
 	}
 	rb.eroute.TruncateColumnCount = ms.truncateColumnCount
 	return ms.input.Wireup(plan, jt)
+}
+
+func (ms *mergeSort) WireupV4(semTable *semantics.SemTable) error {
+	return ms.input.WireupV4(semTable)
 }

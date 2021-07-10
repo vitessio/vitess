@@ -36,27 +36,7 @@ import (
 // is interrupted, and the error is returned.
 func Walk(visit Visit, nodes ...SQLNode) error {
 	for _, node := range nodes {
-		if node == nil {
-			continue
-		}
-		var err error
-		var kontinue bool
-		pre := func(cursor *Cursor) bool {
-			// If we already have found an error, don't visit these nodes, just exit early
-			if err != nil {
-				return false
-			}
-			kontinue, err = visit(cursor.Node())
-			if err != nil {
-				return true // we have to return true here so that post gets called
-			}
-			return kontinue
-		}
-		post := func(cursor *Cursor) bool {
-			return err == nil // now we can abort the traversal if an error was found
-		}
-
-		Rewrite(node, pre, post)
+		err := VisitSQLNode(node, visit)
 		if err != nil {
 			return err
 		}
@@ -66,6 +46,8 @@ func Walk(visit Visit, nodes ...SQLNode) error {
 
 // Visit defines the signature of a function that
 // can be used to visit all nodes of a parse tree.
+// returning false on kontinue means that children will not be visited
+// returning an error will abort the visitation and return the error
 type Visit func(node SQLNode) (kontinue bool, err error)
 
 // Append appends the SQLNode to the buffer.
@@ -392,9 +374,10 @@ func NewWhere(typ WhereType, expr Expr) *Where {
 // then to is returned.
 func ReplaceExpr(root, from, to Expr) Expr {
 	tmp := Rewrite(root, replaceExpr(from, to), nil)
+
 	expr, success := tmp.(Expr)
 	if !success {
-		log.Errorf("Failed to rewrite expression. Rewriter returned a non-expression: " + String(tmp))
+		log.Errorf("Failed to rewrite expression. Rewriter returned a non-expression:  %s", String(tmp))
 		return from
 	}
 
@@ -442,48 +425,48 @@ func (node *ComparisonExpr) IsImpossible() bool {
 }
 
 // NewStrLiteral builds a new StrVal.
-func NewStrLiteral(in []byte) *Literal {
+func NewStrLiteral(in string) *Literal {
 	return &Literal{Type: StrVal, Val: in}
 }
 
 // NewIntLiteral builds a new IntVal.
-func NewIntLiteral(in []byte) *Literal {
+func NewIntLiteral(in string) *Literal {
 	return &Literal{Type: IntVal, Val: in}
 }
 
 // NewFloatLiteral builds a new FloatVal.
-func NewFloatLiteral(in []byte) *Literal {
+func NewFloatLiteral(in string) *Literal {
 	return &Literal{Type: FloatVal, Val: in}
 }
 
 // NewHexNumLiteral builds a new HexNum.
-func NewHexNumLiteral(in []byte) *Literal {
+func NewHexNumLiteral(in string) *Literal {
 	return &Literal{Type: HexNum, Val: in}
 }
 
 // NewHexLiteral builds a new HexVal.
-func NewHexLiteral(in []byte) *Literal {
+func NewHexLiteral(in string) *Literal {
 	return &Literal{Type: HexVal, Val: in}
 }
 
 // NewBitLiteral builds a new BitVal containing a bit literal.
-func NewBitLiteral(in []byte) *Literal {
+func NewBitLiteral(in string) *Literal {
 	return &Literal{Type: BitVal, Val: in}
 }
 
 // NewArgument builds a new ValArg.
-func NewArgument(in []byte) Argument {
-	return in
+func NewArgument(in string) Argument {
+	return Argument(in)
+}
+
+// Bytes return the []byte
+func (node *Literal) Bytes() []byte {
+	return []byte(node.Val)
 }
 
 // HexDecode decodes the hexval into bytes.
 func (node *Literal) HexDecode() ([]byte, error) {
-	dst := make([]byte, hex.DecodedLen(len([]byte(node.Val))))
-	_, err := hex.Decode(dst, []byte(node.Val))
-	if err != nil {
-		return nil, err
-	}
-	return dst, err
+	return hex.DecodeString(node.Val)
 }
 
 // Equal returns true if the column names match.
@@ -693,11 +676,12 @@ func (node *TableIdent) UnmarshalJSON(b []byte) error {
 func containEscapableChars(s string, at AtCount) bool {
 	isDbSystemVariable := at != NoAt
 
-	for i, c := range s {
-		letter := isLetter(uint16(c))
-		systemVarChar := isDbSystemVariable && isCarat(uint16(c))
+	for i := range s {
+		c := uint16(s[i])
+		letter := isLetter(c)
+		systemVarChar := isDbSystemVariable && isCarat(c)
 		if !(letter || systemVarChar) {
-			if i == 0 || !isDigit(uint16(c)) {
+			if i == 0 || !isDigit(c) {
 				return true
 			}
 		}
@@ -706,16 +690,12 @@ func containEscapableChars(s string, at AtCount) bool {
 	return false
 }
 
-func isKeyword(s string) bool {
-	_, isKeyword := keywords[s]
-	return isKeyword
-}
-
-func formatID(buf *TrackedBuffer, original, lowered string, at AtCount) {
-	if containEscapableChars(original, at) || isKeyword(lowered) {
+func formatID(buf *TrackedBuffer, original string, at AtCount) {
+	_, isKeyword := keywordLookupTable.LookupString(original)
+	if isKeyword || containEscapableChars(original, at) {
 		writeEscapedString(buf, original)
 	} else {
-		buf.Myprintf("%s", original)
+		buf.WriteString(original)
 	}
 }
 
@@ -816,6 +796,22 @@ func (node *ParenSelect) MakeDistinct() {
 	node.Select.MakeDistinct()
 }
 
+// AddWhere adds the boolean expression to the
+// WHERE clause as an AND condition.
+func (node *Update) AddWhere(expr Expr) {
+	if node.Where == nil {
+		node.Where = &Where{
+			Type: WhereClause,
+			Expr: expr,
+		}
+		return
+	}
+	node.Where.Expr = &AndExpr{
+		Left:  node.Where.Expr,
+		Right: expr,
+	}
+}
+
 // AddOrder adds an order by element
 func (node *Union) AddOrder(order *Order) {
 	node.OrderBy = append(node.OrderBy, order)
@@ -863,8 +859,6 @@ func (action DDLAction) ToString() string {
 		return RenameStr
 	case TruncateDDLAction:
 		return TruncateStr
-	case FlushDDLAction:
-		return FlushStr
 	case CreateVindexDDLAction:
 		return CreateVindexStr
 	case DropVindexDDLAction:
@@ -1213,24 +1207,59 @@ func (ty ShowCommandType) ToString() string {
 		return CharsetStr
 	case Collation:
 		return CollationStr
+	case Column:
+		return ColumnStr
+	case CreateDb:
+		return CreateDbStr
+	case CreateE:
+		return CreateEStr
+	case CreateF:
+		return CreateFStr
+	case CreateProc:
+		return CreateProcStr
+	case CreateTbl:
+		return CreateTblStr
+	case CreateTr:
+		return CreateTrStr
+	case CreateV:
+		return CreateVStr
 	case Database:
 		return DatabaseStr
+	case FunctionC:
+		return FunctionCStr
 	case Function:
 		return FunctionStr
+	case Index:
+		return IndexStr
+	case OpenTable:
+		return OpenTableStr
 	case Privilege:
 		return PrivilegeStr
+	case ProcedureC:
+		return ProcedureCStr
 	case Procedure:
 		return ProcedureStr
 	case StatusGlobal:
 		return StatusGlobalStr
 	case StatusSession:
 		return StatusSessionStr
+	case Table:
+		return TableStr
+	case TableStatus:
+		return TableStatusStr
+	case Trigger:
+		return TriggerStr
 	case VariableGlobal:
 		return VariableGlobalStr
 	case VariableSession:
 		return VariableSessionStr
+	case VitessMigrations:
+		return VitessMigrationsStr
+	case Keyspace:
+		return KeyspaceStr
 	default:
-		return "Unknown ShowCommandType"
+		return "" +
+			"Unknown ShowCommandType"
 	}
 }
 
@@ -1264,6 +1293,14 @@ func (lock LockOptionType) ToString() string {
 	}
 }
 
+// CompliantName is used to get the name of the bind variable to use for this column name
+func (node *ColName) CompliantName(suffix string) string {
+	if !node.Qualifier.IsEmpty() {
+		return node.Qualifier.Name.CompliantName() + "_" + node.Name.CompliantName() + suffix
+	}
+	return node.Name.CompliantName() + suffix
+}
+
 // AtCount represents the '@' count in ColIdent
 type AtCount int
 
@@ -1275,3 +1312,24 @@ const (
 	// DoubleAt represnts @@
 	DoubleAt
 )
+
+// handleUnaryMinus handles the case when a unary minus operator is seen in the parser. It takes 1 argument which is the expr to which the unary minus has been added to.
+func handleUnaryMinus(expr Expr) Expr {
+	if num, ok := expr.(*Literal); ok && num.Type == IntVal {
+		// Handle double negative
+		if num.Val[0] == '-' {
+			num.Val = num.Val[1:]
+			return num
+		}
+		return NewIntLiteral("-" + num.Val)
+	}
+	if unaryExpr, ok := expr.(*UnaryExpr); ok && unaryExpr.Operator == UMinusOp {
+		return unaryExpr.Expr
+	}
+	return &UnaryExpr{Operator: UMinusOp, Expr: expr}
+}
+
+// encodeSQLString encodes the string as a SQL string.
+func encodeSQLString(val string) string {
+	return sqltypes.EncodeStringSQL(val)
+}

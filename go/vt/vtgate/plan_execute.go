@@ -20,8 +20,6 @@ import (
 	"context"
 	"time"
 
-	"vitess.io/vitess/go/mysql"
-
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -45,7 +43,7 @@ func (e *Executor) newExecute(ctx context.Context, safeSession *SafeSession, sql
 	}
 
 	query, comments := sqlparser.SplitMarginComments(sql)
-	vcursor, err := newVCursorImpl(ctx, safeSession, comments, e, logStats, e.vm, e.VSchema(), e.resolver.resolver, e.serv)
+	vcursor, err := newVCursorImpl(ctx, safeSession, comments, e, logStats, e.vm, e.VSchema(), e.resolver.resolver, e.serv, e.warnShardedOnly)
 	if err != nil {
 		return 0, nil, err
 	}
@@ -73,6 +71,11 @@ func (e *Executor) newExecute(ctx context.Context, safeSession *SafeSession, sql
 		safeSession.ClearWarnings()
 	}
 
+	// add any warnings that the planner wants to add
+	for _, warning := range plan.Warnings {
+		safeSession.RecordWarning(warning)
+	}
+
 	// We need to explicitly handle errors, and begin/commit/rollback, since these control transactions. Everything else
 	// will fall through and be handled through planning
 	switch plan.Type {
@@ -94,13 +97,13 @@ func (e *Executor) newExecute(ctx context.Context, safeSession *SafeSession, sql
 	case sqlparser.StmtSRollback:
 		qr, err := e.handleSavepoint(ctx, safeSession, plan.Original, "Rollback Savepoint", logStats, func(query string) (*sqltypes.Result, error) {
 			// Error as there is no transaction, so there is no savepoint that exists.
-			return nil, mysql.NewSQLError(mysql.ERSavepointNotExist, mysql.SSSyntaxErrorOrAccessViolation, "SAVEPOINT does not exist: %s", query)
+			return nil, vterrors.NewErrorf(vtrpcpb.Code_NOT_FOUND, vterrors.SPDoesNotExist, "SAVEPOINT does not exist: %s", query)
 		}, vcursor.ignoreMaxMemoryRows)
 		return sqlparser.StmtSRollback, qr, err
 	case sqlparser.StmtRelease:
 		qr, err := e.handleSavepoint(ctx, safeSession, plan.Original, "Release Savepoint", logStats, func(query string) (*sqltypes.Result, error) {
 			// Error as there is no transaction, so there is no savepoint that exists.
-			return nil, mysql.NewSQLError(mysql.ERSavepointNotExist, mysql.SSSyntaxErrorOrAccessViolation, "SAVEPOINT does not exist: %s", query)
+			return nil, vterrors.NewErrorf(vtrpcpb.Code_NOT_FOUND, vterrors.SPDoesNotExist, "SAVEPOINT does not exist: %s", query)
 		}, vcursor.ignoreMaxMemoryRows)
 		return sqlparser.StmtRelease, qr, err
 	}
@@ -179,7 +182,7 @@ func (e *Executor) executePlan(ctx context.Context, plan *engine.Plan, vcursor *
 		logStats.Table = plan.Instructions.GetTableName()
 		logStats.TabletType = vcursor.TabletType().String()
 		errCount := e.logExecutionEnd(logStats, execStart, plan, err, qr)
-		plan.AddStats(1, time.Since(logStats.StartTime), uint64(logStats.ShardQueries), logStats.RowsAffected, errCount)
+		plan.AddStats(1, time.Since(logStats.StartTime), uint64(logStats.ShardQueries), logStats.RowsAffected, logStats.RowsReturned, errCount)
 
 		// Check if there was partial DML execution. If so, rollback the transaction.
 		if err != nil && safeSession.InTransaction() && vcursor.rollbackOnPartialExec {
@@ -201,6 +204,7 @@ func (e *Executor) logExecutionEnd(logStats *LogStats, execStart time.Time, plan
 		errCount = 1
 	} else {
 		logStats.RowsAffected = qr.RowsAffected
+		logStats.RowsReturned = uint64(len(qr.Rows))
 	}
 	return errCount
 }

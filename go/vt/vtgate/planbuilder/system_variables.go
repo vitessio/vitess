@@ -27,6 +27,7 @@ import (
 )
 
 func init() {
+	forSettings(sysvars.ReadOnly, buildSetOpReadOnly)
 	forSettings(sysvars.IgnoreThese, buildSetOpIgnore)
 	forSettings(sysvars.UseReservedConn, buildSetOpReservedConn)
 	forSettings(sysvars.CheckAndIgnore, buildSetOpCheckAndIgnore)

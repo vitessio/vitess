@@ -49,7 +49,7 @@ type XtrabackupEngine struct {
 
 var (
 	// path where backup engine program is located
-	xtrabackupEnginePath = flag.String("xtrabackup_root_path", "", "directory location of the xtrabackup executable, e.g., /usr/bin")
+	xtrabackupEnginePath = flag.String("xtrabackup_root_path", "", "directory location of the xtrabackup and xbstream executables, e.g., /usr/bin")
 	// flags to pass through to backup phase
 	xtrabackupBackupFlags = flag.String("xtrabackup_backup_flags", "", "flags to pass to backup command. These should be space separated and will be added to the end of the command")
 	// flags to pass through to prepare phase of restore
@@ -582,7 +582,7 @@ func (be *XtrabackupEngine) extractFiles(ctx context.Context, logger logutil.Log
 
 	case xbstream:
 		// now extract the files by running xbstream
-		xbstreamProgram := xbstream
+		xbstreamProgram := path.Join(*xtrabackupEnginePath, xbstream)
 		flagsToExec := []string{"-C", tempDir, "-xv"}
 		if *xbstreamRestoreFlags != "" {
 			flagsToExec = append(flagsToExec, strings.Fields(*xbstreamRestoreFlags)...)
