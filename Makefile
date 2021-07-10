@@ -127,9 +127,10 @@ asthelpergen:
 
 sizegen:
 	go run ./go/tools/sizegen/sizegen.go \
-		-in ./go/vt/... \
+		-in ./go/... \
 	  	-gen vitess.io/vitess/go/vt/vtgate/engine.Plan \
-	  	-gen vitess.io/vitess/go/vt/vttablet/tabletserver.TabletPlan
+		-gen vitess.io/vitess/go/vt/vttablet/tabletserver.TabletPlan \
+		-gen vitess.io/vitess/go/sqltypes.Result
 
 astfmtgen:
 	go run ./go/tools/astfmtgen/main.go vitess.io/vitess/go/vt/sqlparser/...
