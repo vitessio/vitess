@@ -123,3 +123,7 @@ require (
 )
 
 replace github.com/skeema/tengo => github.com/planetscale/tengo v0.9.6-ps.v1
+
+// (NOTE:@ajm188) Something we depend on depends on moby/term, and that version
+// of moby/term has this issue: https://github.com/moby/term/issues/15.
+replace golang.org/x/sys => golang.org/x/sys v0.0.0-20200826173525-f9321e4c35a6
