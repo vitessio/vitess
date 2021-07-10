@@ -10,15 +10,11 @@ import (
 )
 
 func TestQP(t *testing.T) {
-	type order struct {
-		found bool
-		pos   int
-	}
 	tcases := []struct {
 		sql string
 
 		expErr   string
-		expOrder []order
+		expOrder []orderBy
 	}{
 		{
 			sql:    "select * from user",
@@ -32,7 +28,8 @@ func TestQP(t *testing.T) {
 			sql: "select (select 1) from user",
 		},
 		{
-			sql: "select 1, count(1) from user",
+			sql:    "select 1, count(1) from user",
+			expErr: "gen4 does not yet support: aggregation and non-aggregation expressions, together are not supported in cross-shard query",
 		},
 		{
 			sql: "select max(id) from user",
@@ -47,25 +44,38 @@ func TestQP(t *testing.T) {
 		},
 		{
 			sql:    "select 1, count(1) from user order by 1",
-			expErr: "",
-			expOrder: []order{
-				{found: true, pos: 0},
+			expErr: "gen4 does not yet support: aggregation and non-aggregation expressions, together are not supported in cross-shard query",
+		},
+		{
+			sql: "select id from user order by col, id, 1",
+			expOrder: []orderBy{
+				{inner: &sqlparser.Order{Expr: sqlparser.NewColName("col")}, weightStrExpr: sqlparser.NewColName("col")},
+				{inner: &sqlparser.Order{Expr: sqlparser.NewColName("id")}, weightStrExpr: sqlparser.NewColName("id")},
+				{inner: &sqlparser.Order{Expr: sqlparser.NewColName("id")}, weightStrExpr: sqlparser.NewColName("id")},
 			},
 		},
 		{
-			sql: "select id from user order by col, id",
-			expOrder: []order{
-				{found: false},
-				{found: true, pos: 0},
-			},
+			sql:    "select id from user order by 2", // positional order not supported
+			expErr: "Unknown column '2' in 'order clause'",
 		},
 		{
-			sql: "select id from user order by 2", // positional order not supported
-			expOrder: []order{
-				{found: false},
+			sql: "SELECT CONCAT(last_name,', ',first_name) AS full_name FROM mytable, tbl2 ORDER BY full_name", // alias in order not supported
+			expOrder: []orderBy{
+				{
+					inner: &sqlparser.Order{Expr: sqlparser.NewColName("full_name")},
+					weightStrExpr: &sqlparser.FuncExpr{
+						Name: sqlparser.NewColIdent("CONCAT"),
+						Exprs: sqlparser.SelectExprs{
+							&sqlparser.AliasedExpr{Expr: sqlparser.NewColName("last_name")},
+							&sqlparser.AliasedExpr{Expr: sqlparser.NewStrLiteral(", ")},
+							&sqlparser.AliasedExpr{Expr: sqlparser.NewColName("first_name")},
+						},
+					},
+				},
 			},
 		},
 	}
+
 	for _, tcase := range tcases {
 		t.Run(tcase.sql, func(t *testing.T) {
 			stmt, err := sqlparser.Parse(tcase.sql)
@@ -78,11 +88,10 @@ func TestQP(t *testing.T) {
 			} else {
 				require.NoError(t, err)
 				assert.Equal(t, len(sel.SelectExprs), len(qp.selectExprs)+len(qp.aggrExprs))
-				//for index, orderExpr := range qp.orderExprs {
-				//	pos, exists := qp.orderExprs[orderExpr]
-				//	assert.Contains(t, tcase.expOrder[index].found, exists)
-				//	assert.Equal(t, tcase.expOrder[index].pos, pos)
-				//}
+				for index, expOrder := range tcase.expOrder {
+					assert.True(t, sqlparser.EqualsSQLNode(expOrder.inner, qp.orderExprs[index].inner), "want: %+v, got %+v", sqlparser.String(expOrder.inner), sqlparser.String(qp.orderExprs[index].inner))
+					assert.True(t, sqlparser.EqualsSQLNode(expOrder.weightStrExpr, qp.orderExprs[index].weightStrExpr), "want: %v, got %v", sqlparser.String(expOrder.weightStrExpr), sqlparser.String(qp.orderExprs[index].weightStrExpr))
+				}
 			}
 		})
 	}
