@@ -243,6 +243,11 @@ func (dg *DiscoveryGateway) withRetry(ctx context.Context, target *querypb.Targe
 	var err error
 	invalidTablets := make(map[string]bool)
 
+	if target == nil {
+		err = fmt.Errorf("withRetry called with nil target")
+		log.Errorf(err.Error())
+		return err
+	}
 	if len(discovery.AllowedTabletTypes) > 0 {
 		var match bool
 		for _, allowed := range discovery.AllowedTabletTypes {
