@@ -70,17 +70,6 @@ jobs:
 
         {{end}}
 
-        {{if (eq .Platform "mariadb101")}}
-
-        # mariadb101
-        sudo apt-get install -y software-properties-common
-        sudo apt-key adv --recv-keys --keyserver hkp://keyserver.ubuntu.com:80 0xF1656F24C74CD1D8
-        sudo add-apt-repository 'deb [arch=amd64,arm64,ppc64el] http://nyc2.mirrors.digitalocean.com/mariadb/repo/10.1/ubuntu bionic main'
-        sudo apt update
-        sudo DEBIAN_FRONTEND="noninteractive" apt install -y mariadb-server
-
-        {{end}}
-
         {{if (eq .Platform "mariadb102")}}
 
         # mariadb102
@@ -98,6 +87,39 @@ jobs:
         sudo apt-get install -y software-properties-common
         sudo apt-key adv --recv-keys --keyserver hkp://keyserver.ubuntu.com:80 0xF1656F24C74CD1D8
         sudo add-apt-repository 'deb [arch=amd64,arm64,ppc64el] http://nyc2.mirrors.digitalocean.com/mariadb/repo/10.3/ubuntu bionic main'
+        sudo apt update
+        sudo DEBIAN_FRONTEND="noninteractive" apt install -y mariadb-server
+
+        {{end}}
+
+        {{if (eq .Platform "mariadb104")}}
+
+        # mariadb104
+        sudo apt-get install -y software-properties-common
+        sudo apt-key adv --recv-keys --keyserver hkp://keyserver.ubuntu.com:80 0xF1656F24C74CD1D8
+        sudo add-apt-repository 'deb [arch=amd64,arm64,ppc64el] http://nyc2.mirrors.digitalocean.com/mariadb/repo/10.4/ubuntu bionic main'
+        sudo apt update
+        sudo DEBIAN_FRONTEND="noninteractive" apt install -y mariadb-server
+
+        {{end}}
+
+        {{if (eq .Platform "mariadb105")}}
+
+        # mariadb105
+        sudo apt-get install -y software-properties-common
+        sudo apt-key adv --recv-keys --keyserver hkp://keyserver.ubuntu.com:80 0xF1656F24C74CD1D8
+        sudo add-apt-repository 'deb [arch=amd64,arm64,ppc64el] http://nyc2.mirrors.digitalocean.com/mariadb/repo/10.5/ubuntu bionic main'
+        sudo apt update
+        sudo DEBIAN_FRONTEND="noninteractive" apt install -y mariadb-server
+
+        {{end}}
+
+        {{if (eq .Platform "mariadb106")}}
+
+        # mariadb106
+        sudo apt-get install -y software-properties-common
+        sudo apt-key adv --recv-keys --keyserver hkp://keyserver.ubuntu.com:80 0xF1656F24C74CD1D8
+        sudo add-apt-repository 'deb [arch=amd64,arm64,ppc64el] http://nyc2.mirrors.digitalocean.com/mariadb/repo/10.6/ubuntu bionic main'
         sudo apt update
         sudo DEBIAN_FRONTEND="noninteractive" apt install -y mariadb-server
 
