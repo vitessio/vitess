@@ -210,9 +210,14 @@ func (code RouteOpcode) MarshalJSON() ([]byte, error) {
 	return json.Marshal(routeName[code])
 }
 
+// String returns a string presentation of this opcode
+func (code RouteOpcode) String() string {
+	return routeName[code]
+}
+
 // RouteType returns a description of the query routing type used by the primitive
 func (route *Route) RouteType() string {
-	return routeName[route.Opcode]
+	return route.Opcode.String()
 }
 
 // GetKeyspaceName specifies the Keyspace that this primitive routes to.
