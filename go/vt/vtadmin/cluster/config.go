@@ -18,6 +18,20 @@ package cluster
 
 import (
 	"fmt"
+	"strconv"
+	"time"
+
+	"vitess.io/vitess/go/pools"
+	"vitess.io/vitess/go/vt/vtadmin/errors"
+)
+
+var (
+	// DefaultReadPoolSize is the pool size used when creating read-only RPC
+	// pools if a config has no size set.
+	DefaultReadPoolSize = 500
+	// DefaultReadPoolWaitTimeout is the pool wait timeout used when creating
+	// read-only RPC pools if a config has no wait timeout set.
+	DefaultReadPoolWaitTimeout = time.Millisecond * 100
 )
 
 // Config represents the options to configure a vtadmin cluster.
@@ -29,6 +43,11 @@ type Config struct {
 	TabletFQDNTmplStr    string
 	VtSQLFlags           map[string]string
 	VtctldFlags          map[string]string
+
+	BackupReadPoolConfig   *RPCPoolConfig
+	SchemaReadPoolConfig   *RPCPoolConfig
+	TopoReadPoolConfig     *RPCPoolConfig
+	WorkflowReadPoolConfig *RPCPoolConfig
 }
 
 // Cluster returns a new cluster instance from the given config.
@@ -81,13 +100,17 @@ func (cfg *Config) UnmarshalYAML(unmarshal func(interface{}) error) error {
 // config. Neither the caller or the argument are modified in any way.
 func (cfg Config) Merge(override Config) Config {
 	merged := Config{
-		ID:                   cfg.ID,
-		Name:                 cfg.Name,
-		DiscoveryImpl:        cfg.DiscoveryImpl,
-		DiscoveryFlagsByImpl: map[string]map[string]string{},
-		TabletFQDNTmplStr:    cfg.TabletFQDNTmplStr,
-		VtSQLFlags:           map[string]string{},
-		VtctldFlags:          map[string]string{},
+		ID:                     cfg.ID,
+		Name:                   cfg.Name,
+		DiscoveryImpl:          cfg.DiscoveryImpl,
+		DiscoveryFlagsByImpl:   map[string]map[string]string{},
+		TabletFQDNTmplStr:      cfg.TabletFQDNTmplStr,
+		VtSQLFlags:             map[string]string{},
+		VtctldFlags:            map[string]string{},
+		BackupReadPoolConfig:   cfg.BackupReadPoolConfig.merge(override.BackupReadPoolConfig),
+		SchemaReadPoolConfig:   cfg.SchemaReadPoolConfig.merge(override.SchemaReadPoolConfig),
+		TopoReadPoolConfig:     cfg.TopoReadPoolConfig.merge(override.TopoReadPoolConfig),
+		WorkflowReadPoolConfig: cfg.WorkflowReadPoolConfig.merge(override.WorkflowReadPoolConfig),
 	}
 
 	if override.ID != "" {
@@ -124,4 +147,83 @@ func mergeStringMap(base map[string]string, override map[string]string) {
 	for k, v := range override {
 		base[k] = v
 	}
+}
+
+// RPCPoolConfig holds configuration options for creating RPCPools.
+type RPCPoolConfig struct {
+	Size        int
+	WaitTimeout time.Duration
+}
+
+// NewReadPool returns an RPCPool from the given config that should be used for
+// performing read-only operations. If the config is nil, or has a non-positive
+// size, DefaultReadPoolSize will be used. Similarly, if the config is nil or
+// has a negative wait timeout, DefaultReadPoolWaitTimeout will be used.
+func (cfg *RPCPoolConfig) NewReadPool() *pools.RPCPool {
+	size := DefaultReadPoolSize
+	waitTimeout := DefaultReadPoolWaitTimeout
+
+	if cfg != nil {
+		if cfg.Size > 0 {
+			size = cfg.Size
+		}
+
+		if cfg.WaitTimeout >= 0 {
+			waitTimeout = cfg.WaitTimeout
+		}
+	}
+
+	return pools.NewRPCPool(size, waitTimeout, nil)
+}
+
+// merge merges two RPCPoolConfigs, returning the merged version. neither of the
+// original configs is modified as a result of merging, and both can be nil.
+func (cfg *RPCPoolConfig) merge(override *RPCPoolConfig) *RPCPoolConfig {
+	if cfg == nil && override == nil {
+		return nil
+	}
+
+	merged := &RPCPoolConfig{
+		Size:        -1,
+		WaitTimeout: -1,
+	}
+
+	for _, c := range []*RPCPoolConfig{cfg, override} { // First apply the base config, then any overrides.
+		if c != nil {
+			if c.Size >= 0 {
+				merged.Size = c.Size
+			}
+
+			if c.WaitTimeout > 0 {
+				merged.WaitTimeout = c.WaitTimeout
+			}
+		}
+	}
+
+	return merged
+}
+
+func (cfg *RPCPoolConfig) parseFlag(name string, val string) (err error) {
+	switch name {
+	case "size":
+		size, err := strconv.ParseInt(val, 10, 64)
+		if err != nil {
+			return err
+		}
+
+		if size < 0 {
+			return fmt.Errorf("%w: pool size must be non-negative; got %d", strconv.ErrRange, size)
+		}
+
+		cfg.Size = int(size)
+	case "timeout":
+		cfg.WaitTimeout, err = time.ParseDuration(val)
+		if err != nil {
+			return err
+		}
+	default:
+		return errors.ErrNoFlag
+	}
+
+	return nil
 }

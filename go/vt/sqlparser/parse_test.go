@@ -77,6 +77,15 @@ var (
 		input:  "alter database charset charset = 'utf16'",
 		output: "alter database `charset` character set 'utf16'",
 	}, {
+		input:  "create table t(id int unique)",
+		output: "create table t (\n\tid int unique\n)",
+	}, {
+		input:  "create table t(id int key)",
+		output: "create table t (\n\tid int key\n)",
+	}, {
+		input:  "create table t(id int unique key)",
+		output: "create table t (\n\tid int unique key\n)",
+	}, {
 		input: "select a.b as a$b from $test$",
 	}, {
 		input:  "select 1 from t // aa\n",

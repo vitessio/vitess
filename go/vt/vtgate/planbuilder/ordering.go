@@ -84,7 +84,7 @@ func planOAOrdering(pb *primitiveBuilder, orderBy sqlparser.OrderBy, oa *ordered
 		var orderByCol *column
 		switch expr := order.Expr.(type) {
 		case *sqlparser.Literal:
-			num, err := ResultFromNumber(oa.resultColumns, expr)
+			num, err := ResultFromNumber(oa.resultColumns, expr, "order clause")
 			if err != nil {
 				return nil, err
 			}
@@ -183,7 +183,7 @@ func planJoinOrdering(pb *primitiveBuilder, orderBy sqlparser.OrderBy, node *joi
 		if e, ok := order.Expr.(*sqlparser.Literal); ok {
 			// This block handles constructs that use ordinals for 'ORDER BY'. For example:
 			// SELECT a, b, c FROM t1, t2 ORDER BY 1, 2, 3.
-			num, err := ResultFromNumber(node.ResultColumns(), e)
+			num, err := ResultFromNumber(node.ResultColumns(), e, "order clause")
 			if err != nil {
 				return nil, err
 			}
@@ -258,7 +258,7 @@ func planRouteOrdering(orderBy sqlparser.OrderBy, node *route) (logicalPlan, err
 		switch expr := order.Expr.(type) {
 		case *sqlparser.Literal:
 			var err error
-			if colNumber, err = ResultFromNumber(node.resultColumns, expr); err != nil {
+			if colNumber, err = ResultFromNumber(node.resultColumns, expr, "order clause"); err != nil {
 				return nil, err
 			}
 		case *sqlparser.ColName:

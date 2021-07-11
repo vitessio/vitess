@@ -305,13 +305,13 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 	require.Nil(t, err)
 
 	// Wait for tablets to come in Service state
-	err = shard0Master.VttabletProcess.WaitForTabletType("SERVING")
+	err = shard0Master.VttabletProcess.WaitForTabletStatus("SERVING")
 	require.Nil(t, err)
-	err = shard1Master.VttabletProcess.WaitForTabletType("SERVING")
+	err = shard1Master.VttabletProcess.WaitForTabletStatus("SERVING")
 	require.Nil(t, err)
-	err = shard2Master.VttabletProcess.WaitForTabletType("SERVING")
+	err = shard2Master.VttabletProcess.WaitForTabletStatus("SERVING")
 	require.Nil(t, err)
-	err = shard3Master.VttabletProcess.WaitForTabletType("SERVING")
+	err = shard3Master.VttabletProcess.WaitForTabletStatus("SERVING")
 	require.Nil(t, err)
 
 	// keyspace/shard name fields
@@ -375,7 +375,7 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", shard1Replica2.Alias, "spare")
 	require.Nil(t, err)
 
-	err = shard1Replica2.VttabletProcess.WaitForTabletType("NOT_SERVING")
+	err = shard1Replica2.VttabletProcess.WaitForTabletStatus("NOT_SERVING")
 	require.Nil(t, err)
 
 	// we need to create the schema, and the worker will do data copying
@@ -522,9 +522,9 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 	// The tested behavior is a safeguard to prevent that somebody can
 	// accidentally modify data on the destination masters while they are not
 	// migrated yet and the source shards are still the source of truth.
-	err = shard2Master.VttabletProcess.WaitForTabletType("NOT_SERVING")
+	err = shard2Master.VttabletProcess.WaitForTabletStatus("NOT_SERVING")
 	require.Nil(t, err)
-	err = shard3Master.VttabletProcess.WaitForTabletType("NOT_SERVING")
+	err = shard3Master.VttabletProcess.WaitForTabletStatus("NOT_SERVING")
 	require.Nil(t, err)
 
 	// check that binlog server exported the stats vars
@@ -596,9 +596,9 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", shard1Replica1.Alias, "spare")
 	require.Nil(t, err)
 
-	err = shard1Replica2.VttabletProcess.WaitForTabletType("SERVING")
+	err = shard1Replica2.VttabletProcess.WaitForTabletStatus("SERVING")
 	require.Nil(t, err)
-	err = shard1Replica1.VttabletProcess.WaitForTabletType("NOT_SERVING")
+	err = shard1Replica1.VttabletProcess.WaitForTabletStatus("NOT_SERVING")
 	require.Nil(t, err)
 
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("RunHealthCheck", shard1Replica2.Alias)

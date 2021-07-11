@@ -104,6 +104,7 @@ Gen4 plan same as above
 # Multi-value aggregates not supported
 "select count(a,b) from user"
 "unsupported: only one expression allowed inside aggregates: count(a, b)"
+"aggregate functions take a single argument 'count(a, b)'"
 
 # Cannot have more than one aggr(distinct...
 "select count(distinct a), count(distinct b) from user"
@@ -120,6 +121,23 @@ Gen4 plan same as above
 # order by with ambiguous column reference ; valid in MySQL
 "select id, id from user order by id"
 "ambiguous symbol reference: id"
+{
+  "QueryType": "SELECT",
+  "Original": "select id, id from user order by id",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select id, weight_string(id) from `user` where 1 != 1",
+    "OrderBy": "0 ASC",
+    "Query": "select id, weight_string(id) from `user` order by id asc",
+    "ResultColumns": 1,
+    "Table": "`user`"
+  }
+}
 
 # scatter aggregate with ambiguous aliases
 "select distinct a, b as a from user"
@@ -446,6 +464,7 @@ Gen4 plan same as above
 # create view with Cannot auto-resolve for cross-shard joins
 "create view user.view_a as select col from user join user_extra"
 "symbol col not found"
+"Complex select queries are not supported in create or alter view statements"
 
 # create view with join that cannot be served in each shard separately
 "create view user.view_a as select user_extra.id from user join user_extra"

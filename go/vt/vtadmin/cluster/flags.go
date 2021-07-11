@@ -17,6 +17,7 @@ limitations under the License.
 package cluster
 
 import (
+	"fmt"
 	"regexp"
 	"strings"
 
@@ -146,51 +147,92 @@ func parseOne(cfg *Config, name string, val string) error {
 	case "tablet-fqdn-tmpl":
 		cfg.TabletFQDNTmplStr = val
 	default:
-		if strings.HasPrefix(name, "vtsql-") {
+		switch {
+		case strings.HasPrefix(name, "vtsql-"):
 			if cfg.VtSQLFlags == nil {
 				cfg.VtSQLFlags = map[string]string{}
 			}
 
 			cfg.VtSQLFlags[strings.TrimPrefix(name, "vtsql-")] = val
-
-			return nil
-		} else if strings.HasPrefix(name, "vtctld-") {
+		case strings.HasPrefix(name, "vtctld-"):
 			if cfg.VtctldFlags == nil {
 				cfg.VtctldFlags = map[string]string{}
 			}
 
 			cfg.VtctldFlags[strings.TrimPrefix(name, "vtctld-")] = val
-
-			return nil
-		}
-
-		match := discoveryFlagRegexp.FindStringSubmatch(name)
-		if match == nil {
-			// not a discovery flag
-			log.Warningf("Attempted to parse %q as a discovery flag, ignoring ...", name)
-			return nil
-		}
-
-		var impl, flag string
-
-		for i, g := range discoveryFlagRegexp.SubexpNames() {
-			switch g {
-			case "impl":
-				impl = match[i]
-			case "flag":
-				flag = match[i]
+		case strings.HasPrefix(name, "backup-read-pool-"):
+			if cfg.BackupReadPoolConfig == nil {
+				cfg.BackupReadPoolConfig = &RPCPoolConfig{
+					Size:        -1,
+					WaitTimeout: -1,
+				}
 			}
-		}
 
-		if cfg.DiscoveryFlagsByImpl == nil {
-			cfg.DiscoveryFlagsByImpl = map[string]map[string]string{}
-		}
+			if err := cfg.BackupReadPoolConfig.parseFlag(strings.TrimPrefix(name, "backup-read-pool-"), val); err != nil {
+				return fmt.Errorf("error parsing %s: %w", name, err)
+			}
+		case strings.HasPrefix(name, "schema-read-pool-"):
+			if cfg.BackupReadPoolConfig == nil {
+				cfg.BackupReadPoolConfig = &RPCPoolConfig{
+					Size:        -1,
+					WaitTimeout: -1,
+				}
+			}
 
-		if cfg.DiscoveryFlagsByImpl[impl] == nil {
-			cfg.DiscoveryFlagsByImpl[impl] = map[string]string{}
-		}
+			if err := cfg.SchemaReadPoolConfig.parseFlag(strings.TrimPrefix(name, "schema-read-pool-"), val); err != nil {
+				return fmt.Errorf("error parsing %s: %w", name, err)
+			}
+		case strings.HasPrefix(name, "topo-read-pool-"):
+			if cfg.TopoReadPoolConfig == nil {
+				cfg.TopoReadPoolConfig = &RPCPoolConfig{
+					Size:        -1,
+					WaitTimeout: -1,
+				}
+			}
 
-		cfg.DiscoveryFlagsByImpl[impl][flag] = val
+			if err := cfg.TopoReadPoolConfig.parseFlag(strings.TrimPrefix(name, "topo-read-pool-"), val); err != nil {
+				return fmt.Errorf("error parsing %s: %w", name, err)
+			}
+		case strings.HasPrefix(name, "workflow-read-pool-"):
+			if cfg.WorkflowReadPoolConfig == nil {
+				cfg.WorkflowReadPoolConfig = &RPCPoolConfig{
+					Size:        -1,
+					WaitTimeout: -1,
+				}
+			}
+
+			if err := cfg.WorkflowReadPoolConfig.parseFlag(strings.TrimPrefix(name, "workflow-read-pool-"), val); err != nil {
+				return fmt.Errorf("error parsing %s: %w", name, err)
+			}
+		default:
+			match := discoveryFlagRegexp.FindStringSubmatch(name)
+			if match == nil {
+				// not a discovery flag
+				log.Warningf("Attempted to parse %q as a discovery flag, ignoring ...", name)
+				return nil
+			}
+
+			var impl, flag string
+
+			for i, g := range discoveryFlagRegexp.SubexpNames() {
+				switch g {
+				case "impl":
+					impl = match[i]
+				case "flag":
+					flag = match[i]
+				}
+			}
+
+			if cfg.DiscoveryFlagsByImpl == nil {
+				cfg.DiscoveryFlagsByImpl = map[string]map[string]string{}
+			}
+
+			if cfg.DiscoveryFlagsByImpl[impl] == nil {
+				cfg.DiscoveryFlagsByImpl[impl] = map[string]string{}
+			}
+
+			cfg.DiscoveryFlagsByImpl[impl][flag] = val
+		}
 	}
 
 	return nil

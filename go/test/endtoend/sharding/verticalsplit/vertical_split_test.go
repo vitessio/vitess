@@ -141,11 +141,11 @@ func TestVerticalSplit(t *testing.T) {
 	destinationMasterTablet.Type = "master"
 
 	for _, tablet := range []cluster.Vttablet{sourceReplicaTablet, destinationReplicaTablet} {
-		_ = tablet.VttabletProcess.WaitForTabletType("SERVING")
+		_ = tablet.VttabletProcess.WaitForTabletStatus("SERVING")
 		require.NoError(t, err)
 	}
 	for _, tablet := range []cluster.Vttablet{sourceRdOnlyTablet1, sourceRdOnlyTablet2, destinationRdOnlyTablet1, destinationRdOnlyTablet2} {
-		_ = tablet.VttabletProcess.WaitForTabletType("SERVING")
+		_ = tablet.VttabletProcess.WaitForTabletStatus("SERVING")
 		require.NoError(t, err)
 	}
 
