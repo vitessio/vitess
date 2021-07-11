@@ -45,7 +45,7 @@ import (
 // fakeRPCTM implements tabletmanager.RPCTM and fills in all
 // possible values in all APIs
 type fakeRPCTM struct {
-	t      *testing.T
+	t      testing.TB
 	panics bool
 	// slow if true will let Ping() sleep and effectively not respond to an RPC.
 	slow bool
@@ -68,7 +68,7 @@ func (fra *fakeRPCTM) setSlow(slow bool) {
 }
 
 // NewFakeRPCTM returns a fake tabletmanager.RPCTM that's just a mirror.
-func NewFakeRPCTM(t *testing.T) tabletmanager.RPCTM {
+func NewFakeRPCTM(t testing.TB) tabletmanager.RPCTM {
 	return &fakeRPCTM{
 		t: t,
 	}
@@ -83,7 +83,7 @@ func NewFakeRPCTM(t *testing.T) tabletmanager.RPCTM {
 
 var protoMessage = reflect.TypeOf((*proto.Message)(nil)).Elem()
 
-func compare(t *testing.T, name string, got, want interface{}) {
+func compare(t testing.TB, name string, got, want interface{}) {
 	t.Helper()
 	typ := reflect.TypeOf(got)
 	if reflect.TypeOf(got) != reflect.TypeOf(want) {
@@ -114,7 +114,7 @@ fail:
 	t.Errorf("Unexpected %v:\ngot  %#v\nwant %#v", name, got, want)
 }
 
-func compareBool(t *testing.T, name string, got bool) {
+func compareBool(t testing.TB, name string, got bool) {
 	t.Helper()
 	if !got {
 		t.Errorf("Unexpected %v: got false expected true", name)
@@ -200,7 +200,7 @@ func tmRPCTestPingPanic(ctx context.Context, t *testing.T, client tmclient.Table
 // tmRPCTestDialExpiredContext verifies that
 // the context returns the right DeadlineExceeded Err() for
 // RPCs failed due to an expired context before .Dial().
-func tmRPCTestDialExpiredContext(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+func tmRPCTestDialExpiredContext(ctx context.Context, t testing.TB, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	// Using a timeout of 0 here such that .Dial() will fail immediately.
 	expiredCtx, cancel := context.WithTimeout(ctx, 0)
 	defer cancel()

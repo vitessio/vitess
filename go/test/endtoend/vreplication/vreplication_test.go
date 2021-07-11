@@ -25,6 +25,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/log"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -195,12 +197,12 @@ func TestCellAliasVreplicationWorkflow(t *testing.T) {
 
 func insertInitialData(t *testing.T) {
 	t.Run("insertInitialData", func(t *testing.T) {
-		t.Logf("Inserting initial data")
+		log.Infof("Inserting initial data")
 		lines, _ := ioutil.ReadFile("unsharded_init_data.sql")
 		execMultipleQueries(t, vtgateConn, "product:0", string(lines))
 		execVtgateQuery(t, vtgateConn, "product:0", "insert into customer_seq(id, next_id, cache) values(0, 100, 100);")
 		execVtgateQuery(t, vtgateConn, "product:0", "insert into order_seq(id, next_id, cache) values(0, 100, 100);")
-		t.Logf("Done inserting initial data")
+		log.Infof("Done inserting initial data")
 
 		validateCount(t, vtgateConn, "product:0", "product", 2)
 		validateCount(t, vtgateConn, "product:0", "customer", 3)
@@ -482,10 +484,10 @@ func reshard(t *testing.T, ksName string, tableName string, workflow string, sou
 		targetShards = "," + targetShards + ","
 		for _, tab := range tablets {
 			if strings.Contains(targetShards, ","+tab.Shard+",") {
-				t.Logf("Waiting for vrepl to catch up on %s since it IS a target shard", tab.Shard)
+				log.Infof("Waiting for vrepl to catch up on %s since it IS a target shard", tab.Shard)
 				catchup(t, tab, workflow, "Reshard")
 			} else {
-				t.Logf("Not waiting for vrepl to catch up on %s since it is NOT a target shard", tab.Shard)
+				log.Infof("Not waiting for vrepl to catch up on %s since it is NOT a target shard", tab.Shard)
 				continue
 			}
 		}
@@ -570,7 +572,7 @@ func shardMerchant(t *testing.T) {
 func vdiff(t *testing.T, workflow, cells string) {
 	t.Run("vdiff", func(t *testing.T) {
 		output, err := vc.VtctlClient.ExecuteCommandWithOutput("VDiff", "-tablet_types=master", "-source_cell="+cells, "-format", "json", workflow)
-		t.Logf("vdiff err: %+v, output: %+v", err, output)
+		log.Infof("vdiff err: %+v, output: %+v", err, output)
 		require.Nil(t, err)
 		require.NotNil(t, output)
 		diffReports := make(map[string]*wrangler.DiffReport)
@@ -852,7 +854,7 @@ func printSwitchWritesExtraDebug(t *testing.T, ksWorkflow, msg string) {
 	// Temporary code: print lots of info for debugging occasional flaky failures in customer reshard in CI for multicell test
 	debug := true
 	if debug {
-		t.Logf("------------------- START Extra debug info %s SwitchWrites %s", msg, ksWorkflow)
+		log.Infof("------------------- START Extra debug info %s SwitchWrites %s", msg, ksWorkflow)
 		ksShards := []string{"product/0", "customer/-80", "customer/80-"}
 		printShardPositions(vc, ksShards)
 		custKs := vc.Cells[defaultCell.Name].Keyspaces["customer"]
@@ -870,11 +872,11 @@ func printSwitchWritesExtraDebug(t *testing.T, ksWorkflow, msg string) {
 			for _, query := range queries {
 				qr, err := tab.QueryTablet(query, "", false)
 				require.NoError(t, err)
-				t.Logf("\nTablet:%s.%s.%s.%d\nQuery: %s\n%+v\n",
+				log.Infof("\nTablet:%s.%s.%s.%d\nQuery: %s\n%+v\n",
 					tab.Cell, tab.Keyspace, tab.Shard, tab.TabletUID, query, qr.Rows)
 			}
 		}
-		t.Logf("------------------- END Extra debug info %s SwitchWrites %s", msg, ksWorkflow)
+		log.Infof("------------------- END Extra debug info %s SwitchWrites %s", msg, ksWorkflow)
 	}
 }
 
