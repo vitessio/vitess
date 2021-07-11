@@ -1,6 +1,3 @@
-2021-03-15T14:23:00Z,check_make_visitor,https://github.com/vitessio/vitess/actions/runs/654463294
-2021-03-15T14:23:00Z,e2e_race,https://github.com/vitessio/vitess/actions/runs/654463323
-2021-03-15T14:23:00Z,endtoend,https://github.com/vitessio/vitess/actions/runs/654463325
 2021-03-15T14:23:00Z,local_example,https://github.com/vitessio/vitess/actions/runs/654463298
 2021-03-15T14:23:00Z,local_example,https://github.com/vitessio/vitess/actions/runs/654463320
 2021-03-15T14:23:00Z,region_example,https://github.com/vitessio/vitess/actions/runs/654463312
@@ -9998,3 +9995,6 @@
 2021-07-11T03:37:41Z,Unit Test (mariadb106),https://github.com/vitessio/vitess/actions/runs/1019283700
 2021-07-11T03:37:41Z,pr-labels,https://github.com/vitessio/vitess/actions/runs/1019283677
 2021-07-11T06:13:16Z,Unit Test (mariadb101),https://github.com/vitessio/vitess/actions/runs/1019486155
+2021-07-11T06:13:16Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/1019486205
+2021-07-11T06:13:16Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/1019486168
+2021-07-11T06:13:16Z,endtoend,https://github.com/vitessio/vitess/actions/runs/1019486198
