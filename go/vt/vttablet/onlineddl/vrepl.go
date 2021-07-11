@@ -70,11 +70,10 @@ type VRepl struct {
 	alterOptions string
 	tableRows    int64
 
-	sourceSharedColumns         *vrepl.ColumnList
-	targetSharedColumns         *vrepl.ColumnList
-	extraTargetUniqueKeyColumns *vrepl.ColumnList // Columns that appear in target's unique key but not in source table
-	sharedColumnsMap            map[string]string
-	sourceAutoIncrement         uint64
+	sourceSharedColumns *vrepl.ColumnList
+	targetSharedColumns *vrepl.ColumnList
+	sharedColumnsMap    map[string]string
+	sourceAutoIncrement uint64
 
 	chosenSourceUniqueKey *vrepl.UniqueKey
 	chosenTargetUniqueKey *vrepl.UniqueKey
@@ -428,7 +427,7 @@ func (v *VRepl) analyzeTables(ctx context.Context, conn *dbconnpool.DBConnection
 	v.chosenSourceUniqueKey, v.chosenTargetUniqueKey = getSharedUniqueKeys(sourceUniqueKeys, targetUniqueKeys, v.parser.ColumnRenameMap())
 	if v.chosenSourceUniqueKey == nil {
 		// VReplication supports completely different unique keys on source and target, covering
-		// some/completely different columns. The only condition is that the key on source
+		// some/completely different columns. The condition is that the key on source
 		// must use columns which all exist on target table.
 		v.chosenSourceUniqueKey = getUniqueKeyCoveredByColumns(sourceUniqueKeys, v.sourceSharedColumns)
 		if v.chosenSourceUniqueKey == nil {
@@ -437,14 +436,14 @@ func (v *VRepl) analyzeTables(ctx context.Context, conn *dbconnpool.DBConnection
 		}
 	}
 	if v.chosenTargetUniqueKey == nil {
-		// We didn't find a unique key shared to both source and target. We're gonna pick
-		// the "best" target unique key (the query that reads unique keys sorts best keys on top)
-		v.chosenTargetUniqueKey = targetUniqueKeys[0]
-		// And, possibly the target unique key has columns not in source table. Example:
-		//   tbl(uuid varchar(64) primary key)
-		//   alter table tbl drop primary key, add id bigint unsigned auto_increment primary key
-		// ^ `id` column does not appear in source table and appears in target's chosen (only) key
-		v.extraTargetUniqueKeyColumns = v.chosenTargetUniqueKey.Columns.Difference(v.targetSharedColumns)
+		// VReplication supports completely different unique keys on source and target, covering
+		// some/completely different columns. The condition is that the key on target
+		// must use columns which all exist on source table.
+		v.chosenTargetUniqueKey = getUniqueKeyCoveredByColumns(targetUniqueKeys, v.targetSharedColumns)
+		if v.chosenTargetUniqueKey == nil {
+			// Still no luck.
+			return fmt.Errorf("Found no possible unique key on `%s` whose columns are in source table `%s`", v.targetTable, v.sourceTable)
+		}
 	}
 	if v.chosenSourceUniqueKey == nil || v.chosenTargetUniqueKey == nil {
 		return fmt.Errorf("Found no shared, not nullable, unique keys between `%s` and `%s`", v.sourceTable, v.targetTable)
@@ -541,16 +540,6 @@ func (v *VRepl) generateFilterQuery(ctx context.Context) error {
 		}
 		sb.WriteString(" as ")
 		sb.WriteString(escapeName(targetName))
-	}
-	if v.extraTargetUniqueKeyColumns != nil {
-		for _, extraCol := range v.extraTargetUniqueKeyColumns.Columns() {
-			// Columns that appear in target's unique key but not in source table.
-			// We append a "NULL as col_name" to the filter's SELECT query so that
-			// the vreplication mechanism is satisfied that the column exists. It's
-			// a cheat/hack to make vreplication happy.
-			sb.WriteString(", NULL as ")
-			sb.WriteString(escapeName(extraCol.Name))
-		}
 	}
 	sb.WriteString(" from ")
 	sb.WriteString(escapeName(v.sourceTable))
