@@ -24,6 +24,7 @@ import (
 	"strings"
 
 	"vitess.io/vitess/go/flagutil"
+	vtadmindebug "vitess.io/vitess/go/vt/vtadmin/debug"
 )
 
 var (
@@ -34,8 +35,6 @@ var (
 	// http handler.
 	OmitEnv flagutil.StringSetFlag
 )
-
-const sanitized = "********"
 
 // Env responds with a plaintext listing of key=value pairs of the environment
 // variables, sorted by key name.
@@ -83,7 +82,7 @@ func readEnv() [][2]string {
 		}
 
 		if SanitizeEnv.ToSet().Has(key) {
-			value = sanitized
+			value = vtadmindebug.SanitizeString(value)
 		}
 
 		vars = append(vars, [2]string{
