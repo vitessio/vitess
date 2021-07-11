@@ -19,5 +19,8 @@ create event onlineddl_test
 begin
   insert into onlineddl_test values (uuid(), now());
   insert into onlineddl_test values (uuid(), now());
-  insert into onlineddl_test values (uuid(), now());
+
+  set @uu := uuid();
+  insert into onlineddl_test values (@uu, now());
+  update onlineddl_test set ts=now() + interval 1 hour where uu=@uu;
 end ;;
