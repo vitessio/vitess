@@ -8,12 +8,14 @@
     "OperatorType": "Sort",
     "Variant": "Memory",
     "OrderBy": "1 ASC",
+    "ResultColumns": 3,
     "Inputs": [
       {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
         "Aggregates": "count(2)",
         "GroupBy": "0",
+        "ResultColumns": 4,
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -78,12 +80,14 @@
     "OperatorType": "Sort",
     "Variant": "Memory",
     "OrderBy": "1 ASC, 0 ASC, 2 ASC",
+    "ResultColumns": 3,
     "Inputs": [
       {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
         "Aggregates": "count(2)",
         "GroupBy": "0",
+        "ResultColumns": 5,
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -154,12 +158,14 @@
     "OperatorType": "Sort",
     "Variant": "Memory",
     "OrderBy": "0 ASC, 2 ASC",
+    "ResultColumns": 3,
     "Inputs": [
       {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
         "Aggregates": "count(2)",
         "GroupBy": "0",
+        "ResultColumns": 4,
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -190,12 +196,14 @@
     "OperatorType": "Sort",
     "Variant": "Memory",
     "OrderBy": "0 ASC, 1 ASC, 0 ASC",
+    "ResultColumns": 2,
     "Inputs": [
       {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
         "Aggregates": "count(1)",
         "GroupBy": "2",
+        "ResultColumns": 3,
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -225,6 +233,7 @@
     "OperatorType": "Sort",
     "Variant": "Memory",
     "OrderBy": "0 ASC",
+    "ResultColumns": 1,
     "Inputs": [
       {
         "OperatorType": "Subquery",
@@ -277,6 +286,7 @@
     "OperatorType": "Sort",
     "Variant": "Memory",
     "OrderBy": "2 ASC",
+    "ResultColumns": 3,
     "Inputs": [
       {
         "OperatorType": "Join",
@@ -326,6 +336,7 @@
     "OperatorType": "Sort",
     "Variant": "Memory",
     "OrderBy": "2 ASC",
+    "ResultColumns": 3,
     "Inputs": [
       {
         "OperatorType": "Join",
@@ -378,6 +389,7 @@
     "OperatorType": "Sort",
     "Variant": "Memory",
     "OrderBy": "0 ASC, 2 DESC, 1 ASC",
+    "ResultColumns": 3,
     "Inputs": [
       {
         "OperatorType": "Join",
@@ -427,6 +439,7 @@
     "OperatorType": "Sort",
     "Variant": "Memory",
     "OrderBy": "0 ASC, 2 DESC, 1 ASC",
+    "ResultColumns": 3,
     "Inputs": [
       {
         "OperatorType": "Join",
@@ -479,6 +492,7 @@
     "OperatorType": "Sort",
     "Variant": "Memory",
     "OrderBy": "1 ASC, 2 ASC",
+    "ResultColumns": 3,
     "Inputs": [
       {
         "OperatorType": "Join",
@@ -524,6 +538,7 @@ Gen4 plan same as above
     "OperatorType": "Sort",
     "Variant": "Memory",
     "OrderBy": "1 ASC, 2 ASC",
+    "ResultColumns": 3,
     "Inputs": [
       {
         "OperatorType": "Join",

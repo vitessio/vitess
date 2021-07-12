@@ -461,7 +461,9 @@ func (oa *OrderedAggregate) description() PrimitiveDescription {
 		"Aggregates": aggregates,
 		"GroupBy":    groupBy,
 	}
-
+	if oa.TruncateColumnCount > 0 {
+		other["ResultColumns"] = oa.TruncateColumnCount
+	}
 	return PrimitiveDescription{
 		OperatorType: "Aggregate",
 		Variant:      "Ordered",
