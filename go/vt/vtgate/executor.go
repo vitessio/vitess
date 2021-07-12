@@ -1523,8 +1523,7 @@ func (e *Executor) startVStream(ctx context.Context, rss []*srvtopo.ResolvedShar
 }
 
 func (e *Executor) checkThatPlanIsValid(stmt sqlparser.Statement, plan *engine.Plan) (*engine.Plan, error) {
-	directive := sqlparser.AllowScatterDirective(stmt)
-	if e.allowScatter || directive {
+	if e.allowScatter || sqlparser.AllowScatterDirective(stmt) {
 		return plan, nil
 	}
 	// we go over all the primitives in the plan, searching for a route that is of SelectScatter opcode
