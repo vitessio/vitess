@@ -44,6 +44,7 @@ import (
 	"vitess.io/vitess/go/vt/vtadmin/http/debug"
 	"vitess.io/vitess/go/vt/vtadmin/http/experimental"
 	vthandlers "vitess.io/vitess/go/vt/vtadmin/http/handlers"
+	"vitess.io/vitess/go/vt/vtadmin/rbac"
 	"vitess.io/vitess/go/vt/vtadmin/sort"
 	"vitess.io/vitess/go/vt/vtadmin/vtadminproto"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -65,6 +66,8 @@ type API struct {
 	serv       *grpcserver.Server
 	router     *mux.Router
 
+	authz *rbac.Authorizer
+
 	// See https://github.com/vitessio/vitess/issues/7723 for why this exists.
 	vtexplainLock sync.Mutex
 }
@@ -74,6 +77,7 @@ type API struct {
 type Options struct {
 	GRPCOpts grpcserver.Options
 	HTTPOpts vtadminhttp.Options
+	RBAC     *rbac.Config
 }
 
 // NewAPI returns a new API, configured to service the given set of clusters,
@@ -97,6 +101,38 @@ func NewAPI(clusters []*cluster.Cluster, opts Options) *API {
 		opts.GRPCOpts.Services = []string{"vtadmin.VTAdminServer"}
 	}
 
+	var (
+		authn rbac.Authenticator
+		authz *rbac.Authorizer
+	)
+	if opts.RBAC != nil {
+		authn = opts.RBAC.GetAuthenticator()
+		authz = opts.RBAC.GetAuthorizer()
+
+		if authn != nil {
+			opts.GRPCOpts.StreamInterceptors = append(opts.GRPCOpts.StreamInterceptors, rbac.AuthenticationStreamInterceptor(authn))
+			opts.GRPCOpts.UnaryInterceptors = append(opts.GRPCOpts.UnaryInterceptors, rbac.AuthenticationUnaryInterceptor(authn))
+		}
+	}
+
+	if authz == nil {
+		authz, _ = rbac.NewAuthorizer(&rbac.Config{
+			Rules: []*struct {
+				Resource string
+				Actions  []string
+				Subjects []string
+				Clusters []string
+			}{
+				{
+					Resource: "*",
+					Actions:  []string{"*"},
+					Subjects: []string{"*"},
+					Clusters: []string{"*"},
+				},
+			},
+		})
+	}
+
 	serv := grpcserver.New("vtadmin", opts.GRPCOpts)
 	serv.Router().HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("ok\n"))
@@ -109,6 +145,7 @@ func NewAPI(clusters []*cluster.Cluster, opts Options) *API {
 		clusterMap: clusterMap,
 		router:     router,
 		serv:       serv,
+		authz:      authz,
 	}
 
 	vtadminpb.RegisterVTAdminServer(serv.GRPCServer(), api)
@@ -158,6 +195,7 @@ func NewAPI(clusters []*cluster.Cluster, opts Options) *API {
 	// 	1. CORS. CORS is a special case and is applied globally, the rest are applied only to the subrouter.
 	//	2. Compression
 	//	3. Tracing
+	//	4. Authentication
 	middlewares := []mux.MiddlewareFunc{}
 
 	if len(opts.HTTPOpts.CORSOrigins) > 0 {
@@ -171,6 +209,10 @@ func NewAPI(clusters []*cluster.Cluster, opts Options) *API {
 
 	if opts.HTTPOpts.EnableTracing {
 		middlewares = append(middlewares, vthandlers.TraceHandler)
+	}
+
+	if authn != nil {
+		middlewares = append(middlewares, vthandlers.NewAuthenticationHandler(authn))
 	}
 
 	router.Use(middlewares...)
@@ -201,6 +243,10 @@ func (api *API) FindSchema(ctx context.Context, req *vtadminpb.FindSchemaRequest
 	)
 
 	for _, c := range clusters {
+		if !api.authz.IsAuthorized(ctx, c.ID, rbac.SchemaResource, rbac.GetAction) {
+			continue
+		}
+
 		wg.Add(1)
 
 		go func(c *cluster.Cluster) {
