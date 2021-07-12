@@ -19,6 +19,8 @@ package vreplication
 import (
 	"flag"
 	"fmt"
+	"math"
+	"sort"
 	"strings"
 	"time"
 
@@ -243,7 +245,6 @@ func (vr *vreplicator) buildColInfoMap(ctx context.Context) (map[string][]*Colum
 	queryTemplate := "select character_set_name, collation_name, column_name, data_type, column_type, extra from information_schema.columns where table_schema=%s and table_name=%s;"
 	colInfoMap := make(map[string][]*ColumnInfo)
 	for _, td := range schema.TableDefinitions {
-
 		query := fmt.Sprintf(queryTemplate, encodeString(vr.dbClient.DBName()), encodeString(td.Name))
 		qr, err := vr.mysqld.FetchSuperQuery(ctx, query)
 		if err != nil {
@@ -403,4 +404,23 @@ func (vr *vreplicator) resetFKCheckAfterCopy() error {
 func (vr *vreplicator) clearFKCheck() error {
 	_, err := vr.dbClient.Execute("set foreign_key_checks=0;")
 	return err
+}
+
+func recalculatePKColsInfoByColumnNames(uniqueKeyColumnNames []string, colInfos []*ColumnInfo) (pkColInfos []*ColumnInfo) {
+	pkColInfos = colInfos[:]
+	columnOrderMap := map[string]int64{}
+	for _, colInfo := range pkColInfos {
+		columnOrderMap[colInfo.Name] = math.MaxInt64
+	}
+
+	isPKMap := map[string]bool{}
+	for i, colName := range uniqueKeyColumnNames {
+		columnOrderMap[colName] = int64(i)
+		isPKMap[colName] = true
+	}
+	sort.SliceStable(pkColInfos, func(i, j int) bool { return columnOrderMap[pkColInfos[i].Name] < columnOrderMap[pkColInfos[j].Name] })
+	for i := range pkColInfos {
+		pkColInfos[i].IsPK = isPKMap[pkColInfos[i].Name]
+	}
+	return pkColInfos
 }
