@@ -613,8 +613,8 @@ github.com/planetscale/pargzip v0.0.0-20201116224723-90c7fc03ea8a h1:y0OpQ4+5tKx
 github.com/planetscale/pargzip v0.0.0-20201116224723-90c7fc03ea8a/go.mod h1:GJFUzQuXIoB2Kjn1ZfDhJr/42D5nWOqRcIQVgCxTuIE=
 github.com/planetscale/tengo v0.9.6-ps.v4 h1:nLGFobPtYEZDmuRww38RJiP7gVWVLBMzpTUysLIUF7Q=
 github.com/planetscale/tengo v0.9.6-ps.v4/go.mod h1:Xwj7BHMQW30k479dZvWIl/WOCy33skXRjYZLsKgAINM=
-github.com/planetscale/vtprotobuf v0.0.0-20210521163914-5a02622d1e2a h1:qr27Mt+/BoONcc6hogjN5PPCykCxXvJMpXCtYMMgkws=
-github.com/planetscale/vtprotobuf v0.0.0-20210521163914-5a02622d1e2a/go.mod h1:8abDv+/TBY4d10QUVQgKYCy6+xk9SQPorWPZDqTkPHM=
+github.com/planetscale/vtprotobuf v0.2.0 h1:65H8opMdnSwIUvrRZ51o6rFxA01t9XG91qi997v9FoA=
+github.com/planetscale/vtprotobuf v0.2.0/go.mod h1:r/DtDohldd/geKrA1bxnXNfbJShO/I1LG/OBEBvpRd4=
 github.com/pmezard/go-difflib v0.0.0-20151028094244-d8ed2627bdf0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
@@ -742,6 +742,8 @@ github.com/yuin/goldmark v1.2.1/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9dec
 github.com/yuin/goldmark v1.3.5/go.mod h1:mwnBkeHKe2W/ZEtQ+71ViKU8L12m81fl3OWwC1Zlc8k=
 github.com/z-division/go-zookeeper v0.0.0-20190128072838-6d7457066b9b h1:Itr7GbuXoM1PK/eCeNNia4Qd3ib9IgX9g9SpXgo8BwQ=
 github.com/z-division/go-zookeeper v0.0.0-20190128072838-6d7457066b9b/go.mod h1:JNALoWa+nCXR8SmgLluHcBNVJgyejzpKPZk9pX2yXXE=
+github.com/zeebo/assert v1.3.0/go.mod h1:Pq9JiuJQpG8JLJdtkwrJESF0Foym2/D9XMU5ciN/wJ0=
+github.com/zeebo/errs v1.2.2/go.mod h1:sgbWHsvVuTPHcqJJGQ1WhI5KbWlHYz+2+2C/LSEtCw4=
 go.etcd.io/bbolt v1.3.2/go.mod h1:IbVyRI1SCnLcuJnV2u8VeU0CEYM7e686BmAb1XKL+uU=
 go.etcd.io/bbolt v1.3.3/go.mod h1:IbVyRI1SCnLcuJnV2u8VeU0CEYM7e686BmAb1XKL+uU=
 go.etcd.io/etcd v0.0.0-20191023171146-3cf2f69b5738 h1:VcrIfasaLFkyjk6KNlXQSzO+B0fZcnECiDrKJsfxka0=
@@ -1271,3 +1273,4 @@ sigs.k8s.io/structured-merge-diff v1.0.1-0.20191108220359-b1b620dd3f06/go.mod h1
 sigs.k8s.io/yaml v1.1.0/go.mod h1:UJmg0vDUVViEyp3mgSv9WPwZCDxu4rQW1olrI1uml+o=
 sigs.k8s.io/yaml v1.2.0 h1:kr/MCeFWJWTwyaHoR9c8EjH9OumOmoF9YGiZd7lFm/Q=
 sigs.k8s.io/yaml v1.2.0/go.mod h1:yfXDCHCao9+ENCvLSE62v9VSji2MKu5jeNfTrofGhJc=
+storj.io/drpc v0.0.21/go.mod h1:OSJH7wvH3yKlhnMHwblKJioaaeyI6X8xbXT1SG9woe8=
