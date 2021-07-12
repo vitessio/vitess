@@ -49,6 +49,7 @@ const (
 var discoveryQueue *discovery.Queue
 var snapshotDiscoveryKeys chan inst.InstanceKey
 var snapshotDiscoveryKeysMutex sync.Mutex
+var hasReceivedSIGTERM int32
 
 var discoveriesCounter = metrics.NewCounter()
 var failedDiscoveriesCounter = metrics.NewCounter()
@@ -120,10 +121,28 @@ func acceptSignals() {
 				config.Reload()
 				discoveryMetrics.SetExpirePeriod(time.Duration(config.Config.DiscoveryCollectionRetentionSeconds) * time.Second)
 			case syscall.SIGTERM:
-				log.Infof("Received SIGTERM. Shutting down orchestrator")
+				log.Infof("Received SIGTERM. Starting shutdown")
+				atomic.StoreInt32(&hasReceivedSIGTERM, 1)
 				discoveryMetrics.StopAutoExpiration()
 				// probably should poke other go routines to stop cleanly here ...
 				inst.AuditOperation("shutdown", nil, "Triggered via SIGTERM")
+				timeout := time.After(*shutdownWaitTime)
+				func() {
+					for {
+						count := atomic.LoadInt32(&shardsLockCounter)
+						if count == 0 {
+							return
+						}
+						select {
+						case <-timeout:
+							log.Infof("wait for lock release timed out. Some locks might not have been released.")
+							return
+						default:
+							time.Sleep(100 * time.Millisecond)
+						}
+					}
+				}()
+				log.Infof("Shutting down orchestrator")
 				os.Exit(0)
 			}
 		}

@@ -22,11 +22,11 @@ interface Props {
 }
 
 const STATUS_STATES: { [s in mysqlctl.BackupInfo.Status]: PipState } = {
-    [mysqlctl.BackupInfo.Status.UNKNOWN]: 'danger',
-    [mysqlctl.BackupInfo.Status.INCOMPLETE]: 'danger',
-    [mysqlctl.BackupInfo.Status.COMPLETE]: 'danger',
+    [mysqlctl.BackupInfo.Status.UNKNOWN]: null,
+    [mysqlctl.BackupInfo.Status.INCOMPLETE]: 'warning',
+    [mysqlctl.BackupInfo.Status.COMPLETE]: 'primary',
     [mysqlctl.BackupInfo.Status.INVALID]: 'danger',
-    [mysqlctl.BackupInfo.Status.VALID]: 'danger',
+    [mysqlctl.BackupInfo.Status.VALID]: 'success',
 };
 
 export const BackupStatusPip = ({ status }: Props) => {

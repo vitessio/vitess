@@ -484,8 +484,8 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 		if sql == "" {
 			sql = event.Dml
 		}
-		// If the event is for one of the AWS RDS "special" tables, we skip
-		if !strings.Contains(sql, " mysql.rds_") {
+		// If the event is for one of the AWS RDS "special" or pt-table-checksum tables, we skip
+		if !strings.Contains(sql, " mysql.rds_") && !strings.Contains(sql, " percona.checksums") {
 			// This is a player using statement based replication
 			if err := vp.vr.dbClient.Begin(); err != nil {
 				return err

@@ -51,7 +51,7 @@ func newMemorySort(plan logicalPlan, orderBy sqlparser.OrderBy) (*memorySort, er
 		switch expr := order.Expr.(type) {
 		case *sqlparser.Literal:
 			var err error
-			if colNumber, err = ResultFromNumber(ms.ResultColumns(), expr); err != nil {
+			if colNumber, err = ResultFromNumber(ms.ResultColumns(), expr, "order clause"); err != nil {
 				return nil, err
 			}
 		case *sqlparser.ColName:
