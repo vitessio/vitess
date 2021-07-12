@@ -29,6 +29,7 @@ import (
 	"google.golang.org/protobuf/proto"
 	"k8s.io/apimachinery/pkg/util/sets"
 
+	"vitess.io/vitess/go/pools"
 	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/concurrency"
@@ -64,6 +65,11 @@ type Cluster struct {
 
 	// Fields for generating FQDNs for tablets
 	TabletFQDNTmpl *template.Template
+
+	backupReadPool   *pools.RPCPool
+	schemaReadPool   *pools.RPCPool
+	topoReadPool     *pools.RPCPool
+	workflowReadPool *pools.RPCPool
 }
 
 // New creates a new Cluster from a Config.
@@ -107,6 +113,11 @@ func New(cfg Config) (*Cluster, error) {
 			return nil, fmt.Errorf("failed to parse tablet fqdn template %s: %w", cfg.TabletFQDNTmplStr, err)
 		}
 	}
+
+	cluster.backupReadPool = cfg.BackupReadPoolConfig.NewReadPool()
+	cluster.schemaReadPool = cfg.SchemaReadPoolConfig.NewReadPool()
+	cluster.topoReadPool = cfg.TopoReadPoolConfig.NewReadPool()
+	cluster.workflowReadPool = cfg.WorkflowReadPoolConfig.NewReadPool()
 
 	return cluster, nil
 }
@@ -231,6 +242,11 @@ type FindAllShardsInKeyspaceOptions struct {
 	// SkipDial indicates that the cluster can assume the vtctldclient has
 	// already dialed up a connection to a vtctld.
 	SkipDial bool
+	// skipPool indicates that the caller has already made a successful call to
+	// Acquire on the topoReadPool. It is not exported, because the cluster
+	// pools are not exported, so it's not possible to manually Acquire from
+	// outside this package.
+	skipPool bool
 }
 
 // FindAllShardsInKeyspace proxies a FindAllShardsInKeyspace RPC to a cluster's
@@ -249,6 +265,13 @@ func (c *Cluster) FindAllShardsInKeyspace(ctx context.Context, keyspace string, 
 		if err := c.Vtctld.Dial(ctx); err != nil {
 			return nil, fmt.Errorf("failed to Dial vtctld for cluster = %s for FindAllShardsInKeyspace: %w", c.ID, err)
 		}
+	}
+
+	if !opts.skipPool {
+		if err := c.topoReadPool.Acquire(ctx); err != nil {
+			return nil, fmt.Errorf("FindAllShardsInKeyspace(%s) failed to acquire topoReadPool: %w", keyspace, err)
+		}
+		defer c.topoReadPool.Release()
 	}
 
 	resp, err := c.Vtctld.FindAllShardsInKeyspace(ctx, &vtctldatapb.FindAllShardsInKeyspaceRequest{
@@ -310,7 +333,14 @@ func (c *Cluster) findWorkflows(ctx context.Context, keyspaces []string, opts Fi
 		span, ctx := trace.NewSpan(ctx, "Cluster.GetKeyspaces")
 		AnnotateSpan(c, span)
 
+		if err := c.topoReadPool.Acquire(ctx); err != nil {
+			span.Finish()
+			return nil, fmt.Errorf("findWorkflows(keyspaces = %v, opts = %+v) failed to acquire topoReadPool: %w", keyspaces, opts, err)
+		}
+
 		resp, err := c.Vtctld.GetKeyspaces(ctx, &vtctldatapb.GetKeyspacesRequest{})
+		c.topoReadPool.Release()
+
 		if err != nil {
 			span.Finish()
 			return nil, fmt.Errorf("GetKeyspaces(cluster = %s) failed: %w", c.ID, err)
@@ -362,12 +392,21 @@ func (c *Cluster) findWorkflows(ctx context.Context, keyspaces []string, opts Fi
 			span.Annotate("keyspace", ks)
 			span.Annotate("active_only", opts.ActiveOnly)
 
+			if err := c.workflowReadPool.Acquire(ctx); err != nil {
+				err = fmt.Errorf("GetWorkflows(keyspace = %s, active_only = %v) failed to acquire workflowReadPool: %w", ks, opts.ActiveOnly, err)
+				rec.RecordError(err)
+
+				return
+			}
+
 			resp, err := c.Vtctld.GetWorkflows(ctx, &vtctldatapb.GetWorkflowsRequest{
 				Keyspace:   ks,
 				ActiveOnly: opts.ActiveOnly,
 			})
+			c.workflowReadPool.Release()
+
 			if err != nil {
-				err = fmt.Errorf("GetWorkflows(cluster = %s, keyspace = %s, active_only = %v) failed: %w", c.ID, ks, opts.ActiveOnly, err)
+				err = fmt.Errorf("GetWorkflows(keyspace = %s, active_only = %v) failed: %w", ks, opts.ActiveOnly, err)
 				rec.RecordError(err)
 
 				return
@@ -441,6 +480,11 @@ func (c *Cluster) GetBackups(ctx context.Context, req *vtadminpb.GetBackupsReque
 				span.Annotate("keyspace", keyspace)
 				span.Annotate("shard", shard)
 
+				if err := c.backupReadPool.Acquire(ctx); err != nil {
+					rec.RecordError(fmt.Errorf("GetBackups(%s/%s) failed to acquire backupReadPool: %w", keyspace, shard, err))
+					return
+				}
+
 				resp, err := c.Vtctld.GetBackups(ctx, &vtctldatapb.GetBackupsRequest{
 					Keyspace:      keyspace,
 					Shard:         shard,
@@ -448,6 +492,8 @@ func (c *Cluster) GetBackups(ctx context.Context, req *vtadminpb.GetBackupsReque
 					Detailed:      req.RequestOptions.Detailed,
 					DetailedLimit: req.RequestOptions.DetailedLimit,
 				})
+				c.backupReadPool.Release()
+
 				if err != nil {
 					rec.RecordError(fmt.Errorf("GetBackups(%s/%s): %w", keyspace, shard, err))
 					return
@@ -623,6 +669,11 @@ func (c *Cluster) GetKeyspace(ctx context.Context, name string) (*vtadminpb.Keys
 		return nil, fmt.Errorf("Vtctld.Dial failed for cluster = %s: %w", c.ID, err)
 	}
 
+	if err := c.topoReadPool.Acquire(ctx); err != nil {
+		return nil, fmt.Errorf("GetKeyspace(%s) failed to acquire topoReadPool: %w", name, err)
+	}
+	defer c.topoReadPool.Release()
+
 	resp, err := c.Vtctld.GetKeyspace(ctx, &vtctldatapb.GetKeyspaceRequest{
 		Keyspace: name,
 	})
@@ -630,7 +681,10 @@ func (c *Cluster) GetKeyspace(ctx context.Context, name string) (*vtadminpb.Keys
 		return nil, err
 	}
 
-	shards, err := c.FindAllShardsInKeyspace(ctx, name, FindAllShardsInKeyspaceOptions{SkipDial: true})
+	shards, err := c.FindAllShardsInKeyspace(ctx, name, FindAllShardsInKeyspaceOptions{
+		SkipDial: true,
+		skipPool: true, // we already acquired before making the GetKeyspace call
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -653,7 +707,13 @@ func (c *Cluster) GetKeyspaces(ctx context.Context) ([]*vtadminpb.Keyspace, erro
 		return nil, fmt.Errorf("Vtctld.Dial(cluster=%s) failed: %w", c.ID, err)
 	}
 
+	if err := c.topoReadPool.Acquire(ctx); err != nil {
+		return nil, fmt.Errorf("GetKeyspaces() failed to acquire topoReadPool: %w", err)
+	}
+
 	resp, err := c.Vtctld.GetKeyspaces(ctx, &vtctldatapb.GetKeyspacesRequest{})
+	c.topoReadPool.Release()
+
 	if err != nil {
 		return nil, err
 	}
@@ -875,7 +935,15 @@ func (c *Cluster) getSchemaFromTablets(ctx context.Context, keyspace string, tab
 			span.Annotate("keyspace", keyspace)
 			span.Annotate("shard", tablet.Tablet.Shard)
 
+			if err := c.schemaReadPool.Acquire(ctx); err != nil {
+				err = fmt.Errorf("GetSchema(cluster = %s, keyspace = %s, tablet = %s) failed to acquire schemaReadPool: %w", c.ID, keyspace, tablet.Tablet.Alias, err)
+				rec.RecordError(err)
+				return
+			}
+
 			resp, err := c.Vtctld.GetSchema(ctx, req)
+			c.schemaReadPool.Release()
+
 			if err != nil {
 				err = fmt.Errorf("GetSchema(cluster = %s, keyspace = %s, tablet = %s) failed: %w", c.ID, keyspace, tablet.Tablet.Alias, err)
 				rec.RecordError(err)
@@ -1003,6 +1071,11 @@ func (c *Cluster) GetSrvVSchema(ctx context.Context, cell string) (*vtadminpb.Sr
 		return nil, fmt.Errorf("Vtctld.Dial(cluster=%s) failed: %w", c.ID, err)
 	}
 
+	if err := c.topoReadPool.Acquire(ctx); err != nil {
+		return nil, fmt.Errorf("GetSrvVSchema(%s) failed to acquire topoReadPool: %w", cell, err)
+	}
+	defer c.topoReadPool.Release()
+
 	sv, err := c.Vtctld.GetSrvVSchema(ctx, &vtctldatapb.GetSrvVSchemaRequest{
 		Cell: cell,
 	})
@@ -1030,17 +1103,21 @@ func (c *Cluster) GetSrvVSchemas(ctx context.Context, cells []string) ([]*vtadmi
 		return nil, fmt.Errorf("Vtctld.Dial(cluster=%s) failed: %w", c.ID, err)
 	}
 
-	res, err := c.Vtctld.GetSrvVSchemas(ctx, &vtctldatapb.GetSrvVSchemasRequest{
+	if err := c.topoReadPool.Acquire(ctx); err != nil {
+		return nil, fmt.Errorf("GetSrvVSchema(cluster = %s, cells = %v) failed to acquire topoReadPool: %w", c.ID, cells, err)
+	}
+	resp, err := c.Vtctld.GetSrvVSchemas(ctx, &vtctldatapb.GetSrvVSchemasRequest{
 		Cells: cells,
 	})
+	c.topoReadPool.Release()
 
 	if err != nil {
 		return nil, err
 	}
 
-	svs := make([]*vtadminpb.SrvVSchema, 0)
+	svs := make([]*vtadminpb.SrvVSchema, 0, len(resp.SrvVSchemas))
 
-	for cell, s := range res.SrvVSchemas {
+	for cell, s := range resp.SrvVSchemas {
 		svs = append(svs, &vtadminpb.SrvVSchema{
 			Cell:       cell,
 			Cluster:    c.ToProto(),
@@ -1060,6 +1137,11 @@ func (c *Cluster) GetVSchema(ctx context.Context, keyspace string) (*vtadminpb.V
 
 	AnnotateSpan(c, span)
 	span.Annotate("keyspace", keyspace)
+
+	if err := c.topoReadPool.Acquire(ctx); err != nil {
+		return nil, fmt.Errorf("GetVSchema(%s) failed to acquire topoReadPool: %w", keyspace, err)
+	}
+	defer c.topoReadPool.Release()
 
 	vschema, err := c.Vtctld.GetVSchema(ctx, &vtctldatapb.GetVSchemaRequest{
 		Keyspace: keyspace,

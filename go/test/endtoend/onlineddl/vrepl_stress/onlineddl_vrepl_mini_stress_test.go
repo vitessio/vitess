@@ -82,18 +82,30 @@ deletesAttempts=%d, deletesFailures=%d, deletesNoops=%d, deletes=%d,
 }
 
 var (
-	clusterInstance *cluster.LocalProcessCluster
-	vtParams        mysql.ConnParams
+	clusterInstance      *cluster.LocalProcessCluster
+	vtParams             mysql.ConnParams
+	evaluatedMysqlParams *mysql.ConnParams
 
+	opOrder               int64
+	opOrderMutex          sync.Mutex
+	onlineDDLStrategy     = "online -vreplication-test-suite -skip-topo"
 	hostname              = "localhost"
 	keyspaceName          = "ks"
+	shards                []cluster.Shard
 	cell                  = "zone1"
 	schemaChangeDirectory = ""
 	tableName             = `stress_test`
-	createStatement       = `
+	afterTableName        = `stress_test_after`
+	cleanupStatements     = []string{
+		`DROP TABLE IF EXISTS stress_test`,
+		`DROP TABLE IF EXISTS stress_test_before`,
+		`DROP TABLE IF EXISTS stress_test_after`,
+	}
+	createStatement = `
 		CREATE TABLE stress_test (
 			id bigint(20) not null,
 			rand_val varchar(32) null default '',
+			op_order bigint unsigned not null default 0,
 			hint_col varchar(64) not null default '',
 			created_timestamp timestamp not null default current_timestamp,
 			updates int unsigned not null default 0,
@@ -106,10 +118,10 @@ var (
 		ALTER TABLE stress_test modify hint_col varchar(64) not null default '%s'
 	`
 	insertRowStatement = `
-		INSERT IGNORE INTO stress_test (id, rand_val) VALUES (%d, left(md5(rand()), 8))
+		INSERT IGNORE INTO stress_test (id, rand_val, op_order) VALUES (%d, left(md5(rand()), 8), %d)
 	`
 	updateRowStatement = `
-		UPDATE stress_test SET updates=updates+1 WHERE id=%d
+		UPDATE stress_test SET op_order=%d, updates=updates+1 WHERE id=%d
 	`
 	deleteRowStatement = `
 		DELETE FROM stress_test WHERE id=%d AND updates=1
@@ -118,6 +130,28 @@ var (
 	selectCountRowsStatement = `
 		SELECT COUNT(*) AS num_rows, CAST(SUM(updates) AS SIGNED) AS sum_updates FROM stress_test
 	`
+	// We use CAST(SUM(updates) AS SIGNED) because SUM() returns a DECIMAL datatype, and we want to read a SIGNED INTEGER type
+	selectCountRowsFromAfterTableStatement = `
+		SELECT COUNT(*) AS num_rows, CAST(SUM(updates) AS SIGNED) AS sum_updates FROM stress_test_after
+	`
+	selectCountFromTableBefore = `
+		SELECT count(*) as c FROM stress_test_before
+	`
+	selectCountFromTableAfter = `
+		SELECT count(*) as c FROM stress_test_after
+	`
+	selectMaxOpOrderFromTableBefore = `
+		SELECT MAX(op_order) as m FROM stress_test_before
+	`
+	selectMaxOpOrderFromTableAfter = `
+		SELECT MAX(op_order) as m FROM stress_test_after
+	`
+	selectBeforeTable = `
+		SELECT * FROM stress_test_before order by id
+	`
+	selectAfterTable = `
+		SELECT * FROM stress_test_after order by id
+	`
 	truncateStatement = `
 		TRUNCATE TABLE stress_test
 	`
@@ -125,10 +159,40 @@ var (
 )
 
 const (
-	maxTableRows    = 4096
-	maxConcurrency  = 5
-	countIterations = 5
+	maxTableRows                  = 4096
+	maxConcurrency                = 20
+	singleConnectionSleepInterval = 2 * time.Millisecond
+	countIterations               = 5
 )
+
+func resetOpOrder() {
+	opOrderMutex.Lock()
+	defer opOrderMutex.Unlock()
+	opOrder = 0
+}
+
+func nextOpOrder() int64 {
+	opOrderMutex.Lock()
+	defer opOrderMutex.Unlock()
+	opOrder++
+	return opOrder
+}
+
+func getTablet() *cluster.Vttablet {
+	return clusterInstance.Keyspaces[0].Shards[0].Vttablets[0]
+}
+
+func mysqlParams() *mysql.ConnParams {
+	if evaluatedMysqlParams != nil {
+		return evaluatedMysqlParams
+	}
+	evaluatedMysqlParams = &mysql.ConnParams{
+		Uname:      "vt_dba",
+		UnixSocket: path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d", getTablet().TabletUID), "/mysql.sock"),
+		DbName:     fmt.Sprintf("vt_%s", keyspaceName),
+	}
+	return evaluatedMysqlParams
+}
 
 func TestMain(m *testing.M) {
 	defer cluster.PanicHandler(nil)
@@ -204,7 +268,7 @@ func TestMain(m *testing.M) {
 func TestSchemaChange(t *testing.T) {
 	defer cluster.PanicHandler(t)
 
-	shards := clusterInstance.Keyspaces[0].Shards
+	shards = clusterInstance.Keyspaces[0].Shards
 	require.Equal(t, 1, len(shards))
 
 	t.Run("create schema", func(t *testing.T) {
@@ -243,11 +307,12 @@ func TestSchemaChange(t *testing.T) {
 	t.Run("ALTER TABLE without workload", func(t *testing.T) {
 		// A single ALTER TABLE. Generally this is covered in endtoend/onlineddl_vrepl,
 		// but we wish to verify the ALTER statement used in these tests is sound
+		testWithInitialSchema(t)
 		initTable(t)
 		hint := "hint-alter-without-workload"
-		uuid := testOnlineDDLStatement(t, fmt.Sprintf(alterHintStatement, hint), "online", "vtgate", hint)
+		uuid := testOnlineDDLStatement(t, fmt.Sprintf(alterHintStatement, hint), onlineDDLStrategy, "vtgate", hint)
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
-		testSelectTableMetrics(t)
+		testSelectTableMetricsAfterMigration(t)
 	})
 
 	for i := 0; i < countIterations; i++ {
@@ -260,24 +325,37 @@ func TestSchemaChange(t *testing.T) {
 		testName := fmt.Sprintf("ALTER TABLE with workload %d/%d", (i + 1), countIterations)
 		t.Run(testName, func(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
-			initTable(t)
-			var wg sync.WaitGroup
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				runMultipleConnections(ctx, t)
-			}()
-			hint := fmt.Sprintf("hint-alter-with-workload-%d", i)
-			uuid := testOnlineDDLStatement(t, fmt.Sprintf(alterHintStatement, hint), "online", "vtgate", hint)
-			onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
-			cancel() // will cause runMultipleConnections() to terminate
-			wg.Wait()
-			testSelectTableMetrics(t)
+			t.Run("create schema", func(t *testing.T) {
+				testWithInitialSchema(t)
+			})
+			t.Run("init table", func(t *testing.T) {
+				initTable(t)
+			})
+			t.Run("migrate", func(t *testing.T) {
+				var wg sync.WaitGroup
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					runMultipleConnections(ctx, t)
+				}()
+				hint := fmt.Sprintf("hint-alter-with-workload-%d", i)
+				uuid := testOnlineDDLStatement(t, fmt.Sprintf(alterHintStatement, hint), onlineDDLStrategy, "vtgate", hint)
+				onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+				cancel() // will cause runMultipleConnections() to terminate
+				wg.Wait()
+			})
+			t.Run("validate metrics", func(t *testing.T) {
+				testSelectTableMetricsAfterMigration(t)
+			})
 		})
 	}
 }
 
 func testWithInitialSchema(t *testing.T) {
+	for _, statement := range cleanupStatements {
+		err := clusterInstance.VtctlclientProcess.ApplySchema(keyspaceName, statement)
+		require.Nil(t, err)
+	}
 	// Create the stress table
 	err := clusterInstance.VtctlclientProcess.ApplySchema(keyspaceName, createStatement)
 	require.Nil(t, err)
@@ -306,11 +384,12 @@ func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy str
 	assert.NoError(t, err)
 
 	if !strategySetting.Strategy.IsDirect() {
-		time.Sleep(time.Second * 20)
+		status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, 30*time.Second, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+		fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 	}
 
 	if expectHint != "" {
-		checkMigratedTable(t, tableName, expectHint)
+		checkMigratedTable(t, afterTableName, expectHint)
 	}
 	return uuid
 }
@@ -351,7 +430,7 @@ func getCreateTableStatement(t *testing.T, tablet *cluster.Vttablet, tableName s
 
 func generateInsert(t *testing.T, conn *mysql.Conn) error {
 	id := rand.Int31n(int32(maxTableRows))
-	query := fmt.Sprintf(insertRowStatement, id)
+	query := fmt.Sprintf(insertRowStatement, id, nextOpOrder())
 	qr, err := conn.ExecuteFetch(query, 1000, true)
 
 	func() {
@@ -375,7 +454,7 @@ func generateInsert(t *testing.T, conn *mysql.Conn) error {
 
 func generateUpdate(t *testing.T, conn *mysql.Conn) error {
 	id := rand.Int31n(int32(maxTableRows))
-	query := fmt.Sprintf(updateRowStatement, id)
+	query := fmt.Sprintf(updateRowStatement, nextOpOrder(), id)
 	qr, err := conn.ExecuteFetch(query, 1000, true)
 
 	func() {
@@ -448,10 +527,13 @@ func runSingleConnection(ctx context.Context, t *testing.T, done *int64) {
 		if err != nil {
 			if strings.Contains(err.Error(), "disallowed due to rule: enforce blacklisted tables") {
 				err = nil
+			} else if strings.Contains(err.Error(), "doesn't exist") {
+				// Table renamed to _before, due to -vreplication-test-suite flag
+				err = nil
 			}
 		}
 		assert.Nil(t, err)
-		time.Sleep(10 * time.Millisecond)
+		time.Sleep(singleConnectionSleepInterval)
 	}
 }
 
@@ -477,11 +559,20 @@ func initTable(t *testing.T) {
 	log.Infof("initTable begin")
 	defer log.Infof("initTable complete")
 
+	t.Run("cancel pending migrations", func(t *testing.T) {
+		cancelQuery := "alter vitess_migration cancel all"
+		r := onlineddl.VtgateExecQuery(t, &vtParams, cancelQuery, "")
+		if r.RowsAffected > 0 {
+			fmt.Printf("# Cancelled migrations (for debug purposes): %d\n", r.RowsAffected)
+		}
+	})
+
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)
 	defer conn.Close()
 
+	resetOpOrder()
 	writeMetrics.Clear()
 	_, err = conn.ExecuteFetch(truncateStatement, 1000, true)
 	require.Nil(t, err)
@@ -497,10 +588,7 @@ func initTable(t *testing.T) {
 	}
 }
 
-func testSelectTableMetrics(t *testing.T) {
-	writeMetrics.mu.Lock()
-	defer writeMetrics.mu.Unlock()
-
+func testSelectTableMetricsWithStatement(t *testing.T, statement string) {
 	log.Infof("%s", writeMetrics.String())
 
 	ctx := context.Background()
@@ -508,7 +596,7 @@ func testSelectTableMetrics(t *testing.T) {
 	require.Nil(t, err)
 	defer conn.Close()
 
-	rs, err := conn.ExecuteFetch(selectCountRowsStatement, 1000, true)
+	rs, err := conn.ExecuteFetch(statement, 1000, true)
 	require.Nil(t, err)
 
 	row := rs.Named().Row()
@@ -523,5 +611,76 @@ func testSelectTableMetrics(t *testing.T) {
 	assert.NotZero(t, writeMetrics.deletes)
 	assert.NotZero(t, writeMetrics.updates)
 	assert.Equal(t, writeMetrics.inserts-writeMetrics.deletes, numRows)
-	assert.Equal(t, writeMetrics.updates-writeMetrics.deletes, sumUpdates) // because we DELETE WHERE updates=1
+}
+
+func testSelectTableMetrics(t *testing.T) {
+	testSelectTableMetricsWithStatement(t, selectCountRowsStatement)
+}
+
+func testSelectTableMetricsAfterMigration(t *testing.T) {
+	writeMetrics.mu.Lock()
+	defer writeMetrics.mu.Unlock()
+
+	var countBefore int64
+	{
+		// Validate after table is populated
+		rs := onlineddl.VtgateExecQuery(t, &vtParams, selectCountFromTableBefore, "")
+		row := rs.Named().Row()
+		require.NotNil(t, row)
+
+		countBefore = row.AsInt64("c", 0)
+		require.NotZero(t, countBefore)
+		require.Less(t, countBefore, int64(maxTableRows))
+
+		fmt.Printf("# count rows in table (before): %d\n", countBefore)
+	}
+	var countAfter int64
+	{
+		// Validate after table is populated
+		rs := onlineddl.VtgateExecQuery(t, &vtParams, selectCountFromTableAfter, "")
+		row := rs.Named().Row()
+		require.NotNil(t, row)
+
+		countAfter = row.AsInt64("c", 0)
+		require.NotZero(t, countAfter)
+		require.Less(t, countAfter, int64(maxTableRows))
+
+		fmt.Printf("# count rows in table (after): %d\n", countAfter)
+	}
+	{
+		rs := onlineddl.VtgateExecQuery(t, &vtParams, selectMaxOpOrderFromTableBefore, "")
+		row := rs.Named().Row()
+		require.NotNil(t, row)
+
+		maxOpOrder := row.AsInt64("m", 0)
+		fmt.Printf("# max op_order in table (before): %d\n", maxOpOrder)
+	}
+	{
+		rs := onlineddl.VtgateExecQuery(t, &vtParams, selectMaxOpOrderFromTableAfter, "")
+		row := rs.Named().Row()
+		require.NotNil(t, row)
+
+		maxOpOrder := row.AsInt64("m", 0)
+		fmt.Printf("# max op_order in table (after): %d\n", maxOpOrder)
+	}
+
+	testSelectTableMetricsWithStatement(t, selectCountRowsFromAfterTableStatement)
+
+	{
+		selectBeforeFile := onlineddl.CreateTempScript(t, selectBeforeTable)
+		defer os.Remove(selectBeforeFile)
+		beforeOutput := onlineddl.MysqlClientExecFile(t, mysqlParams(), os.TempDir(), "", selectBeforeFile)
+		beforeOutput = strings.TrimSpace(beforeOutput)
+		require.NotEmpty(t, beforeOutput)
+		assert.Equal(t, countBefore, int64(len(strings.Split(beforeOutput, "\n"))))
+
+		selectAfterFile := onlineddl.CreateTempScript(t, selectAfterTable)
+		defer os.Remove(selectAfterFile)
+		afterOutput := onlineddl.MysqlClientExecFile(t, mysqlParams(), os.TempDir(), "", selectAfterFile)
+		afterOutput = strings.TrimSpace(afterOutput)
+		require.NotEmpty(t, afterOutput)
+		assert.Equal(t, countAfter, int64(len(strings.Split(afterOutput, "\n"))))
+
+		require.Equal(t, beforeOutput, afterOutput, "results mismatch: (%s) and (%s)", selectBeforeTable, selectAfterTable)
+	}
 }

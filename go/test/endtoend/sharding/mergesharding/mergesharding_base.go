@@ -214,13 +214,13 @@ func TestMergesharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 	require.NoError(t, err)
 
 	// Wait for tablets to come in Service state
-	err = shard0Master.VttabletProcess.WaitForTabletType("SERVING")
+	err = shard0Master.VttabletProcess.WaitForTabletStatus("SERVING")
 	require.NoError(t, err)
-	err = shard1Master.VttabletProcess.WaitForTabletType("SERVING")
+	err = shard1Master.VttabletProcess.WaitForTabletStatus("SERVING")
 	require.NoError(t, err)
-	err = shard2Master.VttabletProcess.WaitForTabletType("SERVING")
+	err = shard2Master.VttabletProcess.WaitForTabletStatus("SERVING")
 	require.NoError(t, err)
-	err = shard3Master.VttabletProcess.WaitForTabletType("SERVING")
+	err = shard3Master.VttabletProcess.WaitForTabletStatus("SERVING")
 	require.NoError(t, err)
 
 	// keyspace/shard name fields
@@ -348,7 +348,7 @@ func TestMergesharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 	// The tested behavior is a safeguard to prevent that somebody can
 	// accidentally modify data on the destination masters while they are not
 	// migrated yet and the source shards are still the source of truth.
-	err = shard3Master.VttabletProcess.WaitForTabletType("NOT_SERVING")
+	err = shard3Master.VttabletProcess.WaitForTabletStatus("NOT_SERVING")
 	require.NoError(t, err)
 
 	// check that binlog server exported the stats vars

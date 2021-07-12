@@ -489,7 +489,7 @@ var commands = []commandGroup{
 		"Workflow", []command{
 			{"Workflow", commandWorkflow,
 				"<ks.workflow> <action> --dry-run",
-				"Start/Stop/Delete/Show/ListAll Workflow on all target tablets in workflow. Example: Workflow merchant.morders Start",
+				"Start/Stop/Delete/Show/ListAll/Tags Workflow on all target tablets in workflow. Example: Workflow merchant.morders Start",
 			},
 		},
 	},
@@ -3491,8 +3491,8 @@ func commandWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
-	if subFlags.NArg() != 2 {
-		return fmt.Errorf("usage: Workflow --dry-run keyspace[.workflow] start/stop/delete/list/listall")
+	if subFlags.NArg() < 2 {
+		return fmt.Errorf("usage: Workflow --dry-run keyspace[.workflow] start/stop/delete/list/listall/tags [<tags>]")
 	}
 	keyspace := subFlags.Arg(0)
 	action := strings.ToLower(subFlags.Arg(1))
@@ -3512,14 +3512,30 @@ func commandWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.
 	if err != nil {
 		wr.Logger().Errorf("Keyspace %s not found", keyspace)
 	}
+	var results map[*topo.TabletInfo]*sqltypes.Result
+	if action == "tags" {
+		tags := ""
+		if subFlags.NArg() != 3 {
+			return fmt.Errorf("tags incorrectly specified, usage: Workflow keyspace.workflow tags <tags>")
+		}
+		tags = strings.ToLower(subFlags.Arg(2))
+		results, err = wr.WorkflowTagAction(ctx, keyspace, workflow, tags)
+		if err != nil {
+			return err
+		}
+	} else {
+		if subFlags.NArg() != 2 {
+			return fmt.Errorf("usage: Workflow --dry-run keyspace[.workflow] start/stop/delete/list/listall")
+		}
+		results, err = wr.WorkflowAction(ctx, workflow, keyspace, action, *dryRun)
+		if err != nil {
+			return err
+		}
+		if action == "show" || action == "listall" {
+			return nil
+		}
+	}
 
-	results, err := wr.WorkflowAction(ctx, workflow, keyspace, action, *dryRun)
-	if err != nil {
-		return err
-	}
-	if action == "show" || action == "listall" {
-		return nil
-	}
 	if len(results) == 0 {
 		wr.Logger().Printf("no result returned\n")
 		return nil
