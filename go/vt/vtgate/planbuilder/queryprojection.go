@@ -17,6 +17,8 @@ limitations under the License.
 package planbuilder
 
 import (
+	"strconv"
+
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -24,21 +26,18 @@ import (
 )
 
 type queryProjection struct {
-	selectExprs             []*sqlparser.AliasedExpr
-	aggrExprs               []*sqlparser.AliasedExpr
-	groupOrderingCommonExpr map[sqlparser.Expr]*sqlparser.Order
+	selectExprs []*sqlparser.AliasedExpr
+	aggrExprs   []*sqlparser.AliasedExpr
+	orderExprs  []orderBy
+}
 
-	orderExprs sqlparser.OrderBy
-
-	// orderExprColMap keeps a map between the Order object and the offset into the select expressions list
-	orderExprColMap map[*sqlparser.Order]int
+type orderBy struct {
+	inner         *sqlparser.Order
+	weightStrExpr sqlparser.Expr
 }
 
 func newQueryProjection() *queryProjection {
-	return &queryProjection{
-		groupOrderingCommonExpr: map[sqlparser.Expr]*sqlparser.Order{},
-		orderExprColMap:         map[*sqlparser.Order]int{},
-	}
+	return &queryProjection{}
 }
 
 func createQPFromSelect(sel *sqlparser.Select) (*queryProjection, error) {
@@ -63,22 +62,61 @@ func createQPFromSelect(sel *sqlparser.Select) (*queryProjection, error) {
 		qp.selectExprs = append(qp.selectExprs, exp)
 	}
 
-	qp.orderExprs = sel.OrderBy
+	if len(qp.selectExprs) > 0 && len(qp.aggrExprs) > 0 {
+		return nil, semantics.Gen4NotSupportedF("aggregation and non-aggregation expressions, together are not supported in cross-shard query")
+	}
 
 	allExpr := append(qp.selectExprs, qp.aggrExprs...)
+
 	for _, order := range sel.OrderBy {
-		for offset, expr := range allExpr {
-			if sqlparser.EqualsExpr(order.Expr, expr.Expr) {
-				qp.orderExprColMap[order] = offset
-				break
+		qp.addOrderBy(order, allExpr)
+	}
+	return qp, nil
+}
+
+func (qp *queryProjection) addOrderBy(order *sqlparser.Order, allExpr []*sqlparser.AliasedExpr) {
+	// Order by is the column offset to be used from the select expressions
+	// Eg - select id from music order by 1
+	literalExpr, isLiteral := order.Expr.(*sqlparser.Literal)
+	if isLiteral && literalExpr.Type == sqlparser.IntVal {
+		num, _ := strconv.Atoi(literalExpr.Val)
+		aliasedExpr := allExpr[num-1]
+		expr := aliasedExpr.Expr
+		if !aliasedExpr.As.IsEmpty() {
+			// the column is aliased, so we'll add an expression ordering by the alias and not the underlying expression
+			expr = &sqlparser.ColName{
+				Name: aliasedExpr.As,
 			}
-			// TODO: handle alias and column offset
+		}
+		qp.orderExprs = append(qp.orderExprs, orderBy{
+			inner: &sqlparser.Order{
+				Expr:      expr,
+				Direction: order.Direction,
+			},
+			weightStrExpr: aliasedExpr.Expr,
+		})
+		return
+	}
+
+	// If the ORDER BY is against a column alias, we need to remember the expression
+	// behind the alias. The weightstring(.) calls needs to be done against that expression and not the alias.
+	// Eg - select music.foo as bar, weightstring(music.foo) from music order by bar
+	colExpr, isColName := order.Expr.(*sqlparser.ColName)
+	if isColName && colExpr.Qualifier.IsEmpty() {
+		for _, expr := range allExpr {
+			isAliasExpr := !expr.As.IsEmpty()
+			if isAliasExpr && colExpr.Name.Equal(expr.As) {
+				qp.orderExprs = append(qp.orderExprs, orderBy{
+					inner:         order,
+					weightStrExpr: expr.Expr,
+				})
+				return
+			}
 		}
 	}
 
-	if sel.GroupBy == nil || sel.OrderBy == nil {
-		return qp, nil
-	}
-
-	return qp, nil
+	qp.orderExprs = append(qp.orderExprs, orderBy{
+		inner:         order,
+		weightStrExpr: order.Expr,
+	})
 }

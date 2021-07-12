@@ -127,6 +127,7 @@ message Workflow {
     // if there are N logs that exist for the stream, and we fail to fetch the
     // ith log, we will still return logs in [0, i) + (i, N].
     string log_fetch_error = 14;
+    repeated string tags = 15;
 
     message CopyState {
       string table = 1;
