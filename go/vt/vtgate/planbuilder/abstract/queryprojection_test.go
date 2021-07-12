@@ -24,7 +24,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
-func TestName(t *testing.T) {
+func TestQPSimplifiedExpr(t *testing.T) {
 	testCases := []struct {
 		query, expected string
 	}{
@@ -42,6 +42,40 @@ func TestName(t *testing.T) {
   "OrderBy": []
 }`,
 		},
+		{
+			query: "select intcol, textcol from user order by 1, textcol",
+			expected: `
+{
+  "Select": [
+    "intcol",
+    "textcol"
+  ],
+  "Grouping": [],
+  "OrderBy": [
+    "intcol asc",
+    "textcol asc"
+  ]
+}`,
+		},
+		{
+			query: "select intcol, textcol, count(id) from user group by intcol, textcol, extracol order by 2 desc",
+			expected: `
+{
+  "Select": [
+    "intcol",
+    "textcol",
+    "aggr: count(id)"
+  ],
+  "Grouping": [
+    "intcol",
+    "textcol",
+    "extracol"
+  ],
+  "OrderBy": [
+    "textcol desc"
+  ]
+}`,
+		},
 	}
 
 	for _, tc := range testCases {
@@ -51,7 +85,7 @@ func TestName(t *testing.T) {
 			sel := ast.(*sqlparser.Select)
 			qp, err := CreateQPFromSelect(sel)
 			require.NoError(t, err)
-			require.Equal(t, tc.expected[1:], qp.ToString())
+			require.Equal(t, tc.expected[1:], qp.toString())
 		})
 	}
 }
