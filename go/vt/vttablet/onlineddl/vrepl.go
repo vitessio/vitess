@@ -32,6 +32,7 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/dbconnpool"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -69,8 +70,6 @@ type VRepl struct {
 	alterOptions string
 	tableRows    int64
 
-	sharedPKColumns *vrepl.ColumnList
-
 	sourceSharedColumns *vrepl.ColumnList
 	targetSharedColumns *vrepl.ColumnList
 	sharedColumnsMap    map[string]string
@@ -102,36 +101,6 @@ func NewVRepl(workflow, keyspace, shard, dbName, sourceTable, targetTable, alter
 		enumToTextMap:  map[string]string{},
 		convertCharset: map[string](*binlogdatapb.CharsetConversion){},
 	}
-}
-
-// getCandidateUniqueKeys investigates a table and returns the list of unique keys
-// candidate for chunking
-func (v *VRepl) getCandidateUniqueKeys(ctx context.Context, conn *dbconnpool.DBConnection, tableName string) (uniqueKeys [](*vrepl.UniqueKey), err error) {
-
-	query, err := sqlparser.ParseAndBind(sqlShowColumnsFrom,
-		sqltypes.StringBindVariable(v.dbName),
-		sqltypes.StringBindVariable(tableName),
-		sqltypes.StringBindVariable(v.dbName),
-		sqltypes.StringBindVariable(tableName),
-	)
-	if err != nil {
-		return uniqueKeys, err
-	}
-
-	rs, err := conn.ExecuteFetch(query, math.MaxInt64, true)
-	if err != nil {
-		return nil, err
-	}
-	for _, row := range rs.Named().Rows {
-		uniqueKey := &vrepl.UniqueKey{
-			Name:            row.AsString("INDEX_NAME", ""),
-			Columns:         *vrepl.ParseColumnList(row.AsString("COLUMN_NAMES", "")),
-			HasNullable:     row.AsBool("has_nullable", false),
-			IsAutoIncrement: row.AsBool("is_auto_increment", false),
-		}
-		uniqueKeys = append(uniqueKeys, uniqueKey)
-	}
-	return uniqueKeys, nil
 }
 
 // getSharedUniqueKeys returns the unique keys shared between the two source&target tables
@@ -167,7 +136,7 @@ func getSharedUniqueKeys(sourceUniqueKeys, targetUniqueKeys [](*vrepl.UniqueKey)
 		}
 	}
 	// Now that we know what the shared unique keys are, let's find the "best" shared one.
-	// Source and target unique keys can have different name, ven though they cover the exact same
+	// Source and target unique keys can have different name, even though they cover the exact same
 	// columns and in same order.
 	for _, pair := range sharedUKPairs {
 		if pair.source.HasNullable {
@@ -248,6 +217,16 @@ func (v *VRepl) readTableUniqueKeys(ctx context.Context, conn *dbconnpool.DBConn
 		return nil, err
 	}
 	for _, row := range rs.Named().Rows {
+		if row.AsBool("is_float", false) {
+			// float & double data types are imprecise and we cannot use them while iterating unique keys
+			continue
+		}
+		if row.AsBool("has_nullable", false) {
+			// NULLable columns in a unique key means the set of values is not really unique (two identical rows with NULLs are allowed).
+			// Thus, we cannot use this unique key for iteration.
+			continue
+		}
+
 		uniqueKey := &vrepl.UniqueKey{
 			Name:            row.AsString("index_name", ""),
 			Columns:         *vrepl.ParseColumnList(row.AsString("column_names", "")),
@@ -424,25 +403,31 @@ func (v *VRepl) analyzeTables(ctx context.Context, conn *dbconnpool.DBConnection
 	if err != nil {
 		return err
 	}
+	if len(sourceUniqueKeys) == 0 {
+		return fmt.Errorf("Found no possible unique key on `%s`", v.sourceTable)
+	}
 	targetUniqueKeys, err := v.readTableUniqueKeys(ctx, conn, v.targetTable)
 	if err != nil {
 		return err
+	}
+	if len(targetUniqueKeys) == 0 {
+		return fmt.Errorf("Found no possible unique key on `%s`", v.targetTable)
 	}
 	v.chosenSourceUniqueKey, v.chosenTargetUniqueKey = getSharedUniqueKeys(sourceUniqueKeys, targetUniqueKeys, v.parser.ColumnRenameMap())
 	if v.chosenSourceUniqueKey == nil || v.chosenTargetUniqueKey == nil {
 		return fmt.Errorf("Found no shared, not nullable, unique keys between `%s` and `%s`", v.sourceTable, v.targetTable)
 	}
 	// chosen source & target unique keys have exact columns in same order
-	v.sharedPKColumns = &v.chosenSourceUniqueKey.Columns
+	sharedPKColumns := &v.chosenSourceUniqueKey.Columns
 
-	if err := v.applyColumnTypes(ctx, conn, v.sourceTable, sourceColumns, sourceVirtualColumns, sourcePKColumns, v.sourceSharedColumns, v.sharedPKColumns); err != nil {
+	if err := v.applyColumnTypes(ctx, conn, v.sourceTable, sourceColumns, sourceVirtualColumns, sourcePKColumns, v.sourceSharedColumns, sharedPKColumns); err != nil {
 		return err
 	}
 	if err := v.applyColumnTypes(ctx, conn, v.targetTable, targetColumns, targetVirtualColumns, targetPKColumns, v.targetSharedColumns); err != nil {
 		return err
 	}
 
-	for _, sourcePKColumn := range v.sharedPKColumns.Columns() {
+	for _, sourcePKColumn := range sharedPKColumns.Columns() {
 		mappedColumn := v.targetSharedColumns.GetColumn(sourcePKColumn.Name)
 		if sourcePKColumn.Type == vrepl.EnumColumnType && mappedColumn.Type == vrepl.EnumColumnType {
 			// An ENUM as part of PRIMARY KEY. We must convert it to text because OMG that's complicated.
@@ -539,10 +524,10 @@ func (v *VRepl) analyzeBinlogSource(ctx context.Context) {
 		StopAfterCopy: false,
 	}
 	rule := &binlogdatapb.Rule{
-		Match:           v.targetTable,
-		Filter:          v.filterQuery,
-		SourceUniqueKey: v.chosenSourceUniqueKey.Name,
-		TargetUniqueKey: v.chosenTargetUniqueKey.Name,
+		Match:                  v.targetTable,
+		Filter:                 v.filterQuery,
+		SourceUniqueKeyColumns: textutil.EscapeJoin(v.chosenSourceUniqueKey.Columns.Names(), ","),
+		TargetUniqueKeyColumns: textutil.EscapeJoin(v.chosenTargetUniqueKey.Columns.Names(), ","),
 	}
 	if len(v.convertCharset) > 0 {
 		rule.ConvertCharset = v.convertCharset
