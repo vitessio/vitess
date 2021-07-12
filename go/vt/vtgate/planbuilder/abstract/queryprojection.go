@@ -79,74 +79,60 @@ func CreateQPFromSelect(sel *sqlparser.Select) (*QueryProjection, error) {
 		return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.MixOfGroupFuncAndFields, "Mixing of aggregation and non-aggregation columns is not allowed if there is no GROUP BY clause")
 	}
 
-	qp.GroupByExprs = sqlparser.Exprs(sel.GroupBy)
+	for _, expr := range sel.GroupBy {
+		// todo dont ignore weightstringexpr
+		e, _ := qp.getSimplifiedExpr(expr)
+		qp.GroupByExprs = append(qp.GroupByExprs, e)
+	}
 
 	for _, order := range sel.OrderBy {
-		qp.addOrderBy(order)
+		expr, weightStrExpr := qp.getSimplifiedExpr(order.Expr)
+		qp.OrderExprs = append(qp.OrderExprs, OrderBy{
+			Inner: &sqlparser.Order{
+				Expr:      expr,
+				Direction: order.Direction,
+			},
+			WeightStrExpr: weightStrExpr,
+		})
 	}
 
-	for _, expr := range qp.GroupByExprs {
-		// if we are to do grouping on a multishard query, we need the results to be ordered by the grouping keys
-		found := false
-		for _, orderExpr := range qp.OrderExprs {
-			if sqlparser.EqualsExpr(expr, orderExpr.Inner.Expr) {
-				found = true
-				break
-			}
-		}
-		if !found {
-			order := &sqlparser.Order{Expr: expr, Direction: sqlparser.AscOrder}
-			qp.addOrderBy(order)
-		}
-	}
 	return qp, nil
 }
 
-func (qp *QueryProjection) addOrderBy(order *sqlparser.Order) {
+// getSimplifiedExpr takes an expression used in ORDER BY or GROUP BY, which can reference both aliased columns and
+// column offsets, and returns an expression that is simpler to evaluate
+func (qp *QueryProjection) getSimplifiedExpr(e sqlparser.Expr) (expr sqlparser.Expr, weightStrExpr sqlparser.Expr) {
 	// Order by is the column offset to be used from the select expressions
 	// Eg - select id from music order by 1
-	literalExpr, isLiteral := order.Expr.(*sqlparser.Literal)
+	literalExpr, isLiteral := e.(*sqlparser.Literal)
 	if isLiteral && literalExpr.Type == sqlparser.IntVal {
 		num, _ := strconv.Atoi(literalExpr.Val)
 		aliasedExpr := qp.SelectExprs[num-1].Col
-		expr := aliasedExpr.Expr
+		expr = aliasedExpr.Expr
 		if !aliasedExpr.As.IsEmpty() {
 			// the column is aliased, so we'll add an expression ordering by the alias and not the underlying expression
 			expr = &sqlparser.ColName{
 				Name: aliasedExpr.As,
 			}
 		}
-		qp.OrderExprs = append(qp.OrderExprs, OrderBy{
-			Inner: &sqlparser.Order{
-				Expr:      expr,
-				Direction: order.Direction,
-			},
-			WeightStrExpr: aliasedExpr.Expr,
-		})
-		return
+
+		return expr, aliasedExpr.Expr
 	}
 
 	// If the ORDER BY is against a column alias, we need to remember the expression
 	// behind the alias. The weightstring(.) calls needs to be done against that expression and not the alias.
 	// Eg - select music.foo as bar, weightstring(music.foo) from music order by bar
-	colExpr, isColName := order.Expr.(*sqlparser.ColName)
+	colExpr, isColName := e.(*sqlparser.ColName)
 	if isColName && colExpr.Qualifier.IsEmpty() {
 		for _, selectExpr := range qp.SelectExprs {
 			isAliasExpr := !selectExpr.Col.As.IsEmpty()
 			if isAliasExpr && colExpr.Name.Equal(selectExpr.Col.As) {
-				qp.OrderExprs = append(qp.OrderExprs, OrderBy{
-					Inner:         order,
-					WeightStrExpr: selectExpr.Col.Expr,
-				})
-				return
+				return e, selectExpr.Col.Expr
 			}
 		}
 	}
 
-	qp.OrderExprs = append(qp.OrderExprs, OrderBy{
-		Inner:         order,
-		WeightStrExpr: order.Expr,
-	})
+	return e, e
 }
 
 func (qp *QueryProjection) ToString() string {
