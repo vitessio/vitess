@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"math/rand"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -75,7 +76,7 @@ type (
 		duration time.Duration
 		start    time.Time
 		t        *testing.T
-		finish   bool
+		finish   uint32
 		cfgMu    sync.Mutex
 	}
 
@@ -173,21 +174,21 @@ func (s *Stresser) Stop() {
 // assert that all the results are successful, and finally prints them to the standard
 // output.
 func (s *Stresser) StopAfter(after time.Duration) {
-	if s.start.Second() == 0 {
+	if s.start.IsZero() {
 		s.t.Log("Load testing was not started.")
 		return
 	}
 	timeoutCh := time.After(after)
 	select {
 	case res := <-s.doneCh:
-		res.print(s.duration.Seconds())
+		res.print(s.t.Logf, s.duration.Seconds())
 		if !res.assert() {
 			s.t.Errorf("Requires no failed queries")
 		}
 	case <-timeoutCh:
-		s.finish = true
+		atomic.StoreUint32(&s.finish, 1)
 		res := <-s.doneCh
-		res.print(s.duration.Seconds())
+		res.print(s.t.Logf, s.duration.Seconds())
 		if !res.assert() {
 			s.t.Errorf("Requires no failed queries")
 		}
@@ -217,7 +218,7 @@ func (s *Stresser) SetConn(conn *mysql.ConnParams) *Stresser {
 //		s.Stop()
 //
 func (s *Stresser) Start() *Stresser {
-	fmt.Println("Starting load testing ...")
+	s.t.Log("Starting load testing ...")
 	s.tbls = s.createTables(s.cfg.NumberOfTables)
 	s.start = time.Now()
 	go s.startClients()
@@ -298,7 +299,7 @@ func (s *Stresser) startStressClient(resultCh chan result) {
 	timeout := time.After(s.cfg.MaximumDuration - time.Since(s.start))
 
 outer:
-	for !s.finish {
+	for !s.finished() {
 
 		// Update the connection parameters is Stresser has new ones, and
 		// create a new client using the new parameters.
@@ -324,6 +325,10 @@ outer:
 		}
 	}
 	resultCh <- res
+}
+
+func (s *Stresser) finished() bool {
+	return atomic.LoadUint32(&s.finish) == 1
 }
 
 // deleteFromRandomTable will delete the last row of a random table.

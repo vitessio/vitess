@@ -16,8 +16,6 @@ limitations under the License.
 
 package stress
 
-import "fmt"
-
 type (
 	queryCount struct {
 		success           int
@@ -75,9 +73,9 @@ func (r result) assert() bool {
 }
 
 // print renders the results held by result.
-func (r result) print(seconds float64) {
+func (r result) print(log func(format string, args ...interface{}), seconds float64) {
 	allQCs := sumQueryCounts(r.selects, r.inserts, r.deletes)
-	fmt.Printf(`QPS:
+	log(`QPS:
 	select: %d | failed: %d (including %d meaningful failures) | sum: %d
 	insert: %d | failed: %d (including %d meaningful failures) | sum: %d
 	delete: %d | failed: %d (including %d meaningful failures) | sum: %d
