@@ -507,7 +507,7 @@ func TestSubQueryOnTopOfSubQuery(t *testing.T) {
 	exec(t, conn, `insert into t1(id1, id2) values (1, 1), (2, 2), (3, 3), (4, 4), (5, 5)`)
 	exec(t, conn, `insert into t2(id3, id4) values (1, 3), (2, 4)`)
 
-	assertMatches(t, conn, "select id1 from t1 where id1 not in (select id3 from t2) and id2 in (select id4 from t2)", `[[INT64(3)] [INT64(4)]]`)
+	assertMatches(t, conn, "select id1 from t1 where id1 not in (select id3 from t2) and id2 in (select id4 from t2) order by id1", `[[INT64(3)] [INT64(4)]]`)
 }
 
 func TestFunctionInDefault(t *testing.T) {
@@ -517,25 +517,8 @@ func TestFunctionInDefault(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
-	// store the original sql mode
-	res := exec(t, conn, `SELECT @@GLOBAL.sql_mode`)
-	originalSQLMode := string(res.Rows[0][0].Raw())
 	// set the sql mode ALLOW_INVALID_DATES
-	for _, shard := range clusterInstance.Keyspaces[0].Shards {
-		for _, vttablet := range shard.Vttablets {
-			_, err = vttablet.VttabletProcess.QueryTablet(`SET GLOBAL sql_mode = 'ALLOW_INVALID_DATES'`, "", false)
-			require.NoError(t, err)
-		}
-	}
-	// restore the sql mode
-	defer func() {
-		for _, shard := range clusterInstance.Keyspaces[0].Shards {
-			for _, vttablet := range shard.Vttablets {
-				_, err = vttablet.VttabletProcess.QueryTablet(`SET GLOBAL sql_mode = '`+originalSQLMode+`'`, "", false)
-				require.NoError(t, err)
-			}
-		}
-	}()
+	exec(t, conn, `SET sql_mode = 'ALLOW_INVALID_DATES'`)
 
 	_, err = conn.ExecuteFetch(`create table function_default (x varchar(25) DEFAULT (TRIM(" check ")))`, 1000, true)
 	// this query fails because mysql57 does not support functions in default clause

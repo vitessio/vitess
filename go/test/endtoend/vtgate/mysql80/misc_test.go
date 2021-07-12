@@ -35,17 +35,8 @@ func TestFunctionInDefault(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
-	// store the original sql mode
-	res := exec(t, conn, `SELECT @@GLOBAL.sql_mode`)
-	originalSQLMode := string(res.Rows[0][0].Raw())
 	// set the sql mode ALLOW_INVALID_DATES
-	_, err = clusterInstance.Keyspaces[0].Shards[0].Vttablets[0].VttabletProcess.QueryTablet(`SET GLOBAL sql_mode = 'ALLOW_INVALID_DATES'`, "", false)
-	require.NoError(t, err)
-	// restore the sql mode
-	defer func() {
-		_, err = clusterInstance.Keyspaces[0].Shards[0].Vttablets[0].VttabletProcess.QueryTablet(`SET GLOBAL sql_mode = '`+originalSQLMode+`'`, "", false)
-		require.NoError(t, err)
-	}()
+	exec(t, conn, `SET sql_mode = 'ALLOW_INVALID_DATES'`)
 
 	exec(t, conn, `create table function_default (x varchar(25) DEFAULT (TRIM(" check ")))`)
 	exec(t, conn, "drop table function_default")
