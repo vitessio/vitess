@@ -150,7 +150,7 @@
 		},
 		"messaging": {
 			"File": "messaging_test.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/messaging"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/messaging","-run", "TestReparenting"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "12",

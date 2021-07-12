@@ -297,6 +297,8 @@ func TestReparenting(t *testing.T) {
 	// validate that we have received inserted message
 	stream.Next()
 
+	assert.Equal(t, 1, getClientCount(shard1Master))
+
 	// make old master again as new master
 	log.Infof("Starting second PRS")
 	output, err = clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(
