@@ -156,8 +156,6 @@ func (vtctlclient *VtctlClientProcess) ExecuteCommand(args ...string) (err error
 	if output != "" {
 		if err != nil {
 			log.Errorf("Output:\n%v", output)
-		} else {
-			log.Infof("Output:\n%v", output)
 		}
 	}
 	return err

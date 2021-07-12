@@ -163,7 +163,7 @@ func setupShard(ctx context.Context, t *testing.T, shardName string, tablets []*
 	}
 
 	for _, tablet := range tablets {
-		err := tablet.VttabletProcess.WaitForTabletTypes([]string{"SERVING", "NOT_SERVING"})
+		err := tablet.VttabletProcess.WaitForTabletStatuses([]string{"SERVING", "NOT_SERVING"})
 		require.NoError(t, err)
 	}
 

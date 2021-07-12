@@ -650,6 +650,15 @@ func TestQueryAndSubQWithLimit(t *testing.T) {
 	assert.Equal(t, 10, len(result.Rows))
 }
 
+func TestDeleteAlias(t *testing.T) {
+	conn, err := mysql.Connect(context.Background(), &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	exec(t, conn, "delete t1 from t1 where id1 = 1")
+	exec(t, conn, "delete t.* from t1 t where t.id1 = 1")
+}
+
 func assertMatches(t *testing.T, conn *mysql.Conn, query, expected string) {
 	t.Helper()
 	qr := exec(t, conn, query)

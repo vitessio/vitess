@@ -46,6 +46,11 @@ func gen4Planner(_ string) func(sqlparser.Statement, *sqlparser.ReservedVars, Co
 }
 
 func newBuildSelectPlan(sel *sqlparser.Select, vschema ContextVSchema) (engine.Primitive, error) {
+
+	directives := sqlparser.ExtractCommentDirectives(sel.Comments)
+	if len(directives) > 0 {
+		return nil, semantics.Gen4NotSupportedF("comment directives")
+	}
 	keyspace, err := vschema.DefaultKeyspace()
 	if err != nil {
 		return nil, err
@@ -126,111 +131,6 @@ func optimizeQuery(opTree abstract.Operator, semTable *semantics.SemTable, vsche
 	}
 }
 
-type starRewriter struct {
-	err      error
-	semTable *semantics.SemTable
-}
-
-func (sr *starRewriter) starRewrite(cursor *sqlparser.Cursor) bool {
-	switch node := cursor.Node().(type) {
-	case *sqlparser.Select:
-		tables := sr.semTable.GetSelectTables(node)
-		var selExprs sqlparser.SelectExprs
-		for _, selectExpr := range node.SelectExprs {
-			starExpr, isStarExpr := selectExpr.(*sqlparser.StarExpr)
-			if !isStarExpr {
-				selExprs = append(selExprs, selectExpr)
-				continue
-			}
-			colNames, expStar, err := expandTableColumns(tables, starExpr)
-			if err != nil {
-				sr.err = err
-				return false
-			}
-			if !expStar.proceed {
-				selExprs = append(selExprs, selectExpr)
-				continue
-			}
-			selExprs = append(selExprs, colNames...)
-			for tbl, cols := range expStar.tblColMap {
-				sr.semTable.AddExprs(tbl, cols)
-			}
-		}
-		node.SelectExprs = selExprs
-	}
-	return true
-}
-
-func expandTableColumns(tables []*semantics.TableInfo, starExpr *sqlparser.StarExpr) (sqlparser.SelectExprs, *expandStarInfo, error) {
-	unknownTbl := true
-	var colNames sqlparser.SelectExprs
-	expStar := &expandStarInfo{
-		tblColMap: map[*sqlparser.AliasedTableExpr]sqlparser.SelectExprs{},
-	}
-
-	for _, tbl := range tables {
-		if !starExpr.TableName.IsEmpty() {
-			if !tbl.ASTNode.As.IsEmpty() {
-				if !starExpr.TableName.Qualifier.IsEmpty() {
-					continue
-				}
-				if starExpr.TableName.Name.String() != tbl.ASTNode.As.String() {
-					continue
-				}
-			} else {
-				if !starExpr.TableName.Qualifier.IsEmpty() {
-					if starExpr.TableName.Qualifier.String() != tbl.Table.Keyspace.Name {
-						continue
-					}
-				}
-				tblName := tbl.ASTNode.Expr.(sqlparser.TableName)
-				if starExpr.TableName.Name.String() != tblName.Name.String() {
-					continue
-				}
-			}
-		}
-		unknownTbl = false
-		if tbl.Table == nil || !tbl.Table.ColumnListAuthoritative {
-			expStar.proceed = false
-			break
-		}
-		expStar.proceed = true
-		tblName, err := tbl.ASTNode.TableName()
-		if err != nil {
-			return nil, nil, err
-		}
-		for _, col := range tbl.Table.Columns {
-			colNames = append(colNames, &sqlparser.AliasedExpr{
-				Expr: sqlparser.NewColNameWithQualifier(col.Name.String(), tblName),
-				As:   sqlparser.NewColIdent(col.Name.String()),
-			})
-		}
-		expStar.tblColMap[tbl.ASTNode] = colNames
-	}
-
-	if unknownTbl {
-		// This will only happen for case when starExpr has qualifier.
-		return nil, nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadDb, "Unknown table '%s'", sqlparser.String(starExpr.TableName))
-	}
-	return colNames, expStar, nil
-}
-
-type expandStarInfo struct {
-	proceed   bool
-	tblColMap map[*sqlparser.AliasedTableExpr]sqlparser.SelectExprs
-}
-
-func expandStar(sel *sqlparser.Select, semTable *semantics.SemTable) (*sqlparser.Select, error) {
-	// TODO we could store in semTable whether there are any * in the query that needs expanding or not
-	sr := &starRewriter{semTable: semTable}
-
-	_ = sqlparser.Rewrite(sel, sr.starRewrite, nil)
-	if sr.err != nil {
-		return nil, sr.err
-	}
-	return sel, nil
-}
-
 func planLimit(limit *sqlparser.Limit, plan logicalPlan) (logicalPlan, error) {
 	if limit == nil {
 		return plan, nil
@@ -256,25 +156,36 @@ func planLimit(limit *sqlparser.Limit, plan logicalPlan) (logicalPlan, error) {
 
 func planHorizon(sel *sqlparser.Select, plan logicalPlan, semTable *semantics.SemTable) (logicalPlan, error) {
 	rb, ok := plan.(*route)
+	if !ok && semTable.ProjectionErr != nil {
+		return nil, semTable.ProjectionErr
+	}
+
 	if ok && rb.isSingleShard() {
 		createSingleShardRoutePlan(sel, rb)
 		return plan, nil
 	}
 
-	// TODO real horizon planning to be done
-	if sel.Distinct {
-		return nil, semantics.Gen4NotSupportedF("DISTINCT")
+	if err := checkUnsupportedConstructs(sel); err != nil {
+		return nil, err
 	}
-	if sel.GroupBy != nil {
-		return nil, semantics.Gen4NotSupportedF("GROUP BY")
-	}
+
 	qp, err := createQPFromSelect(sel)
 	if err != nil {
 		return nil, err
 	}
 	for _, e := range qp.selectExprs {
-		if _, err := pushProjection(e, plan, semTable); err != nil {
+		if _, _, err := pushProjection(e, plan, semTable, true); err != nil {
 			return nil, err
+		}
+	}
+
+	for _, expr := range qp.aggrExprs {
+		funcExpr, ok := expr.Expr.(*sqlparser.FuncExpr)
+		if !ok {
+			return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "expected an aggregation here")
+		}
+		if funcExpr.Distinct {
+			return nil, semantics.Gen4NotSupportedF("distinct aggregation")
 		}
 	}
 
@@ -285,7 +196,7 @@ func planHorizon(sel *sqlparser.Select, plan logicalPlan, semTable *semantics.Se
 		}
 	}
 	if len(sel.OrderBy) > 0 {
-		plan, err = planOrderBy(qp, plan, semTable)
+		plan, err = planOrderBy(qp, qp.orderExprs, plan, semTable)
 		if err != nil {
 			return nil, err
 		}
@@ -306,6 +217,19 @@ func createSingleShardRoutePlan(sel *sqlparser.Select, rb *route) {
 			ast.SelectExprs[i] = removeQualifierFromColName(aliasedExpr)
 		}
 	}
+}
+
+func checkUnsupportedConstructs(sel *sqlparser.Select) error {
+	if sel.Distinct {
+		return semantics.Gen4NotSupportedF("DISTINCT")
+	}
+	if sel.GroupBy != nil {
+		return semantics.Gen4NotSupportedF("GROUP BY")
+	}
+	if sel.Having != nil {
+		return semantics.Gen4NotSupportedF("HAVING")
+	}
+	return nil
 }
 
 func pushJoinPredicate(exprs []sqlparser.Expr, tree joinTree, semTable *semantics.SemTable) (joinTree, error) {
@@ -605,7 +529,7 @@ func findColumnVindex(a *routePlan, exp sqlparser.Expr, sem *semantics.SemTable)
 
 	var singCol vindexes.SingleColumn
 
-	_ = a.tables.visit(func(table *routeTable) error {
+	_ = visitTables(a.tables, func(table *routeTable) error {
 		if leftDep.IsSolvedBy(table.qtable.TableID) {
 			for _, vindex := range table.vtable.ColumnVindexes {
 				sC, isSingle := vindex.Vindex.(vindexes.SingleColumn)

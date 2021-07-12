@@ -12,6 +12,7 @@
     "Query": "create table t1 (\n\tid bigint,\n\tprimary key (id)\n)"
   }
 }
+Gen4 plan same as above
 
 # simple create table with keyspace
 "create table user.t1(id bigint, primary key(id))"
@@ -27,6 +28,7 @@
     "Query": "create table t1 (\n\tid bigint,\n\tprimary key (id)\n)"
   }
 }
+Gen4 plan same as above
 
 # DDL
 "create table a(id int)"
@@ -42,10 +44,12 @@
     "Query": "create table a (\n\tid int\n)"
   }
 }
+Gen4 plan same as above
 
 # simple create table with table qualifier that does not exists
 "create table a.b(id int)"
 "Unknown database 'a' in vschema"
+Gen4 plan same as above
 
 #Alter table
 "alter table a ADD id int"
@@ -61,6 +65,7 @@
     "Query": "alter table a add column id int"
   }
 }
+Gen4 plan same as above
 
 #Alter table with qualifier
 "alter table user.user ADD id int"
@@ -76,6 +81,7 @@
     "Query": "alter table `user` add column id int"
   }
 }
+Gen4 plan same as above
 
 #Alter table with qualifier and table not in vschema
 "alter table user.a ADD id int"
@@ -91,10 +97,12 @@
     "Query": "alter table a add column id int"
   }
 }
+Gen4 plan same as above
 
 #Alter table with unknown qualifier
 "alter table a.b ADD id int"
 "Unknown database 'a' in vschema"
+Gen4 plan same as above
 
 # create db foo
 "create database foo"
@@ -109,10 +117,12 @@
     }
   }
 }
+Gen4 plan same as above
 
 # create db main
 "create database main"
 "Can't create database 'main'; database exists"
+Gen4 plan same as above
 
 # create db if not exists main
 "create database if not exists main"
@@ -123,18 +133,22 @@
     "OperatorType": "Rows"
   }
 }
+Gen4 plan same as above
 
 # alter db foo
 "alter database foo collate utf8"
 "Can't alter database 'foo'; unknown database"
+Gen4 plan same as above
 
 # alter db main
 "alter database main collate utf8"
 "alter database is not supported"
+Gen4 plan same as above
 
 # drop db foo
 "drop database foo"
 "Can't drop database 'foo'; database doesn't exists"
+Gen4 plan same as above
 
 # drop db main
 "drop database main"
@@ -149,6 +163,7 @@
     }
   }
 }
+Gen4 plan same as above
 
 # drop db if exists main
 "drop database if exists main"
@@ -163,6 +178,7 @@
     }
   }
 }
+Gen4 plan same as above
 
 # drop db if exists foo
 "drop schema if exists foo"
@@ -173,6 +189,7 @@
     "OperatorType": "Rows"
   }
 }
+Gen4 plan same as above
 
 # DDL with qualifier
 "create index a on user.user(id)"
@@ -188,6 +205,7 @@
     "Query": "alter table `user` add index a (id)"
   }
 }
+Gen4 plan same as above
 
 # DDL with qualifier for a table not in vschema of an unsharded keyspace
 "create index a on main.unknown(id)"
@@ -203,6 +221,7 @@
     "Query": "alter table unknown add index a (id)"
   }
 }
+Gen4 plan same as above
 
 # create view with subquery in unsharded keyspace
 "create view view_a as select * from (select col1, col2 from unsharded where id = 1 union select col1, col2 from unsharded where id = 3) a"
@@ -248,6 +267,7 @@
     "Query": "create view view_a as (select id from unsharded) union (select id from unsharded_auto) order by id asc limit 5"
   }
 }
+Gen4 plan same as above
 
 # create view with subquery in unsharded keyspace with multiple UNION clauses
 "create view view_a as select id from unsharded union select id from unsharded_auto union select id from unsharded_auto where id in (132)"
@@ -263,6 +283,7 @@
     "Query": "create view view_a as select id from unsharded union select id from unsharded_auto union select id from unsharded_auto where id in (132)"
   }
 }
+Gen4 plan same as above
 
 # create view with subquery in unsharded keyspace with UNION clauses in subqueries
 "create view view_a as (select id from unsharded union select id from unsharded_auto) union (select id from unsharded_auto union select name from unsharded)"
@@ -278,6 +299,7 @@
     "Query": "create view view_a as (select id from unsharded union select id from unsharded_auto) union (select id from unsharded_auto union select `name` from unsharded)"
   }
 }
+Gen4 plan same as above
 
 # Alter View
 "alter view user.user_extra as select* from user.user"
@@ -308,6 +330,7 @@
     "Query": "drop table unsharded_a"
   }
 }
+Gen4 plan same as above
 
 # Drop view
 "drop view main.a"
@@ -323,6 +346,7 @@
     "Query": "drop view a"
   }
 }
+Gen4 plan same as above
 
 # Truncate table with qualifier
 "truncate user.user_extra"
@@ -338,6 +362,7 @@
     "Query": "truncate table user_extra"
   }
 }
+Gen4 plan same as above
 
 # Rename table
 "rename table a to main.b"
@@ -353,6 +378,7 @@
     "Query": "rename table a to b"
   }
 }
+Gen4 plan same as above
 
 # CREATE temp TABLE
 "create temporary table a(id int)"
@@ -369,6 +395,7 @@
     "TempTable": true
   }
 }
+Gen4 plan same as above
 
 # DROP temp TABLE
 "drop temporary table a"
@@ -385,3 +412,4 @@
     "TempTable": true
   }
 }
+Gen4 plan same as above

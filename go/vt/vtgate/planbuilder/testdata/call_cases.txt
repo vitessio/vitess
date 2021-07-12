@@ -13,6 +13,7 @@
     "Query": "call proc()"
   }
 }
+Gen4 plan same as above
 
 # call qualified keyspace
 "call main.proc()"
@@ -29,10 +30,12 @@
     "Query": "call proc()"
   }
 }
+Gen4 plan same as above
 
 # CALL not allowed on sharded keyspaces
 "call user.proc()"
 "CALL is not supported for sharded database"
+Gen4 plan same as above
 
 # CALL with expressions and parameters 
 "call proc(1, 'foo', @var)"
@@ -49,3 +52,4 @@
     "Query": "call proc(1, 'foo', :__vtudvvar)"
   }
 }
+Gen4 plan same as above

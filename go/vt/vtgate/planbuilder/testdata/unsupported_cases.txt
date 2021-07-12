@@ -40,30 +40,37 @@ Gen4 plan same as above
 # natural join
 "select * from user natural join user_extra"
 "unsupported: natural join"
+Gen4 plan same as above
 
 # join with USING construct
 "select * from user join user_extra using(id)"
 "unsupported: join with USING(column_list) clause for complex queries"
+Gen4 plan same as above
 
 # join with USING construct with 3 tables
 "select user.id from user join user_extra using(id) join music using(id2)"
 "unsupported: join with USING(column_list) clause for complex queries"
+Gen4 plan same as above
 
 # natural left join
 "select * from user natural left join user_extra"
 "unsupported: natural left join"
+Gen4 plan same as above
 
 # natural right join
 "select * from user natural right join user_extra"
 "unsupported: natural right join"
+Gen4 plan same as above
 
 # left join with expressions
 "select user.id, user_extra.col+1 from user left join user_extra on user.col = user_extra.col"
 "unsupported: cross-shard left join and column expressions"
+Gen4 plan same as above
 
 # left join with expressions, with three-way join (different code path)
 "select user.id, user_extra.col+1 from user left join user_extra on user.col = user_extra.col join user_extra e"
 "unsupported: cross-shard left join and column expressions"
+Gen4 plan same as above
 
 # left join where clauses
 "select user.id from user left join user_extra on user.col = user_extra.col where user_extra.col = 5"
@@ -97,6 +104,7 @@ Gen4 plan same as above
 # Multi-value aggregates not supported
 "select count(a,b) from user"
 "unsupported: only one expression allowed inside aggregates: count(a, b)"
+"aggregate functions take a single argument 'count(a, b)'"
 
 # Cannot have more than one aggr(distinct...
 "select count(distinct a), count(distinct b) from user"
@@ -113,6 +121,23 @@ Gen4 plan same as above
 # order by with ambiguous column reference ; valid in MySQL
 "select id, id from user order by id"
 "ambiguous symbol reference: id"
+{
+  "QueryType": "SELECT",
+  "Original": "select id, id from user order by id",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select id, weight_string(id) from `user` where 1 != 1",
+    "OrderBy": "0 ASC",
+    "Query": "select id, weight_string(id) from `user` order by id asc",
+    "ResultColumns": 1,
+    "Table": "`user`"
+  }
+}
 
 # scatter aggregate with ambiguous aliases
 "select distinct a, b as a from user"
@@ -370,11 +395,6 @@ Gen4 plan same as above
 "select func(keyspace_id) from user_index where id = :id"
 "unsupported: expression on results of a vindex function"
 
-# delete with unknown reference
-"delete music from user where id = 1"
-"Unknown table 'music' in MULTI DELETE"
-Gen4 plan same as above
-
 # delete with multi-table targets
 "delete music,user from music inner join user where music.id = user.id"
 "unsupported: multi-shard or vindex write statement"
@@ -444,6 +464,7 @@ Gen4 plan same as above
 # create view with Cannot auto-resolve for cross-shard joins
 "create view user.view_a as select col from user join user_extra"
 "symbol col not found"
+"Complex select queries are not supported in create or alter view statements"
 
 # create view with join that cannot be served in each shard separately
 "create view user.view_a as select user_extra.id from user join user_extra"

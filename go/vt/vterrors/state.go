@@ -33,6 +33,7 @@ const (
 	IncorrectGlobalLocalVar
 	NonUniqError
 	NonUniqTable
+	NonUpdateableTable
 	SyntaxError
 	WrongGroupField
 	WrongTypeForVar

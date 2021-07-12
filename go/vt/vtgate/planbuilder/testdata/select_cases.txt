@@ -1356,7 +1356,6 @@ Gen4 plan same as above
     "Table": "unsharded"
   }
 }
-Gen4 plan same as above
 
 # testing SingleRow Projection
 "select 42"
