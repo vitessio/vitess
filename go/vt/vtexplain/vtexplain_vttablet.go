@@ -103,6 +103,7 @@ func newTablet(opts *Options, t *topodatapb.Tablet) *explainTablet {
 		config.TwoPCAbandonAge = 1.0
 		config.TwoPCEnable = true
 	}
+	config.EnableOnlineDDL = false
 
 	// XXX much of this is cloned from the tabletserver tests
 	tsv := tabletserver.NewTabletServer(topoproto.TabletAliasString(t.Alias), config, memorytopo.NewServer(""), t.Alias)
