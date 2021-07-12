@@ -1485,6 +1485,21 @@ Gen4 plan same as above
     "Table": "`user`"
   }
 }
+{
+  "QueryType": "SELECT",
+  "Original": "select user.col from user join ref",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select `user`.col from `user`, ref where 1 != 1",
+    "Query": "select `user`.col from `user`, ref",
+    "Table": "`user`, ref"
+  }
+}
 
 # reference table self-join
 "select r1.col from ref r1 join ref"
@@ -1500,6 +1515,21 @@ Gen4 plan same as above
     },
     "FieldQuery": "select r1.col from ref as r1 join ref where 1 != 1",
     "Query": "select r1.col from ref as r1 join ref",
+    "Table": "ref"
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select r1.col from ref r1 join ref",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectReference",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select r1.col from ref as r1, ref where 1 != 1",
+    "Query": "select r1.col from ref as r1, ref",
     "Table": "ref"
   }
 }

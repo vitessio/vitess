@@ -708,6 +708,9 @@ func tryMerge(a, b joinTree, joinPredicates []sqlparser.Expr, semTable *semantic
 			return nil
 		}
 	case engine.SelectScatter, engine.SelectEqualUnique:
+		if bRoute.routeOpCode == engine.SelectReference {
+			return r
+		}
 		if len(joinPredicates) == 0 {
 			// If we are doing two Scatters, we have to make sure that the
 			// joins are on the correct vindex to allow them to be merged
@@ -720,6 +723,10 @@ func tryMerge(a, b joinTree, joinPredicates []sqlparser.Expr, semTable *semantic
 			return nil
 		}
 		r.pickBestAvailableVindex()
+	case engine.SelectReference:
+		if bRoute.routeOpCode != engine.SelectReference {
+			return nil
+		}
 	}
 	return r
 }
