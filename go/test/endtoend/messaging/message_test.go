@@ -271,11 +271,15 @@ func TestReparenting(t *testing.T) {
 
 	// do planned reparenting, make one replica as master
 	// and validate client connection count in correspond tablets
-	clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(
+	var output string
+	log.Infof("Starting first PRS")
+	output, err = clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(
 		"PlannedReparentShard",
 		"-keyspace_shard", userKeyspace+"/-80",
 		"-new_master", shard0Replica.Alias)
 	// validate topology
+	require.Nil(t, err)
+	log.Infof("Output of first PRS: %s", output)
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("Validate")
 	require.Nil(t, err)
 
@@ -294,10 +298,14 @@ func TestReparenting(t *testing.T) {
 	stream.Next()
 
 	// make old master again as new master
-	clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(
+	log.Infof("Starting second PRS")
+	output, err = clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(
 		"PlannedReparentShard",
 		"-keyspace_shard", userKeyspace+"/-80",
 		"-new_master", shard0Master.Alias)
+	require.Nil(t, err)
+	log.Infof("Output of second PRS: %s", output)
+
 	// validate topology
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("Validate")
 	require.Nil(t, err)
