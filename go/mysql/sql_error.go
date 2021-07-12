@@ -179,6 +179,7 @@ var stateToMysqlCode = map[vterrors.State]struct {
 	vterrors.NetPacketTooLarge:            {num: ERNetPacketTooLarge, state: SSNetError},
 	vterrors.NonUniqError:                 {num: ERNonUniq, state: SSConstraintViolation},
 	vterrors.NonUniqTable:                 {num: ERNonUniqTable, state: SSClientError},
+	vterrors.NonUpdateableTable:           {num: ERNonUpdateableTable, state: SSUnknownSQLState},
 	vterrors.QueryInterrupted:             {num: ERQueryInterrupted, state: SSQueryInterrupted},
 	vterrors.SPDoesNotExist:               {num: ERSPDoesNotExist, state: SSClientError},
 	vterrors.SyntaxError:                  {num: ERSyntaxError, state: SSClientError},

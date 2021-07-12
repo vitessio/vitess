@@ -602,7 +602,7 @@ Gen4 plan same as above
     ]
   }
 }
-Gen4 plan same as above
+"gen4 does not yet support: aggregation and non-aggregation expressions, together are not supported in cross-shard query"
 
 # scatter aggregate using distinct
 "select distinct col from user"
@@ -995,7 +995,7 @@ Gen4 plan same as above
 
 # scatter aggregate group by invalid column number
 "select col from user group by 2"
-"column number out of range: 2"
+"Unknown column '2' in 'group statement'"
 
 # scatter aggregate order by null
 "select count(*) from user order by null"
@@ -1168,7 +1168,8 @@ Gen4 plan same as above
 
 # invalid order by column numner for scatter
 "select col, count(*) from user group by col order by 5 limit 10"
-"column number out of range: 5"
+"Unknown column '5' in 'order clause'"
+Gen4 plan same as above
 
 # aggregate with limit
 "select col, count(*) from user group by col limit 10"
@@ -1337,8 +1338,9 @@ Gen4 plan same as above
 
 # Group by out of range column number (code is duplicated from symab).
 "select id from user group by 2"
-"column number out of range: 2"
+"Unknown column '2' in 'group statement'"
 
 # syntax error detected by planbuilder
 "select count(distinct *) from user"
 "syntax error: count(distinct *)"
+Gen4 plan same as above

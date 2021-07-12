@@ -77,6 +77,15 @@ var (
 		input:  "alter database charset charset = 'utf16'",
 		output: "alter database `charset` character set 'utf16'",
 	}, {
+		input:  "create table t(id int unique)",
+		output: "create table t (\n\tid int unique\n)",
+	}, {
+		input:  "create table t(id int key)",
+		output: "create table t (\n\tid int key\n)",
+	}, {
+		input:  "create table t(id int unique key)",
+		output: "create table t (\n\tid int unique key\n)",
+	}, {
 		input: "select a.b as a$b from $test$",
 	}, {
 		input:  "select 1 from t // aa\n",
@@ -800,6 +809,12 @@ var (
 		input: "delete /* order */ from a order by b desc",
 	}, {
 		input: "delete /* limit */ from a limit b",
+	}, {
+		input:  "delete /* alias where */ t.* from a as t where t.id = 2",
+		output: "delete /* alias where */ t from a as t where t.id = 2",
+	}, {
+		input:  "delete t.* from t, t1",
+		output: "delete t from t, t1",
 	}, {
 		input:  "delete a from a join b on a.id = b.id where b.name = 'test'",
 		output: "delete a from a join b on a.id = b.id where b.`name` = 'test'",

@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package testutil
+package fakevtctldclient
 
 import (
 	"context"
@@ -36,6 +36,10 @@ type VtctldClient struct {
 
 	FindAllShardsInKeyspaceResults map[string]struct {
 		Response *vtctldatapb.FindAllShardsInKeyspaceResponse
+		Error    error
+	}
+	GetKeyspaceResults map[string]struct {
+		Response *vtctldatapb.GetKeyspaceResponse
 		Error    error
 	}
 	GetKeyspacesResults struct {
@@ -67,6 +71,19 @@ func (fake *VtctldClient) FindAllShardsInKeyspace(ctx context.Context, req *vtct
 	}
 
 	if result, ok := fake.FindAllShardsInKeyspaceResults[req.Keyspace]; ok {
+		return result.Response, result.Error
+	}
+
+	return nil, fmt.Errorf("%w: no result set for keyspace %s", assert.AnError, req.Keyspace)
+}
+
+// GetKeyspace is part of the vtctldclient.VtctldClient interface.
+func (fake *VtctldClient) GetKeyspace(ctx context.Context, req *vtctldatapb.GetKeyspaceRequest, opts ...grpc.CallOption) (*vtctldatapb.GetKeyspaceResponse, error) {
+	if fake.GetKeyspaceResults == nil {
+		return nil, fmt.Errorf("%w: GetKeyspaceResults not set on fake vtctldclient", assert.AnError)
+	}
+
+	if result, ok := fake.GetKeyspaceResults[req.Keyspace]; ok {
 		return result.Response, result.Error
 	}
 

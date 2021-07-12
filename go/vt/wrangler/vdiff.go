@@ -37,6 +37,7 @@ import (
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -243,6 +244,10 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflowName, sou
 	diffReports := make(map[string]*DiffReport)
 	jsonOutput := ""
 	for table, td := range df.differs {
+		// Skip internal operation tables for vdiff
+		if schema.IsInternalOperationTableName(table) {
+			continue
+		}
 		if err := df.diffTable(ctx, wr, table, td, filteredReplicationWaitTime); err != nil {
 			return nil, err
 		}
@@ -1108,7 +1113,7 @@ func (td *tableDiffer) genDebugQueryDiff(sel *sqlparser.Select, row []sqltypes.V
 		sel.SelectExprs.Format(buf)
 	}
 	buf.Myprintf(" from ")
-	sel.From.Format(buf)
+	buf.Myprintf(sqlparser.ToString(sel.From))
 	buf.Myprintf(" where ")
 	for i, pkI := range td.selectPks {
 		sel.SelectExprs[pkI].Format(buf)

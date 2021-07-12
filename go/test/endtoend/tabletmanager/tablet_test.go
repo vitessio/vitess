@@ -53,7 +53,7 @@ func TestEnsureDB(t *testing.T) {
 
 	// Switch to read-write and verify that that we go serving.
 	_ = clusterInstance.VtctlclientProcess.ExecuteCommand("SetReadWrite", tablet.Alias)
-	err = tablet.VttabletProcess.WaitForTabletType("SERVING")
+	err = tablet.VttabletProcess.WaitForTabletStatus("SERVING")
 	require.NoError(t, err)
 	killTablets(t, tablet)
 }

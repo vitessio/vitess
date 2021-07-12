@@ -61,6 +61,13 @@ type (
 		pred  sqlparser.Expr
 	}
 
+	// cost is used to make it easy to compare the cost of two plans with each other
+	cost struct {
+		vindexCost int
+		isUnique   bool
+		opCode     engine.RouteOpcode
+	}
+
 	routePlan struct {
 		routeOpCode engine.RouteOpcode
 		solved      semantics.TableSet
@@ -76,7 +83,8 @@ type (
 		// leftJoins are the join conditions evaluated by this plan
 		leftJoins []*outerTable
 
-		// vindex and vindexValues is set if a vindex will be used for this route.
+		// these fields are set if a vindex will be used for this route
+		currentCost      cost // currentCost tracks the cost of the chosen access method
 		vindex           vindexes.Vindex
 		vindexValues     []sqltypes.PlanValue
 		vindexPredicates []sqlparser.Expr
@@ -103,6 +111,17 @@ type (
 	}
 
 	parenTables []relation
+
+	// vindexPlusPredicates is a struct used to store all the predicates that the vindex can be used to query
+	vindexPlusPredicates struct {
+		colVindex *vindexes.ColumnVindex
+		values    []sqltypes.PlanValue
+
+		// when we have the predicates found, we also know how to interact with this vindex
+		foundVindex vindexes.Vindex
+		opcode      engine.RouteOpcode
+		predicates  []sqlparser.Expr
+	}
 )
 
 // type assertions
@@ -141,20 +160,31 @@ func (p parenTables) tableID() semantics.TableSet {
 }
 
 // visit will traverse the route tables, going inside parenTables and visiting all routeTables
-func (p parenTables) visit(f func(tbl *routeTable) error) error {
-	for _, r := range p {
-		switch r := r.(type) {
-		case *routeTable:
-			err := f(r)
-			if err != nil {
-				return err
-			}
-		case parenTables:
-			err := r.visit(f)
+func visitTables(r relation, f func(tbl *routeTable) error) error {
+	switch r := r.(type) {
+	case *routeTable:
+		err := f(r)
+		if err != nil {
+			return err
+		}
+	case parenTables:
+		for _, r := range r {
+			err := visitTables(r, f)
 			if err != nil {
 				return err
 			}
 		}
+		return nil
+	case *leJoin:
+		err := visitTables(r.lhs, f)
+		if err != nil {
+			return err
+		}
+		err = visitTables(r.rhs, f)
+		if err != nil {
+			return err
+		}
+		return nil
 	}
 	return nil
 }
@@ -204,17 +234,6 @@ func (rp *routePlan) cost() int {
 		return 20
 	}
 	return 1
-}
-
-// vindexPlusPredicates is a struct used to store all the predicates that the vindex can be used to query
-type vindexPlusPredicates struct {
-	colVindex *vindexes.ColumnVindex
-	values    []sqltypes.PlanValue
-
-	// when we have the predicates found, we also know how to interact with this vindex
-	foundVindex vindexes.Vindex
-	opcode      engine.RouteOpcode
-	predicates  []sqlparser.Expr
 }
 
 // addPredicate adds these predicates added to it. if the predicates can help,
@@ -355,11 +374,7 @@ func (rp *routePlan) planEqualOp(node *sqlparser.ComparisonExpr) (bool, error) {
 	return rp.haveMatchingVindex(node, column, *val, equalOrEqualUnique, justTheVindex), err
 }
 
-func (rp *routePlan) planInOp(node *sqlparser.ComparisonExpr) (bool, error) {
-	column, ok := node.Left.(*sqlparser.ColName)
-	if !ok {
-		return false, nil
-	}
+func (rp *routePlan) planSimpleInOp(node *sqlparser.ComparisonExpr, left *sqlparser.ColName) (bool, error) {
 	value, err := sqlparser.NewPlanValue(node.Right)
 	if err != nil {
 		// if we are unable to create a PlanValue, we can't use a vindex, but we don't have to fail
@@ -377,7 +392,70 @@ func (rp *routePlan) planInOp(node *sqlparser.ComparisonExpr) (bool, error) {
 		}
 	}
 	opcode := func(*vindexes.ColumnVindex) engine.RouteOpcode { return engine.SelectIN }
-	return rp.haveMatchingVindex(node, column, value, opcode, justTheVindex), err
+	return rp.haveMatchingVindex(node, left, value, opcode, justTheVindex), err
+}
+
+func (rp *routePlan) planCompositeInOp(node *sqlparser.ComparisonExpr, left sqlparser.ValTuple) (bool, error) {
+	right, rightIsValTuple := node.Right.(sqlparser.ValTuple)
+	if !rightIsValTuple {
+		return false, nil
+	}
+	return rp.planCompositeInOpRecursive(node, left, right, nil)
+}
+
+func (rp *routePlan) planCompositeInOpRecursive(node *sqlparser.ComparisonExpr, left, right sqlparser.ValTuple, coordinates []int) (bool, error) {
+	foundVindex := false
+	cindex := len(coordinates)
+	coordinates = append(coordinates, 0)
+	for i, expr := range left {
+		coordinates[cindex] = i
+		switch expr := expr.(type) {
+		case sqlparser.ValTuple:
+			ok, err := rp.planCompositeInOpRecursive(node, expr, right, coordinates)
+			if err != nil {
+				return false, err
+			}
+			return ok || foundVindex, nil
+		case *sqlparser.ColName:
+			// check if left col is a vindex
+			if !rp.hasVindex(expr) {
+				continue
+			}
+
+			rightVals := make(sqlparser.ValTuple, len(right))
+			for j, currRight := range right {
+				switch currRight := currRight.(type) {
+				case sqlparser.ValTuple:
+					val := tupleAccess(currRight, coordinates)
+					if val == nil {
+						return false, nil
+					}
+					rightVals[j] = val
+				default:
+					return false, nil
+				}
+			}
+			newPlanValues, err := makePlanValue(rightVals)
+			if newPlanValues == nil || err != nil {
+				return false, err
+			}
+
+			opcode := func(*vindexes.ColumnVindex) engine.RouteOpcode { return engine.SelectMultiEqual }
+			newVindex := rp.haveMatchingVindex(node, expr, *newPlanValues, opcode, justTheVindex)
+			foundVindex = newVindex || foundVindex
+		}
+	}
+	return foundVindex, nil
+}
+
+func (rp *routePlan) planInOp(node *sqlparser.ComparisonExpr) (bool, error) {
+	switch left := node.Left.(type) {
+	case *sqlparser.ColName:
+		return rp.planSimpleInOp(node, left)
+	case sqlparser.ValTuple:
+		return rp.planCompositeInOp(node, left)
+	}
+	return false, nil
 }
 
 func (rp *routePlan) planLikeOp(node *sqlparser.ComparisonExpr) (bool, error) {
@@ -434,6 +512,17 @@ func makePlanValue(n sqlparser.Expr) (*sqltypes.PlanValue, error) {
 	return &value, nil
 }
 
+func (rp routePlan) hasVindex(column *sqlparser.ColName) bool {
+	for _, v := range rp.vindexPreds {
+		for _, col := range v.colVindex.Columns {
+			if column.Name.Equal(col) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func (rp *routePlan) haveMatchingVindex(
 	node sqlparser.Expr,
 	column *sqlparser.ColName,
@@ -471,7 +560,9 @@ func (rp *routePlan) pickBestAvailableVindex() {
 			continue
 		}
 		// Choose the minimum cost vindex from the ones which are covered
-		if rp.vindex == nil || v.colVindex.Vindex.Cost() < rp.vindex.Cost() {
+		thisCost := costFor(v.foundVindex, v.opcode)
+		if rp.vindex == nil || less(thisCost, rp.currentCost) {
+			rp.currentCost = thisCost
 			rp.routeOpCode = v.opcode
 			rp.vindex = v.foundVindex
 			rp.vindexValues = v.values
@@ -482,7 +573,12 @@ func (rp *routePlan) pickBestAvailableVindex() {
 
 // Predicates takes all known predicates for this route and ANDs them together
 func (rp *routePlan) Predicates() sqlparser.Expr {
-	return sqlparser.AndExpressions(rp.predicates...)
+	predicates := rp.predicates
+	_ = visitTables(rp.tables, func(tbl *routeTable) error {
+		predicates = append(predicates, tbl.qtable.Predicates...)
+		return nil
+	})
+	return sqlparser.AndExpressions(predicates...)
 }
 
 func (rp *routePlan) pushOutputColumns(col []*sqlparser.ColName, _ *semantics.SemTable) []int {
@@ -546,4 +642,38 @@ func (jp *joinPlan) pushOutputColumns(columns []*sqlparser.ColName, semTable *se
 		}
 	}
 	return outputColumns
+}
+
+// costFor returns a cost struct to make route choices easier to compare
+func costFor(foundVindex vindexes.Vindex, opcode engine.RouteOpcode) cost {
+	switch opcode {
+	// For these opcodes, we should not have a vindex, so we just return the opcode as the cost
+	case engine.SelectUnsharded, engine.SelectNext, engine.SelectDBA, engine.SelectReference, engine.SelectNone, engine.SelectScatter:
+		return cost{
+			opCode: opcode,
+		}
+	}
+
+	// if we have a multiplier that is non-zero, we should have a vindex
+	if foundVindex == nil {
+		panic("expected a vindex")
+	}
+
+	return cost{
+		vindexCost: foundVindex.Cost(),
+		isUnique:   foundVindex.IsUnique(),
+		opCode:     opcode,
+	}
+}
+
+// less compares two costs and returns true if the first cost is cheaper than the second
+func less(c1, c2 cost) bool {
+	switch {
+	case c1.opCode != c2.opCode:
+		return c1.opCode < c2.opCode
+	case c1.isUnique == c2.isUnique:
+		return c1.vindexCost <= c2.vindexCost
+	default:
+		return c1.isUnique
+	}
 }

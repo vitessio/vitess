@@ -35,6 +35,7 @@ import (
 	"vitess.io/vitess/go/vt/vtadmin/cluster/discovery/fakediscovery"
 	vtadminerrors "vitess.io/vitess/go/vt/vtadmin/errors"
 	"vitess.io/vitess/go/vt/vtadmin/testutil"
+	"vitess.io/vitess/go/vt/vtadmin/vtctldclient/fakevtctldclient"
 	"vitess.io/vitess/go/vt/vtadmin/vtsql"
 	"vitess.io/vitess/go/vt/vtctl/vtctldclient"
 
@@ -147,7 +148,7 @@ func TestFindTablet(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			cluster := testutil.BuildCluster(testutil.TestClusterConfig{
+			cluster := testutil.BuildCluster(t, testutil.TestClusterConfig{
 				Cluster: &vtadminpb.Cluster{
 					Id:   "c0",
 					Name: "cluster0",
@@ -358,7 +359,7 @@ func TestFindTablets(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			cluster := testutil.BuildCluster(testutil.TestClusterConfig{
+			cluster := testutil.BuildCluster(t, testutil.TestClusterConfig{
 				Cluster: &vtadminpb.Cluster{
 					Id:   "c0",
 					Name: "cluster0",
@@ -386,7 +387,7 @@ func TestGetSchema(t *testing.T) {
 	}{
 		{
 			name: "success",
-			vtctld: &testutil.VtctldClient{
+			vtctld: &fakevtctldclient.VtctldClient{
 				GetSchemaResults: map[string]struct {
 					Response *vtctldatapb.GetSchemaResponse
 					Error    error
@@ -432,7 +433,7 @@ func TestGetSchema(t *testing.T) {
 		},
 		{
 			name: "error getting schema",
-			vtctld: &testutil.VtctldClient{
+			vtctld: &fakevtctldclient.VtctldClient{
 				GetSchemaResults: map[string]struct {
 					Response *vtctldatapb.GetSchemaResponse
 					Error    error
@@ -458,7 +459,7 @@ func TestGetSchema(t *testing.T) {
 		},
 		{
 			name: "underlying schema is nil",
-			vtctld: &testutil.VtctldClient{
+			vtctld: &fakevtctldclient.VtctldClient{
 				GetSchemaResults: map[string]struct {
 					Response *vtctldatapb.GetSchemaResponse
 					Error    error
@@ -504,7 +505,7 @@ func TestGetSchema(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			c := testutil.BuildCluster(testutil.TestClusterConfig{
+			c := testutil.BuildCluster(t, testutil.TestClusterConfig{
 				Cluster: &vtadminpb.Cluster{
 					Id:   fmt.Sprintf("c%d", i),
 					Name: fmt.Sprintf("cluster%d", i),
@@ -535,7 +536,7 @@ func TestGetSchema(t *testing.T) {
 	t.Run("does not modify passed-in request", func(t *testing.T) {
 		t.Parallel()
 
-		vtctld := &testutil.VtctldClient{
+		vtctld := &fakevtctldclient.VtctldClient{
 			GetSchemaResults: map[string]struct {
 				Response *vtctldatapb.GetSchemaResponse
 				Error    error
@@ -561,7 +562,7 @@ func TestGetSchema(t *testing.T) {
 			},
 		}
 
-		c := testutil.BuildCluster(testutil.TestClusterConfig{
+		c := testutil.BuildCluster(t, testutil.TestClusterConfig{
 			Cluster: &vtadminpb.Cluster{
 				Id:   "c0",
 				Name: "cluster0",
@@ -622,7 +623,7 @@ func TestGetSchema(t *testing.T) {
 							State: vtadminpb.Tablet_SERVING,
 						},
 					},
-					VtctldClient: &testutil.VtctldClient{
+					VtctldClient: &fakevtctldclient.VtctldClient{
 						FindAllShardsInKeyspaceResults: map[string]struct {
 							Response *vtctldatapb.FindAllShardsInKeyspaceResponse
 							Error    error
@@ -778,7 +779,7 @@ func TestGetSchema(t *testing.T) {
 							State: vtadminpb.Tablet_SERVING,
 						},
 					},
-					VtctldClient: &testutil.VtctldClient{
+					VtctldClient: &fakevtctldclient.VtctldClient{
 						FindAllShardsInKeyspaceResults: map[string]struct {
 							Response *vtctldatapb.FindAllShardsInKeyspaceResponse
 							Error    error
@@ -935,7 +936,7 @@ func TestGetSchema(t *testing.T) {
 							State: vtadminpb.Tablet_SERVING,
 						},
 					},
-					VtctldClient: &testutil.VtctldClient{
+					VtctldClient: &fakevtctldclient.VtctldClient{
 						FindAllShardsInKeyspaceResults: map[string]struct {
 							Response *vtctldatapb.FindAllShardsInKeyspaceResponse
 							Error    error
@@ -1050,7 +1051,7 @@ func TestGetSchema(t *testing.T) {
 							State: vtadminpb.Tablet_SERVING,
 						},
 					},
-					VtctldClient: &testutil.VtctldClient{
+					VtctldClient: &fakevtctldclient.VtctldClient{
 						FindAllShardsInKeyspaceResults: map[string]struct {
 							Response *vtctldatapb.FindAllShardsInKeyspaceResponse
 							Error    error
@@ -1198,7 +1199,7 @@ func TestGetSchema(t *testing.T) {
 							State: vtadminpb.Tablet_SERVING,
 						},
 					},
-					VtctldClient: &testutil.VtctldClient{
+					VtctldClient: &fakevtctldclient.VtctldClient{
 						FindAllShardsInKeyspaceResults: map[string]struct {
 							Response *vtctldatapb.FindAllShardsInKeyspaceResponse
 							Error    error
@@ -1301,7 +1302,7 @@ func TestGetSchema(t *testing.T) {
 							State: vtadminpb.Tablet_SERVING,
 						},
 					},
-					VtctldClient: &testutil.VtctldClient{
+					VtctldClient: &fakevtctldclient.VtctldClient{
 						FindAllShardsInKeyspaceResults: map[string]struct {
 							Response *vtctldatapb.FindAllShardsInKeyspaceResponse
 							Error    error
@@ -1387,7 +1388,7 @@ func TestGetSchema(t *testing.T) {
 							State: vtadminpb.Tablet_SERVING,
 						},
 					},
-					VtctldClient: &testutil.VtctldClient{
+					VtctldClient: &fakevtctldclient.VtctldClient{
 						FindAllShardsInKeyspaceResults: map[string]struct {
 							Response *vtctldatapb.FindAllShardsInKeyspaceResponse
 							Error    error
@@ -1517,7 +1518,7 @@ func TestGetSchema(t *testing.T) {
 					t.SkipNow()
 				}
 
-				c := testutil.BuildCluster(tt.cfg)
+				c := testutil.BuildCluster(t, tt.cfg)
 				schema, err := c.GetSchema(ctx, tt.keyspace, tt.opts)
 				if tt.shouldErr {
 					assert.Error(t, err)
@@ -1562,7 +1563,7 @@ func TestFindWorkflows(t *testing.T) {
 					Id:   "c1",
 					Name: "cluster1",
 				},
-				VtctldClient: &testutil.VtctldClient{
+				VtctldClient: &fakevtctldclient.VtctldClient{
 					GetWorkflowsResults: map[string]struct {
 						Response *vtctldatapb.GetWorkflowsResponse
 						Error    error
@@ -1603,7 +1604,7 @@ func TestFindWorkflows(t *testing.T) {
 					Id:   "c1",
 					Name: "cluster1",
 				},
-				VtctldClient: &testutil.VtctldClient{
+				VtctldClient: &fakevtctldclient.VtctldClient{
 					GetKeyspacesResults: struct {
 						Keyspaces []*vtctldatapb.Keyspace
 						Error     error
@@ -1624,7 +1625,7 @@ func TestFindWorkflows(t *testing.T) {
 					Id:   "c1",
 					Name: "cluster1",
 				},
-				VtctldClient: &testutil.VtctldClient{
+				VtctldClient: &fakevtctldclient.VtctldClient{
 					GetKeyspacesResults: struct {
 						Keyspaces []*vtctldatapb.Keyspace
 						Error     error
@@ -1647,7 +1648,7 @@ func TestFindWorkflows(t *testing.T) {
 					Id:   "c1",
 					Name: "cluster1",
 				},
-				VtctldClient: &testutil.VtctldClient{
+				VtctldClient: &fakevtctldclient.VtctldClient{
 					GetKeyspacesResults: struct {
 						Keyspaces []*vtctldatapb.Keyspace
 						Error     error
@@ -1717,7 +1718,7 @@ func TestFindWorkflows(t *testing.T) {
 					Id:   "c1",
 					Name: "cluster1",
 				},
-				VtctldClient: &testutil.VtctldClient{
+				VtctldClient: &fakevtctldclient.VtctldClient{
 					GetKeyspacesResults: struct {
 						Keyspaces []*vtctldatapb.Keyspace
 						Error     error
@@ -1797,7 +1798,7 @@ func TestFindWorkflows(t *testing.T) {
 					Id:   "c1",
 					Name: "cluster1",
 				},
-				VtctldClient: &testutil.VtctldClient{
+				VtctldClient: &fakevtctldclient.VtctldClient{
 					GetWorkflowsResults: map[string]struct {
 						Response *vtctldatapb.GetWorkflowsResponse
 						Error    error
@@ -1819,7 +1820,7 @@ func TestFindWorkflows(t *testing.T) {
 					Id:   "c1",
 					Name: "cluster1",
 				},
-				VtctldClient: &testutil.VtctldClient{
+				VtctldClient: &fakevtctldclient.VtctldClient{
 					GetWorkflowsResults: map[string]struct {
 						Response *vtctldatapb.GetWorkflowsResponse
 						Error    error
@@ -1864,7 +1865,7 @@ func TestFindWorkflows(t *testing.T) {
 					Id:   "c1",
 					Name: "cluster1",
 				},
-				VtctldClient: &testutil.VtctldClient{
+				VtctldClient: &fakevtctldclient.VtctldClient{
 					GetWorkflowsResults: map[string]struct {
 						Response *vtctldatapb.GetWorkflowsResponse
 						Error    error
@@ -1916,7 +1917,7 @@ func TestFindWorkflows(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			c := testutil.BuildCluster(tt.cfg)
+			c := testutil.BuildCluster(t, tt.cfg)
 			workflows, err := c.FindWorkflows(ctx, tt.keyspaces, tt.opts)
 			if tt.shouldErr {
 				assert.Error(t, err)
@@ -1971,7 +1972,7 @@ func TestGetVSchema(t *testing.T) {
 					Id:   "c0",
 					Name: "cluster0",
 				},
-				VtctldClient: &testutil.VtctldClient{
+				VtctldClient: &fakevtctldclient.VtctldClient{
 					GetVSchemaResults: map[string]struct {
 						Response *vtctldatapb.GetVSchemaResponse
 						Error    error
@@ -2002,7 +2003,7 @@ func TestGetVSchema(t *testing.T) {
 					Id:   "c0",
 					Name: "cluster0",
 				},
-				VtctldClient: &testutil.VtctldClient{
+				VtctldClient: &fakevtctldclient.VtctldClient{
 					GetVSchemaResults: map[string]struct {
 						Response *vtctldatapb.GetVSchemaResponse
 						Error    error
@@ -2029,7 +2030,7 @@ func TestGetVSchema(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			cluster := testutil.BuildCluster(tt.cfg)
+			cluster := testutil.BuildCluster(t, tt.cfg)
 			err := cluster.Vtctld.Dial(ctx)
 			require.NoError(t, err, "could not dial test vtctld")
 
@@ -2065,7 +2066,7 @@ func TestGetWorkflow(t *testing.T) {
 					Id:   "c1",
 					Name: "cluster1",
 				},
-				VtctldClient: &testutil.VtctldClient{
+				VtctldClient: &fakevtctldclient.VtctldClient{
 					GetWorkflowsResults: map[string]struct {
 						Response *vtctldatapb.GetWorkflowsResponse
 						Error    error
@@ -2106,7 +2107,7 @@ func TestGetWorkflow(t *testing.T) {
 					Id:   "c1",
 					Name: "cluster1",
 				},
-				VtctldClient: &testutil.VtctldClient{
+				VtctldClient: &fakevtctldclient.VtctldClient{
 					GetWorkflowsResults: map[string]struct {
 						Response *vtctldatapb.GetWorkflowsResponse
 						Error    error
@@ -2129,7 +2130,7 @@ func TestGetWorkflow(t *testing.T) {
 					Id:   "c1",
 					Name: "cluster1",
 				},
-				VtctldClient: &testutil.VtctldClient{
+				VtctldClient: &fakevtctldclient.VtctldClient{
 					GetWorkflowsResults: map[string]struct {
 						Response *vtctldatapb.GetWorkflowsResponse
 						Error    error
@@ -2154,7 +2155,7 @@ func TestGetWorkflow(t *testing.T) {
 					Id:   "c1",
 					Name: "cluster1",
 				},
-				VtctldClient: &testutil.VtctldClient{
+				VtctldClient: &fakevtctldclient.VtctldClient{
 					GetWorkflowsResults: map[string]struct {
 						Response *vtctldatapb.GetWorkflowsResponse
 						Error    error
@@ -2189,7 +2190,7 @@ func TestGetWorkflow(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			c := testutil.BuildCluster(tt.cfg)
+			c := testutil.BuildCluster(t, tt.cfg)
 			workflow, err := c.GetWorkflow(ctx, tt.keyspace, tt.workflow, tt.opts)
 			if tt.shouldErr {
 				assert.Error(t, err)
@@ -2225,7 +2226,7 @@ func TestGetWorkflows(t *testing.T) {
 					Id:   "c1",
 					Name: "cluster1",
 				},
-				VtctldClient: &testutil.VtctldClient{
+				VtctldClient: &fakevtctldclient.VtctldClient{
 					GetWorkflowsResults: map[string]struct {
 						Response *vtctldatapb.GetWorkflowsResponse
 						Error    error
@@ -2285,7 +2286,7 @@ func TestGetWorkflows(t *testing.T) {
 					Id:   "c1",
 					Name: "cluster1",
 				},
-				VtctldClient: &testutil.VtctldClient{
+				VtctldClient: &fakevtctldclient.VtctldClient{
 					GetWorkflowsResults: map[string]struct {
 						Response *vtctldatapb.GetWorkflowsResponse
 						Error    error
@@ -2330,7 +2331,7 @@ func TestGetWorkflows(t *testing.T) {
 					Id:   "c1",
 					Name: "cluster1",
 				},
-				VtctldClient: &testutil.VtctldClient{
+				VtctldClient: &fakevtctldclient.VtctldClient{
 					GetWorkflowsResults: map[string]struct {
 						Response *vtctldatapb.GetWorkflowsResponse
 						Error    error
@@ -2355,7 +2356,7 @@ func TestGetWorkflows(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			c := testutil.BuildCluster(tt.cfg)
+			c := testutil.BuildCluster(t, tt.cfg)
 			workflows, err := c.GetWorkflows(ctx, tt.keyspaces, tt.opts)
 			if tt.shouldErr {
 				assert.Error(t, err)

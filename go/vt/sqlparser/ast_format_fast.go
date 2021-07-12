@@ -48,7 +48,12 @@ func (node *Select) formatFast(buf *TrackedBuffer) {
 	node.SelectExprs.formatFast(buf)
 	buf.WriteString(" from ")
 
-	node.From.formatFast(buf)
+	prefix := ""
+	for _, expr := range node.From {
+		buf.WriteString(prefix)
+		expr.formatFast(buf)
+		prefix = ", "
+	}
 
 	node.Where.formatFast(buf)
 

@@ -17,47 +17,39 @@ limitations under the License.
 package vtgate
 
 import (
+	"context"
 	"fmt"
 	"sort"
 	"strings"
 	"sync/atomic"
 	"time"
 
-	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-
-	"vitess.io/vitess/go/mysql"
-
-	"github.com/prometheus/common/log"
-
-	"vitess.io/vitess/go/vt/vtgate/semantics"
-
 	"golang.org/x/sync/errgroup"
 
-	"vitess.io/vitess/go/vt/callerid"
-	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
-	"vitess.io/vitess/go/vt/schema"
-	"vitess.io/vitess/go/vt/topotools"
-	"vitess.io/vitess/go/vt/vtgate/vschemaacl"
-
-	"vitess.io/vitess/go/vt/vtgate/planbuilder"
-
-	"context"
-
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/key"
+	"vitess.io/vitess/go/vt/log"
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
+	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/topo"
+	topoprotopb "vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder"
+	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
-
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	topoprotopb "vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vtgate/vschemaacl"
 )
 
 var _ engine.VCursor = (*vcursorImpl)(nil)
@@ -362,7 +354,7 @@ func (vc *vcursorImpl) Planner() planbuilder.PlannerVersion {
 		return planbuilder.Gen4WithFallback
 	}
 
-	log.Warn("unknown planner version configured. using the default")
+	log.Warning("unknown planner version configured. using the default")
 	return planbuilder.V3
 }
 

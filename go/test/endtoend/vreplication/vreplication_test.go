@@ -25,9 +25,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/require"
+	"vitess.io/vitess/go/vt/log"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
@@ -196,12 +197,12 @@ func TestCellAliasVreplicationWorkflow(t *testing.T) {
 
 func insertInitialData(t *testing.T) {
 	t.Run("insertInitialData", func(t *testing.T) {
-		t.Logf("Inserting initial data")
+		log.Infof("Inserting initial data")
 		lines, _ := ioutil.ReadFile("unsharded_init_data.sql")
 		execMultipleQueries(t, vtgateConn, "product:0", string(lines))
 		execVtgateQuery(t, vtgateConn, "product:0", "insert into customer_seq(id, next_id, cache) values(0, 100, 100);")
 		execVtgateQuery(t, vtgateConn, "product:0", "insert into order_seq(id, next_id, cache) values(0, 100, 100);")
-		t.Logf("Done inserting initial data")
+		log.Infof("Done inserting initial data")
 
 		validateCount(t, vtgateConn, "product:0", "product", 2)
 		validateCount(t, vtgateConn, "product:0", "customer", 3)
@@ -299,6 +300,11 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 			printShardPositions(vc, ksShards)
 			switchWrites(t, reverseKsWorkflow, false)
 
+			output, err := vc.VtctlClient.ExecuteCommandWithOutput("Workflow", ksWorkflow, "show")
+			require.NoError(t, err)
+			require.Contains(t, output, "'customer.reverse_bits'")
+			require.Contains(t, output, "'customer.bmd5'")
+
 			insertQuery1 = "insert into customer(cid, name) values(1002, 'tempCustomer5')"
 			require.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, productTab, "product", insertQuery1, matchInsertQuery1))
 			// both inserts go into 80-, this tests the edge-case where a stream (-80) has no relevant new events after the previous switch
@@ -314,7 +320,7 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 			dropSourcesDryRun(t, ksWorkflow, true, dryRunResultsDropSourcesRenameCustomerShard)
 
 			var exists bool
-			exists, err := checkIfBlacklistExists(t, vc, "product:0", "customer")
+			exists, err = checkIfBlacklistExists(t, vc, "product:0", "customer")
 			require.NoError(t, err, "Error getting blacklist for customer:0")
 			require.True(t, exists)
 			dropSources(t, ksWorkflow)
@@ -478,10 +484,10 @@ func reshard(t *testing.T, ksName string, tableName string, workflow string, sou
 		targetShards = "," + targetShards + ","
 		for _, tab := range tablets {
 			if strings.Contains(targetShards, ","+tab.Shard+",") {
-				t.Logf("Waiting for vrepl to catch up on %s since it IS a target shard", tab.Shard)
+				log.Infof("Waiting for vrepl to catch up on %s since it IS a target shard", tab.Shard)
 				catchup(t, tab, workflow, "Reshard")
 			} else {
-				t.Logf("Not waiting for vrepl to catch up on %s since it is NOT a target shard", tab.Shard)
+				log.Infof("Not waiting for vrepl to catch up on %s since it is NOT a target shard", tab.Shard)
 				continue
 			}
 		}
@@ -566,7 +572,7 @@ func shardMerchant(t *testing.T) {
 func vdiff(t *testing.T, workflow, cells string) {
 	t.Run("vdiff", func(t *testing.T) {
 		output, err := vc.VtctlClient.ExecuteCommandWithOutput("VDiff", "-tablet_types=master", "-source_cell="+cells, "-format", "json", workflow)
-		t.Logf("vdiff err: %+v, output: %+v", err, output)
+		log.Infof("vdiff err: %+v, output: %+v", err, output)
 		require.Nil(t, err)
 		require.NotNil(t, output)
 		diffReports := make(map[string]*wrangler.DiffReport)
@@ -848,7 +854,7 @@ func printSwitchWritesExtraDebug(t *testing.T, ksWorkflow, msg string) {
 	// Temporary code: print lots of info for debugging occasional flaky failures in customer reshard in CI for multicell test
 	debug := true
 	if debug {
-		t.Logf("------------------- START Extra debug info %s SwitchWrites %s", msg, ksWorkflow)
+		log.Infof("------------------- START Extra debug info %s SwitchWrites %s", msg, ksWorkflow)
 		ksShards := []string{"product/0", "customer/-80", "customer/80-"}
 		printShardPositions(vc, ksShards)
 		custKs := vc.Cells[defaultCell.Name].Keyspaces["customer"]
@@ -866,11 +872,11 @@ func printSwitchWritesExtraDebug(t *testing.T, ksWorkflow, msg string) {
 			for _, query := range queries {
 				qr, err := tab.QueryTablet(query, "", false)
 				require.NoError(t, err)
-				t.Logf("\nTablet:%s.%s.%s.%d\nQuery: %s\n%+v\n",
+				log.Infof("\nTablet:%s.%s.%s.%d\nQuery: %s\n%+v\n",
 					tab.Cell, tab.Keyspace, tab.Shard, tab.TabletUID, query, qr.Rows)
 			}
 		}
-		t.Logf("------------------- END Extra debug info %s SwitchWrites %s", msg, ksWorkflow)
+		log.Infof("------------------- END Extra debug info %s SwitchWrites %s", msg, ksWorkflow)
 	}
 }
 

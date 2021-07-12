@@ -384,9 +384,9 @@ func (v *VRepl) analyzeTables(ctx context.Context, conn *dbconnpool.DBConnection
 	v.sourceSharedColumns, v.targetSharedColumns, v.sharedColumnsMap = v.getSharedColumns(sourceColumns, targetColumns, sourceVirtualColumns, targetVirtualColumns, v.parser.ColumnRenameMap())
 
 	v.sharedPKColumns = v.getSharedPKColumns(sourcePKColumns, targetPKColumns, v.parser.ColumnRenameMap())
-	if v.sharedPKColumns.Len() == 0 {
-		// TODO(shlomi): need to carefully examine what happens when we extend/reduce a PRIMARY KEY
-		// is a column subset OK?
+	pkMatches := (v.sharedPKColumns.Len() > 0 && v.sharedPKColumns.Len() == sourcePKColumns.Len() && v.sharedPKColumns.Len() == targetPKColumns.Len())
+	if !pkMatches {
+		// Has to be a 1:1 mapping for all columns
 		return fmt.Errorf("Found no shared PRIMARY KEY columns between `%s` and `%s`", v.sourceTable, v.targetTable)
 	}
 
@@ -525,7 +525,7 @@ func (v *VRepl) analyze(ctx context.Context, conn *dbconnpool.DBConnection) erro
 // generateInsertStatement generates the INSERT INTO _vt.replication stataement that creates the vreplication workflow
 func (v *VRepl) generateInsertStatement(ctx context.Context) (string, error) {
 	ig := vreplication.NewInsertGenerator(binlogplayer.BlpStopped, v.dbName)
-	ig.AddRow(v.workflow, v.bls, v.pos, "", "MASTER")
+	ig.AddRow(v.workflow, v.bls, v.pos, "", "in_order:REPLICA,MASTER")
 
 	return ig.String(), nil
 }

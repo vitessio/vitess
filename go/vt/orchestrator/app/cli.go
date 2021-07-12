@@ -266,7 +266,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 				log.Fatalf("Could not regroup replicas of %+v; error: %+v", *instanceKey, err)
 			}
 			fmt.Printf("%s lost: %d, trivial: %d, pseudo-gtid: %d\n",
-				promotedReplica.Key.DisplayString(), len(lostReplicas), len(equalReplicas), len(aheadReplicas))
+				promotedReplica.Key.DisplayString(), len(lostReplicas), len(equalReplicas), len(aheadReplicas)) //nolint
 			if err != nil {
 				log.Fatale(err)
 			}
@@ -385,7 +385,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			if promotedBinlogServer == nil {
 				log.Fatalf("Could not regroup binlog server replicas of %+v; error: %+v", *instanceKey, err)
 			}
-			fmt.Println(promotedBinlogServer.Key.DisplayString())
+			fmt.Println(promotedBinlogServer.Key.DisplayString()) //nolint
 			if err != nil {
 				log.Fatale(err)
 			}
@@ -435,7 +435,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			if promotedReplica == nil {
 				log.Fatalf("Could not regroup replicas of %+v; error: %+v", *instanceKey, err)
 			}
-			fmt.Printf("%s lost: %d, moved: %d\n", promotedReplica.Key.DisplayString(), len(lostReplicas), len(movedReplicas))
+			fmt.Printf("%s lost: %d, moved: %d\n", promotedReplica.Key.DisplayString(), len(lostReplicas), len(movedReplicas)) //nolint
 			if err != nil {
 				log.Fatale(err)
 			}
@@ -470,7 +470,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			if instance == nil {
 				log.Fatalf("Instance not found: %+v", *instanceKey)
 			}
-			fmt.Println(instance.GtidErrant)
+			fmt.Println(instance.GtidErrant) //nolint
 		}
 	case registerCliCommand("gtid-errant-reset-master", "Replication, general", `Reset master on instance, remove GTID errant transactions`):
 		{
@@ -1373,7 +1373,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			} else {
 				log.Fatale(err)
 			}
-			if cname, err := inst.GetCNAME(rawInstanceKey.Hostname); err == nil {
+			if cname, err := inst.GetCNAME(rawInstanceKey.Hostname); err == nil { //nolint
 				log.Debugf("GetCNAME() %+v, %+v", cname, err)
 				rawInstanceKey.Hostname = cname
 				fmt.Println(rawInstanceKey.DisplayString())
