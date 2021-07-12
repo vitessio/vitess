@@ -478,17 +478,17 @@ func (m *Rule) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
-	if len(m.TargetUniqueKey) > 0 {
-		i -= len(m.TargetUniqueKey)
-		copy(dAtA[i:], m.TargetUniqueKey)
-		i = encodeVarint(dAtA, i, uint64(len(m.TargetUniqueKey)))
+	if len(m.TargetUniqueKeyColumns) > 0 {
+		i -= len(m.TargetUniqueKeyColumns)
+		copy(dAtA[i:], m.TargetUniqueKeyColumns)
+		i = encodeVarint(dAtA, i, uint64(len(m.TargetUniqueKeyColumns)))
 		i--
 		dAtA[i] = 0x32
 	}
-	if len(m.SourceUniqueKey) > 0 {
-		i -= len(m.SourceUniqueKey)
-		copy(dAtA[i:], m.SourceUniqueKey)
-		i = encodeVarint(dAtA, i, uint64(len(m.SourceUniqueKey)))
+	if len(m.SourceUniqueKeyColumns) > 0 {
+		i -= len(m.SourceUniqueKeyColumns)
+		copy(dAtA[i:], m.SourceUniqueKeyColumns)
+		i = encodeVarint(dAtA, i, uint64(len(m.SourceUniqueKeyColumns)))
 		i--
 		dAtA[i] = 0x2a
 	}
@@ -2221,11 +2221,11 @@ func (m *Rule) SizeVT() (n int) {
 			n += mapEntrySize + 1 + sov(uint64(mapEntrySize))
 		}
 	}
-	l = len(m.SourceUniqueKey)
+	l = len(m.SourceUniqueKeyColumns)
 	if l > 0 {
 		n += 1 + l + sov(uint64(l))
 	}
-	l = len(m.TargetUniqueKey)
+	l = len(m.TargetUniqueKeyColumns)
 	if l > 0 {
 		n += 1 + l + sov(uint64(l))
 	}
@@ -4127,7 +4127,7 @@ func (m *Rule) UnmarshalVT(dAtA []byte) error {
 			iNdEx = postIndex
 		case 5:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field SourceUniqueKey", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field SourceUniqueKeyColumns", wireType)
 			}
 			var stringLen uint64
 			for shift := uint(0); ; shift += 7 {
@@ -4155,11 +4155,11 @@ func (m *Rule) UnmarshalVT(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.SourceUniqueKey = string(dAtA[iNdEx:postIndex])
+			m.SourceUniqueKeyColumns = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		case 6:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field TargetUniqueKey", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field TargetUniqueKeyColumns", wireType)
 			}
 			var stringLen uint64
 			for shift := uint(0); ; shift += 7 {
@@ -4187,7 +4187,7 @@ func (m *Rule) UnmarshalVT(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.TargetUniqueKey = string(dAtA[iNdEx:postIndex])
+			m.TargetUniqueKeyColumns = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
