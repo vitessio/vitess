@@ -80,7 +80,7 @@ func IsRunningQueryService(tt topodatapb.TabletType) bool {
 // lameduck.  Lameduck is a transition period where we are still
 // allowed to serve, but we tell the clients we are going away
 // soon. Typically, a vttablet will still serve, but broadcast a
-// non-serving state through its health check. then vtgate will ctahc
+// non-serving state through its health check. then vtgate will catch
 // that non-serving state, and stop sending queries.
 //
 // Masters are not subject to lameduck, as we usually want to transition

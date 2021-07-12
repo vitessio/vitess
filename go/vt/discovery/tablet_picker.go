@@ -19,6 +19,7 @@ package discovery
 import (
 	"fmt"
 	"math/rand"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -44,6 +45,7 @@ var (
 	tabletPickerRetryDelay   = 30 * time.Second
 	muTabletPickerRetryDelay sync.Mutex
 	globalTPStats            *tabletPickerStats
+	inOrderHint              = "in_order:"
 )
 
 // GetTabletPickerRetryDelay synchronizes changes to tabletPickerRetryDelay. Used in tests only at the moment
@@ -67,10 +69,16 @@ type TabletPicker struct {
 	keyspace    string
 	shard       string
 	tabletTypes []topodatapb.TabletType
+	inOrder     bool
 }
 
 // NewTabletPicker returns a TabletPicker.
 func NewTabletPicker(ts *topo.Server, cells []string, keyspace, shard, tabletTypesStr string) (*TabletPicker, error) {
+	inOrder := false
+	if strings.HasPrefix(tabletTypesStr, inOrderHint) {
+		inOrder = true
+		tabletTypesStr = tabletTypesStr[len(inOrderHint):]
+	}
 	tabletTypes, err := topoproto.ParseTabletTypes(tabletTypesStr)
 	if err != nil {
 		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "failed to parse list of tablet types: %v", tabletTypesStr)
@@ -95,6 +103,7 @@ func NewTabletPicker(ts *topo.Server, cells []string, keyspace, shard, tabletTyp
 		keyspace:    keyspace,
 		shard:       shard,
 		tabletTypes: tabletTypes,
+		inOrder:     inOrder,
 	}, nil
 }
 
@@ -102,6 +111,7 @@ func NewTabletPicker(ts *topo.Server, cells []string, keyspace, shard, tabletTyp
 // All tablets that belong to tp.cells are evaluated and one is
 // chosen at random
 func (tp *TabletPicker) PickForStreaming(ctx context.Context) (*topodatapb.Tablet, error) {
+	rand.Seed(time.Now().UnixNano())
 	// keep trying at intervals (tabletPickerRetryDelay) until a tablet is found
 	// or the context is canceled
 	for {
@@ -111,6 +121,25 @@ func (tp *TabletPicker) PickForStreaming(ctx context.Context) (*topodatapb.Table
 		default:
 		}
 		candidates := tp.GetMatchingTablets(ctx)
+		if tp.inOrder {
+			// Sort candidates slice such that tablets appear in same tablet type order as in tp.tabletTypes
+			orderMap := map[topodatapb.TabletType]int{}
+			for i, t := range tp.tabletTypes {
+				orderMap[t] = i
+			}
+			sort.Slice(candidates, func(i, j int) bool {
+				if orderMap[candidates[i].Type] == orderMap[candidates[j].Type] {
+					// identical tablet types: randomize order of tablets for this type
+					return rand.Intn(2) == 0 // 50% chance
+				}
+				return orderMap[candidates[i].Type] < orderMap[candidates[j].Type]
+			})
+		} else {
+			// Randomize candidates
+			rand.Shuffle(len(candidates), func(i, j int) {
+				candidates[i], candidates[j] = candidates[j], candidates[i]
+			})
+		}
 		if len(candidates) == 0 {
 			// if no candidates were found, sleep and try again
 			tp.incNoTabletFoundStat()
@@ -125,27 +154,19 @@ func (tp *TabletPicker) PickForStreaming(ctx context.Context) (*topodatapb.Table
 			}
 			continue
 		}
-		// try at most len(candidate) times to find a healthy tablet
-		for i := 0; i < len(candidates); i++ {
-			idx := rand.Intn(len(candidates))
-			ti := candidates[idx]
-			// get tablet
+		for _, ti := range candidates {
 			// try to connect to tablet
-			conn, err := tabletconn.GetDialer()(ti.Tablet, true)
-			if err != nil {
-				log.Warningf("unable to connect to tablet for alias %v", ti.Alias)
-				candidates = append(candidates[:idx], candidates[idx+1:]...)
-				if len(candidates) == 0 {
-					tp.incNoTabletFoundStat()
-					break
-				}
-				continue
+			if conn, err := tabletconn.GetDialer()(ti.Tablet, true); err == nil {
+				// OK to use ctx here because it is not actually used by the underlying Close implementation
+				_ = conn.Close(ctx)
+				log.Infof("tablet picker found tablet %s", ti.Tablet.String())
+				return ti.Tablet, nil
 			}
-			// OK to use ctx here because it is not actually used by the underlying Close implementation
-			_ = conn.Close(ctx)
-			log.Infof("tablet picker found tablet %s", ti.Tablet.String())
-			return ti.Tablet, nil
+			// err found
+			log.Warningf("unable to connect to tablet for alias %v", ti.Alias)
 		}
+		// Got here? Means we iterated all tablets and did not find a healthy one
+		tp.incNoTabletFoundStat()
 	}
 }
 

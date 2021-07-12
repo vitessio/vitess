@@ -372,6 +372,32 @@ func (onlineDDL *OnlineDDL) ToJSON() ([]byte, error) {
 	return json.Marshal(onlineDDL)
 }
 
+// sqlWithoutComments returns the SQL statement without comment directives. Useful for tests
+func (onlineDDL *OnlineDDL) sqlWithoutComments() (sql string, err error) {
+	sql = onlineDDL.SQL
+	stmt, err := sqlparser.Parse(sql)
+	if err != nil {
+		// query validation and rebuilding
+		if _, err := legacyParseRevertUUID(sql); err == nil {
+			// This is a revert statement of the form "revert <uuid>". We allow this for now. Future work will
+			// make sure the statement is a valid, parseable "revert vitess_migration '<uuid>'", but we must
+			// be backwards compatible for now.
+			return sql, nil
+		}
+		// otherwise the statement should have been parseable!
+		return "", err
+	}
+
+	switch stmt := stmt.(type) {
+	case sqlparser.DDLStatement:
+		stmt.SetComments(nil)
+	case *sqlparser.RevertMigration:
+		stmt.SetComments(nil)
+	}
+	sql = sqlparser.String(stmt)
+	return sql, nil
+}
+
 // GetAction extracts the DDL action type from the online DDL statement
 func (onlineDDL *OnlineDDL) GetAction() (action sqlparser.DDLAction, err error) {
 	if _, err := onlineDDL.GetRevertUUID(); err == nil {
