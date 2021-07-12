@@ -19,6 +19,7 @@ package vtctldclient
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"google.golang.org/grpc"
@@ -66,6 +67,7 @@ type ClientProxy struct {
 	// exported for testing purposes.
 	DialFunc func(addr string, ff grpcclient.FailFast, opts ...grpc.DialOption) (vtctldclient.VtctldClient, error)
 
+	m        sync.Mutex
 	closed   bool
 	host     string
 	lastPing time.Time
@@ -96,6 +98,9 @@ func (vtctld *ClientProxy) Dial(ctx context.Context) error {
 	defer span.Finish()
 
 	vtadminproto.AnnotateClusterSpan(vtctld.cluster, span)
+
+	vtctld.m.Lock()
+	defer vtctld.m.Unlock()
 
 	if vtctld.VtctldClient != nil {
 		if !vtctld.closed {
@@ -167,6 +172,9 @@ func (vtctld *ClientProxy) Close() error {
 
 // Debug implements debug.Debuggable for ClientProxy.
 func (vtctld *ClientProxy) Debug() map[string]interface{} {
+	vtctld.m.Lock()
+	defer vtctld.m.Unlock()
+
 	m := map[string]interface{}{
 		"host":         vtctld.host,
 		"is_connected": !vtctld.closed,
