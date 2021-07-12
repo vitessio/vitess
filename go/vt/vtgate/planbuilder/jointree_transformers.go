@@ -167,7 +167,7 @@ func relToTableExpr(t relation) (sqlparser.TableExpr, error) {
 			},
 			Partitions: nil,
 			As:         t.qtable.Alias.As,
-			Hints:      nil,
+			Hints:      t.qtable.Alias.Hints,
 		}, nil
 	case parenTables:
 		tables := sqlparser.TableExprs{}

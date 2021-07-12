@@ -1018,6 +1018,7 @@ Gen4 plan same as above
     "Table": "`user`"
   }
 }
+Gen4 plan same as above
 
 # mergeable sharded join on unique vindex
 "select user.col from user join user_extra on user.id = user_extra.user_id"
