@@ -69,17 +69,23 @@ func createQPFromSelect(sel *sqlparser.Select) (*queryProjection, error) {
 	allExpr := append(qp.selectExprs, qp.aggrExprs...)
 
 	for _, order := range sel.OrderBy {
-		qp.addOrderBy(order, allExpr)
+		err := qp.addOrderBy(order, allExpr)
+		if err != nil {
+			return nil, err
+		}
 	}
 	return qp, nil
 }
 
-func (qp *queryProjection) addOrderBy(order *sqlparser.Order, allExpr []*sqlparser.AliasedExpr) {
+func (qp *queryProjection) addOrderBy(order *sqlparser.Order, allExpr []*sqlparser.AliasedExpr) error {
 	// Order by is the column offset to be used from the select expressions
 	// Eg - select id from music order by 1
 	literalExpr, isLiteral := order.Expr.(*sqlparser.Literal)
 	if isLiteral && literalExpr.Type == sqlparser.IntVal {
 		num, _ := strconv.Atoi(literalExpr.Val)
+		if num > len(allExpr) {
+			return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadFieldError, "Unknown column '%d' in 'order clause'", num)
+		}
 		aliasedExpr := allExpr[num-1]
 		expr := aliasedExpr.Expr
 		if !aliasedExpr.As.IsEmpty() {
@@ -95,7 +101,7 @@ func (qp *queryProjection) addOrderBy(order *sqlparser.Order, allExpr []*sqlpars
 			},
 			weightStrExpr: aliasedExpr.Expr,
 		})
-		return
+		return nil
 	}
 
 	// If the ORDER BY is against a column alias, we need to remember the expression
@@ -110,7 +116,7 @@ func (qp *queryProjection) addOrderBy(order *sqlparser.Order, allExpr []*sqlpars
 					inner:         order,
 					weightStrExpr: expr.Expr,
 				})
-				return
+				return nil
 			}
 		}
 	}
@@ -119,4 +125,5 @@ func (qp *queryProjection) addOrderBy(order *sqlparser.Order, allExpr []*sqlpars
 		inner:         order,
 		weightStrExpr: order.Expr,
 	})
+	return nil
 }
