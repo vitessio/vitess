@@ -275,6 +275,14 @@ func (vx *vexec) getMasterForShard(shard string) (*topo.TabletInfo, error) {
 	return master, nil
 }
 
+func (wr *Wrangler) convertQueryResultToSQLTypesResult(results map[*topo.TabletInfo]*querypb.QueryResult) map[*topo.TabletInfo]*sqltypes.Result {
+	retResults := make(map[*topo.TabletInfo]*sqltypes.Result)
+	for tablet, result := range results {
+		retResults[tablet] = sqltypes.Proto3ToResult(result)
+	}
+	return retResults
+}
+
 // WorkflowAction can start/stop/delete or list streams in _vt.vreplication on all masters in the target keyspace of the workflow.
 func (wr *Wrangler) WorkflowAction(ctx context.Context, workflow, keyspace, action string, dryRun bool) (map[*topo.TabletInfo]*sqltypes.Result, error) {
 
@@ -294,11 +302,7 @@ func (wr *Wrangler) WorkflowAction(ctx context.Context, workflow, keyspace, acti
 		return nil, err
 	}
 	results, err := wr.execWorkflowAction(ctx, workflow, keyspace, action, dryRun)
-	retResults := make(map[*topo.TabletInfo]*sqltypes.Result)
-	for tablet, result := range results {
-		retResults[tablet] = sqltypes.Proto3ToResult(result)
-	}
-	return retResults, err
+	return wr.convertQueryResultToSQLTypesResult(results), err
 }
 
 func (wr *Wrangler) getWorkflowActionQuery(action string) (string, error) {
@@ -323,6 +327,13 @@ func (wr *Wrangler) execWorkflowAction(ctx context.Context, workflow, keyspace, 
 		return nil, err
 	}
 	return wr.runVexec(ctx, workflow, keyspace, query, dryRun)
+}
+
+// WorkflowTagAction sets or clears the tags for a workflow in a keyspace
+func (wr *Wrangler) WorkflowTagAction(ctx context.Context, keyspace string, workflow string, tags string) (map[*topo.TabletInfo]*sqltypes.Result, error) {
+	query := fmt.Sprintf("update _vt.vreplication set tags = %s", encodeString(tags))
+	results, err := wr.runVexec(ctx, workflow, keyspace, query, false)
+	return wr.convertQueryResultToSQLTypesResult(results), err
 }
 
 // ReplicationStatusResult represents the result of trying to get the replication status for a given workflow.
@@ -385,6 +396,8 @@ type ReplicationStatus struct {
 	TimeUpdated int64
 	// Message represents the message column from the _vt.vreplication table.
 	Message string
+	// Tags contain the tags specified for this stream
+	Tags string
 
 	// CopyState represents the rows from the _vt.copy_state table.
 	CopyState []copyState
@@ -393,7 +406,7 @@ type ReplicationStatus struct {
 func (wr *Wrangler) getReplicationStatusFromRow(ctx context.Context, row []sqltypes.Value, master *topo.TabletInfo) (*ReplicationStatus, string, error) {
 	var err error
 	var id, timeUpdated, transactionTimestamp int64
-	var state, dbName, pos, stopPos, message string
+	var state, dbName, pos, stopPos, message, tags string
 	var bls binlogdatapb.BinlogSource
 	var mpos mysql.Position
 
@@ -426,6 +439,7 @@ func (wr *Wrangler) getReplicationStatusFromRow(ctx context.Context, row []sqlty
 		return nil, "", err
 	}
 	message = row[9].ToString()
+	tags = row[10].ToString()
 	status := &ReplicationStatus{
 		Shard:                master.Shard,
 		Tablet:               master.AliasString(),
@@ -438,6 +452,7 @@ func (wr *Wrangler) getReplicationStatusFromRow(ctx context.Context, row []sqlty
 		TransactionTimestamp: transactionTimestamp,
 		TimeUpdated:          timeUpdated,
 		Message:              message,
+		Tags:                 tags,
 	}
 	status.CopyState, err = wr.getCopyState(ctx, master, id)
 	if err != nil {
@@ -453,7 +468,7 @@ func (wr *Wrangler) getStreams(ctx context.Context, workflow, keyspace string) (
 	rsr.ShardStatuses = make(map[string]*ShardReplicationStatus)
 	rsr.Workflow = workflow
 	var results map[*topo.TabletInfo]*querypb.QueryResult
-	query := "select id, source, pos, stop_pos, max_replication_lag, state, db_name, time_updated, transaction_timestamp, message from _vt.vreplication"
+	query := "select id, source, pos, stop_pos, max_replication_lag, state, db_name, time_updated, transaction_timestamp, message, tags from _vt.vreplication"
 	results, err := wr.runVexec(ctx, workflow, keyspace, query, false)
 	if err != nil {
 		return nil, err

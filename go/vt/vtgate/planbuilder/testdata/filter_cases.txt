@@ -985,6 +985,7 @@ Gen4 plan same as above
     "Vindex": "name_user_map"
   }
 }
+Gen4 plan same as above
 
 # Route with multiple route constraints, SelectEqual is the best constraint.
 "select id from user where user.col = false and user.id in (1, 2) and user.name = 'aa'"
@@ -1007,6 +1008,7 @@ Gen4 plan same as above
     "Vindex": "name_user_map"
   }
 }
+Gen4 plan same as above
 
 # Route with multiple route constraints, SelectEqualUnique is the best constraint.
 "select id from user where user.col = 5 and user.id in (1, 2) and user.name = 'aa' and user.id = 1"

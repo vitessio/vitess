@@ -14,6 +14,7 @@
     "SingleShardOnly": true
   }
 }
+Gen4 plan same as above
 
 # show columns from routed table
 "show full fields from `route1`"
@@ -31,6 +32,7 @@
     "SingleShardOnly": true
   }
 }
+Gen4 plan same as above
 
 # show variables
 "show variables"
@@ -53,6 +55,7 @@
     ]
   }
 }
+Gen4 plan same as above
 
 # show full columns from system schema
 "show full columns from sys.sys_config"
@@ -70,6 +73,7 @@
     "SingleShardOnly": true
   }
 }
+Gen4 plan same as above
 
 # show full columns from system schema replacing qualifier
 "show full columns from x.sys_config from sys"
@@ -87,3 +91,4 @@
     "SingleShardOnly": true
   }
 }
+Gen4 plan same as above
