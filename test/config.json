@@ -67,7 +67,7 @@
 			"RetryMax": 0,
 			"Tags": []
 		},
-		"backup_mysqlctld": { 
+		"backup_mysqlctld": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/backup/mysqlctld"],
 			"Command": [],
@@ -150,7 +150,7 @@
 		},
 		"messaging": {
 			"File": "messaging_test.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/messaging","-run", "TestReparenting"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/messaging"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "12",

@@ -52,6 +52,75 @@ var createMessage = `create table vitess_message(
 	index ack_idx(time_acked))
 comment 'vitess_message,vt_ack_wait=1,vt_purge_after=3,vt_batch_size=2,vt_cache_size=10,vt_poller_interval=1'`
 
+// TestReparenting checks the client connection count after reparenting.
+func TestReparenting(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	name := "sharded_message"
+
+	ctx := context.Background()
+	// start grpc connection with vtgate and validate client
+	// connection counts in tablets
+	stream, err := VtgateGrpcConn(ctx, clusterInstance)
+	require.Nil(t, err)
+	defer stream.Close()
+	_, err = stream.MessageStream(userKeyspace, "", nil, name)
+	require.Nil(t, err)
+
+	assert.Equal(t, 1, getClientCount(shard0Master))
+	assert.Equal(t, 0, getClientCount(shard0Replica))
+	assert.Equal(t, 1, getClientCount(shard1Master))
+
+	// do planned reparenting, make one replica as master
+	// and validate client connection count in correspond tablets
+	var output string
+	log.Infof("Starting first PRS")
+	output, err = clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(
+		"PlannedReparentShard",
+		"-keyspace_shard", userKeyspace+"/-80",
+		"-new_master", shard0Replica.Alias)
+	// validate topology
+	require.Nil(t, err)
+	log.Infof("Output of first PRS: %s", output)
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("Validate")
+	require.Nil(t, err)
+
+	// Verify connection has migrated.
+	// The wait must be at least 6s which is how long vtgate will
+	// wait before retrying: that is 30s/5 where 30s is the default
+	// message_stream_grace_period.
+	time.Sleep(10 * time.Second)
+	assert.Equal(t, 0, getClientCount(shard0Master))
+	assert.Equal(t, 1, getClientCount(shard0Replica))
+	assert.Equal(t, 1, getClientCount(shard1Master))
+	session := stream.Session("@master", nil)
+	cluster.ExecuteQueriesUsingVtgate(t, session, "insert into sharded_message (id, message) values (3,'hello world 3')")
+
+	// validate that we have received inserted message
+	stream.Next()
+
+	assert.Equal(t, 1, getClientCount(shard1Master))
+
+	// make old master again as new master
+	log.Infof("Starting second PRS")
+	output, err = clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(
+		"PlannedReparentShard",
+		"-keyspace_shard", userKeyspace+"/-80",
+		"-new_master", shard0Master.Alias)
+	require.Nil(t, err)
+	log.Infof("Output of second PRS: %s", output)
+
+	// validate topology
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("Validate")
+	require.Nil(t, err)
+	time.Sleep(10 * time.Second)
+	assert.Equal(t, 1, getClientCount(shard0Master))
+	assert.Equal(t, 0, getClientCount(shard0Replica))
+	assert.Equal(t, 1, getClientCount(shard1Master))
+
+	_, err = session.Execute(context.Background(), "update "+name+" set time_acked = 1, time_next = null where id in (3) and time_acked is null", nil)
+	require.Nil(t, err)
+}
+
 func TestMessage(t *testing.T) {
 	ctx := context.Background()
 
@@ -249,75 +318,6 @@ func TestSharded(t *testing.T) {
 func TestUnsharded(t *testing.T) {
 	// validate messaging for unsharded keyspace(lookup)
 	testMessaging(t, "unsharded_message", lookupKeyspace)
-}
-
-// TestReparenting checks the client connection count after reparenting.
-func TestReparenting(t *testing.T) {
-	defer cluster.PanicHandler(t)
-	name := "sharded_message"
-
-	ctx := context.Background()
-	// start grpc connection with vtgate and validate client
-	// connection counts in tablets
-	stream, err := VtgateGrpcConn(ctx, clusterInstance)
-	require.Nil(t, err)
-	defer stream.Close()
-	_, err = stream.MessageStream(userKeyspace, "", nil, name)
-	require.Nil(t, err)
-
-	assert.Equal(t, 1, getClientCount(shard0Master))
-	assert.Equal(t, 0, getClientCount(shard0Replica))
-	assert.Equal(t, 1, getClientCount(shard1Master))
-
-	// do planned reparenting, make one replica as master
-	// and validate client connection count in correspond tablets
-	var output string
-	log.Infof("Starting first PRS")
-	output, err = clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(
-		"PlannedReparentShard",
-		"-keyspace_shard", userKeyspace+"/-80",
-		"-new_master", shard0Replica.Alias)
-	// validate topology
-	require.Nil(t, err)
-	log.Infof("Output of first PRS: %s", output)
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("Validate")
-	require.Nil(t, err)
-
-	// Verify connection has migrated.
-	// The wait must be at least 6s which is how long vtgate will
-	// wait before retrying: that is 30s/5 where 30s is the default
-	// message_stream_grace_period.
-	time.Sleep(10 * time.Second)
-	assert.Equal(t, 0, getClientCount(shard0Master))
-	assert.Equal(t, 1, getClientCount(shard0Replica))
-	assert.Equal(t, 1, getClientCount(shard1Master))
-	session := stream.Session("@master", nil)
-	cluster.ExecuteQueriesUsingVtgate(t, session, "insert into sharded_message (id, message) values (3,'hello world 3')")
-
-	// validate that we have received inserted message
-	stream.Next()
-
-	assert.Equal(t, 1, getClientCount(shard1Master))
-
-	// make old master again as new master
-	log.Infof("Starting second PRS")
-	output, err = clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(
-		"PlannedReparentShard",
-		"-keyspace_shard", userKeyspace+"/-80",
-		"-new_master", shard0Master.Alias)
-	require.Nil(t, err)
-	log.Infof("Output of second PRS: %s", output)
-
-	// validate topology
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("Validate")
-	require.Nil(t, err)
-	time.Sleep(10 * time.Second)
-	assert.Equal(t, 1, getClientCount(shard0Master))
-	assert.Equal(t, 0, getClientCount(shard0Replica))
-	assert.Equal(t, 1, getClientCount(shard1Master))
-
-	_, err = session.Execute(context.Background(), "update "+name+" set time_acked = 1, time_next = null where id in (3) and time_acked is null", nil)
-	require.Nil(t, err)
 }
 
 // TestConnection validate the connection count and message streaming.
