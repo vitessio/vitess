@@ -6,7 +6,6 @@ package topodata
 
 import (
 	fmt "fmt"
-	proto "google.golang.org/protobuf/proto"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	io "io"
 	bits "math/bits"
@@ -143,24 +142,12 @@ func (m *Tablet) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		copy(dAtA[i:], m.unknownFields)
 	}
 	if m.MasterTermStartTime != nil {
-		if marshalto, ok := interface{}(m.MasterTermStartTime).(interface {
-			MarshalToSizedBufferVT([]byte) (int, error)
-		}); ok {
-			size, err := marshalto.MarshalToSizedBufferVT(dAtA[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= size
-			i = encodeVarint(dAtA, i, uint64(size))
-		} else {
-			encoded, err := proto.Marshal(m.MasterTermStartTime)
-			if err != nil {
-				return 0, err
-			}
-			i -= len(encoded)
-			copy(dAtA[i:], encoded)
-			i = encodeVarint(dAtA, i, uint64(len(encoded)))
+		size, err := m.MasterTermStartTime.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
 		}
+		i -= size
+		i = encodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0x72
 	}
@@ -483,24 +470,12 @@ func (m *Shard) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		copy(dAtA[i:], m.unknownFields)
 	}
 	if m.MasterTermStartTime != nil {
-		if marshalto, ok := interface{}(m.MasterTermStartTime).(interface {
-			MarshalToSizedBufferVT([]byte) (int, error)
-		}); ok {
-			size, err := marshalto.MarshalToSizedBufferVT(dAtA[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= size
-			i = encodeVarint(dAtA, i, uint64(size))
-		} else {
-			encoded, err := proto.Marshal(m.MasterTermStartTime)
-			if err != nil {
-				return 0, err
-			}
-			i -= len(encoded)
-			copy(dAtA[i:], encoded)
-			i = encodeVarint(dAtA, i, uint64(len(encoded)))
+		size, err := m.MasterTermStartTime.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
 		}
+		i -= size
+		i = encodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0x42
 	}
@@ -658,24 +633,12 @@ func (m *Keyspace) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		copy(dAtA[i:], m.unknownFields)
 	}
 	if m.SnapshotTime != nil {
-		if marshalto, ok := interface{}(m.SnapshotTime).(interface {
-			MarshalToSizedBufferVT([]byte) (int, error)
-		}); ok {
-			size, err := marshalto.MarshalToSizedBufferVT(dAtA[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= size
-			i = encodeVarint(dAtA, i, uint64(size))
-		} else {
-			encoded, err := proto.Marshal(m.SnapshotTime)
-			if err != nil {
-				return 0, err
-			}
-			i -= len(encoded)
-			copy(dAtA[i:], encoded)
-			i = encodeVarint(dAtA, i, uint64(len(encoded)))
+		size, err := m.SnapshotTime.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
 		}
+		i -= size
+		i = encodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0x3a
 	}
@@ -1430,13 +1393,7 @@ func (m *Tablet) SizeVT() (n int) {
 		n += 1 + sov(uint64(m.MysqlPort))
 	}
 	if m.MasterTermStartTime != nil {
-		if size, ok := interface{}(m.MasterTermStartTime).(interface {
-			SizeVT() int
-		}); ok {
-			l = size.SizeVT()
-		} else {
-			l = proto.Size(m.MasterTermStartTime)
-		}
+		l = m.MasterTermStartTime.SizeVT()
 		n += 1 + l + sov(uint64(l))
 	}
 	if m.unknownFields != nil {
@@ -1565,13 +1522,7 @@ func (m *Shard) SizeVT() (n int) {
 		n += 2
 	}
 	if m.MasterTermStartTime != nil {
-		if size, ok := interface{}(m.MasterTermStartTime).(interface {
-			SizeVT() int
-		}); ok {
-			l = size.SizeVT()
-		} else {
-			l = proto.Size(m.MasterTermStartTime)
-		}
+		l = m.MasterTermStartTime.SizeVT()
 		n += 1 + l + sov(uint64(l))
 	}
 	if m.unknownFields != nil {
@@ -1632,13 +1583,7 @@ func (m *Keyspace) SizeVT() (n int) {
 		n += 1 + l + sov(uint64(l))
 	}
 	if m.SnapshotTime != nil {
-		if size, ok := interface{}(m.SnapshotTime).(interface {
-			SizeVT() int
-		}); ok {
-			l = size.SizeVT()
-		} else {
-			l = proto.Size(m.SnapshotTime)
-		}
+		l = m.SnapshotTime.SizeVT()
 		n += 1 + l + sov(uint64(l))
 	}
 	if m.unknownFields != nil {
@@ -2695,16 +2640,8 @@ func (m *Tablet) UnmarshalVT(dAtA []byte) error {
 			if m.MasterTermStartTime == nil {
 				m.MasterTermStartTime = &vttime.Time{}
 			}
-			if unmarshal, ok := interface{}(m.MasterTermStartTime).(interface {
-				UnmarshalVT([]byte) error
-			}); ok {
-				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-					return err
-				}
-			} else {
-				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.MasterTermStartTime); err != nil {
-					return err
-				}
+			if err := m.MasterTermStartTime.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
 			}
 			iNdEx = postIndex
 		default:
@@ -3442,16 +3379,8 @@ func (m *Shard) UnmarshalVT(dAtA []byte) error {
 			if m.MasterTermStartTime == nil {
 				m.MasterTermStartTime = &vttime.Time{}
 			}
-			if unmarshal, ok := interface{}(m.MasterTermStartTime).(interface {
-				UnmarshalVT([]byte) error
-			}); ok {
-				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-					return err
-				}
-			} else {
-				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.MasterTermStartTime); err != nil {
-					return err
-				}
+			if err := m.MasterTermStartTime.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
 			}
 			iNdEx = postIndex
 		default:
@@ -3807,16 +3736,8 @@ func (m *Keyspace) UnmarshalVT(dAtA []byte) error {
 			if m.SnapshotTime == nil {
 				m.SnapshotTime = &vttime.Time{}
 			}
-			if unmarshal, ok := interface{}(m.SnapshotTime).(interface {
-				UnmarshalVT([]byte) error
-			}); ok {
-				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-					return err
-				}
-			} else {
-				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.SnapshotTime); err != nil {
-					return err
-				}
+			if err := m.SnapshotTime.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
 			}
 			iNdEx = postIndex
 		default:

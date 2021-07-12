@@ -6,7 +6,6 @@ package logutil
 
 import (
 	fmt "fmt"
-	proto "google.golang.org/protobuf/proto"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	io "io"
 	bits "math/bits"
@@ -75,24 +74,12 @@ func (m *Event) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		dAtA[i] = 0x10
 	}
 	if m.Time != nil {
-		if marshalto, ok := interface{}(m.Time).(interface {
-			MarshalToSizedBufferVT([]byte) (int, error)
-		}); ok {
-			size, err := marshalto.MarshalToSizedBufferVT(dAtA[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= size
-			i = encodeVarint(dAtA, i, uint64(size))
-		} else {
-			encoded, err := proto.Marshal(m.Time)
-			if err != nil {
-				return 0, err
-			}
-			i -= len(encoded)
-			copy(dAtA[i:], encoded)
-			i = encodeVarint(dAtA, i, uint64(len(encoded)))
+		size, err := m.Time.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
 		}
+		i -= size
+		i = encodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0xa
 	}
@@ -117,13 +104,7 @@ func (m *Event) SizeVT() (n int) {
 	var l int
 	_ = l
 	if m.Time != nil {
-		if size, ok := interface{}(m.Time).(interface {
-			SizeVT() int
-		}); ok {
-			l = size.SizeVT()
-		} else {
-			l = proto.Size(m.Time)
-		}
+		l = m.Time.SizeVT()
 		n += 1 + l + sov(uint64(l))
 	}
 	if m.Level != 0 {
@@ -213,16 +194,8 @@ func (m *Event) UnmarshalVT(dAtA []byte) error {
 			if m.Time == nil {
 				m.Time = &vttime.Time{}
 			}
-			if unmarshal, ok := interface{}(m.Time).(interface {
-				UnmarshalVT([]byte) error
-			}); ok {
-				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-					return err
-				}
-			} else {
-				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.Time); err != nil {
-					return err
-				}
+			if err := m.Time.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
 			}
 			iNdEx = postIndex
 		case 2:

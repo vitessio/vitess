@@ -6,7 +6,6 @@ package vtctldata
 
 import (
 	fmt "fmt"
-	proto "google.golang.org/protobuf/proto"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	io "io"
 	bits "math/bits"
@@ -105,24 +104,12 @@ func (m *ExecuteVtctlCommandResponse) MarshalToSizedBufferVT(dAtA []byte) (int, 
 		copy(dAtA[i:], m.unknownFields)
 	}
 	if m.Event != nil {
-		if marshalto, ok := interface{}(m.Event).(interface {
-			MarshalToSizedBufferVT([]byte) (int, error)
-		}); ok {
-			size, err := marshalto.MarshalToSizedBufferVT(dAtA[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= size
-			i = encodeVarint(dAtA, i, uint64(size))
-		} else {
-			encoded, err := proto.Marshal(m.Event)
-			if err != nil {
-				return 0, err
-			}
-			i -= len(encoded)
-			copy(dAtA[i:], encoded)
-			i = encodeVarint(dAtA, i, uint64(len(encoded)))
+		size, err := m.Event.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
 		}
+		i -= size
+		i = encodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0xa
 	}
@@ -311,24 +298,12 @@ func (m *Keyspace) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		copy(dAtA[i:], m.unknownFields)
 	}
 	if m.Keyspace != nil {
-		if marshalto, ok := interface{}(m.Keyspace).(interface {
-			MarshalToSizedBufferVT([]byte) (int, error)
-		}); ok {
-			size, err := marshalto.MarshalToSizedBufferVT(dAtA[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= size
-			i = encodeVarint(dAtA, i, uint64(size))
-		} else {
-			encoded, err := proto.Marshal(m.Keyspace)
-			if err != nil {
-				return 0, err
-			}
-			i -= len(encoded)
-			copy(dAtA[i:], encoded)
-			i = encodeVarint(dAtA, i, uint64(len(encoded)))
+		size, err := m.Keyspace.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
 		}
+		i -= size
+		i = encodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0x12
 	}
@@ -373,24 +348,12 @@ func (m *Shard) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		copy(dAtA[i:], m.unknownFields)
 	}
 	if m.Shard != nil {
-		if marshalto, ok := interface{}(m.Shard).(interface {
-			MarshalToSizedBufferVT([]byte) (int, error)
-		}); ok {
-			size, err := marshalto.MarshalToSizedBufferVT(dAtA[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= size
-			i = encodeVarint(dAtA, i, uint64(size))
-		} else {
-			encoded, err := proto.Marshal(m.Shard)
-			if err != nil {
-				return 0, err
-			}
-			i -= len(encoded)
-			copy(dAtA[i:], encoded)
-			i = encodeVarint(dAtA, i, uint64(len(encoded)))
+		size, err := m.Shard.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
 		}
+		i -= size
+		i = encodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0x1a
 	}
@@ -502,24 +465,12 @@ func (m *Workflow_ShardStream) MarshalToSizedBufferVT(dAtA []byte) (int, error) 
 	}
 	if len(m.TabletControls) > 0 {
 		for iNdEx := len(m.TabletControls) - 1; iNdEx >= 0; iNdEx-- {
-			if marshalto, ok := interface{}(m.TabletControls[iNdEx]).(interface {
-				MarshalToSizedBufferVT([]byte) (int, error)
-			}); ok {
-				size, err := marshalto.MarshalToSizedBufferVT(dAtA[:i])
-				if err != nil {
-					return 0, err
-				}
-				i -= size
-				i = encodeVarint(dAtA, i, uint64(size))
-			} else {
-				encoded, err := proto.Marshal(m.TabletControls[iNdEx])
-				if err != nil {
-					return 0, err
-				}
-				i -= len(encoded)
-				copy(dAtA[i:], encoded)
-				i = encodeVarint(dAtA, i, uint64(len(encoded)))
+			size, err := m.TabletControls[iNdEx].MarshalToSizedBufferVT(dAtA[:i])
+			if err != nil {
+				return 0, err
 			}
+			i -= size
+			i = encodeVarint(dAtA, i, uint64(size))
 			i--
 			dAtA[i] = 0x12
 		}
@@ -629,46 +580,22 @@ func (m *Workflow_Stream_Log) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		dAtA[i] = 0x3a
 	}
 	if m.UpdatedAt != nil {
-		if marshalto, ok := interface{}(m.UpdatedAt).(interface {
-			MarshalToSizedBufferVT([]byte) (int, error)
-		}); ok {
-			size, err := marshalto.MarshalToSizedBufferVT(dAtA[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= size
-			i = encodeVarint(dAtA, i, uint64(size))
-		} else {
-			encoded, err := proto.Marshal(m.UpdatedAt)
-			if err != nil {
-				return 0, err
-			}
-			i -= len(encoded)
-			copy(dAtA[i:], encoded)
-			i = encodeVarint(dAtA, i, uint64(len(encoded)))
+		size, err := m.UpdatedAt.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
 		}
+		i -= size
+		i = encodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0x32
 	}
 	if m.CreatedAt != nil {
-		if marshalto, ok := interface{}(m.CreatedAt).(interface {
-			MarshalToSizedBufferVT([]byte) (int, error)
-		}); ok {
-			size, err := marshalto.MarshalToSizedBufferVT(dAtA[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= size
-			i = encodeVarint(dAtA, i, uint64(size))
-		} else {
-			encoded, err := proto.Marshal(m.CreatedAt)
-			if err != nil {
-				return 0, err
-			}
-			i -= len(encoded)
-			copy(dAtA[i:], encoded)
-			i = encodeVarint(dAtA, i, uint64(len(encoded)))
+		size, err := m.CreatedAt.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
 		}
+		i -= size
+		i = encodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0x2a
 	}
@@ -777,46 +704,22 @@ func (m *Workflow_Stream) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		dAtA[i] = 0x5a
 	}
 	if m.TimeUpdated != nil {
-		if marshalto, ok := interface{}(m.TimeUpdated).(interface {
-			MarshalToSizedBufferVT([]byte) (int, error)
-		}); ok {
-			size, err := marshalto.MarshalToSizedBufferVT(dAtA[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= size
-			i = encodeVarint(dAtA, i, uint64(size))
-		} else {
-			encoded, err := proto.Marshal(m.TimeUpdated)
-			if err != nil {
-				return 0, err
-			}
-			i -= len(encoded)
-			copy(dAtA[i:], encoded)
-			i = encodeVarint(dAtA, i, uint64(len(encoded)))
+		size, err := m.TimeUpdated.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
 		}
+		i -= size
+		i = encodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0x52
 	}
 	if m.TransactionTimestamp != nil {
-		if marshalto, ok := interface{}(m.TransactionTimestamp).(interface {
-			MarshalToSizedBufferVT([]byte) (int, error)
-		}); ok {
-			size, err := marshalto.MarshalToSizedBufferVT(dAtA[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= size
-			i = encodeVarint(dAtA, i, uint64(size))
-		} else {
-			encoded, err := proto.Marshal(m.TransactionTimestamp)
-			if err != nil {
-				return 0, err
-			}
-			i -= len(encoded)
-			copy(dAtA[i:], encoded)
-			i = encodeVarint(dAtA, i, uint64(len(encoded)))
+		size, err := m.TransactionTimestamp.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
 		}
+		i -= size
+		i = encodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0x4a
 	}
@@ -849,46 +752,22 @@ func (m *Workflow_Stream) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		dAtA[i] = 0x2a
 	}
 	if m.BinlogSource != nil {
-		if marshalto, ok := interface{}(m.BinlogSource).(interface {
-			MarshalToSizedBufferVT([]byte) (int, error)
-		}); ok {
-			size, err := marshalto.MarshalToSizedBufferVT(dAtA[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= size
-			i = encodeVarint(dAtA, i, uint64(size))
-		} else {
-			encoded, err := proto.Marshal(m.BinlogSource)
-			if err != nil {
-				return 0, err
-			}
-			i -= len(encoded)
-			copy(dAtA[i:], encoded)
-			i = encodeVarint(dAtA, i, uint64(len(encoded)))
+		size, err := m.BinlogSource.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
 		}
+		i -= size
+		i = encodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0x22
 	}
 	if m.Tablet != nil {
-		if marshalto, ok := interface{}(m.Tablet).(interface {
-			MarshalToSizedBufferVT([]byte) (int, error)
-		}); ok {
-			size, err := marshalto.MarshalToSizedBufferVT(dAtA[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= size
-			i = encodeVarint(dAtA, i, uint64(size))
-		} else {
-			encoded, err := proto.Marshal(m.Tablet)
-			if err != nil {
-				return 0, err
-			}
-			i -= len(encoded)
-			copy(dAtA[i:], encoded)
-			i = encodeVarint(dAtA, i, uint64(len(encoded)))
+		size, err := m.Tablet.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
 		}
+		i -= size
+		i = encodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0x1a
 	}
@@ -1025,24 +904,12 @@ func (m *AddCellInfoRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		copy(dAtA[i:], m.unknownFields)
 	}
 	if m.CellInfo != nil {
-		if marshalto, ok := interface{}(m.CellInfo).(interface {
-			MarshalToSizedBufferVT([]byte) (int, error)
-		}); ok {
-			size, err := marshalto.MarshalToSizedBufferVT(dAtA[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= size
-			i = encodeVarint(dAtA, i, uint64(size))
-		} else {
-			encoded, err := proto.Marshal(m.CellInfo)
-			if err != nil {
-				return 0, err
-			}
-			i -= len(encoded)
-			copy(dAtA[i:], encoded)
-			i = encodeVarint(dAtA, i, uint64(len(encoded)))
+		size, err := m.CellInfo.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
 		}
+		i -= size
+		i = encodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0x12
 	}
@@ -1221,24 +1088,12 @@ func (m *ApplyRoutingRulesRequest) MarshalToSizedBufferVT(dAtA []byte) (int, err
 		dAtA[i] = 0x10
 	}
 	if m.RoutingRules != nil {
-		if marshalto, ok := interface{}(m.RoutingRules).(interface {
-			MarshalToSizedBufferVT([]byte) (int, error)
-		}); ok {
-			size, err := marshalto.MarshalToSizedBufferVT(dAtA[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= size
-			i = encodeVarint(dAtA, i, uint64(size))
-		} else {
-			encoded, err := proto.Marshal(m.RoutingRules)
-			if err != nil {
-				return 0, err
-			}
-			i -= len(encoded)
-			copy(dAtA[i:], encoded)
-			i = encodeVarint(dAtA, i, uint64(len(encoded)))
+		size, err := m.RoutingRules.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
 		}
+		i -= size
+		i = encodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0xa
 	}
@@ -1316,24 +1171,12 @@ func (m *ApplyVSchemaRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		dAtA[i] = 0x32
 	}
 	if m.VSchema != nil {
-		if marshalto, ok := interface{}(m.VSchema).(interface {
-			MarshalToSizedBufferVT([]byte) (int, error)
-		}); ok {
-			size, err := marshalto.MarshalToSizedBufferVT(dAtA[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= size
-			i = encodeVarint(dAtA, i, uint64(size))
-		} else {
-			encoded, err := proto.Marshal(m.VSchema)
-			if err != nil {
-				return 0, err
-			}
-			i -= len(encoded)
-			copy(dAtA[i:], encoded)
-			i = encodeVarint(dAtA, i, uint64(len(encoded)))
+		size, err := m.VSchema.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
 		}
+		i -= size
+		i = encodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0x2a
 	}
@@ -1407,24 +1250,12 @@ func (m *ApplyVSchemaResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error) 
 		copy(dAtA[i:], m.unknownFields)
 	}
 	if m.VSchema != nil {
-		if marshalto, ok := interface{}(m.VSchema).(interface {
-			MarshalToSizedBufferVT([]byte) (int, error)
-		}); ok {
-			size, err := marshalto.MarshalToSizedBufferVT(dAtA[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= size
-			i = encodeVarint(dAtA, i, uint64(size))
-		} else {
-			encoded, err := proto.Marshal(m.VSchema)
-			if err != nil {
-				return 0, err
-			}
-			i -= len(encoded)
-			copy(dAtA[i:], encoded)
-			i = encodeVarint(dAtA, i, uint64(len(encoded)))
+		size, err := m.VSchema.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
 		}
+		i -= size
+		i = encodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0xa
 	}
@@ -1477,24 +1308,12 @@ func (m *ChangeTabletTypeRequest) MarshalToSizedBufferVT(dAtA []byte) (int, erro
 		dAtA[i] = 0x10
 	}
 	if m.TabletAlias != nil {
-		if marshalto, ok := interface{}(m.TabletAlias).(interface {
-			MarshalToSizedBufferVT([]byte) (int, error)
-		}); ok {
-			size, err := marshalto.MarshalToSizedBufferVT(dAtA[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= size
-			i = encodeVarint(dAtA, i, uint64(size))
-		} else {
-			encoded, err := proto.Marshal(m.TabletAlias)
-			if err != nil {
-				return 0, err
-			}
-			i -= len(encoded)
-			copy(dAtA[i:], encoded)
-			i = encodeVarint(dAtA, i, uint64(len(encoded)))
+		size, err := m.TabletAlias.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
 		}
+		i -= size
+		i = encodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0xa
 	}
@@ -1542,46 +1361,22 @@ func (m *ChangeTabletTypeResponse) MarshalToSizedBufferVT(dAtA []byte) (int, err
 		dAtA[i] = 0x18
 	}
 	if m.AfterTablet != nil {
-		if marshalto, ok := interface{}(m.AfterTablet).(interface {
-			MarshalToSizedBufferVT([]byte) (int, error)
-		}); ok {
-			size, err := marshalto.MarshalToSizedBufferVT(dAtA[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= size
-			i = encodeVarint(dAtA, i, uint64(size))
-		} else {
-			encoded, err := proto.Marshal(m.AfterTablet)
-			if err != nil {
-				return 0, err
-			}
-			i -= len(encoded)
-			copy(dAtA[i:], encoded)
-			i = encodeVarint(dAtA, i, uint64(len(encoded)))
+		size, err := m.AfterTablet.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
 		}
+		i -= size
+		i = encodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0x12
 	}
 	if m.BeforeTablet != nil {
-		if marshalto, ok := interface{}(m.BeforeTablet).(interface {
-			MarshalToSizedBufferVT([]byte) (int, error)
-		}); ok {
-			size, err := marshalto.MarshalToSizedBufferVT(dAtA[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= size
-			i = encodeVarint(dAtA, i, uint64(size))
-		} else {
-			encoded, err := proto.Marshal(m.BeforeTablet)
-			if err != nil {
-				return 0, err
-			}
-			i -= len(encoded)
-			copy(dAtA[i:], encoded)
-			i = encodeVarint(dAtA, i, uint64(len(encoded)))
+		size, err := m.BeforeTablet.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
 		}
+		i -= size
+		i = encodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0xa
 	}
@@ -1619,24 +1414,12 @@ func (m *CreateKeyspaceRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error)
 		copy(dAtA[i:], m.unknownFields)
 	}
 	if m.SnapshotTime != nil {
-		if marshalto, ok := interface{}(m.SnapshotTime).(interface {
-			MarshalToSizedBufferVT([]byte) (int, error)
-		}); ok {
-			size, err := marshalto.MarshalToSizedBufferVT(dAtA[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= size
-			i = encodeVarint(dAtA, i, uint64(size))
-		} else {
-			encoded, err := proto.Marshal(m.SnapshotTime)
-			if err != nil {
-				return 0, err
-			}
-			i -= len(encoded)
-			copy(dAtA[i:], encoded)
-			i = encodeVarint(dAtA, i, uint64(len(encoded)))
+		size, err := m.SnapshotTime.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
 		}
+		i -= size
+		i = encodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0x4a
 	}
@@ -1654,24 +1437,12 @@ func (m *CreateKeyspaceRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error)
 	}
 	if len(m.ServedFroms) > 0 {
 		for iNdEx := len(m.ServedFroms) - 1; iNdEx >= 0; iNdEx-- {
-			if marshalto, ok := interface{}(m.ServedFroms[iNdEx]).(interface {
-				MarshalToSizedBufferVT([]byte) (int, error)
-			}); ok {
-				size, err := marshalto.MarshalToSizedBufferVT(dAtA[:i])
-				if err != nil {
-					return 0, err
-				}
-				i -= size
-				i = encodeVarint(dAtA, i, uint64(size))
-			} else {
-				encoded, err := proto.Marshal(m.ServedFroms[iNdEx])
-				if err != nil {
-					return 0, err
-				}
-				i -= len(encoded)
-				copy(dAtA[i:], encoded)
-				i = encodeVarint(dAtA, i, uint64(len(encoded)))
+			size, err := m.ServedFroms[iNdEx].MarshalToSizedBufferVT(dAtA[:i])
+			if err != nil {
+				return 0, err
 			}
+			i -= size
+			i = encodeVarint(dAtA, i, uint64(size))
 			i--
 			dAtA[i] = 0x32
 		}
@@ -2270,24 +2041,12 @@ func (m *DeleteTabletsRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) 
 	}
 	if len(m.TabletAliases) > 0 {
 		for iNdEx := len(m.TabletAliases) - 1; iNdEx >= 0; iNdEx-- {
-			if marshalto, ok := interface{}(m.TabletAliases[iNdEx]).(interface {
-				MarshalToSizedBufferVT([]byte) (int, error)
-			}); ok {
-				size, err := marshalto.MarshalToSizedBufferVT(dAtA[:i])
-				if err != nil {
-					return 0, err
-				}
-				i -= size
-				i = encodeVarint(dAtA, i, uint64(size))
-			} else {
-				encoded, err := proto.Marshal(m.TabletAliases[iNdEx])
-				if err != nil {
-					return 0, err
-				}
-				i -= len(encoded)
-				copy(dAtA[i:], encoded)
-				i = encodeVarint(dAtA, i, uint64(len(encoded)))
+			size, err := m.TabletAliases[iNdEx].MarshalToSizedBufferVT(dAtA[:i])
+			if err != nil {
+				return 0, err
 			}
+			i -= size
+			i = encodeVarint(dAtA, i, uint64(size))
 			i--
 			dAtA[i] = 0xa
 		}
@@ -2359,70 +2118,34 @@ func (m *EmergencyReparentShardRequest) MarshalToSizedBufferVT(dAtA []byte) (int
 		copy(dAtA[i:], m.unknownFields)
 	}
 	if m.WaitReplicasTimeout != nil {
-		if marshalto, ok := interface{}(m.WaitReplicasTimeout).(interface {
-			MarshalToSizedBufferVT([]byte) (int, error)
-		}); ok {
-			size, err := marshalto.MarshalToSizedBufferVT(dAtA[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= size
-			i = encodeVarint(dAtA, i, uint64(size))
-		} else {
-			encoded, err := proto.Marshal(m.WaitReplicasTimeout)
-			if err != nil {
-				return 0, err
-			}
-			i -= len(encoded)
-			copy(dAtA[i:], encoded)
-			i = encodeVarint(dAtA, i, uint64(len(encoded)))
+		size, err := m.WaitReplicasTimeout.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
 		}
+		i -= size
+		i = encodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0x2a
 	}
 	if len(m.IgnoreReplicas) > 0 {
 		for iNdEx := len(m.IgnoreReplicas) - 1; iNdEx >= 0; iNdEx-- {
-			if marshalto, ok := interface{}(m.IgnoreReplicas[iNdEx]).(interface {
-				MarshalToSizedBufferVT([]byte) (int, error)
-			}); ok {
-				size, err := marshalto.MarshalToSizedBufferVT(dAtA[:i])
-				if err != nil {
-					return 0, err
-				}
-				i -= size
-				i = encodeVarint(dAtA, i, uint64(size))
-			} else {
-				encoded, err := proto.Marshal(m.IgnoreReplicas[iNdEx])
-				if err != nil {
-					return 0, err
-				}
-				i -= len(encoded)
-				copy(dAtA[i:], encoded)
-				i = encodeVarint(dAtA, i, uint64(len(encoded)))
-			}
-			i--
-			dAtA[i] = 0x22
-		}
-	}
-	if m.NewPrimary != nil {
-		if marshalto, ok := interface{}(m.NewPrimary).(interface {
-			MarshalToSizedBufferVT([]byte) (int, error)
-		}); ok {
-			size, err := marshalto.MarshalToSizedBufferVT(dAtA[:i])
+			size, err := m.IgnoreReplicas[iNdEx].MarshalToSizedBufferVT(dAtA[:i])
 			if err != nil {
 				return 0, err
 			}
 			i -= size
 			i = encodeVarint(dAtA, i, uint64(size))
-		} else {
-			encoded, err := proto.Marshal(m.NewPrimary)
-			if err != nil {
-				return 0, err
-			}
-			i -= len(encoded)
-			copy(dAtA[i:], encoded)
-			i = encodeVarint(dAtA, i, uint64(len(encoded)))
+			i--
+			dAtA[i] = 0x22
 		}
+	}
+	if m.NewPrimary != nil {
+		size, err := m.NewPrimary.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
+		}
+		i -= size
+		i = encodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0x1a
 	}
@@ -2475,47 +2198,23 @@ func (m *EmergencyReparentShardResponse) MarshalToSizedBufferVT(dAtA []byte) (in
 	}
 	if len(m.Events) > 0 {
 		for iNdEx := len(m.Events) - 1; iNdEx >= 0; iNdEx-- {
-			if marshalto, ok := interface{}(m.Events[iNdEx]).(interface {
-				MarshalToSizedBufferVT([]byte) (int, error)
-			}); ok {
-				size, err := marshalto.MarshalToSizedBufferVT(dAtA[:i])
-				if err != nil {
-					return 0, err
-				}
-				i -= size
-				i = encodeVarint(dAtA, i, uint64(size))
-			} else {
-				encoded, err := proto.Marshal(m.Events[iNdEx])
-				if err != nil {
-					return 0, err
-				}
-				i -= len(encoded)
-				copy(dAtA[i:], encoded)
-				i = encodeVarint(dAtA, i, uint64(len(encoded)))
-			}
-			i--
-			dAtA[i] = 0x22
-		}
-	}
-	if m.PromotedPrimary != nil {
-		if marshalto, ok := interface{}(m.PromotedPrimary).(interface {
-			MarshalToSizedBufferVT([]byte) (int, error)
-		}); ok {
-			size, err := marshalto.MarshalToSizedBufferVT(dAtA[:i])
+			size, err := m.Events[iNdEx].MarshalToSizedBufferVT(dAtA[:i])
 			if err != nil {
 				return 0, err
 			}
 			i -= size
 			i = encodeVarint(dAtA, i, uint64(size))
-		} else {
-			encoded, err := proto.Marshal(m.PromotedPrimary)
-			if err != nil {
-				return 0, err
-			}
-			i -= len(encoded)
-			copy(dAtA[i:], encoded)
-			i = encodeVarint(dAtA, i, uint64(len(encoded)))
+			i--
+			dAtA[i] = 0x22
 		}
+	}
+	if m.PromotedPrimary != nil {
+		size, err := m.PromotedPrimary.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
+		}
+		i -= size
+		i = encodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0x1a
 	}
@@ -2730,24 +2429,12 @@ func (m *GetBackupsResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	}
 	if len(m.Backups) > 0 {
 		for iNdEx := len(m.Backups) - 1; iNdEx >= 0; iNdEx-- {
-			if marshalto, ok := interface{}(m.Backups[iNdEx]).(interface {
-				MarshalToSizedBufferVT([]byte) (int, error)
-			}); ok {
-				size, err := marshalto.MarshalToSizedBufferVT(dAtA[:i])
-				if err != nil {
-					return 0, err
-				}
-				i -= size
-				i = encodeVarint(dAtA, i, uint64(size))
-			} else {
-				encoded, err := proto.Marshal(m.Backups[iNdEx])
-				if err != nil {
-					return 0, err
-				}
-				i -= len(encoded)
-				copy(dAtA[i:], encoded)
-				i = encodeVarint(dAtA, i, uint64(len(encoded)))
+			size, err := m.Backups[iNdEx].MarshalToSizedBufferVT(dAtA[:i])
+			if err != nil {
+				return 0, err
 			}
+			i -= size
+			i = encodeVarint(dAtA, i, uint64(size))
 			i--
 			dAtA[i] = 0xa
 		}
@@ -2826,24 +2513,12 @@ func (m *GetCellInfoResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		copy(dAtA[i:], m.unknownFields)
 	}
 	if m.CellInfo != nil {
-		if marshalto, ok := interface{}(m.CellInfo).(interface {
-			MarshalToSizedBufferVT([]byte) (int, error)
-		}); ok {
-			size, err := marshalto.MarshalToSizedBufferVT(dAtA[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= size
-			i = encodeVarint(dAtA, i, uint64(size))
-		} else {
-			encoded, err := proto.Marshal(m.CellInfo)
-			if err != nil {
-				return 0, err
-			}
-			i -= len(encoded)
-			copy(dAtA[i:], encoded)
-			i = encodeVarint(dAtA, i, uint64(len(encoded)))
+		size, err := m.CellInfo.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
 		}
+		i -= size
+		i = encodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0xa
 	}
@@ -2992,24 +2667,12 @@ func (m *GetCellsAliasesResponse) MarshalToSizedBufferVT(dAtA []byte) (int, erro
 		for k := range m.Aliases {
 			v := m.Aliases[k]
 			baseI := i
-			if marshalto, ok := interface{}(v).(interface {
-				MarshalToSizedBufferVT([]byte) (int, error)
-			}); ok {
-				size, err := marshalto.MarshalToSizedBufferVT(dAtA[:i])
-				if err != nil {
-					return 0, err
-				}
-				i -= size
-				i = encodeVarint(dAtA, i, uint64(size))
-			} else {
-				encoded, err := proto.Marshal(v)
-				if err != nil {
-					return 0, err
-				}
-				i -= len(encoded)
-				copy(dAtA[i:], encoded)
-				i = encodeVarint(dAtA, i, uint64(len(encoded)))
+			size, err := v.MarshalToSizedBufferVT(dAtA[:i])
+			if err != nil {
+				return 0, err
 			}
+			i -= size
+			i = encodeVarint(dAtA, i, uint64(size))
 			i--
 			dAtA[i] = 0x12
 			i -= len(k)
@@ -3250,24 +2913,12 @@ func (m *GetRoutingRulesResponse) MarshalToSizedBufferVT(dAtA []byte) (int, erro
 		copy(dAtA[i:], m.unknownFields)
 	}
 	if m.RoutingRules != nil {
-		if marshalto, ok := interface{}(m.RoutingRules).(interface {
-			MarshalToSizedBufferVT([]byte) (int, error)
-		}); ok {
-			size, err := marshalto.MarshalToSizedBufferVT(dAtA[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= size
-			i = encodeVarint(dAtA, i, uint64(size))
-		} else {
-			encoded, err := proto.Marshal(m.RoutingRules)
-			if err != nil {
-				return 0, err
-			}
-			i -= len(encoded)
-			copy(dAtA[i:], encoded)
-			i = encodeVarint(dAtA, i, uint64(len(encoded)))
+		size, err := m.RoutingRules.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
 		}
+		i -= size
+		i = encodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0xa
 	}
@@ -3353,24 +3004,12 @@ func (m *GetSchemaRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		}
 	}
 	if m.TabletAlias != nil {
-		if marshalto, ok := interface{}(m.TabletAlias).(interface {
-			MarshalToSizedBufferVT([]byte) (int, error)
-		}); ok {
-			size, err := marshalto.MarshalToSizedBufferVT(dAtA[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= size
-			i = encodeVarint(dAtA, i, uint64(size))
-		} else {
-			encoded, err := proto.Marshal(m.TabletAlias)
-			if err != nil {
-				return 0, err
-			}
-			i -= len(encoded)
-			copy(dAtA[i:], encoded)
-			i = encodeVarint(dAtA, i, uint64(len(encoded)))
+		size, err := m.TabletAlias.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
 		}
+		i -= size
+		i = encodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0xa
 	}
@@ -3408,24 +3047,12 @@ func (m *GetSchemaResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		copy(dAtA[i:], m.unknownFields)
 	}
 	if m.Schema != nil {
-		if marshalto, ok := interface{}(m.Schema).(interface {
-			MarshalToSizedBufferVT([]byte) (int, error)
-		}); ok {
-			size, err := marshalto.MarshalToSizedBufferVT(dAtA[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= size
-			i = encodeVarint(dAtA, i, uint64(size))
-		} else {
-			encoded, err := proto.Marshal(m.Schema)
-			if err != nil {
-				return 0, err
-			}
-			i -= len(encoded)
-			copy(dAtA[i:], encoded)
-			i = encodeVarint(dAtA, i, uint64(len(encoded)))
+		size, err := m.Schema.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
 		}
+		i -= size
+		i = encodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0xa
 	}
@@ -3605,24 +3232,12 @@ func (m *GetSrvKeyspacesResponse) MarshalToSizedBufferVT(dAtA []byte) (int, erro
 		for k := range m.SrvKeyspaces {
 			v := m.SrvKeyspaces[k]
 			baseI := i
-			if marshalto, ok := interface{}(v).(interface {
-				MarshalToSizedBufferVT([]byte) (int, error)
-			}); ok {
-				size, err := marshalto.MarshalToSizedBufferVT(dAtA[:i])
-				if err != nil {
-					return 0, err
-				}
-				i -= size
-				i = encodeVarint(dAtA, i, uint64(size))
-			} else {
-				encoded, err := proto.Marshal(v)
-				if err != nil {
-					return 0, err
-				}
-				i -= len(encoded)
-				copy(dAtA[i:], encoded)
-				i = encodeVarint(dAtA, i, uint64(len(encoded)))
+			size, err := v.MarshalToSizedBufferVT(dAtA[:i])
+			if err != nil {
+				return 0, err
 			}
+			i -= size
+			i = encodeVarint(dAtA, i, uint64(size))
 			i--
 			dAtA[i] = 0x12
 			i -= len(k)
@@ -3709,24 +3324,12 @@ func (m *GetSrvVSchemaResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error)
 		copy(dAtA[i:], m.unknownFields)
 	}
 	if m.SrvVSchema != nil {
-		if marshalto, ok := interface{}(m.SrvVSchema).(interface {
-			MarshalToSizedBufferVT([]byte) (int, error)
-		}); ok {
-			size, err := marshalto.MarshalToSizedBufferVT(dAtA[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= size
-			i = encodeVarint(dAtA, i, uint64(size))
-		} else {
-			encoded, err := proto.Marshal(m.SrvVSchema)
-			if err != nil {
-				return 0, err
-			}
-			i -= len(encoded)
-			copy(dAtA[i:], encoded)
-			i = encodeVarint(dAtA, i, uint64(len(encoded)))
+		size, err := m.SrvVSchema.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
 		}
+		i -= size
+		i = encodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0xa
 	}
@@ -3809,24 +3412,12 @@ func (m *GetSrvVSchemasResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error
 		for k := range m.SrvVSchemas {
 			v := m.SrvVSchemas[k]
 			baseI := i
-			if marshalto, ok := interface{}(v).(interface {
-				MarshalToSizedBufferVT([]byte) (int, error)
-			}); ok {
-				size, err := marshalto.MarshalToSizedBufferVT(dAtA[:i])
-				if err != nil {
-					return 0, err
-				}
-				i -= size
-				i = encodeVarint(dAtA, i, uint64(size))
-			} else {
-				encoded, err := proto.Marshal(v)
-				if err != nil {
-					return 0, err
-				}
-				i -= len(encoded)
-				copy(dAtA[i:], encoded)
-				i = encodeVarint(dAtA, i, uint64(len(encoded)))
+			size, err := v.MarshalToSizedBufferVT(dAtA[:i])
+			if err != nil {
+				return 0, err
 			}
+			i -= size
+			i = encodeVarint(dAtA, i, uint64(size))
 			i--
 			dAtA[i] = 0x12
 			i -= len(k)
@@ -3873,24 +3464,12 @@ func (m *GetTabletRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		copy(dAtA[i:], m.unknownFields)
 	}
 	if m.TabletAlias != nil {
-		if marshalto, ok := interface{}(m.TabletAlias).(interface {
-			MarshalToSizedBufferVT([]byte) (int, error)
-		}); ok {
-			size, err := marshalto.MarshalToSizedBufferVT(dAtA[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= size
-			i = encodeVarint(dAtA, i, uint64(size))
-		} else {
-			encoded, err := proto.Marshal(m.TabletAlias)
-			if err != nil {
-				return 0, err
-			}
-			i -= len(encoded)
-			copy(dAtA[i:], encoded)
-			i = encodeVarint(dAtA, i, uint64(len(encoded)))
+		size, err := m.TabletAlias.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
 		}
+		i -= size
+		i = encodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0xa
 	}
@@ -3928,24 +3507,12 @@ func (m *GetTabletResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		copy(dAtA[i:], m.unknownFields)
 	}
 	if m.Tablet != nil {
-		if marshalto, ok := interface{}(m.Tablet).(interface {
-			MarshalToSizedBufferVT([]byte) (int, error)
-		}); ok {
-			size, err := marshalto.MarshalToSizedBufferVT(dAtA[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= size
-			i = encodeVarint(dAtA, i, uint64(size))
-		} else {
-			encoded, err := proto.Marshal(m.Tablet)
-			if err != nil {
-				return 0, err
-			}
-			i -= len(encoded)
-			copy(dAtA[i:], encoded)
-			i = encodeVarint(dAtA, i, uint64(len(encoded)))
+		size, err := m.Tablet.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
 		}
+		i -= size
+		i = encodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0xa
 	}
@@ -3984,24 +3551,12 @@ func (m *GetTabletsRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	}
 	if len(m.TabletAliases) > 0 {
 		for iNdEx := len(m.TabletAliases) - 1; iNdEx >= 0; iNdEx-- {
-			if marshalto, ok := interface{}(m.TabletAliases[iNdEx]).(interface {
-				MarshalToSizedBufferVT([]byte) (int, error)
-			}); ok {
-				size, err := marshalto.MarshalToSizedBufferVT(dAtA[:i])
-				if err != nil {
-					return 0, err
-				}
-				i -= size
-				i = encodeVarint(dAtA, i, uint64(size))
-			} else {
-				encoded, err := proto.Marshal(m.TabletAliases[iNdEx])
-				if err != nil {
-					return 0, err
-				}
-				i -= len(encoded)
-				copy(dAtA[i:], encoded)
-				i = encodeVarint(dAtA, i, uint64(len(encoded)))
+			size, err := m.TabletAliases[iNdEx].MarshalToSizedBufferVT(dAtA[:i])
+			if err != nil {
+				return 0, err
 			}
+			i -= size
+			i = encodeVarint(dAtA, i, uint64(size))
 			i--
 			dAtA[i] = 0x2a
 		}
@@ -4074,24 +3629,12 @@ func (m *GetTabletsResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	}
 	if len(m.Tablets) > 0 {
 		for iNdEx := len(m.Tablets) - 1; iNdEx >= 0; iNdEx-- {
-			if marshalto, ok := interface{}(m.Tablets[iNdEx]).(interface {
-				MarshalToSizedBufferVT([]byte) (int, error)
-			}); ok {
-				size, err := marshalto.MarshalToSizedBufferVT(dAtA[:i])
-				if err != nil {
-					return 0, err
-				}
-				i -= size
-				i = encodeVarint(dAtA, i, uint64(size))
-			} else {
-				encoded, err := proto.Marshal(m.Tablets[iNdEx])
-				if err != nil {
-					return 0, err
-				}
-				i -= len(encoded)
-				copy(dAtA[i:], encoded)
-				i = encodeVarint(dAtA, i, uint64(len(encoded)))
+			size, err := m.Tablets[iNdEx].MarshalToSizedBufferVT(dAtA[:i])
+			if err != nil {
+				return 0, err
 			}
+			i -= size
+			i = encodeVarint(dAtA, i, uint64(size))
 			i--
 			dAtA[i] = 0xa
 		}
@@ -4170,24 +3713,12 @@ func (m *GetVSchemaResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		copy(dAtA[i:], m.unknownFields)
 	}
 	if m.VSchema != nil {
-		if marshalto, ok := interface{}(m.VSchema).(interface {
-			MarshalToSizedBufferVT([]byte) (int, error)
-		}); ok {
-			size, err := marshalto.MarshalToSizedBufferVT(dAtA[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= size
-			i = encodeVarint(dAtA, i, uint64(size))
-		} else {
-			encoded, err := proto.Marshal(m.VSchema)
-			if err != nil {
-				return 0, err
-			}
-			i -= len(encoded)
-			copy(dAtA[i:], encoded)
-			i = encodeVarint(dAtA, i, uint64(len(encoded)))
+		size, err := m.VSchema.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
 		}
+		i -= size
+		i = encodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0xa
 	}
@@ -4320,24 +3851,12 @@ func (m *InitShardPrimaryRequest) MarshalToSizedBufferVT(dAtA []byte) (int, erro
 		copy(dAtA[i:], m.unknownFields)
 	}
 	if m.WaitReplicasTimeout != nil {
-		if marshalto, ok := interface{}(m.WaitReplicasTimeout).(interface {
-			MarshalToSizedBufferVT([]byte) (int, error)
-		}); ok {
-			size, err := marshalto.MarshalToSizedBufferVT(dAtA[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= size
-			i = encodeVarint(dAtA, i, uint64(size))
-		} else {
-			encoded, err := proto.Marshal(m.WaitReplicasTimeout)
-			if err != nil {
-				return 0, err
-			}
-			i -= len(encoded)
-			copy(dAtA[i:], encoded)
-			i = encodeVarint(dAtA, i, uint64(len(encoded)))
+		size, err := m.WaitReplicasTimeout.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
 		}
+		i -= size
+		i = encodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0x2a
 	}
@@ -4352,24 +3871,12 @@ func (m *InitShardPrimaryRequest) MarshalToSizedBufferVT(dAtA []byte) (int, erro
 		dAtA[i] = 0x20
 	}
 	if m.PrimaryElectTabletAlias != nil {
-		if marshalto, ok := interface{}(m.PrimaryElectTabletAlias).(interface {
-			MarshalToSizedBufferVT([]byte) (int, error)
-		}); ok {
-			size, err := marshalto.MarshalToSizedBufferVT(dAtA[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= size
-			i = encodeVarint(dAtA, i, uint64(size))
-		} else {
-			encoded, err := proto.Marshal(m.PrimaryElectTabletAlias)
-			if err != nil {
-				return 0, err
-			}
-			i -= len(encoded)
-			copy(dAtA[i:], encoded)
-			i = encodeVarint(dAtA, i, uint64(len(encoded)))
+		size, err := m.PrimaryElectTabletAlias.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
 		}
+		i -= size
+		i = encodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0x1a
 	}
@@ -4422,24 +3929,12 @@ func (m *InitShardPrimaryResponse) MarshalToSizedBufferVT(dAtA []byte) (int, err
 	}
 	if len(m.Events) > 0 {
 		for iNdEx := len(m.Events) - 1; iNdEx >= 0; iNdEx-- {
-			if marshalto, ok := interface{}(m.Events[iNdEx]).(interface {
-				MarshalToSizedBufferVT([]byte) (int, error)
-			}); ok {
-				size, err := marshalto.MarshalToSizedBufferVT(dAtA[:i])
-				if err != nil {
-					return 0, err
-				}
-				i -= size
-				i = encodeVarint(dAtA, i, uint64(size))
-			} else {
-				encoded, err := proto.Marshal(m.Events[iNdEx])
-				if err != nil {
-					return 0, err
-				}
-				i -= len(encoded)
-				copy(dAtA[i:], encoded)
-				i = encodeVarint(dAtA, i, uint64(len(encoded)))
+			size, err := m.Events[iNdEx].MarshalToSizedBufferVT(dAtA[:i])
+			if err != nil {
+				return 0, err
 			}
+			i -= size
+			i = encodeVarint(dAtA, i, uint64(size))
 			i--
 			dAtA[i] = 0xa
 		}
@@ -4478,68 +3973,32 @@ func (m *PlannedReparentShardRequest) MarshalToSizedBufferVT(dAtA []byte) (int, 
 		copy(dAtA[i:], m.unknownFields)
 	}
 	if m.WaitReplicasTimeout != nil {
-		if marshalto, ok := interface{}(m.WaitReplicasTimeout).(interface {
-			MarshalToSizedBufferVT([]byte) (int, error)
-		}); ok {
-			size, err := marshalto.MarshalToSizedBufferVT(dAtA[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= size
-			i = encodeVarint(dAtA, i, uint64(size))
-		} else {
-			encoded, err := proto.Marshal(m.WaitReplicasTimeout)
-			if err != nil {
-				return 0, err
-			}
-			i -= len(encoded)
-			copy(dAtA[i:], encoded)
-			i = encodeVarint(dAtA, i, uint64(len(encoded)))
+		size, err := m.WaitReplicasTimeout.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
 		}
+		i -= size
+		i = encodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0x2a
 	}
 	if m.AvoidPrimary != nil {
-		if marshalto, ok := interface{}(m.AvoidPrimary).(interface {
-			MarshalToSizedBufferVT([]byte) (int, error)
-		}); ok {
-			size, err := marshalto.MarshalToSizedBufferVT(dAtA[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= size
-			i = encodeVarint(dAtA, i, uint64(size))
-		} else {
-			encoded, err := proto.Marshal(m.AvoidPrimary)
-			if err != nil {
-				return 0, err
-			}
-			i -= len(encoded)
-			copy(dAtA[i:], encoded)
-			i = encodeVarint(dAtA, i, uint64(len(encoded)))
+		size, err := m.AvoidPrimary.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
 		}
+		i -= size
+		i = encodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0x22
 	}
 	if m.NewPrimary != nil {
-		if marshalto, ok := interface{}(m.NewPrimary).(interface {
-			MarshalToSizedBufferVT([]byte) (int, error)
-		}); ok {
-			size, err := marshalto.MarshalToSizedBufferVT(dAtA[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= size
-			i = encodeVarint(dAtA, i, uint64(size))
-		} else {
-			encoded, err := proto.Marshal(m.NewPrimary)
-			if err != nil {
-				return 0, err
-			}
-			i -= len(encoded)
-			copy(dAtA[i:], encoded)
-			i = encodeVarint(dAtA, i, uint64(len(encoded)))
+		size, err := m.NewPrimary.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
 		}
+		i -= size
+		i = encodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0x1a
 	}
@@ -4592,47 +4051,23 @@ func (m *PlannedReparentShardResponse) MarshalToSizedBufferVT(dAtA []byte) (int,
 	}
 	if len(m.Events) > 0 {
 		for iNdEx := len(m.Events) - 1; iNdEx >= 0; iNdEx-- {
-			if marshalto, ok := interface{}(m.Events[iNdEx]).(interface {
-				MarshalToSizedBufferVT([]byte) (int, error)
-			}); ok {
-				size, err := marshalto.MarshalToSizedBufferVT(dAtA[:i])
-				if err != nil {
-					return 0, err
-				}
-				i -= size
-				i = encodeVarint(dAtA, i, uint64(size))
-			} else {
-				encoded, err := proto.Marshal(m.Events[iNdEx])
-				if err != nil {
-					return 0, err
-				}
-				i -= len(encoded)
-				copy(dAtA[i:], encoded)
-				i = encodeVarint(dAtA, i, uint64(len(encoded)))
-			}
-			i--
-			dAtA[i] = 0x22
-		}
-	}
-	if m.PromotedPrimary != nil {
-		if marshalto, ok := interface{}(m.PromotedPrimary).(interface {
-			MarshalToSizedBufferVT([]byte) (int, error)
-		}); ok {
-			size, err := marshalto.MarshalToSizedBufferVT(dAtA[:i])
+			size, err := m.Events[iNdEx].MarshalToSizedBufferVT(dAtA[:i])
 			if err != nil {
 				return 0, err
 			}
 			i -= size
 			i = encodeVarint(dAtA, i, uint64(size))
-		} else {
-			encoded, err := proto.Marshal(m.PromotedPrimary)
-			if err != nil {
-				return 0, err
-			}
-			i -= len(encoded)
-			copy(dAtA[i:], encoded)
-			i = encodeVarint(dAtA, i, uint64(len(encoded)))
+			i--
+			dAtA[i] = 0x22
 		}
+	}
+	if m.PromotedPrimary != nil {
+		size, err := m.PromotedPrimary.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
+		}
+		i -= size
+		i = encodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0x1a
 	}
@@ -4759,24 +4194,12 @@ func (m *RefreshStateRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		copy(dAtA[i:], m.unknownFields)
 	}
 	if m.TabletAlias != nil {
-		if marshalto, ok := interface{}(m.TabletAlias).(interface {
-			MarshalToSizedBufferVT([]byte) (int, error)
-		}); ok {
-			size, err := marshalto.MarshalToSizedBufferVT(dAtA[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= size
-			i = encodeVarint(dAtA, i, uint64(size))
-		} else {
-			encoded, err := proto.Marshal(m.TabletAlias)
-			if err != nil {
-				return 0, err
-			}
-			i -= len(encoded)
-			copy(dAtA[i:], encoded)
-			i = encodeVarint(dAtA, i, uint64(len(encoded)))
+		size, err := m.TabletAlias.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
 		}
+		i -= size
+		i = encodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0xa
 	}
@@ -5153,24 +4576,12 @@ func (m *ReparentTabletRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error)
 		copy(dAtA[i:], m.unknownFields)
 	}
 	if m.Tablet != nil {
-		if marshalto, ok := interface{}(m.Tablet).(interface {
-			MarshalToSizedBufferVT([]byte) (int, error)
-		}); ok {
-			size, err := marshalto.MarshalToSizedBufferVT(dAtA[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= size
-			i = encodeVarint(dAtA, i, uint64(size))
-		} else {
-			encoded, err := proto.Marshal(m.Tablet)
-			if err != nil {
-				return 0, err
-			}
-			i -= len(encoded)
-			copy(dAtA[i:], encoded)
-			i = encodeVarint(dAtA, i, uint64(len(encoded)))
+		size, err := m.Tablet.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
 		}
+		i -= size
+		i = encodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0xa
 	}
@@ -5208,24 +4619,12 @@ func (m *ReparentTabletResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error
 		copy(dAtA[i:], m.unknownFields)
 	}
 	if m.Primary != nil {
-		if marshalto, ok := interface{}(m.Primary).(interface {
-			MarshalToSizedBufferVT([]byte) (int, error)
-		}); ok {
-			size, err := marshalto.MarshalToSizedBufferVT(dAtA[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= size
-			i = encodeVarint(dAtA, i, uint64(size))
-		} else {
-			encoded, err := proto.Marshal(m.Primary)
-			if err != nil {
-				return 0, err
-			}
-			i -= len(encoded)
-			copy(dAtA[i:], encoded)
-			i = encodeVarint(dAtA, i, uint64(len(encoded)))
+		size, err := m.Primary.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
 		}
+		i -= size
+		i = encodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0x1a
 	}
@@ -5327,24 +4726,12 @@ func (m *ShardReplicationPositionsResponse) MarshalToSizedBufferVT(dAtA []byte) 
 		for k := range m.TabletMap {
 			v := m.TabletMap[k]
 			baseI := i
-			if marshalto, ok := interface{}(v).(interface {
-				MarshalToSizedBufferVT([]byte) (int, error)
-			}); ok {
-				size, err := marshalto.MarshalToSizedBufferVT(dAtA[:i])
-				if err != nil {
-					return 0, err
-				}
-				i -= size
-				i = encodeVarint(dAtA, i, uint64(size))
-			} else {
-				encoded, err := proto.Marshal(v)
-				if err != nil {
-					return 0, err
-				}
-				i -= len(encoded)
-				copy(dAtA[i:], encoded)
-				i = encodeVarint(dAtA, i, uint64(len(encoded)))
+			size, err := v.MarshalToSizedBufferVT(dAtA[:i])
+			if err != nil {
+				return 0, err
 			}
+			i -= size
+			i = encodeVarint(dAtA, i, uint64(size))
 			i--
 			dAtA[i] = 0x12
 			i -= len(k)
@@ -5361,24 +4748,12 @@ func (m *ShardReplicationPositionsResponse) MarshalToSizedBufferVT(dAtA []byte) 
 		for k := range m.ReplicationStatuses {
 			v := m.ReplicationStatuses[k]
 			baseI := i
-			if marshalto, ok := interface{}(v).(interface {
-				MarshalToSizedBufferVT([]byte) (int, error)
-			}); ok {
-				size, err := marshalto.MarshalToSizedBufferVT(dAtA[:i])
-				if err != nil {
-					return 0, err
-				}
-				i -= size
-				i = encodeVarint(dAtA, i, uint64(size))
-			} else {
-				encoded, err := proto.Marshal(v)
-				if err != nil {
-					return 0, err
-				}
-				i -= len(encoded)
-				copy(dAtA[i:], encoded)
-				i = encodeVarint(dAtA, i, uint64(len(encoded)))
+			size, err := v.MarshalToSizedBufferVT(dAtA[:i])
+			if err != nil {
+				return 0, err
 			}
+			i -= size
+			i = encodeVarint(dAtA, i, uint64(size))
 			i--
 			dAtA[i] = 0x12
 			i -= len(k)
@@ -5425,24 +4800,12 @@ func (m *TabletExternallyReparentedRequest) MarshalToSizedBufferVT(dAtA []byte) 
 		copy(dAtA[i:], m.unknownFields)
 	}
 	if m.Tablet != nil {
-		if marshalto, ok := interface{}(m.Tablet).(interface {
-			MarshalToSizedBufferVT([]byte) (int, error)
-		}); ok {
-			size, err := marshalto.MarshalToSizedBufferVT(dAtA[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= size
-			i = encodeVarint(dAtA, i, uint64(size))
-		} else {
-			encoded, err := proto.Marshal(m.Tablet)
-			if err != nil {
-				return 0, err
-			}
-			i -= len(encoded)
-			copy(dAtA[i:], encoded)
-			i = encodeVarint(dAtA, i, uint64(len(encoded)))
+		size, err := m.Tablet.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
 		}
+		i -= size
+		i = encodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0xa
 	}
@@ -5480,46 +4843,22 @@ func (m *TabletExternallyReparentedResponse) MarshalToSizedBufferVT(dAtA []byte)
 		copy(dAtA[i:], m.unknownFields)
 	}
 	if m.OldPrimary != nil {
-		if marshalto, ok := interface{}(m.OldPrimary).(interface {
-			MarshalToSizedBufferVT([]byte) (int, error)
-		}); ok {
-			size, err := marshalto.MarshalToSizedBufferVT(dAtA[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= size
-			i = encodeVarint(dAtA, i, uint64(size))
-		} else {
-			encoded, err := proto.Marshal(m.OldPrimary)
-			if err != nil {
-				return 0, err
-			}
-			i -= len(encoded)
-			copy(dAtA[i:], encoded)
-			i = encodeVarint(dAtA, i, uint64(len(encoded)))
+		size, err := m.OldPrimary.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
 		}
+		i -= size
+		i = encodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0x22
 	}
 	if m.NewPrimary != nil {
-		if marshalto, ok := interface{}(m.NewPrimary).(interface {
-			MarshalToSizedBufferVT([]byte) (int, error)
-		}); ok {
-			size, err := marshalto.MarshalToSizedBufferVT(dAtA[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= size
-			i = encodeVarint(dAtA, i, uint64(size))
-		} else {
-			encoded, err := proto.Marshal(m.NewPrimary)
-			if err != nil {
-				return 0, err
-			}
-			i -= len(encoded)
-			copy(dAtA[i:], encoded)
-			i = encodeVarint(dAtA, i, uint64(len(encoded)))
+		size, err := m.NewPrimary.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
 		}
+		i -= size
+		i = encodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0x1a
 	}
@@ -5571,24 +4910,12 @@ func (m *UpdateCellInfoRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error)
 		copy(dAtA[i:], m.unknownFields)
 	}
 	if m.CellInfo != nil {
-		if marshalto, ok := interface{}(m.CellInfo).(interface {
-			MarshalToSizedBufferVT([]byte) (int, error)
-		}); ok {
-			size, err := marshalto.MarshalToSizedBufferVT(dAtA[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= size
-			i = encodeVarint(dAtA, i, uint64(size))
-		} else {
-			encoded, err := proto.Marshal(m.CellInfo)
-			if err != nil {
-				return 0, err
-			}
-			i -= len(encoded)
-			copy(dAtA[i:], encoded)
-			i = encodeVarint(dAtA, i, uint64(len(encoded)))
+		size, err := m.CellInfo.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
 		}
+		i -= size
+		i = encodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0x12
 	}
@@ -5633,24 +4960,12 @@ func (m *UpdateCellInfoResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error
 		copy(dAtA[i:], m.unknownFields)
 	}
 	if m.CellInfo != nil {
-		if marshalto, ok := interface{}(m.CellInfo).(interface {
-			MarshalToSizedBufferVT([]byte) (int, error)
-		}); ok {
-			size, err := marshalto.MarshalToSizedBufferVT(dAtA[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= size
-			i = encodeVarint(dAtA, i, uint64(size))
-		} else {
-			encoded, err := proto.Marshal(m.CellInfo)
-			if err != nil {
-				return 0, err
-			}
-			i -= len(encoded)
-			copy(dAtA[i:], encoded)
-			i = encodeVarint(dAtA, i, uint64(len(encoded)))
+		size, err := m.CellInfo.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
 		}
+		i -= size
+		i = encodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0x12
 	}
@@ -5695,24 +5010,12 @@ func (m *UpdateCellsAliasRequest) MarshalToSizedBufferVT(dAtA []byte) (int, erro
 		copy(dAtA[i:], m.unknownFields)
 	}
 	if m.CellsAlias != nil {
-		if marshalto, ok := interface{}(m.CellsAlias).(interface {
-			MarshalToSizedBufferVT([]byte) (int, error)
-		}); ok {
-			size, err := marshalto.MarshalToSizedBufferVT(dAtA[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= size
-			i = encodeVarint(dAtA, i, uint64(size))
-		} else {
-			encoded, err := proto.Marshal(m.CellsAlias)
-			if err != nil {
-				return 0, err
-			}
-			i -= len(encoded)
-			copy(dAtA[i:], encoded)
-			i = encodeVarint(dAtA, i, uint64(len(encoded)))
+		size, err := m.CellsAlias.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
 		}
+		i -= size
+		i = encodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0x12
 	}
@@ -5757,24 +5060,12 @@ func (m *UpdateCellsAliasResponse) MarshalToSizedBufferVT(dAtA []byte) (int, err
 		copy(dAtA[i:], m.unknownFields)
 	}
 	if m.CellsAlias != nil {
-		if marshalto, ok := interface{}(m.CellsAlias).(interface {
-			MarshalToSizedBufferVT([]byte) (int, error)
-		}); ok {
-			size, err := marshalto.MarshalToSizedBufferVT(dAtA[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= size
-			i = encodeVarint(dAtA, i, uint64(size))
-		} else {
-			encoded, err := proto.Marshal(m.CellsAlias)
-			if err != nil {
-				return 0, err
-			}
-			i -= len(encoded)
-			copy(dAtA[i:], encoded)
-			i = encodeVarint(dAtA, i, uint64(len(encoded)))
+		size, err := m.CellsAlias.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
 		}
+		i -= size
+		i = encodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0x12
 	}
@@ -5827,13 +5118,7 @@ func (m *ExecuteVtctlCommandResponse) SizeVT() (n int) {
 	var l int
 	_ = l
 	if m.Event != nil {
-		if size, ok := interface{}(m.Event).(interface {
-			SizeVT() int
-		}); ok {
-			l = size.SizeVT()
-		} else {
-			l = proto.Size(m.Event)
-		}
+		l = m.Event.SizeVT()
 		n += 1 + l + sov(uint64(l))
 	}
 	if m.unknownFields != nil {
@@ -5922,13 +5207,7 @@ func (m *Keyspace) SizeVT() (n int) {
 		n += 1 + l + sov(uint64(l))
 	}
 	if m.Keyspace != nil {
-		if size, ok := interface{}(m.Keyspace).(interface {
-			SizeVT() int
-		}); ok {
-			l = size.SizeVT()
-		} else {
-			l = proto.Size(m.Keyspace)
-		}
+		l = m.Keyspace.SizeVT()
 		n += 1 + l + sov(uint64(l))
 	}
 	if m.unknownFields != nil {
@@ -5952,13 +5231,7 @@ func (m *Shard) SizeVT() (n int) {
 		n += 1 + l + sov(uint64(l))
 	}
 	if m.Shard != nil {
-		if size, ok := interface{}(m.Shard).(interface {
-			SizeVT() int
-		}); ok {
-			l = size.SizeVT()
-		} else {
-			l = proto.Size(m.Shard)
-		}
+		l = m.Shard.SizeVT()
 		n += 1 + l + sov(uint64(l))
 	}
 	if m.unknownFields != nil {
@@ -6003,13 +5276,7 @@ func (m *Workflow_ShardStream) SizeVT() (n int) {
 	}
 	if len(m.TabletControls) > 0 {
 		for _, e := range m.TabletControls {
-			if size, ok := interface{}(e).(interface {
-				SizeVT() int
-			}); ok {
-				l = size.SizeVT()
-			} else {
-				l = proto.Size(e)
-			}
+			l = e.SizeVT()
 			n += 1 + l + sov(uint64(l))
 		}
 	}
@@ -6063,23 +5330,11 @@ func (m *Workflow_Stream_Log) SizeVT() (n int) {
 		n += 1 + l + sov(uint64(l))
 	}
 	if m.CreatedAt != nil {
-		if size, ok := interface{}(m.CreatedAt).(interface {
-			SizeVT() int
-		}); ok {
-			l = size.SizeVT()
-		} else {
-			l = proto.Size(m.CreatedAt)
-		}
+		l = m.CreatedAt.SizeVT()
 		n += 1 + l + sov(uint64(l))
 	}
 	if m.UpdatedAt != nil {
-		if size, ok := interface{}(m.UpdatedAt).(interface {
-			SizeVT() int
-		}); ok {
-			l = size.SizeVT()
-		} else {
-			l = proto.Size(m.UpdatedAt)
-		}
+		l = m.UpdatedAt.SizeVT()
 		n += 1 + l + sov(uint64(l))
 	}
 	l = len(m.Message)
@@ -6109,23 +5364,11 @@ func (m *Workflow_Stream) SizeVT() (n int) {
 		n += 1 + l + sov(uint64(l))
 	}
 	if m.Tablet != nil {
-		if size, ok := interface{}(m.Tablet).(interface {
-			SizeVT() int
-		}); ok {
-			l = size.SizeVT()
-		} else {
-			l = proto.Size(m.Tablet)
-		}
+		l = m.Tablet.SizeVT()
 		n += 1 + l + sov(uint64(l))
 	}
 	if m.BinlogSource != nil {
-		if size, ok := interface{}(m.BinlogSource).(interface {
-			SizeVT() int
-		}); ok {
-			l = size.SizeVT()
-		} else {
-			l = proto.Size(m.BinlogSource)
-		}
+		l = m.BinlogSource.SizeVT()
 		n += 1 + l + sov(uint64(l))
 	}
 	l = len(m.Position)
@@ -6145,23 +5388,11 @@ func (m *Workflow_Stream) SizeVT() (n int) {
 		n += 1 + l + sov(uint64(l))
 	}
 	if m.TransactionTimestamp != nil {
-		if size, ok := interface{}(m.TransactionTimestamp).(interface {
-			SizeVT() int
-		}); ok {
-			l = size.SizeVT()
-		} else {
-			l = proto.Size(m.TransactionTimestamp)
-		}
+		l = m.TransactionTimestamp.SizeVT()
 		n += 1 + l + sov(uint64(l))
 	}
 	if m.TimeUpdated != nil {
-		if size, ok := interface{}(m.TimeUpdated).(interface {
-			SizeVT() int
-		}); ok {
-			l = size.SizeVT()
-		} else {
-			l = proto.Size(m.TimeUpdated)
-		}
+		l = m.TimeUpdated.SizeVT()
 		n += 1 + l + sov(uint64(l))
 	}
 	l = len(m.Message)
@@ -6247,13 +5478,7 @@ func (m *AddCellInfoRequest) SizeVT() (n int) {
 		n += 1 + l + sov(uint64(l))
 	}
 	if m.CellInfo != nil {
-		if size, ok := interface{}(m.CellInfo).(interface {
-			SizeVT() int
-		}); ok {
-			l = size.SizeVT()
-		} else {
-			l = proto.Size(m.CellInfo)
-		}
+		l = m.CellInfo.SizeVT()
 		n += 1 + l + sov(uint64(l))
 	}
 	if m.unknownFields != nil {
@@ -6315,13 +5540,7 @@ func (m *ApplyRoutingRulesRequest) SizeVT() (n int) {
 	var l int
 	_ = l
 	if m.RoutingRules != nil {
-		if size, ok := interface{}(m.RoutingRules).(interface {
-			SizeVT() int
-		}); ok {
-			l = size.SizeVT()
-		} else {
-			l = proto.Size(m.RoutingRules)
-		}
+		l = m.RoutingRules.SizeVT()
 		n += 1 + l + sov(uint64(l))
 	}
 	if m.SkipRebuild {
@@ -6374,13 +5593,7 @@ func (m *ApplyVSchemaRequest) SizeVT() (n int) {
 		}
 	}
 	if m.VSchema != nil {
-		if size, ok := interface{}(m.VSchema).(interface {
-			SizeVT() int
-		}); ok {
-			l = size.SizeVT()
-		} else {
-			l = proto.Size(m.VSchema)
-		}
+		l = m.VSchema.SizeVT()
 		n += 1 + l + sov(uint64(l))
 	}
 	l = len(m.Sql)
@@ -6400,13 +5613,7 @@ func (m *ApplyVSchemaResponse) SizeVT() (n int) {
 	var l int
 	_ = l
 	if m.VSchema != nil {
-		if size, ok := interface{}(m.VSchema).(interface {
-			SizeVT() int
-		}); ok {
-			l = size.SizeVT()
-		} else {
-			l = proto.Size(m.VSchema)
-		}
+		l = m.VSchema.SizeVT()
 		n += 1 + l + sov(uint64(l))
 	}
 	if m.unknownFields != nil {
@@ -6422,13 +5629,7 @@ func (m *ChangeTabletTypeRequest) SizeVT() (n int) {
 	var l int
 	_ = l
 	if m.TabletAlias != nil {
-		if size, ok := interface{}(m.TabletAlias).(interface {
-			SizeVT() int
-		}); ok {
-			l = size.SizeVT()
-		} else {
-			l = proto.Size(m.TabletAlias)
-		}
+		l = m.TabletAlias.SizeVT()
 		n += 1 + l + sov(uint64(l))
 	}
 	if m.DbType != 0 {
@@ -6450,23 +5651,11 @@ func (m *ChangeTabletTypeResponse) SizeVT() (n int) {
 	var l int
 	_ = l
 	if m.BeforeTablet != nil {
-		if size, ok := interface{}(m.BeforeTablet).(interface {
-			SizeVT() int
-		}); ok {
-			l = size.SizeVT()
-		} else {
-			l = proto.Size(m.BeforeTablet)
-		}
+		l = m.BeforeTablet.SizeVT()
 		n += 1 + l + sov(uint64(l))
 	}
 	if m.AfterTablet != nil {
-		if size, ok := interface{}(m.AfterTablet).(interface {
-			SizeVT() int
-		}); ok {
-			l = size.SizeVT()
-		} else {
-			l = proto.Size(m.AfterTablet)
-		}
+		l = m.AfterTablet.SizeVT()
 		n += 1 + l + sov(uint64(l))
 	}
 	if m.WasDryRun {
@@ -6503,13 +5692,7 @@ func (m *CreateKeyspaceRequest) SizeVT() (n int) {
 	}
 	if len(m.ServedFroms) > 0 {
 		for _, e := range m.ServedFroms {
-			if size, ok := interface{}(e).(interface {
-				SizeVT() int
-			}); ok {
-				l = size.SizeVT()
-			} else {
-				l = proto.Size(e)
-			}
+			l = e.SizeVT()
 			n += 1 + l + sov(uint64(l))
 		}
 	}
@@ -6521,13 +5704,7 @@ func (m *CreateKeyspaceRequest) SizeVT() (n int) {
 		n += 1 + l + sov(uint64(l))
 	}
 	if m.SnapshotTime != nil {
-		if size, ok := interface{}(m.SnapshotTime).(interface {
-			SizeVT() int
-		}); ok {
-			l = size.SizeVT()
-		} else {
-			l = proto.Size(m.SnapshotTime)
-		}
+		l = m.SnapshotTime.SizeVT()
 		n += 1 + l + sov(uint64(l))
 	}
 	if m.unknownFields != nil {
@@ -6735,13 +5912,7 @@ func (m *DeleteTabletsRequest) SizeVT() (n int) {
 	_ = l
 	if len(m.TabletAliases) > 0 {
 		for _, e := range m.TabletAliases {
-			if size, ok := interface{}(e).(interface {
-				SizeVT() int
-			}); ok {
-				l = size.SizeVT()
-			} else {
-				l = proto.Size(e)
-			}
+			l = e.SizeVT()
 			n += 1 + l + sov(uint64(l))
 		}
 	}
@@ -6781,35 +5952,17 @@ func (m *EmergencyReparentShardRequest) SizeVT() (n int) {
 		n += 1 + l + sov(uint64(l))
 	}
 	if m.NewPrimary != nil {
-		if size, ok := interface{}(m.NewPrimary).(interface {
-			SizeVT() int
-		}); ok {
-			l = size.SizeVT()
-		} else {
-			l = proto.Size(m.NewPrimary)
-		}
+		l = m.NewPrimary.SizeVT()
 		n += 1 + l + sov(uint64(l))
 	}
 	if len(m.IgnoreReplicas) > 0 {
 		for _, e := range m.IgnoreReplicas {
-			if size, ok := interface{}(e).(interface {
-				SizeVT() int
-			}); ok {
-				l = size.SizeVT()
-			} else {
-				l = proto.Size(e)
-			}
+			l = e.SizeVT()
 			n += 1 + l + sov(uint64(l))
 		}
 	}
 	if m.WaitReplicasTimeout != nil {
-		if size, ok := interface{}(m.WaitReplicasTimeout).(interface {
-			SizeVT() int
-		}); ok {
-			l = size.SizeVT()
-		} else {
-			l = proto.Size(m.WaitReplicasTimeout)
-		}
+		l = m.WaitReplicasTimeout.SizeVT()
 		n += 1 + l + sov(uint64(l))
 	}
 	if m.unknownFields != nil {
@@ -6833,24 +5986,12 @@ func (m *EmergencyReparentShardResponse) SizeVT() (n int) {
 		n += 1 + l + sov(uint64(l))
 	}
 	if m.PromotedPrimary != nil {
-		if size, ok := interface{}(m.PromotedPrimary).(interface {
-			SizeVT() int
-		}); ok {
-			l = size.SizeVT()
-		} else {
-			l = proto.Size(m.PromotedPrimary)
-		}
+		l = m.PromotedPrimary.SizeVT()
 		n += 1 + l + sov(uint64(l))
 	}
 	if len(m.Events) > 0 {
 		for _, e := range m.Events {
-			if size, ok := interface{}(e).(interface {
-				SizeVT() int
-			}); ok {
-				l = size.SizeVT()
-			} else {
-				l = proto.Size(e)
-			}
+			l = e.SizeVT()
 			n += 1 + l + sov(uint64(l))
 		}
 	}
@@ -6938,13 +6079,7 @@ func (m *GetBackupsResponse) SizeVT() (n int) {
 	_ = l
 	if len(m.Backups) > 0 {
 		for _, e := range m.Backups {
-			if size, ok := interface{}(e).(interface {
-				SizeVT() int
-			}); ok {
-				l = size.SizeVT()
-			} else {
-				l = proto.Size(e)
-			}
+			l = e.SizeVT()
 			n += 1 + l + sov(uint64(l))
 		}
 	}
@@ -6977,13 +6112,7 @@ func (m *GetCellInfoResponse) SizeVT() (n int) {
 	var l int
 	_ = l
 	if m.CellInfo != nil {
-		if size, ok := interface{}(m.CellInfo).(interface {
-			SizeVT() int
-		}); ok {
-			l = size.SizeVT()
-		} else {
-			l = proto.Size(m.CellInfo)
-		}
+		l = m.CellInfo.SizeVT()
 		n += 1 + l + sov(uint64(l))
 	}
 	if m.unknownFields != nil {
@@ -7046,13 +6175,7 @@ func (m *GetCellsAliasesResponse) SizeVT() (n int) {
 			_ = v
 			l = 0
 			if v != nil {
-				if size, ok := interface{}(v).(interface {
-					SizeVT() int
-				}); ok {
-					l = size.SizeVT()
-				} else {
-					l = proto.Size(v)
-				}
+				l = v.SizeVT()
 			}
 			l += 1 + sov(uint64(l))
 			mapEntrySize := 1 + len(k) + sov(uint64(len(k))) + l
@@ -7146,13 +6269,7 @@ func (m *GetRoutingRulesResponse) SizeVT() (n int) {
 	var l int
 	_ = l
 	if m.RoutingRules != nil {
-		if size, ok := interface{}(m.RoutingRules).(interface {
-			SizeVT() int
-		}); ok {
-			l = size.SizeVT()
-		} else {
-			l = proto.Size(m.RoutingRules)
-		}
+		l = m.RoutingRules.SizeVT()
 		n += 1 + l + sov(uint64(l))
 	}
 	if m.unknownFields != nil {
@@ -7168,13 +6285,7 @@ func (m *GetSchemaRequest) SizeVT() (n int) {
 	var l int
 	_ = l
 	if m.TabletAlias != nil {
-		if size, ok := interface{}(m.TabletAlias).(interface {
-			SizeVT() int
-		}); ok {
-			l = size.SizeVT()
-		} else {
-			l = proto.Size(m.TabletAlias)
-		}
+		l = m.TabletAlias.SizeVT()
 		n += 1 + l + sov(uint64(l))
 	}
 	if len(m.Tables) > 0 {
@@ -7211,13 +6322,7 @@ func (m *GetSchemaResponse) SizeVT() (n int) {
 	var l int
 	_ = l
 	if m.Schema != nil {
-		if size, ok := interface{}(m.Schema).(interface {
-			SizeVT() int
-		}); ok {
-			l = size.SizeVT()
-		} else {
-			l = proto.Size(m.Schema)
-		}
+		l = m.Schema.SizeVT()
 		n += 1 + l + sov(uint64(l))
 	}
 	if m.unknownFields != nil {
@@ -7296,13 +6401,7 @@ func (m *GetSrvKeyspacesResponse) SizeVT() (n int) {
 			_ = v
 			l = 0
 			if v != nil {
-				if size, ok := interface{}(v).(interface {
-					SizeVT() int
-				}); ok {
-					l = size.SizeVT()
-				} else {
-					l = proto.Size(v)
-				}
+				l = v.SizeVT()
 			}
 			l += 1 + sov(uint64(l))
 			mapEntrySize := 1 + len(k) + sov(uint64(len(k))) + l
@@ -7338,13 +6437,7 @@ func (m *GetSrvVSchemaResponse) SizeVT() (n int) {
 	var l int
 	_ = l
 	if m.SrvVSchema != nil {
-		if size, ok := interface{}(m.SrvVSchema).(interface {
-			SizeVT() int
-		}); ok {
-			l = size.SizeVT()
-		} else {
-			l = proto.Size(m.SrvVSchema)
-		}
+		l = m.SrvVSchema.SizeVT()
 		n += 1 + l + sov(uint64(l))
 	}
 	if m.unknownFields != nil {
@@ -7383,13 +6476,7 @@ func (m *GetSrvVSchemasResponse) SizeVT() (n int) {
 			_ = v
 			l = 0
 			if v != nil {
-				if size, ok := interface{}(v).(interface {
-					SizeVT() int
-				}); ok {
-					l = size.SizeVT()
-				} else {
-					l = proto.Size(v)
-				}
+				l = v.SizeVT()
 			}
 			l += 1 + sov(uint64(l))
 			mapEntrySize := 1 + len(k) + sov(uint64(len(k))) + l
@@ -7409,13 +6496,7 @@ func (m *GetTabletRequest) SizeVT() (n int) {
 	var l int
 	_ = l
 	if m.TabletAlias != nil {
-		if size, ok := interface{}(m.TabletAlias).(interface {
-			SizeVT() int
-		}); ok {
-			l = size.SizeVT()
-		} else {
-			l = proto.Size(m.TabletAlias)
-		}
+		l = m.TabletAlias.SizeVT()
 		n += 1 + l + sov(uint64(l))
 	}
 	if m.unknownFields != nil {
@@ -7431,13 +6512,7 @@ func (m *GetTabletResponse) SizeVT() (n int) {
 	var l int
 	_ = l
 	if m.Tablet != nil {
-		if size, ok := interface{}(m.Tablet).(interface {
-			SizeVT() int
-		}); ok {
-			l = size.SizeVT()
-		} else {
-			l = proto.Size(m.Tablet)
-		}
+		l = m.Tablet.SizeVT()
 		n += 1 + l + sov(uint64(l))
 	}
 	if m.unknownFields != nil {
@@ -7471,13 +6546,7 @@ func (m *GetTabletsRequest) SizeVT() (n int) {
 	}
 	if len(m.TabletAliases) > 0 {
 		for _, e := range m.TabletAliases {
-			if size, ok := interface{}(e).(interface {
-				SizeVT() int
-			}); ok {
-				l = size.SizeVT()
-			} else {
-				l = proto.Size(e)
-			}
+			l = e.SizeVT()
 			n += 1 + l + sov(uint64(l))
 		}
 	}
@@ -7495,13 +6564,7 @@ func (m *GetTabletsResponse) SizeVT() (n int) {
 	_ = l
 	if len(m.Tablets) > 0 {
 		for _, e := range m.Tablets {
-			if size, ok := interface{}(e).(interface {
-				SizeVT() int
-			}); ok {
-				l = size.SizeVT()
-			} else {
-				l = proto.Size(e)
-			}
+			l = e.SizeVT()
 			n += 1 + l + sov(uint64(l))
 		}
 	}
@@ -7534,13 +6597,7 @@ func (m *GetVSchemaResponse) SizeVT() (n int) {
 	var l int
 	_ = l
 	if m.VSchema != nil {
-		if size, ok := interface{}(m.VSchema).(interface {
-			SizeVT() int
-		}); ok {
-			l = size.SizeVT()
-		} else {
-			l = proto.Size(m.VSchema)
-		}
+		l = m.VSchema.SizeVT()
 		n += 1 + l + sov(uint64(l))
 	}
 	if m.unknownFields != nil {
@@ -7601,26 +6658,14 @@ func (m *InitShardPrimaryRequest) SizeVT() (n int) {
 		n += 1 + l + sov(uint64(l))
 	}
 	if m.PrimaryElectTabletAlias != nil {
-		if size, ok := interface{}(m.PrimaryElectTabletAlias).(interface {
-			SizeVT() int
-		}); ok {
-			l = size.SizeVT()
-		} else {
-			l = proto.Size(m.PrimaryElectTabletAlias)
-		}
+		l = m.PrimaryElectTabletAlias.SizeVT()
 		n += 1 + l + sov(uint64(l))
 	}
 	if m.Force {
 		n += 2
 	}
 	if m.WaitReplicasTimeout != nil {
-		if size, ok := interface{}(m.WaitReplicasTimeout).(interface {
-			SizeVT() int
-		}); ok {
-			l = size.SizeVT()
-		} else {
-			l = proto.Size(m.WaitReplicasTimeout)
-		}
+		l = m.WaitReplicasTimeout.SizeVT()
 		n += 1 + l + sov(uint64(l))
 	}
 	if m.unknownFields != nil {
@@ -7637,13 +6682,7 @@ func (m *InitShardPrimaryResponse) SizeVT() (n int) {
 	_ = l
 	if len(m.Events) > 0 {
 		for _, e := range m.Events {
-			if size, ok := interface{}(e).(interface {
-				SizeVT() int
-			}); ok {
-				l = size.SizeVT()
-			} else {
-				l = proto.Size(e)
-			}
+			l = e.SizeVT()
 			n += 1 + l + sov(uint64(l))
 		}
 	}
@@ -7668,33 +6707,15 @@ func (m *PlannedReparentShardRequest) SizeVT() (n int) {
 		n += 1 + l + sov(uint64(l))
 	}
 	if m.NewPrimary != nil {
-		if size, ok := interface{}(m.NewPrimary).(interface {
-			SizeVT() int
-		}); ok {
-			l = size.SizeVT()
-		} else {
-			l = proto.Size(m.NewPrimary)
-		}
+		l = m.NewPrimary.SizeVT()
 		n += 1 + l + sov(uint64(l))
 	}
 	if m.AvoidPrimary != nil {
-		if size, ok := interface{}(m.AvoidPrimary).(interface {
-			SizeVT() int
-		}); ok {
-			l = size.SizeVT()
-		} else {
-			l = proto.Size(m.AvoidPrimary)
-		}
+		l = m.AvoidPrimary.SizeVT()
 		n += 1 + l + sov(uint64(l))
 	}
 	if m.WaitReplicasTimeout != nil {
-		if size, ok := interface{}(m.WaitReplicasTimeout).(interface {
-			SizeVT() int
-		}); ok {
-			l = size.SizeVT()
-		} else {
-			l = proto.Size(m.WaitReplicasTimeout)
-		}
+		l = m.WaitReplicasTimeout.SizeVT()
 		n += 1 + l + sov(uint64(l))
 	}
 	if m.unknownFields != nil {
@@ -7718,24 +6739,12 @@ func (m *PlannedReparentShardResponse) SizeVT() (n int) {
 		n += 1 + l + sov(uint64(l))
 	}
 	if m.PromotedPrimary != nil {
-		if size, ok := interface{}(m.PromotedPrimary).(interface {
-			SizeVT() int
-		}); ok {
-			l = size.SizeVT()
-		} else {
-			l = proto.Size(m.PromotedPrimary)
-		}
+		l = m.PromotedPrimary.SizeVT()
 		n += 1 + l + sov(uint64(l))
 	}
 	if len(m.Events) > 0 {
 		for _, e := range m.Events {
-			if size, ok := interface{}(e).(interface {
-				SizeVT() int
-			}); ok {
-				l = size.SizeVT()
-			} else {
-				l = proto.Size(e)
-			}
+			l = e.SizeVT()
 			n += 1 + l + sov(uint64(l))
 		}
 	}
@@ -7782,13 +6791,7 @@ func (m *RefreshStateRequest) SizeVT() (n int) {
 	var l int
 	_ = l
 	if m.TabletAlias != nil {
-		if size, ok := interface{}(m.TabletAlias).(interface {
-			SizeVT() int
-		}); ok {
-			l = size.SizeVT()
-		} else {
-			l = proto.Size(m.TabletAlias)
-		}
+		l = m.TabletAlias.SizeVT()
 		n += 1 + l + sov(uint64(l))
 	}
 	if m.unknownFields != nil {
@@ -7937,13 +6940,7 @@ func (m *ReparentTabletRequest) SizeVT() (n int) {
 	var l int
 	_ = l
 	if m.Tablet != nil {
-		if size, ok := interface{}(m.Tablet).(interface {
-			SizeVT() int
-		}); ok {
-			l = size.SizeVT()
-		} else {
-			l = proto.Size(m.Tablet)
-		}
+		l = m.Tablet.SizeVT()
 		n += 1 + l + sov(uint64(l))
 	}
 	if m.unknownFields != nil {
@@ -7967,13 +6964,7 @@ func (m *ReparentTabletResponse) SizeVT() (n int) {
 		n += 1 + l + sov(uint64(l))
 	}
 	if m.Primary != nil {
-		if size, ok := interface{}(m.Primary).(interface {
-			SizeVT() int
-		}); ok {
-			l = size.SizeVT()
-		} else {
-			l = proto.Size(m.Primary)
-		}
+		l = m.Primary.SizeVT()
 		n += 1 + l + sov(uint64(l))
 	}
 	if m.unknownFields != nil {
@@ -8014,13 +7005,7 @@ func (m *ShardReplicationPositionsResponse) SizeVT() (n int) {
 			_ = v
 			l = 0
 			if v != nil {
-				if size, ok := interface{}(v).(interface {
-					SizeVT() int
-				}); ok {
-					l = size.SizeVT()
-				} else {
-					l = proto.Size(v)
-				}
+				l = v.SizeVT()
 			}
 			l += 1 + sov(uint64(l))
 			mapEntrySize := 1 + len(k) + sov(uint64(len(k))) + l
@@ -8033,13 +7018,7 @@ func (m *ShardReplicationPositionsResponse) SizeVT() (n int) {
 			_ = v
 			l = 0
 			if v != nil {
-				if size, ok := interface{}(v).(interface {
-					SizeVT() int
-				}); ok {
-					l = size.SizeVT()
-				} else {
-					l = proto.Size(v)
-				}
+				l = v.SizeVT()
 			}
 			l += 1 + sov(uint64(l))
 			mapEntrySize := 1 + len(k) + sov(uint64(len(k))) + l
@@ -8059,13 +7038,7 @@ func (m *TabletExternallyReparentedRequest) SizeVT() (n int) {
 	var l int
 	_ = l
 	if m.Tablet != nil {
-		if size, ok := interface{}(m.Tablet).(interface {
-			SizeVT() int
-		}); ok {
-			l = size.SizeVT()
-		} else {
-			l = proto.Size(m.Tablet)
-		}
+		l = m.Tablet.SizeVT()
 		n += 1 + l + sov(uint64(l))
 	}
 	if m.unknownFields != nil {
@@ -8089,23 +7062,11 @@ func (m *TabletExternallyReparentedResponse) SizeVT() (n int) {
 		n += 1 + l + sov(uint64(l))
 	}
 	if m.NewPrimary != nil {
-		if size, ok := interface{}(m.NewPrimary).(interface {
-			SizeVT() int
-		}); ok {
-			l = size.SizeVT()
-		} else {
-			l = proto.Size(m.NewPrimary)
-		}
+		l = m.NewPrimary.SizeVT()
 		n += 1 + l + sov(uint64(l))
 	}
 	if m.OldPrimary != nil {
-		if size, ok := interface{}(m.OldPrimary).(interface {
-			SizeVT() int
-		}); ok {
-			l = size.SizeVT()
-		} else {
-			l = proto.Size(m.OldPrimary)
-		}
+		l = m.OldPrimary.SizeVT()
 		n += 1 + l + sov(uint64(l))
 	}
 	if m.unknownFields != nil {
@@ -8125,13 +7086,7 @@ func (m *UpdateCellInfoRequest) SizeVT() (n int) {
 		n += 1 + l + sov(uint64(l))
 	}
 	if m.CellInfo != nil {
-		if size, ok := interface{}(m.CellInfo).(interface {
-			SizeVT() int
-		}); ok {
-			l = size.SizeVT()
-		} else {
-			l = proto.Size(m.CellInfo)
-		}
+		l = m.CellInfo.SizeVT()
 		n += 1 + l + sov(uint64(l))
 	}
 	if m.unknownFields != nil {
@@ -8151,13 +7106,7 @@ func (m *UpdateCellInfoResponse) SizeVT() (n int) {
 		n += 1 + l + sov(uint64(l))
 	}
 	if m.CellInfo != nil {
-		if size, ok := interface{}(m.CellInfo).(interface {
-			SizeVT() int
-		}); ok {
-			l = size.SizeVT()
-		} else {
-			l = proto.Size(m.CellInfo)
-		}
+		l = m.CellInfo.SizeVT()
 		n += 1 + l + sov(uint64(l))
 	}
 	if m.unknownFields != nil {
@@ -8177,13 +7126,7 @@ func (m *UpdateCellsAliasRequest) SizeVT() (n int) {
 		n += 1 + l + sov(uint64(l))
 	}
 	if m.CellsAlias != nil {
-		if size, ok := interface{}(m.CellsAlias).(interface {
-			SizeVT() int
-		}); ok {
-			l = size.SizeVT()
-		} else {
-			l = proto.Size(m.CellsAlias)
-		}
+		l = m.CellsAlias.SizeVT()
 		n += 1 + l + sov(uint64(l))
 	}
 	if m.unknownFields != nil {
@@ -8203,13 +7146,7 @@ func (m *UpdateCellsAliasResponse) SizeVT() (n int) {
 		n += 1 + l + sov(uint64(l))
 	}
 	if m.CellsAlias != nil {
-		if size, ok := interface{}(m.CellsAlias).(interface {
-			SizeVT() int
-		}); ok {
-			l = size.SizeVT()
-		} else {
-			l = proto.Size(m.CellsAlias)
-		}
+		l = m.CellsAlias.SizeVT()
 		n += 1 + l + sov(uint64(l))
 	}
 	if m.unknownFields != nil {
@@ -8387,16 +7324,8 @@ func (m *ExecuteVtctlCommandResponse) UnmarshalVT(dAtA []byte) error {
 			if m.Event == nil {
 				m.Event = &logutil.Event{}
 			}
-			if unmarshal, ok := interface{}(m.Event).(interface {
-				UnmarshalVT([]byte) error
-			}); ok {
-				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-					return err
-				}
-			} else {
-				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.Event); err != nil {
-					return err
-				}
+			if err := m.Event.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
 			}
 			iNdEx = postIndex
 		default:
@@ -8958,16 +7887,8 @@ func (m *Keyspace) UnmarshalVT(dAtA []byte) error {
 			if m.Keyspace == nil {
 				m.Keyspace = &topodata.Keyspace{}
 			}
-			if unmarshal, ok := interface{}(m.Keyspace).(interface {
-				UnmarshalVT([]byte) error
-			}); ok {
-				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-					return err
-				}
-			} else {
-				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.Keyspace); err != nil {
-					return err
-				}
+			if err := m.Keyspace.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
 			}
 			iNdEx = postIndex
 		default:
@@ -9117,16 +8038,8 @@ func (m *Shard) UnmarshalVT(dAtA []byte) error {
 			if m.Shard == nil {
 				m.Shard = &topodata.Shard{}
 			}
-			if unmarshal, ok := interface{}(m.Shard).(interface {
-				UnmarshalVT([]byte) error
-			}); ok {
-				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-					return err
-				}
-			} else {
-				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.Shard); err != nil {
-					return err
-				}
+			if err := m.Shard.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
 			}
 			iNdEx = postIndex
 		default:
@@ -9359,16 +8272,8 @@ func (m *Workflow_ShardStream) UnmarshalVT(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			m.TabletControls = append(m.TabletControls, &topodata.Shard_TabletControl{})
-			if unmarshal, ok := interface{}(m.TabletControls[len(m.TabletControls)-1]).(interface {
-				UnmarshalVT([]byte) error
-			}); ok {
-				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-					return err
-				}
-			} else {
-				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.TabletControls[len(m.TabletControls)-1]); err != nil {
-					return err
-				}
+			if err := m.TabletControls[len(m.TabletControls)-1].UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
 			}
 			iNdEx = postIndex
 		case 3:
@@ -9691,16 +8596,8 @@ func (m *Workflow_Stream_Log) UnmarshalVT(dAtA []byte) error {
 			if m.CreatedAt == nil {
 				m.CreatedAt = &vttime.Time{}
 			}
-			if unmarshal, ok := interface{}(m.CreatedAt).(interface {
-				UnmarshalVT([]byte) error
-			}); ok {
-				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-					return err
-				}
-			} else {
-				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.CreatedAt); err != nil {
-					return err
-				}
+			if err := m.CreatedAt.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
 			}
 			iNdEx = postIndex
 		case 6:
@@ -9735,16 +8632,8 @@ func (m *Workflow_Stream_Log) UnmarshalVT(dAtA []byte) error {
 			if m.UpdatedAt == nil {
 				m.UpdatedAt = &vttime.Time{}
 			}
-			if unmarshal, ok := interface{}(m.UpdatedAt).(interface {
-				UnmarshalVT([]byte) error
-			}); ok {
-				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-					return err
-				}
-			} else {
-				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.UpdatedAt); err != nil {
-					return err
-				}
+			if err := m.UpdatedAt.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
 			}
 			iNdEx = postIndex
 		case 7:
@@ -9932,16 +8821,8 @@ func (m *Workflow_Stream) UnmarshalVT(dAtA []byte) error {
 			if m.Tablet == nil {
 				m.Tablet = &topodata.TabletAlias{}
 			}
-			if unmarshal, ok := interface{}(m.Tablet).(interface {
-				UnmarshalVT([]byte) error
-			}); ok {
-				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-					return err
-				}
-			} else {
-				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.Tablet); err != nil {
-					return err
-				}
+			if err := m.Tablet.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
 			}
 			iNdEx = postIndex
 		case 4:
@@ -9976,16 +8857,8 @@ func (m *Workflow_Stream) UnmarshalVT(dAtA []byte) error {
 			if m.BinlogSource == nil {
 				m.BinlogSource = &binlogdata.BinlogSource{}
 			}
-			if unmarshal, ok := interface{}(m.BinlogSource).(interface {
-				UnmarshalVT([]byte) error
-			}); ok {
-				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-					return err
-				}
-			} else {
-				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.BinlogSource); err != nil {
-					return err
-				}
+			if err := m.BinlogSource.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
 			}
 			iNdEx = postIndex
 		case 5:
@@ -10148,16 +9021,8 @@ func (m *Workflow_Stream) UnmarshalVT(dAtA []byte) error {
 			if m.TransactionTimestamp == nil {
 				m.TransactionTimestamp = &vttime.Time{}
 			}
-			if unmarshal, ok := interface{}(m.TransactionTimestamp).(interface {
-				UnmarshalVT([]byte) error
-			}); ok {
-				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-					return err
-				}
-			} else {
-				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.TransactionTimestamp); err != nil {
-					return err
-				}
+			if err := m.TransactionTimestamp.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
 			}
 			iNdEx = postIndex
 		case 10:
@@ -10192,16 +9057,8 @@ func (m *Workflow_Stream) UnmarshalVT(dAtA []byte) error {
 			if m.TimeUpdated == nil {
 				m.TimeUpdated = &vttime.Time{}
 			}
-			if unmarshal, ok := interface{}(m.TimeUpdated).(interface {
-				UnmarshalVT([]byte) error
-			}); ok {
-				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-					return err
-				}
-			} else {
-				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.TimeUpdated); err != nil {
-					return err
-				}
+			if err := m.TimeUpdated.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
 			}
 			iNdEx = postIndex
 		case 11:
@@ -10786,16 +9643,8 @@ func (m *AddCellInfoRequest) UnmarshalVT(dAtA []byte) error {
 			if m.CellInfo == nil {
 				m.CellInfo = &topodata.CellInfo{}
 			}
-			if unmarshal, ok := interface{}(m.CellInfo).(interface {
-				UnmarshalVT([]byte) error
-			}); ok {
-				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-					return err
-				}
-			} else {
-				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.CellInfo); err != nil {
-					return err
-				}
+			if err := m.CellInfo.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
 			}
 			iNdEx = postIndex
 		default:
@@ -11098,16 +9947,8 @@ func (m *ApplyRoutingRulesRequest) UnmarshalVT(dAtA []byte) error {
 			if m.RoutingRules == nil {
 				m.RoutingRules = &vschema.RoutingRules{}
 			}
-			if unmarshal, ok := interface{}(m.RoutingRules).(interface {
-				UnmarshalVT([]byte) error
-			}); ok {
-				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-					return err
-				}
-			} else {
-				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.RoutingRules); err != nil {
-					return err
-				}
+			if err := m.RoutingRules.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
 			}
 			iNdEx = postIndex
 		case 2:
@@ -11400,16 +10241,8 @@ func (m *ApplyVSchemaRequest) UnmarshalVT(dAtA []byte) error {
 			if m.VSchema == nil {
 				m.VSchema = &vschema.Keyspace{}
 			}
-			if unmarshal, ok := interface{}(m.VSchema).(interface {
-				UnmarshalVT([]byte) error
-			}); ok {
-				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-					return err
-				}
-			} else {
-				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.VSchema); err != nil {
-					return err
-				}
+			if err := m.VSchema.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
 			}
 			iNdEx = postIndex
 		case 6:
@@ -11527,16 +10360,8 @@ func (m *ApplyVSchemaResponse) UnmarshalVT(dAtA []byte) error {
 			if m.VSchema == nil {
 				m.VSchema = &vschema.Keyspace{}
 			}
-			if unmarshal, ok := interface{}(m.VSchema).(interface {
-				UnmarshalVT([]byte) error
-			}); ok {
-				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-					return err
-				}
-			} else {
-				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.VSchema); err != nil {
-					return err
-				}
+			if err := m.VSchema.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
 			}
 			iNdEx = postIndex
 		default:
@@ -11622,16 +10447,8 @@ func (m *ChangeTabletTypeRequest) UnmarshalVT(dAtA []byte) error {
 			if m.TabletAlias == nil {
 				m.TabletAlias = &topodata.TabletAlias{}
 			}
-			if unmarshal, ok := interface{}(m.TabletAlias).(interface {
-				UnmarshalVT([]byte) error
-			}); ok {
-				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-					return err
-				}
-			} else {
-				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.TabletAlias); err != nil {
-					return err
-				}
+			if err := m.TabletAlias.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
 			}
 			iNdEx = postIndex
 		case 2:
@@ -11756,16 +10573,8 @@ func (m *ChangeTabletTypeResponse) UnmarshalVT(dAtA []byte) error {
 			if m.BeforeTablet == nil {
 				m.BeforeTablet = &topodata.Tablet{}
 			}
-			if unmarshal, ok := interface{}(m.BeforeTablet).(interface {
-				UnmarshalVT([]byte) error
-			}); ok {
-				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-					return err
-				}
-			} else {
-				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.BeforeTablet); err != nil {
-					return err
-				}
+			if err := m.BeforeTablet.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
 			}
 			iNdEx = postIndex
 		case 2:
@@ -11800,16 +10609,8 @@ func (m *ChangeTabletTypeResponse) UnmarshalVT(dAtA []byte) error {
 			if m.AfterTablet == nil {
 				m.AfterTablet = &topodata.Tablet{}
 			}
-			if unmarshal, ok := interface{}(m.AfterTablet).(interface {
-				UnmarshalVT([]byte) error
-			}); ok {
-				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-					return err
-				}
-			} else {
-				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.AfterTablet); err != nil {
-					return err
-				}
+			if err := m.AfterTablet.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
 			}
 			iNdEx = postIndex
 		case 3:
@@ -12036,16 +10837,8 @@ func (m *CreateKeyspaceRequest) UnmarshalVT(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			m.ServedFroms = append(m.ServedFroms, &topodata.Keyspace_ServedFrom{})
-			if unmarshal, ok := interface{}(m.ServedFroms[len(m.ServedFroms)-1]).(interface {
-				UnmarshalVT([]byte) error
-			}); ok {
-				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-					return err
-				}
-			} else {
-				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.ServedFroms[len(m.ServedFroms)-1]); err != nil {
-					return err
-				}
+			if err := m.ServedFroms[len(m.ServedFroms)-1].UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
 			}
 			iNdEx = postIndex
 		case 7:
@@ -12131,16 +10924,8 @@ func (m *CreateKeyspaceRequest) UnmarshalVT(dAtA []byte) error {
 			if m.SnapshotTime == nil {
 				m.SnapshotTime = &vttime.Time{}
 			}
-			if unmarshal, ok := interface{}(m.SnapshotTime).(interface {
-				UnmarshalVT([]byte) error
-			}); ok {
-				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-					return err
-				}
-			} else {
-				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.SnapshotTime); err != nil {
-					return err
-				}
+			if err := m.SnapshotTime.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
 			}
 			iNdEx = postIndex
 		default:
@@ -13227,16 +12012,8 @@ func (m *DeleteTabletsRequest) UnmarshalVT(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			m.TabletAliases = append(m.TabletAliases, &topodata.TabletAlias{})
-			if unmarshal, ok := interface{}(m.TabletAliases[len(m.TabletAliases)-1]).(interface {
-				UnmarshalVT([]byte) error
-			}); ok {
-				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-					return err
-				}
-			} else {
-				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.TabletAliases[len(m.TabletAliases)-1]); err != nil {
-					return err
-				}
+			if err := m.TabletAliases[len(m.TabletAliases)-1].UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
 			}
 			iNdEx = postIndex
 		case 2:
@@ -13457,16 +12234,8 @@ func (m *EmergencyReparentShardRequest) UnmarshalVT(dAtA []byte) error {
 			if m.NewPrimary == nil {
 				m.NewPrimary = &topodata.TabletAlias{}
 			}
-			if unmarshal, ok := interface{}(m.NewPrimary).(interface {
-				UnmarshalVT([]byte) error
-			}); ok {
-				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-					return err
-				}
-			} else {
-				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.NewPrimary); err != nil {
-					return err
-				}
+			if err := m.NewPrimary.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
 			}
 			iNdEx = postIndex
 		case 4:
@@ -13499,16 +12268,8 @@ func (m *EmergencyReparentShardRequest) UnmarshalVT(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			m.IgnoreReplicas = append(m.IgnoreReplicas, &topodata.TabletAlias{})
-			if unmarshal, ok := interface{}(m.IgnoreReplicas[len(m.IgnoreReplicas)-1]).(interface {
-				UnmarshalVT([]byte) error
-			}); ok {
-				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-					return err
-				}
-			} else {
-				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.IgnoreReplicas[len(m.IgnoreReplicas)-1]); err != nil {
-					return err
-				}
+			if err := m.IgnoreReplicas[len(m.IgnoreReplicas)-1].UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
 			}
 			iNdEx = postIndex
 		case 5:
@@ -13543,16 +12304,8 @@ func (m *EmergencyReparentShardRequest) UnmarshalVT(dAtA []byte) error {
 			if m.WaitReplicasTimeout == nil {
 				m.WaitReplicasTimeout = &vttime.Duration{}
 			}
-			if unmarshal, ok := interface{}(m.WaitReplicasTimeout).(interface {
-				UnmarshalVT([]byte) error
-			}); ok {
-				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-					return err
-				}
-			} else {
-				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.WaitReplicasTimeout); err != nil {
-					return err
-				}
+			if err := m.WaitReplicasTimeout.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
 			}
 			iNdEx = postIndex
 		default:
@@ -13702,16 +12455,8 @@ func (m *EmergencyReparentShardResponse) UnmarshalVT(dAtA []byte) error {
 			if m.PromotedPrimary == nil {
 				m.PromotedPrimary = &topodata.TabletAlias{}
 			}
-			if unmarshal, ok := interface{}(m.PromotedPrimary).(interface {
-				UnmarshalVT([]byte) error
-			}); ok {
-				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-					return err
-				}
-			} else {
-				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.PromotedPrimary); err != nil {
-					return err
-				}
+			if err := m.PromotedPrimary.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
 			}
 			iNdEx = postIndex
 		case 4:
@@ -13744,16 +12489,8 @@ func (m *EmergencyReparentShardResponse) UnmarshalVT(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			m.Events = append(m.Events, &logutil.Event{})
-			if unmarshal, ok := interface{}(m.Events[len(m.Events)-1]).(interface {
-				UnmarshalVT([]byte) error
-			}); ok {
-				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-					return err
-				}
-			} else {
-				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.Events[len(m.Events)-1]); err != nil {
-					return err
-				}
+			if err := m.Events[len(m.Events)-1].UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
 			}
 			iNdEx = postIndex
 		default:
@@ -14273,16 +13010,8 @@ func (m *GetBackupsResponse) UnmarshalVT(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			m.Backups = append(m.Backups, &mysqlctl.BackupInfo{})
-			if unmarshal, ok := interface{}(m.Backups[len(m.Backups)-1]).(interface {
-				UnmarshalVT([]byte) error
-			}); ok {
-				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-					return err
-				}
-			} else {
-				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.Backups[len(m.Backups)-1]); err != nil {
-					return err
-				}
+			if err := m.Backups[len(m.Backups)-1].UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
 			}
 			iNdEx = postIndex
 		default:
@@ -14451,16 +13180,8 @@ func (m *GetCellInfoResponse) UnmarshalVT(dAtA []byte) error {
 			if m.CellInfo == nil {
 				m.CellInfo = &topodata.CellInfo{}
 			}
-			if unmarshal, ok := interface{}(m.CellInfo).(interface {
-				UnmarshalVT([]byte) error
-			}); ok {
-				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-					return err
-				}
-			} else {
-				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.CellInfo); err != nil {
-					return err
-				}
+			if err := m.CellInfo.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
 			}
 			iNdEx = postIndex
 		default:
@@ -14807,16 +13528,8 @@ func (m *GetCellsAliasesResponse) UnmarshalVT(dAtA []byte) error {
 						return io.ErrUnexpectedEOF
 					}
 					mapvalue = &topodata.CellsAlias{}
-					if unmarshal, ok := interface{}(mapvalue).(interface {
-						UnmarshalVT([]byte) error
-					}); ok {
-						if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postmsgIndex]); err != nil {
-							return err
-						}
-					} else {
-						if err := proto.Unmarshal(dAtA[iNdEx:postmsgIndex], mapvalue); err != nil {
-							return err
-						}
+					if err := mapvalue.UnmarshalVT(dAtA[iNdEx:postmsgIndex]); err != nil {
+						return err
 					}
 					iNdEx = postmsgIndex
 				} else {
@@ -15276,16 +13989,8 @@ func (m *GetRoutingRulesResponse) UnmarshalVT(dAtA []byte) error {
 			if m.RoutingRules == nil {
 				m.RoutingRules = &vschema.RoutingRules{}
 			}
-			if unmarshal, ok := interface{}(m.RoutingRules).(interface {
-				UnmarshalVT([]byte) error
-			}); ok {
-				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-					return err
-				}
-			} else {
-				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.RoutingRules); err != nil {
-					return err
-				}
+			if err := m.RoutingRules.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
 			}
 			iNdEx = postIndex
 		default:
@@ -15371,16 +14076,8 @@ func (m *GetSchemaRequest) UnmarshalVT(dAtA []byte) error {
 			if m.TabletAlias == nil {
 				m.TabletAlias = &topodata.TabletAlias{}
 			}
-			if unmarshal, ok := interface{}(m.TabletAlias).(interface {
-				UnmarshalVT([]byte) error
-			}); ok {
-				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-					return err
-				}
-			} else {
-				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.TabletAlias); err != nil {
-					return err
-				}
+			if err := m.TabletAlias.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
 			}
 			iNdEx = postIndex
 		case 2:
@@ -15590,16 +14287,8 @@ func (m *GetSchemaResponse) UnmarshalVT(dAtA []byte) error {
 			if m.Schema == nil {
 				m.Schema = &tabletmanagerdata.SchemaDefinition{}
 			}
-			if unmarshal, ok := interface{}(m.Schema).(interface {
-				UnmarshalVT([]byte) error
-			}); ok {
-				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-					return err
-				}
-			} else {
-				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.Schema); err != nil {
-					return err
-				}
+			if err := m.Schema.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
 			}
 			iNdEx = postIndex
 		default:
@@ -16078,16 +14767,8 @@ func (m *GetSrvKeyspacesResponse) UnmarshalVT(dAtA []byte) error {
 						return io.ErrUnexpectedEOF
 					}
 					mapvalue = &topodata.SrvKeyspace{}
-					if unmarshal, ok := interface{}(mapvalue).(interface {
-						UnmarshalVT([]byte) error
-					}); ok {
-						if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postmsgIndex]); err != nil {
-							return err
-						}
-					} else {
-						if err := proto.Unmarshal(dAtA[iNdEx:postmsgIndex], mapvalue); err != nil {
-							return err
-						}
+					if err := mapvalue.UnmarshalVT(dAtA[iNdEx:postmsgIndex]); err != nil {
+						return err
 					}
 					iNdEx = postmsgIndex
 				} else {
@@ -16273,16 +14954,8 @@ func (m *GetSrvVSchemaResponse) UnmarshalVT(dAtA []byte) error {
 			if m.SrvVSchema == nil {
 				m.SrvVSchema = &vschema.SrvVSchema{}
 			}
-			if unmarshal, ok := interface{}(m.SrvVSchema).(interface {
-				UnmarshalVT([]byte) error
-			}); ok {
-				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-					return err
-				}
-			} else {
-				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.SrvVSchema); err != nil {
-					return err
-				}
+			if err := m.SrvVSchema.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
 			}
 			iNdEx = postIndex
 		default:
@@ -16527,16 +15200,8 @@ func (m *GetSrvVSchemasResponse) UnmarshalVT(dAtA []byte) error {
 						return io.ErrUnexpectedEOF
 					}
 					mapvalue = &vschema.SrvVSchema{}
-					if unmarshal, ok := interface{}(mapvalue).(interface {
-						UnmarshalVT([]byte) error
-					}); ok {
-						if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postmsgIndex]); err != nil {
-							return err
-						}
-					} else {
-						if err := proto.Unmarshal(dAtA[iNdEx:postmsgIndex], mapvalue); err != nil {
-							return err
-						}
+					if err := mapvalue.UnmarshalVT(dAtA[iNdEx:postmsgIndex]); err != nil {
+						return err
 					}
 					iNdEx = postmsgIndex
 				} else {
@@ -16639,16 +15304,8 @@ func (m *GetTabletRequest) UnmarshalVT(dAtA []byte) error {
 			if m.TabletAlias == nil {
 				m.TabletAlias = &topodata.TabletAlias{}
 			}
-			if unmarshal, ok := interface{}(m.TabletAlias).(interface {
-				UnmarshalVT([]byte) error
-			}); ok {
-				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-					return err
-				}
-			} else {
-				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.TabletAlias); err != nil {
-					return err
-				}
+			if err := m.TabletAlias.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
 			}
 			iNdEx = postIndex
 		default:
@@ -16734,16 +15391,8 @@ func (m *GetTabletResponse) UnmarshalVT(dAtA []byte) error {
 			if m.Tablet == nil {
 				m.Tablet = &topodata.Tablet{}
 			}
-			if unmarshal, ok := interface{}(m.Tablet).(interface {
-				UnmarshalVT([]byte) error
-			}); ok {
-				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-					return err
-				}
-			} else {
-				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.Tablet); err != nil {
-					return err
-				}
+			if err := m.Tablet.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
 			}
 			iNdEx = postIndex
 		default:
@@ -16943,16 +15592,8 @@ func (m *GetTabletsRequest) UnmarshalVT(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			m.TabletAliases = append(m.TabletAliases, &topodata.TabletAlias{})
-			if unmarshal, ok := interface{}(m.TabletAliases[len(m.TabletAliases)-1]).(interface {
-				UnmarshalVT([]byte) error
-			}); ok {
-				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-					return err
-				}
-			} else {
-				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.TabletAliases[len(m.TabletAliases)-1]); err != nil {
-					return err
-				}
+			if err := m.TabletAliases[len(m.TabletAliases)-1].UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
 			}
 			iNdEx = postIndex
 		default:
@@ -17036,16 +15677,8 @@ func (m *GetTabletsResponse) UnmarshalVT(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			m.Tablets = append(m.Tablets, &topodata.Tablet{})
-			if unmarshal, ok := interface{}(m.Tablets[len(m.Tablets)-1]).(interface {
-				UnmarshalVT([]byte) error
-			}); ok {
-				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-					return err
-				}
-			} else {
-				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.Tablets[len(m.Tablets)-1]); err != nil {
-					return err
-				}
+			if err := m.Tablets[len(m.Tablets)-1].UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
 			}
 			iNdEx = postIndex
 		default:
@@ -17214,16 +15847,8 @@ func (m *GetVSchemaResponse) UnmarshalVT(dAtA []byte) error {
 			if m.VSchema == nil {
 				m.VSchema = &vschema.Keyspace{}
 			}
-			if unmarshal, ok := interface{}(m.VSchema).(interface {
-				UnmarshalVT([]byte) error
-			}); ok {
-				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-					return err
-				}
-			} else {
-				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.VSchema); err != nil {
-					return err
-				}
+			if err := m.VSchema.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
 			}
 			iNdEx = postIndex
 		default:
@@ -17561,16 +16186,8 @@ func (m *InitShardPrimaryRequest) UnmarshalVT(dAtA []byte) error {
 			if m.PrimaryElectTabletAlias == nil {
 				m.PrimaryElectTabletAlias = &topodata.TabletAlias{}
 			}
-			if unmarshal, ok := interface{}(m.PrimaryElectTabletAlias).(interface {
-				UnmarshalVT([]byte) error
-			}); ok {
-				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-					return err
-				}
-			} else {
-				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.PrimaryElectTabletAlias); err != nil {
-					return err
-				}
+			if err := m.PrimaryElectTabletAlias.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
 			}
 			iNdEx = postIndex
 		case 4:
@@ -17625,16 +16242,8 @@ func (m *InitShardPrimaryRequest) UnmarshalVT(dAtA []byte) error {
 			if m.WaitReplicasTimeout == nil {
 				m.WaitReplicasTimeout = &vttime.Duration{}
 			}
-			if unmarshal, ok := interface{}(m.WaitReplicasTimeout).(interface {
-				UnmarshalVT([]byte) error
-			}); ok {
-				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-					return err
-				}
-			} else {
-				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.WaitReplicasTimeout); err != nil {
-					return err
-				}
+			if err := m.WaitReplicasTimeout.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
 			}
 			iNdEx = postIndex
 		default:
@@ -17718,16 +16327,8 @@ func (m *InitShardPrimaryResponse) UnmarshalVT(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			m.Events = append(m.Events, &logutil.Event{})
-			if unmarshal, ok := interface{}(m.Events[len(m.Events)-1]).(interface {
-				UnmarshalVT([]byte) error
-			}); ok {
-				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-					return err
-				}
-			} else {
-				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.Events[len(m.Events)-1]); err != nil {
-					return err
-				}
+			if err := m.Events[len(m.Events)-1].UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
 			}
 			iNdEx = postIndex
 		default:
@@ -17877,16 +16478,8 @@ func (m *PlannedReparentShardRequest) UnmarshalVT(dAtA []byte) error {
 			if m.NewPrimary == nil {
 				m.NewPrimary = &topodata.TabletAlias{}
 			}
-			if unmarshal, ok := interface{}(m.NewPrimary).(interface {
-				UnmarshalVT([]byte) error
-			}); ok {
-				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-					return err
-				}
-			} else {
-				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.NewPrimary); err != nil {
-					return err
-				}
+			if err := m.NewPrimary.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
 			}
 			iNdEx = postIndex
 		case 4:
@@ -17921,16 +16514,8 @@ func (m *PlannedReparentShardRequest) UnmarshalVT(dAtA []byte) error {
 			if m.AvoidPrimary == nil {
 				m.AvoidPrimary = &topodata.TabletAlias{}
 			}
-			if unmarshal, ok := interface{}(m.AvoidPrimary).(interface {
-				UnmarshalVT([]byte) error
-			}); ok {
-				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-					return err
-				}
-			} else {
-				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.AvoidPrimary); err != nil {
-					return err
-				}
+			if err := m.AvoidPrimary.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
 			}
 			iNdEx = postIndex
 		case 5:
@@ -17965,16 +16550,8 @@ func (m *PlannedReparentShardRequest) UnmarshalVT(dAtA []byte) error {
 			if m.WaitReplicasTimeout == nil {
 				m.WaitReplicasTimeout = &vttime.Duration{}
 			}
-			if unmarshal, ok := interface{}(m.WaitReplicasTimeout).(interface {
-				UnmarshalVT([]byte) error
-			}); ok {
-				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-					return err
-				}
-			} else {
-				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.WaitReplicasTimeout); err != nil {
-					return err
-				}
+			if err := m.WaitReplicasTimeout.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
 			}
 			iNdEx = postIndex
 		default:
@@ -18124,16 +16701,8 @@ func (m *PlannedReparentShardResponse) UnmarshalVT(dAtA []byte) error {
 			if m.PromotedPrimary == nil {
 				m.PromotedPrimary = &topodata.TabletAlias{}
 			}
-			if unmarshal, ok := interface{}(m.PromotedPrimary).(interface {
-				UnmarshalVT([]byte) error
-			}); ok {
-				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-					return err
-				}
-			} else {
-				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.PromotedPrimary); err != nil {
-					return err
-				}
+			if err := m.PromotedPrimary.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
 			}
 			iNdEx = postIndex
 		case 4:
@@ -18166,16 +16735,8 @@ func (m *PlannedReparentShardResponse) UnmarshalVT(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			m.Events = append(m.Events, &logutil.Event{})
-			if unmarshal, ok := interface{}(m.Events[len(m.Events)-1]).(interface {
-				UnmarshalVT([]byte) error
-			}); ok {
-				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-					return err
-				}
-			} else {
-				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.Events[len(m.Events)-1]); err != nil {
-					return err
-				}
+			if err := m.Events[len(m.Events)-1].UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
 			}
 			iNdEx = postIndex
 		default:
@@ -18395,16 +16956,8 @@ func (m *RefreshStateRequest) UnmarshalVT(dAtA []byte) error {
 			if m.TabletAlias == nil {
 				m.TabletAlias = &topodata.TabletAlias{}
 			}
-			if unmarshal, ok := interface{}(m.TabletAlias).(interface {
-				UnmarshalVT([]byte) error
-			}); ok {
-				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-					return err
-				}
-			} else {
-				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.TabletAlias); err != nil {
-					return err
-				}
+			if err := m.TabletAlias.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
 			}
 			iNdEx = postIndex
 		default:
@@ -19203,16 +17756,8 @@ func (m *ReparentTabletRequest) UnmarshalVT(dAtA []byte) error {
 			if m.Tablet == nil {
 				m.Tablet = &topodata.TabletAlias{}
 			}
-			if unmarshal, ok := interface{}(m.Tablet).(interface {
-				UnmarshalVT([]byte) error
-			}); ok {
-				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-					return err
-				}
-			} else {
-				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.Tablet); err != nil {
-					return err
-				}
+			if err := m.Tablet.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
 			}
 			iNdEx = postIndex
 		default:
@@ -19362,16 +17907,8 @@ func (m *ReparentTabletResponse) UnmarshalVT(dAtA []byte) error {
 			if m.Primary == nil {
 				m.Primary = &topodata.TabletAlias{}
 			}
-			if unmarshal, ok := interface{}(m.Primary).(interface {
-				UnmarshalVT([]byte) error
-			}); ok {
-				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-					return err
-				}
-			} else {
-				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.Primary); err != nil {
-					return err
-				}
+			if err := m.Primary.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
 			}
 			iNdEx = postIndex
 		default:
@@ -19648,16 +18185,8 @@ func (m *ShardReplicationPositionsResponse) UnmarshalVT(dAtA []byte) error {
 						return io.ErrUnexpectedEOF
 					}
 					mapvalue = &replicationdata.Status{}
-					if unmarshal, ok := interface{}(mapvalue).(interface {
-						UnmarshalVT([]byte) error
-					}); ok {
-						if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postmsgIndex]); err != nil {
-							return err
-						}
-					} else {
-						if err := proto.Unmarshal(dAtA[iNdEx:postmsgIndex], mapvalue); err != nil {
-							return err
-						}
+					if err := mapvalue.UnmarshalVT(dAtA[iNdEx:postmsgIndex]); err != nil {
+						return err
 					}
 					iNdEx = postmsgIndex
 				} else {
@@ -19785,16 +18314,8 @@ func (m *ShardReplicationPositionsResponse) UnmarshalVT(dAtA []byte) error {
 						return io.ErrUnexpectedEOF
 					}
 					mapvalue = &topodata.Tablet{}
-					if unmarshal, ok := interface{}(mapvalue).(interface {
-						UnmarshalVT([]byte) error
-					}); ok {
-						if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postmsgIndex]); err != nil {
-							return err
-						}
-					} else {
-						if err := proto.Unmarshal(dAtA[iNdEx:postmsgIndex], mapvalue); err != nil {
-							return err
-						}
+					if err := mapvalue.UnmarshalVT(dAtA[iNdEx:postmsgIndex]); err != nil {
+						return err
 					}
 					iNdEx = postmsgIndex
 				} else {
@@ -19897,16 +18418,8 @@ func (m *TabletExternallyReparentedRequest) UnmarshalVT(dAtA []byte) error {
 			if m.Tablet == nil {
 				m.Tablet = &topodata.TabletAlias{}
 			}
-			if unmarshal, ok := interface{}(m.Tablet).(interface {
-				UnmarshalVT([]byte) error
-			}); ok {
-				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-					return err
-				}
-			} else {
-				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.Tablet); err != nil {
-					return err
-				}
+			if err := m.Tablet.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
 			}
 			iNdEx = postIndex
 		default:
@@ -20056,16 +18569,8 @@ func (m *TabletExternallyReparentedResponse) UnmarshalVT(dAtA []byte) error {
 			if m.NewPrimary == nil {
 				m.NewPrimary = &topodata.TabletAlias{}
 			}
-			if unmarshal, ok := interface{}(m.NewPrimary).(interface {
-				UnmarshalVT([]byte) error
-			}); ok {
-				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-					return err
-				}
-			} else {
-				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.NewPrimary); err != nil {
-					return err
-				}
+			if err := m.NewPrimary.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
 			}
 			iNdEx = postIndex
 		case 4:
@@ -20100,16 +18605,8 @@ func (m *TabletExternallyReparentedResponse) UnmarshalVT(dAtA []byte) error {
 			if m.OldPrimary == nil {
 				m.OldPrimary = &topodata.TabletAlias{}
 			}
-			if unmarshal, ok := interface{}(m.OldPrimary).(interface {
-				UnmarshalVT([]byte) error
-			}); ok {
-				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-					return err
-				}
-			} else {
-				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.OldPrimary); err != nil {
-					return err
-				}
+			if err := m.OldPrimary.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
 			}
 			iNdEx = postIndex
 		default:
@@ -20227,16 +18724,8 @@ func (m *UpdateCellInfoRequest) UnmarshalVT(dAtA []byte) error {
 			if m.CellInfo == nil {
 				m.CellInfo = &topodata.CellInfo{}
 			}
-			if unmarshal, ok := interface{}(m.CellInfo).(interface {
-				UnmarshalVT([]byte) error
-			}); ok {
-				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-					return err
-				}
-			} else {
-				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.CellInfo); err != nil {
-					return err
-				}
+			if err := m.CellInfo.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
 			}
 			iNdEx = postIndex
 		default:
@@ -20354,16 +18843,8 @@ func (m *UpdateCellInfoResponse) UnmarshalVT(dAtA []byte) error {
 			if m.CellInfo == nil {
 				m.CellInfo = &topodata.CellInfo{}
 			}
-			if unmarshal, ok := interface{}(m.CellInfo).(interface {
-				UnmarshalVT([]byte) error
-			}); ok {
-				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-					return err
-				}
-			} else {
-				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.CellInfo); err != nil {
-					return err
-				}
+			if err := m.CellInfo.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
 			}
 			iNdEx = postIndex
 		default:
@@ -20481,16 +18962,8 @@ func (m *UpdateCellsAliasRequest) UnmarshalVT(dAtA []byte) error {
 			if m.CellsAlias == nil {
 				m.CellsAlias = &topodata.CellsAlias{}
 			}
-			if unmarshal, ok := interface{}(m.CellsAlias).(interface {
-				UnmarshalVT([]byte) error
-			}); ok {
-				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-					return err
-				}
-			} else {
-				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.CellsAlias); err != nil {
-					return err
-				}
+			if err := m.CellsAlias.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
 			}
 			iNdEx = postIndex
 		default:
@@ -20608,16 +19081,8 @@ func (m *UpdateCellsAliasResponse) UnmarshalVT(dAtA []byte) error {
 			if m.CellsAlias == nil {
 				m.CellsAlias = &topodata.CellsAlias{}
 			}
-			if unmarshal, ok := interface{}(m.CellsAlias).(interface {
-				UnmarshalVT([]byte) error
-			}); ok {
-				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-					return err
-				}
-			} else {
-				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.CellsAlias); err != nil {
-					return err
-				}
+			if err := m.CellsAlias.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
 			}
 			iNdEx = postIndex
 		default:
