@@ -126,7 +126,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/cellalias"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "12",
+			"Shard": "-1",
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -135,7 +135,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/preparestmt"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "12",
+			"Shard": "-1",
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -154,7 +154,7 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "12",
-			"RetryMax": 0,
+			"RetryMax": 1,
 			"Tags": []
 		},
 		"clustertest": {
@@ -171,7 +171,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/encryption/encryptedreplication"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "12",
+			"Shard": "-1",
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -180,7 +180,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/encryption/encryptedtransport"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "12",
+			"Shard": "-1",
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -216,7 +216,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/keyspace"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "12",
+			"Shard": "-1",
 			"RetryMax": 0,
 			"Tags": [
 				"site_test"
@@ -249,7 +249,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/mysqlctl"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "12",
+			"Shard": "-1",
 			"RetryMax": 0,
 			"Tags": [
 				"site_test"
@@ -260,7 +260,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/mysqlctld"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "12",
+			"Shard": "-1",
 			"RetryMax": 0,
 			"Tags": [
 				"site_test"
