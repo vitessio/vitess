@@ -151,6 +151,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4 plan same as above
 
 # scatter group by a text column, reuse existing weight_string
 "select count(*) k, a, textcol1, b from user group by a, textcol1, b order by k, textcol1"
