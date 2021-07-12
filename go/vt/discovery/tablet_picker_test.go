@@ -17,12 +17,9 @@ limitations under the License.
 package discovery
 
 import (
+	"context"
 	"testing"
 	"time"
-
-	"vitess.io/vitess/go/vt/log"
-
-	"context"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -37,7 +34,7 @@ import (
 func TestPickSimple(t *testing.T) {
 	te := newPickerTestEnv(t, []string{"cell"})
 	want := addTablet(te, 100, topodatapb.TabletType_REPLICA, "cell", true, true)
-	defer deleteTablet(te, want)
+	defer deleteTablet(t, te, want)
 
 	tp, err := NewTabletPicker(te.topoServ, te.cells, te.keyspace, te.shard, "replica")
 	require.NoError(t, err)
@@ -50,9 +47,9 @@ func TestPickSimple(t *testing.T) {
 func TestPickFromTwoHealthy(t *testing.T) {
 	te := newPickerTestEnv(t, []string{"cell"})
 	want1 := addTablet(te, 100, topodatapb.TabletType_REPLICA, "cell", true, true)
-	defer deleteTablet(te, want1)
+	defer deleteTablet(t, te, want1)
 	want2 := addTablet(te, 101, topodatapb.TabletType_RDONLY, "cell", true, true)
-	defer deleteTablet(te, want2)
+	defer deleteTablet(t, te, want2)
 
 	tp, err := NewTabletPicker(te.topoServ, te.cells, te.keyspace, te.shard, "replica,rdonly")
 	require.NoError(t, err)
@@ -73,12 +70,102 @@ func TestPickFromTwoHealthy(t *testing.T) {
 	assert.True(t, picked2)
 }
 
+func TestPickInOrder1(t *testing.T) {
+	te := newPickerTestEnv(t, []string{"cell"})
+	want1 := addTablet(te, 100, topodatapb.TabletType_REPLICA, "cell", true, true)
+	defer deleteTablet(t, te, want1)
+	want2 := addTablet(te, 101, topodatapb.TabletType_RDONLY, "cell", true, true)
+	defer deleteTablet(t, te, want2)
+
+	tp, err := NewTabletPicker(te.topoServ, te.cells, te.keyspace, te.shard, "in_order:replica,rdonly")
+	require.NoError(t, err)
+
+	// In 20 attempts, we always pick the first healthy tablet in order
+	var picked1, picked2 bool
+	for i := 0; i < 20; i++ {
+		tablet, err := tp.PickForStreaming(context.Background())
+		require.NoError(t, err)
+		if proto.Equal(tablet, want1) {
+			picked1 = true
+		}
+		if proto.Equal(tablet, want2) {
+			picked2 = true
+		}
+	}
+	assert.True(t, picked1)
+	assert.False(t, picked2)
+}
+
+func TestPickInOrder2(t *testing.T) {
+	te := newPickerTestEnv(t, []string{"cell"})
+	want1 := addTablet(te, 100, topodatapb.TabletType_REPLICA, "cell", true, true)
+	defer deleteTablet(t, te, want1)
+	want2 := addTablet(te, 101, topodatapb.TabletType_RDONLY, "cell", true, true)
+	defer deleteTablet(t, te, want2)
+
+	tp, err := NewTabletPicker(te.topoServ, te.cells, te.keyspace, te.shard, "in_order:rdonly,replica")
+	require.NoError(t, err)
+
+	// In 20 attempts, we always pick the first healthy tablet in order
+	var picked1, picked2 bool
+	for i := 0; i < 20; i++ {
+		tablet, err := tp.PickForStreaming(context.Background())
+		require.NoError(t, err)
+		if proto.Equal(tablet, want1) {
+			picked1 = true
+		}
+		if proto.Equal(tablet, want2) {
+			picked2 = true
+		}
+	}
+	assert.False(t, picked1)
+	assert.True(t, picked2)
+}
+
+func TestPickInOrderMultipleInGroup(t *testing.T) {
+	te := newPickerTestEnv(t, []string{"cell"})
+	want1 := addTablet(te, 100, topodatapb.TabletType_REPLICA, "cell", true, true)
+	defer deleteTablet(t, te, want1)
+	want2 := addTablet(te, 101, topodatapb.TabletType_RDONLY, "cell", true, true)
+	defer deleteTablet(t, te, want2)
+	want3 := addTablet(te, 102, topodatapb.TabletType_RDONLY, "cell", true, true)
+	defer deleteTablet(t, te, want3)
+	want4 := addTablet(te, 103, topodatapb.TabletType_RDONLY, "cell", true, true)
+	defer deleteTablet(t, te, want4)
+
+	tp, err := NewTabletPicker(te.topoServ, te.cells, te.keyspace, te.shard, "in_order:rdonly,replica")
+	require.NoError(t, err)
+
+	// In 40 attempts, we pick each of the three RDONLY, but never the REPLICA
+	var picked1, picked2, picked3, picked4 bool
+	for i := 0; i < 40; i++ {
+		tablet, err := tp.PickForStreaming(context.Background())
+		require.NoError(t, err)
+		if proto.Equal(tablet, want1) {
+			picked1 = true
+		}
+		if proto.Equal(tablet, want2) {
+			picked2 = true
+		}
+		if proto.Equal(tablet, want3) {
+			picked3 = true
+		}
+		if proto.Equal(tablet, want4) {
+			picked4 = true
+		}
+	}
+	assert.False(t, picked1)
+	assert.True(t, picked2)
+	assert.True(t, picked3)
+	assert.True(t, picked4)
+}
+
 func TestPickRespectsTabletType(t *testing.T) {
 	te := newPickerTestEnv(t, []string{"cell"})
 	want := addTablet(te, 100, topodatapb.TabletType_REPLICA, "cell", true, true)
-	defer deleteTablet(te, want)
+	defer deleteTablet(t, te, want)
 	dont := addTablet(te, 101, topodatapb.TabletType_MASTER, "cell", true, true)
-	defer deleteTablet(te, dont)
+	defer deleteTablet(t, te, dont)
 
 	tp, err := NewTabletPicker(te.topoServ, te.cells, te.keyspace, te.shard, "replica,rdonly")
 	require.NoError(t, err)
@@ -95,7 +182,7 @@ func TestPickRespectsTabletType(t *testing.T) {
 func TestPickMultiCell(t *testing.T) {
 	te := newPickerTestEnv(t, []string{"cell", "otherCell"})
 	want := addTablet(te, 100, topodatapb.TabletType_REPLICA, "cell", true, true)
-	defer deleteTablet(te, want)
+	defer deleteTablet(t, te, want)
 
 	tp, err := NewTabletPicker(te.topoServ, te.cells, te.keyspace, te.shard, "replica")
 	require.NoError(t, err)
@@ -110,7 +197,7 @@ func TestPickMultiCell(t *testing.T) {
 func TestPickMaster(t *testing.T) {
 	te := newPickerTestEnv(t, []string{"cell", "otherCell"})
 	want := addTablet(te, 100, topodatapb.TabletType_MASTER, "cell", true, true)
-	defer deleteTablet(te, want)
+	defer deleteTablet(t, te, want)
 	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 	defer cancel()
 	_, err := te.topoServ.UpdateShardFields(ctx, te.keyspace, te.shard, func(si *topo.ShardInfo) error {
@@ -132,7 +219,7 @@ func TestPickMaster(t *testing.T) {
 func TestPickFromOtherCell(t *testing.T) {
 	te := newPickerTestEnv(t, []string{"cell", "otherCell"})
 	want := addTablet(te, 100, topodatapb.TabletType_REPLICA, "otherCell", true, true)
-	defer deleteTablet(te, want)
+	defer deleteTablet(t, te, want)
 
 	tp, err := NewTabletPicker(te.topoServ, te.cells, te.keyspace, te.shard, "replica")
 	require.NoError(t, err)
@@ -147,9 +234,9 @@ func TestPickFromOtherCell(t *testing.T) {
 func TestDontPickFromOtherCell(t *testing.T) {
 	te := newPickerTestEnv(t, []string{"cell", "otherCell"})
 	want1 := addTablet(te, 100, topodatapb.TabletType_REPLICA, "cell", true, true)
-	defer deleteTablet(te, want1)
+	defer deleteTablet(t, te, want1)
 	want2 := addTablet(te, 101, topodatapb.TabletType_REPLICA, "otherCell", true, true)
-	defer deleteTablet(te, want2)
+	defer deleteTablet(t, te, want2)
 
 	tp, err := NewTabletPicker(te.topoServ, []string{"cell"}, te.keyspace, te.shard, "replica")
 	require.NoError(t, err)
@@ -176,9 +263,9 @@ func TestDontPickFromOtherCell(t *testing.T) {
 func TestPickMultiCellTwoTablets(t *testing.T) {
 	te := newPickerTestEnv(t, []string{"cell", "otherCell"})
 	want1 := addTablet(te, 100, topodatapb.TabletType_REPLICA, "cell", true, true)
-	defer deleteTablet(te, want1)
+	defer deleteTablet(t, te, want1)
 	want2 := addTablet(te, 101, topodatapb.TabletType_REPLICA, "otherCell", true, true)
-	defer deleteTablet(te, want2)
+	defer deleteTablet(t, te, want2)
 
 	tp, err := NewTabletPicker(te.topoServ, te.cells, te.keyspace, te.shard, "replica")
 	require.NoError(t, err)
@@ -205,9 +292,9 @@ func TestPickMultiCellTwoTablets(t *testing.T) {
 func TestPickMultiCellTwoTabletTypes(t *testing.T) {
 	te := newPickerTestEnv(t, []string{"cell", "otherCell"})
 	want1 := addTablet(te, 100, topodatapb.TabletType_REPLICA, "cell", true, true)
-	defer deleteTablet(te, want1)
+	defer deleteTablet(t, te, want1)
 	want2 := addTablet(te, 101, topodatapb.TabletType_RDONLY, "otherCell", true, true)
-	defer deleteTablet(te, want2)
+	defer deleteTablet(t, te, want2)
 
 	tp, err := NewTabletPicker(te.topoServ, te.cells, te.keyspace, te.shard, "replica,rdonly")
 	require.NoError(t, err)
@@ -235,7 +322,7 @@ func TestPickUsingCellAlias(t *testing.T) {
 	// test env puts all cells into an alias called "cella"
 	te := newPickerTestEnv(t, []string{"cell", "otherCell"})
 	want1 := addTablet(te, 100, topodatapb.TabletType_REPLICA, "cell", true, true)
-	defer deleteTablet(te, want1)
+	defer deleteTablet(t, te, want1)
 
 	tp, err := NewTabletPicker(te.topoServ, []string{"cella"}, te.keyspace, te.shard, "replica")
 	require.NoError(t, err)
@@ -247,9 +334,9 @@ func TestPickUsingCellAlias(t *testing.T) {
 	assert.True(t, proto.Equal(want1, tablet), "Pick: %v, want %v", tablet, want1)
 
 	// create a tablet in the other cell, it should be picked
-	deleteTablet(te, want1)
+	deleteTablet(t, te, want1)
 	want2 := addTablet(te, 101, topodatapb.TabletType_REPLICA, "otherCell", true, true)
-	defer deleteTablet(te, want2)
+	defer deleteTablet(t, te, want2)
 	ctx2, cancel2 := context.WithTimeout(context.Background(), 200*time.Millisecond)
 	defer cancel2()
 	tablet, err = tp.PickForStreaming(ctx2)
@@ -299,7 +386,7 @@ func TestTabletAppearsDuringSleep(t *testing.T) {
 	}()
 
 	want := addTablet(te, 100, topodatapb.TabletType_REPLICA, "cell", true, true)
-	defer deleteTablet(te, want)
+	defer deleteTablet(t, te, want)
 	got := <-result
 	require.NotNil(t, got, "Tablet should not be nil")
 	assert.True(t, proto.Equal(want, got), "Pick: %v, want %v", got, want)
@@ -324,7 +411,7 @@ func TestPickError(t *testing.T) {
 	_, err = tp.PickForStreaming(ctx)
 	require.EqualError(t, err, "context has expired")
 	// no tablets of the correct type
-	defer deleteTablet(te, addTablet(te, 200, topodatapb.TabletType_RDONLY, "cell", true, true))
+	defer deleteTablet(t, te, addTablet(te, 200, topodatapb.TabletType_RDONLY, "cell", true, true))
 	ctx, cancel = context.WithTimeout(context.Background(), 20*time.Millisecond)
 	defer cancel()
 	_, err = tp.PickForStreaming(ctx)
@@ -395,18 +482,16 @@ func addTablet(te *pickerTestEnv, id int, tabletType topodatapb.TabletType, cell
 	return tablet
 }
 
-func deleteTablet(te *pickerTestEnv, tablet *topodatapb.Tablet) {
-
+func deleteTablet(t *testing.T, te *pickerTestEnv, tablet *topodatapb.Tablet) {
 	if tablet == nil {
 		return
 	}
-	//log error
-	if err := te.topoServ.DeleteTablet(context.Background(), tablet.Alias); err != nil {
-		log.Errorf("failed to DeleteTablet with alias : %v", err)
+	{ //log error
+		err := te.topoServ.DeleteTablet(context.Background(), tablet.Alias)
+		require.NoError(t, err, "failed to DeleteTablet with alias: %v", err)
 	}
-
-	//This is not automatically removed from shard replication, which results in log spam and log error
-	if err := topo.DeleteTabletReplicationData(context.Background(), te.topoServ, tablet); err != nil {
-		log.Errorf("failed to automatically remove from shard replication: %v", err)
+	{ //This is not automatically removed from shard replication, which results in log spam and log error
+		err := topo.DeleteTabletReplicationData(context.Background(), te.topoServ, tablet)
+		require.NoError(t, err, "failed to automatically remove from shard replication: %v", err)
 	}
 }
