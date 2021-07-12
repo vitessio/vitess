@@ -23163,28 +23163,8 @@ export namespace vtrpc {
         DATA_LOSS = 15
     }
 
-    /** LegacyErrorCode enum. */
-    enum LegacyErrorCode {
-        SUCCESS_LEGACY = 0,
-        CANCELLED_LEGACY = 1,
-        UNKNOWN_ERROR_LEGACY = 2,
-        BAD_INPUT_LEGACY = 3,
-        DEADLINE_EXCEEDED_LEGACY = 4,
-        INTEGRITY_ERROR_LEGACY = 5,
-        PERMISSION_DENIED_LEGACY = 6,
-        RESOURCE_EXHAUSTED_LEGACY = 7,
-        QUERY_NOT_SERVED_LEGACY = 8,
-        NOT_IN_TX_LEGACY = 9,
-        INTERNAL_ERROR_LEGACY = 10,
-        TRANSIENT_ERROR_LEGACY = 11,
-        UNAUTHENTICATED_LEGACY = 12
-    }
-
     /** Properties of a RPCError. */
     interface IRPCError {
-
-        /** RPCError legacy_code */
-        legacy_code?: (vtrpc.LegacyErrorCode|null);
 
         /** RPCError message */
         message?: (string|null);
@@ -23201,9 +23181,6 @@ export namespace vtrpc {
          * @param [properties] Properties to set
          */
         constructor(properties?: vtrpc.IRPCError);
-
-        /** RPCError legacy_code. */
-        public legacy_code: vtrpc.LegacyErrorCode;
 
         /** RPCError message. */
         public message: string;

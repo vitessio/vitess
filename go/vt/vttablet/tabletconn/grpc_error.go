@@ -47,9 +47,5 @@ func ErrorFromVTRPC(err *vtrpcpb.RPCError) error {
 	if err == nil {
 		return nil
 	}
-	code := err.Code
-	if code == vtrpcpb.Code_OK {
-		code = vterrors.LegacyErrorCodeToCode(err.LegacyCode)
-	}
-	return vterrors.Errorf(code, "vttablet: %s", err.Message)
+	return vterrors.Errorf(err.Code, "vttablet: %s", err.Message)
 }
