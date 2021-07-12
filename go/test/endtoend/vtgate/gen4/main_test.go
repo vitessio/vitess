@@ -35,6 +35,13 @@ var (
 	col bigint,
 	primary key(id)
 ) Engine=InnoDB;
+
+create table t2(
+	id bigint,
+	tcol1 varchar(50),
+	tcol2 varchar(50),
+	primary key(id)
+) Engine=InnoDB;
 `
 
 	VSchema = `
@@ -51,6 +58,20 @@ var (
         {
           "column": "id",
           "name": "xxhash"
+        }
+      ]
+    },
+    "t2": {
+      "column_vindexes": [
+        {
+          "column": "id",
+          "name": "xxhash"
+        }
+      ],
+      "columns": [
+        {
+          "name": "tcol1",
+          "type": "VARCHAR"
         }
       ]
     }
@@ -84,7 +105,7 @@ func TestMain(m *testing.M) {
 		}
 
 		// Start vtgate
-		clusterInstance.VtGateExtraArgs = []string{"-planner_version", "Gen4Fallback"} // enable Gen4 planner.
+		clusterInstance.VtGateExtraArgs = []string{"-planner_version", "Gen4"} // enable Gen4 planner.
 		err = clusterInstance.StartVtgate()
 		if err != nil {
 			return 1

@@ -174,30 +174,48 @@ func planHorizon(sel *sqlparser.Select, plan logicalPlan, semTable *semantics.Se
 		return nil, err
 	}
 
+	var needsTruncation bool
 	if qp.HasAggr {
-		plan, err = planAggregations(qp, plan, semTable)
+		plan, needsTruncation, err = planAggregations(qp, plan, semTable)
 		if err != nil {
 			return nil, err
 		}
 	} else {
 		for _, e := range qp.SelectExprs {
-			if _, _, err := pushProjection(e.Col, plan, semTable, true); err != nil {
+			if _, _, err := pushProjection(e.Col, plan, semTable, true, false); err != nil {
 				return nil, err
 			}
 		}
 	}
 
 	if len(qp.OrderExprs) > 0 {
-		plan, err = planOrderBy(qp, qp.OrderExprs, plan, semTable)
+		var colAdded bool
+		plan, colAdded, err = planOrderBy(qp, qp.OrderExprs, plan, semTable)
 		if err != nil {
 			return nil, err
 		}
+		needsTruncation = needsTruncation || colAdded
 	}
 
 	if qp.HasAggr {
-		plan, err = planOrderByUsingGroupBy(qp, plan, semTable)
+		var colAdded bool
+		plan, colAdded, err = planOrderByUsingGroupBy(qp, plan, semTable)
 		if err != nil {
 			return nil, err
+		}
+		needsTruncation = needsTruncation || colAdded
+	}
+
+	if needsTruncation {
+		switch p := plan.(type) {
+		case *route:
+			p.eroute.SetTruncateColumnCount(sel.GetColumnCount())
+		case *orderedAggregate:
+			p.eaggr.SetTruncateColumnCount(sel.GetColumnCount())
+		case *memorySort:
+			p.truncater.SetTruncateColumnCount(sel.GetColumnCount())
+		default:
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "plan type not known for column truncation: %T", plan)
 		}
 	}
 
