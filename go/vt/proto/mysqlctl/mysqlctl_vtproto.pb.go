@@ -6,7 +6,6 @@ package mysqlctl
 
 import (
 	fmt "fmt"
-	proto "google.golang.org/protobuf/proto"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	io "io"
 	bits "math/bits"
@@ -413,46 +412,22 @@ func (m *BackupInfo) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		dAtA[i] = 0x3a
 	}
 	if m.Time != nil {
-		if marshalto, ok := interface{}(m.Time).(interface {
-			MarshalToSizedBufferVT([]byte) (int, error)
-		}); ok {
-			size, err := marshalto.MarshalToSizedBufferVT(dAtA[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= size
-			i = encodeVarint(dAtA, i, uint64(size))
-		} else {
-			encoded, err := proto.Marshal(m.Time)
-			if err != nil {
-				return 0, err
-			}
-			i -= len(encoded)
-			copy(dAtA[i:], encoded)
-			i = encodeVarint(dAtA, i, uint64(len(encoded)))
+		size, err := m.Time.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
 		}
+		i -= size
+		i = encodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0x32
 	}
 	if m.TabletAlias != nil {
-		if marshalto, ok := interface{}(m.TabletAlias).(interface {
-			MarshalToSizedBufferVT([]byte) (int, error)
-		}); ok {
-			size, err := marshalto.MarshalToSizedBufferVT(dAtA[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= size
-			i = encodeVarint(dAtA, i, uint64(size))
-		} else {
-			encoded, err := proto.Marshal(m.TabletAlias)
-			if err != nil {
-				return 0, err
-			}
-			i -= len(encoded)
-			copy(dAtA[i:], encoded)
-			i = encodeVarint(dAtA, i, uint64(len(encoded)))
+		size, err := m.TabletAlias.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
 		}
+		i -= size
+		i = encodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0x2a
 	}
@@ -650,23 +625,11 @@ func (m *BackupInfo) SizeVT() (n int) {
 		n += 1 + l + sov(uint64(l))
 	}
 	if m.TabletAlias != nil {
-		if size, ok := interface{}(m.TabletAlias).(interface {
-			SizeVT() int
-		}); ok {
-			l = size.SizeVT()
-		} else {
-			l = proto.Size(m.TabletAlias)
-		}
+		l = m.TabletAlias.SizeVT()
 		n += 1 + l + sov(uint64(l))
 	}
 	if m.Time != nil {
-		if size, ok := interface{}(m.Time).(interface {
-			SizeVT() int
-		}); ok {
-			l = size.SizeVT()
-		} else {
-			l = proto.Size(m.Time)
-		}
+		l = m.Time.SizeVT()
 		n += 1 + l + sov(uint64(l))
 	}
 	l = len(m.Engine)
@@ -1439,16 +1402,8 @@ func (m *BackupInfo) UnmarshalVT(dAtA []byte) error {
 			if m.TabletAlias == nil {
 				m.TabletAlias = &topodata.TabletAlias{}
 			}
-			if unmarshal, ok := interface{}(m.TabletAlias).(interface {
-				UnmarshalVT([]byte) error
-			}); ok {
-				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-					return err
-				}
-			} else {
-				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.TabletAlias); err != nil {
-					return err
-				}
+			if err := m.TabletAlias.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
 			}
 			iNdEx = postIndex
 		case 6:
@@ -1483,16 +1438,8 @@ func (m *BackupInfo) UnmarshalVT(dAtA []byte) error {
 			if m.Time == nil {
 				m.Time = &vttime.Time{}
 			}
-			if unmarshal, ok := interface{}(m.Time).(interface {
-				UnmarshalVT([]byte) error
-			}); ok {
-				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-					return err
-				}
-			} else {
-				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.Time); err != nil {
-					return err
-				}
+			if err := m.Time.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
 			}
 			iNdEx = postIndex
 		case 7:
