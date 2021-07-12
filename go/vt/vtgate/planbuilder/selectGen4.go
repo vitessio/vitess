@@ -179,6 +179,27 @@ func planGroupByGen4(groupExpr sqlparser.Expr, plan logicalPlan, semTable *seman
 	}
 }
 
+func planOrderByUsingGroupBy(qp *abstract.QueryProjection, plan logicalPlan, semTable *semantics.SemTable) (logicalPlan, error) {
+	var orderExprs []abstract.OrderBy
+	for _, groupExpr := range qp.GroupByExprs {
+		addExpr := true
+		for _, orderExpr := range qp.OrderExprs {
+			if sqlparser.EqualsExpr(groupExpr, orderExpr.Inner.Expr) {
+				addExpr = false
+				break
+			}
+		}
+		if addExpr {
+			// TODO: add weight string expr
+			orderExprs = append(orderExprs, abstract.OrderBy{Inner: &sqlparser.Order{Expr: groupExpr}})
+		}
+	}
+	if len(orderExprs) > 0 {
+		return planOrderBy(qp, orderExprs, plan, semTable)
+	}
+	return plan, nil
+}
+
 func planOrderBy(qp *abstract.QueryProjection, orderExprs []abstract.OrderBy, plan logicalPlan, semTable *semantics.SemTable) (logicalPlan, error) {
 	switch plan := plan.(type) {
 	case *route:
@@ -193,7 +214,6 @@ func planOrderBy(qp *abstract.QueryProjection, orderExprs []abstract.OrderBy, pl
 		plan.input = newInput
 
 		return plan, nil
-
 	default:
 		return nil, semantics.Gen4NotSupportedF("ordering on complex query")
 	}

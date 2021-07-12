@@ -194,6 +194,13 @@ func planHorizon(sel *sqlparser.Select, plan logicalPlan, semTable *semantics.Se
 		}
 	}
 
+	if qp.HasAggr {
+		plan, err = planOrderByUsingGroupBy(qp, plan, semTable)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	return plan, nil
 }
 
