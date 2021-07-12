@@ -271,15 +271,15 @@ func TestInitialSharding(t *testing.T, keyspace *cluster.Keyspace, keyType query
 		err = ClusterInstance.VtctlclientProcess.InitShardMaster(keyspace.Name, shard1.Name, cell, shard1MasterTablet.TabletUID)
 		require.NoError(t, err)
 	} else {
-		err = shard1.Replica().VttabletProcess.WaitForTabletType("SERVING")
+		err = shard1.Replica().VttabletProcess.WaitForTabletStatus("SERVING")
 		require.NoError(t, err)
 		_, err = ClusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("TabletExternallyReparented", shard1MasterTablet.Alias)
 		require.NoError(t, err)
 	}
 
-	err = shard1.Replica().VttabletProcess.WaitForTabletType("SERVING")
+	err = shard1.Replica().VttabletProcess.WaitForTabletStatus("SERVING")
 	require.NoError(t, err)
-	err = shard1.Rdonly().VttabletProcess.WaitForTabletType("SERVING")
+	err = shard1.Rdonly().VttabletProcess.WaitForTabletStatus("SERVING")
 	require.NoError(t, err)
 	for _, vttablet := range shard1.Vttablets {
 		assert.Equal(t, vttablet.VttabletProcess.GetTabletStatus(), "SERVING")
@@ -352,8 +352,8 @@ func TestInitialSharding(t *testing.T, keyspace *cluster.Keyspace, keyType query
 		_ = ClusterInstance.VtctlclientProcess.ApplyVSchema(keyspaceName, fmt.Sprintf(vSchema, tableName, "id"))
 
 		for _, shard := range []cluster.Shard{shard21, shard22} {
-			_ = shard.Replica().VttabletProcess.WaitForTabletType("SERVING")
-			_ = shard.Rdonly().VttabletProcess.WaitForTabletType("SERVING")
+			_ = shard.Replica().VttabletProcess.WaitForTabletStatus("SERVING")
+			_ = shard.Rdonly().VttabletProcess.WaitForTabletStatus("SERVING")
 		}
 
 		for _, shard := range []cluster.Shard{shard21, shard22} {
@@ -526,8 +526,8 @@ func TestInitialSharding(t *testing.T, keyspace *cluster.Keyspace, keyType query
 	expectedPartitions[topodata.TabletType_RDONLY] = []string{shard21.Name, shard22.Name}
 	checkSrvKeyspaceForSharding(t, keyspaceName, expectedPartitions)
 
-	_ = shard21.Rdonly().VttabletProcess.WaitForTabletType("SERVING")
-	_ = shard22.Rdonly().VttabletProcess.WaitForTabletType("SERVING")
+	_ = shard21.Rdonly().VttabletProcess.WaitForTabletStatus("SERVING")
+	_ = shard22.Rdonly().VttabletProcess.WaitForTabletStatus("SERVING")
 
 	_ = vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.rdonly", keyspaceName, shard21.Name), 1)
 	_ = vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.rdonly", keyspaceName, shard22.Name), 1)

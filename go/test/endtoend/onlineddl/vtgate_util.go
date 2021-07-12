@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"os"
 	"testing"
+	"time"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
@@ -137,6 +138,36 @@ func CheckMigrationStatus(t *testing.T, vtParams *mysql.ConnParams, shards []clu
 		}
 	}
 	assert.Equal(t, len(shards), count)
+}
+
+// WaitForMigrationStatus waits for a migration to reach either provided statuses (returns immediately), or eventually time out
+func WaitForMigrationStatus(t *testing.T, vtParams *mysql.ConnParams, shards []cluster.Shard, uuid string, timeout time.Duration, expectStatuses ...schema.OnlineDDLStatus) schema.OnlineDDLStatus {
+	query, err := sqlparser.ParseAndBind("show vitess_migrations like %a",
+		sqltypes.StringBindVariable(uuid),
+	)
+	require.NoError(t, err)
+
+	statusesMap := map[string]bool{}
+	for _, status := range expectStatuses {
+		statusesMap[string(status)] = true
+	}
+	startTime := time.Now()
+	lastKnownStatus := ""
+	for time.Since(startTime) < timeout {
+		countMatchedShards := 0
+		r := VtgateExecQuery(t, vtParams, query, "")
+		for _, row := range r.Named().Rows {
+			lastKnownStatus = row["migration_status"].ToString()
+			if row["migration_uuid"].ToString() == uuid && statusesMap[lastKnownStatus] {
+				countMatchedShards++
+			}
+		}
+		if countMatchedShards == len(shards) {
+			return schema.OnlineDDLStatus(lastKnownStatus)
+		}
+		time.Sleep(1 * time.Second)
+	}
+	return schema.OnlineDDLStatus(lastKnownStatus)
 }
 
 // CheckMigrationArtifacts verifies given migration exists, and checks if it has artifacts

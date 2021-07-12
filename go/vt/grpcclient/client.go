@@ -19,6 +19,7 @@ limitations under the License.
 package grpcclient
 
 import (
+	"context"
 	"flag"
 	"time"
 
@@ -58,6 +59,16 @@ func RegisterGRPCDialOptions(grpcDialOptionsFunc func(opts []grpc.DialOption) ([
 // failFast is a non-optional parameter because callers are required to specify
 // what that should be.
 func Dial(target string, failFast FailFast, opts ...grpc.DialOption) (*grpc.ClientConn, error) {
+	return DialContext(context.Background(), target, failFast, opts...)
+}
+
+// DialContext creates a grpc connection to the given target. Setup steps are
+// covered by the context deadline, and, if WithBlock is specified in the dial
+// options, connection establishment steps are covered by the context as well.
+//
+// failFast is a non-optional parameter because callers are required to specify
+// what that should be.
+func DialContext(ctx context.Context, target string, failFast FailFast, opts ...grpc.DialOption) (*grpc.ClientConn, error) {
 	grpccommon.EnableTracingOpt()
 	newopts := []grpc.DialOption{
 		grpc.WithDefaultCallOptions(
@@ -98,7 +109,7 @@ func Dial(target string, failFast FailFast, opts ...grpc.DialOption) (*grpc.Clie
 
 	newopts = append(newopts, interceptors()...)
 
-	return grpc.Dial(target, newopts...)
+	return grpc.DialContext(ctx, target, newopts...)
 }
 
 func interceptors() []grpc.DialOption {

@@ -46,6 +46,7 @@ type (
 		SetLimit(*Limit)
 		SetLock(lock Lock)
 		MakeDistinct()
+		GetColumnCount() int
 	}
 
 	// DDLStatement represents any DDL Statement

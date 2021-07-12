@@ -149,7 +149,7 @@ func TestUnShardedRecoveryAfterSharding(t *testing.T) {
 	shardedTablets := []*cluster.Vttablet{shard0Master, shard0Replica, shard0RdOnly, shard1Master, shard1Replica, shard1RdOnly}
 
 	for _, tablet := range shardedTablets {
-		_ = tablet.VttabletProcess.WaitForTabletType("SERVING")
+		_ = tablet.VttabletProcess.WaitForTabletStatus("SERVING")
 		require.NoError(t, err)
 	}
 
@@ -288,7 +288,7 @@ func TestShardedRecovery(t *testing.T) {
 	require.NoError(t, err)
 
 	for _, tablet := range shardedTablets {
-		_ = tablet.VttabletProcess.WaitForTabletType("SERVING")
+		_ = tablet.VttabletProcess.WaitForTabletStatus("SERVING")
 		require.NoError(t, err)
 	}
 

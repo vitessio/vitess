@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"google.golang.org/protobuf/encoding/prototext"
@@ -41,8 +42,10 @@ import (
 )
 
 var (
-	ts              *topo.Server
-	clustersToWatch = flag.String("clusters_to_watch", "", "Comma-separated list of keyspaces or keyspace/shards that this instance will monitor and repair. Defaults to all clusters in the topology. Example: \"ks1,ks2/-80\"")
+	ts                *topo.Server
+	clustersToWatch   = flag.String("clusters_to_watch", "", "Comma-separated list of keyspaces or keyspace/shards that this instance will monitor and repair. Defaults to all clusters in the topology. Example: \"ks1,ks2/-80\"")
+	shutdownWaitTime  = flag.Duration("shutdown_wait_time", 30*time.Second, "maximum time to wait for vtorc to release all the locks that it is holding before shutting down on SIGTERM")
+	shardsLockCounter int32
 )
 
 // OpenTabletDiscovery opens the vitess topo if enables and returns a ticker
@@ -240,6 +243,10 @@ func LockShard(instanceKey inst.InstanceKey) (func(*error), error) {
 	if instanceKey.Hostname == "" {
 		return nil, errors.New("Can't lock shard: instance is unspecified")
 	}
+	val := atomic.LoadInt32(&hasReceivedSIGTERM)
+	if val > 0 {
+		return nil, errors.New("Can't lock shard: SIGTERM received")
+	}
 
 	tablet, err := inst.ReadTablet(instanceKey)
 	if err != nil {
@@ -247,8 +254,16 @@ func LockShard(instanceKey inst.InstanceKey) (func(*error), error) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(config.Config.LockShardTimeoutSeconds)*time.Second)
 	defer cancel()
+	atomic.AddInt32(&shardsLockCounter, 1)
 	_, unlock, err := ts.LockShard(ctx, tablet.Keyspace, tablet.Shard, "Orc Recovery")
-	return unlock, err
+	if err != nil {
+		atomic.AddInt32(&shardsLockCounter, -1)
+		return nil, err
+	}
+	return func(e *error) {
+		defer atomic.AddInt32(&shardsLockCounter, -1)
+		unlock(e)
+	}, nil
 }
 
 // TabletRefresh refreshes the tablet info.
