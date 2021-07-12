@@ -684,7 +684,7 @@ func (s *VtctldServer) GetBackups(ctx context.Context, req *vtctldatapb.GetBacku
 
 	backups := make([]*mysqlctlpb.BackupInfo, 0, totalBackups)
 	backupsToSkip := len(bhs) - totalBackups
-	backupsToSkipDetails := totalBackups - totalDetailedBackups
+	backupsToSkipDetails := len(bhs) - totalDetailedBackups
 
 	for i, bh := range bhs {
 		if i < backupsToSkip {

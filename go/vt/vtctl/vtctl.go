@@ -489,7 +489,7 @@ var commands = []commandGroup{
 		"Workflow", []command{
 			{"Workflow", commandWorkflow,
 				"<ks.workflow> <action> --dry-run",
-				"Start/Stop/Delete/Show/ListAll Workflow on all target tablets in workflow. Example: Workflow merchant.morders Start",
+				"Start/Stop/Delete/Show/ListAll/Tags Workflow on all target tablets in workflow. Example: Workflow merchant.morders Start",
 			},
 		},
 	},
@@ -2942,6 +2942,9 @@ func commandOnlineDDL(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag
 		}
 	case "revert":
 		{
+			deprecationMessage := `OnlineDDL 'revert' command will be deprecated in version v12. Use "REVERT VITESS_MIGRATION '<uuid>'" SQL command`
+			log.Warningf(deprecationMessage)
+
 			if arg == "" {
 				return fmt.Errorf("UUID required")
 			}
@@ -3445,6 +3448,9 @@ func commandHelp(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Flag
 }
 
 func commandVExec(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	deprecationMessage := `VExec command will be deprecated in version v12. For Online DDL control, use "vtctl OnlineDDL" commands or SQL syntax`
+	log.Warningf(deprecationMessage)
+
 	json := subFlags.Bool("json", false, "Output JSON instead of human-readable table")
 	dryRun := subFlags.Bool("dry_run", false, "Does a dry run of VExec and only reports the final query and list of masters on which it will be applied")
 	if err := subFlags.Parse(args); err != nil {
@@ -3485,8 +3491,8 @@ func commandWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
-	if subFlags.NArg() != 2 {
-		return fmt.Errorf("usage: Workflow --dry-run keyspace[.workflow] start/stop/delete/list/listall")
+	if subFlags.NArg() < 2 {
+		return fmt.Errorf("usage: Workflow --dry-run keyspace[.workflow] start/stop/delete/list/listall/tags [<tags>]")
 	}
 	keyspace := subFlags.Arg(0)
 	action := strings.ToLower(subFlags.Arg(1))
@@ -3506,14 +3512,30 @@ func commandWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.
 	if err != nil {
 		wr.Logger().Errorf("Keyspace %s not found", keyspace)
 	}
+	var results map[*topo.TabletInfo]*sqltypes.Result
+	if action == "tags" {
+		tags := ""
+		if subFlags.NArg() != 3 {
+			return fmt.Errorf("tags incorrectly specified, usage: Workflow keyspace.workflow tags <tags>")
+		}
+		tags = strings.ToLower(subFlags.Arg(2))
+		results, err = wr.WorkflowTagAction(ctx, keyspace, workflow, tags)
+		if err != nil {
+			return err
+		}
+	} else {
+		if subFlags.NArg() != 2 {
+			return fmt.Errorf("usage: Workflow --dry-run keyspace[.workflow] start/stop/delete/list/listall")
+		}
+		results, err = wr.WorkflowAction(ctx, workflow, keyspace, action, *dryRun)
+		if err != nil {
+			return err
+		}
+		if action == "show" || action == "listall" {
+			return nil
+		}
+	}
 
-	results, err := wr.WorkflowAction(ctx, workflow, keyspace, action, *dryRun)
-	if err != nil {
-		return err
-	}
-	if action == "show" || action == "listall" {
-		return nil
-	}
 	if len(results) == 0 {
 		wr.Logger().Printf("no result returned\n")
 		return nil

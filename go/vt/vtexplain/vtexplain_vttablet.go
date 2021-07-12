@@ -23,6 +23,8 @@ import (
 	"strings"
 	"sync"
 
+	"vitess.io/vitess/go/vt/vttablet/onlineddl"
+
 	"context"
 
 	"vitess.io/vitess/go/mysql"
@@ -391,6 +393,13 @@ func newTabletEnvironment(ddls []sqlparser.DDLStatement, opts *Options) (*tablet
 			),
 			"Innodb_rows|0",
 		),
+	}
+
+	for _, query := range onlineddl.ApplyDDL {
+		tEnv.schemaQueries[query] = &sqltypes.Result{
+			Fields: []*querypb.Field{{Type: sqltypes.Uint64}},
+			Rows:   [][]sqltypes.Value{},
+		}
 	}
 
 	showTableRows := make([][]sqltypes.Value, 0, 4)
