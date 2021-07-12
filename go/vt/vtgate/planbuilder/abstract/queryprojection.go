@@ -37,13 +37,19 @@ type (
 	QueryProjection struct {
 		SelectExprs  []SelectExpr
 		HasAggr      bool
-		GroupByExprs sqlparser.Exprs
+		GroupByExprs []GroupBy
 		OrderExprs   []OrderBy
 	}
 
 	// OrderBy contains the expression to used in order by and also if ordering is needed at VTGate level then what the weight_string function expression to be sent down for evaluation.
 	OrderBy struct {
 		Inner         *sqlparser.Order
+		WeightStrExpr sqlparser.Expr
+	}
+
+	// GroupBy contains the expression to used in group by and also if grouping is needed at VTGate level then what the weight_string function expression to be sent down for evaluation.
+	GroupBy struct {
+		Inner         sqlparser.Expr
 		WeightStrExpr sqlparser.Expr
 	}
 )
@@ -85,10 +91,10 @@ func CreateQPFromSelect(sel *sqlparser.Select) (*QueryProjection, error) {
 		return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.MixOfGroupFuncAndFields, "Mixing of aggregation and non-aggregation columns is not allowed if there is no GROUP BY clause")
 	}
 
-	for _, expr := range sel.GroupBy {
+	for _, group := range sel.GroupBy {
 		// todo dont ignore weightstringexpr
-		e, _ := qp.getSimplifiedExpr(expr)
-		qp.GroupByExprs = append(qp.GroupByExprs, e)
+		expr, weightStrExpr := qp.getSimplifiedExpr(group)
+		qp.GroupByExprs = append(qp.GroupByExprs, GroupBy{Inner: expr, WeightStrExpr: weightStrExpr})
 	}
 
 	for _, order := range sel.OrderBy {
@@ -176,7 +182,7 @@ func (qp *QueryProjection) toString() string {
 	}
 
 	for _, expr := range qp.GroupByExprs {
-		out.Grouping = append(out.Grouping, sqlparser.String(expr))
+		out.Grouping = append(out.Grouping, sqlparser.String(expr.Inner))
 	}
 	for _, expr := range qp.OrderExprs {
 		out.OrderBy = append(out.OrderBy, sqlparser.String(expr.Inner))
