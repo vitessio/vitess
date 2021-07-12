@@ -32,6 +32,7 @@ import (
 	"vitess.io/vitess/go/vt/vtadmin/grpcserver"
 	vtadminhttp "vitess.io/vitess/go/vt/vtadmin/http"
 	"vitess.io/vitess/go/vt/vtadmin/http/debug"
+	"vitess.io/vitess/go/vt/vtadmin/rbac"
 )
 
 var (
@@ -40,6 +41,8 @@ var (
 	clusterConfigs       cluster.ClustersFlag
 	clusterFileConfig    cluster.FileConfig
 	defaultClusterConfig cluster.Config
+
+	rbacConfigPath string
 
 	traceCloser io.Closer = &noopCloser{}
 
@@ -97,6 +100,16 @@ func run(cmd *cobra.Command, args []string) {
 		fatal("must specify at least one cluster")
 	}
 
+	var rbacConfig *rbac.Config
+	if rbacConfigPath != "" {
+		cfg, err := rbac.LoadConfig(rbacConfigPath)
+		if err != nil {
+			fatal(err)
+		}
+
+		rbacConfig = cfg
+	}
+
 	for i, cfg := range configs {
 		cluster, err := cfg.Cluster()
 		if err != nil {
@@ -110,6 +123,7 @@ func run(cmd *cobra.Command, args []string) {
 	s := vtadmin.NewAPI(clusters, vtadmin.Options{
 		GRPCOpts: opts,
 		HTTPOpts: httpOpts,
+		RBAC:     rbacConfig,
 	})
 	bootSpan.Finish()
 
@@ -145,6 +159,9 @@ func main() {
 			"address for a tablet. Currently used to make passthrough "+
 			"requests to /debug/vars endpoints.",
 	)
+
+	// rbac flags
+	rootCmd.Flags().StringVar(&rbacConfigPath, "rbac-config", "rbac.yaml", "")
 
 	// glog flags, no better way to do this
 	rootCmd.Flags().AddGoFlag(flag.Lookup("v"))
