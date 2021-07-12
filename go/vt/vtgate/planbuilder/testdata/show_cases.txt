@@ -553,6 +553,7 @@ Gen4 plan same as above
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
     "Aggregates": "vgtid(1) AS global vgtid_executed",
+    "ResultColumns": 2,
     "Inputs": [
       {
         "OperatorType": "Send",

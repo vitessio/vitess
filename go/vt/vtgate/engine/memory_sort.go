@@ -183,6 +183,9 @@ func (ms *MemorySort) description() PrimitiveDescription {
 	if !value.IsNull() {
 		other["UpperLimit"] = value.String()
 	}
+	if ms.TruncateColumnCount > 0 {
+		other["ResultColumns"] = ms.TruncateColumnCount
+	}
 	return PrimitiveDescription{
 		OperatorType: "Sort",
 		Variant:      "Memory",

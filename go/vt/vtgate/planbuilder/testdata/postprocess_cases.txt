@@ -1427,11 +1427,13 @@ Gen4 plan same as above
     "OperatorType": "Sort",
     "Variant": "Memory",
     "OrderBy": "1 ASC",
+    "ResultColumns": 2,
     "Inputs": [
       {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
         "Aggregates": "count(0)",
+        "ResultColumns": 3,
         "Inputs": [
           {
             "OperatorType": "Route",
