@@ -185,6 +185,15 @@ func planOrderBy(qp *abstract.QueryProjection, orderExprs []abstract.OrderBy, pl
 		return planOrderByForRoute(orderExprs, plan, semTable)
 	case *joinGen4:
 		return planOrderByForJoin(qp, orderExprs, plan, semTable)
+	case *orderedAggregate:
+		newInput, err := planOrderBy(qp, orderExprs, plan.input, semTable)
+		if err != nil {
+			return nil, err
+		}
+		plan.input = newInput
+
+		return plan, nil
+
 	default:
 		return nil, semantics.Gen4NotSupportedF("ordering on complex query")
 	}
