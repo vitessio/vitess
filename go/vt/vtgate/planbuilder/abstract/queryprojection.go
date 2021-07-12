@@ -27,22 +27,28 @@ import (
 )
 
 type (
+	// SelectExpr provides whether the columns is aggregation expression or not.
 	SelectExpr struct {
 		Col  *sqlparser.AliasedExpr
 		Aggr bool
 	}
+
+	// QueryProjection  contains the information about the projections, group by and order by expressions used to do horizon planning.
 	QueryProjection struct {
 		SelectExprs  []SelectExpr
 		HasAggr      bool
 		GroupByExprs sqlparser.Exprs
 		OrderExprs   []OrderBy
 	}
+
+	// OrderBy contains the expression to used in order by and also if ordering is needed at VTGate level then what the weight_string function expression to be sent down for evaluation.
 	OrderBy struct {
 		Inner         *sqlparser.Order
 		WeightStrExpr sqlparser.Expr
 	}
 )
 
+// CreateQPFromSelect created the QueryProjection for the input *sqlparser.Select
 func CreateQPFromSelect(sel *sqlparser.Select) (*QueryProjection, error) {
 	qp := &QueryProjection{}
 
@@ -135,7 +141,7 @@ func (qp *QueryProjection) getSimplifiedExpr(e sqlparser.Expr) (expr sqlparser.E
 	return e, e
 }
 
-func (qp *QueryProjection) ToString() string {
+func (qp *QueryProjection) toString() string {
 	/*
 		QueryProjection struct {
 			SelectExprs  []SelectExpr
