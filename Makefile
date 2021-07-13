@@ -226,16 +226,14 @@ ifndef NOBANNER
 endif
 
 $(PROTO_GO_OUTS): minimaltools install_protoc-gen-go proto/*.proto
-	for name in $(PROTO_SRC_NAMES); do \
-		$(VTROOT)/bin/protoc \
+	$(VTROOT)/bin/protoc \
 		--go_out=. --plugin protoc-gen-go="${GOBIN}/protoc-gen-go" \
 		--go-grpc_out=. --plugin protoc-gen-go-grpc="${GOBIN}/protoc-gen-go-grpc" \
 		--go-vtproto_out=. --plugin protoc-gen-go-vtproto="${GOBIN}/protoc-gen-go-vtproto" \
 		--go-vtproto_opt=features=marshal+unmarshal+size+pool \
 		--go-vtproto_opt=pool=vitess.io/vitess/go/vt/proto/query.Row \
 		--go-vtproto_opt=pool=vitess.io/vitess/go/vt/proto/binlogdata.VStreamRowsResponse \
-		-I${PWD}/dist/vt-protoc-3.6.1/include:proto proto/$${name}.proto; \
-	done
+		-I${PWD}/dist/vt-protoc-3.6.1/include:proto $(PROTO_SRCS)
 	cp -Rf vitess.io/vitess/go/vt/proto/* go/vt/proto
 	rm -rf vitess.io/vitess/go/vt/proto/
 
