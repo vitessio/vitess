@@ -138,8 +138,12 @@ func NewAPI(clusters []*cluster.Cluster, opts grpcserver.Options, httpOpts vtadm
 		serv.Router().HandleFunc("/debug/pprof/profile", pprof.Profile)
 		serv.Router().HandleFunc("/debug/pprof/symbol", pprof.Symbol)
 		serv.Router().PathPrefix("/debug/pprof").HandlerFunc(pprof.Index)
+
+		dapi := &debugAPI{api}
 		debugRouter := serv.Router().PathPrefix("/debug").Subrouter()
 		debugRouter.HandleFunc("/env", debug.Env)
+		debugRouter.HandleFunc("/cluster/{cluster_id}", debug.Cluster(dapi))
+		debugRouter.HandleFunc("/clusters", debug.Clusters(dapi))
 	}
 
 	// Middlewares are executed in order of addition. Our ordering (all

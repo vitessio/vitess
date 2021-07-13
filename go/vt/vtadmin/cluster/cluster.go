@@ -19,6 +19,7 @@ package cluster
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"math/rand"
 	"strings"
@@ -37,6 +38,7 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtadmin/cluster/discovery"
+	"vitess.io/vitess/go/vt/vtadmin/debug"
 	"vitess.io/vitess/go/vt/vtadmin/errors"
 	"vitess.io/vitess/go/vt/vtadmin/vtadminproto"
 	"vitess.io/vitess/go/vt/vtadmin/vtctldclient"
@@ -70,6 +72,8 @@ type Cluster struct {
 	schemaReadPool   *pools.RPCPool
 	topoReadPool     *pools.RPCPool
 	workflowReadPool *pools.RPCPool
+
+	cfg Config
 }
 
 // New creates a new Cluster from a Config.
@@ -77,6 +81,7 @@ func New(cfg Config) (*Cluster, error) {
 	cluster := &Cluster{
 		ID:   cfg.ID,
 		Name: cfg.Name,
+		cfg:  cfg,
 	}
 
 	discoargs := buildPFlagSlice(cfg.DiscoveryFlagsByImpl[cfg.DiscoveryImpl])
@@ -1283,4 +1288,28 @@ func (c *Cluster) findTablets(ctx context.Context, filter func(*vtadminpb.Tablet
 	}
 
 	return vtadminproto.FilterTablets(filter, tablets, n), nil
+}
+
+// Debug returns a map of debug information for a cluster.
+func (c *Cluster) Debug() map[string]interface{} {
+	m := map[string]interface{}{
+		"cluster": c.ToProto(),
+		"config":  c.cfg,
+		"pools": map[string]json.RawMessage{
+			"backup_read_pool":   json.RawMessage(c.backupReadPool.StatsJSON()),
+			"schema_read_pool":   json.RawMessage(c.schemaReadPool.StatsJSON()),
+			"topo_read_pool":     json.RawMessage(c.topoReadPool.StatsJSON()),
+			"workflow_read_pool": json.RawMessage(c.workflowReadPool.StatsJSON()),
+		},
+	}
+
+	if vtsql, ok := c.DB.(debug.Debuggable); ok {
+		m["vtsql"] = vtsql.Debug()
+	}
+
+	if vtctld, ok := c.Vtctld.(debug.Debuggable); ok {
+		m["vtctld"] = vtctld.Debug()
+	}
+
+	return m
 }
