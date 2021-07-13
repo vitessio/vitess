@@ -180,9 +180,89 @@ var (
 			alterStatement:   "drop primary key, add primary key(updates, id)",
 		},
 		{
-			name:             "fail; no shared UK",
+			name:             "different PRIMARY KEY",
+			prepareStatement: "",
+			alterStatement:   "drop primary key, add primary key(id_negative)",
+		},
+		{
+			name:             "extended PRIMARY KEY",
+			prepareStatement: "",
+			alterStatement:   "drop primary key, add primary key(id, id_negative)",
+		},
+		{
+			name:             "extended PRIMARY KEY, different order",
+			prepareStatement: "",
+			alterStatement:   "drop primary key, add primary key(id_negative, id)",
+		},
+		{
+			name:             "reduced PRIMARY KEY",
+			prepareStatement: "drop primary key, add primary key(id, id_negative)",
+			alterStatement:   "drop primary key, add primary key(id)",
+		},
+		{
+			name:             "reduced PRIMARY KEY 2",
+			prepareStatement: "drop primary key, add primary key(id, id_negative)",
+			alterStatement:   "drop primary key, add primary key(id_negative)",
+		},
+		{
+			name:             "different PRIMARY KEY, text",
+			prepareStatement: "",
+			alterStatement:   "drop primary key, add primary key(rand_text(40))",
+		},
+		{
+			name:             "different PRIMARY KEY, rand",
+			prepareStatement: "",
+			alterStatement:   "drop primary key, add primary key(rand_num, rand_text(40))",
+		},
+		{
+			name:             "different PRIMARY KEY, from negative to int",
+			prepareStatement: "drop primary key, add primary key(id_negative)",
+			alterStatement:   "drop primary key, add primary key(id)",
+		},
+		{
+			name:             "different PRIMARY KEY, from text to int",
+			prepareStatement: "drop primary key, add primary key(rand_text(40))",
+			alterStatement:   "drop primary key, add primary key(id)",
+		},
+		{
+			name:             "different PRIMARY KEY, from text to rand",
+			prepareStatement: "drop primary key, add primary key(rand_text(40))",
+			alterStatement:   "drop primary key, add primary key(rand_num, rand_text(40))",
+		},
+		{
+			name:             "partially shared PRIMARY KEY 1",
+			prepareStatement: "drop primary key, add primary key(id, id_negative)",
+			alterStatement:   "drop primary key, add primary key(id, rand_text(40))",
+		},
+		{
+			name:             "partially shared PRIMARY KEY 2",
+			prepareStatement: "drop primary key, add primary key(id, id_negative)",
+			alterStatement:   "drop primary key, add primary key(id_negative, rand_text(40))",
+		},
+		{
+			name:             "partially shared PRIMARY KEY 3",
+			prepareStatement: "drop primary key, add primary key(id, id_negative)",
+			alterStatement:   "drop primary key, add primary key(rand_text(40), id)",
+		},
+		{
+			name:             "partially shared PRIMARY KEY 4",
+			prepareStatement: "drop primary key, add primary key(id_negative, id)",
+			alterStatement:   "drop primary key, add primary key(rand_text(40), id)",
+		},
+		{
+			name:             "different PRIMARY KEY vs UNIQUE KEY",
+			prepareStatement: "",
+			alterStatement:   "drop primary key, add unique key(id_negative)",
+		},
+		{
+			name:             "no shared UK, multiple options",
 			prepareStatement: "add unique key negative_uidx(id_negative)",
 			alterStatement:   "drop primary key, drop key negative_uidx, add primary key(rand_text(40)), add unique key negtext_uidx(id_negative, rand_text(40))",
+		},
+		{
+			name:             "fail; no uk on target",
+			prepareStatement: "",
+			alterStatement:   "drop primary key",
 			expectFailure:    true,
 		},
 		{
@@ -197,7 +277,7 @@ var (
 	`
 
 	insertRowStatement = `
-		INSERT IGNORE INTO stress_test (id, id_negative, rand_text, rand_num, op_order) VALUES (%d, %d, concat(left(md5(rand()), 8), '_', %d), floor(rand()*1000000), %d)
+		INSERT IGNORE INTO stress_test (id, id_negative, rand_text, rand_num, op_order) VALUES (%d, %d, concat(left(md5(%d), 8), '_', %d), floor(rand()*1000000), %d)
 	`
 	updateRowStatement = `
 		UPDATE stress_test SET op_order=%d, updates=updates+1 WHERE id=%d
@@ -480,7 +560,7 @@ func getCreateTableStatement(t *testing.T, tablet *cluster.Vttablet, tableName s
 
 func generateInsert(t *testing.T, conn *mysql.Conn) error {
 	id := rand.Int31n(int32(maxTableRows))
-	query := fmt.Sprintf(insertRowStatement, id, -id, id, nextOpOrder())
+	query := fmt.Sprintf(insertRowStatement, id, -id, id, id, nextOpOrder())
 	qr, err := conn.ExecuteFetch(query, 1000, true)
 	if err == nil && qr != nil {
 		assert.Less(t, qr.RowsAffected, uint64(2))

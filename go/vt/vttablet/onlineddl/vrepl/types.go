@@ -149,6 +149,12 @@ func (l *ColumnList) GetColumn(columnName string) *Column {
 	return nil
 }
 
+// ColumnExists returns true if this column list has a column by a given name
+func (l *ColumnList) ColumnExists(columnName string) bool {
+	_, ok := l.Ordinals[columnName]
+	return ok
+}
+
 // String returns a comma separated list of column names
 func (l *ColumnList) String() string {
 	return strings.Join(l.Names(), ",")
@@ -175,9 +181,33 @@ func (l *ColumnList) IsSubsetOf(other *ColumnList) bool {
 	return true
 }
 
+// Difference returns a (new copy) subset of this column list, consisting of all
+// column NOT in given list.
+// The result is never nil, even if the difference is empty
+func (l *ColumnList) Difference(other *ColumnList) (diff *ColumnList) {
+	names := []string{}
+	for _, column := range l.columns {
+		if !other.ColumnExists(column.Name) {
+			names = append(names, column.Name)
+		}
+	}
+	return NewColumnList(names)
+}
+
 // Len returns the length of this list
 func (l *ColumnList) Len() int {
 	return len(l.columns)
+}
+
+// MappedNamesColumnList returns a column list based on this list, with names possibly mapped by given map
+func (l *ColumnList) MappedNamesColumnList(columnNamesMap map[string]string) *ColumnList {
+	names := l.Names()
+	for i := range names {
+		if mappedName, ok := columnNamesMap[names[i]]; ok {
+			names[i] = mappedName
+		}
+	}
+	return NewColumnList(names)
 }
 
 // SetEnumToTextConversion tells this column list that an enum is conveted to text
