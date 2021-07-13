@@ -24,6 +24,8 @@ import (
 	"strings"
 	"testing"
 
+	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
+
 	"github.com/stretchr/testify/require"
 
 	"github.com/stretchr/testify/assert"
@@ -457,13 +459,17 @@ func createCustomExecutor(vschema string) (executor *Executor, sbc1, sbc2, sbclo
 	return executor, sbc1, sbc2, sbclookup
 }
 
-func executorExec(executor *Executor, sql string, bv map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+func executorExecSession(executor *Executor, sql string, bv map[string]*querypb.BindVariable, session *vtgatepb.Session) (*sqltypes.Result, error) {
 	return executor.Execute(
 		context.Background(),
 		"TestExecute",
-		NewSafeSession(masterSession),
+		NewSafeSession(session),
 		sql,
 		bv)
+}
+
+func executorExec(executor *Executor, sql string, bv map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+	return executorExecSession(executor, sql, bv, masterSession)
 }
 
 func executorPrepare(executor *Executor, sql string, bv map[string]*querypb.BindVariable) ([]*querypb.Field, error) {
