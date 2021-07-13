@@ -232,7 +232,13 @@ func (lci *ClientImpl) Connect(network string, config *ServerConfig) error {
 	if err != nil {
 		return err
 	}
-	tlsConfig, err := vttls.ClientConfig(config.LdapCert, config.LdapKey, config.LdapCA, serverName, vttls.TLSVersionToNumber(config.LdapTLSMinVersion))
+
+	tlsVersion, err := vttls.TLSVersionToNumber(config.LdapTLSMinVersion)
+	if err != nil {
+		return err
+	}
+
+	tlsConfig, err := vttls.ClientConfig(config.LdapCert, config.LdapKey, config.LdapCA, serverName, tlsVersion)
 	if err != nil {
 		return err
 	}
