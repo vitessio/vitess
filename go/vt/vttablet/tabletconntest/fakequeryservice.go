@@ -677,11 +677,11 @@ var TestStreamHealthStreamHealthResponse = &querypb.StreamHealthResponse{
 	TabletExternallyReparentedTimestamp: 1234589,
 
 	RealtimeStats: &querypb.RealtimeStats{
-		CpuUsage:                               1.0,
-		HealthError:                            "random error",
-		SecondsBehindMaster:                    234,
-		BinlogPlayersCount:                     1,
-		SecondsBehindMasterFilteredReplication: 2,
+		CpuUsage:                      1.0,
+		HealthError:                   "random error",
+		ReplicationLagSeconds:         234,
+		BinlogPlayersCount:            1,
+		FilteredReplicationLagSeconds: 2,
 	},
 }
 

@@ -760,13 +760,13 @@ message RealtimeStats {
   // we do not send queries to servers that are not healthy.
   string health_error = 1;
 
-  // seconds_behind_master is populated for replicas only. It indicates
+  // replication_lag_seconds is populated for replicas only. It indicates
   // how far behind on (MySQL) replication a replica currently is.  It is used
   // by clients for subset selection (so we don't try to send traffic
   // to tablets that are too far behind).
   // NOTE: This field must not be evaluated if "health_error" is not empty.
   // TODO(mberlin): Let's switch it to int64 instead?
-  uint32 seconds_behind_master = 2;
+  uint32 replication_lag_seconds = 2;
 
   // bin_log_players_count is the number of currently running binlog players.
   // if the value is 0, it means that filtered replication is currently not
@@ -774,12 +774,12 @@ message RealtimeStats {
   // NOTE: This field must not be evaluated if "health_error" is not empty.
   int32 binlog_players_count = 3;
 
-  // seconds_behind_master_filtered_replication is populated for the receiving
+  // filtered_replication_lag_seconds is populated for the receiving
   // master of an ongoing filtered replication only.
   // It specifies how far the receiving master lags behind the sending master.
   // NOTE: This field must not be evaluated if "health_error" is not empty.
   // NOTE: This field must not be evaluated if "bin_log_players_count" is 0.
-  int64 seconds_behind_master_filtered_replication = 4;
+  int64 filtered_replication_lag_seconds = 4;
 
   // cpu_usage is used for load-based balancing
   double cpu_usage = 5;

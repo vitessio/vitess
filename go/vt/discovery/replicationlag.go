@@ -64,16 +64,16 @@ func SetMinNumTablets(numTablets int) {
 // IsReplicationLagHigh verifies that the given LegacytabletHealth refers to a tablet with high
 // replication lag, i.e. higher than the configured discovery_low_replication_lag flag.
 func IsReplicationLagHigh(tabletHealth *TabletHealth) bool {
-	return float64(tabletHealth.Stats.SecondsBehindMaster) > lowReplicationLag.Seconds()
+	return float64(tabletHealth.Stats.ReplicationLagSeconds) > lowReplicationLag.Seconds()
 }
 
 // IsReplicationLagVeryHigh verifies that the given LegacytabletHealth refers to a tablet with very high
 // replication lag, i.e. higher than the configured discovery_high_replication_lag_minimum_serving flag.
 func IsReplicationLagVeryHigh(tabletHealth *TabletHealth) bool {
-	return float64(tabletHealth.Stats.SecondsBehindMaster) > highReplicationLagMinServing.Seconds()
+	return float64(tabletHealth.Stats.ReplicationLagSeconds) > highReplicationLagMinServing.Seconds()
 }
 
-// FilterStatsByReplicationLag filters the list of TabletHealth by TabletHealth.Stats.SecondsBehindMaster.
+// FilterStatsByReplicationLag filters the list of TabletHealth by TabletHealth.Stats.ReplicationLagSeconds.
 // Note that TabletHealth that is non-serving or has error is ignored.
 //
 // The simplified logic:
@@ -122,7 +122,7 @@ func filterStatsByLag(tabletHealthList []*TabletHealth) []*TabletHealth {
 		// Pull the current replication lag for a stable sort later.
 		list = append(list, tabletLagSnapshot{
 			ts:     ts,
-			replag: ts.Stats.SecondsBehindMaster})
+			replag: ts.Stats.ReplicationLagSeconds})
 	}
 
 	// Sort by replication lag.
@@ -183,7 +183,7 @@ func filterStatsByLagWithLegacyAlgorithm(tabletHealthList []*TabletHealth) []*Ta
 		if !IsReplicationLagVeryHigh(ts) {
 			snapshots = append(snapshots, tabletLagSnapshot{
 				ts:     ts,
-				replag: ts.Stats.SecondsBehindMaster})
+				replag: ts.Stats.ReplicationLagSeconds})
 		}
 	}
 	if len(snapshots) == 0 {
@@ -197,7 +197,7 @@ func filterStatsByLagWithLegacyAlgorithm(tabletHealthList []*TabletHealth) []*Ta
 		for _, ts := range list {
 			snapshots = append(snapshots, tabletLagSnapshot{
 				ts:     ts,
-				replag: ts.Stats.SecondsBehindMaster})
+				replag: ts.Stats.ReplicationLagSeconds})
 		}
 	}
 
@@ -244,7 +244,7 @@ func mean(tabletHealthList []*TabletHealth, idxExclude int) (uint64, error) {
 		if i == idxExclude {
 			continue
 		}
-		sum = sum + uint64(ts.Stats.SecondsBehindMaster)
+		sum = sum + uint64(ts.Stats.ReplicationLagSeconds)
 		count++
 	}
 	if count == 0 {

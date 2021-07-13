@@ -86,10 +86,10 @@ func TestMariadbRetrieveMasterServerId(t *testing.T) {
 		"Gtid_Slave_Pos":   "0-101-2320",
 	}
 
-	want := ReplicationStatus{MasterServerID: 1}
+	want := ReplicationStatus{SourceServerID: 1}
 	got, err := parseMariadbReplicationStatus(resultMap)
 	require.NoError(t, err)
-	assert.Equal(t, got.MasterServerID, want.MasterServerID, fmt.Sprintf("got MasterServerID: %v; want MasterServerID: %v", got.MasterServerID, want.MasterServerID))
+	assert.Equal(t, got.SourceServerID, want.SourceServerID, fmt.Sprintf("got SourceServerID: %v; want SourceServerID: %v", got.SourceServerID, want.SourceServerID))
 }
 
 func TestMariadbRetrieveFileBasedPositions(t *testing.T) {

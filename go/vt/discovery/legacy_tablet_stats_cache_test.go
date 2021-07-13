@@ -77,7 +77,7 @@ func TestLegacyTabletStatsCache(t *testing.T) {
 		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
 		Up:      true,
 		Serving: true,
-		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
+		Stats:   &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.2},
 	}
 	tsc.StatsUpdate(ts1)
 
@@ -98,7 +98,7 @@ func TestLegacyTabletStatsCache(t *testing.T) {
 		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
 		Up:      true,
 		Serving: true,
-		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 2, CpuUsage: 0.2},
+		Stats:   &querypb.RealtimeStats{ReplicationLagSeconds: 2, CpuUsage: 0.2},
 	}
 	tsc.StatsUpdate(stillHealthyTs1)
 
@@ -119,7 +119,7 @@ func TestLegacyTabletStatsCache(t *testing.T) {
 		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
 		Up:      true,
 		Serving: true,
-		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 35, CpuUsage: 0.2},
+		Stats:   &querypb.RealtimeStats{ReplicationLagSeconds: 35, CpuUsage: 0.2},
 	}
 	tsc.StatsUpdate(notHealthyTs1)
 
@@ -141,7 +141,7 @@ func TestLegacyTabletStatsCache(t *testing.T) {
 		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
 		Up:      true,
 		Serving: true,
-		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 10, CpuUsage: 0.2},
+		Stats:   &querypb.RealtimeStats{ReplicationLagSeconds: 10, CpuUsage: 0.2},
 	}
 	tsc.StatsUpdate(ts2)
 
@@ -244,7 +244,7 @@ func TestLegacyTabletStatsCache(t *testing.T) {
 		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
 		Up:      true,
 		Serving: true,
-		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 10, CpuUsage: 0.2},
+		Stats:   &querypb.RealtimeStats{ReplicationLagSeconds: 10, CpuUsage: 0.2},
 	}
 	tsc.StatsUpdate(ts3)
 	// check it's there
@@ -265,7 +265,7 @@ func TestLegacyTabletStatsCache(t *testing.T) {
 		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
 		Up:      true,
 		Serving: true,
-		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 10, CpuUsage: 0.2},
+		Stats:   &querypb.RealtimeStats{ReplicationLagSeconds: 10, CpuUsage: 0.2},
 	}
 	tsc.StatsUpdate(ts4)
 	// check it's *NOT* there

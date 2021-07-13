@@ -69,7 +69,7 @@ const logEntryHTML = `
       <td>{{.OldRate}}</td>
       <td>{{.NewRate}}</td>
       <td>{{.Alias}}</td>
-      <td>{{.LagRecordNow.Stats.SecondsBehindMaster}}s</td>
+      <td>{{.LagRecordNow.Stats.ReplicationLagSeconds}}s</td>
       <td>{{.TimeSinceLastRateChange}}</td>
       <td>{{.CurrentRate}}</td>
       <td>{{.GoodOrBad}}</td>
