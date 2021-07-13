@@ -42,7 +42,13 @@ func getOperatorFromTableExpr(tableExpr sqlparser.TableExpr, semTable *semantics
 	case *sqlparser.AliasedTableExpr:
 		qg := newQueryGraph()
 		tableName := tableExpr.Expr.(sqlparser.TableName)
-		qt := &QueryTable{Alias: tableExpr, Table: tableName, TableID: semTable.TableSetFor(tableExpr)}
+		tableID := semTable.TableSetFor(tableExpr)
+		tableInfo, err := semTable.TableInfoFor(tableID)
+		if err != nil {
+			return nil, err
+		}
+		isInfSchema := tableInfo.IsInfSchema()
+		qt := &QueryTable{Alias: tableExpr, Table: tableName, TableID: tableID, IsInfSchema: isInfSchema}
 		qg.Tables = append(qg.Tables, qt)
 		return qg, nil
 	case *sqlparser.JoinTableExpr:
