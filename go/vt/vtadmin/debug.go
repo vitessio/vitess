@@ -14,16 +14,21 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package debug
+package vtadmin
 
 import "vitess.io/vitess/go/vt/vtadmin/cluster"
 
-// API defines the interface needed to provide debug info for a vtadmin.API.
-// This is implemented by a private wrapper struct in package vtadmin, to
-// prevent debug needs from polluting the public interface of the actual API.
-type API interface {
-	// Cluster returns a cluster by id, with the same semantics as a map lookup.
-	Cluster(id string) (*cluster.Cluster, bool)
-	// Clusters returns a slice of all clusters in the API.
-	Clusters() []*cluster.Cluster
+// debugAPI wraps a vtadmin API for use in the vtadmin/http/debug package
+// endpoints.
+type debugAPI struct {
+	api *API
 }
+
+// Cluster is part of the debug.API interface.
+func (dapi *debugAPI) Cluster(id string) (*cluster.Cluster, bool) {
+	c, ok := dapi.api.clusterMap[id]
+	return c, ok
+}
+
+// Clusters is part of the debug.API interface.
+func (dapi *debugAPI) Clusters() []*cluster.Cluster { return dapi.api.clusters }
