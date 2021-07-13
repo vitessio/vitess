@@ -458,7 +458,7 @@ var vreplicationTemplate = `
       <td>{{.State}}</td>
       <td>{{.StopPosition}}</td>
       <td>{{.LastPosition}}</td>
-      <td>{{.SecondsBehindMaster}}</td>
+      <td>{{.ReplicationLagSeconds}}</td>
       <td>{{range $key, $value := .Counts}}<b>{{$key}}</b>: {{$value}}<br>{{end}}</td>
       <td>{{range $key, $values := .Rates}}<b>{{$key}}</b>: {{range $values}}{{.}} {{end}}<br>{{end}}</td>
       <td>{{range $index, $value := .Messages}}{{$value}}<br>{{end}}</td>

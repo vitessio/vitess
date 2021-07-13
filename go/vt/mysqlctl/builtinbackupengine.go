@@ -237,7 +237,7 @@ func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, params BackupP
 			return usable, vterrors.Wrap(err, "replica is not restarting")
 		}
 
-		// Wait for a reliable value for SecondsBehindMaster from ReplicationStatus()
+		// Wait for a reliable value for ReplicationLagSeconds from ReplicationStatus()
 
 		// We know that we stopped at replicationPosition.
 		// If PrimaryPosition is the same, that means no writes

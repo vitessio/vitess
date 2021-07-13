@@ -612,7 +612,7 @@ func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentA
 	}
 	masterHost := parent.Tablet.MysqlHostname
 	masterPort := int(parent.Tablet.MysqlPort)
-	if status.MasterHost != masterHost || status.MasterPort != masterPort {
+	if status.SourceHost != masterHost || status.SourcePort != masterPort {
 		// This handles both changing the address and starting replication.
 		if err := tm.MysqlDaemon.SetReplicationSource(ctx, masterHost, masterPort, wasReplicating, shouldbeReplicating); err != nil {
 			if err := tm.handleRelayLogError(err); err != nil {
