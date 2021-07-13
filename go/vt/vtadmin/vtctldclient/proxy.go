@@ -19,12 +19,15 @@ package vtctldclient
 import (
 	"context"
 	"fmt"
+	"sync"
+	"time"
 
 	"google.golang.org/grpc"
 
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/vtadmin/cluster/discovery"
+	"vitess.io/vitess/go/vt/vtadmin/debug"
 	"vitess.io/vitess/go/vt/vtadmin/vtadminproto"
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldclient"
 	"vitess.io/vitess/go/vt/vtctl/vtctldclient"
@@ -39,9 +42,6 @@ type Proxy interface {
 	// Dial opens a gRPC connection to a vtctld in the cluster. If the Proxy
 	// already has a valid connection, this is a no-op.
 	Dial(ctx context.Context) error
-
-	// Hostname returns the hostname the Proxy is currently connected to.
-	Hostname() string
 
 	// Close closes the underlying vtctldclient connection. This is a no-op if
 	// the Proxy has no current, valid connection. It is safe to call repeatedly.
@@ -60,14 +60,18 @@ type ClientProxy struct {
 	cluster   *vtadminpb.Cluster
 	creds     *grpcclient.StaticAuthClientCreds
 	discovery discovery.Discovery
+	cfg       *Config
 
 	// DialFunc is called to open a new vtctdclient connection. In production,
 	// this should always be grpcvtctldclient.NewWithDialOpts, but it is
 	// exported for testing purposes.
 	DialFunc func(addr string, ff grpcclient.FailFast, opts ...grpc.DialOption) (vtctldclient.VtctldClient, error)
 
-	closed bool
-	host   string
+	m        sync.Mutex
+	closed   bool
+	host     string
+	lastPing time.Time
+	dialedAt time.Time
 }
 
 // New returns a ClientProxy to the given cluster. When Dial-ing, it will use
@@ -79,10 +83,12 @@ type ClientProxy struct {
 // use.
 func New(cfg *Config) *ClientProxy {
 	return &ClientProxy{
+		cfg:       cfg,
 		cluster:   cfg.Cluster,
 		creds:     cfg.Credentials,
 		discovery: cfg.Discovery,
 		DialFunc:  grpcvtctldclient.NewWithDialOpts,
+		closed:    true,
 	}
 }
 
@@ -93,10 +99,15 @@ func (vtctld *ClientProxy) Dial(ctx context.Context) error {
 
 	vtadminproto.AnnotateClusterSpan(vtctld.cluster, span)
 
+	vtctld.m.Lock()
+	defer vtctld.m.Unlock()
+
 	if vtctld.VtctldClient != nil {
 		if !vtctld.closed {
 			span.Annotate("is_noop", true)
 			span.Annotate("vtctld_host", vtctld.host)
+
+			vtctld.lastPing = time.Now()
 
 			return nil
 		}
@@ -133,16 +144,12 @@ func (vtctld *ClientProxy) Dial(ctx context.Context) error {
 		return err
 	}
 
+	vtctld.dialedAt = time.Now()
 	vtctld.host = addr
 	vtctld.VtctldClient = client
 	vtctld.closed = false
 
 	return nil
-}
-
-// Hostname is part of the Proxy interface.
-func (vtctld *ClientProxy) Hostname() string {
-	return vtctld.host
 }
 
 // Close is part of the Proxy interface.
@@ -161,4 +168,30 @@ func (vtctld *ClientProxy) Close() error {
 	vtctld.closed = true
 
 	return nil
+}
+
+// Debug implements debug.Debuggable for ClientProxy.
+func (vtctld *ClientProxy) Debug() map[string]interface{} {
+	vtctld.m.Lock()
+	defer vtctld.m.Unlock()
+
+	m := map[string]interface{}{
+		"host":         vtctld.host,
+		"is_connected": !vtctld.closed,
+	}
+
+	if vtctld.creds != nil {
+		m["credentials"] = map[string]interface{}{
+			"source":   vtctld.cfg.CredentialsPath,
+			"username": vtctld.creds.Username,
+			"password": debug.SanitizeString(vtctld.creds.Password),
+		}
+	}
+
+	if !vtctld.closed {
+		m["last_ping"] = debug.TimeToString(vtctld.lastPing)
+		m["dialed_at"] = debug.TimeToString(vtctld.dialedAt)
+	}
+
+	return m
 }

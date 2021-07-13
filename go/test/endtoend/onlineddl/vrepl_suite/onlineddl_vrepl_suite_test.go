@@ -22,9 +22,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
-	"os/exec"
 	"path"
-	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
@@ -198,7 +196,7 @@ func testSingle(t *testing.T, testName string) {
 		f := "create.sql"
 		_, exists := readTestFile(t, testName, f)
 		require.True(t, exists)
-		mysqlClientExecFile(t, testName, f)
+		onlineddl.MysqlClientExecFile(t, mysqlParams(), testDataPath, testName, f)
 		// ensure test table has been created:
 		getCreateTableStatement(t, tableName)
 	}
@@ -206,7 +204,7 @@ func testSingle(t *testing.T, testName string) {
 		// destroy
 		f := "destroy.sql"
 		if _, exists := readTestFile(t, testName, f); exists {
-			mysqlClientExecFile(t, testName, f)
+			onlineddl.MysqlClientExecFile(t, mysqlParams(), testDataPath, testName, f)
 		}
 	}()
 
@@ -279,13 +277,13 @@ func testSingle(t *testing.T, testName string) {
 		selectBefore := fmt.Sprintf("select %s from %s %s", beforeColumns, beforeTableName, orderBy)
 		selectAfter := fmt.Sprintf("select %s from %s %s", afterColumns, afterTableName, orderBy)
 
-		selectBeforeFile := createTempScript(t, selectBefore)
+		selectBeforeFile := onlineddl.CreateTempScript(t, selectBefore)
 		defer os.Remove(selectBeforeFile)
-		beforeOutput := mysqlClientExecFile(t, "", selectBeforeFile)
+		beforeOutput := onlineddl.MysqlClientExecFile(t, mysqlParams(), testDataPath, "", selectBeforeFile)
 
-		selectAfterFile := createTempScript(t, selectAfter)
+		selectAfterFile := onlineddl.CreateTempScript(t, selectAfter)
 		defer os.Remove(selectAfterFile)
-		afterOutput := mysqlClientExecFile(t, "", selectAfterFile)
+		afterOutput := onlineddl.MysqlClientExecFile(t, mysqlParams(), testDataPath, "", selectAfterFile)
 
 		require.Equal(t, beforeOutput, afterOutput, "results mismatch: (%s) and (%s)", selectBefore, selectAfter)
 	}
@@ -364,31 +362,6 @@ func mysqlExec(t *testing.T, sql string, expectError string) *sqltypes.Result {
 	return qr
 }
 
-// mysqlClientExecFile runs a file through the mysql client
-func mysqlClientExecFile(t *testing.T, testName string, fileName string) (output string) {
-	t.Helper()
-
-	bashPath, err := exec.LookPath("bash")
-	require.NoError(t, err)
-	mysqlPath, err := exec.LookPath("mysql")
-	require.NoError(t, err)
-
-	filePath := fileName
-	if !filepath.IsAbs(fileName) {
-		filePath, _ = filepath.Abs(path.Join(testDataPath, testName, fileName))
-	}
-	params := mysqlParams()
-	bashCommand := fmt.Sprintf(`%s -u%s --socket=%s --database=%s -s -s < %s 2> /tmp/error.log`, mysqlPath, params.Uname, params.UnixSocket, params.DbName, filePath)
-	cmd, err := exec.Command(
-		bashPath,
-		"-c",
-		bashCommand,
-	).Output()
-
-	require.NoError(t, err)
-	return string(cmd)
-}
-
 // getCreateTableStatement returns the CREATE TABLE statement for a given table
 func getCreateTableStatement(t *testing.T, tableName string) (statement string) {
 	queryResult, err := getTablet().VttabletProcess.QueryTablet(fmt.Sprintf("show create table %s", tableName), keyspaceName, true)
@@ -398,16 +371,4 @@ func getCreateTableStatement(t *testing.T, tableName string) (statement string) 
 	assert.Equal(t, len(queryResult.Rows[0]), 2) // table name, create statement
 	statement = queryResult.Rows[0][1].ToString()
 	return statement
-}
-
-func createTempScript(t *testing.T, content string) (fileName string) {
-	f, err := ioutil.TempFile("", "vrepl-suite-")
-	require.NoError(t, err)
-
-	_, err = f.WriteString(content)
-	require.NoError(t, err)
-	err = f.Close()
-	require.NoError(t, err)
-
-	return f.Name()
 }

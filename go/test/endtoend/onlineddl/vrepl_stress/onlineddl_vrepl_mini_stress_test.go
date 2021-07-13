@@ -83,6 +83,7 @@ deletesAttempts=%d, deletesFailures=%d, deletesNoops=%d, deletes=%d,
 
 var (
 	clusterInstance      *cluster.LocalProcessCluster
+	shards               []cluster.Shard
 	vtParams             mysql.ConnParams
 	evaluatedMysqlParams *mysql.ConnParams
 
@@ -91,7 +92,6 @@ var (
 	onlineDDLStrategy     = "online -vreplication-test-suite -skip-topo"
 	hostname              = "localhost"
 	keyspaceName          = "ks"
-	shards                []cluster.Shard
 	cell                  = "zone1"
 	schemaChangeDirectory = ""
 	tableName             = `stress_test`

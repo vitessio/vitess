@@ -22,14 +22,16 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vtgate/vindexes"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
-
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 )
 
 // RowStreamer exposes an externally usable interface to rowStreamer.
@@ -62,11 +64,12 @@ type rowStreamer struct {
 	send    func(*binlogdatapb.VStreamRowsResponse) error
 	vschema *localVSchema
 
-	plan      *Plan
-	pkColumns []int
-	sendQuery string
-	vse       *Engine
-	pktsize   PacketSizer
+	plan          *Plan
+	pkColumns     []int
+	ukColumnNames []string
+	sendQuery     string
+	vse           *Engine
+	pktsize       PacketSizer
 }
 
 func newRowStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine, query string, lastpk []sqltypes.Value, vschema *localVSchema, send func(*binlogdatapb.VStreamRowsResponse) error, vse *Engine) *rowStreamer {
@@ -113,7 +116,7 @@ func (rs *rowStreamer) Stream() error {
 func (rs *rowStreamer) buildPlan() error {
 	// This pre-parsing is required to extract the table name
 	// and create its metadata.
-	_, fromTable, err := analyzeSelect(rs.query)
+	sel, fromTable, err := analyzeSelect(rs.query)
 	if err != nil {
 		return err
 	}
@@ -134,7 +137,16 @@ func (rs *rowStreamer) buildPlan() error {
 		log.Errorf("%s", err.Error())
 		return err
 	}
-	rs.pkColumns, err = buildPKColumns(st)
+
+	directives := sqlparser.ExtractCommentDirectives(sel.Comments)
+	if s := directives.GetString("ukColumns", ""); s != "" {
+		rs.ukColumnNames, err = textutil.SplitUnescape(s, ",")
+		if err != nil {
+			return err
+		}
+	}
+
+	rs.pkColumns, err = rs.buildPKColumns(st)
 	if err != nil {
 		return err
 	}
@@ -145,7 +157,25 @@ func (rs *rowStreamer) buildPlan() error {
 	return err
 }
 
-func buildPKColumns(st *binlogdatapb.MinimalTable) ([]int, error) {
+// buildPKColumnsFromUniqueKey assumes a unique key is indicated,
+func (rs *rowStreamer) buildPKColumnsFromUniqueKey() ([]int, error) {
+	var pkColumns = make([]int, 0)
+	// We wish to utilize a UNIQUE KEY which is not the PRIMARY KEY/
+
+	for _, colName := range rs.ukColumnNames {
+		index := rs.plan.Table.FindColumn(sqlparser.NewColIdent(colName))
+		if index < 0 {
+			return pkColumns, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "column %v is listed as unique key, but not present in table %v", colName, rs.plan.Table.Name)
+		}
+		pkColumns = append(pkColumns, index)
+	}
+	return pkColumns, nil
+}
+
+func (rs *rowStreamer) buildPKColumns(st *binlogdatapb.MinimalTable) ([]int, error) {
+	if len(rs.ukColumnNames) > 0 {
+		return rs.buildPKColumnsFromUniqueKey()
+	}
 	var pkColumns = make([]int, 0)
 	if len(st.PKColumns) == 0 {
 		pkColumns = make([]int, len(st.Fields))
@@ -170,7 +200,7 @@ func (rs *rowStreamer) buildSelect() (string, error) {
 	prefix := ""
 	for _, col := range rs.plan.Table.Fields {
 		if rs.plan.isConvertColumnUsingUTF8(col.Name) {
-			buf.Myprintf("%sconvert(%v using utf8mb4)", prefix, sqlparser.NewColIdent(col.Name))
+			buf.Myprintf("%sconvert(%v using utf8mb4) as %v", prefix, sqlparser.NewColIdent(col.Name), sqlparser.NewColIdent(col.Name))
 		} else {
 			buf.Myprintf("%s%v", prefix, sqlparser.NewColIdent(col.Name))
 		}
