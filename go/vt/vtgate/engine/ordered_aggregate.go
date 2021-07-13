@@ -45,9 +45,9 @@ type OrderedAggregate struct {
 	// aggregation function: function opcode and input column number.
 	Aggregates []AggregateParams
 
-	// Keys specifies the input values that must be used for
+	// GroupByKeys specifies the input values that must be used for
 	// the aggregation key.
-	Keys []int
+	GroupByKeys []GroupbyParams
 
 	// TruncateColumnCount specifies the number of columns to return
 	// in the final result. Rest of the columns are truncated
@@ -56,6 +56,17 @@ type OrderedAggregate struct {
 
 	// Input is the primitive that will feed into this Primitive.
 	Input Primitive
+}
+
+// GroupbyParams specify the grouping key to be used.
+type GroupbyParams struct {
+	Col             int
+	WeightStringCol int
+	KeyCol          int
+}
+
+func (gbp GroupbyParams) String() string {
+	return strconv.Itoa(gbp.KeyCol)
 }
 
 // AggregateParams specify the parameters for each aggregation.
@@ -201,7 +212,7 @@ func (oa *OrderedAggregate) execute(vcursor VCursor, bindVars map[string]*queryp
 		current, curDistinct = oa.convertRow(row)
 	}
 
-	if len(result.Rows) == 0 && len(oa.Keys) == 0 {
+	if len(result.Rows) == 0 && len(oa.GroupByKeys) == 0 {
 		// When doing aggregation without grouping keys, we need to produce a single row containing zero-value for the
 		// different aggregation functions
 		row, err := oa.createEmptyRow()
@@ -350,10 +361,18 @@ func (oa *OrderedAggregate) NeedsTransaction() bool {
 }
 
 func (oa *OrderedAggregate) keysEqual(row1, row2 []sqltypes.Value) (bool, error) {
-	for _, key := range oa.Keys {
-		cmp, err := evalengine.NullsafeCompare(row1[key], row2[key])
+	for _, key := range oa.GroupByKeys {
+		cmp, err := evalengine.NullsafeCompare(row1[key.KeyCol], row2[key.KeyCol])
 		if err != nil {
-			return false, err
+			_, isComparisonErr := err.(evalengine.UnsupportedComparisonError)
+			if !(isComparisonErr && key.WeightStringCol != -1) {
+				return false, err
+			}
+			key.KeyCol = key.WeightStringCol
+			cmp, err = evalengine.NullsafeCompare(row1[key.WeightStringCol], row2[key.WeightStringCol])
+			if err != nil {
+				return false, err
+			}
 		}
 		if cmp != 0 {
 			return false, nil
@@ -450,13 +469,13 @@ func aggregateParamsToString(in interface{}) string {
 	return in.(AggregateParams).String()
 }
 
-func intToString(i interface{}) string {
-	return strconv.Itoa(i.(int))
+func groupByParamsToString(i interface{}) string {
+	return i.(GroupbyParams).String()
 }
 
 func (oa *OrderedAggregate) description() PrimitiveDescription {
 	aggregates := GenericJoin(oa.Aggregates, aggregateParamsToString)
-	groupBy := GenericJoin(oa.Keys, intToString)
+	groupBy := GenericJoin(oa.GroupByKeys, groupByParamsToString)
 	other := map[string]interface{}{
 		"Aggregates": aggregates,
 		"GroupBy":    groupBy,

@@ -53,8 +53,8 @@ func TestOrderedAggregateExecute(t *testing.T) {
 			Opcode: AggregateCount,
 			Col:    1,
 		}},
-		Keys:  []int{0},
-		Input: fp,
+		GroupByKeys: []GroupbyParams{{KeyCol: 0}},
+		Input:       fp,
 	}
 
 	result, err := oa.Execute(nil, nil, false)
@@ -90,7 +90,7 @@ func TestOrderedAggregateExecuteTruncate(t *testing.T) {
 			Opcode: AggregateCount,
 			Col:    1,
 		}},
-		Keys:                []int{2},
+		GroupByKeys:         []GroupbyParams{{KeyCol: 2}},
 		TruncateColumnCount: 2,
 		Input:               fp,
 	}
@@ -132,8 +132,8 @@ func TestOrderedAggregateStreamExecute(t *testing.T) {
 			Opcode: AggregateCount,
 			Col:    1,
 		}},
-		Keys:  []int{0},
-		Input: fp,
+		GroupByKeys: []GroupbyParams{{KeyCol: 0}},
+		Input:       fp,
 	}
 
 	var results []*sqltypes.Result
@@ -175,7 +175,7 @@ func TestOrderedAggregateStreamExecuteTruncate(t *testing.T) {
 			Opcode: AggregateCount,
 			Col:    1,
 		}},
-		Keys:                []int{2},
+		GroupByKeys:         []GroupbyParams{{KeyCol: 2}},
 		TruncateColumnCount: 2,
 		Input:               fp,
 	}
@@ -316,8 +316,8 @@ func TestOrderedAggregateExecuteCountDistinct(t *testing.T) {
 			Opcode: AggregateCount,
 			Col:    2,
 		}},
-		Keys:  []int{0},
-		Input: fp,
+		GroupByKeys: []GroupbyParams{{KeyCol: 0}},
+		Input:       fp,
 	}
 
 	result, err := oa.Execute(nil, nil, false)
@@ -392,8 +392,8 @@ func TestOrderedAggregateStreamCountDistinct(t *testing.T) {
 			Opcode: AggregateCount,
 			Col:    2,
 		}},
-		Keys:  []int{0},
-		Input: fp,
+		GroupByKeys: []GroupbyParams{{KeyCol: 0}},
+		Input:       fp,
 	}
 
 	var results []*sqltypes.Result
@@ -480,8 +480,8 @@ func TestOrderedAggregateSumDistinctGood(t *testing.T) {
 			Opcode: AggregateSum,
 			Col:    2,
 		}},
-		Keys:  []int{0},
-		Input: fp,
+		GroupByKeys: []GroupbyParams{{KeyCol: 0}},
+		Input:       fp,
 	}
 
 	result, err := oa.Execute(nil, nil, false)
@@ -525,8 +525,8 @@ func TestOrderedAggregateSumDistinctTolerateError(t *testing.T) {
 			Col:    1,
 			Alias:  "sum(distinct col2)",
 		}},
-		Keys:  []int{0},
-		Input: fp,
+		GroupByKeys: []GroupbyParams{{KeyCol: 0}},
+		Input:       fp,
 	}
 
 	result, err := oa.Execute(nil, nil, false)
@@ -560,8 +560,8 @@ func TestOrderedAggregateKeysFail(t *testing.T) {
 			Opcode: AggregateCount,
 			Col:    1,
 		}},
-		Keys:  []int{0},
-		Input: fp,
+		GroupByKeys: []GroupbyParams{{KeyCol: 0}},
+		Input:       fp,
 	}
 
 	want := "types are not comparable: VARCHAR vs VARCHAR"
@@ -593,8 +593,8 @@ func TestOrderedAggregateMergeFail(t *testing.T) {
 			Opcode: AggregateCount,
 			Col:    1,
 		}},
-		Keys:  []int{0},
-		Input: fp,
+		GroupByKeys: []GroupbyParams{{KeyCol: 0}},
+		Input:       fp,
 	}
 
 	result := &sqltypes.Result{
@@ -721,8 +721,8 @@ func TestNoInputAndNoGroupingKeys(outer *testing.T) {
 					Col:    0,
 					Alias:  test.name,
 				}},
-				Keys:  []int{},
-				Input: fp,
+				GroupByKeys: []GroupbyParams{},
+				Input:       fp,
 			}
 
 			result, err := oa.Execute(nil, nil, false)

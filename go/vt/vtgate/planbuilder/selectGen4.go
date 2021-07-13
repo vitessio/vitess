@@ -164,15 +164,11 @@ func planGroupByGen4(groupExpr abstract.GroupBy, plan logicalPlan, semTable *sem
 		sel.GroupBy = append(sel.GroupBy, groupExpr.Inner)
 		return false, nil
 	case *orderedAggregate:
-		offset, weightStringOffset, colAdded, err := funcName(groupExpr.Inner, groupExpr.WeightStrExpr, node.input, semTable)
+		offset, weightStringOffset, colAdded, err := wrapAndPushExpr(groupExpr.Inner, groupExpr.WeightStrExpr, node.input, semTable)
 		if err != nil {
 			return false, err
 		}
-		if weightStringOffset == -1 {
-			node.eaggr.Keys = append(node.eaggr.Keys, offset)
-		} else {
-			node.eaggr.Keys = append(node.eaggr.Keys, weightStringOffset)
-		}
+		node.eaggr.GroupByKeys = append(node.eaggr.GroupByKeys, engine.GroupbyParams{KeyCol: offset, Col: offset, WeightStringCol: weightStringOffset})
 		colAddedRecursively, err := planGroupByGen4(groupExpr, node.input, semTable)
 		if err != nil {
 			return false, err
@@ -228,7 +224,7 @@ func planOrderBy(qp *abstract.QueryProjection, orderExprs []abstract.OrderBy, pl
 func planOrderByForRoute(orderExprs []abstract.OrderBy, plan *route, semTable *semantics.SemTable) (logicalPlan, bool, error) {
 	origColCount := plan.Select.GetColumnCount()
 	for _, order := range orderExprs {
-		offset, weightStringOffset, _, err := funcName(order.Inner.Expr, order.WeightStrExpr, plan, semTable)
+		offset, weightStringOffset, _, err := wrapAndPushExpr(order.Inner.Expr, order.WeightStrExpr, plan, semTable)
 		if err != nil {
 			return nil, false, err
 		}
@@ -243,7 +239,7 @@ func planOrderByForRoute(orderExprs []abstract.OrderBy, plan *route, semTable *s
 	return plan, origColCount != plan.Select.GetColumnCount(), nil
 }
 
-func funcName(expr sqlparser.Expr, weightStrExpr sqlparser.Expr, plan logicalPlan, semTable *semantics.SemTable) (int, int, bool, error) {
+func wrapAndPushExpr(expr sqlparser.Expr, weightStrExpr sqlparser.Expr, plan logicalPlan, semTable *semantics.SemTable) (int, int, bool, error) {
 	offset, added, err := pushProjection(&sqlparser.AliasedExpr{Expr: expr}, plan, semTable, true, true)
 	if err != nil {
 		return 0, 0, false, err
@@ -314,7 +310,7 @@ func planOrderByForJoin(qp *abstract.QueryProjection, orderExprs []abstract.Orde
 
 	var colAdded bool
 	for _, order := range orderExprs {
-		offset, weightStringOffset, added, err := funcName(order.Inner.Expr, order.WeightStrExpr, plan, semTable)
+		offset, weightStringOffset, added, err := wrapAndPushExpr(order.Inner.Expr, order.WeightStrExpr, plan, semTable)
 		if err != nil {
 			return nil, false, err
 		}
