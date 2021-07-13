@@ -87,6 +87,13 @@ func pushProjection(expr *sqlparser.AliasedExpr, plan logicalPlan, semTable *sem
 		}
 		node.Cols = append(node.Cols, column)
 		return len(node.Cols) - 1, true, nil
+	case *orderedAggregate:
+		for k, v := range node.columnOffset {
+			if sqlparser.EqualsExpr(expr.Expr, k) {
+				return v, false, nil
+			}
+		}
+		return 0, false, semantics.Gen4NotSupportedF("column not found in already added list: %s", sqlparser.String(expr))
 	default:
 		return 0, false, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%T not yet supported", node)
 	}
@@ -129,7 +136,8 @@ func planAggregations(qp *abstract.QueryProjection, plan logicalPlan, semTable *
 			weightStrings:     make(map[*resultColumn]int),
 			truncater:         eaggr,
 		},
-		eaggr: eaggr,
+		eaggr:        eaggr,
+		columnOffset: map[sqlparser.Expr]int{},
 	}
 	for _, e := range qp.SelectExprs {
 		offset, _, err := pushProjection(e.Col, plan, semTable, true, false)
@@ -143,6 +151,7 @@ func planAggregations(qp *abstract.QueryProjection, plan logicalPlan, semTable *
 				Opcode: opcode,
 				Col:    offset,
 			})
+			oa.columnOffset[e.Col.Expr] = offset
 		}
 	}
 
@@ -153,6 +162,25 @@ func planAggregations(qp *abstract.QueryProjection, plan logicalPlan, semTable *
 			return nil, false, err
 		}
 		colAdded = colAdded || added
+	}
+
+	if !qp.CanPushDownSorting {
+		var orderExprs []abstract.OrderBy
+		// if we can't at a later stage push down the sorting to our inputs, we have to do ordering here
+		for _, groupExpr := range qp.GroupByExprs {
+			orderExprs = append(orderExprs, abstract.OrderBy{
+				Inner:         &sqlparser.Order{Expr: groupExpr.Inner},
+				WeightStrExpr: groupExpr.WeightStrExpr},
+			)
+		}
+		if len(orderExprs) > 0 {
+			newInput, added, err := planOrderBy(qp, orderExprs, plan, semTable)
+			if err != nil {
+				return nil, false, err
+			}
+			oa.input = newInput
+			return oa, colAdded || added, nil
+		}
 	}
 	return oa, colAdded, nil
 }
@@ -176,6 +204,7 @@ func planGroupByGen4(groupExpr abstract.GroupBy, plan logicalPlan, semTable *sem
 		if err != nil {
 			return false, err
 		}
+		node.columnOffset[groupExpr.WeightStrExpr] = keyCol
 		return colAdded || colAddedRecursively, nil
 	default:
 		return false, semantics.Gen4NotSupportedF("group by on: %T", plan)
@@ -212,15 +241,25 @@ func planOrderBy(qp *abstract.QueryProjection, orderExprs []abstract.OrderBy, pl
 	case *joinGen4:
 		return planOrderByForJoin(qp, orderExprs, plan, semTable)
 	case *orderedAggregate:
+		for _, order := range orderExprs {
+			if sqlparser.ContainsAggregation(order.WeightStrExpr) {
+				ms, err := createMemorySortPlanOnAggregation(plan, orderExprs)
+				if err != nil {
+					return nil, false, err
+				}
+				return ms, false, nil
+			}
+		}
 		newInput, colAdded, err := planOrderBy(qp, orderExprs, plan.input, semTable)
 		if err != nil {
 			return nil, false, err
 		}
 		plan.input = newInput
-
 		return plan, colAdded, nil
+	case *memorySort:
+		return plan, false, nil
 	default:
-		return nil, false, semantics.Gen4NotSupportedF("ordering on complex query")
+		return nil, false, semantics.Gen4NotSupportedF("ordering on complex query %T", plan)
 	}
 }
 
@@ -310,7 +349,49 @@ func planOrderByForJoin(qp *abstract.QueryProjection, orderExprs []abstract.Orde
 		plan.Left = newLeft
 		return plan, false, nil
 	}
+	ms, colAdded, err := createMemorySortPlan(plan, orderExprs, semTable)
+	if err != nil {
+		return nil, false, err
+	}
+	return ms, colAdded, nil
+}
 
+func createMemorySortPlanOnAggregation(plan *orderedAggregate, orderExprs []abstract.OrderBy) (logicalPlan, error) {
+	primitive := &engine.MemorySort{}
+	ms := &memorySort{
+		resultsBuilder: resultsBuilder{
+			logicalPlanCommon: newBuilderCommon(plan),
+			weightStrings:     make(map[*resultColumn]int),
+			truncater:         primitive,
+		},
+		eMemorySort: primitive,
+	}
+
+	for _, order := range orderExprs {
+		offset, found := findExprInOrderedAggr(plan, order)
+		if !found {
+			return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "expected to find this expression")
+		}
+		ms.eMemorySort.OrderBy = append(ms.eMemorySort.OrderBy, engine.OrderbyParams{
+			Col:               offset,
+			WeightStringCol:   -1,
+			Desc:              order.Inner.Direction == sqlparser.DescOrder,
+			StarColFixedIndex: offset,
+		})
+	}
+	return ms, nil
+}
+
+func findExprInOrderedAggr(plan *orderedAggregate, order abstract.OrderBy) (int, bool) {
+	for expr, i := range plan.columnOffset {
+		if sqlparser.EqualsExpr(order.WeightStrExpr, expr) {
+			return i, true
+		}
+	}
+	return 0, false
+}
+
+func createMemorySortPlan(plan logicalPlan, orderExprs []abstract.OrderBy, semTable *semantics.SemTable) (logicalPlan, bool, error) {
 	primitive := &engine.MemorySort{}
 	ms := &memorySort{
 		resultsBuilder: resultsBuilder{
@@ -335,9 +416,7 @@ func planOrderByForJoin(qp *abstract.QueryProjection, orderExprs []abstract.Orde
 			StarColFixedIndex: offset,
 		})
 	}
-
 	return ms, colAdded, nil
-
 }
 
 func allLeft(orderExprs []abstract.OrderBy, semTable *semantics.SemTable, lhsTables semantics.TableSet) bool {

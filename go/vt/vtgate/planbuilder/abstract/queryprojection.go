@@ -35,10 +35,11 @@ type (
 
 	// QueryProjection  contains the information about the projections, group by and order by expressions used to do horizon planning.
 	QueryProjection struct {
-		SelectExprs  []SelectExpr
-		HasAggr      bool
-		GroupByExprs []GroupBy
-		OrderExprs   []OrderBy
+		SelectExprs        []SelectExpr
+		HasAggr            bool
+		GroupByExprs       []GroupBy
+		OrderExprs         []OrderBy
+		CanPushDownSorting bool
 	}
 
 	// OrderBy contains the expression to used in order by and also if ordering is needed at VTGate level then what the weight_string function expression to be sent down for evaluation.
@@ -92,7 +93,6 @@ func CreateQPFromSelect(sel *sqlparser.Select) (*QueryProjection, error) {
 	}
 
 	for _, group := range sel.GroupBy {
-		// todo dont ignore weightstringexpr
 		expr, weightStrExpr, err := qp.getSimplifiedExpr(group, "group statement")
 		if err != nil {
 			return nil, err
@@ -100,6 +100,7 @@ func CreateQPFromSelect(sel *sqlparser.Select) (*QueryProjection, error) {
 		qp.GroupByExprs = append(qp.GroupByExprs, GroupBy{Inner: expr, WeightStrExpr: weightStrExpr})
 	}
 
+	canPushDownSorting := true
 	for _, order := range sel.OrderBy {
 		expr, weightStrExpr, err := qp.getSimplifiedExpr(order.Expr, "order clause")
 		if err != nil {
@@ -112,7 +113,9 @@ func CreateQPFromSelect(sel *sqlparser.Select) (*QueryProjection, error) {
 			},
 			WeightStrExpr: weightStrExpr,
 		})
+		canPushDownSorting = canPushDownSorting && !sqlparser.ContainsAggregation(weightStrExpr)
 	}
+	qp.CanPushDownSorting = canPushDownSorting
 
 	return qp, nil
 }
