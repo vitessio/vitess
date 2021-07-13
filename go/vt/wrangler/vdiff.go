@@ -529,13 +529,21 @@ func (df *vdiff) buildTablePlan(table *tabletmanagerdatapb.TableDefinition, quer
 	// the results, which engine.OrderedAggregate can do.
 	if len(aggregates) != 0 {
 		td.sourcePrimitive = &engine.OrderedAggregate{
-			Aggregates: aggregates,
-			Keys:       td.pkCols,
-			Input:      td.sourcePrimitive,
+			Aggregates:  aggregates,
+			GroupByKeys: pkColsToGroupByParams(td.pkCols),
+			Input:       td.sourcePrimitive,
 		}
 	}
 
 	return td, nil
+}
+
+func pkColsToGroupByParams(pkCols []int) []engine.GroupbyParams {
+	var res []engine.GroupbyParams
+	for _, col := range pkCols {
+		res = append(res, engine.GroupbyParams{Col: col, KeyCol: col, WeightStringCol: -1})
+	}
+	return res
 }
 
 // newMergeSorter creates an engine.MergeSort based on the shard streamers and pk columns.

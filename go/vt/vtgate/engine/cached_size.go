@@ -395,9 +395,9 @@ func (cached *OrderedAggregate) CachedSize(alloc bool) int64 {
 			size += elem.CachedSize(false)
 		}
 	}
-	// field Keys []int
+	// field GroupByKeys []vitess.io/vitess/go/vt/vtgate/engine.GroupbyParams
 	{
-		size += int64(cap(cached.Keys)) * int64(8)
+		size += int64(cap(cached.GroupByKeys)) * int64(24)
 	}
 	// field Input vitess.io/vitess/go/vt/vtgate/engine.Primitive
 	if cc, ok := cached.Input.(cachedObject); ok {
