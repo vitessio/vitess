@@ -2555,6 +2555,7 @@ func TestStreamOrderByLimitWithMultipleResults(t *testing.T) {
 }
 
 func TestSelectScatterFails(t *testing.T) {
+	sess := &vtgatepb.Session{}
 	cell := "aa"
 	hc := discovery.NewFakeHealthCheck()
 	s := createSandbox("TestExecutor")
@@ -2586,10 +2587,10 @@ func TestSelectScatterFails(t *testing.T) {
 	logChan := QueryLogger.Subscribe("Test")
 	defer QueryLogger.Unsubscribe(logChan)
 
-	_, err := executorExec(executor, "select id from user", nil)
+	_, err := executorExecSession(executor, "select id from user", nil, sess)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "scatter")
 
-	_, err = executorExec(executor, "select /*vt+ ALLOW_SCATTER */ id from user", nil)
+	_, err = executorExecSession(executor, "select /*vt+ ALLOW_SCATTER */ id from user", nil, sess)
 	require.NoError(t, err)
 }
