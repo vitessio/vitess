@@ -17,6 +17,7 @@ limitations under the License.
 package cluster
 
 import (
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"time"
@@ -96,6 +97,42 @@ func (cfg *Config) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	return nil
 }
 
+// MarshalJSON implements the json.Marshaler interface.
+func (cfg *Config) MarshalJSON() ([]byte, error) {
+	defaultReadPoolConfig := &RPCPoolConfig{
+		Size:        DefaultReadPoolSize,
+		WaitTimeout: DefaultReadPoolWaitTimeout,
+	}
+
+	tmp := struct {
+		ID                   string            `json:"id"`
+		Name                 string            `json:"name"`
+		DiscoveryImpl        string            `json:"discovery_impl"`
+		DiscoveryFlagsByImpl FlagsByImpl       `json:"discovery_flags_by_impl"`
+		TabletFQDNTmplStr    string            `json:"tablet_fqdn_tmpl_str"`
+		VtSQLFlags           map[string]string `json:"vtsql_flags"`
+		VtctldFlags          map[string]string `json:"vtctld_flags"`
+
+		BackupReadPoolConfig   *RPCPoolConfig `json:"backup_read_pool_config"`
+		SchemaReadPoolConfig   *RPCPoolConfig `json:"schema_read_pool_config"`
+		TopoReadPoolConfig     *RPCPoolConfig `json:"topo_read_pool_config"`
+		WorkflowReadPoolConfig *RPCPoolConfig `json:"workflow_read_pool_config"`
+	}{
+		ID:                     cfg.ID,
+		Name:                   cfg.Name,
+		DiscoveryImpl:          cfg.DiscoveryImpl,
+		DiscoveryFlagsByImpl:   cfg.DiscoveryFlagsByImpl,
+		VtSQLFlags:             cfg.VtSQLFlags,
+		VtctldFlags:            cfg.VtctldFlags,
+		BackupReadPoolConfig:   defaultReadPoolConfig.merge(cfg.BackupReadPoolConfig),
+		SchemaReadPoolConfig:   defaultReadPoolConfig.merge(cfg.SchemaReadPoolConfig),
+		TopoReadPoolConfig:     defaultReadPoolConfig.merge(cfg.TopoReadPoolConfig),
+		WorkflowReadPoolConfig: defaultReadPoolConfig.merge(cfg.WorkflowReadPoolConfig),
+	}
+
+	return json.Marshal(&tmp)
+}
+
 // Merge returns the result of merging the calling config into the passed
 // config. Neither the caller or the argument are modified in any way.
 func (cfg Config) Merge(override Config) Config {
@@ -151,8 +188,8 @@ func mergeStringMap(base map[string]string, override map[string]string) {
 
 // RPCPoolConfig holds configuration options for creating RPCPools.
 type RPCPoolConfig struct {
-	Size        int
-	WaitTimeout time.Duration
+	Size        int           `json:"size"`
+	WaitTimeout time.Duration `json:"wait_timeout"`
 }
 
 // NewReadPool returns an RPCPool from the given config that should be used for

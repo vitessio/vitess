@@ -93,12 +93,18 @@ func CreateQPFromSelect(sel *sqlparser.Select) (*QueryProjection, error) {
 
 	for _, group := range sel.GroupBy {
 		// todo dont ignore weightstringexpr
-		expr, weightStrExpr := qp.getSimplifiedExpr(group)
+		expr, weightStrExpr, err := qp.getSimplifiedExpr(group, "group statement")
+		if err != nil {
+			return nil, err
+		}
 		qp.GroupByExprs = append(qp.GroupByExprs, GroupBy{Inner: expr, WeightStrExpr: weightStrExpr})
 	}
 
 	for _, order := range sel.OrderBy {
-		expr, weightStrExpr := qp.getSimplifiedExpr(order.Expr)
+		expr, weightStrExpr, err := qp.getSimplifiedExpr(order.Expr, "order clause")
+		if err != nil {
+			return nil, err
+		}
 		qp.OrderExprs = append(qp.OrderExprs, OrderBy{
 			Inner: &sqlparser.Order{
 				Expr:      expr,
@@ -113,12 +119,15 @@ func CreateQPFromSelect(sel *sqlparser.Select) (*QueryProjection, error) {
 
 // getSimplifiedExpr takes an expression used in ORDER BY or GROUP BY, which can reference both aliased columns and
 // column offsets, and returns an expression that is simpler to evaluate
-func (qp *QueryProjection) getSimplifiedExpr(e sqlparser.Expr) (expr sqlparser.Expr, weightStrExpr sqlparser.Expr) {
+func (qp *QueryProjection) getSimplifiedExpr(e sqlparser.Expr, caller string) (expr sqlparser.Expr, weightStrExpr sqlparser.Expr, err error) {
 	// Order by is the column offset to be used from the select expressions
 	// Eg - select id from music order by 1
 	literalExpr, isLiteral := e.(*sqlparser.Literal)
 	if isLiteral && literalExpr.Type == sqlparser.IntVal {
 		num, _ := strconv.Atoi(literalExpr.Val)
+		if num > len(qp.SelectExprs) {
+			return nil, nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadFieldError, "Unknown column '%d' in '%s'", num, caller)
+		}
 		aliasedExpr := qp.SelectExprs[num-1].Col
 		expr = aliasedExpr.Expr
 		if !aliasedExpr.As.IsEmpty() {
@@ -128,7 +137,7 @@ func (qp *QueryProjection) getSimplifiedExpr(e sqlparser.Expr) (expr sqlparser.E
 			}
 		}
 
-		return expr, aliasedExpr.Expr
+		return expr, aliasedExpr.Expr, nil
 	}
 
 	// If the ORDER BY is against a column alias, we need to remember the expression
@@ -139,12 +148,12 @@ func (qp *QueryProjection) getSimplifiedExpr(e sqlparser.Expr) (expr sqlparser.E
 		for _, selectExpr := range qp.SelectExprs {
 			isAliasExpr := !selectExpr.Col.As.IsEmpty()
 			if isAliasExpr && colExpr.Name.Equal(selectExpr.Col.As) {
-				return e, selectExpr.Col.Expr
+				return e, selectExpr.Col.Expr, nil
 			}
 		}
 	}
 
-	return e, e
+	return e, e, nil
 }
 
 func (qp *QueryProjection) toString() string {

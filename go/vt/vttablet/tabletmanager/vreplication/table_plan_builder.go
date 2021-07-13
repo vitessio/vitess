@@ -23,6 +23,7 @@ import (
 	"strings"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/key"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -143,7 +144,11 @@ func buildReplicatorPlan(filter *binlogdatapb.Filter, colInfoMap map[string][]*C
 		if rule == nil {
 			continue
 		}
-		tablePlan, err := buildTablePlan(tableName, rule, colInfoMap, lastpk, stats)
+		colInfos, ok := colInfoMap[tableName]
+		if !ok {
+			return nil, fmt.Errorf("table %s not found in schema", tableName)
+		}
+		tablePlan, err := buildTablePlan(tableName, rule, colInfos, lastpk, stats)
 		if err != nil {
 			return nil, err
 		}
@@ -182,7 +187,7 @@ func MatchTable(tableName string, filter *binlogdatapb.Filter) (*binlogdatapb.Ru
 	return nil, nil
 }
 
-func buildTablePlan(tableName string, rule *binlogdatapb.Rule, colInfoMap map[string][]*ColumnInfo, lastpk *sqltypes.Result, stats *binlogplayer.Stats) (*TablePlan, error) {
+func buildTablePlan(tableName string, rule *binlogdatapb.Rule, colInfos []*ColumnInfo, lastpk *sqltypes.Result, stats *binlogplayer.Stats) (*TablePlan, error) {
 	filter := rule.Filter
 	query := filter
 	// generate equivalent select statement if filter is empty or a keyrange.
@@ -242,7 +247,7 @@ func buildTablePlan(tableName string, rule *binlogdatapb.Rule, colInfoMap map[st
 		},
 		selColumns: make(map[string]bool),
 		lastpk:     lastpk,
-		colInfos:   colInfoMap[tableName],
+		colInfos:   colInfos,
 		stats:      stats,
 	}
 
@@ -264,7 +269,12 @@ func buildTablePlan(tableName string, rule *binlogdatapb.Rule, colInfoMap map[st
 	if err := tpb.analyzeGroupBy(sel.GroupBy); err != nil {
 		return nil, err
 	}
-	if err := tpb.analyzePK(colInfoMap); err != nil {
+	targetKeyColumnNames, err := textutil.SplitUnescape(rule.TargetUniqueKeyColumns, ",")
+	if err != nil {
+		return nil, err
+	}
+	pkColsInfo := tpb.getPKColsInfo(targetKeyColumnNames, colInfos)
+	if err := tpb.analyzePK(pkColsInfo); err != nil {
 		return nil, err
 	}
 
@@ -276,6 +286,16 @@ func buildTablePlan(tableName string, rule *binlogdatapb.Rule, colInfoMap map[st
 				Expr: sqlparser.NewIntLiteral("1"),
 			},
 		})
+	}
+	commentsList := []string{}
+	if len(rule.SourceUniqueKeyColumns) > 0 {
+		commentsList = append(commentsList, fmt.Sprintf(`ukColumns="%s"`, rule.SourceUniqueKeyColumns))
+	}
+	if len(commentsList) > 0 {
+		comments := sqlparser.Comments{
+			fmt.Sprintf(`/*vt+ %s */`, strings.Join(commentsList, " ")),
+		}
+		tpb.sendSelect.Comments = comments
 	}
 	sendRule.Filter = sqlparser.String(tpb.sendSelect)
 
@@ -503,12 +523,19 @@ func (tpb *tablePlanBuilder) analyzeGroupBy(groupBy sqlparser.GroupBy) error {
 	return nil
 }
 
-// analyzePK builds tpb.pkCols.
-func (tpb *tablePlanBuilder) analyzePK(colInfoMap map[string][]*ColumnInfo) error {
-	cols, ok := colInfoMap[tpb.name.String()]
-	if !ok {
-		return fmt.Errorf("table %s not found in schema", tpb.name)
+func (tpb *tablePlanBuilder) getPKColsInfo(uniqueKeyColumns []string, colInfos []*ColumnInfo) (pkColsInfo []*ColumnInfo) {
+	if len(uniqueKeyColumns) == 0 {
+		// No PK override
+		return colInfos
 	}
+	// A unique key is specified. We will re-assess colInfos based on the unique key
+	return recalculatePKColsInfoByColumnNames(uniqueKeyColumns, colInfos)
+}
+
+// analyzePK builds tpb.pkCols.
+// Input cols must include all columns which participate in the PRIMARY KEY or the chosen UniqueKey. It's OK to also include columns not in the key.
+// InputCols should be ordered according to key ordinal. e.g. if "UNIQUE KEY(c5,c2)" then we expect c5 to come before c2
+func (tpb *tablePlanBuilder) analyzePK(cols []*ColumnInfo) error {
 	for _, col := range cols {
 		if !col.IsPK {
 			continue

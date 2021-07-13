@@ -330,7 +330,7 @@
 		},
 		"onlineddl_vrepl_stress": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/onlineddl/vrepl_stress"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/onlineddl/vrepl_stress", "-timeout", "30m"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "onlineddl_vrepl_stress",
@@ -343,6 +343,15 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "onlineddl_vrepl_suite",
+			"RetryMax": 0,
+			"Tags": []
+		},
+		"onlineddl_vrepl_stress_suite": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/onlineddl/vrepl_stress_suite", "-timeout", "30m"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "onlineddl_vrepl_stress_suite",
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -447,6 +456,15 @@
 		"sharded_recovery": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/recovery/shardedrecovery"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "16",
+			"RetryMax": 0,
+			"Tags": []
+		},
+		"stress": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/stress"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "16",
