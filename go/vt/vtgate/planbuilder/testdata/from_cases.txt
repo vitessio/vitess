@@ -90,6 +90,21 @@ Gen4 plan same as above
     "Query": "select col from information_schema.foo"
   }
 }
+{
+  "QueryType": "SELECT",
+  "Original": "select col from information_schema.foo",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectDBA",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select col from information_schema.foo where 1 != 1",
+    "Query": "select col from information_schema.foo",
+    "Table": "information_schema.foo"
+  }
+}
 
 # Multi-table unsharded
 "select m1.col from unsharded as m1 join unsharded as m2"
@@ -333,6 +348,21 @@ Gen4 plan same as above
     },
     "FieldQuery": "select a.id, b.id from information_schema.a as a, information_schema.b as b where 1 != 1",
     "Query": "select a.id, b.id from information_schema.a as a, information_schema.b as b"
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select a.id,b.id from information_schema.a as a, information_schema.b as b",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectDBA",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select a.id, b.id from information_schema.a as a, information_schema.b as b where 1 != 1",
+    "Query": "select a.id, b.id from information_schema.a as a, information_schema.b as b",
+    "Table": "information_schema.a, information_schema.b"
   }
 }
 
@@ -1900,6 +1930,40 @@ Gen4 plan same as above
     ]
   }
 }
+{
+  "QueryType": "SELECT",
+  "Original": "select unsharded.foo from information_schema.a join unsharded",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "1",
+    "TableName": "information_schema.a_unsharded",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectDBA",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select 1 from information_schema.a where 1 != 1",
+        "Query": "select 1 from information_schema.a",
+        "Table": "information_schema.a"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectUnsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select unsharded.foo from unsharded where 1 != 1",
+        "Query": "select unsharded.foo from unsharded",
+        "Table": "unsharded"
+      }
+    ]
+  }
+}
 
 # join of normal table with information_schema
 "select unsharded.foo from unsharded join information_schema.a"
@@ -1932,6 +1996,40 @@ Gen4 plan same as above
         },
         "FieldQuery": "select 1 from information_schema.a where 1 != 1",
         "Query": "select 1 from information_schema.a"
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select unsharded.foo from unsharded join information_schema.a",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "-1",
+    "TableName": "unsharded_information_schema.a",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectUnsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select unsharded.foo from unsharded where 1 != 1",
+        "Query": "select unsharded.foo from unsharded",
+        "Table": "unsharded"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectDBA",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select 1 from information_schema.a where 1 != 1",
+        "Query": "select 1 from information_schema.a",
+        "Table": "information_schema.a"
       }
     ]
   }
@@ -2797,6 +2895,21 @@ Gen4 plan same as above
     "Query": "select column_name from information_schema.`columns` where table_schema = schema()"
   }
 }
+{
+  "QueryType": "SELECT",
+  "Original": "select column_name from information_schema.columns where table_schema = (select schema())",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectDBA",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select column_name from information_schema.`columns` where 1 != 1",
+    "Query": "select column_name from information_schema.`columns` where table_schema = schema()",
+    "Table": "information_schema.`columns`"
+  }
+}
 
 # information schema join
 "select * from information_schema.a join information_schema.b"
@@ -2812,6 +2925,21 @@ Gen4 plan same as above
     },
     "FieldQuery": "select * from information_schema.a join information_schema.b where 1 != 1",
     "Query": "select * from information_schema.a join information_schema.b"
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select * from information_schema.a join information_schema.b",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectDBA",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select * from information_schema.a, information_schema.b where 1 != 1",
+    "Query": "select * from information_schema.a, information_schema.b",
+    "Table": "information_schema.a, information_schema.b"
   }
 }
 
@@ -2960,6 +3088,21 @@ Gen4 plan same as above
     },
     "FieldQuery": "select id from information_schema.`processlist` where 1 != 1",
     "Query": "select id from information_schema.`processlist` where info like '% FOR UPDATE'"
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "SELECT id FROM information_schema.processlist WHERE info LIKE '% FOR UPDATE'",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectDBA",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select id from information_schema.`processlist` where 1 != 1",
+    "Query": "select id from information_schema.`processlist` where info like '% FOR UPDATE'",
+    "Table": "information_schema.`processlist`"
   }
 }
 

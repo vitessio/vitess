@@ -464,6 +464,26 @@ func removeAt(plans []joinTree, idx int) []joinTree {
 }
 
 func createRoutePlan(table *abstract.QueryTable, solves semantics.TableSet, vschema ContextVSchema) (*routePlan, error) {
+	if table.IsInfSchema {
+		defaultKeyspace, err := vschema.DefaultKeyspace()
+		if err != nil {
+			return nil, err
+		}
+		return &routePlan{
+			routeOpCode: engine.SelectDBA,
+			solved:      solves,
+			// TODO: find keyspace to route using the predicates as in v3
+			keyspace: defaultKeyspace,
+			tables: []relation{&routeTable{
+				qtable: table,
+				vtable: &vindexes.Table{
+					Name:     table.Table.Name,
+					Keyspace: defaultKeyspace,
+				},
+			}},
+			predicates: table.Predicates,
+		}, nil
+	}
 	vschemaTable, _, _, _, _, err := vschema.FindTableOrVindex(table.Table)
 	if err != nil {
 		return nil, err
