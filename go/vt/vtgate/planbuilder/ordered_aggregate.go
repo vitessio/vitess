@@ -59,6 +59,7 @@ type orderedAggregate struct {
 	resultsBuilder
 	extraDistinct *sqlparser.ColName
 	eaggr         *engine.OrderedAggregate
+	columnOffset  map[sqlparser.Expr]int
 }
 
 // checkAggregates analyzes the select expression for aggregates. If it determines

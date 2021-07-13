@@ -197,7 +197,7 @@ func planHorizon(sel *sqlparser.Select, plan logicalPlan, semTable *semantics.Se
 		needsTruncation = needsTruncation || colAdded
 	}
 
-	if qp.HasAggr {
+	if qp.HasAggr && qp.CanPushDownSorting {
 		var colAdded bool
 		plan, colAdded, err = planOrderByUsingGroupBy(qp, plan, semTable)
 		if err != nil {
