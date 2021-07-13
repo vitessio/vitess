@@ -432,7 +432,12 @@ func initMySQLProtocol() {
 			mysqlListener.ServerVersion = *servenv.MySQLServerVersion
 		}
 		if *mysqlSslCert != "" && *mysqlSslKey != "" {
-			initTLSConfig(mysqlListener, *mysqlSslCert, *mysqlSslKey, *mysqlSslCa, *mysqlSslServerCA, *mysqlServerRequireSecureTransport, vttls.TLSVersionToNumber(*mysqlTLSMinVersion))
+			tlsVersion, err := vttls.TLSVersionToNumber(*mysqlTLSMinVersion)
+			if err != nil {
+				log.Exitf("mysql.NewListener failed: %v", err)
+			}
+
+			initTLSConfig(mysqlListener, *mysqlSslCert, *mysqlSslKey, *mysqlSslCa, *mysqlSslServerCA, *mysqlServerRequireSecureTransport, tlsVersion)
 		}
 		mysqlListener.AllowClearTextWithoutTLS.Set(*mysqlAllowClearTextWithoutTLS)
 		// Check for the connection threshold

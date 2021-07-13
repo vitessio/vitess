@@ -60,18 +60,18 @@ func newTLSConfig(minVersion uint16) *tls.Config {
 
 // TLSVersionToNumber converts a text description of the TLS protocol
 // to the internal Go number representation.
-func TLSVersionToNumber(tlsVersion string) uint16 {
-	switch tlsVersion {
-	case "TLSv1.3":
-		return tls.VersionTLS13
-	case "", "TLSv1.2":
-		return tls.VersionTLS12
-	case "TLSv1.1":
-		return tls.VersionTLS11
-	case "TLSv1.0":
-		return tls.VersionTLS10
+func TLSVersionToNumber(tlsVersion string) (uint16, error) {
+	switch strings.ToLower(tlsVersion) {
+	case "tlsv1.3":
+		return tls.VersionTLS13, nil
+	case "", "tlsv1.2":
+		return tls.VersionTLS12, nil
+	case "tlsv1.1":
+		return tls.VersionTLS11, nil
+	case "tlsv1.0":
+		return tls.VersionTLS10, nil
 	default:
-		return tls.VersionTLS12
+		return tls.VersionTLS12, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "Invalid TLS version specified: %s. Allowed options are TLSv1.0, TLSv1.1, TLSv1.2 & TLSv1.3", tlsVersion)
 	}
 }
 
