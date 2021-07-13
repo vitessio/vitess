@@ -20,6 +20,7 @@ package grpcclient
 
 import (
 	"context"
+	"crypto/tls"
 	"flag"
 	"time"
 
@@ -131,7 +132,7 @@ func SecureDialOption(cert, key, ca, name string) (grpc.DialOption, error) {
 	}
 
 	// Load the config.
-	config, err := vttls.ClientConfig(cert, key, ca, name)
+	config, err := vttls.ClientConfig(cert, key, ca, name, tls.VersionTLS12)
 	if err != nil {
 		return nil, err
 	}

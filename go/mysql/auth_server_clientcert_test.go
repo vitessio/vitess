@@ -18,6 +18,7 @@ package mysql
 
 import (
 	"context"
+	"crypto/tls"
 	"io/ioutil"
 	"net"
 	"os"
@@ -62,7 +63,8 @@ func TestValidCert(t *testing.T) {
 		path.Join(root, "server-cert.pem"),
 		path.Join(root, "server-key.pem"),
 		path.Join(root, "ca-cert.pem"),
-		"")
+		"",
+		tls.VersionTLS12)
 	if err != nil {
 		t.Fatalf("TLSServerConfig failed: %v", err)
 	}
@@ -145,7 +147,8 @@ func TestNoCert(t *testing.T) {
 		path.Join(root, "server-cert.pem"),
 		path.Join(root, "server-key.pem"),
 		path.Join(root, "ca-cert.pem"),
-		"")
+		"",
+		tls.VersionTLS12)
 	if err != nil {
 		t.Fatalf("TLSServerConfig failed: %v", err)
 	}
