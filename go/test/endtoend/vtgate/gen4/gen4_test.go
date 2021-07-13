@@ -34,6 +34,10 @@ func TestOrderBy(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
+	defer func() {
+		_, _ = exec(t, conn, `delete from t1`)
+	}()
+
 	// insert some data.
 	checkedExec(t, conn, `insert into t1(id, col) values (100, 123),(10, 12),(1, 13),(1000, 1234)`)
 
@@ -53,6 +57,11 @@ func TestGroupBy(t *testing.T) {
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
+
+	defer func() {
+		_, _ = exec(t, conn, `delete from t1`)
+		_, _ = exec(t, conn, `delete from t2`)
+	}()
 
 	// insert some data.
 	checkedExec(t, conn, `insert into t1(id, col) values (1, 123),(2, 12),(3, 13),(4, 1234)`)

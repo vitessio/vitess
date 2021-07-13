@@ -332,14 +332,14 @@ func (oa *orderedAggregate) needDistinctHandling(pb *primitiveBuilder, funcExpr 
 // ability to mimic mysql's collation behavior.
 func (oa *orderedAggregate) Wireup(plan logicalPlan, jt *jointab) error {
 	for i, gbk := range oa.eaggr.GroupByKeys {
-		rc := oa.resultColumns[gbk.Col]
+		rc := oa.resultColumns[gbk.KeyCol]
 		if sqltypes.IsText(rc.column.typ) {
 			if weightcolNumber, ok := oa.weightStrings[rc]; ok {
 				oa.eaggr.GroupByKeys[i].WeightStringCol = weightcolNumber
 				oa.eaggr.GroupByKeys[i].KeyCol = weightcolNumber
 				continue
 			}
-			weightcolNumber, err := oa.input.SupplyWeightString(gbk.Col)
+			weightcolNumber, err := oa.input.SupplyWeightString(gbk.KeyCol)
 			if err != nil {
 				_, isUnsupportedErr := err.(UnsupportedSupplyWeightString)
 				if isUnsupportedErr {
