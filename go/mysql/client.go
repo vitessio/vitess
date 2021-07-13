@@ -277,7 +277,7 @@ func (c *Conn) clientHandshake(characterSet uint8, params *ConnParams) error {
 		}
 
 		// Build the TLS config.
-		clientConfig, err := vttls.ClientConfig(params.SslCert, params.SslKey, params.SslCa, serverName)
+		clientConfig, err := vttls.ClientConfig(params.SslCert, params.SslKey, params.SslCa, serverName, vttls.TLSVersionToNumber(params.TLSMinVersion))
 		if err != nil {
 			return NewSQLError(CRSSLConnectionError, SSUnknownSQLState, "error loading client cert and ca: %v", err)
 		}
