@@ -394,7 +394,7 @@ func TestVDiffPlanSuccess(t *testing.T) {
 					Opcode: engine.AggregateSum,
 					Col:    3,
 				}},
-				GroupByKeys: []engine.GroupbyParams{{Col: 0, KeyCol: 0, WeightStringCol: -1}},
+				GroupByKeys: []engine.GroupbyParams{{KeyCol: 0, WeightStringCol: -1}},
 				Input:       newMergeSorter(nil, []compareColInfo{{0, 0, true}}),
 			},
 			targetPrimitive: newMergeSorter(nil, []compareColInfo{{0, 0, true}}),

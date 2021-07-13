@@ -103,8 +103,8 @@ func planOAOrdering(pb *primitiveBuilder, orderBy sqlparser.OrderBy, oa *ordered
 
 		// Match orderByCol against the group by columns.
 		found := false
-		for j, key := range oa.eaggr.GroupByKeys {
-			if oa.resultColumns[key.Col].column != orderByCol {
+		for j, groupBy := range oa.eaggr.GroupByKeys {
+			if oa.resultColumns[groupBy.KeyCol].column != orderByCol {
 				continue
 			}
 
@@ -119,12 +119,12 @@ func planOAOrdering(pb *primitiveBuilder, orderBy sqlparser.OrderBy, oa *ordered
 	}
 
 	// Append any unreferenced keys at the end of the order by.
-	for i, key := range oa.eaggr.GroupByKeys {
+	for i, groupByKey := range oa.eaggr.GroupByKeys {
 		if referenced[i] {
 			continue
 		}
 		// Build a brand new reference for the key.
-		col, err := BuildColName(oa.input.ResultColumns(), key.Col)
+		col, err := BuildColName(oa.input.ResultColumns(), groupByKey.KeyCol)
 		if err != nil {
 			return nil, vterrors.Wrapf(err, "generating order by clause")
 		}

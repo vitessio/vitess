@@ -541,7 +541,7 @@ func (df *vdiff) buildTablePlan(table *tabletmanagerdatapb.TableDefinition, quer
 func pkColsToGroupByParams(pkCols []int) []engine.GroupbyParams {
 	var res []engine.GroupbyParams
 	for _, col := range pkCols {
-		res = append(res, engine.GroupbyParams{Col: col, KeyCol: col, WeightStringCol: -1})
+		res = append(res, engine.GroupbyParams{KeyCol: col, WeightStringCol: -1})
 	}
 	return res
 }

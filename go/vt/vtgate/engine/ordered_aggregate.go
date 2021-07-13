@@ -60,9 +60,8 @@ type OrderedAggregate struct {
 
 // GroupbyParams specify the grouping key to be used.
 type GroupbyParams struct {
-	Col             int
-	WeightStringCol int
 	KeyCol          int
+	WeightStringCol int
 }
 
 func (gbp GroupbyParams) String() string {
