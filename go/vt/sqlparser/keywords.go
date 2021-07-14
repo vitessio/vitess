@@ -401,6 +401,7 @@ var keywords = []keyword{
 	{"right", RIGHT},
 	{"rlike", REGEXP},
 	{"rollback", ROLLBACK},
+	{"row", UNUSED},
 	{"row_format", ROW_FORMAT},
 	{"row_number", UNUSED},
 	{"rows", UNUSED},
