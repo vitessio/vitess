@@ -201,7 +201,7 @@ func assertTablesPresent(t *testing.T) {
 	output, err := tmpCmd.CombinedOutput()
 	require.Nil(t, err)
 
-	numMaster, numReplica, numRdonly, numDash80, num80Dash := 0, 0, 0, 0, 0
+	numPrimary, numReplica, numRdonly, numDash80, num80Dash := 0, 0, 0, 0, 0
 	lines := strings.Split(string(output), "\n")
 	for _, line := range lines {
 		if !strings.HasPrefix(line, "test-") {
@@ -212,7 +212,7 @@ func assertTablesPresent(t *testing.T) {
 
 		switch parts[3] {
 		case "master":
-			numMaster++
+			numPrimary++
 		case "replica":
 			numReplica++
 		case "rdonly":
@@ -232,7 +232,7 @@ func assertTablesPresent(t *testing.T) {
 
 	}
 
-	assert.Equal(t, 2, numMaster)
+	assert.Equal(t, 2, numPrimary)
 	assert.Equal(t, 2, numReplica)
 	assert.Equal(t, 2, numRdonly)
 	assert.Equal(t, 3, numDash80)

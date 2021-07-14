@@ -31,7 +31,7 @@ import (
 
 var (
 	clusterInstance *cluster.LocalProcessCluster
-	masterTablet    *cluster.Vttablet
+	primaryTablet   *cluster.Vttablet
 	replicaTablet   *cluster.Vttablet
 	hostname        = "localhost"
 	keyspaceName    = "test_keyspace"
@@ -65,7 +65,7 @@ func TestMain(m *testing.M) {
 		tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 		for _, tablet := range tablets {
 			if tablet.Type == "master" {
-				masterTablet = tablet
+				primaryTablet = tablet
 			} else if tablet.Type != "rdonly" {
 				replicaTablet = tablet
 			}
@@ -139,10 +139,10 @@ func initCluster(shardNames []string, totalTabletsRequired int) error {
 
 func TestRestart(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	err := masterTablet.MysqlctldProcess.Stop()
+	err := primaryTablet.MysqlctldProcess.Stop()
 	require.Nil(t, err)
-	masterTablet.MysqlctldProcess.CleanupFiles(masterTablet.TabletUID)
-	err = masterTablet.MysqlctldProcess.Start()
+	primaryTablet.MysqlctldProcess.CleanupFiles(primaryTablet.TabletUID)
+	err = primaryTablet.MysqlctldProcess.Start()
 	require.Nil(t, err)
 }
 
@@ -159,7 +159,7 @@ func TestAutoDetect(t *testing.T) {
 	require.Nil(t, err, "error should be nil")
 
 	// Reparent tablets, which requires flavor detection
-	err = clusterInstance.VtctlclientProcess.InitShardMaster(keyspaceName, shardName, cell, masterTablet.TabletUID)
+	err = clusterInstance.VtctlclientProcess.InitShardPrimary(keyspaceName, shardName, cell, primaryTablet.TabletUID)
 	require.Nil(t, err, "error should be nil")
 
 	//Reset flavor

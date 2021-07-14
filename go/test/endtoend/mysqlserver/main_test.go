@@ -134,8 +134,8 @@ func TestMain(m *testing.M) {
 			Pass:  "testpassword1",
 		}
 
-		masterProcess := clusterInstance.Keyspaces[0].Shards[0].MasterTablet().VttabletProcess
-		if _, err := masterProcess.QueryTablet(createProcSQL, keyspaceName, false); err != nil {
+		primaryTabletProcess := clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet().VttabletProcess
+		if _, err := primaryTabletProcess.QueryTablet(createProcSQL, keyspaceName, false); err != nil {
 			return 1, err
 		}
 

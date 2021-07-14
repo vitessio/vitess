@@ -1455,7 +1455,7 @@ func (s *VtctldServer) InitShardPrimaryLocked(
 	}
 
 	// Create database if necessary on the master. replicas will get it too through
-	// replication. Since the user called InitShardMaster, they've told us to
+	// replication. Since the user called InitShardPrimary, they've told us to
 	// assume that whatever data is on all the replicas is what they intended.
 	// If the database doesn't exist, it means the user intends for these tablets
 	// to begin serving with no data (i.e. first time initialization).
