@@ -659,6 +659,51 @@ func TestDeleteAlias(t *testing.T) {
 	exec(t, conn, "delete t.* from t1 t where t.id1 = 1")
 }
 
+func TestFunctionInDefault(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	// set the sql mode ALLOW_INVALID_DATES
+	exec(t, conn, `SET sql_mode = 'ALLOW_INVALID_DATES'`)
+
+	_, err = conn.ExecuteFetch(`create table function_default (x varchar(25) DEFAULT (TRIM(" check ")))`, 1000, true)
+	// this query fails because mysql57 does not support functions in default clause
+	require.Error(t, err)
+
+	// verify that currenet_timestamp and it's aliases work as default values
+	exec(t, conn, `create table function_default (
+ts TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+dt DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+ts2 TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+dt2 DATETIME DEFAULT CURRENT_TIMESTAMP,
+ts3 TIMESTAMP DEFAULT 0,
+dt3 DATETIME DEFAULT 0,
+ts4 TIMESTAMP DEFAULT 0 ON UPDATE CURRENT_TIMESTAMP,
+dt4 DATETIME DEFAULT 0 ON UPDATE CURRENT_TIMESTAMP,
+ts5 TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+ts6 TIMESTAMP NULL ON UPDATE CURRENT_TIMESTAMP,
+dt5 DATETIME ON UPDATE CURRENT_TIMESTAMP,
+dt6 DATETIME NOT NULL ON UPDATE CURRENT_TIMESTAMP,
+ts7 TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+ts8 TIMESTAMP DEFAULT NOW(),
+ts9 TIMESTAMP DEFAULT LOCALTIMESTAMP,
+ts10 TIMESTAMP DEFAULT LOCALTIME,
+ts11 TIMESTAMP DEFAULT LOCALTIMESTAMP(),
+ts12 TIMESTAMP DEFAULT LOCALTIME()
+)`)
+	exec(t, conn, "drop table function_default")
+
+	_, err = conn.ExecuteFetch(`create table function_default (ts TIMESTAMP DEFAULT UTC_TIMESTAMP)`, 1000, true)
+	// this query fails because utc_timestamp is not supported in default clause
+	require.Error(t, err)
+
+	exec(t, conn, `create table function_default (x varchar(25) DEFAULT "check")`)
+	exec(t, conn, "drop table function_default")
+}
+
 func assertMatches(t *testing.T, conn *mysql.Conn, query, expected string) {
 	t.Helper()
 	qr := exec(t, conn, query)
