@@ -175,7 +175,7 @@ func planHorizon(sel *sqlparser.Select, plan logicalPlan, semTable *semantics.Se
 	}
 
 	var needsTruncation, vtgateGrouping bool
-	if qp.HasAggr {
+	if qp.NeedsAggregation() {
 		plan, needsTruncation, vtgateGrouping, err = planAggregations(qp, plan, semTable, vschema)
 		if err != nil {
 			return nil, err

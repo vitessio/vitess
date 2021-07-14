@@ -97,6 +97,9 @@ func CreateQPFromSelect(sel *sqlparser.Select) (*QueryProjection, error) {
 		if err != nil {
 			return nil, err
 		}
+		if sqlparser.ContainsAggregation(weightStrExpr) {
+			return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongGroupField, "Can't group on '%s'", sqlparser.String(expr))
+		}
 		qp.GroupByExprs = append(qp.GroupByExprs, GroupBy{Inner: expr, WeightStrExpr: weightStrExpr})
 	}
 
@@ -160,15 +163,6 @@ func (qp *QueryProjection) getSimplifiedExpr(e sqlparser.Expr, caller string) (e
 }
 
 func (qp *QueryProjection) toString() string {
-	/*
-		QueryProjection struct {
-			SelectExprs  []SelectExpr
-			HasAggr      bool
-			GroupByExprs sqlparser.Exprs
-			OrderExprs   []OrderBy
-		}
-
-	*/
 	type output struct {
 		Select   []string
 		Grouping []string
@@ -202,4 +196,9 @@ func (qp *QueryProjection) toString() string {
 
 	bytes, _ := json.MarshalIndent(out, "", "  ")
 	return string(bytes)
+}
+
+// NeedsAggregation returns true if we either have aggregate functions or grouping defined
+func (qp *QueryProjection) NeedsAggregation() bool {
+	return qp.HasAggr || len(qp.GroupByExprs) > 0
 }
