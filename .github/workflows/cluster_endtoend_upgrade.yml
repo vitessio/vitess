@@ -13,6 +13,10 @@ jobs:
       with:
         go-version: 1.16
 
+    - name: Get latest Vitess tag
+      run: |
+        echo "latest_release=git describe --tags $(git rev-list --tags --max-count=1)" >> $GITHUB_ENV
+
     - name: Tune the OS
       run: |
         echo '1024 65535' | sudo tee -a /proc/sys/net/ipv4/ip_local_port_range
@@ -23,10 +27,10 @@ jobs:
         echo -e "$(ip addr show eth0 | grep "inet\b" | awk '{print $2}' | cut -d/ -f1)\t$(hostname -f) $(hostname -s)" | sudo tee -a /etc/hosts
     # DON'T FORGET TO REMOVE CODE ABOVE WHEN ISSUE IS ADRESSED!
 
-    - name: Check out v9.0.0
+    - name: Check out ${{ env.latest_release }}
       uses: actions/checkout@v2
       with:
-        ref: v9.0.0
+        ref: ${{ env.latest_release }}
 
     - name: Get dependencies
       run: |
@@ -46,23 +50,23 @@ jobs:
         sudo apt-get update
         sudo apt-get install percona-xtrabackup-24
 
-    - name: Building v9.0.0 binaries
+    - name: Building ${{ env.latest_release }} binaries
       timeout-minutes: 10
       run: |
         # We build v9.0.0 binaries and save them in a temporary location
         source build.env
         make build
-        mkdir -p /tmp/vitess-build-v9.0.0/
-        cp -R bin /tmp/vitess-build-v9.0.0/
+        mkdir -p /tmp/vitess-build-${{ env.latest_release }}/
+        cp -R bin /tmp/vitess-build-${{ env.latest_release }}/
 
     - name: Check out HEAD
       uses: actions/checkout@v2
 
-    - name: Run cluster endtoend test v9.0.0 (create cluster)
+    - name: Run cluster endtoend test ${{ env.latest_release }} (create cluster)
       timeout-minutes: 5
       run: |
         # By checking out we deleted bin/ directory. We now restore our pre-built v9.0.0 binaries
-        cp -R /tmp/vitess-build-v9.0.0/bin .
+        cp -R /tmp/vitess-build-${{ env.latest_release }}/bin .
         # create the directory where we store test data; ensure it is empty:
         rm -rf /tmp/vtdataroot
         mkdir -p /tmp/vtdataroot
@@ -84,7 +88,7 @@ jobs:
         mkdir -p /tmp/vitess-build-head/
         cp -R bin /tmp/vitess-build-head/
 
-    - name: Run cluster endtoend test HEAD based on v9.0.0 data (upgrade path)
+    - name: Run cluster endtoend test HEAD based on ${{ env.latest_release }} data (upgrade path)
       timeout-minutes: 5
       run: |
         # /tmp/vtdataroot exists from previous test
@@ -105,11 +109,11 @@ jobs:
         eatmydata -- go run test.go -skip-build -keep-data -docker=false -print-log -follow -shard 28
 
 
-    - name: Run cluster endtoend test v9.0.0 based on HEAD data (downgrade path)
+    - name: Run cluster endtoend test ${{ env.latest_release }} based on HEAD data (downgrade path)
       timeout-minutes: 5
       run: |
         # /tmp/vtdataroot exists from previous test
-        cp -R /tmp/vitess-build-v9.0.0/bin .
+        cp -R /tmp/vitess-build-${{ env.latest_release }}/bin .
 
         source build.env
         # We again built manually and there's no need for the test to build.
