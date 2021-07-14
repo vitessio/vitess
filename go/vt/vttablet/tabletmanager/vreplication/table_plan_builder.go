@@ -23,6 +23,7 @@ import (
 	"strings"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/key"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -46,15 +47,14 @@ type tablePlanBuilder struct {
 	// selColumns keeps track of the columns we want to pull from source.
 	// If Lastpk is set, we compare this list against the table's pk and
 	// add missing references.
-	selColumns map[string]bool
-	colExprs   []*colExpr
-	onInsert   insertType
-	pkCols     []*colExpr
-	lastpk     *sqltypes.Result
-	colInfos   []*ColumnInfo
-	stats      *binlogplayer.Stats
-
-	recalculatePKColsInfo recalculatePKColsInfoFunc
+	selColumns        map[string]bool
+	colExprs          []*colExpr
+	onInsert          insertType
+	pkCols            []*colExpr
+	extraSourcePkCols []*colExpr
+	lastpk            *sqltypes.Result
+	colInfos          []*ColumnInfo
+	stats             *binlogplayer.Stats
 }
 
 // colExpr describes the processing to be performed to
@@ -108,8 +108,6 @@ const (
 	insertIgnore
 )
 
-type recalculatePKColsInfoFunc func(tableName string, uniqueKeyName string, colInfos []*ColumnInfo) (pkColInfos []*ColumnInfo, err error)
-
 // buildReplicatorPlan builds a ReplicatorPlan for the tables that match the filter.
 // The filter is matched against the target schema. For every table matched,
 // a table-specific rule is built to be sent to the source. We don't send the
@@ -126,9 +124,7 @@ type recalculatePKColsInfoFunc func(tableName string, uniqueKeyName string, colI
 // The TablePlan built is a partial plan. The full plan for a table is built
 // when we receive field information from events or rows sent by the source.
 // buildExecutionPlan is the function that builds the full plan.
-func buildReplicatorPlan(filter *binlogdatapb.Filter, colInfoMap map[string][]*ColumnInfo, copyState map[string]*sqltypes.Result, stats *binlogplayer.Stats,
-	recalculatePKColsInfo recalculatePKColsInfoFunc,
-) (*ReplicatorPlan, error) {
+func buildReplicatorPlan(filter *binlogdatapb.Filter, colInfoMap map[string][]*ColumnInfo, copyState map[string]*sqltypes.Result, stats *binlogplayer.Stats) (*ReplicatorPlan, error) {
 	plan := &ReplicatorPlan{
 		VStreamFilter: &binlogdatapb.Filter{FieldEventMode: filter.FieldEventMode},
 		TargetTables:  make(map[string]*TablePlan),
@@ -153,7 +149,7 @@ func buildReplicatorPlan(filter *binlogdatapb.Filter, colInfoMap map[string][]*C
 		if !ok {
 			return nil, fmt.Errorf("table %s not found in schema", tableName)
 		}
-		tablePlan, err := buildTablePlan(tableName, rule, colInfos, lastpk, stats, recalculatePKColsInfo)
+		tablePlan, err := buildTablePlan(tableName, rule, colInfos, lastpk, stats)
 		if err != nil {
 			return nil, err
 		}
@@ -192,9 +188,7 @@ func MatchTable(tableName string, filter *binlogdatapb.Filter) (*binlogdatapb.Ru
 	return nil, nil
 }
 
-func buildTablePlan(tableName string, rule *binlogdatapb.Rule, colInfos []*ColumnInfo, lastpk *sqltypes.Result, stats *binlogplayer.Stats,
-	recalculatePKColsInfo recalculatePKColsInfoFunc,
-) (*TablePlan, error) {
+func buildTablePlan(tableName string, rule *binlogdatapb.Rule, colInfos []*ColumnInfo, lastpk *sqltypes.Result, stats *binlogplayer.Stats) (*TablePlan, error) {
 	filter := rule.Filter
 	query := filter
 	// generate equivalent select statement if filter is empty or a keyrange.
@@ -252,11 +246,10 @@ func buildTablePlan(tableName string, rule *binlogdatapb.Rule, colInfos []*Colum
 			From:  sel.From,
 			Where: sel.Where,
 		},
-		selColumns:            make(map[string]bool),
-		lastpk:                lastpk,
-		colInfos:              colInfos,
-		stats:                 stats,
-		recalculatePKColsInfo: recalculatePKColsInfo,
+		selColumns: make(map[string]bool),
+		lastpk:     lastpk,
+		colInfos:   colInfos,
+		stats:      stats,
 	}
 
 	if err := tpb.analyzeExprs(sel.SelectExprs); err != nil {
@@ -277,11 +270,20 @@ func buildTablePlan(tableName string, rule *binlogdatapb.Rule, colInfos []*Colum
 	if err := tpb.analyzeGroupBy(sel.GroupBy); err != nil {
 		return nil, err
 	}
-	pkColsInfo, err := tpb.getPKColsInfo(tableName, rule.TargetUniqueKey, colInfos)
+	targetKeyColumnNames, err := textutil.SplitUnescape(rule.TargetUniqueKeyColumns, ",")
 	if err != nil {
 		return nil, err
 	}
+	pkColsInfo := tpb.getPKColsInfo(targetKeyColumnNames, colInfos)
 	if err := tpb.analyzePK(pkColsInfo); err != nil {
+		return nil, err
+	}
+
+	sourceKeyTargetColumnNames, err := textutil.SplitUnescape(rule.SourceUniqueKeyTargetColumns, ",")
+	if err != nil {
+		return nil, err
+	}
+	if err := tpb.analyzeExtraSourcePkCols(colInfos, sourceKeyTargetColumnNames); err != nil {
 		return nil, err
 	}
 
@@ -295,8 +297,8 @@ func buildTablePlan(tableName string, rule *binlogdatapb.Rule, colInfos []*Colum
 		})
 	}
 	commentsList := []string{}
-	if rule.SourceUniqueKey != "" {
-		commentsList = append(commentsList, fmt.Sprintf(`ukName="%s"`, rule.SourceUniqueKey))
+	if rule.SourceUniqueKeyColumns != "" {
+		commentsList = append(commentsList, fmt.Sprintf(`ukColumns="%s"`, rule.SourceUniqueKeyColumns))
 	}
 	if len(commentsList) > 0 {
 		comments := sqlparser.Comments{
@@ -341,17 +343,18 @@ func (tpb *tablePlanBuilder) generate() *TablePlan {
 	}
 
 	return &TablePlan{
-		TargetName:       tpb.name.String(),
-		Lastpk:           tpb.lastpk,
-		BulkInsertFront:  tpb.generateInsertPart(sqlparser.NewTrackedBuffer(bvf.formatter)),
-		BulkInsertValues: tpb.generateValuesPart(sqlparser.NewTrackedBuffer(bvf.formatter), bvf),
-		BulkInsertOnDup:  tpb.generateOnDupPart(sqlparser.NewTrackedBuffer(bvf.formatter)),
-		Insert:           tpb.generateInsertStatement(),
-		Update:           tpb.generateUpdateStatement(),
-		Delete:           tpb.generateDeleteStatement(),
-		PKReferences:     pkrefs,
-		Stats:            tpb.stats,
-		FieldsToSkip:     fieldsToSkip,
+		TargetName:              tpb.name.String(),
+		Lastpk:                  tpb.lastpk,
+		BulkInsertFront:         tpb.generateInsertPart(sqlparser.NewTrackedBuffer(bvf.formatter)),
+		BulkInsertValues:        tpb.generateValuesPart(sqlparser.NewTrackedBuffer(bvf.formatter), bvf),
+		BulkInsertOnDup:         tpb.generateOnDupPart(sqlparser.NewTrackedBuffer(bvf.formatter)),
+		Insert:                  tpb.generateInsertStatement(),
+		Update:                  tpb.generateUpdateStatement(),
+		Delete:                  tpb.generateDeleteStatement(),
+		PKReferences:            pkrefs,
+		Stats:                   tpb.stats,
+		FieldsToSkip:            fieldsToSkip,
+		HasExtraSourcePkColumns: (len(tpb.extraSourcePkCols) > 0),
 	}
 }
 
@@ -530,21 +533,20 @@ func (tpb *tablePlanBuilder) analyzeGroupBy(groupBy sqlparser.GroupBy) error {
 	return nil
 }
 
-func (tpb *tablePlanBuilder) getPKColsInfo(tableName string, uniqueKeyName string, colInfos []*ColumnInfo) (pkColsInfo []*ColumnInfo, err error) {
-	if uniqueKeyName == "" || uniqueKeyName == "PRIMARY" {
+func (tpb *tablePlanBuilder) getPKColsInfo(uniqueKeyColumns []string, colInfos []*ColumnInfo) (pkColsInfo []*ColumnInfo) {
+	if len(uniqueKeyColumns) == 0 {
 		// No PK override
-		return colInfos, nil
-	}
-	if tpb.recalculatePKColsInfo == nil {
-		return colInfos, nil
+		return colInfos
 	}
 	// A unique key is specified. We will re-assess colInfos based on the unique key
-	return tpb.recalculatePKColsInfo(tableName, uniqueKeyName, colInfos)
+	return recalculatePKColsInfoByColumnNames(uniqueKeyColumns, colInfos)
 }
 
 // analyzePK builds tpb.pkCols.
-// Input cols must include all columns which participate in the PRIMARY KEY or the chosen UniqueKey. It's OK to also include columns not in the key.
-// InputCols should be ordered according to key ordinal. e.g. if "UNIQUE KEY(c5,c2)" then we expect c5 to come before c2
+// Input cols must include all columns which participate in the PRIMARY KEY or the chosen UniqueKey.
+// It's OK to also include columns not in the key.
+// Input cols should be ordered according to key ordinal.
+// e.g. if "UNIQUE KEY(c5,c2)" then we expect c5 to come before c2
 func (tpb *tablePlanBuilder) analyzePK(cols []*ColumnInfo) error {
 	for _, col := range cols {
 		if !col.IsPK {
@@ -574,13 +576,55 @@ func (tpb *tablePlanBuilder) analyzePK(cols []*ColumnInfo) error {
 	return nil
 }
 
-func (tpb *tablePlanBuilder) findCol(name sqlparser.ColIdent) *colExpr {
-	for _, cexpr := range tpb.colExprs {
+// analyzeExtraSourcePkCols builds tpb.extraSourcePkCols.
+// Vreplication allows source and target tables to use different unique keys. Normally, both will
+// use same PRIMARY KEY. Other times, same other UNIQUE KEY. Byut it's possible that cource and target
+// unique keys will only have partial (or empty) shared list of columns.
+// To be able to generate UPDATE/DELETE queries correctly, we need to know the identities of the
+// source unique key columns, that are not already part of the target unique key columns. We call
+// those columns "extra source pk columns". We will use them in the `WHERE` clause.
+func (tpb *tablePlanBuilder) analyzeExtraSourcePkCols(colInfos []*ColumnInfo, sourceKeyTargetColumnNames []string) error {
+	sourceKeyTargetColumnNamesMap := map[string]bool{}
+	for _, name := range sourceKeyTargetColumnNames {
+		sourceKeyTargetColumnNamesMap[name] = true
+	}
+
+	for _, col := range colInfos {
+		if !sourceKeyTargetColumnNamesMap[col.Name] {
+			// This column is not interesting
+			continue
+		}
+
+		if cexpr := findCol(sqlparser.NewColIdent(col.Name), tpb.pkCols); cexpr != nil {
+			// Column is already found in pkCols. It's not an "extra" column
+			continue
+		}
+		if cexpr := findCol(sqlparser.NewColIdent(col.Name), tpb.colExprs); cexpr != nil {
+			tpb.extraSourcePkCols = append(tpb.extraSourcePkCols, cexpr)
+		} else {
+			// Column not found
+			if !col.IsGenerated {
+				// We shouldn't get here in any normal scenario. If a column is part of colInfos,
+				// then it must also exist in tpb.colExprs.
+				return fmt.Errorf("column %s not found in table expressions", col.Name)
+			}
+		}
+	}
+	return nil
+}
+
+// findCol finds a column in a list of expressions
+func findCol(name sqlparser.ColIdent, exprs []*colExpr) *colExpr {
+	for _, cexpr := range exprs {
 		if cexpr.colName.Equal(name) {
 			return cexpr
 		}
 	}
 	return nil
+}
+
+func (tpb *tablePlanBuilder) findCol(name sqlparser.ColIdent) *colExpr {
+	return findCol(name, tpb.colExprs)
 }
 
 func (tpb *tablePlanBuilder) generateInsertStatement() *sqlparser.ParsedQuery {
@@ -782,18 +826,23 @@ func (tpb *tablePlanBuilder) generateWhere(buf *sqlparser.TrackedBuffer, bvf *bi
 	buf.WriteString(" where ")
 	bvf.mode = bvBefore
 	separator := ""
-	for _, cexpr := range tpb.pkCols {
-		if _, ok := cexpr.expr.(*sqlparser.ColName); ok {
-			buf.Myprintf("%s%v=", separator, cexpr.colName)
-			buf.Myprintf("%v", cexpr.expr)
-		} else {
-			// Parenthesize non-trivial expressions.
-			buf.Myprintf("%s%v=(", separator, cexpr.colName)
-			buf.Myprintf("%v", cexpr.expr)
-			buf.Myprintf(")")
+
+	addWhereColumns := func(colExprs []*colExpr) {
+		for _, cexpr := range colExprs {
+			if _, ok := cexpr.expr.(*sqlparser.ColName); ok {
+				buf.Myprintf("%s%v=", separator, cexpr.colName)
+				buf.Myprintf("%v", cexpr.expr)
+			} else {
+				// Parenthesize non-trivial expressions.
+				buf.Myprintf("%s%v=(", separator, cexpr.colName)
+				buf.Myprintf("%v", cexpr.expr)
+				buf.Myprintf(")")
+			}
+			separator = " and "
 		}
-		separator = " and "
 	}
+	addWhereColumns(tpb.pkCols)
+	addWhereColumns(tpb.extraSourcePkCols)
 	if tpb.lastpk != nil {
 		buf.WriteString(" and ")
 		tpb.generatePKConstraint(buf, bvf)

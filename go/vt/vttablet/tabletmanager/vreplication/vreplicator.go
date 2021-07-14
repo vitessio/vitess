@@ -35,7 +35,6 @@ import (
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
-	"vitess.io/vitess/go/vt/sqlparser"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
@@ -424,25 +423,4 @@ func recalculatePKColsInfoByColumnNames(uniqueKeyColumnNames []string, colInfos 
 		pkColInfos[i].IsPK = isPKMap[pkColInfos[i].Name]
 	}
 	return pkColInfos
-}
-
-func (vr *vreplicator) recalculatePKColsInfo(tableName string, uniqueKeyName string, colInfos []*ColumnInfo) (pkColInfos []*ColumnInfo, err error) {
-	query, err := sqlparser.ParseAndBind(mysql.BaseShowTableUniqueKey,
-		sqltypes.StringBindVariable(tableName),
-		sqltypes.StringBindVariable(uniqueKeyName),
-	)
-	if err != nil {
-		return nil, err
-	}
-	r, err := vr.dbClient.ExecuteFetch(query, math.MaxInt64)
-	if err != nil {
-		return nil, err
-	}
-
-	var uniqueKeyColumnNames []string
-	for _, row := range r.Named().Rows {
-		colName := row["column_name"].ToString()
-		uniqueKeyColumnNames = append(uniqueKeyColumnNames, colName)
-	}
-	return recalculatePKColsInfoByColumnNames(uniqueKeyColumnNames, colInfos), nil
 }

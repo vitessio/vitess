@@ -107,7 +107,10 @@ func run(cmd *cobra.Command, args []string) {
 		clusters[i] = cluster
 	}
 
-	s := vtadmin.NewAPI(clusters, opts, httpOpts)
+	s := vtadmin.NewAPI(clusters, vtadmin.Options{
+		GRPCOpts: opts,
+		HTTPOpts: httpOpts,
+	})
 	bootSpan.Finish()
 
 	if err := s.ListenAndServe(); err != nil {

@@ -7,6 +7,8 @@ create table onlineddl_test (
   unique key its_uidx(i, id)
 ) ;
 
+insert into onlineddl_test values (null, 3, now(6));
+
 drop event if exists onlineddl_test;
 delimiter ;;
 create event onlineddl_test

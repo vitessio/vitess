@@ -24,6 +24,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/util/sets"
 
+	"vitess.io/vitess/go/pools"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtadmin/vtctldclient/fakevtctldclient"
 	"vitess.io/vitess/go/vt/vtctl/vtctldclient"
@@ -38,7 +39,6 @@ type vtctldProxy struct {
 }
 
 func (fake *vtctldProxy) Dial(ctx context.Context) error { return fake.dialErr }
-func (fake *vtctldProxy) Hostname() string               { return "fake" }
 
 func Test_getShardSets(t *testing.T) {
 	t.Parallel()
@@ -119,6 +119,7 @@ func Test_getShardSets(t *testing.T) {
 				},
 			},
 		},
+		topoReadPool: pools.NewRPCPool(5, 0, nil),
 	}
 	require.NoError(t, c.Vtctld.Dial(context.Background()))
 

@@ -163,7 +163,7 @@ func setupShard(ctx context.Context, t *testing.T, shardName string, tablets []*
 	}
 
 	for _, tablet := range tablets {
-		err := tablet.VttabletProcess.WaitForTabletTypes([]string{"SERVING", "NOT_SERVING"})
+		err := tablet.VttabletProcess.WaitForTabletStatuses([]string{"SERVING", "NOT_SERVING"})
 		require.NoError(t, err)
 	}
 
@@ -461,7 +461,7 @@ func checkInsertedValues(ctx context.Context, t *testing.T, tablet *cluster.Vtta
 // region tablet operations
 
 func stopTablet(t *testing.T, tab *cluster.Vttablet, stopDatabase bool) {
-	err := tab.VttabletProcess.TearDown()
+	err := tab.VttabletProcess.TearDownWithTimeout(30 * time.Second)
 	require.NoError(t, err)
 	if stopDatabase {
 		err = tab.MysqlctlProcess.Stop()
