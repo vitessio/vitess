@@ -155,7 +155,6 @@ func (vtgate *VtgateProcess) GetStatusForTabletOfShard(name string, endPointsCou
 			panic(err)
 		}
 		object := reflect.ValueOf(resultMap["HealthcheckConnections"])
-		masterConnectionExist := false
 		if object.Kind() == reflect.Map {
 			for _, key := range object.MapKeys() {
 				if key.String() == name {
@@ -165,7 +164,6 @@ func (vtgate *VtgateProcess) GetStatusForTabletOfShard(name string, endPointsCou
 				}
 			}
 		}
-		return masterConnectionExist
 	}
 	return false
 }

@@ -42,8 +42,8 @@ type VtctlClientParams struct {
 	SkipPreflight bool
 }
 
-// InitShardMaster executes vtctlclient command to make one of tablet as master
-func (vtctlclient *VtctlClientProcess) InitShardMaster(Keyspace string, Shard string, Cell string, TabletUID int) (err error) {
+// InitShardPrimary executes vtctlclient command to make specified tablet the primary for the shard.
+func (vtctlclient *VtctlClientProcess) InitShardPrimary(Keyspace string, Shard string, Cell string, TabletUID int) (err error) {
 	output, err := vtctlclient.ExecuteCommandWithOutput(
 		"InitShardMaster",
 		"-force", "-wait_replicas_timeout", "31s",
