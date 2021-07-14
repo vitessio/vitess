@@ -132,7 +132,7 @@ Gen4 plan same as above
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
     "Aggregates": "count(0)",
-    "GroupBy": "1, 5, 3",
+    "GroupBy": "1, 2, 3",
     "ResultColumns": 4,
     "Inputs": [
       {
@@ -221,14 +221,14 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Sort",
     "Variant": "Memory",
-    "OrderBy": "0 ASC, 5 ASC",
+    "OrderBy": "0 ASC, 2 ASC",
     "ResultColumns": 4,
     "Inputs": [
       {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
         "Aggregates": "count(0)",
-        "GroupBy": "1, 5, 3",
+        "GroupBy": "1, 2, 3",
         "Inputs": [
           {
             "OperatorType": "Route",

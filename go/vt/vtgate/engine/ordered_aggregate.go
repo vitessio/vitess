@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"strconv"
 
+	"vitess.io/vitess/go/vt/sqlparser"
+
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -62,6 +64,7 @@ type OrderedAggregate struct {
 type GroupbyParams struct {
 	KeyCol          int
 	WeightStringCol int
+	Expr            sqlparser.Expr
 }
 
 func (gbp GroupbyParams) String() string {
@@ -75,6 +78,7 @@ type AggregateParams struct {
 	Col    int
 	// Alias is set only for distinct opcodes.
 	Alias string `json:",omitempty"`
+	Expr  sqlparser.Expr
 }
 
 func (ap AggregateParams) isDistinct() bool {
