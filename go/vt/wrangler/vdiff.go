@@ -538,10 +538,10 @@ func (df *vdiff) buildTablePlan(table *tabletmanagerdatapb.TableDefinition, quer
 	return td, nil
 }
 
-func pkColsToGroupByParams(pkCols []int) []engine.GroupbyParams {
-	var res []engine.GroupbyParams
+func pkColsToGroupByParams(pkCols []int) []engine.GroupByParams {
+	var res []engine.GroupByParams
 	for _, col := range pkCols {
-		res = append(res, engine.GroupbyParams{KeyCol: col, WeightStringCol: -1})
+		res = append(res, engine.GroupByParams{KeyCol: col, WeightStringCol: -1})
 	}
 	return res
 }
@@ -552,13 +552,13 @@ func newMergeSorter(participants map[string]*shardStreamer, comparePKs []compare
 	for _, participant := range participants {
 		prims = append(prims, participant)
 	}
-	ob := make([]engine.OrderbyParams, 0, len(comparePKs))
+	ob := make([]engine.OrderByParams, 0, len(comparePKs))
 	for _, cpk := range comparePKs {
 		weightStringCol := -1
 		if cpk.weightStringIndex != cpk.colIndex {
 			weightStringCol = cpk.weightStringIndex
 		}
-		ob = append(ob, engine.OrderbyParams{Col: cpk.colIndex, WeightStringCol: weightStringCol})
+		ob = append(ob, engine.OrderByParams{Col: cpk.colIndex, WeightStringCol: weightStringCol})
 	}
 	return &engine.MergeSort{
 		Primitives: prims,

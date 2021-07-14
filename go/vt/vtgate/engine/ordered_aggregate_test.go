@@ -53,7 +53,7 @@ func TestOrderedAggregateExecute(t *testing.T) {
 			Opcode: AggregateCount,
 			Col:    1,
 		}},
-		GroupByKeys: []GroupbyParams{{KeyCol: 0}},
+		GroupByKeys: []GroupByParams{{KeyCol: 0}},
 		Input:       fp,
 	}
 
@@ -90,7 +90,7 @@ func TestOrderedAggregateExecuteTruncate(t *testing.T) {
 			Opcode: AggregateCount,
 			Col:    1,
 		}},
-		GroupByKeys:         []GroupbyParams{{KeyCol: 2}},
+		GroupByKeys:         []GroupByParams{{KeyCol: 2}},
 		TruncateColumnCount: 2,
 		Input:               fp,
 	}
@@ -132,7 +132,7 @@ func TestOrderedAggregateStreamExecute(t *testing.T) {
 			Opcode: AggregateCount,
 			Col:    1,
 		}},
-		GroupByKeys: []GroupbyParams{{KeyCol: 0}},
+		GroupByKeys: []GroupByParams{{KeyCol: 0}},
 		Input:       fp,
 	}
 
@@ -175,7 +175,7 @@ func TestOrderedAggregateStreamExecuteTruncate(t *testing.T) {
 			Opcode: AggregateCount,
 			Col:    1,
 		}},
-		GroupByKeys:         []GroupbyParams{{KeyCol: 2}},
+		GroupByKeys:         []GroupByParams{{KeyCol: 2}},
 		TruncateColumnCount: 2,
 		Input:               fp,
 	}
@@ -316,7 +316,7 @@ func TestOrderedAggregateExecuteCountDistinct(t *testing.T) {
 			Opcode: AggregateCount,
 			Col:    2,
 		}},
-		GroupByKeys: []GroupbyParams{{KeyCol: 0}},
+		GroupByKeys: []GroupByParams{{KeyCol: 0}},
 		Input:       fp,
 	}
 
@@ -392,7 +392,7 @@ func TestOrderedAggregateStreamCountDistinct(t *testing.T) {
 			Opcode: AggregateCount,
 			Col:    2,
 		}},
-		GroupByKeys: []GroupbyParams{{KeyCol: 0}},
+		GroupByKeys: []GroupByParams{{KeyCol: 0}},
 		Input:       fp,
 	}
 
@@ -480,7 +480,7 @@ func TestOrderedAggregateSumDistinctGood(t *testing.T) {
 			Opcode: AggregateSum,
 			Col:    2,
 		}},
-		GroupByKeys: []GroupbyParams{{KeyCol: 0}},
+		GroupByKeys: []GroupByParams{{KeyCol: 0}},
 		Input:       fp,
 	}
 
@@ -525,7 +525,7 @@ func TestOrderedAggregateSumDistinctTolerateError(t *testing.T) {
 			Col:    1,
 			Alias:  "sum(distinct col2)",
 		}},
-		GroupByKeys: []GroupbyParams{{KeyCol: 0}},
+		GroupByKeys: []GroupByParams{{KeyCol: 0}},
 		Input:       fp,
 	}
 
@@ -560,7 +560,7 @@ func TestOrderedAggregateKeysFail(t *testing.T) {
 			Opcode: AggregateCount,
 			Col:    1,
 		}},
-		GroupByKeys: []GroupbyParams{{KeyCol: 0}},
+		GroupByKeys: []GroupByParams{{KeyCol: 0}},
 		Input:       fp,
 	}
 
@@ -593,7 +593,7 @@ func TestOrderedAggregateMergeFail(t *testing.T) {
 			Opcode: AggregateCount,
 			Col:    1,
 		}},
-		GroupByKeys: []GroupbyParams{{KeyCol: 0}},
+		GroupByKeys: []GroupByParams{{KeyCol: 0}},
 		Input:       fp,
 	}
 
@@ -721,7 +721,7 @@ func TestNoInputAndNoGroupingKeys(outer *testing.T) {
 					Col:    0,
 					Alias:  test.name,
 				}},
-				GroupByKeys: []GroupbyParams{},
+				GroupByKeys: []GroupByParams{},
 				Input:       fp,
 			}
 

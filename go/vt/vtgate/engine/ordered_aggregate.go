@@ -49,7 +49,7 @@ type OrderedAggregate struct {
 
 	// GroupByKeys specifies the input values that must be used for
 	// the aggregation key.
-	GroupByKeys []GroupbyParams
+	GroupByKeys []GroupByParams
 
 	// TruncateColumnCount specifies the number of columns to return
 	// in the final result. Rest of the columns are truncated
@@ -60,14 +60,15 @@ type OrderedAggregate struct {
 	Input Primitive
 }
 
-// GroupbyParams specify the grouping key to be used.
-type GroupbyParams struct {
+// GroupByParams specify the grouping key to be used.
+type GroupByParams struct {
 	KeyCol          int
 	WeightStringCol int
 	Expr            sqlparser.Expr
 }
 
-func (gbp GroupbyParams) String() string {
+// String returns a string. Used for plan descriptions
+func (gbp GroupByParams) String() string {
 	if gbp.WeightStringCol == -1 || gbp.KeyCol == gbp.WeightStringCol {
 		return strconv.Itoa(gbp.KeyCol)
 	}
@@ -476,7 +477,7 @@ func aggregateParamsToString(in interface{}) string {
 }
 
 func groupByParamsToString(i interface{}) string {
-	return i.(GroupbyParams).String()
+	return i.(GroupByParams).String()
 }
 
 func (oa *OrderedAggregate) description() PrimitiveDescription {

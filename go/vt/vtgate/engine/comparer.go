@@ -59,8 +59,8 @@ func (c *comparer) compare(r1, r2 []sqltypes.Value) (int, error) {
 	return cmp, nil
 }
 
-// extractSlices extracts the three fields of OrderbyParams into a slice of comparers
-func extractSlices(input []OrderbyParams) []*comparer {
+// extractSlices extracts the three fields of OrderByParams into a slice of comparers
+func extractSlices(input []OrderByParams) []*comparer {
 	var result []*comparer
 	for _, order := range input {
 		result = append(result, &comparer{

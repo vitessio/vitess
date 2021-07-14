@@ -225,7 +225,7 @@ func planGroupByGen4(groupExpr abstract.GroupBy, plan logicalPlan, semTable *sem
 		if err != nil {
 			return false, err
 		}
-		node.eaggr.GroupByKeys = append(node.eaggr.GroupByKeys, engine.GroupbyParams{KeyCol: keyCol, WeightStringCol: weightStringOffset, Expr: groupExpr.WeightStrExpr})
+		node.eaggr.GroupByKeys = append(node.eaggr.GroupByKeys, engine.GroupByParams{KeyCol: keyCol, WeightStringCol: weightStringOffset, Expr: groupExpr.WeightStrExpr})
 		colAddedRecursively, err := planGroupByGen4(groupExpr, node.input, semTable)
 		if err != nil {
 			return false, err
@@ -296,7 +296,7 @@ func planOrderByForRoute(orderExprs []abstract.OrderBy, plan *route, semTable *s
 			return nil, false, err
 		}
 
-		plan.eroute.OrderBy = append(plan.eroute.OrderBy, engine.OrderbyParams{
+		plan.eroute.OrderBy = append(plan.eroute.OrderBy, engine.OrderByParams{
 			Col:             offset,
 			WeightStringCol: weightStringOffset,
 			Desc:            order.Inner.Direction == sqlparser.DescOrder,
@@ -386,7 +386,7 @@ func createMemorySortPlanOnAggregation(plan *orderedAggregate, orderExprs []abst
 		if !found {
 			return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "expected to find this expression")
 		}
-		ms.eMemorySort.OrderBy = append(ms.eMemorySort.OrderBy, engine.OrderbyParams{
+		ms.eMemorySort.OrderBy = append(ms.eMemorySort.OrderBy, engine.OrderByParams{
 			Col:               offset,
 			WeightStringCol:   woffset,
 			Desc:              order.Inner.Direction == sqlparser.DescOrder,
@@ -428,7 +428,7 @@ func createMemorySortPlan(plan logicalPlan, orderExprs []abstract.OrderBy, semTa
 			return nil, false, err
 		}
 		colAdded = colAdded || added
-		ms.eMemorySort.OrderBy = append(ms.eMemorySort.OrderBy, engine.OrderbyParams{
+		ms.eMemorySort.OrderBy = append(ms.eMemorySort.OrderBy, engine.OrderByParams{
 			Col:               offset,
 			WeightStringCol:   weightStringOffset,
 			Desc:              order.Inner.Direction == sqlparser.DescOrder,

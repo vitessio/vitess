@@ -1384,5 +1384,4 @@ func ContainsAggregation(e Expr) bool {
 		return true, nil
 	}, e)
 	return hasAggregates
-
 }

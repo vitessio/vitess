@@ -33,8 +33,9 @@ type (
 		Aggr bool
 	}
 
-	// QueryProjection  contains the information about the projections, group by and order by expressions used to do horizon planning.
+	// QueryProjection contains the information about the projections, group by and order by expressions used to do horizon planning.
 	QueryProjection struct {
+		// If you change the contents here, please update the toString() method
 		SelectExprs        []SelectExpr
 		HasAggr            bool
 		GroupByExprs       []GroupBy
@@ -162,6 +163,7 @@ func (qp *QueryProjection) getSimplifiedExpr(e sqlparser.Expr, caller string) (e
 	return e, e, nil
 }
 
+// toString should only be used for tests
 func (qp *QueryProjection) toString() string {
 	type output struct {
 		Select   []string
