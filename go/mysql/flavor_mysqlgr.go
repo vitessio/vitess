@@ -123,7 +123,7 @@ func (mysqlGRFlavor) status(c *Conn) (ReplicationStatus, error) {
 			chanel = "group_replication_recovery"
 		} else { // OFFLINE, ERROR, UNREACHABLE
 			// If the member is not in healthy state, use max int as lag
-			res.SecondsBehindMaster = math.MaxUint32
+			res.ReplicationLagSeconds = math.MaxUint32
 		}
 		return nil
 	})
@@ -183,18 +183,18 @@ func (mysqlGRFlavor) status(c *Conn) (ReplicationStatus, error) {
 }
 
 func parsePrimaryGroupMember(res *ReplicationStatus, row []sqltypes.Value) {
-	res.MasterHost = row[0].ToString() /* MEMBER_HOST */
+	res.SourceHost = row[0].ToString() /* MEMBER_HOST */
 	memberPort, _ := row[1].ToInt64()  /* MEMBER_PORT */
-	res.MasterPort = int(memberPort)
+	res.SourcePort = int(memberPort)
 }
 
 func parseReplicationApplierLag(res *ReplicationStatus, row []sqltypes.Value) {
 	lagSec, err := row[0].ToInt64()
-	// if the error is not nil, SecondsBehindMaster will remain to be MaxUint32
+	// if the error is not nil, ReplicationLagSeconds will remain to be MaxUint32
 	if err == nil {
 		// Only set where there is no error
 		// The value can be NULL when there is no replication applied yet
-		res.SecondsBehindMaster = uint(lagSec)
+		res.ReplicationLagSeconds = uint(lagSec)
 	}
 }
 

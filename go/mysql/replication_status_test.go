@@ -81,9 +81,9 @@ func TestFindErrantGTIDs(t *testing.T) {
 		masterSID: []interval{{2, 6}, {15, 45}},
 	}
 
-	status1 := ReplicationStatus{MasterUUID: masterSID, RelayLogPosition: Position{GTIDSet: set1}}
-	status2 := ReplicationStatus{MasterUUID: masterSID, RelayLogPosition: Position{GTIDSet: set2}}
-	status3 := ReplicationStatus{MasterUUID: masterSID, RelayLogPosition: Position{GTIDSet: set3}}
+	status1 := ReplicationStatus{SourceUUID: masterSID, RelayLogPosition: Position{GTIDSet: set1}}
+	status2 := ReplicationStatus{SourceUUID: masterSID, RelayLogPosition: Position{GTIDSet: set2}}
+	status3 := ReplicationStatus{SourceUUID: masterSID, RelayLogPosition: Position{GTIDSet: set3}}
 
 	got, err := status1.FindErrantGTIDs([]*ReplicationStatus{&status2, &status3})
 	if err != nil {

@@ -386,22 +386,22 @@ func (st *vrStats) status() *EngineStatus {
 	i := 0
 	for _, ct := range st.controllers {
 		status.Controllers[i] = &ControllerStatus{
-			Index:               ct.id,
-			Source:              ct.source.String(),
-			StopPosition:        ct.stopPos,
-			LastPosition:        ct.blpStats.LastPosition().String(),
-			Heartbeat:           ct.blpStats.Heartbeat(),
-			SecondsBehindMaster: ct.blpStats.SecondsBehindMaster.Get(),
-			Counts:              ct.blpStats.Timings.Counts(),
-			Rates:               ct.blpStats.Rates.Get(),
-			State:               ct.blpStats.State.Get(),
-			SourceTablet:        ct.sourceTablet.Get(),
-			Messages:            ct.blpStats.MessageHistory(),
-			QueryCounts:         ct.blpStats.QueryCount.Counts(),
-			PhaseTimings:        ct.blpStats.PhaseTimings.Counts(),
-			CopyRowCount:        ct.blpStats.CopyRowCount.Get(),
-			CopyLoopCount:       ct.blpStats.CopyLoopCount.Get(),
-			NoopQueryCounts:     ct.blpStats.NoopQueryCount.Counts(),
+			Index:                 ct.id,
+			Source:                ct.source.String(),
+			StopPosition:          ct.stopPos,
+			LastPosition:          ct.blpStats.LastPosition().String(),
+			Heartbeat:             ct.blpStats.Heartbeat(),
+			ReplicationLagSeconds: ct.blpStats.SecondsBehindMaster.Get(),
+			Counts:                ct.blpStats.Timings.Counts(),
+			Rates:                 ct.blpStats.Rates.Get(),
+			State:                 ct.blpStats.State.Get(),
+			SourceTablet:          ct.sourceTablet.Get(),
+			Messages:              ct.blpStats.MessageHistory(),
+			QueryCounts:           ct.blpStats.QueryCount.Counts(),
+			PhaseTimings:          ct.blpStats.PhaseTimings.Counts(),
+			CopyRowCount:          ct.blpStats.CopyRowCount.Get(),
+			CopyLoopCount:         ct.blpStats.CopyLoopCount.Get(),
+			NoopQueryCounts:       ct.blpStats.NoopQueryCount.Counts(),
 		}
 		i++
 	}
@@ -417,23 +417,23 @@ type EngineStatus struct {
 
 // ControllerStatus contains a renderable status of a controller.
 type ControllerStatus struct {
-	Index               uint32
-	Source              string
-	SourceShard         string
-	StopPosition        string
-	LastPosition        string
-	Heartbeat           int64
-	SecondsBehindMaster int64
-	Counts              map[string]int64
-	Rates               map[string][]float64
-	State               string
-	SourceTablet        string
-	Messages            []string
-	QueryCounts         map[string]int64
-	PhaseTimings        map[string]int64
-	CopyRowCount        int64
-	CopyLoopCount       int64
-	NoopQueryCounts     map[string]int64
+	Index                 uint32
+	Source                string
+	SourceShard           string
+	StopPosition          string
+	LastPosition          string
+	Heartbeat             int64
+	ReplicationLagSeconds int64
+	Counts                map[string]int64
+	Rates                 map[string][]float64
+	State                 string
+	SourceTablet          string
+	Messages              []string
+	QueryCounts           map[string]int64
+	PhaseTimings          map[string]int64
+	CopyRowCount          int64
+	CopyLoopCount         int64
+	NoopQueryCounts       map[string]int64
 }
 
 var vreplicationTemplate = `
@@ -458,7 +458,7 @@ var vreplicationTemplate = `
       <td>{{.State}}</td>
       <td>{{.StopPosition}}</td>
       <td>{{.LastPosition}}</td>
-      <td>{{.SecondsBehindMaster}}</td>
+      <td>{{.ReplicationLagSeconds}}</td>
       <td>{{range $key, $value := .Counts}}<b>{{$key}}</b>: {{$value}}<br>{{end}}</td>
       <td>{{range $key, $values := .Rates}}<b>{{$key}}</b>: {{range $values}}{{.}} {{end}}<br>{{end}}</td>
       <td>{{range $index, $value := .Messages}}{{$value}}<br>{{end}}</td>

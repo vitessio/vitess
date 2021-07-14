@@ -203,7 +203,7 @@ func checkStreamHealthEqualsBinlogPlayerVars(t *testing.T, vttablet cluster.Vtta
 	assert.NotNil(t, streamHealthResponse.RealtimeStats.BinlogPlayersCount)
 
 	assert.Equal(t, streamCount, int(streamHealthResponse.RealtimeStats.BinlogPlayersCount))
-	assert.Equal(t, secondBehindMaserMax, float64(streamHealthResponse.RealtimeStats.SecondsBehindMasterFilteredReplication))
+	assert.Equal(t, secondBehindMaserMax, float64(streamHealthResponse.RealtimeStats.FilteredReplicationLagSeconds))
 }
 
 // CheckBinlogServerVars checks the binlog server variables are correctly exported.
