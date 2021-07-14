@@ -68,7 +68,10 @@ type GroupbyParams struct {
 }
 
 func (gbp GroupbyParams) String() string {
-	return strconv.Itoa(gbp.KeyCol)
+	if gbp.WeightStringCol == -1 || gbp.KeyCol == gbp.WeightStringCol {
+		return strconv.Itoa(gbp.KeyCol)
+	}
+	return fmt.Sprintf("(%d|%d)", gbp.KeyCol, gbp.WeightStringCol)
 }
 
 // AggregateParams specify the parameters for each aggregation.
