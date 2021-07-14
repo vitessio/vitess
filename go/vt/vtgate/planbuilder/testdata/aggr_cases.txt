@@ -481,10 +481,60 @@ Gen4 plan same as above
     ]
   }
 }
+{
+  "QueryType": "SELECT",
+  "Original": "select col, count(*) from user group by col",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Ordered",
+    "Aggregates": "count(1)",
+    "GroupBy": "(0|2)",
+    "ResultColumns": 2,
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select col, count(*), weight_string(col) from `user` where 1 != 1 group by col",
+        "OrderBy": "(0|2) ASC",
+        "Query": "select col, count(*), weight_string(col) from `user` group by col order by col asc",
+        "Table": "`user`"
+      }
+    ]
+  }
+}
 
 # group by must only reference expressions in the select list
 "select col, count(*) from user group by col, baz"
 "unsupported: in scatter query: group by column must reference column in SELECT list"
+{
+  "QueryType": "SELECT",
+  "Original": "select col, count(*) from user group by col, baz",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Ordered",
+    "Aggregates": "count(1)",
+    "GroupBy": "(0|2), (3|4)",
+    "ResultColumns": 2,
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select col, count(*), weight_string(col), baz, weight_string(baz) from `user` where 1 != 1 group by col, baz",
+        "OrderBy": "(0|2) ASC, (3|4) ASC",
+        "Query": "select col, count(*), weight_string(col), baz, weight_string(baz) from `user` group by col, baz order by col asc, baz asc",
+        "Table": "`user`"
+      }
+    ]
+  }
+}
 
 # group by a non-unique vindex column should use an OrderedAggregate primitive
 "select name, count(*) from user group by name"
@@ -966,7 +1016,7 @@ Gen4 plan same as above
 }
 
 # scatter aggregate group by aggregate function
-" select count(*) b from user group by b"
+"select count(*) b from user group by b"
 "Can't group on 'b'"
 
 # scatter aggregate multiple group by (columns)
@@ -996,6 +1046,31 @@ Gen4 plan same as above
     ]
   }
 }
+{
+  "QueryType": "SELECT",
+  "Original": "select a, b, count(*) from user group by b, a",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Ordered",
+    "Aggregates": "count(2)",
+    "GroupBy": "(1|3), (0|4)",
+    "ResultColumns": 3,
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select a, b, count(*), weight_string(b), weight_string(a) from `user` where 1 != 1 group by b, a",
+        "OrderBy": "(1|3) ASC, (0|4) ASC",
+        "Query": "select a, b, count(*), weight_string(b), weight_string(a) from `user` group by b, a order by b asc, a asc",
+        "Table": "`user`"
+      }
+    ]
+  }
+}
 
 # scatter aggregate multiple group by (numbers)
 "select a, b, count(*) from user group by 2, 1"
@@ -1019,6 +1094,31 @@ Gen4 plan same as above
         "OrderBy": "(1|3) ASC, (0|4) ASC",
         "Query": "select a, b, count(*), weight_string(b), weight_string(a) from `user` group by 2, 1 order by b asc, a asc",
         "ResultColumns": 3,
+        "Table": "`user`"
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select a, b, count(*) from user group by 2, 1",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Ordered",
+    "Aggregates": "count(2)",
+    "GroupBy": "(1|3), (0|4)",
+    "ResultColumns": 3,
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select a, b, count(*), weight_string(b), weight_string(a) from `user` where 1 != 1 group by b, a",
+        "OrderBy": "(1|3) ASC, (0|4) ASC",
+        "Query": "select a, b, count(*), weight_string(b), weight_string(a) from `user` group by b, a order by b asc, a asc",
         "Table": "`user`"
       }
     ]
