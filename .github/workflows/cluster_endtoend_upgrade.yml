@@ -15,7 +15,7 @@ jobs:
 
     - name: Get latest Vitess tag
       run: |
-        echo "latest_release=git describe --tags $(git rev-list --tags --max-count=1)" >> $GITHUB_ENV
+        echo "latest_release=$(git describe --tags $(git rev-list --tags --max-count=1))" >> $GITHUB_ENV
 
     - name: Tune the OS
       run: |
