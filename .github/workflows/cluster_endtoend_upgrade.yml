@@ -13,6 +13,11 @@ jobs:
       with:
         go-version: 1.16
 
+    - name: Check out to HEAD
+      uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+
     - name: Get latest Vitess tag
       run: |
         echo "latest_release=$(git describe --tags $(git rev-list --tags --max-count=1))" >> $GITHUB_ENV
