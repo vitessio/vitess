@@ -480,6 +480,7 @@ func testFile(t *testing.T, filename, tempDir string, vschema *vschemaWrapper, c
 			vschema.version = Gen4
 			out, err := getPlanOutput(tcase, vschema)
 			if err != nil && tcase.output2ndPlanner == "" && strings.HasPrefix(err.Error(), "gen4 does not yet support") {
+				expected.WriteString("\n")
 				continue
 			}
 

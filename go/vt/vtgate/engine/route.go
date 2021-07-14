@@ -138,6 +138,9 @@ func (obp OrderbyParams) String() string {
 	if obp.StarColFixedIndex > obp.Col {
 		val = strconv.Itoa(obp.StarColFixedIndex)
 	}
+	if obp.WeightStringCol != -1 && obp.WeightStringCol != obp.Col {
+		val = fmt.Sprintf("(%s|%d)", val, obp.WeightStringCol)
+	}
 	if obp.Desc {
 		val += " DESC"
 	} else {
