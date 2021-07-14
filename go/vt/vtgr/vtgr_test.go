@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/sync2"
+
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/vtgr/config"
@@ -39,15 +41,15 @@ func TestSighupHandle(t *testing.T) {
 	vtgr.Shards = shards
 	shard := vtgr.Shards[0]
 	shard.LockShard(ctx, "test")
-	res := 0
+	res := sync2.NewAtomicInt32(0)
 	vtgr.handleSignal(func(i int) {
-		res = i
+		res.Set(1)
 	})
 	assert.NotNil(t, shard.GetUnlock())
 	assert.False(t, vtgr.stopped.Get())
 	syscall.Kill(syscall.Getpid(), syscall.SIGHUP)
 	time.Sleep(100 * time.Millisecond)
-	assert.Equal(t, 1, res)
+	assert.Equal(t, int32(1), res.Get())
 	assert.Nil(t, shard.GetUnlock())
 	assert.True(t, vtgr.stopped.Get())
 }
