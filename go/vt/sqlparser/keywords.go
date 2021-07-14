@@ -403,6 +403,7 @@ var keywords = []keyword{
 	{"rollback", ROLLBACK},
 	{"row_format", ROW_FORMAT},
 	{"row_number", UNUSED},
+	{"rows", UNUSED},
 	{"s3", S3},
 	{"savepoint", SAVEPOINT},
 	{"schema", SCHEMA},
