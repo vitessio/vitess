@@ -1115,6 +1115,15 @@ var (
 		input:  "create table `a`",
 		output: "create table a",
 	}, {
+		input:  "create table function_default (x varchar(25) default (trim(' check ')))",
+		output: "create table function_default (\n\tx varchar(25) default (trim(' check '))\n)",
+	}, {
+		input:  "create table function_default (x varchar(25) default (((trim(' check ')))))",
+		output: "create table function_default (\n\tx varchar(25) default (trim(' check '))\n)",
+	}, {
+		input:  "create table function_default3 (x bool DEFAULT (true AND false));",
+		output: "create table function_default3 (\n\tx bool default (true and false)\n)",
+	}, {
 		input:  "create table a (\n\t`a` int\n)",
 		output: "create table a (\n\ta int\n)",
 	}, {
@@ -2830,11 +2839,11 @@ func TestCreateTable(t *testing.T) {
 			"	time5 timestamp(4) default utc_timestamp(4) on update utc_timestamp(4)\n" +
 			")",
 		output: "create table t (\n" +
-			"	time1 timestamp default utc_timestamp(),\n" +
-			"	time2 timestamp default utc_timestamp(),\n" +
-			"	time3 timestamp default utc_timestamp() on update utc_timestamp(),\n" +
-			"	time4 timestamp default utc_timestamp() on update utc_timestamp(),\n" +
-			"	time5 timestamp(4) default utc_timestamp(4) on update utc_timestamp(4)\n" +
+			"	time1 timestamp default (utc_timestamp()),\n" +
+			"	time2 timestamp default (utc_timestamp()),\n" +
+			"	time3 timestamp default (utc_timestamp()) on update utc_timestamp(),\n" +
+			"	time4 timestamp default (utc_timestamp()) on update utc_timestamp(),\n" +
+			"	time5 timestamp(4) default (utc_timestamp(4)) on update utc_timestamp(4)\n" +
 			")",
 	}, {
 		// test utc_time with and without ()
@@ -2846,11 +2855,11 @@ func TestCreateTable(t *testing.T) {
 			"	time5 timestamp(5) default utc_time(5) on update utc_time(5)\n" +
 			")",
 		output: "create table t (\n" +
-			"	time1 timestamp default utc_time(),\n" +
-			"	time2 timestamp default utc_time(),\n" +
-			"	time3 timestamp default utc_time() on update utc_time(),\n" +
-			"	time4 timestamp default utc_time() on update utc_time(),\n" +
-			"	time5 timestamp(5) default utc_time(5) on update utc_time(5)\n" +
+			"	time1 timestamp default (utc_time()),\n" +
+			"	time2 timestamp default (utc_time()),\n" +
+			"	time3 timestamp default (utc_time()) on update utc_time(),\n" +
+			"	time4 timestamp default (utc_time()) on update utc_time(),\n" +
+			"	time5 timestamp(5) default (utc_time(5)) on update utc_time(5)\n" +
 			")",
 	}, {
 		// test utc_date with and without ()
@@ -2861,10 +2870,10 @@ func TestCreateTable(t *testing.T) {
 			"	time4 timestamp default utc_date() on update utc_date()\n" +
 			")",
 		output: "create table t (\n" +
-			"	time1 timestamp default utc_date(),\n" +
-			"	time2 timestamp default utc_date(),\n" +
-			"	time3 timestamp default utc_date() on update utc_date(),\n" +
-			"	time4 timestamp default utc_date() on update utc_date()\n" +
+			"	time1 timestamp default (utc_date()),\n" +
+			"	time2 timestamp default (utc_date()),\n" +
+			"	time3 timestamp default (utc_date()) on update utc_date(),\n" +
+			"	time4 timestamp default (utc_date()) on update utc_date()\n" +
 			")",
 	}, {
 		// test localtime with and without ()
@@ -2907,10 +2916,10 @@ func TestCreateTable(t *testing.T) {
 			"	time4 timestamp default current_date() on update current_date()\n" +
 			")",
 		output: "create table t (\n" +
-			"	time1 timestamp default current_date(),\n" +
-			"	time2 timestamp default current_date(),\n" +
-			"	time3 timestamp default current_date() on update current_date(),\n" +
-			"	time4 timestamp default current_date() on update current_date()\n" +
+			"	time1 timestamp default (current_date()),\n" +
+			"	time2 timestamp default (current_date()),\n" +
+			"	time3 timestamp default (current_date()) on update current_date(),\n" +
+			"	time4 timestamp default (current_date()) on update current_date()\n" +
 			")",
 	}, {
 		// test current_time with and without ()
@@ -2922,11 +2931,11 @@ func TestCreateTable(t *testing.T) {
 			"	time5 timestamp(2) default current_time(2) on update current_time(2)\n" +
 			")",
 		output: "create table t (\n" +
-			"	time1 timestamp default current_time(),\n" +
-			"	time2 timestamp default current_time(),\n" +
-			"	time3 timestamp default current_time() on update current_time(),\n" +
-			"	time4 timestamp default current_time() on update current_time(),\n" +
-			"	time5 timestamp(2) default current_time(2) on update current_time(2)\n" +
+			"	time1 timestamp default (current_time()),\n" +
+			"	time2 timestamp default (current_time()),\n" +
+			"	time3 timestamp default (current_time()) on update current_time(),\n" +
+			"	time4 timestamp default (current_time()) on update current_time(),\n" +
+			"	time5 timestamp(2) default (current_time(2)) on update current_time(2)\n" +
 			")",
 	},
 	}

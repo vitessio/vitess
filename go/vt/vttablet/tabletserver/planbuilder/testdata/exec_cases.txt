@@ -939,3 +939,17 @@ options:PassthroughDMLs
   "TableName": "",
   "FullQuery": "call getAllTheThings()"
 }
+
+# create table with function as a default value
+"create table function_default (x varchar(25) DEFAULT (TRIM(' check ')))"
+{
+  "PlanID": "DDL",
+  "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "function_default",
+      "Role": 2
+    }
+  ],
+  "FullQuery": "create table function_default (\n\tx varchar(25) default (TRIM(' check '))\n)"
+}

@@ -385,3 +385,18 @@
     "TempTable": true
   }
 }
+
+# create table with function as a default value
+"create table function_default (x varchar(25) DEFAULT (TRIM(' check ')))"
+{
+  "QueryType": "DDL",
+  "Original": "create table function_default (x varchar(25) DEFAULT (TRIM(' check ')))",
+  "Instructions": {
+    "OperatorType": "DDL",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "create table function_default (\n\tx varchar(25) default (TRIM(' check '))\n)"
+  }
+}
