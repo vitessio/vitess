@@ -69,14 +69,21 @@ type API struct {
 	vtexplainLock sync.Mutex
 }
 
+// Options wraps the configuration options for different components of the
+// vtadmin API.
+type Options struct {
+	GRPCOpts grpcserver.Options
+	HTTPOpts vtadminhttp.Options
+}
+
 // NewAPI returns a new API, configured to service the given set of clusters,
-// and configured with the given gRPC and HTTP server options.
+// and configured with the given options.
 //
-// If opts.Services is nil, NewAPI will automatically add
+// If opts.GRPCOpts.Services is nil, NewAPI will automatically add
 // "vtadmin.VTAdminServer" to the list of services queryable in the healthcheck
 // service. Callers can opt-out of this behavior by explicitly setting this
 // value to the empty slice.
-func NewAPI(clusters []*cluster.Cluster, opts grpcserver.Options, httpOpts vtadminhttp.Options) *API {
+func NewAPI(clusters []*cluster.Cluster, opts Options) *API {
 	clusterMap := make(map[string]*cluster.Cluster, len(clusters))
 	for _, cluster := range clusters {
 		clusterMap[cluster.ID] = cluster
@@ -86,11 +93,11 @@ func NewAPI(clusters []*cluster.Cluster, opts grpcserver.Options, httpOpts vtadm
 		return c1.ID < c2.ID
 	}).Sort(clusters)
 
-	if opts.Services == nil {
-		opts.Services = []string{"vtadmin.VTAdminServer"}
+	if opts.GRPCOpts.Services == nil {
+		opts.GRPCOpts.Services = []string{"vtadmin.VTAdminServer"}
 	}
 
-	serv := grpcserver.New("vtadmin", opts)
+	serv := grpcserver.New("vtadmin", opts.GRPCOpts)
 	serv.Router().HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("ok\n"))
 	})
@@ -106,7 +113,7 @@ func NewAPI(clusters []*cluster.Cluster, opts grpcserver.Options, httpOpts vtadm
 
 	vtadminpb.RegisterVTAdminServer(serv.GRPCServer(), api)
 
-	httpAPI := vtadminhttp.NewAPI(api, httpOpts)
+	httpAPI := vtadminhttp.NewAPI(api, opts.HTTPOpts)
 
 	router.HandleFunc("/backups", httpAPI.Adapt(vtadminhttp.GetBackups)).Name("API.GetBackups")
 	router.HandleFunc("/clusters", httpAPI.Adapt(vtadminhttp.GetClusters)).Name("API.GetClusters")
@@ -129,7 +136,7 @@ func NewAPI(clusters []*cluster.Cluster, opts grpcserver.Options, httpOpts vtadm
 	experimentalRouter := router.PathPrefix("/experimental").Subrouter()
 	experimentalRouter.HandleFunc("/tablet/{tablet}/debug/vars", httpAPI.Adapt(experimental.TabletDebugVarsPassthrough)).Name("API.TabletDebugVarsPassthrough")
 
-	if !httpOpts.DisableDebug {
+	if !opts.HTTPOpts.DisableDebug {
 		// Due to the way net/http/pprof insists on registering its handlers, we
 		// have to put these on the root router, and not on the /debug prefixed
 		// subrouter, which would make way more sense, but alas. Additional
@@ -138,8 +145,12 @@ func NewAPI(clusters []*cluster.Cluster, opts grpcserver.Options, httpOpts vtadm
 		serv.Router().HandleFunc("/debug/pprof/profile", pprof.Profile)
 		serv.Router().HandleFunc("/debug/pprof/symbol", pprof.Symbol)
 		serv.Router().PathPrefix("/debug/pprof").HandlerFunc(pprof.Index)
+
+		dapi := &debugAPI{api}
 		debugRouter := serv.Router().PathPrefix("/debug").Subrouter()
 		debugRouter.HandleFunc("/env", debug.Env)
+		debugRouter.HandleFunc("/cluster/{cluster_id}", debug.Cluster(dapi))
+		debugRouter.HandleFunc("/clusters", debug.Clusters(dapi))
 	}
 
 	// Middlewares are executed in order of addition. Our ordering (all
@@ -149,16 +160,16 @@ func NewAPI(clusters []*cluster.Cluster, opts grpcserver.Options, httpOpts vtadm
 	//	3. Tracing
 	middlewares := []mux.MiddlewareFunc{}
 
-	if len(httpOpts.CORSOrigins) > 0 {
+	if len(opts.HTTPOpts.CORSOrigins) > 0 {
 		serv.Router().Use(handlers.CORS(
-			handlers.AllowCredentials(), handlers.AllowedOrigins(httpOpts.CORSOrigins)))
+			handlers.AllowCredentials(), handlers.AllowedOrigins(opts.HTTPOpts.CORSOrigins)))
 	}
 
-	if !httpOpts.DisableCompression {
+	if !opts.HTTPOpts.DisableCompression {
 		middlewares = append(middlewares, handlers.CompressHandler)
 	}
 
-	if httpOpts.EnableTracing {
+	if opts.HTTPOpts.EnableTracing {
 		middlewares = append(middlewares, vthandlers.TraceHandler)
 	}
 

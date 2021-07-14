@@ -83,7 +83,7 @@ func RestoreTablet(t *testing.T, localCluster *cluster.LocalProcessCluster, tabl
 	err = tablet.VttabletProcess.Setup()
 	require.Nil(t, err)
 
-	err = tablet.VttabletProcess.WaitForTabletTypesForTimeout([]string{"SERVING"}, 20*time.Second)
+	err = tablet.VttabletProcess.WaitForTabletStatusesForTimeout([]string{"SERVING"}, 20*time.Second)
 	require.Nil(t, err)
 }
 

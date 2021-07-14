@@ -210,8 +210,8 @@ func TestNewOnlineDDL(t *testing.T) {
 		NewDDLStrategySetting(DDLStrategyOnline, ""),
 		NewDDLStrategySetting(DDLStrategyOnline, "-singleton"),
 	}
-	require.False(t, strategies[0].IsSkipTopo())
-	require.False(t, strategies[1].IsSkipTopo())
+	require.True(t, strategies[0].IsSkipTopo())
+	require.True(t, strategies[1].IsSkipTopo())
 	require.True(t, strategies[2].IsSkipTopo())
 
 	for _, ts := range tt {
@@ -224,16 +224,11 @@ func TestNewOnlineDDL(t *testing.T) {
 						return
 					}
 					assert.NoError(t, err)
-					if stgy.IsSkipTopo() {
-						// onlineDDL.SQL enriched with /*vt+ ... */ comment
-						assert.Contains(t, onlineDDL.SQL, hex.EncodeToString([]byte(onlineDDL.UUID)))
-						assert.Contains(t, onlineDDL.SQL, hex.EncodeToString([]byte(migrationContext)))
-						assert.Contains(t, onlineDDL.SQL, hex.EncodeToString([]byte(string(stgy.Strategy))))
-					} else {
-						assert.NotContains(t, onlineDDL.SQL, hex.EncodeToString([]byte(onlineDDL.UUID)))
-						assert.NotContains(t, onlineDDL.SQL, hex.EncodeToString([]byte(migrationContext)))
-						assert.NotContains(t, onlineDDL.SQL, hex.EncodeToString([]byte(string(stgy.Strategy))))
-					}
+					require.True(t, stgy.IsSkipTopo(), "IsSkipTopo() should always be true")
+					// onlineDDL.SQL enriched with /*vt+ ... */ comment
+					assert.Contains(t, onlineDDL.SQL, hex.EncodeToString([]byte(onlineDDL.UUID)))
+					assert.Contains(t, onlineDDL.SQL, hex.EncodeToString([]byte(migrationContext)))
+					assert.Contains(t, onlineDDL.SQL, hex.EncodeToString([]byte(string(stgy.Strategy))))
 				})
 			}
 		})
@@ -297,7 +292,8 @@ func TestNewOnlineDDLs(t *testing.T) {
 
 			sqls := []string{}
 			for _, onlineDDL := range onlineDDLs {
-				sql := onlineDDL.SQL
+				sql, err := onlineDDL.sqlWithoutComments()
+				assert.NoError(t, err)
 				sql = strings.ReplaceAll(sql, "\n", "")
 				sql = strings.ReplaceAll(sql, "\t", "")
 				sqls = append(sqls, sql)
