@@ -794,6 +794,30 @@ Gen4 plan same as above
     ]
   }
 }
+{
+  "QueryType": "SELECT",
+  "Original": "select col from user group by col",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Ordered",
+    "GroupBy": "(0|1)",
+    "ResultColumns": 1,
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select col, weight_string(col) from `user` where 1 != 1 group by col",
+        "OrderBy": "(0|1) ASC",
+        "Query": "select col, weight_string(col) from `user` group by col order by col asc",
+        "Table": "`user`"
+      }
+    ]
+  }
+}
 
 # count with distinct group by unique vindex
 "select id, count(distinct col) from user group by id"
@@ -1018,6 +1042,7 @@ Gen4 plan same as above
 # scatter aggregate group by aggregate function
 "select count(*) b from user group by b"
 "Can't group on 'b'"
+Gen4 plan same as above
 
 # scatter aggregate multiple group by (columns)
 "select a, b, count(*) from user group by b, a"
