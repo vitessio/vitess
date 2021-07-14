@@ -77,8 +77,13 @@ func TestGroupBy(t *testing.T) {
 	assertMatches(t, conn, `select tcol1, tcol1 from t1 join t2 on t1.id = t2.id order by tcol1`,
 		`[[VARCHAR("A") VARCHAR("A")] [VARCHAR("A") VARCHAR("A")] [VARCHAR("B") VARCHAR("B")] [VARCHAR("C") VARCHAR("C")]]`)
 
-	assertMatches(t, conn, `select count(*) k, tcol1, tcol2, "abc" b from t2 group by tcol1, tcol2, b order by k, tcol2`,
-		`[[INT64(1) VARCHAR("B") VARCHAR("A") VARCHAR("abc")] [INT64(1) VARCHAR("C") VARCHAR("A") VARCHAR("abc")] [INT64(1) VARCHAR("C") VARCHAR("B") VARCHAR("abc")] [INT64(1) VARCHAR("A") VARCHAR("C") VARCHAR("abc")] [INT64(2) VARCHAR("A") VARCHAR("A") VARCHAR("abc")] [INT64(2) VARCHAR("B") VARCHAR("C") VARCHAR("abc")]]`)
+	assertMatches(t, conn, `select count(*) k, tcol1, tcol2, "abc" b from t2 group by tcol1, tcol2, b order by k, tcol2, tcol1`,
+		`[[INT64(1) VARCHAR("B") VARCHAR("A") VARCHAR("abc")] `+
+			`[INT64(1) VARCHAR("C") VARCHAR("A") VARCHAR("abc")] `+
+			`[INT64(1) VARCHAR("C") VARCHAR("B") VARCHAR("abc")] `+
+			`[INT64(1) VARCHAR("A") VARCHAR("C") VARCHAR("abc")] `+
+			`[INT64(2) VARCHAR("A") VARCHAR("A") VARCHAR("abc")] `+
+			`[INT64(2) VARCHAR("B") VARCHAR("C") VARCHAR("abc")]]`)
 }
 
 func assertMatches(t *testing.T, conn *mysql.Conn, query, expected string) {
