@@ -47,4 +47,7 @@ jobs:
       timeout-minutes: 30
       run: |
         source build.env
-        eatmydata -- go run test.go -docker=false -print-log -follow -shard vtgate_vindex
+        # Run native
+        # eatmydata -- go run test.go -docker=false -print-log -follow -shard vtgate_vindex
+        # Run in a docker container
+        eatmydata -- go run test.go -print-log -follow -retry=1 -shard vtgate_vindex
