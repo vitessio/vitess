@@ -84,8 +84,8 @@ func TestShardReplicationStatuses(t *testing.T) {
 			},
 		},
 	}
-	replica.FakeMysqlDaemon.CurrentMasterHost = master.Tablet.MysqlHostname
-	replica.FakeMysqlDaemon.CurrentMasterPort = int(master.Tablet.MysqlPort)
+	replica.FakeMysqlDaemon.CurrentSourceHost = master.Tablet.MysqlHostname
+	replica.FakeMysqlDaemon.CurrentSourcePort = int(master.Tablet.MysqlPort)
 	replica.StartActionLoop(t, wr)
 	defer replica.StopActionLoop(t)
 
@@ -105,8 +105,8 @@ func TestShardReplicationStatuses(t *testing.T) {
 	}
 	if !topoproto.TabletAliasEqual(ti[0].Alias, master.Tablet.Alias) ||
 		!topoproto.TabletAliasEqual(ti[1].Alias, replica.Tablet.Alias) ||
-		rs[0].MasterHost != "" ||
-		rs[1].MasterHost != master.Tablet.Hostname {
+		rs[0].SourceHost != "" ||
+		rs[1].SourceHost != master.Tablet.Hostname {
 		t.Fatalf("ShardReplicationStatuses returend wrong results: %v %v", ti, rs)
 	}
 }

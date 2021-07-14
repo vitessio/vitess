@@ -62,7 +62,7 @@ func TestWaitForTablets(t *testing.T) {
 			TabletType: topodatapb.TabletType_REPLICA,
 		},
 		Serving:       true,
-		RealtimeStats: &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
+		RealtimeStats: &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.2},
 	}
 	input <- shr
 

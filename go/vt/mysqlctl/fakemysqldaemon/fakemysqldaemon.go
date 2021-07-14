@@ -75,8 +75,8 @@ type FakeMysqlDaemon struct {
 	// and ReplicationStatus
 	CurrentPrimaryPosition mysql.Position
 
-	// CurrentMasterFilePosition is used to determine the executed file based positioning of the master.
-	CurrentMasterFilePosition mysql.Position
+	// CurrentSourceFilePosition is used to determine the executed file based positioning of the replication source.
+	CurrentSourceFilePosition mysql.Position
 
 	// ReplicationStatusError is used by ReplicationStatus
 	ReplicationStatusError error
@@ -87,14 +87,14 @@ type FakeMysqlDaemon struct {
 	// PrimaryStatusError is used by PrimaryStatus
 	PrimaryStatusError error
 
-	// CurrentMasterHost is returned by ReplicationStatus
-	CurrentMasterHost string
+	// CurrentSourceHost is returned by ReplicationStatus
+	CurrentSourceHost string
 
-	// CurrentMasterport is returned by ReplicationStatus
-	CurrentMasterPort int
+	// CurrentSourcePort is returned by ReplicationStatus
+	CurrentSourcePort int
 
-	// SecondsBehindMaster is returned by ReplicationStatus
-	SecondsBehindMaster uint
+	// ReplicationLagSeconds is returned by ReplicationStatus
+	ReplicationLagSeconds uint
 
 	// ReadOnly is the current value of the flag
 	ReadOnly bool
@@ -265,16 +265,16 @@ func (fmd *FakeMysqlDaemon) ReplicationStatus() (mysql.ReplicationStatus, error)
 	fmd.mu.Lock()
 	defer fmd.mu.Unlock()
 	return mysql.ReplicationStatus{
-		Position:             fmd.CurrentPrimaryPosition,
-		FilePosition:         fmd.CurrentMasterFilePosition,
-		FileRelayLogPosition: fmd.CurrentMasterFilePosition,
-		SecondsBehindMaster:  fmd.SecondsBehindMaster,
+		Position:              fmd.CurrentPrimaryPosition,
+		FilePosition:          fmd.CurrentSourceFilePosition,
+		FileRelayLogPosition:  fmd.CurrentSourceFilePosition,
+		ReplicationLagSeconds: fmd.ReplicationLagSeconds,
 		// implemented as AND to avoid changing all tests that were
 		// previously using Replicating = false
 		IOThreadRunning:  fmd.Replicating && fmd.IOThreadRunning,
 		SQLThreadRunning: fmd.Replicating,
-		MasterHost:       fmd.CurrentMasterHost,
-		MasterPort:       fmd.CurrentMasterPort,
+		SourceHost:       fmd.CurrentSourceHost,
+		SourcePort:       fmd.CurrentSourcePort,
 	}, nil
 }
 
@@ -285,7 +285,7 @@ func (fmd *FakeMysqlDaemon) PrimaryStatus(ctx context.Context) (mysql.PrimarySta
 	}
 	return mysql.PrimaryStatus{
 		Position:     fmd.CurrentPrimaryPosition,
-		FilePosition: fmd.CurrentMasterFilePosition,
+		FilePosition: fmd.CurrentSourceFilePosition,
 	}, nil
 }
 

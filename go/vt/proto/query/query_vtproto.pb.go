@@ -3591,8 +3591,8 @@ func (m *RealtimeStats) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i--
 		dAtA[i] = 0x29
 	}
-	if m.SecondsBehindMasterFilteredReplication != 0 {
-		i = encodeVarint(dAtA, i, uint64(m.SecondsBehindMasterFilteredReplication))
+	if m.FilteredReplicationLagSeconds != 0 {
+		i = encodeVarint(dAtA, i, uint64(m.FilteredReplicationLagSeconds))
 		i--
 		dAtA[i] = 0x20
 	}
@@ -3601,8 +3601,8 @@ func (m *RealtimeStats) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i--
 		dAtA[i] = 0x18
 	}
-	if m.SecondsBehindMaster != 0 {
-		i = encodeVarint(dAtA, i, uint64(m.SecondsBehindMaster))
+	if m.ReplicationLagSeconds != 0 {
+		i = encodeVarint(dAtA, i, uint64(m.ReplicationLagSeconds))
 		i--
 		dAtA[i] = 0x10
 	}
@@ -5288,14 +5288,14 @@ func (m *RealtimeStats) SizeVT() (n int) {
 	if l > 0 {
 		n += 1 + l + sov(uint64(l))
 	}
-	if m.SecondsBehindMaster != 0 {
-		n += 1 + sov(uint64(m.SecondsBehindMaster))
+	if m.ReplicationLagSeconds != 0 {
+		n += 1 + sov(uint64(m.ReplicationLagSeconds))
 	}
 	if m.BinlogPlayersCount != 0 {
 		n += 1 + sov(uint64(m.BinlogPlayersCount))
 	}
-	if m.SecondsBehindMasterFilteredReplication != 0 {
-		n += 1 + sov(uint64(m.SecondsBehindMasterFilteredReplication))
+	if m.FilteredReplicationLagSeconds != 0 {
+		n += 1 + sov(uint64(m.FilteredReplicationLagSeconds))
 	}
 	if m.CpuUsage != 0 {
 		n += 9
@@ -14368,9 +14368,9 @@ func (m *RealtimeStats) UnmarshalVT(dAtA []byte) error {
 			iNdEx = postIndex
 		case 2:
 			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field SecondsBehindMaster", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field ReplicationLagSeconds", wireType)
 			}
-			m.SecondsBehindMaster = 0
+			m.ReplicationLagSeconds = 0
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
 					return ErrIntOverflow
@@ -14380,7 +14380,7 @@ func (m *RealtimeStats) UnmarshalVT(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.SecondsBehindMaster |= uint32(b&0x7F) << shift
+				m.ReplicationLagSeconds |= uint32(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -14406,9 +14406,9 @@ func (m *RealtimeStats) UnmarshalVT(dAtA []byte) error {
 			}
 		case 4:
 			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field SecondsBehindMasterFilteredReplication", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field FilteredReplicationLagSeconds", wireType)
 			}
-			m.SecondsBehindMasterFilteredReplication = 0
+			m.FilteredReplicationLagSeconds = 0
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
 					return ErrIntOverflow
@@ -14418,7 +14418,7 @@ func (m *RealtimeStats) UnmarshalVT(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.SecondsBehindMasterFilteredReplication |= int64(b&0x7F) << shift
+				m.FilteredReplicationLagSeconds |= int64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}

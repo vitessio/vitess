@@ -44,7 +44,7 @@ const (
 
 var resultStringTemplate = template.Must(template.New("result.String()").Parse(
 	`rate was: {{.RateChange}} from: {{.OldRate}} to: {{.NewRate}}
-alias: {{.Alias}} lag: {{.LagRecordNow.Stats.SecondsBehindMaster}}s
+alias: {{.Alias}} lag: {{.LagRecordNow.Stats.ReplicationLagSeconds}}s
 last change: {{.TimeSinceLastRateChange}} rate: {{.CurrentRate}} good/bad? {{.GoodOrBad}} skipped b/c: {{.MemorySkipReason}} good/bad: {{.HighestGood}}/{{.LowestBad}}
 state (old/tested/new): {{.OldState}}/{{.TestedState}}/{{.NewState}} 
 lag before: {{.LagBefore}} ({{.AgeOfBeforeLag}} ago) rates (master/replica): {{.MasterRate}}/{{.GuessedReplicationRate}} backlog (old/new): {{.GuessedReplicationBacklogOld}}/{{.GuessedReplicationBacklogNew}}
@@ -103,7 +103,7 @@ func (r result) LagBefore() string {
 	if r.LagRecordBefore.isZero() {
 		return "n/a"
 	}
-	return fmt.Sprintf("%ds", r.LagRecordBefore.Stats.SecondsBehindMaster)
+	return fmt.Sprintf("%ds", r.LagRecordBefore.Stats.ReplicationLagSeconds)
 }
 
 func (r result) AgeOfBeforeLag() string {
