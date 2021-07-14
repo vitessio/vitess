@@ -557,7 +557,7 @@ Gen4 plan same as above
     },
     "FieldQuery": "select user_extra.id from `user` join user_extra on `user`.id = user_extra.user_id where 1 != 1",
     "Query": "select user_extra.id from `user` join user_extra on `user`.id = user_extra.user_id where `user`.id = 5",
-    "Table": "`user`",
+    "Table": "`user`, user_extra",
     "Values": [
       5
     ],
@@ -598,7 +598,7 @@ Gen4 plan same as above
     },
     "FieldQuery": "select user_extra.id from `user` join user_extra on `user`.id = user_extra.user_id where 1 != 1",
     "Query": "select user_extra.id from `user` join user_extra on `user`.id = user_extra.user_id where user_extra.user_id = 5",
-    "Table": "`user`",
+    "Table": "`user`, user_extra",
     "Values": [
       5
     ],
@@ -639,7 +639,7 @@ Gen4 plan same as above
     },
     "FieldQuery": "select user_extra.id from `user` left join user_extra on `user`.id = user_extra.user_id where 1 != 1",
     "Query": "select user_extra.id from `user` left join user_extra on `user`.id = user_extra.user_id where `user`.id = 5",
-    "Table": "`user`",
+    "Table": "`user`, user_extra",
     "Values": [
       5
     ],
@@ -662,7 +662,7 @@ Gen4 plan same as above
     },
     "FieldQuery": "select user_extra.id from `user` left join user_extra on `user`.id = user_extra.user_id where 1 != 1",
     "Query": "select user_extra.id from `user` left join user_extra on `user`.id = user_extra.user_id where user_extra.user_id = 5",
-    "Table": "`user`",
+    "Table": "`user`, user_extra",
     "Values": [
       5
     ],
@@ -1185,7 +1185,8 @@ Gen4 plan same as above
       "Sharded": false
     },
     "FieldQuery": "select * from information_schema.a where 1 != 1",
-    "Query": "select * from information_schema.a where id in (select * from information_schema.b)"
+    "Query": "select * from information_schema.a where id in (select * from information_schema.b)",
+    "Table": "information_schema.a"
   }
 }
 
@@ -1700,7 +1701,7 @@ Gen4 plan same as above
     },
     "FieldQuery": "select user_extra.Id from `user` join user_extra on `user`.iD = user_extra.User_Id where 1 != 1",
     "Query": "select user_extra.Id from `user` join user_extra on `user`.iD = user_extra.User_Id where `user`.Id = 5",
-    "Table": "`user`",
+    "Table": "`user`, user_extra",
     "Values": [
       5
     ],
@@ -1912,7 +1913,6 @@ Gen4 plan same as above
 }
 Gen4 plan same as above
 
-
 # query trying to query two different keyspaces at the same time
 "SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'user' AND TABLE_SCHEMA = 'main'"
 {
@@ -1927,7 +1927,8 @@ Gen4 plan same as above
     },
     "FieldQuery": "select * from INFORMATION_SCHEMA.`TABLES` where 1 != 1",
     "Query": "select * from INFORMATION_SCHEMA.`TABLES` where TABLE_SCHEMA = :__vtschemaname and TABLE_SCHEMA = :__vtschemaname",
-    "SysTableTableSchema": "[VARBINARY(\"user\"), VARBINARY(\"main\")]"
+    "SysTableTableSchema": "[VARBINARY(\"user\"), VARBINARY(\"main\")]",
+    "Table": "INFORMATION_SCHEMA.`TABLES`"
   }
 }
 
@@ -1944,24 +1945,11 @@ Gen4 plan same as above
       "Sharded": false
     },
     "FieldQuery": "select * from INFORMATION_SCHEMA.`TABLES` where 1 != 1",
-    "Query": "select * from INFORMATION_SCHEMA.`TABLES` where TABLE_SCHEMA = database()"
-  }
-}
-{
-  "QueryType": "SELECT",
-  "Original": "SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = database()",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectDBA",
-    "Keyspace": {
-      "Name": "main",
-      "Sharded": false
-    },
-    "FieldQuery": "select * from INFORMATION_SCHEMA.`TABLES` where 1 != 1",
     "Query": "select * from INFORMATION_SCHEMA.`TABLES` where TABLE_SCHEMA = database()",
     "Table": "INFORMATION_SCHEMA.`TABLES`"
   }
 }
+Gen4 plan same as above
 
 # table_schema predicate the wrong way around
 "SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE 'ks' = TABLE_SCHEMA"
@@ -1977,7 +1965,8 @@ Gen4 plan same as above
     },
     "FieldQuery": "select * from INFORMATION_SCHEMA.`TABLES` where 1 != 1",
     "Query": "select * from INFORMATION_SCHEMA.`TABLES` where TABLE_SCHEMA = :__vtschemaname",
-    "SysTableTableSchema": "[VARBINARY(\"ks\")]"
+    "SysTableTableSchema": "[VARBINARY(\"ks\")]",
+    "Table": "INFORMATION_SCHEMA.`TABLES`"
   }
 }
 
@@ -1996,7 +1985,8 @@ Gen4 plan same as above
     "FieldQuery": "select * from INFORMATION_SCHEMA.`TABLES` where 1 != 1",
     "Query": "select * from INFORMATION_SCHEMA.`TABLES` where TABLE_SCHEMA = :__vtschemaname and TABLE_NAME = :__vttablename",
     "SysTableTableName": "[VARBINARY(\"route1\")]",
-    "SysTableTableSchema": "[VARBINARY(\"ks\")]"
+    "SysTableTableSchema": "[VARBINARY(\"ks\")]",
+    "Table": "INFORMATION_SCHEMA.`TABLES`"
   }
 }
 
@@ -2014,7 +2004,8 @@ Gen4 plan same as above
     },
     "FieldQuery": "select * from INFORMATION_SCHEMA.`TABLES` where 1 != 1",
     "Query": "select * from INFORMATION_SCHEMA.`TABLES` where TABLE_SCHEMA = :__vtschemaname and other_column = 42",
-    "SysTableTableSchema": "[VARBINARY(\"ks\")]"
+    "SysTableTableSchema": "[VARBINARY(\"ks\")]",
+    "Table": "INFORMATION_SCHEMA.`TABLES`"
   }
 }
 
@@ -2096,7 +2087,8 @@ Gen4 plan same as above
     },
     "FieldQuery": "select * from INFORMATION_SCHEMA.`TABLES` where 1 != 1",
     "Query": "select * from INFORMATION_SCHEMA.`TABLES` where TABLE_SCHEMA = :__vtschemaname and (other_column = 42 or TABLE_SCHEMA = 'ks') and (other_column = 42 or foobar = 'value')",
-    "SysTableTableSchema": "[VARBINARY(\"ks\")]"
+    "SysTableTableSchema": "[VARBINARY(\"ks\")]",
+    "Table": "INFORMATION_SCHEMA.`TABLES`"
   }
 }
 
@@ -2122,7 +2114,6 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
-
 
 "select * from samecolvin where col = :col"
 {

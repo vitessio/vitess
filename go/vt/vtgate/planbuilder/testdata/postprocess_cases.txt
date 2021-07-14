@@ -1072,7 +1072,7 @@ Gen4 plan same as above
     },
     "FieldQuery": "select * from `user` as u join (select user_id from user_extra where 1 != 1) as eu on u.id = eu.user_id where 1 != 1",
     "Query": "select * from `user` as u join (select user_id from user_extra where user_id = 5) as eu on u.id = eu.user_id where u.id = 5 order by eu.user_id asc",
-    "Table": "`user`",
+    "Table": "`user`, user_extra",
     "Values": [
       5
     ],
@@ -1416,7 +1416,6 @@ Gen4 plan same as above
     ]
   }
 }
-"gen4 does not yet support: aggregation and non-aggregation expressions, together are not supported in cross-shard query"
 
 # aggregation and non-aggregations column with order by
 "select count(id), num from user order by 2"
@@ -1449,7 +1448,6 @@ Gen4 plan same as above
     ]
   }
 }
-"gen4 does not yet support: aggregation and non-aggregation expressions, together are not supported in cross-shard query"
 
 # aggregation and non-aggregations column with group by
 "select count(id), num from user group by 2"
@@ -1478,7 +1476,6 @@ Gen4 plan same as above
     ]
   }
 }
-"gen4 does not yet support: aggregation and non-aggregation expressions, together are not supported in cross-shard query"
 
 # aggregation and non-aggregations column with group by and order by
 "select count(id), num from user group by 2 order by 1"
@@ -1514,5 +1511,3 @@ Gen4 plan same as above
     ]
   }
 }
-"gen4 does not yet support: aggregation and non-aggregation expressions, together are not supported in cross-shard query"
-
