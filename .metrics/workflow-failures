@@ -1,4 +1,3 @@
-2021-03-18T16:40:49Z,e2e_race,https://github.com/vitessio/vitess/actions/runs/665239470
 2021-03-18T16:40:49Z,endtoend,https://github.com/vitessio/vitess/actions/runs/665239459
 2021-03-18T16:40:49Z,golangci-lint,https://github.com/vitessio/vitess/actions/runs/665239476
 2021-03-18T16:40:49Z,local_example,https://github.com/vitessio/vitess/actions/runs/665239443
@@ -9998,3 +9997,4 @@
 2021-07-14T17:25:08Z,Cluster (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/1031118851
 2021-07-14T17:25:08Z,pr-labels,https://github.com/vitessio/vitess/actions/runs/1031118886
 2021-07-14T17:40:39Z,Cluster (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/1031160450
+2021-07-14T17:45:59Z,Unit Test (mysql57),https://github.com/vitessio/vitess/actions/runs/1031177017
