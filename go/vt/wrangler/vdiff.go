@@ -253,10 +253,10 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflowName, sou
 		}
 		// Perform the diff of source and target streams.
 		dr, err := td.diff(ctx, df.ts.wr, &rowsToCompare, debug, onlyPks)
-		dr.TableName = table
 		if err != nil {
 			return nil, vterrors.Wrap(err, "diff")
 		}
+		dr.TableName = table
 		diffReports[table] = dr
 	}
 	if format == "json" {
