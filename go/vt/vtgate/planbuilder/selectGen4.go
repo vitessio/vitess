@@ -121,22 +121,28 @@ func checkIfAlreadyExists(expr *sqlparser.AliasedExpr, sel *sqlparser.Select) in
 	return -1
 }
 
-func planAggregations(qp *abstract.QueryProjection, plan logicalPlan, semTable *semantics.SemTable) (logicalPlan, bool, error) {
-	eaggr := &engine.OrderedAggregate{}
-	oa := &orderedAggregate{
-		resultsBuilder: resultsBuilder{
-			logicalPlanCommon: newBuilderCommon(plan),
-			weightStrings:     make(map[*resultColumn]int),
-			truncater:         eaggr,
-		},
-		eaggr: eaggr,
+func planAggregations(qp *abstract.QueryProjection, plan logicalPlan, semTable *semantics.SemTable, vschema ContextVSchema) (logicalPlan, bool, bool, error) {
+	newPlan := plan
+	var oa *orderedAggregate
+	if !hasUniqueVindex(vschema, semTable, qp.GroupByExprs) {
+		eaggr := &engine.OrderedAggregate{}
+		oa = &orderedAggregate{
+			resultsBuilder: resultsBuilder{
+				logicalPlanCommon: newBuilderCommon(plan),
+				weightStrings:     make(map[*resultColumn]int),
+				truncater:         eaggr,
+			},
+			eaggr: eaggr,
+		}
+		newPlan = oa
 	}
+
 	for _, e := range qp.SelectExprs {
 		offset, _, err := pushProjection(e.Col, plan, semTable, true, false)
 		if err != nil {
-			return nil, false, err
+			return nil, false, false, err
 		}
-		if e.Aggr {
+		if e.Aggr && oa != nil {
 			fExpr := e.Col.Expr.(*sqlparser.FuncExpr)
 			opcode := engine.SupportedAggregates[fExpr.Name.Lowered()]
 			oa.eaggr.Aggregates = append(oa.eaggr.Aggregates, engine.AggregateParams{
@@ -149,14 +155,14 @@ func planAggregations(qp *abstract.QueryProjection, plan logicalPlan, semTable *
 
 	var colAdded bool
 	for _, groupExpr := range qp.GroupByExprs {
-		added, err := planGroupByGen4(groupExpr, oa, semTable)
+		added, err := planGroupByGen4(groupExpr, newPlan, semTable)
 		if err != nil {
-			return nil, false, err
+			return nil, false, false, err
 		}
 		colAdded = colAdded || added
 	}
 
-	if !qp.CanPushDownSorting {
+	if !qp.CanPushDownSorting && oa != nil {
 		var orderExprs []abstract.OrderBy
 		// if we can't at a later stage push down the sorting to our inputs, we have to do ordering here
 		for _, groupExpr := range qp.GroupByExprs {
@@ -168,13 +174,44 @@ func planAggregations(qp *abstract.QueryProjection, plan logicalPlan, semTable *
 		if len(orderExprs) > 0 {
 			newInput, added, err := planOrderBy(qp, orderExprs, plan, semTable)
 			if err != nil {
-				return nil, false, err
+				return nil, false, false, err
 			}
 			oa.input = newInput
-			return oa, colAdded || added, nil
+			return oa, colAdded || added, true, nil
 		}
 	}
-	return oa, colAdded, nil
+	return newPlan, colAdded, oa != nil, nil
+}
+
+func hasUniqueVindex(vschema ContextVSchema, semTable *semantics.SemTable, groupByExprs []abstract.GroupBy) bool {
+	for _, groupByExpr := range groupByExprs {
+		col, isCol := groupByExpr.WeightStrExpr.(*sqlparser.ColName)
+		if !isCol {
+			continue
+		}
+		ts := semTable.Dependencies(groupByExpr.WeightStrExpr)
+		tableInfo, err := semTable.TableInfoFor(ts)
+		if err != nil {
+			continue
+		}
+		tableName, err := tableInfo.Name()
+		if err != nil {
+			continue
+		}
+		vschemaTable, _, _, _, _, err := vschema.FindTableOrVindex(tableName)
+		if err != nil {
+			continue
+		}
+		for _, vindex := range vschemaTable.ColumnVindexes {
+			if len(vindex.Columns) > 1 || !vindex.Vindex.IsUnique() {
+				continue
+			}
+			if col.Name.Equal(vindex.Columns[0]) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func planGroupByGen4(groupExpr abstract.GroupBy, plan logicalPlan, semTable *semantics.SemTable) (bool, error) {

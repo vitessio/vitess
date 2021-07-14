@@ -80,7 +80,7 @@ func newBuildSelectPlan(sel *sqlparser.Select, vschema ContextVSchema) (engine.P
 		return nil, err
 	}
 
-	plan, err = planHorizon(sel, plan, semTable)
+	plan, err = planHorizon(sel, plan, semTable, vschema)
 	if err != nil {
 		return nil, err
 	}
@@ -154,7 +154,7 @@ func planLimit(limit *sqlparser.Limit, plan logicalPlan) (logicalPlan, error) {
 	return lPlan, nil
 }
 
-func planHorizon(sel *sqlparser.Select, plan logicalPlan, semTable *semantics.SemTable) (logicalPlan, error) {
+func planHorizon(sel *sqlparser.Select, plan logicalPlan, semTable *semantics.SemTable, vschema ContextVSchema) (logicalPlan, error) {
 	rb, ok := plan.(*route)
 	if !ok && semTable.ProjectionErr != nil {
 		return nil, semTable.ProjectionErr
@@ -174,9 +174,9 @@ func planHorizon(sel *sqlparser.Select, plan logicalPlan, semTable *semantics.Se
 		return nil, err
 	}
 
-	var needsTruncation bool
+	var needsTruncation, vtgateGrouping bool
 	if qp.HasAggr {
-		plan, needsTruncation, err = planAggregations(qp, plan, semTable)
+		plan, needsTruncation, vtgateGrouping, err = planAggregations(qp, plan, semTable, vschema)
 		if err != nil {
 			return nil, err
 		}
@@ -197,7 +197,7 @@ func planHorizon(sel *sqlparser.Select, plan logicalPlan, semTable *semantics.Se
 		needsTruncation = needsTruncation || colAdded
 	}
 
-	if qp.HasAggr && qp.CanPushDownSorting {
+	if qp.CanPushDownSorting && vtgateGrouping {
 		var colAdded bool
 		plan, colAdded, err = planOrderByUsingGroupBy(qp, plan, semTable)
 		if err != nil {
