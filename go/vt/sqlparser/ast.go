@@ -2203,62 +2203,57 @@ func (ct *ColumnType) Format(buf *TrackedBuffer) {
 		buf.astPrintf(ct, "(%s)", strings.Join(ct.EnumValues, ", "))
 	}
 
-	opts := make([]string, 0, 16)
 	if ct.Unsigned {
-		opts = append(opts, keywordStrings[UNSIGNED])
+		buf.astPrintf(ct, " %s", keywordStrings[UNSIGNED])
 	}
 	if ct.Zerofill {
-		opts = append(opts, keywordStrings[ZEROFILL])
+		buf.astPrintf(ct, " %s", keywordStrings[ZEROFILL])
 	}
 	if ct.Charset != "" {
-		opts = append(opts, keywordStrings[CHARACTER], keywordStrings[SET], ct.Charset)
+		buf.astPrintf(ct, " %s %s %s", keywordStrings[CHARACTER], keywordStrings[SET], ct.Charset)
 	}
 	if ct.Collate != "" {
-		opts = append(opts, keywordStrings[COLLATE], ct.Collate)
+		buf.astPrintf(ct, " %s %s", keywordStrings[COLLATE], ct.Collate)
 	}
 	if ct.NotNull {
-		opts = append(opts, keywordStrings[NOT], keywordStrings[NULL])
+		buf.astPrintf(ct, " %s %s", keywordStrings[NOT], keywordStrings[NULL])
 	}
 	if ct.Default != nil {
-		opts = append(opts, keywordStrings[DEFAULT])
+		buf.astPrintf(ct, " %s", keywordStrings[DEFAULT])
 		_, isLiteral := ct.Default.(*Literal)
 		_, isNullVal := ct.Default.(*NullVal)
-		if isLiteral || isNullVal {
-			opts = append(opts, String(ct.Default))
+		if isLiteral || isNullVal || isExprAliasForCurrentTimeStamp(ct.Default) {
+			buf.astPrintf(ct, " %v", ct.Default)
 		} else {
-			opts = append(opts, "("+String(ct.Default)+")")
+			buf.astPrintf(ct, " (%v)", ct.Default)
 		}
 	}
 	if ct.OnUpdate != nil {
-		opts = append(opts, keywordStrings[ON], keywordStrings[UPDATE], String(ct.OnUpdate))
+		buf.astPrintf(ct, " %s %s %v", keywordStrings[ON], keywordStrings[UPDATE], ct.OnUpdate)
 	}
 	if ct.Autoincrement {
-		opts = append(opts, keywordStrings[AUTO_INCREMENT])
+		buf.astPrintf(ct, " %s", keywordStrings[AUTO_INCREMENT])
 	}
 	if ct.Comment != nil {
-		opts = append(opts, keywordStrings[COMMENT_KEYWORD], String(ct.Comment))
+		buf.astPrintf(ct, " %s %v", keywordStrings[COMMENT_KEYWORD], ct.Comment)
 	}
 	if ct.KeyOpt == colKeyPrimary {
-		opts = append(opts, keywordStrings[PRIMARY], keywordStrings[KEY])
+		buf.astPrintf(ct, " %s %s", keywordStrings[PRIMARY], keywordStrings[KEY])
 	}
 	if ct.KeyOpt == colKeyUnique {
-		opts = append(opts, keywordStrings[UNIQUE])
+		buf.astPrintf(ct, " %s", keywordStrings[UNIQUE])
 	}
 	if ct.KeyOpt == colKeyUniqueKey {
-		opts = append(opts, keywordStrings[UNIQUE], keywordStrings[KEY])
+		buf.astPrintf(ct, " %s %s", keywordStrings[UNIQUE], keywordStrings[KEY])
 	}
 	if ct.KeyOpt == colKeySpatialKey {
-		opts = append(opts, keywordStrings[SPATIAL], keywordStrings[KEY])
+		buf.astPrintf(ct, " %s %s", keywordStrings[SPATIAL], keywordStrings[KEY])
 	}
 	if ct.KeyOpt == colKeyFulltextKey {
-		opts = append(opts, keywordStrings[FULLTEXT], keywordStrings[KEY])
+		buf.astPrintf(ct, " %s %s", keywordStrings[FULLTEXT], keywordStrings[KEY])
 	}
 	if ct.KeyOpt == colKey {
-		opts = append(opts, keywordStrings[KEY])
-	}
-
-	if len(opts) != 0 {
-		buf.astPrintf(ct, " %s", strings.Join(opts, " "))
+		buf.astPrintf(ct, " %s", keywordStrings[KEY])
 	}
 }
 

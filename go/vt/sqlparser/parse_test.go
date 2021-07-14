@@ -2639,7 +2639,7 @@ func TestCreateTable(t *testing.T) {
 			"	s1 varchar default 'c',\n" +
 			"	s2 varchar default 'this is a string',\n" +
 			"	`s3` varchar default null,\n" +
-			"	s4 timestamp default (current_timestamp()),\n" +
+			"	s4 timestamp default current_timestamp(),\n" +
 			"	s5 bit(1) default B'0'\n" +
 			")",
 	}, {
@@ -2666,7 +2666,7 @@ func TestCreateTable(t *testing.T) {
 			"	email varchar unique,\n" +
 			"	full_name varchar key,\n" +
 			"	time1 timestamp on update current_timestamp(),\n" +
-			"	time2 timestamp default (current_timestamp()) on update current_timestamp()\n" +
+			"	time2 timestamp default current_timestamp() on update current_timestamp()\n" +
 			")",
 	}, {
 		// test current_timestamp with and without ()
@@ -2678,11 +2678,11 @@ func TestCreateTable(t *testing.T) {
 			"	time5 timestamp(3) default current_timestamp(3) on update current_timestamp(3)\n" +
 			")",
 		output: "create table t (\n" +
-			"	time1 timestamp default (current_timestamp()),\n" +
-			"	time2 timestamp default (current_timestamp()),\n" +
-			"	time3 timestamp default (current_timestamp()) on update current_timestamp(),\n" +
-			"	time4 timestamp default (current_timestamp()) on update current_timestamp(),\n" +
-			"	time5 timestamp(3) default (current_timestamp(3)) on update current_timestamp(3)\n" +
+			"	time1 timestamp default current_timestamp(),\n" +
+			"	time2 timestamp default current_timestamp(),\n" +
+			"	time3 timestamp default current_timestamp() on update current_timestamp(),\n" +
+			"	time4 timestamp default current_timestamp() on update current_timestamp(),\n" +
+			"	time5 timestamp(3) default current_timestamp(3) on update current_timestamp(3)\n" +
 			")",
 	}, {
 		// test utc_timestamp with and without ()
@@ -2740,11 +2740,11 @@ func TestCreateTable(t *testing.T) {
 			"	time5 timestamp(6) default localtime(6) on update localtime(6)\n" +
 			")",
 		output: "create table t (\n" +
-			"	time1 timestamp default (localtime()),\n" +
-			"	time2 timestamp default (localtime()),\n" +
-			"	time3 timestamp default (localtime()) on update localtime(),\n" +
-			"	time4 timestamp default (localtime()) on update localtime(),\n" +
-			"	time5 timestamp(6) default (localtime(6)) on update localtime(6)\n" +
+			"	time1 timestamp default localtime(),\n" +
+			"	time2 timestamp default localtime(),\n" +
+			"	time3 timestamp default localtime() on update localtime(),\n" +
+			"	time4 timestamp default localtime() on update localtime(),\n" +
+			"	time5 timestamp(6) default localtime(6) on update localtime(6)\n" +
 			")",
 	}, {
 		// test localtimestamp with and without ()
@@ -2756,11 +2756,11 @@ func TestCreateTable(t *testing.T) {
 			"	time5 timestamp(1) default localtimestamp(1) on update localtimestamp(1)\n" +
 			")",
 		output: "create table t (\n" +
-			"	time1 timestamp default (localtimestamp()),\n" +
-			"	time2 timestamp default (localtimestamp()),\n" +
-			"	time3 timestamp default (localtimestamp()) on update localtimestamp(),\n" +
-			"	time4 timestamp default (localtimestamp()) on update localtimestamp(),\n" +
-			"	time5 timestamp(1) default (localtimestamp(1)) on update localtimestamp(1)\n" +
+			"	time1 timestamp default localtimestamp(),\n" +
+			"	time2 timestamp default localtimestamp(),\n" +
+			"	time3 timestamp default localtimestamp() on update localtimestamp(),\n" +
+			"	time4 timestamp default localtimestamp() on update localtimestamp(),\n" +
+			"	time5 timestamp(1) default localtimestamp(1) on update localtimestamp(1)\n" +
 			")",
 	}, {
 		// test current_date with and without ()
