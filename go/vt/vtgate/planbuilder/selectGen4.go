@@ -196,7 +196,7 @@ func planGroupByGen4(groupExpr abstract.GroupBy, plan logicalPlan, semTable *sem
 		if err != nil {
 			return false, err
 		}
-		if wsNeeded == wsRequired {
+		if wsNeeded {
 			keyCol = weightStringOffset
 		}
 		node.eaggr.GroupByKeys = append(node.eaggr.GroupByKeys, engine.GroupbyParams{KeyCol: keyCol, WeightStringCol: weightStringOffset})
@@ -281,28 +281,28 @@ func planOrderByForRoute(orderExprs []abstract.OrderBy, plan *route, semTable *s
 	return plan, origColCount != plan.Select.GetColumnCount(), nil
 }
 
-func wrapAndPushExpr(expr sqlparser.Expr, weightStrExpr sqlparser.Expr, plan logicalPlan, semTable *semantics.SemTable) (int, int, bool, wsEnum, error) {
+func wrapAndPushExpr(expr sqlparser.Expr, weightStrExpr sqlparser.Expr, plan logicalPlan, semTable *semantics.SemTable) (int, int, bool, bool, error) {
 	offset, added, err := pushProjection(&sqlparser.AliasedExpr{Expr: expr}, plan, semTable, true, true)
 	if err != nil {
-		return 0, 0, false, 0, err
+		return 0, 0, false, false, err
 	}
 	colName, ok := expr.(*sqlparser.ColName)
 	if !ok {
-		return 0, 0, false, 0, semantics.Gen4NotSupportedF("group by/order by non-column expression")
+		return 0, 0, false, false, semantics.Gen4NotSupportedF("group by/order by non-column expression")
 	}
 	table := semTable.Dependencies(colName)
 	tbl, err := semTable.TableInfoFor(table)
 	if err != nil {
-		return 0, 0, false, 0, err
+		return 0, 0, false, false, err
 	}
 	wsNeeded := needsWeightString(tbl, colName)
 
 	weightStringOffset := -1
 	var wAdded bool
-	if wsNeeded != wsNotRequired {
+	if wsNeeded {
 		weightStringOffset, wAdded, err = pushProjection(&sqlparser.AliasedExpr{Expr: weightStringFor(weightStrExpr)}, plan, semTable, true, true)
 		if err != nil {
-			return 0, 0, false, 0, err
+			return 0, 0, false, false, err
 		}
 	}
 	return offset, weightStringOffset, added || wAdded, wsNeeded, nil
@@ -320,24 +320,13 @@ func weightStringFor(expr sqlparser.Expr) sqlparser.Expr {
 
 }
 
-type wsEnum int
-
-const (
-	wsNotRequired = wsEnum(iota)
-	wsRequired
-	wsSafeAddition
-)
-
-func needsWeightString(tbl semantics.TableInfo, colName *sqlparser.ColName) wsEnum {
+func needsWeightString(tbl semantics.TableInfo, colName *sqlparser.ColName) bool {
 	for _, c := range tbl.GetColumns() {
 		if colName.Name.String() == c.Name {
-			if sqltypes.IsNumber(c.Type) {
-				return wsNotRequired
-			}
-			return wsRequired
+			return !sqltypes.IsNumber(c.Type)
 		}
 	}
-	return wsSafeAddition // we didn't find the column. better to add just to be safe1
+	return true // we didn't find the column. better to add just to be safe1
 }
 
 func planOrderByForJoin(qp *abstract.QueryProjection, orderExprs []abstract.OrderBy, plan *joinGen4, semTable *semantics.SemTable) (logicalPlan, bool, error) {
