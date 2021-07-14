@@ -45,7 +45,7 @@ func TestMemorySortExecute(t *testing.T) {
 	}
 
 	ms := &MemorySort{
-		OrderBy: []OrderbyParams{{
+		OrderBy: []OrderByParams{{
 			WeightStringCol: -1,
 			Col:             1,
 		}},
@@ -100,7 +100,7 @@ func TestMemorySortStreamExecuteWeightString(t *testing.T) {
 	}
 
 	ms := &MemorySort{
-		OrderBy: []OrderbyParams{{
+		OrderBy: []OrderByParams{{
 			WeightStringCol: 0,
 			Col:             1,
 		}},
@@ -168,7 +168,7 @@ func TestMemorySortExecuteWeightString(t *testing.T) {
 	}
 
 	ms := &MemorySort{
-		OrderBy: []OrderbyParams{{
+		OrderBy: []OrderByParams{{
 			WeightStringCol: 1,
 			Col:             0,
 		}},
@@ -223,7 +223,7 @@ func TestMemorySortStreamExecute(t *testing.T) {
 	}
 
 	ms := &MemorySort{
-		OrderBy: []OrderbyParams{{
+		OrderBy: []OrderByParams{{
 			WeightStringCol: -1,
 			Col:             1,
 		}},
@@ -302,7 +302,7 @@ func TestMemorySortExecuteTruncate(t *testing.T) {
 	}
 
 	ms := &MemorySort{
-		OrderBy: []OrderbyParams{{
+		OrderBy: []OrderByParams{{
 			WeightStringCol: -1,
 			Col:             1,
 		}},
@@ -341,7 +341,7 @@ func TestMemorySortStreamExecuteTruncate(t *testing.T) {
 	}
 
 	ms := &MemorySort{
-		OrderBy: []OrderbyParams{{
+		OrderBy: []OrderByParams{{
 			WeightStringCol: -1,
 			Col:             1,
 		}},
@@ -384,7 +384,7 @@ func TestMemorySortMultiColumn(t *testing.T) {
 	}
 
 	ms := &MemorySort{
-		OrderBy: []OrderbyParams{{
+		OrderBy: []OrderByParams{{
 			Col:             1,
 			WeightStringCol: -1,
 		}, {
@@ -459,7 +459,7 @@ func TestMemorySortMaxMemoryRows(t *testing.T) {
 		}
 
 		ms := &MemorySort{
-			OrderBy: []OrderbyParams{{
+			OrderBy: []OrderByParams{{
 				WeightStringCol: -1,
 				Col:             1,
 			}},
@@ -495,7 +495,7 @@ func TestMemorySortExecuteNoVarChar(t *testing.T) {
 	}
 
 	ms := &MemorySort{
-		OrderBy: []OrderbyParams{{
+		OrderBy: []OrderByParams{{
 			WeightStringCol: -1,
 			Col:             0,
 		}},
