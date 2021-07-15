@@ -123,16 +123,16 @@ func (s *ReplicationStatus) FindErrantGTIDs(otherReplicaStatuses []*ReplicationS
 		if !ok {
 			panic("The receiver ReplicationStatus contained a Mysql56GTIDSet in its relay log, but a replica's ReplicationStatus is of another flavor. This should never happen.")
 		}
-		// Copy and throw out master SID from consideration, so we don't mutate input.
-		otherSetNoMasterSID := make(Mysql56GTIDSet, len(otherSet))
+		// Copy and throw out primary SID from consideration, so we don't mutate input.
+		otherSetNoPrimarySID := make(Mysql56GTIDSet, len(otherSet))
 		for sid, intervals := range otherSet {
 			if sid == status.SourceUUID {
 				continue
 			}
-			otherSetNoMasterSID[sid] = intervals
+			otherSetNoPrimarySID[sid] = intervals
 		}
 
-		otherSets = append(otherSets, otherSetNoMasterSID)
+		otherSets = append(otherSets, otherSetNoPrimarySID)
 	}
 
 	// Copy set for final diffSet so we don't mutate receiver.
