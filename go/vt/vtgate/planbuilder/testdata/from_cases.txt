@@ -2880,6 +2880,7 @@ Gen4 plan same as above
     "Table": "information_schema.schemata"
   }
 }
+Gen4 plan same as above
 
 #rails_query 3
 "SELECT table_comment FROM information_schema.tables WHERE table_schema = 'schema_name' AND table_name = 'table_name'"
@@ -2900,6 +2901,7 @@ Gen4 plan same as above
     "Table": "information_schema.`tables`"
   }
 }
+Gen4 plan same as above
 
 #rails_query 4
 "SELECT fk.referenced_table_name AS 'to_table', fk.referenced_column_name AS 'primary_key',fk.column_name AS 'column',fk.constraint_name AS 'name',rc.update_rule AS 'on_update',rc.delete_rule AS 'on_delete' FROM information_schema.referential_constraints rc JOIN information_schema.key_column_usage fk USING (constraint_schema, constraint_name) WHERE fk.referenced_column_name IS NOT NULL AND fk.table_schema = 'table_schema' AND fk.table_name = 'table_name' AND rc.constraint_schema = 'table_schema' AND rc.table_name = 'table_name'"
@@ -2960,6 +2962,7 @@ Gen4 plan same as above
     "Table": "information_schema.statistics"
   }
 }
+Gen4 plan same as above
 
 #rails_query 7
 "SELECT generation_expression FROM information_schema.columns WHERE table_schema = 'table_schema' AND table_name = 'table_name' AND column_name = 'column_name'"
@@ -2980,6 +2983,7 @@ Gen4 plan same as above
     "Table": "information_schema.`columns`"
   }
 }
+Gen4 plan same as above
 
 #rails_query 8
 "SELECT id FROM information_schema.processlist WHERE info LIKE '% FOR UPDATE'"
@@ -3057,6 +3061,7 @@ Gen4 plan same as above
     "Table": "information_schema.check_constraints"
   }
 }
+Gen4 plan same as above
 
 # system schema in where clause of information_schema query
 "SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE table_schema = 'performance_schema' AND table_name = 'foo'"
@@ -3077,6 +3082,7 @@ Gen4 plan same as above
     "Table": "INFORMATION_SCHEMA.`TABLES`"
   }
 }
+Gen4 plan same as above
 
 # query with parens is planned correctly
 "select m1.col from (unsharded as m1, unsharded as m2)"

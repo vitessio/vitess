@@ -1969,6 +1969,7 @@ Gen4 plan same as above
     "Table": "INFORMATION_SCHEMA.`TABLES`"
   }
 }
+Gen4 plan same as above
 
 # table_name predicate against a routed table
 "SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'ks' AND TABLE_NAME = 'route1'"
@@ -1989,6 +1990,7 @@ Gen4 plan same as above
     "Table": "INFORMATION_SCHEMA.`TABLES`"
   }
 }
+Gen4 plan same as above
 
 # information_schema query with additional predicates
 "SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'ks' and other_column = 42"
@@ -2008,6 +2010,7 @@ Gen4 plan same as above
     "Table": "INFORMATION_SCHEMA.`TABLES`"
   }
 }
+Gen4 plan same as above
 
 # pullout sq after pullout sq
 "select id from user where not id in (select user_extra.col from user_extra where user_extra.user_id = 42) and id in (select user_extra.col from user_extra where user_extra.user_id = 411)"
