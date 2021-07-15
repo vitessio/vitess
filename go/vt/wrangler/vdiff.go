@@ -529,13 +529,21 @@ func (df *vdiff) buildTablePlan(table *tabletmanagerdatapb.TableDefinition, quer
 	// the results, which engine.OrderedAggregate can do.
 	if len(aggregates) != 0 {
 		td.sourcePrimitive = &engine.OrderedAggregate{
-			Aggregates: aggregates,
-			Keys:       td.pkCols,
-			Input:      td.sourcePrimitive,
+			Aggregates:  aggregates,
+			GroupByKeys: pkColsToGroupByParams(td.pkCols),
+			Input:       td.sourcePrimitive,
 		}
 	}
 
 	return td, nil
+}
+
+func pkColsToGroupByParams(pkCols []int) []engine.GroupByParams {
+	var res []engine.GroupByParams
+	for _, col := range pkCols {
+		res = append(res, engine.GroupByParams{KeyCol: col, WeightStringCol: -1})
+	}
+	return res
 }
 
 // newMergeSorter creates an engine.MergeSort based on the shard streamers and pk columns.
@@ -544,13 +552,13 @@ func newMergeSorter(participants map[string]*shardStreamer, comparePKs []compare
 	for _, participant := range participants {
 		prims = append(prims, participant)
 	}
-	ob := make([]engine.OrderbyParams, 0, len(comparePKs))
+	ob := make([]engine.OrderByParams, 0, len(comparePKs))
 	for _, cpk := range comparePKs {
 		weightStringCol := -1
 		if cpk.weightStringIndex != cpk.colIndex {
 			weightStringCol = cpk.weightStringIndex
 		}
-		ob = append(ob, engine.OrderbyParams{Col: cpk.colIndex, WeightStringCol: weightStringCol})
+		ob = append(ob, engine.OrderByParams{Col: cpk.colIndex, WeightStringCol: weightStringCol})
 	}
 	return &engine.MergeSort{
 		Primitives: prims,

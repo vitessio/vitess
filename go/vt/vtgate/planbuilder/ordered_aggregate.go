@@ -331,14 +331,15 @@ func (oa *orderedAggregate) needDistinctHandling(pb *primitiveBuilder, funcExpr 
 // compare those instead. This is because we currently don't have the
 // ability to mimic mysql's collation behavior.
 func (oa *orderedAggregate) Wireup(plan logicalPlan, jt *jointab) error {
-	for i, colNumber := range oa.eaggr.Keys {
-		rc := oa.resultColumns[colNumber]
+	for i, gbk := range oa.eaggr.GroupByKeys {
+		rc := oa.resultColumns[gbk.KeyCol]
 		if sqltypes.IsText(rc.column.typ) {
 			if weightcolNumber, ok := oa.weightStrings[rc]; ok {
-				oa.eaggr.Keys[i] = weightcolNumber
+				oa.eaggr.GroupByKeys[i].WeightStringCol = weightcolNumber
+				oa.eaggr.GroupByKeys[i].KeyCol = weightcolNumber
 				continue
 			}
-			weightcolNumber, err := oa.input.SupplyWeightString(colNumber)
+			weightcolNumber, err := oa.input.SupplyWeightString(gbk.KeyCol)
 			if err != nil {
 				_, isUnsupportedErr := err.(UnsupportedSupplyWeightString)
 				if isUnsupportedErr {
@@ -347,7 +348,8 @@ func (oa *orderedAggregate) Wireup(plan logicalPlan, jt *jointab) error {
 				return err
 			}
 			oa.weightStrings[rc] = weightcolNumber
-			oa.eaggr.Keys[i] = weightcolNumber
+			oa.eaggr.GroupByKeys[i].WeightStringCol = weightcolNumber
+			oa.eaggr.GroupByKeys[i].KeyCol = weightcolNumber
 			oa.eaggr.TruncateColumnCount = len(oa.resultColumns)
 		}
 	}

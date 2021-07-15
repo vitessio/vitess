@@ -14,12 +14,13 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package planbuilder
+package abstract
 
 import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -30,7 +31,7 @@ func TestQP(t *testing.T) {
 		sql string
 
 		expErr   string
-		expOrder []orderBy
+		expOrder []OrderBy
 	}{
 		{
 			sql:    "select * from user",
@@ -45,7 +46,7 @@ func TestQP(t *testing.T) {
 		},
 		{
 			sql:    "select 1, count(1) from user",
-			expErr: "gen4 does not yet support: aggregation and non-aggregation expressions, together are not supported in cross-shard query",
+			expErr: "Mixing of aggregation and non-aggregation columns is not allowed if there is no GROUP BY clause",
 		},
 		{
 			sql: "select max(id) from user",
@@ -60,14 +61,14 @@ func TestQP(t *testing.T) {
 		},
 		{
 			sql:    "select 1, count(1) from user order by 1",
-			expErr: "gen4 does not yet support: aggregation and non-aggregation expressions, together are not supported in cross-shard query",
+			expErr: "Mixing of aggregation and non-aggregation columns is not allowed if there is no GROUP BY clause",
 		},
 		{
 			sql: "select id from user order by col, id, 1",
-			expOrder: []orderBy{
-				{inner: &sqlparser.Order{Expr: sqlparser.NewColName("col")}, weightStrExpr: sqlparser.NewColName("col")},
-				{inner: &sqlparser.Order{Expr: sqlparser.NewColName("id")}, weightStrExpr: sqlparser.NewColName("id")},
-				{inner: &sqlparser.Order{Expr: sqlparser.NewColName("id")}, weightStrExpr: sqlparser.NewColName("id")},
+			expOrder: []OrderBy{
+				{Inner: &sqlparser.Order{Expr: sqlparser.NewColName("col")}, WeightStrExpr: sqlparser.NewColName("col")},
+				{Inner: &sqlparser.Order{Expr: sqlparser.NewColName("id")}, WeightStrExpr: sqlparser.NewColName("id")},
+				{Inner: &sqlparser.Order{Expr: sqlparser.NewColName("id")}, WeightStrExpr: sqlparser.NewColName("id")},
 			},
 		},
 		{
@@ -76,10 +77,10 @@ func TestQP(t *testing.T) {
 		},
 		{
 			sql: "SELECT CONCAT(last_name,', ',first_name) AS full_name FROM mytable, tbl2 ORDER BY full_name", // alias in order not supported
-			expOrder: []orderBy{
+			expOrder: []OrderBy{
 				{
-					inner: &sqlparser.Order{Expr: sqlparser.NewColName("full_name")},
-					weightStrExpr: &sqlparser.FuncExpr{
+					Inner: &sqlparser.Order{Expr: sqlparser.NewColName("full_name")},
+					WeightStrExpr: &sqlparser.FuncExpr{
 						Name: sqlparser.NewColIdent("CONCAT"),
 						Exprs: sqlparser.SelectExprs{
 							&sqlparser.AliasedExpr{Expr: sqlparser.NewColName("last_name")},
@@ -89,6 +90,9 @@ func TestQP(t *testing.T) {
 					},
 				},
 			},
+		}, {
+			sql:    "select count(*) b from user group by b",
+			expErr: "Can't group on 'b'",
 		},
 	}
 
@@ -98,17 +102,83 @@ func TestQP(t *testing.T) {
 			require.NoError(t, err)
 
 			sel := stmt.(*sqlparser.Select)
-			qp, err := createQPFromSelect(sel)
+			qp, err := CreateQPFromSelect(sel)
 			if tcase.expErr != "" {
 				require.EqualError(t, err, tcase.expErr)
 			} else {
 				require.NoError(t, err)
-				assert.Equal(t, len(sel.SelectExprs), len(qp.selectExprs)+len(qp.aggrExprs))
+				assert.Equal(t, len(sel.SelectExprs), len(qp.SelectExprs))
 				for index, expOrder := range tcase.expOrder {
-					assert.True(t, sqlparser.EqualsSQLNode(expOrder.inner, qp.orderExprs[index].inner), "want: %+v, got %+v", sqlparser.String(expOrder.inner), sqlparser.String(qp.orderExprs[index].inner))
-					assert.True(t, sqlparser.EqualsSQLNode(expOrder.weightStrExpr, qp.orderExprs[index].weightStrExpr), "want: %v, got %v", sqlparser.String(expOrder.weightStrExpr), sqlparser.String(qp.orderExprs[index].weightStrExpr))
+					assert.True(t, sqlparser.EqualsSQLNode(expOrder.Inner, qp.OrderExprs[index].Inner), "want: %+v, got %+v", sqlparser.String(expOrder.Inner), sqlparser.String(qp.OrderExprs[index].Inner))
+					assert.True(t, sqlparser.EqualsSQLNode(expOrder.WeightStrExpr, qp.OrderExprs[index].WeightStrExpr), "want: %v, got %v", sqlparser.String(expOrder.WeightStrExpr), sqlparser.String(qp.OrderExprs[index].WeightStrExpr))
 				}
 			}
+		})
+	}
+}
+
+func TestQPSimplifiedExpr(t *testing.T) {
+	testCases := []struct {
+		query, expected string
+	}{
+		{
+			query: "select intcol, count(*) from user group by 1",
+			expected: `
+{
+  "Select": [
+    "intcol",
+    "aggr: count(*)"
+  ],
+  "Grouping": [
+    "intcol"
+  ],
+  "OrderBy": []
+}`,
+		},
+		{
+			query: "select intcol, textcol from user order by 1, textcol",
+			expected: `
+{
+  "Select": [
+    "intcol",
+    "textcol"
+  ],
+  "Grouping": [],
+  "OrderBy": [
+    "intcol asc",
+    "textcol asc"
+  ]
+}`,
+		},
+		{
+			query: "select intcol, textcol, count(id) from user group by intcol, textcol, extracol order by 2 desc",
+			expected: `
+{
+  "Select": [
+    "intcol",
+    "textcol",
+    "aggr: count(id)"
+  ],
+  "Grouping": [
+    "intcol",
+    "textcol",
+    "extracol"
+  ],
+  "OrderBy": [
+    "textcol desc"
+  ]
+}`,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.query, func(t *testing.T) {
+			ast, err := sqlparser.Parse(tc.query)
+			require.NoError(t, err)
+			sel := ast.(*sqlparser.Select)
+			qp, err := CreateQPFromSelect(sel)
+			require.NoError(t, err)
+			require.Equal(t, tc.expected[1:], qp.toString())
 		})
 	}
 }
