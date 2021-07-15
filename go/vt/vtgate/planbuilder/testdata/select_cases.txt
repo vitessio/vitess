@@ -1853,6 +1853,7 @@ Gen4 plan same as above
     "Table": "information_schema.routines"
   }
 }
+Gen4 plan same as above
 
 #information_schema table sizes
 "SELECT SUM(data_length + index_length) as size FROM information_schema.TABLES WHERE table_schema = ?"
@@ -1872,6 +1873,7 @@ Gen4 plan same as above
     "Table": "information_schema.`TABLES`"
   }
 }
+Gen4 plan same as above
 
 #information_schema referential contraints
 "SELECT kcu.constraint_name constraint_name, kcu.column_name column_name, kcu.referenced_table_name referenced_table_name, kcu.referenced_column_name referenced_column_name, kcu.ordinal_position ordinal_position, kcu.table_name table_name, rc.delete_rule delete_rule, rc.update_rule update_rule FROM information_schema.key_column_usage AS kcu INNER JOIN information_schema.referential_constraints AS rc ON kcu.constraint_name = rc.constraint_name WHERE kcu.table_schema = ? AND rc.constraint_schema = ? AND kcu.referenced_column_name IS NOT NULL ORDER BY ordinal_position"

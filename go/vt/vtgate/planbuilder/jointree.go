@@ -19,6 +19,8 @@ package planbuilder
 import (
 	"strings"
 
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -95,6 +97,10 @@ type (
 
 		// columns needed to feed other plans`
 		columns []*sqlparser.ColName
+
+		// The following two fields are used when routing information_schema queries
+		SysTableTableSchema []evalengine.Expr
+		SysTableTableName   []evalengine.Expr
 	}
 
 	joinPlan struct {
