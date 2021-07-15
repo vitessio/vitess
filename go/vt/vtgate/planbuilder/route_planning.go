@@ -220,10 +220,57 @@ func planHorizon(sel *sqlparser.Select, plan logicalPlan, semTable *semantics.Se
 	}
 
 	if qp.NeedsDistinct() {
-		plan = newDistinct(plan)
+		switch p := plan.(type) {
+		case *route:
+			if rb.isSingleShard() || selectHasUniqueVindex(vschema, semTable, qp.SelectExprs) {
+				p.Select.MakeDistinct()
+			} else {
+				plan = newDistinct(plan)
+			}
+		default:
+			plan = newDistinct(plan)
+		}
 	}
 
 	return plan, nil
+}
+
+func selectHasUniqueVindex(vschema ContextVSchema, semTable *semantics.SemTable, sel []abstract.SelectExpr) bool {
+	for _, expr := range sel {
+		if exprHasUniqueVindex(vschema, semTable, expr.Col.Expr) {
+			return true
+		}
+	}
+	return false
+}
+
+func exprHasUniqueVindex(vschema ContextVSchema, semTable *semantics.SemTable, expr sqlparser.Expr) bool {
+	col, isCol := expr.(*sqlparser.ColName)
+	if !isCol {
+		return false
+	}
+	ts := semTable.Dependencies(expr)
+	tableInfo, err := semTable.TableInfoFor(ts)
+	if err != nil {
+		return false
+	}
+	tableName, err := tableInfo.Name()
+	if err != nil {
+		return false
+	}
+	vschemaTable, _, _, _, _, err := vschema.FindTableOrVindex(tableName)
+	if err != nil {
+		return false
+	}
+	for _, vindex := range vschemaTable.ColumnVindexes {
+		if len(vindex.Columns) > 1 || !vindex.Vindex.IsUnique() {
+			return false
+		}
+		if col.Name.Equal(vindex.Columns[0]) {
+			return true
+		}
+	}
+	return false
 }
 
 func createSingleShardRoutePlan(sel *sqlparser.Select, rb *route) {

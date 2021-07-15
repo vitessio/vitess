@@ -185,30 +185,8 @@ func planAggregations(qp *abstract.QueryProjection, plan logicalPlan, semTable *
 
 func hasUniqueVindex(vschema ContextVSchema, semTable *semantics.SemTable, groupByExprs []abstract.GroupBy) bool {
 	for _, groupByExpr := range groupByExprs {
-		col, isCol := groupByExpr.WeightStrExpr.(*sqlparser.ColName)
-		if !isCol {
-			continue
-		}
-		ts := semTable.Dependencies(groupByExpr.WeightStrExpr)
-		tableInfo, err := semTable.TableInfoFor(ts)
-		if err != nil {
-			continue
-		}
-		tableName, err := tableInfo.Name()
-		if err != nil {
-			continue
-		}
-		vschemaTable, _, _, _, _, err := vschema.FindTableOrVindex(tableName)
-		if err != nil {
-			continue
-		}
-		for _, vindex := range vschemaTable.ColumnVindexes {
-			if len(vindex.Columns) > 1 || !vindex.Vindex.IsUnique() {
-				continue
-			}
-			if col.Name.Equal(vindex.Columns[0]) {
-				return true
-			}
+		if exprHasUniqueVindex(vschema, semTable, groupByExpr.WeightStrExpr) {
+			return true
 		}
 	}
 	return false
