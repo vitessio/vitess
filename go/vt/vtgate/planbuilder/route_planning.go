@@ -219,6 +219,10 @@ func planHorizon(sel *sqlparser.Select, plan logicalPlan, semTable *semantics.Se
 		}
 	}
 
+	if qp.NeedsDistinct() {
+		plan = newDistinct(plan)
+	}
+
 	return plan, nil
 }
 
@@ -237,9 +241,6 @@ func createSingleShardRoutePlan(sel *sqlparser.Select, rb *route) {
 }
 
 func checkUnsupportedConstructs(sel *sqlparser.Select) error {
-	if sel.Distinct {
-		return semantics.Gen4NotSupportedF("DISTINCT")
-	}
 	if sel.Having != nil {
 		return semantics.Gen4NotSupportedF("HAVING")
 	}

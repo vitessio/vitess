@@ -38,6 +38,7 @@ type (
 		// If you change the contents here, please update the toString() method
 		SelectExprs        []SelectExpr
 		HasAggr            bool
+		Distinct           bool
 		GroupByExprs       []GroupBy
 		OrderExprs         []OrderBy
 		CanPushDownSorting bool
@@ -58,7 +59,9 @@ type (
 
 // CreateQPFromSelect created the QueryProjection for the input *sqlparser.Select
 func CreateQPFromSelect(sel *sqlparser.Select) (*QueryProjection, error) {
-	qp := &QueryProjection{}
+	qp := &QueryProjection{
+		Distinct: sel.Distinct,
+	}
 
 	hasNonAggr := false
 	for _, selExp := range sel.SelectExprs {
@@ -70,9 +73,6 @@ func CreateQPFromSelect(sel *sqlparser.Select) (*QueryProjection, error) {
 		if ok && fExpr.IsAggregate() {
 			if len(fExpr.Exprs) != 1 {
 				return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.SyntaxError, "aggregate functions take a single argument '%s'", sqlparser.String(fExpr))
-			}
-			if fExpr.Distinct {
-				return nil, semantics.Gen4NotSupportedF("distinct aggregation")
 			}
 			qp.HasAggr = true
 			qp.SelectExprs = append(qp.SelectExprs, SelectExpr{
@@ -120,7 +120,6 @@ func CreateQPFromSelect(sel *sqlparser.Select) (*QueryProjection, error) {
 		canPushDownSorting = canPushDownSorting && !sqlparser.ContainsAggregation(weightStrExpr)
 	}
 	qp.CanPushDownSorting = canPushDownSorting
-
 	return qp, nil
 }
 
@@ -203,4 +202,8 @@ func (qp *QueryProjection) toString() string {
 // NeedsAggregation returns true if we either have aggregate functions or grouping defined
 func (qp *QueryProjection) NeedsAggregation() bool {
 	return qp.HasAggr || len(qp.GroupByExprs) > 0
+}
+
+func (qp *QueryProjection) NeedsDistinct() bool {
+	return qp.Distinct
 }
