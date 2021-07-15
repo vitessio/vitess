@@ -380,7 +380,7 @@ func createMemorySortPlanOnAggregation(plan *orderedAggregate, orderExprs []abst
 	for _, order := range orderExprs {
 		offset, woffset, found := findExprInOrderedAggr(plan, order)
 		if !found {
-			return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "expected to find this expression")
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "expected to find the order by expression (%s) in orderedAggregate", sqlparser.String(order.Inner))
 		}
 		ms.eMemorySort.OrderBy = append(ms.eMemorySort.OrderBy, engine.OrderByParams{
 			Col:               offset,
