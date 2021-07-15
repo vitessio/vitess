@@ -185,6 +185,18 @@ func TestQPSimplifiedExpr(t *testing.T) {
   "Distinct": true
 }`,
 		},
+		{
+			query: "select distinct count(*) from user",
+			expected: `
+{
+  "Select": [
+    "aggr: count(*)"
+  ],
+  "Grouping": [],
+  "OrderBy": [],
+  "Distinct": false
+}`,
+		},
 	}
 
 	for _, tc := range testCases {

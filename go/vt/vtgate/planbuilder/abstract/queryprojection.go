@@ -212,7 +212,25 @@ func (qp *QueryProjection) NeedsAggregation() bool {
 	return qp.HasAggr || len(qp.GroupByExprs) > 0
 }
 
+func (qp QueryProjection) onlyAggr() bool {
+	if !qp.HasAggr {
+		return false
+	}
+	for _, expr := range qp.SelectExprs {
+		if !expr.Aggr {
+			return false
+		}
+	}
+	return true
+}
+
 // NeedsDistinct returns true if the query needs explicit distinct
 func (qp *QueryProjection) NeedsDistinct() bool {
-	return qp.Distinct
+	if !qp.Distinct {
+		return false
+	}
+	if qp.onlyAggr() && len(qp.GroupByExprs) == 0 {
+		return false
+	}
+	return true
 }
