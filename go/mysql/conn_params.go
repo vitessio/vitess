@@ -34,6 +34,7 @@ type ConnParams struct {
 	SslCaPath        string `json:"ssl_ca_path"`
 	SslCert          string `json:"ssl_cert"`
 	SslKey           string `json:"ssl_key"`
+	TLSMinVersion    string `json:"tls_min_version"`
 	ServerName       string `json:"server_name"`
 	ConnectTimeoutMs uint64 `json:"connect_timeout_ms"`
 

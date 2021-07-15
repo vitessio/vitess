@@ -17,6 +17,7 @@ limitations under the License.
 package servenv
 
 import (
+	"crypto/tls"
 	"flag"
 	"fmt"
 	"math"
@@ -131,7 +132,7 @@ func createGRPCServer() {
 
 	var opts []grpc.ServerOption
 	if GRPCPort != nil && *GRPCCert != "" && *GRPCKey != "" {
-		config, err := vttls.ServerConfig(*GRPCCert, *GRPCKey, *GRPCCA, *GRPCServerCA)
+		config, err := vttls.ServerConfig(*GRPCCert, *GRPCKey, *GRPCCA, *GRPCServerCA, tls.VersionTLS12)
 		if err != nil {
 			log.Exitf("Failed to log gRPC cert/key/ca: %v", err)
 		}

@@ -172,7 +172,7 @@ func (r *replica) processReplicationStream() {
 			// Display lag with a higher precision as well.
 			lag := now.Sub(msg).Seconds()
 			log.Infof("current lag: %1ds (%1.1fs) replica rate: % 7.1f chan len: % 6d", lagTruncated, lag, float64(actualRate)/r.lagUpdateInterval.Seconds(), len(r.replicationStream))
-			r.qs.AddHealthResponseWithSecondsBehindMaster(lagTruncated)
+			r.qs.AddHealthResponseWithReplicationLag(lagTruncated)
 			r.lastHealthUpdate = now
 			actualRate = 0
 		}

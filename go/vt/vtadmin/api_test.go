@@ -32,8 +32,6 @@ import (
 	"vitess.io/vitess/go/vt/vtadmin/cluster"
 	"vitess.io/vitess/go/vt/vtadmin/cluster/discovery/fakediscovery"
 	vtadminerrors "vitess.io/vitess/go/vt/vtadmin/errors"
-	"vitess.io/vitess/go/vt/vtadmin/grpcserver"
-	"vitess.io/vitess/go/vt/vtadmin/http"
 	vtadmintestutil "vitess.io/vitess/go/vt/vtadmin/testutil"
 	"vitess.io/vitess/go/vt/vtadmin/vtctldclient/fakevtctldclient"
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver"
@@ -517,7 +515,7 @@ func TestFindSchema(t *testing.T) {
 				clusters[i] = vtadmintestutil.BuildCluster(t, cfg)
 			}
 
-			api := NewAPI(clusters, grpcserver.Options{}, http.Options{})
+			api := NewAPI(clusters, Options{})
 
 			resp, err := api.FindSchema(ctx, tt.req)
 			if tt.shouldErr {
@@ -726,7 +724,7 @@ func TestFindSchema(t *testing.T) {
 		},
 		)
 
-		api := NewAPI([]*cluster.Cluster{c1, c2}, grpcserver.Options{}, http.Options{})
+		api := NewAPI([]*cluster.Cluster{c1, c2}, Options{})
 		schema, err := api.FindSchema(ctx, &vtadminpb.FindSchemaRequest{
 			Table: "testtable",
 			TableSizeOptions: &vtadminpb.GetSchemaTableSizeOptions{
@@ -822,7 +820,7 @@ func TestGetClusters(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			api := NewAPI(tt.clusters, grpcserver.Options{}, http.Options{})
+			api := NewAPI(tt.clusters, Options{})
 
 			resp, err := api.GetClusters(ctx, &vtadminpb.GetClustersRequest{})
 			assert.NoError(t, err)
@@ -900,7 +898,7 @@ func TestGetGates(t *testing.T) {
 		},
 	}
 
-	api := NewAPI([]*cluster.Cluster{cluster1, cluster2}, grpcserver.Options{}, http.Options{})
+	api := NewAPI([]*cluster.Cluster{cluster1, cluster2}, Options{})
 	ctx := context.Background()
 
 	resp, err := api.GetGates(ctx, &vtadminpb.GetGatesRequest{})
@@ -1038,7 +1036,7 @@ func TestGetKeyspace(t *testing.T) {
 					})
 				}
 
-				api := NewAPI(clusters, grpcserver.Options{}, http.Options{})
+				api := NewAPI(clusters, Options{})
 				ks, err := api.GetKeyspace(ctx, tt.req)
 				if tt.shouldErr {
 					assert.Error(t, err)
@@ -1291,7 +1289,7 @@ func TestGetKeyspaces(t *testing.T) {
 					}),
 				}
 
-				api := NewAPI(clusters, grpcserver.Options{}, http.Options{})
+				api := NewAPI(clusters, Options{})
 				resp, err := api.GetKeyspaces(ctx, tt.req)
 				require.NoError(t, err)
 
@@ -1515,7 +1513,7 @@ func TestGetSchema(t *testing.T) {
 					VtctldClient: client,
 					Tablets:      tt.tablets,
 				})
-				api := NewAPI([]*cluster.Cluster{c}, grpcserver.Options{}, http.Options{})
+				api := NewAPI([]*cluster.Cluster{c}, Options{})
 
 				resp, err := api.GetSchema(ctx, tt.req)
 				if tt.shouldErr {
@@ -1641,7 +1639,7 @@ func TestGetSchema(t *testing.T) {
 		},
 		)
 
-		api := NewAPI([]*cluster.Cluster{c1, c2}, grpcserver.Options{}, http.Options{})
+		api := NewAPI([]*cluster.Cluster{c1, c2}, Options{})
 		schema, err := api.GetSchema(ctx, &vtadminpb.GetSchemaRequest{
 			ClusterId: c1.ID,
 			Keyspace:  "testkeyspace",
@@ -2191,7 +2189,7 @@ func TestGetSchemas(t *testing.T) {
 					})
 				}
 
-				api := NewAPI(clusters, grpcserver.Options{}, http.Options{})
+				api := NewAPI(clusters, Options{})
 
 				resp, err := api.GetSchemas(ctx, tt.req)
 				require.NoError(t, err)
@@ -2411,7 +2409,7 @@ func TestGetSchemas(t *testing.T) {
 		},
 		)
 
-		api := NewAPI([]*cluster.Cluster{c1, c2}, grpcserver.Options{}, http.Options{})
+		api := NewAPI([]*cluster.Cluster{c1, c2}, Options{})
 		resp, err := api.GetSchemas(ctx, &vtadminpb.GetSchemasRequest{
 			TableSizeOptions: &vtadminpb.GetSchemaTableSizeOptions{
 				AggregateSizes: true,
@@ -2642,7 +2640,7 @@ func TestGetSrvVSchema(t *testing.T) {
 					}),
 				}
 
-				api := NewAPI(clusters, grpcserver.Options{}, http.Options{})
+				api := NewAPI(clusters, Options{})
 				resp, err := api.GetSrvVSchema(ctx, tt.req)
 
 				if tt.shouldErr {
@@ -2936,7 +2934,7 @@ func TestGetSrvVSchemas(t *testing.T) {
 					}),
 				}
 
-				api := NewAPI(clusters, grpcserver.Options{}, http.Options{})
+				api := NewAPI(clusters, Options{})
 				resp, err := api.GetSrvVSchemas(ctx, tt.req)
 
 				if tt.shouldErr {
@@ -3192,7 +3190,7 @@ func TestGetTablet(t *testing.T) {
 				})
 			}
 
-			api := NewAPI(clusters, grpcserver.Options{}, http.Options{})
+			api := NewAPI(clusters, Options{})
 			resp, err := api.GetTablet(ctx, tt.req)
 			if tt.shouldErr {
 				assert.Error(t, err)
@@ -3387,7 +3385,7 @@ func TestGetTablets(t *testing.T) {
 				})
 			}
 
-			api := NewAPI(clusters, grpcserver.Options{}, http.Options{})
+			api := NewAPI(clusters, Options{})
 			resp, err := api.GetTablets(ctx, tt.req)
 			if tt.shouldErr {
 				assert.Error(t, err)
@@ -3518,7 +3516,7 @@ func TestGetVSchema(t *testing.T) {
 			t.Parallel()
 
 			clusters := []*cluster.Cluster{vtadmintestutil.BuildCluster(t, tt.clusterCfg)}
-			api := NewAPI(clusters, grpcserver.Options{}, http.Options{})
+			api := NewAPI(clusters, Options{})
 
 			resp, err := api.GetVSchema(ctx, tt.req)
 			if tt.shouldErr {
@@ -3848,7 +3846,7 @@ func TestGetVSchemas(t *testing.T) {
 			}
 
 			clusters := vtadmintestutil.BuildClusters(t, tt.clusterCfgs...)
-			api := NewAPI(clusters, grpcserver.Options{}, http.Options{})
+			api := NewAPI(clusters, Options{})
 
 			resp, err := api.GetVSchemas(ctx, tt.req)
 			if tt.shouldErr {
@@ -3977,11 +3975,7 @@ func TestGetWorkflow(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			api := NewAPI(
-				vtadmintestutil.BuildClusters(t, tt.cfgs...),
-				grpcserver.Options{},
-				http.Options{},
-			)
+			api := NewAPI(vtadmintestutil.BuildClusters(t, tt.cfgs...), Options{})
 
 			resp, err := api.GetWorkflow(ctx, tt.req)
 			if tt.shouldErr {
@@ -4420,11 +4414,7 @@ func TestGetWorkflows(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			api := NewAPI(
-				vtadmintestutil.BuildClusters(t, tt.cfgs...),
-				grpcserver.Options{},
-				http.Options{},
-			)
+			api := NewAPI(vtadmintestutil.BuildClusters(t, tt.cfgs...), Options{})
 
 			resp, err := api.GetWorkflows(ctx, tt.req)
 			if tt.shouldErr {
@@ -4718,7 +4708,7 @@ func TestVTExplain(t *testing.T) {
 					}),
 				}
 
-				api := NewAPI(clusters, grpcserver.Options{}, http.Options{})
+				api := NewAPI(clusters, Options{})
 				resp, err := api.VTExplain(ctx, tt.req)
 
 				if tt.expectedError != nil {

@@ -150,6 +150,17 @@ func getSharedUniqueKeys(sourceUniqueKeys, targetUniqueKeys [](*vrepl.UniqueKey)
 	return nil, nil
 }
 
+// getUniqueKeyCoveredByColumns returns the first unique key from given list, whose columns all appear
+// in given column list.
+func getUniqueKeyCoveredByColumns(uniqueKeys [](*vrepl.UniqueKey), columns *vrepl.ColumnList) (chosenUniqueKey *vrepl.UniqueKey) {
+	for _, uniqueKey := range uniqueKeys {
+		if uniqueKey.Columns.IsSubsetOf(columns) {
+			return uniqueKey
+		}
+	}
+	return nil
+}
+
 // readAutoIncrement reads the AUTO_INCREMENT vlaue, if any, for a give ntable
 func (v *VRepl) readAutoIncrement(ctx context.Context, conn *dbconnpool.DBConnection, tableName string) (autoIncrement uint64, err error) {
 	query, err := sqlparser.ParseAndBind(sqlGetAutoIncrement,
@@ -414,6 +425,26 @@ func (v *VRepl) analyzeTables(ctx context.Context, conn *dbconnpool.DBConnection
 		return fmt.Errorf("Found no possible unique key on `%s`", v.targetTable)
 	}
 	v.chosenSourceUniqueKey, v.chosenTargetUniqueKey = getSharedUniqueKeys(sourceUniqueKeys, targetUniqueKeys, v.parser.ColumnRenameMap())
+	if v.chosenSourceUniqueKey == nil {
+		// VReplication supports completely different unique keys on source and target, covering
+		// some/completely different columns. The condition is that the key on source
+		// must use columns which all exist on target table.
+		v.chosenSourceUniqueKey = getUniqueKeyCoveredByColumns(sourceUniqueKeys, v.sourceSharedColumns)
+		if v.chosenSourceUniqueKey == nil {
+			// Still no luck.
+			return fmt.Errorf("Found no possible unique key on `%s` whose columns are in target table `%s`", v.sourceTable, v.targetTable)
+		}
+	}
+	if v.chosenTargetUniqueKey == nil {
+		// VReplication supports completely different unique keys on source and target, covering
+		// some/completely different columns. The condition is that the key on target
+		// must use columns which all exist on source table.
+		v.chosenTargetUniqueKey = getUniqueKeyCoveredByColumns(targetUniqueKeys, v.targetSharedColumns)
+		if v.chosenTargetUniqueKey == nil {
+			// Still no luck.
+			return fmt.Errorf("Found no possible unique key on `%s` whose columns are in source table `%s`", v.targetTable, v.sourceTable)
+		}
+	}
 	if v.chosenSourceUniqueKey == nil || v.chosenTargetUniqueKey == nil {
 		return fmt.Errorf("Found no shared, not nullable, unique keys between `%s` and `%s`", v.sourceTable, v.targetTable)
 	}
@@ -465,6 +496,7 @@ func (v *VRepl) generateFilterQuery(ctx context.Context) error {
 	}
 	var sb strings.Builder
 	sb.WriteString("select ")
+
 	for i, sourceCol := range v.sourceSharedColumns.Columns() {
 		name := sourceCol.Name
 		targetName := v.sharedColumnsMap[name]
@@ -523,11 +555,16 @@ func (v *VRepl) analyzeBinlogSource(ctx context.Context) {
 		Filter:        &binlogdatapb.Filter{},
 		StopAfterCopy: false,
 	}
+
+	encodeColumns := func(columns *vrepl.ColumnList) string {
+		return textutil.EscapeJoin(columns.Names(), ",")
+	}
 	rule := &binlogdatapb.Rule{
-		Match:                  v.targetTable,
-		Filter:                 v.filterQuery,
-		SourceUniqueKeyColumns: textutil.EscapeJoin(v.chosenSourceUniqueKey.Columns.Names(), ","),
-		TargetUniqueKeyColumns: textutil.EscapeJoin(v.chosenTargetUniqueKey.Columns.Names(), ","),
+		Match:                        v.targetTable,
+		Filter:                       v.filterQuery,
+		SourceUniqueKeyColumns:       encodeColumns(&v.chosenSourceUniqueKey.Columns),
+		TargetUniqueKeyColumns:       encodeColumns(&v.chosenTargetUniqueKey.Columns),
+		SourceUniqueKeyTargetColumns: encodeColumns(v.chosenSourceUniqueKey.Columns.MappedNamesColumnList(v.sharedColumnsMap)),
 	}
 	if len(v.convertCharset) > 0 {
 		rule.ConvertCharset = v.convertCharset

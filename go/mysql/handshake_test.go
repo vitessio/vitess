@@ -17,6 +17,7 @@ limitations under the License.
 package mysql
 
 import (
+	"crypto/tls"
 	"io/ioutil"
 	"net"
 	"os"
@@ -125,7 +126,8 @@ func TestSSLConnection(t *testing.T) {
 		path.Join(root, "server-cert.pem"),
 		path.Join(root, "server-key.pem"),
 		path.Join(root, "ca-cert.pem"),
-		"")
+		"",
+		tls.VersionTLS12)
 	if err != nil {
 		t.Fatalf("TLSServerConfig failed: %v", err)
 	}

@@ -30,28 +30,48 @@ import (
 // Updated list of acceptable cipher suits to address
 // Fixed upstream in https://github.com/golang/go/issues/13385
 // This removed CBC mode ciphers that are suseptiable to Lucky13 style attacks
-func newTLSConfig() *tls.Config {
-	return &tls.Config{
-		// MySQL Community edition has some problems with TLS1.2
-		// TODO: Validate this will not break servers using mysql community edition < 5.7.10
-		// MinVersion: tls.VersionTLS12,
+func newTLSConfig(minVersion uint16) *tls.Config {
 
-		// Default ordering taken from
-		// go 1.11 crypto/tls/cipher_suites.go
-		CipherSuites: []uint16{
-			tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305,
-			tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305,
-			tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
-			tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
-			tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
-			tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+	ciphers := []uint16{
+		tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+		tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+		tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+		tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+		tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305,
+		tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305,
+	}
+
+	if minVersion < tls.VersionTLS12 {
+		ciphers = append(ciphers, []uint16{
 			tls.TLS_RSA_WITH_AES_128_GCM_SHA256,
 			tls.TLS_RSA_WITH_AES_256_GCM_SHA384,
 			tls.TLS_RSA_WITH_AES_128_GCM_SHA256,
 			tls.TLS_RSA_WITH_AES_256_GCM_SHA384,
 			tls.TLS_RSA_WITH_AES_128_CBC_SHA,
 			tls.TLS_RSA_WITH_AES_256_CBC_SHA,
-		},
+		}...)
+	}
+
+	return &tls.Config{
+		MinVersion:   minVersion,
+		CipherSuites: ciphers,
+	}
+}
+
+// TLSVersionToNumber converts a text description of the TLS protocol
+// to the internal Go number representation.
+func TLSVersionToNumber(tlsVersion string) (uint16, error) {
+	switch strings.ToLower(tlsVersion) {
+	case "tlsv1.3":
+		return tls.VersionTLS13, nil
+	case "", "tlsv1.2":
+		return tls.VersionTLS12, nil
+	case "tlsv1.1":
+		return tls.VersionTLS11, nil
+	case "tlsv1.0":
+		return tls.VersionTLS10, nil
+	default:
+		return tls.VersionTLS12, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "Invalid TLS version specified: %s. Allowed options are TLSv1.0, TLSv1.1, TLSv1.2 & TLSv1.3", tlsVersion)
 	}
 }
 
@@ -59,8 +79,8 @@ var onceByKeys = sync.Map{}
 
 // ClientConfig returns the TLS config to use for a client to
 // connect to a server with the provided parameters.
-func ClientConfig(cert, key, ca, name string) (*tls.Config, error) {
-	config := newTLSConfig()
+func ClientConfig(cert, key, ca, name string, minTLSVersion uint16) (*tls.Config, error) {
+	config := newTLSConfig(minTLSVersion)
 
 	// Load the client-side cert & key if any.
 	if cert != "" && key != "" {
@@ -94,8 +114,8 @@ func ClientConfig(cert, key, ca, name string) (*tls.Config, error) {
 
 // ServerConfig returns the TLS config to use for a server to
 // accept client connections.
-func ServerConfig(cert, key, ca, serverCA string) (*tls.Config, error) {
-	config := newTLSConfig()
+func ServerConfig(cert, key, ca, serverCA string, minTLSVersion uint16) (*tls.Config, error) {
+	config := newTLSConfig(minTLSVersion)
 
 	var certificates *[]tls.Certificate
 	var err error

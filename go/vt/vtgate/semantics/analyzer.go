@@ -300,23 +300,25 @@ func (a *analyzer) tableSetFor(t *sqlparser.AliasedTableExpr) TableSet {
 	panic("unknown table")
 }
 
-func (a *analyzer) createTable(t sqlparser.TableName, alias *sqlparser.AliasedTableExpr, tbl *vindexes.Table) TableInfo {
+func (a *analyzer) createTable(t sqlparser.TableName, alias *sqlparser.AliasedTableExpr, tbl *vindexes.Table, isInfSchema bool) TableInfo {
 	dbName := t.Qualifier.String()
 	if dbName == "" {
 		dbName = a.currentDb
 	}
 	if alias.As.IsEmpty() {
 		return &RealTable{
-			dbName:    dbName,
-			tableName: t.Name.String(),
-			ASTNode:   alias,
-			Table:     tbl,
+			dbName:      dbName,
+			tableName:   t.Name.String(),
+			ASTNode:     alias,
+			Table:       tbl,
+			isInfSchema: isInfSchema,
 		}
 	}
 	return &AliasedTable{
-		tableName: alias.As.String(),
-		ASTNode:   alias,
-		Table:     tbl,
+		tableName:   alias.As.String(),
+		ASTNode:     alias,
+		Table:       tbl,
+		isInfSchema: isInfSchema,
 	}
 }
 
@@ -325,18 +327,22 @@ func (a *analyzer) bindTable(alias *sqlparser.AliasedTableExpr, expr sqlparser.S
 	case *sqlparser.DerivedTable:
 		return Gen4NotSupportedF("derived table")
 	case sqlparser.TableName:
+		var tbl *vindexes.Table
+		var isInfSchema bool
 		if sqlparser.SystemSchema(t.Qualifier.String()) {
-			return Gen4NotSupportedF("system tables")
-		}
-		tbl, vdx, _, _, _, err := a.si.FindTableOrVindex(t)
-		if err != nil {
-			return err
-		}
-		if tbl == nil && vdx != nil {
-			return Gen4NotSupportedF("vindex in FROM")
+			isInfSchema = true
+		} else {
+			table, vdx, _, _, _, err := a.si.FindTableOrVindex(t)
+			if err != nil {
+				return err
+			}
+			tbl = table
+			if tbl == nil && vdx != nil {
+				return Gen4NotSupportedF("vindex in FROM")
+			}
 		}
 		scope := a.currentScope()
-		tableInfo := a.createTable(t, alias, tbl)
+		tableInfo := a.createTable(t, alias, tbl, isInfSchema)
 
 		a.Tables = append(a.Tables, tableInfo)
 		return scope.addTable(tableInfo)

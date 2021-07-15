@@ -526,7 +526,7 @@ func health(stat *discovery.LegacyTabletStats) float64 {
 	}
 
 	// The tablet is healthy/degraded/unheathy depending on the lag.
-	lag := stat.Stats.SecondsBehindMaster
+	lag := stat.Stats.ReplicationLagSeconds
 	switch {
 	case lag >= lagThresholdUnhealthy:
 		return tabletUnhealthy
@@ -549,7 +549,7 @@ func health(stat *discovery.LegacyTabletStats) float64 {
 }
 
 func replicationLag(stat *discovery.LegacyTabletStats) float64 {
-	return float64(stat.Stats.SecondsBehindMaster)
+	return float64(stat.Stats.ReplicationLagSeconds)
 }
 
 func qps(stat *discovery.LegacyTabletStats) float64 {
