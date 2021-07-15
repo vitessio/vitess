@@ -1713,3 +1713,50 @@ Gen4 plan same as above
 "select count(distinct *) from user"
 "syntax error: count(distinct *)"
 Gen4 plan same as above
+
+# optimize group by when using distinct with no aggregation
+"select distinct col1, col2 from user group by col1, col2"
+{
+  "QueryType": "SELECT",
+  "Original": "select distinct col1, col2 from user group by col1, col2",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Ordered",
+    "GroupBy": "0, 1, 0, 1",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select col1, col2, weight_string(col1), weight_string(col2) from `user` where 1 != 1 group by col1, col2",
+        "OrderBy": "(0|2) ASC, (1|3) ASC, (0|2) ASC, (1|3) ASC",
+        "Query": "select distinct col1, col2, weight_string(col1), weight_string(col2) from `user` group by col1, col2 order by col1 asc, col2 asc, col1 asc, col2 asc",
+        "ResultColumns": 2,
+        "Table": "`user`"
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select distinct col1, col2 from user group by col1, col2",
+  "Instructions": {
+    "OperatorType": "Distinct",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select col1, col2 from `user` where 1 != 1",
+        "Query": "select col1, col2 from `user`",
+        "Table": "`user`"
+      }
+    ]
+  }
+}

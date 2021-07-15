@@ -122,6 +122,9 @@ func CreateQPFromSelect(sel *sqlparser.Select) (*QueryProjection, error) {
 		})
 		canPushDownSorting = canPushDownSorting && !sqlparser.ContainsAggregation(weightStrExpr)
 	}
+	if qp.Distinct && !qp.HasAggr {
+		qp.GroupByExprs = nil
+	}
 	qp.CanPushDownSorting = canPushDownSorting
 	return qp, nil
 }
@@ -171,11 +174,13 @@ func (qp *QueryProjection) toString() string {
 		Select   []string
 		Grouping []string
 		OrderBy  []string
+		Distinct bool
 	}
 	out := output{
 		Select:   []string{},
 		Grouping: []string{},
 		OrderBy:  []string{},
+		Distinct: qp.NeedsDistinct(),
 	}
 
 	for _, expr := range qp.SelectExprs {

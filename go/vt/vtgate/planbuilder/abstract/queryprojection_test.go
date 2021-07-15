@@ -132,7 +132,8 @@ func TestQPSimplifiedExpr(t *testing.T) {
   "Grouping": [
     "intcol"
   ],
-  "OrderBy": []
+  "OrderBy": [],
+  "Distinct": false
 }`,
 		},
 		{
@@ -147,7 +148,8 @@ func TestQPSimplifiedExpr(t *testing.T) {
   "OrderBy": [
     "intcol asc",
     "textcol asc"
-  ]
+  ],
+  "Distinct": false
 }`,
 		},
 		{
@@ -166,7 +168,21 @@ func TestQPSimplifiedExpr(t *testing.T) {
   ],
   "OrderBy": [
     "textcol desc"
-  ]
+  ],
+  "Distinct": false
+}`,
+		},
+		{
+			query: "select distinct col1, col2 from user group by col1, col2",
+			expected: `
+{
+  "Select": [
+    "col1",
+    "col2"
+  ],
+  "Grouping": [],
+  "OrderBy": [],
+  "Distinct": true
 }`,
 		},
 	}
