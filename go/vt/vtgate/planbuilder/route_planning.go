@@ -721,7 +721,7 @@ func createRoutePlanForOuter(aRoute, bRoute *routePlan, semTable *semantics.SemT
 		aTbl, bTbl, newTables := findTables(deps, tables)
 		tables = newTables
 		if aTbl != nil && bTbl != nil {
-			tables = append(tables, &leJoin{
+			tables = append(tables, &joinTables{
 				lhs:  aTbl,
 				rhs:  bTbl,
 				pred: predicate,
