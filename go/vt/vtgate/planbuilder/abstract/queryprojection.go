@@ -99,6 +99,8 @@ func CreateQPFromSelect(sel *sqlparser.Select) (*QueryProjection, error) {
 
 	if qp.HasAggr {
 		expr := qp.getNonAggrExprNotMatchingGroupByExprs()
+		// if we have aggregation functions, non aggregating columns and GROUP BY,
+		// the non-aggregating expressions must all be listed in the GROUP BY list
 		if expr != nil {
 			if len(qp.GroupByExprs) > 0 {
 				return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongFieldWithGroup, "Expression of SELECT list is not in GROUP BY clause and contains nonaggregated column '%s' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by", sqlparser.String(expr))

@@ -607,6 +607,7 @@ Gen4 plan same as above
     "Table": "`user`"
   }
 }
+Gen4 plan same as above
 
 # group by a unique vindex where alias from select list is used
 "select id as val, 1+count(*) from user group by val"
@@ -625,6 +626,7 @@ Gen4 plan same as above
     "Table": "`user`"
   }
 }
+Gen4 plan same as above
 
 # group by a unique vindex where expression is qualified (alias should be ignored)
 "select val as id, 1+count(*) from user group by user.id"
@@ -643,6 +645,7 @@ Gen4 plan same as above
     "Table": "`user`"
   }
 }
+Gen4 plan same as above
 
 # group by a unique vindex where it should skip non-aliased expressions.
 "select *, id, 1+count(*) from user group by id"
