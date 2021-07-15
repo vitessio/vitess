@@ -592,7 +592,7 @@ func TestSplitCloneV2_Offline_RestartStreamingQuery(t *testing.T) {
 	// to verify that the restart actually happened for that tablet.
 	// SplitClone will ignore the second tablet because we set its replication lag
 	// to 1h.
-	tc.sourceRdonlyQs[1].AddHealthResponseWithSecondsBehindMaster(3600)
+	tc.sourceRdonlyQs[1].AddHealthResponseWithReplicationLag(3600)
 
 	// TODO(mberlin): Change this test to use a multi-column primary key because
 	// the restart generates a WHERE clause which includes all primary key
@@ -636,7 +636,7 @@ func TestSplitCloneV2_Offline_FailOverStreamingQuery_NotAllowed(t *testing.T) {
 	*executeFetchRetryTime = 1 * time.Millisecond
 
 	// Ensure that this test uses only the first tablet.
-	tc.sourceRdonlyQs[1].AddHealthResponseWithSecondsBehindMaster(3600)
+	tc.sourceRdonlyQs[1].AddHealthResponseWithReplicationLag(3600)
 
 	// We fail when returning the last row to ensure that vtworker is forced to
 	// give up after the one allowed restart.
@@ -683,15 +683,15 @@ func TestSplitCloneV2_Online_FailOverStreamingQuery(t *testing.T) {
 	tc.rightMasterFakeDb.DeleteAllEntriesAfterIndex(4)
 
 	// Ensure that this test uses only the first tablet initially.
-	tc.sourceRdonlyQs[1].AddHealthResponseWithSecondsBehindMaster(3600)
+	tc.sourceRdonlyQs[1].AddHealthResponseWithReplicationLag(3600)
 
 	// Let the first tablet fail at the last row.
 	tc.sourceRdonlyQs[0].errorStreamAtRow(199, 12345667890 /* infinite */)
 	tc.sourceRdonlyQs[0].setErrorCallback(func() {
 		// Make the first tablet unhealthy and the second one healthy again.
 		// vtworker should failover from the first to the second tablet then.
-		tc.sourceRdonlyQs[0].AddHealthResponseWithSecondsBehindMaster(3600)
-		tc.sourceRdonlyQs[1].AddHealthResponseWithSecondsBehindMaster(1)
+		tc.sourceRdonlyQs[0].AddHealthResponseWithReplicationLag(3600)
+		tc.sourceRdonlyQs[1].AddHealthResponseWithReplicationLag(1)
 	})
 
 	// Only wait 1 ns between retries, so that the test passes faster.

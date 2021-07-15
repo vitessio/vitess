@@ -195,10 +195,11 @@ type TablePlan struct {
 	EnumValuesMap map[string](map[string]string)
 	// PKReferences is used to check if an event changed
 	// a primary key column (row move).
-	PKReferences   []string
-	Stats          *binlogplayer.Stats
-	FieldsToSkip   map[string]bool
-	ConvertCharset map[string](*binlogdatapb.CharsetConversion)
+	PKReferences            []string
+	Stats                   *binlogplayer.Stats
+	FieldsToSkip            map[string]bool
+	ConvertCharset          map[string](*binlogdatapb.CharsetConversion)
+	HasExtraSourcePkColumns bool
 }
 
 // MarshalJSON performs a custom JSON Marshalling.
@@ -368,13 +369,16 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 		}
 		return execParsedQuery(tp.Delete, bindvars, executor)
 	case before && after:
-		if !tp.pkChanged(bindvars) {
+		if !tp.pkChanged(bindvars) && !tp.HasExtraSourcePkColumns {
 			return execParsedQuery(tp.Update, bindvars, executor)
 		}
 		if tp.Delete != nil {
 			if _, err := execParsedQuery(tp.Delete, bindvars, executor); err != nil {
 				return nil, err
 			}
+		}
+		if tp.isOutsidePKRange(bindvars, before, after, "insert") {
+			return nil, nil
 		}
 		return execParsedQuery(tp.Insert, bindvars, executor)
 	}

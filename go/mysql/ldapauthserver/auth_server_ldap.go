@@ -199,10 +199,11 @@ func (lud *LdapUserData) Get() *querypb.VTGateCallerID {
 // ServerConfig holds the config for and LDAP server
 // * include port in ldapServer, "ldap.example.com:386"
 type ServerConfig struct {
-	LdapServer string
-	LdapCert   string
-	LdapKey    string
-	LdapCA     string
+	LdapServer        string
+	LdapCert          string
+	LdapKey           string
+	LdapCA            string
+	LdapTLSMinVersion string
 }
 
 // Client provides an interface we can mock
@@ -231,7 +232,13 @@ func (lci *ClientImpl) Connect(network string, config *ServerConfig) error {
 	if err != nil {
 		return err
 	}
-	tlsConfig, err := vttls.ClientConfig(config.LdapCert, config.LdapKey, config.LdapCA, serverName)
+
+	tlsVersion, err := vttls.TLSVersionToNumber(config.LdapTLSMinVersion)
+	if err != nil {
+		return err
+	}
+
+	tlsConfig, err := vttls.ClientConfig(config.LdapCert, config.LdapKey, config.LdapCA, serverName, tlsVersion)
 	if err != nil {
 		return err
 	}

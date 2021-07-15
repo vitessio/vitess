@@ -37,6 +37,8 @@ const (
 	DirectiveIgnoreMaxPayloadSize = "IGNORE_MAX_PAYLOAD_SIZE"
 	// DirectiveIgnoreMaxMemoryRows skips memory row validation when set.
 	DirectiveIgnoreMaxMemoryRows = "IGNORE_MAX_MEMORY_ROWS"
+	// DirectiveAllowScatter lets scatter plans pass through even when they are turned off by `no-scatter`.
+	DirectiveAllowScatter = "ALLOW_SCATTER"
 )
 
 func isNonSpace(r rune) bool {
@@ -291,6 +293,30 @@ func (d CommentDirectives) GetString(key string, defaultVal string) string {
 	return stringVal
 }
 
+// MultiShardAutocommitDirective returns true if multishard autocommit directive is set to true in query.
+func MultiShardAutocommitDirective(stmt Statement) bool {
+	switch stmt := stmt.(type) {
+	case *Insert:
+		directives := ExtractCommentDirectives(stmt.Comments)
+		if directives.IsSet(DirectiveMultiShardAutocommit) {
+			return true
+		}
+	case *Update:
+		directives := ExtractCommentDirectives(stmt.Comments)
+		if directives.IsSet(DirectiveMultiShardAutocommit) {
+			return true
+		}
+	case *Delete:
+		directives := ExtractCommentDirectives(stmt.Comments)
+		if directives.IsSet(DirectiveMultiShardAutocommit) {
+			return true
+		}
+	default:
+		return false
+	}
+	return false
+}
+
 // SkipQueryPlanCacheDirective returns true if skip query plan cache directive is set to true in query.
 func SkipQueryPlanCacheDirective(stmt Statement) bool {
 	switch stmt := stmt.(type) {
@@ -360,4 +386,22 @@ func IgnoreMaxMaxMemoryRowsDirective(stmt Statement) bool {
 	default:
 		return false
 	}
+}
+
+// AllowScatterDirective returns true if the allow scatter override is set to true
+func AllowScatterDirective(stmt Statement) bool {
+	var directives CommentDirectives
+	switch stmt := stmt.(type) {
+	case *Select:
+		directives = ExtractCommentDirectives(stmt.Comments)
+	case *Insert:
+		directives = ExtractCommentDirectives(stmt.Comments)
+	case *Update:
+		directives = ExtractCommentDirectives(stmt.Comments)
+	case *Delete:
+		directives = ExtractCommentDirectives(stmt.Comments)
+	default:
+		return false
+	}
+	return directives.IsSet(DirectiveAllowScatter)
 }

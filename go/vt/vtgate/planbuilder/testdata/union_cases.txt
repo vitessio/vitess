@@ -297,7 +297,8 @@ Gen4 plan same as above
               "Sharded": false
             },
             "FieldQuery": "select * from information_schema.a where 1 != 1",
-            "Query": "select * from information_schema.a"
+            "Query": "select * from information_schema.a",
+            "Table": "information_schema.a"
           },
           {
             "OperatorType": "Route",
@@ -347,7 +348,8 @@ Gen4 plan same as above
               "Sharded": false
             },
             "FieldQuery": "select * from information_schema.a where 1 != 1",
-            "Query": "select * from information_schema.a"
+            "Query": "select * from information_schema.a",
+            "Table": "information_schema.a"
           }
         ]
       }

@@ -30,17 +30,17 @@ type ReplicationStatus struct {
 	// were to finish executing everything that's currently in its relay log.
 	// However, some MySQL flavors don't expose this information,
 	// in which case RelayLogPosition.IsZero() will be true.
-	RelayLogPosition     Position
-	FilePosition         Position
-	FileRelayLogPosition Position
-	MasterServerID       uint
-	IOThreadRunning      bool
-	SQLThreadRunning     bool
-	SecondsBehindMaster  uint
-	MasterHost           string
-	MasterPort           int
-	MasterConnectRetry   int
-	MasterUUID           SID
+	RelayLogPosition      Position
+	FilePosition          Position
+	FileRelayLogPosition  Position
+	SourceServerID        uint
+	IOThreadRunning       bool
+	SQLThreadRunning      bool
+	ReplicationLagSeconds uint
+	SourceHost            string
+	SourcePort            int
+	ConnectRetry          int
+	SourceUUID            SID
 }
 
 // ReplicationRunning returns true iff both the IO and SQL threads are
@@ -52,18 +52,18 @@ func (s *ReplicationStatus) ReplicationRunning() bool {
 // ReplicationStatusToProto translates a Status to proto3.
 func ReplicationStatusToProto(s ReplicationStatus) *replicationdatapb.Status {
 	return &replicationdatapb.Status{
-		Position:             EncodePosition(s.Position),
-		RelayLogPosition:     EncodePosition(s.RelayLogPosition),
-		FilePosition:         EncodePosition(s.FilePosition),
-		FileRelayLogPosition: EncodePosition(s.FileRelayLogPosition),
-		MasterServerId:       uint32(s.MasterServerID),
-		IoThreadRunning:      s.IOThreadRunning,
-		SqlThreadRunning:     s.SQLThreadRunning,
-		SecondsBehindMaster:  uint32(s.SecondsBehindMaster),
-		MasterHost:           s.MasterHost,
-		MasterPort:           int32(s.MasterPort),
-		MasterConnectRetry:   int32(s.MasterConnectRetry),
-		MasterUuid:           s.MasterUUID.String(),
+		Position:              EncodePosition(s.Position),
+		RelayLogPosition:      EncodePosition(s.RelayLogPosition),
+		FilePosition:          EncodePosition(s.FilePosition),
+		FileRelayLogPosition:  EncodePosition(s.FileRelayLogPosition),
+		SourceServerId:        uint32(s.SourceServerID),
+		IoThreadRunning:       s.IOThreadRunning,
+		SqlThreadRunning:      s.SQLThreadRunning,
+		ReplicationLagSeconds: uint32(s.ReplicationLagSeconds),
+		SourceHost:            s.SourceHost,
+		SourcePort:            int32(s.SourcePort),
+		ConnectRetry:          int32(s.ConnectRetry),
+		SourceUuid:            s.SourceUUID.String(),
 	}
 }
 
@@ -86,25 +86,25 @@ func ProtoToReplicationStatus(s *replicationdatapb.Status) ReplicationStatus {
 		panic(vterrors.Wrapf(err, "cannot decode FileRelayLogPosition"))
 	}
 	var sid SID
-	if s.MasterUuid != "" {
-		sid, err = ParseSID(s.MasterUuid)
+	if s.SourceUuid != "" {
+		sid, err = ParseSID(s.SourceUuid)
 		if err != nil {
-			panic(vterrors.Wrapf(err, "cannot decode MasterUUID"))
+			panic(vterrors.Wrapf(err, "cannot decode SourceUUID"))
 		}
 	}
 	return ReplicationStatus{
-		Position:             pos,
-		RelayLogPosition:     relayPos,
-		FilePosition:         filePos,
-		FileRelayLogPosition: fileRelayPos,
-		MasterServerID:       uint(s.MasterServerId),
-		IOThreadRunning:      s.IoThreadRunning,
-		SQLThreadRunning:     s.SqlThreadRunning,
-		SecondsBehindMaster:  uint(s.SecondsBehindMaster),
-		MasterHost:           s.MasterHost,
-		MasterPort:           int(s.MasterPort),
-		MasterConnectRetry:   int(s.MasterConnectRetry),
-		MasterUUID:           sid,
+		Position:              pos,
+		RelayLogPosition:      relayPos,
+		FilePosition:          filePos,
+		FileRelayLogPosition:  fileRelayPos,
+		SourceServerID:        uint(s.SourceServerId),
+		IOThreadRunning:       s.IoThreadRunning,
+		SQLThreadRunning:      s.SqlThreadRunning,
+		ReplicationLagSeconds: uint(s.ReplicationLagSeconds),
+		SourceHost:            s.SourceHost,
+		SourcePort:            int(s.SourcePort),
+		ConnectRetry:          int(s.ConnectRetry),
+		SourceUUID:            sid,
 	}
 }
 
@@ -126,7 +126,7 @@ func (s *ReplicationStatus) FindErrantGTIDs(otherReplicaStatuses []*ReplicationS
 		// Copy and throw out master SID from consideration, so we don't mutate input.
 		otherSetNoMasterSID := make(Mysql56GTIDSet, len(otherSet))
 		for sid, intervals := range otherSet {
-			if sid == status.MasterUUID {
+			if sid == status.SourceUUID {
 				continue
 			}
 			otherSetNoMasterSID[sid] = intervals
@@ -138,7 +138,7 @@ func (s *ReplicationStatus) FindErrantGTIDs(otherReplicaStatuses []*ReplicationS
 	// Copy set for final diffSet so we don't mutate receiver.
 	diffSet := make(Mysql56GTIDSet, len(set))
 	for sid, intervals := range set {
-		if sid == s.MasterUUID {
+		if sid == s.SourceUUID {
 			continue
 		}
 		diffSet[sid] = intervals

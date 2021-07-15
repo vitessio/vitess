@@ -37,6 +37,7 @@ type (
 		GetColumns() []ColumnInfo
 		IsVirtual() bool
 		DepsFor(col *sqlparser.ColName, org originable, single bool) *TableSet
+		IsInfSchema() bool
 	}
 
 	// ColumnInfo contains information about columns
@@ -50,13 +51,15 @@ type (
 		dbName, tableName string
 		ASTNode           *sqlparser.AliasedTableExpr
 		Table             *vindexes.Table
+		isInfSchema       bool
 	}
 
 	// AliasedTable contains the alias table expr and vindex table
 	AliasedTable struct {
-		tableName string
-		ASTNode   *sqlparser.AliasedTableExpr
-		Table     *vindexes.Table
+		tableName   string
+		ASTNode     *sqlparser.AliasedTableExpr
+		Table       *vindexes.Table
+		isInfSchema bool
 	}
 
 	vTableInfo struct {
@@ -93,6 +96,7 @@ type (
 	}
 )
 
+// DepsFor implements the TableInfo interface
 func (v *vTableInfo) DepsFor(col *sqlparser.ColName, org originable, single bool) *TableSet {
 	if !col.Qualifier.IsEmpty() {
 		return nil
@@ -106,6 +110,7 @@ func (v *vTableInfo) DepsFor(col *sqlparser.ColName, org originable, single bool
 	return nil
 }
 
+// DepsFor implements the TableInfo interface
 func (a *AliasedTable) DepsFor(col *sqlparser.ColName, org originable, single bool) *TableSet {
 	if single {
 		ts := org.tableSetFor(a.ASTNode)
@@ -120,6 +125,7 @@ func (a *AliasedTable) DepsFor(col *sqlparser.ColName, org originable, single bo
 	return nil
 }
 
+// DepsFor implements the TableInfo interface
 func (r *RealTable) DepsFor(col *sqlparser.ColName, org originable, single bool) *TableSet {
 	if single {
 		ts := org.tableSetFor(r.ASTNode)
@@ -134,14 +140,32 @@ func (r *RealTable) DepsFor(col *sqlparser.ColName, org originable, single bool)
 	return nil
 }
 
+// IsInfSchema implements the TableInfo interface
+func (v *vTableInfo) IsInfSchema() bool {
+	return false
+}
+
+// IsInfSchema implements the TableInfo interface
+func (a *AliasedTable) IsInfSchema() bool {
+	return a.isInfSchema
+}
+
+// IsInfSchema implements the TableInfo interface
+func (r *RealTable) IsInfSchema() bool {
+	return r.isInfSchema
+}
+
+// IsVirtual implements the TableInfo interface
 func (v *vTableInfo) IsVirtual() bool {
 	return true
 }
 
+// IsVirtual implements the TableInfo interface
 func (a *AliasedTable) IsVirtual() bool {
 	return false
 }
 
+// IsVirtual implements the TableInfo interface
 func (r *RealTable) IsVirtual() bool {
 	return false
 }

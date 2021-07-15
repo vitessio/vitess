@@ -138,13 +138,13 @@ func TestHeatmapData(t *testing.T) {
 		{
 			KeyspaceLabel: label{Name: "ks1", Rowspan: 7},
 			Data: [][]float64{
-				{float64(-1), float64(ts9.Stats.SecondsBehindMaster)},
-				{float64(ts6.Stats.SecondsBehindMaster), float64(ts8.Stats.SecondsBehindMaster)},
-				{float64(ts5.Stats.SecondsBehindMaster), float64(-1)},
-				{float64(-1), float64(ts7.Stats.SecondsBehindMaster)},
-				{float64(ts3.Stats.SecondsBehindMaster), float64(-1)},
-				{float64(ts2.Stats.SecondsBehindMaster), float64(ts4.Stats.SecondsBehindMaster)},
-				{float64(ts1.Stats.SecondsBehindMaster), float64(-1)},
+				{float64(-1), float64(ts9.Stats.ReplicationLagSeconds)},
+				{float64(ts6.Stats.ReplicationLagSeconds), float64(ts8.Stats.ReplicationLagSeconds)},
+				{float64(ts5.Stats.ReplicationLagSeconds), float64(-1)},
+				{float64(-1), float64(ts7.Stats.ReplicationLagSeconds)},
+				{float64(ts3.Stats.ReplicationLagSeconds), float64(-1)},
+				{float64(ts2.Stats.ReplicationLagSeconds), float64(ts4.Stats.ReplicationLagSeconds)},
+				{float64(ts1.Stats.ReplicationLagSeconds), float64(-1)},
 			},
 			Aliases: [][]*topodatapb.TabletAlias{
 				{nil, ts9.Tablet.Alias},
@@ -189,9 +189,9 @@ func TestHeatmapData(t *testing.T) {
 		{
 			KeyspaceLabel: label{Name: "ks1", Rowspan: 3},
 			Data: [][]float64{
-				{float64(ts5.Stats.SecondsBehindMaster), float64(-1)},
-				{float64(ts3.Stats.SecondsBehindMaster), float64(-1)},
-				{float64(ts2.Stats.SecondsBehindMaster), float64(ts4.Stats.SecondsBehindMaster)},
+				{float64(ts5.Stats.ReplicationLagSeconds), float64(-1)},
+				{float64(ts3.Stats.ReplicationLagSeconds), float64(-1)},
+				{float64(ts2.Stats.ReplicationLagSeconds), float64(ts4.Stats.ReplicationLagSeconds)},
 			},
 			Aliases: [][]*topodatapb.TabletAlias{
 				{ts5.Tablet.Alias, nil},
@@ -229,9 +229,9 @@ func TestHeatmapData(t *testing.T) {
 		{
 			KeyspaceLabel: label{Name: "ks2", Rowspan: 3},
 			Data: [][]float64{
-				{float64(ts12.Stats.SecondsBehindMaster), float64(-1)},
-				{float64(ts11.Stats.SecondsBehindMaster), float64(ts13.Stats.SecondsBehindMaster)},
-				{float64(ts10.Stats.SecondsBehindMaster), float64(-1)},
+				{float64(ts12.Stats.ReplicationLagSeconds), float64(-1)},
+				{float64(ts11.Stats.ReplicationLagSeconds), float64(ts13.Stats.ReplicationLagSeconds)},
+				{float64(ts10.Stats.ReplicationLagSeconds), float64(-1)},
 			},
 			Aliases: [][]*topodatapb.TabletAlias{
 				{ts12.Tablet.Alias, nil},
@@ -311,7 +311,7 @@ func TestHeatmapData(t *testing.T) {
 		{
 			KeyspaceLabel: label{Name: "ks1", Rowspan: 1},
 			Data: [][]float64{
-				{float64(-1), float64(ts7.Stats.SecondsBehindMaster)},
+				{float64(-1), float64(ts7.Stats.ReplicationLagSeconds)},
 			},
 			Aliases: [][]*topodatapb.TabletAlias{
 				{nil, ts7.Tablet.Alias},
@@ -442,8 +442,8 @@ func tabletStats(keyspace, cell, shard string, tabletType topodatapb.TabletType,
 	}
 	realtimeStats := &querypb.RealtimeStats{
 		HealthError: "",
-		// uid is used for SecondsBehindMaster to give it a unique value.
-		SecondsBehindMaster: uid,
+		// uid is used for ReplicationLagSeconds to give it a unique value.
+		ReplicationLagSeconds: uid,
 	}
 	stats := &discovery.LegacyTabletStats{
 		Tablet:    tablet,

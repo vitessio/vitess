@@ -28,10 +28,10 @@ func TestFilePosRetrieveMasterServerId(t *testing.T) {
 		"Master_Server_Id": "1",
 	}
 
-	want := ReplicationStatus{MasterServerID: 1}
+	want := ReplicationStatus{SourceServerID: 1}
 	got, err := parseFilePosReplicationStatus(resultMap)
 	require.NoError(t, err)
-	assert.Equalf(t, got.MasterServerID, want.MasterServerID, "got MasterServerID: %v; want MasterServerID: %v", got.MasterServerID, want.MasterServerID)
+	assert.Equalf(t, got.SourceServerID, want.SourceServerID, "got SourceServerID: %v; want SourceServerID: %v", got.SourceServerID, want.SourceServerID)
 }
 
 func TestFilePosRetrieveExecutedPosition(t *testing.T) {

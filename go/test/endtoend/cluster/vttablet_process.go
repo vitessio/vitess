@@ -71,6 +71,7 @@ type VttabletProcess struct {
 	DbPassword                  string
 	DbPort                      int
 	VreplicationTabletType      string
+	DbFlavor                    string
 	//Extra Args to be set before starting the vttablet process
 	ExtraArgs []string
 
@@ -116,6 +117,9 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 	}
 	if vttablet.EnableSemiSync {
 		vttablet.proc.Args = append(vttablet.proc.Args, "-enable_semi_sync")
+	}
+	if vttablet.DbFlavor != "" {
+		vttablet.proc.Args = append(vttablet.proc.Args, fmt.Sprintf("-db_flavor=%s", vttablet.DbFlavor))
 	}
 
 	vttablet.proc.Args = append(vttablet.proc.Args, vttablet.ExtraArgs...)

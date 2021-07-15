@@ -567,6 +567,21 @@ func TestNullsafeCompare(t *testing.T) {
 		v1:  TestValue(querypb.Type_DATETIME, "1000-01-01 00:00:00"),
 		v2:  TestValue(querypb.Type_BINARY, "2000-01-01 00:00:00"),
 		out: -1,
+	}, {
+		// Date/Time types
+		v1:  TestValue(querypb.Type_BIT, "101"),
+		v2:  TestValue(querypb.Type_BIT, "101"),
+		out: 0,
+	}, {
+		// Date/Time types
+		v1:  TestValue(querypb.Type_BIT, "1"),
+		v2:  TestValue(querypb.Type_BIT, "0"),
+		out: 1,
+	}, {
+		// Date/Time types
+		v1:  TestValue(querypb.Type_BIT, "0"),
+		v2:  TestValue(querypb.Type_BIT, "1"),
+		out: -1,
 	}}
 	for _, tcase := range tcases {
 		got, err := NullsafeCompare(tcase.v1, tcase.v2)

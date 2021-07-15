@@ -140,7 +140,13 @@ func (rp *leJoin) tableNames() []string {
 }
 
 func (rp *routeTable) tableNames() []string {
-	return []string{sqlparser.String(rp.qtable.Table.Name)}
+	var name string
+	if rp.qtable.IsInfSchema {
+		name = sqlparser.String(rp.qtable.Table)
+	} else {
+		name = sqlparser.String(rp.qtable.Table.Name)
+	}
+	return []string{name}
 }
 
 func (p parenTables) tableNames() []string {
