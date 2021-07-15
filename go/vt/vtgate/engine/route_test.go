@@ -805,7 +805,7 @@ func TestRouteSort(t *testing.T) {
 		"dummy_select",
 		"dummy_select_field",
 	)
-	sel.OrderBy = []OrderbyParams{{
+	sel.OrderBy = []OrderByParams{{
 		Col:             0,
 		WeightStringCol: -1,
 	}}
@@ -887,7 +887,7 @@ func TestRouteSortWeightStrings(t *testing.T) {
 		"dummy_select",
 		"dummy_select_field",
 	)
-	sel.OrderBy = []OrderbyParams{{
+	sel.OrderBy = []OrderByParams{{
 		Col:             1,
 		WeightStringCol: 0,
 	}}
@@ -953,7 +953,7 @@ func TestRouteSortWeightStrings(t *testing.T) {
 	})
 
 	t.Run("Error when no weight string set", func(t *testing.T) {
-		sel.OrderBy = []OrderbyParams{{
+		sel.OrderBy = []OrderByParams{{
 			Col:             1,
 			WeightStringCol: -1,
 		}}
@@ -989,7 +989,7 @@ func TestRouteSortTruncate(t *testing.T) {
 		"dummy_select",
 		"dummy_select_field",
 	)
-	sel.OrderBy = []OrderbyParams{{
+	sel.OrderBy = []OrderByParams{{
 		Col: 0,
 	}}
 	sel.TruncateColumnCount = 1
@@ -1080,7 +1080,7 @@ func TestRouteStreamSortTruncate(t *testing.T) {
 		"dummy_select",
 		"dummy_select_field",
 	)
-	sel.OrderBy = []OrderbyParams{{
+	sel.OrderBy = []OrderByParams{{
 		Col: 0,
 	}}
 	sel.TruncateColumnCount = 1
@@ -1223,7 +1223,7 @@ func TestExecFail(t *testing.T) {
 		vc.Rewind()
 		vc.resultErr = mysql.NewSQLError(mysql.ERQueryInterrupted, "", "query timeout -20")
 		// test when there is order by column
-		sel.OrderBy = []OrderbyParams{{
+		sel.OrderBy = []OrderByParams{{
 			WeightStringCol: -1,
 			Col:             0,
 		}}

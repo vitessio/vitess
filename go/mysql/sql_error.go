@@ -176,6 +176,7 @@ var stateToMysqlCode = map[vterrors.State]struct {
 	vterrors.NoSuchTable:                  {num: ERNoSuchTable, state: SSUnknownTable},
 	vterrors.NotSupportedYet:              {num: ERNotSupportedYet, state: SSClientError},
 	vterrors.ForbidSchemaChange:           {num: ERForbidSchemaChange, state: SSUnknownSQLState},
+	vterrors.MixOfGroupFuncAndFields:      {num: ERMixOfGroupFuncAndFields, state: SSClientError},
 	vterrors.NetPacketTooLarge:            {num: ERNetPacketTooLarge, state: SSNetError},
 	vterrors.NonUniqError:                 {num: ERNonUniq, state: SSConstraintViolation},
 	vterrors.NonUniqTable:                 {num: ERNonUniqTable, state: SSClientError},

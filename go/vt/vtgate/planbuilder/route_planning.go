@@ -80,7 +80,7 @@ func newBuildSelectPlan(sel *sqlparser.Select, vschema ContextVSchema) (engine.P
 		return nil, err
 	}
 
-	plan, err = planHorizon(sel, plan, semTable)
+	plan, err = planHorizon(sel, plan, semTable, vschema)
 	if err != nil {
 		return nil, err
 	}
@@ -154,7 +154,7 @@ func planLimit(limit *sqlparser.Limit, plan logicalPlan) (logicalPlan, error) {
 	return lPlan, nil
 }
 
-func planHorizon(sel *sqlparser.Select, plan logicalPlan, semTable *semantics.SemTable) (logicalPlan, error) {
+func planHorizon(sel *sqlparser.Select, plan logicalPlan, semTable *semantics.SemTable, vschema ContextVSchema) (logicalPlan, error) {
 	rb, ok := plan.(*route)
 	if !ok && semTable.ProjectionErr != nil {
 		return nil, semTable.ProjectionErr
@@ -169,36 +169,53 @@ func planHorizon(sel *sqlparser.Select, plan logicalPlan, semTable *semantics.Se
 		return nil, err
 	}
 
-	qp, err := createQPFromSelect(sel)
+	qp, err := abstract.CreateQPFromSelect(sel)
 	if err != nil {
 		return nil, err
 	}
-	for _, e := range qp.selectExprs {
-		if _, _, err := pushProjection(e, plan, semTable, true); err != nil {
-			return nil, err
-		}
-	}
 
-	for _, expr := range qp.aggrExprs {
-		funcExpr, ok := expr.Expr.(*sqlparser.FuncExpr)
-		if !ok {
-			return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "expected an aggregation here")
-		}
-		if funcExpr.Distinct {
-			return nil, semantics.Gen4NotSupportedF("distinct aggregation")
-		}
-	}
-
-	if len(qp.aggrExprs) > 0 {
-		plan, err = planAggregations(qp, plan, semTable)
+	var needsTruncation, vtgateGrouping bool
+	if qp.NeedsAggregation() {
+		plan, needsTruncation, vtgateGrouping, err = planAggregations(qp, plan, semTable, vschema)
 		if err != nil {
 			return nil, err
 		}
+	} else {
+		for _, e := range qp.SelectExprs {
+			if _, _, err := pushProjection(e.Col, plan, semTable, true, false); err != nil {
+				return nil, err
+			}
+		}
 	}
-	if len(sel.OrderBy) > 0 {
-		plan, err = planOrderBy(qp, qp.orderExprs, plan, semTable)
+
+	if len(qp.OrderExprs) > 0 {
+		var colAdded bool
+		plan, colAdded, err = planOrderBy(qp, qp.OrderExprs, plan, semTable)
 		if err != nil {
 			return nil, err
+		}
+		needsTruncation = needsTruncation || colAdded
+	}
+
+	if qp.CanPushDownSorting && vtgateGrouping {
+		var colAdded bool
+		plan, colAdded, err = planOrderByUsingGroupBy(qp, plan, semTable)
+		if err != nil {
+			return nil, err
+		}
+		needsTruncation = needsTruncation || colAdded
+	}
+
+	if needsTruncation {
+		switch p := plan.(type) {
+		case *route:
+			p.eroute.SetTruncateColumnCount(sel.GetColumnCount())
+		case *orderedAggregate:
+			p.eaggr.SetTruncateColumnCount(sel.GetColumnCount())
+		case *memorySort:
+			p.truncater.SetTruncateColumnCount(sel.GetColumnCount())
+		default:
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "plan type not known for column truncation: %T", plan)
 		}
 	}
 
@@ -222,9 +239,6 @@ func createSingleShardRoutePlan(sel *sqlparser.Select, rb *route) {
 func checkUnsupportedConstructs(sel *sqlparser.Select) error {
 	if sel.Distinct {
 		return semantics.Gen4NotSupportedF("DISTINCT")
-	}
-	if sel.GroupBy != nil {
-		return semantics.Gen4NotSupportedF("GROUP BY")
 	}
 	if sel.Having != nil {
 		return semantics.Gen4NotSupportedF("HAVING")
