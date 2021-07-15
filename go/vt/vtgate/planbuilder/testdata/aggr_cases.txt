@@ -1760,3 +1760,55 @@ Gen4 plan same as above
     ]
   }
 }
+
+# do not use distinct when using only aggregates and no group by
+"select distinct count(*) from user"
+{
+  "QueryType": "SELECT",
+  "Original": "select distinct count(*) from user",
+  "Instructions": {
+    "OperatorType": "Distinct",
+    "Inputs": [
+      {
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "Aggregates": "count(0)",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select count(*) from `user` where 1 != 1",
+            "Query": "select count(*) from `user`",
+            "Table": "`user`"
+          }
+        ]
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select distinct count(*) from user",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Ordered",
+    "Aggregates": "count(0)",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select count(*) from `user` where 1 != 1",
+        "Query": "select count(*) from `user`",
+        "Table": "`user`"
+      }
+    ]
+  }
+}
