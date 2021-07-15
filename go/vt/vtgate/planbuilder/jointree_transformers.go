@@ -112,8 +112,9 @@ func transformRoutePlan(n *routePlan) (*route, error) {
 			LeftExpr:  lft,
 		}
 		tablesForSelect = sqlparser.TableExprs{joinExpr}
-		// todo: add table
-		// tableNameMap[sqlparser.String()] = nil
+		for _, tblNames := range leftJoin.right.tableNames() {
+			tableNameMap[tblNames] = nil
+		}
 	}
 
 	predicates := n.Predicates()
@@ -161,13 +162,19 @@ func transformRoutePlan(n *routePlan) (*route, error) {
 func relToTableExpr(t relation) (sqlparser.TableExpr, error) {
 	switch t := t.(type) {
 	case *routeTable:
-		return &sqlparser.AliasedTableExpr{
-			Expr: sqlparser.TableName{
+		var expr sqlparser.SimpleTableExpr
+		if t.qtable.IsInfSchema {
+			expr = t.qtable.Table
+		} else {
+			expr = sqlparser.TableName{
 				Name: t.vtable.Name,
-			},
+			}
+		}
+		return &sqlparser.AliasedTableExpr{
+			Expr:       expr,
 			Partitions: nil,
 			As:         t.qtable.Alias.As,
-			Hints:      nil,
+			Hints:      t.qtable.Alias.Hints,
 		}, nil
 	case parenTables:
 		tables := sqlparser.TableExprs{}
