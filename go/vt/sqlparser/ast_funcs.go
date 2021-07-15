@@ -1371,17 +1371,21 @@ func ToString(exprs []TableExpr) string {
 func ContainsAggregation(e Expr) bool {
 	hasAggregates := false
 	_ = Walk(func(node SQLNode) (kontinue bool, err error) {
-		switch node := node.(type) {
-		case *FuncExpr:
-			if node.IsAggregate() {
-				hasAggregates = true
-				return false, nil
-			}
-		case *GroupConcatExpr:
+		if IsAggregation(node) {
 			hasAggregates = true
-			return false, nil
 		}
 		return true, nil
 	}, e)
 	return hasAggregates
+}
+
+// IsAggregation returns true if the node is an aggregation expression
+func IsAggregation(node SQLNode) bool {
+	switch node := node.(type) {
+	case *FuncExpr:
+		return node.IsAggregate()
+	case *GroupConcatExpr:
+		return true
+	}
+	return false
 }

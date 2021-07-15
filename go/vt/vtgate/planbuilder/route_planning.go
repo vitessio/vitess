@@ -165,12 +165,12 @@ func planHorizon(sel *sqlparser.Select, plan logicalPlan, semTable *semantics.Se
 		return plan, nil
 	}
 
-	if err := checkUnsupportedConstructs(sel); err != nil {
+	qp, err := abstract.CreateQPFromSelect(sel)
+	if err != nil {
 		return nil, err
 	}
 
-	qp, err := abstract.CreateQPFromSelect(sel)
-	if err != nil {
+	if err := checkUnsupportedConstructs(sel, qp); err != nil {
 		return nil, err
 	}
 
@@ -287,7 +287,13 @@ func createSingleShardRoutePlan(sel *sqlparser.Select, rb *route) {
 	}
 }
 
-func checkUnsupportedConstructs(sel *sqlparser.Select) error {
+func checkUnsupportedConstructs(sel *sqlparser.Select, qp *abstract.QueryProjection) error {
+	for _, expr := range qp.SelectExprs {
+		colExpr := expr.Col.Expr
+		if !sqlparser.IsAggregation(colExpr) && sqlparser.ContainsAggregation(colExpr) {
+			return vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: in scatter query: complex aggregate expression")
+		}
+	}
 	if sel.Having != nil {
 		return semantics.Gen4NotSupportedF("HAVING")
 	}
