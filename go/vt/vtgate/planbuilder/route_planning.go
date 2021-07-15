@@ -780,9 +780,11 @@ func createRoutePlanForInner(aRoute *routePlan, bRoute *routePlan, newTabletSet 
 		predicates: append(
 			append(aRoute.predicates, bRoute.predicates...),
 			joinPredicates...),
-		keyspace:    aRoute.keyspace,
-		vindexPreds: append(aRoute.vindexPreds, bRoute.vindexPreds...),
-		leftJoins:   append(aRoute.leftJoins, bRoute.leftJoins...),
+		keyspace:            aRoute.keyspace,
+		vindexPreds:         append(aRoute.vindexPreds, bRoute.vindexPreds...),
+		leftJoins:           append(aRoute.leftJoins, bRoute.leftJoins...),
+		SysTableTableSchema: append(aRoute.SysTableTableSchema, bRoute.SysTableTableSchema...),
+		SysTableTableName:   append(aRoute.SysTableTableName, bRoute.SysTableTableName...),
 	}
 }
 
