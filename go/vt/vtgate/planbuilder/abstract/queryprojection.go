@@ -74,6 +74,9 @@ func CreateQPFromSelect(sel *sqlparser.Select) (*QueryProjection, error) {
 			if len(fExpr.Exprs) != 1 {
 				return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.SyntaxError, "aggregate functions take a single argument '%s'", sqlparser.String(fExpr))
 			}
+			if fExpr.Distinct {
+				return nil, semantics.Gen4NotSupportedF("distinct aggregation")
+			}
 			qp.HasAggr = true
 			qp.SelectExprs = append(qp.SelectExprs, SelectExpr{
 				Col:  exp,
@@ -204,6 +207,7 @@ func (qp *QueryProjection) NeedsAggregation() bool {
 	return qp.HasAggr || len(qp.GroupByExprs) > 0
 }
 
+// NeedsDistinct returns true if the query needs explicit distinct
 func (qp *QueryProjection) NeedsDistinct() bool {
 	return qp.Distinct
 }

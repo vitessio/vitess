@@ -1669,6 +1669,36 @@ Gen4 plan same as above
     ]
   }
 }
+{
+  "QueryType": "SELECT",
+  "Original": "select distinct a, count(*) from user group by a",
+  "Instructions": {
+    "OperatorType": "Distinct",
+    "Inputs": [
+      {
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "Aggregates": "count(1)",
+        "GroupBy": "(0|2)",
+        "ResultColumns": 2,
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select a, count(*), weight_string(a) from `user` where 1 != 1 group by a",
+            "OrderBy": "(0|2) ASC",
+            "Query": "select a, count(*), weight_string(a) from `user` group by a order by a asc",
+            "Table": "`user`"
+          }
+        ]
+      }
+    ]
+  }
+}
 
 # Group by invalid column number (code is duplicated from symab).
 "select id from user group by 1.1"
