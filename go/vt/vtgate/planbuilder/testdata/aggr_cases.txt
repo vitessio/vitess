@@ -783,7 +783,7 @@ Gen4 error: In aggregated query without GROUP BY, expression of SELECT list cont
           "Sharded": true
         },
         "FieldQuery": "select col from `user` where 1 != 1",
-        "Query": "select col from `user`",
+        "Query": "select distinct col from `user`",
         "Table": "`user`"
       }
     ]
@@ -1809,7 +1809,7 @@ Gen4 plan same as above
           "Sharded": true
         },
         "FieldQuery": "select col1, col2 from `user` where 1 != 1",
-        "Query": "select col1, col2 from `user`",
+        "Query": "select distinct col1, col2 from `user`",
         "Table": "`user`"
       }
     ]
