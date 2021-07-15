@@ -26,12 +26,6 @@ jobs:
       run: |
         echo '1024 65535' | sudo tee -a /proc/sys/net/ipv4/ip_local_port_range
 
-    # TEMPORARY WHILE GITHUB FIXES THIS https://github.com/actions/virtual-environments/issues/3185
-    - name: Add the current IP address, long hostname and short hostname record to /etc/hosts file
-      run: |
-        echo -e "$(ip addr show eth0 | grep "inet\b" | awk '{print $2}' | cut -d/ -f1)\t$(hostname -f) $(hostname -s)" | sudo tee -a /etc/hosts
-    # DON'T FORGET TO REMOVE CODE ABOVE WHEN ISSUE IS ADRESSED!
-
     - name: Check out ${{ env.latest_release }}
       uses: actions/checkout@v2
       with:
@@ -40,7 +34,7 @@ jobs:
     - name: Get dependencies
       run: |
         # This prepares general purpose binary dependencies
-        # as well as v9.0.0 specific go modules
+        # as well as latest version specific go modules
         sudo apt-get update
         sudo apt-get install -y mysql-server mysql-client make unzip g++ etcd curl git wget eatmydata
         sudo service mysql stop
@@ -58,7 +52,7 @@ jobs:
     - name: Building ${{ env.latest_release }} binaries
       timeout-minutes: 10
       run: |
-        # We build v9.0.0 binaries and save them in a temporary location
+        # We build latest version binaries and save them in a temporary location
         source build.env
         make build
         mkdir -p /tmp/vitess-build-${{ env.latest_release }}/
@@ -70,13 +64,13 @@ jobs:
     - name: Run cluster endtoend test ${{ env.latest_release }} (create cluster)
       timeout-minutes: 5
       run: |
-        # By checking out we deleted bin/ directory. We now restore our pre-built v9.0.0 binaries
+        # By checking out we deleted bin/ directory. We now restore our pre-built latest version binaries
         cp -R /tmp/vitess-build-${{ env.latest_release }}/bin .
         # create the directory where we store test data; ensure it is empty:
         rm -rf /tmp/vtdataroot
         mkdir -p /tmp/vtdataroot
         source build.env
-        # We pass -skip-build so that we use the v9.0.0 binaries, not HEAD binaries
+        # We pass -skip-build so that we use the latest version binaries, not HEAD binaries
         eatmydata -- go run test.go -skip-build -keep-data -docker=false -print-log -follow -shard 28
 
     - name: Check out HEAD
