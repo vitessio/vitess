@@ -220,19 +220,31 @@ func planHorizon(sel *sqlparser.Select, plan logicalPlan, semTable *semantics.Se
 	}
 
 	if qp.NeedsDistinct() {
-		switch p := plan.(type) {
-		case *route:
-			if rb.isSingleShard() || selectHasUniqueVindex(vschema, semTable, qp.SelectExprs) {
-				p.Select.MakeDistinct()
-			} else {
-				plan = newDistinct(plan)
-			}
-		default:
-			plan = newDistinct(plan)
+		plan, err = pushDistinct(plan, semTable, vschema, qp)
+		if err != nil {
+			return nil, err
 		}
 	}
 
 	return plan, nil
+}
+
+func pushDistinct(plan logicalPlan, semTable *semantics.SemTable, vschema ContextVSchema, qp *abstract.QueryProjection) (logicalPlan, error) {
+	switch p := plan.(type) {
+	case *route:
+		// we always make the underlying query distinct,
+		// and then we might also add a distinct operator on top if it is needed
+		p.Select.MakeDistinct()
+		if !p.isSingleShard() && !selectHasUniqueVindex(vschema, semTable, qp.SelectExprs) {
+			plan = newDistinct(plan)
+		}
+		return plan, nil
+	case *orderedAggregate, *joinGen4:
+		return newDistinct(plan), nil
+
+	default:
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "no you didnt %T", plan)
+	}
 }
 
 func selectHasUniqueVindex(vschema ContextVSchema, semTable *semantics.SemTable, sel []abstract.SelectExpr) bool {

@@ -46,7 +46,7 @@ func TestQP(t *testing.T) {
 		},
 		{
 			sql:    "select 1, count(1) from user",
-			expErr: "Mixing of aggregation and non-aggregation columns is not allowed if there is no GROUP BY clause",
+			expErr: "In aggregated query without GROUP BY, expression of SELECT list contains nonaggregated column '1'; this is incompatible with sql_mode=only_full_group_by",
 		},
 		{
 			sql: "select max(id) from user",
@@ -56,12 +56,8 @@ func TestQP(t *testing.T) {
 			expErr: "aggregate functions take a single argument 'max(a, b)'",
 		},
 		{
-			sql:    "select func(max(id)) from user",
-			expErr: "unsupported: in scatter query: complex aggregate expression",
-		},
-		{
 			sql:    "select 1, count(1) from user order by 1",
-			expErr: "Mixing of aggregation and non-aggregation columns is not allowed if there is no GROUP BY clause",
+			expErr: "In aggregated query without GROUP BY, expression of SELECT list contains nonaggregated column '1'; this is incompatible with sql_mode=only_full_group_by",
 		},
 		{
 			sql: "select id from user order by col, id, 1",
