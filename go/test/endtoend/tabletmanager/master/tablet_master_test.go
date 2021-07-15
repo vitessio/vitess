@@ -187,7 +187,7 @@ func TestPrimaryRestartSetsTERTimestamp(t *testing.T) {
 	assert.Equal(t, want, got)
 	assert.NotNil(t, streamHealthRes1.GetTabletExternallyReparentedTimestamp())
 	assert.True(t, streamHealthRes1.GetTabletExternallyReparentedTimestamp() > 0,
-		"TER on MASTER must be set after InitShardMaster")
+		"TER on MASTER must be set after InitShardPrimary")
 
 	// Restart the MASTER vttablet and test again
 

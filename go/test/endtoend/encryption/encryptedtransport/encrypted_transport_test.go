@@ -143,7 +143,7 @@ func TestSecureTransport(t *testing.T) {
 	vtctlClientTmArgs := append(vtctlClientArgs, tmclientExtraArgs("vttablet-client-1")...)
 
 	// Reparenting
-	vtctlClientArgs = append(vtctlClientTmArgs, "InitShardMaster", "-force", "test_keyspace/0", primaryTablet.Alias)
+	vtctlClientArgs = append(vtctlClientTmArgs, "InitShardPrimary", "-force", "test_keyspace/0", primaryTablet.Alias)
 	err = clusterInstance.VtctlProcess.ExecuteCommand(vtctlClientArgs...)
 	require.NoError(t, err)
 

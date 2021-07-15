@@ -269,7 +269,7 @@ func TestBackup(t *testing.T, setupType int, streamMode string, stripes int) {
 type restoreMethod func(t *testing.T, tablet *cluster.Vttablet)
 
 // - create a shard with primary and replica1 only
-//- run InitShardMaster
+//- run InitShardPrimary
 //- insert some data
 // - take a backup on primary
 // - insert more data on the primary
@@ -538,7 +538,7 @@ func terminatedRestore(t *testing.T) {
 
 //test_backup will:
 // - create a shard with primary and replica1 only
-//- run InitShardMaster
+//- run InitShardPrimary
 //- bring up tablet_replica2 concurrently, telling it to wait for a backup
 //- insert some data
 //- take a backup

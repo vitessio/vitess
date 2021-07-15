@@ -89,7 +89,7 @@ func createVttablets() error {
 	keyspace := &cluster.Keyspace{Name: keyspaceName}
 	shard0 := &cluster.Shard{Name: shardName}
 
-	// creating tablets by hand instead of using StartKeyspace because we don't want to call InitShardMaster
+	// creating tablets by hand instead of using StartKeyspace because we don't want to call InitShardPrimary
 	var tablets []*cluster.Vttablet
 	for i := 0; i < numReplicas; i++ {
 		vttabletInstance := clusterInstance.NewVttabletInstance("replica", uidBase, cell1)
