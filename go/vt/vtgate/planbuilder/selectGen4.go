@@ -363,11 +363,7 @@ func planOrderByForJoin(qp *abstract.QueryProjection, orderExprs []abstract.Orde
 		plan.Left = newLeft
 		return plan, false, nil
 	}
-	ms, colAdded, err := createMemorySortPlan(plan, orderExprs, semTable)
-	if err != nil {
-		return nil, false, err
-	}
-	return ms, colAdded, nil
+	return createMemorySortPlan(plan, orderExprs, semTable)
 }
 
 func createMemorySortPlanOnAggregation(plan *orderedAggregate, orderExprs []abstract.OrderBy) (logicalPlan, error) {
