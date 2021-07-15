@@ -194,6 +194,9 @@ const (
 	// ComQuery is COM_QUERY.
 	ComQuery = 0x03
 
+	// ComFieldList is COM_Field_List.
+	ComFieldList = 0x04
+
 	// ComPing is COM_PING.
 	ComPing = 0x0e
 
