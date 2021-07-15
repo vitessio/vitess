@@ -199,7 +199,7 @@ func demotePrimaryTablet() (err error) {
 	}
 	defer unlock(&err)
 
-	// update the shard record's master
+	// update the shard record's primary
 	if _, err = ts.UpdateShardFields(ctx, keyspaceName, shardName, func(si *topo.ShardInfo) error {
 		si.MasterAlias = nil
 		si.SetMasterTermStartTime(time.Now())
@@ -319,21 +319,21 @@ func TestMain(m *testing.M) {
 }
 
 // Cases to test:
-// 1. create cluster with 1 replica and 1 rdonly, let orc choose master
+// 1. create cluster with 1 replica and 1 rdonly, let orc choose primary
 // verify rdonly is not elected, only replica
 // verify replication is setup
-func TestMasterElection(t *testing.T) {
+func TestPrimaryElection(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	setupVttabletsAndVtorc(t, 1, 1, nil)
 	keyspace := &clusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 
-	checkMasterTablet(t, clusterInstance, shard0.Vttablets[0])
+	checkPrimaryTablet(t, clusterInstance, shard0.Vttablets[0])
 	checkReplication(t, clusterInstance, shard0.Vttablets[0], shard0.Vttablets[1:])
 }
 
 // Cases to test:
-// 1. create cluster with 1 replica and 1 rdonly, let orc choose master
+// 1. create cluster with 1 replica and 1 rdonly, let orc choose primary
 // verify rdonly is not elected, only replica
 // verify replication is setup
 func TestSingleKeyspace(t *testing.T) {
@@ -342,12 +342,12 @@ func TestSingleKeyspace(t *testing.T) {
 	keyspace := &clusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 
-	checkMasterTablet(t, clusterInstance, shard0.Vttablets[0])
+	checkPrimaryTablet(t, clusterInstance, shard0.Vttablets[0])
 	checkReplication(t, clusterInstance, shard0.Vttablets[0], shard0.Vttablets[1:])
 }
 
 // Cases to test:
-// 1. create cluster with 1 replica and 1 rdonly, let orc choose master
+// 1. create cluster with 1 replica and 1 rdonly, let orc choose primary
 // verify rdonly is not elected, only replica
 // verify replication is setup
 func TestKeyspaceShard(t *testing.T) {
@@ -356,49 +356,49 @@ func TestKeyspaceShard(t *testing.T) {
 	keyspace := &clusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 
-	checkMasterTablet(t, clusterInstance, shard0.Vttablets[0])
+	checkPrimaryTablet(t, clusterInstance, shard0.Vttablets[0])
 	checkReplication(t, clusterInstance, shard0.Vttablets[0], shard0.Vttablets[1:])
 }
 
-// 2. bring down master, let orc promote replica
-func TestDownMaster(t *testing.T) {
+// 2. bring down primary, let orc promote replica
+func TestDownPrimary(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	setupVttabletsAndVtorc(t, 2, 0, nil)
 	keyspace := &clusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
-	// find master from topo
-	curMaster := shardMasterTablet(t, clusterInstance, keyspace, shard0)
-	assert.NotNil(t, curMaster, "should have elected a master")
+	// find primary from topo
+	curPrimary := shardPrimaryTablet(t, clusterInstance, keyspace, shard0)
+	assert.NotNil(t, curPrimary, "should have elected a primary")
 
-	// Make the current master database unavailable.
-	err := curMaster.MysqlctlProcess.Stop()
+	// Make the current primary database unavailable.
+	err := curPrimary.MysqlctlProcess.Stop()
 	require.NoError(t, err)
 	defer func() {
 		// we remove the tablet from our global list since its mysqlctl process has stopped and cannot be reused for other tests
 		for i, tablet := range replicaTablets {
-			if tablet == curMaster {
+			if tablet == curPrimary {
 				// remove this tablet since its mysql has stopped
 				replicaTablets = append(replicaTablets[:i], replicaTablets[i+1:]...)
-				killTablets([]*cluster.Vttablet{curMaster})
+				killTablets([]*cluster.Vttablet{curPrimary})
 				return
 			}
 		}
 	}()
 
 	for _, tablet := range shard0.Vttablets {
-		// we know we have only two tablets, so the "other" one must be the new master
-		if tablet.Alias != curMaster.Alias {
-			checkMasterTablet(t, clusterInstance, tablet)
+		// we know we have only two tablets, so the "other" one must be the new primary
+		if tablet.Alias != curPrimary.Alias {
+			checkPrimaryTablet(t, clusterInstance, tablet)
 			break
 		}
 	}
 }
 
-func waitForReadOnlyValue(t *testing.T, curMaster *cluster.Vttablet, expectValue int64) (match bool) {
+func waitForReadOnlyValue(t *testing.T, curPrimary *cluster.Vttablet, expectValue int64) (match bool) {
 	timeout := 15 * time.Second
 	startTime := time.Now()
 	for time.Since(startTime) < timeout {
-		qr, err := runSQL(t, "select @@global.read_only as read_only", curMaster, "")
+		qr, err := runSQL(t, "select @@global.read_only as read_only", curPrimary, "")
 		require.NoError(t, err)
 		require.NotNil(t, qr)
 		row := qr.Named().Row()
@@ -413,23 +413,23 @@ func waitForReadOnlyValue(t *testing.T, curMaster *cluster.Vttablet, expectValue
 	return false
 }
 
-// 3. make master readonly, let orc repair
-func TestMasterReadOnly(t *testing.T) {
+// 3. make primary readonly, let orc repair
+func TestPrimaryReadOnly(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	setupVttabletsAndVtorc(t, 2, 0, nil)
 	keyspace := &clusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 
-	// find master from topo
-	curMaster := shardMasterTablet(t, clusterInstance, keyspace, shard0)
-	assert.NotNil(t, curMaster, "should have elected a master")
+	// find primary from topo
+	curPrimary := shardPrimaryTablet(t, clusterInstance, keyspace, shard0)
+	assert.NotNil(t, curPrimary, "should have elected a primary")
 
-	// Make the current master database read-only.
-	_, err := runSQL(t, "set global read_only=ON", curMaster, "")
+	// Make the current primary database read-only.
+	_, err := runSQL(t, "set global read_only=ON", curPrimary, "")
 	require.NoError(t, err)
 
 	// wait for repair
-	match := waitForReadOnlyValue(t, curMaster, 0)
+	match := waitForReadOnlyValue(t, curPrimary, 0)
 	require.True(t, match)
 }
 
@@ -440,14 +440,14 @@ func TestReplicaReadWrite(t *testing.T) {
 	keyspace := &clusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 
-	// find master from topo
-	curMaster := shardMasterTablet(t, clusterInstance, keyspace, shard0)
-	assert.NotNil(t, curMaster, "should have elected a master")
+	// find primary from topo
+	curPrimary := shardPrimaryTablet(t, clusterInstance, keyspace, shard0)
+	assert.NotNil(t, curPrimary, "should have elected a primary")
 
 	var replica *cluster.Vttablet
 	for _, tablet := range shard0.Vttablets {
-		// we know we have only two tablets, so the "other" one must be the new master
-		if tablet.Alias != curMaster.Alias {
+		// we know we have only two tablets, so the "other" one must be the new primary
+		if tablet.Alias != curPrimary.Alias {
 			replica = tablet
 			break
 		}
@@ -468,18 +468,18 @@ func TestStopReplication(t *testing.T) {
 	keyspace := &clusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 
-	// find master from topo
-	curMaster := shardMasterTablet(t, clusterInstance, keyspace, shard0)
-	assert.NotNil(t, curMaster, "should have elected a master")
+	// find primary from topo
+	curPrimary := shardPrimaryTablet(t, clusterInstance, keyspace, shard0)
+	assert.NotNil(t, curPrimary, "should have elected a primary")
 
 	// TODO(deepthi): we should not need to do this, the DB should be created automatically
-	_, err := curMaster.VttabletProcess.QueryTablet(fmt.Sprintf("create database IF NOT EXISTS vt_%s", keyspace.Name), keyspace.Name, false)
+	_, err := curPrimary.VttabletProcess.QueryTablet(fmt.Sprintf("create database IF NOT EXISTS vt_%s", keyspace.Name), keyspace.Name, false)
 	require.NoError(t, err)
 
 	var replica *cluster.Vttablet
 	for _, tablet := range shard0.Vttablets {
-		// we know we have only two tablets, so the "other" one must be the new master
-		if tablet.Alias != curMaster.Alias {
+		// we know we have only two tablets, so the "other" one must be the new primary
+		if tablet.Alias != curPrimary.Alias {
 			replica = tablet
 			break
 		}
@@ -492,28 +492,28 @@ func TestStopReplication(t *testing.T) {
 	// wait for repair
 	time.Sleep(15 * time.Second)
 	// check replication is setup correctly
-	checkReplication(t, clusterInstance, curMaster, []*cluster.Vttablet{replica})
+	checkReplication(t, clusterInstance, curPrimary, []*cluster.Vttablet{replica})
 }
 
-// 6. setup replication from non-master, let orc repair
+// 6. setup replication from non-primary, let orc repair
 func TestReplicationFromOtherReplica(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	setupVttabletsAndVtorc(t, 3, 0, nil)
 	keyspace := &clusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 
-	// find master from topo
-	curMaster := shardMasterTablet(t, clusterInstance, keyspace, shard0)
-	assert.NotNil(t, curMaster, "should have elected a master")
+	// find primary from topo
+	curPrimary := shardPrimaryTablet(t, clusterInstance, keyspace, shard0)
+	assert.NotNil(t, curPrimary, "should have elected a primary")
 
 	// TODO(deepthi): we should not need to do this, the DB should be created automatically
-	_, err := curMaster.VttabletProcess.QueryTablet(fmt.Sprintf("create database IF NOT EXISTS vt_%s", keyspace.Name), keyspace.Name, false)
+	_, err := curPrimary.VttabletProcess.QueryTablet(fmt.Sprintf("create database IF NOT EXISTS vt_%s", keyspace.Name), keyspace.Name, false)
 	require.NoError(t, err)
 
 	var replica, otherReplica *cluster.Vttablet
 	for _, tablet := range shard0.Vttablets {
-		// we know we have only two tablets, so the "other" one must be the new master
-		if tablet.Alias != curMaster.Alias {
+		// we know we have only two tablets, so the "other" one must be the new primary
+		if tablet.Alias != curPrimary.Alias {
 			if replica == nil {
 				replica = tablet
 			} else {
@@ -525,19 +525,19 @@ func TestReplicationFromOtherReplica(t *testing.T) {
 	require.NotNil(t, otherReplica, "should be able to find 2nd replica")
 
 	// point replica at otherReplica
-	// Get master position
+	// Get primary position
 	hostname := "localhost"
-	_, gtid := cluster.GetMasterPosition(t, *otherReplica, hostname)
+	_, gtid := cluster.GetPrimaryPosition(t, *otherReplica, hostname)
 
-	changeMasterCommand := fmt.Sprintf("STOP SLAVE; RESET MASTER; SET GLOBAL gtid_purged = '%s';"+
+	changeReplicationSourceCommand := fmt.Sprintf("STOP SLAVE; RESET MASTER; SET GLOBAL gtid_purged = '%s';"+
 		"CHANGE MASTER TO MASTER_HOST='%s', MASTER_PORT=%d, MASTER_USER='vt_repl', MASTER_AUTO_POSITION = 1; START SLAVE", gtid, hostname, otherReplica.MySQLPort)
-	result, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("ExecuteFetchAsDba", replica.Alias, changeMasterCommand)
+	result, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("ExecuteFetchAsDba", replica.Alias, changeReplicationSourceCommand)
 	require.NoError(t, err, result)
 
 	// wait for repair
 	time.Sleep(15 * time.Second)
 	// check replication is setup correctly
-	checkReplication(t, clusterInstance, curMaster, []*cluster.Vttablet{replica, otherReplica})
+	checkReplication(t, clusterInstance, curPrimary, []*cluster.Vttablet{replica, otherReplica})
 }
 
 func TestRepairAfterTER(t *testing.T) {
@@ -548,32 +548,32 @@ func TestRepairAfterTER(t *testing.T) {
 	keyspace := &clusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 
-	// find master from topo
-	curMaster := shardMasterTablet(t, clusterInstance, keyspace, shard0)
-	assert.NotNil(t, curMaster, "should have elected a master")
+	// find primary from topo
+	curPrimary := shardPrimaryTablet(t, clusterInstance, keyspace, shard0)
+	assert.NotNil(t, curPrimary, "should have elected a primary")
 
 	// TODO(deepthi): we should not need to do this, the DB should be created automatically
-	_, err := curMaster.VttabletProcess.QueryTablet(fmt.Sprintf("create database IF NOT EXISTS vt_%s", keyspace.Name), keyspace.Name, false)
+	_, err := curPrimary.VttabletProcess.QueryTablet(fmt.Sprintf("create database IF NOT EXISTS vt_%s", keyspace.Name), keyspace.Name, false)
 	require.NoError(t, err)
 
-	var newMaster *cluster.Vttablet
+	var newPrimary *cluster.Vttablet
 	for _, tablet := range shard0.Vttablets {
-		// we know we have only two tablets, so the "other" one must be the new master
-		if tablet.Alias != curMaster.Alias {
-			newMaster = tablet
+		// we know we have only two tablets, so the "other" one must be the new primary
+		if tablet.Alias != curPrimary.Alias {
+			newPrimary = tablet
 			break
 		}
 	}
 
 	// TER to other tablet
-	_, err = clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("TabletExternallyReparented", newMaster.Alias)
+	_, err = clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("TabletExternallyReparented", newPrimary.Alias)
 	require.NoError(t, err)
 
 	// wait for repair
 	// TODO(deepthi): wait for condition instead of sleep
 	time.Sleep(15 * time.Second)
 
-	checkReplication(t, clusterInstance, newMaster, []*cluster.Vttablet{curMaster})
+	checkReplication(t, clusterInstance, newPrimary, []*cluster.Vttablet{curPrimary})
 }
 
 // 7. make instance A replicates from B and B from A, wait for repair
@@ -583,39 +583,39 @@ func TestCircularReplication(t *testing.T) {
 	keyspace := &clusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 
-	// find master from topo
-	master := shardMasterTablet(t, clusterInstance, keyspace, shard0)
-	assert.NotNil(t, master, "should have elected a master")
+	// find primary from topo
+	primary := shardPrimaryTablet(t, clusterInstance, keyspace, shard0)
+	assert.NotNil(t, primary, "should have elected a primary")
 
 	var replica *cluster.Vttablet
 	for _, tablet := range shard0.Vttablets {
-		// we know we have only two tablets, so the "other" one must be the new master
-		if tablet.Alias != master.Alias {
+		// we know we have only two tablets, so the "other" one must be the new primary
+		if tablet.Alias != primary.Alias {
 			replica = tablet
 			break
 		}
 	}
 
-	changeMasterCommands := fmt.Sprintf("RESET SLAVE;"+
+	changeReplicationSourceCommands := fmt.Sprintf("RESET SLAVE;"+
 		"CHANGE MASTER TO MASTER_HOST='%s', MASTER_PORT=%d, MASTER_USER='vt_repl', MASTER_AUTO_POSITION = 1;"+
 		"START SLAVE;", replica.VttabletProcess.TabletHostname, replica.MySQLPort)
 
-	_, err := runSQL(t, changeMasterCommands, master, "")
+	_, err := runSQL(t, changeReplicationSourceCommands, primary, "")
 	require.NoError(t, err)
 
 	// wait for repair
-	err = waitForReplicationToStop(t, master)
+	err = waitForReplicationToStop(t, primary)
 	require.NoError(t, err)
 	// check replication is setup correctly
-	checkReplication(t, clusterInstance, master, []*cluster.Vttablet{replica})
+	checkReplication(t, clusterInstance, primary, []*cluster.Vttablet{replica})
 }
 
-func shardMasterTablet(t *testing.T, cluster *cluster.LocalProcessCluster, keyspace *cluster.Keyspace, shard *cluster.Shard) *cluster.Vttablet {
+func shardPrimaryTablet(t *testing.T, cluster *cluster.LocalProcessCluster, keyspace *cluster.Keyspace, shard *cluster.Shard) *cluster.Vttablet {
 	start := time.Now()
 	for {
 		now := time.Now()
 		if now.Sub(start) > time.Second*60 {
-			assert.FailNow(t, "failed to elect master before timeout")
+			assert.FailNow(t, "failed to elect primary before timeout")
 		}
 		result, err := cluster.VtctlclientProcess.ExecuteCommandWithOutput("GetShard", fmt.Sprintf("%s/%s", keyspace.Name, shard.Name))
 		assert.Nil(t, err)
@@ -624,7 +624,7 @@ func shardMasterTablet(t *testing.T, cluster *cluster.LocalProcessCluster, keysp
 		err = json2.Unmarshal([]byte(result), &shardInfo)
 		assert.Nil(t, err)
 		if shardInfo.MasterAlias == nil {
-			log.Warningf("Shard %v/%v has no master yet, sleep for 1 second\n", keyspace.Name, shard.Name)
+			log.Warningf("Shard %v/%v has no primary yet, sleep for 1 second\n", keyspace.Name, shard.Name)
 			time.Sleep(time.Second)
 			continue
 		}
@@ -636,14 +636,14 @@ func shardMasterTablet(t *testing.T, cluster *cluster.LocalProcessCluster, keysp
 	}
 }
 
-// Makes sure the tablet type is master, and its health check agrees.
-func checkMasterTablet(t *testing.T, cluster *cluster.LocalProcessCluster, tablet *cluster.Vttablet) {
+// Makes sure the tablet type is primary, and its health check agrees.
+func checkPrimaryTablet(t *testing.T, cluster *cluster.LocalProcessCluster, tablet *cluster.Vttablet) {
 	start := time.Now()
 	for {
 		now := time.Now()
 		if now.Sub(start) > time.Second*60 {
 			//log.Exitf("error")
-			assert.FailNow(t, "failed to elect master before timeout")
+			assert.FailNow(t, "failed to elect primary before timeout")
 		}
 		result, err := cluster.VtctlclientProcess.ExecuteCommandWithOutput("GetTablet", tablet.Alias)
 		require.NoError(t, err)
@@ -652,7 +652,7 @@ func checkMasterTablet(t *testing.T, cluster *cluster.LocalProcessCluster, table
 		require.NoError(t, err)
 
 		if topodatapb.TabletType_MASTER != tabletInfo.GetType() {
-			log.Warningf("Tablet %v is not master yet, sleep for 1 second\n", tablet.Alias)
+			log.Warningf("Tablet %v is not primary yet, sleep for 1 second\n", tablet.Alias)
 			time.Sleep(time.Second)
 			continue
 		} else {
@@ -676,7 +676,7 @@ func checkMasterTablet(t *testing.T, cluster *cluster.LocalProcessCluster, table
 	}
 }
 
-func checkReplication(t *testing.T, clusterInstance *cluster.LocalProcessCluster, master *cluster.Vttablet, replicas []*cluster.Vttablet) {
+func checkReplication(t *testing.T, clusterInstance *cluster.LocalProcessCluster, primary *cluster.Vttablet, replicas []*cluster.Vttablet) {
 	validateTopology(t, clusterInstance, true)
 
 	// create tables, insert data and make sure it is replicated correctly
@@ -687,17 +687,17 @@ func checkReplication(t *testing.T, clusterInstance *cluster.LocalProcessCluster
 		primary key (id)
 		) Engine=InnoDB
 		`
-	_, err := runSQL(t, sqlSchema, master, "vt_ks")
+	_, err := runSQL(t, sqlSchema, primary, "vt_ks")
 	require.NoError(t, err)
-	confirmReplication(t, master, replicas)
+	confirmReplication(t, primary, replicas)
 }
 
-func confirmReplication(t *testing.T, master *cluster.Vttablet, replicas []*cluster.Vttablet) {
-	log.Infof("Insert data into master and check that it is replicated to replica")
+func confirmReplication(t *testing.T, primary *cluster.Vttablet, replicas []*cluster.Vttablet) {
+	log.Infof("Insert data into primary and check that it is replicated to replica")
 	n := 2 // random value ...
-	// insert data into the new master, check the connected replica work
+	// insert data into the new primary, check the connected replica work
 	insertSQL := fmt.Sprintf("insert into vt_insert_test(id, msg) values (%d, 'test %d')", n, n)
-	_, err := runSQL(t, insertSQL, master, "vt_ks")
+	_, err := runSQL(t, insertSQL, primary, "vt_ks")
 	require.NoError(t, err)
 	time.Sleep(100 * time.Millisecond)
 	for _, tab := range replicas {
@@ -727,7 +727,7 @@ func waitForReplicationToStop(t *testing.T, vttablet *cluster.Vttablet) error {
 	for {
 		select {
 		case <-timeout:
-			return fmt.Errorf("timedout: waiting for master to stop replication")
+			return fmt.Errorf("timedout: waiting for primary to stop replication")
 		default:
 			res, err := runSQL(t, "SHOW SLAVE STATUS", vttablet, "")
 			if err != nil {

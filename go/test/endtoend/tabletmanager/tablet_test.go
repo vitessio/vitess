@@ -42,7 +42,7 @@ func TestEnsureDB(t *testing.T) {
 	err = clusterInstance.StartVttablet(tablet, "NOT_SERVING", false, cell, "dbtest", hostname, "0")
 	require.NoError(t, err)
 
-	// Make it the master.
+	// Make it the primary.
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("TabletExternallyReparented", tablet.Alias)
 	require.NoError(t, err)
 

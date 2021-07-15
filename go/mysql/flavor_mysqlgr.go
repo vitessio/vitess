@@ -92,7 +92,7 @@ func (mysqlGRFlavor) setReplicationPositionCommands(pos Position) []string {
 // from replication_connection_status and the current processing txn's commit timestamp
 func (mysqlGRFlavor) status(c *Conn) (ReplicationStatus, error) {
 	res := ReplicationStatus{}
-	// Get master node information
+	// Get primary node information
 	query := `SELECT
 		MEMBER_HOST,
 		MEMBER_PORT
@@ -213,7 +213,7 @@ func fetchStatusForGroupReplication(c *Conn, query string, onResult func([]sqlty
 	return onResult(qr.Rows[0])
 }
 
-// primarymasterStatusStatus returns the result of 'SHOW MASTER STATUS',
+// primaryStatus returns the result of 'SHOW MASTER STATUS',
 // with parsed executed position.
 func (mysqlGRFlavor) primaryStatus(c *Conn) (PrimaryStatus, error) {
 	return mysqlFlavor{}.primaryStatus(c)
