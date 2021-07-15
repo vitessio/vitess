@@ -848,7 +848,7 @@ message StreamHealthResponse {
   //    master i.e. even ages after the last reparent occurred.
   // OR
   // b) the last time an active reparent was executed through a vtctl command
-  //    (InitShardMaster, PlannedReparentShard, EmergencyReparentShard)
+  //    (InitShardPrimary, PlannedReparentShard, EmergencyReparentShard)
   // OR
   // c) the last time vttablet was started and it initialized its tablet type
   //    as MASTER because it was recorded as the shard's current master in the

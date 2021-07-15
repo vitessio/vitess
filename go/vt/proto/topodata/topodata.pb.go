@@ -529,7 +529,7 @@ type Shard struct {
 	// If it is unset, then there is no master in this shard yet.
 	// No lock is necessary to update this field, when for instance
 	// TabletExternallyReparented updates this. However, we lock the
-	// shard for reparenting operations (InitShardMaster,
+	// shard for reparenting operations (InitShardPrimary,
 	// PlannedReparentShard,EmergencyReparentShard), to guarantee
 	// exclusive operation.
 	MasterAlias *TabletAlias `protobuf:"bytes,1,opt,name=master_alias,json=masterAlias,proto3" json:"master_alias,omitempty"`

@@ -60,7 +60,7 @@ import (
 )
 
 const (
-	initShardMasterOperation = "InitShardMaster" // (TODO:@amason) Can I rename this to Primary?
+	initShardPrimaryOperation = "InitShardPrimary"
 )
 
 // VtctldServer implements the Vtctld RPC service protocol.
@@ -1409,7 +1409,7 @@ func (s *VtctldServer) InitShardPrimaryLocked(
 				defer wgMaster.Done()
 				logger.Infof("populating reparent journal on new master %v", alias)
 				masterErr = tmc.PopulateReparentJournal(replCtx, tabletInfo.Tablet, now,
-					initShardMasterOperation,
+					initShardPrimaryOperation,
 					req.PrimaryElectTabletAlias, rp)
 			}(alias, tabletInfo)
 		} else {

@@ -241,7 +241,7 @@ func checkTablesCount(t *testing.T, tablet *cluster.Vttablet, count int) {
 // testCopySchemaShards tests that schema from source is correctly applied to destination
 func testCopySchemaShards(t *testing.T, source string, shard int) {
 	addNewShard(t, shard)
-	// InitShardMaster creates the db, but there shouldn't be any tables yet.
+	// InitShardPrimary creates the db, but there shouldn't be any tables yet.
 	checkTablesCount(t, clusterInstance.Keyspaces[0].Shards[shard].Vttablets[0], 0)
 	checkTablesCount(t, clusterInstance.Keyspaces[0].Shards[shard].Vttablets[1], 0)
 	// Run the command twice to make sure it's idempotent.
