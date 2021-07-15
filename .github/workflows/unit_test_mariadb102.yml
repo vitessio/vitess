@@ -69,6 +69,6 @@ jobs:
       timeout-minutes: 30
       run: |
         # Run native
-        # eatmydata -- make unit_test
+        eatmydata -- make unit_test
         # Run in a docker container
-        eatmydata -- go run test.go -retry=1 -print-log -follow -flavor=mariadb102 unit
+        # eatmydata -- go run test.go -retry=1 -print-log -follow -flavor=mariadb102 unit
