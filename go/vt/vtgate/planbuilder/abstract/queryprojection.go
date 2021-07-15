@@ -63,7 +63,6 @@ func CreateQPFromSelect(sel *sqlparser.Select) (*QueryProjection, error) {
 		Distinct: sel.Distinct,
 	}
 
-	hasNonAggr := false
 	for _, selExp := range sel.SelectExprs {
 		exp, ok := selExp.(*sqlparser.AliasedExpr)
 		if !ok {
@@ -84,16 +83,7 @@ func CreateQPFromSelect(sel *sqlparser.Select) (*QueryProjection, error) {
 			})
 			continue
 		}
-
-		if sqlparser.ContainsAggregation(exp.Expr) {
-			return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: in scatter query: complex aggregate expression")
-		}
-		hasNonAggr = true
 		qp.SelectExprs = append(qp.SelectExprs, SelectExpr{Col: exp})
-	}
-
-	if hasNonAggr && qp.HasAggr && sel.GroupBy == nil {
-		return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.MixOfGroupFuncAndFields, "Mixing of aggregation and non-aggregation columns is not allowed if there is no GROUP BY clause")
 	}
 
 	for _, group := range sel.GroupBy {
@@ -105,6 +95,16 @@ func CreateQPFromSelect(sel *sqlparser.Select) (*QueryProjection, error) {
 			return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongGroupField, "Can't group on '%s'", sqlparser.String(expr))
 		}
 		qp.GroupByExprs = append(qp.GroupByExprs, GroupBy{Inner: expr, WeightStrExpr: weightStrExpr})
+	}
+
+	if qp.HasAggr {
+		expr := qp.getNonAggrExprNotMatchingGroupByExprs()
+		if expr != nil {
+			if len(qp.GroupByExprs) > 0 {
+				return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongFieldWithGroup, "Expression of SELECT list is not in GROUP BY clause and contains nonaggregated column '%s' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by", sqlparser.String(expr))
+			}
+			return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.MixOfGroupFuncAndFields, "In aggregated query without GROUP BY, expression of SELECT list contains nonaggregated column '%s'; this is incompatible with sql_mode=only_full_group_by", sqlparser.String(expr))
+		}
 	}
 
 	canPushDownSorting := true
@@ -127,6 +127,25 @@ func CreateQPFromSelect(sel *sqlparser.Select) (*QueryProjection, error) {
 	}
 	qp.CanPushDownSorting = canPushDownSorting
 	return qp, nil
+}
+
+func (qp *QueryProjection) getNonAggrExprNotMatchingGroupByExprs() sqlparser.Expr {
+	for _, expr := range qp.SelectExprs {
+		if expr.Aggr {
+			continue
+		}
+		isGroupByOk := false
+		for _, groupByExpr := range qp.GroupByExprs {
+			if sqlparser.EqualsExpr(groupByExpr.WeightStrExpr, expr.Col.Expr) {
+				isGroupByOk = true
+				break
+			}
+		}
+		if !isGroupByOk {
+			return expr.Col.Expr
+		}
+	}
+	return nil
 }
 
 // getSimplifiedExpr takes an expression used in ORDER BY or GROUP BY, which can reference both aliased columns and

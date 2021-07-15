@@ -35,6 +35,7 @@ const (
 	NonUniqTable
 	NonUpdateableTable
 	SyntaxError
+	WrongFieldWithGroup
 	WrongGroupField
 	WrongTypeForVar
 	WrongValueForVar
