@@ -709,7 +709,22 @@ func (client *Client) InitMaster(ctx context.Context, tablet *topodatapb.Tablet)
 	}
 	defer closer.Close()
 
-	response, err := c.InitMaster(ctx, &tabletmanagerdatapb.InitMasterRequest{})
+	response, err := c.InitMaster(ctx, &tabletmanagerdatapb.InitPrimaryRequest{})
+	if err != nil {
+		return "", err
+	}
+	return response.Position, nil
+}
+
+// InitPrimary is part of the tmclient.TabletManagerClient interface.
+func (client *Client) InitPrimary(ctx context.Context, tablet *topodatapb.Tablet) (string, error) {
+	c, closer, err := client.dialer.dial(ctx, tablet)
+	if err != nil {
+		return "", err
+	}
+	defer closer.Close()
+
+	response, err := c.InitPrimary(ctx, &tabletmanagerdatapb.InitPrimaryRequest{})
 	if err != nil {
 		return "", err
 	}
