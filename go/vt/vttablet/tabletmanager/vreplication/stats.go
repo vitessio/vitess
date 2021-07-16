@@ -329,7 +329,7 @@ func (st *vrStats) register() {
 	stats.NewCountersFuncWithMultiLabels(
 		"VReplicationErrors",
 		"Errors during vreplication",
-		[]string{"workflow", "type"},
+		[]string{"workflow", "id", "type"},
 		func() map[string]int64 {
 			st.mu.Lock()
 			defer st.mu.Unlock()
