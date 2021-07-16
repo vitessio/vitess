@@ -1373,6 +1373,7 @@ func ContainsAggregation(e Expr) bool {
 	_ = Walk(func(node SQLNode) (kontinue bool, err error) {
 		if IsAggregation(node) {
 			hasAggregates = true
+			return false, nil
 		}
 		return true, nil
 	}, e)
