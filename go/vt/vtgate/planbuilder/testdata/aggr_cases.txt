@@ -80,7 +80,7 @@ Gen4 plan same as above
 }
 Gen4 plan same as above
 
-# distinct and group by together for single route.
+# distinct and group by together for single route - group by is redundant
 "select distinct col1, id from user group by col1"
 {
   "QueryType": "SELECT",
@@ -94,6 +94,21 @@ Gen4 plan same as above
     },
     "FieldQuery": "select col1, id from `user` where 1 != 1 group by col1",
     "Query": "select distinct col1, id from `user` group by col1",
+    "Table": "`user`"
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select distinct col1, id from user group by col1",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select col1, id from `user` where 1 != 1",
+    "Query": "select distinct col1, id from `user`",
     "Table": "`user`"
   }
 }
@@ -374,6 +389,26 @@ Gen4 plan same as above
         "OrderBy": "(0|2) ASC, (1|3) ASC, (0|2) ASC",
         "Query": "select distinct col1, col2, weight_string(col1), weight_string(col2) from `user` group by col1 order by col1 asc, col2 asc, col1 asc",
         "ResultColumns": 2,
+        "Table": "`user`"
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select distinct col1, col2 from user group by col1",
+  "Instructions": {
+    "OperatorType": "Distinct",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select col1, col2 from `user` where 1 != 1",
+        "Query": "select distinct col1, col2 from `user`",
         "Table": "`user`"
       }
     ]
@@ -1312,6 +1347,7 @@ Gen4 plan same as above
 # scatter aggregate with complex select list (can't build order by)
 "select distinct a+1 from user"
 "generating order by clause: cannot reference a complex expression"
+
 
 # scatter aggregate with numbered order by columns
 "select a, b, c, d, count(*) from user group by 1, 2, 3 order by 1, 2, 3"
