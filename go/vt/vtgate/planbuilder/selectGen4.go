@@ -121,31 +121,36 @@ func checkIfAlreadyExists(expr *sqlparser.AliasedExpr, sel *sqlparser.Select) in
 	return -1
 }
 
-func planAggregations(qp *abstract.QueryProjection, plan logicalPlan, semTable *semantics.SemTable, vschema ContextVSchema) (logicalPlan, bool, bool, error) {
-	newPlan := plan
+func (hp *horizonPlanning) haveToTruncate(v bool) {
+	hp.needsTruncation = hp.needsTruncation || v
+}
+
+func (hp *horizonPlanning) planAggregations() error {
+	newPlan := hp.plan
 	var oa *orderedAggregate
-	if !hasUniqueVindex(vschema, semTable, qp.GroupByExprs) {
+	if !hasUniqueVindex(hp.vschema, hp.semTable, hp.qp.GroupByExprs) {
 		eaggr := &engine.OrderedAggregate{}
 		oa = &orderedAggregate{
 			resultsBuilder: resultsBuilder{
-				logicalPlanCommon: newBuilderCommon(plan),
+				logicalPlanCommon: newBuilderCommon(hp.plan),
 				weightStrings:     make(map[*resultColumn]int),
 				truncater:         eaggr,
 			},
 			eaggr: eaggr,
 		}
 		newPlan = oa
+		hp.vtgateGrouping = true
 	}
 
-	for _, e := range qp.SelectExprs {
-		offset, _, err := pushProjection(e.Col, plan, semTable, true, false)
+	for _, e := range hp.qp.SelectExprs {
+		offset, _, err := pushProjection(e.Col, hp.plan, hp.semTable, true, false)
 		if err != nil {
-			return nil, false, false, err
+			return err
 		}
 		if e.Aggr && oa != nil {
 			fExpr, isFunc := e.Col.Expr.(*sqlparser.FuncExpr)
 			if !isFunc {
-				return nil, false, false, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: in scatter query: complex aggregate expression")
+				return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: in scatter query: complex aggregate expression")
 			}
 			opcode := engine.SupportedAggregates[fExpr.Name.Lowered()]
 			oa.eaggr.Aggregates = append(oa.eaggr.Aggregates, engine.AggregateParams{
@@ -156,34 +161,47 @@ func planAggregations(qp *abstract.QueryProjection, plan logicalPlan, semTable *
 		}
 	}
 
-	var colAdded bool
-	for _, groupExpr := range qp.GroupByExprs {
-		added, err := planGroupByGen4(groupExpr, newPlan, semTable)
+	for _, groupExpr := range hp.qp.GroupByExprs {
+		added, err := planGroupByGen4(groupExpr, newPlan, hp.semTable)
 		if err != nil {
-			return nil, false, false, err
+			return err
 		}
-		colAdded = colAdded || added
+		hp.haveToTruncate(added)
 	}
 
-	if !qp.CanPushDownSorting && oa != nil {
+	if !hp.qp.CanPushDownSorting && oa != nil {
 		var orderExprs []abstract.OrderBy
 		// if we can't at a later stage push down the sorting to our inputs, we have to do ordering here
-		for _, groupExpr := range qp.GroupByExprs {
+		for _, groupExpr := range hp.qp.GroupByExprs {
 			orderExprs = append(orderExprs, abstract.OrderBy{
 				Inner:         &sqlparser.Order{Expr: groupExpr.Inner},
 				WeightStrExpr: groupExpr.WeightStrExpr},
 			)
 		}
 		if len(orderExprs) > 0 {
-			newInput, added, err := planOrderBy(qp, orderExprs, plan, semTable)
+			newInput, err := hp.planOrderBy(orderExprs, hp.plan)
 			if err != nil {
-				return nil, false, false, err
+				return err
 			}
 			oa.input = newInput
-			return oa, colAdded || added, true, nil
+			hp.plan = oa
+		}
+	} else {
+		hp.plan = newPlan
+	}
+
+	// done with aggregation planning. let's check if we should fail the query
+	if _, planIsRoute := hp.plan.(*route); !planIsRoute {
+		// if we had to build up additional operators around the route, we have to fail this query
+		for _, expr := range hp.qp.SelectExprs {
+			colExpr := expr.Col.Expr
+			if !sqlparser.IsAggregation(colExpr) && sqlparser.ContainsAggregation(colExpr) {
+				return vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: in scatter query: complex aggregate expression")
+			}
 		}
 	}
-	return newPlan, colAdded, oa != nil, nil
+
+	return nil
 }
 
 func hasUniqueVindex(vschema ContextVSchema, semTable *semantics.SemTable, groupByExprs []abstract.GroupBy) bool {
@@ -217,11 +235,11 @@ func planGroupByGen4(groupExpr abstract.GroupBy, plan logicalPlan, semTable *sem
 	}
 }
 
-func planOrderByUsingGroupBy(qp *abstract.QueryProjection, plan logicalPlan, semTable *semantics.SemTable) (logicalPlan, bool, error) {
+func (hp *horizonPlanning) planOrderByUsingGroupBy() (logicalPlan, error) {
 	var orderExprs []abstract.OrderBy
-	for _, groupExpr := range qp.GroupByExprs {
+	for _, groupExpr := range hp.qp.GroupByExprs {
 		addExpr := true
-		for _, orderExpr := range qp.OrderExprs {
+		for _, orderExpr := range hp.qp.OrderExprs {
 			if sqlparser.EqualsExpr(groupExpr.Inner, orderExpr.Inner.Expr) {
 				addExpr = false
 				break
@@ -235,37 +253,47 @@ func planOrderByUsingGroupBy(qp *abstract.QueryProjection, plan logicalPlan, sem
 		}
 	}
 	if len(orderExprs) > 0 {
-		return planOrderBy(qp, orderExprs, plan, semTable)
+		return hp.planOrderBy(orderExprs, hp.plan)
 	}
-	return plan, false, nil
+	return hp.plan, nil
 }
 
-func planOrderBy(qp *abstract.QueryProjection, orderExprs []abstract.OrderBy, plan logicalPlan, semTable *semantics.SemTable) (logicalPlan, bool, error) {
+func (hp *horizonPlanning) planOrderBy(orderExprs []abstract.OrderBy, plan logicalPlan) (logicalPlan, error) {
 	switch plan := plan.(type) {
 	case *route:
-		return planOrderByForRoute(orderExprs, plan, semTable)
+		newPlan, truncate, err := planOrderByForRoute(orderExprs, plan, hp.semTable)
+		if err != nil {
+			return nil, err
+		}
+		hp.haveToTruncate(truncate)
+		return newPlan, nil
 	case *joinGen4:
-		return planOrderByForJoin(qp, orderExprs, plan, semTable)
+		newPlan, err := hp.planOrderByForJoin(orderExprs, plan)
+		if err != nil {
+			return nil, err
+		}
+
+		return newPlan, nil
 	case *orderedAggregate:
 		for _, order := range orderExprs {
 			if sqlparser.ContainsAggregation(order.WeightStrExpr) {
 				ms, err := createMemorySortPlanOnAggregation(plan, orderExprs)
 				if err != nil {
-					return nil, false, err
+					return nil, err
 				}
-				return ms, false, nil
+				return ms, nil
 			}
 		}
-		newInput, colAdded, err := planOrderBy(qp, orderExprs, plan.input, semTable)
+		newInput, err := hp.planOrderBy(orderExprs, plan.input)
 		if err != nil {
-			return nil, false, err
+			return nil, err
 		}
 		plan.input = newInput
-		return plan, colAdded, nil
+		return plan, nil
 	case *memorySort:
-		return plan, false, nil
+		return plan, nil
 	default:
-		return nil, false, semantics.Gen4NotSupportedF("ordering on complex query %T", plan)
+		return nil, semantics.Gen4NotSupportedF("ordering on complex query %T", plan)
 	}
 }
 
@@ -335,16 +363,23 @@ func needsWeightString(tbl semantics.TableInfo, colName *sqlparser.ColName) bool
 	return true // we didn't find the column. better to add just to be safe1
 }
 
-func planOrderByForJoin(qp *abstract.QueryProjection, orderExprs []abstract.OrderBy, plan *joinGen4, semTable *semantics.SemTable) (logicalPlan, bool, error) {
-	if allLeft(orderExprs, semTable, plan.Left.ContainsTables()) {
-		newLeft, _, err := planOrderBy(qp, orderExprs, plan.Left, semTable)
+func (hp *horizonPlanning) planOrderByForJoin(orderExprs []abstract.OrderBy, plan *joinGen4) (logicalPlan, error) {
+	if allLeft(orderExprs, hp.semTable, plan.Left.ContainsTables()) {
+		newLeft, err := hp.planOrderBy(orderExprs, plan.Left)
 		if err != nil {
-			return nil, false, err
+			return nil, err
 		}
 		plan.Left = newLeft
-		return plan, false, nil
+		hp.needsTruncation = false // since this is a join, we can safely
+		// add extra columns and not need to truncate them
+		return plan, nil
 	}
-	return createMemorySortPlan(plan, orderExprs, semTable)
+	sortPlan, truncate, err := createMemorySortPlan(plan, orderExprs, hp.semTable)
+	if err != nil {
+		return nil, err
+	}
+	hp.haveToTruncate(truncate)
+	return sortPlan, nil
 }
 
 func createMemorySortPlanOnAggregation(plan *orderedAggregate, orderExprs []abstract.OrderBy) (logicalPlan, error) {

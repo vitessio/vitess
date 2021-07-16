@@ -80,7 +80,14 @@ func newBuildSelectPlan(sel *sqlparser.Select, vschema ContextVSchema) (engine.P
 		return nil, err
 	}
 
-	plan, err = planHorizon(sel, plan, semTable, vschema)
+	hp := horizonPlanning{
+		sel:      sel,
+		plan:     plan,
+		semTable: semTable,
+		vschema:  vschema,
+	}
+
+	plan, err = hp.planHorizon()
 	if err != nil {
 		return nil, err
 	}
@@ -154,91 +161,97 @@ func planLimit(limit *sqlparser.Limit, plan logicalPlan) (logicalPlan, error) {
 	return lPlan, nil
 }
 
-func planHorizon(sel *sqlparser.Select, plan logicalPlan, semTable *semantics.SemTable, vschema ContextVSchema) (logicalPlan, error) {
-	rb, ok := plan.(*route)
-	if !ok && semTable.ProjectionErr != nil {
-		return nil, semTable.ProjectionErr
+type horizonPlanning struct {
+	sel             *sqlparser.Select
+	plan            logicalPlan
+	semTable        *semantics.SemTable
+	vschema         ContextVSchema
+	qp              *abstract.QueryProjection
+	needsTruncation bool
+	vtgateGrouping  bool
+}
+
+func (hp horizonPlanning) planHorizon() (logicalPlan, error) {
+	rb, ok := hp.plan.(*route)
+	if !ok && hp.semTable.ProjectionErr != nil {
+		return nil, hp.semTable.ProjectionErr
 	}
 
 	if ok && rb.isSingleShard() {
-		createSingleShardRoutePlan(sel, rb)
-		return plan, nil
+		createSingleShardRoutePlan(hp.sel, rb)
+		return hp.plan, nil
 	}
 
-	qp, err := abstract.CreateQPFromSelect(sel)
+	qp2, err := abstract.CreateQPFromSelect(hp.sel)
 	if err != nil {
 		return nil, err
 	}
 
-	if err := checkUnsupportedConstructs(sel, qp); err != nil {
+	hp.qp = qp2
+
+	if err := checkUnsupportedConstructs(hp.sel); err != nil {
 		return nil, err
 	}
 
-	var needsTruncation, vtgateGrouping bool
-	if qp.NeedsAggregation() {
-		plan, needsTruncation, vtgateGrouping, err = planAggregations(qp, plan, semTable, vschema)
+	if hp.qp.NeedsAggregation() {
+		err = hp.planAggregations()
 		if err != nil {
 			return nil, err
 		}
-
-		if _, planIsRoute := plan.(*route); !planIsRoute {
-			// if we had to build up additional operators around the route, we have to fail this query
-			for _, expr := range qp.SelectExprs {
-				colExpr := expr.Col.Expr
-				if !sqlparser.IsAggregation(colExpr) && sqlparser.ContainsAggregation(colExpr) {
-					return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: in scatter query: complex aggregate expression")
-				}
-			}
-
-		}
-
 	} else {
-		for _, e := range qp.SelectExprs {
-			if _, _, err := pushProjection(e.Col, plan, semTable, true, false); err != nil {
+		for _, e := range hp.qp.SelectExprs {
+			if _, _, err := pushProjection(e.Col, hp.plan, hp.semTable, true, false); err != nil {
 				return nil, err
 			}
 		}
 	}
 
-	if len(qp.OrderExprs) > 0 {
-		var colAdded bool
-		plan, colAdded, err = planOrderBy(qp, qp.OrderExprs, plan, semTable)
-		if err != nil {
-			return nil, err
-		}
-		needsTruncation = needsTruncation || colAdded
-	}
-
-	if qp.CanPushDownSorting && vtgateGrouping {
-		var colAdded bool
-		plan, colAdded, err = planOrderByUsingGroupBy(qp, plan, semTable)
-		if err != nil {
-			return nil, err
-		}
-		needsTruncation = needsTruncation || colAdded
-	}
-
-	if needsTruncation {
-		switch p := plan.(type) {
-		case *route:
-			p.eroute.SetTruncateColumnCount(sel.GetColumnCount())
-		case *orderedAggregate:
-			p.eaggr.SetTruncateColumnCount(sel.GetColumnCount())
-		case *memorySort:
-			p.truncater.SetTruncateColumnCount(sel.GetColumnCount())
-		default:
-			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "plan type not known for column truncation: %T", plan)
-		}
-	}
-
-	if qp.NeedsDistinct() {
-		plan, err = pushDistinct(plan, semTable, vschema, qp)
+	if len(hp.qp.OrderExprs) > 0 {
+		hp.plan, err = hp.planOrderBy(hp.qp.OrderExprs, hp.plan)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	return plan, nil
+	if hp.qp.CanPushDownSorting && hp.vtgateGrouping {
+		hp.plan, err = hp.planOrderByUsingGroupBy()
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	err = hp.truncateColumnsIfNeeded()
+	if err != nil {
+		return nil, err
+	}
+
+	if hp.qp.NeedsDistinct() {
+		hp.plan, err = pushDistinct(hp.plan, hp.semTable, hp.vschema, hp.qp)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return hp.plan, nil
+}
+
+func (hp horizonPlanning) truncateColumnsIfNeeded() error {
+	if !hp.needsTruncation {
+		return nil
+	}
+
+	switch p := hp.plan.(type) {
+	case *route:
+		p.eroute.SetTruncateColumnCount(hp.sel.GetColumnCount())
+	case *orderedAggregate:
+		p.eaggr.SetTruncateColumnCount(hp.sel.GetColumnCount())
+	case *memorySort:
+		p.truncater.SetTruncateColumnCount(hp.sel.GetColumnCount())
+	default:
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "plan type not known for column truncation: %T", hp.plan)
+	}
+
+	return nil
 }
 
 func pushDistinct(plan logicalPlan, semTable *semantics.SemTable, vschema ContextVSchema, qp *abstract.QueryProjection) (logicalPlan, error) {
@@ -255,7 +268,7 @@ func pushDistinct(plan logicalPlan, semTable *semantics.SemTable, vschema Contex
 		return newDistinct(plan), nil
 
 	default:
-		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "no you didnt %T", plan)
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unknown plan type for DISTINCT %T", plan)
 	}
 }
 
@@ -311,7 +324,7 @@ func createSingleShardRoutePlan(sel *sqlparser.Select, rb *route) {
 	}
 }
 
-func checkUnsupportedConstructs(sel *sqlparser.Select, qp *abstract.QueryProjection) error {
+func checkUnsupportedConstructs(sel *sqlparser.Select) error {
 	if sel.Having != nil {
 		return semantics.Gen4NotSupportedF("HAVING")
 	}
