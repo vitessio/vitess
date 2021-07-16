@@ -374,11 +374,10 @@ func (hp *horizonPlanning) planOrderByForJoin(orderExprs []abstract.OrderBy, pla
 		// add extra columns and not need to truncate them
 		return plan, nil
 	}
-	sortPlan, truncate, err := createMemorySortPlan(plan, orderExprs, hp.semTable)
+	sortPlan, err := hp.createMemorySortPlan(plan, orderExprs)
 	if err != nil {
 		return nil, err
 	}
-	hp.haveToTruncate(truncate)
 	return sortPlan, nil
 }
 
@@ -422,7 +421,7 @@ func findExprInOrderedAggr(plan *orderedAggregate, order abstract.OrderBy) (int,
 	return 0, 0, false
 }
 
-func createMemorySortPlan(plan logicalPlan, orderExprs []abstract.OrderBy, semTable *semantics.SemTable) (logicalPlan, bool, error) {
+func (hp *horizonPlanning) createMemorySortPlan(plan logicalPlan, orderExprs []abstract.OrderBy) (logicalPlan, error) {
 	primitive := &engine.MemorySort{}
 	ms := &memorySort{
 		resultsBuilder: resultsBuilder{
@@ -433,13 +432,12 @@ func createMemorySortPlan(plan logicalPlan, orderExprs []abstract.OrderBy, semTa
 		eMemorySort: primitive,
 	}
 
-	var colAdded bool
 	for _, order := range orderExprs {
-		offset, weightStringOffset, added, err := wrapAndPushExpr(order.Inner.Expr, order.WeightStrExpr, plan, semTable)
+		offset, weightStringOffset, added, err := wrapAndPushExpr(order.Inner.Expr, order.WeightStrExpr, plan, hp.semTable)
 		if err != nil {
-			return nil, false, err
+			return nil, err
 		}
-		colAdded = colAdded || added
+		hp.haveToTruncate(added)
 		ms.eMemorySort.OrderBy = append(ms.eMemorySort.OrderBy, engine.OrderByParams{
 			Col:               offset,
 			WeightStringCol:   weightStringOffset,
@@ -447,7 +445,7 @@ func createMemorySortPlan(plan logicalPlan, orderExprs []abstract.OrderBy, semTa
 			StarColFixedIndex: offset,
 		})
 	}
-	return ms, colAdded, nil
+	return ms, nil
 }
 
 func allLeft(orderExprs []abstract.OrderBy, semTable *semantics.SemTable, lhsTables semantics.TableSet) bool {
