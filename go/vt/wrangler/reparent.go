@@ -43,12 +43,6 @@ import (
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
-const (
-	plannedReparentShardOperation       = "PlannedReparentShard"       //nolint
-	emergencyReparentShardOperation     = "EmergencyReparentShard"     //nolint
-	tabletExternallyReparentedOperation = "TabletExternallyReparented" //nolint
-)
-
 // ShardReplicationStatuses returns the ReplicationStatus for each tablet in a shard.
 func (wr *Wrangler) ShardReplicationStatuses(ctx context.Context, keyspace, shard string) ([]*topo.TabletInfo, []*replicationdatapb.Status, error) {
 	tabletMap, err := wr.ts.GetTabletMapForShard(ctx, keyspace, shard)
