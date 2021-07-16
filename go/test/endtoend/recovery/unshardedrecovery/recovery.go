@@ -174,7 +174,7 @@ SET GLOBAL old_alter_table = ON;
 
 // TestRecoveryImpl does following
 // - create a shard with primary and replica1 only
-// - run InitShardMaster
+// - run InitShardPrimary
 // - insert some data
 // - take a backup
 // - insert more data on the primary

@@ -221,7 +221,7 @@ func createRestoreKeyspace(t *testing.T, timeToRecover, restoreKeyspaceName stri
 // -------------------------------------------
 // The following test will:
 // - create a shard with primary and replica
-// - run InitShardMaster
+// - run InitShardPrimary
 // - insert some data using vtgate (e.g. here we have inserted rows 1,2)
 // - verify the replication
 // - take backup of replica
@@ -404,10 +404,10 @@ func tlsPerformResharding(t *testing.T) {
 	err := clusterInstance.VtctlclientProcess.ApplyVSchema(keyspaceName, vSchema)
 	require.NoError(t, err)
 
-	err = clusterInstance.VtctlProcess.ExecuteCommand("InitShardMaster", "-force", "ks/-80", shard0Primary.Alias)
+	err = clusterInstance.VtctlProcess.ExecuteCommand("InitShardPrimary", "-force", "ks/-80", shard0Primary.Alias)
 	require.NoError(t, err)
 
-	err = clusterInstance.VtctlProcess.ExecuteCommand("InitShardMaster", "-force", "ks/80-", shard1Primary.Alias)
+	err = clusterInstance.VtctlProcess.ExecuteCommand("InitShardPrimary", "-force", "ks/80-", shard1Primary.Alias)
 	require.NoError(t, err)
 
 	// we need to create the schema, and the worker will do data copying

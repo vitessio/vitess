@@ -105,10 +105,10 @@ func (wr *Wrangler) ReparentTablet(ctx context.Context, tabletAlias *topodatapb.
 	return err
 }
 
-// InitShardMaster will make the provided tablet the master for the shard.
-func (wr *Wrangler) InitShardMaster(ctx context.Context, keyspace, shard string, masterElectTabletAlias *topodatapb.TabletAlias, force bool, waitReplicasTimeout time.Duration) (err error) {
+// InitShardPrimary will make the provided tablet the master for the shard.
+func (wr *Wrangler) InitShardPrimary(ctx context.Context, keyspace, shard string, masterElectTabletAlias *topodatapb.TabletAlias, force bool, waitReplicasTimeout time.Duration) (err error) {
 	// lock the shard
-	ctx, unlock, lockErr := wr.ts.LockShard(ctx, keyspace, shard, fmt.Sprintf("InitShardMaster(%v)", topoproto.TabletAliasString(masterElectTabletAlias)))
+	ctx, unlock, lockErr := wr.ts.LockShard(ctx, keyspace, shard, fmt.Sprintf("InitShardPrimary(%v)", topoproto.TabletAliasString(masterElectTabletAlias)))
 	if lockErr != nil {
 		return lockErr
 	}
@@ -125,9 +125,9 @@ func (wr *Wrangler) InitShardMaster(ctx context.Context, keyspace, shard string,
 		Force:                   force,
 	}, waitReplicasTimeout, wr.tmc, wr.logger)
 	if err != nil {
-		event.DispatchUpdate(ev, "failed InitShardMaster: "+err.Error())
+		event.DispatchUpdate(ev, "failed InitShardPrimary: "+err.Error())
 	} else {
-		event.DispatchUpdate(ev, "finished InitShardMaster")
+		event.DispatchUpdate(ev, "finished InitShardPrimary")
 	}
 	return err
 }
