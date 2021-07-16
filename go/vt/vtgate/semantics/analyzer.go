@@ -18,7 +18,9 @@ package semantics
 
 import (
 	"fmt"
+	"runtime/debug"
 	"strconv"
+	"strings"
 
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
@@ -412,5 +414,11 @@ func (a *analyzer) currentScope() *scope {
 
 // Gen4NotSupportedF returns a common error for shortcomings in the gen4 planner
 func Gen4NotSupportedF(format string, args ...interface{}) error {
-	return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "gen4 does not yet support: "+format, args...)
+	message := fmt.Sprintf("gen4 does not yet support: "+format, args...)
+
+	// add the line that this happens in so it is easy to find it
+	stack := string(debug.Stack())
+	lines := strings.Split(stack, "\n")
+	message += "\n" + lines[6]
+	return vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, message)
 }
