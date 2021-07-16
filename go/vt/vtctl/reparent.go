@@ -36,11 +36,15 @@ func init() {
 		commandReparentTablet,
 		"<tablet alias>",
 		"Reparent a tablet to the current master in the shard. This only works if the current replica position matches the last known reparent action."})
-
+	addCommand("Shards", command{
+		"InitShardPrimary",
+		commandInitShardPrimary,
+		"[-force] [-wait_replicas_timeout=<duration>] <keyspace/shard> <tablet alias>",
+		"Sets the initial primary for a shard. Will make all other tablets in the shard replicas of the provided tablet. WARNING: this could cause data loss on an already replicating shard. PlannedReparentShard or EmergencyReparentShard should be used instead."})
 	addCommand("Shards", command{
 		"InitShardMaster",
-		commandInitShardMaster,
-		"[-force] [-wait_replicas_timeout=<duration>] <keyspace/shard> <tablet alias>",
+		commandInitShardPrimary,
+		"DEPRECATED [-force] [-wait_replicas_timeout=<duration>] <keyspace/shard> <tablet alias>",
 		"Sets the initial master for a shard. Will make all other tablets in the shard replicas of the provided master. WARNING: this could cause data loss on an already replicating shard. PlannedReparentShard or EmergencyReparentShard should be used instead."})
 	addCommand("Shards", command{
 		"PlannedReparentShard",
@@ -78,7 +82,7 @@ func commandReparentTablet(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 	return wr.ReparentTablet(ctx, tabletAlias)
 }
 
-func commandInitShardMaster(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+func commandInitShardPrimary(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	if *mysqlctl.DisableActiveReparents {
 		return fmt.Errorf("active reparent commands disabled (unset the -disable_active_reparents flag to enable)")
 	}
@@ -89,7 +93,7 @@ func commandInitShardMaster(ctx context.Context, wr *wrangler.Wrangler, subFlags
 		return err
 	}
 	if subFlags.NArg() != 2 {
-		return fmt.Errorf("action InitShardMaster requires <keyspace/shard> <tablet alias>")
+		return fmt.Errorf("action InitShardPrimary requires <keyspace/shard> <tablet alias>")
 	}
 	keyspace, shard, err := topoproto.ParseKeyspaceShard(subFlags.Arg(0))
 	if err != nil {
@@ -99,7 +103,7 @@ func commandInitShardMaster(ctx context.Context, wr *wrangler.Wrangler, subFlags
 	if err != nil {
 		return err
 	}
-	return wr.InitShardMaster(ctx, keyspace, shard, tabletAlias, *force, *waitReplicasTimeout)
+	return wr.InitShardPrimary(ctx, keyspace, shard, tabletAlias, *force, *waitReplicasTimeout)
 }
 
 func commandPlannedReparentShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {

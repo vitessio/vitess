@@ -100,7 +100,7 @@ func firstBackupTest(t *testing.T, tabletType string) {
 	//
 	//    firstBackupTest will:
 	//    - create a shard with primary and replica1 only
-	//    - run InitShardMaster
+	//    - run InitShardPrimary
 	//    - insert some data
 	//    - take a backup
 	//    - insert more data on the primary
