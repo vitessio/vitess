@@ -83,7 +83,7 @@ func planProjection(pb *primitiveBuilder, in logicalPlan, expr *sqlparser.Aliase
 		}
 
 		// Ensure that there are no aggregates in the expression.
-		if nodeHasAggregates(expr.Expr) {
+		if sqlparser.ContainsAggregation(expr.Expr) {
 			return nil, nil, 0, errors.New("unsupported: in scatter query: complex aggregate expression")
 		}
 

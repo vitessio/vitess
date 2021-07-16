@@ -1368,7 +1368,7 @@ func ToString(exprs []TableExpr) string {
 }
 
 // ContainsAggregation returns true if the expression contains aggregation
-func ContainsAggregation(e Expr) bool {
+func ContainsAggregation(e SQLNode) bool {
 	hasAggregates := false
 	_ = Walk(func(node SQLNode) (kontinue bool, err error) {
 		if IsAggregation(node) {
