@@ -68,22 +68,19 @@ func CreateQPFromSelect(sel *sqlparser.Select) (*QueryProjection, error) {
 		if !ok {
 			return nil, semantics.Gen4NotSupportedF("%T in select list", selExp)
 		}
-		fExpr, ok := exp.Expr.(*sqlparser.FuncExpr)
-		if ok && fExpr.IsAggregate() {
-			if len(fExpr.Exprs) != 1 {
-				return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.SyntaxError, "aggregate functions take a single argument '%s'", sqlparser.String(fExpr))
-			}
-			if fExpr.Distinct {
-				return nil, semantics.Gen4NotSupportedF("distinct aggregation")
-			}
-			qp.HasAggr = true
-			qp.SelectExprs = append(qp.SelectExprs, SelectExpr{
-				Col:  exp,
-				Aggr: true,
-			})
-			continue
+
+		if err := checkForInvalidAggregations(exp); err != nil {
+			return nil, err
 		}
-		qp.SelectExprs = append(qp.SelectExprs, SelectExpr{Col: exp})
+		col := SelectExpr{
+			Col: exp,
+		}
+		if sqlparser.ContainsAggregation(exp.Expr) {
+			col.Aggr = true
+			qp.HasAggr = true
+		}
+
+		qp.SelectExprs = append(qp.SelectExprs, col)
 	}
 
 	for _, group := range sel.GroupBy {
@@ -129,6 +126,21 @@ func CreateQPFromSelect(sel *sqlparser.Select) (*QueryProjection, error) {
 	}
 	qp.CanPushDownSorting = canPushDownSorting
 	return qp, nil
+}
+
+func checkForInvalidAggregations(exp *sqlparser.AliasedExpr) error {
+	return sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+		fExpr, ok := node.(*sqlparser.FuncExpr)
+		if ok && fExpr.IsAggregate() {
+			if len(fExpr.Exprs) != 1 {
+				return false, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.SyntaxError, "aggregate functions take a single argument '%s'", sqlparser.String(fExpr))
+			}
+			if fExpr.Distinct {
+				return false, semantics.Gen4NotSupportedF("distinct aggregation")
+			}
+		}
+		return true, nil
+	}, exp.Expr)
 }
 
 func (qp *QueryProjection) getNonAggrExprNotMatchingGroupByExprs() sqlparser.Expr {

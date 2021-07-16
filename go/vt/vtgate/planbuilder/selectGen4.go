@@ -143,7 +143,10 @@ func planAggregations(qp *abstract.QueryProjection, plan logicalPlan, semTable *
 			return nil, false, false, err
 		}
 		if e.Aggr && oa != nil {
-			fExpr := e.Col.Expr.(*sqlparser.FuncExpr)
+			fExpr, isFunc := e.Col.Expr.(*sqlparser.FuncExpr)
+			if !isFunc {
+				return nil, false, false, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: in scatter query: complex aggregate expression")
+			}
 			opcode := engine.SupportedAggregates[fExpr.Name.Lowered()]
 			oa.eaggr.Aggregates = append(oa.eaggr.Aggregates, engine.AggregateParams{
 				Opcode: opcode,
