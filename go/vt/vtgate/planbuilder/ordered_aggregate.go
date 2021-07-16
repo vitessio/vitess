@@ -74,8 +74,7 @@ func (pb *primitiveBuilder) checkAggregates(sel *sqlparser.Select) error {
 	}
 
 	// Check if we can allow aggregates.
-	hasAggregates := nodeHasAggregates(sel.SelectExprs) || len(sel.GroupBy) > 0
-
+	hasAggregates := sqlparser.ContainsAggregation(sel.SelectExprs) || len(sel.GroupBy) > 0
 	if !hasAggregates && !sel.Distinct {
 		return nil
 	}
@@ -132,27 +131,6 @@ func (pb *primitiveBuilder) checkAggregates(sel *sqlparser.Select) error {
 	}
 	pb.plan.Reorder(0)
 	return nil
-}
-
-func nodeHasAggregates(node sqlparser.SQLNode) bool {
-	hasAggregates := false
-	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
-		switch node := node.(type) {
-		case *sqlparser.FuncExpr:
-			if node.IsAggregate() {
-				hasAggregates = true
-				return false, errors.New("unused error")
-			}
-		case *sqlparser.GroupConcatExpr:
-			hasAggregates = true
-			return false, errors.New("unused error")
-		case *sqlparser.Subquery:
-			// Subqueries are analyzed by themselves.
-			return false, nil
-		}
-		return true, nil
-	}, node)
-	return hasAggregates
 }
 
 // groupbyHasUniqueVindex looks ahead at the group by expression to see if
