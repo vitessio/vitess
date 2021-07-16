@@ -44,13 +44,16 @@ type VtctlClientParams struct {
 
 // InitShardPrimary executes vtctlclient command to make specified tablet the primary for the shard.
 func (vtctlclient *VtctlClientProcess) InitShardPrimary(Keyspace string, Shard string, Cell string, TabletUID int) (err error) {
+	// version_upgrade test depends on using older binaries
+	// which means we cannot use the new InitShardPrimary command here
+	// TODO(deepthi): fix after v12.0
 	output, err := vtctlclient.ExecuteCommandWithOutput(
-		"InitShardPrimary",
+		"InitShardMaster",
 		"-force", "-wait_replicas_timeout", "31s",
 		fmt.Sprintf("%s/%s", Keyspace, Shard),
 		fmt.Sprintf("%s-%d", Cell, TabletUID))
 	if err != nil {
-		log.Errorf("error in InitShardPrimary output %s, err %s", output, err.Error())
+		log.Errorf("error in InitShardMaster output %s, err %s", output, err.Error())
 	}
 	return err
 }
