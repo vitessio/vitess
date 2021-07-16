@@ -104,7 +104,8 @@ func TestQP(t *testing.T) {
 			sel := stmt.(*sqlparser.Select)
 			qp, err := CreateQPFromSelect(sel)
 			if tcase.expErr != "" {
-				require.EqualError(t, err, tcase.expErr)
+				require.Error(t, err)
+				require.Contains(t, err.Error(), tcase.expErr)
 			} else {
 				require.NoError(t, err)
 				assert.Equal(t, len(sel.SelectExprs), len(qp.SelectExprs))
