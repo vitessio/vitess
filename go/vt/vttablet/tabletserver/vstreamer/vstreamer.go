@@ -273,14 +273,22 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 			if !vs.vse.throttlerClient.ThrottleCheckOKOrWait(ctx) {
 				continue
 			}
-
-			ev, ok := <-events
-			if ok {
-				throttledEvents <- ev
-			} else {
-				close(throttledEvents)
+			select {
+			case ev, ok := <-events:
+				if ok {
+					select {
+					case throttledEvents <- ev:
+					case <-ctx.Done():
+						return
+					}
+				} else {
+					close(throttledEvents)
+					return
+				}
+			case <-ctx.Done():
 				return
 			}
+
 		}
 	}()
 	for {
