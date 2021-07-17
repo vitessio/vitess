@@ -106,7 +106,7 @@ func (wr *Wrangler) InitTablet(ctx context.Context, tablet *topodatapb.Tablet, a
 // DeleteTablet removes a tablet from a shard.
 // - if allowMaster is set, we can Delete a master tablet (and clear
 // its record from the Shard record if it was the master).
-func (wr *Wrangler) DeleteTablet(ctx context.Context, tabletAlias *topodatapb.TabletAlias, allowMaster bool) (err error) {
+func (wr *Wrangler) DeleteTablet(ctx context.Context, tabletAlias *topodatapb.TabletAlias, allowPrimary bool) (err error) {
 	// load the tablet, see if we'll need to rebuild
 	ti, err := wr.ts.GetTablet(ctx, tabletAlias)
 	if err != nil {
@@ -118,7 +118,7 @@ func (wr *Wrangler) DeleteTablet(ctx context.Context, tabletAlias *topodatapb.Ta
 		return err
 	}
 
-	if wasMaster && !allowMaster {
+	if wasMaster && !allowPrimary {
 		return fmt.Errorf("cannot delete tablet %v as it is a master, use allow_master flag", topoproto.TabletAliasString(tabletAlias))
 	}
 
