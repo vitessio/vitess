@@ -92,21 +92,3 @@
     "SingleShardOnly": true
   }
 }
-
-# show variables
-"show variables"
-{
-  "QueryType": "SHOW",
-  "Original": "show variables",
-  "Instructions": {
-    "OperatorType": "Send",
-    "Keyspace": {
-      "Name": "main",
-      "Sharded": false
-    },
-    "TargetDestination": "AnyShard()",
-    "IsDML": false,
-    "Query": "show variables",
-    "SingleShardOnly": true
-  }
-}

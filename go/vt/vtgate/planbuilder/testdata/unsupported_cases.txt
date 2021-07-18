@@ -422,23 +422,8 @@ Gen4 plan same as above
 "INTO is not supported on sharded keyspace"
 
 # unsupported two predicates specifying the database for the same table if they are different
-# will fail on run time but will pass on the planbuilder
 "SELECT cc.constraint_name AS 'name' FROM information_schema.check_constraints cc  WHERE cc.constraint_schema = 'constraint_schema' AND cc.table_schema = 'a'"
-{
-  "QueryType": "SELECT",
-  "Original": "SELECT cc.constraint_name AS 'name' FROM information_schema.check_constraints cc  WHERE cc.constraint_schema = 'constraint_schema' AND cc.table_schema = 'a'",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectDBA",
-    "Keyspace": {
-      "Name": "main",
-      "Sharded": false
-    },
-    "FieldQuery": "select cc.constraint_name as `name` from information_schema.check_constraints as cc where 1 != 1",
-    "Query": "select cc.constraint_name as `name` from information_schema.check_constraints as cc where cc.constraint_schema = :__vtschemaname and cc.table_schema = :__vtschemaname",
-    "SysTableTableSchema": "[VARBINARY(\"constraint_schema\"), VARBINARY(\"a\")]"
-  }
-}
+"two predicates for specifying the database are not supported"
 
 # create view with Cannot auto-resolve for cross-shard joins
 "create view user.view_a as select col from user join user_extra"

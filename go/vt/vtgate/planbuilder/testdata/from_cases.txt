@@ -2362,15 +2362,34 @@ Gen4 plan same as above
   "QueryType": "SELECT",
   "Original": "select fk.referenced_table_name as to_table, fk.referenced_column_name as primary_key, fk.column_name as `column`, fk.constraint_name as name, rc.update_rule as on_update, rc.delete_rule as on_delete from information_schema.referential_constraints as rc join information_schema.key_column_usage as fk using (constraint_schema, constraint_name) where fk.referenced_column_name is not null and fk.table_schema = database() and fk.table_name = ':vtg1' and rc.constraint_schema = database() and rc.table_name = ':vtg1'",
   "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectDBA",
-    "Keyspace": {
-      "Name": "main",
-      "Sharded": false
-    },
-    "FieldQuery": "select fk.referenced_table_name as to_table, fk.referenced_column_name as primary_key, fk.column_name as `column`, fk.constraint_name as `name`, rc.update_rule as on_update, rc.delete_rule as on_delete from information_schema.referential_constraints as rc join information_schema.key_column_usage as fk on rc.constraint_schema = fk.constraint_schema and rc.constraint_name = fk.constraint_name where 1 != 1",
-    "Query": "select fk.referenced_table_name as to_table, fk.referenced_column_name as primary_key, fk.column_name as `column`, fk.constraint_name as `name`, rc.update_rule as on_update, rc.delete_rule as on_delete from information_schema.referential_constraints as rc join information_schema.key_column_usage as fk on rc.constraint_schema = fk.constraint_schema and rc.constraint_name = fk.constraint_name where fk.referenced_column_name is not null and fk.table_schema = database() and fk.table_name = :__vttablename and rc.constraint_schema = database() and rc.table_name = :__vttablename",
-    "SysTableTableName": "[VARBINARY(\":vtg1\"), VARBINARY(\":vtg1\")]"
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "1,2,3,4,-1,-2",
+    "TableName": "_",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectDBA",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select rc.update_rule as on_update, rc.delete_rule as on_delete, rc.constraint_schema, rc.constraint_name from information_schema.referential_constraints as rc where 1 != 1",
+        "Query": "select rc.update_rule as on_update, rc.delete_rule as on_delete, rc.constraint_schema, rc.constraint_name from information_schema.referential_constraints as rc where rc.constraint_schema = database() and rc.table_name = :__vttablename",
+        "SysTableTableName": "VARBINARY(\":vtg1\")"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectDBA",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select fk.referenced_table_name as to_table, fk.referenced_column_name as primary_key, fk.column_name as `column`, fk.constraint_name as `name` from information_schema.key_column_usage as fk where 1 != 1",
+        "Query": "select fk.referenced_table_name as to_table, fk.referenced_column_name as primary_key, fk.column_name as `column`, fk.constraint_name as `name` from information_schema.key_column_usage as fk where fk.constraint_schema = :rc_constraint_schema and fk.constraint_name = :rc_constraint_name and fk.referenced_column_name is not null and fk.table_schema = database() and fk.table_name = :__vttablename",
+        "SysTableTableName": "VARBINARY(\":vtg1\")"
+      }
+    ]
   }
 }
 
@@ -2388,7 +2407,7 @@ Gen4 plan same as above
     },
     "FieldQuery": "select * from information_schema.schemata where 1 != 1",
     "Query": "select * from information_schema.schemata where schema_name = :__vtschemaname",
-    "SysTableTableSchema": "[VARBINARY(\"user\")]"
+    "SysTableTableSchema": "VARBINARY(\"user\")"
   }
 }
 
@@ -2406,8 +2425,8 @@ Gen4 plan same as above
     },
     "FieldQuery": "select table_comment from information_schema.`tables` where 1 != 1",
     "Query": "select table_comment from information_schema.`tables` where table_schema = :__vtschemaname and table_name = :__vttablename",
-    "SysTableTableName": "[VARBINARY(\"table_name\")]",
-    "SysTableTableSchema": "[VARBINARY(\"schema_name\")]"
+    "SysTableTableName": "VARBINARY(\"table_name\")",
+    "SysTableTableSchema": "VARBINARY(\"schema_name\")"
   }
 }
 
@@ -2417,16 +2436,36 @@ Gen4 plan same as above
   "QueryType": "SELECT",
   "Original": "SELECT fk.referenced_table_name AS 'to_table', fk.referenced_column_name AS 'primary_key',fk.column_name AS 'column',fk.constraint_name AS 'name',rc.update_rule AS 'on_update',rc.delete_rule AS 'on_delete' FROM information_schema.referential_constraints rc JOIN information_schema.key_column_usage fk USING (constraint_schema, constraint_name) WHERE fk.referenced_column_name IS NOT NULL AND fk.table_schema = 'table_schema' AND fk.table_name = 'table_name' AND rc.constraint_schema = 'table_schema' AND rc.table_name = 'table_name'",
   "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectDBA",
-    "Keyspace": {
-      "Name": "main",
-      "Sharded": false
-    },
-    "FieldQuery": "select fk.referenced_table_name as to_table, fk.referenced_column_name as primary_key, fk.column_name as `column`, fk.constraint_name as `name`, rc.update_rule as on_update, rc.delete_rule as on_delete from information_schema.referential_constraints as rc join information_schema.key_column_usage as fk on rc.constraint_schema = fk.constraint_schema and rc.constraint_name = fk.constraint_name where 1 != 1",
-    "Query": "select fk.referenced_table_name as to_table, fk.referenced_column_name as primary_key, fk.column_name as `column`, fk.constraint_name as `name`, rc.update_rule as on_update, rc.delete_rule as on_delete from information_schema.referential_constraints as rc join information_schema.key_column_usage as fk on rc.constraint_schema = fk.constraint_schema and rc.constraint_name = fk.constraint_name where fk.referenced_column_name is not null and fk.table_schema = :__vtschemaname and fk.table_name = :__vttablename and rc.constraint_schema = :__vtschemaname and rc.table_name = :__vttablename",
-    "SysTableTableName": "[VARBINARY(\"table_name\"), VARBINARY(\"table_name\")]",
-    "SysTableTableSchema": "[VARBINARY(\"table_schema\"), VARBINARY(\"table_schema\")]"
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "1,2,3,4,-1,-2",
+    "TableName": "_",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectDBA",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select rc.update_rule as on_update, rc.delete_rule as on_delete, rc.constraint_schema, rc.constraint_name from information_schema.referential_constraints as rc where 1 != 1",
+        "Query": "select rc.update_rule as on_update, rc.delete_rule as on_delete, rc.constraint_schema, rc.constraint_name from information_schema.referential_constraints as rc where rc.constraint_schema = :__vtschemaname and rc.table_name = :__vttablename",
+        "SysTableTableName": "VARBINARY(\"table_name\")",
+        "SysTableTableSchema": "VARBINARY(\"table_schema\")"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectDBA",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select fk.referenced_table_name as to_table, fk.referenced_column_name as primary_key, fk.column_name as `column`, fk.constraint_name as `name` from information_schema.key_column_usage as fk where 1 != 1",
+        "Query": "select fk.referenced_table_name as to_table, fk.referenced_column_name as primary_key, fk.column_name as `column`, fk.constraint_name as `name` from information_schema.key_column_usage as fk where fk.constraint_schema = :rc_constraint_schema and fk.constraint_name = :rc_constraint_name and fk.referenced_column_name is not null and fk.table_schema = :__vtschemaname and fk.table_name = :__vttablename",
+        "SysTableTableName": "VARBINARY(\"table_name\")",
+        "SysTableTableSchema": "VARBINARY(\"table_schema\")"
+      }
+    ]
   }
 }
 
@@ -2436,16 +2475,35 @@ Gen4 plan same as above
   "QueryType": "SELECT",
   "Original": "SELECT cc.constraint_name AS 'name', cc.check_clause AS 'expression' FROM information_schema.check_constraints cc JOIN information_schema.table_constraints tc USING (constraint_schema, constraint_name) WHERE tc.table_schema = 'table_schema' AND tc.table_name = 'table_name' AND cc.constraint_schema = 'constraint_schema'",
   "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectDBA",
-    "Keyspace": {
-      "Name": "main",
-      "Sharded": false
-    },
-    "FieldQuery": "select cc.constraint_name as `name`, cc.check_clause as expression from information_schema.check_constraints as cc join information_schema.table_constraints as tc on cc.constraint_schema = tc.constraint_schema and cc.constraint_name = tc.constraint_name where 1 != 1",
-    "Query": "select cc.constraint_name as `name`, cc.check_clause as expression from information_schema.check_constraints as cc join information_schema.table_constraints as tc on cc.constraint_schema = tc.constraint_schema and cc.constraint_name = tc.constraint_name where tc.table_schema = :__vtschemaname and tc.table_name = :__vttablename and cc.constraint_schema = :__vtschemaname",
-    "SysTableTableName": "[VARBINARY(\"table_name\")]",
-    "SysTableTableSchema": "[VARBINARY(\"table_schema\"), VARBINARY(\"constraint_schema\")]"
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "-1,-2",
+    "TableName": "_",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectDBA",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select cc.constraint_name as `name`, cc.check_clause as expression, cc.constraint_schema from information_schema.check_constraints as cc where 1 != 1",
+        "Query": "select cc.constraint_name as `name`, cc.check_clause as expression, cc.constraint_schema from information_schema.check_constraints as cc where cc.constraint_schema = :__vtschemaname",
+        "SysTableTableSchema": "VARBINARY(\"constraint_schema\")"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectDBA",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select 1 from information_schema.table_constraints as tc where 1 != 1",
+        "Query": "select 1 from information_schema.table_constraints as tc where tc.constraint_schema = :cc_constraint_schema and tc.constraint_name = :cc_constraint_name and tc.table_schema = :__vtschemaname and tc.table_name = :__vttablename",
+        "SysTableTableName": "VARBINARY(\"table_name\")",
+        "SysTableTableSchema": "VARBINARY(\"table_schema\")"
+      }
+    ]
   }
 }
 
@@ -2463,8 +2521,8 @@ Gen4 plan same as above
     },
     "FieldQuery": "select column_name from information_schema.statistics where 1 != 1",
     "Query": "select column_name from information_schema.statistics where index_name = 'PRIMARY' and table_schema = :__vtschemaname and table_name = :__vttablename order by seq_in_index asc",
-    "SysTableTableName": "[VARBINARY(\"table_name\")]",
-    "SysTableTableSchema": "[VARBINARY(\"table_schema\")]"
+    "SysTableTableName": "VARBINARY(\"table_name\")",
+    "SysTableTableSchema": "VARBINARY(\"table_schema\")"
   }
 }
 
@@ -2482,8 +2540,8 @@ Gen4 plan same as above
     },
     "FieldQuery": "select generation_expression from information_schema.`columns` where 1 != 1",
     "Query": "select generation_expression from information_schema.`columns` where table_schema = :__vtschemaname and table_name = :__vttablename and column_name = 'column_name'",
-    "SysTableTableName": "[VARBINARY(\"table_name\")]",
-    "SysTableTableSchema": "[VARBINARY(\"table_schema\")]"
+    "SysTableTableName": "VARBINARY(\"table_name\")",
+    "SysTableTableSchema": "VARBINARY(\"table_schema\")"
   }
 }
 
@@ -2518,7 +2576,7 @@ Gen4 plan same as above
     },
     "FieldQuery": "select table_name from (select * from information_schema.`tables` where 1 != 1) as _subquery where 1 != 1",
     "Query": "select table_name from (select * from information_schema.`tables` where table_schema = :__vtschemaname) as _subquery",
-    "SysTableTableSchema": "[VARBINARY(\"table_schema\")]"
+    "SysTableTableSchema": "VARBINARY(\"table_schema\")"
   }
 }
 
@@ -2536,8 +2594,8 @@ Gen4 plan same as above
     },
     "FieldQuery": "select table_name from (select * from information_schema.`tables` where 1 != 1) as _subquery where 1 != 1",
     "Query": "select table_name from (select * from information_schema.`tables` where table_schema = :__vtschemaname) as _subquery where _subquery.table_type = 'table_type' and _subquery.table_name = :__vttablename",
-    "SysTableTableName": "[VARBINARY(\"table_name\")]",
-    "SysTableTableSchema": "[VARBINARY(\"table_schema\")]"
+    "SysTableTableName": "VARBINARY(\"table_name\")",
+    "SysTableTableSchema": "VARBINARY(\"table_schema\")"
   }
 }
 
@@ -2555,7 +2613,7 @@ Gen4 plan same as above
     },
     "FieldQuery": "select cc.constraint_name as `name` from information_schema.check_constraints as cc where 1 != 1",
     "Query": "select cc.constraint_name as `name` from information_schema.check_constraints as cc where cc.constraint_schema = :__vtschemaname and cc.table_schema = :__vtschemaname",
-    "SysTableTableSchema": "[VARBINARY(\"a\"), VARBINARY(\"a\")]"
+    "SysTableTableSchema": "VARBINARY(\"a\")"
   }
 }
 
