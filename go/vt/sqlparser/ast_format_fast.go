@@ -666,12 +666,12 @@ func (ct *ColumnType) formatFast(buf *TrackedBuffer) {
 		buf.WriteString(keywordStrings[DEFAULT])
 		_, isLiteral := ct.Options.Default.(*Literal)
 		_, isNullVal := ct.Options.Default.(*NullVal)
-		if isLiteral || isNullVal {
+		if isLiteral || isNullVal || isExprAliasForCurrentTimeStamp(ct.Options.Default) {
 			buf.WriteByte(' ')
-			buf.WriteString(String(ct.Options.Default))
+			ct.Options.Default.formatFast(buf)
 		} else {
 			buf.WriteString(" (")
-			buf.WriteString(String(ct.Options.Default))
+			ct.Options.Default.formatFast(buf)
 			buf.WriteByte(')')
 		}
 	}

@@ -467,10 +467,10 @@ func (ct *ColumnType) Format(buf *TrackedBuffer) {
 		buf.astPrintf(ct, " %s", keywordStrings[DEFAULT])
 		_, isLiteral := ct.Options.Default.(*Literal)
 		_, isNullVal := ct.Options.Default.(*NullVal)
-		if isLiteral || isNullVal {
-			buf.astPrintf(ct, " %v", String(ct.Options.Default))
+		if isLiteral || isNullVal || isExprAliasForCurrentTimeStamp(ct.Options.Default) {
+			buf.astPrintf(ct, " %v", ct.Options.Default)
 		} else {
-			buf.astPrintf(ct, " (%v)", String(ct.Options.Default))
+			buf.astPrintf(ct, " (%v)", ct.Options.Default)
 		}
 	}
 	if ct.Options.OnUpdate != nil {
