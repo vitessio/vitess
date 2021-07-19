@@ -100,7 +100,7 @@ type (
 
 		// The following two fields are used when routing information_schema queries
 		SysTableTableSchema []evalengine.Expr
-		SysTableTableName   []evalengine.Expr
+		SysTableTableName   map[string]evalengine.Expr
 	}
 
 	joinPlan struct {

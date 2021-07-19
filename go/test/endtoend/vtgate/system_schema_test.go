@@ -169,14 +169,16 @@ func TestSystemSchemaQueryWithoutQualifier(t *testing.T) {
 		"from information_schema.tables t "+
 		"join information_schema.columns c "+
 		"on c.table_schema = t.table_schema and c.table_name = t.table_name "+
-		"where t.table_schema = '%s' and c.table_schema = '%s'", KeyspaceName, KeyspaceName)
+		"where t.table_schema = '%s' and c.table_schema = '%s' "+
+		"order by t.table_schema,t.table_name,c.column_name", KeyspaceName, KeyspaceName)
 	qr1 := exec(t, conn, queryWithQualifier)
 
 	queryWithoutQualifier := fmt.Sprintf("select t.table_schema,t.table_name,c.column_name,c.column_type "+
 		"from tables t "+
 		"join columns c "+
 		"on c.table_schema = t.table_schema and c.table_name = t.table_name "+
-		"where t.table_schema = '%s' and c.table_schema = '%s'", KeyspaceName, KeyspaceName)
+		"where t.table_schema = '%s' and c.table_schema = '%s' "+
+		"order by t.table_schema,t.table_name,c.column_name", KeyspaceName, KeyspaceName)
 	exec(t, conn, "use information_schema")
 	qr2 := exec(t, conn, queryWithoutQualifier)
 	require.Equal(t, qr1, qr2)
