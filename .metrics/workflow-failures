@@ -1,5 +1,3 @@
-2021-03-20T08:38:44Z,Cluster (20),https://github.com/vitessio/vitess/actions/runs/670417770
-2021-03-20T08:38:44Z,Cluster (21),https://github.com/vitessio/vitess/actions/runs/670417744
 2021-03-20T08:38:44Z,Cluster (22),https://github.com/vitessio/vitess/actions/runs/670417755
 2021-03-20T08:38:44Z,Cluster (23),https://github.com/vitessio/vitess/actions/runs/670417754
 2021-03-20T08:38:44Z,Cluster (24),https://github.com/vitessio/vitess/actions/runs/670417732
@@ -9997,4 +9995,6 @@
 2021-07-19T09:55:11Z,Cluster (vreplication_cellalias),https://github.com/vitessio/vitess/actions/runs/1044751427
 2021-07-19T09:55:11Z,Cluster (vreplication_migrate),https://github.com/vitessio/vitess/actions/runs/1044751415
 2021-07-19T09:55:11Z,unit_race,https://github.com/vitessio/vitess/actions/runs/1044751409
+2021-07-19T09:57:28Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/1044756726
 2021-07-19T09:57:28Z,pr-labels,https://github.com/vitessio/vitess/actions/runs/1044756734
+2021-07-19T10:19:17Z,Cluster (vtgate_gen4),https://github.com/vitessio/vitess/actions/runs/1044823263
