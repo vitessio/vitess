@@ -172,9 +172,3 @@ select id from user where not id in (select col from music where music.user_id =
 2 ks_sharded/40-80: select col from music where music.user_id = 411 limit 10001
 
 ----------------------------------------------------------------------
-select id from user where not id in (select col from music where music.user_id = 42) and id in (select col from music where music.user_id = 411)
-
-1 ks_sharded/40-80: select col from music where music.user_id = 42 limit 10001
-2 ks_sharded/40-80: select col from music where music.user_id = 411 limit 10001
-
-----------------------------------------------------------------------
