@@ -1,7 +1,3 @@
-2021-03-20T08:38:44Z,Cluster (16),https://github.com/vitessio/vitess/actions/runs/670417731
-2021-03-20T08:38:44Z,Cluster (17),https://github.com/vitessio/vitess/actions/runs/670417752
-2021-03-20T08:38:44Z,Cluster (18),https://github.com/vitessio/vitess/actions/runs/670417748
-2021-03-20T08:38:44Z,Cluster (19),https://github.com/vitessio/vitess/actions/runs/670417728
 2021-03-20T08:38:44Z,Cluster (20),https://github.com/vitessio/vitess/actions/runs/670417770
 2021-03-20T08:38:44Z,Cluster (21),https://github.com/vitessio/vitess/actions/runs/670417744
 2021-03-20T08:38:44Z,Cluster (22),https://github.com/vitessio/vitess/actions/runs/670417755
@@ -9998,3 +9994,7 @@
 2021-07-19T09:25:48Z,endtoend,https://github.com/vitessio/vitess/actions/runs/1044671191
 2021-07-19T09:25:48Z,golangci-lint,https://github.com/vitessio/vitess/actions/runs/1044671182
 2021-07-19T09:25:48Z,unit_race,https://github.com/vitessio/vitess/actions/runs/1044671169
+2021-07-19T09:55:11Z,Cluster (vreplication_cellalias),https://github.com/vitessio/vitess/actions/runs/1044751427
+2021-07-19T09:55:11Z,Cluster (vreplication_migrate),https://github.com/vitessio/vitess/actions/runs/1044751415
+2021-07-19T09:55:11Z,unit_race,https://github.com/vitessio/vitess/actions/runs/1044751409
+2021-07-19T09:57:28Z,pr-labels,https://github.com/vitessio/vitess/actions/runs/1044756734
