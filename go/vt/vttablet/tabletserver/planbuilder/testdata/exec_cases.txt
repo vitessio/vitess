@@ -925,7 +925,7 @@ options:PassthroughDMLs
       "Role": 2
     }
   ],
-  "FullQuery": "create table function_default (\n\tx varchar(25) default (TRIM(' check '))\n)"
+  "FullQuery": "create table function_default (\n\tx varchar(25) default TRIM(' check ')\n)"
 }
 
 # flush statement
