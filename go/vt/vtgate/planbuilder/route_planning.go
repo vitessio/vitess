@@ -729,6 +729,11 @@ func tryMerge(a, b joinTree, joinPredicates []sqlparser.Expr, semTable *semantic
 	if aRoute == nil || bRoute == nil {
 		return nil
 	}
+	// If both the routes are system schema queries then we do not validate the keyspaces at plan time. As they are not always the ones where the query will be sent to.
+	if (aRoute.routeOpCode != engine.SelectDBA ||
+		bRoute.routeOpCode != engine.SelectDBA) && aRoute.keyspace != bRoute.keyspace {
+		return nil
+	}
 
 	newTabletSet := aRoute.solved | bRoute.solved
 
@@ -775,9 +780,6 @@ func joinTreesToRoutes(a, b joinTree) (*routePlan, *routePlan) {
 	}
 	bRoute, ok := b.(*routePlan)
 	if !ok {
-		return nil, nil
-	}
-	if aRoute.keyspace != bRoute.keyspace {
 		return nil, nil
 	}
 	return aRoute, bRoute
