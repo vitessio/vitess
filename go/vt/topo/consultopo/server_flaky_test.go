@@ -170,6 +170,52 @@ func TestConsulTopo(t *testing.T) {
 	})
 }
 
+func TestConsulTopoWithChecks(t *testing.T) {
+	// One test is going to wait that full period, so make it shorter.
+	*watchPollDuration = 100 * time.Millisecond
+	*consulLockSessionChecks = "serfHealth"
+	*consulLockSessionTTL = "15s"
+
+	// Start a single consul in the background.
+	cmd, configFilename, serverAddr := startConsul(t, "")
+	defer func() {
+		// Alerts command did not run successful
+		if err := cmd.Process.Kill(); err != nil {
+			log.Errorf("cmd process kill has an error: %v", err)
+		}
+		// Alerts command did not run successful
+		if err := cmd.Wait(); err != nil {
+			log.Errorf("cmd wait has an error: %v", err)
+		}
+
+		os.Remove(configFilename)
+	}()
+
+	// Run the TopoServerTestSuite tests.
+	testIndex := 0
+	test.TopoServerTestSuite(t, func() *topo.Server {
+		// Each test will use its own sub-directories.
+		testRoot := fmt.Sprintf("test-%v", testIndex)
+		testIndex++
+
+		// Create the server on the new root.
+		ts, err := topo.OpenServer("consul", serverAddr, path.Join(testRoot, topo.GlobalCell))
+		if err != nil {
+			t.Fatalf("OpenServer() failed: %v", err)
+		}
+
+		// Create the CellInfo.
+		if err := ts.CreateCellInfo(context.Background(), test.LocalCellName, &topodatapb.CellInfo{
+			ServerAddress: serverAddr,
+			Root:          path.Join(testRoot, test.LocalCellName),
+		}); err != nil {
+			t.Fatalf("CreateCellInfo() failed: %v", err)
+		}
+
+		return ts
+	})
+}
+
 func TestConsulTopoWithAuth(t *testing.T) {
 	// One test is going to wait that full period, so make it shorter.
 	*watchPollDuration = 100 * time.Millisecond

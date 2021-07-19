@@ -32,7 +32,7 @@ import (
 
 var (
 	clusterInstance *cluster.LocalProcessCluster
-	masterTablet    cluster.Vttablet
+	primaryTablet   cluster.Vttablet
 	replicaTablet   cluster.Vttablet
 	hostname        = "localhost"
 	keyspaceName    = "ks"
@@ -109,7 +109,7 @@ func TestMain(m *testing.M) {
 		tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 		for _, tablet := range tablets {
 			if tablet.Type == "master" {
-				masterTablet = *tablet
+				primaryTablet = *tablet
 			} else if tablet.Type != "rdonly" {
 				replicaTablet = *tablet
 			}
@@ -124,21 +124,21 @@ func checkTableRows(t *testing.T, tableName string, expect int64) {
 	require.NotEmpty(t, tableName)
 	query := `select count(*) as c from %a`
 	parsed := sqlparser.BuildParsedQuery(query, tableName)
-	rs, err := masterTablet.VttabletProcess.QueryTablet(parsed.Query, keyspaceName, true)
+	rs, err := primaryTablet.VttabletProcess.QueryTablet(parsed.Query, keyspaceName, true)
 	require.NoError(t, err)
 	count := rs.Named().Row().AsInt64("c", 0)
 	assert.Equal(t, expect, count)
 }
 
 func populateTable(t *testing.T) {
-	_, err := masterTablet.VttabletProcess.QueryTablet(sqlSchema, keyspaceName, true)
+	_, err := primaryTablet.VttabletProcess.QueryTablet(sqlSchema, keyspaceName, true)
 	require.NoError(t, err)
-	_, err = masterTablet.VttabletProcess.QueryTablet("delete from t1", keyspaceName, true)
+	_, err = primaryTablet.VttabletProcess.QueryTablet("delete from t1", keyspaceName, true)
 	require.NoError(t, err)
-	_, err = masterTablet.VttabletProcess.QueryTablet("insert into t1 (id, value) values (null, md5(rand()))", keyspaceName, true)
+	_, err = primaryTablet.VttabletProcess.QueryTablet("insert into t1 (id, value) values (null, md5(rand()))", keyspaceName, true)
 	require.NoError(t, err)
 	for i := 0; i < 10; i++ {
-		_, err = masterTablet.VttabletProcess.QueryTablet("insert into t1 (id, value) select null, md5(rand()) from t1", keyspaceName, true)
+		_, err = primaryTablet.VttabletProcess.QueryTablet("insert into t1 (id, value) select null, md5(rand()) from t1", keyspaceName, true)
 		require.NoError(t, err)
 	}
 	checkTableRows(t, "t1", 1024)
@@ -148,7 +148,7 @@ func populateTable(t *testing.T) {
 func tableExists(tableExpr string) (exists bool, tableName string, err error) {
 	query := `show table status like '%a'`
 	parsed := sqlparser.BuildParsedQuery(query, tableExpr)
-	rs, err := masterTablet.VttabletProcess.QueryTablet(parsed.Query, keyspaceName, true)
+	rs, err := primaryTablet.VttabletProcess.QueryTablet(parsed.Query, keyspaceName, true)
 	if err != nil {
 		return false, "", err
 	}
@@ -163,7 +163,7 @@ func tableExists(tableExpr string) (exists bool, tableName string, err error) {
 func dropTable(tableName string) (err error) {
 	query := `drop table if exists %a`
 	parsed := sqlparser.BuildParsedQuery(query, tableName)
-	_, err = masterTablet.VttabletProcess.QueryTablet(parsed.Query, keyspaceName, true)
+	_, err = primaryTablet.VttabletProcess.QueryTablet(parsed.Query, keyspaceName, true)
 	return err
 }
 
@@ -186,7 +186,7 @@ func TestHold(t *testing.T) {
 	query, tableName, err := schema.GenerateRenameStatement("t1", schema.HoldTableGCState, time.Now().UTC().Add(10*time.Second))
 	assert.NoError(t, err)
 
-	_, err = masterTablet.VttabletProcess.QueryTablet(query, keyspaceName, true)
+	_, err = primaryTablet.VttabletProcess.QueryTablet(query, keyspaceName, true)
 	assert.NoError(t, err)
 
 	{
@@ -232,7 +232,7 @@ func TestEvac(t *testing.T) {
 	query, tableName, err := schema.GenerateRenameStatement("t1", schema.EvacTableGCState, time.Now().UTC().Add(10*time.Second))
 	assert.NoError(t, err)
 
-	_, err = masterTablet.VttabletProcess.QueryTablet(query, keyspaceName, true)
+	_, err = primaryTablet.VttabletProcess.QueryTablet(query, keyspaceName, true)
 	assert.NoError(t, err)
 
 	{
@@ -277,7 +277,7 @@ func TestDrop(t *testing.T) {
 	query, tableName, err := schema.GenerateRenameStatement("t1", schema.DropTableGCState, time.Now().UTC().Add(10*time.Second))
 	assert.NoError(t, err)
 
-	_, err = masterTablet.VttabletProcess.QueryTablet(query, keyspaceName, true)
+	_, err = primaryTablet.VttabletProcess.QueryTablet(query, keyspaceName, true)
 	assert.NoError(t, err)
 
 	{
@@ -300,7 +300,7 @@ func TestPurge(t *testing.T) {
 	query, tableName, err := schema.GenerateRenameStatement("t1", schema.PurgeTableGCState, time.Now().UTC().Add(10*time.Second))
 	require.NoError(t, err)
 
-	_, err = masterTablet.VttabletProcess.QueryTablet(query, keyspaceName, true)
+	_, err = primaryTablet.VttabletProcess.QueryTablet(query, keyspaceName, true)
 	require.NoError(t, err)
 
 	{

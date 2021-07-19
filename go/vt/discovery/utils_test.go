@@ -102,14 +102,14 @@ func minimalTabletStats(uid uint32, tabletType topodatapb.TabletType) LegacyTabl
 
 func healthy(ts LegacyTabletStats) LegacyTabletStats {
 	ts.Stats = &querypb.RealtimeStats{
-		SecondsBehindMaster: uint32(1),
+		ReplicationLagSeconds: uint32(1),
 	}
 	return ts
 }
 
 func unhealthyLag(ts LegacyTabletStats) LegacyTabletStats {
 	ts.Stats = &querypb.RealtimeStats{
-		SecondsBehindMaster: uint32(3600),
+		ReplicationLagSeconds: uint32(3600),
 	}
 	return ts
 }

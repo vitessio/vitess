@@ -183,7 +183,7 @@ func TestLocksWithTxFailure(t *testing.T) {
 	qr := checkedExec(t, conn1, "select connection_id()")
 	exec(t, conn1, "use ks")
 	// kill the mysql connection shard which has transaction open.
-	vttablet1 := clusterInstance.Keyspaces[0].Shards[1].MasterTablet() // 80-
+	vttablet1 := clusterInstance.Keyspaces[0].Shards[1].PrimaryTablet() // 80-
 	vttablet1.VttabletProcess.QueryTablet(fmt.Sprintf("kill %s", qr.Rows[0][0].ToString()), keyspaceName, false)
 
 	// transaction fails on commit.

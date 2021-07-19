@@ -74,8 +74,7 @@ func (pb *primitiveBuilder) checkAggregates(sel *sqlparser.Select) error {
 	}
 
 	// Check if we can allow aggregates.
-	hasAggregates := nodeHasAggregates(sel.SelectExprs) || len(sel.GroupBy) > 0
-
+	hasAggregates := sqlparser.ContainsAggregation(sel.SelectExprs) || len(sel.GroupBy) > 0
 	if !hasAggregates && !sel.Distinct {
 		return nil
 	}
@@ -132,27 +131,6 @@ func (pb *primitiveBuilder) checkAggregates(sel *sqlparser.Select) error {
 	}
 	pb.plan.Reorder(0)
 	return nil
-}
-
-func nodeHasAggregates(node sqlparser.SQLNode) bool {
-	hasAggregates := false
-	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
-		switch node := node.(type) {
-		case *sqlparser.FuncExpr:
-			if node.IsAggregate() {
-				hasAggregates = true
-				return false, errors.New("unused error")
-			}
-		case *sqlparser.GroupConcatExpr:
-			hasAggregates = true
-			return false, errors.New("unused error")
-		case *sqlparser.Subquery:
-			// Subqueries are analyzed by themselves.
-			return false, nil
-		}
-		return true, nil
-	}, node)
-	return hasAggregates
 }
 
 // groupbyHasUniqueVindex looks ahead at the group by expression to see if
@@ -331,14 +309,15 @@ func (oa *orderedAggregate) needDistinctHandling(pb *primitiveBuilder, funcExpr 
 // compare those instead. This is because we currently don't have the
 // ability to mimic mysql's collation behavior.
 func (oa *orderedAggregate) Wireup(plan logicalPlan, jt *jointab) error {
-	for i, colNumber := range oa.eaggr.Keys {
-		rc := oa.resultColumns[colNumber]
+	for i, gbk := range oa.eaggr.GroupByKeys {
+		rc := oa.resultColumns[gbk.KeyCol]
 		if sqltypes.IsText(rc.column.typ) {
 			if weightcolNumber, ok := oa.weightStrings[rc]; ok {
-				oa.eaggr.Keys[i] = weightcolNumber
+				oa.eaggr.GroupByKeys[i].WeightStringCol = weightcolNumber
+				oa.eaggr.GroupByKeys[i].KeyCol = weightcolNumber
 				continue
 			}
-			weightcolNumber, err := oa.input.SupplyWeightString(colNumber)
+			weightcolNumber, err := oa.input.SupplyWeightString(gbk.KeyCol)
 			if err != nil {
 				_, isUnsupportedErr := err.(UnsupportedSupplyWeightString)
 				if isUnsupportedErr {
@@ -347,7 +326,8 @@ func (oa *orderedAggregate) Wireup(plan logicalPlan, jt *jointab) error {
 				return err
 			}
 			oa.weightStrings[rc] = weightcolNumber
-			oa.eaggr.Keys[i] = weightcolNumber
+			oa.eaggr.GroupByKeys[i].WeightStringCol = weightcolNumber
+			oa.eaggr.GroupByKeys[i].KeyCol = weightcolNumber
 			oa.eaggr.TruncateColumnCount = len(oa.resultColumns)
 		}
 	}

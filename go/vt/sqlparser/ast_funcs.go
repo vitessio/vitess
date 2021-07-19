@@ -1322,6 +1322,17 @@ func (node *ColName) CompliantName() string {
 	return node.Name.CompliantName()
 }
 
+// isExprAliasForCurrentTimeStamp returns true if the Expr provided is an alias for CURRENT_TIMESTAMP
+func isExprAliasForCurrentTimeStamp(expr Expr) bool {
+	switch node := expr.(type) {
+	case *FuncExpr:
+		return node.Name.EqualString("current_timestamp") || node.Name.EqualString("now") || node.Name.EqualString("localtimestamp") || node.Name.EqualString("localtime")
+	case *CurTimeFuncExpr:
+		return node.Name.EqualString("current_timestamp") || node.Name.EqualString("now") || node.Name.EqualString("localtimestamp") || node.Name.EqualString("localtime")
+	}
+	return false
+}
+
 // AtCount represents the '@' count in ColIdent
 type AtCount int
 
@@ -1365,4 +1376,28 @@ func ToString(exprs []TableExpr) string {
 		prefix = ", "
 	}
 	return buf.String()
+}
+
+// ContainsAggregation returns true if the expression contains aggregation
+func ContainsAggregation(e SQLNode) bool {
+	hasAggregates := false
+	_ = Walk(func(node SQLNode) (kontinue bool, err error) {
+		if IsAggregation(node) {
+			hasAggregates = true
+			return false, nil
+		}
+		return true, nil
+	}, e)
+	return hasAggregates
+}
+
+// IsAggregation returns true if the node is an aggregation expression
+func IsAggregation(node SQLNode) bool {
+	switch node := node.(type) {
+	case *FuncExpr:
+		return node.IsAggregate()
+	case *GroupConcatExpr:
+		return true
+	}
+	return false
 }

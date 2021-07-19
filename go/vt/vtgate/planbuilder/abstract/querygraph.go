@@ -44,10 +44,11 @@ type (
 
 	// QueryTable is a single FROM table, including all predicates particular to this table
 	QueryTable struct {
-		TableID    semantics.TableSet
-		Alias      *sqlparser.AliasedTableExpr
-		Table      sqlparser.TableName
-		Predicates []sqlparser.Expr
+		TableID     semantics.TableSet
+		Alias       *sqlparser.AliasedTableExpr
+		Table       sqlparser.TableName
+		Predicates  []sqlparser.Expr
+		IsInfSchema bool
 	}
 )
 
@@ -88,46 +89,6 @@ func newQueryGraph() *QueryGraph {
 	return &QueryGraph{
 		innerJoins: map[semantics.TableSet][]sqlparser.Expr{},
 	}
-}
-
-func (qg *QueryGraph) collectTable(t sqlparser.TableExpr, semTable *semantics.SemTable) error {
-	switch table := t.(type) {
-	case *sqlparser.AliasedTableExpr:
-		tableName := table.Expr.(sqlparser.TableName)
-		qt := &QueryTable{Alias: table, Table: tableName, TableID: semTable.TableSetFor(table)}
-		qg.Tables = append(qg.Tables, qt)
-	case *sqlparser.JoinTableExpr:
-		if err := qg.collectTable(table.LeftExpr, semTable); err != nil {
-			return err
-		}
-		if err := qg.collectTable(table.RightExpr, semTable); err != nil {
-			return err
-		}
-		if table.Condition.On != nil {
-			for _, predicate := range sqlparser.SplitAndExpression(nil, table.Condition.On) {
-				err := qg.collectPredicateTable(t, predicate, semTable)
-				if err != nil {
-					return err
-				}
-			}
-		}
-	case *sqlparser.ParenTableExpr:
-		for _, expr := range table.Exprs {
-			if err := qg.collectTable(expr, semTable); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
-}
-
-func (qg *QueryGraph) collectTables(t sqlparser.TableExprs, semTable *semantics.SemTable) error {
-	for _, expr := range t {
-		if err := qg.collectTable(expr, semTable); err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 func (qg *QueryGraph) collectPredicates(sel *sqlparser.Select, semTable *semantics.SemTable) error {

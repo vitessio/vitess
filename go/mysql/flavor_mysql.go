@@ -144,9 +144,9 @@ func parseMysqlReplicationStatus(resultMap map[string]string) (ReplicationStatus
 	if uuidString != "" {
 		sid, err := ParseSID(uuidString)
 		if err != nil {
-			return ReplicationStatus{}, vterrors.Wrapf(err, "cannot decode MasterUUID")
+			return ReplicationStatus{}, vterrors.Wrapf(err, "cannot decode SourceUUID")
 		}
-		status.MasterUUID = sid
+		status.SourceUUID = sid
 	}
 
 	var err error

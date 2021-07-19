@@ -247,7 +247,7 @@ func TestBackupRestore(t *testing.T) {
 
 // TestBackupRestoreLagged tests the changes made in https://github.com/vitessio/vitess/pull/5000
 // While doing a backup or a restore, we wait for a change of the replica's position before completing the action
-// This is because otherwise SecondsBehindMaster is not accurate and the tablet may go into SERVING when it should not
+// This is because otherwise ReplicationLagSeconds is not accurate and the tablet may go into SERVING when it should not
 func TestBackupRestoreLagged(t *testing.T) {
 	delay := discovery.GetTabletPickerRetryDelay()
 	defer func() {
