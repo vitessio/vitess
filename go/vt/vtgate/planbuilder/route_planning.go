@@ -41,11 +41,11 @@ func gen4Planner(_ string) func(sqlparser.Statement, *sqlparser.ReservedVars, Co
 		if !ok {
 			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%T not yet supported", stmt)
 		}
-		return newBuildSelectPlan(sel, vschema)
+		return newBuildSelectPlan(sel, reservedVars, vschema)
 	}
 }
 
-func newBuildSelectPlan(sel *sqlparser.Select, vschema ContextVSchema) (engine.Primitive, error) {
+func newBuildSelectPlan(sel *sqlparser.Select, reservedVars *sqlparser.ReservedVars, vschema ContextVSchema) (engine.Primitive, error) {
 
 	directives := sqlparser.ExtractCommentDirectives(sel.Comments)
 	if len(directives) > 0 {
@@ -70,7 +70,7 @@ func newBuildSelectPlan(sel *sqlparser.Select, vschema ContextVSchema) (engine.P
 		return nil, err
 	}
 
-	tree, err := optimizeQuery(opTree, semTable, vschema)
+	tree, err := optimizeQuery(opTree, reservedVars, semTable, vschema)
 	if err != nil {
 		return nil, err
 	}
@@ -103,31 +103,31 @@ func newBuildSelectPlan(sel *sqlparser.Select, vschema ContextVSchema) (engine.P
 	return plan.Primitive(), nil
 }
 
-func optimizeQuery(opTree abstract.Operator, semTable *semantics.SemTable, vschema ContextVSchema) (joinTree, error) {
+func optimizeQuery(opTree abstract.Operator, reservedVars *sqlparser.ReservedVars, semTable *semantics.SemTable, vschema ContextVSchema) (joinTree, error) {
 	switch op := opTree.(type) {
 	case *abstract.QueryGraph:
 		switch {
 		case vschema.Planner() == Gen4Left2Right:
-			return leftToRightSolve(op, semTable, vschema)
+			return leftToRightSolve(op, reservedVars, semTable, vschema)
 		default:
-			return greedySolve(op, semTable, vschema)
+			return greedySolve(op, reservedVars, semTable, vschema)
 		}
 	case *abstract.LeftJoin:
-		treeInner, err := optimizeQuery(op.Left, semTable, vschema)
+		treeInner, err := optimizeQuery(op.Left, reservedVars, semTable, vschema)
 		if err != nil {
 			return nil, err
 		}
-		treeOuter, err := optimizeQuery(op.Right, semTable, vschema)
+		treeOuter, err := optimizeQuery(op.Right, reservedVars, semTable, vschema)
 		if err != nil {
 			return nil, err
 		}
 		return mergeOrJoin(treeInner, treeOuter, []sqlparser.Expr{op.Predicate}, semTable, false)
 	case *abstract.Join:
-		treeInner, err := optimizeQuery(op.LHS, semTable, vschema)
+		treeInner, err := optimizeQuery(op.LHS, reservedVars, semTable, vschema)
 		if err != nil {
 			return nil, err
 		}
-		treeOuter, err := optimizeQuery(op.RHS, semTable, vschema)
+		treeOuter, err := optimizeQuery(op.RHS, reservedVars, semTable, vschema)
 		if err != nil {
 			return nil, err
 		}
@@ -424,8 +424,8 @@ type (
 	and removes the two inputs to this cheapest plan and instead adds the join.
 	As an optimization, it first only considers joining tables that have predicates defined between them
 */
-func greedySolve(qg *abstract.QueryGraph, semTable *semantics.SemTable, vschema ContextVSchema) (joinTree, error) {
-	joinTrees, err := seedPlanList(qg, semTable, vschema)
+func greedySolve(qg *abstract.QueryGraph, reservedVars *sqlparser.ReservedVars, semTable *semantics.SemTable, vschema ContextVSchema) (joinTree, error) {
+	joinTrees, err := seedPlanList(qg, reservedVars, semTable, vschema)
 	planCache := cacheMap{}
 	if err != nil {
 		return nil, err
@@ -517,8 +517,8 @@ func findBestJoinTree(
 	return bestPlan, lIdx, rIdx, nil
 }
 
-func leftToRightSolve(qg *abstract.QueryGraph, semTable *semantics.SemTable, vschema ContextVSchema) (joinTree, error) {
-	plans, err := seedPlanList(qg, semTable, vschema)
+func leftToRightSolve(qg *abstract.QueryGraph, reservedVars *sqlparser.ReservedVars, semTable *semantics.SemTable, vschema ContextVSchema) (joinTree, error) {
+	plans, err := seedPlanList(qg, reservedVars, semTable, vschema)
 	if err != nil {
 		return nil, err
 	}
@@ -540,13 +540,13 @@ func leftToRightSolve(qg *abstract.QueryGraph, semTable *semantics.SemTable, vsc
 }
 
 // seedPlanList returns a routePlan for each table in the qg
-func seedPlanList(qg *abstract.QueryGraph, semTable *semantics.SemTable, vschema ContextVSchema) ([]joinTree, error) {
+func seedPlanList(qg *abstract.QueryGraph, reservedVars *sqlparser.ReservedVars, semTable *semantics.SemTable, vschema ContextVSchema) ([]joinTree, error) {
 	plans := make([]joinTree, len(qg.Tables))
 
 	// we start by seeding the table with the single routes
 	for i, table := range qg.Tables {
 		solves := semTable.TableSetFor(table.Alias)
-		plan, err := createRoutePlan(table, solves, vschema)
+		plan, err := createRoutePlan(table, solves, reservedVars, vschema)
 		if err != nil {
 			return nil, err
 		}
@@ -562,7 +562,7 @@ func removeAt(plans []joinTree, idx int) []joinTree {
 	return append(plans[:idx], plans[idx+1:]...)
 }
 
-func createRoutePlan(table *abstract.QueryTable, solves semantics.TableSet, vschema ContextVSchema) (*routePlan, error) {
+func createRoutePlan(table *abstract.QueryTable, solves semantics.TableSet, reservedVars *sqlparser.ReservedVars, vschema ContextVSchema) (*routePlan, error) {
 	if table.IsInfSchema {
 		defaultKeyspace, err := vschema.DefaultKeyspace()
 		if err != nil {
@@ -582,7 +582,7 @@ func createRoutePlan(table *abstract.QueryTable, solves semantics.TableSet, vsch
 			}},
 			predicates: table.Predicates,
 		}
-		err = rp.findSysInfoRoutingPredicatesGen4()
+		err = rp.findSysInfoRoutingPredicatesGen4(reservedVars)
 		if err != nil {
 			return nil, err
 		}
@@ -773,6 +773,17 @@ func createRoutePlanForInner(aRoute *routePlan, bRoute *routePlan, newTabletSet 
 	} else {
 		tables = append(parenTables{aRoute.tables}, bRoute.tables...)
 	}
+
+	// append system table names from both the routes.
+	sysTableName := aRoute.SysTableTableName
+	if sysTableName == nil {
+		sysTableName = bRoute.SysTableTableName
+	} else {
+		for k, v := range bRoute.SysTableTableName {
+			sysTableName[k] = v
+		}
+	}
+
 	return &routePlan{
 		routeOpCode: aRoute.routeOpCode,
 		solved:      newTabletSet,
@@ -784,7 +795,7 @@ func createRoutePlanForInner(aRoute *routePlan, bRoute *routePlan, newTabletSet 
 		vindexPreds:         append(aRoute.vindexPreds, bRoute.vindexPreds...),
 		leftJoins:           append(aRoute.leftJoins, bRoute.leftJoins...),
 		SysTableTableSchema: append(aRoute.SysTableTableSchema, bRoute.SysTableTableSchema...),
-		SysTableTableName:   append(aRoute.SysTableTableName, bRoute.SysTableTableName...),
+		SysTableTableName:   sysTableName,
 	}
 }
 
