@@ -239,28 +239,28 @@ func refreshTablets(tablets map[string]*topo.TabletInfo, query string, args []in
 }
 
 // LockShard locks the keyspace-shard preventing others from performing conflicting actions.
-func LockShard(instanceKey inst.InstanceKey) (func(*error), error) {
+func LockShard(ctx context.Context, instanceKey inst.InstanceKey) (context.Context, func(*error), error) {
 	if instanceKey.Hostname == "" {
-		return nil, errors.New("Can't lock shard: instance is unspecified")
+		return nil, nil, errors.New("Can't lock shard: instance is unspecified")
 	}
 	val := atomic.LoadInt32(&hasReceivedSIGTERM)
 	if val > 0 {
-		return nil, errors.New("Can't lock shard: SIGTERM received")
+		return nil, nil, errors.New("Can't lock shard: SIGTERM received")
 	}
 
 	tablet, err := inst.ReadTablet(instanceKey)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(config.Config.LockShardTimeoutSeconds)*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, time.Duration(config.Config.LockShardTimeoutSeconds)*time.Second)
 	defer cancel()
 	atomic.AddInt32(&shardsLockCounter, 1)
-	_, unlock, err := ts.LockShard(ctx, tablet.Keyspace, tablet.Shard, "Orc Recovery")
+	ctx, unlock, err := ts.LockShard(ctx, tablet.Keyspace, tablet.Shard, "Orc Recovery")
 	if err != nil {
 		atomic.AddInt32(&shardsLockCounter, -1)
-		return nil, err
+		return nil, nil, err
 	}
-	return func(e *error) {
+	return ctx, func(e *error) {
 		defer atomic.AddInt32(&shardsLockCounter, -1)
 		unlock(e)
 	}, nil

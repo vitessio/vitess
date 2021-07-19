@@ -17,6 +17,7 @@
 package logic
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"math/rand"
@@ -828,7 +829,7 @@ func checkAndRecoverDeadMaster(analysisEntry inst.ReplicationAnalysis, candidate
 	// That's it! We must do recovery!
 	// TODO(sougou): This function gets called by GracefulMasterTakeover which may
 	// need to obtain shard lock before getting here.
-	unlock, err := LockShard(analysisEntry.AnalyzedInstanceKey)
+	_, unlock, err := LockShard(context.Background(), analysisEntry.AnalyzedInstanceKey)
 	if err != nil {
 		log.Infof("CheckAndRecover: Analysis: %+v, InstanceKey: %+v, candidateInstanceKey: %+v, "+
 			"skipProcesses: %v: NOT detecting/recovering host, could not obtain shard lock (%v)",
@@ -2014,7 +2015,7 @@ func electNewMaster(analysisEntry inst.ReplicationAnalysis, candidateInstanceKey
 	}
 	log.Infof("Analysis: %v, will elect a new master: %v", analysisEntry.Analysis, analysisEntry.SuggestedClusterAlias)
 
-	unlock, err := LockShard(analysisEntry.AnalyzedInstanceKey)
+	_, unlock, err := LockShard(context.Background(), analysisEntry.AnalyzedInstanceKey)
 	if err != nil {
 		log.Infof("CheckAndRecover: Analysis: %+v, InstanceKey: %+v, candidateInstanceKey: %+v, "+
 			"skipProcesses: %v: NOT detecting/recovering host, could not obtain shard lock (%v)",
@@ -2133,7 +2134,7 @@ func fixMaster(analysisEntry inst.ReplicationAnalysis, candidateInstanceKey *ins
 	}
 	log.Infof("Analysis: %v, will fix master to read-write %+v", analysisEntry.Analysis, analysisEntry.AnalyzedInstanceKey)
 
-	unlock, err := LockShard(analysisEntry.AnalyzedInstanceKey)
+	_, unlock, err := LockShard(context.Background(), analysisEntry.AnalyzedInstanceKey)
 	if err != nil {
 		log.Infof("CheckAndRecover: Analysis: %+v, InstanceKey: %+v, candidateInstanceKey: %+v, "+
 			"skipProcesses: %v: NOT detecting/recovering host, could not obtain shard lock (%v)",
@@ -2165,7 +2166,7 @@ func fixReplica(analysisEntry inst.ReplicationAnalysis, candidateInstanceKey *in
 	}
 	log.Infof("Analysis: %v, will fix replica %+v", analysisEntry.Analysis, analysisEntry.AnalyzedInstanceKey)
 
-	unlock, err := LockShard(analysisEntry.AnalyzedInstanceKey)
+	_, unlock, err := LockShard(context.Background(), analysisEntry.AnalyzedInstanceKey)
 	if err != nil {
 		log.Infof("CheckAndRecover: Analysis: %+v, InstanceKey: %+v, candidateInstanceKey: %+v, "+
 			"skipProcesses: %v: NOT detecting/recovering host, could not obtain shard lock (%v)",
