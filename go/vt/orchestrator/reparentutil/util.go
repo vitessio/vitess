@@ -18,8 +18,15 @@ package reparentutil
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
+
+	"k8s.io/apimachinery/pkg/util/sets"
+
+	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/orchestrator/inst"
+	"vitess.io/vitess/go/vt/orchestrator/logic"
 
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo"
@@ -31,6 +38,63 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 )
+
+type (
+	// ReparentFunctions is an interface which has all the functions implementation required for re-parenting
+	ReparentFunctions interface {
+		LockShard(context.Context) (context.Context, func(*error), error)
+	}
+
+	// VtOrcReparentFunctions is the VtOrc implementation for ReparentFunctions
+	VtOrcReparentFunctions struct {
+		analysisEntry        inst.ReplicationAnalysis
+		candidateInstanceKey *inst.InstanceKey
+		skipProcesses        bool
+	}
+
+	// VtctlReparentFunctions is the Vtctl implementation for ReparentFunctions
+	VtctlReparentFunctions struct {
+		NewPrimaryAlias     *topodatapb.TabletAlias
+		IgnoreReplicas      sets.String
+		WaitReplicasTimeout time.Duration
+		keyspace            string
+		shard               string
+		ts                  *topo.Server
+		lockAction          string
+	}
+)
+
+var (
+	_ ReparentFunctions = (*VtOrcReparentFunctions)(nil)
+	_ ReparentFunctions = (*VtctlReparentFunctions)(nil)
+)
+
+func (vtctlReparent *VtctlReparentFunctions) LockShard(ctx context.Context) (context.Context, func(*error), error) {
+	vtctlReparent.lockAction = vtctlReparent.getLockAction(vtctlReparent.NewPrimaryAlias)
+
+	return vtctlReparent.ts.LockShard(ctx, vtctlReparent.keyspace, vtctlReparent.shard, vtctlReparent.lockAction)
+}
+
+func (vtctlReparent *VtctlReparentFunctions) getLockAction(newPrimaryAlias *topodatapb.TabletAlias) string {
+	action := "EmergencyReparentShard"
+
+	if newPrimaryAlias != nil {
+		action += fmt.Sprintf("(%v)", topoproto.TabletAliasString(newPrimaryAlias))
+	}
+
+	return action
+}
+
+func (vtorcReparent *VtOrcReparentFunctions) LockShard(ctx context.Context) (context.Context, func(*error), error) {
+	_, unlock, err := logic.LockShard(ctx, vtorcReparent.analysisEntry.AnalyzedInstanceKey)
+	if err != nil {
+		log.Infof("CheckAndRecover: Analysis: %+v, InstanceKey: %+v, candidateInstanceKey: %+v, "+
+			"skipProcesses: %v: NOT detecting/recovering host, could not obtain shard lock (%v)",
+			vtorcReparent.analysisEntry.Analysis, vtorcReparent.analysisEntry.AnalyzedInstanceKey, vtorcReparent.candidateInstanceKey, vtorcReparent.skipProcesses, err)
+		return nil, nil, err
+	}
+	return ctx, unlock, nil
+}
 
 // ChooseNewPrimary finds a tablet that should become a primary after reparent.
 // The criteria for the new primary-elect are (preferably) to be in the same
