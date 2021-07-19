@@ -186,7 +186,7 @@ func relToTableExpr(t relation) (sqlparser.TableExpr, error) {
 			tables = append(tables, tableExpr)
 		}
 		return &sqlparser.ParenTableExpr{Exprs: tables}, nil
-	case *leJoin:
+	case *joinTables:
 		lExpr, err := relToTableExpr(t.lhs)
 		if err != nil {
 			return nil, err

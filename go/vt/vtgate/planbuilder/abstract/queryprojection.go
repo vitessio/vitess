@@ -38,6 +38,7 @@ type (
 		// If you change the contents here, please update the toString() method
 		SelectExprs        []SelectExpr
 		HasAggr            bool
+		Distinct           bool
 		GroupByExprs       []GroupBy
 		OrderExprs         []OrderBy
 		CanPushDownSorting bool
@@ -58,39 +59,28 @@ type (
 
 // CreateQPFromSelect created the QueryProjection for the input *sqlparser.Select
 func CreateQPFromSelect(sel *sqlparser.Select) (*QueryProjection, error) {
-	qp := &QueryProjection{}
+	qp := &QueryProjection{
+		Distinct: sel.Distinct,
+	}
 
-	hasNonAggr := false
 	for _, selExp := range sel.SelectExprs {
 		exp, ok := selExp.(*sqlparser.AliasedExpr)
 		if !ok {
 			return nil, semantics.Gen4NotSupportedF("%T in select list", selExp)
 		}
-		fExpr, ok := exp.Expr.(*sqlparser.FuncExpr)
-		if ok && fExpr.IsAggregate() {
-			if len(fExpr.Exprs) != 1 {
-				return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.SyntaxError, "aggregate functions take a single argument '%s'", sqlparser.String(fExpr))
-			}
-			if fExpr.Distinct {
-				return nil, semantics.Gen4NotSupportedF("distinct aggregation")
-			}
-			qp.HasAggr = true
-			qp.SelectExprs = append(qp.SelectExprs, SelectExpr{
-				Col:  exp,
-				Aggr: true,
-			})
-			continue
-		}
 
+		if err := checkForInvalidAggregations(exp); err != nil {
+			return nil, err
+		}
+		col := SelectExpr{
+			Col: exp,
+		}
 		if sqlparser.ContainsAggregation(exp.Expr) {
-			return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: in scatter query: complex aggregate expression")
+			col.Aggr = true
+			qp.HasAggr = true
 		}
-		hasNonAggr = true
-		qp.SelectExprs = append(qp.SelectExprs, SelectExpr{Col: exp})
-	}
 
-	if hasNonAggr && qp.HasAggr && sel.GroupBy == nil {
-		return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.MixOfGroupFuncAndFields, "Mixing of aggregation and non-aggregation columns is not allowed if there is no GROUP BY clause")
+		qp.SelectExprs = append(qp.SelectExprs, col)
 	}
 
 	for _, group := range sel.GroupBy {
@@ -102,6 +92,18 @@ func CreateQPFromSelect(sel *sqlparser.Select) (*QueryProjection, error) {
 			return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongGroupField, "Can't group on '%s'", sqlparser.String(expr))
 		}
 		qp.GroupByExprs = append(qp.GroupByExprs, GroupBy{Inner: expr, WeightStrExpr: weightStrExpr})
+	}
+
+	if qp.HasAggr {
+		expr := qp.getNonAggrExprNotMatchingGroupByExprs()
+		// if we have aggregation functions, non aggregating columns and GROUP BY,
+		// the non-aggregating expressions must all be listed in the GROUP BY list
+		if expr != nil {
+			if len(qp.GroupByExprs) > 0 {
+				return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongFieldWithGroup, "Expression of SELECT list is not in GROUP BY clause and contains nonaggregated column '%s' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by", sqlparser.String(expr))
+			}
+			return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.MixOfGroupFuncAndFields, "In aggregated query without GROUP BY, expression of SELECT list contains nonaggregated column '%s'; this is incompatible with sql_mode=only_full_group_by", sqlparser.String(expr))
+		}
 	}
 
 	canPushDownSorting := true
@@ -119,9 +121,45 @@ func CreateQPFromSelect(sel *sqlparser.Select) (*QueryProjection, error) {
 		})
 		canPushDownSorting = canPushDownSorting && !sqlparser.ContainsAggregation(weightStrExpr)
 	}
+	if qp.Distinct && !qp.HasAggr {
+		qp.GroupByExprs = nil
+	}
 	qp.CanPushDownSorting = canPushDownSorting
-
 	return qp, nil
+}
+
+func checkForInvalidAggregations(exp *sqlparser.AliasedExpr) error {
+	return sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+		fExpr, ok := node.(*sqlparser.FuncExpr)
+		if ok && fExpr.IsAggregate() {
+			if len(fExpr.Exprs) != 1 {
+				return false, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.SyntaxError, "aggregate functions take a single argument '%s'", sqlparser.String(fExpr))
+			}
+			if fExpr.Distinct {
+				return false, semantics.Gen4NotSupportedF("distinct aggregation")
+			}
+		}
+		return true, nil
+	}, exp.Expr)
+}
+
+func (qp *QueryProjection) getNonAggrExprNotMatchingGroupByExprs() sqlparser.Expr {
+	for _, expr := range qp.SelectExprs {
+		if expr.Aggr {
+			continue
+		}
+		isGroupByOk := false
+		for _, groupByExpr := range qp.GroupByExprs {
+			if sqlparser.EqualsExpr(groupByExpr.WeightStrExpr, expr.Col.Expr) {
+				isGroupByOk = true
+				break
+			}
+		}
+		if !isGroupByOk {
+			return expr.Col.Expr
+		}
+	}
+	return nil
 }
 
 // getSimplifiedExpr takes an expression used in ORDER BY or GROUP BY, which can reference both aliased columns and
@@ -169,11 +207,13 @@ func (qp *QueryProjection) toString() string {
 		Select   []string
 		Grouping []string
 		OrderBy  []string
+		Distinct bool
 	}
 	out := output{
 		Select:   []string{},
 		Grouping: []string{},
 		OrderBy:  []string{},
+		Distinct: qp.NeedsDistinct(),
 	}
 
 	for _, expr := range qp.SelectExprs {
@@ -203,4 +243,27 @@ func (qp *QueryProjection) toString() string {
 // NeedsAggregation returns true if we either have aggregate functions or grouping defined
 func (qp *QueryProjection) NeedsAggregation() bool {
 	return qp.HasAggr || len(qp.GroupByExprs) > 0
+}
+
+func (qp QueryProjection) onlyAggr() bool {
+	if !qp.HasAggr {
+		return false
+	}
+	for _, expr := range qp.SelectExprs {
+		if !expr.Aggr {
+			return false
+		}
+	}
+	return true
+}
+
+// NeedsDistinct returns true if the query needs explicit distinct
+func (qp *QueryProjection) NeedsDistinct() bool {
+	if !qp.Distinct {
+		return false
+	}
+	if qp.onlyAggr() && len(qp.GroupByExprs) == 0 {
+		return false
+	}
+	return true
 }

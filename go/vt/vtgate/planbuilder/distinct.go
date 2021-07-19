@@ -24,11 +24,7 @@ import (
 
 var _ logicalPlan = (*distinct)(nil)
 
-// limit is the logicalPlan for engine.Limit.
-// This gets built if a limit needs to be applied
-// after rows are returned from an underlying
-// operation. Since a limit is the final operation
-// of a SELECT, most pushes are not applicable.
+// distinct is the logicalPlan for engine.Distinct.
 type distinct struct {
 	logicalPlanCommon
 }
