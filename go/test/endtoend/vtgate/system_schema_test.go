@@ -212,5 +212,5 @@ func TestMultipleSchemaPredicates(t *testing.T) {
 		"where t.table_schema = '%s' and c.table_schema = '%s' and c.table_schema = '%s'", KeyspaceName, KeyspaceName, "a")
 	_, err = conn.ExecuteFetch(query, 1000, true)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "specifying two different database in the query is not supported")
+	require.Contains(t, err.Error(), "two predicates for specifying the database are not supported")
 }
