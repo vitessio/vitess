@@ -82,11 +82,11 @@ func TestMergeJoins(t *testing.T) {
 	}, {
 		l:        selectDBA(1, ks),
 		r:        selectDBA(2, ks2),
-		expected: nil,
+		expected: selectDBA(1|2, ks),
 	}, {
 		l:        selectDBA(2, ks),
 		r:        selectDBA(1, ks2),
-		expected: nil,
+		expected: selectDBA(1|2, ks),
 	}, {
 		l:        unsharded(1, ks),
 		r:        selectDBA(2, ks),
