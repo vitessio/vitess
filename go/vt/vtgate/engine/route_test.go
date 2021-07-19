@@ -88,54 +88,57 @@ func TestSelectInformationSchemaWithTableAndSchemaWithRoutedTables(t *testing.T)
 	}
 
 	type testCase struct {
-		tableSchema, tableName []string
-		testName               string
-		expectedLog            []string
-		routed                 bool
+		tableSchema []string
+		tableName   map[string]evalengine.Expr
+		testName    string
+		expectedLog []string
+		routed      bool
 	}
 	tests := []testCase{{
 		testName:    "both schema and table predicates - routed table",
 		tableSchema: []string{"schema"},
-		tableName:   []string{"table"},
+		tableName:   map[string]evalengine.Expr{"table_name": evalengine.NewLiteralString([]byte("table"))},
 		routed:      true,
 		expectedLog: []string{
 			"FindTable(`schema`.`table`)",
 			"ResolveDestinations routedKeyspace [] Destinations:DestinationAnyShard()",
-			"ExecuteMultiShard routedKeyspace.1: dummy_select {__replacevtschemaname: type:INT64 value:\"1\" __vttablename: type:VARBINARY value:\"routedTable\"} false false"},
+			"ExecuteMultiShard routedKeyspace.1: dummy_select {__replacevtschemaname: type:INT64 value:\"1\" table_name: type:VARBINARY value:\"routedTable\"} false false"},
 	}, {
 		testName:    "both schema and table predicates - not routed",
 		tableSchema: []string{"schema"},
-		tableName:   []string{"table"},
+		tableName:   map[string]evalengine.Expr{"table_name": evalengine.NewLiteralString([]byte("table"))},
 		routed:      false,
 		expectedLog: []string{
 			"FindTable(`schema`.`table`)",
 			"ResolveDestinations schema [] Destinations:DestinationAnyShard()",
-			"ExecuteMultiShard schema.1: dummy_select {__replacevtschemaname: type:INT64 value:\"1\" __vttablename: type:VARBINARY value:\"table\"} false false"},
+			"ExecuteMultiShard schema.1: dummy_select {__replacevtschemaname: type:INT64 value:\"1\" table_name: type:VARBINARY value:\"table\"} false false"},
 	}, {
 		testName:    "multiple schema and table predicates",
 		tableSchema: []string{"schema", "schema", "schema"},
-		tableName:   []string{"table", "table", "table"},
+		tableName:   map[string]evalengine.Expr{"t1": evalengine.NewLiteralString([]byte("table")), "t2": evalengine.NewLiteralString([]byte("table")), "t3": evalengine.NewLiteralString([]byte("table"))},
 		routed:      false,
 		expectedLog: []string{
 			"FindTable(`schema`.`table`)",
+			"FindTable(`schema`.`table`)",
+			"FindTable(`schema`.`table`)",
 			"ResolveDestinations schema [] Destinations:DestinationAnyShard()",
-			"ExecuteMultiShard schema.1: dummy_select {__replacevtschemaname: type:INT64 value:\"1\" __vttablename: type:VARBINARY value:\"table\"} false false"},
+			"ExecuteMultiShard schema.1: dummy_select {__replacevtschemaname: type:INT64 value:\"1\" t1: type:VARBINARY value:\"table\" t2: type:VARBINARY value:\"table\" t3: type:VARBINARY value:\"table\"} false false"},
 	}, {
 		testName:  "table name predicate - routed table",
-		tableName: []string{"tableName"},
+		tableName: map[string]evalengine.Expr{"table_name": evalengine.NewLiteralString([]byte("tableName"))},
 		routed:    true,
 		expectedLog: []string{
 			"FindTable(tableName)",
 			"ResolveDestinations routedKeyspace [] Destinations:DestinationAnyShard()",
-			"ExecuteMultiShard routedKeyspace.1: dummy_select {__vttablename: type:VARBINARY value:\"routedTable\"} false false"},
+			"ExecuteMultiShard routedKeyspace.1: dummy_select {table_name: type:VARBINARY value:\"routedTable\"} false false"},
 	}, {
 		testName:  "table name predicate - not routed",
-		tableName: []string{"tableName"},
+		tableName: map[string]evalengine.Expr{"table_name": evalengine.NewLiteralString([]byte("tableName"))},
 		routed:    false,
 		expectedLog: []string{
 			"FindTable(tableName)",
 			"ResolveDestinations ks [] Destinations:DestinationAnyShard()",
-			"ExecuteMultiShard ks.1: dummy_select {__vttablename: type:VARBINARY value:\"tableName\"} false false"},
+			"ExecuteMultiShard ks.1: dummy_select {table_name: type:VARBINARY value:\"tableName\"} false false"},
 	}, {
 		testName:    "schema predicate",
 		tableSchema: []string{"myKeyspace"},
@@ -154,7 +157,6 @@ func TestSelectInformationSchemaWithTableAndSchemaWithRoutedTables(t *testing.T)
 			"ResolveDestinations ks [] Destinations:DestinationAnyShard()",
 			"ExecuteMultiShard ks.1: dummy_select {} false false"},
 	}}
-
 	for _, tc := range tests {
 		t.Run(tc.testName, func(t *testing.T) {
 			sel := &Route{
@@ -166,7 +168,7 @@ func TestSelectInformationSchemaWithTableAndSchemaWithRoutedTables(t *testing.T)
 				Query:               "dummy_select",
 				FieldQuery:          "dummy_select_field",
 				SysTableTableSchema: stringListToExprList(tc.tableSchema),
-				SysTableTableName:   stringListToExprList(tc.tableName),
+				SysTableTableName:   tc.tableName,
 			}
 			vc := &loggingVCursor{
 				shards:  []string{"1"},
