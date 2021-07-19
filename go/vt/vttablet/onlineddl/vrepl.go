@@ -78,6 +78,9 @@ type VRepl struct {
 	chosenSourceUniqueKey *vrepl.UniqueKey
 	chosenTargetUniqueKey *vrepl.UniqueKey
 
+	addedUniqueKeys   []*vrepl.UniqueKey
+	removedUniqueKeys []*vrepl.UniqueKey
+
 	filterQuery   string
 	enumToTextMap map[string]string
 	bls           *binlogdatapb.BinlogSource
@@ -150,6 +153,10 @@ func getSharedUniqueKeys(sourceUniqueKeys, targetUniqueKeys [](*vrepl.UniqueKey)
 	return nil, nil
 }
 
+// sourceUniqueKeyAsOrMoreConstrainedThanTarget returns 'true' when sourceUniqueKey is at least as constrained as targetUniqueKey.
+// "More constrained" means the uniqueness constraint is "stronger". Thus, if sourceUniqueKey is as-or-more constrained than targetUniqueKey, then
+// rows valid under sourceUniqueKey must also be valid in targetUniqueKey. The opposite is not necessarily so: rows that are valid in targetUniqueKey
+// may cause a unique key violation under sourceUniqueKey
 func sourceUniqueKeyAsOrMoreConstrainedThanTarget(sourceUniqueKey, targetUniqueKey *vrepl.UniqueKey, columnRenameMap map[string]string) bool {
 	// Compare two unique keys
 	if sourceUniqueKey.Columns.Len() > targetUniqueKey.Columns.Len() {
@@ -512,6 +519,9 @@ func (v *VRepl) analyzeTables(ctx context.Context, conn *dbconnpool.DBConnection
 	if v.chosenSourceUniqueKey == nil || v.chosenTargetUniqueKey == nil {
 		return fmt.Errorf("Found no shared, not nullable, unique keys between `%s` and `%s`", v.sourceTable, v.targetTable)
 	}
+	v.addedUniqueKeys = addedUniqueKeys(sourceUniqueKeys, targetUniqueKeys, v.parser.ColumnRenameMap())
+	v.removedUniqueKeys = removedUniqueKeys(sourceUniqueKeys, targetUniqueKeys, v.parser.ColumnRenameMap())
+
 	// chosen source & target unique keys have exact columns in same order
 	sharedPKColumns := &v.chosenSourceUniqueKey.Columns
 
