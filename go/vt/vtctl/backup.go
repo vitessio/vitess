@@ -66,7 +66,7 @@ func commandBackup(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fl
 
 	// handle deprecated flags
 	// should be deleted in a future release
-	deprecatedAllowMaster := subFlags.Bool("allow_master", false, "Allows backups to be taken on master. Warning!! If you are using the builtin backup engine, this will shutdown your master mysql for as long as it takes to create a backup.")
+	deprecatedAllowMaster := subFlags.Bool("allow_master", false, "DEPRECATED. Use -allow_primary instead")
 
 	if err := subFlags.Parse(args); err != nil {
 		return err
@@ -96,7 +96,7 @@ func commandBackupShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 
 	// handle deprecated flags
 	// should be deleted in a future release
-	deprecatedAllowMaster := subFlags.Bool("allow_master", false, "Whether to use master tablet for backup. Warning!! If you are using the builtin backup engine, this will shutdown your master mysql for as long as it takes to create a backup.")
+	deprecatedAllowMaster := subFlags.Bool("allow_master", false, "DEPRECATED. Use -allow_primary instead")
 
 	if err := subFlags.Parse(args); err != nil {
 		return err

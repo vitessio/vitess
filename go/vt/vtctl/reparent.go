@@ -44,8 +44,8 @@ func init() {
 	addCommand("Shards", command{
 		"InitShardMaster",
 		commandInitShardPrimary,
-		"DEPRECATED [-force] [-wait_replicas_timeout=<duration>] <keyspace/shard> <tablet alias>",
-		"Sets the initial master for a shard. Will make all other tablets in the shard replicas of the provided master. WARNING: this could cause data loss on an already replicating shard. PlannedReparentShard or EmergencyReparentShard should be used instead."})
+		"[-force] [-wait_replicas_timeout=<duration>] <keyspace/shard> <tablet alias>",
+		"DEPRECATED. Use InitShardPrimary instead."})
 	addCommand("Shards", command{
 		"PlannedReparentShard",
 		commandPlannedReparentShard,
@@ -118,8 +118,8 @@ func commandPlannedReparentShard(ctx context.Context, wr *wrangler.Wrangler, sub
 
 	// handle deprecated flags
 	// should be deleted in a future release
-	deprecatedNewMaster := subFlags.String("new_master", "", "alias of a tablet that should be the new master")
-	deprecatedAvoidMaster := subFlags.String("avoid_master", "", "alias of a tablet that should not be the master, i.e. reparent to any other tablet if this one is the master")
+	deprecatedNewMaster := subFlags.String("new_master", "", "DEPRECATED. Use -new_primary instead")
+	deprecatedAvoidMaster := subFlags.String("avoid_master", "", "DEPRECATED. Use -avoid_tablet instead")
 
 	if err := subFlags.Parse(args); err != nil {
 		return err
@@ -173,7 +173,7 @@ func commandEmergencyReparentShard(ctx context.Context, wr *wrangler.Wrangler, s
 
 	// handle deprecated flags
 	// should be deleted in a future release
-	deprecatedNewMaster := subFlags.String("new_master", "", "alias of a tablet that should be the new master. If not specified, Vitess will select the best candidate")
+	deprecatedNewMaster := subFlags.String("new_master", "", "DEPRECATED. Use -new_primary instead")
 
 	if err := subFlags.Parse(args); err != nil {
 		return err
