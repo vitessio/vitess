@@ -18,7 +18,10 @@ package vtgate
 
 import (
 	"context"
+	"fmt"
 	"testing"
+
+	"github.com/google/go-cmp/cmp"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
 
@@ -69,6 +72,35 @@ ts12 TIMESTAMP DEFAULT LOCALTIME()
 
 	exec(t, conn, `create table function_default (x varchar(25) DEFAULT "check")`)
 	exec(t, conn, "drop table function_default")
+}
+
+// TestCheckConstraint test check constraints on CREATE TABLE
+// This feature is supported from MySQL 8.0.16 and MariaDB 10.2.1.
+func TestCheckConstraint(t *testing.T) {
+	conn, err := mysql.Connect(context.Background(), &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	query := `CREATE TABLE t7 (CHECK (c1 <> c2), c1 INT CHECK (c1 > 10), c2 INT CONSTRAINT c2_positive CHECK (c2 > 0), c3 INT CHECK (c3 < 100), CONSTRAINT c1_nonzero CHECK (c1 <> 0), CHECK (c1 > c3));`
+	exec(t, conn, query)
+
+	checkQuery := `SELECT CONSTRAINT_NAME FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS WHERE TABLE_NAME = 't7' order by CONSTRAINT_NAME;`
+	expected := `[[VARCHAR("c1_nonzero")] [VARCHAR("c2_positive")] [VARCHAR("t7_chk_1")] [VARCHAR("t7_chk_2")] [VARCHAR("t7_chk_3")] [VARCHAR("t7_chk_4")]]`
+
+	assertMatches(t, conn, checkQuery, expected)
+
+	cleanup := `DROP TABLE t7`
+	exec(t, conn, cleanup)
+}
+
+func assertMatches(t *testing.T, conn *mysql.Conn, query, expected string) {
+	t.Helper()
+	qr := exec(t, conn, query)
+	got := fmt.Sprintf("%v", qr.Rows)
+	diff := cmp.Diff(expected, got)
+	if diff != "" {
+		t.Errorf("Query: %s (-want +got):\n%s", query, diff)
+	}
 }
 
 func exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {

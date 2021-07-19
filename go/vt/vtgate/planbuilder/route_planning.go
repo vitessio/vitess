@@ -68,11 +68,11 @@ func newBuildSelectPlan(sel *sqlparser.Select, reservedVars *sqlparser.ReservedV
 	if len(directives) > 0 {
 		return nil, semantics.Gen4NotSupportedF("comment directives")
 	}
-	keyspace, err := vschema.DefaultKeyspace()
-	if err != nil {
-		return nil, err
+	ksName := ""
+	if ks, _ := vschema.DefaultKeyspace(); ks != nil {
+		ksName = ks.Name
 	}
-	semTable, err := semantics.Analyze(sel, keyspace.Name, vschema)
+	semTable, err := semantics.Analyze(sel, ksName, vschema)
 	if err != nil {
 		return nil, err
 	}
@@ -582,20 +582,19 @@ func removeAt(plans []joinTree, idx int) []joinTree {
 
 func createRoutePlan(table *abstract.QueryTable, solves semantics.TableSet, reservedVars *sqlparser.ReservedVars, vschema ContextVSchema) (*routePlan, error) {
 	if table.IsInfSchema {
-		defaultKeyspace, err := vschema.DefaultKeyspace()
+		ks, err := vschema.AnyKeyspace()
 		if err != nil {
 			return nil, err
 		}
 		rp := &routePlan{
 			routeOpCode: engine.SelectDBA,
 			solved:      solves,
-			// TODO: find keyspace to route using the predicates as in v3
-			keyspace: defaultKeyspace,
+			keyspace:    ks,
 			tables: []relation{&routeTable{
 				qtable: table,
 				vtable: &vindexes.Table{
 					Name:     table.Table.Name,
-					Keyspace: defaultKeyspace,
+					Keyspace: ks,
 				},
 			}},
 			predicates: table.Predicates,

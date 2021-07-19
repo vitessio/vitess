@@ -18,6 +18,8 @@ package vtgate
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"time"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -60,6 +62,8 @@ func (e *Executor) newExecute(ctx context.Context, safeSession *SafeSession, sql
 	if err == planbuilder.ErrPlanNotSupported {
 		return 0, nil, err
 	}
+	bout, _ := json.MarshalIndent(plan, "", "  ")
+	fmt.Println(string(bout))
 	execStart := e.logPlanningFinished(logStats, plan)
 
 	if err != nil {
