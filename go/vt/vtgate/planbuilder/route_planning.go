@@ -41,11 +41,28 @@ func gen4Planner(_ string) func(sqlparser.Statement, *sqlparser.ReservedVars, Co
 		if !ok {
 			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%T not yet supported", stmt)
 		}
-		return newBuildSelectPlan(sel, reservedVars, vschema)
+
+		getPlan := func(sel *sqlparser.Select) (logicalPlan, error) {
+			return newBuildSelectPlan(sel, reservedVars, vschema)
+		}
+
+		plan, err := getPlan(sel)
+		if err != nil {
+			return nil, err
+		}
+
+		if shouldRetryWithCNFRewriting(plan) {
+			// by transforming the predicates to CNF, the planner will sometimes find better plans
+			primitive := rewriteToCNFAndReplan(stmt, getPlan)
+			if primitive != nil {
+				return primitive, nil
+			}
+		}
+		return plan.Primitive(), nil
 	}
 }
 
-func newBuildSelectPlan(sel *sqlparser.Select, reservedVars *sqlparser.ReservedVars, vschema ContextVSchema) (engine.Primitive, error) {
+func newBuildSelectPlan(sel *sqlparser.Select, reservedVars *sqlparser.ReservedVars, vschema ContextVSchema) (logicalPlan, error) {
 
 	directives := sqlparser.ExtractCommentDirectives(sel.Comments)
 	if len(directives) > 0 {
@@ -100,7 +117,8 @@ func newBuildSelectPlan(sel *sqlparser.Select, reservedVars *sqlparser.ReservedV
 	if err := plan.WireupGen4(semTable); err != nil {
 		return nil, err
 	}
-	return plan.Primitive(), nil
+
+	return plan, nil
 }
 
 func optimizeQuery(opTree abstract.Operator, reservedVars *sqlparser.ReservedVars, semTable *semantics.SemTable, vschema ContextVSchema) (joinTree, error) {

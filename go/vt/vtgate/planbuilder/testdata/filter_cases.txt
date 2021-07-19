@@ -1959,25 +1959,6 @@ Gen4 plan same as above
   }
 }
 
-# able to isolate table_schema value even when hidden inside of ORs
-"SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE (TABLE_SCHEMA = 'ks' and other_column = 42) OR (TABLE_SCHEMA = 'ks' and foobar = 'value')"
-{
-  "QueryType": "SELECT",
-  "Original": "SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE (TABLE_SCHEMA = 'ks' and other_column = 42) OR (TABLE_SCHEMA = 'ks' and foobar = 'value')",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectDBA",
-    "Keyspace": {
-      "Name": "main",
-      "Sharded": false
-    },
-    "FieldQuery": "select * from INFORMATION_SCHEMA.`TABLES` where 1 != 1",
-    "Query": "select * from INFORMATION_SCHEMA.`TABLES` where TABLE_SCHEMA = :__vtschemaname and (other_column = 42 or TABLE_SCHEMA = 'ks') and (other_column = 42 or foobar = 'value')",
-    "SysTableTableSchema": "[VARBINARY(\"ks\")]",
-    "Table": "INFORMATION_SCHEMA.`TABLES`"
-  }
-}
-
 # solving LIKE query with a CFC prefix vindex
 "select c2 from cfc_vindex_col where c1 like 'A%'"
 {
