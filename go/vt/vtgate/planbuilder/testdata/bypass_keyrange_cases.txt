@@ -160,12 +160,15 @@ Gen4 plan same as above
   "QueryType": "DDL",
   "Original": "create /* test */ table t1(id bigint, primary key(id)) /* comments */",
   "Instructions": {
-    "OperatorType": "DDL",
+    "OperatorType": "Send",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
-    "Query": "create table t1 (\n\tid bigint,\n\tprimary key (id)\n)"
+    "TargetDestination": "ExactKeyRange(-)",
+    "IsDML": false,
+    "Query": "create /* test */ table t1(id bigint, primary key(id)) /* comments */",
+    "SingleShardOnly": false
   }
 }
 Gen4 plan same as above

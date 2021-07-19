@@ -179,7 +179,9 @@ Gen4 plan same as above
       "Sharded": false
     },
     "TargetDestination": "Shard(-80)",
-    "Query": "create /* test */ table t1(id bigint, primary key(id)) /* comments */"
+    "IsDML": false,
+    "Query": "create /* test */ table t1(id bigint, primary key(id)) /* comments */",
+    "SingleShardOnly": false
   }
 }
 Gen4 plan same as above
