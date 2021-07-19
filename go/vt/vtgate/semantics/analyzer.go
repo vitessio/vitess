@@ -101,25 +101,11 @@ func (a *analyzer) analyzeDown(cursor *sqlparser.Cursor) bool {
 
 		a.rScope[node] = currScope
 		a.wScope[node] = newScope(nil)
-	case *sqlparser.DerivedTable:
-		a.setError(Gen4NotSupportedF("derived tables"))
 	case *sqlparser.Subquery:
 		a.setError(Gen4NotSupportedF("subquery"))
 	case sqlparser.TableExpr:
 		if isParentSelect(cursor) {
 			a.push(newScope(nil))
-		}
-		switch node := node.(type) {
-		case *sqlparser.AliasedTableExpr:
-			a.setError(a.bindTable(node, node.Expr))
-		case *sqlparser.JoinTableExpr:
-			if node.Condition.Using != nil {
-				a.setError(vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: join with USING(column_list) clause for complex queries"))
-			}
-			if node.Join == sqlparser.NaturalJoinType || node.Join == sqlparser.NaturalRightJoinType || node.Join == sqlparser.NaturalLeftJoinType {
-				a.setError(vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: "+node.Join.ToString()))
-			}
-
 		}
 	case *sqlparser.Union:
 		a.push(newScope(current))
@@ -327,7 +313,7 @@ func (a *analyzer) createTable(t sqlparser.TableName, alias *sqlparser.AliasedTa
 func (a *analyzer) bindTable(alias *sqlparser.AliasedTableExpr, expr sqlparser.SimpleTableExpr) error {
 	switch t := expr.(type) {
 	case *sqlparser.DerivedTable:
-		return Gen4NotSupportedF("derived table")
+
 	case sqlparser.TableName:
 		var tbl *vindexes.Table
 		var isInfSchema bool
@@ -361,7 +347,7 @@ func (a *analyzer) analyzeUp(cursor *sqlparser.Cursor) bool {
 	if !a.shouldContinue() {
 		return false
 	}
-	switch cursor.Node().(type) {
+	switch node := cursor.Node().(type) {
 	case sqlparser.SelectExprs:
 		if isParentSelect(cursor) {
 			a.popProjection()
@@ -380,6 +366,17 @@ func (a *analyzer) analyzeUp(cursor *sqlparser.Cursor) bool {
 					a.setError(err)
 					break
 				}
+			}
+		}
+		switch node := node.(type) {
+		case *sqlparser.AliasedTableExpr:
+			a.setError(a.bindTable(node, node.Expr))
+		case *sqlparser.JoinTableExpr:
+			if node.Condition.Using != nil {
+				a.setError(vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: join with USING(column_list) clause for complex queries"))
+			}
+			if node.Join == sqlparser.NaturalJoinType || node.Join == sqlparser.NaturalRightJoinType || node.Join == sqlparser.NaturalLeftJoinType {
+				a.setError(vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: "+node.Join.ToString()))
 			}
 		}
 	}

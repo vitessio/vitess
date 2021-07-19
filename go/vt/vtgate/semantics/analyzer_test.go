@@ -17,6 +17,7 @@ limitations under the License.
 package semantics
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -476,6 +477,30 @@ func TestScoping(t *testing.T) {
 			} else {
 				require.EqualError(t, err, query.errorMessage)
 			}
+		})
+	}
+}
+
+func TestScopingWDerivedTables(t *testing.T) {
+	queries := []struct {
+		query        string
+		errorMessage string
+	}{
+		{
+			query: "select id from (select id from user where id = 5) as t",
+		},
+	}
+	for _, query := range queries {
+		t.Run(query.query, func(t *testing.T) {
+			parse, err := sqlparser.Parse(query.query)
+			require.NoError(t, err)
+			st, err := Analyze(parse, "user", &FakeSI{
+				Tables: map[string]*vindexes.Table{
+					"t": {Name: sqlparser.NewTableIdent("t")},
+				},
+			})
+			require.NoError(t, err)
+			fmt.Println(st)
 		})
 	}
 }
