@@ -234,7 +234,7 @@ Gen4 plan same as above
     },
     "FieldQuery": "select KCU.DELETE_RULE, S.UPDATE_RULE from INFORMATION_SCHEMA.KEY_COLUMN_USAGE as KCU, INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS as RC, INFORMATION_SCHEMA.K as S where 1 != 1",
     "Query": "select KCU.DELETE_RULE, S.UPDATE_RULE from INFORMATION_SCHEMA.KEY_COLUMN_USAGE as KCU, INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS as RC, INFORMATION_SCHEMA.K as S where S.TABLE_SCHEMA = :__vtschemaname and S.TABLE_NAME = :S_TABLE_NAME and KCU.TABLE_SCHEMA = :__vtschemaname and KCU.TABLE_NAME = :KCU_TABLE_NAME and KCU.CONSTRAINT_NAME = RC.CONSTRAINT_NAME order by KCU.CONSTRAINT_NAME asc, KCU.COLUMN_NAME asc",
-    "SysTableTableName": "[S_TABLE_NAME:VARBINARY(\"sc\"), KCU_TABLE_NAME:VARBINARY(\"data_type_table\")]",
+    "SysTableTableName": "[KCU_TABLE_NAME:VARBINARY(\"data_type_table\"), S_TABLE_NAME:VARBINARY(\"sc\")]",
     "SysTableTableSchema": "[VARBINARY(\"test\"), VARBINARY(\"test\")]",
     "Table": "INFORMATION_SCHEMA.K, INFORMATION_SCHEMA.KEY_COLUMN_USAGE, INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS"
   }
@@ -345,7 +345,7 @@ Gen4 plan same as above
     },
     "FieldQuery": "select fk.referenced_table_name as to_table, fk.referenced_column_name as primary_key, fk.column_name as `column`, fk.constraint_name as `name`, rc.update_rule as on_update, rc.delete_rule as on_delete from information_schema.referential_constraints as rc, information_schema.key_column_usage as fk where 1 != 1",
     "Query": "select fk.referenced_table_name as to_table, fk.referenced_column_name as primary_key, fk.column_name as `column`, fk.constraint_name as `name`, rc.update_rule as on_update, rc.delete_rule as on_delete from information_schema.referential_constraints as rc, information_schema.key_column_usage as fk where rc.constraint_schema = database() and rc.table_name = :rc_table_name and fk.referenced_column_name is not null and fk.table_schema = database() and fk.table_name = :fk_table_name and rc.constraint_schema = fk.constraint_schema and rc.constraint_name = fk.constraint_name",
-    "SysTableTableName": "[rc_table_name:VARBINARY(\":vtg1\"), fk_table_name:VARBINARY(\":vtg1\")]",
+    "SysTableTableName": "[fk_table_name:VARBINARY(\":vtg1\"), rc_table_name:VARBINARY(\":vtg1\")]",
     "Table": "information_schema.key_column_usage, information_schema.referential_constraints"
   }
 }
@@ -422,7 +422,7 @@ Gen4 plan same as above
     },
     "FieldQuery": "select fk.referenced_table_name as to_table, fk.referenced_column_name as primary_key, fk.column_name as `column`, fk.constraint_name as `name`, rc.update_rule as on_update, rc.delete_rule as on_delete from information_schema.referential_constraints as rc, information_schema.key_column_usage as fk where 1 != 1",
     "Query": "select fk.referenced_table_name as to_table, fk.referenced_column_name as primary_key, fk.column_name as `column`, fk.constraint_name as `name`, rc.update_rule as on_update, rc.delete_rule as on_delete from information_schema.referential_constraints as rc, information_schema.key_column_usage as fk where rc.constraint_schema = :__vtschemaname and rc.table_name = :rc_table_name and fk.referenced_column_name is not null and fk.table_schema = :__vtschemaname and fk.table_name = :fk_table_name and rc.constraint_schema = fk.constraint_schema and rc.constraint_name = fk.constraint_name",
-    "SysTableTableName": "[rc_table_name:VARBINARY(\"table_name\"), fk_table_name:VARBINARY(\"table_name\")]",
+    "SysTableTableName": "[fk_table_name:VARBINARY(\"table_name\"), rc_table_name:VARBINARY(\"table_name\")]",
     "SysTableTableSchema": "[VARBINARY(\"table_schema\"), VARBINARY(\"table_schema\")]",
     "Table": "information_schema.key_column_usage, information_schema.referential_constraints"
   }
@@ -733,6 +733,26 @@ Gen4 plan same as above
     },
     "FieldQuery": "select * from INFORMATION_SCHEMA.`TABLES` where 1 != 1",
     "Query": "select * from INFORMATION_SCHEMA.`TABLES` where TABLE_SCHEMA = :__vtschemaname and other_column = 42",
+    "SysTableTableSchema": "[VARBINARY(\"ks\")]",
+    "Table": "INFORMATION_SCHEMA.`TABLES`"
+  }
+}
+Gen4 plan same as above
+
+# able to isolate table_schema value even when hidden inside of ORs
+"SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE (TABLE_SCHEMA = 'ks' and other_column = 42) OR (TABLE_SCHEMA = 'ks' and foobar = 'value')"
+{
+  "QueryType": "SELECT",
+  "Original": "SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE (TABLE_SCHEMA = 'ks' and other_column = 42) OR (TABLE_SCHEMA = 'ks' and foobar = 'value')",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectDBA",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select * from INFORMATION_SCHEMA.`TABLES` where 1 != 1",
+    "Query": "select * from INFORMATION_SCHEMA.`TABLES` where TABLE_SCHEMA = :__vtschemaname and (other_column = 42 or TABLE_SCHEMA = 'ks') and (other_column = 42 or foobar = 'value')",
     "SysTableTableSchema": "[VARBINARY(\"ks\")]",
     "Table": "INFORMATION_SCHEMA.`TABLES`"
   }

@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"vitess.io/vitess/go/vt/log"
@@ -800,17 +801,12 @@ func (route *Route) description() PrimitiveDescription {
 		other["SysTableTableSchema"] = sysTabSchema
 	}
 	if len(route.SysTableTableName) != 0 {
-		idx := 0
-		sysTableName := "["
+		var sysTableName []string
 		for k, v := range route.SysTableTableName {
-			if idx != 0 {
-				sysTableName += ", "
-			}
-			sysTableName += k + ":" + v.String()
-			idx++
+			sysTableName = append(sysTableName, k+":"+v.String())
 		}
-		sysTableName += "]"
-		other["SysTableTableName"] = sysTableName
+		sort.Strings(sysTableName)
+		other["SysTableTableName"] = "[" + strings.Join(sysTableName, ", ") + "]"
 	}
 	orderBy := GenericJoin(route.OrderBy, orderByToString)
 	if orderBy != "" {
