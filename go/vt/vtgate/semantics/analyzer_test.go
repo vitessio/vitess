@@ -360,17 +360,29 @@ func TestUnknownColumnMap2(t *testing.T) {
 		Name: sqlparser.NewTableIdent("a"),
 		Columns: []vindexes.Column{{
 			Name: sqlparser.NewColIdent("col"),
-			Type: querypb.Type_VARCHAR,
+			Type: querypb.Type_INT32,
+		}},
+		ColumnListAuthoritative: true,
+	}
+	authoritativeTblBWithInt := vindexes.Table{
+		Name: sqlparser.NewTableIdent("b"),
+		Columns: []vindexes.Column{{
+			Name: sqlparser.NewColIdent("col"),
+			Type: querypb.Type_INT32,
 		}},
 		ColumnListAuthoritative: true,
 	}
 
-	parse, _ := sqlparser.Parse(query)
+	varchar := querypb.Type_VARCHAR
+	int := querypb.Type_INT32
 
+	parse, _ := sqlparser.Parse(query)
+	expr := extract(parse.(*sqlparser.Select), 0)
 	tests := []struct {
 		name   string
 		schema map[string]*vindexes.Table
 		err    bool
+		typ    *querypb.Type
 	}{
 		{
 			name:   "no info about tables",
@@ -386,16 +398,25 @@ func TestUnknownColumnMap2(t *testing.T) {
 			name:   "non authoritative columns - one authoritative and one not",
 			schema: map[string]*vindexes.Table{"a": &nonAuthoritativeTblA, "b": &authoritativeTblB},
 			err:    false,
+			typ:    &varchar,
 		},
 		{
 			name:   "non authoritative columns - one authoritative and one not",
 			schema: map[string]*vindexes.Table{"a": &authoritativeTblA, "b": &nonAuthoritativeTblB},
 			err:    false,
+			typ:    &varchar,
 		},
 		{
 			name:   "authoritative columns",
 			schema: map[string]*vindexes.Table{"a": &authoritativeTblA, "b": &authoritativeTblB},
 			err:    false,
+			typ:    &varchar,
+		},
+		{
+			name:   "authoritative columns",
+			schema: map[string]*vindexes.Table{"a": &authoritativeTblA, "b": &authoritativeTblBWithInt},
+			err:    false,
+			typ:    &int,
 		},
 		{
 			name:   "authoritative columns with overlap",
@@ -413,6 +434,8 @@ func TestUnknownColumnMap2(t *testing.T) {
 				require.Error(t, tbl.ProjectionErr)
 			} else {
 				require.NoError(t, tbl.ProjectionErr)
+				typ := tbl.TypeFor(expr)
+				assert.Equal(t, test.typ, typ)
 			}
 		})
 	}

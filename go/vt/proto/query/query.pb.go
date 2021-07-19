@@ -304,6 +304,7 @@ const (
 	Type_JSON Type = 2078
 	// EXPRESSION specifies a SQL expression.
 	// This type is for internal use only.
+	// I
 	// Properties: 31, None.
 	Type_EXPRESSION Type = 31
 )

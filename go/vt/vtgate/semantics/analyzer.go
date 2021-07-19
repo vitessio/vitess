@@ -22,6 +22,8 @@ import (
 	"strconv"
 	"strings"
 
+	querypb "vitess.io/vitess/go/vt/proto/query"
+
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -37,6 +39,7 @@ type (
 		Tables       []TableInfo
 		scopes       []*scope
 		exprDeps     ExprDependencies
+		exprTypes    map[sqlparser.Expr]querypb.Type
 		err          error
 		currentDb    string
 		inProjection []bool
@@ -51,6 +54,7 @@ type (
 func newAnalyzer(dbName string, si SchemaInformation) *analyzer {
 	return &analyzer{
 		exprDeps:  map[sqlparser.Expr]TableSet{},
+		exprTypes: map[sqlparser.Expr]querypb.Type{},
 		rScope:    map[*sqlparser.Select]*scope{},
 		wScope:    map[*sqlparser.Select]*scope{},
 		currentDb: dbName,
@@ -66,7 +70,13 @@ func Analyze(statement sqlparser.Statement, currentDb string, si SchemaInformati
 	if err != nil {
 		return nil, err
 	}
-	return &SemTable{exprDependencies: analyzer.exprDeps, Tables: analyzer.Tables, selectScope: analyzer.rScope, ProjectionErr: analyzer.projErr}, nil
+	return &SemTable{
+		exprDependencies: analyzer.exprDeps,
+		exprTypes:        analyzer.exprTypes,
+		Tables:           analyzer.Tables,
+		selectScope:      analyzer.rScope,
+		ProjectionErr:    analyzer.projErr,
+	}, nil
 }
 
 func (a *analyzer) setError(err error) {
@@ -174,11 +184,14 @@ func (a *analyzer) analyzeDown(cursor *sqlparser.Cursor) bool {
 
 		a.exprDeps[node.Expr] = deps
 	case *sqlparser.ColName:
-		t, err := a.resolveColumn(node, current)
+		ts, qt, err := a.resolveColumn(node, current)
 		if err != nil {
 			a.setError(err)
 		} else {
-			a.exprDeps[node] = t
+			a.exprDeps[node] = ts
+			if qt != nil {
+				a.exprTypes[node] = *qt
+			}
 		}
 	case *sqlparser.FuncExpr:
 		if node.Distinct {
@@ -224,18 +237,29 @@ func isParentSelect(cursor *sqlparser.Cursor) bool {
 	return isSelect
 }
 
-func (a *analyzer) resolveColumn(colName *sqlparser.ColName, current *scope) (TableSet, error) {
+func (a *analyzer) resolveColumn(colName *sqlparser.ColName, current *scope) (TableSet, *querypb.Type, error) {
 	if colName.Qualifier.IsEmpty() {
 		return a.resolveUnQualifiedColumn(current, colName)
 	}
 	t, err := a.resolveQualifiedColumn(current, colName)
 	if err != nil {
-		return 0, err
+		return 0, nil, err
 	}
 	if t == nil {
-		return 0, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.NonUniqError, fmt.Sprintf("Column '%s' in field list is ambiguous", sqlparser.String(colName)))
+		return 0, nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.NonUniqError, fmt.Sprintf("Column '%s' in field list is ambiguous", sqlparser.String(colName)))
 	}
-	return a.tableSetFor(t.GetExpr()), nil
+	tableSet := a.tableSetFor(t.GetExpr())
+	for _, colInfo := range t.GetColumns() {
+		if colName.Name.EqualString(colInfo.Name) {
+			// A column can't be of type NULL, that is the default value indicating that we dont know the actual type
+			// But expressions can be of NULL type, so we use nil to represent an unknown type
+			if colInfo.Type == querypb.Type_NULL_TYPE {
+				return tableSet, nil, nil
+			}
+			return tableSet, &colInfo.Type, nil
+		}
+	}
+	return tableSet, nil, nil
 }
 
 // resolveQualifiedColumn handles `tabl.col` expressions
@@ -254,29 +278,39 @@ func (a *analyzer) resolveQualifiedColumn(current *scope, expr *sqlparser.ColNam
 
 type originable interface {
 	tableSetFor(t *sqlparser.AliasedTableExpr) TableSet
-	depsForExpr(expr sqlparser.Expr) TableSet
+	depsForExpr(expr sqlparser.Expr) (TableSet, *querypb.Type)
 }
 
-func (a *analyzer) depsForExpr(expr sqlparser.Expr) TableSet {
-	return a.exprDeps.Dependencies(expr)
+func (a *analyzer) depsForExpr(expr sqlparser.Expr) (TableSet, *querypb.Type) {
+	ts := a.exprDeps.Dependencies(expr)
+	qt, isFound := a.exprTypes[expr]
+	if !isFound {
+		return ts, nil
+	}
+	return ts, &qt
 }
 
 // resolveUnQualifiedColumn
-func (a *analyzer) resolveUnQualifiedColumn(current *scope, expr *sqlparser.ColName) (TableSet, error) {
+func (a *analyzer) resolveUnQualifiedColumn(current *scope, expr *sqlparser.ColName) (TableSet, *querypb.Type, error) {
 	var tsp *TableSet
+	var typp *querypb.Type
 	for _, tbl := range current.tables {
-		ts := tbl.DepsFor(expr, a, len(current.tables) == 1)
+		ts, typ, err := DepsFor(expr, a, len(current.tables) == 1, tbl.GetExpr(), tbl.GetColumns(), tbl.Authoritative())
+		if err != nil {
+			return 0, nil, err
+		}
 		if ts != nil && tsp != nil {
-			return 0, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.NonUniqError, fmt.Sprintf("Column '%s' in field list is ambiguous", sqlparser.String(expr)))
+			return 0, nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.NonUniqError, fmt.Sprintf("Column '%s' in field list is ambiguous", sqlparser.String(expr)))
 		}
 		if ts != nil {
 			tsp = ts
+			typp = typ
 		}
 	}
 	if tsp == nil {
-		return 0, nil
+		return 0, nil, nil
 	}
-	return *tsp, nil
+	return *tsp, typp, nil
 }
 
 func (a *analyzer) tableSetFor(t *sqlparser.AliasedTableExpr) TableSet {

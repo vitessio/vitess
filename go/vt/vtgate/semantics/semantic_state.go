@@ -17,6 +17,8 @@ limitations under the License.
 package semantics
 
 import (
+	"fmt"
+
 	"vitess.io/vitess/go/vt/key"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -36,7 +38,10 @@ type (
 		GetExpr() *sqlparser.AliasedTableExpr
 		GetColumns() []ColumnInfo
 		IsVirtual() bool
-		DepsFor(col *sqlparser.ColName, org originable, single bool) *TableSet
+
+		// DepsFor returns a pointer to the table set for the table that this column belongs to, if it can be found
+		// if the column is not found, nil will be returned instead
+		DepsFor(col *sqlparser.ColName, org originable, single bool) (*TableSet, *querypb.Type, error)
 		IsInfSchema() bool
 	}
 
@@ -81,6 +86,7 @@ type (
 		// This is only a real error if we are unable to plan the query as a single route
 		ProjectionErr    error
 		exprDependencies ExprDependencies
+		exprTypes        map[sqlparser.Expr]querypb.Type
 		selectScope      map[*sqlparser.Select]*scope
 	}
 
@@ -97,47 +103,65 @@ type (
 )
 
 // DepsFor implements the TableInfo interface
-func (v *vTableInfo) DepsFor(col *sqlparser.ColName, org originable, single bool) *TableSet {
+func (v *vTableInfo) DepsFor(col *sqlparser.ColName, org originable, single bool) (*TableSet, *querypb.Type, error) {
 	if !col.Qualifier.IsEmpty() {
-		return nil
+		// if we have a table qualifier in the expression, we know that it is not referencing an aliased table
+		return nil, nil, nil
 	}
 	for i, colName := range v.columnNames {
 		if col.Name.String() == colName {
-			ts := org.depsForExpr(v.cols[i])
-			return &ts
+			ts, qt := org.depsForExpr(v.cols[i])
+			return &ts, qt, nil
 		}
 	}
-	return nil
+	return nil, nil, nil
 }
 
 // DepsFor implements the TableInfo interface
-func (a *AliasedTable) DepsFor(col *sqlparser.ColName, org originable, single bool) *TableSet {
-	if single {
-		ts := org.tableSetFor(a.ASTNode)
-		return &ts
-	}
-	for _, info := range a.GetColumns() {
-		if col.Name.String() == info.Name {
-			ts := org.tableSetFor(a.ASTNode)
-			return &ts
-		}
-	}
-	return nil
+func (a *AliasedTable) DepsFor(col *sqlparser.ColName, org originable, single bool) (*TableSet, *querypb.Type, error) {
+	return DepsFor(col, org, single, a.ASTNode, a.GetColumns(), a.Authoritative())
 }
 
 // DepsFor implements the TableInfo interface
-func (r *RealTable) DepsFor(col *sqlparser.ColName, org originable, single bool) *TableSet {
+func (r *RealTable) DepsFor(col *sqlparser.ColName, org originable, single bool) (*TableSet, *querypb.Type, error) {
+	return DepsFor(col, org, single, r.ASTNode, r.GetColumns(), r.Authoritative())
+}
+
+// DepsFor implements the TableInfo interface
+func DepsFor(
+	col *sqlparser.ColName,
+	org originable,
+	single bool,
+	astNode *sqlparser.AliasedTableExpr,
+	cols []ColumnInfo,
+	authoritative bool,
+) (*TableSet, *querypb.Type, error) {
+	// if we know that we are the only table in the scope, there is no doubt - the column must belong to the table
 	if single {
-		ts := org.tableSetFor(r.ASTNode)
-		return &ts
+		ts := org.tableSetFor(astNode)
+
+		for _, info := range cols {
+			if col.Name.String() == info.Name {
+				return &ts, &info.Type, nil
+			}
+		}
+
+		if authoritative {
+			// if we are authoritative and we can't find the column, we should fail
+			return nil, nil, fmt.Errorf("table not found")
+		}
+
+		// it's probably the correct table, but we don't have enough info to be sure or figure out the type of the column
+		return &ts, nil, nil
 	}
-	for _, info := range r.GetColumns() {
+
+	for _, info := range cols {
 		if col.Name.String() == info.Name {
-			ts := org.tableSetFor(r.ASTNode)
-			return &ts
+			ts := org.tableSetFor(astNode)
+			return &ts, &info.Type, nil
 		}
 	}
-	return nil
+	return nil, nil, nil
 }
 
 // IsInfSchema implements the TableInfo interface
@@ -327,6 +351,15 @@ func (st *SemTable) AddExprs(tbl *sqlparser.AliasedTableExpr, cols sqlparser.Sel
 	for _, col := range cols {
 		st.exprDependencies[col.(*sqlparser.AliasedExpr).Expr] = tableSet
 	}
+}
+
+// TypeFor returns the type of expressions in the query
+func (st *SemTable) TypeFor(e sqlparser.Expr) *querypb.Type {
+	typ, found := st.exprTypes[e]
+	if found {
+		return &typ
+	}
+	return nil
 }
 
 func newScope(parent *scope) *scope {
