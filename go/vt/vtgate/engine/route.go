@@ -80,7 +80,7 @@ type Route struct {
 	// OrderBy specifies the key order for merge sorting. This will be
 	// set only for scatter queries that need the results to be
 	// merge-sorted.
-	OrderBy []OrderbyParams
+	OrderBy []OrderByParams
 
 	// TruncateColumnCount specifies the number of columns to return
 	// in the final result. Rest of the columns are truncated
@@ -122,9 +122,9 @@ func NewRoute(opcode RouteOpcode, keyspace *vindexes.Keyspace, query, fieldQuery
 	}
 }
 
-// OrderbyParams specifies the parameters for ordering.
+// OrderByParams specifies the parameters for ordering.
 // This is used for merge-sorting scatter queries.
-type OrderbyParams struct {
+type OrderByParams struct {
 	Col int
 	// WeightStringCol is the weight_string column that will be used for sorting.
 	// It is set to -1 if such a column is not added to the query
@@ -133,10 +133,14 @@ type OrderbyParams struct {
 	StarColFixedIndex int
 }
 
-func (obp OrderbyParams) String() string {
+// String returns a string. Used for plan descriptions
+func (obp OrderByParams) String() string {
 	val := strconv.Itoa(obp.Col)
 	if obp.StarColFixedIndex > obp.Col {
 		val = strconv.Itoa(obp.StarColFixedIndex)
+	}
+	if obp.WeightStringCol != -1 && obp.WeightStringCol != obp.Col {
+		val = fmt.Sprintf("(%s|%d)", val, obp.WeightStringCol)
 	}
 	if obp.Desc {
 		val += " DESC"
@@ -822,7 +826,7 @@ func (route *Route) description() PrimitiveDescription {
 }
 
 func orderByToString(in interface{}) string {
-	return in.(OrderbyParams).String()
+	return in.(OrderByParams).String()
 }
 
 // BvTableName is used to fill in the table name for information_schema queries with routed tables

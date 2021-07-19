@@ -87,9 +87,11 @@ Gen4 plan same as above
       "Sharded": false
     },
     "FieldQuery": "select col from information_schema.foo where 1 != 1",
-    "Query": "select col from information_schema.foo"
+    "Query": "select col from information_schema.foo",
+    "Table": "information_schema.foo"
   }
 }
+Gen4 plan same as above
 
 # Multi-table unsharded
 "select m1.col from unsharded as m1 join unsharded as m2"
@@ -332,9 +334,11 @@ Gen4 plan same as above
       "Sharded": false
     },
     "FieldQuery": "select a.id, b.id from information_schema.a as a, information_schema.b as b where 1 != 1",
-    "Query": "select a.id, b.id from information_schema.a as a, information_schema.b as b"
+    "Query": "select a.id, b.id from information_schema.a as a, information_schema.b as b",
+    "Table": "information_schema.a, information_schema.b"
   }
 }
+Gen4 plan same as above
 
 # ',' 3-way join unsharded
 "select u1.a, u2.a from unsharded u1, unsharded u2, unsharded u3"
@@ -821,7 +825,6 @@ Gen4 plan same as above
   }
 }
 
-
 # Parenthesized, single chunk
 "select user.col from user join (unsharded as m1 join unsharded as m2)"
 {
@@ -1018,6 +1021,7 @@ Gen4 plan same as above
     "Table": "`user`"
   }
 }
+Gen4 plan same as above
 
 # mergeable sharded join on unique vindex
 "select user.col from user join user_extra on user.id = user_extra.user_id"
@@ -1033,7 +1037,7 @@ Gen4 plan same as above
     },
     "FieldQuery": "select `user`.col from `user` join user_extra on `user`.id = user_extra.user_id where 1 != 1",
     "Query": "select `user`.col from `user` join user_extra on `user`.id = user_extra.user_id",
-    "Table": "`user`"
+    "Table": "`user`, user_extra"
   }
 }
 {
@@ -1066,7 +1070,7 @@ Gen4 plan same as above
     },
     "FieldQuery": "select `user`.col from `user` join user_extra on `user`.id = user_extra.user_id where 1 != 1",
     "Query": "select `user`.col from `user` join user_extra on `user`.id = user_extra.user_id",
-    "Table": "`user`"
+    "Table": "`user`, user_extra"
   }
 }
 {
@@ -1099,7 +1103,7 @@ Gen4 plan same as above
     },
     "FieldQuery": "select `user`.col from `user` join user_extra on `user`.col between 1 and 2 and `user`.id = user_extra.user_id where 1 != 1",
     "Query": "select `user`.col from `user` join user_extra on `user`.col between 1 and 2 and `user`.id = user_extra.user_id",
-    "Table": "`user`"
+    "Table": "`user`, user_extra"
   }
 }
 {
@@ -1132,7 +1136,7 @@ Gen4 plan same as above
     },
     "FieldQuery": "select `user`.col from `user` join user_extra on user_extra.user_id = `user`.id where 1 != 1",
     "Query": "select `user`.col from `user` join user_extra on user_extra.user_id = `user`.id",
-    "Table": "`user`"
+    "Table": "`user`, user_extra"
   }
 }
 {
@@ -1165,7 +1169,7 @@ Gen4 plan same as above
     },
     "FieldQuery": "select `user`.col from `user` join user_extra on `user`.id = 5 and `user`.id = user_extra.user_id where 1 != 1",
     "Query": "select `user`.col from `user` join user_extra on `user`.id = 5 and `user`.id = user_extra.user_id",
-    "Table": "`user`",
+    "Table": "`user`, user_extra",
     "Values": [
       5
     ],
@@ -1481,7 +1485,22 @@ Gen4 plan same as above
     },
     "FieldQuery": "select `user`.col from `user` join ref where 1 != 1",
     "Query": "select `user`.col from `user` join ref",
-    "Table": "`user`"
+    "Table": "`user`, ref"
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select user.col from user join ref",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select `user`.col from `user`, ref where 1 != 1",
+    "Query": "select `user`.col from `user`, ref",
+    "Table": "`user`, ref"
   }
 }
 
@@ -1502,6 +1521,21 @@ Gen4 plan same as above
     "Table": "ref"
   }
 }
+{
+  "QueryType": "SELECT",
+  "Original": "select r1.col from ref r1 join ref",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectReference",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select r1.col from ref as r1, ref where 1 != 1",
+    "Query": "select r1.col from ref as r1, ref",
+    "Table": "ref"
+  }
+}
 
 # reference table can merge with other opcodes left to right.
 "select ref.col from ref join user"
@@ -1517,7 +1551,7 @@ Gen4 plan same as above
     },
     "FieldQuery": "select ref.col from ref join `user` where 1 != 1",
     "Query": "select ref.col from ref join `user`",
-    "Table": "`user`"
+    "Table": "`user`, ref"
   }
 }
 
@@ -1536,7 +1570,7 @@ Gen4 plan same as above
     },
     "FieldQuery": "select ref.col from ref join (select aa from `user` where 1 != 1) as `user` where 1 != 1",
     "Query": "select ref.col from ref join (select aa from `user` where `user`.id = 1) as `user`",
-    "Table": "`user`",
+    "Table": "`user`, ref",
     "Values": [
       1
     ],
@@ -1618,7 +1652,7 @@ Gen4 plan same as above
     },
     "FieldQuery": "select t.id from (select id from `user` where 1 != 1) as t join user_extra on t.id = user_extra.user_id where 1 != 1",
     "Query": "select t.id from (select id from `user` where id = 5) as t join user_extra on t.id = user_extra.user_id",
-    "Table": "`user`",
+    "Table": "`user`, user_extra",
     "Values": [
       5
     ],
@@ -1640,7 +1674,7 @@ Gen4 plan same as above
     },
     "FieldQuery": "select t.id from (select `user`.id from `user` where 1 != 1) as t join user_extra on t.id = user_extra.user_id where 1 != 1",
     "Query": "select t.id from (select `user`.id from `user` where `user`.id = 5) as t join user_extra on t.id = user_extra.user_id",
-    "Table": "`user`",
+    "Table": "`user`, user_extra",
     "Values": [
       5
     ],
@@ -1666,7 +1700,7 @@ Gen4 plan same as above
     },
     "FieldQuery": "select t.id from user_extra join (select id from `user` where 1 != 1) as t on t.id = user_extra.user_id where 1 != 1",
     "Query": "select t.id from user_extra join (select id from `user` where id = 5) as t on t.id = user_extra.user_id",
-    "Table": "user_extra"
+    "Table": "user_extra, `user`"
   }
 }
 
@@ -1777,7 +1811,6 @@ Gen4 plan same as above
   }
 }
 
-
 # merge subqueries with single-shard routes
 "select u.col, e.col from (select col from user where id = 5) as u join (select col from user_extra where user_id = 5) as e"
 {
@@ -1792,7 +1825,7 @@ Gen4 plan same as above
     },
     "FieldQuery": "select u.col, e.col from (select col from `user` where 1 != 1) as u join (select col from user_extra where 1 != 1) as e where 1 != 1",
     "Query": "select u.col, e.col from (select col from `user` where id = 5) as u join (select col from user_extra where user_id = 5) as e",
-    "Table": "`user`",
+    "Table": "`user`, user_extra",
     "Values": [
       5
     ],
@@ -1813,9 +1846,11 @@ Gen4 plan same as above
       "Sharded": false
     },
     "FieldQuery": "select * from information_schema.a where 1 != 1",
-    "Query": "select * from information_schema.a where b = 10"
+    "Query": "select * from information_schema.a where b = 10",
+    "Table": "information_schema.a"
   }
 }
+Gen4 plan same as above
 
 # access to qualified column names in information_schema
 "select * from information_schema.a where information_schema.a.b=10"
@@ -1830,9 +1865,11 @@ Gen4 plan same as above
       "Sharded": false
     },
     "FieldQuery": "select * from information_schema.a where 1 != 1",
-    "Query": "select * from information_schema.a where information_schema.a.b = 10"
+    "Query": "select * from information_schema.a where information_schema.a.b = 10",
+    "Table": "information_schema.a"
   }
 }
+Gen4 plan same as above
 
 # join of information_schema with normal table
 "select unsharded.foo from information_schema.a join unsharded"
@@ -1843,7 +1880,7 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "1",
-    "TableName": "_unsharded",
+    "TableName": "information_schema.a_unsharded",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -1853,7 +1890,8 @@ Gen4 plan same as above
           "Sharded": false
         },
         "FieldQuery": "select 1 from information_schema.a where 1 != 1",
-        "Query": "select 1 from information_schema.a"
+        "Query": "select 1 from information_schema.a",
+        "Table": "information_schema.a"
       },
       {
         "OperatorType": "Route",
@@ -1869,6 +1907,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4 plan same as above
 
 # join of normal table with information_schema
 "select unsharded.foo from unsharded join information_schema.a"
@@ -1879,7 +1918,7 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-1",
-    "TableName": "unsharded_",
+    "TableName": "unsharded_information_schema.a",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -1900,11 +1939,13 @@ Gen4 plan same as above
           "Sharded": false
         },
         "FieldQuery": "select 1 from information_schema.a where 1 != 1",
-        "Query": "select 1 from information_schema.a"
+        "Query": "select 1 from information_schema.a",
+        "Table": "information_schema.a"
       }
     ]
   }
 }
+Gen4 plan same as above
 
 # wire-up on join with cross-shard subquery
 "select t.col1 from (select user.id, user.col1 from user join user_extra) as t join unsharded on unsharded.col1 = t.col1 and unsharded.id = t.id"
@@ -2109,7 +2150,7 @@ Gen4 plan same as above
         },
         "FieldQuery": "select unsharded_a.col from unsharded_a join unsharded_b on :__sq1 where 1 != 1",
         "Query": "select unsharded_a.col from unsharded_a join unsharded_b on :__sq1",
-        "Table": "unsharded_a"
+        "Table": "unsharded_a, unsharded_b"
       }
     ]
   }
@@ -2144,7 +2185,7 @@ Gen4 plan same as above
         },
         "FieldQuery": "select unsharded_a.col from unsharded_a join unsharded_b on unsharded_a.col + :__sq1 where 1 != 1",
         "Query": "select unsharded_a.col from unsharded_a join unsharded_b on unsharded_a.col + :__sq1",
-        "Table": "unsharded_a"
+        "Table": "unsharded_a, unsharded_b"
       }
     ]
   }
@@ -2179,7 +2220,7 @@ Gen4 plan same as above
         },
         "FieldQuery": "select unsharded_a.col from unsharded_a join unsharded_b on :__sq_has_values1 = 1 and unsharded_a.col in ::__sq1 where 1 != 1",
         "Query": "select unsharded_a.col from unsharded_a join unsharded_b on :__sq_has_values1 = 1 and unsharded_a.col in ::__sq1",
-        "Table": "unsharded_a"
+        "Table": "unsharded_a, unsharded_b"
       }
     ]
   }
@@ -2472,7 +2513,7 @@ Gen4 plan same as above
     },
     "FieldQuery": "select `user`.col from `user` join user_extra on `user`.ID = user_extra.User_Id where 1 != 1",
     "Query": "select `user`.col from `user` join user_extra on `user`.ID = user_extra.User_Id",
-    "Table": "`user`"
+    "Table": "`user`, user_extra"
   }
 }
 {
@@ -2763,9 +2804,11 @@ Gen4 plan same as above
       "Sharded": false
     },
     "FieldQuery": "select column_name from information_schema.`columns` where 1 != 1",
-    "Query": "select column_name from information_schema.`columns` where table_schema = schema()"
+    "Query": "select column_name from information_schema.`columns` where table_schema = schema()",
+    "Table": "information_schema.`columns`"
   }
 }
+Gen4 plan same as above
 
 # information schema join
 "select * from information_schema.a join information_schema.b"
@@ -2780,7 +2823,23 @@ Gen4 plan same as above
       "Sharded": false
     },
     "FieldQuery": "select * from information_schema.a join information_schema.b where 1 != 1",
-    "Query": "select * from information_schema.a join information_schema.b"
+    "Query": "select * from information_schema.a join information_schema.b",
+    "Table": "information_schema.a, information_schema.b"
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select * from information_schema.a join information_schema.b",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectDBA",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select * from information_schema.a, information_schema.b where 1 != 1",
+    "Query": "select * from information_schema.a, information_schema.b",
+    "Table": "information_schema.a, information_schema.b"
   }
 }
 
@@ -2798,7 +2857,8 @@ Gen4 plan same as above
     },
     "FieldQuery": "select fk.referenced_table_name as to_table, fk.referenced_column_name as primary_key, fk.column_name as `column`, fk.constraint_name as `name`, rc.update_rule as on_update, rc.delete_rule as on_delete from information_schema.referential_constraints as rc join information_schema.key_column_usage as fk on rc.constraint_schema = fk.constraint_schema and rc.constraint_name = fk.constraint_name where 1 != 1",
     "Query": "select fk.referenced_table_name as to_table, fk.referenced_column_name as primary_key, fk.column_name as `column`, fk.constraint_name as `name`, rc.update_rule as on_update, rc.delete_rule as on_delete from information_schema.referential_constraints as rc join information_schema.key_column_usage as fk on rc.constraint_schema = fk.constraint_schema and rc.constraint_name = fk.constraint_name where fk.referenced_column_name is not null and fk.table_schema = database() and fk.table_name = :__vttablename and rc.constraint_schema = database() and rc.table_name = :__vttablename",
-    "SysTableTableName": "[VARBINARY(\":vtg1\"), VARBINARY(\":vtg1\")]"
+    "SysTableTableName": "[VARBINARY(\":vtg1\"), VARBINARY(\":vtg1\")]",
+    "Table": "information_schema.referential_constraints, information_schema.key_column_usage"
   }
 }
 
@@ -2816,7 +2876,8 @@ Gen4 plan same as above
     },
     "FieldQuery": "select * from information_schema.schemata where 1 != 1",
     "Query": "select * from information_schema.schemata where schema_name = :__vtschemaname",
-    "SysTableTableSchema": "[VARBINARY(\"user\")]"
+    "SysTableTableSchema": "[VARBINARY(\"user\")]",
+    "Table": "information_schema.schemata"
   }
 }
 
@@ -2835,7 +2896,8 @@ Gen4 plan same as above
     "FieldQuery": "select table_comment from information_schema.`tables` where 1 != 1",
     "Query": "select table_comment from information_schema.`tables` where table_schema = :__vtschemaname and table_name = :__vttablename",
     "SysTableTableName": "[VARBINARY(\"table_name\")]",
-    "SysTableTableSchema": "[VARBINARY(\"schema_name\")]"
+    "SysTableTableSchema": "[VARBINARY(\"schema_name\")]",
+    "Table": "information_schema.`tables`"
   }
 }
 
@@ -2854,7 +2916,8 @@ Gen4 plan same as above
     "FieldQuery": "select fk.referenced_table_name as to_table, fk.referenced_column_name as primary_key, fk.column_name as `column`, fk.constraint_name as `name`, rc.update_rule as on_update, rc.delete_rule as on_delete from information_schema.referential_constraints as rc join information_schema.key_column_usage as fk on rc.constraint_schema = fk.constraint_schema and rc.constraint_name = fk.constraint_name where 1 != 1",
     "Query": "select fk.referenced_table_name as to_table, fk.referenced_column_name as primary_key, fk.column_name as `column`, fk.constraint_name as `name`, rc.update_rule as on_update, rc.delete_rule as on_delete from information_schema.referential_constraints as rc join information_schema.key_column_usage as fk on rc.constraint_schema = fk.constraint_schema and rc.constraint_name = fk.constraint_name where fk.referenced_column_name is not null and fk.table_schema = :__vtschemaname and fk.table_name = :__vttablename and rc.constraint_schema = :__vtschemaname and rc.table_name = :__vttablename",
     "SysTableTableName": "[VARBINARY(\"table_name\"), VARBINARY(\"table_name\")]",
-    "SysTableTableSchema": "[VARBINARY(\"table_schema\"), VARBINARY(\"table_schema\")]"
+    "SysTableTableSchema": "[VARBINARY(\"table_schema\"), VARBINARY(\"table_schema\")]",
+    "Table": "information_schema.referential_constraints, information_schema.key_column_usage"
   }
 }
 
@@ -2873,7 +2936,8 @@ Gen4 plan same as above
     "FieldQuery": "select cc.constraint_name as `name`, cc.check_clause as expression from information_schema.check_constraints as cc join information_schema.table_constraints as tc on cc.constraint_schema = tc.constraint_schema and cc.constraint_name = tc.constraint_name where 1 != 1",
     "Query": "select cc.constraint_name as `name`, cc.check_clause as expression from information_schema.check_constraints as cc join information_schema.table_constraints as tc on cc.constraint_schema = tc.constraint_schema and cc.constraint_name = tc.constraint_name where tc.table_schema = :__vtschemaname and tc.table_name = :__vttablename and cc.constraint_schema = :__vtschemaname",
     "SysTableTableName": "[VARBINARY(\"table_name\")]",
-    "SysTableTableSchema": "[VARBINARY(\"table_schema\"), VARBINARY(\"constraint_schema\")]"
+    "SysTableTableSchema": "[VARBINARY(\"table_schema\"), VARBINARY(\"constraint_schema\")]",
+    "Table": "information_schema.check_constraints, information_schema.table_constraints"
   }
 }
 
@@ -2892,7 +2956,8 @@ Gen4 plan same as above
     "FieldQuery": "select column_name from information_schema.statistics where 1 != 1",
     "Query": "select column_name from information_schema.statistics where index_name = 'PRIMARY' and table_schema = :__vtschemaname and table_name = :__vttablename order by seq_in_index asc",
     "SysTableTableName": "[VARBINARY(\"table_name\")]",
-    "SysTableTableSchema": "[VARBINARY(\"table_schema\")]"
+    "SysTableTableSchema": "[VARBINARY(\"table_schema\")]",
+    "Table": "information_schema.statistics"
   }
 }
 
@@ -2911,7 +2976,8 @@ Gen4 plan same as above
     "FieldQuery": "select generation_expression from information_schema.`columns` where 1 != 1",
     "Query": "select generation_expression from information_schema.`columns` where table_schema = :__vtschemaname and table_name = :__vttablename and column_name = 'column_name'",
     "SysTableTableName": "[VARBINARY(\"table_name\")]",
-    "SysTableTableSchema": "[VARBINARY(\"table_schema\")]"
+    "SysTableTableSchema": "[VARBINARY(\"table_schema\")]",
+    "Table": "information_schema.`columns`"
   }
 }
 
@@ -2928,9 +2994,11 @@ Gen4 plan same as above
       "Sharded": false
     },
     "FieldQuery": "select id from information_schema.`processlist` where 1 != 1",
-    "Query": "select id from information_schema.`processlist` where info like '% FOR UPDATE'"
+    "Query": "select id from information_schema.`processlist` where info like '% FOR UPDATE'",
+    "Table": "information_schema.`processlist`"
   }
 }
+Gen4 plan same as above
 
 #rails_query 9
 "SELECT table_name FROM (SELECT * FROM information_schema.tables WHERE table_schema = 'table_schema') _subquery"
@@ -2946,7 +3014,8 @@ Gen4 plan same as above
     },
     "FieldQuery": "select table_name from (select * from information_schema.`tables` where 1 != 1) as _subquery where 1 != 1",
     "Query": "select table_name from (select * from information_schema.`tables` where table_schema = :__vtschemaname) as _subquery",
-    "SysTableTableSchema": "[VARBINARY(\"table_schema\")]"
+    "SysTableTableSchema": "[VARBINARY(\"table_schema\")]",
+    "Table": "information_schema.`tables`"
   }
 }
 
@@ -2965,7 +3034,8 @@ Gen4 plan same as above
     "FieldQuery": "select table_name from (select * from information_schema.`tables` where 1 != 1) as _subquery where 1 != 1",
     "Query": "select table_name from (select * from information_schema.`tables` where table_schema = :__vtschemaname) as _subquery where _subquery.table_type = 'table_type' and _subquery.table_name = :__vttablename",
     "SysTableTableName": "[VARBINARY(\"table_name\")]",
-    "SysTableTableSchema": "[VARBINARY(\"table_schema\")]"
+    "SysTableTableSchema": "[VARBINARY(\"table_schema\")]",
+    "Table": "information_schema.`tables`"
   }
 }
 
@@ -2983,7 +3053,8 @@ Gen4 plan same as above
     },
     "FieldQuery": "select cc.constraint_name as `name` from information_schema.check_constraints as cc where 1 != 1",
     "Query": "select cc.constraint_name as `name` from information_schema.check_constraints as cc where cc.constraint_schema = :__vtschemaname and cc.table_schema = :__vtschemaname",
-    "SysTableTableSchema": "[VARBINARY(\"a\"), VARBINARY(\"a\")]"
+    "SysTableTableSchema": "[VARBINARY(\"a\"), VARBINARY(\"a\")]",
+    "Table": "information_schema.check_constraints"
   }
 }
 
@@ -3002,7 +3073,8 @@ Gen4 plan same as above
     "FieldQuery": "select COUNT(*) from INFORMATION_SCHEMA.`TABLES` where 1 != 1",
     "Query": "select COUNT(*) from INFORMATION_SCHEMA.`TABLES` where table_schema = :__vtschemaname and table_name = :__vttablename",
     "SysTableTableName": "[VARBINARY(\"foo\")]",
-    "SysTableTableSchema": "[VARBINARY(\"performance_schema\")]"
+    "SysTableTableSchema": "[VARBINARY(\"performance_schema\")]",
+    "Table": "INFORMATION_SCHEMA.`TABLES`"
   }
 }
 

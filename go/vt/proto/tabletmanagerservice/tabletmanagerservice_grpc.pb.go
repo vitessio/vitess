@@ -70,8 +70,10 @@ type TabletManagerClient interface {
 	VReplicationWaitForPos(ctx context.Context, in *tabletmanagerdata.VReplicationWaitForPosRequest, opts ...grpc.CallOption) (*tabletmanagerdata.VReplicationWaitForPosResponse, error)
 	// ResetReplication makes the target not replicating
 	ResetReplication(ctx context.Context, in *tabletmanagerdata.ResetReplicationRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ResetReplicationResponse, error)
-	// InitMaster initializes the tablet as a master
-	InitMaster(ctx context.Context, in *tabletmanagerdata.InitMasterRequest, opts ...grpc.CallOption) (*tabletmanagerdata.InitMasterResponse, error)
+	// Deprecated, use InitPrimary instead
+	InitMaster(ctx context.Context, in *tabletmanagerdata.InitPrimaryRequest, opts ...grpc.CallOption) (*tabletmanagerdata.InitPrimaryResponse, error)
+	// InitPrimary initializes the tablet as a master
+	InitPrimary(ctx context.Context, in *tabletmanagerdata.InitPrimaryRequest, opts ...grpc.CallOption) (*tabletmanagerdata.InitPrimaryResponse, error)
 	// PopulateReparentJournal tells the tablet to add an entry to its
 	// reparent journal
 	PopulateReparentJournal(ctx context.Context, in *tabletmanagerdata.PopulateReparentJournalRequest, opts ...grpc.CallOption) (*tabletmanagerdata.PopulateReparentJournalResponse, error)
@@ -395,9 +397,18 @@ func (c *tabletManagerClient) ResetReplication(ctx context.Context, in *tabletma
 	return out, nil
 }
 
-func (c *tabletManagerClient) InitMaster(ctx context.Context, in *tabletmanagerdata.InitMasterRequest, opts ...grpc.CallOption) (*tabletmanagerdata.InitMasterResponse, error) {
-	out := new(tabletmanagerdata.InitMasterResponse)
+func (c *tabletManagerClient) InitMaster(ctx context.Context, in *tabletmanagerdata.InitPrimaryRequest, opts ...grpc.CallOption) (*tabletmanagerdata.InitPrimaryResponse, error) {
+	out := new(tabletmanagerdata.InitPrimaryResponse)
 	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/InitMaster", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tabletManagerClient) InitPrimary(ctx context.Context, in *tabletmanagerdata.InitPrimaryRequest, opts ...grpc.CallOption) (*tabletmanagerdata.InitPrimaryResponse, error) {
+	out := new(tabletmanagerdata.InitPrimaryResponse)
+	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/InitPrimary", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -613,8 +624,10 @@ type TabletManagerServer interface {
 	VReplicationWaitForPos(context.Context, *tabletmanagerdata.VReplicationWaitForPosRequest) (*tabletmanagerdata.VReplicationWaitForPosResponse, error)
 	// ResetReplication makes the target not replicating
 	ResetReplication(context.Context, *tabletmanagerdata.ResetReplicationRequest) (*tabletmanagerdata.ResetReplicationResponse, error)
-	// InitMaster initializes the tablet as a master
-	InitMaster(context.Context, *tabletmanagerdata.InitMasterRequest) (*tabletmanagerdata.InitMasterResponse, error)
+	// Deprecated, use InitPrimary instead
+	InitMaster(context.Context, *tabletmanagerdata.InitPrimaryRequest) (*tabletmanagerdata.InitPrimaryResponse, error)
+	// InitPrimary initializes the tablet as a master
+	InitPrimary(context.Context, *tabletmanagerdata.InitPrimaryRequest) (*tabletmanagerdata.InitPrimaryResponse, error)
 	// PopulateReparentJournal tells the tablet to add an entry to its
 	// reparent journal
 	PopulateReparentJournal(context.Context, *tabletmanagerdata.PopulateReparentJournalRequest) (*tabletmanagerdata.PopulateReparentJournalResponse, error)
@@ -743,8 +756,11 @@ func (UnimplementedTabletManagerServer) VReplicationWaitForPos(context.Context, 
 func (UnimplementedTabletManagerServer) ResetReplication(context.Context, *tabletmanagerdata.ResetReplicationRequest) (*tabletmanagerdata.ResetReplicationResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ResetReplication not implemented")
 }
-func (UnimplementedTabletManagerServer) InitMaster(context.Context, *tabletmanagerdata.InitMasterRequest) (*tabletmanagerdata.InitMasterResponse, error) {
+func (UnimplementedTabletManagerServer) InitMaster(context.Context, *tabletmanagerdata.InitPrimaryRequest) (*tabletmanagerdata.InitPrimaryResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method InitMaster not implemented")
+}
+func (UnimplementedTabletManagerServer) InitPrimary(context.Context, *tabletmanagerdata.InitPrimaryRequest) (*tabletmanagerdata.InitPrimaryResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method InitPrimary not implemented")
 }
 func (UnimplementedTabletManagerServer) PopulateReparentJournal(context.Context, *tabletmanagerdata.PopulateReparentJournalRequest) (*tabletmanagerdata.PopulateReparentJournalResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method PopulateReparentJournal not implemented")
@@ -1372,7 +1388,7 @@ func _TabletManager_ResetReplication_Handler(srv interface{}, ctx context.Contex
 }
 
 func _TabletManager_InitMaster_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(tabletmanagerdata.InitMasterRequest)
+	in := new(tabletmanagerdata.InitPrimaryRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -1384,7 +1400,25 @@ func _TabletManager_InitMaster_Handler(srv interface{}, ctx context.Context, dec
 		FullMethod: "/tabletmanagerservice.TabletManager/InitMaster",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(TabletManagerServer).InitMaster(ctx, req.(*tabletmanagerdata.InitMasterRequest))
+		return srv.(TabletManagerServer).InitMaster(ctx, req.(*tabletmanagerdata.InitPrimaryRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TabletManager_InitPrimary_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(tabletmanagerdata.InitPrimaryRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TabletManagerServer).InitPrimary(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/tabletmanagerservice.TabletManager/InitPrimary",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TabletManagerServer).InitPrimary(ctx, req.(*tabletmanagerdata.InitPrimaryRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1749,6 +1783,10 @@ var TabletManager_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "InitMaster",
 			Handler:    _TabletManager_InitMaster_Handler,
+		},
+		{
+			MethodName: "InitPrimary",
+			Handler:    _TabletManager_InitPrimary_Handler,
 		},
 		{
 			MethodName: "PopulateReparentJournal",

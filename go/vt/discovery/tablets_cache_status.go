@@ -71,7 +71,7 @@ func (tcs *TabletsCacheStatus) StatusAsHTML() template.HTML {
 		} else if ts.Target.TabletType == topodatapb.TabletType_MASTER {
 			extra = fmt.Sprintf(" (MasterTS: %v)", ts.MasterTermStartTime)
 		} else {
-			extra = fmt.Sprintf(" (RepLag: %v)", ts.Stats.SecondsBehindMaster)
+			extra = fmt.Sprintf(" (RepLag: %v)", ts.Stats.ReplicationLagSeconds)
 		}
 		name := topoproto.TabletAliasString(ts.Tablet.Alias)
 		tLinks = append(tLinks, fmt.Sprintf(`<a href="%s" style="color:%v">%v</a>%v`, ts.getTabletDebugURL(), color, name, extra))

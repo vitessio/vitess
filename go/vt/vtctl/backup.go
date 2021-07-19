@@ -117,14 +117,14 @@ func commandBackupShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 		// choose the first tablet as the baseline
 		if tabletForBackup == nil {
 			tabletForBackup = tablets[i].Tablet
-			secondsBehind = stats[i].SecondsBehindMaster
+			secondsBehind = stats[i].ReplicationLagSeconds
 			continue
 		}
 
 		// choose a new tablet if it is more up to date
-		if stats[i].SecondsBehindMaster < secondsBehind {
+		if stats[i].ReplicationLagSeconds < secondsBehind {
 			tabletForBackup = tablets[i].Tablet
-			secondsBehind = stats[i].SecondsBehindMaster
+			secondsBehind = stats[i].ReplicationLagSeconds
 		}
 	}
 

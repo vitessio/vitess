@@ -28,7 +28,7 @@ import (
 var _ logicalPlan = (*memorySortGen4)(nil)
 
 type memorySortGen4 struct {
-	orderBy             []engine.OrderbyParams
+	orderBy             []engine.OrderByParams
 	input               logicalPlan
 	truncateColumnCount int
 }

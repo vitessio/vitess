@@ -50,7 +50,7 @@ var _ Primitive = (*MergeSort)(nil)
 // so that vdiff can use it. In that situation, only StreamExecute is used.
 type MergeSort struct {
 	Primitives              []StreamExecutor
-	OrderBy                 []OrderbyParams
+	OrderBy                 []OrderByParams
 	ScatterErrorsAsWarnings bool
 	noInputs
 	noTxNeeded

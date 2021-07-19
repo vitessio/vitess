@@ -285,7 +285,7 @@ func (vp *vplayer) recordHeartbeat() error {
 // * OTHER event: the current position of the event is saved.
 // * JOURNAL event: if the event is relevant to the current stream, invoke registerJournal
 //   of the engine, and terminate.
-// * HEARTBEAT: update SecondsBehindMaster.
+// * HEARTBEAT: update ReplicationLagSeconds.
 // * Empty transaction: The event is remembered as an unsavedEvent. If no commits
 //   happen for idleTimeout since timeLastSaved, the current position of the unsavedEvent
 //   is committed (updatePos).
@@ -328,7 +328,7 @@ func (vp *vplayer) recordHeartbeat() error {
 func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 	defer vp.vr.dbClient.Rollback()
 
-	// If we're not running, set SecondsBehindMaster to be very high.
+	// If we're not running, set ReplicationLagSeconds to be very high.
 	// TODO(sougou): if we also stored the time of the last event, we
 	// can estimate this value more accurately.
 	defer vp.vr.stats.SecondsBehindMaster.Set(math.MaxInt64)
