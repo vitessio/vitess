@@ -88,12 +88,12 @@ type truncater interface {
 
 // TestBuilder builds a plan for a query based on the specified vschema.
 // This method is only used from tests
-func TestBuilder(query string, vschema ContextVSchema) (*engine.Plan, error) {
+func TestBuilder(query string, vschema ContextVSchema, keyspace string) (*engine.Plan, error) {
 	stmt, reserved, err := sqlparser.Parse2(query)
 	if err != nil {
 		return nil, err
 	}
-	result, err := sqlparser.RewriteAST(stmt, "")
+	result, err := sqlparser.RewriteAST(stmt, keyspace)
 	if err != nil {
 		return nil, err
 	}

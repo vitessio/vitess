@@ -115,6 +115,87 @@ func TestSelectDBA(t *testing.T) {
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
 }
 
+func TestGen4SelectDBA(t *testing.T) {
+	executor, sbc1, _, _ := createExecutorEnv()
+	executor.normalize = true
+	*plannerVersion = "Gen4"
+	defer func() {
+		// change it back to v3
+		*plannerVersion = "v3"
+	}()
+
+	query := "select * from INFORMATION_SCHEMA.foo"
+	_, err := executor.Execute(context.Background(), "TestSelectDBA",
+		NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"}),
+		query, map[string]*querypb.BindVariable{},
+	)
+	require.NoError(t, err)
+	wantQueries := []*querypb.BoundQuery{{Sql: query, BindVariables: map[string]*querypb.BindVariable{}}}
+	utils.MustMatch(t, wantQueries, sbc1.Queries)
+
+	sbc1.Queries = nil
+	query = "SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES ist WHERE ist.table_schema = 'performance_schema' AND ist.table_name = 'foo'"
+	_, err = executor.Execute(context.Background(), "TestSelectDBA",
+		NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"}),
+		query, map[string]*querypb.BindVariable{},
+	)
+	require.NoError(t, err)
+	wantQueries = []*querypb.BoundQuery{{Sql: "select COUNT(*) from INFORMATION_SCHEMA.`TABLES` as ist where ist.table_schema = :__vtschemaname and ist.table_name = :ist_table_name",
+		BindVariables: map[string]*querypb.BindVariable{
+			"vtg1":           sqltypes.StringBindVariable("performance_schema"),
+			"vtg2":           sqltypes.StringBindVariable("foo"),
+			"__vtschemaname": sqltypes.StringBindVariable("performance_schema"),
+			"ist_table_name": sqltypes.StringBindVariable("foo"),
+		}}}
+	utils.MustMatch(t, wantQueries, sbc1.Queries)
+
+	sbc1.Queries = nil
+	query = "select 1 from information_schema.table_constraints where constraint_schema = 'vt_ks' and table_name = 'user'"
+	_, err = executor.Execute(context.Background(), "TestSelectDBA",
+		NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"}),
+		query, map[string]*querypb.BindVariable{},
+	)
+	require.NoError(t, err)
+	wantQueries = []*querypb.BoundQuery{{Sql: "select :vtg1 from information_schema.table_constraints where constraint_schema = :__vtschemaname and table_name = :table_name",
+		BindVariables: map[string]*querypb.BindVariable{
+			"vtg1":           sqltypes.Int64BindVariable(1),
+			"vtg2":           sqltypes.StringBindVariable("vt_ks"),
+			"vtg3":           sqltypes.StringBindVariable("user"),
+			"__vtschemaname": sqltypes.StringBindVariable("vt_ks"),
+			"table_name":     sqltypes.StringBindVariable("user"),
+		}}}
+	utils.MustMatch(t, wantQueries, sbc1.Queries)
+
+	sbc1.Queries = nil
+	query = "select 1 from information_schema.table_constraints where constraint_schema = 'vt_ks'"
+	_, err = executor.Execute(context.Background(), "TestSelectDBA",
+		NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"}),
+		query, map[string]*querypb.BindVariable{},
+	)
+	require.NoError(t, err)
+	wantQueries = []*querypb.BoundQuery{{Sql: "select :vtg1 from information_schema.table_constraints where constraint_schema = :__vtschemaname",
+		BindVariables: map[string]*querypb.BindVariable{
+			"vtg1":           sqltypes.Int64BindVariable(1),
+			"vtg2":           sqltypes.StringBindVariable("vt_ks"),
+			"__vtschemaname": sqltypes.StringBindVariable("vt_ks"),
+		}}}
+	utils.MustMatch(t, wantQueries, sbc1.Queries)
+
+	sbc1.Queries = nil
+	query = "select t.table_schema,t.table_name,c.column_name,c.column_type from tables t join columns c on c.table_schema = t.table_schema and c.table_name = t.table_name where t.table_schema = 'TestExecutor' and c.table_schema = 'TestExecutor' order by t.table_schema,t.table_name,c.column_name"
+	_, err = executor.Execute(context.Background(), "TestSelectDBA",
+		NewSafeSession(&vtgatepb.Session{TargetString: "information_schema"}),
+		query, map[string]*querypb.BindVariable{},
+	)
+	require.NoError(t, err)
+	wantQueries = []*querypb.BoundQuery{{Sql: "select t.table_schema, t.table_name, c.column_name, c.column_type from information_schema.`tables` as t, information_schema.`columns` as c where t.table_schema = :__vtschemaname and c.table_schema = :__vtschemaname and c.table_schema = t.table_schema and c.table_name = t.table_name order by t.table_schema asc, t.table_name asc, c.column_name asc",
+		BindVariables: map[string]*querypb.BindVariable{
+			"vtg1":                  sqltypes.StringBindVariable("TestExecutor"),
+			"__replacevtschemaname": sqltypes.Int64BindVariable(1),
+		}}}
+	utils.MustMatch(t, wantQueries, sbc1.Queries)
+}
+
 func TestUnsharded(t *testing.T) {
 	executor, _, _, sbclookup := createLegacyExecutorEnv()
 
