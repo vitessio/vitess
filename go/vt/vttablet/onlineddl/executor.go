@@ -2423,10 +2423,14 @@ func (e *Executor) gcArtifacts(ctx context.Context) error {
 		}
 
 		// Remove logs:
-		if err := os.RemoveAll(logPath); err != nil {
-			return err
+		{
+			// logPath is in 'hostname:/path/to/logs' format
+			tokens := strings.SplitN(logPath, ":", 2)
+			logPath = tokens[len(tokens)-1]
+			if err := os.RemoveAll(logPath); err != nil {
+				return err
+			}
 		}
-
 		if err := e.updateMigrationTimestamp(ctx, "cleanup_timestamp", uuid); err != nil {
 			return err
 		}
