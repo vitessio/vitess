@@ -240,7 +240,7 @@ var commands = []commandGroup{
 				"Add or remove a shard from serving. This is meant as an emergency function. It does not rebuild any serving graph i.e. does not run 'RebuildKeyspaceGraph'."},
 			{"SetShardIsMasterServing", commandSetShardIsPrimaryServing,
 				"<keyspace/shard> <is_master_serving>",
-				"DEPRECATED Add or remove a shard from serving. This is meant as an emergency function. It does not rebuild any serving graph i.e. does not run 'RebuildKeyspaceGraph'."},
+				"DEPRECATED. Use SetShardIsPrimaryServing instead."},
 			{"SetShardTabletControl", commandSetShardTabletControl,
 				"[--cells=c1,c2,...] [--blacklisted_tables=t1,t2,...] [--remove] [--disable_query_service] <keyspace/shard> <tablet type>",
 				"Sets the TabletControl record for a shard and type. Only use this for an emergency fix or after a finished vertical split. The *MigrateServedFrom* and *MigrateServedType* commands set this field appropriately already. Always specify the blacklisted_tables flag for vertical splits, but never for horizontal splits.\n" +
@@ -781,7 +781,7 @@ func commandUpdateTabletAddrs(ctx context.Context, wr *wrangler.Wrangler, subFla
 }
 
 func commandDeleteTablet(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	deprecatedAllowMaster := subFlags.Bool("allow_master", false, "Allows for the master tablet of a shard to be deleted. Use with caution.")
+	deprecatedAllowMaster := subFlags.Bool("allow_master", false, "DEPRECATED. Use allow_primary instead.")
 	allowPrimary := subFlags.Bool("allow_primary", false, "Allows for the primary tablet of a shard to be deleted. Use with caution.")
 
 	if err := subFlags.Parse(args); err != nil {
@@ -2767,7 +2767,7 @@ func commandReloadSchemaShard(ctx context.Context, wr *wrangler.Wrangler, subFla
 
 	// handle deprecated flags
 	// should be deleted in a future release
-	deprecatedIncludeMaster := subFlags.Bool("include_master", true, "Include the master tablet")
+	deprecatedIncludeMaster := subFlags.Bool("include_master", true, "DEPRECATED. Use -include_primary instead")
 
 	if err := subFlags.Parse(args); err != nil {
 		return err
@@ -2793,7 +2793,7 @@ func commandReloadSchemaKeyspace(ctx context.Context, wr *wrangler.Wrangler, sub
 
 	// handle deprecated flags
 	// should be deleted in a future release
-	deprecatedIncludeMaster := subFlags.Bool("include_master", true, "Include the master tablet(s)")
+	deprecatedIncludeMaster := subFlags.Bool("include_master", true, "DEPRECATED. Use -include_primary instead")
 
 	if err := subFlags.Parse(args); err != nil {
 		return err
@@ -2838,7 +2838,7 @@ func commandValidateSchemaKeyspace(ctx context.Context, wr *wrangler.Wrangler, s
 
 	// handle deprecated flags
 	// should be deleted in a future release
-	deprecatedSkipNoMaster := subFlags.Bool("skip-no-master", false, "Skip shards that don't have master when performing validation")
+	deprecatedSkipNoMaster := subFlags.Bool("skip-no-master", false, "DEPRECATED. Use -skip-no-primary instead")
 
 	if err := subFlags.Parse(args); err != nil {
 		return err
