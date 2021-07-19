@@ -172,3 +172,15 @@ select id from user where not id in (select col from music where music.user_id =
 2 ks_sharded/40-80: select col from music where music.user_id = 411 limit 10001
 
 ----------------------------------------------------------------------
+SELECT user.id, user.name, name_info.info FROM user INNER JOIN music ON (user.id = music.user_id) LEFT OUTER JOIN name_info ON (user.name = name_info.name)
+
+1 ks_sharded/-40: select `user`.id, `user`.`name` from `user` join music on `user`.id = music.user_id limit 10001
+1 ks_sharded/40-80: select `user`.id, `user`.`name` from `user` join music on `user`.id = music.user_id limit 10001
+1 ks_sharded/80-c0: select `user`.id, `user`.`name` from `user` join music on `user`.id = music.user_id limit 10001
+1 ks_sharded/c0-: select `user`.id, `user`.`name` from `user` join music on `user`.id = music.user_id limit 10001
+2 ks_sharded/40-80: select name_info.info from name_info where name_info.`name` = 'name_val_2' limit 10001
+3 ks_sharded/40-80: select name_info.info from name_info where name_info.`name` = 'name_val_2' limit 10001
+4 ks_sharded/40-80: select name_info.info from name_info where name_info.`name` = 'name_val_2' limit 10001
+5 ks_sharded/40-80: select name_info.info from name_info where name_info.`name` = 'name_val_2' limit 10001
+
+----------------------------------------------------------------------

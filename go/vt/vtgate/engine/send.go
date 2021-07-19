@@ -45,8 +45,14 @@ type Send struct {
 	// SingleShardOnly specifies that the query must be send to only single shard
 	SingleShardOnly bool
 
+	// ShardNameNeeded specified that the shard name is added to the bind variables
+	ShardNameNeeded bool
+
 	noInputs
 }
+
+// ShardName as key for setting shard name in bind variables map
+const ShardName = "__vt_shard"
 
 //NeedsTransaction implements the Primitive interface
 func (s *Send) NeedsTransaction() bool {
@@ -88,10 +94,15 @@ func (s *Send) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariabl
 	}
 
 	queries := make([]*querypb.BoundQuery, len(rss))
-	for i := range rss {
+	for i, rs := range rss {
+		bv := bindVars
+		if s.ShardNameNeeded {
+			bv = copyBindVars(bindVars)
+			bv[ShardName] = sqltypes.StringBindVariable(rs.Target.Shard)
+		}
 		queries[i] = &querypb.BoundQuery{
 			Sql:           s.Query,
-			BindVariables: bindVars,
+			BindVariables: bv,
 		}
 	}
 
@@ -109,6 +120,14 @@ func (s *Send) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariabl
 	return result, nil
 }
 
+func copyBindVars(in map[string]*querypb.BindVariable) map[string]*querypb.BindVariable {
+	out := make(map[string]*querypb.BindVariable, len(in)+1)
+	for k, v := range in {
+		out[k] = v
+	}
+	return out
+}
+
 // StreamExecute implements Primitive interface
 func (s *Send) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	rss, _, err := vcursor.ResolveDestinations(s.Keyspace.Name, nil, []key.Destination{s.TargetDestination})
@@ -124,19 +143,17 @@ func (s *Send) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindV
 		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Unexpected error, DestinationKeyspaceID mapping to multiple shards: %s, got: %v", s.Query, s.TargetDestination)
 	}
 
-	queries := make([]*querypb.BoundQuery, len(rss))
-	for i := range rss {
-		queries[i] = &querypb.BoundQuery{
-			Sql:           s.Query,
-			BindVariables: bindVars,
-		}
-	}
-
 	multiBindVars := make([]map[string]*querypb.BindVariable, len(rss))
-	for i := range multiBindVars {
-		multiBindVars[i] = bindVars
+	for i, rs := range rss {
+		bv := bindVars
+		if s.ShardNameNeeded {
+			bv = copyBindVars(bindVars)
+			bv[ShardName] = sqltypes.StringBindVariable(rs.Target.Shard)
+		}
+		multiBindVars[i] = bv
 	}
-	return vcursor.StreamExecuteMulti(s.Query, rss, multiBindVars, callback)
+	errors := vcursor.StreamExecuteMulti(s.Query, rss, multiBindVars, callback)
+	return vterrors.Aggregate(errors)
 }
 
 // GetFields implements Primitive interface
@@ -151,10 +168,17 @@ func (s *Send) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVaria
 
 func (s *Send) description() PrimitiveDescription {
 	other := map[string]interface{}{
-		"Query":           s.Query,
-		"Table":           s.GetTableName(),
-		"IsDML":           s.IsDML,
-		"SingleShardOnly": s.SingleShardOnly,
+		"Query": s.Query,
+		"Table": s.GetTableName(),
+	}
+	if s.IsDML {
+		other["IsDML"] = true
+	}
+	if s.SingleShardOnly {
+		other["SingleShardOnly"] = true
+	}
+	if s.ShardNameNeeded {
+		other["ShardNameNeeded"] = true
 	}
 	return PrimitiveDescription{
 		OperatorType:      "Send",

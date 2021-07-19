@@ -172,7 +172,7 @@ func (st *symtab) AddTable(t *table) error {
 		st.singleRoute = nil
 	}
 	if _, ok := st.tables[t.alias]; ok {
-		return fmt.Errorf("duplicate symbol: %s", sqlparser.String(t.alias))
+		return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.NonUniqTable, "Not unique table/alias: '%s'", t.alias.Name.String())
 	}
 	st.tables[t.alias] = t
 	st.tableNames = append(st.tableNames, t.alias)

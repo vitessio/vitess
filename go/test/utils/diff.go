@@ -20,6 +20,10 @@ import (
 	"reflect"
 	"testing"
 
+	"google.golang.org/protobuf/encoding/prototext"
+
+	"google.golang.org/protobuf/proto"
+
 	"github.com/google/go-cmp/cmp"
 )
 
@@ -46,6 +50,9 @@ import (
 // mustMatch(t, want, got, "something doesn't match")
 func MustMatchFn(ignoredFields ...string) func(t *testing.T, want, got interface{}, errMsg ...string) {
 	diffOpts := []cmp.Option{
+		cmp.Comparer(func(a, b proto.Message) bool {
+			return proto.Equal(a, b)
+		}),
 		cmp.Exporter(func(reflect.Type) bool {
 			return true
 		}),
@@ -83,4 +90,15 @@ func cmpIgnoreFields(pathNames ...string) cmp.Option {
 		}
 		return false
 	}, cmp.Ignore())
+}
+
+func MustMatchPB(t *testing.T, expected string, pb proto.Message) {
+	t.Helper()
+
+	expectedPb := pb.ProtoReflect().New().Interface()
+	if err := prototext.Unmarshal([]byte(expected), expectedPb); err != nil {
+		t.Fatal(err)
+	}
+
+	MustMatch(t, expectedPb, pb)
 }

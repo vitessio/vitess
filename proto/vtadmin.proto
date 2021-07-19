@@ -42,6 +42,8 @@ service VTAdmin {
     rpc GetClusters(GetClustersRequest) returns (GetClustersResponse) {};
     // GetGates returns all gates across all the specified clusters.
     rpc GetGates(GetGatesRequest) returns (GetGatesResponse) {};
+    // GetKeyspace returns a keyspace by name in the specified cluster.
+    rpc GetKeyspace(GetKeyspaceRequest) returns (Keyspace) {};
     // GetKeyspaces returns all keyspaces across the specified clusters.
     rpc GetKeyspaces(GetKeyspacesRequest) returns (GetKeyspacesResponse) {};
     // GetSchema returns the schema for the specified (cluster, keyspace, table)
@@ -49,6 +51,10 @@ service VTAdmin {
     rpc GetSchema(GetSchemaRequest) returns (Schema) {};
     // GetSchemas returns all schemas across the specified clusters.
     rpc GetSchemas(GetSchemasRequest) returns (GetSchemasResponse) {};
+    // GetSrvVSchema returns the SrvVSchema for the given cluster and cell.
+    rpc GetSrvVSchema (GetSrvVSchemaRequest) returns (SrvVSchema) {};
+    // GetSrvVSchemas returns all SrvVSchemas across all (or specified) clusters and cells.
+    rpc GetSrvVSchemas(GetSrvVSchemasRequest) returns (GetSrvVSchemasResponse) {};
     // GetTablet looks up a tablet by hostname across all clusters and returns
     // the result.
     rpc GetTablet(GetTabletRequest) returns (Tablet) {};
@@ -113,6 +119,12 @@ message Schema {
     }
 }
 
+message SrvVSchema {
+    string cell = 1;
+    Cluster cluster = 2;
+    vschema.SrvVSchema srv_v_schema = 3;
+}
+
 // Tablet groups the topo information of a tablet together with the Vitess
 // cluster it belongs to.
 message Tablet {
@@ -126,6 +138,7 @@ message Tablet {
     }
 
     ServingState state = 3;
+    string FQDN = 4;
 }
 
 // VSchema represents the vschema for a keyspace in the cluster it belongs to.
@@ -140,6 +153,7 @@ message VSchema {
 message Vtctld {
     string hostname = 1;
     Cluster cluster = 2;
+    string FQDN = 3;
 }
 
 // VTGate represents information about a single VTGate host.
@@ -156,6 +170,7 @@ message VTGate {
     Cluster cluster = 4;
     // Keyspaces is the list of keyspaces-to-watch for the VTGate.
     repeated string keyspaces = 5;
+    string FQDN = 6;
 }
 
 message Workflow {
@@ -186,6 +201,11 @@ message GetGatesResponse {
     repeated VTGate gates = 1;
 }
 
+message GetKeyspaceRequest {
+    string cluster_id = 1;
+    string keyspace = 2;
+}
+
 message GetKeyspacesRequest {
     repeated string cluster_ids = 1;
 }
@@ -210,13 +230,28 @@ message GetSchemasResponse {
     repeated Schema schemas = 1;
 }
 
+message GetSrvVSchemaRequest {
+    string cluster_id = 1;
+    string cell = 2;
+}
+
+message GetSrvVSchemasRequest {
+    repeated string cluster_ids = 1;
+    repeated string cells = 2;
+}
+
+message GetSrvVSchemasResponse {
+    repeated SrvVSchema srv_v_schemas = 1;
+}
+
 message GetSchemaTableSizeOptions {
     bool aggregate_sizes = 1;
     bool include_non_serving_shards = 2;
 }
 
 message GetTabletRequest {
-    string hostname = 1;
+    // Unique (per cluster) tablet alias of the standard form: "$cell-$uid"
+    string alias = 1;
     // ClusterIDs is an optional parameter to narrow the scope of the search, if
     // the caller knows which cluster the tablet may be in, or, to disamiguate if
     // multiple clusters have a tablet with the same hostname.

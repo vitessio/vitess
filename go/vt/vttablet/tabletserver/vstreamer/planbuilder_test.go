@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"testing"
 
+	"vitess.io/vitess/go/vt/proto/topodata"
+
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/test/utils"
@@ -83,10 +85,7 @@ func init() {
 			"ks": &kspb,
 		},
 	}
-	vschema, err := vindexes.BuildVSchema(srvVSchema)
-	if err != nil {
-		panic(err)
-	}
+	vschema := vindexes.BuildVSchema(srvVSchema)
 	testLocalVSchema = &localVSchema{
 		keyspace: "ks",
 		vschema:  vschema,
@@ -582,6 +581,119 @@ func TestPlanBuilder(t *testing.T) {
 				plan.Filters[ind].Vindex = nil
 			}
 			utils.MustMatch(t, tcase.outPlan, plan)
+		})
+	}
+}
+
+func TestPlanBuilderFilterComparison(t *testing.T) {
+	t1 := &Table{
+		Name: "t1",
+		Fields: []*querypb.Field{{
+			Name: "id",
+			Type: sqltypes.Int64,
+		}, {
+			Name: "val",
+			Type: sqltypes.VarBinary,
+		}},
+	}
+	hashVindex, err := vindexes.NewHash("hash", nil)
+	require.NoError(t, err)
+	testcases := []struct {
+		name       string
+		inFilter   string
+		outFilters []Filter
+		outErr     string
+	}{{
+		name:       "equal",
+		inFilter:   "select * from t1 where id = 1",
+		outFilters: []Filter{{Opcode: Equal, ColNum: 0, Value: sqltypes.NewInt64(1)}},
+	}, {
+		name:       "not-equal",
+		inFilter:   "select * from t1 where id <> 1",
+		outFilters: []Filter{{Opcode: NotEqual, ColNum: 0, Value: sqltypes.NewInt64(1)}},
+	}, {
+		name:       "greater",
+		inFilter:   "select * from t1 where val > 'abc'",
+		outFilters: []Filter{{Opcode: GreaterThan, ColNum: 1, Value: sqltypes.NewVarBinary("abc")}},
+	}, {
+		name:       "greater-than",
+		inFilter:   "select * from t1 where id >= 1",
+		outFilters: []Filter{{Opcode: GreaterThanEqual, ColNum: 0, Value: sqltypes.NewInt64(1)}},
+	}, {
+		name:     "less-than-with-and",
+		inFilter: "select * from t1 where id < 2 and val <= 'xyz'",
+		outFilters: []Filter{{Opcode: LessThan, ColNum: 0, Value: sqltypes.NewInt64(2)},
+			{Opcode: LessThanEqual, ColNum: 1, Value: sqltypes.NewVarBinary("xyz")},
+		},
+	}, {
+		name:     "vindex-and-operators",
+		inFilter: "select * from t1 where in_keyrange(id, 'hash', '-80') and id = 2 and val <> 'xyz'",
+		outFilters: []Filter{
+			{
+				Opcode:        VindexMatch,
+				ColNum:        0,
+				Value:         sqltypes.NULL,
+				Vindex:        hashVindex,
+				VindexColumns: []int{0},
+				KeyRange: &topodata.KeyRange{
+					Start: nil,
+					End:   []byte("\200"),
+				},
+			},
+			{Opcode: Equal, ColNum: 0, Value: sqltypes.NewInt64(2)},
+			{Opcode: NotEqual, ColNum: 1, Value: sqltypes.NewVarBinary("xyz")},
+		},
+	}}
+
+	for _, tcase := range testcases {
+		t.Run(tcase.name, func(t *testing.T) {
+			plan, err := buildPlan(t1, testLocalVSchema, &binlogdatapb.Filter{
+				Rules: []*binlogdatapb.Rule{{Match: "t1", Filter: tcase.inFilter}},
+			})
+
+			if tcase.outErr != "" {
+				assert.Nil(t, plan)
+				assert.EqualError(t, err, tcase.outErr)
+				return
+			}
+			require.NotNil(t, plan)
+			require.ElementsMatchf(t, tcase.outFilters, plan.Filters, "want %+v, got: %+v", tcase.outFilters, plan.Filters)
+		})
+	}
+}
+
+func TestCompare(t *testing.T) {
+	type testcase struct {
+		opcode                   Opcode
+		columnValue, filterValue sqltypes.Value
+		want                     bool
+	}
+	int1 := sqltypes.NewInt32(1)
+	int2 := sqltypes.NewInt32(2)
+	testcases := []*testcase{
+		{opcode: Equal, columnValue: int1, filterValue: int1, want: true},
+		{opcode: Equal, columnValue: int1, filterValue: int2, want: false},
+		{opcode: Equal, columnValue: int1, filterValue: sqltypes.NULL, want: false},
+		{opcode: LessThan, columnValue: int2, filterValue: int1, want: false},
+		{opcode: LessThan, columnValue: int1, filterValue: int2, want: true},
+		{opcode: LessThan, columnValue: int1, filterValue: sqltypes.NULL, want: false},
+		{opcode: GreaterThan, columnValue: int2, filterValue: int1, want: true},
+		{opcode: GreaterThan, columnValue: int1, filterValue: int2, want: false},
+		{opcode: GreaterThan, columnValue: int1, filterValue: sqltypes.NULL, want: false},
+		{opcode: NotEqual, columnValue: int1, filterValue: int1, want: false},
+		{opcode: NotEqual, columnValue: int1, filterValue: int2, want: true},
+		{opcode: NotEqual, columnValue: sqltypes.NULL, filterValue: int1, want: false},
+		{opcode: LessThanEqual, columnValue: int1, filterValue: sqltypes.NULL, want: false},
+		{opcode: GreaterThanEqual, columnValue: int2, filterValue: int1, want: true},
+		{opcode: LessThanEqual, columnValue: int2, filterValue: int1, want: false},
+		{opcode: GreaterThanEqual, columnValue: int1, filterValue: int1, want: true},
+		{opcode: LessThanEqual, columnValue: int1, filterValue: int2, want: true},
+	}
+	for _, tc := range testcases {
+		t.Run("", func(t *testing.T) {
+			got, err := compare(tc.opcode, tc.columnValue, tc.filterValue)
+			require.NoError(t, err)
+			require.Equal(t, tc.want, got)
 		})
 	}
 }

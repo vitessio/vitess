@@ -52,7 +52,7 @@ func createQPFromSelect(sel *sqlparser.Select) (*queryProjection, error) {
 		fExpr, ok := exp.Expr.(*sqlparser.FuncExpr)
 		if ok && fExpr.IsAggregate() {
 			if len(fExpr.Exprs) != 1 {
-				return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.SyntaxError, "multiple arguments inside the function '%s'", sqlparser.String(fExpr))
+				return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.SyntaxError, "aggregate functions take a single argument '%s'", sqlparser.String(fExpr))
 			}
 			qp.aggrExprs = append(qp.aggrExprs, exp)
 			continue

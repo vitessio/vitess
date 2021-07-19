@@ -19,8 +19,21 @@ package http
 import (
 	"context"
 
+	"github.com/gorilla/mux"
+
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
 )
+
+// GetKeyspace implements the http wrapper for /keyspace/{cluster_id}/{name}.
+func GetKeyspace(ctx context.Context, r Request, api *API) *JSONResponse {
+	vars := mux.Vars(r.Request)
+	keyspace, err := api.server.GetKeyspace(ctx, &vtadminpb.GetKeyspaceRequest{
+		ClusterId: vars["cluster_id"],
+		Keyspace:  vars["name"],
+	})
+
+	return NewJSONResponse(keyspace, err)
+}
 
 // GetKeyspaces implements the http wrapper for /keyspaces[?cluster=[&cluster=]].
 func GetKeyspaces(ctx context.Context, r Request, api *API) *JSONResponse {

@@ -21,7 +21,6 @@ import (
 
 	"vitess.io/vitess/go/vt/orchestrator/inst"
 	"vitess.io/vitess/go/vt/orchestrator/kv"
-	orcraft "vitess.io/vitess/go/vt/orchestrator/raft"
 
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
 )
@@ -39,14 +38,12 @@ func (applier *CommandApplier) ApplyCommand(op string, value []byte) interface{}
 	switch op {
 	case "heartbeat":
 		return nil
-	case "async-snapshot":
-		return applier.asyncSnapshot(value)
 	case "register-node":
 		return applier.registerNode(value)
 	case "discover":
 		return applier.discover(value)
 	case "injected-pseudo-gtid":
-		return applier.injectedPseudoGTID(value)
+		return nil // depracated
 	case "forget":
 		return applier.forget(value)
 	case "forget-cluster":
@@ -81,19 +78,10 @@ func (applier *CommandApplier) ApplyCommand(op string, value []byte) interface{}
 		return applier.putInstanceTag(value)
 	case "delete-instance-tag":
 		return applier.deleteInstanceTag(value)
-	case "leader-uri":
-		return applier.leaderURI(value)
-	case "request-health-report":
-		return applier.healthReport(value)
 	case "set-cluster-alias-manual-override":
 		return applier.setClusterAliasManualOverride(value)
 	}
 	return log.Errorf("Unknown command op: %s", op)
-}
-
-func (applier *CommandApplier) asyncSnapshot(value []byte) interface{} {
-	err := orcraft.AsyncSnapshot()
-	return err
 }
 
 func (applier *CommandApplier) registerNode(value []byte) interface{} {
@@ -106,15 +94,6 @@ func (applier *CommandApplier) discover(value []byte) interface{} {
 		return log.Errore(err)
 	}
 	DiscoverInstance(instanceKey)
-	return nil
-}
-
-func (applier *CommandApplier) injectedPseudoGTID(value []byte) interface{} {
-	var clusterName string
-	if err := json.Unmarshal(value, &clusterName); err != nil {
-		return log.Errore(err)
-	}
-	inst.RegisterInjectedPseudoGTID(clusterName)
 	return nil
 }
 
@@ -280,24 +259,6 @@ func (applier *CommandApplier) deleteInstanceTag(value []byte) interface{} {
 	}
 	_, err := inst.Untag(&instanceTag.Key, &instanceTag.T)
 	return err
-}
-
-func (applier *CommandApplier) leaderURI(value []byte) interface{} {
-	var uri string
-	if err := json.Unmarshal(value, &uri); err != nil {
-		return log.Errore(err)
-	}
-	orcraft.LeaderURI.Set(uri)
-	return nil
-}
-
-func (applier *CommandApplier) healthReport(value []byte) interface{} {
-	var authenticationToken string
-	if err := json.Unmarshal(value, &authenticationToken); err != nil {
-		return log.Errore(err)
-	}
-	orcraft.ReportToRaftLeader(authenticationToken)
-	return nil
 }
 
 func (applier *CommandApplier) setClusterAliasManualOverride(value []byte) interface{} {

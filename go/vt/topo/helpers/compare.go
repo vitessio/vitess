@@ -21,9 +21,9 @@ package helpers
 import (
 	"reflect"
 
-	"context"
+	"google.golang.org/protobuf/proto"
 
-	"github.com/golang/protobuf/proto"
+	"context"
 
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/topo"

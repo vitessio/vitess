@@ -20,7 +20,7 @@ import { KeyValueSearchToken, SearchTokenTypes, tokenizeSearch } from './tokeniz
 /**
  * `filterNouns` filters a list of nouns by a search string.
  */
-export const filterNouns = <T extends { [k: string]: any }>(needle: string | null, haystack: T[]): T[] => {
+export const filterNouns = <T extends { [k: string]: any }>(needle: string | null | undefined, haystack: T[]): T[] => {
     if (!needle) return haystack;
 
     const tokens = tokenizeSearch(needle);

@@ -36,7 +36,7 @@ func GetTablet(ctx context.Context, r Request, api *API) *JSONResponse {
 	vars := r.Vars()
 
 	tablet, err := api.server.GetTablet(ctx, &vtadminpb.GetTabletRequest{
-		Hostname:   vars["tablet"],
+		Alias:      vars["tablet"],
 		ClusterIds: r.URL.Query()["cluster"],
 	})
 

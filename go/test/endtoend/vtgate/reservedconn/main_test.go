@@ -126,10 +126,8 @@ func TestMain(m *testing.M) {
 		}
 
 		// Start vtgate
-		clusterInstance.VtGateExtraArgs = []string{"-lock_heartbeat_time", "2s"}
-		vtgateProcess := clusterInstance.NewVtgateInstance()
-		vtgateProcess.SysVarSetEnabled = true
-		if err := vtgateProcess.Setup(); err != nil {
+		clusterInstance.VtGateExtraArgs = []string{"-lock_heartbeat_time", "2s", "-enable_system_settings=true"} // enable reserved connection.
+		if err := clusterInstance.StartVtgate(); err != nil {
 			return 1
 		}
 

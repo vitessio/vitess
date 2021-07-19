@@ -275,7 +275,7 @@ func (ct *ColumnType) SQLType() querypb.Type {
 	case keywordStrings[MULTIPOLYGON]:
 		return sqltypes.Geometry
 	}
-	panic("unimplemented type " + ct.Type)
+	return sqltypes.Null
 }
 
 // ParseParams parses the vindex parameter list, pulling out the special-case
@@ -1229,6 +1229,8 @@ func (ty ShowCommandType) ToString() string {
 		return FunctionCStr
 	case Function:
 		return FunctionStr
+	case GtidExecGlobal:
+		return GtidExecGlobalStr
 	case Index:
 		return IndexStr
 	case OpenTable:
@@ -1253,8 +1255,12 @@ func (ty ShowCommandType) ToString() string {
 		return VariableGlobalStr
 	case VariableSession:
 		return VariableSessionStr
+	case VGtidExecGlobal:
+		return VGtidExecGlobalStr
 	case VitessMigrations:
 		return VitessMigrationsStr
+	case Warnings:
+		return WarningsStr
 	case Keyspace:
 		return KeyspaceStr
 	default:
@@ -1294,11 +1300,11 @@ func (lock LockOptionType) ToString() string {
 }
 
 // CompliantName is used to get the name of the bind variable to use for this column name
-func (node *ColName) CompliantName(suffix string) string {
+func (node *ColName) CompliantName() string {
 	if !node.Qualifier.IsEmpty() {
-		return node.Qualifier.Name.CompliantName() + "_" + node.Name.CompliantName() + suffix
+		return node.Qualifier.Name.CompliantName() + "_" + node.Name.CompliantName()
 	}
-	return node.Name.CompliantName() + suffix
+	return node.Name.CompliantName()
 }
 
 // AtCount represents the '@' count in ColIdent
@@ -1332,4 +1338,16 @@ func handleUnaryMinus(expr Expr) Expr {
 // encodeSQLString encodes the string as a SQL string.
 func encodeSQLString(val string) string {
 	return sqltypes.EncodeStringSQL(val)
+}
+
+// ToString prints the list of table expressions as a string
+// To be used as an alternate for String for []TableExpr
+func ToString(exprs []TableExpr) string {
+	buf := NewTrackedBuffer(nil)
+	prefix := ""
+	for _, expr := range exprs {
+		buf.astPrintf(nil, "%s%v", prefix, expr)
+		prefix = ", "
+	}
+	return buf.String()
 }

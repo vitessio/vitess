@@ -380,6 +380,25 @@ func (client *Client) UnlockTables(ctx context.Context, tablet *topodatapb.Table
 	return err
 }
 
+// ExecuteQuery is part of the tmclient.TabletManagerClient interface.
+func (client *Client) ExecuteQuery(ctx context.Context, tablet *topodatapb.Tablet, query []byte, maxrows int) (*querypb.QueryResult, error) {
+	cc, c, err := client.dial(tablet)
+	if err != nil {
+		return nil, err
+	}
+	defer cc.Close()
+
+	response, err := c.ExecuteQuery(ctx, &tabletmanagerdatapb.ExecuteQueryRequest{
+		Query:   query,
+		DbName:  topoproto.TabletDbName(tablet),
+		MaxRows: uint64(maxrows),
+	})
+	if err != nil {
+		return nil, err
+	}
+	return response.Result, nil
+}
+
 // ExecuteFetchAsDba is part of the tmclient.TabletManagerClient interface.
 func (client *Client) ExecuteFetchAsDba(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, query []byte, maxRows int, disableBinlogs, reloadSchema bool) (*querypb.QueryResult, error) {
 	var c tabletmanagerservicepb.TabletManagerClient
@@ -702,7 +721,7 @@ func (client *Client) DemoteMaster(ctx context.Context, tablet *topodatapb.Table
 	if masterStatus == nil {
 		// We are assuming this means a response came from an older server.
 		masterStatus = &replicationdatapb.MasterStatus{
-			Position:     response.DeprecatedPosition,
+			Position:     response.DeprecatedPosition, //nolint
 			FilePosition: "",
 		}
 	}
@@ -773,7 +792,7 @@ func (client *Client) StopReplicationAndGetStatus(ctx context.Context, tablet *t
 	if err != nil {
 		return nil, nil, err
 	}
-	return response.HybridStatus, &replicationdatapb.StopReplicationStatus{
+	return response.HybridStatus, &replicationdatapb.StopReplicationStatus{ //nolint
 		Before: response.Status.Before,
 		After:  response.Status.After,
 	}, nil

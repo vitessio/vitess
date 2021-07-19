@@ -13,13 +13,10 @@ msg_file="$1"
 
 git_email="$(git config --get user.email)"
 git_name="$(git config --get user.name)"
-signoff="$(grep -E --max-count=1 "^Signed-off-by: " "$msg_file")"
+signoff="Signed-off-by: ${git_name} <${git_email}>"
 
-if [[ "$signoff" =~ Signed-off-by:\ (.*)\ \<(.*)\> ]]; then
-  if [[ "${BASH_REMATCH[1]}" == "${git_name}" && "${BASH_REMATCH[2]}" == "${git_email}" ]]; then
-    # Everything checks out!
-    exit 0
-  fi
+if git interpret-trailers --parse $msg_file | grep -q -F "$signoff"; then
+  exit 0
 fi
 
 # No signoff found, or the email doesn't match. Print some instructions.
@@ -46,7 +43,6 @@ if [[ $? -ne 0 ]]; then
 fi
 
 # Offer to add the signoff line.
-signoff="Signed-off-by: ${git_name} <${git_email}>"
 echo
 echo "Alternatively, you can acknowledge your signoff and continue below:"
 echo
@@ -59,5 +55,4 @@ if [[ "${reply}" != "y" ]]; then
   exit 1
 fi
 
-echo >> "${msg_file}"
-echo "${signoff}" >> "${msg_file}"
+git interpret-trailers --trailer "$signoff" --in-place "$msg_file"

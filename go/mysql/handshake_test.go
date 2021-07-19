@@ -21,9 +21,10 @@ import (
 	"net"
 	"os"
 	"path"
-	"reflect"
 	"strings"
 	"testing"
+
+	"vitess.io/vitess/go/test/utils"
 
 	"context"
 
@@ -83,9 +84,7 @@ func TestClearTextClientAuth(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ExecuteFetch failed: %v", err)
 	}
-	if !reflect.DeepEqual(result, selectRowsResult) {
-		t.Errorf("Got wrong result from ExecuteFetch(select rows): %v", result)
-	}
+	utils.MustMatch(t, result, selectRowsResult)
 
 	// Send a ComQuit to avoid the error message on the server side.
 	conn.writeComQuit()
@@ -202,9 +201,7 @@ func testSSLConnectionBasics(t *testing.T, params *ConnParams) {
 	if err != nil {
 		t.Fatalf("ExecuteFetch failed: %v", err)
 	}
-	if !reflect.DeepEqual(result, selectRowsResult) {
-		t.Errorf("Got wrong result from ExecuteFetch(select rows): %v", result)
-	}
+	utils.MustMatch(t, result, selectRowsResult)
 
 	// Make sure this went through SSL.
 	result, err = conn.ExecuteFetch("ssl echo", 10000, true)

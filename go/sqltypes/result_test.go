@@ -20,6 +20,8 @@ import (
 	"reflect"
 	"testing"
 
+	"vitess.io/vitess/go/test/utils"
+
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
@@ -63,9 +65,7 @@ func TestCopy(t *testing.T) {
 		},
 	}
 	out := in.Copy()
-	if !reflect.DeepEqual(out, in) {
-		t.Errorf("Copy:\n%v, want\n%v", out, in)
-	}
+	utils.MustMatch(t, in, out)
 }
 
 func TestTruncate(t *testing.T) {
@@ -291,9 +291,7 @@ func TestStripMetaData(t *testing.T) {
 			}
 		}
 		// check we didn't change the original result.
-		if !reflect.DeepEqual(tcase.in, inCopy) {
-			t.Error("StripMetaData modified original result")
-		}
+		utils.MustMatch(t, tcase.in, inCopy)
 	}
 }
 

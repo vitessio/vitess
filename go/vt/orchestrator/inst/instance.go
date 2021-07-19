@@ -65,7 +65,7 @@ type Instance struct {
 	SupportsOracleGTID    bool
 	UsingOracleGTID       bool
 	UsingMariaDBGTID      bool
-	UsingPseudoGTID       bool
+	UsingPseudoGTID       bool // Legacy. Always 'false'
 	ReadBinlogCoordinates BinlogCoordinates
 	ExecBinlogCoordinates BinlogCoordinates
 	IsDetached            bool
@@ -237,11 +237,6 @@ func (this *Instance) IsPercona() bool {
 	return strings.Contains(this.VersionComment, "Percona")
 }
 
-// isMaxScale checks whether this is any version of MaxScale
-func (this *Instance) isMaxScale() bool {
-	return strings.Contains(this.Version, "maxscale")
-}
-
 // isNDB check whether this is NDB Cluster (aka MySQL Cluster)
 func (this *Instance) IsNDB() bool {
 	return strings.Contains(this.Version, "-ndb-")
@@ -262,9 +257,9 @@ func (this *Instance) IsReplicationGroupSecondary() bool {
 	return this.IsReplicationGroupMember() && !this.ReplicationGroupPrimaryInstanceKey.Equals(&this.Key)
 }
 
-// IsBinlogServer checks whether this is any type of a binlog server (currently only maxscale)
+// IsBinlogServer checks whether this is any type of a binlog server
 func (this *Instance) IsBinlogServer() bool {
-	return this.isMaxScale()
+	return false
 }
 
 // IsOracleMySQL checks whether this is an Oracle MySQL distribution
@@ -273,9 +268,6 @@ func (this *Instance) IsOracleMySQL() bool {
 		return false
 	}
 	if this.IsPercona() {
-		return false
-	}
-	if this.isMaxScale() {
 		return false
 	}
 	if this.IsBinlogServer() {
@@ -302,8 +294,6 @@ func (this *Instance) applyFlavorName() {
 		this.FlavorName = "MariaDB"
 	} else if this.IsPercona() {
 		this.FlavorName = "Percona"
-	} else if this.isMaxScale() {
-		this.FlavorName = "MaxScale"
 	} else {
 		this.FlavorName = "unknown"
 	}
@@ -522,17 +512,6 @@ func (this *Instance) CanMoveAsCoMaster() (bool, error) {
 	return true, nil
 }
 
-// CanMoveViaMatch returns true if this instance's state allows it to be repositioned via pseudo-GTID matching
-func (this *Instance) CanMoveViaMatch() (bool, error) {
-	if !this.IsLastCheckValid {
-		return false, fmt.Errorf("%+v: last check invalid", this.Key)
-	}
-	if !this.IsRecentlyChecked {
-		return false, fmt.Errorf("%+v: not recently checked", this.Key)
-	}
-	return true, nil
-}
-
 // StatusString returns a human readable description of this instance's status
 func (this *Instance) StatusString() string {
 	if !this.IsLastCheckValid {
@@ -598,9 +577,6 @@ func (this *Instance) descriptionTokens() (tokens []string) {
 				token = fmt.Sprintf("%s:errant", token)
 			}
 			extraTokens = append(extraTokens, token)
-		}
-		if this.UsingPseudoGTID {
-			extraTokens = append(extraTokens, "P-GTID")
 		}
 		if this.SemiSyncMasterStatus {
 			extraTokens = append(extraTokens, "semi:master")

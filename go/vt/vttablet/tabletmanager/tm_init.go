@@ -94,6 +94,9 @@ var (
 	// statsBackupIsRunning is set to 1 (true) if a backup is running.
 	statsBackupIsRunning *stats.GaugesWithMultiLabels
 
+	// statsIsInSrvKeyspace is set to 1 (true), 0 (false) whether the tablet is in the serving keyspace
+	statsIsInSrvKeyspace *stats.Gauge
+
 	statsKeyspace      = stats.NewString("TabletKeyspace")
 	statsShard         = stats.NewString("TabletShard")
 	statsKeyRangeStart = stats.NewString("TabletKeyRangeStart")
@@ -115,6 +118,7 @@ func init() {
 	statsTabletType = stats.NewString("TabletType")
 	statsTabletTypeCount = stats.NewCountersWithSingleLabel("TabletTypeCount", "Number of times the tablet changed to the labeled type", "type")
 	statsBackupIsRunning = stats.NewGaugesWithMultiLabels("BackupIsRunning", "Whether a backup is running", []string{"mode"})
+	statsIsInSrvKeyspace = stats.NewGauge("IsInSrvKeyspace", "Whether the vttablet is in the serving keyspace (1 = true / 0 = false)")
 }
 
 // TabletManager is the main class for the tablet manager.
@@ -128,6 +132,11 @@ type TabletManager struct {
 	QueryServiceControl tabletserver.Controller
 	UpdateStream        binlog.UpdateStreamControl
 	VREngine            *vreplication.Engine
+
+	// MetadataManager manages the local metadata tables for a tablet. It
+	// exists, and is exported, to support swapping a nil pointer in test code,
+	// in which case metadata creation/population is skipped.
+	MetadataManager *mysqlctl.MetadataManager
 
 	// tmState manages the TabletManager state.
 	tmState *tmState
@@ -170,6 +179,14 @@ type TabletManager struct {
 
 	// _shardSyncCancel is the function to stop the background shard sync goroutine.
 	_shardSyncCancel context.CancelFunc
+
+	// _rebuildKeyspaceDone is a channel for waiting until the current keyspace
+	// has been rebuilt
+	_rebuildKeyspaceDone chan struct{}
+
+	// _rebuildKeyspaceCancel is the function to stop a keyspace rebuild currently
+	// in progress
+	_rebuildKeyspaceCancel context.CancelFunc
 
 	// _lockTablesConnection is used to get and release the table read locks to pause replication
 	_lockTablesConnection *dbconnpool.DBConnection
@@ -261,7 +278,7 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, healthCheckInterval ti
 		return err
 	}
 
-	err = tm.QueryServiceControl.InitDBConfig(querypb.Target{
+	err = tm.QueryServiceControl.InitDBConfig(&querypb.Target{
 		Keyspace:   tablet.Keyspace,
 		Shard:      tablet.Shard,
 		TabletType: tablet.Type,
@@ -318,6 +335,7 @@ func (tm *TabletManager) Close() {
 	// rather than registering it as an OnTerm hook so the shard sync loop keeps
 	// running during lame duck.
 	tm.stopShardSync()
+	tm.stopRebuildKeyspace()
 
 	// cleanup initialized fields in the tablet entry
 	f := func(tablet *topodatapb.Tablet) error {
@@ -348,6 +366,7 @@ func (tm *TabletManager) Stop() {
 	// Stop the shard sync loop and wait for it to exit. This needs to be done
 	// here in addition to in Close() because tests do not call Close().
 	tm.stopShardSync()
+	tm.stopRebuildKeyspace()
 
 	if tm.UpdateStream != nil {
 		tm.UpdateStream.Disable()
@@ -386,7 +405,10 @@ func (tm *TabletManager) createKeyspaceShard(ctx context.Context) (*topo.ShardIn
 	case err == nil:
 		tm.tmState.RefreshFromTopoInfo(ctx, nil, srvKeyspace)
 	case topo.IsErrType(err, topo.NoNode):
-		go tm.rebuildKeyspace(tablet.Keyspace, rebuildKeyspaceRetryInterval)
+		var rebuildKsCtx context.Context
+		rebuildKsCtx, tm._rebuildKeyspaceCancel = context.WithCancel(tm.BatchCtx)
+		tm._rebuildKeyspaceDone = make(chan struct{})
+		go tm.rebuildKeyspace(rebuildKsCtx, tm._rebuildKeyspaceDone, tablet.Keyspace, rebuildKeyspaceRetryInterval)
 	default:
 		return nil, vterrors.Wrap(err, "initeKeyspaceShardTopo: failed to read SrvKeyspace")
 	}
@@ -412,28 +434,50 @@ func (tm *TabletManager) createKeyspaceShard(ctx context.Context) (*topo.ShardIn
 	return shardInfo, nil
 }
 
-func (tm *TabletManager) rebuildKeyspace(keyspace string, retryInterval time.Duration) {
+func (tm *TabletManager) stopRebuildKeyspace() {
+	var doneChan <-chan struct{}
+
+	tm.mutex.Lock()
+	if tm._rebuildKeyspaceCancel != nil {
+		tm._rebuildKeyspaceCancel()
+	}
+	doneChan = tm._rebuildKeyspaceDone
+	tm.mutex.Unlock()
+
+	if doneChan != nil {
+		<-doneChan
+	}
+}
+
+func (tm *TabletManager) rebuildKeyspace(ctx context.Context, done chan<- struct{}, keyspace string, retryInterval time.Duration) {
 	var srvKeyspace *topodatapb.SrvKeyspace
+
 	defer func() {
 		log.Infof("Keyspace rebuilt: %v", keyspace)
-		tm.tmState.RefreshFromTopoInfo(tm.BatchCtx, nil, srvKeyspace)
+		if ctx.Err() == nil {
+			tm.tmState.RefreshFromTopoInfo(tm.BatchCtx, nil, srvKeyspace)
+		}
+		close(done)
 	}()
 
 	// RebuildKeyspace will fail until at least one tablet is up for every shard.
 	firstTime := true
 	var err error
 	for {
+		if ctx.Err() != nil {
+			return
+		}
 		if !firstTime {
 			// If keyspace was rebuilt by someone else, we can just exit.
-			srvKeyspace, err = tm.TopoServer.GetSrvKeyspace(tm.BatchCtx, tm.tabletAlias.Cell, keyspace)
-			if err == nil {
+			srvKeyspace, err = tm.TopoServer.GetSrvKeyspace(ctx, tm.tabletAlias.Cell, keyspace)
+			if err == nil || ctx.Err() != nil {
 				return
 			}
 		}
-		err = topotools.RebuildKeyspace(tm.BatchCtx, logutil.NewConsoleLogger(), tm.TopoServer, keyspace, []string{tm.tabletAlias.Cell}, false)
+		err = topotools.RebuildKeyspace(ctx, logutil.NewConsoleLogger(), tm.TopoServer, keyspace, []string{tm.tabletAlias.Cell}, false)
 		if err == nil {
-			srvKeyspace, err = tm.TopoServer.GetSrvKeyspace(tm.BatchCtx, tm.tabletAlias.Cell, keyspace)
-			if err == nil {
+			srvKeyspace, err = tm.TopoServer.GetSrvKeyspace(ctx, tm.tabletAlias.Cell, keyspace)
+			if err == nil || ctx.Err() != nil {
 				return
 			}
 		}
@@ -621,9 +665,12 @@ func (tm *TabletManager) handleRestore(ctx context.Context) (bool, error) {
 				return false, err
 			}
 		}
-		err := mysqlctl.PopulateMetadataTables(tm.MysqlDaemon, localMetadata, topoproto.TabletDbName(tablet))
-		if err != nil {
-			return false, vterrors.Wrap(err, "failed to -init_populate_metadata")
+
+		if tm.MetadataManager != nil {
+			err := tm.MetadataManager.PopulateMetadataTables(tm.MysqlDaemon, localMetadata, topoproto.TabletDbName(tablet))
+			if err != nil {
+				return false, vterrors.Wrap(err, "failed to -init_populate_metadata")
+			}
 		}
 	}
 	return false, nil
@@ -684,5 +731,11 @@ func (tm *TabletManager) BlacklistedTables() []string {
 
 // hookExtraEnv returns the map to pass to local hooks
 func (tm *TabletManager) hookExtraEnv() map[string]string {
-	return map[string]string{"TABLET_ALIAS": topoproto.TabletAliasString(tm.tabletAlias)}
+	tablet := tm.Tablet()
+
+	return map[string]string{
+		"TABLET_ALIAS": topoproto.TabletAliasString(tm.tabletAlias),
+		"KEYSPACE":     tablet.Keyspace,
+		"SHARD":        tablet.Shard,
+	}
 }

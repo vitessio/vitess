@@ -25,7 +25,7 @@ import (
 
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
@@ -87,6 +87,11 @@ type vstream struct {
 	timestamps map[string]int64
 
 	vsm *vstreamManager
+
+	rss []*srvtopo.ResolvedShard
+
+	eventCh           chan []*binlogdatapb.VEvent
+	heartbeatInterval uint32
 }
 
 type journalEvent struct {
@@ -110,17 +115,18 @@ func (vsm *vstreamManager) VStream(ctx context.Context, tabletType topodatapb.Ta
 		return err
 	}
 	vs := &vstream{
-		vgtid:      vgtid,
-		tabletType: tabletType,
-		filter:     filter,
-		send:       send,
-		resolver:   vsm.resolver,
-		journaler:  make(map[int64]*journalEvent),
-
-		minimizeSkew:       flags.MinimizeSkew,
+		vgtid:              vgtid,
+		tabletType:         tabletType,
+		filter:             filter,
+		send:               send,
+		resolver:           vsm.resolver,
+		journaler:          make(map[int64]*journalEvent),
+		minimizeSkew:       flags.GetMinimizeSkew(),
 		skewTimeoutSeconds: 10 * 60,
 		timestamps:         make(map[string]int64),
 		vsm:                vsm,
+		eventCh:            make(chan []*binlogdatapb.VEvent),
+		heartbeatInterval:  flags.GetHeartbeatInterval(),
 	}
 	return vs.stream(ctx)
 }
@@ -203,6 +209,8 @@ func (vs *vstream) stream(ctx context.Context) error {
 	ctx, vs.cancel = context.WithCancel(ctx)
 	defer vs.cancel()
 
+	go vs.sendEvents(ctx)
+
 	// Make a copy first, because the ShardGtids list can change once streaming starts.
 	copylist := append(([]*binlogdatapb.ShardGtid)(nil), vs.vgtid.ShardGtids...)
 	for _, sgtid := range copylist {
@@ -210,6 +218,63 @@ func (vs *vstream) stream(ctx context.Context) error {
 	}
 	vs.wg.Wait()
 	return vs.err
+}
+
+func (vs *vstream) sendEvents(ctx context.Context) {
+	var heartbeat <-chan time.Time
+	var resetHeartbeat func()
+
+	if vs.heartbeatInterval == 0 {
+		heartbeat = make(chan time.Time)
+		resetHeartbeat = func() {}
+	} else {
+		d := time.Duration(vs.heartbeatInterval) * time.Second
+		timer := time.NewTicker(d)
+		defer timer.Stop()
+
+		heartbeat = timer.C
+		resetHeartbeat = func() { timer.Reset(d) }
+	}
+
+	send := func(evs []*binlogdatapb.VEvent) error {
+		if err := vs.send(evs); err != nil {
+			vs.once.Do(func() {
+				vs.err = err
+			})
+			return err
+		}
+		return nil
+	}
+	for {
+		select {
+		case <-ctx.Done():
+			vs.once.Do(func() {
+				vs.err = fmt.Errorf("context canceled")
+			})
+			return
+		case evs := <-vs.eventCh:
+			if err := send(evs); err != nil {
+				vs.once.Do(func() {
+					vs.err = err
+				})
+				return
+			}
+			resetHeartbeat()
+		case t := <-heartbeat:
+			now := t.UnixNano()
+			evs := []*binlogdatapb.VEvent{{
+				Type:        binlogdatapb.VEventType_HEARTBEAT,
+				Timestamp:   now / 1e9,
+				CurrentTime: now,
+			}}
+			if err := send(evs); err != nil {
+				vs.once.Do(func() {
+					vs.err = err
+				})
+				return
+			}
+		}
+	}
 }
 
 // startOneStream sets up one shard stream.
@@ -338,9 +403,13 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 		}
 
 		var eventss [][]*binlogdatapb.VEvent
-		rss, err := vs.resolver.ResolveDestination(ctx, sgtid.Keyspace, vs.tabletType, key.DestinationShard(sgtid.Shard))
-		if err != nil {
-			return err
+		var err error
+		rss := vs.rss
+		if vs.resolver != nil {
+			rss, err = vs.resolver.ResolveDestination(ctx, sgtid.Keyspace, vs.tabletType, key.DestinationShard(sgtid.Shard))
+			if err != nil {
+				return err
+			}
 		}
 		if len(rss) != 1 {
 			// Unreachable.
@@ -454,6 +523,9 @@ func (vs *vstream) sendAll(sgtid *binlogdatapb.ShardGtid, eventss [][]*binlogdat
 
 	// Send all chunks while holding the lock.
 	for _, events := range eventss {
+		if vs.err != nil {
+			return vs.err
+		}
 		// convert all gtids to vgtids. This should be done here while holding the lock.
 		for j, event := range events {
 			if event.Type == binlogdatapb.VEventType_GTID {
@@ -492,9 +564,7 @@ func (vs *vstream) sendAll(sgtid *binlogdatapb.ShardGtid, eventss [][]*binlogdat
 				}
 			}
 		}
-		if err := vs.send(events); err != nil {
-			return err
-		}
+		vs.eventCh <- events
 	}
 	return nil
 }

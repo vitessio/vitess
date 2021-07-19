@@ -17,39 +17,58 @@ limitations under the License.
 package testutil
 
 import (
+	"fmt"
+	"sort"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"google.golang.org/protobuf/proto"
+
+	"vitess.io/vitess/go/test/utils"
 
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
 // AssertEmergencyReparentShardResponsesEqual asserts that two
 // vtctldatapb.EmergencyReparentShardResponse objects are equal, ignoring their
 // respective Events field in the comparison.
-func AssertEmergencyReparentShardResponsesEqual(t *testing.T, expected vtctldatapb.EmergencyReparentShardResponse, actual vtctldatapb.EmergencyReparentShardResponse, msgAndArgs ...interface{}) {
+func AssertEmergencyReparentShardResponsesEqual(t *testing.T, expected *vtctldatapb.EmergencyReparentShardResponse, actual *vtctldatapb.EmergencyReparentShardResponse, msgAndArgs ...interface{}) {
 	t.Helper()
 
-	// We take both the expected and actual values by value, rather than by
-	// reference, so this mutation is safe to do and will not interfere with
-	// other assertions performed in the calling function.
+	expected = proto.Clone(expected).(*vtctldatapb.EmergencyReparentShardResponse)
 	expected.Events = nil
+
+	actual = proto.Clone(actual).(*vtctldatapb.EmergencyReparentShardResponse)
 	actual.Events = nil
 
-	assert.Equal(t, expected, actual, msgAndArgs...)
+	utils.MustMatch(t, expected, actual)
 }
 
 // AssertPlannedReparentShardResponsesEqual asserts that two
 // vtctldatapb.PlannedReparentShardResponse objects are equal, ignoring their
 // respective Events field in the comparison.
-func AssertPlannedReparentShardResponsesEqual(t *testing.T, expected vtctldatapb.PlannedReparentShardResponse, actual vtctldatapb.PlannedReparentShardResponse, msgAndArgs ...interface{}) {
+func AssertPlannedReparentShardResponsesEqual(t *testing.T, expected *vtctldatapb.PlannedReparentShardResponse, actual *vtctldatapb.PlannedReparentShardResponse) {
 	t.Helper()
 
+	expected = proto.Clone(expected).(*vtctldatapb.PlannedReparentShardResponse)
 	expected.Events = nil
+
+	actual = proto.Clone(actual).(*vtctldatapb.PlannedReparentShardResponse)
 	actual.Events = nil
 
-	assert.Equal(t, expected, actual, msgAndArgs...)
+	utils.MustMatch(t, expected, actual)
+}
+
+func AssertSameTablets(t *testing.T, expected, actual []*topodatapb.Tablet) {
+	sort.Slice(expected, func(i, j int) bool {
+		return fmt.Sprintf("%v", expected[i]) < fmt.Sprintf("%v", expected[j])
+	})
+	sort.Slice(actual, func(i, j int) bool {
+		return fmt.Sprintf("%v", actual[i]) < fmt.Sprintf("%v", actual[j])
+	})
+	utils.MustMatch(t, expected, actual)
 }
 
 // AssertKeyspacesEqual is a convenience function to assert that two
@@ -57,20 +76,7 @@ func AssertPlannedReparentShardResponsesEqual(t *testing.T, expected vtctldatapb
 // proto XXX_ fields.
 func AssertKeyspacesEqual(t *testing.T, expected *vtctldatapb.Keyspace, actual *vtctldatapb.Keyspace, msgAndArgs ...interface{}) {
 	t.Helper()
-
-	for _, ks := range []*vtctldatapb.Keyspace{expected, actual} {
-		if ks.Keyspace != nil {
-			ks.Keyspace.XXX_sizecache = 0
-			ks.Keyspace.XXX_unrecognized = nil
-		}
-
-		if ks.Keyspace.SnapshotTime != nil {
-			ks.Keyspace.SnapshotTime.XXX_sizecache = 0
-			ks.Keyspace.SnapshotTime.XXX_unrecognized = nil
-		}
-	}
-
-	assert.Equal(t, expected, actual, msgAndArgs...)
+	utils.MustMatch(t, expected, actual)
 }
 
 // AssertLogutilEventsOccurred asserts that for something containing a slice of

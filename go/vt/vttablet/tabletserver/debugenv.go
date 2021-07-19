@@ -23,6 +23,7 @@ import (
 	"net/http"
 	"strconv"
 	"text/template"
+	"time"
 
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/vt/log"
@@ -72,6 +73,24 @@ func debugEnvHandler(tsv *TabletServer, w http.ResponseWriter, r *http.Request) 
 			f(ival)
 			msg = fmt.Sprintf("Setting %v to: %v", varname, value)
 		}
+		setDurationVal := func(f func(time.Duration)) {
+			durationVal, err := time.ParseDuration(value)
+			if err != nil {
+				msg = fmt.Sprintf("Failed setting value for %v: %v", varname, err)
+				return
+			}
+			f(durationVal)
+			msg = fmt.Sprintf("Setting %v to: %v", varname, value)
+		}
+		setFloat64Val := func(f func(float64)) {
+			fval, err := strconv.ParseFloat(value, 64)
+			if err != nil {
+				msg = fmt.Sprintf("Failed setting value for %v: %v", varname, err)
+				return
+			}
+			f(fval)
+			msg = fmt.Sprintf("Setting %v to: %v", varname, value)
+		}
 		switch varname {
 		case "PoolSize":
 			setIntVal(tsv.SetPoolSize)
@@ -85,6 +104,12 @@ func debugEnvHandler(tsv *TabletServer, w http.ResponseWriter, r *http.Request) 
 			setIntVal(tsv.SetMaxResultSize)
 		case "WarnResultSize":
 			setIntVal(tsv.SetWarnResultSize)
+		case "UnhealthyThreshold":
+			setDurationVal(tsv.Config().Healthcheck.UnhealthyThresholdSeconds.Set)
+			setDurationVal(tsv.hs.SetUnhealthyThreshold)
+			setDurationVal(tsv.sm.SetUnhealthyThreshold)
+		case "ThrottleMetricThreshold":
+			setFloat64Val(tsv.SetThrottleMetricThreshold)
 		case "Consolidator":
 			tsv.SetConsolidatorMode(value)
 			msg = fmt.Sprintf("Setting %v to: %v", varname, value)
@@ -98,12 +123,26 @@ func debugEnvHandler(tsv *TabletServer, w http.ResponseWriter, r *http.Request) 
 			Value:   fmt.Sprintf("%v", f()),
 		})
 	}
+	addDurationVar := func(varname string, f func() time.Duration) {
+		vars = append(vars, envValue{
+			VarName: varname,
+			Value:   fmt.Sprintf("%v", f()),
+		})
+	}
+	addFloat64Var := func(varname string, f func() float64) {
+		vars = append(vars, envValue{
+			VarName: varname,
+			Value:   fmt.Sprintf("%v", f()),
+		})
+	}
 	addIntVar("PoolSize", tsv.PoolSize)
 	addIntVar("StreamPoolSize", tsv.StreamPoolSize)
 	addIntVar("TxPoolSize", tsv.TxPoolSize)
 	addIntVar("QueryCacheCapacity", tsv.QueryPlanCacheCap)
 	addIntVar("MaxResultSize", tsv.MaxResultSize)
 	addIntVar("WarnResultSize", tsv.WarnResultSize)
+	addDurationVar("UnhealthyThreshold", tsv.Config().Healthcheck.UnhealthyThresholdSeconds.Get)
+	addFloat64Var("ThrottleMetricThreshold", tsv.ThrottleMetricThreshold)
 	vars = append(vars, envValue{
 		VarName: "Consolidator",
 		Value:   tsv.ConsolidatorMode(),
@@ -130,7 +169,7 @@ func debugEnvHandler(tsv *TabletServer, w http.ResponseWriter, r *http.Request) 
 	w.Write(debugEnvHeader)
 	for _, v := range vars {
 		if err := debugEnvRow.Execute(w, v); err != nil {
-			log.Errorf("queryz: couldn't execute template: %v", err)
+			log.Errorf("debugenv: couldn't execute template: %v", err)
 		}
 	}
 	w.Write(endTable)

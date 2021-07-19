@@ -314,7 +314,7 @@ func (g *generator) isExpr() Expr {
 	ops := []IsExprOperator{IsNullOp, IsNotNullOp, IsTrueOp, IsNotTrueOp, IsFalseOp, IsNotFalseOp}
 
 	return &IsExpr{
-		Operator: ops[g.r.Intn(len(ops))],
-		Expr:     g.booleanExpr(),
+		Right: ops[g.r.Intn(len(ops))],
+		Left:  g.booleanExpr(),
 	}
 }

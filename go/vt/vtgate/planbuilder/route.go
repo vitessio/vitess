@@ -133,7 +133,7 @@ func (rb *route) SetLimit(limit *sqlparser.Limit) {
 }
 
 // Wireup2 implements the logicalPlan interface
-func (rb *route) WireupV4(semTable *semantics.SemTable) error {
+func (rb *route) WireupGen4(semTable *semantics.SemTable) error {
 	rb.prepareTheAST()
 
 	rb.eroute.Query = sqlparser.String(rb.Select)
@@ -161,7 +161,7 @@ func (rb *route) Wireup(plan logicalPlan, jt *jointab) error {
 				return err
 			}
 			rb.eroute.Values = []sqltypes.PlanValue{pv}
-			vals.Right = sqlparser.ListArg("::" + engine.ListVarName)
+			vals.Right = sqlparser.ListArg(engine.ListVarName)
 		case nil:
 			// no-op.
 		default:
@@ -205,7 +205,7 @@ func (rb *route) Wireup(plan logicalPlan, jt *jointab) error {
 		case *sqlparser.ColName:
 			if !rb.isLocal(node) {
 				joinVar := jt.Procure(plan, node, rb.Order())
-				buf.Myprintf("%a", ":"+joinVar)
+				buf.WriteArg(":", joinVar)
 				return
 			}
 		case sqlparser.TableName:
@@ -287,7 +287,7 @@ func (rb *route) generateFieldQuery(sel sqlparser.SelectStatement, jt *jointab) 
 		case *sqlparser.ColName:
 			if !rb.isLocal(node) {
 				_, joinVar := jt.Lookup(node)
-				buf.Myprintf("%a", ":"+joinVar)
+				buf.WriteArg(":", joinVar)
 				return
 			}
 		case sqlparser.TableName:
@@ -440,28 +440,12 @@ func (rb *route) JoinCanMerge(pb *primitiveBuilder, rrb *route, ajoin *sqlparser
 		if where == nil {
 			return true
 		}
-		tableWithRoutingPredicates := make(map[sqlparser.TableName]struct{})
-		_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
-			col, ok := node.(*sqlparser.ColName)
-			if ok {
-				hasRuntimeRoutingPredicates := isTableNameCol(col) || isDbNameCol(col)
-				if hasRuntimeRoutingPredicates && pb.st.tables[col.Qualifier] != nil {
-					tableWithRoutingPredicates[col.Qualifier] = struct{}{}
-				}
-			}
-			return true, nil
-		}, where)
-		// Routes can be merged if only 1 table is used in the predicates that are used for routing
-		// TODO :- Even if more table are present in the routing, we can merge if they agree
-		if len(tableWithRoutingPredicates) <= 1 {
-			return true
-		}
-		return len(tableWithRoutingPredicates) == 0
+		return ajoin != nil
 	}
 	if ajoin == nil {
 		return false
 	}
-	for _, filter := range splitAndExpression(nil, ajoin.Condition.On) {
+	for _, filter := range sqlparser.SplitAndExpression(nil, ajoin.Condition.On) {
 		if rb.canMergeOnFilter(pb, rrb, filter) {
 			return true
 		}
@@ -622,10 +606,36 @@ func (rb *route) computePlan(pb *primitiveBuilder, filter sqlparser.Expr) (opcod
 			return rb.computeINPlan(pb, node)
 		case sqlparser.NotInOp:
 			return rb.computeNotInPlan(node.Right), nil, nil
+		case sqlparser.LikeOp:
+			return rb.computeLikePlan(pb, node)
 		}
 	case *sqlparser.IsExpr:
 		return rb.computeISPlan(pb, node)
 	}
+	return engine.SelectScatter, nil, nil
+}
+
+// computeLikePlan computes the plan for 'LIKE' constraint
+func (rb *route) computeLikePlan(pb *primitiveBuilder, comparison *sqlparser.ComparisonExpr) (opcode engine.RouteOpcode, vindex vindexes.SingleColumn, condition sqlparser.Expr) {
+
+	left := comparison.Left
+	right := comparison.Right
+
+	if sqlparser.IsNull(right) {
+		return engine.SelectNone, nil, nil
+	}
+	if !rb.exprIsValue(right) {
+		return engine.SelectScatter, nil, nil
+	}
+	vindex = pb.st.Vindex(left, rb)
+	if vindex == nil {
+		// if there is no vindex defined, scatter
+		return engine.SelectScatter, nil, nil
+	}
+	if subsharding, ok := vindex.(vindexes.Prefixable); ok {
+		return engine.SelectEqual, subsharding.PrefixVindex(), right
+	}
+
 	return engine.SelectScatter, nil, nil
 }
 
@@ -658,11 +668,11 @@ func (rb *route) computeEqualPlan(pb *primitiveBuilder, comparison *sqlparser.Co
 // computeIS computes the plan for an equality constraint.
 func (rb *route) computeISPlan(pb *primitiveBuilder, comparison *sqlparser.IsExpr) (opcode engine.RouteOpcode, vindex vindexes.SingleColumn, expr sqlparser.Expr) {
 	// we only handle IS NULL correct. IsExpr can contain other expressions as well
-	if comparison.Operator != sqlparser.IsNullOp {
+	if comparison.Right != sqlparser.IsNullOp {
 		return engine.SelectScatter, nil, nil
 	}
 
-	vindex = pb.st.Vindex(comparison.Expr, rb)
+	vindex = pb.st.Vindex(comparison.Left, rb)
 	// fallback to scatter gather if there is no vindex
 	if vindex == nil {
 		return engine.SelectScatter, nil, nil
@@ -717,7 +727,12 @@ func (rb *route) computeCompositeINPlan(pb *primitiveBuilder, comparison *sqlpar
 // iterateCompositeIN recursively walks the LHS tuple of the IN clause looking
 // for column names. For those that match a vindex, it builds a multi-value plan
 // using the corresponding values in the RHS. It returns the best of the plans built.
-func (rb *route) iterateCompositeIN(pb *primitiveBuilder, comparison *sqlparser.ComparisonExpr, coordinates []int, tuple sqlparser.ValTuple) (opcode engine.RouteOpcode, vindex vindexes.SingleColumn, values sqlparser.Expr) {
+func (rb *route) iterateCompositeIN(
+	pb *primitiveBuilder,
+	comparison *sqlparser.ComparisonExpr,
+	coordinates []int,
+	tuple sqlparser.ValTuple,
+) (opcode engine.RouteOpcode, vindex vindexes.SingleColumn, values sqlparser.Expr) {
 	opcode = engine.SelectScatter
 
 	cindex := len(coordinates)

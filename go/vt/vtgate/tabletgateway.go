@@ -83,6 +83,7 @@ func createHealthCheck(ctx context.Context, retryDelay, timeout time.Duration, t
 }
 
 // NewTabletGateway creates and returns a new TabletGateway
+// NewTabletGateway is the default Gateway implementation
 func NewTabletGateway(ctx context.Context, hc discovery.HealthCheck, serv srvtopo.Server, localCell string) *TabletGateway {
 	// hack to accomodate various users of gateway + tests
 	if hc == nil {
@@ -132,8 +133,8 @@ func NewTabletGateway(ctx context.Context, hc discovery.HealthCheck, serv srvtop
 }
 
 // QueryServiceByAlias satisfies the Gateway interface
-func (gw *TabletGateway) QueryServiceByAlias(alias *topodatapb.TabletAlias) (queryservice.QueryService, error) {
-	return gw.hc.TabletConnection(alias)
+func (gw *TabletGateway) QueryServiceByAlias(alias *topodatapb.TabletAlias, target *querypb.Target) (queryservice.QueryService, error) {
+	return gw.hc.TabletConnection(alias, target)
 }
 
 // RegisterStats registers the stats to export the lag since the last refresh

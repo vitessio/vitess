@@ -32,9 +32,8 @@ func FuzzNormalizer(data []byte) int {
 	if err != nil {
 		return -1
 	}
-	prefix := "bv"
 	bv := make(map[string]*querypb.BindVariable)
-	sqlparser.Normalize(stmt, reservedVars, bv, prefix)
+	sqlparser.Normalize(stmt, sqlparser.NewReservedVars("bv", reservedVars), bv)
 	return 1
 }
 

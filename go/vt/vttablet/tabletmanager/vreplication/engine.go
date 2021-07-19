@@ -25,7 +25,8 @@ import (
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/mysql"
+	"google.golang.org/protobuf/proto"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
@@ -63,6 +64,7 @@ const (
 )
 
 var withDDL *withddl.WithDDL
+var withDDLInitialQueries []string
 
 const (
 	throttlerAppName = "vreplication"
@@ -73,7 +75,10 @@ func init() {
 	allddls = append(allddls, binlogplayer.CreateTabletControlsTable()...)
 	allddls = append(allddls, binlogplayer.AlterVReplicationTable...)
 	allddls = append(allddls, createReshardingJournalTable, createCopyState)
+	allddls = append(allddls, createVReplicationLog)
 	withDDL = withddl.New(allddls)
+
+	withDDLInitialQueries = append(withDDLInitialQueries, binlogplayer.WithDDLInitialQueries...)
 }
 
 // this are the default tablet_types that will be used by the tablet picker to find sources for a vreplication stream
@@ -88,6 +93,9 @@ var tabletTypesStr = flag.String("vreplication_tablet_type", "MASTER,REPLICA", "
 // For example, setting the state to 'Stopped' will cause that stream to
 // stop replicating.
 var waitRetryTime = 1 * time.Second
+
+// How frequently vcopier will update _vt.vreplication rows_copied
+var rowsCopiedUpdateInterval = 30 * time.Second
 
 // Engine is the engine for handling vreplication.
 type Engine struct {
@@ -138,6 +146,7 @@ func NewEngine(config *tabletenv.TabletConfig, ts *topo.Server, cell string, mys
 		ec:              newExternalConnector(config.ExternalConnections),
 		throttlerClient: throttle.NewBackgroundClient(lagThrottler, throttlerAppName, throttle.ThrottleCheckPrimaryWrite),
 	}
+
 	return vre
 }
 
@@ -343,7 +352,6 @@ func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error)
 	}
 
 	dbClient := vre.getDBClient(runAsAdmin)
-
 	if err := dbClient.Connect(); err != nil {
 		return nil, err
 	}
@@ -365,6 +373,7 @@ func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error)
 		if qr.InsertID == 0 {
 			return nil, fmt.Errorf("insert failed to generate an id")
 		}
+		vdbc := newVDBClient(dbClient, binlogplayer.NewStats())
 		for id := int(qr.InsertID); id < int(qr.InsertID)+plan.numInserts; id++ {
 			if ct := vre.controllers[id]; ct != nil {
 				// Unreachable. Just a failsafe.
@@ -380,6 +389,9 @@ func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error)
 				return nil, err
 			}
 			vre.controllers[id] = ct
+			if err := insertLogWithParams(vdbc, LogStreamCreate, uint32(id), params); err != nil {
+				return nil, err
+			}
 		}
 		return qr, nil
 	case updateQuery:
@@ -406,6 +418,7 @@ func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error)
 		if err != nil {
 			return nil, err
 		}
+		vdbc := newVDBClient(dbClient, binlogplayer.NewStats())
 		for _, id := range ids {
 			params, err := readRow(dbClient, id)
 			if err != nil {
@@ -418,6 +431,9 @@ func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error)
 				return nil, err
 			}
 			vre.controllers[id] = ct
+			if err := insertLog(vdbc, LogStateChange, uint32(id), params["state"], ""); err != nil {
+				return nil, err
+			}
 		}
 		return qr, nil
 	case deleteQuery:
@@ -429,10 +445,14 @@ func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error)
 			return &sqltypes.Result{}, nil
 		}
 		// Stop and delete the current controllers.
+		vdbc := newVDBClient(dbClient, binlogplayer.NewStats())
 		for _, id := range ids {
 			if ct := vre.controllers[id]; ct != nil {
 				ct.Stop()
 				delete(vre.controllers, id)
+			}
+			if err := insertLogWithParams(vdbc, LogStreamDelete, uint32(id), nil); err != nil {
+				return nil, err
 			}
 		}
 		if err := dbClient.Begin(); err != nil {
@@ -615,10 +635,10 @@ func (vre *Engine) transitionJournal(je *journalEvent) {
 	var newids []int
 	for _, shard := range shardGTIDs {
 		sgtid := je.shardGTIDs[shard]
-		bls := vre.controllers[refid].source
+		bls := proto.Clone(vre.controllers[refid].source).(*binlogdatapb.BinlogSource)
 		bls.Keyspace, bls.Shard = sgtid.Keyspace, sgtid.Shard
 		ig := NewInsertGenerator(binlogplayer.BlpRunning, vre.dbName)
-		ig.AddRow(params["workflow"], &bls, sgtid.Gtid, params["cell"], params["tablet_types"])
+		ig.AddRow(params["workflow"], bls, sgtid.Gtid, params["cell"], params["tablet_types"])
 		qr, err := withDDL.Exec(vre.ctx, ig.String(), dbClient.ExecuteFetch)
 		if err != nil {
 			log.Errorf("transitionJournal: %v", err)
@@ -666,7 +686,7 @@ func (vre *Engine) transitionJournal(je *journalEvent) {
 // WaitForPos waits for the replication to reach the specified position.
 func (vre *Engine) WaitForPos(ctx context.Context, id int, pos string) error {
 	start := time.Now()
-	mPos, err := mysql.DecodePosition(pos)
+	mPos, err := binlogplayer.DecodePosition(pos)
 	if err != nil {
 		return err
 	}
@@ -704,7 +724,7 @@ func (vre *Engine) WaitForPos(ctx context.Context, id int, pos string) error {
 		case len(qr.Rows) > 1 || len(qr.Rows[0]) != 3:
 			return fmt.Errorf("unexpected result: %v", qr)
 		}
-		current, err := mysql.DecodePosition(qr.Rows[0][0].ToString())
+		current, err := binlogplayer.DecodePosition(qr.Rows[0][0].ToString())
 		if err != nil {
 			return err
 		}
@@ -720,8 +740,11 @@ func (vre *Engine) WaitForPos(ctx context.Context, id int, pos string) error {
 
 		select {
 		case <-ctx.Done():
-			log.Errorf("Error waiting for pos: %s, last pos: %s: %v, wait time: %v", pos, qr.Rows[0][0].ToString(), ctx.Err(), time.Since(start))
-			return fmt.Errorf("error waiting for pos: %s, last pos: %s: %v, wait time: %v", pos, qr.Rows[0][0].ToString(), ctx.Err(), time.Since(start))
+			err = fmt.Errorf("error waiting for pos: %s, last pos: %s: %v, wait time: %v: %s",
+				pos, qr.Rows[0][0].ToString(), ctx.Err(), time.Since(start),
+				"possibly no tablets are available to stream in the source keyspace for your cell and tablet_types setting")
+			log.Error(err.Error())
+			return err
 		case <-vre.ctx.Done():
 			return fmt.Errorf("vreplication is closing: %v", vre.ctx.Err())
 		case <-tkr.C:
@@ -773,7 +796,19 @@ func readRow(dbClient binlogplayer.DBClient, id int) (map[string]string, error) 
 	if len(qr.Fields) != len(qr.Rows[0]) {
 		return nil, fmt.Errorf("fields don't match rows: %v", qr)
 	}
-	return rowToMap(qr, 0)
+	row, err := rowToMap(qr, 0)
+	if err != nil {
+		return nil, err
+	}
+	gtid, ok := row["pos"]
+	if ok {
+		b := binlogplayer.MysqlUncompress(gtid)
+		if b != nil {
+			gtid = string(b)
+			row["pos"] = gtid
+		}
+	}
+	return row, nil
 }
 
 // rowToMap converts a row into a map for easier processing.

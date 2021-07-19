@@ -31,6 +31,36 @@ var (
 	legacyReplicationLagAlgorithm = flag.Bool("legacy_replication_lag_algorithm", true, "use the legacy algorithm when selecting the vttablets for serving")
 )
 
+// GetLowReplicationLag getter for use by debugenv
+func GetLowReplicationLag() time.Duration {
+	return *lowReplicationLag
+}
+
+// SetLowReplicationLag setter for use by debugenv
+func SetLowReplicationLag(lag time.Duration) {
+	lowReplicationLag = &lag
+}
+
+// GetHighReplicationLagMinServing getter for use by debugenv
+func GetHighReplicationLagMinServing() time.Duration {
+	return *highReplicationLagMinServing
+}
+
+// SetHighReplicationLagMinServing setter for use by debugenv
+func SetHighReplicationLagMinServing(lag time.Duration) {
+	highReplicationLagMinServing = &lag
+}
+
+// GetMinNumTablets getter for use by debugenv
+func GetMinNumTablets() int {
+	return *minNumTablets
+}
+
+// SetMinNumTablets setter for use by debugenv
+func SetMinNumTablets(numTablets int) {
+	minNumTablets = &numTablets
+}
+
 // IsReplicationLagHigh verifies that the given LegacytabletHealth refers to a tablet with high
 // replication lag, i.e. higher than the configured discovery_low_replication_lag flag.
 func IsReplicationLagHigh(tabletHealth *TabletHealth) bool {

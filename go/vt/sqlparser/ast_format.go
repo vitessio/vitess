@@ -43,9 +43,16 @@ func (node *Select) Format(buf *TrackedBuffer) {
 		buf.WriteString(SQLCalcFoundRowsStr)
 	}
 
-	buf.astPrintf(node, "%v from %v%v%v%v%v%v%s%v",
-		node.SelectExprs,
-		node.From, node.Where,
+	buf.astPrintf(node, "%v from ", node.SelectExprs)
+
+	prefix := ""
+	for _, expr := range node.From {
+		buf.astPrintf(node, "%s%v", prefix, expr)
+		prefix = ", "
+	}
+
+	buf.astPrintf(node, "%v%v%v%v%v%s%v",
+		node.Where,
 		node.GroupBy, node.Having, node.OrderBy,
 		node.Limit, node.Lock.ToString(), node.Into)
 }
@@ -153,7 +160,7 @@ func (node *DropDatabase) Format(buf *TrackedBuffer) {
 	if node.IfExists {
 		exists = "if exists "
 	}
-	buf.astPrintf(node, "%s database %v%s%v", DropStr, node.Comments, exists, node.DBName)
+	buf.astPrintf(node, "%s %vdatabase %s%v", DropStr, node.Comments, exists, node.DBName)
 }
 
 // Format formats the node.
@@ -239,7 +246,7 @@ func (node *AlterMigration) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *RevertMigration) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "revert vitess_migration '%s'", node.UUID)
+	buf.astPrintf(node, "revert %vvitess_migration '%s'", node.Comments, node.UUID)
 }
 
 // Format formats the node.
@@ -456,7 +463,7 @@ func (ct *ColumnType) Format(buf *TrackedBuffer) {
 	if ct.Collate != "" {
 		buf.astPrintf(ct, " %s %s", keywordStrings[COLLATE], ct.Collate)
 	}
-	if ct.Options.Null != nil {
+	if ct.Options.Null != nil && ct.Options.As == nil {
 		if *ct.Options.Null {
 			buf.astPrintf(ct, " %s", keywordStrings[NULL])
 		} else {
@@ -468,6 +475,22 @@ func (ct *ColumnType) Format(buf *TrackedBuffer) {
 	}
 	if ct.Options.OnUpdate != nil {
 		buf.astPrintf(ct, " %s %s %v", keywordStrings[ON], keywordStrings[UPDATE], ct.Options.OnUpdate)
+	}
+	if ct.Options.As != nil {
+		buf.astPrintf(ct, " %s (%v)", keywordStrings[AS], ct.Options.As)
+
+		if ct.Options.Storage == VirtualStorage {
+			buf.astPrintf(ct, " %s", keywordStrings[VIRTUAL])
+		} else if ct.Options.Storage == StoredStorage {
+			buf.astPrintf(ct, " %s", keywordStrings[STORED])
+		}
+		if ct.Options.Null != nil {
+			if *ct.Options.Null {
+				buf.astPrintf(ct, " %s", keywordStrings[NULL])
+			} else {
+				buf.astPrintf(ct, " %s %s", keywordStrings[NOT], keywordStrings[NULL])
+			}
+		}
 	}
 	if ct.Options.Autoincrement {
 		buf.astPrintf(ct, " %s", keywordStrings[AUTO_INCREMENT])
@@ -492,6 +515,9 @@ func (ct *ColumnType) Format(buf *TrackedBuffer) {
 	}
 	if ct.Options.KeyOpt == colKey {
 		buf.astPrintf(ct, " %s", keywordStrings[KEY])
+	}
+	if ct.Options.Reference != nil {
+		buf.astPrintf(ct, " %v", ct.Options.Reference)
 	}
 }
 
@@ -593,12 +619,17 @@ func (a ReferenceAction) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (f *ForeignKeyDefinition) Format(buf *TrackedBuffer) {
-	buf.astPrintf(f, "foreign key %v references %v %v", f.Source, f.ReferencedTable, f.ReferencedColumns)
-	if f.OnDelete != DefaultAction {
-		buf.astPrintf(f, " on delete %v", f.OnDelete)
+	buf.astPrintf(f, "foreign key %v%v %v", f.IndexName, f.Source, f.ReferenceDefinition)
+}
+
+// Format formats the node.
+func (ref *ReferenceDefinition) Format(buf *TrackedBuffer) {
+	buf.astPrintf(ref, "references %v %v", ref.ReferencedTable, ref.ReferencedColumns)
+	if ref.OnDelete != DefaultAction {
+		buf.astPrintf(ref, " on delete %v", ref.OnDelete)
 	}
-	if f.OnUpdate != DefaultAction {
-		buf.astPrintf(f, " on update %v", f.OnUpdate)
+	if ref.OnUpdate != DefaultAction {
+		buf.astPrintf(ref, " on update %v", ref.OnUpdate)
 	}
 }
 
@@ -936,7 +967,7 @@ func (node *RangeCond) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *IsExpr) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "%v %s", node.Expr, node.Operator.ToString())
+	buf.astPrintf(node, "%v %s", node.Left, node.Right.ToString())
 }
 
 // Format formats the node.
@@ -962,7 +993,7 @@ func (node *Literal) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node Argument) Format(buf *TrackedBuffer) {
-	buf.WriteArg(string(node))
+	buf.WriteArg(":", string(node))
 }
 
 // Format formats the node.
@@ -1004,7 +1035,7 @@ func (node *DerivedTable) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node ListArg) Format(buf *TrackedBuffer) {
-	buf.WriteArg(string(node))
+	buf.WriteArg("::", string(node))
 }
 
 // Format formats the node.
@@ -1374,7 +1405,7 @@ func (node *AlterDatabase) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *CreateTable) Format(buf *TrackedBuffer) {
-	buf.WriteString("create ")
+	buf.astPrintf(node, "create %v", node.Comments)
 	if node.Temp {
 		buf.WriteString("temporary ")
 	}
@@ -1451,13 +1482,13 @@ func (node *AlterView) Format(buf *TrackedBuffer) {
 func (node *DropTable) Format(buf *TrackedBuffer) {
 	temp := ""
 	if node.Temp {
-		temp = " temporary"
+		temp = "temporary "
 	}
 	exists := ""
 	if node.IfExists {
 		exists = " if exists"
 	}
-	buf.astPrintf(node, "drop%s table%s %v", temp, exists, node.FromTables)
+	buf.astPrintf(node, "drop %v%stable%s %v", node.Comments, temp, exists, node.FromTables)
 }
 
 // Format formats the node.
@@ -1471,7 +1502,7 @@ func (node *DropView) Format(buf *TrackedBuffer) {
 
 // Format formats the AlterTable node.
 func (node *AlterTable) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "alter table %v", node.Table)
+	buf.astPrintf(node, "alter %vtable %v", node.Comments, node.Table)
 	prefix := ""
 	for i, option := range node.AlterOptions {
 		if i != 0 {

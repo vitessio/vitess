@@ -10,11 +10,10 @@
       "Sharded": false
     },
     "TargetDestination": "AllShards()",
-    "IsDML": false,
-    "Query": "flush tables unsharded, music",
-    "SingleShardOnly": false
+    "Query": "flush tables unsharded, music"
   }
 }
+Gen4 plan same as above
 
 # Flush statement with no tables
 "flush local tables with read lock"
@@ -28,11 +27,10 @@
       "Sharded": false
     },
     "TargetDestination": "AllShards()",
-    "IsDML": false,
-    "Query": "flush local tables with read lock",
-    "SingleShardOnly": false
+    "Query": "flush local tables with read lock"
   }
 }
+Gen4 plan same as above
 
 # Flush statement with flush options
 "flush no_write_to_binlog hosts, logs"
@@ -46,8 +44,7 @@
       "Sharded": false
     },
     "TargetDestination": "AllShards()",
-    "IsDML": false,
-    "Query": "flush local hosts, logs",
-    "SingleShardOnly": false
+    "Query": "flush local hosts, logs"
   }
 }
+Gen4 plan same as above

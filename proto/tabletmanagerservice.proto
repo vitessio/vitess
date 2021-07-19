@@ -72,6 +72,8 @@ service TabletManager {
 
   rpc UnlockTables(tabletmanagerdata.UnlockTablesRequest) returns (tabletmanagerdata.UnlockTablesResponse) {};
 
+  rpc ExecuteQuery(tabletmanagerdata.ExecuteQueryRequest) returns (tabletmanagerdata.ExecuteQueryResponse) {};
+
   rpc ExecuteFetchAsDba(tabletmanagerdata.ExecuteFetchAsDbaRequest) returns (tabletmanagerdata.ExecuteFetchAsDbaResponse) {};
 
   rpc ExecuteFetchAsAllPrivs(tabletmanagerdata.ExecuteFetchAsAllPrivsRequest) returns (tabletmanagerdata.ExecuteFetchAsAllPrivsResponse) {};

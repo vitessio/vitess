@@ -675,18 +675,18 @@ func (conn *gRPCQueryClient) VStreamRows(ctx context.Context, target *querypb.Ta
 		return err
 	}
 	for {
-		r, err := stream.Recv()
+		r := binlogdatapb.VStreamRowsResponseFromVTPool()
+		err := stream.RecvMsg(r)
 		if err != nil {
 			return tabletconn.ErrorFromGRPC(err)
 		}
-		select {
-		case <-ctx.Done():
+		if ctx.Err() != nil {
 			return ctx.Err()
-		default:
 		}
 		if err := send(r); err != nil {
 			return err
 		}
+		r.ReturnToVTPool()
 	}
 }
 

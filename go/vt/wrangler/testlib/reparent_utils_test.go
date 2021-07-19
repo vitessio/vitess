@@ -62,7 +62,7 @@ func TestShardReplicationStatuses(t *testing.T) {
 	}
 
 	// master action loop (to initialize host and port)
-	master.FakeMysqlDaemon.CurrentMasterPosition = mysql.Position{
+	master.FakeMysqlDaemon.CurrentPrimaryPosition = mysql.Position{
 		GTIDSet: mysql.MariadbGTIDSet{
 			5: mysql.MariadbGTID{
 				Domain:   5,
@@ -75,7 +75,7 @@ func TestShardReplicationStatuses(t *testing.T) {
 	defer master.StopActionLoop(t)
 
 	// replica loop
-	replica.FakeMysqlDaemon.CurrentMasterPosition = mysql.Position{
+	replica.FakeMysqlDaemon.CurrentPrimaryPosition = mysql.Position{
 		GTIDSet: mysql.MariadbGTIDSet{
 			5: mysql.MariadbGTID{
 				Domain:   5,
@@ -147,7 +147,7 @@ func TestReparentTablet(t *testing.T) {
 	// which ends up making this test unpredictable.
 	replica.FakeMysqlDaemon.Replicating = true
 	replica.FakeMysqlDaemon.IOThreadRunning = true
-	replica.FakeMysqlDaemon.SetMasterInput = topoproto.MysqlAddr(master.Tablet)
+	replica.FakeMysqlDaemon.SetReplicationSourceInput = topoproto.MysqlAddr(master.Tablet)
 	replica.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"STOP SLAVE",
 		"FAKE SET MASTER",

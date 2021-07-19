@@ -20,9 +20,9 @@ import (
 	"fmt"
 	"path"
 
-	"context"
+	"google.golang.org/protobuf/proto"
 
-	"github.com/golang/protobuf/proto"
+	"context"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )

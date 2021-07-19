@@ -40,7 +40,7 @@ func TestDisabledThrottler(t *testing.T) {
 	config := tabletenv.NewDefaultConfig()
 	config.EnableTxThrottler = false
 	throttler := NewTxThrottler(config, nil)
-	throttler.InitDBConfig(querypb.Target{
+	throttler.InitDBConfig(&querypb.Target{
 		Keyspace: "keyspace",
 		Shard:    "shard",
 	})
@@ -122,7 +122,7 @@ func TestEnabledThrottler(t *testing.T) {
 	if err != nil {
 		t.Fatalf("want: nil, got: %v", err)
 	}
-	throttler.InitDBConfig(querypb.Target{
+	throttler.InitDBConfig(&querypb.Target{
 		Keyspace: "keyspace",
 		Shard:    "shard",
 	})

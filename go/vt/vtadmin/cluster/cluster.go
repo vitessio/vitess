@@ -23,10 +23,14 @@ import (
 	"math/rand"
 	"strings"
 	"sync"
+	"text/template"
 	"time"
+
+	"google.golang.org/protobuf/proto"
 
 	"k8s.io/apimachinery/pkg/util/sets"
 
+	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/log"
@@ -39,7 +43,6 @@ import (
 	"vitess.io/vitess/go/vt/vtadmin/vtsql"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	"vitess.io/vitess/go/vt/proto/vtadmin"
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
@@ -59,6 +62,9 @@ type Cluster struct {
 	// (TODO|@amason): Figure out if these are needed or if there's a way to
 	// push down to the credentials / vtsql.
 	// vtgateCredentialsPath string
+
+	// Fields for generating FQDNs for tablets
+	TabletFQDNTmpl *template.Template
 }
 
 // New creates a new Cluster from a Config.
@@ -95,6 +101,13 @@ func New(cfg Config) (*Cluster, error) {
 
 	cluster.DB = vtsql.New(vtsqlCfg)
 	cluster.Vtctld = vtctldclient.New(vtctldCfg)
+
+	if cfg.TabletFQDNTmplStr != "" {
+		cluster.TabletFQDNTmpl, err = template.New(cluster.ID + "-tablet-fqdn").Parse(cfg.TabletFQDNTmplStr)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse tablet fqdn template %s: %w", cfg.TabletFQDNTmplStr, err)
+		}
+	}
 
 	return cluster, nil
 }
@@ -201,6 +214,13 @@ func (c *Cluster) parseTablet(rows *sql.Rows) (*vtadminpb.Tablet, error) {
 		}
 
 		topotablet.MasterTermStartTime = logutil.TimeToProto(timeTime)
+	}
+
+	if c.TabletFQDNTmpl != nil {
+		tablet.FQDN, err = textutil.ExecuteTemplate(c.TabletFQDNTmpl, tablet)
+		if err != nil {
+			return nil, fmt.Errorf("failed to execute tablet FQDN template for %+v: %w", tablet, err)
+		}
 	}
 
 	return tablet, nil
@@ -388,6 +408,111 @@ func (c *Cluster) findWorkflows(ctx context.Context, keyspaces []string, opts Fi
 	}, nil
 }
 
+// GetGates returns the list of all VTGates in the cluster.
+func (c *Cluster) GetGates(ctx context.Context) ([]*vtadminpb.VTGate, error) {
+	// (TODO|@ajm188) Support tags in the vtadmin RPC request and pass them
+	// through here.
+	gates, err := c.Discovery.DiscoverVTGates(ctx, []string{})
+	if err != nil {
+		return nil, fmt.Errorf("DiscoverVTGates(cluster = %s): %w", c.ID, err)
+	}
+
+	// This overwrites any Cluster field populated by a particular discovery
+	// implementation.
+	cpb := c.ToProto()
+
+	for _, g := range gates {
+		g.Cluster = cpb
+	}
+
+	return gates, nil
+}
+
+// GetKeyspace returns a single keyspace in the cluster.
+func (c *Cluster) GetKeyspace(ctx context.Context, name string) (*vtadminpb.Keyspace, error) {
+	span, ctx := trace.NewSpan(ctx, "Cluster.GetKeyspace")
+	defer span.Finish()
+
+	AnnotateSpan(c, span)
+	span.Annotate("keyspace", name)
+
+	if err := c.Vtctld.Dial(ctx); err != nil {
+		return nil, fmt.Errorf("Vtctld.Dial failed for cluster = %s: %w", c.ID, err)
+	}
+
+	resp, err := c.Vtctld.GetKeyspace(ctx, &vtctldatapb.GetKeyspaceRequest{
+		Keyspace: name,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	shards, err := c.FindAllShardsInKeyspace(ctx, name, FindAllShardsInKeyspaceOptions{SkipDial: true})
+	if err != nil {
+		return nil, err
+	}
+
+	return &vtadminpb.Keyspace{
+		Cluster:  c.ToProto(),
+		Keyspace: resp.Keyspace,
+		Shards:   shards,
+	}, nil
+}
+
+// GetKeyspaces returns all keyspaces, with their shard maps, in the cluster.
+func (c *Cluster) GetKeyspaces(ctx context.Context) ([]*vtadminpb.Keyspace, error) {
+	span, ctx := trace.NewSpan(ctx, "Cluster.GetKeyspaces")
+	defer span.Finish()
+
+	AnnotateSpan(c, span)
+
+	if err := c.Vtctld.Dial(ctx); err != nil {
+		return nil, fmt.Errorf("Vtctld.Dial(cluster=%s) failed: %w", c.ID, err)
+	}
+
+	resp, err := c.Vtctld.GetKeyspaces(ctx, &vtctldatapb.GetKeyspacesRequest{})
+	if err != nil {
+		return nil, err
+	}
+
+	var (
+		m         sync.Mutex
+		wg        sync.WaitGroup
+		rec       concurrency.AllErrorRecorder
+		keyspaces = make([]*vtadminpb.Keyspace, len(resp.Keyspaces))
+	)
+
+	for i, ks := range resp.Keyspaces {
+		wg.Add(1)
+		go func(i int, ks *vtctldatapb.Keyspace) {
+			defer wg.Done()
+
+			shards, err := c.FindAllShardsInKeyspace(ctx, ks.Name, FindAllShardsInKeyspaceOptions{SkipDial: true})
+			if err != nil {
+				rec.RecordError(err)
+				return
+			}
+
+			keyspace := &vtadminpb.Keyspace{
+				Cluster:  c.ToProto(),
+				Keyspace: ks,
+				Shards:   shards,
+			}
+
+			m.Lock()
+			defer m.Unlock()
+			keyspaces[i] = keyspace
+		}(i, ks)
+	}
+
+	wg.Wait()
+	if rec.HasErrors() {
+		return nil, rec.Error()
+	}
+
+	return keyspaces, nil
+}
+
 // GetTablets returns all tablets in the cluster.
 func (c *Cluster) GetTablets(ctx context.Context) ([]*vtadminpb.Tablet, error) {
 	span, ctx := trace.NewSpan(ctx, "Cluster.GetTablets")
@@ -558,16 +683,16 @@ func (c *Cluster) getSchemaFromTablets(ctx context.Context, keyspace string, tab
 			span, ctx := trace.NewSpan(ctx, "Vtctld.GetSchema")
 			defer span.Finish()
 
-			req := *opts.BaseRequest
+			req := proto.Clone(opts.BaseRequest).(*vtctldatapb.GetSchemaRequest)
 			req.TableSizesOnly = sizesOnly
 			req.TabletAlias = tablet.Tablet.Alias
 
 			AnnotateSpan(c, span)
-			annotateGetSchemaRequest(&req, span)
+			annotateGetSchemaRequest(req, span)
 			span.Annotate("keyspace", keyspace)
 			span.Annotate("shard", tablet.Tablet.Shard)
 
-			resp, err := c.Vtctld.GetSchema(ctx, &req)
+			resp, err := c.Vtctld.GetSchema(ctx, req)
 			if err != nil {
 				err = fmt.Errorf("GetSchema(cluster = %s, keyspace = %s, tablet = %s) failed: %w", c.ID, keyspace, tablet.Tablet.Alias, err)
 				rec.RecordError(err)
@@ -680,7 +805,67 @@ func (c *Cluster) getTabletsToQueryForSchemas(ctx context.Context, keyspace stri
 	}
 
 	randomServingTablet := keyspaceTablets[rand.Intn(len(keyspaceTablets))]
-	return []*vtadmin.Tablet{randomServingTablet}, nil
+	return []*vtadminpb.Tablet{randomServingTablet}, nil
+}
+
+// GetSrvVSchema returns the SrvVSchema for a given cell in the cluster.
+func (c *Cluster) GetSrvVSchema(ctx context.Context, cell string) (*vtadminpb.SrvVSchema, error) {
+	span, ctx := trace.NewSpan(ctx, "Cluster.GetVSchema")
+	defer span.Finish()
+
+	AnnotateSpan(c, span)
+	span.Annotate("cell", cell)
+
+	if err := c.Vtctld.Dial(ctx); err != nil {
+		return nil, fmt.Errorf("Vtctld.Dial(cluster=%s) failed: %w", c.ID, err)
+	}
+
+	sv, err := c.Vtctld.GetSrvVSchema(ctx, &vtctldatapb.GetSrvVSchemaRequest{
+		Cell: cell,
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &vtadminpb.SrvVSchema{
+		Cell:       cell,
+		Cluster:    c.ToProto(),
+		SrvVSchema: sv.SrvVSchema,
+	}, nil
+}
+
+// GetSrvVSchemas returns the SrvVSchema for all cells in the cluster,
+// optionally filtered by cell.
+func (c *Cluster) GetSrvVSchemas(ctx context.Context, cells []string) ([]*vtadminpb.SrvVSchema, error) {
+	span, ctx := trace.NewSpan(ctx, "Cluster.GetVSchemas")
+	defer span.Finish()
+
+	AnnotateSpan(c, span)
+
+	if err := c.Vtctld.Dial(ctx); err != nil {
+		return nil, fmt.Errorf("Vtctld.Dial(cluster=%s) failed: %w", c.ID, err)
+	}
+
+	res, err := c.Vtctld.GetSrvVSchemas(ctx, &vtctldatapb.GetSrvVSchemasRequest{
+		Cells: cells,
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	svs := make([]*vtadminpb.SrvVSchema, 0)
+
+	for cell, s := range res.SrvVSchemas {
+		svs = append(svs, &vtadminpb.SrvVSchema{
+			Cell:       cell,
+			Cluster:    c.ToProto(),
+			SrvVSchema: s,
+		})
+	}
+
+	return svs, nil
 }
 
 // GetVSchema returns the vschema for a given keyspace in this cluster. The

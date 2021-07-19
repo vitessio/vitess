@@ -147,7 +147,9 @@ func TestMain(m *testing.M) {
 		clusterInstance.VtctldExtraArgs = []string{
 			"-schema_change_dir", schemaChangeDirectory,
 			"-schema_change_controller", "local",
-			"-schema_change_check_interval", "1"}
+			"-schema_change_check_interval", "1",
+			"-online_ddl_check_interval", "3s",
+		}
 
 		clusterInstance.VtTabletExtraArgs = []string{
 			"-enable-lag-throttler",
@@ -293,17 +295,17 @@ func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy str
 		}
 	} else {
 		var err error
-		uuid, err = clusterInstance.VtctlclientProcess.ApplySchemaWithOutput(keyspaceName, alterStatement, ddlStrategy)
+		uuid, err = clusterInstance.VtctlclientProcess.ApplySchemaWithOutput(keyspaceName, alterStatement, cluster.VtctlClientParams{DDLStrategy: ddlStrategy})
 		assert.NoError(t, err)
 	}
 	uuid = strings.TrimSpace(uuid)
 	fmt.Println("# Generated UUID (for debug purposes):")
 	fmt.Printf("<%s>\n", uuid)
 
-	strategy, _, err := schema.ParseDDLStrategy(ddlStrategy)
+	strategySetting, err := schema.ParseDDLStrategy(ddlStrategy)
 	assert.NoError(t, err)
 
-	if !strategy.IsDirect() {
+	if !strategySetting.Strategy.IsDirect() {
 		time.Sleep(time.Second * 20)
 	}
 

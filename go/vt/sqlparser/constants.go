@@ -224,6 +224,7 @@ const (
 	DatabaseStr         = " databases"
 	FunctionCStr        = " function code"
 	FunctionStr         = " function status"
+	GtidExecGlobalStr   = " global gtid_executed"
 	IndexStr            = " indexes"
 	OpenTableStr        = " open tables"
 	PrivilegeStr        = " privileges"
@@ -236,8 +237,10 @@ const (
 	TriggerStr          = " triggers"
 	VariableGlobalStr   = " global variables"
 	VariableSessionStr  = " variables"
+	VGtidExecGlobalStr  = " global vgtid_executed"
 	KeyspaceStr         = " keyspaces"
 	VitessMigrationsStr = " vitess_migrations"
+	WarningsStr         = " warnings"
 
 	// DropKeyType strings
 	PrimaryKeyTypeStr = "primary key"
@@ -481,6 +484,7 @@ const (
 	Database
 	FunctionC
 	Function
+	GtidExecGlobal
 	Index
 	OpenTable
 	Privilege
@@ -493,7 +497,9 @@ const (
 	Trigger
 	VariableGlobal
 	VariableSession
+	VGtidExecGlobal
 	VitessMigrations
+	Warnings
 	Keyspace
 )
 
@@ -512,9 +518,16 @@ const (
 	ExclusiveType
 )
 
+// AlterMigrationType constants
 const (
 	RetryMigrationType AlterMigrationType = iota
 	CompleteMigrationType
 	CancelMigrationType
 	CancelAllMigrationType
+)
+
+// ColumnStorage constants
+const (
+	VirtualStorage ColumnStorage = iota
+	StoredStorage
 )

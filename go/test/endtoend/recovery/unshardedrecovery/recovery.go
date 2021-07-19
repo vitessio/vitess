@@ -100,6 +100,11 @@ func TestMainImpl(m *testing.M) {
 		sql := string(initDb)
 		newInitDBFile = path.Join(localCluster.TmpDirectory, "init_db_with_passwords.sql")
 		sql = sql + initialsharding.GetPasswordUpdateSQL(localCluster)
+		// https://github.com/vitessio/vitess/issues/8315
+		oldAlterTableMode := `
+SET GLOBAL old_alter_table = ON;
+`
+		sql = sql + oldAlterTableMode
 		ioutil.WriteFile(newInitDBFile, []byte(sql), 0666)
 
 		extraArgs := []string{"-db-credentials-file", dbCredentialFile}

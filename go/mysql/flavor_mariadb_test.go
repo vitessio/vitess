@@ -41,7 +41,7 @@ func TestMariadbSetMasterCommands(t *testing.T) {
   MASTER_USE_GTID = current_pos`
 
 	conn := &Conn{flavor: mariadbFlavor101{}}
-	got := conn.SetMasterCommand(params, masterHost, masterPort, masterConnectRetry)
+	got := conn.SetReplicationSourceCommand(params, masterHost, masterPort, masterConnectRetry)
 	if got != want {
 		t.Errorf("mariadbFlavor.SetMasterCommands(%#v, %#v, %#v, %#v) = %#v, want %#v", params, masterHost, masterPort, masterConnectRetry, got, want)
 	}
@@ -74,7 +74,7 @@ func TestMariadbSetMasterCommandsSSL(t *testing.T) {
   MASTER_USE_GTID = current_pos`
 
 	conn := &Conn{flavor: mariadbFlavor101{}}
-	got := conn.SetMasterCommand(params, masterHost, masterPort, masterConnectRetry)
+	got := conn.SetReplicationSourceCommand(params, masterHost, masterPort, masterConnectRetry)
 	if got != want {
 		t.Errorf("mariadbFlavor.SetMasterCommands(%#v, %#v, %#v, %#v) = %#v, want %#v", params, masterHost, masterPort, masterConnectRetry, got, want)
 	}

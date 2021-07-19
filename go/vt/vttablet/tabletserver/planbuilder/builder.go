@@ -45,7 +45,7 @@ func analyzeSelect(sel *sqlparser.Select, tables map[string]*schema.Table) (plan
 	// Check if it's a NEXT VALUE statement.
 	if nextVal, ok := sel.SelectExprs[0].(*sqlparser.Nextval); ok {
 		if plan.Table == nil || plan.Table.Type != schema.Sequence {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%s is not a sequence", sqlparser.String(sel.From))
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%s is not a sequence", sqlparser.ToString(sel.From))
 		}
 		plan.PlanID = PlanNextval
 		v, err := sqlparser.NewPlanValue(nextVal.Expr)

@@ -27,6 +27,8 @@ import (
 	"sort"
 	"strings"
 
+	"vitess.io/vitess/go/tools/common"
+
 	"github.com/dave/jennifer/jen"
 	"golang.org/x/tools/go/packages"
 )
@@ -505,6 +507,10 @@ func GenerateSizeHelpers(packagePatterns []string, typePatterns []string) (map[s
 
 	if err != nil {
 		return nil, err
+	}
+
+	if common.PkgFailed(loaded) {
+		return nil, fmt.Errorf("failed to load packages")
 	}
 
 	sizegen := newSizegen(loaded[0].Module, loaded[0].TypesSizes)

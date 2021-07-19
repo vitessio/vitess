@@ -150,7 +150,10 @@ func init() {
 	vindexes.Register("costly", newCostlyIndex)
 }
 
-const samePlanMarker = "Gen4 plan same as above\n"
+const (
+	samePlanMarker  = "Gen4 plan same as above\n"
+	gen4ErrorPrefix = "Gen4 error: "
+)
 
 func TestPlan(t *testing.T) {
 	vschemaWrapper := &vschemaWrapper{
@@ -191,6 +194,7 @@ func TestPlan(t *testing.T) {
 	testFile(t, "ddl_cases_no_default_keyspace.txt", testOutputTempDir, vschemaWrapper, false)
 	testFile(t, "flush_cases_no_default_keyspace.txt", testOutputTempDir, vschemaWrapper, false)
 	testFile(t, "show_cases_no_default_keyspace.txt", testOutputTempDir, vschemaWrapper, false)
+	testFile(t, "stream_cases.txt", testOutputTempDir, vschemaWrapper, false)
 }
 
 func TestSysVarSetDisabled(t *testing.T) {
@@ -234,7 +238,11 @@ func TestWithDefaultKeyspaceFromFile(t *testing.T) {
 	// We are testing this separately so we can set a default keyspace
 	testOutputTempDir, err := ioutil.TempDir("", "plan_test")
 	require.NoError(t, err)
-	defer os.RemoveAll(testOutputTempDir)
+	defer func() {
+		if !t.Failed() {
+			_ = os.RemoveAll(testOutputTempDir)
+		}
+	}()
 	vschema := &vschemaWrapper{
 		v: loadSchema(t, "schema_test.json"),
 		keyspace: &vindexes.Keyspace{
@@ -289,7 +297,7 @@ func loadSchema(t testing.TB, filename string) *vindexes.VSchema {
 	if err != nil {
 		t.Fatal(err)
 	}
-	vschema, err := vindexes.BuildVSchema(formal)
+	vschema := vindexes.BuildVSchema(formal)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -440,7 +448,7 @@ func escapeNewLines(in string) string {
 	return strings.ReplaceAll(in, "\n", "\\n")
 }
 
-func testFile(t *testing.T, filename, tempDir string, vschema *vschemaWrapper, checkV4equalPlan bool) {
+func testFile(t *testing.T, filename, tempDir string, vschema *vschemaWrapper, checkGen4equalPlan bool) {
 	var checkAllTests = false
 	t.Run(filename, func(t *testing.T) {
 		expected := &strings.Builder{}
@@ -471,20 +479,23 @@ func testFile(t *testing.T, filename, tempDir string, vschema *vschemaWrapper, c
 
 			vschema.version = Gen4
 			out, err := getPlanOutput(tcase, vschema)
+			if err != nil && tcase.output2ndPlanner == "" && strings.HasPrefix(err.Error(), "gen4 does not yet support") {
+				continue
+			}
 
 			// our expectation for the new planner on this query is one of three
 			//  - it produces the same plan as V3 - this is shown using empty brackets: {\n}
 			//  - it produces a different but accepted plan - this is shown using the accepted plan
 			//  - or it produces a different plan that has not yet been accepted, or it fails to produce a plan
 			//       this is shown by not having any info at all after the result for the V3 planner
-			//       with this last expectation, it is an error if the V4 planner
+			//       with this last expectation, it is an error if the Gen4 planner
 			//       produces the same plan as the V3 planner does
-			testName := fmt.Sprintf("%d V4: %s", tcase.lineno, tcase.comments)
+			testName := fmt.Sprintf("%d Gen4: %s", tcase.lineno, tcase.comments)
 			if !empty || checkAllTests {
 				t.Run(testName, func(t *testing.T) {
 					if out != tcase.output2ndPlanner {
 						fail = true
-						t.Errorf("V4 - %s:%d\nDiff:\n%s\n[%s] \n[%s]", filename, tcase.lineno, cmp.Diff(tcase.output2ndPlanner, out), tcase.output, out)
+						t.Errorf("Gen4 - %s:%d\nDiff:\n%s\n[%s] \n[%s]", filename, tcase.lineno, cmp.Diff(tcase.output2ndPlanner, out), tcase.output, out)
 
 					}
 					if err != nil {
@@ -498,9 +509,9 @@ func testFile(t *testing.T, filename, tempDir string, vschema *vschemaWrapper, c
 					}
 				})
 			} else {
-				if out == tcase.output && checkV4equalPlan {
+				if out == tcase.output && checkGen4equalPlan {
 					t.Run(testName, func(t *testing.T) {
-						t.Errorf("V4 - %s:%d\nplanner produces same output as V3", filename, tcase.lineno)
+						t.Errorf("Gen4 - %s:%d\nplanner produces same output as V3", filename, tcase.lineno)
 					})
 				}
 			}
@@ -603,9 +614,11 @@ func iterateExecFile(name string) (testCaseIterator chan testCase) {
 			if err != nil && err != io.EOF {
 				panic(fmt.Sprintf("error reading file %s line# %d: %s", name, lineno, err.Error()))
 			}
-			if len(binput) > 0 && string(binput) == samePlanMarker {
+			nextLine := string(binput)
+			switch {
+			case nextLine == samePlanMarker:
 				output2Planner = output
-			} else if len(binput) > 0 && (binput[0] == '"' || binput[0] == '{') {
+			case strings.HasPrefix(nextLine, "{"):
 				output2Planner = append(output2Planner, binput...)
 				for {
 					l, err := r.ReadBytes('\n')
@@ -623,8 +636,9 @@ func iterateExecFile(name string) (testCaseIterator chan testCase) {
 						break
 					}
 				}
+			case strings.HasPrefix(nextLine, gen4ErrorPrefix):
+				output2Planner = []byte(nextLine[len(gen4ErrorPrefix) : len(nextLine)-1])
 			}
-
 			testCaseIterator <- testCase{
 				file:             name,
 				lineno:           lineno,
@@ -657,10 +671,10 @@ func BenchmarkPlanner(b *testing.B) {
 		b.Run(filename+"-v3", func(b *testing.B) {
 			benchmarkPlanner(b, V3, testCases, vschema)
 		})
-		b.Run(filename+"-v4", func(b *testing.B) {
+		b.Run(filename+"-gen4", func(b *testing.B) {
 			benchmarkPlanner(b, Gen4, testCases, vschema)
 		})
-		b.Run(filename+"-v4left2right", func(b *testing.B) {
+		b.Run(filename+"-gen4left2right", func(b *testing.B) {
 			benchmarkPlanner(b, Gen4Left2Right, testCases, vschema)
 		})
 	}

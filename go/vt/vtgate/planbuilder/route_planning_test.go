@@ -20,6 +20,12 @@ import (
 	"fmt"
 	"testing"
 
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/abstract"
+
+	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/sqltypes"
+
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 
 	"github.com/stretchr/testify/assert"
@@ -99,7 +105,7 @@ func TestMergeJoins(t *testing.T) {
 	}}
 	for i, tc := range tests {
 		t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
-			result := tryMerge(tc.l, tc.r, tc.predicates, semantics.NewSemTable())
+			result := tryMerge(tc.l, tc.r, tc.predicates, semantics.NewSemTable(), true)
 			assert.Equal(t, tc.expected, result)
 		})
 	}
@@ -108,9 +114,7 @@ func TestMergeJoins(t *testing.T) {
 func TestClone(t *testing.T) {
 	original := &routePlan{
 		routeOpCode: engine.SelectEqualUnique,
-		vindexPreds: []*vindexPlusPredicates{{
-			covered: false,
-		}},
+		vindexPreds: []*vindexPlusPredicates{{}},
 	}
 
 	clone := original.clone()
@@ -120,7 +124,219 @@ func TestClone(t *testing.T) {
 	assert.Equal(t, clonedRP.routeOpCode, engine.SelectDBA)
 	assert.Equal(t, original.routeOpCode, engine.SelectEqualUnique)
 
-	clonedRP.vindexPreds[0].covered = true
-	assert.True(t, clonedRP.vindexPreds[0].covered)
-	assert.False(t, original.vindexPreds[0].covered)
+	clonedRP.vindexPreds[0].foundVindex = &vindexes.Null{}
+	assert.NotNil(t, clonedRP.vindexPreds[0].foundVindex)
+	assert.Nil(t, original.vindexPreds[0].foundVindex)
+}
+
+func TestCreateRoutePlanForOuter(t *testing.T) {
+	assert := assert.New(t)
+	m1 := &routeTable{
+		qtable: &abstract.QueryTable{
+			TableID: semantics.TableSet(1),
+			Table:   sqlparser.TableName{},
+		},
+		vtable: &vindexes.Table{},
+	}
+	m2 := &routeTable{
+		qtable: &abstract.QueryTable{
+			TableID: semantics.TableSet(2),
+			Table:   sqlparser.TableName{},
+		},
+		vtable: &vindexes.Table{},
+	}
+	m3 := &routeTable{
+		qtable: &abstract.QueryTable{
+			TableID: semantics.TableSet(4),
+			Table:   sqlparser.TableName{},
+		},
+		vtable: &vindexes.Table{},
+	}
+	a := &routePlan{
+		routeOpCode: engine.SelectUnsharded,
+		solved:      semantics.TableSet(1),
+		tables:      []relation{m1},
+	}
+	col1 := sqlparser.NewColNameWithQualifier("id", sqlparser.TableName{
+		Name: sqlparser.NewTableIdent("m1"),
+	})
+	col2 := sqlparser.NewColNameWithQualifier("id", sqlparser.TableName{
+		Name: sqlparser.NewTableIdent("m2"),
+	})
+	b := &routePlan{
+		routeOpCode: engine.SelectUnsharded,
+		solved:      semantics.TableSet(6),
+		tables:      []relation{m2, m3},
+		predicates:  []sqlparser.Expr{equals(col1, col2)},
+	}
+	semTable := semantics.NewSemTable()
+	merge := tryMerge(a, b, []sqlparser.Expr{}, semTable, false)
+	assert.NotNil(merge)
+}
+
+func equals(left, right sqlparser.Expr) sqlparser.Expr {
+	return &sqlparser.ComparisonExpr{
+		Operator: sqlparser.EqualOp,
+		Left:     left,
+		Right:    right,
+	}
+}
+
+func colName(table, column string) *sqlparser.ColName {
+	return &sqlparser.ColName{Name: sqlparser.NewColIdent(column), Qualifier: tableName(table)}
+}
+
+func tableName(name string) sqlparser.TableName {
+	return sqlparser.TableName{Name: sqlparser.NewTableIdent(name)}
+}
+
+func TestExpandStar(t *testing.T) {
+	schemaInfo := &semantics.FakeSI{
+		Tables: map[string]*vindexes.Table{
+			"t1": {
+				Name: sqlparser.NewTableIdent("t1"),
+				Columns: []vindexes.Column{{
+					Name: sqlparser.NewColIdent("a"),
+					Type: sqltypes.VarChar,
+				}, {
+					Name: sqlparser.NewColIdent("b"),
+					Type: sqltypes.VarChar,
+				}, {
+					Name: sqlparser.NewColIdent("c"),
+					Type: sqltypes.VarChar,
+				}},
+				ColumnListAuthoritative: true,
+			},
+			"t2": {
+				Name: sqlparser.NewTableIdent("t2"),
+				Columns: []vindexes.Column{{
+					Name: sqlparser.NewColIdent("c1"),
+					Type: sqltypes.VarChar,
+				}, {
+					Name: sqlparser.NewColIdent("c2"),
+					Type: sqltypes.VarChar,
+				}},
+				ColumnListAuthoritative: true,
+			},
+			"t3": { // non authoritative table.
+				Name: sqlparser.NewTableIdent("t3"),
+				Columns: []vindexes.Column{{
+					Name: sqlparser.NewColIdent("col"),
+					Type: sqltypes.VarChar,
+				}},
+				ColumnListAuthoritative: false,
+			},
+		},
+	}
+	cDB := "db"
+	tcases := []struct {
+		sql    string
+		expSQL string
+		expErr string
+	}{{
+		sql:    "select * from t1",
+		expSQL: "select t1.a as a, t1.b as b, t1.c as c from t1",
+	}, {
+		sql:    "select t1.* from t1",
+		expSQL: "select t1.a as a, t1.b as b, t1.c as c from t1",
+	}, {
+		sql:    "select *, 42, t1.* from t1",
+		expSQL: "select t1.a as a, t1.b as b, t1.c as c, 42, t1.a as a, t1.b as b, t1.c as c from t1",
+	}, {
+		sql:    "select 42, t1.* from t1",
+		expSQL: "select 42, t1.a as a, t1.b as b, t1.c as c from t1",
+	}, {
+		sql:    "select * from t1, t2",
+		expSQL: "select t1.a as a, t1.b as b, t1.c as c, t2.c1 as c1, t2.c2 as c2 from t1, t2",
+	}, {
+		sql:    "select t1.* from t1, t2",
+		expSQL: "select t1.a as a, t1.b as b, t1.c as c from t1, t2",
+	}, {
+		sql:    "select *, t1.* from t1, t2",
+		expSQL: "select t1.a as a, t1.b as b, t1.c as c, t2.c1 as c1, t2.c2 as c2, t1.a as a, t1.b as b, t1.c as c from t1, t2",
+	}, { // aliased table
+		sql:    "select * from t1 a, t2 b",
+		expSQL: "select a.a as a, a.b as b, a.c as c, b.c1 as c1, b.c2 as c2 from t1 as a, t2 as b",
+	}, { // t3 is non-authoritative table
+		sql:    "select * from t3",
+		expSQL: "select * from t3",
+	}, { // t3 is non-authoritative table
+		sql:    "select * from t1, t2, t3",
+		expSQL: "select * from t1, t2, t3",
+	}, { // t3 is non-authoritative table
+		sql:    "select t1.*, t2.*, t3.* from t1, t2, t3",
+		expSQL: "select t1.a as a, t1.b as b, t1.c as c, t2.c1 as c1, t2.c2 as c2, t3.* from t1, t2, t3",
+	}, {
+		sql:    "select foo.* from t1, t2",
+		expErr: "Unknown table 'foo'",
+	}}
+	for _, tcase := range tcases {
+		t.Run(tcase.sql, func(t *testing.T) {
+			ast, err := sqlparser.Parse(tcase.sql)
+			require.NoError(t, err)
+			semTable, err := semantics.Analyze(ast, cDB, schemaInfo)
+			require.NoError(t, err)
+			expandedSelect, err := expandStar(ast.(*sqlparser.Select), semTable)
+			if tcase.expErr == "" {
+				require.NoError(t, err)
+				assert.Equal(t, tcase.expSQL, sqlparser.String(expandedSelect))
+			} else {
+				require.EqualError(t, err, tcase.expErr)
+			}
+		})
+	}
+}
+
+func TestSemTableDependenciesAfterExpandStar(t *testing.T) {
+	schemaInfo := &semantics.FakeSI{Tables: map[string]*vindexes.Table{
+		"t1": {
+			Name: sqlparser.NewTableIdent("t1"),
+			Columns: []vindexes.Column{{
+				Name: sqlparser.NewColIdent("a"),
+				Type: sqltypes.VarChar,
+			}},
+			ColumnListAuthoritative: true,
+		}}}
+	tcases := []struct {
+		sql         string
+		expSQL      string
+		sameTbl     int
+		otherTbl    int
+		expandedCol int
+	}{{
+		sql:      "select a, * from t1",
+		expSQL:   "select a, t1.a as a from t1",
+		otherTbl: -1, sameTbl: 0, expandedCol: 1,
+	}, {
+		sql:      "select t2.a, t1.a, t1.* from t1, t2",
+		expSQL:   "select t2.a, t1.a, t1.a as a from t1, t2",
+		otherTbl: 0, sameTbl: 1, expandedCol: 2,
+	}, {
+		sql:      "select t2.a, t.a, t.* from t1 t, t2",
+		expSQL:   "select t2.a, t.a, t.a as a from t1 as t, t2",
+		otherTbl: 0, sameTbl: 1, expandedCol: 2,
+	}}
+	for _, tcase := range tcases {
+		t.Run(tcase.sql, func(t *testing.T) {
+			ast, err := sqlparser.Parse(tcase.sql)
+			require.NoError(t, err)
+			semTable, err := semantics.Analyze(ast, "", schemaInfo)
+			require.NoError(t, err)
+			expandedSelect, err := expandStar(ast.(*sqlparser.Select), semTable)
+			require.NoError(t, err)
+			assert.Equal(t, tcase.expSQL, sqlparser.String(expandedSelect))
+			if tcase.otherTbl != -1 {
+				assert.NotEqual(t,
+					semTable.Dependencies(expandedSelect.SelectExprs[tcase.otherTbl].(*sqlparser.AliasedExpr).Expr),
+					semTable.Dependencies(expandedSelect.SelectExprs[tcase.expandedCol].(*sqlparser.AliasedExpr).Expr),
+				)
+			}
+			if tcase.sameTbl != -1 {
+				assert.Equal(t,
+					semTable.Dependencies(expandedSelect.SelectExprs[tcase.sameTbl].(*sqlparser.AliasedExpr).Expr),
+					semTable.Dependencies(expandedSelect.SelectExprs[tcase.expandedCol].(*sqlparser.AliasedExpr).Expr),
+				)
+			}
+		})
+	}
 }

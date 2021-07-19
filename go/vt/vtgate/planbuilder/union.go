@@ -29,7 +29,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
-func buildUnionPlan(stmt sqlparser.Statement, reservedVars sqlparser.BindVars, vschema ContextVSchema) (engine.Primitive, error) {
+func buildUnionPlan(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema ContextVSchema) (engine.Primitive, error) {
 	union := stmt.(*sqlparser.Union)
 	// For unions, create a pb with anonymous scope.
 	pb := newPrimitiveBuilder(vschema, newJointab(reservedVars))
@@ -42,7 +42,7 @@ func buildUnionPlan(stmt sqlparser.Statement, reservedVars sqlparser.BindVars, v
 	return pb.plan.Primitive(), nil
 }
 
-func (pb *primitiveBuilder) processUnion(union *sqlparser.Union, reservedVars sqlparser.BindVars, outer *symtab) error {
+func (pb *primitiveBuilder) processUnion(union *sqlparser.Union, reservedVars *sqlparser.ReservedVars, outer *symtab) error {
 	if err := pb.processPart(union.FirstStatement, reservedVars, outer, false); err != nil {
 		return err
 	}
@@ -87,7 +87,7 @@ func (pb *primitiveBuilder) processUnion(union *sqlparser.Union, reservedVars sq
 	return pb.pushLimit(union.Limit)
 }
 
-func (pb *primitiveBuilder) processPart(part sqlparser.SelectStatement, reservedVars sqlparser.BindVars, outer *symtab, hasParens bool) error {
+func (pb *primitiveBuilder) processPart(part sqlparser.SelectStatement, reservedVars *sqlparser.ReservedVars, outer *symtab, hasParens bool) error {
 	switch part := part.(type) {
 	case *sqlparser.Union:
 		return pb.processUnion(part, reservedVars, outer)

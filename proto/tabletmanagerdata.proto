@@ -252,6 +252,16 @@ message UnlockTablesRequest {
 message UnlockTablesResponse {
 }
 
+message ExecuteQueryRequest {
+  bytes query = 1;
+  string db_name = 2;
+  uint64 max_rows = 3;
+}
+
+message ExecuteQueryResponse {
+  query.QueryResult result = 1;
+}
+
 message ExecuteFetchAsDbaRequest {
   bytes query = 1;
   string db_name = 2;

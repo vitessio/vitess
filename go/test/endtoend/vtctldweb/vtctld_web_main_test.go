@@ -177,7 +177,7 @@ func CreateWebDriver(port int) error {
 			return err
 		}
 
-		name, err := wd.CurrentWindowHandle() //nolint
+		name, _ := wd.CurrentWindowHandle() //nolint
 		return wd.ResizeWindow(name, 1280, 1024)
 	}
 
@@ -203,7 +203,7 @@ func CreateWebDriver(port int) error {
 	if err != nil {
 		return err
 	}
-	name, err := wd.CurrentWindowHandle() //nolint
+	name, _ := wd.CurrentWindowHandle() //nolint
 	return wd.ResizeWindow(name, 1280, 1024)
 }
 
@@ -348,7 +348,7 @@ func getDashboardKeyspaces(t *testing.T) []string {
 	dashboardContent, err := wd.FindElement(selenium.ByTagName, "vt-dashboard")
 	require.Nil(t, err)
 
-	ksCards, err := dashboardContent.FindElements(selenium.ByClassName, "vt-keyspace-card") //nolint
+	ksCards, _ := dashboardContent.FindElements(selenium.ByClassName, "vt-keyspace-card") //nolint
 	var out []string
 	for _, ks := range ksCards {
 		out = append(out, text(t, ks))
@@ -363,7 +363,7 @@ func getDashboardShards(t *testing.T) []string {
 	dashboardContent, err := wd.FindElement(selenium.ByTagName, "vt-dashboard") //nolint
 	require.Nil(t, err)
 
-	ksCards, err := dashboardContent.FindElements(selenium.ByClassName, "vt-shard-stats") //nolint
+	ksCards, _ := dashboardContent.FindElements(selenium.ByClassName, "vt-shard-stats") //nolint
 	var out []string
 	for _, ks := range ksCards {
 		out = append(out, text(t, ks))
@@ -392,7 +392,7 @@ func getShardTablets(t *testing.T) ([]string, []string) {
 	shardContent, err := wd.FindElement(selenium.ByTagName, "vt-shard-view")
 	require.Nil(t, err)
 
-	tableRows, err := shardContent.FindElements(selenium.ByTagName, "tr") //nolint
+	tableRows, _ := shardContent.FindElements(selenium.ByTagName, "tr") //nolint
 	tableRows = tableRows[1:]
 
 	var tabletTypes, tabletUIDs []string

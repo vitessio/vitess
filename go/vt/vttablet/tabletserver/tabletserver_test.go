@@ -22,6 +22,8 @@ import (
 	"io"
 	"io/ioutil"
 	"math/rand"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"reflect"
 	"strings"
@@ -56,6 +58,62 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
+func TestTabletServerHealthz(t *testing.T) {
+	db, tsv := setupTabletServerTest(t, "")
+	defer tsv.StopService()
+	defer db.Close()
+
+	req, err := http.NewRequest("GET", "/healthz", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rr := httptest.NewRecorder()
+	handler := http.HandlerFunc(tsv.healthzHandler)
+	handler.ServeHTTP(rr, req)
+
+	expectedCode := http.StatusOK
+	if status := rr.Code; status != expectedCode {
+		t.Errorf("handler returned wrong status code: got %v want %v",
+			status, expectedCode)
+	}
+
+	expected := "ok\n"
+	if rr.Body.String() != expected {
+		t.Errorf("handler returned unexpected body: got %v want %v",
+			rr.Body.String(), expected)
+	}
+}
+
+func TestTabletServerHealthzNotConnected(t *testing.T) {
+	db, tsv := setupTabletServerTest(t, "")
+	defer tsv.StopService()
+	defer db.Close()
+
+	tsv.sm.SetServingType(topodatapb.TabletType_MASTER, time.Time{}, StateNotConnected, "test disconnected")
+
+	req, err := http.NewRequest("GET", "/healthz", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rr := httptest.NewRecorder()
+	handler := http.HandlerFunc(tsv.healthzHandler)
+	handler.ServeHTTP(rr, req)
+
+	expectedCode := http.StatusInternalServerError
+	if status := rr.Code; status != expectedCode {
+		t.Errorf("handler returned wrong status code: got %v want %v",
+			status, expectedCode)
+	}
+
+	expected := "500 internal server error: vttablet is not serving\n"
+	if rr.Body.String() != expected {
+		t.Errorf("handler returned unexpected body: got %v want %v",
+			rr.Body.String(), expected)
+	}
+}
+
 func TestBeginOnReplica(t *testing.T) {
 	db, tsv := setupTabletServerTest(t, "")
 	defer tsv.StopService()
@@ -71,7 +129,7 @@ func TestBeginOnReplica(t *testing.T) {
 	}
 	txID, alias, err := tsv.Begin(ctx, &target, &options)
 	require.NoError(t, err, "failed to create read only tx on replica")
-	assert.Equal(t, tsv.alias, *alias, "Wrong tablet alias from Begin")
+	assert.Equal(t, tsv.alias, alias, "Wrong tablet alias from Begin")
 	_, err = tsv.Rollback(ctx, &target, txID)
 	require.NoError(t, err, "failed to rollback read only tx")
 
@@ -131,6 +189,7 @@ func TestTabletServerRedoLogIsKeptBetweenRestarts(t *testing.T) {
 
 	turnOnTxEngine := func() {
 		tsv.SetServingType(topodatapb.TabletType_MASTER, time.Time{}, true, "")
+		tsv.TwoPCEngineWait()
 	}
 	turnOffTxEngine := func() {
 		tsv.SetServingType(topodatapb.TabletType_REPLICA, time.Time{}, true, "")
@@ -1653,7 +1712,7 @@ func TestPurgeMessages(t *testing.T) {
 func TestHandleExecUnknownError(t *testing.T) {
 	logStats := tabletenv.NewLogStats(ctx, "TestHandleExecError")
 	config := tabletenv.NewDefaultConfig()
-	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
+	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), &topodatapb.TabletAlias{})
 	defer tsv.handlePanicAndSendLogStats("select * from test_table", nil, logStats)
 	panic("unknown exec error")
 }
@@ -1700,7 +1759,7 @@ func (tl *testLogger) getLog(i int) string {
 
 func TestHandleExecTabletError(t *testing.T) {
 	config := tabletenv.NewDefaultConfig()
-	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
+	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), &topodatapb.TabletAlias{})
 	tl := newTestLogger()
 	defer tl.Close()
 	err := tsv.convertAndLogError(
@@ -1722,7 +1781,7 @@ func TestHandleExecTabletError(t *testing.T) {
 func TestTerseErrorsNonSQLError(t *testing.T) {
 	config := tabletenv.NewDefaultConfig()
 	config.TerseErrors = true
-	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
+	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), &topodatapb.TabletAlias{})
 	tl := newTestLogger()
 	defer tl.Close()
 	err := tsv.convertAndLogError(
@@ -1744,7 +1803,7 @@ func TestTerseErrorsNonSQLError(t *testing.T) {
 func TestTerseErrorsBindVars(t *testing.T) {
 	config := tabletenv.NewDefaultConfig()
 	config.TerseErrors = true
-	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
+	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), &topodatapb.TabletAlias{})
 	tl := newTestLogger()
 	defer tl.Close()
 
@@ -1763,7 +1822,7 @@ func TestTerseErrorsBindVars(t *testing.T) {
 		t.Errorf("error got '%v', want '%s'", err, want)
 	}
 
-	wantLog := "sensitive message (errno 10) (sqlstate HY000): Sql: \"select * from test_table where a = :a\", BindVars: {a: \"type:INT64 value:\\\"1\\\" \"}"
+	wantLog := "sensitive message (errno 10) (sqlstate HY000): Sql: \"select * from test_table where a = :a\", BindVars: {a: \"type:INT64 value:\\\"1\\\"\"}"
 	if wantLog != tl.getLog(0) {
 		t.Errorf("log got '%s', want '%s'", tl.getLog(0), wantLog)
 	}
@@ -1772,7 +1831,7 @@ func TestTerseErrorsBindVars(t *testing.T) {
 func TestTerseErrorsNoBindVars(t *testing.T) {
 	config := tabletenv.NewDefaultConfig()
 	config.TerseErrors = true
-	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
+	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), &topodatapb.TabletAlias{})
 	tl := newTestLogger()
 	defer tl.Close()
 	err := tsv.convertAndLogError(ctx, "", nil, vterrors.Errorf(vtrpcpb.Code_DEADLINE_EXCEEDED, "sensitive message"), nil)
@@ -1788,7 +1847,7 @@ func TestTerseErrorsNoBindVars(t *testing.T) {
 func TestTruncateErrors(t *testing.T) {
 	config := tabletenv.NewDefaultConfig()
 	config.TerseErrors = true
-	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
+	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), &topodatapb.TabletAlias{})
 	tl := newTestLogger()
 	defer tl.Close()
 
@@ -1827,7 +1886,7 @@ func TestTruncateErrors(t *testing.T) {
 		t.Errorf("error got '%v', want '%s'", err, wantErr)
 	}
 
-	wantLog = "sensitive message (errno 10) (sqlstate HY000): Sql: \"select * from test_table where xyz = :vtg1 order by abc desc\", BindVars: {vtg1: \"type:VARBINARY value:\\\"this is kinda long eh\\\" \"}"
+	wantLog = "sensitive message (errno 10) (sqlstate HY000): Sql: \"select * from test_table where xyz = :vtg1 order by abc desc\", BindVars: {vtg1: \"type:VARBINARY value:\\\"this is kinda long eh\\\"\"}"
 	if wantLog != tl.getLog(1) {
 		t.Errorf("log got '%s', want '%s'", tl.getLog(1), wantLog)
 	}
@@ -1837,7 +1896,7 @@ func TestTruncateErrors(t *testing.T) {
 func TestTerseErrorsIgnoreFailoverInProgress(t *testing.T) {
 	config := tabletenv.NewDefaultConfig()
 	config.TerseErrors = true
-	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
+	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), &topodatapb.TabletAlias{})
 	tl := newTestLogger()
 	defer tl.Close()
 	err := tsv.convertAndLogError(ctx, "select * from test_table where id = :a",
@@ -1877,7 +1936,7 @@ var aclJSON2 = `{
 func TestACLHUP(t *testing.T) {
 	tableacl.Register("simpleacl", &simpleacl.Factory{})
 	config := tabletenv.NewDefaultConfig()
-	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
+	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), &topodatapb.TabletAlias{})
 
 	f, err := ioutil.TempFile("", "tableacl")
 	require.NoError(t, err)
@@ -2197,14 +2256,14 @@ func TestDatabaseNameReplaceByKeyspaceNameExecuteMethod(t *testing.T) {
 	target := tsv.sm.target
 
 	// Testing Execute Method
-	transactionID, _, err := tsv.Begin(ctx, &target, nil)
+	transactionID, _, err := tsv.Begin(ctx, target, nil)
 	require.NoError(t, err)
-	res, err := tsv.Execute(ctx, &target, executeSQL, nil, transactionID, 0, &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL})
+	res, err := tsv.Execute(ctx, target, executeSQL, nil, transactionID, 0, &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL})
 	require.NoError(t, err)
 	for _, field := range res.Fields {
 		require.Equal(t, "keyspaceName", field.Database)
 	}
-	_, err = tsv.Commit(ctx, &target, transactionID)
+	_, err = tsv.Commit(ctx, target, transactionID)
 	require.NoError(t, err)
 }
 
@@ -2239,7 +2298,7 @@ func TestDatabaseNameReplaceByKeyspaceNameStreamExecuteMethod(t *testing.T) {
 		}
 		return nil
 	}
-	err := tsv.StreamExecute(ctx, &target, executeSQL, nil, 0, &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL}, callback)
+	err := tsv.StreamExecute(ctx, target, executeSQL, nil, 0, &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL}, callback)
 	require.NoError(t, err)
 }
 
@@ -2266,7 +2325,7 @@ func TestDatabaseNameReplaceByKeyspaceNameExecuteBatchMethod(t *testing.T) {
 	target := tsv.sm.target
 
 	// Testing ExecuteBatch Method
-	results, err := tsv.ExecuteBatch(ctx, &target, []*querypb.BoundQuery{
+	results, err := tsv.ExecuteBatch(ctx, target, []*querypb.BoundQuery{
 		{
 			Sql:           executeSQL,
 			BindVariables: nil,
@@ -2307,12 +2366,12 @@ func TestDatabaseNameReplaceByKeyspaceNameBeginExecuteMethod(t *testing.T) {
 	target := tsv.sm.target
 
 	// Test BeginExecute Method
-	res, transactionID, _, err := tsv.BeginExecute(ctx, &target, nil, executeSQL, nil, 0, &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL})
+	res, transactionID, _, err := tsv.BeginExecute(ctx, target, nil, executeSQL, nil, 0, &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL})
 	require.NoError(t, err)
 	for _, field := range res.Fields {
 		require.Equal(t, "keyspaceName", field.Database)
 	}
-	_, err = tsv.Commit(ctx, &target, transactionID)
+	_, err = tsv.Commit(ctx, target, transactionID)
 	require.NoError(t, err)
 }
 
@@ -2344,7 +2403,7 @@ func TestDatabaseNameReplaceByKeyspaceNameBeginExecuteBatchMethod(t *testing.T) 
 	target := tsv.sm.target
 
 	// Test BeginExecuteBatch Method
-	results, transactionID, _, err := tsv.BeginExecuteBatch(ctx, &target, []*querypb.BoundQuery{
+	results, transactionID, _, err := tsv.BeginExecuteBatch(ctx, target, []*querypb.BoundQuery{
 		{
 			Sql:           executeSQL,
 			BindVariables: nil,
@@ -2360,7 +2419,7 @@ func TestDatabaseNameReplaceByKeyspaceNameBeginExecuteBatchMethod(t *testing.T) 
 			require.Equal(t, "keyspaceName", field.Database)
 		}
 	}
-	_, err = tsv.Commit(ctx, &target, transactionID)
+	_, err = tsv.Commit(ctx, target, transactionID)
 	require.NoError(t, err)
 }
 
@@ -2387,12 +2446,12 @@ func TestDatabaseNameReplaceByKeyspaceNameReserveExecuteMethod(t *testing.T) {
 	target := tsv.sm.target
 
 	// Test ReserveExecute
-	res, rID, _, err := tsv.ReserveExecute(ctx, &target, nil, executeSQL, nil, 0, &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL})
+	res, rID, _, err := tsv.ReserveExecute(ctx, target, nil, executeSQL, nil, 0, &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL})
 	require.NoError(t, err)
 	for _, field := range res.Fields {
 		require.Equal(t, "keyspaceName", field.Database)
 	}
-	err = tsv.Release(ctx, &target, 0, rID)
+	err = tsv.Release(ctx, target, 0, rID)
 	require.NoError(t, err)
 }
 
@@ -2419,12 +2478,12 @@ func TestDatabaseNameReplaceByKeyspaceNameReserveBeginExecuteMethod(t *testing.T
 	target := tsv.sm.target
 
 	// Test for ReserveBeginExecute
-	res, transactionID, reservedID, _, err := tsv.ReserveBeginExecute(ctx, &target, nil, executeSQL, nil, &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL})
+	res, transactionID, reservedID, _, err := tsv.ReserveBeginExecute(ctx, target, nil, executeSQL, nil, &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL})
 	require.NoError(t, err)
 	for _, field := range res.Fields {
 		require.Equal(t, "keyspaceName", field.Database)
 	}
-	err = tsv.Release(ctx, &target, transactionID, reservedID)
+	err = tsv.Release(ctx, target, transactionID, reservedID)
 	require.NoError(t, err)
 }
 
@@ -2435,10 +2494,10 @@ func setupTabletServerTest(t *testing.T, keyspaceName string) (*fakesqldb.DB, *T
 
 func setupTabletServerTestCustom(t *testing.T, config *tabletenv.TabletConfig, keyspaceName string) (*fakesqldb.DB, *TabletServer) {
 	db := setupFakeDB(t)
-	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
+	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), &topodatapb.TabletAlias{})
 	require.Equal(t, StateNotConnected, tsv.sm.State())
 	dbcfgs := newDBConfigs(db)
-	target := querypb.Target{
+	target := &querypb.Target{
 		Keyspace:   keyspaceName,
 		TabletType: topodatapb.TabletType_MASTER,
 	}

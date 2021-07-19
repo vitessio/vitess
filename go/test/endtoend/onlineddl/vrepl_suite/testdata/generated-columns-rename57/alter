@@ -1,0 +1,1 @@
+change sum_ab total_ab int as (a + b) virtual not null

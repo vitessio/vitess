@@ -23,20 +23,16 @@ import (
 	"strings"
 	"time"
 
-	"github.com/patrickmn/go-cache"
-
 	"vitess.io/vitess/go/vt/orchestrator/config"
 	"vitess.io/vitess/go/vt/orchestrator/db"
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/sqlutils"
-	"vitess.io/vitess/go/vt/orchestrator/util"
 )
 
 // Max concurrency for bulk topology operations
 const topologyConcurrency = 128
 
 var topologyConcurrencyChan = make(chan bool, topologyConcurrency)
-var supportedAutoPseudoGTIDWriters *cache.Cache = cache.New(config.CheckAutoPseudoGTIDGrantsIntervalSeconds*time.Second, time.Second)
 
 type OperationGTIDHint string
 
@@ -271,12 +267,6 @@ func StopReplicationNicely(instanceKey *InstanceKey, timeout time.Duration) (*In
 
 	_, err = ExecInstance(instanceKey, `stop slave`)
 	if err != nil {
-		// Patch; current MaxScale behavior for STOP SLAVE is to throw an error if replica already stopped.
-		if instance.isMaxScale() && err.Error() == "Error 1199: Slave connection is not running" {
-			err = nil
-		}
-	}
-	if err != nil {
 		return instance, log.Errore(err)
 	}
 
@@ -380,12 +370,6 @@ func StopReplication(instanceKey *InstanceKey) (*Instance, error) {
 		return instance, log.Errore(err)
 	}
 	_, err = ExecInstance(instanceKey, `stop slave`)
-	if err != nil {
-		// Patch; current MaxScale behavior for STOP SLAVE is to throw an error if replica already stopped.
-		if instance.isMaxScale() && err.Error() == "Error 1199: Slave connection is not running" {
-			err = nil
-		}
-	}
 	if err != nil {
 		return instance, log.Errore(err)
 	}
@@ -612,9 +596,6 @@ func ChangeMasterTo(instanceKey *InstanceKey, masterKey *InstanceKey, masterBinl
 		return instance, fmt.Errorf("noop: aborting CHANGE MASTER TO operation on %+v; signalling error but nothing went wrong.", *instanceKey)
 	}
 
-	originalMasterKey := instance.MasterKey
-	originalExecBinlogCoordinates := instance.ExecBinlogCoordinates
-
 	var changeMasterFunc func() error
 	changedViaGTID := false
 	if instance.UsingMariaDBGTID && gtidHint != GTIDHintDeny {
@@ -695,7 +676,6 @@ func ChangeMasterTo(instanceKey *InstanceKey, masterKey *InstanceKey, masterBinl
 		return instance, log.Errore(err)
 	}
 
-	WriteMasterPositionEquivalence(&originalMasterKey, &originalExecBinlogCoordinates, changeToMasterKey, masterBinlogCoordinates)
 	ResetInstanceRelaylogCoordinatesHistory(instanceKey)
 
 	log.Infof("ChangeMasterTo: Changed master on %+v to: %+v, %+v. GTID: %+v", *instanceKey, masterKey, masterBinlogCoordinates, changedViaGTID)
@@ -966,103 +946,6 @@ func KillQuery(instanceKey *InstanceKey, process int64) (*Instance, error) {
 	log.Infof("Killed query on %+v", *instanceKey)
 	AuditOperation("kill-query", instanceKey, fmt.Sprintf("Killed query %d", process))
 	return instance, err
-}
-
-// injectPseudoGTID injects a Pseudo-GTID statement on a writable instance
-func injectPseudoGTID(instance *Instance) (hint string, err error) {
-	if *config.RuntimeCLIFlags.Noop {
-		return hint, fmt.Errorf("noop: aborting inject-pseudo-gtid operation on %+v; signalling error but nothing went wrong.", instance.Key)
-	}
-
-	now := time.Now()
-	randomHash := util.RandomHash()[0:16]
-	hint = fmt.Sprintf("%.8x:%.8x:%s", now.Unix(), instance.ServerID, randomHash)
-	query := fmt.Sprintf("drop view if exists `%s`.`_asc:%s`", config.PseudoGTIDSchema, hint)
-	_, err = ExecInstance(&instance.Key, query)
-	return hint, log.Errore(err)
-}
-
-// canInjectPseudoGTID checks orchestrator's grants to determine whether is has the
-// privilege of auto-injecting pseudo-GTID
-func canInjectPseudoGTID(instanceKey *InstanceKey) (canInject bool, err error) {
-	if canInject, found := supportedAutoPseudoGTIDWriters.Get(instanceKey.StringCode()); found {
-		return canInject.(bool), nil
-	}
-	db, err := db.OpenTopology(instanceKey.Hostname, instanceKey.Port)
-	if err != nil {
-		return canInject, err
-	}
-
-	foundAll := false
-	foundDropOnAll := false
-	foundAllOnSchema := false
-	foundDropOnSchema := false
-
-	err = sqlutils.QueryRowsMap(db, `show grants for current_user()`, func(m sqlutils.RowMap) error {
-		for _, grantData := range m {
-			grant := grantData.String
-			if strings.Contains(grant, `GRANT ALL PRIVILEGES ON *.*`) {
-				foundAll = true
-			}
-			if strings.Contains(grant, `DROP`) && strings.Contains(grant, ` ON *.*`) {
-				foundDropOnAll = true
-			}
-			if strings.Contains(grant, fmt.Sprintf("GRANT ALL PRIVILEGES ON `%s`.*", config.PseudoGTIDSchema)) {
-				foundAllOnSchema = true
-			}
-			if strings.Contains(grant, fmt.Sprintf(`GRANT ALL PRIVILEGES ON "%s".*`, config.PseudoGTIDSchema)) {
-				foundAllOnSchema = true
-			}
-			if strings.Contains(grant, `DROP`) && strings.Contains(grant, fmt.Sprintf(" ON `%s`.*", config.PseudoGTIDSchema)) {
-				foundDropOnSchema = true
-			}
-			if strings.Contains(grant, `DROP`) && strings.Contains(grant, fmt.Sprintf(` ON "%s".*`, config.PseudoGTIDSchema)) {
-				foundDropOnSchema = true
-			}
-		}
-		return nil
-	})
-	if err != nil {
-		return canInject, err
-	}
-
-	canInject = foundAll || foundDropOnAll || foundAllOnSchema || foundDropOnSchema
-	supportedAutoPseudoGTIDWriters.Set(instanceKey.StringCode(), canInject, cache.DefaultExpiration)
-
-	return canInject, nil
-}
-
-// CheckAndInjectPseudoGTIDOnWriter checks whether pseudo-GTID can and
-// should be injected on given instance, and if so, attempts to inject.
-func CheckAndInjectPseudoGTIDOnWriter(instance *Instance) (injected bool, err error) {
-	if instance == nil {
-		return injected, log.Errorf("CheckAndInjectPseudoGTIDOnWriter: instance is nil")
-	}
-	if instance.ReadOnly {
-		return injected, log.Errorf("CheckAndInjectPseudoGTIDOnWriter: instance is read-only: %+v", instance.Key)
-	}
-	if !instance.IsLastCheckValid {
-		return injected, nil
-	}
-	canInject, err := canInjectPseudoGTID(&instance.Key)
-	if err != nil {
-		return injected, log.Errore(err)
-	}
-	if !canInject {
-		if util.ClearToLog("CheckAndInjectPseudoGTIDOnWriter", instance.Key.StringCode()) {
-			log.Warningf("AutoPseudoGTID enabled, but orchestrator has no priviliges on %+v to inject pseudo-gtid", instance.Key)
-		}
-
-		return injected, nil
-	}
-	if _, err := injectPseudoGTID(instance); err != nil {
-		return injected, log.Errore(err)
-	}
-	injected = true
-	if err := RegisterInjectedPseudoGTID(instance.ClusterName); err != nil {
-		return injected, log.Errore(err)
-	}
-	return injected, nil
 }
 
 func GTIDSubtract(instanceKey *InstanceKey, gtidSet string, gtidSubset string) (gtidSubtract string, err error) {

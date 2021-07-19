@@ -80,7 +80,6 @@ Gen4 plan same as above
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
     "Aggregates": "count(0)",
-    "Distinct": "false",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -122,10 +121,10 @@ Gen4 plan same as above
 }
 
 # select with partial scatter directive
-"select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ * from user"
+"select /*vt+ SCATTER_ERRORS_AS_WARNINGS */ * from user"
 {
   "QueryType": "SELECT",
-  "Original": "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ * from user",
+  "Original": "select /*vt+ SCATTER_ERRORS_AS_WARNINGS */ * from user",
   "Instructions": {
     "OperatorType": "Route",
     "Variant": "SelectScatter",
@@ -134,7 +133,8 @@ Gen4 plan same as above
       "Sharded": true
     },
     "FieldQuery": "select * from `user` where 1 != 1",
-    "Query": "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ * from `user`",
+    "Query": "select /*vt+ SCATTER_ERRORS_AS_WARNINGS */ * from `user`",
+    "ScatterErrorsAsWarnings": true,
     "Table": "`user`"
   }
 }
@@ -148,7 +148,6 @@ Gen4 plan same as above
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
     "Aggregates": "count(0)",
-    "Distinct": "false",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -159,6 +158,7 @@ Gen4 plan same as above
         },
         "FieldQuery": "select count(*) from `user` where 1 != 1",
         "Query": "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ count(*) from `user`",
+        "ScatterErrorsAsWarnings": true,
         "Table": "`user`"
       }
     ]
@@ -174,7 +174,6 @@ Gen4 plan same as above
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
     "Aggregates": "count(0)",
-    "Distinct": "false",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -185,6 +184,7 @@ Gen4 plan same as above
         },
         "FieldQuery": "select count(*) from `user` where 1 != 1",
         "Query": "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ count(*) from `user`",
+        "ScatterErrorsAsWarnings": true,
         "Table": "`user`"
       }
     ]
@@ -209,6 +209,7 @@ Gen4 plan same as above
         },
         "FieldQuery": "select * from `user` where 1 != 1",
         "Query": "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ * from `user` limit :__upper_limit",
+        "ScatterErrorsAsWarnings": true,
         "Table": "`user`"
       }
     ]
@@ -950,6 +951,7 @@ Gen4 plan same as above
     "Vindex": "user_index"
   }
 }
+Gen4 plan same as above
 
 # Column Aliasing with Column
 "select user0_.col as col0_ from user user0_ where id = 1 order by col0_ desc limit 3"
@@ -972,6 +974,7 @@ Gen4 plan same as above
     "Vindex": "user_index"
   }
 }
+Gen4 plan same as above
 
 # Booleans and parenthesis
 "select * from user where (id = 1) AND name = true limit 5"
@@ -1392,6 +1395,7 @@ Gen4 plan same as above
     "Table": "dual"
   }
 }
+Gen4 plan same as above
 
 # testing SingleRow Projection with arithmetics
 "select 42+2"
@@ -1466,7 +1470,6 @@ Gen4 plan same as above
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
         "Aggregates": "count(0)",
-        "Distinct": "false",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -1558,7 +1561,6 @@ Gen4 plan same as above
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
         "Aggregates": "count(0)",
-        "Distinct": "false",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -1704,8 +1706,8 @@ Gen4 plan same as above
     },
     "FieldQuery": "select DELETE_RULE, UPDATE_RULE from INFORMATION_SCHEMA.KEY_COLUMN_USAGE as KCU join INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS as RC on KCU.CONSTRAINT_NAME = RC.CONSTRAINT_NAME where 1 != 1",
     "Query": "select DELETE_RULE, UPDATE_RULE from INFORMATION_SCHEMA.KEY_COLUMN_USAGE as KCU join INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS as RC on KCU.CONSTRAINT_NAME = RC.CONSTRAINT_NAME where KCU.TABLE_SCHEMA = :__vtschemaname and KCU.TABLE_NAME = :__vttablename and KCU.COLUMN_NAME = 'id' and KCU.REFERENCED_TABLE_SCHEMA = 'test' and KCU.CONSTRAINT_NAME = 'data_type_table_id_fkey' order by KCU.CONSTRAINT_NAME asc, KCU.COLUMN_NAME asc",
-    "SysTableTableName": "VARBINARY(\"data_type_table\")",
-    "SysTableTableSchema": "VARBINARY(\"test\")"
+    "SysTableTableName": "[VARBINARY(\"data_type_table\")]",
+    "SysTableTableSchema": "[VARBINARY(\"test\")]"
   }
 }
 
@@ -1729,8 +1731,8 @@ Gen4 plan same as above
         },
         "FieldQuery": "select KCU.DELETE_RULE from INFORMATION_SCHEMA.KEY_COLUMN_USAGE as KCU join INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS as RC on KCU.CONSTRAINT_NAME = RC.CONSTRAINT_NAME where 1 != 1",
         "Query": "select KCU.DELETE_RULE from INFORMATION_SCHEMA.KEY_COLUMN_USAGE as KCU join INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS as RC on KCU.CONSTRAINT_NAME = RC.CONSTRAINT_NAME where KCU.TABLE_SCHEMA = :__vtschemaname and KCU.TABLE_NAME = :__vttablename and KCU.TABLE_NAME = :__vttablename order by KCU.CONSTRAINT_NAME asc, KCU.COLUMN_NAME asc",
-        "SysTableTableName": "VARBINARY(\"data_type_table\")",
-        "SysTableTableSchema": "VARBINARY(\"test\")"
+        "SysTableTableName": "[VARBINARY(\"data_type_table\"), VARBINARY(\"data_type_table\")]",
+        "SysTableTableSchema": "[VARBINARY(\"test\")]"
       },
       {
         "OperatorType": "Route",
@@ -1741,8 +1743,8 @@ Gen4 plan same as above
         },
         "FieldQuery": "select S.UPDATE_RULE from INFORMATION_SCHEMA.K as S where 1 != 1",
         "Query": "select S.UPDATE_RULE from INFORMATION_SCHEMA.K as S where S.TABLE_SCHEMA = :__vtschemaname and S.TABLE_NAME = :__vttablename",
-        "SysTableTableName": "VARBINARY(\"sc\")",
-        "SysTableTableSchema": "VARBINARY(\"test\")"
+        "SysTableTableName": "[VARBINARY(\"sc\")]",
+        "SysTableTableSchema": "[VARBINARY(\"test\")]"
       }
     ]
   }
@@ -1762,7 +1764,7 @@ Gen4 plan same as above
     },
     "FieldQuery": "select routine_name as `name`, routine_definition as definition from information_schema.routines where 1 != 1",
     "Query": "select routine_name as `name`, routine_definition as definition from information_schema.routines where ROUTINE_SCHEMA = :__vtschemaname and ROUTINE_TYPE = 'PROCEDURE'",
-    "SysTableTableSchema": ":v1"
+    "SysTableTableSchema": "[:v1]"
   }
 }
 
@@ -1780,7 +1782,7 @@ Gen4 plan same as above
     },
     "FieldQuery": "select SUM(data_length + index_length) as size from information_schema.`TABLES` where 1 != 1",
     "Query": "select SUM(data_length + index_length) as size from information_schema.`TABLES` where table_schema = :__vtschemaname",
-    "SysTableTableSchema": ":v1"
+    "SysTableTableSchema": "[:v1]"
   }
 }
 
@@ -1790,34 +1792,14 @@ Gen4 plan same as above
   "QueryType": "SELECT",
   "Original": "SELECT kcu.constraint_name constraint_name, kcu.column_name column_name, kcu.referenced_table_name referenced_table_name, kcu.referenced_column_name referenced_column_name, kcu.ordinal_position ordinal_position, kcu.table_name table_name, rc.delete_rule delete_rule, rc.update_rule update_rule FROM information_schema.key_column_usage AS kcu INNER JOIN information_schema.referential_constraints AS rc ON kcu.constraint_name = rc.constraint_name WHERE kcu.table_schema = ? AND rc.constraint_schema = ? AND kcu.referenced_column_name IS NOT NULL ORDER BY ordinal_position",
   "Instructions": {
-    "OperatorType": "Join",
-    "Variant": "Join",
-    "JoinColumnIndexes": "-1,-2,-3,-4,-5,-6,1,2",
-    "TableName": "_",
-    "Inputs": [
-      {
-        "OperatorType": "Route",
-        "Variant": "SelectDBA",
-        "Keyspace": {
-          "Name": "main",
-          "Sharded": false
-        },
-        "FieldQuery": "select kcu.constraint_name as constraint_name, kcu.column_name as column_name, kcu.referenced_table_name as referenced_table_name, kcu.referenced_column_name as referenced_column_name, kcu.ordinal_position as ordinal_position, kcu.table_name as table_name from information_schema.key_column_usage as kcu where 1 != 1",
-        "Query": "select kcu.constraint_name as constraint_name, kcu.column_name as column_name, kcu.referenced_table_name as referenced_table_name, kcu.referenced_column_name as referenced_column_name, kcu.ordinal_position as ordinal_position, kcu.table_name as table_name from information_schema.key_column_usage as kcu where kcu.table_schema = :__vtschemaname and kcu.referenced_column_name is not null order by ordinal_position asc",
-        "SysTableTableSchema": ":v1"
-      },
-      {
-        "OperatorType": "Route",
-        "Variant": "SelectDBA",
-        "Keyspace": {
-          "Name": "main",
-          "Sharded": false
-        },
-        "FieldQuery": "select rc.delete_rule as delete_rule, rc.update_rule as update_rule from information_schema.referential_constraints as rc where 1 != 1",
-        "Query": "select rc.delete_rule as delete_rule, rc.update_rule as update_rule from information_schema.referential_constraints as rc where rc.constraint_name = :kcu_constraint_name and rc.constraint_schema = :__vtschemaname",
-        "SysTableTableSchema": ":v2"
-      }
-    ]
+    "OperatorType": "Route",
+    "Variant": "SelectDBA",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select kcu.constraint_name as constraint_name, kcu.column_name as column_name, kcu.referenced_table_name as referenced_table_name, kcu.referenced_column_name as referenced_column_name, kcu.ordinal_position as ordinal_position, kcu.table_name as table_name, rc.delete_rule as delete_rule, rc.update_rule as update_rule from information_schema.key_column_usage as kcu join information_schema.referential_constraints as rc on kcu.constraint_name = rc.constraint_name where 1 != 1",
+    "Query": "select kcu.constraint_name as constraint_name, kcu.column_name as column_name, kcu.referenced_table_name as referenced_table_name, kcu.referenced_column_name as referenced_column_name, kcu.ordinal_position as ordinal_position, kcu.table_name as table_name, rc.delete_rule as delete_rule, rc.update_rule as update_rule from information_schema.key_column_usage as kcu join information_schema.referential_constraints as rc on kcu.constraint_name = rc.constraint_name where kcu.table_schema = :__vtschemaname and rc.constraint_schema = :__vtschemaname and kcu.referenced_column_name is not null order by ordinal_position asc",
+    "SysTableTableSchema": "[:v1, :v2]"
   }
 }
-

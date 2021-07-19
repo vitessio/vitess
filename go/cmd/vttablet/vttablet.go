@@ -104,6 +104,7 @@ func main() {
 		QueryServiceControl: qsc,
 		UpdateStream:        binlog.NewUpdateStream(ts, tablet.Keyspace, tabletAlias.Cell, qsc.SchemaEngine()),
 		VREngine:            vreplication.NewEngine(config, ts, tabletAlias.Cell, mysqld, qsc.LagThrottler()),
+		MetadataManager:     &mysqlctl.MetadataManager{},
 	}
 	if err := tm.Start(tablet, config.Healthcheck.IntervalSeconds.Get()); err != nil {
 		log.Exitf("failed to parse -tablet-path or initialize DB credentials: %v", err)
@@ -203,7 +204,7 @@ func createTabletServer(config *tabletenv.TabletConfig, ts *topo.Server, tabletA
 		log.Exit("table acl config has to be specified with table-acl-config flag because enforce-tableacl-config is set.")
 	}
 	// creates and registers the query service
-	qsc := tabletserver.NewTabletServer("", config, ts, *tabletAlias)
+	qsc := tabletserver.NewTabletServer("", config, ts, tabletAlias)
 	servenv.OnRun(func() {
 		qsc.Register()
 		addStatusParts(qsc)

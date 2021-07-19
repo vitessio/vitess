@@ -54,7 +54,7 @@ func init() {
 	RegisterGatewayCreator(GatewayImplementationDiscovery, createDiscoveryGateway)
 }
 
-// DiscoveryGateway is the default Gateway implementation.
+// DiscoveryGateway is not the default Gateway implementation anymore.
 // This implementation uses the legacy healthcheck module.
 type DiscoveryGateway struct {
 	queryservice.QueryService
@@ -126,7 +126,7 @@ func NewDiscoveryGateway(ctx context.Context, hc discovery.LegacyHealthCheck, se
 		}
 		var recorder discovery.LegacyTabletRecorder = dg.hc
 		if len(discovery.TabletFilters) > 0 {
-			if len(discovery.KeyspacesToWatch) > 0 {
+			if discovery.FilteringKeyspaces() {
 				log.Exitf("Only one of -keyspaces_to_watch and -tablet_filters may be specified at a time")
 			}
 
@@ -135,7 +135,7 @@ func NewDiscoveryGateway(ctx context.Context, hc discovery.LegacyHealthCheck, se
 				log.Exitf("Cannot parse tablet_filters parameter: %v", err)
 			}
 			recorder = fbs
-		} else if len(discovery.KeyspacesToWatch) > 0 {
+		} else if discovery.FilteringKeyspaces() {
 			recorder = discovery.NewLegacyFilterByKeyspace(recorder, discovery.KeyspacesToWatch)
 		}
 
@@ -405,6 +405,6 @@ func (dg *DiscoveryGateway) getStatsAggregator(target *querypb.Target) *TabletSt
 }
 
 // QueryServiceByAlias satisfies the Gateway interface
-func (dg *DiscoveryGateway) QueryServiceByAlias(_ *topodatapb.TabletAlias) (queryservice.QueryService, error) {
+func (dg *DiscoveryGateway) QueryServiceByAlias(_ *topodatapb.TabletAlias, _ *querypb.Target) (queryservice.QueryService, error) {
 	return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "DiscoveryGateway does not implement QueryServiceByAlias")
 }

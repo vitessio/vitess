@@ -21,17 +21,14 @@ import (
 	"fmt"
 	"testing"
 
-	"vitess.io/vitess/go/test/utils"
-
 	"github.com/google/go-cmp/cmp"
-
 	"github.com/stretchr/testify/assert"
-
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/utils"
 )
 
 func TestSelectNull(t *testing.T) {
@@ -595,6 +592,73 @@ func TestSubQueryOnTopOfSubQuery(t *testing.T) {
 	assertMatches(t, conn, "select id1 from t1 where id1 not in (select id3 from t2) and id2 in (select id4 from t2) order by id1", `[[INT64(3)] [INT64(4)]]`)
 }
 
+func TestShowVGtid(t *testing.T) {
+	conn, err := mysql.Connect(context.Background(), &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	query := "show global vgtid_executed from ks"
+	qr := exec(t, conn, query)
+	require.Equal(t, 1, len(qr.Rows))
+	require.Equal(t, 2, len(qr.Rows[0]))
+
+	defer exec(t, conn, `delete from t1`)
+	exec(t, conn, `insert into t1(id1, id2) values (1, 1), (2, 2), (3, 3), (4, 4), (5, 5)`)
+	qr2 := exec(t, conn, query)
+	require.Equal(t, 1, len(qr2.Rows))
+	require.Equal(t, 2, len(qr2.Rows[0]))
+
+	require.Equal(t, qr.Rows[0][0], qr2.Rows[0][0], "keyspace should be same")
+	require.NotEqual(t, qr.Rows[0][1].ToString(), qr2.Rows[0][1].ToString(), "vgtid should have changed")
+}
+
+func TestShowGtid(t *testing.T) {
+	conn, err := mysql.Connect(context.Background(), &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	query := "show global gtid_executed from ks"
+	qr := exec(t, conn, query)
+	require.Equal(t, 2, len(qr.Rows))
+
+	res := make(map[string]string, 2)
+	for _, row := range qr.Rows {
+		require.Equal(t, KeyspaceName, row[0].ToString())
+		res[row[2].ToString()] = row[1].ToString()
+	}
+
+	defer exec(t, conn, `delete from t1`)
+	exec(t, conn, `insert into t1(id1, id2) values (1, 1), (2, 2), (3, 3), (4, 4), (5, 5)`)
+	qr2 := exec(t, conn, query)
+	require.Equal(t, 2, len(qr2.Rows))
+
+	for _, row := range qr2.Rows {
+		require.Equal(t, KeyspaceName, row[0].ToString())
+		gtid, exists := res[row[2].ToString()]
+		require.True(t, exists, "gtid not cached for row: %v", row)
+		require.NotEqual(t, gtid, row[1].ToString())
+	}
+}
+
+func TestQueryAndSubQWithLimit(t *testing.T) {
+	conn, err := mysql.Connect(context.Background(), &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	exec(t, conn, "insert into t1(id1, id2) values(0,0),(1,1),(2,2),(3, 3), (4, 4), (5, 5), (6, 6), (7, 7), (8, 8),(9,9)")
+	result := exec(t, conn, `select id1, id2 from t1 where id1 >= ( select id1 from t1 order by id1 asc limit 1) limit 100`)
+	assert.Equal(t, 10, len(result.Rows))
+}
+
+func TestDeleteAlias(t *testing.T) {
+	conn, err := mysql.Connect(context.Background(), &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	exec(t, conn, "delete t1 from t1 where id1 = 1")
+	exec(t, conn, "delete t.* from t1 t where t.id1 = 1")
+}
+
 func assertMatches(t *testing.T, conn *mysql.Conn, query, expected string) {
 	t.Helper()
 	qr := exec(t, conn, query)
@@ -604,6 +668,7 @@ func assertMatches(t *testing.T, conn *mysql.Conn, query, expected string) {
 		t.Errorf("Query: %s (-want +got):\n%s", query, diff)
 	}
 }
+
 func assertMatchesNoOrder(t *testing.T, conn *mysql.Conn, query, expected string) {
 	t.Helper()
 	qr := exec(t, conn, query)

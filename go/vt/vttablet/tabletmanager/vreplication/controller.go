@@ -23,12 +23,12 @@ import (
 	"strings"
 	"time"
 
+	"google.golang.org/protobuf/encoding/prototext"
+
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"context"
-
-	"github.com/golang/protobuf/proto"
 
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/tb"
@@ -60,7 +60,7 @@ type controller struct {
 
 	id           uint32
 	workflow     string
-	source       binlogdatapb.BinlogSource
+	source       *binlogdatapb.BinlogSource
 	stopPos      string
 	tabletPicker *discovery.TabletPicker
 
@@ -83,6 +83,7 @@ func newController(ctx context.Context, params map[string]string, dbClientFactor
 		mysqld:          mysqld,
 		blpStats:        blpStats,
 		done:            make(chan struct{}),
+		source:          &binlogdatapb.BinlogSource{},
 	}
 	log.Infof("creating controller with cell: %v, tabletTypes: %v, and params: %v", cell, tabletTypesStr, params)
 
@@ -103,7 +104,7 @@ func newController(ctx context.Context, params map[string]string, dbClientFactor
 	}
 
 	// source, stopPos
-	if err := proto.UnmarshalText(params["source"], &ct.source); err != nil {
+	if err := prototext.Unmarshal([]byte(params["source"]), ct.source); err != nil {
 		return nil, err
 	}
 	ct.stopPos = params["stop_pos"]
@@ -197,6 +198,11 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 	if err := dbClient.Connect(); err != nil {
 		return vterrors.Wrap(err, "can't connect to database")
 	}
+	for _, query := range withDDLInitialQueries {
+		if _, err := withDDL.Exec(ctx, query, dbClient.ExecuteFetch); err != nil {
+			log.Errorf("cannot apply withDDL init query '%s': %v", query, err)
+		}
+	}
 	defer dbClient.Close()
 
 	var tablet *topodatapb.Tablet
@@ -241,6 +247,10 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 		if _, err := dbClient.ExecuteFetch("set names binary", 10000); err != nil {
 			return err
 		}
+		// We must apply AUTO_INCREMENT values precisely as we got them. This include the 0 value, which is not recommended in AUTO_INCREMENT, and yet is valid.
+		if _, err := dbClient.ExecuteFetch("set @@session.sql_mode = CONCAT(@@session.sql_mode, ',NO_AUTO_VALUE_ON_ZERO')", 10000); err != nil {
+			return err
+		}
 
 		var vsClient VStreamerClient
 		var err error
@@ -257,8 +267,7 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 		}
 		defer vsClient.Close(ctx)
 
-		vr := newVReplicator(ct.id, &ct.source, vsClient, ct.blpStats, dbClient, ct.mysqld, ct.vre)
-
+		vr := newVReplicator(ct.id, ct.source, vsClient, ct.blpStats, dbClient, ct.mysqld, ct.vre)
 		return vr.Replicate(ctx)
 	}
 	ct.blpStats.ErrorCounts.Add([]string{"Invalid Source"}, 1)

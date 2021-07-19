@@ -16,9 +16,11 @@ limitations under the License.
 
 package vreplication
 
-import "fmt"
+import (
+	"fmt"
+)
 
-var jsonDoc1 = `
+var jsonSingleDoc = `
     {
         "_id": "5f882c85c74593afb7895a16",
         "index": 0,
@@ -27,6 +29,7 @@ var jsonDoc1 = `
         "balance": "$2,636.61",
         "picture": "http://placehold.it/32x32",
         "age": 36,
+		"id2": 1234567890,
         "eyeColor": "green",
         "name": "Stephens Paul",
         "gender": "male",
@@ -53,7 +56,7 @@ func repeatJSON(jsonDoc string, times int, typ largeDocCollectionType) string {
 		jsonDocs = "["
 		for times > 0 {
 			times--
-			jsonDocs += jsonDoc1
+			jsonDocs += jsonSingleDoc
 			if times != 0 {
 				jsonDocs += ","
 			}
@@ -63,7 +66,7 @@ func repeatJSON(jsonDoc string, times int, typ largeDocCollectionType) string {
 		jsonDocs = "{"
 		for times > 0 {
 			times--
-			jsonDocs += fmt.Sprintf("\"%d\": %s", times, jsonDoc1)
+			jsonDocs += fmt.Sprintf("\"%d\": %s", times, jsonSingleDoc)
 			if times != 0 {
 				jsonDocs += ","
 			}
@@ -74,7 +77,7 @@ func repeatJSON(jsonDoc string, times int, typ largeDocCollectionType) string {
 	return jsonDocs
 }
 
-var jsonDoc2 = `
+var jsonMultipleDocs = `
 [
     {
         "_id": "5f882c85c74593afb7895a16",
@@ -96,6 +99,7 @@ var jsonDoc2 = `
         "latitude": -31.013461,
         "longitude": 136.055816,
         "tags": [
+			"Unicode 木元木元木元木元木元木元木元木元木元木元木元木元木元木元木元木元木元木元木元木元木元木元 Text",
             "nisi",
             "tempor",
             "dolor",
@@ -347,4 +351,41 @@ var jsonDoc2 = `
         "favoriteFruit": "strawberry"
     }
 ]
+`
+
+// handcrafted test (based on an actual user failure) to isolate error with inline type handling
+var singleLargeObjectTemplate = `
+{
+  "user": {
+    "id": 1234567890,
+    "type": 1,
+    "login": "isaac",
+    "created_at": {
+      "seconds": 1618443705
+    }
+  },
+  "repository": {
+    "id": 1234567890,
+    "name": "gravitational theory",
+    "created_at": {
+      "seconds": 1234567890
+    },
+    "updated_at": {
+      "seconds": 1234567890
+    },
+    "visibility": 1,
+    "description": "%s"
+  },
+  "numberOfLaws": 3,
+  "user2": {
+    "id": 1234567890,
+    "type": 1,
+    "login": "isaac",
+    "created_at": {
+      "seconds": 1234567890
+    },
+    "challenge": "falling-apples",
+    "response": "eureka"
+  }
+}
 `

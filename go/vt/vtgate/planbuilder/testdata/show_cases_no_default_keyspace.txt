@@ -10,7 +10,6 @@
       "Sharded": true
     },
     "TargetDestination": "AnyShard()",
-    "IsDML": false,
     "Query": "show full columns from user_extra",
     "SingleShardOnly": true
   }
@@ -28,7 +27,6 @@
       "Sharded": true
     },
     "TargetDestination": "AnyShard()",
-    "IsDML": false,
     "Query": "show full columns from `user`",
     "SingleShardOnly": true
   }
@@ -49,7 +47,6 @@
           "Sharded": false
         },
         "TargetDestination": "AnyShard()",
-        "IsDML": false,
         "Query": "show variables",
         "SingleShardOnly": true
       }
@@ -69,7 +66,6 @@
       "Sharded": false
     },
     "TargetDestination": "AnyShard()",
-    "IsDML": false,
     "Query": "show full columns from sys.sys_config",
     "SingleShardOnly": true
   }
@@ -87,7 +83,6 @@
       "Sharded": false
     },
     "TargetDestination": "AnyShard()",
-    "IsDML": false,
     "Query": "show full columns from sys.sys_config",
     "SingleShardOnly": true
   }

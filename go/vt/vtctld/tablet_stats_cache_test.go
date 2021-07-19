@@ -18,6 +18,7 @@ package vtctld
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 
 	"vitess.io/vitess/go/vt/discovery"
@@ -357,9 +358,8 @@ func TestTabletStats(t *testing.T) {
 
 	// Test 2: tablet3 isn't found in the map since no update was received for it.
 	_, gotErr := tabletStatsCache.tabletStats(ts3.Tablet.Alias)
-	wantErr := "could not find tablet: cell:\"cell1\" uid:300 "
-	if gotErr.Error() != wantErr {
-		t.Errorf("got: %v, want: %v", gotErr.Error(), wantErr)
+	if !strings.Contains(gotErr.Error(), "could not find tablet") {
+		t.Errorf("bad error message: %v", gotErr.Error())
 	}
 }
 

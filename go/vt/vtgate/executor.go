@@ -18,36 +18,31 @@ package vtgate
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
-	"regexp"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/vt/servenv"
-
-	"vitess.io/vitess/go/vt/sysvars"
-
-	"context"
-
-	"vitess.io/vitess/go/trace"
-	"vitess.io/vitess/go/vt/discovery"
-	"vitess.io/vitess/go/vt/log"
-
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/cache"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
+	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/callerid"
+	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/key"
+	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
+	"vitess.io/vitess/go/vt/sysvars"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -55,6 +50,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vtgate/vschemaacl"
 
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
@@ -77,10 +73,6 @@ var (
 )
 
 const (
-	utf8          = "utf8"
-	utf8mb4       = "utf8mb4"
-	both          = "both"
-	charset       = "charset"
 	bindVarPrefix = "__vt"
 )
 
@@ -106,7 +98,8 @@ type Executor struct {
 	normalize       bool
 	warnShardedOnly bool
 
-	vm *VSchemaManager
+	vm            *VSchemaManager
+	schemaTracker SchemaInfo
 }
 
 var executorOnce sync.Once
@@ -116,7 +109,16 @@ const pathScatterStats = "/debug/scatter_stats"
 const pathVSchema = "/debug/vschema"
 
 // NewExecutor creates a new Executor.
-func NewExecutor(ctx context.Context, serv srvtopo.Server, cell string, resolver *Resolver, normalize, warnOnShardedOnly bool, streamSize int, cacheCfg *cache.Config) *Executor {
+func NewExecutor(
+	ctx context.Context,
+	serv srvtopo.Server,
+	cell string,
+	resolver *Resolver,
+	normalize, warnOnShardedOnly bool,
+	streamSize int,
+	cacheCfg *cache.Config,
+	schemaTracker SchemaInfo,
+) *Executor {
 	e := &Executor{
 		serv:            serv,
 		cell:            cell,
@@ -127,11 +129,18 @@ func NewExecutor(ctx context.Context, serv srvtopo.Server, cell string, resolver
 		normalize:       normalize,
 		warnShardedOnly: warnOnShardedOnly,
 		streamSize:      streamSize,
+		schemaTracker:   schemaTracker,
 	}
 
 	vschemaacl.Init()
-	e.vm = &VSchemaManager{e: e}
-	e.vm.watchSrvVSchema(ctx, cell)
+	// we subscribe to update from the VSchemaManager
+	e.vm = &VSchemaManager{
+		subscriber: e.SaveVSchema,
+		serv:       serv,
+		cell:       cell,
+		schema:     e.schemaTracker,
+	}
+	serv.WatchSrvVSchema(ctx, cell, e.vm.VSchemaUpdate)
 
 	executorOnce.Do(func() {
 		stats.NewGaugeFunc("QueryPlanCacheLength", "Query plan cache length", func() int64 {
@@ -448,11 +457,12 @@ func (e *Executor) CloseSession(ctx context.Context, safeSession *SafeSession) e
 }
 
 func (e *Executor) handleSet(ctx context.Context, sql string, logStats *LogStats) (*sqltypes.Result, error) {
-	stmt, reservedVars, err := sqlparser.Parse2(sql)
+	stmt, reserved, err := sqlparser.Parse2(sql)
 	if err != nil {
 		return nil, err
 	}
-	rewrittenAST, err := sqlparser.PrepareAST(stmt, reservedVars, nil, "vtg", false, "")
+	reservedVars := sqlparser.NewReservedVars("vtg", reserved)
+	rewrittenAST, err := sqlparser.PrepareAST(stmt, reservedVars, nil, false, "")
 	if err != nil {
 		return nil, err
 	}
@@ -479,8 +489,7 @@ func (e *Executor) handleSet(ctx context.Context, sql string, logStats *LogStats
 	for _, expr := range set.Exprs {
 		// This is what correctly allows us to handle queries such as "set @@session.`autocommit`=1"
 		// it will remove backticks and double quotes that might surround the part after the first period
-		_, out := sqlparser.NewStringTokenizer(expr.Name.Lowered()).Scan()
-		name := string(out)
+		_, name := sqlparser.NewStringTokenizer(expr.Name.Lowered()).Scan()
 		switch expr.Scope {
 		case sqlparser.VitessMetadataScope:
 			value, err = getValueFor(expr)
@@ -509,15 +518,15 @@ func getValueFor(expr *sqlparser.SetExpr) (interface{}, error) {
 	case *sqlparser.Literal:
 		switch expr.Type {
 		case sqlparser.StrVal:
-			return strings.ToLower(string(expr.Val)), nil
+			return strings.ToLower(expr.Val), nil
 		case sqlparser.IntVal:
-			num, err := strconv.ParseInt(string(expr.Val), 0, 64)
+			num, err := strconv.ParseInt(expr.Val, 0, 64)
 			if err != nil {
 				return nil, err
 			}
 			return num, nil
 		case sqlparser.FloatVal:
-			num, err := strconv.ParseFloat(string(expr.Val), 64)
+			num, err := strconv.ParseFloat(expr.Val, 64)
 			if err != nil {
 				return nil, err
 			}
@@ -844,28 +853,6 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 			Fields: buildVarCharFields("Keyspace", "Name", "Type", "Params", "Owner"),
 			Rows:   rows,
 		}, nil
-	case sqlparser.KeywordString(sqlparser.WARNINGS):
-		fields := []*querypb.Field{
-			{Name: "Level", Type: sqltypes.VarChar},
-			{Name: "Code", Type: sqltypes.Uint16},
-			{Name: "Message", Type: sqltypes.VarChar},
-		}
-		rows := make([][]sqltypes.Value, 0)
-
-		if safeSession.Warnings != nil {
-			for _, warning := range safeSession.Warnings {
-				rows = append(rows, []sqltypes.Value{
-					sqltypes.NewVarChar("Warning"),
-					sqltypes.NewUint32(warning.Code),
-					sqltypes.NewVarChar(warning.Message),
-				})
-			}
-		}
-
-		return &sqltypes.Result{
-			Fields: fields,
-			Rows:   rows,
-		}, nil
 	}
 
 	// Any other show statement is passed through
@@ -1032,37 +1019,19 @@ func (e *Executor) handleOther(ctx context.Context, safeSession *SafeSession, sq
 }
 
 // StreamExecute executes a streaming query.
-func (e *Executor) StreamExecute(ctx context.Context, method string, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, target querypb.Target, callback func(*sqltypes.Result) error) (err error) {
+func (e *Executor) StreamExecute(ctx context.Context, method string, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, target *querypb.Target, callback func(*sqltypes.Result) error) (err error) {
 	logStats := NewLogStats(ctx, method, sql, bindVars)
-	stmtType := sqlparser.Preview(sql)
-	logStats.StmtType = stmtType.String()
 	defer logStats.Send()
 
 	if bindVars == nil {
 		bindVars = make(map[string]*querypb.BindVariable)
 	}
 	query, comments := sqlparser.SplitMarginComments(sql)
-	vcursor, _ := newVCursorImpl(ctx, safeSession, comments, e, logStats, e.vm, e.VSchema(), e.resolver.resolver, e.serv, e.warnShardedOnly)
-	vcursor.SetIgnoreMaxMemoryRows(true)
-	switch stmtType {
-	case sqlparser.StmtStream:
-		// this is a stream statement for messaging
-		// TODO: support keyRange syntax
-		return e.handleMessageStream(ctx, sql, target, callback, vcursor, logStats)
-	case sqlparser.StmtSelect, sqlparser.StmtDDL, sqlparser.StmtSet, sqlparser.StmtInsert, sqlparser.StmtReplace, sqlparser.StmtUpdate, sqlparser.StmtDelete,
-		sqlparser.StmtUse, sqlparser.StmtOther, sqlparser.StmtComment, sqlparser.StmtFlush:
-		// These may or may not all work, but getPlan() should either return a plan with instructions
-		// or an error, so it's safe to try.
-		break
-	case sqlparser.StmtVStream:
-		log.Infof("handleVStream called with target %v", target)
-		return e.handleVStream(ctx, sql, target, callback, vcursor, logStats)
-	default:
-		return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "OLAP does not supported statement type: %s", stmtType)
-	}
+	vc, _ := newVCursorImpl(ctx, safeSession, comments, e, logStats, e.vm, e.VSchema(), e.resolver.resolver, e.serv, e.warnShardedOnly)
+	vc.SetIgnoreMaxMemoryRows(true)
 
 	plan, err := e.getPlan(
-		vcursor,
+		vc,
 		query,
 		comments,
 		bindVars,
@@ -1072,6 +1041,11 @@ func (e *Executor) StreamExecute(ctx context.Context, method string, safeSession
 	if err != nil {
 		logStats.Error = err
 		return err
+	}
+	logStats.StmtType = plan.Type.String()
+	switch plan.Type {
+	case sqlparser.StmtBegin, sqlparser.StmtCommit, sqlparser.StmtRollback:
+		return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "OLAP does not supported statement type: %s", plan.Type)
 	}
 
 	err = e.addNeededBindVars(plan.BindVarNeeds, bindVars, safeSession)
@@ -1095,87 +1069,67 @@ func (e *Executor) StreamExecute(ctx context.Context, method string, safeSession
 	byteCount := 0
 	seenResults := false
 	var foundRows uint64
-	err = plan.Instructions.StreamExecute(vcursor, bindVars, true, func(qr *sqltypes.Result) error {
-		// If the row has field info, send it separately.
-		// TODO(sougou): this behavior is for handling tests because
-		// the framework currently sends all results as one packet.
-		if len(qr.Fields) > 0 {
-			qrfield := &sqltypes.Result{Fields: qr.Fields}
-			if err := callback(qrfield); err != nil {
-				return err
-			}
-			seenResults = true
-		}
-
-		foundRows += uint64(len(qr.Rows))
-		for _, row := range qr.Rows {
-			result.Rows = append(result.Rows, row)
-
-			for _, col := range row {
-				byteCount += col.Len()
-			}
-
-			if byteCount >= e.streamSize {
-				err := callback(result)
-				seenResults = true
-				result = &sqltypes.Result{}
-				byteCount = 0
-				if err != nil {
+	callbackGen := callback
+	if plan.Type != sqlparser.StmtStream && plan.Type != sqlparser.StmtVStream {
+		callbackGen = func(qr *sqltypes.Result) error {
+			// If the row has field info, send it separately.
+			// TODO(sougou): this behavior is for handling tests because
+			// the framework currently sends all results as one packet.
+			if len(qr.Fields) > 0 {
+				qrfield := &sqltypes.Result{Fields: qr.Fields}
+				if err := callback(qrfield); err != nil {
 					return err
 				}
+				seenResults = true
 			}
-		}
-		return nil
-	})
 
-	// Send left-over rows if there is no error on execution.
-	if err == nil {
-		if len(result.Rows) > 0 || !seenResults {
-			if err := callback(result); err != nil {
-				return err
+			foundRows += uint64(len(qr.Rows))
+			for _, row := range qr.Rows {
+				result.Rows = append(result.Rows, row)
+
+				for _, col := range row {
+					byteCount += col.Len()
+				}
+
+				if byteCount >= e.streamSize {
+					err := callback(result)
+					seenResults = true
+					result = &sqltypes.Result{}
+					byteCount = 0
+					if err != nil {
+						return err
+					}
+				}
 			}
+			return nil
 		}
-		// save session stats for future queries
-		if !safeSession.foundRowsHandled {
-			safeSession.FoundRows = foundRows
-		}
-		safeSession.RowCount = -1
 	}
+
+	err = plan.Instructions.StreamExecute(vc, bindVars, true, callbackGen)
 
 	logStats.ExecuteTime = time.Since(execStart)
 	e.updateQueryCounts(plan.Instructions.RouteType(), plan.Instructions.GetKeyspaceName(), plan.Instructions.GetTableName(), int64(logStats.ShardQueries))
 
-	return err
-}
-
-// handleMessageStream executes queries of the form 'stream * from t'
-func (e *Executor) handleMessageStream(ctx context.Context, sql string, target querypb.Target, callback func(*sqltypes.Result) error, vcursor *vcursorImpl, logStats *LogStats) error {
-	stmt, err := sqlparser.Parse(sql)
 	if err != nil {
-		logStats.Error = err
 		return err
 	}
 
-	streamStmt, ok := stmt.(*sqlparser.Stream)
-	if !ok {
-		logStats.Error = err
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unrecognized STREAM statement: %v", sql)
+	if plan.Type == sqlparser.StmtStream || plan.Type == sqlparser.StmtVStream {
+		return nil
 	}
 
-	// TODO: Add support for destination target in streamed queries
-	table, _, _, _, err := vcursor.FindTable(streamStmt.Table)
-	if err != nil {
-		logStats.Error = err
-		return err
+	// Send left-over rows if there is no error on execution.
+	if len(result.Rows) > 0 || !seenResults {
+		if err := callback(result); err != nil {
+			return err
+		}
 	}
-
-	execStart := time.Now()
-	logStats.PlanTime = execStart.Sub(logStats.StartTime)
-
-	err = e.MessageStream(ctx, table.Keyspace.Name, target.Shard, nil, table.Name.CompliantName(), callback)
-	logStats.Error = err
-	logStats.ExecuteTime = time.Since(execStart)
-	return err
+	// save session stats for future queries
+	if !safeSession.foundRowsHandled {
+		safeSession.FoundRows = foundRows
+	}
+	safeSession.RowCount = -1
+	return nil
 }
 
 // MessageStream is part of the vtgate service API. This is a V2 level API that's sent
@@ -1203,7 +1157,9 @@ func (e *Executor) VSchema() *vindexes.VSchema {
 func (e *Executor) SaveVSchema(vschema *vindexes.VSchema, stats *VSchemaStats) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	e.vschema = vschema
+	if vschema != nil {
+		e.vschema = vschema
+	}
 	e.vschemaStats = stats
 	e.plans.Clear()
 
@@ -1237,12 +1193,13 @@ func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.
 		return nil, errors.New("vschema not initialized")
 	}
 
-	stmt, reservedVars, err := sqlparser.Parse2(sql)
+	stmt, reserved, err := sqlparser.Parse2(sql)
 	if err != nil {
 		return nil, err
 	}
 	query := sql
 	statement := stmt
+	reservedVars := sqlparser.NewReservedVars("vtg", reserved)
 	bindVarNeeds := &sqlparser.BindVarNeeds{}
 	if !sqlparser.IgnoreMaxPayloadSizeDirective(statement) && !isValidPayloadSize(query) {
 		return nil, vterrors.NewErrorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.NetPacketTooLarge, "query payload size above threshold")
@@ -1253,7 +1210,7 @@ func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.
 	// Normalize if possible and retry.
 	if (e.normalize && sqlparser.CanNormalize(stmt)) || sqlparser.MustRewriteAST(stmt) {
 		parameterize := e.normalize // the public flag is called normalize
-		result, err := sqlparser.PrepareAST(stmt, reservedVars, bindVars, "vtg", parameterize, vcursor.keyspace)
+		result, err := sqlparser.PrepareAST(stmt, reservedVars, bindVars, parameterize, vcursor.keyspace)
 		if err != nil {
 			return nil, err
 		}
@@ -1272,7 +1229,7 @@ func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.
 		return plan.(*engine.Plan), nil
 	}
 
-	plan, err := planbuilder.BuildFromStmt(query, statement, reservedVars, vcursor, bindVarNeeds)
+	plan, err := planbuilder.BuildFromStmt(query, statement, reservedVars, vcursor, bindVarNeeds, *enableOnlineDDL, *enableDirectDDL)
 	if err != nil {
 		return nil, err
 	}
@@ -1387,98 +1344,6 @@ func buildVarCharRow(values ...string) []sqltypes.Value {
 		row[i] = sqltypes.NewVarChar(v)
 	}
 	return row
-}
-
-func generateCharsetRows(showFilter *sqlparser.ShowFilter, colNames []string) ([][]sqltypes.Value, error) {
-	if showFilter == nil {
-		return buildCharsetRows(both), nil
-	}
-
-	var filteredColName string
-	var err error
-
-	if showFilter.Like != "" {
-		filteredColName, err = checkLikeOpt(showFilter.Like, colNames)
-		if err != nil {
-			return nil, err
-		}
-
-	} else {
-		cmpExp, ok := showFilter.Filter.(*sqlparser.ComparisonExpr)
-		if !ok {
-			return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.SyntaxError, "expect a 'LIKE' or '=' expression")
-		}
-
-		left, ok := cmpExp.Left.(*sqlparser.ColName)
-		if !ok {
-			return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.SyntaxError, "expect left side to be 'column'")
-		}
-		leftOk := left.Name.EqualString(charset)
-
-		if leftOk {
-			literal, ok := cmpExp.Right.(*sqlparser.Literal)
-			if !ok {
-				return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.SyntaxError, "expect right side to be string")
-			}
-			rightString := string(literal.Val)
-
-			switch cmpExp.Operator {
-			case sqlparser.EqualOp:
-				for _, colName := range colNames {
-					if rightString == colName {
-						filteredColName = colName
-					}
-				}
-			case sqlparser.LikeOp:
-				filteredColName, err = checkLikeOpt(rightString, colNames)
-				if err != nil {
-					return nil, err
-				}
-			}
-		}
-
-	}
-
-	return buildCharsetRows(filteredColName), nil
-}
-
-func buildCharsetRows(colName string) [][]sqltypes.Value {
-	row0 := buildVarCharRow(
-		"utf8",
-		"UTF-8 Unicode",
-		"utf8_general_ci")
-	row0 = append(row0, sqltypes.NewInt32(3))
-	row1 := buildVarCharRow(
-		"utf8mb4",
-		"UTF-8 Unicode",
-		"utf8mb4_general_ci")
-	row1 = append(row1, sqltypes.NewInt32(4))
-
-	switch colName {
-	case utf8:
-		return [][]sqltypes.Value{row0}
-	case utf8mb4:
-		return [][]sqltypes.Value{row1}
-	case both:
-		return [][]sqltypes.Value{row0, row1}
-	}
-
-	return [][]sqltypes.Value{}
-}
-
-func checkLikeOpt(likeOpt string, colNames []string) (string, error) {
-	likeRegexp := strings.ReplaceAll(likeOpt, "%", ".*")
-	for _, v := range colNames {
-		match, err := regexp.MatchString(likeRegexp, v)
-		if err != nil {
-			return "", err
-		}
-		if match {
-			return v, nil
-		}
-	}
-
-	return "", nil
 }
 
 // isValidPayloadSize validates whether a query payload is above the
@@ -1608,11 +1473,45 @@ func (e *Executor) ExecuteMultiShard(ctx context.Context, rss []*srvtopo.Resolve
 }
 
 // StreamExecuteMulti implements the IExecutor interface
-func (e *Executor) StreamExecuteMulti(ctx context.Context, query string, rss []*srvtopo.ResolvedShard, vars []map[string]*querypb.BindVariable, options *querypb.ExecuteOptions, callback func(reply *sqltypes.Result) error) error {
+func (e *Executor) StreamExecuteMulti(ctx context.Context, query string, rss []*srvtopo.ResolvedShard, vars []map[string]*querypb.BindVariable, options *querypb.ExecuteOptions, callback func(reply *sqltypes.Result) error) []error {
 	return e.scatterConn.StreamExecuteMulti(ctx, query, rss, vars, options, callback)
 }
 
-//ExecuteLock implments the IExecutor interface
+// ExecuteLock implements the IExecutor interface
 func (e *Executor) ExecuteLock(ctx context.Context, rs *srvtopo.ResolvedShard, query *querypb.BoundQuery, session *SafeSession) (*sqltypes.Result, error) {
 	return e.scatterConn.ExecuteLock(ctx, rs, query, session)
+}
+
+// ExecuteMessageStream implements the IExecutor interface
+func (e *Executor) ExecuteMessageStream(ctx context.Context, rss []*srvtopo.ResolvedShard, tableName string, callback func(reply *sqltypes.Result) error) error {
+	return e.scatterConn.MessageStream(ctx, rss, tableName, callback)
+}
+
+// ExecuteVStream implements the IExecutor interface
+func (e *Executor) ExecuteVStream(ctx context.Context, rss []*srvtopo.ResolvedShard, filter *binlogdatapb.Filter, gtid string, callback func(evs []*binlogdatapb.VEvent) error) error {
+	return e.startVStream(ctx, rss, filter, gtid, callback)
+}
+
+func (e *Executor) startVStream(ctx context.Context, rss []*srvtopo.ResolvedShard, filter *binlogdatapb.Filter, gtid string, callback func(evs []*binlogdatapb.VEvent) error) error {
+	var shardGtids []*binlogdatapb.ShardGtid
+	for _, rs := range rss {
+		shardGtid := &binlogdatapb.ShardGtid{
+			Keyspace: rs.Target.Keyspace,
+			Shard:    rs.Target.Shard,
+			Gtid:     gtid,
+		}
+		shardGtids = append(shardGtids, shardGtid)
+	}
+	vgtid := &binlogdatapb.VGtid{
+		ShardGtids: shardGtids,
+	}
+	vs := &vstream{
+		vgtid:      vgtid,
+		tabletType: topodatapb.TabletType_MASTER,
+		filter:     filter,
+		send:       callback,
+		rss:        rss,
+	}
+	vs.stream(ctx)
+	return nil
 }

@@ -42,11 +42,11 @@ func TestReplTracker(t *testing.T) {
 	cp := *params
 	config.DB = dbconfigs.NewTestDBConfigs(cp, cp, "")
 	env := tabletenv.NewEnv(config, "ReplTrackerTest")
-	alias := topodatapb.TabletAlias{
+	alias := &topodatapb.TabletAlias{
 		Cell: "cell",
 		Uid:  1,
 	}
-	target := querypb.Target{}
+	target := &querypb.Target{}
 	mysqld := fakemysqldaemon.NewFakeMysqlDaemon(nil)
 
 	rt := NewReplTracker(env, alias)

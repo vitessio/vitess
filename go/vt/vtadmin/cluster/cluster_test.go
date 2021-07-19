@@ -24,6 +24,8 @@ import (
 	"strings"
 	"testing"
 
+	"vitess.io/vitess/go/test/utils"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -158,7 +160,7 @@ func TestFindTablet(t *testing.T) {
 				assert.True(t, errors.Is(err, tt.expectedError), "expected error type %w does not match actual error type %w", err, tt.expectedError)
 			} else {
 				assert.NoError(t, err)
-				testutil.AssertTabletsEqual(t, tt.expected, tablet)
+				utils.MustMatch(t, tt.expected, tablet)
 			}
 		})
 	}

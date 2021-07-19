@@ -21,7 +21,7 @@ import (
 
 	"context"
 
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -40,7 +40,7 @@ type Gateway interface {
 	queryservice.QueryService
 
 	// QueryServiceByAlias returns a QueryService
-	QueryServiceByAlias(alias *topodatapb.TabletAlias) (queryservice.QueryService, error)
+	QueryServiceByAlias(alias *topodatapb.TabletAlias, target *querypb.Target) (queryservice.QueryService, error)
 }
 
 // A Resolver can resolve keyspace ids and key ranges into ResolvedShard*

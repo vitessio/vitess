@@ -373,7 +373,7 @@ func addLookupDataToVschema(
 		lookupTableOwner := ""
 
 		// Find owner of lookup table
-		for primaryTableName, _ := range primaryTableColumns {
+		for primaryTableName := range primaryTableColumns {
 			if strings.HasPrefix(tableName, primaryTableName) && len(primaryTableName) > len(lookupTableOwner) {
 				lookupTableOwner = primaryTableName
 			}

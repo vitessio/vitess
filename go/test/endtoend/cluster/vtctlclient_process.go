@@ -36,6 +36,12 @@ type VtctlClientProcess struct {
 	ZoneName      string
 }
 
+// VtctlClientParams encapsulated params to provide if non-default
+type VtctlClientParams struct {
+	DDLStrategy   string
+	SkipPreflight bool
+}
+
 // InitShardMaster executes vtctlclient command to make one of tablet as master
 func (vtctlclient *VtctlClientProcess) InitShardMaster(Keyspace string, Shard string, Cell string, TabletUID int) (err error) {
 	output, err := vtctlclient.ExecuteCommandWithOutput(
@@ -50,13 +56,16 @@ func (vtctlclient *VtctlClientProcess) InitShardMaster(Keyspace string, Shard st
 }
 
 // ApplySchemaWithOutput applies SQL schema to the keyspace
-func (vtctlclient *VtctlClientProcess) ApplySchemaWithOutput(Keyspace string, SQL string, ddlStrategy string) (result string, err error) {
+func (vtctlclient *VtctlClientProcess) ApplySchemaWithOutput(Keyspace string, SQL string, params VtctlClientParams) (result string, err error) {
 	args := []string{
 		"ApplySchema",
 		"-sql", SQL,
 	}
-	if ddlStrategy != "" {
-		args = append(args, "-ddl_strategy", ddlStrategy)
+	if params.DDLStrategy != "" {
+		args = append(args, "-ddl_strategy", params.DDLStrategy)
+	}
+	if params.SkipPreflight {
+		args = append(args, "-skip_preflight")
 	}
 	args = append(args, Keyspace)
 	return vtctlclient.ExecuteCommandWithOutput(args...)
@@ -64,7 +73,7 @@ func (vtctlclient *VtctlClientProcess) ApplySchemaWithOutput(Keyspace string, SQ
 
 // ApplySchema applies SQL schema to the keyspace
 func (vtctlclient *VtctlClientProcess) ApplySchema(Keyspace string, SQL string) error {
-	message, err := vtctlclient.ApplySchemaWithOutput(Keyspace, SQL, "direct")
+	message, err := vtctlclient.ApplySchemaWithOutput(Keyspace, SQL, VtctlClientParams{DDLStrategy: "direct"})
 
 	return vterrors.Wrap(err, message)
 }

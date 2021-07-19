@@ -107,7 +107,7 @@ func (tp *TabletPicker) PickForStreaming(ctx context.Context) (*topodatapb.Table
 			return nil, vterrors.Errorf(vtrpcpb.Code_CANCELED, "context has expired")
 		default:
 		}
-		candidates := tp.getMatchingTablets(ctx)
+		candidates := tp.GetMatchingTablets(ctx)
 
 		if len(candidates) == 0 {
 			// if no candidates were found, sleep and try again
@@ -145,9 +145,9 @@ func (tp *TabletPicker) PickForStreaming(ctx context.Context) (*topodatapb.Table
 	}
 }
 
-// getMatchingTablets returns a list of TabletInfo for tablets
+// GetMatchingTablets returns a list of TabletInfo for tablets
 // that match the cells, keyspace, shard and tabletTypes for this TabletPicker
-func (tp *TabletPicker) getMatchingTablets(ctx context.Context) []*topo.TabletInfo {
+func (tp *TabletPicker) GetMatchingTablets(ctx context.Context) []*topo.TabletInfo {
 	// Special handling for MASTER tablet type
 	// Since there is only one master, we ignore cell and find the master
 	aliases := make([]*topodatapb.TabletAlias, 0)

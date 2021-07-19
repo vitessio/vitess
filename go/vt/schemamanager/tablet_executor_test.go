@@ -291,11 +291,11 @@ func TestIsOnlineSchemaDDL(t *testing.T) {
 		ddlStmt, ok := stmt.(sqlparser.DDLStatement)
 		assert.True(t, ok)
 
-		isOnlineDDL, strategy, options := e.isOnlineSchemaDDL(ddlStmt)
+		isOnlineDDL := e.isOnlineSchemaDDL(ddlStmt)
 		assert.Equal(t, ts.isOnlineDDL, isOnlineDDL)
 		if isOnlineDDL {
-			assert.Equal(t, ts.strategy, strategy)
-			assert.Equal(t, ts.options, options)
+			assert.Equal(t, ts.strategy, e.ddlStrategySetting.Strategy)
+			assert.Equal(t, ts.options, e.ddlStrategySetting.Options)
 		}
 	}
 }

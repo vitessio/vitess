@@ -38,6 +38,7 @@ import (
 
 // server is the gRPC implementation of the RPC server
 type server struct {
+	tabletmanagerservicepb.UnimplementedTabletManagerServer
 	// implementation of the tm to call
 	tm tabletmanager.RPCTM
 }
@@ -202,6 +203,18 @@ func (s *server) UnlockTables(ctx context.Context, req *tabletmanagerdatapb.Unlo
 	return &tabletmanagerdatapb.UnlockTablesResponse{}, nil
 }
 
+func (s *server) ExecuteQuery(ctx context.Context, request *tabletmanagerdatapb.ExecuteQueryRequest) (response *tabletmanagerdatapb.ExecuteQueryResponse, err error) {
+	defer s.tm.HandleRPCPanic(ctx, "ExecuteQuery", request, response, false /*verbose*/, &err)
+	ctx = callinfo.GRPCCallInfo(ctx)
+	response = &tabletmanagerdatapb.ExecuteQueryResponse{}
+	qr, err := s.tm.ExecuteQuery(ctx, request.Query, request.DbName, int(request.MaxRows))
+	if err != nil {
+		return nil, vterrors.ToGRPC(err)
+	}
+	response.Result = qr
+	return response, nil
+}
+
 func (s *server) ExecuteFetchAsDba(ctx context.Context, request *tabletmanagerdatapb.ExecuteFetchAsDbaRequest) (response *tabletmanagerdatapb.ExecuteFetchAsDbaResponse, err error) {
 	defer s.tm.HandleRPCPanic(ctx, "ExecuteFetchAsDba", request, response, false /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
@@ -254,7 +267,7 @@ func (s *server) ReplicationStatus(ctx context.Context, request *tabletmanagerda
 }
 
 func (s *server) MasterStatus(ctx context.Context, request *tabletmanagerdatapb.MasterStatusRequest) (response *tabletmanagerdatapb.MasterStatusResponse, err error) {
-	defer s.tm.HandleRPCPanic(ctx, "MasterStatus", request, response, false /*verbose*/, &err)
+	defer s.tm.HandleRPCPanic(ctx, "PrimaryStatus", request, response, false /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response = &tabletmanagerdatapb.MasterStatusResponse{}
 	status, err := s.tm.MasterStatus(ctx)
@@ -265,7 +278,7 @@ func (s *server) MasterStatus(ctx context.Context, request *tabletmanagerdatapb.
 }
 
 func (s *server) MasterPosition(ctx context.Context, request *tabletmanagerdatapb.MasterPositionRequest) (response *tabletmanagerdatapb.MasterPositionResponse, err error) {
-	defer s.tm.HandleRPCPanic(ctx, "MasterPosition", request, response, false /*verbose*/, &err)
+	defer s.tm.HandleRPCPanic(ctx, "PrimaryPosition", request, response, false /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response = &tabletmanagerdatapb.MasterPositionResponse{}
 	position, err := s.tm.MasterPosition(ctx)
@@ -390,7 +403,7 @@ func (s *server) DemoteMaster(ctx context.Context, request *tabletmanagerdatapb.
 	response = &tabletmanagerdatapb.DemoteMasterResponse{}
 	masterStatus, err := s.tm.DemoteMaster(ctx)
 	if err == nil {
-		response.DeprecatedPosition = masterStatus.Position
+		response.DeprecatedPosition = masterStatus.Position //nolint
 		response.MasterStatus = masterStatus
 	}
 	return response, err
@@ -431,7 +444,7 @@ func (s *server) StopReplicationAndGetStatus(ctx context.Context, request *table
 	response = &tabletmanagerdatapb.StopReplicationAndGetStatusResponse{}
 	statusResponse, err := s.tm.StopReplicationAndGetStatus(ctx, request.StopReplicationMode)
 	if err == nil {
-		response.HybridStatus = statusResponse.HybridStatus
+		response.HybridStatus = statusResponse.HybridStatus //nolint
 		response.Status = statusResponse.Status
 
 	}
@@ -490,12 +503,12 @@ func (s *server) RestoreFromBackup(request *tabletmanagerdatapb.RestoreFromBacku
 func init() {
 	tabletmanager.RegisterTabletManagers = append(tabletmanager.RegisterTabletManagers, func(tm *tabletmanager.TabletManager) {
 		if servenv.GRPCCheckServiceMap("tabletmanager") {
-			tabletmanagerservicepb.RegisterTabletManagerServer(servenv.GRPCServer, &server{tm})
+			tabletmanagerservicepb.RegisterTabletManagerServer(servenv.GRPCServer, &server{tm: tm})
 		}
 	})
 }
 
 // RegisterForTest will register the RPC, to be used by test instances only
 func RegisterForTest(s *grpc.Server, tm *tabletmanager.TabletManager) {
-	tabletmanagerservicepb.RegisterTabletManagerServer(s, &server{tm})
+	tabletmanagerservicepb.RegisterTabletManagerServer(s, &server{tm: tm})
 }

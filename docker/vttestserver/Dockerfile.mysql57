@@ -17,7 +17,7 @@
 #       ensure images contain the right binaries.
 
 # Use a temporary layer for the build stage.
-ARG bootstrap_version=1
+ARG bootstrap_version=2
 ARG image="vitess/bootstrap:${bootstrap_version}-mysql57"
 
 FROM "${image}" AS builder
@@ -57,6 +57,5 @@ USER vitess
 
 COPY docker/vttestserver/setup_vschema_folder.sh /vt/setup_vschema_folder.sh
 COPY docker/vttestserver/run.sh /vt/run.sh
-RUN bash -c 'echo "max_connections = 1000"' >> /vt/config/mycnf/default-fast.cnf
 
 CMD /vt/run.sh "5.7.9-vitess"

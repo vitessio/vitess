@@ -22,8 +22,8 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/golang/protobuf/jsonpb"
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
 )
 
 var carriageReturn = []byte("\n")
@@ -33,7 +33,7 @@ var carriageReturn = []byte("\n")
 // efficient and should not be used for high QPS operations.
 func Unmarshal(data []byte, v interface{}) error {
 	if pb, ok := v.(proto.Message); ok {
-		return annotate(data, jsonpb.Unmarshal(bytes.NewBuffer(data), pb))
+		return annotate(data, protojson.Unmarshal(data, pb))
 	}
 	return annotate(data, json.Unmarshal(data, v))
 }

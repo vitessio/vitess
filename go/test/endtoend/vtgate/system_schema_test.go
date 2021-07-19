@@ -78,6 +78,8 @@ func TestInformationSchemaQuery(t *testing.T) {
 	assertResultIsEmpty(t, conn, "table_schema = 'PERFORMANCE_SCHEMA'")
 	assertSingleRowIsReturned(t, conn, "table_schema = 'performance_schema' and table_name = 'users'", "performance_schema")
 	assertResultIsEmpty(t, conn, "table_schema = 'performance_schema' and table_name = 'foo'")
+	assertSingleRowIsReturned(t, conn, "table_schema = 'vt_ks' and table_name = 't1'", "vt_ks")
+	assertSingleRowIsReturned(t, conn, "table_schema = 'ks' and table_name = 't1'", "vt_ks")
 }
 
 func assertResultIsEmpty(t *testing.T, conn *mysql.Conn, pre string) {
@@ -187,4 +189,30 @@ func TestSystemSchemaQueryWithoutQualifier(t *testing.T) {
 
 	qr3 := exec(t, conn2, queryWithoutQualifier)
 	require.Equal(t, qr2, qr3)
+}
+
+func TestMultipleSchemaPredicates(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	query := fmt.Sprintf("select t.table_schema,t.table_name,c.column_name,c.column_type "+
+		"from information_schema.tables t "+
+		"join information_schema.columns c "+
+		"on c.table_schema = t.table_schema and c.table_name = t.table_name "+
+		"where t.table_schema = '%s' and c.table_schema = '%s' and c.table_schema = '%s' and c.table_schema = '%s'", KeyspaceName, KeyspaceName, KeyspaceName, KeyspaceName)
+	qr1 := exec(t, conn, query)
+	require.EqualValues(t, 4, len(qr1.Fields))
+
+	// test a query with two keyspace names
+	query = fmt.Sprintf("select t.table_schema,t.table_name,c.column_name,c.column_type "+
+		"from information_schema.tables t "+
+		"join information_schema.columns c "+
+		"on c.table_schema = t.table_schema and c.table_name = t.table_name "+
+		"where t.table_schema = '%s' and c.table_schema = '%s' and c.table_schema = '%s'", KeyspaceName, KeyspaceName, "a")
+	_, err = conn.ExecuteFetch(query, 1000, true)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "specifying two different database in the query is not supported")
 }

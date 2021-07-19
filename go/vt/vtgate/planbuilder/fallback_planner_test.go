@@ -36,8 +36,8 @@ type testPlanner struct {
 
 var _ selectPlanner = (*testPlanner)(nil).plan
 
-func (tp *testPlanner) plan(_ string) func(sqlparser.Statement, sqlparser.BindVars, ContextVSchema) (engine.Primitive, error) {
-	return func(statement sqlparser.Statement, vars sqlparser.BindVars, schema ContextVSchema) (engine.Primitive, error) {
+func (tp *testPlanner) plan(_ string) func(sqlparser.Statement, *sqlparser.ReservedVars, ContextVSchema) (engine.Primitive, error) {
+	return func(statement sqlparser.Statement, vars *sqlparser.ReservedVars, schema ContextVSchema) (engine.Primitive, error) {
 		tp.called = true
 		if tp.panic != nil {
 			panic(tp.panic)

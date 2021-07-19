@@ -17,6 +17,7 @@
 }
 
 .icon {
+  box-sizing: unset;
   fill: var(--colorPrimary);
   padding: 16px;
   transition: fill 0.1s ease-in-out;
@@ -50,4 +51,8 @@
   display: grid;
   grid-gap: 8px;
   grid-template-columns: repeat(4, min-content);
+}
+
+.tabContainer {
+  margin: 2.4rem 0;
 }

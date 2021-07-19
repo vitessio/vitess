@@ -10,9 +10,7 @@
       "Sharded": false
     },
     "TargetDestination": "Shard(-80)",
-    "IsDML": false,
-    "Query": "select count(*), col from unsharded",
-    "SingleShardOnly": false
+    "Query": "select count(*), col from unsharded"
   }
 }
 Gen4 plan same as above
@@ -30,8 +28,7 @@ Gen4 plan same as above
     },
     "TargetDestination": "Shard(-80)",
     "IsDML": true,
-    "Query": "update `user` set val = 1 where id = 18446744073709551616 and id = 1",
-    "SingleShardOnly": false
+    "Query": "update `user` set val = 1 where id = 18446744073709551616 and id = 1"
   }
 }
 Gen4 plan same as above
@@ -49,8 +46,7 @@ Gen4 plan same as above
     },
     "TargetDestination": "Shard(-80)",
     "IsDML": true,
-    "Query": "delete from `USER` where ID = 42",
-    "SingleShardOnly": false
+    "Query": "delete from `USER` where ID = 42"
   }
 }
 Gen4 plan same as above
@@ -68,8 +64,7 @@ Gen4 plan same as above
     },
     "TargetDestination": "Shard(-80)",
     "IsDML": true,
-    "Query": "insert into `USER`(ID, `NAME`) values (42, 'ms X')",
-    "SingleShardOnly": false
+    "Query": "insert into `USER`(ID, `NAME`) values (42, 'ms X')"
   }
 }
 Gen4 plan same as above
@@ -87,8 +82,7 @@ Gen4 plan same as above
     },
     "TargetDestination": "Shard(-80)",
     "IsDML": true,
-    "Query": "insert into `user`(nonid) values (2)",
-    "SingleShardOnly": false
+    "Query": "insert into `user`(nonid) values (2)"
   }
 }
 Gen4 plan same as above
@@ -105,9 +99,7 @@ Gen4 plan same as above
       "Sharded": false
     },
     "TargetDestination": "Shard(-80)",
-    "IsDML": false,
-    "Query": "select count(*), col from unsharded into outfile s3 'x.txt'",
-    "SingleShardOnly": false
+    "Query": "select count(*), col from unsharded into outfile s3 'x.txt'"
   }
 }
 Gen4 plan same as above
@@ -124,9 +116,7 @@ Gen4 plan same as above
       "Sharded": false
     },
     "TargetDestination": "Shard(-80)",
-    "IsDML": false,
-    "Query": "select * from `user` into outfile s3 'x.txt'",
-    "SingleShardOnly": false
+    "Query": "select * from `user` into outfile s3 'x.txt'"
   }
 }
 Gen4 plan same as above
@@ -163,6 +153,23 @@ Gen4 plan same as above
     "IsDML": true,
     "Query": "load data from s3 'x.txt'",
     "SingleShardOnly": true
+  }
+}
+Gen4 plan same as above
+
+# create table
+"create /* test */ table t1(id bigint, primary key(id)) /* comments */"
+{
+  "QueryType": "DDL",
+  "Original": "create /* test */ table t1(id bigint, primary key(id)) /* comments */",
+  "Instructions": {
+    "OperatorType": "Send",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "TargetDestination": "Shard(-80)",
+    "Query": "create /* test */ table t1(id bigint, primary key(id)) /* comments */"
   }
 }
 Gen4 plan same as above

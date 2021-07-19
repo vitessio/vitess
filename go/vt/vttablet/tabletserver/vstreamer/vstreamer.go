@@ -19,15 +19,14 @@ package vstreamer
 import (
 	"bytes"
 	"context"
-	"flag"
 	"fmt"
 	"io"
 	"strings"
 	"time"
 
-	vtschema "vitess.io/vitess/go/vt/schema"
+	"google.golang.org/protobuf/encoding/prototext"
 
-	"github.com/golang/protobuf/proto"
+	vtschema "vitess.io/vitess/go/vt/schema"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
@@ -41,9 +40,6 @@ import (
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
-
-// PacketSize is the suggested packet size for VReplication streamer.
-var PacketSize = flag.Int("vstream_packet_size", 250000, "Suggested packet size for VReplication streamer. This is used only as a recommendation. The actual packet size may be more or less than this amount.")
 
 // HeartbeatTime is set to slightly below 1s, compared to idleTimeout
 // set by VPlayer at slightly above 1s. This minimizes conflicts
@@ -84,9 +80,6 @@ type vstreamer struct {
 	vse   *Engine
 }
 
-// CopyState contains the last PK for tables to be copied
-type CopyState map[string][]*sqltypes.Result
-
 // streamerPlan extends the original plan to also include
 // the TableMap, which comes from the binlog. It's used
 // to extract values from the ROW events.
@@ -109,7 +102,7 @@ type streamerPlan struct {
 //   "select * from t where in_keyrange(col1, 'hash', '-80')",
 //   "select col1, col2 from t where...",
 //   "select col1, keyspace_id() from t where...".
-//   Only "in_keyrange" expressions are supported in the where clause.
+//   Only "in_keyrange" and limited comparison operators (see enum Opcode in planbuilder.go) are supported in the where clause.
 //   Other constructs like joins, group by, etc. are not supported.
 // vschema: the current vschema. This value can later be changed through the SetVSchema method.
 // send: callback function to send events.
@@ -227,7 +220,7 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 			return vs.send(vevents)
 		case binlogdatapb.VEventType_INSERT, binlogdatapb.VEventType_DELETE, binlogdatapb.VEventType_UPDATE, binlogdatapb.VEventType_REPLACE:
 			newSize := len(vevent.GetDml())
-			if curSize+newSize > *PacketSize {
+			if curSize+newSize > *defaultPacketSize {
 				vs.vse.vstreamerNumPackets.Add(1)
 				vevents := bufferedEvents
 				bufferedEvents = []*binlogdatapb.VEvent{vevent}
@@ -248,7 +241,7 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 					newSize += len(rowChange.After.Values)
 				}
 			}
-			if curSize+newSize > *PacketSize {
+			if curSize+newSize > *defaultPacketSize {
 				vs.vse.vstreamerNumPackets.Add(1)
 				vevents := bufferedEvents
 				bufferedEvents = []*binlogdatapb.VEvent{vevent}
@@ -470,7 +463,9 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 					Type: binlogdatapb.VEventType_OTHER,
 				})
 			}
-			vs.se.ReloadAt(context.Background(), vs.pos)
+			if schema.MustReloadSchemaOnDDL(q.SQL, vs.cp.DBName()) {
+				vs.se.ReloadAt(context.Background(), vs.pos)
+			}
 		case sqlparser.StmtSavepoint:
 			mustSend := mustSendStmt(q, vs.cp.DBName())
 			if mustSend {
@@ -789,7 +784,7 @@ nextrow:
 				continue
 			}
 			journal := &binlogdatapb.Journal{}
-			if err := proto.UnmarshalText(afterValues[i].ToString(), journal); err != nil {
+			if err := prototext.Unmarshal(afterValues[i].ToBytes(), journal); err != nil {
 				return nil, err
 			}
 			vevents = append(vevents, &binlogdatapb.VEvent{
@@ -875,13 +870,18 @@ func (vs *vstreamer) extractRowAndFilter(plan *streamerPlan, data []byte, dataCo
 		}
 		value, l, err := mysql.CellValue(data, pos, plan.TableMap.Types[colNum], plan.TableMap.Metadata[colNum], plan.Table.Fields[colNum].Type)
 		if err != nil {
+			log.Errorf("extractRowAndFilter: %s, table: %s, colNum: %d, fields: %+v, current values: %+v",
+				err, plan.Table.Name, colNum, plan.Table.Fields, values)
 			return false, nil, err
 		}
 		pos += l
+
 		values[colNum] = value
 		valueIndex++
 	}
-	return plan.filter(values)
+	filtered := make([]sqltypes.Value, len(plan.ColExprs))
+	ok, err := plan.filter(values, filtered)
+	return ok, filtered, err
 }
 
 func wrapError(err error, stopPos mysql.Position, vse *Engine) error {

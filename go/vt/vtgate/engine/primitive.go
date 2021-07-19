@@ -17,23 +17,21 @@ limitations under the License.
 package engine
 
 import (
+	"context"
 	"encoding/json"
 	"sync/atomic"
 	"time"
 
-	"vitess.io/vitess/go/vt/vtgate/vindexes"
-
 	"golang.org/x/sync/errgroup"
-
-	"vitess.io/vitess/go/vt/sqlparser"
-
-	"context"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/schema"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 )
@@ -76,7 +74,7 @@ type (
 		// Shard-level functions.
 		ExecuteMultiShard(rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, rollbackOnError, canAutocommit bool) (*sqltypes.Result, []error)
 		ExecuteStandalone(query string, bindvars map[string]*querypb.BindVariable, rs *srvtopo.ResolvedShard) (*sqltypes.Result, error)
-		StreamExecuteMulti(query string, rss []*srvtopo.ResolvedShard, bindVars []map[string]*querypb.BindVariable, callback func(reply *sqltypes.Result) error) error
+		StreamExecuteMulti(query string, rss []*srvtopo.ResolvedShard, bindVars []map[string]*querypb.BindVariable, callback func(reply *sqltypes.Result) error) []error
 
 		// Keyspace ID level functions.
 		ExecuteKeyspaceID(keyspace string, ksid []byte, query string, bindVars map[string]*querypb.BindVariable, rollbackOnError, autocommit bool) (*sqltypes.Result, error)
@@ -104,6 +102,10 @@ type (
 
 		// KeyspaceAvailable returns true when a keyspace is visible from vtgate
 		KeyspaceAvailable(ks string) bool
+
+		MessageStream(rss []*srvtopo.ResolvedShard, tableName string, callback func(*sqltypes.Result) error) error
+
+		VStream(rss []*srvtopo.ResolvedShard, filter *binlogdatapb.Filter, gtid string, callback func(evs []*binlogdatapb.VEvent) error) error
 	}
 
 	//SessionActions gives primitives ability to interact with the session state
@@ -150,6 +152,7 @@ type (
 
 		// HasCreatedTempTable will mark the session as having created temp tables
 		HasCreatedTempTable()
+		GetWarnings() []*querypb.QueryWarning
 	}
 
 	// Plan represents the execution strategy for a given query.

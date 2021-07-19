@@ -22,7 +22,7 @@ import (
 
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/vt/proto/query"

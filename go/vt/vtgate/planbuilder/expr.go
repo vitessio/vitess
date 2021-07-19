@@ -25,21 +25,6 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
-// splitAndExpression breaks up the Expr into AND-separated conditions
-// and appends them to filters, which can be shuffled and recombined
-// as needed.
-func splitAndExpression(filters []sqlparser.Expr, node sqlparser.Expr) []sqlparser.Expr {
-	if node == nil {
-		return filters
-	}
-	switch node := node.(type) {
-	case *sqlparser.AndExpr:
-		filters = splitAndExpression(filters, node.Left)
-		return splitAndExpression(filters, node.Right)
-	}
-	return append(filters, node)
-}
-
 type subqueryInfo struct {
 	ast    *sqlparser.Subquery
 	plan   logicalPlan
@@ -69,10 +54,10 @@ type subqueryInfo struct {
 //
 // If an expression has no references to the current query, then the left-most
 // origin is chosen as the default.
-func (pb *primitiveBuilder) findOrigin(expr sqlparser.Expr, reservedVars sqlparser.BindVars) (pullouts []*pulloutSubquery, origin logicalPlan, pushExpr sqlparser.Expr, err error) {
+func (pb *primitiveBuilder) findOrigin(expr sqlparser.Expr, reservedVars *sqlparser.ReservedVars) (pullouts []*pulloutSubquery, origin logicalPlan, pushExpr sqlparser.Expr, err error) {
 	// highestOrigin tracks the highest origin referenced by the expression.
-	// Default is the First.
-	highestOrigin := First(pb.plan)
+	// Default is the first.
+	highestOrigin := first(pb.plan)
 
 	// subqueries tracks the list of subqueries encountered.
 	var subqueries []subqueryInfo
@@ -156,7 +141,7 @@ func (pb *primitiveBuilder) findOrigin(expr sqlparser.Expr, reservedVars sqlpars
 		construct, ok := constructsMap[sqi.ast]
 		if !ok {
 			// (subquery) -> :_sq
-			expr = sqlparser.ReplaceExpr(expr, sqi.ast, sqlparser.NewArgument(":"+sqName))
+			expr = sqlparser.ReplaceExpr(expr, sqi.ast, sqlparser.NewArgument(sqName))
 			pullouts = append(pullouts, newPulloutSubquery(engine.PulloutValue, sqName, hasValues, sqi.plan))
 			continue
 		}
@@ -167,10 +152,10 @@ func (pb *primitiveBuilder) findOrigin(expr sqlparser.Expr, reservedVars sqlpars
 				right := &sqlparser.ComparisonExpr{
 					Operator: construct.Operator,
 					Left:     construct.Left,
-					Right:    sqlparser.ListArg("::" + sqName),
+					Right:    sqlparser.ListArg(sqName),
 				}
 				left := &sqlparser.ComparisonExpr{
-					Left:     sqlparser.NewArgument(":" + hasValues),
+					Left:     sqlparser.NewArgument(hasValues),
 					Operator: sqlparser.EqualOp,
 					Right:    sqlparser.NewIntLiteral("1"),
 				}
@@ -183,14 +168,14 @@ func (pb *primitiveBuilder) findOrigin(expr sqlparser.Expr, reservedVars sqlpars
 			} else {
 				// a not in (subquery) -> (:__sq_has_values = 0 or (a not in ::__sq))
 				left := &sqlparser.ComparisonExpr{
-					Left:     sqlparser.NewArgument(":" + hasValues),
+					Left:     sqlparser.NewArgument(hasValues),
 					Operator: sqlparser.EqualOp,
 					Right:    sqlparser.NewIntLiteral("0"),
 				}
 				right := &sqlparser.ComparisonExpr{
 					Operator: construct.Operator,
 					Left:     construct.Left,
-					Right:    sqlparser.ListArg("::" + sqName),
+					Right:    sqlparser.ListArg(sqName),
 				}
 				newExpr := &sqlparser.OrExpr{
 					Left:  left,
@@ -201,7 +186,7 @@ func (pb *primitiveBuilder) findOrigin(expr sqlparser.Expr, reservedVars sqlpars
 			}
 		case *sqlparser.ExistsExpr:
 			// exists (subquery) -> :__sq_has_values
-			expr = sqlparser.ReplaceExpr(expr, construct, sqlparser.NewArgument(":"+hasValues))
+			expr = sqlparser.ReplaceExpr(expr, construct, sqlparser.NewArgument(hasValues))
 			pullouts = append(pullouts, newPulloutSubquery(engine.PulloutExists, sqName, hasValues, sqi.plan))
 		}
 	}
@@ -221,7 +206,7 @@ func hasSubquery(node sqlparser.SQLNode) bool {
 	return has
 }
 
-func (pb *primitiveBuilder) finalizeUnshardedDMLSubqueries(reservedVars sqlparser.BindVars, nodes ...sqlparser.SQLNode) bool {
+func (pb *primitiveBuilder) finalizeUnshardedDMLSubqueries(reservedVars *sqlparser.ReservedVars, nodes ...sqlparser.SQLNode) bool {
 	var keyspace string
 	if rb, ok := pb.plan.(*route); ok {
 		keyspace = rb.eroute.Keyspace.Name

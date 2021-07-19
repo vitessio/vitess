@@ -197,6 +197,7 @@ func (tpc *TwoPC) Open(dbconfigs *dbconfigs.DBConfigs) error {
 		}
 	}
 	tpc.readPool.Open(dbconfigs.AppWithDB(), dbconfigs.DbaWithDB(), dbconfigs.DbaWithDB())
+	log.Infof("TwoPC: Engine open succeeded")
 	return nil
 }
 

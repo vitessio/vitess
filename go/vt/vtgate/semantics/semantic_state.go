@@ -29,8 +29,9 @@ import (
 type (
 	// TableInfo contains the alias table expr and vindex table
 	TableInfo struct {
-		ASTNode *sqlparser.AliasedTableExpr
-		Table   *vindexes.Table
+		dbName, tableName string
+		ASTNode           *sqlparser.AliasedTableExpr
+		Table             *vindexes.Table
 	}
 
 	// TableSet is how a set of tables is expressed.
@@ -40,13 +41,17 @@ type (
 
 	// SemTable contains semantic analysis information about the query.
 	SemTable struct {
-		Tables           []*TableInfo
+		Tables []*TableInfo
+		// ProjectionErr stores the error that we got during the semantic analysis of the SelectExprs.
+		// This is only a real error if we are unable to plan the query as a single route
+		ProjectionErr    error
 		exprDependencies map[sqlparser.Expr]TableSet
+		selectScope      map[*sqlparser.Select]*scope
 	}
 
 	scope struct {
 		parent *scope
-		tables map[string]*TableInfo
+		tables []*TableInfo
 	}
 
 	// SchemaInformation is used tp provide table information from Vschema.
@@ -99,28 +104,35 @@ func (st *SemTable) Dependencies(expr sqlparser.Expr) TableSet {
 	return deps
 }
 
+// GetSelectTables returns the table in the select.
+func (st *SemTable) GetSelectTables(node *sqlparser.Select) []*TableInfo {
+	scope := st.selectScope[node]
+	return scope.tables
+}
+
+// AddExprs adds new select exprs to the SemTable.
+func (st *SemTable) AddExprs(tbl *sqlparser.AliasedTableExpr, cols sqlparser.SelectExprs) {
+	tableSet := st.TableSetFor(tbl)
+	for _, col := range cols {
+		st.exprDependencies[col.(*sqlparser.AliasedExpr).Expr] = tableSet
+	}
+}
+
 func newScope(parent *scope) *scope {
-	return &scope{tables: map[string]*TableInfo{}, parent: parent}
+	return &scope{parent: parent}
 }
 
-func (s *scope) addTable(name string, table *TableInfo) error {
-	_, found := s.tables[name]
-	if found {
-		return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.NonUniqTable, "Not unique table/alias: '%s'", name)
+func (s *scope) addTable(table *TableInfo) error {
+	for _, scopeTable := range s.tables {
+		b := scopeTable.tableName == table.tableName
+		b2 := scopeTable.dbName == table.dbName
+		if b && b2 {
+			return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.NonUniqTable, "Not unique table/alias: '%s'", table.tableName)
+		}
 	}
-	s.tables[name] = table
+
+	s.tables = append(s.tables, table)
 	return nil
-}
-
-// Analyse analyzes the parsed query.
-func Analyse(statement sqlparser.Statement, si SchemaInformation) (*SemTable, error) {
-	analyzer := newAnalyzer(si)
-	// Initial scope
-	err := analyzer.analyze(statement)
-	if err != nil {
-		return nil, err
-	}
-	return &SemTable{exprDependencies: analyzer.exprDeps, Tables: analyzer.Tables}, nil
 }
 
 // IsOverlapping returns true if at least one table exists in both sets

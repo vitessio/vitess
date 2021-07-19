@@ -53,29 +53,39 @@ func (tm *TabletManager) ReplicationStatus(ctx context.Context) (*replicationdat
 
 // MasterStatus returns the replication status fopr a master tablet.
 func (tm *TabletManager) MasterStatus(ctx context.Context) (*replicationdatapb.MasterStatus, error) {
-	status, err := tm.MysqlDaemon.MasterStatus(ctx)
+	return tm.PrimaryStatus(ctx)
+}
+
+// PrimaryStatus returns the replication status fopr a master tablet.
+func (tm *TabletManager) PrimaryStatus(ctx context.Context) (*replicationdatapb.MasterStatus, error) {
+	status, err := tm.MysqlDaemon.PrimaryStatus(ctx)
 	if err != nil {
 		return nil, err
 	}
-	return mysql.MasterStatusToProto(status), nil
+	return mysql.PrimaryStatusToProto(status), nil
 }
 
 // MasterPosition returns the master position
 func (tm *TabletManager) MasterPosition(ctx context.Context) (string, error) {
-	pos, err := tm.MysqlDaemon.MasterPosition()
+	return tm.PrimaryPosition(ctx)
+}
+
+// PrimaryPosition returns the position of a primary database
+func (tm *TabletManager) PrimaryPosition(ctx context.Context) (string, error) {
+	pos, err := tm.MysqlDaemon.PrimaryPosition()
 	if err != nil {
 		return "", err
 	}
 	return mysql.EncodePosition(pos), nil
 }
 
-// WaitForPosition returns the master position
+// WaitForPosition waits until replication reaches the desired position
 func (tm *TabletManager) WaitForPosition(ctx context.Context, pos string) error {
 	mpos, err := mysql.DecodePosition(pos)
 	if err != nil {
 		return err
 	}
-	return tm.MysqlDaemon.WaitMasterPos(ctx, mpos)
+	return tm.MysqlDaemon.WaitSourcePos(ctx, mpos)
 }
 
 // StopReplication will stop the mysql. Works both when Vitess manages
@@ -144,13 +154,13 @@ func (tm *TabletManager) StopReplicationMinimum(ctx context.Context, position st
 	}
 	waitCtx, cancel := context.WithTimeout(ctx, waitTime)
 	defer cancel()
-	if err := tm.MysqlDaemon.WaitMasterPos(waitCtx, pos); err != nil {
+	if err := tm.MysqlDaemon.WaitSourcePos(waitCtx, pos); err != nil {
 		return "", err
 	}
 	if err := tm.stopReplicationLocked(ctx); err != nil {
 		return "", err
 	}
-	pos, err = tm.MysqlDaemon.MasterPosition()
+	pos, err = tm.MysqlDaemon.PrimaryPosition()
 	if err != nil {
 		return "", err
 	}
@@ -222,12 +232,17 @@ func (tm *TabletManager) ResetReplication(ctx context.Context) error {
 
 // InitMaster enables writes and returns the replication position.
 func (tm *TabletManager) InitMaster(ctx context.Context) (string, error) {
+	return tm.InitPrimary(ctx)
+}
+
+// InitPrimary enables writes and returns the replication position.
+func (tm *TabletManager) InitPrimary(ctx context.Context) (string, error) {
 	if err := tm.lock(ctx); err != nil {
 		return "", err
 	}
 	defer tm.unlock()
 
-	// Initializing as master implies undoing any previous "do not replicate".
+	// Initializing as primary implies undoing any previous "do not replicate".
 	tm.replManager.setReplicationStopped(false)
 
 	// we need to insert something in the binlogs, so we can get the
@@ -238,7 +253,7 @@ func (tm *TabletManager) InitMaster(ctx context.Context) (string, error) {
 	}
 
 	// get the current replication position
-	pos, err := tm.MysqlDaemon.MasterPosition()
+	pos, err := tm.MysqlDaemon.PrimaryPosition()
 	if err != nil {
 		return "", err
 	}
@@ -250,8 +265,8 @@ func (tm *TabletManager) InitMaster(ctx context.Context) (string, error) {
 		return "", err
 	}
 
-	// Enforce semi-sync after changing the type to master. Otherwise, the
-	// master will hang while trying to create the database.
+	// Enforce semi-sync after changing the tablet)type to MASTER. Otherwise, the
+	// primary will hang while trying to create the database.
 	if err := tm.fixSemiSync(topodatapb.TabletType_MASTER); err != nil {
 		return "", err
 	}
@@ -313,7 +328,7 @@ func (tm *TabletManager) InitReplica(ctx context.Context, parent *topodatapb.Tab
 	if err := tm.MysqlDaemon.SetReplicationPosition(ctx, pos); err != nil {
 		return err
 	}
-	if err := tm.MysqlDaemon.SetMaster(ctx, ti.Tablet.MysqlHostname, int(ti.Tablet.MysqlPort), false /* stopReplicationBefore */, true /* stopReplicationAfter */); err != nil {
+	if err := tm.MysqlDaemon.SetReplicationSource(ctx, ti.Tablet.MysqlHostname, int(ti.Tablet.MysqlPort), false /* stopReplicationBefore */, true /* stopReplicationAfter */); err != nil {
 		return err
 	}
 
@@ -321,7 +336,7 @@ func (tm *TabletManager) InitReplica(ctx context.Context, parent *topodatapb.Tab
 	return tm.MysqlDaemon.WaitForReparentJournal(ctx, timeCreatedNS)
 }
 
-// DemoteMaster prepares a MASTER tablet to give up mastership to another tablet.
+// DemotePrimary prepares a MASTER tablet to give up leadership to another tablet.
 //
 // It attemps to idempotently ensure the following guarantees upon returning
 // successfully:
@@ -336,16 +351,21 @@ func (tm *TabletManager) InitReplica(ctx context.Context, parent *topodatapb.Tab
 // or on a tablet that already transitioned to REPLICA.
 //
 // If a step fails in the middle, it will try to undo any changes it made.
-func (tm *TabletManager) DemoteMaster(ctx context.Context) (*replicationdatapb.MasterStatus, error) {
+func (tm *TabletManager) DemotePrimary(ctx context.Context) (*replicationdatapb.MasterStatus, error) {
 	// The public version always reverts on partial failure.
-	return tm.demoteMaster(ctx, true /* revertPartialFailure */)
+	return tm.demotePrimary(ctx, true /* revertPartialFailure */)
 }
 
-// demoteMaster implements DemoteMaster with an additional, private option.
+// DemoteMaster is the old version of DemotePrimary
+func (tm *TabletManager) DemoteMaster(ctx context.Context) (*replicationdatapb.MasterStatus, error) {
+	return tm.DemotePrimary(ctx)
+}
+
+// demotePrimary implements DemotePrimary with an additional, private option.
 //
 // If revertPartialFailure is true, and a step fails in the middle, it will try
 // to undo any changes it made.
-func (tm *TabletManager) demoteMaster(ctx context.Context, revertPartialFailure bool) (masterStatus *replicationdatapb.MasterStatus, finalErr error) {
+func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure bool) (masterStatus *replicationdatapb.MasterStatus, finalErr error) {
 	if err := tm.lock(ctx); err != nil {
 		return nil, err
 	}
@@ -371,7 +391,7 @@ func (tm *TabletManager) demoteMaster(ctx context.Context, revertPartialFailure 
 			if tm.orc == nil {
 				return
 			}
-			if err := tm.orc.BeginMaintenance(tm.Tablet(), "vttablet has been told to DemoteMaster"); err != nil {
+			if err := tm.orc.BeginMaintenance(tm.Tablet(), "vttablet has been told to DemotePrimary"); err != nil {
 				log.Warningf("Orchestrator BeginMaintenance failed: %v", err)
 			}
 		}()
@@ -381,7 +401,7 @@ func (tm *TabletManager) demoteMaster(ctx context.Context, revertPartialFailure 
 		// have to be killed at the end of their timeout, this will be
 		// considered successful. If we are already not serving, this will be
 		// idempotent.
-		log.Infof("DemoteMaster disabling query service")
+		log.Infof("DemotePrimary disabling query service")
 		if err := tm.QueryServiceControl.SetServingType(tablet.Type, logutil.ProtoToTime(tablet.MasterTermStartTime), false, "demotion in progress"); err != nil {
 			return nil, vterrors.Wrap(err, "SetServingType(serving=false) failed")
 		}
@@ -431,24 +451,29 @@ func (tm *TabletManager) demoteMaster(ctx context.Context, revertPartialFailure 
 	}()
 
 	// Return the current replication position.
-	status, err := tm.MysqlDaemon.MasterStatus(ctx)
+	status, err := tm.MysqlDaemon.PrimaryStatus(ctx)
 	if err != nil {
 		return nil, err
 	}
-	masterStatusProto := mysql.MasterStatusToProto(status)
+	masterStatusProto := mysql.PrimaryStatusToProto(status)
 	return masterStatusProto, nil
 }
 
-// UndoDemoteMaster reverts a previous call to DemoteMaster
+// UndoDemoteMaster is the old version of UndoDemotePrimary
+func (tm *TabletManager) UndoDemoteMaster(ctx context.Context) error {
+	return tm.UndoDemotePrimary(ctx)
+}
+
+// UndoDemotePrimary reverts a previous call to DemotePrimary
 // it sets read-only to false, fixes semi-sync
 // and returns its master position.
-func (tm *TabletManager) UndoDemoteMaster(ctx context.Context) error {
+func (tm *TabletManager) UndoDemotePrimary(ctx context.Context) error {
 	if err := tm.lock(ctx); err != nil {
 		return err
 	}
 	defer tm.unlock()
 
-	// If using semi-sync, we need to enable master-side.
+	// If using semi-sync, we need to enable source-side.
 	if err := tm.fixSemiSync(topodatapb.TabletType_MASTER); err != nil {
 		return err
 	}
@@ -460,7 +485,7 @@ func (tm *TabletManager) UndoDemoteMaster(ctx context.Context) error {
 
 	// Update serving graph
 	tablet := tm.Tablet()
-	log.Infof("UndoDemoteMaster re-enabling query service")
+	log.Infof("UndoDemotePrimary re-enabling query service")
 	if err := tm.QueryServiceControl.SetServingType(tablet.Type, logutil.ProtoToTime(tablet.MasterTermStartTime), true, ""); err != nil {
 		return vterrors.Wrap(err, "SetServingType(serving=true) failed")
 	}
@@ -482,18 +507,23 @@ func (tm *TabletManager) ReplicaWasPromoted(ctx context.Context) error {
 	return tm.ChangeType(ctx, topodatapb.TabletType_MASTER)
 }
 
-// SetMaster sets replication master, and waits for the
+// SetReplicationSource sets replication master, and waits for the
 // reparent_journal table entry up to context timeout
-func (tm *TabletManager) SetMaster(ctx context.Context, parentAlias *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool) error {
+func (tm *TabletManager) SetReplicationSource(ctx context.Context, parentAlias *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool) error {
 	if err := tm.lock(ctx); err != nil {
 		return err
 	}
 	defer tm.unlock()
 
-	return tm.setMasterLocked(ctx, parentAlias, timeCreatedNS, waitPosition, forceStartReplication)
+	return tm.setReplicationSourceLocked(ctx, parentAlias, timeCreatedNS, waitPosition, forceStartReplication)
 }
 
-func (tm *TabletManager) setMasterRepairReplication(ctx context.Context, parentAlias *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool) (err error) {
+// SetMaster is the old version of SetReplicationSource
+func (tm *TabletManager) SetMaster(ctx context.Context, parentAlias *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool) error {
+	return tm.SetReplicationSource(ctx, parentAlias, timeCreatedNS, waitPosition, forceStartReplication)
+}
+
+func (tm *TabletManager) setReplicationSourceRepairReplication(ctx context.Context, parentAlias *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool) (err error) {
 	parent, err := tm.TopoServer.GetTablet(ctx, parentAlias)
 	if err != nil {
 		return err
@@ -506,10 +536,10 @@ func (tm *TabletManager) setMasterRepairReplication(ctx context.Context, parentA
 
 	defer unlock(&err)
 
-	return tm.setMasterLocked(ctx, parentAlias, timeCreatedNS, waitPosition, forceStartReplication)
+	return tm.setReplicationSourceLocked(ctx, parentAlias, timeCreatedNS, waitPosition, forceStartReplication)
 }
 
-func (tm *TabletManager) setMasterLocked(ctx context.Context, parentAlias *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool) (err error) {
+func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentAlias *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool) (err error) {
 	// End orchestrator maintenance at the end of fixing replication.
 	// This is a best effort operation, so it should happen in a goroutine
 	defer func() {
@@ -524,7 +554,7 @@ func (tm *TabletManager) setMasterLocked(ctx context.Context, parentAlias *topod
 	}()
 
 	// Change our type to REPLICA if we used to be MASTER.
-	// Being sent SetMaster means another MASTER has been successfully promoted,
+	// Being sent SetReplicationSource means another MASTER has been successfully promoted,
 	// so we convert to REPLICA first, since we want to do it even if other
 	// steps fail below.
 	// Note it is important to check for MASTER here so that we don't
@@ -561,7 +591,7 @@ func (tm *TabletManager) setMasterLocked(ctx context.Context, parentAlias *topod
 		shouldbeReplicating = true
 	}
 
-	// If using semi-sync, we need to enable it before connecting to master.
+	// If using semi-sync, we need to enable it before connecting to primary.
 	// If we are currently MASTER, assume we are about to become REPLICA.
 	tabletType := tm.Tablet().Type
 	if tabletType == topodatapb.TabletType_MASTER {
@@ -570,7 +600,7 @@ func (tm *TabletManager) setMasterLocked(ctx context.Context, parentAlias *topod
 	if err := tm.fixSemiSync(tabletType); err != nil {
 		return err
 	}
-	// Update the master address only if needed.
+	// Update the primary/source address only if needed.
 	// We don't want to interrupt replication for no reason.
 	if parentAlias == nil {
 		// if there is no master in the shard, return an error so that we can retry
@@ -584,7 +614,7 @@ func (tm *TabletManager) setMasterLocked(ctx context.Context, parentAlias *topod
 	masterPort := int(parent.Tablet.MysqlPort)
 	if status.MasterHost != masterHost || status.MasterPort != masterPort {
 		// This handles both changing the address and starting replication.
-		if err := tm.MysqlDaemon.SetMaster(ctx, masterHost, masterPort, wasReplicating, shouldbeReplicating); err != nil {
+		if err := tm.MysqlDaemon.SetReplicationSource(ctx, masterHost, masterPort, wasReplicating, shouldbeReplicating); err != nil {
 			if err := tm.handleRelayLogError(err); err != nil {
 				return err
 			}
@@ -610,7 +640,7 @@ func (tm *TabletManager) setMasterLocked(ctx context.Context, parentAlias *topod
 			if err != nil {
 				return err
 			}
-			if err := tm.MysqlDaemon.WaitMasterPos(ctx, pos); err != nil {
+			if err := tm.MysqlDaemon.WaitSourcePos(ctx, pos); err != nil {
 				return err
 			}
 		}
@@ -884,5 +914,5 @@ func (tm *TabletManager) repairReplication(ctx context.Context) error {
 		}
 	}
 
-	return tm.setMasterRepairReplication(ctx, si.MasterAlias, 0, "", true)
+	return tm.setReplicationSourceRepairReplication(ctx, si.MasterAlias, 0, "", true)
 }
