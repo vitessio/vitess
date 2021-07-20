@@ -27,7 +27,7 @@ jobs:
             major_and_minor_releases=$(echo -e "$last_major_releases\n$last_minor_release")
           fi
 
-          echo "latest_releases=$(echo "$major_and_minor_releases" | awk ' BEGIN { ORS = ""; print "["; } { print "\/\@{\\\"project\\\":\\\""$0"\\\"}\/\@"; } END { print "]"; }' | sed "s^\/\@\/\@^, ^g;s^\/\@^^g")" >> $GITHUB_ENV
+          echo "latest_releases=$(echo "$major_and_minor_releases" | awk ' BEGIN { ORS = ""; print "["; } { print "\/\@{\\\"project\\\":\\\"v"$0"\\\"}\/\@"; } END { print "]"; }' | sed "s^\/\@\/\@^, ^g;s^\/\@^^g")" >> $GITHUB_ENV
 
       - name: Set Releases
         id: set-releases
