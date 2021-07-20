@@ -87,13 +87,13 @@ func TestValidateHashGetter(t *testing.T) {
 	ip := net.ParseIP("127.0.0.1")
 	addr := &net.IPAddr{IP: ip, Zone: ""}
 
-	salt, err := NewSalt()
+	salt, err := newSalt()
 	if err != nil {
 		t.Fatalf("error generating salt: %v", err)
 	}
 
 	scrambled := ScrambleMysqlNativePassword(salt, []byte("password"))
-	getter, err := auth.ValidateHash(salt, "mysql_user", scrambled, addr)
+	getter, err := auth.UserEntryWithHash(nil, salt, "mysql_user", scrambled, addr)
 	if err != nil {
 		t.Fatalf("error validating password: %v", err)
 	}
@@ -265,13 +265,13 @@ func TestStaticPasswords(t *testing.T) {
 
 	for _, c := range tests {
 		t.Run(fmt.Sprintf("%s-%s", c.user, c.password), func(t *testing.T) {
-			salt, err := NewSalt()
+			salt, err := newSalt()
 			if err != nil {
 				t.Fatalf("error generating salt: %v", err)
 			}
 
 			scrambled := ScrambleMysqlNativePassword(salt, []byte(c.password))
-			_, err = auth.ValidateHash(salt, c.user, scrambled, addr)
+			_, err = auth.UserEntryWithHash(nil, salt, c.user, scrambled, addr)
 
 			if c.success {
 				if err != nil {

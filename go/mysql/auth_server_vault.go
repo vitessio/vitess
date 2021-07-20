@@ -17,7 +17,8 @@ limitations under the License.
 package mysql
 
 import (
-	"bytes"
+	"crypto/subtle"
+	"crypto/x509"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -48,16 +49,11 @@ var (
 
 // AuthServerVault implements AuthServer with a config loaded from Vault.
 type AuthServerVault struct {
-	mu sync.Mutex
-	// method can be set to:
-	// - MysqlNativePassword
-	// - MysqlClearPassword
-	// - MysqlDialog
-	// It defaults to MysqlNativePassword.
-	method string
+	methods []AuthMethod
+	mu      sync.Mutex
 	// users, passwords and user data
-	//   We use the same JSON format as for -mysql_auth_server_static
-	//   Acts as a cache for the in-Vault data
+	// We use the same JSON format as for -mysql_auth_server_static
+	// Acts as a cache for the in-Vault data
 	entries                map[string][]*AuthServerStaticEntry
 	vaultCacheExpireTicker *time.Ticker
 	vaultClient            *vaultapi.Client
@@ -86,7 +82,7 @@ func registerAuthServerVault(addr string, timeout time.Duration, caCertPath stri
 	if err != nil {
 		log.Exitf("%s", err)
 	}
-	RegisterAuthServerImpl("vault", authServerVault)
+	RegisterAuthServer("vault", authServerVault)
 }
 
 func newAuthServerVault(addr string, timeout time.Duration, caCertPath string, path string, ttl time.Duration, tokenFilePath string, roleID string, secretIDPath string, roleMountPoint string) (*AuthServerVault, error) {
@@ -140,13 +136,64 @@ func newAuthServerVault(addr string, timeout time.Duration, caCertPath string, p
 		vaultClient: client,
 		vaultPath:   path,
 		vaultTTL:    ttl,
-		method:      MysqlNativePassword,
 		entries:     make(map[string][]*AuthServerStaticEntry),
 	}
+
+	authMethodNative := NewMysqlNativeAuthMethod(a, a)
+	a.methods = []AuthMethod{authMethodNative}
 
 	a.reloadVault()
 	a.installSignalHandlers()
 	return a, nil
+}
+
+// AuthMethods returns the list of registered auth methods
+// implemented by this auth server.
+func (a *AuthServerVault) AuthMethods() []AuthMethod {
+	return a.methods
+}
+
+// DefaultAuthMethodDescription returns MysqlNativePassword as the default
+// authentication method for the auth server implementation.
+func (a *AuthServerVault) DefaultAuthMethodDescription() AuthMethodDescription {
+	return MysqlNativePassword
+}
+
+// HandleUser is part of the Validator interface. We
+// handle any user here since we don't check up front.
+func (a *AuthServerVault) HandleUser(user string) bool {
+	return true
+}
+
+// UserEntryWithHash is called when mysql_native_password is used.
+func (a *AuthServerVault) UserEntryWithHash(userCerts []*x509.Certificate, salt []byte, user string, authResponse []byte, remoteAddr net.Addr) (Getter, error) {
+	a.mu.Lock()
+	userEntries, ok := a.entries[user]
+	a.mu.Unlock()
+
+	if !ok {
+		return &StaticUserData{}, NewSQLError(ERAccessDeniedError, SSAccessDeniedError, "Access denied for user '%v'", user)
+	}
+
+	for _, entry := range userEntries {
+		if entry.MysqlNativePassword != "" {
+			hash, err := DecodeMysqlNativePasswordHex(entry.MysqlNativePassword)
+			if err != nil {
+				return &StaticUserData{entry.UserData, entry.Groups}, NewSQLError(ERAccessDeniedError, SSAccessDeniedError, "Access denied for user '%v'", user)
+			}
+			isPass := VerifyHashedMysqlNativePassword(authResponse, salt, hash)
+			if matchSourceHost(remoteAddr, entry.SourceHost) && isPass {
+				return &StaticUserData{entry.UserData, entry.Groups}, nil
+			}
+		} else {
+			computedAuthResponse := ScrambleMysqlNativePassword(salt, []byte(entry.Password))
+			// Validate the password.
+			if matchSourceHost(remoteAddr, entry.SourceHost) && subtle.ConstantTimeCompare(authResponse, computedAuthResponse) == 1 {
+				return &StaticUserData{entry.UserData, entry.Groups}, nil
+			}
+		}
+	}
+	return &StaticUserData{}, NewSQLError(ERAccessDeniedError, SSAccessDeniedError, "Access denied for user '%v'", user)
 }
 
 func (a *AuthServerVault) setTTLTicker(ttl time.Duration) {
@@ -222,69 +269,6 @@ func (a *AuthServerVault) close() {
 	if a.sigChan != nil {
 		signal.Stop(a.sigChan)
 	}
-}
-
-// AuthMethod is part of the AuthServer interface.
-func (a *AuthServerVault) AuthMethod(user string) (string, error) {
-	return a.method, nil
-}
-
-// Salt is part of the AuthServer interface.
-func (a *AuthServerVault) Salt() ([]byte, error) {
-	return NewSalt()
-}
-
-// ValidateHash is part of the AuthServer interface.
-func (a *AuthServerVault) ValidateHash(salt []byte, user string, authResponse []byte, remoteAddr net.Addr) (Getter, error) {
-	a.mu.Lock()
-	userEntries, ok := a.entries[user]
-	a.mu.Unlock()
-
-	if !ok {
-		return &StaticUserData{}, NewSQLError(ERAccessDeniedError, SSAccessDeniedError, "Access denied for user '%v'", user)
-	}
-
-	for _, entry := range userEntries {
-		if entry.MysqlNativePassword != "" {
-			isPass := isPassScrambleMysqlNativePassword(authResponse, salt, entry.MysqlNativePassword)
-			if matchSourceHost(remoteAddr, entry.SourceHost) && isPass {
-				return &StaticUserData{entry.UserData, entry.Groups}, nil
-			}
-		} else {
-			computedAuthResponse := ScrambleMysqlNativePassword(salt, []byte(entry.Password))
-			// Validate the password.
-			if matchSourceHost(remoteAddr, entry.SourceHost) && bytes.Equal(authResponse, computedAuthResponse) {
-				return &StaticUserData{entry.UserData, entry.Groups}, nil
-			}
-		}
-	}
-	return &StaticUserData{}, NewSQLError(ERAccessDeniedError, SSAccessDeniedError, "Access denied for user '%v'", user)
-}
-
-// Negotiate is part of the AuthServer interface.
-// It will be called if method is anything else than MysqlNativePassword.
-// We only recognize MysqlClearPassword and MysqlDialog here.
-func (a *AuthServerVault) Negotiate(c *Conn, user string, remoteAddr net.Addr) (Getter, error) {
-	// Finish the negotiation.
-	password, err := AuthServerNegotiateClearOrDialog(c, a.method)
-	if err != nil {
-		return nil, err
-	}
-
-	a.mu.Lock()
-	userEntries, ok := a.entries[user]
-	a.mu.Unlock()
-
-	if !ok {
-		return &StaticUserData{}, NewSQLError(ERAccessDeniedError, SSAccessDeniedError, "Access denied for user '%v'", user)
-	}
-	for _, entry := range userEntries {
-		// Validate the password.
-		if matchSourceHost(remoteAddr, entry.SourceHost) && entry.Password == password {
-			return &StaticUserData{entry.UserData, entry.Groups}, nil
-		}
-	}
-	return &StaticUserData{}, NewSQLError(ERAccessDeniedError, SSAccessDeniedError, "Access denied for user '%v'", user)
 }
 
 // We ignore most errors here, to allow us to retry cleanly
