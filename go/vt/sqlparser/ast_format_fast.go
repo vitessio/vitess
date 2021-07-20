@@ -673,8 +673,9 @@ func (ct *ColumnType) formatFast(buf *TrackedBuffer) {
 		buf.WriteByte(' ')
 		buf.WriteString(keywordStrings[DEFAULT])
 		_, isLiteral := ct.Options.Default.(*Literal)
+		_, isBool := ct.Options.Default.(BoolVal)
 		_, isNullVal := ct.Options.Default.(*NullVal)
-		if isLiteral || isNullVal || isExprAliasForCurrentTimeStamp(ct.Options.Default) {
+		if isLiteral || isNullVal || isBool || isExprAliasForCurrentTimeStamp(ct.Options.Default) {
 			buf.WriteByte(' ')
 			ct.Options.Default.formatFast(buf)
 		} else {

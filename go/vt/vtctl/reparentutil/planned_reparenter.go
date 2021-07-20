@@ -149,7 +149,7 @@ func (pr *PlannedReparenter) preflightChecks(
 
 	if opts.NewPrimaryAlias == nil {
 		if !topoproto.TabletAliasEqual(opts.AvoidPrimaryAlias, ev.ShardInfo.MasterAlias) {
-			event.DispatchUpdate(ev, "current primary is different than AvoidPrimary, nothing to do")
+			event.DispatchUpdate(ev, "current primary is different than tablet to avoid, nothing to do")
 			return true, nil
 		}
 

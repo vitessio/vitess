@@ -169,11 +169,13 @@ func transformRoutePlan(n *routePlan) (*route, error) {
 
 	return &route{
 		eroute: &engine.Route{
-			Opcode:    n.routeOpCode,
-			TableName: strings.Join(tableNames, ", "),
-			Keyspace:  n.keyspace,
-			Vindex:    singleColumn,
-			Values:    n.vindexValues,
+			Opcode:              n.routeOpCode,
+			TableName:           strings.Join(tableNames, ", "),
+			Keyspace:            n.keyspace,
+			Vindex:              singleColumn,
+			Values:              n.vindexValues,
+			SysTableTableName:   n.SysTableTableName,
+			SysTableTableSchema: n.SysTableTableSchema,
 		},
 		Select: &sqlparser.Select{
 			SelectExprs: expressions,
