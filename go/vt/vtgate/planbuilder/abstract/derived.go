@@ -21,17 +21,21 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
+// Derived represents a derived table in the query
 type Derived struct {
 	sel   *sqlparser.Select
 	inner Operator
+	alias string
 }
 
 var _ Operator = (*Derived)(nil)
 
+// TableID implements the Operator interface
 func (d *Derived) TableID() semantics.TableSet {
 	return d.inner.TableID()
 }
 
+// PushPredicate implements the Operator interface
 func (d *Derived) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) error {
 	panic("implement me")
 }

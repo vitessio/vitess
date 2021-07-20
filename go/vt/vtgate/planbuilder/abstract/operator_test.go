@@ -157,12 +157,31 @@ JoinPredicates:
 }`,
 	}, {
 		input: "select 1 from (select 42 as id from tbl) as t",
-		output: `Derived: {
+		output: `Derived t: {
 	Query: select 42 as id from tbl
 	Inner:	QueryGraph: {
 	Tables:
 		1:tbl
 	}
+}`,
+	}, {
+		input: "select 1 from (select id from tbl limit 10) as t join (select foo, count(*) from usr group by foo) as s on t.id = s.foo",
+		output: `Join: {
+	LHS: 	Derived t: {
+		Query: select id from tbl limit 10
+		Inner:	QueryGraph: {
+		Tables:
+			1:tbl
+		}
+	}
+	RHS: 	Derived s: {
+		Query: select foo, count(*) from usr group by foo
+		Inner:	QueryGraph: {
+		Tables:
+			4:usr
+		}
+	}
+	Predicate: t.id = s.foo
 }`,
 	}}
 
@@ -198,7 +217,7 @@ func testString(op Operator) string {
 	case *Derived:
 		inner := indent(testString(op.inner))
 		query := sqlparser.String(op.sel)
-		return fmt.Sprintf("Derived: {\n\tQuery: %s\n\tInner:%s\n}", query, inner)
+		return fmt.Sprintf("Derived %s: {\n\tQuery: %s\n\tInner:%s\n}", op.alias, query, inner)
 	}
 	return "implement me"
 }
