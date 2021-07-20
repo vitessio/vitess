@@ -17,7 +17,6 @@ limitations under the License.
 package semantics
 
 import (
-	"fmt"
 	"strings"
 	"testing"
 
@@ -508,9 +507,32 @@ func TestScopingWDerivedTables(t *testing.T) {
 	queries := []struct {
 		query        string
 		errorMessage string
+		expectation  TableSet
 	}{
 		{
-			query: "select id from (select id from user where id = 5) as t",
+			query:       "select id from (select id from user where id = 5) as t",
+			expectation: T1,
+		}, {
+			query:       "select id from (select foo as id from user) as t",
+			expectation: T1,
+		}, {
+			query:       "select id from (select foo as id from (select x as foo from user) as c) as t",
+			expectation: T1,
+		}, {
+			query:       "select t.id from (select foo as id from user) as t",
+			expectation: T1,
+		}, {
+			query:        "select t.id2 from (select foo as id from user) as t",
+			errorMessage: "symbol t.id2 not found",
+		}, {
+			query:       "select id from (select 42 as id) as t",
+			expectation: T0,
+		}, {
+			query:       "select t.id from (select 42 as id) as t",
+			expectation: T0,
+		}, {
+			query:        "select ks.t.id from (select 42 as id) as t",
+			errorMessage: "symbol ks.t.id not found",
 		},
 	}
 	for _, query := range queries {
@@ -522,8 +544,13 @@ func TestScopingWDerivedTables(t *testing.T) {
 					"t": {Name: sqlparser.NewTableIdent("t")},
 				},
 			})
-			require.NoError(t, err)
-			fmt.Println(st)
+			if query.errorMessage != "" {
+				require.EqualError(t, err, query.errorMessage)
+			} else {
+				require.NoError(t, err)
+				sel := parse.(*sqlparser.Select)
+				assert.Equal(t, query.expectation, st.Dependencies(extract(sel, 0)))
+			}
 		})
 	}
 }

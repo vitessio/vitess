@@ -37,7 +37,7 @@ type (
 		Name() (sqlparser.TableName, error)
 		GetExpr() *sqlparser.AliasedTableExpr
 		GetColumns() []ColumnInfo
-		IsVirtual() bool
+		IsActualTable() bool
 
 		// DepsFor returns a pointer to the table set for the table that this column belongs to, if it can be found
 		// if the column is not found, nil will be returned instead
@@ -68,6 +68,8 @@ type (
 	}
 
 	vTableInfo struct {
+		tableName   string
+		ASTNode     *sqlparser.AliasedTableExpr
 		columnNames []string
 		cols        []sqlparser.Expr
 	}
@@ -105,7 +107,7 @@ type (
 
 // DepsFor implements the TableInfo interface
 func (v *vTableInfo) DepsFor(col *sqlparser.ColName, org originable, single bool) (*TableSet, *querypb.Type, error) {
-	if !col.Qualifier.IsEmpty() {
+	if !col.Qualifier.IsEmpty() && (v.ASTNode == nil || v.tableName != col.Qualifier.Name.String()) {
 		// if we have a table qualifier in the expression, we know that it is not referencing an aliased table
 		return nil, nil, nil
 	}
@@ -180,19 +182,19 @@ func (r *RealTable) IsInfSchema() bool {
 	return r.isInfSchema
 }
 
-// IsVirtual implements the TableInfo interface
-func (v *vTableInfo) IsVirtual() bool {
+// IsActualTable implements the TableInfo interface
+func (v *vTableInfo) IsActualTable() bool {
+	return false
+}
+
+// IsActualTable implements the TableInfo interface
+func (a *AliasedTable) IsActualTable() bool {
 	return true
 }
 
-// IsVirtual implements the TableInfo interface
-func (a *AliasedTable) IsVirtual() bool {
-	return false
-}
-
-// IsVirtual implements the TableInfo interface
-func (r *RealTable) IsVirtual() bool {
-	return false
+// IsActualTable implements the TableInfo interface
+func (r *RealTable) IsActualTable() bool {
+	return true
 }
 
 var _ TableInfo = (*RealTable)(nil)
@@ -200,7 +202,7 @@ var _ TableInfo = (*AliasedTable)(nil)
 var _ TableInfo = (*vTableInfo)(nil)
 
 func (v *vTableInfo) Matches(name sqlparser.TableName) bool {
-	return false
+	return v.tableName == name.Name.String() && name.Qualifier.IsEmpty()
 }
 
 func (v *vTableInfo) Authoritative() bool {
@@ -208,11 +210,11 @@ func (v *vTableInfo) Authoritative() bool {
 }
 
 func (v *vTableInfo) Name() (sqlparser.TableName, error) {
-	return sqlparser.TableName{}, nil
+	return v.ASTNode.TableName()
 }
 
 func (v *vTableInfo) GetExpr() *sqlparser.AliasedTableExpr {
-	return nil
+	return v.ASTNode
 }
 
 func (v *vTableInfo) GetColumns() []ColumnInfo {
