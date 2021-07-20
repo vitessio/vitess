@@ -37,7 +37,7 @@ const benchmarkQueryPrefix = "benchmark "
 func benchmarkQuery(b *testing.B, threads int, query string) {
 	th := &testHandler{}
 
-	authServer := &AuthServerNone{}
+	authServer := NewAuthServerNone()
 
 	lCfg := ListenerConfig{
 		Protocol:           "tcp",
