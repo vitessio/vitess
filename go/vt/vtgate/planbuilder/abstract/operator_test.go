@@ -215,9 +215,9 @@ func testString(op Operator) string {
 		rightStr := indent(testString(op.Right))
 		return fmt.Sprintf("OuterJoin: {\n\tInner: %s\n\tOuter: %s\n\tPredicate: %s\n}", leftStr, rightStr, sqlparser.String(op.Predicate))
 	case *Derived:
-		inner := indent(testString(op.inner))
-		query := sqlparser.String(op.sel)
-		return fmt.Sprintf("Derived %s: {\n\tQuery: %s\n\tInner:%s\n}", op.alias, query, inner)
+		inner := indent(testString(op.Inner))
+		query := sqlparser.String(op.Sel)
+		return fmt.Sprintf("Derived %s: {\n\tQuery: %s\n\tInner:%s\n}", op.Alias, query, inner)
 	}
 	return "implement me"
 }

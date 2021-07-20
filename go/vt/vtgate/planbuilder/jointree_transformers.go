@@ -29,24 +29,49 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
-func transformToLogicalPlan(tree joinTree, semTable *semantics.SemTable) (logicalPlan, error) {
+func transformToLogicalPlan(tree joinTree, semTable *semantics.SemTable, processing func(plan logicalPlan, sel *sqlparser.Select) (logicalPlan, error)) (logicalPlan, error) {
 	switch n := tree.(type) {
 	case *routePlan:
 		return transformRoutePlan(n)
 
 	case *joinPlan:
-		return transformJoinPlan(n, semTable)
+		return transformJoinPlan(n, semTable, processing)
+
+	case *derivedPlan:
+		plan, err := transformToLogicalPlan(n.inner, semTable, processing)
+		if err != nil {
+			return nil, err
+		}
+		plan, err = processing(plan, n.query)
+		if err != nil {
+			return nil, err
+		}
+
+		rb, isRoute := plan.(*route)
+		if !isRoute {
+			return nil, semantics.Gen4NotSupportedF("not yet")
+		}
+		innerSelect := rb.Select
+		derivedTable := &sqlparser.DerivedTable{Select: innerSelect}
+		tblExpr := &sqlparser.AliasedTableExpr{
+			Expr: derivedTable,
+			As:   sqlparser.NewTableIdent(n.alias),
+		}
+		rb.Select = &sqlparser.Select{
+			From: []sqlparser.TableExpr{tblExpr},
+		}
+		return plan, nil
 	}
 
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unknown type encountered: %T", tree)
 }
 
-func transformJoinPlan(n *joinPlan, semTable *semantics.SemTable) (logicalPlan, error) {
-	lhs, err := transformToLogicalPlan(n.lhs, semTable)
+func transformJoinPlan(n *joinPlan, semTable *semantics.SemTable, processing func(plan logicalPlan, sel *sqlparser.Select) (logicalPlan, error)) (logicalPlan, error) {
+	lhs, err := transformToLogicalPlan(n.lhs, semTable, processing)
 	if err != nil {
 		return nil, err
 	}
-	rhs, err := transformToLogicalPlan(n.rhs, semTable)
+	rhs, err := transformToLogicalPlan(n.rhs, semTable, processing)
 	if err != nil {
 		return nil, err
 	}

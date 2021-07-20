@@ -1637,6 +1637,7 @@ Gen4 plan same as above
     "Vindex": "user_index"
   }
 }
+Gen4 plan same as above
 
 # subquery with join
 "select t.id from (select id from user where id = 5) as t join user_extra on t.id = user_extra.user_id"
@@ -1745,7 +1746,7 @@ Gen4 plan same as above
   }
 }
 
-# routing rules for subquery
+# routing rules for derived table
 "select id from (select id, col from route1 where id = 5) as t"
 {
   "QueryType": "SELECT",
@@ -1766,8 +1767,9 @@ Gen4 plan same as above
     "Vindex": "user_index"
   }
 }
+Gen4 plan same as above
 
-# routing rules for subquery where the constraint is in the outer query
+# routing rules for derived table where the constraint is in the outer query
 "select id from (select id, col from route1) as t where id = 5"
 {
   "QueryType": "SELECT",

@@ -57,11 +57,11 @@ func getOperatorFromTableExpr(tableExpr sqlparser.TableExpr, semTable *semantics
 			if !isSel {
 				return nil, semantics.Gen4NotSupportedF("UNION")
 			}
-			inner, err := crossJoin(sel.From, semTable)
+			inner, err := CreateOperatorFromSelect(sel, semTable)
 			if err != nil {
 				return nil, err
 			}
-			return &Derived{alias: tableExpr.As.String(), inner: inner, sel: sel}, nil
+			return &Derived{Alias: tableExpr.As.String(), Inner: inner, Sel: sel}, nil
 		default:
 			return nil, semantics.Gen4NotSupportedF("%T", tbl)
 		}
