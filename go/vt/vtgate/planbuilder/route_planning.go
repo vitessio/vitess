@@ -238,16 +238,14 @@ func (hp horizonPlanning) planHorizon() (logicalPlan, error) {
 		}
 	}
 
-	err = hp.truncateColumnsIfNeeded()
+	err = hp.planDistinct()
 	if err != nil {
 		return nil, err
 	}
 
-	if hp.qp.NeedsDistinct() {
-		hp.plan, err = pushDistinct(hp.plan, hp.semTable, hp.vschema, hp.qp)
-		if err != nil {
-			return nil, err
-		}
+	err = hp.truncateColumnsIfNeeded()
+	if err != nil {
+		return nil, err
 	}
 
 	return hp.plan, nil
@@ -270,33 +268,6 @@ func (hp horizonPlanning) truncateColumnsIfNeeded() error {
 	}
 
 	return nil
-}
-
-func pushDistinct(plan logicalPlan, semTable *semantics.SemTable, vschema ContextVSchema, qp *abstract.QueryProjection) (logicalPlan, error) {
-	switch p := plan.(type) {
-	case *route:
-		// we always make the underlying query distinct,
-		// and then we might also add a distinct operator on top if it is needed
-		p.Select.MakeDistinct()
-		if !p.isSingleShard() && !selectHasUniqueVindex(vschema, semTable, qp.SelectExprs) {
-			plan = newDistinct(plan)
-		}
-		return plan, nil
-	case *orderedAggregate, *joinGen4:
-		return newDistinct(plan), nil
-
-	default:
-		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unknown plan type for DISTINCT %T", plan)
-	}
-}
-
-func selectHasUniqueVindex(vschema ContextVSchema, semTable *semantics.SemTable, sel []abstract.SelectExpr) bool {
-	for _, expr := range sel {
-		if exprHasUniqueVindex(vschema, semTable, expr.Col.Expr) {
-			return true
-		}
-	}
-	return false
 }
 
 func exprHasUniqueVindex(vschema ContextVSchema, semTable *semantics.SemTable, expr sqlparser.Expr) bool {
