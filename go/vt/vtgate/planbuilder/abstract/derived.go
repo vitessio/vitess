@@ -23,16 +23,16 @@ import (
 
 // Derived represents a derived table in the query
 type Derived struct {
-	sel   *sqlparser.Select
-	inner Operator
-	alias string
+	Sel   *sqlparser.Select
+	Inner Operator
+	Alias string
 }
 
 var _ Operator = (*Derived)(nil)
 
 // TableID implements the Operator interface
 func (d *Derived) TableID() semantics.TableSet {
-	return d.inner.TableID()
+	return d.Inner.TableID()
 }
 
 // PushPredicate implements the Operator interface

@@ -110,6 +110,12 @@ type (
 		outer bool
 	}
 
+	derivedPlan struct {
+		query *sqlparser.Select
+		inner joinTree
+		alias string
+	}
+
 	parenTables []relation
 
 	// vindexPlusPredicates is a struct used to store all the predicates that the vindex can be used to query
@@ -124,9 +130,27 @@ type (
 	}
 )
 
+func (d *derivedPlan) tableID() semantics.TableSet {
+	return d.inner.tableID()
+}
+
+func (d *derivedPlan) cost() int {
+	panic("implement me")
+}
+
+func (d *derivedPlan) clone() joinTree {
+	other := *d
+	return &other
+}
+
+func (d *derivedPlan) pushOutputColumns(names []*sqlparser.ColName, semTable *semantics.SemTable) []int {
+	panic("implement me")
+}
+
 // type assertions
 var _ joinTree = (*routePlan)(nil)
 var _ joinTree = (*joinPlan)(nil)
+var _ joinTree = (*derivedPlan)(nil)
 var _ relation = (*routeTable)(nil)
 var _ relation = (*joinTables)(nil)
 var _ relation = (parenTables)(nil)

@@ -75,24 +75,32 @@ func newBuildSelectPlan(sel *sqlparser.Select, vschema ContextVSchema) (engine.P
 		return nil, err
 	}
 
-	plan, err := transformToLogicalPlan(tree, semTable)
+	postProcessing := func(plan logicalPlan, sel *sqlparser.Select) (logicalPlan, error) {
+		hp := horizonPlanning{
+			sel:      sel,
+			plan:     plan,
+			semTable: semTable,
+			vschema:  vschema,
+		}
+
+		plan, err = hp.planHorizon()
+		if err != nil {
+			return nil, err
+		}
+
+		plan, err = planLimit(sel.Limit, plan)
+		if err != nil {
+			return nil, err
+		}
+		return plan, nil
+	}
+
+	plan, err := transformToLogicalPlan(tree, semTable, postProcessing)
 	if err != nil {
 		return nil, err
 	}
 
-	hp := horizonPlanning{
-		sel:      sel,
-		plan:     plan,
-		semTable: semTable,
-		vschema:  vschema,
-	}
-
-	plan, err = hp.planHorizon()
-	if err != nil {
-		return nil, err
-	}
-
-	plan, err = planLimit(sel.Limit, plan)
+	plan, err = postProcessing(plan, sel)
 	if err != nil {
 		return nil, err
 	}
@@ -132,7 +140,16 @@ func optimizeQuery(opTree abstract.Operator, semTable *semantics.SemTable, vsche
 			return nil, err
 		}
 		return mergeOrJoin(treeInner, treeOuter, []sqlparser.Expr{op.Exp}, semTable, true)
-
+	case *abstract.Derived:
+		treeInner, err := optimizeQuery(op.Inner, semTable, vschema)
+		if err != nil {
+			return nil, err
+		}
+		return &derivedPlan{
+			query: op.Sel,
+			inner: treeInner,
+			alias: op.Alias,
+		}, nil
 	default:
 		return nil, semantics.Gen4NotSupportedF("optimizeQuery")
 	}
