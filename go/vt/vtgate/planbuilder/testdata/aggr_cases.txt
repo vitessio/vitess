@@ -398,7 +398,10 @@ Gen4 plan same as above
   "QueryType": "SELECT",
   "Original": "select distinct col1, col2 from user group by col1",
   "Instructions": {
-    "OperatorType": "Distinct",
+    "OperatorType": "Aggregate",
+    "Variant": "Ordered",
+    "GroupBy": "(0|2), (1|3)",
+    "ResultColumns": 2,
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -407,8 +410,8 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select col1, col2 from `user` where 1 != 1",
-        "Query": "select distinct col1, col2 from `user`",
+        "FieldQuery": "select col1, col2, weight_string(col1), weight_string(col2) from `user` where 1 != 1",
+        "Query": "select distinct col1, col2, weight_string(col1), weight_string(col2) from `user`",
         "Table": "`user`"
       }
     ]
@@ -811,7 +814,10 @@ Gen4 error: In aggregated query without GROUP BY, expression of SELECT list cont
   "QueryType": "SELECT",
   "Original": "select distinct col from user",
   "Instructions": {
-    "OperatorType": "Distinct",
+    "OperatorType": "Aggregate",
+    "Variant": "Ordered",
+    "GroupBy": "(0|1)",
+    "ResultColumns": 1,
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -820,8 +826,8 @@ Gen4 error: In aggregated query without GROUP BY, expression of SELECT list cont
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select col from `user` where 1 != 1",
-        "Query": "select distinct col from `user`",
+        "FieldQuery": "select col, weight_string(col) from `user` where 1 != 1",
+        "Query": "select distinct col, weight_string(col) from `user`",
         "Table": "`user`"
       }
     ]
@@ -1767,14 +1773,16 @@ Gen4 error: In aggregated query without GROUP BY, expression of SELECT list cont
   "QueryType": "SELECT",
   "Original": "select distinct a, count(*) from user group by a",
   "Instructions": {
-    "OperatorType": "Distinct",
+    "OperatorType": "Aggregate",
+    "Variant": "Ordered",
+    "GroupBy": "(0|2), 1",
+    "ResultColumns": 2,
     "Inputs": [
       {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
         "Aggregates": "count(1)",
         "GroupBy": "(0|2)",
-        "ResultColumns": 2,
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -1838,7 +1846,10 @@ Gen4 plan same as above
   "QueryType": "SELECT",
   "Original": "select distinct col1, col2 from user group by col1, col2",
   "Instructions": {
-    "OperatorType": "Distinct",
+    "OperatorType": "Aggregate",
+    "Variant": "Ordered",
+    "GroupBy": "(0|2), (1|3)",
+    "ResultColumns": 2,
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -1847,8 +1858,8 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select col1, col2 from `user` where 1 != 1",
-        "Query": "select distinct col1, col2 from `user`",
+        "FieldQuery": "select col1, col2, weight_string(col1), weight_string(col2) from `user` where 1 != 1",
+        "Query": "select distinct col1, col2, weight_string(col1), weight_string(col2) from `user`",
         "Table": "`user`"
       }
     ]

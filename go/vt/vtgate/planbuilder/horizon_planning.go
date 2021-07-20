@@ -457,3 +457,91 @@ func allLeft(orderExprs []abstract.OrderBy, semTable *semantics.SemTable, lhsTab
 	}
 	return true
 }
+
+func (hp *horizonPlanning) planDistinct() error {
+	if !hp.qp.NeedsDistinct() {
+		return nil
+	}
+	switch p := hp.plan.(type) {
+	case *route:
+		// we always make the underlying query distinct,
+		// and then we might also add a distinct operator on top if it is needed
+		p.Select.MakeDistinct()
+		if !p.isSingleShard() && !selectHasUniqueVindex(hp.vschema, hp.semTable, hp.qp.SelectExprs) {
+			return hp.pushDistinct()
+		}
+		return nil
+	case *joinGen4:
+		return hp.pushDistinct()
+	case *orderedAggregate:
+		eaggr := &engine.OrderedAggregate{}
+		oa := &orderedAggregate{
+			resultsBuilder: resultsBuilder{
+				logicalPlanCommon: newBuilderCommon(hp.plan),
+				weightStrings:     make(map[*resultColumn]int),
+				truncater:         eaggr,
+			},
+			eaggr: eaggr,
+		}
+		for _, sExpr := range hp.qp.SelectExprs {
+			found := false
+			for _, grpParam := range p.eaggr.GroupByKeys {
+				if sqlparser.EqualsExpr(sExpr.Col.Expr, grpParam.Expr) {
+					found = true
+					eaggr.GroupByKeys = append(eaggr.GroupByKeys, grpParam)
+					break
+				}
+			}
+			if found {
+				continue
+			}
+			for _, aggrParam := range p.eaggr.Aggregates {
+				if sqlparser.EqualsExpr(sExpr.Col.Expr, aggrParam.Expr) {
+					found = true
+					eaggr.GroupByKeys = append(eaggr.GroupByKeys, engine.GroupByParams{KeyCol: aggrParam.Col, WeightStringCol: -1})
+					break
+				}
+			}
+			if !found {
+				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unable to plan distinct query as the column is not projected: %s", sqlparser.String(sExpr.Col))
+			}
+		}
+		hp.plan = oa
+		return nil
+	default:
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unknown plan type for DISTINCT %T", hp.plan)
+	}
+}
+
+func (hp *horizonPlanning) pushDistinct() error {
+	eaggr := &engine.OrderedAggregate{}
+	oa := &orderedAggregate{
+		resultsBuilder: resultsBuilder{
+			logicalPlanCommon: newBuilderCommon(hp.plan),
+			weightStrings:     make(map[*resultColumn]int),
+			truncater:         eaggr,
+		},
+		eaggr: eaggr,
+	}
+	for index, sExpr := range hp.qp.SelectExprs {
+		grpParam := engine.GroupByParams{KeyCol: index, WeightStringCol: -1}
+		_, wOffset, added, err := wrapAndPushExpr(sExpr.Col.Expr, sExpr.Col.Expr, hp.plan, hp.semTable)
+		if err != nil {
+			return err
+		}
+		hp.needsTruncation = hp.needsTruncation || added
+		grpParam.WeightStringCol = wOffset
+		eaggr.GroupByKeys = append(eaggr.GroupByKeys, grpParam)
+	}
+	hp.plan = oa
+	return nil
+}
+
+func selectHasUniqueVindex(vschema ContextVSchema, semTable *semantics.SemTable, sel []abstract.SelectExpr) bool {
+	for _, expr := range sel {
+		if exprHasUniqueVindex(vschema, semTable, expr.Col.Expr) {
+			return true
+		}
+	}
+	return false
+}
