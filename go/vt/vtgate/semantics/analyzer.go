@@ -295,7 +295,7 @@ func (a *analyzer) resolveUnQualifiedColumn(current *scope, expr *sqlparser.ColN
 	var tsp *TableSet
 	var typp *querypb.Type
 	for _, tbl := range current.tables {
-		ts, typ, err := DepsFor(expr, a, len(current.tables) == 1, tbl.GetExpr(), tbl.GetColumns(), tbl.Authoritative())
+		ts, typ, err := tbl.DepsFor(expr, a, len(current.tables) == 1)
 		if err != nil {
 			return 0, nil, err
 		}
