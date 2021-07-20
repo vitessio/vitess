@@ -20,6 +20,8 @@ import (
 	"context"
 )
 
+// Authorizer contains a set of rules that determine which actors may take which
+// actions on which resources in which clusters.
 type Authorizer struct {
 	// keyed by resource name
 	policies map[string][]*Rule

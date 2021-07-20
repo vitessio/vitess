@@ -30,11 +30,30 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
+// Authenticator defines the interface vtadmin authentication plugins must
+// implement. Authenticators are installed at the grpc interceptor and http
+// middleware layers.
 type Authenticator interface {
+	// Authenticate returns an Actor given a context. This method is called
+	// from the stream and unary grpc server interceptors, and are passed the
+	// stream and request contexts, respectively.
+	//
+	// Returning an error from the authenticator will fail the request. To
+	// denote an authenticated request, return (nil, nil) instead.
 	Authenticate(ctx context.Context) (*Actor, error)
+	// AuthenticateHTTP returns an actor given an http.Request.
+	//
+	// Returning an error from the authenticator will fail the request. To
+	// denote an authenticated request, return (nil, nil) instead.
 	AuthenticateHTTP(r *http.Request) (*Actor, error)
 }
 
+// AuthenticationStreamInterceptor returns a grpc.StreamServerInterceptor that
+// uses the given Authenticator create an Actor from the stream's context, which
+// is then stored in the stream context for later use.
+//
+// If the authenticator returns an error, the overall streaming rpc returns an
+// UNAUTHENTICATED error.
 func AuthenticationStreamInterceptor(authn Authenticator) grpc.StreamServerInterceptor {
 	return func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 		actor, err := authn.Authenticate(ss.Context())
@@ -49,6 +68,12 @@ func AuthenticationStreamInterceptor(authn Authenticator) grpc.StreamServerInter
 	}
 }
 
+// AuthenticationUnaryInterceptor returns a grpc.UnaryServerInterceptor that
+// uses the given Authenticator create an Actor from the request context, which
+// is then stored in the request context for later use.
+//
+// If the authenticator returns an error, the overall unary rpc returns an
+// UNAUTHENTICATED error.
 func AuthenticationUnaryInterceptor(authn Authenticator) grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
 		actor, err := authn.Authenticate(ctx)
@@ -61,6 +86,8 @@ func AuthenticationUnaryInterceptor(authn Authenticator) grpc.UnaryServerInterce
 	}
 }
 
+// Actor represents the subject in the "subject action resource" of an
+// authorization check. It has a name and many roles.
 type Actor struct {
 	Name  string
 	Roles []string
@@ -68,10 +95,14 @@ type Actor struct {
 
 type actorkey struct{}
 
+// NewContext returns a context with the given actor stored in it. This is used
+// to pass actor information from the authentication middleware and interceptors
+// to the actual vtadmin api methods.
 func NewContext(ctx context.Context, actor *Actor) context.Context {
 	return context.WithValue(ctx, actorkey{}, actor)
 }
 
+// FromContext extracts an actor from the context, if one exists.
 func FromContext(ctx context.Context) (*Actor, bool) {
 	actor, ok := ctx.Value(actorkey{}).(*Actor)
 	if !ok {
@@ -82,11 +113,18 @@ func FromContext(ctx context.Context) (*Actor, bool) {
 }
 
 var (
+	// ErrUnregisteredAuthenticationImpl is returned when an RBAC config
+	// specifies an authenticator name that was not registered.
 	ErrUnregisteredAuthenticationImpl = errors.New("unregistered Authenticator implementation")
 	authenticators                    = map[string]func() Authenticator{}
 	authenticatorsM                   sync.Mutex
 )
 
+// RegisterAuthenticator registers an authenticator implementation by name. It
+// is not safe for concurrent use.
+//
+// Plugin-based authenticators are loaded separately, and need not call this
+// function.
 func RegisterAuthenticator(name string, f func() Authenticator) {
 	if _, ok := authenticators[name]; ok {
 		panic("TODO")

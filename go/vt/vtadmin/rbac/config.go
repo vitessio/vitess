@@ -24,8 +24,12 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 
 	"vitess.io/vitess/go/vt/concurrency"
+	"vitess.io/vitess/go/vt/log"
 )
 
+// Config is the RBAC configuration representation. The public fields are
+// populated by viper during LoadConfig, and the private fields are set during
+// cfg.Reify. A config must be reified before first use.
 type Config struct {
 	Authenticator string
 	Rules         []*struct {
@@ -42,6 +46,13 @@ type Config struct {
 	authorizer    *Authorizer
 }
 
+// LoadConfig reads the file at path into a Config struct, and then reifies
+// the config so its autheticator and authorizer may be used. Errors during
+// loading/parsing, or validation errors during reification are returned to the
+// caller.
+//
+// Any file format supported by viper is supported. Currently this is yaml, json
+// or toml.
 func LoadConfig(path string) (*Config, error) {
 	v := viper.New()
 	v.SetConfigFile(path)
@@ -61,6 +72,11 @@ func LoadConfig(path string) (*Config, error) {
 	return &cfg, nil
 }
 
+// Reify makes a config that was loaded from a file usable, by validating the
+// rules and constructing its (optional) authenticator and authorizer. A config
+// must be reified before first use. Calling Reify multiple times has no effect
+// after the first call. Reify is called by LoadConfig, so a config loaded that
+// way does not need to be manually reified.
 func (c *Config) Reify() error {
 	if c.reified {
 		return nil
@@ -96,11 +112,14 @@ func (c *Config) Reify() error {
 			subjects: subjects,
 			clusters: clusters,
 		})
+		byResource[rule.Resource] = resourceRules
 	}
 
 	if rec.HasErrors() {
 		return rec.Error()
 	}
+
+	log.Infof("[rbac]: loaded authorizer with %d rules", len(c.Rules))
 
 	c.cfg = byResource
 	c.authorizer = &Authorizer{
@@ -124,7 +143,7 @@ func (c *Config) Reify() error {
 
 		c.authenticator = factory()
 	default:
-		// TODO: maybe log a warning?
+		log.Info("[rbac]: no authenticator implementation specified")
 		c.authenticator = nil // Technically a no-op, but being super explicit about it.
 	}
 
@@ -132,10 +151,15 @@ func (c *Config) Reify() error {
 	return nil
 }
 
+// GetAuthenticator returns the Authenticator implementation specified by the
+// config. It returns nil if the Authenticator string field is the empty string,
+// or if a call to Reify has not been made.
 func (c *Config) GetAuthenticator() Authenticator {
 	return c.authenticator
 }
 
+// GetAuthorizer returns the Authorizer using the rules specified in the config.
+// It returns nil if a call to Reify has not been made.
 func (c *Config) GetAuthorizer() *Authorizer {
 	return c.authorizer
 }
