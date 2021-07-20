@@ -2033,6 +2033,10 @@ check_constraint_definition:
   {
     $$ = &ConstraintDefinition{Name: string($2), Details: $3}
   }
+| CONSTRAINT column_name_safe_reserved_keyword check_constraint_info
+    {
+      $$ = &ConstraintDefinition{Name: string($2), Details: $3}
+    }
 | CONSTRAINT check_constraint_info
   {
     $$ = &ConstraintDefinition{Details: $2}
@@ -3513,6 +3517,10 @@ value_expression:
   {
     $$ = $1
   }
+| column_name_safe_reserved_keyword
+  {
+    $$ = &ColName{Name: NewColIdent(string($1))}
+  }
 | boolean_value
   {
     $$ = $1
@@ -4192,10 +4200,6 @@ group_by:
   {
     $$ = $1
   }
-| column_name_safe_reserved_keyword
-  {
-    $$ = &ColName{Name: NewColIdent(string($1))}
-  }
 
 having_opt:
   {
@@ -4210,10 +4214,6 @@ having:
   expression
   {
     $$ = $1
-  }
-| column_name_safe_reserved_keyword
-  {
-    $$ = &ColName{Name: NewColIdent(string($1))}
   }
 
 order_by_opt:
@@ -4239,10 +4239,6 @@ order:
   expression asc_desc_opt
   {
     $$ = &Order{Expr: $1, Direction: $2}
-  }
-| column_name_safe_reserved_keyword asc_desc_opt
-  {
-    $$ = &Order{Expr: &ColName{Name: NewColIdent(string($1))}, Direction: $2}
   }
 
 asc_desc_opt:
@@ -4914,6 +4910,7 @@ reserved_keyword:
 | WHERE
 | WINDOW
 | WITH
+| STATUS
 
 /*
   These are non-reserved Vitess, because they don't cause conflicts in the grammar.
@@ -5099,7 +5096,6 @@ non_reserved_keyword:
 | SRID
 | START
 | STARTING
-| STATUS
 | STREAM
 | SUBCLASS_ORIGIN
 | TABLES
@@ -5159,6 +5155,7 @@ column_name_safe_reserved_keyword:
 | PERCENT_RANK
 | RANK
 | ROW_NUMBER
+| STATUS
 | STD
 | STDDEV
 | STDDEV_POP
