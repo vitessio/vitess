@@ -474,43 +474,47 @@ func (hp *horizonPlanning) planDistinct() error {
 	case *joinGen4:
 		return hp.pushDistinct()
 	case *orderedAggregate:
-		eaggr := &engine.OrderedAggregate{}
-		oa := &orderedAggregate{
-			resultsBuilder: resultsBuilder{
-				logicalPlanCommon: newBuilderCommon(hp.plan),
-				weightStrings:     make(map[*resultColumn]int),
-				truncater:         eaggr,
-			},
-			eaggr: eaggr,
-		}
-		for _, sExpr := range hp.qp.SelectExprs {
-			found := false
-			for _, grpParam := range p.eaggr.GroupByKeys {
-				if sqlparser.EqualsExpr(sExpr.Col.Expr, grpParam.Expr) {
-					found = true
-					eaggr.GroupByKeys = append(eaggr.GroupByKeys, grpParam)
-					break
-				}
-			}
-			if found {
-				continue
-			}
-			for _, aggrParam := range p.eaggr.Aggregates {
-				if sqlparser.EqualsExpr(sExpr.Col.Expr, aggrParam.Expr) {
-					found = true
-					eaggr.GroupByKeys = append(eaggr.GroupByKeys, engine.GroupByParams{KeyCol: aggrParam.Col, WeightStringCol: -1})
-					break
-				}
-			}
-			if !found {
-				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unable to plan distinct query as the column is not projected: %s", sqlparser.String(sExpr.Col))
-			}
-		}
-		hp.plan = oa
-		return nil
+		return hp.planDistinctOA(p)
 	default:
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unknown plan type for DISTINCT %T", hp.plan)
 	}
+}
+
+func (hp *horizonPlanning) planDistinctOA(currPlan *orderedAggregate) error {
+	eaggr := &engine.OrderedAggregate{}
+	oa := &orderedAggregate{
+		resultsBuilder: resultsBuilder{
+			logicalPlanCommon: newBuilderCommon(hp.plan),
+			weightStrings:     make(map[*resultColumn]int),
+			truncater:         eaggr,
+		},
+		eaggr: eaggr,
+	}
+	for _, sExpr := range hp.qp.SelectExprs {
+		found := false
+		for _, grpParam := range currPlan.eaggr.GroupByKeys {
+			if sqlparser.EqualsExpr(sExpr.Col.Expr, grpParam.Expr) {
+				found = true
+				eaggr.GroupByKeys = append(eaggr.GroupByKeys, grpParam)
+				break
+			}
+		}
+		if found {
+			continue
+		}
+		for _, aggrParam := range currPlan.eaggr.Aggregates {
+			if sqlparser.EqualsExpr(sExpr.Col.Expr, aggrParam.Expr) {
+				found = true
+				eaggr.GroupByKeys = append(eaggr.GroupByKeys, engine.GroupByParams{KeyCol: aggrParam.Col, WeightStringCol: -1})
+				break
+			}
+		}
+		if !found {
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unable to plan distinct query as the column is not projected: %s", sqlparser.String(sExpr.Col))
+		}
+	}
+	hp.plan = oa
+	return nil
 }
 
 func (hp *horizonPlanning) pushDistinct() error {
