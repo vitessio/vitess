@@ -61,7 +61,7 @@ func getOperatorFromTableExpr(tableExpr sqlparser.TableExpr, semTable *semantics
 			if err != nil {
 				return nil, err
 			}
-			return &Derived{inner: inner, sel: sel}, nil
+			return &Derived{alias: tableExpr.As.String(), inner: inner, sel: sel}, nil
 		default:
 			return nil, semantics.Gen4NotSupportedF("%T", tbl)
 		}
