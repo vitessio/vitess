@@ -405,10 +405,10 @@ func (s *server) DemoteMaster(ctx context.Context, request *tabletmanagerdatapb.
 	defer s.tm.HandleRPCPanic(ctx, "DemoteMaster", request, response, true /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response = &tabletmanagerdatapb.DemoteMasterResponse{}
-	masterStatus, err := s.tm.DemoteMaster(ctx)
+	status, err := s.tm.DemoteMaster(ctx)
 	if err == nil {
-		response.DeprecatedPosition = masterStatus.Position //nolint
-		response.MasterStatus = masterStatus
+		response.DeprecatedPosition = status.Position //nolint
+		response.PrimaryStatus = status
 	}
 	return response, err
 }
