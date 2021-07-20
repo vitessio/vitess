@@ -1811,7 +1811,7 @@ Gen4 plan same as above
   }
 }
 
-# merge subqueries with single-shard routes
+# merge derived tables with single-shard routes
 "select u.col, e.col from (select col from user where id = 5) as u join (select col from user_extra where user_id = 5) as e"
 {
   "QueryType": "SELECT",
@@ -1947,7 +1947,7 @@ Gen4 plan same as above
 }
 Gen4 plan same as above
 
-# wire-up on join with cross-shard subquery
+# wire-up on join with cross-shard derived table
 "select t.col1 from (select user.id, user.col1 from user join user_extra) as t join unsharded on unsharded.col1 = t.col1 and unsharded.id = t.id"
 {
   "QueryType": "SELECT",
@@ -2012,7 +2012,7 @@ Gen4 plan same as above
   }
 }
 
-# wire-up on within cross-shard subquery
+# wire-up on within cross-shard derived table
 "select t.id from (select user.id, user.col1 from user join user_extra on user_extra.col = user.col) as t"
 {
   "QueryType": "SELECT",
@@ -2057,7 +2057,7 @@ Gen4 plan same as above
   }
 }
 
-# Join with cross-shard subquery on rhs
+# Join with cross-shard derived table on rhs
 "select t.col1 from unsharded_a ua join (select user.id, user.col1 from user join user_extra) as t"
 {
   "QueryType": "SELECT",
@@ -2532,7 +2532,7 @@ Gen4 plan same as above
   }
 }
 
-# subquery with join primitive (FROM)
+# derived table with join primitive (FROM)
 "select id, t.id from (select user.id from user join user_extra) as t"
 {
   "QueryType": "SELECT",
