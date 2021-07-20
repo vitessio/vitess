@@ -44,7 +44,7 @@ var (
 	clusterInstance         *cluster.LocalProcessCluster
 	vtParams                mysql.ConnParams
 	evaluatedMysqlParams    *mysql.ConnParams
-	ddlStrategy             = "online -skip-topo -vreplication-test-suite"
+	ddlStrategy             = "online -vreplication-test-suite"
 	waitForMigrationTimeout = 20 * time.Second
 
 	hostname              = "localhost"

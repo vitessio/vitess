@@ -80,7 +80,14 @@ func newBuildSelectPlan(sel *sqlparser.Select, vschema ContextVSchema) (engine.P
 		return nil, err
 	}
 
-	plan, err = planHorizon(sel, plan, semTable)
+	hp := horizonPlanning{
+		sel:      sel,
+		plan:     plan,
+		semTable: semTable,
+		vschema:  vschema,
+	}
+
+	plan, err = hp.planHorizon()
 	if err != nil {
 		return nil, err
 	}
@@ -154,55 +161,153 @@ func planLimit(limit *sqlparser.Limit, plan logicalPlan) (logicalPlan, error) {
 	return lPlan, nil
 }
 
-func planHorizon(sel *sqlparser.Select, plan logicalPlan, semTable *semantics.SemTable) (logicalPlan, error) {
-	rb, ok := plan.(*route)
-	if !ok && semTable.ProjectionErr != nil {
-		return nil, semTable.ProjectionErr
+type horizonPlanning struct {
+	sel             *sqlparser.Select
+	plan            logicalPlan
+	semTable        *semantics.SemTable
+	vschema         ContextVSchema
+	qp              *abstract.QueryProjection
+	needsTruncation bool
+	vtgateGrouping  bool
+}
+
+func (hp horizonPlanning) planHorizon() (logicalPlan, error) {
+	rb, ok := hp.plan.(*route)
+	if !ok && hp.semTable.ProjectionErr != nil {
+		return nil, hp.semTable.ProjectionErr
 	}
 
 	if ok && rb.isSingleShard() {
-		createSingleShardRoutePlan(sel, rb)
-		return plan, nil
+		createSingleShardRoutePlan(hp.sel, rb)
+		return hp.plan, nil
 	}
 
-	if err := checkUnsupportedConstructs(sel); err != nil {
-		return nil, err
-	}
-
-	qp, err := createQPFromSelect(sel)
+	qp2, err := abstract.CreateQPFromSelect(hp.sel)
 	if err != nil {
 		return nil, err
 	}
-	for _, e := range qp.selectExprs {
-		if _, _, err := pushProjection(e, plan, semTable, true); err != nil {
+
+	hp.qp = qp2
+
+	if err := checkUnsupportedConstructs(hp.sel); err != nil {
+		return nil, err
+	}
+
+	if hp.qp.NeedsAggregation() {
+		err = hp.planAggregations()
+		if err != nil {
 			return nil, err
 		}
-	}
-
-	for _, expr := range qp.aggrExprs {
-		funcExpr, ok := expr.Expr.(*sqlparser.FuncExpr)
-		if !ok {
-			return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "expected an aggregation here")
-		}
-		if funcExpr.Distinct {
-			return nil, semantics.Gen4NotSupportedF("distinct aggregation")
+	} else {
+		for _, e := range hp.qp.SelectExprs {
+			if _, _, err := pushProjection(e.Col, hp.plan, hp.semTable, true, false); err != nil {
+				return nil, err
+			}
 		}
 	}
 
-	if len(qp.aggrExprs) > 0 {
-		plan, err = planAggregations(qp, plan, semTable)
+	if len(hp.qp.OrderExprs) > 0 {
+		hp.plan, err = hp.planOrderBy(hp.qp.OrderExprs, hp.plan)
 		if err != nil {
 			return nil, err
 		}
 	}
-	if len(sel.OrderBy) > 0 {
-		plan, err = planOrderBy(qp, qp.orderExprs, plan, semTable)
+
+	if hp.qp.CanPushDownSorting && hp.vtgateGrouping {
+		hp.plan, err = hp.planOrderByUsingGroupBy()
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	return plan, nil
+	err = hp.truncateColumnsIfNeeded()
+	if err != nil {
+		return nil, err
+	}
+
+	if hp.qp.NeedsDistinct() {
+		hp.plan, err = pushDistinct(hp.plan, hp.semTable, hp.vschema, hp.qp)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return hp.plan, nil
+}
+
+func (hp horizonPlanning) truncateColumnsIfNeeded() error {
+	if !hp.needsTruncation {
+		return nil
+	}
+
+	switch p := hp.plan.(type) {
+	case *route:
+		p.eroute.SetTruncateColumnCount(hp.sel.GetColumnCount())
+	case *orderedAggregate:
+		p.eaggr.SetTruncateColumnCount(hp.sel.GetColumnCount())
+	case *memorySort:
+		p.truncater.SetTruncateColumnCount(hp.sel.GetColumnCount())
+	default:
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "plan type not known for column truncation: %T", hp.plan)
+	}
+
+	return nil
+}
+
+func pushDistinct(plan logicalPlan, semTable *semantics.SemTable, vschema ContextVSchema, qp *abstract.QueryProjection) (logicalPlan, error) {
+	switch p := plan.(type) {
+	case *route:
+		// we always make the underlying query distinct,
+		// and then we might also add a distinct operator on top if it is needed
+		p.Select.MakeDistinct()
+		if !p.isSingleShard() && !selectHasUniqueVindex(vschema, semTable, qp.SelectExprs) {
+			plan = newDistinct(plan)
+		}
+		return plan, nil
+	case *orderedAggregate, *joinGen4:
+		return newDistinct(plan), nil
+
+	default:
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unknown plan type for DISTINCT %T", plan)
+	}
+}
+
+func selectHasUniqueVindex(vschema ContextVSchema, semTable *semantics.SemTable, sel []abstract.SelectExpr) bool {
+	for _, expr := range sel {
+		if exprHasUniqueVindex(vschema, semTable, expr.Col.Expr) {
+			return true
+		}
+	}
+	return false
+}
+
+func exprHasUniqueVindex(vschema ContextVSchema, semTable *semantics.SemTable, expr sqlparser.Expr) bool {
+	col, isCol := expr.(*sqlparser.ColName)
+	if !isCol {
+		return false
+	}
+	ts := semTable.Dependencies(expr)
+	tableInfo, err := semTable.TableInfoFor(ts)
+	if err != nil {
+		return false
+	}
+	tableName, err := tableInfo.Name()
+	if err != nil {
+		return false
+	}
+	vschemaTable, _, _, _, _, err := vschema.FindTableOrVindex(tableName)
+	if err != nil {
+		return false
+	}
+	for _, vindex := range vschemaTable.ColumnVindexes {
+		if len(vindex.Columns) > 1 || !vindex.Vindex.IsUnique() {
+			return false
+		}
+		if col.Name.Equal(vindex.Columns[0]) {
+			return true
+		}
+	}
+	return false
 }
 
 func createSingleShardRoutePlan(sel *sqlparser.Select, rb *route) {
@@ -220,12 +325,6 @@ func createSingleShardRoutePlan(sel *sqlparser.Select, rb *route) {
 }
 
 func checkUnsupportedConstructs(sel *sqlparser.Select) error {
-	if sel.Distinct {
-		return semantics.Gen4NotSupportedF("DISTINCT")
-	}
-	if sel.GroupBy != nil {
-		return semantics.Gen4NotSupportedF("GROUP BY")
-	}
 	if sel.Having != nil {
 		return semantics.Gen4NotSupportedF("HAVING")
 	}
@@ -464,6 +563,26 @@ func removeAt(plans []joinTree, idx int) []joinTree {
 }
 
 func createRoutePlan(table *abstract.QueryTable, solves semantics.TableSet, vschema ContextVSchema) (*routePlan, error) {
+	if table.IsInfSchema {
+		defaultKeyspace, err := vschema.DefaultKeyspace()
+		if err != nil {
+			return nil, err
+		}
+		return &routePlan{
+			routeOpCode: engine.SelectDBA,
+			solved:      solves,
+			// TODO: find keyspace to route using the predicates as in v3
+			keyspace: defaultKeyspace,
+			tables: []relation{&routeTable{
+				qtable: table,
+				vtable: &vindexes.Table{
+					Name:     table.Table.Name,
+					Keyspace: defaultKeyspace,
+				},
+			}},
+			predicates: table.Predicates,
+		}, nil
+	}
 	vschemaTable, _, _, _, _, err := vschema.FindTableOrVindex(table.Table)
 	if err != nil {
 		return nil, err
@@ -603,6 +722,9 @@ func tryMerge(a, b joinTree, joinPredicates []sqlparser.Expr, semTable *semantic
 			return nil
 		}
 	case engine.SelectScatter, engine.SelectEqualUnique:
+		if bRoute.routeOpCode == engine.SelectReference {
+			return r
+		}
 		if len(joinPredicates) == 0 {
 			// If we are doing two Scatters, we have to make sure that the
 			// joins are on the correct vindex to allow them to be merged
@@ -615,6 +737,10 @@ func tryMerge(a, b joinTree, joinPredicates []sqlparser.Expr, semTable *semantic
 			return nil
 		}
 		r.pickBestAvailableVindex()
+	case engine.SelectReference:
+		if bRoute.routeOpCode != engine.SelectReference {
+			return nil
+		}
 	}
 	return r
 }
@@ -680,7 +806,7 @@ func createRoutePlanForOuter(aRoute, bRoute *routePlan, semTable *semantics.SemT
 		aTbl, bTbl, newTables := findTables(deps, tables)
 		tables = newTables
 		if aTbl != nil && bTbl != nil {
-			tables = append(tables, &leJoin{
+			tables = append(tables, &joinTables{
 				lhs:  aTbl,
 				rhs:  bTbl,
 				pred: predicate,

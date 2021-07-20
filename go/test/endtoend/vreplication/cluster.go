@@ -277,7 +277,7 @@ func (vc *VitessCluster) AddShards(t testing.TB, cells []*Cell, keyspace *Keyspa
 	arrNames := strings.Split(names, ",")
 	log.Infof("Addshards got %d shards with %+v", len(arrNames), arrNames)
 	isSharded := len(arrNames) > 1
-	masterTabletUID := 0
+	primaryTabletUID := 0
 	for ind, shardName := range arrNames {
 		tabletID := tabletIDBase + ind*100
 		tabletIndex := 0
@@ -295,16 +295,16 @@ func (vc *VitessCluster) AddShards(t testing.TB, cells []*Cell, keyspace *Keyspa
 			dbProcesses := make([]*exec.Cmd, 0)
 			tablets := make([]*Tablet, 0)
 			if i == 0 {
-				// only add master tablet for first cell, so first time CreateShard is called
-				log.Infof("Adding Master tablet")
-				master, proc, err := vc.AddTablet(t, cell, keyspace, shard, "replica", tabletID+tabletIndex)
+				// only add primary tablet for first cell, so first time CreateShard is called
+				log.Infof("Adding Primary tablet")
+				primary, proc, err := vc.AddTablet(t, cell, keyspace, shard, "replica", tabletID+tabletIndex)
 				require.NoError(t, err)
-				require.NotNil(t, master)
+				require.NotNil(t, primary)
 				tabletIndex++
-				master.Vttablet.VreplicationTabletType = "MASTER"
-				tablets = append(tablets, master)
+				primary.Vttablet.VreplicationTabletType = "MASTER"
+				tablets = append(tablets, primary)
 				dbProcesses = append(dbProcesses, proc)
-				masterTabletUID = master.Vttablet.TabletUID
+				primaryTabletUID = primary.Vttablet.TabletUID
 			}
 
 			for i := 0; i < numReplicas; i++ {
@@ -344,9 +344,9 @@ func (vc *VitessCluster) AddShards(t testing.TB, cells []*Cell, keyspace *Keyspa
 				}
 			}
 		}
-		require.NotEqual(t, 0, masterTabletUID, "Should have created a master tablet")
-		log.Infof("InitShardMaster for %d", masterTabletUID)
-		require.NoError(t, vc.VtctlClient.InitShardMaster(keyspace.Name, shardName, cells[0].Name, masterTabletUID))
+		require.NotEqual(t, 0, primaryTabletUID, "Should have created a primary tablet")
+		log.Infof("InitShardPrimary for %d", primaryTabletUID)
+		require.NoError(t, vc.VtctlClient.InitShardPrimary(keyspace.Name, shardName, cells[0].Name, primaryTabletUID))
 		log.Infof("Finished creating shard %s", shard.Name)
 	}
 	return nil

@@ -45,7 +45,7 @@ var (
 var (
 	clusterInstance *cluster.LocalProcessCluster
 
-	master  *cluster.Vttablet
+	primary *cluster.Vttablet
 	replica *cluster.Vttablet
 
 	cell            = "zone1"
@@ -110,7 +110,7 @@ func TestVaultAuth(t *testing.T) {
 	defer clusterInstance.Teardown()
 
 	// start Vault server
-	vs := startVaultServer(t, master)
+	vs := startVaultServer(t)
 	defer vs.stop()
 
 	// Wait for Vault server to come up
@@ -137,7 +137,7 @@ func TestVaultAuth(t *testing.T) {
 	initializeClusterLate(t)
 
 	// Create a table
-	_, err := master.VttabletProcess.QueryTablet(createTable, keyspaceName, true)
+	_, err := primary.VttabletProcess.QueryTablet(createTable, keyspaceName, true)
 	require.NoError(t, err)
 
 	// This tests the vtgate Vault auth & indirectly vttablet Vault auth too
@@ -155,7 +155,7 @@ func TestVaultAuth(t *testing.T) {
 	require.True(t, bytes.Contains(logContents, []byte(tokenRenewalString)))
 }
 
-func startVaultServer(t *testing.T, masterTablet *cluster.Vttablet) *VaultServer {
+func startVaultServer(t *testing.T) *VaultServer {
 	vs := &VaultServer{
 		address: hostname,
 		port1:   clusterInstance.GetAndReservePort(),
@@ -234,12 +234,12 @@ func initializeClusterLate(t *testing.T) {
 		Name: shardName,
 	}
 
-	master = clusterInstance.NewVttabletInstance("replica", 0, "")
+	primary = clusterInstance.NewVttabletInstance("replica", 0, "")
 	// We don't really need the replica to test this feature
 	//   but keeping it in to excercise the vt_repl user/password path
 	replica = clusterInstance.NewVttabletInstance("replica", 0, "")
 
-	shard.Vttablets = []*cluster.Vttablet{master, replica}
+	shard.Vttablets = []*cluster.Vttablet{primary, replica}
 
 	clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, commonTabletArg...)
 	clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, vaultTabletArg...)
@@ -264,7 +264,7 @@ func initializeClusterLate(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	for _, tablet := range []*cluster.Vttablet{master, replica} {
+	for _, tablet := range []*cluster.Vttablet{primary, replica} {
 		for _, user := range mysqlUsers {
 			query := fmt.Sprintf("ALTER USER '%s'@'%s' IDENTIFIED BY '%s';", user, hostname, mysqlPassword)
 			_, err = tablet.VttabletProcess.QueryTablet(query, keyspace.Name, false)
@@ -288,7 +288,7 @@ func initializeClusterLate(t *testing.T) {
 		tablet.MysqlctlProcess.ExtraArgs = append(tablet.MysqlctlProcess.ExtraArgs, mysqlctlArg...)
 	}
 
-	err = clusterInstance.VtctlclientProcess.InitShardMaster(keyspaceName, shard.Name, cell, master.TabletUID)
+	err = clusterInstance.VtctlclientProcess.InitShardPrimary(keyspaceName, shard.Name, cell, primary.TabletUID)
 	require.NoError(t, err)
 
 	// Start vtgate

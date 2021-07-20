@@ -46,7 +46,7 @@ type (
 		tableNames() []string
 	}
 
-	leJoin struct {
+	joinTables struct {
 		lhs, rhs relation
 		pred     sqlparser.Expr
 	}
@@ -128,19 +128,25 @@ type (
 var _ joinTree = (*routePlan)(nil)
 var _ joinTree = (*joinPlan)(nil)
 var _ relation = (*routeTable)(nil)
-var _ relation = (*leJoin)(nil)
+var _ relation = (*joinTables)(nil)
 var _ relation = (parenTables)(nil)
 
 func (rp *routeTable) tableID() semantics.TableSet { return rp.qtable.TableID }
 
-func (rp *leJoin) tableID() semantics.TableSet { return rp.lhs.tableID().Merge(rp.rhs.tableID()) }
+func (rp *joinTables) tableID() semantics.TableSet { return rp.lhs.tableID().Merge(rp.rhs.tableID()) }
 
-func (rp *leJoin) tableNames() []string {
+func (rp *joinTables) tableNames() []string {
 	return append(rp.lhs.tableNames(), rp.rhs.tableNames()...)
 }
 
 func (rp *routeTable) tableNames() []string {
-	return []string{sqlparser.String(rp.qtable.Table.Name)}
+	var name string
+	if rp.qtable.IsInfSchema {
+		name = sqlparser.String(rp.qtable.Table)
+	} else {
+		name = sqlparser.String(rp.qtable.Table.Name)
+	}
+	return []string{name}
 }
 
 func (p parenTables) tableNames() []string {
@@ -175,7 +181,7 @@ func visitTables(r relation, f func(tbl *routeTable) error) error {
 			}
 		}
 		return nil
-	case *leJoin:
+	case *joinTables:
 		err := visitTables(r.lhs, f)
 		if err != nil {
 			return err

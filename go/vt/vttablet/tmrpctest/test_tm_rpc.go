@@ -705,13 +705,13 @@ func tmRPCTestExecuteFetchPanic(ctx context.Context, t *testing.T, client tmclie
 //
 
 var testReplicationStatus = &replicationdatapb.Status{
-	Position:            "MariaDB/1-345-789",
-	IoThreadRunning:     true,
-	SqlThreadRunning:    true,
-	SecondsBehindMaster: 654,
-	MasterHost:          "master.host",
-	MasterPort:          3366,
-	MasterConnectRetry:  12,
+	Position:              "MariaDB/1-345-789",
+	IoThreadRunning:       true,
+	SqlThreadRunning:      true,
+	ReplicationLagSeconds: 654,
+	SourceHost:            "master.host",
+	SourcePort:            3366,
+	ConnectRetry:          12,
 }
 
 var testMasterStatus = &replicationdatapb.MasterStatus{Position: "MariaDB/1-345-789"}

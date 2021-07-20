@@ -15,14 +15,14 @@ limitations under the License.
 */
 
 /*
-Test the vtgate master buffer.
+Test the vtgate buffering.
 
-During a master failover, vtgate should automatically buffer (stall) requests
+During a failover, vtgate should automatically buffer (stall) requests
 for a configured time and retry them after the failover is over.
 
 The test reproduces such a scenario as follows:
 - run two threads, the first thread continuously executes a critical read and the second executes a write (UPDATE)
-- vtctl PlannedReparentShard runs a master failover
+- vtctl PlannedReparentShard runs a failover
 - both threads should not see any error during the failover
 */
 
@@ -70,7 +70,7 @@ var (
 const (
 	criticalReadRowID          = 1
 	updateRowID                = 2
-	demoteMasterQuery          = "SET GLOBAL read_only = ON;FLUSH TABLES WITH READ LOCK;UNLOCK TABLES;"
+	demoteQuery                = "SET GLOBAL read_only = ON;FLUSH TABLES WITH READ LOCK;UNLOCK TABLES;"
 	disableSemiSyncMasterQuery = "SET GLOBAL rpl_semi_sync_master_enabled = 0"
 	enableSemiSyncMasterQuery  = "SET GLOBAL rpl_semi_sync_master_enabled = 1"
 	promoteQuery               = "STOP SLAVE;RESET SLAVE ALL;SET GLOBAL read_only = OFF;"
@@ -362,7 +362,7 @@ func testBufferBase(t *testing.T, isExternalParent bool, useReservedConn bool) {
 	require.Nil(t, err)
 	label := fmt.Sprintf("%s.%s", keyspaceUnshardedName, "0")
 	inFlightMax := 0
-	masterPromotedCount := 0
+	promotedCount := 0
 	durationMs := 0
 	bufferingStops := 0
 	if resp.StatusCode == 200 {
@@ -373,7 +373,7 @@ func testBufferBase(t *testing.T, isExternalParent bool, useReservedConn bool) {
 			panic(err)
 		}
 		inFlightMax = getVarFromVtgate(t, label, "BufferLastRequestsInFlightMax", resultMap)
-		masterPromotedCount = getVarFromVtgate(t, label, "HealthcheckMasterPromoted", resultMap)
+		promotedCount = getVarFromVtgate(t, label, "HealthcheckMasterPromoted", resultMap)
 		durationMs = getVarFromVtgate(t, label, "BufferFailoverDurationSumMs", resultMap)
 		bufferingStops = getVarFromVtgate(t, "NewMasterSeen", "BufferStops", resultMap)
 	}
@@ -386,13 +386,13 @@ func testBufferBase(t *testing.T, isExternalParent bool, useReservedConn bool) {
 	}
 
 	// There was a failover and the HealthCheck module must have seen it.
-	if masterPromotedCount > 0 {
-		assert.Greater(t, masterPromotedCount, 0)
+	if promotedCount > 0 {
+		assert.Greater(t, promotedCount, 0)
 	}
 
 	if durationMs > 0 {
 		// Number of buffering stops must be equal to the number of seen failovers.
-		assert.Equal(t, masterPromotedCount, bufferingStops)
+		assert.Equal(t, promotedCount, bufferingStops)
 	}
 	wg.Wait()
 }
@@ -417,18 +417,18 @@ func getVarFromVtgate(t *testing.T, label string, param string, resultMap map[st
 func externalReparenting(t *testing.T, clusterInstance *cluster.LocalProcessCluster) error {
 	start := time.Now()
 
-	// Demote master Query
-	master := clusterInstance.Keyspaces[0].Shards[0].Vttablets[0]
+	// Demote Query
+	primary := clusterInstance.Keyspaces[0].Shards[0].Vttablets[0]
 	replica := clusterInstance.Keyspaces[0].Shards[0].Vttablets[1]
-	oldMaster := master
-	newMaster := replica
-	master.VttabletProcess.QueryTablet(demoteMasterQuery, keyspaceUnshardedName, true)
-	if master.VttabletProcess.EnableSemiSync {
-		master.VttabletProcess.QueryTablet(disableSemiSyncMasterQuery, keyspaceUnshardedName, true)
+	oldPrimary := primary
+	newPrimary := replica
+	primary.VttabletProcess.QueryTablet(demoteQuery, keyspaceUnshardedName, true)
+	if primary.VttabletProcess.EnableSemiSync {
+		primary.VttabletProcess.QueryTablet(disableSemiSyncMasterQuery, keyspaceUnshardedName, true)
 	}
 
-	// Wait for replica to catch up to master.
-	cluster.WaitForReplicationPos(t, master, replica, "localhost", 60.0)
+	// Wait for replica to catch up to primary.
+	cluster.WaitForReplicationPos(t, primary, replica, "localhost", 60.0)
 
 	duration := time.Since(start)
 	minUnavailabilityInS := 1.0
@@ -438,22 +438,22 @@ func externalReparenting(t *testing.T, clusterInstance *cluster.LocalProcessClus
 		time.Sleep(time.Duration(w) * time.Second)
 	}
 
-	// Promote replica to new master.
+	// Promote replica to new primary.
 	replica.VttabletProcess.QueryTablet(promoteQuery, keyspaceUnshardedName, true)
 
 	if replica.VttabletProcess.EnableSemiSync {
 		replica.VttabletProcess.QueryTablet(enableSemiSyncMasterQuery, keyspaceUnshardedName, true)
 	}
 
-	// Configure old master to replicate from new master.
+	// Configure old primary to replicate from new primary.
 
-	_, gtID := cluster.GetMasterPosition(t, *newMaster, hostname)
+	_, gtID := cluster.GetPrimaryPosition(t, *newPrimary, hostname)
 
 	// Use 'localhost' as hostname because Travis CI worker hostnames
 	// are too long for MySQL replication.
-	changeMasterCommands := fmt.Sprintf("RESET SLAVE;SET GLOBAL gtid_slave_pos = '%s';CHANGE MASTER TO MASTER_HOST='%s', MASTER_PORT=%d ,MASTER_USER='vt_repl', MASTER_USE_GTID = slave_pos;START SLAVE;", gtID, "localhost", newMaster.MySQLPort)
-	oldMaster.VttabletProcess.QueryTablet(changeMasterCommands, keyspaceUnshardedName, true)
+	changeMasterCommands := fmt.Sprintf("RESET SLAVE;SET GLOBAL gtid_slave_pos = '%s';CHANGE MASTER TO MASTER_HOST='%s', MASTER_PORT=%d ,MASTER_USER='vt_repl', MASTER_USE_GTID = slave_pos;START SLAVE;", gtID, "localhost", newPrimary.MySQLPort)
+	oldPrimary.VttabletProcess.QueryTablet(changeMasterCommands, keyspaceUnshardedName, true)
 
-	// Notify the new vttablet master about the reparent.
-	return clusterInstance.VtctlclientProcess.ExecuteCommand("TabletExternallyReparented", newMaster.Alias)
+	// Notify the new vttablet primary about the reparent.
+	return clusterInstance.VtctlclientProcess.ExecuteCommand("TabletExternallyReparented", newPrimary.Alias)
 }

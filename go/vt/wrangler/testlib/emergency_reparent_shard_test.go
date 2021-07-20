@@ -66,7 +66,7 @@ func TestEmergencyReparentShard(t *testing.T) {
 		},
 	}
 	currentMasterFilePosition, _ := mysql.ParseFilePosGTIDSet("mariadb-bin.000010:456")
-	oldMaster.FakeMysqlDaemon.CurrentMasterFilePosition = mysql.Position{
+	oldMaster.FakeMysqlDaemon.CurrentSourceFilePosition = mysql.Position{
 		GTIDSet: currentMasterFilePosition,
 	}
 
@@ -83,10 +83,10 @@ func TestEmergencyReparentShard(t *testing.T) {
 		},
 	}
 	newMasterRelayLogPos, _ := mysql.ParseFilePosGTIDSet("relay-bin.000004:456")
-	newMaster.FakeMysqlDaemon.CurrentMasterFilePosition = mysql.Position{
+	newMaster.FakeMysqlDaemon.CurrentSourceFilePosition = mysql.Position{
 		GTIDSet: newMasterRelayLogPos,
 	}
-	newMaster.FakeMysqlDaemon.WaitPrimaryPosition = newMaster.FakeMysqlDaemon.CurrentMasterFilePosition
+	newMaster.FakeMysqlDaemon.WaitPrimaryPosition = newMaster.FakeMysqlDaemon.CurrentSourceFilePosition
 	newMaster.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"STOP SLAVE IO_THREAD",
 		"CREATE DATABASE IF NOT EXISTS _vt",
@@ -128,10 +128,10 @@ func TestEmergencyReparentShard(t *testing.T) {
 		},
 	}
 	goodReplica1RelayLogPos, _ := mysql.ParseFilePosGTIDSet("relay-bin.000004:455")
-	goodReplica1.FakeMysqlDaemon.CurrentMasterFilePosition = mysql.Position{
+	goodReplica1.FakeMysqlDaemon.CurrentSourceFilePosition = mysql.Position{
 		GTIDSet: goodReplica1RelayLogPos,
 	}
-	goodReplica1.FakeMysqlDaemon.WaitPrimaryPosition = goodReplica1.FakeMysqlDaemon.CurrentMasterFilePosition
+	goodReplica1.FakeMysqlDaemon.WaitPrimaryPosition = goodReplica1.FakeMysqlDaemon.CurrentSourceFilePosition
 	goodReplica1.FakeMysqlDaemon.SetReplicationSourceInput = topoproto.MysqlAddr(newMaster.Tablet)
 	goodReplica1.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"STOP SLAVE IO_THREAD",
@@ -155,10 +155,10 @@ func TestEmergencyReparentShard(t *testing.T) {
 		},
 	}
 	goodReplica2RelayLogPos, _ := mysql.ParseFilePosGTIDSet("relay-bin.000004:454")
-	goodReplica2.FakeMysqlDaemon.CurrentMasterFilePosition = mysql.Position{
+	goodReplica2.FakeMysqlDaemon.CurrentSourceFilePosition = mysql.Position{
 		GTIDSet: goodReplica2RelayLogPos,
 	}
-	goodReplica2.FakeMysqlDaemon.WaitPrimaryPosition = goodReplica2.FakeMysqlDaemon.CurrentMasterFilePosition
+	goodReplica2.FakeMysqlDaemon.WaitPrimaryPosition = goodReplica2.FakeMysqlDaemon.CurrentSourceFilePosition
 	goodReplica2.FakeMysqlDaemon.SetReplicationSourceInput = topoproto.MysqlAddr(newMaster.Tablet)
 	goodReplica2.StartActionLoop(t, wr)
 	goodReplica2.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
@@ -224,10 +224,10 @@ func TestEmergencyReparentShardMasterElectNotBest(t *testing.T) {
 		},
 	}
 	newMasterRelayLogPos, _ := mysql.ParseFilePosGTIDSet("relay-bin.000004:456")
-	newMaster.FakeMysqlDaemon.CurrentMasterFilePosition = mysql.Position{
+	newMaster.FakeMysqlDaemon.CurrentSourceFilePosition = mysql.Position{
 		GTIDSet: newMasterRelayLogPos,
 	}
-	newMaster.FakeMysqlDaemon.WaitPrimaryPosition = newMaster.FakeMysqlDaemon.CurrentMasterFilePosition
+	newMaster.FakeMysqlDaemon.WaitPrimaryPosition = newMaster.FakeMysqlDaemon.CurrentSourceFilePosition
 	newMaster.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"STOP SLAVE IO_THREAD",
 	}
@@ -262,10 +262,10 @@ func TestEmergencyReparentShardMasterElectNotBest(t *testing.T) {
 		},
 	}
 	moreAdvancedReplicaLogPos, _ := mysql.ParseFilePosGTIDSet("relay-bin.000004:457")
-	moreAdvancedReplica.FakeMysqlDaemon.CurrentMasterFilePosition = mysql.Position{
+	moreAdvancedReplica.FakeMysqlDaemon.CurrentSourceFilePosition = mysql.Position{
 		GTIDSet: moreAdvancedReplicaLogPos,
 	}
-	moreAdvancedReplica.FakeMysqlDaemon.WaitPrimaryPosition = moreAdvancedReplica.FakeMysqlDaemon.CurrentMasterFilePosition
+	moreAdvancedReplica.FakeMysqlDaemon.WaitPrimaryPosition = moreAdvancedReplica.FakeMysqlDaemon.CurrentSourceFilePosition
 	moreAdvancedReplica.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"STOP SLAVE IO_THREAD",
 	}
