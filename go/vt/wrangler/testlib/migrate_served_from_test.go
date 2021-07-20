@@ -51,7 +51,7 @@ func TestMigrateServedFrom(t *testing.T) {
 	defer vp.Close()
 
 	// create the source keyspace tablets
-	sourceMaster := NewFakeTablet(t, wr, "cell1", 10, topodatapb.TabletType_MASTER, nil,
+	sourcePrimary := NewFakeTablet(t, wr, "cell1", 10, topodatapb.TabletType_MASTER, nil,
 		TabletKeyspaceShard(t, "source", "0"))
 	sourceReplica := NewFakeTablet(t, wr, "cell1", 11, topodatapb.TabletType_REPLICA, nil,
 		TabletKeyspaceShard(t, "source", "0"))
@@ -72,7 +72,7 @@ func TestMigrateServedFrom(t *testing.T) {
 	}
 
 	// create the destination keyspace tablets
-	destMaster := NewFakeTablet(t, wr, "cell1", 20, topodatapb.TabletType_MASTER, nil,
+	destPrimary := NewFakeTablet(t, wr, "cell1", 20, topodatapb.TabletType_MASTER, nil,
 		TabletKeyspaceShard(t, "dest", "0"))
 	destReplica := NewFakeTablet(t, wr, "cell1", 21, topodatapb.TabletType_REPLICA, nil,
 		TabletKeyspaceShard(t, "dest", "0"))
@@ -87,9 +87,9 @@ func TestMigrateServedFrom(t *testing.T) {
 	sourceReplica.StartActionLoop(t, wr)
 	defer sourceReplica.StopActionLoop(t)
 
-	// sourceMaster will see the refresh, and has to respond to it
+	// sourcePrimary will see the refresh, and has to respond to it
 	// also will be asked about its replication position.
-	sourceMaster.FakeMysqlDaemon.CurrentPrimaryPosition = mysql.Position{
+	sourcePrimary.FakeMysqlDaemon.CurrentPrimaryPosition = mysql.Position{
 		GTIDSet: mysql.MariadbGTIDSet{
 			5: mysql.MariadbGTID{
 				Domain:   5,
@@ -98,8 +98,8 @@ func TestMigrateServedFrom(t *testing.T) {
 			},
 		},
 	}
-	sourceMaster.StartActionLoop(t, wr)
-	defer sourceMaster.StopActionLoop(t)
+	sourcePrimary.StartActionLoop(t, wr)
+	defer sourcePrimary.StopActionLoop(t)
 
 	// destRdonly will see the refresh
 	destRdonly.StartActionLoop(t, wr)
@@ -109,15 +109,15 @@ func TestMigrateServedFrom(t *testing.T) {
 	destReplica.StartActionLoop(t, wr)
 	defer destReplica.StopActionLoop(t)
 
-	destMaster.StartActionLoop(t, wr)
-	defer destMaster.StopActionLoop(t)
+	destPrimary.StartActionLoop(t, wr)
+	defer destPrimary.StopActionLoop(t)
 
 	// Override with a fake VREngine after TM is initialized in action loop.
 	dbClient := binlogplayer.NewMockDBClient(t)
 	dbClientFactory := func() binlogplayer.DBClient { return dbClient }
-	destMaster.TM.VREngine = vreplication.NewTestEngine(ts, "", destMaster.FakeMysqlDaemon, dbClientFactory, dbClientFactory, dbClient.DBName(), nil)
+	destPrimary.TM.VREngine = vreplication.NewTestEngine(ts, "", destPrimary.FakeMysqlDaemon, dbClientFactory, dbClientFactory, dbClient.DBName(), nil)
 	dbClient.ExpectRequest("select * from _vt.vreplication where db_name='db'", &sqltypes.Result{}, nil)
-	destMaster.TM.VREngine.Open(context.Background())
+	destPrimary.TM.VREngine.Open(context.Background())
 	// select pos, state, message from _vt.vreplication
 	dbClient.ExpectRequest("select pos, state, message from _vt.vreplication where id=1", &sqltypes.Result{Rows: [][]sqltypes.Value{{
 		sqltypes.NewVarBinary("MariaDB/5-456-892"),
@@ -246,7 +246,7 @@ func TestMigrateServedFrom(t *testing.T) {
 		t.Fatalf("replica type doesn't have right blacklisted tables")
 	}
 
-	// migrate master over
+	// migrate primary over
 	if err := vp.Run([]string{"MigrateServedFrom", "dest/0", "master"}); err != nil {
 		t.Fatalf("MigrateServedFrom(master) failed: %v", err)
 	}

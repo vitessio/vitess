@@ -193,7 +193,7 @@ func (wr *Wrangler) ValidateSchemaShard(ctx context.Context, keyspace, shard str
 
 // ValidateSchemaKeyspace will diff the schema from all the tablets in
 // the keyspace.
-func (wr *Wrangler) ValidateSchemaKeyspace(ctx context.Context, keyspace string, excludeTables []string, includeViews, skipNoMaster bool, includeVSchema bool) error {
+func (wr *Wrangler) ValidateSchemaKeyspace(ctx context.Context, keyspace string, excludeTables []string, includeViews, skipNoPrimary bool, includeVSchema bool) error {
 	// find all the shards
 	shards, err := wr.ts.GetShardNames(ctx, keyspace)
 	if err != nil {
@@ -234,7 +234,7 @@ func (wr *Wrangler) ValidateSchemaKeyspace(ctx context.Context, keyspace string,
 		}
 
 		if !si.HasMaster() {
-			if !skipNoMaster {
+			if !skipNoPrimary {
 				er.RecordError(fmt.Errorf("no master in shard %v/%v", keyspace, shard))
 			}
 			continue
