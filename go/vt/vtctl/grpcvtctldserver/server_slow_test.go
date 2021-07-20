@@ -95,11 +95,11 @@ func TestEmergencyReparentShardSlow(t *testing.T) {
 			},
 			tmc: &testutil.TabletManagerClient{
 				DemoteMasterResults: map[string]struct {
-					Status *replicationdatapb.MasterStatus
+					Status *replicationdatapb.PrimaryStatus
 					Error  error
 				}{
 					"zone1-0000000100": {
-						Status: &replicationdatapb.MasterStatus{
+						Status: &replicationdatapb.PrimaryStatus{
 							Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
 						},
 					},
@@ -208,11 +208,11 @@ func TestEmergencyReparentShardSlow(t *testing.T) {
 			},
 			tmc: &testutil.TabletManagerClient{
 				DemoteMasterResults: map[string]struct {
-					Status *replicationdatapb.MasterStatus
+					Status *replicationdatapb.PrimaryStatus
 					Error  error
 				}{
 					"zone1-0000000100": {
-						Status: &replicationdatapb.MasterStatus{
+						Status: &replicationdatapb.PrimaryStatus{
 							Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
 						},
 					},
@@ -380,11 +380,11 @@ func TestPlannedReparentShardSlow(t *testing.T) {
 			},
 			tmc: &testutil.TabletManagerClient{
 				DemoteMasterResults: map[string]struct {
-					Status *replicationdatapb.MasterStatus
+					Status *replicationdatapb.PrimaryStatus
 					Error  error
 				}{
 					"zone1-0000000100": {
-						Status: &replicationdatapb.MasterStatus{
+						Status: &replicationdatapb.PrimaryStatus{
 							Position: "primary-demotion position",
 						},
 						Error: nil,
@@ -483,11 +483,11 @@ func TestPlannedReparentShardSlow(t *testing.T) {
 			},
 			tmc: &testutil.TabletManagerClient{
 				DemoteMasterResults: map[string]struct {
-					Status *replicationdatapb.MasterStatus
+					Status *replicationdatapb.PrimaryStatus
 					Error  error
 				}{
 					"zone1-0000000100": {
-						Status: &replicationdatapb.MasterStatus{
+						Status: &replicationdatapb.PrimaryStatus{
 							Position: "primary-demotion position",
 						},
 						Error: nil,

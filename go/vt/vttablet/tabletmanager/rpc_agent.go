@@ -80,9 +80,9 @@ type RPCTM interface {
 
 	// Replication related methods
 	// Deprecated, use PrimaryStatus instead
-	MasterStatus(ctx context.Context) (*replicationdatapb.MasterStatus, error)
+	MasterStatus(ctx context.Context) (*replicationdatapb.PrimaryStatus, error)
 
-	PrimaryStatus(ctx context.Context) (*replicationdatapb.MasterStatus, error)
+	PrimaryStatus(ctx context.Context) (*replicationdatapb.PrimaryStatus, error)
 
 	ReplicationStatus(ctx context.Context) (*replicationdatapb.Status, error)
 
@@ -123,12 +123,12 @@ type RPCTM interface {
 	InitReplica(ctx context.Context, parent *topodatapb.TabletAlias, replicationPosition string, timeCreatedNS int64) error
 
 	// Deprecated, use DemotePrimary instead
-	DemoteMaster(ctx context.Context) (*replicationdatapb.MasterStatus, error)
+	DemoteMaster(ctx context.Context) (*replicationdatapb.PrimaryStatus, error)
 
 	// Deprecated, use UndoDemotePrimary instead
 	UndoDemoteMaster(ctx context.Context) error
 
-	DemotePrimary(ctx context.Context) (*replicationdatapb.MasterStatus, error)
+	DemotePrimary(ctx context.Context) (*replicationdatapb.PrimaryStatus, error)
 
 	UndoDemotePrimary(ctx context.Context) error
 
