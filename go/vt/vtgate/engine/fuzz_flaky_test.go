@@ -220,7 +220,7 @@ func execRouteSelectDBA(query, field, tablename, schema, shards string) {
 		Query:               query,
 		FieldQuery:          field,
 		SysTableTableSchema: stringToExpr(schema),
-		SysTableTableName:   stringToExpr(tablename),
+		SysTableTableName:   map[string]evalengine.Expr{"table_name": evalengine.NewLiteralString([]byte(tablename))},
 	}
 	vc := &loggingVCursor{
 		shards:  []string{shards},

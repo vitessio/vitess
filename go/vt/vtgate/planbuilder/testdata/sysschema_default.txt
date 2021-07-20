@@ -15,3 +15,39 @@
     "Table": "dual"
   }
 }
+Gen4 plan same as above
+
+# unqualified table name
+"select t.table_schema,t.table_name,c.column_name,c.column_type from tables t join columns c on c.table_schema = t.table_schema and c.table_name = t.table_name where t.table_schema = 'user' and c.table_schema = 'user' order by t.table_schema,t.table_name,c.column_name"
+{
+  "QueryType": "SELECT",
+  "Original": "select t.table_schema,t.table_name,c.column_name,c.column_type from tables t join columns c on c.table_schema = t.table_schema and c.table_name = t.table_name where t.table_schema = 'user' and c.table_schema = 'user' order by t.table_schema,t.table_name,c.column_name",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectDBA",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select t.table_schema, t.table_name, c.column_name, c.column_type from information_schema.`tables` as t join information_schema.`columns` as c on c.table_schema = t.table_schema and c.table_name = t.table_name where 1 != 1",
+    "Query": "select t.table_schema, t.table_name, c.column_name, c.column_type from information_schema.`tables` as t join information_schema.`columns` as c on c.table_schema = t.table_schema and c.table_name = t.table_name where t.table_schema = :__vtschemaname and c.table_schema = :__vtschemaname order by t.table_schema asc, t.table_name asc, c.column_name asc",
+    "SysTableTableSchema": "[VARBINARY(\"user\"), VARBINARY(\"user\")]",
+    "Table": "information_schema.`tables`, information_schema.`columns`"
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select t.table_schema,t.table_name,c.column_name,c.column_type from tables t join columns c on c.table_schema = t.table_schema and c.table_name = t.table_name where t.table_schema = 'user' and c.table_schema = 'user' order by t.table_schema,t.table_name,c.column_name",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectDBA",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select t.table_schema, t.table_name, c.column_name, c.column_type from information_schema.`tables` as t, information_schema.`columns` as c where 1 != 1",
+    "Query": "select t.table_schema, t.table_name, c.column_name, c.column_type from information_schema.`tables` as t, information_schema.`columns` as c where t.table_schema = :__vtschemaname and c.table_schema = :__vtschemaname and c.table_schema = t.table_schema and c.table_name = t.table_name order by t.table_schema asc, t.table_name asc, c.column_name asc",
+    "SysTableTableSchema": "[VARBINARY(\"user\"), VARBINARY(\"user\")]",
+    "Table": "information_schema.`columns`, information_schema.`tables`"
+  }
+}

@@ -562,13 +562,15 @@ func (cached *RevertMigration) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
+//go:nocheckptr
 func (cached *Route) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(224)
+		size += int64(208)
 	}
 	// field Keyspace *vitess.io/vitess/go/vt/vtgate/vindexes.Keyspace
 	size += cached.Keyspace.CachedSize(true)
@@ -606,11 +608,19 @@ func (cached *Route) CachedSize(alloc bool) int64 {
 			}
 		}
 	}
-	// field SysTableTableName []vitess.io/vitess/go/vt/vtgate/evalengine.Expr
-	{
-		size += int64(cap(cached.SysTableTableName)) * int64(16)
-		for _, elem := range cached.SysTableTableName {
-			if cc, ok := elem.(cachedObject); ok {
+	// field SysTableTableName map[string]vitess.io/vitess/go/vt/vtgate/evalengine.Expr
+	if cached.SysTableTableName != nil {
+		size += int64(48)
+		hmap := reflect.ValueOf(cached.SysTableTableName)
+		numBuckets := int(math.Pow(2, float64((*(*uint8)(unsafe.Pointer(hmap.Pointer() + uintptr(9)))))))
+		numOldBuckets := (*(*uint16)(unsafe.Pointer(hmap.Pointer() + uintptr(10))))
+		size += int64(numOldBuckets * 272)
+		if len(cached.SysTableTableName) > 0 || numBuckets > 1 {
+			size += int64(numBuckets * 272)
+		}
+		for k, v := range cached.SysTableTableName {
+			size += int64(len(k))
+			if cc, ok := v.(cachedObject); ok {
 				size += cc.CachedSize(true)
 			}
 		}
@@ -670,7 +680,7 @@ func (cached *Send) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(43)
+		size += int64(44)
 	}
 	// field Keyspace *vitess.io/vitess/go/vt/vtgate/vindexes.Keyspace
 	size += cached.Keyspace.CachedSize(true)
