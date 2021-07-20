@@ -35,10 +35,12 @@ const (
 	NonUniqTable
 	NonUpdateableTable
 	SyntaxError
+	WrongFieldWithGroup
 	WrongGroupField
 	WrongTypeForVar
 	WrongValueForVar
 	LockOrActiveTransaction
+	MixOfGroupFuncAndFields
 
 	// failed precondition
 	NoDB

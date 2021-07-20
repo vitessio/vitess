@@ -104,7 +104,7 @@ Gen4 plan same as above
 # Multi-value aggregates not supported
 "select count(a,b) from user"
 "unsupported: only one expression allowed inside aggregates: count(a, b)"
-"aggregate functions take a single argument 'count(a, b)'"
+Gen4 error: aggregate functions take a single argument 'count(a, b)'
 
 # Cannot have more than one aggr(distinct...
 "select count(distinct a), count(distinct b) from user"
@@ -117,27 +117,6 @@ Gen4 plan same as above
 # scatter aggregate symtab lookup error
 "select id, b as id, count(*) from user order by id"
 "ambiguous symbol reference: id"
-
-# order by with ambiguous column reference ; valid in MySQL
-"select id, id from user order by id"
-"ambiguous symbol reference: id"
-{
-  "QueryType": "SELECT",
-  "Original": "select id, id from user order by id",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectScatter",
-    "Keyspace": {
-      "Name": "user",
-      "Sharded": true
-    },
-    "FieldQuery": "select id, weight_string(id) from `user` where 1 != 1",
-    "OrderBy": "0 ASC",
-    "Query": "select id, weight_string(id) from `user` order by id asc",
-    "ResultColumns": 1,
-    "Table": "`user`"
-  }
-}
 
 # scatter aggregate with ambiguous aliases
 "select distinct a, b as a from user"
@@ -457,14 +436,15 @@ Gen4 plan same as above
     },
     "FieldQuery": "select cc.constraint_name as `name` from information_schema.check_constraints as cc where 1 != 1",
     "Query": "select cc.constraint_name as `name` from information_schema.check_constraints as cc where cc.constraint_schema = :__vtschemaname and cc.table_schema = :__vtschemaname",
-    "SysTableTableSchema": "[VARBINARY(\"constraint_schema\"), VARBINARY(\"a\")]"
+    "SysTableTableSchema": "[VARBINARY(\"constraint_schema\"), VARBINARY(\"a\")]",
+    "Table": "information_schema.check_constraints"
   }
 }
 
 # create view with Cannot auto-resolve for cross-shard joins
 "create view user.view_a as select col from user join user_extra"
 "symbol col not found"
-"Complex select queries are not supported in create or alter view statements"
+Gen4 error: Complex select queries are not supported in create or alter view statements
 
 # create view with join that cannot be served in each shard separately
 "create view user.view_a as select user_extra.id from user join user_extra"
@@ -491,3 +471,49 @@ Gen4 plan same as above
 # create view with incompatible keyspaces
 "create view main.view_a as select * from user.user_extra"
 "Select query does not belong to the same keyspace as the view statement"
+
+# table_schema OR predicate
+# It is unsupported because we do not route queries to multiple keyspaces right now
+"SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'ks' OR TABLE_SCHEMA = 'main'"
+{
+  "QueryType": "SELECT",
+  "Original": "SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'ks' OR TABLE_SCHEMA = 'main'",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectDBA",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select * from INFORMATION_SCHEMA.`TABLES` where 1 != 1",
+    "Query": "select * from INFORMATION_SCHEMA.`TABLES` where TABLE_SCHEMA = 'ks' or TABLE_SCHEMA = 'main'",
+    "Table": "INFORMATION_SCHEMA.`TABLES`"
+  }
+}
+Gen4 plan same as above
+
+# aggr and non-aggr without group by (with query does not give useful result out)
+"select id, count(*) from user"
+{
+  "QueryType": "SELECT",
+  "Original": "select id, count(*) from user",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Ordered",
+    "Aggregates": "count(1)",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id, count(*) from `user` where 1 != 1",
+        "Query": "select id, count(*) from `user`",
+        "Table": "`user`"
+      }
+    ]
+  }
+}
+"Mixing of aggregation and non-aggregation columns is not allowed if there is no GROUP BY clause"

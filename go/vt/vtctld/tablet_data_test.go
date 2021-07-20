@@ -95,9 +95,9 @@ func (s *streamHealthTabletServer) BroadcastHealth() {
 	shr := &querypb.StreamHealthResponse{
 		TabletExternallyReparentedTimestamp: 42,
 		RealtimeStats: &querypb.RealtimeStats{
-			HealthError:         "testHealthError",
-			SecondsBehindMaster: 72,
-			CpuUsage:            1.1,
+			HealthError:           "testHealthError",
+			ReplicationLagSeconds: 72,
+			CpuUsage:              1.1,
 		},
 	}
 
@@ -151,9 +151,9 @@ func TestTabletData(t *testing.T) {
 	}
 
 	stats := &querypb.RealtimeStats{
-		HealthError:         "testHealthError",
-		SecondsBehindMaster: 72,
-		CpuUsage:            1.1,
+		HealthError:           "testHealthError",
+		ReplicationLagSeconds: 72,
+		CpuUsage:              1.1,
 	}
 	if got, want := result.RealtimeStats, stats; !proto.Equal(got, want) {
 		t.Errorf("RealtimeStats = %#v, want %#v", got, want)

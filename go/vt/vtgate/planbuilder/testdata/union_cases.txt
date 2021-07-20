@@ -120,7 +120,7 @@ Gen4 plan same as above
               "Sharded": true
             },
             "FieldQuery": "select id, weight_string(id) from `user` where 1 != 1",
-            "OrderBy": "0 DESC",
+            "OrderBy": "(0|1) DESC",
             "Query": "select id, weight_string(id) from `user` order by id desc limit :__upper_limit",
             "ResultColumns": 1,
             "Table": "`user`"
@@ -139,7 +139,7 @@ Gen4 plan same as above
               "Sharded": true
             },
             "FieldQuery": "select id, weight_string(id) from music where 1 != 1",
-            "OrderBy": "0 DESC",
+            "OrderBy": "(0|1) DESC",
             "Query": "select id, weight_string(id) from music order by id desc limit :__upper_limit",
             "ResultColumns": 1,
             "Table": "music"
@@ -208,7 +208,7 @@ Gen4 plan same as above
               "Sharded": true
             },
             "FieldQuery": "select id, weight_string(id) from `user` where 1 != 1",
-            "OrderBy": "0 ASC",
+            "OrderBy": "(0|1) ASC",
             "Query": "select id, weight_string(id) from `user` order by id asc limit :__upper_limit",
             "ResultColumns": 1,
             "Table": "`user`"
@@ -227,7 +227,7 @@ Gen4 plan same as above
               "Sharded": true
             },
             "FieldQuery": "select id, weight_string(id) from music where 1 != 1",
-            "OrderBy": "0 DESC",
+            "OrderBy": "(0|1) DESC",
             "Query": "select id, weight_string(id) from music order by id desc limit :__upper_limit",
             "ResultColumns": 1,
             "Table": "music"
@@ -297,7 +297,8 @@ Gen4 plan same as above
               "Sharded": false
             },
             "FieldQuery": "select * from information_schema.a where 1 != 1",
-            "Query": "select * from information_schema.a"
+            "Query": "select * from information_schema.a",
+            "Table": "information_schema.a"
           },
           {
             "OperatorType": "Route",
@@ -347,7 +348,8 @@ Gen4 plan same as above
               "Sharded": false
             },
             "FieldQuery": "select * from information_schema.a where 1 != 1",
-            "Query": "select * from information_schema.a"
+            "Query": "select * from information_schema.a",
+            "Table": "information_schema.a"
           }
         ]
       }
@@ -649,7 +651,7 @@ Gen4 plan same as above
               "Sharded": true
             },
             "FieldQuery": "select 1, weight_string(1) from `user` where 1 != 1",
-            "OrderBy": "0 DESC",
+            "OrderBy": "(0|1) DESC",
             "Query": "select 1, weight_string(1) from `user` order by 1 desc",
             "ResultColumns": 1,
             "Table": "`user`"
@@ -662,7 +664,7 @@ Gen4 plan same as above
               "Sharded": true
             },
             "FieldQuery": "select 1, weight_string(1) from `user` where 1 != 1",
-            "OrderBy": "0 ASC",
+            "OrderBy": "(0|1) ASC",
             "Query": "select 1, weight_string(1) from `user` order by 1 asc",
             "ResultColumns": 1,
             "Table": "`user`"

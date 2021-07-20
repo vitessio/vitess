@@ -810,6 +810,9 @@ func (e *Executor) ExecuteWithVReplication(ctx context.Context, onlineDDL *schem
 	if err := e.updateMigrationTableRows(ctx, onlineDDL.UUID, v.tableRows); err != nil {
 		return err
 	}
+	if err := e.updateMigrationAddedRemovedUniqueKeys(ctx, onlineDDL.UUID, len(v.addedUniqueKeys), len(v.removedUniqueKeys)); err != nil {
+		return err
+	}
 	if revertMigration == nil {
 		// Original ALTER TABLE request for vreplication
 		if err := e.validateTableForAlterAction(ctx, onlineDDL); err != nil {
@@ -2603,6 +2606,19 @@ func (e *Executor) updateDDLAction(ctx context.Context, uuid string, actionStr s
 func (e *Executor) updateMigrationMessage(ctx context.Context, uuid string, message string) error {
 	query, err := sqlparser.ParseAndBind(sqlUpdateMessage,
 		sqltypes.StringBindVariable(message),
+		sqltypes.StringBindVariable(uuid),
+	)
+	if err != nil {
+		return err
+	}
+	_, err = e.execQuery(ctx, query)
+	return err
+}
+
+func (e *Executor) updateMigrationAddedRemovedUniqueKeys(ctx context.Context, uuid string, addedUniqueKeys, removedUnqiueKeys int) error {
+	query, err := sqlparser.ParseAndBind(sqlUpdateAddedRemovedUniqueKeys,
+		sqltypes.Int64BindVariable(int64(addedUniqueKeys)),
+		sqltypes.Int64BindVariable(int64(removedUnqiueKeys)),
 		sqltypes.StringBindVariable(uuid),
 	)
 	if err != nil {

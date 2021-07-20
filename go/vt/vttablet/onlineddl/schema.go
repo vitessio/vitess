@@ -58,6 +58,8 @@ const (
 	alterSchemaMigrationsTableETASeconds         = "ALTER TABLE _vt.schema_migrations add column eta_seconds bigint NOT NULL DEFAULT -1"
 	alterSchemaMigrationsTableRowsCopied         = "ALTER TABLE _vt.schema_migrations add column rows_copied bigint unsigned NOT NULL DEFAULT 0"
 	alterSchemaMigrationsTableTableRows          = "ALTER TABLE _vt.schema_migrations add column table_rows bigint NOT NULL DEFAULT 0"
+	alterSchemaMigrationsTableAddedUniqueKeys    = "ALTER TABLE _vt.schema_migrations add column added_unique_keys int unsigned NOT NULL DEFAULT 0"
+	alterSchemaMigrationsTableRemovedUniqueKeys  = "ALTER TABLE _vt.schema_migrations add column removed_unique_keys int unsigned NOT NULL DEFAULT 0"
 	alterSchemaMigrationsTableLogFile            = "ALTER TABLE _vt.schema_migrations add column log_file varchar(1024) NOT NULL DEFAULT ''"
 
 	sqlInsertMigration = `INSERT IGNORE INTO _vt.schema_migrations (
@@ -150,6 +152,11 @@ const (
 	`
 	sqlUpdateMessage = `UPDATE _vt.schema_migrations
 			SET message=%a
+		WHERE
+			migration_uuid=%a
+	`
+	sqlUpdateAddedRemovedUniqueKeys = `UPDATE _vt.schema_migrations
+			SET added_unique_keys=%a, removed_unique_keys=%a
 		WHERE
 			migration_uuid=%a
 	`
@@ -287,6 +294,8 @@ const (
 			ddl_action,
 			artifacts,
 			tablet,
+			added_unique_keys,
+			removed_unique_keys,
 			migration_context
 		FROM _vt.schema_migrations
 		WHERE
@@ -314,6 +323,8 @@ const (
 			ddl_action,
 			artifacts,
 			tablet,
+			added_unique_keys,
+			removed_unique_keys,
 			migration_context
 		FROM _vt.schema_migrations
 		WHERE
@@ -495,5 +506,7 @@ var ApplyDDL = []string{
 	alterSchemaMigrationsTableETASeconds,
 	alterSchemaMigrationsTableRowsCopied,
 	alterSchemaMigrationsTableTableRows,
+	alterSchemaMigrationsTableAddedUniqueKeys,
+	alterSchemaMigrationsTableRemovedUniqueKeys,
 	alterSchemaMigrationsTableLogFile,
 }

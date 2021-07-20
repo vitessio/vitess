@@ -212,7 +212,7 @@ func parseFilePosReplicationStatus(resultMap map[string]string) (ReplicationStat
 	return status, nil
 }
 
-// masterStatus is part of the Flavor interface.
+// primaryStatus is part of the Flavor interface.
 func (flv *filePosFlavor) primaryStatus(c *Conn) (PrimaryStatus, error) {
 	qr, err := c.ExecuteFetch("SHOW MASTER STATUS", 100, true /* wantfields */)
 	if err != nil {
@@ -228,10 +228,10 @@ func (flv *filePosFlavor) primaryStatus(c *Conn) (PrimaryStatus, error) {
 		return PrimaryStatus{}, err
 	}
 
-	return parseFilePosMasterStatus(resultMap)
+	return parseFilePosPrimaryStatus(resultMap)
 }
 
-func parseFilePosMasterStatus(resultMap map[string]string) (PrimaryStatus, error) {
+func parseFilePosPrimaryStatus(resultMap map[string]string) (PrimaryStatus, error) {
 	status := parsePrimaryStatus(resultMap)
 
 	status.Position = status.FilePosition

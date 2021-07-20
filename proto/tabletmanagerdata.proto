@@ -357,10 +357,10 @@ message VReplicationWaitForPosRequest {
 message VReplicationWaitForPosResponse {
 }
 
-message InitMasterRequest {
+message InitPrimaryRequest {
 }
 
-message InitMasterResponse {
+message InitPrimaryResponse {
   string position = 1;
 }
 

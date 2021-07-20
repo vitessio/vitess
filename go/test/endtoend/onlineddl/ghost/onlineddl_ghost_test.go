@@ -321,13 +321,13 @@ func TestSchemaChange(t *testing.T) {
 		onlineddl.CheckRetryMigration(t, &vtParams, shards, uuid, true)
 	})
 	t.Run("Online CREATE no PK table, vtgate", func(t *testing.T) {
-		uuid := testOnlineDDLStatement(t, noPKCreateTableStatement, "gh-ost --skip-topo", "vtgate", "online_ddl_create_col")
+		uuid := testOnlineDDLStatement(t, noPKCreateTableStatement, "gh-ost", "vtgate", "online_ddl_create_col")
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 		onlineddl.CheckCancelMigration(t, &vtParams, shards, uuid, false)
 		onlineddl.CheckRetryMigration(t, &vtParams, shards, uuid, false)
 	})
 	t.Run("Fail ALTER for no PK table, vtgate", func(t *testing.T) {
-		uuid := testOnlineDDLStatement(t, alterTableTrivialStatement, "gh-ost --skip-topo", "vtgate", "")
+		uuid := testOnlineDDLStatement(t, alterTableTrivialStatement, "gh-ost", "vtgate", "")
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusFailed)
 
 		expectedMessage := "No PRIMARY nor UNIQUE key found"

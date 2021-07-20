@@ -36,7 +36,7 @@ import (
 
 var (
 	clusterInstance *cluster.LocalProcessCluster
-	masterTablet    cluster.Vttablet
+	primaryTablet   cluster.Vttablet
 	replicaTablet   cluster.Vttablet
 	hostname        = "localhost"
 	keyspaceName    = "ks"
@@ -109,7 +109,7 @@ func TestMain(m *testing.M) {
 		tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 		for _, tablet := range tablets {
 			if tablet.Type == "master" {
-				masterTablet = *tablet
+				primaryTablet = *tablet
 			} else if tablet.Type != "rdonly" {
 				replicaTablet = *tablet
 			}
@@ -120,53 +120,53 @@ func TestMain(m *testing.M) {
 	os.Exit(exitCode)
 }
 
-func TestRepeatedInitShardMaster(t *testing.T) {
+func TestRepeatedInitShardPrimary(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	// Test that using InitShardMaster can go back and forth between 2 hosts.
+	// Test that using InitShardPrimary can go back and forth between 2 hosts.
 
-	// Make replica tablet as master
-	err := clusterInstance.VtctlclientProcess.InitShardMaster(keyspaceName, shardName, cell, replicaTablet.TabletUID)
+	// Make replica tablet as primary
+	err := clusterInstance.VtctlclientProcess.InitShardPrimary(keyspaceName, shardName, cell, replicaTablet.TabletUID)
 	require.Nil(t, err)
 
 	// Run health check on both, make sure they are both healthy.
 	// Also make sure the types are correct.
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("RunHealthCheck", masterTablet.Alias)
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("RunHealthCheck", primaryTablet.Alias)
 	require.Nil(t, err)
-	checkHealth(t, masterTablet.HTTPPort, false)
+	checkHealth(t, primaryTablet.HTTPPort, false)
 
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("RunHealthCheck", replicaTablet.Alias)
 	require.Nil(t, err)
 	checkHealth(t, replicaTablet.HTTPPort, false)
 
-	checkTabletType(t, masterTablet.Alias, "REPLICA")
+	checkTabletType(t, primaryTablet.Alias, "REPLICA")
 	checkTabletType(t, replicaTablet.Alias, "MASTER")
 
 	// Come back to the original tablet.
-	err = clusterInstance.VtctlclientProcess.InitShardMaster(keyspaceName, shardName, cell, masterTablet.TabletUID)
+	err = clusterInstance.VtctlclientProcess.InitShardPrimary(keyspaceName, shardName, cell, primaryTablet.TabletUID)
 	require.Nil(t, err)
 
 	// Run health check on both, make sure they are both healthy.
 	// Also make sure the types are correct.
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("RunHealthCheck", masterTablet.Alias)
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("RunHealthCheck", primaryTablet.Alias)
 	require.Nil(t, err)
-	checkHealth(t, masterTablet.HTTPPort, false)
+	checkHealth(t, primaryTablet.HTTPPort, false)
 
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("RunHealthCheck", replicaTablet.Alias)
 	require.Nil(t, err)
 	checkHealth(t, replicaTablet.HTTPPort, false)
 
-	checkTabletType(t, masterTablet.Alias, "MASTER")
+	checkTabletType(t, primaryTablet.Alias, "MASTER")
 	checkTabletType(t, replicaTablet.Alias, "REPLICA")
 }
 
-func TestMasterRestartSetsTERTimestamp(t *testing.T) {
+func TestPrimaryRestartSetsTERTimestamp(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	// Test that TER timestamp is set when we restart the MASTER vttablet.
 	// TER = TabletExternallyReparented.
 	// See StreamHealthResponse.tablet_externally_reparented_timestamp for details.
 
-	// Make replica as master
-	err := clusterInstance.VtctlclientProcess.InitShardMaster(keyspaceName, shardName, cell, replicaTablet.TabletUID)
+	// Make replica as primary
+	err := clusterInstance.VtctlclientProcess.InitShardPrimary(keyspaceName, shardName, cell, replicaTablet.TabletUID)
 	require.Nil(t, err)
 
 	err = replicaTablet.VttabletProcess.WaitForTabletStatus("SERVING")
@@ -187,11 +187,11 @@ func TestMasterRestartSetsTERTimestamp(t *testing.T) {
 	assert.Equal(t, want, got)
 	assert.NotNil(t, streamHealthRes1.GetTabletExternallyReparentedTimestamp())
 	assert.True(t, streamHealthRes1.GetTabletExternallyReparentedTimestamp() > 0,
-		"TER on MASTER must be set after InitShardMaster")
+		"TER on MASTER must be set after InitShardPrimary")
 
 	// Restart the MASTER vttablet and test again
 
-	// kill the newly promoted master tablet
+	// kill the newly promoted primary tablet
 	err = replicaTablet.VttabletProcess.TearDown()
 	require.Nil(t, err)
 
@@ -221,10 +221,10 @@ func TestMasterRestartSetsTERTimestamp(t *testing.T) {
 			streamHealthRes1.GetTabletExternallyReparentedTimestamp(),
 			streamHealthRes2.GetTabletExternallyReparentedTimestamp()))
 
-	// Reset master
-	err = clusterInstance.VtctlclientProcess.InitShardMaster(keyspaceName, shardName, cell, masterTablet.TabletUID)
+	// Reset primary
+	err = clusterInstance.VtctlclientProcess.InitShardPrimary(keyspaceName, shardName, cell, primaryTablet.TabletUID)
 	require.Nil(t, err)
-	err = masterTablet.VttabletProcess.WaitForTabletStatus("SERVING")
+	err = primaryTablet.VttabletProcess.WaitForTabletStatus("SERVING")
 	require.Nil(t, err)
 
 }

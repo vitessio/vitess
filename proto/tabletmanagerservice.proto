@@ -124,8 +124,11 @@ service TabletManager {
   // ResetReplication makes the target not replicating
   rpc ResetReplication(tabletmanagerdata.ResetReplicationRequest) returns (tabletmanagerdata.ResetReplicationResponse) {};
 
-  // InitMaster initializes the tablet as a master
-  rpc InitMaster(tabletmanagerdata.InitMasterRequest) returns (tabletmanagerdata.InitMasterResponse) {};
+  // Deprecated, use InitPrimary instead
+  rpc InitMaster(tabletmanagerdata.InitPrimaryRequest) returns (tabletmanagerdata.InitPrimaryResponse) {};
+
+  // InitPrimary initializes the tablet as a master
+  rpc InitPrimary(tabletmanagerdata.InitPrimaryRequest) returns (tabletmanagerdata.InitPrimaryResponse) {};
 
   // PopulateReparentJournal tells the tablet to add an entry to its
   // reparent journal
