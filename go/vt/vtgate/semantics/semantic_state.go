@@ -77,6 +77,7 @@ type (
 	TableSet uint64 // we can only join 64 tables with this underlying data type
 	// TODO : change uint64 to struct to support arbitrary number of tables.
 
+	// ExprDependencies stores the tables that an expr references
 	ExprDependencies map[sqlparser.Expr]TableSet
 
 	// SemTable contains semantic analysis information about the query.
@@ -119,16 +120,16 @@ func (v *vTableInfo) DepsFor(col *sqlparser.ColName, org originable, single bool
 
 // DepsFor implements the TableInfo interface
 func (a *AliasedTable) DepsFor(col *sqlparser.ColName, org originable, single bool) (*TableSet, *querypb.Type, error) {
-	return DepsFor(col, org, single, a.ASTNode, a.GetColumns(), a.Authoritative())
+	return depsFor(col, org, single, a.ASTNode, a.GetColumns(), a.Authoritative())
 }
 
 // DepsFor implements the TableInfo interface
 func (r *RealTable) DepsFor(col *sqlparser.ColName, org originable, single bool) (*TableSet, *querypb.Type, error) {
-	return DepsFor(col, org, single, r.ASTNode, r.GetColumns(), r.Authoritative())
+	return depsFor(col, org, single, r.ASTNode, r.GetColumns(), r.Authoritative())
 }
 
-// DepsFor implements the TableInfo interface
-func DepsFor(
+// depsFor implements the TableInfo interface for RealTable and AliasedTable
+func depsFor(
 	col *sqlparser.ColName,
 	org originable,
 	single bool,
@@ -321,6 +322,7 @@ func (st *SemTable) Dependencies(expr sqlparser.Expr) TableSet {
 	return st.exprDependencies.Dependencies(expr)
 }
 
+// Dependencies return the table dependencies of the expression.
 func (d ExprDependencies) Dependencies(expr sqlparser.Expr) TableSet {
 	deps, found := d[expr]
 	if found {
