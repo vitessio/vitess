@@ -40,17 +40,31 @@ type (
 func getOperatorFromTableExpr(tableExpr sqlparser.TableExpr, semTable *semantics.SemTable) (Operator, error) {
 	switch tableExpr := tableExpr.(type) {
 	case *sqlparser.AliasedTableExpr:
-		qg := newQueryGraph()
-		tableName := tableExpr.Expr.(sqlparser.TableName)
-		tableID := semTable.TableSetFor(tableExpr)
-		tableInfo, err := semTable.TableInfoFor(tableID)
-		if err != nil {
-			return nil, err
+		switch tbl := tableExpr.Expr.(type) {
+		case sqlparser.TableName:
+			qg := newQueryGraph()
+			tableID := semTable.TableSetFor(tableExpr)
+			tableInfo, err := semTable.TableInfoFor(tableID)
+			if err != nil {
+				return nil, err
+			}
+			isInfSchema := tableInfo.IsInfSchema()
+			qt := &QueryTable{Alias: tableExpr, Table: tbl, TableID: tableID, IsInfSchema: isInfSchema}
+			qg.Tables = append(qg.Tables, qt)
+			return qg, nil
+		case *sqlparser.DerivedTable:
+			sel, isSel := tbl.Select.(*sqlparser.Select)
+			if !isSel {
+				return nil, semantics.Gen4NotSupportedF("UNION")
+			}
+			inner, err := crossJoin(sel.From, semTable)
+			if err != nil {
+				return nil, err
+			}
+			return &Derived{inner: inner, sel: sel}, nil
+		default:
+			return nil, semantics.Gen4NotSupportedF("%T", tbl)
 		}
-		isInfSchema := tableInfo.IsInfSchema()
-		qt := &QueryTable{Alias: tableExpr, Table: tableName, TableID: tableID, IsInfSchema: isInfSchema}
-		qg.Tables = append(qg.Tables, qt)
-		return qg, nil
 	case *sqlparser.JoinTableExpr:
 		switch tableExpr.Join {
 		case sqlparser.NormalJoinType:

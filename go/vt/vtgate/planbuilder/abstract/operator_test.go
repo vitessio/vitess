@@ -155,6 +155,15 @@ JoinPredicates:
 	}
 	Predicate: a.id = c.id
 }`,
+	}, {
+		input: "select 1 from (select 42 as id from tbl) as t",
+		output: `Derived: {
+	Query: select 42 as id from tbl
+	Inner:	QueryGraph: {
+	Tables:
+		1:tbl
+	}
+}`,
 	}}
 
 	for i, tc := range tcases {
@@ -186,6 +195,10 @@ func testString(op Operator) string {
 		leftStr := indent(testString(op.Left))
 		rightStr := indent(testString(op.Right))
 		return fmt.Sprintf("OuterJoin: {\n\tInner: %s\n\tOuter: %s\n\tPredicate: %s\n}", leftStr, rightStr, sqlparser.String(op.Predicate))
+	case *Derived:
+		inner := indent(testString(op.inner))
+		query := sqlparser.String(op.sel)
+		return fmt.Sprintf("Derived: {\n\tQuery: %s\n\tInner:%s\n}", query, inner)
 	}
 	return "implement me"
 }
@@ -197,6 +210,8 @@ func indent(s string) string {
 	}
 	return strings.Join(lines, "\n")
 }
+
+// the following code is only used by tests
 
 func (qt *QueryTable) testString() string {
 	var alias string

@@ -1,1 +1,23 @@
 # Add your test case here for debugging and run go test -run=One.
+# subquery
+"select id from (select id, col from user where id = 5) as t"
+{
+  "QueryType": "SELECT",
+  "Original": "select id from (select id, col from user where id = 5) as t",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select id from (select id, col from `user` where 1 != 1) as t where 1 != 1",
+    "Query": "select id from (select id, col from `user` where id = 5) as t",
+    "Table": "`user`",
+    "Values": [
+      5
+    ],
+    "Vindex": "user_index"
+  }
+}
+Gen4 plan same as above

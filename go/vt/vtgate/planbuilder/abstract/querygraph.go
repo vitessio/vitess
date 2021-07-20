@@ -52,6 +52,8 @@ type (
 	}
 )
 
+var _ Operator = (*QueryGraph)(nil)
+
 // PushPredicate implements the Operator interface
 func (qg *QueryGraph) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) error {
 	for _, e := range sqlparser.SplitAndExpression(nil, expr) {
