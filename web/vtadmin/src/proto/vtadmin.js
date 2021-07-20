@@ -55824,6 +55824,216 @@ $root.replicationdata = (function() {
         return PrimaryStatus;
     })();
 
+    replicationdata.PrimaryStatus = (function() {
+
+        /**
+         * Properties of a PrimaryStatus.
+         * @memberof replicationdata
+         * @interface IPrimaryStatus
+         * @property {string|null} [position] PrimaryStatus position
+         * @property {string|null} [file_position] PrimaryStatus file_position
+         */
+
+        /**
+         * Constructs a new PrimaryStatus.
+         * @memberof replicationdata
+         * @classdesc Represents a PrimaryStatus.
+         * @implements IPrimaryStatus
+         * @constructor
+         * @param {replicationdata.IPrimaryStatus=} [properties] Properties to set
+         */
+        function PrimaryStatus(properties) {
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * PrimaryStatus position.
+         * @member {string} position
+         * @memberof replicationdata.PrimaryStatus
+         * @instance
+         */
+        PrimaryStatus.prototype.position = "";
+
+        /**
+         * PrimaryStatus file_position.
+         * @member {string} file_position
+         * @memberof replicationdata.PrimaryStatus
+         * @instance
+         */
+        PrimaryStatus.prototype.file_position = "";
+
+        /**
+         * Creates a new PrimaryStatus instance using the specified properties.
+         * @function create
+         * @memberof replicationdata.PrimaryStatus
+         * @static
+         * @param {replicationdata.IPrimaryStatus=} [properties] Properties to set
+         * @returns {replicationdata.PrimaryStatus} PrimaryStatus instance
+         */
+        PrimaryStatus.create = function create(properties) {
+            return new PrimaryStatus(properties);
+        };
+
+        /**
+         * Encodes the specified PrimaryStatus message. Does not implicitly {@link replicationdata.PrimaryStatus.verify|verify} messages.
+         * @function encode
+         * @memberof replicationdata.PrimaryStatus
+         * @static
+         * @param {replicationdata.IPrimaryStatus} message PrimaryStatus message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        PrimaryStatus.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.position != null && Object.hasOwnProperty.call(message, "position"))
+                writer.uint32(/* id 1, wireType 2 =*/10).string(message.position);
+            if (message.file_position != null && Object.hasOwnProperty.call(message, "file_position"))
+                writer.uint32(/* id 2, wireType 2 =*/18).string(message.file_position);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified PrimaryStatus message, length delimited. Does not implicitly {@link replicationdata.PrimaryStatus.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof replicationdata.PrimaryStatus
+         * @static
+         * @param {replicationdata.IPrimaryStatus} message PrimaryStatus message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        PrimaryStatus.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a PrimaryStatus message from the specified reader or buffer.
+         * @function decode
+         * @memberof replicationdata.PrimaryStatus
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {replicationdata.PrimaryStatus} PrimaryStatus
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        PrimaryStatus.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.replicationdata.PrimaryStatus();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    message.position = reader.string();
+                    break;
+                case 2:
+                    message.file_position = reader.string();
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a PrimaryStatus message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof replicationdata.PrimaryStatus
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {replicationdata.PrimaryStatus} PrimaryStatus
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        PrimaryStatus.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a PrimaryStatus message.
+         * @function verify
+         * @memberof replicationdata.PrimaryStatus
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        PrimaryStatus.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.position != null && message.hasOwnProperty("position"))
+                if (!$util.isString(message.position))
+                    return "position: string expected";
+            if (message.file_position != null && message.hasOwnProperty("file_position"))
+                if (!$util.isString(message.file_position))
+                    return "file_position: string expected";
+            return null;
+        };
+
+        /**
+         * Creates a PrimaryStatus message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof replicationdata.PrimaryStatus
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {replicationdata.PrimaryStatus} PrimaryStatus
+         */
+        PrimaryStatus.fromObject = function fromObject(object) {
+            if (object instanceof $root.replicationdata.PrimaryStatus)
+                return object;
+            var message = new $root.replicationdata.PrimaryStatus();
+            if (object.position != null)
+                message.position = String(object.position);
+            if (object.file_position != null)
+                message.file_position = String(object.file_position);
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a PrimaryStatus message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof replicationdata.PrimaryStatus
+         * @static
+         * @param {replicationdata.PrimaryStatus} message PrimaryStatus
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        PrimaryStatus.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.defaults) {
+                object.position = "";
+                object.file_position = "";
+            }
+            if (message.position != null && message.hasOwnProperty("position"))
+                object.position = message.position;
+            if (message.file_position != null && message.hasOwnProperty("file_position"))
+                object.file_position = message.file_position;
+            return object;
+        };
+
+        /**
+         * Converts this PrimaryStatus to JSON.
+         * @function toJSON
+         * @memberof replicationdata.PrimaryStatus
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        PrimaryStatus.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return PrimaryStatus;
+    })();
+
     return replicationdata;
 })();
 

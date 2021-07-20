@@ -23616,6 +23616,102 @@ export namespace replicationdata {
          */
         public toJSON(): { [k: string]: any };
     }
+
+    /** Properties of a PrimaryStatus. */
+    interface IPrimaryStatus {
+
+        /** PrimaryStatus position */
+        position?: (string|null);
+
+        /** PrimaryStatus file_position */
+        file_position?: (string|null);
+    }
+
+    /** Represents a PrimaryStatus. */
+    class PrimaryStatus implements IPrimaryStatus {
+
+        /**
+         * Constructs a new PrimaryStatus.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: replicationdata.IPrimaryStatus);
+
+        /** PrimaryStatus position. */
+        public position: string;
+
+        /** PrimaryStatus file_position. */
+        public file_position: string;
+
+        /**
+         * Creates a new PrimaryStatus instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns PrimaryStatus instance
+         */
+        public static create(properties?: replicationdata.IPrimaryStatus): replicationdata.PrimaryStatus;
+
+        /**
+         * Encodes the specified PrimaryStatus message. Does not implicitly {@link replicationdata.PrimaryStatus.verify|verify} messages.
+         * @param message PrimaryStatus message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: replicationdata.IPrimaryStatus, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified PrimaryStatus message, length delimited. Does not implicitly {@link replicationdata.PrimaryStatus.verify|verify} messages.
+         * @param message PrimaryStatus message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: replicationdata.IPrimaryStatus, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a PrimaryStatus message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns PrimaryStatus
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): replicationdata.PrimaryStatus;
+
+        /**
+         * Decodes a PrimaryStatus message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns PrimaryStatus
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): replicationdata.PrimaryStatus;
+
+        /**
+         * Verifies a PrimaryStatus message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a PrimaryStatus message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns PrimaryStatus
+         */
+        public static fromObject(object: { [k: string]: any }): replicationdata.PrimaryStatus;
+
+        /**
+         * Creates a plain object from a PrimaryStatus message. Also converts values to other types if specified.
+         * @param message PrimaryStatus
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: replicationdata.PrimaryStatus, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this PrimaryStatus to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
 }
 
 /** Namespace logutil. */
