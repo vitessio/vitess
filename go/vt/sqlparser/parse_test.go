@@ -3210,6 +3210,28 @@ func TestCreateTable(t *testing.T) {
 			"	check (a != b)\n" +
 			")",
 	}, {
+		input: "create table t (\n" +
+			"	id int,\n" +
+			"	status int,\n" +
+			"	constraint status check (a > 0)\n" +
+			")",
+		output: "create table t (\n" +
+			"	id int,\n" +
+			"	`status` int,\n" +
+			"	constraint status check (a > 0)\n" +
+			")",
+	}, {
+		input: "create table t (\n" +
+			"	id int,\n" +
+			"	status int,\n" +
+			"	constraint status check (status in (0, 1))\n" +
+			")",
+		output: "create table t (\n" +
+			"	id int,\n" +
+			"	`status` int,\n" +
+			"	constraint status check (`status` in (0, 1))\n" +
+			")",
+	}, {
 		// we don't support named primary keys currently
 		input: "create table t (\n" +
 			"	id int auto_increment,\n" +
