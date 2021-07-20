@@ -242,11 +242,8 @@ func (a *analyzer) resolveColumn(colName *sqlparser.ColName, current *scope) (Ta
 		return a.resolveUnQualifiedColumn(current, colName)
 	}
 	t, err := a.resolveQualifiedColumn(current, colName)
-	if err != nil {
+	if t == nil || err != nil {
 		return 0, nil, err
-	}
-	if t == nil {
-		return 0, nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.NonUniqError, fmt.Sprintf("Column '%s' in field list is ambiguous", sqlparser.String(colName)))
 	}
 	tableSet := a.tableSetFor(t.GetExpr())
 	for _, colInfo := range t.GetColumns() {
@@ -262,13 +259,37 @@ func (a *analyzer) resolveColumn(colName *sqlparser.ColName, current *scope) (Ta
 	return tableSet, nil, nil
 }
 
+// tableInfoFor returns the table info for the table set. It should contains only single table.
+func (a *analyzer) tableInfoFor(id TableSet) (TableInfo, error) {
+	numberOfTables := id.NumberOfTables()
+	if numberOfTables == 0 {
+		return nil, nil
+	}
+	if numberOfTables > 1 {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] should only be used for single tables")
+	}
+	return a.Tables[id.TableOffset()], nil
+}
+
 // resolveQualifiedColumn handles `tabl.col` expressions
 func (a *analyzer) resolveQualifiedColumn(current *scope, expr *sqlparser.ColName) (TableInfo, error) {
 	// search up the scope stack until we find a match
 	for current != nil {
 		for _, table := range current.tables {
 			if table.Matches(expr.Qualifier) {
-				return table, nil
+				if table.IsActualTable() {
+					return table, nil
+				}
+				newExpr := *expr
+				newExpr.Qualifier = sqlparser.TableName{}
+				ts, _, err := table.DepsFor(&newExpr, a, len(current.tables) == 1)
+				if err != nil {
+					return nil, err
+				}
+				if ts == nil {
+					return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadFieldError, "symbol %s not found", sqlparser.String(expr))
+				}
+				return a.tableInfoFor(*ts)
 			}
 		}
 		current = current.parent
@@ -347,7 +368,33 @@ func (a *analyzer) createTable(t sqlparser.TableName, alias *sqlparser.AliasedTa
 func (a *analyzer) bindTable(alias *sqlparser.AliasedTableExpr, expr sqlparser.SimpleTableExpr) error {
 	switch t := expr.(type) {
 	case *sqlparser.DerivedTable:
-
+		sel, isSelect := t.Select.(*sqlparser.Select)
+		if !isSelect {
+			return Gen4NotSupportedF("union in derived table")
+		}
+		var columnNames []string
+		var cols []sqlparser.Expr
+		for _, selectExpr := range sel.SelectExprs {
+			aliasedExpr, isAliasedExpr := selectExpr.(*sqlparser.AliasedExpr)
+			if !isAliasedExpr {
+				return Gen4NotSupportedF("non-aliased expression in derived table")
+			}
+			cols = append(cols, aliasedExpr.Expr)
+			if !aliasedExpr.As.IsEmpty() {
+				columnNames = append(columnNames, aliasedExpr.As.String())
+			} else {
+				columnNames = append(columnNames, sqlparser.String(aliasedExpr))
+			}
+		}
+		tableInfo := &vTableInfo{
+			ASTNode:     alias,
+			tableName:   alias.As.String(),
+			columnNames: columnNames,
+			cols:        cols,
+		}
+		a.Tables = append(a.Tables, tableInfo)
+		scope := a.currentScope()
+		return scope.addTable(tableInfo)
 	case sqlparser.TableName:
 		var tbl *vindexes.Table
 		var isInfSchema bool
