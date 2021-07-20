@@ -320,16 +320,15 @@ func wrapAndPushExpr(expr sqlparser.Expr, weightStrExpr sqlparser.Expr, plan log
 	if err != nil {
 		return 0, 0, false, err
 	}
-	colName, ok := expr.(*sqlparser.ColName)
+	_, ok := expr.(*sqlparser.ColName)
 	if !ok {
 		return 0, 0, false, semantics.Gen4NotSupportedF("group by/order by non-column expression")
 	}
-	table := semTable.Dependencies(colName)
-	tbl, err := semTable.TableInfoFor(table)
-	if err != nil {
-		return 0, 0, false, err
+	qt := semTable.TypeFor(expr)
+	wsNeeded := true
+	if qt != nil && sqltypes.IsNumber(*qt) {
+		wsNeeded = false
 	}
-	wsNeeded := needsWeightString(tbl, colName)
 
 	weightStringOffset := -1
 	var wAdded bool
@@ -352,15 +351,6 @@ func weightStringFor(expr sqlparser.Expr) sqlparser.Expr {
 		},
 	}
 
-}
-
-func needsWeightString(tbl semantics.TableInfo, colName *sqlparser.ColName) bool {
-	for _, c := range tbl.GetColumns() {
-		if colName.Name.String() == c.Name {
-			return !sqltypes.IsNumber(c.Type)
-		}
-	}
-	return true // we didn't find the column. better to add just to be safe1
 }
 
 func (hp *horizonPlanning) planOrderByForJoin(orderExprs []abstract.OrderBy, plan *joinGen4) (logicalPlan, error) {
