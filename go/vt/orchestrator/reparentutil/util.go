@@ -24,8 +24,6 @@ import (
 
 	"k8s.io/apimachinery/pkg/util/sets"
 
-	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/orchestrator/inst"
 	"vitess.io/vitess/go/vt/orchestrator/logic"
 
 	"vitess.io/vitess/go/vt/logutil"
@@ -43,13 +41,10 @@ type (
 	// ReparentFunctions is an interface which has all the functions implementation required for re-parenting
 	ReparentFunctions interface {
 		LockShard(context.Context) (context.Context, func(*error), error)
-	}
-
-	// VtOrcReparentFunctions is the VtOrc implementation for ReparentFunctions
-	VtOrcReparentFunctions struct {
-		analysisEntry        inst.ReplicationAnalysis
-		candidateInstanceKey *inst.InstanceKey
-		skipProcesses        bool
+		GetTopoServer() *topo.Server
+		GetKeyspace() string
+		GetShard() string
+		CheckIfFixed() bool
 	}
 
 	// VtctlReparentFunctions is the Vtctl implementation for ReparentFunctions
@@ -65,14 +60,35 @@ type (
 )
 
 var (
-	_ ReparentFunctions = (*VtOrcReparentFunctions)(nil)
+	_ ReparentFunctions = (*logic.VtOrcReparentFunctions)(nil)
 	_ ReparentFunctions = (*VtctlReparentFunctions)(nil)
 )
 
+// LockShard implements the ReparentFunctions interface
 func (vtctlReparent *VtctlReparentFunctions) LockShard(ctx context.Context) (context.Context, func(*error), error) {
 	vtctlReparent.lockAction = vtctlReparent.getLockAction(vtctlReparent.NewPrimaryAlias)
 
 	return vtctlReparent.ts.LockShard(ctx, vtctlReparent.keyspace, vtctlReparent.shard, vtctlReparent.lockAction)
+}
+
+// GetTopoServer implements the ReparentFunctions interface
+func (vtctlReparent *VtctlReparentFunctions) GetTopoServer() *topo.Server {
+	return vtctlReparent.ts
+}
+
+// GetKeyspace implements the ReparentFunctions interface
+func (vtctlReparent *VtctlReparentFunctions) GetKeyspace() string {
+	return vtctlReparent.keyspace
+}
+
+// GetShard implements the ReparentFunctions interface
+func (vtctlReparent *VtctlReparentFunctions) GetShard() string {
+	return vtctlReparent.shard
+}
+
+// CheckIfFixed implements the ReparentFunctions interface
+func (vtctlReparent *VtctlReparentFunctions) CheckIfFixed() bool {
+	return false
 }
 
 func (vtctlReparent *VtctlReparentFunctions) getLockAction(newPrimaryAlias *topodatapb.TabletAlias) string {
@@ -83,17 +99,6 @@ func (vtctlReparent *VtctlReparentFunctions) getLockAction(newPrimaryAlias *topo
 	}
 
 	return action
-}
-
-func (vtorcReparent *VtOrcReparentFunctions) LockShard(ctx context.Context) (context.Context, func(*error), error) {
-	_, unlock, err := logic.LockShard(ctx, vtorcReparent.analysisEntry.AnalyzedInstanceKey)
-	if err != nil {
-		log.Infof("CheckAndRecover: Analysis: %+v, InstanceKey: %+v, candidateInstanceKey: %+v, "+
-			"skipProcesses: %v: NOT detecting/recovering host, could not obtain shard lock (%v)",
-			vtorcReparent.analysisEntry.Analysis, vtorcReparent.analysisEntry.AnalyzedInstanceKey, vtorcReparent.candidateInstanceKey, vtorcReparent.skipProcesses, err)
-		return nil, nil, err
-	}
-	return ctx, unlock, nil
 }
 
 // ChooseNewPrimary finds a tablet that should become a primary after reparent.

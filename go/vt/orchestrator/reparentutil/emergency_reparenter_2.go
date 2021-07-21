@@ -33,7 +33,7 @@ type EmergencyReparenter2 struct {
 	logger logutil.Logger
 }
 
-// NewEmergencyReparenter returns a new EmergencyReparenter object, ready to
+// NewEmergencyReparenter2 returns a new EmergencyReparenter object, ready to
 // perform EmergencyReparentShard operations using the given topo.Server,
 // TabletManagerClient, and logger.
 //
@@ -72,5 +72,24 @@ func (erp *EmergencyReparenter2) ReparentShard(ctx context.Context, reparentFunc
 		}
 	}()
 
+	err = erp.reparentShardLocked(ctx, ev, reparentFunctions)
+
 	return ev, nil
+}
+
+func (erp *EmergencyReparenter2) reparentShardLocked(ctx context.Context, ev *events.Reparent, reparentFunctions ReparentFunctions) error {
+
+	if reparentFunctions.CheckIfFixed() {
+		return nil
+	}
+
+	ts := reparentFunctions.GetTopoServer()
+	shardInfo, err := ts.GetShard(ctx, reparentFunctions.GetKeyspace(), reparentFunctions.GetShard())
+	if err != nil {
+		return err
+	}
+	ev.ShardInfo = *shardInfo
+	event.DispatchUpdate(ev, "reading all tablets")
+
+	return nil
 }
