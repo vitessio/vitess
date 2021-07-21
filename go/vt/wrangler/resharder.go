@@ -22,7 +22,11 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
+
 	"google.golang.org/protobuf/encoding/prototext"
+	"vitess.io/vitess/go/vt/logutil"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vtctl/workflow"
@@ -79,6 +83,24 @@ func (wr *Wrangler) Reshard(ctx context.Context, keyspace, workflow string, sour
 	rs, err := wr.buildResharder(ctx, keyspace, workflow, sources, targets, cell, tabletTypes)
 	if err != nil {
 		return vterrors.Wrap(err, "buildResharder")
+	}
+
+	rsEvent := &topodatapb.TopoEvent{
+		Cell:      cell,
+		StartedAt: logutil.TimeToProto(time.Now()),
+		Uuid:      uuid.New().String(),
+		Keyspace:  keyspace,
+		Event: &topodatapb.TopoEvent_Resharding_{
+			Resharding: &topodatapb.TopoEvent_Resharding{
+				Workflow: workflow,
+				Sources:  sources,
+				Targets:  targets,
+			},
+		},
+	}
+
+	if err := wr.ts.UpdateTopoEventLog(ctx, rsEvent); err != nil {
+		return err
 	}
 
 	rs.stopAfterCopy = stopAfterCopy

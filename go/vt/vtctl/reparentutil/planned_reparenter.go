@@ -22,6 +22,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
+
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/event"
@@ -113,6 +115,22 @@ func (pr *PlannedReparenter) ReparentShard(ctx context.Context, keyspace string,
 			event.DispatchUpdate(ev, "failed PlannedReparentShard: "+err.Error())
 		}
 	}()
+
+	topoEvent := &topodatapb.TopoEvent{
+		StartedAt: logutil.TimeToProto(time.Now()),
+		Uuid:      uuid.New().String(),
+		Keyspace:  keyspace,
+		Event: &topodatapb.TopoEvent_PlannedReparenting_{
+			PlannedReparenting: &topodatapb.TopoEvent_PlannedReparenting{
+				Shard:        shard,
+				PrimaryElect: opts.NewPrimaryAlias,
+				PrimaryAvoid: opts.AvoidPrimaryAlias,
+			}},
+	}
+
+	if err := pr.ts.UpdateTopoEventLog(ctx, topoEvent); err != nil {
+		return nil, err
+	}
 
 	err = pr.reparentShardLocked(ctx, ev, keyspace, shard, opts)
 

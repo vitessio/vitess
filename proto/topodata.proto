@@ -421,3 +421,38 @@ message ExternalVitessCluster {
 message ExternalClusters {
   repeated ExternalVitessCluster vitess_cluster = 1;
 }
+
+message TopoEventLog {
+  repeated TopoEvent log = 1;
+}
+
+message TopoEvent {
+  string cell = 1;
+  vttime.Time started_at = 2;
+  string uuid = 3;
+  string keyspace = 4;
+
+  message EmergencyReparenting {
+    string shard = 1;
+    TabletAlias primaryElect = 2;
+    repeated string ignore_tablets = 3;
+  }
+
+  message PlannedReparenting {
+    string shard = 1;
+    TabletAlias primaryElect = 2;
+    TabletAlias primaryAvoid = 3;
+  }
+
+  message Resharding {
+    string workflow = 1;
+    repeated string sources = 2;
+    repeated string targets = 3;
+  }
+
+  oneof event {
+    EmergencyReparenting emergency_reparenting = 5;
+    PlannedReparenting planned_reparenting = 6;
+    Resharding resharding = 7;
+  }
+}

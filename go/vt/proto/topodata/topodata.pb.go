@@ -1272,6 +1272,179 @@ func (x *ExternalClusters) GetVitessCluster() []*ExternalVitessCluster {
 	return nil
 }
 
+type TopoEventLog struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Log []*TopoEvent `protobuf:"bytes,1,rep,name=log,proto3" json:"log,omitempty"`
+}
+
+func (x *TopoEventLog) Reset() {
+	*x = TopoEventLog{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_topodata_proto_msgTypes[14]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *TopoEventLog) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TopoEventLog) ProtoMessage() {}
+
+func (x *TopoEventLog) ProtoReflect() protoreflect.Message {
+	mi := &file_topodata_proto_msgTypes[14]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TopoEventLog.ProtoReflect.Descriptor instead.
+func (*TopoEventLog) Descriptor() ([]byte, []int) {
+	return file_topodata_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *TopoEventLog) GetLog() []*TopoEvent {
+	if x != nil {
+		return x.Log
+	}
+	return nil
+}
+
+type TopoEvent struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Cell      string       `protobuf:"bytes,1,opt,name=cell,proto3" json:"cell,omitempty"`
+	StartedAt *vttime.Time `protobuf:"bytes,2,opt,name=started_at,json=startedAt,proto3" json:"started_at,omitempty"`
+	Uuid      string       `protobuf:"bytes,3,opt,name=uuid,proto3" json:"uuid,omitempty"`
+	Keyspace  string       `protobuf:"bytes,4,opt,name=keyspace,proto3" json:"keyspace,omitempty"`
+	// Types that are assignable to Event:
+	//	*TopoEvent_EmergencyReparenting_
+	//	*TopoEvent_PlannedReparenting_
+	//	*TopoEvent_Resharding_
+	Event isTopoEvent_Event `protobuf_oneof:"event"`
+}
+
+func (x *TopoEvent) Reset() {
+	*x = TopoEvent{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_topodata_proto_msgTypes[15]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *TopoEvent) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TopoEvent) ProtoMessage() {}
+
+func (x *TopoEvent) ProtoReflect() protoreflect.Message {
+	mi := &file_topodata_proto_msgTypes[15]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TopoEvent.ProtoReflect.Descriptor instead.
+func (*TopoEvent) Descriptor() ([]byte, []int) {
+	return file_topodata_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *TopoEvent) GetCell() string {
+	if x != nil {
+		return x.Cell
+	}
+	return ""
+}
+
+func (x *TopoEvent) GetStartedAt() *vttime.Time {
+	if x != nil {
+		return x.StartedAt
+	}
+	return nil
+}
+
+func (x *TopoEvent) GetUuid() string {
+	if x != nil {
+		return x.Uuid
+	}
+	return ""
+}
+
+func (x *TopoEvent) GetKeyspace() string {
+	if x != nil {
+		return x.Keyspace
+	}
+	return ""
+}
+
+func (m *TopoEvent) GetEvent() isTopoEvent_Event {
+	if m != nil {
+		return m.Event
+	}
+	return nil
+}
+
+func (x *TopoEvent) GetEmergencyReparenting() *TopoEvent_EmergencyReparenting {
+	if x, ok := x.GetEvent().(*TopoEvent_EmergencyReparenting_); ok {
+		return x.EmergencyReparenting
+	}
+	return nil
+}
+
+func (x *TopoEvent) GetPlannedReparenting() *TopoEvent_PlannedReparenting {
+	if x, ok := x.GetEvent().(*TopoEvent_PlannedReparenting_); ok {
+		return x.PlannedReparenting
+	}
+	return nil
+}
+
+func (x *TopoEvent) GetResharding() *TopoEvent_Resharding {
+	if x, ok := x.GetEvent().(*TopoEvent_Resharding_); ok {
+		return x.Resharding
+	}
+	return nil
+}
+
+type isTopoEvent_Event interface {
+	isTopoEvent_Event()
+}
+
+type TopoEvent_EmergencyReparenting_ struct {
+	EmergencyReparenting *TopoEvent_EmergencyReparenting `protobuf:"bytes,5,opt,name=emergency_reparenting,json=emergencyReparenting,proto3,oneof"`
+}
+
+type TopoEvent_PlannedReparenting_ struct {
+	PlannedReparenting *TopoEvent_PlannedReparenting `protobuf:"bytes,6,opt,name=planned_reparenting,json=plannedReparenting,proto3,oneof"`
+}
+
+type TopoEvent_Resharding_ struct {
+	Resharding *TopoEvent_Resharding `protobuf:"bytes,7,opt,name=resharding,proto3,oneof"`
+}
+
+func (*TopoEvent_EmergencyReparenting_) isTopoEvent_Event() {}
+
+func (*TopoEvent_PlannedReparenting_) isTopoEvent_Event() {}
+
+func (*TopoEvent_Resharding_) isTopoEvent_Event() {}
+
 // ServedType is an entry in the served_types
 type Shard_ServedType struct {
 	state         protoimpl.MessageState
@@ -1285,7 +1458,7 @@ type Shard_ServedType struct {
 func (x *Shard_ServedType) Reset() {
 	*x = Shard_ServedType{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_topodata_proto_msgTypes[16]
+		mi := &file_topodata_proto_msgTypes[18]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -1298,7 +1471,7 @@ func (x *Shard_ServedType) String() string {
 func (*Shard_ServedType) ProtoMessage() {}
 
 func (x *Shard_ServedType) ProtoReflect() protoreflect.Message {
-	mi := &file_topodata_proto_msgTypes[16]
+	mi := &file_topodata_proto_msgTypes[18]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1351,7 +1524,7 @@ type Shard_SourceShard struct {
 func (x *Shard_SourceShard) Reset() {
 	*x = Shard_SourceShard{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_topodata_proto_msgTypes[17]
+		mi := &file_topodata_proto_msgTypes[19]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -1364,7 +1537,7 @@ func (x *Shard_SourceShard) String() string {
 func (*Shard_SourceShard) ProtoMessage() {}
 
 func (x *Shard_SourceShard) ProtoReflect() protoreflect.Message {
-	mi := &file_topodata_proto_msgTypes[17]
+	mi := &file_topodata_proto_msgTypes[19]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1433,7 +1606,7 @@ type Shard_TabletControl struct {
 func (x *Shard_TabletControl) Reset() {
 	*x = Shard_TabletControl{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_topodata_proto_msgTypes[18]
+		mi := &file_topodata_proto_msgTypes[20]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -1446,7 +1619,7 @@ func (x *Shard_TabletControl) String() string {
 func (*Shard_TabletControl) ProtoMessage() {}
 
 func (x *Shard_TabletControl) ProtoReflect() protoreflect.Message {
-	mi := &file_topodata_proto_msgTypes[18]
+	mi := &file_topodata_proto_msgTypes[20]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1508,7 +1681,7 @@ type Keyspace_ServedFrom struct {
 func (x *Keyspace_ServedFrom) Reset() {
 	*x = Keyspace_ServedFrom{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_topodata_proto_msgTypes[19]
+		mi := &file_topodata_proto_msgTypes[21]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -1521,7 +1694,7 @@ func (x *Keyspace_ServedFrom) String() string {
 func (*Keyspace_ServedFrom) ProtoMessage() {}
 
 func (x *Keyspace_ServedFrom) ProtoReflect() protoreflect.Message {
-	mi := &file_topodata_proto_msgTypes[19]
+	mi := &file_topodata_proto_msgTypes[21]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1570,7 +1743,7 @@ type ShardReplication_Node struct {
 func (x *ShardReplication_Node) Reset() {
 	*x = ShardReplication_Node{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_topodata_proto_msgTypes[20]
+		mi := &file_topodata_proto_msgTypes[22]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -1583,7 +1756,7 @@ func (x *ShardReplication_Node) String() string {
 func (*ShardReplication_Node) ProtoMessage() {}
 
 func (x *ShardReplication_Node) ProtoReflect() protoreflect.Message {
-	mi := &file_topodata_proto_msgTypes[20]
+	mi := &file_topodata_proto_msgTypes[22]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1622,7 +1795,7 @@ type SrvKeyspace_KeyspacePartition struct {
 func (x *SrvKeyspace_KeyspacePartition) Reset() {
 	*x = SrvKeyspace_KeyspacePartition{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_topodata_proto_msgTypes[21]
+		mi := &file_topodata_proto_msgTypes[23]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -1635,7 +1808,7 @@ func (x *SrvKeyspace_KeyspacePartition) String() string {
 func (*SrvKeyspace_KeyspacePartition) ProtoMessage() {}
 
 func (x *SrvKeyspace_KeyspacePartition) ProtoReflect() protoreflect.Message {
-	mi := &file_topodata_proto_msgTypes[21]
+	mi := &file_topodata_proto_msgTypes[23]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1688,7 +1861,7 @@ type SrvKeyspace_ServedFrom struct {
 func (x *SrvKeyspace_ServedFrom) Reset() {
 	*x = SrvKeyspace_ServedFrom{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_topodata_proto_msgTypes[22]
+		mi := &file_topodata_proto_msgTypes[24]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -1701,7 +1874,7 @@ func (x *SrvKeyspace_ServedFrom) String() string {
 func (*SrvKeyspace_ServedFrom) ProtoMessage() {}
 
 func (x *SrvKeyspace_ServedFrom) ProtoReflect() protoreflect.Message {
-	mi := &file_topodata_proto_msgTypes[22]
+	mi := &file_topodata_proto_msgTypes[24]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1729,6 +1902,195 @@ func (x *SrvKeyspace_ServedFrom) GetKeyspace() string {
 		return x.Keyspace
 	}
 	return ""
+}
+
+type TopoEvent_EmergencyReparenting struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Shard         string       `protobuf:"bytes,1,opt,name=shard,proto3" json:"shard,omitempty"`
+	PrimaryElect  *TabletAlias `protobuf:"bytes,2,opt,name=primaryElect,proto3" json:"primaryElect,omitempty"`
+	IgnoreTablets []string     `protobuf:"bytes,3,rep,name=ignore_tablets,json=ignoreTablets,proto3" json:"ignore_tablets,omitempty"`
+}
+
+func (x *TopoEvent_EmergencyReparenting) Reset() {
+	*x = TopoEvent_EmergencyReparenting{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_topodata_proto_msgTypes[25]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *TopoEvent_EmergencyReparenting) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TopoEvent_EmergencyReparenting) ProtoMessage() {}
+
+func (x *TopoEvent_EmergencyReparenting) ProtoReflect() protoreflect.Message {
+	mi := &file_topodata_proto_msgTypes[25]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TopoEvent_EmergencyReparenting.ProtoReflect.Descriptor instead.
+func (*TopoEvent_EmergencyReparenting) Descriptor() ([]byte, []int) {
+	return file_topodata_proto_rawDescGZIP(), []int{15, 0}
+}
+
+func (x *TopoEvent_EmergencyReparenting) GetShard() string {
+	if x != nil {
+		return x.Shard
+	}
+	return ""
+}
+
+func (x *TopoEvent_EmergencyReparenting) GetPrimaryElect() *TabletAlias {
+	if x != nil {
+		return x.PrimaryElect
+	}
+	return nil
+}
+
+func (x *TopoEvent_EmergencyReparenting) GetIgnoreTablets() []string {
+	if x != nil {
+		return x.IgnoreTablets
+	}
+	return nil
+}
+
+type TopoEvent_PlannedReparenting struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Shard        string       `protobuf:"bytes,1,opt,name=shard,proto3" json:"shard,omitempty"`
+	PrimaryElect *TabletAlias `protobuf:"bytes,2,opt,name=primaryElect,proto3" json:"primaryElect,omitempty"`
+	PrimaryAvoid *TabletAlias `protobuf:"bytes,3,opt,name=primaryAvoid,proto3" json:"primaryAvoid,omitempty"`
+}
+
+func (x *TopoEvent_PlannedReparenting) Reset() {
+	*x = TopoEvent_PlannedReparenting{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_topodata_proto_msgTypes[26]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *TopoEvent_PlannedReparenting) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TopoEvent_PlannedReparenting) ProtoMessage() {}
+
+func (x *TopoEvent_PlannedReparenting) ProtoReflect() protoreflect.Message {
+	mi := &file_topodata_proto_msgTypes[26]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TopoEvent_PlannedReparenting.ProtoReflect.Descriptor instead.
+func (*TopoEvent_PlannedReparenting) Descriptor() ([]byte, []int) {
+	return file_topodata_proto_rawDescGZIP(), []int{15, 1}
+}
+
+func (x *TopoEvent_PlannedReparenting) GetShard() string {
+	if x != nil {
+		return x.Shard
+	}
+	return ""
+}
+
+func (x *TopoEvent_PlannedReparenting) GetPrimaryElect() *TabletAlias {
+	if x != nil {
+		return x.PrimaryElect
+	}
+	return nil
+}
+
+func (x *TopoEvent_PlannedReparenting) GetPrimaryAvoid() *TabletAlias {
+	if x != nil {
+		return x.PrimaryAvoid
+	}
+	return nil
+}
+
+type TopoEvent_Resharding struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Workflow string   `protobuf:"bytes,1,opt,name=workflow,proto3" json:"workflow,omitempty"`
+	Sources  []string `protobuf:"bytes,2,rep,name=sources,proto3" json:"sources,omitempty"`
+	Targets  []string `protobuf:"bytes,3,rep,name=targets,proto3" json:"targets,omitempty"`
+}
+
+func (x *TopoEvent_Resharding) Reset() {
+	*x = TopoEvent_Resharding{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_topodata_proto_msgTypes[27]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *TopoEvent_Resharding) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TopoEvent_Resharding) ProtoMessage() {}
+
+func (x *TopoEvent_Resharding) ProtoReflect() protoreflect.Message {
+	mi := &file_topodata_proto_msgTypes[27]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TopoEvent_Resharding.ProtoReflect.Descriptor instead.
+func (*TopoEvent_Resharding) Descriptor() ([]byte, []int) {
+	return file_topodata_proto_rawDescGZIP(), []int{15, 2}
+}
+
+func (x *TopoEvent_Resharding) GetWorkflow() string {
+	if x != nil {
+		return x.Workflow
+	}
+	return ""
+}
+
+func (x *TopoEvent_Resharding) GetSources() []string {
+	if x != nil {
+		return x.Sources
+	}
+	return nil
+}
+
+func (x *TopoEvent_Resharding) GetTargets() []string {
+	if x != nil {
+		return x.Targets
+	}
+	return nil
 }
 
 var File_topodata_proto protoreflect.FileDescriptor
@@ -1951,26 +2313,79 @@ var file_topodata_proto_rawDesc = []byte{
 	0x18, 0x01, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x1f, 0x2e, 0x74, 0x6f, 0x70, 0x6f, 0x64, 0x61, 0x74,
 	0x61, 0x2e, 0x45, 0x78, 0x74, 0x65, 0x72, 0x6e, 0x61, 0x6c, 0x56, 0x69, 0x74, 0x65, 0x73, 0x73,
 	0x43, 0x6c, 0x75, 0x73, 0x74, 0x65, 0x72, 0x52, 0x0d, 0x76, 0x69, 0x74, 0x65, 0x73, 0x73, 0x43,
-	0x6c, 0x75, 0x73, 0x74, 0x65, 0x72, 0x2a, 0x28, 0x0a, 0x0c, 0x4b, 0x65, 0x79, 0x73, 0x70, 0x61,
-	0x63, 0x65, 0x54, 0x79, 0x70, 0x65, 0x12, 0x0a, 0x0a, 0x06, 0x4e, 0x4f, 0x52, 0x4d, 0x41, 0x4c,
-	0x10, 0x00, 0x12, 0x0c, 0x0a, 0x08, 0x53, 0x4e, 0x41, 0x50, 0x53, 0x48, 0x4f, 0x54, 0x10, 0x01,
-	0x2a, 0x32, 0x0a, 0x0e, 0x4b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x49, 0x64, 0x54, 0x79,
-	0x70, 0x65, 0x12, 0x09, 0x0a, 0x05, 0x55, 0x4e, 0x53, 0x45, 0x54, 0x10, 0x00, 0x12, 0x0a, 0x0a,
-	0x06, 0x55, 0x49, 0x4e, 0x54, 0x36, 0x34, 0x10, 0x01, 0x12, 0x09, 0x0a, 0x05, 0x42, 0x59, 0x54,
-	0x45, 0x53, 0x10, 0x02, 0x2a, 0x90, 0x01, 0x0a, 0x0a, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x54,
-	0x79, 0x70, 0x65, 0x12, 0x0b, 0x0a, 0x07, 0x55, 0x4e, 0x4b, 0x4e, 0x4f, 0x57, 0x4e, 0x10, 0x00,
-	0x12, 0x0a, 0x0a, 0x06, 0x4d, 0x41, 0x53, 0x54, 0x45, 0x52, 0x10, 0x01, 0x12, 0x0b, 0x0a, 0x07,
-	0x52, 0x45, 0x50, 0x4c, 0x49, 0x43, 0x41, 0x10, 0x02, 0x12, 0x0a, 0x0a, 0x06, 0x52, 0x44, 0x4f,
-	0x4e, 0x4c, 0x59, 0x10, 0x03, 0x12, 0x09, 0x0a, 0x05, 0x42, 0x41, 0x54, 0x43, 0x48, 0x10, 0x03,
-	0x12, 0x09, 0x0a, 0x05, 0x53, 0x50, 0x41, 0x52, 0x45, 0x10, 0x04, 0x12, 0x10, 0x0a, 0x0c, 0x45,
-	0x58, 0x50, 0x45, 0x52, 0x49, 0x4d, 0x45, 0x4e, 0x54, 0x41, 0x4c, 0x10, 0x05, 0x12, 0x0a, 0x0a,
-	0x06, 0x42, 0x41, 0x43, 0x4b, 0x55, 0x50, 0x10, 0x06, 0x12, 0x0b, 0x0a, 0x07, 0x52, 0x45, 0x53,
-	0x54, 0x4f, 0x52, 0x45, 0x10, 0x07, 0x12, 0x0b, 0x0a, 0x07, 0x44, 0x52, 0x41, 0x49, 0x4e, 0x45,
-	0x44, 0x10, 0x08, 0x1a, 0x02, 0x10, 0x01, 0x42, 0x38, 0x0a, 0x0f, 0x69, 0x6f, 0x2e, 0x76, 0x69,
-	0x74, 0x65, 0x73, 0x73, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x5a, 0x25, 0x76, 0x69, 0x74, 0x65,
-	0x73, 0x73, 0x2e, 0x69, 0x6f, 0x2f, 0x76, 0x69, 0x74, 0x65, 0x73, 0x73, 0x2f, 0x67, 0x6f, 0x2f,
-	0x76, 0x74, 0x2f, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2f, 0x74, 0x6f, 0x70, 0x6f, 0x64, 0x61, 0x74,
-	0x61, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
+	0x6c, 0x75, 0x73, 0x74, 0x65, 0x72, 0x22, 0x35, 0x0a, 0x0c, 0x54, 0x6f, 0x70, 0x6f, 0x45, 0x76,
+	0x65, 0x6e, 0x74, 0x4c, 0x6f, 0x67, 0x12, 0x25, 0x0a, 0x03, 0x6c, 0x6f, 0x67, 0x18, 0x01, 0x20,
+	0x03, 0x28, 0x0b, 0x32, 0x13, 0x2e, 0x74, 0x6f, 0x70, 0x6f, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x54,
+	0x6f, 0x70, 0x6f, 0x45, 0x76, 0x65, 0x6e, 0x74, 0x52, 0x03, 0x6c, 0x6f, 0x67, 0x22, 0x95, 0x06,
+	0x0a, 0x09, 0x54, 0x6f, 0x70, 0x6f, 0x45, 0x76, 0x65, 0x6e, 0x74, 0x12, 0x12, 0x0a, 0x04, 0x63,
+	0x65, 0x6c, 0x6c, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x04, 0x63, 0x65, 0x6c, 0x6c, 0x12,
+	0x2b, 0x0a, 0x0a, 0x73, 0x74, 0x61, 0x72, 0x74, 0x65, 0x64, 0x5f, 0x61, 0x74, 0x18, 0x02, 0x20,
+	0x01, 0x28, 0x0b, 0x32, 0x0c, 0x2e, 0x76, 0x74, 0x74, 0x69, 0x6d, 0x65, 0x2e, 0x54, 0x69, 0x6d,
+	0x65, 0x52, 0x09, 0x73, 0x74, 0x61, 0x72, 0x74, 0x65, 0x64, 0x41, 0x74, 0x12, 0x12, 0x0a, 0x04,
+	0x75, 0x75, 0x69, 0x64, 0x18, 0x03, 0x20, 0x01, 0x28, 0x09, 0x52, 0x04, 0x75, 0x75, 0x69, 0x64,
+	0x12, 0x1a, 0x0a, 0x08, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x18, 0x04, 0x20, 0x01,
+	0x28, 0x09, 0x52, 0x08, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x12, 0x5f, 0x0a, 0x15,
+	0x65, 0x6d, 0x65, 0x72, 0x67, 0x65, 0x6e, 0x63, 0x79, 0x5f, 0x72, 0x65, 0x70, 0x61, 0x72, 0x65,
+	0x6e, 0x74, 0x69, 0x6e, 0x67, 0x18, 0x05, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x28, 0x2e, 0x74, 0x6f,
+	0x70, 0x6f, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x54, 0x6f, 0x70, 0x6f, 0x45, 0x76, 0x65, 0x6e, 0x74,
+	0x2e, 0x45, 0x6d, 0x65, 0x72, 0x67, 0x65, 0x6e, 0x63, 0x79, 0x52, 0x65, 0x70, 0x61, 0x72, 0x65,
+	0x6e, 0x74, 0x69, 0x6e, 0x67, 0x48, 0x00, 0x52, 0x14, 0x65, 0x6d, 0x65, 0x72, 0x67, 0x65, 0x6e,
+	0x63, 0x79, 0x52, 0x65, 0x70, 0x61, 0x72, 0x65, 0x6e, 0x74, 0x69, 0x6e, 0x67, 0x12, 0x59, 0x0a,
+	0x13, 0x70, 0x6c, 0x61, 0x6e, 0x6e, 0x65, 0x64, 0x5f, 0x72, 0x65, 0x70, 0x61, 0x72, 0x65, 0x6e,
+	0x74, 0x69, 0x6e, 0x67, 0x18, 0x06, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x26, 0x2e, 0x74, 0x6f, 0x70,
+	0x6f, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x54, 0x6f, 0x70, 0x6f, 0x45, 0x76, 0x65, 0x6e, 0x74, 0x2e,
+	0x50, 0x6c, 0x61, 0x6e, 0x6e, 0x65, 0x64, 0x52, 0x65, 0x70, 0x61, 0x72, 0x65, 0x6e, 0x74, 0x69,
+	0x6e, 0x67, 0x48, 0x00, 0x52, 0x12, 0x70, 0x6c, 0x61, 0x6e, 0x6e, 0x65, 0x64, 0x52, 0x65, 0x70,
+	0x61, 0x72, 0x65, 0x6e, 0x74, 0x69, 0x6e, 0x67, 0x12, 0x40, 0x0a, 0x0a, 0x72, 0x65, 0x73, 0x68,
+	0x61, 0x72, 0x64, 0x69, 0x6e, 0x67, 0x18, 0x07, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x1e, 0x2e, 0x74,
+	0x6f, 0x70, 0x6f, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x54, 0x6f, 0x70, 0x6f, 0x45, 0x76, 0x65, 0x6e,
+	0x74, 0x2e, 0x52, 0x65, 0x73, 0x68, 0x61, 0x72, 0x64, 0x69, 0x6e, 0x67, 0x48, 0x00, 0x52, 0x0a,
+	0x72, 0x65, 0x73, 0x68, 0x61, 0x72, 0x64, 0x69, 0x6e, 0x67, 0x1a, 0x8e, 0x01, 0x0a, 0x14, 0x45,
+	0x6d, 0x65, 0x72, 0x67, 0x65, 0x6e, 0x63, 0x79, 0x52, 0x65, 0x70, 0x61, 0x72, 0x65, 0x6e, 0x74,
+	0x69, 0x6e, 0x67, 0x12, 0x14, 0x0a, 0x05, 0x73, 0x68, 0x61, 0x72, 0x64, 0x18, 0x01, 0x20, 0x01,
+	0x28, 0x09, 0x52, 0x05, 0x73, 0x68, 0x61, 0x72, 0x64, 0x12, 0x39, 0x0a, 0x0c, 0x70, 0x72, 0x69,
+	0x6d, 0x61, 0x72, 0x79, 0x45, 0x6c, 0x65, 0x63, 0x74, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0b, 0x32,
+	0x15, 0x2e, 0x74, 0x6f, 0x70, 0x6f, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x54, 0x61, 0x62, 0x6c, 0x65,
+	0x74, 0x41, 0x6c, 0x69, 0x61, 0x73, 0x52, 0x0c, 0x70, 0x72, 0x69, 0x6d, 0x61, 0x72, 0x79, 0x45,
+	0x6c, 0x65, 0x63, 0x74, 0x12, 0x25, 0x0a, 0x0e, 0x69, 0x67, 0x6e, 0x6f, 0x72, 0x65, 0x5f, 0x74,
+	0x61, 0x62, 0x6c, 0x65, 0x74, 0x73, 0x18, 0x03, 0x20, 0x03, 0x28, 0x09, 0x52, 0x0d, 0x69, 0x67,
+	0x6e, 0x6f, 0x72, 0x65, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x73, 0x1a, 0xa0, 0x01, 0x0a, 0x12,
+	0x50, 0x6c, 0x61, 0x6e, 0x6e, 0x65, 0x64, 0x52, 0x65, 0x70, 0x61, 0x72, 0x65, 0x6e, 0x74, 0x69,
+	0x6e, 0x67, 0x12, 0x14, 0x0a, 0x05, 0x73, 0x68, 0x61, 0x72, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28,
+	0x09, 0x52, 0x05, 0x73, 0x68, 0x61, 0x72, 0x64, 0x12, 0x39, 0x0a, 0x0c, 0x70, 0x72, 0x69, 0x6d,
+	0x61, 0x72, 0x79, 0x45, 0x6c, 0x65, 0x63, 0x74, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x15,
+	0x2e, 0x74, 0x6f, 0x70, 0x6f, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x74,
+	0x41, 0x6c, 0x69, 0x61, 0x73, 0x52, 0x0c, 0x70, 0x72, 0x69, 0x6d, 0x61, 0x72, 0x79, 0x45, 0x6c,
+	0x65, 0x63, 0x74, 0x12, 0x39, 0x0a, 0x0c, 0x70, 0x72, 0x69, 0x6d, 0x61, 0x72, 0x79, 0x41, 0x76,
+	0x6f, 0x69, 0x64, 0x18, 0x03, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x15, 0x2e, 0x74, 0x6f, 0x70, 0x6f,
+	0x64, 0x61, 0x74, 0x61, 0x2e, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x41, 0x6c, 0x69, 0x61, 0x73,
+	0x52, 0x0c, 0x70, 0x72, 0x69, 0x6d, 0x61, 0x72, 0x79, 0x41, 0x76, 0x6f, 0x69, 0x64, 0x1a, 0x5c,
+	0x0a, 0x0a, 0x52, 0x65, 0x73, 0x68, 0x61, 0x72, 0x64, 0x69, 0x6e, 0x67, 0x12, 0x1a, 0x0a, 0x08,
+	0x77, 0x6f, 0x72, 0x6b, 0x66, 0x6c, 0x6f, 0x77, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08,
+	0x77, 0x6f, 0x72, 0x6b, 0x66, 0x6c, 0x6f, 0x77, 0x12, 0x18, 0x0a, 0x07, 0x73, 0x6f, 0x75, 0x72,
+	0x63, 0x65, 0x73, 0x18, 0x02, 0x20, 0x03, 0x28, 0x09, 0x52, 0x07, 0x73, 0x6f, 0x75, 0x72, 0x63,
+	0x65, 0x73, 0x12, 0x18, 0x0a, 0x07, 0x74, 0x61, 0x72, 0x67, 0x65, 0x74, 0x73, 0x18, 0x03, 0x20,
+	0x03, 0x28, 0x09, 0x52, 0x07, 0x74, 0x61, 0x72, 0x67, 0x65, 0x74, 0x73, 0x42, 0x07, 0x0a, 0x05,
+	0x65, 0x76, 0x65, 0x6e, 0x74, 0x2a, 0x28, 0x0a, 0x0c, 0x4b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63,
+	0x65, 0x54, 0x79, 0x70, 0x65, 0x12, 0x0a, 0x0a, 0x06, 0x4e, 0x4f, 0x52, 0x4d, 0x41, 0x4c, 0x10,
+	0x00, 0x12, 0x0c, 0x0a, 0x08, 0x53, 0x4e, 0x41, 0x50, 0x53, 0x48, 0x4f, 0x54, 0x10, 0x01, 0x2a,
+	0x32, 0x0a, 0x0e, 0x4b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x49, 0x64, 0x54, 0x79, 0x70,
+	0x65, 0x12, 0x09, 0x0a, 0x05, 0x55, 0x4e, 0x53, 0x45, 0x54, 0x10, 0x00, 0x12, 0x0a, 0x0a, 0x06,
+	0x55, 0x49, 0x4e, 0x54, 0x36, 0x34, 0x10, 0x01, 0x12, 0x09, 0x0a, 0x05, 0x42, 0x59, 0x54, 0x45,
+	0x53, 0x10, 0x02, 0x2a, 0x90, 0x01, 0x0a, 0x0a, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x54, 0x79,
+	0x70, 0x65, 0x12, 0x0b, 0x0a, 0x07, 0x55, 0x4e, 0x4b, 0x4e, 0x4f, 0x57, 0x4e, 0x10, 0x00, 0x12,
+	0x0a, 0x0a, 0x06, 0x4d, 0x41, 0x53, 0x54, 0x45, 0x52, 0x10, 0x01, 0x12, 0x0b, 0x0a, 0x07, 0x52,
+	0x45, 0x50, 0x4c, 0x49, 0x43, 0x41, 0x10, 0x02, 0x12, 0x0a, 0x0a, 0x06, 0x52, 0x44, 0x4f, 0x4e,
+	0x4c, 0x59, 0x10, 0x03, 0x12, 0x09, 0x0a, 0x05, 0x42, 0x41, 0x54, 0x43, 0x48, 0x10, 0x03, 0x12,
+	0x09, 0x0a, 0x05, 0x53, 0x50, 0x41, 0x52, 0x45, 0x10, 0x04, 0x12, 0x10, 0x0a, 0x0c, 0x45, 0x58,
+	0x50, 0x45, 0x52, 0x49, 0x4d, 0x45, 0x4e, 0x54, 0x41, 0x4c, 0x10, 0x05, 0x12, 0x0a, 0x0a, 0x06,
+	0x42, 0x41, 0x43, 0x4b, 0x55, 0x50, 0x10, 0x06, 0x12, 0x0b, 0x0a, 0x07, 0x52, 0x45, 0x53, 0x54,
+	0x4f, 0x52, 0x45, 0x10, 0x07, 0x12, 0x0b, 0x0a, 0x07, 0x44, 0x52, 0x41, 0x49, 0x4e, 0x45, 0x44,
+	0x10, 0x08, 0x1a, 0x02, 0x10, 0x01, 0x42, 0x38, 0x0a, 0x0f, 0x69, 0x6f, 0x2e, 0x76, 0x69, 0x74,
+	0x65, 0x73, 0x73, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x5a, 0x25, 0x76, 0x69, 0x74, 0x65, 0x73,
+	0x73, 0x2e, 0x69, 0x6f, 0x2f, 0x76, 0x69, 0x74, 0x65, 0x73, 0x73, 0x2f, 0x67, 0x6f, 0x2f, 0x76,
+	0x74, 0x2f, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2f, 0x74, 0x6f, 0x70, 0x6f, 0x64, 0x61, 0x74, 0x61,
+	0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
 }
 
 var (
@@ -1986,75 +2401,88 @@ func file_topodata_proto_rawDescGZIP() []byte {
 }
 
 var file_topodata_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
-var file_topodata_proto_msgTypes = make([]protoimpl.MessageInfo, 23)
+var file_topodata_proto_msgTypes = make([]protoimpl.MessageInfo, 28)
 var file_topodata_proto_goTypes = []interface{}{
-	(KeyspaceType)(0),                     // 0: topodata.KeyspaceType
-	(KeyspaceIdType)(0),                   // 1: topodata.KeyspaceIdType
-	(TabletType)(0),                       // 2: topodata.TabletType
-	(*KeyRange)(nil),                      // 3: topodata.KeyRange
-	(*TabletAlias)(nil),                   // 4: topodata.TabletAlias
-	(*Tablet)(nil),                        // 5: topodata.Tablet
-	(*Shard)(nil),                         // 6: topodata.Shard
-	(*Keyspace)(nil),                      // 7: topodata.Keyspace
-	(*ShardReplication)(nil),              // 8: topodata.ShardReplication
-	(*ShardReference)(nil),                // 9: topodata.ShardReference
-	(*ShardTabletControl)(nil),            // 10: topodata.ShardTabletControl
-	(*SrvKeyspace)(nil),                   // 11: topodata.SrvKeyspace
-	(*CellInfo)(nil),                      // 12: topodata.CellInfo
-	(*CellsAlias)(nil),                    // 13: topodata.CellsAlias
-	(*TopoConfig)(nil),                    // 14: topodata.TopoConfig
-	(*ExternalVitessCluster)(nil),         // 15: topodata.ExternalVitessCluster
-	(*ExternalClusters)(nil),              // 16: topodata.ExternalClusters
-	nil,                                   // 17: topodata.Tablet.PortMapEntry
-	nil,                                   // 18: topodata.Tablet.TagsEntry
-	(*Shard_ServedType)(nil),              // 19: topodata.Shard.ServedType
-	(*Shard_SourceShard)(nil),             // 20: topodata.Shard.SourceShard
-	(*Shard_TabletControl)(nil),           // 21: topodata.Shard.TabletControl
-	(*Keyspace_ServedFrom)(nil),           // 22: topodata.Keyspace.ServedFrom
-	(*ShardReplication_Node)(nil),         // 23: topodata.ShardReplication.Node
-	(*SrvKeyspace_KeyspacePartition)(nil), // 24: topodata.SrvKeyspace.KeyspacePartition
-	(*SrvKeyspace_ServedFrom)(nil),        // 25: topodata.SrvKeyspace.ServedFrom
-	(*vttime.Time)(nil),                   // 26: vttime.Time
+	(KeyspaceType)(0),                      // 0: topodata.KeyspaceType
+	(KeyspaceIdType)(0),                    // 1: topodata.KeyspaceIdType
+	(TabletType)(0),                        // 2: topodata.TabletType
+	(*KeyRange)(nil),                       // 3: topodata.KeyRange
+	(*TabletAlias)(nil),                    // 4: topodata.TabletAlias
+	(*Tablet)(nil),                         // 5: topodata.Tablet
+	(*Shard)(nil),                          // 6: topodata.Shard
+	(*Keyspace)(nil),                       // 7: topodata.Keyspace
+	(*ShardReplication)(nil),               // 8: topodata.ShardReplication
+	(*ShardReference)(nil),                 // 9: topodata.ShardReference
+	(*ShardTabletControl)(nil),             // 10: topodata.ShardTabletControl
+	(*SrvKeyspace)(nil),                    // 11: topodata.SrvKeyspace
+	(*CellInfo)(nil),                       // 12: topodata.CellInfo
+	(*CellsAlias)(nil),                     // 13: topodata.CellsAlias
+	(*TopoConfig)(nil),                     // 14: topodata.TopoConfig
+	(*ExternalVitessCluster)(nil),          // 15: topodata.ExternalVitessCluster
+	(*ExternalClusters)(nil),               // 16: topodata.ExternalClusters
+	(*TopoEventLog)(nil),                   // 17: topodata.TopoEventLog
+	(*TopoEvent)(nil),                      // 18: topodata.TopoEvent
+	nil,                                    // 19: topodata.Tablet.PortMapEntry
+	nil,                                    // 20: topodata.Tablet.TagsEntry
+	(*Shard_ServedType)(nil),               // 21: topodata.Shard.ServedType
+	(*Shard_SourceShard)(nil),              // 22: topodata.Shard.SourceShard
+	(*Shard_TabletControl)(nil),            // 23: topodata.Shard.TabletControl
+	(*Keyspace_ServedFrom)(nil),            // 24: topodata.Keyspace.ServedFrom
+	(*ShardReplication_Node)(nil),          // 25: topodata.ShardReplication.Node
+	(*SrvKeyspace_KeyspacePartition)(nil),  // 26: topodata.SrvKeyspace.KeyspacePartition
+	(*SrvKeyspace_ServedFrom)(nil),         // 27: topodata.SrvKeyspace.ServedFrom
+	(*TopoEvent_EmergencyReparenting)(nil), // 28: topodata.TopoEvent.EmergencyReparenting
+	(*TopoEvent_PlannedReparenting)(nil),   // 29: topodata.TopoEvent.PlannedReparenting
+	(*TopoEvent_Resharding)(nil),           // 30: topodata.TopoEvent.Resharding
+	(*vttime.Time)(nil),                    // 31: vttime.Time
 }
 var file_topodata_proto_depIdxs = []int32{
 	4,  // 0: topodata.Tablet.alias:type_name -> topodata.TabletAlias
-	17, // 1: topodata.Tablet.port_map:type_name -> topodata.Tablet.PortMapEntry
+	19, // 1: topodata.Tablet.port_map:type_name -> topodata.Tablet.PortMapEntry
 	3,  // 2: topodata.Tablet.key_range:type_name -> topodata.KeyRange
 	2,  // 3: topodata.Tablet.type:type_name -> topodata.TabletType
-	18, // 4: topodata.Tablet.tags:type_name -> topodata.Tablet.TagsEntry
-	26, // 5: topodata.Tablet.master_term_start_time:type_name -> vttime.Time
+	20, // 4: topodata.Tablet.tags:type_name -> topodata.Tablet.TagsEntry
+	31, // 5: topodata.Tablet.master_term_start_time:type_name -> vttime.Time
 	4,  // 6: topodata.Shard.master_alias:type_name -> topodata.TabletAlias
-	26, // 7: topodata.Shard.master_term_start_time:type_name -> vttime.Time
+	31, // 7: topodata.Shard.master_term_start_time:type_name -> vttime.Time
 	3,  // 8: topodata.Shard.key_range:type_name -> topodata.KeyRange
-	19, // 9: topodata.Shard.served_types:type_name -> topodata.Shard.ServedType
-	20, // 10: topodata.Shard.source_shards:type_name -> topodata.Shard.SourceShard
-	21, // 11: topodata.Shard.tablet_controls:type_name -> topodata.Shard.TabletControl
+	21, // 9: topodata.Shard.served_types:type_name -> topodata.Shard.ServedType
+	22, // 10: topodata.Shard.source_shards:type_name -> topodata.Shard.SourceShard
+	23, // 11: topodata.Shard.tablet_controls:type_name -> topodata.Shard.TabletControl
 	1,  // 12: topodata.Keyspace.sharding_column_type:type_name -> topodata.KeyspaceIdType
-	22, // 13: topodata.Keyspace.served_froms:type_name -> topodata.Keyspace.ServedFrom
+	24, // 13: topodata.Keyspace.served_froms:type_name -> topodata.Keyspace.ServedFrom
 	0,  // 14: topodata.Keyspace.keyspace_type:type_name -> topodata.KeyspaceType
-	26, // 15: topodata.Keyspace.snapshot_time:type_name -> vttime.Time
-	23, // 16: topodata.ShardReplication.nodes:type_name -> topodata.ShardReplication.Node
+	31, // 15: topodata.Keyspace.snapshot_time:type_name -> vttime.Time
+	25, // 16: topodata.ShardReplication.nodes:type_name -> topodata.ShardReplication.Node
 	3,  // 17: topodata.ShardReference.key_range:type_name -> topodata.KeyRange
 	3,  // 18: topodata.ShardTabletControl.key_range:type_name -> topodata.KeyRange
-	24, // 19: topodata.SrvKeyspace.partitions:type_name -> topodata.SrvKeyspace.KeyspacePartition
+	26, // 19: topodata.SrvKeyspace.partitions:type_name -> topodata.SrvKeyspace.KeyspacePartition
 	1,  // 20: topodata.SrvKeyspace.sharding_column_type:type_name -> topodata.KeyspaceIdType
-	25, // 21: topodata.SrvKeyspace.served_from:type_name -> topodata.SrvKeyspace.ServedFrom
+	27, // 21: topodata.SrvKeyspace.served_from:type_name -> topodata.SrvKeyspace.ServedFrom
 	14, // 22: topodata.ExternalVitessCluster.topo_config:type_name -> topodata.TopoConfig
 	15, // 23: topodata.ExternalClusters.vitess_cluster:type_name -> topodata.ExternalVitessCluster
-	2,  // 24: topodata.Shard.ServedType.tablet_type:type_name -> topodata.TabletType
-	3,  // 25: topodata.Shard.SourceShard.key_range:type_name -> topodata.KeyRange
-	2,  // 26: topodata.Shard.TabletControl.tablet_type:type_name -> topodata.TabletType
-	2,  // 27: topodata.Keyspace.ServedFrom.tablet_type:type_name -> topodata.TabletType
-	4,  // 28: topodata.ShardReplication.Node.tablet_alias:type_name -> topodata.TabletAlias
-	2,  // 29: topodata.SrvKeyspace.KeyspacePartition.served_type:type_name -> topodata.TabletType
-	9,  // 30: topodata.SrvKeyspace.KeyspacePartition.shard_references:type_name -> topodata.ShardReference
-	10, // 31: topodata.SrvKeyspace.KeyspacePartition.shard_tablet_controls:type_name -> topodata.ShardTabletControl
-	2,  // 32: topodata.SrvKeyspace.ServedFrom.tablet_type:type_name -> topodata.TabletType
-	33, // [33:33] is the sub-list for method output_type
-	33, // [33:33] is the sub-list for method input_type
-	33, // [33:33] is the sub-list for extension type_name
-	33, // [33:33] is the sub-list for extension extendee
-	0,  // [0:33] is the sub-list for field type_name
+	18, // 24: topodata.TopoEventLog.log:type_name -> topodata.TopoEvent
+	31, // 25: topodata.TopoEvent.started_at:type_name -> vttime.Time
+	28, // 26: topodata.TopoEvent.emergency_reparenting:type_name -> topodata.TopoEvent.EmergencyReparenting
+	29, // 27: topodata.TopoEvent.planned_reparenting:type_name -> topodata.TopoEvent.PlannedReparenting
+	30, // 28: topodata.TopoEvent.resharding:type_name -> topodata.TopoEvent.Resharding
+	2,  // 29: topodata.Shard.ServedType.tablet_type:type_name -> topodata.TabletType
+	3,  // 30: topodata.Shard.SourceShard.key_range:type_name -> topodata.KeyRange
+	2,  // 31: topodata.Shard.TabletControl.tablet_type:type_name -> topodata.TabletType
+	2,  // 32: topodata.Keyspace.ServedFrom.tablet_type:type_name -> topodata.TabletType
+	4,  // 33: topodata.ShardReplication.Node.tablet_alias:type_name -> topodata.TabletAlias
+	2,  // 34: topodata.SrvKeyspace.KeyspacePartition.served_type:type_name -> topodata.TabletType
+	9,  // 35: topodata.SrvKeyspace.KeyspacePartition.shard_references:type_name -> topodata.ShardReference
+	10, // 36: topodata.SrvKeyspace.KeyspacePartition.shard_tablet_controls:type_name -> topodata.ShardTabletControl
+	2,  // 37: topodata.SrvKeyspace.ServedFrom.tablet_type:type_name -> topodata.TabletType
+	4,  // 38: topodata.TopoEvent.EmergencyReparenting.primaryElect:type_name -> topodata.TabletAlias
+	4,  // 39: topodata.TopoEvent.PlannedReparenting.primaryElect:type_name -> topodata.TabletAlias
+	4,  // 40: topodata.TopoEvent.PlannedReparenting.primaryAvoid:type_name -> topodata.TabletAlias
+	41, // [41:41] is the sub-list for method output_type
+	41, // [41:41] is the sub-list for method input_type
+	41, // [41:41] is the sub-list for extension type_name
+	41, // [41:41] is the sub-list for extension extendee
+	0,  // [0:41] is the sub-list for field type_name
 }
 
 func init() { file_topodata_proto_init() }
@@ -2231,8 +2659,8 @@ func file_topodata_proto_init() {
 				return nil
 			}
 		}
-		file_topodata_proto_msgTypes[16].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*Shard_ServedType); i {
+		file_topodata_proto_msgTypes[14].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*TopoEventLog); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -2243,8 +2671,8 @@ func file_topodata_proto_init() {
 				return nil
 			}
 		}
-		file_topodata_proto_msgTypes[17].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*Shard_SourceShard); i {
+		file_topodata_proto_msgTypes[15].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*TopoEvent); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -2256,7 +2684,7 @@ func file_topodata_proto_init() {
 			}
 		}
 		file_topodata_proto_msgTypes[18].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*Shard_TabletControl); i {
+			switch v := v.(*Shard_ServedType); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -2268,7 +2696,7 @@ func file_topodata_proto_init() {
 			}
 		}
 		file_topodata_proto_msgTypes[19].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*Keyspace_ServedFrom); i {
+			switch v := v.(*Shard_SourceShard); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -2280,7 +2708,7 @@ func file_topodata_proto_init() {
 			}
 		}
 		file_topodata_proto_msgTypes[20].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*ShardReplication_Node); i {
+			switch v := v.(*Shard_TabletControl); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -2292,7 +2720,7 @@ func file_topodata_proto_init() {
 			}
 		}
 		file_topodata_proto_msgTypes[21].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*SrvKeyspace_KeyspacePartition); i {
+			switch v := v.(*Keyspace_ServedFrom); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -2304,6 +2732,30 @@ func file_topodata_proto_init() {
 			}
 		}
 		file_topodata_proto_msgTypes[22].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*ShardReplication_Node); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_topodata_proto_msgTypes[23].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*SrvKeyspace_KeyspacePartition); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_topodata_proto_msgTypes[24].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*SrvKeyspace_ServedFrom); i {
 			case 0:
 				return &v.state
@@ -2315,6 +2767,47 @@ func file_topodata_proto_init() {
 				return nil
 			}
 		}
+		file_topodata_proto_msgTypes[25].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*TopoEvent_EmergencyReparenting); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_topodata_proto_msgTypes[26].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*TopoEvent_PlannedReparenting); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_topodata_proto_msgTypes[27].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*TopoEvent_Resharding); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+	}
+	file_topodata_proto_msgTypes[15].OneofWrappers = []interface{}{
+		(*TopoEvent_EmergencyReparenting_)(nil),
+		(*TopoEvent_PlannedReparenting_)(nil),
+		(*TopoEvent_Resharding_)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
@@ -2322,7 +2815,7 @@ func file_topodata_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: file_topodata_proto_rawDesc,
 			NumEnums:      3,
-			NumMessages:   23,
+			NumMessages:   28,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

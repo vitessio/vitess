@@ -22,6 +22,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
+
 	"google.golang.org/protobuf/proto"
 
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -105,6 +107,22 @@ func (erp *EmergencyReparenter) ReparentShard(ctx context.Context, keyspace stri
 			event.DispatchUpdate(ev, "failed EmergencyReparentShard: "+err.Error())
 		}
 	}()
+
+	topoEvent := &topodatapb.TopoEvent{
+		StartedAt: logutil.TimeToProto(time.Now()),
+		Uuid:      uuid.New().String(),
+		Keyspace:  keyspace,
+		Event: &topodatapb.TopoEvent_EmergencyReparenting_{
+			EmergencyReparenting: &topodatapb.TopoEvent_EmergencyReparenting{
+				Shard:         shard,
+				PrimaryElect:  opts.NewPrimaryAlias,
+				IgnoreTablets: opts.IgnoreReplicas.UnsortedList(),
+			}},
+	}
+
+	if err := erp.ts.UpdateTopoEventLog(ctx, topoEvent); err != nil {
+		return nil, err
+	}
 
 	err = erp.reparentShardLocked(ctx, ev, keyspace, shard, opts)
 

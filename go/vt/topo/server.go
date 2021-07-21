@@ -66,6 +66,7 @@ const (
 
 // Filenames for all object types.
 const (
+	TopoEventFile        = "TopologyEvents"
 	CellInfoFile         = "CellInfo"
 	CellsAliasFile       = "CellsAlias"
 	KeyspaceFile         = "Keyspace"
