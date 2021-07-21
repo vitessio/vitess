@@ -3330,8 +3330,8 @@ func (m *DemoteMasterResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error) 
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
-	if m.MasterStatus != nil {
-		size, err := m.MasterStatus.MarshalToSizedBufferVT(dAtA[:i])
+	if m.PrimaryStatus != nil {
+		size, err := m.PrimaryStatus.MarshalToSizedBufferVT(dAtA[:i])
 		if err != nil {
 			return 0, err
 		}
@@ -5400,8 +5400,8 @@ func (m *DemoteMasterResponse) SizeVT() (n int) {
 	if l > 0 {
 		n += 1 + l + sov(uint64(l))
 	}
-	if m.MasterStatus != nil {
-		l = m.MasterStatus.SizeVT()
+	if m.PrimaryStatus != nil {
+		l = m.PrimaryStatus.SizeVT()
 		n += 1 + l + sov(uint64(l))
 	}
 	if m.unknownFields != nil {
@@ -10582,7 +10582,7 @@ func (m *MasterStatusResponse) UnmarshalVT(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			if m.Status == nil {
-				m.Status = &replicationdata.MasterStatus{}
+				m.Status = &replicationdata.PrimaryStatus{}
 			}
 			if err := m.Status.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 				return err
@@ -12637,7 +12637,7 @@ func (m *DemoteMasterResponse) UnmarshalVT(dAtA []byte) error {
 			iNdEx = postIndex
 		case 2:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field MasterStatus", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field PrimaryStatus", wireType)
 			}
 			var msglen int
 			for shift := uint(0); ; shift += 7 {
@@ -12664,10 +12664,10 @@ func (m *DemoteMasterResponse) UnmarshalVT(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			if m.MasterStatus == nil {
-				m.MasterStatus = &replicationdata.MasterStatus{}
+			if m.PrimaryStatus == nil {
+				m.PrimaryStatus = &replicationdata.PrimaryStatus{}
 			}
-			if err := m.MasterStatus.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+			if err := m.PrimaryStatus.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
 			iNdEx = postIndex

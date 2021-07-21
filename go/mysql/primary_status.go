@@ -29,8 +29,8 @@ type PrimaryStatus struct {
 }
 
 // PrimaryStatusToProto translates a PrimaryStatus to proto3.
-func PrimaryStatusToProto(s PrimaryStatus) *replicationdatapb.MasterStatus {
-	return &replicationdatapb.MasterStatus{
+func PrimaryStatusToProto(s PrimaryStatus) *replicationdatapb.PrimaryStatus {
+	return &replicationdatapb.PrimaryStatus{
 		Position:     EncodePosition(s.Position),
 		FilePosition: EncodePosition(s.FilePosition),
 	}
