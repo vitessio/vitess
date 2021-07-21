@@ -25,6 +25,7 @@ import (
 	"crypto/x509"
 	"encoding/hex"
 	"net"
+	"sync"
 
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
@@ -552,8 +553,13 @@ func (n *mysqlCachingSha2AuthMethod) HandleAuthPluginData(c *Conn, user string, 
 // authServers is a registry of AuthServer implementations.
 var authServers = make(map[string]AuthServer)
 
+// mu is used to lock access to authServers
+var mu sync.Mutex
+
 // RegisterAuthServer registers an implementations of AuthServer.
 func RegisterAuthServer(name string, authServer AuthServer) {
+	mu.Lock()
+	defer mu.Unlock()
 	if _, ok := authServers[name]; ok {
 		log.Fatalf("AuthServer named %v already exists", name)
 	}
@@ -562,6 +568,8 @@ func RegisterAuthServer(name string, authServer AuthServer) {
 
 // GetAuthServer returns an AuthServer by name, or log.Exitf.
 func GetAuthServer(name string) AuthServer {
+	mu.Lock()
+	defer mu.Unlock()
 	authServer, ok := authServers[name]
 	if !ok {
 		log.Exitf("no AuthServer name %v registered", name)
