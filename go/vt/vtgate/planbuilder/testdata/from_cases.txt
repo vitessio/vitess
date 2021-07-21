@@ -1578,7 +1578,7 @@ Gen4 plan same as above
 }
 Gen4 plan same as above
 
-# subquery
+# derived table
 "select id from (select id, col from user where id = 5) as t"
 {
   "QueryType": "SELECT",
@@ -1601,7 +1601,7 @@ Gen4 plan same as above
 }
 Gen4 plan same as above
 
-# subquery with join
+# derived table with join
 "select t.id from (select id from user where id = 5) as t join user_extra on t.id = user_extra.user_id"
 {
   "QueryType": "SELECT",
@@ -1623,7 +1623,7 @@ Gen4 plan same as above
   }
 }
 
-# subquery with join, and aliased references
+# derived table with join, and aliased references
 "select t.id from (select user.id from user where user.id = 5) as t join user_extra on t.id = user_extra.user_id"
 {
   "QueryType": "SELECT",
@@ -1645,11 +1645,11 @@ Gen4 plan same as above
   }
 }
 
-# subquery with join, duplicate columns
+# derived table with join, duplicate columns
 "select t.id from (select user.id, id from user where user.id = 5) as t join user_extra on t.id = user_extra.user_id"
 "duplicate column aliases: id"
 
-# subquery in RHS of join
+# derived table in RHS of join
 "select t.id from user_extra join (select id from user where id = 5) as t on t.id = user_extra.user_id"
 {
   "QueryType": "SELECT",
@@ -1667,7 +1667,7 @@ Gen4 plan same as above
   }
 }
 
-# subquery in FROM with cross-shard join
+# derived table in FROM with cross-shard join
 "select t.id from (select id from user where id = 5) as t join user_extra on t.id = user_extra.col"
 {
   "QueryType": "SELECT",

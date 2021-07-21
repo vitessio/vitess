@@ -159,7 +159,7 @@ func optimizeQuery(opTree abstract.Operator, reservedVars *sqlparser.ReservedVar
 		}
 		return mergeOrJoin(treeInner, treeOuter, []sqlparser.Expr{op.Exp}, semTable, true)
 	case *abstract.Derived:
-		treeInner, err := optimizeQuery(op.Inner, semTable, vschema)
+		treeInner, err := optimizeQuery(op.Inner, reservedVars, semTable, vschema)
 		if err != nil {
 			return nil, err
 		}
