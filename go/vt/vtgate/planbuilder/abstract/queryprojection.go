@@ -94,7 +94,7 @@ func CreateQPFromSelect(sel *sqlparser.Select) (*QueryProjection, error) {
 		qp.GroupByExprs = append(qp.GroupByExprs, GroupBy{Inner: expr, WeightStrExpr: weightStrExpr})
 	}
 
-	if qp.HasAggr {
+	if qp.HasAggr || len(qp.GroupByExprs) > 0 {
 		expr := qp.getNonAggrExprNotMatchingGroupByExprs()
 		// if we have aggregation functions, non aggregating columns and GROUP BY,
 		// the non-aggregating expressions must all be listed in the GROUP BY list
