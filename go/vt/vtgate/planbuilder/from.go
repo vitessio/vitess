@@ -19,6 +19,7 @@ package planbuilder
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -186,6 +187,7 @@ func (pb *primitiveBuilder) buildTablePrimitive(tableExpr *sqlparser.AliasedTabl
 		}
 		rb, st := newRoute(sel)
 		rb.eroute = engine.NewSimpleRoute(engine.SelectDBA, ks)
+		rb.eroute.TableName = sqlparser.String(tableName)
 		pb.plan, pb.st = rb, st
 		// Add the table to symtab
 		return st.AddTable(&table{
@@ -343,6 +345,10 @@ func (pb *primitiveBuilder) join(rpb *primitiveBuilder, ajoin *sqlparser.JoinTab
 	} else {
 		sel.From = sqlparser.TableExprs{ajoin}
 	}
+	// join table name
+	if lRoute.eroute.TableName != rRoute.eroute.TableName {
+		lRoute.eroute.TableName = strings.Join([]string{lRoute.eroute.TableName, rRoute.eroute.TableName}, ", ")
+	}
 
 	// Since the routes have merged, set st.singleRoute to point at
 	// the merged route.
@@ -356,7 +362,7 @@ func (pb *primitiveBuilder) join(rpb *primitiveBuilder, ajoin *sqlparser.JoinTab
 	}
 	ajoin.Condition.On = expr
 	pb.addPullouts(pullouts)
-	for _, filter := range splitAndExpression(nil, ajoin.Condition.On) {
+	for _, filter := range sqlparser.SplitAndExpression(nil, ajoin.Condition.On) {
 		lRoute.UpdatePlan(pb, filter)
 	}
 	return nil

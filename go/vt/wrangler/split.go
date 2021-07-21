@@ -120,7 +120,7 @@ func (wr *Wrangler) WaitForFilteredReplication(ctx context.Context, keyspace, sh
 			return fmt.Errorf("no filtered replication running on tablet: %v health record: %v", alias, shr)
 		}
 
-		delaySecs := stats.SecondsBehindMasterFilteredReplication
+		delaySecs := stats.FilteredReplicationLagSeconds
 		lastSeenDelay = time.Duration(delaySecs) * time.Second
 		if lastSeenDelay < 0 {
 			return fmt.Errorf("last seen delay should never be negative. tablet: %v delay: %v", alias, lastSeenDelay)

@@ -47,7 +47,7 @@ func TestVttabletProcess(t *testing.T) {
 
 func TestDeleteTablet(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	primary := clusterInstance.Keyspaces[0].Shards[0].MasterTablet()
+	primary := clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet()
 	require.NotNil(t, primary)
 	_, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("DeleteTablet", "-allow_master", primary.Alias)
 	require.Nil(t, err, "Error: %v", err)

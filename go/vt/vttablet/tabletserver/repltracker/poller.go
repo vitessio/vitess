@@ -57,7 +57,7 @@ func (p *poller) Status() (time.Duration, error) {
 		return time.Since(p.timeRecorded) + p.lag, nil
 	}
 
-	p.lag = time.Duration(status.SecondsBehindMaster) * time.Second
+	p.lag = time.Duration(status.ReplicationLagSeconds) * time.Second
 	p.timeRecorded = time.Now()
 	replicationLagSeconds.Set(int64(p.lag.Seconds()))
 	return p.lag, nil

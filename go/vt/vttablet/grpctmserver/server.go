@@ -365,11 +365,22 @@ func (s *server) ResetReplication(ctx context.Context, request *tabletmanagerdat
 	return response, s.tm.ResetReplication(ctx)
 }
 
-func (s *server) InitMaster(ctx context.Context, request *tabletmanagerdatapb.InitMasterRequest) (response *tabletmanagerdatapb.InitMasterResponse, err error) {
+func (s *server) InitMaster(ctx context.Context, request *tabletmanagerdatapb.InitPrimaryRequest) (response *tabletmanagerdatapb.InitPrimaryResponse, err error) {
 	defer s.tm.HandleRPCPanic(ctx, "InitMaster", request, response, true /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
-	response = &tabletmanagerdatapb.InitMasterResponse{}
+	response = &tabletmanagerdatapb.InitPrimaryResponse{}
 	position, err := s.tm.InitMaster(ctx)
+	if err == nil {
+		response.Position = position
+	}
+	return response, err
+}
+
+func (s *server) InitPrimary(ctx context.Context, request *tabletmanagerdatapb.InitPrimaryRequest) (response *tabletmanagerdatapb.InitPrimaryResponse, err error) {
+	defer s.tm.HandleRPCPanic(ctx, "InitPrimary", request, response, true /*verbose*/, &err)
+	ctx = callinfo.GRPCCallInfo(ctx)
+	response = &tabletmanagerdatapb.InitPrimaryResponse{}
+	position, err := s.tm.InitPrimary(ctx)
 	if err == nil {
 		response.Position = position
 	}
@@ -502,6 +513,6 @@ func init() {
 }
 
 // RegisterForTest will register the RPC, to be used by test instances only
-func RegisterForTest(s *grpc.Server, tm *tabletmanager.TabletManager) {
+func RegisterForTest(s *grpc.Server, tm tabletmanager.RPCTM) {
 	tabletmanagerservicepb.RegisterTabletManagerServer(s, &server{tm: tm})
 }

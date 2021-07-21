@@ -193,7 +193,7 @@ func (wr *Wrangler) ValidateSchemaShard(ctx context.Context, keyspace, shard str
 
 // ValidateSchemaKeyspace will diff the schema from all the tablets in
 // the keyspace.
-func (wr *Wrangler) ValidateSchemaKeyspace(ctx context.Context, keyspace string, excludeTables []string, includeViews, skipNoMaster bool, includeVSchema bool) error {
+func (wr *Wrangler) ValidateSchemaKeyspace(ctx context.Context, keyspace string, excludeTables []string, includeViews, skipNoPrimary bool, includeVSchema bool) error {
 	// find all the shards
 	shards, err := wr.ts.GetShardNames(ctx, keyspace)
 	if err != nil {
@@ -234,7 +234,7 @@ func (wr *Wrangler) ValidateSchemaKeyspace(ctx context.Context, keyspace string,
 		}
 
 		if !si.HasMaster() {
-			if !skipNoMaster {
+			if !skipNoPrimary {
 				er.RecordError(fmt.Errorf("no master in shard %v/%v", keyspace, shard))
 			}
 			continue
@@ -333,7 +333,7 @@ func (wr *Wrangler) CopySchemaShardFromShard(ctx context.Context, tables, exclud
 		return fmt.Errorf("GetShard(%v, %v) failed: %v", sourceKeyspace, sourceShard, err)
 	}
 	if sourceShardInfo.MasterAlias == nil {
-		return fmt.Errorf("no master in shard record %v/%v. Consider running 'vtctl InitShardMaster' in case of a new shard or to reparent the shard to fix the topology data, or providing a non-master tablet alias", sourceKeyspace, sourceShard)
+		return fmt.Errorf("no primary in shard record %v/%v. Consider running 'vtctl InitShardPrimary' in case of a new shard or reparenting the shard to fix the topology data, or providing a non-primary tablet alias", sourceKeyspace, sourceShard)
 	}
 
 	return wr.CopySchemaShard(ctx, sourceShardInfo.MasterAlias, tables, excludeTables, includeViews, destKeyspace, destShard, waitReplicasTimeout, skipVerify)
@@ -350,7 +350,7 @@ func (wr *Wrangler) CopySchemaShard(ctx context.Context, sourceTabletAlias *topo
 	}
 
 	if destShardInfo.MasterAlias == nil {
-		return fmt.Errorf("no master in shard record %v/%v. Consider to run 'vtctl InitShardMaster' in case of a new shard or to reparent the shard to fix the topology data", destKeyspace, destShard)
+		return fmt.Errorf("no primary in shard record %v/%v. Consider running 'vtctl InitShardPrimary' in case of a new shard or reparenting the shard to fix the topology data", destKeyspace, destShard)
 	}
 
 	err = wr.copyShardMetadata(ctx, sourceTabletAlias, destShardInfo.MasterAlias)

@@ -274,6 +274,7 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 		}
 		_, err = vc.tablePlan.applyBulkInsert(&sqlbuffer, rows, func(sql string) (*sqltypes.Result, error) {
 			start := time.Now()
+
 			qr, err := vc.vr.dbClient.ExecuteWithRetry(ctx, sql)
 			if err != nil {
 				return nil, err

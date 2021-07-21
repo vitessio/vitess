@@ -13,8 +13,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import { useQuery, useQueryClient, UseQueryOptions } from 'react-query';
+import { useQueries, useQuery, useQueryClient, UseQueryOptions, UseQueryResult } from 'react-query';
 import {
+    fetchBackups,
     fetchClusters,
     fetchExperimentalTabletDebugVars,
     fetchGates,
@@ -23,16 +24,23 @@ import {
     FetchSchemaParams,
     fetchSchemas,
     fetchTablet,
+    FetchTabletParams,
     fetchTablets,
     fetchVSchema,
     FetchVSchemaParams,
     fetchVTExplain,
     fetchWorkflow,
     fetchWorkflows,
+    TabletDebugVarsResponse,
 } from '../api/http';
 import { vtadmin as pb } from '../proto/vtadmin';
-import { TabletDebugVars } from '../util/tabletDebugVars';
 import { formatAlias } from '../util/tablets';
+
+/**
+ * useBackups is a query hook that fetches all backups across every cluster.
+ */
+export const useBackups = (options?: UseQueryOptions<pb.ClusterBackup[], Error> | undefined) =>
+    useQuery(['backups'], fetchBackups, options);
 
 /**
  * useClusters is a query hook that fetches all clusters VTAdmin is configured to discover.
@@ -81,14 +89,30 @@ export const useTablet = (params: Parameters<typeof fetchTablet>[0], options?: U
 };
 
 export const useExperimentalTabletDebugVars = (
-    params: Parameters<typeof fetchExperimentalTabletDebugVars>[0],
-    options?: UseQueryOptions<TabletDebugVars, Error>
+    params: FetchTabletParams,
+    options?: UseQueryOptions<TabletDebugVarsResponse, Error>
 ) => {
     return useQuery(
         ['experimental/tablet/debug/vars', params],
         () => fetchExperimentalTabletDebugVars(params),
         options
     );
+};
+
+// Future enhancement: add vtadmin-api endpoint to fetch /debug/vars
+// for multiple tablets in a single request. https://github.com/vitessio/vitess/projects/12#card-63086674
+export const useManyExperimentalTabletDebugVars = (
+    params: FetchTabletParams[],
+    defaultOptions: UseQueryOptions<TabletDebugVarsResponse, Error> = {}
+) => {
+    // Robust typing for useQueries is still in progress, so we do
+    // some sneaky type-casting. See https://github.com/tannerlinsley/react-query/issues/1675
+    const queries = params.map((p) => ({
+        queryKey: ['experimental/tablet/debug/vars', p],
+        queryFn: () => fetchExperimentalTabletDebugVars(p),
+        ...(defaultOptions as any),
+    }));
+    return useQueries(queries) as UseQueryResult<TabletDebugVarsResponse, Error>[];
 };
 
 /**

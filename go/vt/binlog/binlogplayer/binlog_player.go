@@ -473,10 +473,10 @@ func (blp *BinlogPlayer) exec(sql string) (*sqltypes.Result, error) {
 // It also tries to get the timestamp for the transaction. Two cases:
 // - we have statements, and they start with a SET TIMESTAMP that we
 //   can parse: then we update transaction_timestamp in vreplication
-//   with it, and set SecondsBehindMaster to now() - transaction_timestamp
+//   with it, and set ReplicationLagSeconds to now() - transaction_timestamp
 // - otherwise (the statements are probably filtered out), we leave
 //   transaction_timestamp alone (keeping the old value), and we don't
-//   change SecondsBehindMaster
+//   change ReplicationLagSeconds
 func (blp *BinlogPlayer) writeRecoveryPosition(tx *binlogdatapb.BinlogTransaction) error {
 	position, err := DecodePosition(tx.EventToken.Position)
 	if err != nil {
@@ -563,6 +563,7 @@ var AlterVReplicationTable = []string{
 	"ALTER TABLE _vt.vreplication MODIFY source BLOB NOT NULL",
 	"ALTER TABLE _vt.vreplication ADD KEY workflow_idx (workflow(64))",
 	"ALTER TABLE _vt.vreplication ADD COLUMN rows_copied BIGINT(20) NOT NULL DEFAULT 0",
+	"ALTER TABLE _vt.vreplication ADD COLUMN tags VARBINARY(1024) NOT NULL DEFAULT ''",
 }
 
 // WithDDLInitialQueries contains the queries to be expected by the mock db client during tests

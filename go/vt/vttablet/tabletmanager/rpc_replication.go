@@ -295,7 +295,7 @@ func (tm *TabletManager) InitReplica(ctx context.Context, parent *topodatapb.Tab
 	defer tm.unlock()
 
 	// If we were a master type, switch our type to replica.  This
-	// is used on the old master when using InitShardMaster with
+	// is used on the old master when using InitShardPrimary with
 	// -force, and the new master is different from the old master.
 	if tm.Tablet().Type == topodatapb.TabletType_MASTER {
 		if err := tm.changeTypeLocked(ctx, topodatapb.TabletType_REPLICA, DBActionNone); err != nil {
@@ -612,7 +612,7 @@ func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentA
 	}
 	masterHost := parent.Tablet.MysqlHostname
 	masterPort := int(parent.Tablet.MysqlPort)
-	if status.MasterHost != masterHost || status.MasterPort != masterPort {
+	if status.SourceHost != masterHost || status.SourcePort != masterPort {
 		// This handles both changing the address and starting replication.
 		if err := tm.MysqlDaemon.SetReplicationSource(ctx, masterHost, masterPort, wasReplicating, shouldbeReplicating); err != nil {
 			if err := tm.handleRelayLogError(err); err != nil {

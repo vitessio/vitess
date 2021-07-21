@@ -61,3 +61,15 @@ create table test_partitioned (
 	primary key(id)
 ) Engine=InnoDB
 ;
+
+create table customer (
+  id bigint,
+  email varchar(64),
+  primary key (id)
+) Engine=InnoDB;
+
+create table email_customer_map (
+   email varchar(64),
+   user_id bigint,
+   primary key (email, user_id)
+) Engine=InnoDB;

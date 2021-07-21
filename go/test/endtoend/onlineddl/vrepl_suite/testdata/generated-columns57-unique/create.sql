@@ -27,4 +27,7 @@ begin
   insert into onlineddl_test (id, jsonobj) values (null, '{"_id":19}');
   insert into onlineddl_test (id, jsonobj) values (null, '{"_id":23}');
   insert into onlineddl_test (id, jsonobj) values (null, '{"_id":27}');
+
+  set @last_insert_id := last_insert_id();
+  update onlineddl_test set jsonobj=JSON_OBJECT('_id', 27, 'name', 'carrot') where id=@last_insert_id and idb=27;
 end ;;

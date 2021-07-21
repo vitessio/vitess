@@ -27,16 +27,16 @@ message Status {
   string position = 1;
   bool io_thread_running = 2;
   bool sql_thread_running = 3;
-  uint32 seconds_behind_master = 4;
-  string master_host = 5;
-  int32 master_port = 6;
-  int32 master_connect_retry = 7;
+  uint32 replication_lag_seconds = 4;
+  string source_host = 5;
+  int32 source_port = 6;
+  int32 connect_retry = 7;
   // RelayLogPosition will be empty for flavors that do not support returning the full GTIDSet from the relay log, such as MariaDB.
   string relay_log_position = 8;
   string file_position = 9;
   string file_relay_log_position = 10;
-  uint32 master_server_id = 11;
-  string master_uuid = 12;
+  uint32 source_server_id = 11;
+  string source_uuid = 12;
 }
 
 // StopReplicationStatus represents the replication status before calling StopReplication, and the replication status collected immediately after
@@ -52,8 +52,15 @@ enum StopReplicationMode {
   IOTHREADONLY = 1;
 }
 
+// Deprecated
 // MasterStatus is the replication status for a MySQL master (returned by 'show master status').
 message MasterStatus {
+  string position = 1;
+  string file_position = 2;
+}
+
+// PrimaryStatus is the replication status for a MySQL primary (returned by 'show master status').
+message PrimaryStatus {
   string position = 1;
   string file_position = 2;
 }

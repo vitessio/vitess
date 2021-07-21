@@ -172,7 +172,7 @@ func onlineDDLStatementSanity(sql string, ddlStmt sqlparser.DDLStatement) error 
 	if err := sqlparser.Walk(validateWalk, ddlStmt); err != nil {
 		switch err {
 		case ErrForeignKeyFound:
-			return vterrors.Errorf(vtrpcpb.Code_ABORTED, "foreign key constraints are not supported in online DDL, see https://code.openark.org/blog/mysql/the-problem-with-mysql-foreign-key-constraints-in-online-schema-changes")
+			return vterrors.Errorf(vtrpcpb.Code_ABORTED, "foreign key constraints are not supported in online DDL, see https://vitess.io/blog/2021-06-15-online-ddl-why-no-fk/")
 		case ErrRenameTableFound:
 			return vterrors.Errorf(vtrpcpb.Code_ABORTED, "ALTER TABLE ... RENAME is not supported in online DDL")
 		}
@@ -370,6 +370,32 @@ func (onlineDDL *OnlineDDL) JobsKeyspaceShardPath(shard string) string {
 // ToJSON exports this onlineDDL to JSON
 func (onlineDDL *OnlineDDL) ToJSON() ([]byte, error) {
 	return json.Marshal(onlineDDL)
+}
+
+// sqlWithoutComments returns the SQL statement without comment directives. Useful for tests
+func (onlineDDL *OnlineDDL) sqlWithoutComments() (sql string, err error) {
+	sql = onlineDDL.SQL
+	stmt, err := sqlparser.Parse(sql)
+	if err != nil {
+		// query validation and rebuilding
+		if _, err := legacyParseRevertUUID(sql); err == nil {
+			// This is a revert statement of the form "revert <uuid>". We allow this for now. Future work will
+			// make sure the statement is a valid, parseable "revert vitess_migration '<uuid>'", but we must
+			// be backwards compatible for now.
+			return sql, nil
+		}
+		// otherwise the statement should have been parseable!
+		return "", err
+	}
+
+	switch stmt := stmt.(type) {
+	case sqlparser.DDLStatement:
+		stmt.SetComments(nil)
+	case *sqlparser.RevertMigration:
+		stmt.SetComments(nil)
+	}
+	sql = sqlparser.String(stmt)
+	return sql, nil
 }
 
 // GetAction extracts the DDL action type from the online DDL statement

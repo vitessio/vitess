@@ -30,6 +30,7 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/trace"
+	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
@@ -288,7 +289,8 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 			db_name,
 			time_updated,
 			transaction_timestamp,
-			message
+			message,
+			tags
 		FROM
 			_vt.vreplication
 		%s`,
@@ -301,6 +303,7 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 		return nil, err
 	}
 
+	m := sync.Mutex{} // guards access to the following maps during concurrent calls to scanWorkflow
 	workflowsMap := make(map[string]*vtctldatapb.Workflow, len(results))
 	sourceKeyspaceByWorkflow := make(map[string]string, len(results))
 	sourceShardsByWorkflow := make(map[string]sets.String, len(results))
@@ -352,6 +355,11 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 
 		message := row[10].ToString()
 
+		tags := row[11].ToString()
+		var tagArray []string
+		if tags != "" {
+			tagArray = strings.Split(tags, ",")
+		}
 		stream := &vtctldatapb.Workflow_Stream{
 			Id:           id,
 			Shard:        tablet.Shard,
@@ -368,6 +376,7 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 				Seconds: timeUpdatedSeconds,
 			},
 			Message: message,
+			Tags:    tagArray,
 		}
 
 		stream.CopyStates, err = s.getWorkflowCopyStates(ctx, tablet, id)
@@ -385,6 +394,15 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 		case stream.State == "Running" && int64(time.Now().Second())-timeUpdatedSeconds > 10:
 			stream.State = "Lagging"
 		}
+
+		// At this point, we're going to start modifying the maps defined
+		// outside this function, as well as fields on the passed-in Workflow
+		// pointer. Since we're running concurrently, take the lock.
+		//
+		// We've already made the remote call to getCopyStates, so synchronizing
+		// here shouldn't hurt too badly, performance-wise.
+		m.Lock()
+		defer m.Unlock()
 
 		shardStreamKey := fmt.Sprintf("%s/%s", tablet.Shard, tablet.AliasString())
 		shardStream, ok := workflow.ShardStreams[shardStreamKey]
@@ -436,6 +454,11 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 		return nil
 	}
 
+	var (
+		scanWorkflowWg     sync.WaitGroup
+		scanWorkflowErrors concurrency.FirstErrorRecorder
+	)
+
 	for tablet, result := range results {
 		qr := sqltypes.Proto3ToResult(result)
 
@@ -464,22 +487,23 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 				targetShardsByWorkflow[workflowName] = sets.NewString()
 			}
 
-			if err := scanWorkflow(ctx, workflow, row, tablet); err != nil {
-				return nil, err
-			}
-
-			// Sort shard streams by stream_id ASC, to support an optimization
-			// in fetchStreamLogs below.
-			for _, shardStreams := range workflow.ShardStreams {
-				sort.Slice(shardStreams.Streams, func(i, j int) bool {
-					return shardStreams.Streams[i].Id < shardStreams.Streams[j].Id
-				})
-			}
+			scanWorkflowWg.Add(1)
+			go func(ctx context.Context, workflow *vtctldatapb.Workflow, row []sqltypes.Value, tablet *topo.TabletInfo) {
+				defer scanWorkflowWg.Done()
+				if err := scanWorkflow(ctx, workflow, row, tablet); err != nil {
+					scanWorkflowErrors.RecordError(err)
+				}
+			}(ctx, workflow, row, tablet)
 		}
 	}
 
+	scanWorkflowWg.Wait()
+	if scanWorkflowErrors.HasErrors() {
+		return nil, scanWorkflowErrors.Error()
+	}
+
 	var (
-		wg           sync.WaitGroup
+		fetchLogsWG  sync.WaitGroup
 		vrepLogQuery = strings.TrimSpace(`
 SELECT
 	id,
@@ -499,7 +523,11 @@ ORDER BY
 	)
 
 	fetchStreamLogs := func(ctx context.Context, workflow *vtctldatapb.Workflow) {
-		defer wg.Done()
+		span, ctx := trace.NewSpan(ctx, "workflow.Server.scanWorkflow")
+		defer span.Finish()
+
+		span.Annotate("keyspace", req.Keyspace)
+		span.Annotate("workflow", workflow.Name)
 
 		results, err := vx.WithWorkflow(workflow.Name).QueryContext(ctx, vrepLogQuery)
 		if err != nil {
@@ -651,15 +679,26 @@ ORDER BY
 
 		workflow.MaxVReplicationLag = int64(maxVReplicationLag)
 
-		// Fetch logs for all streams associated with this workflow in the background.
-		wg.Add(1)
-		go fetchStreamLogs(ctx, workflow)
+		// Sort shard streams by stream_id ASC, to support an optimization
+		// in fetchStreamLogs below.
+		for _, shardStreams := range workflow.ShardStreams {
+			sort.Slice(shardStreams.Streams, func(i, j int) bool {
+				return shardStreams.Streams[i].Id < shardStreams.Streams[j].Id
+			})
+		}
 
 		workflows = append(workflows, workflow)
+
+		// Fetch logs for all streams associated with this workflow in the background.
+		fetchLogsWG.Add(1)
+		go func(ctx context.Context, workflow *vtctldatapb.Workflow) {
+			defer fetchLogsWG.Done()
+			fetchStreamLogs(ctx, workflow)
+		}(ctx, workflow)
 	}
 
 	// Wait for all the log fetchers to finish.
-	wg.Wait()
+	fetchLogsWG.Wait()
 
 	return &vtctldatapb.GetWorkflowsResponse{
 		Workflows: workflows,

@@ -20,12 +20,18 @@ func newDatadogTracer(serviceName string) (tracingService, io.Closer, error) {
 		return nil, nil, fmt.Errorf("need host and port to datadog agent to use datadog tracing")
 	}
 
-	t := opentracer.New(
-		ddtracer.WithAgentAddr(*dataDogHost+":"+*dataDogPort),
+	opts := []ddtracer.StartOption{
+		ddtracer.WithAgentAddr(*dataDogHost + ":" + *dataDogPort),
 		ddtracer.WithServiceName(serviceName),
 		ddtracer.WithDebugMode(true),
 		ddtracer.WithSampler(ddtracer.NewRateSampler(samplingRate.Get())),
-	)
+	}
+
+	if *enableLogging {
+		opts = append(opts, ddtracer.WithLogger(&traceLogger{}))
+	}
+
+	t := opentracer.New(opts...)
 
 	opentracing.SetGlobalTracer(t)
 

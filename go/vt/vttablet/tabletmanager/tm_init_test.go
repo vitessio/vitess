@@ -125,6 +125,7 @@ func TestStartCreateKeyspaceShard(t *testing.T) {
 	rebuildKeyspaceRetryInterval = 10 * time.Millisecond
 
 	ctx := context.Background()
+	statsTabletTypeCount.ResetAll()
 	cell := "cell1"
 	ts := memorytopo.NewServer(cell)
 	tm := newTestTM(t, ts, 1, "ks", "0")

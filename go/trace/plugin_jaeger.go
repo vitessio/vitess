@@ -98,7 +98,14 @@ func newJagerTracerFromEnv(serviceName string) (tracingService, io.Closer, error
 
 	log.Infof("Tracing sampler type %v (param: %v)", cfg.Sampler.Type, cfg.Sampler.Param)
 
-	tracer, closer, err := cfg.NewTracer()
+	var opts []config.Option
+	if *enableLogging {
+		opts = append(opts, config.Logger(&traceLogger{}))
+	} else if cfg.Reporter.LogSpans {
+		log.Warningf("JAEGER_REPORTER_LOG_SPANS was set, but -tracing-enable-logging was not; spans will not be logged")
+	}
+
+	tracer, closer, err := cfg.NewTracer(opts...)
 
 	if err != nil {
 		return nil, &nilCloser{}, err

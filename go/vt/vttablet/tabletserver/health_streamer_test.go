@@ -94,8 +94,8 @@ func TestHealthStreamerBroadcast(t *testing.T) {
 		},
 		TabletAlias: alias,
 		RealtimeStats: &querypb.RealtimeStats{
-			SecondsBehindMasterFilteredReplication: 1,
-			BinlogPlayersCount:                     2,
+			FilteredReplicationLagSeconds: 1,
+			BinlogPlayersCount:            2,
 		},
 	}
 	assert.Equal(t, want, shr)
@@ -112,8 +112,8 @@ func TestHealthStreamerBroadcast(t *testing.T) {
 		Serving:                             true,
 		TabletExternallyReparentedTimestamp: now.Unix(),
 		RealtimeStats: &querypb.RealtimeStats{
-			SecondsBehindMasterFilteredReplication: 1,
-			BinlogPlayersCount:                     2,
+			FilteredReplicationLagSeconds: 1,
+			BinlogPlayersCount:            2,
 		},
 	}
 	assert.Equal(t, want, shr)
@@ -127,9 +127,9 @@ func TestHealthStreamerBroadcast(t *testing.T) {
 		},
 		TabletAlias: alias,
 		RealtimeStats: &querypb.RealtimeStats{
-			SecondsBehindMaster:                    1,
-			SecondsBehindMasterFilteredReplication: 1,
-			BinlogPlayersCount:                     2,
+			ReplicationLagSeconds:         1,
+			FilteredReplicationLagSeconds: 1,
+			BinlogPlayersCount:            2,
 		},
 	}
 	assert.Equal(t, want, shr)
@@ -143,9 +143,9 @@ func TestHealthStreamerBroadcast(t *testing.T) {
 		},
 		TabletAlias: alias,
 		RealtimeStats: &querypb.RealtimeStats{
-			HealthError:                            "repl err",
-			SecondsBehindMasterFilteredReplication: 1,
-			BinlogPlayersCount:                     2,
+			HealthError:                   "repl err",
+			FilteredReplicationLagSeconds: 1,
+			BinlogPlayersCount:            2,
 		},
 	}
 	assert.Equal(t, want, shr)

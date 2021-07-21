@@ -268,11 +268,11 @@ func TestReparenting(t *testing.T) {
 	_, err = stream.MessageStream(userKeyspace, "", nil, name)
 	require.Nil(t, err)
 
-	assert.Equal(t, 1, getClientCount(shard0Master))
+	assert.Equal(t, 1, getClientCount(shard0Primary))
 	assert.Equal(t, 0, getClientCount(shard0Replica))
-	assert.Equal(t, 1, getClientCount(shard1Master))
+	assert.Equal(t, 1, getClientCount(shard1Primary))
 
-	// do planned reparenting, make one replica as master
+	// do planned reparenting, make one replica as primary
 	// and validate client connection count in correspond tablets
 	clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(
 		"PlannedReparentShard",
@@ -287,27 +287,27 @@ func TestReparenting(t *testing.T) {
 	// wait before retrying: that is 30s/5 where 30s is the default
 	// message_stream_grace_period.
 	time.Sleep(10 * time.Second)
-	assert.Equal(t, 0, getClientCount(shard0Master))
+	assert.Equal(t, 0, getClientCount(shard0Primary))
 	assert.Equal(t, 1, getClientCount(shard0Replica))
-	assert.Equal(t, 1, getClientCount(shard1Master))
+	assert.Equal(t, 1, getClientCount(shard1Primary))
 	session := stream.Session("@master", nil)
 	cluster.ExecuteQueriesUsingVtgate(t, session, "insert into sharded_message (id, message) values (3,'hello world 3')")
 
 	// validate that we have received inserted message
 	stream.Next()
 
-	// make old master again as new master
+	// make old primary again as new primary
 	clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(
 		"PlannedReparentShard",
 		"-keyspace_shard", userKeyspace+"/-80",
-		"-new_master", shard0Master.Alias)
+		"-new_master", shard0Primary.Alias)
 	// validate topology
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("Validate")
 	require.Nil(t, err)
 	time.Sleep(10 * time.Second)
-	assert.Equal(t, 1, getClientCount(shard0Master))
+	assert.Equal(t, 1, getClientCount(shard0Primary))
 	assert.Equal(t, 0, getClientCount(shard0Replica))
-	assert.Equal(t, 1, getClientCount(shard1Master))
+	assert.Equal(t, 1, getClientCount(shard1Primary))
 
 	_, err = session.Execute(context.Background(), "update "+name+" set time_acked = 1, time_next = null where id in (3) and time_acked is null", nil)
 	require.Nil(t, err)
@@ -323,9 +323,9 @@ func TestConnection(t *testing.T) {
 	time.Sleep(time.Second)
 
 	// create two grpc connection with vtgate and verify
-	// client connection count in vttablet of the master
-	assert.Equal(t, 0, getClientCount(shard0Master))
-	assert.Equal(t, 0, getClientCount(shard1Master))
+	// client connection count in vttablet of the primary
+	assert.Equal(t, 0, getClientCount(shard0Primary))
+	assert.Equal(t, 0, getClientCount(shard1Primary))
 
 	ctx := context.Background()
 	// first connection with vtgate
@@ -335,8 +335,8 @@ func TestConnection(t *testing.T) {
 	require.Nil(t, err)
 	// validate client count of vttablet
 	time.Sleep(time.Second)
-	assert.Equal(t, 1, getClientCount(shard0Master))
-	assert.Equal(t, 1, getClientCount(shard1Master))
+	assert.Equal(t, 1, getClientCount(shard0Primary))
+	assert.Equal(t, 1, getClientCount(shard1Primary))
 	// second connection with vtgate, secont connection
 	// will only be used for client connection counts
 	stream1, err := VtgateGrpcConn(ctx, clusterInstance)
@@ -345,13 +345,13 @@ func TestConnection(t *testing.T) {
 	require.Nil(t, err)
 	// validate client count of vttablet
 	time.Sleep(time.Second)
-	assert.Equal(t, 2, getClientCount(shard0Master))
-	assert.Equal(t, 2, getClientCount(shard1Master))
+	assert.Equal(t, 2, getClientCount(shard0Primary))
+	assert.Equal(t, 2, getClientCount(shard1Primary))
 
-	// insert data in master and validate that we receive this
+	// insert data in primary and validate that we receive this
 	// in message stream
 	session := stream.Session("@master", nil)
-	// insert data in master
+	// insert data in primary
 	cluster.ExecuteQueriesUsingVtgate(t, session, "insert into sharded_message (id, message) values (2,'hello world 2')")
 	cluster.ExecuteQueriesUsingVtgate(t, session, "insert into sharded_message (id, message) values (5,'hello world 5')")
 	// validate in msg stream
@@ -365,8 +365,8 @@ func TestConnection(t *testing.T) {
 	// After closing one stream, ensure vttablets have dropped it.
 	stream.Close()
 	time.Sleep(time.Second)
-	assert.Equal(t, 1, getClientCount(shard0Master))
-	assert.Equal(t, 1, getClientCount(shard1Master))
+	assert.Equal(t, 1, getClientCount(shard0Primary))
+	assert.Equal(t, 1, getClientCount(shard1Primary))
 
 	stream1.Close()
 }

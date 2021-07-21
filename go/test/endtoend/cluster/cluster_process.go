@@ -116,6 +116,7 @@ type Vttablet struct {
 	MysqlctlProcess  MysqlctlProcess
 	MysqlctldProcess MysqlctldProcess
 	VttabletProcess  *VttabletProcess
+	VtgrProcess      *VtgrProcess
 }
 
 // Keyspace : Cluster accepts keyspace to launch it
@@ -132,8 +133,8 @@ type Shard struct {
 	Vttablets []*Vttablet
 }
 
-// MasterTablet get the 1st tablet which is master
-func (shard *Shard) MasterTablet() *Vttablet {
+// PrimaryTablet get the 1st tablet which is always elected as primary
+func (shard *Shard) PrimaryTablet() *Vttablet {
 	return shard.Vttablets[0]
 }
 
@@ -231,12 +232,12 @@ func (cluster *LocalProcessCluster) StartUnshardedKeyspace(keyspace Keyspace, re
 // StartKeyspace starts required number of shard and the corresponding tablets
 // keyspace : struct containing keyspace name, Sqlschema to apply, VSchema to apply
 // shardName : list of shard names
-// replicaCount: total number of replicas excluding master and rdonly
+// replicaCount: total number of replicas excluding shard primary and rdonly
 // rdonly: whether readonly tablets needed
 // customizers: functions like "func(*VttabletProcess)" that can modify settings of various objects
 // after they're created.
 func (cluster *LocalProcessCluster) StartKeyspace(keyspace Keyspace, shardNames []string, replicaCount int, rdonly bool, customizers ...interface{}) (err error) {
-	totalTabletsRequired := replicaCount + 1 // + 1 is for master
+	totalTabletsRequired := replicaCount + 1 // + 1 is for primary
 	if rdonly {
 		totalTabletsRequired = totalTabletsRequired + 1 // + 1 for rdonly
 	}
@@ -263,7 +264,7 @@ func (cluster *LocalProcessCluster) StartKeyspace(keyspace Keyspace, shardNames 
 				MySQLPort: cluster.GetAndReservePort(),
 				Alias:     fmt.Sprintf("%s-%010d", cluster.Cell, tabletUID),
 			}
-			if i == 0 { // Make the first one as master
+			if i == 0 { // Make the first one as primary
 				tablet.Type = "master"
 			} else if i == totalTabletsRequired-1 && rdonly { // Make the last one as rdonly if rdonly flag is passed
 				tablet.Type = "rdonly"
@@ -330,8 +331,8 @@ func (cluster *LocalProcessCluster) StartKeyspace(keyspace Keyspace, shardNames 
 			}
 		}
 
-		// Make first tablet as master
-		if err = cluster.VtctlclientProcess.InitShardMaster(keyspace.Name, shardName, cluster.Cell, shard.Vttablets[0].TabletUID); err != nil {
+		// Make first tablet as primary
+		if err = cluster.VtctlclientProcess.InitShardPrimary(keyspace.Name, shardName, cluster.Cell, shard.Vttablets[0].TabletUID); err != nil {
 			log.Errorf("error running ISM on keyspace %v, shard %v: %v", keyspace.Name, shardName, err)
 			return
 		}
@@ -721,6 +722,19 @@ func (cluster *LocalProcessCluster) NewOrcProcess(configFile string) *VtorcProce
 		VtctlProcess: *base,
 		LogDir:       cluster.TmpDirectory,
 		Config:       configFile,
+	}
+}
+
+// NewVtgrProcess creates a new VtgrProcess object
+func (cluster *LocalProcessCluster) NewVtgrProcess(clusters []string, config string, grPort int) *VtgrProcess {
+	base := VtctlProcessInstance(cluster.TopoProcess.Port, cluster.Hostname)
+	base.Binary = "vtgr"
+	return &VtgrProcess{
+		VtctlProcess: *base,
+		LogDir:       cluster.TmpDirectory,
+		clusters:     clusters,
+		config:       config,
+		grPort:       grPort,
 	}
 }
 

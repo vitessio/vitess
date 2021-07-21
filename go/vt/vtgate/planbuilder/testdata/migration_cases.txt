@@ -12,6 +12,7 @@
     "query": "revert vitess_migration 'abc'"
   }
 }
+Gen4 plan same as above
 
 # retry migration
 "alter vitess_migration 'abc' retry"
@@ -28,6 +29,7 @@
     "Query": "alter vitess_migration 'abc' retry"
   }
 }
+Gen4 plan same as above
 
 # complete migration
 "alter vitess_migration 'abc' complete"
@@ -44,6 +46,7 @@
     "Query": "alter vitess_migration 'abc' complete"
   }
 }
+Gen4 plan same as above
 
 # cancel migration
 "alter vitess_migration 'abc' cancel"
@@ -60,6 +63,7 @@
     "Query": "alter vitess_migration 'abc' cancel"
   }
 }
+Gen4 plan same as above
 
 # cancel all migrations
 "alter vitess_migration cancel all"
@@ -76,3 +80,4 @@
     "Query": "alter vitess_migration cancel all"
   }
 }
+Gen4 plan same as above

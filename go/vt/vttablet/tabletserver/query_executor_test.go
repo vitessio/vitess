@@ -389,6 +389,30 @@ func TestQueryExecutorSelectImpossible(t *testing.T) {
 	}
 }
 
+// TestDisableOnlineDDL checks whether disabling online DDLs throws the correct error or not
+func TestDisableOnlineDDL(t *testing.T) {
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
+	query := "ALTER VITESS_MIGRATION CANCEL ALL"
+
+	db.AddQueryPattern(".*", &sqltypes.Result{})
+
+	ctx := context.Background()
+	tsv := newTestTabletServer(ctx, noFlags, db)
+
+	qre := newTestQueryExecutor(ctx, tsv, query, 0)
+	_, err := qre.Execute()
+	require.NoError(t, err)
+	tsv.StopService()
+
+	tsv = newTestTabletServer(ctx, disableOnlineDDL, db)
+	defer tsv.StopService()
+
+	qre = newTestQueryExecutor(ctx, tsv, query, 0)
+	_, err = qre.Execute()
+	require.EqualError(t, err, "online ddl is disabled")
+}
+
 func TestQueryExecutorLimitFailure(t *testing.T) {
 	type dbResponse struct {
 		query  string
@@ -1117,6 +1141,7 @@ const (
 	noTwopc
 	shortTwopcAge
 	smallResultSize
+	disableOnlineDDL
 )
 
 // newTestQueryExecutor uses a package level variable testTabletServer defined in tabletserver_test.go
@@ -1137,6 +1162,11 @@ func newTestTabletServer(ctx context.Context, flags executorFlags, db *fakesqldb
 		config.TwoPCEnable = false
 	} else {
 		config.TwoPCEnable = true
+	}
+	if flags&disableOnlineDDL > 0 {
+		config.EnableOnlineDDL = false
+	} else {
+		config.EnableOnlineDDL = true
 	}
 	config.TwoPCCoordinatorAddress = "fake"
 	if flags&shortTwopcAge > 0 {

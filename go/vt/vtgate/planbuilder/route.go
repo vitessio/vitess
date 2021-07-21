@@ -445,7 +445,7 @@ func (rb *route) JoinCanMerge(pb *primitiveBuilder, rrb *route, ajoin *sqlparser
 	if ajoin == nil {
 		return false
 	}
-	for _, filter := range splitAndExpression(nil, ajoin.Condition.On) {
+	for _, filter := range sqlparser.SplitAndExpression(nil, ajoin.Condition.On) {
 		if rb.canMergeOnFilter(pb, rrb, filter) {
 			return true
 		}
@@ -727,7 +727,12 @@ func (rb *route) computeCompositeINPlan(pb *primitiveBuilder, comparison *sqlpar
 // iterateCompositeIN recursively walks the LHS tuple of the IN clause looking
 // for column names. For those that match a vindex, it builds a multi-value plan
 // using the corresponding values in the RHS. It returns the best of the plans built.
-func (rb *route) iterateCompositeIN(pb *primitiveBuilder, comparison *sqlparser.ComparisonExpr, coordinates []int, tuple sqlparser.ValTuple) (opcode engine.RouteOpcode, vindex vindexes.SingleColumn, values sqlparser.Expr) {
+func (rb *route) iterateCompositeIN(
+	pb *primitiveBuilder,
+	comparison *sqlparser.ComparisonExpr,
+	coordinates []int,
+	tuple sqlparser.ValTuple,
+) (opcode engine.RouteOpcode, vindex vindexes.SingleColumn, values sqlparser.Expr) {
 	opcode = engine.SelectScatter
 
 	cindex := len(coordinates)
