@@ -80,6 +80,9 @@ const (
 	SrvVSchemaResource Resource = "SrvVSchema"
 	VSchemaResource    Resource = "VSchema"
 
-	BackupResource Resource = "Backup"
-	SchemaResource Resource = "Schema"
+	BackupResource   Resource = "Backup"
+	SchemaResource   Resource = "Schema"
+	WorkflowResource Resource = "Workflow"
+
+	VTExplainResource Resource = "VTExplain"
 )

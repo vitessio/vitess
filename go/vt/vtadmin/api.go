@@ -326,6 +326,10 @@ func (api *API) GetBackups(ctx context.Context, req *vtadminpb.GetBackupsRequest
 	)
 
 	for _, c := range clusters {
+		if !api.authz.IsAuthorized(ctx, c.ID, rbac.BackupResource, rbac.GetAction) {
+			continue
+		}
+
 		wg.Add(1)
 
 		go func(c *cluster.Cluster) {
@@ -363,6 +367,10 @@ func (api *API) GetClusters(ctx context.Context, req *vtadminpb.GetClustersReque
 	vcs := make([]*vtadminpb.Cluster, 0, len(api.clusters))
 
 	for _, c := range api.clusters {
+		if !api.authz.IsAuthorized(ctx, c.ID, rbac.ClusterResource, rbac.GetAction) {
+			continue
+		}
+
 		vcs = append(vcs, &vtadminpb.Cluster{
 			Id:   c.ID,
 			Name: c.Name,
@@ -389,6 +397,10 @@ func (api *API) GetGates(ctx context.Context, req *vtadminpb.GetGatesRequest) (*
 	)
 
 	for _, c := range clusters {
+		if !api.authz.IsAuthorized(ctx, c.ID, rbac.VTGateResource, rbac.GetAction) {
+			continue
+		}
+
 		wg.Add(1)
 
 		go func(c *cluster.Cluster) {
@@ -428,6 +440,10 @@ func (api *API) GetKeyspace(ctx context.Context, req *vtadminpb.GetKeyspaceReque
 		return nil, fmt.Errorf("%w: %s", errors.ErrUnsupportedCluster, req.ClusterId)
 	}
 
+	if !api.authz.IsAuthorized(ctx, c.ID, rbac.KeyspaceResource, rbac.GetAction) {
+		return nil, nil
+	}
+
 	return c.GetKeyspace(ctx, req.Keyspace)
 }
 
@@ -446,6 +462,10 @@ func (api *API) GetKeyspaces(ctx context.Context, req *vtadminpb.GetKeyspacesReq
 	)
 
 	for _, c := range clusters {
+		if !api.authz.IsAuthorized(ctx, c.ID, rbac.KeyspaceResource, rbac.GetAction) {
+			continue
+		}
+
 		wg.Add(1)
 
 		go func(c *cluster.Cluster) {
@@ -489,6 +509,10 @@ func (api *API) GetSchema(ctx context.Context, req *vtadminpb.GetSchemaRequest) 
 		return nil, fmt.Errorf("%w: no cluster with id %s", errors.ErrUnsupportedCluster, req.ClusterId)
 	}
 
+	if !api.authz.IsAuthorized(ctx, c.ID, rbac.SchemaResource, rbac.GetAction) {
+		return nil, nil
+	}
+
 	schema, err := c.GetSchema(ctx, req.Keyspace, cluster.GetSchemaOptions{
 		BaseRequest: &vtctldatapb.GetSchemaRequest{
 			Tables: []string{req.Table},
@@ -524,6 +548,10 @@ func (api *API) GetSchemas(ctx context.Context, req *vtadminpb.GetSchemasRequest
 	)
 
 	for _, c := range clusters {
+		if !api.authz.IsAuthorized(ctx, c.ID, rbac.SchemaResource, rbac.GetAction) {
+			continue
+		}
+
 		wg.Add(1)
 
 		// Get schemas for the cluster
@@ -650,6 +678,10 @@ func (api *API) GetSrvVSchema(ctx context.Context, req *vtadminpb.GetSrvVSchemaR
 		return nil, fmt.Errorf("%w: %s", errors.ErrUnsupportedCluster, req.ClusterId)
 	}
 
+	if !api.authz.IsAuthorized(ctx, c.ID, rbac.SrvVSchemaResource, rbac.GetAction) {
+		return nil, nil
+	}
+
 	return c.GetSrvVSchema(ctx, req.Cell)
 }
 
@@ -668,6 +700,10 @@ func (api *API) GetSrvVSchemas(ctx context.Context, req *vtadminpb.GetSrvVSchema
 	)
 
 	for _, c := range clusters {
+		if !api.authz.IsAuthorized(ctx, c.ID, rbac.SrvVSchemaResource, rbac.GetAction) {
+			continue
+		}
+
 		wg.Add(1)
 
 		go func(c *cluster.Cluster) {
@@ -722,6 +758,10 @@ func (api *API) GetTablet(ctx context.Context, req *vtadminpb.GetTabletRequest) 
 	)
 
 	for _, c := range clusters {
+		if !api.authz.IsAuthorized(ctx, c.ID, rbac.TabletResource, rbac.GetAction) {
+			continue
+		}
+
 		wg.Add(1)
 
 		go func(c *cluster.Cluster) {
@@ -778,6 +818,10 @@ func (api *API) GetTablets(ctx context.Context, req *vtadminpb.GetTabletsRequest
 	)
 
 	for _, c := range clusters {
+		if !api.authz.IsAuthorized(ctx, c.ID, rbac.TabletResource, rbac.GetAction) {
+			continue
+		}
+
 		wg.Add(1)
 
 		go func(c *cluster.Cluster) {
@@ -818,6 +862,10 @@ func (api *API) GetVSchema(ctx context.Context, req *vtadminpb.GetVSchemaRequest
 
 	cluster.AnnotateSpan(c, span)
 
+	if !api.authz.IsAuthorized(ctx, c.ID, rbac.VSchemaResource, rbac.GetAction) {
+		return nil, nil
+	}
+
 	if err := c.Vtctld.Dial(ctx); err != nil {
 		return nil, err
 	}
@@ -848,6 +896,10 @@ func (api *API) GetVSchemas(ctx context.Context, req *vtadminpb.GetVSchemasReque
 	}
 
 	for _, c := range clusters {
+		if !api.authz.IsAuthorized(ctx, c.ID, rbac.VSchemaResource, rbac.GetAction) {
+			continue
+		}
+
 		wg.Add(1)
 
 		go func(c *cluster.Cluster) {
@@ -938,6 +990,10 @@ func (api *API) GetWorkflow(ctx context.Context, req *vtadminpb.GetWorkflowReque
 	span.Annotate("workflow_name", req.Name)
 	span.Annotate("active_only", req.ActiveOnly)
 
+	if !api.authz.IsAuthorized(ctx, c.ID, rbac.WorkflowResource, rbac.GetAction) {
+		return nil, nil
+	}
+
 	return c.GetWorkflow(ctx, req.Keyspace, req.Name, cluster.GetWorkflowOptions{
 		ActiveOnly: req.ActiveOnly,
 	})
@@ -958,6 +1014,10 @@ func (api *API) GetWorkflows(ctx context.Context, req *vtadminpb.GetWorkflowsReq
 	)
 
 	for _, c := range clusters {
+		if !api.authz.IsAuthorized(ctx, c.ID, rbac.WorkflowResource, rbac.GetAction) {
+			continue
+		}
+
 		wg.Add(1)
 
 		go func(c *cluster.Cluster) {
@@ -1014,6 +1074,10 @@ func (api *API) VTExplain(ctx context.Context, req *vtadminpb.VTExplainRequest) 
 
 	span.Annotate("keyspace", req.Keyspace)
 	cluster.AnnotateSpan(c, span)
+
+	if !api.authz.IsAuthorized(ctx, c.ID, rbac.VTExplainResource, rbac.GetAction) {
+		return nil, nil
+	}
 
 	tablet, err := c.FindTablet(ctx, func(t *vtadminpb.Tablet) bool {
 		return t.Tablet.Keyspace == req.Keyspace && topo.IsInServingGraph(t.Tablet.Type) && t.Tablet.Type != topodatapb.TabletType_MASTER && t.State == vtadminpb.Tablet_SERVING
