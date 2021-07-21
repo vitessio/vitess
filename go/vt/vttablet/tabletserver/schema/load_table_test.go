@@ -173,7 +173,7 @@ func newTestLoadTable(tableType string, comment string, db *fakesqldb.DB) (*Tabl
 	}
 	defer conn.Recycle()
 
-	return LoadTable(conn, "test_table", tableType, comment)
+	return LoadTable(conn, "test_table", comment)
 }
 
 func getTestLoadTableQueries() map[string]*sqltypes.Result {

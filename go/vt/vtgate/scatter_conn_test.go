@@ -402,11 +402,11 @@ func TestIsConnClosed(t *testing.T) {
 		conClosed bool
 	}{{
 		"server gone",
-		mysql.NewSQLError(mysql.CRServerGone, mysql.SSServerShutdown, ""),
+		mysql.NewSQLError(mysql.CRServerGone, mysql.SSNetError, ""),
 		true,
 	}, {
 		"connection lost",
-		mysql.NewSQLError(mysql.CRServerLost, mysql.SSServerShutdown, ""),
+		mysql.NewSQLError(mysql.CRServerLost, mysql.SSNetError, ""),
 		true,
 	}, {
 		"tx ended",

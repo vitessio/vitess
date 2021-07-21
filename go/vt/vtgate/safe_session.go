@@ -228,11 +228,11 @@ func (session *SafeSession) AppendOrUpdate(shardSession *vtgatepb.Session_ShardS
 	// that needs to be stored as shard session.
 	if session.autocommitState == autocommitted && shardSession.TransactionId != 0 {
 		// Should be unreachable
-		return vterrors.New(vtrpcpb.Code_INTERNAL, "BUG: SafeSession.AppendOrUpdate: unexpected autocommit state")
+		return vterrors.New(vtrpcpb.Code_INTERNAL, "[BUG] unexpected 'autocommitted' state in transaction")
 	}
 	if !(session.Session.InTransaction || session.Session.InReservedConn) {
 		// Should be unreachable
-		return vterrors.New(vtrpcpb.Code_INTERNAL, "BUG: SafeSession.AppendOrUpdate: not in transaction and not in reserved connection")
+		return vterrors.New(vtrpcpb.Code_INTERNAL, "[BUG] current session neither in transaction nor in reserved connection")
 	}
 	session.autocommitState = notAutocommittable
 
@@ -247,7 +247,7 @@ func (session *SafeSession) AppendOrUpdate(shardSession *vtgatepb.Session_ShardS
 		// isSingle is enforced only for normmal commit order operations.
 		if session.isSingleDB(txMode) && len(session.ShardSessions) > 1 {
 			session.mustRollback = true
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "multi-db transaction attempted: %v", session.ShardSessions)
+			return vterrors.Errorf(vtrpcpb.Code_ABORTED, "multi-db transaction attempted: %v", session.ShardSessions)
 		}
 	case vtgatepb.CommitOrder_PRE:
 		newSessions, err := addOrUpdate(shardSession, session.PreSessions)
@@ -263,7 +263,7 @@ func (session *SafeSession) AppendOrUpdate(shardSession *vtgatepb.Session_ShardS
 		session.PostSessions = newSessions
 	default:
 		// Should be unreachable
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: SafeSession.AppendOrUpdate: unexpected commitOrder")
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] SafeSession.AppendOrUpdate: unexpected commitOrder")
 	}
 
 	return nil
@@ -452,7 +452,7 @@ func (session *SafeSession) ResetShard(tabletAlias *topodatapb.TabletAlias) erro
 		session.PostSessions = newSessions
 	default:
 		// Should be unreachable
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: SafeSession.ResetShard: unexpected commitOrder")
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] SafeSession.ResetShard: unexpected commitOrder")
 	}
 	return nil
 }
@@ -476,6 +476,20 @@ func (session *SafeSession) GetSessionUUID() string {
 	session.mu.Lock()
 	defer session.mu.Unlock()
 	return session.SessionUUID
+}
+
+// SetSessionEnableSystemSettings set the SessionEnableSystemSettings setting.
+func (session *SafeSession) SetSessionEnableSystemSettings(allow bool) {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	session.EnableSystemSettings = allow
+}
+
+// GetSessionEnableSystemSettings returns the SessionEnableSystemSettings value.
+func (session *SafeSession) GetSessionEnableSystemSettings() bool {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	return session.EnableSystemSettings
 }
 
 // SetReadAfterWriteGTID set the ReadAfterWriteGtid setting.
@@ -513,7 +527,7 @@ func removeShard(tabletAlias *topodatapb.TabletAlias, sessions []*vtgatepb.Sessi
 	for i, session := range sessions {
 		if proto.Equal(session.TabletAlias, tabletAlias) {
 			if session.TransactionId != 0 {
-				return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "BUG: SafeSession.ResetShard: in transaction")
+				return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "[BUG] removing shard session when in transaction")
 			}
 			idx = i
 		}

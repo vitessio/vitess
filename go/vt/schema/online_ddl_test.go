@@ -17,6 +17,7 @@ limitations under the License.
 package schema
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -31,6 +32,7 @@ func TestCreateUUID(t *testing.T) {
 
 func TestIsDirect(t *testing.T) {
 	assert.True(t, DDLStrategyDirect.IsDirect())
+	assert.False(t, DDLStrategyOnline.IsDirect())
 	assert.False(t, DDLStrategyGhost.IsDirect())
 	assert.False(t, DDLStrategyPTOSC.IsDirect())
 	assert.True(t, DDLStrategy("").IsDirect())
@@ -44,11 +46,17 @@ func TestParseDDLStrategy(t *testing.T) {
 		strategyVariable string
 		strategy         DDLStrategy
 		options          string
+		isDeclarative    bool
+		runtimeOptions   string
 		err              error
 	}{
 		{
 			strategyVariable: "direct",
 			strategy:         DDLStrategyDirect,
+		},
+		{
+			strategyVariable: "online",
+			strategy:         DDLStrategyOnline,
 		},
 		{
 			strategyVariable: "gh-ost",
@@ -65,6 +73,21 @@ func TestParseDDLStrategy(t *testing.T) {
 			strategyVariable: "gh-ost --max-load=Threads_running=100 --allow-master",
 			strategy:         DDLStrategyGhost,
 			options:          "--max-load=Threads_running=100 --allow-master",
+			runtimeOptions:   "--max-load=Threads_running=100 --allow-master",
+		},
+		{
+			strategyVariable: "gh-ost --max-load=Threads_running=100 -declarative",
+			strategy:         DDLStrategyGhost,
+			options:          "--max-load=Threads_running=100 -declarative",
+			runtimeOptions:   "--max-load=Threads_running=100",
+			isDeclarative:    true,
+		},
+		{
+			strategyVariable: "gh-ost --declarative --max-load=Threads_running=100",
+			strategy:         DDLStrategyGhost,
+			options:          "--declarative --max-load=Threads_running=100",
+			runtimeOptions:   "--max-load=Threads_running=100",
+			isDeclarative:    true,
 		},
 	}
 	for _, ts := range tt {
@@ -72,6 +95,11 @@ func TestParseDDLStrategy(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, ts.strategy, strategy)
 		assert.Equal(t, ts.options, options)
+		onlineDDL := &OnlineDDL{Options: options}
+		assert.Equal(t, ts.isDeclarative, onlineDDL.IsDeclarative())
+
+		runtimeOptions := strings.Join(onlineDDL.RuntimeOptions(), " ")
+		assert.Equal(t, ts.runtimeOptions, runtimeOptions)
 	}
 	{
 		_, _, err := ParseDDLStrategy("other")
@@ -109,7 +137,6 @@ func TestGetGCUUID(t *testing.T) {
 	}
 	assert.Equal(t, count, len(uuids))
 }
-
 func TestGetActionStr(t *testing.T) {
 	tt := []struct {
 		statement string
@@ -134,14 +161,16 @@ func TestGetActionStr(t *testing.T) {
 		},
 	}
 	for _, ts := range tt {
-		onlineDDL := &OnlineDDL{SQL: ts.statement}
-		actionStr, err := onlineDDL.GetActionStr()
-		if ts.isError {
-			assert.Error(t, err)
-		} else {
-			assert.NoError(t, err)
-			assert.Equal(t, actionStr, ts.actionStr)
-		}
+		t.Run(ts.statement, func(t *testing.T) {
+			onlineDDL := &OnlineDDL{SQL: ts.statement}
+			_, actionStr, err := onlineDDL.GetActionStr()
+			if ts.isError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, actionStr, ts.actionStr)
+			}
+		})
 	}
 }
 
@@ -151,6 +180,7 @@ func TestIsOnlineDDLTableName(t *testing.T) {
 		"_4e5dcf80_354b_11eb_82cd_f875a4d24e90_20201203114014_ghc",
 		"_4e5dcf80_354b_11eb_82cd_f875a4d24e90_20201203114014_del",
 		"_4e5dcf80_354b_11eb_82cd_f875a4d24e90_20201203114013_new",
+		"_84371a37_6153_11eb_9917_f875a4d24e90_20210128122816_vrepl",
 		"_table_old",
 		"__table_old",
 	}
@@ -164,9 +194,47 @@ func TestIsOnlineDDLTableName(t *testing.T) {
 		"_table_gho",
 		"_table_ghc",
 		"_table_del",
+		"_table_vrepl",
 		"table_old",
 	}
 	for _, tableName := range irrelevantNames {
 		assert.False(t, IsOnlineDDLTableName(tableName))
+	}
+}
+
+func TestGetRevertUUID(t *testing.T) {
+	tt := []struct {
+		statement string
+		uuid      string
+		isError   bool
+	}{
+		{
+			statement: "revert 4e5dcf80_354b_11eb_82cd_f875a4d24e90_20201203114014",
+			uuid:      "4e5dcf80_354b_11eb_82cd_f875a4d24e90_20201203114014",
+		},
+		{
+			statement: "REVERT   4e5dcf80_354b_11eb_82cd_f875a4d24e90_20201203114014",
+			uuid:      "4e5dcf80_354b_11eb_82cd_f875a4d24e90_20201203114014",
+		},
+		{
+			statement: "REVERT",
+			isError:   true,
+		},
+		{
+			statement: "alter table t drop column c",
+			isError:   true,
+		},
+	}
+	for _, ts := range tt {
+		t.Run(ts.statement, func(t *testing.T) {
+			onlineDDL := &OnlineDDL{SQL: ts.statement}
+			uuid, err := onlineDDL.GetRevertUUID()
+			if ts.isError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, uuid, ts.uuid)
+			}
+		})
 	}
 }

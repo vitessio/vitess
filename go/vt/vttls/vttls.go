@@ -94,15 +94,21 @@ func ClientConfig(cert, key, ca, name string) (*tls.Config, error) {
 
 // ServerConfig returns the TLS config to use for a server to
 // accept client connections.
-func ServerConfig(cert, key, ca string) (*tls.Config, error) {
+func ServerConfig(cert, key, ca, serverCA string) (*tls.Config, error) {
 	config := newTLSConfig()
 
-	certificates, err := loadTLSCertificate(cert, key)
+	var certificates *[]tls.Certificate
+	var err error
+
+	if serverCA != "" {
+		certificates, err = combineAndLoadTLSCertificates(serverCA, cert, key)
+	} else {
+		certificates, err = loadTLSCertificate(cert, key)
+	}
 
 	if err != nil {
 		return nil, err
 	}
-
 	config.Certificates = *certificates
 
 	// if specified, load ca to validate client,
@@ -161,8 +167,8 @@ func doLoadx509CertPool(ca string) error {
 
 var tlsCertificates = sync.Map{}
 
-func tlsCertificatesIdentifier(cert, key string) string {
-	return strings.Join([]string{cert, key}, ";")
+func tlsCertificatesIdentifier(tokens ...string) string {
+	return strings.Join(tokens, ";")
 }
 
 func loadTLSCertificate(cert, key string) (*[]tls.Certificate, error) {
@@ -200,6 +206,65 @@ func doLoadTLSCertificate(cert, key string) error {
 	certificate = []tls.Certificate{crt}
 
 	tlsCertificates.Store(tlsIdentifier, &certificate)
+
+	return nil
+}
+
+var combinedTlsCertificates = sync.Map{}
+
+func combineAndLoadTLSCertificates(ca, cert, key string) (*[]tls.Certificate, error) {
+	combinedTlsIdentifier := tlsCertificatesIdentifier(ca, cert, key)
+	once, _ := onceByKeys.LoadOrStore(combinedTlsIdentifier, &sync.Once{})
+
+	var err error
+	once.(*sync.Once).Do(func() {
+		err = doLoadAndCombineTLSCertificates(ca, cert, key)
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	result, ok := combinedTlsCertificates.Load(combinedTlsIdentifier)
+
+	if !ok {
+		return nil, vterrors.Errorf(vtrpc.Code_NOT_FOUND, "Cannot find loaded tls certificate chain with ca: %s, cert: %s, key: %s", ca, cert, key)
+	}
+
+	return result.(*[]tls.Certificate), nil
+}
+
+func doLoadAndCombineTLSCertificates(ca, cert, key string) error {
+	combinedTlsIdentifier := tlsCertificatesIdentifier(ca, cert, key)
+
+	// Read CA certificates chain
+	ca_b, err := ioutil.ReadFile(ca)
+	if err != nil {
+		return vterrors.Errorf(vtrpc.Code_NOT_FOUND, "failed to read ca file: %s", ca)
+	}
+
+	// Read server certificate
+	cert_b, err := ioutil.ReadFile(cert)
+	if err != nil {
+		return vterrors.Errorf(vtrpc.Code_NOT_FOUND, "failed to read server cert file: %s", cert)
+	}
+
+	// Read server key file
+	key_b, err := ioutil.ReadFile(key)
+	if err != nil {
+		return vterrors.Errorf(vtrpc.Code_NOT_FOUND, "failed to read key file: %s", key)
+	}
+
+	// Load CA, server cert and key.
+	var certificate []tls.Certificate
+	crt, err := tls.X509KeyPair(append(cert_b, ca_b...), key_b)
+	if err != nil {
+		return vterrors.Errorf(vtrpc.Code_NOT_FOUND, "failed to load and merge tls certificate with CA, ca %s, cert %s, key: %s", ca, cert, key)
+	}
+
+	certificate = []tls.Certificate{crt}
+
+	combinedTlsCertificates.Store(combinedTlsIdentifier, &certificate)
 
 	return nil
 }

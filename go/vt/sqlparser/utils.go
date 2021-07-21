@@ -36,11 +36,14 @@ func QueryMatchesTemplates(query string, queryTemplates []string) (match bool, e
 		if err != nil {
 			return "", err
 		}
-		stmt, err := Parse(q)
+		stmt, reservedVars, err := Parse2(q)
 		if err != nil {
 			return "", err
 		}
-		Normalize(stmt, bv, "")
+		err = Normalize(stmt, reservedVars, bv, "")
+		if err != nil {
+			return "", err
+		}
 		normalized := String(stmt)
 		return normalized, nil
 	}

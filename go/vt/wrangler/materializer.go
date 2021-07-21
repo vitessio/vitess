@@ -64,11 +64,21 @@ const (
 
 // MoveTables initiates moving table(s) over to another keyspace
 func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, targetKeyspace, tableSpecs,
-	cell, tabletTypes string, allTables bool, excludeTables string) error {
+	cell, tabletTypes string, allTables bool, excludeTables string, autoStart, stopAfterCopy bool,
+	externalCluster string) error {
 	//FIXME validate tableSpecs, allTables, excludeTables
 	var tables []string
+	var externalTopo *topo.Server
 	var err error
 
+	if externalCluster != "" {
+		externalTopo, err = wr.ts.OpenExternalVitessClusterServer(ctx, externalCluster)
+		if err != nil {
+			return err
+		}
+		wr.sourceTs = externalTopo
+		log.Infof("Successfully opened external topo: %+v", externalTopo)
+	}
 	var vschema *vschemapb.Keyspace
 	vschema, err = wr.ts.GetVSchema(ctx, targetKeyspace)
 	if err != nil {
@@ -86,9 +96,6 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 		if err := json2.Unmarshal([]byte(wrap), ks); err != nil {
 			return err
 		}
-		if err != nil {
-			return err
-		}
 		for table, vtab := range ks.Tables {
 			vschema.Tables[table] = vtab
 			tables = append(tables, table)
@@ -97,7 +104,7 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 		if len(strings.TrimSpace(tableSpecs)) > 0 {
 			tables = strings.Split(tableSpecs, ",")
 		}
-		ksTables, err := wr.getKeyspaceTables(ctx, sourceKeyspace)
+		ksTables, err := wr.getKeyspaceTables(ctx, sourceKeyspace, wr.sourceTs)
 		if err != nil {
 			return err
 		}
@@ -148,44 +155,46 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 			}
 		}
 	}
-
-	// Save routing rules before vschema. If we save vschema first, and routing rules
-	// fails to save, we may generate duplicate table errors.
-	rules, err := wr.getRoutingRules(ctx)
-	if err != nil {
-		return err
-	}
-	for _, table := range tables {
-		toSource := []string{sourceKeyspace + "." + table}
-		rules[table] = toSource
-		rules[table+"@replica"] = toSource
-		rules[table+"@rdonly"] = toSource
-		rules[targetKeyspace+"."+table] = toSource
-		rules[targetKeyspace+"."+table+"@replica"] = toSource
-		rules[targetKeyspace+"."+table+"@rdonly"] = toSource
-		rules[targetKeyspace+"."+table] = toSource
-		rules[sourceKeyspace+"."+table+"@replica"] = toSource
-		rules[sourceKeyspace+"."+table+"@rdonly"] = toSource
-	}
-	if err := wr.saveRoutingRules(ctx, rules); err != nil {
-		return err
-	}
-	if vschema != nil {
-		// We added to the vschema.
-		if err := wr.ts.SaveVSchema(ctx, targetKeyspace, vschema); err != nil {
+	if externalTopo == nil {
+		// Save routing rules before vschema. If we save vschema first, and routing rules
+		// fails to save, we may generate duplicate table errors.
+		rules, err := wr.getRoutingRules(ctx)
+		if err != nil {
 			return err
+		}
+		for _, table := range tables {
+			toSource := []string{sourceKeyspace + "." + table}
+			rules[table] = toSource
+			rules[table+"@replica"] = toSource
+			rules[table+"@rdonly"] = toSource
+			rules[targetKeyspace+"."+table] = toSource
+			rules[targetKeyspace+"."+table+"@replica"] = toSource
+			rules[targetKeyspace+"."+table+"@rdonly"] = toSource
+			rules[targetKeyspace+"."+table] = toSource
+			rules[sourceKeyspace+"."+table+"@replica"] = toSource
+			rules[sourceKeyspace+"."+table+"@rdonly"] = toSource
+		}
+		if err := wr.saveRoutingRules(ctx, rules); err != nil {
+			return err
+		}
+		if vschema != nil {
+			// We added to the vschema.
+			if err := wr.ts.SaveVSchema(ctx, targetKeyspace, vschema); err != nil {
+				return err
+			}
 		}
 	}
 	if err := wr.ts.RebuildSrvVSchema(ctx, nil); err != nil {
 		return err
 	}
-
 	ms := &vtctldatapb.MaterializeSettings{
-		Workflow:       workflow,
-		SourceKeyspace: sourceKeyspace,
-		TargetKeyspace: targetKeyspace,
-		Cell:           cell,
-		TabletTypes:    tabletTypes,
+		Workflow:        workflow,
+		SourceKeyspace:  sourceKeyspace,
+		TargetKeyspace:  targetKeyspace,
+		Cell:            cell,
+		TabletTypes:     tabletTypes,
+		StopAfterCopy:   stopAfterCopy,
+		ExternalCluster: externalCluster,
 	}
 	for _, table := range tables {
 		buf := sqlparser.NewTrackedBuffer(nil)
@@ -210,19 +219,26 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 		return err
 	}
 
-	exists, tablets, err := wr.checkIfPreviousJournalExists(ctx, mz, migrationID)
-	if err != nil {
-		return err
+	if externalCluster == "" {
+		exists, tablets, err := wr.checkIfPreviousJournalExists(ctx, mz, migrationID)
+		if err != nil {
+			return err
+		}
+		if exists {
+			wr.Logger().Errorf("Found a previous journal entry for %d", migrationID)
+			msg := fmt.Sprintf("found an entry from a previous run for migration id %d in _vt.resharding_journal of tablets %s,",
+				migrationID, strings.Join(tablets, ","))
+			msg += fmt.Sprintf("please review and delete it before proceeding and restart the workflow using the Workflow %s.%s start",
+				workflow, targetKeyspace)
+			return fmt.Errorf(msg)
+		}
 	}
-	if exists {
-		wr.Logger().Errorf("Found a previous journal entry for %d", migrationID)
-		msg := fmt.Sprintf("found an entry from a previous run for migration id %d in _vt.resharding_journal of tablets %s,",
-			migrationID, strings.Join(tablets, ","))
-		msg += fmt.Sprintf("please review and delete it before proceeding and restart the workflow using the Workflow %s.%s start",
-			workflow, targetKeyspace)
-		return fmt.Errorf(msg)
+	if autoStart {
+		return mz.startStreams(ctx)
 	}
-	return mz.startStreams(ctx)
+	wr.Logger().Infof("Streams will not be started since -auto_start is set to false")
+
+	return nil
 }
 
 func (wr *Wrangler) validateSourceTablesExist(ctx context.Context, sourceKeyspace string, ksTables, tables []string) error {
@@ -246,8 +262,8 @@ func (wr *Wrangler) validateSourceTablesExist(ctx context.Context, sourceKeyspac
 	return nil
 }
 
-func (wr *Wrangler) getKeyspaceTables(ctx context.Context, ks string) ([]string, error) {
-	shards, err := wr.ts.GetServingShards(ctx, ks)
+func (wr *Wrangler) getKeyspaceTables(ctx context.Context, ks string, ts *topo.Server) ([]string, error) {
+	shards, err := ts.GetServingShards(ctx, ks)
 	if err != nil {
 		return nil, err
 	}
@@ -260,7 +276,11 @@ func (wr *Wrangler) getKeyspaceTables(ctx context.Context, ks string) ([]string,
 	}
 	allTables := []string{"/.*/"}
 
-	schema, err := wr.GetSchema(ctx, master, allTables, nil, false)
+	ti, err := ts.GetTablet(ctx, master)
+	if err != nil {
+		return nil, err
+	}
+	schema, err := wr.tmc.GetSchema(ctx, ti.Tablet, allTables, nil, false)
 	if err != nil {
 		return nil, err
 	}
@@ -721,7 +741,10 @@ func (wr *Wrangler) ExternalizeVindex(ctx context.Context, qualifiedVindexName s
 
 	// Remove the write_only param and save the source vschema.
 	delete(sourceVindex.Params, "write_only")
-	return wr.ts.SaveVSchema(ctx, sourceKeyspace, sourceVSchema)
+	if err := wr.ts.SaveVSchema(ctx, sourceKeyspace, sourceVSchema); err != nil {
+		return err
+	}
+	return wr.ts.RebuildSrvVSchema(ctx, nil)
 }
 
 //
@@ -817,7 +840,7 @@ func (wr *Wrangler) buildMaterializer(ctx context.Context, ms *vtctldatapb.Mater
 		}
 	}
 
-	sourceShards, err := wr.ts.GetServingShards(ctx, ms.SourceKeyspace)
+	sourceShards, err := wr.sourceTs.GetServingShards(ctx, ms.SourceKeyspace)
 	if err != nil {
 		return nil, err
 	}
@@ -843,8 +866,11 @@ func (mz *materializer) getSourceTableDDLs(ctx context.Context) (map[string]stri
 		return nil, fmt.Errorf("source shard must have a master for copying schema: %v", mz.sourceShards[0].ShardName())
 	}
 
-	var err error
-	sourceSchema, err := mz.wr.GetSchema(ctx, sourceMaster, allTables, nil, false)
+	ti, err := mz.wr.sourceTs.GetTablet(ctx, sourceMaster)
+	if err != nil {
+		return nil, err
+	}
+	sourceSchema, err := mz.wr.tmc.GetSchema(ctx, ti.Tablet, allTables, nil, false)
 	if err != nil {
 		return nil, err
 	}
@@ -978,10 +1004,11 @@ func (mz *materializer) generateInserts(ctx context.Context) (string, error) {
 
 	for _, source := range mz.sourceShards {
 		bls := &binlogdatapb.BinlogSource{
-			Keyspace:      mz.ms.SourceKeyspace,
-			Shard:         source.ShardName(),
-			Filter:        &binlogdatapb.Filter{},
-			StopAfterCopy: mz.ms.StopAfterCopy,
+			Keyspace:        mz.ms.SourceKeyspace,
+			Shard:           source.ShardName(),
+			Filter:          &binlogdatapb.Filter{},
+			StopAfterCopy:   mz.ms.StopAfterCopy,
+			ExternalCluster: mz.ms.ExternalCluster,
 		}
 		for _, ts := range mz.ms.TableSettings {
 			rule := &binlogdatapb.Rule{
@@ -1022,8 +1049,8 @@ func (mz *materializer) generateInserts(ctx context.Context) (string, error) {
 					subExprs = append(subExprs, &sqlparser.AliasedExpr{Expr: mappedCol})
 				}
 				vindexName := fmt.Sprintf("%s.%s", mz.ms.TargetKeyspace, cv.Name)
-				subExprs = append(subExprs, &sqlparser.AliasedExpr{Expr: sqlparser.NewStrLiteral([]byte(vindexName))})
-				subExprs = append(subExprs, &sqlparser.AliasedExpr{Expr: sqlparser.NewStrLiteral([]byte("{{.keyrange}}"))})
+				subExprs = append(subExprs, &sqlparser.AliasedExpr{Expr: sqlparser.NewStrLiteral(vindexName)})
+				subExprs = append(subExprs, &sqlparser.AliasedExpr{Expr: sqlparser.NewStrLiteral("{{.keyrange}}")})
 				sel.Where = &sqlparser.Where{
 					Type: sqlparser.WhereClause,
 					Expr: &sqlparser.FuncExpr{

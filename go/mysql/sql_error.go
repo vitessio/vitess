@@ -91,56 +91,43 @@ func NewSQLErrorFromError(err error) error {
 		return serr
 	}
 
+	sErr := convertToMysqlError(err)
+	if _, ok := sErr.(*SQLError); ok {
+		return sErr
+	}
+
 	msg := err.Error()
 	match := errExtract.FindStringSubmatch(msg)
 	if len(match) < 2 {
 		// Map vitess error codes into the mysql equivalent
 		code := vterrors.Code(err)
 		num := ERUnknownError
+		ss := SSUnknownSQLState
 		switch code {
-		case vtrpcpb.Code_CANCELED:
+		case vtrpcpb.Code_CANCELED, vtrpcpb.Code_DEADLINE_EXCEEDED, vtrpcpb.Code_ABORTED:
 			num = ERQueryInterrupted
-		case vtrpcpb.Code_UNKNOWN:
+			ss = SSQueryInterrupted
+		case vtrpcpb.Code_UNKNOWN, vtrpcpb.Code_INVALID_ARGUMENT, vtrpcpb.Code_NOT_FOUND, vtrpcpb.Code_ALREADY_EXISTS,
+			vtrpcpb.Code_FAILED_PRECONDITION, vtrpcpb.Code_OUT_OF_RANGE, vtrpcpb.Code_UNAVAILABLE, vtrpcpb.Code_DATA_LOSS:
 			num = ERUnknownError
-		case vtrpcpb.Code_INVALID_ARGUMENT:
-			// TODO/demmer there are several more appropriate mysql error
-			// codes for the various invalid argument cases.
-			// it would be better to change the call sites to use
-			// the mysql style "(errno X) (sqlstate Y)" format rather than
-			// trying to add vitess error codes for all these cases
-			num = ERUnknownError
-		case vtrpcpb.Code_DEADLINE_EXCEEDED:
-			num = ERQueryInterrupted
-		case vtrpcpb.Code_NOT_FOUND:
-			num = ERUnknownError
-		case vtrpcpb.Code_ALREADY_EXISTS:
-			num = ERUnknownError
-		case vtrpcpb.Code_PERMISSION_DENIED:
+		case vtrpcpb.Code_PERMISSION_DENIED, vtrpcpb.Code_UNAUTHENTICATED:
 			num = ERAccessDeniedError
-		case vtrpcpb.Code_UNAUTHENTICATED:
-			num = ERAccessDeniedError
+			ss = SSAccessDeniedError
 		case vtrpcpb.Code_RESOURCE_EXHAUSTED:
 			num = demuxResourceExhaustedErrors(err.Error())
-		case vtrpcpb.Code_FAILED_PRECONDITION:
-			num = ERUnknownError
-		case vtrpcpb.Code_ABORTED:
-			num = ERQueryInterrupted
-		case vtrpcpb.Code_OUT_OF_RANGE:
-			num = ERUnknownError
+			ss = SSClientError
 		case vtrpcpb.Code_UNIMPLEMENTED:
 			num = ERNotSupportedYet
+			ss = SSClientError
 		case vtrpcpb.Code_INTERNAL:
-			num = ERUnknownError
-		case vtrpcpb.Code_UNAVAILABLE:
-			num = ERUnknownError
-		case vtrpcpb.Code_DATA_LOSS:
-			num = ERUnknownError
+			num = ERInternalError
+			ss = SSUnknownSQLState
 		}
 
 		// Not found, build a generic SQLError.
 		return &SQLError{
 			Num:     num,
-			State:   SSUnknownSQLState,
+			State:   ss,
 			Message: msg,
 		}
 	}
@@ -160,6 +147,58 @@ func NewSQLErrorFromError(err error) error {
 		Message: msg,
 	}
 	return serr
+}
+
+var stateToMysqlCode = map[vterrors.State]struct {
+	num   int
+	state string
+}{
+	vterrors.Undefined:                    {num: ERUnknownError, state: SSUnknownSQLState},
+	vterrors.AccessDeniedError:            {num: ERAccessDeniedError, state: SSAccessDeniedError},
+	vterrors.BadDb:                        {num: ERBadDb, state: SSClientError},
+	vterrors.BadFieldError:                {num: ERBadFieldError, state: SSBadFieldError},
+	vterrors.CantUseOptionHere:            {num: ERCantUseOptionHere, state: SSClientError},
+	vterrors.DataOutOfRange:               {num: ERDataOutOfRange, state: SSDataOutOfRange},
+	vterrors.DbCreateExists:               {num: ERDbCreateExists, state: SSUnknownSQLState},
+	vterrors.DbDropExists:                 {num: ERDbDropExists, state: SSUnknownSQLState},
+	vterrors.EmptyQuery:                   {num: EREmptyQuery, state: SSClientError},
+	vterrors.IncorrectGlobalLocalVar:      {num: ERIncorrectGlobalLocalVar, state: SSUnknownSQLState},
+	vterrors.InnodbReadOnly:               {num: ERInnodbReadOnly, state: SSUnknownSQLState},
+	vterrors.LockOrActiveTransaction:      {num: ERLockOrActiveTransaction, state: SSUnknownSQLState},
+	vterrors.NoDB:                         {num: ERNoDb, state: SSNoDB},
+	vterrors.NoSuchTable:                  {num: ERNoSuchTable, state: SSUnknownTable},
+	vterrors.NotSupportedYet:              {num: ERNotSupportedYet, state: SSClientError},
+	vterrors.ForbidSchemaChange:           {num: ERForbidSchemaChange, state: SSUnknownSQLState},
+	vterrors.NetPacketTooLarge:            {num: ERNetPacketTooLarge, state: SSNetError},
+	vterrors.NonUniqTable:                 {num: ERNonUniqTable, state: SSClientError},
+	vterrors.QueryInterrupted:             {num: ERQueryInterrupted, state: SSQueryInterrupted},
+	vterrors.SPDoesNotExist:               {num: ERSPDoesNotExist, state: SSClientError},
+	vterrors.SyntaxError:                  {num: ERSyntaxError, state: SSClientError},
+	vterrors.UnsupportedPS:                {num: ERUnsupportedPS, state: SSUnknownSQLState},
+	vterrors.UnknownSystemVariable:        {num: ERUnknownSystemVariable, state: SSUnknownSQLState},
+	vterrors.UnknownTable:                 {num: ERUnknownTable, state: SSUnknownTable},
+	vterrors.WrongGroupField:              {num: ERWrongGroupField, state: SSClientError},
+	vterrors.WrongNumberOfColumnsInSelect: {num: ERWrongNumberOfColumnsInSelect, state: SSWrongNumberOfColumns},
+	vterrors.WrongTypeForVar:              {num: ERWrongTypeForVar, state: SSClientError},
+	vterrors.WrongValueForVar:             {num: ERWrongValueForVar, state: SSClientError},
+}
+
+func init() {
+	if len(stateToMysqlCode) != int(vterrors.NumOfStates) {
+		panic("all vterrors states are not mapped to mysql errors")
+	}
+}
+
+func convertToMysqlError(err error) error {
+	errState := vterrors.ErrState(err)
+	if errState == vterrors.Undefined {
+		return err
+	}
+	mysqlCode, ok := stateToMysqlCode[errState]
+	if !ok {
+		return err
+	}
+	return NewSQLError(mysqlCode.num, mysqlCode.state, err.Error())
 }
 
 var isGRPCOverflowRE = regexp.MustCompile(`.*grpc: received message larger than max \(\d+ vs. \d+\)`)

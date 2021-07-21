@@ -209,6 +209,15 @@ func (c *conn) dial() error {
 	return nil
 }
 
+func (c *conn) Ping(ctx context.Context) error {
+	if c.Streaming {
+		return errors.New("Ping not allowed for streaming connections")
+	}
+
+	_, err := c.ExecContext(ctx, "select 1", nil)
+	return err
+}
+
 func (c *conn) Prepare(query string) (driver.Stmt, error) {
 	return &stmt{c: c, query: query}, nil
 }

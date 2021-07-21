@@ -23,6 +23,8 @@ import (
 	"sync"
 	"testing"
 
+	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
+
 	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/require"
 
@@ -79,7 +81,8 @@ func TestVStream(t *testing.T) {
 			Match: "/.*/",
 		}},
 	}
-	reader, err := gconn.VStream(ctx, topodatapb.TabletType_MASTER, vgtid, filter)
+	flags := &vtgatepb.VStreamFlags{}
+	reader, err := gconn.VStream(ctx, topodatapb.TabletType_MASTER, vgtid, filter, flags)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -194,7 +197,8 @@ func TestVStreamCopyBasic(t *testing.T) {
 			Filter: "select * from t1",
 		}},
 	}
-	reader, err := gconn.VStream(ctx, topodatapb.TabletType_MASTER, vgtid, filter)
+	flags := &vtgatepb.VStreamFlags{}
+	reader, err := gconn.VStream(ctx, topodatapb.TabletType_MASTER, vgtid, filter, flags)
 	_, _ = conn, mconn
 	if err != nil {
 		t.Fatal(err)
@@ -247,7 +251,8 @@ func TestVStreamCurrent(t *testing.T) {
 			Filter: "select * from t1",
 		}},
 	}
-	reader, err := gconn.VStream(ctx, topodatapb.TabletType_MASTER, vgtid, filter)
+	flags := &vtgatepb.VStreamFlags{}
+	reader, err := gconn.VStream(ctx, topodatapb.TabletType_MASTER, vgtid, filter, flags)
 	_, _ = conn, mconn
 	if err != nil {
 		t.Fatal(err)

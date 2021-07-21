@@ -29,16 +29,13 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/vt/sqlparser"
-
 	"github.com/stretchr/testify/assert"
-
-	"vitess.io/vitess/go/test/utils"
-
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/test/utils"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 func createSocketPair(t *testing.T) (net.Listener, *Conn, *Conn) {
@@ -81,6 +78,7 @@ func createSocketPair(t *testing.T) (net.Listener, *Conn, *Conn) {
 	// Create a Conn on both sides.
 	cConn := newConn(clientConn)
 	sConn := newConn(serverConn)
+	sConn.PrepareData = map[uint32]*PrepareData{}
 
 	return listener, sConn, cConn
 }
@@ -456,8 +454,8 @@ func TestMultiStatementStopsOnError(t *testing.T) {
 	// panic if the query contains "panic" and it will return selectRowsResult in case of any other query
 	handler := &testRun{t: t, err: fmt.Errorf("execution failed")}
 	res := sConn.handleNextCommand(handler)
-	// Execution error will occur in this case becuase the query sent is error and testRun will throw an error.
-	// We shuold send an error packet but not close the connection.
+	// Execution error will occur in this case because the query sent is error and testRun will throw an error.
+	// We should send an error packet but not close the connection.
 	require.True(t, res, "we should not break the connection because of execution errors")
 
 	data, err := cConn.ReadPacket()
@@ -482,7 +480,7 @@ func TestMultiStatement(t *testing.T) {
 	// panic if the query contains "panic" and it will return selectRowsResult in case of any other query
 	handler := &testRun{t: t, err: NewSQLError(CRMalformedPacket, SSUnknownSQLState, "cannot get column number")}
 	res := sConn.handleNextCommand(handler)
-	//The queries run will be select 1; and select 2; These queries do not return any errors, so the connnection should still be open
+	//The queries run will be select 1; and select 2; These queries do not return any errors, so the connection should still be open
 	require.True(t, res, "we should not break the connection in case of no errors")
 	// Read the result of the query and assert that it is indeed what we want. This will contain the result of the first query.
 	data, more, _, err := cConn.ReadQueryResult(100, true)
@@ -651,6 +649,9 @@ func (t testRun) ComQuery(c *Conn, query string, callback func(*sqltypes.Result)
 	}
 	if strings.Contains(query, "panic") {
 		panic("test panic attack!")
+	}
+	if strings.Contains(query, "twice") {
+		callback(selectRowsResult)
 	}
 	callback(selectRowsResult)
 	return nil

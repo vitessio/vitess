@@ -21,7 +21,10 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
+
+	"vitess.io/vitess/go/vt/servenv"
 
 	"context"
 
@@ -369,6 +372,11 @@ func (ts *tmState) publishStateLocked(ctx context.Context) {
 		return nil
 	})
 	if err != nil {
+		if topo.IsErrType(err, topo.NoNode) { // Someone deleted the tablet record under us. Shut down gracefully.
+			log.Error("Tablet record has disappeared, shutting down")
+			servenv.ExitChan <- syscall.SIGTERM
+			return
+		}
 		log.Errorf("Unable to publish state to topo, will keep retrying: %v", err)
 		ts.isPublishing = true
 		// Keep retrying until success.
@@ -396,6 +404,11 @@ func (ts *tmState) retryPublish() {
 		})
 		cancel()
 		if err != nil {
+			if topo.IsErrType(err, topo.NoNode) { // Someone deleted the tablet record under us. Shut down gracefully.
+				log.Error("Tablet record has disappeared, shutting down")
+				servenv.ExitChan <- syscall.SIGTERM
+				return
+			}
 			log.Errorf("Unable to publish state to topo, will keep retrying: %v", err)
 			ts.mu.Unlock()
 			time.Sleep(*publishRetryInterval)

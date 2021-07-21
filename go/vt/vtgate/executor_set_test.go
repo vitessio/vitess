@@ -89,10 +89,10 @@ func TestExecutorSet(t *testing.T) {
 		out: &vtgatepb.Session{},
 	}, {
 		in:  "set AUTOCOMMIT = 'aa'",
-		err: "System setting 'autocommit' can't be set to this value: 'aa' is not a boolean",
+		err: "Variable 'autocommit' can't be set to the value: 'aa' is not a boolean",
 	}, {
 		in:  "set autocommit = 2",
-		err: "System setting 'autocommit' can't be set to this value: 2 is not a boolean",
+		err: "Variable 'autocommit' can't be set to the value: 2 is not a boolean",
 	}, {
 		in:  "set client_found_rows = 1",
 		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{ClientFoundRows: true}},
@@ -110,10 +110,10 @@ func TestExecutorSet(t *testing.T) {
 		err: "cannot use scope and @@",
 	}, {
 		in:  "set client_found_rows = 'aa'",
-		err: "System setting 'client_found_rows' can't be set to this value: 'aa' is not a boolean",
+		err: "Variable 'client_found_rows' can't be set to the value: 'aa' is not a boolean",
 	}, {
 		in:  "set client_found_rows = 2",
-		err: "System setting 'client_found_rows' can't be set to this value: 2 is not a boolean",
+		err: "Variable 'client_found_rows' can't be set to the value: 2 is not a boolean",
 	}, {
 		in:  "set transaction_mode = 'unspecified'",
 		out: &vtgatepb.Session{Autocommit: true, TransactionMode: vtgatepb.TransactionMode_UNSPECIFIED},
@@ -134,7 +134,7 @@ func TestExecutorSet(t *testing.T) {
 		err: "invalid transaction_mode: aa",
 	}, {
 		in:  "set transaction_mode = 1",
-		err: "unexpected value type for transaction_mode: INT64",
+		err: "Incorrect argument type to variable 'transaction_mode': INT64",
 	}, {
 		in:  "set workload = 'unspecified'",
 		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{Workload: querypb.ExecuteOptions_UNSPECIFIED}},
@@ -152,7 +152,7 @@ func TestExecutorSet(t *testing.T) {
 		err: "invalid workload: aa",
 	}, {
 		in:  "set workload = 1",
-		err: "unexpected value type for workload: INT64",
+		err: "Incorrect argument type to variable 'workload': INT64",
 	}, {
 		in:  "set transaction_mode = 'twopc', autocommit=1",
 		out: &vtgatepb.Session{Autocommit: true, TransactionMode: vtgatepb.TransactionMode_TWOPC},
@@ -164,10 +164,10 @@ func TestExecutorSet(t *testing.T) {
 		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{SqlSelectLimit: 0}},
 	}, {
 		in:  "set sql_select_limit = 'asdfasfd'",
-		err: "failed to evaluate value for sql_select_limit: expected int, unexpected value type: string",
+		err: "Incorrect argument type to variable 'sql_select_limit': VARBINARY",
 	}, {
 		in:  "set autocommit = 1+1",
-		err: "System setting 'autocommit' can't be set to this value: 2 is not a boolean",
+		err: "Variable 'autocommit' can't be set to the value: 2 is not a boolean",
 	}, {
 		in:  "set autocommit = 1+0",
 		out: &vtgatepb.Session{Autocommit: true},
@@ -176,7 +176,7 @@ func TestExecutorSet(t *testing.T) {
 		out: &vtgatepb.Session{Autocommit: true},
 	}, {
 		in:  "set foo = 1",
-		err: "unsupported construct in set: session foo = 1",
+		err: "Unknown system variable 'session foo = 1'",
 	}, {
 		in:  "set names utf8",
 		out: &vtgatepb.Session{Autocommit: true},
@@ -200,10 +200,10 @@ func TestExecutorSet(t *testing.T) {
 		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{}},
 	}, {
 		in:  "set tx_read_only = 2",
-		err: "System setting 'tx_read_only' can't be set to this value: 2 is not a boolean",
+		err: "Variable 'tx_read_only' can't be set to the value: 2 is not a boolean",
 	}, {
 		in:  "set transaction_read_only = 2",
-		err: "System setting 'transaction_read_only' can't be set to this value: 2 is not a boolean",
+		err: "Variable 'transaction_read_only' can't be set to the value: 2 is not a boolean",
 	}, {
 		in:  "set session transaction isolation level repeatable read",
 		out: &vtgatepb.Session{Autocommit: true},
@@ -228,6 +228,27 @@ func TestExecutorSet(t *testing.T) {
 	}, {
 		in:  "set session transaction read write",
 		out: &vtgatepb.Session{Autocommit: true},
+	}, {
+		in:  "set @@enable_system_settings = on",
+		out: &vtgatepb.Session{Autocommit: true, EnableSystemSettings: true},
+	}, {
+		in:  "set @@enable_system_settings = off",
+		out: &vtgatepb.Session{Autocommit: true, EnableSystemSettings: false},
+	}, {
+		in:  "set @@enable_system_settings = 1",
+		out: &vtgatepb.Session{Autocommit: true, EnableSystemSettings: true},
+	}, {
+		in:  "set @@enable_system_settings = 0",
+		out: &vtgatepb.Session{Autocommit: true, EnableSystemSettings: false},
+	}, {
+		in:  "set @@enable_system_settings = true",
+		out: &vtgatepb.Session{Autocommit: true, EnableSystemSettings: true},
+	}, {
+		in:  "set @@enable_system_settings = false",
+		out: &vtgatepb.Session{Autocommit: true, EnableSystemSettings: false},
+	}, {
+		in:  "set @@socket = '/tmp/change.sock'",
+		err: "Variable 'socket' is a read only variable",
 	}}
 	for i, tcase := range testcases {
 		t.Run(fmt.Sprintf("%d-%s", i, tcase.in), func(t *testing.T) {
@@ -247,76 +268,91 @@ func TestExecutorSetOp(t *testing.T) {
 	executor, _, _, sbclookup := createLegacyExecutorEnv()
 	*sysVarSetEnabled = true
 
-	sbclookup.SetResults([]*sqltypes.Result{
-		sqltypes.MakeTestResult(sqltypes.MakeTestFields("sql_mode", "varchar"), "STRICT_ALL_TABLES,NO_AUTO_UPDATES"),
-		sqltypes.MakeTestResult(sqltypes.MakeTestFields("sql_safe_updates", "int64"), "1"),
-		sqltypes.MakeTestResult(sqltypes.MakeTestFields("tx_isolation", "varchar"), "read-committed"),
-		sqltypes.MakeTestResult(sqltypes.MakeTestFields("sql_quote_show_create", "int64"), "0"),
-		sqltypes.MakeTestResult(sqltypes.MakeTestFields("foreign_key_checks", "int64")),
-		sqltypes.MakeTestResult(sqltypes.MakeTestFields("unique_checks", "int64"), "0"),
-		sqltypes.MakeTestResult(sqltypes.MakeTestFields("net_write_timeout", "int64"), "600"),
-		sqltypes.MakeTestResult(sqltypes.MakeTestFields("net_read_timeout", "int64"), "300"),
-		sqltypes.MakeTestResult(sqltypes.MakeTestFields("character_set_client", "varchar"), "utf8"),
-		sqltypes.MakeTestResult(sqltypes.MakeTestFields("character_set_results", "varchar")),
-		sqltypes.MakeTestResult(sqltypes.MakeTestFields("character_set_results", "varchar")),
-		sqltypes.MakeTestResult(sqltypes.MakeTestFields("character_set_results", "varchar")),
-		sqltypes.MakeTestResult(sqltypes.MakeTestFields("character_set_results", "varchar")),
-		sqltypes.MakeTestResult(sqltypes.MakeTestFields("character_set_results", "varchar")),
-		sqltypes.MakeTestResult(sqltypes.MakeTestFields("character_set_results", "varchar")),
-		sqltypes.MakeTestResult(sqltypes.MakeTestFields("client_found_rows", "int64")),
-		sqltypes.MakeTestResult(sqltypes.MakeTestFields("client_found_rows", "int64")),
-	})
+	returnResult := func(columnName, typ, value string) *sqltypes.Result {
+		return sqltypes.MakeTestResult(sqltypes.MakeTestFields(columnName, typ), value)
+	}
+	returnNoResult := func(columnName, typ string) *sqltypes.Result {
+		return sqltypes.MakeTestResult(sqltypes.MakeTestFields(columnName, typ))
+	}
 
 	testcases := []struct {
-		in      string
-		warning []*querypb.QueryWarning
-		sysVars map[string]string
+		in              string
+		warning         []*querypb.QueryWarning
+		sysVars         map[string]string
+		disallowResConn bool
+		result          *sqltypes.Result
 	}{{
 		in: "set big_tables = 1", //ignore
 	}, {
 		in:      "set sql_mode = 'STRICT_ALL_TABLES,NO_AUTO_UPDATES'",
 		sysVars: map[string]string{"sql_mode": "'STRICT_ALL_TABLES,NO_AUTO_UPDATES'"},
+		result:  returnResult("sql_mode", "varchar", "STRICT_ALL_TABLES,NO_AUTO_UPDATES"),
+	}, {
+		// even though the tablet is saying that the value has changed,
+		// useReservedConn is false, so we won't allow this change
+		in:              "set sql_mode = 'STRICT_ALL_TABLES,NO_AUTO_UPDATES'",
+		result:          returnResult("sql_mode", "varchar", "STRICT_ALL_TABLES,NO_AUTO_UPDATES"),
+		sysVars:         nil,
+		disallowResConn: true,
 	}, {
 		in:      "set sql_safe_updates = 1",
 		sysVars: map[string]string{"sql_safe_updates": "1"},
+		result:  returnResult("sql_safe_updates", "int64", "1"),
 	}, {
 		in:      "set tx_isolation = 'read-committed'",
 		sysVars: map[string]string{"tx_isolation": "'read-committed'"},
+		result:  returnResult("tx_isolation", "varchar", "read-committed"),
 	}, {
 		in:      "set sql_quote_show_create = 0",
 		sysVars: map[string]string{"sql_quote_show_create": "0"},
+		result:  returnResult("sql_quote_show_create", "int64", "0"),
 	}, {
-		in: "set foreign_key_checks = 1",
+		in:     "set foreign_key_checks = 1",
+		result: returnNoResult("foreign_key_checks", "int64"),
 	}, {
 		in:      "set unique_checks = 0",
 		sysVars: map[string]string{"unique_checks": "0"},
+		result:  returnResult("unique_checks", "int64", "0"),
 	}, {
-		in: "set net_write_timeout = 600",
+		in:     "set net_write_timeout = 600",
+		result: returnResult("net_write_timeout", "int64", "600"),
 	}, {
-		in: "set net_read_timeout = 600",
+		in:     "set net_read_timeout = 600",
+		result: returnResult("net_read_timeout", "int64", "300"),
 	}, {
-		in: "set character_set_client = utf8",
+		in:     "set character_set_client = utf8",
+		result: returnResult("character_set_client", "varchar", "utf8"),
 	}, {
-		in: "set character_set_results=null",
+		in:     "set character_set_results=null",
+		result: returnNoResult("character_set_results", "varchar"),
 	}, {
-		in: "set character_set_results='binary'",
+		in:     "set character_set_results='binary'",
+		result: returnNoResult("character_set_results", "varchar"),
 	}, {
-		in: "set character_set_results='utf8'",
+		in:     "set character_set_results='utf8'",
+		result: returnNoResult("character_set_results", "varchar"),
 	}, {
-		in: "set character_set_results=utf8mb4",
+		in:     "set character_set_results=utf8mb4",
+		result: returnNoResult("character_set_results", "varchar"),
 	}, {
-		in: "set character_set_results='latin1'",
+		in:     "set character_set_results='latin1'",
+		result: returnNoResult("character_set_results", "varchar"),
 	}, {
-		in: "set character_set_results='abcd'",
+		in:     "set character_set_results='abcd'",
+		result: returnNoResult("character_set_results", "varchar"),
 	}, {
-		in: "set @@global.client_found_rows = 1",
+		in:     "set @@global.client_found_rows = 1",
+		result: returnNoResult("client_found_rows", "int64"),
 	}, {
-		in: "set global client_found_rows = 1",
+		in:     "set global client_found_rows = 1",
+		result: returnNoResult("client_found_rows", "int64"),
 	}}
 	for _, tcase := range testcases {
 		t.Run(tcase.in, func(t *testing.T) {
 			session := NewAutocommitSession(masterSession)
 			session.TargetString = KsTestUnsharded
+			session.EnableSystemSettings = !tcase.disallowResConn
+			sbclookup.SetResults([]*sqltypes.Result{tcase.result})
 			_, err := executor.Execute(
 				context.Background(),
 				"TestExecute",

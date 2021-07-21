@@ -78,8 +78,6 @@ func TestInformationSchemaQuery(t *testing.T) {
 	assertResultIsEmpty(t, conn, "table_schema = 'PERFORMANCE_SCHEMA'")
 	assertSingleRowIsReturned(t, conn, "table_schema = 'performance_schema' and table_name = 'users'", "performance_schema")
 	assertResultIsEmpty(t, conn, "table_schema = 'performance_schema' and table_name = 'foo'")
-	assertSingleRowIsReturned(t, conn, "table_schema = 'vt_ks' and table_name = 't1'", "vt_ks")
-	assertSingleRowIsReturned(t, conn, "table_schema = 'ks' and table_name = 't1'", "vt_ks")
 }
 
 func assertResultIsEmpty(t *testing.T, conn *mysql.Conn, pre string) {
@@ -141,6 +139,7 @@ func TestConnectWithSystemSchema(t *testing.T) {
 		connParams.DbName = dbname
 		conn, err := mysql.Connect(ctx, &connParams)
 		require.NoError(t, err)
+		exec(t, conn, `select @@max_allowed_packet from dual`)
 		conn.Close()
 	}
 }
@@ -148,12 +147,12 @@ func TestConnectWithSystemSchema(t *testing.T) {
 func TestUseSystemSchema(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
 	for _, dbname := range []string{"information_schema", "mysql", "performance_schema", "sys"} {
-		conn, err := mysql.Connect(ctx, &vtParams)
-		require.NoError(t, err)
-
 		exec(t, conn, fmt.Sprintf("use %s", dbname))
-		conn.Close()
+		exec(t, conn, `select @@max_allowed_packet from dual`)
 	}
 }
 
@@ -213,5 +212,5 @@ func TestMultipleSchemaPredicates(t *testing.T) {
 		"where t.table_schema = '%s' and c.table_schema = '%s' and c.table_schema = '%s'", KeyspaceName, KeyspaceName, "a")
 	_, err = conn.ExecuteFetch(query, 1000, true)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "specifying two different database in the query is not supported")
+	require.Contains(t, err.Error(), "two predicates for specifying the database are not supported")
 }

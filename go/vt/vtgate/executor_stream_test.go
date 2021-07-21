@@ -24,6 +24,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/cache"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/discovery"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -59,7 +60,7 @@ func TestStreamSQLSharded(t *testing.T) {
 	for _, shard := range shards {
 		_ = hc.AddTestTablet(cell, shard, 1, "TestExecutor", shard, topodatapb.TabletType_MASTER, true, 1, nil)
 	}
-	executor := NewExecutor(context.Background(), serv, cell, resolver, false, testBufferSize, testCacheSize)
+	executor := NewExecutor(context.Background(), serv, cell, resolver, false, false, testBufferSize, cache.DefaultConfig)
 
 	sql := "stream * from sharded_user_msgs"
 	result, err := executorStreamMessages(executor, sql)
@@ -79,6 +80,26 @@ func TestStreamSQLSharded(t *testing.T) {
 	}
 	if !result.Equal(wantResult) {
 		t.Errorf("result: %+v, want %+v", result, wantResult)
+	}
+}
+
+func TestStreamError(t *testing.T) {
+	executor, _, _, _ := createLegacyExecutorEnv()
+	logChan := QueryLogger.Subscribe("TestStreamError")
+	defer QueryLogger.Unsubscribe(logChan)
+
+	queries := []string{
+		"start transaction",
+		"begin",
+		"rollback",
+		"commit",
+	}
+	for _, query := range queries {
+		t.Run(query, func(t *testing.T) {
+			_, err := executorStreamMessages(executor, query)
+			require.Error(t, err)
+			require.Contains(t, err.Error(), "OLAP does not supported statement")
+		})
 	}
 }
 

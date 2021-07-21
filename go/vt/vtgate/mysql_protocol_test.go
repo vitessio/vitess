@@ -55,6 +55,7 @@ func TestMySQLProtocolExecute(t *testing.T) {
 
 	options := &querypb.ExecuteOptions{
 		IncludedFields: querypb.ExecuteOptions_ALL,
+		Workload:       querypb.ExecuteOptions_OLTP,
 	}
 	if !proto.Equal(sbc.Options[0], options) {
 		t.Errorf("got ExecuteOptions \n%+v, want \n%+v", sbc.Options[0], options)
@@ -132,12 +133,12 @@ func TestMySQLProtocolExecuteUseStatement(t *testing.T) {
 	// No replica tablets, this should also fail
 	_, err = c.ExecuteFetch("select id from t1", 10, true /* wantfields */)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "no valid tablet")
+	assert.Contains(t, err.Error(), `no healthy tablet available for 'keyspace:"TestUnsharded" shard:"0" tablet_type:REPLICA`)
 }
 
 func TestMysqlProtocolInvalidDB(t *testing.T) {
 	_, err := mysqlConnect(&mysql.ConnParams{DbName: "invalidDB"})
-	require.EqualError(t, err, "vtgate: : Unknown database 'invalidDB' (errno 1049) (sqlstate 42000) (errno 1049) (sqlstate 42000)")
+	require.EqualError(t, err, "Unknown database 'invalidDB' (errno 1049) (sqlstate 42000)")
 }
 
 func TestMySQLProtocolClientFoundRows(t *testing.T) {
@@ -160,7 +161,9 @@ func TestMySQLProtocolClientFoundRows(t *testing.T) {
 	options := &querypb.ExecuteOptions{
 		IncludedFields:  querypb.ExecuteOptions_ALL,
 		ClientFoundRows: true,
+		Workload:        querypb.ExecuteOptions_OLTP,
 	}
+
 	if !proto.Equal(sbc.Options[0], options) {
 		t.Errorf("got ExecuteOptions \n%+v, want \n%+v", sbc.Options[0], options)
 	}

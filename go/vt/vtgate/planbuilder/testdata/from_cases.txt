@@ -10,11 +10,12 @@
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select col from user where 1 != 1",
-    "Query": "select col from user",
-    "Table": "user"
+    "FieldQuery": "select col from `user` where 1 != 1",
+    "Query": "select col from `user`",
+    "Table": "`user`"
   }
 }
+Gen4 plan same as above
 
 # Single table unsharded
 "select col from unsharded"
@@ -33,6 +34,7 @@
     "Table": "unsharded"
   }
 }
+Gen4 plan same as above
 
 # Select from sequence
 "select next 2 values from seq"
@@ -51,6 +53,7 @@
     "Table": "seq"
   }
 }
+Gen4 plan same as above
 
 # Select from reference
 "select * from ref"
@@ -69,6 +72,7 @@
     "Table": "ref"
   }
 }
+Gen4 plan same as above
 
 # Single information_schema query
 "select col from information_schema.foo"
@@ -114,7 +118,7 @@
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "1",
-    "TableName": "user_music",
+    "TableName": "`user`_music",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -123,9 +127,9 @@
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select 1 from user where 1 != 1",
-        "Query": "select 1 from user",
-        "Table": "user"
+        "FieldQuery": "select 1 from `user` where 1 != 1",
+        "Query": "select 1 from `user`",
+        "Table": "`user`"
       },
       {
         "OperatorType": "Route",
@@ -141,6 +145,7 @@
     ]
   }
 }
+Gen4 plan same as above
 
 # routing rules where table name matches, and there's no alias.
 "select * from second_user.user"
@@ -154,9 +159,9 @@
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select * from user where 1 != 1",
-    "Query": "select * from user",
-    "Table": "user"
+    "FieldQuery": "select * from `user` where 1 != 1",
+    "Query": "select * from `user`",
+    "Table": "`user`"
   }
 }
 
@@ -172,9 +177,9 @@
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select * from user as a where 1 != 1",
-    "Query": "select * from user as a",
-    "Table": "user"
+    "FieldQuery": "select * from `user` as a where 1 != 1",
+    "Query": "select * from `user` as a",
+    "Table": "`user`"
   }
 }
 
@@ -190,9 +195,9 @@
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select * from user as route1 where 1 != 1",
-    "Query": "select * from user as route1",
-    "Table": "user"
+    "FieldQuery": "select * from `user` as route1 where 1 != 1",
+    "Query": "select * from `user` as route1",
+    "Table": "`user`"
   }
 }
 
@@ -208,9 +213,9 @@
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select * from user as a where 1 != 1",
-    "Query": "select * from user as a",
-    "Table": "user"
+    "FieldQuery": "select * from `user` as a where 1 != 1",
+    "Query": "select * from `user` as a",
+    "Table": "`user`"
   }
 }
 
@@ -226,19 +231,21 @@
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select * from user as master_redirect where 1 != 1",
-    "Query": "select * from user as master_redirect",
-    "Table": "user"
+    "FieldQuery": "select * from `user` as master_redirect where 1 != 1",
+    "Query": "select * from `user` as master_redirect",
+    "Table": "`user`"
   }
 }
 
 # routing rules bad table
 "select * from bad_table"
 "keyspace noks not found in vschema"
+Gen4 plan same as above
 
 # routing rules disabled table
 "select * from disabled"
 "table disabled has been disabled"
+Gen4 plan same as above
 
 # ',' join
 "select music.col from user, music"
@@ -249,7 +256,7 @@
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "1",
-    "TableName": "user_music",
+    "TableName": "`user`_music",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -258,9 +265,9 @@
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select 1 from user where 1 != 1",
-        "Query": "select 1 from user",
-        "Table": "user"
+        "FieldQuery": "select 1 from `user` where 1 != 1",
+        "Query": "select 1 from `user`",
+        "Table": "`user`"
       },
       {
         "OperatorType": "Route",
@@ -276,6 +283,7 @@
     ]
   }
 }
+Gen4 plan same as above
 
 # ',' join unsharded
 "select u1.a, u2.a from unsharded u1, unsharded u2"
@@ -357,7 +365,7 @@
     "OperatorType": "Join",
     "Variant": "LeftJoin",
     "JoinColumnIndexes": "-1",
-    "TableName": "user_unsharded",
+    "TableName": "`user`_unsharded",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -366,9 +374,9 @@
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select u.col, u.a from user as u where 1 != 1",
-        "Query": "select u.col, u.a from user as u",
-        "Table": "user"
+        "FieldQuery": "select u.col, u.a from `user` as u where 1 != 1",
+        "Query": "select u.col, u.a from `user` as u",
+        "Table": "`user`"
       },
       {
         "OperatorType": "Route",
@@ -394,13 +402,13 @@
     "OperatorType": "Join",
     "Variant": "LeftJoin",
     "JoinColumnIndexes": "-1",
-    "TableName": "user_unsharded_unsharded",
+    "TableName": "`user`_unsharded_unsharded",
     "Inputs": [
       {
         "OperatorType": "Join",
         "Variant": "LeftJoin",
         "JoinColumnIndexes": "-1,1",
-        "TableName": "user_unsharded",
+        "TableName": "`user`_unsharded",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -409,9 +417,9 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select user.col from user where 1 != 1",
-            "Query": "select user.col from user",
-            "Table": "user"
+            "FieldQuery": "select `user`.col from `user` where 1 != 1",
+            "Query": "select `user`.col from `user`",
+            "Table": "`user`"
           },
           {
             "OperatorType": "Route",
@@ -450,7 +458,7 @@
     "OperatorType": "Join",
     "Variant": "LeftJoin",
     "JoinColumnIndexes": "-1",
-    "TableName": "user_user_extra_unsharded",
+    "TableName": "`user`_user_extra_unsharded",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -459,9 +467,9 @@
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select user.col from user where 1 != 1",
-        "Query": "select user.col from user",
-        "Table": "user"
+        "FieldQuery": "select `user`.col from `user` where 1 != 1",
+        "Query": "select `user`.col from `user`",
+        "Table": "`user`"
       },
       {
         "OperatorType": "Join",
@@ -559,13 +567,13 @@
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-1",
-    "TableName": "user_unsharded_unsharded",
+    "TableName": "`user`_unsharded_unsharded",
     "Inputs": [
       {
         "OperatorType": "Join",
         "Variant": "Join",
         "JoinColumnIndexes": "-1",
-        "TableName": "user_unsharded",
+        "TableName": "`user`_unsharded",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -574,9 +582,9 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select user.col from user where 1 != 1",
-            "Query": "select user.col from user",
-            "Table": "user"
+            "FieldQuery": "select `user`.col from `user` where 1 != 1",
+            "Query": "select `user`.col from `user`",
+            "Table": "`user`"
           },
           {
             "OperatorType": "Route",
@@ -615,7 +623,7 @@
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-1",
-    "TableName": "user_unsharded",
+    "TableName": "`user`_unsharded",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -624,9 +632,9 @@
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select user.col from user where 1 != 1",
-        "Query": "select user.col from user",
-        "Table": "user"
+        "FieldQuery": "select `user`.col from `user` where 1 != 1",
+        "Query": "select `user`.col from `user`",
+        "Table": "`user`"
       },
       {
         "OperatorType": "Route",
@@ -652,7 +660,7 @@
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-1",
-    "TableName": "user_user_unsharded",
+    "TableName": "`user`_`user`_unsharded",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -661,14 +669,14 @@
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select user.col from user where 1 != 1",
-        "Query": "select user.col from user",
-        "Table": "user"
+        "FieldQuery": "select `user`.col from `user` where 1 != 1",
+        "Query": "select `user`.col from `user`",
+        "Table": "`user`"
       },
       {
         "OperatorType": "Join",
         "Variant": "Join",
-        "TableName": "user_unsharded",
+        "TableName": "`user`_unsharded",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -677,9 +685,9 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select 1 from user as u1 where 1 != 1",
-            "Query": "select 1 from user as u1",
-            "Table": "user"
+            "FieldQuery": "select 1 from `user` as u1 where 1 != 1",
+            "Query": "select 1 from `user` as u1",
+            "Table": "`user`"
           },
           {
             "OperatorType": "Route",
@@ -710,9 +718,9 @@
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select user.col from user use index (a) where 1 != 1",
-    "Query": "select user.col from user use index (a)",
-    "Table": "user"
+    "FieldQuery": "select `user`.col from `user` use index (a) where 1 != 1",
+    "Query": "select `user`.col from `user` use index (a)",
+    "Table": "`user`"
   }
 }
 
@@ -728,9 +736,24 @@
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select user.col from user join user_extra on user.id = user_extra.user_id where 1 != 1",
-    "Query": "select user.col from user join user_extra on user.id = user_extra.user_id",
-    "Table": "user"
+    "FieldQuery": "select `user`.col from `user` join user_extra on `user`.id = user_extra.user_id where 1 != 1",
+    "Query": "select `user`.col from `user` join user_extra on `user`.id = user_extra.user_id",
+    "Table": "`user`"
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select user.col from user join user_extra on user.id = user_extra.user_id",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select `user`.col from `user`, user_extra where 1 != 1",
+    "Query": "select `user`.col from `user`, user_extra where `user`.id = user_extra.user_id",
+    "Table": "`user`, user_extra"
   }
 }
 
@@ -746,9 +769,24 @@
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select user.col from user join user_extra on user.id = user_extra.user_id where 1 != 1",
-    "Query": "select user.col from user join user_extra on user.id = user_extra.user_id",
-    "Table": "user"
+    "FieldQuery": "select `user`.col from `user` join user_extra on `user`.id = user_extra.user_id where 1 != 1",
+    "Query": "select `user`.col from `user` join user_extra on `user`.id = user_extra.user_id",
+    "Table": "`user`"
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select user.col from user join user_extra on (user.id = user_extra.user_id)",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select `user`.col from `user`, user_extra where 1 != 1",
+    "Query": "select `user`.col from `user`, user_extra where `user`.id = user_extra.user_id",
+    "Table": "`user`, user_extra"
   }
 }
 
@@ -764,9 +802,24 @@
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select user.col from user join user_extra on user.col between 1 and 2 and user.id = user_extra.user_id where 1 != 1",
-    "Query": "select user.col from user join user_extra on user.col between 1 and 2 and user.id = user_extra.user_id",
-    "Table": "user"
+    "FieldQuery": "select `user`.col from `user` join user_extra on `user`.col between 1 and 2 and `user`.id = user_extra.user_id where 1 != 1",
+    "Query": "select `user`.col from `user` join user_extra on `user`.col between 1 and 2 and `user`.id = user_extra.user_id",
+    "Table": "`user`"
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select user.col from user join user_extra on user.col between 1 and 2 and user.id = user_extra.user_id",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select `user`.col from `user`, user_extra where 1 != 1",
+    "Query": "select `user`.col from `user`, user_extra where `user`.col between 1 and 2 and `user`.id = user_extra.user_id",
+    "Table": "`user`, user_extra"
   }
 }
 
@@ -782,9 +835,24 @@
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select user.col from user join user_extra on user_extra.user_id = user.id where 1 != 1",
-    "Query": "select user.col from user join user_extra on user_extra.user_id = user.id",
-    "Table": "user"
+    "FieldQuery": "select `user`.col from `user` join user_extra on user_extra.user_id = `user`.id where 1 != 1",
+    "Query": "select `user`.col from `user` join user_extra on user_extra.user_id = `user`.id",
+    "Table": "`user`"
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select user.col from user join user_extra on user_extra.user_id = user.id",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select `user`.col from `user`, user_extra where 1 != 1",
+    "Query": "select `user`.col from `user`, user_extra where user_extra.user_id = `user`.id",
+    "Table": "`user`, user_extra"
   }
 }
 
@@ -800,9 +868,28 @@
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select user.col from user join user_extra on user.id = 5 and user.id = user_extra.user_id where 1 != 1",
-    "Query": "select user.col from user join user_extra on user.id = 5 and user.id = user_extra.user_id",
-    "Table": "user",
+    "FieldQuery": "select `user`.col from `user` join user_extra on `user`.id = 5 and `user`.id = user_extra.user_id where 1 != 1",
+    "Query": "select `user`.col from `user` join user_extra on `user`.id = 5 and `user`.id = user_extra.user_id",
+    "Table": "`user`",
+    "Values": [
+      5
+    ],
+    "Vindex": "user_index"
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select user.col from user join user_extra on user.id = 5 and user.id = user_extra.user_id",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select `user`.col from `user`, user_extra where 1 != 1",
+    "Query": "select `user`.col from `user`, user_extra where `user`.id = 5 and `user`.id = user_extra.user_id",
+    "Table": "`user`, user_extra",
     "Values": [
       5
     ],
@@ -819,7 +906,7 @@
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-1",
-    "TableName": "user_user_extra",
+    "TableName": "`user`_user_extra",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -828,9 +915,9 @@
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select user.col, user.id from user where 1 != 1",
-        "Query": "select user.col, user.id from user",
-        "Table": "user"
+        "FieldQuery": "select `user`.col, `user`.id from `user` where 1 != 1",
+        "Query": "select `user`.col, `user`.id from `user`",
+        "Table": "`user`"
       },
       {
         "OperatorType": "Route",
@@ -856,7 +943,7 @@
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-1",
-    "TableName": "user_user_extra",
+    "TableName": "`user`_user_extra",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -865,9 +952,9 @@
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select user.col from user where 1 != 1",
-        "Query": "select user.col from user where user.id = 5",
-        "Table": "user",
+        "FieldQuery": "select `user`.col from `user` where 1 != 1",
+        "Query": "select `user`.col from `user` where `user`.id = 5",
+        "Table": "`user`",
         "Values": [
           5
         ],
@@ -887,6 +974,7 @@
     ]
   }
 }
+Gen4 plan same as above
 
 # sharded join, non-col reference LHS
 "select user.col from user join user_extra on 5 = user.id"
@@ -897,7 +985,7 @@
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-1",
-    "TableName": "user_user_extra",
+    "TableName": "`user`_user_extra",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -906,9 +994,9 @@
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select user.col from user where 1 != 1",
-        "Query": "select user.col from user where user.id = 5",
-        "Table": "user",
+        "FieldQuery": "select `user`.col from `user` where 1 != 1",
+        "Query": "select `user`.col from `user` where `user`.id = 5",
+        "Table": "`user`",
         "Values": [
           5
         ],
@@ -928,6 +1016,7 @@
     ]
   }
 }
+Gen4 plan same as above
 
 # sharded join, non-vindex col
 "select user.col from user join user_extra on user.id = user_extra.col"
@@ -938,7 +1027,7 @@
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-1",
-    "TableName": "user_user_extra",
+    "TableName": "`user`_user_extra",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -947,9 +1036,9 @@
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select user.col, user.id from user where 1 != 1",
-        "Query": "select user.col, user.id from user",
-        "Table": "user"
+        "FieldQuery": "select `user`.col, `user`.id from `user` where 1 != 1",
+        "Query": "select `user`.col, `user`.id from `user`",
+        "Table": "`user`"
       },
       {
         "OperatorType": "Route",
@@ -965,6 +1054,44 @@
     ]
   }
 }
+{
+  "QueryType": "SELECT",
+  "Original": "select user.col from user join user_extra on user.id = user_extra.col",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "1",
+    "TableName": "user_extra_`user`",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select user_extra.col from user_extra where 1 != 1",
+        "Query": "select user_extra.col from user_extra",
+        "Table": "user_extra"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectEqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select `user`.col from `user` where 1 != 1",
+        "Query": "select `user`.col from `user` where `user`.id = :user_extra_col",
+        "Table": "`user`",
+        "Values": [
+          ":user_extra_col"
+        ],
+        "Vindex": "user_index"
+      }
+    ]
+  }
+}
 
 # sharded join, non-unique vindex
 "select user.col from user_extra join user on user_extra.user_id = user.name"
@@ -975,7 +1102,7 @@
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "1",
-    "TableName": "user_extra_user",
+    "TableName": "user_extra_`user`",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -995,9 +1122,9 @@
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select user.col from user where 1 != 1",
-        "Query": "select user.col from user where user.`name` = :user_extra_user_id",
-        "Table": "user",
+        "FieldQuery": "select `user`.col from `user` where 1 != 1",
+        "Query": "select `user`.col from `user` where `user`.`name` = :user_extra_user_id",
+        "Table": "`user`",
         "Values": [
           ":user_extra_user_id"
         ],
@@ -1019,9 +1146,9 @@
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select user.col from user join ref where 1 != 1",
-    "Query": "select user.col from user join ref",
-    "Table": "user"
+    "FieldQuery": "select `user`.col from `user` join ref where 1 != 1",
+    "Query": "select `user`.col from `user` join ref",
+    "Table": "`user`"
   }
 }
 
@@ -1055,9 +1182,9 @@
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select ref.col from ref join user where 1 != 1",
-    "Query": "select ref.col from ref join user",
-    "Table": "user"
+    "FieldQuery": "select ref.col from ref join `user` where 1 != 1",
+    "Query": "select ref.col from ref join `user`",
+    "Table": "`user`"
   }
 }
 
@@ -1074,9 +1201,9 @@
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select ref.col from ref join (select aa from user where 1 != 1) as user where 1 != 1",
-    "Query": "select ref.col from ref join (select aa from user where user.id = 1) as user",
-    "Table": "user",
+    "FieldQuery": "select ref.col from ref join (select aa from `user` where 1 != 1) as `user` where 1 != 1",
+    "Query": "select ref.col from ref join (select aa from `user` where `user`.id = 1) as `user`",
+    "Table": "`user`",
     "Values": [
       1
     ],
@@ -1133,9 +1260,9 @@
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select id from (select id, col from user where 1 != 1) as t where 1 != 1",
-    "Query": "select id from (select id, col from user where id = 5) as t",
-    "Table": "user",
+    "FieldQuery": "select id from (select id, col from `user` where 1 != 1) as t where 1 != 1",
+    "Query": "select id from (select id, col from `user` where id = 5) as t",
+    "Table": "`user`",
     "Values": [
       5
     ],
@@ -1155,9 +1282,9 @@
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select t.id from (select id from user where 1 != 1) as t join user_extra on t.id = user_extra.user_id where 1 != 1",
-    "Query": "select t.id from (select id from user where id = 5) as t join user_extra on t.id = user_extra.user_id",
-    "Table": "user",
+    "FieldQuery": "select t.id from (select id from `user` where 1 != 1) as t join user_extra on t.id = user_extra.user_id where 1 != 1",
+    "Query": "select t.id from (select id from `user` where id = 5) as t join user_extra on t.id = user_extra.user_id",
+    "Table": "`user`",
     "Values": [
       5
     ],
@@ -1177,9 +1304,9 @@
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select t.id from (select user.id from user where 1 != 1) as t join user_extra on t.id = user_extra.user_id where 1 != 1",
-    "Query": "select t.id from (select user.id from user where user.id = 5) as t join user_extra on t.id = user_extra.user_id",
-    "Table": "user",
+    "FieldQuery": "select t.id from (select `user`.id from `user` where 1 != 1) as t join user_extra on t.id = user_extra.user_id where 1 != 1",
+    "Query": "select t.id from (select `user`.id from `user` where `user`.id = 5) as t join user_extra on t.id = user_extra.user_id",
+    "Table": "`user`",
     "Values": [
       5
     ],
@@ -1203,8 +1330,8 @@
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select t.id from user_extra join (select id from user where 1 != 1) as t on t.id = user_extra.user_id where 1 != 1",
-    "Query": "select t.id from user_extra join (select id from user where id = 5) as t on t.id = user_extra.user_id",
+    "FieldQuery": "select t.id from user_extra join (select id from `user` where 1 != 1) as t on t.id = user_extra.user_id where 1 != 1",
+    "Query": "select t.id from user_extra join (select id from `user` where id = 5) as t on t.id = user_extra.user_id",
     "Table": "user_extra"
   }
 }
@@ -1218,7 +1345,7 @@
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-1",
-    "TableName": "user_user_extra",
+    "TableName": "`user`_user_extra",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -1227,9 +1354,9 @@
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select t.id from (select id from user where 1 != 1) as t where 1 != 1",
-        "Query": "select t.id from (select id from user where id = 5) as t",
-        "Table": "user",
+        "FieldQuery": "select t.id from (select id from `user` where 1 != 1) as t where 1 != 1",
+        "Query": "select t.id from (select id from `user` where id = 5) as t",
+        "Table": "`user`",
         "Values": [
           5
         ],
@@ -1262,9 +1389,9 @@
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select id from (select id, col from user as route1 where 1 != 1) as t where 1 != 1",
-    "Query": "select id from (select id, col from user as route1 where id = 5) as t",
-    "Table": "user",
+    "FieldQuery": "select id from (select id, col from `user` as route1 where 1 != 1) as t where 1 != 1",
+    "Query": "select id from (select id, col from `user` as route1 where id = 5) as t",
+    "Table": "`user`",
     "Values": [
       5
     ],
@@ -1284,9 +1411,9 @@
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select id from (select id, col from user as route1 where 1 != 1) as t where 1 != 1",
-    "Query": "select id from (select id, col from user as route1) as t where id = 5",
-    "Table": "user",
+    "FieldQuery": "select id from (select id, col from `user` as route1 where 1 != 1) as t where 1 != 1",
+    "Query": "select id from (select id, col from `user` as route1) as t where id = 5",
+    "Table": "`user`",
     "Values": [
       5
     ],
@@ -1306,9 +1433,9 @@
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select u.col, e.col from (select col from user where 1 != 1) as u join (select col from user_extra where 1 != 1) as e where 1 != 1",
-    "Query": "select u.col, e.col from (select col from user where id = 5) as u join (select col from user_extra where user_id = 5) as e",
-    "Table": "user",
+    "FieldQuery": "select u.col, e.col from (select col from `user` where 1 != 1) as u join (select col from user_extra where 1 != 1) as e where 1 != 1",
+    "Query": "select u.col, e.col from (select col from `user` where id = 5) as u join (select col from user_extra where user_id = 5) as e",
+    "Table": "`user`",
     "Values": [
       5
     ],
@@ -1431,7 +1558,7 @@
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-1",
-    "TableName": "user_user_extra_unsharded",
+    "TableName": "`user`_user_extra_unsharded",
     "Inputs": [
       {
         "OperatorType": "Subquery",
@@ -1444,7 +1571,7 @@
             "OperatorType": "Join",
             "Variant": "Join",
             "JoinColumnIndexes": "-1,-2",
-            "TableName": "user_user_extra",
+            "TableName": "`user`_user_extra",
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -1453,9 +1580,9 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select user.id, user.col1 from user where 1 != 1",
-                "Query": "select user.id, user.col1 from user",
-                "Table": "user"
+                "FieldQuery": "select `user`.id, `user`.col1 from `user` where 1 != 1",
+                "Query": "select `user`.id, `user`.col1 from `user`",
+                "Table": "`user`"
               },
               {
                 "OperatorType": "Route",
@@ -1502,7 +1629,7 @@
         "OperatorType": "Join",
         "Variant": "Join",
         "JoinColumnIndexes": "-1,-2",
-        "TableName": "user_user_extra",
+        "TableName": "`user`_user_extra",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -1511,9 +1638,9 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select user.id, user.col1, user.col from user where 1 != 1",
-            "Query": "select user.id, user.col1, user.col from user",
-            "Table": "user"
+            "FieldQuery": "select `user`.id, `user`.col1, `user`.col from `user` where 1 != 1",
+            "Query": "select `user`.id, `user`.col1, `user`.col from `user`",
+            "Table": "`user`"
           },
           {
             "OperatorType": "Route",
@@ -1541,7 +1668,7 @@
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "1",
-    "TableName": "unsharded_a_user_user_extra",
+    "TableName": "unsharded_a_`user`_user_extra",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -1564,7 +1691,7 @@
             "OperatorType": "Join",
             "Variant": "Join",
             "JoinColumnIndexes": "-1,-2",
-            "TableName": "user_user_extra",
+            "TableName": "`user`_user_extra",
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -1573,9 +1700,9 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select user.id, user.col1 from user where 1 != 1",
-                "Query": "select user.id, user.col1 from user",
-                "Table": "user"
+                "FieldQuery": "select `user`.id, `user`.col1 from `user` where 1 != 1",
+                "Query": "select `user`.id, `user`.col1 from `user`",
+                "Table": "`user`"
               },
               {
                 "OperatorType": "Route",
@@ -1612,9 +1739,9 @@
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select col from user where 1 != 1",
-        "Query": "select col from user",
-        "Table": "user"
+        "FieldQuery": "select col from `user` where 1 != 1",
+        "Query": "select col from `user`",
+        "Table": "`user`"
       },
       {
         "OperatorType": "Route",
@@ -1647,9 +1774,9 @@
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select col from user where 1 != 1",
-        "Query": "select col from user",
-        "Table": "user"
+        "FieldQuery": "select col from `user` where 1 != 1",
+        "Query": "select col from `user`",
+        "Table": "`user`"
       },
       {
         "OperatorType": "Route",
@@ -1682,9 +1809,9 @@
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select col from user where 1 != 1",
-        "Query": "select col from user",
-        "Table": "user"
+        "FieldQuery": "select col from `user` where 1 != 1",
+        "Query": "select col from `user`",
+        "Table": "`user`"
       },
       {
         "OperatorType": "Route",
@@ -1717,15 +1844,15 @@
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select col from user where 1 != 1",
-        "Query": "select col from user",
-        "Table": "user"
+        "FieldQuery": "select col from `user` where 1 != 1",
+        "Query": "select col from `user`",
+        "Table": "`user`"
       },
       {
         "OperatorType": "Join",
         "Variant": "Join",
         "JoinColumnIndexes": "-1",
-        "TableName": "unsharded_user",
+        "TableName": "unsharded_`user`",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -1745,9 +1872,9 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select 1 from user where 1 != 1",
-            "Query": "select 1 from user where :__sq_has_values1 = 1 and user.col in ::__sq1",
-            "Table": "user"
+            "FieldQuery": "select 1 from `user` where 1 != 1",
+            "Query": "select 1 from `user` where :__sq_has_values1 = 1 and `user`.col in ::__sq1",
+            "Table": "`user`"
           }
         ]
       }
@@ -1765,7 +1892,7 @@
     "OperatorType": "Join",
     "Variant": "LeftJoin",
     "JoinColumnIndexes": "-1",
-    "TableName": "unsharded_user",
+    "TableName": "unsharded_`user`",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -1789,9 +1916,9 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select col from user where 1 != 1",
-            "Query": "select col from user",
-            "Table": "user"
+            "FieldQuery": "select col from `user` where 1 != 1",
+            "Query": "select col from `user`",
+            "Table": "`user`"
           },
           {
             "OperatorType": "Route",
@@ -1800,9 +1927,9 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select 1 from user where 1 != 1",
-            "Query": "select 1 from user where :__sq_has_values1 = 1 and user.col in ::__sq1",
-            "Table": "user"
+            "FieldQuery": "select 1 from `user` where 1 != 1",
+            "Query": "select 1 from `user` where :__sq_has_values1 = 1 and `user`.col in ::__sq1",
+            "Table": "`user`"
           }
         ]
       }
@@ -1820,7 +1947,7 @@
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-1",
-    "TableName": "unsharded_user_unsharded_a",
+    "TableName": "unsharded_`user`_unsharded_a",
     "Inputs": [
       {
         "OperatorType": "Subquery",
@@ -1833,15 +1960,15 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select col from user where 1 != 1",
-            "Query": "select col from user",
-            "Table": "user"
+            "FieldQuery": "select col from `user` where 1 != 1",
+            "Query": "select col from `user`",
+            "Table": "`user`"
           },
           {
             "OperatorType": "Join",
             "Variant": "Join",
             "JoinColumnIndexes": "-1",
-            "TableName": "unsharded_user",
+            "TableName": "unsharded_`user`",
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -1861,9 +1988,9 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select 1 from user where 1 != 1",
-                "Query": "select 1 from user where :__sq_has_values1 = 1 and user.col in ::__sq1",
-                "Table": "user"
+                "FieldQuery": "select 1 from `user` where 1 != 1",
+                "Query": "select 1 from `user` where :__sq_has_values1 = 1 and `user`.col in ::__sq1",
+                "Table": "`user`"
               }
             ]
           }
@@ -1893,7 +2020,7 @@
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-1,1",
-    "TableName": "user_unsharded",
+    "TableName": "`user`_unsharded",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -1902,9 +2029,9 @@
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select user.col1, user.col2 from user where 1 != 1",
-        "Query": "select user.col1, user.col2 from user",
-        "Table": "user"
+        "FieldQuery": "select `user`.col1, `user`.col2 from `user` where 1 != 1",
+        "Query": "select `user`.col1, `user`.col2 from `user`",
+        "Table": "`user`"
       },
       {
         "OperatorType": "Route",
@@ -1951,9 +2078,9 @@
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select user.col from user join user_extra on user.ID = user_extra.User_Id where 1 != 1",
-    "Query": "select user.col from user join user_extra on user.ID = user_extra.User_Id",
-    "Table": "user"
+    "FieldQuery": "select `user`.col from `user` join user_extra on `user`.ID = user_extra.User_Id where 1 != 1",
+    "Query": "select `user`.col from `user` join user_extra on `user`.ID = user_extra.User_Id",
+    "Table": "`user`"
   }
 }
 
@@ -1973,7 +2100,7 @@
         "OperatorType": "Join",
         "Variant": "Join",
         "JoinColumnIndexes": "-1",
-        "TableName": "user_user_extra",
+        "TableName": "`user`_user_extra",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -1982,9 +2109,9 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select user.id from user where 1 != 1",
-            "Query": "select user.id from user",
-            "Table": "user"
+            "FieldQuery": "select `user`.id from `user` where 1 != 1",
+            "Query": "select `user`.id from `user`",
+            "Table": "`user`"
           },
           {
             "OperatorType": "Route",
@@ -2055,11 +2182,12 @@
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select :__lastInsertId as `last_insert_id()` from user where 1 != 1",
-    "Query": "select :__lastInsertId as `last_insert_id()` from user",
-    "Table": "user"
+    "FieldQuery": "select :__lastInsertId as `last_insert_id()` from `user` where 1 != 1",
+    "Query": "select :__lastInsertId as `last_insert_id()` from `user`",
+    "Table": "`user`"
   }
 }
+Gen4 plan same as above
 
 # last_insert_id for unsharded route
 "select last_insert_id() from main.unsharded"
@@ -2078,6 +2206,7 @@
     "Table": "unsharded"
   }
 }
+Gen4 plan same as above
 
 # join with USING construct
 "select user.id from user join user_extra using(id)"
@@ -2088,7 +2217,7 @@
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-1",
-    "TableName": "user_user_extra",
+    "TableName": "`user`_user_extra",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -2097,9 +2226,9 @@
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select user.id from user where 1 != 1",
-        "Query": "select user.id from user",
-        "Table": "user"
+        "FieldQuery": "select `user`.id from `user` where 1 != 1",
+        "Query": "select `user`.id from `user`",
+        "Table": "`user`"
       },
       {
         "OperatorType": "Route",
@@ -2115,6 +2244,44 @@
     ]
   }
 }
+{
+  "QueryType": "SELECT",
+  "Original": "select user.id from user join user_extra using(id)",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "1",
+    "TableName": "user_extra_`user`",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select user_extra.id from user_extra where 1 != 1",
+        "Query": "select user_extra.id from user_extra",
+        "Table": "user_extra"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectEqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select `user`.id from `user` where 1 != 1",
+        "Query": "select `user`.id from `user` where `user`.id = :user_extra_id",
+        "Table": "`user`",
+        "Values": [
+          ":user_extra_id"
+        ],
+        "Vindex": "user_index"
+      }
+    ]
+  }
+}
 
 # verify ',' vs JOIN precedence
 "select u1.a from unsharded u1, unsharded u2 join unsharded u3 on u1.a = u2.a"
@@ -2123,6 +2290,7 @@
 # first expression fails for ',' join (code coverage: ensure error is returned)
 "select user.foo.col from user.foo, user"
 "table foo not found"
+Gen4 plan same as above
 
 # table names should be case-sensitive
 "select unsharded.id from unsharded where Unsharded.val = 1"
@@ -2131,18 +2299,20 @@
 # implicit table reference for sharded keyspace
 "select user.foo.col from user.foo"
 "table foo not found"
+Gen4 plan same as above
 
 # duplicate symbols
 "select user.id from user join user"
-"duplicate symbol: user"
+"duplicate symbol: `user`"
 
 # duplicate symbols for merging routes
 "select user.id from user join user_extra user on user.id = user.user_id"
-"duplicate symbol: user"
+"duplicate symbol: `user`"
 
 # non-existent table
 "select c from t"
 "table t not found"
+Gen4 plan same as above
 
 # non-existent table on left of join
 "select c from t join user"
@@ -2192,15 +2362,34 @@
   "QueryType": "SELECT",
   "Original": "select fk.referenced_table_name as to_table, fk.referenced_column_name as primary_key, fk.column_name as `column`, fk.constraint_name as name, rc.update_rule as on_update, rc.delete_rule as on_delete from information_schema.referential_constraints as rc join information_schema.key_column_usage as fk using (constraint_schema, constraint_name) where fk.referenced_column_name is not null and fk.table_schema = database() and fk.table_name = ':vtg1' and rc.constraint_schema = database() and rc.table_name = ':vtg1'",
   "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectDBA",
-    "Keyspace": {
-      "Name": "main",
-      "Sharded": false
-    },
-    "FieldQuery": "select fk.referenced_table_name as to_table, fk.referenced_column_name as primary_key, fk.column_name as `column`, fk.constraint_name as `name`, rc.update_rule as on_update, rc.delete_rule as on_delete from information_schema.referential_constraints as rc join information_schema.key_column_usage as fk on rc.constraint_schema = fk.constraint_schema and rc.constraint_name = fk.constraint_name where 1 != 1",
-    "Query": "select fk.referenced_table_name as to_table, fk.referenced_column_name as primary_key, fk.column_name as `column`, fk.constraint_name as `name`, rc.update_rule as on_update, rc.delete_rule as on_delete from information_schema.referential_constraints as rc join information_schema.key_column_usage as fk on rc.constraint_schema = fk.constraint_schema and rc.constraint_name = fk.constraint_name where fk.referenced_column_name is not null and fk.table_schema = database() and fk.table_name = :__vttablename and rc.constraint_schema = database() and rc.table_name = :__vttablename",
-    "SysTableTableName": "[VARBINARY(\":vtg1\"), VARBINARY(\":vtg1\")]"
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "1,2,3,4,-1,-2",
+    "TableName": "_",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectDBA",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select rc.update_rule as on_update, rc.delete_rule as on_delete, rc.constraint_schema, rc.constraint_name from information_schema.referential_constraints as rc where 1 != 1",
+        "Query": "select rc.update_rule as on_update, rc.delete_rule as on_delete, rc.constraint_schema, rc.constraint_name from information_schema.referential_constraints as rc where rc.constraint_schema = database() and rc.table_name = :__vttablename",
+        "SysTableTableName": "VARBINARY(\":vtg1\")"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectDBA",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select fk.referenced_table_name as to_table, fk.referenced_column_name as primary_key, fk.column_name as `column`, fk.constraint_name as `name` from information_schema.key_column_usage as fk where 1 != 1",
+        "Query": "select fk.referenced_table_name as to_table, fk.referenced_column_name as primary_key, fk.column_name as `column`, fk.constraint_name as `name` from information_schema.key_column_usage as fk where fk.constraint_schema = :rc_constraint_schema and fk.constraint_name = :rc_constraint_name and fk.referenced_column_name is not null and fk.table_schema = database() and fk.table_name = :__vttablename",
+        "SysTableTableName": "VARBINARY(\":vtg1\")"
+      }
+    ]
   }
 }
 
@@ -2218,7 +2407,7 @@
     },
     "FieldQuery": "select * from information_schema.schemata where 1 != 1",
     "Query": "select * from information_schema.schemata where schema_name = :__vtschemaname",
-    "SysTableTableSchema": "[VARBINARY(\"user\")]"
+    "SysTableTableSchema": "VARBINARY(\"user\")"
   }
 }
 
@@ -2236,8 +2425,8 @@
     },
     "FieldQuery": "select table_comment from information_schema.`tables` where 1 != 1",
     "Query": "select table_comment from information_schema.`tables` where table_schema = :__vtschemaname and table_name = :__vttablename",
-    "SysTableTableName": "[VARBINARY(\"table_name\")]",
-    "SysTableTableSchema": "[VARBINARY(\"schema_name\")]"
+    "SysTableTableName": "VARBINARY(\"table_name\")",
+    "SysTableTableSchema": "VARBINARY(\"schema_name\")"
   }
 }
 
@@ -2247,16 +2436,36 @@
   "QueryType": "SELECT",
   "Original": "SELECT fk.referenced_table_name AS 'to_table', fk.referenced_column_name AS 'primary_key',fk.column_name AS 'column',fk.constraint_name AS 'name',rc.update_rule AS 'on_update',rc.delete_rule AS 'on_delete' FROM information_schema.referential_constraints rc JOIN information_schema.key_column_usage fk USING (constraint_schema, constraint_name) WHERE fk.referenced_column_name IS NOT NULL AND fk.table_schema = 'table_schema' AND fk.table_name = 'table_name' AND rc.constraint_schema = 'table_schema' AND rc.table_name = 'table_name'",
   "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectDBA",
-    "Keyspace": {
-      "Name": "main",
-      "Sharded": false
-    },
-    "FieldQuery": "select fk.referenced_table_name as to_table, fk.referenced_column_name as primary_key, fk.column_name as `column`, fk.constraint_name as `name`, rc.update_rule as on_update, rc.delete_rule as on_delete from information_schema.referential_constraints as rc join information_schema.key_column_usage as fk on rc.constraint_schema = fk.constraint_schema and rc.constraint_name = fk.constraint_name where 1 != 1",
-    "Query": "select fk.referenced_table_name as to_table, fk.referenced_column_name as primary_key, fk.column_name as `column`, fk.constraint_name as `name`, rc.update_rule as on_update, rc.delete_rule as on_delete from information_schema.referential_constraints as rc join information_schema.key_column_usage as fk on rc.constraint_schema = fk.constraint_schema and rc.constraint_name = fk.constraint_name where fk.referenced_column_name is not null and fk.table_schema = :__vtschemaname and fk.table_name = :__vttablename and rc.constraint_schema = :__vtschemaname and rc.table_name = :__vttablename",
-    "SysTableTableName": "[VARBINARY(\"table_name\"), VARBINARY(\"table_name\")]",
-    "SysTableTableSchema": "[VARBINARY(\"table_schema\"), VARBINARY(\"table_schema\")]"
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "1,2,3,4,-1,-2",
+    "TableName": "_",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectDBA",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select rc.update_rule as on_update, rc.delete_rule as on_delete, rc.constraint_schema, rc.constraint_name from information_schema.referential_constraints as rc where 1 != 1",
+        "Query": "select rc.update_rule as on_update, rc.delete_rule as on_delete, rc.constraint_schema, rc.constraint_name from information_schema.referential_constraints as rc where rc.constraint_schema = :__vtschemaname and rc.table_name = :__vttablename",
+        "SysTableTableName": "VARBINARY(\"table_name\")",
+        "SysTableTableSchema": "VARBINARY(\"table_schema\")"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectDBA",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select fk.referenced_table_name as to_table, fk.referenced_column_name as primary_key, fk.column_name as `column`, fk.constraint_name as `name` from information_schema.key_column_usage as fk where 1 != 1",
+        "Query": "select fk.referenced_table_name as to_table, fk.referenced_column_name as primary_key, fk.column_name as `column`, fk.constraint_name as `name` from information_schema.key_column_usage as fk where fk.constraint_schema = :rc_constraint_schema and fk.constraint_name = :rc_constraint_name and fk.referenced_column_name is not null and fk.table_schema = :__vtschemaname and fk.table_name = :__vttablename",
+        "SysTableTableName": "VARBINARY(\"table_name\")",
+        "SysTableTableSchema": "VARBINARY(\"table_schema\")"
+      }
+    ]
   }
 }
 
@@ -2266,16 +2475,35 @@
   "QueryType": "SELECT",
   "Original": "SELECT cc.constraint_name AS 'name', cc.check_clause AS 'expression' FROM information_schema.check_constraints cc JOIN information_schema.table_constraints tc USING (constraint_schema, constraint_name) WHERE tc.table_schema = 'table_schema' AND tc.table_name = 'table_name' AND cc.constraint_schema = 'constraint_schema'",
   "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectDBA",
-    "Keyspace": {
-      "Name": "main",
-      "Sharded": false
-    },
-    "FieldQuery": "select cc.constraint_name as `name`, cc.check_clause as expression from information_schema.check_constraints as cc join information_schema.table_constraints as tc on cc.constraint_schema = tc.constraint_schema and cc.constraint_name = tc.constraint_name where 1 != 1",
-    "Query": "select cc.constraint_name as `name`, cc.check_clause as expression from information_schema.check_constraints as cc join information_schema.table_constraints as tc on cc.constraint_schema = tc.constraint_schema and cc.constraint_name = tc.constraint_name where tc.table_schema = :__vtschemaname and tc.table_name = :__vttablename and cc.constraint_schema = :__vtschemaname",
-    "SysTableTableName": "[VARBINARY(\"table_name\")]",
-    "SysTableTableSchema": "[VARBINARY(\"table_schema\"), VARBINARY(\"constraint_schema\")]"
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "-1,-2",
+    "TableName": "_",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectDBA",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select cc.constraint_name as `name`, cc.check_clause as expression, cc.constraint_schema from information_schema.check_constraints as cc where 1 != 1",
+        "Query": "select cc.constraint_name as `name`, cc.check_clause as expression, cc.constraint_schema from information_schema.check_constraints as cc where cc.constraint_schema = :__vtschemaname",
+        "SysTableTableSchema": "VARBINARY(\"constraint_schema\")"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectDBA",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select 1 from information_schema.table_constraints as tc where 1 != 1",
+        "Query": "select 1 from information_schema.table_constraints as tc where tc.constraint_schema = :cc_constraint_schema and tc.constraint_name = :cc_constraint_name and tc.table_schema = :__vtschemaname and tc.table_name = :__vttablename",
+        "SysTableTableName": "VARBINARY(\"table_name\")",
+        "SysTableTableSchema": "VARBINARY(\"table_schema\")"
+      }
+    ]
   }
 }
 
@@ -2293,8 +2521,8 @@
     },
     "FieldQuery": "select column_name from information_schema.statistics where 1 != 1",
     "Query": "select column_name from information_schema.statistics where index_name = 'PRIMARY' and table_schema = :__vtschemaname and table_name = :__vttablename order by seq_in_index asc",
-    "SysTableTableName": "[VARBINARY(\"table_name\")]",
-    "SysTableTableSchema": "[VARBINARY(\"table_schema\")]"
+    "SysTableTableName": "VARBINARY(\"table_name\")",
+    "SysTableTableSchema": "VARBINARY(\"table_schema\")"
   }
 }
 
@@ -2312,8 +2540,8 @@
     },
     "FieldQuery": "select generation_expression from information_schema.`columns` where 1 != 1",
     "Query": "select generation_expression from information_schema.`columns` where table_schema = :__vtschemaname and table_name = :__vttablename and column_name = 'column_name'",
-    "SysTableTableName": "[VARBINARY(\"table_name\")]",
-    "SysTableTableSchema": "[VARBINARY(\"table_schema\")]"
+    "SysTableTableName": "VARBINARY(\"table_name\")",
+    "SysTableTableSchema": "VARBINARY(\"table_schema\")"
   }
 }
 
@@ -2348,7 +2576,7 @@
     },
     "FieldQuery": "select table_name from (select * from information_schema.`tables` where 1 != 1) as _subquery where 1 != 1",
     "Query": "select table_name from (select * from information_schema.`tables` where table_schema = :__vtschemaname) as _subquery",
-    "SysTableTableSchema": "[VARBINARY(\"table_schema\")]"
+    "SysTableTableSchema": "VARBINARY(\"table_schema\")"
   }
 }
 
@@ -2366,8 +2594,8 @@
     },
     "FieldQuery": "select table_name from (select * from information_schema.`tables` where 1 != 1) as _subquery where 1 != 1",
     "Query": "select table_name from (select * from information_schema.`tables` where table_schema = :__vtschemaname) as _subquery where _subquery.table_type = 'table_type' and _subquery.table_name = :__vttablename",
-    "SysTableTableName": "[VARBINARY(\"table_name\")]",
-    "SysTableTableSchema": "[VARBINARY(\"table_schema\")]"
+    "SysTableTableName": "VARBINARY(\"table_name\")",
+    "SysTableTableSchema": "VARBINARY(\"table_schema\")"
   }
 }
 
@@ -2385,7 +2613,7 @@
     },
     "FieldQuery": "select cc.constraint_name as `name` from information_schema.check_constraints as cc where 1 != 1",
     "Query": "select cc.constraint_name as `name` from information_schema.check_constraints as cc where cc.constraint_schema = :__vtschemaname and cc.table_schema = :__vtschemaname",
-    "SysTableTableSchema": "[VARBINARY(\"a\"), VARBINARY(\"a\")]"
+    "SysTableTableSchema": "VARBINARY(\"a\")"
   }
 }
 
@@ -2403,7 +2631,7 @@
     },
     "FieldQuery": "select COUNT(*) from INFORMATION_SCHEMA.`TABLES` where 1 != 1",
     "Query": "select COUNT(*) from INFORMATION_SCHEMA.`TABLES` where table_schema = :__vtschemaname and table_name = :__vttablename",
-    "SysTableTableName": "[VARBINARY(\"foo\")]",
-    "SysTableTableSchema": "[VARBINARY(\"performance_schema\")]"
+    "SysTableTableName": "VARBINARY(\"foo\")",
+    "SysTableTableSchema": "VARBINARY(\"performance_schema\")"
   }
 }

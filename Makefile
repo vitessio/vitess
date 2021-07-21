@@ -13,6 +13,7 @@
 # limitations under the License.
 
 MAKEFLAGS = -s
+GIT_STATUS := $(shell git status --porcelain)
 
 export GOBIN=$(PWD)/bin
 export GO111MODULE=on
@@ -22,7 +23,7 @@ export REWRITER=go/vt/sqlparser/rewriter.go
 # Since we are not using this Makefile for compilation, limiting parallelism will not increase build time.
 .NOTPARALLEL:
 
-.PHONY: all build install test clean unit_test unit_test_cover unit_test_race integration_test proto proto_banner site_test site_integration_test docker_bootstrap docker_test docker_unit_test java_test reshard_tests e2e_test e2e_test_race minimaltools tools web_bootstrap web_build web_start
+.PHONY: all build install test clean unit_test unit_test_cover unit_test_race integration_test proto proto_banner site_test site_integration_test docker_bootstrap docker_test docker_unit_test java_test reshard_tests e2e_test e2e_test_race minimaltools tools web_bootstrap web_build web_start generate_ci_workflows
 
 all: build
 
@@ -53,13 +54,27 @@ embed_config:
 	go run github.com/GeertJohan/go.rice/rice embed-go
 	go build .
 
+# build the vitess binaries with dynamic dependency on libc
+build-dyn:
+ifndef NOBANNER
+	echo $$(date): Building source tree
+endif
+	bash ./build.env
+	go install $(EXTRA_BUILD_FLAGS) $(VT_GO_PARALLEL) -ldflags "$(shell tools/build_version_flags.sh)" ./go/...
+	(cd go/cmd/vttablet && go run github.com/GeertJohan/go.rice/rice append --exec=../../../bin/vttablet)
+
+# build the vitess binaries statically
 build:
 ifndef NOBANNER
 	echo $$(date): Building source tree
 endif
 	bash ./build.env
-	go install $(EXTRA_BUILD_FLAGS) $(VT_GO_PARALLEL) -ldflags "$(shell tools/build_version_flags.sh)" ./go/... && \
-		(cd go/cmd/vttablet && go run github.com/GeertJohan/go.rice/rice append --exec=../../../bin/vttablet)
+	# build all the binaries by default with CGO disabled
+	CGO_ENABLED=0 go install $(EXTRA_BUILD_FLAGS) $(VT_GO_PARALLEL) -ldflags "$(shell tools/build_version_flags.sh)" ./go/...
+	# embed local resources in the vttablet executable
+	(cd go/cmd/vttablet && go run github.com/GeertJohan/go.rice/rice append --exec=../../../bin/vttablet)
+	# build vtorc with CGO, because it depends on sqlite
+	CGO_ENABLED=1 go install $(EXTRA_BUILD_FLAGS) $(VT_GO_PARALLEL) -ldflags "$(shell tools/build_version_flags.sh)" ./go/cmd/vtorc/...
 
 debug:
 ifndef NOBANNER
@@ -74,7 +89,7 @@ endif
 install: build
 	# binaries
 	mkdir -p "$${PREFIX}/bin"
-	cp "$${VTROOT}/bin/"{mysqlctld,vtorc,vtctld,vtctlclient,vtctldclient,vtgate,vttablet,vtworker,vtbackup} "$${PREFIX}/bin/"
+	cp "$${VTROOT}/bin/"{mysqlctl,mysqlctld,vtorc,vtctld,vtctlclient,vtctldclient,vtgate,vttablet,vtworker,vtbackup} "$${PREFIX}/bin/"
 
 # Install local install the binaries needed to run vitess locally
 # Usage: make install-local PREFIX=/path/to/install/root
@@ -102,8 +117,23 @@ grpcvtctldclient: go/vt/proto/vtctlservice/vtctlservice.pb.go
 parser:
 	make -C go/vt/sqlparser
 
-visitor:
-	go generate go/vt/sqlparser/rewriter.go
+codegen: asthelpergen sizegen parser
+
+visitor: asthelpergen
+	echo "make visitor has been replaced by make asthelpergen"
+
+asthelpergen:
+	go run ./go/tools/asthelpergen/main -in ./go/vt/sqlparser -iface vitess.io/vitess/go/vt/sqlparser.SQLNode -except "*ColName"
+
+sizegen:
+	go run ./go/tools/sizegen/sizegen.go \
+		-in ./go/... \
+	  	-gen vitess.io/vitess/go/vt/vtgate/engine.Plan \
+		-gen vitess.io/vitess/go/vt/vttablet/tabletserver.TabletPlan \
+		-gen vitess.io/vitess/go/sqltypes.Result
+
+astfmtgen:
+	go run ./go/tools/astfmtgen/main.go vitess.io/vitess/go/vt/sqlparser/...
 
 # To pass extra flags, run test.go manually.
 # For example: go run test.go -docker=false -- --extra-flag
@@ -117,7 +147,6 @@ clean:
 	go clean -i ./go/...
 	rm -rf third_party/acolyte
 	rm -rf go/vt/.proto.tmp
-	rm -rf ./visitorgen
 
 # Remove everything including stuff pulled down by bootstrap.sh
 cleanall: clean
@@ -166,7 +195,7 @@ java_test:
 	VTROOT=${PWD} mvn -f java/pom.xml -B clean verify
 
 install_protoc-gen-go:
-	go install github.com/golang/protobuf/protoc-gen-go
+	go install github.com/gogo/protobuf/protoc-gen-gofast
 
 PROTO_SRCS = $(wildcard proto/*.proto)
 PROTO_SRC_NAMES = $(basename $(notdir $(PROTO_SRCS)))
@@ -179,10 +208,11 @@ ifndef NOBANNER
 	echo $$(date): Compiling proto definitions
 endif
 
-$(PROTO_GO_OUTS): install_protoc-gen-go proto/*.proto
+$(PROTO_GO_OUTS): minimaltools install_protoc-gen-go proto/*.proto
 	for name in $(PROTO_SRC_NAMES); do \
-		$(VTROOT)/bin/protoc --go_out=plugins=grpc:. -Iproto proto/$${name}.proto && \
-		goimports -local vitess.io/vitess -w vitess.io/vitess/go/vt/proto/$${name}/$${name}.pb.go; \
+		$(VTROOT)/bin/protoc --gofast_out=plugins=grpc:. --plugin protoc-gen-gofast="${GOBIN}/protoc-gen-gofast" \
+		-I${PWD}/dist/vt-protoc-3.6.1/include:proto proto/$${name}.proto && \
+		goimports -w vitess.io/vitess/go/vt/proto/$${name}/$${name}.pb.go; \
 	done
 	cp -Rf vitess.io/vitess/go/vt/proto/* go/vt/proto
 	rm -rf vitess.io/vitess/go/vt/proto/
@@ -245,6 +275,12 @@ docker_local:
 docker_mini:
 	${call build_docker_image,docker/mini/Dockerfile,vitess/mini}
 
+DOCKER_VTTESTSERVER_SUFFIX = mysql57 mysql80
+DOCKER_VTTESTSERVER_TARGETS = $(addprefix docker_vttestserver_,$(DOCKER_VTTESTSERVER_SUFFIX))
+$(DOCKER_VTTESTSERVER_TARGETS): docker_vttestserver_%:
+	${call build_docker_image,docker/vttestserver/Dockerfile.$*,vitess/vttestserver:$*}
+
+docker_vttestserver: $(DOCKER_VTTESTSERVER_TARGETS)
 # This rule loads the working copy of the code into a bootstrap image,
 # and then runs the tests inside Docker.
 # Example: $ make docker_test flavor=mariadb
@@ -258,7 +294,7 @@ docker_unit_test:
 # This will generate a tar.gz file into the releases folder with the current source
 release: docker_base
 	@if [ -z "$VERSION" ]; then \
-	  echo "Set the env var VERSION with the release version"; exit 1;\
+		echo "Set the env var VERSION with the release version"; exit 1;\
 	fi
 	mkdir -p releases
 	docker build -f docker/Dockerfile.release -t vitess/release .
@@ -267,6 +303,43 @@ release: docker_base
 	echo "A git tag was created, you can push it with:"
 	echo "git push origin v$(VERSION)"
 	echo "Also, don't forget the upload releases/v$(VERSION).tar.gz file to GitHub releases"
+
+do_release:
+ifndef RELEASE_VERSION
+		echo "Set the env var RELEASE_VERSION with the release version"
+		exit 1
+endif
+ifndef DEV_VERSION
+		echo "Set the env var DEV_VERSION with the version the dev branch should have after release"
+		exit 1
+endif
+ifeq ($(strip $(GIT_STATUS)),)
+	echo so much clean
+else	
+	echo cannot do release with dirty git state
+	exit 1
+	echo so much win        
+endif
+# Pre checks passed. Let's change the current version
+	cd java && mvn versions:set -DnewVersion=$(RELEASE_VERSION)
+	echo package servenv > go/vt/servenv/version.go
+	echo  >> go/vt/servenv/version.go
+	echo const versionName = \"$(RELEASE_VERSION)\" >> go/vt/servenv/version.go
+	echo -n Pausing so relase notes can be added. Press enter to continue
+	read line
+	git add --all
+	git commit -n -s -m "Release commit for $(RELEASE_VERSION)" 
+	git tag -m Version\ $(RELEASE_VERSION) v$(RELEASE_VERSION)
+	cd java && mvn versions:set -DnewVersion=$(DEV_VERSION)
+	echo package servenv > go/vt/servenv/version.go
+	echo  >> go/vt/servenv/version.go
+	echo const versionName = \"$(DEV_VERSION)\" >> go/vt/servenv/version.go
+	git add --all
+	git commit -n -s -m "Back to dev mode"
+	echo "Release preparations successful" 
+	echo "A git tag was created, you can push it with:"
+	echo "   git push upstream v$(RELEASE_VERSION)"
+	echo "The git branch has also been updated. You need to push it and get it merged"
 
 tools:
 	echo $$(date): Installing dependencies
@@ -279,34 +352,70 @@ minimaltools:
 dependency_check:
 	./tools/dependency_check.sh
 
-GEN_BASE_DIR ?= ./go/vt/topo/k8stopo
+install_k8s-code-generator: tools.go go.mod
+	go install k8s.io/code-generator/cmd/deepcopy-gen
+	go install k8s.io/code-generator/cmd/client-gen
+	go install k8s.io/code-generator/cmd/lister-gen
+	go install k8s.io/code-generator/cmd/informer-gen
 
-client_go_gen:
+DEEPCOPY_GEN=$(GOBIN)/deepcopy-gen
+CLIENT_GEN=$(GOBIN)/client-gen
+LISTER_GEN=$(GOBIN)/lister-gen
+INFORMER_GEN=$(GOBIN)/informer-gen
+
+GEN_BASE_DIR ?= vitess.io/vitess/go/vt/topo/k8stopo
+
+client_go_gen: install_k8s-code-generator
 	echo $$(date): Regenerating client-go code
 	# Delete and re-generate the deepcopy types
-	find $(GEN_BASE_DIR)/apis/topo/v1beta1 -type f -name 'zz_generated*' -exec rm '{}' \;
-	deepcopy-gen -i $(GEN_BASE_DIR)/apis/topo/v1beta1 -O zz_generated.deepcopy -o ./ --bounding-dirs $(GEN_BASE_DIR)/apis --go-header-file $(GEN_BASE_DIR)/boilerplate.go.txt
+	find $(VTROOT)/go/vt/topo/k8stopo/apis/topo/v1beta1 -name "zz_generated.deepcopy.go" -delete
 
-	# Delete, generate, and move the client libraries
+	# We output to ./ and then copy over the generated files to the appropriate path
+	# This is done so we don't have rely on the repository being cloned to `$GOPATH/src/vitess.io/vitess`
+
+	$(DEEPCOPY_GEN) -o ./ \
+	--input-dirs $(GEN_BASE_DIR)/apis/topo/v1beta1 \
+	-O zz_generated.deepcopy \
+	--bounding-dirs $(GEN_BASE_DIR)/apis \
+	--go-header-file ./go/vt/topo/k8stopo/boilerplate.go.txt
+
+	# Delete existing code
 	rm -rf go/vt/topo/k8stopo/client
 
-	# There is no way to get client-gen to automatically put files in the right place and still have the right import path so we generate and move them
+	# Generate clientset
+	$(CLIENT_GEN) -o ./ \
+	--clientset-name versioned \
+	--input-base $(GEN_BASE_DIR)/apis \
+	--input 'topo/v1beta1' \
+	--output-package $(GEN_BASE_DIR)/client/clientset \
+	--fake-clientset=true \
+	--go-header-file ./go/vt/topo/k8stopo/boilerplate.go.txt
 
-	# Generate client, informers, and listers
-	client-gen -o ./ --input 'topo/v1beta1' --clientset-name versioned --input-base 'vitess.io/vitess/go/vt/topo/k8stopo/apis/' -i vitess.io/vitess --output-package vitess.io/vitess/go/vt/topo/k8stopo/client/clientset --go-header-file $(GEN_BASE_DIR)/boilerplate.go.txt
-	lister-gen -o ./ --input-dirs  vitess.io/vitess/go/vt/topo/k8stopo/apis/topo/v1beta1 --output-package vitess.io/vitess/go/vt/topo/k8stopo/client/listers --go-header-file $(GEN_BASE_DIR)/boilerplate.go.txt
-	informer-gen -o ./ --input-dirs  vitess.io/vitess/go/vt/topo/k8stopo/apis/topo/v1beta1 --versioned-clientset-package vitess.io/vitess/go/vt/topo/k8stopo/client/clientset/versioned --listers-package vitess.io/vitess/go/vt/topo/k8stopo/client/listers --output-package vitess.io/vitess/go/vt/topo/k8stopo/client/informers --go-header-file $(GEN_BASE_DIR)/boilerplate.go.txt
+	# Generate listers
+	$(LISTER_GEN) -o ./ \
+	--input-dirs $(GEN_BASE_DIR)/apis/topo/v1beta1 \
+	--output-package $(GEN_BASE_DIR)/client/listers \
+	--go-header-file ./go/vt/topo/k8stopo/boilerplate.go.txt
+
+	# Generate informers
+	$(INFORMER_GEN) -o ./ \
+	--input-dirs $(GEN_BASE_DIR)/apis/topo/v1beta1 \
+	--output-package $(GEN_BASE_DIR)/client/informers \
+	--versioned-clientset-package $(GEN_BASE_DIR)/client/clientset/versioned \
+	--listers-package $(GEN_BASE_DIR)/client/listers \
+	--go-header-file ./go/vt/topo/k8stopo/boilerplate.go.txt
 
 	# Move and cleanup
 	mv vitess.io/vitess/go/vt/topo/k8stopo/client go/vt/topo/k8stopo/
-	rmdir -p vitess.io/vitess/go/vt/topo/k8stopo/
+	mv vitess.io/vitess/go/vt/topo/k8stopo/apis/topo/v1beta1/zz_generated.deepcopy.go go/vt/topo/k8stopo/apis/topo/v1beta1/zz_generated.deepcopy.go
+	rm -rf vitess.io/vitess/go/vt/topo/k8stopo/
 
 # Check prerequisites and install dependencies
 web_bootstrap:
 	./tools/web_bootstrap.sh
 
 # Do a production build of the vtctld UI.
-# This target needs to be manually run every time any file within web/vtctld2/app 
+# This target needs to be manually run every time any file within web/vtctld2/app
 # is modified to regenerate rice-box.go
 web_build: web_bootstrap
 	./tools/web_build.sh
@@ -317,7 +426,7 @@ web_build: web_bootstrap
 web_start: web_bootstrap
 	cd web/vtctld2 && npm run start
 
-vtadmin_web_install: 
+vtadmin_web_install:
 	cd web/vtadmin && npm install
 
 # Generate JavaScript/TypeScript bindings for vtadmin-web from the Vitess .proto files.
@@ -325,3 +434,9 @@ vtadmin_web_install:
 # While vtadmin-web is new and unstable, however, we can keep it out of the critical build path.
 vtadmin_web_proto_types: vtadmin_web_install
 	./web/vtadmin/bin/generate-proto-types.sh
+
+# Generate github CI actions workflow files for unit tests and cluster endtoend tests based on templates in the test/templates directory
+# Needs to be called if the templates change or if a new test "shard" is created. We do not need to rebuild tests if only the test/config.json
+# is changed by adding a new test to an existing shard. Any new or modified files need to be committed into git
+generate_ci_workflows:
+	cd test && go run ci_workflow_gen.go && cd ..

@@ -167,5 +167,5 @@ func planProjection(pb *primitiveBuilder, in logicalPlan, expr *sqlparser.Aliase
 		return node, rc, len(node.resultColumns) - 1, nil
 
 	}
-	return nil, nil, 0, vterrors.Errorf(vtrpc.Code_UNIMPLEMENTED, "%T.projection: unreachable", in)
+	return nil, nil, 0, vterrors.Errorf(vtrpc.Code_UNIMPLEMENTED, "[BUG] unreachable %T.projection", in)
 }

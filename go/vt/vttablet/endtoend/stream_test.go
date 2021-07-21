@@ -26,6 +26,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -40,9 +41,7 @@ func TestStreamUnion(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	if qr.RowsAffected != 1 {
-		t.Errorf("RowsAffected: %d, want 1", qr.RowsAffected)
-	}
+	assert.Equal(t, 1, len(qr.Rows))
 }
 
 func TestStreamConsolidation(t *testing.T) {

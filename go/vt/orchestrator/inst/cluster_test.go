@@ -21,6 +21,8 @@ import (
 
 	"testing"
 
+	_ "github.com/mattn/go-sqlite3"
+
 	"vitess.io/vitess/go/vt/orchestrator/config"
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
 	test "vitess.io/vitess/go/vt/orchestrator/external/golib/tests"

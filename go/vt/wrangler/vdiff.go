@@ -194,7 +194,7 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflow, sourceC
 		return nil, vterrors.Wrap(err, "buildVDiffPlan")
 	}
 
-	if err := df.selectTablets(ctx); err != nil {
+	if err := df.selectTablets(ctx, ts); err != nil {
 		return nil, vterrors.Wrap(err, "selectTablets")
 	}
 	defer func(ctx context.Context) {
@@ -492,7 +492,7 @@ func newMergeSorter(participants map[string]*shardStreamer, comparePKs []int) *e
 	}
 	ob := make([]engine.OrderbyParams, 0, len(comparePKs))
 	for _, cpk := range comparePKs {
-		ob = append(ob, engine.OrderbyParams{Col: cpk})
+		ob = append(ob, engine.OrderbyParams{Col: cpk, WeightStringCol: -1})
 	}
 	return &engine.MergeSort{
 		Primitives: prims,
@@ -501,7 +501,7 @@ func newMergeSorter(participants map[string]*shardStreamer, comparePKs []int) *e
 }
 
 // selectTablets selects the tablets that will be used for the diff.
-func (df *vdiff) selectTablets(ctx context.Context) error {
+func (df *vdiff) selectTablets(ctx context.Context, ts *trafficSwitcher) error {
 	var wg sync.WaitGroup
 	var err1, err2 error
 
@@ -510,7 +510,11 @@ func (df *vdiff) selectTablets(ctx context.Context) error {
 	go func() {
 		defer wg.Done()
 		err1 = df.forAll(df.sources, func(shard string, source *shardStreamer) error {
-			tp, err := discovery.NewTabletPicker(df.ts.wr.ts, []string{df.sourceCell}, df.ts.sourceKeyspace, shard, df.tabletTypesStr)
+			sourceTopo := df.ts.wr.ts
+			if ts.externalTopo != nil {
+				sourceTopo = ts.externalTopo
+			}
+			tp, err := discovery.NewTabletPicker(sourceTopo, []string{df.sourceCell}, df.ts.sourceKeyspace, shard, df.tabletTypesStr)
 			if err != nil {
 				return err
 			}

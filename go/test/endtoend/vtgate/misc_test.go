@@ -77,6 +77,18 @@ func TestShowColumns(t *testing.T) {
 	assertMatches(t, conn, "SHOW columns FROM `t5_null_vindex` in `ks`", expected)
 }
 
+func TestShowTables(t *testing.T) {
+	conn, err := mysql.Connect(context.Background(), &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	query := "show tables;"
+	qr := exec(t, conn, query)
+
+	assert.Equal(t, "information_schema", qr.Fields[0].Database)
+	assert.Equal(t, "Tables_in_ks", qr.Fields[0].Name)
+}
+
 func TestCastConvert(t *testing.T) {
 	conn, err := mysql.Connect(context.Background(), &vtParams)
 	require.NoError(t, err)
@@ -352,6 +364,9 @@ func TestExplainPassthrough(t *testing.T) {
 	got := fmt.Sprintf("%v", result.Rows)
 	require.Contains(t, got, "SIMPLE") // there is a lot more coming from mysql,
 	// but we are trying to make the test less fragile
+
+	result = exec(t, conn, "explain ks.t1")
+	require.EqualValues(t, 2, len(result.Rows))
 }
 
 func TestXXHash(t *testing.T) {
@@ -404,8 +419,15 @@ func TestSwitchBetweenOlapAndOltp(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
+	assertMatches(t, conn, "select @@workload", `[[VARBINARY("OLTP")]]`)
+
 	exec(t, conn, "set workload='olap'")
+
+	assertMatches(t, conn, "select @@workload", `[[VARBINARY("OLAP")]]`)
+
 	exec(t, conn, "set workload='oltp'")
+
+	assertMatches(t, conn, "select @@workload", `[[VARBINARY("OLTP")]]`)
 }
 
 func TestFoundRowsOnDualQueries(t *testing.T) {
@@ -425,7 +447,7 @@ func TestUseStmtInOLAP(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
-	queries := []string{"set workload='olap'", "use `ks:80-`"}
+	queries := []string{"set workload='olap'", "use `ks:80-`", "use `ks:-80`"}
 	for i, q := range queries {
 		t.Run(fmt.Sprintf("%d-%s", i, q), func(t *testing.T) {
 			exec(t, conn, q)
@@ -496,6 +518,69 @@ func TestCreateView(t *testing.T) {
 	assertMatches(t, conn, "select * from v1", `[[INT64(1) INT64(1)] [INT64(2) INT64(2)] [INT64(3) INT64(3)] [INT64(4) INT64(4)] [INT64(5) INT64(5)]]`)
 }
 
+func TestVersions(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	qr := exec(t, conn, `select @@version`)
+	assert.Contains(t, fmt.Sprintf("%v", qr.Rows), "vitess")
+
+	qr = exec(t, conn, `select @@version_comment`)
+	assert.Contains(t, fmt.Sprintf("%v", qr.Rows), "Git revision")
+}
+
+func TestFlush(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+	exec(t, conn, "flush local tables t1, t2")
+}
+
+func TestShowVariables(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+	res := exec(t, conn, "show variables like \"%version%\";")
+	found := false
+	for _, row := range res.Rows {
+		if row[0].ToString() == "version" {
+			assert.Contains(t, row[1].ToString(), "vitess")
+			found = true
+		}
+	}
+	require.True(t, found, "Expected a row for version in show query")
+}
+
+func TestOrderBy(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.Nil(t, err)
+	defer conn.Close()
+	exec(t, conn, "insert into t4(id1, id2) values(1,'a'), (2,'Abc'), (3,'b'), (4,'c'), (5,'test')")
+	exec(t, conn, "insert into t4(id1, id2) values(6,'d'), (7,'e'), (8,'F')")
+	// test ordering of varchar column
+	assertMatches(t, conn, "select id1, id2 from t4 order by id2 desc", `[[INT64(5) VARCHAR("test")] [INT64(8) VARCHAR("F")] [INT64(7) VARCHAR("e")] [INT64(6) VARCHAR("d")] [INT64(4) VARCHAR("c")] [INT64(3) VARCHAR("b")] [INT64(2) VARCHAR("Abc")] [INT64(1) VARCHAR("a")]]`)
+	// test ordering of int column
+	assertMatches(t, conn, "select id1, id2 from t4 order by id1 desc", `[[INT64(8) VARCHAR("F")] [INT64(7) VARCHAR("e")] [INT64(6) VARCHAR("d")] [INT64(5) VARCHAR("test")] [INT64(4) VARCHAR("c")] [INT64(3) VARCHAR("b")] [INT64(2) VARCHAR("Abc")] [INT64(1) VARCHAR("a")]]`)
+
+	defer func() {
+		exec(t, conn, "set workload = oltp")
+		exec(t, conn, "delete from t4")
+	}()
+	// Test the same queries in streaming mode
+	exec(t, conn, "set workload = olap")
+	assertMatches(t, conn, "select id1, id2 from t4 order by id2 desc", `[[INT64(5) VARCHAR("test")] [INT64(8) VARCHAR("F")] [INT64(7) VARCHAR("e")] [INT64(6) VARCHAR("d")] [INT64(4) VARCHAR("c")] [INT64(3) VARCHAR("b")] [INT64(2) VARCHAR("Abc")] [INT64(1) VARCHAR("a")]]`)
+	assertMatches(t, conn, "select id1, id2 from t4 order by id1 desc", `[[INT64(8) VARCHAR("F")] [INT64(7) VARCHAR("e")] [INT64(6) VARCHAR("d")] [INT64(5) VARCHAR("test")] [INT64(4) VARCHAR("c")] [INT64(3) VARCHAR("b")] [INT64(2) VARCHAR("Abc")] [INT64(1) VARCHAR("a")]]`)
+}
+
 func TestSubQueryOnTopOfSubQuery(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	ctx := context.Background()
@@ -507,7 +592,7 @@ func TestSubQueryOnTopOfSubQuery(t *testing.T) {
 	exec(t, conn, `insert into t1(id1, id2) values (1, 1), (2, 2), (3, 3), (4, 4), (5, 5)`)
 	exec(t, conn, `insert into t2(id3, id4) values (1, 3), (2, 4)`)
 
-	assertMatches(t, conn, "select id1 from t1 where id1 not in (select id3 from t2) and id2 in (select id4 from t2)", `[[INT64(3)] [INT64(4)]]`)
+	assertMatches(t, conn, "select id1 from t1 where id1 not in (select id3 from t2) and id2 in (select id4 from t2) order by id1", `[[INT64(3)] [INT64(4)]]`)
 }
 
 func assertMatches(t *testing.T, conn *mysql.Conn, query, expected string) {

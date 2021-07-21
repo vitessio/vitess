@@ -172,6 +172,23 @@ func (dbc *DBConn) ExecOnce(ctx context.Context, query string, maxrows int, want
 	return dbc.execOnce(ctx, query, maxrows, wantfields)
 }
 
+// FetchNext returns the next result set.
+func (dbc *DBConn) FetchNext(ctx context.Context, maxrows int, wantfields bool) (*sqltypes.Result, error) {
+	// Check if the context is already past its deadline before
+	// trying to fetch the next result.
+	select {
+	case <-ctx.Done():
+		return nil, fmt.Errorf("%v before reading next result set", ctx.Err())
+	default:
+	}
+	res, _, _, err := dbc.conn.ReadQueryResult(maxrows, wantfields)
+	if err != nil {
+		return nil, err
+	}
+	return res, err
+
+}
+
 // Stream executes the query and streams the results.
 func (dbc *DBConn) Stream(ctx context.Context, query string, callback func(*sqltypes.Result) error, alloc func() *sqltypes.Result, streamBufferSize int, includedFields querypb.ExecuteOptions_IncludedFields) error {
 	span, ctx := trace.NewSpan(ctx, "DBConn.Stream")
@@ -356,6 +373,11 @@ func (dbc *DBConn) Current() string {
 // ID returns the connection id.
 func (dbc *DBConn) ID() int64 {
 	return dbc.conn.ID()
+}
+
+// BaseShowTables returns a query that shows tables and their sizes
+func (dbc *DBConn) BaseShowTables() string {
+	return dbc.conn.BaseShowTables()
 }
 
 func (dbc *DBConn) reconnect(ctx context.Context) error {

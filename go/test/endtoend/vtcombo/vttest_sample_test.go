@@ -74,6 +74,7 @@ func TestMain(m *testing.M) {
 		cfg.Topology = topology
 		cfg.SchemaDir = os.Getenv("VTROOT") + "/test/vttest_schema"
 		cfg.DefaultSchemaDir = os.Getenv("VTROOT") + "/test/vttest_schema/default"
+		cfg.PersistentMode = true
 
 		localCluster = &vttest.LocalCluster{
 			Config: cfg,
@@ -116,27 +117,24 @@ func TestStandalone(t *testing.T) {
 	conn, err := vtgateconn.Dial(ctx, grpcAddress)
 	require.Nil(t, err)
 	defer conn.Close()
-	cur := conn.Session(ks1+":-80@master", nil)
 
 	idStart, rowCount := 1000, 500
-	query := "insert into test_table (id, msg, keyspace_id) values (:id, :msg, :keyspace_id)"
-	_, err = cur.Execute(ctx, "begin", nil)
+	insertManyRows(ctx, t, conn, idStart, rowCount)
+	assertInsertedRowsExist(ctx, t, conn, idStart, rowCount)
+	assertCanInsertRow(ctx, t, conn)
+	assertTablesPresent(t)
+
+	err = localCluster.TearDown()
+	require.Nil(t, err)
+	err = localCluster.Setup()
 	require.Nil(t, err)
 
-	for i := idStart; i < idStart+rowCount; i++ {
-		bindVariables := map[string]*querypb.BindVariable{
-			"id":          {Type: querypb.Type_UINT64, Value: []byte(strconv.FormatInt(int64(i), 10))},
-			"msg":         {Type: querypb.Type_VARCHAR, Value: []byte("test" + strconv.FormatInt(int64(i), 10))},
-			"keyspace_id": {Type: querypb.Type_UINT64, Value: []byte(strconv.FormatInt(int64(i), 10))},
-		}
-		_, err = cur.Execute(ctx, query, bindVariables)
-		require.Nil(t, err)
-	}
+	assertInsertedRowsExist(ctx, t, conn, idStart, rowCount)
+	assertTablesPresent(t)
+}
 
-	_, err = cur.Execute(ctx, "commit", nil)
-	require.Nil(t, err)
-
-	cur = conn.Session(ks1+":-80@rdonly", nil)
+func assertInsertedRowsExist(ctx context.Context, t *testing.T, conn *vtgateconn.VTGateConn, idStart, rowCount int) {
+	cur := conn.Session(ks1+":-80@rdonly", nil)
 	bindVariables := map[string]*querypb.BindVariable{
 		"id_start": {Type: querypb.Type_UINT64, Value: []byte(strconv.FormatInt(int64(idStart), 10))},
 	}
@@ -153,23 +151,49 @@ func TestStandalone(t *testing.T) {
 	require.Nil(t, err)
 	require.Equal(t, 1, len(res.Rows))
 	assert.Equal(t, "VARCHAR(\"test1000\")", res.Rows[0][1].String())
+}
 
-	cur = conn.Session(ks1+":80-@master", nil)
-	_, err = cur.Execute(ctx, "begin", nil)
+func assertCanInsertRow(ctx context.Context, t *testing.T, conn *vtgateconn.VTGateConn) {
+	cur := conn.Session(ks1+":80-@master", nil)
+	_, err := cur.Execute(ctx, "begin", nil)
 	require.Nil(t, err)
 
 	i := 0x810000000000000
-	bindVariables = map[string]*querypb.BindVariable{
+	bindVariables := map[string]*querypb.BindVariable{
 		"id":          {Type: querypb.Type_UINT64, Value: []byte(strconv.FormatInt(int64(i), 10))},
 		"msg":         {Type: querypb.Type_VARCHAR, Value: []byte("test" + strconv.FormatInt(int64(i), 10))},
 		"keyspace_id": {Type: querypb.Type_UINT64, Value: []byte(strconv.FormatInt(int64(i), 10))},
 	}
+	query := "insert into test_table (id, msg, keyspace_id) values (:id, :msg, :keyspace_id)"
 	_, err = cur.Execute(ctx, query, bindVariables)
 	require.Nil(t, err)
 
 	_, err = cur.Execute(ctx, "commit", nil)
 	require.Nil(t, err)
+}
 
+func insertManyRows(ctx context.Context, t *testing.T, conn *vtgateconn.VTGateConn, idStart, rowCount int) {
+	cur := conn.Session(ks1+":-80@master", nil)
+
+	query := "insert into test_table (id, msg, keyspace_id) values (:id, :msg, :keyspace_id)"
+	_, err := cur.Execute(ctx, "begin", nil)
+	require.Nil(t, err)
+
+	for i := idStart; i < idStart+rowCount; i++ {
+		bindVariables := map[string]*querypb.BindVariable{
+			"id":          {Type: querypb.Type_UINT64, Value: []byte(strconv.FormatInt(int64(i), 10))},
+			"msg":         {Type: querypb.Type_VARCHAR, Value: []byte("test" + strconv.FormatInt(int64(i), 10))},
+			"keyspace_id": {Type: querypb.Type_UINT64, Value: []byte(strconv.FormatInt(int64(i), 10))},
+		}
+		_, err = cur.Execute(ctx, query, bindVariables)
+		require.Nil(t, err)
+	}
+
+	_, err = cur.Execute(ctx, "commit", nil)
+	require.Nil(t, err)
+}
+
+func assertTablesPresent(t *testing.T) {
 	tmpCmd := exec.Command("vtctlclient", "-vtctl_client_protocol", "grpc", "-server", grpcAddress, "-stderrthreshold", "0", "ListAllTablets", "test")
 
 	log.Infof("Running vtctlclient with command: %v", tmpCmd.Args)

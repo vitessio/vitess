@@ -221,6 +221,7 @@ func VtcomboProcess(env Environment, args *Config, mysql MySQLManager) *VtProces
 		"-mycnf_server_id", "1",
 		"-mycnf_socket_file", socket,
 		"-normalize_queries",
+		"-enable_query_plan_field_caching=false",
 	}...)
 
 	vt.ExtraArgs = append(vt.ExtraArgs, QueryServerArgs...)
@@ -246,6 +247,9 @@ func VtcomboProcess(env Environment, args *Config, mysql MySQLManager) *VtProces
 	}
 	if args.VSchemaDDLAuthorizedUsers != "" {
 		vt.ExtraArgs = append(vt.ExtraArgs, []string{"-vschema_ddl_authorized_users", args.VSchemaDDLAuthorizedUsers}...)
+	}
+	if *servenv.MySQLServerVersion != "" {
+		vt.ExtraArgs = append(vt.ExtraArgs, "-mysql_server_version", *servenv.MySQLServerVersion)
 	}
 
 	if socket != "" {

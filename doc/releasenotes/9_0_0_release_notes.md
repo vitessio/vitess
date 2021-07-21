@@ -7,9 +7,6 @@ The following PRs made changes to behaviors that clients might rely on. They sho
 
 Vitess 9.0 is not compatible with the previous release of the Vitess Kubernetes Operator (2.2.0). A new version of the Operator (2.3.0) is available that is compatible.
 
-## Known Issue(s)
-* VReplication errors when a fixed-length binary column is used as the sharding key #8080
-
 ## Bugs Fixed
 
 ### VTGate / MySQL compatibility
@@ -159,7 +156,6 @@ Automatically terminate migrations run by a failed tablet
 * Online DDL: ignore errors if extracted gh-ost binary is identical to installed binary #6928
 * Online DDL: Table lifecycle: skip time hint for unspecified states #7151
 
-
 ### VTadmin
 
 * VTadmin: Initial vtadmin-api, clusters, and service discovery #7187
@@ -245,4 +241,3 @@ Automatically terminate migrations run by a failed tablet
 * action_repository: no need for http.Request #7124
 * Testing version upgrade/downgrade path from/to 8.0 #7323
 * Use `context` from Go's standard library #7235
-

@@ -234,8 +234,8 @@ func newTestAuthServerStatic() *mysql.AuthServerStatic {
 func TestDefaultWorkloadEmpty(t *testing.T) {
 	vh := &vtgateHandler{}
 	sess := vh.session(&mysql.Conn{})
-	if sess.Options.Workload != querypb.ExecuteOptions_UNSPECIFIED {
-		t.Fatalf("Expected default workload UNSPECIFIED")
+	if sess.Options.Workload != querypb.ExecuteOptions_OLTP {
+		t.Fatalf("Expected default workload OLTP")
 	}
 }
 
@@ -248,7 +248,15 @@ func TestDefaultWorkloadOLAP(t *testing.T) {
 	}
 }
 
-func TestInitTLSConfig(t *testing.T) {
+func TestInitTLSConfigWithoutServerCA(t *testing.T) {
+	testInitTLSConfig(t, false)
+}
+
+func TestInitTLSConfigWithServerCA(t *testing.T) {
+	testInitTLSConfig(t, true)
+}
+
+func testInitTLSConfig(t *testing.T, serverCA bool) {
 	// Create the certs.
 	root, err := ioutil.TempDir("", "TestInitTLSConfig")
 	if err != nil {
@@ -258,8 +266,13 @@ func TestInitTLSConfig(t *testing.T) {
 	tlstest.CreateCA(root)
 	tlstest.CreateSignedCert(root, tlstest.CA, "01", "server", "server.example.com")
 
+	serverCACert := ""
+	if serverCA {
+		serverCACert = path.Join(root, "ca-cert.pem")
+	}
+
 	listener := &mysql.Listener{}
-	if err := initTLSConfig(listener, path.Join(root, "server-cert.pem"), path.Join(root, "server-key.pem"), path.Join(root, "ca-cert.pem"), true); err != nil {
+	if err := initTLSConfig(listener, path.Join(root, "server-cert.pem"), path.Join(root, "server-key.pem"), path.Join(root, "ca-cert.pem"), serverCACert, true); err != nil {
 		t.Fatalf("init tls config failure due to: +%v", err)
 	}
 

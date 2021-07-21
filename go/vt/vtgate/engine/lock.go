@@ -65,7 +65,7 @@ func (l *Lock) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariabl
 		return nil, err
 	}
 	if len(rss) != 1 {
-		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "lock query cannot be routed to vttablet: %v", rss)
+		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "lock query can be routed to single shard only: %v", rss)
 	}
 
 	query := &querypb.BoundQuery{

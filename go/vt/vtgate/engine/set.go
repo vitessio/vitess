@@ -238,7 +238,7 @@ func (svci *SysVarCheckAndIgnore) VariableName() string {
 func (svci *SysVarCheckAndIgnore) Execute(vcursor VCursor, env evalengine.ExpressionEnv) error {
 	rss, _, err := vcursor.ResolveDestinations(svci.Keyspace.Name, nil, []key.Destination{svci.TargetDestination})
 	if err != nil {
-		return vterrors.Wrap(err, "SysVarCheckAndIgnore")
+		return err
 	}
 
 	if len(rss) != 1 {
@@ -253,7 +253,7 @@ func (svci *SysVarCheckAndIgnore) Execute(vcursor VCursor, env evalengine.Expres
 		log.Warningf("unable to validate the current settings for '%s': %s", svci.Name, err.Error())
 		return nil
 	}
-	if result.RowsAffected == 0 {
+	if len(result.Rows) == 0 {
 		log.Infof("Ignored inapplicable SET %v = %v", svci.Name, svci.Expr)
 	}
 	return nil
@@ -284,7 +284,7 @@ func (svs *SysVarReservedConn) Execute(vcursor VCursor, env evalengine.Expressio
 	if svs.TargetDestination != nil {
 		rss, _, err := vcursor.ResolveDestinations(svs.Keyspace.Name, nil, []key.Destination{svs.TargetDestination})
 		if err != nil {
-			return vterrors.Wrap(err, "SysVarSet")
+			return err
 		}
 		vcursor.Session().NeedsReservedConn()
 		return svs.execSetStatement(vcursor, rss, env)
@@ -329,7 +329,7 @@ func (svs *SysVarReservedConn) checkAndUpdateSysVar(vcursor VCursor, res evaleng
 	sysVarExprValidationQuery := fmt.Sprintf("select %s from dual where @@%s != %s", svs.Expr, svs.Name, svs.Expr)
 	rss, _, err := vcursor.ResolveDestinations(svs.Keyspace.Name, nil, []key.Destination{key.DestinationKeyspaceID{0}})
 	if err != nil {
-		return false, vterrors.Wrap(err, "SysVarSet")
+		return false, err
 	}
 	qr, err := execShard(vcursor, sysVarExprValidationQuery, res.BindVars, rss[0], false /* rollbackOnError */, false /* canAutocommit */)
 	if err != nil {
@@ -380,7 +380,7 @@ func (svss *SysVarSetAware) Execute(vcursor VCursor, env evalengine.ExpressionEn
 	case sysvars.SQLSelectLimit.Name:
 		intValue, err := svss.evalAsInt64(env)
 		if err != nil {
-			return vterrors.Wrapf(err, "failed to evaluate value for %s", sysvars.SQLSelectLimit.Name)
+			return err
 		}
 		vcursor.Session().SetSQLSelectLimit(intValue)
 	case sysvars.TransactionMode.Name:
@@ -390,7 +390,7 @@ func (svss *SysVarSetAware) Execute(vcursor VCursor, env evalengine.ExpressionEn
 		}
 		out, ok := vtgatepb.TransactionMode_value[strings.ToUpper(str)]
 		if !ok {
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid transaction_mode: %s", str)
+			return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongValueForVar, "invalid transaction_mode: %s", str)
 		}
 		vcursor.Session().SetTransactionMode(vtgatepb.TransactionMode(out))
 	case sysvars.Workload.Name:
@@ -400,7 +400,7 @@ func (svss *SysVarSetAware) Execute(vcursor VCursor, env evalengine.ExpressionEn
 		}
 		out, ok := querypb.ExecuteOptions_Workload_value[strings.ToUpper(str)]
 		if !ok {
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid workload: %s", str)
+			return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongValueForVar, "invalid workload: %s", str)
 		}
 		vcursor.Session().SetWorkload(querypb.ExecuteOptions_Workload(out))
 	case sysvars.DDLStrategy.Name:
@@ -409,9 +409,11 @@ func (svss *SysVarSetAware) Execute(vcursor VCursor, env evalengine.ExpressionEn
 			return err
 		}
 		if _, _, err := schema.ParseDDLStrategy(str); err != nil {
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid DDL strategy: %s", str)
+			return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongValueForVar, "invalid DDL strategy: %s", str)
 		}
 		vcursor.Session().SetDDLStrategy(str)
+	case sysvars.SessionEnableSystemSettings.Name:
+		err = svss.setBoolSysVar(env, vcursor.Session().SetSessionEnableSystemSettings)
 	case sysvars.Charset.Name, sysvars.Names.Name:
 		str, err := svss.evalAsString(env)
 		if err != nil {
@@ -422,7 +424,7 @@ func (svss *SysVarSetAware) Execute(vcursor VCursor, env evalengine.ExpressionEn
 			// do nothing
 			break
 		default:
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value for charset/names: %v", str)
+			return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongValueForVar, "unexpected value for charset/names: %v", str)
 		}
 	case sysvars.ReadAfterWriteGTID.Name:
 		str, err := svss.evalAsString(env)
@@ -447,10 +449,10 @@ func (svss *SysVarSetAware) Execute(vcursor VCursor, env evalengine.ExpressionEn
 		case "own_gtid":
 			vcursor.Session().SetSessionTrackGTIDs(true)
 		default:
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%s", str)
+			return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongValueForVar, "Variable 'session_track_gtids' can't be set to the value of '%s'", str)
 		}
 	default:
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unsupported construct %s", svss.Name)
+		return vterrors.NewErrorf(vtrpcpb.Code_NOT_FOUND, vterrors.UnknownSystemVariable, "Unknown system variable '%s'", svss.Name)
 	}
 
 	return err
@@ -464,7 +466,7 @@ func (svss *SysVarSetAware) evalAsInt64(env evalengine.ExpressionEnv) (int64, er
 
 	v := value.Value()
 	if !v.IsIntegral() {
-		return 0, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "expected int, unexpected value type: %T", value.Value().Type().String())
+		return 0, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongTypeForVar, "Incorrect argument type to variable '%s': %s", svss.Name, value.Value().Type().String())
 	}
 	intValue, err := v.ToInt64()
 	if err != nil {
@@ -482,7 +484,7 @@ func (svss *SysVarSetAware) evalAsFloat(env evalengine.ExpressionEnv) (float64, 
 	v := value.Value()
 	floatValue, err := v.ToFloat64()
 	if err != nil {
-		return 0, err
+		return 0, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongTypeForVar, "Incorrect argument type to variable '%s': %s", svss.Name, value.Value().Type().String())
 	}
 	return floatValue, nil
 }
@@ -494,7 +496,7 @@ func (svss *SysVarSetAware) evalAsString(env evalengine.ExpressionEnv) (string, 
 	}
 	v := value.Value()
 	if !v.IsText() && !v.IsBinary() {
-		return "", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value type for %s: %s", svss.Name, value.Value().Type().String())
+		return "", vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongTypeForVar, "Incorrect argument type to variable '%s': %s", svss.Name, value.Value().Type().String())
 	}
 
 	return v.ToString(), nil
@@ -507,7 +509,7 @@ func (svss *SysVarSetAware) setBoolSysVar(env evalengine.ExpressionEnv, setter f
 	}
 	boolValue, err := value.ToBooleanStrict()
 	if err != nil {
-		return vterrors.Wrapf(err, "System setting '%s' can't be set to this value", svss.Name)
+		return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongValueForVar, "Variable '%s' can't be set to the value: %s", svss.Name, err.Error())
 	}
 	return setter(boolValue)
 }

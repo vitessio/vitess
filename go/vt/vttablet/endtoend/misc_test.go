@@ -27,9 +27,12 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/test/utils"
+
 	"context"
 
 	"github.com/golang/protobuf/proto"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
@@ -88,16 +91,14 @@ func TestBinary(t *testing.T) {
 				Flags:        128,
 			},
 		},
-		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			{
 				sqltypes.NewVarBinary(binaryData),
 			},
 		},
+		StatusFlags: sqltypes.ServerStatusAutocommit,
 	}
-	if !qr.Equal(&want) {
-		t.Errorf("Execute: \n%#v, want \n%#v", prettyPrint(*qr), prettyPrint(want))
-	}
+	mustMatch(t, want, *qr)
 
 	// Test with bindvars.
 	_, err = client.Execute(
@@ -132,9 +133,7 @@ func TestNocacheListArgs(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	if qr.RowsAffected != 2 {
-		t.Errorf("rows affected: %d, want 2", qr.RowsAffected)
-	}
+	assert.Equal(t, 2, len(qr.Rows))
 
 	qr, err = client.Execute(
 		query,
@@ -146,9 +145,7 @@ func TestNocacheListArgs(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	if qr.RowsAffected != 1 {
-		t.Errorf("rows affected: %d, want 1", qr.RowsAffected)
-	}
+	assert.Equal(t, 1, len(qr.Rows))
 
 	qr, err = client.Execute(
 		query,
@@ -160,9 +157,7 @@ func TestNocacheListArgs(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	if qr.RowsAffected != 1 {
-		t.Errorf("rows affected: %d, want 1", qr.RowsAffected)
-	}
+	assert.Equal(t, 1, len(qr.Rows))
 
 	// Error case
 	_, err = client.Execute(
@@ -320,7 +315,6 @@ func TestBindInSelect(t *testing.T) {
 			Charset:      63,
 			Flags:        32897,
 		}},
-		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			{
 				sqltypes.NewInt64(1),
@@ -354,7 +348,6 @@ func TestBindInSelect(t *testing.T) {
 			Charset:      33,
 			Flags:        1,
 		}},
-		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			{
 				sqltypes.NewVarChar("abcd"),
@@ -384,7 +377,6 @@ func TestBindInSelect(t *testing.T) {
 			Charset:      33,
 			Flags:        1,
 		}},
-		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			{
 				sqltypes.NewVarChar("\x00\xff"),
@@ -450,16 +442,16 @@ func TestQueryStats(t *testing.T) {
 	stat.Time = 0
 	stat.MysqlTime = 0
 	want := framework.QueryStat{
-		Query:      query,
-		Table:      "vitess_a",
-		Plan:       "Select",
-		QueryCount: 1,
-		RowCount:   2,
-		ErrorCount: 0,
+		Query:        query,
+		Table:        "vitess_a",
+		Plan:         "Select",
+		QueryCount:   1,
+		RowsAffected: 0,
+		RowsReturned: 2,
+		ErrorCount:   0,
 	}
-	if stat != want {
-		t.Errorf("stat: %+v, want %+v", stat, want)
-	}
+
+	utils.MustMatch(t, want, stat)
 
 	// Query cache should be updated for errors that happen at MySQL level also.
 	query = "select /* query_stats */ eid from vitess_a where dontexist(eid) = :eid"
@@ -468,19 +460,20 @@ func TestQueryStats(t *testing.T) {
 	stat.Time = 0
 	stat.MysqlTime = 0
 	want = framework.QueryStat{
-		Query:      query,
-		Table:      "vitess_a",
-		Plan:       "Select",
-		QueryCount: 1,
-		RowCount:   0,
-		ErrorCount: 1,
+		Query:        query,
+		Table:        "vitess_a",
+		Plan:         "Select",
+		QueryCount:   1,
+		RowsAffected: 0,
+		RowsReturned: 0,
+		ErrorCount:   1,
 	}
 	if stat != want {
 		t.Errorf("stat: %+v, want %+v", stat, want)
 	}
 	vend := framework.DebugVars()
 	compareIntDiff(t, vend, "QueryCounts/vitess_a.Select", vstart, 2)
-	compareIntDiff(t, vend, "QueryRowCounts/vitess_a.Select", vstart, 2)
+	compareIntDiff(t, vend, "QueryRowCounts/vitess_a.Select", vstart, 0)
 	compareIntDiff(t, vend, "QueryErrorCounts/vitess_a.Select", vstart, 1)
 
 	// Ensure BeginExecute also updates the stats and strips comments.
@@ -518,18 +511,14 @@ func TestDBAStatements(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	if qr.RowsAffected != 4 {
-		t.Errorf("RowsAffected: %d, want 4", qr.RowsAffected)
-	}
+	assert.Equal(t, 4, len(qr.Rows))
 
 	qr, err = client.Execute("explain vitess_a", nil)
 	if err != nil {
 		t.Error(err)
 		return
 	}
-	if qr.RowsAffected != 4 {
-		t.Errorf("RowsAffected: %d, want 4", qr.RowsAffected)
-	}
+	assert.Equal(t, 4, len(qr.Rows))
 }
 
 type testLogger struct {
@@ -645,9 +634,7 @@ func TestClientFoundRows(t *testing.T) {
 	}
 	qr, err := client.Execute("update vitess_test set charval='aa' where intval=124", nil)
 	require.NoError(t, err)
-	if qr.RowsAffected != 0 {
-		t.Errorf("Execute(rowsFound==false): %d, want 0", qr.RowsAffected)
-	}
+	assert.Equal(t, 0, len(qr.Rows))
 	if err := client.Rollback(); err != nil {
 		t.Error(err)
 	}
@@ -658,9 +645,7 @@ func TestClientFoundRows(t *testing.T) {
 	}
 	qr, err = client.Execute("update vitess_test set charval='aa' where intval=124", nil)
 	require.NoError(t, err)
-	if qr.RowsAffected != 1 {
-		t.Errorf("Execute(rowsFound==true): %d, want 1", qr.RowsAffected)
-	}
+	assert.EqualValues(t, 1, qr.RowsAffected)
 	if err := client.Rollback(); err != nil {
 		t.Error(err)
 	}
@@ -759,4 +744,103 @@ func TestBeginExecuteWithFailingPreQueriesAndCheckConnectionState(t *testing.T) 
 	qr, err := client.Execute("select intval from vitess_test where intval = 4", nil)
 	require.NoError(t, err)
 	require.Empty(t, qr.Rows)
+}
+
+func TestSelectBooleanSystemVariables(t *testing.T) {
+	client := framework.NewClient()
+
+	type testCase struct {
+		Variable string
+		Value    bool
+		Type     querypb.Type
+	}
+
+	newTestCase := func(varname string, vartype querypb.Type, value bool) testCase {
+		return testCase{Variable: varname, Value: value, Type: vartype}
+	}
+
+	tcs := []testCase{
+		newTestCase("autocommit", querypb.Type_INT64, true),
+		newTestCase("autocommit", querypb.Type_INT64, false),
+		newTestCase("enable_system_settings", querypb.Type_INT64, true),
+		newTestCase("enable_system_settings", querypb.Type_INT64, false),
+	}
+
+	for _, tc := range tcs {
+		qr, err := client.Execute(
+			fmt.Sprintf("select :%s", tc.Variable),
+			map[string]*querypb.BindVariable{tc.Variable: sqltypes.BoolBindVariable(tc.Value)},
+		)
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		require.NotEmpty(t, qr.Fields, "fields should not be empty")
+		require.Equal(t, tc.Type, qr.Fields[0].Type, fmt.Sprintf("invalid type, wants: %+v, but got: %+v\n", tc.Type, qr.Fields[0].Type))
+	}
+}
+
+func TestSysSchema(t *testing.T) {
+	client := framework.NewClient()
+	_, err := client.Execute("drop table if exists `a`", nil)
+	require.NoError(t, err)
+
+	_, err = client.Execute("CREATE TABLE `a` (`one` int NOT NULL,`two` int NOT NULL,PRIMARY KEY (`one`,`two`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4", nil)
+	require.NoError(t, err)
+	defer client.Execute("drop table `a`", nil)
+
+	qr, err := client.Execute(`SELECT
+		column_name column_name,
+		data_type data_type,
+		column_type full_data_type,
+		character_maximum_length character_maximum_length,
+		numeric_precision numeric_precision,
+		numeric_scale numeric_scale,
+		datetime_precision datetime_precision,
+		column_default column_default,
+		is_nullable is_nullable,
+		extra extra,
+		table_name table_name
+	FROM information_schema.columns
+	WHERE 1 != 1
+	ORDER BY ordinal_position`, nil)
+	require.NoError(t, err)
+
+	// This is mysql behaviour that we are receiving Uint32 on field query even though the column is Uint64.
+	// assert.EqualValues(t, sqltypes.Uint64, qr.Fields[4].Type) - ideally this should be received
+	// The issue is only in MySQL 8.0 , As CI is on MySQL 5.7 need to check with Uint64
+	assert.True(t, qr.Fields[4].Type == sqltypes.Uint64 || qr.Fields[4].Type == sqltypes.Uint32)
+
+	qr, err = client.Execute(`SELECT
+		column_name column_name,
+		data_type data_type,
+		column_type full_data_type,
+		character_maximum_length character_maximum_length,
+		numeric_precision numeric_precision,
+		numeric_scale numeric_scale,
+		datetime_precision datetime_precision,
+		column_default column_default,
+		is_nullable is_nullable,
+		extra extra,
+		table_name table_name
+	FROM information_schema.columns
+	WHERE table_schema = 'vttest' and table_name = 'a'
+	ORDER BY ordinal_position`, nil)
+	require.NoError(t, err)
+	require.Equal(t, 2, len(qr.Rows))
+
+	// is_nullable
+	assert.Equal(t, `VARCHAR("NO")`, qr.Rows[0][8].String())
+	assert.Equal(t, `VARCHAR("NO")`, qr.Rows[1][8].String())
+
+	// table_name
+	assert.Equal(t, `VARCHAR("a")`, qr.Rows[0][10].String())
+	assert.Equal(t, `VARCHAR("a")`, qr.Rows[1][10].String())
+
+	// The field Type and the row value type are not matching and because of this wrong packet is send regarding the data of bigint unsigned to the client on vttestserver.
+	// On, Vitess cluster using protobuf we are doing the row conversion to field type and so the final row type send to client is same as field type.
+	// assert.EqualValues(t, sqltypes.Uint64, qr.Fields[4].Type) - We would have received this but because of field caching we are receiving Uint32.
+	// The issue is only in MySQL 8.0 , As CI is on MySQL 5.7 need to check with Uint64
+	assert.True(t, qr.Fields[4].Type == sqltypes.Uint64 || qr.Fields[4].Type == sqltypes.Uint32)
+	assert.Equal(t, querypb.Type_UINT64, qr.Rows[0][4].Type())
 }

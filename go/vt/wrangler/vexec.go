@@ -30,19 +30,20 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/topo"
+	vtctldvexec "vitess.io/vitess/go/vt/vtctl/workflow/vexec" // renamed to avoid a collision with the vexec struct in this package
+	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/topo"
-	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
 
 const (
-	vexecTableQualifier       = "_vt"
-	vreplicationTableName     = "vreplication"
-	schemaMigrationsTableName = "schema_migrations"
+	vexecTableQualifier   = "_vt"
+	vreplicationTableName = "vreplication"
 )
 
 // vexec is the construct by which we run a query against backend shards. vexec is created by user-facing
@@ -81,7 +82,6 @@ func newVExec(ctx context.Context, workflow, keyspace, query string, wr *Wrangle
 // QueryResultForRowsAffected aggregates results into row-type results (fields + values)
 func (wr *Wrangler) QueryResultForRowsAffected(results map[*topo.TabletInfo]*sqltypes.Result) *sqltypes.Result {
 	var qr = &sqltypes.Result{}
-	qr.RowsAffected = uint64(len(results))
 	qr.Fields = []*querypb.Field{{
 		Name: "Tablet",
 		Type: sqltypes.VarBinary,
@@ -102,7 +102,6 @@ func (wr *Wrangler) QueryResultForRowsAffected(results map[*topo.TabletInfo]*sql
 // QueryResultForTabletResults aggregates given results into a "rows-affected" type result (no row data)
 func (wr *Wrangler) QueryResultForTabletResults(results map[*topo.TabletInfo]*sqltypes.Result) *sqltypes.Result {
 	var qr = &sqltypes.Result{}
-	qr.RowsAffected = uint64(len(results))
 	defaultFields := []*querypb.Field{{
 		Name: "Tablet",
 		Type: sqltypes.VarBinary,
@@ -511,7 +510,8 @@ func (wr *Wrangler) ListAllWorkflows(ctx context.Context, keyspace string, activ
 		where = " where state <> 'Stopped'"
 	}
 	query := "select distinct workflow from _vt.vreplication" + where
-	results, err := wr.runVexec(ctx, "", keyspace, query, false)
+	vx := vtctldvexec.NewVExec(keyspace, "", wr.ts, wr.tmc)
+	results, err := vx.QueryContext(ctx, query)
 	if err != nil {
 		return nil, err
 	}

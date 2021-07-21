@@ -30,11 +30,11 @@ import (
 )
 
 // buildInsertPlan builds the route for an INSERT statement.
-func buildInsertPlan(stmt sqlparser.Statement, vschema ContextVSchema) (engine.Primitive, error) {
+func buildInsertPlan(stmt sqlparser.Statement, reservedVars sqlparser.BindVars, vschema ContextVSchema) (engine.Primitive, error) {
 	ins := stmt.(*sqlparser.Insert)
-	pb := newPrimitiveBuilder(vschema, newJointab(sqlparser.GetBindvars(ins)))
+	pb := newPrimitiveBuilder(vschema, newJointab(reservedVars))
 	exprs := sqlparser.TableExprs{&sqlparser.AliasedTableExpr{Expr: ins.Table}}
-	rb, err := pb.processDMLTable(exprs, nil)
+	rb, err := pb.processDMLTable(exprs, reservedVars, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -46,7 +46,7 @@ func buildInsertPlan(stmt sqlparser.Statement, vschema ContextVSchema) (engine.P
 
 	if len(pb.st.tables) != 1 {
 		// Unreachable.
-		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: multi-table insert statement in sharded keyspace")
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "multi-table insert statement in not supported in sharded keyspace")
 	}
 	var vschemaTable *vindexes.Table
 	for _, tval := range pb.st.tables {
@@ -54,7 +54,9 @@ func buildInsertPlan(stmt sqlparser.Statement, vschema ContextVSchema) (engine.P
 		vschemaTable = tval.vschemaTable
 	}
 	if !rb.eroute.Keyspace.Sharded {
-		if !pb.finalizeUnshardedDMLSubqueries(ins) {
+		if pb.finalizeUnshardedDMLSubqueries(reservedVars, ins) {
+			vschema.WarnUnshardedOnly("subqueries can't be sharded for INSERT")
+		} else {
 			return nil, errors.New("unsupported: sharded subquery in insert values")
 		}
 		return buildInsertUnshardedPlan(ins, vschemaTable)
@@ -182,7 +184,7 @@ func buildInsertShardedPlan(ins *sqlparser.Insert, table *vindexes.Table) (engin
 			colNum := findOrAddColumn(ins, col)
 			for rowNum, row := range rows {
 				name := ":" + engine.InsertVarName(col, rowNum)
-				row[colNum] = sqlparser.NewArgument([]byte(name))
+				row[colNum] = sqlparser.NewArgument(name)
 			}
 		}
 	}
@@ -234,7 +236,7 @@ func modifyForAutoinc(ins *sqlparser.Insert, eins *engine.Insert) error {
 			return fmt.Errorf("could not compute value for vindex or auto-inc column: %v", err)
 		}
 		autoIncValues.Values = append(autoIncValues.Values, pv)
-		row[colNum] = sqlparser.NewArgument([]byte(":" + engine.SeqVarName + strconv.Itoa(rowNum)))
+		row[colNum] = sqlparser.NewArgument(":" + engine.SeqVarName + strconv.Itoa(rowNum))
 	}
 
 	eins.Generate = &engine.Generate{

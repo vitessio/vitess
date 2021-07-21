@@ -47,17 +47,19 @@ func BuildPermissions(stmt sqlparser.Statement) []Permission {
 	case *sqlparser.Delete:
 		permissions = buildTableExprsPermissions(node.TableExprs, tableacl.WRITER, permissions)
 		permissions = buildSubqueryPermissions(node, tableacl.READER, permissions)
-	case *sqlparser.Set, *sqlparser.Show, *sqlparser.OtherRead, *sqlparser.Explain:
-		// no-op
 	case sqlparser.DDLStatement:
 		for _, t := range node.AffectedTables() {
 			permissions = buildTableNamePermissions(t, tableacl.ADMIN, permissions)
 		}
-	case *sqlparser.OtherAdmin:
-		// no op
-	case *sqlparser.Begin, *sqlparser.Commit, *sqlparser.Rollback, *sqlparser.Load:
-		// no op
-	case *sqlparser.Savepoint, *sqlparser.Release, *sqlparser.SRollback:
+	case *sqlparser.AlterMigration:
+		permissions = []Permission{} // TODO(shlomi) what are the correct permissions here? Table is unknown
+	case *sqlparser.Flush:
+		for _, t := range node.TableNames {
+			permissions = buildTableNamePermissions(t, tableacl.ADMIN, permissions)
+		}
+	case *sqlparser.OtherAdmin, *sqlparser.CallProc, *sqlparser.Begin, *sqlparser.Commit, *sqlparser.Rollback,
+		*sqlparser.Load, *sqlparser.Savepoint, *sqlparser.Release, *sqlparser.SRollback, *sqlparser.Set, *sqlparser.Show,
+		*sqlparser.OtherRead, sqlparser.Explain:
 		// no op
 	default:
 		panic(fmt.Errorf("BUG: unexpected statement type: %T", node))

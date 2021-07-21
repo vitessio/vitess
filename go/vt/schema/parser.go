@@ -17,6 +17,7 @@ limitations under the License.
 package schema
 
 import (
+	"fmt"
 	"regexp"
 	"strings"
 
@@ -48,7 +49,21 @@ var (
 		// ALTER TABLE tbl something
 		regexp.MustCompile(alterTableBasicPattern + `([\S]+)\s+(.*$)`),
 	}
+	createTableRegexp = regexp.MustCompile(`(?s)(?i)(CREATE\s+TABLE\s+)` + "`" + `([^` + "`" + `]+)` + "`" + `(\s*[(].*$)`)
 )
+
+// ReplaceTableNameInCreateTableStatement returns a modified CREATE TABLE statement, such that the table name is replaced with given name.
+// This intentionally string-replacement based, and not sqlparser.String() based, because the return statement has to be formatted _precisely_,
+// up to MySQL version nuances, like the original statement. That's in favor of tengo table comparison.
+// We expect a well formatted, no-qualifier statement in the form:
+// CREATE TABLE `some_table` ...
+func ReplaceTableNameInCreateTableStatement(createStatement string, replacementName string) (modifiedStatement string, err error) {
+	submatch := createTableRegexp.FindStringSubmatch(createStatement)
+	if len(submatch) == 0 {
+		return createStatement, fmt.Errorf("could not parse statement: %s", createStatement)
+	}
+	return fmt.Sprintf("%s`%s`%s", submatch[1], replacementName, submatch[3]), nil
+}
 
 // ParseAlterTableOptions parses a ALTER ... TABLE... statement into:
 // - explicit schema and table, if available

@@ -25,6 +25,8 @@ import (
 )
 
 func TestMergeConfig(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name     string
 		base     Config
@@ -46,6 +48,7 @@ func TestMergeConfig(t *testing.T) {
 				DiscoveryImpl:        "consul",
 				DiscoveryFlagsByImpl: FlagsByImpl{},
 				VtSQLFlags:           map[string]string{},
+				VtctldFlags:          map[string]string{},
 			},
 		},
 		{
@@ -81,17 +84,22 @@ func TestMergeConfig(t *testing.T) {
 						"foo": "baz",
 					},
 				},
-				VtSQLFlags: map[string]string{},
+				VtSQLFlags:  map[string]string{},
+				VtctldFlags: map[string]string{},
 			},
 		},
 		{
-			name: "merging vtsql flags",
+			name: "merging vtsql/vtctld flags",
 			base: Config{
 				ID:   "c1",
 				Name: "cluster1",
 				VtSQLFlags: map[string]string{
 					"one": "one",
 					"two": "2",
+				},
+				VtctldFlags: map[string]string{
+					"a": "A",
+					"b": "B",
 				},
 			},
 			override: Config{
@@ -100,6 +108,10 @@ func TestMergeConfig(t *testing.T) {
 				VtSQLFlags: map[string]string{
 					"two":   "two",
 					"three": "three",
+				},
+				VtctldFlags: map[string]string{
+					"a": "alpha",
+					"c": "C",
 				},
 			},
 			expected: Config{
@@ -111,12 +123,21 @@ func TestMergeConfig(t *testing.T) {
 					"two":   "two",
 					"three": "three",
 				},
+				VtctldFlags: map[string]string{
+					"a": "alpha",
+					"b": "B",
+					"c": "C",
+				},
 			},
 		},
 	}
 
 	for _, tt := range tests {
+		tt := tt
+
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			actual := tt.base.Merge(tt.override)
 			assert.Equal(t, tt.expected, actual)
 		})
@@ -124,6 +145,8 @@ func TestMergeConfig(t *testing.T) {
 }
 
 func TestConfigUnmarshalYAML(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name   string
 		yaml   string
@@ -172,7 +195,11 @@ discovery-zk-whatever: 5
 	}
 
 	for _, tt := range tests {
+		tt := tt
+
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			cfg := Config{
 				DiscoveryFlagsByImpl: map[string]map[string]string{},
 			}

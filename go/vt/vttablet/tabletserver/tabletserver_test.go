@@ -1853,7 +1853,7 @@ func TestTerseErrorsIgnoreFailoverInProgress(t *testing.T) {
 	defer tl.Close()
 	err := tsv.convertAndLogError(ctx, "select * from test_table where id = :a",
 		map[string]*querypb.BindVariable{"a": sqltypes.Int64BindVariable(1)},
-		mysql.NewSQLError(1227, mysql.SSSyntaxErrorOrAccessViolation, "failover in progress"),
+		mysql.NewSQLError(1227, mysql.SSClientError, "failover in progress"),
 		nil,
 	)
 	if got, want := err.Error(), "failover in progress (errno 1227) (sqlstate 42000)"; !strings.HasPrefix(got, want) {
@@ -2187,7 +2187,7 @@ func TestReserveStats(t *testing.T) {
 
 func TestDatabaseNameReplaceByKeyspaceNameExecuteMethod(t *testing.T) {
 	db, tsv := setupTabletServerTest(t, "keyspaceName")
-	db.SetName("databaseInMysql")
+	setDBName(db, tsv, "databaseInMysql")
 	defer tsv.StopService()
 	defer db.Close()
 
@@ -2221,7 +2221,7 @@ func TestDatabaseNameReplaceByKeyspaceNameExecuteMethod(t *testing.T) {
 
 func TestDatabaseNameReplaceByKeyspaceNameStreamExecuteMethod(t *testing.T) {
 	db, tsv := setupTabletServerTest(t, "keyspaceName")
-	db.SetName("databaseInMysql")
+	setDBName(db, tsv, "databaseInMysql")
 	defer tsv.StopService()
 	defer db.Close()
 
@@ -2256,7 +2256,7 @@ func TestDatabaseNameReplaceByKeyspaceNameStreamExecuteMethod(t *testing.T) {
 
 func TestDatabaseNameReplaceByKeyspaceNameExecuteBatchMethod(t *testing.T) {
 	db, tsv := setupTabletServerTest(t, "keyspaceName")
-	db.SetName("databaseInMysql")
+	setDBName(db, tsv, "databaseInMysql")
 	defer tsv.StopService()
 	defer db.Close()
 
@@ -2297,7 +2297,7 @@ func TestDatabaseNameReplaceByKeyspaceNameExecuteBatchMethod(t *testing.T) {
 
 func TestDatabaseNameReplaceByKeyspaceNameBeginExecuteMethod(t *testing.T) {
 	db, tsv := setupTabletServerTest(t, "keyspaceName")
-	db.SetName("databaseInMysql")
+	setDBName(db, tsv, "databaseInMysql")
 	defer tsv.StopService()
 	defer db.Close()
 
@@ -2327,9 +2327,14 @@ func TestDatabaseNameReplaceByKeyspaceNameBeginExecuteMethod(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func setDBName(db *fakesqldb.DB, tsv *TabletServer, s string) {
+	tsv.config.DB.DBName = "databaseInMysql"
+	db.SetName("databaseInMysql")
+}
+
 func TestDatabaseNameReplaceByKeyspaceNameBeginExecuteBatchMethod(t *testing.T) {
 	db, tsv := setupTabletServerTest(t, "keyspaceName")
-	db.SetName("databaseInMysql")
+	setDBName(db, tsv, "databaseInMysql")
 	defer tsv.StopService()
 	defer db.Close()
 
@@ -2372,7 +2377,7 @@ func TestDatabaseNameReplaceByKeyspaceNameBeginExecuteBatchMethod(t *testing.T) 
 
 func TestDatabaseNameReplaceByKeyspaceNameReserveExecuteMethod(t *testing.T) {
 	db, tsv := setupTabletServerTest(t, "keyspaceName")
-	db.SetName("databaseInMysql")
+	setDBName(db, tsv, "databaseInMysql")
 	defer tsv.StopService()
 	defer db.Close()
 
@@ -2404,7 +2409,7 @@ func TestDatabaseNameReplaceByKeyspaceNameReserveExecuteMethod(t *testing.T) {
 
 func TestDatabaseNameReplaceByKeyspaceNameReserveBeginExecuteMethod(t *testing.T) {
 	db, tsv := setupTabletServerTest(t, "keyspaceName")
-	db.SetName("databaseInMysql")
+	setDBName(db, tsv, "databaseInMysql")
 	defer tsv.StopService()
 	defer db.Close()
 
@@ -2458,6 +2463,19 @@ func setupFakeDB(t *testing.T) *fakesqldb.DB {
 	for query, result := range getSupportedQueries() {
 		db.AddQuery(query, result)
 	}
+	db.AddQueryPattern(baseShowTablesPattern, &sqltypes.Result{
+		Fields: mysql.BaseShowTablesFields,
+		Rows: [][]sqltypes.Value{
+			mysql.BaseShowTablesRow("test_table", false, ""),
+			mysql.BaseShowTablesRow("msg", false, "vitess_message,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30"),
+		},
+	})
+	db.AddQuery("show status like 'Innodb_rows_read'", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+		"Variable_name|Value",
+		"varchar|int64"),
+		"Innodb_rows_read|0",
+	))
+
 	return db
 }
 
@@ -2518,13 +2536,6 @@ func getSupportedQueries() map[string]*sqltypes.Result {
 			}},
 			Rows: [][]sqltypes.Value{
 				{sqltypes.NewVarBinary("0")},
-			},
-		},
-		mysql.BaseShowTables: {
-			Fields: mysql.BaseShowTablesFields,
-			Rows: [][]sqltypes.Value{
-				mysql.BaseShowTablesRow("test_table", false, ""),
-				mysql.BaseShowTablesRow("msg", false, "vitess_message,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30"),
 			},
 		},
 		mysql.BaseShowPrimary: {

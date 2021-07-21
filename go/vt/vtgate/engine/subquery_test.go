@@ -20,6 +20,8 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/sqltypes"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -71,7 +73,7 @@ func TestSubqueryExecute(t *testing.T) {
 		sendErr: errors.New("err"),
 	}
 	_, err = sq.Execute(nil, bv, true)
-	expectError(t, "sq.Execute", err, "err")
+	require.EqualError(t, err, `err`)
 }
 
 func TestSubqueryStreamExecute(t *testing.T) {
@@ -120,7 +122,7 @@ func TestSubqueryStreamExecute(t *testing.T) {
 		sendErr: errors.New("err"),
 	}
 	_, err = wrapStreamExecute(sq, nil, bv, true)
-	expectError(t, "sq.Execute", err, "err")
+	require.EqualError(t, err, `err`)
 }
 
 func TestSubqueryGetFields(t *testing.T) {
@@ -167,5 +169,5 @@ func TestSubqueryGetFields(t *testing.T) {
 		sendErr: errors.New("err"),
 	}
 	_, err = sq.GetFields(nil, bv)
-	expectError(t, "sq.Execute", err, "err")
+	require.EqualError(t, err, `err`)
 }

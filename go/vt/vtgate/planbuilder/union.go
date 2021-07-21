@@ -29,11 +29,11 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
-func buildUnionPlan(stmt sqlparser.Statement, vschema ContextVSchema) (engine.Primitive, error) {
+func buildUnionPlan(stmt sqlparser.Statement, reservedVars sqlparser.BindVars, vschema ContextVSchema) (engine.Primitive, error) {
 	union := stmt.(*sqlparser.Union)
 	// For unions, create a pb with anonymous scope.
-	pb := newPrimitiveBuilder(vschema, newJointab(sqlparser.GetBindvars(union)))
-	if err := pb.processUnion(union, nil); err != nil {
+	pb := newPrimitiveBuilder(vschema, newJointab(reservedVars))
+	if err := pb.processUnion(union, reservedVars, nil); err != nil {
 		return nil, err
 	}
 	if err := pb.plan.Wireup(pb.plan, pb.jt); err != nil {
@@ -42,13 +42,13 @@ func buildUnionPlan(stmt sqlparser.Statement, vschema ContextVSchema) (engine.Pr
 	return pb.plan.Primitive(), nil
 }
 
-func (pb *primitiveBuilder) processUnion(union *sqlparser.Union, outer *symtab) error {
-	if err := pb.processPart(union.FirstStatement, outer, false); err != nil {
+func (pb *primitiveBuilder) processUnion(union *sqlparser.Union, reservedVars sqlparser.BindVars, outer *symtab) error {
+	if err := pb.processPart(union.FirstStatement, reservedVars, outer, false); err != nil {
 		return err
 	}
 	for _, us := range union.UnionSelects {
 		rpb := newPrimitiveBuilder(pb.vschema, pb.jt)
-		if err := rpb.processPart(us.Statement, outer, false); err != nil {
+		if err := rpb.processPart(us.Statement, reservedVars, outer, false); err != nil {
 			return err
 		}
 		err := unionRouteMerge(pb.plan, rpb.plan, us)
@@ -87,10 +87,10 @@ func (pb *primitiveBuilder) processUnion(union *sqlparser.Union, outer *symtab) 
 	return pb.pushLimit(union.Limit)
 }
 
-func (pb *primitiveBuilder) processPart(part sqlparser.SelectStatement, outer *symtab, hasParens bool) error {
+func (pb *primitiveBuilder) processPart(part sqlparser.SelectStatement, reservedVars sqlparser.BindVars, outer *symtab, hasParens bool) error {
 	switch part := part.(type) {
 	case *sqlparser.Union:
-		return pb.processUnion(part, outer)
+		return pb.processUnion(part, reservedVars, outer)
 	case *sqlparser.Select:
 		if part.SQLCalcFoundRows {
 			return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "SQL_CALC_FOUND_ROWS not supported with union")
@@ -101,9 +101,9 @@ func (pb *primitiveBuilder) processPart(part sqlparser.SelectStatement, outer *s
 				return err
 			}
 		}
-		return pb.processSelect(part, outer, "")
+		return pb.processSelect(part, reservedVars, outer, "")
 	case *sqlparser.ParenSelect:
-		err := pb.processPart(part.Select, outer, true)
+		err := pb.processPart(part.Select, reservedVars, outer, true)
 		if err != nil {
 			return err
 		}
@@ -168,7 +168,7 @@ func setLock(in logicalPlan, lock sqlparser.Lock) error {
 			node.Select.SetLock(lock)
 			return false, node, nil
 		case *sqlCalcFoundRows, *vindexFunc:
-			return false, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "%T.locking: unreachable", in)
+			return false, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unreachable %T.locking", in)
 		}
 		return true, plan, nil
 	})

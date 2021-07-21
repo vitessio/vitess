@@ -1,0 +1,16 @@
+{
+    "vtctlds": [
+        {
+            "host": {
+                "hostname": "localhost:15999"
+            }
+        }
+    ],
+    "vtgates": [
+        {
+            "host": {
+                "hostname": "localhost:15991"
+            }
+        }
+    ]
+}

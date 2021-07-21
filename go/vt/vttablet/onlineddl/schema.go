@@ -16,15 +16,10 @@ limitations under the License.
 
 package onlineddl
 
-import (
-	"fmt"
-)
-
 const (
 	// SchemaMigrationsTableName is used by VExec interceptor to call the correct handler
-	SchemaMigrationsTableName      = "schema_migrations"
-	sqlCreateSidecarDB             = "create database if not exists %s"
-	sqlCreateSchemaMigrationsTable = `CREATE TABLE IF NOT EXISTS %s.schema_migrations (
+	sqlCreateSidecarDB             = "create database if not exists _vt"
+	sqlCreateSchemaMigrationsTable = `CREATE TABLE IF NOT EXISTS _vt.schema_migrations (
 		id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
 		migration_uuid varchar(64) NOT NULL,
 		keyspace varchar(256) NOT NULL,
@@ -50,16 +45,19 @@ const (
 		KEY status_idx (migration_status, liveness_timestamp),
 		KEY cleanup_status_idx (cleanup_timestamp, migration_status)
 	) engine=InnoDB DEFAULT CHARSET=utf8mb4`
-	alterSchemaMigrationsTableRetries            = "ALTER TABLE %s.schema_migrations add column retries int unsigned NOT NULL DEFAULT 0"
-	alterSchemaMigrationsTableTablet             = "ALTER TABLE %s.schema_migrations add column tablet varchar(128) NOT NULL DEFAULT ''"
-	alterSchemaMigrationsTableArtifacts          = "ALTER TABLE %s.schema_migrations modify artifacts TEXT NOT NULL"
-	alterSchemaMigrationsTableTabletFailure      = "ALTER TABLE %s.schema_migrations add column tablet_failure tinyint unsigned NOT NULL DEFAULT 0"
-	alterSchemaMigrationsTableTabletFailureIndex = "ALTER TABLE %s.schema_migrations add KEY tablet_failure_idx (tablet_failure, migration_status, retries)"
-	alterSchemaMigrationsTableProgress           = "ALTER TABLE %s.schema_migrations add column progress float NOT NULL DEFAULT 0"
-	alterSchemaMigrationsTableContext            = "ALTER TABLE %s.schema_migrations add column migration_context varchar(1024) NOT NULL DEFAULT ''"
-	alterSchemaMigrationsTableDDLAction          = "ALTER TABLE %s.schema_migrations add column ddl_action varchar(16) NOT NULL DEFAULT ''"
+	alterSchemaMigrationsTableRetries            = "ALTER TABLE _vt.schema_migrations add column retries int unsigned NOT NULL DEFAULT 0"
+	alterSchemaMigrationsTableTablet             = "ALTER TABLE _vt.schema_migrations add column tablet varchar(128) NOT NULL DEFAULT ''"
+	alterSchemaMigrationsTableArtifacts          = "ALTER TABLE _vt.schema_migrations modify artifacts TEXT NOT NULL"
+	alterSchemaMigrationsTableTabletFailure      = "ALTER TABLE _vt.schema_migrations add column tablet_failure tinyint unsigned NOT NULL DEFAULT 0"
+	alterSchemaMigrationsTableTabletFailureIndex = "ALTER TABLE _vt.schema_migrations add KEY tablet_failure_idx (tablet_failure, migration_status, retries)"
+	alterSchemaMigrationsTableProgress           = "ALTER TABLE _vt.schema_migrations add column progress float NOT NULL DEFAULT 0"
+	alterSchemaMigrationsTableContext            = "ALTER TABLE _vt.schema_migrations add column migration_context varchar(1024) NOT NULL DEFAULT ''"
+	alterSchemaMigrationsTableDDLAction          = "ALTER TABLE _vt.schema_migrations add column ddl_action varchar(16) NOT NULL DEFAULT ''"
+	alterSchemaMigrationsTableMessage            = "ALTER TABLE _vt.schema_migrations add column message TEXT NOT NULL"
+	alterSchemaMigrationsTableTableCompleteIndex = "ALTER TABLE _vt.schema_migrations add KEY table_complete_idx (migration_status, keyspace(64), mysql_table(64), completed_timestamp)"
+	alterSchemaMigrationsTableETASeconds         = "ALTER TABLE _vt.schema_migrations add column eta_seconds bigint NOT NULL DEFAULT -1"
 
-	sqlScheduleSingleMigration = `UPDATE %s.schema_migrations
+	sqlScheduleSingleMigration = `UPDATE _vt.schema_migrations
 		SET
 			migration_status='ready',
 			ready_timestamp=NOW()
@@ -69,42 +67,67 @@ const (
 			requested_timestamp ASC
 		LIMIT 1
 	`
-	sqlUpdateMigrationStatus = `UPDATE %s.schema_migrations
+	sqlUpdateMySQLTable = `UPDATE _vt.schema_migrations
+			SET mysql_table=%a
+		WHERE
+			migration_uuid=%a
+	`
+	sqlUpdateMigrationStatus = `UPDATE _vt.schema_migrations
 			SET migration_status=%a
 		WHERE
 			migration_uuid=%a
 	`
-	sqlUpdateMigrationProgress = `UPDATE %s.schema_migrations
+	sqlUpdateMigrationProgress = `UPDATE _vt.schema_migrations
 			SET progress=%a
 		WHERE
 			migration_uuid=%a
 	`
-	sqlUpdateMigrationStartedTimestamp = `UPDATE %s.schema_migrations
+	sqlUpdateMigrationETASeconds = `UPDATE _vt.schema_migrations
+			SET eta_seconds=%a
+		WHERE
+			migration_uuid=%a
+	`
+	sqlUpdateMigrationStartedTimestamp = `UPDATE _vt.schema_migrations
 			SET started_timestamp=IFNULL(started_timestamp, NOW())
 		WHERE
 			migration_uuid=%a
 	`
-	sqlUpdateMigrationTimestamp = `UPDATE %s.schema_migrations
+	sqlUpdateMigrationTimestamp = `UPDATE _vt.schema_migrations
 			SET %s=NOW()
 		WHERE
 			migration_uuid=%a
 	`
-	sqlUpdateMigrationLogPath = `UPDATE %s.schema_migrations
+	sqlUpdateMigrationLogPath = `UPDATE _vt.schema_migrations
 			SET log_path=%a
 		WHERE
 			migration_uuid=%a
 	`
-	sqlUpdateArtifacts = `UPDATE %s.schema_migrations
+	sqlUpdateArtifacts = `UPDATE _vt.schema_migrations
 			SET artifacts=concat(%a, ',', artifacts)
 		WHERE
 			migration_uuid=%a
 	`
-	sqlUpdateTabletFailure = `UPDATE %s.schema_migrations
+	sqlClearArtifacts = `UPDATE _vt.schema_migrations
+			SET artifacts=''
+		WHERE
+			migration_uuid=%a
+	`
+	sqlUpdateTabletFailure = `UPDATE _vt.schema_migrations
 			SET tablet_failure=1
 		WHERE
 			migration_uuid=%a
 	`
-	sqlRetryMigration = `UPDATE %s.schema_migrations
+	sqlUpdateDDLAction = `UPDATE _vt.schema_migrations
+			SET ddl_action=%a
+		WHERE
+			migration_uuid=%a
+	`
+	sqlUpdateMessage = `UPDATE _vt.schema_migrations
+			SET message=%a
+		WHERE
+			migration_uuid=%a
+	`
+	sqlRetryMigrationWhere = `UPDATE _vt.schema_migrations
 		SET
 			migration_status='queued',
 			tablet=%a,
@@ -120,44 +143,72 @@ const (
 			AND (%s)
 			LIMIT 1
 	`
+	sqlRetryMigration = `UPDATE _vt.schema_migrations
+		SET
+			migration_status='queued',
+			tablet=%a,
+			retries=retries + 1,
+			tablet_failure=0,
+			ready_timestamp=NULL,
+			started_timestamp=NULL,
+			liveness_timestamp=NULL,
+			completed_timestamp=NULL,
+			cleanup_timestamp=NULL
+		WHERE
+			migration_status IN ('failed', 'cancelled')
+			AND migration_uuid=%a
+	`
 	sqlWhereTabletFailure = `
 		tablet_failure=1
 		AND migration_status='failed'
 		AND retries=0
 	`
 	sqlSelectRunningMigrations = `SELECT
-			migration_uuid
-		FROM %s.schema_migrations
+			migration_uuid,
+			strategy
+		FROM _vt.schema_migrations
 		WHERE
 			migration_status='running'
-			AND strategy=%a
+	`
+	sqlSelectCompleteMigrationsOnTable = `SELECT
+			migration_uuid,
+			strategy
+		FROM _vt.schema_migrations
+		WHERE
+			migration_status='complete'
+			AND keyspace=%a
+			AND mysql_table=%a
+		ORDER BY
+			completed_timestamp DESC
+		LIMIT 1
 	`
 	sqlSelectCountReadyMigrations = `SELECT
 			count(*) as count_ready
-		FROM %s.schema_migrations
+		FROM _vt.schema_migrations
 		WHERE
 			migration_status='ready'
 	`
 	sqlSelectStaleMigrations = `SELECT
 			migration_uuid
-		FROM %s.schema_migrations
+		FROM _vt.schema_migrations
 		WHERE
 			migration_status='running'
 			AND liveness_timestamp < NOW() - INTERVAL %a MINUTE
 	`
 	sqlSelectPendingMigrations = `SELECT
 			migration_uuid
-		FROM %s.schema_migrations
+		FROM _vt.schema_migrations
 		WHERE
 			migration_status IN ('queued', 'ready', 'running')
 	`
 	sqlSelectUncollectedArtifacts = `SELECT
 			migration_uuid,
 			artifacts
-		FROM %s.schema_migrations
+		FROM _vt.schema_migrations
 		WHERE
 			migration_status IN ('complete', 'failed')
 			AND cleanup_timestamp IS NULL
+			AND completed_timestamp <= NOW() - INTERVAL %a SECOND
 	`
 	sqlSelectMigration = `SELECT
 			id,
@@ -177,8 +228,10 @@ const (
 			migration_status,
 			log_path,
 			retries,
+			ddl_action,
+			artifacts,
 			tablet
-		FROM %s.schema_migrations
+		FROM _vt.schema_migrations
 		WHERE
 			migration_uuid=%a
 	`
@@ -200,8 +253,10 @@ const (
 			migration_status,
 			log_path,
 			retries,
+			ddl_action,
+			artifacts,
 			tablet
-		FROM %s.schema_migrations
+		FROM _vt.schema_migrations
 		WHERE
 			migration_status='ready'
 		LIMIT 1
@@ -216,8 +271,37 @@ const (
 			AND ACTION_TIMING='AFTER'
 			AND LEFT(TRIGGER_NAME, 7)='pt_osc_'
 		`
-	sqlDropTrigger    = "DROP TRIGGER IF EXISTS `%a`.`%a`"
-	sqlShowTablesLike = "SHOW TABLES LIKE '%a'"
+	sqlDropTrigger       = "DROP TRIGGER IF EXISTS `%a`.`%a`"
+	sqlShowTablesLike    = "SHOW TABLES LIKE '%a'"
+	sqlCreateTableLike   = "CREATE TABLE `%a` LIKE `%a`"
+	sqlDropTable         = "DROP TABLE `%a`"
+	sqlAlterTableOptions = "ALTER TABLE `%a` %s"
+	sqlShowColumnsFrom   = "SHOW COLUMNS FROM `%a`"
+	sqlStartVReplStream  = "UPDATE _vt.vreplication set state='Running' where db_name=%a and workflow=%a"
+	sqlStopVReplStream   = "UPDATE _vt.vreplication set state='Stopped' where db_name=%a and workflow=%a"
+	sqlDeleteVReplStream = "DELETE FROM _vt.vreplication where db_name=%a and workflow=%a"
+	sqlReadVReplStream   = `SELECT
+			id,
+			workflow,
+			source,
+			pos,
+			time_updated,
+			transaction_timestamp,
+			state,
+			message
+		FROM _vt.vreplication
+		WHERE
+			workflow=%a
+
+		`
+	sqlReadCountCopyState = `SELECT
+			count(*) as cnt
+		FROM
+			_vt.copy_state
+		WHERE vrepl_id=%a
+		`
+	sqlSwapTables  = "RENAME TABLE `%a` TO `%a`, `%a` TO `%a`, `%a` TO `%a`"
+	sqlRenameTable = "RENAME TABLE `%a` TO `%a`"
 )
 
 const (
@@ -239,14 +323,17 @@ var (
 )
 
 var applyDDL = []string{
-	fmt.Sprintf(sqlCreateSidecarDB, "_vt"),
-	fmt.Sprintf(sqlCreateSchemaMigrationsTable, "_vt"),
-	fmt.Sprintf(alterSchemaMigrationsTableRetries, "_vt"),
-	fmt.Sprintf(alterSchemaMigrationsTableTablet, "_vt"),
-	fmt.Sprintf(alterSchemaMigrationsTableArtifacts, "_vt"),
-	fmt.Sprintf(alterSchemaMigrationsTableTabletFailure, "_vt"),
-	fmt.Sprintf(alterSchemaMigrationsTableTabletFailureIndex, "_vt"),
-	fmt.Sprintf(alterSchemaMigrationsTableProgress, "_vt"),
-	fmt.Sprintf(alterSchemaMigrationsTableContext, "_vt"),
-	fmt.Sprintf(alterSchemaMigrationsTableDDLAction, "_vt"),
+	sqlCreateSidecarDB,
+	sqlCreateSchemaMigrationsTable,
+	alterSchemaMigrationsTableRetries,
+	alterSchemaMigrationsTableTablet,
+	alterSchemaMigrationsTableArtifacts,
+	alterSchemaMigrationsTableTabletFailure,
+	alterSchemaMigrationsTableTabletFailureIndex,
+	alterSchemaMigrationsTableProgress,
+	alterSchemaMigrationsTableContext,
+	alterSchemaMigrationsTableDDLAction,
+	alterSchemaMigrationsTableMessage,
+	alterSchemaMigrationsTableTableCompleteIndex,
+	alterSchemaMigrationsTableETASeconds,
 }

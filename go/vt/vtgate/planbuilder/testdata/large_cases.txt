@@ -1,0 +1,226 @@
+"select user.id from user, user_extra, user_metadata, music, unsharded, unsharded_a, unsharded_b, unsharded_auto, music_extra where user.id = user_extra.user_id and user_metadata.user_id = user_extra.user_id and music.id = music_extra.music_id and unsharded.x = unsharded_a.y"
+{
+  "QueryType": "SELECT",
+  "Original": "select user.id from user, user_extra, user_metadata, music, unsharded, unsharded_a, unsharded_b, unsharded_auto, music_extra where user.id = user_extra.user_id and user_metadata.user_id = user_extra.user_id and music.id = music_extra.music_id and unsharded.x = unsharded_a.y",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "-1",
+    "TableName": "`user`_user_extra_user_metadata_music_unsharded_unsharded_a_unsharded_b_unsharded_auto_music_extra",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select `user`.id from `user` where 1 != 1",
+        "Query": "select `user`.id from `user`",
+        "Table": "`user`"
+      },
+      {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "TableName": "user_extra_user_metadata_music_unsharded_unsharded_a_unsharded_b_unsharded_auto_music_extra",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectEqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select user_extra.user_id from user_extra where 1 != 1",
+            "Query": "select user_extra.user_id from user_extra where user_extra.user_id = :user_id",
+            "Table": "user_extra",
+            "Values": [
+              ":user_id"
+            ],
+            "Vindex": "user_index"
+          },
+          {
+            "OperatorType": "Join",
+            "Variant": "Join",
+            "TableName": "user_metadata_music_unsharded_unsharded_a_unsharded_b_unsharded_auto_music_extra",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "SelectEqualUnique",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select 1 from user_metadata where 1 != 1",
+                "Query": "select 1 from user_metadata where user_metadata.user_id = :user_extra_user_id",
+                "Table": "user_metadata",
+                "Values": [
+                  ":user_extra_user_id"
+                ],
+                "Vindex": "user_index"
+              },
+              {
+                "OperatorType": "Join",
+                "Variant": "Join",
+                "TableName": "music_unsharded_unsharded_a_unsharded_b_unsharded_auto_music_extra",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "SelectScatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select music.id from music where 1 != 1",
+                    "Query": "select music.id from music",
+                    "Table": "music"
+                  },
+                  {
+                    "OperatorType": "Join",
+                    "Variant": "Join",
+                    "TableName": "unsharded_unsharded_a_unsharded_b_unsharded_auto_music_extra",
+                    "Inputs": [
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "SelectUnsharded",
+                        "Keyspace": {
+                          "Name": "main",
+                          "Sharded": false
+                        },
+                        "FieldQuery": "select unsharded.x from unsharded where 1 != 1",
+                        "Query": "select unsharded.x from unsharded",
+                        "Table": "unsharded"
+                      },
+                      {
+                        "OperatorType": "Join",
+                        "Variant": "Join",
+                        "TableName": "unsharded_a_unsharded_b_unsharded_auto_music_extra",
+                        "Inputs": [
+                          {
+                            "OperatorType": "Route",
+                            "Variant": "SelectUnsharded",
+                            "Keyspace": {
+                              "Name": "main",
+                              "Sharded": false
+                            },
+                            "FieldQuery": "select 1 from unsharded_a where 1 != 1",
+                            "Query": "select 1 from unsharded_a where unsharded_a.y = :unsharded_x",
+                            "Table": "unsharded_a"
+                          },
+                          {
+                            "OperatorType": "Join",
+                            "Variant": "Join",
+                            "TableName": "unsharded_b_unsharded_auto_music_extra",
+                            "Inputs": [
+                              {
+                                "OperatorType": "Route",
+                                "Variant": "SelectUnsharded",
+                                "Keyspace": {
+                                  "Name": "main",
+                                  "Sharded": false
+                                },
+                                "FieldQuery": "select 1 from unsharded_b where 1 != 1",
+                                "Query": "select 1 from unsharded_b",
+                                "Table": "unsharded_b"
+                              },
+                              {
+                                "OperatorType": "Join",
+                                "Variant": "Join",
+                                "TableName": "unsharded_auto_music_extra",
+                                "Inputs": [
+                                  {
+                                    "OperatorType": "Route",
+                                    "Variant": "SelectUnsharded",
+                                    "Keyspace": {
+                                      "Name": "main",
+                                      "Sharded": false
+                                    },
+                                    "FieldQuery": "select 1 from unsharded_auto where 1 != 1",
+                                    "Query": "select 1 from unsharded_auto",
+                                    "Table": "unsharded_auto"
+                                  },
+                                  {
+                                    "OperatorType": "Route",
+                                    "Variant": "SelectEqualUnique",
+                                    "Keyspace": {
+                                      "Name": "user",
+                                      "Sharded": true
+                                    },
+                                    "FieldQuery": "select 1 from music_extra where 1 != 1",
+                                    "Query": "select 1 from music_extra where music_extra.music_id = :music_id",
+                                    "Table": "music_extra",
+                                    "Values": [
+                                      ":music_id"
+                                    ],
+                                    "Vindex": "music_user_map"
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select user.id from user, user_extra, user_metadata, music, unsharded, unsharded_a, unsharded_b, unsharded_auto, music_extra where user.id = user_extra.user_id and user_metadata.user_id = user_extra.user_id and music.id = music_extra.music_id and unsharded.x = unsharded_a.y",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "1",
+    "TableName": "music, music_extra_`user`, user_extra, user_metadata_unsharded, unsharded_a, unsharded_auto, unsharded_b",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select 1 from music, music_extra where 1 != 1",
+        "Query": "select 1 from music, music_extra where music.id = music_extra.music_id",
+        "Table": "music, music_extra"
+      },
+      {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "-1",
+        "TableName": "`user`, user_extra, user_metadata_unsharded, unsharded_a, unsharded_auto, unsharded_b",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select `user`.id from `user`, user_extra, user_metadata where 1 != 1",
+            "Query": "select `user`.id from `user`, user_extra, user_metadata where `user`.id = user_extra.user_id and user_metadata.user_id = user_extra.user_id",
+            "Table": "`user`, user_extra, user_metadata"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectUnsharded",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "FieldQuery": "select 1 from unsharded, unsharded_a, unsharded_b, unsharded_auto where 1 != 1",
+            "Query": "select 1 from unsharded, unsharded_a, unsharded_b, unsharded_auto where unsharded.x = unsharded_a.y",
+            "Table": "unsharded, unsharded_a, unsharded_auto, unsharded_b"
+          }
+        ]
+      }
+    ]
+  }
+}

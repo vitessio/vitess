@@ -56,7 +56,6 @@ var (
 	mysqlTCPVersion               = flag.String("mysql_tcp_version", "tcp", "Select tcp, tcp4, or tcp6 to control the socket type.")
 	mysqlAuthServerImpl           = flag.String("mysql_auth_server_impl", "static", "Which auth server implementation to use. Options: none, ldap, clientcert, static, vault.")
 	mysqlAllowClearTextWithoutTLS = flag.Bool("mysql_allow_clear_text_without_tls", false, "If set, the server will allow the use of a clear text password over non-SSL connections.")
-	mysqlServerVersion            = flag.String("mysql_server_version", mysql.DefaultServerVersion, "MySQL server version to advertise.")
 	mysqlProxyProtocol            = flag.Bool("proxy_protocol", false, "Enable HAProxy PROXY protocol on MySQL listener socket")
 
 	mysqlServerRequireSecureTransport = flag.Bool("mysql_server_require_secure_transport", false, "Reject insecure connections but only if mysql_server_ssl_cert and mysql_server_ssl_key are provided")
@@ -65,13 +64,15 @@ var (
 	mysqlSslKey  = flag.String("mysql_server_ssl_key", "", "Path to ssl key for mysql server plugin SSL")
 	mysqlSslCa   = flag.String("mysql_server_ssl_ca", "", "Path to ssl CA for mysql server plugin SSL. If specified, server will require and validate client certs.")
 
+	mysqlSslServerCA = flag.String("mysql_server_ssl_server_ca", "", "path to server CA in PEM format, which will be combine with server cert, return full certificate chain to clients")
+
 	mysqlSlowConnectWarnThreshold = flag.Duration("mysql_slow_connect_warn_threshold", 0, "Warn if it takes more than the given threshold for a mysql connection to establish")
 
 	mysqlConnReadTimeout  = flag.Duration("mysql_server_read_timeout", 0, "connection read timeout")
 	mysqlConnWriteTimeout = flag.Duration("mysql_server_write_timeout", 0, "connection write timeout")
 	mysqlQueryTimeout     = flag.Duration("mysql_server_query_timeout", 0, "mysql query timeout")
 
-	mysqlDefaultWorkloadName = flag.String("mysql_default_workload", "UNSPECIFIED", "Default session workload (OLTP, OLAP, DBA)")
+	mysqlDefaultWorkloadName = flag.String("mysql_default_workload", "OLTP", "Default session workload (OLTP, OLAP, DBA)")
 	mysqlDefaultWorkload     int32
 
 	busyConnections int32
@@ -342,9 +343,10 @@ func (vh *vtgateHandler) session(c *mysql.Conn) *vtgatepb.Session {
 				IncludedFields: querypb.ExecuteOptions_ALL,
 				Workload:       querypb.ExecuteOptions_Workload(mysqlDefaultWorkload),
 			},
-			Autocommit:  true,
-			DDLStrategy: *defaultDDLStrategy,
-			SessionUUID: u.String(),
+			Autocommit:           true,
+			DDLStrategy:          *defaultDDLStrategy,
+			SessionUUID:          u.String(),
+			EnableSystemSettings: *sysVarSetEnabled,
 		}
 		if c.Capabilities&mysql.CapabilityClientFoundRows != 0 {
 			session.Options.ClientFoundRows = true
@@ -360,8 +362,8 @@ var sigChan chan os.Signal
 var vtgateHandle *vtgateHandler
 
 // initTLSConfig inits tls config for the given mysql listener
-func initTLSConfig(mysqlListener *mysql.Listener, mysqlSslCert, mysqlSslKey, mysqlSslCa string, mysqlServerRequireSecureTransport bool) error {
-	serverConfig, err := vttls.ServerConfig(mysqlSslCert, mysqlSslKey, mysqlSslCa)
+func initTLSConfig(mysqlListener *mysql.Listener, mysqlSslCert, mysqlSslKey, mysqlSslCa, mysqlSslServerCA string, mysqlServerRequireSecureTransport bool) error {
+	serverConfig, err := vttls.ServerConfig(mysqlSslCert, mysqlSslKey, mysqlSslCa, mysqlSslServerCA)
 	if err != nil {
 		log.Exitf("grpcutils.TLSServerConfig failed: %v", err)
 		return err
@@ -372,7 +374,7 @@ func initTLSConfig(mysqlListener *mysql.Listener, mysqlSslCert, mysqlSslKey, mys
 	signal.Notify(sigChan, syscall.SIGHUP)
 	go func() {
 		for range sigChan {
-			serverConfig, err := vttls.ServerConfig(mysqlSslCert, mysqlSslKey, mysqlSslCa)
+			serverConfig, err := vttls.ServerConfig(mysqlSslCert, mysqlSslKey, mysqlSslCa, mysqlSslServerCA)
 			if err != nil {
 				log.Errorf("grpcutils.TLSServerConfig failed: %v", err)
 			} else {
@@ -424,11 +426,11 @@ func initMySQLProtocol() {
 		if err != nil {
 			log.Exitf("mysql.NewListener failed: %v", err)
 		}
-		if *mysqlServerVersion != "" {
-			mysqlListener.ServerVersion = *mysqlServerVersion
+		if *servenv.MySQLServerVersion != "" {
+			mysqlListener.ServerVersion = *servenv.MySQLServerVersion
 		}
 		if *mysqlSslCert != "" && *mysqlSslKey != "" {
-			initTLSConfig(mysqlListener, *mysqlSslCert, *mysqlSslKey, *mysqlSslCa, *mysqlServerRequireSecureTransport)
+			initTLSConfig(mysqlListener, *mysqlSslCert, *mysqlSslKey, *mysqlSslCa, *mysqlSslServerCA, *mysqlServerRequireSecureTransport)
 		}
 		mysqlListener.AllowClearTextWithoutTLS.Set(*mysqlAllowClearTextWithoutTLS)
 		// Check for the connection threshold
@@ -538,6 +540,13 @@ func rollbackAtShutdown() {
 		time.Sleep(10 * time.Millisecond)
 	}
 	log.Errorf("All connections did not go idle. Shutting down anyway.")
+}
+
+func mysqlSocketPath() string {
+	if mysqlServerSocketPath == nil {
+		return ""
+	}
+	return *mysqlServerSocketPath
 }
 
 func init() {

@@ -55,10 +55,9 @@ func (r *Rows) GetTableName() string {
 //Execute implements the Primitive interface
 func (r *Rows) Execute(VCursor, map[string]*querypb.BindVariable, bool) (*sqltypes.Result, error) {
 	return &sqltypes.Result{
-		Fields:       r.fields,
-		RowsAffected: uint64(len(r.rows)),
-		InsertID:     0,
-		Rows:         r.rows,
+		Fields:   r.fields,
+		InsertID: 0,
+		Rows:     r.rows,
 	}, nil
 }
 
@@ -74,10 +73,9 @@ func (r *Rows) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindV
 //GetFields implements the Primitive interface
 func (r *Rows) GetFields(VCursor, map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	return &sqltypes.Result{
-		Fields:       r.fields,
-		RowsAffected: uint64(len(r.rows)),
-		InsertID:     0,
-		Rows:         nil,
+		Fields:   r.fields,
+		InsertID: 0,
+		Rows:     nil,
 	}, nil
 }
 

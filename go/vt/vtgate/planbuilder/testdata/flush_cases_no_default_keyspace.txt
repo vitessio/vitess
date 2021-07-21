@@ -1,0 +1,138 @@
+# Flush statement
+"flush local tables user, unsharded_a, user_extra with read lock"
+{
+  "QueryType": "FLUSH",
+  "Original": "flush local tables user, unsharded_a, user_extra with read lock",
+  "Instructions": {
+    "OperatorType": "Concatenate",
+    "Inputs": [
+      {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "AllShards()",
+        "IsDML": false,
+        "Query": "flush local tables unsharded_a with read lock",
+        "SingleShardOnly": false
+      },
+      {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetDestination": "AllShards()",
+        "IsDML": false,
+        "Query": "flush local tables `user`, user_extra with read lock",
+        "SingleShardOnly": false
+      }
+    ]
+  }
+}
+
+# Flush statement with flush options
+"flush no_write_to_binlog hosts, logs"
+"keyspace not specified"
+
+# Flush statement with routing rules
+"flush local tables route1, route2"
+{
+  "QueryType": "FLUSH",
+  "Original": "flush local tables route1, route2",
+  "Instructions": {
+    "OperatorType": "Concatenate",
+    "Inputs": [
+      {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "AllShards()",
+        "IsDML": false,
+        "Query": "flush local tables unsharded",
+        "SingleShardOnly": false
+      },
+      {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetDestination": "AllShards()",
+        "IsDML": false,
+        "Query": "flush local tables `user`",
+        "SingleShardOnly": false
+      }
+    ]
+  }
+}
+
+# Incorrect tables in flush
+"flush tables user.a with read lock"
+"table a not found"
+
+# Unknown tables in unsharded keyspaces are allowed
+"flush tables main.a with read lock"
+{
+  "QueryType": "FLUSH",
+  "Original": "flush tables main.a with read lock",
+  "Instructions": {
+    "OperatorType": "Send",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "TargetDestination": "AllShards()",
+    "IsDML": false,
+    "Query": "flush tables a with read lock",
+    "SingleShardOnly": false
+  }
+}
+
+# Flush statement with 3 keyspaces
+"flush local tables user, unsharded_a, user_extra, unsharded_tab with read lock"
+{
+  "QueryType": "FLUSH",
+  "Original": "flush local tables user, unsharded_a, user_extra, unsharded_tab with read lock",
+  "Instructions": {
+    "OperatorType": "Concatenate",
+    "Inputs": [
+      {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "AllShards()",
+        "IsDML": false,
+        "Query": "flush local tables unsharded_a with read lock",
+        "SingleShardOnly": false
+      },
+      {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "main_2",
+          "Sharded": false
+        },
+        "TargetDestination": "AllShards()",
+        "IsDML": false,
+        "Query": "flush local tables unsharded_tab with read lock",
+        "SingleShardOnly": false
+      },
+      {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetDestination": "AllShards()",
+        "IsDML": false,
+        "Query": "flush local tables `user`, user_extra with read lock",
+        "SingleShardOnly": false
+      }
+    ]
+  }
+}

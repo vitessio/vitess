@@ -21,6 +21,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 var _ logicalPlan = (*sqlCalcFoundRows)(nil)
@@ -37,6 +38,20 @@ func (s *sqlCalcFoundRows) Wireup(logicalPlan, *jointab) error {
 		return err
 	}
 	return s.CountQuery.Wireup(s.CountQuery, s.cjt)
+}
+
+//Wireup2 implements the logicalPlan interface
+func (s *sqlCalcFoundRows) WireupV4(semTable *semantics.SemTable) error {
+	err := s.LimitQuery.WireupV4(semTable)
+	if err != nil {
+		return err
+	}
+	return s.CountQuery.WireupV4(semTable)
+}
+
+// Solves implements the logicalPlan interface
+func (s *sqlCalcFoundRows) ContainsTables() semantics.TableSet {
+	return s.LimitQuery.ContainsTables()
 }
 
 //Primitive implements the logicalPlan interface
@@ -76,13 +91,13 @@ func (s *sqlCalcFoundRows) SupplyCol(col *sqlparser.ColName) (*resultColumn, int
 
 //SupplyWeightString implements the logicalPlan interface
 func (s *sqlCalcFoundRows) SupplyWeightString(int) (weightcolNumber int, err error) {
-	return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unreachable: sqlCalcFoundRows.SupplyWeightString")
+	return 0, UnsupportedSupplyWeightString{Type: "sqlCalcFoundRows"}
 }
 
 // Rewrite implements the logicalPlan interface
 func (s *sqlCalcFoundRows) Rewrite(inputs ...logicalPlan) error {
 	if len(inputs) != 2 {
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "sqlCalcFoundRows: wrong number of inputs")
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] wrong number of inputs for SQL_CALC_FOUND_ROWS: %d", len(inputs))
 	}
 	s.LimitQuery = inputs[0]
 	s.CountQuery = inputs[1]

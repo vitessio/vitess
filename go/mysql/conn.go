@@ -86,6 +86,13 @@ type Conn struct {
 	// fields, this is set to an empty array (but not nil).
 	fields []*querypb.Field
 
+	// salt is sent by the server during initial handshake to be used for authentication
+	salt []byte
+
+	// authPluginName is the name of server's authentication plugin.
+	// It is set during the initial handshake.
+	authPluginName string
+
 	// schemaName is the default database name to use. It is set
 	// during handshake, and by ComInitDb packets. Both client and
 	// servers maintain it. This member is private because it's
@@ -942,7 +949,7 @@ func (c *Conn) handleComStmtReset(data []byte) bool {
 }
 
 func (c *Conn) handleComStmtSendLongData(data []byte) bool {
-	stmtID, paramID, chunkData, ok := c.parseComStmtSendLongData(data)
+	stmtID, paramID, chunk, ok := c.parseComStmtSendLongData(data)
 	c.recycleReadPacket()
 	if !ok {
 		err := fmt.Errorf("error parsing statement send long data from client %v, returning error: %v", c.ConnectionID, data)
@@ -961,9 +968,6 @@ func (c *Conn) handleComStmtSendLongData(data []byte) bool {
 		err := fmt.Errorf("invalid parameter Number from client %v, statement: %v", c.ConnectionID, prepare.PrepareStmt)
 		return c.writeErrorPacketFromErrorAndLog(err)
 	}
-
-	chunk := make([]byte, len(chunkData))
-	copy(chunk, chunkData)
 
 	key := fmt.Sprintf("v%d", paramID+1)
 	if val, ok := prepare.BindVars[key]; ok {
@@ -1064,7 +1068,15 @@ func (c *Conn) handleComStmtExecute(handler Handler, data []byte) (kontinue bool
 	return true
 }
 
-func (c *Conn) handleComPrepare(handler Handler, data []byte) bool {
+func (c *Conn) handleComPrepare(handler Handler, data []byte) (kontinue bool) {
+	c.startWriterBuffering()
+	defer func() {
+		if err := c.endWriterBuffering(); err != nil {
+			log.Errorf("conn %v: flush() failed: %v", c.ID(), err)
+			kontinue = false
+		}
+	}()
+
 	query := c.parseComPrepare(data)
 	c.recycleReadPacket()
 
@@ -1169,7 +1181,7 @@ func (c *Conn) handleComPing() bool {
 	c.recycleReadPacket()
 	// Return error if listener was shut down and OK otherwise
 	if c.listener.isShutdown() {
-		if !c.writeErrorAndLog(ERServerShutdown, SSServerShutdown, "Server shutdown in progress") {
+		if !c.writeErrorAndLog(ERServerShutdown, SSNetError, "Server shutdown in progress") {
 			return false
 		}
 	} else {
@@ -1180,6 +1192,8 @@ func (c *Conn) handleComPing() bool {
 	}
 	return true
 }
+
+var errEmptyStatement = NewSQLError(EREmptyQuery, SSClientError, "Query was empty")
 
 func (c *Conn) handleComQuery(handler Handler, data []byte) (kontinue bool) {
 	c.startWriterBuffering()
@@ -1207,8 +1221,7 @@ func (c *Conn) handleComQuery(handler Handler, data []byte) (kontinue bool) {
 	}
 
 	if len(queries) == 0 {
-		err := NewSQLError(EREmptyQuery, SSSyntaxErrorOrAccessViolation, "Query was empty")
-		return c.writeErrorPacketFromErrorAndLog(err)
+		return c.writeErrorPacketFromErrorAndLog(errEmptyStatement)
 	}
 
 	for index, sql := range queries {
@@ -1331,16 +1344,16 @@ func isEOFPacket(data []byte) bool {
 //
 // Note: This is only valid on actual EOF packets and not on OK packets with the EOF
 // type code set, i.e. should not be used if ClientDeprecateEOF is set.
-func parseEOFPacket(data []byte) (warnings uint16, more bool, err error) {
+func parseEOFPacket(data []byte) (warnings uint16, statusFlags uint16, err error) {
 	// The warning count is in position 2 & 3
 	warnings, _, _ = readUint16(data, 1)
 
 	// The status flag is in position 4 & 5
 	statusFlags, _, ok := readUint16(data, 3)
 	if !ok {
-		return 0, false, vterrors.Errorf(vtrpc.Code_INTERNAL, "invalid EOF packet statusFlags: %v", data)
+		return 0, 0, vterrors.Errorf(vtrpc.Code_INTERNAL, "invalid EOF packet statusFlags: %v", data)
 	}
-	return warnings, (statusFlags & ServerMoreResultsExists) != 0, nil
+	return warnings, statusFlags, nil
 }
 
 // PacketOK contains the ok packet details

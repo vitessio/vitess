@@ -20,11 +20,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"math/rand"
 
 	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/trace"
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
 )
 
@@ -52,16 +54,28 @@ type StaticFileDiscovery struct {
 		byName map[string]*vtadminpb.VTGate
 		byTag  map[string][]*vtadminpb.VTGate
 	}
+	vtctlds struct {
+		byName map[string]*vtadminpb.Vtctld
+		byTag  map[string][]*vtadminpb.Vtctld
+	}
 }
 
 // StaticFileClusterConfig configures Vitess components for a single cluster.
 type StaticFileClusterConfig struct {
 	VTGates []*StaticFileVTGateConfig `json:"vtgates,omitempty"`
+	Vtctlds []*StaticFileVtctldConfig `json:"vtctlds,omitempty"`
 }
 
 // StaticFileVTGateConfig contains host and tag information for a single VTGate in a cluster.
 type StaticFileVTGateConfig struct {
 	Host *vtadminpb.VTGate `json:"host"`
+	Tags []string          `json:"tags"`
+}
+
+// StaticFileVtctldConfig contains a host and tag information for a single
+// Vtctld in a cluster.
+type StaticFileVtctldConfig struct {
+	Host *vtadminpb.Vtctld `json:"host"`
 	Tags []string          `json:"tags"`
 }
 
@@ -94,7 +108,7 @@ func NewStaticFile(cluster *vtadminpb.Cluster, flags *pflag.FlagSet, args []stri
 
 func (d *StaticFileDiscovery) parseConfig(bytes []byte) error {
 	if err := json.Unmarshal(bytes, &d.config); err != nil {
-		return err
+		return fmt.Errorf("failed to unmarshal staticfile config from json: %w", err)
 	}
 
 	d.gates.byName = make(map[string]*vtadminpb.VTGate, len(d.config.VTGates))
@@ -108,12 +122,32 @@ func (d *StaticFileDiscovery) parseConfig(bytes []byte) error {
 			d.gates.byTag[tag] = append(d.gates.byTag[tag], gate.Host)
 		}
 	}
+
+	d.vtctlds.byName = make(map[string]*vtadminpb.Vtctld, len(d.config.Vtctlds))
+	d.vtctlds.byTag = make(map[string][]*vtadminpb.Vtctld)
+
+	// Index the vtctlds by name and by tag for easier lookups
+	for _, vtctld := range d.config.Vtctlds {
+		d.vtctlds.byName[vtctld.Host.Hostname] = vtctld.Host
+
+		for _, tag := range vtctld.Tags {
+			d.vtctlds.byTag[tag] = append(d.vtctlds.byTag[tag], vtctld.Host)
+		}
+	}
+
 	return nil
 }
 
 // DiscoverVTGate is part of the Discovery interface.
 func (d *StaticFileDiscovery) DiscoverVTGate(ctx context.Context, tags []string) (*vtadminpb.VTGate, error) {
-	gates, err := d.DiscoverVTGates(ctx, tags)
+	span, ctx := trace.NewSpan(ctx, "StaticFileDiscovery.DiscoverVTGate")
+	defer span.Finish()
+
+	return d.discoverVTGate(ctx, tags)
+}
+
+func (d *StaticFileDiscovery) discoverVTGate(ctx context.Context, tags []string) (*vtadminpb.VTGate, error) {
+	gates, err := d.discoverVTGates(ctx, tags)
 	if err != nil {
 		return nil, err
 	}
@@ -129,6 +163,9 @@ func (d *StaticFileDiscovery) DiscoverVTGate(ctx context.Context, tags []string)
 
 // DiscoverVTGateAddr is part of the Discovery interface.
 func (d *StaticFileDiscovery) DiscoverVTGateAddr(ctx context.Context, tags []string) (string, error) {
+	span, ctx := trace.NewSpan(ctx, "StaticFileDiscovery.DiscoverVTGateAddr")
+	defer span.Finish()
+
 	gate, err := d.DiscoverVTGate(ctx, tags)
 	if err != nil {
 		return "", err
@@ -139,6 +176,13 @@ func (d *StaticFileDiscovery) DiscoverVTGateAddr(ctx context.Context, tags []str
 
 // DiscoverVTGates is part of the Discovery interface.
 func (d *StaticFileDiscovery) DiscoverVTGates(ctx context.Context, tags []string) ([]*vtadminpb.VTGate, error) {
+	span, ctx := trace.NewSpan(ctx, "StaticFileDiscovery.DiscoverVTGates")
+	defer span.Finish()
+
+	return d.discoverVTGates(ctx, tags)
+}
+
+func (d *StaticFileDiscovery) discoverVTGates(ctx context.Context, tags []string) ([]*vtadminpb.VTGate, error) {
 	if len(tags) == 0 {
 		results := []*vtadminpb.VTGate{}
 		for _, g := range d.gates.byName {
@@ -171,6 +215,88 @@ func (d *StaticFileDiscovery) DiscoverVTGates(ctx context.Context, tags []string
 
 	for _, gate := range set {
 		results = append(results, gate)
+	}
+
+	return results, nil
+}
+
+// DiscoverVtctld is part of the Discovery interface.
+func (d *StaticFileDiscovery) DiscoverVtctld(ctx context.Context, tags []string) (*vtadminpb.Vtctld, error) {
+	span, ctx := trace.NewSpan(ctx, "StaticFileDiscovery.DiscoverVtctld")
+	defer span.Finish()
+
+	return d.discoverVtctld(ctx, tags)
+}
+
+func (d *StaticFileDiscovery) discoverVtctld(ctx context.Context, tags []string) (*vtadminpb.Vtctld, error) {
+	vtctlds, err := d.discoverVtctlds(ctx, tags)
+	if err != nil {
+		return nil, err
+	}
+
+	count := len(vtctlds)
+	if count == 0 {
+		return nil, ErrNoVtctlds
+	}
+
+	vtctld := vtctlds[rand.Intn(len(vtctlds))]
+	return vtctld, nil
+}
+
+// DiscoverVtctldAddr is part of the Discovery interface.
+func (d *StaticFileDiscovery) DiscoverVtctldAddr(ctx context.Context, tags []string) (string, error) {
+	span, ctx := trace.NewSpan(ctx, "StaticFileDiscovery.DiscoverVtctldAddr")
+	defer span.Finish()
+
+	vtctld, err := d.discoverVtctld(ctx, tags)
+	if err != nil {
+		return "", err
+	}
+
+	return vtctld.Hostname, nil
+}
+
+// DiscoverVtctlds is part of the Discovery interface.
+func (d *StaticFileDiscovery) DiscoverVtctlds(ctx context.Context, tags []string) ([]*vtadminpb.Vtctld, error) {
+	span, ctx := trace.NewSpan(ctx, "StaticFileDiscovery.DiscoverVtctlds")
+	defer span.Finish()
+
+	return d.discoverVtctlds(ctx, tags)
+}
+
+func (d *StaticFileDiscovery) discoverVtctlds(ctx context.Context, tags []string) ([]*vtadminpb.Vtctld, error) {
+	if len(tags) == 0 {
+		results := []*vtadminpb.Vtctld{}
+		for _, v := range d.vtctlds.byName {
+			results = append(results, v)
+		}
+
+		return results, nil
+	}
+
+	set := d.vtctlds.byName
+
+	for _, tag := range tags {
+		intermediate := map[string]*vtadminpb.Vtctld{}
+
+		vtctlds, ok := d.vtctlds.byTag[tag]
+		if !ok {
+			return []*vtadminpb.Vtctld{}, nil
+		}
+
+		for _, v := range vtctlds {
+			if _, ok := set[v.Hostname]; ok {
+				intermediate[v.Hostname] = v
+			}
+		}
+
+		set = intermediate
+	}
+
+	results := make([]*vtadminpb.Vtctld, 0, len(set))
+
+	for _, vtctld := range set {
+		results = append(results, vtctld)
 	}
 
 	return results, nil

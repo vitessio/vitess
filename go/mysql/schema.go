@@ -30,58 +30,64 @@ import (
 // data.
 
 const (
-	// BaseShowTables is the base query used in further methods.
-	BaseShowTables = "SELECT table_name, table_type, unix_timestamp(create_time), table_comment FROM information_schema.tables WHERE table_schema = database()"
-
 	// BaseShowPrimary is the base query for fetching primary key info.
 	BaseShowPrimary = "SELECT table_name, column_name FROM information_schema.key_column_usage WHERE table_schema=database() AND constraint_name='PRIMARY' ORDER BY table_name, ordinal_position"
+	// ShowRowsRead is the query used to find the number of rows read.
+	ShowRowsRead = "show status like 'Innodb_rows_read'"
 )
 
 // BaseShowTablesFields contains the fields returned by a BaseShowTables or a BaseShowTablesForTable command.
 // They are validated by the
 // testBaseShowTables test.
-var BaseShowTablesFields = []*querypb.Field{
-	{
-		Name:         "table_name",
-		Type:         querypb.Type_VARCHAR,
-		Table:        "tables",
-		OrgTable:     "TABLES",
-		Database:     "information_schema",
-		OrgName:      "TABLE_NAME",
-		ColumnLength: 192,
-		Charset:      CharacterSetUtf8,
-		Flags:        uint32(querypb.MySqlFlag_NOT_NULL_FLAG),
-	},
-	{
-		Name:         "table_type",
-		Type:         querypb.Type_VARCHAR,
-		Table:        "tables",
-		OrgTable:     "TABLES",
-		Database:     "information_schema",
-		OrgName:      "TABLE_TYPE",
-		ColumnLength: 192,
-		Charset:      CharacterSetUtf8,
-		Flags:        uint32(querypb.MySqlFlag_NOT_NULL_FLAG),
-	},
-	{
-		Name:         "unix_timestamp(create_time)",
-		Type:         querypb.Type_INT64,
-		ColumnLength: 11,
-		Charset:      CharacterSetBinary,
-		Flags:        uint32(querypb.MySqlFlag_BINARY_FLAG | querypb.MySqlFlag_NUM_FLAG),
-	},
-	{
-		Name:         "table_comment",
-		Type:         querypb.Type_VARCHAR,
-		Table:        "tables",
-		OrgTable:     "TABLES",
-		Database:     "information_schema",
-		OrgName:      "TABLE_COMMENT",
-		ColumnLength: 6144,
-		Charset:      CharacterSetUtf8,
-		Flags:        uint32(querypb.MySqlFlag_NOT_NULL_FLAG),
-	},
-}
+var BaseShowTablesFields = []*querypb.Field{{
+	Name:         "t.table_name",
+	Type:         querypb.Type_VARCHAR,
+	Table:        "tables",
+	OrgTable:     "TABLES",
+	Database:     "information_schema",
+	OrgName:      "TABLE_NAME",
+	ColumnLength: 192,
+	Charset:      CharacterSetUtf8,
+	Flags:        uint32(querypb.MySqlFlag_NOT_NULL_FLAG),
+}, {
+	Name:         "t.table_type",
+	Type:         querypb.Type_VARCHAR,
+	Table:        "tables",
+	OrgTable:     "TABLES",
+	Database:     "information_schema",
+	OrgName:      "TABLE_TYPE",
+	ColumnLength: 192,
+	Charset:      CharacterSetUtf8,
+	Flags:        uint32(querypb.MySqlFlag_NOT_NULL_FLAG),
+}, {
+	Name:         "unix_timestamp(t.create_time)",
+	Type:         querypb.Type_INT64,
+	ColumnLength: 11,
+	Charset:      CharacterSetBinary,
+	Flags:        uint32(querypb.MySqlFlag_BINARY_FLAG | querypb.MySqlFlag_NUM_FLAG),
+}, {
+	Name:         "t.table_comment",
+	Type:         querypb.Type_VARCHAR,
+	Table:        "tables",
+	OrgTable:     "TABLES",
+	Database:     "information_schema",
+	OrgName:      "TABLE_COMMENT",
+	ColumnLength: 6144,
+	Charset:      CharacterSetUtf8,
+	Flags:        uint32(querypb.MySqlFlag_NOT_NULL_FLAG),
+}, {
+	Name:         "i.file_size",
+	Type:         querypb.Type_INT64,
+	ColumnLength: 11,
+	Charset:      CharacterSetBinary,
+	Flags:        uint32(querypb.MySqlFlag_BINARY_FLAG | querypb.MySqlFlag_NUM_FLAG),
+}, {
+	Name:         "i.allocated_size",
+	Type:         querypb.Type_INT64,
+	ColumnLength: 11,
+	Charset:      CharacterSetBinary,
+	Flags:        uint32(querypb.MySqlFlag_BINARY_FLAG | querypb.MySqlFlag_NUM_FLAG),
+}}
 
 // BaseShowTablesRow returns the fields from a BaseShowTables or
 // BaseShowTablesForTable command.
@@ -95,6 +101,8 @@ func BaseShowTablesRow(tableName string, isView bool, comment string) []sqltypes
 		sqltypes.MakeTrusted(sqltypes.VarChar, []byte(tableType)),
 		sqltypes.MakeTrusted(sqltypes.Int64, []byte("1427325875")), // unix_timestamp(create_time)
 		sqltypes.MakeTrusted(sqltypes.VarChar, []byte(comment)),
+		sqltypes.MakeTrusted(sqltypes.Int64, []byte("100")), // file_size
+		sqltypes.MakeTrusted(sqltypes.Int64, []byte("150")), // allocated_size
 	}
 }
 

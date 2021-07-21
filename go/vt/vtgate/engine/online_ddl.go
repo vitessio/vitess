@@ -96,8 +96,7 @@ func (v *OnlineDDL) Execute(vcursor VCursor, bindVars map[string]*query.BindVari
 				Type: sqltypes.VarChar,
 			},
 		},
-		Rows:         rows,
-		RowsAffected: uint64(len(rows)),
+		Rows: rows,
 	}
 	return result, err
 }
@@ -113,5 +112,5 @@ func (v *OnlineDDL) StreamExecute(vcursor VCursor, bindVars map[string]*query.Bi
 
 //GetFields implements the Primitive interface
 func (v *OnlineDDL) GetFields(vcursor VCursor, bindVars map[string]*query.BindVariable) (*sqltypes.Result, error) {
-	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "not reachable")
+	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] GetFields is not reachable")
 }

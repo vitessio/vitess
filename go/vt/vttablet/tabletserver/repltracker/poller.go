@@ -20,10 +20,14 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/stats"
+
 	"vitess.io/vitess/go/vt/mysqlctl"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )
+
+var replicationLagSeconds = stats.NewGauge("replicationLagSec", "replication lag in seconds")
 
 type poller struct {
 	mysqld mysqlctl.MysqlDaemon
@@ -55,5 +59,6 @@ func (p *poller) Status() (time.Duration, error) {
 
 	p.lag = time.Duration(status.SecondsBehindMaster) * time.Second
 	p.timeRecorded = time.Now()
+	replicationLagSeconds.Set(int64(p.lag.Seconds()))
 	return p.lag, nil
 }

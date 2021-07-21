@@ -17,499 +17,45 @@ limitations under the License.
 package sqlparser
 
 import (
-	"bytes"
 	"fmt"
-	"io"
+	"strconv"
 	"strings"
 
-	"vitess.io/vitess/go/bytes2"
 	"vitess.io/vitess/go/sqltypes"
 )
 
 const (
-	defaultBufSize = 4096
-	eofChar        = 0x100
+	eofChar = 0x100
 )
 
 // Tokenizer is the struct used to generate SQL
 // tokens for the parser.
 type Tokenizer struct {
-	InStream            io.Reader
 	AllowComments       bool
 	SkipSpecialComments bool
 	SkipToEnd           bool
-	lastChar            uint16
-	Position            int
-	lastToken           []byte
 	LastError           error
-	posVarIndex         int
 	ParseTree           Statement
-	partialDDL          Statement
-	nesting             int
-	multi               bool
-	specialComment      *Tokenizer
+	BindVars            map[string]struct{}
 
-	buf     []byte
-	bufPos  int
-	bufSize int
+	lastToken      string
+	posVarIndex    int
+	partialDDL     Statement
+	nesting        int
+	multi          bool
+	specialComment *Tokenizer
+
+	Pos int
+	buf string
 }
 
 // NewStringTokenizer creates a new Tokenizer for the
 // sql string.
 func NewStringTokenizer(sql string) *Tokenizer {
-	buf := []byte(sql)
 	return &Tokenizer{
-		buf:     buf,
-		bufSize: len(buf),
+		buf:      sql,
+		BindVars: make(map[string]struct{}),
 	}
-}
-
-// NewTokenizer creates a new Tokenizer reading a sql
-// string from the io.Reader.
-func NewTokenizer(r io.Reader) *Tokenizer {
-	return &Tokenizer{
-		InStream: r,
-		buf:      make([]byte, defaultBufSize),
-	}
-}
-
-// keywords is a map of mysql keywords that fall into two categories:
-// 1) keywords considered reserved by MySQL
-// 2) keywords for us to handle specially in sql.y
-//
-// Those marked as UNUSED are likely reserved keywords. We add them here so that
-// when rewriting queries we can properly backtick quote them so they don't cause issues
-//
-// NOTE: If you add new keywords, add them also to the reserved_keywords or
-// non_reserved_keywords grammar in sql.y -- this will allow the keyword to be used
-// in identifiers. See the docs for each grammar to determine which one to put it into.
-var keywords = map[string]int{
-	"accessible":          UNUSED,
-	"action":              ACTION,
-	"add":                 ADD,
-	"after":               AFTER,
-	"against":             AGAINST,
-	"algorithm":           ALGORITHM,
-	"all":                 ALL,
-	"alter":               ALTER,
-	"analyze":             ANALYZE,
-	"and":                 AND,
-	"as":                  AS,
-	"asc":                 ASC,
-	"asensitive":          UNUSED,
-	"auto_increment":      AUTO_INCREMENT,
-	"avg_row_length":      AVG_ROW_LENGTH,
-	"before":              UNUSED,
-	"begin":               BEGIN,
-	"between":             BETWEEN,
-	"bigint":              BIGINT,
-	"binary":              BINARY,
-	"_binary":             UNDERSCORE_BINARY,
-	"_utf8mb4":            UNDERSCORE_UTF8MB4,
-	"_utf8":               UNDERSCORE_UTF8,
-	"_latin1":             UNDERSCORE_LATIN1,
-	"bit":                 BIT,
-	"blob":                BLOB,
-	"bool":                BOOL,
-	"boolean":             BOOLEAN,
-	"both":                UNUSED,
-	"by":                  BY,
-	"call":                UNUSED,
-	"cascade":             CASCADE,
-	"cascaded":            CASCADED,
-	"case":                CASE,
-	"cast":                CAST,
-	"change":              CHANGE,
-	"char":                CHAR,
-	"character":           CHARACTER,
-	"charset":             CHARSET,
-	"check":               CHECK,
-	"checksum":            CHECKSUM,
-	"coalesce":            COALESCE,
-	"code":                CODE,
-	"collate":             COLLATE,
-	"collation":           COLLATION,
-	"column":              COLUMN,
-	"columns":             COLUMNS,
-	"comment":             COMMENT_KEYWORD,
-	"committed":           COMMITTED,
-	"commit":              COMMIT,
-	"compact":             COMPACT,
-	"compressed":          COMPRESSED,
-	"compression":         COMPRESSION,
-	"condition":           UNUSED,
-	"connection":          CONNECTION,
-	"constraint":          CONSTRAINT,
-	"continue":            UNUSED,
-	"convert":             CONVERT,
-	"copy":                COPY,
-	"substr":              SUBSTR,
-	"substring":           SUBSTRING,
-	"create":              CREATE,
-	"cross":               CROSS,
-	"csv":                 CSV,
-	"current_date":        CURRENT_DATE,
-	"current_time":        CURRENT_TIME,
-	"current_timestamp":   CURRENT_TIMESTAMP,
-	"current_user":        CURRENT_USER,
-	"cursor":              UNUSED,
-	"data":                DATA,
-	"database":            DATABASE,
-	"databases":           DATABASES,
-	"day_hour":            UNUSED,
-	"day_microsecond":     UNUSED,
-	"day_minute":          UNUSED,
-	"day_second":          UNUSED,
-	"date":                DATE,
-	"datetime":            DATETIME,
-	"dec":                 UNUSED,
-	"decimal":             DECIMAL,
-	"declare":             UNUSED,
-	"default":             DEFAULT,
-	"definer":             DEFINER,
-	"delay_key_write":     DELAY_KEY_WRITE,
-	"delayed":             UNUSED,
-	"delete":              DELETE,
-	"desc":                DESC,
-	"describe":            DESCRIBE,
-	"deterministic":       UNUSED,
-	"directory":           DIRECTORY,
-	"disable":             DISABLE,
-	"discard":             DISCARD,
-	"disk":                DISK,
-	"distinct":            DISTINCT,
-	"distinctrow":         DISTINCTROW,
-	"div":                 DIV,
-	"double":              DOUBLE,
-	"do":                  DO,
-	"drop":                DROP,
-	"dumpfile":            DUMPFILE,
-	"duplicate":           DUPLICATE,
-	"dynamic":             DYNAMIC,
-	"each":                UNUSED,
-	"else":                ELSE,
-	"elseif":              UNUSED,
-	"enable":              ENABLE,
-	"enclosed":            ENCLOSED,
-	"encryption":          ENCRYPTION,
-	"end":                 END,
-	"enforced":            ENFORCED,
-	"engine":              ENGINE,
-	"engines":             ENGINES,
-	"enum":                ENUM,
-	"escape":              ESCAPE,
-	"escaped":             ESCAPED,
-	"exchange":            EXCHANGE,
-	"exclusive":           EXCLUSIVE,
-	"exists":              EXISTS,
-	"exit":                UNUSED,
-	"explain":             EXPLAIN,
-	"expansion":           EXPANSION,
-	"extended":            EXTENDED,
-	"false":               FALSE,
-	"fetch":               UNUSED,
-	"fields":              FIELDS,
-	"first":               FIRST,
-	"fixed":               FIXED,
-	"float":               FLOAT_TYPE,
-	"float4":              UNUSED,
-	"float8":              UNUSED,
-	"flush":               FLUSH,
-	"for":                 FOR,
-	"force":               FORCE,
-	"foreign":             FOREIGN,
-	"format":              FORMAT,
-	"from":                FROM,
-	"full":                FULL,
-	"fulltext":            FULLTEXT,
-	"function":            FUNCTION,
-	"generated":           UNUSED,
-	"geometry":            GEOMETRY,
-	"geometrycollection":  GEOMETRYCOLLECTION,
-	"get":                 UNUSED,
-	"global":              GLOBAL,
-	"grant":               UNUSED,
-	"group":               GROUP,
-	"group_concat":        GROUP_CONCAT,
-	"having":              HAVING,
-	"header":              HEADER,
-	"high_priority":       UNUSED,
-	"hour_microsecond":    UNUSED,
-	"hour_minute":         UNUSED,
-	"hour_second":         UNUSED,
-	"if":                  IF,
-	"ignore":              IGNORE,
-	"import":              IMPORT,
-	"in":                  IN,
-	"index":               INDEX,
-	"indexes":             INDEXES,
-	"infile":              UNUSED,
-	"inout":               UNUSED,
-	"inner":               INNER,
-	"inplace":             INPLACE,
-	"insensitive":         UNUSED,
-	"insert":              INSERT,
-	"insert_method":       INSERT_METHOD,
-	"int":                 INT,
-	"int1":                UNUSED,
-	"int2":                UNUSED,
-	"int3":                UNUSED,
-	"int4":                UNUSED,
-	"int8":                UNUSED,
-	"integer":             INTEGER,
-	"interval":            INTERVAL,
-	"into":                INTO,
-	"io_after_gtids":      UNUSED,
-	"is":                  IS,
-	"isolation":           ISOLATION,
-	"iterate":             UNUSED,
-	"invoker":             INVOKER,
-	"join":                JOIN,
-	"json":                JSON,
-	"key":                 KEY,
-	"keys":                KEYS,
-	"keyspaces":           KEYSPACES,
-	"key_block_size":      KEY_BLOCK_SIZE,
-	"kill":                UNUSED,
-	"last":                LAST,
-	"language":            LANGUAGE,
-	"last_insert_id":      LAST_INSERT_ID,
-	"leading":             UNUSED,
-	"leave":               UNUSED,
-	"left":                LEFT,
-	"less":                LESS,
-	"level":               LEVEL,
-	"like":                LIKE,
-	"limit":               LIMIT,
-	"linear":              UNUSED,
-	"lines":               LINES,
-	"linestring":          LINESTRING,
-	"load":                LOAD,
-	"local":               LOCAL,
-	"localtime":           LOCALTIME,
-	"localtimestamp":      LOCALTIMESTAMP,
-	"lock":                LOCK,
-	"long":                UNUSED,
-	"longblob":            LONGBLOB,
-	"longtext":            LONGTEXT,
-	"loop":                UNUSED,
-	"low_priority":        LOW_PRIORITY,
-	"manifest":            MANIFEST,
-	"master_bind":         UNUSED,
-	"match":               MATCH,
-	"max_rows":            MAX_ROWS,
-	"maxvalue":            MAXVALUE,
-	"mediumblob":          MEDIUMBLOB,
-	"mediumint":           MEDIUMINT,
-	"mediumtext":          MEDIUMTEXT,
-	"memory":              MEMORY,
-	"merge":               MERGE,
-	"middleint":           UNUSED,
-	"min_rows":            MIN_ROWS,
-	"minute_microsecond":  UNUSED,
-	"minute_second":       UNUSED,
-	"mod":                 MOD,
-	"mode":                MODE,
-	"modify":              MODIFY,
-	"modifies":            UNUSED,
-	"multilinestring":     MULTILINESTRING,
-	"multipoint":          MULTIPOINT,
-	"multipolygon":        MULTIPOLYGON,
-	"name":                NAME,
-	"names":               NAMES,
-	"natural":             NATURAL,
-	"nchar":               NCHAR,
-	"next":                NEXT,
-	"no":                  NO,
-	"none":                NONE,
-	"not":                 NOT,
-	"no_write_to_binlog":  UNUSED,
-	"null":                NULL,
-	"numeric":             NUMERIC,
-	"off":                 OFF,
-	"offset":              OFFSET,
-	"on":                  ON,
-	"only":                ONLY,
-	"optimize":            OPTIMIZE,
-	"optimizer_costs":     UNUSED,
-	"option":              OPTION,
-	"optionally":          OPTIONALLY,
-	"or":                  OR,
-	"order":               ORDER,
-	"out":                 UNUSED,
-	"outer":               OUTER,
-	"outfile":             OUTFILE,
-	"overwrite":           OVERWRITE,
-	"pack_keys":           PACK_KEYS,
-	"parser":              PARSER,
-	"partition":           PARTITION,
-	"partitioning":        PARTITIONING,
-	"password":            PASSWORD,
-	"plugins":             PLUGINS,
-	"point":               POINT,
-	"polygon":             POLYGON,
-	"precision":           UNUSED,
-	"primary":             PRIMARY,
-	"privileges":          PRIVILEGES,
-	"processlist":         PROCESSLIST,
-	"procedure":           PROCEDURE,
-	"query":               QUERY,
-	"range":               UNUSED,
-	"read":                READ,
-	"reads":               UNUSED,
-	"read_write":          UNUSED,
-	"real":                REAL,
-	"rebuild":             REBUILD,
-	"redundant":           REDUNDANT,
-	"references":          REFERENCES,
-	"regexp":              REGEXP,
-	"release":             RELEASE,
-	"remove":              REMOVE,
-	"rename":              RENAME,
-	"reorganize":          REORGANIZE,
-	"repair":              REPAIR,
-	"repeat":              UNUSED,
-	"repeatable":          REPEATABLE,
-	"replace":             REPLACE,
-	"require":             UNUSED,
-	"resignal":            UNUSED,
-	"restrict":            RESTRICT,
-	"return":              UNUSED,
-	"revoke":              UNUSED,
-	"right":               RIGHT,
-	"rlike":               REGEXP,
-	"rollback":            ROLLBACK,
-	"row_format":          ROW_FORMAT,
-	"s3":                  S3,
-	"savepoint":           SAVEPOINT,
-	"schema":              SCHEMA,
-	"schemas":             SCHEMAS,
-	"second_microsecond":  UNUSED,
-	"security":            SECURITY,
-	"select":              SELECT,
-	"sensitive":           UNUSED,
-	"separator":           SEPARATOR,
-	"sequence":            SEQUENCE,
-	"serializable":        SERIALIZABLE,
-	"session":             SESSION,
-	"set":                 SET,
-	"share":               SHARE,
-	"shared":              SHARED,
-	"show":                SHOW,
-	"signal":              UNUSED,
-	"signed":              SIGNED,
-	"smallint":            SMALLINT,
-	"spatial":             SPATIAL,
-	"specific":            UNUSED,
-	"sql":                 SQL,
-	"sqlexception":        UNUSED,
-	"sqlstate":            UNUSED,
-	"sqlwarning":          UNUSED,
-	"sql_big_result":      UNUSED,
-	"sql_cache":           SQL_CACHE,
-	"sql_calc_found_rows": SQL_CALC_FOUND_ROWS,
-	"sql_no_cache":        SQL_NO_CACHE,
-	"sql_small_result":    UNUSED,
-	"ssl":                 UNUSED,
-	"start":               START,
-	"starting":            STARTING,
-	"stats_auto_recalc":   STATS_AUTO_RECALC,
-	"stats_persistent":    STATS_PERSISTENT,
-	"stats_sample_pages":  STATS_SAMPLE_PAGES,
-	"status":              STATUS,
-	"storage":             STORAGE,
-	"stored":              UNUSED,
-	"straight_join":       STRAIGHT_JOIN,
-	"stream":              STREAM,
-	"vstream":             VSTREAM,
-	"table":               TABLE,
-	"tables":              TABLES,
-	"tablespace":          TABLESPACE,
-	"temptable":           TEMPTABLE,
-	"terminated":          TERMINATED,
-	"text":                TEXT,
-	"than":                THAN,
-	"then":                THEN,
-	"time":                TIME,
-	"timestamp":           TIMESTAMP,
-	"timestampadd":        TIMESTAMPADD,
-	"timestampdiff":       TIMESTAMPDIFF,
-	"tinyblob":            TINYBLOB,
-	"tinyint":             TINYINT,
-	"tinytext":            TINYTEXT,
-	"to":                  TO,
-	"trailing":            UNUSED,
-	"transaction":         TRANSACTION,
-	"tree":                TREE,
-	"traditional":         TRADITIONAL,
-	"trigger":             TRIGGER,
-	"true":                TRUE,
-	"truncate":            TRUNCATE,
-	"uncommitted":         UNCOMMITTED,
-	"undefined":           UNDEFINED,
-	"undo":                UNUSED,
-	"union":               UNION,
-	"unique":              UNIQUE,
-	"unlock":              UNLOCK,
-	"unsigned":            UNSIGNED,
-	"update":              UPDATE,
-	"upgrade":             UPGRADE,
-	"usage":               UNUSED,
-	"use":                 USE,
-	"using":               USING,
-	"utc_date":            UTC_DATE,
-	"utc_time":            UTC_TIME,
-	"utc_timestamp":       UTC_TIMESTAMP,
-	"validation":          VALIDATION,
-	"values":              VALUES,
-	"variables":           VARIABLES,
-	"varbinary":           VARBINARY,
-	"varchar":             VARCHAR,
-	"varcharacter":        UNUSED,
-	"varying":             UNUSED,
-	"virtual":             UNUSED,
-	"vindex":              VINDEX,
-	"vindexes":            VINDEXES,
-	"view":                VIEW,
-	"vitess":              VITESS,
-	"vitess_keyspaces":    VITESS_KEYSPACES,
-	"vitess_metadata":     VITESS_METADATA,
-	"vitess_shards":       VITESS_SHARDS,
-	"vitess_tablets":      VITESS_TABLETS,
-	"vschema":             VSCHEMA,
-	"warnings":            WARNINGS,
-	"when":                WHEN,
-	"where":               WHERE,
-	"while":               UNUSED,
-	"with":                WITH,
-	"without":             WITHOUT,
-	"work":                WORK,
-	"write":               WRITE,
-	"xor":                 XOR,
-	"year":                YEAR,
-	"year_month":          UNUSED,
-	"zerofill":            ZEROFILL,
-}
-
-// keywordStrings contains the reverse mapping of token to keyword strings
-var keywordStrings = map[int]string{}
-
-func init() {
-	for str, id := range keywords {
-		if id == UNUSED {
-			continue
-		}
-		keywordStrings[id] = strings.ToLower(str)
-	}
-}
-
-// KeywordString returns the string corresponding to the given keyword
-func KeywordString(id int) string {
-	str, ok := keywordStrings[id]
-	if !ok {
-		return ""
-	}
-	return str
 }
 
 // Lex returns the next token form the Tokenizer.
@@ -533,7 +79,7 @@ func (tkn *Tokenizer) Lex(lval *yySymType) int {
 		// Parse function to see how this is handled.
 		tkn.partialDDL = nil
 	}
-	lval.bytes = val
+	lval.str = val
 	tkn.lastToken = val
 	return typ
 }
@@ -542,11 +88,11 @@ func (tkn *Tokenizer) Lex(lval *yySymType) int {
 type PositionedErr struct {
 	Err  string
 	Pos  int
-	Near []byte
+	Near string
 }
 
 func (p PositionedErr) Error() string {
-	if p.Near != nil {
+	if p.Near != "" {
 		return fmt.Sprintf("%s at position %v near '%s'", p.Err, p.Pos, p.Near)
 	}
 	return fmt.Sprintf("%s at position %v", p.Err, p.Pos)
@@ -554,7 +100,7 @@ func (p PositionedErr) Error() string {
 
 // Error is called by go yacc if there's a parsing error.
 func (tkn *Tokenizer) Error(err string) {
-	tkn.LastError = PositionedErr{Err: err, Pos: tkn.Position, Near: tkn.lastToken}
+	tkn.LastError = PositionedErr{Err: err, Pos: tkn.Pos + 1, Near: tkn.lastToken}
 
 	// Try and re-sync to the next statement
 	tkn.skipStatement()
@@ -562,7 +108,7 @@ func (tkn *Tokenizer) Error(err string) {
 
 // Scan scans the tokenizer for the next token and returns
 // the token type and an optional value.
-func (tkn *Tokenizer) Scan() (int, []byte) {
+func (tkn *Tokenizer) Scan() (int, string) {
 	if tkn.specialComment != nil {
 		// Enter specialComment scan mode.
 		// for scanning such kind of comment: /*! MySQL-specific code */
@@ -575,49 +121,44 @@ func (tkn *Tokenizer) Scan() (int, []byte) {
 		// leave specialComment scan mode after all stream consumed.
 		tkn.specialComment = nil
 	}
-	if tkn.lastChar == 0 {
-		tkn.next()
-	}
 
 	tkn.skipBlank()
-	switch ch := tkn.lastChar; {
+	switch ch := tkn.cur(); {
 	case ch == '@':
 		tokenID := AT_ID
-		tkn.next()
-		if tkn.lastChar == '@' {
+		tkn.skip(1)
+		if tkn.cur() == '@' {
 			tokenID = AT_AT_ID
-			tkn.next()
+			tkn.skip(1)
 		}
 		var tID int
-		var tBytes []byte
-		ch = tkn.lastChar
-		tkn.next()
-		if ch == '`' {
+		var tBytes string
+		if tkn.cur() == '`' {
+			tkn.skip(1)
 			tID, tBytes = tkn.scanLiteralIdentifier()
 		} else {
-			tID, tBytes = tkn.scanIdentifier(byte(ch), true)
+			tID, tBytes = tkn.scanIdentifier(true)
 		}
 		if tID == LEX_ERROR {
-			return tID, nil
+			return tID, ""
 		}
 		return tokenID, tBytes
 	case isLetter(ch):
-		tkn.next()
 		if ch == 'X' || ch == 'x' {
-			if tkn.lastChar == '\'' {
-				tkn.next()
+			if tkn.peek(1) == '\'' {
+				tkn.skip(2)
 				return tkn.scanHex()
 			}
 		}
 		if ch == 'B' || ch == 'b' {
-			if tkn.lastChar == '\'' {
-				tkn.next()
+			if tkn.peek(1) == '\'' {
+				tkn.skip(2)
 				return tkn.scanBitLiteral()
 			}
 		}
-		return tkn.scanIdentifier(byte(ch), false)
+		return tkn.scanIdentifier(false)
 	case isDigit(ch):
-		return tkn.scanNumber(false)
+		return tkn.scanNumber()
 	case ch == ':':
 		return tkn.scanBindVar()
 	case ch == ';':
@@ -625,112 +166,118 @@ func (tkn *Tokenizer) Scan() (int, []byte) {
 			// In multi mode, ';' is treated as EOF. So, we don't advance.
 			// Repeated calls to Scan will keep returning 0 until ParseNext
 			// forces the advance.
-			return 0, nil
+			return 0, ""
 		}
-		tkn.next()
-		return ';', nil
+		tkn.skip(1)
+		return ';', ""
 	case ch == eofChar:
-		return 0, nil
+		return 0, ""
 	default:
-		tkn.next()
+		if ch == '.' && isDigit(tkn.peek(1)) {
+			return tkn.scanNumber()
+		}
+
+		tkn.skip(1)
 		switch ch {
 		case '=', ',', '(', ')', '+', '*', '%', '^', '~':
-			return int(ch), nil
+			return int(ch), ""
 		case '&':
-			if tkn.lastChar == '&' {
-				tkn.next()
-				return AND, nil
+			if tkn.cur() == '&' {
+				tkn.skip(1)
+				return AND, ""
 			}
-			return int(ch), nil
+			return int(ch), ""
 		case '|':
-			if tkn.lastChar == '|' {
-				tkn.next()
-				return OR, nil
+			if tkn.cur() == '|' {
+				tkn.skip(1)
+				return OR, ""
 			}
-			return int(ch), nil
+			return int(ch), ""
 		case '?':
 			tkn.posVarIndex++
-			buf := new(bytes2.Buffer)
-			fmt.Fprintf(buf, ":v%d", tkn.posVarIndex)
-			return VALUE_ARG, buf.Bytes()
+			buf := make([]byte, 0, 8)
+			buf = append(buf, ":v"...)
+			buf = strconv.AppendInt(buf, int64(tkn.posVarIndex), 10)
+			return VALUE_ARG, string(buf)
 		case '.':
-			if isDigit(tkn.lastChar) {
-				return tkn.scanNumber(true)
-			}
-			return int(ch), nil
+			return int(ch), ""
 		case '/':
-			switch tkn.lastChar {
+			switch tkn.cur() {
 			case '/':
-				tkn.next()
-				return tkn.scanCommentType1("//")
+				tkn.skip(1)
+				return tkn.scanCommentType1(2)
 			case '*':
-				tkn.next()
-				if tkn.lastChar == '!' && !tkn.SkipSpecialComments {
+				tkn.skip(1)
+				if tkn.cur() == '!' && !tkn.SkipSpecialComments {
+					tkn.skip(1)
 					return tkn.scanMySQLSpecificComment()
 				}
 				return tkn.scanCommentType2()
 			default:
-				return int(ch), nil
+				return int(ch), ""
 			}
 		case '#':
-			return tkn.scanCommentType1("#")
+			return tkn.scanCommentType1(1)
 		case '-':
-			switch tkn.lastChar {
+			switch tkn.cur() {
 			case '-':
-				tkn.next()
-				return tkn.scanCommentType1("--")
-			case '>':
-				tkn.next()
-				if tkn.lastChar == '>' {
-					tkn.next()
-					return JSON_UNQUOTE_EXTRACT_OP, nil
+				nextChar := tkn.peek(1)
+				if nextChar == ' ' || nextChar == '\n' || nextChar == '\t' || nextChar == '\r' || nextChar == eofChar {
+					tkn.skip(1)
+					return tkn.scanCommentType1(2)
 				}
-				return JSON_EXTRACT_OP, nil
-			}
-			return int(ch), nil
-		case '<':
-			switch tkn.lastChar {
 			case '>':
-				tkn.next()
-				return NE, nil
+				tkn.skip(1)
+				if tkn.cur() == '>' {
+					tkn.skip(1)
+					return JSON_UNQUOTE_EXTRACT_OP, ""
+				}
+				return JSON_EXTRACT_OP, ""
+			}
+			return int(ch), ""
+		case '<':
+			switch tkn.cur() {
+			case '>':
+				tkn.skip(1)
+				return NE, ""
 			case '<':
-				tkn.next()
-				return SHIFT_LEFT, nil
+				tkn.skip(1)
+				return SHIFT_LEFT, ""
 			case '=':
-				tkn.next()
-				switch tkn.lastChar {
+				tkn.skip(1)
+				switch tkn.cur() {
 				case '>':
-					tkn.next()
-					return NULL_SAFE_EQUAL, nil
+					tkn.skip(1)
+					return NULL_SAFE_EQUAL, ""
 				default:
-					return LE, nil
+					return LE, ""
 				}
 			default:
-				return int(ch), nil
+				return int(ch), ""
 			}
 		case '>':
-			switch tkn.lastChar {
+			switch tkn.cur() {
 			case '=':
-				tkn.next()
-				return GE, nil
+				tkn.skip(1)
+				return GE, ""
 			case '>':
-				tkn.next()
-				return SHIFT_RIGHT, nil
+				tkn.skip(1)
+				return SHIFT_RIGHT, ""
 			default:
-				return int(ch), nil
+				return int(ch), ""
 			}
 		case '!':
-			if tkn.lastChar == '=' {
-				tkn.next()
-				return NE, nil
+			if tkn.cur() == '=' {
+				tkn.skip(1)
+				return NE, ""
 			}
-			return int(ch), nil
+			return int(ch), ""
 		case '\'', '"':
 			return tkn.scanString(ch, STRING)
 		case '`':
 			return tkn.scanLiteralIdentifier()
 		default:
-			return LEX_ERROR, []byte{byte(ch)}
+			return LEX_ERROR, string(byte(ch))
 		}
 	}
 }
@@ -746,311 +293,370 @@ func (tkn *Tokenizer) skipStatement() int {
 	}
 }
 
+// skipBlank skips the cursor while it finds whitespace
 func (tkn *Tokenizer) skipBlank() {
-	ch := tkn.lastChar
+	ch := tkn.cur()
 	for ch == ' ' || ch == '\n' || ch == '\r' || ch == '\t' {
-		tkn.next()
-		ch = tkn.lastChar
+		tkn.skip(1)
+		ch = tkn.cur()
 	}
 }
 
-func (tkn *Tokenizer) scanIdentifier(firstByte byte, isVariable bool) (int, []byte) {
-	buffer := &bytes2.Buffer{}
-	buffer.WriteByte(firstByte)
-	for isLetter(tkn.lastChar) ||
-		isDigit(tkn.lastChar) ||
-		tkn.lastChar == '@' ||
-		(isVariable && isCarat(tkn.lastChar)) {
-		if tkn.lastChar == '@' {
+// scanIdentifier scans a language keyword or @-encased variable
+func (tkn *Tokenizer) scanIdentifier(isVariable bool) (int, string) {
+	start := tkn.Pos
+	tkn.skip(1)
+
+	for {
+		ch := tkn.cur()
+		if !isLetter(ch) && !isDigit(ch) && ch != '@' && !(isVariable && isCarat(ch)) {
+			break
+		}
+		if ch == '@' {
 			isVariable = true
 		}
-		buffer.WriteByte(byte(tkn.lastChar))
-		tkn.next()
+		tkn.skip(1)
 	}
-	lowered := bytes.ToLower(buffer.Bytes())
-	loweredStr := string(lowered)
-	if keywordID, found := keywords[loweredStr]; found {
-		return keywordID, buffer.Bytes()
+	keywordName := tkn.buf[start:tkn.Pos]
+	if keywordID, found := keywordLookupTable.LookupString(keywordName); found {
+		return keywordID, keywordName
 	}
 	// dual must always be case-insensitive
-	if loweredStr == "dual" {
-		return ID, lowered
+	if keywordASCIIMatch(keywordName, "dual") {
+		return ID, "dual"
 	}
-	return ID, buffer.Bytes()
+	return ID, keywordName
 }
 
-func (tkn *Tokenizer) scanHex() (int, []byte) {
-	buffer := &bytes2.Buffer{}
-	tkn.scanMantissa(16, buffer)
-	if tkn.lastChar != '\'' {
-		return LEX_ERROR, buffer.Bytes()
+// scanHex scans a hex numeral; assumes x' or X' has already been scanned
+func (tkn *Tokenizer) scanHex() (int, string) {
+	start := tkn.Pos
+	tkn.scanMantissa(16)
+	hex := tkn.buf[start:tkn.Pos]
+	if tkn.cur() != '\'' {
+		return LEX_ERROR, hex
 	}
-	tkn.next()
-	if buffer.Len()%2 != 0 {
-		return LEX_ERROR, buffer.Bytes()
+	tkn.skip(1)
+	if len(hex)%2 != 0 {
+		return LEX_ERROR, hex
 	}
-	return HEX, buffer.Bytes()
+	return HEX, hex
 }
 
-func (tkn *Tokenizer) scanBitLiteral() (int, []byte) {
-	buffer := &bytes2.Buffer{}
-	tkn.scanMantissa(2, buffer)
-	if tkn.lastChar != '\'' {
-		return LEX_ERROR, buffer.Bytes()
+// scanBitLiteral scans a binary numeric literal; assumes b' or B' has already been scanned
+func (tkn *Tokenizer) scanBitLiteral() (int, string) {
+	start := tkn.Pos
+	tkn.scanMantissa(2)
+	bit := tkn.buf[start:tkn.Pos]
+	if tkn.cur() != '\'' {
+		return LEX_ERROR, bit
 	}
-	tkn.next()
-	return BIT_LITERAL, buffer.Bytes()
+	tkn.skip(1)
+	return BIT_LITERAL, bit
 }
 
-func (tkn *Tokenizer) scanLiteralIdentifier() (int, []byte) {
-	buffer := &bytes2.Buffer{}
-	backTickSeen := false
+// scanLiteralIdentifierSlow scans an identifier surrounded by backticks which may
+// contain escape sequences instead of it. This method is only called from
+// scanLiteralIdentifier once the first escape sequence is found in the identifier.
+// The provided `buf` contains the contents of the identifier that have been scanned
+// so far.
+func (tkn *Tokenizer) scanLiteralIdentifierSlow(buf *strings.Builder) (int, string) {
+	backTickSeen := true
 	for {
 		if backTickSeen {
-			if tkn.lastChar != '`' {
+			if tkn.cur() != '`' {
 				break
 			}
 			backTickSeen = false
-			buffer.WriteByte('`')
-			tkn.next()
+			buf.WriteByte('`')
+			tkn.skip(1)
 			continue
 		}
 		// The previous char was not a backtick.
-		switch tkn.lastChar {
+		switch tkn.cur() {
 		case '`':
 			backTickSeen = true
 		case eofChar:
 			// Premature EOF.
-			return LEX_ERROR, buffer.Bytes()
+			return LEX_ERROR, buf.String()
 		default:
-			buffer.WriteByte(byte(tkn.lastChar))
+			buf.WriteByte(byte(tkn.cur()))
+			// keep scanning
 		}
-		tkn.next()
+		tkn.skip(1)
 	}
-	if buffer.Len() == 0 {
-		return LEX_ERROR, buffer.Bytes()
-	}
-	return ID, buffer.Bytes()
+	return ID, buf.String()
 }
 
-func (tkn *Tokenizer) scanBindVar() (int, []byte) {
-	buffer := &bytes2.Buffer{}
-	buffer.WriteByte(byte(tkn.lastChar))
+// scanLiteralIdentifier scans an identifier enclosed by backticks. If the identifier
+// is a simple literal, it'll be returned as a slice of the input buffer. If the identifier
+// contains escape sequences, this function will fall back to scanLiteralIdentifierSlow
+func (tkn *Tokenizer) scanLiteralIdentifier() (int, string) {
+	start := tkn.Pos
+	for {
+		switch tkn.cur() {
+		case '`':
+			if tkn.peek(1) != '`' {
+				if tkn.Pos == start {
+					return LEX_ERROR, ""
+				}
+				tkn.skip(1)
+				return ID, tkn.buf[start : tkn.Pos-1]
+			}
+
+			var buf strings.Builder
+			buf.WriteString(tkn.buf[start:tkn.Pos])
+			tkn.skip(1)
+			return tkn.scanLiteralIdentifierSlow(&buf)
+		case eofChar:
+			// Premature EOF.
+			return LEX_ERROR, tkn.buf[start:tkn.Pos]
+		default:
+			tkn.skip(1)
+		}
+	}
+}
+
+// scanBindVar scans a bind variable; assumes a ':' has been scanned right before
+func (tkn *Tokenizer) scanBindVar() (int, string) {
+	start := tkn.Pos
 	token := VALUE_ARG
-	tkn.next()
-	if tkn.lastChar == ':' {
+
+	tkn.skip(1)
+	if tkn.cur() == ':' {
 		token = LIST_ARG
-		buffer.WriteByte(byte(tkn.lastChar))
-		tkn.next()
+		tkn.skip(1)
 	}
-	if !isLetter(tkn.lastChar) {
-		return LEX_ERROR, buffer.Bytes()
+	if !isLetter(tkn.cur()) {
+		return LEX_ERROR, tkn.buf[start:tkn.Pos]
 	}
-	for isLetter(tkn.lastChar) || isDigit(tkn.lastChar) || tkn.lastChar == '.' {
-		buffer.WriteByte(byte(tkn.lastChar))
-		tkn.next()
+	for {
+		ch := tkn.cur()
+		if !isLetter(ch) && !isDigit(ch) && ch != '.' {
+			break
+		}
+		tkn.skip(1)
 	}
-	return token, buffer.Bytes()
+	return token, tkn.buf[start:tkn.Pos]
 }
 
-func (tkn *Tokenizer) scanMantissa(base int, buffer *bytes2.Buffer) {
-	for digitVal(tkn.lastChar) < base {
-		tkn.consumeNext(buffer)
+// scanMantissa scans a sequence of numeric characters with the same base.
+// This is a helper function only called from the numeric scanners
+func (tkn *Tokenizer) scanMantissa(base int) {
+	for digitVal(tkn.cur()) < base {
+		tkn.skip(1)
 	}
 }
 
-func (tkn *Tokenizer) scanNumber(seenDecimalPoint bool) (int, []byte) {
+// scanNumber scans any SQL numeric literal, either floating point or integer
+func (tkn *Tokenizer) scanNumber() (int, string) {
+	start := tkn.Pos
 	token := INTEGRAL
-	buffer := &bytes2.Buffer{}
-	if seenDecimalPoint {
+
+	if tkn.cur() == '.' {
 		token = FLOAT
-		buffer.WriteByte('.')
-		tkn.scanMantissa(10, buffer)
+		tkn.skip(1)
+		tkn.scanMantissa(10)
 		goto exponent
 	}
 
 	// 0x construct.
-	if tkn.lastChar == '0' {
-		tkn.consumeNext(buffer)
-		if tkn.lastChar == 'x' || tkn.lastChar == 'X' {
+	if tkn.cur() == '0' {
+		tkn.skip(1)
+		if tkn.cur() == 'x' || tkn.cur() == 'X' {
 			token = HEXNUM
-			tkn.consumeNext(buffer)
-			tkn.scanMantissa(16, buffer)
+			tkn.skip(1)
+			tkn.scanMantissa(16)
 			goto exit
 		}
 	}
 
-	tkn.scanMantissa(10, buffer)
+	tkn.scanMantissa(10)
 
-	if tkn.lastChar == '.' {
+	if tkn.cur() == '.' {
 		token = FLOAT
-		tkn.consumeNext(buffer)
-		tkn.scanMantissa(10, buffer)
+		tkn.skip(1)
+		tkn.scanMantissa(10)
 	}
 
 exponent:
-	if tkn.lastChar == 'e' || tkn.lastChar == 'E' {
+	if tkn.cur() == 'e' || tkn.cur() == 'E' {
 		token = FLOAT
-		tkn.consumeNext(buffer)
-		if tkn.lastChar == '+' || tkn.lastChar == '-' {
-			tkn.consumeNext(buffer)
+		tkn.skip(1)
+		if tkn.cur() == '+' || tkn.cur() == '-' {
+			tkn.skip(1)
 		}
-		tkn.scanMantissa(10, buffer)
+		tkn.scanMantissa(10)
 	}
 
 exit:
 	// A letter cannot immediately follow a number.
-	if isLetter(tkn.lastChar) {
-		return LEX_ERROR, buffer.Bytes()
+	if isLetter(tkn.cur()) {
+		return LEX_ERROR, tkn.buf[start:tkn.Pos]
 	}
 
-	return token, buffer.Bytes()
+	return token, tkn.buf[start:tkn.Pos]
 }
 
-func (tkn *Tokenizer) scanString(delim uint16, typ int) (int, []byte) {
-	var buffer bytes2.Buffer
+// scanString scans a string surrounded by the given `delim`, which can be
+// either single or double quotes. Assumes that the given delimiter has just
+// been scanned. If the skin contains any escape sequences, this function
+// will fall back to scanStringSlow
+func (tkn *Tokenizer) scanString(delim uint16, typ int) (int, string) {
+	start := tkn.Pos
+
 	for {
-		ch := tkn.lastChar
+		switch tkn.cur() {
+		case delim:
+			if tkn.peek(1) != delim {
+				tkn.skip(1)
+				return typ, tkn.buf[start : tkn.Pos-1]
+			}
+			fallthrough
+
+		case '\\':
+			var buffer strings.Builder
+			buffer.WriteString(tkn.buf[start:tkn.Pos])
+			return tkn.scanStringSlow(&buffer, delim, typ)
+
+		case eofChar:
+			return LEX_ERROR, tkn.buf[start:tkn.Pos]
+		}
+
+		tkn.skip(1)
+	}
+}
+
+// scanString scans a string surrounded by the given `delim` and containing escape
+// sequencse. The given `buffer` contains the contents of the string that have
+// been scanned so far.
+func (tkn *Tokenizer) scanStringSlow(buffer *strings.Builder, delim uint16, typ int) (int, string) {
+	for {
+		ch := tkn.cur()
 		if ch == eofChar {
 			// Unterminated string.
-			return LEX_ERROR, buffer.Bytes()
+			return LEX_ERROR, buffer.String()
 		}
 
 		if ch != delim && ch != '\\' {
-			buffer.WriteByte(byte(ch))
-
 			// Scan ahead to the next interesting character.
-			start := tkn.bufPos
-			for ; tkn.bufPos < tkn.bufSize; tkn.bufPos++ {
-				ch = uint16(tkn.buf[tkn.bufPos])
+			start := tkn.Pos
+			for ; tkn.Pos < len(tkn.buf); tkn.Pos++ {
+				ch = uint16(tkn.buf[tkn.Pos])
 				if ch == delim || ch == '\\' {
 					break
 				}
 			}
 
-			buffer.Write(tkn.buf[start:tkn.bufPos])
-			tkn.Position += (tkn.bufPos - start)
-
-			if tkn.bufPos >= tkn.bufSize {
+			buffer.WriteString(tkn.buf[start:tkn.Pos])
+			if tkn.Pos >= len(tkn.buf) {
 				// Reached the end of the buffer without finding a delim or
 				// escape character.
-				tkn.next()
+				tkn.skip(1)
 				continue
 			}
-
-			tkn.bufPos++
-			tkn.Position++
 		}
-		tkn.next() // Read one past the delim or escape character.
+		tkn.skip(1) // Read one past the delim or escape character.
 
 		if ch == '\\' {
-			if tkn.lastChar == eofChar {
+			if tkn.cur() == eofChar {
 				// String terminates mid escape character.
-				return LEX_ERROR, buffer.Bytes()
+				return LEX_ERROR, buffer.String()
 			}
-			if decodedChar := sqltypes.SQLDecodeMap[byte(tkn.lastChar)]; decodedChar == sqltypes.DontEscape {
-				ch = tkn.lastChar
+			if decodedChar := sqltypes.SQLDecodeMap[byte(tkn.cur())]; decodedChar == sqltypes.DontEscape {
+				ch = tkn.cur()
 			} else {
 				ch = uint16(decodedChar)
 			}
-
-		} else if ch == delim && tkn.lastChar != delim {
+		} else if ch == delim && tkn.cur() != delim {
 			// Correctly terminated string, which is not a double delim.
 			break
 		}
 
 		buffer.WriteByte(byte(ch))
-		tkn.next()
+		tkn.skip(1)
 	}
 
-	return typ, buffer.Bytes()
+	return typ, buffer.String()
 }
 
-func (tkn *Tokenizer) scanCommentType1(prefix string) (int, []byte) {
-	buffer := &bytes2.Buffer{}
-	buffer.WriteString(prefix)
-	for tkn.lastChar != eofChar {
-		if tkn.lastChar == '\n' {
-			tkn.consumeNext(buffer)
+// scanCommentType1 scans a SQL line-comment, which is applied until the end
+// of the line. The given prefix length varies based on whether the comment
+// is started with '//', '--' or '#'.
+func (tkn *Tokenizer) scanCommentType1(prefixLen int) (int, string) {
+	start := tkn.Pos - prefixLen
+	for tkn.cur() != eofChar {
+		if tkn.cur() == '\n' {
+			tkn.skip(1)
 			break
 		}
-		tkn.consumeNext(buffer)
+		tkn.skip(1)
 	}
-	return COMMENT, buffer.Bytes()
+	return COMMENT, tkn.buf[start:tkn.Pos]
 }
 
-func (tkn *Tokenizer) scanCommentType2() (int, []byte) {
-	buffer := &bytes2.Buffer{}
-	buffer.WriteString("/*")
+// scanCommentType2 scans a '/*' delimited comment; assumes the opening
+// prefix has already been scanned
+func (tkn *Tokenizer) scanCommentType2() (int, string) {
+	start := tkn.Pos - 2
 	for {
-		if tkn.lastChar == '*' {
-			tkn.consumeNext(buffer)
-			if tkn.lastChar == '/' {
-				tkn.consumeNext(buffer)
+		if tkn.cur() == '*' {
+			tkn.skip(1)
+			if tkn.cur() == '/' {
+				tkn.skip(1)
 				break
 			}
 			continue
 		}
-		if tkn.lastChar == eofChar {
-			return LEX_ERROR, buffer.Bytes()
+		if tkn.cur() == eofChar {
+			return LEX_ERROR, tkn.buf[start:tkn.Pos]
 		}
-		tkn.consumeNext(buffer)
+		tkn.skip(1)
 	}
-	return COMMENT, buffer.Bytes()
+	return COMMENT, tkn.buf[start:tkn.Pos]
 }
 
-func (tkn *Tokenizer) scanMySQLSpecificComment() (int, []byte) {
-	buffer := &bytes2.Buffer{}
-	buffer.WriteString("/*!")
-	tkn.next()
+// scanMySQLSpecificComment scans a MySQL comment pragma, which always starts with '//*`
+func (tkn *Tokenizer) scanMySQLSpecificComment() (int, string) {
+	start := tkn.Pos - 3
 	for {
-		if tkn.lastChar == '*' {
-			tkn.consumeNext(buffer)
-			if tkn.lastChar == '/' {
-				tkn.consumeNext(buffer)
+		if tkn.cur() == '*' {
+			tkn.skip(1)
+			if tkn.cur() == '/' {
+				tkn.skip(1)
 				break
 			}
 			continue
 		}
-		if tkn.lastChar == eofChar {
-			return LEX_ERROR, buffer.Bytes()
+		if tkn.cur() == eofChar {
+			return LEX_ERROR, tkn.buf[start:tkn.Pos]
 		}
-		tkn.consumeNext(buffer)
+		tkn.skip(1)
 	}
-	_, sql := ExtractMysqlComment(buffer.String())
-	tkn.specialComment = NewStringTokenizer(sql)
+
+	commentVersion, sql := ExtractMysqlComment(tkn.buf[start:tkn.Pos])
+
+	if MySQLVersion >= commentVersion {
+		// Only add the special comment to the tokenizer if the version of MySQL is higher or equal to the comment version
+		tkn.specialComment = NewStringTokenizer(sql)
+	}
+
 	return tkn.Scan()
 }
 
-func (tkn *Tokenizer) consumeNext(buffer *bytes2.Buffer) {
-	if tkn.lastChar == eofChar {
-		// This should never happen.
-		panic("unexpected EOF")
-	}
-	buffer.WriteByte(byte(tkn.lastChar))
-	tkn.next()
+func (tkn *Tokenizer) cur() uint16 {
+	return tkn.peek(0)
 }
 
-func (tkn *Tokenizer) next() {
-	if tkn.bufPos >= tkn.bufSize && tkn.InStream != nil {
-		// Try and refill the buffer
-		var err error
-		tkn.bufPos = 0
-		if tkn.bufSize, err = tkn.InStream.Read(tkn.buf); err != io.EOF && err != nil {
-			tkn.LastError = err
-		}
-	}
+func (tkn *Tokenizer) skip(dist int) {
+	tkn.Pos += dist
+}
 
-	if tkn.bufPos >= tkn.bufSize {
-		if tkn.lastChar != eofChar {
-			tkn.Position++
-			tkn.lastChar = eofChar
-		}
-	} else {
-		tkn.Position++
-		tkn.lastChar = uint16(tkn.buf[tkn.bufPos])
-		tkn.bufPos++
+func (tkn *Tokenizer) peek(dist int) uint16 {
+	if tkn.Pos+dist >= len(tkn.buf) {
+		return eofChar
 	}
+	return uint16(tkn.buf[tkn.Pos+dist])
 }
 
 // reset clears any internal state.

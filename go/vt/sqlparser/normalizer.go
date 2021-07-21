@@ -24,6 +24,9 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
+// BindVars is a set of reserved bind variables from a SQL statement
+type BindVars map[string]struct{}
+
 // Normalize changes the statement to use bind values, and
 // updates the bind vars to those values. The supplied prefix
 // is used to generate the bind var names. The function ensures
@@ -31,9 +34,10 @@ import (
 // Within Select constructs, bind vars are deduped. This allows
 // us to identify vindex equality. Otherwise, every value is
 // treated as distinct.
-func Normalize(stmt Statement, bindVars map[string]*querypb.BindVariable, prefix string) {
-	nz := newNormalizer(stmt, bindVars, prefix)
-	Rewrite(stmt, nz.WalkStatement, nil)
+func Normalize(stmt Statement, known BindVars, bindVars map[string]*querypb.BindVariable, prefix string) error {
+	nz := newNormalizer(known, bindVars, prefix)
+	_ = Rewrite(stmt, nz.WalkStatement, nil)
+	return nz.err
 }
 
 type normalizer struct {
@@ -42,13 +46,14 @@ type normalizer struct {
 	reserved map[string]struct{}
 	counter  int
 	vals     map[string]string
+	err      error
 }
 
-func newNormalizer(stmt Statement, bindVars map[string]*querypb.BindVariable, prefix string) *normalizer {
+func newNormalizer(reserved map[string]struct{}, bindVars map[string]*querypb.BindVariable, prefix string) *normalizer {
 	return &normalizer{
 		bindVars: bindVars,
 		prefix:   prefix,
-		reserved: GetBindvars(stmt),
+		reserved: reserved,
 		counter:  1,
 		vals:     make(map[string]string),
 	}
@@ -63,7 +68,7 @@ func (nz *normalizer) WalkStatement(cursor *Cursor) bool {
 	case *Set, *Show, *Begin, *Commit, *Rollback, *Savepoint, *SetTransaction, DDLStatement, *SRollback, *Release, *OtherAdmin, *OtherRead:
 		return false
 	case *Select:
-		Rewrite(node, nz.WalkSelect, nil)
+		_ = Rewrite(node, nz.WalkSelect, nil)
 		// Don't continue
 		return false
 	case *Literal:
@@ -77,7 +82,7 @@ func (nz *normalizer) WalkStatement(cursor *Cursor) bool {
 	case *ConvertType: // we should not rewrite the type description
 		return false
 	}
-	return true
+	return nz.err == nil // only continue if we haven't found any errors
 }
 
 // WalkSelect normalizes the AST in Select mode.
@@ -98,7 +103,7 @@ func (nz *normalizer) WalkSelect(cursor *Cursor) bool {
 		// we should not rewrite the type description
 		return false
 	}
-	return true
+	return nz.err == nil // only continue if we haven't found any errors
 }
 
 func (nz *normalizer) convertLiteralDedup(node *Literal, cursor *Cursor) {
@@ -123,9 +128,9 @@ func (nz *normalizer) convertLiteralDedup(node *Literal, cursor *Cursor) {
 		// Prefixing strings with "'" ensures that a string
 		// and number that have the same representation don't
 		// collide.
-		key = "'" + string(node.Val)
+		key = "'" + node.Val
 	} else {
-		key = string(node.Val)
+		key = node.Val
 	}
 	bvname, ok := nz.vals[key]
 	if !ok {
@@ -136,7 +141,7 @@ func (nz *normalizer) convertLiteralDedup(node *Literal, cursor *Cursor) {
 	}
 
 	// Modify the AST node to a bindvar.
-	cursor.Replace(NewArgument([]byte(":" + bvname)))
+	cursor.Replace(NewArgument(":" + bvname))
 }
 
 // convertLiteral converts an Literal without the dedup.
@@ -149,7 +154,7 @@ func (nz *normalizer) convertLiteral(node *Literal, cursor *Cursor) {
 	bvname := nz.newName()
 	nz.bindVars[bvname] = bval
 
-	cursor.Replace(NewArgument([]byte(":" + bvname)))
+	cursor.Replace(NewArgument(":" + bvname))
 }
 
 // convertComparison attempts to convert IN clauses to
@@ -192,11 +197,11 @@ func (nz *normalizer) sqlToBindvar(node SQLNode) *querypb.BindVariable {
 		var err error
 		switch node.Type {
 		case StrVal:
-			v, err = sqltypes.NewValue(sqltypes.VarBinary, node.Val)
+			v, err = sqltypes.NewValue(sqltypes.VarBinary, node.Bytes())
 		case IntVal:
-			v, err = sqltypes.NewValue(sqltypes.Int64, node.Val)
+			v, err = sqltypes.NewValue(sqltypes.Int64, node.Bytes())
 		case FloatVal:
-			v, err = sqltypes.NewValue(sqltypes.Float64, node.Val)
+			v, err = sqltypes.NewValue(sqltypes.Float64, node.Bytes())
 		default:
 			return nil
 		}
@@ -220,8 +225,6 @@ func (nz *normalizer) newName() string {
 }
 
 // GetBindvars returns a map of the bind vars referenced in the statement.
-// TODO(sougou); This function gets called again from vtgate/planbuilder.
-// Ideally, this should be done only once.
 func GetBindvars(stmt Statement) map[string]struct{} {
 	bindvars := make(map[string]struct{})
 	_ = Walk(func(node SQLNode) (kontinue bool, err error) {

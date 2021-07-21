@@ -31,12 +31,10 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/discovery"
-	"vitess.io/vitess/go/vt/topo"
-	"vitess.io/vitess/go/vt/topotools"
-
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/topo"
 )
 
 func TestTabletGatewayExecute(t *testing.T) {
@@ -202,7 +200,7 @@ func testTabletGatewayGeneric(t *testing.T, f func(tg *TabletGateway, target *qu
 	tg := NewTabletGateway(context.Background(), hc, nil, "cell")
 
 	// no tablet
-	want := []string{"target: ks.0.replica", "no valid tablet"}
+	want := []string{"target: ks.0.replica", `no healthy tablet available for 'keyspace:"ks" shard:"0" tablet_type:REPLICA`}
 	err := f(tg, target)
 	verifyShardErrors(t, err, want, vtrpcpb.Code_UNAVAILABLE)
 
@@ -224,14 +222,9 @@ func testTabletGatewayGeneric(t *testing.T, f func(tg *TabletGateway, target *qu
 	sc2 := hc.AddTestTablet("cell", host, port+1, keyspace, shard, tabletType, true, 10, nil)
 	sc1.MustFailCodes[vtrpcpb.Code_FAILED_PRECONDITION] = 1
 	sc2.MustFailCodes[vtrpcpb.Code_FAILED_PRECONDITION] = 1
-	ep1 := sc1.Tablet()
-	ep2 := sc2.Tablet()
 
 	err = f(tg, target)
 	verifyContainsError(t, err, "target: ks.0.replica", vtrpcpb.Code_FAILED_PRECONDITION)
-	verifyShardErrorEither(t, err,
-		fmt.Sprintf(`used tablet: %s`, topotools.TabletIdent(ep1)),
-		fmt.Sprintf(`used tablet: %s`, topotools.TabletIdent(ep2)))
 
 	// fatal error
 	hc.Reset()
@@ -239,21 +232,15 @@ func testTabletGatewayGeneric(t *testing.T, f func(tg *TabletGateway, target *qu
 	sc2 = hc.AddTestTablet("cell", host, port+1, keyspace, shard, tabletType, true, 10, nil)
 	sc1.MustFailCodes[vtrpcpb.Code_FAILED_PRECONDITION] = 1
 	sc2.MustFailCodes[vtrpcpb.Code_FAILED_PRECONDITION] = 1
-	ep1 = sc1.Tablet()
-	ep2 = sc2.Tablet()
 	err = f(tg, target)
 	verifyContainsError(t, err, "target: ks.0.replica", vtrpcpb.Code_FAILED_PRECONDITION)
-	verifyShardErrorEither(t, err,
-		fmt.Sprintf(`used tablet: %s`, topotools.TabletIdent(ep1)),
-		fmt.Sprintf(`used tablet: %s`, topotools.TabletIdent(ep2)))
 
 	// server error - no retry
 	hc.Reset()
 	sc1 = hc.AddTestTablet("cell", host, port, keyspace, shard, tabletType, true, 10, nil)
 	sc1.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
-	ep1 = sc1.Tablet()
 	err = f(tg, target)
-	verifyContainsError(t, err, fmt.Sprintf(`used tablet: %s`, topotools.TabletIdent(ep1)), vtrpcpb.Code_INVALID_ARGUMENT)
+	assert.Equal(t, vtrpcpb.Code_INVALID_ARGUMENT, vterrors.Code(err))
 
 	// no failure
 	hc.Reset()
@@ -284,24 +271,16 @@ func testTabletGatewayTransact(t *testing.T, f func(tg *TabletGateway, target *q
 	sc2 := hc.AddTestTablet("cell", host, port+1, keyspace, shard, tabletType, true, 10, nil)
 	sc1.MustFailCodes[vtrpcpb.Code_FAILED_PRECONDITION] = 1
 	sc2.MustFailCodes[vtrpcpb.Code_FAILED_PRECONDITION] = 1
-	ep1 := sc1.Tablet()
-	ep2 := sc2.Tablet()
 
 	err := f(tg, target)
 	verifyContainsError(t, err, "target: ks.0.master", vtrpcpb.Code_FAILED_PRECONDITION)
-	format := `used tablet: %s`
-	verifyShardErrorEither(t, err,
-		fmt.Sprintf(format, topotools.TabletIdent(ep1)),
-		fmt.Sprintf(format, topotools.TabletIdent(ep2)))
 
 	// server error - no retry
 	hc.Reset()
 	sc1 = hc.AddTestTablet("cell", host, port, keyspace, shard, tabletType, true, 10, nil)
 	sc1.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
-	ep1 = sc1.Tablet()
 	err = f(tg, target)
 	verifyContainsError(t, err, "target: ks.0.master", vtrpcpb.Code_INVALID_ARGUMENT)
-	verifyContainsError(t, err, fmt.Sprintf(format, topotools.TabletIdent(ep1)), vtrpcpb.Code_INVALID_ARGUMENT)
 }
 
 func verifyContainsError(t *testing.T, err error, wantErr string, wantCode vtrpcpb.Code) {
@@ -311,13 +290,6 @@ func verifyContainsError(t *testing.T, err error, wantErr string, wantCode vtrpc
 	}
 	if code := vterrors.Code(err); code != wantCode {
 		assert.Failf(t, "", "wanted error code: %v, got: %v", wantCode, code)
-	}
-}
-
-func verifyShardErrorEither(t *testing.T, err error, a, b string) {
-	require.Error(t, err)
-	if !strings.Contains(err.Error(), a) && !strings.Contains(err.Error(), b) {
-		assert.Failf(t, "", "wanted error to contain: %v or %v\n, got error: [[%v]]", a, b, err)
 	}
 }
 

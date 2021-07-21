@@ -25,7 +25,6 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
-	"vitess.io/vitess/go/vt/vterrors"
 )
 
 var (
@@ -71,7 +70,7 @@ func (*Numeric) Verify(_ VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool,
 		var keybytes [8]byte
 		num, err := evalengine.ToUint64(ids[i])
 		if err != nil {
-			return nil, vterrors.Wrap(err, "Numeric.Verify")
+			return nil, err
 		}
 		binary.BigEndian.PutUint64(keybytes[:], num)
 		out[i] = bytes.Equal(keybytes[:], ksids[i])

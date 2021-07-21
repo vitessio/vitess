@@ -1,0 +1,59 @@
+on:
+  schedule:
+    - cron:  '*/10 * * * *'
+
+jobs:
+  analyze:
+    if: github.repository == 'vitessio/vitess'
+    name: analyze_check_runs
+    runs-on: ubuntu-latest
+    steps:
+
+    - uses: actions/checkout@v2
+      with:
+        ref: metrics
+    - name: analyze check runs
+      run: |
+        FAILED_RUNS_JSON="/tmp/failed_runs.json"
+        FAILED_RUNS_CSV="/tmp/failed_runs.csv"
+        WORKFLOW_FAILURES_FILE=".metrics/workflow-failures"
+
+        # Get latest failed check runs
+        curl \
+          -H 'authorization: Bearer ${{ secrets.GITHUB_TOKEN }}' \
+          -H "Accept: application/vnd.github.v3+json" \
+          -H "Content-type: application/json" \
+          "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/runs?per_page=100&status=failure" \
+          > "$FAILED_RUNS_JSON"
+
+        # extract .created_at, .name, .html_url for each failed check run
+        cat "$FAILED_RUNS_JSON" |
+          jq -r '.workflow_runs[] | (.created_at + "," + .name + "," + .html_url)' > "$FAILED_RUNS_CSV"
+
+        # now combine back into $WORKFLOW_FAILURES_FILE,
+        # - skipping duplicates
+        # - limit file size to X last lines
+        # - encode with bas64
+        tmpfile="$(mktemp)"
+        cat $WORKFLOW_FAILURES_FILE $FAILED_RUNS_CSV | sort | uniq | tail -10000 | base64 -w 0 > $tmpfile
+        # sha of the file we're replacing:
+        sha="$(git hash-object ${WORKFLOW_FAILURES_FILE})"
+
+        json="
+          {
+            \"message\": \"automated merge of failed check runs\",
+            \"branch\": \"metrics\",
+            \"sha\": \"$sha\",
+            \"content\": \"$(cat $tmpfile)\"
+          }
+        "
+        json_tmpfile="$(mktemp)"
+        echo "$json" > $json_tmpfile
+
+        curl \
+          -X PUT \
+          -H 'authorization: Bearer ${{ secrets.GITHUB_TOKEN }}' \
+          -H "Accept: application/vnd.github.v3+json" \
+          -H "Content-type: application/json" \
+          "https://api.github.com/repos/${GITHUB_REPOSITORY}/contents/${WORKFLOW_FAILURES_FILE}" \
+          -d "@${json_tmpfile}"

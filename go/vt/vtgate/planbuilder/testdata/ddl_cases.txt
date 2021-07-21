@@ -45,7 +45,7 @@
 
 # simple create table with table qualifier that does not exists
 "create table a.b(id int)"
-"no keyspace with name [a] found"
+"Unknown database 'a' in vschema"
 
 #Alter table
 "alter table a ADD id int"
@@ -73,7 +73,7 @@
       "Name": "user",
       "Sharded": true
     },
-    "Query": "alter table user add column id int"
+    "Query": "alter table `user` add column id int"
   }
 }
 
@@ -98,11 +98,21 @@
 
 # create db foo
 "create database foo"
-"create database not allowed"
+{
+  "QueryType": "DDL",
+  "Original": "create database foo",
+  "Instructions": {
+    "OperatorType": "CREATEDB",
+    "Keyspace": {
+      "Name": "foo",
+      "Sharded": false
+    }
+  }
+}
 
 # create db main
 "create database main"
-"cannot create database 'main'; database exists"
+"Can't create database 'main'; database exists"
 
 # create db if not exists main
 "create database if not exists main"
@@ -116,23 +126,43 @@
 
 # alter db foo
 "alter database foo collate utf8"
-"cannot alter database 'foo'; database does not exists"
+"Can't alter database 'foo'; unknown database"
 
 # alter db main
 "alter database main collate utf8"
-"alter database not allowed"
+"alter database is not supported"
 
 # drop db foo
 "drop database foo"
-"cannot drop database 'foo'; database does not exists"
+"Can't drop database 'foo'; database doesn't exists"
 
 # drop db main
 "drop database main"
-"drop database not allowed"
+{
+  "QueryType": "DDL",
+  "Original": "drop database main",
+  "Instructions": {
+    "OperatorType": "DROPDB",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    }
+  }
+}
 
 # drop db if exists main
 "drop database if exists main"
-"drop database not allowed"
+{
+  "QueryType": "DDL",
+  "Original": "drop database if exists main",
+  "Instructions": {
+    "OperatorType": "DROPDB",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    }
+  }
+}
 
 # drop db if exists foo
 "drop schema if exists foo"
@@ -155,7 +185,7 @@
       "Name": "user",
       "Sharded": true
     },
-    "Query": "alter table user add index a (id)"
+    "Query": "alter table `user` add index a (id)"
   }
 }
 
@@ -260,7 +290,7 @@
       "Name": "user",
       "Sharded": true
     },
-    "Query": "alter view user_extra as select * from user"
+    "Query": "alter view user_extra as select * from `user`"
   }
 }
 
@@ -291,5 +321,67 @@
       "Sharded": false
     },
     "Query": "drop view a"
+  }
+}
+
+# Truncate table with qualifier
+"truncate user.user_extra"
+{
+  "QueryType": "DDL",
+  "Original": "truncate user.user_extra",
+  "Instructions": {
+    "OperatorType": "DDL",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "truncate table user_extra"
+  }
+}
+
+# Rename table
+"rename table a to main.b"
+{
+  "QueryType": "DDL",
+  "Original": "rename table a to main.b",
+  "Instructions": {
+    "OperatorType": "DDL",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "rename table a to b"
+  }
+}
+
+# CREATE temp TABLE
+"create temporary table a(id int)"
+{
+  "QueryType": "DDL",
+  "Original": "create temporary table a(id int)",
+  "Instructions": {
+    "OperatorType": "DDL",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "create temporary table a (\n\tid int\n)",
+    "TempTable": true
+  }
+}
+
+# DROP temp TABLE
+"drop temporary table a"
+{
+  "QueryType": "DDL",
+  "Original": "drop temporary table a",
+  "Instructions": {
+    "OperatorType": "DDL",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "drop temporary table a",
+    "TempTable": true
   }
 }

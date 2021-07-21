@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"net/http"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"context"
@@ -55,43 +56,37 @@ import (
 // and track stats.
 type TabletPlan struct {
 	*planbuilder.Plan
+	Original   string
 	Fields     []*querypb.Field
 	Rules      *rules.Rules
 	Authorized []*tableacl.ACLResult
 
-	mu         sync.Mutex
-	QueryCount int64
-	Time       time.Duration
-	MysqlTime  time.Duration
-	RowCount   int64
-	ErrorCount int64
-}
-
-// Size allows TabletPlan to be in cache.LRUCache.
-func (*TabletPlan) Size() int {
-	return 1
+	QueryCount   uint64
+	Time         uint64
+	MysqlTime    uint64
+	RowsAffected uint64
+	RowsReturned uint64
+	ErrorCount   uint64
 }
 
 // AddStats updates the stats for the current TabletPlan.
-func (ep *TabletPlan) AddStats(queryCount int64, duration, mysqlTime time.Duration, rowCount, errorCount int64) {
-	ep.mu.Lock()
-	ep.QueryCount += queryCount
-	ep.Time += duration
-	ep.MysqlTime += mysqlTime
-	ep.RowCount += rowCount
-	ep.ErrorCount += errorCount
-	ep.mu.Unlock()
+func (ep *TabletPlan) AddStats(queryCount uint64, duration, mysqlTime time.Duration, rowsAffected, rowsReturned, errorCount uint64) {
+	atomic.AddUint64(&ep.QueryCount, queryCount)
+	atomic.AddUint64(&ep.Time, uint64(duration))
+	atomic.AddUint64(&ep.MysqlTime, uint64(mysqlTime))
+	atomic.AddUint64(&ep.RowsAffected, rowsAffected)
+	atomic.AddUint64(&ep.RowsReturned, rowsReturned)
+	atomic.AddUint64(&ep.ErrorCount, errorCount)
 }
 
 // Stats returns the current stats of TabletPlan.
-func (ep *TabletPlan) Stats() (queryCount int64, duration, mysqlTime time.Duration, rowCount, errorCount int64) {
-	ep.mu.Lock()
-	queryCount = ep.QueryCount
-	duration = ep.Time
-	mysqlTime = ep.MysqlTime
-	rowCount = ep.RowCount
-	errorCount = ep.ErrorCount
-	ep.mu.Unlock()
+func (ep *TabletPlan) Stats() (queryCount uint64, duration, mysqlTime time.Duration, rowsAffected, rowsReturned, errorCount uint64) {
+	queryCount = atomic.LoadUint64(&ep.QueryCount)
+	duration = time.Duration(atomic.LoadUint64(&ep.Time))
+	mysqlTime = time.Duration(atomic.LoadUint64(&ep.MysqlTime))
+	rowsAffected = atomic.LoadUint64(&ep.RowsAffected)
+	rowsReturned = atomic.LoadUint64(&ep.RowsReturned)
+	errorCount = atomic.LoadUint64(&ep.ErrorCount)
 	return
 }
 
@@ -120,7 +115,7 @@ type QueryEngine struct {
 	// mu protects the following fields.
 	mu               sync.RWMutex
 	tables           map[string]*schema.Table
-	plans            *cache.LRUCache
+	plans            cache.Cache
 	queryRuleSources *rules.Map
 
 	// Pools
@@ -166,11 +161,17 @@ type QueryEngine struct {
 // You must call this only once.
 func NewQueryEngine(env tabletenv.Env, se *schema.Engine) *QueryEngine {
 	config := env.Config()
+	cacheCfg := &cache.Config{
+		MaxEntries:     int64(config.QueryCacheSize),
+		MaxMemoryUsage: config.QueryCacheMemory,
+		LFU:            config.QueryCacheLFU,
+	}
+
 	qe := &QueryEngine{
 		env:              env,
 		se:               se,
 		tables:           make(map[string]*schema.Table),
-		plans:            cache.NewLRUCache(int64(config.QueryCacheSize)),
+		plans:            cache.NewDefaultCacheImpl(cacheCfg),
 		queryRuleSources: rules.NewMap(),
 	}
 
@@ -215,13 +216,12 @@ func NewQueryEngine(env tabletenv.Env, se *schema.Engine) *QueryEngine {
 	env.Exporter().NewGaugeFunc("StreamBufferSize", "Query engine stream buffer size", qe.streamBufferSize.Get)
 	env.Exporter().NewCounterFunc("TableACLExemptCount", "Query engine table ACL exempt count", qe.tableaclExemptCount.Get)
 
-	env.Exporter().NewGaugeFunc("QueryCacheLength", "Query engine query cache length", qe.plans.Length)
-	env.Exporter().NewGaugeFunc("QueryCacheSize", "Query engine query cache size", qe.plans.Size)
-	env.Exporter().NewGaugeFunc("QueryCacheCapacity", "Query engine query cache capacity", qe.plans.Capacity)
+	env.Exporter().NewGaugeFunc("QueryCacheLength", "Query engine query cache length", func() int64 {
+		return int64(qe.plans.Len())
+	})
+	env.Exporter().NewGaugeFunc("QueryCacheSize", "Query engine query cache size", qe.plans.UsedCapacity)
+	env.Exporter().NewGaugeFunc("QueryCacheCapacity", "Query engine query cache capacity", qe.plans.MaxCapacity)
 	env.Exporter().NewCounterFunc("QueryCacheEvictions", "Query engine query cache evictions", qe.plans.Evictions)
-	env.Exporter().Publish("QueryCacheOldest", stats.StringFunc(func() string {
-		return fmt.Sprintf("%v", qe.plans.Oldest())
-	}))
 	qe.queryCounts = env.Exporter().NewCountersWithMultiLabels("QueryCounts", "query counts", []string{"Table", "Plan"})
 	qe.queryTimes = env.Exporter().NewCountersWithMultiLabels("QueryTimesNs", "query times in ns", []string{"Table", "Plan"})
 	qe.queryRowCounts = env.Exporter().NewCountersWithMultiLabels("QueryRowCounts", "query row counts", []string{"Table", "Plan"})
@@ -290,6 +290,7 @@ func (qe *QueryEngine) GetPlan(ctx context.Context, logStats *tabletenv.LogStats
 	defer span.Finish()
 
 	if plan := qe.getQuery(sql); plan != nil {
+		logStats.CachedPlan = true
 		return plan, nil
 	}
 
@@ -309,11 +310,11 @@ func (qe *QueryEngine) GetPlan(ctx context.Context, logStats *tabletenv.LogStats
 	if err != nil {
 		return nil, err
 	}
-	plan := &TabletPlan{Plan: splan}
+	plan := &TabletPlan{Plan: splan, Original: sql}
 	plan.Rules = qe.queryRuleSources.FilterByPlan(sql, plan.PlanID, plan.TableName().String())
 	plan.buildAuthorized()
 	if plan.PlanID.IsSelect() {
-		if qe.enableQueryPlanFieldCaching && plan.FieldQuery != nil {
+		if !skipQueryPlanCache && qe.enableQueryPlanFieldCaching && plan.FieldQuery != nil {
 			conn, err := qe.conns.Get(ctx)
 			if err != nil {
 				return nil, err
@@ -347,7 +348,7 @@ func (qe *QueryEngine) GetStreamPlan(sql string, isReservedConn bool) (*TabletPl
 	if err != nil {
 		return nil, err
 	}
-	plan := &TabletPlan{Plan: splan}
+	plan := &TabletPlan{Plan: splan, Original: sql}
 	plan.Rules = qe.queryRuleSources.FilterByPlan(sql, plan.PlanID, plan.TableName().String())
 	plan.buildAuthorized()
 	return plan, nil
@@ -403,14 +404,6 @@ func (qe *QueryEngine) getQuery(sql string) *TabletPlan {
 	return nil
 }
 
-// peekQuery fetches the plan without changing the LRU order.
-func (qe *QueryEngine) peekQuery(sql string) *TabletPlan {
-	if cacheResult, ok := qe.plans.Peek(sql); ok {
-		return cacheResult.(*TabletPlan)
-	}
-	return nil
-}
-
 // SetQueryPlanCacheCap sets the query plan cache capacity.
 func (qe *QueryEngine) SetQueryPlanCacheCap(size int) {
 	if size <= 0 {
@@ -421,7 +414,13 @@ func (qe *QueryEngine) SetQueryPlanCacheCap(size int) {
 
 // QueryPlanCacheCap returns the capacity of the query cache.
 func (qe *QueryEngine) QueryPlanCacheCap() int {
-	return int(qe.plans.Capacity())
+	return int(qe.plans.MaxCapacity())
+}
+
+// QueryPlanCacheLen returns the length (size in entries) of the query cache
+func (qe *QueryEngine) QueryPlanCacheLen() int {
+	qe.plans.Wait()
+	return qe.plans.Len()
 }
 
 // AddStats adds the given stats for the planName.tableName
@@ -435,14 +434,15 @@ func (qe *QueryEngine) AddStats(planName, tableName string, queryCount int64, du
 }
 
 type perQueryStats struct {
-	Query      string
-	Table      string
-	Plan       planbuilder.PlanType
-	QueryCount int64
-	Time       time.Duration
-	MysqlTime  time.Duration
-	RowCount   int64
-	ErrorCount int64
+	Query        string
+	Table        string
+	Plan         planbuilder.PlanType
+	QueryCount   uint64
+	Time         time.Duration
+	MysqlTime    time.Duration
+	RowsAffected uint64
+	RowsReturned uint64
+	ErrorCount   uint64
 }
 
 func (qe *QueryEngine) handleHTTPQueryPlans(response http.ResponseWriter, request *http.Request) {
@@ -450,20 +450,19 @@ func (qe *QueryEngine) handleHTTPQueryPlans(response http.ResponseWriter, reques
 		acl.SendError(response, err)
 		return
 	}
-	keys := qe.plans.Keys()
+
 	response.Header().Set("Content-Type", "text/plain")
-	response.Write([]byte(fmt.Sprintf("Length: %d\n", len(keys))))
-	for _, v := range keys {
-		response.Write([]byte(fmt.Sprintf("%#v\n", sqlparser.TruncateForUI(v))))
-		if plan := qe.peekQuery(v); plan != nil {
-			if b, err := json.MarshalIndent(plan.Plan, "", "  "); err != nil {
-				response.Write([]byte(err.Error()))
-			} else {
-				response.Write(b)
-			}
-			response.Write(([]byte)("\n\n"))
+	qe.plans.ForEach(func(value interface{}) bool {
+		plan := value.(*TabletPlan)
+		response.Write([]byte(fmt.Sprintf("%#v\n", sqlparser.TruncateForUI(plan.Original))))
+		if b, err := json.MarshalIndent(plan.Plan, "", "  "); err != nil {
+			response.Write([]byte(err.Error()))
+		} else {
+			response.Write(b)
 		}
-	}
+		response.Write(([]byte)("\n\n"))
+		return true
+	})
 }
 
 func (qe *QueryEngine) handleHTTPQueryStats(response http.ResponseWriter, request *http.Request) {
@@ -471,20 +470,20 @@ func (qe *QueryEngine) handleHTTPQueryStats(response http.ResponseWriter, reques
 		acl.SendError(response, err)
 		return
 	}
-	keys := qe.plans.Keys()
 	response.Header().Set("Content-Type", "application/json; charset=utf-8")
-	qstats := make([]perQueryStats, 0, len(keys))
-	for _, v := range keys {
-		if plan := qe.peekQuery(v); plan != nil {
-			var pqstats perQueryStats
-			pqstats.Query = unicoded(sqlparser.TruncateForUI(v))
-			pqstats.Table = plan.TableName().String()
-			pqstats.Plan = plan.PlanID
-			pqstats.QueryCount, pqstats.Time, pqstats.MysqlTime, pqstats.RowCount, pqstats.ErrorCount = plan.Stats()
+	var qstats []perQueryStats
+	qe.plans.ForEach(func(value interface{}) bool {
+		plan := value.(*TabletPlan)
 
-			qstats = append(qstats, pqstats)
-		}
-	}
+		var pqstats perQueryStats
+		pqstats.Query = unicoded(sqlparser.TruncateForUI(plan.Original))
+		pqstats.Table = plan.TableName().String()
+		pqstats.Plan = plan.PlanID
+		pqstats.QueryCount, pqstats.Time, pqstats.MysqlTime, pqstats.RowsAffected, pqstats.RowsReturned, pqstats.ErrorCount = plan.Stats()
+
+		qstats = append(qstats, pqstats)
+		return true
+	})
 	if b, err := json.MarshalIndent(qstats, "", "  "); err != nil {
 		response.Write([]byte(err.Error()))
 	} else {

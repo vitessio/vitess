@@ -2,7 +2,6 @@ package endtoend
 
 import (
 	"context"
-	"fmt"
 	"testing"
 
 	"github.com/google/uuid"
@@ -14,7 +13,7 @@ import (
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtctl"
-	"vitess.io/vitess/go/vt/vttablet/faketmclient"
+	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver/testutil"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 	"vitess.io/vitess/go/vt/wrangler"
 
@@ -22,29 +21,6 @@ import (
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
-
-type fakeTabletManagerClient struct {
-	tmclient.TabletManagerClient
-	schemas map[string]*tabletmanagerdatapb.SchemaDefinition
-}
-
-func newTMClient() *fakeTabletManagerClient {
-	return &fakeTabletManagerClient{
-		TabletManagerClient: faketmclient.NewFakeTabletManagerClient(),
-		schemas:             map[string]*tabletmanagerdatapb.SchemaDefinition{},
-	}
-}
-
-func (c *fakeTabletManagerClient) GetSchema(ctx context.Context, tablet *topodatapb.Tablet, tablets []string, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error) {
-	key := topoproto.TabletAliasString(tablet.Alias)
-
-	schema, ok := c.schemas[key]
-	if !ok {
-		return nil, fmt.Errorf("no schemas for %s", key)
-	}
-
-	return schema, nil
-}
 
 func TestGetSchema(t *testing.T) {
 	ctx := context.Background()
@@ -162,12 +138,26 @@ func TestGetSchema(t *testing.T) {
 		},
 	}
 
-	tmc := newTMClient()
-	tmc.schemas[topoproto.TabletAliasString(tablet.Alias)] = sd
+	tmc := testutil.TabletManagerClient{
+		GetSchemaResults: map[string]struct {
+			Schema *tabletmanagerdatapb.SchemaDefinition
+			Error  error
+		}{
+			topoproto.TabletAliasString(tablet.Alias): {
+				Schema: sd,
+				Error:  nil,
+			},
+		},
+	}
+
+	tmclient.RegisterTabletManagerClientFactory(t.Name(), func() tmclient.TabletManagerClient {
+		return &tmc
+	})
+	*tmclient.TabletManagerProtocol = t.Name()
 
 	logger := logutil.NewMemoryLogger()
 
-	err := vtctl.RunCommand(ctx, wrangler.New(logger, topo, tmc), []string{
+	err := vtctl.RunCommand(ctx, wrangler.New(logger, topo, &tmc), []string{
 		"GetSchema",
 		topoproto.TabletAliasString(tablet.Alias),
 	})
@@ -207,7 +197,7 @@ func TestGetSchema(t *testing.T) {
 		},
 	}
 
-	err = vtctl.RunCommand(ctx, wrangler.New(logger, topo, tmc), []string{
+	err = vtctl.RunCommand(ctx, wrangler.New(logger, topo, &tmc), []string{
 		"GetSchema",
 		"-table_sizes_only",
 		topoproto.TabletAliasString(tablet.Alias),
@@ -223,13 +213,4 @@ func TestGetSchema(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, sd, actual)
-}
-
-func init() {
-	// enforce we will use the right protocol (gRPC) (note the
-	// client is unused, but it is initialized, so it needs to exist)
-	*tmclient.TabletManagerProtocol = "grpc"
-	tmclient.RegisterTabletManagerClientFactory("grpc", func() tmclient.TabletManagerClient {
-		return nil
-	})
 }

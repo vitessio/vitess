@@ -39,7 +39,7 @@ import (
 // FakeQueryService implements a programmable fake for the query service
 // server side.
 type FakeQueryService struct {
-	t              *testing.T
+	t              testing.TB
 	TestingGateway bool
 
 	// these fields are used to simulate and synchronize on errors
@@ -740,7 +740,7 @@ func (f *FakeQueryService) Release(ctx context.Context, target *querypb.Target, 
 }
 
 // CreateFakeServer returns the fake server for the tests
-func CreateFakeServer(t *testing.T) *FakeQueryService {
+func CreateFakeServer(t testing.TB) *FakeQueryService {
 	return &FakeQueryService{
 		t: t,
 	}

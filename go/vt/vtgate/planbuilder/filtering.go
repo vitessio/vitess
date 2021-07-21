@@ -78,7 +78,7 @@ func planFilter(pb *primitiveBuilder, input logicalPlan, filter sqlparser.Expr, 
 		return nil, errors.New("unsupported: filtering on results of aggregates")
 	}
 
-	return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "%T.filtering: unreachable", input)
+	return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "[BUG] unreachable %T.filtering", input)
 }
 
 func filterVindexFunc(node *vindexFunc, filter sqlparser.Expr) (logicalPlan, error) {

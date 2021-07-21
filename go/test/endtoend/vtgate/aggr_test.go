@@ -40,3 +40,22 @@ func TestAggregateTypes(t *testing.T) {
 	assertMatches(t, conn, "select val1, count(distinct val2) k, count(*) from aggr_test group by val1 order by k desc, val1 limit 4", `[[VARCHAR("c") INT64(2) INT64(2)] [VARCHAR("a") INT64(1) INT64(2)] [VARCHAR("b") INT64(1) INT64(1)] [VARCHAR("e") INT64(1) INT64(2)]]`)
 	exec(t, conn, "delete from aggr_test")
 }
+
+func TestGroupBy(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.Nil(t, err)
+	defer conn.Close()
+	exec(t, conn, "insert into t3(id5, id6, id7) values(1,1,2), (2,2,4), (3,2,4), (4,1,2), (5,1,2), (6,3,6)")
+	// test ordering and group by int column
+	assertMatches(t, conn, "select id6, id7, count(*) k from t3 group by id6, id7 order by k", `[[INT64(3) INT64(6) INT64(1)] [INT64(2) INT64(4) INT64(2)] [INT64(1) INT64(2) INT64(3)]]`)
+
+	defer func() {
+		exec(t, conn, "set workload = oltp")
+		exec(t, conn, "delete from t3")
+	}()
+	// Test the same queries in streaming mode
+	exec(t, conn, "set workload = olap")
+	assertMatches(t, conn, "select id6, id7, count(*) k from t3 group by id6, id7 order by k", `[[INT64(3) INT64(6) INT64(1)] [INT64(2) INT64(4) INT64(2)] [INT64(1) INT64(2) INT64(3)]]`)
+}

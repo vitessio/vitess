@@ -21,6 +21,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 // logicalPlan defines the interface that a primitive must
@@ -48,6 +49,9 @@ type logicalPlan interface {
 	// the lhs nodes.
 	Wireup(lp logicalPlan, jt *jointab) error
 
+	// WireupV4 does the wire up work for the V4 planner
+	WireupV4(semTable *semantics.SemTable) error
+
 	// SupplyVar finds the common root between from and to. If it's
 	// the common root, it supplies the requested var to the rhs tree.
 	// If the primitive already has the column in its list, it should
@@ -65,15 +69,22 @@ type logicalPlan interface {
 	SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colNumber int)
 
 	// SupplyWeightString must supply a weight_string expression of the
-	// specified column.
+	// specified column. It returns an error if we cannot supply a weight column for it.
 	SupplyWeightString(colNumber int) (weightcolNumber int, err error)
 
 	// Primitive returns the underlying primitive.
 	// This function should only be called after Wireup is finished.
 	Primitive() engine.Primitive
 
+	// Inputs are the children of this plan
 	Inputs() []logicalPlan
+
+	// Rewrite replaces the inputs of this plan with the ones provided
 	Rewrite(inputs ...logicalPlan) error
+
+	// ContainsTables keeps track which query tables are being solved by this logical plan
+	// This is only applicable for plans that have been built with the V4 planner
+	ContainsTables() semantics.TableSet
 }
 
 //-------------------------------------------------------------------------
@@ -147,6 +158,10 @@ func (bc *logicalPlanCommon) Wireup(plan logicalPlan, jt *jointab) error {
 	return bc.input.Wireup(plan, jt)
 }
 
+func (bc *logicalPlanCommon) WireupV4(semTable *semantics.SemTable) error {
+	return bc.input.WireupV4(semTable)
+}
+
 func (bc *logicalPlanCommon) SupplyVar(from, to int, col *sqlparser.ColName, varname string) {
 	bc.input.SupplyVar(from, to, col, varname)
 }
@@ -171,6 +186,11 @@ func (bc *logicalPlanCommon) Rewrite(inputs ...logicalPlan) error {
 // Inputs implements the logicalPlan interface
 func (bc *logicalPlanCommon) Inputs() []logicalPlan {
 	return []logicalPlan{bc.input}
+}
+
+// Solves implements the logicalPlan interface
+func (bc *logicalPlanCommon) ContainsTables() semantics.TableSet {
+	return bc.input.ContainsTables()
 }
 
 //-------------------------------------------------------------------------

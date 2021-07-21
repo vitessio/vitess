@@ -28,7 +28,6 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
-	"vitess.io/vitess/go/vt/vterrors"
 )
 
 var (
@@ -94,7 +93,7 @@ func (vind *NumericStaticMap) Verify(_ VCursor, ids []sqltypes.Value, ksids [][]
 		var keybytes [8]byte
 		num, err := evalengine.ToUint64(ids[i])
 		if err != nil {
-			return nil, vterrors.Wrap(err, "NumericStaticMap.Verify")
+			return nil, err
 		}
 		lookupNum, ok := vind.lookup[num]
 		if ok {

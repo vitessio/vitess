@@ -112,6 +112,10 @@
               "type": "VARCHAR"
             },
             {
+              "name": "intcol",
+              "type": "INT16"
+            },
+            {
               "name": "textcol2",
               "type": "VARCHAR"
             }
@@ -304,6 +308,20 @@
         },
         "seq": {
           "type": "sequence"
+        }
+      }
+    },
+    "main_2": {
+      "tables": {
+        "unsharded_tab": {
+          "columns": [
+            {
+              "name": "predef1"
+            },
+            {
+              "name": "predef3"
+            }
+          ]
         }
       }
     }

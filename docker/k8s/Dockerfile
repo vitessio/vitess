@@ -42,6 +42,7 @@ COPY --from=base /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificat
 
 # Copy binaries
 COPY --from=base /vt/bin/mysqlctld /vt/bin/
+COPY --from=base /vt/bin/mysqlctl /vt/bin/
 COPY --from=base /vt/bin/vtctld /vt/bin/
 COPY --from=base /vt/bin/vtctl /vt/bin/
 COPY --from=base /vt/bin/vtctlclient /vt/bin/

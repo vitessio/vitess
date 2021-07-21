@@ -18,7 +18,9 @@ package planbuilder
 
 import (
 	"vitess.io/vitess/go/sqltypes"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
@@ -34,9 +36,15 @@ func (pb *primitiveBuilder) findSysInfoRoutingPredicates(expr sqlparser.Expr, ru
 	}
 
 	if isTableSchema {
-		rut.eroute.SysTableTableSchema = append(rut.eroute.SysTableTableSchema, out)
+		if rut.eroute.SysTableTableSchema != nil && !evalengine.AreExprEqual(rut.eroute.SysTableTableSchema, out) {
+			return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "two predicates for specifying the database are not supported")
+		}
+		rut.eroute.SysTableTableSchema = out
 	} else {
-		rut.eroute.SysTableTableName = append(rut.eroute.SysTableTableName, out)
+		if rut.eroute.SysTableTableName != nil && !evalengine.AreExprEqual(rut.eroute.SysTableTableName, out) {
+			return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "two predicates for table_name not supported")
+		}
+		rut.eroute.SysTableTableName = out
 	}
 
 	return nil
@@ -66,7 +74,7 @@ func isTableSchemaOrName(e sqlparser.Expr) (isTableSchema bool, isTableName bool
 }
 
 func isDbNameCol(col *sqlparser.ColName) bool {
-	return col.Name.EqualString("table_schema") || col.Name.EqualString("constraint_schema") || col.Name.EqualString("schema_name")
+	return col.Name.EqualString("table_schema") || col.Name.EqualString("constraint_schema") || col.Name.EqualString("schema_name") || col.Name.EqualString("routine_schema")
 }
 
 func isTableNameCol(col *sqlparser.ColName) bool {
@@ -94,7 +102,7 @@ func extractInfoSchemaRoutingPredicate(in sqlparser.Expr) (bool, evalengine.Expr
 				} else {
 					name += engine.BvTableName
 				}
-				replaceOther(sqlparser.NewArgument([]byte(name)))
+				replaceOther(sqlparser.NewArgument(name))
 				return isSchemaName, evalExpr, nil
 			}
 		}

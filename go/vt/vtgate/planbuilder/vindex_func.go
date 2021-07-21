@@ -17,7 +17,9 @@ limitations under the License.
 package planbuilder
 
 import (
-	"errors"
+	"fmt"
+
+	"vitess.io/vitess/go/vt/vtgate/semantics"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -92,7 +94,12 @@ func (vf *vindexFunc) ResultColumns() []*resultColumn {
 }
 
 // Wireup implements the logicalPlan interface
-func (vf *vindexFunc) Wireup(plan logicalPlan, jt *jointab) error {
+func (vf *vindexFunc) Wireup(logicalPlan, *jointab) error {
+	return nil
+}
+
+// Wireup2 implements the logicalPlan interface
+func (vf *vindexFunc) WireupV4(*semantics.SemTable) error {
 	return nil
 }
 
@@ -124,9 +131,19 @@ func (vf *vindexFunc) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colNu
 	return rc, len(vf.resultColumns) - 1
 }
 
+// UnsupportedSupplyWeightString represents the error where the supplying a weight string is not supported
+type UnsupportedSupplyWeightString struct {
+	Type string
+}
+
+// Error function implements the error interface
+func (err UnsupportedSupplyWeightString) Error() string {
+	return fmt.Sprintf("cannot do collation on %s", err.Type)
+}
+
 // SupplyWeightString implements the logicalPlan interface
 func (vf *vindexFunc) SupplyWeightString(colNumber int) (weightcolNumber int, err error) {
-	return 0, errors.New("cannot do collation on vindex function")
+	return 0, UnsupportedSupplyWeightString{Type: "vindex function"}
 }
 
 // Rewrite implements the logicalPlan interface
@@ -135,6 +152,11 @@ func (vf *vindexFunc) Rewrite(inputs ...logicalPlan) error {
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vindexFunc: wrong number of inputs")
 	}
 	return nil
+}
+
+// ContainsTables implements the logicalPlan interface
+func (vf *vindexFunc) ContainsTables() semantics.TableSet {
+	return 0
 }
 
 // Inputs implements the logicalPlan interface

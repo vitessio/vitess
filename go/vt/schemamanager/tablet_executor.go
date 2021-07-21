@@ -42,6 +42,7 @@ type TabletExecutor struct {
 	keyspace             string
 	waitReplicasTimeout  time.Duration
 	ddlStrategy          string
+	skipPreflight        bool
 }
 
 // NewTabletExecutor creates a new TabletExecutor instance
@@ -74,6 +75,11 @@ func (exec *TabletExecutor) SetDDLStrategy(ddlStrategy string) error {
 	}
 	exec.ddlStrategy = ddlStrategy
 	return nil
+}
+
+// SkipPreflight disables preflight checks
+func (exec *TabletExecutor) SkipPreflight() {
+	exec.skipPreflight = true
 }
 
 // Open opens a connection to the master for every shard.
@@ -212,6 +218,9 @@ func (exec *TabletExecutor) detectBigSchemaChanges(ctx context.Context, parsedDD
 }
 
 func (exec *TabletExecutor) preflightSchemaChanges(ctx context.Context, sqls []string) error {
+	if exec.skipPreflight {
+		return nil
+	}
 	_, err := exec.wr.TabletManagerClient().PreflightSchema(ctx, exec.tablets[0], sqls)
 	return err
 }

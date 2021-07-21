@@ -1,33 +1,44 @@
-* @sougou
-
+bootstrap.sh @deepthi
 /config/mycnf/ @askdba @shlomi-noach
 /docker/ @derekperkins @dkhenry
 /examples/compose @shlomi-noach
+/examples/demo @sougou
+/examples/legacy_local @deepthi
 /examples/local @rohit-nayak-ps
+/examples/operator @askdba
+/examples/region_sharding @deepthi
+/java/ @harshit-gangal
+/go/cache @vmg
 /go/cmd/vtadmin @ajm188 @doeg
 /go/cmd/vtctldclient @ajm188 @doeg
 /go/mysql @harshit-gangal @systay
+/go/protoutil @ajm188
 /go/test/endtoend/onlineddl @shlomi-noach
 /go/test/endtoend/orchestrator @deepthi @shlomi-noach
 /go/test/endtoend/vtgate @harshit-gangal @systay
 /go/vt/discovery @deepthi
 /go/vt/mysqlctl @deepthi
-/go/vt/proto/vtadmin @ajm188 @doeg
 /go/vt/orchestrator @deepthi @shlomi-noach
+/go/vt/proto/vtadmin @ajm188 @doeg
 /go/vt/schema @shlomi-noach
-/go/vt/sqlparser @harshit-gangal @systay
-/go/vt/vtadmin @ajm188 @doeg
+/go/vt/servenv @deepthi
+/go/vt/sqlparser @harshit-gangal @systay @GuptaManan100
+/go/vt/srvtopo @rafael
+/go/vt/topo @deepthi @rafael
+/go/vt/vtadmin @ajm188 @doeg @rohit-nayak-ps
 /go/vt/vtctl @deepthi
 /go/vt/vtctl/vtctl.go @ajm188 @doeg
 /go/vt/vtctl/grpcvtctldclient @ajm188 @doeg
 /go/vt/vtctl/grpcvtctldserver @ajm188 @doeg
 /go/vt/vtctl/vtctldclient @ajm188 @doeg
+/go/vt/vtctld @ajm188 @doeg @rohit-nayak-ps @deepthi
 /go/vt/vtgate @harshit-gangal @systay
 /go/vt/vttablet/tabletmanager @deepthi @shlomi-noach
 /go/vt/vttablet/tabletmanager/vreplication @rohit-nayak-ps
 /go/vt/vttablet/tabletmanager/vstreamer @rohit-nayak-ps
 /go/vt/vttablet/tabletserver @harshit-gangal @systay @shlomi-noach
 /go/vt/wrangler @deepthi @rohit-nayak-ps
+/go/vt/workflow @rohit-nayak-ps
 /helm/ @derekperkins @dkhenry
 /proto/vtadmin.proto @ajm188 @doeg
 /proto/vtctldata.proto @ajm188 @doeg

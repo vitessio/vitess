@@ -26,6 +26,8 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/json2"
+
 	"vitess.io/vitess/go/vt/topotools"
 
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -114,7 +116,8 @@ type trafficSwitcher struct {
 	sourceKSSchema  *vindexes.KeyspaceSchema
 	optCells        string //cells option passed to MoveTables/Reshard
 	optTabletTypes  string //tabletTypes option passed to MoveTables/Reshard
-
+	externalCluster string
+	externalTopo    *topo.Server
 }
 
 // tsTarget contains the metadata for each migration target.
@@ -465,10 +468,18 @@ func (wr *Wrangler) SwitchReads(ctx context.Context, targetKeyspace, workflow st
 		}
 		return sw.logs(), nil
 	}
-	wr.Logger().Infof("switchShardReads: %+v, %+v, %+v", cells, servedTypes, direction)
+	wr.Logger().Infof("About to switchShardReads: %+v, %+v, %+v", cells, servedTypes, direction)
 	if err := ts.switchShardReads(ctx, cells, servedTypes, direction); err != nil {
 		ts.wr.Logger().Errorf("switchShardReads failed: %v", err)
 		return nil, err
+	}
+
+	wr.Logger().Infof("switchShardReads Completed: %+v, %+v, %+v", cells, servedTypes, direction)
+	if err := wr.ts.ValidateSrvKeyspace(ctx, targetKeyspace, strings.Join(cells, ",")); err != nil {
+		err2 := vterrors.Wrapf(err, "After switching shard reads, found SrvKeyspace for %s is corrupt in cell %s",
+			targetKeyspace, strings.Join(cells, ","))
+		log.Errorf("%w", err2)
+		return nil, err2
 	}
 	return sw.logs(), nil
 }
@@ -696,6 +707,47 @@ func (wr *Wrangler) dropArtifacts(ctx context.Context, sw iswitcher) error {
 	return nil
 }
 
+// finalizeMigrateWorkflow deletes the streams for the Migrate workflow.
+// We only cleanup the target for external sources
+func (wr *Wrangler) finalizeMigrateWorkflow(ctx context.Context, targetKeyspace, workflow, tableSpecs string,
+	cancel, keepData, dryRun bool) (*[]string, error) {
+	ts, err := wr.buildTrafficSwitcher(ctx, targetKeyspace, workflow)
+	if err != nil {
+		wr.Logger().Errorf("buildTrafficSwitcher failed: %v", err)
+		return nil, err
+	}
+	var sw iswitcher
+	if dryRun {
+		sw = &switcherDryRun{ts: ts, drLog: NewLogRecorder()}
+	} else {
+		sw = &switcher{ts: ts, wr: wr}
+	}
+	var tctx context.Context
+	tctx, targetUnlock, lockErr := sw.lockKeyspace(ctx, ts.targetKeyspace, "completeMigrateWorkflow")
+	if lockErr != nil {
+		ts.wr.Logger().Errorf("Target LockKeyspace failed: %v", lockErr)
+		return nil, lockErr
+	}
+	defer targetUnlock(&err)
+	ctx = tctx
+	if err := sw.dropTargetVReplicationStreams(ctx); err != nil {
+		return nil, err
+	}
+	if !cancel {
+		sw.addParticipatingTablesToKeyspace(ctx, targetKeyspace, tableSpecs)
+		if err := ts.wr.ts.RebuildSrvVSchema(ctx, nil); err != nil {
+			return nil, err
+		}
+	}
+	log.Infof("cancel is %t, keepData %t", cancel, keepData)
+	if cancel && !keepData {
+		if err := sw.removeTargetTables(ctx); err != nil {
+			return nil, err
+		}
+	}
+	return sw.logs(), nil
+}
+
 // DropSources cleans up source tables, shards and blacklisted tables after a MoveTables/Reshard is completed
 func (wr *Wrangler) DropSources(ctx context.Context, targetKeyspace, workflow string, removalType TableRemovalType, keepData, force, dryRun bool) (*[]string, error) {
 	ts, err := wr.buildTrafficSwitcher(ctx, targetKeyspace, workflow)
@@ -781,12 +833,22 @@ func (wr *Wrangler) buildTrafficSwitcher(ctx context.Context, targetKeyspace, wo
 		optTabletTypes:  optTabletTypes,
 	}
 	log.Infof("Migration ID for workflow %s: %d", workflow, ts.id)
+	sourceTopo := wr.ts
 
 	// Build the sources
 	for _, target := range targets {
 		for _, bls := range target.sources {
 			if ts.sourceKeyspace == "" {
 				ts.sourceKeyspace = bls.Keyspace
+				ts.externalCluster = bls.ExternalCluster
+				if ts.externalCluster != "" {
+					externalTopo, err := wr.ts.OpenExternalVitessClusterServer(ctx, ts.externalCluster)
+					if err != nil {
+						return nil, err
+					}
+					sourceTopo = externalTopo
+					ts.externalTopo = externalTopo
+				}
 			} else if ts.sourceKeyspace != bls.Keyspace {
 				return nil, fmt.Errorf("source keyspaces are mismatched across streams: %v vs %v", ts.sourceKeyspace, bls.Keyspace)
 			}
@@ -810,11 +872,11 @@ func (wr *Wrangler) buildTrafficSwitcher(ctx context.Context, targetKeyspace, wo
 			if _, ok := ts.sources[bls.Shard]; ok {
 				continue
 			}
-			sourcesi, err := ts.wr.ts.GetShard(ctx, bls.Keyspace, bls.Shard)
+			sourcesi, err := sourceTopo.GetShard(ctx, bls.Keyspace, bls.Shard)
 			if err != nil {
 				return nil, err
 			}
-			sourceMaster, err := ts.wr.ts.GetTablet(ctx, sourcesi.MasterAlias)
+			sourceMaster, err := sourceTopo.GetTablet(ctx, sourcesi.MasterAlias)
 			if err != nil {
 				return nil, err
 			}
@@ -824,7 +886,7 @@ func (wr *Wrangler) buildTrafficSwitcher(ctx context.Context, targetKeyspace, wo
 			}
 		}
 	}
-	if ts.sourceKeyspace != ts.targetKeyspace {
+	if ts.sourceKeyspace != ts.targetKeyspace || ts.externalCluster != "" {
 		ts.migrationType = binlogdatapb.MigrationType_TABLES
 	} else {
 		// TODO(sougou): for shard migration, validate that source and target combined
@@ -838,7 +900,7 @@ func (wr *Wrangler) buildTrafficSwitcher(ctx context.Context, targetKeyspace, wo
 			}
 		}
 	}
-	vs, err := ts.wr.ts.GetVSchema(ctx, ts.sourceKeyspace)
+	vs, err := sourceTopo.GetVSchema(ctx, ts.sourceKeyspace)
 	if err != nil {
 		return nil, err
 	}
@@ -944,11 +1006,15 @@ func hashStreams(targetKeyspace string, targets map[string]*tsTarget) int64 {
 
 func (ts *trafficSwitcher) validate(ctx context.Context) error {
 	if ts.migrationType == binlogdatapb.MigrationType_TABLES {
+		sourceTopo := ts.wr.ts
+		if ts.externalTopo != nil {
+			sourceTopo = ts.externalTopo
+		}
 		// All shards must be present.
-		if err := ts.compareShards(ctx, ts.sourceKeyspace, ts.sourceShards()); err != nil {
+		if err := ts.compareShards(ctx, ts.sourceKeyspace, ts.sourceShards(), sourceTopo); err != nil {
 			return err
 		}
-		if err := ts.compareShards(ctx, ts.targetKeyspace, ts.targetShards()); err != nil {
+		if err := ts.compareShards(ctx, ts.targetKeyspace, ts.targetShards(), ts.wr.ts); err != nil {
 			return err
 		}
 		// Wildcard table names not allowed.
@@ -961,12 +1027,12 @@ func (ts *trafficSwitcher) validate(ctx context.Context) error {
 	return nil
 }
 
-func (ts *trafficSwitcher) compareShards(ctx context.Context, keyspace string, sis []*topo.ShardInfo) error {
+func (ts *trafficSwitcher) compareShards(ctx context.Context, keyspace string, sis []*topo.ShardInfo, topo *topo.Server) error {
 	var shards []string
 	for _, si := range sis {
 		shards = append(shards, si.ShardName())
 	}
-	topoShards, err := ts.wr.ts.GetShardNames(ctx, keyspace)
+	topoShards, err := topo.GetShardNames(ctx, keyspace)
 	if err != nil {
 		return err
 	}
@@ -1020,6 +1086,12 @@ func (ts *trafficSwitcher) switchShardReads(ctx context.Context, cells []string,
 	} else {
 		fromShards, toShards = ts.targetShards(), ts.sourceShards()
 	}
+	if err := ts.wr.ts.ValidateSrvKeyspace(ctx, ts.targetKeyspace, strings.Join(cells, ",")); err != nil {
+		err2 := vterrors.Wrapf(err, "Before switching shard reads, found SrvKeyspace for %s is corrupt in cell %s",
+			ts.targetKeyspace, strings.Join(cells, ","))
+		log.Errorf("%w", err2)
+		return err2
+	}
 	for _, servedType := range servedTypes {
 		if err := ts.wr.updateShardRecords(ctx, ts.sourceKeyspace, fromShards, cells, servedType, true /* isFrom */, false /* clearSourceShards */); err != nil {
 			return err
@@ -1031,6 +1103,12 @@ func (ts *trafficSwitcher) switchShardReads(ctx context.Context, cells []string,
 		if err != nil {
 			return err
 		}
+	}
+	if err := ts.wr.ts.ValidateSrvKeyspace(ctx, ts.targetKeyspace, strings.Join(cells, ",")); err != nil {
+		err2 := vterrors.Wrapf(err, "After switching shard reads, found SrvKeyspace for %s is corrupt in cell %s",
+			ts.targetKeyspace, strings.Join(cells, ","))
+		log.Errorf("%w", err2)
+		return err2
 	}
 	return nil
 }
@@ -1109,7 +1187,7 @@ func (ts *trafficSwitcher) changeTableSourceWrites(ctx context.Context, access a
 		}); err != nil {
 			return err
 		}
-		return ts.wr.RefreshTabletsByShard(ctx, source.si, nil, nil)
+		return ts.wr.RefreshTabletsByShard(ctx, source.si, nil)
 	})
 }
 
@@ -1344,7 +1422,7 @@ func (ts *trafficSwitcher) allowTableTargetWrites(ctx context.Context) error {
 		}); err != nil {
 			return err
 		}
-		return ts.wr.RefreshTabletsByShard(ctx, target.si, nil, nil)
+		return ts.wr.RefreshTabletsByShard(ctx, target.si, nil)
 	})
 }
 
@@ -1374,6 +1452,11 @@ func (ts *trafficSwitcher) changeWriteRoute(ctx context.Context) error {
 }
 
 func (ts *trafficSwitcher) changeShardRouting(ctx context.Context) error {
+	if err := ts.wr.ts.ValidateSrvKeyspace(ctx, ts.targetKeyspace, ""); err != nil {
+		err2 := vterrors.Wrapf(err, "Before changing shard routes, found SrvKeyspace for %s is corrupt", ts.targetKeyspace)
+		log.Errorf("%w", err2)
+		return err2
+	}
 	err := ts.forAllSources(func(source *tsSource) error {
 		_, err := ts.wr.ts.UpdateShardFields(ctx, ts.sourceKeyspace, source.si.ShardName(), func(si *topo.ShardInfo) error {
 			si.IsMasterServing = false
@@ -1394,7 +1477,16 @@ func (ts *trafficSwitcher) changeShardRouting(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	return ts.wr.ts.MigrateServedType(ctx, ts.targetKeyspace, ts.targetShards(), ts.sourceShards(), topodatapb.TabletType_MASTER, nil)
+	err = ts.wr.ts.MigrateServedType(ctx, ts.targetKeyspace, ts.targetShards(), ts.sourceShards(), topodatapb.TabletType_MASTER, nil)
+	if err != nil {
+		return err
+	}
+	if err := ts.wr.ts.ValidateSrvKeyspace(ctx, ts.targetKeyspace, ""); err != nil {
+		err2 := vterrors.Wrapf(err, "After changing shard routes, found SrvKeyspace for %s is corrupt", ts.targetKeyspace)
+		log.Errorf("%w", err2)
+		return err2
+	}
+	return nil
 }
 
 func (ts *trafficSwitcher) startReverseVReplication(ctx context.Context) error {
@@ -1488,7 +1580,7 @@ func (ts *trafficSwitcher) dropSourceBlacklistedTables(ctx context.Context) erro
 		}); err != nil {
 			return err
 		}
-		return ts.wr.RefreshTabletsByShard(ctx, source.si, nil, nil)
+		return ts.wr.RefreshTabletsByShard(ctx, source.si, nil)
 	})
 }
 
@@ -1637,6 +1729,7 @@ func (ts *trafficSwitcher) dropSourceReverseVReplicationStreams(ctx context.Cont
 }
 
 func (ts *trafficSwitcher) removeTargetTables(ctx context.Context) error {
+	log.Infof("removeTargetTables")
 	err := ts.forAllTargets(func(target *tsTarget) error {
 		for _, tableName := range ts.tables {
 			query := fmt.Sprintf("drop table %s.%s", target.master.DbName(), tableName)
@@ -1724,4 +1817,42 @@ func reverseName(workflow string) string {
 		return workflow[:len(workflow)-len(reverse)]
 	}
 	return workflow + reverse
+}
+
+// addParticipatingTablesToKeyspace updates the vschema with the new tables that were created as part of the
+// Migrate flow. It is called when the Migrate flow is Completed
+func (ts *trafficSwitcher) addParticipatingTablesToKeyspace(ctx context.Context, keyspace, tableSpecs string) error {
+	var err error
+	var vschema *vschemapb.Keyspace
+	vschema, err = ts.wr.ts.GetVSchema(ctx, keyspace)
+	if err != nil {
+		return err
+	}
+	if vschema == nil {
+		return fmt.Errorf("no vschema found for keyspace %s", keyspace)
+	}
+	if vschema.Tables == nil {
+		vschema.Tables = make(map[string]*vschemapb.Table)
+	}
+	if strings.HasPrefix(tableSpecs, "{") { // user defined the vschema snippet, typically for a sharded target
+		wrap := fmt.Sprintf(`{"tables": %s}`, tableSpecs)
+		ks := &vschemapb.Keyspace{}
+		if err := json2.Unmarshal([]byte(wrap), ks); err != nil {
+			return err
+		}
+		if err != nil {
+			return err
+		}
+		for table, vtab := range ks.Tables {
+			vschema.Tables[table] = vtab
+		}
+	} else {
+		if vschema.Sharded {
+			return fmt.Errorf("no sharded vschema was provided, so you will need to update the vschema of the target manually for the moved tables")
+		}
+		for _, table := range ts.tables {
+			vschema.Tables[table] = &vschemapb.Table{}
+		}
+	}
+	return ts.wr.ts.SaveVSchema(ctx, keyspace, vschema)
 }

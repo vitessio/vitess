@@ -49,7 +49,7 @@ type XtrabackupEngine struct {
 
 var (
 	// path where backup engine program is located
-	xtrabackupEnginePath = flag.String("xtrabackup_root_path", "", "directory location of the xtrabackup executable, e.g., /usr/bin")
+	xtrabackupEnginePath = flag.String("xtrabackup_root_path", "", "directory location of the xtrabackup and xbstream executables, e.g., /usr/bin")
 	// flags to pass through to backup phase
 	xtrabackupBackupFlags = flag.String("xtrabackup_backup_flags", "", "flags to pass to backup command. These should be space separated and will be added to the end of the command")
 	// flags to pass through to prepare phase of restore
@@ -299,6 +299,7 @@ func (be *XtrabackupEngine) backupFiles(ctx context.Context, params BackupParams
 	// the replication position. Note that if we don't read stderr as we go, the
 	// xtrabackup process gets blocked when the write buffer fills up.
 	stderrBuilder := &strings.Builder{}
+	posBuilder := &strings.Builder{}
 	stderrDone := make(chan struct{})
 	go func() {
 		defer close(stderrDone)
@@ -318,7 +319,7 @@ func (be *XtrabackupEngine) backupFiles(ctx context.Context, params BackupParams
 				}
 				capture = true
 			}
-			fmt.Fprintln(stderrBuilder, line)
+			fmt.Fprintln(posBuilder, line)
 		}
 		if err := scanner.Err(); err != nil {
 			params.Logger.Errorf("error reading from xtrabackup stderr: %v", err)
@@ -359,10 +360,11 @@ func (be *XtrabackupEngine) backupFiles(ctx context.Context, params BackupParams
 	sterrOutput := stderrBuilder.String()
 
 	if err := backupCmd.Wait(); err != nil {
-		return replicationPosition, vterrors.Wrap(err, "xtrabackup failed with error")
+		return replicationPosition, vterrors.Wrap(err, fmt.Sprintf("xtrabackup failed with error. Output=%s", sterrOutput))
 	}
 
-	replicationPosition, rerr := findReplicationPosition(sterrOutput, flavor, params.Logger)
+	posOutput := posBuilder.String()
+	replicationPosition, rerr := findReplicationPosition(posOutput, flavor, params.Logger)
 	if rerr != nil {
 		return replicationPosition, vterrors.Wrap(rerr, "backup failed trying to find replication position")
 	}
@@ -580,7 +582,7 @@ func (be *XtrabackupEngine) extractFiles(ctx context.Context, logger logutil.Log
 
 	case xbstream:
 		// now extract the files by running xbstream
-		xbstreamProgram := xbstream
+		xbstreamProgram := path.Join(*xtrabackupEnginePath, xbstream)
 		flagsToExec := []string{"-C", tempDir, "-xv"}
 		if *xbstreamRestoreFlags != "" {
 			flagsToExec = append(flagsToExec, strings.Fields(*xbstreamRestoreFlags)...)

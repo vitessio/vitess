@@ -117,6 +117,23 @@ func TestReparentNoChoiceDownMaster(t *testing.T) {
 	resurrectTablet(ctx, t, tab1)
 }
 
+func TestTrivialERS(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	setupReparentCluster(t)
+	defer teardownCluster()
+
+	confirmReplication(t, tab1, []*cluster.Vttablet{tab2, tab3, tab4})
+
+	// We should be able to do a series of ERS-es, even if nothing
+	// is down, without issue
+	for i := 1; i <= 4; i++ {
+		out, err := ers(t, nil, "30s")
+		log.Infof("ERS loop %d.  EmergencyReparentShard Output: %v", i, out)
+		require.NoError(t, err)
+		time.Sleep(5 * time.Second)
+	}
+}
+
 func TestReparentIgnoreReplicas(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	setupReparentCluster(t)
@@ -204,7 +221,7 @@ func TestReparentReplicaOffline(t *testing.T) {
 	// Perform a graceful reparent operation.
 	out, err := prsWithTimeout(t, tab2, false, "", "31s")
 	require.Error(t, err)
-	assert.Contains(t, out, fmt.Sprintf("tablet %s SetMaster failed", tab4.Alias))
+	assert.Contains(t, out, fmt.Sprintf("tablet %s failed to SetMaster", tab4.Alias))
 	checkMasterTablet(t, tab2)
 }
 
@@ -345,7 +362,7 @@ func TestReparentWithDownReplica(t *testing.T) {
 	// Perform a graceful reparent operation. It will fail as one tablet is down.
 	out, err := prs(t, tab2)
 	require.Error(t, err)
-	assert.Contains(t, out, fmt.Sprintf("tablet %s SetMaster failed", tab3.Alias))
+	assert.Contains(t, out, fmt.Sprintf("tablet %s failed to SetMaster", tab3.Alias))
 
 	// insert data into the new master, check the connected replica work
 	confirmReplication(t, tab2, []*cluster.Vttablet{tab1, tab4})
@@ -441,5 +458,5 @@ func TestReparentDoesntHangIfMasterFails(t *testing.T) {
 	// insert.  The replicas should then abort right away.
 	out, err := prs(t, tab2)
 	require.Error(t, err)
-	assert.Contains(t, out, "master failed to PopulateReparentJournal")
+	assert.Contains(t, out, "primary failed to PopulateReparentJournal")
 }

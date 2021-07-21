@@ -10,7 +10,9 @@
       "Sharded": false
     },
     "TargetDestination": "ExactKeyRange(-)",
-    "Query": "select count(*), col from unsharded"
+    "IsDML": false,
+    "Query": "select count(*), col from unsharded",
+    "SingleShardOnly": false
   }
 }
 Gen4 plan same as above
@@ -28,7 +30,8 @@ Gen4 plan same as above
     },
     "TargetDestination": "ExactKeyRange(-)",
     "IsDML": true,
-    "Query": "update `user` set val = 1 where id = 18446744073709551616 and id = 1"
+    "Query": "update `user` set val = 1 where id = 18446744073709551616 and id = 1",
+    "SingleShardOnly": false
   }
 }
 Gen4 plan same as above
@@ -47,7 +50,8 @@ Gen4 plan same as above
     "TargetDestination": "ExactKeyRange(-)",
     "IsDML": true,
     "MultishardAutocommit": true,
-    "Query": "update /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ `user` set val = 1 where id = 18446744073709551616 and id = 1"
+    "Query": "update /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ `user` set val = 1 where id = 18446744073709551616 and id = 1",
+    "SingleShardOnly": false
   }
 }
 Gen4 plan same as above
@@ -65,14 +69,15 @@ Gen4 plan same as above
     },
     "TargetDestination": "ExactKeyRange(-)",
     "IsDML": true,
-    "Query": "delete from `USER` where ID = 42"
+    "Query": "delete from `USER` where ID = 42",
+    "SingleShardOnly": false
   }
 }
 Gen4 plan same as above
 
 # insert bypass: not supported
 "INSERT INTO USER (ID, NAME) VALUES (42, 'ms X')"
-"INSERT not supported when targeting a key range: targetString"
+"range queries are not allowed for insert statement: targetString"
 Gen4 plan same as above
 
 # bypass query for into outfile s3
@@ -87,7 +92,9 @@ Gen4 plan same as above
       "Sharded": false
     },
     "TargetDestination": "ExactKeyRange(-)",
-    "Query": "select count(*), col from unsharded into outfile s3 'x.txt'"
+    "IsDML": false,
+    "Query": "select count(*), col from unsharded into outfile s3 'x.txt'",
+    "SingleShardOnly": false
   }
 }
 Gen4 plan same as above
@@ -104,7 +111,9 @@ Gen4 plan same as above
       "Sharded": false
     },
     "TargetDestination": "ExactKeyRange(-)",
-    "Query": "select * from `user` into outfile s3 'x.txt'"
+    "IsDML": false,
+    "Query": "select * from `user` into outfile s3 'x.txt'",
+    "SingleShardOnly": false
   }
 }
 Gen4 plan same as above
@@ -157,7 +166,9 @@ Gen4 plan same as above
       "Sharded": false
     },
     "TargetDestination": "ExactKeyRange(-)",
-    "Query": "create /* test */ table t1(id bigint, primary key(id)) /* comments */"
+    "IsDML": false,
+    "Query": "create /* test */ table t1(id bigint, primary key(id)) /* comments */",
+    "SingleShardOnly": false
   }
 }
 Gen4 plan same as above

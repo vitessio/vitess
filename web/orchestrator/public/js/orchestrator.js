@@ -76,6 +76,19 @@ function isCompactDisplay() {
   return ($.cookie("compact-display") == "true");
 }
 
+// origin: https://vanillajstoolkit.com/
+/**
+ * Sanitize and encode all HTML in a user-submitted string
+ * https://portswigger.net/web-security/cross-site-scripting/preventing
+ * @param  {String} str  The user-submitted string
+ * @return {String} str  The sanitized string
+ */
+function sanitizeHTML (str) {
+	return str.replace(/[^\w-_. ]/gi, function (c) {
+		return '&#' + c.charCodeAt(0) + ';';
+	});
+}
+
 function anonymizeInstanceId(instanceId) {
   var tokens = instanceId.split("__");
   return "instance-" + md5(tokens[1]).substring(0, 4) + ":" + tokens[2];
@@ -1133,7 +1146,7 @@ $(document).ready(function() {
     $("[data-nav-page=user-id]").css('display', 'inline-block');
     $("[data-nav-page=user-id] a").html(" " + getUserId());
   }
-  var orchestratorMsg = getParameterByName("orchestrator-msg")
+  var orchestratorMsg = sanitizeHTML(getParameterByName("orchestrator-msg"))
   if (orchestratorMsg) {
     addInfo(orchestratorMsg)
 

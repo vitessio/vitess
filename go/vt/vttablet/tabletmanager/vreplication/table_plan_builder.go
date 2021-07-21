@@ -193,7 +193,7 @@ func buildTablePlan(tableName, filter string, pkInfoMap map[string][]*PrimaryKey
 		query = buf.String()
 	case key.IsKeyRange(filter):
 		buf := sqlparser.NewTrackedBuffer(nil)
-		buf.Myprintf("select * from %v where in_keyrange(%v)", sqlparser.NewTableIdent(tableName), sqlparser.NewStrLiteral([]byte(filter)))
+		buf.Myprintf("select * from %v where in_keyrange(%v)", sqlparser.NewTableIdent(tableName), sqlparser.NewStrLiteral(filter))
 		query = buf.String()
 	case filter == ExcludeStr:
 		return nil, nil
@@ -264,7 +264,7 @@ func buildTablePlan(tableName, filter string, pkInfoMap map[string][]*PrimaryKey
 	if len(tpb.sendSelect.SelectExprs) == 0 {
 		tpb.sendSelect.SelectExprs = sqlparser.SelectExprs([]sqlparser.SelectExpr{
 			&sqlparser.AliasedExpr{
-				Expr: sqlparser.NewIntLiteral([]byte{'1'}),
+				Expr: sqlparser.NewIntLiteral("1"),
 			},
 		})
 	}
@@ -633,7 +633,11 @@ func (tpb *tablePlanBuilder) generateUpdateStatement() *sqlparser.ParsedQuery {
 		switch cexpr.operation {
 		case opExpr:
 			bvf.mode = bvAfter
-			buf.Myprintf("%v", cexpr.expr)
+			if cexpr.colType == querypb.Type_JSON {
+				buf.Myprintf("convert(%v using utf8mb4)", cexpr.expr)
+			} else {
+				buf.Myprintf("%v", cexpr.expr)
+			}
 		case opCount:
 			buf.Myprintf("%v", cexpr.colName)
 		case opSum:

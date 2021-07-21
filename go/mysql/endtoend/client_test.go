@@ -22,12 +22,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/stretchr/testify/require"
 
 	"context"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/sqltypes"
 )
 
 // TestKill opens a connection, issues a command that
@@ -123,7 +124,7 @@ func TestDupEntry(t *testing.T) {
 		t.Fatalf("first insert failed: %v", err)
 	}
 	_, err = conn.ExecuteFetch("insert into dup_entry(id, name) values(2, 10)", 0, false)
-	assertSQLError(t, err, mysql.ERDupEntry, mysql.SSDupKey, "Duplicate entry", "insert into dup_entry(id, name) values(2, 10)")
+	assertSQLError(t, err, mysql.ERDupEntry, mysql.SSConstraintViolation, "Duplicate entry", "insert into dup_entry(id, name) values(2, 10)")
 }
 
 // TestClientFoundRows tests if the CLIENT_FOUND_ROWS flag works.
@@ -145,19 +146,12 @@ func TestClientFoundRows(t *testing.T) {
 		t.Fatalf("insert failed: %v", err)
 	}
 	qr, err := conn.ExecuteFetch("update found_rows set val=11 where id=1", 0, false)
-	if err != nil {
-		t.Fatalf("first update failed: %v", err)
-	}
-	if qr.RowsAffected != 1 {
-		t.Errorf("First update: RowsAffected: %d, want 1", qr.RowsAffected)
-	}
+	require.NoError(t, err)
+	assert.EqualValues(t, 1, qr.RowsAffected, "RowsAffected")
+
 	qr, err = conn.ExecuteFetch("update found_rows set val=11 where id=1", 0, false)
-	if err != nil {
-		t.Fatalf("second update failed: %v", err)
-	}
-	if qr.RowsAffected != 1 {
-		t.Errorf("Second update: RowsAffected: %d, want 1", qr.RowsAffected)
-	}
+	require.NoError(t, err)
+	assert.EqualValues(t, 1, qr.RowsAffected, "RowsAffected")
 }
 
 func doTestMultiResult(t *testing.T, disableClientDeprecateEOF bool) {
@@ -171,27 +165,27 @@ func doTestMultiResult(t *testing.T, disableClientDeprecateEOF bool) {
 	qr, more, err := conn.ExecuteFetchMulti("select 1 from dual; set autocommit=1; select 1 from dual", 10, true)
 	expectNoError(t, err)
 	expectFlag(t, "ExecuteMultiFetch(multi result)", more, true)
-	expectRows(t, "ExecuteMultiFetch(multi result)", qr, 1)
+	assert.EqualValues(t, 1, len(qr.Rows))
 
 	qr, more, _, err = conn.ReadQueryResult(10, true)
 	expectNoError(t, err)
 	expectFlag(t, "ReadQueryResult(1)", more, true)
-	expectRows(t, "ReadQueryResult(1)", qr, 0)
+	assert.EqualValues(t, 0, len(qr.Rows))
 
 	qr, more, _, err = conn.ReadQueryResult(10, true)
 	expectNoError(t, err)
 	expectFlag(t, "ReadQueryResult(2)", more, false)
-	expectRows(t, "ReadQueryResult(2)", qr, 1)
+	assert.EqualValues(t, 1, len(qr.Rows))
 
 	qr, more, err = conn.ExecuteFetchMulti("select 1 from dual", 10, true)
 	expectNoError(t, err)
 	expectFlag(t, "ExecuteMultiFetch(single result)", more, false)
-	expectRows(t, "ExecuteMultiFetch(single result)", qr, 1)
+	assert.EqualValues(t, 1, len(qr.Rows))
 
 	qr, more, err = conn.ExecuteFetchMulti("set autocommit=1", 10, true)
 	expectNoError(t, err)
 	expectFlag(t, "ExecuteMultiFetch(no result)", more, false)
-	expectRows(t, "ExecuteMultiFetch(no result)", qr, 0)
+	assert.EqualValues(t, 0, len(qr.Rows))
 
 	// The ClientDeprecateEOF protocol change has a subtle twist in which an EOF or OK
 	// packet happens to have the status flags in the same position if the affected_rows
@@ -206,42 +200,32 @@ func doTestMultiResult(t *testing.T, disableClientDeprecateEOF bool) {
 	// negotiated version, it can properly send the status flags.
 	//
 	result, err := conn.ExecuteFetch("create table a(id int, name varchar(128), primary key(id))", 0, false)
-	if err != nil {
-		t.Fatalf("create table failed: %v", err)
-	}
-	if result.RowsAffected != 0 {
-		t.Errorf("create table returned RowsAffected %v, was expecting 0", result.RowsAffected)
-	}
+	require.NoError(t, err)
+	assert.Zero(t, result.RowsAffected, "create table RowsAffected ")
 
 	for i := 0; i < 255; i++ {
 		result, err := conn.ExecuteFetch(fmt.Sprintf("insert into a(id, name) values(%v, 'nice name %v')", 1000+i, i), 1000, true)
-		if err != nil {
-			t.Fatalf("ExecuteFetch(%v) failed: %v", i, err)
-		}
-		if result.RowsAffected != 1 {
-			t.Errorf("insert into returned RowsAffected %v, was expecting 1", result.RowsAffected)
-		}
+		require.NoError(t, err)
+		assert.EqualValues(t, 1, result.RowsAffected, "insert into returned RowsAffected")
 	}
 
 	qr, more, err = conn.ExecuteFetchMulti("update a set name = concat(name, ' updated'); select * from a; select count(*) from a", 300, true)
 	expectNoError(t, err)
 	expectFlag(t, "ExecuteMultiFetch(multi result)", more, true)
-	expectRows(t, "ExecuteMultiFetch(multi result)", qr, 255)
+	assert.EqualValues(t, 255, qr.RowsAffected)
 
 	qr, more, _, err = conn.ReadQueryResult(300, true)
 	expectNoError(t, err)
 	expectFlag(t, "ReadQueryResult(1)", more, true)
-	expectRows(t, "ReadQueryResult(1)", qr, 255)
+	assert.EqualValues(t, 255, len(qr.Rows), "ReadQueryResult(1)")
 
 	qr, more, _, err = conn.ReadQueryResult(300, true)
 	expectNoError(t, err)
 	expectFlag(t, "ReadQueryResult(2)", more, false)
-	expectRows(t, "ReadQueryResult(2)", qr, 1)
+	assert.EqualValues(t, 1, len(qr.Rows), "ReadQueryResult(1)")
 
 	_, err = conn.ExecuteFetch("drop table a", 10, true)
-	if err != nil {
-		t.Fatalf("drop table failed: %v", err)
-	}
+	require.NoError(t, err)
 }
 
 func TestMultiResultDeprecateEOF(t *testing.T) {
@@ -255,13 +239,6 @@ func expectNoError(t *testing.T, err error) {
 	t.Helper()
 	if err != nil {
 		t.Fatal(err)
-	}
-}
-
-func expectRows(t *testing.T, msg string, result *sqltypes.Result, want int) {
-	t.Helper()
-	if int(result.RowsAffected) != want {
-		t.Errorf("%s: %d, want %d", msg, result.RowsAffected, want)
 	}
 }
 
@@ -338,4 +315,45 @@ func TestSessionTrackGTIDs(t *testing.T) {
 	qr, err = conn.ExecuteFetch(`insert into vttest.t1 values (1)`, 1000, false)
 	require.NoError(t, err)
 	require.NotEmpty(t, qr.SessionStateChanges)
+}
+
+func TestCachingSha2Password(t *testing.T) {
+	ctx := context.Background()
+
+	// connect as an existing user to create a user account with caching_sha2_password
+	params := connParams
+	conn, err := mysql.Connect(ctx, &params)
+	expectNoError(t, err)
+	defer conn.Close()
+
+	qr, err := conn.ExecuteFetch(`select true from information_schema.PLUGINS where PLUGIN_NAME='caching_sha2_password' and PLUGIN_STATUS='ACTIVE'`, 1, false)
+	if err != nil {
+		t.Errorf("select true from information_schema.PLUGINS failed: %v", err)
+	}
+
+	if len(qr.Rows) != 1 {
+		t.Skip("Server does not support caching_sha2_password plugin")
+	}
+
+	// create a user using caching_sha2_password password
+	if _, err = conn.ExecuteFetch(`create user 'sha2user'@'localhost' identified with caching_sha2_password by 'password';`, 0, false); err != nil {
+		t.Fatalf("Create user with caching_sha2_password failed: %v", err)
+	}
+	conn.Close()
+
+	// connect as sha2user
+	params.Uname = "sha2user"
+	params.Pass = "password"
+	params.DbName = "information_schema"
+	conn, err = mysql.Connect(ctx, &params)
+	expectNoError(t, err)
+	defer conn.Close()
+
+	if qr, err = conn.ExecuteFetch(`select user()`, 1, true); err != nil {
+		t.Fatalf("select user() failed: %v", err)
+	}
+
+	if len(qr.Rows) != 1 || qr.Rows[0][0].ToString() != "sha2user@localhost" {
+		t.Errorf("Logged in user is not sha2user")
+	}
 }

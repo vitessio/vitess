@@ -37,6 +37,11 @@ type switcherDryRun struct {
 	ts    *trafficSwitcher
 }
 
+func (dr *switcherDryRun) addParticipatingTablesToKeyspace(ctx context.Context, keyspace, tableSpecs string) error {
+	dr.drLog.Log("All source tables will be added to the target keyspace vschema")
+	return nil
+}
+
 func (dr *switcherDryRun) deleteRoutingRules(ctx context.Context) error {
 	dr.drLog.Log("Routing rules for participating tables will be deleted")
 	return nil

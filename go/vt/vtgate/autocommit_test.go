@@ -42,7 +42,7 @@ func TestAutocommitUpdateSharded(t *testing.T) {
 	require.NoError(t, err)
 
 	testQueries(t, "sbc1", sbc1, []*querypb.BoundQuery{{
-		Sql:           "update user set a = 2 where id = 1",
+		Sql:           "update `user` set a = 2 where id = 1",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}})
 	testCommitCount(t, "sbc1", sbc1, 0)
@@ -271,7 +271,7 @@ func TestAutocommitInsertLookup(t *testing.T) {
 	testCommitCount(t, "sbclookup", sbclookup, 1)
 
 	testQueries(t, "sbc1", sbc1, []*querypb.BoundQuery{{
-		Sql: "insert into user(id, v, `name`) values (:_Id_0, 2, :_name_0)",
+		Sql: "insert into `user`(id, v, `name`) values (:_Id_0, 2, :_name_0)",
 		BindVariables: map[string]*querypb.BindVariable{
 			"_Id_0":   sqltypes.Int64BindVariable(1),
 			"_name_0": sqltypes.BytesBindVariable([]byte("myname")),
@@ -386,7 +386,7 @@ func TestAutocommitTransactionStarted(t *testing.T) {
 	require.NoError(t, err)
 
 	testQueries(t, "sbc1", sbc1, []*querypb.BoundQuery{{
-		Sql:           "update user set a = 2 where id = 1",
+		Sql:           "update `user` set a = 2 where id = 1",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}})
 	testCommitCount(t, "sbc1", sbc1, 0)

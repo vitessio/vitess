@@ -9,13 +9,11 @@ This document contains the summary of the commands to be run.
 # Example:
 	    "region_map": "/home/user/vitess/examples/region_sharding/countries.json",
 
+# setup environment and aliases
+source env.sh
 
 # Bring up initial cluster and main keyspace (unsharded)
 ./101_initial_cluster.sh
-
-# setup aliases
-alias mysql="command mysql -h 127.0.0.1 -P 15306"
-alias vtctlclient="command vtctlclient -server localhost:15999 -log_dir ${VTDATAROOT}/tmp -alsologtostderr"
 
 # Insert and verify data
 mysql < insert_customers.sql

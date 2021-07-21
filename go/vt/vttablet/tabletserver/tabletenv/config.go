@@ -24,6 +24,7 @@ import (
 
 	"github.com/golang/protobuf/proto"
 
+	"vitess.io/vitess/go/cache"
 	"vitess.io/vitess/go/flagutil"
 	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/vt/dbconfigs"
@@ -103,6 +104,8 @@ func init() {
 
 	flag.IntVar(&currentConfig.StreamBufferSize, "queryserver-config-stream-buffer-size", defaultConfig.StreamBufferSize, "query server stream buffer size, the maximum number of bytes sent from vttablet for each stream call. It's recommended to keep this value in sync with vtgate's stream_buffer_size.")
 	flag.IntVar(&currentConfig.QueryCacheSize, "queryserver-config-query-cache-size", defaultConfig.QueryCacheSize, "query server query cache size, maximum number of queries to be cached. vttablet analyzes every incoming query and generate a query plan, these plans are being cached in a lru cache. This config controls the capacity of the lru cache.")
+	flag.Int64Var(&currentConfig.QueryCacheMemory, "queryserver-config-query-cache-memory", defaultConfig.QueryCacheMemory, "query server query cache size in bytes, maximum amount of memory to be used for caching. vttablet analyzes every incoming query and generate a query plan, these plans are being cached in a lru cache. This config controls the capacity of the lru cache.")
+	flag.BoolVar(&currentConfig.QueryCacheLFU, "queryserver-config-query-cache-lfu", defaultConfig.QueryCacheLFU, "query server cache algorithm. when set to true, a new cache algorithm based on a TinyLFU admission policy will be used to improve cache behavior and prevent pollution from sparse queries")
 	SecondsVar(&currentConfig.SchemaReloadIntervalSeconds, "queryserver-config-schema-reload-time", defaultConfig.SchemaReloadIntervalSeconds, "query server schema reload time, how often vttablet reloads schemas from underlying MySQL instance in seconds. vttablet keeps table schemas in its own memory and periodically refreshes it from MySQL. This config controls the reload time.")
 	SecondsVar(&currentConfig.Oltp.QueryTimeoutSeconds, "queryserver-config-query-timeout", defaultConfig.Oltp.QueryTimeoutSeconds, "query server query timeout (in seconds), this is the query timeout in vttablet side. If a query takes more than this timeout, it will be killed.")
 	SecondsVar(&currentConfig.OltpReadPool.TimeoutSeconds, "queryserver-config-query-pool-timeout", defaultConfig.OltpReadPool.TimeoutSeconds, "query server query pool timeout (in seconds), it is how long vttablet waits for a connection from the query pool. If set to 0 (default) then the overall query timeout is used instead.")
@@ -123,9 +126,9 @@ func init() {
 	flag.BoolVar(&currentConfig.TwoPCEnable, "twopc_enable", defaultConfig.TwoPCEnable, "if the flag is on, 2pc is enabled. Other 2pc flags must be supplied.")
 	flag.StringVar(&currentConfig.TwoPCCoordinatorAddress, "twopc_coordinator_address", defaultConfig.TwoPCCoordinatorAddress, "address of the (VTGate) process(es) that will be used to notify of abandoned transactions.")
 	SecondsVar(&currentConfig.TwoPCAbandonAge, "twopc_abandon_age", defaultConfig.TwoPCAbandonAge, "time in seconds. Any unresolved transaction older than this time will be sent to the coordinator to be resolved.")
-	flag.BoolVar(&currentConfig.EnableTxThrottler, "enable-tx-throttler", defaultConfig.EnableTxThrottler, "If true replication-lag-based throttling on transactions will be enabled.")
-	flag.StringVar(&currentConfig.TxThrottlerConfig, "tx-throttler-config", defaultConfig.TxThrottlerConfig, "The configuration of the transaction throttler as a text formatted throttlerdata.Configuration protocol buffer message")
-	flagutil.StringListVar(&currentConfig.TxThrottlerHealthCheckCells, "tx-throttler-healthcheck-cells", defaultConfig.TxThrottlerHealthCheckCells, "A comma-separated list of cells. Only tabletservers running in these cells will be monitored for replication lag by the transaction throttler.")
+	flagutil.DualFormatBoolVar(&currentConfig.EnableTxThrottler, "enable_tx_throttler", defaultConfig.EnableTxThrottler, "If true replication-lag-based throttling on transactions will be enabled.")
+	flagutil.DualFormatStringVar(&currentConfig.TxThrottlerConfig, "tx_throttler_config", defaultConfig.TxThrottlerConfig, "The configuration of the transaction throttler as a text formatted throttlerdata.Configuration protocol buffer message")
+	flagutil.DualFormatStringListVar(&currentConfig.TxThrottlerHealthCheckCells, "tx_throttler_healthcheck_cells", defaultConfig.TxThrottlerHealthCheckCells, "A comma-separated list of cells. Only tabletservers running in these cells will be monitored for replication lag by the transaction throttler.")
 
 	flag.BoolVar(&enableHotRowProtection, "enable_hot_row_protection", false, "If true, incoming transactions for the same row (range) will be queued and cannot consume all txpool slots.")
 	flag.BoolVar(&enableHotRowProtectionDryRun, "enable_hot_row_protection_dry_run", false, "If true, hot row protection is not enforced but logs if transactions would have been queued.")
@@ -143,12 +146,12 @@ func init() {
 
 	flag.BoolVar(&enableHeartbeat, "heartbeat_enable", false, "If true, vttablet records (if master) or checks (if replica) the current time of a replication heartbeat in the table _vt.heartbeat. The result is used to inform the serving state of the vttablet via healthchecks.")
 	flag.DurationVar(&heartbeatInterval, "heartbeat_interval", 1*time.Second, "How frequently to read and write replication heartbeat.")
-	flag.BoolVar(&currentConfig.EnableLagThrottler, "enable-lag-throttler", defaultConfig.EnableLagThrottler, "If true, vttablet will run a throttler service, and will implicitly enable heartbeats")
+	flagutil.DualFormatBoolVar(&currentConfig.EnableLagThrottler, "enable_lag_throttler", defaultConfig.EnableLagThrottler, "If true, vttablet will run a throttler service, and will implicitly enable heartbeats")
 
 	flag.BoolVar(&currentConfig.EnforceStrictTransTables, "enforce_strict_trans_tables", defaultConfig.EnforceStrictTransTables, "If true, vttablet requires MySQL to run with STRICT_TRANS_TABLES or STRICT_ALL_TABLES on. It is recommended to not turn this flag off. Otherwise MySQL may alter your supplied values before saving them to the database.")
-	flag.BoolVar(&enableConsolidator, "enable-consolidator", true, "This option enables the query consolidator.")
-	flag.BoolVar(&enableConsolidatorReplicas, "enable-consolidator-replicas", false, "This option enables the query consolidator only on replicas.")
-	flag.BoolVar(&currentConfig.CacheResultFields, "enable-query-plan-field-caching", defaultConfig.CacheResultFields, "This option fetches & caches fields (columns) when storing query plans")
+	flagutil.DualFormatBoolVar(&enableConsolidator, "enable_consolidator", true, "This option enables the query consolidator.")
+	flagutil.DualFormatBoolVar(&enableConsolidatorReplicas, "enable_consolidator_replicas", false, "This option enables the query consolidator only on replicas.")
+	flagutil.DualFormatBoolVar(&currentConfig.CacheResultFields, "enable_query_plan_field_caching", defaultConfig.CacheResultFields, "This option fetches & caches fields (columns) when storing query plans")
 
 	flag.DurationVar(&healthCheckInterval, "health_check_interval", 20*time.Second, "Interval between health checks")
 	flag.DurationVar(&degradedThreshold, "degraded_threshold", 30*time.Second, "replication lag after which a replica is considered degraded")
@@ -245,6 +248,8 @@ type TabletConfig struct {
 	ConsolidatorStreamTotalSize int64   `json:"consolidatorStreamTotalSize,omitempty"`
 	ConsolidatorStreamQuerySize int64   `json:"consolidatorStreamQuerySize,omitempty"`
 	QueryCacheSize              int     `json:"queryCacheSize,omitempty"`
+	QueryCacheMemory            int64   `json:"queryCacheMemory,omitempty"`
+	QueryCacheLFU               bool    `json:"queryCacheLFU,omitempty"`
 	SchemaReloadIntervalSeconds Seconds `json:"schemaReloadIntervalSeconds,omitempty"`
 	WatchReplication            bool    `json:"watchReplication,omitempty"`
 	TrackSchemaVersions         bool    `json:"trackSchemaVersions,omitempty"`
@@ -451,7 +456,9 @@ var defaultConfig = TabletConfig{
 	// great (the overhead makes the final packets on the wire about twice
 	// bigger than this).
 	StreamBufferSize:            32 * 1024,
-	QueryCacheSize:              5000,
+	QueryCacheSize:              int(cache.DefaultConfig.MaxEntries),
+	QueryCacheMemory:            cache.DefaultConfig.MaxMemoryUsage,
+	QueryCacheLFU:               cache.DefaultConfig.LFU,
 	SchemaReloadIntervalSeconds: 30 * 60,
 	MessagePostponeParallelism:  4,
 	CacheResultFields:           true,

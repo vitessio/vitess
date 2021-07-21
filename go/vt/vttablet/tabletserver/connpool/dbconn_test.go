@@ -54,7 +54,7 @@ func TestDBConnExec(t *testing.T) {
 		Fields: []*querypb.Field{
 			{Type: sqltypes.VarChar},
 		},
-		RowsAffected: 1,
+		RowsAffected: 0,
 		Rows: [][]sqltypes.Value{
 			{sqltypes.NewVarChar("123")},
 		},
@@ -126,7 +126,7 @@ func TestDBConnDeadline(t *testing.T) {
 		Fields: []*querypb.Field{
 			{Type: sqltypes.VarChar},
 		},
-		RowsAffected: 1,
+		RowsAffected: 0,
 		Rows: [][]sqltypes.Value{
 			{sqltypes.NewVarChar("123")},
 		},

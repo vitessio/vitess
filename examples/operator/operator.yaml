@@ -5773,7 +5773,7 @@ spec:
               fieldPath: metadata.name
         - name: OPERATOR_NAME
           value: vitess-operator
-        image: planetscale/vitess-operator:v2.3.0
+        image: planetscale/vitess-operator:v2.4.1
         imagePullPolicy: IfNotPresent
         name: vitess-operator
         resources:
