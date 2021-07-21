@@ -81,8 +81,10 @@ type TabletManagerClient interface {
 	InitReplica(ctx context.Context, in *tabletmanagerdata.InitReplicaRequest, opts ...grpc.CallOption) (*tabletmanagerdata.InitReplicaResponse, error)
 	// DemoteMaster tells the soon-to-be-former master it's gonna change
 	DemoteMaster(ctx context.Context, in *tabletmanagerdata.DemoteMasterRequest, opts ...grpc.CallOption) (*tabletmanagerdata.DemoteMasterResponse, error)
-	// UndoDemoteMaster reverts all changes made by DemoteMaster
-	UndoDemoteMaster(ctx context.Context, in *tabletmanagerdata.UndoDemoteMasterRequest, opts ...grpc.CallOption) (*tabletmanagerdata.UndoDemoteMasterResponse, error)
+	// Deprecated, use UndoDemotePrimary instead
+	UndoDemoteMaster(ctx context.Context, in *tabletmanagerdata.UndoDemotePrimaryRequest, opts ...grpc.CallOption) (*tabletmanagerdata.UndoDemotePrimaryResponse, error)
+	// UndoDemotePrimary reverts all changes made by DemotePrimary
+	UndoDemotePrimary(ctx context.Context, in *tabletmanagerdata.UndoDemotePrimaryRequest, opts ...grpc.CallOption) (*tabletmanagerdata.UndoDemotePrimaryResponse, error)
 	// ReplicaWasPromoted tells the remote tablet it is now the master
 	ReplicaWasPromoted(ctx context.Context, in *tabletmanagerdata.ReplicaWasPromotedRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ReplicaWasPromotedResponse, error)
 	// SetMaster tells the replica to reparent
@@ -442,9 +444,18 @@ func (c *tabletManagerClient) DemoteMaster(ctx context.Context, in *tabletmanage
 	return out, nil
 }
 
-func (c *tabletManagerClient) UndoDemoteMaster(ctx context.Context, in *tabletmanagerdata.UndoDemoteMasterRequest, opts ...grpc.CallOption) (*tabletmanagerdata.UndoDemoteMasterResponse, error) {
-	out := new(tabletmanagerdata.UndoDemoteMasterResponse)
+func (c *tabletManagerClient) UndoDemoteMaster(ctx context.Context, in *tabletmanagerdata.UndoDemotePrimaryRequest, opts ...grpc.CallOption) (*tabletmanagerdata.UndoDemotePrimaryResponse, error) {
+	out := new(tabletmanagerdata.UndoDemotePrimaryResponse)
 	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/UndoDemoteMaster", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tabletManagerClient) UndoDemotePrimary(ctx context.Context, in *tabletmanagerdata.UndoDemotePrimaryRequest, opts ...grpc.CallOption) (*tabletmanagerdata.UndoDemotePrimaryResponse, error) {
+	out := new(tabletmanagerdata.UndoDemotePrimaryResponse)
+	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/UndoDemotePrimary", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -635,8 +646,10 @@ type TabletManagerServer interface {
 	InitReplica(context.Context, *tabletmanagerdata.InitReplicaRequest) (*tabletmanagerdata.InitReplicaResponse, error)
 	// DemoteMaster tells the soon-to-be-former master it's gonna change
 	DemoteMaster(context.Context, *tabletmanagerdata.DemoteMasterRequest) (*tabletmanagerdata.DemoteMasterResponse, error)
-	// UndoDemoteMaster reverts all changes made by DemoteMaster
-	UndoDemoteMaster(context.Context, *tabletmanagerdata.UndoDemoteMasterRequest) (*tabletmanagerdata.UndoDemoteMasterResponse, error)
+	// Deprecated, use UndoDemotePrimary instead
+	UndoDemoteMaster(context.Context, *tabletmanagerdata.UndoDemotePrimaryRequest) (*tabletmanagerdata.UndoDemotePrimaryResponse, error)
+	// UndoDemotePrimary reverts all changes made by DemotePrimary
+	UndoDemotePrimary(context.Context, *tabletmanagerdata.UndoDemotePrimaryRequest) (*tabletmanagerdata.UndoDemotePrimaryResponse, error)
 	// ReplicaWasPromoted tells the remote tablet it is now the master
 	ReplicaWasPromoted(context.Context, *tabletmanagerdata.ReplicaWasPromotedRequest) (*tabletmanagerdata.ReplicaWasPromotedResponse, error)
 	// SetMaster tells the replica to reparent
@@ -771,8 +784,11 @@ func (UnimplementedTabletManagerServer) InitReplica(context.Context, *tabletmana
 func (UnimplementedTabletManagerServer) DemoteMaster(context.Context, *tabletmanagerdata.DemoteMasterRequest) (*tabletmanagerdata.DemoteMasterResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method DemoteMaster not implemented")
 }
-func (UnimplementedTabletManagerServer) UndoDemoteMaster(context.Context, *tabletmanagerdata.UndoDemoteMasterRequest) (*tabletmanagerdata.UndoDemoteMasterResponse, error) {
+func (UnimplementedTabletManagerServer) UndoDemoteMaster(context.Context, *tabletmanagerdata.UndoDemotePrimaryRequest) (*tabletmanagerdata.UndoDemotePrimaryResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method UndoDemoteMaster not implemented")
+}
+func (UnimplementedTabletManagerServer) UndoDemotePrimary(context.Context, *tabletmanagerdata.UndoDemotePrimaryRequest) (*tabletmanagerdata.UndoDemotePrimaryResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method UndoDemotePrimary not implemented")
 }
 func (UnimplementedTabletManagerServer) ReplicaWasPromoted(context.Context, *tabletmanagerdata.ReplicaWasPromotedRequest) (*tabletmanagerdata.ReplicaWasPromotedResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ReplicaWasPromoted not implemented")
@@ -1478,7 +1494,7 @@ func _TabletManager_DemoteMaster_Handler(srv interface{}, ctx context.Context, d
 }
 
 func _TabletManager_UndoDemoteMaster_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(tabletmanagerdata.UndoDemoteMasterRequest)
+	in := new(tabletmanagerdata.UndoDemotePrimaryRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -1490,7 +1506,25 @@ func _TabletManager_UndoDemoteMaster_Handler(srv interface{}, ctx context.Contex
 		FullMethod: "/tabletmanagerservice.TabletManager/UndoDemoteMaster",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(TabletManagerServer).UndoDemoteMaster(ctx, req.(*tabletmanagerdata.UndoDemoteMasterRequest))
+		return srv.(TabletManagerServer).UndoDemoteMaster(ctx, req.(*tabletmanagerdata.UndoDemotePrimaryRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TabletManager_UndoDemotePrimary_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(tabletmanagerdata.UndoDemotePrimaryRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TabletManagerServer).UndoDemotePrimary(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/tabletmanagerservice.TabletManager/UndoDemotePrimary",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TabletManagerServer).UndoDemotePrimary(ctx, req.(*tabletmanagerdata.UndoDemotePrimaryRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1803,6 +1837,10 @@ var TabletManager_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "UndoDemoteMaster",
 			Handler:    _TabletManager_UndoDemoteMaster_Handler,
+		},
+		{
+			MethodName: "UndoDemotePrimary",
+			Handler:    _TabletManager_UndoDemotePrimary_Handler,
 		},
 		{
 			MethodName: "ReplicaWasPromoted",

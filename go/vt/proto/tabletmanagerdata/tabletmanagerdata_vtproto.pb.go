@@ -3350,7 +3350,7 @@ func (m *DemoteMasterResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error) 
 	return len(dAtA) - i, nil
 }
 
-func (m *UndoDemoteMasterRequest) MarshalVT() (dAtA []byte, err error) {
+func (m *UndoDemotePrimaryRequest) MarshalVT() (dAtA []byte, err error) {
 	if m == nil {
 		return nil, nil
 	}
@@ -3363,12 +3363,12 @@ func (m *UndoDemoteMasterRequest) MarshalVT() (dAtA []byte, err error) {
 	return dAtA[:n], nil
 }
 
-func (m *UndoDemoteMasterRequest) MarshalToVT(dAtA []byte) (int, error) {
+func (m *UndoDemotePrimaryRequest) MarshalToVT(dAtA []byte) (int, error) {
 	size := m.SizeVT()
 	return m.MarshalToSizedBufferVT(dAtA[:size])
 }
 
-func (m *UndoDemoteMasterRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
+func (m *UndoDemotePrimaryRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m == nil {
 		return 0, nil
 	}
@@ -3383,7 +3383,7 @@ func (m *UndoDemoteMasterRequest) MarshalToSizedBufferVT(dAtA []byte) (int, erro
 	return len(dAtA) - i, nil
 }
 
-func (m *UndoDemoteMasterResponse) MarshalVT() (dAtA []byte, err error) {
+func (m *UndoDemotePrimaryResponse) MarshalVT() (dAtA []byte, err error) {
 	if m == nil {
 		return nil, nil
 	}
@@ -3396,12 +3396,12 @@ func (m *UndoDemoteMasterResponse) MarshalVT() (dAtA []byte, err error) {
 	return dAtA[:n], nil
 }
 
-func (m *UndoDemoteMasterResponse) MarshalToVT(dAtA []byte) (int, error) {
+func (m *UndoDemotePrimaryResponse) MarshalToVT(dAtA []byte) (int, error) {
 	size := m.SizeVT()
 	return m.MarshalToSizedBufferVT(dAtA[:size])
 }
 
-func (m *UndoDemoteMasterResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
+func (m *UndoDemotePrimaryResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m == nil {
 		return 0, nil
 	}
@@ -5410,7 +5410,7 @@ func (m *DemoteMasterResponse) SizeVT() (n int) {
 	return n
 }
 
-func (m *UndoDemoteMasterRequest) SizeVT() (n int) {
+func (m *UndoDemotePrimaryRequest) SizeVT() (n int) {
 	if m == nil {
 		return 0
 	}
@@ -5422,7 +5422,7 @@ func (m *UndoDemoteMasterRequest) SizeVT() (n int) {
 	return n
 }
 
-func (m *UndoDemoteMasterResponse) SizeVT() (n int) {
+func (m *UndoDemotePrimaryResponse) SizeVT() (n int) {
 	if m == nil {
 		return 0
 	}
@@ -12693,7 +12693,7 @@ func (m *DemoteMasterResponse) UnmarshalVT(dAtA []byte) error {
 	}
 	return nil
 }
-func (m *UndoDemoteMasterRequest) UnmarshalVT(dAtA []byte) error {
+func (m *UndoDemotePrimaryRequest) UnmarshalVT(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -12716,10 +12716,10 @@ func (m *UndoDemoteMasterRequest) UnmarshalVT(dAtA []byte) error {
 		fieldNum := int32(wire >> 3)
 		wireType := int(wire & 0x7)
 		if wireType == 4 {
-			return fmt.Errorf("proto: UndoDemoteMasterRequest: wiretype end group for non-group")
+			return fmt.Errorf("proto: UndoDemotePrimaryRequest: wiretype end group for non-group")
 		}
 		if fieldNum <= 0 {
-			return fmt.Errorf("proto: UndoDemoteMasterRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+			return fmt.Errorf("proto: UndoDemotePrimaryRequest: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		default:
@@ -12744,7 +12744,7 @@ func (m *UndoDemoteMasterRequest) UnmarshalVT(dAtA []byte) error {
 	}
 	return nil
 }
-func (m *UndoDemoteMasterResponse) UnmarshalVT(dAtA []byte) error {
+func (m *UndoDemotePrimaryResponse) UnmarshalVT(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -12767,10 +12767,10 @@ func (m *UndoDemoteMasterResponse) UnmarshalVT(dAtA []byte) error {
 		fieldNum := int32(wire >> 3)
 		wireType := int(wire & 0x7)
 		if wireType == 4 {
-			return fmt.Errorf("proto: UndoDemoteMasterResponse: wiretype end group for non-group")
+			return fmt.Errorf("proto: UndoDemotePrimaryResponse: wiretype end group for non-group")
 		}
 		if fieldNum <= 0 {
-			return fmt.Errorf("proto: UndoDemoteMasterResponse: illegal tag %d (wire type %d)", fieldNum, wire)
+			return fmt.Errorf("proto: UndoDemotePrimaryResponse: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		default:

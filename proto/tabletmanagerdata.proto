@@ -394,10 +394,10 @@ message DemoteMasterResponse {
   replicationdata.MasterStatus master_status = 2;
 }
 
-message UndoDemoteMasterRequest {
+message UndoDemotePrimaryRequest {
 }
 
-message UndoDemoteMasterResponse {
+message UndoDemotePrimaryResponse {
 }
 
 message ReplicaWasPromotedRequest {
