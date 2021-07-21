@@ -1,0 +1,35 @@
+rules:
+  - resource: Tablet
+    actions:
+    - get
+    - list
+    subjects:
+    - "role:dev"
+    clusters: ["*"]
+
+  - resource: Keyspace
+    actions:
+    - get
+    - list
+    - create
+    - delete
+    - update
+    subjects:
+    - "role:dba"
+    clusters: ["*"]
+
+  - resource: Keyspace
+    actions:
+    - get
+    - list
+    - update
+    subjects:
+    - "role:us_east_1_dba"
+    clusters:
+    - iad
+
+  - resource: "*"
+    actions: ["*"]
+    subjects:
+    - "user:ajm188"
+    clusters: ["*"]
