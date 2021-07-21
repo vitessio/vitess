@@ -401,10 +401,22 @@ func (s *server) InitReplica(ctx context.Context, request *tabletmanagerdatapb.I
 	return response, s.tm.InitReplica(ctx, request.Parent, request.ReplicationPosition, request.TimeCreatedNs)
 }
 
-func (s *server) DemoteMaster(ctx context.Context, request *tabletmanagerdatapb.DemoteMasterRequest) (response *tabletmanagerdatapb.DemoteMasterResponse, err error) {
+func (s *server) DemoteMaster(ctx context.Context, request *tabletmanagerdatapb.DemotePrimaryRequest) (response *tabletmanagerdatapb.DemotePrimaryResponse, err error) {
 	defer s.tm.HandleRPCPanic(ctx, "DemoteMaster", request, response, true /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
-	response = &tabletmanagerdatapb.DemoteMasterResponse{}
+	response = &tabletmanagerdatapb.DemotePrimaryResponse{}
+	masterStatus, err := s.tm.DemoteMaster(ctx)
+	if err == nil {
+		response.DeprecatedPosition = masterStatus.Position //nolint
+		response.MasterStatus = masterStatus
+	}
+	return response, err
+}
+
+func (s *server) DemotePrimary(ctx context.Context, request *tabletmanagerdatapb.DemotePrimaryRequest) (response *tabletmanagerdatapb.DemotePrimaryResponse, err error) {
+	defer s.tm.HandleRPCPanic(ctx, "DemoteMaster", request, response, true /*verbose*/, &err)
+	ctx = callinfo.GRPCCallInfo(ctx)
+	response = &tabletmanagerdatapb.DemotePrimaryResponse{}
 	masterStatus, err := s.tm.DemoteMaster(ctx)
 	if err == nil {
 		response.DeprecatedPosition = masterStatus.Position //nolint
