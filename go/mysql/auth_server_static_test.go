@@ -150,6 +150,8 @@ func TestStaticConfigHUP(t *testing.T) {
 	hupTest(t, aStatic, tmpFile, oldStr, "str2")
 	hupTest(t, aStatic, tmpFile, "str2", "str3") // still handling the signal
 
+	mu.Lock()
+	defer mu.Unlock()
 	// delete registered Auth server
 	for auth := range authServers {
 		delete(authServers, auth)
