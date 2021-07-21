@@ -97,21 +97,7 @@ Gen4 plan same as above
     "Table": "`user`"
   }
 }
-{
-  "QueryType": "SELECT",
-  "Original": "select distinct col1, id from user group by col1",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectScatter",
-    "Keyspace": {
-      "Name": "user",
-      "Sharded": true
-    },
-    "FieldQuery": "select col1, id from `user` where 1 != 1",
-    "Query": "select distinct col1, id from `user`",
-    "Table": "`user`"
-  }
-}
+Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains nonaggregated column 'id' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by
 
 # scatter group by a text column
 "select count(*), a, textcol1, b from user group by a, textcol1, b"
@@ -394,29 +380,7 @@ Gen4 plan same as above
     ]
   }
 }
-{
-  "QueryType": "SELECT",
-  "Original": "select distinct col1, col2 from user group by col1",
-  "Instructions": {
-    "OperatorType": "Aggregate",
-    "Variant": "Ordered",
-    "GroupBy": "(0|2), (1|3)",
-    "ResultColumns": 2,
-    "Inputs": [
-      {
-        "OperatorType": "Route",
-        "Variant": "SelectScatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select col1, col2, weight_string(col1), weight_string(col2) from `user` where 1 != 1",
-        "Query": "select distinct col1, col2, weight_string(col1), weight_string(col2) from `user`",
-        "Table": "`user`"
-      }
-    ]
-  }
-}
+Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains nonaggregated column 'col2' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by
 
 # aggregate on RHS subquery (tests symbol table merge)
 "select user.a, t.b from user join (select count(*) b from unsharded) as t"
@@ -1805,6 +1769,7 @@ Gen4 error: In aggregated query without GROUP BY, expression of SELECT list cont
 # Group by invalid column number (code is duplicated from symab).
 "select id from user group by 1.1"
 "column number is not an int"
+Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains nonaggregated column 'id' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by
 
 # Group by out of range column number (code is duplicated from symab).
 "select id from user group by 2"
