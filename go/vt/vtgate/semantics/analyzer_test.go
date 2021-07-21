@@ -143,6 +143,42 @@ func TestOrderByBindingSingleTable(t *testing.T) {
 	})
 }
 
+func TestGroupByBindingSingleTable(t *testing.T) {
+	t.Run("positive tests", func(t *testing.T) {
+		tcases := []struct {
+			sql  string
+			deps TableSet
+		}{{
+			"select col from tabl group by col",
+			T1,
+		}, {
+			"select col from tabl group by tabl.col",
+			T1,
+		}, {
+			"select col from tabl group by d.tabl.col",
+			T1,
+		}, {
+			"select col from tabl group by 1",
+			T1,
+		}, {
+			"select col as c from tabl group by c",
+			T1,
+		}, {
+			"select 1 as c from tabl group by c",
+			T0,
+		}}
+		for _, tc := range tcases {
+			t.Run(tc.sql, func(t *testing.T) {
+				stmt, semTable := parseAndAnalyze(t, tc.sql, "d")
+				sel, _ := stmt.(*sqlparser.Select)
+				grp := sel.GroupBy[0]
+				d := semTable.Dependencies(grp)
+				require.Equal(t, tc.deps, d, tc.sql)
+			})
+		}
+	})
+}
+
 func TestBindingSingleAliasedTable(t *testing.T) {
 	t.Run("positive tests", func(t *testing.T) {
 		queries := []string{
