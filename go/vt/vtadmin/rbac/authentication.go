@@ -19,6 +19,7 @@ package rbac
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"plugin"
 	"sync"
@@ -127,7 +128,7 @@ var (
 // function.
 func RegisterAuthenticator(name string, f func() Authenticator) {
 	if _, ok := authenticators[name]; ok {
-		panic("TODO")
+		panic(fmt.Sprintf("authenticator already registered with name: %s", name))
 	}
 
 	authenticators[name] = f
@@ -153,7 +154,7 @@ func loadAuthenticatorPlugin(path string) (Authenticator, error) {
 
 	f, ok := sym.(func() Authenticator)
 	if !ok {
-		return nil, nil // TODO: error
+		return nil, fmt.Errorf("symbol NewAuthenticator must be of type `func() Authenticator`; have %T", sym)
 	}
 
 	authenticators[path] = f
