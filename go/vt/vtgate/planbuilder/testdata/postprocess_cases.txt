@@ -1709,3 +1709,59 @@ Gen4 error: In aggregated query without GROUP BY, expression of SELECT list cont
     "Table": "`user`"
   }
 }
+
+# Scatter order by and aggregation: order by column must reference column from select list
+"select col, count(*) from user group by col order by c1"
+"unsupported: memory sort: order by must reference a column in the select list: c1 asc"
+{
+  "QueryType": "SELECT",
+  "Original": "select col, count(*) from user group by col order by c1",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Ordered",
+    "Aggregates": "count(1)",
+    "GroupBy": "(0|2)",
+    "ResultColumns": 2,
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select col, count(*), weight_string(col), c1, weight_string(c1) from `user` where 1 != 1 group by col",
+        "OrderBy": "(3|4) ASC, (0|2) ASC",
+        "Query": "select col, count(*), weight_string(col), c1, weight_string(c1) from `user` group by col order by c1 asc, col asc",
+        "Table": "`user`"
+      }
+    ]
+  }
+}
+
+# scatter aggregate with ambiguous aliases
+"select distinct a, b as a from user"
+"generating order by clause: ambiguous symbol reference: a"
+{
+  "QueryType": "SELECT",
+  "Original": "select distinct a, b as a from user",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Ordered",
+    "GroupBy": "(0|2), (1|4)",
+    "ResultColumns": 2,
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select a, b as a, weight_string(a), b, weight_string(b) from `user` where 1 != 1",
+        "Query": "select distinct a, b as a, weight_string(a), b, weight_string(b) from `user`",
+        "Table": "`user`"
+      }
+    ]
+  }
+}
