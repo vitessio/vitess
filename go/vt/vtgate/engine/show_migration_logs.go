@@ -28,7 +28,7 @@ import (
 
 var _ Primitive = (*ShowMigrationLogs)(nil)
 
-//ShowMigrationLogs represents the instructions to perform an online schema change via vtctld
+// ShowMigrationLogs represents the instructions to perform an online schema change via vtctld
 type ShowMigrationLogs struct {
 	Keyspace          *vindexes.Keyspace
 	Stmt              *sqlparser.ShowMigrationLogs
@@ -74,8 +74,7 @@ func (v *ShowMigrationLogs) Execute(vcursor VCursor, bindVars map[string]*query.
 		IsDML:             false,
 		SingleShardOnly:   false,
 	}
-	result, err = s.Execute(vcursor, bindVars, wantfields)
-	return result, err
+	return s.Execute(vcursor, bindVars, wantfields)
 }
 
 //StreamExecute implements the Primitive interface
