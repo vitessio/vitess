@@ -1,7 +1,3 @@
-2021-03-20T19:33:10Z,golangci-lint,https://github.com/vitessio/vitess/actions/runs/671509041
-2021-03-20T19:33:10Z,unit_race,https://github.com/vitessio/vitess/actions/runs/671509039
-2021-03-20T20:13:54Z,Cluster (11),https://github.com/vitessio/vitess/actions/runs/671566263
-2021-03-20T20:13:54Z,Cluster (12),https://github.com/vitessio/vitess/actions/runs/671566295
 2021-03-20T20:13:54Z,Cluster (13),https://github.com/vitessio/vitess/actions/runs/671566252
 2021-03-20T20:13:54Z,Cluster (14),https://github.com/vitessio/vitess/actions/runs/671566291
 2021-03-20T20:13:54Z,Cluster (15),https://github.com/vitessio/vitess/actions/runs/671566256
@@ -9998,3 +9994,7 @@
 2021-07-21T19:53:49Z,docker_test_1,https://github.com/vitessio/vitess/actions/runs/1053827317
 2021-07-21T19:53:49Z,docker_test_2,https://github.com/vitessio/vitess/actions/runs/1053827361
 2021-07-21T19:56:35Z,Cluster (14),https://github.com/vitessio/vitess/actions/runs/1053832681
+2021-07-21T19:56:35Z,Cluster (vtorc),https://github.com/vitessio/vitess/actions/runs/1053832704
+2021-07-21T19:56:35Z,docker_test_1,https://github.com/vitessio/vitess/actions/runs/1053832667
+2021-07-21T20:18:34Z,Cluster (onlineddl_vrepl),https://github.com/vitessio/vitess/actions/runs/1053893488
+2021-07-21T20:18:34Z,cluster_initial_sharding_multi,https://github.com/vitessio/vitess/actions/runs/1053893522
