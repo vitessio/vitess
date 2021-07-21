@@ -41,8 +41,9 @@ registered at runtime via the rbac.RegisterAuthenticator method, or may be set
 as a Go plugin (built via `go build -buildmode=plugin`) by setting the
 authenticator name as a path ending in ".so" in the rbac config.
 
-2. Permissions are additive. The way to revoke a permission from a user or role
-is to not assign it to them in the first place.
+2. Permissions are additive. There is no concept of a negative permission (or
+revocation). To "revoke" a permission from a user or role, structure your rules
+such that they are never granted that permission.
 
 3. Authentication is done at the gRPC/HTTP ingress boundaries.
 
