@@ -1,7 +1,3 @@
-2021-03-20T18:34:24Z,golangci-lint,https://github.com/vitessio/vitess/actions/runs/671409774
-2021-03-20T18:34:24Z,unit_race,https://github.com/vitessio/vitess/actions/runs/671409804
-2021-03-20T18:34:45Z,Unit Test (mariadb101),https://github.com/vitessio/vitess/actions/runs/671410367
-2021-03-20T18:34:45Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/671410333
 2021-03-20T18:34:45Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/671410336
 2021-03-20T18:34:45Z,Unit Test (mysql57),https://github.com/vitessio/vitess/actions/runs/671410339
 2021-03-20T18:34:45Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/671410366
@@ -9987,11 +9983,15 @@
 2021-07-21T15:21:19Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/1053057927
 2021-07-21T15:21:19Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/1053057910
 2021-07-21T15:21:19Z,cluster_initial_sharding_multi,https://github.com/vitessio/vitess/actions/runs/1053057901
+2021-07-21T15:21:19Z,docker_test_1,https://github.com/vitessio/vitess/actions/runs/1053057949
+2021-07-21T15:21:19Z,docker_test_2,https://github.com/vitessio/vitess/actions/runs/1053057938
 2021-07-21T15:21:19Z,endtoend,https://github.com/vitessio/vitess/actions/runs/1053057982
 2021-07-21T15:21:19Z,unit_race,https://github.com/vitessio/vitess/actions/runs/1053057903
+2021-07-21T15:36:42Z,Cluster (11),https://github.com/vitessio/vitess/actions/runs/1053109047
 2021-07-21T15:36:42Z,Cluster (12),https://github.com/vitessio/vitess/actions/runs/1053109010
 2021-07-21T15:36:42Z,Cluster (13),https://github.com/vitessio/vitess/actions/runs/1053108995
 2021-07-21T15:36:42Z,Cluster (15),https://github.com/vitessio/vitess/actions/runs/1053109023
+2021-07-21T15:36:42Z,Cluster (16),https://github.com/vitessio/vitess/actions/runs/1053109015
 2021-07-21T15:36:42Z,Cluster (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/1053109057
 2021-07-21T15:36:42Z,Cluster (vreplication_cellalias),https://github.com/vitessio/vitess/actions/runs/1053109037
 2021-07-21T15:36:42Z,Cluster (vreplication_multicell),https://github.com/vitessio/vitess/actions/runs/1053109049
