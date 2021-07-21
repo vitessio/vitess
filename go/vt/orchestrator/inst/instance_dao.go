@@ -76,10 +76,11 @@ const (
 	GroupReplicationMemberRolePrimary   = "PRIMARY"
 	GroupReplicationMemberRoleSecondary = "SECONDARY"
 	// Group member states
-	GroupReplicationMemberStateOnline     = "ONLINE"
-	GroupReplicationMemberStateRecovering = "RECOVERING"
-	GroupReplicationMemberStateOffline    = "OFFLINE"
-	GroupReplicationMemberStateError      = "ERROR"
+	GroupReplicationMemberStateOnline      = "ONLINE"
+	GroupReplicationMemberStateRecovering  = "RECOVERING"
+	GroupReplicationMemberStateUnreachable = "UNREACHABLE"
+	GroupReplicationMemberStateOffline     = "OFFLINE"
+	GroupReplicationMemberStateError       = "ERROR"
 )
 
 // We use this map to identify whether the query failed because the server does not support group replication or due
@@ -489,7 +490,7 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 		instance.IsDetachedMaster = instance.MasterKey.IsDetached()
 		instance.SecondsBehindMaster = m.GetNullInt64("Seconds_Behind_Master")
 		if instance.SecondsBehindMaster.Valid && instance.SecondsBehindMaster.Int64 < 0 {
-			log.Warningf("Host: %+v, instance.SecondsBehindMaster < 0 [%+v], correcting to 0", instanceKey, instance.SecondsBehindMaster.Int64)
+			log.Warningf("Host: %+v, instance.ReplicationLagSeconds < 0 [%+v], correcting to 0", instanceKey, instance.SecondsBehindMaster.Int64)
 			instance.SecondsBehindMaster.Int64 = 0
 		}
 		// And until told otherwise:

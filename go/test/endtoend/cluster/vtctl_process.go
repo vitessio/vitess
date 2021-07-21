@@ -58,19 +58,11 @@ func (vtctl *VtctlProcess) AddCellInfo(Cell string) (err error) {
 
 // CreateKeyspace executes vtctl command to create keyspace
 func (vtctl *VtctlProcess) CreateKeyspace(keyspace string) (err error) {
-	tmpProcess := exec.Command(
-		vtctl.Binary,
-		"-topo_implementation", vtctl.TopoImplementation,
-		"-topo_global_server_address", vtctl.TopoGlobalAddress,
-		"-topo_global_root", vtctl.TopoGlobalRoot,
-	)
-	if *isCoverage {
-		tmpProcess.Args = append(tmpProcess.Args, "-test.coverprofile="+getCoveragePath("vtctl-create-ks.out"))
+	output, err := vtctl.ExecuteCommandWithOutput("CreateKeyspace", keyspace)
+	if err != nil {
+		log.Errorf("CreateKeyspace returned err: %s, output: %s", err, output)
 	}
-	tmpProcess.Args = append(tmpProcess.Args,
-		"CreateKeyspace", keyspace)
-	log.Infof("Running CreateKeyspace with command: %v", strings.Join(tmpProcess.Args, " "))
-	return tmpProcess.Run()
+	return err
 }
 
 // ExecuteCommandWithOutput executes any vtctlclient command and returns output

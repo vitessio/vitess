@@ -85,10 +85,10 @@ var (
 		  }
 		}
 `
-	shard1Master  *cluster.Vttablet
+	shard1Primary *cluster.Vttablet
 	shard1Replica *cluster.Vttablet
 	shard1Rdonly  *cluster.Vttablet
-	shard2Master  *cluster.Vttablet
+	shard2Primary *cluster.Vttablet
 	shard2Replica *cluster.Vttablet
 	shard2Rdonly  *cluster.Vttablet
 )
@@ -119,16 +119,16 @@ func TestMain(m *testing.M) {
 			return 1, err
 		}
 
-		shard1Master = localCluster.NewVttabletInstance("master", 0, "")
+		shard1Primary = localCluster.NewVttabletInstance("master", 0, "")
 		shard1Replica = localCluster.NewVttabletInstance("replica", 0, cell2)
 		shard1Rdonly = localCluster.NewVttabletInstance("rdonly", 0, cell2)
 
-		shard2Master = localCluster.NewVttabletInstance("master", 0, "")
+		shard2Primary = localCluster.NewVttabletInstance("master", 0, "")
 		shard2Replica = localCluster.NewVttabletInstance("replica", 0, cell2)
 		shard2Rdonly = localCluster.NewVttabletInstance("rdonly", 0, cell2)
 
 		var mysqlProcs []*exec.Cmd
-		for _, tablet := range []*cluster.Vttablet{shard1Master, shard1Replica, shard1Rdonly, shard2Master, shard2Replica, shard2Rdonly} {
+		for _, tablet := range []*cluster.Vttablet{shard1Primary, shard1Replica, shard1Rdonly, shard2Primary, shard2Replica, shard2Rdonly} {
 			tablet.MysqlctlProcess = *cluster.MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, localCluster.TmpDirectory)
 			tablet.VttabletProcess = cluster.VttabletProcessInstance(tablet.HTTPPort,
 				tablet.GrpcPort,
@@ -163,7 +163,7 @@ func TestMain(m *testing.M) {
 
 		shard1 := cluster.Shard{
 			Name:      "-80",
-			Vttablets: []*cluster.Vttablet{shard1Master, shard1Replica, shard1Rdonly},
+			Vttablets: []*cluster.Vttablet{shard1Primary, shard1Replica, shard1Rdonly},
 		}
 		for idx := range shard1.Vttablets {
 			shard1.Vttablets[idx].VttabletProcess.Shard = shard1.Name
@@ -172,7 +172,7 @@ func TestMain(m *testing.M) {
 
 		shard2 := cluster.Shard{
 			Name:      "80-",
-			Vttablets: []*cluster.Vttablet{shard2Master, shard2Replica, shard2Rdonly},
+			Vttablets: []*cluster.Vttablet{shard2Primary, shard2Replica, shard2Rdonly},
 		}
 		for idx := range shard2.Vttablets {
 			shard2.Vttablets[idx].VttabletProcess.Shard = shard2.Name
@@ -184,7 +184,7 @@ func TestMain(m *testing.M) {
 				return 1, err
 			}
 		}
-		if err := localCluster.VtctlclientProcess.InitShardMaster(keyspaceName, shard1.Name, shard1Master.Cell, shard1Master.TabletUID); err != nil {
+		if err := localCluster.VtctlclientProcess.InitShardPrimary(keyspaceName, shard1.Name, shard1Primary.Cell, shard1Primary.TabletUID); err != nil {
 			return 1, err
 		}
 
@@ -202,7 +202,7 @@ func TestMain(m *testing.M) {
 			}
 		}
 
-		if err := localCluster.VtctlclientProcess.InitShardMaster(keyspaceName, shard2.Name, shard2Master.Cell, shard2Master.TabletUID); err != nil {
+		if err := localCluster.VtctlclientProcess.InitShardPrimary(keyspaceName, shard2.Name, shard2Primary.Cell, shard2Primary.TabletUID); err != nil {
 			return 1, err
 		}
 
@@ -321,19 +321,19 @@ func testQueriesOnTabletType(t *testing.T, tabletType string, vtgateGrpcPort int
 func insertInitialValues(t *testing.T) {
 	sharding.ExecuteOnTablet(t,
 		fmt.Sprintf(sharding.InsertTabletTemplateKsID, tableName, 1, "msg1", 1),
-		*shard1Master,
+		*shard1Primary,
 		keyspaceName,
 		false)
 
 	sharding.ExecuteOnTablet(t,
 		fmt.Sprintf(sharding.InsertTabletTemplateKsID, tableName, 2, "msg2", 2),
-		*shard1Master,
+		*shard1Primary,
 		keyspaceName,
 		false)
 
 	sharding.ExecuteOnTablet(t,
 		fmt.Sprintf(sharding.InsertTabletTemplateKsID, tableName, 4, "msg4", 4),
-		*shard2Master,
+		*shard2Primary,
 		keyspaceName,
 		false)
 }
@@ -341,19 +341,19 @@ func insertInitialValues(t *testing.T) {
 func deleteInitialValues(t *testing.T) {
 	sharding.ExecuteOnTablet(t,
 		fmt.Sprintf("delete from %s where id = %v", tableName, 1),
-		*shard1Master,
+		*shard1Primary,
 		keyspaceName,
 		false)
 
 	sharding.ExecuteOnTablet(t,
 		fmt.Sprintf("delete from %s where id = %v", tableName, 2),
-		*shard1Master,
+		*shard1Primary,
 		keyspaceName,
 		false)
 
 	sharding.ExecuteOnTablet(t,
 		fmt.Sprintf("delete from %s where id = %v", tableName, 4),
-		*shard2Master,
+		*shard2Primary,
 		keyspaceName,
 		false)
 }

@@ -29,7 +29,7 @@ const (
 	workflowConfigDir = "../.github/workflows"
 
 	unitTestTemplate  = "templates/unit_test.tpl"
-	unitTestDatabases = "percona56, mysql57, mysql80, mariadb101, mariadb102, mariadb103"
+	unitTestDatabases = "percona56, mysql57, mysql80, mariadb102, mariadb103"
 
 	clusterTestTemplate = "templates/cluster_endtoend_test.tpl"
 )
@@ -58,6 +58,7 @@ var (
 		"onlineddl_ghost",
 		"onlineddl_vrepl",
 		"onlineddl_vrepl_stress",
+		"onlineddl_vrepl_stress_suite",
 		"onlineddl_vrepl_suite",
 		"vreplication_migrate",
 		"onlineddl_revert",
@@ -81,6 +82,7 @@ var (
 		"xb_recovery",
 		"resharding",
 		"resharding_bytes",
+		"mysql80",
 	}
 	// TODO: currently some percona tools including xtrabackup are installed on all clusters, we can possibly optimize
 	// this by only installing them in the required clusters
@@ -88,6 +90,9 @@ var (
 	clustersRequiringMakeTools  = []string{
 		"18",
 		"24",
+	}
+	clustersRequiringUbuntu20 = []string{
+		"mysql80",
 	}
 )
 
@@ -98,6 +103,7 @@ type unitTest struct {
 type clusterTest struct {
 	Name, Shard                  string
 	MakeTools, InstallXtraBackup bool
+	Ubuntu20                     bool
 }
 
 func mergeBlankLines(buf *bytes.Buffer) string {
@@ -160,6 +166,13 @@ func generateClusterWorkflows() {
 		for _, xtraBackupCluster := range xtraBackupClusters {
 			if xtraBackupCluster == cluster {
 				test.InstallXtraBackup = true
+				break
+			}
+		}
+		ubuntu20Clusters := canonnizeList(clustersRequiringUbuntu20)
+		for _, ubuntu20Cluster := range ubuntu20Clusters {
+			if ubuntu20Cluster == cluster {
+				test.Ubuntu20 = true
 				break
 			}
 		}

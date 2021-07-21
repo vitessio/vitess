@@ -239,7 +239,6 @@ func (ts *tmState) updateLocked(ctx context.Context) {
 	// before other services are shutdown.
 	reason := ts.canServe(ts.tablet.Type)
 	if reason != "" {
-		ts.populateLocalMetadataLocked()
 		log.Infof("Disabling query service: %v", reason)
 		if err := ts.tm.QueryServiceControl.SetServingType(ts.tablet.Type, terTime, false, reason); err != nil {
 			log.Errorf("SetServingType(serving=false) failed: %v", err)
@@ -281,8 +280,6 @@ func (ts *tmState) updateLocked(ctx context.Context) {
 		if err := ts.tm.QueryServiceControl.SetServingType(ts.tablet.Type, terTime, true, ""); err != nil {
 			log.Errorf("Cannot start query service: %v", err)
 		}
-
-		ts.populateLocalMetadataLocked()
 	}
 }
 

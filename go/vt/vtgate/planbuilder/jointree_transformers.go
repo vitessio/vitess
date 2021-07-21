@@ -50,11 +50,16 @@ func transformJoinPlan(n *joinPlan, semTable *semantics.SemTable) (logicalPlan, 
 	if err != nil {
 		return nil, err
 	}
+	opCode := engine.InnerJoin
+	if n.outer {
+		opCode = engine.LeftJoin
+	}
 	return &joinGen4{
-		Left:  lhs,
-		Right: rhs,
-		Cols:  n.columns,
-		Vars:  n.vars,
+		Left:   lhs,
+		Right:  rhs,
+		Cols:   n.columns,
+		Vars:   n.vars,
+		Opcode: opCode,
 	}, nil
 }
 
@@ -62,26 +67,53 @@ func transformRoutePlan(n *routePlan) (*route, error) {
 	var tablesForSelect sqlparser.TableExprs
 	tableNameMap := map[string]interface{}{}
 
-	sort.Sort(n._tables)
-	for _, t := range n._tables {
-		alias := sqlparser.AliasedTableExpr{
-			Expr: sqlparser.TableName{
-				Name: t.vtable.Name,
-			},
-			Partitions: nil,
-			As:         t.qtable.alias.As,
-			Hints:      nil,
+	sort.Sort(n.tables)
+	for _, t := range n.tables {
+		tableExpr, err := relToTableExpr(t)
+		if err != nil {
+			return nil, err
 		}
-		tablesForSelect = append(tablesForSelect, &alias)
-		tableNameMap[sqlparser.String(t.qtable.table.Name)] = nil
+		tablesForSelect = append(tablesForSelect, tableExpr)
+		for _, name := range t.tableNames() {
+			tableNameMap[name] = nil
+		}
 	}
 
 	for _, predicate := range n.vindexPredicates {
 		switch predicate := predicate.(type) {
 		case *sqlparser.ComparisonExpr:
 			if predicate.Operator == sqlparser.InOp {
-				predicate.Right = sqlparser.ListArg(engine.ListVarName)
+				switch predicate.Left.(type) {
+				case *sqlparser.ColName:
+					predicate.Right = sqlparser.ListArg(engine.ListVarName)
+				}
 			}
+		}
+	}
+
+	for _, leftJoin := range n.leftJoins {
+		var lft sqlparser.TableExpr
+		if len(tablesForSelect) == 1 {
+			lft = tablesForSelect[0]
+		} else {
+			lft = &sqlparser.ParenTableExpr{Exprs: tablesForSelect}
+		}
+
+		rightExpr, err := relToTableExpr(leftJoin.right)
+		if err != nil {
+			return nil, err
+		}
+		joinExpr := &sqlparser.JoinTableExpr{
+			Join: sqlparser.LeftJoinType,
+			Condition: sqlparser.JoinCondition{
+				On: leftJoin.pred,
+			},
+			RightExpr: rightExpr,
+			LeftExpr:  lft,
+		}
+		tablesForSelect = sqlparser.TableExprs{joinExpr}
+		for _, tblNames := range leftJoin.right.tableNames() {
+			tableNameMap[tblNames] = nil
 		}
 	}
 
@@ -98,7 +130,10 @@ func transformRoutePlan(n *routePlan) (*route, error) {
 
 	var expressions sqlparser.SelectExprs
 	for _, col := range n.columns {
-		expressions = append(expressions, &sqlparser.AliasedExpr{Expr: col})
+		expressions = append(expressions, &sqlparser.AliasedExpr{
+			Expr: col,
+			As:   sqlparser.ColIdent{},
+		})
 	}
 
 	var tableNames []string
@@ -109,11 +144,13 @@ func transformRoutePlan(n *routePlan) (*route, error) {
 
 	return &route{
 		eroute: &engine.Route{
-			Opcode:    n.routeOpCode,
-			TableName: strings.Join(tableNames, ", "),
-			Keyspace:  n.keyspace,
-			Vindex:    singleColumn,
-			Values:    n.vindexValues,
+			Opcode:              n.routeOpCode,
+			TableName:           strings.Join(tableNames, ", "),
+			Keyspace:            n.keyspace,
+			Vindex:              singleColumn,
+			Values:              n.vindexValues,
+			SysTableTableName:   n.SysTableTableName,
+			SysTableTableSchema: n.SysTableTableSchema,
 		},
 		Select: &sqlparser.Select{
 			SelectExprs: expressions,
@@ -122,4 +159,53 @@ func transformRoutePlan(n *routePlan) (*route, error) {
 		},
 		tables: n.solved,
 	}, nil
+}
+
+func relToTableExpr(t relation) (sqlparser.TableExpr, error) {
+	switch t := t.(type) {
+	case *routeTable:
+		var expr sqlparser.SimpleTableExpr
+		if t.qtable.IsInfSchema {
+			expr = t.qtable.Table
+		} else {
+			expr = sqlparser.TableName{
+				Name: t.vtable.Name,
+			}
+		}
+		return &sqlparser.AliasedTableExpr{
+			Expr:       expr,
+			Partitions: nil,
+			As:         t.qtable.Alias.As,
+			Hints:      t.qtable.Alias.Hints,
+		}, nil
+	case parenTables:
+		tables := sqlparser.TableExprs{}
+		for _, t := range t {
+			tableExpr, err := relToTableExpr(t)
+			if err != nil {
+				return nil, err
+			}
+			tables = append(tables, tableExpr)
+		}
+		return &sqlparser.ParenTableExpr{Exprs: tables}, nil
+	case *joinTables:
+		lExpr, err := relToTableExpr(t.lhs)
+		if err != nil {
+			return nil, err
+		}
+		rExpr, err := relToTableExpr(t.rhs)
+		if err != nil {
+			return nil, err
+		}
+		return &sqlparser.JoinTableExpr{
+			LeftExpr:  lExpr,
+			Join:      sqlparser.NormalJoinType,
+			RightExpr: rExpr,
+			Condition: sqlparser.JoinCondition{
+				On: t.pred,
+			},
+		}, nil
+	default:
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unknown relation type: %T", t)
+	}
 }

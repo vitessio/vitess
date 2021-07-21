@@ -37,6 +37,7 @@ import (
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -243,15 +244,19 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflowName, sou
 	diffReports := make(map[string]*DiffReport)
 	jsonOutput := ""
 	for table, td := range df.differs {
+		// Skip internal operation tables for vdiff
+		if schema.IsInternalOperationTableName(table) {
+			continue
+		}
 		if err := df.diffTable(ctx, wr, table, td, filteredReplicationWaitTime); err != nil {
 			return nil, err
 		}
 		// Perform the diff of source and target streams.
 		dr, err := td.diff(ctx, df.ts.wr, &rowsToCompare, debug, onlyPks)
-		dr.TableName = table
 		if err != nil {
 			return nil, vterrors.Wrap(err, "diff")
 		}
+		dr.TableName = table
 		diffReports[table] = dr
 	}
 	if format == "json" {
@@ -524,13 +529,21 @@ func (df *vdiff) buildTablePlan(table *tabletmanagerdatapb.TableDefinition, quer
 	// the results, which engine.OrderedAggregate can do.
 	if len(aggregates) != 0 {
 		td.sourcePrimitive = &engine.OrderedAggregate{
-			Aggregates: aggregates,
-			Keys:       td.pkCols,
-			Input:      td.sourcePrimitive,
+			Aggregates:  aggregates,
+			GroupByKeys: pkColsToGroupByParams(td.pkCols),
+			Input:       td.sourcePrimitive,
 		}
 	}
 
 	return td, nil
+}
+
+func pkColsToGroupByParams(pkCols []int) []engine.GroupByParams {
+	var res []engine.GroupByParams
+	for _, col := range pkCols {
+		res = append(res, engine.GroupByParams{KeyCol: col, WeightStringCol: -1})
+	}
+	return res
 }
 
 // newMergeSorter creates an engine.MergeSort based on the shard streamers and pk columns.
@@ -539,13 +552,13 @@ func newMergeSorter(participants map[string]*shardStreamer, comparePKs []compare
 	for _, participant := range participants {
 		prims = append(prims, participant)
 	}
-	ob := make([]engine.OrderbyParams, 0, len(comparePKs))
+	ob := make([]engine.OrderByParams, 0, len(comparePKs))
 	for _, cpk := range comparePKs {
 		weightStringCol := -1
 		if cpk.weightStringIndex != cpk.colIndex {
 			weightStringCol = cpk.weightStringIndex
 		}
-		ob = append(ob, engine.OrderbyParams{Col: cpk.colIndex, WeightStringCol: weightStringCol})
+		ob = append(ob, engine.OrderByParams{Col: cpk.colIndex, WeightStringCol: weightStringCol})
 	}
 	return &engine.MergeSort{
 		Primitives: prims,
@@ -1108,7 +1121,7 @@ func (td *tableDiffer) genDebugQueryDiff(sel *sqlparser.Select, row []sqltypes.V
 		sel.SelectExprs.Format(buf)
 	}
 	buf.Myprintf(" from ")
-	sel.From.Format(buf)
+	buf.Myprintf(sqlparser.ToString(sel.From))
 	buf.Myprintf(" where ")
 	for i, pkI := range td.selectPks {
 		sel.SelectExprs[pkI].Format(buf)

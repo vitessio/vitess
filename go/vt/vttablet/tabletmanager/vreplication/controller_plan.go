@@ -221,12 +221,12 @@ func buildDeletePlan(del *sqlparser.Delete) (*controllerPlan, error) {
 }
 
 func buildSelectPlan(sel *sqlparser.Select) (*controllerPlan, error) {
-	switch sqlparser.String(sel.From) {
+	switch sqlparser.ToString(sel.From) {
 	case vreplicationTableName, reshardingJournalTableName, copyStateTableName, vreplicationLogTableName:
 		return &controllerPlan{
 			opcode: selectQuery,
 		}, nil
 	default:
-		return nil, fmt.Errorf("invalid table name: %v", sqlparser.String(sel.From))
+		return nil, fmt.Errorf("invalid table name: %v", sqlparser.ToString(sel.From))
 	}
 }

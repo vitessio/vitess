@@ -46,6 +46,7 @@ type (
 		SetLimit(*Limit)
 		SetLock(lock Lock)
 		MakeDistinct()
+		GetColumnCount() int
 	}
 
 	// DDLStatement represents any DDL Statement
@@ -201,16 +202,17 @@ type (
 		Distinct         bool
 		StraightJoinHint bool
 		SQLCalcFoundRows bool
-		Comments         Comments
-		SelectExprs      SelectExprs
-		From             TableExprs
-		Where            *Where
-		GroupBy          GroupBy
-		Having           *Where
-		OrderBy          OrderBy
-		Limit            *Limit
-		Lock             Lock
-		Into             *SelectInto
+		// The From field must be the first AST element of this struct so the rewriter sees it first
+		From        []TableExpr
+		Comments    Comments
+		SelectExprs SelectExprs
+		Where       *Where
+		GroupBy     GroupBy
+		Having      *Where
+		OrderBy     OrderBy
+		Limit       *Limit
+		Lock        Lock
+		Into        *SelectInto
 	}
 
 	// SelectInto is a struct that represent the INTO part of a select query

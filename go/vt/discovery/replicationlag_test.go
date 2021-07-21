@@ -105,7 +105,7 @@ func TestFilterByReplicationLag(t *testing.T) {
 			lts[i] = &TabletHealth{
 				Tablet:  topo.NewTablet(uint32(i+1), "cell", fmt.Sprintf("host-%vs-behind", lag)),
 				Serving: true,
-				Stats:   &querypb.RealtimeStats{SecondsBehindMaster: lag},
+				Stats:   &querypb.RealtimeStats{ReplicationLagSeconds: lag},
 			}
 		}
 		got := FilterStatsByReplicationLag(lts)
@@ -114,7 +114,7 @@ func TestFilterByReplicationLag(t *testing.T) {
 			continue
 		}
 		for i, elag := range tc.output {
-			if got[i].Stats.SecondsBehindMaster != elag {
+			if got[i].Stats.ReplicationLagSeconds != elag {
 				t.Errorf("FilterStatsByReplicationLag(%v) failed: got output:\n%v\nExpected value index %v to be %v", tc.description, got, i, elag)
 			}
 		}
@@ -131,22 +131,22 @@ func TestFilterByReplicationLagThreeTabletMin(t *testing.T) {
 	ts1 := &TabletHealth{
 		Tablet:  topo.NewTablet(1, "cell", "host1"),
 		Serving: true,
-		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 1},
+		Stats:   &querypb.RealtimeStats{ReplicationLagSeconds: 1},
 	}
 	ts2 := &TabletHealth{
 		Tablet:  topo.NewTablet(2, "cell", "host2"),
 		Serving: true,
-		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 1},
+		Stats:   &querypb.RealtimeStats{ReplicationLagSeconds: 1},
 	}
 	ts3 := &TabletHealth{
 		Tablet:  topo.NewTablet(3, "cell", "host3"),
 		Serving: true,
-		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 10 * 60},
+		Stats:   &querypb.RealtimeStats{ReplicationLagSeconds: 10 * 60},
 	}
 	ts4 := &TabletHealth{
 		Tablet:  topo.NewTablet(4, "cell", "host4"),
 		Serving: true,
-		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 11 * 60},
+		Stats:   &querypb.RealtimeStats{ReplicationLagSeconds: 11 * 60},
 	}
 	got := FilterStatsByReplicationLag([]*TabletHealth{ts1, ts2, ts3, ts4})
 	want := []*TabletHealth{ts1, ts2, ts3}
@@ -156,22 +156,22 @@ func TestFilterByReplicationLagThreeTabletMin(t *testing.T) {
 	ts1 = &TabletHealth{
 		Tablet:  topo.NewTablet(1, "cell", "host1"),
 		Serving: true,
-		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 11 * 60},
+		Stats:   &querypb.RealtimeStats{ReplicationLagSeconds: 11 * 60},
 	}
 	ts2 = &TabletHealth{
 		Tablet:  topo.NewTablet(2, "cell", "host2"),
 		Serving: true,
-		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 10 * 60},
+		Stats:   &querypb.RealtimeStats{ReplicationLagSeconds: 10 * 60},
 	}
 	ts3 = &TabletHealth{
 		Tablet:  topo.NewTablet(3, "cell", "host3"),
 		Serving: true,
-		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 1},
+		Stats:   &querypb.RealtimeStats{ReplicationLagSeconds: 1},
 	}
 	ts4 = &TabletHealth{
 		Tablet:  topo.NewTablet(4, "cell", "host4"),
 		Serving: true,
-		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 1},
+		Stats:   &querypb.RealtimeStats{ReplicationLagSeconds: 1},
 	}
 	got = FilterStatsByReplicationLag([]*TabletHealth{ts1, ts2, ts3, ts4})
 	want = []*TabletHealth{ts3, ts4, ts2}
@@ -187,12 +187,12 @@ func TestFilterStatsByReplicationLagOneTabletMin(t *testing.T) {
 	ts1 := &TabletHealth{
 		Tablet:  topo.NewTablet(1, "cell", "host1"),
 		Serving: true,
-		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 1},
+		Stats:   &querypb.RealtimeStats{ReplicationLagSeconds: 1},
 	}
 	ts2 := &TabletHealth{
 		Tablet:  topo.NewTablet(2, "cell", "host2"),
 		Serving: true,
-		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 100 * 60},
+		Stats:   &querypb.RealtimeStats{ReplicationLagSeconds: 100 * 60},
 	}
 	got := FilterStatsByReplicationLag([]*TabletHealth{ts1, ts2})
 	want := []*TabletHealth{ts1}
@@ -202,12 +202,12 @@ func TestFilterStatsByReplicationLagOneTabletMin(t *testing.T) {
 	ts1 = &TabletHealth{
 		Tablet:  topo.NewTablet(1, "cell", "host1"),
 		Serving: true,
-		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 1 * 60},
+		Stats:   &querypb.RealtimeStats{ReplicationLagSeconds: 1 * 60},
 	}
 	ts2 = &TabletHealth{
 		Tablet:  topo.NewTablet(2, "cell", "host2"),
 		Serving: true,
-		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 100 * 60},
+		Stats:   &querypb.RealtimeStats{ReplicationLagSeconds: 100 * 60},
 	}
 	got = FilterStatsByReplicationLag([]*TabletHealth{ts1, ts2})
 	want = []*TabletHealth{ts1}

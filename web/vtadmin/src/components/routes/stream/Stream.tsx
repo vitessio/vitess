@@ -17,7 +17,7 @@ import { Link, useParams } from 'react-router-dom';
 
 import { useWorkflow } from '../../../hooks/api';
 import { useDocumentTitle } from '../../../hooks/useDocumentTitle';
-import { formatStreamKey, getStreams } from '../../../util/workflows';
+import { formatStreamKey, getStream } from '../../../util/workflows';
 import { Code } from '../../Code';
 import { ContentContainer } from '../../layout/ContentContainer';
 import { NavCrumbs } from '../../layout/NavCrumbs';
@@ -36,14 +36,11 @@ interface RouteParams {
 
 export const Stream = () => {
     const params = useParams<RouteParams>();
-    const { data: workflow } = useWorkflow(
-        {
-            clusterID: params.clusterID,
-            keyspace: params.keyspace,
-            name: params.workflowName,
-        },
-        { refetchInterval: 1000 }
-    );
+    const { data: workflow } = useWorkflow({
+        clusterID: params.clusterID,
+        keyspace: params.keyspace,
+        name: params.workflowName,
+    });
 
     const streamID = parseInt(params.streamID, 10);
     const tabletUID = parseInt(params.tabletUID, 10);
@@ -52,9 +49,7 @@ export const Stream = () => {
 
     useDocumentTitle(`${streamKey} (${params.workflowName})`);
 
-    const stream = getStreams(workflow).find(
-        (s) => s.id === streamID && s.tablet?.cell === tabletAlias.cell && s.tablet?.uid === tabletAlias.uid
-    );
+    const stream = getStream(workflow, streamKey);
 
     return (
         <div>

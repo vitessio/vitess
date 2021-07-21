@@ -48,7 +48,12 @@ func (node *Select) formatFast(buf *TrackedBuffer) {
 	node.SelectExprs.formatFast(buf)
 	buf.WriteString(" from ")
 
-	node.From.formatFast(buf)
+	prefix := ""
+	for _, expr := range node.From {
+		buf.WriteString(prefix)
+		expr.formatFast(buf)
+		prefix = ", "
+	}
 
 	node.Where.formatFast(buf)
 
@@ -667,8 +672,17 @@ func (ct *ColumnType) formatFast(buf *TrackedBuffer) {
 	if ct.Options.Default != nil {
 		buf.WriteByte(' ')
 		buf.WriteString(keywordStrings[DEFAULT])
-		buf.WriteByte(' ')
-		ct.Options.Default.formatFast(buf)
+		_, isLiteral := ct.Options.Default.(*Literal)
+		_, isBool := ct.Options.Default.(BoolVal)
+		_, isNullVal := ct.Options.Default.(*NullVal)
+		if isLiteral || isNullVal || isBool || isExprAliasForCurrentTimeStamp(ct.Options.Default) {
+			buf.WriteByte(' ')
+			ct.Options.Default.formatFast(buf)
+		} else {
+			buf.WriteString(" (")
+			ct.Options.Default.formatFast(buf)
+			buf.WriteByte(')')
+		}
 	}
 	if ct.Options.OnUpdate != nil {
 		buf.WriteByte(' ')

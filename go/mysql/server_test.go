@@ -840,7 +840,8 @@ func TestTLSServer(t *testing.T) {
 		path.Join(root, "server-cert.pem"),
 		path.Join(root, "server-key.pem"),
 		path.Join(root, "ca-cert.pem"),
-		"")
+		"",
+		tls.VersionTLS12)
 	require.NoError(t, err)
 	l.TLSConfig.Store(serverConfig)
 
@@ -939,7 +940,8 @@ func TestTLSRequired(t *testing.T) {
 		path.Join(root, "server-cert.pem"),
 		path.Join(root, "server-key.pem"),
 		path.Join(root, "ca-cert.pem"),
-		"")
+		"",
+		tls.VersionTLS12)
 	require.NoError(t, err)
 	l.TLSConfig.Store(serverConfig)
 	l.RequireSecureTransport = true
@@ -1274,7 +1276,7 @@ func TestServerFlush(t *testing.T) {
 	flds, err := c.Fields()
 	require.NoError(t, err)
 	if duration, want := time.Since(start), 20*time.Millisecond; duration < *mysqlServerFlushDelay || duration > want {
-		assert.Fail(t, "duration: %v, want between %v and %v", duration, *mysqlServerFlushDelay, want)
+		assert.Fail(t, "duration: %v, want between %v and %v", duration.String(), (*mysqlServerFlushDelay).String(), want.String())
 	}
 	want1 := []*querypb.Field{{
 		Name: "result",

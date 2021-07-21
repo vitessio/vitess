@@ -109,7 +109,7 @@ func TestVerticalSplit(t *testing.T) {
 	destinationRdOnlyTablet1 := *destinationShard.Vttablets[2]
 	destinationRdOnlyTablet2 := *destinationShard.Vttablets[3]
 
-	// source and destination master and replica tablets will be started
+	// source and destination primary and replica tablets will be started
 	for _, tablet := range []cluster.Vttablet{sourceMasterTablet, sourceReplicaTablet, destinationMasterTablet, destinationReplicaTablet} {
 		_ = tablet.VttabletProcess.Setup()
 	}
@@ -132,20 +132,20 @@ func TestVerticalSplit(t *testing.T) {
 	checkSrvKeyspaceServedFrom(t, cellj, destinationKeyspace, ksServedFrom, *clusterInstance)
 
 	// reparent to make the tablets work (we use health check, fix their types)
-	err = clusterInstance.VtctlclientProcess.InitShardMaster(sourceKeyspace, shardName, cellj, sourceMasterTablet.TabletUID)
+	err = clusterInstance.VtctlclientProcess.InitShardPrimary(sourceKeyspace, shardName, cellj, sourceMasterTablet.TabletUID)
 	require.NoError(t, err)
-	err = clusterInstance.VtctlclientProcess.InitShardMaster(destinationKeyspace, shardName, cellj, destinationMasterTablet.TabletUID)
+	err = clusterInstance.VtctlclientProcess.InitShardPrimary(destinationKeyspace, shardName, cellj, destinationMasterTablet.TabletUID)
 	require.NoError(t, err)
 
 	sourceMasterTablet.Type = "master"
 	destinationMasterTablet.Type = "master"
 
 	for _, tablet := range []cluster.Vttablet{sourceReplicaTablet, destinationReplicaTablet} {
-		_ = tablet.VttabletProcess.WaitForTabletType("SERVING")
+		_ = tablet.VttabletProcess.WaitForTabletStatus("SERVING")
 		require.NoError(t, err)
 	}
 	for _, tablet := range []cluster.Vttablet{sourceRdOnlyTablet1, sourceRdOnlyTablet2, destinationRdOnlyTablet1, destinationRdOnlyTablet2} {
-		_ = tablet.VttabletProcess.WaitForTabletType("SERVING")
+		_ = tablet.VttabletProcess.WaitForTabletStatus("SERVING")
 		require.NoError(t, err)
 	}
 
@@ -229,7 +229,7 @@ func TestVerticalSplit(t *testing.T) {
 	require.NoError(t, err)
 	err = destinationMasterTablet.VttabletProcess.WaitForBinLogPlayerCount(0)
 	require.NoError(t, err)
-	// master should be in serving state after cancel
+	// primary should be in serving state after cancel
 	sharding.CheckTabletQueryServices(t, []cluster.Vttablet{destinationMasterTablet}, "SERVING", false, *clusterInstance)
 
 	// redo VerticalSplitClone
@@ -266,7 +266,7 @@ func TestVerticalSplit(t *testing.T) {
 	dbConn.Close()
 
 	// check the binlog player is running and exporting vars
-	sharding.CheckDestinationMaster(t, destinationMasterTablet, []string{sourceKs}, *clusterInstance)
+	sharding.CheckDestinationPrimary(t, destinationMasterTablet, []string{sourceKs}, *clusterInstance)
 
 	// check that binlog server exported the stats vars
 	sharding.CheckBinlogServerVars(t, sourceReplicaTablet, 0, 0, true)
@@ -291,13 +291,13 @@ func TestVerticalSplit(t *testing.T) {
 		"destination_keyspace/0")
 	require.NoError(t, err)
 
-	// check query service is off on destination master, as filtered
+	// check query service is off on destination primary, as filtered
 	// replication is enabled. Even health check should not interfere.
 	destinationMasterTabletVars := destinationMasterTablet.VttabletProcess.GetVars()
 	assert.NotNil(t, destinationMasterTabletVars)
 	assert.Contains(t, reflect.ValueOf(destinationMasterTabletVars["TabletStateName"]).String(), "NOT_SERVING")
 
-	// check we can't migrate the master just yet
+	// check we can't migrate the primary just yet
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("MigrateServedFrom", "destination_keyspace/0", "master")
 	require.Error(t, err)
 
@@ -385,7 +385,7 @@ func TestVerticalSplit(t *testing.T) {
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("CancelResharding", "destination_keyspace/0")
 	require.Error(t, err)
 
-	// then serve master from the destination shards
+	// then serve primary from the destination shards
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("MigrateServedFrom", "destination_keyspace/0", "master")
 	require.NoError(t, err)
 	checkSrvKeyspaceServedFrom(t, cellj, destinationKeyspace, "", *clusterInstance)
@@ -475,7 +475,7 @@ func checkStats(t *testing.T) {
 	resultCountStr := fmt.Sprintf("%v", reflect.ValueOf(resultTableMap["Count"]))
 	assert.Equal(t, "2", resultCountStr, fmt.Sprintf("unexpected value for VttabletCall(Execute.source_keyspace.0.replica) inside %s", resultCountStr))
 
-	// Verify master reads done by self._check_client_conn_redirection().
+	// Verify primary reads done by self._check_client_conn_redirection().
 	resultVtgateAPI := resultMap["VtgateApi"]
 	resultVtgateAPIMap := resultVtgateAPI.(map[string]interface{})
 	resultAPIHistograms := resultVtgateAPIMap["Histograms"]
@@ -539,7 +539,7 @@ func checkValuesTimeout(t *testing.T, tablet cluster.Vttablet, table string, fir
 	for i := 0; i < timeoutInSec; i-- {
 		qr, err := tablet.VttabletProcess.QueryTablet(fmt.Sprintf("select id, msg from %s where id>=%d order by id limit %d", table, first, count), destinationKeyspace, true)
 		if err != nil {
-			require.NoError(t, err, "select failed on master tablet")
+			require.NoError(t, err, "select failed on primary tablet")
 		}
 		if len(qr.Rows) == count {
 			return true

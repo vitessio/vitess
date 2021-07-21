@@ -69,6 +69,9 @@ export const NavRail = () => {
 
                 <ul className={style.navList}>
                     <li>
+                        <NavRailLink icon={Icons.download} text="Backups" to="/backups" />
+                    </li>
+                    <li>
                         <NavRailLink icon={Icons.runQuery} text="VTExplain" to="/vtexplain" />
                     </li>
                     <li>

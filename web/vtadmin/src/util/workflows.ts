@@ -32,6 +32,20 @@ export const getStreams = <W extends pb.IWorkflow>(workflow: W | null | undefine
     }, [] as vtctldata.Workflow.IStream[]);
 };
 
+/**
+ * getStream returns the stream in the workflow with the given streamKey.
+ */
+export const getStream = <W extends pb.IWorkflow>(
+    workflow: W | null | undefined,
+    streamKey: string | null | undefined
+): vtctldata.Workflow.IStream | undefined => {
+    if (!streamKey || !workflow) {
+        return undefined;
+    }
+
+    return getStreams(workflow).find((s) => formatStreamKey(s) === streamKey);
+};
+
 export const formatStreamKey = <S extends vtctldata.Workflow.IStream>(stream: S | null | undefined): string | null => {
     return stream?.tablet && stream?.id ? `${formatAlias(stream.tablet)}/${stream.id}` : null;
 };
@@ -58,4 +72,25 @@ export const getTimeUpdated = <W extends pb.IWorkflow>(workflow: W | null | unde
     // added by https://github.com/vitessio/vitess/pull/7831
     const timestamps = getStreams(workflow).map((s) => parseInt(`${s.time_updated?.seconds}`, 10));
     return Math.max(...timestamps);
+};
+
+/**
+ * getStreamTablets returns an unordered set of tablet alias strings across all streams
+ * in the workflow.
+ */
+export const getStreamTablets = <W extends pb.IWorkflow>(workflow: W | null | undefined): string[] => {
+    const streams = getStreams(workflow);
+    if (!Array.isArray(streams)) {
+        return [];
+    }
+
+    const aliases = new Set<string>();
+    streams.forEach((stream) => {
+        const alias = formatAlias(stream.tablet);
+        if (alias) {
+            aliases.add(alias);
+        }
+    });
+
+    return [...aliases];
 };

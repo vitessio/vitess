@@ -61,13 +61,13 @@ func TestFindValidEmergencyReparentCandidates(t *testing.T) {
 			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
 				"r1": {
 					After: &replicationdatapb.Status{
-						MasterUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
+						SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 						RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
 					},
 				},
 				"r2": {
 					After: &replicationdatapb.Status{
-						MasterUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
+						SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 						RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
 					},
 				},
@@ -85,13 +85,13 @@ func TestFindValidEmergencyReparentCandidates(t *testing.T) {
 			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
 				"r1": {
 					After: &replicationdatapb.Status{
-						MasterUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
+						SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 						RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
 					},
 				},
 				"r2": {
 					After: &replicationdatapb.Status{
-						MasterUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
+						SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 						RelayLogPosition: "FilePos/mysql-bin.0001:10",
 					},
 				},
@@ -104,7 +104,7 @@ func TestFindValidEmergencyReparentCandidates(t *testing.T) {
 			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
 				"r1": {
 					After: &replicationdatapb.Status{
-						MasterUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
+						SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 						RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
 					},
 				},
@@ -122,13 +122,13 @@ func TestFindValidEmergencyReparentCandidates(t *testing.T) {
 			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
 				"r1": {
 					After: &replicationdatapb.Status{
-						MasterUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
+						SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 						RelayLogPosition: "FilePos/mysql-bin.0001:100",
 					},
 				},
 				"r2": {
 					After: &replicationdatapb.Status{
-						MasterUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
+						SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 						RelayLogPosition: "FilePos/mysql-bin.0001:10",
 					},
 				},
@@ -141,13 +141,13 @@ func TestFindValidEmergencyReparentCandidates(t *testing.T) {
 			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
 				"r1": {
 					After: &replicationdatapb.Status{
-						MasterUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
+						SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 						RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
 					},
 				},
 				"errant": {
 					After: &replicationdatapb.Status{
-						MasterUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
+						SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 						RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5,AAAAAAAA-71CA-11E1-9E33-C80AA9429562:1",
 					},
 				},
@@ -165,7 +165,7 @@ func TestFindValidEmergencyReparentCandidates(t *testing.T) {
 			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
 				"r1": {
 					After: &replicationdatapb.Status{
-						MasterUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
+						SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 						RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
 					},
 				},

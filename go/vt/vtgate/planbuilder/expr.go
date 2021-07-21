@@ -25,21 +25,6 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
-// splitAndExpression breaks up the Expr into AND-separated conditions
-// and appends them to filters, which can be shuffled and recombined
-// as needed.
-func splitAndExpression(filters []sqlparser.Expr, node sqlparser.Expr) []sqlparser.Expr {
-	if node == nil {
-		return filters
-	}
-	switch node := node.(type) {
-	case *sqlparser.AndExpr:
-		filters = splitAndExpression(filters, node.Left)
-		return splitAndExpression(filters, node.Right)
-	}
-	return append(filters, node)
-}
-
 type subqueryInfo struct {
 	ast    *sqlparser.Subquery
 	plan   logicalPlan

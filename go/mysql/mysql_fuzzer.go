@@ -1,3 +1,4 @@
+// +build gofuzz
 /*
 Copyright 2021 The Vitess Authors.
 
@@ -13,12 +14,12 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-// +build gofuzz
 
 package mysql
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"io/ioutil"
 	"net"
@@ -356,7 +357,8 @@ func FuzzTLSServer(data []byte) int {
 		path.Join(root, "server-cert.pem"),
 		path.Join(root, "server-key.pem"),
 		path.Join(root, "ca-cert.pem"),
-		"")
+		"",
+		tls.VersionTLS12)
 	if err != nil {
 		return -1
 	}

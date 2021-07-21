@@ -23,6 +23,8 @@ import (
 	"strings"
 	"sync"
 
+	"vitess.io/vitess/go/vt/vttablet/onlineddl"
+
 	"context"
 
 	"vitess.io/vitess/go/mysql"
@@ -101,6 +103,7 @@ func newTablet(opts *Options, t *topodatapb.Tablet) *explainTablet {
 		config.TwoPCAbandonAge = 1.0
 		config.TwoPCEnable = true
 	}
+	config.EnableOnlineDDL = false
 
 	// XXX much of this is cloned from the tabletserver tests
 	tsv := tabletserver.NewTabletServer(topoproto.TabletAliasString(t.Alias), config, memorytopo.NewServer(""), t.Alias)
@@ -391,6 +394,13 @@ func newTabletEnvironment(ddls []sqlparser.DDLStatement, opts *Options) (*tablet
 			),
 			"Innodb_rows|0",
 		),
+	}
+
+	for _, query := range onlineddl.ApplyDDL {
+		tEnv.schemaQueries[query] = &sqltypes.Result{
+			Fields: []*querypb.Field{{Type: sqltypes.Uint64}},
+			Rows:   [][]sqltypes.Value{},
+		}
 	}
 
 	showTableRows := make([][]sqltypes.Value, 0, 4)

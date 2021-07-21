@@ -394,8 +394,8 @@ func TestVDiffPlanSuccess(t *testing.T) {
 					Opcode: engine.AggregateSum,
 					Col:    3,
 				}},
-				Keys:  []int{0},
-				Input: newMergeSorter(nil, []compareColInfo{{0, 0, true}}),
+				GroupByKeys: []engine.GroupByParams{{KeyCol: 0, WeightStringCol: -1}},
+				Input:       newMergeSorter(nil, []compareColInfo{{0, 0, true}}),
 			},
 			targetPrimitive: newMergeSorter(nil, []compareColInfo{{0, 0, true}}),
 		},
@@ -755,8 +755,15 @@ func TestVDiffSharded(t *testing.T) {
 			Columns:           []string{"c1", "c2"},
 			PrimaryKeyColumns: []string{"c1"},
 			Fields:            sqltypes.MakeTestFields("c1|c2", "int64|int64"),
-		}},
+		},
+			{
+				Name:              "_t1_gho",
+				Columns:           []string{"c1", "c2", "c3"},
+				PrimaryKeyColumns: []string{"c2"},
+				Fields:            sqltypes.MakeTestFields("c1|c2|c3", "int64|int64|int64"),
+			}},
 	}
+
 	env.tmc.schema = schm
 
 	query := "select c1, c2 from t1 order by c1 asc"
