@@ -137,7 +137,7 @@ service TabletManager {
   // InitReplica tells the tablet to reparent to the master unconditionally
   rpc InitReplica(tabletmanagerdata.InitReplicaRequest) returns (tabletmanagerdata.InitReplicaResponse) {};
 
-  // Deprecated, se DemotePrimary instead
+  // Deprecated, see DemotePrimary instead
   rpc DemoteMaster(tabletmanagerdata.DemotePrimaryRequest) returns (tabletmanagerdata.DemotePrimaryResponse) {};
 
   // DemotePrimary tells the soon-to-be-former primary it's gonna change
