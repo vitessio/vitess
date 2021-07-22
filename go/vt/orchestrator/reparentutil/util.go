@@ -34,8 +34,6 @@ import (
 
 	"k8s.io/apimachinery/pkg/util/sets"
 
-	"vitess.io/vitess/go/vt/orchestrator/logic"
-
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -57,8 +55,7 @@ type (
 		CheckIfFixed() bool
 		PreRecoveryProcesses(context.Context) error
 		StopReplicationAndBuildStatusMaps(context.Context, tmclient.TabletManagerClient, *events.Reparent, logutil.Logger) error
-		GetPrimaryRecoveryType() logic.MasterRecoveryType
-		AddError(string) error
+		CheckPrimaryRecoveryType() error
 		FindPrimaryCandidates(context.Context, logutil.Logger, tmclient.TabletManagerClient) error
 		CheckIfNeedToOverridePrimary() error
 		StartReplication(context.Context, *events.Reparent, logutil.Logger, tmclient.TabletManagerClient) error
@@ -84,7 +81,6 @@ type (
 )
 
 var (
-	_ ReparentFunctions = (*logic.VtOrcReparentFunctions)(nil)
 	_ ReparentFunctions = (*VtctlReparentFunctions)(nil)
 )
 
@@ -135,14 +131,9 @@ func (vtctlReparent *VtctlReparentFunctions) StopReplicationAndBuildStatusMaps(c
 	return nil
 }
 
-// GetPrimaryRecoveryType implements the ReparentFunctions interface
-func (vtctlReparent *VtctlReparentFunctions) GetPrimaryRecoveryType() logic.MasterRecoveryType {
-	return logic.MasterRecoveryGTID
-}
-
-// AddError implements the ReparentFunctions interface
-func (vtctlReparent *VtctlReparentFunctions) AddError(errorMsg string) error {
-	return vterrors.New(vtrpc.Code_INTERNAL, errorMsg)
+// CheckPrimaryRecoveryType implements the ReparentFunctions interface
+func (vtctlReparent *VtctlReparentFunctions) CheckPrimaryRecoveryType() error {
+	return nil
 }
 
 // FindPrimaryCandidates implements the ReparentFunctions interface
