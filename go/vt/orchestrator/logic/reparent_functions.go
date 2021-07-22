@@ -21,6 +21,9 @@ import (
 	"fmt"
 	"time"
 
+	"vitess.io/vitess/go/vt/orchestrator/attributes"
+	"vitess.io/vitess/go/vt/orchestrator/kv"
+
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	"vitess.io/vitess/go/vt/logutil"
@@ -236,4 +239,94 @@ func (vtorcReparent *VtOrcReparentFunctions) CheckIfNeedToOverridePrimary() erro
 		AuditTopologyRecovery(vtorcReparent.topologyRecovery, err.Error())
 	}
 	return nil
+}
+
+// StartReplication implements the ReparentFunctions interface
+func (vtorcReparent *VtOrcReparentFunctions) StartReplication(ctx context.Context, ev *events.Reparent, logger logutil.Logger, tmc tmclient.TabletManagerClient) error {
+	// And this is the end; whether successful or not, we're done.
+	resolveRecovery(vtorcReparent.topologyRecovery, vtorcReparent.promotedReplica)
+	// Now, see whether we are successful or not. From this point there's no going back.
+	if vtorcReparent.promotedReplica != nil {
+		// Success!
+		recoverDeadMasterSuccessCounter.Inc(1)
+		AuditTopologyRecovery(vtorcReparent.topologyRecovery, fmt.Sprintf("RecoverDeadMaster: successfully promoted %+v", vtorcReparent.promotedReplica.Key))
+		AuditTopologyRecovery(vtorcReparent.topologyRecovery, fmt.Sprintf("- RecoverDeadMaster: promoted server coordinates: %+v", vtorcReparent.promotedReplica.SelfBinlogCoordinates))
+
+		AuditTopologyRecovery(vtorcReparent.topologyRecovery, "- RecoverDeadMaster: will apply MySQL changes to promoted master")
+		{
+			_, err := inst.ResetReplicationOperation(&vtorcReparent.promotedReplica.Key)
+			if err != nil {
+				// Ugly, but this is important. Let's give it another try
+				_, err = inst.ResetReplicationOperation(&vtorcReparent.promotedReplica.Key)
+			}
+			AuditTopologyRecovery(vtorcReparent.topologyRecovery, fmt.Sprintf("- RecoverDeadMaster: applying RESET SLAVE ALL on promoted master: success=%t", (err == nil)))
+			if err != nil {
+				AuditTopologyRecovery(vtorcReparent.topologyRecovery, fmt.Sprintf("- RecoverDeadMaster: NOTE that %+v is promoted even though SHOW SLAVE STATUS may still show it has a master", vtorcReparent.promotedReplica.Key))
+			}
+		}
+		{
+			count := inst.MasterSemiSync(vtorcReparent.promotedReplica.Key)
+			err := inst.SetSemiSyncMaster(&vtorcReparent.promotedReplica.Key, count > 0)
+			AuditTopologyRecovery(vtorcReparent.topologyRecovery, fmt.Sprintf("- RecoverDeadMaster: applying semi-sync %v: success=%t", count > 0, (err == nil)))
+
+			// Dont' allow writes if semi-sync settings fail.
+			if err == nil {
+				_, err := inst.SetReadOnly(&vtorcReparent.promotedReplica.Key, false)
+				AuditTopologyRecovery(vtorcReparent.topologyRecovery, fmt.Sprintf("- RecoverDeadMaster: applying read-only=0 on promoted master: success=%t", (err == nil)))
+			}
+		}
+		// Let's attempt, though we won't necessarily succeed, to set old master as read-only
+		go func() {
+			_, err := inst.SetReadOnly(&vtorcReparent.analysisEntry.AnalyzedInstanceKey, true)
+			AuditTopologyRecovery(vtorcReparent.topologyRecovery, fmt.Sprintf("- RecoverDeadMaster: applying read-only=1 on demoted master: success=%t", (err == nil)))
+		}()
+
+		kvPairs := inst.GetClusterMasterKVPairs(vtorcReparent.analysisEntry.ClusterDetails.ClusterAlias, &vtorcReparent.promotedReplica.Key)
+		AuditTopologyRecovery(vtorcReparent.topologyRecovery, fmt.Sprintf("Writing KV %+v", kvPairs))
+		for _, kvPair := range kvPairs {
+			err := kv.PutKVPair(kvPair)
+			log.Errore(err)
+		}
+		{
+			AuditTopologyRecovery(vtorcReparent.topologyRecovery, fmt.Sprintf("Distributing KV %+v", kvPairs))
+			err := kv.DistributePairs(kvPairs)
+			log.Errore(err)
+		}
+		if config.Config.MasterFailoverDetachReplicaMasterHost {
+			postponedFunction := func() error {
+				AuditTopologyRecovery(vtorcReparent.topologyRecovery, "- RecoverDeadMaster: detaching master host on promoted master")
+				inst.DetachReplicaMasterHost(&vtorcReparent.promotedReplica.Key)
+				return nil
+			}
+			vtorcReparent.topologyRecovery.AddPostponedFunction(postponedFunction, fmt.Sprintf("RecoverDeadMaster, detaching promoted master host %+v", vtorcReparent.promotedReplica.Key))
+		}
+		func() error {
+			before := vtorcReparent.analysisEntry.AnalyzedInstanceKey.StringCode()
+			after := vtorcReparent.promotedReplica.Key.StringCode()
+			AuditTopologyRecovery(vtorcReparent.topologyRecovery, fmt.Sprintf("- RecoverDeadMaster: updating cluster_alias: %v -> %v", before, after))
+			//~~~inst.ReplaceClusterName(before, after)
+			if alias := vtorcReparent.analysisEntry.ClusterDetails.ClusterAlias; alias != "" {
+				inst.SetClusterAlias(vtorcReparent.promotedReplica.Key.StringCode(), alias)
+			} else {
+				inst.ReplaceAliasClusterName(before, after)
+			}
+			return nil
+		}()
+
+		attributes.SetGeneralAttribute(vtorcReparent.analysisEntry.ClusterDetails.ClusterDomain, vtorcReparent.promotedReplica.Key.StringCode())
+
+		if !vtorcReparent.skipProcesses {
+			// Execute post master-failover processes
+			executeProcesses(config.Config.PostMasterFailoverProcesses, "PostMasterFailoverProcesses", vtorcReparent.topologyRecovery, false)
+		}
+	} else {
+		recoverDeadMasterFailureCounter.Inc(1)
+	}
+	return nil
+}
+
+// GetNewPrimary implements the ReparentFunctions interface
+func (vtorcReparent *VtOrcReparentFunctions) GetNewPrimary() *topodatapb.Tablet {
+	tablet, _ := inst.ReadTablet(vtorcReparent.promotedReplica.Key)
+	return tablet
 }

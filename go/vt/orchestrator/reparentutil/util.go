@@ -22,6 +22,8 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/event"
+
 	"vitess.io/vitess/go/vt/concurrency"
 
 	"vitess.io/vitess/go/mysql"
@@ -59,6 +61,8 @@ type (
 		AddError(string) error
 		FindPrimaryCandidates(context.Context, logutil.Logger, tmclient.TabletManagerClient) error
 		CheckIfNeedToOverridePrimary() error
+		StartReplication(context.Context, *events.Reparent, logutil.Logger, tmclient.TabletManagerClient) error
+		GetNewPrimary() *topodatapb.Tablet
 	}
 
 	// VtctlReparentFunctions is the Vtctl implementation for ReparentFunctions
@@ -187,6 +191,17 @@ func (vtctlReparent *VtctlReparentFunctions) CheckIfNeedToOverridePrimary() erro
 	return nil
 }
 
+// StartReplication implements the ReparentFunctions interface
+func (vtctlReparent *VtctlReparentFunctions) StartReplication(ctx context.Context, ev *events.Reparent, logger logutil.Logger, tmc tmclient.TabletManagerClient) error {
+	// Do the promotion.
+	return vtctlReparent.promoteNewPrimary(ctx, ev, logger, tmc)
+}
+
+// GetNewPrimary implements the ReparentFunctions interface
+func (vtctlReparent *VtctlReparentFunctions) GetNewPrimary() *topodatapb.Tablet {
+	return vtctlReparent.tabletMap[vtctlReparent.winningPrimaryTabletAliasStr].Tablet
+}
+
 func (vtctlReparent *VtctlReparentFunctions) getLockAction(newPrimaryAlias *topodatapb.TabletAlias) string {
 	action := "EmergencyReparentShard"
 
@@ -251,6 +266,140 @@ func (vtctlReparent *VtctlReparentFunctions) waitForAllRelayLogsToApply(ctx cont
 	}
 
 	return nil
+}
+
+func (vtctlReparent *VtctlReparentFunctions) promoteNewPrimary(ctx context.Context, ev *events.Reparent, logger logutil.Logger, tmc tmclient.TabletManagerClient) error {
+	logger.Infof("promoting tablet %v to master", vtctlReparent.winningPrimaryTabletAliasStr)
+	event.DispatchUpdate(ev, "promoting replica")
+
+	newPrimaryTabletInfo, ok := vtctlReparent.tabletMap[vtctlReparent.winningPrimaryTabletAliasStr]
+	if !ok {
+		return vterrors.Errorf(vtrpc.Code_INTERNAL, "attempted to promote master-elect %v that was not in the tablet map; this an impossible situation", vtctlReparent.winningPrimaryTabletAliasStr)
+	}
+
+	rp, err := tmc.PromoteReplica(ctx, newPrimaryTabletInfo.Tablet)
+	if err != nil {
+		return vterrors.Wrapf(err, "master-elect tablet %v failed to be upgraded to master: %v", vtctlReparent.winningPrimaryTabletAliasStr, err)
+	}
+
+	if err := topo.CheckShardLocked(ctx, vtctlReparent.keyspace, vtctlReparent.shard); err != nil {
+		return vterrors.Wrapf(err, "lost topology lock, aborting: %v", err)
+	}
+
+	replCtx, replCancel := context.WithTimeout(ctx, vtctlReparent.WaitReplicasTimeout)
+	defer replCancel()
+
+	event.DispatchUpdate(ev, "reparenting all tablets")
+
+	// Create a context and cancel function to watch for the first successful
+	// SetMaster call on a replica. We use a background context so that this
+	// context is only ever Done when its cancel is called by the background
+	// goroutine we're about to spin up.
+	//
+	// Similarly, create a context and cancel for the replica waiter goroutine
+	// to signal when all replica goroutines have finished. In the case where at
+	// least one replica succeeds, replSuccessCtx will be canceled first, while
+	// allReplicasDoneCtx is guaranteed to be canceled within
+	// opts.WaitReplicasTimeout plus some jitter.
+	replSuccessCtx, replSuccessCancel := context.WithCancel(context.Background())
+	allReplicasDoneCtx, allReplicasDoneCancel := context.WithCancel(context.Background())
+
+	now := time.Now().UnixNano()
+	replWg := sync.WaitGroup{}
+	rec := concurrency.AllErrorRecorder{}
+
+	handlePrimary := func(alias string, ti *topo.TabletInfo) error {
+		logger.Infof("populating reparent journal on new master %v", alias)
+		return tmc.PopulateReparentJournal(replCtx, ti.Tablet, now, vtctlReparent.lockAction, newPrimaryTabletInfo.Alias, rp)
+	}
+
+	handleReplica := func(alias string, ti *topo.TabletInfo) {
+		defer replWg.Done()
+		logger.Infof("setting new master on replica %v", alias)
+
+		forceStart := false
+		if status, ok := vtctlReparent.statusMap[alias]; ok {
+			fs, err := ReplicaWasRunning(status)
+			if err != nil {
+				err = vterrors.Wrapf(err, "tablet %v could not determine StopReplicationStatus: %v", alias, err)
+				rec.RecordError(err)
+
+				return
+			}
+
+			forceStart = fs
+		}
+
+		err := tmc.SetMaster(replCtx, ti.Tablet, newPrimaryTabletInfo.Alias, now, "", forceStart)
+		if err != nil {
+			err = vterrors.Wrapf(err, "tablet %v SetMaster failed: %v", alias, err)
+			rec.RecordError(err)
+
+			return
+		}
+
+		// Signal that at least one goroutine succeeded to SetMaster.
+		replSuccessCancel()
+	}
+
+	numReplicas := 0
+
+	for alias, ti := range vtctlReparent.tabletMap {
+		switch {
+		case alias == vtctlReparent.winningPrimaryTabletAliasStr:
+			continue
+		case !vtctlReparent.IgnoreReplicas.Has(alias):
+			replWg.Add(1)
+			numReplicas++
+			go handleReplica(alias, ti)
+		}
+	}
+
+	// Spin up a background goroutine to wait until all replica goroutines
+	// finished. Polling this way allows us to have promoteNewPrimary return
+	// success as soon as (a) the primary successfully populates its reparent
+	// journal and (b) at least one replica successfully begins replicating.
+	//
+	// If we were to follow the more common pattern of blocking on replWg.Wait()
+	// in the main body of promoteNewPrimary, we would be bound to the
+	// time of slowest replica, instead of the time of the fastest successful
+	// replica, and we want ERS to be fast.
+	go func() {
+		replWg.Wait()
+		allReplicasDoneCancel()
+	}()
+
+	primaryErr := handlePrimary(vtctlReparent.winningPrimaryTabletAliasStr, newPrimaryTabletInfo)
+	if primaryErr != nil {
+		logger.Warningf("master failed to PopulateReparentJournal")
+		replCancel()
+
+		return vterrors.Wrapf(primaryErr, "failed to PopulateReparentJournal on master: %v", primaryErr)
+	}
+
+	select {
+	case <-replSuccessCtx.Done():
+		// At least one replica was able to SetMaster successfully
+		return nil
+	case <-allReplicasDoneCtx.Done():
+		// There are certain timing issues between replSuccessCtx.Done firing
+		// and allReplicasDoneCtx.Done firing, so we check again if truly all
+		// replicas failed (where `numReplicas` goroutines recorded an error) or
+		// one or more actually managed to succeed.
+		errCount := len(rec.Errors)
+
+		switch {
+		case errCount > numReplicas:
+			// Technically, rec.Errors should never be greater than numReplicas,
+			// but it's better to err on the side of caution here, but also
+			// we're going to be explicit that this is doubly unexpected.
+			return vterrors.Wrapf(rec.Error(), "received more errors (= %d) than replicas (= %d), which should be impossible: %v", errCount, numReplicas, rec.Error())
+		case errCount == numReplicas:
+			return vterrors.Wrapf(rec.Error(), "%d replica(s) failed: %v", numReplicas, rec.Error())
+		default:
+			return nil
+		}
+	}
 }
 
 // ChooseNewPrimary finds a tablet that should become a primary after reparent.
