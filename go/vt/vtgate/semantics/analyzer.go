@@ -287,6 +287,8 @@ func (a *analyzer) depsForExpr(expr sqlparser.Expr) TableSet {
 // resolveUnQualifiedColumn
 func (a *analyzer) resolveUnQualifiedColumn(current *scope, expr *sqlparser.ColName) (TableSet, error) {
 	var tsp *TableSet
+
+tryAgain:
 	for _, tbl := range current.tables {
 		ts := tbl.DepsFor(expr, a, len(current.tables) == 1)
 		if ts != nil && tsp != nil {
@@ -295,6 +297,10 @@ func (a *analyzer) resolveUnQualifiedColumn(current *scope, expr *sqlparser.ColN
 		if ts != nil {
 			tsp = ts
 		}
+	}
+	if tsp == nil && current.parent != nil {
+		current = current.parent
+		goto tryAgain
 	}
 	if tsp == nil {
 		return 0, nil
