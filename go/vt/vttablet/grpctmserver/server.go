@@ -259,10 +259,21 @@ func (s *server) ReplicationStatus(ctx context.Context, request *tabletmanagerda
 	return response, err
 }
 
-func (s *server) MasterStatus(ctx context.Context, request *tabletmanagerdatapb.MasterStatusRequest) (response *tabletmanagerdatapb.MasterStatusResponse, err error) {
+func (s *server) MasterStatus(ctx context.Context, request *tabletmanagerdatapb.PrimaryStatusRequest) (response *tabletmanagerdatapb.PrimaryStatusResponse, err error) {
 	defer s.tm.HandleRPCPanic(ctx, "PrimaryStatus", request, response, false /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
-	response = &tabletmanagerdatapb.MasterStatusResponse{}
+	response = &tabletmanagerdatapb.PrimaryStatusResponse{}
+	status, err := s.tm.MasterStatus(ctx)
+	if err == nil {
+		response.Status = status
+	}
+	return response, err
+}
+
+func (s *server) PrimaryStatus(ctx context.Context, request *tabletmanagerdatapb.PrimaryStatusRequest) (response *tabletmanagerdatapb.PrimaryStatusResponse, err error) {
+	defer s.tm.HandleRPCPanic(ctx, "PrimaryStatus", request, response, false /*verbose*/, &err)
+	ctx = callinfo.GRPCCallInfo(ctx)
+	response = &tabletmanagerdatapb.PrimaryStatusResponse{}
 	status, err := s.tm.MasterStatus(ctx)
 	if err == nil {
 		response.Status = status
@@ -448,10 +459,17 @@ func (s *server) ReplicaWasPromoted(ctx context.Context, request *tabletmanagerd
 	return response, s.tm.ReplicaWasPromoted(ctx)
 }
 
-func (s *server) SetMaster(ctx context.Context, request *tabletmanagerdatapb.SetMasterRequest) (response *tabletmanagerdatapb.SetMasterResponse, err error) {
+func (s *server) SetMaster(ctx context.Context, request *tabletmanagerdatapb.SetPrimaryRequest) (response *tabletmanagerdatapb.SetPrimaryResponse, err error) {
 	defer s.tm.HandleRPCPanic(ctx, "SetMaster", request, response, true /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
-	response = &tabletmanagerdatapb.SetMasterResponse{}
+	response = &tabletmanagerdatapb.SetPrimaryResponse{}
+	return response, s.tm.SetMaster(ctx, request.Parent, request.TimeCreatedNs, request.WaitPosition, request.ForceStartReplication)
+}
+
+func (s *server) SetPrimary(ctx context.Context, request *tabletmanagerdatapb.SetPrimaryRequest) (response *tabletmanagerdatapb.SetPrimaryResponse, err error) {
+	defer s.tm.HandleRPCPanic(ctx, "SetMaster", request, response, true /*verbose*/, &err)
+	ctx = callinfo.GRPCCallInfo(ctx)
+	response = &tabletmanagerdatapb.SetPrimaryResponse{}
 	return response, s.tm.SetMaster(ctx, request.Parent, request.TimeCreatedNs, request.WaitPosition, request.ForceStartReplication)
 }
 

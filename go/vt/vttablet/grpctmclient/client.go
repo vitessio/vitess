@@ -540,12 +540,17 @@ func (client *Client) ReplicationStatus(ctx context.Context, tablet *topodatapb.
 
 // MasterStatus is part of the tmclient.TabletManagerClient interface.
 func (client *Client) MasterStatus(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error) {
+	return client.PrimaryStatus(ctx, tablet)
+}
+
+// PrimaryStatus is part of the tmclient.TabletManagerClient interface.
+func (client *Client) PrimaryStatus(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error) {
 	c, closer, err := client.dialer.dial(ctx, tablet)
 	if err != nil {
 		return nil, err
 	}
 	defer closer.Close()
-	response, err := c.MasterStatus(ctx, &tabletmanagerdatapb.MasterStatusRequest{})
+	response, err := c.PrimaryStatus(ctx, &tabletmanagerdatapb.PrimaryStatusRequest{})
 	if err != nil {
 		return nil, err
 	}
@@ -808,12 +813,17 @@ func (client *Client) ReplicaWasPromoted(ctx context.Context, tablet *topodatapb
 
 // SetMaster is part of the tmclient.TabletManagerClient interface.
 func (client *Client) SetMaster(ctx context.Context, tablet *topodatapb.Tablet, parent *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool) error {
+	return client.SetPrimary(ctx, tablet, parent, timeCreatedNS, waitPosition, forceStartReplication)
+}
+
+// SetPrimary is part of the tmclient.TabletManagerClient interface.
+func (client *Client) SetPrimary(ctx context.Context, tablet *topodatapb.Tablet, parent *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool) error {
 	c, closer, err := client.dialer.dial(ctx, tablet)
 	if err != nil {
 		return err
 	}
 	defer closer.Close()
-	_, err = c.SetMaster(ctx, &tabletmanagerdatapb.SetMasterRequest{
+	_, err = c.SetPrimary(ctx, &tabletmanagerdatapb.SetPrimaryRequest{
 		Parent:                parent,
 		TimeCreatedNs:         timeCreatedNS,
 		WaitPosition:          waitPosition,
