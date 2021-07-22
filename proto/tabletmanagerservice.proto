@@ -143,8 +143,11 @@ service TabletManager {
   // DemotePrimary tells the soon-to-be-former primary it's gonna change
   rpc DemotePrimary(tabletmanagerdata.DemotePrimaryRequest) returns (tabletmanagerdata.DemotePrimaryResponse) {};
 
-  // UndoDemoteMaster reverts all changes made by DemoteMaster
-  rpc UndoDemoteMaster(tabletmanagerdata.UndoDemoteMasterRequest) returns (tabletmanagerdata.UndoDemoteMasterResponse) {};
+  // Deprecated, use UndoDemotePrimary instead
+  rpc UndoDemoteMaster(tabletmanagerdata.UndoDemotePrimaryRequest) returns (tabletmanagerdata.UndoDemotePrimaryResponse) {};
+
+  // UndoDemotePrimary reverts all changes made by DemotePrimary
+  rpc UndoDemotePrimary(tabletmanagerdata.UndoDemotePrimaryRequest) returns (tabletmanagerdata.UndoDemotePrimaryResponse) {};
 
   // ReplicaWasPromoted tells the remote tablet it is now the master
   rpc ReplicaWasPromoted(tabletmanagerdata.ReplicaWasPromotedRequest) returns (tabletmanagerdata.ReplicaWasPromotedResponse) {};
