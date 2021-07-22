@@ -176,7 +176,7 @@ func TestGroupByBindingSingleTable(t *testing.T) {
 		T1,
 	}, {
 		"select t.id from t, t1 group by id",
-		T2,
+		T1,
 	}}
 	for _, tc := range tcases {
 		t.Run(tc.sql, func(t *testing.T) {
