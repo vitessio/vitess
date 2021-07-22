@@ -19,6 +19,9 @@ package reparentutil
 import (
 	"context"
 
+	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vterrors"
+
 	"vitess.io/vitess/go/event"
 
 	"vitess.io/vitess/go/vt/logutil"
@@ -84,7 +87,9 @@ func (erp *EmergencyReparenter2) reparentShardLocked(ctx context.Context, ev *ev
 	}
 
 	ts := reparentFunctions.GetTopoServer()
-	shardInfo, err := ts.GetShard(ctx, reparentFunctions.GetKeyspace(), reparentFunctions.GetShard())
+	keyspace := reparentFunctions.GetKeyspace()
+	shard := reparentFunctions.GetShard()
+	shardInfo, err := ts.GetShard(ctx, keyspace, shard)
 	if err != nil {
 		return err
 	}
@@ -93,6 +98,14 @@ func (erp *EmergencyReparenter2) reparentShardLocked(ctx context.Context, ev *ev
 
 	if err := reparentFunctions.PreRecoveryProcesses(ctx); err != nil {
 		return err
+	}
+
+	if err := reparentFunctions.StopReplicationAndBuildStatusMaps(ctx, erp.tmc, ev, erp.logger); err != nil {
+		return err
+	}
+
+	if err := topo.CheckShardLocked(ctx, keyspace, shard); err != nil {
+		return vterrors.Wrapf(err, "lost topology lock, aborting: %v", err)
 	}
 
 	return nil
