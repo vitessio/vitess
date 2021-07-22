@@ -252,8 +252,7 @@ func LockShard(ctx context.Context, instanceKey inst.InstanceKey) (context.Conte
 	if err != nil {
 		return nil, nil, err
 	}
-	ctx, cancel := context.WithTimeout(ctx, time.Duration(config.Config.LockShardTimeoutSeconds)*time.Second)
-	defer cancel()
+	ctx, _ = context.WithTimeout(ctx, time.Duration(config.Config.LockShardTimeoutSeconds)*time.Second)
 	atomic.AddInt32(&shardsLockCounter, 1)
 	ctx, unlock, err := ts.LockShard(ctx, tablet.Keyspace, tablet.Shard, "Orc Recovery")
 	if err != nil {
