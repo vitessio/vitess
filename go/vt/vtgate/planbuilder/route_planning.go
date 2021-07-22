@@ -63,7 +63,6 @@ func gen4Planner(_ string) func(sqlparser.Statement, *sqlparser.ReservedVars, Co
 }
 
 func newBuildSelectPlan(sel *sqlparser.Select, reservedVars *sqlparser.ReservedVars, vschema ContextVSchema) (logicalPlan, error) {
-
 	directives := sqlparser.ExtractCommentDirectives(sel.Comments)
 	if len(directives) > 0 {
 		return nil, semantics.Gen4NotSupportedF("comment directives")
@@ -790,13 +789,42 @@ func tryMerge(a, b joinTree, joinPredicates []sqlparser.Expr, semTable *semantic
 	return r
 }
 
-func joinTreesToRoutes(a, b joinTree) (*routePlan, *routePlan) {
-	aRoute, ok := a.(*routePlan)
+func makeRoute(j joinTree) *routePlan {
+	rb, ok := j.(*routePlan)
+	if ok {
+		return rb
+	}
+
+	dp, ok := j.(*derivedPlan)
 	if !ok {
+		return nil
+	}
+
+	inner := makeRoute(dp.inner)
+	if inner == nil {
+		return nil
+	}
+
+	dt := &derivedTable{
+		tables:     inner.tables,
+		query:      dp.query,
+		predicates: inner.predicates,
+		leftJoins:  inner.leftJoins,
+	}
+
+	inner.tables = parenTables{dt}
+	inner.predicates = nil
+	inner.leftJoins = nil
+	return inner
+}
+
+func joinTreesToRoutes(a, b joinTree) (*routePlan, *routePlan) {
+	aRoute := makeRoute(a)
+	if aRoute == nil {
 		return nil, nil
 	}
-	bRoute, ok := b.(*routePlan)
-	if !ok {
+	bRoute := makeRoute(b)
+	if bRoute == nil {
 		return nil, nil
 	}
 	return aRoute, bRoute
