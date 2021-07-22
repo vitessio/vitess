@@ -19,6 +19,10 @@ package reparentutil
 import (
 	"context"
 
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+
+	"google.golang.org/protobuf/proto"
+
 	"vitess.io/vitess/go/vt/orchestrator/logic"
 
 	"vitess.io/vitess/go/vt/topo"
@@ -79,7 +83,7 @@ func (erp *EmergencyReparenter2) ReparentShard(ctx context.Context, reparentFunc
 
 	err = erp.reparentShardLocked(ctx, ev, reparentFunctions)
 
-	return ev, nil
+	return ev, err
 }
 
 func (erp *EmergencyReparenter2) reparentShardLocked(ctx context.Context, ev *events.Reparent, reparentFunctions ReparentFunctions) error {
@@ -127,6 +131,12 @@ func (erp *EmergencyReparenter2) reparentShardLocked(ctx context.Context, ev *ev
 	if err := topo.CheckShardLocked(ctx, keyspace, shard); err != nil {
 		return vterrors.Wrapf(err, "lost topology lock, aborting: %v", err)
 	}
+
+	if err := reparentFunctions.StartReplication(ctx, ev, erp.logger, erp.tmc); err != nil {
+		return err
+	}
+
+	ev.NewMaster = proto.Clone(reparentFunctions.GetNewPrimary()).(*topodatapb.Tablet)
 
 	return nil
 }
