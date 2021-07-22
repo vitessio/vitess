@@ -345,7 +345,7 @@ func (vc *VitessCluster) AddShards(t testing.TB, cells []*Cell, keyspace *Keyspa
 			}
 		}
 		require.NotEqual(t, 0, primaryTabletUID, "Should have created a primary tablet")
-		log.Infof("InitShardMaster for %d", primaryTabletUID)
+		log.Infof("InitShardPrimary for %d", primaryTabletUID)
 		require.NoError(t, vc.VtctlClient.InitShardPrimary(keyspace.Name, shardName, cells[0].Name, primaryTabletUID))
 		log.Infof("Finished creating shard %s", shard.Name)
 	}

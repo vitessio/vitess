@@ -144,11 +144,13 @@ func transformRoutePlan(n *routePlan) (*route, error) {
 
 	return &route{
 		eroute: &engine.Route{
-			Opcode:    n.routeOpCode,
-			TableName: strings.Join(tableNames, ", "),
-			Keyspace:  n.keyspace,
-			Vindex:    singleColumn,
-			Values:    n.vindexValues,
+			Opcode:              n.routeOpCode,
+			TableName:           strings.Join(tableNames, ", "),
+			Keyspace:            n.keyspace,
+			Vindex:              singleColumn,
+			Values:              n.vindexValues,
+			SysTableTableName:   n.SysTableTableName,
+			SysTableTableSchema: n.SysTableTableSchema,
 		},
 		Select: &sqlparser.Select{
 			SelectExprs: expressions,
@@ -186,7 +188,7 @@ func relToTableExpr(t relation) (sqlparser.TableExpr, error) {
 			tables = append(tables, tableExpr)
 		}
 		return &sqlparser.ParenTableExpr{Exprs: tables}, nil
-	case *leJoin:
+	case *joinTables:
 		lExpr, err := relToTableExpr(t.lhs)
 		if err != nil {
 			return nil, err

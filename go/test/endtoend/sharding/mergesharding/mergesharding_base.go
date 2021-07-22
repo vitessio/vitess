@@ -197,19 +197,19 @@ func TestMergesharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 	}
 
 	// Init Shard Master
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("InitShardMaster",
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("InitShardPrimary",
 		"-force", fmt.Sprintf("%s/%s", keyspaceName, shard0.Name), shard0Primary.Alias)
 	require.NoError(t, err)
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("InitShardMaster",
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("InitShardPrimary",
 		"-force", fmt.Sprintf("%s/%s", keyspaceName, shard1.Name), shard1Primary.Alias)
 	require.NoError(t, err)
 
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("InitShardMaster",
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("InitShardPrimary",
 		"-force", fmt.Sprintf("%s/%s", keyspaceName, shard2.Name), shard2Primary.Alias)
 	require.NoError(t, err)
 
 	// Init Shard Master on Merge Shard
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("InitShardMaster",
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("InitShardPrimary",
 		"-force", fmt.Sprintf("%s/%s", keyspaceName, shard3.Name), shard3Primary.Alias)
 	require.NoError(t, err)
 

@@ -78,8 +78,9 @@ Gen4 plan same as above
     "Table": "`user`"
   }
 }
+Gen4 plan same as above
 
-# distinct and group by together for single route.
+# distinct and group by together for single route - group by is redundant
 "select distinct col1, id from user group by col1"
 {
   "QueryType": "SELECT",
@@ -93,6 +94,21 @@ Gen4 plan same as above
     },
     "FieldQuery": "select col1, id from `user` where 1 != 1 group by col1",
     "Query": "select distinct col1, id from `user` group by col1",
+    "Table": "`user`"
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select distinct col1, id from user group by col1",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select col1, id from `user` where 1 != 1",
+    "Query": "select distinct col1, id from `user`",
     "Table": "`user`"
   }
 }
@@ -378,6 +394,26 @@ Gen4 plan same as above
     ]
   }
 }
+{
+  "QueryType": "SELECT",
+  "Original": "select distinct col1, col2 from user group by col1",
+  "Instructions": {
+    "OperatorType": "Distinct",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select col1, col2 from `user` where 1 != 1",
+        "Query": "select distinct col1, col2 from `user`",
+        "Table": "`user`"
+      }
+    ]
+  }
+}
 
 # aggregate on RHS subquery (tests symbol table merge)
 "select user.a, t.b from user join (select count(*) b from unsharded) as t"
@@ -606,6 +642,7 @@ Gen4 plan same as above
     "Table": "`user`"
   }
 }
+Gen4 plan same as above
 
 # group by a unique vindex where alias from select list is used
 "select id as val, 1+count(*) from user group by val"
@@ -624,6 +661,7 @@ Gen4 plan same as above
     "Table": "`user`"
   }
 }
+Gen4 plan same as above
 
 # group by a unique vindex where expression is qualified (alias should be ignored)
 "select val as id, 1+count(*) from user group by user.id"
@@ -642,6 +680,7 @@ Gen4 plan same as above
     "Table": "`user`"
   }
 }
+Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains nonaggregated column 'val' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by
 
 # group by a unique vindex where it should skip non-aliased expressions.
 "select *, id, 1+count(*) from user group by id"
@@ -740,6 +779,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4 error: In aggregated query without GROUP BY, expression of SELECT list contains nonaggregated column 'id'; this is incompatible with sql_mode=only_full_group_by
 
 # scatter aggregate using distinct
 "select distinct col from user"
@@ -762,6 +802,26 @@ Gen4 plan same as above
         "OrderBy": "(0|1) ASC",
         "Query": "select distinct col, weight_string(col) from `user` order by col asc",
         "ResultColumns": 1,
+        "Table": "`user`"
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select distinct col from user",
+  "Instructions": {
+    "OperatorType": "Distinct",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select col from `user` where 1 != 1",
+        "Query": "select distinct col from `user`",
         "Table": "`user`"
       }
     ]
@@ -1177,6 +1237,31 @@ Gen4 plan same as above
     ]
   }
 }
+{
+  "QueryType": "SELECT",
+  "Original": "select a, b, count(*) from user group by b, a",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Ordered",
+    "Aggregates": "count(2)",
+    "GroupBy": "(1|3), (0|4)",
+    "ResultColumns": 3,
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select a, b, count(*), weight_string(b), weight_string(a) from `user` where 1 != 1 group by b, a",
+        "OrderBy": "(1|3) ASC, (0|4) ASC",
+        "Query": "select a, b, count(*), weight_string(b), weight_string(a) from `user` group by b, a order by b asc, a asc",
+        "Table": "`user`"
+      }
+    ]
+  }
+}
 
 # scatter aggregate group by column number
 "select col from user group by 1"
@@ -1199,6 +1284,30 @@ Gen4 plan same as above
         "OrderBy": "(0|1) ASC",
         "Query": "select col, weight_string(col) from `user` group by 1 order by col asc",
         "ResultColumns": 1,
+        "Table": "`user`"
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select col from user group by 1",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Ordered",
+    "GroupBy": "(0|1)",
+    "ResultColumns": 1,
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select col, weight_string(col) from `user` where 1 != 1 group by col",
+        "OrderBy": "(0|1) ASC",
+        "Query": "select col, weight_string(col) from `user` group by col order by col asc",
         "Table": "`user`"
       }
     ]
@@ -1239,6 +1348,7 @@ Gen4 plan same as above
 "select distinct a+1 from user"
 "generating order by clause: cannot reference a complex expression"
 
+
 # scatter aggregate with numbered order by columns
 "select a, b, c, d, count(*) from user group by 1, 2, 3 order by 1, 2, 3"
 {
@@ -1266,31 +1376,7 @@ Gen4 plan same as above
     ]
   }
 }
-{
-  "QueryType": "SELECT",
-  "Original": "select a, b, c, d, count(*) from user group by 1, 2, 3 order by 1, 2, 3",
-  "Instructions": {
-    "OperatorType": "Aggregate",
-    "Variant": "Ordered",
-    "Aggregates": "count(4)",
-    "GroupBy": "(0|5), (1|6), (2|7)",
-    "ResultColumns": 5,
-    "Inputs": [
-      {
-        "OperatorType": "Route",
-        "Variant": "SelectScatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select a, b, c, d, count(*), weight_string(a), weight_string(b), weight_string(c) from `user` where 1 != 1 group by a, b, c",
-        "OrderBy": "(0|5) ASC, (1|6) ASC, (2|7) ASC",
-        "Query": "select a, b, c, d, count(*), weight_string(a), weight_string(b), weight_string(c) from `user` group by a, b, c order by a asc, b asc, c asc",
-        "Table": "`user`"
-      }
-    ]
-  }
-}
+Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains nonaggregated column 'd' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by
 
 # scatter aggregate with named order by columns
 "select a, b, c, d, count(*) from user group by 1, 2, 3 order by a, b, c"
@@ -1319,31 +1405,7 @@ Gen4 plan same as above
     ]
   }
 }
-{
-  "QueryType": "SELECT",
-  "Original": "select a, b, c, d, count(*) from user group by 1, 2, 3 order by a, b, c",
-  "Instructions": {
-    "OperatorType": "Aggregate",
-    "Variant": "Ordered",
-    "Aggregates": "count(4)",
-    "GroupBy": "(0|5), (1|6), (2|7)",
-    "ResultColumns": 5,
-    "Inputs": [
-      {
-        "OperatorType": "Route",
-        "Variant": "SelectScatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select a, b, c, d, count(*), weight_string(a), weight_string(b), weight_string(c) from `user` where 1 != 1 group by a, b, c",
-        "OrderBy": "(0|5) ASC, (1|6) ASC, (2|7) ASC",
-        "Query": "select a, b, c, d, count(*), weight_string(a), weight_string(b), weight_string(c) from `user` group by a, b, c order by a asc, b asc, c asc",
-        "Table": "`user`"
-      }
-    ]
-  }
-}
+Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains nonaggregated column 'd' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by
 
 # scatter aggregate with jumbled order by columns
 "select a, b, c, d, count(*) from user group by 1, 2, 3, 4 order by d, b, a, c"
@@ -1542,6 +1604,37 @@ Gen4 plan same as above
     ]
   }
 }
+{
+  "QueryType": "SELECT",
+  "Original": "select col, count(*) from user group by col limit 10",
+  "Instructions": {
+    "OperatorType": "Limit",
+    "Count": 10,
+    "Inputs": [
+      {
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "Aggregates": "count(1)",
+        "GroupBy": "(0|2)",
+        "ResultColumns": 2,
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select col, count(*), weight_string(col) from `user` where 1 != 1 group by col",
+            "OrderBy": "(0|2) ASC",
+            "Query": "select col, count(*), weight_string(col) from `user` group by col order by col asc limit :__upper_limit",
+            "Table": "`user`"
+          }
+        ]
+      }
+    ]
+  }
+}
 
 # Group by with collate operator
 "select user.col1 as a from user where user.id = 5 group by a collate utf8_general_ci"
@@ -1636,6 +1729,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4 error: In aggregated query without GROUP BY, expression of SELECT list contains nonaggregated column 'a'; this is incompatible with sql_mode=only_full_group_by
 
 # distinct and aggregate functions
 "select distinct a, count(*) from user group by a"
@@ -1669,6 +1763,36 @@ Gen4 plan same as above
     ]
   }
 }
+{
+  "QueryType": "SELECT",
+  "Original": "select distinct a, count(*) from user group by a",
+  "Instructions": {
+    "OperatorType": "Distinct",
+    "Inputs": [
+      {
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "Aggregates": "count(1)",
+        "GroupBy": "(0|2)",
+        "ResultColumns": 2,
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select a, count(*), weight_string(a) from `user` where 1 != 1 group by a",
+            "OrderBy": "(0|2) ASC",
+            "Query": "select a, count(*), weight_string(a) from `user` group by a order by a asc",
+            "Table": "`user`"
+          }
+        ]
+      }
+    ]
+  }
+}
 
 # Group by invalid column number (code is duplicated from symab).
 "select id from user group by 1.1"
@@ -1683,3 +1807,102 @@ Gen4 plan same as above
 "select count(distinct *) from user"
 "syntax error: count(distinct *)"
 Gen4 plan same as above
+
+# optimize group by when using distinct with no aggregation
+"select distinct col1, col2 from user group by col1, col2"
+{
+  "QueryType": "SELECT",
+  "Original": "select distinct col1, col2 from user group by col1, col2",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Ordered",
+    "GroupBy": "0, 1, 0, 1",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select col1, col2, weight_string(col1), weight_string(col2) from `user` where 1 != 1 group by col1, col2",
+        "OrderBy": "(0|2) ASC, (1|3) ASC, (0|2) ASC, (1|3) ASC",
+        "Query": "select distinct col1, col2, weight_string(col1), weight_string(col2) from `user` group by col1, col2 order by col1 asc, col2 asc, col1 asc, col2 asc",
+        "ResultColumns": 2,
+        "Table": "`user`"
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select distinct col1, col2 from user group by col1, col2",
+  "Instructions": {
+    "OperatorType": "Distinct",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select col1, col2 from `user` where 1 != 1",
+        "Query": "select distinct col1, col2 from `user`",
+        "Table": "`user`"
+      }
+    ]
+  }
+}
+
+# do not use distinct when using only aggregates and no group by
+"select distinct count(*) from user"
+{
+  "QueryType": "SELECT",
+  "Original": "select distinct count(*) from user",
+  "Instructions": {
+    "OperatorType": "Distinct",
+    "Inputs": [
+      {
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "Aggregates": "count(0)",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select count(*) from `user` where 1 != 1",
+            "Query": "select count(*) from `user`",
+            "Table": "`user`"
+          }
+        ]
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select distinct count(*) from user",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Ordered",
+    "Aggregates": "count(0)",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select count(*) from `user` where 1 != 1",
+        "Query": "select count(*) from `user`",
+        "Table": "`user`"
+      }
+    ]
+  }
+}

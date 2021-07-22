@@ -131,7 +131,7 @@ type TabletManagerClient struct {
 	DemoteMasterDelays map[string]time.Duration
 	// keyed by tablet alias.
 	DemoteMasterResults map[string]struct {
-		Status *replicationdatapb.MasterStatus
+		Status *replicationdatapb.PrimaryStatus
 		Error  error
 	}
 	// keyed by tablet alias.
@@ -217,7 +217,7 @@ func (fake *TabletManagerClient) ChangeType(ctx context.Context, tablet *topodat
 }
 
 // DemoteMaster is part of the tmclient.TabletManagerClient interface.
-func (fake *TabletManagerClient) DemoteMaster(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.MasterStatus, error) {
+func (fake *TabletManagerClient) DemoteMaster(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error) {
 	if fake.DemoteMasterResults == nil {
 		return nil, assert.AnError
 	}

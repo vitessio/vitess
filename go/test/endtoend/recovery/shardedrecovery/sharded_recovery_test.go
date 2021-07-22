@@ -94,7 +94,7 @@ var (
 
 // test_recovery will:
 // - create a shard with primary and replica1 only
-// - run InitShardMaster
+// - run InitShardPrimary
 // - insert some data
 // - take a backup
 // - insert more data on the primary
@@ -140,10 +140,10 @@ func TestUnShardedRecoveryAfterSharding(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	err = localCluster.VtctlProcess.ExecuteCommand("InitShardMaster", "-force", "test_keyspace/-80", shard0Primary.Alias)
+	err = localCluster.VtctlProcess.ExecuteCommand("InitShardPrimary", "-force", "test_keyspace/-80", shard0Primary.Alias)
 	require.NoError(t, err)
 
-	err = localCluster.VtctlProcess.ExecuteCommand("InitShardMaster", "-force", "test_keyspace/80-", shard1Primary.Alias)
+	err = localCluster.VtctlProcess.ExecuteCommand("InitShardPrimary", "-force", "test_keyspace/80-", shard1Primary.Alias)
 	require.NoError(t, err)
 
 	shardedTablets := []*cluster.Vttablet{shard0Primary, shard0Replica, shard0RdOnly, shard1Primary, shard1Replica, shard1RdOnly}
@@ -245,7 +245,7 @@ func TestUnShardedRecoveryAfterSharding(t *testing.T) {
 
 // test_recovery will:
 // - create a shard with primary and replica1 only
-// - run InitShardMaster
+// - run InitShardPrimary
 // - insert some data
 // - perform a resharding
 // - take a backup of both new shards
@@ -281,10 +281,10 @@ func TestShardedRecovery(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	err = localCluster.VtctlProcess.ExecuteCommand("InitShardMaster", "-force", "test_keyspace/-80", shard0Primary.Alias)
+	err = localCluster.VtctlProcess.ExecuteCommand("InitShardPrimary", "-force", "test_keyspace/-80", shard0Primary.Alias)
 	require.NoError(t, err)
 
-	err = localCluster.VtctlProcess.ExecuteCommand("InitShardMaster", "-force", "test_keyspace/80-", shard1Primary.Alias)
+	err = localCluster.VtctlProcess.ExecuteCommand("InitShardPrimary", "-force", "test_keyspace/80-", shard1Primary.Alias)
 	require.NoError(t, err)
 
 	for _, tablet := range shardedTablets {

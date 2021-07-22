@@ -405,18 +405,26 @@ func (s *server) DemoteMaster(ctx context.Context, request *tabletmanagerdatapb.
 	defer s.tm.HandleRPCPanic(ctx, "DemoteMaster", request, response, true /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response = &tabletmanagerdatapb.DemoteMasterResponse{}
-	masterStatus, err := s.tm.DemoteMaster(ctx)
+	status, err := s.tm.DemoteMaster(ctx)
 	if err == nil {
-		response.DeprecatedPosition = masterStatus.Position //nolint
-		response.MasterStatus = masterStatus
+		response.DeprecatedPosition = status.Position //nolint
+		response.PrimaryStatus = status
 	}
 	return response, err
 }
 
-func (s *server) UndoDemoteMaster(ctx context.Context, request *tabletmanagerdatapb.UndoDemoteMasterRequest) (response *tabletmanagerdatapb.UndoDemoteMasterResponse, err error) {
+func (s *server) UndoDemoteMaster(ctx context.Context, request *tabletmanagerdatapb.UndoDemotePrimaryRequest) (response *tabletmanagerdatapb.UndoDemotePrimaryResponse, err error) {
 	defer s.tm.HandleRPCPanic(ctx, "UndoDemoteMaster", request, response, true /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
-	response = &tabletmanagerdatapb.UndoDemoteMasterResponse{}
+	response = &tabletmanagerdatapb.UndoDemotePrimaryResponse{}
+	err = s.tm.UndoDemoteMaster(ctx)
+	return response, err
+}
+
+func (s *server) UndoDemotePrimary(ctx context.Context, request *tabletmanagerdatapb.UndoDemotePrimaryRequest) (response *tabletmanagerdatapb.UndoDemotePrimaryResponse, err error) {
+	defer s.tm.HandleRPCPanic(ctx, "UndoDemoteMaster", request, response, true /*verbose*/, &err)
+	ctx = callinfo.GRPCCallInfo(ctx)
+	response = &tabletmanagerdatapb.UndoDemotePrimaryResponse{}
 	err = s.tm.UndoDemoteMaster(ctx)
 	return response, err
 }
