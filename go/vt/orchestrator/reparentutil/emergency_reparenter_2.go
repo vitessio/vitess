@@ -91,5 +91,9 @@ func (erp *EmergencyReparenter2) reparentShardLocked(ctx context.Context, ev *ev
 	ev.ShardInfo = *shardInfo
 	event.DispatchUpdate(ev, "reading all tablets")
 
+	if err := reparentFunctions.PreRecoveryProcesses(ctx); err != nil {
+		return err
+	}
+
 	return nil
 }

@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	"vitess.io/vitess/go/vt/orchestrator/config"
+
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
@@ -62,4 +64,17 @@ func (vtorcReparent *VtOrcReparentFunctions) CheckIfFixed() bool {
 	AuditTopologyRecovery(vtorcReparent.topologyRecovery, fmt.Sprintf("will handle DeadMaster event on %+v", vtorcReparent.analysisEntry.ClusterDetails.ClusterName))
 	recoverDeadMasterCounter.Inc(1)
 	return false
+}
+
+// PreRecoveryProcesses implements the ReparentFunctions interface
+func (vtorcReparent *VtOrcReparentFunctions) PreRecoveryProcesses(ctx context.Context) error {
+	inst.AuditOperation("recover-dead-master", &vtorcReparent.analysisEntry.AnalyzedInstanceKey, "problem found; will recover")
+	if !vtorcReparent.skipProcesses {
+		if err := executeProcesses(config.Config.PreFailoverProcesses, "PreFailoverProcesses", vtorcReparent.topologyRecovery, true); err != nil {
+			return vtorcReparent.topologyRecovery.AddError(err)
+		}
+	}
+
+	AuditTopologyRecovery(vtorcReparent.topologyRecovery, fmt.Sprintf("RecoverDeadMaster: will recover %+v", vtorcReparent.analysisEntry.AnalyzedInstanceKey))
+	return nil
 }
