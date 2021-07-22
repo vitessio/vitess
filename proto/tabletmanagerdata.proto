@@ -285,10 +285,10 @@ message PrimaryStatusResponse {
   replicationdata.PrimaryStatus status = 1;
 }
 
-message MasterPositionRequest {
+message PrimaryPositionRequest {
 }
 
-message MasterPositionResponse {
+message PrimaryPositionResponse {
   string position = 1;
 }
 

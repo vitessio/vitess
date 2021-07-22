@@ -94,7 +94,10 @@ service TabletManager {
   rpc PrimaryStatus(tabletmanagerdata.PrimaryStatusRequest) returns (tabletmanagerdata.PrimaryStatusResponse) {};
 
   // MasterPosition returns the current master position
-  rpc MasterPosition(tabletmanagerdata.MasterPositionRequest) returns (tabletmanagerdata.MasterPositionResponse) {};
+  rpc MasterPosition(tabletmanagerdata.PrimaryPositionRequest) returns (tabletmanagerdata.PrimaryPositionResponse) {};
+
+  // PrimaryPosition returns the current master position
+  rpc PrimaryPosition(tabletmanagerdata.PrimaryPositionRequest) returns (tabletmanagerdata.PrimaryPositionResponse) {};
 
   // WaitForPosition waits for the position to be reached
   rpc WaitForPosition(tabletmanagerdata.WaitForPositionRequest) returns (tabletmanagerdata.WaitForPositionResponse) {};

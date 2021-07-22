@@ -2268,7 +2268,7 @@ func (m *PrimaryStatusResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error)
 	return len(dAtA) - i, nil
 }
 
-func (m *MasterPositionRequest) MarshalVT() (dAtA []byte, err error) {
+func (m *PrimaryPositionRequest) MarshalVT() (dAtA []byte, err error) {
 	if m == nil {
 		return nil, nil
 	}
@@ -2281,12 +2281,12 @@ func (m *MasterPositionRequest) MarshalVT() (dAtA []byte, err error) {
 	return dAtA[:n], nil
 }
 
-func (m *MasterPositionRequest) MarshalToVT(dAtA []byte) (int, error) {
+func (m *PrimaryPositionRequest) MarshalToVT(dAtA []byte) (int, error) {
 	size := m.SizeVT()
 	return m.MarshalToSizedBufferVT(dAtA[:size])
 }
 
-func (m *MasterPositionRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
+func (m *PrimaryPositionRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m == nil {
 		return 0, nil
 	}
@@ -2301,7 +2301,7 @@ func (m *MasterPositionRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error)
 	return len(dAtA) - i, nil
 }
 
-func (m *MasterPositionResponse) MarshalVT() (dAtA []byte, err error) {
+func (m *PrimaryPositionResponse) MarshalVT() (dAtA []byte, err error) {
 	if m == nil {
 		return nil, nil
 	}
@@ -2314,12 +2314,12 @@ func (m *MasterPositionResponse) MarshalVT() (dAtA []byte, err error) {
 	return dAtA[:n], nil
 }
 
-func (m *MasterPositionResponse) MarshalToVT(dAtA []byte) (int, error) {
+func (m *PrimaryPositionResponse) MarshalToVT(dAtA []byte) (int, error) {
 	size := m.SizeVT()
 	return m.MarshalToSizedBufferVT(dAtA[:size])
 }
 
-func (m *MasterPositionResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
+func (m *PrimaryPositionResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m == nil {
 		return 0, nil
 	}
@@ -4989,7 +4989,7 @@ func (m *PrimaryStatusResponse) SizeVT() (n int) {
 	return n
 }
 
-func (m *MasterPositionRequest) SizeVT() (n int) {
+func (m *PrimaryPositionRequest) SizeVT() (n int) {
 	if m == nil {
 		return 0
 	}
@@ -5001,7 +5001,7 @@ func (m *MasterPositionRequest) SizeVT() (n int) {
 	return n
 }
 
-func (m *MasterPositionResponse) SizeVT() (n int) {
+func (m *PrimaryPositionResponse) SizeVT() (n int) {
 	if m == nil {
 		return 0
 	}
@@ -10610,7 +10610,7 @@ func (m *PrimaryStatusResponse) UnmarshalVT(dAtA []byte) error {
 	}
 	return nil
 }
-func (m *MasterPositionRequest) UnmarshalVT(dAtA []byte) error {
+func (m *PrimaryPositionRequest) UnmarshalVT(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -10633,10 +10633,10 @@ func (m *MasterPositionRequest) UnmarshalVT(dAtA []byte) error {
 		fieldNum := int32(wire >> 3)
 		wireType := int(wire & 0x7)
 		if wireType == 4 {
-			return fmt.Errorf("proto: MasterPositionRequest: wiretype end group for non-group")
+			return fmt.Errorf("proto: PrimaryPositionRequest: wiretype end group for non-group")
 		}
 		if fieldNum <= 0 {
-			return fmt.Errorf("proto: MasterPositionRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+			return fmt.Errorf("proto: PrimaryPositionRequest: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		default:
@@ -10661,7 +10661,7 @@ func (m *MasterPositionRequest) UnmarshalVT(dAtA []byte) error {
 	}
 	return nil
 }
-func (m *MasterPositionResponse) UnmarshalVT(dAtA []byte) error {
+func (m *PrimaryPositionResponse) UnmarshalVT(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -10684,10 +10684,10 @@ func (m *MasterPositionResponse) UnmarshalVT(dAtA []byte) error {
 		fieldNum := int32(wire >> 3)
 		wireType := int(wire & 0x7)
 		if wireType == 4 {
-			return fmt.Errorf("proto: MasterPositionResponse: wiretype end group for non-group")
+			return fmt.Errorf("proto: PrimaryPositionResponse: wiretype end group for non-group")
 		}
 		if fieldNum <= 0 {
-			return fmt.Errorf("proto: MasterPositionResponse: illegal tag %d (wire type %d)", fieldNum, wire)
+			return fmt.Errorf("proto: PrimaryPositionResponse: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		case 1:
