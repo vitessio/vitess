@@ -19,6 +19,7 @@ package logic
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
@@ -40,6 +41,8 @@ type VtOrcReparentFunctions struct {
 	candidateInstanceKey *inst.InstanceKey
 	skipProcesses        bool
 	topologyRecovery     *TopologyRecovery
+	promotedReplica      *inst.Instance
+	lostReplicas         [](*inst.Instance)
 }
 
 // LockShard implements the ReparentFunctions interface
@@ -117,4 +120,70 @@ func (vtorcReparent *VtOrcReparentFunctions) GetPrimaryRecoveryType() MasterReco
 // AddError implements the ReparentFunctions interface
 func (vtorcReparent *VtOrcReparentFunctions) AddError(errorMsg string) error {
 	return vtorcReparent.topologyRecovery.AddError(log.Errorf(errorMsg))
+}
+
+// FindPrimaryCandidates implements the ReparentFunctions interface
+func (vtorcReparent *VtOrcReparentFunctions) FindPrimaryCandidates(ctx context.Context, logger logutil.Logger, tmc tmclient.TabletManagerClient) error {
+	postponedAll := false
+	promotedReplicaIsIdeal := func(promoted *inst.Instance, hasBestPromotionRule bool) bool {
+		if promoted == nil {
+			return false
+		}
+		AuditTopologyRecovery(vtorcReparent.topologyRecovery, fmt.Sprintf("RecoverDeadMaster: promotedReplicaIsIdeal(%+v)", promoted.Key))
+		if vtorcReparent.candidateInstanceKey != nil { //explicit request to promote a specific server
+			return promoted.Key.Equals(vtorcReparent.candidateInstanceKey)
+		}
+		if promoted.DataCenter == vtorcReparent.topologyRecovery.AnalysisEntry.AnalyzedInstanceDataCenter &&
+			promoted.PhysicalEnvironment == vtorcReparent.topologyRecovery.AnalysisEntry.AnalyzedInstancePhysicalEnvironment {
+			if promoted.PromotionRule == inst.MustPromoteRule || promoted.PromotionRule == inst.PreferPromoteRule ||
+				(hasBestPromotionRule && promoted.PromotionRule != inst.MustNotPromoteRule) {
+				AuditTopologyRecovery(vtorcReparent.topologyRecovery, fmt.Sprintf("RecoverDeadMaster: found %+v to be ideal candidate; will optimize recovery", promoted.Key))
+				postponedAll = true
+				return true
+			}
+		}
+		return false
+	}
+
+	AuditTopologyRecovery(vtorcReparent.topologyRecovery, "RecoverDeadMaster: regrouping replicas via GTID")
+	lostReplicas, _, cannotReplicateReplicas, promotedReplica, err := inst.RegroupReplicasGTID(&vtorcReparent.analysisEntry.AnalyzedInstanceKey, true, nil, &vtorcReparent.topologyRecovery.PostponedFunctionsContainer, promotedReplicaIsIdeal)
+	vtorcReparent.topologyRecovery.AddError(err)
+	lostReplicas = append(lostReplicas, cannotReplicateReplicas...)
+	for _, replica := range lostReplicas {
+		AuditTopologyRecovery(vtorcReparent.topologyRecovery, fmt.Sprintf("RecoverDeadMaster: - lost replica: %+v", replica.Key))
+	}
+
+	if promotedReplica != nil && len(lostReplicas) > 0 && config.Config.DetachLostReplicasAfterMasterFailover {
+		postponedFunction := func() error {
+			AuditTopologyRecovery(vtorcReparent.topologyRecovery, fmt.Sprintf("RecoverDeadMaster: lost %+v replicas during recovery process; detaching them", len(lostReplicas)))
+			for _, replica := range lostReplicas {
+				replica := replica
+				inst.DetachReplicaMasterHost(&replica.Key)
+			}
+			return nil
+		}
+		vtorcReparent.topologyRecovery.AddPostponedFunction(postponedFunction, fmt.Sprintf("RecoverDeadMaster, detach %+v lost replicas", len(lostReplicas)))
+	}
+
+	func() error {
+		// TODO(sougou): Commented out: this downtime feels a little aggressive.
+		//inst.BeginDowntime(inst.NewDowntime(failedInstanceKey, inst.GetMaintenanceOwner(), inst.DowntimeLostInRecoveryMessage, time.Duration(config.LostInRecoveryDowntimeSeconds)*time.Second))
+		acknowledgeInstanceFailureDetection(&vtorcReparent.analysisEntry.AnalyzedInstanceKey)
+		for _, replica := range lostReplicas {
+			replica := replica
+			inst.BeginDowntime(inst.NewDowntime(&replica.Key, inst.GetMaintenanceOwner(), inst.DowntimeLostInRecoveryMessage, time.Duration(config.LostInRecoveryDowntimeSeconds)*time.Second))
+		}
+		return nil
+	}()
+
+	AuditTopologyRecovery(vtorcReparent.topologyRecovery, fmt.Sprintf("RecoverDeadMaster: %d postponed functions", vtorcReparent.topologyRecovery.PostponedFunctionsContainer.Len()))
+
+	if promotedReplica != nil && !postponedAll {
+		promotedReplica, err = replacePromotedReplicaWithCandidate(vtorcReparent.topologyRecovery, &vtorcReparent.analysisEntry.AnalyzedInstanceKey, promotedReplica, vtorcReparent.candidateInstanceKey)
+		vtorcReparent.topologyRecovery.AddError(err)
+	}
+
+	vtorcReparent.promotedReplica = promotedReplica
+	vtorcReparent.lostReplicas = lostReplicas
+	return nil
 }

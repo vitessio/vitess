@@ -22,6 +22,10 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/vt/concurrency"
+
+	"vitess.io/vitess/go/mysql"
+
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 
 	"vitess.io/vitess/go/vt/topotools/events"
@@ -53,20 +57,23 @@ type (
 		StopReplicationAndBuildStatusMaps(context.Context, tmclient.TabletManagerClient, *events.Reparent, logutil.Logger) error
 		GetPrimaryRecoveryType() logic.MasterRecoveryType
 		AddError(string) error
+		FindPrimaryCandidates(context.Context, logutil.Logger, tmclient.TabletManagerClient) error
 	}
 
 	// VtctlReparentFunctions is the Vtctl implementation for ReparentFunctions
 	VtctlReparentFunctions struct {
-		NewPrimaryAlias     *topodatapb.TabletAlias
-		IgnoreReplicas      sets.String
-		WaitReplicasTimeout time.Duration
-		keyspace            string
-		shard               string
-		ts                  *topo.Server
-		lockAction          string
-		tabletMap           map[string]*topo.TabletInfo
-		statusMap           map[string]*replicationdatapb.StopReplicationStatus
-		primaryStatusMap    map[string]*replicationdatapb.PrimaryStatus
+		NewPrimaryAlias              *topodatapb.TabletAlias
+		IgnoreReplicas               sets.String
+		WaitReplicasTimeout          time.Duration
+		keyspace                     string
+		shard                        string
+		ts                           *topo.Server
+		lockAction                   string
+		tabletMap                    map[string]*topo.TabletInfo
+		statusMap                    map[string]*replicationdatapb.StopReplicationStatus
+		primaryStatusMap             map[string]*replicationdatapb.PrimaryStatus
+		winningPosition              mysql.Position
+		winningPrimaryTabletAliasStr string
 	}
 )
 
@@ -132,6 +139,45 @@ func (vtctlReparent *VtctlReparentFunctions) AddError(errorMsg string) error {
 	return vterrors.New(vtrpc.Code_INTERNAL, errorMsg)
 }
 
+// FindPrimaryCandidates implements the ReparentFunctions interface
+func (vtctlReparent *VtctlReparentFunctions) FindPrimaryCandidates(ctx context.Context, logger logutil.Logger, tmc tmclient.TabletManagerClient) error {
+	validCandidates, err := FindValidEmergencyReparentCandidates(vtctlReparent.statusMap, vtctlReparent.primaryStatusMap)
+	if err != nil {
+		return err
+	} else if len(validCandidates) == 0 {
+		return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "no valid candidates for emergency reparent")
+	}
+
+	// Wait for all candidates to apply relay logs
+	if err := vtctlReparent.waitForAllRelayLogsToApply(ctx, logger, tmc, validCandidates); err != nil {
+		return err
+	}
+
+	// Elect the candidate with the most up-to-date position.
+
+	for alias, position := range validCandidates {
+		if vtctlReparent.winningPosition.IsZero() || position.AtLeast(vtctlReparent.winningPosition) {
+			vtctlReparent.winningPosition = position
+			vtctlReparent.winningPrimaryTabletAliasStr = alias
+		}
+	}
+
+	// If we were requested to elect a particular primary, verify it's a valid
+	// candidate (non-zero position, no errant GTIDs) and is at least as
+	// advanced as the winning position.
+	if vtctlReparent.NewPrimaryAlias != nil {
+		vtctlReparent.winningPrimaryTabletAliasStr = topoproto.TabletAliasString(vtctlReparent.NewPrimaryAlias)
+		pos, ok := validCandidates[vtctlReparent.winningPrimaryTabletAliasStr]
+		switch {
+		case !ok:
+			return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "master elect %v has errant GTIDs", vtctlReparent.winningPrimaryTabletAliasStr)
+		case !pos.AtLeast(vtctlReparent.winningPosition):
+			return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "master elect %v at position %v is not fully caught up. Winning position: %v", vtctlReparent.winningPrimaryTabletAliasStr, pos, vtctlReparent.winningPosition)
+		}
+	}
+	return nil
+}
+
 func (vtctlReparent *VtctlReparentFunctions) getLockAction(newPrimaryAlias *topodatapb.TabletAlias) string {
 	action := "EmergencyReparentShard"
 
@@ -140,6 +186,62 @@ func (vtctlReparent *VtctlReparentFunctions) getLockAction(newPrimaryAlias *topo
 	}
 
 	return action
+}
+
+func (vtctlReparent *VtctlReparentFunctions) waitForAllRelayLogsToApply(ctx context.Context, logger logutil.Logger, tmc tmclient.TabletManagerClient, validCandidates map[string]mysql.Position) error {
+	errCh := make(chan error)
+	defer close(errCh)
+
+	groupCtx, groupCancel := context.WithTimeout(ctx, vtctlReparent.WaitReplicasTimeout)
+	defer groupCancel()
+
+	waiterCount := 0
+
+	for candidate := range validCandidates {
+		// When we called StopReplicationAndBuildStatusMaps, we got back two
+		// maps: (1) the StopReplicationStatus of any replicas that actually
+		// stopped replication; and (2) the MasterStatus of anything that
+		// returned ErrNotReplica, which is a tablet that is either the current
+		// primary or is stuck thinking it is a MASTER but is not in actuality.
+		//
+		// If we have a tablet in the validCandidates map that does not appear
+		// in the statusMap, then we have either (a) the current primary, which
+		// is not replicating, so it is not applying relay logs; or (b) a tablet
+		// that is stuck thinking it is MASTER but is not in actuality. In that
+		// second case - (b) - we will most likely find that the stuck MASTER
+		// does not have a winning position, and fail the ERS. If, on the other
+		// hand, it does have a winning position, we are trusting the operator
+		// to know what they are doing by emergency-reparenting onto that
+		// tablet. In either case, it does not make sense to wait for relay logs
+		// to apply on a tablet that was never applying relay logs in the first
+		// place, so we skip it, and log that we did.
+		status, ok := vtctlReparent.statusMap[candidate]
+		if !ok {
+			logger.Infof("EmergencyReparent candidate %v not in replica status map; this means it was not running replication (because it was formerly MASTER), so skipping WaitForRelayLogsToApply step for this candidate", candidate)
+			continue
+		}
+
+		go func(alias string, status *replicationdatapb.StopReplicationStatus) {
+			var err error
+			defer func() { errCh <- err }()
+			err = WaitForRelayLogsToApply(groupCtx, tmc, vtctlReparent.tabletMap[alias], status)
+		}(candidate, status)
+
+		waiterCount++
+	}
+
+	errgroup := concurrency.ErrorGroup{
+		NumGoroutines:        waiterCount,
+		NumRequiredSuccesses: waiterCount,
+		NumAllowedErrors:     0,
+	}
+	rec := errgroup.Wait(groupCancel, errCh)
+
+	if len(rec.Errors) != 0 {
+		return vterrors.Wrapf(rec.Error(), "could not apply all relay logs within the provided WaitReplicasTimeout (%s): %v", vtctlReparent.WaitReplicasTimeout, rec.Error())
+	}
+
+	return nil
 }
 
 // ChooseNewPrimary finds a tablet that should become a primary after reparent.
