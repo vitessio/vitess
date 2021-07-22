@@ -88,7 +88,10 @@ service TabletManager {
   rpc ReplicationStatus(tabletmanagerdata.ReplicationStatusRequest) returns (tabletmanagerdata.ReplicationStatusResponse) {};
 
   // MasterStatus returns the current master status.
-  rpc MasterStatus(tabletmanagerdata.MasterStatusRequest) returns (tabletmanagerdata.MasterStatusResponse) {};
+  rpc MasterStatus(tabletmanagerdata.PrimaryStatusRequest) returns (tabletmanagerdata.PrimaryStatusResponse) {};
+
+  // PrimaryStatus returns the current master status.
+  rpc PrimaryStatus(tabletmanagerdata.PrimaryStatusRequest) returns (tabletmanagerdata.PrimaryStatusResponse) {};
 
   // MasterPosition returns the current master position
   rpc MasterPosition(tabletmanagerdata.MasterPositionRequest) returns (tabletmanagerdata.MasterPositionResponse) {};
@@ -153,7 +156,10 @@ service TabletManager {
   rpc ReplicaWasPromoted(tabletmanagerdata.ReplicaWasPromotedRequest) returns (tabletmanagerdata.ReplicaWasPromotedResponse) {};
 
   // SetMaster tells the replica to reparent
-  rpc SetMaster(tabletmanagerdata.SetMasterRequest) returns (tabletmanagerdata.SetMasterResponse) {};
+  rpc SetMaster(tabletmanagerdata.SetPrimaryRequest) returns (tabletmanagerdata.SetPrimaryResponse) {};
+
+  // SetMaster tells the replica to reparent
+  rpc SetPrimary(tabletmanagerdata.SetPrimaryRequest) returns (tabletmanagerdata.SetPrimaryResponse) {};
 
   // ReplicaWasRestarted tells the remote tablet its master has changed
   rpc ReplicaWasRestarted(tabletmanagerdata.ReplicaWasRestartedRequest) returns (tabletmanagerdata.ReplicaWasRestartedResponse) {};
