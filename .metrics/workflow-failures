@@ -1,4 +1,3 @@
-2021-03-20T20:37:27Z,Cluster (12),https://github.com/vitessio/vitess/actions/runs/671603349
 2021-03-20T20:37:27Z,Cluster (13),https://github.com/vitessio/vitess/actions/runs/671603343
 2021-03-20T20:37:27Z,Cluster (14),https://github.com/vitessio/vitess/actions/runs/671603332
 2021-03-20T20:37:27Z,Cluster (15),https://github.com/vitessio/vitess/actions/runs/671603373
@@ -9998,3 +9997,4 @@
 2021-07-22T05:43:41Z,docker_test_2,https://github.com/vitessio/vitess/actions/runs/1055065998
 2021-07-22T05:43:41Z,golangci-lint,https://github.com/vitessio/vitess/actions/runs/1055065982
 2021-07-22T05:43:41Z,unit_race,https://github.com/vitessio/vitess/actions/runs/1055065991
+2021-07-22T05:48:48Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/1055074073
