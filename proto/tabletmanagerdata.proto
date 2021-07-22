@@ -383,10 +383,10 @@ message InitReplicaRequest {
 message InitReplicaResponse {
 }
 
-message DemoteMasterRequest {
+message DemotePrimaryRequest {
 }
 
-message DemoteMasterResponse {
+message DemotePrimaryResponse {
   // Position is deprecated, and is a string representation of a demoted masters executed position.
   string deprecated_position = 1 [deprecated=true];
 

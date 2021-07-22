@@ -769,7 +769,29 @@ func (client *Client) DemoteMaster(ctx context.Context, tablet *topodatapb.Table
 		return nil, err
 	}
 	defer closer.Close()
-	response, err := c.DemoteMaster(ctx, &tabletmanagerdatapb.DemoteMasterRequest{})
+	response, err := c.DemotePrimary(ctx, &tabletmanagerdatapb.DemotePrimaryRequest{})
+	if err != nil {
+		return nil, err
+	}
+	status := response.PrimaryStatus
+	if status == nil {
+		// We are assuming this means a response came from an older server.
+		status = &replicationdatapb.PrimaryStatus{
+			Position:     response.DeprecatedPosition, //nolint
+			FilePosition: "",
+		}
+	}
+	return status, nil
+}
+
+// DemotePrimary is part of the tmclient.TabletManagerClient interface.
+func (client *Client) DemotePrimary(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error) {
+	c, closer, err := client.dialer.dial(ctx, tablet)
+	if err != nil {
+		return nil, err
+	}
+	defer closer.Close()
+	response, err := c.DemotePrimary(ctx, &tabletmanagerdatapb.DemotePrimaryRequest{})
 	if err != nil {
 		return nil, err
 	}
