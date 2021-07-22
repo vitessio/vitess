@@ -422,15 +422,16 @@ message ExternalClusters {
   repeated ExternalVitessCluster vitess_cluster = 1;
 }
 
-message TopoEventLog {
-  repeated TopoEvent log = 1;
+message ActiveTopoEvents {
+  map<string, TopoEvent> events = 1;
 }
 
 message TopoEvent {
   string cell = 1;
   vttime.Time started_at = 2;
-  string uuid = 3;
-  string keyspace = 4;
+  vttime.Time finished_at = 3;
+  string uuid = 4;
+  string keyspace = 5;
 
   message EmergencyReparent {
     string shard = 1;
@@ -451,8 +452,8 @@ message TopoEvent {
   }
 
   oneof event {
-    EmergencyReparent emergency_reparent = 5;
-    PlannedReparent planned_reparent = 6;
-    Reshard reshard = 7;
+    EmergencyReparent emergency_reparent = 6;
+    PlannedReparent planned_reparent = 7;
+    Reshard reshard = 8;
   }
 }

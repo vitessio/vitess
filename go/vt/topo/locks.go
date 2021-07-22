@@ -63,12 +63,12 @@ type Lock struct {
 }
 
 // newLock creates a new Lock.
-func newLock(action string) *Lock {
+func newLock(now time.Time, action string) *Lock {
 	l := &Lock{
 		Action:   action,
 		HostName: "unknown",
 		UserName: "unknown",
-		Time:     time.Now().Format(time.RFC3339),
+		Time:     now.Format(time.RFC3339),
 		Status:   "Running",
 	}
 	if h, err := os.Hostname(); err == nil {
@@ -147,7 +147,7 @@ func (ts *Server) LockKeyspace(ctx context.Context, keyspace, action string) (co
 	}
 
 	// lock
-	l := newLock(action)
+	l := newLock(ts.now(), action)
 	lockDescriptor, err := l.lockKeyspace(ctx, ts, keyspace)
 	if err != nil {
 		return nil, nil, err
@@ -290,7 +290,7 @@ func (ts *Server) LockShard(ctx context.Context, keyspace, shard, action string)
 	}
 
 	// lock
-	l := newLock(action)
+	l := newLock(ts.now(), action)
 	lockDescriptor, err := l.lockShard(ctx, ts, keyspace, shard)
 	if err != nil {
 		return nil, nil, err

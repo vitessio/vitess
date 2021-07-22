@@ -2,7 +2,7 @@ package topo
 
 import (
 	"context"
-	"sort"
+	"time"
 
 	"google.golang.org/protobuf/proto"
 
@@ -12,27 +12,28 @@ import (
 )
 
 // WatchTopoEventData is the data returned on each watch event from
-// WatchTopoEventLog. It contains the topology events that have happened
-// on the cluster since the last time this method was called.
+// WatchTopoEventLog. It contains the topology events that are currently
+// happening on the cluster.
 type WatchTopoEventData struct {
-	// NewLogEntries are the topology events that have happened on the cluster
-	// since the last time we watched the topology server
-	NewLogEntries []*topodatapb.TopoEvent
-
-	// FullLog is the full list of topology events in the cluster as of the last
-	// watch event, and it contains events that have potentially been seen before
-	FullLog []*topodatapb.TopoEvent
+	// ActiveEvents is a map of all the events that are currently happening
+	// on the cluster, keyed by their UUID.
+	ActiveEvents map[string]*topodatapb.TopoEvent
 
 	// Error is the last error that happened while watching for topology events
 	Err error
 }
 
-func (ts *Server) createTopoEventLog(ctx context.Context, entries []*topodatapb.TopoEvent) error {
-	topoEvLog := &topodatapb.TopoEventLog{
-		Log: entries,
+func (ts *Server) createTopoEventLog(ctx context.Context, entries ...*topodatapb.TopoEvent) error {
+	active := &topodatapb.ActiveTopoEvents{}
+
+	if len(entries) > 0 {
+		active.Events = make(map[string]*topodatapb.TopoEvent)
+		for _, ev := range entries {
+			active.Events[ev.Uuid] = ev
+		}
 	}
 
-	newData, err := proto.Marshal(topoEvLog)
+	newData, err := proto.Marshal(active)
 	if err != nil {
 		return vterrors.Wrapf(err, "TopoEventLog marshal failed: %v", newData)
 	}
@@ -48,7 +49,7 @@ func (ts *Server) WatchTopoEventLog(ctx context.Context) (*WatchTopoEventData, <
 	current, wdChannel, cancel := ts.globalCell.Watch(ctx, TopoEventFile)
 	if current.Err != nil {
 		if IsErrType(current.Err, NoNode) {
-			err := ts.createTopoEventLog(ctx, nil)
+			err := ts.createTopoEventLog(ctx)
 			if err == nil || IsErrType(err, NodeExists) {
 				return ts.WatchTopoEventLog(ctx)
 			}
@@ -56,7 +57,7 @@ func (ts *Server) WatchTopoEventLog(ctx context.Context) (*WatchTopoEventData, <
 		}
 		return &WatchTopoEventData{Err: current.Err}, nil, nil
 	}
-	value := &topodatapb.TopoEventLog{}
+	value := &topodatapb.ActiveTopoEvents{}
 	if err := proto.Unmarshal(current.Contents, value); err != nil {
 		// Cancel the watch, drain channel.
 		cancel()
@@ -66,11 +67,6 @@ func (ts *Server) WatchTopoEventLog(ctx context.Context) (*WatchTopoEventData, <
 	}
 
 	changes := make(chan *WatchTopoEventData, 10)
-	seen := make(map[string]struct{})
-
-	for _, ev := range value.Log {
-		seen[ev.Uuid] = struct{}{}
-	}
 
 	// The background routine reads any event from the watch channel,
 	// translates it, and sends it to the caller.
@@ -89,7 +85,7 @@ func (ts *Server) WatchTopoEventLog(ctx context.Context) (*WatchTopoEventData, <
 				return
 			}
 
-			value := &topodatapb.TopoEventLog{}
+			value := &topodatapb.ActiveTopoEvents{}
 			if err := proto.Unmarshal(wd.Contents, value); err != nil {
 				cancel()
 				for range wdChannel {
@@ -98,24 +94,18 @@ func (ts *Server) WatchTopoEventLog(ctx context.Context) (*WatchTopoEventData, <
 				return
 			}
 
-			data := &WatchTopoEventData{
-				FullLog: value.Log,
+			changes <- &WatchTopoEventData{
+				ActiveEvents: value.Events,
 			}
-			for _, ev := range value.Log {
-				if _, ok := seen[ev.Uuid]; !ok {
-					seen[ev.Uuid] = struct{}{}
-					data.NewLogEntries = append(data.NewLogEntries, ev)
-				}
-			}
-
-			changes <- data
 		}
 	}()
 
-	return &WatchTopoEventData{NewLogEntries: value.Log, FullLog: value.Log}, changes, cancel
+	return &WatchTopoEventData{ActiveEvents: value.Events}, changes, cancel
 }
 
-// UpdateTopoEventLog appends the given event to the topology event log.
+const MaximumTopoLogDuration = 24 * time.Hour
+
+// UpdateTopoEventLog appends or updates the given event to the topology event log.
 // The log is always kept consistently sorted by StartTime for all events.
 func (ts *Server) UpdateTopoEventLog(ctx context.Context, newEvent *topodatapb.TopoEvent) error {
 	nodePath := TopoEventFile
@@ -123,7 +113,7 @@ func (ts *Server) UpdateTopoEventLog(ctx context.Context, newEvent *topodatapb.T
 		data, version, err := ts.globalCell.Get(ctx, nodePath)
 		if err != nil {
 			if IsErrType(err, NoNode) {
-				err = ts.createTopoEventLog(ctx, []*topodatapb.TopoEvent{newEvent})
+				err = ts.createTopoEventLog(ctx, newEvent)
 				if err != nil {
 					if IsErrType(err, NodeExists) {
 						continue
@@ -134,19 +124,27 @@ func (ts *Server) UpdateTopoEventLog(ctx context.Context, newEvent *topodatapb.T
 			return vterrors.Wrapf(err, "failed to update TopoEventLog in place")
 		}
 
-		topoEvLog := &topodatapb.TopoEventLog{}
-		if err := proto.Unmarshal(data, topoEvLog); err != nil {
+		active := &topodatapb.ActiveTopoEvents{}
+		if err := proto.Unmarshal(data, active); err != nil {
 			return vterrors.Wrapf(err, "TopoEventLog unmarshal failed: %v", data)
 		}
 
-		topoEvLog.Log = append(topoEvLog.Log, newEvent)
-		sort.Slice(topoEvLog.Log, func(i, j int) bool {
-			a := protoutil.TimeFromProto(topoEvLog.Log[i].StartedAt)
-			b := protoutil.TimeFromProto(topoEvLog.Log[j].StartedAt)
-			return a.Before(b)
-		})
+		var condensed = make(map[string]*topodatapb.TopoEvent)
+		for _, ev := range active.Events {
+			if ev.FinishedAt != nil {
+				started := protoutil.TimeFromProto(ev.StartedAt)
+				if time.Since(started) > MaximumTopoLogDuration {
+					continue
+				}
+			}
 
-		updatedData, err := proto.Marshal(topoEvLog)
+			condensed[ev.Uuid] = ev
+		}
+
+		condensed[newEvent.Uuid] = newEvent
+		active.Events = condensed
+
+		updatedData, err := proto.Marshal(active)
 		if err != nil {
 			return vterrors.Wrapf(err, "TopoEventLog marshal failed: %v", data)
 		}

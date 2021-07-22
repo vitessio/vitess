@@ -46,6 +46,7 @@ import (
 	"flag"
 	"fmt"
 	"sync"
+	"time"
 
 	"context"
 
@@ -142,6 +143,9 @@ type Server struct {
 	// will read the list of addresses for that cell from the
 	// global cluster and create clients as needed.
 	cells map[string]Conn
+
+	// now returns the current time (used for testing)
+	now func() time.Time
 }
 
 type cellsToAliasesMap struct {
@@ -205,6 +209,7 @@ func NewWithFactory(factory Factory, serverAddress, root string) (*Server, error
 		globalReadOnlyCell: connReadOnly,
 		factory:            factory,
 		cells:              make(map[string]Conn),
+		now:                time.Now,
 	}, nil
 }
 

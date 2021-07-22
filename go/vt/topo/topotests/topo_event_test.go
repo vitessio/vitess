@@ -18,7 +18,6 @@ package topotests
 
 import (
 	"context"
-	"sort"
 	"sync"
 	"testing"
 	"time"
@@ -37,7 +36,7 @@ func TestWatchOnEmptyTopo(t *testing.T) {
 
 	current, _, cancel := ts.WatchTopoEventLog(ctx)
 	require.NoError(t, current.Err)
-	require.Len(t, current.NewLogEntries, 0)
+	require.Len(t, current.ActiveEvents, 0)
 
 	cancel()
 }
@@ -48,38 +47,32 @@ func TestWatchNewEvents(t *testing.T) {
 
 	current, watchChan, watchCancel := ts.WatchTopoEventLog(ctx)
 	require.NoError(t, current.Err)
-	require.Len(t, current.NewLogEntries, 0)
+	require.Len(t, current.ActiveEvents, 0)
 
 	var wg sync.WaitGroup
 	var done = make(chan struct{})
-	var logEntries []*topodatapb.TopoEvent
+	var logEntries = make(map[string]*topodatapb.TopoEvent)
 
 	go func() {
 		defer close(done)
 
-		for ev := range watchChan {
-			if ev.Err != nil {
+		for data := range watchChan {
+			if data.Err != nil {
 				return
 			}
 
-			logEntries = append(logEntries, ev.NewLogEntries...)
-
-			if !sort.SliceIsSorted(ev.FullLog, func(i, j int) bool {
-				a := protoutil.TimeFromProto(ev.FullLog[i].StartedAt)
-				b := protoutil.TimeFromProto(ev.FullLog[j].StartedAt)
-				return a.Before(b)
-			}) {
-				t.Errorf("FullLog is not sorted")
+			for _, ev := range data.ActiveEvents {
+				logEntries[ev.Uuid] = ev
 			}
 		}
 	}()
 
-	for i := 0; i < 3; i++ {
+	for i := 0; i < 4; i++ {
 		wg.Add(1)
 
 		go func() {
 			defer wg.Done()
-			for i := 0; i < 512; i++ {
+			for i := 0; i < 128; i++ {
 				ev := &topodatapb.TopoEvent{
 					Uuid:      uuid.New().String(),
 					StartedAt: protoutil.TimeToProto(time.Now()),
@@ -96,5 +89,5 @@ func TestWatchNewEvents(t *testing.T) {
 	watchCancel()
 	<-done
 
-	require.Len(t, logEntries, 512*3)
+	require.Len(t, logEntries, 128*4)
 }
