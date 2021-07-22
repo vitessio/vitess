@@ -405,7 +405,7 @@ func (s *server) DemoteMaster(ctx context.Context, request *tabletmanagerdatapb.
 	defer s.tm.HandleRPCPanic(ctx, "DemoteMaster", request, response, true /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response = &tabletmanagerdatapb.DemotePrimaryResponse{}
-	status, err := s.tm.DemoteMaster(ctx)
+	status, err := s.tm.DemotePrimary(ctx)
 	if err == nil {
 		response.DeprecatedPosition = status.Position //nolint
 		response.PrimaryStatus = status
@@ -414,7 +414,7 @@ func (s *server) DemoteMaster(ctx context.Context, request *tabletmanagerdatapb.
 }
 
 func (s *server) DemotePrimary(ctx context.Context, request *tabletmanagerdatapb.DemotePrimaryRequest) (response *tabletmanagerdatapb.DemotePrimaryResponse, err error) {
-	defer s.tm.HandleRPCPanic(ctx, "DemoteMaster", request, response, true /*verbose*/, &err)
+	defer s.tm.HandleRPCPanic(ctx, "DemotePrimary", request, response, true /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response = &tabletmanagerdatapb.DemotePrimaryResponse{}
 	status, err := s.tm.DemotePrimary(ctx)
@@ -429,15 +429,15 @@ func (s *server) UndoDemoteMaster(ctx context.Context, request *tabletmanagerdat
 	defer s.tm.HandleRPCPanic(ctx, "UndoDemoteMaster", request, response, true /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response = &tabletmanagerdatapb.UndoDemotePrimaryResponse{}
-	err = s.tm.UndoDemoteMaster(ctx)
+	err = s.tm.UndoDemotePrimary(ctx)
 	return response, err
 }
 
 func (s *server) UndoDemotePrimary(ctx context.Context, request *tabletmanagerdatapb.UndoDemotePrimaryRequest) (response *tabletmanagerdatapb.UndoDemotePrimaryResponse, err error) {
-	defer s.tm.HandleRPCPanic(ctx, "UndoDemoteMaster", request, response, true /*verbose*/, &err)
+	defer s.tm.HandleRPCPanic(ctx, "UndoDemotePrimary", request, response, true /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response = &tabletmanagerdatapb.UndoDemotePrimaryResponse{}
-	err = s.tm.UndoDemoteMaster(ctx)
+	err = s.tm.UndoDemotePrimary(ctx)
 	return response, err
 }
 
