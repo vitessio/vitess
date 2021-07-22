@@ -251,7 +251,7 @@ func (hp *horizonPlanning) planHorizon() (logicalPlan, error) {
 	return hp.plan, nil
 }
 
-func (hp horizonPlanning) truncateColumnsIfNeeded() error {
+func (hp *horizonPlanning) truncateColumnsIfNeeded() error {
 	if !hp.needsTruncation {
 		return nil
 	}
@@ -259,6 +259,8 @@ func (hp horizonPlanning) truncateColumnsIfNeeded() error {
 	switch p := hp.plan.(type) {
 	case *route:
 		p.eroute.SetTruncateColumnCount(hp.sel.GetColumnCount())
+	case *joinGen4:
+		// since this is a join, we can safely add extra columns and not need to truncate them
 	case *orderedAggregate:
 		p.eaggr.SetTruncateColumnCount(hp.sel.GetColumnCount())
 	case *memorySort:
