@@ -45,6 +45,7 @@ type (
 		GetKeyspace() string
 		GetShard() string
 		CheckIfFixed() bool
+		PreRecoveryProcesses(ctx context.Context) error
 	}
 
 	// VtctlReparentFunctions is the Vtctl implementation for ReparentFunctions
@@ -56,6 +57,7 @@ type (
 		shard               string
 		ts                  *topo.Server
 		lockAction          string
+		tabletMap           map[string]*topo.TabletInfo
 	}
 )
 
@@ -89,6 +91,16 @@ func (vtctlReparent *VtctlReparentFunctions) GetShard() string {
 // CheckIfFixed implements the ReparentFunctions interface
 func (vtctlReparent *VtctlReparentFunctions) CheckIfFixed() bool {
 	return false
+}
+
+// PreRecoveryProcesses implements the ReparentFunctions interface
+func (vtctlReparent *VtctlReparentFunctions) PreRecoveryProcesses(ctx context.Context) error {
+	var err error
+	vtctlReparent.tabletMap, err = vtctlReparent.ts.GetTabletMapForShard(ctx, vtctlReparent.keyspace, vtctlReparent.shard)
+	if err != nil {
+		return vterrors.Wrapf(err, "failed to get tablet map for %v/%v: %v", vtctlReparent.keyspace, vtctlReparent.shard, err)
+	}
+	return nil
 }
 
 func (vtctlReparent *VtctlReparentFunctions) getLockAction(newPrimaryAlias *topodatapb.TabletAlias) string {
