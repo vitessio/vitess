@@ -21,10 +21,9 @@ import (
 	"fmt"
 	"time"
 
-	"vitess.io/vitess/go/vt/orchestrator/reparentutil"
-
 	"vitess.io/vitess/go/vt/orchestrator/attributes"
 	"vitess.io/vitess/go/vt/orchestrator/kv"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil"
 
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
