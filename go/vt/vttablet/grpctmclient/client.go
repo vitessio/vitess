@@ -773,15 +773,15 @@ func (client *Client) DemoteMaster(ctx context.Context, tablet *topodatapb.Table
 	if err != nil {
 		return nil, err
 	}
-	masterStatus := response.PrimaryStatus
-	if masterStatus == nil {
+	status := response.PrimaryStatus
+	if status == nil {
 		// We are assuming this means a response came from an older server.
-		masterStatus = &replicationdatapb.PrimaryStatus{
+		status = &replicationdatapb.PrimaryStatus{
 			Position:     response.DeprecatedPosition, //nolint
 			FilePosition: "",
 		}
 	}
-	return masterStatus, nil
+	return status, nil
 }
 
 // DemotePrimary is part of the tmclient.TabletManagerClient interface.
