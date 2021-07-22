@@ -128,7 +128,7 @@ func (pr *PlannedReparenter) ReparentShard(ctx context.Context, keyspace string,
 			}},
 	}
 
-	if err := pr.ts.UpdateTopoEventLog(ctx, topoEvent); err != nil {
+	if err := pr.ts.AppendTopoEvent(ctx, topoEvent); err != nil {
 		return nil, err
 	}
 

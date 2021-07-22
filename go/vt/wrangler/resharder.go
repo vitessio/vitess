@@ -96,7 +96,7 @@ func (wr *Wrangler) Reshard(ctx context.Context, keyspace, workflow string, sour
 		},
 	}
 
-	if err := wr.ts.UpdateTopoEventLog(ctx, rsEvent); err != nil {
+	if err := wr.ts.AppendTopoEvent(ctx, rsEvent); err != nil {
 		return err
 	}
 

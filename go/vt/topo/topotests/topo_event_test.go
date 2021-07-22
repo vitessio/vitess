@@ -34,18 +34,34 @@ func TestWatchOnEmptyTopo(t *testing.T) {
 	ctx := context.Background()
 	ts := memorytopo.NewServer("cell1")
 
-	current, _, cancel := ts.WatchTopoEventLog(ctx)
+	current, _, cancel := ts.WatchTopoEvents(ctx)
 	require.NoError(t, current.Err)
 	require.Len(t, current.ActiveEvents, 0)
 
 	cancel()
 }
 
+func TestDuplicateEvents(t *testing.T) {
+	ctx := context.Background()
+	ts := memorytopo.NewServer("cell1")
+
+	ev := &topodatapb.TopoEvent{
+		Uuid:      uuid.New().String(),
+		StartedAt: protoutil.TimeToProto(time.Now()),
+	}
+
+	err := ts.AppendTopoEvent(ctx, ev)
+	require.NoError(t, err)
+
+	err = ts.AppendTopoEvent(ctx, ev)
+	require.Error(t, err)
+}
+
 func TestWatchNewEvents(t *testing.T) {
 	ctx := context.Background()
 	ts := memorytopo.NewServer("cell1")
 
-	current, watchChan, watchCancel := ts.WatchTopoEventLog(ctx)
+	current, watchChan, watchCancel := ts.WatchTopoEvents(ctx)
 	require.NoError(t, current.Err)
 	require.Len(t, current.ActiveEvents, 0)
 
@@ -77,8 +93,8 @@ func TestWatchNewEvents(t *testing.T) {
 					Uuid:      uuid.New().String(),
 					StartedAt: protoutil.TimeToProto(time.Now()),
 				}
-				if err := ts.UpdateTopoEventLog(ctx, ev); err != nil {
-					t.Errorf("failed to UpdateTopoEventLog: %v", err)
+				if err := ts.AppendTopoEvent(ctx, ev); err != nil {
+					t.Errorf("failed to AppendTopoEvent: %v", err)
 					return
 				}
 			}

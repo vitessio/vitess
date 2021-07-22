@@ -120,7 +120,7 @@ func (erp *EmergencyReparenter) ReparentShard(ctx context.Context, keyspace stri
 			}},
 	}
 
-	if err := erp.ts.UpdateTopoEventLog(ctx, topoEvent); err != nil {
+	if err := erp.ts.AppendTopoEvent(ctx, topoEvent); err != nil {
 		return nil, err
 	}
 

@@ -2,6 +2,7 @@ package topo
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"google.golang.org/protobuf/proto"
@@ -12,7 +13,7 @@ import (
 )
 
 // WatchTopoEventData is the data returned on each watch event from
-// WatchTopoEventLog. It contains the topology events that are currently
+// WatchTopoEvents. It contains the topology events that are currently
 // happening on the cluster.
 type WatchTopoEventData struct {
 	// ActiveEvents is a map of all the events that are currently happening
@@ -42,18 +43,17 @@ func (ts *Server) createTopoEventLog(ctx context.Context, entries ...*topodatapb
 	return err
 }
 
-// WatchTopoEventLog watches the topology event log for topology change events
+// WatchTopoEvents watches the topology event log for topology change events
 // in real time. If there's no topology event log in the cluster, a new empty
 // one will be created.
-func (ts *Server) WatchTopoEventLog(ctx context.Context) (*WatchTopoEventData, <-chan *WatchTopoEventData, CancelFunc) {
+func (ts *Server) WatchTopoEvents(ctx context.Context) (*WatchTopoEventData, <-chan *WatchTopoEventData, CancelFunc) {
 	current, wdChannel, cancel := ts.globalCell.Watch(ctx, TopoEventFile)
 	if current.Err != nil {
 		if IsErrType(current.Err, NoNode) {
-			err := ts.createTopoEventLog(ctx)
-			if err == nil || IsErrType(err, NodeExists) {
-				return ts.WatchTopoEventLog(ctx)
+			current.Err = ts.createTopoEventLog(ctx)
+			if current.Err == nil || IsErrType(current.Err, NodeExists) {
+				return ts.WatchTopoEvents(ctx)
 			}
-			return &WatchTopoEventData{Err: err}, nil, nil
 		}
 		return &WatchTopoEventData{Err: current.Err}, nil, nil
 	}
@@ -105,23 +105,12 @@ func (ts *Server) WatchTopoEventLog(ctx context.Context) (*WatchTopoEventData, <
 
 const MaximumTopoLogDuration = 24 * time.Hour
 
-// UpdateTopoEventLog appends or updates the given event to the topology event log.
-// The log is always kept consistently sorted by StartTime for all events.
-func (ts *Server) UpdateTopoEventLog(ctx context.Context, newEvent *topodatapb.TopoEvent) error {
+func (ts *Server) atomicUpdateTopoEvent(ctx context.Context, update func(map[string]*topodatapb.TopoEvent) error) error {
 	nodePath := TopoEventFile
 	for {
 		data, version, err := ts.globalCell.Get(ctx, nodePath)
 		if err != nil {
-			if IsErrType(err, NoNode) {
-				err = ts.createTopoEventLog(ctx, newEvent)
-				if err != nil {
-					if IsErrType(err, NodeExists) {
-						continue
-					}
-					return err
-				}
-			}
-			return vterrors.Wrapf(err, "failed to update TopoEventLog in place")
+			return err
 		}
 
 		active := &topodatapb.ActiveTopoEvents{}
@@ -130,10 +119,11 @@ func (ts *Server) UpdateTopoEventLog(ctx context.Context, newEvent *topodatapb.T
 		}
 
 		var condensed = make(map[string]*topodatapb.TopoEvent)
+		var now = ts.now()
 		for _, ev := range active.Events {
 			if ev.FinishedAt != nil {
 				started := protoutil.TimeFromProto(ev.StartedAt)
-				if time.Since(started) > MaximumTopoLogDuration {
+				if now.Sub(started) > MaximumTopoLogDuration {
 					continue
 				}
 			}
@@ -141,9 +131,11 @@ func (ts *Server) UpdateTopoEventLog(ctx context.Context, newEvent *topodatapb.T
 			condensed[ev.Uuid] = ev
 		}
 
-		condensed[newEvent.Uuid] = newEvent
-		active.Events = condensed
+		if err := update(condensed); err != nil {
+			return vterrors.Wrapf(err, "failed to update ActiveTopoEvent")
+		}
 
+		active.Events = condensed
 		updatedData, err := proto.Marshal(active)
 		if err != nil {
 			return vterrors.Wrapf(err, "TopoEventLog marshal failed: %v", data)
@@ -158,4 +150,48 @@ func (ts *Server) UpdateTopoEventLog(ctx context.Context, newEvent *topodatapb.T
 		}
 		return nil
 	}
+}
+
+// AppendTopoEvent appends the given event to the topology event log.
+// The log is always kept consistently sorted by StartTime for all events.
+func (ts *Server) AppendTopoEvent(ctx context.Context, newEvent *topodatapb.TopoEvent) error {
+	err := ts.atomicUpdateTopoEvent(ctx, func(active map[string]*topodatapb.TopoEvent) error {
+		if _, found := active[newEvent.Uuid]; found {
+			return fmt.Errorf("duplicate event UUID: %q", newEvent.Uuid)
+		}
+		active[newEvent.Uuid] = newEvent
+		return nil
+	})
+
+	if err != nil {
+		if IsErrType(err, NoNode) {
+			err = ts.createTopoEventLog(ctx, newEvent)
+			if err != nil {
+				if IsErrType(err, NodeExists) {
+					return ts.AppendTopoEvent(ctx, newEvent)
+				}
+			}
+		}
+		return vterrors.Wrapf(err, "failed to update ActiveTopoEvents in place")
+	}
+
+	return nil
+}
+
+// ResolveTopoEvent marks a specific event in the topology events log as resolved
+func (ts *Server) ResolveTopoEvent(ctx context.Context, uuid string) error {
+	err := ts.atomicUpdateTopoEvent(ctx, func(active map[string]*topodatapb.TopoEvent) error {
+		ev := active[uuid]
+		if ev == nil {
+			return fmt.Errorf("cannot resolve topo event %q (not found)", uuid)
+		}
+		if ev.FinishedAt == nil {
+			ev.FinishedAt = protoutil.TimeToProto(ts.now())
+		}
+		return nil
+	})
+	if err != nil {
+		return vterrors.Wrapf(err, "failed to update ActiveTopoEvents in place")
+	}
+	return nil
 }
