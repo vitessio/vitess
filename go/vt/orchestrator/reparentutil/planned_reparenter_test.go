@@ -682,11 +682,11 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 			ts:   memorytopo.NewServer("zone1"),
 			tmc: &testutil.TabletManagerClient{
 				DemoteMasterResults: map[string]struct {
-					Status *replicationdatapb.MasterStatus
+					Status *replicationdatapb.PrimaryStatus
 					Error  error
 				}{
 					"zone1-0000000100": {
-						Status: &replicationdatapb.MasterStatus{
+						Status: &replicationdatapb.PrimaryStatus{
 							// value of Position doesn't strictly matter for
 							// this test case, as long as it matches the inner
 							// key of the WaitForPositionResults map for the
@@ -900,7 +900,7 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 			ts:   memorytopo.NewServer("zone1"),
 			tmc: &testutil.TabletManagerClient{
 				DemoteMasterResults: map[string]struct {
-					Status *replicationdatapb.MasterStatus
+					Status *replicationdatapb.PrimaryStatus
 					Error  error
 				}{
 					"zone1-0000000100": {
@@ -945,11 +945,11 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 			ts:   memorytopo.NewServer("zone1"),
 			tmc: &testutil.TabletManagerClient{
 				DemoteMasterResults: map[string]struct {
-					Status *replicationdatapb.MasterStatus
+					Status *replicationdatapb.PrimaryStatus
 					Error  error
 				}{
 					"zone1-0000000100": {
-						Status: &replicationdatapb.MasterStatus{
+						Status: &replicationdatapb.PrimaryStatus{
 							// value of Position doesn't strictly matter for
 							// this test case, as long as it matches the inner
 							// key of the WaitForPositionResults map for the
@@ -1002,11 +1002,11 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 			ts:   memorytopo.NewServer("zone1"),
 			tmc: &testutil.TabletManagerClient{
 				DemoteMasterResults: map[string]struct {
-					Status *replicationdatapb.MasterStatus
+					Status *replicationdatapb.PrimaryStatus
 					Error  error
 				}{
 					"zone1-0000000100": {
-						Status: &replicationdatapb.MasterStatus{
+						Status: &replicationdatapb.PrimaryStatus{
 							// value of Position doesn't strictly matter for
 							// this test case, as long as it matches the inner
 							// key of the WaitForPositionResults map for the
@@ -1064,11 +1064,11 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 			ts:   memorytopo.NewServer("zone1"),
 			tmc: &testutil.TabletManagerClient{
 				DemoteMasterResults: map[string]struct {
-					Status *replicationdatapb.MasterStatus
+					Status *replicationdatapb.PrimaryStatus
 					Error  error
 				}{
 					"zone1-0000000100": {
-						Status: &replicationdatapb.MasterStatus{
+						Status: &replicationdatapb.PrimaryStatus{
 							Position: "position1",
 						},
 						Error: nil,
@@ -1135,11 +1135,11 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 			ts:   memorytopo.NewServer("zone1"),
 			tmc: &testutil.TabletManagerClient{
 				DemoteMasterResults: map[string]struct {
-					Status *replicationdatapb.MasterStatus
+					Status *replicationdatapb.PrimaryStatus
 					Error  error
 				}{
 					"zone1-0000000100": {
-						Status: &replicationdatapb.MasterStatus{
+						Status: &replicationdatapb.PrimaryStatus{
 							// value of Position doesn't strictly matter for
 							// this test case, as long as it matches the inner
 							// key of the WaitForPositionResults map for the
@@ -1198,11 +1198,11 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 			ts:   memorytopo.NewServer("zone1"),
 			tmc: &testutil.TabletManagerClient{
 				DemoteMasterResults: map[string]struct {
-					Status *replicationdatapb.MasterStatus
+					Status *replicationdatapb.PrimaryStatus
 					Error  error
 				}{
 					"zone1-0000000100": {
-						Status: &replicationdatapb.MasterStatus{
+						Status: &replicationdatapb.PrimaryStatus{
 							// value of Position doesn't strictly matter for
 							// this test case, as long as it matches the inner
 							// key of the WaitForPositionResults map for the
@@ -1261,11 +1261,11 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 			ts:   memorytopo.NewServer("zone1"),
 			tmc: &testutil.TabletManagerClient{
 				DemoteMasterResults: map[string]struct {
-					Status *replicationdatapb.MasterStatus
+					Status *replicationdatapb.PrimaryStatus
 					Error  error
 				}{
 					"zone1-0000000100": {
-						Status: &replicationdatapb.MasterStatus{
+						Status: &replicationdatapb.PrimaryStatus{
 							// value of Position doesn't strictly matter for
 							// this test case, as long as it matches the inner
 							// key of the WaitForPositionResults map for the
@@ -1326,11 +1326,11 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 			ts:   memorytopo.NewServer("zone1"),
 			tmc: &testutil.TabletManagerClient{
 				DemoteMasterResults: map[string]struct {
-					Status *replicationdatapb.MasterStatus
+					Status *replicationdatapb.PrimaryStatus
 					Error  error
 				}{
 					"zone1-0000000100": {
-						Status: &replicationdatapb.MasterStatus{
+						Status: &replicationdatapb.PrimaryStatus{
 							// value of Position doesn't strictly matter for
 							// this test case, as long as it matches the inner
 							// key of the WaitForPositionResults map for the
@@ -1635,23 +1635,23 @@ func TestPlannedReparenter_performPotentialPromotion(t *testing.T) {
 			ts:   memorytopo.NewServer("zone1"),
 			tmc: &testutil.TabletManagerClient{
 				DemoteMasterResults: map[string]struct {
-					Status *replicationdatapb.MasterStatus
+					Status *replicationdatapb.PrimaryStatus
 					Error  error
 				}{
 					"zone1-0000000100": {
-						Status: &replicationdatapb.MasterStatus{
+						Status: &replicationdatapb.PrimaryStatus{
 							Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
 						},
 						Error: nil,
 					},
 					"zone1-0000000101": {
-						Status: &replicationdatapb.MasterStatus{
+						Status: &replicationdatapb.PrimaryStatus{
 							Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
 						},
 						Error: nil,
 					},
 					"zone1-0000000102": {
-						Status: &replicationdatapb.MasterStatus{
+						Status: &replicationdatapb.PrimaryStatus{
 							Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
 						},
 						Error: nil,
@@ -1710,7 +1710,7 @@ func TestPlannedReparenter_performPotentialPromotion(t *testing.T) {
 			ts:   memorytopo.NewServer("zone1"),
 			tmc: &testutil.TabletManagerClient{
 				DemoteMasterResults: map[string]struct {
-					Status *replicationdatapb.MasterStatus
+					Status *replicationdatapb.PrimaryStatus
 					Error  error
 				}{
 					"zone1-0000000100": {
@@ -1748,11 +1748,11 @@ func TestPlannedReparenter_performPotentialPromotion(t *testing.T) {
 					"zone1-0000000100": time.Millisecond * 50,
 				},
 				DemoteMasterResults: map[string]struct {
-					Status *replicationdatapb.MasterStatus
+					Status *replicationdatapb.PrimaryStatus
 					Error  error
 				}{
 					"zone1-0000000100": {
-						Status: &replicationdatapb.MasterStatus{
+						Status: &replicationdatapb.PrimaryStatus{
 							Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
 						},
 						Error: nil,
@@ -1786,11 +1786,11 @@ func TestPlannedReparenter_performPotentialPromotion(t *testing.T) {
 			ts:   memorytopo.NewServer("zone1"),
 			tmc: &testutil.TabletManagerClient{
 				DemoteMasterResults: map[string]struct {
-					Status *replicationdatapb.MasterStatus
+					Status *replicationdatapb.PrimaryStatus
 					Error  error
 				}{
 					"zone1-0000000100": {
-						Status: &replicationdatapb.MasterStatus{
+						Status: &replicationdatapb.PrimaryStatus{
 							Position: "MySQL56/this-is-nonsense",
 						},
 						Error: nil,
@@ -1839,23 +1839,23 @@ func TestPlannedReparenter_performPotentialPromotion(t *testing.T) {
 			ts:   memorytopo.NewServer("zone1"),
 			tmc: &testutil.TabletManagerClient{
 				DemoteMasterResults: map[string]struct {
-					Status *replicationdatapb.MasterStatus
+					Status *replicationdatapb.PrimaryStatus
 					Error  error
 				}{
 					"zone1-0000000100": {
-						Status: &replicationdatapb.MasterStatus{
+						Status: &replicationdatapb.PrimaryStatus{
 							Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
 						},
 						Error: nil,
 					},
 					"zone1-0000000101": {
-						Status: &replicationdatapb.MasterStatus{
+						Status: &replicationdatapb.PrimaryStatus{
 							Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
 						},
 						Error: nil,
 					},
 					"zone1-0000000102": {
-						Status: &replicationdatapb.MasterStatus{
+						Status: &replicationdatapb.PrimaryStatus{
 							Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10000",
 						},
 						Error: nil,
@@ -1904,23 +1904,23 @@ func TestPlannedReparenter_performPotentialPromotion(t *testing.T) {
 			ts:   memorytopo.NewServer("zone1"),
 			tmc: &testutil.TabletManagerClient{
 				DemoteMasterResults: map[string]struct {
-					Status *replicationdatapb.MasterStatus
+					Status *replicationdatapb.PrimaryStatus
 					Error  error
 				}{
 					"zone1-0000000100": {
-						Status: &replicationdatapb.MasterStatus{
+						Status: &replicationdatapb.PrimaryStatus{
 							Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
 						},
 						Error: nil,
 					},
 					"zone1-0000000101": {
-						Status: &replicationdatapb.MasterStatus{
+						Status: &replicationdatapb.PrimaryStatus{
 							Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
 						},
 						Error: nil,
 					},
 					"zone1-0000000102": {
-						Status: &replicationdatapb.MasterStatus{
+						Status: &replicationdatapb.PrimaryStatus{
 							Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
 						},
 						Error: nil,
@@ -1969,23 +1969,23 @@ func TestPlannedReparenter_performPotentialPromotion(t *testing.T) {
 			ts:   memorytopo.NewServer("zone1"),
 			tmc: &testutil.TabletManagerClient{
 				DemoteMasterResults: map[string]struct {
-					Status *replicationdatapb.MasterStatus
+					Status *replicationdatapb.PrimaryStatus
 					Error  error
 				}{
 					"zone1-0000000100": {
-						Status: &replicationdatapb.MasterStatus{
+						Status: &replicationdatapb.PrimaryStatus{
 							Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
 						},
 						Error: nil,
 					},
 					"zone1-0000000101": {
-						Status: &replicationdatapb.MasterStatus{
+						Status: &replicationdatapb.PrimaryStatus{
 							Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
 						},
 						Error: nil,
 					},
 					"zone1-0000000102": {
-						Status: &replicationdatapb.MasterStatus{
+						Status: &replicationdatapb.PrimaryStatus{
 							Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
 						},
 						Error: nil,
@@ -2043,23 +2043,23 @@ func TestPlannedReparenter_performPotentialPromotion(t *testing.T) {
 			ts:   memorytopo.NewServer("zone1"),
 			tmc: &testutil.TabletManagerClient{
 				DemoteMasterResults: map[string]struct {
-					Status *replicationdatapb.MasterStatus
+					Status *replicationdatapb.PrimaryStatus
 					Error  error
 				}{
 					"zone1-0000000100": {
-						Status: &replicationdatapb.MasterStatus{
+						Status: &replicationdatapb.PrimaryStatus{
 							Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
 						},
 						Error: nil,
 					},
 					"zone1-0000000101": {
-						Status: &replicationdatapb.MasterStatus{
+						Status: &replicationdatapb.PrimaryStatus{
 							Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
 						},
 						Error: nil,
 					},
 					"zone1-0000000102": {
-						Status: &replicationdatapb.MasterStatus{
+						Status: &replicationdatapb.PrimaryStatus{
 							Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
 						},
 						Error: nil,
@@ -2190,17 +2190,17 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 			ts:   memorytopo.NewServer("zone1"),
 			tmc: &testutil.TabletManagerClient{
 				DemoteMasterResults: map[string]struct {
-					Status *replicationdatapb.MasterStatus
+					Status *replicationdatapb.PrimaryStatus
 					Error  error
 				}{
 					"zone1-0000000100": {
-						Status: &replicationdatapb.MasterStatus{
+						Status: &replicationdatapb.PrimaryStatus{
 							Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
 						},
 						Error: nil,
 					},
 					"zone1-0000000200": {
-						Status: &replicationdatapb.MasterStatus{
+						Status: &replicationdatapb.PrimaryStatus{
 							Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
 						},
 						Error: nil,
@@ -2345,11 +2345,11 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 			ts:   memorytopo.NewServer("zone1"),
 			tmc: &testutil.TabletManagerClient{
 				DemoteMasterResults: map[string]struct {
-					Status *replicationdatapb.MasterStatus
+					Status *replicationdatapb.PrimaryStatus
 					Error  error
 				}{
 					"zone1-0000000100": {
-						Status: &replicationdatapb.MasterStatus{
+						Status: &replicationdatapb.PrimaryStatus{
 							// a few more transactions happen after waiting for replication
 							Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
 						},

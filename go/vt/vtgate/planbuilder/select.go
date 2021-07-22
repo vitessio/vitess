@@ -371,7 +371,7 @@ func (pb *primitiveBuilder) pushFilter(in sqlparser.Expr, whereType string, rese
 		}
 		rut, isRoute := origin.(*route)
 		if isRoute && rut.eroute.Opcode == engine.SelectDBA {
-			err := pb.findSysInfoRoutingPredicates(expr, rut)
+			err := pb.findSysInfoRoutingPredicates(expr, rut, reservedVars)
 			if err != nil {
 				return err
 			}

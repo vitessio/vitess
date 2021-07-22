@@ -19,6 +19,8 @@ package planbuilder
 import (
 	"strings"
 
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -46,7 +48,7 @@ type (
 		tableNames() []string
 	}
 
-	leJoin struct {
+	joinTables struct {
 		lhs, rhs relation
 		pred     sqlparser.Expr
 	}
@@ -95,6 +97,10 @@ type (
 
 		// columns needed to feed other plans`
 		columns []*sqlparser.ColName
+
+		// The following two fields are used when routing information_schema queries
+		SysTableTableSchema []evalengine.Expr
+		SysTableTableName   map[string]evalengine.Expr
 	}
 
 	joinPlan struct {
@@ -128,14 +134,14 @@ type (
 var _ joinTree = (*routePlan)(nil)
 var _ joinTree = (*joinPlan)(nil)
 var _ relation = (*routeTable)(nil)
-var _ relation = (*leJoin)(nil)
+var _ relation = (*joinTables)(nil)
 var _ relation = (parenTables)(nil)
 
 func (rp *routeTable) tableID() semantics.TableSet { return rp.qtable.TableID }
 
-func (rp *leJoin) tableID() semantics.TableSet { return rp.lhs.tableID().Merge(rp.rhs.tableID()) }
+func (rp *joinTables) tableID() semantics.TableSet { return rp.lhs.tableID().Merge(rp.rhs.tableID()) }
 
-func (rp *leJoin) tableNames() []string {
+func (rp *joinTables) tableNames() []string {
 	return append(rp.lhs.tableNames(), rp.rhs.tableNames()...)
 }
 
@@ -181,7 +187,7 @@ func visitTables(r relation, f func(tbl *routeTable) error) error {
 			}
 		}
 		return nil
-	case *leJoin:
+	case *joinTables:
 		err := visitTables(r.lhs, f)
 		if err != nil {
 			return err

@@ -33,7 +33,7 @@ to make sure the tablet type in the topology is correct before running
 vttablet. Usually, vttablet can be started with `-init_tablet_type replica`,
 even for a master (as `master` is not allowed), and will figure out the master
 and set its type to `master`. When Vitess doesn't manage that at all, running
-`vtctl InitShardMaster` is not possible, so there is no way to start as the
+`vtctl InitShardPrimary` is not possible, so there is no way to start as the
 master just using vttablet. There are two solutions:
 
 * Preferred: Start the master with `-init_tablet_type replica`, and then run a
@@ -45,7 +45,7 @@ master just using vttablet. There are two solutions:
 ## Other Configurations
 
 `vtctl` and `vtctld` can be run with the `-disable_active_reparents` flag. This
-would make all explicit reparent commands unreachable (like `InitShardMaster`
+would make all explicit reparent commands unreachable (like `InitShardPrimary`
 or `PlannedReparentShard`).
 
 `vtgate` and `vtworker` don't need any special configuration.

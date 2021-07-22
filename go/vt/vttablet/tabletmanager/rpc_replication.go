@@ -52,12 +52,12 @@ func (tm *TabletManager) ReplicationStatus(ctx context.Context) (*replicationdat
 }
 
 // MasterStatus returns the replication status fopr a master tablet.
-func (tm *TabletManager) MasterStatus(ctx context.Context) (*replicationdatapb.MasterStatus, error) {
+func (tm *TabletManager) MasterStatus(ctx context.Context) (*replicationdatapb.PrimaryStatus, error) {
 	return tm.PrimaryStatus(ctx)
 }
 
 // PrimaryStatus returns the replication status fopr a master tablet.
-func (tm *TabletManager) PrimaryStatus(ctx context.Context) (*replicationdatapb.MasterStatus, error) {
+func (tm *TabletManager) PrimaryStatus(ctx context.Context) (*replicationdatapb.PrimaryStatus, error) {
 	status, err := tm.MysqlDaemon.PrimaryStatus(ctx)
 	if err != nil {
 		return nil, err
@@ -295,7 +295,7 @@ func (tm *TabletManager) InitReplica(ctx context.Context, parent *topodatapb.Tab
 	defer tm.unlock()
 
 	// If we were a master type, switch our type to replica.  This
-	// is used on the old master when using InitShardMaster with
+	// is used on the old master when using InitShardPrimary with
 	// -force, and the new master is different from the old master.
 	if tm.Tablet().Type == topodatapb.TabletType_MASTER {
 		if err := tm.changeTypeLocked(ctx, topodatapb.TabletType_REPLICA, DBActionNone); err != nil {
@@ -351,13 +351,13 @@ func (tm *TabletManager) InitReplica(ctx context.Context, parent *topodatapb.Tab
 // or on a tablet that already transitioned to REPLICA.
 //
 // If a step fails in the middle, it will try to undo any changes it made.
-func (tm *TabletManager) DemotePrimary(ctx context.Context) (*replicationdatapb.MasterStatus, error) {
+func (tm *TabletManager) DemotePrimary(ctx context.Context) (*replicationdatapb.PrimaryStatus, error) {
 	// The public version always reverts on partial failure.
 	return tm.demotePrimary(ctx, true /* revertPartialFailure */)
 }
 
 // DemoteMaster is the old version of DemotePrimary
-func (tm *TabletManager) DemoteMaster(ctx context.Context) (*replicationdatapb.MasterStatus, error) {
+func (tm *TabletManager) DemoteMaster(ctx context.Context) (*replicationdatapb.PrimaryStatus, error) {
 	return tm.DemotePrimary(ctx)
 }
 
@@ -365,7 +365,7 @@ func (tm *TabletManager) DemoteMaster(ctx context.Context) (*replicationdatapb.M
 //
 // If revertPartialFailure is true, and a step fails in the middle, it will try
 // to undo any changes it made.
-func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure bool) (masterStatus *replicationdatapb.MasterStatus, finalErr error) {
+func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure bool) (masterStatus *replicationdatapb.PrimaryStatus, finalErr error) {
 	if err := tm.lock(ctx); err != nil {
 		return nil, err
 	}
@@ -455,8 +455,7 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 	if err != nil {
 		return nil, err
 	}
-	masterStatusProto := mysql.PrimaryStatusToProto(status)
-	return masterStatusProto, nil
+	return mysql.PrimaryStatusToProto(status), nil
 }
 
 // UndoDemoteMaster is the old version of UndoDemotePrimary

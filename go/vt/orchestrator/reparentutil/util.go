@@ -64,7 +64,7 @@ type (
 		lockAction          string
 		tabletMap           map[string]*topo.TabletInfo
 		statusMap           map[string]*replicationdatapb.StopReplicationStatus
-		primaryStatusMap    map[string]*replicationdatapb.MasterStatus
+		primaryStatusMap    map[string]*replicationdatapb.PrimaryStatus
 	}
 )
 
