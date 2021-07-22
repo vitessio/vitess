@@ -695,10 +695,7 @@ func DeleteVReplication(uid uint32) string {
 // MessageTruncate truncates the message string to a safe length.
 func MessageTruncate(msg string) string {
 	// message length is 1000 bytes.
-	if len(msg) > 950 {
-		return msg[:950] + "..."
-	}
-	return msg
+	return LimitString(msg, 950)
 }
 
 func encodeString(in string) string {

@@ -19,8 +19,11 @@ package vreplication
 import (
 	"flag"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
+
+	"vitess.io/vitess/go/vt/sqlparser"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 
@@ -145,9 +148,8 @@ func newVReplicator(id uint32, source *binlogdatapb.BinlogSource, sourceVStreame
 func (vr *vreplicator) Replicate(ctx context.Context) error {
 	err := vr.replicate(ctx)
 	if err != nil {
-		log.Errorf("Replicate error: %s", err.Error())
-		if err := vr.setMessage(fmt.Sprintf("Error: %s", err.Error())); err != nil {
-			log.Errorf("Failed to set error state: %v", err)
+		if err := vr.setMessage(err.Error()); err != nil {
+			binlogplayer.LogError("Failed to set error state", err)
 		}
 	}
 	return err
@@ -333,11 +335,14 @@ func (vr *vreplicator) readSettings(ctx context.Context) (settings binlogplayer.
 }
 
 func (vr *vreplicator) setMessage(message string) error {
+	message = binlogplayer.MessageTruncate(message)
 	vr.stats.History.Add(&binlogplayer.StatsHistoryRecord{
 		Time:    time.Now(),
 		Message: message,
 	})
-	query := fmt.Sprintf("update _vt.vreplication set message=%v where id=%v", encodeString(binlogplayer.MessageTruncate(message)), vr.id)
+	buf := sqlparser.NewTrackedBuffer(nil)
+	buf.Myprintf("update _vt.vreplication set message=%s where id=%s", encodeString(message), strconv.Itoa(int(vr.id)))
+	query := buf.ParsedQuery().Query
 	if _, err := vr.dbClient.Execute(query); err != nil {
 		return fmt.Errorf("could not set message: %v: %v", query, err)
 	}
