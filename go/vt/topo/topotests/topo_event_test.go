@@ -1,5 +1,5 @@
 /*
-Copyright 2019 The Vitess Authors
+Copyright 2021 The Vitess Authors
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -24,10 +24,9 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"vitess.io/vitess/go/protoutil"
-
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/protoutil"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 )
@@ -86,7 +85,8 @@ func TestWatchNewEvents(t *testing.T) {
 					StartedAt: protoutil.TimeToProto(time.Now()),
 				}
 				if err := ts.UpdateTopoEventLog(ctx, ev); err != nil {
-					t.Fatalf("failed to UpdateTopoEventLog: %v", err)
+					t.Errorf("failed to UpdateTopoEventLog: %v", err)
+					return
 				}
 			}
 		}()

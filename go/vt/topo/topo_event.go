@@ -4,9 +4,9 @@ import (
 	"context"
 	"sort"
 
-	"vitess.io/vitess/go/protoutil"
-
 	"google.golang.org/protobuf/proto"
+
+	"vitess.io/vitess/go/protoutil"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/vterrors"
 )
