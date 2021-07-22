@@ -803,15 +803,15 @@ message AggregateStats {
   // unhealthy_tablet_count is the number of unhealthy tablets in the group.
   int32 unhealthy_tablet_count = 2;
 
-  // seconds_behind_primary_min is the minimum of the
-  // seconds_behind_primary values of the healthy tablets. It is unset
+  // replication_lag_seconds_min is the minimum of the
+  // replication_lag_seconds values of the healthy tablets. It is unset
   // if the tablet type is primary.
-  uint32 seconds_behind_primary_min = 3;
+  uint32 replication_lag_seconds_min = 3;
 
-  // seconds_behind_primary_max is the maximum of the
-  // seconds_behind_primary values of the healthy tablets. It is unset
+  // replication_lag_seconds_max is the maximum of the
+  // replication_lag_seconds values of the healthy tablets. It is unset
   // if the tablet type is primary.
-  uint32 seconds_behind_primary_max = 4;
+  uint32 replication_lag_seconds_max = 4;
 }
 
 // StreamHealthResponse is streamed by StreamHealth on a regular basis.
