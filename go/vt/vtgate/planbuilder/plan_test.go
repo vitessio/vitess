@@ -464,15 +464,19 @@ func (vw *vschemaWrapper) ErrorIfShardedF(keyspace *vindexes.Keyspace, _, errFmt
 	return nil
 }
 
+func (vw *vschemaWrapper) currentDb() string {
+	ksName := ""
+	if vw.keyspace != nil {
+		ksName = vw.keyspace.Name
+	}
+	return ksName
+}
+
 func escapeNewLines(in string) string {
 	return strings.ReplaceAll(in, "\n", "\\n")
 }
 
 func testFile(t *testing.T, filename, tempDir string, vschema *vschemaWrapper, checkGen4equalPlan bool) {
-	ksName := ""
-	if vschema.keyspace != nil {
-		ksName = vschema.keyspace.Name
-	}
 	var checkAllTests = false
 	t.Run(filename, func(t *testing.T) {
 		expected := &strings.Builder{}
@@ -481,7 +485,7 @@ func testFile(t *testing.T, filename, tempDir string, vschema *vschemaWrapper, c
 		for tcase := range iterateExecFile(filename) {
 			t.Run(fmt.Sprintf("%d V3: %s", tcase.lineno, tcase.comments), func(t *testing.T) {
 				vschema.version = V3
-				plan, err := TestBuilder(tcase.input, vschema, ksName)
+				plan, err := TestBuilder(tcase.input, vschema, vschema.currentDb())
 				out := getPlanOrErrorOutput(err, plan)
 
 				if out != tcase.output {
@@ -558,11 +562,7 @@ func getPlanOutput(tcase testCase, vschema *vschemaWrapper) (out string, err err
 			out = fmt.Sprintf("panicked: %v\n%s", r, string(debug.Stack()))
 		}
 	}()
-	ksName := ""
-	if vschema.keyspace != nil {
-		ksName = vschema.keyspace.Name
-	}
-	plan, err := TestBuilder(tcase.input, vschema, ksName)
+	plan, err := TestBuilder(tcase.input, vschema, vschema.currentDb())
 	out = getPlanOrErrorOutput(err, plan)
 	return out, err
 }
@@ -747,16 +747,12 @@ func BenchmarkSelectVsDML(b *testing.B) {
 }
 
 func benchmarkPlanner(b *testing.B, version PlannerVersion, testCases []testCase, vschema *vschemaWrapper) {
-	ksName := ""
-	if vschema.keyspace != nil {
-		ksName = vschema.keyspace.Name
-	}
 	b.ReportAllocs()
 	for n := 0; n < b.N; n++ {
 		for _, tcase := range testCases {
 			if tcase.output2ndPlanner != "" {
 				vschema.version = version
-				_, _ = TestBuilder(tcase.input, vschema, ksName)
+				_, _ = TestBuilder(tcase.input, vschema, vschema.currentDb())
 			}
 		}
 	}
