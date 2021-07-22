@@ -21,6 +21,7 @@ import (
 	"net/http"
 
 	"vitess.io/vitess/go/trace"
+	"vitess.io/vitess/go/vt/vtadmin/rbac"
 
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
 )
@@ -71,6 +72,11 @@ func (api *API) Adapt(handler VTAdminHandler) http.HandlerFunc {
 		span, _ := trace.FromContext(r.Context())
 		if span != nil {
 			ctx = trace.NewContext(ctx, span)
+		}
+
+		actor, _ := rbac.FromContext(r.Context())
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
 		}
 
 		handler(ctx, Request{r}, api).Write(w)
