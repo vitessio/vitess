@@ -282,7 +282,7 @@ message MasterStatusRequest {
 }
 
 message MasterStatusResponse {
-  replicationdata.MasterStatus status = 1;
+  replicationdata.PrimaryStatus status = 1;
 }
 
 message MasterPositionRequest {
@@ -383,21 +383,21 @@ message InitReplicaRequest {
 message InitReplicaResponse {
 }
 
-message DemoteMasterRequest {
+message DemotePrimaryRequest {
 }
 
-message DemoteMasterResponse {
+message DemotePrimaryResponse {
   // Position is deprecated, and is a string representation of a demoted masters executed position.
   string deprecated_position = 1 [deprecated=true];
 
   // MasterStatus represents the response from calling `SHOW MASTER STATUS` on a master that has been demoted.
-  replicationdata.MasterStatus master_status = 2;
+  replicationdata.PrimaryStatus primary_status = 2;
 }
 
-message UndoDemoteMasterRequest {
+message UndoDemotePrimaryRequest {
 }
 
-message UndoDemoteMasterResponse {
+message UndoDemotePrimaryResponse {
 }
 
 message ReplicaWasPromotedRequest {

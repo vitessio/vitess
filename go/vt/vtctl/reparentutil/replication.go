@@ -41,7 +41,7 @@ import (
 // raw strings) to their replication positions for later comparison.
 func FindValidEmergencyReparentCandidates(
 	statusMap map[string]*replicationdatapb.StopReplicationStatus,
-	primaryStatusMap map[string]*replicationdatapb.MasterStatus,
+	primaryStatusMap map[string]*replicationdatapb.PrimaryStatus,
 ) (map[string]mysql.Position, error) {
 	replicationStatusMap := make(map[string]*mysql.ReplicationStatus, len(statusMap))
 	positionMap := make(map[string]mysql.Position)
@@ -161,12 +161,12 @@ func StopReplicationAndBuildStatusMaps(
 	waitReplicasTimeout time.Duration,
 	ignoredTablets sets.String,
 	logger logutil.Logger,
-) (map[string]*replicationdatapb.StopReplicationStatus, map[string]*replicationdatapb.MasterStatus, error) {
+) (map[string]*replicationdatapb.StopReplicationStatus, map[string]*replicationdatapb.PrimaryStatus, error) {
 	event.DispatchUpdate(ev, "stop replication on all replicas")
 
 	var (
 		statusMap       = map[string]*replicationdatapb.StopReplicationStatus{}
-		masterStatusMap = map[string]*replicationdatapb.MasterStatus{}
+		masterStatusMap = map[string]*replicationdatapb.PrimaryStatus{}
 		m               sync.Mutex
 		errChan         = make(chan error)
 	)
@@ -183,7 +183,7 @@ func StopReplicationAndBuildStatusMaps(
 		_, stopReplicationStatus, err := tmc.StopReplicationAndGetStatus(groupCtx, tabletInfo.Tablet, replicationdatapb.StopReplicationMode_IOTHREADONLY)
 		switch err {
 		case mysql.ErrNotReplica:
-			var masterStatus *replicationdatapb.MasterStatus
+			var masterStatus *replicationdatapb.PrimaryStatus
 
 			masterStatus, err = tmc.DemoteMaster(groupCtx, tabletInfo.Tablet)
 			if err != nil {

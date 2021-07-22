@@ -135,39 +135,12 @@ func (a *analyzer) analyzeDown(cursor *sqlparser.Cursor) bool {
 	case sqlparser.OrderBy:
 		a.changeScopeForOrderBy(cursor)
 	case *sqlparser.Order:
-		l, ok := node.Expr.(*sqlparser.Literal)
-		if !ok {
-			break
+		a.analyzeOrderByGroupByExprForLiteral(node.Expr, "order clause")
+	case sqlparser.GroupBy:
+		a.changeScopeForOrderBy(cursor)
+		for _, grpExpr := range node {
+			a.analyzeOrderByGroupByExprForLiteral(grpExpr, "group statement")
 		}
-		if l.Type != sqlparser.IntVal {
-			break
-		}
-		currScope := a.currentScope()
-		num, err := strconv.Atoi(l.Val)
-		if err != nil {
-			a.err = err
-			break
-		}
-		if num < 1 || num > len(currScope.selectExprs) {
-			a.err = vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadFieldError, "Unknown column '%d' in 'order clause'", num)
-			break
-		}
-
-		expr, ok := currScope.selectExprs[num-1].(*sqlparser.AliasedExpr)
-		if !ok {
-			break
-		}
-
-		var deps TableSet
-		_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
-			expr, ok := node.(sqlparser.Expr)
-			if ok {
-				deps = deps.Merge(a.exprDeps[expr])
-			}
-			return true, nil
-		}, expr.Expr)
-
-		a.exprDeps[node.Expr] = deps
 	case *sqlparser.ColName:
 		ts, qt, err := a.resolveColumn(node, current)
 		if err != nil {
@@ -196,6 +169,42 @@ func (a *analyzer) analyzeDown(cursor *sqlparser.Cursor) bool {
 	// to the current node, but that is not what we want if we have encountered an error.
 	// In order to abort the whole visitation, we have to return true here and then return false in the `analyzeUp` method
 	return true
+}
+
+func (a *analyzer) analyzeOrderByGroupByExprForLiteral(input sqlparser.Expr, caller string) {
+	l, ok := input.(*sqlparser.Literal)
+	if !ok {
+		return
+	}
+	if l.Type != sqlparser.IntVal {
+		return
+	}
+	currScope := a.currentScope()
+	num, err := strconv.Atoi(l.Val)
+	if err != nil {
+		a.err = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "error parsing column number: %s", l.Val)
+		return
+	}
+	if num < 1 || num > len(currScope.selectExprs) {
+		a.err = vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadFieldError, "Unknown column '%d' in '%s'", num, caller)
+		return
+	}
+
+	expr, ok := currScope.selectExprs[num-1].(*sqlparser.AliasedExpr)
+	if !ok {
+		return
+	}
+
+	var deps TableSet
+	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+		expr, ok := node.(sqlparser.Expr)
+		if ok {
+			deps = deps.Merge(a.exprDeps[expr])
+		}
+		return true, nil
+	}, expr.Expr)
+
+	a.exprDeps[input] = deps
 }
 
 func (a *analyzer) changeScopeForOrderBy(cursor *sqlparser.Cursor) {
@@ -300,6 +309,8 @@ func (a *analyzer) depsForExpr(expr sqlparser.Expr) (TableSet, *querypb.Type) {
 func (a *analyzer) resolveUnQualifiedColumn(current *scope, expr *sqlparser.ColName) (TableSet, *querypb.Type, error) {
 	var tsp *TableSet
 	var typp *querypb.Type
+
+tryAgain:
 	for _, tbl := range current.tables {
 		ts, typ, err := tbl.DepsFor(expr, a, len(current.tables) == 1)
 		if err != nil {
@@ -312,6 +323,10 @@ func (a *analyzer) resolveUnQualifiedColumn(current *scope, expr *sqlparser.ColN
 			tsp = ts
 			typp = typ
 		}
+	}
+	if tsp == nil && current.parent != nil {
+		current = current.parent
+		goto tryAgain
 	}
 	if tsp == nil {
 		return 0, nil, nil
@@ -403,7 +418,7 @@ func (a *analyzer) analyzeUp(cursor *sqlparser.Cursor) bool {
 		if isParentSelect(cursor) {
 			a.popProjection()
 		}
-	case *sqlparser.Union, *sqlparser.Select, sqlparser.OrderBy:
+	case *sqlparser.Union, *sqlparser.Select, sqlparser.OrderBy, sqlparser.GroupBy:
 		a.popScope()
 	case sqlparser.TableExpr:
 		if isParentSelect(cursor) {

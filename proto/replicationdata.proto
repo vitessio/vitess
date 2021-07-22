@@ -52,13 +52,6 @@ enum StopReplicationMode {
   IOTHREADONLY = 1;
 }
 
-// Deprecated
-// MasterStatus is the replication status for a MySQL master (returned by 'show master status').
-message MasterStatus {
-  string position = 1;
-  string file_position = 2;
-}
-
 // PrimaryStatus is the replication status for a MySQL primary (returned by 'show master status').
 message PrimaryStatus {
   string position = 1;
