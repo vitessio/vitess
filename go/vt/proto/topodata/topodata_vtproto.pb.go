@@ -1331,7 +1331,7 @@ func (m *TopoEventLog) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	return len(dAtA) - i, nil
 }
 
-func (m *TopoEvent_EmergencyReparenting) MarshalVT() (dAtA []byte, err error) {
+func (m *TopoEvent_EmergencyReparent) MarshalVT() (dAtA []byte, err error) {
 	if m == nil {
 		return nil, nil
 	}
@@ -1344,12 +1344,12 @@ func (m *TopoEvent_EmergencyReparenting) MarshalVT() (dAtA []byte, err error) {
 	return dAtA[:n], nil
 }
 
-func (m *TopoEvent_EmergencyReparenting) MarshalToVT(dAtA []byte) (int, error) {
+func (m *TopoEvent_EmergencyReparent) MarshalToVT(dAtA []byte) (int, error) {
 	size := m.SizeVT()
 	return m.MarshalToSizedBufferVT(dAtA[:size])
 }
 
-func (m *TopoEvent_EmergencyReparenting) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
+func (m *TopoEvent_EmergencyReparent) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m == nil {
 		return 0, nil
 	}
@@ -1390,7 +1390,7 @@ func (m *TopoEvent_EmergencyReparenting) MarshalToSizedBufferVT(dAtA []byte) (in
 	return len(dAtA) - i, nil
 }
 
-func (m *TopoEvent_PlannedReparenting) MarshalVT() (dAtA []byte, err error) {
+func (m *TopoEvent_PlannedReparent) MarshalVT() (dAtA []byte, err error) {
 	if m == nil {
 		return nil, nil
 	}
@@ -1403,12 +1403,12 @@ func (m *TopoEvent_PlannedReparenting) MarshalVT() (dAtA []byte, err error) {
 	return dAtA[:n], nil
 }
 
-func (m *TopoEvent_PlannedReparenting) MarshalToVT(dAtA []byte) (int, error) {
+func (m *TopoEvent_PlannedReparent) MarshalToVT(dAtA []byte) (int, error) {
 	size := m.SizeVT()
 	return m.MarshalToSizedBufferVT(dAtA[:size])
 }
 
-func (m *TopoEvent_PlannedReparenting) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
+func (m *TopoEvent_PlannedReparent) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m == nil {
 		return 0, nil
 	}
@@ -1450,7 +1450,7 @@ func (m *TopoEvent_PlannedReparenting) MarshalToSizedBufferVT(dAtA []byte) (int,
 	return len(dAtA) - i, nil
 }
 
-func (m *TopoEvent_Resharding) MarshalVT() (dAtA []byte, err error) {
+func (m *TopoEvent_Reshard) MarshalVT() (dAtA []byte, err error) {
 	if m == nil {
 		return nil, nil
 	}
@@ -1463,12 +1463,12 @@ func (m *TopoEvent_Resharding) MarshalVT() (dAtA []byte, err error) {
 	return dAtA[:n], nil
 }
 
-func (m *TopoEvent_Resharding) MarshalToVT(dAtA []byte) (int, error) {
+func (m *TopoEvent_Reshard) MarshalToVT(dAtA []byte) (int, error) {
 	size := m.SizeVT()
 	return m.MarshalToSizedBufferVT(dAtA[:size])
 }
 
-func (m *TopoEvent_Resharding) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
+func (m *TopoEvent_Reshard) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m == nil {
 		return 0, nil
 	}
@@ -1584,15 +1584,15 @@ func (m *TopoEvent) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	return len(dAtA) - i, nil
 }
 
-func (m *TopoEvent_EmergencyReparenting_) MarshalToVT(dAtA []byte) (int, error) {
+func (m *TopoEvent_EmergencyReparent_) MarshalToVT(dAtA []byte) (int, error) {
 	size := m.SizeVT()
 	return m.MarshalToSizedBufferVT(dAtA[:size])
 }
 
-func (m *TopoEvent_EmergencyReparenting_) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
+func (m *TopoEvent_EmergencyReparent_) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	i := len(dAtA)
-	if m.EmergencyReparenting != nil {
-		size, err := m.EmergencyReparenting.MarshalToSizedBufferVT(dAtA[:i])
+	if m.EmergencyReparent != nil {
+		size, err := m.EmergencyReparent.MarshalToSizedBufferVT(dAtA[:i])
 		if err != nil {
 			return 0, err
 		}
@@ -1603,15 +1603,15 @@ func (m *TopoEvent_EmergencyReparenting_) MarshalToSizedBufferVT(dAtA []byte) (i
 	}
 	return len(dAtA) - i, nil
 }
-func (m *TopoEvent_PlannedReparenting_) MarshalToVT(dAtA []byte) (int, error) {
+func (m *TopoEvent_PlannedReparent_) MarshalToVT(dAtA []byte) (int, error) {
 	size := m.SizeVT()
 	return m.MarshalToSizedBufferVT(dAtA[:size])
 }
 
-func (m *TopoEvent_PlannedReparenting_) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
+func (m *TopoEvent_PlannedReparent_) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	i := len(dAtA)
-	if m.PlannedReparenting != nil {
-		size, err := m.PlannedReparenting.MarshalToSizedBufferVT(dAtA[:i])
+	if m.PlannedReparent != nil {
+		size, err := m.PlannedReparent.MarshalToSizedBufferVT(dAtA[:i])
 		if err != nil {
 			return 0, err
 		}
@@ -1622,15 +1622,15 @@ func (m *TopoEvent_PlannedReparenting_) MarshalToSizedBufferVT(dAtA []byte) (int
 	}
 	return len(dAtA) - i, nil
 }
-func (m *TopoEvent_Resharding_) MarshalToVT(dAtA []byte) (int, error) {
+func (m *TopoEvent_Reshard_) MarshalToVT(dAtA []byte) (int, error) {
 	size := m.SizeVT()
 	return m.MarshalToSizedBufferVT(dAtA[:size])
 }
 
-func (m *TopoEvent_Resharding_) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
+func (m *TopoEvent_Reshard_) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	i := len(dAtA)
-	if m.Resharding != nil {
-		size, err := m.Resharding.MarshalToSizedBufferVT(dAtA[:i])
+	if m.Reshard != nil {
+		size, err := m.Reshard.MarshalToSizedBufferVT(dAtA[:i])
 		if err != nil {
 			return 0, err
 		}
@@ -2215,7 +2215,7 @@ func (m *TopoEventLog) SizeVT() (n int) {
 	return n
 }
 
-func (m *TopoEvent_EmergencyReparenting) SizeVT() (n int) {
+func (m *TopoEvent_EmergencyReparent) SizeVT() (n int) {
 	if m == nil {
 		return 0
 	}
@@ -2241,7 +2241,7 @@ func (m *TopoEvent_EmergencyReparenting) SizeVT() (n int) {
 	return n
 }
 
-func (m *TopoEvent_PlannedReparenting) SizeVT() (n int) {
+func (m *TopoEvent_PlannedReparent) SizeVT() (n int) {
 	if m == nil {
 		return 0
 	}
@@ -2265,7 +2265,7 @@ func (m *TopoEvent_PlannedReparenting) SizeVT() (n int) {
 	return n
 }
 
-func (m *TopoEvent_Resharding) SizeVT() (n int) {
+func (m *TopoEvent_Reshard) SizeVT() (n int) {
 	if m == nil {
 		return 0
 	}
@@ -2324,38 +2324,38 @@ func (m *TopoEvent) SizeVT() (n int) {
 	return n
 }
 
-func (m *TopoEvent_EmergencyReparenting_) SizeVT() (n int) {
+func (m *TopoEvent_EmergencyReparent_) SizeVT() (n int) {
 	if m == nil {
 		return 0
 	}
 	var l int
 	_ = l
-	if m.EmergencyReparenting != nil {
-		l = m.EmergencyReparenting.SizeVT()
+	if m.EmergencyReparent != nil {
+		l = m.EmergencyReparent.SizeVT()
 		n += 1 + l + sov(uint64(l))
 	}
 	return n
 }
-func (m *TopoEvent_PlannedReparenting_) SizeVT() (n int) {
+func (m *TopoEvent_PlannedReparent_) SizeVT() (n int) {
 	if m == nil {
 		return 0
 	}
 	var l int
 	_ = l
-	if m.PlannedReparenting != nil {
-		l = m.PlannedReparenting.SizeVT()
+	if m.PlannedReparent != nil {
+		l = m.PlannedReparent.SizeVT()
 		n += 1 + l + sov(uint64(l))
 	}
 	return n
 }
-func (m *TopoEvent_Resharding_) SizeVT() (n int) {
+func (m *TopoEvent_Reshard_) SizeVT() (n int) {
 	if m == nil {
 		return 0
 	}
 	var l int
 	_ = l
-	if m.Resharding != nil {
-		l = m.Resharding.SizeVT()
+	if m.Reshard != nil {
+		l = m.Reshard.SizeVT()
 		n += 1 + l + sov(uint64(l))
 	}
 	return n
@@ -5723,7 +5723,7 @@ func (m *TopoEventLog) UnmarshalVT(dAtA []byte) error {
 	}
 	return nil
 }
-func (m *TopoEvent_EmergencyReparenting) UnmarshalVT(dAtA []byte) error {
+func (m *TopoEvent_EmergencyReparent) UnmarshalVT(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -5746,10 +5746,10 @@ func (m *TopoEvent_EmergencyReparenting) UnmarshalVT(dAtA []byte) error {
 		fieldNum := int32(wire >> 3)
 		wireType := int(wire & 0x7)
 		if wireType == 4 {
-			return fmt.Errorf("proto: TopoEvent_EmergencyReparenting: wiretype end group for non-group")
+			return fmt.Errorf("proto: TopoEvent_EmergencyReparent: wiretype end group for non-group")
 		}
 		if fieldNum <= 0 {
-			return fmt.Errorf("proto: TopoEvent_EmergencyReparenting: illegal tag %d (wire type %d)", fieldNum, wire)
+			return fmt.Errorf("proto: TopoEvent_EmergencyReparent: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		case 1:
@@ -5874,7 +5874,7 @@ func (m *TopoEvent_EmergencyReparenting) UnmarshalVT(dAtA []byte) error {
 	}
 	return nil
 }
-func (m *TopoEvent_PlannedReparenting) UnmarshalVT(dAtA []byte) error {
+func (m *TopoEvent_PlannedReparent) UnmarshalVT(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -5897,10 +5897,10 @@ func (m *TopoEvent_PlannedReparenting) UnmarshalVT(dAtA []byte) error {
 		fieldNum := int32(wire >> 3)
 		wireType := int(wire & 0x7)
 		if wireType == 4 {
-			return fmt.Errorf("proto: TopoEvent_PlannedReparenting: wiretype end group for non-group")
+			return fmt.Errorf("proto: TopoEvent_PlannedReparent: wiretype end group for non-group")
 		}
 		if fieldNum <= 0 {
-			return fmt.Errorf("proto: TopoEvent_PlannedReparenting: illegal tag %d (wire type %d)", fieldNum, wire)
+			return fmt.Errorf("proto: TopoEvent_PlannedReparent: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		case 1:
@@ -6029,7 +6029,7 @@ func (m *TopoEvent_PlannedReparenting) UnmarshalVT(dAtA []byte) error {
 	}
 	return nil
 }
-func (m *TopoEvent_Resharding) UnmarshalVT(dAtA []byte) error {
+func (m *TopoEvent_Reshard) UnmarshalVT(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -6052,10 +6052,10 @@ func (m *TopoEvent_Resharding) UnmarshalVT(dAtA []byte) error {
 		fieldNum := int32(wire >> 3)
 		wireType := int(wire & 0x7)
 		if wireType == 4 {
-			return fmt.Errorf("proto: TopoEvent_Resharding: wiretype end group for non-group")
+			return fmt.Errorf("proto: TopoEvent_Reshard: wiretype end group for non-group")
 		}
 		if fieldNum <= 0 {
-			return fmt.Errorf("proto: TopoEvent_Resharding: illegal tag %d (wire type %d)", fieldNum, wire)
+			return fmt.Errorf("proto: TopoEvent_Reshard: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		case 1:
@@ -6339,7 +6339,7 @@ func (m *TopoEvent) UnmarshalVT(dAtA []byte) error {
 			iNdEx = postIndex
 		case 5:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field EmergencyReparenting", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field EmergencyReparent", wireType)
 			}
 			var msglen int
 			for shift := uint(0); ; shift += 7 {
@@ -6366,21 +6366,21 @@ func (m *TopoEvent) UnmarshalVT(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			if oneof, ok := m.Event.(*TopoEvent_EmergencyReparenting_); ok {
-				if err := oneof.EmergencyReparenting.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+			if oneof, ok := m.Event.(*TopoEvent_EmergencyReparent_); ok {
+				if err := oneof.EmergencyReparent.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 					return err
 				}
 			} else {
-				v := &TopoEvent_EmergencyReparenting{}
+				v := &TopoEvent_EmergencyReparent{}
 				if err := v.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 					return err
 				}
-				m.Event = &TopoEvent_EmergencyReparenting_{v}
+				m.Event = &TopoEvent_EmergencyReparent_{v}
 			}
 			iNdEx = postIndex
 		case 6:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field PlannedReparenting", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field PlannedReparent", wireType)
 			}
 			var msglen int
 			for shift := uint(0); ; shift += 7 {
@@ -6407,21 +6407,21 @@ func (m *TopoEvent) UnmarshalVT(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			if oneof, ok := m.Event.(*TopoEvent_PlannedReparenting_); ok {
-				if err := oneof.PlannedReparenting.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+			if oneof, ok := m.Event.(*TopoEvent_PlannedReparent_); ok {
+				if err := oneof.PlannedReparent.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 					return err
 				}
 			} else {
-				v := &TopoEvent_PlannedReparenting{}
+				v := &TopoEvent_PlannedReparent{}
 				if err := v.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 					return err
 				}
-				m.Event = &TopoEvent_PlannedReparenting_{v}
+				m.Event = &TopoEvent_PlannedReparent_{v}
 			}
 			iNdEx = postIndex
 		case 7:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Resharding", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field Reshard", wireType)
 			}
 			var msglen int
 			for shift := uint(0); ; shift += 7 {
@@ -6448,16 +6448,16 @@ func (m *TopoEvent) UnmarshalVT(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			if oneof, ok := m.Event.(*TopoEvent_Resharding_); ok {
-				if err := oneof.Resharding.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+			if oneof, ok := m.Event.(*TopoEvent_Reshard_); ok {
+				if err := oneof.Reshard.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 					return err
 				}
 			} else {
-				v := &TopoEvent_Resharding{}
+				v := &TopoEvent_Reshard{}
 				if err := v.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 					return err
 				}
-				m.Event = &TopoEvent_Resharding_{v}
+				m.Event = &TopoEvent_Reshard_{v}
 			}
 			iNdEx = postIndex
 		default:

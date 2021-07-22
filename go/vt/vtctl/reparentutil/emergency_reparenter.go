@@ -112,8 +112,8 @@ func (erp *EmergencyReparenter) ReparentShard(ctx context.Context, keyspace stri
 		StartedAt: logutil.TimeToProto(time.Now()),
 		Uuid:      uuid.New().String(),
 		Keyspace:  keyspace,
-		Event: &topodatapb.TopoEvent_EmergencyReparenting_{
-			EmergencyReparenting: &topodatapb.TopoEvent_EmergencyReparenting{
+		Event: &topodatapb.TopoEvent_EmergencyReparent_{
+			EmergencyReparent: &topodatapb.TopoEvent_EmergencyReparent{
 				Shard:         shard,
 				PrimaryElect:  opts.NewPrimaryAlias,
 				IgnoreTablets: opts.IgnoreReplicas.UnsortedList(),

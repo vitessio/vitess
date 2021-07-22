@@ -432,27 +432,27 @@ message TopoEvent {
   string uuid = 3;
   string keyspace = 4;
 
-  message EmergencyReparenting {
+  message EmergencyReparent {
     string shard = 1;
     TabletAlias primaryElect = 2;
     repeated string ignore_tablets = 3;
   }
 
-  message PlannedReparenting {
+  message PlannedReparent {
     string shard = 1;
     TabletAlias primaryElect = 2;
     TabletAlias primaryAvoid = 3;
   }
 
-  message Resharding {
+  message Reshard {
     string workflow = 1;
     repeated string sources = 2;
     repeated string targets = 3;
   }
 
   oneof event {
-    EmergencyReparenting emergency_reparenting = 5;
-    PlannedReparenting planned_reparenting = 6;
-    Resharding resharding = 7;
+    EmergencyReparent emergency_reparent = 5;
+    PlannedReparent planned_reparent = 6;
+    Reshard reshard = 7;
   }
 }

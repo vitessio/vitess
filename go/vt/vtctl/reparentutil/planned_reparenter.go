@@ -120,8 +120,8 @@ func (pr *PlannedReparenter) ReparentShard(ctx context.Context, keyspace string,
 		StartedAt: logutil.TimeToProto(time.Now()),
 		Uuid:      uuid.New().String(),
 		Keyspace:  keyspace,
-		Event: &topodatapb.TopoEvent_PlannedReparenting_{
-			PlannedReparenting: &topodatapb.TopoEvent_PlannedReparenting{
+		Event: &topodatapb.TopoEvent_PlannedReparent_{
+			PlannedReparent: &topodatapb.TopoEvent_PlannedReparent{
 				Shard:        shard,
 				PrimaryElect: opts.NewPrimaryAlias,
 				PrimaryAvoid: opts.AvoidPrimaryAlias,

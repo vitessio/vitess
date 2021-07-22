@@ -90,8 +90,8 @@ func (wr *Wrangler) Reshard(ctx context.Context, keyspace, workflow string, sour
 		StartedAt: logutil.TimeToProto(time.Now()),
 		Uuid:      uuid.New().String(),
 		Keyspace:  keyspace,
-		Event: &topodatapb.TopoEvent_Resharding_{
-			Resharding: &topodatapb.TopoEvent_Resharding{
+		Event: &topodatapb.TopoEvent_Reshard_{
+			Reshard: &topodatapb.TopoEvent_Reshard{
 				Workflow: workflow,
 				Sources:  sources,
 				Targets:  targets,

@@ -4,14 +4,27 @@ import (
 	"context"
 	"sort"
 
+	"vitess.io/vitess/go/protoutil"
+
 	"google.golang.org/protobuf/proto"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
+// WatchTopoEventData is the data returned on each watch event from
+// WatchTopoEventLog. It contains the topology events that have happened
+// on the cluster since the last time this method was called.
 type WatchTopoEventData struct {
+	// NewLogEntries are the topology events that have happened on the cluster
+	// since the last time we watched the topology server
 	NewLogEntries []*topodatapb.TopoEvent
-	Err           error
+
+	// FullLog is the full list of topology events in the cluster as of the last
+	// watch event, and it contains events that have potentially been seen before
+	FullLog []*topodatapb.TopoEvent
+
+	// Error is the last error that happened while watching for topology events
+	Err error
 }
 
 func (ts *Server) createTopoEventLog(ctx context.Context, entries []*topodatapb.TopoEvent) error {
@@ -28,6 +41,9 @@ func (ts *Server) createTopoEventLog(ctx context.Context, entries []*topodatapb.
 	return err
 }
 
+// WatchTopoEventLog watches the topology event log for topology change events
+// in real time. If there's no topology event log in the cluster, a new empty
+// one will be created.
 func (ts *Server) WatchTopoEventLog(ctx context.Context) (*WatchTopoEventData, <-chan *WatchTopoEventData, CancelFunc) {
 	current, wdChannel, cancel := ts.globalCell.Watch(ctx, TopoEventFile)
 	if current.Err != nil {
@@ -82,7 +98,9 @@ func (ts *Server) WatchTopoEventLog(ctx context.Context) (*WatchTopoEventData, <
 				return
 			}
 
-			data := &WatchTopoEventData{}
+			data := &WatchTopoEventData{
+				FullLog: value.Log,
+			}
 			for _, ev := range value.Log {
 				if _, ok := seen[ev.Uuid]; !ok {
 					seen[ev.Uuid] = struct{}{}
@@ -94,9 +112,11 @@ func (ts *Server) WatchTopoEventLog(ctx context.Context) (*WatchTopoEventData, <
 		}
 	}()
 
-	return &WatchTopoEventData{NewLogEntries: value.Log}, changes, cancel
+	return &WatchTopoEventData{NewLogEntries: value.Log, FullLog: value.Log}, changes, cancel
 }
 
+// UpdateTopoEventLog appends the given event to the topology event log.
+// The log is always kept consistently sorted by StartTime for all events.
 func (ts *Server) UpdateTopoEventLog(ctx context.Context, newEvent *topodatapb.TopoEvent) error {
 	nodePath := TopoEventFile
 	for {
@@ -121,9 +141,9 @@ func (ts *Server) UpdateTopoEventLog(ctx context.Context, newEvent *topodatapb.T
 
 		topoEvLog.Log = append(topoEvLog.Log, newEvent)
 		sort.Slice(topoEvLog.Log, func(i, j int) bool {
-			a := topoEvLog.Log[i].StartedAt
-			b := topoEvLog.Log[j].StartedAt
-			return a.Seconds < b.Seconds && a.Nanoseconds < b.Nanoseconds
+			a := protoutil.TimeFromProto(topoEvLog.Log[i].StartedAt)
+			b := protoutil.TimeFromProto(topoEvLog.Log[j].StartedAt)
+			return a.Before(b)
 		})
 
 		updatedData, err := proto.Marshal(topoEvLog)
