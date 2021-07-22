@@ -4,6 +4,11 @@ import (
 	"context"
 	"fmt"
 
+	"vitess.io/vitess/go/vt/vttablet/tmclient"
+
+	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/topotools/events"
+
 	"vitess.io/vitess/go/vt/orchestrator/config"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -77,4 +82,11 @@ func (vtorcReparent *VtOrcReparentFunctions) PreRecoveryProcesses(ctx context.Co
 
 	AuditTopologyRecovery(vtorcReparent.topologyRecovery, fmt.Sprintf("RecoverDeadMaster: will recover %+v", vtorcReparent.analysisEntry.AnalyzedInstanceKey))
 	return nil
+}
+
+// StopReplicationAndBuildStatusMaps implements the ReparentFunctions interface
+func (vtorcReparent *VtOrcReparentFunctions) StopReplicationAndBuildStatusMaps(context.Context, tmclient.TabletManagerClient, *events.Reparent, logutil.Logger) error {
+	err := TabletDemoteMaster(vtorcReparent.analysisEntry.AnalyzedInstanceKey)
+	AuditTopologyRecovery(vtorcReparent.topologyRecovery, fmt.Sprintf("RecoverDeadMaster: TabletDemoteMaster: %v", err))
+	return err
 }

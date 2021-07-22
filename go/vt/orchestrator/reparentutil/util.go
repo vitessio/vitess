@@ -22,6 +22,10 @@ import (
 	"sync"
 	"time"
 
+	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
+
+	"vitess.io/vitess/go/vt/topotools/events"
+
 	"k8s.io/apimachinery/pkg/util/sets"
 
 	"vitess.io/vitess/go/vt/orchestrator/logic"
@@ -45,7 +49,8 @@ type (
 		GetKeyspace() string
 		GetShard() string
 		CheckIfFixed() bool
-		PreRecoveryProcesses(ctx context.Context) error
+		PreRecoveryProcesses(context.Context) error
+		StopReplicationAndBuildStatusMaps(context.Context, tmclient.TabletManagerClient, *events.Reparent, logutil.Logger) error
 	}
 
 	// VtctlReparentFunctions is the Vtctl implementation for ReparentFunctions
@@ -58,6 +63,8 @@ type (
 		ts                  *topo.Server
 		lockAction          string
 		tabletMap           map[string]*topo.TabletInfo
+		statusMap           map[string]*replicationdatapb.StopReplicationStatus
+		primaryStatusMap    map[string]*replicationdatapb.MasterStatus
 	}
 )
 
@@ -99,6 +106,16 @@ func (vtctlReparent *VtctlReparentFunctions) PreRecoveryProcesses(ctx context.Co
 	vtctlReparent.tabletMap, err = vtctlReparent.ts.GetTabletMapForShard(ctx, vtctlReparent.keyspace, vtctlReparent.shard)
 	if err != nil {
 		return vterrors.Wrapf(err, "failed to get tablet map for %v/%v: %v", vtctlReparent.keyspace, vtctlReparent.shard, err)
+	}
+	return nil
+}
+
+// StopReplicationAndBuildStatusMaps implements the ReparentFunctions interface
+func (vtctlReparent *VtctlReparentFunctions) StopReplicationAndBuildStatusMaps(ctx context.Context, tmc tmclient.TabletManagerClient, ev *events.Reparent, logger logutil.Logger) error {
+	var err error
+	vtctlReparent.statusMap, vtctlReparent.primaryStatusMap, err = StopReplicationAndBuildStatusMaps(ctx, tmc, ev, vtctlReparent.tabletMap, vtctlReparent.WaitReplicasTimeout, vtctlReparent.IgnoreReplicas, logger)
+	if err != nil {
+		return vterrors.Wrapf(err, "failed to stop replication and build status maps: %v", err)
 	}
 	return nil
 }
