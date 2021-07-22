@@ -1002,7 +1002,7 @@ Gen4 plan same as above
 # Order by, invalid column number
 "select col from user order by 18446744073709551616"
 "error parsing column number: 18446744073709551616"
-Gen4 error: strconv.Atoi: parsing "18446744073709551616": value out of range
+Gen4 plan same as above
 
 # Order by, out of range column number
 "select col from user order by 2"
@@ -1713,31 +1713,7 @@ Gen4 error: In aggregated query without GROUP BY, expression of SELECT list cont
 # Scatter order by and aggregation: order by column must reference column from select list
 "select col, count(*) from user group by col order by c1"
 "unsupported: memory sort: order by must reference a column in the select list: c1 asc"
-{
-  "QueryType": "SELECT",
-  "Original": "select col, count(*) from user group by col order by c1",
-  "Instructions": {
-    "OperatorType": "Aggregate",
-    "Variant": "Ordered",
-    "Aggregates": "count(1)",
-    "GroupBy": "(0|2)",
-    "ResultColumns": 2,
-    "Inputs": [
-      {
-        "OperatorType": "Route",
-        "Variant": "SelectScatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select col, count(*), weight_string(col), c1, weight_string(c1) from `user` where 1 != 1 group by col",
-        "OrderBy": "(3|4) ASC, (0|2) ASC",
-        "Query": "select col, count(*), weight_string(col), c1, weight_string(c1) from `user` group by col order by c1 asc, col asc",
-        "Table": "`user`"
-      }
-    ]
-  }
-}
+Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains nonaggregated column 'c1' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by
 
 # scatter aggregate with ambiguous aliases
 "select distinct a, b as a from user"
