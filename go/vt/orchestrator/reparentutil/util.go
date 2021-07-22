@@ -51,6 +51,8 @@ type (
 		CheckIfFixed() bool
 		PreRecoveryProcesses(context.Context) error
 		StopReplicationAndBuildStatusMaps(context.Context, tmclient.TabletManagerClient, *events.Reparent, logutil.Logger) error
+		GetPrimaryRecoveryType() logic.MasterRecoveryType
+		AddError(string) error
 	}
 
 	// VtctlReparentFunctions is the Vtctl implementation for ReparentFunctions
@@ -118,6 +120,16 @@ func (vtctlReparent *VtctlReparentFunctions) StopReplicationAndBuildStatusMaps(c
 		return vterrors.Wrapf(err, "failed to stop replication and build status maps: %v", err)
 	}
 	return nil
+}
+
+// GetPrimaryRecoveryType implements the ReparentFunctions interface
+func (vtctlReparent *VtctlReparentFunctions) GetPrimaryRecoveryType() logic.MasterRecoveryType {
+	return logic.MasterRecoveryGTID
+}
+
+// AddError implements the ReparentFunctions interface
+func (vtctlReparent *VtctlReparentFunctions) AddError(errorMsg string) error {
+	return vterrors.New(vtrpc.Code_INTERNAL, errorMsg)
 }
 
 func (vtctlReparent *VtctlReparentFunctions) getLockAction(newPrimaryAlias *topodatapb.TabletAlias) string {

@@ -19,6 +19,8 @@ package reparentutil
 import (
 	"context"
 
+	"vitess.io/vitess/go/vt/orchestrator/logic"
+
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -106,6 +108,11 @@ func (erp *EmergencyReparenter2) reparentShardLocked(ctx context.Context, ev *ev
 
 	if err := topo.CheckShardLocked(ctx, keyspace, shard); err != nil {
 		return vterrors.Wrapf(err, "lost topology lock, aborting: %v", err)
+	}
+
+	recoveryType := reparentFunctions.GetPrimaryRecoveryType()
+	if recoveryType != logic.MasterRecoveryGTID {
+		return reparentFunctions.AddError("RecoveryType unknown/unsupported")
 	}
 
 	return nil
