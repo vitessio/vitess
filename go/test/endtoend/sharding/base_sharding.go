@@ -143,8 +143,8 @@ func CheckBinlogPlayerVars(t *testing.T, vttablet cluster.Vttablet, sourceShards
 	assert.Contains(t, tabletVars, "VReplicationSecondsBehindMasterMax")
 	assert.Contains(t, tabletVars, "VReplicationSecondsBehindMaster")
 
-	assert.Contains(t, tabletVars, "VReplicationSecondsBehindPrimaryMax")
-	assert.Contains(t, tabletVars, "VReplicationSecondsBehindPrimary")
+	assert.Contains(t, tabletVars, "VReplicationLagSecondsMax")
+	assert.Contains(t, tabletVars, "VReplicationLagSeconds")
 	assert.Contains(t, tabletVars, "VReplicationSource")
 	assert.Contains(t, tabletVars, "VReplicationSourceTablet")
 

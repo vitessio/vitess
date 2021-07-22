@@ -86,8 +86,8 @@ type Stats struct {
 	heartbeatMutex sync.Mutex
 	heartbeat      int64
 
-	SecondsBehindPrimary sync2.AtomicInt64
-	History              *history.History
+	ReplicationLagSeconds sync2.AtomicInt64
+	History               *history.History
 
 	State sync2.AtomicString
 
@@ -149,7 +149,7 @@ func NewStats() *Stats {
 	bps.Timings = stats.NewTimings("", "", "")
 	bps.Rates = stats.NewRates("", bps.Timings, 15*60/5, 5*time.Second)
 	bps.History = history.New(3)
-	bps.SecondsBehindPrimary.Set(math.MaxInt64)
+	bps.ReplicationLagSeconds.Set(math.MaxInt64)
 	bps.PhaseTimings = stats.NewTimings("", "", "Phase")
 	bps.QueryTimings = stats.NewTimings("", "", "Phase")
 	bps.QueryCount = stats.NewCountersWithSingleLabel("", "", "Phase", "")
@@ -498,7 +498,7 @@ func (blp *BinlogPlayer) writeRecoveryPosition(tx *binlogdatapb.BinlogTransactio
 	blp.position = position
 	blp.blplStats.SetLastPosition(blp.position)
 	if tx.EventToken.Timestamp != 0 {
-		blp.blplStats.SecondsBehindPrimary.Set(now - tx.EventToken.Timestamp)
+		blp.blplStats.ReplicationLagSeconds.Set(now - tx.EventToken.Timestamp)
 	}
 	return nil
 }

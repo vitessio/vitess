@@ -38,8 +38,8 @@ func init() {
 }
 
 // StatusSummary returns the summary status of vreplication.
-func StatusSummary() (maxSecondsBehindPrimary int64, binlogPlayersCount int32) {
-	return globalStats.maxSecondsBehindPrimary(), int32(globalStats.numControllers())
+func StatusSummary() (maxReplicationLagSeconds int64, binlogPlayersCount int32) {
+	return globalStats.maxReplicationLagSeconds(), int32(globalStats.numControllers())
 }
 
 // AddStatusPart adds the vreplication status to the status page.
@@ -63,7 +63,7 @@ func (st *vrStats) register() {
 	// DEPRECATED
 	//TODO(rohit) : remove this metric and related parameter in V13
 
-	stats.NewGaugeFunc("VReplicationSecondsBehindMasterMax", "Max vreplication seconds behind primary", st.maxSecondsBehindPrimary)
+	stats.NewGaugeFunc("VReplicationSecondsBehindMasterMax", "Max vreplication seconds behind primary", st.maxReplicationLagSeconds)
 	stats.NewGaugesFuncWithMultiLabels(
 		"VReplicationSecondsBehindMaster",
 		"vreplication seconds behind primary per stream",
@@ -73,7 +73,7 @@ func (st *vrStats) register() {
 			defer st.mu.Unlock()
 			result := make(map[string]int64, len(st.controllers))
 			for _, ct := range st.controllers {
-				result[ct.source.Keyspace+"."+ct.source.Shard+"."+ct.workflow+"."+fmt.Sprintf("%v", ct.id)] = ct.blpStats.SecondsBehindPrimary.Get()
+				result[ct.source.Keyspace+"."+ct.source.Shard+"."+ct.workflow+"."+fmt.Sprintf("%v", ct.id)] = ct.blpStats.ReplicationLagSeconds.Get()
 			}
 			return result
 		})
@@ -86,13 +86,13 @@ func (st *vrStats) register() {
 			defer st.mu.Unlock()
 			result := int64(0)
 			for _, ct := range st.controllers {
-				result += ct.blpStats.SecondsBehindPrimary.Get()
+				result += ct.blpStats.ReplicationLagSeconds.Get()
 			}
 			return result
 		})
 
 	stats.NewGaugeFunc("VReplicationStreamCount", "Number of vreplication streams", st.numControllers)
-	stats.NewGaugeFunc("VReplicationSecondsBehindPrimaryMax", "Max vreplication seconds behind primary", st.maxSecondsBehindPrimary)
+	stats.NewGaugeFunc("VReplicationLagSecondsMax", "Max vreplication seconds behind primary", st.maxReplicationLagSeconds)
 	stats.Publish("VReplicationStreamState", stats.StringMapFunc(func() map[string]string {
 		st.mu.Lock()
 		defer st.mu.Unlock()
@@ -103,7 +103,7 @@ func (st *vrStats) register() {
 		return result
 	}))
 	stats.NewGaugesFuncWithMultiLabels(
-		"VReplicationSecondsBehindPrimary",
+		"VReplicationLagSeconds",
 		"vreplication seconds behind primary per stream",
 		[]string{"source_keyspace", "source_shard", "workflow", "counts"},
 		func() map[string]int64 {
@@ -111,20 +111,20 @@ func (st *vrStats) register() {
 			defer st.mu.Unlock()
 			result := make(map[string]int64, len(st.controllers))
 			for _, ct := range st.controllers {
-				result[ct.source.Keyspace+"."+ct.source.Shard+"."+ct.workflow+"."+fmt.Sprintf("%v", ct.id)] = ct.blpStats.SecondsBehindPrimary.Get()
+				result[ct.source.Keyspace+"."+ct.source.Shard+"."+ct.workflow+"."+fmt.Sprintf("%v", ct.id)] = ct.blpStats.ReplicationLagSeconds.Get()
 			}
 			return result
 		})
 
 	stats.NewCounterFunc(
-		"VReplicationSecondsBehindPrimaryTotal",
+		"VReplicationLagSecondsTotal",
 		"vreplication seconds behind primary aggregated across all streams",
 		func() int64 {
 			st.mu.Lock()
 			defer st.mu.Unlock()
 			result := int64(0)
 			for _, ct := range st.controllers {
-				result += ct.blpStats.SecondsBehindPrimary.Get()
+				result += ct.blpStats.ReplicationLagSeconds.Get()
 			}
 			return result
 		})
@@ -394,12 +394,12 @@ func (st *vrStats) numControllers() int64 {
 	return int64(len(st.controllers))
 }
 
-func (st *vrStats) maxSecondsBehindPrimary() int64 {
+func (st *vrStats) maxReplicationLagSeconds() int64 {
 	st.mu.Lock()
 	defer st.mu.Unlock()
 	max := int64(0)
 	for _, ct := range st.controllers {
-		if cur := ct.blpStats.SecondsBehindPrimary.Get(); cur > max {
+		if cur := ct.blpStats.ReplicationLagSeconds.Get(); cur > max {
 			max = cur
 		}
 	}
@@ -422,7 +422,7 @@ func (st *vrStats) status() *EngineStatus {
 			StopPosition:          ct.stopPos,
 			LastPosition:          ct.blpStats.LastPosition().String(),
 			Heartbeat:             ct.blpStats.Heartbeat(),
-			ReplicationLagSeconds: ct.blpStats.SecondsBehindPrimary.Get(),
+			ReplicationLagSeconds: ct.blpStats.ReplicationLagSeconds.Get(),
 			Counts:                ct.blpStats.Timings.Counts(),
 			Rates:                 ct.blpStats.Rates.Get(),
 			State:                 ct.blpStats.State.Get(),
