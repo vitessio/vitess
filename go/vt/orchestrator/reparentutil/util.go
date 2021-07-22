@@ -58,6 +58,7 @@ type (
 		GetPrimaryRecoveryType() logic.MasterRecoveryType
 		AddError(string) error
 		FindPrimaryCandidates(context.Context, logutil.Logger, tmclient.TabletManagerClient) error
+		CheckIfNeedToOverridePrimary() error
 	}
 
 	// VtctlReparentFunctions is the Vtctl implementation for ReparentFunctions
@@ -72,6 +73,7 @@ type (
 		tabletMap                    map[string]*topo.TabletInfo
 		statusMap                    map[string]*replicationdatapb.StopReplicationStatus
 		primaryStatusMap             map[string]*replicationdatapb.PrimaryStatus
+		validCandidates              map[string]mysql.Position
 		winningPosition              mysql.Position
 		winningPrimaryTabletAliasStr string
 	}
@@ -162,12 +164,19 @@ func (vtctlReparent *VtctlReparentFunctions) FindPrimaryCandidates(ctx context.C
 		}
 	}
 
+	vtctlReparent.validCandidates = validCandidates
+
+	return nil
+}
+
+// CheckIfNeedToOverridePrimary implements the ReparentFunctions interface
+func (vtctlReparent *VtctlReparentFunctions) CheckIfNeedToOverridePrimary() error {
 	// If we were requested to elect a particular primary, verify it's a valid
 	// candidate (non-zero position, no errant GTIDs) and is at least as
 	// advanced as the winning position.
 	if vtctlReparent.NewPrimaryAlias != nil {
 		vtctlReparent.winningPrimaryTabletAliasStr = topoproto.TabletAliasString(vtctlReparent.NewPrimaryAlias)
-		pos, ok := validCandidates[vtctlReparent.winningPrimaryTabletAliasStr]
+		pos, ok := vtctlReparent.validCandidates[vtctlReparent.winningPrimaryTabletAliasStr]
 		switch {
 		case !ok:
 			return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "master elect %v has errant GTIDs", vtctlReparent.winningPrimaryTabletAliasStr)
