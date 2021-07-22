@@ -769,7 +769,7 @@ func (client *Client) DemoteMaster(ctx context.Context, tablet *topodatapb.Table
 		return nil, err
 	}
 	defer closer.Close()
-	response, err := c.DemoteMaster(ctx, &tabletmanagerdatapb.DemotePrimaryRequest{})
+	response, err := c.DemotePrimary(ctx, &tabletmanagerdatapb.DemotePrimaryRequest{})
 	if err != nil {
 		return nil, err
 	}
@@ -791,7 +791,7 @@ func (client *Client) DemotePrimary(ctx context.Context, tablet *topodatapb.Tabl
 		return nil, err
 	}
 	defer closer.Close()
-	response, err := c.DemoteMaster(ctx, &tabletmanagerdatapb.DemotePrimaryRequest{})
+	response, err := c.DemotePrimary(ctx, &tabletmanagerdatapb.DemotePrimaryRequest{})
 	if err != nil {
 		return nil, err
 	}
