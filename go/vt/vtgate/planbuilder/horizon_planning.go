@@ -128,7 +128,9 @@ func (hp *horizonPlanning) haveToTruncate(v bool) {
 func (hp *horizonPlanning) planAggregations() error {
 	newPlan := hp.plan
 	var oa *orderedAggregate
-	if !hasUniqueVindex(hp.vschema, hp.semTable, hp.qp.GroupByExprs) {
+	uniqVindex := hasUniqueVindex(hp.vschema, hp.semTable, hp.qp.GroupByExprs)
+	_, joinPlan := hp.plan.(*joinGen4)
+	if !uniqVindex || joinPlan {
 		eaggr := &engine.OrderedAggregate{}
 		oa = &orderedAggregate{
 			resultsBuilder: resultsBuilder{
@@ -219,6 +221,9 @@ func planGroupByGen4(groupExpr abstract.GroupBy, plan logicalPlan, semTable *sem
 		sel := node.Select.(*sqlparser.Select)
 		sel.GroupBy = append(sel.GroupBy, groupExpr.Inner)
 		return false, nil
+	case *joinGen4:
+		_, _, added, err := wrapAndPushExpr(groupExpr.Inner, groupExpr.WeightStrExpr, node, semTable)
+		return added, err
 	case *orderedAggregate:
 		keyCol, weightStringOffset, colAdded, err := wrapAndPushExpr(groupExpr.Inner, groupExpr.WeightStrExpr, node.input, semTable)
 		if err != nil {
@@ -315,6 +320,8 @@ func planOrderByForRoute(orderExprs []abstract.OrderBy, plan *route, semTable *s
 	return plan, origColCount != plan.Select.GetColumnCount(), nil
 }
 
+// wrapAndPushExpr pushes the expression and weighted_string function to the plan using semantics.SemTable
+// It returns (expr offset, weight_string offset, new_column added, error)
 func wrapAndPushExpr(expr sqlparser.Expr, weightStrExpr sqlparser.Expr, plan logicalPlan, semTable *semantics.SemTable) (int, int, bool, error) {
 	offset, added, err := pushProjection(&sqlparser.AliasedExpr{Expr: expr}, plan, semTable, true, true)
 	if err != nil {
@@ -370,8 +377,6 @@ func (hp *horizonPlanning) planOrderByForJoin(orderExprs []abstract.OrderBy, pla
 			return nil, err
 		}
 		plan.Left = newLeft
-		hp.needsTruncation = false // since this is a join, we can safely
-		// add extra columns and not need to truncate them
 		return plan, nil
 	}
 	sortPlan, err := hp.createMemorySortPlan(plan, orderExprs)

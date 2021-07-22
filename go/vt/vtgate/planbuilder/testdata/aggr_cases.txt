@@ -1927,3 +1927,146 @@ Gen4 plan same as above
     ]
   }
 }
+
+# Grouping on join
+"select user.a from user join user_extra group by user.a"
+"unsupported: cross-shard query with aggregates"
+{
+  "QueryType": "SELECT",
+  "Original": "select user.a from user join user_extra group by user.a",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Ordered",
+    "GroupBy": "(0|1)",
+    "ResultColumns": 1,
+    "Inputs": [
+      {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "-1,-2",
+        "TableName": "`user`_user_extra",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select `user`.a, weight_string(`user`.a) from `user` where 1 != 1",
+            "OrderBy": "(0|1) ASC",
+            "Query": "select `user`.a, weight_string(`user`.a) from `user` order by `user`.a asc",
+            "Table": "`user`"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from user_extra where 1 != 1",
+            "Query": "select 1 from user_extra",
+            "Table": "user_extra"
+          }
+        ]
+      }
+    ]
+  }
+}
+
+# Aggregate on join
+"select user.a, count(*) from user join user_extra group by user.a"
+"unsupported: cross-shard query with aggregates"
+{
+  "QueryType": "SELECT",
+  "Original": "select user.a, count(*) from user join user_extra group by user.a",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Ordered",
+    "Aggregates": "count(1)",
+    "GroupBy": "(0|2)",
+    "ResultColumns": 2,
+    "Inputs": [
+      {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "-1,-2,-3",
+        "TableName": "`user`_user_extra",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select `user`.a, count(*), weight_string(`user`.a) from `user` where 1 != 1",
+            "OrderBy": "(0|2) ASC",
+            "Query": "select `user`.a, count(*), weight_string(`user`.a) from `user` order by `user`.a asc",
+            "Table": "`user`"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from user_extra where 1 != 1",
+            "Query": "select 1 from user_extra",
+            "Table": "user_extra"
+          }
+        ]
+      }
+    ]
+  }
+}
+
+# Aggregate on other table in join
+"select user.a, count(user_extra.a) from user join user_extra group by user.a"
+"unsupported: cross-shard query with aggregates"
+{
+  "QueryType": "SELECT",
+  "Original": "select user.a, count(user_extra.a) from user join user_extra group by user.a",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Ordered",
+    "Aggregates": "count(1)",
+    "GroupBy": "(0|2)",
+    "ResultColumns": 2,
+    "Inputs": [
+      {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "-1,1,-2",
+        "TableName": "`user`_user_extra",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select `user`.a, weight_string(`user`.a) from `user` where 1 != 1",
+            "OrderBy": "(0|1) ASC",
+            "Query": "select `user`.a, weight_string(`user`.a) from `user` order by `user`.a asc",
+            "Table": "`user`"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select count(user_extra.a) from user_extra where 1 != 1",
+            "Query": "select count(user_extra.a) from user_extra",
+            "Table": "user_extra"
+          }
+        ]
+      }
+    ]
+  }
+}
