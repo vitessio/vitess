@@ -190,6 +190,7 @@ func TestNewTable(t *testing.T) {
 	defer connShard2.Close()
 
 	_ = exec(t, conn, "create table test_table (id bigint, name varchar(100))")
+	defer exec(t, conn, "drop table test_table")
 
 	time.Sleep(2 * time.Second)
 
