@@ -61,6 +61,12 @@ create table t8(
 	testId bigint,
 	primary key(id8)
 ) Engine=InnoDB;
+
+create table t9(
+	id9 bigint,
+	testId bigint,
+	primary key(id9)
+) Engine=InnoDB;
 `
 
 	VSchema = `
@@ -163,6 +169,33 @@ func TestMain(m *testing.M) {
 		return m.Run()
 	}()
 	os.Exit(exitCode)
+}
+
+func TestNewTable(t *testing.T) {
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	shard1Params := vtParams
+	shard1Params.DbName += ":-80@master"
+	connShard1, err := mysql.Connect(ctx, &shard1Params)
+	require.NoError(t, err)
+	defer connShard1.Close()
+
+	shard2Params := vtParams
+	shard2Params.DbName += ":80-@master"
+	connShard2, err := mysql.Connect(ctx, &shard2Params)
+	require.NoError(t, err)
+	defer connShard2.Close()
+
+	_ = exec(t, conn, "create table test_table (id bigint, name varchar(100))")
+
+	time.Sleep(2 * time.Second)
+
+	assertMatches(t, conn, "select * from test_table", `[]`)
+	assertMatches(t, connShard1, "select * from test_table", `[]`)
+	assertMatches(t, connShard2, "select * from test_table", `[]`)
 }
 
 func TestAmbiguousColumnJoin(t *testing.T) {
