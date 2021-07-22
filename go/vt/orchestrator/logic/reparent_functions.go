@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"time"
 
+	"vitess.io/vitess/go/vt/orchestrator/reparentutil"
+
 	"vitess.io/vitess/go/vt/orchestrator/attributes"
 	"vitess.io/vitess/go/vt/orchestrator/kv"
 
@@ -38,6 +40,8 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 )
 
+var _ reparentutil.ReparentFunctions = (*VtOrcReparentFunctions)(nil)
+
 // VtOrcReparentFunctions is the VtOrc implementation for ReparentFunctions
 type VtOrcReparentFunctions struct {
 	analysisEntry        inst.ReplicationAnalysis
@@ -46,6 +50,7 @@ type VtOrcReparentFunctions struct {
 	topologyRecovery     *TopologyRecovery
 	promotedReplica      *inst.Instance
 	lostReplicas         [](*inst.Instance)
+	recoveryAttempted    bool
 }
 
 // LockShard implements the ReparentFunctions interface
@@ -113,16 +118,14 @@ func (vtorcReparent *VtOrcReparentFunctions) StopReplicationAndBuildStatusMaps(c
 	return err
 }
 
-// GetPrimaryRecoveryType implements the ReparentFunctions interface
-func (vtorcReparent *VtOrcReparentFunctions) GetPrimaryRecoveryType() MasterRecoveryType {
+// CheckPrimaryRecoveryType implements the ReparentFunctions interface
+func (vtorcReparent *VtOrcReparentFunctions) CheckPrimaryRecoveryType() error {
 	vtorcReparent.topologyRecovery.RecoveryType = GetMasterRecoveryType(&vtorcReparent.topologyRecovery.AnalysisEntry)
 	AuditTopologyRecovery(vtorcReparent.topologyRecovery, fmt.Sprintf("RecoverDeadMaster: masterRecoveryType=%+v", vtorcReparent.topologyRecovery.RecoveryType))
-	return vtorcReparent.topologyRecovery.RecoveryType
-}
-
-// AddError implements the ReparentFunctions interface
-func (vtorcReparent *VtOrcReparentFunctions) AddError(errorMsg string) error {
-	return vtorcReparent.topologyRecovery.AddError(log.Errorf(errorMsg))
+	if vtorcReparent.topologyRecovery.RecoveryType != MasterRecoveryGTID {
+		return vtorcReparent.topologyRecovery.AddError(log.Errorf("RecoveryType unknown/unsupported"))
+	}
+	return nil
 }
 
 // FindPrimaryCandidates implements the ReparentFunctions interface
@@ -188,6 +191,7 @@ func (vtorcReparent *VtOrcReparentFunctions) FindPrimaryCandidates(ctx context.C
 
 	vtorcReparent.promotedReplica = promotedReplica
 	vtorcReparent.lostReplicas = lostReplicas
+	vtorcReparent.recoveryAttempted = true
 	return nil
 }
 

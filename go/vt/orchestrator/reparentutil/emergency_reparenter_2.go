@@ -23,8 +23,6 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
-	"vitess.io/vitess/go/vt/orchestrator/logic"
-
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -114,9 +112,8 @@ func (erp *EmergencyReparenter2) reparentShardLocked(ctx context.Context, ev *ev
 		return vterrors.Wrapf(err, "lost topology lock, aborting: %v", err)
 	}
 
-	recoveryType := reparentFunctions.GetPrimaryRecoveryType()
-	if recoveryType != logic.MasterRecoveryGTID {
-		return reparentFunctions.AddError("RecoveryType unknown/unsupported")
+	if err := reparentFunctions.CheckPrimaryRecoveryType(); err != nil {
+		return err
 	}
 
 	if err := reparentFunctions.FindPrimaryCandidates(ctx, erp.logger, erp.tmc); err != nil {

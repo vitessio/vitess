@@ -27,14 +27,15 @@ import (
 	"sync/atomic"
 	"time"
 
+	"vitess.io/vitess/go/vt/orchestrator/reparentutil"
+	"vitess.io/vitess/go/vt/vttablet/tmclient"
+
 	"github.com/patrickmn/go-cache"
 	"github.com/rcrowley/go-metrics"
 
-	"vitess.io/vitess/go/vt/orchestrator/attributes"
 	"vitess.io/vitess/go/vt/orchestrator/config"
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
 	"vitess.io/vitess/go/vt/orchestrator/inst"
-	"vitess.io/vitess/go/vt/orchestrator/kv"
 	ometrics "vitess.io/vitess/go/vt/orchestrator/metrics"
 	"vitess.io/vitess/go/vt/orchestrator/os"
 	"vitess.io/vitess/go/vt/orchestrator/process"
@@ -826,150 +827,15 @@ func checkAndRecoverDeadMaster(analysisEntry inst.ReplicationAnalysis, candidate
 	}
 	log.Infof("Analysis: %v, deadmaster %+v", analysisEntry.Analysis, analysisEntry.AnalyzedInstanceKey)
 
-	// That's it! We must do recovery!
-	// TODO(sougou): This function gets called by GracefulMasterTakeover which may
-	// need to obtain shard lock before getting here.
-	_, unlock, err := LockShard(context.Background(), analysisEntry.AnalyzedInstanceKey)
-	if err != nil {
-		log.Infof("CheckAndRecover: Analysis: %+v, InstanceKey: %+v, candidateInstanceKey: %+v, "+
-			"skipProcesses: %v: NOT detecting/recovering host, could not obtain shard lock (%v)",
-			analysisEntry.Analysis, analysisEntry.AnalyzedInstanceKey, candidateInstanceKey, skipProcesses, err)
-		return false, nil, err
+	reparentFunctions := &VtOrcReparentFunctions{
+		analysisEntry:        analysisEntry,
+		candidateInstanceKey: candidateInstanceKey,
+		skipProcesses:        skipProcesses,
+		topologyRecovery:     topologyRecovery,
 	}
-	defer unlock(&err)
+	_, err = reparentutil.NewEmergencyReparenter2(tmclient.NewTabletManagerClient(), nil).ReparentShard(context.Background(), reparentFunctions)
 
-	// Check if someone else fixed the problem.
-	tablet, err := TabletRefresh(analysisEntry.AnalyzedInstanceKey)
-	if err == nil && tablet.Type != topodatapb.TabletType_MASTER {
-		// TODO(sougou); use a version that only refreshes the current shard.
-		RefreshTablets()
-		AuditTopologyRecovery(topologyRecovery, "another agent seems to have fixed the problem")
-		// TODO(sougou): see if we have to reset the cluster as healthy.
-		return false, topologyRecovery, nil
-	}
-
-	AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("will handle DeadMaster event on %+v", analysisEntry.ClusterDetails.ClusterName))
-	recoverDeadMasterCounter.Inc(1)
-	recoveryAttempted, promotedReplica, lostReplicas, err := recoverDeadMaster(topologyRecovery, candidateInstanceKey, skipProcesses)
-	if err != nil {
-		AuditTopologyRecovery(topologyRecovery, err.Error())
-	}
-	topologyRecovery.LostReplicas.AddInstances(lostReplicas)
-	if !recoveryAttempted {
-		return false, topologyRecovery, err
-	}
-
-	overrideMasterPromotion := func() (*inst.Instance, error) {
-		if promotedReplica == nil {
-			// No promotion; nothing to override.
-			return promotedReplica, err
-		}
-		// Scenarios where we might cancel the promotion.
-		if satisfied, reason := MasterFailoverGeographicConstraintSatisfied(&analysisEntry, promotedReplica); !satisfied {
-			return nil, fmt.Errorf("RecoverDeadMaster: failed %+v promotion; %s", promotedReplica.Key, reason)
-		}
-		if config.Config.FailMasterPromotionOnLagMinutes > 0 &&
-			time.Duration(promotedReplica.ReplicationLagSeconds.Int64)*time.Second >= time.Duration(config.Config.FailMasterPromotionOnLagMinutes)*time.Minute {
-			// candidate replica lags too much
-			return nil, fmt.Errorf("RecoverDeadMaster: failed promotion. FailMasterPromotionOnLagMinutes is set to %d (minutes) and promoted replica %+v 's lag is %d (seconds)", config.Config.FailMasterPromotionOnLagMinutes, promotedReplica.Key, promotedReplica.ReplicationLagSeconds.Int64)
-		}
-		if config.Config.FailMasterPromotionIfSQLThreadNotUpToDate && !promotedReplica.SQLThreadUpToDate() {
-			return nil, fmt.Errorf("RecoverDeadMaster: failed promotion. FailMasterPromotionIfSQLThreadNotUpToDate is set and promoted replica %+v 's sql thread is not up to date (relay logs still unapplied). Aborting promotion", promotedReplica.Key)
-		}
-		if config.Config.DelayMasterPromotionIfSQLThreadNotUpToDate && !promotedReplica.SQLThreadUpToDate() {
-			AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("DelayMasterPromotionIfSQLThreadNotUpToDate: waiting for SQL thread on %+v", promotedReplica.Key))
-			if _, err := inst.WaitForSQLThreadUpToDate(&promotedReplica.Key, 0, 0); err != nil {
-				return nil, fmt.Errorf("DelayMasterPromotionIfSQLThreadNotUpToDate error: %+v", err)
-			}
-			AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("DelayMasterPromotionIfSQLThreadNotUpToDate: SQL thread caught up on %+v", promotedReplica.Key))
-		}
-		// All seems well. No override done.
-		return promotedReplica, err
-	}
-	if promotedReplica, err = overrideMasterPromotion(); err != nil {
-		AuditTopologyRecovery(topologyRecovery, err.Error())
-	}
-	// And this is the end; whether successful or not, we're done.
-	resolveRecovery(topologyRecovery, promotedReplica)
-	// Now, see whether we are successful or not. From this point there's no going back.
-	if promotedReplica != nil {
-		// Success!
-		recoverDeadMasterSuccessCounter.Inc(1)
-		AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("RecoverDeadMaster: successfully promoted %+v", promotedReplica.Key))
-		AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("- RecoverDeadMaster: promoted server coordinates: %+v", promotedReplica.SelfBinlogCoordinates))
-
-		AuditTopologyRecovery(topologyRecovery, "- RecoverDeadMaster: will apply MySQL changes to promoted master")
-		{
-			_, err := inst.ResetReplicationOperation(&promotedReplica.Key)
-			if err != nil {
-				// Ugly, but this is important. Let's give it another try
-				_, err = inst.ResetReplicationOperation(&promotedReplica.Key)
-			}
-			AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("- RecoverDeadMaster: applying RESET SLAVE ALL on promoted master: success=%t", (err == nil)))
-			if err != nil {
-				AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("- RecoverDeadMaster: NOTE that %+v is promoted even though SHOW SLAVE STATUS may still show it has a master", promotedReplica.Key))
-			}
-		}
-		{
-			count := inst.MasterSemiSync(promotedReplica.Key)
-			err := inst.SetSemiSyncMaster(&promotedReplica.Key, count > 0)
-			AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("- RecoverDeadMaster: applying semi-sync %v: success=%t", count > 0, (err == nil)))
-
-			// Dont' allow writes if semi-sync settings fail.
-			if err == nil {
-				_, err := inst.SetReadOnly(&promotedReplica.Key, false)
-				AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("- RecoverDeadMaster: applying read-only=0 on promoted master: success=%t", (err == nil)))
-			}
-		}
-		// Let's attempt, though we won't necessarily succeed, to set old master as read-only
-		go func() {
-			_, err := inst.SetReadOnly(&analysisEntry.AnalyzedInstanceKey, true)
-			AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("- RecoverDeadMaster: applying read-only=1 on demoted master: success=%t", (err == nil)))
-		}()
-
-		kvPairs := inst.GetClusterMasterKVPairs(analysisEntry.ClusterDetails.ClusterAlias, &promotedReplica.Key)
-		AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("Writing KV %+v", kvPairs))
-		for _, kvPair := range kvPairs {
-			err := kv.PutKVPair(kvPair)
-			log.Errore(err)
-		}
-		{
-			AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("Distributing KV %+v", kvPairs))
-			err := kv.DistributePairs(kvPairs)
-			log.Errore(err)
-		}
-		if config.Config.MasterFailoverDetachReplicaMasterHost {
-			postponedFunction := func() error {
-				AuditTopologyRecovery(topologyRecovery, "- RecoverDeadMaster: detaching master host on promoted master")
-				inst.DetachReplicaMasterHost(&promotedReplica.Key)
-				return nil
-			}
-			topologyRecovery.AddPostponedFunction(postponedFunction, fmt.Sprintf("RecoverDeadMaster, detaching promoted master host %+v", promotedReplica.Key))
-		}
-		func() error {
-			before := analysisEntry.AnalyzedInstanceKey.StringCode()
-			after := promotedReplica.Key.StringCode()
-			AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("- RecoverDeadMaster: updating cluster_alias: %v -> %v", before, after))
-			//~~~inst.ReplaceClusterName(before, after)
-			if alias := analysisEntry.ClusterDetails.ClusterAlias; alias != "" {
-				inst.SetClusterAlias(promotedReplica.Key.StringCode(), alias)
-			} else {
-				inst.ReplaceAliasClusterName(before, after)
-			}
-			return nil
-		}()
-
-		attributes.SetGeneralAttribute(analysisEntry.ClusterDetails.ClusterDomain, promotedReplica.Key.StringCode())
-
-		if !skipProcesses {
-			// Execute post master-failover processes
-			executeProcesses(config.Config.PostMasterFailoverProcesses, "PostMasterFailoverProcesses", topologyRecovery, false)
-		}
-	} else {
-		recoverDeadMasterFailureCounter.Inc(1)
-	}
-
-	return true, topologyRecovery, err
+	return reparentFunctions.recoveryAttempted, topologyRecovery, err
 }
 
 // isGenerallyValidAsCandidateSiblingOfIntermediateMaster sees that basic server configuration and state are valid
