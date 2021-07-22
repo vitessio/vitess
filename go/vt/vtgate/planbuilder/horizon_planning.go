@@ -473,11 +473,11 @@ func (hp *horizonPlanning) planDistinct() error {
 		// and then we might also add a distinct operator on top if it is needed
 		p.Select.MakeDistinct()
 		if !p.isSingleShard() && !selectHasUniqueVindex(hp.vschema, hp.semTable, hp.qp.SelectExprs) {
-			return hp.pushDistinct()
+			return hp.addDistinct()
 		}
 		return nil
 	case *joinGen4:
-		return hp.pushDistinct()
+		return hp.addDistinct()
 	case *orderedAggregate:
 		return hp.planDistinctOA(p)
 	default:
@@ -522,7 +522,7 @@ func (hp *horizonPlanning) planDistinctOA(currPlan *orderedAggregate) error {
 	return nil
 }
 
-func (hp *horizonPlanning) pushDistinct() error {
+func (hp *horizonPlanning) addDistinct() error {
 	eaggr := &engine.OrderedAggregate{}
 	oa := &orderedAggregate{
 		resultsBuilder: resultsBuilder{

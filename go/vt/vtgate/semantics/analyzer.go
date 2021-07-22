@@ -198,7 +198,7 @@ func (a *analyzer) analyzeOrderByGroupByExprForLiteral(input sqlparser.Expr, cal
 	currScope := a.currentScope()
 	num, err := strconv.Atoi(l.Val)
 	if err != nil {
-		a.err = err
+		a.err = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "error parsing column number: %s", l.Val)
 		return
 	}
 	if num < 1 || num > len(currScope.selectExprs) {

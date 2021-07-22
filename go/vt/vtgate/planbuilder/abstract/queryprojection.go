@@ -94,18 +94,6 @@ func CreateQPFromSelect(sel *sqlparser.Select) (*QueryProjection, error) {
 		qp.GroupByExprs = append(qp.GroupByExprs, GroupBy{Inner: expr, WeightStrExpr: weightStrExpr})
 	}
 
-	if qp.HasAggr || len(qp.GroupByExprs) > 0 {
-		expr := qp.getNonAggrExprNotMatchingGroupByExprs()
-		// if we have aggregation functions, non aggregating columns and GROUP BY,
-		// the non-aggregating expressions must all be listed in the GROUP BY list
-		if expr != nil {
-			if len(qp.GroupByExprs) > 0 {
-				return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongFieldWithGroup, "Expression of SELECT list is not in GROUP BY clause and contains nonaggregated column '%s' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by", sqlparser.String(expr))
-			}
-			return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.MixOfGroupFuncAndFields, "In aggregated query without GROUP BY, expression of SELECT list contains nonaggregated column '%s'; this is incompatible with sql_mode=only_full_group_by", sqlparser.String(expr))
-		}
-	}
-
 	canPushDownSorting := true
 	for _, order := range sel.OrderBy {
 		expr, weightStrExpr, err := qp.getSimplifiedExpr(order.Expr, "order clause")
@@ -121,10 +109,24 @@ func CreateQPFromSelect(sel *sqlparser.Select) (*QueryProjection, error) {
 		})
 		canPushDownSorting = canPushDownSorting && !sqlparser.ContainsAggregation(weightStrExpr)
 	}
+
+	if qp.HasAggr || len(qp.GroupByExprs) > 0 {
+		expr := qp.getNonAggrExprNotMatchingGroupByExprs()
+		// if we have aggregation functions, non aggregating columns and GROUP BY,
+		// the non-aggregating expressions must all be listed in the GROUP BY list
+		if expr != nil {
+			if len(qp.GroupByExprs) > 0 {
+				return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongFieldWithGroup, "Expression of SELECT list is not in GROUP BY clause and contains nonaggregated column '%s' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by", sqlparser.String(expr))
+			}
+			return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.MixOfGroupFuncAndFields, "In aggregated query without GROUP BY, expression of SELECT list contains nonaggregated column '%s'; this is incompatible with sql_mode=only_full_group_by", sqlparser.String(expr))
+		}
+	}
+
 	if qp.Distinct && !qp.HasAggr {
 		qp.GroupByExprs = nil
 	}
 	qp.CanPushDownSorting = canPushDownSorting
+
 	return qp, nil
 }
 
@@ -157,6 +159,21 @@ func (qp *QueryProjection) getNonAggrExprNotMatchingGroupByExprs() sqlparser.Exp
 		}
 		if !isGroupByOk {
 			return expr.Col.Expr
+		}
+	}
+	for _, order := range qp.OrderExprs {
+		if sqlparser.IsAggregation(order.WeightStrExpr) {
+			continue
+		}
+		isGroupByOk := false
+		for _, groupByExpr := range qp.GroupByExprs {
+			if sqlparser.EqualsExpr(groupByExpr.WeightStrExpr, order.WeightStrExpr) {
+				isGroupByOk = true
+				break
+			}
+		}
+		if !isGroupByOk {
+			return order.Inner.Expr
 		}
 	}
 	return nil
