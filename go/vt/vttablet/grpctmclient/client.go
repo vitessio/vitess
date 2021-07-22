@@ -559,12 +559,17 @@ func (client *Client) PrimaryStatus(ctx context.Context, tablet *topodatapb.Tabl
 
 // MasterPosition is part of the tmclient.TabletManagerClient interface.
 func (client *Client) MasterPosition(ctx context.Context, tablet *topodatapb.Tablet) (string, error) {
+	return client.PrimaryPosition(ctx, tablet)
+}
+
+// PrimaryPosition is part of the tmclient.TabletManagerClient interface.
+func (client *Client) PrimaryPosition(ctx context.Context, tablet *topodatapb.Tablet) (string, error) {
 	c, closer, err := client.dialer.dial(ctx, tablet)
 	if err != nil {
 		return "", err
 	}
 	defer closer.Close()
-	response, err := c.MasterPosition(ctx, &tabletmanagerdatapb.MasterPositionRequest{})
+	response, err := c.MasterPosition(ctx, &tabletmanagerdatapb.PrimaryPositionRequest{})
 	if err != nil {
 		return "", err
 	}

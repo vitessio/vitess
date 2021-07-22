@@ -281,10 +281,21 @@ func (s *server) PrimaryStatus(ctx context.Context, request *tabletmanagerdatapb
 	return response, err
 }
 
-func (s *server) MasterPosition(ctx context.Context, request *tabletmanagerdatapb.MasterPositionRequest) (response *tabletmanagerdatapb.MasterPositionResponse, err error) {
+func (s *server) MasterPosition(ctx context.Context, request *tabletmanagerdatapb.PrimaryPositionRequest) (response *tabletmanagerdatapb.PrimaryPositionResponse, err error) {
 	defer s.tm.HandleRPCPanic(ctx, "PrimaryPosition", request, response, false /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
-	response = &tabletmanagerdatapb.MasterPositionResponse{}
+	response = &tabletmanagerdatapb.PrimaryPositionResponse{}
+	position, err := s.tm.MasterPosition(ctx)
+	if err == nil {
+		response.Position = position
+	}
+	return response, err
+}
+
+func (s *server) PrimaryPosition(ctx context.Context, request *tabletmanagerdatapb.PrimaryPositionRequest) (response *tabletmanagerdatapb.PrimaryPositionResponse, err error) {
+	defer s.tm.HandleRPCPanic(ctx, "PrimaryPosition", request, response, false /*verbose*/, &err)
+	ctx = callinfo.GRPCCallInfo(ctx)
+	response = &tabletmanagerdatapb.PrimaryPositionResponse{}
 	position, err := s.tm.MasterPosition(ctx)
 	if err == nil {
 		response.Position = position

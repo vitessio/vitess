@@ -52,7 +52,9 @@ type TabletManagerClient interface {
 	// PrimaryStatus returns the current master status.
 	PrimaryStatus(ctx context.Context, in *tabletmanagerdata.PrimaryStatusRequest, opts ...grpc.CallOption) (*tabletmanagerdata.PrimaryStatusResponse, error)
 	// MasterPosition returns the current master position
-	MasterPosition(ctx context.Context, in *tabletmanagerdata.MasterPositionRequest, opts ...grpc.CallOption) (*tabletmanagerdata.MasterPositionResponse, error)
+	MasterPosition(ctx context.Context, in *tabletmanagerdata.PrimaryPositionRequest, opts ...grpc.CallOption) (*tabletmanagerdata.PrimaryPositionResponse, error)
+	// PrimaryPosition returns the current master position
+	PrimaryPosition(ctx context.Context, in *tabletmanagerdata.PrimaryPositionRequest, opts ...grpc.CallOption) (*tabletmanagerdata.PrimaryPositionResponse, error)
 	// WaitForPosition waits for the position to be reached
 	WaitForPosition(ctx context.Context, in *tabletmanagerdata.WaitForPositionRequest, opts ...grpc.CallOption) (*tabletmanagerdata.WaitForPositionResponse, error)
 	// StopReplication makes mysql stop its replication
@@ -324,9 +326,18 @@ func (c *tabletManagerClient) PrimaryStatus(ctx context.Context, in *tabletmanag
 	return out, nil
 }
 
-func (c *tabletManagerClient) MasterPosition(ctx context.Context, in *tabletmanagerdata.MasterPositionRequest, opts ...grpc.CallOption) (*tabletmanagerdata.MasterPositionResponse, error) {
-	out := new(tabletmanagerdata.MasterPositionResponse)
+func (c *tabletManagerClient) MasterPosition(ctx context.Context, in *tabletmanagerdata.PrimaryPositionRequest, opts ...grpc.CallOption) (*tabletmanagerdata.PrimaryPositionResponse, error) {
+	out := new(tabletmanagerdata.PrimaryPositionResponse)
 	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/MasterPosition", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tabletManagerClient) PrimaryPosition(ctx context.Context, in *tabletmanagerdata.PrimaryPositionRequest, opts ...grpc.CallOption) (*tabletmanagerdata.PrimaryPositionResponse, error) {
+	out := new(tabletmanagerdata.PrimaryPositionResponse)
+	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/PrimaryPosition", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -650,7 +661,9 @@ type TabletManagerServer interface {
 	// PrimaryStatus returns the current master status.
 	PrimaryStatus(context.Context, *tabletmanagerdata.PrimaryStatusRequest) (*tabletmanagerdata.PrimaryStatusResponse, error)
 	// MasterPosition returns the current master position
-	MasterPosition(context.Context, *tabletmanagerdata.MasterPositionRequest) (*tabletmanagerdata.MasterPositionResponse, error)
+	MasterPosition(context.Context, *tabletmanagerdata.PrimaryPositionRequest) (*tabletmanagerdata.PrimaryPositionResponse, error)
+	// PrimaryPosition returns the current master position
+	PrimaryPosition(context.Context, *tabletmanagerdata.PrimaryPositionRequest) (*tabletmanagerdata.PrimaryPositionResponse, error)
 	// WaitForPosition waits for the position to be reached
 	WaitForPosition(context.Context, *tabletmanagerdata.WaitForPositionRequest) (*tabletmanagerdata.WaitForPositionResponse, error)
 	// StopReplication makes mysql stop its replication
@@ -781,8 +794,11 @@ func (UnimplementedTabletManagerServer) MasterStatus(context.Context, *tabletman
 func (UnimplementedTabletManagerServer) PrimaryStatus(context.Context, *tabletmanagerdata.PrimaryStatusRequest) (*tabletmanagerdata.PrimaryStatusResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method PrimaryStatus not implemented")
 }
-func (UnimplementedTabletManagerServer) MasterPosition(context.Context, *tabletmanagerdata.MasterPositionRequest) (*tabletmanagerdata.MasterPositionResponse, error) {
+func (UnimplementedTabletManagerServer) MasterPosition(context.Context, *tabletmanagerdata.PrimaryPositionRequest) (*tabletmanagerdata.PrimaryPositionResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method MasterPosition not implemented")
+}
+func (UnimplementedTabletManagerServer) PrimaryPosition(context.Context, *tabletmanagerdata.PrimaryPositionRequest) (*tabletmanagerdata.PrimaryPositionResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method PrimaryPosition not implemented")
 }
 func (UnimplementedTabletManagerServer) WaitForPosition(context.Context, *tabletmanagerdata.WaitForPositionRequest) (*tabletmanagerdata.WaitForPositionResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method WaitForPosition not implemented")
@@ -1290,7 +1306,7 @@ func _TabletManager_PrimaryStatus_Handler(srv interface{}, ctx context.Context, 
 }
 
 func _TabletManager_MasterPosition_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(tabletmanagerdata.MasterPositionRequest)
+	in := new(tabletmanagerdata.PrimaryPositionRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -1302,7 +1318,25 @@ func _TabletManager_MasterPosition_Handler(srv interface{}, ctx context.Context,
 		FullMethod: "/tabletmanagerservice.TabletManager/MasterPosition",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(TabletManagerServer).MasterPosition(ctx, req.(*tabletmanagerdata.MasterPositionRequest))
+		return srv.(TabletManagerServer).MasterPosition(ctx, req.(*tabletmanagerdata.PrimaryPositionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TabletManager_PrimaryPosition_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(tabletmanagerdata.PrimaryPositionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TabletManagerServer).PrimaryPosition(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/tabletmanagerservice.TabletManager/PrimaryPosition",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TabletManagerServer).PrimaryPosition(ctx, req.(*tabletmanagerdata.PrimaryPositionRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1883,6 +1917,10 @@ var TabletManager_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "MasterPosition",
 			Handler:    _TabletManager_MasterPosition_Handler,
+		},
+		{
+			MethodName: "PrimaryPosition",
+			Handler:    _TabletManager_PrimaryPosition_Handler,
 		},
 		{
 			MethodName: "WaitForPosition",
