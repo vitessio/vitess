@@ -1,4 +1,3 @@
-2021-03-20T20:37:27Z,endtoend,https://github.com/vitessio/vitess/actions/runs/671603354
 2021-03-20T20:37:27Z,golangci-lint,https://github.com/vitessio/vitess/actions/runs/671603364
 2021-03-20T20:37:27Z,local_example,https://github.com/vitessio/vitess/actions/runs/671603334
 2021-03-20T20:37:27Z,local_example,https://github.com/vitessio/vitess/actions/runs/671603363
@@ -9998,3 +9997,4 @@
 2021-07-22T12:16:38Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/1056072901
 2021-07-22T12:54:48Z,Cluster (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/1056182693
 2021-07-22T12:54:48Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/1056182708
+2021-07-22T13:24:27Z,Cluster (17),https://github.com/vitessio/vitess/actions/runs/1056280501
