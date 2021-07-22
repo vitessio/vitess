@@ -119,6 +119,10 @@ func (erp *EmergencyReparenter2) reparentShardLocked(ctx context.Context, ev *ev
 		return err
 	}
 
+	if err := reparentFunctions.CheckIfNeedToOverridePrimary(); err != nil {
+		return err
+	}
+
 	// Check (again) we still have the topology lock.
 	if err := topo.CheckShardLocked(ctx, keyspace, shard); err != nil {
 		return vterrors.Wrapf(err, "lost topology lock, aborting: %v", err)
