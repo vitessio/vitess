@@ -189,7 +189,7 @@ type horizonPlanning struct {
 	vtgateGrouping  bool
 }
 
-func (hp horizonPlanning) planHorizon() (logicalPlan, error) {
+func (hp *horizonPlanning) planHorizon() (logicalPlan, error) {
 	rb, ok := hp.plan.(*route)
 	if !ok && hp.semTable.ProjectionErr != nil {
 		return nil, hp.semTable.ProjectionErr
