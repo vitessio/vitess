@@ -120,33 +120,18 @@ func (a *analyzer) analyzeDown(cursor *sqlparser.Cursor) bool {
 	case *sqlparser.Union:
 		a.push(newScope(current))
 	case sqlparser.SelectExprs:
-		if isParentSelect(cursor) {
-			a.inProjection = append(a.inProjection, true)
-		}
 		sel, ok := cursor.Parent().(*sqlparser.Select)
 		if !ok {
 			break
 		}
 
+		a.inProjection = append(a.inProjection, true)
 		wScope, exists := a.wScope[sel]
 		if !exists {
 			break
 		}
 
-		vTbl := &vTableInfo{}
-		for _, selectExpr := range node {
-			expr, ok := selectExpr.(*sqlparser.AliasedExpr)
-			if !ok {
-				continue
-			}
-			vTbl.cols = append(vTbl.cols, expr.Expr)
-			if !expr.As.IsEmpty() {
-				vTbl.columnNames = append(vTbl.columnNames, expr.As.String())
-			} else {
-				vTbl.columnNames = append(vTbl.columnNames, sqlparser.String(expr))
-			}
-		}
-		wScope.tables = append(wScope.tables, vTbl)
+		wScope.tables = append(wScope.tables, a.createVTableInfoForExpressions(node))
 	case sqlparser.OrderBy:
 		a.changeScopeForOrderBy(cursor)
 	case *sqlparser.Order:
@@ -372,26 +357,11 @@ func (a *analyzer) bindTable(alias *sqlparser.AliasedTableExpr, expr sqlparser.S
 		if !isSelect {
 			return Gen4NotSupportedF("union in derived table")
 		}
-		var columnNames []string
-		var cols []sqlparser.Expr
-		for _, selectExpr := range sel.SelectExprs {
-			aliasedExpr, isAliasedExpr := selectExpr.(*sqlparser.AliasedExpr)
-			if !isAliasedExpr {
-				return Gen4NotSupportedF("non-aliased expression in derived table")
-			}
-			cols = append(cols, aliasedExpr.Expr)
-			if !aliasedExpr.As.IsEmpty() {
-				columnNames = append(columnNames, aliasedExpr.As.String())
-			} else {
-				columnNames = append(columnNames, sqlparser.String(aliasedExpr))
-			}
-		}
-		tableInfo := &vTableInfo{
-			ASTNode:     alias,
-			tableName:   alias.As.String(),
-			columnNames: columnNames,
-			cols:        cols,
-		}
+
+		tableInfo := a.createVTableInfoForExpressions(sel.SelectExprs)
+		tableInfo.ASTNode = alias
+		tableInfo.tableName = alias.As.String()
+
 		a.Tables = append(a.Tables, tableInfo)
 		scope := a.currentScope()
 		return scope.addTable(tableInfo)
@@ -463,6 +433,29 @@ func (a *analyzer) analyzeUp(cursor *sqlparser.Cursor) bool {
 	}
 
 	return a.shouldContinue()
+}
+
+func (a *analyzer) createVTableInfoForExpressions(expressions sqlparser.SelectExprs) *vTableInfo {
+	vTbl := &vTableInfo{}
+	for _, selectExpr := range expressions {
+		expr, ok := selectExpr.(*sqlparser.AliasedExpr)
+		if !ok {
+			continue
+		}
+		vTbl.cols = append(vTbl.cols, expr.Expr)
+		if expr.As.IsEmpty() {
+			switch expr := expr.Expr.(type) {
+			case *sqlparser.ColName:
+				// for projections, we strip out the qualifier and keep only the column name
+				vTbl.columnNames = append(vTbl.columnNames, expr.Name.String())
+			default:
+				vTbl.columnNames = append(vTbl.columnNames, sqlparser.String(expr))
+			}
+		} else {
+			vTbl.columnNames = append(vTbl.columnNames, expr.As.String())
+		}
+	}
+	return vTbl
 }
 
 func (a *analyzer) popProjection() {

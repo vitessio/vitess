@@ -19,6 +19,9 @@ package planbuilder
 import (
 	"strings"
 
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
+
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -43,31 +46,17 @@ type (
 		pushOutputColumns([]*sqlparser.ColName, *semantics.SemTable) []int
 	}
 
-	relation interface {
-		tableID() semantics.TableSet
-		tableNames() []string
-	}
+	joinPlan struct {
+		// columns needed to feed other plans
+		columns []int
 
-	joinTables struct {
-		lhs, rhs relation
-		pred     sqlparser.Expr
-	}
+		// arguments that need to be copied from the LHS/RHS
+		vars map[string]int
 
-	routeTable struct {
-		qtable *abstract.QueryTable
-		vtable *vindexes.Table
-	}
+		// the children of this plan
+		lhs, rhs joinTree
 
-	outerTable struct {
-		right relation
-		pred  sqlparser.Expr
-	}
-
-	// cost is used to make it easy to compare the cost of two plans with each other
-	cost struct {
-		vindexCost int
-		isUnique   bool
-		opCode     engine.RouteOpcode
+		outer bool
 	}
 
 	routePlan struct {
@@ -102,18 +91,54 @@ type (
 		SysTableTableSchema []evalengine.Expr
 		SysTableTableName   map[string]evalengine.Expr
 	}
+)
 
-	joinPlan struct {
-		// columns needed to feed other plans
-		columns []int
+type (
+	relation interface {
+		tableID() semantics.TableSet
+		tableNames() []string
+	}
 
-		// arguments that need to be copied from the LHS/RHS
-		vars map[string]int
+	joinTables struct {
+		lhs, rhs relation
+		pred     sqlparser.Expr
+	}
 
-		// the children of this plan
-		lhs, rhs joinTree
+	routeTable struct {
+		qtable *abstract.QueryTable
+		vtable *vindexes.Table
+	}
 
-		outer bool
+	parenTables []relation
+
+	derivedTable struct {
+		// tables contains inner tables that are solved by this plan.
+		// the tables also contain any predicates that only depend on that particular table
+		tables parenTables
+
+		// predicates are the predicates evaluated by this plan
+		predicates []sqlparser.Expr
+
+		// leftJoins are the join conditions evaluated by this plan
+		leftJoins []*outerTable
+
+		alias string
+
+		query *sqlparser.Select
+	}
+)
+
+type (
+	outerTable struct {
+		right relation
+		pred  sqlparser.Expr
+	}
+
+	// cost is used to make it easy to compare the cost of two plans with each other
+	cost struct {
+		vindexCost int
+		isUnique   bool
+		opCode     engine.RouteOpcode
 	}
 
 	derivedPlan struct {
@@ -121,8 +146,6 @@ type (
 		inner joinTree
 		alias string
 	}
-
-	parenTables []relation
 
 	// vindexPlusPredicates is a struct used to store all the predicates that the vindex can be used to query
 	vindexPlusPredicates struct {
@@ -149,8 +172,38 @@ func (d *derivedPlan) clone() joinTree {
 	return &other
 }
 
-func (d *derivedPlan) pushOutputColumns(names []*sqlparser.ColName, semTable *semantics.SemTable) []int {
-	panic("implement me")
+func (d *derivedPlan) pushOutputColumns(names []*sqlparser.ColName, _ *semantics.SemTable) (offsets []int) {
+	for _, name := range names {
+		offset, err := d.findOutputColumn(name)
+		if err != nil {
+			panic(err)
+		}
+		offsets = append(offsets, offset)
+	}
+	return
+}
+
+func (d *derivedPlan) findOutputColumn(name *sqlparser.ColName) (int, error) {
+	for j, exp := range d.query.SelectExprs {
+		ae, ok := exp.(*sqlparser.AliasedExpr)
+		if !ok {
+			return 0, vterrors.New(vtrpcpb.Code_INTERNAL, "what")
+		}
+		if ae.As.IsEmpty() {
+			col, ok := ae.Expr.(*sqlparser.ColName)
+			if !ok {
+				return 0, vterrors.New(vtrpcpb.Code_INTERNAL, "what")
+			}
+			if name.Name.Equal(col.Name) {
+				return j, nil
+			}
+		} else {
+			if ae.As.Equal(name.Name) {
+				return j, nil
+			}
+		}
+	}
+	return 0, vterrors.New(vtrpcpb.Code_INTERNAL, "could not find column")
 }
 
 // type assertions
@@ -160,6 +213,11 @@ var _ joinTree = (*derivedPlan)(nil)
 var _ relation = (*routeTable)(nil)
 var _ relation = (*joinTables)(nil)
 var _ relation = (parenTables)(nil)
+var _ relation = (*derivedTable)(nil)
+
+func (d *derivedTable) tableID() semantics.TableSet { return d.tables.tableID() }
+
+func (d *derivedTable) tableNames() []string { return d.tables.tableNames() }
 
 func (rp *routeTable) tableID() semantics.TableSet { return rp.qtable.TableID }
 
@@ -195,6 +253,46 @@ func (p parenTables) tableID() semantics.TableSet {
 	return res
 }
 
+func visitTables2(r relation, f func(tbl relation) (bool, error)) error {
+
+	kontinue, err := f(r)
+	if err != nil {
+		return err
+	}
+	if !kontinue {
+		return nil
+	}
+
+	switch r := r.(type) {
+	case *routeTable:
+		// already visited when entering this method
+	case parenTables:
+		for _, r := range r {
+			err := visitTables2(r, f)
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	case *joinTables:
+		err := visitTables2(r.lhs, f)
+		if err != nil {
+			return err
+		}
+		err = visitTables2(r.rhs, f)
+		if err != nil {
+			return err
+		}
+		return nil
+	case *derivedTable:
+		err := visitTables2(r.tables, f)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // visit will traverse the route tables, going inside parenTables and visiting all routeTables
 func visitTables(r relation, f func(tbl *routeTable) error) error {
 	switch r := r.(type) {
@@ -221,6 +319,11 @@ func visitTables(r relation, f func(tbl *routeTable) error) error {
 			return err
 		}
 		return nil
+	case *derivedTable:
+		err := visitTables(r.tables, f)
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -610,9 +713,16 @@ func (rp *routePlan) pickBestAvailableVindex() {
 // Predicates takes all known predicates for this route and ANDs them together
 func (rp *routePlan) Predicates() sqlparser.Expr {
 	predicates := rp.predicates
-	_ = visitTables(rp.tables, func(tbl *routeTable) error {
-		predicates = append(predicates, tbl.qtable.Predicates...)
-		return nil
+	_ = visitTables2(rp.tables, func(tbl relation) (bool, error) {
+		switch tbl := tbl.(type) {
+		case *routeTable:
+			predicates = append(predicates, tbl.qtable.Predicates...)
+		case *derivedTable:
+			// no need to copy the inner predicates to the outside
+			return false, nil
+		}
+
+		return true, nil
 	})
 	return sqlparser.AndExpressions(predicates...)
 }

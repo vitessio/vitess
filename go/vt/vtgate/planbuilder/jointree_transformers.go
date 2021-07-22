@@ -230,6 +230,25 @@ func relToTableExpr(t relation) (sqlparser.TableExpr, error) {
 				On: t.pred,
 			},
 		}, nil
+	case *derivedTable:
+		innerTables, err := relToTableExpr(t.tables)
+		if err != nil {
+			return nil, err
+		}
+		tbls := innerTables.(*sqlparser.ParenTableExpr)
+
+		sel := &sqlparser.Select{
+			From:  tbls.Exprs,
+			Where: &sqlparser.Where{Expr: sqlparser.AndExpressions(t.predicates...)},
+		}
+		expr := &sqlparser.DerivedTable{
+			Select: sel,
+		}
+		return &sqlparser.AliasedTableExpr{
+			Expr:       expr,
+			Partitions: nil,
+			As:         sqlparser.NewTableIdent(t.alias),
+		}, nil
 	default:
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unknown relation type: %T", t)
 	}
