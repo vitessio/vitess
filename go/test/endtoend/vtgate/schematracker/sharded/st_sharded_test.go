@@ -61,12 +61,6 @@ create table t8(
 	testId bigint,
 	primary key(id8)
 ) Engine=InnoDB;
-
-create table t9(
-	id9 bigint,
-	testId bigint,
-	primary key(id9)
-) Engine=InnoDB;
 `
 
 	VSchema = `
@@ -190,13 +184,16 @@ func TestNewTable(t *testing.T) {
 	defer connShard2.Close()
 
 	_ = exec(t, conn, "create table test_table (id bigint, name varchar(100))")
-	defer exec(t, conn, "drop table test_table")
 
 	time.Sleep(2 * time.Second)
 
 	assertMatches(t, conn, "select * from test_table", `[]`)
 	assertMatches(t, connShard1, "select * from test_table", `[]`)
 	assertMatches(t, connShard2, "select * from test_table", `[]`)
+
+	exec(t, conn, "drop table test_table")
+
+	time.Sleep(2 * time.Second)
 }
 
 func TestAmbiguousColumnJoin(t *testing.T) {
