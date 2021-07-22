@@ -539,7 +539,7 @@ func (client *Client) ReplicationStatus(ctx context.Context, tablet *topodatapb.
 }
 
 // MasterStatus is part of the tmclient.TabletManagerClient interface.
-func (client *Client) MasterStatus(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.MasterStatus, error) {
+func (client *Client) MasterStatus(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error) {
 	c, closer, err := client.dialer.dial(ctx, tablet)
 	if err != nil {
 		return nil, err
@@ -763,25 +763,47 @@ func (client *Client) InitReplica(ctx context.Context, tablet *topodatapb.Tablet
 }
 
 // DemoteMaster is part of the tmclient.TabletManagerClient interface.
-func (client *Client) DemoteMaster(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.MasterStatus, error) {
+func (client *Client) DemoteMaster(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error) {
 	c, closer, err := client.dialer.dial(ctx, tablet)
 	if err != nil {
 		return nil, err
 	}
 	defer closer.Close()
-	response, err := c.DemoteMaster(ctx, &tabletmanagerdatapb.DemoteMasterRequest{})
+	response, err := c.DemotePrimary(ctx, &tabletmanagerdatapb.DemotePrimaryRequest{})
 	if err != nil {
 		return nil, err
 	}
-	masterStatus := response.MasterStatus
-	if masterStatus == nil {
+	status := response.PrimaryStatus
+	if status == nil {
 		// We are assuming this means a response came from an older server.
-		masterStatus = &replicationdatapb.MasterStatus{
+		status = &replicationdatapb.PrimaryStatus{
 			Position:     response.DeprecatedPosition, //nolint
 			FilePosition: "",
 		}
 	}
-	return masterStatus, nil
+	return status, nil
+}
+
+// DemotePrimary is part of the tmclient.TabletManagerClient interface.
+func (client *Client) DemotePrimary(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error) {
+	c, closer, err := client.dialer.dial(ctx, tablet)
+	if err != nil {
+		return nil, err
+	}
+	defer closer.Close()
+	response, err := c.DemotePrimary(ctx, &tabletmanagerdatapb.DemotePrimaryRequest{})
+	if err != nil {
+		return nil, err
+	}
+	status := response.PrimaryStatus
+	if status == nil {
+		// We are assuming this means a response came from an older server.
+		status = &replicationdatapb.PrimaryStatus{
+			Position:     response.DeprecatedPosition, //nolint
+			FilePosition: "",
+		}
+	}
+	return status, nil
 }
 
 // UndoDemoteMaster is part of the tmclient.TabletManagerClient interface.
@@ -791,7 +813,18 @@ func (client *Client) UndoDemoteMaster(ctx context.Context, tablet *topodatapb.T
 		return err
 	}
 	defer closer.Close()
-	_, err = c.UndoDemoteMaster(ctx, &tabletmanagerdatapb.UndoDemoteMasterRequest{})
+	_, err = c.UndoDemoteMaster(ctx, &tabletmanagerdatapb.UndoDemotePrimaryRequest{})
+	return err
+}
+
+// UndoDemotePrimary is part of the tmclient.TabletManagerClient interface.
+func (client *Client) UndoDemotePrimary(ctx context.Context, tablet *topodatapb.Tablet) error {
+	c, closer, err := client.dialer.dial(ctx, tablet)
+	if err != nil {
+		return err
+	}
+	defer closer.Close()
+	_, err = c.UndoDemoteMaster(ctx, &tabletmanagerdatapb.UndoDemotePrimaryRequest{})
 	return err
 }
 

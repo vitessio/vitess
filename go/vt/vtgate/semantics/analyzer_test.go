@@ -143,6 +143,52 @@ func TestOrderByBindingSingleTable(t *testing.T) {
 	})
 }
 
+func TestGroupByBindingSingleTable(t *testing.T) {
+	tcases := []struct {
+		sql  string
+		deps TableSet
+	}{{
+		"select col from tabl group by col",
+		T1,
+	}, {
+		"select col from tabl group by tabl.col",
+		T1,
+	}, {
+		"select col from tabl group by d.tabl.col",
+		T1,
+	}, {
+		"select tabl.col as x from tabl group by x",
+		T1,
+	}, {
+		"select tabl.col as x from tabl group by col",
+		T1,
+	}, {
+		"select col from tabl group by 1",
+		T1,
+	}, {
+		"select col as c from tabl group by c",
+		T1,
+	}, {
+		"select 1 as c from tabl group by c",
+		T0,
+	}, {
+		"select t1.id from t1, t2 group by id",
+		T1,
+	}, {
+		"select t.id from t, t1 group by id",
+		T2,
+	}}
+	for _, tc := range tcases {
+		t.Run(tc.sql, func(t *testing.T) {
+			stmt, semTable := parseAndAnalyze(t, tc.sql, "d")
+			sel, _ := stmt.(*sqlparser.Select)
+			grp := sel.GroupBy[0]
+			d := semTable.Dependencies(grp)
+			require.Equal(t, tc.deps, d, tc.sql)
+		})
+	}
+}
+
 func TestBindingSingleAliasedTable(t *testing.T) {
 	t.Run("positive tests", func(t *testing.T) {
 		queries := []string{
@@ -559,9 +605,24 @@ func parseAndAnalyze(t *testing.T, query, dbName string) (sqlparser.Statement, *
 	t.Helper()
 	parse, err := sqlparser.Parse(query)
 	require.NoError(t, err)
+
+	cols1 := []vindexes.Column{{
+		Name: sqlparser.NewColIdent("id"),
+		Type: querypb.Type_INT64,
+	}}
+	cols2 := []vindexes.Column{{
+		Name: sqlparser.NewColIdent("uid"),
+		Type: querypb.Type_INT64,
+	}, {
+		Name: sqlparser.NewColIdent("name"),
+		Type: querypb.Type_VARCHAR,
+	}}
+
 	semTable, err := Analyze(parse, dbName, &FakeSI{
 		Tables: map[string]*vindexes.Table{
-			"t": {Name: sqlparser.NewTableIdent("t")},
+			"t":  {Name: sqlparser.NewTableIdent("t")},
+			"t1": {Name: sqlparser.NewTableIdent("t1"), Columns: cols1, ColumnListAuthoritative: true},
+			"t2": {Name: sqlparser.NewTableIdent("t2"), Columns: cols2, ColumnListAuthoritative: true},
 		},
 	})
 	require.NoError(t, err)

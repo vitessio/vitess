@@ -727,7 +727,7 @@ func (itmc *internalTabletManagerClient) ExecuteFetchAsApp(ctx context.Context, 
 	return nil, fmt.Errorf("not implemented in vtcombo")
 }
 
-func (itmc *internalTabletManagerClient) MasterStatus(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.MasterStatus, error) {
+func (itmc *internalTabletManagerClient) MasterStatus(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error) {
 	return nil, fmt.Errorf("not implemented in vtcombo")
 }
 
@@ -763,7 +763,7 @@ func (itmc *internalTabletManagerClient) PopulateReparentJournal(ctx context.Con
 	return fmt.Errorf("not implemented in vtcombo")
 }
 
-func (itmc *internalTabletManagerClient) DemoteMaster(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.MasterStatus, error) {
+func (itmc *internalTabletManagerClient) DemoteMaster(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error) {
 	return nil, fmt.Errorf("not implemented in vtcombo")
 }
 
