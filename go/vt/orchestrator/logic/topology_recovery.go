@@ -27,7 +27,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"vitess.io/vitess/go/vt/orchestrator/reparentutil"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	"github.com/patrickmn/go-cache"
