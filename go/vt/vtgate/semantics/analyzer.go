@@ -310,24 +310,24 @@ func (a *analyzer) resolveUnQualifiedColumn(current *scope, expr *sqlparser.ColN
 	var tsp *TableSet
 	var typp *querypb.Type
 
-tryAgain:
-	for _, tbl := range current.tables {
-		ts, typ, err := tbl.DepsFor(expr, a, len(current.tables) == 1)
-		if err != nil {
-			return 0, nil, err
+	for current != nil && tsp == nil {
+		for _, tbl := range current.tables {
+			ts, typ, err := tbl.DepsFor(expr, a, len(current.tables) == 1)
+			if err != nil {
+				return 0, nil, err
+			}
+			if ts != nil && tsp != nil {
+				return 0, nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.NonUniqError, fmt.Sprintf("Column '%s' in field list is ambiguous", sqlparser.String(expr)))
+			}
+			if ts != nil {
+				tsp = ts
+				typp = typ
+			}
 		}
-		if ts != nil && tsp != nil {
-			return 0, nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.NonUniqError, fmt.Sprintf("Column '%s' in field list is ambiguous", sqlparser.String(expr)))
-		}
-		if ts != nil {
-			tsp = ts
-			typp = typ
-		}
-	}
-	if tsp == nil && current.parent != nil {
+
 		current = current.parent
-		goto tryAgain
 	}
+
 	if tsp == nil {
 		return 0, nil, nil
 	}
