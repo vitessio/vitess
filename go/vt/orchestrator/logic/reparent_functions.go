@@ -54,7 +54,7 @@ type VtOrcReparentFunctions struct {
 
 // LockShard implements the ReparentFunctions interface
 func (vtorcReparent *VtOrcReparentFunctions) LockShard(ctx context.Context) (context.Context, func(*error), error) {
-	_, unlock, err := LockShard(ctx, vtorcReparent.analysisEntry.AnalyzedInstanceKey)
+	ctx, unlock, err := LockShard(ctx, vtorcReparent.analysisEntry.AnalyzedInstanceKey)
 	if err != nil {
 		log.Infof("CheckAndRecover: Analysis: %+v, InstanceKey: %+v, candidateInstanceKey: %+v, "+
 			"skipProcesses: %v: NOT detecting/recovering host, could not obtain shard lock (%v)",
@@ -114,7 +114,7 @@ func (vtorcReparent *VtOrcReparentFunctions) PreRecoveryProcesses(ctx context.Co
 func (vtorcReparent *VtOrcReparentFunctions) StopReplicationAndBuildStatusMaps(context.Context, tmclient.TabletManagerClient, *events.Reparent, logutil.Logger) error {
 	err := TabletDemoteMaster(vtorcReparent.analysisEntry.AnalyzedInstanceKey)
 	AuditTopologyRecovery(vtorcReparent.topologyRecovery, fmt.Sprintf("RecoverDeadMaster: TabletDemoteMaster: %v", err))
-	return err
+	return nil
 }
 
 // CheckPrimaryRecoveryType implements the ReparentFunctions interface
