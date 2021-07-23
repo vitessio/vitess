@@ -355,8 +355,6 @@ func TestMain(m *testing.M) {
 		if err != nil {
 			return 1, err
 		}
-		out, _ := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("ListShardTablets", fmt.Sprintf("%s/%s", keyspaceName, shardName))
-		log.Error(out)
 
 		return m.Run(), nil
 	}()
