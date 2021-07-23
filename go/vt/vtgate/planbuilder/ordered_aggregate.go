@@ -303,6 +303,33 @@ func (oa *orderedAggregate) needDistinctHandling(pb *primitiveBuilder, funcExpr 
 	return true, innerAliased, nil
 }
 
+// needDistinctHandling returns true if oa needs to handle the distinct clause.
+// If true, it will also return the aliased expression that needs to be pushed
+// down into the underlying route.
+func (oa *orderedAggregate) needDistinctHandlingGen4(funcExpr *sqlparser.FuncExpr, opcode engine.AggregateOpcode) (bool, *sqlparser.AliasedExpr, error) {
+	if !funcExpr.Distinct {
+		return false, nil, nil
+	}
+	if opcode != engine.AggregateCount && opcode != engine.AggregateSum {
+		return false, nil, nil
+	}
+	innerAliased, ok := funcExpr.Exprs[0].(*sqlparser.AliasedExpr)
+	if !ok {
+		return false, nil, fmt.Errorf("syntax error: %s", sqlparser.String(funcExpr))
+	}
+	_, ok = oa.input.(*route)
+	if !ok {
+		// Unreachable
+		return true, innerAliased, nil
+	}
+	// check for unique vindex
+	//vindex := pb.st.Vindex(innerAliased.Expr, rb)
+	//if vindex != nil && vindex.IsUnique() {
+	//	return false, nil, nil
+	//}
+	return true, innerAliased, nil
+}
+
 // Wireup implements the logicalPlan interface
 // If text columns are detected in the keys, then the function modifies
 // the primitive to pull a corresponding weight_string from mysql and

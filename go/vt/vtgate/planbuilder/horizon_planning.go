@@ -145,21 +145,58 @@ func (hp *horizonPlanning) planAggregations() error {
 	}
 
 	for _, e := range hp.qp.SelectExprs {
-		offset, _, err := pushProjection(e.Col, hp.plan, hp.semTable, true, false)
-		if err != nil {
-			return err
+		// push all expression if they are non-aggregating or the plan is not ordered aggregated plan.
+		if !e.Aggr || oa == nil {
+			_, _, err := pushProjection(e.Col, hp.plan, hp.semTable, true, false)
+			if err != nil {
+				return err
+			}
 		}
+
 		if e.Aggr && oa != nil {
 			fExpr, isFunc := e.Col.Expr.(*sqlparser.FuncExpr)
 			if !isFunc {
 				return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: in scatter query: complex aggregate expression")
 			}
 			opcode := engine.SupportedAggregates[fExpr.Name.Lowered()]
-			oa.eaggr.Aggregates = append(oa.eaggr.Aggregates, engine.AggregateParams{
+			handleDistinct, innerAliased, err := oa.needDistinctHandlingGen4(fExpr, opcode)
+			if err != nil {
+				return err
+			}
+
+			pushExpr := e.Col
+			var alias string
+			if handleDistinct {
+				switch opcode {
+				case engine.AggregateCount:
+					opcode = engine.AggregateCountDistinct
+				case engine.AggregateSum:
+					opcode = engine.AggregateSumDistinct
+				}
+
+				if e.Col.As.IsEmpty() {
+					alias = sqlparser.String(e.Col.Expr)
+				} else {
+					alias = e.Col.As.String()
+				}
+
+				pushExpr = innerAliased
+				oa.eaggr.PreProcess = true
+
+				hp.haveToTruncate(true)
+				hp.qp.GroupByExprs = append(hp.qp.GroupByExprs, abstract.GroupBy{Inner: innerAliased.Expr, Distinct: true})
+			}
+			offset, _, err := pushProjection(pushExpr, oa.input, hp.semTable, true, true)
+			if err != nil {
+				return err
+			}
+			aggrParams := engine.AggregateParams{
 				Opcode: opcode,
 				Col:    offset,
+				Alias:  alias,
 				Expr:   fExpr,
-			})
+			}
+			oa.eaggr.Aggregates = append(oa.eaggr.Aggregates, aggrParams)
 		}
 	}
 
@@ -229,7 +266,9 @@ func planGroupByGen4(groupExpr abstract.GroupBy, plan logicalPlan, semTable *sem
 		if err != nil {
 			return false, err
 		}
-		node.eaggr.GroupByKeys = append(node.eaggr.GroupByKeys, engine.GroupByParams{KeyCol: keyCol, WeightStringCol: weightStringOffset, Expr: groupExpr.WeightStrExpr})
+		if !groupExpr.Distinct {
+			node.eaggr.GroupByKeys = append(node.eaggr.GroupByKeys, engine.GroupByParams{KeyCol: keyCol, WeightStringCol: weightStringOffset, Expr: groupExpr.WeightStrExpr})
+		}
 		colAddedRecursively, err := planGroupByGen4(groupExpr, node.input, semTable)
 		if err != nil {
 			return false, err
@@ -326,6 +365,9 @@ func wrapAndPushExpr(expr sqlparser.Expr, weightStrExpr sqlparser.Expr, plan log
 	offset, added, err := pushProjection(&sqlparser.AliasedExpr{Expr: expr}, plan, semTable, true, true)
 	if err != nil {
 		return 0, 0, false, err
+	}
+	if weightStrExpr == nil {
+		return offset, -1, added, nil
 	}
 	colName, ok := expr.(*sqlparser.ColName)
 	if !ok {

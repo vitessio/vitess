@@ -866,6 +866,7 @@ Gen4 error: In aggregated query without GROUP BY, expression of SELECT list cont
     "Table": "`user`"
   }
 }
+Gen4 plan same as above
 
 # count with distinct unique vindex
 "select col, count(distinct id) from user group by col"
