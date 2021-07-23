@@ -374,6 +374,10 @@ func (a *analyzer) bindTable(alias *sqlparser.AliasedTableExpr, expr sqlparser.S
 		}
 
 		tableInfo := a.createVTableInfoForExpressions(sel.SelectExprs)
+		if err := tableInfo.checkForDuplicates(); err != nil {
+			return err
+		}
+
 		tableInfo.ASTNode = alias
 		tableInfo.tableName = alias.As.String()
 
@@ -400,6 +404,20 @@ func (a *analyzer) bindTable(alias *sqlparser.AliasedTableExpr, expr sqlparser.S
 
 		a.Tables = append(a.Tables, tableInfo)
 		return scope.addTable(tableInfo)
+	}
+	return nil
+}
+
+func (v *vTableInfo) checkForDuplicates() error {
+	for i, name := range v.columnNames {
+		for j, name2 := range v.columnNames {
+			if i == j {
+				continue
+			}
+			if name == name2 {
+				return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.DupFieldName, "Duplicate column name '%s'", name)
+			}
+		}
 	}
 	return nil
 }
