@@ -660,17 +660,21 @@ func findColumnVindex(a *routePlan, exp sqlparser.Expr, sem *semantics.SemTable)
 
 	var singCol vindexes.SingleColumn
 
-	_ = visitTables(a.tables, func(table *routeTable) error {
-		if leftDep.IsSolvedBy(table.qtable.TableID) {
-			for _, vindex := range table.vtable.ColumnVindexes {
+	_ = visitRelations(a.tables, func(rel relation) (bool, error) {
+		rb, isRoute := rel.(*routeTable)
+		if !isRoute {
+			return true, nil
+		}
+		if leftDep.IsSolvedBy(rb.qtable.TableID) {
+			for _, vindex := range rb.vtable.ColumnVindexes {
 				sC, isSingle := vindex.Vindex.(vindexes.SingleColumn)
 				if isSingle && vindex.Columns[0].Equal(left.Name) {
 					singCol = sC
-					return io.EOF
+					return false, io.EOF
 				}
 			}
 		}
-		return nil
+		return false, nil
 	})
 
 	return singCol

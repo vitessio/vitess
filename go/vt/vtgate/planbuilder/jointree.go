@@ -32,6 +32,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
+// joinTree interface and implementations
 type (
 	joinTree interface {
 		// tableID returns the table identifiers that are solved by this plan
@@ -91,8 +92,15 @@ type (
 		SysTableTableSchema []evalengine.Expr
 		SysTableTableName   map[string]evalengine.Expr
 	}
+
+	derivedPlan struct {
+		query *sqlparser.Select
+		inner joinTree
+		alias string
+	}
 )
 
+// relation interface and implementations
 type (
 	relation interface {
 		tableID() semantics.TableSet
@@ -128,36 +136,28 @@ type (
 	}
 )
 
-type (
-	outerTable struct {
-		right relation
-		pred  sqlparser.Expr
-	}
+type outerTable struct {
+	right relation
+	pred  sqlparser.Expr
+}
 
-	// cost is used to make it easy to compare the cost of two plans with each other
-	cost struct {
-		vindexCost int
-		isUnique   bool
-		opCode     engine.RouteOpcode
-	}
+// cost is used to make it easy to compare the cost of two plans with each other
+type cost struct {
+	vindexCost int
+	isUnique   bool
+	opCode     engine.RouteOpcode
+}
 
-	derivedPlan struct {
-		query *sqlparser.Select
-		inner joinTree
-		alias string
-	}
+// vindexPlusPredicates is a struct used to store all the predicates that the vindex can be used to query
+type vindexPlusPredicates struct {
+	colVindex *vindexes.ColumnVindex
+	values    []sqltypes.PlanValue
 
-	// vindexPlusPredicates is a struct used to store all the predicates that the vindex can be used to query
-	vindexPlusPredicates struct {
-		colVindex *vindexes.ColumnVindex
-		values    []sqltypes.PlanValue
-
-		// when we have the predicates found, we also know how to interact with this vindex
-		foundVindex vindexes.Vindex
-		opcode      engine.RouteOpcode
-		predicates  []sqlparser.Expr
-	}
-)
+	// when we have the predicates found, we also know how to interact with this vindex
+	foundVindex vindexes.Vindex
+	opcode      engine.RouteOpcode
+	predicates  []sqlparser.Expr
+}
 
 func (d *derivedPlan) tableID() semantics.TableSet {
 	return d.inner.tableID()
@@ -254,7 +254,9 @@ func (p parenTables) tableID() semantics.TableSet {
 	return res
 }
 
-func visitTables2(r relation, f func(tbl relation) (bool, error)) error {
+// visitRelations visits all relations recursively and applies the function f on them
+// If the function f returns false: the children of the current relation will not be visited.
+func visitRelations(r relation, f func(tbl relation) (bool, error)) error {
 
 	kontinue, err := f(r)
 	if err != nil {
@@ -269,59 +271,24 @@ func visitTables2(r relation, f func(tbl relation) (bool, error)) error {
 		// already visited when entering this method
 	case parenTables:
 		for _, r := range r {
-			err := visitTables2(r, f)
+			err := visitRelations(r, f)
 			if err != nil {
 				return err
 			}
 		}
 		return nil
 	case *joinTables:
-		err := visitTables2(r.lhs, f)
+		err := visitRelations(r.lhs, f)
 		if err != nil {
 			return err
 		}
-		err = visitTables2(r.rhs, f)
-		if err != nil {
-			return err
-		}
-		return nil
-	case *derivedTable:
-		err := visitTables2(r.tables, f)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// visit will traverse the route tables, going inside parenTables and visiting all routeTables
-func visitTables(r relation, f func(tbl *routeTable) error) error {
-	switch r := r.(type) {
-	case *routeTable:
-		err := f(r)
-		if err != nil {
-			return err
-		}
-	case parenTables:
-		for _, r := range r {
-			err := visitTables(r, f)
-			if err != nil {
-				return err
-			}
-		}
-		return nil
-	case *joinTables:
-		err := visitTables(r.lhs, f)
-		if err != nil {
-			return err
-		}
-		err = visitTables(r.rhs, f)
+		err = visitRelations(r.rhs, f)
 		if err != nil {
 			return err
 		}
 		return nil
 	case *derivedTable:
-		err := visitTables(r.tables, f)
+		err := visitRelations(r.tables, f)
 		if err != nil {
 			return err
 		}
@@ -714,7 +681,7 @@ func (rp *routePlan) pickBestAvailableVindex() {
 // Predicates takes all known predicates for this route and ANDs them together
 func (rp *routePlan) Predicates() sqlparser.Expr {
 	predicates := rp.predicates
-	_ = visitTables2(rp.tables, func(tbl relation) (bool, error) {
+	_ = visitRelations(rp.tables, func(tbl relation) (bool, error) {
 		switch tbl := tbl.(type) {
 		case *routeTable:
 			predicates = append(predicates, tbl.qtable.Predicates...)
