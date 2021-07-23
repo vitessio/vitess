@@ -1632,8 +1632,8 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select t.id from (select 1 from `user` where 1 != 1), user_extra where 1 != 1",
-    "Query": "select t.id from (select 1 from `user` where id = 5), user_extra where t.id = user_extra.user_id",
+    "FieldQuery": "select t.id from (select id from `user` where 1 != 1), user_extra where 1 != 1",
+    "Query": "select t.id from (select id from `user` where id = 5), user_extra where t.id = user_extra.user_id",
     "Table": "`user`, user_extra",
     "Values": [
       5
@@ -1749,6 +1749,25 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+
+# derived table missing columns
+"select t.id from (select id from user) as t join user_extra on t.id = user_extra.user_id where t.col = 42"
+{
+  "QueryType": "SELECT",
+  "Original": "select t.id from (select id from user) as t join user_extra on t.id = user_extra.user_id where t.col = 42",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select t.id from (select id from `user` where 1 != 1) as t join user_extra on t.id = user_extra.user_id where 1 != 1",
+    "Query": "select t.id from (select id from `user`) as t join user_extra on t.id = user_extra.user_id where t.col = 42",
+    "Table": "`user`, user_extra"
+  }
+}
+Gen4 error: symbol t.col not found
 
 # routing rules for derived table where the constraint is in the outer query
 "select id from (select id, col from route1) as t where id = 5"
