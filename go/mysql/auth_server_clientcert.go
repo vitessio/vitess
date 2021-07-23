@@ -59,7 +59,7 @@ func newAuthServerClientCert() *AuthServerClientCert {
 	case MysqlDialog:
 		authMethod = NewMysqlDialogAuthMethod(ascc, ascc, "")
 	default:
-		log.Exitf("Invalid mysql_ldap_auth_method value: only support mysql_clear_password or dialog")
+		log.Exitf("Invalid mysql_clientcert_auth_method value: only support mysql_clear_password or dialog")
 	}
 
 	ascc.methods = []AuthMethod{authMethod}
