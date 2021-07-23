@@ -768,10 +768,11 @@ func makeRoute(j joinTree) *routePlan {
 		return rb
 	}
 
-	dp, ok := j.(*derivedPlan)
+	x, ok := j.(*derivedPlan)
 	if !ok {
 		return nil
 	}
+	dp := x.clone().(*derivedPlan)
 
 	inner := makeRoute(dp.inner)
 	if inner == nil {

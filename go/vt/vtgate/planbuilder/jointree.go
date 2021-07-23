@@ -169,6 +169,7 @@ func (d *derivedPlan) cost() int {
 
 func (d *derivedPlan) clone() joinTree {
 	other := *d
+	other.inner = d.inner.clone()
 	return &other
 }
 
