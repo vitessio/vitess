@@ -1,8 +1,3 @@
-2021-03-20T20:58:08Z,Cluster (onlineddl_revert),https://github.com/vitessio/vitess/actions/runs/671632768
-2021-03-20T20:58:08Z,Cluster (onlineddl_vrepl),https://github.com/vitessio/vitess/actions/runs/671632758
-2021-03-20T20:58:08Z,Cluster (onlineddl_vrepl_stress),https://github.com/vitessio/vitess/actions/runs/671632761
-2021-03-20T20:58:08Z,Cluster (tabletmanager_throttler),https://github.com/vitessio/vitess/actions/runs/671632800
-2021-03-20T20:58:08Z,Cluster (tabletmanager_throttler_custom_config),https://github.com/vitessio/vitess/actions/runs/671632753
 2021-03-20T20:58:08Z,Cluster (upgrade),https://github.com/vitessio/vitess/actions/runs/671632779
 2021-03-20T20:58:08Z,Cluster (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/671632752
 2021-03-20T20:58:08Z,Cluster (vreplication_cellalias),https://github.com/vitessio/vitess/actions/runs/671632787
@@ -9994,7 +9989,12 @@
 2021-07-23T05:30:58Z,Cluster (18),https://github.com/vitessio/vitess/actions/runs/1058647048
 2021-07-23T05:30:58Z,Cluster (vtgate_readafterwrite),https://github.com/vitessio/vitess/actions/runs/1058647047
 2021-07-23T05:30:58Z,Cluster (vtgate_reservedconn),https://github.com/vitessio/vitess/actions/runs/1058647042
+2021-07-23T05:30:58Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/1058647069
 2021-07-23T05:30:58Z,Unit Test (mysql57),https://github.com/vitessio/vitess/actions/runs/1058647050
+2021-07-23T05:30:58Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/1058647057
+2021-07-23T05:30:58Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/1058647090
+2021-07-23T05:30:58Z,docker_test_2,https://github.com/vitessio/vitess/actions/runs/1058647054
 2021-07-23T05:30:58Z,endtoend,https://github.com/vitessio/vitess/actions/runs/1058647076
 2021-07-23T05:30:58Z,pr-labels,https://github.com/vitessio/vitess/actions/runs/1058647087
 2021-07-23T05:30:58Z,unit_race,https://github.com/vitessio/vitess/actions/runs/1058647088
+2021-07-23T05:30:59Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/1058647105
