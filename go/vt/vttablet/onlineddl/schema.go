@@ -112,8 +112,9 @@ const (
 		WHERE
 			migration_uuid=%a
 	`
-	sqlUpdateMigrationStartedTimestamp = `UPDATE _vt.schema_migrations
-			SET started_timestamp=IFNULL(started_timestamp, NOW())
+	sqlUpdateMigrationStartedTimestamp = `UPDATE _vt.schema_migrations SET
+			started_timestamp =IFNULL(started_timestamp,  NOW()),
+			liveness_timestamp=IFNULL(liveness_timestamp, NOW())
 		WHERE
 			migration_uuid=%a
 	`
@@ -128,7 +129,7 @@ const (
 			migration_uuid=%a
 	`
 	sqlUpdateArtifacts = `UPDATE _vt.schema_migrations
-			SET artifacts=concat(%a, ',', artifacts)
+			SET artifacts=concat(%a, ',', artifacts), cleanup_timestamp=NULL
 		WHERE
 			migration_uuid=%a
 	`
@@ -262,6 +263,14 @@ const (
 			migration_status IN ('complete', 'failed')
 			AND cleanup_timestamp IS NULL
 			AND completed_timestamp <= NOW() - INTERVAL %a SECOND
+	`
+	sqlFixCompletedTimestamp = `UPDATE _vt.schema_migrations
+		SET
+			completed_timestamp=NOW()
+		WHERE
+			migration_status='failed'
+			AND cleanup_timestamp IS NULL
+			AND completed_timestamp IS NULL
 	`
 	sqlSelectMigration = `SELECT
 			id,

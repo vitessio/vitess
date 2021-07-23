@@ -420,15 +420,9 @@ func (e *Executor) dropOnlineDDLUser(ctx context.Context) error {
 
 // tableExists checks if a given table exists.
 func (e *Executor) tableExists(ctx context.Context, tableName string) (bool, error) {
-	conn, err := e.pool.Get(ctx)
-	if err != nil {
-		return false, err
-	}
-	defer conn.Recycle()
-
 	tableName = strings.ReplaceAll(tableName, `_`, `\_`)
 	parsed := sqlparser.BuildParsedQuery(sqlShowTablesLike, tableName)
-	rs, err := conn.Exec(ctx, parsed.Query, 1, true)
+	rs, err := e.execQuery(ctx, parsed.Query)
 	if err != nil {
 		return false, err
 	}
@@ -2350,6 +2344,10 @@ func (e *Executor) reviewStaleMigrations(ctx context.Context) error {
 		if err := e.updateMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusFailed); err != nil {
 			return err
 		}
+		_ = e.updateMigrationStartedTimestamp(ctx, uuid)
+		if err := e.updateMigrationTimestamp(ctx, "completed_timestamp", uuid); err != nil {
+			return err
+		}
 		_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, "stale migration")
 	}
 
@@ -2364,7 +2362,7 @@ func (e *Executor) retryTabletFailureMigrations(ctx context.Context) error {
 }
 
 // gcArtifactTable garbage-collects a single table
-func (e *Executor) gcArtifactTable(ctx context.Context, artifactTable, uuid string) error {
+func (e *Executor) gcArtifactTable(ctx context.Context, artifactTable, uuid string, t time.Time) error {
 	tableExists, err := e.tableExists(ctx, artifactTable)
 	if err != nil {
 		return err
@@ -2374,17 +2372,11 @@ func (e *Executor) gcArtifactTable(ctx context.Context, artifactTable, uuid stri
 	}
 	// We've already concluded in gcArtifacts() that this table was held for long enough.
 	// We therefore move it into PURGE state.
-	renameStatement, _, err := schema.GenerateRenameStatementWithUUID(artifactTable, schema.PurgeTableGCState, schema.OnlineDDLToGCUUID(uuid), time.Now().UTC())
+	renameStatement, _, err := schema.GenerateRenameStatementWithUUID(artifactTable, schema.PurgeTableGCState, schema.OnlineDDLToGCUUID(uuid), t)
 	if err != nil {
 		return err
 	}
-	conn, err := e.pool.Get(ctx)
-	if err != nil {
-		return err
-	}
-	defer conn.Recycle()
-
-	_, err = conn.Exec(ctx, renameStatement, 1, true)
+	_, err = e.execQuery(ctx, renameStatement)
 	return err
 }
 
@@ -2393,6 +2385,13 @@ func (e *Executor) gcArtifacts(ctx context.Context) error {
 	e.migrationMutex.Lock()
 	defer e.migrationMutex.Unlock()
 
+	if _, err := e.execQuery(ctx, sqlFixCompletedTimestamp); err != nil {
+		// This query fixes a bug where stale migrations were marked as 'failed' without updating 'completed_timestamp'
+		// see https://github.com/vitessio/vitess/issues/8499
+		// Running this query retroactively sets completed_timestamp
+		// This 'if' clause can be removed in version v13
+		return err
+	}
 	query, err := sqlparser.ParseAndBind(sqlSelectUncollectedArtifacts,
 		sqltypes.Int64BindVariable(int64((*retainOnlineDDLTables).Seconds())),
 	)
@@ -2408,8 +2407,14 @@ func (e *Executor) gcArtifacts(ctx context.Context) error {
 		artifacts := row["artifacts"].ToString()
 
 		artifactTables := textutil.SplitDelimitedList(artifacts)
-		for _, artifactTable := range artifactTables {
-			if err := e.gcArtifactTable(ctx, artifactTable, uuid); err != nil {
+
+		timeNow := time.Now()
+		for i, artifactTable := range artifactTables {
+			// We wish to generate distinct timestamp values for each table in this UUID,
+			// because all tables will be renamed as _something_UUID_timestamp. Since UUID
+			// is shared for all artifacts in this loop, we differentiate via timestamp
+			t := timeNow.Add(time.Duration(i) * time.Second).UTC()
+			if err := e.gcArtifactTable(ctx, artifactTable, uuid, t); err != nil {
 				return err
 			}
 			log.Infof("Executor.gcArtifacts: renamed away artifact %s", artifactTable)
