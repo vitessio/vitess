@@ -1830,6 +1830,25 @@ Gen4 error: symbol t.col not found
     "Vindex": "user_index"
   }
 }
+{
+  "QueryType": "SELECT",
+  "Original": "select id from (select id, col from route1) as t where id = 5",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select id from (select id, col from `user` as route1 where 1 != 1) as t where 1 != 1",
+    "Query": "select id from (select id, col from `user` as route1 where id = 5) as t",
+    "Table": "`user`",
+    "Values": [
+      5
+    ],
+    "Vindex": "user_index"
+  }
+}
 
 # recursive derived table lookups
 "select id from (select id from (select id from user) as u) as t where id = 5"
