@@ -3,6 +3,8 @@
 VTAdmin is an experimental replacement for the vtctld2 web UI, that also allows
 users to manage multiple Vitess clusters from a single API and web UI.
 
+For a more detailed writeup, refer to the [original RFC](https://github.com/vitessio/vitess/issues/7117).
+
 ## Setup
 
 The simplest VTAdmin deployment involves a single Vitess cluster. You can look

@@ -10,11 +10,11 @@ defaults:
   # to the regex:
   #   ^discovery-(?P<impl>\w+)-(?P<flag>.+)$
   # The full set of options for each discovery implementation is defined in that
-  # implementations factory function, e.g. NewConsul in
+  # implementation's factory function, e.g. NewConsul in
   # go/vt/vtadmin/cluster/discovery/discovery_consul.go and NewStaticFile in
   # discovery_static_file.go in the same directory.
 
-  # Service name to use when discovery vtctlds from consul.
+  # Service name to use when discovering vtctlds from consul.
   discovery-consul-vtctld-service-name: "vtctld"
   # Path to json file containing vtctld and vtgate hostnames when using staticfile.
   discovery-staticfile-path: "/path/to/static/discovery.json"
