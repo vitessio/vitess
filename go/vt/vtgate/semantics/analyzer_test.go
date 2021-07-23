@@ -579,6 +579,9 @@ func TestScopingWDerivedTables(t *testing.T) {
 		}, {
 			query:        "select ks.t.id from (select 42 as id) as t",
 			errorMessage: "symbol ks.t.id not found",
+		}, {
+			query:        "select * from (select id, id from user) as t",
+			errorMessage: "Duplicate column name 'id'",
 		},
 	}
 	for _, query := range queries {
