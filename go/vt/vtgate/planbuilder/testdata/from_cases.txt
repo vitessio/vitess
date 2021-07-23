@@ -1705,6 +1705,25 @@ Gen4 error: Duplicate column name 'id'
     "Table": "user_extra, `user`"
   }
 }
+{
+  "QueryType": "SELECT",
+  "Original": "select t.id from user_extra join (select id from user where id = 5) as t on t.id = user_extra.user_id",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select t.id from user_extra, (select id from `user` where 1 != 1) where 1 != 1",
+    "Query": "select t.id from user_extra, (select id from `user` where id = 5) where t.id = user_extra.user_id",
+    "Table": "`user`, user_extra",
+    "Values": [
+      5
+    ],
+    "Vindex": "user_index"
+  }
+}
 
 # derived table in FROM with cross-shard join
 "select t.id from (select id from user where id = 5) as t join user_extra on t.id = user_extra.col"
@@ -1746,6 +1765,7 @@ Gen4 error: Duplicate column name 'id'
     ]
   }
 }
+Gen4 plan same as above
 
 # routing rules for derived table
 "select id from (select id, col from route1 where id = 5) as t"
