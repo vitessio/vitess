@@ -46,11 +46,19 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
+type cellInfo struct {
+	cellName       string
+	replicaTablets []*cluster.Vttablet
+	rdonlyTablets  []*cluster.Vttablet
+	// constants that should be set in TestMain
+	numReplicas int
+	numRdonly   int
+}
+
 var (
 	clusterInstance *cluster.LocalProcessCluster
 	ts              *topo.Server
-	replicaTablets  []*cluster.Vttablet
-	rdonlyTablets   []*cluster.Vttablet
+	cellInfos       []*cellInfo
 	uidBase         = 100
 )
 
@@ -59,8 +67,7 @@ const (
 	shardName    = "0"
 	hostname     = "localhost"
 	cell1        = "zone1"
-	numReplicas  = 4
-	numRdonly    = 1
+	cell2        = "zone2"
 )
 
 // createClusterAndStartTopo starts the cluster and topology service
@@ -69,6 +76,16 @@ func createClusterAndStartTopo() error {
 
 	// Start topo server
 	err := clusterInstance.StartTopo()
+	if err != nil {
+		return err
+	}
+
+	// Adding another cell in the same cluster
+	err = clusterInstance.TopoProcess.ManageTopoDir("mkdir", "/vitess/"+cell2)
+	if err != nil {
+		return err
+	}
+	err = clusterInstance.VtctlProcess.AddCellInfo(cell2)
 	if err != nil {
 		return err
 	}
@@ -91,17 +108,19 @@ func createVttablets() error {
 
 	// creating tablets by hand instead of using StartKeyspace because we don't want to call InitShardPrimary
 	var tablets []*cluster.Vttablet
-	for i := 0; i < numReplicas; i++ {
-		vttabletInstance := clusterInstance.NewVttabletInstance("replica", uidBase, cell1)
-		uidBase++
-		tablets = append(tablets, vttabletInstance)
-		replicaTablets = append(replicaTablets, vttabletInstance)
-	}
-	for i := 0; i < numRdonly; i++ {
-		vttabletInstance := clusterInstance.NewVttabletInstance("rdonly", uidBase, cell1)
-		uidBase++
-		tablets = append(tablets, vttabletInstance)
-		rdonlyTablets = append(rdonlyTablets, vttabletInstance)
+	for _, cellInfo := range cellInfos {
+		for i := 0; i < cellInfo.numReplicas; i++ {
+			vttabletInstance := clusterInstance.NewVttabletInstance("replica", uidBase, cellInfo.cellName)
+			uidBase++
+			tablets = append(tablets, vttabletInstance)
+			cellInfo.replicaTablets = append(cellInfo.replicaTablets, vttabletInstance)
+		}
+		for i := 0; i < cellInfo.numRdonly; i++ {
+			vttabletInstance := clusterInstance.NewVttabletInstance("rdonly", uidBase, cellInfo.cellName)
+			uidBase++
+			tablets = append(tablets, vttabletInstance)
+			cellInfo.rdonlyTablets = append(cellInfo.rdonlyTablets, vttabletInstance)
+		}
 	}
 	clusterInstance.VtTabletExtraArgs = []string{
 		"-lock_tables_timeout", "5s",
@@ -230,7 +249,7 @@ func stopVtorc(t *testing.T) {
 }
 
 // setupVttabletsAndVtorc is used to setup the vttablets and start the orchestrator
-func setupVttabletsAndVtorc(t *testing.T, numReplicasReq int, numRdonlyReq int, orcExtraArgs []string) {
+func setupVttabletsAndVtorc(t *testing.T, numReplicasReqCell1 int, numRdonlyReqCell1 int, numReplicasReqCell2 int, numRdonlyReqCell2 int, orcExtraArgs []string) {
 	// stop vtorc if it is running
 	stopVtorc(t)
 
@@ -238,25 +257,48 @@ func setupVttabletsAndVtorc(t *testing.T, numReplicasReq int, numRdonlyReq int, 
 	err := shutdownVttablets()
 	require.NoError(t, err)
 
-	for _, tablet := range replicaTablets {
-		if numReplicasReq == 0 {
-			break
+	for _, cellInfo := range cellInfos {
+		if cellInfo.cellName == cell1 {
+			for _, tablet := range cellInfo.replicaTablets {
+				if numReplicasReqCell1 == 0 {
+					break
+				}
+				err = cleanAndStartVttablet(t, tablet)
+				require.NoError(t, err)
+				numReplicasReqCell1--
+			}
+
+			for _, tablet := range cellInfo.rdonlyTablets {
+				if numRdonlyReqCell1 == 0 {
+					break
+				}
+				err = cleanAndStartVttablet(t, tablet)
+				require.NoError(t, err)
+				numRdonlyReqCell1--
+			}
 		}
-		err = cleanAndStartVttablet(t, tablet)
-		require.NoError(t, err)
-		numReplicasReq--
+		if cellInfo.cellName == cell2 {
+			for _, tablet := range cellInfo.replicaTablets {
+				if numReplicasReqCell2 == 0 {
+					break
+				}
+				err = cleanAndStartVttablet(t, tablet)
+				require.NoError(t, err)
+				numReplicasReqCell2--
+			}
+
+			for _, tablet := range cellInfo.rdonlyTablets {
+				if numRdonlyReqCell2 == 0 {
+					break
+				}
+				err = cleanAndStartVttablet(t, tablet)
+				require.NoError(t, err)
+				numRdonlyReqCell2--
+			}
+		}
 	}
 
-	for _, tablet := range rdonlyTablets {
-		if numRdonlyReq == 0 {
-			break
-		}
-		err = cleanAndStartVttablet(t, tablet)
-		require.NoError(t, err)
-		numRdonlyReq--
-	}
-
-	if numRdonlyReq > 0 || numReplicasReq > 0 {
+	if numRdonlyReqCell1 > 0 || numReplicasReqCell1 > 0 || numReplicasReqCell2 > 0 || numRdonlyReqCell2 > 0 {
 		t.Fatalf("more than available tablets requested. Please increase the constants numReplicas or numRdonly")
 	}
 
@@ -296,17 +338,34 @@ func cleanAndStartVttablet(t *testing.T, vttablet *cluster.Vttablet) error {
 }
 
 func TestMain(m *testing.M) {
+	// setup cellInfos before creating the cluster
+	cellInfos = append(cellInfos, &cellInfo{
+		cellName:    cell1,
+		numReplicas: 4,
+		numRdonly:   1,
+	})
+	cellInfos = append(cellInfos, &cellInfo{
+		cellName:    cell2,
+		numReplicas: 1,
+		numRdonly:   0,
+	})
+
 	exitcode, err := func() (int, error) {
 		err := createClusterAndStartTopo()
 		if err != nil {
 			return 1, err
 		}
+		out, _ := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("ListShardTablets", fmt.Sprintf("%s/%s", keyspaceName, shardName))
+		log.Error(out)
+
 		return m.Run(), nil
 	}()
 
 	cluster.PanicHandler(nil)
-	killTablets(replicaTablets)
-	killTablets(rdonlyTablets)
+	for _, cellInfo := range cellInfos {
+		killTablets(cellInfo.replicaTablets)
+		killTablets(cellInfo.rdonlyTablets)
+	}
 	clusterInstance.Keyspaces[0].Shards[0].Vttablets = nil
 	clusterInstance.Teardown()
 

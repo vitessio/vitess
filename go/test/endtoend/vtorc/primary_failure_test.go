@@ -28,7 +28,7 @@ import (
 // 2. bring down primary, let orc promote replica
 func TestDownPrimary(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	setupVttabletsAndVtorc(t, 2, 0, nil)
+	setupVttabletsAndVtorc(t, 2, 0, 0, 0, nil)
 	keyspace := &clusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 	// find primary from topo
@@ -40,12 +40,14 @@ func TestDownPrimary(t *testing.T) {
 	require.NoError(t, err)
 	defer func() {
 		// we remove the tablet from our global list since its mysqlctl process has stopped and cannot be reused for other tests
-		for i, tablet := range replicaTablets {
-			if tablet == curPrimary {
-				// remove this tablet since its mysql has stopped
-				replicaTablets = append(replicaTablets[:i], replicaTablets[i+1:]...)
-				killTablets([]*cluster.Vttablet{curPrimary})
-				return
+		for _, cellInfo := range cellInfos {
+			for i, tablet := range cellInfo.replicaTablets {
+				if tablet == curPrimary {
+					// remove this tablet since its mysql has stopped
+					cellInfo.replicaTablets = append(cellInfo.replicaTablets[:i], cellInfo.replicaTablets[i+1:]...)
+					killTablets([]*cluster.Vttablet{curPrimary})
+					return
+				}
 			}
 		}
 	}()
