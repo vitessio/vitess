@@ -17,8 +17,6 @@ limitations under the License.
 package semantics
 
 import (
-	"fmt"
-
 	"vitess.io/vitess/go/vt/key"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -153,7 +151,7 @@ func depsFor(
 
 		if authoritative {
 			// if we are authoritative and we can't find the column, we should fail
-			return nil, nil, fmt.Errorf("table not found")
+			return nil, nil, vterrors.NewErrorf(vtrpcpb.Code_NOT_FOUND, vterrors.BadFieldError, "Unknown column '%s' in 'field list'", col.Name.String())
 		}
 
 		// it's probably the correct table, but we don't have enough info to be sure or figure out the type of the column

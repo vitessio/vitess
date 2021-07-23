@@ -44,7 +44,7 @@ type (
 		// creates a copy of the joinTree that can be updated without changing the original
 		clone() joinTree
 
-		pushOutputColumns([]*sqlparser.ColName, *semantics.SemTable) []int
+		pushOutputColumns([]*sqlparser.ColName, *semantics.SemTable) ([]int, error)
 	}
 
 	joinPlan struct {
@@ -173,11 +173,11 @@ func (d *derivedPlan) clone() joinTree {
 	return &other
 }
 
-func (d *derivedPlan) pushOutputColumns(names []*sqlparser.ColName, _ *semantics.SemTable) (offsets []int) {
+func (d *derivedPlan) pushOutputColumns(names []*sqlparser.ColName, _ *semantics.SemTable) (offsets []int, err error) {
 	for _, name := range names {
 		offset, err := d.findOutputColumn(name)
 		if err != nil {
-			panic(err)
+			return nil, err
 		}
 		offsets = append(offsets, offset)
 	}
@@ -188,23 +188,22 @@ func (d *derivedPlan) findOutputColumn(name *sqlparser.ColName) (int, error) {
 	for j, exp := range d.query.SelectExprs {
 		ae, ok := exp.(*sqlparser.AliasedExpr)
 		if !ok {
-			return 0, vterrors.New(vtrpcpb.Code_INTERNAL, "what")
+			return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "expected AliasedExpr")
+		}
+		if !ae.As.IsEmpty() && ae.As.Equal(name.Name) {
+			return j, nil
 		}
 		if ae.As.IsEmpty() {
 			col, ok := ae.Expr.(*sqlparser.ColName)
 			if !ok {
-				return 0, vterrors.New(vtrpcpb.Code_INTERNAL, "what")
+				return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "expected ColName")
 			}
 			if name.Name.Equal(col.Name) {
 				return j, nil
 			}
-		} else {
-			if ae.As.Equal(name.Name) {
-				return j, nil
-			}
 		}
 	}
-	return 0, vterrors.New(vtrpcpb.Code_INTERNAL, "could not find column")
+	return 0, vterrors.NewErrorf(vtrpcpb.Code_NOT_FOUND, vterrors.BadFieldError, "Unknown column '%s' in 'field list'", name.Name.String())
 }
 
 // type assertions
@@ -695,7 +694,7 @@ func (rp *routePlan) Predicates() sqlparser.Expr {
 	return sqlparser.AndExpressions(predicates...)
 }
 
-func (rp *routePlan) pushOutputColumns(col []*sqlparser.ColName, _ *semantics.SemTable) []int {
+func (rp *routePlan) pushOutputColumns(col []*sqlparser.ColName, _ *semantics.SemTable) ([]int, error) {
 	idxs := make([]int, len(col))
 outer:
 	for i, newCol := range col {
@@ -708,7 +707,7 @@ outer:
 		idxs[i] = len(rp.columns)
 		rp.columns = append(rp.columns, newCol)
 	}
-	return idxs
+	return idxs, nil
 }
 
 func (jp *joinPlan) tableID() semantics.TableSet {
@@ -728,7 +727,7 @@ func (jp *joinPlan) clone() joinTree {
 	return result
 }
 
-func (jp *joinPlan) pushOutputColumns(columns []*sqlparser.ColName, semTable *semantics.SemTable) []int {
+func (jp *joinPlan) pushOutputColumns(columns []*sqlparser.ColName, semTable *semantics.SemTable) ([]int, error) {
 	var toTheLeft []bool
 	var lhs, rhs []*sqlparser.ColName
 	for _, col := range columns {
@@ -741,8 +740,15 @@ func (jp *joinPlan) pushOutputColumns(columns []*sqlparser.ColName, semTable *se
 			toTheLeft = append(toTheLeft, false)
 		}
 	}
-	lhsOffset := jp.lhs.pushOutputColumns(lhs, semTable)
-	rhsOffset := jp.rhs.pushOutputColumns(rhs, semTable)
+	lhsOffset, err := jp.lhs.pushOutputColumns(lhs, semTable)
+	if err != nil {
+		return nil, err
+	}
+	rhsOffset, err := jp.rhs.pushOutputColumns(rhs, semTable)
+	if err != nil {
+		return nil, err
+	}
+
 	outputColumns := make([]int, len(toTheLeft))
 	var l, r int
 	for i, isLeft := range toTheLeft {
@@ -755,7 +761,7 @@ func (jp *joinPlan) pushOutputColumns(columns []*sqlparser.ColName, semTable *se
 			r++
 		}
 	}
-	return outputColumns
+	return outputColumns, nil
 }
 
 // costFor returns a cost struct to make route choices easier to compare
