@@ -50,10 +50,10 @@ type AuthServer interface {
 	// auth switch request using the first provided AuthMethod in this list.
 	AuthMethods() []AuthMethod
 
-	// Default auth method description that the auth server sends during
-	// the initial server handshake. This needs to be either `mysql_native_password`
-	// or `caching_sha2_password` as those are the only supported auth
-	// methods during the initial handshake.
+	// DefaultAuthMethodDescription returns the auth method that the auth server
+	// sends during the initial server handshake. This needs to be either
+	// `mysql_native_password` or `caching_sha2_password` as those are the only
+	// supported auth methods during the initial handshake.
 	//
 	// It's not needed to also support those methods in the AuthMethods(),
 	// in fact, if you want to only support for example clear text passwords,
@@ -514,12 +514,10 @@ func (n *mysqlCachingSha2AuthMethod) HandleAuthPluginData(c *Conn, user string, 
 		return nil, err
 	}
 
-	if cacheState == AuthRejected {
+	switch cacheState {
+	case AuthRejected:
 		return nil, NewSQLError(ERAccessDeniedError, SSAccessDeniedError, "Access denied for user '%v'", user)
-	}
-
-	// If we get a result back from the cache that's valid, we can return that immediately.
-	if cacheState == AuthAccepted {
+	case AuthAccepted:
 		// We need to write a more data packet to indicate the
 		// handshake completed properly. This  will be followed
 		// by a regular OK packet which the caller of this method will send.
@@ -531,23 +529,26 @@ func (n *mysqlCachingSha2AuthMethod) HandleAuthPluginData(c *Conn, user string, 
 			return nil, err
 		}
 		return result, nil
-	}
+	case AuthNeedMoreData:
+		if !c.TLSEnabled() && !c.IsUnixSocket() {
+			return nil, NewSQLError(ERAccessDeniedError, SSAccessDeniedError, "Access denied for user '%v'", user)
+		}
 
-	if !c.TLSEnabled() && !c.IsUnixSocket() {
+		data, pos := c.startEphemeralPacketWithHeader(1)
+		pos = writeByte(data, pos, AuthMoreDataPacket)
+		writeByte(data, pos, CachingSha2FullAuth)
+		c.writeEphemeralPacket()
+
+		password, err := readPacketPasswordString(c)
+		if err != nil {
+			return nil, err
+		}
+
+		return n.storage.UserEntryWithPassword(c.GetTLSClientCerts(), user, password, remoteAddr)
+	default:
+		// Somehow someone returned an unknown state, let's error with access denied.
 		return nil, NewSQLError(ERAccessDeniedError, SSAccessDeniedError, "Access denied for user '%v'", user)
 	}
-
-	data, pos := c.startEphemeralPacketWithHeader(1)
-	pos = writeByte(data, pos, AuthMoreDataPacket)
-	writeByte(data, pos, CachingSha2FullAuth)
-	c.writeEphemeralPacket()
-
-	password, err := readPacketPasswordString(c)
-	if err != nil {
-		return nil, err
-	}
-
-	return n.storage.UserEntryWithPassword(c.GetTLSClientCerts(), user, password, remoteAddr)
 }
 
 // authServers is a registry of AuthServer implementations.
