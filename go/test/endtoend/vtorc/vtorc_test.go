@@ -74,40 +74,6 @@ func TestKeyspaceShard(t *testing.T) {
 	checkReplication(t, clusterInstance, shard0.Vttablets[0], shard0.Vttablets[1:])
 }
 
-// 2. bring down primary, let orc promote replica
-func TestDownPrimary(t *testing.T) {
-	defer cluster.PanicHandler(t)
-	setupVttabletsAndVtorc(t, 2, 0, nil)
-	keyspace := &clusterInstance.Keyspaces[0]
-	shard0 := &keyspace.Shards[0]
-	// find primary from topo
-	curPrimary := shardPrimaryTablet(t, clusterInstance, keyspace, shard0)
-	assert.NotNil(t, curPrimary, "should have elected a primary")
-
-	// Make the current primary database unavailable.
-	err := curPrimary.MysqlctlProcess.Stop()
-	require.NoError(t, err)
-	defer func() {
-		// we remove the tablet from our global list since its mysqlctl process has stopped and cannot be reused for other tests
-		for i, tablet := range replicaTablets {
-			if tablet == curPrimary {
-				// remove this tablet since its mysql has stopped
-				replicaTablets = append(replicaTablets[:i], replicaTablets[i+1:]...)
-				killTablets([]*cluster.Vttablet{curPrimary})
-				return
-			}
-		}
-	}()
-
-	for _, tablet := range shard0.Vttablets {
-		// we know we have only two tablets, so the "other" one must be the new primary
-		if tablet.Alias != curPrimary.Alias {
-			checkPrimaryTablet(t, clusterInstance, tablet)
-			break
-		}
-	}
-}
-
 func waitForReadOnlyValue(t *testing.T, curPrimary *cluster.Vttablet, expectValue int64) (match bool) {
 	timeout := 15 * time.Second
 	startTime := time.Now()
