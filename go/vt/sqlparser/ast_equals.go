@@ -2149,9 +2149,9 @@ func EqualsRefOfSelect(a, b *Select) bool {
 		a.StraightJoinHint == b.StraightJoinHint &&
 		a.SQLCalcFoundRows == b.SQLCalcFoundRows &&
 		EqualsRefOfBool(a.Cache, b.Cache) &&
+		EqualsSliceOfTableExpr(a.From, b.From) &&
 		EqualsComments(a.Comments, b.Comments) &&
 		EqualsSelectExprs(a.SelectExprs, b.SelectExprs) &&
-		EqualsTableExprs(a.From, b.From) &&
 		EqualsRefOfWhere(a.Where, b.Where) &&
 		EqualsGroupBy(a.GroupBy, b.GroupBy) &&
 		EqualsRefOfWhere(a.Having, b.Having) &&
@@ -3888,6 +3888,19 @@ func EqualsRefOfBool(a, b *bool) bool {
 		return false
 	}
 	return *a == *b
+}
+
+// EqualsSliceOfTableExpr does deep equals between the two objects.
+func EqualsSliceOfTableExpr(a, b []TableExpr) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := 0; i < len(a); i++ {
+		if !EqualsTableExpr(a[i], b[i]) {
+			return false
+		}
+	}
+	return true
 }
 
 // EqualsSliceOfCharacteristic does deep equals between the two objects.

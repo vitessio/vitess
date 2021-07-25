@@ -37,9 +37,9 @@ import (
 var (
 	clusterInstance     *cluster.LocalProcessCluster
 	tmClient            *tmc.Client
-	masterTabletParams  mysql.ConnParams
+	primaryTabletParams mysql.ConnParams
 	replicaTabletParams mysql.ConnParams
-	masterTablet        cluster.Vttablet
+	primaryTablet       cluster.Vttablet
 	replicaTablet       cluster.Vttablet
 	rdonlyTablet        cluster.Vttablet
 	hostname            = "localhost"
@@ -123,7 +123,7 @@ func TestMain(m *testing.M) {
 		tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 		for _, tablet := range tablets {
 			if tablet.Type == "master" {
-				masterTablet = *tablet
+				primaryTablet = *tablet
 			} else if tablet.Type != "rdonly" {
 				replicaTablet = *tablet
 			} else {
@@ -132,10 +132,10 @@ func TestMain(m *testing.M) {
 		}
 
 		// Set mysql tablet params
-		masterTabletParams = mysql.ConnParams{
+		primaryTabletParams = mysql.ConnParams{
 			Uname:      username,
 			DbName:     dbName,
-			UnixSocket: path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d/mysql.sock", masterTablet.TabletUID)),
+			UnixSocket: path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d/mysql.sock", primaryTablet.TabletUID)),
 		}
 		replicaTabletParams = mysql.ConnParams{
 			Uname:      username,

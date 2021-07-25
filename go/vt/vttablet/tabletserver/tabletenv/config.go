@@ -161,6 +161,7 @@ func init() {
 	flag.DurationVar(&transitionGracePeriod, "serving_state_grace_period", 0, "how long to pause after broadcasting health to vtgate, before enforcing a new serving state")
 
 	flag.BoolVar(&enableReplicationReporter, "enable_replication_reporter", false, "Use polling to track replication lag.")
+	flag.BoolVar(&currentConfig.EnableOnlineDDL, "queryserver_enable_online_ddl", true, "Enable online DDL.")
 }
 
 // Init must be called after flag.Parse, and before doing any other operations.
@@ -279,6 +280,7 @@ type TabletConfig struct {
 	TransactionLimitConfig `json:"-"`
 
 	EnforceStrictTransTables bool `json:"-"`
+	EnableOnlineDDL          bool `json:"-"`
 }
 
 // ConnPoolConfig contains the config for a conn pool.
@@ -478,6 +480,7 @@ var defaultConfig = TabletConfig{
 	TransactionLimitConfig: defaultTransactionLimitConfig(),
 
 	EnforceStrictTransTables: true,
+	EnableOnlineDDL:          true,
 }
 
 // defaultTxThrottlerConfig formats the default throttlerdata.Configuration

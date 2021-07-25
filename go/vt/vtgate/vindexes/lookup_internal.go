@@ -37,6 +37,7 @@ type lookupInternal struct {
 	Autocommit    bool     `json:"autocommit,omitempty"`
 	Upsert        bool     `json:"upsert,omitempty"`
 	IgnoreNulls   bool     `json:"ignore_nulls,omitempty"`
+	BatchLookup   bool     `json:"batch_lookup,omitempty"`
 	sel, ver, del string
 }
 
@@ -51,6 +52,10 @@ func (lkp *lookupInternal) Init(lookupQueryParams map[string]string, autocommit,
 
 	var err error
 	lkp.IgnoreNulls, err = boolFromMap(lookupQueryParams, "ignore_nulls")
+	if err != nil {
+		return err
+	}
+	lkp.BatchLookup, err = boolFromMap(lookupQueryParams, "batch_lookup")
 	if err != nil {
 		return err
 	}
@@ -80,7 +85,7 @@ func (lkp *lookupInternal) Lookup(vcursor VCursor, ids []sqltypes.Value, co vtga
 	if vcursor.InTransactionAndIsDML() {
 		sel = sel + " for update"
 	}
-	if ids[0].IsIntegral() {
+	if ids[0].IsIntegral() || lkp.BatchLookup {
 		// for integral types, batch query all ids and then map them back to the input order
 		vars, err := sqltypes.BuildBindVariable(ids)
 		if err != nil {

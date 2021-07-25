@@ -744,6 +744,11 @@ func (node *Select) MakeDistinct() {
 	node.Distinct = true
 }
 
+// GetColumnCount return SelectExprs count.
+func (node *Select) GetColumnCount() int {
+	return len(node.SelectExprs)
+}
+
 // AddWhere adds the boolean expression to the
 // WHERE clause as an AND condition.
 func (node *Select) AddWhere(expr Expr) {
@@ -796,6 +801,11 @@ func (node *ParenSelect) MakeDistinct() {
 	node.Select.MakeDistinct()
 }
 
+// GetColumnCount implements the SelectStatement interface
+func (node *ParenSelect) GetColumnCount() int {
+	return node.Select.GetColumnCount()
+}
+
 // AddWhere adds the boolean expression to the
 // WHERE clause as an AND condition.
 func (node *Update) AddWhere(expr Expr) {
@@ -830,6 +840,11 @@ func (node *Union) SetLock(lock Lock) {
 // MakeDistinct implements the SelectStatement interface
 func (node *Union) MakeDistinct() {
 	node.UnionSelects[len(node.UnionSelects)-1].Distinct = true
+}
+
+// GetColumnCount implements the SelectStatement interface
+func (node *Union) GetColumnCount() int {
+	return node.FirstStatement.GetColumnCount()
 }
 
 //Unionize returns a UNION, either creating one or adding SELECT to an existing one
@@ -1307,6 +1322,17 @@ func (node *ColName) CompliantName() string {
 	return node.Name.CompliantName()
 }
 
+// isExprAliasForCurrentTimeStamp returns true if the Expr provided is an alias for CURRENT_TIMESTAMP
+func isExprAliasForCurrentTimeStamp(expr Expr) bool {
+	switch node := expr.(type) {
+	case *FuncExpr:
+		return node.Name.EqualString("current_timestamp") || node.Name.EqualString("now") || node.Name.EqualString("localtimestamp") || node.Name.EqualString("localtime")
+	case *CurTimeFuncExpr:
+		return node.Name.EqualString("current_timestamp") || node.Name.EqualString("now") || node.Name.EqualString("localtimestamp") || node.Name.EqualString("localtime")
+	}
+	return false
+}
+
 // AtCount represents the '@' count in ColIdent
 type AtCount int
 
@@ -1338,4 +1364,40 @@ func handleUnaryMinus(expr Expr) Expr {
 // encodeSQLString encodes the string as a SQL string.
 func encodeSQLString(val string) string {
 	return sqltypes.EncodeStringSQL(val)
+}
+
+// ToString prints the list of table expressions as a string
+// To be used as an alternate for String for []TableExpr
+func ToString(exprs []TableExpr) string {
+	buf := NewTrackedBuffer(nil)
+	prefix := ""
+	for _, expr := range exprs {
+		buf.astPrintf(nil, "%s%v", prefix, expr)
+		prefix = ", "
+	}
+	return buf.String()
+}
+
+// ContainsAggregation returns true if the expression contains aggregation
+func ContainsAggregation(e SQLNode) bool {
+	hasAggregates := false
+	_ = Walk(func(node SQLNode) (kontinue bool, err error) {
+		if IsAggregation(node) {
+			hasAggregates = true
+			return false, nil
+		}
+		return true, nil
+	}, e)
+	return hasAggregates
+}
+
+// IsAggregation returns true if the node is an aggregation expression
+func IsAggregation(node SQLNode) bool {
+	switch node := node.(type) {
+	case *FuncExpr:
+		return node.IsAggregate()
+	case *GroupConcatExpr:
+		return true
+	}
+	return false
 }

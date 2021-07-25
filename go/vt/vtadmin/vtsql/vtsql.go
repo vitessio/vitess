@@ -30,6 +30,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vitessdriver"
 	"vitess.io/vitess/go/vt/vtadmin/cluster/discovery"
+	"vitess.io/vitess/go/vt/vtadmin/debug"
 	"vitess.io/vitess/go/vt/vtadmin/vtadminproto"
 
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
@@ -46,9 +47,6 @@ type DB interface {
 	//
 	// target is a Vitess query target, e.g. "", "<keyspace>", "<keyspace>@replica".
 	Dial(ctx context.Context, target string, opts ...grpc.DialOption) error
-
-	// Hostname returns the hostname the DB is currently connected to.
-	Hostname() string
 
 	// Ping behaves like (*sql.DB).Ping.
 	Ping() error
@@ -69,6 +67,7 @@ type VTGateProxy struct {
 	discovery     discovery.Discovery
 	discoveryTags []string
 	creds         Credentials
+	cfg           *Config
 
 	// DialFunc is called to open a new database connection. In production this
 	// should always be vitessdriver.OpenWithConfiguration, but it is exported
@@ -76,8 +75,10 @@ type VTGateProxy struct {
 	DialFunc        func(cfg vitessdriver.Configuration) (*sql.DB, error)
 	dialPingTimeout time.Duration
 
-	host string
-	conn *sql.DB
+	host     string
+	conn     *sql.DB
+	dialedAt time.Time
+	lastPing time.Time
 }
 
 var _ DB = (*VTGateProxy)(nil)
@@ -103,6 +104,7 @@ func New(cfg *Config) *VTGateProxy {
 		discovery:       cfg.Discovery,
 		discoveryTags:   discoveryTags,
 		creds:           cfg.Credentials,
+		cfg:             cfg,
 		DialFunc:        vitessdriver.OpenWithConfiguration,
 		dialPingTimeout: cfg.DialPingTimeout,
 	}
@@ -144,6 +146,8 @@ func (vtgate *VTGateProxy) Dial(ctx context.Context, target string, opts ...grpc
 		case nil:
 			log.Infof("Have valid connection to %s, reusing it.", vtgate.host)
 			span.Annotate("is_noop", true)
+
+			vtgate.lastPing = time.Now()
 
 			return nil
 		default:
@@ -189,6 +193,7 @@ func (vtgate *VTGateProxy) Dial(ctx context.Context, target string, opts ...grpc
 	}
 
 	vtgate.conn = db
+	vtgate.dialedAt = time.Now()
 
 	return nil
 }
@@ -244,9 +249,33 @@ func (vtgate *VTGateProxy) Close() error {
 	return err
 }
 
-// Hostname is part of the DB interface.
-func (vtgate *VTGateProxy) Hostname() string {
-	return vtgate.host
+// Debug implements debug.Debuggable for VTGateProxy.
+func (vtgate *VTGateProxy) Debug() map[string]interface{} {
+	m := map[string]interface{}{
+		"host":         vtgate.host,
+		"is_connected": (vtgate.conn != nil),
+	}
+
+	if vtgate.conn != nil {
+		m["last_ping"] = debug.TimeToString(vtgate.lastPing)
+		m["dialed_at"] = debug.TimeToString(vtgate.dialedAt)
+	}
+
+	if vtgate.creds != nil {
+		cmap := map[string]interface{}{
+			"source":         vtgate.cfg.CredentialsPath,
+			"immediate_user": vtgate.creds.GetUsername(),
+			"effective_user": vtgate.creds.GetEffectiveUsername(),
+		}
+
+		if creds, ok := vtgate.creds.(*StaticAuthCredentials); ok {
+			cmap["password"] = debug.SanitizeString(creds.Password)
+		}
+
+		m["credentials"] = cmap
+	}
+
+	return m
 }
 
 func (vtgate *VTGateProxy) annotateSpan(span trace.Span) {

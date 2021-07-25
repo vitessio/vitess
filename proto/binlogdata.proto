@@ -159,6 +159,18 @@ message Rule {
   // The map is only populated when either "from" or "to" charset of a column are non-trivial
   // trivial charsets are utf8 and ascii variants.
   map<string, CharsetConversion> convert_charset = 4;
+
+  // SourceUniqueKeyColumns represents the ordered columns in the index used by rowstreamer to iterate the table
+  // It is comma delimited, as in col1,col2,col3 (tokens are escaped via net/url)
+   string source_unique_key_columns = 5;
+
+  // TargetUniqueKeyColumns represents the ordered columns in that index used by vcopier and vplayer to apply rows
+  // It is comma delimited, as in col1,col2,col3 (tokens are escaped via net/url)
+  string target_unique_key_columns = 6;
+
+  // SourceUniqueKeyTargetColumns represents the names of columns in target table, mapped from the chosen unique
+  // key on source tables (some columns may be renamed from source to target)
+  string source_unique_key_target_columns = 7;
 }
 
 // Filter represents a list of ordered rules. The first

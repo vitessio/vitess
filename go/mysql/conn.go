@@ -91,7 +91,7 @@ type Conn struct {
 
 	// authPluginName is the name of server's authentication plugin.
 	// It is set during the initial handshake.
-	authPluginName string
+	authPluginName AuthMethodDescription
 
 	// schemaName is the default database name to use. It is set
 	// during handshake, and by ComInitDb packets. Both client and
@@ -896,6 +896,11 @@ func (c *Conn) handleNextCommand(handler Handler) bool {
 	case ComResetConnection:
 		c.handleComResetConnection(handler)
 		return true
+	case ComFieldList:
+		c.recycleReadPacket()
+		if !c.writeErrorAndLog(ERUnknownComError, SSNetError, "command handling not implemented yet: %v", data[0]) {
+			return false
+		}
 
 	default:
 		log.Errorf("Got unhandled packet (default) from %s, returning error: %v", c, data)
@@ -1492,6 +1497,17 @@ func (c *Conn) GetTLSClientCerts() []*x509.Certificate {
 		return tlsConn.ConnectionState().PeerCertificates
 	}
 	return nil
+}
+
+// TLSEnabled returns true if this connection is using TLS.
+func (c *Conn) TLSEnabled() bool {
+	return c.Capabilities&CapabilityClientSSL > 0
+}
+
+// IsUnixSocket returns true if this connection is over a Unix socket.
+func (c *Conn) IsUnixSocket() bool {
+	_, ok := c.listener.listener.(*net.UnixListener)
+	return ok
 }
 
 // GetRawConn returns the raw net.Conn for nefarious purposes.

@@ -43,9 +43,16 @@ func (node *Select) Format(buf *TrackedBuffer) {
 		buf.WriteString(SQLCalcFoundRowsStr)
 	}
 
-	buf.astPrintf(node, "%v from %v%v%v%v%v%v%s%v",
-		node.SelectExprs,
-		node.From, node.Where,
+	buf.astPrintf(node, "%v from ", node.SelectExprs)
+
+	prefix := ""
+	for _, expr := range node.From {
+		buf.astPrintf(node, "%s%v", prefix, expr)
+		prefix = ", "
+	}
+
+	buf.astPrintf(node, "%v%v%v%v%v%s%v",
+		node.Where,
 		node.GroupBy, node.Having, node.OrderBy,
 		node.Limit, node.Lock.ToString(), node.Into)
 }
@@ -464,7 +471,15 @@ func (ct *ColumnType) Format(buf *TrackedBuffer) {
 		}
 	}
 	if ct.Options.Default != nil {
-		buf.astPrintf(ct, " %s %v", keywordStrings[DEFAULT], ct.Options.Default)
+		buf.astPrintf(ct, " %s", keywordStrings[DEFAULT])
+		_, isLiteral := ct.Options.Default.(*Literal)
+		_, isBool := ct.Options.Default.(BoolVal)
+		_, isNullVal := ct.Options.Default.(*NullVal)
+		if isLiteral || isNullVal || isBool || isExprAliasForCurrentTimeStamp(ct.Options.Default) {
+			buf.astPrintf(ct, " %v", ct.Options.Default)
+		} else {
+			buf.astPrintf(ct, " (%v)", ct.Options.Default)
+		}
 	}
 	if ct.Options.OnUpdate != nil {
 		buf.astPrintf(ct, " %s %s %v", keywordStrings[ON], keywordStrings[UPDATE], ct.Options.OnUpdate)

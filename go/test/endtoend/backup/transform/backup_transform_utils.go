@@ -37,7 +37,7 @@ import (
 
 // test main part of the testcase
 var (
-	master           *cluster.Vttablet
+	primary          *cluster.Vttablet
 	replica1         *cluster.Vttablet
 	replica2         *cluster.Vttablet
 	localCluster     *cluster.LocalProcessCluster
@@ -98,7 +98,7 @@ func TestMainSetup(m *testing.M, useMysqlctld bool) {
 		extraArgs := []string{"-db-credentials-file", dbCredentialFile}
 		commonTabletArg = append(commonTabletArg, "-db-credentials-file", dbCredentialFile)
 
-		// start mysql process for all replicas and master
+		// start mysql process for all replicas and primary
 		var mysqlProcs []*exec.Cmd
 		for i := 0; i < 3; i++ {
 			tabletType := "replica"
@@ -141,18 +141,18 @@ func TestMainSetup(m *testing.M, useMysqlctld bool) {
 		}
 
 		// initialize tablets
-		master = shard.Vttablets[0]
+		primary = shard.Vttablets[0]
 		replica1 = shard.Vttablets[1]
 		replica2 = shard.Vttablets[2]
 
-		for _, tablet := range []*cluster.Vttablet{master, replica1} {
+		for _, tablet := range []*cluster.Vttablet{primary, replica1} {
 			if err := localCluster.VtctlclientProcess.InitTablet(tablet, cell, keyspaceName, hostname, shard.Name); err != nil {
 				return 1, err
 			}
 		}
 
-		// create database for master and replica
-		for _, tablet := range []cluster.Vttablet{*master, *replica1} {
+		// create database for primary and replica
+		for _, tablet := range []cluster.Vttablet{*primary, *replica1} {
 			if err := tablet.VttabletProcess.CreateDB(keyspaceName); err != nil {
 				return 1, err
 			}
@@ -161,8 +161,8 @@ func TestMainSetup(m *testing.M, useMysqlctld bool) {
 			}
 		}
 
-		// initialize master and start replication
-		if err := localCluster.VtctlclientProcess.InitShardMaster(keyspaceName, shard.Name, cell, master.TabletUID); err != nil {
+		// initialize primary and start replication
+		if err := localCluster.VtctlclientProcess.InitShardPrimary(keyspaceName, shard.Name, cell, primary.TabletUID); err != nil {
 			return 1, err
 		}
 		return m.Run(), nil
@@ -186,7 +186,7 @@ var vtInsertTest = `create table vt_insert_test (
 
 // TestBackupTransformImpl tests backups with transform hooks
 func TestBackupTransformImpl(t *testing.T) {
-	// insert data in master, validate same in replica
+	// insert data in primary, validate same in replica
 	defer cluster.PanicHandler(t)
 	verifyInitialReplication(t)
 
@@ -207,8 +207,8 @@ func TestBackupTransformImpl(t *testing.T) {
 	err = localCluster.VtctlclientProcess.ExecuteCommand("Backup", replica1.Alias)
 	require.Nil(t, err)
 
-	// insert data in master
-	_, err = master.VttabletProcess.QueryTablet("insert into vt_insert_test (msg) values ('test2')", keyspaceName, true)
+	// insert data in primary
+	_, err = primary.VttabletProcess.QueryTablet("insert into vt_insert_test (msg) values ('test2')", keyspaceName, true)
 	require.Nil(t, err)
 
 	// validate backup_list, expecting 1 backup available
@@ -250,7 +250,7 @@ func TestBackupTransformImpl(t *testing.T) {
 	replica2.VttabletProcess.ServingStatus = ""
 	err = replica2.VttabletProcess.Setup()
 	require.Nil(t, err)
-	err = replica2.VttabletProcess.WaitForTabletTypesForTimeout([]string{"SERVING"}, 25*time.Second)
+	err = replica2.VttabletProcess.WaitForTabletStatusesForTimeout([]string{"SERVING"}, 25*time.Second)
 	require.Nil(t, err)
 	defer replica2.VttabletProcess.TearDown()
 
@@ -344,11 +344,11 @@ func verifyReplicationStatus(t *testing.T, vttablet *cluster.Vttablet, expectedS
 	assert.Equal(t, expectedStatus, status)
 }
 
-// verifyInitialReplication creates schema in master, insert some data to master and verify the same data in replica
+// verifyInitialReplication creates schema in primary, insert some data to primary and verify the same data in replica
 func verifyInitialReplication(t *testing.T) {
-	_, err := master.VttabletProcess.QueryTablet(vtInsertTest, keyspaceName, true)
+	_, err := primary.VttabletProcess.QueryTablet(vtInsertTest, keyspaceName, true)
 	require.Nil(t, err)
-	_, err = master.VttabletProcess.QueryTablet("insert into vt_insert_test (msg) values ('test1')", keyspaceName, true)
+	_, err = primary.VttabletProcess.QueryTablet("insert into vt_insert_test (msg) values ('test1')", keyspaceName, true)
 	require.Nil(t, err)
 	cluster.VerifyRowsInTablet(t, replica1, keyspaceName, 1)
 }

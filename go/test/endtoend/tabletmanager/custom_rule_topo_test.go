@@ -34,16 +34,16 @@ func TestTopoCustomRule(t *testing.T) {
 
 	defer cluster.PanicHandler(t)
 	ctx := context.Background()
-	masterConn, err := mysql.Connect(ctx, &masterTabletParams)
+	conn, err := mysql.Connect(ctx, &primaryTabletParams)
 	require.NoError(t, err)
-	defer masterConn.Close()
+	defer conn.Close()
 	replicaConn, err := mysql.Connect(ctx, &replicaTabletParams)
 	require.NoError(t, err)
 	defer replicaConn.Close()
 
 	// Insert data for sanity checks
-	exec(t, masterConn, "delete from t1")
-	exec(t, masterConn, "insert into t1(id, value) values(11,'r'), (12,'s')")
+	exec(t, conn, "delete from t1")
+	exec(t, conn, "insert into t1(id, value) values(11,'r'), (12,'s')")
 	checkDataOnReplica(t, replicaConn, `[[VARCHAR("r")] [VARCHAR("s")]]`)
 
 	// create empty topoCustomRuleFile.
@@ -111,7 +111,7 @@ func TestTopoCustomRule(t *testing.T) {
 	}
 
 	// Empty the table
-	exec(t, masterConn, "delete from t1")
+	exec(t, conn, "delete from t1")
 	// Reset the VtTabletExtraArgs
 	clusterInstance.VtTabletExtraArgs = []string{}
 	// Tear down custom processes

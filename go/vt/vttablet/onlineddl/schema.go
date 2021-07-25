@@ -58,6 +58,8 @@ const (
 	alterSchemaMigrationsTableETASeconds         = "ALTER TABLE _vt.schema_migrations add column eta_seconds bigint NOT NULL DEFAULT -1"
 	alterSchemaMigrationsTableRowsCopied         = "ALTER TABLE _vt.schema_migrations add column rows_copied bigint unsigned NOT NULL DEFAULT 0"
 	alterSchemaMigrationsTableTableRows          = "ALTER TABLE _vt.schema_migrations add column table_rows bigint NOT NULL DEFAULT 0"
+	alterSchemaMigrationsTableAddedUniqueKeys    = "ALTER TABLE _vt.schema_migrations add column added_unique_keys int unsigned NOT NULL DEFAULT 0"
+	alterSchemaMigrationsTableRemovedUniqueKeys  = "ALTER TABLE _vt.schema_migrations add column removed_unique_keys int unsigned NOT NULL DEFAULT 0"
 
 	sqlInsertMigration = `INSERT IGNORE INTO _vt.schema_migrations (
 		migration_uuid,
@@ -112,8 +114,9 @@ const (
 		WHERE
 			migration_uuid=%a
 	`
-	sqlUpdateMigrationStartedTimestamp = `UPDATE _vt.schema_migrations
-			SET started_timestamp=IFNULL(started_timestamp, NOW())
+	sqlUpdateMigrationStartedTimestamp = `UPDATE _vt.schema_migrations SET
+			started_timestamp =IFNULL(started_timestamp,  NOW()),
+			liveness_timestamp=IFNULL(liveness_timestamp, NOW())
 		WHERE
 			migration_uuid=%a
 	`
@@ -128,7 +131,7 @@ const (
 			migration_uuid=%a
 	`
 	sqlUpdateArtifacts = `UPDATE _vt.schema_migrations
-			SET artifacts=concat(%a, ',', artifacts)
+			SET artifacts=concat(%a, ',', artifacts), cleanup_timestamp=NULL
 		WHERE
 			migration_uuid=%a
 	`
@@ -149,6 +152,11 @@ const (
 	`
 	sqlUpdateMessage = `UPDATE _vt.schema_migrations
 			SET message=%a
+		WHERE
+			migration_uuid=%a
+	`
+	sqlUpdateAddedRemovedUniqueKeys = `UPDATE _vt.schema_migrations
+			SET added_unique_keys=%a, removed_unique_keys=%a
 		WHERE
 			migration_uuid=%a
 	`
@@ -263,6 +271,14 @@ const (
 			AND cleanup_timestamp IS NULL
 			AND completed_timestamp <= NOW() - INTERVAL %a SECOND
 	`
+	sqlFixCompletedTimestamp = `UPDATE _vt.schema_migrations
+		SET
+			completed_timestamp=NOW()
+		WHERE
+			migration_status='failed'
+			AND cleanup_timestamp IS NULL
+			AND completed_timestamp IS NULL
+	`
 	sqlSelectMigration = `SELECT
 			id,
 			migration_uuid,
@@ -284,6 +300,8 @@ const (
 			ddl_action,
 			artifacts,
 			tablet,
+			added_unique_keys,
+			removed_unique_keys,
 			migration_context
 		FROM _vt.schema_migrations
 		WHERE
@@ -310,6 +328,8 @@ const (
 			ddl_action,
 			artifacts,
 			tablet,
+			added_unique_keys,
+			removed_unique_keys,
 			migration_context
 		FROM _vt.schema_migrations
 		WHERE
@@ -351,6 +371,64 @@ const (
 			TABLE_SCHEMA=%a AND TABLE_NAME=%a
 			AND REFERENCED_TABLE_NAME IS NOT NULL
 		`
+	sqlSelectUniqueKeys = `
+	SELECT
+		COLUMNS.TABLE_SCHEMA as table_schema,
+		COLUMNS.TABLE_NAME as table_name,
+		COLUMNS.COLUMN_NAME as column_name,
+		UNIQUES.INDEX_NAME as index_name,
+		UNIQUES.COLUMN_NAMES as column_names,
+		UNIQUES.COUNT_COLUMN_IN_INDEX as count_column_in_index,
+		COLUMNS.DATA_TYPE as data_type,
+		COLUMNS.CHARACTER_SET_NAME as character_set_name,
+		LOCATE('auto_increment', EXTRA) > 0 as is_auto_increment,
+		(DATA_TYPE='float' OR DATA_TYPE='double') AS is_float,
+		has_nullable
+	FROM INFORMATION_SCHEMA.COLUMNS INNER JOIN (
+		SELECT
+			TABLE_SCHEMA,
+			TABLE_NAME,
+			INDEX_NAME,
+			COUNT(*) AS COUNT_COLUMN_IN_INDEX,
+			GROUP_CONCAT(COLUMN_NAME ORDER BY SEQ_IN_INDEX ASC) AS COLUMN_NAMES,
+			SUBSTRING_INDEX(GROUP_CONCAT(COLUMN_NAME ORDER BY SEQ_IN_INDEX ASC), ',', 1) AS FIRST_COLUMN_NAME,
+			SUM(NULLABLE='YES') > 0 AS has_nullable
+		FROM INFORMATION_SCHEMA.STATISTICS
+		WHERE
+			NON_UNIQUE=0
+			AND TABLE_SCHEMA=%a
+			AND TABLE_NAME=%a
+		GROUP BY TABLE_SCHEMA, TABLE_NAME, INDEX_NAME
+	) AS UNIQUES
+	ON (
+		COLUMNS.COLUMN_NAME = UNIQUES.FIRST_COLUMN_NAME
+	)
+	WHERE
+		COLUMNS.TABLE_SCHEMA=%a
+		AND COLUMNS.TABLE_NAME=%a
+	ORDER BY
+		COLUMNS.TABLE_SCHEMA, COLUMNS.TABLE_NAME,
+		CASE UNIQUES.INDEX_NAME
+			WHEN 'PRIMARY' THEN 0
+			ELSE 1
+		END,
+		CASE has_nullable
+			WHEN 0 THEN 0
+			ELSE 1
+		END,
+		CASE IFNULL(CHARACTER_SET_NAME, '')
+				WHEN '' THEN 0
+				ELSE 1
+		END,
+		CASE DATA_TYPE
+			WHEN 'tinyint' THEN 0
+			WHEN 'smallint' THEN 1
+			WHEN 'int' THEN 2
+			WHEN 'bigint' THEN 3
+			ELSE 100
+		END,
+		COUNT_COLUMN_IN_INDEX
+	`
 	sqlDropTrigger       = "DROP TRIGGER IF EXISTS `%a`.`%a`"
 	sqlShowTablesLike    = "SHOW TABLES LIKE '%a'"
 	sqlCreateTableLike   = "CREATE TABLE `%a` LIKE `%a`"
@@ -416,7 +494,8 @@ var (
 	sqlDropOnlineDDLUser = `DROP USER IF EXISTS %s`
 )
 
-var applyDDL = []string{
+// ApplyDDL ddls to be applied at the start
+var ApplyDDL = []string{
 	sqlCreateSidecarDB,
 	sqlCreateSchemaMigrationsTable,
 	alterSchemaMigrationsTableRetries,
@@ -432,4 +511,6 @@ var applyDDL = []string{
 	alterSchemaMigrationsTableETASeconds,
 	alterSchemaMigrationsTableRowsCopied,
 	alterSchemaMigrationsTableTableRows,
+	alterSchemaMigrationsTableAddedUniqueKeys,
+	alterSchemaMigrationsTableRemovedUniqueKeys,
 }

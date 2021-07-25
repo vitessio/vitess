@@ -15,7 +15,7 @@ limitations under the License.
 */
 
 // Package binlogplayer contains the code that plays a vreplication
-// stream on a client database. It usually runs inside the destination master
+// stream on a client database. It usually runs inside the destination primary
 // vttablet process.
 package binlogplayer
 
@@ -86,8 +86,8 @@ type Stats struct {
 	heartbeatMutex sync.Mutex
 	heartbeat      int64
 
-	SecondsBehindMaster sync2.AtomicInt64
-	History             *history.History
+	ReplicationLagSeconds sync2.AtomicInt64
+	History               *history.History
 
 	State sync2.AtomicString
 
@@ -149,7 +149,7 @@ func NewStats() *Stats {
 	bps.Timings = stats.NewTimings("", "", "")
 	bps.Rates = stats.NewRates("", bps.Timings, 15*60/5, 5*time.Second)
 	bps.History = history.New(3)
-	bps.SecondsBehindMaster.Set(math.MaxInt64)
+	bps.ReplicationLagSeconds.Set(math.MaxInt64)
 	bps.PhaseTimings = stats.NewTimings("", "", "Phase")
 	bps.QueryTimings = stats.NewTimings("", "", "Phase")
 	bps.QueryCount = stats.NewCountersWithSingleLabel("", "", "Phase", "")
@@ -473,10 +473,10 @@ func (blp *BinlogPlayer) exec(sql string) (*sqltypes.Result, error) {
 // It also tries to get the timestamp for the transaction. Two cases:
 // - we have statements, and they start with a SET TIMESTAMP that we
 //   can parse: then we update transaction_timestamp in vreplication
-//   with it, and set SecondsBehindMaster to now() - transaction_timestamp
+//   with it, and set ReplicationLagSeconds to now() - transaction_timestamp
 // - otherwise (the statements are probably filtered out), we leave
 //   transaction_timestamp alone (keeping the old value), and we don't
-//   change SecondsBehindMaster
+//   change ReplicationLagSeconds
 func (blp *BinlogPlayer) writeRecoveryPosition(tx *binlogdatapb.BinlogTransaction) error {
 	position, err := DecodePosition(tx.EventToken.Position)
 	if err != nil {
@@ -498,7 +498,7 @@ func (blp *BinlogPlayer) writeRecoveryPosition(tx *binlogdatapb.BinlogTransactio
 	blp.position = position
 	blp.blplStats.SetLastPosition(blp.position)
 	if tx.EventToken.Timestamp != 0 {
-		blp.blplStats.SecondsBehindMaster.Set(now - tx.EventToken.Timestamp)
+		blp.blplStats.ReplicationLagSeconds.Set(now - tx.EventToken.Timestamp)
 	}
 	return nil
 }
@@ -530,7 +530,7 @@ func (blp *BinlogPlayer) setVReplicationState(state, message string) error {
 // cell: optional column that overrides the current cell to replicate from.
 // tablet_types: optional column that overrides the tablet types to look to replicate from.
 // time_update: last time an event was applied.
-// transaction_timestamp: timestamp of the transaction (from the master).
+// transaction_timestamp: timestamp of the transaction (from the primary).
 // state: Running, Error or Stopped.
 // message: Reason for current state.
 func CreateVReplicationTable() []string {
@@ -563,6 +563,7 @@ var AlterVReplicationTable = []string{
 	"ALTER TABLE _vt.vreplication MODIFY source BLOB NOT NULL",
 	"ALTER TABLE _vt.vreplication ADD KEY workflow_idx (workflow(64))",
 	"ALTER TABLE _vt.vreplication ADD COLUMN rows_copied BIGINT(20) NOT NULL DEFAULT 0",
+	"ALTER TABLE _vt.vreplication ADD COLUMN tags VARBINARY(1024) NOT NULL DEFAULT ''",
 }
 
 // WithDDLInitialQueries contains the queries to be expected by the mock db client during tests
