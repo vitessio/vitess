@@ -94,9 +94,9 @@ type TabletManagerClient interface {
 	// ReplicaWasPromoted tells the remote tablet it is now the master
 	ReplicaWasPromoted(ctx context.Context, in *tabletmanagerdata.ReplicaWasPromotedRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ReplicaWasPromotedResponse, error)
 	// SetMaster tells the replica to reparent
-	SetMaster(ctx context.Context, in *tabletmanagerdata.SetPrimaryRequest, opts ...grpc.CallOption) (*tabletmanagerdata.SetPrimaryResponse, error)
-	// SetMaster tells the replica to reparent
-	SetPrimary(ctx context.Context, in *tabletmanagerdata.SetPrimaryRequest, opts ...grpc.CallOption) (*tabletmanagerdata.SetPrimaryResponse, error)
+	SetMaster(ctx context.Context, in *tabletmanagerdata.SetReplicationSourceRequest, opts ...grpc.CallOption) (*tabletmanagerdata.SetReplicationSourceResponse, error)
+	// SetReplicationSource tells the replica to reparent
+	SetReplicationSource(ctx context.Context, in *tabletmanagerdata.SetReplicationSourceRequest, opts ...grpc.CallOption) (*tabletmanagerdata.SetReplicationSourceResponse, error)
 	// ReplicaWasRestarted tells the remote tablet its master has changed
 	ReplicaWasRestarted(ctx context.Context, in *tabletmanagerdata.ReplicaWasRestartedRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ReplicaWasRestartedResponse, error)
 	// StopReplicationAndGetStatus stops MySQL replication, and returns the
@@ -506,8 +506,8 @@ func (c *tabletManagerClient) ReplicaWasPromoted(ctx context.Context, in *tablet
 	return out, nil
 }
 
-func (c *tabletManagerClient) SetMaster(ctx context.Context, in *tabletmanagerdata.SetPrimaryRequest, opts ...grpc.CallOption) (*tabletmanagerdata.SetPrimaryResponse, error) {
-	out := new(tabletmanagerdata.SetPrimaryResponse)
+func (c *tabletManagerClient) SetMaster(ctx context.Context, in *tabletmanagerdata.SetReplicationSourceRequest, opts ...grpc.CallOption) (*tabletmanagerdata.SetReplicationSourceResponse, error) {
+	out := new(tabletmanagerdata.SetReplicationSourceResponse)
 	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/SetMaster", in, out, opts...)
 	if err != nil {
 		return nil, err
@@ -515,9 +515,9 @@ func (c *tabletManagerClient) SetMaster(ctx context.Context, in *tabletmanagerda
 	return out, nil
 }
 
-func (c *tabletManagerClient) SetPrimary(ctx context.Context, in *tabletmanagerdata.SetPrimaryRequest, opts ...grpc.CallOption) (*tabletmanagerdata.SetPrimaryResponse, error) {
-	out := new(tabletmanagerdata.SetPrimaryResponse)
-	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/SetPrimary", in, out, opts...)
+func (c *tabletManagerClient) SetReplicationSource(ctx context.Context, in *tabletmanagerdata.SetReplicationSourceRequest, opts ...grpc.CallOption) (*tabletmanagerdata.SetReplicationSourceResponse, error) {
+	out := new(tabletmanagerdata.SetReplicationSourceResponse)
+	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/SetReplicationSource", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -703,9 +703,9 @@ type TabletManagerServer interface {
 	// ReplicaWasPromoted tells the remote tablet it is now the master
 	ReplicaWasPromoted(context.Context, *tabletmanagerdata.ReplicaWasPromotedRequest) (*tabletmanagerdata.ReplicaWasPromotedResponse, error)
 	// SetMaster tells the replica to reparent
-	SetMaster(context.Context, *tabletmanagerdata.SetPrimaryRequest) (*tabletmanagerdata.SetPrimaryResponse, error)
-	// SetMaster tells the replica to reparent
-	SetPrimary(context.Context, *tabletmanagerdata.SetPrimaryRequest) (*tabletmanagerdata.SetPrimaryResponse, error)
+	SetMaster(context.Context, *tabletmanagerdata.SetReplicationSourceRequest) (*tabletmanagerdata.SetReplicationSourceResponse, error)
+	// SetReplicationSource tells the replica to reparent
+	SetReplicationSource(context.Context, *tabletmanagerdata.SetReplicationSourceRequest) (*tabletmanagerdata.SetReplicationSourceResponse, error)
 	// ReplicaWasRestarted tells the remote tablet its master has changed
 	ReplicaWasRestarted(context.Context, *tabletmanagerdata.ReplicaWasRestartedRequest) (*tabletmanagerdata.ReplicaWasRestartedResponse, error)
 	// StopReplicationAndGetStatus stops MySQL replication, and returns the
@@ -854,11 +854,11 @@ func (UnimplementedTabletManagerServer) UndoDemotePrimary(context.Context, *tabl
 func (UnimplementedTabletManagerServer) ReplicaWasPromoted(context.Context, *tabletmanagerdata.ReplicaWasPromotedRequest) (*tabletmanagerdata.ReplicaWasPromotedResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ReplicaWasPromoted not implemented")
 }
-func (UnimplementedTabletManagerServer) SetMaster(context.Context, *tabletmanagerdata.SetPrimaryRequest) (*tabletmanagerdata.SetPrimaryResponse, error) {
+func (UnimplementedTabletManagerServer) SetMaster(context.Context, *tabletmanagerdata.SetReplicationSourceRequest) (*tabletmanagerdata.SetReplicationSourceResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SetMaster not implemented")
 }
-func (UnimplementedTabletManagerServer) SetPrimary(context.Context, *tabletmanagerdata.SetPrimaryRequest) (*tabletmanagerdata.SetPrimaryResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method SetPrimary not implemented")
+func (UnimplementedTabletManagerServer) SetReplicationSource(context.Context, *tabletmanagerdata.SetReplicationSourceRequest) (*tabletmanagerdata.SetReplicationSourceResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SetReplicationSource not implemented")
 }
 func (UnimplementedTabletManagerServer) ReplicaWasRestarted(context.Context, *tabletmanagerdata.ReplicaWasRestartedRequest) (*tabletmanagerdata.ReplicaWasRestartedResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ReplicaWasRestarted not implemented")
@@ -1666,7 +1666,7 @@ func _TabletManager_ReplicaWasPromoted_Handler(srv interface{}, ctx context.Cont
 }
 
 func _TabletManager_SetMaster_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(tabletmanagerdata.SetPrimaryRequest)
+	in := new(tabletmanagerdata.SetReplicationSourceRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -1678,25 +1678,25 @@ func _TabletManager_SetMaster_Handler(srv interface{}, ctx context.Context, dec 
 		FullMethod: "/tabletmanagerservice.TabletManager/SetMaster",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(TabletManagerServer).SetMaster(ctx, req.(*tabletmanagerdata.SetPrimaryRequest))
+		return srv.(TabletManagerServer).SetMaster(ctx, req.(*tabletmanagerdata.SetReplicationSourceRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _TabletManager_SetPrimary_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(tabletmanagerdata.SetPrimaryRequest)
+func _TabletManager_SetReplicationSource_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(tabletmanagerdata.SetReplicationSourceRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(TabletManagerServer).SetPrimary(ctx, in)
+		return srv.(TabletManagerServer).SetReplicationSource(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/tabletmanagerservice.TabletManager/SetPrimary",
+		FullMethod: "/tabletmanagerservice.TabletManager/SetReplicationSource",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(TabletManagerServer).SetPrimary(ctx, req.(*tabletmanagerdata.SetPrimaryRequest))
+		return srv.(TabletManagerServer).SetReplicationSource(ctx, req.(*tabletmanagerdata.SetReplicationSourceRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1999,8 +1999,8 @@ var TabletManager_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _TabletManager_SetMaster_Handler,
 		},
 		{
-			MethodName: "SetPrimary",
-			Handler:    _TabletManager_SetPrimary_Handler,
+			MethodName: "SetReplicationSource",
+			Handler:    _TabletManager_SetReplicationSource_Handler,
 		},
 		{
 			MethodName: "ReplicaWasRestarted",
