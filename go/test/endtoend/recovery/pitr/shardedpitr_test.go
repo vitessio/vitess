@@ -299,7 +299,7 @@ func performResharding(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("Reshard", "ks.reshardWorkflow", "0", "-80,80-")
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("Reshard", "-v1", "ks.reshardWorkflow", "0", "-80,80-")
 	require.NoError(t, err)
 
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("SwitchReads", "-tablet_type=rdonly", "ks.reshardWorkflow")

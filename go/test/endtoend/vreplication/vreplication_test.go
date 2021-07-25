@@ -477,7 +477,7 @@ func reshard(t *testing.T, ksName string, tableName string, workflow string, sou
 				t.Fatal(err)
 			}
 		}
-		if err := vc.VtctlClient.ExecuteCommand("Reshard", "-cells="+sourceCellOrAlias, "-tablet_types=replica,master", ksWorkflow, sourceShards, targetShards); err != nil {
+		if err := vc.VtctlClient.ExecuteCommand("Reshard", "-v1", "-cells="+sourceCellOrAlias, "-tablet_types=replica,master", ksWorkflow, sourceShards, targetShards); err != nil {
 			t.Fatalf("Reshard command failed with %+v\n", err)
 		}
 		tablets := vc.getVttabletsInKeyspace(t, defaultCell, ksName, "master")
@@ -819,7 +819,7 @@ func catchup(t *testing.T, vttablet *cluster.VttabletProcess, workflow, info str
 }
 
 func moveTables(t *testing.T, cell, workflow, sourceKs, targetKs, tables string) {
-	if err := vc.VtctlClient.ExecuteCommand("MoveTables", "-cells="+cell, "-workflow="+workflow,
+	if err := vc.VtctlClient.ExecuteCommand("MoveTables", "-v1", "-cells="+cell, "-workflow="+workflow,
 		"-tablet_types="+"master,replica,rdonly", sourceKs, targetKs, tables); err != nil {
 		t.Fatalf("MoveTables command failed with %+v\n", err)
 	}

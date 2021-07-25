@@ -94,7 +94,7 @@ func tstWorkflowExec(t *testing.T, cells, workflow, sourceKs, targetKs, tables, 
 	} else {
 		args = append(args, "Reshard")
 	}
-	args = append(args, "-v2")
+
 	switch action {
 	case workflowActionCreate:
 		if currentWorkflowType == wrangler.MoveTablesWorkflow {
