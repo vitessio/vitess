@@ -406,14 +406,14 @@ message ReplicaWasPromotedRequest {
 message ReplicaWasPromotedResponse {
 }
 
-message SetPrimaryRequest {
+message SetReplicationSourceRequest {
   topodata.TabletAlias parent = 1;
   int64 time_created_ns = 2;
   bool force_start_replication = 3;
   string wait_position = 4;
 }
 
-message SetPrimaryResponse {
+message SetReplicationSourceResponse {
 }
 
 message ReplicaWasRestartedRequest {

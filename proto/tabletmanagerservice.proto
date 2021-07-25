@@ -159,10 +159,10 @@ service TabletManager {
   rpc ReplicaWasPromoted(tabletmanagerdata.ReplicaWasPromotedRequest) returns (tabletmanagerdata.ReplicaWasPromotedResponse) {};
 
   // SetMaster tells the replica to reparent
-  rpc SetMaster(tabletmanagerdata.SetPrimaryRequest) returns (tabletmanagerdata.SetPrimaryResponse) {};
+  rpc SetMaster(tabletmanagerdata.SetReplicationSourceRequest) returns (tabletmanagerdata.SetReplicationSourceResponse) {};
 
-  // SetMaster tells the replica to reparent
-  rpc SetPrimary(tabletmanagerdata.SetPrimaryRequest) returns (tabletmanagerdata.SetPrimaryResponse) {};
+  // SetReplicationSource tells the replica to reparent
+  rpc SetReplicationSource(tabletmanagerdata.SetReplicationSourceRequest) returns (tabletmanagerdata.SetReplicationSourceResponse) {};
 
   // ReplicaWasRestarted tells the remote tablet its master has changed
   rpc ReplicaWasRestarted(tabletmanagerdata.ReplicaWasRestartedRequest) returns (tabletmanagerdata.ReplicaWasRestartedResponse) {};

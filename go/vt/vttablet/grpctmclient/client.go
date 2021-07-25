@@ -818,17 +818,17 @@ func (client *Client) ReplicaWasPromoted(ctx context.Context, tablet *topodatapb
 
 // SetMaster is part of the tmclient.TabletManagerClient interface.
 func (client *Client) SetMaster(ctx context.Context, tablet *topodatapb.Tablet, parent *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool) error {
-	return client.SetPrimary(ctx, tablet, parent, timeCreatedNS, waitPosition, forceStartReplication)
+	return client.SetReplicationSource(ctx, tablet, parent, timeCreatedNS, waitPosition, forceStartReplication)
 }
 
-// SetPrimary is part of the tmclient.TabletManagerClient interface.
-func (client *Client) SetPrimary(ctx context.Context, tablet *topodatapb.Tablet, parent *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool) error {
+// SetReplicationSource is part of the tmclient.TabletManagerClient interface.
+func (client *Client) SetReplicationSource(ctx context.Context, tablet *topodatapb.Tablet, parent *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool) error {
 	c, closer, err := client.dialer.dial(ctx, tablet)
 	if err != nil {
 		return err
 	}
 	defer closer.Close()
-	_, err = c.SetPrimary(ctx, &tabletmanagerdatapb.SetPrimaryRequest{
+	_, err = c.SetReplicationSource(ctx, &tabletmanagerdatapb.SetReplicationSourceRequest{
 		Parent:                parent,
 		TimeCreatedNs:         timeCreatedNS,
 		WaitPosition:          waitPosition,
