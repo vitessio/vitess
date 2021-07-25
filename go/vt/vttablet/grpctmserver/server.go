@@ -263,7 +263,7 @@ func (s *server) MasterStatus(ctx context.Context, request *tabletmanagerdatapb.
 	defer s.tm.HandleRPCPanic(ctx, "PrimaryStatus", request, response, false /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response = &tabletmanagerdatapb.PrimaryStatusResponse{}
-	status, err := s.tm.MasterStatus(ctx)
+	status, err := s.tm.PrimaryStatus(ctx)
 	if err == nil {
 		response.Status = status
 	}
@@ -274,7 +274,7 @@ func (s *server) PrimaryStatus(ctx context.Context, request *tabletmanagerdatapb
 	defer s.tm.HandleRPCPanic(ctx, "PrimaryStatus", request, response, false /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response = &tabletmanagerdatapb.PrimaryStatusResponse{}
-	status, err := s.tm.MasterStatus(ctx)
+	status, err := s.tm.PrimaryStatus(ctx)
 	if err == nil {
 		response.Status = status
 	}
