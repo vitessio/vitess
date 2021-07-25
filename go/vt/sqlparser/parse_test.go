@@ -77,6 +77,15 @@ var (
 		input:  "alter database charset charset = 'utf16'",
 		output: "alter database `charset` character set 'utf16'",
 	}, {
+		input:  "create table t(id int unique)",
+		output: "create table t (\n\tid int unique\n)",
+	}, {
+		input:  "create table t(id int key)",
+		output: "create table t (\n\tid int key\n)",
+	}, {
+		input:  "create table t(id int unique key)",
+		output: "create table t (\n\tid int unique key\n)",
+	}, {
 		input: "select a.b as a$b from $test$",
 	}, {
 		input:  "select 1 from t // aa\n",
@@ -801,6 +810,12 @@ var (
 	}, {
 		input: "delete /* limit */ from a limit b",
 	}, {
+		input:  "delete /* alias where */ t.* from a as t where t.id = 2",
+		output: "delete /* alias where */ t from a as t where t.id = 2",
+	}, {
+		input:  "delete t.* from t, t1",
+		output: "delete t from t, t1",
+	}, {
 		input:  "delete a from a join b on a.id = b.id where b.name = 'test'",
 		output: "delete a from a join b on a.id = b.id where b.`name` = 'test'",
 	}, {
@@ -1154,6 +1169,18 @@ var (
 		input:      "create table `a`",
 		output:     "create table a",
 		partialDDL: true,
+	}, {
+		input:  "create table function_default (x varchar(25) default (trim(' check ')))",
+		output: "create table function_default (\n\tx varchar(25) default (trim(' check '))\n)",
+	}, {
+		input:  "create table function_default (x varchar(25) default (((trim(' check ')))))",
+		output: "create table function_default (\n\tx varchar(25) default (trim(' check '))\n)",
+	}, {
+		input:  "create table function_default3 (x bool DEFAULT (true AND false));",
+		output: "create table function_default3 (\n\tx bool default (true and false)\n)",
+	}, {
+		input:  "create table function_default (x bool DEFAULT true);",
+		output: "create table function_default (\n\tx bool default true\n)",
 	}, {
 		input:  "create table a (\n\t`a` int\n)",
 		output: "create table a (\n\ta int\n)",
@@ -1988,8 +2015,8 @@ var (
 	}, {
 		input: "call proc(@param)",
 	}, {
-		input:  "create table unused_reserved_keywords (dense_rank bigint, lead VARCHAR(255), percent_rank decimal(3, 0), constraint PK_project PRIMARY KEY (dense_rank))",
-		output: "create table unused_reserved_keywords (\n\t`dense_rank` bigint,\n\t`lead` VARCHAR(255),\n\t`percent_rank` decimal(3,0),\n\tconstraint PK_project PRIMARY KEY (`dense_rank`)\n)",
+		input:  "create table unused_reserved_keywords (dense_rank bigint, lead VARCHAR(255), percent_rank decimal(3, 0), row TINYINT, rows CHAR(10), constraint PK_project PRIMARY KEY (dense_rank))",
+		output: "create table unused_reserved_keywords (\n\t`dense_rank` bigint,\n\t`lead` VARCHAR(255),\n\t`percent_rank` decimal(3,0),\n\t`row` TINYINT,\n\t`rows` CHAR(10),\n\tconstraint PK_project PRIMARY KEY (`dense_rank`)\n)",
 	}}
 )
 
@@ -2892,11 +2919,11 @@ func TestCreateTable(t *testing.T) {
 	time5 timestamp(4) default utc_timestamp(4) on update utc_timestamp(4)
 )`,
 			output: `create table t (
-	time1 timestamp default utc_timestamp(),
-	time2 timestamp default utc_timestamp(),
-	time3 timestamp default utc_timestamp() on update utc_timestamp(),
-	time4 timestamp default utc_timestamp() on update utc_timestamp(),
-	time5 timestamp(4) default utc_timestamp(4) on update utc_timestamp(4)
+	time1 timestamp default (utc_timestamp()),
+	time2 timestamp default (utc_timestamp()),
+	time3 timestamp default (utc_timestamp()) on update utc_timestamp(),
+	time4 timestamp default (utc_timestamp()) on update utc_timestamp(),
+	time5 timestamp(4) default (utc_timestamp(4)) on update utc_timestamp(4)
 )`,
 		}, {
 			// test utc_time with and without ()
@@ -2908,11 +2935,11 @@ func TestCreateTable(t *testing.T) {
 	time5 timestamp(5) default utc_time(5) on update utc_time(5)
 )`,
 			output: `create table t (
-	time1 timestamp default utc_time(),
-	time2 timestamp default utc_time(),
-	time3 timestamp default utc_time() on update utc_time(),
-	time4 timestamp default utc_time() on update utc_time(),
-	time5 timestamp(5) default utc_time(5) on update utc_time(5)
+	time1 timestamp default (utc_time()),
+	time2 timestamp default (utc_time()),
+	time3 timestamp default (utc_time()) on update utc_time(),
+	time4 timestamp default (utc_time()) on update utc_time(),
+	time5 timestamp(5) default (utc_time(5)) on update utc_time(5)
 )`,
 		}, {
 			// test utc_date with and without ()
@@ -2923,10 +2950,10 @@ func TestCreateTable(t *testing.T) {
 	time4 timestamp default utc_date() on update utc_date()
 )`,
 			output: `create table t (
-	time1 timestamp default utc_date(),
-	time2 timestamp default utc_date(),
-	time3 timestamp default utc_date() on update utc_date(),
-	time4 timestamp default utc_date() on update utc_date()
+	time1 timestamp default (utc_date()),
+	time2 timestamp default (utc_date()),
+	time3 timestamp default (utc_date()) on update utc_date(),
+	time4 timestamp default (utc_date()) on update utc_date()
 )`,
 		}, {
 			// test localtime with and without ()
@@ -2969,10 +2996,10 @@ func TestCreateTable(t *testing.T) {
 	time4 timestamp default current_date() on update current_date()
 )`,
 			output: `create table t (
-	time1 timestamp default current_date(),
-	time2 timestamp default current_date(),
-	time3 timestamp default current_date() on update current_date(),
-	time4 timestamp default current_date() on update current_date()
+	time1 timestamp default (current_date()),
+	time2 timestamp default (current_date()),
+	time3 timestamp default (current_date()) on update current_date(),
+	time4 timestamp default (current_date()) on update current_date()
 )`,
 		}, {
 			// test current_time with and without ()
@@ -2984,11 +3011,11 @@ func TestCreateTable(t *testing.T) {
 	time5 timestamp(2) default current_time(2) on update current_time(2)
 )`,
 			output: `create table t (
-	time1 timestamp default current_time(),
-	time2 timestamp default current_time(),
-	time3 timestamp default current_time() on update current_time(),
-	time4 timestamp default current_time() on update current_time(),
-	time5 timestamp(2) default current_time(2) on update current_time(2)
+	time1 timestamp default (current_time()),
+	time2 timestamp default (current_time()),
+	time3 timestamp default (current_time()) on update current_time(),
+	time4 timestamp default (current_time()) on update current_time(),
+	time5 timestamp(2) default (current_time(2)) on update current_time(2)
 )`,
 		}, {
 			input: `create table t1 (

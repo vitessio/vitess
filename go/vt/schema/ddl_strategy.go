@@ -155,13 +155,10 @@ func (setting *DDLStrategySetting) RuntimeOptions() []string {
 
 // IsSkipTopo suggests that DDL should apply to tables bypassing global topo request
 func (setting *DDLStrategySetting) IsSkipTopo() bool {
-	switch {
-	case setting.IsSingleton(), setting.IsSingletonContext():
-		return true
-	case setting.hasFlag(skipTopoFlag):
-		return true
-	}
-	return false
+	// Vitess 11 introduced the flag -skip-topo. starting Vitess 12 the flag is _always_ considered 'true'.
+	// Ideally the flag should be gone, but for backwards compatibility we allow users to still specify it
+	// (and we stil ignore the value, it's always set to true)
+	return true
 }
 
 // ToString returns a simple string representation of this instance

@@ -34,6 +34,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/test/utils"
 	vtenv "vitess.io/vitess/go/vt/env"
 	"vitess.io/vitess/go/vt/tlstest"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -694,12 +695,11 @@ func TestServerStats(t *testing.T) {
 func TestClearTextServer(t *testing.T) {
 	th := &testHandler{}
 
-	authServer := NewAuthServerStatic("", "", 0)
+	authServer := NewAuthServerStaticWithAuthMethodDescription("", "", 0, MysqlClearPassword)
 	authServer.entries["user1"] = []*AuthServerStaticEntry{{
 		Password: "password1",
 		UserData: "userData1",
 	}}
-	authServer.method = MysqlClearPassword
 	defer authServer.close()
 	l, err := NewListener("tcp", ":0", authServer, th, 0, 0, false)
 	require.NoError(t, err)
@@ -768,12 +768,11 @@ func TestClearTextServer(t *testing.T) {
 func TestDialogServer(t *testing.T) {
 	th := &testHandler{}
 
-	authServer := NewAuthServerStatic("", "", 0)
+	authServer := NewAuthServerStaticWithAuthMethodDescription("", "", 0, MysqlDialog)
 	authServer.entries["user1"] = []*AuthServerStaticEntry{{
 		Password: "password1",
 		UserData: "userData1",
 	}}
-	authServer.method = MysqlDialog
 	defer authServer.close()
 	l, err := NewListener("tcp", ":0", authServer, th, 0, 0, false)
 	require.NoError(t, err)
@@ -840,7 +839,8 @@ func TestTLSServer(t *testing.T) {
 		path.Join(root, "server-cert.pem"),
 		path.Join(root, "server-key.pem"),
 		path.Join(root, "ca-cert.pem"),
-		"")
+		"",
+		tls.VersionTLS12)
 	require.NoError(t, err)
 	l.TLSConfig.Store(serverConfig)
 
@@ -939,7 +939,8 @@ func TestTLSRequired(t *testing.T) {
 		path.Join(root, "server-cert.pem"),
 		path.Join(root, "server-key.pem"),
 		path.Join(root, "ca-cert.pem"),
-		"")
+		"",
+		tls.VersionTLS12)
 	require.NoError(t, err)
 	l.TLSConfig.Store(serverConfig)
 	l.RequireSecureTransport = true
@@ -982,6 +983,120 @@ func TestTLSRequired(t *testing.T) {
 	require.NoError(t, err)
 	if conn != nil {
 		conn.Close()
+	}
+}
+
+func TestCachingSha2PasswordAuthWithTLS(t *testing.T) {
+	th := &testHandler{}
+
+	authServer := NewAuthServerStaticWithAuthMethodDescription("", "", 0, CachingSha2Password)
+	authServer.entries["user1"] = []*AuthServerStaticEntry{
+		{Password: "password1"},
+	}
+	defer authServer.close()
+
+	// Create the listener, so we can get its host.
+	l, err := NewListener("tcp", ":0", authServer, th, 0, 0, false)
+	if err != nil {
+		t.Fatalf("NewListener failed: %v", err)
+	}
+	defer l.Close()
+	host := l.Addr().(*net.TCPAddr).IP.String()
+	port := l.Addr().(*net.TCPAddr).Port
+
+	// Create the certs.
+	root, err := ioutil.TempDir("", "TestSSLConnection")
+	if err != nil {
+		t.Fatalf("TempDir failed: %v", err)
+	}
+	defer os.RemoveAll(root)
+	tlstest.CreateCA(root)
+	tlstest.CreateSignedCert(root, tlstest.CA, "01", "server", "server.example.com")
+	tlstest.CreateSignedCert(root, tlstest.CA, "02", "client", "Client Cert")
+
+	// Create the server with TLS config.
+	serverConfig, err := vttls.ServerConfig(
+		path.Join(root, "server-cert.pem"),
+		path.Join(root, "server-key.pem"),
+		path.Join(root, "ca-cert.pem"),
+		"",
+		tls.VersionTLS12)
+	if err != nil {
+		t.Fatalf("TLSServerConfig failed: %v", err)
+	}
+	l.TLSConfig.Store(serverConfig)
+	go func() {
+		l.Accept()
+	}()
+
+	// Setup the right parameters.
+	params := &ConnParams{
+		Host:  host,
+		Port:  port,
+		Uname: "user1",
+		Pass:  "password1",
+		// SSL flags.
+		Flags:      CapabilityClientSSL,
+		SslCa:      path.Join(root, "ca-cert.pem"),
+		SslCert:    path.Join(root, "client-cert.pem"),
+		SslKey:     path.Join(root, "client-key.pem"),
+		ServerName: "server.example.com",
+	}
+
+	// Connection should fail, as server requires SSL for caching_sha2_password.
+	ctx := context.Background()
+
+	conn, err := Connect(ctx, params)
+	if err != nil {
+		t.Fatalf("unexpected connection error: %v", err)
+	}
+	defer conn.Close()
+
+	// Run a 'select rows' command with results.
+	result, err := conn.ExecuteFetch("select rows", 10000, true)
+	if err != nil {
+		t.Fatalf("ExecuteFetch failed: %v", err)
+	}
+	utils.MustMatch(t, result, selectRowsResult)
+
+	// Send a ComQuit to avoid the error message on the server side.
+	conn.writeComQuit()
+}
+
+func TestCachingSha2PasswordAuthWithoutTLS(t *testing.T) {
+	th := &testHandler{}
+
+	authServer := NewAuthServerStaticWithAuthMethodDescription("", "", 0, CachingSha2Password)
+	authServer.entries["user1"] = []*AuthServerStaticEntry{
+		{Password: "password1"},
+	}
+	defer authServer.close()
+
+	// Create the listener.
+	l, err := NewListener("tcp", ":0", authServer, th, 0, 0, false)
+	if err != nil {
+		t.Fatalf("NewListener failed: %v", err)
+	}
+	defer l.Close()
+	host := l.Addr().(*net.TCPAddr).IP.String()
+	port := l.Addr().(*net.TCPAddr).Port
+	go func() {
+		l.Accept()
+	}()
+
+	// Setup the right parameters.
+	params := &ConnParams{
+		Host:  host,
+		Port:  port,
+		Uname: "user1",
+		Pass:  "password1",
+	}
+
+	// Connection should fail, as server requires SSL for caching_sha2_password.
+	ctx := context.Background()
+	_, err = Connect(ctx, params)
+	if err == nil || !strings.Contains(err.Error(), "No authentication methods available for authentication") {
+		t.Fatalf("unexpected connection error: %v", err)
 	}
 }
 
@@ -1252,7 +1367,7 @@ func TestServerFlush(t *testing.T) {
 
 	th := &testHandler{}
 
-	l, err := NewListener("tcp", ":0", &AuthServerNone{}, th, 0, 0, false)
+	l, err := NewListener("tcp", ":0", NewAuthServerNone(), th, 0, 0, false)
 	require.NoError(t, err)
 	defer l.Close()
 	go l.Accept()
@@ -1274,7 +1389,7 @@ func TestServerFlush(t *testing.T) {
 	flds, err := c.Fields()
 	require.NoError(t, err)
 	if duration, want := time.Since(start), 20*time.Millisecond; duration < *mysqlServerFlushDelay || duration > want {
-		assert.Fail(t, "duration: %v, want between %v and %v", duration, *mysqlServerFlushDelay, want)
+		assert.Fail(t, "duration: %v, want between %v and %v", duration.String(), (*mysqlServerFlushDelay).String(), want.String())
 	}
 	want1 := []*querypb.Field{{
 		Name: "result",

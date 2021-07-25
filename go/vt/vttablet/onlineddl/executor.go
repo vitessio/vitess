@@ -64,7 +64,7 @@ import (
 
 	mysqldriver "github.com/go-sql-driver/mysql"
 	"github.com/jmoiron/sqlx"
-	"github.com/skeema/tengo"
+	"github.com/planetscale/tengo"
 )
 
 var (
@@ -119,7 +119,7 @@ const (
 	etaSecondsNow                            = 0
 	rowsCopiedUnknown                        = 0
 	databasePoolSize                         = 3
-	cutOverThreshold                         = 3 * time.Second
+	vreplicationCutOverThreshold             = 5 * time.Second
 	vreplicationTestSuiteWaitSeconds         = 5
 )
 
@@ -233,7 +233,7 @@ func (e *Executor) initSchema(ctx context.Context) error {
 	}
 	defer conn.Recycle()
 
-	for _, ddl := range applyDDL {
+	for _, ddl := range ApplyDDL {
 		_, err := conn.Exec(ctx, ddl, math.MaxInt32, false)
 		if mysql.IsSchemaApplyError(err) {
 			continue
@@ -257,7 +257,7 @@ func (e *Executor) InitDBConfig(keyspace, shard, dbName string) {
 func (e *Executor) Open() error {
 	e.initMutex.Lock()
 	defer e.initMutex.Unlock()
-	if e.isOpen {
+	if e.isOpen || !e.env.Config().EnableOnlineDDL {
 		return nil
 	}
 	e.pool.Open(e.env.Config().DB.AppWithDB(), e.env.Config().DB.DbaWithDB(), e.env.Config().DB.AppDebugWithDB())
@@ -420,15 +420,9 @@ func (e *Executor) dropOnlineDDLUser(ctx context.Context) error {
 
 // tableExists checks if a given table exists.
 func (e *Executor) tableExists(ctx context.Context, tableName string) (bool, error) {
-	conn, err := e.pool.Get(ctx)
-	if err != nil {
-		return false, err
-	}
-	defer conn.Recycle()
-
 	tableName = strings.ReplaceAll(tableName, `_`, `\_`)
 	parsed := sqlparser.BuildParsedQuery(sqlShowTablesLike, tableName)
-	rs, err := conn.Exec(ctx, parsed.Query, 1, true)
+	rs, err := e.execQuery(ctx, parsed.Query)
 	if err != nil {
 		return false, err
 	}
@@ -503,6 +497,18 @@ func (e *Executor) validateTableForAlterAction(ctx context.Context, onlineDDL *s
 		}
 	}
 	return nil
+}
+
+// primaryPosition returns the MySQL/MariaDB position (typically GTID pos) on the tablet
+func (e *Executor) primaryPosition(ctx context.Context) (pos mysql.Position, err error) {
+	conn, err := dbconnpool.NewDBConnection(ctx, e.env.Config().DB.DbaWithDB())
+	if err != nil {
+		return pos, err
+	}
+	defer conn.Close()
+
+	pos, err = conn.PrimaryPosition()
+	return pos, err
 }
 
 // terminateVReplMigration stops vreplication, then removes the _vt.vreplication entry for the given migration
@@ -606,7 +612,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 	if isVreplicationTestSuite {
 		// The testing suite may inject queries internally from the server via a recurring EVENT.
 		// Those queries are unaffected by UpdateSourceBlacklistedTables() because they don't go through Vitess.
-		// We therefore hard-rename the table elsewhere, such that the queries will hard-fail.
+		// We therefore hard-rename the table here, such that the queries will hard-fail.
 		beforeTableName := fmt.Sprintf("%s_before", onlineDDL.Table)
 		parsed := sqlparser.BuildParsedQuery(sqlRenameTable,
 			onlineDDL.Table, beforeTableName,
@@ -615,6 +621,11 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 			return err
 		}
 	}
+	postWritesPos, err := e.primaryPosition(ctx)
+	if err != nil {
+		return err
+	}
+	_ = e.updateMigrationTimestamp(ctx, "liveness_timestamp", s.workflow)
 
 	// Writes are now disabled on table. Read up-to-date vreplication info, specifically to get latest (and fixed) pos:
 	s, err = e.readVReplStream(ctx, s.workflow, false)
@@ -623,15 +634,16 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 	}
 
 	waitForPos := func() error {
-		ctx, cancel := context.WithTimeout(ctx, 2*cutOverThreshold)
+		ctx, cancel := context.WithTimeout(ctx, 2*vreplicationCutOverThreshold)
 		defer cancel()
 		// Wait for target to reach the up-to-date pos
-		if err := tmClient.VReplicationWaitForPos(ctx, tablet.Tablet, int(s.id), s.pos); err != nil {
+		if err := tmClient.VReplicationWaitForPos(ctx, tablet.Tablet, int(s.id), mysql.EncodePosition(postWritesPos)); err != nil {
 			return err
 		}
 		// Target is now in sync with source!
 		return nil
 	}
+	log.Infof("VReplication migration %v waiting for position %v", s.workflow, mysql.EncodePosition(postWritesPos))
 	if err := waitForPos(); err != nil {
 		return err
 	}
@@ -790,6 +802,9 @@ func (e *Executor) ExecuteWithVReplication(ctx context.Context, onlineDDL *schem
 		return err
 	}
 	if err := e.updateMigrationTableRows(ctx, onlineDDL.UUID, v.tableRows); err != nil {
+		return err
+	}
+	if err := e.updateMigrationAddedRemovedUniqueKeys(ctx, onlineDDL.UUID, len(v.addedUniqueKeys), len(v.removedUniqueKeys)); err != nil {
 		return err
 	}
 	if revertMigration == nil {
@@ -1363,6 +1378,10 @@ func (e *Executor) terminateMigration(ctx context.Context, onlineDDL *schema.Onl
 
 // CancelMigration attempts to abort a scheduled or a running migration
 func (e *Executor) CancelMigration(ctx context.Context, uuid string, terminateRunningMigration bool, message string) (result *sqltypes.Result, err error) {
+	if !e.isOpen {
+		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "online ddl is disabled")
+	}
+
 	e.migrationMutex.Lock()
 	defer e.migrationMutex.Unlock()
 
@@ -1416,6 +1435,10 @@ func (e *Executor) cancelMigrations(ctx context.Context, uuids []string, message
 // CancelPendingMigrations cancels all pending migrations (that are expected to run or are running)
 // for this keyspace
 func (e *Executor) CancelPendingMigrations(ctx context.Context, message string) (result *sqltypes.Result, err error) {
+	if !e.isOpen {
+		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "online ddl is disabled")
+	}
+
 	uuids, err := e.readPendingMigrationsUUIDs(ctx)
 	if err != nil {
 		return result, err
@@ -2144,13 +2167,13 @@ func (e *Executor) isVReplMigrationReadyToCutOver(ctx context.Context, s *VReplS
 		}
 		timeNow := time.Now()
 		timeUpdated := time.Unix(s.timeUpdated, 0)
-		if durationDiff(timeNow, timeUpdated) > cutOverThreshold {
+		if durationDiff(timeNow, timeUpdated) > vreplicationCutOverThreshold {
 			return false, nil
 		}
 		// Let's look at transaction timestamp. This gets written by any ongoing
 		// writes on the server (whether on this table or any other table)
 		transactionTimestamp := time.Unix(s.transactionTimestamp, 0)
-		if durationDiff(timeNow, transactionTimestamp) > cutOverThreshold {
+		if durationDiff(timeNow, transactionTimestamp) > vreplicationCutOverThreshold {
 			return false, nil
 		}
 	}
@@ -2333,6 +2356,10 @@ func (e *Executor) reviewStaleMigrations(ctx context.Context) error {
 		if err := e.updateMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusFailed); err != nil {
 			return err
 		}
+		_ = e.updateMigrationStartedTimestamp(ctx, uuid)
+		if err := e.updateMigrationTimestamp(ctx, "completed_timestamp", uuid); err != nil {
+			return err
+		}
 		_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, "stale migration")
 	}
 
@@ -2347,7 +2374,7 @@ func (e *Executor) retryTabletFailureMigrations(ctx context.Context) error {
 }
 
 // gcArtifactTable garbage-collects a single table
-func (e *Executor) gcArtifactTable(ctx context.Context, artifactTable, uuid string) error {
+func (e *Executor) gcArtifactTable(ctx context.Context, artifactTable, uuid string, t time.Time) error {
 	tableExists, err := e.tableExists(ctx, artifactTable)
 	if err != nil {
 		return err
@@ -2357,17 +2384,11 @@ func (e *Executor) gcArtifactTable(ctx context.Context, artifactTable, uuid stri
 	}
 	// We've already concluded in gcArtifacts() that this table was held for long enough.
 	// We therefore move it into PURGE state.
-	renameStatement, _, err := schema.GenerateRenameStatementWithUUID(artifactTable, schema.PurgeTableGCState, schema.OnlineDDLToGCUUID(uuid), time.Now().UTC())
+	renameStatement, _, err := schema.GenerateRenameStatementWithUUID(artifactTable, schema.PurgeTableGCState, schema.OnlineDDLToGCUUID(uuid), t)
 	if err != nil {
 		return err
 	}
-	conn, err := e.pool.Get(ctx)
-	if err != nil {
-		return err
-	}
-	defer conn.Recycle()
-
-	_, err = conn.Exec(ctx, renameStatement, 1, true)
+	_, err = e.execQuery(ctx, renameStatement)
 	return err
 }
 
@@ -2376,6 +2397,13 @@ func (e *Executor) gcArtifacts(ctx context.Context) error {
 	e.migrationMutex.Lock()
 	defer e.migrationMutex.Unlock()
 
+	if _, err := e.execQuery(ctx, sqlFixCompletedTimestamp); err != nil {
+		// This query fixes a bug where stale migrations were marked as 'failed' without updating 'completed_timestamp'
+		// see https://github.com/vitessio/vitess/issues/8499
+		// Running this query retroactively sets completed_timestamp
+		// This 'if' clause can be removed in version v13
+		return err
+	}
 	query, err := sqlparser.ParseAndBind(sqlSelectUncollectedArtifacts,
 		sqltypes.Int64BindVariable(int64((*retainOnlineDDLTables).Seconds())),
 	)
@@ -2391,8 +2419,14 @@ func (e *Executor) gcArtifacts(ctx context.Context) error {
 		artifacts := row["artifacts"].ToString()
 
 		artifactTables := textutil.SplitDelimitedList(artifacts)
-		for _, artifactTable := range artifactTables {
-			if err := e.gcArtifactTable(ctx, artifactTable, uuid); err != nil {
+
+		timeNow := time.Now()
+		for i, artifactTable := range artifactTables {
+			// We wish to generate distinct timestamp values for each table in this UUID,
+			// because all tables will be renamed as _something_UUID_timestamp. Since UUID
+			// is shared for all artifacts in this loop, we differentiate via timestamp
+			t := timeNow.Add(time.Duration(i) * time.Second).UTC()
+			if err := e.gcArtifactTable(ctx, artifactTable, uuid, t); err != nil {
 				return err
 			}
 			log.Infof("Executor.gcArtifacts: renamed away artifact %s", artifactTable)
@@ -2576,6 +2610,19 @@ func (e *Executor) updateMigrationMessage(ctx context.Context, uuid string, mess
 	return err
 }
 
+func (e *Executor) updateMigrationAddedRemovedUniqueKeys(ctx context.Context, uuid string, addedUniqueKeys, removedUnqiueKeys int) error {
+	query, err := sqlparser.ParseAndBind(sqlUpdateAddedRemovedUniqueKeys,
+		sqltypes.Int64BindVariable(int64(addedUniqueKeys)),
+		sqltypes.Int64BindVariable(int64(removedUnqiueKeys)),
+		sqltypes.StringBindVariable(uuid),
+	)
+	if err != nil {
+		return err
+	}
+	_, err = e.execQuery(ctx, query)
+	return err
+}
+
 func (e *Executor) updateMySQLTable(ctx context.Context, uuid string, tableName string) error {
 	query, err := sqlparser.ParseAndBind(sqlUpdateMySQLTable,
 		sqltypes.StringBindVariable(tableName),
@@ -2688,6 +2735,9 @@ func (e *Executor) retryMigrationWhere(ctx context.Context, whereExpr string) (r
 
 // RetryMigration marks given migration for retry
 func (e *Executor) RetryMigration(ctx context.Context, uuid string) (result *sqltypes.Result, err error) {
+	if !e.isOpen {
+		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "online ddl is disabled")
+	}
 	if !schema.IsOnlineDDLUUID(uuid) {
 		return nil, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "Not a valid migration ID in RETRY: %s", uuid)
 	}
@@ -2709,7 +2759,9 @@ func (e *Executor) SubmitMigration(
 	ctx context.Context,
 	stmt sqlparser.Statement,
 ) (result *sqltypes.Result, err error) {
-
+	if !e.isOpen {
+		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "online ddl is disabled")
+	}
 	onlineDDL, err := schema.OnlineDDLFromCommentedStatement(stmt)
 	if err != nil {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Error submitting migration %s: %v", sqlparser.String(stmt), err)

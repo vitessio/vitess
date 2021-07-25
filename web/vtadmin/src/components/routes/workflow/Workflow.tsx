@@ -42,7 +42,7 @@ export const Workflow = () => {
 
     useDocumentTitle(`${name} (${keyspace})`);
 
-    const { data } = useWorkflow({ clusterID, keyspace, name }, { refetchInterval: 1000 });
+    const { data } = useWorkflow({ clusterID, keyspace, name });
     const streams = getStreams(data);
 
     return (

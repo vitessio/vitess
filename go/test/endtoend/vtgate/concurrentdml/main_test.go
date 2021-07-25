@@ -249,6 +249,8 @@ func TestInsertIgnoreOnLookupUniqueVindex(t *testing.T) {
 		Host: "localhost",
 		Port: clusterInstance.VtgateMySQLPort,
 	}
+
+	// end-to-end test
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)
 	defer conn.Close()

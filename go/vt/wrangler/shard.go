@@ -29,12 +29,12 @@ import (
 
 // shard related methods for Wrangler
 
-// SetShardIsMasterServing changes the IsMasterServing parameter of a shard.
+// SetShardIsPrimaryServing changes the IsMasterServing parameter of a shard.
 // It does not rebuild any serving graph or do any consistency check.
 // This is an emergency manual operation.
-func (wr *Wrangler) SetShardIsMasterServing(ctx context.Context, keyspace, shard string, isMasterServing bool) (err error) {
+func (wr *Wrangler) SetShardIsPrimaryServing(ctx context.Context, keyspace, shard string, isServing bool) (err error) {
 	// lock the keyspace to not conflict with resharding operations
-	ctx, unlock, lockErr := wr.ts.LockKeyspace(ctx, keyspace, fmt.Sprintf("SetShardIsMasterServing(%v,%v,%v)", keyspace, shard, isMasterServing))
+	ctx, unlock, lockErr := wr.ts.LockKeyspace(ctx, keyspace, fmt.Sprintf("SetShardIsPrimaryServing(%v,%v,%v)", keyspace, shard, isServing))
 	if lockErr != nil {
 		return lockErr
 	}
@@ -42,7 +42,7 @@ func (wr *Wrangler) SetShardIsMasterServing(ctx context.Context, keyspace, shard
 
 	// and update the shard
 	_, err = wr.ts.UpdateShardFields(ctx, keyspace, shard, func(si *topo.ShardInfo) error {
-		si.IsMasterServing = isMasterServing
+		si.IsMasterServing = isServing
 		return nil
 	})
 	return err

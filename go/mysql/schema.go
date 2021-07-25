@@ -32,6 +32,8 @@ import (
 const (
 	// BaseShowPrimary is the base query for fetching primary key info.
 	BaseShowPrimary = "SELECT table_name, column_name FROM information_schema.key_column_usage WHERE table_schema=database() AND constraint_name='PRIMARY' ORDER BY table_name, ordinal_position"
+	// BaseShowTableUniqueKey returns names of colunms covered by a given unique constraint on a given table, in key order
+	BaseShowTableUniqueKey = "SELECT column_name as column_name FROM information_schema.key_column_usage WHERE table_schema=database() AND table_name=%a AND constraint_name=%a ORDER BY ordinal_position"
 	// ShowRowsRead is the query used to find the number of rows read.
 	ShowRowsRead = "show status like 'Innodb_rows_read'"
 

@@ -99,7 +99,7 @@ func TestHealthCheck(t *testing.T) {
 		Serving:     true,
 
 		TabletExternallyReparentedTimestamp: 0,
-		RealtimeStats:                       &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.5},
+		RealtimeStats:                       &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.5},
 	}
 	input <- shr
 	result = <-resultChan
@@ -107,7 +107,7 @@ func TestHealthCheck(t *testing.T) {
 		Tablet:              tablet,
 		Target:              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
 		Serving:             true,
-		Stats:               &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.5},
+		Stats:               &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.5},
 		MasterTermStartTime: 0,
 	}
 	// create a context with timeout and select on it and channel
@@ -121,7 +121,7 @@ func TestHealthCheck(t *testing.T) {
 			Tablet:              tablet,
 			Target:              want.Target,
 			Serving:             true,
-			Stats:               &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.5},
+			Stats:               &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.5},
 			MasterTermStartTime: 0,
 		}},
 	}}
@@ -135,7 +135,7 @@ func TestHealthCheck(t *testing.T) {
 		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
 		Serving:                             true,
 		TabletExternallyReparentedTimestamp: 10,
-		RealtimeStats:                       &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
+		RealtimeStats:                       &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.2},
 	}
 	want = &TabletHealth{
 		Tablet: tablet,
@@ -146,7 +146,7 @@ func TestHealthCheck(t *testing.T) {
 		},
 		Serving:             true,
 		Conn:                conn,
-		Stats:               &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
+		Stats:               &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.2},
 		MasterTermStartTime: 10,
 	}
 	input <- shr
@@ -164,13 +164,13 @@ func TestHealthCheck(t *testing.T) {
 		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
 		Serving:                             false,
 		TabletExternallyReparentedTimestamp: 0,
-		RealtimeStats:                       &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.3},
+		RealtimeStats:                       &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.3},
 	}
 	want = &TabletHealth{
 		Tablet:              tablet,
 		Target:              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
 		Serving:             false,
-		Stats:               &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.3},
+		Stats:               &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.3},
 		MasterTermStartTime: 0,
 	}
 	input <- shr
@@ -184,13 +184,13 @@ func TestHealthCheck(t *testing.T) {
 		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
 		Serving:                             true,
 		TabletExternallyReparentedTimestamp: 0,
-		RealtimeStats:                       &querypb.RealtimeStats{HealthError: "some error", SecondsBehindMaster: 1, CpuUsage: 0.3},
+		RealtimeStats:                       &querypb.RealtimeStats{HealthError: "some error", ReplicationLagSeconds: 1, CpuUsage: 0.3},
 	}
 	want = &TabletHealth{
 		Tablet:              tablet,
 		Target:              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
 		Serving:             false,
-		Stats:               &querypb.RealtimeStats{HealthError: "some error", SecondsBehindMaster: 1, CpuUsage: 0.3},
+		Stats:               &querypb.RealtimeStats{HealthError: "some error", ReplicationLagSeconds: 1, CpuUsage: 0.3},
 		MasterTermStartTime: 0,
 		LastError:           fmt.Errorf("vttablet error: some error"),
 	}
@@ -233,13 +233,13 @@ func TestHealthCheckStreamError(t *testing.T) {
 		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
 		Serving:                             true,
 		TabletExternallyReparentedTimestamp: 0,
-		RealtimeStats:                       &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
+		RealtimeStats:                       &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.2},
 	}
 	want = &TabletHealth{
 		Tablet:              tablet,
 		Target:              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
 		Serving:             true,
-		Stats:               &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
+		Stats:               &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.2},
 		MasterTermStartTime: 0,
 	}
 	input <- shr
@@ -252,7 +252,7 @@ func TestHealthCheckStreamError(t *testing.T) {
 		Tablet:              tablet,
 		Target:              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
 		Serving:             false,
-		Stats:               &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
+		Stats:               &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.2},
 		MasterTermStartTime: 0,
 		LastError:           fmt.Errorf("some stream error"),
 	}
@@ -293,13 +293,13 @@ func TestHealthCheckErrorOnPrimary(t *testing.T) {
 		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
 		Serving:                             true,
 		TabletExternallyReparentedTimestamp: 10,
-		RealtimeStats:                       &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
+		RealtimeStats:                       &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.2},
 	}
 	want = &TabletHealth{
 		Tablet:              tablet,
 		Target:              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
 		Serving:             true,
-		Stats:               &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
+		Stats:               &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.2},
 		MasterTermStartTime: 10,
 	}
 	input <- shr
@@ -312,7 +312,7 @@ func TestHealthCheckErrorOnPrimary(t *testing.T) {
 		Tablet:              tablet,
 		Target:              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
 		Serving:             false,
-		Stats:               &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
+		Stats:               &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.2},
 		MasterTermStartTime: 10,
 		LastError:           fmt.Errorf("some stream error"),
 	}
@@ -350,7 +350,7 @@ func TestHealthCheckErrorOnPrimaryAfterExternalReparent(t *testing.T) {
 		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
 		Serving:                             true,
 		TabletExternallyReparentedTimestamp: 0,
-		RealtimeStats:                       &querypb.RealtimeStats{SecondsBehindMaster: 10, CpuUsage: 0.2},
+		RealtimeStats:                       &querypb.RealtimeStats{ReplicationLagSeconds: 10, CpuUsage: 0.2},
 	}
 	input2 <- shr2
 	<-resultChan
@@ -359,7 +359,7 @@ func TestHealthCheckErrorOnPrimaryAfterExternalReparent(t *testing.T) {
 		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
 		Serving:                             true,
 		TabletExternallyReparentedTimestamp: 10,
-		RealtimeStats:                       &querypb.RealtimeStats{SecondsBehindMaster: 0, CpuUsage: 0.2},
+		RealtimeStats:                       &querypb.RealtimeStats{ReplicationLagSeconds: 0, CpuUsage: 0.2},
 	}
 	input1 <- shr1
 	<-resultChan
@@ -368,7 +368,7 @@ func TestHealthCheckErrorOnPrimaryAfterExternalReparent(t *testing.T) {
 		Tablet:              tablet1,
 		Target:              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
 		Serving:             true,
-		Stats:               &querypb.RealtimeStats{SecondsBehindMaster: 0, CpuUsage: 0.2},
+		Stats:               &querypb.RealtimeStats{ReplicationLagSeconds: 0, CpuUsage: 0.2},
 		MasterTermStartTime: 10,
 	}}
 	a := hc.GetHealthyTabletStats(&querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER})
@@ -379,7 +379,7 @@ func TestHealthCheckErrorOnPrimaryAfterExternalReparent(t *testing.T) {
 		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
 		Serving:                             true,
 		TabletExternallyReparentedTimestamp: 20,
-		RealtimeStats:                       &querypb.RealtimeStats{SecondsBehindMaster: 0, CpuUsage: 0.2},
+		RealtimeStats:                       &querypb.RealtimeStats{ReplicationLagSeconds: 0, CpuUsage: 0.2},
 	}
 	input2 <- shr2
 	<-resultChan
@@ -388,7 +388,7 @@ func TestHealthCheckErrorOnPrimaryAfterExternalReparent(t *testing.T) {
 		Tablet:              tablet2,
 		Target:              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
 		Serving:             true,
-		Stats:               &querypb.RealtimeStats{SecondsBehindMaster: 0, CpuUsage: 0.2},
+		Stats:               &querypb.RealtimeStats{ReplicationLagSeconds: 0, CpuUsage: 0.2},
 		MasterTermStartTime: 20,
 	}}
 	a = hc.GetHealthyTabletStats(&querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER})
@@ -429,7 +429,7 @@ func TestHealthCheckVerifiesTabletAlias(t *testing.T) {
 		TabletAlias:                         &topodatapb.TabletAlias{Uid: 20, Cell: "cellb"},
 		Serving:                             true,
 		TabletExternallyReparentedTimestamp: 10,
-		RealtimeStats:                       &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
+		RealtimeStats:                       &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.2},
 	}
 
 	ticker := time.NewTicker(1 * time.Second)
@@ -471,13 +471,13 @@ func TestHealthCheckCloseWaitsForGoRoutines(t *testing.T) {
 		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
 		Serving:                             true,
 		TabletExternallyReparentedTimestamp: 0,
-		RealtimeStats:                       &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
+		RealtimeStats:                       &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.2},
 	}
 	want = &TabletHealth{
 		Tablet:  tablet,
 		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
 		Serving: true,
-		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
+		Stats:   &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.2},
 
 		MasterTermStartTime: 0,
 	}
@@ -533,13 +533,13 @@ func TestHealthCheckTimeout(t *testing.T) {
 		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
 		Serving:                             true,
 		TabletExternallyReparentedTimestamp: 0,
-		RealtimeStats:                       &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
+		RealtimeStats:                       &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.2},
 	}
 	want = &TabletHealth{
 		Tablet:              tablet,
 		Target:              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
 		Serving:             true,
-		Stats:               &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
+		Stats:               &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.2},
 		MasterTermStartTime: 0,
 	}
 	input <- shr
@@ -610,7 +610,7 @@ func TestWaitForAllServingTablets(t *testing.T) {
 		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
 		Serving:                             true,
 		TabletExternallyReparentedTimestamp: 0,
-		RealtimeStats:                       &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
+		RealtimeStats:                       &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.2},
 	}
 
 	input <- shr
@@ -686,13 +686,13 @@ func TestRemoveTablet(t *testing.T) {
 		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
 		Serving:                             true,
 		TabletExternallyReparentedTimestamp: 0,
-		RealtimeStats:                       &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
+		RealtimeStats:                       &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.2},
 	}
 	want := []*TabletHealth{{
 		Tablet:              tablet,
 		Target:              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
 		Serving:             true,
-		Stats:               &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
+		Stats:               &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.2},
 		MasterTermStartTime: 0,
 	}}
 	input <- shr
@@ -731,13 +731,13 @@ func TestGetHealthyTablets(t *testing.T) {
 		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
 		Serving:                             true,
 		TabletExternallyReparentedTimestamp: 0,
-		RealtimeStats:                       &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
+		RealtimeStats:                       &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.2},
 	}
 	want := []*TabletHealth{{
 		Tablet:              tablet,
 		Target:              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
 		Serving:             true,
-		Stats:               &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
+		Stats:               &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.2},
 		MasterTermStartTime: 0,
 	}}
 	input <- shr
@@ -752,7 +752,7 @@ func TestGetHealthyTablets(t *testing.T) {
 		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
 		Serving:                             true,
 		TabletExternallyReparentedTimestamp: 0,
-		RealtimeStats:                       &querypb.RealtimeStats{SecondsBehindMaster: 2, CpuUsage: 0.2},
+		RealtimeStats:                       &querypb.RealtimeStats{ReplicationLagSeconds: 2, CpuUsage: 0.2},
 	}
 	input <- shr
 	// wait for result before checking
@@ -767,13 +767,13 @@ func TestGetHealthyTablets(t *testing.T) {
 		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
 		Serving:                             true,
 		TabletExternallyReparentedTimestamp: 0,
-		RealtimeStats:                       &querypb.RealtimeStats{SecondsBehindMaster: 35, CpuUsage: 0.2},
+		RealtimeStats:                       &querypb.RealtimeStats{ReplicationLagSeconds: 35, CpuUsage: 0.2},
 	}
 	want = []*TabletHealth{{
 		Tablet:              tablet,
 		Target:              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
 		Serving:             true,
-		Stats:               &querypb.RealtimeStats{SecondsBehindMaster: 35, CpuUsage: 0.2},
+		Stats:               &querypb.RealtimeStats{ReplicationLagSeconds: 35, CpuUsage: 0.2},
 		MasterTermStartTime: 0,
 	}}
 	input <- shr
@@ -797,19 +797,19 @@ func TestGetHealthyTablets(t *testing.T) {
 		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
 		Serving:                             true,
 		TabletExternallyReparentedTimestamp: 0,
-		RealtimeStats:                       &querypb.RealtimeStats{SecondsBehindMaster: 10, CpuUsage: 0.2},
+		RealtimeStats:                       &querypb.RealtimeStats{ReplicationLagSeconds: 10, CpuUsage: 0.2},
 	}
 	want2 := []*TabletHealth{{
 		Tablet:              tablet,
 		Target:              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
 		Serving:             true,
-		Stats:               &querypb.RealtimeStats{SecondsBehindMaster: 35, CpuUsage: 0.2},
+		Stats:               &querypb.RealtimeStats{ReplicationLagSeconds: 35, CpuUsage: 0.2},
 		MasterTermStartTime: 0,
 	}, {
 		Tablet:              tablet2,
 		Target:              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
 		Serving:             true,
-		Stats:               &querypb.RealtimeStats{SecondsBehindMaster: 10, CpuUsage: 0.2},
+		Stats:               &querypb.RealtimeStats{ReplicationLagSeconds: 10, CpuUsage: 0.2},
 		MasterTermStartTime: 0,
 	}}
 	input2 <- shr2
@@ -827,7 +827,7 @@ func TestGetHealthyTablets(t *testing.T) {
 		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
 		Serving:                             false,
 		TabletExternallyReparentedTimestamp: 0,
-		RealtimeStats:                       &querypb.RealtimeStats{SecondsBehindMaster: 10, CpuUsage: 0.2},
+		RealtimeStats:                       &querypb.RealtimeStats{ReplicationLagSeconds: 10, CpuUsage: 0.2},
 	}
 	input2 <- shr2
 	// wait for result
@@ -843,7 +843,7 @@ func TestGetHealthyTablets(t *testing.T) {
 
 		TabletExternallyReparentedTimestamp: 10,
 
-		RealtimeStats: &querypb.RealtimeStats{SecondsBehindMaster: 0, CpuUsage: 0.2},
+		RealtimeStats: &querypb.RealtimeStats{ReplicationLagSeconds: 0, CpuUsage: 0.2},
 	}
 	input2 <- shr2
 	// wait for result
@@ -856,7 +856,7 @@ func TestGetHealthyTablets(t *testing.T) {
 		Tablet:              tablet2,
 		Target:              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
 		Serving:             true,
-		Stats:               &querypb.RealtimeStats{SecondsBehindMaster: 0, CpuUsage: 0.2},
+		Stats:               &querypb.RealtimeStats{ReplicationLagSeconds: 0, CpuUsage: 0.2},
 		MasterTermStartTime: 10,
 	}}
 	// check we have a master now
@@ -869,7 +869,7 @@ func TestGetHealthyTablets(t *testing.T) {
 		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
 		Serving:                             true,
 		TabletExternallyReparentedTimestamp: 20,
-		RealtimeStats:                       &querypb.RealtimeStats{SecondsBehindMaster: 0, CpuUsage: 0.2},
+		RealtimeStats:                       &querypb.RealtimeStats{ReplicationLagSeconds: 0, CpuUsage: 0.2},
 	}
 	input <- shr
 	<-resultChan
@@ -877,7 +877,7 @@ func TestGetHealthyTablets(t *testing.T) {
 		Tablet:              tablet,
 		Target:              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
 		Serving:             true,
-		Stats:               &querypb.RealtimeStats{SecondsBehindMaster: 0, CpuUsage: 0.2},
+		Stats:               &querypb.RealtimeStats{ReplicationLagSeconds: 0, CpuUsage: 0.2},
 		MasterTermStartTime: 20,
 	}}
 
@@ -923,13 +923,13 @@ func TestMasterInOtherCell(t *testing.T) {
 		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
 		Serving:                             true,
 		TabletExternallyReparentedTimestamp: 20,
-		RealtimeStats:                       &querypb.RealtimeStats{SecondsBehindMaster: 0, CpuUsage: 0.2},
+		RealtimeStats:                       &querypb.RealtimeStats{ReplicationLagSeconds: 0, CpuUsage: 0.2},
 	}
 	want := &TabletHealth{
 		Tablet:              tablet,
 		Target:              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
 		Serving:             true,
-		Stats:               &querypb.RealtimeStats{SecondsBehindMaster: 0, CpuUsage: 0.2},
+		Stats:               &querypb.RealtimeStats{ReplicationLagSeconds: 0, CpuUsage: 0.2},
 		MasterTermStartTime: 20,
 	}
 
@@ -979,13 +979,13 @@ func TestReplicaInOtherCell(t *testing.T) {
 		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
 		Serving:                             true,
 		TabletExternallyReparentedTimestamp: 0,
-		RealtimeStats:                       &querypb.RealtimeStats{SecondsBehindMaster: 10, CpuUsage: 0.2},
+		RealtimeStats:                       &querypb.RealtimeStats{ReplicationLagSeconds: 10, CpuUsage: 0.2},
 	}
 	want := &TabletHealth{
 		Tablet:              local,
 		Target:              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
 		Serving:             true,
-		Stats:               &querypb.RealtimeStats{SecondsBehindMaster: 10, CpuUsage: 0.2},
+		Stats:               &querypb.RealtimeStats{ReplicationLagSeconds: 10, CpuUsage: 0.2},
 		MasterTermStartTime: 0,
 	}
 
@@ -1025,13 +1025,13 @@ func TestReplicaInOtherCell(t *testing.T) {
 		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
 		Serving:                             true,
 		TabletExternallyReparentedTimestamp: 0,
-		RealtimeStats:                       &querypb.RealtimeStats{SecondsBehindMaster: 10, CpuUsage: 0.2},
+		RealtimeStats:                       &querypb.RealtimeStats{ReplicationLagSeconds: 10, CpuUsage: 0.2},
 	}
 	want2 := &TabletHealth{
 		Tablet:              remote,
 		Target:              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
 		Serving:             true,
-		Stats:               &querypb.RealtimeStats{SecondsBehindMaster: 10, CpuUsage: 0.2},
+		Stats:               &querypb.RealtimeStats{ReplicationLagSeconds: 10, CpuUsage: 0.2},
 		MasterTermStartTime: 0,
 	}
 
@@ -1088,13 +1088,13 @@ func TestCellAliases(t *testing.T) {
 		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
 		Serving:                             true,
 		TabletExternallyReparentedTimestamp: 0,
-		RealtimeStats:                       &querypb.RealtimeStats{SecondsBehindMaster: 10, CpuUsage: 0.2},
+		RealtimeStats:                       &querypb.RealtimeStats{ReplicationLagSeconds: 10, CpuUsage: 0.2},
 	}
 	want := []*TabletHealth{{
 		Tablet:              tablet,
 		Target:              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
 		Serving:             true,
-		Stats:               &querypb.RealtimeStats{SecondsBehindMaster: 10, CpuUsage: 0.2},
+		Stats:               &querypb.RealtimeStats{ReplicationLagSeconds: 10, CpuUsage: 0.2},
 		MasterTermStartTime: 0,
 	}}
 
@@ -1140,7 +1140,7 @@ func TestTemplate(t *testing.T) {
 			Tablet:              tablet,
 			Target:              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
 			Serving:             false,
-			Stats:               &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.3},
+			Stats:               &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.3},
 			MasterTermStartTime: 0,
 		},
 	}
@@ -1170,7 +1170,7 @@ func TestDebugURLFormatting(t *testing.T) {
 			Tablet:              tablet,
 			Target:              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
 			Serving:             false,
-			Stats:               &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.3},
+			Stats:               &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.3},
 			MasterTermStartTime: 0,
 		},
 	}

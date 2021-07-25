@@ -100,6 +100,9 @@ type Executor struct {
 
 	vm            *VSchemaManager
 	schemaTracker SchemaInfo
+
+	// allowScatter will fail planning if set to false and a plan contains any scatter queries
+	allowScatter bool
 }
 
 var executorOnce sync.Once
@@ -118,6 +121,7 @@ func NewExecutor(
 	streamSize int,
 	cacheCfg *cache.Config,
 	schemaTracker SchemaInfo,
+	noScatter bool,
 ) *Executor {
 	e := &Executor{
 		serv:            serv,
@@ -130,6 +134,7 @@ func NewExecutor(
 		warnShardedOnly: warnOnShardedOnly,
 		streamSize:      streamSize,
 		schemaTracker:   schemaTracker,
+		allowScatter:    !noScatter,
 	}
 
 	vschemaacl.Init()
@@ -208,7 +213,7 @@ func (e *Executor) execute(ctx context.Context, safeSession *SafeSession, sql st
 }
 
 func (e *Executor) legacyExecute(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, logStats *LogStats) (sqlparser.StatementType, *sqltypes.Result, error) {
-	//Start an implicit transaction if necessary.
+	// Start an implicit transaction if necessary.
 	if !safeSession.Autocommit && !safeSession.InTransaction() {
 		if err := e.txConn.Begin(ctx, safeSession); err != nil {
 			return 0, nil, err
@@ -398,7 +403,7 @@ func (e *Executor) handleCommit(ctx context.Context, safeSession *SafeSession, l
 	return &sqltypes.Result{}, err
 }
 
-//Commit commits the existing transactions
+// Commit commits the existing transactions
 func (e *Executor) Commit(ctx context.Context, safeSession *SafeSession) error {
 	return e.txConn.Commit(ctx, safeSession)
 }
@@ -552,7 +557,7 @@ func getValueFor(expr *sqlparser.SetExpr) (interface{}, error) {
 }
 
 func (e *Executor) handleSetVitessMetadata(ctx context.Context, name, value string) (*sqltypes.Result, error) {
-	//TODO(kalfonso): move to its own acl check and consolidate into an acl component that can handle multiple operations (vschema, metadata)
+	// TODO(kalfonso): move to its own acl check and consolidate into an acl component that can handle multiple operations (vschema, metadata)
 	user := callerid.ImmediateCallerIDFromContext(ctx)
 	allowed := vschemaacl.Authorized(user)
 	if !allowed {
@@ -1240,7 +1245,8 @@ func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.
 	if !skipQueryPlanCache && !sqlparser.SkipQueryPlanCacheDirective(statement) && sqlparser.CachePlan(statement) {
 		e.plans.Set(planKey, plan)
 	}
-	return plan, nil
+
+	return e.checkThatPlanIsValid(stmt, plan)
 }
 
 // skipQueryPlanCache extracts SkipQueryPlanCache from session
@@ -1457,7 +1463,7 @@ func (e *Executor) handlePrepare(ctx context.Context, safeSession *SafeSession, 
 	var errCount uint64
 	if err != nil {
 		logStats.Error = err
-		errCount = 1 //nolint
+		errCount = 1 // nolint
 		return nil, err
 	}
 	logStats.RowsAffected = qr.RowsAffected
@@ -1514,4 +1520,24 @@ func (e *Executor) startVStream(ctx context.Context, rss []*srvtopo.ResolvedShar
 	}
 	vs.stream(ctx)
 	return nil
+}
+
+func (e *Executor) checkThatPlanIsValid(stmt sqlparser.Statement, plan *engine.Plan) (*engine.Plan, error) {
+	if e.allowScatter || sqlparser.AllowScatterDirective(stmt) {
+		return plan, nil
+	}
+	// we go over all the primitives in the plan, searching for a route that is of SelectScatter opcode
+	badPrimitive := engine.Find(func(node engine.Primitive) bool {
+		router, ok := node.(*engine.Route)
+		if !ok {
+			return false
+		}
+		return router.Opcode == engine.SelectScatter
+	}, plan.Instructions)
+
+	if badPrimitive == nil {
+		return plan, nil
+	}
+
+	return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "plan includes scatter, which is disallowed using the `no_scatter` command line argument")
 }

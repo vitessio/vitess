@@ -168,7 +168,7 @@ func (vc *vcopier) catchup(ctx context.Context, copyState map[string]*sqltypes.R
 	defer tkr.Stop()
 	seconds := int64(*replicaLagTolerance / time.Second)
 	for {
-		sbm := vc.vr.stats.SecondsBehindMaster.Get()
+		sbm := vc.vr.stats.ReplicationLagSeconds.Get()
 		if sbm < seconds {
 			cancel()
 			// Make sure vplayer returns before returning.
@@ -274,6 +274,7 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 		}
 		_, err = vc.tablePlan.applyBulkInsert(&sqlbuffer, rows, func(sql string) (*sqltypes.Result, error) {
 			start := time.Now()
+
 			qr, err := vc.vr.dbClient.ExecuteWithRetry(ctx, sql)
 			if err != nil {
 				return nil, err

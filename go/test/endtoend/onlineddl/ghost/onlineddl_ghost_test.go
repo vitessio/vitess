@@ -38,6 +38,7 @@ import (
 
 var (
 	clusterInstance       *cluster.LocalProcessCluster
+	shards                []cluster.Shard
 	vtParams              mysql.ConnParams
 	hostname              = "localhost"
 	keyspaceName          = "ks"
@@ -215,7 +216,7 @@ func TestMain(m *testing.M) {
 
 func TestSchemaChange(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	shards := clusterInstance.Keyspaces[0].Shards
+	shards = clusterInstance.Keyspaces[0].Shards
 	assert.Equal(t, 2, len(shards))
 	testWithInitialSchema(t)
 	t.Run("create non_online", func(t *testing.T) {
@@ -311,13 +312,13 @@ func TestSchemaChange(t *testing.T) {
 		onlineddl.CheckRetryMigration(t, &vtParams, shards, uuid, true)
 	})
 	t.Run("Online CREATE no PK table, vtgate", func(t *testing.T) {
-		uuid := testOnlineDDLStatement(t, noPKCreateTableStatement, "gh-ost --skip-topo", "vtgate", "online_ddl_create_col")
+		uuid := testOnlineDDLStatement(t, noPKCreateTableStatement, "gh-ost", "vtgate", "online_ddl_create_col")
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 		onlineddl.CheckCancelMigration(t, &vtParams, shards, uuid, false)
 		onlineddl.CheckRetryMigration(t, &vtParams, shards, uuid, false)
 	})
 	t.Run("Fail ALTER for no PK table, vtgate", func(t *testing.T) {
-		uuid := testOnlineDDLStatement(t, alterTableTrivialStatement, "gh-ost --skip-topo", "vtgate", "")
+		uuid := testOnlineDDLStatement(t, alterTableTrivialStatement, "gh-ost", "vtgate", "")
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusFailed)
 
 		rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
@@ -371,8 +372,10 @@ func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy str
 
 	strategySetting, err := schema.ParseDDLStrategy(ddlStrategy)
 	assert.NoError(t, err)
+
 	if !strategySetting.Strategy.IsDirect() {
-		time.Sleep(time.Second * 20)
+		status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, 20*time.Second, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+		fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 	}
 
 	if expectHint != "" {

@@ -150,7 +150,10 @@ func init() {
 	vindexes.Register("costly", newCostlyIndex)
 }
 
-const samePlanMarker = "Gen4 plan same as above\n"
+const (
+	samePlanMarker  = "Gen4 plan same as above\n"
+	gen4ErrorPrefix = "Gen4 error: "
+)
 
 func TestPlan(t *testing.T) {
 	vschemaWrapper := &vschemaWrapper{
@@ -192,6 +195,7 @@ func TestPlan(t *testing.T) {
 	testFile(t, "flush_cases_no_default_keyspace.txt", testOutputTempDir, vschemaWrapper, false)
 	testFile(t, "show_cases_no_default_keyspace.txt", testOutputTempDir, vschemaWrapper, false)
 	testFile(t, "stream_cases.txt", testOutputTempDir, vschemaWrapper, false)
+	testFile(t, "systemtables_cases.txt", testOutputTempDir, vschemaWrapper, false)
 }
 
 func TestSysVarSetDisabled(t *testing.T) {
@@ -214,10 +218,11 @@ func TestOne(t *testing.T) {
 	testFile(t, "onecase.txt", "", vschema, true)
 }
 
-func TestBypassPlanningFromFile(t *testing.T) {
+func TestBypassPlanningShardTargetFromFile(t *testing.T) {
 	testOutputTempDir, err := ioutil.TempDir("", "plan_test")
 	require.NoError(t, err)
 	defer os.RemoveAll(testOutputTempDir)
+
 	vschema := &vschemaWrapper{
 		v: loadSchema(t, "schema_test.json"),
 		keyspace: &vindexes.Keyspace{
@@ -225,17 +230,39 @@ func TestBypassPlanningFromFile(t *testing.T) {
 			Sharded: false,
 		},
 		tabletType: topodatapb.TabletType_MASTER,
-		dest:       key.DestinationShard("-80"),
+		dest:       key.DestinationShard("-80")}
+
+	testFile(t, "bypass_shard_cases.txt", testOutputTempDir, vschema, true)
+}
+func TestBypassPlanningKeyrangeTargetFromFile(t *testing.T) {
+	testOutputTempDir, err := ioutil.TempDir("", "plan_test")
+	require.NoError(t, err)
+	defer os.RemoveAll(testOutputTempDir)
+
+	keyRange, _ := key.ParseShardingSpec("-")
+
+	vschema := &vschemaWrapper{
+		v: loadSchema(t, "schema_test.json"),
+		keyspace: &vindexes.Keyspace{
+			Name:    "main",
+			Sharded: false,
+		},
+		tabletType: topodatapb.TabletType_MASTER,
+		dest:       key.DestinationExactKeyRange{KeyRange: keyRange[0]},
 	}
 
-	testFile(t, "bypass_cases.txt", testOutputTempDir, vschema, true)
+	testFile(t, "bypass_keyrange_cases.txt", testOutputTempDir, vschema, true)
 }
 
 func TestWithDefaultKeyspaceFromFile(t *testing.T) {
 	// We are testing this separately so we can set a default keyspace
 	testOutputTempDir, err := ioutil.TempDir("", "plan_test")
 	require.NoError(t, err)
-	defer os.RemoveAll(testOutputTempDir)
+	defer func() {
+		if !t.Failed() {
+			_ = os.RemoveAll(testOutputTempDir)
+		}
+	}()
 	vschema := &vschemaWrapper{
 		v: loadSchema(t, "schema_test.json"),
 		keyspace: &vindexes.Keyspace{
@@ -260,7 +287,7 @@ func TestWithSystemSchemaAsDefaultKeyspace(t *testing.T) {
 	defer os.RemoveAll(testOutputTempDir)
 	vschema := &vschemaWrapper{
 		v:          loadSchema(t, "schema_test.json"),
-		keyspace:   &vindexes.Keyspace{Name: "mysql"},
+		keyspace:   &vindexes.Keyspace{Name: "information_schema"},
 		tabletType: topodatapb.TabletType_MASTER,
 	}
 
@@ -437,6 +464,14 @@ func (vw *vschemaWrapper) ErrorIfShardedF(keyspace *vindexes.Keyspace, _, errFmt
 	return nil
 }
 
+func (vw *vschemaWrapper) currentDb() string {
+	ksName := ""
+	if vw.keyspace != nil {
+		ksName = vw.keyspace.Name
+	}
+	return ksName
+}
+
 func escapeNewLines(in string) string {
 	return strings.ReplaceAll(in, "\n", "\\n")
 }
@@ -450,7 +485,7 @@ func testFile(t *testing.T, filename, tempDir string, vschema *vschemaWrapper, c
 		for tcase := range iterateExecFile(filename) {
 			t.Run(fmt.Sprintf("%d V3: %s", tcase.lineno, tcase.comments), func(t *testing.T) {
 				vschema.version = V3
-				plan, err := TestBuilder(tcase.input, vschema)
+				plan, err := TestBuilder(tcase.input, vschema, vschema.currentDb())
 				out := getPlanOrErrorOutput(err, plan)
 
 				if out != tcase.output {
@@ -472,6 +507,10 @@ func testFile(t *testing.T, filename, tempDir string, vschema *vschemaWrapper, c
 
 			vschema.version = Gen4
 			out, err := getPlanOutput(tcase, vschema)
+			if err != nil && tcase.output2ndPlanner == "" && strings.HasPrefix(err.Error(), "gen4 does not yet support") {
+				expected.WriteString("\n")
+				continue
+			}
 
 			// our expectation for the new planner on this query is one of three
 			//  - it produces the same plan as V3 - this is shown using empty brackets: {\n}
@@ -523,7 +562,7 @@ func getPlanOutput(tcase testCase, vschema *vschemaWrapper) (out string, err err
 			out = fmt.Sprintf("panicked: %v\n%s", r, string(debug.Stack()))
 		}
 	}()
-	plan, err := TestBuilder(tcase.input, vschema)
+	plan, err := TestBuilder(tcase.input, vschema, vschema.currentDb())
 	out = getPlanOrErrorOutput(err, plan)
 	return out, err
 }
@@ -604,9 +643,11 @@ func iterateExecFile(name string) (testCaseIterator chan testCase) {
 			if err != nil && err != io.EOF {
 				panic(fmt.Sprintf("error reading file %s line# %d: %s", name, lineno, err.Error()))
 			}
-			if len(binput) > 0 && string(binput) == samePlanMarker {
+			nextLine := string(binput)
+			switch {
+			case nextLine == samePlanMarker:
 				output2Planner = output
-			} else if len(binput) > 0 && (binput[0] == '"' || binput[0] == '{') {
+			case strings.HasPrefix(nextLine, "{"):
 				output2Planner = append(output2Planner, binput...)
 				for {
 					l, err := r.ReadBytes('\n')
@@ -624,8 +665,9 @@ func iterateExecFile(name string) (testCaseIterator chan testCase) {
 						break
 					}
 				}
+			case strings.HasPrefix(nextLine, gen4ErrorPrefix):
+				output2Planner = []byte(nextLine[len(gen4ErrorPrefix) : len(nextLine)-1])
 			}
-
 			testCaseIterator <- testCase{
 				file:             name,
 				lineno:           lineno,
@@ -710,7 +752,7 @@ func benchmarkPlanner(b *testing.B, version PlannerVersion, testCases []testCase
 		for _, tcase := range testCases {
 			if tcase.output2ndPlanner != "" {
 				vschema.version = version
-				_, _ = TestBuilder(tcase.input, vschema)
+				_, _ = TestBuilder(tcase.input, vschema, vschema.currentDb())
 			}
 		}
 	}

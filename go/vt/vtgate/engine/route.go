@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"vitess.io/vitess/go/vt/log"
@@ -80,7 +81,7 @@ type Route struct {
 	// OrderBy specifies the key order for merge sorting. This will be
 	// set only for scatter queries that need the results to be
 	// merge-sorted.
-	OrderBy []OrderbyParams
+	OrderBy []OrderByParams
 
 	// TruncateColumnCount specifies the number of columns to return
 	// in the final result. Rest of the columns are truncated
@@ -95,7 +96,7 @@ type Route struct {
 
 	// The following two fields are used when routing information_schema queries
 	SysTableTableSchema []evalengine.Expr
-	SysTableTableName   []evalengine.Expr
+	SysTableTableName   map[string]evalengine.Expr
 
 	// Route does not take inputs
 	noInputs
@@ -122,9 +123,9 @@ func NewRoute(opcode RouteOpcode, keyspace *vindexes.Keyspace, query, fieldQuery
 	}
 }
 
-// OrderbyParams specifies the parameters for ordering.
+// OrderByParams specifies the parameters for ordering.
 // This is used for merge-sorting scatter queries.
-type OrderbyParams struct {
+type OrderByParams struct {
 	Col int
 	// WeightStringCol is the weight_string column that will be used for sorting.
 	// It is set to -1 if such a column is not added to the query
@@ -133,10 +134,14 @@ type OrderbyParams struct {
 	StarColFixedIndex int
 }
 
-func (obp OrderbyParams) String() string {
+// String returns a string. Used for plan descriptions
+func (obp OrderByParams) String() string {
 	val := strconv.Itoa(obp.Col)
 	if obp.StarColFixedIndex > obp.Col {
 		val = strconv.Itoa(obp.StarColFixedIndex)
+	}
+	if obp.WeightStringCol != -1 && obp.WeightStringCol != obp.Col {
+		val = fmt.Sprintf("(%s|%d)", val, obp.WeightStringCol)
 	}
 	if obp.Desc {
 		val += " DESC"
@@ -210,9 +215,14 @@ func (code RouteOpcode) MarshalJSON() ([]byte, error) {
 	return json.Marshal(routeName[code])
 }
 
+// String returns a string presentation of this opcode
+func (code RouteOpcode) String() string {
+	return routeName[code]
+}
+
 // RouteType returns a description of the query routing type used by the primitive
 func (route *Route) RouteType() string {
-	return routeName[route.Opcode]
+	return route.Opcode.String()
 }
 
 // GetKeyspaceName specifies the Keyspace that this primitive routes to.
@@ -467,32 +477,25 @@ func (route *Route) routeInfoSchemaQuery(vcursor VCursor, bindVars map[string]*q
 		bindVars[sqltypes.BvSchemaName] = sqltypes.StringBindVariable(specifiedKS)
 	}
 
-	var tableName string
-	for _, sysTableName := range route.SysTableTableName {
+	tableNames := map[string]string{}
+	for tblBvName, sysTableName := range route.SysTableTableName {
 		val, err := sysTableName.Evaluate(env)
 		if err != nil {
 			return nil, err
 		}
 		tabName := val.Value().ToString()
-		if tableName == "" {
-			tableName = tabName
-		}
-		if tableName != tabName {
-			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "two predicates for table_name not supported")
-		}
-	}
-	if tableName != "" {
-		bindVars[BvTableName] = sqltypes.StringBindVariable(tableName)
+		tableNames[tblBvName] = tabName
+		bindVars[tblBvName] = sqltypes.StringBindVariable(tabName)
 	}
 
-	// if the table_schema is system system, route to default keyspace.
+	// if the table_schema is system schema, route to default keyspace.
 	if sqlparser.SystemSchema(specifiedKS) {
 		return defaultRoute()
 	}
 
 	// the use has specified a table_name - let's check if it's a routed table
-	if tableName != "" {
-		rss, err := route.paramsRoutedTable(vcursor, bindVars, specifiedKS, tableName)
+	if len(tableNames) > 0 {
+		rss, err := route.paramsRoutedTable(vcursor, bindVars, specifiedKS, tableNames)
 		if err != nil {
 			// Only if keyspace is not found in vschema, we try with default keyspace.
 			// As the in the table_schema predicates for a keyspace 'ks' it can contain 'vt_ks'.
@@ -522,28 +525,39 @@ func (route *Route) routeInfoSchemaQuery(vcursor VCursor, bindVars map[string]*q
 	return destinations, nil
 }
 
-func (route *Route) paramsRoutedTable(vcursor VCursor, bindVars map[string]*querypb.BindVariable, tableSchema string, tableName string) ([]*srvtopo.ResolvedShard, error) {
-	tbl := sqlparser.TableName{
-		Name:      sqlparser.NewTableIdent(tableName),
-		Qualifier: sqlparser.NewTableIdent(tableSchema),
-	}
-	destination, err := vcursor.FindRoutedTable(tbl)
-	if err != nil {
-		return nil, err
-	}
-
-	if destination != nil {
-		// if we were able to find information about this table, let's use it
-		shards, _, err := vcursor.ResolveDestinations(destination.Keyspace.Name, nil, []key.Destination{key.DestinationAnyShard{}})
-		bindVars[BvTableName] = sqltypes.StringBindVariable(destination.Name.String())
-		if tableSchema != "" {
-			setReplaceSchemaName(bindVars)
+func (route *Route) paramsRoutedTable(vcursor VCursor, bindVars map[string]*querypb.BindVariable, tableSchema string, tableNames map[string]string) ([]*srvtopo.ResolvedShard, error) {
+	var routedKs *vindexes.Keyspace
+	for tblBvName, tableName := range tableNames {
+		tbl := sqlparser.TableName{
+			Name:      sqlparser.NewTableIdent(tableName),
+			Qualifier: sqlparser.NewTableIdent(tableSchema),
 		}
-		return shards, err
-	}
+		routedTable, err := vcursor.FindRoutedTable(tbl)
+		if err != nil {
+			return nil, err
+		}
 
-	// no routed table info found. we'll return nil and check on the outside if we can find the table_schema
-	bindVars[BvTableName] = sqltypes.StringBindVariable(tableName)
+		if routedTable != nil {
+			// if we were able to find information about this table, let's use it
+
+			// check if the query is send to single keyspace.
+			if routedKs == nil {
+				routedKs = routedTable.Keyspace
+			}
+			if routedKs.Name != routedTable.Keyspace.Name {
+				return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "cannot send the query to multiple keyspace due to different table_name: %s, %s", routedKs.Name, routedTable.Keyspace.Name)
+			}
+
+			shards, _, err := vcursor.ResolveDestinations(routedTable.Keyspace.Name, nil, []key.Destination{key.DestinationAnyShard{}})
+			bindVars[tblBvName] = sqltypes.StringBindVariable(routedTable.Name.String())
+			if tableSchema != "" {
+				setReplaceSchemaName(bindVars)
+			}
+			return shards, err
+		}
+		// no routed table info found. we'll return nil and check on the outside if we can find the table_schema
+		bindVars[tblBvName] = sqltypes.StringBindVariable(tableName)
+	}
 	return nil, nil
 }
 
@@ -787,15 +801,12 @@ func (route *Route) description() PrimitiveDescription {
 		other["SysTableTableSchema"] = sysTabSchema
 	}
 	if len(route.SysTableTableName) != 0 {
-		sysTableName := "["
-		for idx, tableName := range route.SysTableTableName {
-			if idx != 0 {
-				sysTableName += ", "
-			}
-			sysTableName += tableName.String()
+		var sysTableName []string
+		for k, v := range route.SysTableTableName {
+			sysTableName = append(sysTableName, k+":"+v.String())
 		}
-		sysTableName += "]"
-		other["SysTableTableName"] = sysTableName
+		sort.Strings(sysTableName)
+		other["SysTableTableName"] = "[" + strings.Join(sysTableName, ", ") + "]"
 	}
 	orderBy := GenericJoin(route.OrderBy, orderByToString)
 	if orderBy != "" {
@@ -817,8 +828,5 @@ func (route *Route) description() PrimitiveDescription {
 }
 
 func orderByToString(in interface{}) string {
-	return in.(OrderbyParams).String()
+	return in.(OrderByParams).String()
 }
-
-// BvTableName is used to fill in the table name for information_schema queries with routed tables
-const BvTableName = "__vttablename"

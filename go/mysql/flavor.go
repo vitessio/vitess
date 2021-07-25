@@ -303,25 +303,27 @@ func resultToMap(qr *sqltypes.Result) (map[string]string, error) {
 
 // parseReplicationStatus parses the common (non-flavor-specific) fields of ReplicationStatus
 func parseReplicationStatus(fields map[string]string) ReplicationStatus {
+	// The field names in the map are identical to what we receive from the database
+	// Hence the names still contain Master
 	status := ReplicationStatus{
-		MasterHost: fields["Master_Host"],
+		SourceHost: fields["Master_Host"],
 		// These fields are returned from the underlying DB and cannot be renamed
 		IOThreadRunning:  fields["Slave_IO_Running"] == "Yes" || fields["Slave_IO_Running"] == "Connecting",
 		SQLThreadRunning: fields["Slave_SQL_Running"] == "Yes",
 	}
 	parseInt, _ := strconv.ParseInt(fields["Master_Port"], 10, 0)
-	status.MasterPort = int(parseInt)
+	status.SourcePort = int(parseInt)
 	parseInt, _ = strconv.ParseInt(fields["Connect_Retry"], 10, 0)
-	status.MasterConnectRetry = int(parseInt)
+	status.ConnectRetry = int(parseInt)
 	parseUint, _ := strconv.ParseUint(fields["Seconds_Behind_Master"], 10, 0)
-	status.SecondsBehindMaster = uint(parseUint)
+	status.ReplicationLagSeconds = uint(parseUint)
 	parseUint, _ = strconv.ParseUint(fields["Master_Server_Id"], 10, 0)
-	status.MasterServerID = uint(parseUint)
+	status.SourceServerID = uint(parseUint)
 
-	execMasterLogPosStr := fields["Exec_Master_Log_Pos"]
+	executedPosStr := fields["Exec_Master_Log_Pos"]
 	file := fields["Relay_Master_Log_File"]
-	if file != "" && execMasterLogPosStr != "" {
-		filePos, err := strconv.Atoi(execMasterLogPosStr)
+	if file != "" && executedPosStr != "" {
+		filePos, err := strconv.Atoi(executedPosStr)
 		if err == nil {
 			status.FilePosition.GTIDSet = filePosGTID{
 				file: file,
@@ -330,10 +332,10 @@ func parseReplicationStatus(fields map[string]string) ReplicationStatus {
 		}
 	}
 
-	readMasterLogPosStr := fields["Read_Master_Log_Pos"]
+	readPosStr := fields["Read_Master_Log_Pos"]
 	file = fields["Master_Log_File"]
-	if file != "" && readMasterLogPosStr != "" {
-		fileRelayPos, err := strconv.Atoi(readMasterLogPosStr)
+	if file != "" && readPosStr != "" {
+		fileRelayPos, err := strconv.Atoi(readPosStr)
 		if err == nil {
 			status.FileRelayLogPosition.GTIDSet = filePosGTID{
 				file: file,

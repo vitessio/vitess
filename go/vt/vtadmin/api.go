@@ -44,6 +44,7 @@ import (
 	"vitess.io/vitess/go/vt/vtadmin/http/debug"
 	"vitess.io/vitess/go/vt/vtadmin/http/experimental"
 	vthandlers "vitess.io/vitess/go/vt/vtadmin/http/handlers"
+	"vitess.io/vitess/go/vt/vtadmin/rbac"
 	"vitess.io/vitess/go/vt/vtadmin/sort"
 	"vitess.io/vitess/go/vt/vtadmin/vtadminproto"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -65,18 +66,28 @@ type API struct {
 	serv       *grpcserver.Server
 	router     *mux.Router
 
+	authz *rbac.Authorizer
+
 	// See https://github.com/vitessio/vitess/issues/7723 for why this exists.
 	vtexplainLock sync.Mutex
 }
 
+// Options wraps the configuration options for different components of the
+// vtadmin API.
+type Options struct {
+	GRPCOpts grpcserver.Options
+	HTTPOpts vtadminhttp.Options
+	RBAC     *rbac.Config
+}
+
 // NewAPI returns a new API, configured to service the given set of clusters,
-// and configured with the given gRPC and HTTP server options.
+// and configured with the given options.
 //
-// If opts.Services is nil, NewAPI will automatically add
+// If opts.GRPCOpts.Services is nil, NewAPI will automatically add
 // "vtadmin.VTAdminServer" to the list of services queryable in the healthcheck
 // service. Callers can opt-out of this behavior by explicitly setting this
 // value to the empty slice.
-func NewAPI(clusters []*cluster.Cluster, opts grpcserver.Options, httpOpts vtadminhttp.Options) *API {
+func NewAPI(clusters []*cluster.Cluster, opts Options) *API {
 	clusterMap := make(map[string]*cluster.Cluster, len(clusters))
 	for _, cluster := range clusters {
 		clusterMap[cluster.ID] = cluster
@@ -86,11 +97,43 @@ func NewAPI(clusters []*cluster.Cluster, opts grpcserver.Options, httpOpts vtadm
 		return c1.ID < c2.ID
 	}).Sort(clusters)
 
-	if opts.Services == nil {
-		opts.Services = []string{"vtadmin.VTAdminServer"}
+	if opts.GRPCOpts.Services == nil {
+		opts.GRPCOpts.Services = []string{"vtadmin.VTAdminServer"}
 	}
 
-	serv := grpcserver.New("vtadmin", opts)
+	var (
+		authn rbac.Authenticator
+		authz *rbac.Authorizer
+	)
+	if opts.RBAC != nil {
+		authn = opts.RBAC.GetAuthenticator()
+		authz = opts.RBAC.GetAuthorizer()
+
+		if authn != nil {
+			opts.GRPCOpts.StreamInterceptors = append(opts.GRPCOpts.StreamInterceptors, rbac.AuthenticationStreamInterceptor(authn))
+			opts.GRPCOpts.UnaryInterceptors = append(opts.GRPCOpts.UnaryInterceptors, rbac.AuthenticationUnaryInterceptor(authn))
+		}
+	}
+
+	if authz == nil {
+		authz, _ = rbac.NewAuthorizer(&rbac.Config{
+			Rules: []*struct {
+				Resource string
+				Actions  []string
+				Subjects []string
+				Clusters []string
+			}{
+				{
+					Resource: "*",
+					Actions:  []string{"*"},
+					Subjects: []string{"*"},
+					Clusters: []string{"*"},
+				},
+			},
+		})
+	}
+
+	serv := grpcserver.New("vtadmin", opts.GRPCOpts)
 	serv.Router().HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("ok\n"))
 	})
@@ -102,12 +145,14 @@ func NewAPI(clusters []*cluster.Cluster, opts grpcserver.Options, httpOpts vtadm
 		clusterMap: clusterMap,
 		router:     router,
 		serv:       serv,
+		authz:      authz,
 	}
 
 	vtadminpb.RegisterVTAdminServer(serv.GRPCServer(), api)
 
-	httpAPI := vtadminhttp.NewAPI(api, httpOpts)
+	httpAPI := vtadminhttp.NewAPI(api, opts.HTTPOpts)
 
+	router.HandleFunc("/backups", httpAPI.Adapt(vtadminhttp.GetBackups)).Name("API.GetBackups")
 	router.HandleFunc("/clusters", httpAPI.Adapt(vtadminhttp.GetClusters)).Name("API.GetClusters")
 	router.HandleFunc("/gates", httpAPI.Adapt(vtadminhttp.GetGates)).Name("API.GetGates")
 	router.HandleFunc("/keyspace/{cluster_id}/{name}", httpAPI.Adapt(vtadminhttp.GetKeyspace)).Name("API.GetKeyspace")
@@ -128,7 +173,7 @@ func NewAPI(clusters []*cluster.Cluster, opts grpcserver.Options, httpOpts vtadm
 	experimentalRouter := router.PathPrefix("/experimental").Subrouter()
 	experimentalRouter.HandleFunc("/tablet/{tablet}/debug/vars", httpAPI.Adapt(experimental.TabletDebugVarsPassthrough)).Name("API.TabletDebugVarsPassthrough")
 
-	if !httpOpts.DisableDebug {
+	if !opts.HTTPOpts.DisableDebug {
 		// Due to the way net/http/pprof insists on registering its handlers, we
 		// have to put these on the root router, and not on the /debug prefixed
 		// subrouter, which would make way more sense, but alas. Additional
@@ -137,8 +182,12 @@ func NewAPI(clusters []*cluster.Cluster, opts grpcserver.Options, httpOpts vtadm
 		serv.Router().HandleFunc("/debug/pprof/profile", pprof.Profile)
 		serv.Router().HandleFunc("/debug/pprof/symbol", pprof.Symbol)
 		serv.Router().PathPrefix("/debug/pprof").HandlerFunc(pprof.Index)
+
+		dapi := &debugAPI{api}
 		debugRouter := serv.Router().PathPrefix("/debug").Subrouter()
 		debugRouter.HandleFunc("/env", debug.Env)
+		debugRouter.HandleFunc("/cluster/{cluster_id}", debug.Cluster(dapi))
+		debugRouter.HandleFunc("/clusters", debug.Clusters(dapi))
 	}
 
 	// Middlewares are executed in order of addition. Our ordering (all
@@ -146,19 +195,24 @@ func NewAPI(clusters []*cluster.Cluster, opts grpcserver.Options, httpOpts vtadm
 	// 	1. CORS. CORS is a special case and is applied globally, the rest are applied only to the subrouter.
 	//	2. Compression
 	//	3. Tracing
+	//	4. Authentication
 	middlewares := []mux.MiddlewareFunc{}
 
-	if len(httpOpts.CORSOrigins) > 0 {
+	if len(opts.HTTPOpts.CORSOrigins) > 0 {
 		serv.Router().Use(handlers.CORS(
-			handlers.AllowCredentials(), handlers.AllowedOrigins(httpOpts.CORSOrigins)))
+			handlers.AllowCredentials(), handlers.AllowedOrigins(opts.HTTPOpts.CORSOrigins)))
 	}
 
-	if !httpOpts.DisableCompression {
+	if !opts.HTTPOpts.DisableCompression {
 		middlewares = append(middlewares, handlers.CompressHandler)
 	}
 
-	if httpOpts.EnableTracing {
+	if opts.HTTPOpts.EnableTracing {
 		middlewares = append(middlewares, vthandlers.TraceHandler)
+	}
+
+	if authn != nil {
+		middlewares = append(middlewares, vthandlers.NewAuthenticationHandler(authn))
 	}
 
 	router.Use(middlewares...)
@@ -189,6 +243,10 @@ func (api *API) FindSchema(ctx context.Context, req *vtadminpb.FindSchemaRequest
 	)
 
 	for _, c := range clusters {
+		if !api.authz.IsAuthorized(ctx, c.ID, rbac.SchemaResource, rbac.GetAction) {
+			continue
+		}
+
 		wg.Add(1)
 
 		go func(c *cluster.Cluster) {
@@ -253,6 +311,54 @@ func (api *API) FindSchema(ctx context.Context, req *vtadminpb.FindSchemaRequest
 	}
 }
 
+// GetBackups is part of the vtadminpb.VTAdminServer interface.
+func (api *API) GetBackups(ctx context.Context, req *vtadminpb.GetBackupsRequest) (*vtadminpb.GetBackupsResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.GetBackups")
+	defer span.Finish()
+
+	clusters, _ := api.getClustersForRequest(req.ClusterIds)
+
+	var (
+		m       sync.Mutex
+		wg      sync.WaitGroup
+		rec     concurrency.AllErrorRecorder
+		backups []*vtadminpb.ClusterBackup
+	)
+
+	for _, c := range clusters {
+		if !api.authz.IsAuthorized(ctx, c.ID, rbac.BackupResource, rbac.GetAction) {
+			continue
+		}
+
+		wg.Add(1)
+
+		go func(c *cluster.Cluster) {
+			defer wg.Done()
+
+			bs, err := c.GetBackups(ctx, req)
+			if err != nil {
+				rec.RecordError(err)
+				return
+			}
+
+			m.Lock()
+			defer m.Unlock()
+
+			backups = append(backups, bs...)
+		}(c)
+	}
+
+	wg.Wait()
+
+	if rec.HasErrors() {
+		return nil, rec.Error()
+	}
+
+	return &vtadminpb.GetBackupsResponse{
+		Backups: backups,
+	}, nil
+}
+
 // GetClusters is part of the vtadminpb.VTAdminServer interface.
 func (api *API) GetClusters(ctx context.Context, req *vtadminpb.GetClustersRequest) (*vtadminpb.GetClustersResponse, error) {
 	span, _ := trace.NewSpan(ctx, "API.GetClusters")
@@ -261,6 +367,10 @@ func (api *API) GetClusters(ctx context.Context, req *vtadminpb.GetClustersReque
 	vcs := make([]*vtadminpb.Cluster, 0, len(api.clusters))
 
 	for _, c := range api.clusters {
+		if !api.authz.IsAuthorized(ctx, c.ID, rbac.ClusterResource, rbac.GetAction) {
+			continue
+		}
+
 		vcs = append(vcs, &vtadminpb.Cluster{
 			Id:   c.ID,
 			Name: c.Name,
@@ -287,6 +397,10 @@ func (api *API) GetGates(ctx context.Context, req *vtadminpb.GetGatesRequest) (*
 	)
 
 	for _, c := range clusters {
+		if !api.authz.IsAuthorized(ctx, c.ID, rbac.VTGateResource, rbac.GetAction) {
+			continue
+		}
+
 		wg.Add(1)
 
 		go func(c *cluster.Cluster) {
@@ -326,6 +440,10 @@ func (api *API) GetKeyspace(ctx context.Context, req *vtadminpb.GetKeyspaceReque
 		return nil, fmt.Errorf("%w: %s", errors.ErrUnsupportedCluster, req.ClusterId)
 	}
 
+	if !api.authz.IsAuthorized(ctx, c.ID, rbac.KeyspaceResource, rbac.GetAction) {
+		return nil, nil
+	}
+
 	return c.GetKeyspace(ctx, req.Keyspace)
 }
 
@@ -344,6 +462,10 @@ func (api *API) GetKeyspaces(ctx context.Context, req *vtadminpb.GetKeyspacesReq
 	)
 
 	for _, c := range clusters {
+		if !api.authz.IsAuthorized(ctx, c.ID, rbac.KeyspaceResource, rbac.GetAction) {
+			continue
+		}
+
 		wg.Add(1)
 
 		go func(c *cluster.Cluster) {
@@ -387,6 +509,10 @@ func (api *API) GetSchema(ctx context.Context, req *vtadminpb.GetSchemaRequest) 
 		return nil, fmt.Errorf("%w: no cluster with id %s", errors.ErrUnsupportedCluster, req.ClusterId)
 	}
 
+	if !api.authz.IsAuthorized(ctx, c.ID, rbac.SchemaResource, rbac.GetAction) {
+		return nil, nil
+	}
+
 	schema, err := c.GetSchema(ctx, req.Keyspace, cluster.GetSchemaOptions{
 		BaseRequest: &vtctldatapb.GetSchemaRequest{
 			Tables: []string{req.Table},
@@ -422,6 +548,10 @@ func (api *API) GetSchemas(ctx context.Context, req *vtadminpb.GetSchemasRequest
 	)
 
 	for _, c := range clusters {
+		if !api.authz.IsAuthorized(ctx, c.ID, rbac.SchemaResource, rbac.GetAction) {
+			continue
+		}
+
 		wg.Add(1)
 
 		// Get schemas for the cluster
@@ -548,6 +678,10 @@ func (api *API) GetSrvVSchema(ctx context.Context, req *vtadminpb.GetSrvVSchemaR
 		return nil, fmt.Errorf("%w: %s", errors.ErrUnsupportedCluster, req.ClusterId)
 	}
 
+	if !api.authz.IsAuthorized(ctx, c.ID, rbac.SrvVSchemaResource, rbac.GetAction) {
+		return nil, nil
+	}
+
 	return c.GetSrvVSchema(ctx, req.Cell)
 }
 
@@ -566,6 +700,10 @@ func (api *API) GetSrvVSchemas(ctx context.Context, req *vtadminpb.GetSrvVSchema
 	)
 
 	for _, c := range clusters {
+		if !api.authz.IsAuthorized(ctx, c.ID, rbac.SrvVSchemaResource, rbac.GetAction) {
+			continue
+		}
+
 		wg.Add(1)
 
 		go func(c *cluster.Cluster) {
@@ -620,6 +758,10 @@ func (api *API) GetTablet(ctx context.Context, req *vtadminpb.GetTabletRequest) 
 	)
 
 	for _, c := range clusters {
+		if !api.authz.IsAuthorized(ctx, c.ID, rbac.TabletResource, rbac.GetAction) {
+			continue
+		}
+
 		wg.Add(1)
 
 		go func(c *cluster.Cluster) {
@@ -676,6 +818,10 @@ func (api *API) GetTablets(ctx context.Context, req *vtadminpb.GetTabletsRequest
 	)
 
 	for _, c := range clusters {
+		if !api.authz.IsAuthorized(ctx, c.ID, rbac.TabletResource, rbac.GetAction) {
+			continue
+		}
+
 		wg.Add(1)
 
 		go func(c *cluster.Cluster) {
@@ -716,6 +862,10 @@ func (api *API) GetVSchema(ctx context.Context, req *vtadminpb.GetVSchemaRequest
 
 	cluster.AnnotateSpan(c, span)
 
+	if !api.authz.IsAuthorized(ctx, c.ID, rbac.VSchemaResource, rbac.GetAction) {
+		return nil, nil
+	}
+
 	if err := c.Vtctld.Dial(ctx); err != nil {
 		return nil, err
 	}
@@ -746,6 +896,10 @@ func (api *API) GetVSchemas(ctx context.Context, req *vtadminpb.GetVSchemasReque
 	}
 
 	for _, c := range clusters {
+		if !api.authz.IsAuthorized(ctx, c.ID, rbac.VSchemaResource, rbac.GetAction) {
+			continue
+		}
+
 		wg.Add(1)
 
 		go func(c *cluster.Cluster) {
@@ -836,6 +990,10 @@ func (api *API) GetWorkflow(ctx context.Context, req *vtadminpb.GetWorkflowReque
 	span.Annotate("workflow_name", req.Name)
 	span.Annotate("active_only", req.ActiveOnly)
 
+	if !api.authz.IsAuthorized(ctx, c.ID, rbac.WorkflowResource, rbac.GetAction) {
+		return nil, nil
+	}
+
 	return c.GetWorkflow(ctx, req.Keyspace, req.Name, cluster.GetWorkflowOptions{
 		ActiveOnly: req.ActiveOnly,
 	})
@@ -856,6 +1014,10 @@ func (api *API) GetWorkflows(ctx context.Context, req *vtadminpb.GetWorkflowsReq
 	)
 
 	for _, c := range clusters {
+		if !api.authz.IsAuthorized(ctx, c.ID, rbac.WorkflowResource, rbac.GetAction) {
+			continue
+		}
+
 		wg.Add(1)
 
 		go func(c *cluster.Cluster) {
@@ -912,6 +1074,10 @@ func (api *API) VTExplain(ctx context.Context, req *vtadminpb.VTExplainRequest) 
 
 	span.Annotate("keyspace", req.Keyspace)
 	cluster.AnnotateSpan(c, span)
+
+	if !api.authz.IsAuthorized(ctx, c.ID, rbac.VTExplainResource, rbac.GetAction) {
+		return nil, nil
+	}
 
 	tablet, err := c.FindTablet(ctx, func(t *vtadminpb.Tablet) bool {
 		return t.Tablet.Keyspace == req.Keyspace && topo.IsInServingGraph(t.Tablet.Type) && t.Tablet.Type != topodatapb.TabletType_MASTER && t.State == vtadminpb.Tablet_SERVING

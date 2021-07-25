@@ -238,8 +238,8 @@ func (e *LegacyTabletStats) TrivialStatsUpdate(n *LegacyTabletStats) bool {
 	// Skip replag filter when replag remains in the low rep lag range,
 	// which should be the case majority of the time.
 	lowRepLag := lowReplicationLag.Seconds()
-	oldRepLag := float64(e.Stats.SecondsBehindMaster)
-	newRepLag := float64(n.Stats.SecondsBehindMaster)
+	oldRepLag := float64(e.Stats.ReplicationLagSeconds)
+	newRepLag := float64(n.Stats.ReplicationLagSeconds)
 	if oldRepLag <= lowRepLag && newRepLag <= lowRepLag {
 		return true
 	}
@@ -503,6 +503,7 @@ func (hc *LegacyHealthCheckImpl) updateHealth(ts *LegacyTabletStats, conn querys
 		// comparing against the variables in go/vtgate/buffer/variables.go.
 		if oldts.Target.TabletType != topodatapb.TabletType_MASTER && ts.Target.TabletType == topodatapb.TabletType_MASTER {
 			hcMasterPromotedCounters.Add([]string{ts.Target.Keyspace, ts.Target.Shard}, 1)
+			hcPrimaryPromotedCounters.Add([]string{ts.Target.Keyspace, ts.Target.Shard}, 1)
 		}
 	}
 }
@@ -880,7 +881,7 @@ func (tcs *LegacyTabletsCacheStatus) StatusAsHTML() template.HTML {
 		} else if ts.Target.TabletType == topodatapb.TabletType_MASTER {
 			extra = fmt.Sprintf(" (MasterTS: %v)", ts.TabletExternallyReparentedTimestamp)
 		} else {
-			extra = fmt.Sprintf(" (RepLag: %v)", ts.Stats.SecondsBehindMaster)
+			extra = fmt.Sprintf(" (RepLag: %v)", ts.Stats.ReplicationLagSeconds)
 		}
 		name := ts.Name
 		if name == "" {

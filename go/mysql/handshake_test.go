@@ -17,6 +17,7 @@ limitations under the License.
 package mysql
 
 import (
+	"crypto/tls"
 	"io/ioutil"
 	"net"
 	"os"
@@ -37,8 +38,7 @@ import (
 func TestClearTextClientAuth(t *testing.T) {
 	th := &testHandler{}
 
-	authServer := NewAuthServerStatic("", "", 0)
-	authServer.method = MysqlClearPassword
+	authServer := NewAuthServerStaticWithAuthMethodDescription("", "", 0, MysqlClearPassword)
 	authServer.entries["user1"] = []*AuthServerStaticEntry{
 		{Password: "password1"},
 	}
@@ -95,7 +95,7 @@ func TestClearTextClientAuth(t *testing.T) {
 func TestSSLConnection(t *testing.T) {
 	th := &testHandler{}
 
-	authServer := NewAuthServerStatic("", "", 0)
+	authServer := NewAuthServerStaticWithAuthMethodDescription("", "", 0, MysqlClearPassword)
 	authServer.entries["user1"] = []*AuthServerStaticEntry{
 		{Password: "password1"},
 	}
@@ -125,7 +125,8 @@ func TestSSLConnection(t *testing.T) {
 		path.Join(root, "server-cert.pem"),
 		path.Join(root, "server-key.pem"),
 		path.Join(root, "ca-cert.pem"),
-		"")
+		"",
+		tls.VersionTLS12)
 	if err != nil {
 		t.Fatalf("TLSServerConfig failed: %v", err)
 	}
@@ -154,7 +155,6 @@ func TestSSLConnection(t *testing.T) {
 
 	// Make sure clear text auth works over SSL.
 	t.Run("ClearText", func(t *testing.T) {
-		authServer.method = MysqlClearPassword
 		testSSLConnectionClearText(t, params)
 	})
 }

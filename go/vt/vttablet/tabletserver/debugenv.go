@@ -169,7 +169,7 @@ func debugEnvHandler(tsv *TabletServer, w http.ResponseWriter, r *http.Request) 
 	w.Write(debugEnvHeader)
 	for _, v := range vars {
 		if err := debugEnvRow.Execute(w, v); err != nil {
-			log.Errorf("queryz: couldn't execute template: %v", err)
+			log.Errorf("debugenv: couldn't execute template: %v", err)
 		}
 	}
 	w.Write(endTable)

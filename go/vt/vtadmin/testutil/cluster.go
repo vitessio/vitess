@@ -19,12 +19,17 @@ package testutil
 import (
 	"database/sql"
 	"fmt"
+	"sync"
+	"testing"
 
+	"github.com/spf13/pflag"
+	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/vitessdriver"
 	"vitess.io/vitess/go/vt/vtadmin/cluster"
+	"vitess.io/vitess/go/vt/vtadmin/cluster/discovery"
 	"vitess.io/vitess/go/vt/vtadmin/cluster/discovery/fakediscovery"
 	vtadminvtctldclient "vitess.io/vitess/go/vt/vtadmin/vtctldclient"
 	"vitess.io/vitess/go/vt/vtadmin/vtsql"
@@ -61,12 +66,40 @@ type TestClusterConfig struct {
 	DBConfig Dbcfg
 }
 
+const discoveryTestImplName = "vtadmin.testutil"
+
+var (
+	m         sync.Mutex
+	testdisco discovery.Discovery
+)
+
+func init() {
+	discovery.Register(discoveryTestImplName, func(cluster *vtadminpb.Cluster, flags *pflag.FlagSet, args []string) (discovery.Discovery, error) {
+		return testdisco, nil
+	})
+}
+
 // BuildCluster is a shared helper for building a cluster based on the given
 // test configuration.
-func BuildCluster(cfg TestClusterConfig) *cluster.Cluster {
+func BuildCluster(t testing.TB, cfg TestClusterConfig) *cluster.Cluster {
+	t.Helper()
+
 	disco := fakediscovery.New()
 	disco.AddTaggedGates(nil, &vtadminpb.VTGate{Hostname: fmt.Sprintf("%s-%s-gate", cfg.Cluster.Name, cfg.Cluster.Id)})
 	disco.AddTaggedVtctlds(nil, &vtadminpb.Vtctld{Hostname: "doesn't matter"})
+
+	clusterConf := cluster.Config{
+		ID:            cfg.Cluster.Id,
+		Name:          cfg.Cluster.Name,
+		DiscoveryImpl: discoveryTestImplName,
+	}
+
+	m.Lock()
+	testdisco = disco
+	c, err := cluster.New(clusterConf)
+	m.Unlock()
+
+	require.NoError(t, err, "failed to create cluster from configs %+v %+v", clusterConf, cfg)
 
 	tablets := make([]*vtadminpb.Tablet, len(cfg.Tablets))
 	for i, t := range cfg.Tablets {
@@ -79,38 +112,26 @@ func BuildCluster(cfg TestClusterConfig) *cluster.Cluster {
 		tablets[i] = tablet
 	}
 
-	db := vtsql.New(&vtsql.Config{
-		Cluster:   cfg.Cluster,
-		Discovery: disco,
-	})
+	db := c.DB.(*vtsql.VTGateProxy)
 	db.DialFunc = func(_ vitessdriver.Configuration) (*sql.DB, error) {
 		return sql.OpenDB(&fakevtsql.Connector{Tablets: tablets, ShouldErr: cfg.DBConfig.ShouldErr}), nil
 	}
 
-	vtctld := vtadminvtctldclient.New(&vtadminvtctldclient.Config{
-		Cluster:   cfg.Cluster,
-		Discovery: disco,
-	})
+	vtctld := c.Vtctld.(*vtadminvtctldclient.ClientProxy)
 	vtctld.DialFunc = func(addr string, ff grpcclient.FailFast, opts ...grpc.DialOption) (vtctldclient.VtctldClient, error) {
 		return cfg.VtctldClient, nil
 	}
 
-	return &cluster.Cluster{
-		ID:        cfg.Cluster.Id,
-		Name:      cfg.Cluster.Name,
-		Discovery: disco,
-		DB:        db,
-		Vtctld:    vtctld,
-	}
+	return c
 }
 
 // BuildClusters is a helper for building multiple clusters from a slice of
 // TestClusterConfigs.
-func BuildClusters(cfgs ...TestClusterConfig) []*cluster.Cluster {
+func BuildClusters(t testing.TB, cfgs ...TestClusterConfig) []*cluster.Cluster {
 	clusters := make([]*cluster.Cluster, len(cfgs))
 
 	for i, cfg := range cfgs {
-		clusters[i] = BuildCluster(cfg)
+		clusters[i] = BuildCluster(t, cfg)
 	}
 
 	return clusters

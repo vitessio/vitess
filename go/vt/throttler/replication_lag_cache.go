@@ -113,7 +113,7 @@ func (c *replicationLagCache) sortByLag(ignoreNSlowestReplicas int, minimumRepli
 	i := 0
 	for _, v := range c.entries {
 		record := v.latest()
-		if int64(record.Stats.SecondsBehindMaster) >= minimumReplicationLag {
+		if int64(record.Stats.ReplicationLagSeconds) >= minimumReplicationLag {
 			list = append(list, record.LegacyTabletStats)
 			i++
 		}
@@ -133,8 +133,8 @@ type byLagAndTabletUID []discovery.LegacyTabletStats
 func (a byLagAndTabletUID) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
 func (a byLagAndTabletUID) Len() int      { return len(a) }
 func (a byLagAndTabletUID) Less(i, j int) bool {
-	return a[i].Stats.SecondsBehindMaster < a[j].Stats.SecondsBehindMaster ||
-		(a[i].Stats.SecondsBehindMaster == a[j].Stats.SecondsBehindMaster &&
+	return a[i].Stats.ReplicationLagSeconds < a[j].Stats.ReplicationLagSeconds ||
+		(a[i].Stats.ReplicationLagSeconds == a[j].Stats.ReplicationLagSeconds &&
 			a[i].Tablet.Alias.Uid < a[j].Tablet.Alias.Uid)
 }
 
