@@ -3646,13 +3646,13 @@ func (m *AggregateStats) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
-	if m.SecondsBehindMasterMax != 0 {
-		i = encodeVarint(dAtA, i, uint64(m.SecondsBehindMasterMax))
+	if m.ReplicationLagSecondsMax != 0 {
+		i = encodeVarint(dAtA, i, uint64(m.ReplicationLagSecondsMax))
 		i--
 		dAtA[i] = 0x20
 	}
-	if m.SecondsBehindMasterMin != 0 {
-		i = encodeVarint(dAtA, i, uint64(m.SecondsBehindMasterMin))
+	if m.ReplicationLagSecondsMin != 0 {
+		i = encodeVarint(dAtA, i, uint64(m.ReplicationLagSecondsMin))
 		i--
 		dAtA[i] = 0x18
 	}
@@ -5327,11 +5327,11 @@ func (m *AggregateStats) SizeVT() (n int) {
 	if m.UnhealthyTabletCount != 0 {
 		n += 1 + sov(uint64(m.UnhealthyTabletCount))
 	}
-	if m.SecondsBehindMasterMin != 0 {
-		n += 1 + sov(uint64(m.SecondsBehindMasterMin))
+	if m.ReplicationLagSecondsMin != 0 {
+		n += 1 + sov(uint64(m.ReplicationLagSecondsMin))
 	}
-	if m.SecondsBehindMasterMax != 0 {
-		n += 1 + sov(uint64(m.SecondsBehindMasterMax))
+	if m.ReplicationLagSecondsMax != 0 {
+		n += 1 + sov(uint64(m.ReplicationLagSecondsMax))
 	}
 	if m.unknownFields != nil {
 		n += len(m.unknownFields)
@@ -14568,9 +14568,9 @@ func (m *AggregateStats) UnmarshalVT(dAtA []byte) error {
 			}
 		case 3:
 			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field SecondsBehindMasterMin", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field ReplicationLagSecondsMin", wireType)
 			}
-			m.SecondsBehindMasterMin = 0
+			m.ReplicationLagSecondsMin = 0
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
 					return ErrIntOverflow
@@ -14580,16 +14580,16 @@ func (m *AggregateStats) UnmarshalVT(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.SecondsBehindMasterMin |= uint32(b&0x7F) << shift
+				m.ReplicationLagSecondsMin |= uint32(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
 			}
 		case 4:
 			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field SecondsBehindMasterMax", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field ReplicationLagSecondsMax", wireType)
 			}
-			m.SecondsBehindMasterMax = 0
+			m.ReplicationLagSecondsMax = 0
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
 					return ErrIntOverflow
@@ -14599,7 +14599,7 @@ func (m *AggregateStats) UnmarshalVT(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.SecondsBehindMasterMax |= uint32(b&0x7F) << shift
+				m.ReplicationLagSecondsMax |= uint32(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
