@@ -1850,6 +1850,72 @@ Gen4 error: symbol t.col not found
   }
 }
 
+# routing rules for derived table where the constraint is in the outer query
+"select id from (select id+col as foo from route1) as t where foo = 5"
+{
+  "QueryType": "SELECT",
+  "Original": "select id from (select id+col as foo from route1) as t where foo = 5",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select id from (select id + col as foo from `user` as route1 where 1 != 1) as t where 1 != 1",
+    "Query": "select id from (select id + col as foo from `user` as route1) as t where foo = 5",
+    "Table": "`user`"
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select id from (select id+col as foo from route1) as t where foo = 5",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select id from (select id + col as foo from `user` as route1 where 1 != 1) as t where 1 != 1",
+    "Query": "select id from (select id + col as foo from `user` as route1 where id + col = 5) as t",
+    "Table": "`user`"
+  }
+}
+
+# push predicate on joined derived tables
+"select t.id from (select id, textcol1 as baz from route1) as t join (select id, textcol1+textcol1 as baz from user) as s ON t.id = s.id WHERE t.baz = '3' AND s.baz = '3'"
+{
+  "QueryType": "SELECT",
+  "Original": "select t.id from (select id, textcol1 as baz from route1) as t join (select id, textcol1+textcol1 as baz from user) as s ON t.id = s.id WHERE t.baz = '3' AND s.baz = '3'",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select t.id from (select id, textcol1 as baz from `user` as route1 where 1 != 1) as t join (select id, textcol1 + textcol1 as baz from `user` where 1 != 1) as s on t.id = s.id where 1 != 1",
+    "Query": "select t.id from (select id, textcol1 as baz from `user` as route1) as t join (select id, textcol1 + textcol1 as baz from `user`) as s on t.id = s.id where t.baz = '3' and s.baz = '3'",
+    "Table": "`user`"
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select t.id from (select id, textcol1 as baz from route1) as t join (select id, textcol1+textcol1 as baz from user) as s ON t.id = s.id WHERE t.baz = '3' AND s.baz = '3'",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select t.id from (select id, textcol1 as baz from `user` as route1 where 1 != 1), (select id, textcol1 + textcol1 as baz from `user` where 1 != 1) where 1 != 1",
+    "Query": "select t.id from (select id, textcol1 as baz from `user` as route1 where textcol1 = '3'), (select id, textcol1 + textcol1 as baz from `user` where textcol1 + textcol1 = '3') where t.id = s.id",
+    "Table": "`user`"
+  }
+}
+
 # recursive derived table lookups
 "select id from (select id from (select id from user) as u) as t where id = 5"
 {

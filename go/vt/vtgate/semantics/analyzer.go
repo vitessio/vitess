@@ -36,13 +36,14 @@ type (
 	analyzer struct {
 		si SchemaInformation
 
-		Tables       []TableInfo
-		scopes       []*scope
-		exprDeps     ExprDependencies
-		exprTypes    map[sqlparser.Expr]querypb.Type
-		err          error
-		currentDb    string
-		inProjection []bool
+		Tables        []TableInfo
+		scopes        []*scope
+		exprDeps      ExprDependencies
+		exprOuterDeps ExprDependencies
+		exprTypes     map[sqlparser.Expr]querypb.Type
+		err           error
+		currentDb     string
+		inProjection  []bool
 
 		rScope  map[*sqlparser.Select]*scope
 		wScope  map[*sqlparser.Select]*scope
@@ -53,12 +54,13 @@ type (
 // newAnalyzer create the semantic analyzer
 func newAnalyzer(dbName string, si SchemaInformation) *analyzer {
 	return &analyzer{
-		exprDeps:  map[sqlparser.Expr]TableSet{},
-		exprTypes: map[sqlparser.Expr]querypb.Type{},
-		rScope:    map[*sqlparser.Select]*scope{},
-		wScope:    map[*sqlparser.Select]*scope{},
-		currentDb: dbName,
-		si:        si,
+		exprDeps:      map[sqlparser.Expr]TableSet{},
+		exprOuterDeps: map[sqlparser.Expr]TableSet{},
+		exprTypes:     map[sqlparser.Expr]querypb.Type{},
+		rScope:        map[*sqlparser.Select]*scope{},
+		wScope:        map[*sqlparser.Select]*scope{},
+		currentDb:     dbName,
+		si:            si,
 	}
 }
 
@@ -71,11 +73,12 @@ func Analyze(statement sqlparser.Statement, currentDb string, si SchemaInformati
 		return nil, err
 	}
 	return &SemTable{
-		exprDependencies: analyzer.exprDeps,
-		exprTypes:        analyzer.exprTypes,
-		Tables:           analyzer.Tables,
-		selectScope:      analyzer.rScope,
-		ProjectionErr:    analyzer.projErr,
+		ExprRecursiveDeps: analyzer.exprDeps,
+		ExprDeps:          analyzer.exprOuterDeps,
+		exprTypes:         analyzer.exprTypes,
+		Tables:            analyzer.Tables,
+		selectScope:       analyzer.rScope,
+		ProjectionErr:     analyzer.projErr,
 	}, nil
 }
 
@@ -142,11 +145,12 @@ func (a *analyzer) analyzeDown(cursor *sqlparser.Cursor) bool {
 			a.analyzeOrderByGroupByExprForLiteral(grpExpr, "group statement")
 		}
 	case *sqlparser.ColName:
-		ts, qt, err := a.resolveColumn(node, current)
+		ts, tsOuter, qt, err := a.resolveColumn(node, current)
 		if err != nil {
 			a.setError(err)
 		} else {
 			a.exprDeps[node] = ts
+			a.exprOuterDeps[node] = tsOuter
 			if qt != nil {
 				a.exprTypes[node] = *qt
 			}
@@ -231,26 +235,11 @@ func isParentSelect(cursor *sqlparser.Cursor) bool {
 	return isSelect
 }
 
-func (a *analyzer) resolveColumn(colName *sqlparser.ColName, current *scope) (TableSet, *querypb.Type, error) {
+func (a *analyzer) resolveColumn(colName *sqlparser.ColName, current *scope) (TableSet, TableSet, *querypb.Type, error) {
 	if colName.Qualifier.IsEmpty() {
 		return a.resolveUnQualifiedColumn(current, colName)
 	}
-	t, err := a.resolveQualifiedColumn(current, colName)
-	if t == nil || err != nil {
-		return 0, nil, err
-	}
-	tableSet := a.tableSetFor(t.GetExpr())
-	for _, colInfo := range t.GetColumns() {
-		if colName.Name.EqualString(colInfo.Name) {
-			// A column can't be of type NULL, that is the default value indicating that we dont know the actual type
-			// But expressions can be of NULL type, so we use nil to represent an unknown type
-			if colInfo.Type == querypb.Type_NULL_TYPE {
-				return tableSet, nil, nil
-			}
-			return tableSet, &colInfo.Type, nil
-		}
-	}
-	return tableSet, nil, nil
+	return a.resolveQualifiedColumn(current, colName)
 }
 
 // tableInfoFor returns the table info for the table set. It should contains only single table.
@@ -266,29 +255,43 @@ func (a *analyzer) tableInfoFor(id TableSet) (TableInfo, error) {
 }
 
 // resolveQualifiedColumn handles `tabl.col` expressions
-func (a *analyzer) resolveQualifiedColumn(current *scope, expr *sqlparser.ColName) (TableInfo, error) {
+func (a *analyzer) resolveQualifiedColumn(current *scope, expr *sqlparser.ColName) (TableSet, TableSet, *querypb.Type, error) {
 	// search up the scope stack until we find a match
 	for current != nil {
 		for _, table := range current.tables {
-			if table.Matches(expr.Qualifier) {
-				if table.IsActualTable() {
-					return table, nil
-				}
-				newExpr := *expr
-				newExpr.Qualifier = sqlparser.TableName{}
-				ts, _, err := table.DepsFor(&newExpr, a, len(current.tables) == 1)
-				if err != nil {
-					return nil, err
-				}
-				if ts == nil {
-					return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadFieldError, "symbol %s not found", sqlparser.String(expr))
-				}
-				return a.tableInfoFor(*ts)
+			if !table.Matches(expr.Qualifier) {
+				continue
 			}
+			if table.IsActualTable() {
+				ts := a.tableSetFor(table.GetExpr())
+				for _, colInfo := range table.GetColumns() {
+					if expr.Name.EqualString(colInfo.Name) {
+						// A column can't be of type NULL, that is the default value indicating that we dont know the actual type
+						// But expressions can be of NULL type, so we use nil to represent an unknown type
+						if colInfo.Type == querypb.Type_NULL_TYPE {
+							return ts, ts, nil, nil
+						}
+						return ts, ts, &colInfo.Type, nil
+					}
+				}
+				return ts, ts, nil, nil
+			}
+			ts, typ, err := table.RecursiveDepsFor(expr, a, len(current.tables) == 1)
+			if err != nil {
+				return 0, 0, nil, err
+			}
+			if ts == nil {
+				return 0, 0, nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadFieldError, "symbol %s not found", sqlparser.String(expr))
+			}
+			outerTs, err := table.DepsFor(expr, a, len(current.tables) == 1)
+			if err != nil {
+				return 0, 0, nil, err
+			}
+			return *ts, *outerTs, typ, nil
 		}
 		current = current.parent
 	}
-	return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadFieldError, "symbol %s not found", sqlparser.String(expr))
+	return 0, 0, nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadFieldError, "symbol %s not found", sqlparser.String(expr))
 }
 
 type originable interface {
@@ -306,22 +309,32 @@ func (a *analyzer) depsForExpr(expr sqlparser.Expr) (TableSet, *querypb.Type) {
 }
 
 // resolveUnQualifiedColumn
-func (a *analyzer) resolveUnQualifiedColumn(current *scope, expr *sqlparser.ColName) (TableSet, *querypb.Type, error) {
-	var tsp *TableSet
+func (a *analyzer) resolveUnQualifiedColumn(current *scope, expr *sqlparser.ColName) (TableSet, TableSet, *querypb.Type, error) {
+	var tsp, tspOuter *TableSet
 	var typp *querypb.Type
 
 	for current != nil && tsp == nil {
 		for _, tbl := range current.tables {
-			ts, typ, err := tbl.DepsFor(expr, a, len(current.tables) == 1)
+			ts, typ, err := tbl.RecursiveDepsFor(expr, a, len(current.tables) == 1)
 			if err != nil {
-				return 0, nil, err
+				return 0, 0, nil, err
 			}
 			if ts != nil && tsp != nil {
-				return 0, nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.NonUniqError, fmt.Sprintf("Column '%s' in field list is ambiguous", sqlparser.String(expr)))
+				return 0, 0, nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.NonUniqError, fmt.Sprintf("Column '%s' in field list is ambiguous", sqlparser.String(expr)))
 			}
 			if ts != nil {
 				tsp = ts
 				typp = typ
+			}
+			if tbl.IsActualTable() {
+				continue
+			}
+			tsOuter, err := tbl.DepsFor(expr, a, len(current.tables) == 1)
+			if err != nil {
+				return 0, 0, nil, err
+			}
+			if tsOuter != nil {
+				tspOuter = tsOuter
 			}
 		}
 
@@ -329,9 +342,12 @@ func (a *analyzer) resolveUnQualifiedColumn(current *scope, expr *sqlparser.ColN
 	}
 
 	if tsp == nil {
-		return 0, nil, nil
+		return 0, 0, nil, nil
 	}
-	return *tsp, typp, nil
+	if tspOuter == nil {
+		return *tsp, 0, typp, nil
+	}
+	return *tsp, *tspOuter, typp, nil
 }
 
 func (a *analyzer) tableSetFor(t *sqlparser.AliasedTableExpr) TableSet {
