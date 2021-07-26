@@ -141,7 +141,7 @@ func TestGetSrvKeyspace(t *testing.T) {
 	// cached for at least half of the expected ttl.
 	errorTestStart := time.Now()
 	errorReqsBefore := rs.counts.Counts()[errorCategory]
-	forceErr := fmt.Errorf("test topo error")
+	forceErr := topo.NewError(topo.Timeout, "test topo error")
 	factory.SetError(forceErr)
 
 	expiry = time.Now().Add(*srvTopoCacheTTL / 2)
@@ -200,7 +200,7 @@ func TestGetSrvKeyspace(t *testing.T) {
 	// that even when there is no activity on the key, it is still cached
 	// for the full configured TTL.
 	time.Sleep(*srvTopoCacheTTL)
-	forceErr = fmt.Errorf("another test topo error")
+	forceErr = topo.NewError(topo.Interrupted, "another test topo error")
 	factory.SetError(forceErr)
 
 	expiry = time.Now().Add(*srvTopoCacheTTL / 2)
