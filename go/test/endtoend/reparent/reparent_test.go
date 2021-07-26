@@ -276,7 +276,7 @@ func TestReparentAvoid(t *testing.T) {
 	stopTablet(t, tab1, true)
 	out, err := prsAvoid(t, tab2)
 	require.Error(t, err)
-	assert.Contains(t, out, "cannot find a tablet to reparent to")
+	assert.Contains(t, out, "cannot find a tablet to reparent to in the same cell as the current primary")
 	validateTopology(t, false)
 	checkPrimaryTablet(t, tab2)
 }
