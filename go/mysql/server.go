@@ -378,14 +378,24 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 
 	// See what auth method the AuthServer wants to use for that user.
 	negotiatedAuthMethod, err := negotiateAuthMethod(c, l.authServer, user, clientAuthMethod)
-	if err != nil {
-		// The client will disconnect if it doesn't understand
-		// the first auth method that we send, so we only have to send the
-		// first one that we allow for the user.
-		for _, m := range l.authServer.AuthMethods() {
-			if m.HandleUser(c, user) {
-				negotiatedAuthMethod = m
-				break
+
+	// We need to send down an additional packet if we either have no negotiated method
+	// at all or incomplete authentication data.
+	//
+	// The latter case happens for example for MySQL 8.0 clients until 8.0.25 who advertise
+	// support for caching_sha2_password by default but with no plugin data.
+	if err != nil || len(clientAuthResponse) == 0 {
+		// If we have no negotiated method yet, we pick the first one
+		// we know about ourselves as that's the last resort option we have here.
+		if err != nil {
+			// The client will disconnect if it doesn't understand
+			// the first auth method that we send, so we only have to send the
+			// first one that we allow for the user.
+			for _, m := range l.authServer.AuthMethods() {
+				if m.HandleUser(c, user) {
+					negotiatedAuthMethod = m
+					break
+				}
 			}
 		}
 
@@ -394,11 +404,9 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 			return
 		}
 
-		if negotiatedAuthMethod.Name() == MysqlClearPassword || negotiatedAuthMethod.Name() == MysqlDialog {
-			if !l.AllowClearTextWithoutTLS.Get() && !c.TLSEnabled() {
-				c.writeErrorPacket(CRServerHandshakeErr, SSUnknownSQLState, "Cannot use clear text authentication over non-SSL connections.")
-				return
-			}
+		if !l.AllowClearTextWithoutTLS.Get() && !c.TLSEnabled() && !negotiatedAuthMethod.AllowClearTextWithoutTLS() {
+			c.writeErrorPacket(CRServerHandshakeErr, SSUnknownSQLState, "Cannot use clear text authentication over non-SSL connections.")
+			return
 		}
 
 		serverAuthPluginData, err = negotiatedAuthMethod.AuthPluginData()
