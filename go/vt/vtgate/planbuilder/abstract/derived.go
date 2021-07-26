@@ -37,7 +37,7 @@ func (d *Derived) TableID() semantics.TableSet {
 
 // PushPredicate implements the Operator interface
 func (d *Derived) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) error {
-	tableInfo, err := semTable.TableInfoFor(semTable.ExprDeps.Dependencies(expr))
+	tableInfo, err := semTable.TableInfoForExpr(expr)
 	if err != nil {
 		return err
 	}
