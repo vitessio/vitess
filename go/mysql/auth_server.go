@@ -78,6 +78,11 @@ type AuthMethod interface {
 	// depends on what you have.
 	HandleUser(conn *Conn, user string) bool
 
+	// AllowClearTextWithoutTLS identifies if an auth method is allowed
+	// on a plain text connection. This check is only enforced
+	// if the listener has AllowClearTextWithoutTLS() disabled.
+	AllowClearTextWithoutTLS() bool
+
 	// AuthPluginData generates the information for the auth plugin.
 	// This is included in for example the auth switch request. This
 	// is auth plugin specific and opaque to the Mysql handshake
@@ -417,6 +422,10 @@ func (n *mysqlNativePasswordAuthMethod) AuthPluginData() ([]byte, error) {
 	return append(salt, 0), nil
 }
 
+func (n *mysqlNativePasswordAuthMethod) AllowClearTextWithoutTLS() bool {
+	return true
+}
+
 func (n *mysqlNativePasswordAuthMethod) HandleAuthPluginData(conn *Conn, user string, serverAuthPluginData []byte, clientAuthPluginData []byte, remoteAddr net.Addr) (Getter, error) {
 	if serverAuthPluginData[len(serverAuthPluginData)-1] != 0x00 {
 		return nil, NewSQLError(ERAccessDeniedError, SSAccessDeniedError, "Access denied for user '%v'", user)
@@ -443,13 +452,12 @@ func (n *mysqlClearAuthMethod) AuthPluginData() ([]byte, error) {
 	return nil, nil
 }
 
-func (n *mysqlClearAuthMethod) HandleAuthPluginData(conn *Conn, user string, serverAuthPluginData []byte, clientAuthPluginData []byte, remoteAddr net.Addr) (Getter, error) {
-	password := ""
-	if len(clientAuthPluginData) > 0 {
-		password = string(clientAuthPluginData[:len(clientAuthPluginData)-1])
-	}
+func (n *mysqlClearAuthMethod) AllowClearTextWithoutTLS() bool {
+	return false
+}
 
-	return n.storage.UserEntryWithPassword(conn.GetTLSClientCerts(), user, password, remoteAddr)
+func (n *mysqlClearAuthMethod) HandleAuthPluginData(conn *Conn, user string, serverAuthPluginData []byte, clientAuthPluginData []byte, remoteAddr net.Addr) (Getter, error) {
+	return n.storage.UserEntryWithPassword(conn.GetTLSClientCerts(), user, string(clientAuthPluginData[:len(clientAuthPluginData)-1]), remoteAddr)
 }
 
 type mysqlDialogAuthMethod struct {
@@ -477,6 +485,10 @@ func (n *mysqlDialogAuthMethod) HandleAuthPluginData(conn *Conn, user string, se
 	return n.storage.UserEntryWithPassword(conn.GetTLSClientCerts(), user, string(clientAuthPluginData[:len(clientAuthPluginData)-1]), remoteAddr)
 }
 
+func (n *mysqlDialogAuthMethod) AllowClearTextWithoutTLS() bool {
+	return false
+}
+
 type mysqlCachingSha2AuthMethod struct {
 	cache     CachingStorage
 	storage   PlainTextStorage
@@ -500,6 +512,10 @@ func (n *mysqlCachingSha2AuthMethod) AuthPluginData() ([]byte, error) {
 		return nil, err
 	}
 	return append(salt, 0), nil
+}
+
+func (n *mysqlCachingSha2AuthMethod) AllowClearTextWithoutTLS() bool {
+	return true
 }
 
 func (n *mysqlCachingSha2AuthMethod) HandleAuthPluginData(c *Conn, user string, serverAuthPluginData []byte, clientAuthPluginData []byte, remoteAddr net.Addr) (Getter, error) {
