@@ -34,20 +34,24 @@ const (
 	protocolVersion = 10
 )
 
+// AuthMethodDescription is the type for different supported and
+// implemented authentication methods.
+type AuthMethodDescription string
+
 // Supported auth forms.
 const (
 	// MysqlNativePassword uses a salt and transmits a hash on the wire.
-	MysqlNativePassword = "mysql_native_password"
+	MysqlNativePassword = AuthMethodDescription("mysql_native_password")
 
 	// MysqlClearPassword transmits the password in the clear.
-	MysqlClearPassword = "mysql_clear_password"
+	MysqlClearPassword = AuthMethodDescription("mysql_clear_password")
 
 	// CachingSha2Password uses a salt and transmits a SHA256 hash on the wire.
-	CachingSha2Password = "caching_sha2_password"
+	CachingSha2Password = AuthMethodDescription("caching_sha2_password")
 
 	// MysqlDialog uses the dialog plugin on the client side.
 	// It transmits data in the clear.
-	MysqlDialog = "dialog"
+	MysqlDialog = AuthMethodDescription("dialog")
 )
 
 // Capability flags.

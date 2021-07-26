@@ -331,7 +331,7 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 	// If we're not running, set ReplicationLagSeconds to be very high.
 	// TODO(sougou): if we also stored the time of the last event, we
 	// can estimate this value more accurately.
-	defer vp.vr.stats.SecondsBehindMaster.Set(math.MaxInt64)
+	defer vp.vr.stats.ReplicationLagSeconds.Set(math.MaxInt64)
 	defer vp.vr.stats.VReplicationLags.Add(strconv.Itoa(int(vp.vr.id)), math.MaxInt64)
 	var sbm int64 = -1
 	for {
@@ -348,7 +348,7 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 		// So, we should assume we're falling behind.
 		if len(items) == 0 {
 			behind := time.Now().UnixNano() - vp.lastTimestampNs - vp.timeOffsetNs
-			vp.vr.stats.SecondsBehindMaster.Set(behind / 1e9)
+			vp.vr.stats.ReplicationLagSeconds.Set(behind / 1e9)
 			vp.vr.stats.VReplicationLags.Add(strconv.Itoa(int(vp.vr.id)), time.Duration(behind/1e9)*time.Second)
 		}
 		// Empty transactions are saved at most once every idleTimeout.
@@ -403,7 +403,7 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 			}
 		}
 		if sbm >= 0 {
-			vp.vr.stats.SecondsBehindMaster.Set(sbm)
+			vp.vr.stats.ReplicationLagSeconds.Set(sbm)
 			vp.vr.stats.VReplicationLags.Add(strconv.Itoa(int(vp.vr.id)), time.Duration(sbm)*time.Second)
 		}
 

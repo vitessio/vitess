@@ -540,12 +540,17 @@ func (client *Client) ReplicationStatus(ctx context.Context, tablet *topodatapb.
 
 // MasterStatus is part of the tmclient.TabletManagerClient interface.
 func (client *Client) MasterStatus(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error) {
+	return client.PrimaryStatus(ctx, tablet)
+}
+
+// PrimaryStatus is part of the tmclient.TabletManagerClient interface.
+func (client *Client) PrimaryStatus(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error) {
 	c, closer, err := client.dialer.dial(ctx, tablet)
 	if err != nil {
 		return nil, err
 	}
 	defer closer.Close()
-	response, err := c.MasterStatus(ctx, &tabletmanagerdatapb.MasterStatusRequest{})
+	response, err := c.PrimaryStatus(ctx, &tabletmanagerdatapb.PrimaryStatusRequest{})
 	if err != nil {
 		return nil, err
 	}
@@ -554,12 +559,17 @@ func (client *Client) MasterStatus(ctx context.Context, tablet *topodatapb.Table
 
 // MasterPosition is part of the tmclient.TabletManagerClient interface.
 func (client *Client) MasterPosition(ctx context.Context, tablet *topodatapb.Tablet) (string, error) {
+	return client.PrimaryPosition(ctx, tablet)
+}
+
+// PrimaryPosition is part of the tmclient.TabletManagerClient interface.
+func (client *Client) PrimaryPosition(ctx context.Context, tablet *topodatapb.Tablet) (string, error) {
 	c, closer, err := client.dialer.dial(ctx, tablet)
 	if err != nil {
 		return "", err
 	}
 	defer closer.Close()
-	response, err := c.MasterPosition(ctx, &tabletmanagerdatapb.MasterPositionRequest{})
+	response, err := c.MasterPosition(ctx, &tabletmanagerdatapb.PrimaryPositionRequest{})
 	if err != nil {
 		return "", err
 	}
@@ -703,17 +713,7 @@ func (client *Client) ResetReplication(ctx context.Context, tablet *topodatapb.T
 
 // InitMaster is part of the tmclient.TabletManagerClient interface.
 func (client *Client) InitMaster(ctx context.Context, tablet *topodatapb.Tablet) (string, error) {
-	c, closer, err := client.dialer.dial(ctx, tablet)
-	if err != nil {
-		return "", err
-	}
-	defer closer.Close()
-
-	response, err := c.InitMaster(ctx, &tabletmanagerdatapb.InitPrimaryRequest{})
-	if err != nil {
-		return "", err
-	}
-	return response.Position, nil
+	return client.InitPrimary(ctx, tablet)
 }
 
 // InitPrimary is part of the tmclient.TabletManagerClient interface.
@@ -764,24 +764,7 @@ func (client *Client) InitReplica(ctx context.Context, tablet *topodatapb.Tablet
 
 // DemoteMaster is part of the tmclient.TabletManagerClient interface.
 func (client *Client) DemoteMaster(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error) {
-	c, closer, err := client.dialer.dial(ctx, tablet)
-	if err != nil {
-		return nil, err
-	}
-	defer closer.Close()
-	response, err := c.DemotePrimary(ctx, &tabletmanagerdatapb.DemotePrimaryRequest{})
-	if err != nil {
-		return nil, err
-	}
-	status := response.PrimaryStatus
-	if status == nil {
-		// We are assuming this means a response came from an older server.
-		status = &replicationdatapb.PrimaryStatus{
-			Position:     response.DeprecatedPosition, //nolint
-			FilePosition: "",
-		}
-	}
-	return status, nil
+	return client.DemotePrimary(ctx, tablet)
 }
 
 // DemotePrimary is part of the tmclient.TabletManagerClient interface.
@@ -808,13 +791,7 @@ func (client *Client) DemotePrimary(ctx context.Context, tablet *topodatapb.Tabl
 
 // UndoDemoteMaster is part of the tmclient.TabletManagerClient interface.
 func (client *Client) UndoDemoteMaster(ctx context.Context, tablet *topodatapb.Tablet) error {
-	c, closer, err := client.dialer.dial(ctx, tablet)
-	if err != nil {
-		return err
-	}
-	defer closer.Close()
-	_, err = c.UndoDemoteMaster(ctx, &tabletmanagerdatapb.UndoDemotePrimaryRequest{})
-	return err
+	return client.UndoDemotePrimary(ctx, tablet)
 }
 
 // UndoDemotePrimary is part of the tmclient.TabletManagerClient interface.
@@ -841,12 +818,17 @@ func (client *Client) ReplicaWasPromoted(ctx context.Context, tablet *topodatapb
 
 // SetMaster is part of the tmclient.TabletManagerClient interface.
 func (client *Client) SetMaster(ctx context.Context, tablet *topodatapb.Tablet, parent *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool) error {
+	return client.SetReplicationSource(ctx, tablet, parent, timeCreatedNS, waitPosition, forceStartReplication)
+}
+
+// SetReplicationSource is part of the tmclient.TabletManagerClient interface.
+func (client *Client) SetReplicationSource(ctx context.Context, tablet *topodatapb.Tablet, parent *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool) error {
 	c, closer, err := client.dialer.dial(ctx, tablet)
 	if err != nil {
 		return err
 	}
 	defer closer.Close()
-	_, err = c.SetMaster(ctx, &tabletmanagerdatapb.SetMasterRequest{
+	_, err = c.SetReplicationSource(ctx, &tabletmanagerdatapb.SetReplicationSourceRequest{
 		Parent:                parent,
 		TimeCreatedNs:         timeCreatedNS,
 		WaitPosition:          waitPosition,

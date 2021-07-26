@@ -17,20 +17,23 @@ limitations under the License.
 package vtgr
 
 import (
+	"errors"
 	"flag"
+	"os"
+	"os/signal"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
-
-	"vitess.io/vitess/go/vt/vtgr/config"
-
-	"vitess.io/vitess/go/vt/vtgr/db"
 
 	"golang.org/x/net/context"
 
+	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vtgr/config"
 	"vitess.io/vitess/go/vt/vtgr/controller"
+	"vitess.io/vitess/go/vt/vtgr/db"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 )
 
@@ -54,6 +57,8 @@ type VTGR struct {
 	topo   controller.GRTopo
 	tmc    tmclient.TabletManagerClient
 	ctx    context.Context
+
+	stopped sync2.AtomicBool
 }
 
 func newVTGR(ctx context.Context, ts controller.GRTopo, tmc tmclient.TabletManagerClient) *VTGR {
@@ -104,6 +109,7 @@ func OpenTabletDiscovery(ctx context.Context, cellsToWatch, clustersToWatch []st
 			}
 		}
 	}
+	vtgr.handleSignal(os.Exit)
 	vtgr.Shards = shards
 	log.Infof("Monitoring shards size %v", len(vtgr.Shards))
 	// Force refresh all tablet here to populate data for vtgr
@@ -143,9 +149,11 @@ func (vtgr *VTGR) ScanAndRepair() {
 				func() {
 					ctx, cancel := context.WithTimeout(vtgr.ctx, *scanAndRepairTimeout)
 					defer cancel()
-					log.Infof("Start scan and repair %v/%v", shard.KeyspaceShard.Keyspace, shard.KeyspaceShard.Shard)
-					shard.ScanAndRepairShard(ctx)
-					log.Infof("Finished scan and repair %v/%v", shard.KeyspaceShard.Keyspace, shard.KeyspaceShard.Shard)
+					if !vtgr.stopped.Get() {
+						log.Infof("Start scan and repair %v/%v", shard.KeyspaceShard.Keyspace, shard.KeyspaceShard.Shard)
+						shard.ScanAndRepairShard(ctx)
+						log.Infof("Finished scan and repair %v/%v", shard.KeyspaceShard.Keyspace, shard.KeyspaceShard.Shard)
+					}
 				}()
 			}
 		}(shard)
@@ -159,6 +167,9 @@ func (vtgr *VTGR) Diagnose(ctx context.Context, shard *controller.GRShard) (cont
 
 // Repair exposes the endpoint to repair a particular shard
 func (vtgr *VTGR) Repair(ctx context.Context, shard *controller.GRShard, diagnose controller.DiagnoseType) (controller.RepairResultCode, error) {
+	if vtgr.stopped.Get() {
+		return controller.Fail, errors.New("VTGR is stopped")
+	}
 	return shard.Repair(ctx, diagnose)
 }
 
@@ -171,4 +182,21 @@ func (vtgr *VTGR) GetCurrentShardStatuses() []controller.ShardStatus {
 		result = append(result, status)
 	}
 	return result
+}
+
+func (vtgr *VTGR) handleSignal(action func(int)) {
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGHUP)
+	go func() {
+		// block until the signal is received
+		<-sigChan
+		log.Infof("Handling SIGHUP")
+		// Set stopped to true so that following repair call won't do anything
+		// For the ongoing repairs, checkShardLocked will abort if needed
+		vtgr.stopped.Set(true)
+		for _, shard := range vtgr.Shards {
+			shard.UnlockShard()
+		}
+		action(1)
+	}()
 }

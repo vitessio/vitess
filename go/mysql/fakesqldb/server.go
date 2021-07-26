@@ -173,7 +173,7 @@ func New(t testing.TB) *DB {
 
 	db.Handler = db
 
-	authServer := &mysql.AuthServerNone{}
+	authServer := mysql.NewAuthServerNone()
 
 	// Start listening.
 	db.listener, err = mysql.NewListener("unix", socketFile, authServer, db, 0, 0, false)
