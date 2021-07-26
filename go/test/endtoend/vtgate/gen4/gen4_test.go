@@ -86,6 +86,27 @@ func TestGroupBy(t *testing.T) {
 			`[INT64(2) VARCHAR("B") VARCHAR("C") VARCHAR("abc")]]`)
 }
 
+func TestAggregationFunc(t *testing.T) {
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	defer exec(t, conn, `delete from t2`)
+
+	// insert some data.
+	checkedExec(t, conn, `insert into t2(id, tcol1, tcol2) values (1, 'A', 'A'),(2, 'B', 'C'),(3, 'A', 'C'),(4, 'C', 'A'),(5, 'A', 'A'),(6, 'B', 'C'),(7, 'B', 'A'),(8, 'C', 'A')`)
+
+	// on primary vindex
+	assertMatches(t, conn, `select tcol1, count(distinct id) from t2 group by tcol1`,
+		`[[VARCHAR("A") INT64(3)] [VARCHAR("B") INT64(3)] [VARCHAR("C") INT64(2)]]`)
+
+	// on any column
+	assertMatches(t, conn, `select tcol1, count(distinct tcol2) from t2 group by tcol1`,
+		`[[VARCHAR("A") INT64(2)] [VARCHAR("B") INT64(2)] [VARCHAR("C") INT64(1)]]`)
+
+}
+
 func assertMatches(t *testing.T, conn *mysql.Conn, query, expected string) {
 	t.Helper()
 	qr := checkedExec(t, conn, query)
