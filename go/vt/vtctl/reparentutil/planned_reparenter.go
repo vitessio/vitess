@@ -161,7 +161,7 @@ func (pr *PlannedReparenter) preflightChecks(
 		}
 
 		if opts.NewPrimaryAlias == nil {
-			return true, vterrors.Errorf(vtrpc.Code_INTERNAL, "cannot find a tablet to reparent to")
+			return true, vterrors.Errorf(vtrpc.Code_INTERNAL, "cannot find a tablet to reparent to in the same cell as the current primary")
 		}
 
 		pr.logger.Infof("elected new primary candidate %v", topoproto.TabletAliasString(opts.NewPrimaryAlias))
