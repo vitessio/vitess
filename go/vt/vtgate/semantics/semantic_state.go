@@ -393,23 +393,10 @@ func (st *SemTable) Dependencies(expr sqlparser.Expr) TableSet {
 	return st.ExprDeps.Dependencies(expr)
 }
 
-// Dependencies return the table dependencies of the expression.
-func (d ExprDependencies) Dependencies(expr sqlparser.Expr) TableSet {
-	deps, found := d[expr]
-	if found {
-		return deps
-	}
-
-	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
-		colName, ok := node.(*sqlparser.ColName)
-		if ok {
-			set := d[colName]
-			deps |= set
-		}
-		return true, nil
-	}, expr)
-	d[expr] = deps
-	return deps
+// TableInfoForExpr returns the table info of the table that this expression depends on.
+// Careful: this only works for expressions that have a single table dependency
+func (st *SemTable) TableInfoForExpr(expr sqlparser.Expr) (TableInfo, error) {
+	return st.TableInfoFor(st.ExprDeps.Dependencies(expr))
 }
 
 // GetSelectTables returns the table in the select.
@@ -433,6 +420,25 @@ func (st *SemTable) TypeFor(e sqlparser.Expr) *querypb.Type {
 		return &typ
 	}
 	return nil
+}
+
+// Dependencies return the table dependencies of the expression.
+func (d ExprDependencies) Dependencies(expr sqlparser.Expr) TableSet {
+	deps, found := d[expr]
+	if found {
+		return deps
+	}
+
+	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+		colName, ok := node.(*sqlparser.ColName)
+		if ok {
+			set := d[colName]
+			deps |= set
+		}
+		return true, nil
+	}, expr)
+	d[expr] = deps
+	return deps
 }
 
 func newScope(parent *scope) *scope {
