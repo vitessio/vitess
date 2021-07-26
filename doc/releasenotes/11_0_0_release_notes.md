@@ -38,6 +38,9 @@ This release complies with VEP-3 which removes the upgrade order requirement. Co
  * PRIMARY in index hint list for master #8160
  * Signed int parse #8189 
  * Delete table reference alias support #8393 
+ * Fix for function calls in DEFAULT value of CREATE TABLE statement in release-11.0 #8476
+ * Backport: Fixing multiple issues related to onlineddl/lifecycle #8517
+ * boolean values should not be parenthesised in default clause - release 11 #8531
 
 
 ### VReplication
@@ -54,6 +57,7 @@ This release complies with VEP-3 which removes the upgrade order requirement. Co
  * Schema Tracking Flaky Test: Ignore unrelated gtid progress events #8283
  * Adds padding to keyrange comparison #8296 
  * VReplication Reverse Workflows: add keyspace scope to vindex while creating reverse vreplication streams #8385
+ * OnlineDDL/Vreplication stress test: investigating failures #8390
 ### VTAdmin
  * Add missing return in `vtctld-*` DSN case, and log any flag that gets ignored #7872
  * [vtadmin-web] Do not parse numbers/booleans in URL query parameters by default #8100
@@ -104,6 +108,8 @@ This release complies with VEP-3 which removes the upgrade order requirement. Co
 ### vttestserver
  * docker/vttestserver:  Set max_connections in default-fast.cnf at container build time #7810
 ## Documentation 
+### Cluster management
+ * Enhance k8stopo flag documentation #8458
 ### Build/CI
  * Update version for latest snapshot #7801
  * v10 GA Release Notes #7964
@@ -198,6 +204,8 @@ This release complies with VEP-3 which removes the upgrade order requirement. Co
  * Gen4: expand star in projection list #8325
  * gen4: Fail all queries not handled well by gen4 #8359
  * Gen4 fail more2 #8382  
+ * SHOW VITESS_MIGRATION '...' LOGS, retain logs for 24 hours #8532
+ * [11.0] query serving to continue when topo server restarts #8533
 ### VReplication
  * Use Dba user when Vexec is runAsAdmin #7731
  * VReplication: add table for logging stream errors, state changes and key workflow steps #7831
@@ -218,6 +226,7 @@ This release complies with VEP-3 which removes the upgrade order requirement. Co
  * Online DDL/Vreplication suite: fix test for no shared UK #8334
  * Online DDL/VReplication: support DROP+ADD column of same name #8337
  * Online DDL/VReplication test suite: support ENUM as part of PRIMARY KEY #8345  
+ * Change local example to use v2 vreplication flows #8527
 ### VTAdmin
  * [vtadmin-web] Add useSyncedURLParam hook to persist filter parameter in the URL #7857
  * [vtadmin-web] Display more data on /gates view and add filtering #7876
@@ -290,7 +299,8 @@ This release complies with VEP-3 which removes the upgrade order requirement. Co
  * [wrangler|workflow] Extract `workflowState` and `workflowType` out to `package workflow` #7967
  * [wrangler|workflow] extract `*wrangler.streamMigrater` to `workflow.StreamMigrator` #8008
  * [workflow] Migrate `getCellsWith{Shard,Table}ReadsSwitched`, `TrafficSwitchDirection` and `TableRemovalType` to package workflow #8190
- * [workflow] Cleanup wrangler wrappers, migrate `checkIfJournalExistsOnTablet` to package workflow #8193 
+ * [workflow] Cleanup wrangler wrappers, migrate `checkIfJournalExistsOnTablet` to package workflow #8193
+ * Backports of #8403 #8483 #8489 #8401 #8521 #8396 from main into release 11.0 #8536
 ### VTAdmin
  * [vtadmin-api] Replace magic numbers with `net/http` constants #8127
  * [vtadmin-web] Move single-entity view components into subfolders #8202
@@ -369,6 +379,6 @@ This release complies with VEP-3 which removes the upgrade order requirement. Co
  * Make timestamp authoritative for master information #8381
 
 
-The release includes 1041 commits (excluding merges)
+The release includes 1070 commits (excluding merges)
 
-Thanks to all our contributors: @AdamKorcz, @GuptaManan100, @Hellcatlk, @Johnny-Three, @acharisshopify, @ajm188, @alexrs, @aquarapid, @askdba, @deepthi, @dependabot[bot], @doeg, @dyv, @enisoc, @frouioui, @gedgar, @guidoiaquinti, @harshit-gangal, @hkdsun, @idvoretskyi, @kirs, @mcronce, @narcsfz, @noxiouz, @rafael, @rohit-nayak-ps, @setassociative, @shlomi-noach, @systay, @tokikanno, @vmg, @wangmeng99, @yangxuanjia, @zhangshj-inspur
+Thanks to all our contributors: @AdamKorcz, @GuptaManan100, @Hellcatlk, @Johnny-Three, @acharisshopify, @ajm188, @alexrs, @aquarapid, @askdba, @deepthi, @dependabot[bot], @doeg, @dyv, @enisoc, @frouioui, @gedgar, @guidoiaquinti, @harshit-gangal, @hkdsun, @idvoretskyi, @jmoldow, @kirs, @mcronce, @narcsfz, @noxiouz, @rafael, @rohit-nayak-ps, @setassociative, @shlomi-noach, @systay, @tokikanno, @vmg, @wangmeng99, @yangxuanjia, @zhangshj-inspur
