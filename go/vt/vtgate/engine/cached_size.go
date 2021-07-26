@@ -696,6 +696,26 @@ func (cached *Set) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+func (cached *ShowMigrationLogs) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field Keyspace *vitess.io/vitess/go/vt/vtgate/vindexes.Keyspace
+	size += cached.Keyspace.CachedSize(true)
+	// field Stmt *vitess.io/vitess/go/vt/sqlparser.ShowMigrationLogs
+	size += cached.Stmt.CachedSize(true)
+	// field Query string
+	size += int64(len(cached.Query))
+	// field TargetDestination vitess.io/vitess/go/vt/key.Destination
+	if cc, ok := cached.TargetDestination.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
 func (cached *Subquery) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)

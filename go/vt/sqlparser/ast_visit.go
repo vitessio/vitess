@@ -254,6 +254,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfShowFilter(in, f)
 	case *ShowLegacy:
 		return VisitRefOfShowLegacy(in, f)
+	case *ShowMigrationLogs:
+		return VisitRefOfShowMigrationLogs(in, f)
 	case *StarExpr:
 		return VisitRefOfStarExpr(in, f)
 	case *Stream:
@@ -1869,6 +1871,18 @@ func VisitRefOfShowLegacy(in *ShowLegacy, f Visit) error {
 	}
 	return nil
 }
+func VisitRefOfShowMigrationLogs(in *ShowMigrationLogs, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitComments(in.Comments, f); err != nil {
+		return err
+	}
+	return nil
+}
 func VisitRefOfStarExpr(in *StarExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -2686,6 +2700,8 @@ func VisitStatement(in Statement, f Visit) error {
 		return VisitRefOfSetTransaction(in, f)
 	case *Show:
 		return VisitRefOfShow(in, f)
+	case *ShowMigrationLogs:
+		return VisitRefOfShowMigrationLogs(in, f)
 	case *Stream:
 		return VisitRefOfStream(in, f)
 	case *TruncateTable:
