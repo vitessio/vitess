@@ -341,7 +341,7 @@ func TestMain(m *testing.M) {
 	// setup cellInfos before creating the cluster
 	cellInfos = append(cellInfos, &cellInfo{
 		cellName:    cell1,
-		numReplicas: 4,
+		numReplicas: 5,
 		numRdonly:   1,
 	})
 	cellInfos = append(cellInfos, &cellInfo{
@@ -563,4 +563,67 @@ func runSQL(t *testing.T, sql string, tablet *cluster.Vttablet, db string) (*sql
 func execute(t *testing.T, conn *mysql.Conn, query string) (*sqltypes.Result, error) {
 	t.Helper()
 	return conn.ExecuteFetch(query, 1000, true)
+}
+
+// startVttablet is used to start a vttablet from the given cell and type
+func startVttablet(t *testing.T, cell string, isRdonly bool) *cluster.Vttablet {
+
+	var tablet *cluster.Vttablet
+	for _, cellInfo := range cellInfos {
+		if cellInfo.cellName == cell {
+			tabletsToUse := cellInfo.replicaTablets
+			if isRdonly {
+				tabletsToUse = cellInfo.rdonlyTablets
+			}
+			for _, vttablet := range tabletsToUse {
+				if isVttabletInUse(vttablet) {
+					continue
+				}
+				tablet = vttablet
+				err := cleanAndStartVttablet(t, vttablet)
+				require.NoError(t, err)
+				break
+			}
+			break
+		}
+	}
+
+	require.NotNil(t, tablet, "Could not start requested tablet")
+	// wait for the tablets to come up properly
+	err := tablet.VttabletProcess.WaitForTabletStatuses([]string{"SERVING", "NOT_SERVING"})
+	require.NoError(t, err)
+	err = tablet.VttabletProcess.WaitForTabletTypes([]string{"replica", "rdonly"})
+	require.NoError(t, err)
+	return tablet
+}
+
+func isVttabletInUse(tablet *cluster.Vttablet) bool {
+	for _, vttablet := range clusterInstance.Keyspaces[0].Shards[0].Vttablets {
+		if tablet == vttablet {
+			return true
+		}
+	}
+	return false
+}
+
+func permanentlyRemoveVttablet(tablet *cluster.Vttablet) {
+	// remove the tablet from our global list
+	for _, cellInfo := range cellInfos {
+		for i, vttablet := range cellInfo.replicaTablets {
+			if vttablet == tablet {
+				// remove this tablet since its mysql has stopped
+				cellInfo.replicaTablets = append(cellInfo.replicaTablets[:i], cellInfo.replicaTablets[i+1:]...)
+				killTablets([]*cluster.Vttablet{tablet})
+				return
+			}
+		}
+		for i, vttablet := range cellInfo.rdonlyTablets {
+			if vttablet == tablet {
+				// remove this tablet since its mysql has stopped
+				cellInfo.replicaTablets = append(cellInfo.replicaTablets[:i], cellInfo.replicaTablets[i+1:]...)
+				killTablets([]*cluster.Vttablet{tablet})
+				return
+			}
+		}
+	}
 }

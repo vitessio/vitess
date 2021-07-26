@@ -18,6 +18,7 @@ package vtorc
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -40,16 +41,7 @@ func TestDownPrimary(t *testing.T) {
 	require.NoError(t, err)
 	defer func() {
 		// we remove the tablet from our global list since its mysqlctl process has stopped and cannot be reused for other tests
-		for _, cellInfo := range cellInfos {
-			for i, tablet := range cellInfo.replicaTablets {
-				if tablet == curPrimary {
-					// remove this tablet since its mysql has stopped
-					cellInfo.replicaTablets = append(cellInfo.replicaTablets[:i], cellInfo.replicaTablets[i+1:]...)
-					killTablets([]*cluster.Vttablet{curPrimary})
-					return
-				}
-			}
-		}
+		permanentlyRemoveVttablet(curPrimary)
 	}()
 
 	for _, tablet := range shard0.Vttablets {
@@ -59,4 +51,40 @@ func TestDownPrimary(t *testing.T) {
 			break
 		}
 	}
+}
+
+// Failover should not be cross data centers, according to the configuration file
+func TestCrossDataCenterFailure(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	setupVttabletsAndVtorc(t, 2, 1, 0, 0, nil)
+	keyspace := &clusterInstance.Keyspaces[0]
+	shard0 := &keyspace.Shards[0]
+	// find primary from topo
+	curPrimary := shardPrimaryTablet(t, clusterInstance, keyspace, shard0)
+	assert.NotNil(t, curPrimary, "should have elected a primary")
+
+	var replicaInSameCell *cluster.Vttablet
+	for _, tablet := range shard0.Vttablets {
+		// we know we have only two replcia tablets, so the one not the primary must be the other replica
+		if tablet.Alias != curPrimary.Alias && tablet.Type == "replica" {
+			replicaInSameCell = tablet
+			break
+		}
+	}
+
+	crossCellReplica := startVttablet(t, cell2, false)
+	// newly started tablet does not replicate from anyone yet, we will allow orchestrator to fix this too
+	time.Sleep(15 * time.Second)
+	checkReplication(t, clusterInstance, curPrimary, []*cluster.Vttablet{crossCellReplica, replicaInSameCell})
+
+	// Make the current primary database unavailable.
+	err := curPrimary.MysqlctlProcess.Stop()
+	require.NoError(t, err)
+	defer func() {
+		// we remove the tablet from our global list since its mysqlctl process has stopped and cannot be reused for other tests
+		permanentlyRemoveVttablet(curPrimary)
+	}()
+
+	// we have a replica in the same cell, so that is the one which should be promoted and not the one from another cell
+	checkPrimaryTablet(t, clusterInstance, replicaInSameCell)
 }
