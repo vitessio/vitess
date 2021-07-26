@@ -31,7 +31,7 @@ var _ Operator = (*LeftJoin)(nil)
 
 // PushPredicate implements the Operator interface
 func (oj *LeftJoin) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) error {
-	deps := semTable.Dependencies(expr)
+	deps := semTable.RecursiveDependencies(expr)
 	if deps.IsSolvedBy(oj.Left.TableID()) {
 		return oj.Left.PushPredicate(expr, semTable)
 	}

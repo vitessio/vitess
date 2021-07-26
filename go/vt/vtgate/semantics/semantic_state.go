@@ -37,10 +37,15 @@ type (
 		GetColumns() []ColumnInfo
 		IsActualTable() bool
 
-		// DepsFor returns a pointer to the table set for the table that this column belongs to, if it can be found
-		// if the column is not found, nil will be returned instead
-		DepsFor(col *sqlparser.ColName, org originable, single bool) (*TableSet, *querypb.Type, error)
+		// RecursiveDepsFor returns a pointer to the table set for the table that this column belongs to, if it can be found
+		// if the column is not found, nil will be returned instead. If the column is a derived table column, this method
+		// will recursively find the dependencies of the expression inside the derived table
+		RecursiveDepsFor(col *sqlparser.ColName, org originable, single bool) (*TableSet, *querypb.Type, error)
+
+		// DepsFor finds the table that a column depends on. No recursing is done on derived tables
+		DepsFor(col *sqlparser.ColName, org originable, single bool) (*TableSet, error)
 		IsInfSchema() bool
+		GetExprFor(s string) (sqlparser.Expr, error)
 	}
 
 	// ColumnInfo contains information about columns
@@ -87,10 +92,19 @@ type (
 		Tables []TableInfo
 		// ProjectionErr stores the error that we got during the semantic analysis of the SelectExprs.
 		// This is only a real error if we are unable to plan the query as a single route
-		ProjectionErr    error
-		exprDependencies ExprDependencies
-		exprTypes        map[sqlparser.Expr]querypb.Type
-		selectScope      map[*sqlparser.Select]*scope
+		ProjectionErr error
+
+		// ExprRecursiveDeps contains the dependencies from the expression to the actual tables
+		// in the query (i.e. not including derived tables). If an expression is a column on a derived table,
+		// this map will contain the accumulated dependencies for the column expression inside the derived table
+		ExprRecursiveDeps ExprDependencies
+
+		// ExprDeps keeps information about dependencies for expressions, no matter if they are
+		// against real tables or derived tables
+		ExprDeps ExprDependencies
+
+		exprTypes   map[sqlparser.Expr]querypb.Type
+		selectScope map[*sqlparser.Select]*scope
 	}
 
 	scope struct {
@@ -105,8 +119,28 @@ type (
 	}
 )
 
-// DepsFor implements the TableInfo interface
-func (v *vTableInfo) DepsFor(col *sqlparser.ColName, org originable, single bool) (*TableSet, *querypb.Type, error) {
+// GetExprFor implements the TableInfo interface
+func (v *vTableInfo) GetExprFor(s string) (sqlparser.Expr, error) {
+	for i, colName := range v.columnNames {
+		if colName == s {
+			return v.cols[i], nil
+		}
+	}
+	return nil, vterrors.NewErrorf(vtrpcpb.Code_NOT_FOUND, vterrors.BadFieldError, "Unknown column '%s' in 'field list'", s)
+}
+
+// GetExprFor implements the TableInfo interface
+func (a *AliasedTable) GetExprFor(s string) (sqlparser.Expr, error) {
+	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Unknown column '%s' in 'field list'", s)
+}
+
+// GetExprFor implements the TableInfo interface
+func (r *RealTable) GetExprFor(s string) (sqlparser.Expr, error) {
+	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Unknown column '%s' in 'field list'", s)
+}
+
+// RecursiveDepsFor implements the TableInfo interface
+func (v *vTableInfo) RecursiveDepsFor(col *sqlparser.ColName, org originable, single bool) (*TableSet, *querypb.Type, error) {
 	if !col.Qualifier.IsEmpty() && (v.ASTNode == nil || v.tableName != col.Qualifier.Name.String()) {
 		// if we have a table qualifier in the expression, we know that it is not referencing an aliased table
 		return nil, nil, nil
@@ -121,13 +155,43 @@ func (v *vTableInfo) DepsFor(col *sqlparser.ColName, org originable, single bool
 }
 
 // DepsFor implements the TableInfo interface
-func (a *AliasedTable) DepsFor(col *sqlparser.ColName, org originable, single bool) (*TableSet, *querypb.Type, error) {
+func (v *vTableInfo) DepsFor(col *sqlparser.ColName, org originable, single bool) (*TableSet, error) {
+	if v.ASTNode == nil {
+		return nil, nil
+	}
+	if !col.Qualifier.IsEmpty() && (v.ASTNode == nil || v.tableName != col.Qualifier.Name.String()) {
+		// if we have a table qualifier in the expression, we know that it is not referencing an aliased table
+		return nil, nil
+	}
+	for _, colName := range v.columnNames {
+		if col.Name.String() == colName {
+			ts := org.tableSetFor(v.ASTNode)
+			return &ts, nil
+		}
+	}
+	return nil, nil
+}
+
+// RecursiveDepsFor implements the TableInfo interface
+func (a *AliasedTable) RecursiveDepsFor(col *sqlparser.ColName, org originable, single bool) (*TableSet, *querypb.Type, error) {
 	return depsFor(col, org, single, a.ASTNode, a.GetColumns(), a.Authoritative())
 }
 
 // DepsFor implements the TableInfo interface
-func (r *RealTable) DepsFor(col *sqlparser.ColName, org originable, single bool) (*TableSet, *querypb.Type, error) {
+func (a *AliasedTable) DepsFor(col *sqlparser.ColName, org originable, single bool) (*TableSet, error) {
+	ts, _, err := a.RecursiveDepsFor(col, org, single)
+	return ts, err
+}
+
+// RecursiveDepsFor implements the TableInfo interface
+func (r *RealTable) RecursiveDepsFor(col *sqlparser.ColName, org originable, single bool) (*TableSet, *querypb.Type, error) {
 	return depsFor(col, org, single, r.ASTNode, r.GetColumns(), r.Authoritative())
+}
+
+// DepsFor implements the TableInfo interface
+func (r *RealTable) DepsFor(col *sqlparser.ColName, org originable, single bool) (*TableSet, error) {
+	ts, _, err := r.RecursiveDepsFor(col, org, single)
+	return ts, err
 }
 
 // depsFor implements the TableInfo interface for RealTable and AliasedTable
@@ -298,7 +362,7 @@ func (r *RealTable) Matches(name sqlparser.TableName) bool {
 
 // NewSemTable creates a new empty SemTable
 func NewSemTable() *SemTable {
-	return &SemTable{exprDependencies: map[sqlparser.Expr]TableSet{}}
+	return &SemTable{ExprRecursiveDeps: map[sqlparser.Expr]TableSet{}}
 }
 
 // TableSetFor returns the bitmask for this particular table
@@ -319,9 +383,14 @@ func (st *SemTable) TableInfoFor(id TableSet) (TableInfo, error) {
 	return st.Tables[id.TableOffset()], nil
 }
 
+// RecursiveDependencies return the table dependencies of the expression.
+func (st *SemTable) RecursiveDependencies(expr sqlparser.Expr) TableSet {
+	return st.ExprRecursiveDeps.Dependencies(expr)
+}
+
 // Dependencies return the table dependencies of the expression.
 func (st *SemTable) Dependencies(expr sqlparser.Expr) TableSet {
-	return st.exprDependencies.Dependencies(expr)
+	return st.ExprDeps.Dependencies(expr)
 }
 
 // Dependencies return the table dependencies of the expression.
@@ -353,7 +422,7 @@ func (st *SemTable) GetSelectTables(node *sqlparser.Select) []TableInfo {
 func (st *SemTable) AddExprs(tbl *sqlparser.AliasedTableExpr, cols sqlparser.SelectExprs) {
 	tableSet := st.TableSetFor(tbl)
 	for _, col := range cols {
-		st.exprDependencies[col.(*sqlparser.AliasedExpr).Expr] = tableSet
+		st.ExprRecursiveDeps[col.(*sqlparser.AliasedExpr).Expr] = tableSet
 	}
 }
 
