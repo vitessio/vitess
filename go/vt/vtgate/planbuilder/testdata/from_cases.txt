@@ -1916,6 +1916,39 @@ Gen4 error: symbol t.col not found
   }
 }
 
+# recursive derived table predicate push down
+"select bar from (select foo+4 as bar from (select colA+colB as foo from user) as u) as t where bar = 5"
+{
+  "QueryType": "SELECT",
+  "Original": "select bar from (select foo+4 as bar from (select colA+colB as foo from user) as u) as t where bar = 5",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select bar from (select foo + 4 as bar from (select colA + colB as foo from `user` where 1 != 1) as u where 1 != 1) as t where 1 != 1",
+    "Query": "select bar from (select foo + 4 as bar from (select colA + colB as foo from `user`) as u) as t where bar = 5",
+    "Table": "`user`"
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select bar from (select foo+4 as bar from (select colA+colB as foo from user) as u) as t where bar = 5",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select bar from (select foo + 4 as bar from (select colA + colB as foo from `user` where 1 != 1) as u where 1 != 1) as t where 1 != 1",
+    "Query": "select bar from (select foo + 4 as bar from (select colA + colB as foo from `user` where colA + colB + 4 = 5) as u) as t",
+    "Table": "`user`"
+  }
+}
+
 # recursive derived table lookups
 "select id from (select id from (select id from user) as u) as t where id = 5"
 {
@@ -1930,6 +1963,25 @@ Gen4 error: symbol t.col not found
     },
     "FieldQuery": "select id from (select id from (select id from `user` where 1 != 1) as u where 1 != 1) as t where 1 != 1",
     "Query": "select id from (select id from (select id from `user`) as u) as t where id = 5",
+    "Table": "`user`",
+    "Values": [
+      5
+    ],
+    "Vindex": "user_index"
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select id from (select id from (select id from user) as u) as t where id = 5",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select id from (select id from (select id from `user` where 1 != 1) as u where 1 != 1) as t where 1 != 1",
+    "Query": "select id from (select id from (select id from `user` where id = 5) as u) as t",
     "Table": "`user`",
     "Values": [
       5
