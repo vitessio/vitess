@@ -81,7 +81,7 @@ func buildRevertMigrationPlan(query string, stmt *sqlparser.RevertMigration, vsc
 	}, nil
 }
 
-func buildShowMigrationLogsPlan(query string, stmt *sqlparser.ShowMigrationLogs, vschema ContextVSchema, enableOnlineDDL bool) (engine.Primitive, error) {
+func buildShowMigrationLogsPlan(query string, vschema ContextVSchema, enableOnlineDDL bool) (engine.Primitive, error) {
 	if !enableOnlineDDL {
 		return nil, schema.ErrOnlineDDLDisabled
 	}
@@ -101,10 +101,9 @@ func buildShowMigrationLogsPlan(query string, stmt *sqlparser.ShowMigrationLogs,
 		dest = key.DestinationAllShards{}
 	}
 
-	return &engine.ShowMigrationLogs{
+	return &engine.Send{
 		Keyspace:          ks,
 		TargetDestination: dest,
-		Stmt:              stmt,
 		Query:             query,
 	}, nil
 }
