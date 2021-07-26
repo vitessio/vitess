@@ -37,22 +37,21 @@ func (d *Derived) TableID() semantics.TableSet {
 
 // PushPredicate implements the Operator interface
 func (d *Derived) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) error {
-	set := semTable.ExprDeps.Dependencies(expr)
-	infoFor, err := semTable.TableInfoFor(set)
+	tableInfo, err := semTable.TableInfoFor(semTable.ExprDeps.Dependencies(expr))
 	if err != nil {
 		return err
 	}
 
-	clonedExpr := sqlparser.CloneExpr(expr)
-	sqlparser.Rewrite(clonedExpr, func(cursor *sqlparser.Cursor) bool {
+	newExpr := sqlparser.CloneExpr(expr)
+	sqlparser.Rewrite(newExpr, func(cursor *sqlparser.Cursor) bool {
 		switch node := cursor.Node().(type) {
 		case *sqlparser.ColName:
-			var ex sqlparser.Expr
-			ex, err = infoFor.GetExprFor(node.Name.String())
+			var exp sqlparser.Expr
+			exp, err = tableInfo.GetExprFor(node.Name.String())
 			if err != nil {
 				return false
 			}
-			cursor.Replace(ex)
+			cursor.Replace(exp)
 			return false
 		}
 		return true
@@ -61,5 +60,5 @@ func (d *Derived) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTabl
 	if err != nil {
 		return err
 	}
-	return d.Inner.PushPredicate(clonedExpr, semTable)
+	return d.Inner.PushPredicate(newExpr, semTable)
 }
