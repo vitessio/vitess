@@ -15,7 +15,7 @@ limitations under the License.
 */
 
 // Package binlogplayer contains the code that plays a vreplication
-// stream on a client database. It usually runs inside the destination master
+// stream on a client database. It usually runs inside the destination primary
 // vttablet process.
 package binlogplayer
 
@@ -86,8 +86,8 @@ type Stats struct {
 	heartbeatMutex sync.Mutex
 	heartbeat      int64
 
-	SecondsBehindMaster sync2.AtomicInt64
-	History             *history.History
+	ReplicationLagSeconds sync2.AtomicInt64
+	History               *history.History
 
 	State sync2.AtomicString
 
@@ -149,7 +149,7 @@ func NewStats() *Stats {
 	bps.Timings = stats.NewTimings("", "", "")
 	bps.Rates = stats.NewRates("", bps.Timings, 15*60/5, 5*time.Second)
 	bps.History = history.New(3)
-	bps.SecondsBehindMaster.Set(math.MaxInt64)
+	bps.ReplicationLagSeconds.Set(math.MaxInt64)
 	bps.PhaseTimings = stats.NewTimings("", "", "Phase")
 	bps.QueryTimings = stats.NewTimings("", "", "Phase")
 	bps.QueryCount = stats.NewCountersWithSingleLabel("", "", "Phase", "")
@@ -498,7 +498,7 @@ func (blp *BinlogPlayer) writeRecoveryPosition(tx *binlogdatapb.BinlogTransactio
 	blp.position = position
 	blp.blplStats.SetLastPosition(blp.position)
 	if tx.EventToken.Timestamp != 0 {
-		blp.blplStats.SecondsBehindMaster.Set(now - tx.EventToken.Timestamp)
+		blp.blplStats.ReplicationLagSeconds.Set(now - tx.EventToken.Timestamp)
 	}
 	return nil
 }
@@ -530,7 +530,7 @@ func (blp *BinlogPlayer) setVReplicationState(state, message string) error {
 // cell: optional column that overrides the current cell to replicate from.
 // tablet_types: optional column that overrides the tablet types to look to replicate from.
 // time_update: last time an event was applied.
-// transaction_timestamp: timestamp of the transaction (from the master).
+// transaction_timestamp: timestamp of the transaction (from the primary).
 // state: Running, Error or Stopped.
 // message: Reason for current state.
 func CreateVReplicationTable() []string {
@@ -696,10 +696,7 @@ func DeleteVReplication(uid uint32) string {
 // MessageTruncate truncates the message string to a safe length.
 func MessageTruncate(msg string) string {
 	// message length is 1000 bytes.
-	if len(msg) > 950 {
-		return msg[:950] + "..."
-	}
-	return msg
+	return LimitString(msg, 950)
 }
 
 func encodeString(in string) string {
