@@ -43,21 +43,27 @@ This release complies with VEP-3 which removes the upgrade order requirement. Co
 ### VReplication
  * VDiff: Use byte compare if weight_string() returns null for either source or target #7696
  * Rowlog: Update rowlog for the API change made for the vstream skew alignment feature #7809
- * VReplication: Pad binlog values for binary() columns to match the value returned by mysql selects #7969
+ * Pad binlog values for binary() columns to match the value returned by mysql selects #7969
  * Change vreplication error metric name to start with a string to pass prometheus validations #7983
  * Pass the provided keyspace through to `UpdateDisableQueryService` rather than hard-coding the sourceKeyspace #8020
- * vreplication: fix vreplication timing metrics #8024
+ * Fix vreplication timing metrics #8024, #8483
  * Switchwrites: error if no tablets available on target for reverse replication #8142
- * VReplication: remove noisy vexec logs #8144
+ * Remove noisy vexec logs #8144
  * VReplicationExec: don't create new stats objects on a select #8166
  * Binlog JSON Parser: handle inline types correctly for large documents #8187
  * Schema Tracking Flaky Test: Ignore unrelated gtid progress events #8283
  * Adds padding to keyrange comparison #8296 
  * VReplication Reverse Workflows: add keyspace scope to vindex while creating reverse vreplication streams #8385
+ * Ignore SBR statements from pt-table-checksum #8396
+ * Return from throttler goroutine if context is cancelled to prevent goroutine leaks #8489
+ * VDiff: Add BIT datatype to list of byte comparable types #8401
+ * Fix excessive VReplication logging to file and db #8521
+
 ### VTAdmin
  * Add missing return in `vtctld-*` DSN case, and log any flag that gets ignored #7872
  * [vtadmin-web] Do not parse numbers/booleans in URL query parameters by default #8100
  * [vtadmin-web] Small bugfix where stream source displayed instead of target #8311
+ * 
 ## CI/Build 
 ### Build/CI
  * Planbuilder: Fix fuzzer #7952
@@ -214,6 +220,8 @@ This release complies with VEP-3 which removes the upgrade order requirement. Co
  * Added TableName to DiffReport struct. #8279
  * New VReplication lag metric  #8306
  * VStream API: add heartbeat for idle streams #8244
+ * Change local example to use v2 vreplication flows and make v2 flows as the default #8527
+ * Tablet Picker: add metric to record lack of available tablets #8403
  * Online DDL/VReplication: support non-UTF8 character sets #8322
  * Online DDL/Vreplication suite: fix test for no shared UK #8334
  * Online DDL/VReplication: support DROP+ADD column of same name #8337
@@ -369,6 +377,6 @@ This release complies with VEP-3 which removes the upgrade order requirement. Co
  * Make timestamp authoritative for master information #8381
 
 
-The release includes 1041 commits (excluding merges)
+The release includes 1051 commits (excluding merges)
 
-Thanks to all our contributors: @AdamKorcz, @GuptaManan100, @Hellcatlk, @Johnny-Three, @acharisshopify, @ajm188, @alexrs, @aquarapid, @askdba, @deepthi, @dependabot[bot], @doeg, @dyv, @enisoc, @frouioui, @gedgar, @guidoiaquinti, @harshit-gangal, @hkdsun, @idvoretskyi, @kirs, @mcronce, @narcsfz, @noxiouz, @rafael, @rohit-nayak-ps, @setassociative, @shlomi-noach, @systay, @tokikanno, @vmg, @wangmeng99, @yangxuanjia, @zhangshj-inspur
+Thanks to all our contributors: @AdamKorcz, @GuptaManan100, @Hellcatlk, @Johnny-Three, @acharisshopify, @ajm188, @alexrs, @aquarapid, @askdba, @deepthi, @doeg, @dyv, @enisoc, @frouioui, @gedgar, @guidoiaquinti, @harshit-gangal, @hkdsun, @idvoretskyi, @kirs, @mcronce, @narcsfz, @noxiouz, @rafael, @rohit-nayak-ps, @setassociative, @shlomi-noach, @systay, @tokikanno, @vmg, @wangmeng99, @yangxuanjia, @zhangshj-inspur
