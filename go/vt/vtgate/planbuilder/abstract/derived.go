@@ -42,20 +42,7 @@ func (d *Derived) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTabl
 		return err
 	}
 
-	newExpr := sqlparser.CloneExpr(expr)
-	sqlparser.Rewrite(newExpr, func(cursor *sqlparser.Cursor) bool {
-		switch node := cursor.Node().(type) {
-		case *sqlparser.ColName:
-			var exp sqlparser.Expr
-			exp, err = tableInfo.GetExprFor(node.Name.String())
-			if err != nil {
-				return false
-			}
-			cursor.Replace(exp)
-			return false
-		}
-		return true
-	}, nil)
+	newExpr, err := semantics.RewriteDerivedExpression(expr, tableInfo)
 
 	if err != nil {
 		return err

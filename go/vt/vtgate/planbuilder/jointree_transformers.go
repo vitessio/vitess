@@ -49,7 +49,7 @@ func transformToLogicalPlan(tree joinTree, semTable *semantics.SemTable, process
 
 		rb, isRoute := plan.(*route)
 		if !isRoute {
-			return nil, semantics.Gen4NotSupportedF("not yet")
+			return plan, nil
 		}
 		innerSelect := rb.Select
 		derivedTable := &sqlparser.DerivedTable{Select: innerSelect}

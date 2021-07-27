@@ -374,6 +374,29 @@ func pushJoinPredicate(exprs []sqlparser.Expr, tree joinTree, semTable *semantic
 			rhs:   rhsPlan,
 			outer: node.outer,
 		}, nil
+	case *derivedPlan:
+		plan := node.clone().(*derivedPlan)
+
+		newExpressions := make([]sqlparser.Expr, 0, len(exprs))
+		for _, expr := range exprs {
+			tblInfo, err := semTable.TableInfoForExpr(expr)
+			if err != nil {
+				return nil, err
+			}
+			rewritten, err := semantics.RewriteDerivedExpression(expr, tblInfo)
+			if err != nil {
+				return nil, err
+			}
+			newExpressions = append(newExpressions, rewritten)
+		}
+
+		newInner, err := pushJoinPredicate(newExpressions, plan.inner, semTable)
+		if err != nil {
+			return nil, err
+		}
+
+		plan.inner = newInner
+		return plan, nil
 	default:
 		panic(fmt.Sprintf("BUG: unknown type %T", node))
 	}

@@ -2261,6 +2261,116 @@ Gen4 plan same as above
     ]
   }
 }
+{
+  "QueryType": "SELECT",
+  "Original": "select t.col1 from unsharded_a ua join (select user.id, user.col1 from user join user_extra) as t",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "2",
+    "TableName": "unsharded_a_`user`_user_extra",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectUnsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select 1 from unsharded_a as ua where 1 != 1",
+        "Query": "select 1 from unsharded_a as ua",
+        "Table": "unsharded_a"
+      },
+      {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "-1,-2",
+        "TableName": "`user`_user_extra",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select `user`.id, `user`.col1 from `user` where 1 != 1",
+            "Query": "select `user`.id, `user`.col1 from `user`",
+            "Table": "`user`"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from user_extra where 1 != 1",
+            "Query": "select 1 from user_extra",
+            "Table": "user_extra"
+          }
+        ]
+      }
+    ]
+  }
+}
+
+# Join with cross-shard derived table on rhs - push down join predicate to derived table
+"select t.col1 from unsharded_a ua join (select user.id, user.col1 from user join user_extra) as t on t.id = ua.id"
+"unsupported: filtering on results of cross-shard subquery"
+{
+  "QueryType": "SELECT",
+  "Original": "select t.col1 from unsharded_a ua join (select user.id, user.col1 from user join user_extra) as t on t.id = ua.id",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "2",
+    "TableName": "unsharded_a_`user`_user_extra",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectUnsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select ua.id from unsharded_a as ua where 1 != 1",
+        "Query": "select ua.id from unsharded_a as ua",
+        "Table": "unsharded_a"
+      },
+      {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "-1,-2",
+        "TableName": "`user`_user_extra",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select `user`.id, `user`.col1 from `user` where 1 != 1",
+            "Query": "select `user`.id, `user`.col1 from `user`",
+            "Table": "`user`"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from user_extra where 1 != 1",
+            "Query": "select 1 from user_extra where :user_id = :ua_id",
+            "Table": "user_extra"
+          }
+        ]
+      }
+    ]
+  }
+}
 
 # subquery in ON clause, single route
 "select unsharded_a.col from unsharded_a join unsharded_b on (select col from user)"

@@ -504,3 +504,24 @@ func (ts TableSet) Constituents() (result []TableSet) {
 func (ts TableSet) Merge(other TableSet) TableSet {
 	return ts | other
 }
+
+// RewriteDerivedExpression rewrites all the ColName instances in the supplied expression with
+// the expressions behind the column definition of the derived table
+// SELECT foo FROM (SELECT id+42 as foo FROM user) as t
+// We need `foo` to be translated to `id+42` on the inside of the derived table
+func RewriteDerivedExpression(expr sqlparser.Expr, vt TableInfo) (sqlparser.Expr, error) {
+	newExpr := sqlparser.CloneExpr(expr)
+	sqlparser.Rewrite(newExpr, func(cursor *sqlparser.Cursor) bool {
+		switch node := cursor.Node().(type) {
+		case *sqlparser.ColName:
+			exp, err := vt.GetExprFor(node.Name.String())
+			if err != nil {
+				return false
+			}
+			cursor.Replace(exp)
+			return false
+		}
+		return true
+	}, nil)
+	return newExpr, nil
+}
