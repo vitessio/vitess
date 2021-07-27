@@ -49,7 +49,7 @@ func TestOrderedAggregateExecute(t *testing.T) {
 	}
 
 	oa := &OrderedAggregate{
-		Aggregates: []AggregateParams{{
+		Aggregates: []*AggregateParams{{
 			Opcode: AggregateCount,
 			Col:    1,
 		}},
@@ -86,7 +86,7 @@ func TestOrderedAggregateExecuteTruncate(t *testing.T) {
 	}
 
 	oa := &OrderedAggregate{
-		Aggregates: []AggregateParams{{
+		Aggregates: []*AggregateParams{{
 			Opcode: AggregateCount,
 			Col:    1,
 		}},
@@ -128,7 +128,7 @@ func TestOrderedAggregateStreamExecute(t *testing.T) {
 	}
 
 	oa := &OrderedAggregate{
-		Aggregates: []AggregateParams{{
+		Aggregates: []*AggregateParams{{
 			Opcode: AggregateCount,
 			Col:    1,
 		}},
@@ -171,7 +171,7 @@ func TestOrderedAggregateStreamExecuteTruncate(t *testing.T) {
 	}
 
 	oa := &OrderedAggregate{
-		Aggregates: []AggregateParams{{
+		Aggregates: []*AggregateParams{{
 			Opcode: AggregateCount,
 			Col:    1,
 		}},
@@ -307,7 +307,7 @@ func TestOrderedAggregateExecuteCountDistinct(t *testing.T) {
 
 	oa := &OrderedAggregate{
 		PreProcess: true,
-		Aggregates: []AggregateParams{{
+		Aggregates: []*AggregateParams{{
 			Opcode: AggregateCountDistinct,
 			Col:    1,
 			Alias:  "count(distinct col2)",
@@ -383,7 +383,7 @@ func TestOrderedAggregateStreamCountDistinct(t *testing.T) {
 
 	oa := &OrderedAggregate{
 		PreProcess: true,
-		Aggregates: []AggregateParams{{
+		Aggregates: []*AggregateParams{{
 			Opcode: AggregateCountDistinct,
 			Col:    1,
 			Alias:  "count(distinct col2)",
@@ -471,7 +471,7 @@ func TestOrderedAggregateSumDistinctGood(t *testing.T) {
 
 	oa := &OrderedAggregate{
 		PreProcess: true,
-		Aggregates: []AggregateParams{{
+		Aggregates: []*AggregateParams{{
 			Opcode: AggregateSumDistinct,
 			Col:    1,
 			Alias:  "sum(distinct col2)",
@@ -520,7 +520,7 @@ func TestOrderedAggregateSumDistinctTolerateError(t *testing.T) {
 
 	oa := &OrderedAggregate{
 		PreProcess: true,
-		Aggregates: []AggregateParams{{
+		Aggregates: []*AggregateParams{{
 			Opcode: AggregateSumDistinct,
 			Col:    1,
 			Alias:  "sum(distinct col2)",
@@ -556,7 +556,7 @@ func TestOrderedAggregateKeysFail(t *testing.T) {
 	}
 
 	oa := &OrderedAggregate{
-		Aggregates: []AggregateParams{{
+		Aggregates: []*AggregateParams{{
 			Opcode: AggregateCount,
 			Col:    1,
 		}},
@@ -589,7 +589,7 @@ func TestOrderedAggregateMergeFail(t *testing.T) {
 	}
 
 	oa := &OrderedAggregate{
-		Aggregates: []AggregateParams{{
+		Aggregates: []*AggregateParams{{
 			Opcode: AggregateCount,
 			Col:    1,
 		}},
@@ -629,7 +629,7 @@ func TestOrderedAggregateMergeFail(t *testing.T) {
 func TestMerge(t *testing.T) {
 	assert := assert.New(t)
 	oa := &OrderedAggregate{
-		Aggregates: []AggregateParams{{
+		Aggregates: []*AggregateParams{{
 			Opcode: AggregateCount,
 			Col:    1,
 		}, {
@@ -716,7 +716,7 @@ func TestNoInputAndNoGroupingKeys(outer *testing.T) {
 
 			oa := &OrderedAggregate{
 				PreProcess: true,
-				Aggregates: []AggregateParams{{
+				Aggregates: []*AggregateParams{{
 					Opcode: test.opcode,
 					Col:    0,
 					Alias:  test.name,
@@ -769,7 +769,7 @@ func TestOrderedAggregateExecuteGtid(t *testing.T) {
 
 	oa := &OrderedAggregate{
 		PreProcess: true,
-		Aggregates: []AggregateParams{{
+		Aggregates: []*AggregateParams{{
 			Opcode: AggregateGtid,
 			Col:    1,
 			Alias:  "vgtid",
@@ -789,4 +789,122 @@ func TestOrderedAggregateExecuteGtid(t *testing.T) {
 		`ks|shard_gtids:{keyspace:"ks" shard:"-40" gtid:"a"} shard_gtids:{keyspace:"ks" shard:"40-80" gtid:"b"} shard_gtids:{keyspace:"ks" shard:"80-c0" gtid:"c"} shard_gtids:{keyspace:"ks" shard:"c0-" gtid:"d"}`,
 	)
 	assert.Equal(t, wantResult, result)
+}
+
+func TestCountDistinctOnVarchar(t *testing.T) {
+	fields := sqltypes.MakeTestFields(
+		"c1|c2|weight_string(c2)",
+		"int64|varchar|varbinary",
+	)
+	fp := &fakePrimitive{
+		results: []*sqltypes.Result{sqltypes.MakeTestResult(
+			fields,
+			"1|a|0x41",
+			"1|a|0x41",
+			"1|b|0x42",
+			"2|b|0x42",
+		)},
+	}
+
+	oa := &OrderedAggregate{
+		PreProcess: true,
+		Aggregates: []*AggregateParams{{
+			Opcode:    AggregateCountDistinct,
+			Col:       1,
+			WCol:      2,
+			WAssigned: true,
+			Alias:     "count(distinct c2)",
+		}},
+		GroupByKeys:         []GroupByParams{{KeyCol: 0}},
+		Input:               fp,
+		TruncateColumnCount: 2,
+	}
+
+	want := sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields(
+			"c1|count(distinct c2)",
+			"int64|int64",
+		),
+		`1|2`, `2|1`,
+	)
+
+	qr, err := oa.Execute(nil, nil, false)
+	require.NoError(t, err)
+	assert.Equal(t, want, qr)
+
+	fp.rewind()
+	results := &sqltypes.Result{}
+	err = oa.StreamExecute(nil, nil, false, func(qr *sqltypes.Result) error {
+		if qr.Fields != nil {
+			results.Fields = qr.Fields
+		}
+		results.Rows = append(results.Rows, qr.Rows...)
+		return nil
+	})
+	require.NoError(t, err)
+	assert.Equal(t, want, results)
+}
+
+func TestCountDistinctOnVarcharWithNulls(t *testing.T) {
+	fields := sqltypes.MakeTestFields(
+		"c1|c2|weight_string(c2)",
+		"int64|varchar|varbinary",
+	)
+	fp := &fakePrimitive{
+		results: []*sqltypes.Result{sqltypes.MakeTestResult(
+			fields,
+			"null|a|0x41",
+			"null|b|0x42",
+			"null|null|null",
+			"1|null|null",
+			"1|null|null",
+			"1|a|0x41",
+			"1|a|0x41",
+			"1|b|0x42",
+			"2|null|null",
+			"2|b|0x42",
+			"3|null|null",
+			"3|null|null",
+			"3|null|null",
+			"3|null|null",
+		)},
+	}
+
+	oa := &OrderedAggregate{
+		PreProcess: true,
+		Aggregates: []*AggregateParams{{
+			Opcode:    AggregateCountDistinct,
+			Col:       1,
+			WCol:      2,
+			WAssigned: true,
+			Alias:     "count(distinct c2)",
+		}},
+		GroupByKeys:         []GroupByParams{{KeyCol: 0}},
+		Input:               fp,
+		TruncateColumnCount: 2,
+	}
+
+	want := sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields(
+			"c1|count(distinct c2)",
+			"int64|int64",
+		),
+		`null|2`, `1|2`, `2|1`, `3|0`,
+	)
+
+	qr, err := oa.Execute(nil, nil, false)
+	require.NoError(t, err)
+	assert.Equal(t, want, qr)
+
+	fp.rewind()
+	results := &sqltypes.Result{}
+	err = oa.StreamExecute(nil, nil, false, func(qr *sqltypes.Result) error {
+		if qr.Fields != nil {
+			results.Fields = qr.Fields
+		}
+		results.Rows = append(results.Rows, qr.Rows...)
+		return nil
+	})
+	require.NoError(t, err)
+	assert.Equal(t, want, results)
 }

@@ -253,7 +253,7 @@ func (oa *orderedAggregate) pushAggr(pb *primitiveBuilder, expr *sqlparser.Alias
 		case engine.AggregateSum:
 			opcode = engine.AggregateSumDistinct
 		}
-		oa.eaggr.Aggregates = append(oa.eaggr.Aggregates, engine.AggregateParams{
+		oa.eaggr.Aggregates = append(oa.eaggr.Aggregates, &engine.AggregateParams{
 			Opcode: opcode,
 			Col:    innerCol,
 			Alias:  alias,
@@ -264,7 +264,7 @@ func (oa *orderedAggregate) pushAggr(pb *primitiveBuilder, expr *sqlparser.Alias
 			return nil, 0, err
 		}
 		pb.plan = newBuilder
-		oa.eaggr.Aggregates = append(oa.eaggr.Aggregates, engine.AggregateParams{
+		oa.eaggr.Aggregates = append(oa.eaggr.Aggregates, &engine.AggregateParams{
 			Opcode: opcode,
 			Col:    innerCol,
 		})

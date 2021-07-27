@@ -45,7 +45,7 @@ type OrderedAggregate struct {
 	PreProcess bool `json:",omitempty"`
 	// Aggregates specifies the aggregation parameters for each
 	// aggregation function: function opcode and input column number.
-	Aggregates []AggregateParams
+	Aggregates []*AggregateParams
 
 	// GroupByKeys specifies the input values that must be used for
 	// the aggregation key.
@@ -78,27 +78,33 @@ func (gbp GroupByParams) String() string {
 // AggregateParams specify the parameters for each aggregation.
 // It contains the opcode and input column number.
 type AggregateParams struct {
-	Opcode AggregateOpcode
-	Col    int
+	Opcode    AggregateOpcode
+	Col       int
+	KeyCol    int
+	WCol      int
+	WAssigned bool
 	// Alias is set only for distinct opcodes.
 	Alias string `json:",omitempty"`
 	Expr  sqlparser.Expr
 }
 
-func (ap AggregateParams) isDistinct() bool {
+func (ap *AggregateParams) isDistinct() bool {
 	return ap.Opcode == AggregateCountDistinct || ap.Opcode == AggregateSumDistinct
 }
 
-func (ap AggregateParams) preProcess() bool {
+func (ap *AggregateParams) preProcess() bool {
 	return ap.Opcode == AggregateCountDistinct || ap.Opcode == AggregateSumDistinct || ap.Opcode == AggregateGtid
 }
 
-func (ap AggregateParams) String() string {
-	if ap.Alias != "" {
-		return fmt.Sprintf("%s(%d) AS %s", ap.Opcode.String(), ap.Col, ap.Alias)
+func (ap *AggregateParams) String() string {
+	keyCol := strconv.Itoa(ap.Col)
+	if ap.Opcode == AggregateCountDistinct && ap.WAssigned {
+		keyCol = fmt.Sprintf("%s|%d", keyCol, ap.WCol)
 	}
-
-	return fmt.Sprintf("%s(%d)", ap.Opcode.String(), ap.Col)
+	if ap.Alias != "" {
+		return fmt.Sprintf("%s(%s) AS %s", ap.Opcode.String(), keyCol, ap.Alias)
+	}
+	return fmt.Sprintf("%s(%s)", ap.Opcode.String(), keyCol)
 }
 
 // AggregateOpcode is the aggregation Opcode.
@@ -306,6 +312,9 @@ func (oa *OrderedAggregate) convertFields(fields []*querypb.Field) []*querypb.Fi
 			Name: aggr.Alias,
 			Type: opcodeType[aggr.Opcode],
 		}
+		if aggr.isDistinct() {
+			aggr.KeyCol = aggr.Col
+		}
 	}
 	return fields
 }
@@ -318,17 +327,21 @@ func (oa *OrderedAggregate) convertRow(row []sqltypes.Value) (newRow []sqltypes.
 	for _, aggr := range oa.Aggregates {
 		switch aggr.Opcode {
 		case AggregateCountDistinct:
-			curDistinct = row[aggr.Col]
+			curDistinct = row[aggr.KeyCol]
+			if aggr.WAssigned && !curDistinct.IsComparable() {
+				aggr.KeyCol = aggr.WCol
+				curDistinct = row[aggr.KeyCol]
+			}
 			// Type is int64. Ok to call MakeTrusted.
-			if row[aggr.Col].IsNull() {
+			if row[aggr.KeyCol].IsNull() {
 				newRow[aggr.Col] = countZero
 			} else {
 				newRow[aggr.Col] = countOne
 			}
 		case AggregateSumDistinct:
-			curDistinct = row[aggr.Col]
+			curDistinct = row[aggr.KeyCol]
 			var err error
-			newRow[aggr.Col], err = evalengine.Cast(row[aggr.Col], opcodeType[aggr.Opcode])
+			newRow[aggr.Col], err = evalengine.Cast(row[aggr.KeyCol], opcodeType[aggr.Opcode])
 			if err != nil {
 				newRow[aggr.Col] = sumZero
 			}
@@ -392,17 +405,17 @@ func (oa *OrderedAggregate) merge(fields []*querypb.Field, row1, row2 []sqltypes
 	result := sqltypes.CopyRow(row1)
 	for _, aggr := range oa.Aggregates {
 		if aggr.isDistinct() {
-			if row2[aggr.Col].IsNull() {
+			if row2[aggr.KeyCol].IsNull() {
 				continue
 			}
-			cmp, err := evalengine.NullsafeCompare(curDistinct, row2[aggr.Col])
+			cmp, err := evalengine.NullsafeCompare(curDistinct, row2[aggr.KeyCol])
 			if err != nil {
 				return nil, sqltypes.NULL, err
 			}
 			if cmp == 0 {
 				continue
 			}
-			curDistinct = row2[aggr.Col]
+			curDistinct = row2[aggr.KeyCol]
 		}
 		var err error
 		switch aggr.Opcode {
@@ -473,7 +486,7 @@ func createEmptyValueFor(opcode AggregateOpcode) (sqltypes.Value, error) {
 }
 
 func aggregateParamsToString(in interface{}) string {
-	return in.(AggregateParams).String()
+	return in.(*AggregateParams).String()
 }
 
 func groupByParamsToString(i interface{}) string {

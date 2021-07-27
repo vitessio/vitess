@@ -372,6 +372,18 @@ func (v Value) IsDateTime() bool {
 	return int(v.typ)&dt == dt
 }
 
+// IsComparable returns true if the Value is null safe comparable without collation information.
+func (v *Value) IsComparable() bool {
+	if v.typ == Null || IsNumber(v.typ) || IsBinary(v.typ) {
+		return true
+	}
+	switch v.typ {
+	case Timestamp, Date, Time, Datetime, Enum, Set, TypeJSON, Bit:
+		return true
+	}
+	return false
+}
+
 // MarshalJSON should only be used for testing.
 // It's not a complete implementation.
 func (v Value) MarshalJSON() ([]byte, error) {
