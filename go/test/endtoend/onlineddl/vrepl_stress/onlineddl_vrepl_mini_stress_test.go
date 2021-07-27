@@ -89,7 +89,7 @@ var (
 
 	opOrder               int64
 	opOrderMutex          sync.Mutex
-	onlineDDLStrategy     = "online -vreplication-test-suite -skip-topo"
+	onlineDDLStrategy     = "online -vreplication-test-suite"
 	hostname              = "localhost"
 	keyspaceName          = "ks"
 	cell                  = "zone1"

@@ -1,0 +1,56 @@
+defaults:
+  # Configuration options here provide default options for all clusters.
+  # Specifying a different value for an individual cluster will override the
+  # default setting for that cluster.
+
+  # Discovery implementation to use by default.
+  discovery: "{consul|staticfile}"
+
+  # Each discovery implementation has its own options, which are named according
+  # to the regex:
+  #   ^discovery-(?P<impl>\w+)-(?P<flag>.+)$
+  # The full set of options for each discovery implementation is defined in that
+  # implementation's factory function, e.g. NewConsul in
+  # go/vt/vtadmin/cluster/discovery/discovery_consul.go and NewStaticFile in
+  # discovery_static_file.go in the same directory.
+
+  # Service name to use when discovering vtctlds from consul.
+  discovery-consul-vtctld-service-name: "vtctld"
+  # Path to json file containing vtctld and vtgate hostnames when using staticfile.
+  discovery-staticfile-path: "/path/to/static/discovery.json"
+
+  tablet-fqdn-tmpl: ""
+
+  # Similar to how discovery flags are forwarded to the particular discovery
+  # implementation, the vtctld and vtgate proxy components for a cluster are
+  # configurable, by the prefixes "vtctld-" (for vtctld proxy) and "vtsql-" (for vtgate proxy).
+  # These flags are defined in code in the (*Config).Parse functions in packages
+  # go/vt/vtadmin/{vtctldclient,vtsql}.
+
+  # Go template to produce a path to a json file containing Username and Password
+  # to make requests against vtctlds in this cluster.
+  vtctld-credentials-path-tmpl: "/path/to/vtctld/credentials/{{ .Cluster.Id }}.json"
+
+  # Same as vtctld-credentials-path-tmpl, except used to make requests against
+  # vtgates in the cluster.
+  vtsql-credentials-path-tmpl: "/path/to/vtgate/credentials/{{ .Cluster.Id }}.json"
+  # Optional comma-separated list of tags to pass to a discovery implementation
+  # when discovering a vtgate in the cluster to connect to. The semantics of
+  # the tags depend on the discovery implementation used.
+  vtsql-discovery-tags: "tag1,tag2"
+  # Username to send queries on behalf of. See package callerid.
+  vtsql-effective-user: "my-effective-user"
+
+  # VTAdmin also provides different RPC pools to gate the number of concurrent
+  # requests it will make against vtctlds/vtgates in a given cluster, to prevent
+  # overwhelming those components.
+
+  # The backup read pool is used to constrain the number of GetBackups calls
+  # made to a cluster simultaneously.
+  backup-read-pool-size: 10
+  backup-read-pool-timeout: 10ms
+
+  # Other pools have the same size/timeout options, and include:
+  # - schema-read-pool => for GetSchema, GetSchemas, and FindSchema api methods
+  # - topo-read-pool => for generic topo methods (e.g. GetKeyspace, FindAllShardsInKeyspace)
+  # - workflow-read-pool => for GetWorkflow/GetWorkflows api methods.

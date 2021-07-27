@@ -78,6 +78,9 @@ type VRepl struct {
 	chosenSourceUniqueKey *vrepl.UniqueKey
 	chosenTargetUniqueKey *vrepl.UniqueKey
 
+	addedUniqueKeys   []*vrepl.UniqueKey
+	removedUniqueKeys []*vrepl.UniqueKey
+
 	filterQuery   string
 	enumToTextMap map[string]string
 	bls           *binlogdatapb.BinlogSource
@@ -148,6 +151,74 @@ func getSharedUniqueKeys(sourceUniqueKeys, targetUniqueKeys [](*vrepl.UniqueKey)
 		return pair.source, pair.target
 	}
 	return nil, nil
+}
+
+// sourceUniqueKeyAsOrMoreConstrainedThanTarget returns 'true' when sourceUniqueKey is at least as constrained as targetUniqueKey.
+// "More constrained" means the uniqueness constraint is "stronger". Thus, if sourceUniqueKey is as-or-more constrained than targetUniqueKey, then
+// rows valid under sourceUniqueKey must also be valid in targetUniqueKey. The opposite is not necessarily so: rows that are valid in targetUniqueKey
+// may cause a unique key violation under sourceUniqueKey
+func sourceUniqueKeyAsOrMoreConstrainedThanTarget(sourceUniqueKey, targetUniqueKey *vrepl.UniqueKey, columnRenameMap map[string]string) bool {
+	// Compare two unique keys
+	if sourceUniqueKey.Columns.Len() > targetUniqueKey.Columns.Len() {
+		// source can't be more constrained if it covers *more* columns
+		return false
+	}
+	// we know that len(sourceUniqueKeyNames) <= len(targetUniqueKeyNames)
+	sourceUniqueKeyNames := sourceUniqueKey.Columns.Names()
+	targetUniqueKeyNames := targetUniqueKey.Columns.Names()
+	// source is more constrained than target if every column in source is also in target, order is immaterial
+	for i := range sourceUniqueKeyNames {
+		sourceColumnName := sourceUniqueKeyNames[i]
+		mappedSourceColumnName := sourceColumnName
+		if mapped, ok := columnRenameMap[sourceColumnName]; ok {
+			mappedSourceColumnName = mapped
+		}
+		columnFoundInTarget := func() bool {
+			for _, targetColumnName := range targetUniqueKeyNames {
+				if strings.EqualFold(mappedSourceColumnName, targetColumnName) {
+					return true
+				}
+			}
+			return false
+		}
+		if !columnFoundInTarget() {
+			return false
+		}
+	}
+	return true
+}
+
+// addedUniqueKeys returns the unique key constraints added in target. This does not necessarily mean that the unique key itself is new,
+// rather that there's a new, stricter constraint on a set of columns, that didn't exist before. Example:
+//   before: unique key `my_key`(c1, c2, c3); after: unique key `my_key`(c1, c2)
+//   The constraint on (c1, c2) is new; and `my_key` in target table ("after") is considered a new key
+// Order of columns is immaterial to uniqueness of column combination.
+func addedUniqueKeys(sourceUniqueKeys, targetUniqueKeys [](*vrepl.UniqueKey), columnRenameMap map[string]string) (addedUKs [](*vrepl.UniqueKey)) {
+	addedUKs = [](*vrepl.UniqueKey){}
+	for _, targetUniqueKey := range targetUniqueKeys {
+		foundAsOrMoreConstrainingSourceKey := func() bool {
+			for _, sourceUniqueKey := range sourceUniqueKeys {
+				if sourceUniqueKeyAsOrMoreConstrainedThanTarget(sourceUniqueKey, targetUniqueKey, columnRenameMap) {
+					// target key does not add a new constraint
+					return true
+				}
+			}
+			return false
+		}
+		if !foundAsOrMoreConstrainingSourceKey() {
+			addedUKs = append(addedUKs, targetUniqueKey)
+		}
+	}
+	return addedUKs
+}
+
+// removedUniqueKeys returns the list of unique key constraints _removed_ going from source to target.
+func removedUniqueKeys(sourceUniqueKeys, targetUniqueKeys [](*vrepl.UniqueKey), columnRenameMap map[string]string) (removedUKs [](*vrepl.UniqueKey)) {
+	reverseColumnRenameMap := map[string]string{}
+	for k, v := range columnRenameMap {
+		reverseColumnRenameMap[v] = k
+	}
+	return addedUniqueKeys(targetUniqueKeys, sourceUniqueKeys, reverseColumnRenameMap)
 }
 
 // getUniqueKeyCoveredByColumns returns the first unique key from given list, whose columns all appear
@@ -448,6 +519,9 @@ func (v *VRepl) analyzeTables(ctx context.Context, conn *dbconnpool.DBConnection
 	if v.chosenSourceUniqueKey == nil || v.chosenTargetUniqueKey == nil {
 		return fmt.Errorf("Found no shared, not nullable, unique keys between `%s` and `%s`", v.sourceTable, v.targetTable)
 	}
+	v.addedUniqueKeys = addedUniqueKeys(sourceUniqueKeys, targetUniqueKeys, v.parser.ColumnRenameMap())
+	v.removedUniqueKeys = removedUniqueKeys(sourceUniqueKeys, targetUniqueKeys, v.parser.ColumnRenameMap())
+
 	// chosen source & target unique keys have exact columns in same order
 	sharedPKColumns := &v.chosenSourceUniqueKey.Columns
 

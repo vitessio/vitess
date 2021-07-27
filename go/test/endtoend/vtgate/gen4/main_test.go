@@ -77,6 +77,15 @@ create table t2(
     }
   }
 }`
+
+	routingRules = `
+{"rules": [
+  {
+    "from_table": "ks.t1000",
+	"to_tables": ["ks.t1"]
+  }
+]}
+`
 )
 
 func TestMain(m *testing.M) {
@@ -100,6 +109,17 @@ func TestMain(m *testing.M) {
 			VSchema:   VSchema,
 		}
 		err = clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 1, true)
+		if err != nil {
+			return 1
+		}
+
+		// apply routing rules
+		err = clusterInstance.VtctlclientProcess.ApplyRoutingRules(routingRules)
+		if err != nil {
+			return 1
+		}
+
+		err = clusterInstance.VtctlclientProcess.ExecuteCommand("RebuildVSchemaGraph")
 		if err != nil {
 			return 1
 		}

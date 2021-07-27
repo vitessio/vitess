@@ -195,6 +195,7 @@ func TestPlan(t *testing.T) {
 	testFile(t, "flush_cases_no_default_keyspace.txt", testOutputTempDir, vschemaWrapper, false)
 	testFile(t, "show_cases_no_default_keyspace.txt", testOutputTempDir, vschemaWrapper, false)
 	testFile(t, "stream_cases.txt", testOutputTempDir, vschemaWrapper, false)
+	testFile(t, "systemtables_cases.txt", testOutputTempDir, vschemaWrapper, false)
 }
 
 func TestSysVarSetDisabled(t *testing.T) {
@@ -286,7 +287,7 @@ func TestWithSystemSchemaAsDefaultKeyspace(t *testing.T) {
 	defer os.RemoveAll(testOutputTempDir)
 	vschema := &vschemaWrapper{
 		v:          loadSchema(t, "schema_test.json"),
-		keyspace:   &vindexes.Keyspace{Name: "mysql"},
+		keyspace:   &vindexes.Keyspace{Name: "information_schema"},
 		tabletType: topodatapb.TabletType_MASTER,
 	}
 
@@ -463,6 +464,14 @@ func (vw *vschemaWrapper) ErrorIfShardedF(keyspace *vindexes.Keyspace, _, errFmt
 	return nil
 }
 
+func (vw *vschemaWrapper) currentDb() string {
+	ksName := ""
+	if vw.keyspace != nil {
+		ksName = vw.keyspace.Name
+	}
+	return ksName
+}
+
 func escapeNewLines(in string) string {
 	return strings.ReplaceAll(in, "\n", "\\n")
 }
@@ -476,7 +485,7 @@ func testFile(t *testing.T, filename, tempDir string, vschema *vschemaWrapper, c
 		for tcase := range iterateExecFile(filename) {
 			t.Run(fmt.Sprintf("%d V3: %s", tcase.lineno, tcase.comments), func(t *testing.T) {
 				vschema.version = V3
-				plan, err := TestBuilder(tcase.input, vschema)
+				plan, err := TestBuilder(tcase.input, vschema, vschema.currentDb())
 				out := getPlanOrErrorOutput(err, plan)
 
 				if out != tcase.output {
@@ -553,7 +562,7 @@ func getPlanOutput(tcase testCase, vschema *vschemaWrapper) (out string, err err
 			out = fmt.Sprintf("panicked: %v\n%s", r, string(debug.Stack()))
 		}
 	}()
-	plan, err := TestBuilder(tcase.input, vschema)
+	plan, err := TestBuilder(tcase.input, vschema, vschema.currentDb())
 	out = getPlanOrErrorOutput(err, plan)
 	return out, err
 }
@@ -743,7 +752,7 @@ func benchmarkPlanner(b *testing.B, version PlannerVersion, testCases []testCase
 		for _, tcase := range testCases {
 			if tcase.output2ndPlanner != "" {
 				vschema.version = version
-				_, _ = TestBuilder(tcase.input, vschema)
+				_, _ = TestBuilder(tcase.input, vschema, vschema.currentDb())
 			}
 		}
 	}

@@ -1179,6 +1179,9 @@ var (
 		input:  "create table function_default3 (x bool DEFAULT (true AND false));",
 		output: "create table function_default3 (\n\tx bool default (true and false)\n)",
 	}, {
+		input:  "create table function_default (x bool DEFAULT true);",
+		output: "create table function_default (\n\tx bool default true\n)",
+	}, {
 		input:  "create table a (\n\t`a` int\n)",
 		output: "create table a (\n\ta int\n)",
 	}, {

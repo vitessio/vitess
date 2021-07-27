@@ -302,11 +302,26 @@ Gen4 plan same as above
     "Table": "authoritative"
   }
 }
+{
+  "QueryType": "SELECT",
+  "Original": "select * from authoritative a join authoritative b on a.user_id=b.user_id",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select a.user_id as user_id, a.col1 as col1, a.col2 as col2, b.user_id as user_id, b.col1 as col1, b.col2 as col2 from authoritative as a, authoritative as b where 1 != 1",
+    "Query": "select a.user_id as user_id, a.col1 as col1, a.col2 as col2, b.user_id as user_id, b.col1 as col1, b.col2 as col2 from authoritative as a, authoritative as b where a.user_id = b.user_id",
+    "Table": "authoritative"
+  }
+}
 
 # test table lookup failure for authoritative code path
 "select a.* from authoritative"
 "table a not found"
-"Unknown table 'a'"
+Gen4 error: Unknown table 'a'
 
 # select * from qualified authoritative table
 "select a.* from authoritative a"
@@ -374,6 +389,21 @@ Gen4 plan same as above
     "FieldQuery": "select `user`.id, a.user_id, a.col1, a.col2, `user`.col1 from authoritative as a join `user` on a.user_id = `user`.id where 1 != 1",
     "Query": "select `user`.id, a.user_id, a.col1, a.col2, `user`.col1 from authoritative as a join `user` on a.user_id = `user`.id",
     "Table": "authoritative, `user`"
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select user.id, a.*, user.col1 from authoritative a join user on a.user_id=user.id",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select `user`.id, a.user_id as user_id, a.col1 as col1, a.col2 as col2, `user`.col1 from authoritative as a, `user` where 1 != 1",
+    "Query": "select `user`.id, a.user_id as user_id, a.col1 as col1, a.col2 as col2, `user`.col1 from authoritative as a, `user` where a.user_id = `user`.id",
+    "Table": "`user`, authoritative"
   }
 }
 
@@ -1249,25 +1279,6 @@ Gen4 plan same as above
 "select t.col from (select user.id from user join user_extra) as t"
 "symbol t.col not found in table or subquery"
 
-# union of information_schema
-"select * from information_schema.a union select * from information_schema.b"
-{
-  "QueryType": "SELECT",
-  "Original": "select * from information_schema.a union select * from information_schema.b",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectDBA",
-    "Keyspace": {
-      "Name": "main",
-      "Sharded": false
-    },
-    "FieldQuery": "select * from information_schema.a where 1 != 1 union select * from information_schema.b where 1 != 1",
-    "Query": "select * from information_schema.a union select * from information_schema.b",
-    "Table": "information_schema.a"
-  }
-}
-Gen4 plan same as above
-
 # union with the same target shard
 "select * from music where user_id = 1 union select * from user where id = 1"
 {
@@ -1772,122 +1783,45 @@ Gen4 plan same as above
     ]
   }
 }
-Gen4 plan same as above
-
-# Select from information schema query with two tables that route should be merged
-"SELECT DELETE_RULE, UPDATE_RULE FROM  INFORMATION_SCHEMA.KEY_COLUMN_USAGE AS KCU INNER JOIN INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS AS RC ON KCU.CONSTRAINT_NAME = RC.CONSTRAINT_NAME WHERE KCU.TABLE_SCHEMA = 'test' AND KCU.TABLE_NAME = 'data_type_table' AND KCU.COLUMN_NAME = 'id' AND KCU.REFERENCED_TABLE_SCHEMA = 'test' AND KCU.CONSTRAINT_NAME = 'data_type_table_id_fkey' ORDER BY KCU.CONSTRAINT_NAME, KCU.COLUMN_NAME"
 {
   "QueryType": "SELECT",
-  "Original": "SELECT DELETE_RULE, UPDATE_RULE FROM  INFORMATION_SCHEMA.KEY_COLUMN_USAGE AS KCU INNER JOIN INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS AS RC ON KCU.CONSTRAINT_NAME = RC.CONSTRAINT_NAME WHERE KCU.TABLE_SCHEMA = 'test' AND KCU.TABLE_NAME = 'data_type_table' AND KCU.COLUMN_NAME = 'id' AND KCU.REFERENCED_TABLE_SCHEMA = 'test' AND KCU.CONSTRAINT_NAME = 'data_type_table_id_fkey' ORDER BY KCU.CONSTRAINT_NAME, KCU.COLUMN_NAME",
+  "Original": "select distinct user.a from user join user_extra",
   "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectDBA",
-    "Keyspace": {
-      "Name": "main",
-      "Sharded": false
-    },
-    "FieldQuery": "select DELETE_RULE, UPDATE_RULE from INFORMATION_SCHEMA.KEY_COLUMN_USAGE as KCU join INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS as RC on KCU.CONSTRAINT_NAME = RC.CONSTRAINT_NAME where 1 != 1",
-    "Query": "select DELETE_RULE, UPDATE_RULE from INFORMATION_SCHEMA.KEY_COLUMN_USAGE as KCU join INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS as RC on KCU.CONSTRAINT_NAME = RC.CONSTRAINT_NAME where KCU.TABLE_SCHEMA = :__vtschemaname and KCU.TABLE_NAME = :__vttablename and KCU.COLUMN_NAME = 'id' and KCU.REFERENCED_TABLE_SCHEMA = 'test' and KCU.CONSTRAINT_NAME = 'data_type_table_id_fkey' order by KCU.CONSTRAINT_NAME asc, KCU.COLUMN_NAME asc",
-    "SysTableTableName": "[VARBINARY(\"data_type_table\")]",
-    "SysTableTableSchema": "[VARBINARY(\"test\")]",
-    "Table": "INFORMATION_SCHEMA.KEY_COLUMN_USAGE, INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS"
-  }
-}
-
-# Select from information schema query with three tables such that route for 2 should be merged but not for the last.
-"SELECT KCU.DELETE_RULE, S.UPDATE_RULE FROM  INFORMATION_SCHEMA.KEY_COLUMN_USAGE AS KCU INNER JOIN INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS AS RC ON KCU.CONSTRAINT_NAME = RC.CONSTRAINT_NAME, INFORMATION_SCHEMA.K AS S WHERE KCU.TABLE_SCHEMA = 'test' AND KCU.TABLE_NAME = 'data_type_table' AND KCU.TABLE_NAME = 'data_type_table' AND S.TABLE_SCHEMA = 'test' AND S.TABLE_NAME = 'sc' ORDER BY KCU.CONSTRAINT_NAME, KCU.COLUMN_NAME"
-{
-  "QueryType": "SELECT",
-  "Original": "SELECT KCU.DELETE_RULE, S.UPDATE_RULE FROM  INFORMATION_SCHEMA.KEY_COLUMN_USAGE AS KCU INNER JOIN INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS AS RC ON KCU.CONSTRAINT_NAME = RC.CONSTRAINT_NAME, INFORMATION_SCHEMA.K AS S WHERE KCU.TABLE_SCHEMA = 'test' AND KCU.TABLE_NAME = 'data_type_table' AND KCU.TABLE_NAME = 'data_type_table' AND S.TABLE_SCHEMA = 'test' AND S.TABLE_NAME = 'sc' ORDER BY KCU.CONSTRAINT_NAME, KCU.COLUMN_NAME",
-  "Instructions": {
-    "OperatorType": "Join",
-    "Variant": "Join",
-    "JoinColumnIndexes": "-1,1",
-    "TableName": "INFORMATION_SCHEMA.KEY_COLUMN_USAGE, INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS_INFORMATION_SCHEMA.K",
+    "OperatorType": "Aggregate",
+    "Variant": "Ordered",
+    "GroupBy": "(0|1)",
+    "ResultColumns": 1,
     "Inputs": [
       {
-        "OperatorType": "Route",
-        "Variant": "SelectDBA",
-        "Keyspace": {
-          "Name": "main",
-          "Sharded": false
-        },
-        "FieldQuery": "select KCU.DELETE_RULE from INFORMATION_SCHEMA.KEY_COLUMN_USAGE as KCU join INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS as RC on KCU.CONSTRAINT_NAME = RC.CONSTRAINT_NAME where 1 != 1",
-        "Query": "select KCU.DELETE_RULE from INFORMATION_SCHEMA.KEY_COLUMN_USAGE as KCU join INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS as RC on KCU.CONSTRAINT_NAME = RC.CONSTRAINT_NAME where KCU.TABLE_SCHEMA = :__vtschemaname and KCU.TABLE_NAME = :__vttablename and KCU.TABLE_NAME = :__vttablename order by KCU.CONSTRAINT_NAME asc, KCU.COLUMN_NAME asc",
-        "SysTableTableName": "[VARBINARY(\"data_type_table\"), VARBINARY(\"data_type_table\")]",
-        "SysTableTableSchema": "[VARBINARY(\"test\")]",
-        "Table": "INFORMATION_SCHEMA.KEY_COLUMN_USAGE, INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS"
-      },
-      {
-        "OperatorType": "Route",
-        "Variant": "SelectDBA",
-        "Keyspace": {
-          "Name": "main",
-          "Sharded": false
-        },
-        "FieldQuery": "select S.UPDATE_RULE from INFORMATION_SCHEMA.K as S where 1 != 1",
-        "Query": "select S.UPDATE_RULE from INFORMATION_SCHEMA.K as S where S.TABLE_SCHEMA = :__vtschemaname and S.TABLE_NAME = :__vttablename",
-        "SysTableTableName": "[VARBINARY(\"sc\")]",
-        "SysTableTableSchema": "[VARBINARY(\"test\")]",
-        "Table": "INFORMATION_SCHEMA.K"
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "-1,-2",
+        "TableName": "`user`_user_extra",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select `user`.a, weight_string(`user`.a) from `user` where 1 != 1",
+            "Query": "select `user`.a, weight_string(`user`.a) from `user`",
+            "Table": "`user`"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from user_extra where 1 != 1",
+            "Query": "select 1 from user_extra",
+            "Table": "user_extra"
+          }
+        ]
       }
     ]
-  }
-}
-
-#information_schema.routines
-"SELECT routine_name AS name, routine_definition AS definition FROM information_schema.routines WHERE ROUTINE_SCHEMA = ? AND ROUTINE_TYPE = 'PROCEDURE'"
-{
-  "QueryType": "SELECT",
-  "Original": "SELECT routine_name AS name, routine_definition AS definition FROM information_schema.routines WHERE ROUTINE_SCHEMA = ? AND ROUTINE_TYPE = 'PROCEDURE'",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectDBA",
-    "Keyspace": {
-      "Name": "main",
-      "Sharded": false
-    },
-    "FieldQuery": "select routine_name as `name`, routine_definition as definition from information_schema.routines where 1 != 1",
-    "Query": "select routine_name as `name`, routine_definition as definition from information_schema.routines where ROUTINE_SCHEMA = :__vtschemaname and ROUTINE_TYPE = 'PROCEDURE'",
-    "SysTableTableSchema": "[:v1]",
-    "Table": "information_schema.routines"
-  }
-}
-
-#information_schema table sizes
-"SELECT SUM(data_length + index_length) as size FROM information_schema.TABLES WHERE table_schema = ?"
-{
-  "QueryType": "SELECT",
-  "Original": "SELECT SUM(data_length + index_length) as size FROM information_schema.TABLES WHERE table_schema = ?",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectDBA",
-    "Keyspace": {
-      "Name": "main",
-      "Sharded": false
-    },
-    "FieldQuery": "select SUM(data_length + index_length) as size from information_schema.`TABLES` where 1 != 1",
-    "Query": "select SUM(data_length + index_length) as size from information_schema.`TABLES` where table_schema = :__vtschemaname",
-    "SysTableTableSchema": "[:v1]",
-    "Table": "information_schema.`TABLES`"
-  }
-}
-
-#information_schema referential contraints
-"SELECT kcu.constraint_name constraint_name, kcu.column_name column_name, kcu.referenced_table_name referenced_table_name, kcu.referenced_column_name referenced_column_name, kcu.ordinal_position ordinal_position, kcu.table_name table_name, rc.delete_rule delete_rule, rc.update_rule update_rule FROM information_schema.key_column_usage AS kcu INNER JOIN information_schema.referential_constraints AS rc ON kcu.constraint_name = rc.constraint_name WHERE kcu.table_schema = ? AND rc.constraint_schema = ? AND kcu.referenced_column_name IS NOT NULL ORDER BY ordinal_position"
-{
-  "QueryType": "SELECT",
-  "Original": "SELECT kcu.constraint_name constraint_name, kcu.column_name column_name, kcu.referenced_table_name referenced_table_name, kcu.referenced_column_name referenced_column_name, kcu.ordinal_position ordinal_position, kcu.table_name table_name, rc.delete_rule delete_rule, rc.update_rule update_rule FROM information_schema.key_column_usage AS kcu INNER JOIN information_schema.referential_constraints AS rc ON kcu.constraint_name = rc.constraint_name WHERE kcu.table_schema = ? AND rc.constraint_schema = ? AND kcu.referenced_column_name IS NOT NULL ORDER BY ordinal_position",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectDBA",
-    "Keyspace": {
-      "Name": "main",
-      "Sharded": false
-    },
-    "FieldQuery": "select kcu.constraint_name as constraint_name, kcu.column_name as column_name, kcu.referenced_table_name as referenced_table_name, kcu.referenced_column_name as referenced_column_name, kcu.ordinal_position as ordinal_position, kcu.table_name as table_name, rc.delete_rule as delete_rule, rc.update_rule as update_rule from information_schema.key_column_usage as kcu join information_schema.referential_constraints as rc on kcu.constraint_name = rc.constraint_name where 1 != 1",
-    "Query": "select kcu.constraint_name as constraint_name, kcu.column_name as column_name, kcu.referenced_table_name as referenced_table_name, kcu.referenced_column_name as referenced_column_name, kcu.ordinal_position as ordinal_position, kcu.table_name as table_name, rc.delete_rule as delete_rule, rc.update_rule as update_rule from information_schema.key_column_usage as kcu join information_schema.referential_constraints as rc on kcu.constraint_name = rc.constraint_name where kcu.table_schema = :__vtschemaname and rc.constraint_schema = :__vtschemaname and kcu.referenced_column_name is not null order by ordinal_position asc",
-    "SysTableTableSchema": "[:v1, :v2]",
-    "Table": "information_schema.key_column_usage, information_schema.referential_constraints"
   }
 }
