@@ -853,9 +853,9 @@ func TestCountDistinctOnVarcharWithNulls(t *testing.T) {
 	fp := &fakePrimitive{
 		results: []*sqltypes.Result{sqltypes.MakeTestResult(
 			fields,
+			"null|null|null",
 			"null|a|0x41",
 			"null|b|0x42",
-			"null|null|null",
 			"1|null|null",
 			"1|null|null",
 			"1|a|0x41",
@@ -890,6 +890,70 @@ func TestCountDistinctOnVarcharWithNulls(t *testing.T) {
 			"int64|int64",
 		),
 		`null|2`, `1|2`, `2|1`, `3|0`,
+	)
+
+	qr, err := oa.Execute(nil, nil, false)
+	require.NoError(t, err)
+	assert.Equal(t, want, qr)
+
+	fp.rewind()
+	results := &sqltypes.Result{}
+	err = oa.StreamExecute(nil, nil, false, func(qr *sqltypes.Result) error {
+		if qr.Fields != nil {
+			results.Fields = qr.Fields
+		}
+		results.Rows = append(results.Rows, qr.Rows...)
+		return nil
+	})
+	require.NoError(t, err)
+	assert.Equal(t, want, results)
+}
+
+func TestSumDistinctOnVarcharWithNulls(t *testing.T) {
+	fields := sqltypes.MakeTestFields(
+		"c1|c2|weight_string(c2)",
+		"int64|varchar|varbinary",
+	)
+	fp := &fakePrimitive{
+		results: []*sqltypes.Result{sqltypes.MakeTestResult(
+			fields,
+			"null|null|null",
+			"null|a|0x41",
+			"null|b|0x42",
+			"1|null|null",
+			"1|null|null",
+			"1|a|0x41",
+			"1|a|0x41",
+			"1|b|0x42",
+			"2|null|null",
+			"2|b|0x42",
+			"3|null|null",
+			"3|null|null",
+			"3|null|null",
+			"3|null|null",
+		)},
+	}
+
+	oa := &OrderedAggregate{
+		PreProcess: true,
+		Aggregates: []*AggregateParams{{
+			Opcode:    AggregateSumDistinct,
+			Col:       1,
+			WCol:      2,
+			WAssigned: true,
+			Alias:     "sum(distinct c2)",
+		}},
+		GroupByKeys:         []*GroupByParams{{KeyCol: 0}},
+		Input:               fp,
+		TruncateColumnCount: 2,
+	}
+
+	want := sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields(
+			"c1|sum(distinct c2)",
+			"int64|decimal",
+		),
+		`null|0`, `1|0`, `2|0`, `3|null`,
 	)
 
 	qr, err := oa.Execute(nil, nil, false)
