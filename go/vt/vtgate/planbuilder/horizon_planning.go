@@ -165,6 +165,12 @@ func (hp *horizonPlanning) planAggregations() error {
 				return err
 			}
 
+			// Currently the OA engine primitive is able to handle only one distinct aggregation function.
+			// PreProcess being true tells that it is already handling it.
+			if oa.eaggr.PreProcess && handleDistinct {
+				return semantics.Gen4NotSupportedF("multiple distinct aggregation function")
+			}
+
 			pushExpr := e.Col
 			var alias string
 			if handleDistinct {
