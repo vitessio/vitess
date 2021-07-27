@@ -1632,8 +1632,8 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select t.id from (select id from `user` where 1 != 1), user_extra where 1 != 1",
-    "Query": "select t.id from (select id from `user` where id = 5), user_extra where t.id = user_extra.user_id",
+    "FieldQuery": "select t.id from (select id from `user` where 1 != 1) as t, user_extra where 1 != 1",
+    "Query": "select t.id from (select id from `user` where id = 5) as t, user_extra where t.id = user_extra.user_id",
     "Table": "`user`, user_extra",
     "Values": [
       5
@@ -1673,8 +1673,8 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select t.id from (select `user`.id from `user` where 1 != 1), user_extra where 1 != 1",
-    "Query": "select t.id from (select `user`.id from `user` where `user`.id = 5), user_extra where t.id = user_extra.user_id",
+    "FieldQuery": "select t.id from (select `user`.id from `user` where 1 != 1) as t, user_extra where 1 != 1",
+    "Query": "select t.id from (select `user`.id from `user` where `user`.id = 5) as t, user_extra where t.id = user_extra.user_id",
     "Table": "`user`, user_extra",
     "Values": [
       5
@@ -1715,8 +1715,8 @@ Gen4 error: Duplicate column name 'id'
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select t.id from user_extra, (select id from `user` where 1 != 1) where 1 != 1",
-    "Query": "select t.id from user_extra, (select id from `user` where id = 5) where t.id = user_extra.user_id",
+    "FieldQuery": "select t.id from user_extra, (select id from `user` where 1 != 1) as t where 1 != 1",
+    "Query": "select t.id from user_extra, (select id from `user` where id = 5) as t where t.id = user_extra.user_id",
     "Table": "`user`, user_extra",
     "Values": [
       5
@@ -1910,8 +1910,8 @@ Gen4 error: symbol t.col not found
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select t.id from (select id, textcol1 as baz from `user` as route1 where 1 != 1), (select id, textcol1 + textcol1 as baz from `user` where 1 != 1) where 1 != 1",
-    "Query": "select t.id from (select id, textcol1 as baz from `user` as route1 where textcol1 = '3'), (select id, textcol1 + textcol1 as baz from `user` where textcol1 + textcol1 = '3') where t.id = s.id",
+    "FieldQuery": "select t.id from (select id, textcol1 as baz from `user` as route1 where 1 != 1) as t, (select id, textcol1 + textcol1 as baz from `user` where 1 != 1) as s where 1 != 1",
+    "Query": "select t.id from (select id, textcol1 as baz from `user` as route1 where textcol1 = '3') as t, (select id, textcol1 + textcol1 as baz from `user` where textcol1 + textcol1 = '3') as s where t.id = s.id",
     "Table": "`user`"
   }
 }

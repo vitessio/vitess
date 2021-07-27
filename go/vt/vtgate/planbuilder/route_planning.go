@@ -811,6 +811,7 @@ func makeRoute(j joinTree) *routePlan {
 		query:      dp.query,
 		predicates: inner.predicates,
 		leftJoins:  inner.leftJoins,
+		alias:      dp.alias,
 	}
 
 	inner.tables = parenTables{dt}
