@@ -43,7 +43,6 @@ func (d *Derived) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTabl
 	}
 
 	newExpr, err := semantics.RewriteDerivedExpression(expr, tableInfo)
-
 	if err != nil {
 		return err
 	}
