@@ -56,7 +56,8 @@ type (
 		WeightStrExpr sqlparser.Expr
 
 		// This is to add the distinct function expression in grouping column for pushing down but not be to used as grouping key at VTGate level.
-		Distinct bool
+		// Starts with 1 so that default (0) means unassigned.
+		DistinctAggrIndex int
 	}
 )
 
