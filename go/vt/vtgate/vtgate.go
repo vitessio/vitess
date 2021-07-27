@@ -79,7 +79,7 @@ var (
 	warnPayloadSize    = flag.Int("warn_payload_size", 0, "The warning threshold for query payloads in bytes. A payload greater than this threshold will cause the VtGateWarnings.WarnPayloadSizeExceeded counter to be incremented.")
 
 	// Put set-passthrough under a flag.
-	sysVarSetEnabled = flag.Bool("enable_system_settings", true, "This will enable the system settings to be changed per session at the database connection level")
+	sysVarSetEnabled = flag.Bool("enable_system_settings", false, "This will enable the system settings to be changed per session at the database connection level")
 	plannerVersion   = flag.String("planner_version", "v3", "Sets the default planner to use when the session has not changed it. Valid values are: V3, Gen4, Gen4Greedy and Gen4Fallback. Gen4Fallback tries the new gen4 planner and falls back to the V3 planner if the gen4 fails. All Gen4 versions should be considered experimental!")
 
 	// lockHeartbeatTime is used to set the next heartbeat time.
