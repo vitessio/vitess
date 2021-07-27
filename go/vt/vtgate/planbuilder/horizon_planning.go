@@ -266,7 +266,7 @@ func planGroupByGen4(groupExpr abstract.GroupBy, plan logicalPlan, semTable *sem
 			return false, err
 		}
 		if groupExpr.DistinctAggrIndex == 0 {
-			node.eaggr.GroupByKeys = append(node.eaggr.GroupByKeys, engine.GroupByParams{KeyCol: keyCol, WeightStringCol: wsOffset, Expr: groupExpr.WeightStrExpr})
+			node.eaggr.GroupByKeys = append(node.eaggr.GroupByKeys, &engine.GroupByParams{KeyCol: keyCol, WeightStringCol: wsOffset, Expr: groupExpr.WeightStrExpr})
 		} else {
 			if wsOffset != -1 {
 				node.eaggr.Aggregates[groupExpr.DistinctAggrIndex-1].WAssigned = true
@@ -556,7 +556,7 @@ func (hp *horizonPlanning) planDistinctOA(currPlan *orderedAggregate) error {
 		for _, aggrParam := range currPlan.eaggr.Aggregates {
 			if sqlparser.EqualsExpr(sExpr.Col.Expr, aggrParam.Expr) {
 				found = true
-				eaggr.GroupByKeys = append(eaggr.GroupByKeys, engine.GroupByParams{KeyCol: aggrParam.Col, WeightStringCol: -1})
+				eaggr.GroupByKeys = append(eaggr.GroupByKeys, &engine.GroupByParams{KeyCol: aggrParam.Col, WeightStringCol: -1})
 				break
 			}
 		}
@@ -579,7 +579,7 @@ func (hp *horizonPlanning) addDistinct() error {
 		eaggr: eaggr,
 	}
 	for index, sExpr := range hp.qp.SelectExprs {
-		grpParam := engine.GroupByParams{KeyCol: index, WeightStringCol: -1}
+		grpParam := &engine.GroupByParams{KeyCol: index, WeightStringCol: -1}
 		_, wOffset, added, err := wrapAndPushExpr(sExpr.Col.Expr, sExpr.Col.Expr, hp.plan, hp.semTable)
 		if err != nil {
 			return err
