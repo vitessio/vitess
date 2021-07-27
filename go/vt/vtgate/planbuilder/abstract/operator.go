@@ -24,6 +24,7 @@ import (
 type (
 	// Operator forms the tree of operators, representing the declarative query provided.
 	// An operator can be:
+	//	*  Derived - which represents an expression that generates a table.
 	//  *  QueryGraph - which represents a group of tables and predicates that can be evaluated in any order
 	//     while still preserving the results
 	//	*  LeftJoin - A left join. These can't be evaluated in any order, so we keep them separate
