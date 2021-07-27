@@ -78,14 +78,17 @@ func (gbp GroupByParams) String() string {
 // AggregateParams specify the parameters for each aggregation.
 // It contains the opcode and input column number.
 type AggregateParams struct {
-	Opcode    AggregateOpcode
-	Col       int
+	Opcode AggregateOpcode
+	Col    int
+
+	// These are used only for distinct opcodes.
 	KeyCol    int
 	WCol      int
 	WAssigned bool
 	// Alias is set only for distinct opcodes.
 	Alias string `json:",omitempty"`
-	Expr  sqlparser.Expr
+
+	Expr sqlparser.Expr
 }
 
 func (ap *AggregateParams) isDistinct() bool {
@@ -98,7 +101,7 @@ func (ap *AggregateParams) preProcess() bool {
 
 func (ap *AggregateParams) String() string {
 	keyCol := strconv.Itoa(ap.Col)
-	if ap.Opcode == AggregateCountDistinct && ap.WAssigned {
+	if ap.WAssigned {
 		keyCol = fmt.Sprintf("%s|%d", keyCol, ap.WCol)
 	}
 	if ap.Alias != "" {
@@ -327,11 +330,7 @@ func (oa *OrderedAggregate) convertRow(row []sqltypes.Value) (newRow []sqltypes.
 	for _, aggr := range oa.Aggregates {
 		switch aggr.Opcode {
 		case AggregateCountDistinct:
-			curDistinct = row[aggr.KeyCol]
-			if aggr.WAssigned && !curDistinct.IsComparable() {
-				aggr.KeyCol = aggr.WCol
-				curDistinct = row[aggr.KeyCol]
-			}
+			curDistinct = findComparableCurrentDistinct(row, aggr)
 			// Type is int64. Ok to call MakeTrusted.
 			if row[aggr.KeyCol].IsNull() {
 				newRow[aggr.Col] = countZero
@@ -339,11 +338,7 @@ func (oa *OrderedAggregate) convertRow(row []sqltypes.Value) (newRow []sqltypes.
 				newRow[aggr.Col] = countOne
 			}
 		case AggregateSumDistinct:
-			curDistinct = row[aggr.KeyCol]
-			if aggr.WAssigned && !curDistinct.IsComparable() {
-				aggr.KeyCol = aggr.WCol
-				curDistinct = row[aggr.KeyCol]
-			}
+			curDistinct = findComparableCurrentDistinct(row, aggr)
 			var err error
 			newRow[aggr.Col], err = evalengine.Cast(row[aggr.Col], opcodeType[aggr.Opcode])
 			if err != nil {
@@ -362,6 +357,15 @@ func (oa *OrderedAggregate) convertRow(row []sqltypes.Value) (newRow []sqltypes.
 		}
 	}
 	return newRow, curDistinct
+}
+
+func findComparableCurrentDistinct(row []sqltypes.Value, aggr *AggregateParams) sqltypes.Value {
+	curDistinct := row[aggr.KeyCol]
+	if aggr.WAssigned && !curDistinct.IsComparable() {
+		aggr.KeyCol = aggr.WCol
+		curDistinct = row[aggr.KeyCol]
+	}
+	return curDistinct
 }
 
 // GetFields is a Primitive function.
@@ -419,11 +423,7 @@ func (oa *OrderedAggregate) merge(fields []*querypb.Field, row1, row2 []sqltypes
 			if cmp == 0 {
 				continue
 			}
-			curDistinct = row2[aggr.KeyCol]
-			if aggr.WAssigned && !curDistinct.IsComparable() {
-				aggr.KeyCol = aggr.WCol
-				curDistinct = row2[aggr.KeyCol]
-			}
+			curDistinct = findComparableCurrentDistinct(row2, aggr)
 		}
 		var err error
 		switch aggr.Opcode {

@@ -67,18 +67,16 @@ func CreateQPFromSelect(sel *sqlparser.Select) (*QueryProjection, error) {
 		Distinct: sel.Distinct,
 	}
 
-	distinctAggrFunc := false
 	for _, selExp := range sel.SelectExprs {
 		exp, ok := selExp.(*sqlparser.AliasedExpr)
 		if !ok {
 			return nil, semantics.Gen4NotSupportedF("%T in select list", selExp)
 		}
 
-		foundDistinctAggrFunc, err := checkForInvalidAggregations(exp, distinctAggrFunc)
+		err := checkForInvalidAggregations(exp)
 		if err != nil {
 			return nil, err
 		}
-		distinctAggrFunc = distinctAggrFunc || foundDistinctAggrFunc
 		col := SelectExpr{
 			Col: exp,
 		}
@@ -137,25 +135,16 @@ func CreateQPFromSelect(sel *sqlparser.Select) (*QueryProjection, error) {
 	return qp, nil
 }
 
-func checkForInvalidAggregations(exp *sqlparser.AliasedExpr, failOnDistinctAggrFunc bool) (bool, error) {
-	distinctAggrFunc := false
-	err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+func checkForInvalidAggregations(exp *sqlparser.AliasedExpr) error {
+	return sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 		fExpr, ok := node.(*sqlparser.FuncExpr)
 		if ok && fExpr.IsAggregate() {
 			if len(fExpr.Exprs) != 1 {
 				return false, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.SyntaxError, "aggregate functions take a single argument '%s'", sqlparser.String(fExpr))
 			}
-			if fExpr.Distinct {
-				if failOnDistinctAggrFunc {
-					return false, semantics.Gen4NotSupportedF("multiple distinct aggregation function")
-				}
-				distinctAggrFunc = true
-				return true, nil
-			}
 		}
 		return true, nil
 	}, exp.Expr)
-	return distinctAggrFunc, err
 }
 
 func (qp *QueryProjection) getNonAggrExprNotMatchingGroupByExprs() sqlparser.Expr {

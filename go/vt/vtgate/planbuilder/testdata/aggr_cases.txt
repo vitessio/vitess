@@ -1111,7 +1111,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "sum_distinct(1) AS sum(distinct col2)",
+    "Aggregates": "sum_distinct(1|3) AS sum(distinct col2)",
     "GroupBy": "(0|2)",
     "ResultColumns": 2,
     "Inputs": [
