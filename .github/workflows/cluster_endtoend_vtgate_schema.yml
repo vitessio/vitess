@@ -3,7 +3,7 @@
 name: Cluster (vtgate_schema)
 on: [push, pull_request]
 concurrency:
-  group: ${{ github.ref }}
+  group: format('{0}-{1}', ${{ github.ref }}, 'Cluster (vtgate_schema)')
   cancel-in-progress: true
 
 jobs:

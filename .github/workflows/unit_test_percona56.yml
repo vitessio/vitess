@@ -3,7 +3,7 @@
 name: Unit Test (percona56)
 on: [push, pull_request]
 concurrency:
-  group: ${{ github.ref }}
+  group: format('{0}-{1}', ${{ github.ref }}, 'Unit Test (percona56)')
   cancel-in-progress: true
 
 jobs:

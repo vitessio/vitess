@@ -3,7 +3,7 @@
 name: Cluster (vtgate_topo)
 on: [push, pull_request]
 concurrency:
-  group: ${{ github.ref }}
+  group: format('{0}-{1}', ${{ github.ref }}, 'Cluster (vtgate_topo)')
   cancel-in-progress: true
 
 jobs:

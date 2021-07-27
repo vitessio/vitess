@@ -3,7 +3,7 @@
 name: Cluster (24)
 on: [push, pull_request]
 concurrency:
-  group: ${{ github.ref }}
+  group: format('{0}-{1}', ${{ github.ref }}, 'Cluster (24)')
   cancel-in-progress: true
 
 jobs:

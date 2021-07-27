@@ -3,7 +3,7 @@
 name: Unit Test (mariadb102)
 on: [push, pull_request]
 concurrency:
-  group: ${{ github.ref }}
+  group: format('{0}-{1}', ${{ github.ref }}, 'Unit Test (mariadb102)')
   cancel-in-progress: true
 
 jobs:

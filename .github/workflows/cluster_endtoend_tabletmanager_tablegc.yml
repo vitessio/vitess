@@ -3,7 +3,7 @@
 name: Cluster (tabletmanager_tablegc)
 on: [push, pull_request]
 concurrency:
-  group: ${{ github.ref }}
+  group: format('{0}-{1}', ${{ github.ref }}, 'Cluster (tabletmanager_tablegc)')
   cancel-in-progress: true
 
 jobs:
