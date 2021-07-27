@@ -49,7 +49,7 @@ type OrderedAggregate struct {
 
 	// GroupByKeys specifies the input values that must be used for
 	// the aggregation key.
-	GroupByKeys []GroupByParams
+	GroupByKeys []*GroupByParams
 
 	// TruncateColumnCount specifies the number of columns to return
 	// in the final result. Rest of the columns are truncated
@@ -490,7 +490,7 @@ func aggregateParamsToString(in interface{}) string {
 }
 
 func groupByParamsToString(i interface{}) string {
-	return i.(GroupByParams).String()
+	return i.(*GroupByParams).String()
 }
 
 func (oa *OrderedAggregate) description() PrimitiveDescription {
