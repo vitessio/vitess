@@ -306,7 +306,7 @@ func (oa *orderedAggregate) needDistinctHandling(pb *primitiveBuilder, funcExpr 
 // needDistinctHandling returns true if oa needs to handle the distinct clause.
 // If true, it will also return the aliased expression that needs to be pushed
 // down into the underlying route.
-func (oa *orderedAggregate) needDistinctHandlingGen4(funcExpr *sqlparser.FuncExpr, opcode engine.AggregateOpcode) (bool, *sqlparser.AliasedExpr, error) {
+func (oa *orderedAggregate) needDistinctHandlingGen4(funcExpr *sqlparser.FuncExpr, opcode engine.AggregateOpcode, semTable *semantics.SemTable, vschema ContextVSchema) (bool, *sqlparser.AliasedExpr, error) {
 	if !funcExpr.Distinct {
 		return false, nil, nil
 	}
@@ -322,11 +322,9 @@ func (oa *orderedAggregate) needDistinctHandlingGen4(funcExpr *sqlparser.FuncExp
 		// Unreachable
 		return true, innerAliased, nil
 	}
-	// check for unique vindex
-	//vindex := pb.st.Vindex(innerAliased.Expr, rb)
-	//if vindex != nil && vindex.IsUnique() {
-	//	return false, nil, nil
-	//}
+	if exprHasUniqueVindex(vschema, semTable, innerAliased.Expr) {
+		return false, nil, nil
+	}
 	return true, innerAliased, nil
 }
 
