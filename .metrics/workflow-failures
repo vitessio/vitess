@@ -1,10 +1,3 @@
-2021-03-30T12:36:50Z,endtoend,https://github.com/vitessio/vitess/actions/runs/701415584
-2021-03-30T15:19:14Z,Cluster (17),https://github.com/vitessio/vitess/actions/runs/701915288
-2021-03-30T15:19:14Z,local_example,https://github.com/vitessio/vitess/actions/runs/701915323
-2021-03-30T17:17:05Z,Cluster (12),https://github.com/vitessio/vitess/actions/runs/702251478
-2021-03-30T17:17:05Z,Cluster (17),https://github.com/vitessio/vitess/actions/runs/702251523
-2021-03-30T17:23:48Z,endtoend,https://github.com/vitessio/vitess/actions/runs/702269240
-2021-03-30T17:32:43Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/702292299
 2021-03-30T18:22:12Z,endtoend,https://github.com/vitessio/vitess/actions/runs/702424876
 2021-03-30T18:50:33Z,Cluster (onlineddl_ghost),https://github.com/vitessio/vitess/actions/runs/702499077
 2021-03-30T18:50:33Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/702499044
@@ -9997,4 +9990,11 @@
 2021-07-27T12:23:39Z,Cluster (vreplication_migrate),https://github.com/vitessio/vitess/actions/runs/1071124847
 2021-07-27T12:23:39Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/1071124849
 2021-07-27T12:56:26Z,Cluster (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/1071224040
+2021-07-27T14:15:29Z,Cluster (vreplication_multicell),https://github.com/vitessio/vitess/actions/runs/1071485639
+2021-07-27T14:15:29Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/1071485635
+2021-07-27T14:15:29Z,Unit Test (mysql57),https://github.com/vitessio/vitess/actions/runs/1071485606
+2021-07-27T14:15:29Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/1071485605
 2021-07-27T14:15:29Z,golangci-lint,https://github.com/vitessio/vitess/actions/runs/1071485660
+2021-07-27T14:15:29Z,unit_race,https://github.com/vitessio/vitess/actions/runs/1071485652
+2021-07-27T14:15:30Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/1071485672
+2021-07-27T14:15:30Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/1071485683
