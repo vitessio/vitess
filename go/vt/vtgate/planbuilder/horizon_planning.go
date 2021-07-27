@@ -164,37 +164,41 @@ func (hp *horizonPlanning) planAggregations() error {
 				return err
 			}
 
-			pushExpr := e.Col
-			var alias string
+			aggrParams := &engine.AggregateParams{
+				Opcode: opcode,
+				Expr:   fExpr,
+			}
 			if handleDistinct {
 				switch opcode {
 				case engine.AggregateCount:
-					opcode = engine.AggregateCountDistinct
+					aggrParams.Opcode = engine.AggregateCountDistinct
 				case engine.AggregateSum:
-					opcode = engine.AggregateSumDistinct
+					aggrParams.Opcode = engine.AggregateSumDistinct
 				}
 
 				if e.Col.As.IsEmpty() {
-					alias = sqlparser.String(e.Col.Expr)
+					aggrParams.Alias = sqlparser.String(e.Col.Expr)
 				} else {
-					alias = e.Col.As.String()
+					aggrParams.Alias = e.Col.As.String()
 				}
-
-				pushExpr = innerAliased
 				oa.eaggr.PreProcess = true
 
 				hp.haveToTruncate(true)
 				hp.qp.GroupByExprs = append(hp.qp.GroupByExprs, abstract.GroupBy{Inner: innerAliased.Expr, Distinct: true})
-			}
-			offset, _, err := pushProjection(pushExpr, oa.input, hp.semTable, true, true)
-			if err != nil {
-				return err
-			}
-			aggrParams := engine.AggregateParams{
-				Opcode: opcode,
-				Col:    offset,
-				Alias:  alias,
-				Expr:   fExpr,
+
+				offset, wOffset, _, err := wrapAndPushExpr(innerAliased.Expr, innerAliased.Expr, oa.input, hp.semTable)
+				if err != nil {
+					return err
+				}
+				aggrParams.Col = offset
+				aggrParams.WCol = wOffset
+				aggrParams.WAssigned = true
+			} else {
+				offset, _, err := pushProjection(e.Col, oa.input, hp.semTable, true, true)
+				if err != nil {
+					return err
+				}
+				aggrParams.Col = offset
 			}
 			oa.eaggr.Aggregates = append(oa.eaggr.Aggregates, aggrParams)
 		}
