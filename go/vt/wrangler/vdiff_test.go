@@ -387,7 +387,7 @@ func TestVDiffPlanSuccess(t *testing.T) {
 			pkCols:           []int{0},
 			selectPks:        []int{0},
 			sourcePrimitive: &engine.OrderedAggregate{
-				Aggregates: []engine.AggregateParams{{
+				Aggregates: []*engine.AggregateParams{{
 					Opcode: engine.AggregateCount,
 					Col:    2,
 				}, {

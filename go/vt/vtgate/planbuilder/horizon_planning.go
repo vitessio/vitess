@@ -151,6 +151,7 @@ func (hp *horizonPlanning) planAggregations() error {
 			if err != nil {
 				return err
 			}
+			continue
 		}
 
 		if e.Aggr && oa != nil {
@@ -184,7 +185,7 @@ func (hp *horizonPlanning) planAggregations() error {
 				oa.eaggr.PreProcess = true
 
 				hp.haveToTruncate(true)
-				hp.qp.GroupByExprs = append(hp.qp.GroupByExprs, abstract.GroupBy{Inner: innerAliased.Expr, Distinct: true})
+				hp.qp.GroupByExprs = append(hp.qp.GroupByExprs, abstract.GroupBy{Inner: innerAliased.Expr, WeightStrExpr: innerAliased.Expr, Distinct: true})
 
 				offset, wOffset, _, err := wrapAndPushExpr(innerAliased.Expr, innerAliased.Expr, oa.input, hp.semTable)
 				if err != nil {
