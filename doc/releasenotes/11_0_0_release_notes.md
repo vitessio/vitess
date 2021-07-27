@@ -211,6 +211,7 @@ This release complies with VEP-3 which removes the upgrade order requirement. Co
  * Gen4 fail more2 #8382  
  * SHOW VITESS_MIGRATION '...' LOGS, retain logs for 24 hours #8532
  * [11.0] query serving to continue when topo server restarts #8533
+ * [11.0] Disable allowing set statements on system settings by default #8540
 ### VReplication
  * Change local example to use v2 vreplication flows and make v2 flows as the default #8527
  * Use Dba user when Vexec is runAsAdmin #7731
