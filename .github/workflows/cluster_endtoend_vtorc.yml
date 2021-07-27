@@ -3,7 +3,7 @@
 name: Cluster (vtorc)
 on: [push, pull_request]
 concurrency:
-  group: ${{ github.ref }}
+  group: format('{0}-{1}', ${{ github.ref }}, 'Cluster (vtorc)')
   cancel-in-progress: true
 
 jobs:

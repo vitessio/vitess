@@ -3,7 +3,7 @@
 name: Cluster (onlineddl_singleton)
 on: [push, pull_request]
 concurrency:
-  group: ${{ github.ref }}
+  group: format('{0}-{1}', ${{ github.ref }}, 'Cluster (onlineddl_singleton)')
   cancel-in-progress: true
 
 jobs:
