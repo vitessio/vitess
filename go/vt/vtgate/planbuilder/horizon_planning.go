@@ -103,19 +103,27 @@ func removeQualifierFromColName(expr *sqlparser.AliasedExpr) *sqlparser.AliasedE
 
 func checkIfAlreadyExists(expr *sqlparser.AliasedExpr, sel *sqlparser.Select) int {
 	for i, selectExpr := range sel.SelectExprs {
-		if selectExpr, ok := selectExpr.(*sqlparser.AliasedExpr); ok {
-			if selectExpr.As.IsEmpty() {
-				// we don't have an alias, so we can compare the expressions
-				if sqlparser.EqualsExpr(selectExpr.Expr, expr.Expr) {
-					return i
-				}
-				// we have an aliased column, so let's check if the expression is matching the alias
-			} else if colName, ok := expr.Expr.(*sqlparser.ColName); ok {
-				if selectExpr.As.Equal(colName.Name) {
-					return i
-				}
-			}
+		selectExpr, ok := selectExpr.(*sqlparser.AliasedExpr)
+		if !ok {
+			continue
+		}
 
+		selectExprCol, isSelectExprCol := selectExpr.Expr.(*sqlparser.ColName)
+		exprCol, isExprCol := expr.Expr.(*sqlparser.ColName)
+
+		if selectExpr.As.IsEmpty() {
+			// we don't have an alias
+
+			if isSelectExprCol && isExprCol && exprCol.Name.Equal(selectExprCol.Name) {
+				// the expressions are ColName, we compare their name
+				return i
+			} else if sqlparser.EqualsExpr(selectExpr.Expr, expr.Expr) {
+				// the expressions are not ColName, so we just compare the expressions
+				return i
+			}
+		} else if isExprCol && selectExpr.As.Equal(exprCol.Name) {
+			// we have an aliased column, checking if the the expression is matching the alias
+			return i
 		}
 	}
 	return -1
