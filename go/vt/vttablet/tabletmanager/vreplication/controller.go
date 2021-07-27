@@ -160,7 +160,7 @@ func (ct *controller) run(ctx context.Context) {
 			return
 		default:
 		}
-		log.Errorf("stream %v: %v, retrying after %v", ct.id, err, *retryDelay)
+		binlogplayer.LogError(fmt.Sprintf("error in stream %v, retrying after %v", ct.id, *retryDelay), err)
 		ct.blpStats.ErrorCounts.Add([]string{"Stream Error"}, 1)
 		timer := time.NewTimer(*retryDelay)
 		select {

@@ -58,6 +58,8 @@ const (
 	alterSchemaMigrationsTableETASeconds         = "ALTER TABLE _vt.schema_migrations add column eta_seconds bigint NOT NULL DEFAULT -1"
 	alterSchemaMigrationsTableRowsCopied         = "ALTER TABLE _vt.schema_migrations add column rows_copied bigint unsigned NOT NULL DEFAULT 0"
 	alterSchemaMigrationsTableTableRows          = "ALTER TABLE _vt.schema_migrations add column table_rows bigint NOT NULL DEFAULT 0"
+	alterSchemaMigrationsTableAddedUniqueKeys    = "ALTER TABLE _vt.schema_migrations add column added_unique_keys int unsigned NOT NULL DEFAULT 0"
+	alterSchemaMigrationsTableRemovedUniqueKeys  = "ALTER TABLE _vt.schema_migrations add column removed_unique_keys int unsigned NOT NULL DEFAULT 0"
 
 	sqlInsertMigration = `INSERT IGNORE INTO _vt.schema_migrations (
 		migration_uuid,
@@ -112,8 +114,9 @@ const (
 		WHERE
 			migration_uuid=%a
 	`
-	sqlUpdateMigrationStartedTimestamp = `UPDATE _vt.schema_migrations
-			SET started_timestamp=IFNULL(started_timestamp, NOW())
+	sqlUpdateMigrationStartedTimestamp = `UPDATE _vt.schema_migrations SET
+			started_timestamp =IFNULL(started_timestamp,  NOW()),
+			liveness_timestamp=IFNULL(liveness_timestamp, NOW())
 		WHERE
 			migration_uuid=%a
 	`
@@ -128,7 +131,7 @@ const (
 			migration_uuid=%a
 	`
 	sqlUpdateArtifacts = `UPDATE _vt.schema_migrations
-			SET artifacts=concat(%a, ',', artifacts)
+			SET artifacts=concat(%a, ',', artifacts), cleanup_timestamp=NULL
 		WHERE
 			migration_uuid=%a
 	`
@@ -149,6 +152,11 @@ const (
 	`
 	sqlUpdateMessage = `UPDATE _vt.schema_migrations
 			SET message=%a
+		WHERE
+			migration_uuid=%a
+	`
+	sqlUpdateAddedRemovedUniqueKeys = `UPDATE _vt.schema_migrations
+			SET added_unique_keys=%a, removed_unique_keys=%a
 		WHERE
 			migration_uuid=%a
 	`
@@ -263,6 +271,14 @@ const (
 			AND cleanup_timestamp IS NULL
 			AND completed_timestamp <= NOW() - INTERVAL %a SECOND
 	`
+	sqlFixCompletedTimestamp = `UPDATE _vt.schema_migrations
+		SET
+			completed_timestamp=NOW()
+		WHERE
+			migration_status='failed'
+			AND cleanup_timestamp IS NULL
+			AND completed_timestamp IS NULL
+	`
 	sqlSelectMigration = `SELECT
 			id,
 			migration_uuid,
@@ -284,6 +300,8 @@ const (
 			ddl_action,
 			artifacts,
 			tablet,
+			added_unique_keys,
+			removed_unique_keys,
 			migration_context
 		FROM _vt.schema_migrations
 		WHERE
@@ -310,6 +328,8 @@ const (
 			ddl_action,
 			artifacts,
 			tablet,
+			added_unique_keys,
+			removed_unique_keys,
 			migration_context
 		FROM _vt.schema_migrations
 		WHERE
@@ -491,4 +511,6 @@ var ApplyDDL = []string{
 	alterSchemaMigrationsTableETASeconds,
 	alterSchemaMigrationsTableRowsCopied,
 	alterSchemaMigrationsTableTableRows,
+	alterSchemaMigrationsTableAddedUniqueKeys,
+	alterSchemaMigrationsTableRemovedUniqueKeys,
 }

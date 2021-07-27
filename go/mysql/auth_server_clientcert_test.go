@@ -35,9 +35,7 @@ const clientCertUsername = "Client Cert"
 func TestValidCert(t *testing.T) {
 	th := &testHandler{}
 
-	authServer := &AuthServerClientCert{
-		Method: MysqlClearPassword,
-	}
+	authServer := newAuthServerClientCert()
 
 	// Create the listener, so we can get its host.
 	l, err := NewListener("tcp", ":0", authServer, th, 0, 0, false)
@@ -120,9 +118,7 @@ func TestValidCert(t *testing.T) {
 func TestNoCert(t *testing.T) {
 	th := &testHandler{}
 
-	authServer := &AuthServerClientCert{
-		Method: MysqlClearPassword,
-	}
+	authServer := newAuthServerClientCert()
 
 	// Create the listener, so we can get its host.
 	l, err := NewListener("tcp", ":0", authServer, th, 0, 0, false)
