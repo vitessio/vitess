@@ -63,11 +63,6 @@ func gen4Planner(_ string) func(sqlparser.Statement, *sqlparser.ReservedVars, Co
 }
 
 func newBuildSelectPlan(sel *sqlparser.Select, reservedVars *sqlparser.ReservedVars, vschema ContextVSchema) (logicalPlan, error) {
-
-	directives := sqlparser.ExtractCommentDirectives(sel.Comments)
-	if len(directives) > 0 {
-		return nil, semantics.Gen4NotSupportedF("comment directives")
-	}
 	ksName := ""
 	if ks, _ := vschema.DefaultKeyspace(); ks != nil {
 		ksName = ks.Name
@@ -116,6 +111,17 @@ func newBuildSelectPlan(sel *sqlparser.Select, reservedVars *sqlparser.ReservedV
 
 	if err := plan.WireupGen4(semTable); err != nil {
 		return nil, err
+	}
+
+	directives := sqlparser.ExtractCommentDirectives(sel.Comments)
+	if directives.IsSet(sqlparser.DirectiveScatterErrorsAsWarnings) {
+		visit(plan, func(logicalPlan logicalPlan) (bool, logicalPlan, error) {
+			switch plan := logicalPlan.(type) {
+			case *route:
+				plan.eroute.ScatterErrorsAsWarnings = true
+			}
+			return true, logicalPlan, nil
+		})
 	}
 
 	return plan, nil
