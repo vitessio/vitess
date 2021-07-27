@@ -460,7 +460,8 @@ func (e *Executor) addNeededBindVars(bindVarNeeds *sqlparser.BindVarNeeds, bindV
 		case sysvars.Version.Name:
 			bindVars[key] = sqltypes.StringBindVariable(servenv.AppVersion.MySQLVersion())
 		case sysvars.VersionComment.Name:
-			bindVars[key] = sqltypes.StringBindVariable(servenv.AppVersion.String())
+			// XXX: Don't advertize the overly specific Vitess build information to the public
+			bindVars[key] = sqltypes.StringBindVariable("")
 		case sysvars.Socket.Name:
 			bindVars[key] = sqltypes.StringBindVariable(mysqlSocketPath())
 		default:
