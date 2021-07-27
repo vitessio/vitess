@@ -340,8 +340,12 @@ func (oa *OrderedAggregate) convertRow(row []sqltypes.Value) (newRow []sqltypes.
 			}
 		case AggregateSumDistinct:
 			curDistinct = row[aggr.KeyCol]
+			if aggr.WAssigned && !curDistinct.IsComparable() {
+				aggr.KeyCol = aggr.WCol
+				curDistinct = row[aggr.KeyCol]
+			}
 			var err error
-			newRow[aggr.Col], err = evalengine.Cast(row[aggr.KeyCol], opcodeType[aggr.Opcode])
+			newRow[aggr.Col], err = evalengine.Cast(row[aggr.Col], opcodeType[aggr.Opcode])
 			if err != nil {
 				newRow[aggr.Col] = sumZero
 			}
@@ -416,6 +420,10 @@ func (oa *OrderedAggregate) merge(fields []*querypb.Field, row1, row2 []sqltypes
 				continue
 			}
 			curDistinct = row2[aggr.KeyCol]
+			if aggr.WAssigned && !curDistinct.IsComparable() {
+				aggr.KeyCol = aggr.WCol
+				curDistinct = row2[aggr.KeyCol]
+			}
 		}
 		var err error
 		switch aggr.Opcode {
