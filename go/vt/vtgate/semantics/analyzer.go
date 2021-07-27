@@ -263,7 +263,8 @@ func (a *analyzer) resolveQualifiedColumn(current *scope, expr *sqlparser.ColNam
 				continue
 			}
 			if table.IsActualTable() {
-				return a.resolveQualifiedColumnOnActualTable(table, expr)
+				actualTable, ts, typ := a.resolveQualifiedColumnOnActualTable(table, expr)
+				return actualTable, ts, typ, nil
 			}
 			recursiveTs, typ, err := table.RecursiveDepsFor(expr, a, len(current.tables) == 1)
 			if err != nil {
@@ -284,19 +285,19 @@ func (a *analyzer) resolveQualifiedColumn(current *scope, expr *sqlparser.ColNam
 	return 0, 0, nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadFieldError, "symbol %s not found", sqlparser.String(expr))
 }
 
-func (a *analyzer) resolveQualifiedColumnOnActualTable(table TableInfo, expr *sqlparser.ColName) (TableSet, TableSet, *querypb.Type, error) {
+func (a *analyzer) resolveQualifiedColumnOnActualTable(table TableInfo, expr *sqlparser.ColName) (TableSet, TableSet, *querypb.Type) {
 	ts := a.tableSetFor(table.GetExpr())
 	for _, colInfo := range table.GetColumns() {
 		if expr.Name.EqualString(colInfo.Name) {
 			// A column can't be of type NULL, that is the default value indicating that we dont know the actual type
 			// But expressions can be of NULL type, so we use nil to represent an unknown type
 			if colInfo.Type == querypb.Type_NULL_TYPE {
-				return ts, ts, nil, nil
+				return ts, ts, nil
 			}
-			return ts, ts, &colInfo.Type, nil
+			return ts, ts, &colInfo.Type
 		}
 	}
-	return ts, ts, nil, nil
+	return ts, ts, nil
 }
 
 type originable interface {
