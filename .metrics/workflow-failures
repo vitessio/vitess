@@ -1,4 +1,3 @@
-2021-03-26T18:01:26Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/690837574
 2021-03-26T18:01:26Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/690837603
 2021-03-26T18:01:26Z,Unit Test (mysql57),https://github.com/vitessio/vitess/actions/runs/690837592
 2021-03-26T18:01:26Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/690837587
@@ -9988,6 +9987,7 @@
 2021-07-27T07:42:41Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/1070315356
 2021-07-27T07:59:58Z,Cluster (14),https://github.com/vitessio/vitess/actions/runs/1070356038
 2021-07-27T07:59:58Z,Cluster (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/1070356050
+2021-07-27T08:01:47Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/1070362326
 2021-07-27T08:01:47Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/1070362288
 2021-07-27T08:01:47Z,unit_race,https://github.com/vitessio/vitess/actions/runs/1070362251
 2021-07-27T08:03:11Z,Cluster (vreplication_cellalias),https://github.com/vitessio/vitess/actions/runs/1070367697
