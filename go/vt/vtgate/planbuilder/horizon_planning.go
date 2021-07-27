@@ -165,43 +165,37 @@ func (hp *horizonPlanning) planAggregations() error {
 				return err
 			}
 
-			aggrParams := &engine.AggregateParams{
-				Opcode: opcode,
-				Expr:   fExpr,
-			}
+			pushExpr := e.Col
+			var alias string
 			if handleDistinct {
+				pushExpr = innerAliased
+
 				switch opcode {
 				case engine.AggregateCount:
-					aggrParams.Opcode = engine.AggregateCountDistinct
+					opcode = engine.AggregateCountDistinct
 				case engine.AggregateSum:
-					aggrParams.Opcode = engine.AggregateSumDistinct
+					opcode = engine.AggregateSumDistinct
 				}
-
 				if e.Col.As.IsEmpty() {
-					aggrParams.Alias = sqlparser.String(e.Col.Expr)
+					alias = sqlparser.String(e.Col.Expr)
 				} else {
-					aggrParams.Alias = e.Col.As.String()
+					alias = e.Col.As.String()
 				}
+
 				oa.eaggr.PreProcess = true
-
 				hp.haveToTruncate(true)
-				hp.qp.GroupByExprs = append(hp.qp.GroupByExprs, abstract.GroupBy{Inner: innerAliased.Expr, WeightStrExpr: innerAliased.Expr, Distinct: true})
-
-				offset, wOffset, _, err := wrapAndPushExpr(innerAliased.Expr, innerAliased.Expr, oa.input, hp.semTable)
-				if err != nil {
-					return err
-				}
-				aggrParams.Col = offset
-				aggrParams.WCol = wOffset
-				aggrParams.WAssigned = true
-			} else {
-				offset, _, err := pushProjection(e.Col, oa.input, hp.semTable, true, true)
-				if err != nil {
-					return err
-				}
-				aggrParams.Col = offset
+				hp.qp.GroupByExprs = append(hp.qp.GroupByExprs, abstract.GroupBy{Inner: innerAliased.Expr, WeightStrExpr: innerAliased.Expr, DistinctAggrIndex: len(oa.eaggr.Aggregates) + 1})
 			}
-			oa.eaggr.Aggregates = append(oa.eaggr.Aggregates, aggrParams)
+			offset, _, err := pushProjection(pushExpr, oa.input, hp.semTable, true, true)
+			if err != nil {
+				return err
+			}
+			oa.eaggr.Aggregates = append(oa.eaggr.Aggregates, &engine.AggregateParams{
+				Opcode: opcode,
+				Col:    offset,
+				Alias:  alias,
+				Expr:   fExpr,
+			})
 		}
 	}
 
@@ -267,12 +261,17 @@ func planGroupByGen4(groupExpr abstract.GroupBy, plan logicalPlan, semTable *sem
 		_, _, added, err := wrapAndPushExpr(groupExpr.Inner, groupExpr.WeightStrExpr, node, semTable)
 		return added, err
 	case *orderedAggregate:
-		keyCol, weightStringOffset, colAdded, err := wrapAndPushExpr(groupExpr.Inner, groupExpr.WeightStrExpr, node.input, semTable)
+		keyCol, wsOffset, colAdded, err := wrapAndPushExpr(groupExpr.Inner, groupExpr.WeightStrExpr, node.input, semTable)
 		if err != nil {
 			return false, err
 		}
-		if !groupExpr.Distinct {
-			node.eaggr.GroupByKeys = append(node.eaggr.GroupByKeys, engine.GroupByParams{KeyCol: keyCol, WeightStringCol: weightStringOffset, Expr: groupExpr.WeightStrExpr})
+		if groupExpr.DistinctAggrIndex == 0 {
+			node.eaggr.GroupByKeys = append(node.eaggr.GroupByKeys, engine.GroupByParams{KeyCol: keyCol, WeightStringCol: wsOffset, Expr: groupExpr.WeightStrExpr})
+		} else {
+			if wsOffset != -1 {
+				node.eaggr.Aggregates[groupExpr.DistinctAggrIndex-1].WAssigned = true
+				node.eaggr.Aggregates[groupExpr.DistinctAggrIndex-1].WCol = wsOffset
+			}
 		}
 		colAddedRecursively, err := planGroupByGen4(groupExpr, node.input, semTable)
 		if err != nil {
