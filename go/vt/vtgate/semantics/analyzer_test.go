@@ -99,7 +99,7 @@ func TestBindingSingleTable(t *testing.T) {
 			t.Run(query, func(t *testing.T) {
 				parse, err := sqlparser.Parse(query)
 				require.NoError(t, err)
-				_, err = Analyze(parse, "d", &FakeSI{})
+				_, err = Analyze(parse.(sqlparser.SelectStatement), "d", &FakeSI{})
 				require.Error(t, err)
 			})
 		}
@@ -222,7 +222,7 @@ func TestBindingSingleAliasedTable(t *testing.T) {
 			t.Run(query, func(t *testing.T) {
 				parse, err := sqlparser.Parse(query)
 				require.NoError(t, err)
-				_, err = Analyze(parse, "", &FakeSI{
+				_, err = Analyze(parse.(sqlparser.SelectStatement), "", &FakeSI{
 					Tables: map[string]*vindexes.Table{
 						"t": {Name: sqlparser.NewTableIdent("t")},
 					},
@@ -321,7 +321,7 @@ func TestBindingMultiTable(t *testing.T) {
 			t.Run(query, func(t *testing.T) {
 				parse, err := sqlparser.Parse(query)
 				require.NoError(t, err)
-				_, err = Analyze(parse, "d", &FakeSI{
+				_, err = Analyze(parse.(sqlparser.SelectStatement), "d", &FakeSI{
 					Tables: map[string]*vindexes.Table{
 						"tabl": {Name: sqlparser.NewTableIdent("tabl")},
 						"foo":  {Name: sqlparser.NewTableIdent("foo")},
@@ -357,7 +357,7 @@ func TestNotUniqueTableName(t *testing.T) {
 				t.Skip("derived tables not implemented")
 			}
 			parse, _ := sqlparser.Parse(query)
-			_, err := Analyze(parse, "test", &FakeSI{})
+			_, err := Analyze(parse.(sqlparser.SelectStatement), "test", &FakeSI{})
 			require.Error(t, err)
 			require.Contains(t, err.Error(), "Not unique table/alias")
 		})
@@ -372,7 +372,7 @@ func TestMissingTable(t *testing.T) {
 	for _, query := range queries {
 		t.Run(query, func(t *testing.T) {
 			parse, _ := sqlparser.Parse(query)
-			_, err := Analyze(parse, "", &FakeSI{})
+			_, err := Analyze(parse.(sqlparser.SelectStatement), "", &FakeSI{})
 			require.Error(t, err)
 			require.Contains(t, err.Error(), "symbol t.col not found")
 		})
@@ -472,7 +472,7 @@ func TestUnknownColumnMap2(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			si := &FakeSI{Tables: test.schema}
-			tbl, err := Analyze(parse, "", si)
+			tbl, err := Analyze(parse.(sqlparser.SelectStatement), "", si)
 			require.NoError(t, err)
 
 			if test.err {
@@ -511,7 +511,7 @@ func TestUnknownPredicate(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			si := &FakeSI{Tables: test.schema}
-			_, err := Analyze(parse, "", si)
+			_, err := Analyze(parse.(sqlparser.SelectStatement), "", si)
 			if test.err {
 				require.Error(t, err)
 			} else {
@@ -535,7 +535,7 @@ func TestScoping(t *testing.T) {
 		t.Run(query.query, func(t *testing.T) {
 			parse, err := sqlparser.Parse(query.query)
 			require.NoError(t, err)
-			_, err = Analyze(parse, "user", &FakeSI{
+			_, err = Analyze(parse.(sqlparser.SelectStatement), "user", &FakeSI{
 				Tables: map[string]*vindexes.Table{
 					"t": {Name: sqlparser.NewTableIdent("t")},
 				},
@@ -599,7 +599,7 @@ func TestScopingWDerivedTables(t *testing.T) {
 		t.Run(query.query, func(t *testing.T) {
 			parse, err := sqlparser.Parse(query.query)
 			require.NoError(t, err)
-			st, err := Analyze(parse, "user", &FakeSI{
+			st, err := Analyze(parse.(sqlparser.SelectStatement), "user", &FakeSI{
 				Tables: map[string]*vindexes.Table{
 					"t": {Name: sqlparser.NewTableIdent("t")},
 				},
@@ -633,7 +633,7 @@ func parseAndAnalyze(t *testing.T, query, dbName string) (sqlparser.Statement, *
 		Type: querypb.Type_VARCHAR,
 	}}
 
-	semTable, err := Analyze(parse, dbName, &FakeSI{
+	semTable, err := Analyze(parse.(sqlparser.SelectStatement), dbName, &FakeSI{
 		Tables: map[string]*vindexes.Table{
 			"t":  {Name: sqlparser.NewTableIdent("t")},
 			"t1": {Name: sqlparser.NewTableIdent("t1"), Columns: cols1, ColumnListAuthoritative: true},

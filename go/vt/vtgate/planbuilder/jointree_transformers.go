@@ -32,7 +32,7 @@ import (
 func transformToLogicalPlan(tree joinTree, semTable *semantics.SemTable, processing *postProcessor) (logicalPlan, error) {
 	switch n := tree.(type) {
 	case *routePlan:
-		return transformRoutePlan(n)
+		return transformRoutePlan(n, semTable)
 
 	case *joinPlan:
 		return transformJoinPlan(n, semTable, processing)
@@ -90,7 +90,7 @@ func transformJoinPlan(n *joinPlan, semTable *semantics.SemTable, processing *po
 	}, nil
 }
 
-func transformRoutePlan(n *routePlan) (*route, error) {
+func transformRoutePlan(n *routePlan, semTable *semantics.SemTable) (*route, error) {
 	var tablesForSelect sqlparser.TableExprs
 	tableNameMap := map[string]interface{}{}
 
@@ -183,6 +183,7 @@ func transformRoutePlan(n *routePlan) (*route, error) {
 			SelectExprs: expressions,
 			From:        tablesForSelect,
 			Where:       where,
+			Comments:    semTable.Comments,
 		},
 		tables: n.solved,
 	}, nil
