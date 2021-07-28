@@ -622,6 +622,7 @@ func (jp *joinPlan) clone() joinTree {
 		lhs:   jp.lhs.clone(),
 		rhs:   jp.rhs.clone(),
 		outer: jp.outer,
+		vars:  jp.vars,
 	}
 	return result
 }

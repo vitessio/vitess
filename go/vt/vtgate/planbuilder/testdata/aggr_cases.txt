@@ -1898,7 +1898,7 @@ Gen4 plan same as above
         "OperatorType": "Join",
         "Variant": "Join",
         "JoinColumnIndexes": "-1",
-        "JoinVars": null,
+        "JoinVars": {},
         "TableName": "`user`_user_extra",
         "Inputs": [
           {
@@ -1945,7 +1945,7 @@ Gen4 plan same as above
         "OperatorType": "Join",
         "Variant": "Join",
         "JoinColumnIndexes": "-1,-2",
-        "JoinVars": null,
+        "JoinVars": {},
         "TableName": "`user`_user_extra",
         "Inputs": [
           {
@@ -1994,7 +1994,7 @@ Gen4 plan same as above
         "OperatorType": "Join",
         "Variant": "Join",
         "JoinColumnIndexes": "-1,-2,-3",
-        "JoinVars": null,
+        "JoinVars": {},
         "TableName": "`user`_user_extra",
         "Inputs": [
           {
@@ -2043,7 +2043,7 @@ Gen4 plan same as above
         "OperatorType": "Join",
         "Variant": "Join",
         "JoinColumnIndexes": "-1,1,-2",
-        "JoinVars": null,
+        "JoinVars": {},
         "TableName": "`user`_user_extra",
         "Inputs": [
           {
