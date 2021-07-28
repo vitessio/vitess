@@ -17,6 +17,8 @@ limitations under the License.
 package semantics
 
 import (
+	"strings"
+
 	"vitess.io/vitess/go/vt/key"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -99,7 +101,7 @@ type (
 )
 
 // DepsFor implements the TableInfo interface
-func (v *vTableInfo) DepsFor(col *sqlparser.ColName, org originable, single bool) *TableSet {
+func (v *vTableInfo) DepsFor(col *sqlparser.ColName, org originable, _ bool) *TableSet {
 	if !col.Qualifier.IsEmpty() {
 		return nil
 	}
@@ -176,7 +178,7 @@ var _ TableInfo = (*RealTable)(nil)
 var _ TableInfo = (*AliasedTable)(nil)
 var _ TableInfo = (*vTableInfo)(nil)
 
-func (v *vTableInfo) Matches(name sqlparser.TableName) bool {
+func (v *vTableInfo) Matches(sqlparser.TableName) bool {
 	return false
 }
 
@@ -306,14 +308,37 @@ func (d ExprDependencies) Dependencies(expr sqlparser.Expr) TableSet {
 		return deps
 	}
 
+	// During the original semantic analysis, all ColName:s were found and bound the the corresponding tables
+	// Here, we'll walk the expression tree and look to see if we can found any sub-expressions
+	// that have already set dependencies.
 	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
-		colName, ok := node.(*sqlparser.ColName)
-		if ok {
-			set := d[colName]
+		defer func() {
+			if r := recover(); r != nil {
+				err, ok := r.(error)
+				// this is an expected and manageable error
+				if ok && strings.HasPrefix(err.Error(), "runtime error: hash of unhashable type") {
+					kontinue = true
+					err = nil
+					return
+				}
+
+				// if we don't know how to handle this, panic
+				panic(r)
+			}
+		}()
+		expr, ok := node.(sqlparser.Expr)
+		if !ok {
+			return true, nil
+		}
+		set, found := d[expr]
+		if found {
 			deps |= set
 		}
-		return true, nil
+
+		// if we found a cached value, there is no need to continue down to visit children
+		return !found, nil
 	}, expr)
+
 	d[expr] = deps
 	return deps
 }
