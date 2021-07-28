@@ -1519,7 +1519,7 @@ Gen4 plan same as above
     ]
   }
 }
-"In aggregated query without GROUP BY, expression of SELECT list contains nonaggregated column 'num'; this is incompatible with sql_mode=only_full_group_by"
+Gen4 error: In aggregated query without GROUP BY, expression of SELECT list contains nonaggregated column 'num'; this is incompatible with sql_mode=only_full_group_by
 
 # aggregation and non-aggregations column with order by
 "select count(id), num from user order by 2"
@@ -1554,7 +1554,7 @@ Gen4 plan same as above
     ]
   }
 }
-"In aggregated query without GROUP BY, expression of SELECT list contains nonaggregated column 'num'; this is incompatible with sql_mode=only_full_group_by"
+Gen4 error: In aggregated query without GROUP BY, expression of SELECT list contains nonaggregated column 'num'; this is incompatible with sql_mode=only_full_group_by
 
 # aggregation and non-aggregations column with group by
 "select count(id), num from user group by 2"
@@ -1740,7 +1740,7 @@ Gen4 plan same as above
 # Scatter order by and aggregation: order by column must reference column from select list
 "select col, count(*) from user group by col order by c1"
 "unsupported: memory sort: order by must reference a column in the select list: c1 asc"
-"Expression of SELECT list is not in GROUP BY clause and contains nonaggregated column 'c1' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by"
+Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains nonaggregated column 'c1' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by
 
 # scatter aggregate with ambiguous aliases
 "select distinct a, b as a from user"
