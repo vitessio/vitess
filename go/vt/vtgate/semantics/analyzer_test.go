@@ -58,7 +58,7 @@ from x as t`
 
 	// extract the `t.col2` expression from the subquery
 	sel2 := sel.SelectExprs[1].(*sqlparser.AliasedExpr).Expr.(*sqlparser.Subquery).Select.(*sqlparser.Select)
-	s1 := semTable.Dependencies(extract(sel2, 0))
+	s1 := semTable.GetBaseTableDependencies(extract(sel2, 0))
 
 	// if scoping works as expected, we should be able to see the inner table being used by the inner expression
 	assert.Equal(t, T2, s1)
@@ -82,7 +82,7 @@ func TestBindingSingleTable(t *testing.T) {
 				ts := semTable.TableSetFor(t1)
 				assert.EqualValues(t, 1, ts)
 
-				d := semTable.Dependencies(extract(sel, 0))
+				d := semTable.GetBaseTableDependencies(extract(sel, 0))
 				require.Equal(t, T1, d, query)
 			})
 		}
@@ -136,7 +136,7 @@ func TestOrderByBindingSingleTable(t *testing.T) {
 				stmt, semTable := parseAndAnalyze(t, tc.sql, "d")
 				sel, _ := stmt.(*sqlparser.Select)
 				order := sel.OrderBy[0].Expr
-				d := semTable.Dependencies(order)
+				d := semTable.GetBaseTableDependencies(order)
 				require.Equal(t, tc.deps, d, tc.sql)
 			})
 		}
@@ -176,14 +176,14 @@ func TestGroupByBindingSingleTable(t *testing.T) {
 		T1,
 	}, {
 		"select t.id from t, t1 group by id",
-		T2,
+		T1,
 	}}
 	for _, tc := range tcases {
 		t.Run(tc.sql, func(t *testing.T) {
 			stmt, semTable := parseAndAnalyze(t, tc.sql, "d")
 			sel, _ := stmt.(*sqlparser.Select)
 			grp := sel.GroupBy[0]
-			d := semTable.Dependencies(grp)
+			d := semTable.GetBaseTableDependencies(grp)
 			require.Equal(t, tc.deps, d, tc.sql)
 		})
 	}
@@ -205,7 +205,7 @@ func TestBindingSingleAliasedTable(t *testing.T) {
 				ts := semTable.TableSetFor(t1)
 				assert.EqualValues(t, 1, ts)
 
-				d := semTable.Dependencies(extract(sel, 0))
+				d := semTable.GetBaseTableDependencies(extract(sel, 0))
 				require.Equal(t, T1, d, query)
 			})
 		}
@@ -248,8 +248,8 @@ func TestUnion(t *testing.T) {
 	assert.EqualValues(t, 1, ts1)
 	assert.EqualValues(t, 2, ts2)
 
-	d1 := semTable.Dependencies(extract(sel1, 0))
-	d2 := semTable.Dependencies(extract(sel2, 0))
+	d1 := semTable.GetBaseTableDependencies(extract(sel1, 0))
+	d2 := semTable.GetBaseTableDependencies(extract(sel2, 0))
 	assert.Equal(t, T1, d1)
 	assert.Equal(t, T2, d2)
 }
@@ -306,7 +306,7 @@ func TestBindingMultiTable(t *testing.T) {
 			t.Run(query.query, func(t *testing.T) {
 				stmt, semTable := parseAndAnalyze(t, query.query, "user")
 				sel, _ := stmt.(*sqlparser.Select)
-				assert.Equal(t, query.deps, semTable.Dependencies(extract(sel, 0)), query.query)
+				assert.Equal(t, query.deps, semTable.GetBaseTableDependencies(extract(sel, 0)), query.query)
 			})
 		}
 	})
@@ -338,7 +338,7 @@ func TestBindingSingleDepPerTable(t *testing.T) {
 	stmt, semTable := parseAndAnalyze(t, query, "")
 	sel, _ := stmt.(*sqlparser.Select)
 
-	d := semTable.Dependencies(extract(sel, 0))
+	d := semTable.GetBaseTableDependencies(extract(sel, 0))
 	assert.Equal(t, 1, d.NumberOfTables(), "size wrong")
 	assert.Equal(t, T1, d)
 }
@@ -405,17 +405,29 @@ func TestUnknownColumnMap2(t *testing.T) {
 		Name: sqlparser.NewTableIdent("a"),
 		Columns: []vindexes.Column{{
 			Name: sqlparser.NewColIdent("col"),
-			Type: querypb.Type_VARCHAR,
+			Type: querypb.Type_INT32,
+		}},
+		ColumnListAuthoritative: true,
+	}
+	authoritativeTblBWithInt := vindexes.Table{
+		Name: sqlparser.NewTableIdent("b"),
+		Columns: []vindexes.Column{{
+			Name: sqlparser.NewColIdent("col"),
+			Type: querypb.Type_INT32,
 		}},
 		ColumnListAuthoritative: true,
 	}
 
-	parse, _ := sqlparser.Parse(query)
+	varchar := querypb.Type_VARCHAR
+	int := querypb.Type_INT32
 
+	parse, _ := sqlparser.Parse(query)
+	expr := extract(parse.(*sqlparser.Select), 0)
 	tests := []struct {
 		name   string
 		schema map[string]*vindexes.Table
 		err    bool
+		typ    *querypb.Type
 	}{
 		{
 			name:   "no info about tables",
@@ -431,16 +443,25 @@ func TestUnknownColumnMap2(t *testing.T) {
 			name:   "non authoritative columns - one authoritative and one not",
 			schema: map[string]*vindexes.Table{"a": &nonAuthoritativeTblA, "b": &authoritativeTblB},
 			err:    false,
+			typ:    &varchar,
 		},
 		{
 			name:   "non authoritative columns - one authoritative and one not",
 			schema: map[string]*vindexes.Table{"a": &authoritativeTblA, "b": &nonAuthoritativeTblB},
 			err:    false,
+			typ:    &varchar,
 		},
 		{
 			name:   "authoritative columns",
 			schema: map[string]*vindexes.Table{"a": &authoritativeTblA, "b": &authoritativeTblB},
 			err:    false,
+			typ:    &varchar,
+		},
+		{
+			name:   "authoritative columns",
+			schema: map[string]*vindexes.Table{"a": &authoritativeTblA, "b": &authoritativeTblBWithInt},
+			err:    false,
+			typ:    &int,
 		},
 		{
 			name:   "authoritative columns with overlap",
@@ -458,6 +479,8 @@ func TestUnknownColumnMap2(t *testing.T) {
 				require.Error(t, tbl.ProjectionErr)
 			} else {
 				require.NoError(t, tbl.ProjectionErr)
+				typ := tbl.TypeFor(expr)
+				assert.Equal(t, test.typ, typ)
 			}
 		})
 	}
@@ -521,6 +544,73 @@ func TestScoping(t *testing.T) {
 				require.NoError(t, err)
 			} else {
 				require.EqualError(t, err, query.errorMessage)
+			}
+		})
+	}
+}
+
+func TestScopingWDerivedTables(t *testing.T) {
+	queries := []struct {
+		query                string
+		errorMessage         string
+		recursiveExpectation TableSet
+		expectation          TableSet
+	}{
+		{
+			query:                "select id from (select id from user where id = 5) as t",
+			recursiveExpectation: T1,
+			expectation:          T2,
+		}, {
+			query:                "select id from (select foo as id from user) as t",
+			recursiveExpectation: T1,
+			expectation:          T2,
+		}, {
+			query:                "select id from (select foo as id from (select x as foo from user) as c) as t",
+			recursiveExpectation: T1,
+			expectation:          T3,
+		}, {
+			query:                "select t.id from (select foo as id from user) as t",
+			recursiveExpectation: T1,
+			expectation:          T2,
+		}, {
+			query:        "select t.id2 from (select foo as id from user) as t",
+			errorMessage: "symbol t.id2 not found",
+		}, {
+			query:                "select id from (select 42 as id) as t",
+			recursiveExpectation: T0,
+			expectation:          T2,
+		}, {
+			query:                "select t.id from (select 42 as id) as t",
+			recursiveExpectation: T0,
+			expectation:          T2,
+		}, {
+			query:        "select ks.t.id from (select 42 as id) as t",
+			errorMessage: "symbol ks.t.id not found",
+		}, {
+			query:        "select * from (select id, id from user) as t",
+			errorMessage: "Duplicate column name 'id'",
+		}, {
+			query:                "select t.baz = 1 from (select id as baz from user) as t",
+			expectation:          T2,
+			recursiveExpectation: T1,
+		},
+	}
+	for _, query := range queries {
+		t.Run(query.query, func(t *testing.T) {
+			parse, err := sqlparser.Parse(query.query)
+			require.NoError(t, err)
+			st, err := Analyze(parse.(sqlparser.SelectStatement), "user", &FakeSI{
+				Tables: map[string]*vindexes.Table{
+					"t": {Name: sqlparser.NewTableIdent("t")},
+				},
+			})
+			if query.errorMessage != "" {
+				require.EqualError(t, err, query.errorMessage)
+			} else {
+				require.NoError(t, err)
+				sel := parse.(*sqlparser.Select)
+				assert.Equal(t, query.recursiveExpectation, st.GetBaseTableDependencies(extract(sel, 0)))
+				assert.Equal(t, query.expectation, st.Dependencies(extract(sel, 0)))
 			}
 		})
 	}
