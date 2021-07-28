@@ -172,14 +172,8 @@ func (hp *horizonPlanning) planAggregations() error {
 			return err
 		}
 
-		// Currently the OA engine primitive is able to handle only one distinct aggregation function.
-		// PreProcess being true tells that it is already handling it.
-		if oa.eaggr.PreProcess && handleDistinct {
-			return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "multiple distinct aggregation function")
-		}
-
 		pushExpr, alias, opcode := hp.createPushExprAndAlias(e, handleDistinct, innerAliased, opcode, oa)
-		offset, _, err := pushProjection(pushExpr, oa.input, hp.semTable, true, true)
+		offset, _, err := pushProjection(pushExpr, oa.input, hp.semTable, true, false)
 		if err != nil {
 			return err
 		}
