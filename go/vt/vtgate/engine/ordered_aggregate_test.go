@@ -652,13 +652,13 @@ func TestMerge(t *testing.T) {
 		"1|3|2.8|2|bc",
 	)
 
-	merged, _, err := oa.merge(fields, r.Rows[0], r.Rows[1], sqltypes.NULL)
+	merged, _, err := oa.merge(fields, r.Rows[0], r.Rows[1], nil)
 	assert.NoError(err)
 	want := sqltypes.MakeTestResult(fields, "1|5|6|2|bc").Rows[0]
 	assert.Equal(want, merged)
 
 	// swap and retry
-	merged, _, err = oa.merge(fields, r.Rows[1], r.Rows[0], sqltypes.NULL)
+	merged, _, err = oa.merge(fields, r.Rows[1], r.Rows[0], nil)
 	assert.NoError(err)
 	assert.Equal(want, merged)
 }
@@ -961,6 +961,77 @@ func TestSumDistinctOnVarcharWithNulls(t *testing.T) {
 		`10|0`,
 		`20|0`,
 		`30|null`,
+	)
+
+	qr, err := oa.Execute(nil, nil, false)
+	require.NoError(t, err)
+	assert.Equal(t, want, qr)
+
+	fp.rewind()
+	results := &sqltypes.Result{}
+	err = oa.StreamExecute(nil, nil, false, func(qr *sqltypes.Result) error {
+		if qr.Fields != nil {
+			results.Fields = qr.Fields
+		}
+		results.Rows = append(results.Rows, qr.Rows...)
+		return nil
+	})
+	require.NoError(t, err)
+	assert.Equal(t, want, results)
+}
+
+func TestMultiDistinct(t *testing.T) {
+	fields := sqltypes.MakeTestFields(
+		"c1|c2|c3",
+		"int64|int64|int64",
+	)
+	fp := &fakePrimitive{
+		results: []*sqltypes.Result{sqltypes.MakeTestResult(
+			fields,
+			"null|null|null",
+			"null|1|2",
+			"null|2|2",
+			"10|null|null",
+			"10|2|null",
+			"10|2|1",
+			"10|2|3",
+			"10|3|3",
+			"20|null|null",
+			"20|null|null",
+			"30|1|1",
+			"30|1|2",
+			"30|1|3",
+			"40|1|1",
+			"40|2|1",
+			"40|3|1",
+		)},
+	}
+
+	oa := &OrderedAggregate{
+		PreProcess: true,
+		Aggregates: []*AggregateParams{{
+			Opcode: AggregateCountDistinct,
+			Col:    1,
+			Alias:  "count(distinct c2)",
+		}, {
+			Opcode: AggregateSumDistinct,
+			Col:    2,
+			Alias:  "sum(distinct c3)",
+		}},
+		GroupByKeys: []*GroupByParams{{KeyCol: 0}},
+		Input:       fp,
+	}
+
+	want := sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields(
+			"c1|count(distinct c2)|sum(distinct c3)",
+			"int64|int64|decimal",
+		),
+		`null|2|2`,
+		`10|2|4`,
+		`20|0|null`,
+		`30|1|6`,
+		`40|3|1`,
 	)
 
 	qr, err := oa.Execute(nil, nil, false)
