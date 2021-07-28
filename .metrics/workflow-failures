@@ -1,4 +1,3 @@
-2021-03-31T06:44:53Z,endtoend,https://github.com/vitessio/vitess/actions/runs/704043202
 2021-03-31T07:12:00Z,endtoend,https://github.com/vitessio/vitess/actions/runs/704109330
 2021-03-31T11:16:37Z,endtoend,https://github.com/vitessio/vitess/actions/runs/704766588
 2021-03-31T11:17:51Z,Cluster (17),https://github.com/vitessio/vitess/actions/runs/704769718
@@ -9998,3 +9997,4 @@
 2021-07-27T20:03:27Z,Cluster (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/1072530015
 2021-07-27T20:03:27Z,Cluster (vreplication_cellalias),https://github.com/vitessio/vitess/actions/runs/1072530041
 2021-07-27T20:03:27Z,Cluster (vreplication_multicell),https://github.com/vitessio/vitess/actions/runs/1072530021
+2021-07-28T05:20:03Z,endtoend,https://github.com/vitessio/vitess/actions/runs/1073736693
