@@ -275,3 +275,8 @@ func (*filePosFlavor) disableBinlogPlaybackCommand() string {
 func (*filePosFlavor) baseShowTablesWithSizes() string {
 	return TablesWithSize56
 }
+
+// supportsLockTablesRename is part of the Flavor interface.
+func (*filePosFlavor) supportsLockTablesRename(c *Conn) (bool, error) {
+	return false, nil
+}

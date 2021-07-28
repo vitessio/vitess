@@ -231,3 +231,8 @@ func (mariadbFlavor) readBinlogEvent(c *Conn) (BinlogEvent, error) {
 	}
 	return NewMariadbBinlogEvent(result[1:]), nil
 }
+
+// supportsLockTablesRename is part of the Flavor interface.
+func (mariadbFlavor) supportsLockTablesRename(c *Conn) (bool, error) {
+	return false, nil
+}

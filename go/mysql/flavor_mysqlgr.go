@@ -223,6 +223,11 @@ func (mysqlGRFlavor) baseShowTablesWithSizes() string {
 	return TablesWithSize80
 }
 
+// supportsLockTablesRename is part of the Flavor interface.
+func (mysqlGRFlavor) supportsLockTablesRename(c *Conn) (bool, error) {
+	return false, nil
+}
+
 func init() {
 	flavors[GRFlavorID] = newMysqlGRFlavor
 }

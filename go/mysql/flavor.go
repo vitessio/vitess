@@ -117,6 +117,29 @@ type flavor interface {
 	disableBinlogPlaybackCommand() string
 
 	baseShowTablesWithSizes() string
+
+	supportsLockTablesRename(c *Conn) (bool, error)
+}
+
+func serverVersionAtLeast(serverVersion string, parts ...int) (bool, error) {
+	versionPrefix := strings.Split(serverVersion, "-")[0]
+	versionTokens := strings.Split(versionPrefix, ".")
+	for i, part := range parts {
+		if len(versionTokens) <= i {
+			return false, nil
+		}
+		tokenValue, err := strconv.Atoi(versionTokens[i])
+		if err != nil {
+			return false, err
+		}
+		if tokenValue > part {
+			return true, nil
+		}
+		if tokenValue < part {
+			return false, nil
+		}
+	}
+	return true, nil
 }
 
 // flavors maps flavor names to their implementation.
@@ -158,6 +181,12 @@ func (c *Conn) fillFlavor(params *ConnParams) {
 	default:
 		c.flavor = mysqlFlavor56{}
 	}
+}
+
+// ServerVersionAtLeast returns 'true' if server version is equal or greater than given parts. e.g.
+// "8.0.14-log" is at least [8, 0, 13] and [8, 0, 14], but not [8, 0, 15]
+func (c *Conn) ServerVersionAtLeast(parts ...int) (bool, error) {
+	return serverVersionAtLeast(c.ServerVersion, parts...)
 }
 
 //
@@ -375,6 +404,13 @@ func parsePrimaryStatus(fields map[string]string) PrimaryStatus {
 // and returns a parsed executed Position, as well as file based Position.
 func (c *Conn) ShowPrimaryStatus() (PrimaryStatus, error) {
 	return c.flavor.primaryStatus(c)
+}
+
+// SupportsLockTablesRename checks if the database server supports RENAME TABLE operation while
+// table is under LOCK TABLE.
+// Specifically, MySQL 8.0.13 and above, support it: https://dev.mysql.com/doc/relnotes/mysql/8.0/en/news-8-0-13.html
+func (c *Conn) SupportsLockTablesRename() (bool, error) {
+	return c.flavor.supportsLockTablesRename(c)
 }
 
 // WaitUntilPositionCommand returns the SQL command to issue

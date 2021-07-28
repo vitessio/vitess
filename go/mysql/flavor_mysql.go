@@ -272,12 +272,27 @@ func (mysqlFlavor56) baseShowTablesWithSizes() string {
 	return TablesWithSize56
 }
 
+// supportsLockTablesRename is part of the Flavor interface.
+func (mysqlFlavor56) supportsLockTablesRename(c *Conn) (bool, error) {
+	return false, nil
+}
+
 // baseShowTablesWithSizes is part of the Flavor interface.
 func (mysqlFlavor57) baseShowTablesWithSizes() string {
 	return TablesWithSize57
 }
 
+// supportsLockTablesRename is part of the Flavor interface.
+func (mysqlFlavor57) supportsLockTablesRename(c *Conn) (bool, error) {
+	return false, nil
+}
+
 // baseShowTablesWithSizes is part of the Flavor interface.
 func (mysqlFlavor80) baseShowTablesWithSizes() string {
 	return TablesWithSize80
+}
+
+// supportsLockTablesRename is part of the Flavor interface.
+func (mysqlFlavor80) supportsLockTablesRename(c *Conn) (bool, error) {
+	return c.ServerVersionAtLeast(8, 0, 13)
 }
