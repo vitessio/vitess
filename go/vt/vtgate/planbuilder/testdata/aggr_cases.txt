@@ -391,6 +391,7 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-1,1",
+    "JoinVars": {},
     "TableName": "`user`_unsharded",
     "Inputs": [
       {
@@ -1318,7 +1319,6 @@ Gen4 plan same as above
 "select distinct a+1 from user"
 "generating order by clause: cannot reference a complex expression"
 
-
 # scatter aggregate with numbered order by columns
 "select a, b, c, d, count(*) from user group by 1, 2, 3 order by 1, 2, 3"
 {
@@ -1898,6 +1898,7 @@ Gen4 plan same as above
         "OperatorType": "Join",
         "Variant": "Join",
         "JoinColumnIndexes": "-1",
+        "JoinVars": null,
         "TableName": "`user`_user_extra",
         "Inputs": [
           {
@@ -1944,6 +1945,7 @@ Gen4 plan same as above
         "OperatorType": "Join",
         "Variant": "Join",
         "JoinColumnIndexes": "-1,-2",
+        "JoinVars": null,
         "TableName": "`user`_user_extra",
         "Inputs": [
           {
@@ -1992,6 +1994,7 @@ Gen4 plan same as above
         "OperatorType": "Join",
         "Variant": "Join",
         "JoinColumnIndexes": "-1,-2,-3",
+        "JoinVars": null,
         "TableName": "`user`_user_extra",
         "Inputs": [
           {
@@ -2040,6 +2043,7 @@ Gen4 plan same as above
         "OperatorType": "Join",
         "Variant": "Join",
         "JoinColumnIndexes": "-1,1,-2",
+        "JoinVars": null,
         "TableName": "`user`_user_extra",
         "Inputs": [
           {
