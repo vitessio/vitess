@@ -321,7 +321,7 @@ Gen4 plan same as above
 # test table lookup failure for authoritative code path
 "select a.* from authoritative"
 "table a not found"
-"Unknown table 'a'"
+Gen4 error: Unknown table 'a'
 
 # select * from qualified authoritative table
 "select a.* from authoritative a"
@@ -1711,7 +1711,7 @@ Gen4 plan same as above
 }
 
 # select from unsharded keyspace into outfile
-"select * from main.unsharded into outfile 'x.txt' character set binary fields terminated by 'term' optionally enclosed by 'c' escaped by 'e' lines starting by 'a' terminated by '\n'"
+"select * from main.unsharded into outfile 'x.txt' character set binary fields terminated by 'term' optionally enclosed by 'c' escaped by 'e' lines starting by 'a' terminated by '\\n'"
 {
   "QueryType": "SELECT",
   "Original": "select * from main.unsharded into outfile 'x.txt' character set binary fields terminated by 'term' optionally enclosed by 'c' escaped by 'e' lines starting by 'a' terminated by '\\n'",
