@@ -38,6 +38,12 @@ func transformToLogicalPlan(tree queryTree, semTable *semantics.SemTable, proces
 		return transformJoinPlan(n, semTable, processing)
 
 	case *derivedTree:
+		// transforming the inner part of the derived table into a logical plan
+		// so that we can do horizon planning on the inner. If the logical plan
+		// we've produced is a Route, we set its Select.From field to be an aliased
+		// expression containing our derived table's inner select and the derived
+		// table's alias.
+
 		plan, err := transformToLogicalPlan(n.inner, semTable, processing)
 		if err != nil {
 			return nil, err
