@@ -116,7 +116,6 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "1",
-    "JoinVars": {},
     "TableName": "`user`_music",
     "Inputs": [
       {
@@ -255,7 +254,6 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "1",
-    "JoinVars": {},
     "TableName": "`user`_music",
     "Inputs": [
       {
@@ -738,14 +736,12 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-1",
-    "JoinVars": {},
     "TableName": "`user`_unsharded_unsharded",
     "Inputs": [
       {
         "OperatorType": "Join",
         "Variant": "Join",
         "JoinColumnIndexes": "-1",
-        "JoinVars": {},
         "TableName": "`user`_unsharded",
         "Inputs": [
           {
@@ -793,7 +789,6 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-1",
-    "JoinVars": {},
     "TableName": "`user`_unsharded",
     "Inputs": [
       {
@@ -831,7 +826,6 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-1",
-    "JoinVars": {},
     "TableName": "`user`_unsharded",
     "Inputs": [
       {
@@ -866,7 +860,6 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-1",
-    "JoinVars": {},
     "TableName": "`user`_unsharded",
     "Inputs": [
       {
@@ -904,7 +897,6 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-1",
-    "JoinVars": {},
     "TableName": "`user`_`user`_unsharded",
     "Inputs": [
       {
@@ -921,7 +913,6 @@ Gen4 plan same as above
       {
         "OperatorType": "Join",
         "Variant": "Join",
-        "JoinVars": {},
         "TableName": "`user`_unsharded",
         "Inputs": [
           {
@@ -958,7 +949,6 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "1",
-    "JoinVars": {},
     "TableName": "`user`_`user`_unsharded",
     "Inputs": [
       {
@@ -976,7 +966,6 @@ Gen4 plan same as above
         "OperatorType": "Join",
         "Variant": "Join",
         "JoinColumnIndexes": "-1",
-        "JoinVars": {},
         "TableName": "`user`_unsharded",
         "Inputs": [
           {
@@ -1248,7 +1237,6 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-1",
-    "JoinVars": {},
     "TableName": "`user`_user_extra",
     "Inputs": [
       {
@@ -1291,7 +1279,6 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-1",
-    "JoinVars": {},
     "TableName": "`user`_user_extra",
     "Inputs": [
       {
@@ -1607,7 +1594,6 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-1",
-    "JoinVars": {},
     "TableName": "unsharded_user_extra",
     "Inputs": [
       {
@@ -2083,7 +2069,6 @@ Gen4 error: symbol t.col not found
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "1",
-    "JoinVars": {},
     "TableName": "information_schema.a_unsharded",
     "Inputs": [
       {
@@ -2122,7 +2107,6 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-1",
-    "JoinVars": {},
     "TableName": "unsharded_information_schema.a",
     "Inputs": [
       {
@@ -2178,7 +2162,6 @@ Gen4 plan same as above
             "OperatorType": "Join",
             "Variant": "Join",
             "JoinColumnIndexes": "-1,-2",
-            "JoinVars": {},
             "TableName": "`user`_user_extra",
             "Inputs": [
               {
@@ -2279,7 +2262,6 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "1",
-    "JoinVars": {},
     "TableName": "unsharded_a_`user`_user_extra",
     "Inputs": [
       {
@@ -2303,7 +2285,6 @@ Gen4 plan same as above
             "OperatorType": "Join",
             "Variant": "Join",
             "JoinColumnIndexes": "-1,-2",
-            "JoinVars": {},
             "TableName": "`user`_user_extra",
             "Inputs": [
               {
@@ -2342,7 +2323,6 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "2",
-    "JoinVars": {},
     "TableName": "unsharded_a_`user`_user_extra",
     "Inputs": [
       {
@@ -2360,7 +2340,6 @@ Gen4 plan same as above
         "OperatorType": "Join",
         "Variant": "Join",
         "JoinColumnIndexes": "-1,-2",
-        "JoinVars": {},
         "TableName": "`user`_user_extra",
         "Inputs": [
           {
@@ -2583,7 +2562,6 @@ Gen4 plan same as above
         "OperatorType": "Join",
         "Variant": "Join",
         "JoinColumnIndexes": "-1",
-        "JoinVars": {},
         "TableName": "unsharded_`user`",
         "Inputs": [
           {
@@ -2624,7 +2602,6 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "LeftJoin",
     "JoinColumnIndexes": "-1",
-    "JoinVars": {},
     "TableName": "unsharded_`user`",
     "Inputs": [
       {
@@ -2680,7 +2657,6 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-1",
-    "JoinVars": {},
     "TableName": "unsharded_`user`_unsharded_a",
     "Inputs": [
       {
@@ -2702,7 +2678,6 @@ Gen4 plan same as above
             "OperatorType": "Join",
             "Variant": "Join",
             "JoinColumnIndexes": "-1",
-            "JoinVars": {},
             "TableName": "unsharded_`user`",
             "Inputs": [
               {
@@ -2891,7 +2866,6 @@ Gen4 plan same as above
         "OperatorType": "Join",
         "Variant": "Join",
         "JoinColumnIndexes": "-1",
-        "JoinVars": {},
         "TableName": "`user`_user_extra",
         "Inputs": [
           {

@@ -48,7 +48,6 @@
           {
             "OperatorType": "Join",
             "Variant": "Join",
-            "JoinVars": {},
             "TableName": "user_metadata_music_unsharded_unsharded_a_unsharded_b_unsharded_auto_music_extra",
             "Inputs": [
               {
@@ -107,7 +106,6 @@
                       {
                         "OperatorType": "Join",
                         "Variant": "Join",
-                        "JoinVars": {},
                         "TableName": "unsharded_a_unsharded_b_unsharded_auto_music_extra",
                         "Inputs": [
                           {
@@ -124,7 +122,6 @@
                           {
                             "OperatorType": "Join",
                             "Variant": "Join",
-                            "JoinVars": {},
                             "TableName": "unsharded_b_unsharded_auto_music_extra",
                             "Inputs": [
                               {
@@ -141,7 +138,6 @@
                               {
                                 "OperatorType": "Join",
                                 "Variant": "Join",
-                                "JoinVars": {},
                                 "TableName": "unsharded_auto_music_extra",
                                 "Inputs": [
                                   {
@@ -194,7 +190,6 @@
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "1",
-    "JoinVars": {},
     "TableName": "music, music_extra_`user`, user_extra, user_metadata_unsharded, unsharded_a, unsharded_auto, unsharded_b",
     "Inputs": [
       {
@@ -212,7 +207,6 @@
         "OperatorType": "Join",
         "Variant": "Join",
         "JoinColumnIndexes": "-1",
-        "JoinVars": {},
         "TableName": "`user`, user_extra, user_metadata_unsharded, unsharded_a, unsharded_auto, unsharded_b",
         "Inputs": [
           {

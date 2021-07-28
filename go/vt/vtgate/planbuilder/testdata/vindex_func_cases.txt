@@ -114,7 +114,6 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-1,1",
-    "JoinVars": {},
     "TableName": "_unsharded",
     "Inputs": [
       {
@@ -153,7 +152,6 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "1,-1",
-    "JoinVars": {},
     "TableName": "unsharded_",
     "Inputs": [
       {

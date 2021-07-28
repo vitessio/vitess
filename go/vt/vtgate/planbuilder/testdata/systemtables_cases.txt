@@ -191,7 +191,6 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-1,1",
-    "JoinVars": {},
     "TableName": "INFORMATION_SCHEMA.KEY_COLUMN_USAGE, INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS_INFORMATION_SCHEMA.K",
     "Inputs": [
       {

@@ -282,7 +282,6 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
             "OperatorType": "Join",
             "Variant": "Join",
             "JoinColumnIndexes": "-1,-2,-3",
-            "JoinVars": {},
             "TableName": "`user`_user_extra",
             "Inputs": [
               {
@@ -548,7 +547,6 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
         "OperatorType": "Join",
         "Variant": "Join",
         "JoinColumnIndexes": "-1,-2,1,-3,2",
-        "JoinVars": {},
         "TableName": "`user`_unsharded",
         "Inputs": [
           {
@@ -595,7 +593,6 @@ Gen4 plan same as above
         "OperatorType": "Join",
         "Variant": "Join",
         "JoinColumnIndexes": "1,2,-1,3,-2",
-        "JoinVars": {},
         "TableName": "unsharded_`user`",
         "Inputs": [
           {
