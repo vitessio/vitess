@@ -29,7 +29,7 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
-func transformToLogicalPlan(tree joinTree, semTable *semantics.SemTable, processing func(plan logicalPlan, sel *sqlparser.Select) (logicalPlan, error)) (logicalPlan, error) {
+func transformToLogicalPlan(tree joinTree, semTable *semantics.SemTable, processing *postProcessor) (logicalPlan, error) {
 	switch n := tree.(type) {
 	case *routePlan:
 		return transformRoutePlan(n)
@@ -42,10 +42,12 @@ func transformToLogicalPlan(tree joinTree, semTable *semantics.SemTable, process
 		if err != nil {
 			return nil, err
 		}
-		plan, err = processing(plan, n.query)
+		processing.inDerived = true
+		plan, err = processing.planHorizon(plan, n.query)
 		if err != nil {
 			return nil, err
 		}
+		processing.inDerived = false
 
 		rb, isRoute := plan.(*route)
 		if !isRoute {
@@ -66,7 +68,7 @@ func transformToLogicalPlan(tree joinTree, semTable *semantics.SemTable, process
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unknown type encountered: %T", tree)
 }
 
-func transformJoinPlan(n *joinPlan, semTable *semantics.SemTable, processing func(plan logicalPlan, sel *sqlparser.Select) (logicalPlan, error)) (logicalPlan, error) {
+func transformJoinPlan(n *joinPlan, semTable *semantics.SemTable, processing *postProcessor) (logicalPlan, error) {
 	lhs, err := transformToLogicalPlan(n.lhs, semTable, processing)
 	if err != nil {
 		return nil, err

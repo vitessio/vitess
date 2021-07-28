@@ -62,6 +62,34 @@ func gen4Planner(_ string) func(sqlparser.Statement, *sqlparser.ReservedVars, Co
 	}
 }
 
+type postProcessor struct {
+	inDerived bool
+	semTable  *semantics.SemTable
+	vschema   ContextVSchema
+}
+
+func (pp *postProcessor) planHorizon(plan logicalPlan, sel *sqlparser.Select) (logicalPlan, error) {
+	hp := horizonPlanning{
+		sel:       sel,
+		plan:      plan,
+		semTable:  pp.semTable,
+		vschema:   pp.vschema,
+		inDerived: pp.inDerived,
+	}
+
+	plan, err := hp.planHorizon()
+	if err != nil {
+		return nil, err
+	}
+
+	plan, err = planLimit(sel.Limit, plan)
+	if err != nil {
+		return nil, err
+	}
+	return plan, nil
+
+}
+
 func newBuildSelectPlan(sel *sqlparser.Select, reservedVars *sqlparser.ReservedVars, vschema ContextVSchema) (logicalPlan, error) {
 	directives := sqlparser.ExtractCommentDirectives(sel.Comments)
 	if len(directives) > 0 {
@@ -91,32 +119,16 @@ func newBuildSelectPlan(sel *sqlparser.Select, reservedVars *sqlparser.ReservedV
 		return nil, err
 	}
 
-	postProcessing := func(plan logicalPlan, sel *sqlparser.Select) (logicalPlan, error) {
-		hp := horizonPlanning{
-			sel:      sel,
-			plan:     plan,
-			semTable: semTable,
-			vschema:  vschema,
-		}
-
-		plan, err = hp.planHorizon()
-		if err != nil {
-			return nil, err
-		}
-
-		plan, err = planLimit(sel.Limit, plan)
-		if err != nil {
-			return nil, err
-		}
-		return plan, nil
+	postProcessing := &postProcessor{
+		semTable:  semTable,
+		vschema:   vschema,
 	}
-
 	plan, err := transformToLogicalPlan(tree, semTable, postProcessing)
 	if err != nil {
 		return nil, err
 	}
 
-	plan, err = postProcessing(plan, sel)
+	plan, err = postProcessing.planHorizon(plan, sel)
 	if err != nil {
 		return nil, err
 	}
@@ -201,6 +213,7 @@ type horizonPlanning struct {
 	semTable        *semantics.SemTable
 	vschema         ContextVSchema
 	qp              *abstract.QueryProjection
+	inDerived       bool
 	needsTruncation bool
 	vtgateGrouping  bool
 }
@@ -209,6 +222,14 @@ func (hp *horizonPlanning) planHorizon() (logicalPlan, error) {
 	rb, ok := hp.plan.(*route)
 	if !ok && hp.semTable.ProjectionErr != nil {
 		return nil, hp.semTable.ProjectionErr
+	}
+
+	if hp.inDerived {
+		for _, expr := range hp.sel.SelectExprs {
+			if sqlparser.ContainsAggregation(expr) {
+				return nil, semantics.Gen4NotSupportedF("aggregation inside of derived table")
+			}
+		}
 	}
 
 	if ok && rb.isSingleShard() {
