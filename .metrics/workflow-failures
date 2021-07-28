@@ -1,4 +1,3 @@
-2021-04-02T19:03:16Z,check_make_sizegen,https://github.com/vitessio/vitess/actions/runs/712523245
 2021-04-02T19:03:16Z,cluster_initial_sharding_multi,https://github.com/vitessio/vitess/actions/runs/712523213
 2021-04-02T19:03:16Z,docker_test_1,https://github.com/vitessio/vitess/actions/runs/712523222
 2021-04-02T19:03:16Z,docker_test_2,https://github.com/vitessio/vitess/actions/runs/712523238
@@ -9998,3 +9997,4 @@
 2021-07-28T16:01:53Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/1075542058
 2021-07-28T16:01:53Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/1075542092
 2021-07-28T17:42:07Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/1075820023
+2021-07-28T22:02:48Z,pr-labels,https://github.com/vitessio/vitess/actions/runs/1076521153
