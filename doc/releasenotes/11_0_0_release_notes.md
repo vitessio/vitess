@@ -38,22 +38,31 @@ This release complies with VEP-3 which removes the upgrade order requirement. Co
  * PRIMARY in index hint list for master #8160
  * Signed int parse #8189 
  * Delete table reference alias support #8393 
+ * Fix for function calls in DEFAULT value of CREATE TABLE statement in release-11.0 #8476
+ * Backport: Fixing multiple issues related to onlineddl/lifecycle #8517
+ * boolean values should not be parenthesised in default clause - release 11 #8531
 
 
 ### VReplication
  * VDiff: Use byte compare if weight_string() returns null for either source or target #7696
  * Rowlog: Update rowlog for the API change made for the vstream skew alignment feature #7809
- * VReplication: Pad binlog values for binary() columns to match the value returned by mysql selects #7969
+ * Pad binlog values for binary() columns to match the value returned by mysql selects #7969
  * Change vreplication error metric name to start with a string to pass prometheus validations #7983
  * Pass the provided keyspace through to `UpdateDisableQueryService` rather than hard-coding the sourceKeyspace #8020
- * vreplication: fix vreplication timing metrics #8024
+ * Fix vreplication timing metrics #8024
  * Switchwrites: error if no tablets available on target for reverse replication #8142
- * VReplication: remove noisy vexec logs #8144
+ * Remove noisy vexec logs #8144
  * VReplicationExec: don't create new stats objects on a select #8166
  * Binlog JSON Parser: handle inline types correctly for large documents #8187
  * Schema Tracking Flaky Test: Ignore unrelated gtid progress events #8283
  * Adds padding to keyrange comparison #8296 
  * VReplication Reverse Workflows: add keyspace scope to vindex while creating reverse vreplication streams #8385
+ * OnlineDDL/Vreplication stress test: investigating failures #8390
+ * Ignore SBR statements from pt-table-checksum #8396
+ * Return from throttler goroutine if context is cancelled to prevent goroutine leaks #8489
+ * VDiff: Add BIT datatype to list of byte comparable types #8401
+ * Fix excessive VReplication logging to file and db #8521
+
 ### VTAdmin
  * Add missing return in `vtctld-*` DSN case, and log any flag that gets ignored #7872
  * [vtadmin-web] Do not parse numbers/booleans in URL query parameters by default #8100
@@ -104,6 +113,8 @@ This release complies with VEP-3 which removes the upgrade order requirement. Co
 ### vttestserver
  * docker/vttestserver:  Set max_connections in default-fast.cnf at container build time #7810
 ## Documentation 
+### Cluster management
+ * Enhance k8stopo flag documentation #8458
 ### Build/CI
  * Update version for latest snapshot #7801
  * v10 GA Release Notes #7964
@@ -198,14 +209,18 @@ This release complies with VEP-3 which removes the upgrade order requirement. Co
  * Gen4: expand star in projection list #8325
  * gen4: Fail all queries not handled well by gen4 #8359
  * Gen4 fail more2 #8382  
+ * SHOW VITESS_MIGRATION '...' LOGS, retain logs for 24 hours #8532
+ * [11.0] query serving to continue when topo server restarts #8533
+ * [11.0] Disable allowing set statements on system settings by default #8540
 ### VReplication
+ * Change local example to use v2 vreplication flows and make v2 flows as the default #8527
  * Use Dba user when Vexec is runAsAdmin #7731
- * VReplication: add table for logging stream errors, state changes and key workflow steps #7831
+ * Add table for logging stream errors, state changes and key workflow steps #7831
  * Fix some static check warning #7960
  * VSchema Validation on ReshardWorkflow Creation #7977
- * VReplication: tracking `rows_copied` #7980
+ * Tracking `rows_copied` #7980
  * Vdiff formatting improvements #8079
- * VReplication: ignore generated columns in workflows #8129
+ * Ignore generated columns in workflows #8129
  * VReplication Copy Phase: Increase default replica lag tolerance. Also make it and copy timeout modifiable via flags #8130
  * Materialize: Add additional comparison operators in Materialize and fix bug where they not applied for sharded keyspaces #8247
  * Copy Phase: turn on OptimizeInserts by default #8248
@@ -218,6 +233,8 @@ This release complies with VEP-3 which removes the upgrade order requirement. Co
  * Online DDL/Vreplication suite: fix test for no shared UK #8334
  * Online DDL/VReplication: support DROP+ADD column of same name #8337
  * Online DDL/VReplication test suite: support ENUM as part of PRIMARY KEY #8345  
+ * Change local example to use v2 vreplication flows #8527
+ * Tablet Picker: add metric to record lack of available tablets #8403
 ### VTAdmin
  * [vtadmin-web] Add useSyncedURLParam hook to persist filter parameter in the URL #7857
  * [vtadmin-web] Display more data on /gates view and add filtering #7876
@@ -290,7 +307,8 @@ This release complies with VEP-3 which removes the upgrade order requirement. Co
  * [wrangler|workflow] Extract `workflowState` and `workflowType` out to `package workflow` #7967
  * [wrangler|workflow] extract `*wrangler.streamMigrater` to `workflow.StreamMigrator` #8008
  * [workflow] Migrate `getCellsWith{Shard,Table}ReadsSwitched`, `TrafficSwitchDirection` and `TableRemovalType` to package workflow #8190
- * [workflow] Cleanup wrangler wrappers, migrate `checkIfJournalExistsOnTablet` to package workflow #8193 
+ * [workflow] Cleanup wrangler wrappers, migrate `checkIfJournalExistsOnTablet` to package workflow #8193
+ * Backports of #8403 #8483 #8489 #8401 #8521 #8396 from main into release 11.0 #8536
 ### VTAdmin
  * [vtadmin-api] Replace magic numbers with `net/http` constants #8127
  * [vtadmin-web] Move single-entity view components into subfolders #8202
@@ -330,10 +348,10 @@ This release complies with VEP-3 which removes the upgrade order requirement. Co
  * vttablet: stream consolidation #7752
  * perf: optimize bind var generation #7828 
 ### VReplication
- * VReplication: optimize the catchup phases by filtering out rows which not within range of copied pks during inserts #7708
- * VReplication: ability to compress gtid when stored in _vt.vreplication's pos column #7877
- * vreplication: performance & benchmarks (table copying) #7881
- * vreplication: dynamic packet sizing #7933
+ * Optimize the catchup phases by filtering out rows which not within range of copied pks during inserts #7708
+ * Ability to compress gtid when stored in _vt.vreplication's pos column #7877
+ * Performance & benchmarks (table copying) #7881
+ * Dynamic packet sizing #7933
  * perf: vreplication client CPU usage #7951
  * VDIff: fix performance regression introduced by progress logging  #8016
  * proto: Generate faster code using vtprotobuf #8173
@@ -369,6 +387,6 @@ This release complies with VEP-3 which removes the upgrade order requirement. Co
  * Make timestamp authoritative for master information #8381
 
 
-The release includes 1041 commits (excluding merges)
+The release includes 1080 commits (excluding merges)
 
-Thanks to all our contributors: @AdamKorcz, @GuptaManan100, @Hellcatlk, @Johnny-Three, @acharisshopify, @ajm188, @alexrs, @aquarapid, @askdba, @deepthi, @dependabot[bot], @doeg, @dyv, @enisoc, @frouioui, @gedgar, @guidoiaquinti, @harshit-gangal, @hkdsun, @idvoretskyi, @kirs, @mcronce, @narcsfz, @noxiouz, @rafael, @rohit-nayak-ps, @setassociative, @shlomi-noach, @systay, @tokikanno, @vmg, @wangmeng99, @yangxuanjia, @zhangshj-inspur
+Thanks to all our contributors: @AdamKorcz, @GuptaManan100, @Hellcatlk, @Johnny-Three, @acharisshopify, @ajm188, @alexrs, @aquarapid, @askdba, @deepthi, @doeg, @dyv, @enisoc, @frouioui, @gedgar, @guidoiaquinti, @harshit-gangal, @hkdsun, @idvoretskyi, @jmoldow, @kirs, @mcronce, @narcsfz, @noxiouz, @rafael, @rohit-nayak-ps, @setassociative, @shlomi-noach, @systay, @tokikanno, @vmg, @wangmeng99, @yangxuanjia, @zhangshj-inspur
