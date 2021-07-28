@@ -205,10 +205,10 @@ func (oa *OrderedAggregate) execute(vcursor VCursor, bindVars map[string]*queryp
 	}
 	// This code is similar to the one in StreamExecute.
 	var current []sqltypes.Value
-	var curDistinct sqltypes.Value
+	var curDistincts []sqltypes.Value
 	for _, row := range result.Rows {
 		if current == nil {
-			current, curDistinct = oa.convertRow(row)
+			current, curDistincts = oa.convertRow(row)
 			continue
 		}
 
@@ -218,14 +218,14 @@ func (oa *OrderedAggregate) execute(vcursor VCursor, bindVars map[string]*queryp
 		}
 
 		if equal {
-			current, curDistinct, err = oa.merge(result.Fields, current, row, curDistinct)
+			current, curDistincts, err = oa.merge(result.Fields, current, row, curDistincts)
 			if err != nil {
 				return nil, err
 			}
 			continue
 		}
 		out.Rows = append(out.Rows, current)
-		current, curDistinct = oa.convertRow(row)
+		current, curDistincts = oa.convertRow(row)
 	}
 
 	if len(result.Rows) == 0 && len(oa.GroupByKeys) == 0 {
@@ -251,7 +251,7 @@ func (oa *OrderedAggregate) execute(vcursor VCursor, bindVars map[string]*queryp
 // StreamExecute is a Primitive function.
 func (oa *OrderedAggregate) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	var current []sqltypes.Value
-	var curDistinct sqltypes.Value
+	var curDistincts []sqltypes.Value
 	var fields []*querypb.Field
 
 	cb := func(qr *sqltypes.Result) error {
@@ -268,7 +268,7 @@ func (oa *OrderedAggregate) StreamExecute(vcursor VCursor, bindVars map[string]*
 		// This code is similar to the one in Execute.
 		for _, row := range qr.Rows {
 			if current == nil {
-				current, curDistinct = oa.convertRow(row)
+				current, curDistincts = oa.convertRow(row)
 				continue
 			}
 
@@ -278,7 +278,7 @@ func (oa *OrderedAggregate) StreamExecute(vcursor VCursor, bindVars map[string]*
 			}
 
 			if equal {
-				current, curDistinct, err = oa.merge(fields, current, row, curDistinct)
+				current, curDistincts, err = oa.merge(fields, current, row, curDistincts)
 				if err != nil {
 					return err
 				}
@@ -287,7 +287,7 @@ func (oa *OrderedAggregate) StreamExecute(vcursor VCursor, bindVars map[string]*
 			if err := cb(&sqltypes.Result{Rows: [][]sqltypes.Value{current}}); err != nil {
 				return err
 			}
-			current, curDistinct = oa.convertRow(row)
+			current, curDistincts = oa.convertRow(row)
 		}
 		return nil
 	})
@@ -322,15 +322,16 @@ func (oa *OrderedAggregate) convertFields(fields []*querypb.Field) []*querypb.Fi
 	return fields
 }
 
-func (oa *OrderedAggregate) convertRow(row []sqltypes.Value) (newRow []sqltypes.Value, curDistinct sqltypes.Value) {
+func (oa *OrderedAggregate) convertRow(row []sqltypes.Value) (newRow []sqltypes.Value, curDistincts []sqltypes.Value) {
 	if !oa.PreProcess {
-		return row, sqltypes.NULL
+		return row, nil
 	}
 	newRow = append(newRow, row...)
-	for _, aggr := range oa.Aggregates {
+	curDistincts = make([]sqltypes.Value, len(oa.Aggregates))
+	for index, aggr := range oa.Aggregates {
 		switch aggr.Opcode {
 		case AggregateCountDistinct:
-			curDistinct = findComparableCurrentDistinct(row, aggr)
+			curDistincts[index] = findComparableCurrentDistinct(row, aggr)
 			// Type is int64. Ok to call MakeTrusted.
 			if row[aggr.KeyCol].IsNull() {
 				newRow[aggr.Col] = countZero
@@ -338,7 +339,7 @@ func (oa *OrderedAggregate) convertRow(row []sqltypes.Value) (newRow []sqltypes.
 				newRow[aggr.Col] = countOne
 			}
 		case AggregateSumDistinct:
-			curDistinct = findComparableCurrentDistinct(row, aggr)
+			curDistincts[index] = findComparableCurrentDistinct(row, aggr)
 			var err error
 			newRow[aggr.Col], err = evalengine.Cast(row[aggr.Col], opcodeType[aggr.Opcode])
 			if err != nil {
@@ -356,7 +357,7 @@ func (oa *OrderedAggregate) convertRow(row []sqltypes.Value) (newRow []sqltypes.
 			newRow[aggr.Col] = val
 		}
 	}
-	return newRow, curDistinct
+	return newRow, curDistincts
 }
 
 func findComparableCurrentDistinct(row []sqltypes.Value, aggr *AggregateParams) sqltypes.Value {
@@ -409,21 +410,21 @@ func (oa *OrderedAggregate) keysEqual(row1, row2 []sqltypes.Value) (bool, error)
 	return true, nil
 }
 
-func (oa *OrderedAggregate) merge(fields []*querypb.Field, row1, row2 []sqltypes.Value, curDistinct sqltypes.Value) ([]sqltypes.Value, sqltypes.Value, error) {
+func (oa *OrderedAggregate) merge(fields []*querypb.Field, row1, row2 []sqltypes.Value, curDistincts []sqltypes.Value) ([]sqltypes.Value, []sqltypes.Value, error) {
 	result := sqltypes.CopyRow(row1)
-	for _, aggr := range oa.Aggregates {
+	for index, aggr := range oa.Aggregates {
 		if aggr.isDistinct() {
 			if row2[aggr.KeyCol].IsNull() {
 				continue
 			}
-			cmp, err := evalengine.NullsafeCompare(curDistinct, row2[aggr.KeyCol])
+			cmp, err := evalengine.NullsafeCompare(curDistincts[index], row2[aggr.KeyCol])
 			if err != nil {
-				return nil, sqltypes.NULL, err
+				return nil, nil, err
 			}
 			if cmp == 0 {
 				continue
 			}
-			curDistinct = findComparableCurrentDistinct(row2, aggr)
+			curDistincts[index] = findComparableCurrentDistinct(row2, aggr)
 		}
 		var err error
 		switch aggr.Opcode {
@@ -443,7 +444,7 @@ func (oa *OrderedAggregate) merge(fields []*querypb.Field, row1, row2 []sqltypes
 			vgtid := &binlogdatapb.VGtid{}
 			err = proto.Unmarshal(row1[aggr.Col].ToBytes(), vgtid)
 			if err != nil {
-				return nil, sqltypes.NULL, err
+				return nil, nil, err
 			}
 			vgtid.ShardGtids = append(vgtid.ShardGtids, &binlogdatapb.ShardGtid{
 				Keyspace: row2[aggr.Col-1].ToString(),
@@ -454,13 +455,13 @@ func (oa *OrderedAggregate) merge(fields []*querypb.Field, row1, row2 []sqltypes
 			val, _ := sqltypes.NewValue(sqltypes.VarBinary, data)
 			result[aggr.Col] = val
 		default:
-			return nil, sqltypes.NULL, fmt.Errorf("BUG: Unexpected opcode: %v", aggr.Opcode)
+			return nil, nil, fmt.Errorf("BUG: Unexpected opcode: %v", aggr.Opcode)
 		}
 		if err != nil {
-			return nil, sqltypes.NULL, err
+			return nil, nil, err
 		}
 	}
-	return result, curDistinct, nil
+	return result, curDistincts, nil
 }
 
 // creates the empty row for the case when we are missing grouping keys and have empty input table
