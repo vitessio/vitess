@@ -73,7 +73,7 @@ func Analyze(statement sqlparser.SelectStatement, currentDb string, si SchemaInf
 		return nil, err
 	}
 	return &SemTable{
-		ExprRecursiveDeps: analyzer.exprRecursiveDeps,
+		ExprBaseTableDeps: analyzer.exprRecursiveDeps,
 		ExprDeps:          analyzer.exprDeps,
 		exprTypes:         analyzer.exprTypes,
 		Tables:            analyzer.Tables,

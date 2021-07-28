@@ -29,15 +29,15 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
-func transformToLogicalPlan(tree joinTree, semTable *semantics.SemTable, processing *postProcessor) (logicalPlan, error) {
+func transformToLogicalPlan(tree queryTree, semTable *semantics.SemTable, processing *postProcessor) (logicalPlan, error) {
 	switch n := tree.(type) {
-	case *routePlan:
+	case *routeTree:
 		return transformRoutePlan(n, semTable)
 
-	case *joinPlan:
+	case *joinTree:
 		return transformJoinPlan(n, semTable, processing)
 
-	case *derivedPlan:
+	case *derivedTree:
 		plan, err := transformToLogicalPlan(n.inner, semTable, processing)
 		if err != nil {
 			return nil, err
@@ -68,7 +68,7 @@ func transformToLogicalPlan(tree joinTree, semTable *semantics.SemTable, process
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unknown type encountered: %T", tree)
 }
 
-func transformJoinPlan(n *joinPlan, semTable *semantics.SemTable, processing *postProcessor) (logicalPlan, error) {
+func transformJoinPlan(n *joinTree, semTable *semantics.SemTable, processing *postProcessor) (logicalPlan, error) {
 	lhs, err := transformToLogicalPlan(n.lhs, semTable, processing)
 	if err != nil {
 		return nil, err
@@ -90,7 +90,7 @@ func transformJoinPlan(n *joinPlan, semTable *semantics.SemTable, processing *po
 	}, nil
 }
 
-func transformRoutePlan(n *routePlan, semTable *semantics.SemTable) (*route, error) {
+func transformRoutePlan(n *routeTree, semTable *semantics.SemTable) (*route, error) {
 	var tablesForSelect sqlparser.TableExprs
 	tableNameMap := map[string]interface{}{}
 

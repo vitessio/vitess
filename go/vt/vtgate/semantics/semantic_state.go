@@ -94,10 +94,10 @@ type (
 		// This is only a real error if we are unable to plan the query as a single route
 		ProjectionErr error
 
-		// ExprRecursiveDeps contains the dependencies from the expression to the actual tables
+		// ExprBaseTableDeps contains the dependencies from the expression to the actual tables
 		// in the query (i.e. not including derived tables). If an expression is a column on a derived table,
 		// this map will contain the accumulated dependencies for the column expression inside the derived table
-		ExprRecursiveDeps ExprDependencies
+		ExprBaseTableDeps ExprDependencies
 
 		// ExprDeps keeps information about dependencies for expressions, no matter if they are
 		// against real tables or derived tables
@@ -363,7 +363,7 @@ func (r *RealTable) Matches(name sqlparser.TableName) bool {
 
 // NewSemTable creates a new empty SemTable
 func NewSemTable() *SemTable {
-	return &SemTable{ExprRecursiveDeps: map[sqlparser.Expr]TableSet{}}
+	return &SemTable{ExprBaseTableDeps: map[sqlparser.Expr]TableSet{}}
 }
 
 // TableSetFor returns the bitmask for this particular table
@@ -384,9 +384,9 @@ func (st *SemTable) TableInfoFor(id TableSet) (TableInfo, error) {
 	return st.Tables[id.TableOffset()], nil
 }
 
-// RecursiveDependencies return the table dependencies of the expression.
-func (st *SemTable) RecursiveDependencies(expr sqlparser.Expr) TableSet {
-	return st.ExprRecursiveDeps.Dependencies(expr)
+// GetBaseTableDependencies return the table dependencies of the expression.
+func (st *SemTable) GetBaseTableDependencies(expr sqlparser.Expr) TableSet {
+	return st.ExprBaseTableDeps.Dependencies(expr)
 }
 
 // Dependencies return the table dependencies of the expression.
@@ -410,7 +410,7 @@ func (st *SemTable) GetSelectTables(node *sqlparser.Select) []TableInfo {
 func (st *SemTable) AddExprs(tbl *sqlparser.AliasedTableExpr, cols sqlparser.SelectExprs) {
 	tableSet := st.TableSetFor(tbl)
 	for _, col := range cols {
-		st.ExprRecursiveDeps[col.(*sqlparser.AliasedExpr).Expr] = tableSet
+		st.ExprBaseTableDeps[col.(*sqlparser.AliasedExpr).Expr] = tableSet
 	}
 }
 

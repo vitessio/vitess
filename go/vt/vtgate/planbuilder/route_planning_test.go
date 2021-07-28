@@ -31,23 +31,23 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
-func unsharded(solved semantics.TableSet, keyspace *vindexes.Keyspace) *routePlan {
-	return &routePlan{
+func unsharded(solved semantics.TableSet, keyspace *vindexes.Keyspace) *routeTree {
+	return &routeTree{
 		routeOpCode: engine.SelectUnsharded,
 		solved:      solved,
 		keyspace:    keyspace,
 	}
 }
-func selectDBA(solved semantics.TableSet, keyspace *vindexes.Keyspace) *routePlan {
-	return &routePlan{
+func selectDBA(solved semantics.TableSet, keyspace *vindexes.Keyspace) *routeTree {
+	return &routeTree{
 		routeOpCode: engine.SelectDBA,
 		solved:      solved,
 		keyspace:    keyspace,
 	}
 }
 
-func selectScatter(solved semantics.TableSet, keyspace *vindexes.Keyspace) *routePlan {
-	return &routePlan{
+func selectScatter(solved semantics.TableSet, keyspace *vindexes.Keyspace) *routeTree {
+	return &routeTree{
 		routeOpCode: engine.SelectScatter,
 		solved:      solved,
 		keyspace:    keyspace,
@@ -59,7 +59,7 @@ func TestMergeJoins(t *testing.T) {
 	ks2 := &vindexes.Keyspace{Name: "banan", Sharded: false}
 
 	type testCase struct {
-		l, r, expected joinTree
+		l, r, expected queryTree
 		predicates     []sqlparser.Expr
 	}
 
@@ -108,14 +108,14 @@ func TestMergeJoins(t *testing.T) {
 }
 
 func TestClone(t *testing.T) {
-	original := &routePlan{
+	original := &routeTree{
 		routeOpCode: engine.SelectEqualUnique,
 		vindexPreds: []*vindexPlusPredicates{{}},
 	}
 
 	clone := original.clone()
 
-	clonedRP := clone.(*routePlan)
+	clonedRP := clone.(*routeTree)
 	clonedRP.routeOpCode = engine.SelectDBA
 	assert.Equal(t, clonedRP.routeOpCode, engine.SelectDBA)
 	assert.Equal(t, original.routeOpCode, engine.SelectEqualUnique)
@@ -148,7 +148,7 @@ func TestCreateRoutePlanForOuter(t *testing.T) {
 		},
 		vtable: &vindexes.Table{},
 	}
-	a := &routePlan{
+	a := &routeTree{
 		routeOpCode: engine.SelectUnsharded,
 		solved:      semantics.TableSet(1),
 		tables:      []relation{m1},
@@ -159,7 +159,7 @@ func TestCreateRoutePlanForOuter(t *testing.T) {
 	col2 := sqlparser.NewColNameWithQualifier("id", sqlparser.TableName{
 		Name: sqlparser.NewTableIdent("m2"),
 	})
-	b := &routePlan{
+	b := &routeTree{
 		routeOpCode: engine.SelectUnsharded,
 		solved:      semantics.TableSet(6),
 		tables:      []relation{m2, m3},

@@ -58,7 +58,7 @@ from x as t`
 
 	// extract the `t.col2` expression from the subquery
 	sel2 := sel.SelectExprs[1].(*sqlparser.AliasedExpr).Expr.(*sqlparser.Subquery).Select.(*sqlparser.Select)
-	s1 := semTable.RecursiveDependencies(extract(sel2, 0))
+	s1 := semTable.GetBaseTableDependencies(extract(sel2, 0))
 
 	// if scoping works as expected, we should be able to see the inner table being used by the inner expression
 	assert.Equal(t, T2, s1)
@@ -82,7 +82,7 @@ func TestBindingSingleTable(t *testing.T) {
 				ts := semTable.TableSetFor(t1)
 				assert.EqualValues(t, 1, ts)
 
-				d := semTable.RecursiveDependencies(extract(sel, 0))
+				d := semTable.GetBaseTableDependencies(extract(sel, 0))
 				require.Equal(t, T1, d, query)
 			})
 		}
@@ -136,7 +136,7 @@ func TestOrderByBindingSingleTable(t *testing.T) {
 				stmt, semTable := parseAndAnalyze(t, tc.sql, "d")
 				sel, _ := stmt.(*sqlparser.Select)
 				order := sel.OrderBy[0].Expr
-				d := semTable.RecursiveDependencies(order)
+				d := semTable.GetBaseTableDependencies(order)
 				require.Equal(t, tc.deps, d, tc.sql)
 			})
 		}
@@ -183,7 +183,7 @@ func TestGroupByBindingSingleTable(t *testing.T) {
 			stmt, semTable := parseAndAnalyze(t, tc.sql, "d")
 			sel, _ := stmt.(*sqlparser.Select)
 			grp := sel.GroupBy[0]
-			d := semTable.RecursiveDependencies(grp)
+			d := semTable.GetBaseTableDependencies(grp)
 			require.Equal(t, tc.deps, d, tc.sql)
 		})
 	}
@@ -205,7 +205,7 @@ func TestBindingSingleAliasedTable(t *testing.T) {
 				ts := semTable.TableSetFor(t1)
 				assert.EqualValues(t, 1, ts)
 
-				d := semTable.RecursiveDependencies(extract(sel, 0))
+				d := semTable.GetBaseTableDependencies(extract(sel, 0))
 				require.Equal(t, T1, d, query)
 			})
 		}
@@ -248,8 +248,8 @@ func TestUnion(t *testing.T) {
 	assert.EqualValues(t, 1, ts1)
 	assert.EqualValues(t, 2, ts2)
 
-	d1 := semTable.RecursiveDependencies(extract(sel1, 0))
-	d2 := semTable.RecursiveDependencies(extract(sel2, 0))
+	d1 := semTable.GetBaseTableDependencies(extract(sel1, 0))
+	d2 := semTable.GetBaseTableDependencies(extract(sel2, 0))
 	assert.Equal(t, T1, d1)
 	assert.Equal(t, T2, d2)
 }
@@ -306,7 +306,7 @@ func TestBindingMultiTable(t *testing.T) {
 			t.Run(query.query, func(t *testing.T) {
 				stmt, semTable := parseAndAnalyze(t, query.query, "user")
 				sel, _ := stmt.(*sqlparser.Select)
-				assert.Equal(t, query.deps, semTable.RecursiveDependencies(extract(sel, 0)), query.query)
+				assert.Equal(t, query.deps, semTable.GetBaseTableDependencies(extract(sel, 0)), query.query)
 			})
 		}
 	})
@@ -338,7 +338,7 @@ func TestBindingSingleDepPerTable(t *testing.T) {
 	stmt, semTable := parseAndAnalyze(t, query, "")
 	sel, _ := stmt.(*sqlparser.Select)
 
-	d := semTable.RecursiveDependencies(extract(sel, 0))
+	d := semTable.GetBaseTableDependencies(extract(sel, 0))
 	assert.Equal(t, 1, d.NumberOfTables(), "size wrong")
 	assert.Equal(t, T1, d)
 }
@@ -609,7 +609,7 @@ func TestScopingWDerivedTables(t *testing.T) {
 			} else {
 				require.NoError(t, err)
 				sel := parse.(*sqlparser.Select)
-				assert.Equal(t, query.recursiveExpectation, st.RecursiveDependencies(extract(sel, 0)))
+				assert.Equal(t, query.recursiveExpectation, st.GetBaseTableDependencies(extract(sel, 0)))
 				assert.Equal(t, query.expectation, st.Dependencies(extract(sel, 0)))
 			}
 		})

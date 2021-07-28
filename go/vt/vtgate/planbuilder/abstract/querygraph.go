@@ -106,7 +106,7 @@ func (qg *QueryGraph) collectPredicates(sel *sqlparser.Select, semTable *semanti
 }
 
 func (qg *QueryGraph) collectPredicateTable(t sqlparser.TableExpr, predicate sqlparser.Expr, semTable *semantics.SemTable) error {
-	deps := semTable.RecursiveDependencies(predicate)
+	deps := semTable.GetBaseTableDependencies(predicate)
 	switch deps.NumberOfTables() {
 	case 0:
 		qg.addNoDepsPredicate(predicate)
@@ -137,7 +137,7 @@ func (qg *QueryGraph) collectPredicateTable(t sqlparser.TableExpr, predicate sql
 }
 
 func (qg *QueryGraph) collectPredicate(predicate sqlparser.Expr, semTable *semantics.SemTable) error {
-	deps := semTable.RecursiveDependencies(predicate)
+	deps := semTable.GetBaseTableDependencies(predicate)
 	switch deps.NumberOfTables() {
 	case 0:
 		qg.addNoDepsPredicate(predicate)
