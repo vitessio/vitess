@@ -105,7 +105,7 @@ type (
 
 		exprTypes   map[sqlparser.Expr]querypb.Type
 		selectScope map[*sqlparser.Select]*scope
-		Comments         sqlparser.Comments
+		Comments    sqlparser.Comments
 	}
 
 	scope struct {
