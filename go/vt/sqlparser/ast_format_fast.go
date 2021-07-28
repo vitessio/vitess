@@ -382,6 +382,13 @@ func (node *RevertMigration) formatFast(buf *TrackedBuffer) {
 }
 
 // formatFast formats the node.
+func (node *ShowMigrationLogs) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("show vitess_migration '")
+	buf.WriteString(node.UUID)
+	buf.WriteString("' logs")
+}
+
+// formatFast formats the node.
 func (node *OptLike) formatFast(buf *TrackedBuffer) {
 	buf.WriteString("like ")
 	node.LikeTable.formatFast(buf)

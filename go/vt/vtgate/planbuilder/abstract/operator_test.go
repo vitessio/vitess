@@ -155,6 +155,34 @@ JoinPredicates:
 	}
 	Predicate: a.id = c.id
 }`,
+	}, {
+		input: "select 1 from (select 42 as id from tbl) as t",
+		output: `Derived t: {
+	Query: select 42 as id from tbl
+	Inner:	QueryGraph: {
+	Tables:
+		1:tbl
+	}
+}`,
+	}, {
+		input: "select 1 from (select id from tbl limit 10) as t join (select foo, count(*) from usr group by foo) as s on t.id = s.foo",
+		output: `Join: {
+	LHS: 	Derived t: {
+		Query: select id from tbl limit 10
+		Inner:	QueryGraph: {
+		Tables:
+			1:tbl
+		}
+	}
+	RHS: 	Derived s: {
+		Query: select foo, count(*) from usr group by foo
+		Inner:	QueryGraph: {
+		Tables:
+			4:usr
+		}
+	}
+	Predicate: t.id = s.foo
+}`,
 	}}
 
 	for i, tc := range tcases {
@@ -162,7 +190,7 @@ JoinPredicates:
 		t.Run(fmt.Sprintf("%d %s", i, sql), func(t *testing.T) {
 			tree, err := sqlparser.Parse(sql)
 			require.NoError(t, err)
-			semTable, err := semantics.Analyze(tree, "", &semantics.FakeSI{})
+			semTable, err := semantics.Analyze(tree.(sqlparser.SelectStatement), "", &semantics.FakeSI{})
 			require.NoError(t, err)
 			optree, err := CreateOperatorFromSelect(tree.(*sqlparser.Select), semTable)
 			require.NoError(t, err)
@@ -186,6 +214,10 @@ func testString(op Operator) string {
 		leftStr := indent(testString(op.Left))
 		rightStr := indent(testString(op.Right))
 		return fmt.Sprintf("OuterJoin: {\n\tInner: %s\n\tOuter: %s\n\tPredicate: %s\n}", leftStr, rightStr, sqlparser.String(op.Predicate))
+	case *Derived:
+		inner := indent(testString(op.Inner))
+		query := sqlparser.String(op.Sel)
+		return fmt.Sprintf("Derived %s: {\n\tQuery: %s\n\tInner:%s\n}", op.Alias, query, inner)
 	}
 	return "implement me"
 }
@@ -197,6 +229,8 @@ func indent(s string) string {
 	}
 	return strings.Join(lines, "\n")
 }
+
+// the following code is only used by tests
 
 func (qt *QueryTable) testString() string {
 	var alias string

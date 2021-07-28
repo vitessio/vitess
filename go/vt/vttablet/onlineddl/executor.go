@@ -1050,7 +1050,6 @@ exit $exit_code
 			return err
 		}
 		// Migration successful!
-		os.RemoveAll(tempDir)
 		successfulMigrations.Add(1)
 		log.Infof("+ OK")
 		return nil
@@ -1274,7 +1273,6 @@ export MYSQL_PWD
 			return err
 		}
 		// Migration successful!
-		os.RemoveAll(tempDir)
 		successfulMigrations.Add(1)
 		log.Infof("+ OK")
 		return nil
@@ -2321,15 +2319,13 @@ func (e *Executor) reviewStaleMigrations(ctx context.Context) error {
 	e.migrationMutex.Lock()
 	defer e.migrationMutex.Unlock()
 
-	parsed := sqlparser.BuildParsedQuery(sqlSelectStaleMigrations, ":minutes")
-	bindVars := map[string]*querypb.BindVariable{
-		"minutes": sqltypes.Int64BindVariable(staleMigrationMinutes),
-	}
-	bound, err := parsed.GenerateQuery(bindVars, nil)
+	query, err := sqlparser.ParseAndBind(sqlSelectStaleMigrations,
+		sqltypes.Int64BindVariable(staleMigrationMinutes),
+	)
 	if err != nil {
 		return err
 	}
-	r, err := e.execQuery(ctx, bound)
+	r, err := e.execQuery(ctx, query)
 	if err != nil {
 		return err
 	}
@@ -2417,7 +2413,9 @@ func (e *Executor) gcArtifacts(ctx context.Context) error {
 	for _, row := range r.Named().Rows {
 		uuid := row["migration_uuid"].ToString()
 		artifacts := row["artifacts"].ToString()
+		logPath := row["log_path"].ToString()
 
+		// Remove tables:
 		artifactTables := textutil.SplitDelimitedList(artifacts)
 
 		timeNow := time.Now()
@@ -2430,6 +2428,16 @@ func (e *Executor) gcArtifacts(ctx context.Context) error {
 				return err
 			}
 			log.Infof("Executor.gcArtifacts: renamed away artifact %s", artifactTable)
+		}
+
+		// Remove logs:
+		{
+			// logPath is in 'hostname:/path/to/logs' format
+			tokens := strings.SplitN(logPath, ":", 2)
+			logPath = tokens[len(tokens)-1]
+			if err := os.RemoveAll(logPath); err != nil {
+				return err
+			}
 		}
 		if err := e.updateMigrationTimestamp(ctx, "cleanup_timestamp", uuid); err != nil {
 			return err
@@ -2521,10 +2529,12 @@ func (e *Executor) updateMigrationTimestamp(ctx context.Context, timestampColumn
 	return err
 }
 
-func (e *Executor) updateMigrationLogPath(ctx context.Context, uuid string, hostname, path string) error {
-	logPath := fmt.Sprintf("%s:%s", hostname, path)
+func (e *Executor) updateMigrationLogPath(ctx context.Context, uuid string, hostname, logPath string) error {
+	logFile := path.Join(logPath, migrationLogFileName)
+	hostLogPath := fmt.Sprintf("%s:%s", hostname, logPath)
 	query, err := sqlparser.ParseAndBind(sqlUpdateMigrationLogPath,
-		sqltypes.StringBindVariable(logPath),
+		sqltypes.StringBindVariable(hostLogPath),
+		sqltypes.StringBindVariable(logFile),
 		sqltypes.StringBindVariable(uuid),
 	)
 	if err != nil {
@@ -2825,6 +2835,39 @@ func (e *Executor) SubmitMigration(
 	defer e.triggerNextCheckInterval()
 
 	return e.execQuery(ctx, query)
+}
+
+// ShowMigrationLogs reads the migration log for a given migration
+func (e *Executor) ShowMigrationLogs(ctx context.Context, stmt *sqlparser.ShowMigrationLogs) (result *sqltypes.Result, err error) {
+	if !e.isOpen {
+		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "online ddl is disabled")
+	}
+	_, row, err := e.readMigration(ctx, stmt.UUID)
+	if err != nil {
+		return nil, err
+	}
+	logFile := row["log_file"].ToString()
+	if logFile == "" {
+		return nil, vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "No log file for migration %v", stmt.UUID)
+	}
+	content, err := ioutil.ReadFile(logFile)
+	if err != nil {
+		return nil, err
+	}
+
+	result = &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{
+				Name: "migration_log",
+				Type: sqltypes.VarChar,
+			},
+		},
+		Rows: [][]sqltypes.Value{},
+	}
+	result.Rows = append(result.Rows, []sqltypes.Value{
+		sqltypes.NewVarChar(string(content)),
+	})
+	return result, nil
 }
 
 // onSchemaMigrationStatus is called when a status is set/changed for a running migration

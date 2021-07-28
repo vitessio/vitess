@@ -91,4 +91,22 @@ Gen4 plan same as above
     "SingleShardOnly": true
   }
 }
+
+
+# show global status
+"show global status"
+{
+  "QueryType": "SHOW",
+  "Original": "show global status",
+  "Instructions": {
+    "OperatorType": "Send",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "TargetDestination": "AnyShard()",
+    "Query": "show global status",
+    "SingleShardOnly": true
+  }
+}
 Gen4 plan same as above

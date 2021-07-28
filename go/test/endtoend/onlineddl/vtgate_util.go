@@ -191,3 +191,18 @@ func ReadMigrations(t *testing.T, vtParams *mysql.ConnParams, like string) *sqlt
 
 	return VtgateExecQuery(t, vtParams, query, "")
 }
+
+// ReadMigrationLogs reads migration logs for a given migration, on all shards
+func ReadMigrationLogs(t *testing.T, vtParams *mysql.ConnParams, uuid string) (logs []string) {
+	query, err := sqlparser.ParseAndBind("show vitess_migration %a logs",
+		sqltypes.StringBindVariable(uuid),
+	)
+	require.NoError(t, err)
+
+	r := VtgateExecQuery(t, vtParams, query, "")
+	for _, row := range r.Named().Rows {
+		migrationLog := row["migration_log"].ToString()
+		logs = append(logs, migrationLog)
+	}
+	return logs
+}

@@ -41,6 +41,7 @@ const (
 	WrongValueForVar
 	LockOrActiveTransaction
 	MixOfGroupFuncAndFields
+	DupFieldName
 
 	// failed precondition
 	NoDB
