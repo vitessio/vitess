@@ -799,10 +799,10 @@ func TestCountDistinctOnVarchar(t *testing.T) {
 	fp := &fakePrimitive{
 		results: []*sqltypes.Result{sqltypes.MakeTestResult(
 			fields,
-			"1|a|0x41",
-			"1|a|0x41",
-			"1|b|0x42",
-			"2|b|0x42",
+			"10|a|0x41",
+			"10|a|0x41",
+			"10|b|0x42",
+			"20|b|0x42",
 		)},
 	}
 
@@ -825,7 +825,8 @@ func TestCountDistinctOnVarchar(t *testing.T) {
 			"c1|count(distinct c2)",
 			"int64|int64",
 		),
-		`1|2`, `2|1`,
+		`10|2`,
+		`20|1`,
 	)
 
 	qr, err := oa.Execute(nil, nil, false)
@@ -856,17 +857,17 @@ func TestCountDistinctOnVarcharWithNulls(t *testing.T) {
 			"null|null|null",
 			"null|a|0x41",
 			"null|b|0x42",
-			"1|null|null",
-			"1|null|null",
-			"1|a|0x41",
-			"1|a|0x41",
-			"1|b|0x42",
-			"2|null|null",
-			"2|b|0x42",
-			"3|null|null",
-			"3|null|null",
-			"3|null|null",
-			"3|null|null",
+			"10|null|null",
+			"10|null|null",
+			"10|a|0x41",
+			"10|a|0x41",
+			"10|b|0x42",
+			"20|null|null",
+			"20|b|0x42",
+			"30|null|null",
+			"30|null|null",
+			"30|null|null",
+			"30|null|null",
 		)},
 	}
 
@@ -889,7 +890,10 @@ func TestCountDistinctOnVarcharWithNulls(t *testing.T) {
 			"c1|count(distinct c2)",
 			"int64|int64",
 		),
-		`null|2`, `1|2`, `2|1`, `3|0`,
+		`null|2`,
+		`10|2`,
+		`20|1`,
+		`30|0`,
 	)
 
 	qr, err := oa.Execute(nil, nil, false)
@@ -920,17 +924,17 @@ func TestSumDistinctOnVarcharWithNulls(t *testing.T) {
 			"null|null|null",
 			"null|a|0x41",
 			"null|b|0x42",
-			"1|null|null",
-			"1|null|null",
-			"1|a|0x41",
-			"1|a|0x41",
-			"1|b|0x42",
-			"2|null|null",
-			"2|b|0x42",
-			"3|null|null",
-			"3|null|null",
-			"3|null|null",
-			"3|null|null",
+			"10|null|null",
+			"10|null|null",
+			"10|a|0x41",
+			"10|a|0x41",
+			"10|b|0x42",
+			"20|null|null",
+			"20|b|0x42",
+			"30|null|null",
+			"30|null|null",
+			"30|null|null",
+			"30|null|null",
 		)},
 	}
 
@@ -953,7 +957,10 @@ func TestSumDistinctOnVarcharWithNulls(t *testing.T) {
 			"c1|sum(distinct c2)",
 			"int64|decimal",
 		),
-		`null|0`, `1|0`, `2|0`, `3|null`,
+		`null|0`,
+		`10|0`,
+		`20|0`,
+		`30|null`,
 	)
 
 	qr, err := oa.Execute(nil, nil, false)
