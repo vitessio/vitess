@@ -72,6 +72,7 @@ type (
 	TableSet uint64 // we can only join 64 tables with this underlying data type
 	// TODO : change uint64 to struct to support arbitrary number of tables.
 
+	// ExprDependencies stores the tables that an expression depends on as a map
 	ExprDependencies map[sqlparser.Expr]TableSet
 
 	// SemTable contains semantic analysis information about the query.
@@ -82,6 +83,7 @@ type (
 		ProjectionErr    error
 		exprDependencies ExprDependencies
 		selectScope      map[*sqlparser.Select]*scope
+		Comments         sqlparser.Comments
 	}
 
 	scope struct {
@@ -297,6 +299,7 @@ func (st *SemTable) Dependencies(expr sqlparser.Expr) TableSet {
 	return st.exprDependencies.Dependencies(expr)
 }
 
+// Dependencies return the table dependencies of the expression. This method finds table dependencies recursively
 func (d ExprDependencies) Dependencies(expr sqlparser.Expr) TableSet {
 	deps, found := d[expr]
 	if found {

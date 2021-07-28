@@ -47,6 +47,8 @@ type (
 		SetLock(lock Lock)
 		MakeDistinct()
 		GetColumnCount() int
+		SetComments(comments Comments)
+		GetComments() Comments
 	}
 
 	// DDLStatement represents any DDL Statement

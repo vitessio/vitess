@@ -59,14 +59,14 @@ func newAnalyzer(dbName string, si SchemaInformation) *analyzer {
 }
 
 // Analyze analyzes the parsed query.
-func Analyze(statement sqlparser.Statement, currentDb string, si SchemaInformation) (*SemTable, error) {
+func Analyze(statement sqlparser.SelectStatement, currentDb string, si SchemaInformation) (*SemTable, error) {
 	analyzer := newAnalyzer(currentDb, si)
 	// Initial scope
 	err := analyzer.analyze(statement)
 	if err != nil {
 		return nil, err
 	}
-	return &SemTable{exprDependencies: analyzer.exprDeps, Tables: analyzer.Tables, selectScope: analyzer.rScope, ProjectionErr: analyzer.projErr}, nil
+	return &SemTable{exprDependencies: analyzer.exprDeps, Tables: analyzer.Tables, selectScope: analyzer.rScope, ProjectionErr: analyzer.projErr, Comments: statement.GetComments()}, nil
 }
 
 func (a *analyzer) setError(err error) {
