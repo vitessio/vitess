@@ -24,6 +24,7 @@ import (
 type (
 	// Operator forms the tree of operators, representing the declarative query provided.
 	// An operator can be:
+	//	*  Derived - which represents an expression that generates a table.
 	//  *  QueryGraph - which represents a group of tables and predicates that can be evaluated in any order
 	//     while still preserving the results
 	//	*  LeftJoin - A left join. These can't be evaluated in any order, so we keep them separate
@@ -40,17 +41,31 @@ type (
 func getOperatorFromTableExpr(tableExpr sqlparser.TableExpr, semTable *semantics.SemTable) (Operator, error) {
 	switch tableExpr := tableExpr.(type) {
 	case *sqlparser.AliasedTableExpr:
-		qg := newQueryGraph()
-		tableName := tableExpr.Expr.(sqlparser.TableName)
-		tableID := semTable.TableSetFor(tableExpr)
-		tableInfo, err := semTable.TableInfoFor(tableID)
-		if err != nil {
-			return nil, err
+		switch tbl := tableExpr.Expr.(type) {
+		case sqlparser.TableName:
+			qg := newQueryGraph()
+			tableID := semTable.TableSetFor(tableExpr)
+			tableInfo, err := semTable.TableInfoFor(tableID)
+			if err != nil {
+				return nil, err
+			}
+			isInfSchema := tableInfo.IsInfSchema()
+			qt := &QueryTable{Alias: tableExpr, Table: tbl, TableID: tableID, IsInfSchema: isInfSchema}
+			qg.Tables = append(qg.Tables, qt)
+			return qg, nil
+		case *sqlparser.DerivedTable:
+			sel, isSel := tbl.Select.(*sqlparser.Select)
+			if !isSel {
+				return nil, semantics.Gen4NotSupportedF("UNION")
+			}
+			inner, err := CreateOperatorFromSelect(sel, semTable)
+			if err != nil {
+				return nil, err
+			}
+			return &Derived{Alias: tableExpr.As.String(), Inner: inner, Sel: sel}, nil
+		default:
+			return nil, semantics.Gen4NotSupportedF("%T", tbl)
 		}
-		isInfSchema := tableInfo.IsInfSchema()
-		qt := &QueryTable{Alias: tableExpr, Table: tableName, TableID: tableID, IsInfSchema: isInfSchema}
-		qg.Tables = append(qg.Tables, qt)
-		return qg, nil
 	case *sqlparser.JoinTableExpr:
 		switch tableExpr.Join {
 		case sqlparser.NormalJoinType:
