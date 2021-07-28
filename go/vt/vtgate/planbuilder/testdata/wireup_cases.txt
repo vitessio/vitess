@@ -144,7 +144,7 @@
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "1",
-    "JoinVars": null,
+    "JoinVars": {},
     "TableName": "`user`_`user`_`user`",
     "Inputs": [
       {
@@ -162,7 +162,9 @@
         "OperatorType": "Join",
         "Variant": "Join",
         "JoinColumnIndexes": "-2",
-        "JoinVars": null,
+        "JoinVars": {
+          "u1_col": 0
+        },
         "TableName": "`user`_`user`",
         "Inputs": [
           {
@@ -259,7 +261,7 @@
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-1",
-    "JoinVars": null,
+    "JoinVars": {},
     "TableName": "`user`_`user`_`user`",
     "Inputs": [
       {
@@ -276,7 +278,9 @@
       {
         "OperatorType": "Join",
         "Variant": "Join",
-        "JoinVars": null,
+        "JoinVars": {
+          "u2_col": 0
+        },
         "TableName": "`user`_`user`",
         "Inputs": [
           {
@@ -375,7 +379,9 @@
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "1",
-    "JoinVars": null,
+    "JoinVars": {
+      "u3_col": 0
+    },
     "TableName": "`user`_`user`_`user`",
     "Inputs": [
       {
@@ -393,7 +399,9 @@
         "OperatorType": "Join",
         "Variant": "Join",
         "JoinColumnIndexes": "-2",
-        "JoinVars": null,
+        "JoinVars": {
+          "u1_col": 0
+        },
         "TableName": "`user`_`user`",
         "Inputs": [
           {
@@ -519,7 +527,7 @@
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "1",
-    "JoinVars": null,
+    "JoinVars": {},
     "TableName": "`user`_`user`_`user`_`user`",
     "Inputs": [
       {
@@ -537,7 +545,9 @@
         "OperatorType": "Join",
         "Variant": "Join",
         "JoinColumnIndexes": "1",
-        "JoinVars": null,
+        "JoinVars": {
+          "u4_col": 0
+        },
         "TableName": "`user`_`user`_`user`",
         "Inputs": [
           {
@@ -555,7 +565,9 @@
             "OperatorType": "Join",
             "Variant": "Join",
             "JoinColumnIndexes": "-2",
-            "JoinVars": null,
+            "JoinVars": {
+              "u1_col": 0
+            },
             "TableName": "`user`_`user`",
             "Inputs": [
               {
@@ -665,14 +677,18 @@
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-2",
-    "JoinVars": null,
+    "JoinVars": {
+      "u1_col": 0
+    },
     "TableName": "`user`_`user`_`user`",
     "Inputs": [
       {
         "OperatorType": "Join",
         "Variant": "Join",
         "JoinColumnIndexes": "-1,-2",
-        "JoinVars": null,
+        "JoinVars": {
+          "u1_col": 0
+        },
         "TableName": "`user`_`user`",
         "Inputs": [
           {
@@ -768,7 +784,9 @@
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "1,-2",
-    "JoinVars": null,
+    "JoinVars": {
+      "unsharded_id": 0
+    },
     "TableName": "unsharded_`weird``name`",
     "Inputs": [
       {
@@ -847,7 +865,9 @@
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-2",
-    "JoinVars": null,
+    "JoinVars": {
+      "unsharded_id": 0
+    },
     "TableName": "unsharded_`weird``name`",
     "Inputs": [
       {
@@ -936,7 +956,9 @@
         "OperatorType": "Join",
         "Variant": "Join",
         "JoinColumnIndexes": "-2,1",
-        "JoinVars": null,
+        "JoinVars": {
+          "u_col": 0
+        },
         "TableName": "`user`_user_extra",
         "Inputs": [
           {

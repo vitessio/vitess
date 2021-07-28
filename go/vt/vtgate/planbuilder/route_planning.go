@@ -338,16 +338,24 @@ func pushJoinPredicate(exprs []sqlparser.Expr, tree joinTree, semTable *semantic
 		// we break up the predicates so that colnames from the LHS are replaced by arguments
 		var rhsPreds []sqlparser.Expr
 		var lhsColumns []*sqlparser.ColName
+		var lhsVarsName []string
 		lhsSolves := node.lhs.tableID()
 		for _, expr := range exprs {
-			cols, predicate, err := breakPredicateInLHSandRHS(expr, semTable, lhsSolves)
+			bvName, cols, predicate, err := breakPredicateInLHSandRHS(expr, semTable, lhsSolves)
 			if err != nil {
 				return nil, err
 			}
 			lhsColumns = append(lhsColumns, cols...)
+			lhsVarsName = append(lhsVarsName, bvName...)
 			rhsPreds = append(rhsPreds, predicate)
 		}
-		node.pushOutputColumns(lhsColumns, semTable)
+		if lhsColumns != nil && lhsVarsName != nil {
+			idxs := node.pushOutputColumns(lhsColumns, semTable)
+			for i, idx := range idxs {
+				node.vars[lhsVarsName[i]] = idx
+			}
+		}
+
 		rhsPlan, err := pushJoinPredicate(rhsPreds, node.rhs, semTable)
 		if err != nil {
 			return nil, err
@@ -357,13 +365,14 @@ func pushJoinPredicate(exprs []sqlparser.Expr, tree joinTree, semTable *semantic
 			lhs:   node.lhs,
 			rhs:   rhsPlan,
 			outer: node.outer,
+			vars:  node.vars,
 		}, nil
 	default:
 		panic(fmt.Sprintf("BUG: unknown type %T", node))
 	}
 }
 
-func breakPredicateInLHSandRHS(expr sqlparser.Expr, semTable *semantics.SemTable, lhs semantics.TableSet) (columns []*sqlparser.ColName, predicate sqlparser.Expr, err error) {
+func breakPredicateInLHSandRHS(expr sqlparser.Expr, semTable *semantics.SemTable, lhs semantics.TableSet) (bvNames []string, columns []*sqlparser.ColName, predicate sqlparser.Expr, err error) {
 	predicate = sqlparser.CloneExpr(expr)
 	_ = sqlparser.Rewrite(predicate, nil, func(cursor *sqlparser.Cursor) bool {
 		switch node := cursor.Node().(type) {
@@ -376,14 +385,16 @@ func breakPredicateInLHSandRHS(expr sqlparser.Expr, semTable *semantics.SemTable
 			if deps.IsSolvedBy(lhs) {
 				node.Qualifier.Qualifier = sqlparser.NewTableIdent("")
 				columns = append(columns, node)
-				arg := sqlparser.NewArgument(node.CompliantName())
+				bvName := node.CompliantName()
+				bvNames = append(bvNames, bvName)
+				arg := sqlparser.NewArgument(bvName)
 				cursor.Replace(arg)
 			}
 		}
 		return true
 	})
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	return
 }
@@ -398,7 +409,7 @@ func mergeOrJoin(lhs, rhs joinTree, joinPredicates []sqlparser.Expr, semTable *s
 		return newPlan, nil
 	}
 
-	tree := &joinPlan{lhs: lhs.clone(), rhs: rhs.clone(), outer: !inner}
+	tree := &joinPlan{lhs: lhs.clone(), rhs: rhs.clone(), outer: !inner, vars: map[string]int{}}
 	return pushJoinPredicate(joinPredicates, tree, semTable)
 }
 

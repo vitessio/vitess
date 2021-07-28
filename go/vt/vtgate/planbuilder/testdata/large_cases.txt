@@ -194,7 +194,7 @@
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "1",
-    "JoinVars": null,
+    "JoinVars": {},
     "TableName": "music, music_extra_`user`, user_extra, user_metadata_unsharded, unsharded_a, unsharded_auto, unsharded_b",
     "Inputs": [
       {
@@ -212,7 +212,7 @@
         "OperatorType": "Join",
         "Variant": "Join",
         "JoinColumnIndexes": "-1",
-        "JoinVars": null,
+        "JoinVars": {},
         "TableName": "`user`, user_extra, user_metadata_unsharded, unsharded_a, unsharded_auto, unsharded_b",
         "Inputs": [
           {

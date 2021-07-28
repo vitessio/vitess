@@ -634,7 +634,9 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-2,-3,1",
-    "JoinVars": null,
+    "JoinVars": {
+      "user_id": 0
+    },
     "TableName": "`user`_music",
     "Inputs": [
       {
@@ -726,7 +728,9 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-2,-3,1",
-    "JoinVars": null,
+    "JoinVars": {
+      "user_id": 0
+    },
     "TableName": "`user`_music",
     "Inputs": [
       {
@@ -1232,47 +1236,7 @@ Gen4 plan same as above
     ]
   }
 }
-{
-  "QueryType": "SELECT",
-  "Original": "select user.col from user join user_extra limit 1",
-  "Instructions": {
-    "OperatorType": "Limit",
-    "Count": 1,
-    "Inputs": [
-      {
-        "OperatorType": "Join",
-        "Variant": "Join",
-        "JoinColumnIndexes": "-1",
-        "JoinVars": null,
-        "TableName": "`user`_user_extra",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "SelectScatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select `user`.col from `user` where 1 != 1",
-            "Query": "select `user`.col from `user`",
-            "Table": "`user`"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "SelectScatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select 1 from user_extra where 1 != 1",
-            "Query": "select 1 from user_extra",
-            "Table": "user_extra"
-          }
-        ]
-      }
-    ]
-  }
-}
+Gen4 plan same as above
 
 # limit for scatter
 "select col from user limit 1"
@@ -1501,7 +1465,7 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-1",
-    "JoinVars": null,
+    "JoinVars": {},
     "TableName": "`user`_music",
     "Inputs": [
       {
@@ -1555,7 +1519,7 @@ Gen4 plan same as above
     ]
   }
 }
-Gen4 error: In aggregated query without GROUP BY, expression of SELECT list contains nonaggregated column 'num'; this is incompatible with sql_mode=only_full_group_by
+"In aggregated query without GROUP BY, expression of SELECT list contains nonaggregated column 'num'; this is incompatible with sql_mode=only_full_group_by"
 
 # aggregation and non-aggregations column with order by
 "select count(id), num from user order by 2"
@@ -1590,7 +1554,7 @@ Gen4 error: In aggregated query without GROUP BY, expression of SELECT list cont
     ]
   }
 }
-Gen4 error: In aggregated query without GROUP BY, expression of SELECT list contains nonaggregated column 'num'; this is incompatible with sql_mode=only_full_group_by
+"In aggregated query without GROUP BY, expression of SELECT list contains nonaggregated column 'num'; this is incompatible with sql_mode=only_full_group_by"
 
 # aggregation and non-aggregations column with group by
 "select count(id), num from user group by 2"
@@ -1722,7 +1686,7 @@ Gen4 error: In aggregated query without GROUP BY, expression of SELECT list cont
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-1,-1",
-    "JoinVars": null,
+    "JoinVars": {},
     "TableName": "`user`_music",
     "Inputs": [
       {
@@ -1776,7 +1740,7 @@ Gen4 error: In aggregated query without GROUP BY, expression of SELECT list cont
 # Scatter order by and aggregation: order by column must reference column from select list
 "select col, count(*) from user group by col order by c1"
 "unsupported: memory sort: order by must reference a column in the select list: c1 asc"
-Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains nonaggregated column 'c1' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by
+"Expression of SELECT list is not in GROUP BY clause and contains nonaggregated column 'c1' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by"
 
 # scatter aggregate with ambiguous aliases
 "select distinct a, b as a from user"

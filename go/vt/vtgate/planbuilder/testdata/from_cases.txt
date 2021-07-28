@@ -144,41 +144,7 @@ Gen4 plan same as above
     ]
   }
 }
-{
-  "QueryType": "SELECT",
-  "Original": "select music.col from user join music",
-  "Instructions": {
-    "OperatorType": "Join",
-    "Variant": "Join",
-    "JoinColumnIndexes": "1",
-    "JoinVars": null,
-    "TableName": "`user`_music",
-    "Inputs": [
-      {
-        "OperatorType": "Route",
-        "Variant": "SelectScatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select 1 from `user` where 1 != 1",
-        "Query": "select 1 from `user`",
-        "Table": "`user`"
-      },
-      {
-        "OperatorType": "Route",
-        "Variant": "SelectScatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select music.col from music where 1 != 1",
-        "Query": "select music.col from music",
-        "Table": "music"
-      }
-    ]
-  }
-}
+Gen4 plan same as above
 
 # routing rules where table name matches, and there's no alias.
 "select * from second_user.user"
@@ -317,41 +283,7 @@ Gen4 plan same as above
     ]
   }
 }
-{
-  "QueryType": "SELECT",
-  "Original": "select music.col from user, music",
-  "Instructions": {
-    "OperatorType": "Join",
-    "Variant": "Join",
-    "JoinColumnIndexes": "1",
-    "JoinVars": null,
-    "TableName": "`user`_music",
-    "Inputs": [
-      {
-        "OperatorType": "Route",
-        "Variant": "SelectScatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select 1 from `user` where 1 != 1",
-        "Query": "select 1 from `user`",
-        "Table": "`user`"
-      },
-      {
-        "OperatorType": "Route",
-        "Variant": "SelectScatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select music.col from music where 1 != 1",
-        "Query": "select music.col from music",
-        "Table": "music"
-      }
-    ]
-  }
-}
+Gen4 plan same as above
 
 # ',' join unsharded
 "select u1.a, u2.a from unsharded u1, unsharded u2"
@@ -456,7 +388,9 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "LeftJoin",
     "JoinColumnIndexes": "-2",
-    "JoinVars": null,
+    "JoinVars": {
+      "u_a": 0
+    },
     "TableName": "`user`_unsharded",
     "Inputs": [
       {
@@ -553,14 +487,18 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "LeftJoin",
     "JoinColumnIndexes": "-2,1",
-    "JoinVars": null,
+    "JoinVars": {
+      "m1_col": 0
+    },
     "TableName": "`user`_unsharded_unsharded",
     "Inputs": [
       {
         "OperatorType": "Join",
         "Variant": "LeftJoin",
         "JoinColumnIndexes": "1,-1",
-        "JoinVars": null,
+        "JoinVars": {
+          "user_col": 0
+        },
         "TableName": "`user`_unsharded",
         "Inputs": [
           {
@@ -669,7 +607,9 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "LeftJoin",
     "JoinColumnIndexes": "-1",
-    "JoinVars": null,
+    "JoinVars": {
+      "user_col": 0
+    },
     "TableName": "`user`_user_extra_unsharded",
     "Inputs": [
       {
@@ -686,7 +626,9 @@ Gen4 plan same as above
       {
         "OperatorType": "Join",
         "Variant": "LeftJoin",
-        "JoinVars": null,
+        "JoinVars": {
+          "e_col": 0
+        },
         "TableName": "user_extra_unsharded",
         "Inputs": [
           {
@@ -851,7 +793,7 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-1",
-    "JoinVars": null,
+    "JoinVars": {},
     "TableName": "`user`_unsharded",
     "Inputs": [
       {
@@ -924,7 +866,7 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-1",
-    "JoinVars": null,
+    "JoinVars": {},
     "TableName": "`user`_unsharded",
     "Inputs": [
       {
@@ -1016,7 +958,7 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "1",
-    "JoinVars": null,
+    "JoinVars": {},
     "TableName": "`user`_`user`_unsharded",
     "Inputs": [
       {
@@ -1034,7 +976,7 @@ Gen4 plan same as above
         "OperatorType": "Join",
         "Variant": "Join",
         "JoinColumnIndexes": "-1",
-        "JoinVars": null,
+        "JoinVars": {},
         "TableName": "`user`_unsharded",
         "Inputs": [
           {
@@ -1338,45 +1280,7 @@ Gen4 plan same as above
     ]
   }
 }
-{
-  "QueryType": "SELECT",
-  "Original": "select user.col from user join user_extra on user.id = 5",
-  "Instructions": {
-    "OperatorType": "Join",
-    "Variant": "Join",
-    "JoinColumnIndexes": "-1",
-    "JoinVars": null,
-    "TableName": "`user`_user_extra",
-    "Inputs": [
-      {
-        "OperatorType": "Route",
-        "Variant": "SelectEqualUnique",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select `user`.col from `user` where 1 != 1",
-        "Query": "select `user`.col from `user` where `user`.id = 5",
-        "Table": "`user`",
-        "Values": [
-          5
-        ],
-        "Vindex": "user_index"
-      },
-      {
-        "OperatorType": "Route",
-        "Variant": "SelectScatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select 1 from user_extra where 1 != 1",
-        "Query": "select 1 from user_extra",
-        "Table": "user_extra"
-      }
-    ]
-  }
-}
+Gen4 plan same as above
 
 # sharded join, non-col reference LHS
 "select user.col from user join user_extra on 5 = user.id"
@@ -1419,45 +1323,7 @@ Gen4 plan same as above
     ]
   }
 }
-{
-  "QueryType": "SELECT",
-  "Original": "select user.col from user join user_extra on 5 = user.id",
-  "Instructions": {
-    "OperatorType": "Join",
-    "Variant": "Join",
-    "JoinColumnIndexes": "-1",
-    "JoinVars": null,
-    "TableName": "`user`_user_extra",
-    "Inputs": [
-      {
-        "OperatorType": "Route",
-        "Variant": "SelectEqualUnique",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select `user`.col from `user` where 1 != 1",
-        "Query": "select `user`.col from `user` where `user`.id = 5",
-        "Table": "`user`",
-        "Values": [
-          5
-        ],
-        "Vindex": "user_index"
-      },
-      {
-        "OperatorType": "Route",
-        "Variant": "SelectScatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select 1 from user_extra where 1 != 1",
-        "Query": "select 1 from user_extra",
-        "Table": "user_extra"
-      }
-    ]
-  }
-}
+Gen4 plan same as above
 
 # sharded join, non-vindex col
 "select user.col from user join user_extra on user.id = user_extra.col"
@@ -1505,7 +1371,9 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "1",
-    "JoinVars": null,
+    "JoinVars": {
+      "user_extra_col": 0
+    },
     "TableName": "user_extra_`user`",
     "Inputs": [
       {
@@ -1588,7 +1456,9 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-2",
-    "JoinVars": null,
+    "JoinVars": {
+      "user_name": 0
+    },
     "TableName": "`user`_user_extra",
     "Inputs": [
       {
@@ -1765,41 +1635,7 @@ Gen4 plan same as above
     ]
   }
 }
-{
-  "QueryType": "SELECT",
-  "Original": "select route2.col from route2 join user_extra",
-  "Instructions": {
-    "OperatorType": "Join",
-    "Variant": "Join",
-    "JoinColumnIndexes": "-1",
-    "JoinVars": null,
-    "TableName": "unsharded_user_extra",
-    "Inputs": [
-      {
-        "OperatorType": "Route",
-        "Variant": "SelectUnsharded",
-        "Keyspace": {
-          "Name": "main",
-          "Sharded": false
-        },
-        "FieldQuery": "select route2.col from unsharded as route2 where 1 != 1",
-        "Query": "select route2.col from unsharded as route2",
-        "Table": "unsharded"
-      },
-      {
-        "OperatorType": "Route",
-        "Variant": "SelectScatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select 1 from user_extra where 1 != 1",
-        "Query": "select 1 from user_extra",
-        "Table": "user_extra"
-      }
-    ]
-  }
-}
+Gen4 plan same as above
 
 # subquery
 "select id from (select id, col from user where id = 5) as t"
@@ -2058,41 +1894,7 @@ Gen4 plan same as above
     ]
   }
 }
-{
-  "QueryType": "SELECT",
-  "Original": "select unsharded.foo from information_schema.a join unsharded",
-  "Instructions": {
-    "OperatorType": "Join",
-    "Variant": "Join",
-    "JoinColumnIndexes": "1",
-    "JoinVars": null,
-    "TableName": "information_schema.a_unsharded",
-    "Inputs": [
-      {
-        "OperatorType": "Route",
-        "Variant": "SelectDBA",
-        "Keyspace": {
-          "Name": "main",
-          "Sharded": false
-        },
-        "FieldQuery": "select 1 from information_schema.a where 1 != 1",
-        "Query": "select 1 from information_schema.a",
-        "Table": "information_schema.a"
-      },
-      {
-        "OperatorType": "Route",
-        "Variant": "SelectUnsharded",
-        "Keyspace": {
-          "Name": "main",
-          "Sharded": false
-        },
-        "FieldQuery": "select unsharded.foo from unsharded where 1 != 1",
-        "Query": "select unsharded.foo from unsharded",
-        "Table": "unsharded"
-      }
-    ]
-  }
-}
+Gen4 plan same as above
 
 # join of normal table with information_schema
 "select unsharded.foo from unsharded join information_schema.a"
@@ -2131,41 +1933,7 @@ Gen4 plan same as above
     ]
   }
 }
-{
-  "QueryType": "SELECT",
-  "Original": "select unsharded.foo from unsharded join information_schema.a",
-  "Instructions": {
-    "OperatorType": "Join",
-    "Variant": "Join",
-    "JoinColumnIndexes": "-1",
-    "JoinVars": null,
-    "TableName": "unsharded_information_schema.a",
-    "Inputs": [
-      {
-        "OperatorType": "Route",
-        "Variant": "SelectUnsharded",
-        "Keyspace": {
-          "Name": "main",
-          "Sharded": false
-        },
-        "FieldQuery": "select unsharded.foo from unsharded where 1 != 1",
-        "Query": "select unsharded.foo from unsharded",
-        "Table": "unsharded"
-      },
-      {
-        "OperatorType": "Route",
-        "Variant": "SelectDBA",
-        "Keyspace": {
-          "Name": "main",
-          "Sharded": false
-        },
-        "FieldQuery": "select 1 from information_schema.a where 1 != 1",
-        "Query": "select 1 from information_schema.a",
-        "Table": "information_schema.a"
-      }
-    ]
-  }
-}
+Gen4 plan same as above
 
 # wire-up on join with cross-shard subquery
 "select t.col1 from (select user.id, user.col1 from user join user_extra) as t join unsharded on unsharded.col1 = t.col1 and unsharded.id = t.id"
@@ -2689,7 +2457,9 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-2,1",
-    "JoinVars": null,
+    "JoinVars": {
+      "user_col2": 0
+    },
     "TableName": "`user`_unsharded",
     "Inputs": [
       {
@@ -2956,7 +2726,9 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "1",
-    "JoinVars": null,
+    "JoinVars": {
+      "user_extra_id": 0
+    },
     "TableName": "user_extra_`user`",
     "Inputs": [
       {
@@ -2982,6 +2754,95 @@ Gen4 plan same as above
         "Table": "`user`",
         "Values": [
           ":user_extra_id"
+        ],
+        "Vindex": "user_index"
+      }
+    ]
+  }
+}
+
+# join with bindvariables
+"SELECT `user`.`id` FROM `user` INNER JOIN `user_extra` ON `user`.`id` = `user_extra`.`assembly_id` WHERE `user_extra`.`user_id` = 2"
+{
+  "QueryType": "SELECT",
+  "Original": "SELECT `user`.`id` FROM `user` INNER JOIN `user_extra` ON `user`.`id` = `user_extra`.`assembly_id` WHERE `user_extra`.`user_id` = 2",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "-1",
+    "JoinVars": {
+      "user_id": 0
+    },
+    "TableName": "`user`_user_extra",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select `user`.id from `user` where 1 != 1",
+        "Query": "select `user`.id from `user`",
+        "Table": "`user`"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectEqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select 1 from user_extra where 1 != 1",
+        "Query": "select 1 from user_extra where user_extra.assembly_id = :user_id and user_extra.user_id = 2",
+        "Table": "user_extra",
+        "Values": [
+          2
+        ],
+        "Vindex": "user_index"
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "SELECT `user`.`id` FROM `user` INNER JOIN `user_extra` ON `user`.`id` = `user_extra`.`assembly_id` WHERE `user_extra`.`user_id` = 2",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "1",
+    "JoinVars": {
+      "user_extra_assembly_id": 0
+    },
+    "TableName": "user_extra_`user`",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectEqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select user_extra.assembly_id from user_extra where 1 != 1",
+        "Query": "select user_extra.assembly_id from user_extra where user_extra.user_id = 2",
+        "Table": "user_extra",
+        "Values": [
+          2
+        ],
+        "Vindex": "user_index"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectEqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select `user`.id from `user` where 1 != 1",
+        "Query": "select `user`.id from `user` where `user`.id = :user_extra_assembly_id",
+        "Table": "`user`",
+        "Values": [
+          ":user_extra_assembly_id"
         ],
         "Vindex": "user_index"
       }
