@@ -29,6 +29,7 @@
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-1,1",
+    "JoinVars": {},
     "TableName": "`user`_user_extra",
     "Inputs": [
       {
@@ -66,6 +67,7 @@
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-1,-2,1",
+    "JoinVars": {},
     "TableName": "`user`_user_extra",
     "Inputs": [
       {
@@ -539,6 +541,9 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-1,-2,1",
+    "JoinVars": {
+      "user_id": 2
+    },
     "TableName": "`user`_music",
     "Inputs": [
       {
@@ -584,6 +589,9 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-1,-2,1",
+    "JoinVars": {
+      "user_id": 2
+    },
     "TableName": "`user`_music",
     "Inputs": [
       {
@@ -626,6 +634,7 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-2,-3,1",
+    "JoinVars": null,
     "TableName": "`user`_music",
     "Inputs": [
       {
@@ -672,6 +681,9 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-1,-2,1",
+    "JoinVars": {
+      "user_id": 2
+    },
     "TableName": "`user`_music",
     "Inputs": [
       {
@@ -714,6 +726,7 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-2,-3,1",
+    "JoinVars": null,
     "TableName": "`user`_music",
     "Inputs": [
       {
@@ -813,6 +826,9 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-1,-2,1",
+    "JoinVars": {
+      "user_id": 2
+    },
     "TableName": "`user`_music",
     "Inputs": [
       {
@@ -962,6 +978,9 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-1,1",
+    "JoinVars": {
+      "u_col": 1
+    },
     "TableName": "`user`_user_extra",
     "Inputs": [
       {
@@ -1183,6 +1202,7 @@ Gen4 plan same as above
         "OperatorType": "Join",
         "Variant": "Join",
         "JoinColumnIndexes": "-1",
+        "JoinVars": {},
         "TableName": "`user`_user_extra",
         "Inputs": [
           {
@@ -1212,7 +1232,47 @@ Gen4 plan same as above
     ]
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select user.col from user join user_extra limit 1",
+  "Instructions": {
+    "OperatorType": "Limit",
+    "Count": 1,
+    "Inputs": [
+      {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "-1",
+        "JoinVars": null,
+        "TableName": "`user`_user_extra",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select `user`.col from `user` where 1 != 1",
+            "Query": "select `user`.col from `user`",
+            "Table": "`user`"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from user_extra where 1 != 1",
+            "Query": "select 1 from user_extra",
+            "Table": "user_extra"
+          }
+        ]
+      }
+    ]
+  }
+}
 
 # limit for scatter
 "select col from user limit 1"
@@ -1404,6 +1464,7 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-1",
+    "JoinVars": {},
     "TableName": "`user`_music",
     "Inputs": [
       {
@@ -1440,6 +1501,7 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-1",
+    "JoinVars": null,
     "TableName": "`user`_music",
     "Inputs": [
       {
@@ -1660,6 +1722,7 @@ Gen4 error: In aggregated query without GROUP BY, expression of SELECT list cont
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-1,-1",
+    "JoinVars": null,
     "TableName": "`user`_music",
     "Inputs": [
       {

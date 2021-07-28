@@ -450,6 +450,7 @@ Gen4 error: Unknown table 'a'
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-1",
+    "JoinVars": null,
     "TableName": "`user`_user_extra",
     "Inputs": [
       {
@@ -487,6 +488,7 @@ Gen4 error: Unknown table 'a'
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-1,1",
+    "JoinVars": {},
     "TableName": "`user`_user_extra",
     "Inputs": [
       {
@@ -628,6 +630,7 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "1",
+    "JoinVars": {},
     "TableName": "`user`_user_extra",
     "Inputs": [
       {
@@ -655,7 +658,41 @@ Gen4 plan same as above
     ]
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select user_extra.id from user join user_extra",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "1",
+    "JoinVars": null,
+    "TableName": "`user`_user_extra",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select 1 from `user` where 1 != 1",
+        "Query": "select 1 from `user`",
+        "Table": "`user`"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select user_extra.id from user_extra where 1 != 1",
+        "Query": "select user_extra.id from user_extra",
+        "Table": "user_extra"
+      }
+    ]
+  }
+}
 
 # Both routes referenced
 "select user.col, user_extra.id from user join user_extra"
@@ -666,6 +703,7 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-1,1",
+    "JoinVars": {},
     "TableName": "`user`_user_extra",
     "Inputs": [
       {
@@ -693,7 +731,41 @@ Gen4 plan same as above
     ]
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select user.col, user_extra.id from user join user_extra",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "-1,1",
+    "JoinVars": null,
+    "TableName": "`user`_user_extra",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select `user`.col from `user` where 1 != 1",
+        "Query": "select `user`.col from `user`",
+        "Table": "`user`"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select user_extra.id from user_extra where 1 != 1",
+        "Query": "select user_extra.id from user_extra",
+        "Table": "user_extra"
+      }
+    ]
+  }
+}
 
 # Expression with single-route reference
 "select user.col, user_extra.id + user_extra.col from user join user_extra"
@@ -704,6 +776,7 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-1,1",
+    "JoinVars": {},
     "TableName": "`user`_user_extra",
     "Inputs": [
       {
@@ -731,7 +804,41 @@ Gen4 plan same as above
     ]
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select user.col, user_extra.id + user_extra.col from user join user_extra",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "-1,1",
+    "JoinVars": null,
+    "TableName": "`user`_user_extra",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select `user`.col from `user` where 1 != 1",
+        "Query": "select `user`.col from `user`",
+        "Table": "`user`"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select user_extra.id + user_extra.col from user_extra where 1 != 1",
+        "Query": "select user_extra.id + user_extra.col from user_extra",
+        "Table": "user_extra"
+      }
+    ]
+  }
+}
 
 # Jumbled references
 "select user.col, user_extra.id, user.col2 from user join user_extra"
@@ -742,6 +849,7 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-1,1,-2",
+    "JoinVars": {},
     "TableName": "`user`_user_extra",
     "Inputs": [
       {
@@ -769,7 +877,41 @@ Gen4 plan same as above
     ]
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select user.col, user_extra.id, user.col2 from user join user_extra",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "-1,1,-2",
+    "JoinVars": null,
+    "TableName": "`user`_user_extra",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select `user`.col, `user`.col2 from `user` where 1 != 1",
+        "Query": "select `user`.col, `user`.col2 from `user`",
+        "Table": "`user`"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select user_extra.id from user_extra where 1 != 1",
+        "Query": "select user_extra.id from user_extra",
+        "Table": "user_extra"
+      }
+    ]
+  }
+}
 
 # Comments
 "select /* comment */ user.col from user join user_extra"
@@ -780,6 +922,7 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-1",
+    "JoinVars": {},
     "TableName": "`user`_user_extra",
     "Inputs": [
       {
@@ -817,6 +960,7 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-1",
+    "JoinVars": {},
     "TableName": "`user`_user_extra",
     "Inputs": [
       {
@@ -854,6 +998,9 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-1,1",
+    "JoinVars": {
+      "user_id": 0
+    },
     "TableName": "`user`_unsharded",
     "Inputs": [
       {
@@ -891,6 +1038,7 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-1,1",
+    "JoinVars": {},
     "TableName": "`user`_user_extra",
     "Inputs": [
       {
@@ -918,7 +1066,41 @@ Gen4 plan same as above
     ]
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select user.Col, user_extra.Id from user join user_extra",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "-1,1",
+    "JoinVars": null,
+    "TableName": "`user`_user_extra",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select `user`.Col from `user` where 1 != 1",
+        "Query": "select `user`.Col from `user`",
+        "Table": "`user`"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select user_extra.Id from user_extra where 1 != 1",
+        "Query": "select user_extra.Id from user_extra",
+        "Table": "user_extra"
+      }
+    ]
+  }
+}
 
 # syntax error
 "the quick brown fox"
@@ -1241,6 +1423,7 @@ Gen4 plan same as above
         "OperatorType": "Join",
         "Variant": "Join",
         "JoinColumnIndexes": "-1,1",
+        "JoinVars": {},
         "TableName": "`user`_user_extra",
         "Inputs": [
           {
@@ -1754,6 +1937,7 @@ Gen4 plan same as above
         "OperatorType": "Join",
         "Variant": "Join",
         "JoinColumnIndexes": "-1",
+        "JoinVars": {},
         "TableName": "`user`_user_extra",
         "Inputs": [
           {
@@ -1796,6 +1980,7 @@ Gen4 plan same as above
         "OperatorType": "Join",
         "Variant": "Join",
         "JoinColumnIndexes": "-1,-2",
+        "JoinVars": null,
         "TableName": "`user`_user_extra",
         "Inputs": [
           {
