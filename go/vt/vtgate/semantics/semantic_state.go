@@ -84,7 +84,7 @@ type (
 	TableSet uint64 // we can only join 64 tables with this underlying data type
 	// TODO : change uint64 to struct to support arbitrary number of tables.
 
-	// ExprDependencies stores the tables that an expr references
+	// ExprDependencies stores the tables that an expression depends on as a map
 	ExprDependencies map[sqlparser.Expr]TableSet
 
 	// SemTable contains semantic analysis information about the query.
@@ -105,6 +105,7 @@ type (
 
 		exprTypes   map[sqlparser.Expr]querypb.Type
 		selectScope map[*sqlparser.Select]*scope
+		Comments         sqlparser.Comments
 	}
 
 	scope struct {
@@ -422,7 +423,7 @@ func (st *SemTable) TypeFor(e sqlparser.Expr) *querypb.Type {
 	return nil
 }
 
-// Dependencies return the table dependencies of the expression.
+// Dependencies return the table dependencies of the expression. This method finds table dependencies recursively
 func (d ExprDependencies) Dependencies(expr sqlparser.Expr) TableSet {
 	deps, found := d[expr]
 	if found {

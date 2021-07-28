@@ -95,6 +95,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4 plan same as above
 
 # select limit with timeout directive sets QueryTimeout in the route
 "select /*vt+ QUERY_TIMEOUT_MS=1000 */ * from user limit 10"
@@ -164,6 +165,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4 plan same as above
 
 # select aggregation with partial scatter directive - added comments to try to confuse the hint extraction
 "/*VT_SPAN_CONTEXT=123*/select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ count(*) from user"
@@ -190,6 +192,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4 plan same as above
 
 # select limit with partial scatter directive
 "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ * from user limit 10"
@@ -807,6 +810,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4 plan same as above
 
 # for update
 "select user.col from user join user_extra for update"
@@ -1448,6 +1452,7 @@ Gen4 plan same as above
     "Table": "unsharded"
   }
 }
+Gen4 plan same as above
 
 # testing SingleRow Projection
 "select 42"

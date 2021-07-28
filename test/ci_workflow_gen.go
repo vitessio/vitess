@@ -54,6 +54,7 @@ var (
 		"vreplication_basic",
 		"vreplication_multicell",
 		"vreplication_cellalias",
+		"vstream_failover",
 		"vreplication_v2",
 		"onlineddl_ghost",
 		"onlineddl_vrepl",
