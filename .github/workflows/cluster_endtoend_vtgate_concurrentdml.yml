@@ -2,8 +2,11 @@
 
 name: Cluster (vtgate_concurrentdml)
 on: [push, pull_request]
-jobs:
+concurrency:
+  group: format('{0}-{1}', ${{ github.ref }}, 'Cluster (vtgate_concurrentdml)')
+  cancel-in-progress: true
 
+jobs:
   build:
     name: Run endtoend tests on Cluster (vtgate_concurrentdml)
     runs-on: ubuntu-18.04

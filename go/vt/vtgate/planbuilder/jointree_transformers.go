@@ -29,24 +29,57 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
-func transformToLogicalPlan(tree joinTree, semTable *semantics.SemTable) (logicalPlan, error) {
+func transformToLogicalPlan(tree queryTree, semTable *semantics.SemTable, processing *postProcessor) (logicalPlan, error) {
 	switch n := tree.(type) {
-	case *routePlan:
-		return transformRoutePlan(n)
+	case *routeTree:
+		return transformRoutePlan(n, semTable)
 
-	case *joinPlan:
-		return transformJoinPlan(n, semTable)
+	case *joinTree:
+		return transformJoinPlan(n, semTable, processing)
+
+	case *derivedTree:
+		// transforming the inner part of the derived table into a logical plan
+		// so that we can do horizon planning on the inner. If the logical plan
+		// we've produced is a Route, we set its Select.From field to be an aliased
+		// expression containing our derived table's inner select and the derived
+		// table's alias.
+
+		plan, err := transformToLogicalPlan(n.inner, semTable, processing)
+		if err != nil {
+			return nil, err
+		}
+		processing.inDerived = true
+		plan, err = processing.planHorizon(plan, n.query)
+		if err != nil {
+			return nil, err
+		}
+		processing.inDerived = false
+
+		rb, isRoute := plan.(*route)
+		if !isRoute {
+			return plan, nil
+		}
+		innerSelect := rb.Select
+		derivedTable := &sqlparser.DerivedTable{Select: innerSelect}
+		tblExpr := &sqlparser.AliasedTableExpr{
+			Expr: derivedTable,
+			As:   sqlparser.NewTableIdent(n.alias),
+		}
+		rb.Select = &sqlparser.Select{
+			From: []sqlparser.TableExpr{tblExpr},
+		}
+		return plan, nil
 	}
 
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unknown type encountered: %T", tree)
 }
 
-func transformJoinPlan(n *joinPlan, semTable *semantics.SemTable) (logicalPlan, error) {
-	lhs, err := transformToLogicalPlan(n.lhs, semTable)
+func transformJoinPlan(n *joinTree, semTable *semantics.SemTable, processing *postProcessor) (logicalPlan, error) {
+	lhs, err := transformToLogicalPlan(n.lhs, semTable, processing)
 	if err != nil {
 		return nil, err
 	}
-	rhs, err := transformToLogicalPlan(n.rhs, semTable)
+	rhs, err := transformToLogicalPlan(n.rhs, semTable, processing)
 	if err != nil {
 		return nil, err
 	}
@@ -63,7 +96,7 @@ func transformJoinPlan(n *joinPlan, semTable *semantics.SemTable) (logicalPlan, 
 	}, nil
 }
 
-func transformRoutePlan(n *routePlan) (*route, error) {
+func transformRoutePlan(n *routeTree, semTable *semantics.SemTable) (*route, error) {
 	var tablesForSelect sqlparser.TableExprs
 	tableNameMap := map[string]interface{}{}
 
@@ -156,6 +189,7 @@ func transformRoutePlan(n *routePlan) (*route, error) {
 			SelectExprs: expressions,
 			From:        tablesForSelect,
 			Where:       where,
+			Comments:    semTable.Comments,
 		},
 		tables: n.solved,
 	}, nil
@@ -204,6 +238,26 @@ func relToTableExpr(t relation) (sqlparser.TableExpr, error) {
 			Condition: sqlparser.JoinCondition{
 				On: t.pred,
 			},
+		}, nil
+	case *derivedTable:
+		innerTables, err := relToTableExpr(t.tables)
+		if err != nil {
+			return nil, err
+		}
+		tbls := innerTables.(*sqlparser.ParenTableExpr)
+
+		sel := &sqlparser.Select{
+			SelectExprs: t.query.SelectExprs,
+			From:        tbls.Exprs,
+			Where:       &sqlparser.Where{Expr: sqlparser.AndExpressions(t.predicates...)},
+		}
+		expr := &sqlparser.DerivedTable{
+			Select: sel,
+		}
+		return &sqlparser.AliasedTableExpr{
+			Expr:       expr,
+			Partitions: nil,
+			As:         sqlparser.NewTableIdent(t.alias),
 		}, nil
 	default:
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unknown relation type: %T", t)

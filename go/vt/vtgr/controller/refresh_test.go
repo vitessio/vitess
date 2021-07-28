@@ -119,6 +119,26 @@ func TestRefreshWithEmptyCells(t *testing.T) {
 	assert.Equal(t, "cell3-0000000002", instances[2].alias)
 }
 
+func TestLockRelease(t *testing.T) {
+	ctx := context.Background()
+	ts := memorytopo.NewServer("cell1", "cell2", "cell3")
+	defer ts.Close()
+	ts.CreateKeyspace(ctx, "ks", &topodatapb.Keyspace{})
+	ts.CreateShard(ctx, "ks", "0")
+	cfg := &config.VTGRConfig{GroupSize: 3, MinNumReplica: 0, BackoffErrorWaitTimeSeconds: 1, BootstrapWaitTimeSeconds: 1}
+	shard := NewGRShard("ks", "0", nil, nil, ts, nil, cfg, testPort0)
+	ctx, err := shard.LockShard(ctx, "")
+	assert.NoError(t, err)
+	// make sure we get the lock
+	err = shard.checkShardLocked(ctx)
+	assert.NoError(t, err)
+	assert.NotNil(t, shard.unlock)
+	shard.UnlockShard()
+	assert.Nil(t, shard.unlock)
+	err = shard.checkShardLocked(ctx)
+	assert.EqualError(t, err, "lost topology lock; aborting: shard ks/0 is not locked (no lockInfo in map)")
+}
+
 func buildTabletInfo(id uint32, host string, mysqlPort int, ttype topodatapb.TabletType, masterTermTime time.Time) *topo.TabletInfo {
 	return buildTabletInfoWithCell(id, host, "test_cell", mysqlPort, ttype, masterTermTime)
 }

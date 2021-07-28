@@ -55,7 +55,7 @@ func pushProjection(expr *sqlparser.AliasedExpr, plan logicalPlan, semTable *sem
 	case *joinGen4:
 		lhsSolves := node.Left.ContainsTables()
 		rhsSolves := node.Right.ContainsTables()
-		deps := semTable.Dependencies(expr.Expr)
+		deps := semTable.GetBaseTableDependencies(expr.Expr)
 		var column int
 		var appended bool
 		switch {
@@ -103,19 +103,27 @@ func removeQualifierFromColName(expr *sqlparser.AliasedExpr) *sqlparser.AliasedE
 
 func checkIfAlreadyExists(expr *sqlparser.AliasedExpr, sel *sqlparser.Select) int {
 	for i, selectExpr := range sel.SelectExprs {
-		if selectExpr, ok := selectExpr.(*sqlparser.AliasedExpr); ok {
-			if selectExpr.As.IsEmpty() {
-				// we don't have an alias, so we can compare the expressions
-				if sqlparser.EqualsExpr(selectExpr.Expr, expr.Expr) {
-					return i
-				}
-				// we have an aliased column, so let's check if the expression is matching the alias
-			} else if colName, ok := expr.Expr.(*sqlparser.ColName); ok {
-				if selectExpr.As.Equal(colName.Name) {
-					return i
-				}
-			}
+		selectExpr, ok := selectExpr.(*sqlparser.AliasedExpr)
+		if !ok {
+			continue
+		}
 
+		selectExprCol, isSelectExprCol := selectExpr.Expr.(*sqlparser.ColName)
+		exprCol, isExprCol := expr.Expr.(*sqlparser.ColName)
+
+		if selectExpr.As.IsEmpty() {
+			// we don't have an alias
+
+			if isSelectExprCol && isExprCol && exprCol.Name.Equal(selectExprCol.Name) {
+				// the expressions are ColName, we compare their name
+				return i
+			} else if sqlparser.EqualsExpr(selectExpr.Expr, expr.Expr) {
+				// the expressions are not ColName, so we just compare the expressions
+				return i
+			}
+		} else if isExprCol && selectExpr.As.Equal(exprCol.Name) {
+			// we have an aliased column, checking if the the expression is matching the alias
+			return i
 		}
 	}
 	return -1
@@ -395,16 +403,15 @@ func wrapAndPushExpr(expr sqlparser.Expr, weightStrExpr sqlparser.Expr, plan log
 	if weightStrExpr == nil {
 		return offset, -1, added, nil
 	}
-	colName, ok := expr.(*sqlparser.ColName)
+	_, ok := expr.(*sqlparser.ColName)
 	if !ok {
 		return 0, 0, false, semantics.Gen4NotSupportedF("group by/order by non-column expression")
 	}
-	table := semTable.Dependencies(colName)
-	tbl, err := semTable.TableInfoFor(table)
-	if err != nil {
-		return 0, 0, false, err
+	qt := semTable.TypeFor(expr)
+	wsNeeded := true
+	if qt != nil && sqltypes.IsNumber(*qt) {
+		wsNeeded = false
 	}
-	wsNeeded := needsWeightString(tbl, colName)
 
 	weightStringOffset := -1
 	var wAdded bool
@@ -427,15 +434,6 @@ func weightStringFor(expr sqlparser.Expr) sqlparser.Expr {
 		},
 	}
 
-}
-
-func needsWeightString(tbl semantics.TableInfo, colName *sqlparser.ColName) bool {
-	for _, c := range tbl.GetColumns() {
-		if colName.Name.String() == c.Name {
-			return !sqltypes.IsNumber(c.Type)
-		}
-	}
-	return true // we didn't find the column. better to add just to be safe1
 }
 
 func (hp *horizonPlanning) planOrderByForJoin(orderExprs []abstract.OrderBy, plan *joinGen4) (logicalPlan, error) {
@@ -523,7 +521,7 @@ func (hp *horizonPlanning) createMemorySortPlan(plan logicalPlan, orderExprs []a
 
 func allLeft(orderExprs []abstract.OrderBy, semTable *semantics.SemTable, lhsTables semantics.TableSet) bool {
 	for _, expr := range orderExprs {
-		exprDependencies := semTable.Dependencies(expr.Inner.Expr)
+		exprDependencies := semTable.GetBaseTableDependencies(expr.Inner.Expr)
 		if !exprDependencies.IsSolvedBy(lhsTables) {
 			return false
 		}

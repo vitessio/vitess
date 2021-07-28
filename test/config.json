@@ -875,7 +875,7 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_multicell",
-			"RetryMax": 0,
+			"RetryMax": 1,
 			"Tags": []
 		},
 		"vreplication_materialize": {
@@ -884,7 +884,7 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_multicell",
-			"RetryMax": 0,
+			"RetryMax": 1,
 			"Tags": []
 		},
 		"vreplication_cellalias": {
@@ -893,7 +893,7 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_cellalias",
-			"RetryMax": 0,
+			"RetryMax": 1,
 			"Tags": []
 		},
 		"vreplication_basic": {
@@ -902,7 +902,16 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_basic",
-			"RetryMax": 0,
+			"RetryMax": 1,
+			"Tags": []
+		},
+		"vstream_failover": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "VStreamFailover"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vstream_failover",
+			"RetryMax": 1,
 			"Tags": []
 		},
 		"vtorc": {
@@ -929,7 +938,7 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_v2",
-			"RetryMax": 0,
+			"RetryMax": 1,
 			"Tags": []
 		},
 		"vreplication_migrate": {
@@ -938,7 +947,16 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_migrate",
-			"RetryMax": 0,
+			"RetryMax": 1,
+			"Tags": []
+		},
+		"vstream_failover": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestVStreamFailover"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vstream_failover",
+			"RetryMax": 1,
 			"Tags": []
 		}
 	}
