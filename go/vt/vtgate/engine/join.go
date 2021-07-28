@@ -261,7 +261,9 @@ func (jn *Join) description() PrimitiveDescription {
 	other := map[string]interface{}{
 		"TableName":         jn.GetTableName(),
 		"JoinColumnIndexes": strings.Trim(strings.Join(strings.Fields(fmt.Sprint(jn.Cols)), ","), "[]"),
-		"JoinVars":          jn.Vars,
+	}
+	if len(jn.Vars) > 0 {
+		other["JoinVars"] = jn.Vars
 	}
 	return PrimitiveDescription{
 		OperatorType: "Join",

@@ -731,7 +731,6 @@ Gen4 plan same as above
             "OperatorType": "Join",
             "Variant": "Join",
             "JoinColumnIndexes": "-1,-2",
-            "JoinVars": {},
             "TableName": "`user`_user_extra",
             "Inputs": [
               {
@@ -802,7 +801,6 @@ Gen4 plan same as above
             "OperatorType": "Join",
             "Variant": "Join",
             "JoinColumnIndexes": "-1,-2",
-            "JoinVars": {},
             "TableName": "`user`_user_extra",
             "Inputs": [
               {

@@ -96,7 +96,6 @@
         "OperatorType": "Join",
         "Variant": "Join",
         "JoinColumnIndexes": "-1,-2",
-        "JoinVars": {},
         "TableName": "`user`_`user`",
         "Inputs": [
           {
@@ -144,7 +143,6 @@
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "1",
-    "JoinVars": {},
     "TableName": "`user`_`user`_`user`",
     "Inputs": [
       {
@@ -213,7 +211,6 @@
         "OperatorType": "Join",
         "Variant": "Join",
         "JoinColumnIndexes": "-1,1",
-        "JoinVars": {},
         "TableName": "`user`_`user`",
         "Inputs": [
           {
@@ -261,7 +258,6 @@
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-1",
-    "JoinVars": {},
     "TableName": "`user`_`user`_`user`",
     "Inputs": [
       {
@@ -462,7 +458,6 @@
             "OperatorType": "Join",
             "Variant": "Join",
             "JoinColumnIndexes": "-1,-2",
-            "JoinVars": {},
             "TableName": "`user`_`user`",
             "Inputs": [
               {
@@ -527,7 +522,6 @@
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "1",
-    "JoinVars": {},
     "TableName": "`user`_`user`_`user`_`user`",
     "Inputs": [
       {
@@ -632,7 +626,6 @@
       {
         "OperatorType": "Join",
         "Variant": "Join",
-        "JoinVars": {},
         "TableName": "`user`_`user`",
         "Inputs": [
           {
