@@ -66,6 +66,8 @@ type controller struct {
 	tabletPicker *discovery.TabletPicker
 	dbClient     binlogplayer.DBClient
 
+	overrideDbClientClose bool
+
 	cancel context.CancelFunc
 	done   chan struct{}
 
@@ -205,7 +207,12 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 			log.Errorf("cannot apply withDDL init query '%s': %v", query, err)
 		}
 	}
-	defer dbClient.Close()
+	defer func() {
+		fmt.Printf("=========== zzz defer 	dbClient.Close(): overrideDbClientClose=%v\n", ct.overrideDbClientClose)
+		if !ct.overrideDbClientClose {
+			dbClient.Close()
+		}
+	}()
 
 	ct.dbClient = dbClient
 	fmt.Printf("====== zzz seting dbClient for controller %v. Is nil? %v\n", ct.id, (ct.dbClient == nil))

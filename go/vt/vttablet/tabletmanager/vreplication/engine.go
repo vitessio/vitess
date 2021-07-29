@@ -358,6 +358,7 @@ func (vre *Engine) CutOverOnlineDDL(id int, tableName string, vreplTableName str
 	if err := vre.WaitForPos(vre.ctx, id, mysql.EncodePosition(postWritesPos)); err != nil {
 		return err
 	}
+	ct.overrideDbClientClose = true
 	// pos reached. stop vreplication and rename tables
 	fmt.Printf("============ zzz CutOverOnlineDDL: stopping vrepl\n")
 	if _, err := vre.ExecWithDBA(binlogplayer.StopVReplication(uint32(id), "stopped for online DDL cutover")); err != nil {
@@ -372,7 +373,10 @@ func (vre *Engine) CutOverOnlineDDL(id int, tableName string, vreplTableName str
 	if _, err := ct.executeFetch(swapTablesQuery.Query, 1); err != nil {
 		return err
 	}
-	// tables will be unlocked by virtual of earlier defer
+
+	// Actively unlock again
+	ct.executeFetch("unlock tables", 1)
+	ct.dbClient.Close()
 	fmt.Printf("============ zzz CutOverOnlineDDL: DONE\n")
 
 	return nil
