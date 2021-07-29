@@ -614,6 +614,9 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 		if err := tmClient.VReplicationCutOverOnlineDDL(ctx, tablet.Tablet, int(s.id), onlineDDL.Table, vreplTable); err != nil {
 			return err
 		}
+		if err := e.updateAtomicCutover(ctx, s.workflow); err != nil {
+			return err
+		}
 	} else {
 		// No atomic cut-over, we use two-step cut-over, where we stop writes, rename original table away,
 		// wait for pos, stop vreplication, rename vrepl table in place of the original table, resume writes
@@ -2607,6 +2610,18 @@ func (e *Executor) updateTabletFailure(ctx context.Context, uuid string) error {
 		return err
 	}
 	_, err = e.execQuery(ctx, bound)
+	return err
+}
+
+// updateAtomicCutover marks a given migration as having been cut-over atomically (no queries rejected)
+func (e *Executor) updateAtomicCutover(ctx context.Context, uuid string) error {
+	query, err := sqlparser.ParseAndBind(sqlUpdateAtomicCutover,
+		sqltypes.StringBindVariable(uuid),
+	)
+	if err != nil {
+		return err
+	}
+	_, err = e.execQuery(ctx, query)
 	return err
 }
 

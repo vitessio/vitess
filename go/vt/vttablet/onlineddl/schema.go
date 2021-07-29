@@ -60,6 +60,7 @@ const (
 	alterSchemaMigrationsTableTableRows          = "ALTER TABLE _vt.schema_migrations add column table_rows bigint NOT NULL DEFAULT 0"
 	alterSchemaMigrationsTableAddedUniqueKeys    = "ALTER TABLE _vt.schema_migrations add column added_unique_keys int unsigned NOT NULL DEFAULT 0"
 	alterSchemaMigrationsTableRemovedUniqueKeys  = "ALTER TABLE _vt.schema_migrations add column removed_unique_keys int unsigned NOT NULL DEFAULT 0"
+	alterSchemaMigrationsTableAtomicCutover      = "ALTER TABLE _vt.schema_migrations add column atomic_cutover tinyint unsigned NOT NULL DEFAULT 0"
 
 	sqlInsertMigration = `INSERT IGNORE INTO _vt.schema_migrations (
 		migration_uuid,
@@ -142,6 +143,11 @@ const (
 	`
 	sqlUpdateTabletFailure = `UPDATE _vt.schema_migrations
 			SET tablet_failure=1
+		WHERE
+			migration_uuid=%a
+	`
+	sqlUpdateAtomicCutover = `UPDATE _vt.schema_migrations
+			SET atomic_cutover=1
 		WHERE
 			migration_uuid=%a
 	`
@@ -513,4 +519,5 @@ var ApplyDDL = []string{
 	alterSchemaMigrationsTableTableRows,
 	alterSchemaMigrationsTableAddedUniqueKeys,
 	alterSchemaMigrationsTableRemovedUniqueKeys,
+	alterSchemaMigrationsTableAtomicCutover,
 }
