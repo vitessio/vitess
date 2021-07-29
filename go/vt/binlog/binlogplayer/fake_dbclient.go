@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"strings"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 )
 
@@ -79,4 +80,9 @@ func (dc *fakeDBClient) ExecuteFetch(query string, maxrows int) (qr *sqltypes.Re
 		return &sqltypes.Result{}, nil
 	}
 	return nil, fmt.Errorf("unexpected: %v", query)
+}
+
+// PrimaryPosition returns the position (e.g. GTID position) for this connection
+func (dc *fakeDBClient) PrimaryPosition() (mysql.Position, error) {
+	return mysql.Position{}, nil
 }

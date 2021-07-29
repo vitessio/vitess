@@ -266,13 +266,13 @@ func (client *FakeTabletManagerClient) VReplicationExec(ctx context.Context, tab
 	return sqltypes.ResultToProto3(result), nil
 }
 
-// VReplicationExecInConnection is part of the tmclient.TabletManagerClient interface.
-func (client *FakeTabletManagerClient) VReplicationExecInConnection(ctx context.Context, tablet *topodatapb.Tablet, id int, query string) (*querypb.QueryResult, error) {
-	return client.VReplicationExec(ctx, tablet, query)
-}
-
 // VReplicationWaitForPos is part of the tmclient.TabletManagerClient interface.
 func (client *FakeTabletManagerClient) VReplicationWaitForPos(ctx context.Context, tablet *topodatapb.Tablet, id int, pos string) error {
+	return nil
+}
+
+// VReplicationCutOverOnlineDDL is part of the tmclient.TabletManagerClient interface.
+func (client *FakeTabletManagerClient) VReplicationCutOverOnlineDDL(ctx context.Context, tablet *topodatapb.Tablet, id int, tableName string, vreplTabeName string) error {
 	return nil
 }
 

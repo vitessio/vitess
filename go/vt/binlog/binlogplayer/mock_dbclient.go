@@ -22,6 +22,7 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 )
 
@@ -198,4 +199,9 @@ func (dc *MockDBClient) ExecuteFetch(query string, maxrows int) (qr *sqltypes.Re
 		close(dc.done)
 	}
 	return result.result, result.err
+}
+
+// PrimaryPosition is part of the DBClient interface
+func (dc *MockDBClient) PrimaryPosition() (mysql.Position, error) {
+	return mysql.Position{}, nil
 }

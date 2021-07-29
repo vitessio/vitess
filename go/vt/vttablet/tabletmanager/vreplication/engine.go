@@ -27,6 +27,7 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
@@ -36,6 +37,8 @@ import (
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/schema"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -315,13 +318,75 @@ func (vre *Engine) getDBClient(isAdmin bool) binlogplayer.DBClient {
 	return vre.dbClientFactoryFiltered()
 }
 
+// CutOverOnlineDDL runs the sequence of commands to complete an OnlineDDL migration
+func (vre *Engine) CutOverOnlineDDL(id int, tableName string, vreplTableName string) error {
+	fmt.Printf("============ zzz CutOverOnlineDDL: %v, %v, %v\n", id, tableName, vreplTableName)
+	var ct *controller
+
+	func() {
+		vre.mu.Lock()
+		defer vre.mu.Unlock()
+
+		ct = vre.controllers[id]
+	}()
+	if ct == nil {
+		return fmt.Errorf("vreplication stream %d not found", id)
+	}
+	fmt.Printf("============ zzz CutOverOnlineDDL: ct.id=%v\n", ct.id)
+
+	swapTableName, err := schema.GenerateGCTableName(schema.HoldTableGCState, time.Now().Add(time.Hour))
+	if err != nil {
+		return err
+	}
+	fmt.Printf("============ zzz CutOverOnlineDDL: swapTableName=%v\n", swapTableName)
+	// Lock
+	lockTablesQuery := sqlparser.BuildParsedQuery("LOCK TABLES _vt.vreplication WRITE, `%a` WRITE, `%a` WRITE",
+		tableName,
+		vreplTableName,
+	)
+	fmt.Printf("============ zzz CutOverOnlineDDL: lockTablesQuery=%v\n", lockTablesQuery.Query)
+	if _, err := ct.executeFetch(lockTablesQuery.Query, 1); err != nil {
+		return err
+	}
+	defer ct.executeFetch("unlock tables", 1)
+	// Wait for pos
+	postWritesPos, err := ct.dbClient.PrimaryPosition()
+	if err != nil {
+		return err
+	}
+	fmt.Printf("============ zzz CutOverOnlineDDL: postWritesPos=%v\n", mysql.EncodePosition(postWritesPos))
+	if err := vre.WaitForPos(vre.ctx, id, mysql.EncodePosition(postWritesPos)); err != nil {
+		return err
+	}
+	// pos reached. stop vreplication and rename tables
+	fmt.Printf("============ zzz CutOverOnlineDDL: stopping vrepl\n")
+	if _, err := vre.ExecWithDBA(binlogplayer.StopVReplication(uint32(id), "stopped for online DDL cutover")); err != nil {
+		return err
+	}
+	swapTablesQuery := sqlparser.BuildParsedQuery("RENAME TABLE `%a` TO `%a`, `%a` TO `%a`, `%a` TO `%a`",
+		tableName, swapTableName,
+		vreplTableName, tableName,
+		swapTableName, vreplTableName,
+	)
+	fmt.Printf("============ zzz CutOverOnlineDDL: swapTablesQuery=%v\n", swapTablesQuery.Query)
+	if _, err := ct.executeFetch(swapTablesQuery.Query, 1); err != nil {
+		return err
+	}
+	// tables will be unlocked by virtual of earlier defer
+	fmt.Printf("============ zzz CutOverOnlineDDL: DONE\n")
+
+	return nil
+}
+
 // ExecInVReplicationConnection runs the specified query via the database connection
 // used in the specifid stream
 func (vre *Engine) ExecInVReplicationConnection(id int, query string) (*sqltypes.Result, error) {
 	vre.mu.Lock()
 	defer vre.mu.Unlock()
 
+	fmt.Printf("============ zzz ExecInVReplicationConnection: %d, %s\n", id, query)
 	if ct := vre.controllers[id]; ct != nil {
+		fmt.Printf("============ zzz ExecInVReplicationConnection: executing\n")
 		return ct.executeFetch(query, 10000)
 	}
 	return nil, fmt.Errorf("vreplication stream %d not found", id)

@@ -604,111 +604,114 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 		ctx = lctx
 		defer unlockKeyspace(&err)
 	}
-	toggleWrites := func(allowWrites bool) error {
-		if _, err := e.ts.UpdateShardFields(ctx, e.keyspace, shardInfo.ShardName(), func(si *topo.ShardInfo) error {
-			err := si.UpdateSourceBlacklistedTables(ctx, topodatapb.TabletType_MASTER, nil, allowWrites, []string{onlineDDL.Table})
-			return err
-		}); err != nil {
-			return err
-		}
-		if err := tmClient.RefreshState(ctx, tablet.Tablet); err != nil {
-			return err
-		}
-		return nil
-	}
 	lockTablesRenameSupported, err := e.supportsLockTablesRename(ctx)
 	if err != nil {
 		return err
 	}
 
-	switch {
-	case isVreplicationTestSuite:
-		{
-			// The testing suite may inject queries internally from the server via a recurring EVENT.
-			// Those queries are unaffected by UpdateSourceBlacklistedTables() because they don't go through Vitess.
-			// We therefore hard-rename the table here, such that the queries will hard-fail.
-			beforeTableName := fmt.Sprintf("%s_before", onlineDDL.Table)
-			parsed := sqlparser.BuildParsedQuery(sqlRenameTable,
-				onlineDDL.Table, beforeTableName,
-			)
-			if _, err = e.execQuery(ctx, parsed.Query); err != nil {
-				return err
-			}
-		}
-	case lockTablesRenameSupported:
-		{
-		}
-	default:
-		{ // Normal (non-testing) alter table
-			// stop writes on source:
-			if err := toggleWrites(false); err != nil {
-				return err
-			}
-			defer toggleWrites(true)
-		}
-	}
-
-	postWritesPos, err := e.primaryPosition(ctx)
-	if err != nil {
-		return err
-	}
-	_ = e.updateMigrationTimestamp(ctx, "liveness_timestamp", s.workflow)
-
-	// Writes are now disabled on table. Read up-to-date vreplication info, specifically to get latest (and fixed) pos:
-	s, err = e.readVReplStream(ctx, s.workflow, false)
-	if err != nil {
-		return err
-	}
-
-	waitForPos := func() error {
-		ctx, cancel := context.WithTimeout(ctx, 2*vreplicationCutOverThreshold)
-		defer cancel()
-		// Wait for target to reach the up-to-date pos
-		if err := tmClient.VReplicationWaitForPos(ctx, tablet.Tablet, int(s.id), mysql.EncodePosition(postWritesPos)); err != nil {
+	if lockTablesRenameSupported {
+		// Atomic cut-over, to be executed by vreplication
+		if err := tmClient.VReplicationCutOverOnlineDDL(ctx, tablet.Tablet, int(s.id), onlineDDL.Table, vreplTable); err != nil {
 			return err
 		}
-		// Target is now in sync with source!
-		return nil
-	}
-	log.Infof("VReplication migration %v waiting for position %v", s.workflow, mysql.EncodePosition(postWritesPos))
-	if err := waitForPos(); err != nil {
-		return err
-	}
-	// Stop vreplication
-	if _, err := tmClient.VReplicationExec(ctx, tablet.Tablet, binlogplayer.StopVReplication(uint32(s.id), "stopped for online DDL cutover")); err != nil {
-		return err
-	}
-
-	// rename tables atomically (remember, writes on source tables are stopped)
-
-	switch {
-	case isVreplicationTestSuite:
-		{
-			// this is used in Vitess endtoend testing suite
-			afterTableName := fmt.Sprintf("%s_after", onlineDDL.Table)
-			parsed := sqlparser.BuildParsedQuery(sqlRenameTable,
-				vreplTable, afterTableName,
-			)
-			if _, err = e.execQuery(ctx, parsed.Query); err != nil {
+	} else {
+		// No atomic cut-over, we use two-step cut-over, where we stop writes, rename original table away,
+		// wait for pos, stop vreplication, rename vrepl table in place of the original table, resume writes
+		toggleWrites := func(allowWrites bool) error {
+			if _, err := e.ts.UpdateShardFields(ctx, e.keyspace, shardInfo.ShardName(), func(si *topo.ShardInfo) error {
+				err := si.UpdateSourceBlacklistedTables(ctx, topodatapb.TabletType_MASTER, nil, allowWrites, []string{onlineDDL.Table})
+				return err
+			}); err != nil {
 				return err
 			}
-		}
-	case lockTablesRenameSupported:
-		{
-		}
-	default:
-		{ // Normal (non-testing) alter table
-			parsed := sqlparser.BuildParsedQuery(sqlSwapTables,
-				onlineDDL.Table, swapTable,
-				vreplTable, onlineDDL.Table,
-				swapTable, vreplTable,
-			)
-			if _, err = e.execQuery(ctx, parsed.Query); err != nil {
+			if err := tmClient.RefreshState(ctx, tablet.Tablet); err != nil {
 				return err
+			}
+			return nil
+		}
+
+		switch {
+		case isVreplicationTestSuite:
+			{
+				// The testing suite may inject queries internally from the server via a recurring EVENT.
+				// Those queries are unaffected by UpdateSourceBlacklistedTables() because they don't go through Vitess.
+				// We therefore hard-rename the table here, such that the queries will hard-fail.
+				beforeTableName := fmt.Sprintf("%s_before", onlineDDL.Table)
+				parsed := sqlparser.BuildParsedQuery(sqlRenameTable,
+					onlineDDL.Table, beforeTableName,
+				)
+				if _, err = e.execQuery(ctx, parsed.Query); err != nil {
+					return err
+				}
+			}
+		default:
+			{ // Normal (non-testing) alter table
+				// stop writes on source:
+				if err := toggleWrites(false); err != nil {
+					return err
+				}
+				defer toggleWrites(true)
+			}
+		}
+
+		postWritesPos, err := e.primaryPosition(ctx)
+		if err != nil {
+			return err
+		}
+		_ = e.updateMigrationTimestamp(ctx, "liveness_timestamp", s.workflow)
+
+		// Writes are now disabled on table. Read up-to-date vreplication info, specifically to get latest (and fixed) pos:
+		s, err = e.readVReplStream(ctx, s.workflow, false)
+		if err != nil {
+			return err
+		}
+
+		waitForPos := func() error {
+			ctx, cancel := context.WithTimeout(ctx, 2*vreplicationCutOverThreshold)
+			defer cancel()
+			// Wait for target to reach the up-to-date pos
+			if err := tmClient.VReplicationWaitForPos(ctx, tablet.Tablet, int(s.id), mysql.EncodePosition(postWritesPos)); err != nil {
+				return err
+			}
+			// Target is now in sync with source!
+			return nil
+		}
+		log.Infof("VReplication migration %v waiting for position %v", s.workflow, mysql.EncodePosition(postWritesPos))
+		if err := waitForPos(); err != nil {
+			return err
+		}
+		// Stop vreplication
+		if _, err := tmClient.VReplicationExec(ctx, tablet.Tablet, binlogplayer.StopVReplication(uint32(s.id), "stopped for online DDL cutover")); err != nil {
+			return err
+		}
+
+		// rename tables atomically (remember, writes on source tables are stopped)
+
+		switch {
+		case isVreplicationTestSuite:
+			{
+				// this is used in Vitess endtoend testing suite
+				afterTableName := fmt.Sprintf("%s_after", onlineDDL.Table)
+				parsed := sqlparser.BuildParsedQuery(sqlRenameTable,
+					vreplTable, afterTableName,
+				)
+				if _, err = e.execQuery(ctx, parsed.Query); err != nil {
+					return err
+				}
+			}
+		default:
+			{ // Normal (non-testing) alter table
+				parsed := sqlparser.BuildParsedQuery(sqlSwapTables,
+					onlineDDL.Table, swapTable,
+					vreplTable, onlineDDL.Table,
+					swapTable, vreplTable,
+				)
+				if _, err = e.execQuery(ctx, parsed.Query); err != nil {
+					return err
+				}
 			}
 		}
 	}
-
 	go func() {
 		// Tables are swapped! Let's take the opportunity to ReloadSchema now
 		// We do this in a goroutine because it might take time on a schema with thousands of tables, and we don't want to delay

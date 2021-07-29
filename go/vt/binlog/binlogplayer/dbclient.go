@@ -35,6 +35,7 @@ type DBClient interface {
 	Rollback() error
 	Close()
 	ExecuteFetch(query string, maxrows int) (qr *sqltypes.Result, err error)
+	PrimaryPosition() (mysql.Position, error)
 }
 
 // dbClientImpl is a real DBClient backed by a mysql connection.
@@ -122,4 +123,9 @@ func (dc *dbClientImpl) ExecuteFetch(query string, maxrows int) (*sqltypes.Resul
 		return nil, err
 	}
 	return mqr, nil
+}
+
+// PrimaryPosition returns the position (e.g. GTID position) for this connection
+func (dc *dbClientImpl) PrimaryPosition() (mysql.Position, error) {
+	return dc.dbConn.PrimaryPosition()
 }

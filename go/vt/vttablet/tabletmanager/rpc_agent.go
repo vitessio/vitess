@@ -107,8 +107,8 @@ type RPCTM interface {
 
 	// VReplication API
 	VReplicationExec(ctx context.Context, query string) (*querypb.QueryResult, error)
-	VReplicationExecInConnection(ctx context.Context, id int, query string) (*querypb.QueryResult, error)
 	VReplicationWaitForPos(ctx context.Context, id int, pos string) error
+	VReplicationCutOverOnlineDDL(ctx context.Context, id int, tableName string, vreplTableName string) error
 
 	// Reparenting related functions
 

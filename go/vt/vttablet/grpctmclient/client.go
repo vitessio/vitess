@@ -683,20 +683,6 @@ func (client *Client) VReplicationExec(ctx context.Context, tablet *topodatapb.T
 	return response.Result, nil
 }
 
-// VReplicationExecInConnection is part of the tmclient.TabletManagerClient interface.
-func (client *Client) VReplicationExecInConnection(ctx context.Context, tablet *topodatapb.Tablet, id int, query string) (*querypb.QueryResult, error) {
-	c, closer, err := client.dialer.dial(ctx, tablet)
-	if err != nil {
-		return nil, err
-	}
-	defer closer.Close()
-	response, err := c.VReplicationExecInConnection(ctx, &tabletmanagerdatapb.VReplicationExecInConnectionRequest{Id: int64(id), Query: query})
-	if err != nil {
-		return nil, err
-	}
-	return response.Result, nil
-}
-
 // VReplicationWaitForPos is part of the tmclient.TabletManagerClient interface.
 func (client *Client) VReplicationWaitForPos(ctx context.Context, tablet *topodatapb.Tablet, id int, pos string) error {
 	c, closer, err := client.dialer.dial(ctx, tablet)
@@ -705,6 +691,19 @@ func (client *Client) VReplicationWaitForPos(ctx context.Context, tablet *topoda
 	}
 	defer closer.Close()
 	if _, err = c.VReplicationWaitForPos(ctx, &tabletmanagerdatapb.VReplicationWaitForPosRequest{Id: int64(id), Position: pos}); err != nil {
+		return err
+	}
+	return nil
+}
+
+// VReplicationCutOverOnlineDDL is part of the tmclient.TabletManagerClient interface.
+func (client *Client) VReplicationCutOverOnlineDDL(ctx context.Context, tablet *topodatapb.Tablet, id int, tableName string, vreplTableName string) error {
+	c, closer, err := client.dialer.dial(ctx, tablet)
+	if err != nil {
+		return err
+	}
+	defer closer.Close()
+	if _, err = c.VReplicationCutOverOnlineDDL(ctx, &tabletmanagerdatapb.VReplicationCutOverOnlineDDLRequest{Id: int64(id), TableName: tableName, VreplTableName: vreplTableName}); err != nil {
 		return err
 	}
 	return nil

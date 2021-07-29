@@ -151,8 +151,8 @@ type TabletManagerClient interface {
 
 	// VReplicationExec executes a VReplication command
 	VReplicationExec(ctx context.Context, tablet *topodatapb.Tablet, query string) (*querypb.QueryResult, error)
-	VReplicationExecInConnection(ctx context.Context, tablet *topodatapb.Tablet, id int, query string) (*querypb.QueryResult, error)
 	VReplicationWaitForPos(ctx context.Context, tablet *topodatapb.Tablet, id int, pos string) error
+	VReplicationCutOverOnlineDDL(ctx context.Context, tablet *topodatapb.Tablet, id int, tableName string, vreplTableName string) error
 
 	//
 	// Reparenting related functions

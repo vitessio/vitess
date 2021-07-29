@@ -422,6 +422,11 @@ func (dbc *realDBClient) ExecuteFetch(query string, maxrows int) (*sqltypes.Resu
 	return qr, err
 }
 
+// PrimaryPosition is part of the DBClient interface
+func (dbc *realDBClient) PrimaryPosition() (mysql.Position, error) {
+	return dbc.conn.PrimaryPosition()
+}
+
 func expectDeleteQueries(t *testing.T) {
 	t.Helper()
 	expectNontxQueries(t, []string{
