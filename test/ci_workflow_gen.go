@@ -34,6 +34,12 @@ const (
 
 	clusterTestTemplate       = "templates/cluster_endtoend_test.tpl"
 	workflowBuildkitePipeline = "../.buildkite/pipeline.yml"
+
+	initialPipeline = `env:
+  GOROOT: "/usr/local/go"
+  PATH: "/usr/local/go/bin:$PATH"
+steps:
+`
 )
 
 var (
@@ -255,11 +261,7 @@ func setupBuildkitePipelineFile() error {
 		return err
 	}
 	f.WriteString("# DO NOT MODIFY: THIS FILE IS GENERATED USING \"make generate_ci_workflows\"\n\n")
-	f.WriteString(`env:
-  GOROOT: "/usr/local/go"
-  PATH: "/usr/local/go/bin:$PATH"
-steps:
-`)
+	f.WriteString(initialPipeline)
 	return nil
 }
 
