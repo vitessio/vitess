@@ -492,6 +492,7 @@ Gen4 plan same as above
     "Table": "`user`"
   }
 }
+Gen4 plan same as above
 
 # ORDER BY after pull-out subquery
 "select col from user where col in (select col2 from user) order by col"
