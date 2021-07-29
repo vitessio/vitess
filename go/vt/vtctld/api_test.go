@@ -18,14 +18,13 @@ package vtctld
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
-
-	"context"
 
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/wrangler"
@@ -280,7 +279,6 @@ func TestAPI(t *testing.T) {
 					"start": "",
 					"end":"gA=="
 				},
-				"served_types": [],
 				"source_shards": [],
 				"tablet_controls": [],
 				"is_master_serving": true
