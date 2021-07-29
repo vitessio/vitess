@@ -71,6 +71,7 @@ type TabletManagerClient interface {
 	GetReplicas(ctx context.Context, in *tabletmanagerdata.GetReplicasRequest, opts ...grpc.CallOption) (*tabletmanagerdata.GetReplicasResponse, error)
 	// VReplication API
 	VReplicationExec(ctx context.Context, in *tabletmanagerdata.VReplicationExecRequest, opts ...grpc.CallOption) (*tabletmanagerdata.VReplicationExecResponse, error)
+	VReplicationExecInConnection(ctx context.Context, in *tabletmanagerdata.VReplicationExecInConnectionRequest, opts ...grpc.CallOption) (*tabletmanagerdata.VReplicationExecResponse, error)
 	VReplicationWaitForPos(ctx context.Context, in *tabletmanagerdata.VReplicationWaitForPosRequest, opts ...grpc.CallOption) (*tabletmanagerdata.VReplicationWaitForPosResponse, error)
 	// ResetReplication makes the target not replicating
 	ResetReplication(ctx context.Context, in *tabletmanagerdata.ResetReplicationRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ResetReplicationResponse, error)
@@ -407,6 +408,15 @@ func (c *tabletManagerClient) VReplicationExec(ctx context.Context, in *tabletma
 	return out, nil
 }
 
+func (c *tabletManagerClient) VReplicationExecInConnection(ctx context.Context, in *tabletmanagerdata.VReplicationExecInConnectionRequest, opts ...grpc.CallOption) (*tabletmanagerdata.VReplicationExecResponse, error) {
+	out := new(tabletmanagerdata.VReplicationExecResponse)
+	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/VReplicationExecInConnection", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *tabletManagerClient) VReplicationWaitForPos(ctx context.Context, in *tabletmanagerdata.VReplicationWaitForPosRequest, opts ...grpc.CallOption) (*tabletmanagerdata.VReplicationWaitForPosResponse, error) {
 	out := new(tabletmanagerdata.VReplicationWaitForPosResponse)
 	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/VReplicationWaitForPos", in, out, opts...)
@@ -680,6 +690,7 @@ type TabletManagerServer interface {
 	GetReplicas(context.Context, *tabletmanagerdata.GetReplicasRequest) (*tabletmanagerdata.GetReplicasResponse, error)
 	// VReplication API
 	VReplicationExec(context.Context, *tabletmanagerdata.VReplicationExecRequest) (*tabletmanagerdata.VReplicationExecResponse, error)
+	VReplicationExecInConnection(context.Context, *tabletmanagerdata.VReplicationExecInConnectionRequest) (*tabletmanagerdata.VReplicationExecResponse, error)
 	VReplicationWaitForPos(context.Context, *tabletmanagerdata.VReplicationWaitForPosRequest) (*tabletmanagerdata.VReplicationWaitForPosResponse, error)
 	// ResetReplication makes the target not replicating
 	ResetReplication(context.Context, *tabletmanagerdata.ResetReplicationRequest) (*tabletmanagerdata.ResetReplicationResponse, error)
@@ -820,6 +831,9 @@ func (UnimplementedTabletManagerServer) GetReplicas(context.Context, *tabletmana
 }
 func (UnimplementedTabletManagerServer) VReplicationExec(context.Context, *tabletmanagerdata.VReplicationExecRequest) (*tabletmanagerdata.VReplicationExecResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method VReplicationExec not implemented")
+}
+func (UnimplementedTabletManagerServer) VReplicationExecInConnection(context.Context, *tabletmanagerdata.VReplicationExecInConnectionRequest) (*tabletmanagerdata.VReplicationExecResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method VReplicationExecInConnection not implemented")
 }
 func (UnimplementedTabletManagerServer) VReplicationWaitForPos(context.Context, *tabletmanagerdata.VReplicationWaitForPosRequest) (*tabletmanagerdata.VReplicationWaitForPosResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method VReplicationWaitForPos not implemented")
@@ -1467,6 +1481,24 @@ func _TabletManager_VReplicationExec_Handler(srv interface{}, ctx context.Contex
 	return interceptor(ctx, in, info, handler)
 }
 
+func _TabletManager_VReplicationExecInConnection_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(tabletmanagerdata.VReplicationExecInConnectionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TabletManagerServer).VReplicationExecInConnection(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/tabletmanagerservice.TabletManager/VReplicationExecInConnection",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TabletManagerServer).VReplicationExecInConnection(ctx, req.(*tabletmanagerdata.VReplicationExecInConnectionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _TabletManager_VReplicationWaitForPos_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(tabletmanagerdata.VReplicationWaitForPosRequest)
 	if err := dec(in); err != nil {
@@ -1949,6 +1981,10 @@ var TabletManager_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "VReplicationExec",
 			Handler:    _TabletManager_VReplicationExec_Handler,
+		},
+		{
+			MethodName: "VReplicationExecInConnection",
+			Handler:    _TabletManager_VReplicationExecInConnection_Handler,
 		},
 		{
 			MethodName: "VReplicationWaitForPos",

@@ -121,9 +121,8 @@ service TabletManager {
 
   // VReplication API
   rpc VReplicationExec(tabletmanagerdata.VReplicationExecRequest) returns(tabletmanagerdata.VReplicationExecResponse) {};
+  rpc VReplicationExecInConnection(tabletmanagerdata.VReplicationExecInConnectionRequest) returns(tabletmanagerdata.VReplicationExecResponse) {};
   rpc VReplicationWaitForPos(tabletmanagerdata.VReplicationWaitForPosRequest) returns(tabletmanagerdata.VReplicationWaitForPosResponse) {};
-  rpc VReplicationLockTables(tabletmanagerdata.VReplicationLockTablesRequest) returns(tabletmanagerdata.VReplicationLockTablesResponse) {};
-  rpc VReplicationSwapTables(tabletmanagerdata.VReplicationSwapTablesRequest) returns(tabletmanagerdata.VReplicationSwapTablesResponse) {};
 
   //
   // Reparenting related functions

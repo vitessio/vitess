@@ -349,29 +349,17 @@ message VReplicationExecResponse {
   query.QueryResult result = 1;
 }
 
+message VReplicationExecInConnectionRequest {
+  int64 id = 1;
+  string query = 2;
+}
+
 message VReplicationWaitForPosRequest {
   int64 id = 1;
   string position = 2;
 }
 
 message VReplicationWaitForPosResponse {
-}
-
-message VReplicationLockTablesRequest {
-  string original_table = 1;
-  string vrepl_table = 2;
-}
-
-message VReplicationLockTablesResponse {
-}
-
-message VReplicationSwapTablesRequest {
-  string original_table = 1;
-  string vrepl_table = 2;
-  string swap_table = 3;
-}
-
-message VReplicationSwapTablesResponse {
 }
 
 message InitPrimaryRequest {
