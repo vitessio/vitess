@@ -321,7 +321,7 @@ func exprHasUniqueVindex(vschema ContextVSchema, semTable *semantics.SemTable, e
 	if !isCol {
 		return false
 	}
-	ts := semTable.GetBaseTableDependencies(expr)
+	ts := semTable.BaseTableDependencies(expr)
 	tableInfo, err := semTable.TableInfoFor(ts)
 	if err != nil {
 		return false
@@ -447,7 +447,7 @@ func breakPredicateInLHSandRHS(expr sqlparser.Expr, semTable *semantics.SemTable
 	_ = sqlparser.Rewrite(predicate, nil, func(cursor *sqlparser.Cursor) bool {
 		switch node := cursor.Node().(type) {
 		case *sqlparser.ColName:
-			deps := semTable.GetBaseTableDependencies(node)
+			deps := semTable.BaseTableDependencies(node)
 			if deps == 0 {
 				err = vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unknown column. has the AST been copied?")
 				return false
@@ -721,7 +721,7 @@ func findColumnVindex(a *routeTree, exp sqlparser.Expr, sem *semantics.SemTable)
 	if !isCol {
 		return nil
 	}
-	leftDep := sem.GetBaseTableDependencies(left)
+	leftDep := sem.BaseTableDependencies(left)
 
 	var singCol vindexes.SingleColumn
 
@@ -929,7 +929,7 @@ func createRoutePlanForOuter(aRoute, bRoute *routeTree, semTable *semantics.SemT
 	tables := bRoute.tables
 	// we are doing an outer join where the outer part contains multiple tables - we have to turn the outer part into a join or two
 	for _, predicate := range bRoute.predicates {
-		deps := semTable.GetBaseTableDependencies(predicate)
+		deps := semTable.BaseTableDependencies(predicate)
 		aTbl, bTbl, newTables := findTables(deps, tables)
 		tables = newTables
 		if aTbl != nil && bTbl != nil {
