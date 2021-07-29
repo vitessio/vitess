@@ -103,6 +103,38 @@ func TestJoinBindVars(t *testing.T) {
 	assertMatches(t, conn, `select t2.tcol1 from t2 join t3 on t2.tcol2 = t3.tcol2 where t2.tcol1 = 'A'`, `[[VARCHAR("A")] [VARCHAR("A")] [VARCHAR("A")] [VARCHAR("A")] [VARCHAR("A")] [VARCHAR("A")] [VARCHAR("A")] [VARCHAR("A")] [VARCHAR("A")] [VARCHAR("A")] [VARCHAR("A")]]`)
 }
 
+func TestDistinctAggregationFunc(t *testing.T) {
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	defer exec(t, conn, `delete from t2`)
+
+	// insert some data.
+	checkedExec(t, conn, `insert into t2(id, tcol1, tcol2) values (1, 'A', 'A'),(2, 'B', 'C'),(3, 'A', 'C'),(4, 'C', 'A'),(5, 'A', 'A'),(6, 'B', 'C'),(7, 'B', 'A'),(8, 'C', 'A')`)
+
+	// count on primary vindex
+	assertMatches(t, conn, `select tcol1, count(distinct id) from t2 group by tcol1`,
+		`[[VARCHAR("A") INT64(3)] [VARCHAR("B") INT64(3)] [VARCHAR("C") INT64(2)]]`)
+
+	// count on any column
+	assertMatches(t, conn, `select tcol1, count(distinct tcol2) from t2 group by tcol1`,
+		`[[VARCHAR("A") INT64(2)] [VARCHAR("B") INT64(2)] [VARCHAR("C") INT64(1)]]`)
+
+	// sum of columns
+	assertMatches(t, conn, `select sum(id), sum(tcol1) from t2`,
+		`[[DECIMAL(36) FLOAT64(0)]]`)
+
+	// sum on primary vindex
+	assertMatches(t, conn, `select tcol1, sum(distinct id) from t2 group by tcol1`,
+		`[[VARCHAR("A") DECIMAL(9)] [VARCHAR("B") DECIMAL(15)] [VARCHAR("C") DECIMAL(12)]]`)
+
+	// sum on any column
+	assertMatches(t, conn, `select tcol1, sum(distinct tcol2) from t2 group by tcol1`,
+		`[[VARCHAR("A") DECIMAL(0)] [VARCHAR("B") DECIMAL(0)] [VARCHAR("C") DECIMAL(0)]]`)
+}
+
 func assertMatches(t *testing.T, conn *mysql.Conn, query, expected string) {
 	t.Helper()
 	qr := checkedExec(t, conn, query)

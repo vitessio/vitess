@@ -33,7 +33,7 @@ func (cached *AggregateParams) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(48)
+		size += int64(72)
 	}
 	// field Alias string
 	size += int64(len(cached.Alias))
@@ -406,18 +406,18 @@ func (cached *OrderedAggregate) CachedSize(alloc bool) int64 {
 	if alloc {
 		size += int64(80)
 	}
-	// field Aggregates []vitess.io/vitess/go/vt/vtgate/engine.AggregateParams
+	// field Aggregates []*vitess.io/vitess/go/vt/vtgate/engine.AggregateParams
 	{
-		size += int64(cap(cached.Aggregates)) * int64(48)
+		size += int64(cap(cached.Aggregates)) * int64(8)
 		for _, elem := range cached.Aggregates {
-			size += elem.CachedSize(false)
+			size += elem.CachedSize(true)
 		}
 	}
-	// field GroupByKeys []vitess.io/vitess/go/vt/vtgate/engine.GroupByParams
+	// field GroupByKeys []*vitess.io/vitess/go/vt/vtgate/engine.GroupByParams
 	{
-		size += int64(cap(cached.GroupByKeys)) * int64(32)
+		size += int64(cap(cached.GroupByKeys)) * int64(8)
 		for _, elem := range cached.GroupByKeys {
-			size += elem.CachedSize(false)
+			size += elem.CachedSize(true)
 		}
 	}
 	// field Input vitess.io/vitess/go/vt/vtgate/engine.Primitive
