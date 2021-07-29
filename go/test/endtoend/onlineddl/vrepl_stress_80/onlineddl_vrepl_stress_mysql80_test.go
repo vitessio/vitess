@@ -267,19 +267,32 @@ func TestSchemaChange(t *testing.T) {
 		testName := fmt.Sprintf("ALTER TABLE with workload %d/%d", (i + 1), countIterations)
 		t.Run(testName, func(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
-			initTable(t)
-			var wg sync.WaitGroup
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				runMultipleConnections(ctx, t)
-			}()
-			hint := fmt.Sprintf("hint-alter-with-workload-%d", i)
-			uuid := testOnlineDDLStatement(t, fmt.Sprintf(alterHintStatement, hint), "online", "vtgate", hint)
-			onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
-			cancel() // will cause runMultipleConnections() to terminate
-			wg.Wait()
-			testSelectTableMetrics(t)
+			t.Run("initTable", func(t *testing.T) {
+				initTable(t)
+			})
+			var uuid string
+			t.Run("alter with workload", func(t *testing.T) {
+				var wg sync.WaitGroup
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					runMultipleConnections(ctx, t)
+				}()
+				hint := fmt.Sprintf("hint-alter-with-workload-%d", i)
+				uuid = testOnlineDDLStatement(t, fmt.Sprintf(alterHintStatement, hint), "online", "vtgate", hint)
+				onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+				cancel() // will cause runMultipleConnections() to terminate
+				wg.Wait()
+			})
+			t.Run("test metrics", func(t *testing.T) {
+				testSelectTableMetrics(t)
+			})
+			t.Run("verify atomic_cutover", func(t *testing.T) {
+				for _, row := range onlineddl.ReadMigrations(t, &vtParams, uuid).Named().Rows {
+					isAtomicCutover := (row.AsInt64("atomic_cutover", 0) == 1)
+					require.True(t, isAtomicCutover)
+				}
+			})
 		})
 	}
 }
@@ -452,11 +465,6 @@ func runSingleConnection(ctx context.Context, t *testing.T, done *int64) {
 			err = generateUpdate(t, conn)
 		case 2:
 			err = generateDelete(t, conn)
-		}
-		if err != nil {
-			if strings.Contains(err.Error(), "disallowed due to rule: enforce blacklisted tables") {
-				err = nil
-			}
 		}
 		assert.Nil(t, err)
 		time.Sleep(10 * time.Millisecond)
