@@ -378,7 +378,7 @@ var commands = []commandGroup{
 				"<tablet alias> ...",
 				"Lists specified tablets in an awk-friendly way."},
 			{"GenerateShardRanges", commandGenerateShardRanges,
-				"<num shards>",
+				"[-num_shards 2]",
 				"Generates shard ranges assuming a keyspace with N shards."},
 			{"Panic", commandPanic,
 				"",
