@@ -54,6 +54,10 @@ type (
 	GroupBy struct {
 		Inner         sqlparser.Expr
 		WeightStrExpr sqlparser.Expr
+
+		// This is to add the distinct function expression in grouping column for pushing down but not be to used as grouping key at VTGate level.
+		// Starts with 1 so that default (0) means unassigned.
+		DistinctAggrIndex int
 	}
 )
 
@@ -69,7 +73,8 @@ func CreateQPFromSelect(sel *sqlparser.Select) (*QueryProjection, error) {
 			return nil, semantics.Gen4NotSupportedF("%T in select list", selExp)
 		}
 
-		if err := checkForInvalidAggregations(exp); err != nil {
+		err := checkForInvalidAggregations(exp)
+		if err != nil {
 			return nil, err
 		}
 		col := SelectExpr{
@@ -136,9 +141,6 @@ func checkForInvalidAggregations(exp *sqlparser.AliasedExpr) error {
 		if ok && fExpr.IsAggregate() {
 			if len(fExpr.Exprs) != 1 {
 				return false, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.SyntaxError, "aggregate functions take a single argument '%s'", sqlparser.String(fExpr))
-			}
-			if fExpr.Distinct {
-				return false, semantics.Gen4NotSupportedF("distinct aggregation")
 			}
 		}
 		return true, nil

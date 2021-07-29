@@ -153,22 +153,42 @@ func (hp *horizonPlanning) planAggregations() error {
 	}
 
 	for _, e := range hp.qp.SelectExprs {
-		offset, _, err := pushProjection(e.Col, hp.plan, hp.semTable, true, false)
+		// push all expression if they are non-aggregating or the plan is not ordered aggregated plan.
+		if !e.Aggr || oa == nil {
+			_, _, err := pushProjection(e.Col, hp.plan, hp.semTable, true, false)
+			if err != nil {
+				return err
+			}
+			continue
+		}
+
+		fExpr, isFunc := e.Col.Expr.(*sqlparser.FuncExpr)
+		if !isFunc {
+			return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: in scatter query: complex aggregate expression")
+		}
+		opcode := engine.SupportedAggregates[fExpr.Name.Lowered()]
+		handleDistinct, innerAliased, err := hp.needDistinctHandling(fExpr, opcode, oa.input)
 		if err != nil {
 			return err
 		}
-		if e.Aggr && oa != nil {
-			fExpr, isFunc := e.Col.Expr.(*sqlparser.FuncExpr)
-			if !isFunc {
-				return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: in scatter query: complex aggregate expression")
-			}
-			opcode := engine.SupportedAggregates[fExpr.Name.Lowered()]
-			oa.eaggr.Aggregates = append(oa.eaggr.Aggregates, engine.AggregateParams{
-				Opcode: opcode,
-				Col:    offset,
-				Expr:   fExpr,
-			})
+
+		// Currently the OA engine primitive is able to handle only one distinct aggregation function.
+		// PreProcess being true tells that it is already handling it.
+		if oa.eaggr.PreProcess && handleDistinct {
+			return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "multiple distinct aggregation function")
 		}
+
+		pushExpr, alias, opcode := hp.createPushExprAndAlias(e, handleDistinct, innerAliased, opcode, oa)
+		offset, _, err := pushProjection(pushExpr, oa.input, hp.semTable, true, true)
+		if err != nil {
+			return err
+		}
+		oa.eaggr.Aggregates = append(oa.eaggr.Aggregates, &engine.AggregateParams{
+			Opcode: opcode,
+			Col:    offset,
+			Alias:  alias,
+			Expr:   fExpr,
+		})
 	}
 
 	for _, groupExpr := range hp.qp.GroupByExprs {
@@ -214,6 +234,44 @@ func (hp *horizonPlanning) planAggregations() error {
 	return nil
 }
 
+// createPushExprAndAlias creates the expression that should be pushed down to the leaves,
+// and changes the opcode so it is a distinct one if needed
+func (hp *horizonPlanning) createPushExprAndAlias(
+	expr abstract.SelectExpr,
+	handleDistinct bool,
+	innerAliased *sqlparser.AliasedExpr,
+	opcode engine.AggregateOpcode,
+	oa *orderedAggregate,
+) (*sqlparser.AliasedExpr, string, engine.AggregateOpcode) {
+	pushExpr := expr.Col
+	var alias string
+	if handleDistinct {
+		pushExpr = innerAliased
+
+		switch opcode {
+		case engine.AggregateCount:
+			opcode = engine.AggregateCountDistinct
+		case engine.AggregateSum:
+			opcode = engine.AggregateSumDistinct
+		}
+		if expr.Col.As.IsEmpty() {
+			alias = sqlparser.String(expr.Col.Expr)
+		} else {
+			alias = expr.Col.As.String()
+		}
+
+		oa.eaggr.PreProcess = true
+		hp.haveToTruncate(true)
+		by := abstract.GroupBy{
+			Inner:             innerAliased.Expr,
+			WeightStrExpr:     innerAliased.Expr,
+			DistinctAggrIndex: len(oa.eaggr.Aggregates) + 1,
+		}
+		hp.qp.GroupByExprs = append(hp.qp.GroupByExprs, by)
+	}
+	return pushExpr, alias, opcode
+}
+
 func hasUniqueVindex(vschema ContextVSchema, semTable *semantics.SemTable, groupByExprs []abstract.GroupBy) bool {
 	for _, groupByExpr := range groupByExprs {
 		if exprHasUniqueVindex(vschema, semTable, groupByExpr.WeightStrExpr) {
@@ -233,11 +291,18 @@ func planGroupByGen4(groupExpr abstract.GroupBy, plan logicalPlan, semTable *sem
 		_, _, added, err := wrapAndPushExpr(groupExpr.Inner, groupExpr.WeightStrExpr, node, semTable)
 		return added, err
 	case *orderedAggregate:
-		keyCol, weightStringOffset, colAdded, err := wrapAndPushExpr(groupExpr.Inner, groupExpr.WeightStrExpr, node.input, semTable)
+		keyCol, wsOffset, colAdded, err := wrapAndPushExpr(groupExpr.Inner, groupExpr.WeightStrExpr, node.input, semTable)
 		if err != nil {
 			return false, err
 		}
-		node.eaggr.GroupByKeys = append(node.eaggr.GroupByKeys, engine.GroupByParams{KeyCol: keyCol, WeightStringCol: weightStringOffset, Expr: groupExpr.WeightStrExpr})
+		if groupExpr.DistinctAggrIndex == 0 {
+			node.eaggr.GroupByKeys = append(node.eaggr.GroupByKeys, &engine.GroupByParams{KeyCol: keyCol, WeightStringCol: wsOffset, Expr: groupExpr.WeightStrExpr})
+		} else {
+			if wsOffset != -1 {
+				node.eaggr.Aggregates[groupExpr.DistinctAggrIndex-1].WAssigned = true
+				node.eaggr.Aggregates[groupExpr.DistinctAggrIndex-1].WCol = wsOffset
+			}
+		}
 		colAddedRecursively, err := planGroupByGen4(groupExpr, node.input, semTable)
 		if err != nil {
 			return false, err
@@ -334,6 +399,9 @@ func wrapAndPushExpr(expr sqlparser.Expr, weightStrExpr sqlparser.Expr, plan log
 	offset, added, err := pushProjection(&sqlparser.AliasedExpr{Expr: expr}, plan, semTable, true, true)
 	if err != nil {
 		return 0, 0, false, err
+	}
+	if weightStrExpr == nil {
+		return offset, -1, added, nil
 	}
 	_, ok := expr.(*sqlparser.ColName)
 	if !ok {
@@ -508,7 +576,7 @@ func (hp *horizonPlanning) planDistinctOA(currPlan *orderedAggregate) error {
 		for _, aggrParam := range currPlan.eaggr.Aggregates {
 			if sqlparser.EqualsExpr(sExpr.Col.Expr, aggrParam.Expr) {
 				found = true
-				eaggr.GroupByKeys = append(eaggr.GroupByKeys, engine.GroupByParams{KeyCol: aggrParam.Col, WeightStringCol: -1})
+				eaggr.GroupByKeys = append(eaggr.GroupByKeys, &engine.GroupByParams{KeyCol: aggrParam.Col, WeightStringCol: -1})
 				break
 			}
 		}
@@ -531,7 +599,7 @@ func (hp *horizonPlanning) addDistinct() error {
 		eaggr: eaggr,
 	}
 	for index, sExpr := range hp.qp.SelectExprs {
-		grpParam := engine.GroupByParams{KeyCol: index, WeightStringCol: -1}
+		grpParam := &engine.GroupByParams{KeyCol: index, WeightStringCol: -1}
 		_, wOffset, added, err := wrapAndPushExpr(sExpr.Col.Expr, sExpr.Col.Expr, hp.plan, hp.semTable)
 		if err != nil {
 			return err
@@ -551,4 +619,31 @@ func selectHasUniqueVindex(vschema ContextVSchema, semTable *semantics.SemTable,
 		}
 	}
 	return false
+}
+
+// needDistinctHandling returns true if oa needs to handle the distinct clause.
+// If true, it will also return the aliased expression that needs to be pushed
+// down into the underlying route.
+func (hp *horizonPlanning) needDistinctHandling(funcExpr *sqlparser.FuncExpr, opcode engine.AggregateOpcode, input logicalPlan) (bool, *sqlparser.AliasedExpr, error) {
+	if !funcExpr.Distinct {
+		return false, nil, nil
+	}
+	if opcode != engine.AggregateCount && opcode != engine.AggregateSum {
+		return false, nil, nil
+	}
+	innerAliased, ok := funcExpr.Exprs[0].(*sqlparser.AliasedExpr)
+	if !ok {
+		return false, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "syntax error: %s", sqlparser.String(funcExpr))
+	}
+	_, ok = input.(*route)
+	if !ok {
+		// Unreachable
+		return true, innerAliased, nil
+	}
+	if exprHasUniqueVindex(hp.vschema, hp.semTable, innerAliased.Expr) {
+		// if we can see a unique vindex on this table/column,
+		// we know the results will be unique, and we don't need to DISTINCTify them
+		return false, nil, nil
+	}
+	return true, innerAliased, nil
 }
