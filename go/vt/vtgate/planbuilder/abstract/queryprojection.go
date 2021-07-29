@@ -164,7 +164,8 @@ func (qp *QueryProjection) getNonAggrExprNotMatchingGroupByExprs() sqlparser.Exp
 		}
 	}
 	for _, order := range qp.OrderExprs {
-		if sqlparser.IsAggregation(order.WeightStrExpr) {
+		// ORDER BY NULL or Aggregation functions need not be present in group by
+		if sqlparser.IsNull(order.Inner.Expr) || sqlparser.IsAggregation(order.WeightStrExpr) {
 			continue
 		}
 		isGroupByOk := false
@@ -215,6 +216,10 @@ func (qp *QueryProjection) getSimplifiedExpr(e sqlparser.Expr, caller string) (e
 				return e, selectExpr.Col.Expr, nil
 			}
 		}
+	}
+
+	if sqlparser.IsNull(e) {
+		return e, nil, nil
 	}
 
 	return e, e, nil
