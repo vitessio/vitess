@@ -30,6 +30,7 @@ import (
 
 	"context"
 
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/tb"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
@@ -63,6 +64,7 @@ type controller struct {
 	source       *binlogdatapb.BinlogSource
 	stopPos      string
 	tabletPicker *discovery.TabletPicker
+	dbClient     binlogplayer.DBClient
 
 	cancel context.CancelFunc
 	done   chan struct{}
@@ -205,6 +207,8 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 	}
 	defer dbClient.Close()
 
+	ct.dbClient = dbClient
+
 	var tablet *topodatapb.Tablet
 	if ct.source.GetExternalMysql() == "" {
 		log.Infof("trying to find a tablet eligible for vreplication. stream id: %v", ct.id)
@@ -288,4 +292,11 @@ func (ct *controller) setMessage(dbClient binlogplayer.DBClient, message string)
 func (ct *controller) Stop() {
 	ct.cancel()
 	<-ct.done
+}
+
+// executeFetch uses the controller's database client to run a query. This is useful in cases
+// where you want to run a query using same connection as vcopier and vplayer do.
+// Specifically, it is useful for locking tables.
+func (ct *controller) executeFetch(query string, maxrows int) (qr *sqltypes.Result, err error) {
+	return ct.dbClient.ExecuteFetch(query, maxrows)
 }
