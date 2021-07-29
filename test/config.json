@@ -337,6 +337,15 @@
 			"RetryMax": 0,
 			"Tags": []
 		},
+		"onlineddl_vrepl_stress_80": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/onlineddl/vrepl_stress_80", "-timeout", "30m"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "onlineddl_vrepl_stress_80",
+			"RetryMax": 0,
+			"Tags": []
+		},
 		"onlineddl_vrepl_suite": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/onlineddl/vrepl_suite", "-timeout", "30m"],
