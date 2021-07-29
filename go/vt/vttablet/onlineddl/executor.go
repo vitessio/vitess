@@ -511,6 +511,19 @@ func (e *Executor) primaryPosition(ctx context.Context) (pos mysql.Position, err
 	return pos, err
 }
 
+// supportsLockTablesRename checks if the database server supports RENAME TABLE operation while
+// table is under LOCK TABLE.
+func (e *Executor) supportsLockTablesRename(ctx context.Context) (supported bool, err error) {
+	conn, err := dbconnpool.NewDBConnection(ctx, e.env.Config().DB.DbaWithDB())
+	if err != nil {
+		return false, err
+	}
+	defer conn.Close()
+
+	supported, err = conn.SupportsLockTablesRename()
+	return supported, err
+}
+
 // terminateVReplMigration stops vreplication, then removes the _vt.vreplication entry for the given migration
 func (e *Executor) terminateVReplMigration(ctx context.Context, uuid string) error {
 	tmClient := tmclient.NewTabletManagerClient()
@@ -603,24 +616,38 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 		}
 		return nil
 	}
-	// stop writes on source:
-	if err := toggleWrites(false); err != nil {
+	lockTablesRenameSupported, err := e.supportsLockTablesRename(ctx)
+	if err != nil {
 		return err
 	}
-	defer toggleWrites(true)
 
-	if isVreplicationTestSuite {
-		// The testing suite may inject queries internally from the server via a recurring EVENT.
-		// Those queries are unaffected by UpdateSourceBlacklistedTables() because they don't go through Vitess.
-		// We therefore hard-rename the table here, such that the queries will hard-fail.
-		beforeTableName := fmt.Sprintf("%s_before", onlineDDL.Table)
-		parsed := sqlparser.BuildParsedQuery(sqlRenameTable,
-			onlineDDL.Table, beforeTableName,
-		)
-		if _, err = e.execQuery(ctx, parsed.Query); err != nil {
-			return err
+	switch {
+	case isVreplicationTestSuite:
+		{
+			// The testing suite may inject queries internally from the server via a recurring EVENT.
+			// Those queries are unaffected by UpdateSourceBlacklistedTables() because they don't go through Vitess.
+			// We therefore hard-rename the table here, such that the queries will hard-fail.
+			beforeTableName := fmt.Sprintf("%s_before", onlineDDL.Table)
+			parsed := sqlparser.BuildParsedQuery(sqlRenameTable,
+				onlineDDL.Table, beforeTableName,
+			)
+			if _, err = e.execQuery(ctx, parsed.Query); err != nil {
+				return err
+			}
+		}
+	case lockTablesRenameSupported:
+		{
+		}
+	default:
+		{ // Normal (non-testing) alter table
+			// stop writes on source:
+			if err := toggleWrites(false); err != nil {
+				return err
+			}
+			defer toggleWrites(true)
 		}
 	}
+
 	postWritesPos, err := e.primaryPosition(ctx)
 	if err != nil {
 		return err
@@ -653,8 +680,10 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 	}
 
 	// rename tables atomically (remember, writes on source tables are stopped)
-	{
-		if isVreplicationTestSuite {
+
+	switch {
+	case isVreplicationTestSuite:
+		{
 			// this is used in Vitess endtoend testing suite
 			afterTableName := fmt.Sprintf("%s_after", onlineDDL.Table)
 			parsed := sqlparser.BuildParsedQuery(sqlRenameTable,
@@ -663,8 +692,12 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 			if _, err = e.execQuery(ctx, parsed.Query); err != nil {
 				return err
 			}
-		} else {
-			// Normal (non-testing) alter table
+		}
+	case lockTablesRenameSupported:
+		{
+		}
+	default:
+		{ // Normal (non-testing) alter table
 			parsed := sqlparser.BuildParsedQuery(sqlSwapTables,
 				onlineDDL.Table, swapTable,
 				vreplTable, onlineDDL.Table,

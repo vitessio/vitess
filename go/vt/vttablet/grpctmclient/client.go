@@ -683,6 +683,20 @@ func (client *Client) VReplicationExec(ctx context.Context, tablet *topodatapb.T
 	return response.Result, nil
 }
 
+// VReplicationExecInConnection is part of the tmclient.TabletManagerClient interface.
+func (client *Client) VReplicationExecInConnection(ctx context.Context, tablet *topodatapb.Tablet, id int, query string) (*querypb.QueryResult, error) {
+	c, closer, err := client.dialer.dial(ctx, tablet)
+	if err != nil {
+		return nil, err
+	}
+	defer closer.Close()
+	response, err := c.VReplicationExecInConnection(ctx, &tabletmanagerdatapb.VReplicationExecInConnectionRequest{Id: int64(id), Query: query})
+	if err != nil {
+		return nil, err
+	}
+	return response.Result, nil
+}
+
 // VReplicationWaitForPos is part of the tmclient.TabletManagerClient interface.
 func (client *Client) VReplicationWaitForPos(ctx context.Context, tablet *topodatapb.Tablet, id int, pos string) error {
 	c, closer, err := client.dialer.dial(ctx, tablet)

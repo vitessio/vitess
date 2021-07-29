@@ -315,6 +315,18 @@ func (vre *Engine) getDBClient(isAdmin bool) binlogplayer.DBClient {
 	return vre.dbClientFactoryFiltered()
 }
 
+// ExecInVReplicationConnection runs the specified query via the database connection
+// used in the specifid stream
+func (vre *Engine) ExecInVReplicationConnection(id int, query string) (*sqltypes.Result, error) {
+	vre.mu.Lock()
+	defer vre.mu.Unlock()
+
+	if ct := vre.controllers[id]; ct != nil {
+		return ct.executeFetch(query, 10000)
+	}
+	return nil, fmt.Errorf("vreplication stream %d not found", id)
+}
+
 // ExecWithDBA runs the specified query as the DBA user
 func (vre *Engine) ExecWithDBA(query string) (*sqltypes.Result, error) {
 	return vre.exec(query, true /*runAsAdmin*/)

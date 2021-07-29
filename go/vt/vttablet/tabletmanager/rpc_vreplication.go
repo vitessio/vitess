@@ -33,6 +33,15 @@ func (tm *TabletManager) VReplicationExec(ctx context.Context, query string) (*q
 	return sqltypes.ResultToProto3(qr), nil
 }
 
+// VReplicationExecInConnection executes a vreplication command in same connection as the indicated underlying stream uses
+func (tm *TabletManager) VReplicationExecInConnection(ctx context.Context, id int, query string) (*querypb.QueryResult, error) {
+	qr, err := tm.VREngine.ExecInVReplicationConnection(id, query)
+	if err != nil {
+		return nil, err
+	}
+	return sqltypes.ResultToProto3(qr), nil
+}
+
 // VReplicationWaitForPos waits for the specified position.
 func (tm *TabletManager) VReplicationWaitForPos(ctx context.Context, id int, pos string) error {
 	return tm.VREngine.WaitForPos(ctx, id, pos)

@@ -892,6 +892,14 @@ func (fra *fakeRPCTM) VReplicationExec(ctx context.Context, query string) (*quer
 	return testExecuteFetchResult, nil
 }
 
+func (fra *fakeRPCTM) VReplicationExecInConnection(ctx context.Context, id int, query string) (*querypb.QueryResult, error) {
+	if fra.panics {
+		panic(fmt.Errorf("test-triggered panic"))
+	}
+	compare(fra.t, "VReplicationExecInConnection query", query, testVRQuery)
+	return testExecuteFetchResult, nil
+}
+
 func tmRPCTestVReplicationExec(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	rp, err := client.VReplicationExec(ctx, tablet, testVRQuery)
 	compareError(t, "VReplicationExec", err, rp, testExecuteFetchResult)

@@ -369,6 +369,14 @@ func (s *server) VReplicationExec(ctx context.Context, request *tabletmanagerdat
 	return response, err
 }
 
+func (s *server) VReplicationExecInConnection(ctx context.Context, request *tabletmanagerdatapb.VReplicationExecInConnectionRequest) (response *tabletmanagerdatapb.VReplicationExecResponse, err error) {
+	defer s.tm.HandleRPCPanic(ctx, "VReplicationExecInConnection", request, response, true /*verbose*/, &err)
+	ctx = callinfo.GRPCCallInfo(ctx)
+	response = &tabletmanagerdatapb.VReplicationExecResponse{}
+	response.Result, err = s.tm.VReplicationExecInConnection(ctx, int(request.Id), request.Query)
+	return response, err
+}
+
 func (s *server) VReplicationWaitForPos(ctx context.Context, request *tabletmanagerdatapb.VReplicationWaitForPosRequest) (response *tabletmanagerdatapb.VReplicationWaitForPosResponse, err error) {
 	defer s.tm.HandleRPCPanic(ctx, "VReplicationWaitForPos", request, response, true /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
