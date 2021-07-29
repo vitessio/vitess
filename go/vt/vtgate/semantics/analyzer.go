@@ -70,7 +70,7 @@ func Analyze(statement sqlparser.SelectStatement, currentDb string, si SchemaInf
 }
 
 func (a *analyzer) setError(err error) {
-	if len(a.inProjection) > 0 && vterrors.ErrState(err) == vterrors.NonUniqError {
+	if len(a.inProjection) > 0 && (vterrors.ErrState(err) == vterrors.NonUniqError || vterrors.ErrState(err) == vterrors.BadFieldError) {
 		a.projErr = err
 	} else {
 		a.err = err
@@ -303,7 +303,7 @@ tryAgain:
 		goto tryAgain
 	}
 	if tsp == nil {
-		return 0, nil
+		return 0, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadFieldError, fmt.Sprintf("Unknown column '%s' in 'field list'", sqlparser.String(expr)))
 	}
 	return *tsp, nil
 }

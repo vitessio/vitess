@@ -124,6 +124,17 @@ func (a *AliasedTable) DepsFor(col *sqlparser.ColName, org originable, single bo
 			return &ts
 		}
 	}
+	if a.Table == nil {
+		return nil
+	}
+	for _, vindex := range a.Table.ColumnVindexes {
+		for _, column := range vindex.Columns {
+			if column.Equal(col.Name) {
+				ts := org.tableSetFor(a.ASTNode)
+				return &ts
+			}
+		}
+	}
 	return nil
 }
 
@@ -137,6 +148,17 @@ func (r *RealTable) DepsFor(col *sqlparser.ColName, org originable, single bool)
 		if col.Name.String() == info.Name {
 			ts := org.tableSetFor(r.ASTNode)
 			return &ts
+		}
+	}
+	if r.Table == nil {
+		return nil
+	}
+	for _, vindex := range r.Table.ColumnVindexes {
+		for _, column := range vindex.Columns {
+			if column.Equal(col.Name) {
+				ts := org.tableSetFor(r.ASTNode)
+				return &ts
+			}
 		}
 	}
 	return nil
