@@ -58,52 +58,51 @@ from x as t`
 
 	// extract the `t.col2` expression from the subquery
 	sel2 := sel.SelectExprs[1].(*sqlparser.AliasedExpr).Expr.(*sqlparser.Subquery).Select.(*sqlparser.Select)
-	s1 := semTable.GetBaseTableDependencies(extract(sel2, 0))
+	s1 := semTable.BaseTableDependencies(extract(sel2, 0))
 
 	// if scoping works as expected, we should be able to see the inner table being used by the inner expression
 	assert.Equal(t, T2, s1)
 }
 
-func TestBindingSingleTable(t *testing.T) {
-	t.Run("positive tests", func(t *testing.T) {
-		queries := []string{
-			"select col from tabl",
-			"select tabl.col from tabl",
-			"select d.tabl.col from tabl",
-			"select col from d.tabl",
-			"select tabl.col from d.tabl",
-			"select d.tabl.col from d.tabl",
-		}
-		for _, query := range queries {
-			t.Run(query, func(t *testing.T) {
-				stmt, semTable := parseAndAnalyze(t, query, "d")
-				sel, _ := stmt.(*sqlparser.Select)
-				t1 := sel.From[0].(*sqlparser.AliasedTableExpr)
-				ts := semTable.TableSetFor(t1)
-				assert.EqualValues(t, 1, ts)
+func TestBindingSingleTablePositive(t *testing.T) {
+	queries := []string{
+		"select col from tabl",
+		"select tabl.col from tabl",
+		"select d.tabl.col from tabl",
+		"select col from d.tabl",
+		"select tabl.col from d.tabl",
+		"select d.tabl.col from d.tabl",
+	}
+	for _, query := range queries {
+		t.Run(query, func(t *testing.T) {
+			stmt, semTable := parseAndAnalyze(t, query, "d")
+			sel, _ := stmt.(*sqlparser.Select)
+			t1 := sel.From[0].(*sqlparser.AliasedTableExpr)
+			ts := semTable.TableSetFor(t1)
+			assert.EqualValues(t, 1, ts)
 
-				d := semTable.GetBaseTableDependencies(extract(sel, 0))
-				require.Equal(t, T1, d, query)
-			})
-		}
-	})
-	t.Run("negative tests", func(t *testing.T) {
-		queries := []string{
-			"select foo.col from tabl",
-			"select ks.tabl.col from tabl",
-			"select ks.tabl.col from d.tabl",
-			"select d.tabl.col from ks.tabl",
-			"select foo.col from d.tabl",
-		}
-		for _, query := range queries {
-			t.Run(query, func(t *testing.T) {
-				parse, err := sqlparser.Parse(query)
-				require.NoError(t, err)
-				_, err = Analyze(parse.(sqlparser.SelectStatement), "d", &FakeSI{})
-				require.Error(t, err)
-			})
-		}
-	})
+			assert.Equal(t, T1, semTable.BaseTableDependencies(extract(sel, 0)), query)
+			assert.Equal(t, T1, semTable.Dependencies(extract(sel, 0)), query)
+		})
+	}
+}
+
+func TestBindingSingleTableNegative(t *testing.T) {
+	queries := []string{
+		"select foo.col from tabl",
+		"select ks.tabl.col from tabl",
+		"select ks.tabl.col from d.tabl",
+		"select d.tabl.col from ks.tabl",
+		"select foo.col from d.tabl",
+	}
+	for _, query := range queries {
+		t.Run(query, func(t *testing.T) {
+			parse, err := sqlparser.Parse(query)
+			require.NoError(t, err)
+			_, err = Analyze(parse.(sqlparser.SelectStatement), "d", &FakeSI{})
+			require.Error(t, err)
+		})
+	}
 }
 
 func TestOrderByBindingSingleTable(t *testing.T) {
@@ -136,7 +135,28 @@ func TestOrderByBindingSingleTable(t *testing.T) {
 				stmt, semTable := parseAndAnalyze(t, tc.sql, "d")
 				sel, _ := stmt.(*sqlparser.Select)
 				order := sel.OrderBy[0].Expr
-				d := semTable.GetBaseTableDependencies(order)
+				d := semTable.BaseTableDependencies(order)
+				require.Equal(t, tc.deps, d, tc.sql)
+			})
+		}
+	})
+}
+
+func TestOrderByBindingMultiTable(t *testing.T) {
+	t.Run("positive tests", func(t *testing.T) {
+		tcases := []struct {
+			sql  string
+			deps TableSet
+		}{{
+			"select name, name from t1, t2 order by name",
+			T2,
+		}}
+		for _, tc := range tcases {
+			t.Run(tc.sql, func(t *testing.T) {
+				stmt, semTable := parseAndAnalyze(t, tc.sql, "d")
+				sel, _ := stmt.(*sqlparser.Select)
+				order := sel.OrderBy[0].Expr
+				d := semTable.BaseTableDependencies(order)
 				require.Equal(t, tc.deps, d, tc.sql)
 			})
 		}
@@ -183,7 +203,7 @@ func TestGroupByBindingSingleTable(t *testing.T) {
 			stmt, semTable := parseAndAnalyze(t, tc.sql, "d")
 			sel, _ := stmt.(*sqlparser.Select)
 			grp := sel.GroupBy[0]
-			d := semTable.GetBaseTableDependencies(grp)
+			d := semTable.BaseTableDependencies(grp)
 			require.Equal(t, tc.deps, d, tc.sql)
 		})
 	}
@@ -205,7 +225,7 @@ func TestBindingSingleAliasedTable(t *testing.T) {
 				ts := semTable.TableSetFor(t1)
 				assert.EqualValues(t, 1, ts)
 
-				d := semTable.GetBaseTableDependencies(extract(sel, 0))
+				d := semTable.BaseTableDependencies(extract(sel, 0))
 				require.Equal(t, T1, d, query)
 			})
 		}
@@ -248,8 +268,8 @@ func TestUnion(t *testing.T) {
 	assert.EqualValues(t, 1, ts1)
 	assert.EqualValues(t, 2, ts2)
 
-	d1 := semTable.GetBaseTableDependencies(extract(sel1, 0))
-	d2 := semTable.GetBaseTableDependencies(extract(sel2, 0))
+	d1 := semTable.BaseTableDependencies(extract(sel1, 0))
+	d2 := semTable.BaseTableDependencies(extract(sel2, 0))
 	assert.Equal(t, T1, d1)
 	assert.Equal(t, T2, d2)
 }
@@ -306,7 +326,7 @@ func TestBindingMultiTable(t *testing.T) {
 			t.Run(query.query, func(t *testing.T) {
 				stmt, semTable := parseAndAnalyze(t, query.query, "user")
 				sel, _ := stmt.(*sqlparser.Select)
-				assert.Equal(t, query.deps, semTable.GetBaseTableDependencies(extract(sel, 0)), query.query)
+				assert.Equal(t, query.deps, semTable.BaseTableDependencies(extract(sel, 0)), query.query)
 			})
 		}
 	})
@@ -338,7 +358,7 @@ func TestBindingSingleDepPerTable(t *testing.T) {
 	stmt, semTable := parseAndAnalyze(t, query, "")
 	sel, _ := stmt.(*sqlparser.Select)
 
-	d := semTable.GetBaseTableDependencies(extract(sel, 0))
+	d := semTable.BaseTableDependencies(extract(sel, 0))
 	assert.Equal(t, 1, d.NumberOfTables(), "size wrong")
 	assert.Equal(t, T1, d)
 }
@@ -432,12 +452,12 @@ func TestUnknownColumnMap2(t *testing.T) {
 		{
 			name:   "no info about tables",
 			schema: map[string]*vindexes.Table{"a": {}, "b": {}},
-			err:    false,
+			err:    true,
 		},
 		{
 			name:   "non authoritative columns",
 			schema: map[string]*vindexes.Table{"a": &nonAuthoritativeTblA, "b": &nonAuthoritativeTblA},
-			err:    false,
+			err:    true,
 		},
 		{
 			name:   "non authoritative columns - one authoritative and one not",
@@ -609,7 +629,7 @@ func TestScopingWDerivedTables(t *testing.T) {
 			} else {
 				require.NoError(t, err)
 				sel := parse.(*sqlparser.Select)
-				assert.Equal(t, query.recursiveExpectation, st.GetBaseTableDependencies(extract(sel, 0)))
+				assert.Equal(t, query.recursiveExpectation, st.BaseTableDependencies(extract(sel, 0)))
 				assert.Equal(t, query.expectation, st.Dependencies(extract(sel, 0)))
 			}
 		})
