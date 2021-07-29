@@ -18,6 +18,22 @@
         # mysql80
         - ./.buildkite/install_mysql80.sh
         {{end}}
+        {{if (eq .Platform "percona56")}}
+        # percona56
+        - ./.buildkite/install_percona56.sh
+        {{end}}
+        {{if (eq .Platform "mariadb101")}}
+        # mariadb101
+        - ./.buildkite/install_mariadb101.sh
+        {{end}}
+        {{if (eq .Platform "mariadb102")}}
+        # mariadb102
+        - ./.buildkite/install_mariadb102.sh
+        {{end}}
+        {{if (eq .Platform "mariadb103")}}
+        # mariadb103
+        - ./.buildkite/install_mariadb103.sh
+        {{end}}
         {{end}} {{/*outer if*/}}
         - ./.buildkite/install_dependencies.sh
         # Run make tools

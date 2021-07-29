@@ -239,9 +239,6 @@ func generateWorkflowFile(templateFile, path string, test interface{}) {
 func generateBuildkiteUnitTestWorkflows() error {
 	platforms := parseList(unitTestDatabases)
 	for _, platform := range platforms {
-		if !strings.Contains(platform, "mysql") {
-			continue
-		}
 		test := &unitTest{
 			Name:     fmt.Sprintf("Unit Test (%s)", platform),
 			Platform: platform,

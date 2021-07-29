@@ -4,6 +4,29 @@ env:
   GOROOT: "/usr/local/go"
   PATH: "/usr/local/go/bin:$PATH"
 steps:
+  - label: "Unit Test (percona56)"
+    commands:
+        # Set up Go
+        - ./.buildkite/setup_go.sh
+        # Tune the OS
+        - echo '1024 65535' | sudo tee -a /proc/sys/net/ipv4/ip_local_port_range
+        # Get dependencies
+        - export DEBIAN_FRONTEND="noninteractive"
+        - sudo apt-get update
+        
+        # !mysql57
+        # Uninstall any previously installed MySQL first
+        - ./.buildkite/uninstall_mysql.sh
+        
+        # percona56
+        - ./.buildkite/install_percona56.sh
+        
+        - ./.buildkite/install_dependencies.sh
+        # Run make tools
+        - make tools
+        # Run test
+        - eatmydata -- make unit_test
+    timeout_in_minutes: 30
   - label: "Unit Test (mysql57)"
     commands:
         # Set up Go
@@ -39,6 +62,52 @@ steps:
         
         # mysql80
         - ./.buildkite/install_mysql80.sh
+        
+        - ./.buildkite/install_dependencies.sh
+        # Run make tools
+        - make tools
+        # Run test
+        - eatmydata -- make unit_test
+    timeout_in_minutes: 30
+  - label: "Unit Test (mariadb102)"
+    commands:
+        # Set up Go
+        - ./.buildkite/setup_go.sh
+        # Tune the OS
+        - echo '1024 65535' | sudo tee -a /proc/sys/net/ipv4/ip_local_port_range
+        # Get dependencies
+        - export DEBIAN_FRONTEND="noninteractive"
+        - sudo apt-get update
+        
+        # !mysql57
+        # Uninstall any previously installed MySQL first
+        - ./.buildkite/uninstall_mysql.sh
+        
+        # mariadb102
+        - ./.buildkite/install_mariadb102.sh
+        
+        - ./.buildkite/install_dependencies.sh
+        # Run make tools
+        - make tools
+        # Run test
+        - eatmydata -- make unit_test
+    timeout_in_minutes: 30
+  - label: "Unit Test (mariadb103)"
+    commands:
+        # Set up Go
+        - ./.buildkite/setup_go.sh
+        # Tune the OS
+        - echo '1024 65535' | sudo tee -a /proc/sys/net/ipv4/ip_local_port_range
+        # Get dependencies
+        - export DEBIAN_FRONTEND="noninteractive"
+        - sudo apt-get update
+        
+        # !mysql57
+        # Uninstall any previously installed MySQL first
+        - ./.buildkite/uninstall_mysql.sh
+        
+        # mariadb103
+        - ./.buildkite/install_mariadb103.sh
         
         - ./.buildkite/install_dependencies.sh
         # Run make tools
