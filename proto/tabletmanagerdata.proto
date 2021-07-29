@@ -349,17 +349,21 @@ message VReplicationExecResponse {
   query.QueryResult result = 1;
 }
 
-message VReplicationExecInConnectionRequest {
-  int64 id = 1;
-  string query = 2;
-}
-
 message VReplicationWaitForPosRequest {
   int64 id = 1;
   string position = 2;
 }
 
 message VReplicationWaitForPosResponse {
+}
+
+message VReplicationCutOverOnlineDDLRequest {
+  int64 id = 1;
+  string table_name = 2;
+  string vrepl_table_name = 3;
+}
+
+message VReplicationCutOverOnlineDDLResponse {
 }
 
 message InitPrimaryRequest {
