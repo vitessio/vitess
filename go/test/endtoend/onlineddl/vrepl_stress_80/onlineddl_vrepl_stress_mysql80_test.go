@@ -254,7 +254,16 @@ func TestSchemaChange(t *testing.T) {
 		hint := "hint-alter-without-workload"
 		uuid := testOnlineDDLStatement(t, fmt.Sprintf(alterHintStatement, hint), "online", "vtgate", hint)
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
-		testSelectTableMetrics(t)
+
+		t.Run("test metrics", func(t *testing.T) {
+			testSelectTableMetrics(t)
+		})
+		t.Run("verify atomic_cutover", func(t *testing.T) {
+			for _, row := range onlineddl.ReadMigrations(t, &vtParams, uuid).Named().Rows {
+				isAtomicCutover := (row.AsInt64("atomic_cutover", 0) == 1)
+				require.True(t, isAtomicCutover)
+			}
+		})
 	})
 
 	for i := 0; i < countIterations; i++ {
