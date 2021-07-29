@@ -67,7 +67,7 @@ func buildShowBasicPlan(show *sqlparser.ShowBasic, vschema ContextVSchema) (engi
 	case sqlparser.OpenTable, sqlparser.TableStatus, sqlparser.Table, sqlparser.Trigger:
 		return buildPlanWithDB(show, vschema)
 	case sqlparser.StatusGlobal, sqlparser.StatusSession:
-		return engine.NewRowsPrimitive(make([][]sqltypes.Value, 0, 2), buildVarCharFields("Variable_name", "Value")), nil
+		return buildSendAnywherePlan(show, vschema)
 	case sqlparser.VitessMigrations:
 		return buildShowVMigrationsPlan(show, vschema)
 	case sqlparser.VGtidExecGlobal:
@@ -505,7 +505,7 @@ func buildShowVGtidPlan(show *sqlparser.ShowBasic, vschema ContextVSchema) (engi
 	}
 	return &engine.OrderedAggregate{
 		PreProcess: true,
-		Aggregates: []engine.AggregateParams{
+		Aggregates: []*engine.AggregateParams{
 			{
 				Opcode: engine.AggregateGtid,
 				Col:    1,

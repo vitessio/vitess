@@ -22,6 +22,8 @@ import (
 	"strconv"
 	"strings"
 
+	querypb "vitess.io/vitess/go/vt/proto/query"
+
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -34,12 +36,14 @@ type (
 	analyzer struct {
 		si SchemaInformation
 
-		Tables       []TableInfo
-		scopes       []*scope
-		exprDeps     ExprDependencies
-		err          error
-		currentDb    string
-		inProjection []bool
+		Tables            []TableInfo
+		scopes            []*scope
+		exprRecursiveDeps ExprDependencies
+		exprDeps          ExprDependencies
+		exprTypes         map[sqlparser.Expr]querypb.Type
+		err               error
+		currentDb         string
+		inProjection      []bool
 
 		rScope  map[*sqlparser.Select]*scope
 		wScope  map[*sqlparser.Select]*scope
@@ -50,11 +54,13 @@ type (
 // newAnalyzer create the semantic analyzer
 func newAnalyzer(dbName string, si SchemaInformation) *analyzer {
 	return &analyzer{
-		exprDeps:  map[sqlparser.Expr]TableSet{},
-		rScope:    map[*sqlparser.Select]*scope{},
-		wScope:    map[*sqlparser.Select]*scope{},
-		currentDb: dbName,
-		si:        si,
+		exprRecursiveDeps: map[sqlparser.Expr]TableSet{},
+		exprDeps:          map[sqlparser.Expr]TableSet{},
+		exprTypes:         map[sqlparser.Expr]querypb.Type{},
+		rScope:            map[*sqlparser.Select]*scope{},
+		wScope:            map[*sqlparser.Select]*scope{},
+		currentDb:         dbName,
+		si:                si,
 	}
 }
 
@@ -66,7 +72,15 @@ func Analyze(statement sqlparser.SelectStatement, currentDb string, si SchemaInf
 	if err != nil {
 		return nil, err
 	}
-	return &SemTable{exprDependencies: analyzer.exprDeps, Tables: analyzer.Tables, selectScope: analyzer.rScope, ProjectionErr: analyzer.projErr, Comments: statement.GetComments()}, nil
+	return &SemTable{
+		ExprBaseTableDeps: analyzer.exprRecursiveDeps,
+		ExprDeps:          analyzer.exprDeps,
+		exprTypes:         analyzer.exprTypes,
+		Tables:            analyzer.Tables,
+		selectScope:       analyzer.rScope,
+		ProjectionErr:     analyzer.projErr,
+		Comments:          statement.GetComments(),
+	}, nil
 }
 
 func (a *analyzer) setError(err error) {
@@ -101,56 +115,27 @@ func (a *analyzer) analyzeDown(cursor *sqlparser.Cursor) bool {
 
 		a.rScope[node] = currScope
 		a.wScope[node] = newScope(nil)
-	case *sqlparser.DerivedTable:
-		a.setError(Gen4NotSupportedF("derived tables"))
 	case *sqlparser.Subquery:
 		a.setError(Gen4NotSupportedF("subquery"))
 	case sqlparser.TableExpr:
 		if isParentSelect(cursor) {
 			a.push(newScope(nil))
 		}
-		switch node := node.(type) {
-		case *sqlparser.AliasedTableExpr:
-			a.setError(a.bindTable(node, node.Expr))
-		case *sqlparser.JoinTableExpr:
-			if node.Condition.Using != nil {
-				a.setError(vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: join with USING(column_list) clause for complex queries"))
-			}
-			if node.Join == sqlparser.NaturalJoinType || node.Join == sqlparser.NaturalRightJoinType || node.Join == sqlparser.NaturalLeftJoinType {
-				a.setError(vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: "+node.Join.ToString()))
-			}
-
-		}
 	case *sqlparser.Union:
 		a.push(newScope(current))
 	case sqlparser.SelectExprs:
-		if isParentSelect(cursor) {
-			a.inProjection = append(a.inProjection, true)
-		}
 		sel, ok := cursor.Parent().(*sqlparser.Select)
 		if !ok {
 			break
 		}
 
+		a.inProjection = append(a.inProjection, true)
 		wScope, exists := a.wScope[sel]
 		if !exists {
 			break
 		}
 
-		vTbl := &vTableInfo{}
-		for _, selectExpr := range node {
-			expr, ok := selectExpr.(*sqlparser.AliasedExpr)
-			if !ok {
-				continue
-			}
-			vTbl.cols = append(vTbl.cols, expr.Expr)
-			if !expr.As.IsEmpty() {
-				vTbl.columnNames = append(vTbl.columnNames, expr.As.String())
-			} else {
-				vTbl.columnNames = append(vTbl.columnNames, sqlparser.String(expr))
-			}
-		}
-		wScope.tables = append(wScope.tables, vTbl)
+		wScope.tables = append(wScope.tables, a.createVTableInfoForExpressions(node))
 	case sqlparser.OrderBy:
 		a.changeScopeForOrderBy(cursor)
 	case *sqlparser.Order:
@@ -161,11 +146,15 @@ func (a *analyzer) analyzeDown(cursor *sqlparser.Cursor) bool {
 			a.analyzeOrderByGroupByExprForLiteral(grpExpr, "group statement")
 		}
 	case *sqlparser.ColName:
-		t, err := a.resolveColumn(node, current)
+		tsRecursive, ts, qt, err := a.resolveColumn(node, current)
 		if err != nil {
 			a.setError(err)
 		} else {
-			a.exprDeps[node] = t
+			a.exprRecursiveDeps[node] = tsRecursive
+			a.exprDeps[node] = ts
+			if qt != nil {
+				a.exprTypes[node] = *qt
+			}
 		}
 	case *sqlparser.FuncExpr:
 		if node.Distinct {
@@ -215,12 +204,12 @@ func (a *analyzer) analyzeOrderByGroupByExprForLiteral(input sqlparser.Expr, cal
 	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 		expr, ok := node.(sqlparser.Expr)
 		if ok {
-			deps = deps.Merge(a.exprDeps[expr])
+			deps = deps.Merge(a.exprRecursiveDeps[expr])
 		}
 		return true, nil
 	}, expr.Expr)
 
-	a.exprDeps[input] = deps
+	a.exprRecursiveDeps[input] = deps
 }
 
 func (a *analyzer) changeScopeForOrderBy(cursor *sqlparser.Cursor) {
@@ -247,65 +236,125 @@ func isParentSelect(cursor *sqlparser.Cursor) bool {
 	return isSelect
 }
 
-func (a *analyzer) resolveColumn(colName *sqlparser.ColName, current *scope) (TableSet, error) {
+func (a *analyzer) resolveColumn(colName *sqlparser.ColName, current *scope) (TableSet, TableSet, *querypb.Type, error) {
 	if colName.Qualifier.IsEmpty() {
 		return a.resolveUnQualifiedColumn(current, colName)
 	}
-	t, err := a.resolveQualifiedColumn(current, colName)
-	if err != nil {
-		return 0, err
+	return a.resolveQualifiedColumn(current, colName)
+}
+
+// tableInfoFor returns the table info for the table set. It should contains only single table.
+func (a *analyzer) tableInfoFor(id TableSet) (TableInfo, error) {
+	numberOfTables := id.NumberOfTables()
+	if numberOfTables == 0 {
+		return nil, nil
 	}
-	if t == nil {
-		return 0, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.NonUniqError, fmt.Sprintf("Column '%s' in field list is ambiguous", sqlparser.String(colName)))
+	if numberOfTables > 1 {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] should only be used for single tables")
 	}
-	return a.tableSetFor(t.GetExpr()), nil
+	return a.Tables[id.TableOffset()], nil
 }
 
 // resolveQualifiedColumn handles `tabl.col` expressions
-func (a *analyzer) resolveQualifiedColumn(current *scope, expr *sqlparser.ColName) (TableInfo, error) {
+func (a *analyzer) resolveQualifiedColumn(current *scope, expr *sqlparser.ColName) (TableSet, TableSet, *querypb.Type, error) {
 	// search up the scope stack until we find a match
 	for current != nil {
 		for _, table := range current.tables {
-			if table.Matches(expr.Qualifier) {
-				return table, nil
+			if !table.Matches(expr.Qualifier) {
+				continue
 			}
+			if table.IsActualTable() {
+				actualTable, ts, typ := a.resolveQualifiedColumnOnActualTable(table, expr)
+				return actualTable, ts, typ, nil
+			}
+			recursiveTs, typ, err := table.RecursiveDepsFor(expr, a, len(current.tables) == 1)
+			if err != nil {
+				return 0, 0, nil, err
+			}
+			if recursiveTs == nil {
+				return 0, 0, nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadFieldError, "symbol %s not found", sqlparser.String(expr))
+			}
+
+			ts, err := table.DepsFor(expr, a, len(current.tables) == 1)
+			if err != nil {
+				return 0, 0, nil, err
+			}
+			return *recursiveTs, *ts, typ, nil
 		}
 		current = current.parent
 	}
-	return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadFieldError, "symbol %s not found", sqlparser.String(expr))
+	return 0, 0, nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadFieldError, "symbol %s not found", sqlparser.String(expr))
+}
+
+func (a *analyzer) resolveQualifiedColumnOnActualTable(table TableInfo, expr *sqlparser.ColName) (TableSet, TableSet, *querypb.Type) {
+	ts := a.tableSetFor(table.GetExpr())
+	for _, colInfo := range table.GetColumns() {
+		if expr.Name.EqualString(colInfo.Name) {
+			// A column can't be of type NULL, that is the default value indicating that we dont know the actual type
+			// But expressions can be of NULL type, so we use nil to represent an unknown type
+			if colInfo.Type == querypb.Type_NULL_TYPE {
+				return ts, ts, nil
+			}
+			return ts, ts, &colInfo.Type
+		}
+	}
+	return ts, ts, nil
 }
 
 type originable interface {
 	tableSetFor(t *sqlparser.AliasedTableExpr) TableSet
-	depsForExpr(expr sqlparser.Expr) TableSet
+	depsForExpr(expr sqlparser.Expr) (TableSet, *querypb.Type)
 }
 
-func (a *analyzer) depsForExpr(expr sqlparser.Expr) TableSet {
-	return a.exprDeps.Dependencies(expr)
+func (a *analyzer) depsForExpr(expr sqlparser.Expr) (TableSet, *querypb.Type) {
+	ts := a.exprRecursiveDeps.Dependencies(expr)
+	qt, isFound := a.exprTypes[expr]
+	if !isFound {
+		return ts, nil
+	}
+	return ts, &qt
 }
 
 // resolveUnQualifiedColumn
-func (a *analyzer) resolveUnQualifiedColumn(current *scope, expr *sqlparser.ColName) (TableSet, error) {
-	var tsp *TableSet
+func (a *analyzer) resolveUnQualifiedColumn(current *scope, expr *sqlparser.ColName) (TableSet, TableSet, *querypb.Type, error) {
+	var tspRecursive, tsp *TableSet
+	var typp *querypb.Type
 
-tryAgain:
-	for _, tbl := range current.tables {
-		ts := tbl.DepsFor(expr, a, len(current.tables) == 1)
-		if ts != nil && tsp != nil {
-			return 0, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.NonUniqError, fmt.Sprintf("Column '%s' in field list is ambiguous", sqlparser.String(expr)))
+	for current != nil && tspRecursive == nil {
+		for _, tbl := range current.tables {
+			recursiveTs, typ, err := tbl.RecursiveDepsFor(expr, a, len(current.tables) == 1)
+			if err != nil {
+				return 0, 0, nil, err
+			}
+			if recursiveTs != nil && tspRecursive != nil {
+				return 0, 0, nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.NonUniqError, fmt.Sprintf("Column '%s' in field list is ambiguous", sqlparser.String(expr)))
+			}
+			if recursiveTs != nil {
+				tspRecursive = recursiveTs
+				typp = typ
+			}
+			if tbl.IsActualTable() {
+				continue
+			}
+			ts, err := tbl.DepsFor(expr, a, len(current.tables) == 1)
+			if err != nil {
+				return 0, 0, nil, err
+			}
+			if ts != nil {
+				tsp = ts
+			}
 		}
-		if ts != nil {
-			tsp = ts
-		}
-	}
-	if tsp == nil && current.parent != nil {
+
 		current = current.parent
-		goto tryAgain
+	}
+
+	if tspRecursive == nil {
+		return 0, 0, nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadFieldError, fmt.Sprintf("Unknown column '%s' in 'field list'", sqlparser.String(expr)))
 	}
 	if tsp == nil {
-		return 0, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadFieldError, fmt.Sprintf("Unknown column '%s' in 'field list'", sqlparser.String(expr)))
+		return *tspRecursive, 0, typp, nil
 	}
-	return *tsp, nil
+	return *tspRecursive, *tsp, typp, nil
 }
 
 func (a *analyzer) tableSetFor(t *sqlparser.AliasedTableExpr) TableSet {
@@ -342,7 +391,22 @@ func (a *analyzer) createTable(t sqlparser.TableName, alias *sqlparser.AliasedTa
 func (a *analyzer) bindTable(alias *sqlparser.AliasedTableExpr, expr sqlparser.SimpleTableExpr) error {
 	switch t := expr.(type) {
 	case *sqlparser.DerivedTable:
-		return Gen4NotSupportedF("derived table")
+		sel, isSelect := t.Select.(*sqlparser.Select)
+		if !isSelect {
+			return Gen4NotSupportedF("union in derived table")
+		}
+
+		tableInfo := a.createVTableInfoForExpressions(sel.SelectExprs)
+		if err := tableInfo.checkForDuplicates(); err != nil {
+			return err
+		}
+
+		tableInfo.ASTNode = alias
+		tableInfo.tableName = alias.As.String()
+
+		a.Tables = append(a.Tables, tableInfo)
+		scope := a.currentScope()
+		return scope.addTable(tableInfo)
 	case sqlparser.TableName:
 		var tbl *vindexes.Table
 		var isInfSchema bool
@@ -367,6 +431,20 @@ func (a *analyzer) bindTable(alias *sqlparser.AliasedTableExpr, expr sqlparser.S
 	return nil
 }
 
+func (v *vTableInfo) checkForDuplicates() error {
+	for i, name := range v.columnNames {
+		for j, name2 := range v.columnNames {
+			if i == j {
+				continue
+			}
+			if name == name2 {
+				return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.DupFieldName, "Duplicate column name '%s'", name)
+			}
+		}
+	}
+	return nil
+}
+
 func (a *analyzer) analyze(statement sqlparser.Statement) error {
 	_ = sqlparser.Rewrite(statement, a.analyzeDown, a.analyzeUp)
 	return a.err
@@ -376,7 +454,7 @@ func (a *analyzer) analyzeUp(cursor *sqlparser.Cursor) bool {
 	if !a.shouldContinue() {
 		return false
 	}
-	switch cursor.Node().(type) {
+	switch node := cursor.Node().(type) {
 	case sqlparser.SelectExprs:
 		if isParentSelect(cursor) {
 			a.popProjection()
@@ -397,9 +475,43 @@ func (a *analyzer) analyzeUp(cursor *sqlparser.Cursor) bool {
 				}
 			}
 		}
+		switch node := node.(type) {
+		case *sqlparser.AliasedTableExpr:
+			a.setError(a.bindTable(node, node.Expr))
+		case *sqlparser.JoinTableExpr:
+			if node.Condition.Using != nil {
+				a.setError(vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: join with USING(column_list) clause for complex queries"))
+			}
+			if node.Join == sqlparser.NaturalJoinType || node.Join == sqlparser.NaturalRightJoinType || node.Join == sqlparser.NaturalLeftJoinType {
+				a.setError(vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: "+node.Join.ToString()))
+			}
+		}
 	}
 
 	return a.shouldContinue()
+}
+
+func (a *analyzer) createVTableInfoForExpressions(expressions sqlparser.SelectExprs) *vTableInfo {
+	vTbl := &vTableInfo{}
+	for _, selectExpr := range expressions {
+		expr, ok := selectExpr.(*sqlparser.AliasedExpr)
+		if !ok {
+			continue
+		}
+		vTbl.cols = append(vTbl.cols, expr.Expr)
+		if expr.As.IsEmpty() {
+			switch expr := expr.Expr.(type) {
+			case *sqlparser.ColName:
+				// for projections, we strip out the qualifier and keep only the column name
+				vTbl.columnNames = append(vTbl.columnNames, expr.Name.String())
+			default:
+				vTbl.columnNames = append(vTbl.columnNames, sqlparser.String(expr))
+			}
+		} else {
+			vTbl.columnNames = append(vTbl.columnNames, expr.As.String())
+		}
+	}
+	return vTbl
 }
 
 func (a *analyzer) popProjection() {

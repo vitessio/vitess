@@ -666,15 +666,20 @@ func TestExecutorShow(t *testing.T) {
 	}
 	utils.MustMatch(t, wantqr, qr, query)
 
-	for _, query := range []string{"show session status", "show session status like 'Ssl_cipher'"} {
-		qr, err = executor.Execute(ctx, "TestExecute", session, "show session status", nil)
+	for _, sql := range []string{"show session status", "show session status like 'Ssl_cipher'"} {
+		qr, err = executor.Execute(ctx, "TestExecute", session, sql, nil)
 		require.NoError(t, err)
 		wantqr = &sqltypes.Result{
-			Fields: buildVarCharFields("Variable_name", "Value"),
-			Rows:   make([][]sqltypes.Value, 0, 2),
+			Fields: []*querypb.Field{
+				{Name: "id", Type: sqltypes.Int32},
+				{Name: "value", Type: sqltypes.VarChar},
+			},
+			Rows: [][]sqltypes.Value{
+				{sqltypes.NewInt32(1), sqltypes.NewVarChar("foo")},
+			},
 		}
 
-		utils.MustMatch(t, wantqr, qr, query)
+		utils.MustMatch(t, wantqr, qr, sql)
 	}
 
 	// Test SHOW FULL COLUMNS FROM where query has a qualifier
@@ -705,7 +710,7 @@ func TestExecutorShow(t *testing.T) {
 		Fields: buildVarCharFields("Cell", "Keyspace", "Shard", "TabletType", "State", "Alias", "Hostname", "MasterTermStartTime"),
 		Rows: [][]sqltypes.Value{
 			buildVarCharRow("FakeCell", "TestExecutor", "-20", "MASTER", "SERVING", "aa-0000000000", "-20", "1970-01-01T00:00:01Z"),
-			buildVarCharRow("FakeCell", "TestUnsharded", "0", "MASTER", "SERVING", "aa-0000000000", "0", "1970-01-01T00:00:01Z"),
+			buildVarCharRow("FakeCell", "TestXBadVSchema", "-20", "MASTER", "SERVING", "aa-0000000000", "e0-", "1970-01-01T00:00:01Z"),
 		},
 	}
 	utils.MustMatch(t, wantqr, qr, query)
