@@ -17,6 +17,7 @@ limitations under the License.
 package topo
 
 import (
+	"context"
 	"encoding/hex"
 	"fmt"
 	"path"
@@ -27,8 +28,6 @@ import (
 	"time"
 
 	"google.golang.org/protobuf/proto"
-
-	"context"
 
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
@@ -507,16 +506,6 @@ func (si *ShardInfo) removeCellsFromTabletControl(tc *topodatapb.Shard_TabletCon
 	} else {
 		tc.Cells = result
 	}
-}
-
-// GetServedType returns the Shard_ServedType for a TabletType, or nil
-func (si *ShardInfo) GetServedType(tabletType topodatapb.TabletType) *topodatapb.Shard_ServedType {
-	for _, st := range si.ServedTypes {
-		if st.TabletType == tabletType {
-			return st
-		}
-	}
-	return nil
 }
 
 //
