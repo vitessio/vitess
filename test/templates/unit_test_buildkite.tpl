@@ -7,14 +7,14 @@
         # Get dependencies
         - export DEBIAN_FRONTEND="noninteractive"
         - sudo apt-get update
-        {{if (eq .Platform "mysql80")}}
+        {{if (eq .Platform "mysql57")}}
         # mysql57
         - sudo apt-get install -y mysql-server mysql-client
         {{else}}
         # !mysql57
         # Uninstall any previously installed MySQL first
         - ./.buildkite/uninstall_mysql.sh
-        {{if (eq .Platform "mysql57")}}
+        {{if (eq .Platform "mysql80")}}
         # mysql80
         - ./.buildkite/install_mysql80.sh
         {{end}}

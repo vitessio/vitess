@@ -14,13 +14,9 @@ steps:
         - export DEBIAN_FRONTEND="noninteractive"
         - sudo apt-get update
         
-        # !mysql80
-        # Uninstall any previously installed MySQL first
-        - ./.buildkite/uninstall_mysql.sh
-        
         # mysql57
-        - ./.buildkite/install_mysql57.sh
-        
+        - sudo apt-get install -y mysql-server mysql-client
+         
         - ./.buildkite/install_dependencies.sh
         # Run make tools
         - make tools
@@ -37,9 +33,13 @@ steps:
         - export DEBIAN_FRONTEND="noninteractive"
         - sudo apt-get update
         
+        # !mysql57
+        # Uninstall any previously installed MySQL first
+        - ./.buildkite/uninstall_mysql.sh
+        
         # mysql80
-        - sudo apt-get install -y mysql-server mysql-client
-         
+        - ./.buildkite/install_mysql80.sh
+        
         - ./.buildkite/install_dependencies.sh
         # Run make tools
         - make tools
