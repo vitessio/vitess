@@ -755,7 +755,7 @@ func (itmc *internalTabletManagerClient) VReplicationExec(ctx context.Context, t
 	return nil, fmt.Errorf("not implemented in vtcombo")
 }
 
-func (itmc *internalTabletManagerClient) VReplicationExecInConnection(ctx context.Context, tablet *topodatapb.Tablet, query string) (*querypb.QueryResult, error) {
+func (itmc *internalTabletManagerClient) VReplicationExecInConnection(ctx context.Context, tablet *topodatapb.Tablet, id int, query string) (*querypb.QueryResult, error) {
 	return nil, fmt.Errorf("not implemented in vtcombo")
 }
 
