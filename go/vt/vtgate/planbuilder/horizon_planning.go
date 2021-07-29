@@ -55,7 +55,7 @@ func pushProjection(expr *sqlparser.AliasedExpr, plan logicalPlan, semTable *sem
 	case *joinGen4:
 		lhsSolves := node.Left.ContainsTables()
 		rhsSolves := node.Right.ContainsTables()
-		deps := semTable.GetBaseTableDependencies(expr.Expr)
+		deps := semTable.BaseTableDependencies(expr.Expr)
 		var column int
 		var appended bool
 		switch {
@@ -528,7 +528,7 @@ func (hp *horizonPlanning) createMemorySortPlan(plan logicalPlan, orderExprs []a
 
 func allLeft(orderExprs []abstract.OrderBy, semTable *semantics.SemTable, lhsTables semantics.TableSet) bool {
 	for _, expr := range orderExprs {
-		exprDependencies := semTable.GetBaseTableDependencies(expr.Inner.Expr)
+		exprDependencies := semTable.BaseTableDependencies(expr.Inner.Expr)
 		if !exprDependencies.IsSolvedBy(lhsTables) {
 			return false
 		}

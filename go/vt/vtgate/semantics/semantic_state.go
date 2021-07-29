@@ -211,7 +211,7 @@ func depsFor(
 		ts := org.tableSetFor(astNode)
 
 		for _, info := range cols {
-			if col.Name.String() == info.Name {
+			if col.Name.EqualString(info.Name) {
 				return &ts, &info.Type, nil
 			}
 		}
@@ -226,7 +226,7 @@ func depsFor(
 	}
 
 	for _, info := range cols {
-		if col.Name.String() == info.Name {
+		if col.Name.EqualString(info.Name) {
 			ts := org.tableSetFor(astNode)
 			return &ts, &info.Type, nil
 		}
@@ -298,12 +298,26 @@ func vindexTableToColumnInfo(tbl *vindexes.Table) []ColumnInfo {
 	if tbl == nil {
 		return nil
 	}
+	nameMap := map[string]interface{}{}
 	cols := make([]ColumnInfo, 0, len(tbl.Columns))
 	for _, col := range tbl.Columns {
 		cols = append(cols, ColumnInfo{
 			Name: col.Name.String(),
 			Type: col.Type,
 		})
+		nameMap[col.Name.String()] = nil
+	}
+	for _, vindex := range tbl.ColumnVindexes {
+		for _, column := range vindex.Columns {
+			name := column.String()
+			if _, exists := nameMap[name]; exists {
+				continue
+			}
+			cols = append(cols, ColumnInfo{
+				Name: name,
+			})
+			nameMap[name] = nil
+		}
 	}
 	return cols
 }
@@ -386,8 +400,8 @@ func (st *SemTable) TableInfoFor(id TableSet) (TableInfo, error) {
 	return st.Tables[id.TableOffset()], nil
 }
 
-// GetBaseTableDependencies return the table dependencies of the expression.
-func (st *SemTable) GetBaseTableDependencies(expr sqlparser.Expr) TableSet {
+// BaseTableDependencies return the table dependencies of the expression.
+func (st *SemTable) BaseTableDependencies(expr sqlparser.Expr) TableSet {
 	return st.ExprBaseTableDeps.Dependencies(expr)
 }
 

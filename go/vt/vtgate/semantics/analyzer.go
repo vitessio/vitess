@@ -200,16 +200,7 @@ func (a *analyzer) analyzeOrderByGroupByExprForLiteral(input sqlparser.Expr, cal
 		return
 	}
 
-	var deps TableSet
-	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
-		expr, ok := node.(sqlparser.Expr)
-		if ok {
-			deps = deps.Merge(a.exprRecursiveDeps[expr])
-		}
-		return true, nil
-	}, expr.Expr)
-
-	a.exprRecursiveDeps[input] = deps
+	a.exprRecursiveDeps[input] = a.exprDeps.Dependencies(expr.Expr)
 }
 
 func (a *analyzer) changeScopeForOrderBy(cursor *sqlparser.Cursor) {
@@ -334,6 +325,7 @@ func (a *analyzer) resolveUnQualifiedColumn(current *scope, expr *sqlparser.ColN
 				typp = typ
 			}
 			if tbl.IsActualTable() {
+				tsp = tspRecursive
 				continue
 			}
 			ts, err := tbl.DepsFor(expr, a, len(current.tables) == 1)
@@ -349,6 +341,7 @@ func (a *analyzer) resolveUnQualifiedColumn(current *scope, expr *sqlparser.ColN
 	}
 
 	if tspRecursive == nil {
+		a.projErr = vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.NonUniqError, fmt.Sprintf("Column '%s' in field list is ambiguous", sqlparser.String(expr)))
 		return 0, 0, nil, nil
 	}
 	if tsp == nil {
