@@ -28,10 +28,12 @@ import (
 const (
 	workflowConfigDir = "../.github/workflows"
 
-	unitTestTemplate  = "templates/unit_test.tpl"
-	unitTestDatabases = "percona56, mysql57, mysql80, mariadb102, mariadb103"
+	unitTestTemplate          = "templates/unit_test.tpl"
+	unitTestBuildkiteTemplate = "templates/unit_test_buildkite.tpl"
+	unitTestDatabases         = "percona56, mysql57, mysql80, mariadb102, mariadb103"
 
-	clusterTestTemplate = "templates/cluster_endtoend_test.tpl"
+	clusterTestTemplate       = "templates/cluster_endtoend_test.tpl"
+	workflowBuildkitePipeline = "../.buildkite/pipeline.yml"
 )
 
 var (
@@ -129,6 +131,14 @@ func mergeBlankLines(buf *bytes.Buffer) string {
 func main() {
 	generateUnitTestWorkflows()
 	generateClusterWorkflows()
+	err := setupBuildkitePipelineFile()
+	if err != nil {
+		log.Fatal(err)
+	}
+	err = generateBuildkiteUnitTestWorkflows()
+	if err != nil {
+		log.Fatal(err)
+	}
 }
 
 func canonnizeList(list []string) []string {
@@ -218,4 +228,58 @@ func generateWorkflowFile(templateFile, path string, test interface{}) {
 	f.WriteString(mergeBlankLines(buf))
 	fmt.Printf("Generated %s\n", path)
 
+}
+
+func generateBuildkiteUnitTestWorkflows() error {
+	platforms := parseList(unitTestDatabases)
+	for _, platform := range platforms {
+		if !strings.Contains(platform, "mysql") {
+			continue
+		}
+		test := &unitTest{
+			Name:     fmt.Sprintf("Unit Test (%s)", platform),
+			Platform: platform,
+		}
+		err := addToPipeline(unitTestBuildkiteTemplate, test)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func setupBuildkitePipelineFile() error {
+	_ = os.Remove(workflowBuildkitePipeline)
+	f, err := os.Create(workflowBuildkitePipeline)
+	if err != nil {
+		return err
+	}
+	f.WriteString("# DO NOT MODIFY: THIS FILE IS GENERATED USING \"make generate_ci_workflows\"\n\n")
+	f.WriteString(`env:
+  GOROOT: "/usr/local/go"
+  PATH: "/usr/local/go/bin:$PATH"
+steps:
+`)
+	return nil
+}
+
+func addToPipeline(templateFile string, test interface{}) error {
+	tpl, err := template.ParseFiles(templateFile)
+	if err != nil {
+		return err
+	}
+
+	buf := &bytes.Buffer{}
+	err = tpl.Execute(buf, test)
+	if err != nil {
+		return err
+	}
+
+	f, err := os.OpenFile(workflowBuildkitePipeline, os.O_APPEND|os.O_WRONLY, 0666)
+	if err != nil {
+		return err
+	}
+	f.WriteString(mergeBlankLines(buf))
+	f.Close()
+	return nil
 }

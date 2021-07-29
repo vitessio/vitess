@@ -1,3 +1,16 @@
+# DO NOT MODIFY: THIS FILE IS GENERATED USING "make generate_ci_workflows"
+
+env:
+  GOROOT: "/usr/local/go"
+  PATH: "/usr/local/go/bin:$PATH"
 steps:
-  - label: "Example Test"
-    command: echo "Hello!"
+  - label: "Unit Test (mysql57)"
+    commands:
+        - ./.buildkite/setup_go.sh
+        - echo '1024 65535' | sudo tee -a /proc/sys/net/ipv4/ip_local_port_range
+    timeout_in_minutes: 30
+  - label: "Unit Test (mysql80)"
+    commands:
+        - ./.buildkite/setup_go.sh
+        - echo '1024 65535' | sudo tee -a /proc/sys/net/ipv4/ip_local_port_range
+    timeout_in_minutes: 30
