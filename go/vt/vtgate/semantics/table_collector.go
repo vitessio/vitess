@@ -38,7 +38,7 @@ func newTableCollector(scoper *scoper, si SchemaInformation, currentDb string) *
 	}
 }
 
-func (b *tableCollector) up(cursor *sqlparser.Cursor) error {
+func (tc *tableCollector) up(cursor *sqlparser.Cursor) error {
 	node, ok := cursor.Node().(*sqlparser.AliasedTableExpr)
 	if !ok {
 		return nil
@@ -59,8 +59,8 @@ func (b *tableCollector) up(cursor *sqlparser.Cursor) error {
 		tableInfo.ASTNode = node
 		tableInfo.tableName = node.As.String()
 
-		b.Tables = append(b.Tables, tableInfo)
-		scope := b.scoper.currentScope()
+		tc.Tables = append(tc.Tables, tableInfo)
+		scope := tc.scoper.currentScope()
 		return scope.addTable(tableInfo)
 	case sqlparser.TableName:
 		var tbl *vindexes.Table
@@ -68,7 +68,7 @@ func (b *tableCollector) up(cursor *sqlparser.Cursor) error {
 		if sqlparser.SystemSchema(t.Qualifier.String()) {
 			isInfSchema = true
 		} else {
-			table, vdx, _, _, _, err := b.si.FindTableOrVindex(t)
+			table, vdx, _, _, _, err := tc.si.FindTableOrVindex(t)
 			if err != nil {
 				return err
 			}
@@ -77,10 +77,10 @@ func (b *tableCollector) up(cursor *sqlparser.Cursor) error {
 				return Gen4NotSupportedF("vindex in FROM")
 			}
 		}
-		scope := b.scoper.currentScope()
-		tableInfo := b.createTable(t, node, tbl, isInfSchema)
+		scope := tc.scoper.currentScope()
+		tableInfo := tc.createTable(t, node, tbl, isInfSchema)
 
-		b.Tables = append(b.Tables, tableInfo)
+		tc.Tables = append(tc.Tables, tableInfo)
 		return scope.addTable(tableInfo)
 	}
 	return nil
@@ -88,8 +88,8 @@ func (b *tableCollector) up(cursor *sqlparser.Cursor) error {
 
 // tabletSetFor implements the originable interface, and that is why it lives on the analyser struct.
 // The code lives in this file since it is only touching tableCollector data
-func (a *analyzer) tableSetFor(t *sqlparser.AliasedTableExpr) TableSet {
-	for i, t2 := range a.tables.Tables {
+func (tc *tableCollector) tableSetFor(t *sqlparser.AliasedTableExpr) TableSet {
+	for i, t2 := range tc.Tables {
 		if t == t2.GetExpr() {
 			return TableSet(1 << i)
 		}
@@ -97,10 +97,10 @@ func (a *analyzer) tableSetFor(t *sqlparser.AliasedTableExpr) TableSet {
 	panic("unknown table")
 }
 
-func (b *tableCollector) createTable(t sqlparser.TableName, alias *sqlparser.AliasedTableExpr, tbl *vindexes.Table, isInfSchema bool) TableInfo {
+func (tc *tableCollector) createTable(t sqlparser.TableName, alias *sqlparser.AliasedTableExpr, tbl *vindexes.Table, isInfSchema bool) TableInfo {
 	dbName := t.Qualifier.String()
 	if dbName == "" {
-		dbName = b.currentDb
+		dbName = tc.currentDb
 	}
 	if alias.As.IsEmpty() {
 		return &RealTable{
