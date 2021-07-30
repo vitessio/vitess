@@ -19,7 +19,6 @@ package semantics
 import (
 	"fmt"
 	"runtime/debug"
-	"strconv"
 	"strings"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -32,13 +31,12 @@ type (
 	// analyzer is a struct to work with analyzing the query.
 	analyzer struct {
 		scoper *scoper
+		tables *tableCollector
 		binder *binder
 
-		exprRecursiveDeps ExprDependencies
-		exprDeps          ExprDependencies
-		exprTypes         map[sqlparser.Expr]querypb.Type
-		err               error
-		inProjection      []bool
+		exprTypes    map[sqlparser.Expr]querypb.Type
+		err          error
+		inProjection []bool
 
 		projErr error
 	}
@@ -48,11 +46,10 @@ type (
 func newAnalyzer(dbName string, si SchemaInformation) *analyzer {
 	s := newScoper()
 	return &analyzer{
-		exprRecursiveDeps: map[sqlparser.Expr]TableSet{},
-		exprDeps:          map[sqlparser.Expr]TableSet{},
-		exprTypes:         map[sqlparser.Expr]querypb.Type{},
-		scoper:            s,
-		binder:            newBinder(s, si, dbName),
+		exprTypes: map[sqlparser.Expr]querypb.Type{},
+		scoper:    s,
+		tables:    newTableCollector(s, si, dbName),
+		binder:    newBinder(),
 	}
 }
 
@@ -65,10 +62,10 @@ func Analyze(statement sqlparser.SelectStatement, currentDb string, si SchemaInf
 		return nil, err
 	}
 	return &SemTable{
-		ExprBaseTableDeps: analyzer.exprRecursiveDeps,
-		ExprDeps:          analyzer.exprDeps,
+		ExprBaseTableDeps: analyzer.binder.exprRecursiveDeps,
+		ExprDeps:          analyzer.binder.exprDeps,
 		exprTypes:         analyzer.exprTypes,
-		Tables:            analyzer.binder.Tables,
+		Tables:            analyzer.tables.Tables,
 		selectScope:       analyzer.scoper.rScope,
 		ProjectionErr:     analyzer.projErr,
 		Comments:          statement.GetComments(),
@@ -118,8 +115,8 @@ func (a *analyzer) analyzeDown(cursor *sqlparser.Cursor) bool {
 		if err != nil {
 			a.setError(err)
 		} else {
-			a.exprRecursiveDeps[node] = tsRecursive
-			a.exprDeps[node] = ts
+			a.binder.exprRecursiveDeps[node] = tsRecursive
+			a.binder.exprDeps[node] = ts
 			if qt != nil {
 				a.exprTypes[node] = *qt
 			}
@@ -141,43 +138,9 @@ func (a *analyzer) analyzeDown(cursor *sqlparser.Cursor) bool {
 	return true
 }
 
-func (a *analyzer) analyzeOrderByGroupByExprForLiteral(input sqlparser.Expr, caller string) {
-	l, ok := input.(*sqlparser.Literal)
-	if !ok {
-		return
-	}
-	if l.Type != sqlparser.IntVal {
-		return
-	}
-	currScope := a.scoper.currentScope()
-	num, err := strconv.Atoi(l.Val)
-	if err != nil {
-		a.err = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "error parsing column number: %s", l.Val)
-		return
-	}
-	if num < 1 || num > len(currScope.selectExprs) {
-		a.err = vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadFieldError, "Unknown column '%d' in '%s'", num, caller)
-		return
-	}
-
-	expr, ok := currScope.selectExprs[num-1].(*sqlparser.AliasedExpr)
-	if !ok {
-		return
-	}
-
-	a.exprRecursiveDeps[input] = a.exprRecursiveDeps.Dependencies(expr.Expr)
-}
-
 func isParentSelect(cursor *sqlparser.Cursor) bool {
 	_, isSelect := cursor.Parent().(*sqlparser.Select)
 	return isSelect
-}
-
-func (a *analyzer) resolveColumn(colName *sqlparser.ColName, current *scope) (TableSet, TableSet, *querypb.Type, error) {
-	if colName.Qualifier.IsEmpty() {
-		return a.resolveUnQualifiedColumn(current, colName)
-	}
-	return a.resolveQualifiedColumn(current, colName)
 }
 
 // tableInfoFor returns the table info for the table set. It should contains only single table.
@@ -189,53 +152,7 @@ func (a *analyzer) tableInfoFor(id TableSet) (TableInfo, error) {
 	if numberOfTables > 1 {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] should only be used for single tables")
 	}
-	return a.binder.Tables[id.TableOffset()], nil
-}
-
-// resolveQualifiedColumn handles `tabl.col` expressions
-func (a *analyzer) resolveQualifiedColumn(current *scope, expr *sqlparser.ColName) (TableSet, TableSet, *querypb.Type, error) {
-	// search up the scope stack until we find a match
-	for current != nil {
-		for _, table := range current.tables {
-			if !table.Matches(expr.Qualifier) {
-				continue
-			}
-			if table.IsActualTable() {
-				actualTable, ts, typ := a.resolveQualifiedColumnOnActualTable(table, expr)
-				return actualTable, ts, typ, nil
-			}
-			recursiveTs, typ, err := table.RecursiveDepsFor(expr, a, len(current.tables) == 1)
-			if err != nil {
-				return 0, 0, nil, err
-			}
-			if recursiveTs == nil {
-				return 0, 0, nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadFieldError, "symbol %s not found", sqlparser.String(expr))
-			}
-
-			ts, err := table.DepsFor(expr, a, len(current.tables) == 1)
-			if err != nil {
-				return 0, 0, nil, err
-			}
-			return *recursiveTs, *ts, typ, nil
-		}
-		current = current.parent
-	}
-	return 0, 0, nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadFieldError, "symbol %s not found", sqlparser.String(expr))
-}
-
-func (a *analyzer) resolveQualifiedColumnOnActualTable(table TableInfo, expr *sqlparser.ColName) (TableSet, TableSet, *querypb.Type) {
-	ts := a.tableSetFor(table.GetExpr())
-	for _, colInfo := range table.GetColumns() {
-		if expr.Name.EqualString(colInfo.Name) {
-			// A column can't be of type NULL, that is the default value indicating that we dont know the actual type
-			// But expressions can be of NULL type, so we use nil to represent an unknown type
-			if colInfo.Type == querypb.Type_NULL_TYPE {
-				return ts, ts, nil
-			}
-			return ts, ts, &colInfo.Type
-		}
-	}
-	return ts, ts, nil
+	return a.tables.Tables[id.TableOffset()], nil
 }
 
 type originable interface {
@@ -244,54 +161,12 @@ type originable interface {
 }
 
 func (a *analyzer) depsForExpr(expr sqlparser.Expr) (TableSet, *querypb.Type) {
-	ts := a.exprRecursiveDeps.Dependencies(expr)
+	ts := a.binder.exprRecursiveDeps.Dependencies(expr)
 	qt, isFound := a.exprTypes[expr]
 	if !isFound {
 		return ts, nil
 	}
 	return ts, &qt
-}
-
-// resolveUnQualifiedColumn
-func (a *analyzer) resolveUnQualifiedColumn(current *scope, expr *sqlparser.ColName) (TableSet, TableSet, *querypb.Type, error) {
-	var tspRecursive, tsp *TableSet
-	var typp *querypb.Type
-
-	for current != nil && tspRecursive == nil {
-		for _, tbl := range current.tables {
-			recursiveTs, typ, err := tbl.RecursiveDepsFor(expr, a, len(current.tables) == 1)
-			if err != nil {
-				return 0, 0, nil, err
-			}
-			if recursiveTs != nil && tspRecursive != nil {
-				return 0, 0, nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.NonUniqError, fmt.Sprintf("Column '%s' in field list is ambiguous", sqlparser.String(expr)))
-			}
-			if recursiveTs != nil {
-				tspRecursive = recursiveTs
-				typp = typ
-			}
-			if tbl.IsActualTable() {
-				continue
-			}
-			ts, err := tbl.DepsFor(expr, a, len(current.tables) == 1)
-			if err != nil {
-				return 0, 0, nil, err
-			}
-			if ts != nil {
-				tsp = ts
-			}
-		}
-
-		current = current.parent
-	}
-
-	if tspRecursive == nil {
-		return 0, 0, nil, nil
-	}
-	if tsp == nil {
-		return *tspRecursive, 0, typp, nil
-	}
-	return *tspRecursive, *tsp, typp, nil
 }
 
 func (v *vTableInfo) checkForDuplicates() error {
@@ -318,7 +193,7 @@ func (a *analyzer) analyzeUp(cursor *sqlparser.Cursor) bool {
 		return false
 	}
 
-	if err := a.binder.up(cursor); err != nil {
+	if err := a.tables.up(cursor); err != nil {
 		a.setError(err)
 		return false
 	}
