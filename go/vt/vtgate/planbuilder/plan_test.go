@@ -551,7 +551,7 @@ func testFile(t *testing.T, filename, tempDir string, vschema *vschemaWrapper, c
 		if fail && tempDir != "" {
 			gotFile := fmt.Sprintf("%s/%s", tempDir, filename)
 			_ = ioutil.WriteFile(gotFile, []byte(strings.TrimSpace(expected.String())+"\n"), 0644)
-			fmt.Println(fmt.Sprintf("Errors found in plantests. If the output is correct, run `cp %s/* testdata/` to update test expectations", tempDir)) //nolint
+			fmt.Println(fmt.Sprintf("Errors found in plantests. If the output is correct, run `cp %s/* testdata/` to update test expectations", tempDir)) // nolint
 		}
 	})
 }
@@ -686,13 +686,14 @@ func locateFile(name string) string {
 	return "testdata/" + name
 }
 
+var benchMarkFiles = []string{"from_cases.txt", "filter_cases.txt", "large_cases.txt", "aggr_cases.txt", "select_cases.txt", "union_cases.txt"}
+
 func BenchmarkPlanner(b *testing.B) {
-	filenames := []string{"from_cases.txt", "filter_cases.txt", "large_cases.txt", "aggr_cases.txt", "select_cases.txt", "union_cases.txt"}
 	vschema := &vschemaWrapper{
 		v:             loadSchema(b, "schema_test.json"),
 		sysVarEnabled: true,
 	}
-	for _, filename := range filenames {
+	for _, filename := range benchMarkFiles {
 		var testCases []testCase
 		for tc := range iterateExecFile(filename) {
 			testCases = append(testCases, tc)
@@ -707,6 +708,39 @@ func BenchmarkPlanner(b *testing.B) {
 			benchmarkPlanner(b, Gen4Left2Right, testCases, vschema)
 		})
 	}
+}
+
+func BenchmarkSemAnalysis(b *testing.B) {
+	vschema := &vschemaWrapper{
+		v:             loadSchema(b, "schema_test.json"),
+		sysVarEnabled: true,
+	}
+
+	for i := 0; i < b.N; i++ {
+		for _, filename := range benchMarkFiles {
+			for tc := range iterateExecFile(filename) {
+				exerciseAnalyzer(tc.input, vschema.currentDb(), vschema)
+			}
+		}
+	}
+}
+
+func exerciseAnalyzer(query, database string, s semantics.SchemaInformation) {
+	defer func() {
+		// if analysis panics, let's just continue. this is just a benchmark
+		recover()
+	}()
+
+	ast, err := sqlparser.Parse(query)
+	if err != nil {
+		return
+	}
+	sel, ok := ast.(sqlparser.SelectStatement)
+	if !ok {
+		return
+	}
+
+	_, _ = semantics.Analyze(sel, database, s)
 }
 
 func BenchmarkSelectVsDML(b *testing.B) {
