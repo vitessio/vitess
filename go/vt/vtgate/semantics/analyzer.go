@@ -110,24 +110,14 @@ func (a *analyzer) analyzeDown(cursor *sqlparser.Cursor) bool {
 	case *sqlparser.Subquery:
 		a.setError(Gen4NotSupportedF("subquery"))
 	case sqlparser.SelectExprs:
-		sel, ok := cursor.Parent().(*sqlparser.Select)
-		if !ok {
+		if !isParentSelect(cursor) {
 			break
 		}
 
 		a.inProjection = append(a.inProjection, true)
-		wScope, exists := a.scoper.wScope[sel]
-		if !exists {
-			break
-		}
-
-		wScope.tables = append(wScope.tables, a.createVTableInfoForExpressions(node))
-	case sqlparser.OrderBy:
-		a.changeScopeForOrderBy(cursor)
 	case *sqlparser.Order:
 		a.analyzeOrderByGroupByExprForLiteral(node.Expr, "order clause")
 	case sqlparser.GroupBy:
-		a.changeScopeForOrderBy(cursor)
 		for _, grpExpr := range node {
 			a.analyzeOrderByGroupByExprForLiteral(grpExpr, "group statement")
 		}
@@ -196,25 +186,6 @@ func (a *analyzer) analyzeOrderByGroupByExprForLiteral(input sqlparser.Expr, cal
 	}, expr.Expr)
 
 	a.exprRecursiveDeps[input] = deps
-}
-
-func (a *analyzer) changeScopeForOrderBy(cursor *sqlparser.Cursor) {
-	sel, ok := cursor.Parent().(*sqlparser.Select)
-	if !ok {
-		return
-	}
-	// In ORDER BY, we can see both the scope in the FROM part of the query, and the SELECT columns created
-	// so before walking the rest of the tree, we change the scope to match this behaviour
-	incomingScope := a.scoper.currentScope()
-	nScope := newScope(incomingScope)
-	a.scoper.push(nScope)
-	wScope := a.scoper.wScope[sel]
-	nScope.tables = append(nScope.tables, wScope.tables...)
-	nScope.selectExprs = incomingScope.selectExprs
-
-	if a.scoper.rScope[sel] != incomingScope {
-		panic("BUG: scope counts did not match")
-	}
 }
 
 func isParentSelect(cursor *sqlparser.Cursor) bool {
@@ -382,7 +353,7 @@ func (a *analyzer) bindTable(alias *sqlparser.AliasedTableExpr, expr sqlparser.S
 			return Gen4NotSupportedF("union in derived table")
 		}
 
-		tableInfo := a.createVTableInfoForExpressions(sel.SelectExprs)
+		tableInfo := createVTableInfoForExpressions(sel.SelectExprs)
 		if err := tableInfo.checkForDuplicates(); err != nil {
 			return err
 		}
@@ -477,7 +448,7 @@ func (a *analyzer) analyzeUp(cursor *sqlparser.Cursor) bool {
 	return a.shouldContinue()
 }
 
-func (a *analyzer) createVTableInfoForExpressions(expressions sqlparser.SelectExprs) *vTableInfo {
+func createVTableInfoForExpressions(expressions sqlparser.SelectExprs) *vTableInfo {
 	vTbl := &vTableInfo{}
 	for _, selectExpr := range expressions {
 		expr, ok := selectExpr.(*sqlparser.AliasedExpr)

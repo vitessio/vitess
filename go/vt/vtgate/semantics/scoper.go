@@ -46,8 +46,41 @@ func (s *scoper) down(cursor *sqlparser.Cursor) {
 		if isParentSelect(cursor) {
 			s.push(newScope(nil))
 		}
+	case sqlparser.SelectExprs:
+		sel, parentIsSelect := cursor.Parent().(*sqlparser.Select)
+		if !parentIsSelect {
+			break
+		}
+
+		wScope, exists := s.wScope[sel]
+		if !exists {
+			break
+		}
+
+		wScope.tables = append(wScope.tables, createVTableInfoForExpressions(node))
+	case sqlparser.OrderBy, sqlparser.GroupBy:
+		s.changeScopeForOrderBy(cursor)
 	case *sqlparser.Union:
 		s.push(newScope(s.currentScope()))
+	}
+}
+
+func (s *scoper) changeScopeForOrderBy(cursor *sqlparser.Cursor) {
+	sel, ok := cursor.Parent().(*sqlparser.Select)
+	if !ok {
+		return
+	}
+	// In ORDER BY, we can see both the scope in the FROM part of the query, and the SELECT columns created
+	// so before walking the rest of the tree, we change the scope to match this behaviour
+	incomingScope := s.currentScope()
+	nScope := newScope(incomingScope)
+	s.push(nScope)
+	wScope := s.wScope[sel]
+	nScope.tables = append(nScope.tables, wScope.tables...)
+	nScope.selectExprs = incomingScope.selectExprs
+
+	if s.rScope[sel] != incomingScope {
+		panic("BUG: scope counts did not match")
 	}
 }
 
