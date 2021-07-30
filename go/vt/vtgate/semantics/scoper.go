@@ -65,6 +65,27 @@ func (s *scoper) down(cursor *sqlparser.Cursor) {
 	}
 }
 
+func (s *scoper) up(cursor *sqlparser.Cursor) error {
+	switch cursor.Node().(type) {
+	case *sqlparser.Union, *sqlparser.Select, sqlparser.OrderBy, sqlparser.GroupBy:
+		s.popScope()
+	case sqlparser.TableExpr:
+		if isParentSelect(cursor) {
+			curScope := s.currentScope()
+			s.popScope()
+			earlierScope := s.currentScope()
+			// copy curScope into the earlierScope
+			for _, table := range curScope.tables {
+				err := earlierScope.addTable(table)
+				if err != nil {
+					return err
+				}
+			}
+		}
+	}
+	return nil
+}
+
 func (s *scoper) changeScopeForOrderBy(cursor *sqlparser.Cursor) {
 	sel, ok := cursor.Parent().(*sqlparser.Select)
 	if !ok {
