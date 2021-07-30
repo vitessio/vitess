@@ -36,8 +36,9 @@ type (
 	analyzer struct {
 		si SchemaInformation
 
+		scoper *scoper
+
 		Tables            []TableInfo
-		scopes            []*scope
 		exprRecursiveDeps ExprDependencies
 		exprDeps          ExprDependencies
 		exprTypes         map[sqlparser.Expr]querypb.Type
@@ -45,8 +46,6 @@ type (
 		currentDb         string
 		inProjection      []bool
 
-		rScope  map[*sqlparser.Select]*scope
-		wScope  map[*sqlparser.Select]*scope
 		projErr error
 	}
 )
@@ -57,8 +56,7 @@ func newAnalyzer(dbName string, si SchemaInformation) *analyzer {
 		exprRecursiveDeps: map[sqlparser.Expr]TableSet{},
 		exprDeps:          map[sqlparser.Expr]TableSet{},
 		exprTypes:         map[sqlparser.Expr]querypb.Type{},
-		rScope:            map[*sqlparser.Select]*scope{},
-		wScope:            map[*sqlparser.Select]*scope{},
+		scoper:            newScoper(),
 		currentDb:         dbName,
 		si:                si,
 	}
@@ -77,7 +75,7 @@ func Analyze(statement sqlparser.SelectStatement, currentDb string, si SchemaInf
 		ExprDeps:          analyzer.exprDeps,
 		exprTypes:         analyzer.exprTypes,
 		Tables:            analyzer.Tables,
-		selectScope:       analyzer.rScope,
+		selectScope:       analyzer.scoper.rScope,
 		ProjectionErr:     analyzer.projErr,
 		Comments:          statement.GetComments(),
 	}, nil
@@ -99,7 +97,7 @@ func (a *analyzer) analyzeDown(cursor *sqlparser.Cursor) bool {
 	if !a.shouldContinue() {
 		return true
 	}
-	current := a.currentScope()
+	current := a.scoper.currentScope()
 	n := cursor.Node()
 	switch node := n.(type) {
 	case *sqlparser.Select:
@@ -113,8 +111,8 @@ func (a *analyzer) analyzeDown(cursor *sqlparser.Cursor) bool {
 		// Needed for order by with Literal to find the Expression.
 		currScope.selectExprs = node.SelectExprs
 
-		a.rScope[node] = currScope
-		a.wScope[node] = newScope(nil)
+		a.scoper.rScope[node] = currScope
+		a.scoper.wScope[node] = newScope(nil)
 	case *sqlparser.Subquery:
 		a.setError(Gen4NotSupportedF("subquery"))
 	case sqlparser.TableExpr:
@@ -130,7 +128,7 @@ func (a *analyzer) analyzeDown(cursor *sqlparser.Cursor) bool {
 		}
 
 		a.inProjection = append(a.inProjection, true)
-		wScope, exists := a.wScope[sel]
+		wScope, exists := a.scoper.wScope[sel]
 		if !exists {
 			break
 		}
@@ -184,7 +182,7 @@ func (a *analyzer) analyzeOrderByGroupByExprForLiteral(input sqlparser.Expr, cal
 	if l.Type != sqlparser.IntVal {
 		return
 	}
-	currScope := a.currentScope()
+	currScope := a.scoper.currentScope()
 	num, err := strconv.Atoi(l.Val)
 	if err != nil {
 		a.err = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "error parsing column number: %s", l.Val)
@@ -219,14 +217,14 @@ func (a *analyzer) changeScopeForOrderBy(cursor *sqlparser.Cursor) {
 	}
 	// In ORDER BY, we can see both the scope in the FROM part of the query, and the SELECT columns created
 	// so before walking the rest of the tree, we change the scope to match this behaviour
-	incomingScope := a.currentScope()
+	incomingScope := a.scoper.currentScope()
 	nScope := newScope(incomingScope)
 	a.push(nScope)
-	wScope := a.wScope[sel]
+	wScope := a.scoper.wScope[sel]
 	nScope.tables = append(nScope.tables, wScope.tables...)
 	nScope.selectExprs = incomingScope.selectExprs
 
-	if a.rScope[sel] != incomingScope {
+	if a.scoper.rScope[sel] != incomingScope {
 		panic("BUG: scope counts did not match")
 	}
 }
@@ -405,7 +403,7 @@ func (a *analyzer) bindTable(alias *sqlparser.AliasedTableExpr, expr sqlparser.S
 		tableInfo.tableName = alias.As.String()
 
 		a.Tables = append(a.Tables, tableInfo)
-		scope := a.currentScope()
+		scope := a.scoper.currentScope()
 		return scope.addTable(tableInfo)
 	case sqlparser.TableName:
 		var tbl *vindexes.Table
@@ -422,7 +420,7 @@ func (a *analyzer) bindTable(alias *sqlparser.AliasedTableExpr, expr sqlparser.S
 				return Gen4NotSupportedF("vindex in FROM")
 			}
 		}
-		scope := a.currentScope()
+		scope := a.scoper.currentScope()
 		tableInfo := a.createTable(t, alias, tbl, isInfSchema)
 
 		a.Tables = append(a.Tables, tableInfo)
@@ -463,9 +461,9 @@ func (a *analyzer) analyzeUp(cursor *sqlparser.Cursor) bool {
 		a.popScope()
 	case sqlparser.TableExpr:
 		if isParentSelect(cursor) {
-			curScope := a.currentScope()
+			curScope := a.scoper.currentScope()
 			a.popScope()
-			earlierScope := a.currentScope()
+			earlierScope := a.scoper.currentScope()
 			// copy curScope into the earlierScope
 			for _, table := range curScope.tables {
 				err := earlierScope.addTable(table)
@@ -523,20 +521,12 @@ func (a *analyzer) shouldContinue() bool {
 }
 
 func (a *analyzer) push(s *scope) {
-	a.scopes = append(a.scopes, s)
+	a.scoper.scopes = append(a.scoper.scopes, s)
 }
 
 func (a *analyzer) popScope() {
-	l := len(a.scopes) - 1
-	a.scopes = a.scopes[:l]
-}
-
-func (a *analyzer) currentScope() *scope {
-	size := len(a.scopes)
-	if size == 0 {
-		return nil
-	}
-	return a.scopes[size-1]
+	l := len(a.scoper.scopes) - 1
+	a.scoper.scopes = a.scoper.scopes[:l]
 }
 
 // Gen4NotSupportedF returns a common error for shortcomings in the gen4 planner
