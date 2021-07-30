@@ -307,6 +307,10 @@ func vindexTableToColumnInfo(tbl *vindexes.Table) []ColumnInfo {
 		})
 		nameMap[col.Name.String()] = nil
 	}
+	// If table is authoritative, we do not need ColumnVindexes to help in resolving the unqualified columns.
+	if tbl.ColumnListAuthoritative {
+		return cols
+	}
 	for _, vindex := range tbl.ColumnVindexes {
 		for _, column := range vindex.Columns {
 			name := column.String()
