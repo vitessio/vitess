@@ -97,16 +97,16 @@ func (a *analyzer) analyzeDown(cursor *sqlparser.Cursor) bool {
 	if !a.shouldContinue() {
 		return true
 	}
+
+	if err := checkForInvalidConstructs(cursor); err != nil {
+		a.setError(err)
+		return true
+	}
+
 	a.scoper.down(cursor)
 
 	n := cursor.Node()
 	switch node := n.(type) {
-	case *sqlparser.Select:
-		if node.Having != nil {
-			a.setError(Gen4NotSupportedF("HAVING"))
-		}
-	case *sqlparser.Subquery:
-		a.setError(Gen4NotSupportedF("subquery"))
 	case sqlparser.SelectExprs:
 		if !isParentSelect(cursor) {
 			break
@@ -138,9 +138,6 @@ func (a *analyzer) analyzeDown(cursor *sqlparser.Cursor) bool {
 			} else if _, ok := node.Exprs[0].(*sqlparser.AliasedExpr); !ok {
 				a.setError(err)
 			}
-		}
-		if sqlparser.IsLockingFunc(node) {
-			a.setError(Gen4NotSupportedF("locking functions"))
 		}
 	}
 
@@ -410,8 +407,7 @@ func (a *analyzer) analyzeUp(cursor *sqlparser.Cursor) bool {
 		return false
 	}
 
-	err := a.scoper.up(cursor)
-	if err != nil {
+	if err := a.scoper.up(cursor); err != nil {
 		a.setError(err)
 		return false
 	}
@@ -425,17 +421,34 @@ func (a *analyzer) analyzeUp(cursor *sqlparser.Cursor) bool {
 		switch node := node.(type) {
 		case *sqlparser.AliasedTableExpr:
 			a.setError(a.bindTable(node, node.Expr))
-		case *sqlparser.JoinTableExpr:
-			if node.Condition.Using != nil {
-				a.setError(vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: join with USING(column_list) clause for complex queries"))
-			}
-			if node.Join == sqlparser.NaturalJoinType || node.Join == sqlparser.NaturalRightJoinType || node.Join == sqlparser.NaturalLeftJoinType {
-				a.setError(vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: "+node.Join.ToString()))
-			}
 		}
 	}
 
 	return a.shouldContinue()
+}
+
+func checkForInvalidConstructs(cursor *sqlparser.Cursor) error {
+	switch node := cursor.Node().(type) {
+	case *sqlparser.JoinTableExpr:
+		if node.Condition.Using != nil {
+			return vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: join with USING(column_list) clause for complex queries")
+		}
+		if node.Join == sqlparser.NaturalJoinType || node.Join == sqlparser.NaturalRightJoinType || node.Join == sqlparser.NaturalLeftJoinType {
+			return vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: "+node.Join.ToString())
+		}
+	case *sqlparser.Select:
+		if node.Having != nil {
+			return Gen4NotSupportedF("HAVING")
+		}
+	case *sqlparser.Subquery:
+		return Gen4NotSupportedF("subquery")
+	case *sqlparser.FuncExpr:
+		if sqlparser.IsLockingFunc(node) {
+			return Gen4NotSupportedF("locking functions")
+		}
+	}
+
+	return nil
 }
 
 func createVTableInfoForExpressions(expressions sqlparser.SelectExprs) *vTableInfo {
