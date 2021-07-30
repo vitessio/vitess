@@ -17,102 +17,145 @@ limitations under the License.
 package semantics
 
 import (
+	"fmt"
+	"strconv"
+
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vtgate/vindexes"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
-// binder is responsible for gathering information about the tables listed in the FROM clause,
-// and adding them to the current scope, plus keeping the global list of tables used in the query
 type binder struct {
-	Tables    []TableInfo
-	scoper    *scoper
-	si        SchemaInformation
-	currentDb string
+	exprRecursiveDeps ExprDependencies
+	exprDeps          ExprDependencies
 }
 
-func newBinder(scoper *scoper, si SchemaInformation, currentDb string) *binder {
+func newBinder() *binder {
 	return &binder{
-		scoper:    scoper,
-		si:        si,
-		currentDb: currentDb,
+		exprRecursiveDeps: map[sqlparser.Expr]TableSet{},
+		exprDeps:          map[sqlparser.Expr]TableSet{},
 	}
 }
 
-func (b *binder) up(cursor *sqlparser.Cursor) error {
-	node, ok := cursor.Node().(*sqlparser.AliasedTableExpr)
-	if !ok {
-		return nil
+func (a *analyzer) resolveColumn(colName *sqlparser.ColName, current *scope) (TableSet, TableSet, *querypb.Type, error) {
+	if colName.Qualifier.IsEmpty() {
+		return a.resolveUnQualifiedColumn(current, colName)
 	}
+	return a.resolveQualifiedColumn(current, colName)
+}
 
-	switch t := node.Expr.(type) {
-	case *sqlparser.DerivedTable:
-		sel, isSelect := t.Select.(*sqlparser.Select)
-		if !isSelect {
-			return Gen4NotSupportedF("union in derived table")
-		}
-
-		tableInfo := createVTableInfoForExpressions(sel.SelectExprs)
-		if err := tableInfo.checkForDuplicates(); err != nil {
-			return err
-		}
-
-		tableInfo.ASTNode = node
-		tableInfo.tableName = node.As.String()
-
-		b.Tables = append(b.Tables, tableInfo)
-		scope := b.scoper.currentScope()
-		return scope.addTable(tableInfo)
-	case sqlparser.TableName:
-		var tbl *vindexes.Table
-		var isInfSchema bool
-		if sqlparser.SystemSchema(t.Qualifier.String()) {
-			isInfSchema = true
-		} else {
-			table, vdx, _, _, _, err := b.si.FindTableOrVindex(t)
+// resolveQualifiedColumn handles column expressions where the table is explicitly stated
+func (a *analyzer) resolveQualifiedColumn(current *scope, expr *sqlparser.ColName) (TableSet, TableSet, *querypb.Type, error) {
+	// search up the scope stack until we find a match
+	for current != nil {
+		for _, table := range current.tables {
+			if !table.Matches(expr.Qualifier) {
+				continue
+			}
+			if table.IsActualTable() {
+				actualTable, ts, typ := a.resolveQualifiedColumnOnActualTable(table, expr)
+				return actualTable, ts, typ, nil
+			}
+			recursiveTs, typ, err := table.RecursiveDepsFor(expr, a, len(current.tables) == 1)
 			if err != nil {
-				return err
+				return 0, 0, nil, err
 			}
-			tbl = table
-			if tbl == nil && vdx != nil {
-				return Gen4NotSupportedF("vindex in FROM")
+			if recursiveTs == nil {
+				return 0, 0, nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadFieldError, "symbol %s not found", sqlparser.String(expr))
 			}
-		}
-		scope := b.scoper.currentScope()
-		tableInfo := b.createTable(t, node, tbl, isInfSchema)
 
-		b.Tables = append(b.Tables, tableInfo)
-		return scope.addTable(tableInfo)
+			ts, err := table.DepsFor(expr, a, len(current.tables) == 1)
+			if err != nil {
+				return 0, 0, nil, err
+			}
+			return *recursiveTs, *ts, typ, nil
+		}
+		current = current.parent
 	}
-	return nil
+	return 0, 0, nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadFieldError, "symbol %s not found", sqlparser.String(expr))
 }
 
-func (a *analyzer) tableSetFor(t *sqlparser.AliasedTableExpr) TableSet {
-	for i, t2 := range a.binder.Tables {
-		if t == t2.GetExpr() {
-			return TableSet(1 << i)
+// resolveUnQualifiedColumn handles column that do not specify which table they belong to
+func (a *analyzer) resolveUnQualifiedColumn(current *scope, expr *sqlparser.ColName) (TableSet, TableSet, *querypb.Type, error) {
+	var tspRecursive, tsp *TableSet
+	var typp *querypb.Type
+
+	for current != nil && tspRecursive == nil {
+		for _, tbl := range current.tables {
+			recursiveTs, typ, err := tbl.RecursiveDepsFor(expr, a, len(current.tables) == 1)
+			if err != nil {
+				return 0, 0, nil, err
+			}
+			if recursiveTs != nil && tspRecursive != nil {
+				return 0, 0, nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.NonUniqError, fmt.Sprintf("Column '%s' in field list is ambiguous", sqlparser.String(expr)))
+			}
+			if recursiveTs != nil {
+				tspRecursive = recursiveTs
+				typp = typ
+			}
+			if tbl.IsActualTable() {
+				continue
+			}
+			ts, err := tbl.DepsFor(expr, a, len(current.tables) == 1)
+			if err != nil {
+				return 0, 0, nil, err
+			}
+			if ts != nil {
+				tsp = ts
+			}
 		}
+
+		current = current.parent
 	}
-	panic("unknown table")
+
+	if tspRecursive == nil {
+		return 0, 0, nil, nil
+	}
+	if tsp == nil {
+		return *tspRecursive, 0, typp, nil
+	}
+	return *tspRecursive, *tsp, typp, nil
 }
 
-func (b *binder) createTable(t sqlparser.TableName, alias *sqlparser.AliasedTableExpr, tbl *vindexes.Table, isInfSchema bool) TableInfo {
-	dbName := t.Qualifier.String()
-	if dbName == "" {
-		dbName = b.currentDb
-	}
-	if alias.As.IsEmpty() {
-		return &RealTable{
-			dbName:      dbName,
-			tableName:   t.Name.String(),
-			ASTNode:     alias,
-			Table:       tbl,
-			isInfSchema: isInfSchema,
+func (a *analyzer) resolveQualifiedColumnOnActualTable(table TableInfo, expr *sqlparser.ColName) (TableSet, TableSet, *querypb.Type) {
+	ts := a.tableSetFor(table.GetExpr())
+	for _, colInfo := range table.GetColumns() {
+		if expr.Name.EqualString(colInfo.Name) {
+			// A column can't be of type NULL, that is the default value indicating that we dont know the actual type
+			// But expressions can be of NULL type, so we use nil to represent an unknown type
+			if colInfo.Type == querypb.Type_NULL_TYPE {
+				return ts, ts, nil
+			}
+			return ts, ts, &colInfo.Type
 		}
 	}
-	return &AliasedTable{
-		tableName:   alias.As.String(),
-		ASTNode:     alias,
-		Table:       tbl,
-		isInfSchema: isInfSchema,
+	return ts, ts, nil
+}
+
+func (a *analyzer) analyzeOrderByGroupByExprForLiteral(input sqlparser.Expr, caller string) {
+	l, ok := input.(*sqlparser.Literal)
+	if !ok {
+		return
 	}
+	if l.Type != sqlparser.IntVal {
+		return
+	}
+	currScope := a.scoper.currentScope()
+	num, err := strconv.Atoi(l.Val)
+	if err != nil {
+		a.err = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "error parsing column number: %s", l.Val)
+		return
+	}
+	if num < 1 || num > len(currScope.selectExprs) {
+		a.err = vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadFieldError, "Unknown column '%d' in '%s'", num, caller)
+		return
+	}
+
+	expr, ok := currScope.selectExprs[num-1].(*sqlparser.AliasedExpr)
+	if !ok {
+		return
+	}
+
+	a.binder.exprRecursiveDeps[input] = a.binder.exprRecursiveDeps.Dependencies(expr.Expr)
 }
