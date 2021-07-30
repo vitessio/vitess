@@ -2279,6 +2279,7 @@ func commandCreateLookupVindex(ctx context.Context, wr *wrangler.Wrangler, subFl
 	//TODO: keep -cell around for backward compatibility and remove it in a future version
 	cell := subFlags.String("cell", "", "Cell to replicate from.")
 	tabletTypes := subFlags.String("tablet_types", "", "Source tablet types to replicate from.")
+	continueAfterCopyWithOwner := subFlags.Bool("continue_after_copy_with_owner", false, "Vindex will continue materialization after copy when an owner is provided")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -2293,7 +2294,7 @@ func commandCreateLookupVindex(ctx context.Context, wr *wrangler.Wrangler, subFl
 	if err := json2.Unmarshal([]byte(subFlags.Arg(1)), specs); err != nil {
 		return err
 	}
-	return wr.CreateLookupVindex(ctx, keyspace, specs, *cell, *tabletTypes)
+	return wr.CreateLookupVindex(ctx, keyspace, specs, *cell, *tabletTypes, *continueAfterCopyWithOwner)
 }
 
 func commandExternalizeVindex(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
