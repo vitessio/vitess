@@ -31,6 +31,26 @@ func newScoper() *scoper {
 	}
 }
 
+func (s *scoper) down(cursor *sqlparser.Cursor) {
+	switch node := cursor.Node().(type) {
+	case *sqlparser.Select:
+		currScope := newScope(s.currentScope())
+		s.push(currScope)
+
+		// Needed for order by with Literal to find the Expression.
+		currScope.selectExprs = node.SelectExprs
+
+		s.rScope[node] = currScope
+		s.wScope[node] = newScope(nil)
+	case sqlparser.TableExpr:
+		if isParentSelect(cursor) {
+			s.push(newScope(nil))
+		}
+	case *sqlparser.Union:
+		s.push(newScope(s.currentScope()))
+	}
+}
+
 func (s *scoper) currentScope() *scope {
 	size := len(s.scopes)
 	if size == 0 {

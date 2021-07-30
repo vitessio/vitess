@@ -98,29 +98,17 @@ func (a *analyzer) analyzeDown(cursor *sqlparser.Cursor) bool {
 		return true
 	}
 	current := a.scoper.currentScope()
+
+	a.scoper.down(cursor)
+
 	n := cursor.Node()
 	switch node := n.(type) {
 	case *sqlparser.Select:
 		if node.Having != nil {
 			a.setError(Gen4NotSupportedF("HAVING"))
 		}
-
-		currScope := newScope(current)
-		a.scoper.push(currScope)
-
-		// Needed for order by with Literal to find the Expression.
-		currScope.selectExprs = node.SelectExprs
-
-		a.scoper.rScope[node] = currScope
-		a.scoper.wScope[node] = newScope(nil)
 	case *sqlparser.Subquery:
 		a.setError(Gen4NotSupportedF("subquery"))
-	case sqlparser.TableExpr:
-		if isParentSelect(cursor) {
-			a.scoper.push(newScope(nil))
-		}
-	case *sqlparser.Union:
-		a.scoper.push(newScope(current))
 	case sqlparser.SelectExprs:
 		sel, ok := cursor.Parent().(*sqlparser.Select)
 		if !ok {
