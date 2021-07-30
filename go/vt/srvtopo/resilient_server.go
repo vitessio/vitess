@@ -17,14 +17,13 @@ limitations under the License.
 package srvtopo
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"html/template"
 	"sort"
 	"sync"
 	"time"
-
-	"context"
 
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/log"
