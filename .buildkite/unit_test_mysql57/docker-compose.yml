@@ -1,0 +1,6 @@
+version: "3.8"
+services:
+  vitess:
+    build:
+      context: ../../
+      dockerfile: ./.buildkite/unit_test_mysql57/Dockerfile
