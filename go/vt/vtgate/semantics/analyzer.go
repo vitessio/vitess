@@ -97,8 +97,6 @@ func (a *analyzer) analyzeDown(cursor *sqlparser.Cursor) bool {
 	if !a.shouldContinue() {
 		return true
 	}
-	current := a.scoper.currentScope()
-
 	a.scoper.down(cursor)
 
 	n := cursor.Node()
@@ -122,7 +120,7 @@ func (a *analyzer) analyzeDown(cursor *sqlparser.Cursor) bool {
 			a.analyzeOrderByGroupByExprForLiteral(grpExpr, "group statement")
 		}
 	case *sqlparser.ColName:
-		tsRecursive, ts, qt, err := a.resolveColumn(node, current)
+		tsRecursive, ts, qt, err := a.resolveColumn(node, a.scoper.currentScope())
 		if err != nil {
 			a.setError(err)
 		} else {
@@ -411,27 +409,19 @@ func (a *analyzer) analyzeUp(cursor *sqlparser.Cursor) bool {
 	if !a.shouldContinue() {
 		return false
 	}
+
+	err := a.scoper.up(cursor)
+	if err != nil {
+		a.setError(err)
+		return false
+	}
+
 	switch node := cursor.Node().(type) {
 	case sqlparser.SelectExprs:
 		if isParentSelect(cursor) {
 			a.popProjection()
 		}
-	case *sqlparser.Union, *sqlparser.Select, sqlparser.OrderBy, sqlparser.GroupBy:
-		a.scoper.popScope()
 	case sqlparser.TableExpr:
-		if isParentSelect(cursor) {
-			curScope := a.scoper.currentScope()
-			a.scoper.popScope()
-			earlierScope := a.scoper.currentScope()
-			// copy curScope into the earlierScope
-			for _, table := range curScope.tables {
-				err := earlierScope.addTable(table)
-				if err != nil {
-					a.setError(err)
-					break
-				}
-			}
-		}
 		switch node := node.(type) {
 		case *sqlparser.AliasedTableExpr:
 			a.setError(a.bindTable(node, node.Expr))
