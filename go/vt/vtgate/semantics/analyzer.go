@@ -49,7 +49,7 @@ func newAnalyzer(dbName string, si SchemaInformation) *analyzer {
 		exprTypes: map[sqlparser.Expr]querypb.Type{},
 		scoper:    s,
 		tables:    newTableCollector(s, si, dbName),
-		binder:    newBinder(),
+		binder:    newBinder(s),
 	}
 }
 
@@ -96,6 +96,11 @@ func (a *analyzer) analyzeDown(cursor *sqlparser.Cursor) bool {
 
 	a.scoper.down(cursor)
 
+	if err := a.binder.down(cursor); err != nil {
+		a.setError(err)
+		return true
+	}
+
 	n := cursor.Node()
 	switch node := n.(type) {
 	case sqlparser.SelectExprs:
@@ -104,12 +109,6 @@ func (a *analyzer) analyzeDown(cursor *sqlparser.Cursor) bool {
 		}
 
 		a.inProjection = append(a.inProjection, true)
-	case *sqlparser.Order:
-		a.analyzeOrderByGroupByExprForLiteral(node.Expr, "order clause")
-	case sqlparser.GroupBy:
-		for _, grpExpr := range node {
-			a.analyzeOrderByGroupByExprForLiteral(grpExpr, "group statement")
-		}
 	case *sqlparser.ColName:
 		tsRecursive, ts, qt, err := a.resolveColumn(node, a.scoper.currentScope())
 		if err != nil {

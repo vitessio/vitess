@@ -29,13 +29,30 @@ import (
 type binder struct {
 	exprRecursiveDeps ExprDependencies
 	exprDeps          ExprDependencies
+	scoper            *scoper
 }
 
-func newBinder() *binder {
+func newBinder(scoper *scoper) *binder {
 	return &binder{
 		exprRecursiveDeps: map[sqlparser.Expr]TableSet{},
 		exprDeps:          map[sqlparser.Expr]TableSet{},
+		scoper:            scoper,
 	}
+}
+
+func (b *binder) down(cursor *sqlparser.Cursor) error {
+	switch node := cursor.Node().(type) {
+	case *sqlparser.Order:
+		return b.analyzeOrderByGroupByExprForLiteral(node.Expr, "order clause")
+	case sqlparser.GroupBy:
+		for _, grpExpr := range node {
+			err := b.analyzeOrderByGroupByExprForLiteral(grpExpr, "group statement")
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 func (a *analyzer) resolveColumn(colName *sqlparser.ColName, current *scope) (TableSet, TableSet, *querypb.Type, error) {
@@ -133,29 +150,28 @@ func (a *analyzer) resolveQualifiedColumnOnActualTable(table TableInfo, expr *sq
 	return ts, ts, nil
 }
 
-func (a *analyzer) analyzeOrderByGroupByExprForLiteral(input sqlparser.Expr, caller string) {
+func (b *binder) analyzeOrderByGroupByExprForLiteral(input sqlparser.Expr, caller string) error {
 	l, ok := input.(*sqlparser.Literal)
 	if !ok {
-		return
+		return nil
 	}
 	if l.Type != sqlparser.IntVal {
-		return
+		return nil
 	}
-	currScope := a.scoper.currentScope()
+	currScope := b.scoper.currentScope()
 	num, err := strconv.Atoi(l.Val)
 	if err != nil {
-		a.err = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "error parsing column number: %s", l.Val)
-		return
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "error parsing column number: %s", l.Val)
 	}
 	if num < 1 || num > len(currScope.selectExprs) {
-		a.err = vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadFieldError, "Unknown column '%d' in '%s'", num, caller)
-		return
+		return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadFieldError, "Unknown column '%d' in '%s'", num, caller)
 	}
 
 	expr, ok := currScope.selectExprs[num-1].(*sqlparser.AliasedExpr)
 	if !ok {
-		return
+		return nil
 	}
 
-	a.binder.exprRecursiveDeps[input] = a.binder.exprRecursiveDeps.Dependencies(expr.Expr)
+	b.exprRecursiveDeps[input] = b.exprRecursiveDeps.Dependencies(expr.Expr)
+	return nil
 }
