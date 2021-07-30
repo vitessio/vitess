@@ -171,16 +171,7 @@ func (a *analyzer) analyzeOrderByGroupByExprForLiteral(input sqlparser.Expr, cal
 		return
 	}
 
-	var deps TableSet
-	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
-		expr, ok := node.(sqlparser.Expr)
-		if ok {
-			deps = deps.Merge(a.exprRecursiveDeps[expr])
-		}
-		return true, nil
-	}, expr.Expr)
-
-	a.exprRecursiveDeps[input] = deps
+	a.exprRecursiveDeps[input] = a.exprRecursiveDeps.Dependencies(expr.Expr)
 }
 
 func isParentSelect(cursor *sqlparser.Cursor) bool {
