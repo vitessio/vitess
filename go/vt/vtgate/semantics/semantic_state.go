@@ -17,6 +17,8 @@ limitations under the License.
 package semantics
 
 import (
+	"reflect"
+
 	"vitess.io/vitess/go/vt/key"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -156,7 +158,7 @@ func (v *vTableInfo) RecursiveDepsFor(col *sqlparser.ColName, org originable, si
 }
 
 // DepsFor implements the TableInfo interface
-func (v *vTableInfo) DepsFor(col *sqlparser.ColName, org originable, single bool) (*TableSet, error) {
+func (v *vTableInfo) DepsFor(col *sqlparser.ColName, org originable, _ bool) (*TableSet, error) {
 	if v.ASTNode == nil {
 		return nil, nil
 	}
@@ -430,14 +432,26 @@ func (d ExprDependencies) Dependencies(expr sqlparser.Expr) TableSet {
 		return deps
 	}
 
+	// During the original semantic analysis, all ColName:s were found and bound the the corresponding tables
+	// Here, we'll walk the expression tree and look to see if we can found any sub-expressions
+	// that have already set dependencies.
 	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
-		colName, ok := node.(*sqlparser.ColName)
-		if ok {
-			set := d[colName]
+		expr, ok := node.(sqlparser.Expr)
+		if !ok || !reflect.TypeOf(expr).Comparable() {
+			// if this is not an expression, or it is an expression we can't use as a map-key,
+			// just carry on down the tree
+			return true, nil
+		}
+
+		set, found := d[expr]
+		if found {
 			deps |= set
 		}
-		return true, nil
+
+		// if we found a cached value, there is no need to continue down to visit children
+		return !found, nil
 	}, expr)
+
 	d[expr] = deps
 	return deps
 }
