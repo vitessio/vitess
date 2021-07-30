@@ -349,6 +349,9 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "LeftJoin",
     "JoinColumnIndexes": "-1",
+    "JoinVars": {
+      "u_a": 1
+    },
     "TableName": "`user`_unsharded",
     "Inputs": [
       {
@@ -383,6 +386,9 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "LeftJoin",
     "JoinColumnIndexes": "-2",
+    "JoinVars": {
+      "u_a": 0
+    },
     "TableName": "`user`_unsharded",
     "Inputs": [
       {
@@ -420,12 +426,18 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "LeftJoin",
     "JoinColumnIndexes": "-1,1",
+    "JoinVars": {
+      "m1_col": 1
+    },
     "TableName": "`user`_unsharded_unsharded",
     "Inputs": [
       {
         "OperatorType": "Join",
         "Variant": "LeftJoin",
         "JoinColumnIndexes": "-1,1",
+        "JoinVars": {
+          "user_col": 0
+        },
         "TableName": "`user`_unsharded",
         "Inputs": [
           {
@@ -473,12 +485,18 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "LeftJoin",
     "JoinColumnIndexes": "-2,1",
+    "JoinVars": {
+      "m1_col": 0
+    },
     "TableName": "`user`_unsharded_unsharded",
     "Inputs": [
       {
         "OperatorType": "Join",
         "Variant": "LeftJoin",
         "JoinColumnIndexes": "1,-1",
+        "JoinVars": {
+          "user_col": 0
+        },
         "TableName": "`user`_unsharded",
         "Inputs": [
           {
@@ -529,6 +547,9 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "LeftJoin",
     "JoinColumnIndexes": "-1",
+    "JoinVars": {
+      "user_col": 0
+    },
     "TableName": "`user`_user_extra_unsharded",
     "Inputs": [
       {
@@ -545,6 +566,9 @@ Gen4 plan same as above
       {
         "OperatorType": "Join",
         "Variant": "LeftJoin",
+        "JoinVars": {
+          "e_col": 0
+        },
         "TableName": "user_extra_unsharded",
         "Inputs": [
           {
@@ -581,6 +605,9 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "LeftJoin",
     "JoinColumnIndexes": "-1",
+    "JoinVars": {
+      "user_col": 0
+    },
     "TableName": "`user`_user_extra_unsharded",
     "Inputs": [
       {
@@ -597,6 +624,9 @@ Gen4 plan same as above
       {
         "OperatorType": "Join",
         "Variant": "LeftJoin",
+        "JoinVars": {
+          "e_col": 0
+        },
         "TableName": "user_extra_unsharded",
         "Inputs": [
           {
@@ -1167,6 +1197,9 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-1",
+    "JoinVars": {
+      "user_id": 1
+    },
     "TableName": "`user`_user_extra",
     "Inputs": [
       {
@@ -1288,6 +1321,9 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-1",
+    "JoinVars": {
+      "user_id": 1
+    },
     "TableName": "`user`_user_extra",
     "Inputs": [
       {
@@ -1322,6 +1358,9 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "1",
+    "JoinVars": {
+      "user_extra_col": 0
+    },
     "TableName": "user_extra_`user`",
     "Inputs": [
       {
@@ -1363,6 +1402,9 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "1",
+    "JoinVars": {
+      "user_extra_user_id": 0
+    },
     "TableName": "user_extra_`user`",
     "Inputs": [
       {
@@ -1401,6 +1443,9 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-2",
+    "JoinVars": {
+      "user_name": 0
+    },
     "TableName": "`user`_user_extra",
     "Inputs": [
       {
@@ -1734,6 +1779,9 @@ Gen4 error: Duplicate column name 'id'
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-1",
+    "JoinVars": {
+      "t_id": 0
+    },
     "TableName": "`user`_user_extra",
     "Inputs": [
       {
@@ -2097,6 +2145,10 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-1",
+    "JoinVars": {
+      "t_col1": 0,
+      "t_id": 1
+    },
     "TableName": "`user`_user_extra_unsharded",
     "Inputs": [
       {
@@ -2168,6 +2220,9 @@ Gen4 plan same as above
         "OperatorType": "Join",
         "Variant": "Join",
         "JoinColumnIndexes": "-1,-2",
+        "JoinVars": {
+          "user_col": 2
+        },
         "TableName": "`user`_user_extra",
         "Inputs": [
           {
@@ -2325,6 +2380,9 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "2",
+    "JoinVars": {
+      "ua_id": 0
+    },
     "TableName": "unsharded_a_`user`_user_extra",
     "Inputs": [
       {
@@ -2342,6 +2400,9 @@ Gen4 plan same as above
         "OperatorType": "Join",
         "Variant": "Join",
         "JoinColumnIndexes": "-1,-2",
+        "JoinVars": {
+          "user_id": 0
+        },
         "TableName": "`user`_user_extra",
         "Inputs": [
           {
@@ -2669,6 +2730,9 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-1,1",
+    "JoinVars": {
+      "user_col2": 1
+    },
     "TableName": "`user`_unsharded",
     "Inputs": [
       {
@@ -2703,6 +2767,9 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-2,1",
+    "JoinVars": {
+      "user_col2": 0
+    },
     "TableName": "`user`_unsharded",
     "Inputs": [
       {
@@ -2931,6 +2998,9 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-1",
+    "JoinVars": {
+      "user_id": 0
+    },
     "TableName": "`user`_user_extra",
     "Inputs": [
       {
@@ -2965,6 +3035,9 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "1",
+    "JoinVars": {
+      "user_extra_id": 0
+    },
     "TableName": "user_extra_`user`",
     "Inputs": [
       {
@@ -2990,6 +3063,95 @@ Gen4 plan same as above
         "Table": "`user`",
         "Values": [
           ":user_extra_id"
+        ],
+        "Vindex": "user_index"
+      }
+    ]
+  }
+}
+
+# join with bindvariables
+"SELECT `user`.`id` FROM `user` INNER JOIN `user_extra` ON `user`.`id` = `user_extra`.`assembly_id` WHERE `user_extra`.`user_id` = 2"
+{
+  "QueryType": "SELECT",
+  "Original": "SELECT `user`.`id` FROM `user` INNER JOIN `user_extra` ON `user`.`id` = `user_extra`.`assembly_id` WHERE `user_extra`.`user_id` = 2",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "-1",
+    "JoinVars": {
+      "user_id": 0
+    },
+    "TableName": "`user`_user_extra",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select `user`.id from `user` where 1 != 1",
+        "Query": "select `user`.id from `user`",
+        "Table": "`user`"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectEqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select 1 from user_extra where 1 != 1",
+        "Query": "select 1 from user_extra where user_extra.assembly_id = :user_id and user_extra.user_id = 2",
+        "Table": "user_extra",
+        "Values": [
+          2
+        ],
+        "Vindex": "user_index"
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "SELECT `user`.`id` FROM `user` INNER JOIN `user_extra` ON `user`.`id` = `user_extra`.`assembly_id` WHERE `user_extra`.`user_id` = 2",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "1",
+    "JoinVars": {
+      "user_extra_assembly_id": 0
+    },
+    "TableName": "user_extra_`user`",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectEqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select user_extra.assembly_id from user_extra where 1 != 1",
+        "Query": "select user_extra.assembly_id from user_extra where user_extra.user_id = 2",
+        "Table": "user_extra",
+        "Values": [
+          2
+        ],
+        "Vindex": "user_index"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectEqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select `user`.id from `user` where 1 != 1",
+        "Query": "select `user`.id from `user` where `user`.id = :user_extra_assembly_id",
+        "Table": "`user`",
+        "Values": [
+          ":user_extra_assembly_id"
         ],
         "Vindex": "user_index"
       }

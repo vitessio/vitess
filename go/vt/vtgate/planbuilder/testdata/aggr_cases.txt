@@ -1500,7 +1500,6 @@ Gen4 plan same as above
 "select distinct a+1 from user"
 "generating order by clause: cannot reference a complex expression"
 
-
 # scatter aggregate with numbered order by columns
 "select a, b, c, d, count(*) from user group by 1, 2, 3 order by 1, 2, 3"
 {
