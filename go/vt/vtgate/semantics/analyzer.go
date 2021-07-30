@@ -106,7 +106,7 @@ func (a *analyzer) analyzeDown(cursor *sqlparser.Cursor) bool {
 		}
 
 		currScope := newScope(current)
-		a.push(currScope)
+		a.scoper.push(currScope)
 
 		// Needed for order by with Literal to find the Expression.
 		currScope.selectExprs = node.SelectExprs
@@ -117,10 +117,10 @@ func (a *analyzer) analyzeDown(cursor *sqlparser.Cursor) bool {
 		a.setError(Gen4NotSupportedF("subquery"))
 	case sqlparser.TableExpr:
 		if isParentSelect(cursor) {
-			a.push(newScope(nil))
+			a.scoper.push(newScope(nil))
 		}
 	case *sqlparser.Union:
-		a.push(newScope(current))
+		a.scoper.push(newScope(current))
 	case sqlparser.SelectExprs:
 		sel, ok := cursor.Parent().(*sqlparser.Select)
 		if !ok {
@@ -219,7 +219,7 @@ func (a *analyzer) changeScopeForOrderBy(cursor *sqlparser.Cursor) {
 	// so before walking the rest of the tree, we change the scope to match this behaviour
 	incomingScope := a.scoper.currentScope()
 	nScope := newScope(incomingScope)
-	a.push(nScope)
+	a.scoper.push(nScope)
 	wScope := a.scoper.wScope[sel]
 	nScope.tables = append(nScope.tables, wScope.tables...)
 	nScope.selectExprs = incomingScope.selectExprs
@@ -458,11 +458,11 @@ func (a *analyzer) analyzeUp(cursor *sqlparser.Cursor) bool {
 			a.popProjection()
 		}
 	case *sqlparser.Union, *sqlparser.Select, sqlparser.OrderBy, sqlparser.GroupBy:
-		a.popScope()
+		a.scoper.popScope()
 	case sqlparser.TableExpr:
 		if isParentSelect(cursor) {
 			curScope := a.scoper.currentScope()
-			a.popScope()
+			a.scoper.popScope()
 			earlierScope := a.scoper.currentScope()
 			// copy curScope into the earlierScope
 			for _, table := range curScope.tables {
@@ -518,15 +518,6 @@ func (a *analyzer) popProjection() {
 
 func (a *analyzer) shouldContinue() bool {
 	return a.err == nil
-}
-
-func (a *analyzer) push(s *scope) {
-	a.scoper.scopes = append(a.scoper.scopes, s)
-}
-
-func (a *analyzer) popScope() {
-	l := len(a.scoper.scopes) - 1
-	a.scoper.scopes = a.scoper.scopes[:l]
 }
 
 // Gen4NotSupportedF returns a common error for shortcomings in the gen4 planner
