@@ -534,7 +534,12 @@ func testFile(t *testing.T, filename, tempDir string, vschema *vschemaWrapper, c
 					if outFirstPlanner == out {
 						expected.WriteString(samePlanMarker)
 					} else {
-						expected.WriteString(fmt.Sprintf("%s\n", out))
+						if err != nil {
+							out = out[1 : len(out)-1] // remove the double quotes
+							expected.WriteString(fmt.Sprintf("Gen4 error: %s\n", out))
+						} else {
+							expected.WriteString(fmt.Sprintf("%s\n", out))
+						}
 					}
 				})
 			} else {
