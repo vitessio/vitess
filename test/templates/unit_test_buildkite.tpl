@@ -4,6 +4,9 @@
         - ./.buildkite/setup_go.sh
         # Tune the OS
         - echo '1024 65535' | sudo tee -a /proc/sys/net/ipv4/ip_local_port_range
+        # clear the VTROOT
+        - sudo rm -rf "$VTDATAROOT"
+        - mkdir -p "$VTDATAROOT"
         # Get dependencies
         - export DEBIAN_FRONTEND="noninteractive"
         - sudo apt-get update

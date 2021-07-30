@@ -38,6 +38,7 @@ const (
 	initialPipeline = `env:
   GOROOT: "/usr/local/go"
   PATH: "/usr/local/go/bin:$PATH"
+  VTDATAROOT: "/tmp/vtdataroot"
 steps:
 `
 )
