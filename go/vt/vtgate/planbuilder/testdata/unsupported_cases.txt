@@ -108,10 +108,6 @@ Gen4 plan same as above
 "unsupported: only one expression allowed inside aggregates: count(a, b)"
 Gen4 error: aggregate functions take a single argument 'count(a, b)'
 
-# Cannot have more than one aggr(distinct...
-"select count(distinct a), count(distinct b) from user"
-"unsupported: only one distinct aggregation allowed in a select: count(distinct b)"
-
 # scatter aggregate symtab lookup error
 "select id, b as id, count(*) from user order by id"
 "ambiguous symbol reference: id"
