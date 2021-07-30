@@ -20,17 +20,24 @@ import (
 	"fmt"
 	"strconv"
 
+	querypb "vitess.io/vitess/go/vt/proto/query"
+
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
+// binder is responsible for finding all the column references in
+// the query and bind them to the table that they belong to.
+// While doing this, it will also find the types for columns and
+// store these in the typer:s expression map
 type binder struct {
 	exprRecursiveDeps ExprDependencies
 	exprDeps          ExprDependencies
 	scoper            *scoper
 	tc                *tableCollector
 	org               originable
+	typer             *typer
 }
 
 func newBinder(scoper *scoper, org originable, tc *tableCollector) *binder {
@@ -53,6 +60,16 @@ func (b *binder) down(cursor *sqlparser.Cursor) error {
 			if err != nil {
 				return err
 			}
+		}
+	case *sqlparser.ColName:
+		baseTableTS, ts, typ, err := b.resolveColumn(node, b.scoper.currentScope())
+		if err != nil {
+			return err
+		}
+		b.exprRecursiveDeps[node] = baseTableTS
+		b.exprDeps[node] = ts
+		if typ != nil {
+			b.typer.setTypeFor(node, *typ)
 		}
 	}
 	return nil
@@ -84,7 +101,7 @@ func (b *binder) analyzeOrderByGroupByExprForLiteral(input sqlparser.Expr, calle
 	return nil
 }
 
-func (b *binder) resolveColumn(colName *sqlparser.ColName, current *scope) (TableSet, TableSet, error) {
+func (b *binder) resolveColumn(colName *sqlparser.ColName, current *scope) (TableSet, TableSet, *querypb.Type, error) {
 	if colName.Qualifier.IsEmpty() {
 		return b.resolveUnQualifiedColumn(current, colName)
 	}
@@ -92,7 +109,7 @@ func (b *binder) resolveColumn(colName *sqlparser.ColName, current *scope) (Tabl
 }
 
 // resolveQualifiedColumn handles column expressions where the table is explicitly stated
-func (b *binder) resolveQualifiedColumn(current *scope, expr *sqlparser.ColName) (TableSet, TableSet, error) {
+func (b *binder) resolveQualifiedColumn(current *scope, expr *sqlparser.ColName) (TableSet, TableSet, *querypb.Type, error) {
 	// search up the scope stack until we find a match
 	for current != nil {
 		for _, table := range current.tables {
@@ -100,50 +117,52 @@ func (b *binder) resolveQualifiedColumn(current *scope, expr *sqlparser.ColName)
 				continue
 			}
 			if table.IsActualTable() {
-				ts := b.tc.tableSetFor(table.GetExpr())
-				return ts, ts, nil
+				actualTable, ts, typ := b.resolveQualifiedColumnOnActualTable(table, expr)
+				return actualTable, ts, typ, nil
 			}
-			recursiveTs, _, err := table.RecursiveDepsFor(expr, b.org, len(current.tables) == 1)
+			recursiveTs, typ, err := table.RecursiveDepsFor(expr, b.org, len(current.tables) == 1)
 			if err != nil {
-				return 0, 0, err
+				return 0, 0, nil, err
 			}
 			if recursiveTs == nil {
-				return 0, 0, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadFieldError, "symbol %s not found", sqlparser.String(expr))
+				return 0, 0, nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadFieldError, "symbol %s not found", sqlparser.String(expr))
 			}
 
 			ts, err := table.DepsFor(expr, b.org, len(current.tables) == 1)
 			if err != nil {
-				return 0, 0, err
+				return 0, 0, nil, err
 			}
-			return *recursiveTs, *ts, nil
+			return *recursiveTs, *ts, typ, nil
 		}
 		current = current.parent
 	}
-	return 0, 0, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadFieldError, "symbol %s not found", sqlparser.String(expr))
+	return 0, 0, nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadFieldError, "symbol %s not found", sqlparser.String(expr))
 }
 
 // resolveUnQualifiedColumn handles column that do not specify which table they belong to
-func (b *binder) resolveUnQualifiedColumn(current *scope, expr *sqlparser.ColName) (TableSet, TableSet, error) {
+func (b *binder) resolveUnQualifiedColumn(current *scope, expr *sqlparser.ColName) (TableSet, TableSet, *querypb.Type, error) {
 	var tspRecursive, tsp *TableSet
+	var typp *querypb.Type
 
 	for current != nil && tspRecursive == nil {
 		for _, tbl := range current.tables {
-			recursiveTs, _, err := tbl.RecursiveDepsFor(expr, b.org, len(current.tables) == 1)
+			recursiveTs, typ, err := tbl.RecursiveDepsFor(expr, b.org, len(current.tables) == 1)
 			if err != nil {
-				return 0, 0, err
+				return 0, 0, nil, err
 			}
 			if recursiveTs != nil && tspRecursive != nil {
-				return 0, 0, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.NonUniqError, fmt.Sprintf("Column '%s' in field list is ambiguous", sqlparser.String(expr)))
+				return 0, 0, nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.NonUniqError, fmt.Sprintf("Column '%s' in field list is ambiguous", sqlparser.String(expr)))
 			}
 			if recursiveTs != nil {
 				tspRecursive = recursiveTs
+				typp = typ
 			}
 			if tbl.IsActualTable() {
 				continue
 			}
 			ts, err := tbl.DepsFor(expr, b.org, len(current.tables) == 1)
 			if err != nil {
-				return 0, 0, err
+				return 0, 0, nil, err
 			}
 			if ts != nil {
 				tsp = ts
@@ -154,10 +173,25 @@ func (b *binder) resolveUnQualifiedColumn(current *scope, expr *sqlparser.ColNam
 	}
 
 	if tspRecursive == nil {
-		return 0, 0, nil
+		return 0, 0, nil, nil
 	}
 	if tsp == nil {
-		return *tspRecursive, 0, nil
+		return *tspRecursive, 0, typp, nil
 	}
-	return *tspRecursive, *tsp, nil
+	return *tspRecursive, *tsp, typp, nil
+}
+
+func (b *binder) resolveQualifiedColumnOnActualTable(table TableInfo, expr *sqlparser.ColName) (TableSet, TableSet, *querypb.Type) {
+	ts := b.tc.tableSetFor(table.GetExpr())
+	for _, colInfo := range table.GetColumns() {
+		if expr.Name.EqualString(colInfo.Name) {
+			// A column can't be of type NULL, that is the default value indicating that we dont know the actual type
+			// But expressions can be of NULL type, so we use nil to represent an unknown type
+			if colInfo.Type == querypb.Type_NULL_TYPE {
+				return ts, ts, nil
+			}
+			return ts, ts, &colInfo.Type
+		}
+	}
+	return ts, ts, nil
 }

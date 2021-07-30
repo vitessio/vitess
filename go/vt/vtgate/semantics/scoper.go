@@ -18,6 +18,8 @@ package semantics
 
 import "vitess.io/vitess/go/vt/sqlparser"
 
+// scoper is responsible for figuring out the scoping for the query,
+// and keeps the current scope when walking the tree
 type scoper struct {
 	rScope map[*sqlparser.Select]*scope
 	wScope map[*sqlparser.Select]*scope
@@ -44,6 +46,10 @@ func (s *scoper) down(cursor *sqlparser.Cursor) {
 		s.wScope[node] = newScope(nil)
 	case sqlparser.TableExpr:
 		if isParentSelect(cursor) {
+			// when checking the expressions used in JOIN conditions, special rules apply where the ON expression
+			// can only see the two tables involved in the JOIN, and no other tables.
+			// To create this special context, we create a special scope here that is then merged with
+			// the surrounding scope when we come back out from the JOIN
 			s.push(newScope(nil))
 		}
 	case sqlparser.SelectExprs:
@@ -59,6 +65,8 @@ func (s *scoper) down(cursor *sqlparser.Cursor) {
 
 		wScope.tables = append(wScope.tables, createVTableInfoForExpressions(node))
 	case sqlparser.OrderBy, sqlparser.GroupBy:
+		// ORDER BY and GROUP BY live in a special scope where they can access the SELECT expressions declared,
+		// but also the tables in the FROM clause
 		s.changeScopeForOrderBy(cursor)
 	case *sqlparser.Union:
 		s.push(newScope(s.currentScope()))

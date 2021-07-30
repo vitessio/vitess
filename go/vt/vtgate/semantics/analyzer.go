@@ -27,31 +27,31 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
-type (
-	// analyzer is a struct to work with analyzing the query.
-	analyzer struct {
-		scoper *scoper
-		tables *tableCollector
-		binder *binder
+// analyzer controls the flow of the analysis.
+// It starts the tree walking and controls which part of the analysis sees which parts of the tree
+type analyzer struct {
+	scoper *scoper
+	tables *tableCollector
+	binder *binder
+	typer  *typer
 
-		exprTypes    map[sqlparser.Expr]querypb.Type
-		err          error
-		inProjection []bool
+	err          error
+	inProjection int
 
-		projErr error
-	}
-)
+	projErr error
+}
 
 // newAnalyzer create the semantic analyzer
 func newAnalyzer(dbName string, si SchemaInformation) *analyzer {
 	s := newScoper()
 	a := &analyzer{
-		exprTypes: map[sqlparser.Expr]querypb.Type{},
-		scoper:    s,
-		tables:    newTableCollector(s, si, dbName),
+		scoper: s,
+		tables: newTableCollector(s, si, dbName),
 	}
 
 	a.binder = newBinder(s, a, a.tables)
+	a.typer = newTyper(a.binder)
+	a.binder.typer = a.typer
 
 	return a
 }
@@ -67,7 +67,7 @@ func Analyze(statement sqlparser.SelectStatement, currentDb string, si SchemaInf
 	return &SemTable{
 		ExprBaseTableDeps: analyzer.binder.exprRecursiveDeps,
 		ExprDeps:          analyzer.binder.exprDeps,
-		exprTypes:         analyzer.exprTypes,
+		exprTypes:         analyzer.typer.exprTypes,
 		Tables:            analyzer.tables.Tables,
 		selectScope:       analyzer.scoper.rScope,
 		ProjectionErr:     analyzer.projErr,
@@ -76,15 +76,13 @@ func Analyze(statement sqlparser.SelectStatement, currentDb string, si SchemaInf
 }
 
 func (a *analyzer) setError(err error) {
-	if len(a.inProjection) > 0 && vterrors.ErrState(err) == vterrors.NonUniqError {
+	if a.inProjection > 0 && vterrors.ErrState(err) == vterrors.NonUniqError {
 		a.projErr = err
 	} else {
 		a.err = err
 	}
 }
 
-// analyzeDown pushes new scopes when we encounter sub queries,
-// and resolves the table a column is using
 func (a *analyzer) analyzeDown(cursor *sqlparser.Cursor) bool {
 	// If we have an error we keep on going down the tree without checking for anything else
 	// this way we can abort when we come back up.
@@ -104,34 +102,11 @@ func (a *analyzer) analyzeDown(cursor *sqlparser.Cursor) bool {
 		return true
 	}
 
-	n := cursor.Node()
-	switch node := n.(type) {
-	case sqlparser.SelectExprs:
-		if !isParentSelect(cursor) {
-			break
-		}
-
-		a.inProjection = append(a.inProjection, true)
-	case *sqlparser.ColName:
-		tsRecursive, ts, qt, err := a.resolveColumn(node, a.scoper.currentScope())
-		if err != nil {
-			a.setError(err)
-		} else {
-			a.binder.exprRecursiveDeps[node] = tsRecursive
-			a.binder.exprDeps[node] = ts
-			if qt != nil {
-				a.exprTypes[node] = *qt
-			}
-		}
-	case *sqlparser.FuncExpr:
-		if node.Distinct {
-			err := vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "syntax error: %s", sqlparser.String(node))
-			if len(node.Exprs) != 1 {
-				a.setError(err)
-			} else if _, ok := node.Exprs[0].(*sqlparser.AliasedExpr); !ok {
-				a.setError(err)
-			}
-		}
+	_, ok := cursor.Node().(sqlparser.SelectExprs)
+	if ok && isParentSelect(cursor) {
+		// errors that happen when we are evaluating SELECT expressions are saved until we know
+		// if we can merge everything into a single route or not
+		a.inProjection++
 	}
 
 	// this is the visitor going down the tree. Returning false here would just not visit the children
@@ -140,21 +115,39 @@ func (a *analyzer) analyzeDown(cursor *sqlparser.Cursor) bool {
 	return true
 }
 
+func (a *analyzer) analyzeUp(cursor *sqlparser.Cursor) bool {
+	if !a.shouldContinue() {
+		return false
+	}
+
+	if err := a.scoper.up(cursor); err != nil {
+		a.setError(err)
+		return false
+	}
+
+	if err := a.tables.up(cursor); err != nil {
+		a.setError(err)
+		return false
+	}
+
+	if err := a.typer.up(cursor); err != nil {
+		a.setError(err)
+		return false
+	}
+
+	_, ok := cursor.Node().(sqlparser.SelectExprs)
+	if ok && isParentSelect(cursor) {
+		// errors that happen when we are evaluating SELECT expressions are saved until we know
+		// if we can merge everything into a single route or not
+		a.inProjection--
+	}
+
+	return a.shouldContinue()
+}
+
 func isParentSelect(cursor *sqlparser.Cursor) bool {
 	_, isSelect := cursor.Parent().(*sqlparser.Select)
 	return isSelect
-}
-
-// tableInfoFor returns the table info for the table set. It should contains only single table.
-func (a *analyzer) tableInfoFor(id TableSet) (TableInfo, error) {
-	numberOfTables := id.NumberOfTables()
-	if numberOfTables == 0 {
-		return nil, nil
-	}
-	if numberOfTables > 1 {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] should only be used for single tables")
-	}
-	return a.tables.Tables[id.TableOffset()], nil
 }
 
 type originable interface {
@@ -164,7 +157,7 @@ type originable interface {
 
 func (a *analyzer) depsForExpr(expr sqlparser.Expr) (TableSet, *querypb.Type) {
 	ts := a.binder.exprRecursiveDeps.Dependencies(expr)
-	qt, isFound := a.exprTypes[expr]
+	qt, isFound := a.typer.exprTypes[expr]
 	if !isFound {
 		return ts, nil
 	}
@@ -190,31 +183,6 @@ func (a *analyzer) analyze(statement sqlparser.Statement) error {
 	return a.err
 }
 
-func (a *analyzer) analyzeUp(cursor *sqlparser.Cursor) bool {
-	if !a.shouldContinue() {
-		return false
-	}
-
-	if err := a.tables.up(cursor); err != nil {
-		a.setError(err)
-		return false
-	}
-
-	if err := a.scoper.up(cursor); err != nil {
-		a.setError(err)
-		return false
-	}
-
-	switch cursor.Node().(type) {
-	case sqlparser.SelectExprs:
-		if isParentSelect(cursor) {
-			a.popProjection()
-		}
-	}
-
-	return a.shouldContinue()
-}
-
 func checkForInvalidConstructs(cursor *sqlparser.Cursor) error {
 	switch node := cursor.Node().(type) {
 	case *sqlparser.JoinTableExpr:
@@ -233,6 +201,15 @@ func checkForInvalidConstructs(cursor *sqlparser.Cursor) error {
 	case *sqlparser.FuncExpr:
 		if sqlparser.IsLockingFunc(node) {
 			return Gen4NotSupportedF("locking functions")
+		}
+
+		if node.Distinct {
+			err := vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "syntax error: %s", sqlparser.String(node))
+			if len(node.Exprs) != 1 {
+				return err
+			} else if _, ok := node.Exprs[0].(*sqlparser.AliasedExpr); !ok {
+				return err
+			}
 		}
 	}
 
@@ -262,107 +239,8 @@ func createVTableInfoForExpressions(expressions sqlparser.SelectExprs) *vTableIn
 	return vTbl
 }
 
-func (a *analyzer) popProjection() {
-	a.inProjection = a.inProjection[:len(a.inProjection)-1]
-}
-
 func (a *analyzer) shouldContinue() bool {
 	return a.err == nil
-}
-
-func (a *analyzer) resolveColumn(colName *sqlparser.ColName, current *scope) (TableSet, TableSet, *querypb.Type, error) {
-	if colName.Qualifier.IsEmpty() {
-		return a.resolveUnQualifiedColumn(current, colName)
-	}
-	return a.resolveQualifiedColumn(current, colName)
-}
-
-// resolveQualifiedColumn handles column expressions where the table is explicitly stated
-func (a *analyzer) resolveQualifiedColumn(current *scope, expr *sqlparser.ColName) (TableSet, TableSet, *querypb.Type, error) {
-	// search up the scope stack until we find a match
-	for current != nil {
-		for _, table := range current.tables {
-			if !table.Matches(expr.Qualifier) {
-				continue
-			}
-			if table.IsActualTable() {
-				actualTable, ts, typ := a.resolveQualifiedColumnOnActualTable(table, expr)
-				return actualTable, ts, typ, nil
-			}
-			recursiveTs, typ, err := table.RecursiveDepsFor(expr, a, len(current.tables) == 1)
-			if err != nil {
-				return 0, 0, nil, err
-			}
-			if recursiveTs == nil {
-				return 0, 0, nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadFieldError, "symbol %s not found", sqlparser.String(expr))
-			}
-
-			ts, err := table.DepsFor(expr, a, len(current.tables) == 1)
-			if err != nil {
-				return 0, 0, nil, err
-			}
-			return *recursiveTs, *ts, typ, nil
-		}
-		current = current.parent
-	}
-	return 0, 0, nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadFieldError, "symbol %s not found", sqlparser.String(expr))
-}
-
-// resolveUnQualifiedColumn handles column that do not specify which table they belong to
-func (a *analyzer) resolveUnQualifiedColumn(current *scope, expr *sqlparser.ColName) (TableSet, TableSet, *querypb.Type, error) {
-	var tspRecursive, tsp *TableSet
-	var typp *querypb.Type
-
-	for current != nil && tspRecursive == nil {
-		for _, tbl := range current.tables {
-			recursiveTs, typ, err := tbl.RecursiveDepsFor(expr, a, len(current.tables) == 1)
-			if err != nil {
-				return 0, 0, nil, err
-			}
-			if recursiveTs != nil && tspRecursive != nil {
-				return 0, 0, nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.NonUniqError, fmt.Sprintf("Column '%s' in field list is ambiguous", sqlparser.String(expr)))
-			}
-			if recursiveTs != nil {
-				tspRecursive = recursiveTs
-				typp = typ
-			}
-			if tbl.IsActualTable() {
-				continue
-			}
-			ts, err := tbl.DepsFor(expr, a, len(current.tables) == 1)
-			if err != nil {
-				return 0, 0, nil, err
-			}
-			if ts != nil {
-				tsp = ts
-			}
-		}
-
-		current = current.parent
-	}
-
-	if tspRecursive == nil {
-		return 0, 0, nil, nil
-	}
-	if tsp == nil {
-		return *tspRecursive, 0, typp, nil
-	}
-	return *tspRecursive, *tsp, typp, nil
-}
-
-func (a *analyzer) resolveQualifiedColumnOnActualTable(table TableInfo, expr *sqlparser.ColName) (TableSet, TableSet, *querypb.Type) {
-	ts := a.tableSetFor(table.GetExpr())
-	for _, colInfo := range table.GetColumns() {
-		if expr.Name.EqualString(colInfo.Name) {
-			// A column can't be of type NULL, that is the default value indicating that we dont know the actual type
-			// But expressions can be of NULL type, so we use nil to represent an unknown type
-			if colInfo.Type == querypb.Type_NULL_TYPE {
-				return ts, ts, nil
-			}
-			return ts, ts, &colInfo.Type
-		}
-	}
-	return ts, ts, nil
 }
 
 func (a *analyzer) tableSetFor(t *sqlparser.AliasedTableExpr) TableSet {
