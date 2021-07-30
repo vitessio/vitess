@@ -343,8 +343,8 @@ func (wr *Wrangler) checkIfPreviousJournalExists(ctx context.Context, mz *materi
 }
 
 // CreateLookupVindex creates a lookup vindex and sets up the backfill.
-func (wr *Wrangler) CreateLookupVindex(ctx context.Context, keyspace string, specs *vschemapb.Keyspace, cell, tabletTypes string) error {
-	ms, sourceVSchema, targetVSchema, err := wr.prepareCreateLookup(ctx, keyspace, specs)
+func (wr *Wrangler) CreateLookupVindex(ctx context.Context, keyspace string, specs *vschemapb.Keyspace, cell, tabletTypes string, continueAfterCopyWithOwner bool) error {
+	ms, sourceVSchema, targetVSchema, err := wr.prepareCreateLookup(ctx, keyspace, specs, continueAfterCopyWithOwner)
 	if err != nil {
 		return err
 	}
@@ -364,7 +364,7 @@ func (wr *Wrangler) CreateLookupVindex(ctx context.Context, keyspace string, spe
 }
 
 // prepareCreateLookup performs the preparatory steps for creating a lookup vindex.
-func (wr *Wrangler) prepareCreateLookup(ctx context.Context, keyspace string, specs *vschemapb.Keyspace) (ms *vtctldatapb.MaterializeSettings, sourceVSchema, targetVSchema *vschemapb.Keyspace, err error) {
+func (wr *Wrangler) prepareCreateLookup(ctx context.Context, keyspace string, specs *vschemapb.Keyspace, continueAfterCopyWithOwner bool) (ms *vtctldatapb.MaterializeSettings, sourceVSchema, targetVSchema *vschemapb.Keyspace, err error) {
 	// Important variables are pulled out here.
 	var (
 		// lookup vindex info
@@ -617,7 +617,7 @@ func (wr *Wrangler) prepareCreateLookup(ctx context.Context, keyspace string, sp
 		Workflow:       targetTableName + "_vdx",
 		SourceKeyspace: keyspace,
 		TargetKeyspace: targetKeyspace,
-		StopAfterCopy:  vindex.Owner != "",
+		StopAfterCopy:  vindex.Owner != "" && !continueAfterCopyWithOwner,
 		TableSettings: []*vtctldatapb.TableMaterializeSettings{{
 			TargetTable:      targetTableName,
 			SourceExpression: materializeQuery,
