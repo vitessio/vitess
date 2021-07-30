@@ -23,9 +23,6 @@ import (
 	"strings"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
-
-	"vitess.io/vitess/go/vt/vtgate/vindexes"
-
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -34,16 +31,13 @@ import (
 type (
 	// analyzer is a struct to work with analyzing the query.
 	analyzer struct {
-		si SchemaInformation
-
 		scoper *scoper
+		binder *binder
 
-		Tables            []TableInfo
 		exprRecursiveDeps ExprDependencies
 		exprDeps          ExprDependencies
 		exprTypes         map[sqlparser.Expr]querypb.Type
 		err               error
-		currentDb         string
 		inProjection      []bool
 
 		projErr error
@@ -52,13 +46,13 @@ type (
 
 // newAnalyzer create the semantic analyzer
 func newAnalyzer(dbName string, si SchemaInformation) *analyzer {
+	s := newScoper()
 	return &analyzer{
 		exprRecursiveDeps: map[sqlparser.Expr]TableSet{},
 		exprDeps:          map[sqlparser.Expr]TableSet{},
 		exprTypes:         map[sqlparser.Expr]querypb.Type{},
-		scoper:            newScoper(),
-		currentDb:         dbName,
-		si:                si,
+		scoper:            s,
+		binder:            newBinder(s, si, dbName),
 	}
 }
 
@@ -74,7 +68,7 @@ func Analyze(statement sqlparser.SelectStatement, currentDb string, si SchemaInf
 		ExprBaseTableDeps: analyzer.exprRecursiveDeps,
 		ExprDeps:          analyzer.exprDeps,
 		exprTypes:         analyzer.exprTypes,
-		Tables:            analyzer.Tables,
+		Tables:            analyzer.binder.Tables,
 		selectScope:       analyzer.scoper.rScope,
 		ProjectionErr:     analyzer.projErr,
 		Comments:          statement.GetComments(),
@@ -195,7 +189,7 @@ func (a *analyzer) tableInfoFor(id TableSet) (TableInfo, error) {
 	if numberOfTables > 1 {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] should only be used for single tables")
 	}
-	return a.Tables[id.TableOffset()], nil
+	return a.binder.Tables[id.TableOffset()], nil
 }
 
 // resolveQualifiedColumn handles `tabl.col` expressions
@@ -300,80 +294,6 @@ func (a *analyzer) resolveUnQualifiedColumn(current *scope, expr *sqlparser.ColN
 	return *tspRecursive, *tsp, typp, nil
 }
 
-func (a *analyzer) tableSetFor(t *sqlparser.AliasedTableExpr) TableSet {
-	for i, t2 := range a.Tables {
-		if t == t2.GetExpr() {
-			return TableSet(1 << i)
-		}
-	}
-	panic("unknown table")
-}
-
-func (a *analyzer) createTable(t sqlparser.TableName, alias *sqlparser.AliasedTableExpr, tbl *vindexes.Table, isInfSchema bool) TableInfo {
-	dbName := t.Qualifier.String()
-	if dbName == "" {
-		dbName = a.currentDb
-	}
-	if alias.As.IsEmpty() {
-		return &RealTable{
-			dbName:      dbName,
-			tableName:   t.Name.String(),
-			ASTNode:     alias,
-			Table:       tbl,
-			isInfSchema: isInfSchema,
-		}
-	}
-	return &AliasedTable{
-		tableName:   alias.As.String(),
-		ASTNode:     alias,
-		Table:       tbl,
-		isInfSchema: isInfSchema,
-	}
-}
-
-func (a *analyzer) bindTable(alias *sqlparser.AliasedTableExpr, expr sqlparser.SimpleTableExpr) error {
-	switch t := expr.(type) {
-	case *sqlparser.DerivedTable:
-		sel, isSelect := t.Select.(*sqlparser.Select)
-		if !isSelect {
-			return Gen4NotSupportedF("union in derived table")
-		}
-
-		tableInfo := createVTableInfoForExpressions(sel.SelectExprs)
-		if err := tableInfo.checkForDuplicates(); err != nil {
-			return err
-		}
-
-		tableInfo.ASTNode = alias
-		tableInfo.tableName = alias.As.String()
-
-		a.Tables = append(a.Tables, tableInfo)
-		scope := a.scoper.currentScope()
-		return scope.addTable(tableInfo)
-	case sqlparser.TableName:
-		var tbl *vindexes.Table
-		var isInfSchema bool
-		if sqlparser.SystemSchema(t.Qualifier.String()) {
-			isInfSchema = true
-		} else {
-			table, vdx, _, _, _, err := a.si.FindTableOrVindex(t)
-			if err != nil {
-				return err
-			}
-			tbl = table
-			if tbl == nil && vdx != nil {
-				return Gen4NotSupportedF("vindex in FROM")
-			}
-		}
-		scope := a.scoper.currentScope()
-		tableInfo := a.createTable(t, alias, tbl, isInfSchema)
-
-		a.Tables = append(a.Tables, tableInfo)
-		return scope.addTable(tableInfo)
-	}
-	return nil
-}
-
 func (v *vTableInfo) checkForDuplicates() error {
 	for i, name := range v.columnNames {
 		for j, name2 := range v.columnNames {
@@ -398,20 +318,20 @@ func (a *analyzer) analyzeUp(cursor *sqlparser.Cursor) bool {
 		return false
 	}
 
+	if err := a.binder.up(cursor); err != nil {
+		a.setError(err)
+		return false
+	}
+
 	if err := a.scoper.up(cursor); err != nil {
 		a.setError(err)
 		return false
 	}
 
-	switch node := cursor.Node().(type) {
+	switch cursor.Node().(type) {
 	case sqlparser.SelectExprs:
 		if isParentSelect(cursor) {
 			a.popProjection()
-		}
-	case sqlparser.TableExpr:
-		switch node := node.(type) {
-		case *sqlparser.AliasedTableExpr:
-			a.setError(a.bindTable(node, node.Expr))
 		}
 	}
 
