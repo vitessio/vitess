@@ -178,9 +178,6 @@ func (b *binder) resolveUnQualifiedColumn(current *scope, expr *sqlparser.ColNam
 		return 0, 0, nil, ProjError{vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.NonUniqError, fmt.Sprintf("Column '%s' in field list is ambiguous", sqlparser.String(expr)))}
 	}
 
-	if tspRecursive == nil {
-		return 0, 0, nil, nil
-	}
 	if tsp == nil {
 		return *tspRecursive, 0, typp, nil
 	}
