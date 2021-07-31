@@ -726,21 +726,17 @@ func (jp *joinTree) clone() queryTree {
 		lhs:   jp.lhs.clone(),
 		rhs:   jp.rhs.clone(),
 		outer: jp.outer,
+		vars:  jp.vars,
 	}
 	return result
 }
-
-/*
-
-select id, t2.b from t1 , (select b from t2) t2 where t.id = 1
-*/
 
 func (jp *joinTree) pushOutputColumns(columns []*sqlparser.ColName, semTable *semantics.SemTable) ([]int, error) {
 	var toTheLeft []bool
 	var lhs, rhs []*sqlparser.ColName
 	for _, col := range columns {
 		col.Qualifier.Qualifier = sqlparser.NewTableIdent("")
-		if semTable.GetBaseTableDependencies(col).IsSolvedBy(jp.lhs.tableID()) {
+		if semTable.BaseTableDependencies(col).IsSolvedBy(jp.lhs.tableID()) {
 			lhs = append(lhs, col)
 			toTheLeft = append(toTheLeft, true)
 		} else {

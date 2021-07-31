@@ -75,6 +75,12 @@ func Analyze(statement sqlparser.SelectStatement, currentDb string, si SchemaInf
 }
 
 func (a *analyzer) setError(err error) {
+	prErr, ok := err.(ProjError)
+	if ok {
+		a.projErr = prErr.inner
+		return
+	}
+
 	if a.inProjection > 0 && vterrors.ErrState(err) == vterrors.NonUniqError {
 		a.projErr = err
 	} else {
@@ -255,4 +261,14 @@ func Gen4NotSupportedF(format string, args ...interface{}) error {
 	lines := strings.Split(stack, "\n")
 	message += "\n" + lines[6]
 	return vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, message)
+}
+
+// ProjError is used to mark an error as something that should only be returned
+// if the planner fails to merge everything down to a single route
+type ProjError struct {
+	inner error
+}
+
+func (p ProjError) Error() string {
+	return p.inner.Error()
 }

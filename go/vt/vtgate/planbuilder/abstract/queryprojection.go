@@ -164,7 +164,8 @@ func (qp *QueryProjection) getNonAggrExprNotMatchingGroupByExprs() sqlparser.Exp
 		}
 	}
 	for _, order := range qp.OrderExprs {
-		if sqlparser.IsAggregation(order.WeightStrExpr) {
+		// ORDER BY NULL or Aggregation functions need not be present in group by
+		if sqlparser.IsNull(order.Inner.Expr) || sqlparser.IsAggregation(order.WeightStrExpr) {
 			continue
 		}
 		isGroupByOk := false
@@ -190,7 +191,7 @@ func (qp *QueryProjection) getSimplifiedExpr(e sqlparser.Expr, caller string) (e
 	if isLiteral && literalExpr.Type == sqlparser.IntVal {
 		num, _ := strconv.Atoi(literalExpr.Val)
 		if num > len(qp.SelectExprs) {
-			return nil, nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadFieldError, "Unknown column '%d' in '%s'", num, caller)
+			return nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "column offset does not exist")
 		}
 		aliasedExpr := qp.SelectExprs[num-1].Col
 		expr = aliasedExpr.Expr
@@ -215,6 +216,10 @@ func (qp *QueryProjection) getSimplifiedExpr(e sqlparser.Expr, caller string) (e
 				return e, selectExpr.Col.Expr, nil
 			}
 		}
+	}
+
+	if sqlparser.IsNull(e) {
+		return e, nil, nil
 	}
 
 	return e, e, nil

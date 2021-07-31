@@ -446,40 +446,7 @@ Gen4 error: Unknown table 'a'
 # Cannot auto-resolve for cross-shard joins
 "select col from user join user_extra"
 "symbol col not found"
-{
-  "QueryType": "SELECT",
-  "Original": "select col from user join user_extra",
-  "Instructions": {
-    "OperatorType": "Join",
-    "Variant": "Join",
-    "JoinColumnIndexes": "-1",
-    "TableName": "`user`_user_extra",
-    "Inputs": [
-      {
-        "OperatorType": "Route",
-        "Variant": "SelectScatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select col from `user` where 1 != 1",
-        "Query": "select col from `user`",
-        "Table": "`user`"
-      },
-      {
-        "OperatorType": "Route",
-        "Variant": "SelectScatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select 1 from user_extra where 1 != 1",
-        "Query": "select 1 from user_extra",
-        "Table": "user_extra"
-      }
-    ]
-  }
-}
+Gen4 error: Column 'col' in field list is ambiguous
 
 # Auto-resolve should work if unique vindex columns are referenced
 "select id, user_id from user join user_extra"
@@ -517,6 +484,7 @@ Gen4 error: Unknown table 'a'
     ]
   }
 }
+Gen4 plan same as above
 
 # database calls should be substituted
 "select database() from dual"
@@ -858,6 +826,9 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-1,1",
+    "JoinVars": {
+      "user_id": 0
+    },
     "TableName": "`user`_unsharded",
     "Inputs": [
       {

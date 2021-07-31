@@ -321,7 +321,7 @@ func exprHasUniqueVindex(vschema ContextVSchema, semTable *semantics.SemTable, e
 	if !isCol {
 		return false
 	}
-	ts := semTable.GetBaseTableDependencies(expr)
+	ts := semTable.BaseTableDependencies(expr)
 	tableInfo, err := semTable.TableInfoFor(ts)
 	if err != nil {
 		return false
@@ -382,16 +382,27 @@ func pushJoinPredicate(exprs []sqlparser.Expr, tree queryTree, semTable *semanti
 		// we break up the predicates so that colnames from the LHS are replaced by arguments
 		var rhsPreds []sqlparser.Expr
 		var lhsColumns []*sqlparser.ColName
+		var lhsVarsName []string
 		lhsSolves := node.lhs.tableID()
 		for _, expr := range exprs {
-			cols, predicate, err := breakPredicateInLHSandRHS(expr, semTable, lhsSolves)
+			bvName, cols, predicate, err := breakPredicateInLHSandRHS(expr, semTable, lhsSolves)
 			if err != nil {
 				return nil, err
 			}
 			lhsColumns = append(lhsColumns, cols...)
+			lhsVarsName = append(lhsVarsName, bvName...)
 			rhsPreds = append(rhsPreds, predicate)
 		}
-		node.pushOutputColumns(lhsColumns, semTable)
+		if lhsColumns != nil && lhsVarsName != nil {
+			idxs, err := node.pushOutputColumns(lhsColumns, semTable)
+			if err != nil {
+				return nil, err
+			}
+			for i, idx := range idxs {
+				node.vars[lhsVarsName[i]] = idx
+			}
+		}
+
 		rhsPlan, err := pushJoinPredicate(rhsPreds, node.rhs, semTable)
 		if err != nil {
 			return nil, err
@@ -401,6 +412,7 @@ func pushJoinPredicate(exprs []sqlparser.Expr, tree queryTree, semTable *semanti
 			lhs:   node.lhs,
 			rhs:   rhsPlan,
 			outer: node.outer,
+			vars:  node.vars,
 		}, nil
 	case *derivedTree:
 		plan := node.clone().(*derivedTree)
@@ -430,12 +442,12 @@ func pushJoinPredicate(exprs []sqlparser.Expr, tree queryTree, semTable *semanti
 	}
 }
 
-func breakPredicateInLHSandRHS(expr sqlparser.Expr, semTable *semantics.SemTable, lhs semantics.TableSet) (columns []*sqlparser.ColName, predicate sqlparser.Expr, err error) {
+func breakPredicateInLHSandRHS(expr sqlparser.Expr, semTable *semantics.SemTable, lhs semantics.TableSet) (bvNames []string, columns []*sqlparser.ColName, predicate sqlparser.Expr, err error) {
 	predicate = sqlparser.CloneExpr(expr)
 	_ = sqlparser.Rewrite(predicate, nil, func(cursor *sqlparser.Cursor) bool {
 		switch node := cursor.Node().(type) {
 		case *sqlparser.ColName:
-			deps := semTable.GetBaseTableDependencies(node)
+			deps := semTable.BaseTableDependencies(node)
 			if deps == 0 {
 				err = vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unknown column. has the AST been copied?")
 				return false
@@ -443,14 +455,16 @@ func breakPredicateInLHSandRHS(expr sqlparser.Expr, semTable *semantics.SemTable
 			if deps.IsSolvedBy(lhs) {
 				node.Qualifier.Qualifier = sqlparser.NewTableIdent("")
 				columns = append(columns, node)
-				arg := sqlparser.NewArgument(node.CompliantName())
+				bvName := node.CompliantName()
+				bvNames = append(bvNames, bvName)
+				arg := sqlparser.NewArgument(bvName)
 				cursor.Replace(arg)
 			}
 		}
 		return true
 	})
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	return
 }
@@ -465,7 +479,7 @@ func mergeOrJoin(lhs, rhs queryTree, joinPredicates []sqlparser.Expr, semTable *
 		return newPlan, nil
 	}
 
-	tree := &joinTree{lhs: lhs.clone(), rhs: rhs.clone(), outer: !inner}
+	tree := &joinTree{lhs: lhs.clone(), rhs: rhs.clone(), outer: !inner, vars: map[string]int{}}
 	return pushJoinPredicate(joinPredicates, tree, semTable)
 }
 
@@ -707,7 +721,7 @@ func findColumnVindex(a *routeTree, exp sqlparser.Expr, sem *semantics.SemTable)
 	if !isCol {
 		return nil
 	}
-	leftDep := sem.GetBaseTableDependencies(left)
+	leftDep := sem.BaseTableDependencies(left)
 
 	var singCol vindexes.SingleColumn
 
@@ -915,7 +929,7 @@ func createRoutePlanForOuter(aRoute, bRoute *routeTree, semTable *semantics.SemT
 	tables := bRoute.tables
 	// we are doing an outer join where the outer part contains multiple tables - we have to turn the outer part into a join or two
 	for _, predicate := range bRoute.predicates {
-		deps := semTable.GetBaseTableDependencies(predicate)
+		deps := semTable.BaseTableDependencies(predicate)
 		aTbl, bTbl, newTables := findTables(deps, tables)
 		tables = newTables
 		if aTbl != nil && bTbl != nil {

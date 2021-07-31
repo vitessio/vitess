@@ -159,6 +159,7 @@ func (b *binder) resolveUnQualifiedColumn(current *scope, expr *sqlparser.ColNam
 				typp = typ
 			}
 			if tbl.IsActualTable() {
+				tsp = tspRecursive
 				continue
 			}
 			ts, err := tbl.DepsFor(expr, b.org, len(current.tables) == 1)
@@ -171,6 +172,10 @@ func (b *binder) resolveUnQualifiedColumn(current *scope, expr *sqlparser.ColNam
 		}
 
 		current = current.parent
+	}
+
+	if tspRecursive == nil {
+		return 0, 0, nil, ProjError{vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.NonUniqError, fmt.Sprintf("Column '%s' in field list is ambiguous", sqlparser.String(expr)))}
 	}
 
 	if tspRecursive == nil {
