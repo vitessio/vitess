@@ -50,7 +50,7 @@ func newAnalyzer(dbName string, si SchemaInformation) *analyzer {
 	}
 
 	a.binder = newBinder(s, a, a.tables)
-	a.typer = newTyper(a.binder)
+	a.typer = newTyper()
 	a.binder.typer = a.typer
 
 	return a
