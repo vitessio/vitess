@@ -55,7 +55,7 @@ func pushProjection(expr *sqlparser.AliasedExpr, plan logicalPlan, semTable *sem
 	case *joinGen4:
 		lhsSolves := node.Left.ContainsTables()
 		rhsSolves := node.Right.ContainsTables()
-		deps := semTable.GetBaseTableDependencies(expr.Expr)
+		deps := semTable.BaseTableDependencies(expr.Expr)
 		var column int
 		var appended bool
 		switch {
@@ -347,6 +347,16 @@ func (hp *horizonPlanning) planOrderBy(orderExprs []abstract.OrderBy, plan logic
 
 		return newPlan, nil
 	case *orderedAggregate:
+		// remove ORDER BY NULL from the list of order by expressions since we will be doing the ordering on vtgate level so NULL is not useful
+		var orderExprsWithoutNils []abstract.OrderBy
+		for _, expr := range orderExprs {
+			if sqlparser.IsNull(expr.Inner.Expr) {
+				continue
+			}
+			orderExprsWithoutNils = append(orderExprsWithoutNils, expr)
+		}
+		orderExprs = orderExprsWithoutNils
+
 		for _, order := range orderExprs {
 			if sqlparser.ContainsAggregation(order.WeightStrExpr) {
 				ms, err := createMemorySortPlanOnAggregation(plan, orderExprs)
@@ -372,6 +382,10 @@ func (hp *horizonPlanning) planOrderBy(orderExprs []abstract.OrderBy, plan logic
 func planOrderByForRoute(orderExprs []abstract.OrderBy, plan *route, semTable *semantics.SemTable) (logicalPlan, bool, error) {
 	origColCount := plan.Select.GetColumnCount()
 	for _, order := range orderExprs {
+		plan.Select.AddOrder(order.Inner)
+		if sqlparser.IsNull(order.Inner.Expr) {
+			continue
+		}
 		offset, weightStringOffset, _, err := wrapAndPushExpr(order.Inner.Expr, order.WeightStrExpr, plan, semTable)
 		if err != nil {
 			return nil, false, err
@@ -382,7 +396,6 @@ func planOrderByForRoute(orderExprs []abstract.OrderBy, plan *route, semTable *s
 			WeightStringCol: weightStringOffset,
 			Desc:            order.Inner.Direction == sqlparser.DescOrder,
 		})
-		plan.Select.AddOrder(order.Inner)
 	}
 	return plan, origColCount != plan.Select.GetColumnCount(), nil
 }
@@ -515,7 +528,7 @@ func (hp *horizonPlanning) createMemorySortPlan(plan logicalPlan, orderExprs []a
 
 func allLeft(orderExprs []abstract.OrderBy, semTable *semantics.SemTable, lhsTables semantics.TableSet) bool {
 	for _, expr := range orderExprs {
-		exprDependencies := semTable.GetBaseTableDependencies(expr.Inner.Expr)
+		exprDependencies := semTable.BaseTableDependencies(expr.Inner.Expr)
 		if !exprDependencies.IsSolvedBy(lhsTables) {
 			return false
 		}
