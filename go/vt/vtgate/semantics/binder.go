@@ -40,13 +40,14 @@ type binder struct {
 	typer             *typer
 }
 
-func newBinder(scoper *scoper, org originable, tc *tableCollector) *binder {
+func newBinder(scoper *scoper, org originable, tc *tableCollector, typer *typer) *binder {
 	return &binder{
 		exprRecursiveDeps: map[sqlparser.Expr]TableSet{},
 		exprDeps:          map[sqlparser.Expr]TableSet{},
 		scoper:            scoper,
 		org:               org,
 		tc:                tc,
+		typer:             typer,
 	}
 }
 
