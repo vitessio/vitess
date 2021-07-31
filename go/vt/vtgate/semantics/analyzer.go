@@ -47,11 +47,10 @@ func newAnalyzer(dbName string, si SchemaInformation) *analyzer {
 	a := &analyzer{
 		scoper: s,
 		tables: newTableCollector(s, si, dbName),
+		typer:  newTyper(),
 	}
 
-	a.binder = newBinder(s, a, a.tables)
-	a.typer = newTyper()
-	a.binder.typer = a.typer
+	a.binder = newBinder(s, a, a.tables, a.typer)
 
 	return a
 }
