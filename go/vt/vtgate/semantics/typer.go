@@ -20,17 +20,18 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
+// typer is responsible for setting the type for expressions
+// it does it's work after visiting the children (up), since the children types is often needed to type a node.
 type typer struct {
 	exprTypes map[sqlparser.Expr]querypb.Type
-	binder    *binder
 }
 
-func newTyper(binder *binder) *typer {
+func newTyper() *typer {
 	return &typer{
 		exprTypes: map[sqlparser.Expr]querypb.Type{},
-		binder:    binder,
 	}
 }
 
@@ -46,10 +47,13 @@ func (t *typer) up(cursor *sqlparser.Cursor) error {
 			t.exprTypes[node] = sqltypes.Decimal
 		}
 	case *sqlparser.FuncExpr:
-		if node.Name.EqualString("count") {
-			t.exprTypes[node] = sqltypes.Int32
+		code, ok := engine.SupportedAggregates[node.Name.Lowered()]
+		if ok {
+			typ, ok := engine.OpcodeType[code]
+			if ok {
+				t.exprTypes[node] = typ
+			}
 		}
-
 	}
 	return nil
 }
