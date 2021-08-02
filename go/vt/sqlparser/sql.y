@@ -398,7 +398,7 @@ func skipToEnd(yylex interface{}) {
 %type <partSpec> partition_operation
 %type <bytes> ignored_alter_object_type
 %type <ReferenceAction> fk_reference_action fk_on_delete fk_on_update
-%type <str> constraint_symbol_opt infile_opt
+%type <str> pk_name_opt constraint_symbol_opt infile_opt
 %type <exprs> call_param_list_opt
 %type <procedureParams> proc_param_list_opt proc_param_list
 %type <procedureParam> proc_param
@@ -1918,10 +1918,10 @@ index_info:
     $$ = &IndexInfo{Type: string($1) + " " + string($2), Name: NewColIdent("PRIMARY"), Primary: true, Unique: true}
   }
 | CONSTRAINT ID PRIMARY KEY
-    {
-      $$ = &IndexInfo{Type: string($3) + " " + string($4), Name: NewColIdent("PRIMARY"), Primary: true, Unique: true}
-    }
-  | SPATIAL index_or_key name_opt
+  {
+    $$ = &IndexInfo{Type: string($3) + " " + string($4), Name: NewColIdent(string($2)), Primary: true, Unique: true}
+  }
+| SPATIAL index_or_key name_opt
   {
     $$ = &IndexInfo{Type: string($1) + " " + string($2), Name: NewColIdent($3), Spatial: true, Unique: false}
   }
@@ -2174,6 +2174,15 @@ constraint_symbol_opt:
     $$ = string($2)
   }
 
+pk_name_opt:
+  {
+    $$ = string("")
+  }
+| CONSTRAINT ID
+  {
+    $$ = string($2)
+  }
+
 alter_statement:
   alter_table_statement
 | alter_view_statement
@@ -2313,6 +2322,16 @@ alter_table_statement_part:
   {
     $$ = &DDL{Action: AlterStr, DefaultSpec: &DefaultSpec{Action: DropStr, Column: $3}}
   }
+| DROP PRIMARY KEY
+  {
+    $$ = &DDL{Action: AlterStr, IndexSpec: &IndexSpec{Action: DropStr, Type: PrimaryStr}}
+  }
+| ADD pk_name_opt PRIMARY KEY '(' index_column_list ')' index_option_list_opt
+  {
+    ddl := &DDL{Action: AlterStr, IndexSpec: &IndexSpec{Action: CreateStr}}
+    ddl.IndexSpec = &IndexSpec{Action: CreateStr, Using: NewColIdent(""), ToName: NewColIdent($2), Type: PrimaryStr, Columns: $6, Options: $8}
+    $$ = ddl
+  }
 
 column_order_opt:
   {
@@ -2341,7 +2360,6 @@ column_opt:
 
 ignored_alter_object_type:
   FOREIGN
-| PRIMARY
 | PARTITION
 
 partition_operation:
