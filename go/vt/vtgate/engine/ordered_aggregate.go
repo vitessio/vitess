@@ -125,9 +125,12 @@ const (
 )
 
 var (
-	opcodeType = map[AggregateOpcode]querypb.Type{
+	// OpcodeType keeps track of the known output types for different aggregate functions
+	OpcodeType = map[AggregateOpcode]querypb.Type{
 		AggregateCountDistinct: sqltypes.Int64,
+		AggregateCount:         sqltypes.Int64,
 		AggregateSumDistinct:   sqltypes.Decimal,
+		AggregateSum:           sqltypes.Decimal,
 		AggregateGtid:          sqltypes.VarChar,
 	}
 	// Some predefined values
@@ -313,7 +316,7 @@ func (oa *OrderedAggregate) convertFields(fields []*querypb.Field) []*querypb.Fi
 		}
 		fields[aggr.Col] = &querypb.Field{
 			Name: aggr.Alias,
-			Type: opcodeType[aggr.Opcode],
+			Type: OpcodeType[aggr.Opcode],
 		}
 		if aggr.isDistinct() {
 			aggr.KeyCol = aggr.Col
@@ -341,7 +344,7 @@ func (oa *OrderedAggregate) convertRow(row []sqltypes.Value) (newRow []sqltypes.
 		case AggregateSumDistinct:
 			curDistincts[index] = findComparableCurrentDistinct(row, aggr)
 			var err error
-			newRow[aggr.Col], err = evalengine.Cast(row[aggr.Col], opcodeType[aggr.Opcode])
+			newRow[aggr.Col], err = evalengine.Cast(row[aggr.Col], OpcodeType[aggr.Opcode])
 			if err != nil {
 				newRow[aggr.Col] = sumZero
 			}
@@ -437,9 +440,9 @@ func (oa *OrderedAggregate) merge(fields []*querypb.Field, row1, row2 []sqltypes
 		case AggregateMax:
 			result[aggr.Col], err = evalengine.Max(row1[aggr.Col], row2[aggr.Col])
 		case AggregateCountDistinct:
-			result[aggr.Col] = evalengine.NullsafeAdd(row1[aggr.Col], countOne, opcodeType[aggr.Opcode])
+			result[aggr.Col] = evalengine.NullsafeAdd(row1[aggr.Col], countOne, OpcodeType[aggr.Opcode])
 		case AggregateSumDistinct:
-			result[aggr.Col] = evalengine.NullsafeAdd(row1[aggr.Col], row2[aggr.Col], opcodeType[aggr.Opcode])
+			result[aggr.Col] = evalengine.NullsafeAdd(row1[aggr.Col], row2[aggr.Col], OpcodeType[aggr.Opcode])
 		case AggregateGtid:
 			vgtid := &binlogdatapb.VGtid{}
 			err = proto.Unmarshal(row1[aggr.Col].ToBytes(), vgtid)
