@@ -320,7 +320,6 @@ func (vre *Engine) getDBClient(isAdmin bool) binlogplayer.DBClient {
 
 // CutOverOnlineDDL runs the sequence of commands to complete an OnlineDDL migration
 func (vre *Engine) CutOverOnlineDDL(id int, tableName string, vreplTableName string) error {
-	fmt.Printf("============ zzz CutOverOnlineDDL: %v, %v, %v\n", id, tableName, vreplTableName)
 	var ct *controller
 
 	func() {
@@ -332,19 +331,19 @@ func (vre *Engine) CutOverOnlineDDL(id int, tableName string, vreplTableName str
 	if ct == nil {
 		return fmt.Errorf("vreplication stream %d not found", id)
 	}
-	fmt.Printf("============ zzz CutOverOnlineDDL: ct.id=%v\n", ct.id)
+
+	ct.dbClientWG.Add(1)
+	defer ct.dbClientWG.Done()
 
 	swapTableName, err := schema.GenerateGCTableName(schema.HoldTableGCState, time.Now().Add(time.Hour))
 	if err != nil {
 		return err
 	}
-	fmt.Printf("============ zzz CutOverOnlineDDL: swapTableName=%v\n", swapTableName)
 	// Lock
-	lockTablesQuery := sqlparser.BuildParsedQuery("LOCK TABLES _vt.vreplication WRITE, `%a` WRITE, `%a` WRITE",
+	lockTablesQuery := sqlparser.BuildParsedQuery("LOCK TABLES _vt.vreplication WRITE, _vt.vreplication_log WRITE, `%a` WRITE, `%a` WRITE",
 		tableName,
 		vreplTableName,
 	)
-	fmt.Printf("============ zzz CutOverOnlineDDL: lockTablesQuery=%v\n", lockTablesQuery.Query)
 	if _, err := ct.executeFetch(lockTablesQuery.Query, 1); err != nil {
 		return err
 	}
@@ -354,30 +353,25 @@ func (vre *Engine) CutOverOnlineDDL(id int, tableName string, vreplTableName str
 	if err != nil {
 		return err
 	}
-	fmt.Printf("============ zzz CutOverOnlineDDL: postWritesPos=%v\n", mysql.EncodePosition(postWritesPos))
-	if err := vre.WaitForPos(vre.ctx, id, mysql.EncodePosition(postWritesPos)); err != nil {
+	if err := vre.waitForPos(vre.ctx, id, mysql.EncodePosition(postWritesPos), ct.dbClient); err != nil {
 		return err
 	}
-	ct.overrideDbClientClose = true
 	// pos reached. stop vreplication and rename tables
-	fmt.Printf("============ zzz CutOverOnlineDDL: stopping vrepl\n")
-	if _, err := vre.ExecWithDBA(binlogplayer.StopVReplication(uint32(id), "stopped for online DDL cutover")); err != nil {
+	if _, err := ct.executeFetch(binlogplayer.StopVReplication(uint32(id), "stopped for online DDL cutover"), 1); err != nil {
 		return err
 	}
+	ct.Stop()
 	swapTablesQuery := sqlparser.BuildParsedQuery("RENAME TABLE `%a` TO `%a`, `%a` TO `%a`, `%a` TO `%a`",
 		tableName, swapTableName,
 		vreplTableName, tableName,
 		swapTableName, vreplTableName,
 	)
-	fmt.Printf("============ zzz CutOverOnlineDDL: swapTablesQuery=%v\n", swapTablesQuery.Query)
 	if _, err := ct.executeFetch(swapTablesQuery.Query, 1); err != nil {
 		return err
 	}
 
 	// Actively unlock again
 	ct.executeFetch("unlock tables", 1)
-	ct.dbClient.Close()
-	fmt.Printf("============ zzz CutOverOnlineDDL: DONE\n")
 
 	return nil
 }
@@ -388,9 +382,7 @@ func (vre *Engine) ExecInVReplicationConnection(id int, query string) (*sqltypes
 	vre.mu.Lock()
 	defer vre.mu.Unlock()
 
-	fmt.Printf("============ zzz ExecInVReplicationConnection: %d, %s\n", id, query)
 	if ct := vre.controllers[id]; ct != nil {
-		fmt.Printf("============ zzz ExecInVReplicationConnection: executing\n")
 		return ct.executeFetch(query, 10000)
 	}
 	return nil, fmt.Errorf("vreplication stream %d not found", id)
@@ -416,6 +408,10 @@ func (vre *Engine) Exec(query string) (*sqltypes.Result, error) {
 // Example delete: delete from _vt.vreplication where id=1
 // Example select: select * from _vt.vreplication
 func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error) {
+	return vre.execWithClient(query, runAsAdmin, nil)
+}
+
+func (vre *Engine) execWithClient(query string, runAsAdmin bool, dbClient binlogplayer.DBClient) (*sqltypes.Result, error) {
 	vre.mu.Lock()
 	defer vre.mu.Unlock()
 	if !vre.isOpen {
@@ -431,12 +427,13 @@ func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error)
 		return nil, err
 	}
 
-	dbClient := vre.getDBClient(runAsAdmin)
-	if err := dbClient.Connect(); err != nil {
-		return nil, err
+	if dbClient == nil {
+		dbClient = vre.getDBClient(runAsAdmin)
+		if err := dbClient.Connect(); err != nil {
+			return nil, err
+		}
+		defer dbClient.Close()
 	}
-	defer dbClient.Close()
-
 	// Change the database to ensure that these events don't get
 	// replicated by another vreplication. This can happen when
 	// we reverse replication.
@@ -764,7 +761,7 @@ func (vre *Engine) transitionJournal(je *journalEvent) {
 }
 
 // WaitForPos waits for the replication to reach the specified position.
-func (vre *Engine) WaitForPos(ctx context.Context, id int, pos string) error {
+func (vre *Engine) waitForPos(ctx context.Context, id int, pos string, dbClient binlogplayer.DBClient) error {
 	start := time.Now()
 	mPos, err := binlogplayer.DecodePosition(pos)
 	if err != nil {
@@ -786,12 +783,13 @@ func (vre *Engine) WaitForPos(ctx context.Context, id int, pos string) error {
 	}
 	defer vre.wg.Done()
 
-	dbClient := vre.dbClientFactoryFiltered()
-	if err := dbClient.Connect(); err != nil {
-		return err
+	if dbClient == nil {
+		dbClient = vre.dbClientFactoryFiltered()
+		if err := dbClient.Connect(); err != nil {
+			return err
+		}
+		defer dbClient.Close()
 	}
-	defer dbClient.Close()
-
 	tkr := time.NewTicker(waitRetryTime)
 	defer tkr.Stop()
 	for {
@@ -830,6 +828,11 @@ func (vre *Engine) WaitForPos(ctx context.Context, id int, pos string) error {
 		case <-tkr.C:
 		}
 	}
+}
+
+// WaitForPos waits for the replication to reach the specified position.
+func (vre *Engine) WaitForPos(ctx context.Context, id int, pos string) error {
+	return vre.waitForPos(ctx, id, pos, nil)
 }
 
 // UpdateStats must be called with lock held.

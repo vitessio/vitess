@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"google.golang.org/protobuf/encoding/prototext"
@@ -66,7 +67,7 @@ type controller struct {
 	tabletPicker *discovery.TabletPicker
 	dbClient     binlogplayer.DBClient
 
-	overrideDbClientClose bool
+	dbClientWG sync.WaitGroup
 
 	cancel context.CancelFunc
 	done   chan struct{}
@@ -208,14 +209,13 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 		}
 	}
 	defer func() {
-		fmt.Printf("=========== zzz defer 	dbClient.Close(): overrideDbClientClose=%v\n", ct.overrideDbClientClose)
-		if !ct.overrideDbClientClose {
+		go func() {
+			ct.dbClientWG.Wait()
 			dbClient.Close()
-		}
+		}()
 	}()
 
 	ct.dbClient = dbClient
-	fmt.Printf("====== zzz seting dbClient for controller %v. Is nil? %v\n", ct.id, (ct.dbClient == nil))
 
 	var tablet *topodatapb.Tablet
 	if ct.source.GetExternalMysql() == "" {
@@ -306,7 +306,6 @@ func (ct *controller) Stop() {
 // where you want to run a query using same connection as vcopier and vplayer do.
 // Specifically, it is useful for locking tables.
 func (ct *controller) executeFetch(query string, maxrows int) (qr *sqltypes.Result, err error) {
-	fmt.Printf("====== zzz executeFetch(%s, %d) for controller %d\n", query, maxrows, ct.id)
 	if ct.dbClient == nil {
 		return nil, fmt.Errorf("nil dbClient in executeFetch for controller %d", ct.id)
 	}
