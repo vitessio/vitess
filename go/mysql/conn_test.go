@@ -725,7 +725,7 @@ func TestPrepareAndExecute(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	for i := 0; i < 1000; i++ {
-		startGoRoutine(ctx, t, randSeq(i))
+		startGoRoutine(ctx, t, fmt.Sprintf("%d:%s", i, randSeq(i)))
 	}
 
 	for {
@@ -763,7 +763,7 @@ func startGoRoutine(ctx context.Context, t *testing.T, s string) {
 		}
 
 		ok := sConn.handleNextCommand(handler)
-		require.True(t, ok, "oh noes")
+		require.True(t, ok, "error handling command for id: %s", s)
 
 		resp, err := cConn.ReadPacket()
 		require.NoError(t, err)
