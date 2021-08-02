@@ -571,8 +571,11 @@ const (
 	// SSLockDeadlock is ER_LOCK_DEADLOCK
 	SSLockDeadlock = "40001"
 
-	//SSClientError is the state on client errors
+	// SSClientError is the state on client errors
 	SSClientError = "42000"
+
+	// SSDupFieldName is ER_DUP_FIELD_NAME
+	SSDupFieldName = "42S21"
 
 	// SSBadFieldError is ER_BAD_FIELD_ERROR
 	SSBadFieldError = "42S22"

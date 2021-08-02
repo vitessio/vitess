@@ -132,15 +132,16 @@ func (rb *route) SetLimit(limit *sqlparser.Limit) {
 	rb.Select.SetLimit(limit)
 }
 
-// Wireup2 implements the logicalPlan interface
+// WireupGen4 implements the logicalPlan interface
 func (rb *route) WireupGen4(semTable *semantics.SemTable) error {
 	rb.prepareTheAST()
 
 	rb.eroute.Query = sqlparser.String(rb.Select)
-	buffer := sqlparser.NewTrackedBuffer(nil)
-	sqlparser.FormatImpossibleQuery(buffer, rb.Select)
-	rb.eroute.FieldQuery = buffer.ParsedQuery().Query
 
+	buffer := sqlparser.NewTrackedBuffer(sqlparser.FormatImpossibleQuery)
+	node := buffer.WriteNode(rb.Select)
+	query := node.ParsedQuery()
+	rb.eroute.FieldQuery = query.Query
 	return nil
 }
 

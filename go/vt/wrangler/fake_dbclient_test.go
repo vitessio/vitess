@@ -24,9 +24,9 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"vitess.io/vitess/go/vt/log"
-
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/log"
 )
 
 func verifyQueries(t *testing.T, dcs []*fakeDBClient) {
@@ -163,6 +163,11 @@ func (dc *fakeDBClient) ExecuteFetch(query string, maxrows int) (qr *sqltypes.Re
 
 	log.Infof("Missing query: >>>>>>>>>>>>>>>>>>%s<<<<<<<<<<<<<<<", query)
 	return nil, fmt.Errorf("unexpected query: %s", query)
+}
+
+// PrimaryPosition is part of the DBClient interface
+func (dc *fakeDBClient) PrimaryPosition() (mysql.Position, error) {
+	return mysql.Position{}, nil
 }
 
 func (dc *fakeDBClient) verifyQueries(t *testing.T) {

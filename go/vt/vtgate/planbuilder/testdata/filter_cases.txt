@@ -679,6 +679,9 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "1",
+    "JoinVars": {
+      "user_col": 0
+    },
     "TableName": "`user`_user_extra",
     "Inputs": [
       {
@@ -721,6 +724,9 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "1",
+    "JoinVars": {
+      "user_col": 0
+    },
     "TableName": "`user`_user_extra",
     "Inputs": [
       {
@@ -763,6 +769,9 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "1",
+    "JoinVars": {
+      "user_col": 0
+    },
     "TableName": "`user`_user_extra",
     "Inputs": [
       {
@@ -808,6 +817,9 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "1",
+    "JoinVars": {
+      "user_col": 0
+    },
     "TableName": "`user`_user_extra",
     "Inputs": [
       {
@@ -839,7 +851,47 @@ Gen4 plan same as above
     ]
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select user_extra.id from user join user_extra on user.col = user_extra.col where user_extra.user_id = user.col",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "1",
+    "JoinVars": {
+      "user_col": 1
+    },
+    "TableName": "`user`_user_extra",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select `user`.col from `user` where 1 != 1",
+        "Query": "select `user`.col from `user`",
+        "Table": "`user`"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectEqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select user_extra.id from user_extra where 1 != 1",
+        "Query": "select user_extra.id from user_extra where user_extra.col = :user_col and user_extra.user_id = :user_col",
+        "Table": "user_extra",
+        "Values": [
+          ":user_col"
+        ],
+        "Vindex": "user_index"
+      }
+    ]
+  }
+}
 
 # Multi-route with non-route constraint, should use first route.
 "select user_extra.id from user join user_extra on user.col = user_extra.col where 1 = 1"
@@ -850,6 +902,9 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "1",
+    "JoinVars": {
+      "user_col": 0
+    },
     "TableName": "`user`_user_extra",
     "Inputs": [
       {
@@ -884,6 +939,9 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "1",
+    "JoinVars": {
+      "user_col": 0
+    },
     "TableName": "`user`_user_extra",
     "Inputs": [
       {
@@ -1083,6 +1141,9 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "1",
+    "JoinVars": {
+      "user_id": 0
+    },
     "TableName": "`user`_unsharded",
     "Inputs": [
       {
@@ -1117,6 +1178,9 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-1",
+    "JoinVars": {
+      "unsharded_id": 0
+    },
     "TableName": "unsharded_`user`",
     "Inputs": [
       {
@@ -1181,6 +1245,9 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "1",
+    "JoinVars": {
+      "user_extra_col": 0
+    },
     "TableName": "user_extra_`user`",
     "Inputs": [
       {
@@ -1266,6 +1333,9 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "1",
+    "JoinVars": {
+      "user_extra_col": 0
+    },
     "TableName": "user_extra_`user`",
     "Inputs": [
       {
