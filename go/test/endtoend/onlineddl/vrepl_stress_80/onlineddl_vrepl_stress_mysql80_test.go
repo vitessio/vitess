@@ -85,6 +85,8 @@ var (
 	clusterInstance *cluster.LocalProcessCluster
 	shards          []cluster.Shard
 	vtParams        mysql.ConnParams
+	opOrder         int64
+	opOrderMutex    sync.Mutex
 
 	hostname              = "localhost"
 	keyspaceName          = "ks"
@@ -95,6 +97,7 @@ var (
 		CREATE TABLE stress_test (
 			id bigint(20) not null,
 			rand_val varchar(32) null default '',
+			op_order bigint unsigned not null default 0,
 			hint_col varchar(64) not null default '',
 			created_timestamp timestamp not null default current_timestamp,
 			updates int unsigned not null default 0,
@@ -107,10 +110,10 @@ var (
 		ALTER TABLE stress_test modify hint_col varchar(64) not null default '%s'
 	`
 	insertRowStatement = `
-		INSERT IGNORE INTO stress_test (id, rand_val) VALUES (%d, left(md5(rand()), 8))
+		INSERT IGNORE INTO stress_test (id, rand_val, op_order) VALUES (%d, left(md5(rand()), 8), %d)
 	`
 	updateRowStatement = `
-		UPDATE stress_test SET updates=updates+1 WHERE id=%d
+		UPDATE stress_test SET op_order=%d, updates=updates+1 WHERE id=%d
 	`
 	deleteRowStatement = `
 		DELETE FROM stress_test WHERE id=%d AND updates=1
@@ -122,14 +125,33 @@ var (
 	truncateStatement = `
 		TRUNCATE TABLE stress_test
 	`
+	compareTablesIds = `
+			SELECT %s.id, %s.op_order as op_order FROM %s LEFT JOIN stress_test USING (id) WHERE stress_test.op_order IS NULL
+	`
+	compareTablesOpOrder = `
+			SELECT stress_test.id, %s.op_order as old_table_op_order, stress_test.op_order as new_table_op_order FROM %s JOIN stress_test USING (id) WHERE %s.op_order > stress_test.op_order
+	`
 	writeMetrics WriteMetrics
 )
 
 const (
 	maxTableRows    = 4096
 	maxConcurrency  = 5
-	countIterations = 5
+	countIterations = 10
 )
+
+func resetOpOrder() {
+	opOrderMutex.Lock()
+	defer opOrderMutex.Unlock()
+	opOrder = 0
+}
+
+func nextOpOrder() int64 {
+	opOrderMutex.Lock()
+	defer opOrderMutex.Unlock()
+	opOrder++
+	return opOrder
+}
 
 func TestMain(m *testing.M) {
 	defer cluster.PanicHandler(nil)
@@ -296,6 +318,13 @@ func TestSchemaChange(t *testing.T) {
 			t.Run("test metrics", func(t *testing.T) {
 				testSelectTableMetrics(t)
 			})
+			t.Run("compare tables", func(t *testing.T) {
+				for _, row := range onlineddl.ReadMigrations(t, &vtParams, uuid).Named().Rows {
+					artifacts := row.AsString("artifacts", "")
+					oldTable := strings.TrimRight(artifacts, ",")
+					testTables(t, oldTable)
+				}
+			})
 			t.Run("verify atomic_cutover", func(t *testing.T) {
 				for _, row := range onlineddl.ReadMigrations(t, &vtParams, uuid).Named().Rows {
 					isAtomicCutover := (row.AsInt64("atomic_cutover", 0) == 1)
@@ -335,7 +364,7 @@ func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy str
 	assert.NoError(t, err)
 
 	if !strategySetting.Strategy.IsDirect() {
-		status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, 20*time.Second, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+		status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, 30*time.Second, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
 		fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 	}
 
@@ -381,7 +410,8 @@ func getCreateTableStatement(t *testing.T, tablet *cluster.Vttablet, tableName s
 
 func generateInsert(t *testing.T, conn *mysql.Conn) error {
 	id := rand.Int31n(int32(maxTableRows))
-	query := fmt.Sprintf(insertRowStatement, id)
+	opOrder := nextOpOrder()
+	query := fmt.Sprintf(insertRowStatement, id, opOrder)
 	qr, err := conn.ExecuteFetch(query, 1000, true)
 
 	func() {
@@ -405,7 +435,8 @@ func generateInsert(t *testing.T, conn *mysql.Conn) error {
 
 func generateUpdate(t *testing.T, conn *mysql.Conn) error {
 	id := rand.Int31n(int32(maxTableRows))
-	query := fmt.Sprintf(updateRowStatement, id)
+	opOrder := nextOpOrder()
+	query := fmt.Sprintf(updateRowStatement, opOrder, id)
 	qr, err := conn.ExecuteFetch(query, 1000, true)
 
 	func() {
@@ -428,6 +459,9 @@ func generateUpdate(t *testing.T, conn *mysql.Conn) error {
 }
 
 func generateDelete(t *testing.T, conn *mysql.Conn) error {
+	if true {
+		return nil
+	}
 	id := rand.Int31n(int32(maxTableRows))
 	query := fmt.Sprintf(deleteRowStatement, id)
 	qr, err := conn.ExecuteFetch(query, 1000, true)
@@ -507,6 +541,7 @@ func initTable(t *testing.T) {
 	require.Nil(t, err)
 	defer conn.Close()
 
+	resetOpOrder()
 	writeMetrics.Clear()
 	_, err = conn.ExecuteFetch(truncateStatement, 1000, true)
 	require.Nil(t, err)
@@ -532,21 +567,62 @@ func testSelectTableMetrics(t *testing.T) {
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)
 	defer conn.Close()
+	{
+		rs, err := conn.ExecuteFetch(selectCountRowsStatement, 1000, true)
+		require.Nil(t, err)
 
-	rs, err := conn.ExecuteFetch(selectCountRowsStatement, 1000, true)
+		row := rs.Named().Row()
+		require.NotNil(t, row)
+		log.Infof("testSelectTableMetrics, row: %v", row)
+		numRows := row.AsInt64("num_rows", 0)
+		sumUpdates := row.AsInt64("sum_updates", 0)
+
+		assert.NotZero(t, numRows)
+		assert.NotZero(t, sumUpdates)
+		assert.NotZero(t, writeMetrics.inserts)
+		// assert.NotZero(t, writeMetrics.deletes)
+		assert.NotZero(t, writeMetrics.updates)
+		assert.Equal(t, writeMetrics.inserts-writeMetrics.deletes, numRows)
+		assert.Equal(t, writeMetrics.updates-writeMetrics.deletes, sumUpdates) // because we DELETE WHERE updates=1
+	}
+}
+
+func testTables(t *testing.T, oldTable string) {
+	// old table cannot have ids not in new table
+
+	// for each shared id, new table has op_order equal or greater than old table
+
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)
+	defer conn.Close()
 
-	row := rs.Named().Row()
-	require.NotNil(t, row)
-	log.Infof("testSelectTableMetrics, row: %v", row)
-	numRows := row.AsInt64("num_rows", 0)
-	sumUpdates := row.AsInt64("sum_updates", 0)
+	t.Run("compare ids", func(t *testing.T) {
+		// old table ids must be subset of new table ids
+		rs, err := conn.ExecuteFetch(fmt.Sprintf(compareTablesIds, oldTable, oldTable, oldTable), 1000, true)
+		require.Nil(t, err)
 
-	assert.NotZero(t, numRows)
-	assert.NotZero(t, sumUpdates)
-	assert.NotZero(t, writeMetrics.inserts)
-	assert.NotZero(t, writeMetrics.deletes)
-	assert.NotZero(t, writeMetrics.updates)
-	assert.Equal(t, writeMetrics.inserts-writeMetrics.deletes, numRows)
-	assert.Equal(t, writeMetrics.updates-writeMetrics.deletes, sumUpdates) // because we DELETE WHERE updates=1
+		rows := rs.Named().Rows
+		assert.Zero(t, len(rows), "expected old table ids to be subset of new table ids")
+		if len(rows) > 0 {
+			fmt.Printf("op_order = %d\n", opOrder)
+			for _, row := range rows {
+				fmt.Printf("- non subset id: %d, op_order=%d\n", row.AsInt64("id", 0), row.AsInt64("op_order", 0))
+			}
+		}
+	})
+	t.Run("compare op_order", func(t *testing.T) {
+		// old table cannot have ids not in new table
+		rs, err := conn.ExecuteFetch(fmt.Sprintf(compareTablesOpOrder, oldTable, oldTable, oldTable), 1000, true)
+		require.Nil(t, err)
+
+		rows := rs.Named().Rows
+		assert.Zero(t, len(rows), "expected old_table.op_order <= new_table.op_order for all rows")
+		if len(rows) > 0 {
+			fmt.Printf("op_order = %d\n", opOrder)
+			for _, row := range rows {
+				fmt.Printf("- row with larger op_order in old table: %d, %d > %d\n", row.AsInt64("id", 0), row.AsInt64("old_table_op_order", 0), row.AsInt64("new_table_op_order", 0))
+			}
+		}
+	})
 }
