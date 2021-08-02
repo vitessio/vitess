@@ -19,6 +19,7 @@ package binlogplayer
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
@@ -40,6 +41,7 @@ type DBClient interface {
 
 // dbClientImpl is a real DBClient backed by a mysql connection.
 type dbClientImpl struct {
+	mu       sync.Mutex
 	dbConfig dbconfigs.Connector
 	dbConn   *mysql.Conn
 }
@@ -63,6 +65,9 @@ func (dc *dbClientImpl) DBName() string {
 }
 
 func (dc *dbClientImpl) Connect() error {
+	dc.mu.Lock()
+	defer dc.mu.Unlock()
+
 	var err error
 	ctx := context.Background()
 	dc.dbConn, err = dc.dbConfig.Connect(ctx)
@@ -73,6 +78,9 @@ func (dc *dbClientImpl) Connect() error {
 }
 
 func (dc *dbClientImpl) Begin() error {
+	dc.mu.Lock()
+	defer dc.mu.Unlock()
+
 	_, err := dc.dbConn.ExecuteFetch("begin", 1, false)
 	if err != nil {
 		LogError("BEGIN failed w/ error", err)
@@ -82,6 +90,9 @@ func (dc *dbClientImpl) Begin() error {
 }
 
 func (dc *dbClientImpl) Commit() error {
+	dc.mu.Lock()
+	defer dc.mu.Unlock()
+
 	_, err := dc.dbConn.ExecuteFetch("commit", 1, false)
 	if err != nil {
 		LogError("COMMIT failed w/ error", err)
@@ -91,6 +102,9 @@ func (dc *dbClientImpl) Commit() error {
 }
 
 func (dc *dbClientImpl) Rollback() error {
+	dc.mu.Lock()
+	defer dc.mu.Unlock()
+
 	_, err := dc.dbConn.ExecuteFetch("rollback", 1, false)
 	if err != nil {
 		LogError("ROLLBACK failed w/ error", err)
@@ -100,6 +114,9 @@ func (dc *dbClientImpl) Rollback() error {
 }
 
 func (dc *dbClientImpl) Close() {
+	dc.mu.Lock()
+	defer dc.mu.Unlock()
+
 	dc.dbConn.Close()
 }
 
@@ -117,6 +134,9 @@ func LimitString(s string, limit int) string {
 }
 
 func (dc *dbClientImpl) ExecuteFetch(query string, maxrows int) (*sqltypes.Result, error) {
+	dc.mu.Lock()
+	defer dc.mu.Unlock()
+
 	mqr, err := dc.dbConn.ExecuteFetch(query, maxrows, true)
 	if err != nil {
 		dc.handleError(err)
@@ -127,5 +147,8 @@ func (dc *dbClientImpl) ExecuteFetch(query string, maxrows int) (*sqltypes.Resul
 
 // PrimaryPosition returns the position (e.g. GTID position) for this connection
 func (dc *dbClientImpl) PrimaryPosition() (mysql.Position, error) {
+	dc.mu.Lock()
+	defer dc.mu.Unlock()
+
 	return dc.dbConn.PrimaryPosition()
 }
