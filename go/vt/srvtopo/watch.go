@@ -11,8 +11,8 @@ import (
 
 type watchEntry struct {
 	// unmutable values
-	watcher *resilientWatcher
-	key     fmt.Stringer
+	rw  *resilientWatcher
+	key fmt.Stringer
 
 	mutex      sync.RWMutex
 	watchState watchState
@@ -25,10 +25,14 @@ type watchEntry struct {
 	lastValueTime time.Time
 	lastErrorCtx  context.Context
 	lastErrorTime time.Time
+
+	listeners map[interface{}]struct{}
 }
 
 type resilientWatcher struct {
-	watch        func(ctx context.Context, entry *watchEntry)
+	watch func(ctx context.Context, entry *watchEntry)
+	event func(entry *watchEntry)
+
 	cacheRefresh time.Duration
 	cacheTTL     time.Duration
 
@@ -47,53 +51,34 @@ func (w *resilientWatcher) getEntry(wkey fmt.Stringer) *watchEntry {
 	}
 
 	entry = &watchEntry{
-		watcher: w,
-		key:     wkey,
+		rw:  w,
+		key: wkey,
 	}
 	w.entries[key] = entry
 	return entry
 }
 
-type SrvKeyspaceWatcher struct {
-	w *resilientWatcher
-}
-
-type srvKeyspaceKey struct {
-	cell, keyspace string
-}
-
-func (k *srvKeyspaceKey) String() string {
-	return k.cell + "." + k.keyspace
-}
-
-func NewSrvKeyspaceWatcher(topoServer topo.Server, cacheRefresh, cacheTTL time.Duration) *SrvKeyspaceWatcher {
-	watch := func(ctx context.Context, entry *watchEntry) {
-		key := entry.key.(*srvKeyspaceKey)
-		current, changes, cancel := topoServer.WatchSrvKeyspace(context.Background(), key.cell, key.keyspace)
-		if !entry.update(ctx, current.Value, current.Err) {
-			return
-		}
-		defer cancel()
-		for c := range changes {
-			if !entry.update(ctx, c.Value, c.Err) {
-				return
-			}
-		}
-	}
-
-	w := &resilientWatcher{
-		watch:        watch,
-		cacheRefresh: cacheRefresh,
-		cacheTTL:     cacheTTL,
-		entries:      make(map[string]*watchEntry),
-	}
-
-	return &SrvKeyspaceWatcher{w}
-}
-
-func (w *resilientWatcher) GetValue(ctx context.Context, wkey fmt.Stringer) (interface{}, error) {
+func (w *resilientWatcher) getValue(ctx context.Context, wkey fmt.Stringer) (interface{}, error) {
 	entry := w.getEntry(wkey)
 	return entry.currentValue(ctx)
+}
+
+func (entry *watchEntry) addListener(ctx context.Context, ch interface{}) {
+	entry.mutex.Lock()
+	defer entry.mutex.Unlock()
+
+	entry.listeners[ch] = struct{}{}
+	entry.ensureWatchingLocked(ctx)
+}
+
+func (entry *watchEntry) ensureWatchingLocked(ctx context.Context) {
+	switch entry.watchState {
+	case watchStateRunning, watchStateStarting:
+	case watchStateIdle:
+		entry.watchState = watchStateStarting
+		entry.watchStartingChan = make(chan struct{})
+		go entry.rw.watch(ctx, entry)
+	}
 }
 
 func (entry *watchEntry) currentValue(ctx context.Context) (interface{}, error) {
@@ -104,16 +89,11 @@ func (entry *watchEntry) currentValue(ctx context.Context) (interface{}, error) 
 		return entry.value, entry.lastError
 	}
 
-	shouldRefresh := time.Since(entry.lastErrorTime) > entry.watcher.cacheRefresh
-	if shouldRefresh && (entry.watchState == watchStateIdle) {
-		entry.watchState = watchStateStarting
-		entry.watchStartingChan = make(chan struct{})
-		go entry.watcher.watch(ctx, entry)
-	}
+	entry.ensureWatchingLocked(ctx)
 
-	cacheValid := entry.value != nil && time.Since(entry.lastValueTime) < entry.watcher.cacheTTL
+	cacheValid := entry.value != nil && time.Since(entry.lastValueTime) < entry.rw.cacheTTL
 	if cacheValid {
-		entry.watcher.counts.Add(cachedCategory, 1)
+		// entry.rw.counts.Add(cachedCategory, 1)
 		return entry.value, nil
 	}
 
@@ -124,27 +104,25 @@ func (entry *watchEntry) currentValue(ctx context.Context) (interface{}, error) 
 		case <-watchStartingChan:
 		case <-ctx.Done():
 			entry.mutex.Lock()
-			return nil, fmt.Errorf("timed out waiting for keyspace")
+			return nil, ctx.Err()
 		}
 		entry.mutex.Lock()
 	}
-
 	if entry.value != nil {
 		return entry.value, nil
 	}
 	return nil, entry.lastError
 }
 
-func (entry *watchEntry) update(ctx context.Context, value interface{}, err error) bool {
+func (entry *watchEntry) update(ctx context.Context, value interface{}, err error) {
 	entry.mutex.Lock()
 	defer entry.mutex.Unlock()
 
 	if err != nil {
 		entry.onErrorLocked(ctx, err)
-		return false
+		return
 	}
 	entry.onValueLocked(value)
-	return true
 }
 
 func (entry *watchEntry) onValueLocked(value interface{}) {
@@ -171,12 +149,12 @@ func (entry *watchEntry) onErrorLocked(callerCtx context.Context, err error) {
 		entry.value = nil
 	}
 
-	entry.watcher.counts.Add(errorCategory, 1)
+	// entry.rw.counts.Add(errorCategory, 1)
 
 	// This watcher will able to continue to return the last value till it is not able to connect to the topo server even if the cache TTL is reached.
 	// TTL cache is only checked if the error is a known error i.e topo.Error.
 	_, isTopoErr := err.(topo.Error)
-	if isTopoErr && time.Since(entry.lastValueTime) > entry.watcher.cacheTTL {
+	if isTopoErr && time.Since(entry.lastValueTime) > entry.rw.cacheTTL {
 		entry.value = nil
 	}
 
@@ -188,5 +166,12 @@ func (entry *watchEntry) onErrorLocked(callerCtx context.Context, err error) {
 	if entry.watchState == watchStateRunning {
 		entry.lastValueTime = time.Now()
 	}
-	entry.watchState = watchStateIdle
+
+	entry.watchState = watchStateStarting
+	entry.watchStartingChan = make(chan struct{})
+
+	go func() {
+		time.Sleep(5 * time.Second)
+		entry.rw.watch(context.Background(), entry)
+	}()
 }
