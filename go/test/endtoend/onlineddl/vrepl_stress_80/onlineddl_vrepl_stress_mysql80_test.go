@@ -460,6 +460,8 @@ func generateUpdate(t *testing.T, conn *mysql.Conn) error {
 
 func generateDelete(t *testing.T, conn *mysql.Conn) error {
 	if true {
+		// do not delete.
+		// TODO (shlomi): cleanup any delete logic later on
 		return nil
 	}
 	id := rand.Int31n(int32(maxTableRows))
