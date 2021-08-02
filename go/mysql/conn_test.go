@@ -724,7 +724,7 @@ func TestPrepareAndExecute(t *testing.T) {
 	// and check that the handler received the correct input
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	for i := 0; i < 1000; i++ {
+	for i := 0; i < 100; i++ {
 		startGoRoutine(ctx, t, fmt.Sprintf("%d:%s", i, randSeq(i)))
 	}
 
