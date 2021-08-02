@@ -340,6 +340,9 @@ func (vre *Engine) CutOverOnlineDDL(id int, tableName string, vreplTableName str
 		return err
 	}
 	// Lock
+	// It's fine to unlock when no tables are locked. So "defer unlock" before locking is both correct
+	// and _safer_ to do than the other way around.
+	defer ct.executeFetch("unlock tables", 1)
 	lockTablesQuery := sqlparser.BuildParsedQuery("LOCK TABLES _vt.vreplication WRITE, _vt.vreplication_log WRITE, `%a` WRITE, `%a` WRITE",
 		tableName,
 		vreplTableName,
@@ -347,7 +350,6 @@ func (vre *Engine) CutOverOnlineDDL(id int, tableName string, vreplTableName str
 	if _, err := ct.executeFetch(lockTablesQuery.Query, 1); err != nil {
 		return err
 	}
-	defer ct.executeFetch("unlock tables", 1)
 	// Wait for pos
 	postWritesPos, err := ct.dbClient.PrimaryPosition()
 	if err != nil {
@@ -369,9 +371,6 @@ func (vre *Engine) CutOverOnlineDDL(id int, tableName string, vreplTableName str
 	if _, err := ct.executeFetch(swapTablesQuery.Query, 1); err != nil {
 		return err
 	}
-
-	// Actively unlock again
-	ct.executeFetch("unlock tables", 1)
 
 	return nil
 }
