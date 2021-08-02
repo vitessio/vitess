@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path"
 	"strings"
 	"text/template"
 )
@@ -28,19 +29,18 @@ import (
 const (
 	workflowConfigDir = "../.github/workflows"
 
-	unitTestTemplate          = "templates/unit_test.tpl"
-	unitTestBuildkiteTemplate = "templates/unit_test_buildkite.tpl"
-	unitTestDatabases         = "percona56, mysql57, mysql80, mariadb102, mariadb103"
+	unitTestTemplate           = "templates/unit_test.tpl"
+	unitTestDatabases          = "percona56, mysql57, mysql80, mariadb102, mariadb103"
+	unitTestBuildkiteDatabases = "percona, mysql57, mysql80, mariadb, mariadb103"
 
-	clusterTestTemplate       = "templates/cluster_endtoend_test.tpl"
-	workflowBuildkitePipeline = "../.buildkite/pipeline.yml"
+	clusterTestTemplate = "templates/cluster_endtoend_test.tpl"
 
-	initialPipeline = `env:
-  GOROOT: "/usr/local/go"
-  PATH: "/usr/local/go/bin:$PATH"
-  VTDATAROOT: "/tmp/vtdataroot"
-steps:
-`
+	workflowBuildkitePipeline          = "../.buildkite/pipeline.yml"
+	unitTestBuildkiteTemplate          = "templates/buildkite/unit_test.tpl"
+	dockerFileBuildkiteTemplate        = "templates/buildkite/dockerfile.tpl"
+	dockerComposeFileBuildkiteTemplate = "templates/buildkite/docker-compose.tpl"
+
+	initialPipeline = "steps:\n"
 )
 
 var (
@@ -108,6 +108,10 @@ var (
 
 type unitTest struct {
 	Name, Platform string
+}
+
+type unitTestBuildkite struct {
+	Name, Platform, DockerCompose, Dockerfile, directoryName string
 }
 
 type clusterTest struct {
@@ -238,13 +242,21 @@ func generateWorkflowFile(templateFile, path string, test interface{}) {
 }
 
 func generateBuildkiteUnitTestWorkflows() error {
-	platforms := parseList(unitTestDatabases)
+	platforms := parseList(unitTestBuildkiteDatabases)
 	for _, platform := range platforms {
-		test := &unitTest{
-			Name:     fmt.Sprintf("Unit Test (%s)", platform),
-			Platform: platform,
+		directoryName := fmt.Sprintf("unit_test_%s", platform)
+		test := &unitTestBuildkite{
+			Name:          fmt.Sprintf("Unit Test (%s)", platform),
+			Platform:      platform,
+			directoryName: directoryName,
+			DockerCompose: fmt.Sprintf("./.buildkite/%s/docker-compose.yml", directoryName),
+			Dockerfile:    fmt.Sprintf("./.buildkite/%s/Dockerfile", directoryName),
 		}
-		err := addToPipeline(unitTestBuildkiteTemplate, test)
+		err := setupUnitTestBuildkiteDockerFiles(test)
+		if err != nil {
+			return err
+		}
+		err = addToPipeline(unitTestBuildkiteTemplate, test)
 		if err != nil {
 			return err
 		}
@@ -260,6 +272,56 @@ func setupBuildkitePipelineFile() error {
 	}
 	f.WriteString("# DO NOT MODIFY: THIS FILE IS GENERATED USING \"make generate_ci_workflows\"\n\n")
 	f.WriteString(initialPipeline)
+	return nil
+}
+
+func setupUnitTestBuildkiteDockerFiles(test *unitTestBuildkite) error {
+	// remove the directory
+	relDirectoryName := fmt.Sprintf("../.buildkite/%s", test.directoryName)
+	err := os.RemoveAll(relDirectoryName)
+	if err != nil {
+		return err
+	}
+	// create the directory
+	err = os.Mkdir(relDirectoryName, 0755)
+	if err != nil {
+		return err
+	}
+
+	// generate the docker file
+	dockerFilePath := path.Join(relDirectoryName, "Dockerfile")
+	err = writeFileFromTemplate(dockerFilePath, dockerFileBuildkiteTemplate, test)
+	if err != nil {
+		return err
+	}
+
+	// generate the docker compose file
+	dockerComposeFilePath := path.Join(relDirectoryName, "docker-compose.yml")
+	err = writeFileFromTemplate(dockerComposeFilePath, dockerComposeFileBuildkiteTemplate, test)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func writeFileFromTemplate(filePath string, templateFile string, test interface{}) error {
+	tpl, err := template.ParseFiles(templateFile)
+	if err != nil {
+		return err
+	}
+	buf := &bytes.Buffer{}
+	err = tpl.Execute(buf, test)
+	if err != nil {
+		return err
+	}
+	f, err := os.Create(filePath)
+	if err != nil {
+		return err
+	}
+	f.WriteString("# DO NOT MODIFY: THIS FILE IS GENERATED USING \"make generate_ci_workflows\"\n\n")
+	f.WriteString(mergeBlankLines(buf))
+	fmt.Printf("Generated %s\n", filePath)
 	return nil
 }
 

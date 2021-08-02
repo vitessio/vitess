@@ -5,4 +5,4 @@ services:
   vitess:
     build:
       context: ../../
-      dockerfile: ./.buildkite/unit_test_mysql57/Dockerfile
+      dockerfile: ./.buildkite/unit_test_mariadb/Dockerfile
