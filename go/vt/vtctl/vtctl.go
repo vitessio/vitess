@@ -1841,19 +1841,29 @@ func commandValidateKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlag
 	return wr.ValidateKeyspace(ctx, keyspace, *pingTablets)
 }
 
-func commandReshard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+func useV1(args []string) bool {
 	for _, arg := range args {
-		if arg == "-v2" {
-			fmt.Println("*** Using Reshard v2 flow ***")
-			return commandVRWorkflow(ctx, wr, subFlags, args, wrangler.ReshardWorkflow)
+		if arg == "-v1" {
+			return true
 		}
 	}
+	return false
+}
+
+func commandReshard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	if !useV1(args) {
+		log.Infof("*** Using Reshard v2 flow ***")
+		return commandVRWorkflow(ctx, wr, subFlags, args, wrangler.ReshardWorkflow)
+	}
+	wr.Logger().Printf("*** The Reshard v1 flow is deprecated, consider using v2 commands instead, see https://vitess.io/docs/reference/vreplication/v2/ ***\n")
+
 	cells := subFlags.String("cells", "", "Cell(s) or CellAlias(es) (comma-separated) to replicate from.")
 	tabletTypes := subFlags.String("tablet_types", "", "Source tablet types to replicate from.")
 	skipSchemaCopy := subFlags.Bool("skip_schema_copy", false, "Skip copying of schema to targets")
 
 	autoStart := subFlags.Bool("auto_start", true, "If false, streams will start in the Stopped state and will need to be explicitly started")
 	stopAfterCopy := subFlags.Bool("stop_after_copy", false, "Streams will be stopped once the copy phase is completed")
+	_ = subFlags.Bool("v1", true, "")
 
 	if err := subFlags.Parse(args); err != nil {
 		return err
@@ -1872,12 +1882,12 @@ func commandReshard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.F
 }
 
 func commandMoveTables(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	for _, arg := range args {
-		if arg == "-v2" {
-			fmt.Println("*** Using MoveTables v2 flow ***")
-			return commandVRWorkflow(ctx, wr, subFlags, args, wrangler.MoveTablesWorkflow)
-		}
+	if !useV1(args) {
+		log.Infof("*** Using MoveTables v2 flow ***")
+		return commandVRWorkflow(ctx, wr, subFlags, args, wrangler.MoveTablesWorkflow)
 	}
+	wr.Logger().Printf("*** The MoveTables v1 flow is deprecated, consider using v2 commands instead, see https://vitess.io/docs/reference/vreplication/v2/ ***\n")
+
 	workflow := subFlags.String("workflow", "", "Workflow name. Can be any descriptive string. Will be used to later migrate traffic via SwitchReads/SwitchWrites.")
 	cells := subFlags.String("cells", "", "Cell(s) or CellAlias(es) (comma-separated) to replicate from.")
 	tabletTypes := subFlags.String("tablet_types", "", "Source tablet types to replicate from (e.g. master, replica, rdonly). Defaults to -vreplication_tablet_type parameter value for the tablet, which has the default value of replica.")
@@ -1886,6 +1896,7 @@ func commandMoveTables(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 
 	autoStart := subFlags.Bool("auto_start", true, "If false, streams will start in the Stopped state and will need to be explicitly started")
 	stopAfterCopy := subFlags.Bool("stop_after_copy", false, "Streams will be stopped once the copy phase is completed")
+	_ = subFlags.Bool("v1", true, "")
 
 	if err := subFlags.Parse(args); err != nil {
 		return err
@@ -1941,7 +1952,7 @@ func getSourceKeyspace(clusterKeyspace string) (clusterName string, sourceKeyspa
 }
 
 // commandVRWorkflow is the common entry point for MoveTables/Reshard/Migrate workflows
-// FIXME: this needs a refactor. Also validations for params need to be done per workflow type
+// FIXME: this function needs a refactor. Also validations for params should to be done per workflow type
 func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string,
 	workflowType wrangler.VReplicationWorkflowType) error {
 
@@ -2269,8 +2280,8 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 			return nil
 		}
 	}
-	wr.Logger().Printf("%s was successful\nStart State: %s\nCurrent State: %s\n\n",
-		originalAction, startState, wf.CurrentState())
+	wr.Logger().Printf("%s was successful for workflow %s.%s\nStart State: %s\nCurrent State: %s\n\n",
+		originalAction, vrwp.TargetKeyspace, vrwp.Workflow, startState, wf.CurrentState())
 	return nil
 }
 
@@ -2451,6 +2462,7 @@ func commandMigrateServedFrom(ctx context.Context, wr *wrangler.Wrangler, subFla
 }
 
 func commandDropSources(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	wr.Logger().Printf("*** DropSources is deprecated. Consider using v2 commands instead, see https://vitess.io/docs/reference/vreplication/v2/ ***\n")
 	dryRun := subFlags.Bool("dry_run", false, "Does a dry run of commandDropSources and only reports the actions to be taken")
 	renameTables := subFlags.Bool("rename_tables", false, "Rename tables instead of dropping them")
 	keepData := subFlags.Bool("keep_data", false, "Do not drop tables or shards (if true, only vreplication artifacts are cleaned up)")
@@ -2483,6 +2495,8 @@ func commandDropSources(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 }
 
 func commandSwitchReads(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	wr.Logger().Printf("*** SwitchReads is deprecated. Consider using v2 commands instead, see https://vitess.io/docs/reference/vreplication/v2/ ***\n")
+
 	reverse := subFlags.Bool("reverse", false, "Moves the served tablet type backward instead of forward.")
 	cellsStr := subFlags.String("cells", "", "Specifies a comma-separated list of cells to update")
 	tabletTypes := subFlags.String("tablet_types", "rdonly,replica", "Tablet types to switch one or both or rdonly/replica")
@@ -2536,8 +2550,10 @@ func commandSwitchReads(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 }
 
 func commandSwitchWrites(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	timeout := subFlags.Duration("timeout", 30*time.Second, "Specifies the maximum time to wait, in seconds, for vreplication to catch up on write migrations. The migration will be cancelled on a timeout.")
-	filteredReplicationWaitTime := subFlags.Duration("filtered_replication_wait_time", 30*time.Second, "DEPRECATED Specifies the maximum time to wait, in seconds, for vreplication to catch up on write migrations. The migration will be cancelled on a timeout.")
+	wr.Logger().Printf("*** SwitchWrites is deprecated. Consider using v2 commands instead, see https://vitess.io/docs/reference/vreplication/v2/ ***\n")
+
+	timeout := subFlags.Duration("timeout", 30*time.Second, "Specifies the maximum time to wait, in seconds, for vreplication to catch up on primary migrations. The migration will be cancelled on a timeout.")
+	filteredReplicationWaitTime := subFlags.Duration("filtered_replication_wait_time", 30*time.Second, "DEPRECATED Specifies the maximum time to wait, in seconds, for vreplication to catch up on primary migrations. The migration will be cancelled on a timeout.")
 	reverseReplication := subFlags.Bool("reverse_replication", true, "Also reverse the replication")
 	cancel := subFlags.Bool("cancel", false, "Cancel the failed migration and serve from source")
 	reverse := subFlags.Bool("reverse", false, "Reverse a previous SwitchWrites serve from source")

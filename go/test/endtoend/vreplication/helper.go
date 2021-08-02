@@ -167,10 +167,13 @@ func getQueryCount(url string, query string) int {
 func validateDryRunResults(t *testing.T, output string, want []string) {
 	t.Helper()
 	require.NotEmpty(t, output)
-
 	gotDryRun := strings.Split(output, "\n")
 	require.True(t, len(gotDryRun) > 3)
-	gotDryRun = gotDryRun[3 : len(gotDryRun)-1]
+	startRow := 3
+	if strings.Contains(gotDryRun[0], "deprecated") {
+		startRow = 4
+	}
+	gotDryRun = gotDryRun[startRow : len(gotDryRun)-1]
 	if len(want) != len(gotDryRun) {
 		t.Fatalf("want and got: lengths don't match, \nwant\n%s\n\ngot\n%s", strings.Join(want, "\n"), strings.Join(gotDryRun, "\n"))
 	}
