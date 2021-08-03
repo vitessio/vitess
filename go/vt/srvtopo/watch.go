@@ -11,8 +11,16 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 )
 
+type watchState int
+
+const (
+	watchStateIdle watchState = iota
+	watchStateStarting
+	watchStateRunning
+)
+
 type watchEntry struct {
-	// unmutable values
+	// immutable values
 	rw  *resilientWatcher
 	key fmt.Stringer
 
