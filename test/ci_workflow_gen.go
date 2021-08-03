@@ -29,16 +29,17 @@ import (
 const (
 	workflowConfigDir = "../.github/workflows"
 
-	unitTestTemplate           = "templates/unit_test.tpl"
-	unitTestDatabases          = "percona56, mysql57, mysql80, mariadb102, mariadb103"
-	unitTestBuildkiteDatabases = "percona, mysql57, mysql80, mariadb, mariadb103"
+	unitTestTemplate  = "templates/unit_test.tpl"
+	unitTestDatabases = "percona56, mysql57, mysql80, mariadb102, mariadb103"
 
 	clusterTestTemplate = "templates/cluster_endtoend_test.tpl"
 
 	workflowBuildkitePipeline          = "../.buildkite/pipeline.yml"
 	unitTestBuildkiteTemplate          = "templates/buildkite/unit_test.tpl"
+	unitTestBuildkiteDatabases         = "percona, mysql57, mysql80, mariadb, mariadb103"
 	dockerFileBuildkiteTemplate        = "templates/buildkite/dockerfile.tpl"
 	dockerComposeFileBuildkiteTemplate = "templates/buildkite/docker-compose.tpl"
+	clusterTestBuildkiteTemplate       = "templates/buildkite/cluster_endtoend_test.tpl"
 
 	initialPipeline = "steps:\n"
 )
@@ -110,8 +111,9 @@ type unitTest struct {
 	Name, Platform string
 }
 
-type unitTestBuildkite struct {
-	Name, Platform, DockerCompose, Dockerfile, directoryName string
+type testBuildkite struct {
+	Name, Platform, DockerCompose, Dockerfile, Shard, directoryName string
+	MakeTools, InstallXtraBackup                                    bool
 }
 
 type clusterTest struct {
@@ -147,6 +149,10 @@ func main() {
 		log.Fatal(err)
 	}
 	err = generateBuildkiteUnitTestWorkflows()
+	if err != nil {
+		log.Fatal(err)
+	}
+	err = generateBuildkiteClusterWorkflows()
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -245,18 +251,68 @@ func generateBuildkiteUnitTestWorkflows() error {
 	platforms := parseList(unitTestBuildkiteDatabases)
 	for _, platform := range platforms {
 		directoryName := fmt.Sprintf("unit_test_%s", platform)
-		test := &unitTestBuildkite{
-			Name:          fmt.Sprintf("Unit Test (%s)", platform),
-			Platform:      platform,
-			directoryName: directoryName,
-			DockerCompose: fmt.Sprintf("./.buildkite/%s/docker-compose.yml", directoryName),
-			Dockerfile:    fmt.Sprintf("./.buildkite/%s/Dockerfile", directoryName),
+		test := &testBuildkite{
+			Name:              fmt.Sprintf("Unit Test (%s)", platform),
+			Platform:          platform,
+			directoryName:     directoryName,
+			DockerCompose:     fmt.Sprintf("./.buildkite/%s/docker-compose.yml", directoryName),
+			Dockerfile:        fmt.Sprintf("./.buildkite/%s/Dockerfile", directoryName),
+			MakeTools:         true,
+			InstallXtraBackup: false,
 		}
-		err := setupUnitTestBuildkiteDockerFiles(test)
+		err := setupBuildkiteTestDockerFiles(test)
 		if err != nil {
 			return err
 		}
 		err = addToPipeline(unitTestBuildkiteTemplate, test)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func generateBuildkiteClusterWorkflows() error {
+	clusters := canonnizeList(clusterList)
+	for _, cluster := range clusters {
+		directoryName := fmt.Sprintf("cluster_test_%s", cluster)
+		test := &testBuildkite{
+			Name:              fmt.Sprintf("Cluster (%s)", cluster),
+			Platform:          "mysql57",
+			directoryName:     directoryName,
+			DockerCompose:     fmt.Sprintf("./.buildkite/%s/docker-compose.yml", directoryName),
+			Dockerfile:        fmt.Sprintf("./.buildkite/%s/Dockerfile", directoryName),
+			Shard:             cluster,
+			MakeTools:         false,
+			InstallXtraBackup: false,
+		}
+		makeToolClusters := canonnizeList(clustersRequiringMakeTools)
+		for _, makeToolCluster := range makeToolClusters {
+			if makeToolCluster == cluster {
+				test.MakeTools = true
+				break
+			}
+		}
+		xtraBackupClusters := canonnizeList(clustersRequiringXtraBackup)
+		for _, xtraBackupCluster := range xtraBackupClusters {
+			if xtraBackupCluster == cluster {
+				test.InstallXtraBackup = true
+				break
+			}
+		}
+		ubuntu20Clusters := canonnizeList(clustersRequiringUbuntu20)
+		for _, ubuntu20Cluster := range ubuntu20Clusters {
+			if ubuntu20Cluster == cluster {
+				test.Platform = "mysql80"
+				break
+			}
+		}
+
+		err := setupBuildkiteTestDockerFiles(test)
+		if err != nil {
+			return err
+		}
+		err = addToPipeline(clusterTestBuildkiteTemplate, test)
 		if err != nil {
 			return err
 		}
@@ -275,7 +331,7 @@ func setupBuildkitePipelineFile() error {
 	return nil
 }
 
-func setupUnitTestBuildkiteDockerFiles(test *unitTestBuildkite) error {
+func setupBuildkiteTestDockerFiles(test *testBuildkite) error {
 	// remove the directory
 	relDirectoryName := fmt.Sprintf("../.buildkite/%s", test.directoryName)
 	err := os.RemoveAll(relDirectoryName)

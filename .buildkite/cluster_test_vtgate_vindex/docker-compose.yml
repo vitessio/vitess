@@ -1,0 +1,8 @@
+# DO NOT MODIFY: THIS FILE IS GENERATED USING "make generate_ci_workflows"
+
+version: "3.8"
+services:
+  vitess:
+    build:
+      context: ../../
+      dockerfile: ./.buildkite/cluster_test_vtgate_vindex/Dockerfile

@@ -29,5 +29,5 @@ RUN mkdir -p $VTDATAROOT
 # make tools
 RUN make tools
 
-# sleep for 30 minutes
-CMD sleep 1800
+# sleep for 50 minutes
+CMD sleep 3000
