@@ -73,6 +73,7 @@ func (r *ReservedVars) ReserveColName(col *ColName) string {
 
 	for {
 		if _, ok := r.reserved[string(joinVar)]; !ok {
+			r.reserved[string(joinVar)] = struct{}{}
 			return string(joinVar)
 		}
 		joinVar = strconv.AppendInt(joinVar[:baseLen], i, 10)

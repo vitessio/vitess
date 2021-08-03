@@ -20,6 +20,7 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
@@ -28,16 +29,21 @@ type (
 		proceed   bool
 		tblColMap map[*sqlparser.AliasedTableExpr]sqlparser.SelectExprs
 	}
-	starRewriter struct {
-		err      error
-		semTable *semantics.SemTable
+	rewriter struct {
+		err          error
+		semTable     *semantics.SemTable
+		reservedVars *sqlparser.ReservedVars
 	}
 )
 
-func (sr *starRewriter) starRewrite(cursor *sqlparser.Cursor) bool {
+var (
+	subqueryColName = sqlparser.NewColName("__sq")
+)
+
+func (r *rewriter) starRewrite(cursor *sqlparser.Cursor) bool {
 	switch node := cursor.Node().(type) {
 	case *sqlparser.Select:
-		tables := sr.semTable.GetSelectTables(node)
+		tables := r.semTable.GetSelectTables(node)
 		var selExprs sqlparser.SelectExprs
 		for _, selectExpr := range node.SelectExprs {
 			starExpr, isStarExpr := selectExpr.(*sqlparser.StarExpr)
@@ -47,7 +53,7 @@ func (sr *starRewriter) starRewrite(cursor *sqlparser.Cursor) bool {
 			}
 			colNames, expStar, err := expandTableColumns(tables, starExpr)
 			if err != nil {
-				sr.err = err
+				r.err = err
 				return false
 			}
 			if !expStar.proceed {
@@ -56,7 +62,7 @@ func (sr *starRewriter) starRewrite(cursor *sqlparser.Cursor) bool {
 			}
 			selExprs = append(selExprs, colNames...)
 			for tbl, cols := range expStar.tblColMap {
-				sr.semTable.AddExprs(tbl, cols)
+				r.semTable.AddExprs(tbl, cols)
 			}
 		}
 		node.SelectExprs = selExprs
@@ -101,13 +107,45 @@ func expandTableColumns(tables []semantics.TableInfo, starExpr *sqlparser.StarEx
 	return colNames, expStar, nil
 }
 
-func expandStar(sel *sqlparser.Select, semTable *semantics.SemTable) (*sqlparser.Select, error) {
-	// TODO we could store in semTable whether there are any * in the query that needs expanding or not
-	sr := &starRewriter{semTable: semTable}
+func (r *rewriter) subqueryRewrite(cursor *sqlparser.Cursor) bool {
+	switch node := cursor.Node().(type) {
+	case *sqlparser.Subquery:
+		semTableSQ, found := r.semTable.SubqueryRef[node]
+		if !found {
+			// should never happen
+			return false
+		}
 
-	_ = sqlparser.Rewrite(sel, sr.starRewrite, nil)
-	if sr.err != nil {
-		return nil, sr.err
+		argName := r.reservedVars.ReserveColName(subqueryColName)
+		semTableSQ.ArgName = argName
+
+		switch semTableSQ.OpCode {
+		case engine.PulloutIn, engine.PulloutNotIn:
+			cursor.Replace(sqlparser.NewListArg(argName))
+		default:
+			cursor.Replace(sqlparser.NewArgument(argName))
+		}
+	}
+	return true
+}
+
+func (r *rewriter) rewriterPre(cursor *sqlparser.Cursor) bool {
+	return r.starRewrite(cursor)
+}
+
+func (r *rewriter) rewriterPost(cursor *sqlparser.Cursor) bool {
+	if len(r.semTable.SubqueryMap) == 0 {
+		return true
+	}
+	return r.subqueryRewrite(cursor)
+}
+
+func rewrite(sel *sqlparser.Select, semTable *semantics.SemTable, reservedVars *sqlparser.ReservedVars) (*sqlparser.Select, error) {
+	r := &rewriter{semTable: semTable, reservedVars: reservedVars}
+
+	_ = sqlparser.Rewrite(sel, r.rewriterPre, r.rewriterPost)
+	if r.err != nil {
+		return nil, r.err
 	}
 	return sel, nil
 }

@@ -116,7 +116,7 @@ func TestExpandStar(t *testing.T) {
 			require.True(t, isSelectStatement, "analyzer expects a select statement")
 			semTable, err := semantics.Analyze(selectStatement, cDB, schemaInfo)
 			require.NoError(t, err)
-			expandedSelect, err := expandStar(selectStatement, semTable)
+			expandedSelect, err := rewrite(selectStatement, semTable, nil)
 			if tcase.expErr == "" {
 				require.NoError(t, err)
 				assert.Equal(t, tcase.expSQL, sqlparser.String(expandedSelect))
@@ -164,7 +164,7 @@ func TestSemTableDependenciesAfterExpandStar(t *testing.T) {
 			require.True(t, isSelectStatement, "analyzer expects a select statement")
 			semTable, err := semantics.Analyze(selectStatement, "", schemaInfo)
 			require.NoError(t, err)
-			expandedSelect, err := expandStar(selectStatement, semTable)
+			expandedSelect, err := rewrite(selectStatement, semTable, nil)
 			require.NoError(t, err)
 			assert.Equal(t, tcase.expSQL, sqlparser.String(expandedSelect))
 			if tcase.otherTbl != -1 {

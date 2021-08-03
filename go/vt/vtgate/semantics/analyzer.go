@@ -71,6 +71,8 @@ func Analyze(statement sqlparser.SelectStatement, currentDb string, si SchemaInf
 		selectScope:       analyzer.scoper.rScope,
 		ProjectionErr:     analyzer.projErr,
 		Comments:          statement.GetComments(),
+		SubqueryMap:       analyzer.binder.subqueryMap,
+		SubqueryRef:       analyzer.binder.subqueryRef,
 	}, nil
 }
 
@@ -201,8 +203,6 @@ func checkForInvalidConstructs(cursor *sqlparser.Cursor) error {
 		if node.Having != nil {
 			return Gen4NotSupportedF("HAVING")
 		}
-	case *sqlparser.Subquery:
-		return Gen4NotSupportedF("subquery")
 	case *sqlparser.FuncExpr:
 		if sqlparser.IsLockingFunc(node) {
 			return Gen4NotSupportedF("locking functions")
