@@ -18,14 +18,13 @@ package srvtopo
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"html/template"
 	"reflect"
 	"sync"
 	"testing"
 	"time"
-
-	"context"
 
 	"google.golang.org/protobuf/proto"
 
@@ -343,7 +342,7 @@ func TestSrvKeyspaceCachedError(t *testing.T) {
 	if err == nil {
 		t.Fatalf("First GetSrvKeyspace didn't return an error")
 	}
-	entry := rs.getSrvKeyspaceEntry("test_cell", "unknown_ks")
+	entry := rs.srvKeyspaceWatcher.getEntry(&srvKeyspaceKey{"test_cell", "unknown_ks"})
 	if err != entry.lastError {
 		t.Errorf("Error wasn't saved properly")
 	}
@@ -404,7 +403,7 @@ func TestGetSrvKeyspaceCreated(t *testing.T) {
 }
 
 func TestWatchSrvVSchema(t *testing.T) {
-	watchSrvVSchemaSleepTime = 10 * time.Millisecond
+	*srvTopoCacheRefresh = 10 * time.Millisecond
 	ctx := context.Background()
 	ts := memorytopo.NewServer("test_cell")
 	rs := NewResilientServer(ts, "TestWatchSrvVSchema")
@@ -442,7 +441,9 @@ func TestWatchSrvVSchema(t *testing.T) {
 	}
 	start := time.Now()
 	for {
-		if v, err := get(); err == nil && proto.Equal(newValue, v) {
+		v, err := get()
+		t.Logf("v = %v err = %v", v, err)
+		if err == nil && proto.Equal(newValue, v) {
 			break
 		}
 		if time.Since(start) > 5*time.Second {
