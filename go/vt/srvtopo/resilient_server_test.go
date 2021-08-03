@@ -441,9 +441,7 @@ func TestWatchSrvVSchema(t *testing.T) {
 	}
 	start := time.Now()
 	for {
-		v, err := get()
-		t.Logf("v = %v err = %v", v, err)
-		if err == nil && proto.Equal(newValue, v) {
+		if v, err := get(); err == nil && proto.Equal(newValue, v) {
 			break
 		}
 		if time.Since(start) > 5*time.Second {
