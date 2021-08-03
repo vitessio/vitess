@@ -12,7 +12,6 @@ import (
 
 type queryEntry struct {
 	// immutable values
-	rw  *resilientWatcher
 	key fmt.Stringer
 
 	// the mutex protects any access to this structure (read or write)
