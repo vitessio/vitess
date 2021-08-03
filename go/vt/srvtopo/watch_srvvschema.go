@@ -10,7 +10,7 @@ import (
 )
 
 type SrvVSchemaWatcher struct {
-	*resilientWatcher
+	rw *resilientWatcher
 }
 
 type cellName string
@@ -49,14 +49,14 @@ func NewSrvVSchemaWatcher(topoServer *topo.Server, counts *stats.CountersWithSin
 	return &SrvVSchemaWatcher{rw}
 }
 
-func (w *SrvVSchemaWatcher) Get(ctx context.Context, cell string) (*vschemapb.SrvVSchema, error) {
-	v, err := w.getValue(ctx, cellName(cell))
+func (w *SrvVSchemaWatcher) GetSrvVSchema(ctx context.Context, cell string) (*vschemapb.SrvVSchema, error) {
+	v, err := w.rw.getValue(ctx, cellName(cell))
 	vschema, _ := v.(*vschemapb.SrvVSchema)
 	return vschema, err
 }
 
-func (w *SrvVSchemaWatcher) Watch(ctx context.Context, cell string, callback func(*vschemapb.SrvVSchema, error)) {
-	entry := w.getEntry(cellName(cell))
+func (w *SrvVSchemaWatcher) WatchSrvVSchema(ctx context.Context, cell string, callback func(*vschemapb.SrvVSchema, error)) {
+	entry := w.rw.getEntry(cellName(cell))
 	entry.addListener(ctx, func(v interface{}, err error) {
 		vschema, _ := v.(*vschemapb.SrvVSchema)
 		callback(vschema, err)

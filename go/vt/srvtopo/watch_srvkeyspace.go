@@ -10,7 +10,7 @@ import (
 )
 
 type SrvKeyspaceWatcher struct {
-	*resilientWatcher
+	rw *resilientWatcher
 }
 
 type srvKeyspaceKey struct {
@@ -51,30 +51,30 @@ func NewSrvKeyspaceWatcher(topoServer *topo.Server, counts *stats.CountersWithSi
 	return &SrvKeyspaceWatcher{rw}
 }
 
-func (w *SrvKeyspaceWatcher) Get(ctx context.Context, cell, keyspace string) (*topodata.SrvKeyspace, error) {
+func (w *SrvKeyspaceWatcher) GetSrvKeyspace(ctx context.Context, cell, keyspace string) (*topodata.SrvKeyspace, error) {
 	key := &srvKeyspaceKey{cell, keyspace}
-	v, err := w.getValue(ctx, key)
+	v, err := w.rw.getValue(ctx, key)
 	ks, _ := v.(*topodata.SrvKeyspace)
 	return ks, err
 }
 
-func (w *SrvKeyspaceWatcher) Watch(ctx context.Context, cell, keyspace string, callback func(*topodata.SrvKeyspace, error)) {
-	entry := w.getEntry(&srvKeyspaceKey{cell, keyspace})
+func (w *SrvKeyspaceWatcher) WatchSrvKeyspace(ctx context.Context, cell, keyspace string, callback func(*topodata.SrvKeyspace, error)) {
+	entry := w.rw.getEntry(&srvKeyspaceKey{cell, keyspace})
 	entry.addListener(ctx, func(v interface{}, err error) {
 		srvkeyspace, _ := v.(*topodata.SrvKeyspace)
 		callback(srvkeyspace, err)
 	})
 }
 
-func (w *SrvKeyspaceWatcher) CacheStatus() (result []*SrvKeyspaceCacheStatus) {
-	w.mutex.Lock()
-	defer w.mutex.Unlock()
+func (w *SrvKeyspaceWatcher) srvKeyspaceCacheStatus() (result []*SrvKeyspaceCacheStatus) {
+	w.rw.mutex.Lock()
+	defer w.rw.mutex.Unlock()
 
-	for _, entry := range w.entries {
+	for _, entry := range w.rw.entries {
 		entry.mutex.Lock()
-		expirationTime := time.Now().Add(w.cacheTTL)
+		expirationTime := time.Now().Add(w.rw.cacheTTL)
 		if entry.watchState != watchStateRunning {
-			expirationTime = entry.lastValueTime.Add(w.cacheTTL)
+			expirationTime = entry.lastValueTime.Add(w.rw.cacheTTL)
 		}
 
 		key := entry.key.(*srvKeyspaceKey)

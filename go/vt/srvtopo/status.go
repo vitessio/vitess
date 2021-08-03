@@ -165,8 +165,8 @@ type ResilientServerCacheStatus struct {
 // CacheStatus returns a displayable version of the cache
 func (server *ResilientServer) CacheStatus() *ResilientServerCacheStatus {
 	result := &ResilientServerCacheStatus{
-		SrvKeyspaceNames: server.srvKeyspaceNamesQuery.CacheStatus(),
-		SrvKeyspaces:     server.srvKeyspaceWatcher.CacheStatus(),
+		SrvKeyspaceNames: server.srvKeyspaceNamesCacheStatus(),
+		SrvKeyspaces:     server.srvKeyspaceCacheStatus(),
 	}
 	sort.Sort(result.SrvKeyspaceNames)
 	sort.Sort(result.SrvKeyspaces)

@@ -9,7 +9,7 @@ import (
 )
 
 type SrvKeyspaceNamesQuery struct {
-	*resilientQuery
+	rq *resilientQuery
 }
 
 func NewSrvKeyspaceNamesQuery(topoServer *topo.Server, counts *stats.CountersWithSingleLabel, cacheRefresh, cacheTTL time.Duration) *SrvKeyspaceNamesQuery {
@@ -29,23 +29,23 @@ func NewSrvKeyspaceNamesQuery(topoServer *topo.Server, counts *stats.CountersWit
 	return &SrvKeyspaceNamesQuery{rq}
 }
 
-func (q *SrvKeyspaceNamesQuery) Get(ctx context.Context, cell string, staleOK bool) ([]string, error) {
-	v, err := q.getCurrentValue(ctx, cellName(cell), staleOK)
+func (q *SrvKeyspaceNamesQuery) GetSrvKeyspaceNames(ctx context.Context, cell string, staleOK bool) ([]string, error) {
+	v, err := q.rq.getCurrentValue(ctx, cellName(cell), staleOK)
 	names, _ := v.([]string)
 	return names, err
 }
 
-func (q *SrvKeyspaceNamesQuery) CacheStatus() (result []*SrvKeyspaceNamesCacheStatus) {
-	q.mutex.Lock()
-	defer q.mutex.Unlock()
+func (q *SrvKeyspaceNamesQuery) srvKeyspaceNamesCacheStatus() (result []*SrvKeyspaceNamesCacheStatus) {
+	q.rq.mutex.Lock()
+	defer q.rq.mutex.Unlock()
 
-	for _, entry := range q.entries {
+	for _, entry := range q.rq.entries {
 		entry.mutex.Lock()
 		value, _ := entry.value.([]string)
 		result = append(result, &SrvKeyspaceNamesCacheStatus{
 			Cell:           entry.key.String(),
 			Value:          value,
-			ExpirationTime: entry.insertionTime.Add(q.cacheTTL),
+			ExpirationTime: entry.insertionTime.Add(q.rq.cacheTTL),
 			LastQueryTime:  entry.lastQueryTime,
 			LastError:      entry.lastError,
 			LastErrorCtx:   entry.lastErrorCtx,
