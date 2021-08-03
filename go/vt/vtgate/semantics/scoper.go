@@ -40,7 +40,7 @@ func (s *scoper) down(cursor *sqlparser.Cursor) {
 		s.push(currScope)
 
 		// Needed for order by with Literal to find the Expression.
-		currScope.selectExprs = node.SelectExprs
+		currScope.selectStmt = node
 
 		s.rScope[node] = currScope
 		s.wScope[node] = newScope(nil)
@@ -106,7 +106,7 @@ func (s *scoper) changeScopeForOrderBy(cursor *sqlparser.Cursor) {
 	s.push(nScope)
 	wScope := s.wScope[sel]
 	nScope.tables = append(nScope.tables, wScope.tables...)
-	nScope.selectExprs = incomingScope.selectExprs
+	nScope.selectStmt = incomingScope.selectStmt
 
 	if s.rScope[sel] != incomingScope {
 		panic("BUG: scope counts did not match")

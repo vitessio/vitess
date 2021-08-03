@@ -100,7 +100,7 @@ func newBuildSelectPlan(sel *sqlparser.Select, reservedVars *sqlparser.ReservedV
 		return nil, err
 	}
 
-	sel, err = expandStar(sel, semTable)
+	sel, err = rewrite(sel, semTable, reservedVars)
 	if err != nil {
 		return nil, err
 	}
