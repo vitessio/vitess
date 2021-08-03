@@ -17,16 +17,12 @@ limitations under the License.
 package srvtopo
 
 import (
-	"context"
 	"flag"
 	"time"
 
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
-
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 )
 
 var (
@@ -61,9 +57,9 @@ type ResilientServer struct {
 	topoServer *topo.Server
 	counts     *stats.CountersWithSingleLabel
 
-	srvKeyspaceWatcher    *SrvKeyspaceWatcher
-	srvVSchemaWatcher     *SrvVSchemaWatcher
-	srvKeyspaceNamesQuery *SrvKeyspaceNamesQuery
+	*SrvKeyspaceWatcher
+	*SrvVSchemaWatcher
+	*SrvKeyspaceNamesQuery
 }
 
 // NewResilientServer creates a new ResilientServer
@@ -84,28 +80,13 @@ func NewResilientServer(base *topo.Server, counterPrefix string) *ResilientServe
 	return &ResilientServer{
 		topoServer:            base,
 		counts:                counts,
-		srvKeyspaceWatcher:    NewSrvKeyspaceWatcher(base, counts, *srvTopoCacheRefresh, *srvTopoCacheTTL),
-		srvVSchemaWatcher:     NewSrvVSchemaWatcher(base, counts, *srvTopoCacheRefresh, *srvTopoCacheTTL),
-		srvKeyspaceNamesQuery: NewSrvKeyspaceNamesQuery(base, counts, *srvTopoCacheRefresh, *srvTopoCacheTTL),
+		SrvKeyspaceWatcher:    NewSrvKeyspaceWatcher(base, counts, *srvTopoCacheRefresh, *srvTopoCacheTTL),
+		SrvVSchemaWatcher:     NewSrvVSchemaWatcher(base, counts, *srvTopoCacheRefresh, *srvTopoCacheTTL),
+		SrvKeyspaceNamesQuery: NewSrvKeyspaceNamesQuery(base, counts, *srvTopoCacheRefresh, *srvTopoCacheTTL),
 	}
 }
 
 // GetTopoServer returns the topo.Server that backs the resilient server.
 func (server *ResilientServer) GetTopoServer() (*topo.Server, error) {
 	return server.topoServer, nil
-}
-
-// GetSrvKeyspaceNames returns all keyspace names for the given cell.
-func (server *ResilientServer) GetSrvKeyspaceNames(ctx context.Context, cell string, staleOK bool) ([]string, error) {
-	return server.srvKeyspaceNamesQuery.Get(ctx, cell, staleOK)
-}
-
-// GetSrvKeyspace returns SrvKeyspace object for the given cell and keyspace.
-func (server *ResilientServer) GetSrvKeyspace(ctx context.Context, cell, keyspace string) (*topodatapb.SrvKeyspace, error) {
-	return server.srvKeyspaceWatcher.Get(ctx, cell, keyspace)
-}
-
-// WatchSrvVSchema is part of the srvtopo.Server interface.
-func (server *ResilientServer) WatchSrvVSchema(ctx context.Context, cell string, callback func(*vschemapb.SrvVSchema, error)) {
-	server.srvVSchemaWatcher.Watch(ctx, cell, callback)
 }

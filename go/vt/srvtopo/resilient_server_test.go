@@ -342,7 +342,7 @@ func TestSrvKeyspaceCachedError(t *testing.T) {
 	if err == nil {
 		t.Fatalf("First GetSrvKeyspace didn't return an error")
 	}
-	entry := rs.srvKeyspaceWatcher.getEntry(&srvKeyspaceKey{"test_cell", "unknown_ks"})
+	entry := rs.SrvKeyspaceWatcher.rw.getEntry(&srvKeyspaceKey{"test_cell", "unknown_ks"})
 	if err != entry.lastError {
 		t.Errorf("Error wasn't saved properly")
 	}
