@@ -126,7 +126,9 @@ type ResilientServer struct {
 	// values in the cache.
 	mutex                 sync.RWMutex
 	srvKeyspaceNamesCache map[string]*srvKeyspaceNamesEntry
-	srvKeyspaceCache      map[string]*srvKeyspaceEntry
+
+	srvKeyspaceWatcher *SrvKeyspaceWatcher
+	srvVSchemaWatcher  *SrvVSchemaWatcher
 }
 
 type srvKeyspaceNamesEntry struct {
@@ -155,55 +157,6 @@ const (
 	watchStateRunning
 )
 
-type srvKeyspaceEntry struct {
-	// unmutable values
-	cell     string
-	keyspace string
-
-	// the mutex protects any access to this structure (read or write)
-	mutex sync.RWMutex
-
-	// watchState describes if the watch go routine is running.
-	// It is easier to have an explicit field instead of guessing
-	// based on value and lastError.
-	//
-	// if the state is watchStateIdle, and the time since the last error is
-	// greater than the refresh time, the next time we try to access the
-	// keyspace, we will set watchState to watchStarting and kick off the
-	// watch in a separate goroutine
-	//
-	// in watchStateRunning, we are guaranteed to have lastError be
-	// non-nil and an up-to-date value (which may be nil)
-	watchState watchState
-
-	// watchStartingCond is used to serialize callers for the first attempt
-	// to establish the watch
-	watchStartingChan chan struct{}
-
-	value     *topodatapb.SrvKeyspace
-	lastError error
-
-	// lastValueTime is the time when the cached value is known to be valid,
-	// either because the watch last obtained a non-nil value or when a
-	// running watch first got an error.
-	//
-	// It is compared to the TTL to determine if we can return the value
-	// when the watch is failing
-	lastValueTime time.Time
-
-	// lastErrorCtx tries to remember the context of the query
-	// that failed to get the SrvKeyspace, so we can display it in
-	// the status UI. The background routine that refreshes the
-	// keyspace will not populate this field.
-	// The intent is to have the source of a query that for instance
-	// has a bad keyspace or cell name.
-	lastErrorCtx context.Context
-
-	// lastErrorTime records the time that the watch failed, used for
-	// the status page
-	lastErrorTime time.Time
-}
-
 // NewResilientServer creates a new ResilientServer
 // based on the provided topo.Server.
 func NewResilientServer(base *topo.Server, counterPrefix string) *ResilientServer {
@@ -218,15 +171,17 @@ func NewResilientServer(base *topo.Server, counterPrefix string) *ResilientServe
 	} else {
 		metric = ""
 	}
+	counts := stats.NewCountersWithSingleLabel(metric, "Resilient srvtopo server operations", "type")
 
 	return &ResilientServer{
 		topoServer:   base,
 		cacheTTL:     *srvTopoCacheTTL,
 		cacheRefresh: *srvTopoCacheRefresh,
-		counts:       stats.NewCountersWithSingleLabel(metric, "Resilient srvtopo server operations", "type"),
+		counts:       counts,
 
 		srvKeyspaceNamesCache: make(map[string]*srvKeyspaceNamesEntry),
-		srvKeyspaceCache:      make(map[string]*srvKeyspaceEntry),
+		srvKeyspaceWatcher:    NewSrvKeyspaceWatcher(base, counts, *srvTopoCacheRefresh, *srvTopoCacheTTL),
+		srvVSchemaWatcher:     NewSrvVSchemaWatcher(base, counts, *srvTopoCacheRefresh, *srvTopoCacheTTL),
 	}
 }
 
@@ -329,7 +284,7 @@ func (server *ResilientServer) GetSrvKeyspaceNames(ctx context.Context, cell str
 	// for the refresh attempt to complete to get a more up to date
 	// response.
 	//
-	// In the event that the topo service is slow or unresponsive either
+	// In the onEventLocked that the topo service is slow or unresponsive either
 	// on the initial fetch or if the cache TTL expires, then several
 	// requests could be blocked on refreshingCond waiting for the response
 	// to come back.
@@ -354,232 +309,14 @@ func (server *ResilientServer) GetSrvKeyspaceNames(ctx context.Context, cell str
 	return nil, entry.lastError
 }
 
-func (server *ResilientServer) getSrvKeyspaceEntry(cell, keyspace string) *srvKeyspaceEntry {
-	// find the entry in the cache, add it if not there
-	key := cell + "." + keyspace
-	server.mutex.RLock()
-	entry, ok := server.srvKeyspaceCache[key]
-	if ok {
-		server.mutex.RUnlock()
-		return entry
-	}
-	server.mutex.RUnlock()
-
-	server.mutex.Lock()
-	entry, ok = server.srvKeyspaceCache[key]
-	if !ok {
-		entry = &srvKeyspaceEntry{
-			cell:     cell,
-			keyspace: keyspace,
-		}
-		server.srvKeyspaceCache[key] = entry
-	}
-	server.mutex.Unlock()
-	return entry
-}
-
 // GetSrvKeyspace returns SrvKeyspace object for the given cell and keyspace.
 func (server *ResilientServer) GetSrvKeyspace(ctx context.Context, cell, keyspace string) (*topodatapb.SrvKeyspace, error) {
-	entry := server.getSrvKeyspaceEntry(cell, keyspace)
-
-	// If the watch is already running, return the value
-	entry.mutex.RLock()
-	if entry.watchState == watchStateRunning {
-		v, e := entry.value, entry.lastError
-		entry.mutex.RUnlock()
-		return v, e
-	}
-	entry.mutex.RUnlock()
-
-	entry.mutex.Lock()
-	defer entry.mutex.Unlock()
-
-	// If the watch is already running (now that we have the write lock),
-	// return the value
-	if entry.watchState == watchStateRunning {
-		return entry.value, entry.lastError
-	}
-
-	// Watch is not running. Start a new one if it is time to use it and if
-	// there isn't one already one  in the process of being started.
-	shouldRefresh := time.Since(entry.lastErrorTime) > server.cacheRefresh
-	if shouldRefresh && (entry.watchState == watchStateIdle) {
-		entry.watchState = watchStateStarting
-		entry.watchStartingChan = make(chan struct{})
-		go server.watchSrvKeyspace(ctx, entry, cell, keyspace)
-	}
-
-	// If the cached value is still valid, use it. Otherwise wait
-	// for the watch attempt to complete to get a more up to date
-	// response.
-	//
-	// In the event that the topo service is slow or unresponsive either
-	// on the initial fetch or if the cache TTL expires, then several
-	// requests could be blocked waiting for the response to come back.
-	cacheValid := entry.value != nil && time.Since(entry.lastValueTime) < server.cacheTTL
-	if cacheValid {
-		server.counts.Add(cachedCategory, 1)
-		return entry.value, nil
-	}
-
-	if entry.watchState == watchStateStarting {
-		watchStartingChan := entry.watchStartingChan
-		entry.mutex.Unlock()
-		select {
-		case <-watchStartingChan:
-		case <-ctx.Done():
-			entry.mutex.Lock()
-			return nil, fmt.Errorf("timed out waiting for keyspace")
-		}
-		entry.mutex.Lock()
-	}
-
-	if entry.value != nil {
-		return entry.value, nil
-	}
-
-	return nil, entry.lastError
+	return server.srvKeyspaceWatcher.Get(ctx, cell, keyspace)
 }
-
-// watchSrvKeyspace is started in a separate goroutine and attempts to establish
-// a watch. The caller context is provided to show in the UI in case the watch
-// fails due to an error like a mistyped keyspace.
-func (server *ResilientServer) watchSrvKeyspace(callerCtx context.Context, entry *srvKeyspaceEntry, cell, keyspace string) {
-	// We use a background context, as starting the watch should keep going
-	// even if the current query context is short-lived.
-	newCtx := context.Background()
-	current, changes, cancel := server.topoServer.WatchSrvKeyspace(newCtx, cell, keyspace)
-
-	entry.mutex.Lock()
-
-	if current.Err != nil {
-		// lastError and lastErrorCtx will be visible from the UI
-		// until the next try
-		entry.lastError = current.Err
-		entry.lastErrorCtx = callerCtx
-		entry.lastErrorTime = time.Now()
-
-		// if the node disappears, delete the cached value
-		if topo.IsErrType(current.Err, topo.NoNode) {
-			entry.value = nil
-		}
-
-		server.counts.Add(errorCategory, 1)
-		log.Errorf("Initial WatchSrvKeyspace failed for %v/%v: %T %v", cell, keyspace, current.Err, current.Err)
-
-		// This watcher will able to continue to return the last value till it is not able to connect to the topo server even if the cache TTL is reached.
-		// TTL cache is only checked if the error is a known error i.e topo.Error.
-		_, topoErr := current.Err.(topo.Error)
-		if topoErr && time.Since(entry.lastValueTime) > server.cacheTTL {
-			log.Errorf("WatchSrvKeyspace clearing cached entry for %v/%v", cell, keyspace)
-			entry.value = nil
-		}
-
-		entry.watchState = watchStateIdle
-		close(entry.watchStartingChan)
-		entry.watchStartingChan = nil
-		entry.mutex.Unlock()
-		return
-	}
-
-	// we are now watching, cache the first notification
-	entry.watchState = watchStateRunning
-	close(entry.watchStartingChan)
-	entry.watchStartingChan = nil
-	entry.value = current.Value
-	entry.lastValueTime = time.Now()
-
-	entry.lastError = nil
-	entry.lastErrorCtx = nil
-	entry.lastErrorTime = time.Time{}
-
-	entry.mutex.Unlock()
-
-	defer cancel()
-	for c := range changes {
-		if c.Err != nil {
-			// Watch errored out.
-			//
-			// Log it and store the error, but do not clear the value
-			// so it can be used until the ttl elapses unless the node
-			// was deleted.
-			err := fmt.Errorf("WatchSrvKeyspace failed for %v/%v: %v", cell, keyspace, c.Err)
-			log.Errorf("%v", err)
-			server.counts.Add(errorCategory, 1)
-			entry.mutex.Lock()
-			if topo.IsErrType(c.Err, topo.NoNode) {
-				entry.value = nil
-			}
-			entry.watchState = watchStateIdle
-
-			// Even though we didn't get a new value, update the lastValueTime
-			// here since the watch was successfully running before and we want
-			// the value to be cached for the full TTL from here onwards.
-			entry.lastValueTime = time.Now()
-
-			entry.lastError = err
-			entry.lastErrorCtx = nil
-			entry.lastErrorTime = time.Now()
-			entry.mutex.Unlock()
-			return
-		}
-
-		// We got a new value, save it.
-		entry.mutex.Lock()
-		entry.value = c.Value
-		entry.lastError = nil
-		entry.lastErrorCtx = nil
-		entry.lastErrorTime = time.Time{}
-		entry.mutex.Unlock()
-	}
-}
-
-var watchSrvVSchemaSleepTime = 5 * time.Second
 
 // WatchSrvVSchema is part of the srvtopo.Server interface.
 func (server *ResilientServer) WatchSrvVSchema(ctx context.Context, cell string, callback func(*vschemapb.SrvVSchema, error)) {
-	wg := sync.WaitGroup{}
-	wg.Add(1)
-
-	go func() {
-		defer func() {
-			if err := recover(); err != nil {
-				log.Errorf("WatchSrvVSchema  uncaught panic, cell :%v, err :%v)", cell, err)
-			}
-		}()
-
-		foundFirstValue := false
-
-		for {
-			current, changes, _ := server.topoServer.WatchSrvVSchema(ctx, cell)
-			callback(current.Value, current.Err)
-			if !foundFirstValue {
-				foundFirstValue = true
-				wg.Done()
-			}
-			if current.Err != nil {
-				// Don't log if there is no VSchema to start with.
-				if !topo.IsErrType(current.Err, topo.NoNode) {
-					log.Warningf("Error watching vschema for cell %s (will wait 5s before retrying): %v", cell, current.Err)
-				}
-			} else {
-				for c := range changes {
-					// Note we forward topo.ErrNoNode as is.
-					callback(c.Value, c.Err)
-					if c.Err != nil {
-						log.Warningf("Error while watching vschema for cell %s (will wait 5s before retrying): %v", cell, c.Err)
-						break
-					}
-				}
-			}
-
-			// Sleep a bit before trying again.
-			time.Sleep(watchSrvVSchemaSleepTime)
-		}
-	}()
-
-	// Wait for the first value to have been processed.
-	wg.Wait()
+	server.srvVSchemaWatcher.Watch(ctx, cell, callback)
 }
 
 // The next few structures and methods are used to get a displayable
@@ -683,8 +420,8 @@ type ResilientServerCacheStatus struct {
 // CacheStatus returns a displayable version of the cache
 func (server *ResilientServer) CacheStatus() *ResilientServerCacheStatus {
 	result := &ResilientServerCacheStatus{}
-	server.mutex.Lock()
 
+	server.mutex.Lock()
 	for _, entry := range server.srvKeyspaceNamesCache {
 		entry.mutex.Lock()
 
@@ -698,28 +435,9 @@ func (server *ResilientServer) CacheStatus() *ResilientServerCacheStatus {
 		})
 		entry.mutex.Unlock()
 	}
-
-	for _, entry := range server.srvKeyspaceCache {
-		entry.mutex.RLock()
-
-		expirationTime := time.Now().Add(server.cacheTTL)
-		if entry.watchState != watchStateRunning {
-			expirationTime = entry.lastValueTime.Add(server.cacheTTL)
-		}
-
-		result.SrvKeyspaces = append(result.SrvKeyspaces, &SrvKeyspaceCacheStatus{
-			Cell:           entry.cell,
-			Keyspace:       entry.keyspace,
-			Value:          entry.value,
-			ExpirationTime: expirationTime,
-			LastErrorTime:  entry.lastErrorTime,
-			LastError:      entry.lastError,
-			LastErrorCtx:   entry.lastErrorCtx,
-		})
-		entry.mutex.RUnlock()
-	}
-
 	server.mutex.Unlock()
+
+	result.SrvKeyspaces = server.srvKeyspaceWatcher.CacheStatus()
 
 	// do the sorting without the mutex
 	sort.Sort(result.SrvKeyspaceNames)
