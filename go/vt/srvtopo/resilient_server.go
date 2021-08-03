@@ -19,7 +19,6 @@ package srvtopo
 import (
 	"context"
 	"flag"
-	"sync"
 	"time"
 
 	"vitess.io/vitess/go/stats"
@@ -65,24 +64,6 @@ type ResilientServer struct {
 	srvKeyspaceWatcher    *SrvKeyspaceWatcher
 	srvVSchemaWatcher     *SrvVSchemaWatcher
 	srvKeyspaceNamesQuery *SrvKeyspaceNamesQuery
-}
-
-type srvKeyspaceNamesEntry struct {
-	// unmutable values
-	cell string
-
-	// the mutex protects any access to this structure (read or write)
-	mutex sync.Mutex
-
-	// refreshingChan is used to synchronize requests and avoid hammering
-	// the topo server
-	refreshingChan chan struct{}
-
-	insertionTime time.Time
-	lastQueryTime time.Time
-	value         []string
-	lastError     error
-	lastErrorCtx  context.Context
 }
 
 // NewResilientServer creates a new ResilientServer
