@@ -645,6 +645,7 @@ func TestQueryAndSubQWithLimit(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
+	defer exec(t, conn, `delete from t1`)
 	exec(t, conn, "insert into t1(id1, id2) values(0,0),(1,1),(2,2),(3, 3), (4, 4), (5, 5), (6, 6), (7, 7), (8, 8),(9,9)")
 	result := exec(t, conn, `select id1, id2 from t1 where id1 >= ( select id1 from t1 order by id1 asc limit 1) limit 100`)
 	assert.Equal(t, 10, len(result.Rows))
@@ -702,6 +703,18 @@ ts12 TIMESTAMP DEFAULT LOCALTIME()
 
 	exec(t, conn, `create table function_default (x varchar(25) DEFAULT "check")`)
 	exec(t, conn, "drop table function_default")
+}
+
+func TestSubqueryInINClause(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	defer exec(t, conn, `delete from t1`)
+	exec(t, conn, "insert into t1(id1, id2) values(0,0),(1,1)")
+	assertMatches(t, conn, `SELECT id2 FROM t1 WHERE id1 IN (SELECT 1 FROM dual)`, `[[INT64(1)]]`)
 }
 
 func assertMatches(t *testing.T, conn *mysql.Conn, query, expected string) {
