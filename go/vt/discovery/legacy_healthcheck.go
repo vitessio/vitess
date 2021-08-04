@@ -38,6 +38,7 @@ package discovery
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"hash/crc32"
@@ -47,8 +48,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-
-	"context"
 
 	"google.golang.org/protobuf/proto"
 
