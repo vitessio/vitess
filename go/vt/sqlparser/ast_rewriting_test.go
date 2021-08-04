@@ -176,8 +176,11 @@ func TestRewrites(in *testing.T) {
 		in:       "SELECT a.col, b.col FROM A JOIN B USING (id)",
 		expected: "SELECT a.col, b.col FROM A JOIN B ON A.id = B.id",
 	}, {
-		in:       "SELECT * FROM tbl WHERE id IN (SELECT 1 FROM dual WHERE 1 = 0)",
+		in:       "SELECT * FROM tbl WHERE id IN (SELECT 1 FROM dual)",
 		expected: "SELECT * FROM tbl WHERE id IN (1)",
+	}, {
+		in:       "SELECT * FROM tbl WHERE id IN (SELECT 1 FROM dual WHERE 1 = 0)",
+		expected: "SELECT * FROM tbl WHERE id IN (SELECT 1 FROM dual WHERE 1 = 0)",
 	}, {
 		in:       "SELECT a.col, b.col FROM A JOIN B USING (id1,id2,id3)",
 		expected: "SELECT a.col, b.col FROM A JOIN B ON A.id1 = B.id1 AND A.id2 = B.id2 AND A.id3 = B.id3",
