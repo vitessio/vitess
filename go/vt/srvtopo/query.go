@@ -1,3 +1,19 @@
+/*
+Copyright 2021 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package srvtopo
 
 import (
@@ -31,9 +47,9 @@ type queryEntry struct {
 type resilientQuery struct {
 	query func(ctx context.Context, entry *queryEntry) (interface{}, error)
 
-	counts       *stats.CountersWithSingleLabel
-	cacheRefresh time.Duration
-	cacheTTL     time.Duration
+	counts               *stats.CountersWithSingleLabel
+	cacheRefreshInterval time.Duration
+	cacheTTL             time.Duration
 
 	mutex   sync.Mutex
 	entries map[string]*queryEntry
@@ -65,9 +81,9 @@ func (q *resilientQuery) getCurrentValue(ctx context.Context, wkey fmt.Stringer,
 	cacheValid := entry.value != nil && (time.Since(entry.insertionTime) < q.cacheTTL)
 	if !cacheValid && staleOK {
 		// Only allow stale results for a bounded period
-		cacheValid = entry.value != nil && (time.Since(entry.insertionTime) < (q.cacheTTL + 2*q.cacheRefresh))
+		cacheValid = entry.value != nil && (time.Since(entry.insertionTime) < (q.cacheTTL + 2*q.cacheRefreshInterval))
 	}
-	shouldRefresh := time.Since(entry.lastQueryTime) > q.cacheRefresh
+	shouldRefresh := time.Since(entry.lastQueryTime) > q.cacheRefreshInterval
 
 	// If it is not time to check again, then return either the cached
 	// value or the cached error but don't ask topo again.
@@ -79,9 +95,9 @@ func (q *resilientQuery) getCurrentValue(ctx context.Context, wkey fmt.Stringer,
 	}
 
 	// Refresh the state in a background goroutine if no refresh is already
-	// in progress none is already running. This way queries are not blocked
-	// while the cache is still valid but past the refresh time, and avoids
-	// calling out to the topo service while the lock is held.
+	// in progress. This way queries are not blocked while the cache is still
+	// valid but past the refresh time, and avoids calling out to the topo
+	// service while the lock is held.
 	if entry.refreshingChan == nil {
 		entry.refreshingChan = make(chan struct{})
 		entry.lastQueryTime = time.Now()
@@ -138,7 +154,7 @@ func (q *resilientQuery) getCurrentValue(ctx context.Context, wkey fmt.Stringer,
 	//
 	// In the event that the topo service is slow or unresponsive either
 	// on the initial fetch or if the cache TTL expires, then several
-	// requests could be blocked on refreshingCond waiting for the response
+	// requests could be blocked on refreshingChan waiting for the response
 	// to come back.
 	if cacheValid {
 		return entry.value, nil
@@ -150,7 +166,7 @@ func (q *resilientQuery) getCurrentValue(ctx context.Context, wkey fmt.Stringer,
 	case <-refreshingChan:
 	case <-ctx.Done():
 		entry.mutex.Lock()
-		return nil, fmt.Errorf("timed out waiting for keyspace names")
+		return nil, ctx.Err()
 	}
 	entry.mutex.Lock()
 
