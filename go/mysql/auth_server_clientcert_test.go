@@ -38,7 +38,7 @@ func TestValidCert(t *testing.T) {
 	authServer := newAuthServerClientCert()
 
 	// Create the listener, so we can get its host.
-	l, err := NewListener("tcp", ":0", authServer, th, 0, 0, false)
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false)
 	if err != nil {
 		t.Fatalf("NewListener failed: %v", err)
 	}
@@ -78,7 +78,7 @@ func TestValidCert(t *testing.T) {
 		Uname: clientCertUsername,
 		Pass:  "",
 		// SSL flags.
-		Flags:      CapabilityClientSSL,
+		SslMode:    vttls.VerifyIdentity,
 		SslCa:      path.Join(root, "ca-cert.pem"),
 		SslCert:    path.Join(root, "client-cert.pem"),
 		SslKey:     path.Join(root, "client-key.pem"),
@@ -121,7 +121,7 @@ func TestNoCert(t *testing.T) {
 	authServer := newAuthServerClientCert()
 
 	// Create the listener, so we can get its host.
-	l, err := NewListener("tcp", ":0", authServer, th, 0, 0, false)
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false)
 	if err != nil {
 		t.Fatalf("NewListener failed: %v", err)
 	}
@@ -159,7 +159,7 @@ func TestNoCert(t *testing.T) {
 		Port:       port,
 		Uname:      "user1",
 		Pass:       "",
-		Flags:      CapabilityClientSSL,
+		SslMode:    vttls.VerifyIdentity,
 		SslCa:      path.Join(root, "ca-cert.pem"),
 		ServerName: "server.example.com",
 	}

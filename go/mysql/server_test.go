@@ -240,11 +240,7 @@ func (th *testHandler) WarningCount(c *Conn) uint16 {
 }
 
 func getHostPort(t *testing.T, a net.Addr) (string, int) {
-	// For the host name, we resolve 'localhost' into an address.
-	// This works around a few travis issues where IPv6 is not 100% enabled.
-	hosts, err := net.LookupHost("localhost")
-	require.NoError(t, err, "LookupHost(localhost) failed")
-	host := hosts[0]
+	host := a.(*net.TCPAddr).IP.String()
 	port := a.(*net.TCPAddr).Port
 	t.Logf("listening on address '%v' port %v", host, port)
 	return host, port
@@ -261,7 +257,7 @@ func TestConnectionFromListener(t *testing.T) {
 	defer authServer.close()
 	// Make sure we can create our own net.Listener for use with the mysql
 	// listener
-	listener, err := net.Listen("tcp", ":0")
+	listener, err := net.Listen("tcp", "127.0.0.1:")
 	require.NoError(t, err, "net.Listener failed")
 
 	l, err := NewFromListener(listener, authServer, th, 0, 0)
@@ -270,7 +266,7 @@ func TestConnectionFromListener(t *testing.T) {
 	go l.Accept()
 
 	host, port := getHostPort(t, l.Addr())
-
+	fmt.Printf("host: %s, port: %d\n", host, port)
 	// Setup the right parameters.
 	params := &ConnParams{
 		Host:  host,
@@ -293,7 +289,7 @@ func TestConnectionWithoutSourceHost(t *testing.T) {
 		UserData: "userData1",
 	}}
 	defer authServer.close()
-	l, err := NewListener("tcp", ":0", authServer, th, 0, 0, false)
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false)
 	require.NoError(t, err, "NewListener failed")
 	defer l.Close()
 	go l.Accept()
@@ -326,7 +322,7 @@ func TestConnectionWithSourceHost(t *testing.T) {
 	}
 	defer authServer.close()
 
-	l, err := NewListener("tcp", ":0", authServer, th, 0, 0, false)
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false)
 	require.NoError(t, err, "NewListener failed")
 	defer l.Close()
 	go l.Accept()
@@ -359,7 +355,7 @@ func TestConnectionUseMysqlNativePasswordWithSourceHost(t *testing.T) {
 	}
 	defer authServer.close()
 
-	l, err := NewListener("tcp", ":0", authServer, th, 0, 0, false)
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false)
 	require.NoError(t, err, "NewListener failed")
 	defer l.Close()
 	go l.Accept()
@@ -423,7 +419,7 @@ func TestClientFoundRows(t *testing.T) {
 		UserData: "userData1",
 	}}
 	defer authServer.close()
-	l, err := NewListener("tcp", ":0", authServer, th, 0, 0, false)
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false)
 	require.NoError(t, err, "NewListener failed")
 	defer l.Close()
 	go l.Accept()
@@ -472,7 +468,7 @@ func TestConnCounts(t *testing.T) {
 		UserData: "userData1",
 	}}
 	defer authServer.close()
-	l, err := NewListener("tcp", ":0", authServer, th, 0, 0, false)
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false)
 	require.NoError(t, err, "NewListener failed")
 	defer l.Close()
 	go l.Accept()
@@ -529,7 +525,7 @@ func TestServer(t *testing.T) {
 		UserData: "userData1",
 	}}
 	defer authServer.close()
-	l, err := NewListener("tcp", ":0", authServer, th, 0, 0, false)
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false)
 	require.NoError(t, err)
 	l.SlowConnectWarnThreshold.Set(time.Nanosecond * 1)
 	defer l.Close()
@@ -628,7 +624,7 @@ func TestServerStats(t *testing.T) {
 		UserData: "userData1",
 	}}
 	defer authServer.close()
-	l, err := NewListener("tcp", ":0", authServer, th, 0, 0, false)
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false)
 	require.NoError(t, err)
 	l.SlowConnectWarnThreshold.Set(time.Nanosecond * 1)
 	defer l.Close()
@@ -701,7 +697,7 @@ func TestClearTextServer(t *testing.T) {
 		UserData: "userData1",
 	}}
 	defer authServer.close()
-	l, err := NewListener("tcp", ":0", authServer, th, 0, 0, false)
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false)
 	require.NoError(t, err)
 	defer l.Close()
 	go l.Accept()
@@ -774,7 +770,7 @@ func TestDialogServer(t *testing.T) {
 		UserData: "userData1",
 	}}
 	defer authServer.close()
-	l, err := NewListener("tcp", ":0", authServer, th, 0, 0, false)
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false)
 	require.NoError(t, err)
 	l.AllowClearTextWithoutTLS.Set(true)
 	defer l.Close()
@@ -784,10 +780,11 @@ func TestDialogServer(t *testing.T) {
 
 	// Setup the right parameters.
 	params := &ConnParams{
-		Host:  host,
-		Port:  port,
-		Uname: "user1",
-		Pass:  "password1",
+		Host:    host,
+		Port:    port,
+		Uname:   "user1",
+		Pass:    "password1",
+		SslMode: vttls.Disabled,
 	}
 	sql := "select rows"
 	output, ok := runMysql(t, params, sql)
@@ -816,14 +813,11 @@ func TestTLSServer(t *testing.T) {
 	// Below, we are enabling --ssl-verify-server-cert, which adds
 	// a check that the common name of the certificate matches the
 	// server host name we connect to.
-	l, err := NewListener("tcp", ":0", authServer, th, 0, 0, false)
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false)
 	require.NoError(t, err)
 	defer l.Close()
 
-	// Make sure hostname is added as an entry to /etc/hosts, otherwise ssl handshake will fail
-	host, err := os.Hostname()
-	require.NoError(t, err)
-
+	host := l.Addr().(*net.TCPAddr).IP.String()
 	port := l.Addr().(*net.TCPAddr).Port
 
 	// Create the certs.
@@ -831,7 +825,7 @@ func TestTLSServer(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(root)
 	tlstest.CreateCA(root)
-	tlstest.CreateSignedCert(root, tlstest.CA, "01", "server", host)
+	tlstest.CreateSignedCert(root, tlstest.CA, "01", "server", "server.example.com")
 	tlstest.CreateSignedCert(root, tlstest.CA, "02", "client", "Client Cert")
 
 	// Create the server with TLS config.
@@ -863,10 +857,11 @@ func TestTLSServer(t *testing.T) {
 		Uname: "user1",
 		Pass:  "password1",
 		// SSL flags.
-		Flags:   CapabilityClientSSL,
-		SslCa:   path.Join(root, "ca-cert.pem"),
-		SslCert: path.Join(root, "client-cert.pem"),
-		SslKey:  path.Join(root, "client-key.pem"),
+		SslMode:    vttls.VerifyIdentity,
+		SslCa:      path.Join(root, "ca-cert.pem"),
+		SslCert:    path.Join(root, "client-cert.pem"),
+		SslKey:     path.Join(root, "client-key.pem"),
+		ServerName: "server.example.com",
 	}
 
 	// Run a 'select rows' command with results.
@@ -917,14 +912,11 @@ func TestTLSRequired(t *testing.T) {
 	// Below, we are enabling --ssl-verify-server-cert, which adds
 	// a check that the common name of the certificate matches the
 	// server host name we connect to.
-	l, err := NewListener("tcp", ":0", authServer, th, 0, 0, false)
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false)
 	require.NoError(t, err)
 	defer l.Close()
 
-	// Make sure hostname is added as an entry to /etc/hosts, otherwise ssl handshake will fail
-	host, err := os.Hostname()
-	require.NoError(t, err)
-
+	host := l.Addr().(*net.TCPAddr).IP.String()
 	port := l.Addr().(*net.TCPAddr).Port
 
 	// Create the certs.
@@ -932,7 +924,7 @@ func TestTLSRequired(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(root)
 	tlstest.CreateCA(root)
-	tlstest.CreateSignedCert(root, tlstest.CA, "01", "server", host)
+	tlstest.CreateSignedCert(root, tlstest.CA, "01", "server", "server.example.com")
 
 	// Create the server with TLS config.
 	serverConfig, err := vttls.ServerConfig(
@@ -958,10 +950,12 @@ func TestTLSRequired(t *testing.T) {
 
 	// Setup conn params without SSL.
 	params := &ConnParams{
-		Host:  host,
-		Port:  port,
-		Uname: "user1",
-		Pass:  "password1",
+		Host:       host,
+		Port:       port,
+		Uname:      "user1",
+		Pass:       "password1",
+		SslMode:    vttls.Disabled,
+		ServerName: "server.example.com",
 	}
 	conn, err := Connect(context.Background(), params)
 	require.NotNil(t, err)
@@ -974,7 +968,7 @@ func TestTLSRequired(t *testing.T) {
 
 	// setup conn params with TLS
 	tlstest.CreateSignedCert(root, tlstest.CA, "02", "client", "Client Cert")
-	params.Flags = CapabilityClientSSL
+	params.SslMode = vttls.VerifyIdentity
 	params.SslCa = path.Join(root, "ca-cert.pem")
 	params.SslCert = path.Join(root, "client-cert.pem")
 	params.SslKey = path.Join(root, "client-key.pem")
@@ -996,7 +990,7 @@ func TestCachingSha2PasswordAuthWithTLS(t *testing.T) {
 	defer authServer.close()
 
 	// Create the listener, so we can get its host.
-	l, err := NewListener("tcp", ":0", authServer, th, 0, 0, false)
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false)
 	if err != nil {
 		t.Fatalf("NewListener failed: %v", err)
 	}
@@ -1036,7 +1030,7 @@ func TestCachingSha2PasswordAuthWithTLS(t *testing.T) {
 		Uname: "user1",
 		Pass:  "password1",
 		// SSL flags.
-		Flags:      CapabilityClientSSL,
+		SslMode:    vttls.VerifyIdentity,
 		SslCa:      path.Join(root, "ca-cert.pem"),
 		SslCert:    path.Join(root, "client-cert.pem"),
 		SslKey:     path.Join(root, "client-key.pem"),
@@ -1073,7 +1067,7 @@ func TestCachingSha2PasswordAuthWithoutTLS(t *testing.T) {
 	defer authServer.close()
 
 	// Create the listener.
-	l, err := NewListener("tcp", ":0", authServer, th, 0, 0, false)
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false)
 	if err != nil {
 		t.Fatalf("NewListener failed: %v", err)
 	}
@@ -1086,10 +1080,11 @@ func TestCachingSha2PasswordAuthWithoutTLS(t *testing.T) {
 
 	// Setup the right parameters.
 	params := &ConnParams{
-		Host:  host,
-		Port:  port,
-		Uname: "user1",
-		Pass:  "password1",
+		Host:    host,
+		Port:    port,
+		Uname:   "user1",
+		Pass:    "password1",
+		SslMode: vttls.Disabled,
 	}
 
 	// Connection should fail, as server requires SSL for caching_sha2_password.
@@ -1116,7 +1111,7 @@ func TestErrorCodes(t *testing.T) {
 		UserData: "userData1",
 	}}
 	defer authServer.close()
-	l, err := NewListener("tcp", ":0", authServer, th, 0, 0, false)
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false)
 	require.NoError(t, err)
 	defer l.Close()
 	go l.Accept()
@@ -1244,7 +1239,7 @@ func runMysqlWithErr(t *testing.T, params *ConnParams, command string) (string, 
 		if params.DbName != "" {
 			args = append(args, "-D", params.DbName)
 		}
-		if params.Flags&CapabilityClientSSL > 0 {
+		if params.SslEnabled() {
 			args = append(args,
 				"--ssl",
 				"--ssl-ca", params.SslCa,
@@ -1294,7 +1289,7 @@ func TestListenerShutdown(t *testing.T) {
 		UserData: "userData1",
 	}}
 	defer authServer.close()
-	l, err := NewListener("tcp", ":0", authServer, th, 0, 0, false)
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false)
 	require.NoError(t, err)
 	defer l.Close()
 	go l.Accept()
@@ -1367,7 +1362,7 @@ func TestServerFlush(t *testing.T) {
 
 	th := &testHandler{}
 
-	l, err := NewListener("tcp", ":0", NewAuthServerNone(), th, 0, 0, false)
+	l, err := NewListener("tcp", "127.0.0.1:", NewAuthServerNone(), th, 0, 0, false)
 	require.NoError(t, err)
 	defer l.Close()
 	go l.Accept()

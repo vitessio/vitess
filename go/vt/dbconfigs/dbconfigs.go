@@ -25,6 +25,8 @@ import (
 	"encoding/json"
 	"flag"
 
+	"vitess.io/vitess/go/vt/vttls"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/log"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -69,19 +71,20 @@ var (
 // The app must store the DBConfigs object internally, and use it to
 // build connection parameters as needed.
 type DBConfigs struct {
-	Socket                     string `json:"socket,omitempty"`
-	Host                       string `json:"host,omitempty"`
-	Port                       int    `json:"port,omitempty"`
-	Charset                    string `json:"charset,omitempty"`
-	Flags                      uint64 `json:"flags,omitempty"`
-	Flavor                     string `json:"flavor,omitempty"`
-	SslCa                      string `json:"sslCa,omitempty"`
-	SslCaPath                  string `json:"sslCaPath,omitempty"`
-	SslCert                    string `json:"sslCert,omitempty"`
-	SslKey                     string `json:"sslKey,omitempty"`
-	ServerName                 string `json:"serverName,omitempty"`
-	ConnectTimeoutMilliseconds int    `json:"connectTimeoutMilliseconds,omitempty"`
-	DBName                     string `json:"dbName,omitempty"`
+	Socket                     string        `json:"socket,omitempty"`
+	Host                       string        `json:"host,omitempty"`
+	Port                       int           `json:"port,omitempty"`
+	Charset                    string        `json:"charset,omitempty"`
+	Flags                      uint64        `json:"flags,omitempty"`
+	Flavor                     string        `json:"flavor,omitempty"`
+	SslMode                    vttls.SslMode `json:"sslMode,omitempty"`
+	SslCa                      string        `json:"sslCa,omitempty"`
+	SslCaPath                  string        `json:"sslCaPath,omitempty"`
+	SslCert                    string        `json:"sslCert,omitempty"`
+	SslKey                     string        `json:"sslKey,omitempty"`
+	ServerName                 string        `json:"serverName,omitempty"`
+	ConnectTimeoutMilliseconds int           `json:"connectTimeoutMilliseconds,omitempty"`
+	DBName                     string        `json:"dbName,omitempty"`
 
 	App          UserConfig `json:"app,omitempty"`
 	Dba          UserConfig `json:"dba,omitempty"`
@@ -126,6 +129,7 @@ func registerBaseFlags() {
 	flag.StringVar(&GlobalDBConfigs.Charset, "db_charset", "", "Character set. Only utf8 or latin1 based character sets are supported.")
 	flag.Uint64Var(&GlobalDBConfigs.Flags, "db_flags", 0, "Flag values as defined by MySQL.")
 	flag.StringVar(&GlobalDBConfigs.Flavor, "db_flavor", "", "Flavor overrid. Valid value is FilePos.")
+	flag.Var(&GlobalDBConfigs.SslMode, "db_ssl_mode", "SSL mode to connect with. One of disabled, preferred, required, verify_ca & verify_identity.")
 	flag.StringVar(&GlobalDBConfigs.SslCa, "db_ssl_ca", "", "connection ssl ca")
 	flag.StringVar(&GlobalDBConfigs.SslCaPath, "db_ssl_ca_path", "", "connection ssl ca path")
 	flag.StringVar(&GlobalDBConfigs.SslCert, "db_ssl_cert", "", "connection ssl certificate")
@@ -152,6 +156,7 @@ func registerPerUserFlags(userKey string, uc *UserConfig, cp *mysql.ConnParams) 
 	flag.StringVar(&cp.UnixSocket, "db-config-"+userKey+"-unixsocket", "", "deprecated: use db_socket")
 	flag.StringVar(&cp.Charset, "db-config-"+userKey+"-charset", "utf8", "deprecated: use db_charset")
 	flag.Uint64Var(&cp.Flags, "db-config-"+userKey+"-flags", 0, "deprecated: use db_flags")
+	flag.Var(&cp.SslMode, "db-config-"+userKey+"-ssl-mode", "deprecated: use db_ssl_mode")
 	flag.StringVar(&cp.SslCa, "db-config-"+userKey+"-ssl-ca", "", "deprecated: use db_ssl_ca")
 	flag.StringVar(&cp.SslCaPath, "db-config-"+userKey+"-ssl-ca-path", "", "deprecated: use db_ssl_ca_path")
 	flag.StringVar(&cp.SslCert, "db-config-"+userKey+"-ssl-cert", "", "deprecated: use db_ssl_cert")
@@ -363,6 +368,7 @@ func (dbcfgs *DBConfigs) InitWithSocket(defaultSocketFile string) {
 		cp.Uname = uc.User
 		cp.Pass = uc.Password
 		if uc.UseSSL {
+			cp.SslMode = dbcfgs.SslMode
 			cp.SslCa = dbcfgs.SslCa
 			cp.SslCaPath = dbcfgs.SslCaPath
 			cp.SslCert = dbcfgs.SslCert
