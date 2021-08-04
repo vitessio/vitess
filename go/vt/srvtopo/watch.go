@@ -1,3 +1,19 @@
+/*
+Copyright 2021 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package srvtopo
 
 import (
@@ -42,9 +58,9 @@ type watchEntry struct {
 type resilientWatcher struct {
 	watcher func(ctx context.Context, entry *watchEntry)
 
-	counts       *stats.CountersWithSingleLabel
-	cacheRefresh time.Duration
-	cacheTTL     time.Duration
+	counts               *stats.CountersWithSingleLabel
+	cacheRefreshInterval time.Duration
+	cacheTTL             time.Duration
 
 	mutex   sync.Mutex
 	entries map[string]*watchEntry
@@ -89,7 +105,7 @@ func (entry *watchEntry) ensureWatchingLocked(ctx context.Context) {
 	switch entry.watchState {
 	case watchStateRunning, watchStateStarting:
 	case watchStateIdle:
-		shouldRefresh := time.Since(entry.lastErrorTime) > entry.rw.cacheRefresh || len(entry.listeners) > 0
+		shouldRefresh := time.Since(entry.lastErrorTime) > entry.rw.cacheRefreshInterval || len(entry.listeners) > 0
 
 		if shouldRefresh {
 			entry.watchState = watchStateStarting
@@ -200,7 +216,7 @@ func (entry *watchEntry) onErrorLocked(callerCtx context.Context, err error, ini
 
 	if len(entry.listeners) > 0 {
 		go func() {
-			time.Sleep(entry.rw.cacheRefresh)
+			time.Sleep(entry.rw.cacheRefreshInterval)
 
 			entry.mutex.Lock()
 			entry.ensureWatchingLocked(context.Background())
