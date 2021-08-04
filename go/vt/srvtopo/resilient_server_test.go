@@ -622,9 +622,8 @@ func TestGetSrvKeyspaceNames(t *testing.T) {
 	timeoutCtx, cancel := context.WithTimeout(context.Background(), *srvTopoCacheRefresh*2) //nolint
 	defer cancel()
 	_, err = rs.GetSrvKeyspaceNames(timeoutCtx, "test_cell", false)
-	wantErr := "timed out waiting for keyspace names"
-	if err == nil || err.Error() != wantErr {
-		t.Errorf("expected error '%v', got '%v'", wantErr, err.Error())
+	if err != context.DeadlineExceeded {
+		t.Errorf("expected error '%v', got '%v'", context.DeadlineExceeded, err.Error())
 	}
 	factory.Unlock()
 }
