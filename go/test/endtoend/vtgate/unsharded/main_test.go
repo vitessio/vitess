@@ -449,6 +449,20 @@ func TestDeleteAlias(t *testing.T) {
 	exec(t, conn, "delete t.* from t1 t where t.c1 = 1")
 }
 
+func TestFloatValueDefault(t *testing.T) {
+	vtParams := mysql.ConnParams{
+		Host: "localhost",
+		Port: clusterInstance.VtgateMySQLPort,
+	}
+	conn, err := mysql.Connect(context.Background(), &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	exec(t, conn, `create table testFloatDefault (pos_f float default 2.1, neg_f float default -2.1);`)
+	defer exec(t, conn, `drop table testFloatDefault`)
+	assertMatches(t, conn, "select table_name, column_name, column_default from information_schema.columns where table_name = 'testFloatDefault'", `[[VARCHAR("testFloatDefault") VARCHAR("neg_f") BLOB("-2.1")] [VARCHAR("testFloatDefault") VARCHAR("pos_f") BLOB("2.1")]]`)
+}
+
 func exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
 	t.Helper()
 	qr, err := conn.ExecuteFetch(query, 1000, true)
