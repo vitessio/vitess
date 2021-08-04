@@ -198,7 +198,7 @@ func (entry *watchEntry) onErrorLocked(callerCtx context.Context, err error, ini
 			entry.value = nil
 		}
 	} else {
-		entry.lastError = fmt.Errorf("ResilientWatch stream failed for %v: %v", entry.key, err)
+		entry.lastError = fmt.Errorf("ResilientWatch stream failed for %v: %w", entry.key, err)
 		log.Errorf("%v", entry.lastError)
 
 		// Even though we didn't get a new value, update the lastValueTime
