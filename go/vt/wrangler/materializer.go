@@ -619,7 +619,7 @@ func (wr *Wrangler) prepareCreateLookup(ctx context.Context, keyspace string, sp
 		MaterializationIntent: vtctldatapb.MaterializationIntent_CREATELOOKUPINDEX,
 		SourceKeyspace:        keyspace,
 		TargetKeyspace:        targetKeyspace,
-		StopAfterCopy:         vindex.Owner != "",
+		StopAfterCopy:         vindex.Owner != "" && !continueAfterCopyWithOwner,
 		TableSettings: []*vtctldatapb.TableMaterializeSettings{{
 			TargetTable:      targetTableName,
 			SourceExpression: materializeQuery,
