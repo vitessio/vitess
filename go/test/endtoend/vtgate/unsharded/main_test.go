@@ -458,9 +458,9 @@ func TestFloatValueDefault(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
-	exec(t, conn, `create table testFloatDefault (pos_f float default 2.1, neg_f float default -2.1);`)
-	defer exec(t, conn, `drop table testFloatDefault`)
-	assertMatches(t, conn, "select table_name, column_name, column_default from information_schema.columns where table_name = 'testFloatDefault'", `[[VARCHAR("testFloatDefault") VARCHAR("neg_f") BLOB("-2.1")] [VARCHAR("testFloatDefault") VARCHAR("pos_f") BLOB("2.1")]]`)
+	exec(t, conn, `create table test_float_default (pos_f float default 2.1, neg_f float default -2.1);`)
+	defer exec(t, conn, `drop table test_float_default`)
+	assertMatches(t, conn, "select table_name, column_name, column_default from information_schema.columns where table_name = 'test_float_default'", `[[VARCHAR("test_float_default") VARCHAR("pos_f") TEXT("2.1")] [VARCHAR("test_float_default") VARCHAR("neg_f") TEXT("-2.1")]]`)
 }
 
 func exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
