@@ -17,7 +17,7 @@ RUN apt-get update
 RUN apt-get install -y gnupg2
 RUN dpkg -i percona-release_latest.$(lsb_release -sc)_all.deb
 RUN apt-get update
-RUN apt-get install percona-xtrabackup-24
+RUN apt-get install -y percona-xtrabackup-24
 
 # Set the working directory
 WORKDIR /vt/src/vitess.io/vitess
