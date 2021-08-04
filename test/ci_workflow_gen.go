@@ -148,10 +148,10 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	err = generateBuildkiteUnitTestWorkflows()
-	if err != nil {
-		log.Fatal(err)
-	}
+	//err = generateBuildkiteUnitTestWorkflows()
+	//if err != nil {
+	//	log.Fatal(err)
+	//}
 	err = generateBuildkiteClusterWorkflows()
 	if err != nil {
 		log.Fatal(err)
@@ -275,6 +275,9 @@ func generateBuildkiteUnitTestWorkflows() error {
 func generateBuildkiteClusterWorkflows() error {
 	clusters := canonnizeList(clusterList)
 	for _, cluster := range clusters {
+		if cluster != "11" && cluster != "18" && cluster != "mysql80" && cluster != "vreplication_v2" {
+			continue
+		}
 		directoryName := fmt.Sprintf("cluster_test_%s", cluster)
 		test := &testBuildkite{
 			Name:              fmt.Sprintf("Cluster (%s)", cluster),
