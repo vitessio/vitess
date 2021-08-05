@@ -71,10 +71,10 @@ func (w *SrvVSchemaWatcher) GetSrvVSchema(ctx context.Context, cell string) (*vs
 	return vschema, err
 }
 
-func (w *SrvVSchemaWatcher) WatchSrvVSchema(ctx context.Context, cell string, callback func(*vschemapb.SrvVSchema, error)) {
+func (w *SrvVSchemaWatcher) WatchSrvVSchema(ctx context.Context, cell string, callback func(*vschemapb.SrvVSchema, error) bool) {
 	entry := w.rw.getEntry(cellName(cell))
-	entry.addListener(ctx, func(v interface{}, err error) {
+	entry.addListener(ctx, func(v interface{}, err error) bool {
 		vschema, _ := v.(*vschemapb.SrvVSchema)
-		callback(vschema, err)
+		return callback(vschema, err)
 	})
 }

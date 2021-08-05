@@ -17,11 +17,10 @@ limitations under the License.
 package vtgate
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"sync"
-
-	"context"
 
 	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/vt/grpcclient"
@@ -289,7 +288,7 @@ func (sct *sandboxTopo) GetSrvKeyspace(ctx context.Context, cell, keyspace strin
 // If the sandbox was created with a backing topo service, piggy back on it
 // to properly simulate watches, otherwise just immediately call back the
 // caller.
-func (sct *sandboxTopo) WatchSrvVSchema(ctx context.Context, cell string, callback func(*vschemapb.SrvVSchema, error)) {
+func (sct *sandboxTopo) WatchSrvVSchema(ctx context.Context, cell string, callback func(*vschemapb.SrvVSchema, error) bool) {
 	srvVSchema := getSandboxSrvVSchema()
 
 	if sct.topoServer == nil {
@@ -299,11 +298,15 @@ func (sct *sandboxTopo) WatchSrvVSchema(ctx context.Context, cell string, callba
 
 	sct.topoServer.UpdateSrvVSchema(ctx, cell, srvVSchema)
 	current, updateChan, _ := sct.topoServer.WatchSrvVSchema(ctx, cell)
-	callback(current.Value, nil)
+	if !callback(current.Value, nil) {
+		panic("sandboxTopo callback returned false")
+	}
 	go func() {
 		for {
 			update := <-updateChan
-			callback(update.Value, update.Err)
+			if !callback(update.Value, update.Err) {
+				panic("sandboxTopo callback returned false")
+			}
 		}
 	}()
 }

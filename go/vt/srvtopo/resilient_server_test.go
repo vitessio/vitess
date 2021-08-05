@@ -414,11 +414,12 @@ func TestWatchSrvVSchema(t *testing.T) {
 	mu := sync.Mutex{}
 	var watchValue *vschemapb.SrvVSchema
 	var watchErr error
-	rs.WatchSrvVSchema(ctx, "test_cell", func(v *vschemapb.SrvVSchema, e error) {
+	rs.WatchSrvVSchema(ctx, "test_cell", func(v *vschemapb.SrvVSchema, e error) bool {
 		mu.Lock()
 		defer mu.Unlock()
 		watchValue = v
 		watchErr = e
+		return true
 	})
 	get := func() (*vschemapb.SrvVSchema, error) {
 		mu.Lock()
@@ -684,10 +685,11 @@ func TestSrvKeyspaceWatcher(t *testing.T) {
 		return nil
 	}
 
-	rs.WatchSrvKeyspace(context.Background(), "test_cell", "test_ks", func(keyspace *topodatapb.SrvKeyspace, err error) {
+	rs.WatchSrvKeyspace(context.Background(), "test_cell", "test_ks", func(keyspace *topodatapb.SrvKeyspace, err error) bool {
 		wmu.Lock()
 		defer wmu.Unlock()
 		wseen = append(wseen, watched{keyspace: keyspace, err: err})
+		return true
 	})
 
 	seen1 := allSeen()
