@@ -186,6 +186,27 @@ func optimizeQuery(opTree abstract.Operator, reservedVars *sqlparser.ReservedVar
 			inner: treeInner,
 			alias: op.Alias,
 		}, nil
+	case *abstract.SubQuery:
+		outerTree, err := optimizeQuery(op.Outer, reservedVars, semTable, vschema)
+		if err != nil {
+			return nil, err
+		}
+		var subqTree queryTree
+		subqTree = outerTree
+		for _, inner := range op.Inner {
+			treeInner, err := optimizeQuery(inner.Inner, reservedVars, semTable, vschema)
+			if err != nil {
+				return nil, err
+			}
+			subqTree = &subqueryTree{
+				subquery: inner.SelectStatement,
+				outer:    subqTree,
+				inner:    treeInner,
+				opcode:   inner.Type,
+				argName:  inner.ArgName,
+			}
+		}
+		return subqTree, nil
 	default:
 		return nil, semantics.Gen4NotSupportedF("optimizeQuery")
 	}
@@ -287,7 +308,7 @@ func (hp *horizonPlanning) planHorizon() (logicalPlan, error) {
 		return nil, err
 	}
 
-	err = hp.truncateColumnsIfNeeded()
+	err = hp.truncateColumnsIfNeeded(hp.plan)
 	if err != nil {
 		return nil, err
 	}
@@ -295,12 +316,12 @@ func (hp *horizonPlanning) planHorizon() (logicalPlan, error) {
 	return hp.plan, nil
 }
 
-func (hp *horizonPlanning) truncateColumnsIfNeeded() error {
+func (hp *horizonPlanning) truncateColumnsIfNeeded(plan logicalPlan) error {
 	if !hp.needsTruncation {
 		return nil
 	}
 
-	switch p := hp.plan.(type) {
+	switch p := plan.(type) {
 	case *route:
 		p.eroute.SetTruncateColumnCount(hp.sel.GetColumnCount())
 	case *joinGen4:
@@ -309,6 +330,8 @@ func (hp *horizonPlanning) truncateColumnsIfNeeded() error {
 		p.eaggr.SetTruncateColumnCount(hp.sel.GetColumnCount())
 	case *memorySort:
 		p.truncater.SetTruncateColumnCount(hp.sel.GetColumnCount())
+	case *pulloutSubquery:
+		return hp.truncateColumnsIfNeeded(p.underlying)
 	default:
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "plan type not known for column truncation: %T", hp.plan)
 	}

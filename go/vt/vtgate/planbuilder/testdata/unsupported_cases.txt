@@ -420,6 +420,7 @@ Gen4 plan same as above
 # create view with top level subquery in select
 "create view user.view_a as select a, (select col from user) from unsharded"
 "Complex select queries are not supported in create or alter view statements"
+Gen4 plan same as above
 
 # create view with sql_calc_found_rows with limit
 "create view user.view_a as select sql_calc_found_rows * from music limit 100"

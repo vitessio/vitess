@@ -69,9 +69,26 @@ func transformToLogicalPlan(tree queryTree, semTable *semantics.SemTable, proces
 			From: []sqlparser.TableExpr{tblExpr},
 		}
 		return plan, nil
+	case *subqueryTree:
+		innerPlan, err := transformToLogicalPlan(n.inner, semTable, processing)
+		if err != nil {
+			return nil, err
+		}
+		innerPlan, err = processing.planHorizon(innerPlan, n.subquery)
+		if err != nil {
+			return nil, err
+		}
+
+		plan := newPulloutSubquery(n.opcode, n.argName, "", innerPlan)
+		outerPlan, err := transformToLogicalPlan(n.outer, semTable, processing)
+		if err != nil {
+			return nil, err
+		}
+		plan.underlying = outerPlan
+		return plan, err
 	}
 
-	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unknown type encountered: %T", tree)
+	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unknown query tree encountered: %T", tree)
 }
 
 func transformJoinPlan(n *joinTree, semTable *semantics.SemTable, processing *postProcessor) (logicalPlan, error) {
