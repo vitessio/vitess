@@ -101,12 +101,29 @@ type (
 	}
 
 	subqueryTree struct {
-		query   *sqlparser.Select
-		inner   queryTree
-		opcode  engine.PulloutOpcode
-		argName string
+		subquery *sqlparser.Select
+		outer    queryTree
+		inner    queryTree
+		opcode   engine.PulloutOpcode
+		argName  string
 	}
 )
+
+func (s *subqueryTree) tableID() semantics.TableSet {
+	panic("implement me")
+}
+
+func (s *subqueryTree) cost() int {
+	panic("implement me")
+}
+
+func (s *subqueryTree) clone() queryTree {
+	panic("implement me")
+}
+
+func (s *subqueryTree) pushOutputColumns(names []*sqlparser.ColName, semTable *semantics.SemTable) ([]int, error) {
+	panic("implement me")
+}
 
 // relation interface and implementations
 // They are representation of the tables in a routeTree
@@ -220,6 +237,7 @@ func (d *derivedTree) findOutputColumn(name *sqlparser.ColName) (int, error) {
 var _ queryTree = (*routeTree)(nil)
 var _ queryTree = (*joinTree)(nil)
 var _ queryTree = (*derivedTree)(nil)
+var _ queryTree = (*subqueryTree)(nil)
 var _ relation = (*routeTable)(nil)
 var _ relation = (*joinTables)(nil)
 var _ relation = (parenTables)(nil)

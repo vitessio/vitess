@@ -26,15 +26,16 @@ import (
 type SubQuery struct {
 	Inner []*SubQueryInner
 	Outer Operator
-	Type  engine.PulloutOpcode
 }
 
 var _ Operator = (*SubQuery)(nil)
 
+// SubQueryInner stores the subquery information for a select statement
 type SubQueryInner struct {
-	Inner   Operator
-	Type    engine.PulloutOpcode
-	ArgName string
+	Inner           Operator
+	Type            engine.PulloutOpcode
+	SelectStatement *sqlparser.Select
+	ArgName         string
 }
 
 // TableID implements the Operator interface
