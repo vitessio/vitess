@@ -441,23 +441,37 @@ func checkPrimaryTablet(t *testing.T, cluster *cluster.LocalProcessCluster, tabl
 	}
 }
 
-func checkReplication(t *testing.T, clusterInstance *cluster.LocalProcessCluster, primary *cluster.Vttablet, replicas []*cluster.Vttablet) {
-	validateTopology(t, clusterInstance, true)
-
+func checkReplication(t *testing.T, clusterInstance *cluster.LocalProcessCluster, primary *cluster.Vttablet, replicas []*cluster.Vttablet, timeToWait time.Duration) {
+	endTime := time.Now().Add(timeToWait)
 	// create tables, insert data and make sure it is replicated correctly
 	sqlSchema := `
-		create table vt_insert_test (
+		create table vt_ks.vt_insert_test (
 		id bigint,
 		msg varchar(64),
 		primary key (id)
 		) Engine=InnoDB
 		`
-	_, err := runSQL(t, sqlSchema, primary, "vt_ks")
-	require.NoError(t, err)
-	confirmReplication(t, primary, replicas)
+	timeout := time.After(time.Until(endTime))
+	for {
+		select {
+		case <-timeout:
+			t.Fatal("timedout waiting for keyspace vt_ks to be created by schema engine")
+			return
+		default:
+			_, err := runSQL(t, sqlSchema, primary, "")
+			if err != nil {
+				log.Warning("create table failed on primary, will retry")
+				time.Sleep(100 * time.Millisecond)
+				break
+			}
+			confirmReplication(t, primary, replicas, time.Until(endTime))
+			validateTopology(t, clusterInstance, true, time.Until(endTime))
+			return
+		}
+	}
 }
 
-func confirmReplication(t *testing.T, primary *cluster.Vttablet, replicas []*cluster.Vttablet) {
+func confirmReplication(t *testing.T, primary *cluster.Vttablet, replicas []*cluster.Vttablet, timeToWait time.Duration) {
 	log.Infof("Insert data into primary and check that it is replicated to replica")
 	n := 2 // random value ...
 	// insert data into the new primary, check the connected replica work
@@ -465,24 +479,37 @@ func confirmReplication(t *testing.T, primary *cluster.Vttablet, replicas []*clu
 	_, err := runSQL(t, insertSQL, primary, "vt_ks")
 	require.NoError(t, err)
 	time.Sleep(100 * time.Millisecond)
-	for _, tab := range replicas {
-		err := checkInsertedValues(t, tab, n)
-		require.NoError(t, err)
+	timeout := time.After(timeToWait)
+	for {
+		select {
+		case <-timeout:
+			t.Fatal("timedout waiting for replication, data not yet replicated")
+			return
+		default:
+			err = nil
+			for _, tab := range replicas {
+				errInReplication := checkInsertedValues(t, tab, n)
+				if errInReplication != nil {
+					err = errInReplication
+				}
+			}
+			if err != nil {
+				log.Warningf("waiting for replication - error received - %v, will retry", err)
+				time.Sleep(300 * time.Millisecond)
+				break
+			}
+			return
+		}
 	}
 }
 
 func checkInsertedValues(t *testing.T, tablet *cluster.Vttablet, index int) error {
-	// wait until it gets the data
-	timeout := time.Now().Add(10 * time.Second)
-	for time.Now().Before(timeout) {
-		selectSQL := fmt.Sprintf("select msg from vt_insert_test where id=%d", index)
-		qr, err := runSQL(t, selectSQL, tablet, "vt_ks")
-		// The error may be not nil, if the replication has not caught upto the point where the table exists.
-		// We can safely skip this error and retry reading after wait
-		if err == nil && len(qr.Rows) == 1 {
-			return nil
-		}
-		time.Sleep(300 * time.Millisecond)
+	selectSQL := fmt.Sprintf("select msg from vt_ks.vt_insert_test where id=%d", index)
+	qr, err := runSQL(t, selectSQL, tablet, "")
+	// The error may be not nil, if the replication has not caught upto the point where the table exists.
+	// We can safely skip this error and retry reading after wait
+	if err == nil && len(qr.Rows) == 1 {
+		return nil
 	}
 	return fmt.Errorf("data is not yet replicated")
 }
@@ -506,24 +533,40 @@ func waitForReplicationToStop(t *testing.T, vttablet *cluster.Vttablet) error {
 	}
 }
 
-func validateTopology(t *testing.T, cluster *cluster.LocalProcessCluster, pingTablets bool) {
-	ch := make(chan interface{})
+func validateTopology(t *testing.T, cluster *cluster.LocalProcessCluster, pingTablets bool, timeToWait time.Duration) {
+	ch := make(chan error)
+	timeout := time.After(timeToWait)
 	go func() {
-		if pingTablets {
-			out, err := cluster.VtctlclientProcess.ExecuteCommandWithOutput("Validate", "-ping-tablets=true")
-			require.NoError(t, err, out)
-		} else {
-			err := cluster.VtctlclientProcess.ExecuteCommand("Validate")
-			require.NoError(t, err)
+		for {
+			select {
+			case <-timeout:
+				ch <- fmt.Errorf("time out waiting for validation to pass")
+				return
+			default:
+				var err error
+				var output string
+				if pingTablets {
+					output, err = cluster.VtctlclientProcess.ExecuteCommandWithOutput("Validate", "-ping-tablets=true")
+				} else {
+					output, err = cluster.VtctlclientProcess.ExecuteCommandWithOutput("Validate")
+				}
+				if err != nil {
+					log.Warningf("Validate failed, retrying, output - %s", output)
+					time.Sleep(100 * time.Millisecond)
+					break
+				}
+				ch <- nil
+				return
+			}
 		}
-		ch <- true
 	}()
 
 	select {
-	case <-ch:
+	case err := <-ch:
+		require.NoError(t, err)
 		return
-	case <-time.After(120 * time.Second):
-		t.Fatal("time out waiting for validation to finish")
+	case <-timeout:
+		t.Fatal("time out waiting for validation to pass")
 	}
 }
 

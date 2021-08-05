@@ -43,7 +43,7 @@ func TestPrimaryElection(t *testing.T) {
 	shard0 := &keyspace.Shards[0]
 
 	checkPrimaryTablet(t, clusterInstance, shard0.Vttablets[0])
-	checkReplication(t, clusterInstance, shard0.Vttablets[0], shard0.Vttablets[1:])
+	checkReplication(t, clusterInstance, shard0.Vttablets[0], shard0.Vttablets[1:], 10*time.Second)
 }
 
 // Cases to test:
@@ -57,7 +57,7 @@ func TestSingleKeyspace(t *testing.T) {
 	shard0 := &keyspace.Shards[0]
 
 	checkPrimaryTablet(t, clusterInstance, shard0.Vttablets[0])
-	checkReplication(t, clusterInstance, shard0.Vttablets[0], shard0.Vttablets[1:])
+	checkReplication(t, clusterInstance, shard0.Vttablets[0], shard0.Vttablets[1:], 10*time.Second)
 }
 
 // Cases to test:
@@ -71,7 +71,7 @@ func TestKeyspaceShard(t *testing.T) {
 	shard0 := &keyspace.Shards[0]
 
 	checkPrimaryTablet(t, clusterInstance, shard0.Vttablets[0])
-	checkReplication(t, clusterInstance, shard0.Vttablets[0], shard0.Vttablets[1:])
+	checkReplication(t, clusterInstance, shard0.Vttablets[0], shard0.Vttablets[1:], 10*time.Second)
 }
 
 func waitForReadOnlyValue(t *testing.T, curPrimary *cluster.Vttablet, expectValue int64) (match bool) {
@@ -169,10 +169,8 @@ func TestStopReplication(t *testing.T) {
 	_, err = clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("StopReplication", replica.Alias)
 	require.NoError(t, err)
 
-	// wait for repair
-	time.Sleep(15 * time.Second)
 	// check replication is setup correctly
-	checkReplication(t, clusterInstance, curPrimary, []*cluster.Vttablet{replica})
+	checkReplication(t, clusterInstance, curPrimary, []*cluster.Vttablet{replica}, 15*time.Second)
 }
 
 // 6. setup replication from non-primary, let orc repair
@@ -214,10 +212,8 @@ func TestReplicationFromOtherReplica(t *testing.T) {
 	result, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("ExecuteFetchAsDba", replica.Alias, changeReplicationSourceCommand)
 	require.NoError(t, err, result)
 
-	// wait for repair
-	time.Sleep(15 * time.Second)
 	// check replication is setup correctly
-	checkReplication(t, clusterInstance, curPrimary, []*cluster.Vttablet{replica, otherReplica})
+	checkReplication(t, clusterInstance, curPrimary, []*cluster.Vttablet{replica, otherReplica}, 15*time.Second)
 }
 
 func TestRepairAfterTER(t *testing.T) {
@@ -249,11 +245,7 @@ func TestRepairAfterTER(t *testing.T) {
 	_, err = clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("TabletExternallyReparented", newPrimary.Alias)
 	require.NoError(t, err)
 
-	// wait for repair
-	// TODO(deepthi): wait for condition instead of sleep
-	time.Sleep(15 * time.Second)
-
-	checkReplication(t, clusterInstance, newPrimary, []*cluster.Vttablet{curPrimary})
+	checkReplication(t, clusterInstance, newPrimary, []*cluster.Vttablet{curPrimary}, 15*time.Second)
 }
 
 // 7. make instance A replicates from B and B from A, wait for repair
@@ -287,5 +279,5 @@ func TestCircularReplication(t *testing.T) {
 	err = waitForReplicationToStop(t, primary)
 	require.NoError(t, err)
 	// check replication is setup correctly
-	checkReplication(t, clusterInstance, primary, []*cluster.Vttablet{replica})
+	checkReplication(t, clusterInstance, primary, []*cluster.Vttablet{replica}, 10*time.Second)
 }

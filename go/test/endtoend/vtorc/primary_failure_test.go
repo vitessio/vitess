@@ -74,8 +74,7 @@ func TestCrossDataCenterFailure(t *testing.T) {
 
 	crossCellReplica := startVttablet(t, cell2, false)
 	// newly started tablet does not replicate from anyone yet, we will allow orchestrator to fix this too
-	time.Sleep(15 * time.Second)
-	checkReplication(t, clusterInstance, curPrimary, []*cluster.Vttablet{crossCellReplica, replicaInSameCell})
+	checkReplication(t, clusterInstance, curPrimary, []*cluster.Vttablet{crossCellReplica, replicaInSameCell}, 15*time.Second)
 
 	// Make the current primary database unavailable.
 	err := curPrimary.MysqlctlProcess.Stop()
