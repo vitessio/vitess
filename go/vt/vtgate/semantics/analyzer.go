@@ -203,6 +203,10 @@ func checkForInvalidConstructs(cursor *sqlparser.Cursor) error {
 		if node.Having != nil {
 			return Gen4NotSupportedF("HAVING")
 		}
+	case *sqlparser.Subquery:
+		if _, ok := node.Select.(*sqlparser.Select); !ok {
+			return Gen4NotSupportedF("%T in subquery", node.Select)
+		}
 	case *sqlparser.FuncExpr:
 		if sqlparser.IsLockingFunc(node) {
 			return Gen4NotSupportedF("locking functions")

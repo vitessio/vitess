@@ -99,6 +99,13 @@ type (
 		inner queryTree
 		alias string
 	}
+
+	subqueryTree struct {
+		query   *sqlparser.Select
+		inner   queryTree
+		opcode  engine.PulloutOpcode
+		argName string
+	}
 )
 
 // relation interface and implementations
