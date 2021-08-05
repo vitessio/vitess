@@ -8,3 +8,5 @@ insert into product(pid, description) values(2, 'monitor');
 insert into orders(oid, cid, mname, pid, price) values(1, 1, 'monoprice', 1, 10);
 insert into orders(oid, cid, mname, pid, price) values(2, 1, 'newegg', 2, 15);
 insert into orders(oid, cid, mname, pid, price) values(3, 2, 'monoprice', 2, 20);
+-- for testing edge case where inserted binary value is 15 bytes, field is 16, mysql adds a null while storing but binlog returns 15 bytes
+insert into tenant(tenant_id, name) values (x'02BD00987932461E8820C908E84BAE', 'abc');
