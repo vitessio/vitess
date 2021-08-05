@@ -72,6 +72,7 @@ func testClientServer(t *testing.T, combineCerts bool) {
 		t.Fatalf("TLSServerConfig failed: %v", err)
 	}
 	clientConfig, err := vttls.ClientConfig(
+		vttls.VerifyIdentity,
 		clientServerKeyPairs.ClientCert,
 		clientServerKeyPairs.ClientKey,
 		clientServerKeyPairs.ServerCA,
@@ -133,6 +134,7 @@ func testClientServer(t *testing.T, combineCerts bool) {
 	//
 
 	badClientConfig, err := vttls.ClientConfig(
+		vttls.VerifyIdentity,
 		clientServerKeyPairs.ServerCert,
 		clientServerKeyPairs.ServerKey,
 		clientServerKeyPairs.ServerCA,
@@ -202,6 +204,7 @@ func getServerConfigWithCombinedCerts(keypairs ClientServerKeyPairs) (*tls.Confi
 
 func getClientConfig(keypairs ClientServerKeyPairs) (*tls.Config, error) {
 	return vttls.ClientConfig(
+		vttls.VerifyIdentity,
 		keypairs.ClientCert,
 		keypairs.ClientKey,
 		keypairs.ServerCA,

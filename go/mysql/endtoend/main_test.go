@@ -123,8 +123,11 @@ func runMysql(t *testing.T, params *mysql.ConnParams, command string) (string, b
 	if params.DbName != "" {
 		args = append(args, "-D", params.DbName)
 	}
-	if params.Flags&mysql.CapabilityClientSSL > 0 {
-		if f != mysqlctl.FlavorMySQL || v.Major != 8 {
+	if params.SslEnabled() {
+		if f == mysqlctl.FlavorMySQL && v.Major == 5 && v.Minor == 7 || v.Major == 8 {
+			args = append(args,
+				fmt.Sprintf("--ssl-mode=%s", params.EffectiveSslMode()))
+		} else {
 			args = append(args,
 				"--ssl",
 				"--ssl-verify-server-cert")

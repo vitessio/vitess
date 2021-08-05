@@ -17,13 +17,22 @@ limitations under the License.
 package mysql
 
 import (
+	"crypto/tls"
+	"fmt"
 	"io/ioutil"
 	"net"
 	"os"
+	"path"
 	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/vt/tlstest"
+	"vitess.io/vitess/go/vt/vttls"
 
 	"context"
 )
@@ -59,7 +68,7 @@ func assertSQLError(t *testing.T, err error, code int, sqlState string, subtext 
 func TestConnectTimeout(t *testing.T) {
 	// Create a socket, but it's not accepting. So all Dial
 	// attempts will timeout.
-	listener, err := net.Listen("tcp", ":0")
+	listener, err := net.Listen("tcp", "127.0.0.1:")
 	if err != nil {
 		t.Fatalf("cannot listen: %v", err)
 	}
@@ -141,4 +150,366 @@ func TestConnectTimeout(t *testing.T) {
 	_, err = Connect(ctx, params)
 	os.Remove(name)
 	assertSQLError(t, err, CRConnectionError, SSUnknownSQLState, "connection refused", "")
+}
+
+// TestTLSClientDisabled creates a Server with TLS support, then connects
+// with a client with TLS disabled.
+func TestTLSClientDisabled(t *testing.T) {
+	th := &testHandler{}
+
+	authServer := NewAuthServerStatic("", "", 0)
+	authServer.entries["user1"] = []*AuthServerStaticEntry{{
+		Password: "password1",
+	}}
+	defer authServer.close()
+
+	// Create the listener, so we can get its host.
+	// Below, we are enabling --ssl-verify-server-cert, which adds
+	// a check that the common name of the certificate matches the
+	// server host name we connect to.
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false)
+	require.NoError(t, err)
+	defer l.Close()
+
+	host := l.Addr().(*net.TCPAddr).IP.String()
+	port := l.Addr().(*net.TCPAddr).Port
+
+	// Create the certs.
+	root, err := ioutil.TempDir("", "TestTLSServer")
+	require.NoError(t, err)
+	defer os.RemoveAll(root)
+	tlstest.CreateCA(root)
+	tlstest.CreateSignedCert(root, tlstest.CA, "01", "server", host)
+	tlstest.CreateSignedCert(root, tlstest.CA, "02", "client", "Client Cert")
+
+	// Create the server with TLS config.
+	serverConfig, err := vttls.ServerConfig(
+		path.Join(root, "server-cert.pem"),
+		path.Join(root, "server-key.pem"),
+		"",
+		"",
+		tls.VersionTLS12)
+	require.NoError(t, err)
+	l.TLSConfig.Store(serverConfig)
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func(l *Listener) {
+		wg.Done()
+		l.Accept()
+	}(l)
+	// This is ensure the listener is called
+	wg.Wait()
+	// Sleep so that the Accept function is called as well.'
+	time.Sleep(3 * time.Second)
+
+	// Setup the right parameters.
+	params := &ConnParams{
+		Host:    host,
+		Port:    port,
+		Uname:   "user1",
+		Pass:    "password1",
+		SslMode: vttls.Disabled,
+	}
+
+	conn, err := Connect(context.Background(), params)
+	require.NoError(t, err)
+
+	// make sure this went through SSL
+	results, err := conn.ExecuteFetch("ssl echo", 1000, true)
+	require.NoError(t, err)
+	assert.Equal(t, "OFF", results.Rows[0][0].ToString())
+
+	if conn != nil {
+		conn.Close()
+	}
+}
+
+// TestTLSClientDisabled creates a Server with TLS support, then connects
+// with a client with TLS preferred.
+func TestTLSClientPreferredDefault(t *testing.T) {
+	th := &testHandler{}
+
+	authServer := NewAuthServerStatic("", "", 0)
+	authServer.entries["user1"] = []*AuthServerStaticEntry{{
+		Password: "password1",
+	}}
+	defer authServer.close()
+
+	// Create the listener, so we can get its host.
+	// Below, we are enabling --ssl-verify-server-cert, which adds
+	// a check that the common name of the certificate matches the
+	// server host name we connect to.
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false)
+	require.NoError(t, err)
+	defer l.Close()
+
+	host := l.Addr().(*net.TCPAddr).IP.String()
+	port := l.Addr().(*net.TCPAddr).Port
+
+	// Create the certs.
+	root, err := ioutil.TempDir("", "TestTLSServer")
+	require.NoError(t, err)
+	defer os.RemoveAll(root)
+	tlstest.CreateCA(root)
+	tlstest.CreateSignedCert(root, tlstest.CA, "01", "server", "server.example.com")
+	tlstest.CreateSignedCert(root, tlstest.CA, "02", "client", "Client Cert")
+
+	// Create the server with TLS config.
+	serverConfig, err := vttls.ServerConfig(
+		path.Join(root, "server-cert.pem"),
+		path.Join(root, "server-key.pem"),
+		"",
+		"",
+		tls.VersionTLS12)
+	require.NoError(t, err)
+	l.TLSConfig.Store(serverConfig)
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func(l *Listener) {
+		wg.Done()
+		l.Accept()
+	}(l)
+	// This is ensure the listener is called
+	wg.Wait()
+	// Sleep so that the Accept function is called as well.'
+	time.Sleep(3 * time.Second)
+
+	// Setup the right parameters.
+	params := &ConnParams{
+		Host:       host,
+		Port:       port,
+		Uname:      "user1",
+		Pass:       "password1",
+		SslMode:    vttls.Preferred,
+		ServerName: "server.example.com",
+	}
+
+	conn, err := Connect(context.Background(), params)
+	require.NoError(t, err)
+
+	// make sure this went through SSL
+	results, err := conn.ExecuteFetch("ssl echo", 1000, true)
+	require.NoError(t, err)
+	assert.Equal(t, "ON", results.Rows[0][0].ToString())
+
+	if conn != nil {
+		conn.Close()
+	}
+}
+
+// TestTLSClientRequired creates a Server with no TLS support, then connects
+// with a client with TLS required.
+func TestTLSClientRequired(t *testing.T) {
+	th := &testHandler{}
+
+	authServer := NewAuthServerStatic("", "", 0)
+	authServer.entries["user1"] = []*AuthServerStaticEntry{{
+		Password: "password1",
+	}}
+	defer authServer.close()
+
+	// Create the listener, so we can get its host.
+	// Below, we are enabling --ssl-verify-server-cert, which adds
+	// a check that the common name of the certificate matches the
+	// server host name we connect to.
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false)
+	require.NoError(t, err)
+	defer l.Close()
+
+	host := l.Addr().(*net.TCPAddr).IP.String()
+	port := l.Addr().(*net.TCPAddr).Port
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func(l *Listener) {
+		wg.Done()
+		l.Accept()
+	}(l)
+	// This is ensure the listener is called
+	wg.Wait()
+	// Sleep so that the Accept function is called as well.'
+	time.Sleep(3 * time.Second)
+
+	// Setup the right parameters.
+	params := &ConnParams{
+		Host:    host,
+		Port:    port,
+		Uname:   "user1",
+		Pass:    "password1",
+		SslMode: vttls.Required,
+	}
+
+	_, err = Connect(context.Background(), params)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "server doesn't support SSL but client asked for it")
+}
+
+// TestTLSClientVerifyCA creates a Server with TLS support, then connects
+// with a client with TLS enabled on a wrong hostname but with verify CA on.
+func TestTLSClientVerifyCA(t *testing.T) {
+	th := &testHandler{}
+
+	authServer := NewAuthServerStatic("", "", 0)
+	authServer.entries["user1"] = []*AuthServerStaticEntry{{
+		Password: "password1",
+	}}
+	defer authServer.close()
+
+	// Create the listener, so we can get its host.
+	// Below, we are enabling --ssl-verify-server-cert, which adds
+	// a check that the common name of the certificate matches the
+	// server host name we connect to.
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false)
+	require.NoError(t, err)
+	defer l.Close()
+
+	host := l.Addr().(*net.TCPAddr).IP.String()
+	port := l.Addr().(*net.TCPAddr).Port
+
+	// Create the certs.
+	root, err := ioutil.TempDir("", "TestTLSServer")
+	require.NoError(t, err)
+	defer os.RemoveAll(root)
+	tlstest.CreateCA(root)
+	tlstest.CreateSignedCert(root, tlstest.CA, "01", "server", "server.example.com")
+	tlstest.CreateSignedCert(root, tlstest.CA, "02", "client", "Client Cert")
+
+	// Create the server with TLS config.
+	serverConfig, err := vttls.ServerConfig(
+		path.Join(root, "server-cert.pem"),
+		path.Join(root, "server-key.pem"),
+		"",
+		"",
+		tls.VersionTLS12)
+	require.NoError(t, err)
+	l.TLSConfig.Store(serverConfig)
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func(l *Listener) {
+		wg.Done()
+		l.Accept()
+	}(l)
+	// This is ensure the listener is called
+	wg.Wait()
+	// Sleep so that the Accept function is called as well.'
+	time.Sleep(3 * time.Second)
+
+	// Setup the right parameters.
+	params := &ConnParams{
+		Host:  host,
+		Port:  port,
+		Uname: "user1",
+		Pass:  "password1",
+		// SSL flags.
+		SslMode:    vttls.VerifyCA,
+		ServerName: "server.example.com",
+	}
+
+	_, err = Connect(context.Background(), params)
+	require.Error(t, err)
+
+	fmt.Printf("Error: %s", err)
+
+	assert.Contains(t, err.Error(), "certificate signed by unknown authority")
+
+	// Now setup proper CA that is valid to verify
+	params.SslCa = path.Join(root, "ca-cert.pem")
+	conn, err := Connect(context.Background(), params)
+	require.NoError(t, err)
+
+	// make sure this went through SSL
+	results, err := conn.ExecuteFetch("ssl echo", 1000, true)
+	require.NoError(t, err)
+	assert.Equal(t, "ON", results.Rows[0][0].ToString())
+
+	if conn != nil {
+		conn.Close()
+	}
+}
+
+// TestTLSClientVerifyIdentity creates a Server with TLS support, then connects
+// with a client with TLS enabled on a wrong hostname but with verify CA on.
+func TestTLSClientVerifyIdentity(t *testing.T) {
+	th := &testHandler{}
+
+	authServer := NewAuthServerStatic("", "", 0)
+	authServer.entries["user1"] = []*AuthServerStaticEntry{{
+		Password: "password1",
+	}}
+	defer authServer.close()
+
+	// Create the listener, so we can get its host.
+	// Below, we are enabling --ssl-verify-server-cert, which adds
+	// a check that the common name of the certificate matches the
+	// server host name we connect to.
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false)
+	require.NoError(t, err)
+	defer l.Close()
+
+	host := l.Addr().(*net.TCPAddr).IP.String()
+	port := l.Addr().(*net.TCPAddr).Port
+
+	// Create the certs.
+	root, err := ioutil.TempDir("", "TestTLSServer")
+	require.NoError(t, err)
+	defer os.RemoveAll(root)
+	tlstest.CreateCA(root)
+	tlstest.CreateSignedCert(root, tlstest.CA, "01", "server", "server.example.com")
+	tlstest.CreateSignedCert(root, tlstest.CA, "02", "client", "Client Cert")
+
+	// Create the server with TLS config.
+	serverConfig, err := vttls.ServerConfig(
+		path.Join(root, "server-cert.pem"),
+		path.Join(root, "server-key.pem"),
+		"",
+		"",
+		tls.VersionTLS12)
+	require.NoError(t, err)
+	l.TLSConfig.Store(serverConfig)
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func(l *Listener) {
+		wg.Done()
+		l.Accept()
+	}(l)
+	// This is ensure the listener is called
+	wg.Wait()
+	// Sleep so that the Accept function is called as well.'
+	time.Sleep(3 * time.Second)
+
+	// Setup the right parameters.
+	params := &ConnParams{
+		Host:  host,
+		Port:  port,
+		Uname: "user1",
+		Pass:  "password1",
+		// SSL flags.
+		SslMode:    vttls.VerifyIdentity,
+		ServerName: "server.example.com",
+	}
+
+	_, err = Connect(context.Background(), params)
+	require.Error(t, err)
+
+	fmt.Printf("Error: %s", err)
+
+	assert.Contains(t, err.Error(), "certificate signed by unknown authority")
+
+	// Now setup proper CA that is valid to verify
+	params.SslCa = path.Join(root, "ca-cert.pem")
+	conn, err := Connect(context.Background(), params)
+	require.NoError(t, err)
+
+	// make sure this went through SSL
+	results, err := conn.ExecuteFetch("ssl echo", 1000, true)
+	require.NoError(t, err)
+	assert.Equal(t, "ON", results.Rows[0][0].ToString())
+
+	if conn != nil {
+		conn.Close()
+	}
 }
