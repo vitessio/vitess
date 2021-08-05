@@ -166,7 +166,10 @@ func (hp *horizonPlanning) planAggregations() error {
 		if !isFunc {
 			return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: in scatter query: complex aggregate expression")
 		}
-		opcode := engine.SupportedAggregates[fExpr.Name.Lowered()]
+		opcode, found := engine.SupportedAggregates[fExpr.Name.Lowered()]
+		if !found {
+			return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: in scatter query: complex aggregate expression")
+		}
 		handleDistinct, innerAliased, err := hp.needDistinctHandling(fExpr, opcode, oa.input)
 		if err != nil {
 			return err
