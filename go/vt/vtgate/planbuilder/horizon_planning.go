@@ -602,6 +602,9 @@ func (hp *horizonPlanning) addDistinct() error {
 	eaggr := &engine.OrderedAggregate{}
 	var orderExprs []abstract.OrderBy
 	for index, sExpr := range hp.qp.SelectExprs {
+		if isAmbiguousOrderBy(index, sExpr.Col.As, hp.qp.SelectExprs) {
+			return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "generating order by clause: ambiguous symbol reference: %s", sqlparser.String(sExpr.Col.As))
+		}
 		grpParam := &engine.GroupByParams{KeyCol: index, WeightStringCol: -1}
 		_, wOffset, added, err := wrapAndPushExpr(sExpr.Col.Expr, sExpr.Col.Expr, hp.plan, hp.semTable)
 		if err != nil {
@@ -628,6 +631,27 @@ func (hp *horizonPlanning) addDistinct() error {
 		eaggr: eaggr,
 	}
 	return nil
+}
+
+func isAmbiguousOrderBy(index int, col sqlparser.ColIdent, exprs []abstract.SelectExpr) bool {
+	if col.String() == "" {
+		return false
+	}
+	for i, expr := range exprs {
+		if i == index {
+			continue
+		}
+		alias := expr.Col.As
+		if alias.IsEmpty() {
+			if col, ok := expr.Col.Expr.(*sqlparser.ColName); ok {
+				alias = col.Name
+			}
+		}
+		if col.Equal(alias) {
+			return true
+		}
+	}
+	return false
 }
 
 func selectHasUniqueVindex(vschema ContextVSchema, semTable *semantics.SemTable, sel []abstract.SelectExpr) bool {
