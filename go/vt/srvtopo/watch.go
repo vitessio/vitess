@@ -52,7 +52,7 @@ type watchEntry struct {
 	lastErrorCtx  context.Context
 	lastErrorTime time.Time
 
-	listeners []func(interface{}, error)
+	listeners []func(interface{}, error) bool
 }
 
 type resilientWatcher struct {
@@ -92,7 +92,7 @@ func (w *resilientWatcher) getValue(ctx context.Context, wkey fmt.Stringer) (int
 	return entry.currentValueLocked(ctx)
 }
 
-func (entry *watchEntry) addListener(ctx context.Context, callback func(interface{}, error)) {
+func (entry *watchEntry) addListener(ctx context.Context, callback func(interface{}, error) bool) {
 	entry.mutex.Lock()
 	defer entry.mutex.Unlock()
 
@@ -157,8 +157,13 @@ func (entry *watchEntry) update(ctx context.Context, value interface{}, err erro
 		entry.onValueLocked(value)
 	}
 
-	for _, callback := range entry.listeners {
-		callback(entry.value, entry.lastError)
+	listeners := entry.listeners
+	entry.listeners = entry.listeners[:0]
+
+	for _, callback := range listeners {
+		if callback(entry.value, entry.lastError) {
+			entry.listeners = append(entry.listeners, callback)
+		}
 	}
 }
 

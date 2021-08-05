@@ -92,7 +92,7 @@ func (vm *VSchemaManager) UpdateVSchema(ctx context.Context, ksName string, vsch
 }
 
 // VSchemaUpdate builds the VSchema from SrvVschema and call subscribers.
-func (vm *VSchemaManager) VSchemaUpdate(v *vschemapb.SrvVSchema, err error) {
+func (vm *VSchemaManager) VSchemaUpdate(v *vschemapb.SrvVSchema, err error) bool {
 	log.Infof("Received vschema update")
 	switch {
 	case err == nil:
@@ -129,6 +129,7 @@ func (vm *VSchemaManager) VSchemaUpdate(v *vschemapb.SrvVSchema, err error) {
 	if vm.subscriber != nil {
 		vm.subscriber(vschema, vSchemaStats(err, vschema))
 	}
+	return true
 }
 
 func vSchemaStats(err error, vschema *vindexes.VSchema) *VSchemaStats {

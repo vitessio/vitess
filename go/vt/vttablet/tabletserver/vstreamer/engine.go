@@ -333,7 +333,7 @@ func (vse *Engine) setWatch() {
 	}
 
 	// WatchSrvVSchema does not return until the inner func has been called at least once.
-	vse.ts.WatchSrvVSchema(context.TODO(), vse.cell, func(v *vschemapb.SrvVSchema, err error) {
+	vse.ts.WatchSrvVSchema(context.TODO(), vse.cell, func(v *vschemapb.SrvVSchema, err error) bool {
 		switch {
 		case err == nil:
 			// Build vschema down below.
@@ -342,7 +342,7 @@ func (vse *Engine) setWatch() {
 		default:
 			log.Errorf("Error fetching vschema: %v", err)
 			vse.vschemaErrors.Add(1)
-			return
+			return true
 		}
 		var vschema *vindexes.VSchema
 		if v != nil {
@@ -350,7 +350,7 @@ func (vse *Engine) setWatch() {
 			if err != nil {
 				log.Errorf("Error building vschema: %v", err)
 				vse.vschemaErrors.Add(1)
-				return
+				return true
 			}
 		} else {
 			vschema = &vindexes.VSchema{}
@@ -369,6 +369,7 @@ func (vse *Engine) setWatch() {
 			s.SetVSchema(vse.lvschema)
 		}
 		vse.vschemaUpdates.Add(1)
+		return true
 	})
 }
 

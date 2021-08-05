@@ -60,6 +60,6 @@ func (srv *PassthroughSrvTopoServer) GetSrvKeyspace(ctx context.Context, cell, k
 }
 
 // WatchSrvVSchema implements srvtopo.Server
-func (srv *PassthroughSrvTopoServer) WatchSrvVSchema(ctx context.Context, cell string, callback func(*vschemapb.SrvVSchema, error)) {
+func (srv *PassthroughSrvTopoServer) WatchSrvVSchema(ctx context.Context, cell string, callback func(*vschemapb.SrvVSchema, error) bool) {
 	callback(srv.WatchedSrvVSchema, srv.WatchedSrvVSchemaError)
 }

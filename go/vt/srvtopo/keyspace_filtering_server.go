@@ -17,9 +17,8 @@ limitations under the License.
 package srvtopo
 
 import (
-	"fmt"
-
 	"context"
+	"fmt"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
@@ -99,9 +98,9 @@ func (ksf keyspaceFilteringServer) GetSrvKeyspace(
 func (ksf keyspaceFilteringServer) WatchSrvVSchema(
 	ctx context.Context,
 	cell string,
-	callback func(*vschemapb.SrvVSchema, error),
+	callback func(*vschemapb.SrvVSchema, error) bool,
 ) {
-	filteringCallback := func(schema *vschemapb.SrvVSchema, err error) {
+	filteringCallback := func(schema *vschemapb.SrvVSchema, err error) bool {
 		if schema != nil {
 			for ks := range schema.Keyspaces {
 				if !ksf.selectKeyspaces[ks] {
@@ -110,7 +109,7 @@ func (ksf keyspaceFilteringServer) WatchSrvVSchema(
 			}
 		}
 
-		callback(schema, err)
+		return callback(schema, err)
 	}
 
 	ksf.server.WatchSrvVSchema(ctx, cell, filteringCallback)
