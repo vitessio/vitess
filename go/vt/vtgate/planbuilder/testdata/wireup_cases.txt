@@ -7,6 +7,9 @@
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "1,-1,2",
+    "JoinVars": {
+      "uid": 0
+    },
     "TableName": "`user`_user_extra",
     "Inputs": [
       {
@@ -44,6 +47,9 @@
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "1,-1,2",
+    "JoinVars": {
+      "uid1": 0
+    },
     "TableName": "`user`_user_extra",
     "Inputs": [
       {
@@ -81,6 +87,9 @@
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-1",
+    "JoinVars": {
+      "u1_col": 1
+    },
     "TableName": "`user`_`user`_`user`",
     "Inputs": [
       {
@@ -151,6 +160,9 @@
         "OperatorType": "Join",
         "Variant": "Join",
         "JoinColumnIndexes": "-2",
+        "JoinVars": {
+          "u1_col": 0
+        },
         "TableName": "`user`_`user`",
         "Inputs": [
           {
@@ -190,6 +202,9 @@
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-1",
+    "JoinVars": {
+      "u2_col": 1
+    },
     "TableName": "`user`_`user`_`user`",
     "Inputs": [
       {
@@ -259,6 +274,9 @@
       {
         "OperatorType": "Join",
         "Variant": "Join",
+        "JoinVars": {
+          "u2_col": 0
+        },
         "TableName": "`user`_`user`",
         "Inputs": [
           {
@@ -298,12 +316,18 @@
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-1",
+    "JoinVars": {
+      "u1_col": 1
+    },
     "TableName": "`user`_`user`_`user`",
     "Inputs": [
       {
         "OperatorType": "Join",
         "Variant": "Join",
         "JoinColumnIndexes": "-1,-2",
+        "JoinVars": {
+          "u1_col": 1
+        },
         "TableName": "`user`_`user`",
         "Inputs": [
           {
@@ -351,6 +375,9 @@
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "1",
+    "JoinVars": {
+      "u3_col": 0
+    },
     "TableName": "`user`_`user`_`user`",
     "Inputs": [
       {
@@ -368,6 +395,9 @@
         "OperatorType": "Join",
         "Variant": "Join",
         "JoinColumnIndexes": "-2",
+        "JoinVars": {
+          "u1_col": 0
+        },
         "TableName": "`user`_`user`",
         "Inputs": [
           {
@@ -410,12 +440,18 @@
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-1",
+    "JoinVars": {
+      "u1_col": 1
+    },
     "TableName": "`user`_`user`_`user`_`user`",
     "Inputs": [
       {
         "OperatorType": "Join",
         "Variant": "Join",
         "JoinColumnIndexes": "-1,-2",
+        "JoinVars": {
+          "u1_col": 1
+        },
         "TableName": "`user`_`user`_`user`",
         "Inputs": [
           {
@@ -503,6 +539,9 @@
         "OperatorType": "Join",
         "Variant": "Join",
         "JoinColumnIndexes": "1",
+        "JoinVars": {
+          "u4_col": 0
+        },
         "TableName": "`user`_`user`_`user`",
         "Inputs": [
           {
@@ -520,6 +559,9 @@
             "OperatorType": "Join",
             "Variant": "Join",
             "JoinColumnIndexes": "-2",
+            "JoinVars": {
+              "u1_col": 0
+            },
             "TableName": "`user`_`user`",
             "Inputs": [
               {
@@ -565,6 +607,9 @@
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-1",
+    "JoinVars": {
+      "u1_col": 1
+    },
     "TableName": "`user`_`user`_`user`",
     "Inputs": [
       {
@@ -625,12 +670,18 @@
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-2",
+    "JoinVars": {
+      "u1_col": 0
+    },
     "TableName": "`user`_`user`_`user`",
     "Inputs": [
       {
         "OperatorType": "Join",
         "Variant": "Join",
         "JoinColumnIndexes": "-1,-2",
+        "JoinVars": {
+          "u1_col": 0
+        },
         "TableName": "`user`_`user`",
         "Inputs": [
           {
@@ -689,6 +740,9 @@
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-1,1",
+    "JoinVars": {
+      "weird_name_a_b_c": 1
+    },
     "TableName": "`weird``name`_unsharded",
     "Inputs": [
       {
@@ -723,6 +777,9 @@
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "1,-2",
+    "JoinVars": {
+      "unsharded_id": 0
+    },
     "TableName": "unsharded_`weird``name`",
     "Inputs": [
       {
@@ -764,6 +821,9 @@
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "1",
+    "JoinVars": {
+      "weird_name_a_b_c": 0
+    },
     "TableName": "`weird``name`_unsharded",
     "Inputs": [
       {
@@ -798,6 +858,9 @@
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-2",
+    "JoinVars": {
+      "unsharded_id": 0
+    },
     "TableName": "unsharded_`weird``name`",
     "Inputs": [
       {
@@ -843,6 +906,9 @@
         "OperatorType": "Join",
         "Variant": "Join",
         "JoinColumnIndexes": "-1,1",
+        "JoinVars": {
+          "u_col": 1
+        },
         "TableName": "`user`_user_extra",
         "Inputs": [
           {
@@ -883,6 +949,9 @@
         "OperatorType": "Join",
         "Variant": "Join",
         "JoinColumnIndexes": "-2,1",
+        "JoinVars": {
+          "u_col": 0
+        },
         "TableName": "`user`_user_extra",
         "Inputs": [
           {
@@ -912,6 +981,7 @@
     ]
   }
 }
+
 # Wire-up in subquery
 "select 1 from user where id in (select u.id, e.id from user u join user_extra e where e.id = u.col limit 10)"
 {
@@ -929,6 +999,9 @@
             "OperatorType": "Join",
             "Variant": "Join",
             "JoinColumnIndexes": "-1,1",
+            "JoinVars": {
+              "u_col": 1
+            },
             "TableName": "`user`_user_extra",
             "Inputs": [
               {
@@ -1004,6 +1077,9 @@
             "OperatorType": "Join",
             "Variant": "Join",
             "JoinColumnIndexes": "-1,1,-2",
+            "JoinVars": {
+              "u_col": 2
+            },
             "TableName": "`user`_user_extra",
             "Inputs": [
               {

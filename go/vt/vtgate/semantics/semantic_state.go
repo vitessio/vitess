@@ -17,6 +17,8 @@ limitations under the License.
 package semantics
 
 import (
+	"reflect"
+
 	"vitess.io/vitess/go/vt/key"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -35,9 +37,17 @@ type (
 		Name() (sqlparser.TableName, error)
 		GetExpr() *sqlparser.AliasedTableExpr
 		GetColumns() []ColumnInfo
-		IsVirtual() bool
-		DepsFor(col *sqlparser.ColName, org originable, single bool) *TableSet
+		IsActualTable() bool
+
+		// RecursiveDepsFor returns a pointer to the table set for the table that this column belongs to, if it can be found
+		// if the column is not found, nil will be returned instead. If the column is a derived table column, this method
+		// will recursively find the dependencies of the expression inside the derived table
+		RecursiveDepsFor(col *sqlparser.ColName, org originable, single bool) (*TableSet, *querypb.Type, error)
+
+		// DepsFor finds the table that a column depends on. No recursing is done on derived tables
+		DepsFor(col *sqlparser.ColName, org originable, single bool) (*TableSet, error)
 		IsInfSchema() bool
+		GetExprFor(s string) (sqlparser.Expr, error)
 	}
 
 	// ColumnInfo contains information about columns
@@ -62,7 +72,11 @@ type (
 		isInfSchema bool
 	}
 
+	// vTableInfo is used to represent projected results, not real tables. It is used for
+	// ORDER BY and GROUP BY that need to access result columns, and also for derived tables.
 	vTableInfo struct {
+		tableName   string
+		ASTNode     *sqlparser.AliasedTableExpr
 		columnNames []string
 		cols        []sqlparser.Expr
 	}
@@ -72,6 +86,7 @@ type (
 	TableSet uint64 // we can only join 64 tables with this underlying data type
 	// TODO : change uint64 to struct to support arbitrary number of tables.
 
+	// ExprDependencies stores the tables that an expression depends on as a map
 	ExprDependencies map[sqlparser.Expr]TableSet
 
 	// SemTable contains semantic analysis information about the query.
@@ -79,9 +94,20 @@ type (
 		Tables []TableInfo
 		// ProjectionErr stores the error that we got during the semantic analysis of the SelectExprs.
 		// This is only a real error if we are unable to plan the query as a single route
-		ProjectionErr    error
-		exprDependencies ExprDependencies
-		selectScope      map[*sqlparser.Select]*scope
+		ProjectionErr error
+
+		// ExprBaseTableDeps contains the dependencies from the expression to the actual tables
+		// in the query (i.e. not including derived tables). If an expression is a column on a derived table,
+		// this map will contain the accumulated dependencies for the column expression inside the derived table
+		ExprBaseTableDeps ExprDependencies
+
+		// ExprDeps keeps information about dependencies for expressions, no matter if they are
+		// against real tables or derived tables
+		ExprDeps ExprDependencies
+
+		exprTypes   map[sqlparser.Expr]querypb.Type
+		selectScope map[*sqlparser.Select]*scope
+		Comments    sqlparser.Comments
 	}
 
 	scope struct {
@@ -96,48 +122,116 @@ type (
 	}
 )
 
-// DepsFor implements the TableInfo interface
-func (v *vTableInfo) DepsFor(col *sqlparser.ColName, org originable, single bool) *TableSet {
-	if !col.Qualifier.IsEmpty() {
-		return nil
+// GetExprFor implements the TableInfo interface
+func (v *vTableInfo) GetExprFor(s string) (sqlparser.Expr, error) {
+	for i, colName := range v.columnNames {
+		if colName == s {
+			return v.cols[i], nil
+		}
+	}
+	return nil, vterrors.NewErrorf(vtrpcpb.Code_NOT_FOUND, vterrors.BadFieldError, "Unknown column '%s' in 'field list'", s)
+}
+
+// GetExprFor implements the TableInfo interface
+func (a *AliasedTable) GetExprFor(s string) (sqlparser.Expr, error) {
+	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Unknown column '%s' in 'field list'", s)
+}
+
+// GetExprFor implements the TableInfo interface
+func (r *RealTable) GetExprFor(s string) (sqlparser.Expr, error) {
+	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Unknown column '%s' in 'field list'", s)
+}
+
+// RecursiveDepsFor implements the TableInfo interface
+func (v *vTableInfo) RecursiveDepsFor(col *sqlparser.ColName, org originable, single bool) (*TableSet, *querypb.Type, error) {
+	if !col.Qualifier.IsEmpty() && (v.ASTNode == nil || v.tableName != col.Qualifier.Name.String()) {
+		// if we have a table qualifier in the expression, we know that it is not referencing an aliased table
+		return nil, nil, nil
 	}
 	for i, colName := range v.columnNames {
 		if col.Name.String() == colName {
-			ts := org.depsForExpr(v.cols[i])
-			return &ts
+			ts, qt := org.depsForExpr(v.cols[i])
+			return &ts, qt, nil
 		}
 	}
-	return nil
+	return nil, nil, nil
 }
 
 // DepsFor implements the TableInfo interface
-func (a *AliasedTable) DepsFor(col *sqlparser.ColName, org originable, single bool) *TableSet {
-	if single {
-		ts := org.tableSetFor(a.ASTNode)
-		return &ts
+func (v *vTableInfo) DepsFor(col *sqlparser.ColName, org originable, _ bool) (*TableSet, error) {
+	if v.ASTNode == nil {
+		return nil, nil
 	}
-	for _, info := range a.GetColumns() {
-		if col.Name.String() == info.Name {
-			ts := org.tableSetFor(a.ASTNode)
-			return &ts
+	if !col.Qualifier.IsEmpty() && (v.ASTNode == nil || v.tableName != col.Qualifier.Name.String()) {
+		// if we have a table qualifier in the expression, we know that it is not referencing an aliased table
+		return nil, nil
+	}
+	for _, colName := range v.columnNames {
+		if col.Name.String() == colName {
+			ts := org.tableSetFor(v.ASTNode)
+			return &ts, nil
 		}
 	}
-	return nil
+	return nil, nil
+}
+
+// RecursiveDepsFor implements the TableInfo interface
+func (a *AliasedTable) RecursiveDepsFor(col *sqlparser.ColName, org originable, single bool) (*TableSet, *querypb.Type, error) {
+	return depsFor(col, org, single, a.ASTNode, a.GetColumns(), a.Authoritative())
 }
 
 // DepsFor implements the TableInfo interface
-func (r *RealTable) DepsFor(col *sqlparser.ColName, org originable, single bool) *TableSet {
+func (a *AliasedTable) DepsFor(col *sqlparser.ColName, org originable, single bool) (*TableSet, error) {
+	ts, _, err := a.RecursiveDepsFor(col, org, single)
+	return ts, err
+}
+
+// RecursiveDepsFor implements the TableInfo interface
+func (r *RealTable) RecursiveDepsFor(col *sqlparser.ColName, org originable, single bool) (*TableSet, *querypb.Type, error) {
+	return depsFor(col, org, single, r.ASTNode, r.GetColumns(), r.Authoritative())
+}
+
+// DepsFor implements the TableInfo interface
+func (r *RealTable) DepsFor(col *sqlparser.ColName, org originable, single bool) (*TableSet, error) {
+	ts, _, err := r.RecursiveDepsFor(col, org, single)
+	return ts, err
+}
+
+// depsFor implements the TableInfo interface for RealTable and AliasedTable
+func depsFor(
+	col *sqlparser.ColName,
+	org originable,
+	single bool,
+	astNode *sqlparser.AliasedTableExpr,
+	cols []ColumnInfo,
+	authoritative bool,
+) (*TableSet, *querypb.Type, error) {
+	// if we know that we are the only table in the scope, there is no doubt - the column must belong to the table
 	if single {
-		ts := org.tableSetFor(r.ASTNode)
-		return &ts
+		ts := org.tableSetFor(astNode)
+
+		for _, info := range cols {
+			if col.Name.EqualString(info.Name) {
+				return &ts, &info.Type, nil
+			}
+		}
+
+		if authoritative {
+			// if we are authoritative and we can't find the column, we should fail
+			return nil, nil, vterrors.NewErrorf(vtrpcpb.Code_NOT_FOUND, vterrors.BadFieldError, "Unknown column '%s' in 'field list'", col.Name.String())
+		}
+
+		// it's probably the correct table, but we don't have enough info to be sure or figure out the type of the column
+		return &ts, nil, nil
 	}
-	for _, info := range r.GetColumns() {
-		if col.Name.String() == info.Name {
-			ts := org.tableSetFor(r.ASTNode)
-			return &ts
+
+	for _, info := range cols {
+		if col.Name.EqualString(info.Name) {
+			ts := org.tableSetFor(astNode)
+			return &ts, &info.Type, nil
 		}
 	}
-	return nil
+	return nil, nil, nil
 }
 
 // IsInfSchema implements the TableInfo interface
@@ -155,19 +249,19 @@ func (r *RealTable) IsInfSchema() bool {
 	return r.isInfSchema
 }
 
-// IsVirtual implements the TableInfo interface
-func (v *vTableInfo) IsVirtual() bool {
+// IsActualTable implements the TableInfo interface
+func (v *vTableInfo) IsActualTable() bool {
+	return false
+}
+
+// IsActualTable implements the TableInfo interface
+func (a *AliasedTable) IsActualTable() bool {
 	return true
 }
 
-// IsVirtual implements the TableInfo interface
-func (a *AliasedTable) IsVirtual() bool {
-	return false
-}
-
-// IsVirtual implements the TableInfo interface
-func (r *RealTable) IsVirtual() bool {
-	return false
+// IsActualTable implements the TableInfo interface
+func (r *RealTable) IsActualTable() bool {
+	return true
 }
 
 var _ TableInfo = (*RealTable)(nil)
@@ -175,7 +269,7 @@ var _ TableInfo = (*AliasedTable)(nil)
 var _ TableInfo = (*vTableInfo)(nil)
 
 func (v *vTableInfo) Matches(name sqlparser.TableName) bool {
-	return false
+	return v.tableName == name.Name.String() && name.Qualifier.IsEmpty()
 }
 
 func (v *vTableInfo) Authoritative() bool {
@@ -183,11 +277,11 @@ func (v *vTableInfo) Authoritative() bool {
 }
 
 func (v *vTableInfo) Name() (sqlparser.TableName, error) {
-	return sqlparser.TableName{}, nil
+	return v.ASTNode.TableName()
 }
 
 func (v *vTableInfo) GetExpr() *sqlparser.AliasedTableExpr {
-	return nil
+	return v.ASTNode
 }
 
 func (v *vTableInfo) GetColumns() []ColumnInfo {
@@ -204,12 +298,30 @@ func vindexTableToColumnInfo(tbl *vindexes.Table) []ColumnInfo {
 	if tbl == nil {
 		return nil
 	}
+	nameMap := map[string]interface{}{}
 	cols := make([]ColumnInfo, 0, len(tbl.Columns))
 	for _, col := range tbl.Columns {
 		cols = append(cols, ColumnInfo{
 			Name: col.Name.String(),
 			Type: col.Type,
 		})
+		nameMap[col.Name.String()] = nil
+	}
+	// If table is authoritative, we do not need ColumnVindexes to help in resolving the unqualified columns.
+	if tbl.ColumnListAuthoritative {
+		return cols
+	}
+	for _, vindex := range tbl.ColumnVindexes {
+		for _, column := range vindex.Columns {
+			name := column.String()
+			if _, exists := nameMap[name]; exists {
+				continue
+			}
+			cols = append(cols, ColumnInfo{
+				Name: name,
+			})
+			nameMap[name] = nil
+		}
 	}
 	return cols
 }
@@ -271,7 +383,7 @@ func (r *RealTable) Matches(name sqlparser.TableName) bool {
 
 // NewSemTable creates a new empty SemTable
 func NewSemTable() *SemTable {
-	return &SemTable{exprDependencies: map[sqlparser.Expr]TableSet{}}
+	return &SemTable{ExprBaseTableDeps: map[sqlparser.Expr]TableSet{}}
 }
 
 // TableSetFor returns the bitmask for this particular table
@@ -292,27 +404,20 @@ func (st *SemTable) TableInfoFor(id TableSet) (TableInfo, error) {
 	return st.Tables[id.TableOffset()], nil
 }
 
-// Dependencies return the table dependencies of the expression.
-func (st *SemTable) Dependencies(expr sqlparser.Expr) TableSet {
-	return st.exprDependencies.Dependencies(expr)
+// BaseTableDependencies return the table dependencies of the expression.
+func (st *SemTable) BaseTableDependencies(expr sqlparser.Expr) TableSet {
+	return st.ExprBaseTableDeps.Dependencies(expr)
 }
 
-func (d ExprDependencies) Dependencies(expr sqlparser.Expr) TableSet {
-	deps, found := d[expr]
-	if found {
-		return deps
-	}
+// Dependencies return the table dependencies of the expression.
+func (st *SemTable) Dependencies(expr sqlparser.Expr) TableSet {
+	return st.ExprDeps.Dependencies(expr)
+}
 
-	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
-		colName, ok := node.(*sqlparser.ColName)
-		if ok {
-			set := d[colName]
-			deps |= set
-		}
-		return true, nil
-	}, expr)
-	d[expr] = deps
-	return deps
+// TableInfoForExpr returns the table info of the table that this expression depends on.
+// Careful: this only works for expressions that have a single table dependency
+func (st *SemTable) TableInfoForExpr(expr sqlparser.Expr) (TableInfo, error) {
+	return st.TableInfoFor(st.ExprDeps.Dependencies(expr))
 }
 
 // GetSelectTables returns the table in the select.
@@ -325,8 +430,48 @@ func (st *SemTable) GetSelectTables(node *sqlparser.Select) []TableInfo {
 func (st *SemTable) AddExprs(tbl *sqlparser.AliasedTableExpr, cols sqlparser.SelectExprs) {
 	tableSet := st.TableSetFor(tbl)
 	for _, col := range cols {
-		st.exprDependencies[col.(*sqlparser.AliasedExpr).Expr] = tableSet
+		st.ExprBaseTableDeps[col.(*sqlparser.AliasedExpr).Expr] = tableSet
 	}
+}
+
+// TypeFor returns the type of expressions in the query
+func (st *SemTable) TypeFor(e sqlparser.Expr) *querypb.Type {
+	typ, found := st.exprTypes[e]
+	if found {
+		return &typ
+	}
+	return nil
+}
+
+// Dependencies return the table dependencies of the expression. This method finds table dependencies recursively
+func (d ExprDependencies) Dependencies(expr sqlparser.Expr) TableSet {
+	deps, found := d[expr]
+	if found {
+		return deps
+	}
+
+	// During the original semantic analysis, all ColName:s were found and bound the the corresponding tables
+	// Here, we'll walk the expression tree and look to see if we can found any sub-expressions
+	// that have already set dependencies.
+	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+		expr, ok := node.(sqlparser.Expr)
+		if !ok || !reflect.TypeOf(expr).Comparable() {
+			// if this is not an expression, or it is an expression we can't use as a map-key,
+			// just carry on down the tree
+			return true, nil
+		}
+
+		set, found := d[expr]
+		if found {
+			deps |= set
+		}
+
+		// if we found a cached value, there is no need to continue down to visit children
+		return !found, nil
+	}, expr)
+
+	d[expr] = deps
+	return deps
 }
 
 func newScope(parent *scope) *scope {
@@ -391,4 +536,25 @@ func (ts TableSet) Constituents() (result []TableSet) {
 // Merge creates a TableSet that contains both inputs
 func (ts TableSet) Merge(other TableSet) TableSet {
 	return ts | other
+}
+
+// RewriteDerivedExpression rewrites all the ColName instances in the supplied expression with
+// the expressions behind the column definition of the derived table
+// SELECT foo FROM (SELECT id+42 as foo FROM user) as t
+// We need `foo` to be translated to `id+42` on the inside of the derived table
+func RewriteDerivedExpression(expr sqlparser.Expr, vt TableInfo) (sqlparser.Expr, error) {
+	newExpr := sqlparser.CloneExpr(expr)
+	sqlparser.Rewrite(newExpr, func(cursor *sqlparser.Cursor) bool {
+		switch node := cursor.Node().(type) {
+		case *sqlparser.ColName:
+			exp, err := vt.GetExprFor(node.Name.String())
+			if err != nil {
+				return false
+			}
+			cursor.Replace(exp)
+			return false
+		}
+		return true
+	}, nil)
+	return newExpr, nil
 }

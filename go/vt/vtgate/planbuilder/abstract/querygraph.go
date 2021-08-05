@@ -52,6 +52,8 @@ type (
 	}
 )
 
+var _ Operator = (*QueryGraph)(nil)
+
 // PushPredicate implements the Operator interface
 func (qg *QueryGraph) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) error {
 	for _, e := range sqlparser.SplitAndExpression(nil, expr) {
@@ -104,7 +106,7 @@ func (qg *QueryGraph) collectPredicates(sel *sqlparser.Select, semTable *semanti
 }
 
 func (qg *QueryGraph) collectPredicateTable(t sqlparser.TableExpr, predicate sqlparser.Expr, semTable *semantics.SemTable) error {
-	deps := semTable.Dependencies(predicate)
+	deps := semTable.BaseTableDependencies(predicate)
 	switch deps.NumberOfTables() {
 	case 0:
 		qg.addNoDepsPredicate(predicate)
@@ -135,7 +137,7 @@ func (qg *QueryGraph) collectPredicateTable(t sqlparser.TableExpr, predicate sql
 }
 
 func (qg *QueryGraph) collectPredicate(predicate sqlparser.Expr, semTable *semantics.SemTable) error {
-	deps := semTable.Dependencies(predicate)
+	deps := semTable.BaseTableDependencies(predicate)
 	switch deps.NumberOfTables() {
 	case 0:
 		qg.addNoDepsPredicate(predicate)

@@ -250,6 +250,11 @@ func (node *RevertMigration) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
+func (node *ShowMigrationLogs) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "show vitess_migration '%s' logs", node.UUID)
+}
+
+// Format formats the node.
 func (node *OptLike) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "like %v", node.LikeTable)
 }

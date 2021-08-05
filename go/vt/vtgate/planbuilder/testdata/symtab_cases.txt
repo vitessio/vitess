@@ -9,6 +9,9 @@
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-1,1",
+    "JoinVars": {
+      "predef2": 0
+    },
     "TableName": "`user`_unsharded",
     "Inputs": [
       {

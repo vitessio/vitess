@@ -190,6 +190,9 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-1,-2,1",
+    "JoinVars": {
+      "user_index_id": 0
+    },
     "TableName": "_unsharded",
     "Inputs": [
       {
@@ -230,6 +233,9 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-1,1",
+    "JoinVars": {
+      "user_index_id": 1
+    },
     "TableName": "_unsharded",
     "Inputs": [
       {
@@ -270,6 +276,9 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-1,1",
+    "JoinVars": {
+      "ui_id": 1
+    },
     "TableName": "_unsharded",
     "Inputs": [
       {
