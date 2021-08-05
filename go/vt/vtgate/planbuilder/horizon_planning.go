@@ -600,14 +600,7 @@ func (hp *horizonPlanning) planDistinctOA(currPlan *orderedAggregate) error {
 
 func (hp *horizonPlanning) addDistinct() error {
 	eaggr := &engine.OrderedAggregate{}
-	oa := &orderedAggregate{
-		resultsBuilder: resultsBuilder{
-			logicalPlanCommon: newBuilderCommon(hp.plan),
-			weightStrings:     make(map[*resultColumn]int),
-			truncater:         eaggr,
-		},
-		eaggr: eaggr,
-	}
+	var orderExprs []abstract.OrderBy
 	for index, sExpr := range hp.qp.SelectExprs {
 		grpParam := &engine.GroupByParams{KeyCol: index, WeightStringCol: -1}
 		_, wOffset, added, err := wrapAndPushExpr(sExpr.Col.Expr, sExpr.Col.Expr, hp.plan, hp.semTable)
@@ -617,8 +610,23 @@ func (hp *horizonPlanning) addDistinct() error {
 		hp.needsTruncation = hp.needsTruncation || added
 		grpParam.WeightStringCol = wOffset
 		eaggr.GroupByKeys = append(eaggr.GroupByKeys, grpParam)
+		orderExprs = append(orderExprs, abstract.OrderBy{
+			Inner:         &sqlparser.Order{Expr: sExpr.Col.Expr},
+			WeightStrExpr: sExpr.Col.Expr},
+		)
 	}
-	hp.plan = oa
+	innerPlan, err := hp.planOrderBy(orderExprs, hp.plan)
+	if err != nil {
+		return err
+	}
+	hp.plan = &orderedAggregate{
+		resultsBuilder: resultsBuilder{
+			logicalPlanCommon: newBuilderCommon(innerPlan),
+			weightStrings:     make(map[*resultColumn]int),
+			truncater:         eaggr,
+		},
+		eaggr: eaggr,
+	}
 	return nil
 }
 
