@@ -1821,3 +1821,82 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
     ]
   }
 }
+
+# Distinct with column alias
+"select distinct a as c, a from user"
+{
+  "QueryType": "SELECT",
+  "Original": "select distinct a as c, a from user",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Ordered",
+    "GroupBy": "0, 1",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select a as c, a, weight_string(a) from `user` where 1 != 1",
+        "OrderBy": "(0|2) ASC, (0|2) ASC",
+        "Query": "select distinct a as c, a, weight_string(a) from `user` order by c asc, a asc",
+        "ResultColumns": 2,
+        "Table": "`user`"
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select distinct a as c, a from user",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Ordered",
+    "GroupBy": "(0|2), (1|2)",
+    "ResultColumns": 2,
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select a as c, a, weight_string(a) from `user` where 1 != 1",
+        "OrderBy": "(0|2) ASC, (1|2) ASC",
+        "Query": "select distinct a as c, a, weight_string(a) from `user` order by c asc, a asc",
+        "Table": "`user`"
+      }
+    ]
+  }
+}
+
+# Distinct with same column
+"select distinct a, a from user"
+"generating order by clause: ambiguous symbol reference: a"
+{
+  "QueryType": "SELECT",
+  "Original": "select distinct a, a from user",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Ordered",
+    "GroupBy": "(0|2), (1|2)",
+    "ResultColumns": 2,
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select a, a, weight_string(a) from `user` where 1 != 1",
+        "OrderBy": "(0|2) ASC, (0|2) ASC",
+        "Query": "select distinct a, a, weight_string(a) from `user` order by a asc, a asc",
+        "Table": "`user`"
+      }
+    ]
+  }
+}
