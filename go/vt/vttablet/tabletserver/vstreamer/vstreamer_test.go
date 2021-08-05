@@ -253,7 +253,7 @@ func TestVersion(t *testing.T) {
 	defer env.SchemaEngine.EnableHistorian(false)
 
 	engine = NewEngine(engine.env, env.SrvTopo, env.SchemaEngine, nil, env.Cells[0])
-	engine.InitDBConfig(env.KeyspaceName)
+	engine.InitDBConfig(env.KeyspaceName, env.ShardName)
 	engine.Open()
 	defer engine.Close()
 
@@ -2072,7 +2072,15 @@ func expectLog(ctx context.Context, t *testing.T, input interface{}, ch <-chan [
 				if evs[i].Type == binlogdatapb.VEventType_FIELD {
 					for j := range evs[i].FieldEvent.Fields {
 						evs[i].FieldEvent.Fields[j].Flags = 0
+						if ignoreKeyspaceShardInFieldAndRowEvents {
+							evs[i].FieldEvent.Keyspace = ""
+							evs[i].FieldEvent.Shard = ""
+						}
 					}
+				}
+				if ignoreKeyspaceShardInFieldAndRowEvents && evs[i].Type == binlogdatapb.VEventType_ROW {
+					evs[i].RowEvent.Keyspace = ""
+					evs[i].RowEvent.Shard = ""
 				}
 				if got := fmt.Sprintf("%v", evs[i]); got != want {
 					log.Errorf("%v (%d): event:\n%q, want\n%q", input, i, got, want)

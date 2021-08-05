@@ -116,6 +116,8 @@ func TestVStream(t *testing.T) {
 		}
 		wantFields := &binlogdatapb.FieldEvent{
 			TableName: "ks.vstream_test",
+			Keyspace:  "ks",
+			Shard:     "-80",
 			Fields: []*querypb.Field{{
 				Name: "id",
 				Type: querypb.Type_INT64,
@@ -128,6 +130,8 @@ func TestVStream(t *testing.T) {
 		gotFields := events[1].FieldEvent
 		filteredFields := &binlogdatapb.FieldEvent{
 			TableName: gotFields.TableName,
+			Keyspace:  gotFields.Keyspace,
+			Shard:     gotFields.Shard,
 			Fields:    []*querypb.Field{},
 		}
 		for _, field := range gotFields.Fields {
@@ -137,10 +141,12 @@ func TestVStream(t *testing.T) {
 			})
 		}
 		if !proto.Equal(filteredFields, wantFields) {
-			t.Errorf("FieldEvent:\n%v, want\n%v", gotFields, wantFields)
+			t.Errorf("FieldEvent:\n%v, want\n%v", filteredFields, wantFields)
 		}
 		wantRows := &binlogdatapb.RowEvent{
 			TableName: "ks.vstream_test",
+			Keyspace:  "ks",
+			Shard:     "-80",
 			RowChanges: []*binlogdatapb.RowChange{{
 				After: &query.Row{
 					Lengths: []int64{1, 1},
