@@ -17,12 +17,11 @@ limitations under the License.
 package srvtopo
 
 import (
+	"context"
 	"fmt"
 	"reflect"
 	"sync"
 	"testing"
-
-	"context"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
@@ -182,7 +181,7 @@ func TestFilteringServerWatchSrvVSchemaFiltersPassthroughSrvVSchema(t *testing.T
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 
-	cb := func(gotSchema *vschemapb.SrvVSchema, gotErr error) {
+	cb := func(gotSchema *vschemapb.SrvVSchema, gotErr error) bool {
 		// ensure that only selected keyspaces made it into the callback
 		for name, ks := range gotSchema.Keyspaces {
 			if !allowed[name] {
@@ -198,6 +197,7 @@ func TestFilteringServerWatchSrvVSchemaFiltersPassthroughSrvVSchema(t *testing.T
 			}
 		}
 		wg.Done()
+		return true
 	}
 
 	f.WatchSrvVSchema(stockCtx, stockCell, cb)
@@ -214,7 +214,7 @@ func TestFilteringServerWatchSrvVSchemaHandlesNilSchema(t *testing.T) {
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 
-	cb := func(gotSchema *vschemapb.SrvVSchema, gotErr error) {
+	cb := func(gotSchema *vschemapb.SrvVSchema, gotErr error) bool {
 		if gotSchema != nil {
 			t.Errorf("Expected nil gotSchema: got %#v", gotSchema)
 		}
@@ -222,6 +222,7 @@ func TestFilteringServerWatchSrvVSchemaHandlesNilSchema(t *testing.T) {
 			t.Errorf("Unexpected error: want %v got %v", wantErr, gotErr)
 		}
 		wg.Done()
+		return true
 	}
 
 	f.WatchSrvVSchema(stockCtx, "other-cell", cb)
