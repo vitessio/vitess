@@ -613,8 +613,15 @@ func (hp *horizonPlanning) addDistinct() error {
 		hp.needsTruncation = hp.needsTruncation || added
 		grpParam.WeightStringCol = wOffset
 		eaggr.GroupByKeys = append(eaggr.GroupByKeys, grpParam)
+
+		var inner sqlparser.Expr
+		if !sExpr.Col.As.IsEmpty() {
+			inner = sqlparser.NewColName(sExpr.Col.As.String())
+		} else {
+			inner = sExpr.Col.Expr
+		}
 		orderExprs = append(orderExprs, abstract.OrderBy{
-			Inner:         &sqlparser.Order{Expr: sExpr.Col.Expr},
+			Inner:         &sqlparser.Order{Expr: inner},
 			WeightStrExpr: sExpr.Col.Expr},
 		)
 	}
