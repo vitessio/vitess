@@ -129,6 +129,21 @@ func crossJoin(exprs sqlparser.TableExprs, semTable *semantics.SemTable) (Operat
 
 // CreateOperatorFromSelect creates an operator tree that represents the input SELECT query
 func CreateOperatorFromSelect(sel *sqlparser.Select, semTable *semantics.SemTable) (Operator, error) {
+	var resultantOp *SubQuery
+	if len(semTable.SubqueryMap[sel]) > 0 {
+		resultantOp = &SubQuery{}
+		for _, sq := range semTable.SubqueryMap[sel] {
+			opInner, err := CreateOperatorFromSelect(sq.SubQuery.Select.(*sqlparser.Select), semTable)
+			if err != nil {
+				return nil, err
+			}
+			resultantOp.Inner = append(resultantOp.Inner, &SubQueryInner{
+				Inner:   opInner,
+				Type:    sq.OpCode,
+				ArgName: sq.ArgName,
+			})
+		}
+	}
 	op, err := crossJoin(sel.From, semTable)
 	if err != nil {
 		return nil, err
@@ -142,7 +157,11 @@ func CreateOperatorFromSelect(sel *sqlparser.Select, semTable *semantics.SemTabl
 			}
 		}
 	}
-	return op, nil
+	if resultantOp == nil {
+		return op, nil
+	}
+	resultantOp.Outer = op
+	return resultantOp, nil
 }
 
 func createJoin(LHS, RHS Operator) Operator {

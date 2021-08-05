@@ -24,15 +24,26 @@ import (
 
 // SubQuery stores the information about subquery
 type SubQuery struct {
-	Inner, Outer Operator
-	Type         engine.PulloutOpcode
+	Inner []*SubQueryInner
+	Outer Operator
+	Type  engine.PulloutOpcode
 }
 
 var _ Operator = (*SubQuery)(nil)
 
+type SubQueryInner struct {
+	Inner   Operator
+	Type    engine.PulloutOpcode
+	ArgName string
+}
+
 // TableID implements the Operator interface
 func (s *SubQuery) TableID() semantics.TableSet {
-	return s.Inner.TableID().Merge(s.Outer.TableID())
+	ts := s.Outer.TableID()
+	for _, inner := range s.Inner {
+		ts = ts.Merge(inner.Inner.TableID())
+	}
+	return ts
 }
 
 // PushPredicate implements the Operator interface

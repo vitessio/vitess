@@ -183,6 +183,37 @@ JoinPredicates:
 	}
 	Predicate: t.id = s.foo
 }`,
+	}, {
+		input: "select (select 1) from t where exists (select 1) and id in (select 1)",
+		output: `SubQuery: {
+	SubQueries: [
+	{
+		Type: PulloutValue
+		ArgName: 
+		Query: 	QueryGraph: {
+	Tables:
+		2:dual
+	}} 
+	{
+		Type: PulloutExists
+		ArgName: 
+		Query: 	QueryGraph: {
+	Tables:
+		4:dual
+	}} 
+	{
+		Type: PulloutIn
+		ArgName: 
+		Query: 	QueryGraph: {
+	Tables:
+		8:dual
+	}}]
+	Outer: 	QueryGraph: {
+	Tables:
+		1:t where id in (select 1 from dual)
+	ForAll: exists (select 1 from dual)
+	}
+}`,
 	}}
 
 	for i, tc := range tcases {
@@ -218,6 +249,14 @@ func testString(op Operator) string {
 		inner := indent(testString(op.Inner))
 		query := sqlparser.String(op.Sel)
 		return fmt.Sprintf("Derived %s: {\n\tQuery: %s\n\tInner:%s\n}", op.Alias, query, inner)
+	case *SubQuery:
+		var inners []string
+		for _, sqOp := range op.Inner {
+			subquery := fmt.Sprintf("\n\t{\n\t\tType: %s\n\t\tArgName: %s\n\t\tQuery: %s}", sqOp.Type.String(), sqOp.ArgName, indent(testString(sqOp.Inner)))
+			inners = append(inners, subquery)
+		}
+		outer := indent(testString(op.Outer))
+		return fmt.Sprintf("SubQuery: {\n\tSubQueries: %s\n\tOuter: %s\n}", inners, outer)
 	}
 	return "implement me"
 }
