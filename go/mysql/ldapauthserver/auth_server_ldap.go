@@ -250,7 +250,7 @@ func (lci *ClientImpl) Connect(network string, config *ServerConfig) error {
 		return err
 	}
 
-	tlsConfig, err := vttls.ClientConfig(config.LdapCert, config.LdapKey, config.LdapCA, serverName, tlsVersion)
+	tlsConfig, err := vttls.ClientConfig(vttls.VerifyIdentity, config.LdapCert, config.LdapKey, config.LdapCA, serverName, tlsVersion)
 	if err != nil {
 		return err
 	}
