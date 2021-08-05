@@ -190,13 +190,14 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 		return err
 	}
 	ms := &vtctldatapb.MaterializeSettings{
-		Workflow:        workflow,
-		SourceKeyspace:  sourceKeyspace,
-		TargetKeyspace:  targetKeyspace,
-		Cell:            cell,
-		TabletTypes:     tabletTypes,
-		StopAfterCopy:   stopAfterCopy,
-		ExternalCluster: externalCluster,
+		Workflow:              workflow,
+		MaterializationIntent: vtctldatapb.MaterializationIntent_MOVETABLES,
+		SourceKeyspace:        sourceKeyspace,
+		TargetKeyspace:        targetKeyspace,
+		Cell:                  cell,
+		TabletTypes:           tabletTypes,
+		StopAfterCopy:         stopAfterCopy,
+		ExternalCluster:       externalCluster,
 	}
 	for _, table := range tables {
 		buf := sqlparser.NewTrackedBuffer(nil)
@@ -614,10 +615,11 @@ func (wr *Wrangler) prepareCreateLookup(ctx context.Context, keyspace string, sp
 	}
 
 	ms = &vtctldatapb.MaterializeSettings{
-		Workflow:       targetTableName + "_vdx",
-		SourceKeyspace: keyspace,
-		TargetKeyspace: targetKeyspace,
-		StopAfterCopy:  vindex.Owner != "" && !continueAfterCopyWithOwner,
+		Workflow:              targetTableName + "_vdx",
+		MaterializationIntent: vtctldatapb.MaterializationIntent_CREATELOOKUPINDEX,
+		SourceKeyspace:        keyspace,
+		TargetKeyspace:        targetKeyspace,
+		StopAfterCopy:         vindex.Owner != "" && !continueAfterCopyWithOwner,
 		TableSettings: []*vtctldatapb.TableMaterializeSettings{{
 			TargetTable:      targetTableName,
 			SourceExpression: materializeQuery,
@@ -807,11 +809,15 @@ func (wr *Wrangler) prepareMaterializerStreams(ctx context.Context, ms *vtctldat
 	if err := mz.deploySchema(ctx); err != nil {
 		return nil, err
 	}
-	inserts, err := mz.generateInserts(ctx)
-	if err != nil {
-		return nil, err
+	insertMap := make(map[string]string, len(mz.targetShards))
+	for _, targetShard := range mz.targetShards {
+		inserts, err := mz.generateInserts(ctx, targetShard)
+		if err != nil {
+			return nil, err
+		}
+		insertMap[targetShard.ShardName()] = inserts
 	}
-	if err := mz.createStreams(ctx, inserts); err != nil {
+	if err := mz.createStreams(ctx, insertMap); err != nil {
 		return nil, err
 	}
 	return mz, nil
@@ -1002,13 +1008,20 @@ func stripTableConstraints(ddl string) (string, error) {
 	return newDDL, nil
 }
 
-func (mz *materializer) generateInserts(ctx context.Context) (string, error) {
+func (mz *materializer) generateInserts(ctx context.Context, targetShard *topo.ShardInfo) (string, error) {
 	ig := vreplication.NewInsertGenerator(binlogplayer.BlpStopped, "{{.dbname}}")
 
-	for _, source := range mz.sourceShards {
+	for _, sourceShard := range mz.sourceShards {
+		// Don't create streams from sources which won't contain data for the target shard.
+		// We only do it for MoveTables for now since this doesn't hold for materialize flows
+		// where the target's sharding key might differ from that of the source
+		if mz.ms.MaterializationIntent == vtctldatapb.MaterializationIntent_MOVETABLES &&
+			!key.KeyRangesIntersect(sourceShard.KeyRange, targetShard.KeyRange) {
+			continue
+		}
 		bls := &binlogdatapb.BinlogSource{
 			Keyspace:        mz.ms.SourceKeyspace,
-			Shard:           source.ShardName(),
+			Shard:           sourceShard.ShardName(),
 			Filter:          &binlogdatapb.Filter{},
 			StopAfterCopy:   mz.ms.StopAfterCopy,
 			ExternalCluster: mz.ms.ExternalCluster,
@@ -1113,8 +1126,9 @@ func matchColInSelect(col sqlparser.ColIdent, sel *sqlparser.Select) (*sqlparser
 	return nil, fmt.Errorf("could not find vindex column %v", sqlparser.String(col))
 }
 
-func (mz *materializer) createStreams(ctx context.Context, inserts string) error {
+func (mz *materializer) createStreams(ctx context.Context, insertsMap map[string]string) error {
 	return mz.forAllTargets(func(target *topo.ShardInfo) error {
+		inserts := insertsMap[target.ShardName()]
 		targetMaster, err := mz.wr.ts.GetTablet(ctx, target.MasterAlias)
 		if err != nil {
 			return vterrors.Wrapf(err, "GetTablet(%v) failed", target.MasterAlias)

@@ -1824,7 +1824,6 @@ func TestMaterializerManyToMany(t *testing.T) {
 	)
 	env.tmc.expectVRQuery(200, mzUpdateQuery, &sqltypes.Result{})
 	env.tmc.expectVRQuery(210, mzUpdateQuery, &sqltypes.Result{})
-
 	err := env.wr.Materialize(context.Background(), ms)
 	require.NoError(t, err)
 	env.tmc.verifyQueries(t)
@@ -2509,5 +2508,104 @@ func TestStripConstraints(t *testing.T) {
 		if newDDL != tc.newDDL {
 			utils.MustMatch(t, tc.newDDL, newDDL, fmt.Sprintf("newDDL does not match. tc: %+v", tc))
 		}
+	}
+}
+
+func TestMaterializerManyToManySomeUnreachable(t *testing.T) {
+	ms := &vtctldatapb.MaterializeSettings{
+		Workflow:       "workflow",
+		SourceKeyspace: "sourceks",
+		TargetKeyspace: "targetks",
+		TableSettings: []*vtctldatapb.TableMaterializeSettings{{
+			TargetTable:      "t1",
+			SourceExpression: "select * from t1",
+			CreateDdl:        "t1ddl",
+		}},
+	}
+
+	vs := &vschemapb.Keyspace{
+		Sharded: true,
+		Vindexes: map[string]*vschemapb.Vindex{
+			"hash": {
+				Type: "hash",
+			},
+		},
+		Tables: map[string]*vschemapb.Table{
+			"t1": {
+				ColumnVindexes: []*vschemapb.ColumnVindex{{
+					Column: "c1",
+					Name:   "hash",
+				}},
+			},
+		},
+	}
+	type testcase struct {
+		targetShards, sourceShards []string
+		insertMap                  map[string][]string
+	}
+	testcases := []testcase{
+		{
+			targetShards: []string{"-40", "40-80", "80-c0", "c0-"},
+			sourceShards: []string{"-80", "80-"},
+			insertMap:    map[string][]string{"-40": {"-80"}, "40-80": {"-80"}, "80-c0": {"80-"}, "c0-": {"80-"}},
+		},
+		{
+			targetShards: []string{"-20", "20-40", "40-a0", "a0-f0", "f0-"},
+			sourceShards: []string{"-40", "40-80", "80-c0", "c0-"},
+			insertMap:    map[string][]string{"-20": {"-40"}, "20-40": {"-40"}, "40-a0": {"40-80", "80-c0"}, "a0-f0": {"80-c0", "c0-"}, "f0-": {"c0-"}},
+		},
+		{
+			targetShards: []string{"-40", "40-80", "80-"},
+			sourceShards: []string{"-80", "80-"},
+			insertMap:    map[string][]string{"-40": {"-80"}, "40-80": {"-80"}, "80-": {"80-"}},
+		},
+		{
+			targetShards: []string{"-80", "80-"},
+			sourceShards: []string{"-40", "40-80", "80-c0", "c0-"},
+			insertMap:    map[string][]string{"-80": {"-40", "40-80"}, "80-": {"80-c0", "c0-"}},
+		},
+		{
+			targetShards: []string{"0"},
+			sourceShards: []string{"-80", "80-"},
+			insertMap:    map[string][]string{"0": {"-80", "80-"}},
+		},
+		{
+			targetShards: []string{"-80", "80-"},
+			sourceShards: []string{"0"},
+			insertMap:    map[string][]string{"-80": {"0"}, "80-": {"0"}},
+		},
+	}
+
+	getStreamInsert := func(sourceShard, targetShard string) string {
+		return fmt.Sprintf(`.*shard:\\"%s\\" filter:{rules:{match:\\"t1\\" filter:\\"select.*t1 where in_keyrange\(c1.*targetks\.hash.*%s.*`, sourceShard, targetShard)
+	}
+
+	for _, tcase := range testcases {
+		t.Run("", func(t *testing.T) {
+			env := newTestMaterializerEnv(t, ms, tcase.sourceShards, tcase.targetShards)
+			if err := env.topoServ.SaveVSchema(context.Background(), "targetks", vs); err != nil {
+				t.Fatal(err)
+			}
+			defer env.close()
+			for i, targetShard := range tcase.targetShards {
+				tabletID := 200 + i*10
+				env.tmc.expectVRQuery(tabletID, mzSelectFrozenQuery, &sqltypes.Result{})
+
+				streamsInsert := ""
+				sourceShards := tcase.insertMap[targetShard]
+				for _, sourceShard := range sourceShards {
+					streamsInsert += getStreamInsert(sourceShard, targetShard)
+				}
+				env.tmc.expectVRQuery(
+					tabletID,
+					insertPrefix+streamsInsert,
+					&sqltypes.Result{},
+				)
+				env.tmc.expectVRQuery(tabletID, mzUpdateQuery, &sqltypes.Result{})
+			}
+			err := env.wr.Materialize(context.Background(), ms)
+			require.NoError(t, err)
+			env.tmc.verifyQueries(t)
+		})
 	}
 }
