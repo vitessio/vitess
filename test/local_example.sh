@@ -81,5 +81,7 @@ sleep 3 # TODO: Required for now!
 mysql --table < ../common/select_customer-80_data.sql
 mysql --table < ../common/select_customer80-_data.sql
 
+./306_down_shard_0.sh
+
 ./401_teardown.sh
 

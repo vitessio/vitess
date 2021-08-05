@@ -19,6 +19,9 @@ package planbuilder
 import (
 	"strings"
 
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
+
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -29,48 +32,36 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
+// queryTree interface and implementations
+// These representation helps in optimizing the join planning using tables and predicates.
 type (
-	joinTree interface {
+	queryTree interface {
 		// tableID returns the table identifiers that are solved by this plan
 		tableID() semantics.TableSet
 
-		// cost is simply the number of routes in the joinTree
+		// cost is simply the number of routes in the queryTree
 		cost() int
 
-		// creates a copy of the joinTree that can be updated without changing the original
-		clone() joinTree
+		// creates a copy of the queryTree that can be updated without changing the original
+		clone() queryTree
 
-		pushOutputColumns([]*sqlparser.ColName, *semantics.SemTable) []int
+		pushOutputColumns([]*sqlparser.ColName, *semantics.SemTable) ([]int, error)
 	}
 
-	relation interface {
-		tableID() semantics.TableSet
-		tableNames() []string
+	joinTree struct {
+		// columns needed to feed other plans
+		columns []int
+
+		// arguments that need to be copied from the LHS/RHS
+		vars map[string]int
+
+		// the children of this plan
+		lhs, rhs queryTree
+
+		outer bool
 	}
 
-	joinTables struct {
-		lhs, rhs relation
-		pred     sqlparser.Expr
-	}
-
-	routeTable struct {
-		qtable *abstract.QueryTable
-		vtable *vindexes.Table
-	}
-
-	outerTable struct {
-		right relation
-		pred  sqlparser.Expr
-	}
-
-	// cost is used to make it easy to compare the cost of two plans with each other
-	cost struct {
-		vindexCost int
-		isUnique   bool
-		opCode     engine.RouteOpcode
-	}
-
-	routePlan struct {
+	routeTree struct {
 		routeOpCode engine.RouteOpcode
 		solved      semantics.TableSet
 		keyspace    *vindexes.Keyspace
@@ -103,39 +94,133 @@ type (
 		SysTableTableName   map[string]evalengine.Expr
 	}
 
-	joinPlan struct {
-		// columns needed to feed other plans
-		columns []int
+	derivedTree struct {
+		query *sqlparser.Select
+		inner queryTree
+		alias string
+	}
+)
 
-		// arguments that need to be copied from the LHS/RHS
-		vars map[string]int
+// relation interface and implementations
+// They are representation of the tables in a routeTree
+// When we are able to merge queryTree then it lives as relation otherwise it stays as joinTree
+type (
+	relation interface {
+		tableID() semantics.TableSet
+		tableNames() []string
+	}
 
-		// the children of this plan
-		lhs, rhs joinTree
+	joinTables struct {
+		lhs, rhs relation
+		pred     sqlparser.Expr
+	}
 
-		outer bool
+	routeTable struct {
+		qtable *abstract.QueryTable
+		vtable *vindexes.Table
 	}
 
 	parenTables []relation
 
-	// vindexPlusPredicates is a struct used to store all the predicates that the vindex can be used to query
-	vindexPlusPredicates struct {
-		colVindex *vindexes.ColumnVindex
-		values    []sqltypes.PlanValue
+	derivedTable struct {
+		// tables contains inner tables that are solved by this plan.
+		// the tables also contain any predicates that only depend on that particular table
+		tables parenTables
 
-		// when we have the predicates found, we also know how to interact with this vindex
-		foundVindex vindexes.Vindex
-		opcode      engine.RouteOpcode
-		predicates  []sqlparser.Expr
+		// predicates are the predicates evaluated by this plan
+		predicates []sqlparser.Expr
+
+		// leftJoins are the join conditions evaluated by this plan
+		leftJoins []*outerTable
+
+		alias string
+
+		query *sqlparser.Select
 	}
 )
 
+type outerTable struct {
+	right relation
+	pred  sqlparser.Expr
+}
+
+// cost is used to make it easy to compare the cost of two plans with each other
+type cost struct {
+	vindexCost int
+	isUnique   bool
+	opCode     engine.RouteOpcode
+}
+
+// vindexPlusPredicates is a struct used to store all the predicates that the vindex can be used to query
+type vindexPlusPredicates struct {
+	colVindex *vindexes.ColumnVindex
+	values    []sqltypes.PlanValue
+
+	// when we have the predicates found, we also know how to interact with this vindex
+	foundVindex vindexes.Vindex
+	opcode      engine.RouteOpcode
+	predicates  []sqlparser.Expr
+}
+
+func (d *derivedTree) tableID() semantics.TableSet {
+	return d.inner.tableID()
+}
+
+func (d *derivedTree) cost() int {
+	panic("implement me")
+}
+
+func (d *derivedTree) clone() queryTree {
+	other := *d
+	other.inner = d.inner.clone()
+	return &other
+}
+
+func (d *derivedTree) pushOutputColumns(names []*sqlparser.ColName, _ *semantics.SemTable) (offsets []int, err error) {
+	for _, name := range names {
+		offset, err := d.findOutputColumn(name)
+		if err != nil {
+			return nil, err
+		}
+		offsets = append(offsets, offset)
+	}
+	return
+}
+
+func (d *derivedTree) findOutputColumn(name *sqlparser.ColName) (int, error) {
+	for j, exp := range d.query.SelectExprs {
+		ae, ok := exp.(*sqlparser.AliasedExpr)
+		if !ok {
+			return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "expected AliasedExpr")
+		}
+		if !ae.As.IsEmpty() && ae.As.Equal(name.Name) {
+			return j, nil
+		}
+		if ae.As.IsEmpty() {
+			col, ok := ae.Expr.(*sqlparser.ColName)
+			if !ok {
+				return 0, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "complex expression needs column alias: %s", sqlparser.String(ae))
+			}
+			if name.Name.Equal(col.Name) {
+				return j, nil
+			}
+		}
+	}
+	return 0, vterrors.NewErrorf(vtrpcpb.Code_NOT_FOUND, vterrors.BadFieldError, "Unknown column '%s' in 'field list'", name.Name.String())
+}
+
 // type assertions
-var _ joinTree = (*routePlan)(nil)
-var _ joinTree = (*joinPlan)(nil)
+var _ queryTree = (*routeTree)(nil)
+var _ queryTree = (*joinTree)(nil)
+var _ queryTree = (*derivedTree)(nil)
 var _ relation = (*routeTable)(nil)
 var _ relation = (*joinTables)(nil)
 var _ relation = (parenTables)(nil)
+var _ relation = (*derivedTable)(nil)
+
+func (d *derivedTable) tableID() semantics.TableSet { return d.tables.tableID() }
+
+func (d *derivedTable) tableNames() []string { return d.tables.tableNames() }
 
 func (rp *routeTable) tableID() semantics.TableSet { return rp.qtable.TableID }
 
@@ -171,39 +256,51 @@ func (p parenTables) tableID() semantics.TableSet {
 	return res
 }
 
-// visit will traverse the route tables, going inside parenTables and visiting all routeTables
-func visitTables(r relation, f func(tbl *routeTable) error) error {
+// visitRelations visits all relations recursively and applies the function f on them
+// If the function f returns false: the children of the current relation will not be visited.
+func visitRelations(r relation, f func(tbl relation) (bool, error)) error {
+
+	kontinue, err := f(r)
+	if err != nil {
+		return err
+	}
+	if !kontinue {
+		return nil
+	}
+
 	switch r := r.(type) {
 	case *routeTable:
-		err := f(r)
-		if err != nil {
-			return err
-		}
+		// already visited when entering this method
 	case parenTables:
 		for _, r := range r {
-			err := visitTables(r, f)
+			err := visitRelations(r, f)
 			if err != nil {
 				return err
 			}
 		}
 		return nil
 	case *joinTables:
-		err := visitTables(r.lhs, f)
+		err := visitRelations(r.lhs, f)
 		if err != nil {
 			return err
 		}
-		err = visitTables(r.rhs, f)
+		err = visitRelations(r.rhs, f)
 		if err != nil {
 			return err
 		}
 		return nil
+	case *derivedTable:
+		err := visitRelations(r.tables, f)
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
 
 // clone returns a copy of the struct with copies of slices,
 // so changing the the contents of them will not be reflected in the original
-func (rp *routePlan) clone() joinTree {
+func (rp *routeTree) clone() queryTree {
 	result := *rp
 	result.vindexPreds = make([]*vindexPlusPredicates, len(rp.vindexPreds))
 	for i, pred := range rp.vindexPreds {
@@ -214,17 +311,17 @@ func (rp *routePlan) clone() joinTree {
 	return &result
 }
 
-// tables implements the joinTree interface
-func (rp *routePlan) tableID() semantics.TableSet {
+// tables implements the queryTree interface
+func (rp *routeTree) tableID() semantics.TableSet {
 	return rp.solved
 }
 
-func (rp *routePlan) hasOuterjoins() bool {
+func (rp *routeTree) hasOuterjoins() bool {
 	return len(rp.leftJoins) > 0
 }
 
-// cost implements the joinTree interface
-func (rp *routePlan) cost() int {
+// cost implements the queryTree interface
+func (rp *routeTree) cost() int {
 	switch rp.routeOpCode {
 	case // these op codes will never be compared with each other - they are assigned by a rule and not a comparison
 		engine.SelectDBA,
@@ -250,7 +347,7 @@ func (rp *routePlan) cost() int {
 
 // addPredicate adds these predicates added to it. if the predicates can help,
 // they will improve the routeOpCode
-func (rp *routePlan) addPredicate(predicates ...sqlparser.Expr) error {
+func (rp *routeTree) addPredicate(predicates ...sqlparser.Expr) error {
 	if rp.canImprove() {
 		newVindexFound, err := rp.searchForNewVindexes(predicates)
 		if err != nil {
@@ -270,11 +367,11 @@ func (rp *routePlan) addPredicate(predicates ...sqlparser.Expr) error {
 }
 
 // canImprove returns true if additional predicates could help improving this plan
-func (rp *routePlan) canImprove() bool {
+func (rp *routeTree) canImprove() bool {
 	return rp.routeOpCode != engine.SelectNone
 }
 
-func (rp *routePlan) isImpossibleIN(node *sqlparser.ComparisonExpr) bool {
+func (rp *routeTree) isImpossibleIN(node *sqlparser.ComparisonExpr) bool {
 	switch nodeR := node.Right.(type) {
 	case sqlparser.ValTuple:
 		// WHERE col IN (null)
@@ -286,7 +383,7 @@ func (rp *routePlan) isImpossibleIN(node *sqlparser.ComparisonExpr) bool {
 	return false
 }
 
-func (rp *routePlan) isImpossibleNotIN(node *sqlparser.ComparisonExpr) bool {
+func (rp *routeTree) isImpossibleNotIN(node *sqlparser.ComparisonExpr) bool {
 	switch node := node.Right.(type) {
 	case sqlparser.ValTuple:
 		for _, n := range node {
@@ -300,7 +397,7 @@ func (rp *routePlan) isImpossibleNotIN(node *sqlparser.ComparisonExpr) bool {
 	return false
 }
 
-func (rp *routePlan) searchForNewVindexes(predicates []sqlparser.Expr) (bool, error) {
+func (rp *routeTree) searchForNewVindexes(predicates []sqlparser.Expr) (bool, error) {
 	newVindexFound := false
 	for _, filter := range predicates {
 		switch node := filter.(type) {
@@ -367,7 +464,7 @@ func equalOrEqualUnique(vindex *vindexes.ColumnVindex) engine.RouteOpcode {
 	return engine.SelectEqual
 }
 
-func (rp *routePlan) planEqualOp(node *sqlparser.ComparisonExpr) (bool, error) {
+func (rp *routeTree) planEqualOp(node *sqlparser.ComparisonExpr) (bool, error) {
 	column, ok := node.Left.(*sqlparser.ColName)
 	other := node.Right
 	if !ok {
@@ -386,7 +483,7 @@ func (rp *routePlan) planEqualOp(node *sqlparser.ComparisonExpr) (bool, error) {
 	return rp.haveMatchingVindex(node, column, *val, equalOrEqualUnique, justTheVindex), err
 }
 
-func (rp *routePlan) planSimpleInOp(node *sqlparser.ComparisonExpr, left *sqlparser.ColName) (bool, error) {
+func (rp *routeTree) planSimpleInOp(node *sqlparser.ComparisonExpr, left *sqlparser.ColName) (bool, error) {
 	value, err := sqlparser.NewPlanValue(node.Right)
 	if err != nil {
 		// if we are unable to create a PlanValue, we can't use a vindex, but we don't have to fail
@@ -407,7 +504,7 @@ func (rp *routePlan) planSimpleInOp(node *sqlparser.ComparisonExpr, left *sqlpar
 	return rp.haveMatchingVindex(node, left, value, opcode, justTheVindex), err
 }
 
-func (rp *routePlan) planCompositeInOp(node *sqlparser.ComparisonExpr, left sqlparser.ValTuple) (bool, error) {
+func (rp *routeTree) planCompositeInOp(node *sqlparser.ComparisonExpr, left sqlparser.ValTuple) (bool, error) {
 	right, rightIsValTuple := node.Right.(sqlparser.ValTuple)
 	if !rightIsValTuple {
 		return false, nil
@@ -415,7 +512,7 @@ func (rp *routePlan) planCompositeInOp(node *sqlparser.ComparisonExpr, left sqlp
 	return rp.planCompositeInOpRecursive(node, left, right, nil)
 }
 
-func (rp *routePlan) planCompositeInOpRecursive(node *sqlparser.ComparisonExpr, left, right sqlparser.ValTuple, coordinates []int) (bool, error) {
+func (rp *routeTree) planCompositeInOpRecursive(node *sqlparser.ComparisonExpr, left, right sqlparser.ValTuple, coordinates []int) (bool, error) {
 	foundVindex := false
 	cindex := len(coordinates)
 	coordinates = append(coordinates, 0)
@@ -460,7 +557,7 @@ func (rp *routePlan) planCompositeInOpRecursive(node *sqlparser.ComparisonExpr, 
 	return foundVindex, nil
 }
 
-func (rp *routePlan) planInOp(node *sqlparser.ComparisonExpr) (bool, error) {
+func (rp *routeTree) planInOp(node *sqlparser.ComparisonExpr) (bool, error) {
 	switch left := node.Left.(type) {
 	case *sqlparser.ColName:
 		return rp.planSimpleInOp(node, left)
@@ -470,7 +567,7 @@ func (rp *routePlan) planInOp(node *sqlparser.ComparisonExpr) (bool, error) {
 	return false, nil
 }
 
-func (rp *routePlan) planLikeOp(node *sqlparser.ComparisonExpr) (bool, error) {
+func (rp *routeTree) planLikeOp(node *sqlparser.ComparisonExpr) (bool, error) {
 	column, ok := node.Left.(*sqlparser.ColName)
 	if !ok {
 		return false, nil
@@ -494,7 +591,7 @@ func (rp *routePlan) planLikeOp(node *sqlparser.ComparisonExpr) (bool, error) {
 	return rp.haveMatchingVindex(node, column, *val, selectEqual, vdx), err
 }
 
-func (rp *routePlan) planIsExpr(node *sqlparser.IsExpr) (bool, error) {
+func (rp *routeTree) planIsExpr(node *sqlparser.IsExpr) (bool, error) {
 	// we only handle IS NULL correct. IsExpr can contain other expressions as well
 	if node.Right != sqlparser.IsNullOp {
 		return false, nil
@@ -524,7 +621,7 @@ func makePlanValue(n sqlparser.Expr) (*sqltypes.PlanValue, error) {
 	return &value, nil
 }
 
-func (rp routePlan) hasVindex(column *sqlparser.ColName) bool {
+func (rp routeTree) hasVindex(column *sqlparser.ColName) bool {
 	for _, v := range rp.vindexPreds {
 		for _, col := range v.colVindex.Columns {
 			if column.Name.Equal(col) {
@@ -535,7 +632,7 @@ func (rp routePlan) hasVindex(column *sqlparser.ColName) bool {
 	return false
 }
 
-func (rp *routePlan) haveMatchingVindex(
+func (rp *routeTree) haveMatchingVindex(
 	node sqlparser.Expr,
 	column *sqlparser.ColName,
 	value sqltypes.PlanValue,
@@ -566,7 +663,7 @@ func (rp *routePlan) haveMatchingVindex(
 }
 
 // pickBestAvailableVindex goes over the available vindexes for this route and picks the best one available.
-func (rp *routePlan) pickBestAvailableVindex() {
+func (rp *routeTree) pickBestAvailableVindex() {
 	for _, v := range rp.vindexPreds {
 		if v.foundVindex == nil {
 			continue
@@ -584,16 +681,23 @@ func (rp *routePlan) pickBestAvailableVindex() {
 }
 
 // Predicates takes all known predicates for this route and ANDs them together
-func (rp *routePlan) Predicates() sqlparser.Expr {
+func (rp *routeTree) Predicates() sqlparser.Expr {
 	predicates := rp.predicates
-	_ = visitTables(rp.tables, func(tbl *routeTable) error {
-		predicates = append(predicates, tbl.qtable.Predicates...)
-		return nil
+	_ = visitRelations(rp.tables, func(tbl relation) (bool, error) {
+		switch tbl := tbl.(type) {
+		case *routeTable:
+			predicates = append(predicates, tbl.qtable.Predicates...)
+		case *derivedTable:
+			// no need to copy the inner predicates to the outside
+			return false, nil
+		}
+
+		return true, nil
 	})
 	return sqlparser.AndExpressions(predicates...)
 }
 
-func (rp *routePlan) pushOutputColumns(col []*sqlparser.ColName, _ *semantics.SemTable) []int {
+func (rp *routeTree) pushOutputColumns(col []*sqlparser.ColName, _ *semantics.SemTable) ([]int, error) {
 	idxs := make([]int, len(col))
 outer:
 	for i, newCol := range col {
@@ -606,32 +710,33 @@ outer:
 		idxs[i] = len(rp.columns)
 		rp.columns = append(rp.columns, newCol)
 	}
-	return idxs
+	return idxs, nil
 }
 
-func (jp *joinPlan) tableID() semantics.TableSet {
+func (jp *joinTree) tableID() semantics.TableSet {
 	return jp.lhs.tableID() | jp.rhs.tableID()
 }
 
-func (jp *joinPlan) cost() int {
+func (jp *joinTree) cost() int {
 	return jp.lhs.cost() + jp.rhs.cost()
 }
 
-func (jp *joinPlan) clone() joinTree {
-	result := &joinPlan{
+func (jp *joinTree) clone() queryTree {
+	result := &joinTree{
 		lhs:   jp.lhs.clone(),
 		rhs:   jp.rhs.clone(),
 		outer: jp.outer,
+		vars:  jp.vars,
 	}
 	return result
 }
 
-func (jp *joinPlan) pushOutputColumns(columns []*sqlparser.ColName, semTable *semantics.SemTable) []int {
+func (jp *joinTree) pushOutputColumns(columns []*sqlparser.ColName, semTable *semantics.SemTable) ([]int, error) {
 	var toTheLeft []bool
 	var lhs, rhs []*sqlparser.ColName
 	for _, col := range columns {
 		col.Qualifier.Qualifier = sqlparser.NewTableIdent("")
-		if semTable.Dependencies(col).IsSolvedBy(jp.lhs.tableID()) {
+		if semTable.BaseTableDependencies(col).IsSolvedBy(jp.lhs.tableID()) {
 			lhs = append(lhs, col)
 			toTheLeft = append(toTheLeft, true)
 		} else {
@@ -639,8 +744,15 @@ func (jp *joinPlan) pushOutputColumns(columns []*sqlparser.ColName, semTable *se
 			toTheLeft = append(toTheLeft, false)
 		}
 	}
-	lhsOffset := jp.lhs.pushOutputColumns(lhs, semTable)
-	rhsOffset := jp.rhs.pushOutputColumns(rhs, semTable)
+	lhsOffset, err := jp.lhs.pushOutputColumns(lhs, semTable)
+	if err != nil {
+		return nil, err
+	}
+	rhsOffset, err := jp.rhs.pushOutputColumns(rhs, semTable)
+	if err != nil {
+		return nil, err
+	}
+
 	outputColumns := make([]int, len(toTheLeft))
 	var l, r int
 	for i, isLeft := range toTheLeft {
@@ -653,7 +765,7 @@ func (jp *joinPlan) pushOutputColumns(columns []*sqlparser.ColName, semTable *se
 			r++
 		}
 	}
-	return outputColumns
+	return outputColumns, nil
 }
 
 // costFor returns a cost struct to make route choices easier to compare

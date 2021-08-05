@@ -112,9 +112,11 @@ func TestExpandStar(t *testing.T) {
 		t.Run(tcase.sql, func(t *testing.T) {
 			ast, err := sqlparser.Parse(tcase.sql)
 			require.NoError(t, err)
-			semTable, err := semantics.Analyze(ast, cDB, schemaInfo)
+			selectStatement, isSelectStatement := ast.(*sqlparser.Select)
+			require.True(t, isSelectStatement, "analyzer expects a select statement")
+			semTable, err := semantics.Analyze(selectStatement, cDB, schemaInfo)
 			require.NoError(t, err)
-			expandedSelect, err := expandStar(ast.(*sqlparser.Select), semTable)
+			expandedSelect, err := expandStar(selectStatement, semTable)
 			if tcase.expErr == "" {
 				require.NoError(t, err)
 				assert.Equal(t, tcase.expSQL, sqlparser.String(expandedSelect))
@@ -158,21 +160,23 @@ func TestSemTableDependenciesAfterExpandStar(t *testing.T) {
 		t.Run(tcase.sql, func(t *testing.T) {
 			ast, err := sqlparser.Parse(tcase.sql)
 			require.NoError(t, err)
-			semTable, err := semantics.Analyze(ast, "", schemaInfo)
+			selectStatement, isSelectStatement := ast.(*sqlparser.Select)
+			require.True(t, isSelectStatement, "analyzer expects a select statement")
+			semTable, err := semantics.Analyze(selectStatement, "", schemaInfo)
 			require.NoError(t, err)
-			expandedSelect, err := expandStar(ast.(*sqlparser.Select), semTable)
+			expandedSelect, err := expandStar(selectStatement, semTable)
 			require.NoError(t, err)
 			assert.Equal(t, tcase.expSQL, sqlparser.String(expandedSelect))
 			if tcase.otherTbl != -1 {
 				assert.NotEqual(t,
-					semTable.Dependencies(expandedSelect.SelectExprs[tcase.otherTbl].(*sqlparser.AliasedExpr).Expr),
-					semTable.Dependencies(expandedSelect.SelectExprs[tcase.expandedCol].(*sqlparser.AliasedExpr).Expr),
+					semTable.BaseTableDependencies(expandedSelect.SelectExprs[tcase.otherTbl].(*sqlparser.AliasedExpr).Expr),
+					semTable.BaseTableDependencies(expandedSelect.SelectExprs[tcase.expandedCol].(*sqlparser.AliasedExpr).Expr),
 				)
 			}
 			if tcase.sameTbl != -1 {
 				assert.Equal(t,
-					semTable.Dependencies(expandedSelect.SelectExprs[tcase.sameTbl].(*sqlparser.AliasedExpr).Expr),
-					semTable.Dependencies(expandedSelect.SelectExprs[tcase.expandedCol].(*sqlparser.AliasedExpr).Expr),
+					semTable.BaseTableDependencies(expandedSelect.SelectExprs[tcase.sameTbl].(*sqlparser.AliasedExpr).Expr),
+					semTable.BaseTableDependencies(expandedSelect.SelectExprs[tcase.expandedCol].(*sqlparser.AliasedExpr).Expr),
 				)
 			}
 		})

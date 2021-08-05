@@ -262,6 +262,9 @@ func (jn *Join) description() PrimitiveDescription {
 		"TableName":         jn.GetTableName(),
 		"JoinColumnIndexes": strings.Trim(strings.Join(strings.Fields(fmt.Sprint(jn.Cols)), ","), "[]"),
 	}
+	if len(jn.Vars) > 0 {
+		other["JoinVars"] = jn.Vars
+	}
 	return PrimitiveDescription{
 		OperatorType: "Join",
 		Variant:      jn.Opcode.String(),

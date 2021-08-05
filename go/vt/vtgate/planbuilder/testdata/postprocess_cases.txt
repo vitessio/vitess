@@ -404,9 +404,9 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select a, `user`.textcol1, b, weight_string(a), textcol1, weight_string(textcol1), weight_string(b) from `user` where 1 != 1",
-    "OrderBy": "(0|3) ASC, (4|5) ASC, (2|6) ASC",
-    "Query": "select a, `user`.textcol1, b, weight_string(a), textcol1, weight_string(textcol1), weight_string(b) from `user` order by a asc, textcol1 asc, b asc",
+    "FieldQuery": "select a, `user`.textcol1, b, weight_string(a), weight_string(textcol1), weight_string(b) from `user` where 1 != 1",
+    "OrderBy": "(0|3) ASC, (1|4) ASC, (2|5) ASC",
+    "Query": "select a, `user`.textcol1, b, weight_string(a), weight_string(textcol1), weight_string(b) from `user` order by a asc, textcol1 asc, b asc",
     "ResultColumns": 3,
     "Table": "`user`"
   }
@@ -492,6 +492,7 @@ Gen4 plan same as above
     "Table": "`user`"
   }
 }
+Gen4 plan same as above
 
 # ORDER BY after pull-out subquery
 "select col from user where col in (select col2 from user) order by col"
@@ -539,6 +540,9 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-1,-2,1",
+    "JoinVars": {
+      "user_id": 2
+    },
     "TableName": "`user`_music",
     "Inputs": [
       {
@@ -584,6 +588,9 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-1,-2,1",
+    "JoinVars": {
+      "user_id": 2
+    },
     "TableName": "`user`_music",
     "Inputs": [
       {
@@ -626,6 +633,9 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-2,-3,1",
+    "JoinVars": {
+      "user_id": 0
+    },
     "TableName": "`user`_music",
     "Inputs": [
       {
@@ -672,6 +682,9 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-1,-2,1",
+    "JoinVars": {
+      "user_id": 2
+    },
     "TableName": "`user`_music",
     "Inputs": [
       {
@@ -714,6 +727,9 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-2,-3,1",
+    "JoinVars": {
+      "user_id": 0
+    },
     "TableName": "`user`_music",
     "Inputs": [
       {
@@ -813,6 +829,9 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-1,-2,1",
+    "JoinVars": {
+      "user_id": 2
+    },
     "TableName": "`user`_music",
     "Inputs": [
       {
@@ -962,6 +981,9 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-1,1",
+    "JoinVars": {
+      "u_col": 1
+    },
     "TableName": "`user`_user_extra",
     "Inputs": [
       {
