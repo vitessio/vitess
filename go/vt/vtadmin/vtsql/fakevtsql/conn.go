@@ -74,7 +74,7 @@ func (c *conn) QueryContext(ctx context.Context, query string, args []driver.Nam
 
 	switch strings.ToLower(query) {
 	case "show vitess_tablets", "show tablets":
-		columns := []string{"Cell", "Keyspace", "Shard", "TabletType", "ServingState", "Alias", "Hostname", "MasterTermStartTime"}
+		columns := []string{"Cell", "Keyspace", "Shard", "TabletType", "ServingState", "Alias", "Hostname", "PrimaryTermStartTime"}
 		vals := [][]interface{}{}
 
 		for _, tablet := range c.tablets {

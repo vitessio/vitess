@@ -71,14 +71,14 @@ func (wr *Wrangler) InitTablet(ctx context.Context, tablet *topodatapb.Tablet, a
 	if !key.KeyRangeEqual(si.KeyRange, tablet.KeyRange) {
 		return fmt.Errorf("shard %v/%v has a different KeyRange: %v != %v", tablet.Keyspace, tablet.Shard, si.KeyRange, tablet.KeyRange)
 	}
-	if tablet.Type == topodatapb.TabletType_MASTER && si.HasMaster() && !topoproto.TabletAliasEqual(si.MasterAlias, tablet.Alias) && !allowMasterOverride {
-		return fmt.Errorf("creating this tablet would override old master %v in shard %v/%v, use allow_master_override flag", topoproto.TabletAliasString(si.MasterAlias), tablet.Keyspace, tablet.Shard)
+	if tablet.Type == topodatapb.TabletType_PRIMARY && si.HasMaster() && !topoproto.TabletAliasEqual(si.PrimaryAlias, tablet.Alias) && !allowMasterOverride {
+		return fmt.Errorf("creating this tablet would override old master %v in shard %v/%v, use allow_master_override flag", topoproto.TabletAliasString(si.PrimaryAlias), tablet.Keyspace, tablet.Shard)
 	}
 
-	if tablet.Type == topodatapb.TabletType_MASTER {
-		// we update master_term_start_time even if the master hasn't changed
+	if tablet.Type == topodatapb.TabletType_PRIMARY {
+		// we update primary_term_start_time even if the master hasn't changed
 		// because that means a new master term with the same master
-		tablet.MasterTermStartTime = logutil.TimeToProto(time.Now())
+		tablet.PrimaryTermStartTime = logutil.TimeToProto(time.Now())
 	}
 
 	err = wr.ts.CreateTablet(ctx, tablet)
@@ -134,12 +134,12 @@ func (wr *Wrangler) DeleteTablet(ctx context.Context, tabletAlias *topodatapb.Ta
 
 		// update the shard record's master
 		if _, err := wr.ts.UpdateShardFields(ctx, ti.Keyspace, ti.Shard, func(si *topo.ShardInfo) error {
-			if !topoproto.TabletAliasEqual(si.MasterAlias, tabletAlias) {
-				wr.Logger().Warningf("Deleting master %v from shard %v/%v but master in Shard object was %v", topoproto.TabletAliasString(tabletAlias), ti.Keyspace, ti.Shard, topoproto.TabletAliasString(si.MasterAlias))
+			if !topoproto.TabletAliasEqual(si.PrimaryAlias, tabletAlias) {
+				wr.Logger().Warningf("Deleting master %v from shard %v/%v but master in Shard object was %v", topoproto.TabletAliasString(tabletAlias), ti.Keyspace, ti.Shard, topoproto.TabletAliasString(si.PrimaryAlias))
 				return topo.NewError(topo.NoUpdateNeeded, si.Keyspace()+"/"+si.ShardName())
 			}
-			si.MasterAlias = nil
-			si.SetMasterTermStartTime(time.Now())
+			si.PrimaryAlias = nil
+			si.SetPrimaryTermStartTime(time.Now())
 			return nil
 		}); err != nil {
 			return err
@@ -225,7 +225,7 @@ func (wr *Wrangler) GenericVExec(ctx context.Context, tabletAlias *topodatapb.Ta
 // isMasterTablet is a shortcut way to determine whether the current tablet
 // is a master before we allow its tablet record to be deleted. The canonical
 // way to determine the only true master in a shard is to list all the tablets
-// and find the one with the highest MasterTermStartTime among the ones that
+// and find the one with the highest PrimaryTermStartTime among the ones that
 // claim to be master.
 // We err on the side of caution here, i.e. we should never return false for
 // a true master tablet, but it is ok to return true for a tablet that isn't

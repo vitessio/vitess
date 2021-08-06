@@ -109,15 +109,15 @@ func (dr *switcherDryRun) changeRouting(ctx context.Context) error {
 	deleteLogs = nil
 	addLogs = nil
 	for _, source := range dr.ts.sources {
-		deleteLogs = append(deleteLogs, fmt.Sprintf("\tShard %s, Tablet %d", source.GetShard().ShardName(), source.GetShard().MasterAlias.Uid))
+		deleteLogs = append(deleteLogs, fmt.Sprintf("\tShard %s, Tablet %d", source.GetShard().ShardName(), source.GetShard().PrimaryAlias.Uid))
 	}
 	for _, target := range dr.ts.targets {
-		addLogs = append(addLogs, fmt.Sprintf("\tShard %s, Tablet %d", target.GetShard().ShardName(), target.GetShard().MasterAlias.Uid))
+		addLogs = append(addLogs, fmt.Sprintf("\tShard %s, Tablet %d", target.GetShard().ShardName(), target.GetShard().PrimaryAlias.Uid))
 	}
 	if len(deleteLogs) > 0 {
-		dr.drLog.Log("IsMasterServing will be set to false for:")
+		dr.drLog.Log("IsPrimaryServing will be set to false for:")
 		dr.drLog.LogSlice(deleteLogs)
-		dr.drLog.Log("IsMasterServing will be set to true for:")
+		dr.drLog.Log("IsPrimaryServing will be set to true for:")
 		dr.drLog.LogSlice(addLogs)
 	}
 	return nil
@@ -259,7 +259,7 @@ func (dr *switcherDryRun) dropSourceShards(ctx context.Context) error {
 		}
 		sort.Strings(tabletsList[si.ShardName()])
 		logs = append(logs, fmt.Sprintf("\tCell %s Keyspace %s Shard\n%s",
-			si.Shard.MasterAlias.Cell, si.Keyspace(), si.ShardName()), strings.Join(tabletsList[si.ShardName()], "\n"))
+			si.Shard.PrimaryAlias.Cell, si.Keyspace(), si.ShardName()), strings.Join(tabletsList[si.ShardName()], "\n"))
 	}
 	if len(logs) > 0 {
 		dr.drLog.Log("Deleting following shards (and all related tablets):")
@@ -311,7 +311,7 @@ func (dr *switcherDryRun) freezeTargetVReplication(ctx context.Context) error {
 func (dr *switcherDryRun) dropSourceBlacklistedTables(ctx context.Context) error {
 	logs := make([]string, 0)
 	for _, si := range dr.ts.sourceShards() {
-		logs = append(logs, fmt.Sprintf("\tKeyspace %s Shard %s Tablet %d", si.Keyspace(), si.ShardName(), si.MasterAlias.Uid))
+		logs = append(logs, fmt.Sprintf("\tKeyspace %s Shard %s Tablet %d", si.Keyspace(), si.ShardName(), si.PrimaryAlias.Uid))
 	}
 	if len(logs) > 0 {
 		dr.drLog.Log(fmt.Sprintf("Blacklisted tables [%s] will be removed from:", strings.Join(dr.ts.tables, ",")))
@@ -354,7 +354,7 @@ func (dr *switcherDryRun) dropTargetShards(ctx context.Context) error {
 		}
 		sort.Strings(tabletsList[si.ShardName()])
 		logs = append(logs, fmt.Sprintf("\tCell %s Keyspace %s Shard\n%s",
-			si.Shard.MasterAlias.Cell, si.Keyspace(), si.ShardName()), strings.Join(tabletsList[si.ShardName()], "\n"))
+			si.Shard.PrimaryAlias.Cell, si.Keyspace(), si.ShardName()), strings.Join(tabletsList[si.ShardName()], "\n"))
 	}
 	if len(logs) > 0 {
 		dr.drLog.Log("Deleting following shards (and all related tablets):")

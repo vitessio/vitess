@@ -51,7 +51,7 @@ func TestMigrateServedFrom(t *testing.T) {
 	defer vp.Close()
 
 	// create the source keyspace tablets
-	sourcePrimary := NewFakeTablet(t, wr, "cell1", 10, topodatapb.TabletType_MASTER, nil,
+	sourcePrimary := NewFakeTablet(t, wr, "cell1", 10, topodatapb.TabletType_PRIMARY, nil,
 		TabletKeyspaceShard(t, "source", "0"))
 	sourceReplica := NewFakeTablet(t, wr, "cell1", 11, topodatapb.TabletType_REPLICA, nil,
 		TabletKeyspaceShard(t, "source", "0"))
@@ -72,7 +72,7 @@ func TestMigrateServedFrom(t *testing.T) {
 	}
 
 	// create the destination keyspace tablets
-	destPrimary := NewFakeTablet(t, wr, "cell1", 20, topodatapb.TabletType_MASTER, nil,
+	destPrimary := NewFakeTablet(t, wr, "cell1", 20, topodatapb.TabletType_PRIMARY, nil,
 		TabletKeyspaceShard(t, "dest", "0"))
 	destReplica := NewFakeTablet(t, wr, "cell1", 21, topodatapb.TabletType_REPLICA, nil,
 		TabletKeyspaceShard(t, "dest", "0"))
@@ -247,7 +247,7 @@ func TestMigrateServedFrom(t *testing.T) {
 	}
 
 	// migrate primary over
-	if err := vp.Run([]string{"MigrateServedFrom", "dest/0", "master"}); err != nil {
+	if err := vp.Run([]string{"MigrateServedFrom", "dest/0", "primary"}); err != nil {
 		t.Fatalf("MigrateServedFrom(master) failed: %v", err)
 	}
 
@@ -275,7 +275,7 @@ func TestMigrateServedFrom(t *testing.T) {
 			BlacklistedTables: []string{"gone1", "gone2"},
 		},
 		{
-			TabletType:        topodatapb.TabletType_MASTER,
+			TabletType:        topodatapb.TabletType_PRIMARY,
 			BlacklistedTables: []string{"gone1", "gone2"},
 		},
 	}) {

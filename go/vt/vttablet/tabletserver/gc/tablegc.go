@@ -224,7 +224,7 @@ func (collector *TableGC) Operate(ctx context.Context) {
 					// sparse
 					shouldBePrimary := false
 					if atomic.LoadInt64(&collector.isOpen) > 0 {
-						if collector.tabletTypeFunc() == topodatapb.TabletType_MASTER {
+						if collector.tabletTypeFunc() == topodatapb.TabletType_PRIMARY {
 							shouldBePrimary = true
 						}
 					}

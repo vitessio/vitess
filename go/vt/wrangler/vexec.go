@@ -262,15 +262,15 @@ func (vx *vexec) getMasterForShard(shard string) (*topo.TabletInfo, error) {
 	if err != nil {
 		return nil, err
 	}
-	if si.MasterAlias == nil {
+	if si.PrimaryAlias == nil {
 		return nil, fmt.Errorf("no master found for shard %s", shard)
 	}
-	master, err := vx.wr.ts.GetTablet(vx.ctx, si.MasterAlias)
+	master, err := vx.wr.ts.GetTablet(vx.ctx, si.PrimaryAlias)
 	if err != nil {
 		return nil, err
 	}
 	if master == nil {
-		return nil, fmt.Errorf("could not get tablet for %s:%s", vx.keyspace, si.MasterAlias)
+		return nil, fmt.Errorf("could not get tablet for %s:%s", vx.keyspace, si.PrimaryAlias)
 	}
 	return master, nil
 }
@@ -509,7 +509,7 @@ func (wr *Wrangler) getStreams(ctx context.Context, workflow, keyspace string) (
 		rsr.ShardStatuses[fmt.Sprintf("%s/%s", master.Shard, master.AliasString())] = &ShardReplicationStatus{
 			MasterReplicationStatuses: rsrStatus,
 			TabletControls:            si.TabletControls,
-			MasterIsServing:           si.IsMasterServing,
+			MasterIsServing:           si.IsPrimaryServing,
 		}
 	}
 	rsr.SourceLocation = ReplicationLocation{

@@ -89,7 +89,7 @@ func newWranglerTestEnv(sourceShards, targetShards []string, query string, posit
 
 	tabletID := 100
 	for _, shard := range sourceShards {
-		_ = env.addTablet(tabletID, "source", shard, topodatapb.TabletType_MASTER)
+		_ = env.addTablet(tabletID, "source", shard, topodatapb.TabletType_PRIMARY)
 		_ = env.addTablet(tabletID+1, "source", shard, topodatapb.TabletType_REPLICA)
 		env.tmc.waitpos[tabletID+1] = testStopPosition
 
@@ -97,7 +97,7 @@ func newWranglerTestEnv(sourceShards, targetShards []string, query string, posit
 	}
 	tabletID = 200
 	for _, shard := range targetShards {
-		master := env.addTablet(tabletID, "target", shard, topodatapb.TabletType_MASTER)
+		master := env.addTablet(tabletID, "target", shard, topodatapb.TabletType_PRIMARY)
 		_ = env.addTablet(tabletID+1, "target", shard, topodatapb.TabletType_REPLICA)
 
 		var rows []string
@@ -191,7 +191,7 @@ func newWranglerTestEnv(sourceShards, targetShards []string, query string, posit
 		env.tmc.setVRResults(master.tablet, "select distinct workflow from _vt.vreplication where db_name = 'vt_target'", result)
 		tabletID += 10
 	}
-	master := env.addTablet(300, "target2", "0", topodatapb.TabletType_MASTER)
+	master := env.addTablet(300, "target2", "0", topodatapb.TabletType_PRIMARY)
 	result := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 		"workflow",
 		"varchar"),
@@ -221,7 +221,7 @@ func newFakeTestWranglerTablet() *testWranglerTablet {
 		Keyspace: "fake",
 		Shard:    "fake",
 		KeyRange: &topodatapb.KeyRange{},
-		Type:     topodatapb.TabletType_MASTER,
+		Type:     topodatapb.TabletType_PRIMARY,
 		PortMap: map[string]int32{
 			"test": int32(id),
 		},
@@ -249,9 +249,9 @@ func (env *testWranglerEnv) addTablet(id int, keyspace, shard string, tabletType
 	if err := env.wr.InitTablet(context.Background(), tablet, false /* allowMasterOverride */, true /* createShardAndKeyspace */, false /* allowUpdate */); err != nil {
 		panic(err)
 	}
-	if tabletType == topodatapb.TabletType_MASTER {
+	if tabletType == topodatapb.TabletType_PRIMARY {
 		_, err := env.wr.ts.UpdateShardFields(context.Background(), keyspace, shard, func(si *topo.ShardInfo) error {
-			si.MasterAlias = tablet.Alias
+			si.PrimaryAlias = tablet.Alias
 			return nil
 		})
 		if err != nil {

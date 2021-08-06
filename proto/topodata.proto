@@ -76,11 +76,14 @@ enum TabletType {
   // UNKNOWN is not a valid value.
   UNKNOWN = 0;
 
-  // MASTER is the master server for the shard. Only MASTER allows DMLs.
+  // PRIMARY is the primary server for the shard. Only PRIMARY allows DMLs.
+  PRIMARY = 1;
+
+  // DEPRECATED
   MASTER = 1;
 
-  // REPLICA replicates from master. It is used to serve live traffic.
-  // A REPLICA can be promoted to MASTER. A demoted MASTER will go to REPLICA.
+  // REPLICA replicates from primary. It is used to serve live traffic.
+  // A REPLICA can be promoted to PRIMARY. A demoted PRIMARY will go to REPLICA.
   REPLICA = 2;
 
   // RDONLY (old name) / BATCH (new name) is used to serve traffic for
@@ -158,16 +161,16 @@ message Tablet {
   // for legacy behavior.
   int32 mysql_port = 13;
 
-  // master_term_start_time is the time (in UTC) at which the current term of
-  // the current tablet began as master. If this tablet is not currently the
-  // master, this value is ignored.
+  // primary_term_start_time is the time (in UTC) at which the current term of
+  // the current tablet began as primary. If this tablet is not currently the
+  // primary, this value is ignored.
   //
-  // A new master term begins any time an authoritative decision is communicated
-  // about which tablet should be the master, such as via Vitess
+  // A new primary term begins any time an authoritative decision is communicated
+  // about which tablet should be the primary, such as via Vitess
   // replication-management commands like PlannedReparentShard,
   // EmergencyReparentShard, and TabletExternallyReparented.
   //
-  vttime.Time master_term_start_time = 14;
+  vttime.Time primary_term_start_time = 14;
 
   // OBSOLETE: ip and tablet health information
   // string ip = 3;
@@ -177,28 +180,28 @@ message Tablet {
 
 // A Shard contains data about a subset of the data whithin a keyspace.
 message Shard {
-  // master_alias is the tablet alias of the master for the shard.
-  // If it is unset, then there is no master in this shard yet.
+  // primary_alias is the tablet alias of the primary for the shard.
+  // If it is unset, then there is no primary in this shard yet.
   // No lock is necessary to update this field, when for instance
   // TabletExternallyReparented updates this. However, we lock the
   // shard for reparenting operations (InitShardPrimary,
   // PlannedReparentShard,EmergencyReparentShard), to guarantee
   // exclusive operation.
-  TabletAlias master_alias = 1;
+  TabletAlias primary_alias = 1;
 
-  // master_term_start_time is the time (in UTC) at which the current term of
-  // the master specified in master_alias began.
+  // primary_term_start_time is the time (in UTC) at which the current term of
+  // the primary specified in primary_alias began.
   //
-  // A new master term begins any time an authoritative decision is communicated
-  // about which tablet should be the master, such as via Vitess
+  // A new primary term begins any time an authoritative decision is communicated
+  // about which tablet should be the primary, such as via Vitess
   // replication-management commands like PlannedReparentShard,
   // EmergencyReparentShard, and TabletExternallyReparented.
   //
-  // The master_alias should only ever be changed if the new master's term began
+  // The primary_alias should only ever be changed if the new primary's term began
   // at a later time than this. Note that a new term can start for the tablet
-  // that is already the master. In that case, the master_term_start_time would
-  // be increased without changing the master_alias.
-  vttime.Time master_term_start_time = 8;
+  // that is already the primary. In that case, the primary_term_start_time would
+  // be increased without changing the primary_alias.
+  vttime.Time primary_term_start_time = 8;
 
   // key_range is the KeyRange for this shard. It can be unset if:
   // - we are not using range-based sharding in this shard.
@@ -212,7 +215,7 @@ message Shard {
   reserved 3;
 
   // SourceShard represents a data source for filtered replication
-  // across shards. When this is used in a destination shard, the master
+  // across shards. When this is used in a destination shard, the primary
   // of that shard will run filtered replication.
   message SourceShard {
     // Uid is the unique ID for this SourceShard object.
@@ -248,7 +251,7 @@ message Shard {
     repeated string blacklisted_tables = 4;
 
     // frozen is set if we've started failing over traffic for
-    // the master. If set, this record should not be removed.
+    // the primary. If set, this record should not be removed.
     bool frozen = 5;
   }
 
@@ -256,9 +259,9 @@ message Shard {
   // The keyspace lock is always taken when changing this.
   repeated TabletControl tablet_controls = 6;
 
-  // is_master_serving sets whether this shard master is serving traffic or not.
+  // is_primary_serving sets whether this shard primary is serving traffic or not.
   // The keyspace lock is always taken when changing this.
-  bool is_master_serving = 7;
+  bool is_primary_serving = 7;
 
   // OBSOLETE cells (5)
   reserved 5;

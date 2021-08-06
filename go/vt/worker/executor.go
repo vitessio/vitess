@@ -126,7 +126,7 @@ func (e *executor) fetchWithRetries(ctx context.Context, action func(ctx context
 		var err error
 
 		// Get the current master from the LegacyTabletStatsCache.
-		masters := e.tsc.GetHealthyTabletStats(e.keyspace, e.shard, topodatapb.TabletType_MASTER)
+		masters := e.tsc.GetHealthyTabletStats(e.keyspace, e.shard, topodatapb.TabletType_PRIMARY)
 		if len(masters) == 0 {
 			e.wr.Logger().Warningf("ExecuteFetch failed for keyspace/shard %v/%v because no MASTER is available; will retry until there is MASTER again", e.keyspace, e.shard)
 			statsRetryCount.Add(1)

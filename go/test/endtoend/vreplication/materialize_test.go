@@ -69,7 +69,7 @@ func TestShardedMaterialize(t *testing.T) {
 	ks1 := "ks1"
 	ks2 := "ks2"
 	require.NotNil(t, vc)
-	defaultReplicas = 0 // because of CI resource constraints we can only run this test with master tablets
+	defaultReplicas = 0 // because of CI resource constraints we can only run this test with primary tablets
 	defer func() { defaultReplicas = 1 }()
 
 	defer vc.TearDown(t)
@@ -78,10 +78,10 @@ func TestShardedMaterialize(t *testing.T) {
 	vc.AddKeyspace(t, []*Cell{defaultCell}, ks1, "-", smVSchema, smSchema, defaultReplicas, defaultRdonly, 100)
 	vtgate = defaultCell.Vtgates[0]
 	require.NotNil(t, vtgate)
-	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.master", ks1, "0"), 1)
+	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", ks1, "0"), 1)
 
 	vc.AddKeyspace(t, []*Cell{defaultCell}, ks2, "-", smVSchema, smSchema, defaultReplicas, defaultRdonly, 200)
-	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.master", ks2, "0"), 1)
+	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", ks2, "0"), 1)
 
 	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 	defer vtgateConn.Close()

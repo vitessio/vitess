@@ -839,7 +839,7 @@ func checkAndRecoverDeadMaster(analysisEntry inst.ReplicationAnalysis, candidate
 
 	// Check if someone else fixed the problem.
 	tablet, err := TabletRefresh(analysisEntry.AnalyzedInstanceKey)
-	if err == nil && tablet.Type != topodatapb.TabletType_MASTER {
+	if err == nil && tablet.Type != topodatapb.TabletType_PRIMARY {
 		// TODO(sougou); use a version that only refreshes the current shard.
 		RefreshTablets()
 		AuditTopologyRecovery(topologyRecovery, "another agent seems to have fixed the problem")
@@ -2068,7 +2068,7 @@ func electNewMaster(analysisEntry inst.ReplicationAnalysis, candidateInstanceKey
 		}
 	}
 
-	if _, err := inst.ChangeTabletType(candidate.Key, topodatapb.TabletType_MASTER); err != nil {
+	if _, err := inst.ChangeTabletType(candidate.Key, topodatapb.TabletType_PRIMARY); err != nil {
 		return true, topologyRecovery, err
 	}
 	// TODO(sougou): parallelize

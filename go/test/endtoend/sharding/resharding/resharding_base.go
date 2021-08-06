@@ -366,7 +366,7 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 
 	// check srv keyspace
 	expectedPartitions := map[topodata.TabletType][]string{}
-	expectedPartitions[topodata.TabletType_MASTER] = []string{shard0.Name, shard1.Name}
+	expectedPartitions[topodata.TabletType_PRIMARY] = []string{shard0.Name, shard1.Name}
 	expectedPartitions[topodata.TabletType_REPLICA] = []string{shard0.Name, shard1.Name}
 	expectedPartitions[topodata.TabletType_RDONLY] = []string{shard0.Name, shard1.Name}
 	sharding.CheckSrvKeyspace(t, cell1, keyspaceName, "", 0, expectedPartitions, *clusterInstance)
@@ -645,14 +645,14 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 
 	// check srv keyspace
 	expectedPartitions = map[topodata.TabletType][]string{}
-	expectedPartitions[topodata.TabletType_MASTER] = []string{shard0.Name, shard1.Name}
+	expectedPartitions[topodata.TabletType_PRIMARY] = []string{shard0.Name, shard1.Name}
 	expectedPartitions[topodata.TabletType_RDONLY] = []string{shard0.Name, shard2.Name, shard3.Name}
 	expectedPartitions[topodata.TabletType_REPLICA] = []string{shard0.Name, shard1.Name}
 	sharding.CheckSrvKeyspace(t, cell1, keyspaceName, "", 0, expectedPartitions, *clusterInstance)
 
 	// Cell 2 is not affected
 	expectedPartitions = map[topodata.TabletType][]string{}
-	expectedPartitions[topodata.TabletType_MASTER] = []string{shard0.Name, shard1.Name}
+	expectedPartitions[topodata.TabletType_PRIMARY] = []string{shard0.Name, shard1.Name}
 	expectedPartitions[topodata.TabletType_RDONLY] = []string{shard0.Name, shard1.Name}
 	expectedPartitions[topodata.TabletType_REPLICA] = []string{shard0.Name, shard1.Name}
 	sharding.CheckSrvKeyspace(t, cell2, keyspaceName, "", 0, expectedPartitions, *clusterInstance)
@@ -682,7 +682,7 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 	require.Nil(t, err)
 
 	expectedPartitions = map[topodata.TabletType][]string{}
-	expectedPartitions[topodata.TabletType_MASTER] = []string{shard0.Name, shard1.Name}
+	expectedPartitions[topodata.TabletType_PRIMARY] = []string{shard0.Name, shard1.Name}
 	expectedPartitions[topodata.TabletType_RDONLY] = []string{shard0.Name, shard2.Name, shard3.Name}
 	expectedPartitions[topodata.TabletType_REPLICA] = []string{shard0.Name, shard1.Name}
 	sharding.CheckSrvKeyspace(t, cell1, keyspaceName, "", 0, expectedPartitions, *clusterInstance)
@@ -708,7 +708,7 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 	require.Nil(t, err)
 
 	expectedPartitions = map[topodata.TabletType][]string{}
-	expectedPartitions[topodata.TabletType_MASTER] = []string{shard0.Name, shard1.Name}
+	expectedPartitions[topodata.TabletType_PRIMARY] = []string{shard0.Name, shard1.Name}
 	expectedPartitions[topodata.TabletType_RDONLY] = []string{shard0.Name, shard2.Name, shard3.Name}
 	expectedPartitions[topodata.TabletType_REPLICA] = []string{shard0.Name, shard2.Name, shard3.Name}
 	sharding.CheckSrvKeyspace(t, cell1, keyspaceName, "", 0, expectedPartitions, *clusterInstance)
@@ -731,7 +731,7 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 		topodata.TabletType_REPLICA, false)
 
 	expectedPartitions = map[topodata.TabletType][]string{}
-	expectedPartitions[topodata.TabletType_MASTER] = []string{shard0.Name, shard1.Name}
+	expectedPartitions[topodata.TabletType_PRIMARY] = []string{shard0.Name, shard1.Name}
 	expectedPartitions[topodata.TabletType_RDONLY] = []string{shard0.Name, shard2.Name, shard3.Name}
 	expectedPartitions[topodata.TabletType_REPLICA] = []string{shard0.Name, shard1.Name}
 	sharding.CheckSrvKeyspace(t, cell1, keyspaceName, "", 0, expectedPartitions, *clusterInstance)
@@ -750,7 +750,7 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 		topodata.TabletType_REPLICA, true)
 
 	expectedPartitions = map[topodata.TabletType][]string{}
-	expectedPartitions[topodata.TabletType_MASTER] = []string{shard0.Name, shard1.Name}
+	expectedPartitions[topodata.TabletType_PRIMARY] = []string{shard0.Name, shard1.Name}
 	expectedPartitions[topodata.TabletType_RDONLY] = []string{shard0.Name, shard2.Name, shard3.Name}
 	expectedPartitions[topodata.TabletType_REPLICA] = []string{shard0.Name, shard2.Name, shard3.Name}
 	sharding.CheckSrvKeyspace(t, cell1, keyspaceName, "", 0, expectedPartitions, *clusterInstance)
@@ -817,7 +817,7 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 	require.Error(t, err)
 
 	expectedPartitions = map[topodata.TabletType][]string{}
-	expectedPartitions[topodata.TabletType_MASTER] = []string{shard0.Name, shard1.Name}
+	expectedPartitions[topodata.TabletType_PRIMARY] = []string{shard0.Name, shard1.Name}
 	expectedPartitions[topodata.TabletType_RDONLY] = []string{shard0.Name, shard2.Name, shard3.Name}
 	expectedPartitions[topodata.TabletType_REPLICA] = []string{shard0.Name, shard2.Name, shard3.Name}
 	sharding.CheckSrvKeyspace(t, cell1, keyspaceName, "", 0, expectedPartitions, *clusterInstance)
@@ -839,15 +839,15 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 
 	// Global topology records should not change as migration did not succeed
 	shardInfo := sharding.GetShardInfo(t, shard1Ks, *clusterInstance)
-	assert.True(t, shardInfo.GetIsMasterServing(), "source shards should be set in destination shard")
+	assert.True(t, shardInfo.GetIsPrimaryServing(), "source shards should be set in destination shard")
 
 	shardInfo = sharding.GetShardInfo(t, shard3Ks, *clusterInstance)
 	assert.Equal(t, 1, len(shardInfo.GetSourceShards()), "source shards should be set in destination shard")
-	assert.False(t, shardInfo.GetIsMasterServing(), "source shards should be set in destination shard")
+	assert.False(t, shardInfo.GetIsPrimaryServing(), "source shards should be set in destination shard")
 
 	shardInfo = sharding.GetShardInfo(t, shard2Ks, *clusterInstance)
 	assert.Equal(t, 1, len(shardInfo.GetSourceShards()), "source shards should be set in destination shard")
-	assert.False(t, shardInfo.GetIsMasterServing(), "source shards should be set in destination shard")
+	assert.False(t, shardInfo.GetIsPrimaryServing(), "source shards should be set in destination shard")
 
 	// remove sabotage, but make it fail early. This should not result in the source primary serving,
 	// because this failure is past the point of no return.
@@ -865,7 +865,7 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 		shard1Ks, "master")
 	require.Nil(t, err)
 	expectedPartitions = map[topodata.TabletType][]string{}
-	expectedPartitions[topodata.TabletType_MASTER] = []string{shard0.Name, shard2.Name, shard3.Name}
+	expectedPartitions[topodata.TabletType_PRIMARY] = []string{shard0.Name, shard2.Name, shard3.Name}
 	expectedPartitions[topodata.TabletType_RDONLY] = []string{shard0.Name, shard2.Name, shard3.Name}
 	expectedPartitions[topodata.TabletType_REPLICA] = []string{shard0.Name, shard2.Name, shard3.Name}
 	sharding.CheckSrvKeyspace(t, cell1, keyspaceName, "", 0, expectedPartitions, *clusterInstance)

@@ -39,7 +39,7 @@ var (
 	cell                  = "zone1"
 	cell2                 = "zone2"
 	hostname              = "localhost"
-	servedTypes           = map[topodata.TabletType]bool{topodata.TabletType_MASTER: true, topodata.TabletType_REPLICA: true, topodata.TabletType_RDONLY: true}
+	servedTypes           = map[topodata.TabletType]bool{topodata.TabletType_PRIMARY: true, topodata.TabletType_REPLICA: true, topodata.TabletType_RDONLY: true}
 	sqlSchema             = `create table vt_insert_test (
 								id bigint auto_increment,
 								msg varchar(64),
@@ -359,7 +359,7 @@ func TestKeyspaceToShardName(t *testing.T) {
 
 	// for each served type MASTER REPLICA RDONLY, the shard ref count should match
 	for _, partition := range srvKeyspace.Partitions {
-		if partition.ServedType == topodata.TabletType_MASTER {
+		if partition.ServedType == topodata.TabletType_PRIMARY {
 			for _, shardRef := range partition.ShardReferences {
 				shardKIDs := shardKIdMap[shardRef.Name]
 				for _, kid := range shardKIDs {
@@ -374,7 +374,7 @@ func TestKeyspaceToShardName(t *testing.T) {
 	srvKeyspace = getSrvKeyspace(t, cell, keyspaceUnshardedName)
 
 	for _, partition := range srvKeyspace.Partitions {
-		if partition.ServedType == topodata.TabletType_MASTER {
+		if partition.ServedType == topodata.TabletType_PRIMARY {
 			for _, shardRef := range partition.ShardReferences {
 				assert.Equal(t, shardRef.Name, keyspaceUnshardedName)
 			}

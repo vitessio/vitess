@@ -500,7 +500,7 @@ func (hc *LegacyHealthCheckImpl) updateHealth(ts *LegacyTabletStats, conn querys
 
 		// Track how often a tablet gets promoted to master. It is used for
 		// comparing against the variables in go/vtgate/buffer/variables.go.
-		if oldts.Target.TabletType != topodatapb.TabletType_MASTER && ts.Target.TabletType == topodatapb.TabletType_MASTER {
+		if oldts.Target.TabletType != topodatapb.TabletType_PRIMARY && ts.Target.TabletType == topodatapb.TabletType_PRIMARY {
 			hcMasterPromotedCounters.Add([]string{ts.Target.Keyspace, ts.Target.Shard}, 1)
 			hcPrimaryPromotedCounters.Add([]string{ts.Target.Keyspace, ts.Target.Shard}, 1)
 		}
@@ -877,7 +877,7 @@ func (tcs *LegacyTabletsCacheStatus) StatusAsHTML() template.HTML {
 		} else if !ts.Up {
 			color = "red"
 			extra = " (Down)"
-		} else if ts.Target.TabletType == topodatapb.TabletType_MASTER {
+		} else if ts.Target.TabletType == topodatapb.TabletType_PRIMARY {
 			extra = fmt.Sprintf(" (MasterTS: %v)", ts.TabletExternallyReparentedTimestamp)
 		} else {
 			extra = fmt.Sprintf(" (RepLag: %v)", ts.Stats.ReplicationLagSeconds)

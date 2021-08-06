@@ -115,7 +115,7 @@ func TestPlannedReparenter_ReparentShard(t *testing.T) {
 						Cell: "zone1",
 						Uid:  100,
 					},
-					Type:     topodatapb.TabletType_MASTER,
+					Type:     topodatapb.TabletType_PRIMARY,
 					Keyspace: "testkeyspace",
 					Shard:    "-",
 				},
@@ -142,19 +142,19 @@ func TestPlannedReparenter_ReparentShard(t *testing.T) {
 			shouldErr: false,
 			expectedEvent: &events.Reparent{
 				ShardInfo: *topo.NewShardInfo("testkeyspace", "-", &topodatapb.Shard{
-					MasterAlias: &topodatapb.TabletAlias{
+					PrimaryAlias: &topodatapb.TabletAlias{
 						Cell: "zone1",
 						Uid:  100,
 					},
-					KeyRange:        &topodatapb.KeyRange{},
-					IsMasterServing: true,
+					KeyRange:         &topodatapb.KeyRange{},
+					IsPrimaryServing: true,
 				}, nil),
 				NewMaster: &topodatapb.Tablet{
 					Alias: &topodatapb.TabletAlias{
 						Cell: "zone1",
 						Uid:  100,
 					},
-					Type:     topodatapb.TabletType_MASTER,
+					Type:     topodatapb.TabletType_PRIMARY,
 					Keyspace: "testkeyspace",
 					Shard:    "-",
 				},
@@ -199,7 +199,7 @@ func TestPlannedReparenter_ReparentShard(t *testing.T) {
 					},
 					Keyspace: "testkeyspace",
 					Shard:    "-",
-					Type:     topodatapb.TabletType_MASTER,
+					Type:     topodatapb.TabletType_PRIMARY,
 				},
 			},
 
@@ -218,12 +218,12 @@ func TestPlannedReparenter_ReparentShard(t *testing.T) {
 
 			expectedEvent: &events.Reparent{
 				ShardInfo: *topo.NewShardInfo("testkeyspace", "-", &topodatapb.Shard{
-					MasterAlias: &topodatapb.TabletAlias{
+					PrimaryAlias: &topodatapb.TabletAlias{
 						Cell: "zone1",
 						Uid:  100,
 					},
-					IsMasterServing: true,
-					KeyRange:        &topodatapb.KeyRange{},
+					IsPrimaryServing: true,
+					KeyRange:         &topodatapb.KeyRange{},
 				}, nil),
 			},
 			shouldErr: true,
@@ -365,7 +365,7 @@ func TestPlannedReparenter_preflightChecks(t *testing.T) {
 			name: "invariants hold",
 			ev: &events.Reparent{
 				ShardInfo: *topo.NewShardInfo("testkeyspace", "-", &topodatapb.Shard{
-					MasterAlias: &topodatapb.TabletAlias{
+					PrimaryAlias: &topodatapb.TabletAlias{
 						Cell: "zone1",
 						Uid:  500,
 					},
@@ -390,7 +390,7 @@ func TestPlannedReparenter_preflightChecks(t *testing.T) {
 			expectedIsNoop: false,
 			expectedEvent: &events.Reparent{
 				ShardInfo: *topo.NewShardInfo("testkeyspace", "-", &topodatapb.Shard{
-					MasterAlias: &topodatapb.TabletAlias{
+					PrimaryAlias: &topodatapb.TabletAlias{
 						Cell: "zone1",
 						Uid:  500,
 					},
@@ -425,7 +425,7 @@ func TestPlannedReparenter_preflightChecks(t *testing.T) {
 			},
 			ev: &events.Reparent{
 				ShardInfo: *topo.NewShardInfo("testkeyspace", "-", &topodatapb.Shard{
-					MasterAlias: &topodatapb.TabletAlias{
+					PrimaryAlias: &topodatapb.TabletAlias{
 						Cell: "zone1",
 						Uid:  500,
 					},
@@ -456,7 +456,7 @@ func TestPlannedReparenter_preflightChecks(t *testing.T) {
 							Cell: "zone1",
 							Uid:  500,
 						},
-						Type: topodatapb.TabletType_MASTER,
+						Type: topodatapb.TabletType_PRIMARY,
 					},
 				},
 			},
@@ -470,7 +470,7 @@ func TestPlannedReparenter_preflightChecks(t *testing.T) {
 			expectedIsNoop: false,
 			expectedEvent: &events.Reparent{
 				ShardInfo: *topo.NewShardInfo("testkeyspace", "-", &topodatapb.Shard{
-					MasterAlias: &topodatapb.TabletAlias{
+					PrimaryAlias: &topodatapb.TabletAlias{
 						Cell: "zone1",
 						Uid:  500,
 					},
@@ -515,7 +515,7 @@ func TestPlannedReparenter_preflightChecks(t *testing.T) {
 			name: "current shard primary is not avoid-primary",
 			ev: &events.Reparent{
 				ShardInfo: *topo.NewShardInfo("testkeyspace", "-", &topodatapb.Shard{
-					MasterAlias: &topodatapb.TabletAlias{
+					PrimaryAlias: &topodatapb.TabletAlias{
 						Cell: "zone1",
 						Uid:  100,
 					},
@@ -540,7 +540,7 @@ func TestPlannedReparenter_preflightChecks(t *testing.T) {
 			name: "cannot choose new primary-elect",
 			ev: &events.Reparent{
 				ShardInfo: *topo.NewShardInfo("testkeyspace", "-", &topodatapb.Shard{
-					MasterAlias: &topodatapb.TabletAlias{
+					PrimaryAlias: &topodatapb.TabletAlias{
 						Cell: "zone1",
 						Uid:  100,
 					},
@@ -582,7 +582,7 @@ func TestPlannedReparenter_preflightChecks(t *testing.T) {
 			name: "shard has no current primary",
 			ev: &events.Reparent{
 				ShardInfo: *topo.NewShardInfo("testkeyspace", "-", &topodatapb.Shard{
-					MasterAlias: nil,
+					PrimaryAlias: nil,
 				}, nil),
 			},
 			tabletMap: map[string]*topo.TabletInfo{
@@ -604,7 +604,7 @@ func TestPlannedReparenter_preflightChecks(t *testing.T) {
 			expectedIsNoop: true,
 			expectedEvent: &events.Reparent{
 				ShardInfo: *topo.NewShardInfo("testkeyspace", "-", &topodatapb.Shard{
-					MasterAlias: nil,
+					PrimaryAlias: nil,
 				}, nil),
 				NewMaster: &topodatapb.Tablet{
 					Alias: &topodatapb.TabletAlias{
@@ -2228,8 +2228,8 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 						Cell: "zone1",
 						Uid:  100,
 					},
-					Type: topodatapb.TabletType_MASTER,
-					MasterTermStartTime: &vttime.Time{
+					Type: topodatapb.TabletType_PRIMARY,
+					PrimaryTermStartTime: &vttime.Time{
 						Seconds:     1000,
 						Nanoseconds: 500,
 					},
@@ -2242,8 +2242,8 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 						Cell: "zone1",
 						Uid:  200,
 					},
-					Type: topodatapb.TabletType_MASTER,
-					MasterTermStartTime: &vttime.Time{
+					Type: topodatapb.TabletType_PRIMARY,
+					PrimaryTermStartTime: &vttime.Time{
 						Seconds:     1000,
 						Nanoseconds: 500,
 					},
@@ -2294,7 +2294,7 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 						Cell: "zone1",
 						Uid:  100,
 					},
-					Type:     topodatapb.TabletType_MASTER,
+					Type:     topodatapb.TabletType_PRIMARY,
 					Keyspace: "testkeyspace",
 					Shard:    "-",
 				},
@@ -2322,19 +2322,19 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 			shouldErr: false,
 			expectedEvent: &events.Reparent{
 				ShardInfo: *topo.NewShardInfo("testkeyspace", "-", &topodatapb.Shard{
-					MasterAlias: &topodatapb.TabletAlias{
+					PrimaryAlias: &topodatapb.TabletAlias{
 						Cell: "zone1",
 						Uid:  100,
 					},
-					KeyRange:        &topodatapb.KeyRange{},
-					IsMasterServing: true,
+					KeyRange:         &topodatapb.KeyRange{},
+					IsPrimaryServing: true,
 				}, nil),
 				NewMaster: &topodatapb.Tablet{
 					Alias: &topodatapb.TabletAlias{
 						Cell: "zone1",
 						Uid:  100,
 					},
-					Type:     topodatapb.TabletType_MASTER,
+					Type:     topodatapb.TabletType_PRIMARY,
 					Keyspace: "testkeyspace",
 					Shard:    "-",
 				},
@@ -2393,8 +2393,8 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 						Cell: "zone1",
 						Uid:  100,
 					},
-					Type: topodatapb.TabletType_MASTER,
-					MasterTermStartTime: &vttime.Time{
+					Type: topodatapb.TabletType_PRIMARY,
+					PrimaryTermStartTime: &vttime.Time{
 						Seconds:     1000,
 						Nanoseconds: 500,
 					},
@@ -2469,8 +2469,8 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 			shouldErr: true,
 			expectedEvent: &events.Reparent{
 				ShardInfo: *topo.NewShardInfo("testkeyspace", "-", &topodatapb.Shard{
-					KeyRange:        &topodatapb.KeyRange{},
-					IsMasterServing: true,
+					KeyRange:         &topodatapb.KeyRange{},
+					IsPrimaryServing: true,
 				}, nil),
 				NewMaster: &topodatapb.Tablet{
 					Alias: &topodatapb.TabletAlias{
@@ -2493,7 +2493,7 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 						Cell: "zone1",
 						Uid:  100,
 					},
-					Type:     topodatapb.TabletType_MASTER,
+					Type:     topodatapb.TabletType_PRIMARY,
 					Keyspace: "testkeyspace",
 					Shard:    "-",
 				},
@@ -2522,12 +2522,12 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 			shouldErr: false,
 			expectedEvent: &events.Reparent{
 				ShardInfo: *topo.NewShardInfo("testkeyspace", "-", &topodatapb.Shard{
-					MasterAlias: &topodatapb.TabletAlias{
+					PrimaryAlias: &topodatapb.TabletAlias{
 						Cell: "zone1",
 						Uid:  100,
 					},
-					KeyRange:        &topodatapb.KeyRange{},
-					IsMasterServing: true,
+					KeyRange:         &topodatapb.KeyRange{},
+					IsPrimaryServing: true,
 				}, nil),
 			},
 		},
@@ -2545,7 +2545,7 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 						Cell: "zone1",
 						Uid:  100,
 					},
-					Type:     topodatapb.TabletType_MASTER,
+					Type:     topodatapb.TabletType_PRIMARY,
 					Keyspace: "testkeyspace",
 					Shard:    "-",
 				},
@@ -2573,19 +2573,19 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 			shouldErr: true,
 			expectedEvent: &events.Reparent{
 				ShardInfo: *topo.NewShardInfo("testkeyspace", "-", &topodatapb.Shard{
-					MasterAlias: &topodatapb.TabletAlias{
+					PrimaryAlias: &topodatapb.TabletAlias{
 						Cell: "zone1",
 						Uid:  100,
 					},
-					KeyRange:        &topodatapb.KeyRange{},
-					IsMasterServing: true,
+					KeyRange:         &topodatapb.KeyRange{},
+					IsPrimaryServing: true,
 				}, nil),
 				NewMaster: &topodatapb.Tablet{
 					Alias: &topodatapb.TabletAlias{
 						Cell: "zone1",
 						Uid:  100,
 					},
-					Type:     topodatapb.TabletType_MASTER,
+					Type:     topodatapb.TabletType_PRIMARY,
 					Keyspace: "testkeyspace",
 					Shard:    "-",
 				},
@@ -2614,7 +2614,7 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 						Cell: "zone1",
 						Uid:  100,
 					},
-					Type:     topodatapb.TabletType_MASTER,
+					Type:     topodatapb.TabletType_PRIMARY,
 					Keyspace: "testkeyspace",
 					Shard:    "-",
 				},
@@ -2644,19 +2644,19 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 			shouldErr: true,
 			expectedEvent: &events.Reparent{
 				ShardInfo: *topo.NewShardInfo("testkeyspace", "-", &topodatapb.Shard{
-					MasterAlias: &topodatapb.TabletAlias{
+					PrimaryAlias: &topodatapb.TabletAlias{
 						Cell: "zone1",
 						Uid:  100,
 					},
-					KeyRange:        &topodatapb.KeyRange{},
-					IsMasterServing: true,
+					KeyRange:         &topodatapb.KeyRange{},
+					IsPrimaryServing: true,
 				}, nil),
 				NewMaster: &topodatapb.Tablet{
 					Alias: &topodatapb.TabletAlias{
 						Cell: "zone1",
 						Uid:  100,
 					},
-					Type:     topodatapb.TabletType_MASTER,
+					Type:     topodatapb.TabletType_PRIMARY,
 					Keyspace: "testkeyspace",
 					Shard:    "-",
 				},
@@ -2688,7 +2688,7 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 						Cell: "zone1",
 						Uid:  100,
 					},
-					Type:     topodatapb.TabletType_MASTER,
+					Type:     topodatapb.TabletType_PRIMARY,
 					Keyspace: "testkeyspace",
 					Shard:    "-",
 				},
@@ -2716,19 +2716,19 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 			shouldErr: true,
 			expectedEvent: &events.Reparent{
 				ShardInfo: *topo.NewShardInfo("testkeyspace", "-", &topodatapb.Shard{
-					MasterAlias: &topodatapb.TabletAlias{
+					PrimaryAlias: &topodatapb.TabletAlias{
 						Cell: "zone1",
 						Uid:  100,
 					},
-					KeyRange:        &topodatapb.KeyRange{},
-					IsMasterServing: true,
+					KeyRange:         &topodatapb.KeyRange{},
+					IsPrimaryServing: true,
 				}, nil),
 				NewMaster: &topodatapb.Tablet{
 					Alias: &topodatapb.TabletAlias{
 						Cell: "zone1",
 						Uid:  100,
 					},
-					Type:     topodatapb.TabletType_MASTER,
+					Type:     topodatapb.TabletType_PRIMARY,
 					Keyspace: "testkeyspace",
 					Shard:    "-",
 				},
@@ -2817,7 +2817,7 @@ func TestPlannedReparenter_reparentTablets(t *testing.T) {
 						Cell: "zone1",
 						Uid:  100,
 					},
-					Type: topodatapb.TabletType_MASTER,
+					Type: topodatapb.TabletType_PRIMARY,
 				},
 			},
 			tabletMap: map[string]*topo.TabletInfo{
@@ -2827,7 +2827,7 @@ func TestPlannedReparenter_reparentTablets(t *testing.T) {
 							Cell: "zone1",
 							Uid:  100,
 						},
-						Type: topodatapb.TabletType_MASTER,
+						Type: topodatapb.TabletType_PRIMARY,
 					},
 				},
 				"zone1-0000000200": {
@@ -2878,7 +2878,7 @@ func TestPlannedReparenter_reparentTablets(t *testing.T) {
 						Cell: "zone1",
 						Uid:  100,
 					},
-					Type: topodatapb.TabletType_MASTER,
+					Type: topodatapb.TabletType_PRIMARY,
 				},
 			},
 			tabletMap: map[string]*topo.TabletInfo{
@@ -2888,7 +2888,7 @@ func TestPlannedReparenter_reparentTablets(t *testing.T) {
 							Cell: "zone1",
 							Uid:  100,
 						},
-						Type: topodatapb.TabletType_MASTER,
+						Type: topodatapb.TabletType_PRIMARY,
 					},
 				},
 				"zone1-0000000200": {
@@ -2942,7 +2942,7 @@ func TestPlannedReparenter_reparentTablets(t *testing.T) {
 						Cell: "zone1",
 						Uid:  100,
 					},
-					Type: topodatapb.TabletType_MASTER,
+					Type: topodatapb.TabletType_PRIMARY,
 				},
 			},
 			tabletMap: map[string]*topo.TabletInfo{
@@ -2952,7 +2952,7 @@ func TestPlannedReparenter_reparentTablets(t *testing.T) {
 							Cell: "zone1",
 							Uid:  100,
 						},
-						Type: topodatapb.TabletType_MASTER,
+						Type: topodatapb.TabletType_PRIMARY,
 					},
 				},
 				"zone1-0000000200": {
@@ -3006,7 +3006,7 @@ func TestPlannedReparenter_reparentTablets(t *testing.T) {
 						Cell: "zone1",
 						Uid:  100,
 					},
-					Type: topodatapb.TabletType_MASTER,
+					Type: topodatapb.TabletType_PRIMARY,
 				},
 			},
 			tabletMap: map[string]*topo.TabletInfo{
@@ -3016,7 +3016,7 @@ func TestPlannedReparenter_reparentTablets(t *testing.T) {
 							Cell: "zone1",
 							Uid:  100,
 						},
-						Type: topodatapb.TabletType_MASTER,
+						Type: topodatapb.TabletType_PRIMARY,
 					},
 				},
 				"zone1-0000000200": {
@@ -3070,7 +3070,7 @@ func TestPlannedReparenter_reparentTablets(t *testing.T) {
 						Cell: "zone1",
 						Uid:  100,
 					},
-					Type: topodatapb.TabletType_MASTER,
+					Type: topodatapb.TabletType_PRIMARY,
 				},
 			},
 			tabletMap: map[string]*topo.TabletInfo{
@@ -3080,7 +3080,7 @@ func TestPlannedReparenter_reparentTablets(t *testing.T) {
 							Cell: "zone1",
 							Uid:  100,
 						},
-						Type: topodatapb.TabletType_MASTER,
+						Type: topodatapb.TabletType_PRIMARY,
 					},
 				},
 				"zone1-0000000200": {
