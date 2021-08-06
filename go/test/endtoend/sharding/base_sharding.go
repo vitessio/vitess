@@ -187,7 +187,7 @@ func checkStreamHealthEqualsBinlogPlayerVars(t *testing.T, vttablet cluster.Vtta
 
 	streamCountStr := fmt.Sprintf("%v", reflect.ValueOf(tabletVars["VReplicationStreamCount"]))
 	streamCount, _ := strconv.Atoi(streamCountStr)
-
+	log.Infof(">>>>>>>>>>>>>>>>>> tabletVars are %+v", tabletVars)
 	vreplicationLagMaxStr := fmt.Sprintf("%v", reflect.ValueOf(tabletVars["VReplicationSecondsBehindMasterMax"]))
 	vreplicationLagMax, _ := strconv.ParseFloat(vreplicationLagMaxStr, 64)
 
@@ -207,6 +207,7 @@ func checkStreamHealthEqualsBinlogPlayerVars(t *testing.T, vttablet cluster.Vtta
 	assert.NotNil(t, streamHealthResponse.RealtimeStats.BinlogPlayersCount)
 
 	assert.Equal(t, streamCount, int(streamHealthResponse.RealtimeStats.BinlogPlayersCount))
+	log.Infof(">>>>>>>>> vreplicationLagMax %v, FilteredReplicationLagSeconds %v", vreplicationLagMax, streamHealthResponse.RealtimeStats.FilteredReplicationLagSeconds)
 	assert.Equal(t, vreplicationLagMax, float64(streamHealthResponse.RealtimeStats.FilteredReplicationLagSeconds))
 }
 

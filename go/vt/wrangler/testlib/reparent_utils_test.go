@@ -50,12 +50,12 @@ func TestShardReplicationStatuses(t *testing.T) {
 	if _, err := ts.GetOrCreateShard(ctx, "test_keyspace", "0"); err != nil {
 		t.Fatalf("GetOrCreateShard failed: %v", err)
 	}
-	primary := NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_MASTER, nil)
+	primary := NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_PRIMARY, nil)
 	replica := NewFakeTablet(t, wr, "cell1", 2, topodatapb.TabletType_REPLICA, nil)
 
 	// mark the primary inside the shard
 	if _, err := ts.UpdateShardFields(ctx, "test_keyspace", "0", func(si *topo.ShardInfo) error {
-		si.MasterAlias = primary.Tablet.Alias
+		si.PrimaryAlias = primary.Tablet.Alias
 		return nil
 	}); err != nil {
 		t.Fatalf("UpdateShardFields failed: %v", err)
@@ -126,12 +126,12 @@ func TestReparentTablet(t *testing.T) {
 	if _, err := ts.GetOrCreateShard(ctx, "test_keyspace", "0"); err != nil {
 		t.Fatalf("CreateShard failed: %v", err)
 	}
-	primary := NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_MASTER, nil)
+	primary := NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_PRIMARY, nil)
 	replica := NewFakeTablet(t, wr, "cell1", 2, topodatapb.TabletType_REPLICA, nil)
 
 	// mark the primary inside the shard
 	if _, err := ts.UpdateShardFields(ctx, "test_keyspace", "0", func(si *topo.ShardInfo) error {
-		si.MasterAlias = primary.Tablet.Alias
+		si.PrimaryAlias = primary.Tablet.Alias
 		return nil
 	}); err != nil {
 		t.Fatalf("UpdateShardFields failed: %v", err)

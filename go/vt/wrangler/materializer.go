@@ -273,7 +273,7 @@ func (wr *Wrangler) getKeyspaceTables(ctx context.Context, ks string, ts *topo.S
 	if len(shards) == 0 {
 		return nil, fmt.Errorf("keyspace %s has no shards", ks)
 	}
-	master := shards[0].MasterAlias
+	master := shards[0].PrimaryAlias
 	if master == nil {
 		return nil, fmt.Errorf("shard does not have a master: %v", shards[0].ShardName())
 	}
@@ -322,7 +322,7 @@ func (wr *Wrangler) checkIfPreviousJournalExists(ctx context.Context, mz *materi
 	)
 
 	err := forAllSources(func(si *topo.ShardInfo) error {
-		tablet, err := wr.ts.GetTablet(ctx, si.MasterAlias)
+		tablet, err := wr.ts.GetTablet(ctx, si.PrimaryAlias)
 		if err != nil {
 			return err
 		}
@@ -510,10 +510,10 @@ func (wr *Wrangler) prepareCreateLookup(ctx context.Context, keyspace string, sp
 		return nil, nil, nil, err
 	}
 	onesource := sourceShards[0]
-	if onesource.MasterAlias == nil {
+	if onesource.PrimaryAlias == nil {
 		return nil, nil, nil, fmt.Errorf("source shard has no master: %v", onesource.ShardName())
 	}
-	tableSchema, err := wr.GetSchema(ctx, onesource.MasterAlias, []string{sourceTableName}, nil, false)
+	tableSchema, err := wr.GetSchema(ctx, onesource.PrimaryAlias, []string{sourceTableName}, nil, false)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -694,7 +694,7 @@ func (wr *Wrangler) ExternalizeVindex(ctx context.Context, qualifiedVindexName s
 	}
 
 	err = forAllTargets(func(targetShard *topo.ShardInfo) error {
-		targetMaster, err := wr.ts.GetTablet(ctx, targetShard.MasterAlias)
+		targetMaster, err := wr.ts.GetTablet(ctx, targetShard.PrimaryAlias)
 		if err != nil {
 			return err
 		}
@@ -731,7 +731,7 @@ func (wr *Wrangler) ExternalizeVindex(ctx context.Context, qualifiedVindexName s
 	if sourceVindex.Owner != "" {
 		// If there is an owner, we have to delete the streams.
 		err := forAllTargets(func(targetShard *topo.ShardInfo) error {
-			targetMaster, err := wr.ts.GetTablet(ctx, targetShard.MasterAlias)
+			targetMaster, err := wr.ts.GetTablet(ctx, targetShard.PrimaryAlias)
 			if err != nil {
 				return err
 			}
@@ -760,9 +760,9 @@ func (wr *Wrangler) collectTargetStreams(ctx context.Context, mz *materializer) 
 		var qrproto *querypb.QueryResult
 		var id int64
 		var err error
-		targetMaster, err := mz.wr.ts.GetTablet(ctx, target.MasterAlias)
+		targetMaster, err := mz.wr.ts.GetTablet(ctx, target.PrimaryAlias)
 		if err != nil {
-			return vterrors.Wrapf(err, "GetTablet(%v) failed", target.MasterAlias)
+			return vterrors.Wrapf(err, "GetTablet(%v) failed", target.PrimaryAlias)
 		}
 		query := fmt.Sprintf("select id from _vt.vreplication where db_name=%s and workflow=%s", encodeString(targetMaster.DbName()), encodeString(mz.ms.Workflow))
 		if qrproto, err = mz.wr.tmc.VReplicationExec(ctx, targetMaster.Tablet, query); err != nil {
@@ -870,7 +870,7 @@ func (mz *materializer) getSourceTableDDLs(ctx context.Context) (map[string]stri
 	sourceDDLs := make(map[string]string)
 	allTables := []string{"/.*/"}
 
-	sourceMaster := mz.sourceShards[0].MasterAlias
+	sourceMaster := mz.sourceShards[0].PrimaryAlias
 	if sourceMaster == nil {
 		return nil, fmt.Errorf("source shard must have a master for copying schema: %v", mz.sourceShards[0].ShardName())
 	}
@@ -898,7 +898,7 @@ func (mz *materializer) deploySchema(ctx context.Context) error {
 		allTables := []string{"/.*/"}
 
 		hasTargetTable := map[string]bool{}
-		targetSchema, err := mz.wr.GetSchema(ctx, target.MasterAlias, allTables, nil, false)
+		targetSchema, err := mz.wr.GetSchema(ctx, target.PrimaryAlias, allTables, nil, false)
 		if err != nil {
 			return err
 		}
@@ -907,7 +907,7 @@ func (mz *materializer) deploySchema(ctx context.Context) error {
 			hasTargetTable[td.Name] = true
 		}
 
-		targetTablet, err := mz.wr.ts.GetTablet(ctx, target.MasterAlias)
+		targetTablet, err := mz.wr.ts.GetTablet(ctx, target.PrimaryAlias)
 		if err != nil {
 			return err
 		}
@@ -1129,9 +1129,9 @@ func matchColInSelect(col sqlparser.ColIdent, sel *sqlparser.Select) (*sqlparser
 func (mz *materializer) createStreams(ctx context.Context, insertsMap map[string]string) error {
 	return mz.forAllTargets(func(target *topo.ShardInfo) error {
 		inserts := insertsMap[target.ShardName()]
-		targetMaster, err := mz.wr.ts.GetTablet(ctx, target.MasterAlias)
+		targetMaster, err := mz.wr.ts.GetTablet(ctx, target.PrimaryAlias)
 		if err != nil {
-			return vterrors.Wrapf(err, "GetTablet(%v) failed", target.MasterAlias)
+			return vterrors.Wrapf(err, "GetTablet(%v) failed", target.PrimaryAlias)
 		}
 		buf := &strings.Builder{}
 		t := template.Must(template.New("").Parse(inserts))
@@ -1151,9 +1151,9 @@ func (mz *materializer) createStreams(ctx context.Context, insertsMap map[string
 
 func (mz *materializer) startStreams(ctx context.Context) error {
 	return mz.forAllTargets(func(target *topo.ShardInfo) error {
-		targetMaster, err := mz.wr.ts.GetTablet(ctx, target.MasterAlias)
+		targetMaster, err := mz.wr.ts.GetTablet(ctx, target.PrimaryAlias)
 		if err != nil {
-			return vterrors.Wrapf(err, "GetTablet(%v) failed", target.MasterAlias)
+			return vterrors.Wrapf(err, "GetTablet(%v) failed", target.PrimaryAlias)
 		}
 		query := fmt.Sprintf("update _vt.vreplication set state='Running' where db_name=%s and workflow=%s", encodeString(targetMaster.DbName()), encodeString(mz.ms.Workflow))
 		if _, err := mz.wr.tmc.VReplicationExec(ctx, targetMaster.Tablet, query); err != nil {

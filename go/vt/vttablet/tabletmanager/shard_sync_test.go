@@ -55,24 +55,24 @@ func TestShardSync(t *testing.T) {
 	updateMasterInfoInShardRecord(ctx, t, tm, nil, originalTime)
 
 	// now try to promote the tablet to primary
-	err := tm.tmState.ChangeTabletType(ctx, topodata.TabletType_MASTER, DBActionSetReadWrite)
+	err := tm.tmState.ChangeTabletType(ctx, topodata.TabletType_PRIMARY, DBActionSetReadWrite)
 	require.NoError(t, err)
 	// verify that the tablet record has been updated
 	ti, err := ts.GetTablet(ctx, tm.tabletAlias)
 	require.NoError(t, err)
-	assert.Equal(t, topodata.TabletType_MASTER, ti.Type)
-	assert.NotNil(t, ti.MasterTermStartTime)
+	assert.Equal(t, topodata.TabletType_PRIMARY, ti.Type)
+	assert.NotNil(t, ti.PrimaryTermStartTime)
 
 	// wait for syncing to work correctly
 	// this should also have updated the shard record since it is a more recent operation
 	// We check here that the shard record and the tablet record are in sync
-	checkShardRecordWithTimeout(ctx, t, ts, ti.Alias, ti.MasterTermStartTime, 1*time.Second)
+	checkShardRecordWithTimeout(ctx, t, ts, ti.Alias, ti.PrimaryTermStartTime, 1*time.Second)
 
 	// even if try to update the shard record with the old timestamp, it should be reverted again
 	updateMasterInfoInShardRecord(ctx, t, tm, nil, originalTime)
 
 	// this should have also updated the shard record because of the timestamp.
-	checkShardRecordWithTimeout(ctx, t, ts, ti.Alias, ti.MasterTermStartTime, 1*time.Second)
+	checkShardRecordWithTimeout(ctx, t, ts, ti.Alias, ti.PrimaryTermStartTime, 1*time.Second)
 
 	// updating the shard record with the latest time should trigger an update in the tablet
 	newTime := time.Now()
@@ -94,7 +94,7 @@ func checkShardRecordWithTimeout(ctx context.Context, t *testing.T, ts *topo.Ser
 		default:
 			si, err := ts.GetShard(ctx, keyspace, shard)
 			require.NoError(t, err)
-			if reflect.DeepEqual(tabletAlias, si.MasterAlias) && reflect.DeepEqual(masterStartTime, si.MasterTermStartTime) {
+			if reflect.DeepEqual(tabletAlias, si.PrimaryAlias) && reflect.DeepEqual(masterStartTime, si.PrimaryTermStartTime) {
 				return
 			}
 			time.Sleep(100 * time.Millisecond)
@@ -111,7 +111,7 @@ func checkTabletRecordWithTimeout(ctx context.Context, t *testing.T, ts *topo.Se
 		default:
 			ti, err := ts.GetTablet(ctx, tabletAlias)
 			require.NoError(t, err)
-			if reflect.DeepEqual(tabletType, ti.Type) && reflect.DeepEqual(masterStartTime, ti.MasterTermStartTime) {
+			if reflect.DeepEqual(tabletType, ti.Type) && reflect.DeepEqual(masterStartTime, ti.PrimaryTermStartTime) {
 				return
 			}
 			time.Sleep(100 * time.Millisecond)
@@ -125,8 +125,8 @@ func updateMasterInfoInShardRecord(ctx context.Context, t *testing.T, tm *Tablet
 	defer unlock(&lockErr)
 
 	_, err := tm.TopoServer.UpdateShardFields(ctx, keyspace, shard, func(si *topo.ShardInfo) error {
-		si.MasterAlias = masterAlias
-		si.SetMasterTermStartTime(time)
+		si.PrimaryAlias = masterAlias
+		si.SetPrimaryTermStartTime(time)
 		return nil
 	})
 	require.NoError(t, err)

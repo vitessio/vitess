@@ -46,7 +46,7 @@ func (tm *TabletManager) Backup(ctx context.Context, concurrency int, logger log
 	// but the process didn't find out about this.
 	// It is not safe to take backups from tablet in this state
 	currentTablet := tm.Tablet()
-	if !allowMaster && currentTablet.Type == topodatapb.TabletType_MASTER {
+	if !allowMaster && currentTablet.Type == topodatapb.TabletType_PRIMARY {
 		return fmt.Errorf("type MASTER cannot take backup. if you really need to do this, rerun the backup command with -allow_master")
 	}
 	engine, err := mysqlctl.GetBackupEngine()
@@ -58,7 +58,7 @@ func (tm *TabletManager) Backup(ctx context.Context, concurrency int, logger log
 	if err != nil {
 		return err
 	}
-	if !allowMaster && tablet.Type == topodatapb.TabletType_MASTER {
+	if !allowMaster && tablet.Type == topodatapb.TabletType_PRIMARY {
 		return fmt.Errorf("type MASTER cannot take backup. if you really need to do this, rerun the backup command with -allow_master")
 	}
 
@@ -125,7 +125,7 @@ func (tm *TabletManager) Backup(ctx context.Context, concurrency int, logger log
 		// above call to Backup. Thus we use the background context to get through to the finish.
 
 		// Change our type back to the original value.
-		// Original type could be master so pass in a real value for masterTermStartTime
+		// Original type could be master so pass in a real value for PrimaryTermStartTime
 		if err := tm.changeTypeLocked(bgCtx, originalType, DBActionNone); err != nil {
 			// failure in changing the topology type is probably worse,
 			// so returning that (we logged the snapshot error anyway)
@@ -161,7 +161,7 @@ func (tm *TabletManager) RestoreFromBackup(ctx context.Context, logger logutil.L
 	if err != nil {
 		return err
 	}
-	if tablet.Type == topodatapb.TabletType_MASTER {
+	if tablet.Type == topodatapb.TabletType_PRIMARY {
 		return fmt.Errorf("type MASTER cannot restore from backup, if you really need to do this, restart vttablet in replica mode")
 	}
 

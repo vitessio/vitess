@@ -119,11 +119,11 @@ func TestMain(m *testing.M) {
 			return 1, err
 		}
 
-		shard1Primary = localCluster.NewVttabletInstance("master", 0, cell1)
+		shard1Primary = localCluster.NewVttabletInstance("primary", 0, cell1)
 		shard1Replica = localCluster.NewVttabletInstance("replica", 0, cell2)
 		shard1Rdonly = localCluster.NewVttabletInstance("rdonly", 0, cell2)
 
-		shard2Primary = localCluster.NewVttabletInstance("master", 0, cell1)
+		shard2Primary = localCluster.NewVttabletInstance("primary", 0, cell1)
 		shard2Replica = localCluster.NewVttabletInstance("replica", 0, cell2)
 		shard2Rdonly = localCluster.NewVttabletInstance("rdonly", 0, cell2)
 
@@ -238,7 +238,7 @@ func TestAlias(t *testing.T) {
 	allCells := fmt.Sprintf("%s,%s", cell1, cell2)
 
 	expectedPartitions := map[topodata.TabletType][]string{}
-	expectedPartitions[topodata.TabletType_MASTER] = []string{shard1.Name, shard2.Name}
+	expectedPartitions[topodata.TabletType_PRIMARY] = []string{shard1.Name, shard2.Name}
 	expectedPartitions[topodata.TabletType_REPLICA] = []string{shard1.Name, shard2.Name}
 	expectedPartitions[topodata.TabletType_RDONLY] = []string{shard1.Name, shard2.Name}
 	sharding.CheckSrvKeyspace(t, cell1, keyspaceName, "", 0, expectedPartitions, *localCluster)
@@ -256,7 +256,7 @@ func TestAlias(t *testing.T) {
 
 	vtgateInstance := localCluster.NewVtgateInstance()
 	vtgateInstance.CellsToWatch = allCells
-	vtgateInstance.TabletTypesToWait = "MASTER,REPLICA"
+	vtgateInstance.TabletTypesToWait = "PRIMARY,REPLICA"
 	// Use legacy gateway. There's a separate test for tabletgateway in go/test/endtoend/tabletgateway/cellalias/cell_alias_test.go
 	vtgateInstance.GatewayImplementation = "discoverygateway"
 	err = vtgateInstance.Setup()
@@ -268,7 +268,7 @@ func TestAlias(t *testing.T) {
 
 	waitTillAllTabletsAreHealthyInVtgate(t, *vtgateInstance, shard1.Name, shard2.Name)
 
-	testQueriesOnTabletType(t, "master", vtgateInstance.GrpcPort, false)
+	testQueriesOnTabletType(t, "primary", vtgateInstance.GrpcPort, false)
 	testQueriesOnTabletType(t, "replica", vtgateInstance.GrpcPort, false)
 	testQueriesOnTabletType(t, "rdonly", vtgateInstance.GrpcPort, false)
 
@@ -278,14 +278,14 @@ func TestAlias(t *testing.T) {
 	require.NoError(t, err)
 
 	// restarts the vtgate process
-	vtgateInstance.TabletTypesToWait = "MASTER"
+	vtgateInstance.TabletTypesToWait = "PRIMARY"
 	err = vtgateInstance.TearDown()
 	require.NoError(t, err)
 	err = vtgateInstance.Setup()
 	require.NoError(t, err)
 
 	// since replica and rdonly tablets of all shards in cell2, the last 2 assertion is expected to fail
-	testQueriesOnTabletType(t, "master", vtgateInstance.GrpcPort, false)
+	testQueriesOnTabletType(t, "primary", vtgateInstance.GrpcPort, false)
 	testQueriesOnTabletType(t, "replica", vtgateInstance.GrpcPort, true)
 	testQueriesOnTabletType(t, "rdonly", vtgateInstance.GrpcPort, true)
 
@@ -304,7 +304,7 @@ func TestAddAliasWhileVtgateUp(t *testing.T) {
 	allCells := fmt.Sprintf("%s,%s", cell1, cell2)
 
 	expectedPartitions := map[topodata.TabletType][]string{}
-	expectedPartitions[topodata.TabletType_MASTER] = []string{shard1.Name, shard2.Name}
+	expectedPartitions[topodata.TabletType_PRIMARY] = []string{shard1.Name, shard2.Name}
 	expectedPartitions[topodata.TabletType_REPLICA] = []string{shard1.Name, shard2.Name}
 	expectedPartitions[topodata.TabletType_RDONLY] = []string{shard1.Name, shard2.Name}
 	sharding.CheckSrvKeyspace(t, cell1, keyspaceName, "", 0, expectedPartitions, *localCluster)
@@ -312,14 +312,14 @@ func TestAddAliasWhileVtgateUp(t *testing.T) {
 
 	vtgateInstance := localCluster.NewVtgateInstance()
 	vtgateInstance.CellsToWatch = allCells
-	// only MASTER is in vtgate's "cell", other tablet types are not visible because they are in the other cell
-	vtgateInstance.TabletTypesToWait = "MASTER"
+	// only primary is in vtgate's "cell", other tablet types are not visible because they are in the other cell
+	vtgateInstance.TabletTypesToWait = "PRIMARY"
 	err = vtgateInstance.Setup()
 	require.NoError(t, err)
 	defer vtgateInstance.TearDown()
 
 	// since replica and rdonly tablets of all shards in cell2, the last 2 assertion is expected to fail
-	testQueriesOnTabletType(t, "master", vtgateInstance.GrpcPort, false)
+	testQueriesOnTabletType(t, "primary", vtgateInstance.GrpcPort, false)
 	testQueriesOnTabletType(t, "replica", vtgateInstance.GrpcPort, true)
 	testQueriesOnTabletType(t, "rdonly", vtgateInstance.GrpcPort, true)
 
@@ -329,7 +329,7 @@ func TestAddAliasWhileVtgateUp(t *testing.T) {
 		"region_east_coast")
 	require.NoError(t, err)
 
-	testQueriesOnTabletType(t, "master", vtgateInstance.GrpcPort, false)
+	testQueriesOnTabletType(t, "primary", vtgateInstance.GrpcPort, false)
 	// TODO(deepthi) change the following to shouldFail:false when fixing https://github.com/vitessio/vitess/issues/5911
 	testQueriesOnTabletType(t, "replica", vtgateInstance.GrpcPort, true)
 	testQueriesOnTabletType(t, "rdonly", vtgateInstance.GrpcPort, true)
@@ -338,7 +338,7 @@ func TestAddAliasWhileVtgateUp(t *testing.T) {
 
 func waitTillAllTabletsAreHealthyInVtgate(t *testing.T, vtgateInstance cluster.VtgateProcess, shards ...string) {
 	for _, shard := range shards {
-		err := vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.master", keyspaceName, shard), 1)
+		err := vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", keyspaceName, shard), 1)
 		require.NoError(t, err)
 		err = vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", keyspaceName, shard), 1)
 		require.NoError(t, err)

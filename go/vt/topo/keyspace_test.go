@@ -37,7 +37,7 @@ func TestUpdateServedFromMap(t *testing.T) {
 					Keyspace:   "source",
 				},
 				{
-					TabletType: topodatapb.TabletType_MASTER,
+					TabletType: topodatapb.TabletType_PRIMARY,
 					Cells:      nil,
 					Keyspace:   "source",
 				},
@@ -54,7 +54,7 @@ func TestUpdateServedFromMap(t *testing.T) {
 			Keyspace:   "source",
 		},
 		{
-			TabletType: topodatapb.TabletType_MASTER,
+			TabletType: topodatapb.TabletType_PRIMARY,
 			Cells:      nil,
 			Keyspace:   "source",
 		},
@@ -70,7 +70,7 @@ func TestUpdateServedFromMap(t *testing.T) {
 			Keyspace:   "source",
 		},
 		{
-			TabletType: topodatapb.TabletType_MASTER,
+			TabletType: topodatapb.TabletType_PRIMARY,
 			Cells:      nil,
 			Keyspace:   "source",
 		},
@@ -86,7 +86,7 @@ func TestUpdateServedFromMap(t *testing.T) {
 			Keyspace:   "source",
 		},
 		{
-			TabletType: topodatapb.TabletType_MASTER,
+			TabletType: topodatapb.TabletType_PRIMARY,
 			Cells:      nil,
 			Keyspace:   "source",
 		},
@@ -98,14 +98,14 @@ func TestUpdateServedFromMap(t *testing.T) {
 	if err := ki.UpdateServedFromMap(topodatapb.TabletType_RDONLY, []string{"second"}, "othersource", true, allCells); err == nil || (err.Error() != "inconsistent keyspace specified in migration: othersource != source for type MASTER" && err.Error() != "inconsistent keyspace specified in migration: othersource != source for type RDONLY") {
 		t.Fatalf("different keyspace should fail: %v", err)
 	}
-	if err := ki.UpdateServedFromMap(topodatapb.TabletType_MASTER, nil, "source", true, allCells); err == nil || err.Error() != "cannot migrate master into ks until everything else is migrated" {
+	if err := ki.UpdateServedFromMap(topodatapb.TabletType_PRIMARY, nil, "source", true, allCells); err == nil || err.Error() != "cannot migrate master into ks until everything else is migrated" {
 		t.Fatalf("migrate the master early should have failed: %v", err)
 	}
 
 	// now remove all cells
 	if err := ki.UpdateServedFromMap(topodatapb.TabletType_RDONLY, []string{"second", "third"}, "source", true, allCells); err != nil || !reflect.DeepEqual(ki.ServedFroms, []*topodatapb.Keyspace_ServedFrom{
 		{
-			TabletType: topodatapb.TabletType_MASTER,
+			TabletType: topodatapb.TabletType_PRIMARY,
 			Cells:      nil,
 			Keyspace:   "source",
 		},
@@ -117,15 +117,15 @@ func TestUpdateServedFromMap(t *testing.T) {
 	}
 
 	// finally migrate the master
-	if err := ki.UpdateServedFromMap(topodatapb.TabletType_MASTER, []string{"second"}, "source", true, allCells); err == nil || err.Error() != "cannot migrate only some cells for master removal in keyspace ks" {
+	if err := ki.UpdateServedFromMap(topodatapb.TabletType_PRIMARY, []string{"second"}, "source", true, allCells); err == nil || err.Error() != "cannot migrate only some cells for master removal in keyspace ks" {
 		t.Fatalf("migrate master with cells should have failed: %v", err)
 	}
-	if err := ki.UpdateServedFromMap(topodatapb.TabletType_MASTER, nil, "source", true, allCells); err != nil || ki.ServedFroms != nil {
+	if err := ki.UpdateServedFromMap(topodatapb.TabletType_PRIMARY, nil, "source", true, allCells); err != nil || ki.ServedFroms != nil {
 		t.Fatalf("migrate the master failed: %v", ki)
 	}
 
 	// error case again
-	if err := ki.UpdateServedFromMap(topodatapb.TabletType_MASTER, nil, "source", true, allCells); err == nil || err.Error() != "supplied type cannot be migrated" {
+	if err := ki.UpdateServedFromMap(topodatapb.TabletType_PRIMARY, nil, "source", true, allCells); err == nil || err.Error() != "supplied type cannot be migrated" {
 		t.Fatalf("migrate the master again should have failed: %v", err)
 	}
 }
@@ -137,7 +137,7 @@ func TestComputeCellServedFrom(t *testing.T) {
 		Keyspace: &topodatapb.Keyspace{
 			ServedFroms: []*topodatapb.Keyspace_ServedFrom{
 				{
-					TabletType: topodatapb.TabletType_MASTER,
+					TabletType: topodatapb.TabletType_PRIMARY,
 					Cells:      nil,
 					Keyspace:   "source",
 				},
@@ -153,7 +153,7 @@ func TestComputeCellServedFrom(t *testing.T) {
 	m := ki.ComputeCellServedFrom("c3")
 	if !reflect.DeepEqual(m, []*topodatapb.SrvKeyspace_ServedFrom{
 		{
-			TabletType: topodatapb.TabletType_MASTER,
+			TabletType: topodatapb.TabletType_PRIMARY,
 			Keyspace:   "source",
 		},
 	}) {
@@ -163,7 +163,7 @@ func TestComputeCellServedFrom(t *testing.T) {
 	m = ki.ComputeCellServedFrom("c2")
 	if !reflect.DeepEqual(m, []*topodatapb.SrvKeyspace_ServedFrom{
 		{
-			TabletType: topodatapb.TabletType_MASTER,
+			TabletType: topodatapb.TabletType_PRIMARY,
 			Keyspace:   "source",
 		},
 		{

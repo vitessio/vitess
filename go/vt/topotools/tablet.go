@@ -64,21 +64,21 @@ func ConfigureTabletHook(hk *hook.Hook, tabletAlias *topodatapb.TabletAlias) {
 // transitions need to be forced from time to time.
 //
 // If successful, the updated tablet record is returned.
-func ChangeType(ctx context.Context, ts *topo.Server, tabletAlias *topodatapb.TabletAlias, newType topodatapb.TabletType, masterTermStartTime *vttime.Time) (*topodatapb.Tablet, error) {
+func ChangeType(ctx context.Context, ts *topo.Server, tabletAlias *topodatapb.TabletAlias, newType topodatapb.TabletType, PrimaryTermStartTime *vttime.Time) (*topodatapb.Tablet, error) {
 	var result *topodatapb.Tablet
 	// Always clear out the master timestamp if not master.
-	if newType != topodatapb.TabletType_MASTER {
-		masterTermStartTime = nil
+	if newType != topodatapb.TabletType_PRIMARY {
+		PrimaryTermStartTime = nil
 	}
 	_, err := ts.UpdateTabletFields(ctx, tabletAlias, func(tablet *topodatapb.Tablet) error {
 		// Save the most recent tablet value so we can return it
 		// either if the update succeeds or if no update is needed.
 		result = tablet
-		if tablet.Type == newType && proto.Equal(tablet.MasterTermStartTime, masterTermStartTime) {
+		if tablet.Type == newType && proto.Equal(tablet.PrimaryTermStartTime, PrimaryTermStartTime) {
 			return topo.NewError(topo.NoUpdateNeeded, topoproto.TabletAliasString(tabletAlias))
 		}
 		tablet.Type = newType
-		tablet.MasterTermStartTime = masterTermStartTime
+		tablet.PrimaryTermStartTime = PrimaryTermStartTime
 		return nil
 	})
 	if err != nil {
@@ -106,7 +106,7 @@ func CheckOwnership(oldTablet, newTablet *topodatapb.Tablet) error {
 // IsPrimaryTablet is a helper function to determine whether the current tablet
 // is a primary before we allow its tablet record to be deleted. The canonical
 // way to determine the only true primary in a shard is to list all the tablets
-// and find the one with the highest MasterTermStartTime among the ones that
+// and find the one with the highest PrimaryTermStartTime among the ones that
 // claim to be master.
 //
 // We err on the side of caution here, i.e. we should never return false for
@@ -116,7 +116,7 @@ func CheckOwnership(oldTablet, newTablet *topodatapb.Tablet) error {
 // the topo have not yet been updated).
 func IsPrimaryTablet(ctx context.Context, ts *topo.Server, ti *topo.TabletInfo) (bool, error) {
 	// Tablet record claims to be non-master, we believe it
-	if ti.Type != topodatapb.TabletType_MASTER {
+	if ti.Type != topodatapb.TabletType_PRIMARY {
 		return false, nil
 	}
 
@@ -128,15 +128,15 @@ func IsPrimaryTablet(ctx context.Context, ts *topo.Server, ti *topo.TabletInfo) 
 	}
 
 	// Tablet record claims to be master, and shard record matches
-	if topoproto.TabletAliasEqual(si.MasterAlias, ti.Tablet.Alias) {
+	if topoproto.TabletAliasEqual(si.PrimaryAlias, ti.Tablet.Alias) {
 		return true, nil
 	}
 
-	// Shard record has another tablet as master, so check MasterTermStartTime
-	// If tablet record's MasterTermStartTime is later than the one in the shard
+	// Shard record has another tablet as master, so check PrimaryTermStartTime
+	// If tablet record's PrimaryTermStartTime is later than the one in the shard
 	// record, then the tablet is master
-	tabletMTST := ti.GetMasterTermStartTime()
-	shardMTST := si.GetMasterTermStartTime()
+	tabletMTST := ti.GetPrimaryTermStartTime()
+	shardMTST := si.GetPrimaryTermStartTime()
 
 	return tabletMTST.After(shardMTST), nil
 }

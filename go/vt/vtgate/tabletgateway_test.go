@@ -253,9 +253,9 @@ func testTabletGatewayTransact(t *testing.T, f func(tg *TabletGateway, target *q
 	t.Helper()
 	keyspace := "ks"
 	shard := "0"
-	// test with MASTER because replica transactions don't use gateway's queryservice
+	// test with PRIMARY because replica transactions don't use gateway's queryservice
 	// they are executed directly on tabletserver
-	tabletType := topodatapb.TabletType_MASTER
+	tabletType := topodatapb.TabletType_PRIMARY
 	host := "1.1.1.1"
 	port := int32(1001)
 	target := &querypb.Target{
@@ -273,14 +273,14 @@ func testTabletGatewayTransact(t *testing.T, f func(tg *TabletGateway, target *q
 	sc2.MustFailCodes[vtrpcpb.Code_FAILED_PRECONDITION] = 1
 
 	err := f(tg, target)
-	verifyContainsError(t, err, "target: ks.0.master", vtrpcpb.Code_FAILED_PRECONDITION)
+	verifyContainsError(t, err, "target: ks.0.primary", vtrpcpb.Code_FAILED_PRECONDITION)
 
 	// server error - no retry
 	hc.Reset()
 	sc1 = hc.AddTestTablet("cell", host, port, keyspace, shard, tabletType, true, 10, nil)
 	sc1.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
 	err = f(tg, target)
-	verifyContainsError(t, err, "target: ks.0.master", vtrpcpb.Code_INVALID_ARGUMENT)
+	verifyContainsError(t, err, "target: ks.0.primary", vtrpcpb.Code_INVALID_ARGUMENT)
 }
 
 func verifyContainsError(t *testing.T, err error, wantErr string, wantCode vtrpcpb.Code) {

@@ -418,7 +418,7 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 			shardStream = &vtctldatapb.Workflow_ShardStream{
 				Streams:          nil,
 				TabletControls:   si.TabletControls,
-				IsPrimaryServing: si.IsMasterServing,
+				IsPrimaryServing: si.IsPrimaryServing,
 			}
 
 			workflow.ShardStreams[shardStreamKey] = shardStream

@@ -213,21 +213,21 @@ func testMultiSplitDiff(t *testing.T, v3 bool) {
 	}
 
 	sourceMaster := testlib.NewFakeTablet(t, wi.wr, "cell1", 0,
-		topodatapb.TabletType_MASTER, nil, testlib.TabletKeyspaceShard(t, "ks", "-80"))
+		topodatapb.TabletType_PRIMARY, nil, testlib.TabletKeyspaceShard(t, "ks", "-80"))
 	sourceRdonly1 := testlib.NewFakeTablet(t, wi.wr, "cell1", 1,
 		topodatapb.TabletType_RDONLY, nil, testlib.TabletKeyspaceShard(t, "ks", "-80"))
 	sourceRdonly2 := testlib.NewFakeTablet(t, wi.wr, "cell1", 2,
 		topodatapb.TabletType_RDONLY, nil, testlib.TabletKeyspaceShard(t, "ks", "-80"))
 
 	leftMaster := testlib.NewFakeTablet(t, wi.wr, "cell1", 10,
-		topodatapb.TabletType_MASTER, nil, testlib.TabletKeyspaceShard(t, "ks", "-40"))
+		topodatapb.TabletType_PRIMARY, nil, testlib.TabletKeyspaceShard(t, "ks", "-40"))
 	leftRdonly1 := testlib.NewFakeTablet(t, wi.wr, "cell1", 11,
 		topodatapb.TabletType_RDONLY, nil, testlib.TabletKeyspaceShard(t, "ks", "-40"))
 	leftRdonly2 := testlib.NewFakeTablet(t, wi.wr, "cell1", 12,
 		topodatapb.TabletType_RDONLY, nil, testlib.TabletKeyspaceShard(t, "ks", "-40"))
 
 	rightMaster := testlib.NewFakeTablet(t, wi.wr, "cell1", 20,
-		topodatapb.TabletType_MASTER, nil, testlib.TabletKeyspaceShard(t, "ks", "40-80"))
+		topodatapb.TabletType_PRIMARY, nil, testlib.TabletKeyspaceShard(t, "ks", "40-80"))
 	rightRdonly1 := testlib.NewFakeTablet(t, wi.wr, "cell1", 21,
 		topodatapb.TabletType_RDONLY, nil, testlib.TabletKeyspaceShard(t, "ks", "40-80"))
 	rightRdonly2 := testlib.NewFakeTablet(t, wi.wr, "cell1", 22,

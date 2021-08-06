@@ -626,7 +626,7 @@ func (ins *Insert) description() PrimitiveDescription {
 		OperatorType:     "Insert",
 		Keyspace:         ins.Keyspace,
 		Variant:          ins.Opcode.String(),
-		TargetTabletType: topodatapb.TabletType_MASTER,
+		TargetTabletType: topodatapb.TabletType_PRIMARY,
 		Other:            other,
 	}
 }

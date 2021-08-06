@@ -317,7 +317,7 @@ func TestCreateLookupVindexFull(t *testing.T) {
 	env.tmc.expectVRQuery(200, "update _vt.vreplication set state='Running' where db_name='vt_targetks' and workflow='lkp_vdx'", &sqltypes.Result{})
 
 	ctx := context.Background()
-	err := env.wr.CreateLookupVindex(ctx, ms.SourceKeyspace, specs, "cell", "MASTER", false)
+	err := env.wr.CreateLookupVindex(ctx, ms.SourceKeyspace, specs, "cell", "PRIMARY", false)
 	require.NoError(t, err)
 
 	wantvschema := &vschemapb.Keyspace{
@@ -2199,7 +2199,7 @@ func TestMaterializerNoSourceMaster(t *testing.T) {
 	}
 	tabletID = 200
 	for _, shard := range targets {
-		_ = env.addTablet(tabletID, env.ms.TargetKeyspace, shard, topodatapb.TabletType_MASTER)
+		_ = env.addTablet(tabletID, env.ms.TargetKeyspace, shard, topodatapb.TabletType_PRIMARY)
 		tabletID += 10
 	}
 

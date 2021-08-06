@@ -244,7 +244,7 @@ func (del *Delete) description() PrimitiveDescription {
 		OperatorType:     "Delete",
 		Keyspace:         del.Keyspace,
 		Variant:          del.Opcode.String(),
-		TargetTabletType: topodatapb.TabletType_MASTER,
+		TargetTabletType: topodatapb.TabletType_PRIMARY,
 		Other:            other,
 	}
 }

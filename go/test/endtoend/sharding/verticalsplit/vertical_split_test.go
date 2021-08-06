@@ -128,7 +128,7 @@ func TestVerticalSplit(t *testing.T) {
 	require.NoError(t, err)
 
 	// check SrvKeyspace
-	ksServedFrom := "ServedFrom(master): source_keyspace\nServedFrom(rdonly): source_keyspace\nServedFrom(replica): source_keyspace\n"
+	ksServedFrom := "ServedFrom(primary): source_keyspace\nServedFrom(rdonly): source_keyspace\nServedFrom(replica): source_keyspace\n"
 	checkSrvKeyspaceServedFrom(t, cellj, destinationKeyspace, ksServedFrom, *clusterInstance)
 
 	// reparent to make the tablets work (we use health check, fix their types)
@@ -137,8 +137,8 @@ func TestVerticalSplit(t *testing.T) {
 	err = clusterInstance.VtctlclientProcess.InitShardPrimary(destinationKeyspace, shardName, cellj, destinationMasterTablet.TabletUID)
 	require.NoError(t, err)
 
-	sourceMasterTablet.Type = "master"
-	destinationMasterTablet.Type = "master"
+	sourceMasterTablet.Type = "primary"
+	destinationMasterTablet.Type = "primary"
 
 	for _, tablet := range []cluster.Vttablet{sourceReplicaTablet, destinationReplicaTablet} {
 		_ = tablet.VttabletProcess.WaitForTabletStatus("SERVING")
@@ -184,13 +184,13 @@ func TestVerticalSplit(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
-	err = clusterInstance.VtgateProcess.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.master", sourceKeyspace, shardName), 1)
+	err = clusterInstance.VtgateProcess.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", sourceKeyspace, shardName), 1)
 	require.NoError(t, err)
 	err = clusterInstance.VtgateProcess.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", sourceKeyspace, shardName), 1)
 	require.NoError(t, err)
 	err = clusterInstance.VtgateProcess.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.rdonly", sourceKeyspace, shardName), 2)
 	require.NoError(t, err)
-	err = clusterInstance.VtgateProcess.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.master", destinationKeyspace, shardName), 1)
+	err = clusterInstance.VtgateProcess.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", destinationKeyspace, shardName), 1)
 	require.NoError(t, err)
 	err = clusterInstance.VtgateProcess.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", destinationKeyspace, shardName), 1)
 	require.NoError(t, err)
@@ -298,7 +298,7 @@ func TestVerticalSplit(t *testing.T) {
 	assert.Contains(t, reflect.ValueOf(destinationMasterTabletVars["TabletStateName"]).String(), "NOT_SERVING")
 
 	// check we can't migrate the primary just yet
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("MigrateServedFrom", "destination_keyspace/0", "master")
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("MigrateServedFrom", "destination_keyspace/0", "primary")
 	require.Error(t, err)
 
 	// migrate rdonly only in test_ny cell, make sure nothing is migrated
@@ -340,7 +340,7 @@ func TestVerticalSplit(t *testing.T) {
 	// now serve rdonly from the destination shards
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("MigrateServedFrom", "destination_keyspace/0", "rdonly")
 	require.NoError(t, err)
-	checkSrvKeyspaceServedFrom(t, cellj, destinationKeyspace, "ServedFrom(master): source_keyspace\nServedFrom(replica): source_keyspace\n", *clusterInstance)
+	checkSrvKeyspaceServedFrom(t, cellj, destinationKeyspace, "ServedFrom(primary): source_keyspace\nServedFrom(replica): source_keyspace\n", *clusterInstance)
 	checkBlacklistedTables(t, sourceMasterTablet, sourceKeyspace, nil)
 	checkBlacklistedTables(t, sourceReplicaTablet, sourceKeyspace, nil)
 	checkBlacklistedTables(t, sourceRdOnlyTablet1, sourceKeyspace, []string{"/moving/", "view1"})
@@ -351,22 +351,22 @@ func TestVerticalSplit(t *testing.T) {
 	require.NoError(t, err)
 	defer gconn.Close()
 
-	checkClientConnRedirectionExecuteKeyrange(ctx, t, gconn, destinationKeyspace, []topodata.TabletType{topodata.TabletType_MASTER, topodata.TabletType_REPLICA}, []string{"moving1", "moving2"})
+	checkClientConnRedirectionExecuteKeyrange(ctx, t, gconn, destinationKeyspace, []topodata.TabletType{topodata.TabletType_PRIMARY, topodata.TabletType_REPLICA}, []string{"moving1", "moving2"})
 
 	// then serve replica from the destination shards
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("MigrateServedFrom", "destination_keyspace/0", "replica")
 	require.NoError(t, err)
-	checkSrvKeyspaceServedFrom(t, cellj, destinationKeyspace, "ServedFrom(master): source_keyspace\n", *clusterInstance)
+	checkSrvKeyspaceServedFrom(t, cellj, destinationKeyspace, "ServedFrom(primary): source_keyspace\n", *clusterInstance)
 	checkBlacklistedTables(t, sourceMasterTablet, sourceKeyspace, nil)
 	checkBlacklistedTables(t, sourceReplicaTablet, sourceKeyspace, []string{"/moving/", "view1"})
 	checkBlacklistedTables(t, sourceRdOnlyTablet1, sourceKeyspace, []string{"/moving/", "view1"})
 	checkBlacklistedTables(t, sourceRdOnlyTablet2, sourceKeyspace, []string{"/moving/", "view1"})
-	checkClientConnRedirectionExecuteKeyrange(ctx, t, gconn, destinationKeyspace, []topodata.TabletType{topodata.TabletType_MASTER}, []string{"moving1", "moving2"})
+	checkClientConnRedirectionExecuteKeyrange(ctx, t, gconn, destinationKeyspace, []topodata.TabletType{topodata.TabletType_PRIMARY}, []string{"moving1", "moving2"})
 
 	// move replica back and forth
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("MigrateServedFrom", "-reverse", "destination_keyspace/0", "replica")
 	require.NoError(t, err)
-	checkSrvKeyspaceServedFrom(t, cellj, destinationKeyspace, "ServedFrom(master): source_keyspace\nServedFrom(replica): source_keyspace\n", *clusterInstance)
+	checkSrvKeyspaceServedFrom(t, cellj, destinationKeyspace, "ServedFrom(primary): source_keyspace\nServedFrom(replica): source_keyspace\n", *clusterInstance)
 	checkBlacklistedTables(t, sourceMasterTablet, sourceKeyspace, nil)
 	checkBlacklistedTables(t, sourceReplicaTablet, sourceKeyspace, nil)
 	checkBlacklistedTables(t, sourceRdOnlyTablet1, sourceKeyspace, []string{"/moving/", "view1"})
@@ -374,19 +374,19 @@ func TestVerticalSplit(t *testing.T) {
 
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("MigrateServedFrom", "destination_keyspace/0", "replica")
 	require.NoError(t, err)
-	checkSrvKeyspaceServedFrom(t, cellj, destinationKeyspace, "ServedFrom(master): source_keyspace\n", *clusterInstance)
+	checkSrvKeyspaceServedFrom(t, cellj, destinationKeyspace, "ServedFrom(primary): source_keyspace\n", *clusterInstance)
 	checkBlacklistedTables(t, sourceMasterTablet, sourceKeyspace, nil)
 	checkBlacklistedTables(t, sourceReplicaTablet, sourceKeyspace, []string{"/moving/", "view1"})
 	checkBlacklistedTables(t, sourceRdOnlyTablet1, sourceKeyspace, []string{"/moving/", "view1"})
 	checkBlacklistedTables(t, sourceRdOnlyTablet2, sourceKeyspace, []string{"/moving/", "view1"})
-	checkClientConnRedirectionExecuteKeyrange(ctx, t, gconn, destinationKeyspace, []topodata.TabletType{topodata.TabletType_MASTER}, []string{"moving1", "moving2"})
+	checkClientConnRedirectionExecuteKeyrange(ctx, t, gconn, destinationKeyspace, []topodata.TabletType{topodata.TabletType_PRIMARY}, []string{"moving1", "moving2"})
 
 	// Cancel should fail now
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("CancelResharding", "destination_keyspace/0")
 	require.Error(t, err)
 
 	// then serve primary from the destination shards
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("MigrateServedFrom", "destination_keyspace/0", "master")
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("MigrateServedFrom", "destination_keyspace/0", "primary")
 	require.NoError(t, err)
 	checkSrvKeyspaceServedFrom(t, cellj, destinationKeyspace, "", *clusterInstance)
 	checkBlacklistedTables(t, sourceMasterTablet, sourceKeyspace, []string{"/moving/", "view1"})
@@ -425,19 +425,19 @@ func verifyVtctlSetShardTabletControl(t *testing.T) {
 	// clear the rdonly entry:
 	err := clusterInstance.VtctlclientProcess.ExecuteCommand("SetShardTabletControl", "--remove", "source_keyspace/0", "rdonly")
 	require.NoError(t, err)
-	assertTabletControls(t, clusterInstance, []topodata.TabletType{topodata.TabletType_MASTER, topodata.TabletType_REPLICA})
+	assertTabletControls(t, clusterInstance, []topodata.TabletType{topodata.TabletType_PRIMARY, topodata.TabletType_REPLICA})
 
 	// re-add rdonly:
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("SetShardTabletControl", "--blacklisted_tables=/moving/,view1", "source_keyspace/0", "rdonly")
 	require.NoError(t, err)
-	assertTabletControls(t, clusterInstance, []topodata.TabletType{topodata.TabletType_MASTER, topodata.TabletType_REPLICA, topodata.TabletType_RDONLY})
+	assertTabletControls(t, clusterInstance, []topodata.TabletType{topodata.TabletType_PRIMARY, topodata.TabletType_REPLICA, topodata.TabletType_RDONLY})
 
 	//and then clear all entries:
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("SetShardTabletControl", "--remove", "source_keyspace/0", "rdonly")
 	require.NoError(t, err)
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("SetShardTabletControl", "--remove", "source_keyspace/0", "replica")
 	require.NoError(t, err)
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("SetShardTabletControl", "--remove", "source_keyspace/0", "master")
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("SetShardTabletControl", "--remove", "source_keyspace/0", "primary")
 	require.NoError(t, err)
 
 	shardJSON, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("GetShard", "source_keyspace/0")
@@ -480,10 +480,10 @@ func checkStats(t *testing.T) {
 	resultVtgateAPIMap := resultVtgateAPI.(map[string]interface{})
 	resultAPIHistograms := resultVtgateAPIMap["Histograms"]
 	resultAPIHistogramsMap := resultAPIHistograms.(map[string]interface{})
-	resultTabletDestination := resultAPIHistogramsMap["Execute.destination_keyspace.master"]
+	resultTabletDestination := resultAPIHistogramsMap["Execute.destination_keyspace.primary"]
 	resultTabletDestinationMap := resultTabletDestination.(map[string]interface{})
 	resultCountStrDestination := fmt.Sprintf("%v", reflect.ValueOf(resultTabletDestinationMap["Count"]))
-	assert.Equal(t, "6", resultCountStrDestination, fmt.Sprintf("unexpected value for VtgateApi(Execute.destination_keyspace.master) inside %s)", resultCountStrDestination))
+	assert.Equal(t, "6", resultCountStrDestination, fmt.Sprintf("unexpected value for VtgateApi(Execute.destination_keyspace.primary) inside %s)", resultCountStrDestination))
 
 	assert.Empty(t, resultMap["VtgateApiErrorCounts"])
 
@@ -608,8 +608,8 @@ func checkSrvKeyspaceServedFrom(t *testing.T, cell string, ksname string, expect
 			tabletTypeKeyspaceMap[tabletTy] = servedFrom.GetKeyspace()
 		}
 	}
-	if tabletTypeKeyspaceMap["master"] != "" {
-		result = result + fmt.Sprintf("ServedFrom(%s): %s\n", "master", tabletTypeKeyspaceMap["master"])
+	if tabletTypeKeyspaceMap["primary"] != "" {
+		result = result + fmt.Sprintf("ServedFrom(%s): %s\n", "primary", tabletTypeKeyspaceMap["primary"])
 	}
 	if tabletTypeKeyspaceMap["rdonly"] != "" {
 		result = result + fmt.Sprintf("ServedFrom(%s): %s\n", "rdonly", tabletTypeKeyspaceMap["rdonly"])

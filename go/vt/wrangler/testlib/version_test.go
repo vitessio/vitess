@@ -75,7 +75,7 @@ func TestVersion(t *testing.T) {
 	defer vp.Close()
 
 	// couple tablets is enough
-	sourceMaster := NewFakeTablet(t, wr, "cell1", 10, topodatapb.TabletType_MASTER, nil,
+	sourceMaster := NewFakeTablet(t, wr, "cell1", 10, topodatapb.TabletType_PRIMARY, nil,
 		TabletKeyspaceShard(t, "source", "0"),
 		StartHTTPServer())
 	sourceReplica := NewFakeTablet(t, wr, "cell1", 11, topodatapb.TabletType_REPLICA, nil,

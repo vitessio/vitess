@@ -244,13 +244,13 @@ func (sm *stateManager) execTransition(tabletType topodatapb.TabletType, state s
 	var err error
 	switch state {
 	case StateServing:
-		if tabletType == topodatapb.TabletType_MASTER {
+		if tabletType == topodatapb.TabletType_PRIMARY {
 			err = sm.serveMaster()
 		} else {
 			err = sm.serveNonMaster(tabletType)
 		}
 	case StateNotServing:
-		if tabletType == topodatapb.TabletType_MASTER {
+		if tabletType == topodatapb.TabletType_PRIMARY {
 			err = sm.unserveMaster()
 		} else {
 			err = sm.unserveNonMaster(tabletType)
@@ -406,7 +406,7 @@ func (sm *stateManager) verifyTargetLocked(ctx context.Context, target *querypb.
 func (sm *stateManager) serveMaster() error {
 	sm.watcher.Close()
 
-	if err := sm.connect(topodatapb.TabletType_MASTER); err != nil {
+	if err := sm.connect(topodatapb.TabletType_PRIMARY); err != nil {
 		return err
 	}
 
@@ -421,7 +421,7 @@ func (sm *stateManager) serveMaster() error {
 	sm.throttler.Open()
 	sm.tableGC.Open()
 	sm.ddle.Open()
-	sm.setState(topodatapb.TabletType_MASTER, StateServing)
+	sm.setState(topodatapb.TabletType_PRIMARY, StateServing)
 	return nil
 }
 
@@ -430,12 +430,12 @@ func (sm *stateManager) unserveMaster() error {
 
 	sm.watcher.Close()
 
-	if err := sm.connect(topodatapb.TabletType_MASTER); err != nil {
+	if err := sm.connect(topodatapb.TabletType_PRIMARY); err != nil {
 		return err
 	}
 
 	sm.rt.MakeMaster()
-	sm.setState(topodatapb.TabletType_MASTER, StateNotServing)
+	sm.setState(topodatapb.TabletType_PRIMARY, StateNotServing)
 	return nil
 }
 
@@ -576,21 +576,21 @@ func (sm *stateManager) setState(tabletType topodatapb.TabletType, state serving
 }
 
 func (sm *stateManager) stateStringLocked(tabletType topodatapb.TabletType, state servingState) string {
-	if tabletType != topodatapb.TabletType_MASTER {
+	if tabletType != topodatapb.TabletType_PRIMARY {
 		return fmt.Sprintf("%v: %v", tabletType, state)
 	}
 	return fmt.Sprintf("%v: %v, %v", tabletType, state, sm.terTimestamp.Local().Format("Jan 2, 2006 at 15:04:05 (MST)"))
 }
 
 func (sm *stateManager) handleGracePeriod(tabletType topodatapb.TabletType) {
-	if tabletType != topodatapb.TabletType_MASTER {
+	if tabletType != topodatapb.TabletType_PRIMARY {
 		// We allow serving of previous type only for a master transition.
 		sm.alsoAllow = nil
 		return
 	}
 
-	if tabletType == topodatapb.TabletType_MASTER &&
-		sm.target.TabletType != topodatapb.TabletType_MASTER &&
+	if tabletType == topodatapb.TabletType_PRIMARY &&
+		sm.target.TabletType != topodatapb.TabletType_PRIMARY &&
 		sm.transitionGracePeriod != 0 {
 
 		sm.alsoAllow = []topodatapb.TabletType{sm.target.TabletType}
@@ -618,7 +618,7 @@ func (sm *stateManager) Broadcast() {
 }
 
 func (sm *stateManager) refreshReplHealthLocked() (time.Duration, error) {
-	if sm.target.TabletType == topodatapb.TabletType_MASTER {
+	if sm.target.TabletType == topodatapb.TabletType_PRIMARY {
 		sm.replHealthy = true
 		return 0, nil
 	}

@@ -72,36 +72,36 @@ type TabletStats struct {
 
 // TabletWithStatsAndURL wraps topo.Tablet, adding a URL property and optional realtime stats.
 type TabletWithStatsAndURL struct {
-	Alias               *topodatapb.TabletAlias `json:"alias,omitempty"`
-	Hostname            string                  `json:"hostname,omitempty"`
-	PortMap             map[string]int32        `json:"port_map,omitempty"`
-	Keyspace            string                  `json:"keyspace,omitempty"`
-	Shard               string                  `json:"shard,omitempty"`
-	KeyRange            *topodatapb.KeyRange    `json:"key_range,omitempty"`
-	Type                topodatapb.TabletType   `json:"type,omitempty"`
-	DbNameOverride      string                  `json:"db_name_override,omitempty"`
-	Tags                map[string]string       `json:"tags,omitempty"`
-	MysqlHostname       string                  `json:"mysql_hostname,omitempty"`
-	MysqlPort           int32                   `json:"mysql_port,omitempty"`
-	MasterTermStartTime *vttime.Time            `json:"master_term_start_time,omitempty"`
-	Stats               *TabletStats            `json:"stats,omitempty"`
-	URL                 string                  `json:"url,omitempty"`
+	Alias                *topodatapb.TabletAlias `json:"alias,omitempty"`
+	Hostname             string                  `json:"hostname,omitempty"`
+	PortMap              map[string]int32        `json:"port_map,omitempty"`
+	Keyspace             string                  `json:"keyspace,omitempty"`
+	Shard                string                  `json:"shard,omitempty"`
+	KeyRange             *topodatapb.KeyRange    `json:"key_range,omitempty"`
+	Type                 topodatapb.TabletType   `json:"type,omitempty"`
+	DbNameOverride       string                  `json:"db_name_override,omitempty"`
+	Tags                 map[string]string       `json:"tags,omitempty"`
+	MysqlHostname        string                  `json:"mysql_hostname,omitempty"`
+	MysqlPort            int32                   `json:"mysql_port,omitempty"`
+	PrimaryTermStartTime *vttime.Time            `json:"primary_term_start_time,omitempty"`
+	Stats                *TabletStats            `json:"stats,omitempty"`
+	URL                  string                  `json:"url,omitempty"`
 }
 
 func newTabletWithStatsAndURL(t *topodatapb.Tablet, realtimeStats *realtimeStats) *TabletWithStatsAndURL {
 	tablet := &TabletWithStatsAndURL{
-		Alias:               t.Alias,
-		Hostname:            t.Hostname,
-		PortMap:             t.PortMap,
-		Keyspace:            t.Keyspace,
-		Shard:               t.Shard,
-		KeyRange:            t.KeyRange,
-		Type:                t.Type,
-		DbNameOverride:      t.DbNameOverride,
-		Tags:                t.Tags,
-		MysqlHostname:       t.MysqlHostname,
-		MysqlPort:           t.MysqlPort,
-		MasterTermStartTime: t.MasterTermStartTime,
+		Alias:                t.Alias,
+		Hostname:             t.Hostname,
+		PortMap:              t.PortMap,
+		Keyspace:             t.Keyspace,
+		Shard:                t.Shard,
+		KeyRange:             t.KeyRange,
+		Type:                 t.Type,
+		DbNameOverride:       t.DbNameOverride,
+		Tags:                 t.Tags,
+		MysqlHostname:        t.MysqlHostname,
+		MysqlPort:            t.MysqlPort,
+		PrimaryTermStartTime: t.PrimaryTermStartTime,
 	}
 
 	if *proxyTablets {

@@ -124,7 +124,7 @@ func (c *grpcVttabletConn) connect(ctx context.Context, cp ConnParams) error {
 	})
 
 	// parse the "db" into the keyspace/shard target
-	keyspace, tabletType, dest, err := topoproto.ParseDestination(cp.DB, topodatapb.TabletType_MASTER)
+	keyspace, tabletType, dest, err := topoproto.ParseDestination(cp.DB, topodatapb.TabletType_PRIMARY)
 	if err != nil {
 		return err
 	}

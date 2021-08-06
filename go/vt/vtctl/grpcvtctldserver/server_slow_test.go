@@ -67,8 +67,8 @@ func TestEmergencyReparentShardSlow(t *testing.T) {
 						Cell: "zone1",
 						Uid:  100,
 					},
-					Type: topodatapb.TabletType_MASTER,
-					MasterTermStartTime: &vttime.Time{
+					Type: topodatapb.TabletType_PRIMARY,
+					PrimaryTermStartTime: &vttime.Time{
 						Seconds: 100,
 					},
 					Keyspace: "testkeyspace",
@@ -180,8 +180,8 @@ func TestEmergencyReparentShardSlow(t *testing.T) {
 						Cell: "zone1",
 						Uid:  100,
 					},
-					Type: topodatapb.TabletType_MASTER,
-					MasterTermStartTime: &vttime.Time{
+					Type: topodatapb.TabletType_PRIMARY,
+					PrimaryTermStartTime: &vttime.Time{
 						Seconds: 100,
 					},
 					Keyspace: "testkeyspace",
@@ -352,8 +352,8 @@ func TestPlannedReparentShardSlow(t *testing.T) {
 						Cell: "zone1",
 						Uid:  100,
 					},
-					Type: topodatapb.TabletType_MASTER,
-					MasterTermStartTime: &vttime.Time{
+					Type: topodatapb.TabletType_PRIMARY,
+					PrimaryTermStartTime: &vttime.Time{
 						Seconds: 100,
 					},
 					Keyspace: "testkeyspace",
@@ -455,8 +455,8 @@ func TestPlannedReparentShardSlow(t *testing.T) {
 						Cell: "zone1",
 						Uid:  100,
 					},
-					Type: topodatapb.TabletType_MASTER,
-					MasterTermStartTime: &vttime.Time{
+					Type: topodatapb.TabletType_PRIMARY,
+					PrimaryTermStartTime: &vttime.Time{
 						Seconds: 100,
 					},
 					Keyspace: "testkeyspace",

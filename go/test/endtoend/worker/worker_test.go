@@ -486,7 +486,7 @@ func runShardTablets(t *testing.T, shardName string, tabletArr []*cluster.Vttabl
 		err = json2.Unmarshal([]byte(result), &shardInfo)
 		assert.Nil(t, err)
 
-		if int(shardInfo.MasterAlias.Uid) == tabletArr[0].TabletUID {
+		if int(shardInfo.PrimaryAlias.Uid) == tabletArr[0].TabletUID {
 			break
 		}
 		time.Sleep(10 * time.Second)

@@ -56,7 +56,7 @@ const (
 )
 
 // servingTypes is the list of tabletTypes which the source keyspace must be serving.
-var servingTypes = []topodatapb.TabletType{topodatapb.TabletType_MASTER, topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY}
+var servingTypes = []topodatapb.TabletType{topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY}
 
 // SplitCloneWorker will clone the data within a keyspace from a
 // source set of shards to a destination set of shards.
@@ -844,12 +844,12 @@ func (scw *SplitCloneWorker) findDestinationMasters(ctx context.Context) error {
 	scw.wr.Logger().Infof("Finding a MASTER tablet for each destination shard...")
 	for _, si := range scw.destinationShards {
 		waitCtx, waitCancel := context.WithTimeout(ctx, *waitForHealthyTabletsTimeout)
-		err := scw.tsc.WaitForTablets(waitCtx, si.Keyspace(), si.ShardName(), topodatapb.TabletType_MASTER)
+		err := scw.tsc.WaitForTablets(waitCtx, si.Keyspace(), si.ShardName(), topodatapb.TabletType_PRIMARY)
 		waitCancel()
 		if err != nil {
 			return vterrors.Wrapf(err, "cannot find MASTER tablet for destination shard for %v/%v (in cell: %v)", si.Keyspace(), si.ShardName(), scw.cell)
 		}
-		masters := scw.tsc.GetHealthyTabletStats(si.Keyspace(), si.ShardName(), topodatapb.TabletType_MASTER)
+		masters := scw.tsc.GetHealthyTabletStats(si.Keyspace(), si.ShardName(), topodatapb.TabletType_PRIMARY)
 		if len(masters) == 0 {
 			return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "cannot find MASTER tablet for destination shard for %v/%v (in cell: %v) in LegacyHealthCheck: empty LegacyTabletStats list", si.Keyspace(), si.ShardName(), scw.cell)
 		}
@@ -1004,7 +1004,7 @@ func (scw *SplitCloneWorker) getDestinationResultReader(ctx context.Context, td 
 	destReaders := make([]ResultReader, len(scw.destinationShards))
 
 	for shardIndex, si := range scw.destinationShards {
-		tp := newShardTabletProvider(scw.tsc, scw.tabletTracker, si.Keyspace(), si.ShardName(), topodatapb.TabletType_MASTER)
+		tp := newShardTabletProvider(scw.tsc, scw.tabletTracker, si.Keyspace(), si.ShardName(), topodatapb.TabletType_PRIMARY)
 		destResultReader, err := NewRestartableResultReader(ctx, scw.wr.Logger(), tp, td, chunk, true /* allowMultipleRetries */)
 		if err != nil {
 			closeReaders(ctx, destReaders)
