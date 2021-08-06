@@ -102,11 +102,11 @@ func TestHealthStreamerBroadcast(t *testing.T) {
 
 	// Test master and timestamp.
 	now := time.Now()
-	hs.ChangeState(topodatapb.TabletType_MASTER, now, 0, nil, true)
+	hs.ChangeState(topodatapb.TabletType_PRIMARY, now, 0, nil, true)
 	shr = <-ch
 	want = &querypb.StreamHealthResponse{
 		Target: &querypb.Target{
-			TabletType: topodatapb.TabletType_MASTER,
+			TabletType: topodatapb.TabletType_PRIMARY,
 		},
 		TabletAlias:                         alias,
 		Serving:                             true,
@@ -166,7 +166,7 @@ func TestReloadSchema(t *testing.T) {
 	blpFunc = testBlpFunc
 	hs := newHealthStreamer(env, alias)
 
-	target := &querypb.Target{TabletType: topodatapb.TabletType_MASTER}
+	target := &querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 	configs := config.DB
 
 	db.AddQuery(mysql.CreateVTDatabase, &sqltypes.Result{})
@@ -227,7 +227,7 @@ func TestDoesNotReloadSchema(t *testing.T) {
 	blpFunc = testBlpFunc
 	hs := newHealthStreamer(env, alias)
 
-	target := &querypb.Target{TabletType: topodatapb.TabletType_MASTER}
+	target := &querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 	configs := config.DB
 
 	hs.InitDBConfig(target, configs.DbaWithDB())
@@ -279,7 +279,7 @@ func TestInitialReloadSchema(t *testing.T) {
 	blpFunc = testBlpFunc
 	hs := newHealthStreamer(env, alias)
 
-	target := &querypb.Target{TabletType: topodatapb.TabletType_MASTER}
+	target := &querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 	configs := config.DB
 
 	db.AddQuery(mysql.CreateVTDatabase, &sqltypes.Result{})

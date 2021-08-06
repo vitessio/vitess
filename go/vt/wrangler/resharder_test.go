@@ -68,8 +68,8 @@ func TestResharderOneToMany(t *testing.T) {
 	var testCases []*testCase
 
 	testCases = append(testCases, newTestCase("", ""))
-	testCases = append(testCases, newTestCase("cell", "master"))
-	testCases = append(testCases, newTestCase("cell", "master,replica"))
+	testCases = append(testCases, newTestCase("cell", "primary"))
+	testCases = append(testCases, newTestCase("cell", "primary,replica"))
 	testCases = append(testCases, newTestCase("", "replica,rdonly"))
 
 	for _, tc := range testCases {

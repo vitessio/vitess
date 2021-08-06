@@ -125,9 +125,9 @@ func TestDiscoveryGatewayGetTablets(t *testing.T) {
 	// master should use the one with newer timestamp regardless of cell
 	hc.Reset()
 	dg.tsc.ResetForTesting()
-	hc.AddTestTablet("remote", "1.1.1.1", 1001, keyspace, shard, topodatapb.TabletType_MASTER, true, 5, nil)
-	ep1 = hc.AddTestTablet("remote", "2.2.2.2", 1001, keyspace, shard, topodatapb.TabletType_MASTER, true, 10, nil).Tablet()
-	tsl = dg.tsc.GetHealthyTabletStats(keyspace, shard, topodatapb.TabletType_MASTER)
+	hc.AddTestTablet("remote", "1.1.1.1", 1001, keyspace, shard, topodatapb.TabletType_PRIMARY, true, 5, nil)
+	ep1 = hc.AddTestTablet("remote", "2.2.2.2", 1001, keyspace, shard, topodatapb.TabletType_PRIMARY, true, 10, nil).Tablet()
+	tsl = dg.tsc.GetHealthyTabletStats(keyspace, shard, topodatapb.TabletType_PRIMARY)
 	if len(tsl) != 1 || !topo.TabletEquality(tsl[0].Tablet, ep1) {
 		t.Errorf("want %+v, got %+v", ep1, tsl)
 	}
@@ -145,7 +145,7 @@ func TestDiscoveryGatewayWaitForTablets(t *testing.T) {
 	srvTopo.SrvKeyspace = &topodatapb.SrvKeyspace{
 		Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
 			{
-				ServedType: topodata.TabletType_MASTER,
+				ServedType: topodata.TabletType_PRIMARY,
 				ShardReferences: []*topodatapb.ShardReference{
 					{
 						Name: shard,
@@ -176,11 +176,11 @@ func TestDiscoveryGatewayWaitForTablets(t *testing.T) {
 	hc.Reset()
 	dg.tsc.ResetForTesting()
 	hc.AddTestTablet(cell, "2.2.2.2", 1001, keyspace, shard, topodatapb.TabletType_REPLICA, true, 10, nil)
-	hc.AddTestTablet(cell, "1.1.1.1", 1001, keyspace, shard, topodatapb.TabletType_MASTER, true, 5, nil)
+	hc.AddTestTablet(cell, "1.1.1.1", 1001, keyspace, shard, topodatapb.TabletType_PRIMARY, true, 5, nil)
 	{
 		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second) //nolint
 		defer cancel()
-		err := dg.WaitForTablets(ctx, []topodatapb.TabletType{topodatapb.TabletType_REPLICA, topodatapb.TabletType_MASTER})
+		err := dg.WaitForTablets(ctx, []topodatapb.TabletType{topodatapb.TabletType_REPLICA, topodatapb.TabletType_PRIMARY})
 		if err != nil {
 			t.Errorf("want %+v, got %+v", nil, err)
 		}
@@ -196,7 +196,7 @@ func TestDiscoveryGatewayWaitForTablets(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second) //nolint
 		defer cancel()
 		srvTopo.SrvKeyspaceNames = []string{keyspace, "ks2"}
-		err := dg.WaitForTablets(ctx, []topodatapb.TabletType{topodatapb.TabletType_MASTER})
+		err := dg.WaitForTablets(ctx, []topodatapb.TabletType{topodatapb.TabletType_PRIMARY})
 		if err == nil {
 			t.Errorf("expected error, got nil")
 		}
@@ -206,7 +206,7 @@ func TestDiscoveryGatewayWaitForTablets(t *testing.T) {
 	{
 		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second) //nolint
 		defer cancel()
-		err := dg.WaitForTablets(ctx, []topodatapb.TabletType{topodatapb.TabletType_MASTER})
+		err := dg.WaitForTablets(ctx, []topodatapb.TabletType{topodatapb.TabletType_PRIMARY})
 		if err != nil {
 			t.Errorf("want %+v, got %+v", nil, err)
 		}

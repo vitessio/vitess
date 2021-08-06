@@ -126,8 +126,8 @@ func newVCursorImpl(
 	}
 
 	// With DiscoveryGateway transactions are only allowed on master.
-	if UsingLegacyGateway() && safeSession.InTransaction() && tabletType != topodatapb.TabletType_MASTER {
-		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "transaction is supported only for master tablet type, current type: %v", tabletType)
+	if UsingLegacyGateway() && safeSession.InTransaction() && tabletType != topodatapb.TabletType_PRIMARY {
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "transaction is supported only for primary tablet type, current type: %v", tabletType)
 	}
 	var ts *topo.Server
 	// We don't have access to the underlying TopoServer if this vtgate is
@@ -486,7 +486,7 @@ func (vc *vcursorImpl) SetTarget(target string) error {
 		return vterrors.NewErrorf(vtrpcpb.Code_NOT_FOUND, vterrors.BadDb, "unknown database '%s'", keyspace)
 	}
 
-	if vc.safeSession.InTransaction() && tabletType != topodatapb.TabletType_MASTER {
+	if vc.safeSession.InTransaction() && tabletType != topodatapb.TabletType_PRIMARY {
 		return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.LockOrActiveTransaction, "can't execute the given command because you have an active transaction")
 	}
 	vc.safeSession.SetTargetString(target)

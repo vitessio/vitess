@@ -141,8 +141,8 @@ func (m *Tablet) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
-	if m.MasterTermStartTime != nil {
-		size, err := m.MasterTermStartTime.MarshalToSizedBufferVT(dAtA[:i])
+	if m.PrimaryTermStartTime != nil {
+		size, err := m.PrimaryTermStartTime.MarshalToSizedBufferVT(dAtA[:i])
 		if err != nil {
 			return 0, err
 		}
@@ -422,8 +422,8 @@ func (m *Shard) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
-	if m.MasterTermStartTime != nil {
-		size, err := m.MasterTermStartTime.MarshalToSizedBufferVT(dAtA[:i])
+	if m.PrimaryTermStartTime != nil {
+		size, err := m.PrimaryTermStartTime.MarshalToSizedBufferVT(dAtA[:i])
 		if err != nil {
 			return 0, err
 		}
@@ -432,9 +432,9 @@ func (m *Shard) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i--
 		dAtA[i] = 0x42
 	}
-	if m.IsMasterServing {
+	if m.IsPrimaryServing {
 		i--
-		if m.IsMasterServing {
+		if m.IsPrimaryServing {
 			dAtA[i] = 1
 		} else {
 			dAtA[i] = 0
@@ -476,8 +476,8 @@ func (m *Shard) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i--
 		dAtA[i] = 0x12
 	}
-	if m.MasterAlias != nil {
-		size, err := m.MasterAlias.MarshalToSizedBufferVT(dAtA[:i])
+	if m.PrimaryAlias != nil {
+		size, err := m.PrimaryAlias.MarshalToSizedBufferVT(dAtA[:i])
 		if err != nil {
 			return 0, err
 		}
@@ -1333,8 +1333,8 @@ func (m *Tablet) SizeVT() (n int) {
 	if m.MysqlPort != 0 {
 		n += 1 + sov(uint64(m.MysqlPort))
 	}
-	if m.MasterTermStartTime != nil {
-		l = m.MasterTermStartTime.SizeVT()
+	if m.PrimaryTermStartTime != nil {
+		l = m.PrimaryTermStartTime.SizeVT()
 		n += 1 + l + sov(uint64(l))
 	}
 	if m.unknownFields != nil {
@@ -1412,8 +1412,8 @@ func (m *Shard) SizeVT() (n int) {
 	}
 	var l int
 	_ = l
-	if m.MasterAlias != nil {
-		l = m.MasterAlias.SizeVT()
+	if m.PrimaryAlias != nil {
+		l = m.PrimaryAlias.SizeVT()
 		n += 1 + l + sov(uint64(l))
 	}
 	if m.KeyRange != nil {
@@ -1432,11 +1432,11 @@ func (m *Shard) SizeVT() (n int) {
 			n += 1 + l + sov(uint64(l))
 		}
 	}
-	if m.IsMasterServing {
+	if m.IsPrimaryServing {
 		n += 2
 	}
-	if m.MasterTermStartTime != nil {
-		l = m.MasterTermStartTime.SizeVT()
+	if m.PrimaryTermStartTime != nil {
+		l = m.PrimaryTermStartTime.SizeVT()
 		n += 1 + l + sov(uint64(l))
 	}
 	if m.unknownFields != nil {
@@ -2524,7 +2524,7 @@ func (m *Tablet) UnmarshalVT(dAtA []byte) error {
 			}
 		case 14:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field MasterTermStartTime", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field PrimaryTermStartTime", wireType)
 			}
 			var msglen int
 			for shift := uint(0); ; shift += 7 {
@@ -2551,10 +2551,10 @@ func (m *Tablet) UnmarshalVT(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			if m.MasterTermStartTime == nil {
-				m.MasterTermStartTime = &vttime.Time{}
+			if m.PrimaryTermStartTime == nil {
+				m.PrimaryTermStartTime = &vttime.Time{}
 			}
-			if err := m.MasterTermStartTime.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+			if err := m.PrimaryTermStartTime.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
 			iNdEx = postIndex
@@ -2967,7 +2967,7 @@ func (m *Shard) UnmarshalVT(dAtA []byte) error {
 		switch fieldNum {
 		case 1:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field MasterAlias", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field PrimaryAlias", wireType)
 			}
 			var msglen int
 			for shift := uint(0); ; shift += 7 {
@@ -2994,10 +2994,10 @@ func (m *Shard) UnmarshalVT(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			if m.MasterAlias == nil {
-				m.MasterAlias = &TabletAlias{}
+			if m.PrimaryAlias == nil {
+				m.PrimaryAlias = &TabletAlias{}
 			}
-			if err := m.MasterAlias.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+			if err := m.PrimaryAlias.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
 			iNdEx = postIndex
@@ -3107,7 +3107,7 @@ func (m *Shard) UnmarshalVT(dAtA []byte) error {
 			iNdEx = postIndex
 		case 7:
 			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field IsMasterServing", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field IsPrimaryServing", wireType)
 			}
 			var v int
 			for shift := uint(0); ; shift += 7 {
@@ -3124,10 +3124,10 @@ func (m *Shard) UnmarshalVT(dAtA []byte) error {
 					break
 				}
 			}
-			m.IsMasterServing = bool(v != 0)
+			m.IsPrimaryServing = bool(v != 0)
 		case 8:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field MasterTermStartTime", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field PrimaryTermStartTime", wireType)
 			}
 			var msglen int
 			for shift := uint(0); ; shift += 7 {
@@ -3154,10 +3154,10 @@ func (m *Shard) UnmarshalVT(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			if m.MasterTermStartTime == nil {
-				m.MasterTermStartTime = &vttime.Time{}
+			if m.PrimaryTermStartTime == nil {
+				m.PrimaryTermStartTime = &vttime.Time{}
 			}
-			if err := m.MasterTermStartTime.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+			if err := m.PrimaryTermStartTime.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
 			iNdEx = postIndex

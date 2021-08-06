@@ -199,12 +199,12 @@ func BuildTargets(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManag
 			return nil, err
 		}
 
-		if si.MasterAlias == nil {
+		if si.PrimaryAlias == nil {
 			// This can happen if bad inputs are given.
 			return nil, fmt.Errorf("shard %v/%v doesn't have a primary set", targetKeyspace, targetShard)
 		}
 
-		primary, err := ts.GetTablet(ctx, si.MasterAlias)
+		primary, err := ts.GetTablet(ctx, si.PrimaryAlias)
 		if err != nil {
 			return nil, err
 		}

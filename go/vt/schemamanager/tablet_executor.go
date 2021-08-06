@@ -102,7 +102,7 @@ func (exec *TabletExecutor) Open(ctx context.Context, keyspace string) error {
 		if !shardInfo.HasMaster() {
 			return fmt.Errorf("shard: %s does not have a master", shardName)
 		}
-		tabletInfo, err := exec.wr.TopoServer().GetTablet(ctx, shardInfo.MasterAlias)
+		tabletInfo, err := exec.wr.TopoServer().GetTablet(ctx, shardInfo.PrimaryAlias)
 		if err != nil {
 			return fmt.Errorf("unable to get master tablet info, keyspace: %s, shard: %s, error: %v", keyspace, shardName, err)
 		}

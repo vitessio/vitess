@@ -171,7 +171,7 @@ func (c *Cluster) parseTablets(rows *sql.Rows) ([]*vtadminpb.Tablet, error) {
 }
 
 // Fields are:
-// Cell | Keyspace | Shard | TabletType (string) | ServingState (string) | Alias | Hostname | MasterTermStartTime.
+// Cell | Keyspace | Shard | TabletType (string) | ServingState (string) | Alias | Hostname | PrimaryTermStartTime.
 func (c *Cluster) parseTablet(rows *sql.Rows) (*vtadminpb.Tablet, error) {
 	var (
 		cell            string
@@ -225,10 +225,10 @@ func (c *Cluster) parseTablet(rows *sql.Rows) (*vtadminpb.Tablet, error) {
 	if mtstStr != "" {
 		timeTime, err := time.Parse(time.RFC3339, mtstStr)
 		if err != nil {
-			return nil, fmt.Errorf("failed parsing master_term_start_time %s: %w", mtstStr, err)
+			return nil, fmt.Errorf("failed parsing primary_term_start_time %s: %w", mtstStr, err)
 		}
 
-		topotablet.MasterTermStartTime = logutil.TimeToProto(timeTime)
+		topotablet.PrimaryTermStartTime = logutil.TimeToProto(timeTime)
 	}
 
 	if c.TabletFQDNTmpl != nil {
@@ -841,7 +841,7 @@ type GetSchemaOptions struct {
 //
 // (2.1) If, in size aggregation mode, opts.SizeOpts.IncludeNonServingShards is
 // false (the default), then we will filter out any shards for which
-// IsMasterServing is false in the topo, and make GetSchema RPCs to one tablet
+// IsPrimaryServing is false in the topo, and make GetSchema RPCs to one tablet
 // in every _serving_ shard. Otherwise we will make a GetSchema RPC to one
 // tablet in _every_ shard.
 //
@@ -1027,8 +1027,8 @@ func (c *Cluster) getTabletsToQueryForSchemas(ctx context.Context, keyspace stri
 			// provide a contiguous keyspace so that certain keyspace-level
 			// operations will work. In our case, we care about whether the
 			// shard is truly serving, which we define as also having a known
-			// primary (via MasterAlias) in addition to the IsMasterServing bit.
-			if !shard.Shard.IsMasterServing || shard.Shard.MasterAlias == nil {
+			// primary (via PrimaryAlias) in addition to the IsPrimaryServing bit.
+			if !shard.Shard.IsPrimaryServing || shard.Shard.PrimaryAlias == nil {
 				if !opts.TableSizeOptions.IncludeNonServingShards {
 					log.Infof("%s/%s is not serving; ignoring because IncludeNonServingShards = false", keyspace, shard.Name)
 					continue

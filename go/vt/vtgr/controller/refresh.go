@@ -184,7 +184,7 @@ func parseTabletInfos(tablets map[string]*topo.TabletInfo) []*grInstance {
 		tablet := tabletInfo.Tablet
 		// Only monitor master, replica and ronly tablet types
 		switch tablet.Type {
-		case topodatapb.TabletType_MASTER, topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY:
+		case topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY:
 			// mysql hostname and port might be empty here if tablet is not running
 			// we will treat them as unreachable
 			instanceKey := inst.InstanceKey{
@@ -194,7 +194,7 @@ func parseTabletInfos(tablets map[string]*topo.TabletInfo) []*grInstance {
 			grInstance := grInstance{
 				instanceKey:     &instanceKey,
 				tablet:          tablet,
-				masterTimeStamp: logutil.ProtoToTime(tablet.MasterTermStartTime),
+				masterTimeStamp: logutil.ProtoToTime(tablet.PrimaryTermStartTime),
 				alias:           alias,
 			}
 			newReplicas = append(newReplicas, &grInstance)

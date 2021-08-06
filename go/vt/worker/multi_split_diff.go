@@ -349,19 +349,19 @@ func (msdw *MultiSplitDiffWorker) stopVreplicationOnAll(ctx context.Context, tab
 	for i, shardInfo := range msdw.destinationShards {
 		tablet := tabletInfo[i].Tablet
 
-		msdw.wr.Logger().Infof("stopping master binlog replication on %v", shardInfo.MasterAlias)
+		msdw.wr.Logger().Infof("stopping master binlog replication on %v", shardInfo.PrimaryAlias)
 		shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
 		_, err := msdw.wr.TabletManagerClient().VReplicationExec(shortCtx, tablet, binlogplayer.StopVReplication(msdw.sourceUID, "for split diff"))
 		cancel()
 		if err != nil {
-			return nil, vterrors.Wrapf(err, "VReplicationExec(stop) for %v failed", shardInfo.MasterAlias)
+			return nil, vterrors.Wrapf(err, "VReplicationExec(stop) for %v failed", shardInfo.PrimaryAlias)
 		}
 		wrangler.RecordVReplicationAction(msdw.cleaner, tablet, binlogplayer.StartVReplication(msdw.sourceUID))
 		shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
 		p3qr, err := msdw.wr.TabletManagerClient().VReplicationExec(shortCtx, tablet, binlogplayer.ReadVReplicationPos(msdw.sourceUID))
 		cancel()
 		if err != nil {
-			return nil, vterrors.Wrapf(err, "VReplicationExec(stop) for %v failed", msdw.shardInfo.MasterAlias)
+			return nil, vterrors.Wrapf(err, "VReplicationExec(stop) for %v failed", msdw.shardInfo.PrimaryAlias)
 		}
 		qr := sqltypes.Proto3ToResult(p3qr)
 		if len(qr.Rows) != 1 || len(qr.Rows[0]) != 1 {
@@ -369,7 +369,7 @@ func (msdw *MultiSplitDiffWorker) stopVreplicationOnAll(ctx context.Context, tab
 		}
 		destVreplicationPos[i] = qr.Rows[0][0].ToString()
 		if err != nil {
-			return nil, vterrors.Wrapf(err, "StopBlp for %v failed", msdw.shardInfo.MasterAlias)
+			return nil, vterrors.Wrapf(err, "StopBlp for %v failed", msdw.shardInfo.PrimaryAlias)
 		}
 	}
 	return destVreplicationPos, nil
@@ -377,10 +377,10 @@ func (msdw *MultiSplitDiffWorker) stopVreplicationOnAll(ctx context.Context, tab
 
 func (msdw *MultiSplitDiffWorker) getMasterTabletInfoForShard(ctx context.Context, shardInfo *topo.ShardInfo) (*topo.TabletInfo, error) {
 	shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
-	masterInfo, err := msdw.wr.TopoServer().GetTablet(shortCtx, shardInfo.MasterAlias)
+	masterInfo, err := msdw.wr.TopoServer().GetTablet(shortCtx, shardInfo.PrimaryAlias)
 	cancel()
 	if err != nil {
-		return nil, vterrors.Wrapf(err, "synchronizeSrcAndDestTxState: cannot get Tablet record for master %v", msdw.shardInfo.MasterAlias)
+		return nil, vterrors.Wrapf(err, "synchronizeSrcAndDestTxState: cannot get Tablet record for master %v", msdw.shardInfo.PrimaryAlias)
 	}
 	return masterInfo, nil
 }
@@ -431,26 +431,26 @@ func (msdw *MultiSplitDiffWorker) stopReplicationOnSourceTabletAt(ctx context.Co
 // ask the master of the destination shard to resume filtered replication
 // up to the specified source position, and return the destination position.
 func (msdw *MultiSplitDiffWorker) stopVreplicationAt(ctx context.Context, shardInfo *topo.ShardInfo, sourcePosition string, masterInfo *topo.TabletInfo) (string, error) {
-	msdw.wr.Logger().Infof("Restarting master %v until it catches up to %v", shardInfo.MasterAlias, sourcePosition)
+	msdw.wr.Logger().Infof("Restarting master %v until it catches up to %v", shardInfo.PrimaryAlias, sourcePosition)
 	shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
 	_, err := msdw.wr.TabletManagerClient().VReplicationExec(shortCtx, masterInfo.Tablet, binlogplayer.StartVReplicationUntil(msdw.sourceUID, sourcePosition))
 	cancel()
 	if err != nil {
-		return "", vterrors.Wrapf(err, "VReplication(start until) for %v until %v failed", shardInfo.MasterAlias, sourcePosition)
+		return "", vterrors.Wrapf(err, "VReplication(start until) for %v until %v failed", shardInfo.PrimaryAlias, sourcePosition)
 	}
 
 	shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
 	err = msdw.wr.TabletManagerClient().VReplicationWaitForPos(shortCtx, masterInfo.Tablet, int(msdw.sourceUID), sourcePosition)
 	cancel()
 	if err != nil {
-		return "", vterrors.Wrapf(err, "VReplicationWaitForPos for %v until %v failed", shardInfo.MasterAlias, sourcePosition)
+		return "", vterrors.Wrapf(err, "VReplicationWaitForPos for %v until %v failed", shardInfo.PrimaryAlias, sourcePosition)
 	}
 
 	shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
 	masterPos, err := msdw.wr.TabletManagerClient().MasterPosition(shortCtx, masterInfo.Tablet)
 	cancel()
 	if err != nil {
-		return "", vterrors.Wrapf(err, "MasterPosition for %v failed", msdw.shardInfo.MasterAlias)
+		return "", vterrors.Wrapf(err, "MasterPosition for %v failed", msdw.shardInfo.PrimaryAlias)
 	}
 	return masterPos, nil
 }
@@ -493,12 +493,12 @@ func (msdw *MultiSplitDiffWorker) stopReplicationAt(ctx context.Context, destina
 // restart filtered replication on the destination master.
 // (remove the cleanup task that does the same)
 func (msdw *MultiSplitDiffWorker) startVreplication(ctx context.Context, shardInfo *topo.ShardInfo, masterInfo *topo.TabletInfo) error {
-	msdw.wr.Logger().Infof("restarting filtered replication on master %v", shardInfo.MasterAlias)
+	msdw.wr.Logger().Infof("restarting filtered replication on master %v", shardInfo.PrimaryAlias)
 	shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
 	_, err := msdw.wr.TabletManagerClient().VReplicationExec(shortCtx, masterInfo.Tablet, binlogplayer.StartVReplication(msdw.sourceUID))
 	if err != nil {
 		cancel()
-		return vterrors.Wrapf(err, "VReplicationExec(start) failed for %v", shardInfo.MasterAlias)
+		return vterrors.Wrapf(err, "VReplicationExec(start) failed for %v", shardInfo.PrimaryAlias)
 	}
 	cancel()
 	return nil
@@ -610,7 +610,7 @@ func (msdw *MultiSplitDiffWorker) synchronizeSrcAndDestTxState(ctx context.Conte
 		destTabletInfo, err := msdw.wr.TopoServer().GetTablet(shortCtx, destinationAlias)
 		cancel()
 		if err != nil {
-			return vterrors.Wrapf(err, "waitForDestinationTabletToReach: cannot get Tablet record for master %v", msdw.shardInfo.MasterAlias)
+			return vterrors.Wrapf(err, "waitForDestinationTabletToReach: cannot get Tablet record for master %v", msdw.shardInfo.PrimaryAlias)
 		}
 
 		queryService, _ := tabletconn.GetDialer()(source.Tablet, true)

@@ -175,7 +175,7 @@ func refreshTablets(tablets map[string]*topo.TabletInfo, query string, args []in
 		if tablet.MysqlHostname == "" {
 			continue
 		}
-		if tablet.Type != topodatapb.TabletType_MASTER && !topo.IsReplicaType(tablet.Type) {
+		if tablet.Type != topodatapb.TabletType_PRIMARY && !topo.IsReplicaType(tablet.Type) {
 			continue
 		}
 		instanceKey := inst.InstanceKey{
@@ -331,7 +331,7 @@ func ShardMaster(instanceKey *inst.InstanceKey) (masterKey *inst.InstanceKey, er
 	}
 	tCtx, tCancel := context.WithTimeout(context.Background(), *topo.RemoteOperationTimeout)
 	defer tCancel()
-	master, err := ts.GetTablet(tCtx, si.MasterAlias)
+	master, err := ts.GetTablet(tCtx, si.PrimaryAlias)
 	if err != nil {
 		return nil, err
 	}

@@ -122,14 +122,14 @@ func (tc *legacySplitCloneTestCase) setUp(v3 bool) {
 	tc.rightMasterFakeDb = fakesqldb.New(tc.t).SetName("rightMaster").OrderMatters()
 
 	sourceMaster := testlib.NewFakeTablet(tc.t, tc.wi.wr, "cell1", 0,
-		topodatapb.TabletType_MASTER, nil, testlib.TabletKeyspaceShard(tc.t, "ks", "-80"))
+		topodatapb.TabletType_PRIMARY, nil, testlib.TabletKeyspaceShard(tc.t, "ks", "-80"))
 	sourceRdonly1 := testlib.NewFakeTablet(tc.t, tc.wi.wr, "cell1", 1,
 		topodatapb.TabletType_RDONLY, sourceRdonlyFakeDB, testlib.TabletKeyspaceShard(tc.t, "ks", "-80"))
 	sourceRdonly2 := testlib.NewFakeTablet(tc.t, tc.wi.wr, "cell1", 2,
 		topodatapb.TabletType_RDONLY, sourceRdonlyFakeDB, testlib.TabletKeyspaceShard(tc.t, "ks", "-80"))
 
 	leftMaster := testlib.NewFakeTablet(tc.t, tc.wi.wr, "cell1", 10,
-		topodatapb.TabletType_MASTER, tc.leftMasterFakeDb, testlib.TabletKeyspaceShard(tc.t, "ks", "-40"))
+		topodatapb.TabletType_PRIMARY, tc.leftMasterFakeDb, testlib.TabletKeyspaceShard(tc.t, "ks", "-40"))
 	leftRdonly := testlib.NewFakeTablet(tc.t, tc.wi.wr, "cell1", 11,
 		topodatapb.TabletType_RDONLY, nil, testlib.TabletKeyspaceShard(tc.t, "ks", "-40"))
 	// leftReplica is used by the reparent test.
@@ -138,7 +138,7 @@ func (tc *legacySplitCloneTestCase) setUp(v3 bool) {
 	tc.leftReplica = leftReplica
 
 	rightMaster := testlib.NewFakeTablet(tc.t, tc.wi.wr, "cell1", 20,
-		topodatapb.TabletType_MASTER, tc.rightMasterFakeDb, testlib.TabletKeyspaceShard(tc.t, "ks", "40-80"))
+		topodatapb.TabletType_PRIMARY, tc.rightMasterFakeDb, testlib.TabletKeyspaceShard(tc.t, "ks", "40-80"))
 	rightRdonly := testlib.NewFakeTablet(tc.t, tc.wi.wr, "cell1", 21,
 		topodatapb.TabletType_RDONLY, nil, testlib.TabletKeyspaceShard(tc.t, "ks", "40-80"))
 
@@ -453,8 +453,8 @@ func TestLegacySplitCloneV2_NoMasterAvailable(t *testing.T) {
 		}
 
 		// Make leftReplica the new MASTER.
-		tc.leftReplica.TM.ChangeType(ctx, topodatapb.TabletType_MASTER)
-		tc.leftReplicaQs.UpdateType(topodatapb.TabletType_MASTER)
+		tc.leftReplica.TM.ChangeType(ctx, topodatapb.TabletType_PRIMARY)
+		tc.leftReplicaQs.UpdateType(topodatapb.TabletType_PRIMARY)
 		tc.leftReplicaQs.AddDefaultHealthResponse()
 		errs <- nil
 		close(errs)

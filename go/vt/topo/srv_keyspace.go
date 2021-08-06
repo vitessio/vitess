@@ -510,7 +510,7 @@ func (ts *Server) MigrateServedType(ctx context.Context, keyspace string, shards
 				for _, partition := range srvKeyspace.GetPartitions() {
 
 					// We are finishing the migration, cleaning up tablet controls from the srvKeyspace
-					if tabletType == topodatapb.TabletType_MASTER {
+					if tabletType == topodatapb.TabletType_PRIMARY {
 						partition.ShardTabletControls = nil
 					}
 

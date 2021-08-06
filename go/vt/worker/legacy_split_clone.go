@@ -313,7 +313,7 @@ func (scw *LegacySplitCloneWorker) init(ctx context.Context) error {
 	}
 
 	// validate all serving types
-	servingTypes := []topodatapb.TabletType{topodatapb.TabletType_MASTER, topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY}
+	servingTypes := []topodatapb.TabletType{topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY}
 	for _, st := range servingTypes {
 		for _, si := range scw.sourceShards {
 			shardServingTypes, err := scw.wr.TopoServer().GetShardServingTypes(ctx, si)
@@ -400,10 +400,10 @@ func (scw *LegacySplitCloneWorker) findTargets(ctx context.Context) error {
 	for _, si := range scw.destinationShards {
 		waitCtx, waitCancel := context.WithTimeout(ctx, 10*time.Second)
 		defer waitCancel()
-		if err := scw.tsc.WaitForTablets(waitCtx, si.Keyspace(), si.ShardName(), topodatapb.TabletType_MASTER); err != nil {
+		if err := scw.tsc.WaitForTablets(waitCtx, si.Keyspace(), si.ShardName(), topodatapb.TabletType_PRIMARY); err != nil {
 			return vterrors.Wrapf(err, "cannot find MASTER tablet for destination shard for %v/%v", si.Keyspace(), si.ShardName())
 		}
-		masters := scw.tsc.GetHealthyTabletStats(si.Keyspace(), si.ShardName(), topodatapb.TabletType_MASTER)
+		masters := scw.tsc.GetHealthyTabletStats(si.Keyspace(), si.ShardName(), topodatapb.TabletType_PRIMARY)
 		if len(masters) == 0 {
 			return fmt.Errorf("cannot find MASTER tablet for destination shard for %v/%v in LegacyHealthCheck: empty LegacyTabletStats list", si.Keyspace(), si.ShardName())
 		}

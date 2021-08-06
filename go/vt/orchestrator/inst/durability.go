@@ -96,7 +96,7 @@ type durabilityNone struct{}
 
 func (d *durabilityNone) promotionRule(tablet *topodatapb.Tablet) CandidatePromotionRule {
 	switch tablet.Type {
-	case topodatapb.TabletType_MASTER, topodatapb.TabletType_REPLICA:
+	case topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA:
 		return NeutralPromoteRule
 	}
 	return MustNotPromoteRule
@@ -116,7 +116,7 @@ type durabilitySemiSync struct{}
 
 func (d *durabilitySemiSync) promotionRule(tablet *topodatapb.Tablet) CandidatePromotionRule {
 	switch tablet.Type {
-	case topodatapb.TabletType_MASTER, topodatapb.TabletType_REPLICA:
+	case topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA:
 		return NeutralPromoteRule
 	}
 	return MustNotPromoteRule
@@ -128,7 +128,7 @@ func (d *durabilitySemiSync) masterSemiSync(instanceKey InstanceKey) int {
 
 func (d *durabilitySemiSync) replicaSemiSync(master, replica *topodatapb.Tablet) bool {
 	switch replica.Type {
-	case topodatapb.TabletType_MASTER, topodatapb.TabletType_REPLICA:
+	case topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA:
 		return true
 	}
 	return false
@@ -140,7 +140,7 @@ type durabilityCrossCell struct{}
 
 func (d *durabilityCrossCell) promotionRule(tablet *topodatapb.Tablet) CandidatePromotionRule {
 	switch tablet.Type {
-	case topodatapb.TabletType_MASTER, topodatapb.TabletType_REPLICA:
+	case topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA:
 		return NeutralPromoteRule
 	}
 	return MustNotPromoteRule
@@ -156,7 +156,7 @@ func (d *durabilityCrossCell) replicaSemiSync(master, replica *topodatapb.Tablet
 		return false
 	}
 	switch replica.Type {
-	case topodatapb.TabletType_MASTER, topodatapb.TabletType_REPLICA:
+	case topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA:
 		return master.Alias.Cell != replica.Alias.Cell
 	}
 	return false

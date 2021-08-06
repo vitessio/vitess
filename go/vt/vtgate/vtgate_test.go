@@ -49,8 +49,8 @@ var executeOptions = &querypb.ExecuteOptions{
 	IncludedFields: querypb.ExecuteOptions_TYPE_ONLY,
 }
 
-var masterSession = &vtgatepb.Session{
-	TargetString: "@master",
+var primarySession = &vtgatepb.Session{
+	TargetString: "@primary",
 }
 
 func init() {
@@ -92,12 +92,12 @@ func init() {
 func TestVTGateExecute(t *testing.T) {
 	createSandbox(KsTestUnsharded)
 	hcVTGateTest.Reset()
-	sbc := hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, KsTestUnsharded, "0", topodatapb.TabletType_MASTER, true, 1, nil)
+	sbc := hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, KsTestUnsharded, "0", topodatapb.TabletType_PRIMARY, true, 1, nil)
 	_, qr, err := rpcVTGate.Execute(
 		context.Background(),
 		&vtgatepb.Session{
 			Autocommit:   true,
-			TargetString: "@master",
+			TargetString: "@primary",
 			Options:      executeOptions,
 		},
 		"select id from t1",
@@ -117,7 +117,7 @@ func TestVTGateExecute(t *testing.T) {
 func TestVTGateExecuteWithKeyspaceShard(t *testing.T) {
 	createSandbox(KsTestUnsharded)
 	hcVTGateTest.Reset()
-	hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, KsTestUnsharded, "0", topodatapb.TabletType_MASTER, true, 1, nil)
+	hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, KsTestUnsharded, "0", topodatapb.TabletType_PRIMARY, true, 1, nil)
 
 	// Valid keyspace.
 	_, qr, err := rpcVTGate.Execute(
@@ -151,7 +151,7 @@ func TestVTGateExecuteWithKeyspaceShard(t *testing.T) {
 	_, qr, err = rpcVTGate.Execute(
 		context.Background(),
 		&vtgatepb.Session{
-			TargetString: KsTestUnsharded + ":0@master",
+			TargetString: KsTestUnsharded + ":0@primary",
 		},
 		"select id from none",
 		nil,
@@ -165,13 +165,13 @@ func TestVTGateExecuteWithKeyspaceShard(t *testing.T) {
 	_, _, err = rpcVTGate.Execute(
 		context.Background(),
 		&vtgatepb.Session{
-			TargetString: KsTestUnsharded + ":noshard@master",
+			TargetString: KsTestUnsharded + ":noshard@primary",
 		},
 		"select id from none",
 		nil,
 	)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), `no healthy tablet available for 'keyspace:"TestUnsharded" shard:"noshard" tablet_type:MASTER`)
+	require.Contains(t, err.Error(), `no healthy tablet available for 'keyspace:"TestUnsharded" shard:"noshard" tablet_type:PRIMARY`)
 }
 
 func TestVTGateStreamExecute(t *testing.T) {
@@ -179,12 +179,12 @@ func TestVTGateStreamExecute(t *testing.T) {
 	shard := "0"
 	createSandbox(ks)
 	hcVTGateTest.Reset()
-	sbc := hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, ks, shard, topodatapb.TabletType_MASTER, true, 1, nil)
+	sbc := hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, ks, shard, topodatapb.TabletType_PRIMARY, true, 1, nil)
 	var qrs []*sqltypes.Result
 	err := rpcVTGate.StreamExecute(
 		context.Background(),
 		&vtgatepb.Session{
-			TargetString: "@master",
+			TargetString: "@primary",
 			Options:      executeOptions,
 		},
 		"select id from t1",
@@ -258,7 +258,7 @@ func testErrorPropagation(t *testing.T, sbcs []*sandboxconn.SandboxConn, before 
 	}
 	_, _, err := rpcVTGate.Execute(
 		context.Background(),
-		masterSession,
+		primarySession,
 		"select id from t1",
 		nil,
 	)
@@ -280,7 +280,7 @@ func testErrorPropagation(t *testing.T, sbcs []*sandboxconn.SandboxConn, before 
 	}
 	err = rpcVTGate.StreamExecute(
 		context.Background(),
-		masterSession,
+		primarySession,
 		"select id from t1",
 		nil,
 		func(r *sqltypes.Result) error {
@@ -301,13 +301,13 @@ func testErrorPropagation(t *testing.T, sbcs []*sandboxconn.SandboxConn, before 
 }
 
 // TestErrorPropagation tests an error returned by sandboxconn is
-// properly propagated through vtgate layers.  We need both a master
+// properly propagated through vtgate layers.  We need both a primary
 // tablet and a rdonly tablet because we don't control the routing of
 // Commit.
 func TestErrorPropagation(t *testing.T) {
 	createSandbox(KsTestUnsharded)
 	hcVTGateTest.Reset()
-	sbcm := hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, KsTestUnsharded, "0", topodatapb.TabletType_MASTER, true, 1, nil)
+	sbcm := hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, KsTestUnsharded, "0", topodatapb.TabletType_PRIMARY, true, 1, nil)
 	sbcrdonly := hcVTGateTest.AddTestTablet("aa", "1.1.1.2", 1001, KsTestUnsharded, "0", topodatapb.TabletType_RDONLY, true, 1, nil)
 	sbcs := []*sandboxconn.SandboxConn{
 		sbcm,
@@ -392,7 +392,7 @@ func TestErrorPropagation(t *testing.T) {
 func TestErrorIssuesRollback(t *testing.T) {
 	createSandbox(KsTestUnsharded)
 	hcVTGateTest.Reset()
-	sbc := hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, KsTestUnsharded, "0", topodatapb.TabletType_MASTER, true, 1, nil)
+	sbc := hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, KsTestUnsharded, "0", topodatapb.TabletType_PRIMARY, true, 1, nil)
 
 	// Start a transaction, send one statement.
 	// Simulate an error that should trigger a rollback:

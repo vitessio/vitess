@@ -156,7 +156,7 @@ func TestConsolidatorReplicasOnly(t *testing.T) {
 	err := client.SetServingType(topodatapb.TabletType_REPLICA)
 	require.NoError(t, err)
 	defer func() {
-		err = client.SetServingType(topodatapb.TabletType_MASTER)
+		err = client.SetServingType(topodatapb.TabletType_PRIMARY)
 		require.NoError(t, err)
 	}()
 

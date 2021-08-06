@@ -66,13 +66,13 @@ func newTestMaterializerEnv(t *testing.T, ms *vtctldatapb.MaterializeSettings, s
 	env.wr = New(logutil.NewConsoleLogger(), env.topoServ, env.tmc)
 	tabletID := 100
 	for _, shard := range sources {
-		_ = env.addTablet(tabletID, env.ms.SourceKeyspace, shard, topodatapb.TabletType_MASTER)
+		_ = env.addTablet(tabletID, env.ms.SourceKeyspace, shard, topodatapb.TabletType_PRIMARY)
 		tabletID += 10
 	}
 	if ms.SourceKeyspace != ms.TargetKeyspace {
 		tabletID = 200
 		for _, shard := range targets {
-			_ = env.addTablet(tabletID, env.ms.TargetKeyspace, shard, topodatapb.TabletType_MASTER)
+			_ = env.addTablet(tabletID, env.ms.TargetKeyspace, shard, topodatapb.TabletType_PRIMARY)
 			tabletID += 10
 		}
 	}
@@ -137,9 +137,9 @@ func (env *testMaterializerEnv) addTablet(id int, keyspace, shard string, tablet
 	if err := env.wr.InitTablet(context.Background(), tablet, false /* allowMasterOverride */, true /* createShardAndKeyspace */, false /* allowUpdate */); err != nil {
 		panic(err)
 	}
-	if tabletType == topodatapb.TabletType_MASTER {
+	if tabletType == topodatapb.TabletType_PRIMARY {
 		_, err := env.wr.ts.UpdateShardFields(context.Background(), keyspace, shard, func(si *topo.ShardInfo) error {
-			si.MasterAlias = tablet.Alias
+			si.PrimaryAlias = tablet.Alias
 			return nil
 		})
 		if err != nil {

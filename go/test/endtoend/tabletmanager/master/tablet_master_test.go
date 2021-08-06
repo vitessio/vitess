@@ -108,7 +108,7 @@ func TestMain(m *testing.M) {
 		// Collect table paths and ports
 		tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 		for _, tablet := range tablets {
-			if tablet.Type == "master" {
+			if tablet.Type == "master" || tablet.Type == "primary" {
 				primaryTablet = *tablet
 			} else if tablet.Type != "rdonly" {
 				replicaTablet = *tablet
@@ -139,7 +139,7 @@ func TestRepeatedInitShardPrimary(t *testing.T) {
 	checkHealth(t, replicaTablet.HTTPPort, false)
 
 	checkTabletType(t, primaryTablet.Alias, "REPLICA")
-	checkTabletType(t, replicaTablet.Alias, "MASTER")
+	checkTabletType(t, replicaTablet.Alias, "PRIMARY")
 
 	// Come back to the original tablet.
 	err = clusterInstance.VtctlclientProcess.InitShardPrimary(keyspaceName, shardName, cell, primaryTablet.TabletUID)
@@ -155,13 +155,13 @@ func TestRepeatedInitShardPrimary(t *testing.T) {
 	require.Nil(t, err)
 	checkHealth(t, replicaTablet.HTTPPort, false)
 
-	checkTabletType(t, primaryTablet.Alias, "MASTER")
+	checkTabletType(t, primaryTablet.Alias, "PRIMARY")
 	checkTabletType(t, replicaTablet.Alias, "REPLICA")
 }
 
 func TestPrimaryRestartSetsTERTimestamp(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	// Test that TER timestamp is set when we restart the MASTER vttablet.
+	// Test that TER timestamp is set when we restart the PRIMARY vttablet.
 	// TER = TabletExternallyReparented.
 	// See StreamHealthResponse.tablet_externally_reparented_timestamp for details.
 
@@ -181,15 +181,15 @@ func TestPrimaryRestartSetsTERTimestamp(t *testing.T) {
 	err = json.Unmarshal([]byte(result), &streamHealthRes1)
 	require.Nil(t, err)
 	actualType := streamHealthRes1.GetTarget().GetTabletType()
-	tabletType := topodatapb.TabletType_value["MASTER"]
+	tabletType := topodatapb.TabletType_value["PRIMARY"]
 	got := fmt.Sprintf("%d", actualType)
 	want := fmt.Sprintf("%d", tabletType)
 	assert.Equal(t, want, got)
 	assert.NotNil(t, streamHealthRes1.GetTabletExternallyReparentedTimestamp())
 	assert.True(t, streamHealthRes1.GetTabletExternallyReparentedTimestamp() > 0,
-		"TER on MASTER must be set after InitShardPrimary")
+		"TER on PRIMARY must be set after InitShardPrimary")
 
-	// Restart the MASTER vttablet and test again
+	// Restart the PRIMARY vttablet and test again
 
 	// kill the newly promoted primary tablet
 	err = replicaTablet.VttabletProcess.TearDown()
@@ -209,14 +209,14 @@ func TestPrimaryRestartSetsTERTimestamp(t *testing.T) {
 	require.Nil(t, err)
 
 	actualType = streamHealthRes2.GetTarget().GetTabletType()
-	tabletType = topodatapb.TabletType_value["MASTER"]
+	tabletType = topodatapb.TabletType_value["PRIMARY"]
 	got = fmt.Sprintf("%d", actualType)
 	want = fmt.Sprintf("%d", tabletType)
 	assert.Equal(t, want, got)
 
 	assert.NotNil(t, streamHealthRes2.GetTabletExternallyReparentedTimestamp())
 	assert.True(t, streamHealthRes2.GetTabletExternallyReparentedTimestamp() == streamHealthRes1.GetTabletExternallyReparentedTimestamp(),
-		fmt.Sprintf("When the MASTER vttablet was restarted, "+
+		fmt.Sprintf("When the PRIMARY vttablet was restarted, "+
 			"the TER timestamp must be set by reading the old value from the tablet record. Old: %d, New: %d",
 			streamHealthRes1.GetTabletExternallyReparentedTimestamp(),
 			streamHealthRes2.GetTabletExternallyReparentedTimestamp()))

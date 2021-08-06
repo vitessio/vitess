@@ -57,7 +57,7 @@ func createSetup(ctx context.Context, t *testing.T) (*topo.Server, *topo.Server)
 		},
 		Keyspace:       "test_keyspace",
 		Shard:          "0",
-		Type:           topodatapb.TabletType_MASTER,
+		Type:           topodatapb.TabletType_PRIMARY,
 		DbNameOverride: "",
 		KeyRange:       nil,
 	}

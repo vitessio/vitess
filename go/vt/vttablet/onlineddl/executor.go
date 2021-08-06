@@ -593,7 +593,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 	}
 	toggleWrites := func(allowWrites bool) error {
 		if _, err := e.ts.UpdateShardFields(ctx, e.keyspace, shardInfo.ShardName(), func(si *topo.ShardInfo) error {
-			err := si.UpdateSourceBlacklistedTables(ctx, topodatapb.TabletType_MASTER, nil, allowWrites, []string{onlineDDL.Table})
+			err := si.UpdateSourceBlacklistedTables(ctx, topodatapb.TabletType_PRIMARY, nil, allowWrites, []string{onlineDDL.Table})
 			return err
 		}); err != nil {
 			return err
@@ -771,7 +771,7 @@ func (e *Executor) ExecuteWithVReplication(ctx context.Context, onlineDDL *schem
 		return ErrExecutorMigrationAlreadyRunning
 	}
 
-	if e.tabletTypeFunc() != topodatapb.TabletType_MASTER {
+	if e.tabletTypeFunc() != topodatapb.TabletType_PRIMARY {
 		return ErrExecutorNotWritableTablet
 	}
 
@@ -861,7 +861,7 @@ func (e *Executor) ExecuteWithGhost(ctx context.Context, onlineDDL *schema.Onlin
 		return ErrExecutorMigrationAlreadyRunning
 	}
 
-	if e.tabletTypeFunc() != topodatapb.TabletType_MASTER {
+	if e.tabletTypeFunc() != topodatapb.TabletType_PRIMARY {
 		return ErrExecutorNotWritableTablet
 	}
 	variables, err := e.readMySQLVariables(ctx)
@@ -1065,7 +1065,7 @@ func (e *Executor) ExecuteWithPTOSC(ctx context.Context, onlineDDL *schema.Onlin
 		return ErrExecutorMigrationAlreadyRunning
 	}
 
-	if e.tabletTypeFunc() != topodatapb.TabletType_MASTER {
+	if e.tabletTypeFunc() != topodatapb.TabletType_PRIMARY {
 		return ErrExecutorNotWritableTablet
 	}
 	variables, err := e.readMySQLVariables(ctx)
@@ -2463,7 +2463,7 @@ func (e *Executor) onMigrationCheckTick() {
 		return
 	}
 
-	if e.tabletTypeFunc() != topodatapb.TabletType_MASTER {
+	if e.tabletTypeFunc() != topodatapb.TabletType_PRIMARY {
 		return
 	}
 	if e.keyspace == "" {
