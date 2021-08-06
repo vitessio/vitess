@@ -70,7 +70,7 @@ func TestStateManagerServeMaster(t *testing.T) {
 	sm := newTestStateManager(t)
 	defer sm.StopService()
 	sm.EnterLameduck()
-	err := sm.SetServingType(topodatapb.TabletType_MASTER, testNow, StateServing, "")
+	err := sm.SetServingType(topodatapb.TabletType_PRIMARY, testNow, StateServing, "")
 	require.NoError(t, err)
 
 	assert.Equal(t, false, sm.lameduck)
@@ -93,7 +93,7 @@ func TestStateManagerServeMaster(t *testing.T) {
 	assert.False(t, sm.se.(*testSchemaEngine).nonMaster)
 	assert.True(t, sm.se.(*testSchemaEngine).ensureCalled)
 
-	assert.Equal(t, topodatapb.TabletType_MASTER, sm.target.TabletType)
+	assert.Equal(t, topodatapb.TabletType_PRIMARY, sm.target.TabletType)
 	assert.Equal(t, StateServing, sm.state)
 }
 
@@ -125,7 +125,7 @@ func TestStateManagerServeNonMaster(t *testing.T) {
 func TestStateManagerUnserveMaster(t *testing.T) {
 	sm := newTestStateManager(t)
 	defer sm.StopService()
-	err := sm.SetServingType(topodatapb.TabletType_MASTER, testNow, StateNotServing, "")
+	err := sm.SetServingType(topodatapb.TabletType_PRIMARY, testNow, StateNotServing, "")
 	require.NoError(t, err)
 
 	verifySubcomponent(t, 1, sm.ddle, testStateClosed)
@@ -143,7 +143,7 @@ func TestStateManagerUnserveMaster(t *testing.T) {
 
 	verifySubcomponent(t, 12, sm.rt, testStateMaster)
 
-	assert.Equal(t, topodatapb.TabletType_MASTER, sm.target.TabletType)
+	assert.Equal(t, topodatapb.TabletType_PRIMARY, sm.target.TabletType)
 	assert.Equal(t, StateNotServing, sm.state)
 }
 
@@ -233,11 +233,11 @@ func TestStateManagerGracePeriod(t *testing.T) {
 	assert.Equal(t, topodatapb.TabletType_REPLICA, sm.target.TabletType)
 	assert.Equal(t, StateServing, sm.state)
 
-	err = sm.SetServingType(topodatapb.TabletType_MASTER, testNow, StateServing, "")
+	err = sm.SetServingType(topodatapb.TabletType_PRIMARY, testNow, StateServing, "")
 	require.NoError(t, err)
 
 	assert.Equal(t, topodatapb.TabletType_REPLICA, alsoAllow())
-	assert.Equal(t, topodatapb.TabletType_MASTER, sm.target.TabletType)
+	assert.Equal(t, topodatapb.TabletType_PRIMARY, sm.target.TabletType)
 	assert.Equal(t, StateServing, sm.state)
 
 	time.Sleep(20 * time.Millisecond)
@@ -273,7 +273,7 @@ func TestStateManagerSetServingTypeRace(t *testing.T) {
 		sm: sm,
 	}
 	sm.watcher = te
-	err := sm.SetServingType(topodatapb.TabletType_MASTER, testNow, StateServing, "")
+	err := sm.SetServingType(topodatapb.TabletType_PRIMARY, testNow, StateServing, "")
 	require.NoError(t, err)
 
 	// Ensure the next call waits and then succeeds.
@@ -321,7 +321,7 @@ func TestStateManagerTransitionFailRetry(t *testing.T) {
 	defer sm.StopService()
 	sm.se.(*testSchemaEngine).failMySQL = true
 
-	err := sm.SetServingType(topodatapb.TabletType_MASTER, testNow, StateServing, "")
+	err := sm.SetServingType(topodatapb.TabletType_PRIMARY, testNow, StateServing, "")
 	require.Error(t, err)
 
 	// Calling retryTransition while retrying should be a no-op.
@@ -344,7 +344,7 @@ func TestStateManagerTransitionFailRetry(t *testing.T) {
 		time.Sleep(10 * time.Millisecond)
 	}
 
-	assert.Equal(t, topodatapb.TabletType_MASTER, sm.Target().TabletType)
+	assert.Equal(t, topodatapb.TabletType_PRIMARY, sm.Target().TabletType)
 	assert.Equal(t, StateServing, sm.State())
 }
 
@@ -414,7 +414,7 @@ func TestStateManagerShutdownGracePeriod(t *testing.T) {
 	})
 
 	// Transition to replica with no shutdown grace period should kill kconn2 but not kconn1.
-	err := sm.SetServingType(topodatapb.TabletType_MASTER, testNow, StateServing, "")
+	err := sm.SetServingType(topodatapb.TabletType_PRIMARY, testNow, StateServing, "")
 	require.NoError(t, err)
 	assert.False(t, kconn1.killed.Get())
 	assert.True(t, kconn2.killed.Get())
@@ -427,7 +427,7 @@ func TestStateManagerShutdownGracePeriod(t *testing.T) {
 	assert.False(t, kconn2.killed.Get())
 
 	// Transition to master with a short shutdown grace period should kill both conns.
-	err = sm.SetServingType(topodatapb.TabletType_MASTER, testNow, StateServing, "")
+	err = sm.SetServingType(topodatapb.TabletType_PRIMARY, testNow, StateServing, "")
 	require.NoError(t, err)
 	sm.shutdownGracePeriod = 10 * time.Millisecond
 	err = sm.SetServingType(topodatapb.TabletType_REPLICA, testNow, StateServing, "")
@@ -436,12 +436,12 @@ func TestStateManagerShutdownGracePeriod(t *testing.T) {
 	assert.True(t, kconn2.killed.Get())
 
 	// Master non-serving should also kill the conn.
-	err = sm.SetServingType(topodatapb.TabletType_MASTER, testNow, StateServing, "")
+	err = sm.SetServingType(topodatapb.TabletType_PRIMARY, testNow, StateServing, "")
 	require.NoError(t, err)
 	sm.shutdownGracePeriod = 10 * time.Millisecond
 	kconn1.killed.Set(false)
 	kconn2.killed.Set(false)
-	err = sm.SetServingType(topodatapb.TabletType_MASTER, testNow, StateNotServing, "")
+	err = sm.SetServingType(topodatapb.TabletType_PRIMARY, testNow, StateNotServing, "")
 	require.NoError(t, err)
 	assert.True(t, kconn1.killed.Get())
 	assert.True(t, kconn2.killed.Get())
@@ -454,7 +454,7 @@ func TestStateManagerCheckMySQL(t *testing.T) {
 	sm := newTestStateManager(t)
 	defer sm.StopService()
 
-	err := sm.SetServingType(topodatapb.TabletType_MASTER, testNow, StateServing, "")
+	err := sm.SetServingType(topodatapb.TabletType_PRIMARY, testNow, StateServing, "")
 	require.NoError(t, err)
 
 	sm.qe.(*testQueryEngine).failMySQL = true
@@ -491,13 +491,13 @@ func TestStateManagerCheckMySQL(t *testing.T) {
 		time.Sleep(10 * time.Millisecond)
 	}
 
-	assert.Equal(t, topodatapb.TabletType_MASTER, sm.Target().TabletType)
+	assert.Equal(t, topodatapb.TabletType_PRIMARY, sm.Target().TabletType)
 	assert.Equal(t, StateServing, sm.State())
 }
 
 func TestStateManagerValidations(t *testing.T) {
 	sm := newTestStateManager(t)
-	target := &querypb.Target{TabletType: topodatapb.TabletType_MASTER}
+	target := &querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 	sm.target = proto.Clone(target).(*querypb.Target)
 
 	err := sm.StartRequest(ctx, target, false)
@@ -560,12 +560,12 @@ func TestStateManagerValidations(t *testing.T) {
 func TestStateManagerWaitForRequests(t *testing.T) {
 	sm := newTestStateManager(t)
 	defer sm.StopService()
-	target := &querypb.Target{TabletType: topodatapb.TabletType_MASTER}
+	target := &querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 	sm.target = target
 	sm.timebombDuration = 10 * time.Second
 
 	sm.replHealthy = true
-	err := sm.SetServingType(topodatapb.TabletType_MASTER, testNow, StateServing, "")
+	err := sm.SetServingType(topodatapb.TabletType_PRIMARY, testNow, StateServing, "")
 	require.NoError(t, err)
 
 	err = sm.StartRequest(ctx, target, false)
@@ -641,7 +641,7 @@ func TestRefreshReplHealthLocked(t *testing.T) {
 	defer sm.StopService()
 	rt := sm.rt.(*testReplTracker)
 
-	sm.target.TabletType = topodatapb.TabletType_MASTER
+	sm.target.TabletType = topodatapb.TabletType_PRIMARY
 	sm.replHealthy = false
 	lag, err := sm.refreshReplHealthLocked()
 	assert.Equal(t, time.Duration(0), lag)

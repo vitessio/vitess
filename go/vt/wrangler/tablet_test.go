@@ -101,7 +101,7 @@ func TestDeleteTabletTrueMaster(t *testing.T) {
 		},
 		Keyspace: "test",
 		Shard:    "0",
-		Type:     topodatapb.TabletType_MASTER,
+		Type:     topodatapb.TabletType_PRIMARY,
 	}
 
 	if err := wr.InitTablet(context.Background(), tablet, false /*allowMasterOverride*/, true /*createShardAndKeyspace*/, false /*allowUpdate*/); err != nil {
@@ -111,10 +111,10 @@ func TestDeleteTabletTrueMaster(t *testing.T) {
 		t.Fatalf("GetTablet failed: %v", err)
 	}
 
-	// set MasterAlias and MasterTermStartTime on shard to match chosen master tablet
+	// set PrimaryAlias and PrimaryTermStartTime on shard to match chosen master tablet
 	if _, err := ts.UpdateShardFields(context.Background(), "test", "0", func(si *topo.ShardInfo) error {
-		si.MasterAlias = tablet.Alias
-		si.MasterTermStartTime = tablet.MasterTermStartTime
+		si.PrimaryAlias = tablet.Alias
+		si.PrimaryTermStartTime = tablet.PrimaryTermStartTime
 		return nil
 	}); err != nil {
 		t.Fatalf("UpdateShardFields failed: %v", err)
@@ -145,7 +145,7 @@ func TestDeleteTabletFalseMaster(t *testing.T) {
 		},
 		Keyspace: "test",
 		Shard:    "0",
-		Type:     topodatapb.TabletType_MASTER,
+		Type:     topodatapb.TabletType_PRIMARY,
 	}
 
 	if err := wr.InitTablet(context.Background(), tablet1, false /*allowMasterOverride*/, true /*createShardAndKeyspace*/, false /*allowUpdate*/); err != nil {
@@ -159,16 +159,16 @@ func TestDeleteTabletFalseMaster(t *testing.T) {
 		},
 		Keyspace: "test",
 		Shard:    "0",
-		Type:     topodatapb.TabletType_MASTER,
+		Type:     topodatapb.TabletType_PRIMARY,
 	}
 	if err := wr.InitTablet(context.Background(), tablet2, true /*allowMasterOverride*/, false /*createShardAndKeyspace*/, false /*allowUpdate*/); err != nil {
 		t.Fatalf("InitTablet failed: %v", err)
 	}
 
-	// set MasterAlias and MasterTermStartTime on shard to match chosen master tablet
+	// set PrimaryAlias and PrimaryTermStartTime on shard to match chosen master tablet
 	if _, err := ts.UpdateShardFields(context.Background(), "test", "0", func(si *topo.ShardInfo) error {
-		si.MasterAlias = tablet2.Alias
-		si.MasterTermStartTime = tablet2.MasterTermStartTime
+		si.PrimaryAlias = tablet2.Alias
+		si.PrimaryTermStartTime = tablet2.PrimaryTermStartTime
 		return nil
 	}); err != nil {
 		t.Fatalf("UpdateShardFields failed: %v", err)

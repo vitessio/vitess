@@ -37,7 +37,7 @@ func TestGetSchema(t *testing.T) {
 		Hostname: "abcd",
 		Keyspace: "testkeyspace",
 		Shard:    "-",
-		Type:     topodatapb.TabletType_MASTER,
+		Type:     topodatapb.TabletType_PRIMARY,
 	}
 	require.NoError(t, topo.CreateTablet(ctx, tablet))
 

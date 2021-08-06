@@ -2255,19 +2255,19 @@ func TestFindTableOrVindex(t *testing.T) {
 	ta := vschema.Keyspaces["ksa"].Tables["ta"]
 	t1 := vschema.Keyspaces["ksb"].Tables["t1"]
 
-	_, _, err := vschema.FindTableOrVindex("", "t1", topodatapb.TabletType_MASTER)
+	_, _, err := vschema.FindTableOrVindex("", "t1", topodatapb.TabletType_PRIMARY)
 	wantErr := "ambiguous table reference: t1"
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("FindTableOrVindex(\"\"): %v, want %s", err, wantErr)
 	}
 
-	_, _, err = vschema.FindTableOrVindex("", "none", topodatapb.TabletType_MASTER)
+	_, _, err = vschema.FindTableOrVindex("", "none", topodatapb.TabletType_PRIMARY)
 	wantErr = "table none not found"
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("FindTableOrVindex(\"\"): %v, want %s", err, wantErr)
 	}
 
-	got, _, err := vschema.FindTableOrVindex("", "ta", topodatapb.TabletType_MASTER)
+	got, _, err := vschema.FindTableOrVindex("", "ta", topodatapb.TabletType_PRIMARY)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2275,7 +2275,7 @@ func TestFindTableOrVindex(t *testing.T) {
 		t.Errorf("FindTableOrVindex(\"t1a\"): %+v, want %+v", got, ta)
 	}
 
-	_, vindex, err := vschema.FindTableOrVindex("", "stfu1", topodatapb.TabletType_MASTER)
+	_, vindex, err := vschema.FindTableOrVindex("", "stfu1", topodatapb.TabletType_PRIMARY)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2286,7 +2286,7 @@ func TestFindTableOrVindex(t *testing.T) {
 		t.Errorf("FindTableOrVindex(\"stfu1\"): %+v, want %+v", vindex, wantVindex)
 	}
 
-	_, vindex, err = vschema.FindTableOrVindex("ksc", "ta", topodatapb.TabletType_MASTER)
+	_, vindex, err = vschema.FindTableOrVindex("ksc", "ta", topodatapb.TabletType_PRIMARY)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2297,13 +2297,13 @@ func TestFindTableOrVindex(t *testing.T) {
 		t.Errorf("FindTableOrVindex(\"stfu1\"): %+v, want %+v", vindex, wantVindex)
 	}
 
-	_, _, err = vschema.FindTableOrVindex("", "dup", topodatapb.TabletType_MASTER)
+	_, _, err = vschema.FindTableOrVindex("", "dup", topodatapb.TabletType_PRIMARY)
 	wantErr = "ambiguous vindex reference: dup"
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("FindTableOrVindex(\"\"): %v, want %s", err, wantErr)
 	}
 
-	got, _, err = vschema.FindTableOrVindex("", "unqualified", topodatapb.TabletType_MASTER)
+	got, _, err = vschema.FindTableOrVindex("", "unqualified", topodatapb.TabletType_PRIMARY)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2319,7 +2319,7 @@ func TestFindTableOrVindex(t *testing.T) {
 		t.Errorf("FindTableOrVindex(unqualified): %+v, want %+v", got, want)
 	}
 
-	got, _, err = vschema.FindTableOrVindex("newks", "qualified", topodatapb.TabletType_MASTER)
+	got, _, err = vschema.FindTableOrVindex("newks", "qualified", topodatapb.TabletType_PRIMARY)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2335,7 +2335,7 @@ func TestFindTableOrVindex(t *testing.T) {
 		t.Errorf("FindTableOrVindex(unqualified): %+v, want %+v", got, want)
 	}
 
-	_, _, err = vschema.FindTableOrVindex("", "notarget", topodatapb.TabletType_MASTER)
+	_, _, err = vschema.FindTableOrVindex("", "notarget", topodatapb.TabletType_PRIMARY)
 	wantErr = "table notarget has been disabled"
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("FindTableOrVindex(\"\"): %v, want %s", err, wantErr)

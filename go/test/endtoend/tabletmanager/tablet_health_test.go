@@ -122,7 +122,7 @@ func TestHealthCheck(t *testing.T) {
 	checkHealth(t, rTablet.HTTPPort, false)
 
 	// Make sure the primary is still primary
-	checkTabletType(t, primaryTablet.Alias, "MASTER")
+	checkTabletType(t, primaryTablet.Alias, "PRIMARY")
 	exec(t, conn, "stop slave")
 
 	// stop replication, make sure we don't go unhealthy.

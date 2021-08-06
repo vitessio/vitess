@@ -100,7 +100,7 @@ func RebuildKeyspaceLocked(ctx context.Context, log logutil.Logger, ts *topo.Ser
 		}
 	}
 
-	servedTypes := []topodatapb.TabletType{topodatapb.TabletType_MASTER, topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY}
+	servedTypes := []topodatapb.TabletType{topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY}
 
 	// for each entry in the srvKeyspaceMap map, we do the following:
 	// - get the Shard structures for each shard / cell
@@ -110,7 +110,7 @@ func RebuildKeyspaceLocked(ctx context.Context, log logutil.Logger, ts *topo.Ser
 	for cell, srvKeyspace := range srvKeyspaceMap {
 		for _, si := range shards {
 			// We rebuild keyspace iff shard master is in a serving state.
-			if !si.IsMasterServing {
+			if !si.GetIsPrimaryServing() {
 				continue
 			}
 			// for each type this shard is supposed to serve,

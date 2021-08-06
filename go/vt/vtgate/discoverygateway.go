@@ -189,7 +189,7 @@ func (dg *DiscoveryGateway) topologyWatcherChecksum() int64 {
 func (dg *DiscoveryGateway) StatsUpdate(ts *discovery.LegacyTabletStats) {
 	dg.tsc.StatsUpdate(ts)
 
-	if ts.Target.TabletType == topodatapb.TabletType_MASTER {
+	if ts.Target.TabletType == topodatapb.TabletType_PRIMARY {
 		dg.buffer.StatsUpdate(ts)
 	}
 }
@@ -268,7 +268,7 @@ func (dg *DiscoveryGateway) withRetry(ctx context.Context, target *querypb.Targe
 		// Note: We only buffer once and only "!inTransaction" queries i.e.
 		// a) no transaction is necessary (e.g. critical reads) or
 		// b) no transaction was created yet.
-		if !bufferedOnce && !inTransaction && target.TabletType == topodatapb.TabletType_MASTER {
+		if !bufferedOnce && !inTransaction && target.TabletType == topodatapb.TabletType_PRIMARY {
 			// The next call blocks if we should buffer during a failover.
 			retryDone, bufferErr := dg.buffer.WaitForFailoverEnd(ctx, target.Keyspace, target.Shard, err)
 			if bufferErr != nil {
