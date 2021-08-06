@@ -55,7 +55,7 @@ func TestTabletInitialBackup(t *testing.T) {
 	//    - list the backups, remove them
 	defer cluster.PanicHandler(t)
 
-	vtBackup(t, true)
+	vtBackup(t, true, false)
 	verifyBackupCount(t, shardKsName, 1)
 
 	// Initialize the tablets
@@ -124,7 +124,7 @@ func firstBackupTest(t *testing.T, tabletType string) {
 
 	// backup the replica
 	log.Infof("taking backup %s", time.Now())
-	vtBackup(t, false)
+	vtBackup(t, false, true)
 	log.Infof("done taking backup %s", time.Now())
 
 	// check that the backup shows up in the listing
@@ -163,9 +163,12 @@ func firstBackupTest(t *testing.T, tabletType string) {
 
 }
 
-func vtBackup(t *testing.T, initialBackup bool) {
+func vtBackup(t *testing.T, initialBackup bool, fullFlush bool) {
 	// Take the back using vtbackup executable
 	extraArgs := []string{"-allow_first_backup", "-db-credentials-file", dbCredentialFile}
+	if fullFlush {
+		extraArgs = append(extraArgs, "-full_flush")
+	}
 	log.Infof("starting backup tablet %s", time.Now())
 	err := localCluster.StartVtbackup(newInitDBFile, initialBackup, keyspaceName, shardName, cell, extraArgs...)
 	require.Nil(t, err)
