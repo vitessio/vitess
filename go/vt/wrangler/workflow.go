@@ -378,7 +378,7 @@ func (vrw *VReplicationWorkflow) parseTabletTypes() (hasReplica, hasRdonly, hasP
 			hasReplica = true
 		case "rdonly":
 			hasRdonly = true
-		case "primary":
+		case "primary", "master":
 			hasPrimary = true
 		default:
 			return false, false, false, fmt.Errorf("invalid tablet type passed %s", tabletType)
