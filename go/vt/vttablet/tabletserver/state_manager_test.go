@@ -426,7 +426,7 @@ func TestStateManagerShutdownGracePeriod(t *testing.T) {
 	assert.False(t, kconn1.killed.Get())
 	assert.False(t, kconn2.killed.Get())
 
-	// Transition to master with a short shutdown grace period should kill both conns.
+	// Transition to primary with a short shutdown grace period should kill both conns.
 	err = sm.SetServingType(topodatapb.TabletType_PRIMARY, testNow, StateServing, "")
 	require.NoError(t, err)
 	sm.shutdownGracePeriod = 10 * time.Millisecond

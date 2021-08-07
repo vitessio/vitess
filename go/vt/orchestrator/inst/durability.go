@@ -65,7 +65,7 @@ func PromotionRule(tablet *topodatapb.Tablet) CandidatePromotionRule {
 	return curDurabilityPolicy.promotionRule(tablet)
 }
 
-// MasterSemiSync returns the master semi-sync setting for the instance.
+// MasterSemiSync returns the primary semi-sync setting for the instance.
 // 0 means none. Non-zero specifies the number of required ackers.
 func MasterSemiSync(instanceKey InstanceKey) int {
 	return curDurabilityPolicy.masterSemiSync(instanceKey)

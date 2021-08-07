@@ -90,7 +90,7 @@ func (mp *kubernetesMasterParticipation) WaitForMastership() (context.Context, e
 		close(mp.done)
 	}()
 
-	// Try to get the mastership, by getting a lock.
+	// Try to get the primaryship, by getting a lock.
 	var err error
 	ld, err = mp.s.lock(lockCtx, electionPath, mp.id, true)
 	if err != nil {
@@ -113,7 +113,7 @@ func (mp *kubernetesMasterParticipation) Stop() {
 func (mp *kubernetesMasterParticipation) GetCurrentMasterID(ctx context.Context) (string, error) {
 	id, _, err := mp.s.Get(ctx, mp.getElectionPath())
 	if err != nil {
-		// NoNode means nobody is the master
+		// NoNode means nobody is the primary
 		if topo.IsErrType(err, topo.NoNode) {
 			return "", nil
 		}

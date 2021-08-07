@@ -279,20 +279,20 @@ func (sdw *SplitDiffWorker) findTargets(ctx context.Context) error {
 }
 
 // synchronizeReplication phase:
-// 1 - ask the master of the destination shard to pause filtered replication,
+// 1 - ask the primary of the destination shard to pause filtered replication,
 //   and return the source binlog positions
-//   (add a cleanup task to restart filtered replication on master)
+//   (add a cleanup task to restart filtered replication on primary)
 // 2 - stop the source tablet at a binlog position higher than the
-//   destination master. Get that new list of positions.
+//   destination primary. Get that new list of positions.
 //   (add a cleanup task to restart binlog replication on the source tablet, and
 //    change the existing ChangeTabletType cleanup action to 'spare' type)
-// 3 - ask the master of the destination shard to resume filtered replication
+// 3 - ask the primary of the destination shard to resume filtered replication
 //   up to the new list of positions, and return its binlog position.
-// 4 - wait until the destination tablet is equal or passed that master
+// 4 - wait until the destination tablet is equal or passed that primary
 //   binlog position, and stop its replication.
 //   (add a cleanup task to restart binlog replication on it, and change
 //    the existing ChangeTabletType cleanup action to 'spare' type)
-// 5 - restart filtered replication on the destination master.
+// 5 - restart filtered replication on the destination primary.
 //   (remove the cleanup task that does the same)
 // At this point, the source and the destination tablet are stopped at the same
 // point.
@@ -307,7 +307,7 @@ func (sdw *SplitDiffWorker) synchronizeReplication(ctx context.Context) error {
 		return vterrors.Wrapf(err, "synchronizeReplication: cannot get Tablet record for master %v", sdw.shardInfo.PrimaryAlias)
 	}
 
-	// 1 - stop the master binlog replication, get its current position
+	// 1 - stop the primary binlog replication, get its current position
 	sdw.wr.Logger().Infof("Stopping master binlog replication on %v", sdw.shardInfo.PrimaryAlias)
 	shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
 	defer cancel()
@@ -345,7 +345,7 @@ func (sdw *SplitDiffWorker) synchronizeReplication(ctx context.Context) error {
 	// to StartReplication() + ChangeTabletType(spare)
 	wrangler.RecordStartReplicationAction(sdw.cleaner, sourceTablet.Tablet)
 
-	// 3 - ask the master of the destination shard to resume filtered
+	// 3 - ask the primary of the destination shard to resume filtered
 	//     replication up to the new list of positions
 	sdw.wr.Logger().Infof("Restarting master %v until it catches up to %v", sdw.shardInfo.PrimaryAlias, mysqlPos)
 	shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
@@ -363,7 +363,7 @@ func (sdw *SplitDiffWorker) synchronizeReplication(ctx context.Context) error {
 	}
 
 	// 4 - wait until the destination tablet is equal or passed
-	//     that master binlog position, and stop its replication.
+	//     that primary binlog position, and stop its replication.
 	sdw.wr.Logger().Infof("Waiting for destination tablet %v to catch up to %v", sdw.destinationAlias, masterPos)
 	shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
 	defer cancel()
@@ -378,7 +378,7 @@ func (sdw *SplitDiffWorker) synchronizeReplication(ctx context.Context) error {
 	}
 	wrangler.RecordStartReplicationAction(sdw.cleaner, destinationTablet.Tablet)
 
-	// 5 - restart filtered replication on destination master
+	// 5 - restart filtered replication on destination primary
 	sdw.wr.Logger().Infof("Restarting filtered replication on master %v", sdw.shardInfo.PrimaryAlias)
 	shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
 	defer cancel()

@@ -92,7 +92,7 @@ func (mysqld *Mysqld) WaitForReparentJournal(ctx context.Context, timeCreatedNS 
 	}
 }
 
-// Promote will promote this server to be the new master.
+// Promote will promote this server to be the new primary.
 func (mysqld *Mysqld) Promote(hookExtraEnv map[string]string) (mysql.Position, error) {
 	ctx := context.TODO()
 	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
@@ -104,10 +104,10 @@ func (mysqld *Mysqld) Promote(hookExtraEnv map[string]string) (mysql.Position, e
 	// Since we handle replication, just stop it.
 	cmds := []string{
 		conn.StopReplicationCommand(),
-		"RESET SLAVE ALL", // "ALL" makes it forget master host:port.
-		// When using semi-sync and GTID, a replica first connects to the new master with a given GTID set,
+		"RESET SLAVE ALL", // "ALL" makes it forget primary host:port.
+		// When using semi-sync and GTID, a replica first connects to the new primary with a given GTID set,
 		// it can take a long time to scan the current binlog file to find the corresponding position.
-		// This can cause commits that occur soon after the master is promoted to take a long time waiting
+		// This can cause commits that occur soon after the primary is promoted to take a long time waiting
 		// for a semi-sync ACK, since replication is not fully set up.
 		// More details in: https://github.com/vitessio/vitess/issues/4161
 		"FLUSH BINARY LOGS",

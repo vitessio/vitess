@@ -59,9 +59,9 @@ type tabletHealthCheck struct {
 	// Serving describes if the tablet can be serving traffic.
 	Serving bool
 	// PrimaryTermStartTime is the last time at which
-	// this tablet was either elected the master, or received
+	// this tablet was either elected the primary, or received
 	// a TabletExternallyReparented event. It is set to 0 if the
-	// tablet doesn't think it's a master.
+	// tablet doesn't think it's a primary.
 	PrimaryTermStartTime int64
 	// Stats is the current health status, as received by the
 	// StreamHealth RPC (replication lag, ...).
@@ -199,7 +199,7 @@ func (thc *tabletHealthCheck) processResponse(hc *HealthCheckImpl, shr *query.St
 	}
 	thc.setServingState(serving, reason)
 
-	// notify downstream for master change
+	// notify downstream for primary change
 	hc.updateHealth(thc.SimpleCopy(), prevTarget, trivialUpdate, thc.Serving)
 	return nil
 }

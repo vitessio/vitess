@@ -94,13 +94,13 @@ func ChooseNewPrimary(
 }
 
 // FindCurrentPrimary returns the current primary tablet of a shard, if any. The
-// current primary is whichever tablet of type MASTER (if any) has the most
+// current primary is whichever tablet of type PRIMARY (if any) has the most
 // recent PrimaryTermStartTime, which is the same rule that vtgate uses to route
-// master traffic.
+// primary traffic.
 //
 // The return value is nil if the current primary cannot be definitively
-// determined. This can happen either if no tablet claims to be type MASTER, or
-// if multiple tablets claim to be type MASTER and happen to have the same
+// determined. This can happen either if no tablet claims to be type PRIMARY, or
+// if multiple tablets claim to be type PRIMARY and happen to have the same
 // PrimaryTermStartTime timestamp (a tie).
 //
 // The tabletMap must be a complete map (not a partial result) for the shard.

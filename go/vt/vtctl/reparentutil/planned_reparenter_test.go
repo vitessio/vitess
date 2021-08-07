@@ -2233,7 +2233,7 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 						Seconds:     1000,
 						Nanoseconds: 500,
 					},
-					Hostname: "primary1", // claims to be MASTER with same term as primary2
+					Hostname: "primary1", // claims to be PRIMARY with same term as primary2
 					Keyspace: "testkeyspace",
 					Shard:    "-",
 				},
@@ -2247,7 +2247,7 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 						Seconds:     1000,
 						Nanoseconds: 500,
 					},
-					Hostname: "primary2", // claims to be MASTER with same term as primary1
+					Hostname: "primary2", // claims to be PRIMARY with same term as primary1
 					Keyspace: "testkeyspace",
 					Shard:    "-",
 				},

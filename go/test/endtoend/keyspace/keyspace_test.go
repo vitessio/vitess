@@ -325,7 +325,7 @@ func TestShardCountForAllKeyspaces(t *testing.T) {
 func testShardCountForKeyspace(t *testing.T, keyspace string, count int) {
 	srvKeyspace := getSrvKeyspace(t, cell, keyspace)
 
-	// for each served type MASTER REPLICA RDONLY, the shard ref count should match
+	// for each served type PRIMARY REPLICA RDONLY, the shard ref count should match
 	for _, partition := range srvKeyspace.Partitions {
 		if servedTypes[partition.ServedType] {
 			assert.Equal(t, len(partition.ShardReferences), count)
@@ -342,7 +342,7 @@ func TestShardNameForAllKeyspaces(t *testing.T) {
 func testShardNameForKeyspace(t *testing.T, keyspace string, shardNames []string) {
 	srvKeyspace := getSrvKeyspace(t, cell, keyspace)
 
-	// for each served type MASTER REPLICA RDONLY, the shard ref count should match
+	// for each served type PRIMARY REPLICA RDONLY, the shard ref count should match
 	for _, partition := range srvKeyspace.Partitions {
 		if servedTypes[partition.ServedType] {
 			for _, shardRef := range partition.ShardReferences {
@@ -357,7 +357,7 @@ func TestKeyspaceToShardName(t *testing.T) {
 	var id []byte
 	srvKeyspace := getSrvKeyspace(t, cell, keyspaceShardedName)
 
-	// for each served type MASTER REPLICA RDONLY, the shard ref count should match
+	// for each served type PRIMARY REPLICA RDONLY, the shard ref count should match
 	for _, partition := range srvKeyspace.Partitions {
 		if partition.ServedType == topodata.TabletType_PRIMARY {
 			for _, shardRef := range partition.ShardReferences {

@@ -43,7 +43,7 @@ func TestMasterToSpareStateChangeImpossible(t *testing.T) {
 	setupReparentCluster(t)
 	defer teardownCluster()
 
-	// We cannot change a master to spare
+	// We cannot change a primary to spare
 	out, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("ChangeTabletType", tab1.Alias, "spare")
 	require.Error(t, err, out)
 	require.Contains(t, out, "type change PRIMARY -> SPARE is not an allowed transition for ChangeTabletType")

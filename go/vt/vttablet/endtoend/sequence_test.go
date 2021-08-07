@@ -125,7 +125,7 @@ func TestResetSequence(t *testing.T) {
 	}
 	utils.MustMatch(t, &want, qr)
 
-	// Reset mastership
+	// Reset primaryship
 	err = client.SetServingType(topodatapb.TabletType_REPLICA)
 	if err != nil {
 		t.Fatal(err)

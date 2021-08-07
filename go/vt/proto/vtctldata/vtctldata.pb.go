@@ -1848,7 +1848,7 @@ type DeleteTabletsRequest struct {
 
 	// TabletAliases is the list of tablets to delete.
 	TabletAliases []*topodata.TabletAlias `protobuf:"bytes,1,rep,name=tablet_aliases,json=tabletAliases,proto3" json:"tablet_aliases,omitempty"`
-	// AllowPrimary allows for the master/primary tablet of a shard to be deleted.
+	// AllowPrimary allows for the primary tablet of a shard to be deleted.
 	// Use with caution.
 	AllowPrimary bool `protobuf:"varint,2,opt,name=allow_primary,json=allowPrimary,proto3" json:"allow_primary,omitempty"`
 }

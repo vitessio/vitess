@@ -121,13 +121,13 @@ func AddKeyspaces(ctx context.Context, t *testing.T, ts *topo.Server, keyspaces 
 // AddTablet.
 type AddTabletOptions struct {
 	// AlsoSetShardMaster is an option to control additional setup to take when
-	// AddTablet receives a tablet of type MASTER. When set, AddTablet will also
+	// AddTablet receives a tablet of type PRIMARY. When set, AddTablet will also
 	// update the shard record to make that tablet the primary, and fail the
 	// test if the shard record has a serving primary already.
 	AlsoSetShardMaster bool
 	// ForceSetShardMaster, when combined with AlsoSetShardMaster, will ignore
 	// any existing primary in the shard, making the current tablet the serving
-	// primary (given it is type MASTER), and log that it has done so.
+	// primary (given it is type PRIMARY), and log that it has done so.
 	ForceSetShardMaster bool
 	// SkipShardCreation, when set, makes AddTablet never attempt to create a
 	// shard record in the topo under any circumstances.
@@ -143,8 +143,8 @@ type AddTabletOptions struct {
 // from the topo server without error.
 //
 // If AddTablet receives a tablet record with a keyspace and shard set, and that
-// tablet's type is MASTER, and opts.AlsoSetShardMaster is set, then AddTablet
-// will update the shard record to make that tablet the shard master and set the
+// tablet's type is PRIMARY, and opts.AlsoSetShardMaster is set, then AddTablet
+// will update the shard record to make that tablet the shard primary and set the
 // shard to serving. If that shard record already has a serving primary, then
 // AddTablet will fail the test.
 func AddTablet(ctx context.Context, t *testing.T, ts *topo.Server, tablet *topodatapb.Tablet, opts *AddTabletOptions) {

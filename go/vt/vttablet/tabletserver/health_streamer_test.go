@@ -100,7 +100,7 @@ func TestHealthStreamerBroadcast(t *testing.T) {
 	}
 	assert.Equal(t, want, shr)
 
-	// Test master and timestamp.
+	// Test primary and timestamp.
 	now := time.Now()
 	hs.ChangeState(topodatapb.TabletType_PRIMARY, now, 0, nil, true)
 	shr = <-ch
@@ -118,7 +118,7 @@ func TestHealthStreamerBroadcast(t *testing.T) {
 	}
 	assert.Equal(t, want, shr)
 
-	// Test non-serving, and 0 timestamp for non-master.
+	// Test non-serving, and 0 timestamp for non-primary.
 	hs.ChangeState(topodatapb.TabletType_REPLICA, now, 1*time.Second, nil, false)
 	shr = <-ch
 	want = &querypb.StreamHealthResponse{

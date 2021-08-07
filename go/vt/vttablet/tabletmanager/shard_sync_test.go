@@ -50,7 +50,7 @@ func TestShardSync(t *testing.T) {
 	tm := newTestTM(t, ts, 100, keyspace, shard)
 	defer tm.Stop()
 
-	// update the master info in the shard record and set it to nil
+	// update the primary info in the shard record and set it to nil
 	originalTime := time.Now()
 	updateMasterInfoInShardRecord(ctx, t, tm, nil, originalTime)
 
