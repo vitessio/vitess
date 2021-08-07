@@ -319,7 +319,7 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 	}
 
 	// Get the current primary replication position, and wait until we catch up
-	// to that point. We do this instead of looking at Seconds_Behind_Master
+	// to that point. We do this instead of looking at ReplicationLag
 	// because that value can
 	// sometimes lie and tell you there's 0 lag when actually replication is
 	// stopped. Also, if replication is making progress but is too slow to ever

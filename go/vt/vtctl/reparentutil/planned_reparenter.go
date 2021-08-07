@@ -448,7 +448,7 @@ func (pr *PlannedReparenter) performPotentialPromotion(
 		return "", vterrors.Wrap(err, "lost topology lock; aborting")
 	}
 
-	// Promote the candidate primary to type:MASTER.
+	// Promote the candidate primary to type:PRIMARY.
 	promoteCtx, promoteCancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
 	defer promoteCancel()
 
@@ -592,7 +592,7 @@ func (pr *PlannedReparenter) reparentTablets(
 			// attempt, we can no longer assume that we know who the former
 			// primary was. Instead, we rely on the former primary to remember
 			// that it needs to start replication after transitioning from
-			// MASTER => REPLICA.
+			// PRIMARY => REPLICA.
 			forceStartReplication := false
 			if err := pr.tmc.SetMaster(replCtx, tablet, ev.NewMaster.Alias, reparentJournalTimestamp, "", forceStartReplication); err != nil {
 				rec.RecordError(vterrors.Wrapf(err, "tablet %v failed to SetMaster(%v): %v", alias, primaryElectAliasStr, err))

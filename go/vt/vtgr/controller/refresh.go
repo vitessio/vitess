@@ -182,7 +182,7 @@ func parseTabletInfos(tablets map[string]*topo.TabletInfo) []*grInstance {
 	var newReplicas []*grInstance
 	for alias, tabletInfo := range tablets {
 		tablet := tabletInfo.Tablet
-		// Only monitor master, replica and ronly tablet types
+		// Only monitor primary, replica and ronly tablet types
 		switch tablet.Type {
 		case topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY:
 			// mysql hostname and port might be empty here if tablet is not running

@@ -73,7 +73,7 @@ type comboTablet struct {
 var tabletMap map[uint32]*comboTablet
 
 // CreateTablet creates an individual tablet, with its tm, and adds
-// it to the map. If it's a master tablet, it also issues a TER.
+// it to the map. If it's a primary tablet, it also issues a TER.
 func CreateTablet(ctx context.Context, ts *topo.Server, cell string, uid uint32, keyspace, shard, dbname string, tabletType topodatapb.TabletType, mysqld mysqlctl.MysqlDaemon, dbcfgs *dbconfigs.DBConfigs) error {
 	alias := &topodatapb.TabletAlias{
 		Cell: cell,
@@ -296,7 +296,7 @@ func CreateKs(ctx context.Context, ts *topo.Server, tpb *vttestpb.VTTestTopology
 
 				replicas := int(kpb.ReplicaCount)
 				if replicas == 0 {
-					// 2 replicas in order to ensure the master cell has a master and a replica
+					// 2 replicas in order to ensure the primary cell has a primary and a replica
 					replicas = 2
 				}
 				rdonlys := int(kpb.RdonlyCount)
@@ -321,7 +321,7 @@ func CreateKs(ctx context.Context, ts *topo.Server, tpb *vttestpb.VTTestTopology
 				if cell == tpb.Cells[0] {
 					replicas--
 
-					// create the master
+					// create the primary
 					if err := CreateTablet(ctx, ts, cell, uid, keyspace, shard, dbname, topodatapb.TabletType_PRIMARY, mysqld, dbcfgs.Clone()); err != nil {
 						return 0, err
 					}

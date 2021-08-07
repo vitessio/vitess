@@ -44,7 +44,7 @@ func TestLockAndUnlock(t *testing.T) {
 	require.Nil(t, err)
 	defer replicaConn.Close()
 
-	// first make sure that our writes to the master make it to the replica
+	// first make sure that our writes to the primary make it to the replica
 	exec(t, conn, "delete from t1")
 	exec(t, conn, "insert into t1(id, value) values(1,'a'), (2,'b')")
 	checkDataOnReplica(t, replicaConn, `[[VARCHAR("a")] [VARCHAR("b")]]`)
@@ -52,7 +52,7 @@ func TestLockAndUnlock(t *testing.T) {
 	// now lock the replica
 	err = tmcLockTables(ctx, replicaTablet.GrpcPort)
 	require.Nil(t, err)
-	// make sure that writing to the master does not show up on the replica while locked
+	// make sure that writing to the primary does not show up on the replica while locked
 	exec(t, conn, "insert into t1(id, value) values(3,'c')")
 	checkDataOnReplica(t, replicaConn, `[[VARCHAR("a")] [VARCHAR("b")]]`)
 
@@ -139,7 +139,7 @@ func TestLockAndTimeout(t *testing.T) {
 	require.Nil(t, err)
 	defer replicaConn.Close()
 
-	// first make sure that our writes to the master make it to the replica
+	// first make sure that our writes to the primary make it to the replica
 	exec(t, masterConn, "insert into t1(id, value) values(1,'a')")
 	checkDataOnReplica(t, replicaConn, `[[VARCHAR("a")]]`)
 
@@ -147,7 +147,7 @@ func TestLockAndTimeout(t *testing.T) {
 	err = tmcLockTables(ctx, replicaTablet.GrpcPort)
 	require.Nil(t, err)
 
-	// make sure that writing to the master does not show up on the replica while locked
+	// make sure that writing to the primary does not show up on the replica while locked
 	exec(t, masterConn, "insert into t1(id, value) values(2,'b')")
 	checkDataOnReplica(t, replicaConn, `[[VARCHAR("a")]]`)
 

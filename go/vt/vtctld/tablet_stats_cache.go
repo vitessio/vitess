@@ -73,7 +73,7 @@ func (a byTabletUID) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 func (a byTabletUID) Less(i, j int) bool { return a[i].Tablet.Alias.Uid < a[j].Tablet.Alias.Uid }
 
 // availableTabletTypes is an array of tabletTypes that are being considered to display on the heatmap.
-// Note: this list must always be sorted by the order they should appear (i.e. MASTER first, then REPLICA, then RDONLY)
+// Note: this list must always be sorted by the order they should appear (i.e. PRIMARY first, then REPLICA, then RDONLY)
 var availableTabletTypes = []topodatapb.TabletType{topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY}
 
 // tabletStatsCache holds the most recent status update received for

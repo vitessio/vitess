@@ -196,7 +196,7 @@ func buildDBPlan(show *sqlparser.ShowBasic, vschema ContextVSchema) (engine.Prim
 	return engine.NewRowsPrimitive(rows, buildVarCharFields("Database")), nil
 }
 
-// buildShowVMigrationsPlan serves `SHOW VITESS_MIGRATIONS ...` queries. It invokes queries on _vt.schema_migrations on all MASTER tablets on keyspace's shards.
+// buildShowVMigrationsPlan serves `SHOW VITESS_MIGRATIONS ...` queries. It invokes queries on _vt.schema_migrations on all primary tablets on keyspace's shards.
 func buildShowVMigrationsPlan(show *sqlparser.ShowBasic, vschema ContextVSchema) (engine.Primitive, error) {
 	dest, ks, tabletType, err := vschema.TargetDestination(show.DbName.String())
 	if err != nil {

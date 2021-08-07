@@ -45,7 +45,7 @@ const (
 	// vdiffSourceGtid should be the position reported by the source side VStreamResults.
 	// It's expected to be higher the vdiffStopPosition.
 	vdiffSourceGtid = "MariaDB/5-456-893"
-	// vdiffTargetMasterPosition is the master position of the target after
+	// vdiffTargetMasterPosition is the primary position of the target after
 	// vreplication has been synchronized.
 	vdiffTargetMasterPosition = "MariaDB/6-456-892"
 )

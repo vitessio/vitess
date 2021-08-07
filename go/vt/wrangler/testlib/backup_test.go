@@ -225,7 +225,7 @@ func TestBackupRestore(t *testing.T) {
 
 	// restore primary from backup
 	require.NoError(t, primary.TM.RestoreData(ctx, logutil.NewConsoleLogger(), 0 /* waitForBackupInterval */, false /* deleteBeforeRestore */), "RestoreData failed")
-	// tablet was created as MASTER, so it's baseTabletType is MASTER
+	// tablet was created as MASTER, so it's baseTabletType is PRIMARY
 	assert.Equal(t, topodatapb.TabletType_PRIMARY, primary.Tablet.Type)
 	assert.False(t, primary.FakeMysqlDaemon.Replicating)
 	assert.True(t, primary.FakeMysqlDaemon.Running)

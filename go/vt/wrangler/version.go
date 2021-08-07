@@ -107,7 +107,7 @@ func (wr *Wrangler) ValidateVersionShard(ctx context.Context, keyspace, shard st
 		return err
 	}
 
-	// get version from the master, or error
+	// get version from the primary, or error
 	if !si.HasMaster() {
 		return fmt.Errorf("no master in shard %v/%v", keyspace, shard)
 	}
@@ -118,7 +118,7 @@ func (wr *Wrangler) ValidateVersionShard(ctx context.Context, keyspace, shard st
 	}
 
 	// read all the aliases in the shard, that is all tablets that are
-	// replicating from the master
+	// replicating from the primary
 	aliases, err := wr.ts.FindAllTabletAliasesInShard(ctx, keyspace, shard)
 	if err != nil {
 		return err
@@ -160,7 +160,7 @@ func (wr *Wrangler) ValidateVersionKeyspace(ctx context.Context, keyspace string
 		return wr.ValidateVersionShard(ctx, keyspace, shards[0])
 	}
 
-	// find the reference version using the first shard's master
+	// find the reference version using the first shard's primary
 	si, err := wr.ts.GetShard(ctx, keyspace, shards[0])
 	if err != nil {
 		return err
@@ -175,7 +175,7 @@ func (wr *Wrangler) ValidateVersionKeyspace(ctx context.Context, keyspace string
 		return err
 	}
 
-	// then diff with all tablets but master 0
+	// then diff with all tablets but primary 0
 	er := concurrency.AllErrorRecorder{}
 	wg := sync.WaitGroup{}
 	for _, shard := range shards {

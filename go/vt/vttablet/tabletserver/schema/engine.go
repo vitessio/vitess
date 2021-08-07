@@ -124,7 +124,7 @@ func (se *Engine) InitDBConfig(cp dbconfigs.Connector) {
 }
 
 // EnsureConnectionAndDB ensures that we can connect to mysql.
-// If tablet type is master and there is no db, then the database is created.
+// If tablet type is primary and there is no db, then the database is created.
 // This function can be called before opening the Engine.
 func (se *Engine) EnsureConnectionAndDB(tabletType topodatapb.TabletType) error {
 	ctx := tabletenv.LocalContext()
@@ -141,7 +141,7 @@ func (se *Engine) EnsureConnectionAndDB(tabletType topodatapb.TabletType) error 
 		return err
 	}
 
-	// We are master and db is not found. Let's create it.
+	// We are primary and db is not found. Let's create it.
 	// We use allprivs instead of DBA because we want db create to fail if we're read-only.
 	conn, err = dbconnpool.NewDBConnection(ctx, se.env.Config().DB.AllPrivsConnector())
 	if err != nil {
@@ -241,7 +241,7 @@ func (se *Engine) Close() {
 }
 
 // MakeNonMaster clears the sequence caches to make sure that
-// they don't get accidentally reused after losing mastership.
+// they don't get accidentally reused after losing primaryship.
 func (se *Engine) MakeNonMaster() {
 	// This function is tested through endtoend test.
 	se.mu.Lock()

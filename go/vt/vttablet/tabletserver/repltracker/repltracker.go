@@ -79,7 +79,7 @@ func (rt *ReplTracker) InitDBConfig(target *querypb.Target, mysqld mysqlctl.Mysq
 	rt.poller.InitDBConfig(mysqld)
 }
 
-// MakeMaster must be called if the tablet type becomes MASTER.
+// MakeMaster must be called if the tablet type becomes PRIMARY.
 func (rt *ReplTracker) MakeMaster() {
 	rt.mu.Lock()
 	defer rt.mu.Unlock()
@@ -95,7 +95,7 @@ func (rt *ReplTracker) MakeMaster() {
 	}
 }
 
-// MakeNonMaster must be called if the tablet type becomes non-MASTER.
+// MakeNonMaster must be called if the tablet type becomes non-PRIMARY.
 func (rt *ReplTracker) MakeNonMaster() {
 	rt.mu.Lock()
 	defer rt.mu.Unlock()

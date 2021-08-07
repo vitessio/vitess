@@ -926,8 +926,8 @@ func (mz *materializer) deploySchema(ctx context.Context) error {
 			mu.Lock()
 			if len(sourceDDLs) == 0 {
 				//only get ddls for tables, once and lazily: if we need to copy the schema from source to target
-				//we copy schemas from masters on the source keyspace
-				//and we have found use cases where user just has a replica (no master) in the source keyspace
+				//we copy schemas from primaries on the source keyspace
+				//and we have found use cases where user just has a replica (no primary) in the source keyspace
 				sourceDDLs, err = mz.getSourceTableDDLs(ctx)
 			}
 			mu.Unlock()

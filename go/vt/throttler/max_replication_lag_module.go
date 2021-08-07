@@ -597,7 +597,7 @@ func (m *MaxReplicationLagModule) decreaseAndGuessRate(r *result, now time.Time,
 	}
 
 	// Find out the average rate (per second) at which we inserted data
-	// at the master during the observed timespan.
+	// at the primary during the observed timespan.
 	from := lagRecordBefore.time
 	to := lagRecordNow.time
 	avgMasterRate := m.actualRatesHistory.average(from, to)

@@ -14,9 +14,9 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package buffer provides a buffer for MASTER traffic during failovers.
+// Package buffer provides a buffer for PRIMARY traffic during failovers.
 //
-// Instead of returning an error to the application (when the vttablet master
+// Instead of returning an error to the application (when the vttablet primary
 // becomes unavailable), the buffer will automatically retry buffered requests
 // after the end of the failover was detected.
 //
@@ -62,9 +62,9 @@ const (
 	bufferDryRun
 )
 
-// Buffer is used to track ongoing MASTER tablet failovers and buffer
-// requests while the MASTER tablet is unavailable.
-// Once the new MASTER starts accepting requests, buffering stops and requests
+// Buffer is used to track ongoing PRIMARY tablet failovers and buffer
+// requests while the PRIMARY tablet is unavailable.
+// Once the new PRIMARY starts accepting requests, buffering stops and requests
 // queued so far will be automatically retried.
 //
 // There should be exactly one instance of this buffer. For each failover, an
@@ -213,7 +213,7 @@ func (b *Buffer) WaitForFailoverEnd(ctx context.Context, keyspace, shard string,
 	return sb.waitForFailoverEnd(ctx, keyspace, shard, err)
 }
 
-// ProcessMasterHealth notifies the buffer to record a new master
+// ProcessMasterHealth notifies the buffer to record a new primary
 // and end any failover buffering that may be in progress
 func (b *Buffer) ProcessMasterHealth(th *discovery.TabletHealth) {
 	if th.Target.TabletType != topodatapb.TabletType_PRIMARY {
@@ -235,7 +235,7 @@ func (b *Buffer) ProcessMasterHealth(th *discovery.TabletHealth) {
 }
 
 // StatsUpdate keeps track of the "tablet_externally_reparented_timestamp" of
-// each master. This way we can detect the end of a failover.
+// each primary. This way we can detect the end of a failover.
 // It is part of the discovery.LegacyHealthCheckStatsListener interface.
 func (b *Buffer) StatsUpdate(ts *discovery.LegacyTabletStats) {
 	if ts.Target.TabletType != topodatapb.TabletType_PRIMARY {

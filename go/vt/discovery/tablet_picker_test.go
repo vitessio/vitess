@@ -170,7 +170,7 @@ func TestPickRespectsTabletType(t *testing.T) {
 	tp, err := NewTabletPicker(te.topoServ, te.cells, te.keyspace, te.shard, "replica,rdonly")
 	require.NoError(t, err)
 
-	// In 20 attempts, master tablet must be never picked
+	// In 20 attempts, primary tablet must be never picked
 	for i := 0; i < 20; i++ {
 		tablet, err := tp.PickForStreaming(context.Background())
 		require.NoError(t, err)

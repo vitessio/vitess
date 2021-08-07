@@ -30,10 +30,10 @@ import (
 
 // LegacyTabletStatsCache is a LegacyHealthCheckStatsListener that keeps both the
 // current list of available LegacyTabletStats, and a serving list:
-// - for master tablets, only the current master is kept.
-// - for non-master tablets, we filter the list using FilterLegacyStatsByReplicationLag.
+// - for primary tablets, only the current primary is kept.
+// - for non-primary tablets, we filter the list using FilterLegacyStatsByReplicationLag.
 // It keeps entries for all tablets in the cell(s) it's configured to serve for,
-// and for the master independently of which cell it's in.
+// and for the primary independently of which cell it's in.
 // Note the healthy tablet computation is done when we receive a tablet
 // update only, not at serving time.
 // Also note the cache may not have the last entry received by the tablet.
@@ -41,7 +41,7 @@ import (
 // keep its new update.
 type LegacyTabletStatsCache struct {
 	// cell is the cell we are keeping all tablets for.
-	// Note we keep track of all master tablets in all cells.
+	// Note we keep track of all primary tablets in all cells.
 	cell string
 	// ts is the topo server in use.
 	ts *topo.Server
@@ -68,7 +68,7 @@ type legacyTabletStatsCacheEntry struct {
 
 func (e *legacyTabletStatsCacheEntry) updateHealthyMapForMaster(ts *LegacyTabletStats) {
 	if ts.Up {
-		// We have an Up master.
+		// We have an Up primary.
 		if len(e.healthy) == 0 {
 			// We have a new Up server, just remember it.
 			e.healthy = append(e.healthy, ts)
@@ -92,7 +92,7 @@ func (e *legacyTabletStatsCacheEntry) updateHealthyMapForMaster(ts *LegacyTablet
 		return
 	}
 
-	// We have a Down master, remove it only if it's exactly the same.
+	// We have a Down primary, remove it only if it's exactly the same.
 	if len(e.healthy) != 0 {
 		if ts.Key == e.healthy[0].Key {
 			// Same guy, remove it.
@@ -285,7 +285,7 @@ func (tc *LegacyTabletStatsCache) GetTabletStats(keyspace, shard string, tabletT
 // GetHealthyTabletStats returns only the healthy targets.
 // The returned array is owned by the caller.
 // For TabletType_PRIMARY, this will only return at most one entry,
-// the most recent tablet of type master.
+// the most recent tablet of type primary.
 func (tc *LegacyTabletStatsCache) GetHealthyTabletStats(keyspace, shard string, tabletType topodatapb.TabletType) []LegacyTabletStats {
 	e := tc.getEntry(keyspace, shard, tabletType)
 	if e == nil {

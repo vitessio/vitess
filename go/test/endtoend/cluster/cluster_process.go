@@ -149,7 +149,7 @@ func (shard *Shard) Rdonly() *Vttablet {
 }
 
 // Replica get the last but one tablet which is replica
-// Mostly we have either 3 tablet setup [master, replica, rdonly]
+// Mostly we have either 3 tablet setup [primary, replica, rdonly]
 func (shard *Shard) Replica() *Vttablet {
 	for idx, tablet := range shard.Vttablets {
 		if tablet.Type == "replica" && idx > 0 {

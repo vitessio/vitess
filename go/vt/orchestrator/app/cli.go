@@ -316,7 +316,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 	case registerCliCommand("repoint", "Classic file:pos relocation", `Make the given instance replicate from another instance without changing the binglog coordinates. Use with care`):
 		{
 			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
-			// destinationKey can be null, in which case the instance repoints to its existing master
+			// destinationKey can be null, in which case the instance repoints to its existing primary
 			instance, err := inst.Repoint(instanceKey, destinationKey, inst.GTIDHintNeutral)
 			if err != nil {
 				log.Fatale(err)

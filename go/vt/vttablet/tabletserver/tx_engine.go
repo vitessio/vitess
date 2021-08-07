@@ -415,7 +415,7 @@ outer:
 
 // shutdownTransactions rolls back all open transactions
 // including the prepared ones.
-// This is used for transitioning from a master to a non-master
+// This is used for transitioning from a primary to a non-primary
 // serving type.
 func (te *TxEngine) shutdownTransactions() {
 	te.rollbackPrepared()

@@ -256,7 +256,7 @@ func (tc *splitCloneTestCase) setUpWithConcurrency(v3 bool, concurrency, writeQu
 		tc.rightPrimaryFakeDb.AddExpectedQuery("INSERT INTO `vt_ks`.`table1` (`id`, `msg`, `keyspace_id`) VALUES (*", nil)
 	}
 
-	// Fake stream health responses because vtworker needs them to find the master.
+	// Fake stream health responses because vtworker needs them to find the primary.
 	shqs := fakes.NewStreamHealthQueryService(leftPrimary.Target())
 	shqs.AddDefaultHealthResponse()
 	tc.leftPrimaryQs = newTestQueryService(tc.t, leftPrimary.Target(), shqs, 0, 2, topoproto.TabletAliasString(leftPrimary.Tablet.Alias), false /* omitKeyspaceID */)
@@ -859,7 +859,7 @@ func TestSplitCloneV2_Offline_Reconciliation(t *testing.T) {
 
 	tc := &splitCloneTestCase{t: t}
 	// We reduce the parallelism to 1 to test the order of expected
-	// insert/update/delete statements on the destination master.
+	// insert/update/delete statements on the destination primary.
 	tc.setUpWithConcurrency(false /* v3 */, 1, 10, splitCloneTestRowsCount)
 	defer tc.tearDown()
 
@@ -961,7 +961,7 @@ func TestSplitCloneV2_Throttled(t *testing.T) {
 }
 
 // TestSplitCloneV2_RetryDueToReadonly is identical to the regular test
-// TestSplitCloneV2 with the additional twist that the destination masters
+// TestSplitCloneV2 with the additional twist that the destination primaries
 // fail the first write because they are read-only and succeed after that.
 func TestSplitCloneV2_RetryDueToReadonly(t *testing.T) {
 	delay := discovery.GetTabletPickerRetryDelay()
@@ -997,7 +997,7 @@ func TestSplitCloneV2_RetryDueToReadonly(t *testing.T) {
 }
 
 // TestSplitCloneV2_NoMasterAvailable tests that vtworker correctly retries
-// even in a period where no MASTER tablet is available according to the
+// even in a period where no PRIMARY tablet is available according to the
 // HealthCheck instance.
 func TestSplitCloneV2_NoMasterAvailable(t *testing.T) {
 	delay := discovery.GetTabletPickerRetryDelay()
@@ -1016,7 +1016,7 @@ func TestSplitCloneV2_NoMasterAvailable(t *testing.T) {
 	// leftReplica will take over for the last, 30th, insert and the vreplication checkpoint.
 	tc.leftReplicaFakeDb.AddExpectedQuery("INSERT INTO `vt_ks`.`table1` (`id`, `msg`, `keyspace_id`) VALUES (*", nil)
 
-	// During the 29th write, let the MASTER disappear.
+	// During the 29th write, let the PRIMARY disappear.
 	tc.leftPrimaryFakeDb.GetEntry(28).AfterFunc = func() {
 		t.Logf("setting MASTER tablet to REPLICA")
 		tc.leftPrimaryQs.UpdateType(topodatapb.TabletType_REPLICA)
@@ -1035,7 +1035,7 @@ func TestSplitCloneV2_NoMasterAvailable(t *testing.T) {
 	defer tc.leftPrimaryFakeDb.DeleteAllEntriesAfterIndex(28)
 
 	// Wait for a retry due to NoMasterAvailable to happen, expect the 30th write
-	// on leftReplica and change leftReplica from REPLICA to MASTER.
+	// on leftReplica and change leftReplica from REPLICA to PRIMARY.
 	//
 	// Reset the stats now. It also happens when the worker starts but that's too
 	// late because this Go routine looks at it and can run before the worker.
@@ -1059,7 +1059,7 @@ func TestSplitCloneV2_NoMasterAvailable(t *testing.T) {
 			}
 		}
 
-		// Make leftReplica the new MASTER.
+		// Make leftReplica the new PRIMARY.
 		tc.leftReplica.TM.ChangeType(ctx, topodatapb.TabletType_PRIMARY)
 		t.Logf("resetting tablet back to MASTER")
 		tc.leftReplicaQs.UpdateType(topodatapb.TabletType_PRIMARY)

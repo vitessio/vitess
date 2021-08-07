@@ -87,7 +87,7 @@ func (wr *Wrangler) ReloadSchemaShard(ctx context.Context, keyspace, shard, repl
 	var wg sync.WaitGroup
 	for _, ti := range tablets {
 		if !includeMaster && ti.Type == topodatapb.TabletType_PRIMARY {
-			// We don't need to reload on the master
+			// We don't need to reload on the primary
 			// because we assume ExecuteFetchAsDba()
 			// already did that.
 			continue
@@ -149,7 +149,7 @@ func (wr *Wrangler) ValidateSchemaShard(ctx context.Context, keyspace, shard str
 		return fmt.Errorf("GetShard(%v, %v) failed: %v", keyspace, shard, err)
 	}
 
-	// get schema from the master, or error
+	// get schema from the primary, or error
 	if !si.HasMaster() {
 		return fmt.Errorf("no master in shard %v/%v", keyspace, shard)
 	}
@@ -167,7 +167,7 @@ func (wr *Wrangler) ValidateSchemaShard(ctx context.Context, keyspace, shard str
 	}
 
 	// read all the aliases in the shard, that is all tablets that are
-	// replicating from the master
+	// replicating from the primary
 	aliases, err := wr.ts.FindAllTabletAliasesInShard(ctx, keyspace, shard)
 	if err != nil {
 		return fmt.Errorf("FindAllTabletAliasesInShard(%v, %v) failed: %v", keyspace, shard, err)
@@ -326,7 +326,7 @@ func (wr *Wrangler) PreflightSchema(ctx context.Context, tabletAlias *topodatapb
 }
 
 // CopySchemaShardFromShard copies the schema from a source shard to the specified destination shard.
-// For both source and destination it picks the master tablet. See also CopySchemaShard.
+// For both source and destination it picks the primary tablet. See also CopySchemaShard.
 func (wr *Wrangler) CopySchemaShardFromShard(ctx context.Context, tables, excludeTables []string, includeViews bool, sourceKeyspace, sourceShard, destKeyspace, destShard string, waitReplicasTimeout time.Duration, skipVerify bool) error {
 	sourceShardInfo, err := wr.ts.GetShard(ctx, sourceKeyspace, sourceShard)
 	if err != nil {
@@ -340,7 +340,7 @@ func (wr *Wrangler) CopySchemaShardFromShard(ctx context.Context, tables, exclud
 }
 
 // CopySchemaShard copies the schema from a source tablet to the
-// specified shard.  The schema is applied directly on the master of
+// specified shard.  The schema is applied directly on the primary of
 // the destination shard, and is propagated to the replicas through
 // binlogs.
 func (wr *Wrangler) CopySchemaShard(ctx context.Context, sourceTabletAlias *topodatapb.TabletAlias, tables, excludeTables []string, includeViews bool, destKeyspace, destShard string, waitReplicasTimeout time.Duration, skipVerify bool) error {
@@ -418,7 +418,7 @@ func (wr *Wrangler) CopySchemaShard(ctx context.Context, sourceTabletAlias *topo
 
 // copyShardMetadata copies contents of _vt.shard_metadata table from the source
 // tablet to the destination tablet. It's assumed that destination tablet is a
-// master and binlogging is not turned off when INSERT statements are executed.
+// primary and binlogging is not turned off when INSERT statements are executed.
 func (wr *Wrangler) copyShardMetadata(ctx context.Context, srcTabletAlias *topodatapb.TabletAlias, destTabletAlias *topodatapb.TabletAlias) error {
 	sql := "SELECT 1 FROM information_schema.tables WHERE table_schema = '_vt' AND table_name = 'shard_metadata'"
 	presenceResult, err := wr.ExecuteFetchAsDba(ctx, srcTabletAlias, sql, 1, false, false)
@@ -477,7 +477,7 @@ func (wr *Wrangler) compareSchemas(ctx context.Context, sourceAlias, destAlias *
 // applySQLShard applies a given SQL change on a given tablet alias. It allows executing arbitrary
 // SQL statements, but doesn't return any results, so it's only useful for SQL statements
 // that would be run for their effects (e.g., CREATE).
-// It works by applying the SQL statement on the shard's master tablet with replication turned on.
+// It works by applying the SQL statement on the shard's primary tablet with replication turned on.
 // Thus it should be used only for changes that can be applied on a live instance without causing issues;
 // it shouldn't be used for anything that will require a pivot.
 // The SQL statement string is expected to have {{.DatabaseName}} in place of the actual db name.
@@ -488,7 +488,7 @@ func (wr *Wrangler) applySQLShard(ctx context.Context, tabletInfo *topo.TabletIn
 	}
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
-	// Need to make sure that we enable binlog, since we're only applying the statement on masters.
+	// Need to make sure that we enable binlog, since we're only applying the statement on primaries.
 	_, err = wr.tmc.ExecuteFetchAsDba(ctx, tabletInfo.Tablet, false, []byte(filledChange), 0, false, reloadSchema)
 	return err
 }

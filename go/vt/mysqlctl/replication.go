@@ -38,7 +38,7 @@ import (
 )
 
 // WaitForReplicationStart waits until the deadline for replication to start.
-// This validates the current master is correct and can be connected to.
+// This validates the current primary is correct and can be connected to.
 func WaitForReplicationStart(mysqld MysqlDaemon, replicaStartDeadline int) error {
 	var rowMap map[string]string
 	for replicaWait := 0; replicaWait < replicaStartDeadline; replicaWait++ {
@@ -215,7 +215,7 @@ func (mysqld *Mysqld) WaitSourcePos(ctx context.Context, targetPos mysql.Positio
 	waitCommandName := "WaitUntilPositionCommand"
 	var query string
 	if targetPos.MatchesFlavor(mysql.FilePosFlavorID) {
-		// If we are the master, WaitUntilFilePositionCommand will fail.
+		// If we are the primary, WaitUntilFilePositionCommand will fail.
 		// But position is most likely reached. So, check the position
 		// first.
 		mpos, err := conn.PrimaryFilePosition()
@@ -233,7 +233,7 @@ func (mysqld *Mysqld) WaitSourcePos(ctx context.Context, targetPos mysql.Positio
 		}
 		waitCommandName = "WaitUntilFilePositionCommand"
 	} else {
-		// If we are the master, WaitUntilPositionCommand will fail.
+		// If we are the primary, WaitUntilPositionCommand will fail.
 		// But position is most likely reached. So, check the position
 		// first.
 		mpos, err := conn.PrimaryPosition()
@@ -280,7 +280,7 @@ func (mysqld *Mysqld) ReplicationStatus() (mysql.ReplicationStatus, error) {
 	return conn.ShowReplicationStatus()
 }
 
-// PrimaryStatus returns the master replication statuses
+// PrimaryStatus returns the primary replication statuses
 func (mysqld *Mysqld) PrimaryStatus(ctx context.Context) (mysql.PrimaryStatus, error) {
 	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
 	if err != nil {
@@ -291,7 +291,7 @@ func (mysqld *Mysqld) PrimaryStatus(ctx context.Context) (mysql.PrimaryStatus, e
 	return conn.ShowPrimaryStatus()
 }
 
-// PrimaryPosition returns the master replication position.
+// PrimaryPosition returns the primary replication position.
 func (mysqld *Mysqld) PrimaryPosition() (mysql.Position, error) {
 	conn, err := getPoolReconnect(context.TODO(), mysqld.dbaPool)
 	if err != nil {
@@ -316,7 +316,7 @@ func (mysqld *Mysqld) SetReplicationPosition(ctx context.Context, pos mysql.Posi
 	return mysqld.executeSuperQueryListConn(ctx, conn, cmds)
 }
 
-// SetReplicationSource makes the provided host / port the master. It optionally
+// SetReplicationSource makes the provided host / port the primary. It optionally
 // stops replication before, and starts it after.
 func (mysqld *Mysqld) SetReplicationSource(ctx context.Context, masterHost string, masterPort int, replicationStopBefore bool, replicationStartAfter bool) error {
 	params, err := mysqld.dbcfgs.ReplConnector().MysqlParams()
@@ -457,7 +457,7 @@ func (mysqld *Mysqld) DisableBinlogPlayback() error {
 }
 
 // SetSemiSyncEnabled enables or disables semi-sync replication for
-// master and/or replica mode.
+// primary and/or replica mode.
 func (mysqld *Mysqld) SetSemiSyncEnabled(master, replica bool) error {
 	log.Infof("Setting semi-sync mode: master=%v, replica=%v", master, replica)
 
@@ -479,7 +479,7 @@ func (mysqld *Mysqld) SetSemiSyncEnabled(master, replica bool) error {
 	return nil
 }
 
-// SemiSyncEnabled returns whether semi-sync is enabled for master or replica.
+// SemiSyncEnabled returns whether semi-sync is enabled for primary or replica.
 // If the semi-sync plugin is not loaded, we assume semi-sync is disabled.
 func (mysqld *Mysqld) SemiSyncEnabled() (master, replica bool) {
 	vars, err := mysqld.fetchVariables(context.TODO(), "rpl_semi_sync_%_enabled")

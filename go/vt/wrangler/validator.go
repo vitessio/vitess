@@ -228,7 +228,7 @@ func (wr *Wrangler) validateReplication(ctx context.Context, shardInfo *topo.Sha
 		replicaIPMap[normalizeIP(replicaAddr)] = true
 	}
 
-	// See if every entry in the replication graph is connected to the master.
+	// See if every entry in the replication graph is connected to the primary.
 	for _, tablet := range tabletMap {
 		if !tablet.IsReplicaType() {
 			continue

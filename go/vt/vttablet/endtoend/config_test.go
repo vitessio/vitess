@@ -135,7 +135,7 @@ func TestConsolidatorReplicasOnly(t *testing.T) {
 	revert := changeVar(t, "Consolidator", tabletenv.NotOnMaster)
 	defer revert()
 
-	// master should not do query consolidation
+	// primary should not do query consolidation
 	var wg2 sync.WaitGroup
 	wg2.Add(2)
 	go func() {
