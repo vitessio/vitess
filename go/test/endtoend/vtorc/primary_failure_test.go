@@ -27,6 +27,7 @@ import (
 )
 
 // 2. bring down primary, let orc promote replica
+// covers the test case master-failover from orchestrator
 func TestDownPrimary(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	setupVttabletsAndVtorc(t, 2, 0, 0, 0, nil)
@@ -54,6 +55,7 @@ func TestDownPrimary(t *testing.T) {
 }
 
 // Failover should not be cross data centers, according to the configuration file
+// covers part of the test case master-failover-lost-replicas from orchestrator
 func TestCrossDataCenterFailure(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	setupVttabletsAndVtorc(t, 2, 1, 0, 0, nil)
@@ -89,6 +91,7 @@ func TestCrossDataCenterFailure(t *testing.T) {
 }
 
 // Failover will sometimes lead to a replica which can no longer replicate.
+// covers part of the test case master-failover-lost-replicas from orchestrator
 func TestLostReplicasOnPrimaryFailure(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	setupVttabletsAndVtorc(t, 2, 1, 0, 0, nil)
