@@ -483,3 +483,8 @@ Gen4 error: In aggregated query without GROUP BY, expression of SELECT list cont
 "select avg(id) from user"
 "unsupported: in scatter query: complex aggregate expression"
 Gen4 plan same as above
+
+# scatter aggregate with ambiguous aliases
+"select distinct a, b as a from user"
+"generating order by clause: ambiguous symbol reference: a"
+Gen4 plan same as above
