@@ -68,7 +68,7 @@ func copySchema(t *testing.T, useShardAsSource bool) {
 	sourcePrimaryDb := fakesqldb.New(t).SetName("sourcePrimaryDb")
 	defer sourcePrimaryDb.Close()
 	sourcePrimary := NewFakeTablet(t, wr, "cell1", 0,
-		topodatapb.TabletType_MASTER, sourcePrimaryDb, TabletKeyspaceShard(t, "ks", "-80"))
+		topodatapb.TabletType_PRIMARY, sourcePrimaryDb, TabletKeyspaceShard(t, "ks", "-80"))
 
 	sourceRdonlyDb := fakesqldb.New(t).SetName("sourceRdonlyDb")
 	defer sourceRdonlyDb.Close()
@@ -78,7 +78,7 @@ func copySchema(t *testing.T, useShardAsSource bool) {
 	destinationPrimaryDb := fakesqldb.New(t).SetName("destinationPrimaryDb")
 	defer destinationPrimaryDb.Close()
 	destinationPrimary := NewFakeTablet(t, wr, "cell1", 10,
-		topodatapb.TabletType_MASTER, destinationPrimaryDb, TabletKeyspaceShard(t, "ks", "-40"))
+		topodatapb.TabletType_PRIMARY, destinationPrimaryDb, TabletKeyspaceShard(t, "ks", "-40"))
 
 	for _, ft := range []*FakeTablet{sourcePrimary, sourceRdonly, destinationPrimary} {
 		ft.StartActionLoop(t, wr)

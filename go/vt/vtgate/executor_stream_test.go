@@ -58,7 +58,7 @@ func TestStreamSQLSharded(t *testing.T) {
 	resolver := newTestLegacyResolver(hc, serv, cell)
 	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
 	for _, shard := range shards {
-		_ = hc.AddTestTablet(cell, shard, 1, "TestExecutor", shard, topodatapb.TabletType_MASTER, true, 1, nil)
+		_ = hc.AddTestTablet(cell, shard, 1, "TestExecutor", shard, topodatapb.TabletType_PRIMARY, true, 1, nil)
 	}
 	executor := NewExecutor(context.Background(), serv, cell, resolver, false, false, testBufferSize, cache.DefaultConfig, nil, false)
 
@@ -110,11 +110,11 @@ func executorStreamMessages(executor *Executor, sql string) (qr *sqltypes.Result
 	err = executor.StreamExecute(
 		ctx,
 		"TestExecuteStream",
-		NewSafeSession(masterSession),
+		NewSafeSession(primarySession),
 		sql,
 		nil,
 		&querypb.Target{
-			TabletType: topodatapb.TabletType_MASTER,
+			TabletType: topodatapb.TabletType_PRIMARY,
 		},
 		func(qr *sqltypes.Result) error {
 			results <- qr

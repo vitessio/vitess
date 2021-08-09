@@ -359,7 +359,7 @@ func initCheckpoint(keyspace string, vtworkers, excludeTables, sourceShards, des
 		return map[string]string{
 			"keyspace":     keyspace,
 			"source_shard": shard,
-			"served_type":  topodatapb.TabletType_MASTER.String(),
+			"served_type":  topodatapb.TabletType_PRIMARY.String(),
 		}
 	})
 

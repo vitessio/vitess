@@ -116,13 +116,13 @@ func (wr *Wrangler) buildResharder(ctx context.Context, keyspace, workflow strin
 		if err != nil {
 			return nil, vterrors.Wrapf(err, "GetShard(%s) failed", shard)
 		}
-		if !si.IsMasterServing {
+		if !si.IsPrimaryServing {
 			return nil, fmt.Errorf("source shard %v is not in serving state", shard)
 		}
 		rs.sourceShards = append(rs.sourceShards, si)
-		master, err := wr.ts.GetTablet(ctx, si.MasterAlias)
+		master, err := wr.ts.GetTablet(ctx, si.PrimaryAlias)
 		if err != nil {
-			return nil, vterrors.Wrapf(err, "GetTablet(%s) failed", si.MasterAlias)
+			return nil, vterrors.Wrapf(err, "GetTablet(%s) failed", si.PrimaryAlias)
 		}
 		rs.sourceMasters[si.ShardName()] = master
 	}
@@ -131,13 +131,13 @@ func (wr *Wrangler) buildResharder(ctx context.Context, keyspace, workflow strin
 		if err != nil {
 			return nil, vterrors.Wrapf(err, "GetShard(%s) failed", shard)
 		}
-		if si.IsMasterServing {
+		if si.IsPrimaryServing {
 			return nil, fmt.Errorf("target shard %v is in serving state", shard)
 		}
 		rs.targetShards = append(rs.targetShards, si)
-		master, err := wr.ts.GetTablet(ctx, si.MasterAlias)
+		master, err := wr.ts.GetTablet(ctx, si.PrimaryAlias)
 		if err != nil {
-			return nil, vterrors.Wrapf(err, "GetTablet(%s) failed", si.MasterAlias)
+			return nil, vterrors.Wrapf(err, "GetTablet(%s) failed", si.PrimaryAlias)
 		}
 		rs.targetMasters[si.ShardName()] = master
 	}
@@ -283,7 +283,7 @@ func (rs *resharder) identifyRuleType(rule *binlogdatapb.Rule) (workflow.StreamT
 }
 
 func (rs *resharder) copySchema(ctx context.Context) error {
-	oneSource := rs.sourceShards[0].MasterAlias
+	oneSource := rs.sourceShards[0].PrimaryAlias
 	err := rs.forAll(rs.targetShards, func(target *topo.ShardInfo) error {
 		return rs.wr.CopySchemaShard(ctx, oneSource, []string{"/.*"}, nil, false, rs.keyspace, target.ShardName(), 1*time.Second, false)
 	})

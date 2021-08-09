@@ -84,7 +84,7 @@ func CreateTablet(ctx context.Context, ts *topo.Server, cell string, uid uint32,
 
 	controller := tabletserver.NewServer(topoproto.TabletAliasString(alias), ts, alias)
 	initTabletType := tabletType
-	if tabletType == topodatapb.TabletType_MASTER {
+	if tabletType == topodatapb.TabletType_PRIMARY {
 		initTabletType = topodatapb.TabletType_REPLICA
 	}
 	_, kr, err := topo.ValidateShardName(shard)
@@ -114,8 +114,8 @@ func CreateTablet(ctx context.Context, ts *topo.Server, cell string, uid uint32,
 		return err
 	}
 
-	if tabletType == topodatapb.TabletType_MASTER {
-		if err := tm.ChangeType(ctx, topodatapb.TabletType_MASTER); err != nil {
+	if tabletType == topodatapb.TabletType_PRIMARY {
+		if err := tm.ChangeType(ctx, topodatapb.TabletType_PRIMARY); err != nil {
 			return fmt.Errorf("TabletExternallyReparented failed on master %v: %v", topoproto.TabletAliasString(alias), err)
 		}
 	}
@@ -256,7 +256,7 @@ func CreateKs(ctx context.Context, ts *topo.Server, tpb *vttestpb.VTTestTopology
 			ShardingColumnType: sct,
 			ServedFroms: []*topodatapb.Keyspace_ServedFrom{
 				{
-					TabletType: topodatapb.TabletType_MASTER,
+					TabletType: topodatapb.TabletType_PRIMARY,
 					Keyspace:   kpb.ServedFrom,
 				},
 				{
@@ -322,7 +322,7 @@ func CreateKs(ctx context.Context, ts *topo.Server, tpb *vttestpb.VTTestTopology
 					replicas--
 
 					// create the master
-					if err := CreateTablet(ctx, ts, cell, uid, keyspace, shard, dbname, topodatapb.TabletType_MASTER, mysqld, dbcfgs.Clone()); err != nil {
+					if err := CreateTablet(ctx, ts, cell, uid, keyspace, shard, dbname, topodatapb.TabletType_PRIMARY, mysqld, dbcfgs.Clone()); err != nil {
 						return 0, err
 					}
 					uid++

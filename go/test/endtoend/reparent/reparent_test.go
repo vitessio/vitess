@@ -46,7 +46,7 @@ func TestMasterToSpareStateChangeImpossible(t *testing.T) {
 	// We cannot change a master to spare
 	out, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("ChangeTabletType", tab1.Alias, "spare")
 	require.Error(t, err, out)
-	require.Contains(t, out, "type change MASTER -> SPARE is not an allowed transition for ChangeTabletType")
+	require.Contains(t, out, "type change PRIMARY -> SPARE is not an allowed transition for ChangeTabletType")
 }
 
 func TestReparentDownPrimary(t *testing.T) {
@@ -179,8 +179,8 @@ func TestReparentGraceful(t *testing.T) {
 
 	// Run this to make sure it succeeds.
 	strArray := getShardReplicationPositions(t, keyspaceName, shardName, false)
-	assert.Equal(t, 4, len(strArray))         // one primary, three replicas
-	assert.Contains(t, strArray[0], "master") // primary first
+	assert.Equal(t, 4, len(strArray))          // one primary, three replicas
+	assert.Contains(t, strArray[0], "primary") // primary first
 
 	// Perform a graceful reparent operation
 	prs(t, tab2)

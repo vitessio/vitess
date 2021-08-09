@@ -61,7 +61,7 @@ func IsTrivialTypeChange(oldTabletType, newTabletType topodatapb.TabletType) boo
 // IsInServingGraph returns if a tablet appears in the serving graph
 func IsInServingGraph(tt topodatapb.TabletType) bool {
 	switch tt {
-	case topodatapb.TabletType_MASTER, topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY:
+	case topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY:
 		return true
 	}
 	return false
@@ -70,7 +70,7 @@ func IsInServingGraph(tt topodatapb.TabletType) bool {
 // IsRunningQueryService returns if a tablet is running the query service
 func IsRunningQueryService(tt topodatapb.TabletType) bool {
 	switch tt {
-	case topodatapb.TabletType_MASTER, topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY, topodatapb.TabletType_EXPERIMENTAL, topodatapb.TabletType_DRAINED:
+	case topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY, topodatapb.TabletType_EXPERIMENTAL, topodatapb.TabletType_DRAINED:
 		return true
 	}
 	return false
@@ -103,7 +103,7 @@ func IsSubjectToLameduck(tt topodatapb.TabletType) bool {
 // RPC service.
 func IsRunningUpdateStream(tt topodatapb.TabletType) bool {
 	switch tt {
-	case topodatapb.TabletType_MASTER, topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY:
+	case topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY:
 		return true
 	}
 	return false
@@ -115,7 +115,7 @@ func IsRunningUpdateStream(tt topodatapb.TabletType) bool {
 // BACKUP, RESTORE, DRAINED may or may not be, but we don't know for sure
 func IsReplicaType(tt topodatapb.TabletType) bool {
 	switch tt {
-	case topodatapb.TabletType_MASTER, topodatapb.TabletType_BACKUP, topodatapb.TabletType_RESTORE, topodatapb.TabletType_DRAINED:
+	case topodatapb.TabletType_PRIMARY, topodatapb.TabletType_BACKUP, topodatapb.TabletType_RESTORE, topodatapb.TabletType_DRAINED:
 		return false
 	}
 	return true
@@ -211,9 +211,9 @@ func (ti *TabletInfo) IsReplicaType() bool {
 	return IsReplicaType(ti.Type)
 }
 
-// GetMasterTermStartTime returns the tablet's master term start time as a Time value.
-func (ti *TabletInfo) GetMasterTermStartTime() time.Time {
-	return logutil.ProtoToTime(ti.Tablet.MasterTermStartTime)
+// GetPrimaryTermStartTime returns the tablet's master term start time as a Time value.
+func (ti *TabletInfo) GetPrimaryTermStartTime() time.Time {
+	return logutil.ProtoToTime(ti.Tablet.PrimaryTermStartTime)
 }
 
 // NewTabletInfo returns a TabletInfo basing on tablet with the

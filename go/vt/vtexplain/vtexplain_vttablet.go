@@ -127,7 +127,7 @@ func newTablet(opts *Options, t *topodatapb.Tablet) *explainTablet {
 	target := querypb.Target{
 		Keyspace:   t.Keyspace,
 		Shard:      t.Shard,
-		TabletType: topodatapb.TabletType_MASTER,
+		TabletType: topodatapb.TabletType_PRIMARY,
 	}
 	tsv.StartService(&target, dbcfgs, nil /* mysqld */)
 

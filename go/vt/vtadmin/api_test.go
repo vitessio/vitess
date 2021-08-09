@@ -555,8 +555,8 @@ func TestFindSchema(t *testing.T) {
 									Keyspace: "testkeyspace",
 									Name:     "-80",
 									Shard: &topodatapb.Shard{
-										IsMasterServing: true,
-										MasterAlias: &topodatapb.TabletAlias{
+										IsPrimaryServing: true,
+										PrimaryAlias: &topodatapb.TabletAlias{
 											Cell: "c1zone1",
 											Uid:  100,
 										},
@@ -566,8 +566,8 @@ func TestFindSchema(t *testing.T) {
 									Keyspace: "testkeyspace",
 									Name:     "80-",
 									Shard: &topodatapb.Shard{
-										IsMasterServing: true,
-										MasterAlias: &topodatapb.TabletAlias{
+										IsPrimaryServing: true,
+										PrimaryAlias: &topodatapb.TabletAlias{
 											Cell: "c1zone1",
 											Uid:  200,
 										},
@@ -583,8 +583,8 @@ func TestFindSchema(t *testing.T) {
 									Keyspace: "ks1",
 									Name:     "-",
 									Shard: &topodatapb.Shard{
-										IsMasterServing: true,
-										MasterAlias: &topodatapb.TabletAlias{
+										IsPrimaryServing: true,
+										PrimaryAlias: &topodatapb.TabletAlias{
 											Cell: "c1zone1",
 											Uid:  300,
 										},
@@ -677,8 +677,8 @@ func TestFindSchema(t *testing.T) {
 									Keyspace: "ks2",
 									Name:     "-",
 									Shard: &topodatapb.Shard{
-										IsMasterServing: true,
-										MasterAlias: &topodatapb.TabletAlias{
+										IsPrimaryServing: true,
+										PrimaryAlias: &topodatapb.TabletAlias{
 											Cell: "c2z1",
 											Uid:  100,
 										},
@@ -1115,14 +1115,14 @@ func TestGetKeyspaces(t *testing.T) {
 								Keyspace: "c0-ks0",
 								Name:     "-80",
 								Shard: &topodatapb.Shard{
-									IsMasterServing: true,
+									IsPrimaryServing: true,
 								},
 							},
 							"80-": {
 								Keyspace: "c0-ks0",
 								Name:     "80-",
 								Shard: &topodatapb.Shard{
-									IsMasterServing: true,
+									IsPrimaryServing: true,
 								},
 							},
 						},
@@ -1141,7 +1141,7 @@ func TestGetKeyspaces(t *testing.T) {
 								Keyspace: "c1-ks0",
 								Name:     "-",
 								Shard: &topodatapb.Shard{
-									IsMasterServing: true,
+									IsPrimaryServing: true,
 								},
 							},
 						},
@@ -1549,8 +1549,8 @@ func TestGetSchema(t *testing.T) {
 									Keyspace: "testkeyspace",
 									Name:     "-80",
 									Shard: &topodatapb.Shard{
-										IsMasterServing: true,
-										MasterAlias: &topodatapb.TabletAlias{
+										IsPrimaryServing: true,
+										PrimaryAlias: &topodatapb.TabletAlias{
 											Cell: "c1zone1",
 											Uid:  100,
 										},
@@ -1560,8 +1560,8 @@ func TestGetSchema(t *testing.T) {
 									Keyspace: "testkeyspace",
 									Name:     "80-",
 									Shard: &topodatapb.Shard{
-										IsMasterServing: true,
-										MasterAlias: &topodatapb.TabletAlias{
+										IsPrimaryServing: true,
+										PrimaryAlias: &topodatapb.TabletAlias{
 											Cell: "c1zone1",
 											Uid:  200,
 										},
@@ -2225,8 +2225,8 @@ func TestGetSchemas(t *testing.T) {
 									Keyspace: "testkeyspace",
 									Name:     "-80",
 									Shard: &topodatapb.Shard{
-										IsMasterServing: true,
-										MasterAlias: &topodatapb.TabletAlias{
+										IsPrimaryServing: true,
+										PrimaryAlias: &topodatapb.TabletAlias{
 											Cell: "c1zone1",
 											Uid:  100,
 										},
@@ -2236,8 +2236,8 @@ func TestGetSchemas(t *testing.T) {
 									Keyspace: "testkeyspace",
 									Name:     "80-",
 									Shard: &topodatapb.Shard{
-										IsMasterServing: true,
-										MasterAlias: &topodatapb.TabletAlias{
+										IsPrimaryServing: true,
+										PrimaryAlias: &topodatapb.TabletAlias{
 											Cell: "c1zone1",
 											Uid:  200,
 										},
@@ -2253,8 +2253,8 @@ func TestGetSchemas(t *testing.T) {
 									Keyspace: "ks1",
 									Name:     "-",
 									Shard: &topodatapb.Shard{
-										IsMasterServing: true,
-										MasterAlias: &topodatapb.TabletAlias{
+										IsPrimaryServing: true,
+										PrimaryAlias: &topodatapb.TabletAlias{
 											Cell: "c1zone2",
 											Uid:  100,
 										},
@@ -2347,8 +2347,8 @@ func TestGetSchemas(t *testing.T) {
 									Keyspace: "ks2",
 									Name:     "-",
 									Shard: &topodatapb.Shard{
-										IsMasterServing: true,
-										MasterAlias: &topodatapb.TabletAlias{
+										IsPrimaryServing: true,
+										PrimaryAlias: &topodatapb.TabletAlias{
 											Cell: "c2z1",
 											Uid:  100,
 										},
@@ -2975,7 +2975,7 @@ func TestGetTablet(t *testing.T) {
 							Hostname: "ks1-00-00-zone1-a",
 							Keyspace: "ks1",
 							Shard:    "-",
-							Type:     topodatapb.TabletType_MASTER,
+							Type:     topodatapb.TabletType_PRIMARY,
 						},
 					},
 				},
@@ -2998,7 +2998,7 @@ func TestGetTablet(t *testing.T) {
 					Hostname: "ks1-00-00-zone1-a",
 					Keyspace: "ks1",
 					Shard:    "-",
-					Type:     topodatapb.TabletType_MASTER,
+					Type:     topodatapb.TabletType_PRIMARY,
 				},
 			},
 			shouldErr: false,
@@ -3018,7 +3018,7 @@ func TestGetTablet(t *testing.T) {
 							Hostname: "ks1-00-00-zone1-a",
 							Keyspace: "ks1",
 							Shard:    "-",
-							Type:     topodatapb.TabletType_MASTER,
+							Type:     topodatapb.TabletType_PRIMARY,
 						},
 					},
 				},
@@ -3034,7 +3034,7 @@ func TestGetTablet(t *testing.T) {
 							Hostname: "ks2-00-00-zone1-a",
 							Keyspace: "ks2",
 							Shard:    "-",
-							Type:     topodatapb.TabletType_MASTER,
+							Type:     topodatapb.TabletType_PRIMARY,
 						},
 					},
 				},
@@ -3063,7 +3063,7 @@ func TestGetTablet(t *testing.T) {
 							Hostname: "ks1-00-00-zone1-a",
 							Keyspace: "ks1",
 							Shard:    "-",
-							Type:     topodatapb.TabletType_MASTER,
+							Type:     topodatapb.TabletType_PRIMARY,
 						},
 					},
 				},
@@ -3079,7 +3079,7 @@ func TestGetTablet(t *testing.T) {
 							Hostname: "ks2-00-00-zone1-a",
 							Keyspace: "ks2",
 							Shard:    "-",
-							Type:     topodatapb.TabletType_MASTER,
+							Type:     topodatapb.TabletType_PRIMARY,
 						},
 					},
 				},
@@ -3103,7 +3103,7 @@ func TestGetTablet(t *testing.T) {
 					Hostname: "ks1-00-00-zone1-a",
 					Keyspace: "ks1",
 					Shard:    "-",
-					Type:     topodatapb.TabletType_MASTER,
+					Type:     topodatapb.TabletType_PRIMARY,
 				},
 			},
 			shouldErr: false,
@@ -3123,7 +3123,7 @@ func TestGetTablet(t *testing.T) {
 							Hostname: "ks1-00-00-zone1-a",
 							Keyspace: "ks1",
 							Shard:    "-",
-							Type:     topodatapb.TabletType_MASTER,
+							Type:     topodatapb.TabletType_PRIMARY,
 						},
 					},
 				},
@@ -3139,7 +3139,7 @@ func TestGetTablet(t *testing.T) {
 							Hostname: "ks1-00-00-zone1-a",
 							Keyspace: "ks1",
 							Shard:    "-",
-							Type:     topodatapb.TabletType_MASTER,
+							Type:     topodatapb.TabletType_PRIMARY,
 						},
 					},
 				},
@@ -3229,7 +3229,7 @@ func TestGetTablets(t *testing.T) {
 							Hostname: "ks1-00-00-zone1-a",
 							Keyspace: "ks1",
 							Shard:    "-",
-							Type:     topodatapb.TabletType_MASTER,
+							Type:     topodatapb.TabletType_PRIMARY,
 						},
 					},
 				},
@@ -3251,7 +3251,7 @@ func TestGetTablets(t *testing.T) {
 						Hostname: "ks1-00-00-zone1-a",
 						Keyspace: "ks1",
 						Shard:    "-",
-						Type:     topodatapb.TabletType_MASTER,
+						Type:     topodatapb.TabletType_PRIMARY,
 					},
 				},
 			},
@@ -3272,7 +3272,7 @@ func TestGetTablets(t *testing.T) {
 							Hostname: "ks1-00-00-zone1-a",
 							Keyspace: "ks1",
 							Shard:    "-",
-							Type:     topodatapb.TabletType_MASTER,
+							Type:     topodatapb.TabletType_PRIMARY,
 						},
 					},
 				},
@@ -3288,7 +3288,7 @@ func TestGetTablets(t *testing.T) {
 							Hostname: "ks2-00-00-zone1-a",
 							Keyspace: "ks2",
 							Shard:    "-",
-							Type:     topodatapb.TabletType_MASTER,
+							Type:     topodatapb.TabletType_PRIMARY,
 						},
 					},
 				},
@@ -3315,7 +3315,7 @@ func TestGetTablets(t *testing.T) {
 							Hostname: "ks1-00-00-zone1-a",
 							Keyspace: "ks1",
 							Shard:    "-",
-							Type:     topodatapb.TabletType_MASTER,
+							Type:     topodatapb.TabletType_PRIMARY,
 						},
 					},
 				},
@@ -3331,7 +3331,7 @@ func TestGetTablets(t *testing.T) {
 							Hostname: "ks2-00-00-zone1-a",
 							Keyspace: "ks2",
 							Shard:    "-",
-							Type:     topodatapb.TabletType_MASTER,
+							Type:     topodatapb.TabletType_PRIMARY,
 						},
 					},
 				},
@@ -3353,7 +3353,7 @@ func TestGetTablets(t *testing.T) {
 						Hostname: "ks1-00-00-zone1-a",
 						Keyspace: "ks1",
 						Shard:    "-",
-						Type:     topodatapb.TabletType_MASTER,
+						Type:     topodatapb.TabletType_PRIMARY,
 					},
 				},
 			},
@@ -4580,7 +4580,7 @@ func TestVTExplain(t *testing.T) {
 						Hostname: "tablet-cell1-a",
 						Keyspace: "commerce",
 						Shard:    "-",
-						Type:     topodatapb.TabletType_MASTER,
+						Type:     topodatapb.TabletType_PRIMARY,
 					},
 				},
 				{

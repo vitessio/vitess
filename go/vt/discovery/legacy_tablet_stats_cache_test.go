@@ -64,7 +64,7 @@ func TestLegacyTabletStatsCache(t *testing.T) {
 	}
 
 	// empty
-	a := tsc.GetTabletStats("k", "s", topodatapb.TabletType_MASTER)
+	a := tsc.GetTabletStats("k", "s", topodatapb.TabletType_PRIMARY)
 	if len(a) != 0 {
 		t.Errorf("wrong result, expected empty list: %v", a)
 	}
@@ -195,7 +195,7 @@ func TestLegacyTabletStatsCache(t *testing.T) {
 	ts2.Up = false
 	tsc.StatsUpdate(ts2)
 	ts2.Up = true
-	ts2.Target.TabletType = topodatapb.TabletType_MASTER
+	ts2.Target.TabletType = topodatapb.TabletType_PRIMARY
 	ts2.TabletExternallyReparentedTimestamp = 10
 	tsc.StatsUpdate(ts2)
 
@@ -206,7 +206,7 @@ func TestLegacyTabletStatsCache(t *testing.T) {
 	}
 
 	// check we have a master now
-	a = tsc.GetTabletStats("k", "s", topodatapb.TabletType_MASTER)
+	a = tsc.GetTabletStats("k", "s", topodatapb.TabletType_PRIMARY)
 	if len(a) != 1 || !ts2.DeepEqual(&a[0]) {
 		t.Errorf("unexpected result: %v", a)
 	}
@@ -215,7 +215,7 @@ func TestLegacyTabletStatsCache(t *testing.T) {
 	ts1.Up = false
 	tsc.StatsUpdate(ts1)
 	ts1.Up = true
-	ts1.Target.TabletType = topodatapb.TabletType_MASTER
+	ts1.Target.TabletType = topodatapb.TabletType_PRIMARY
 	ts1.TabletExternallyReparentedTimestamp = 20
 	tsc.StatsUpdate(ts1)
 
@@ -224,14 +224,14 @@ func TestLegacyTabletStatsCache(t *testing.T) {
 	if len(a) != 0 {
 		t.Errorf("unexpected result: %v", a)
 	}
-	a = tsc.GetHealthyTabletStats("k", "s", topodatapb.TabletType_MASTER)
+	a = tsc.GetHealthyTabletStats("k", "s", topodatapb.TabletType_PRIMARY)
 	if len(a) != 1 || !ts1.DeepEqual(&a[0]) {
 		t.Errorf("unexpected result: %v", a)
 	}
 
 	// old master sending an old ping should be ignored
 	tsc.StatsUpdate(ts2)
-	a = tsc.GetHealthyTabletStats("k", "s", topodatapb.TabletType_MASTER)
+	a = tsc.GetHealthyTabletStats("k", "s", topodatapb.TabletType_PRIMARY)
 	if len(a) != 1 || !ts1.DeepEqual(&a[0]) {
 		t.Errorf("unexpected result: %v", a)
 	}

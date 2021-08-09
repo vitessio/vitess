@@ -201,7 +201,7 @@ func (tc *LegacyTabletStatsCache) getAliasByCell(cell string) string {
 
 // StatsUpdate is part of the LegacyHealthCheckStatsListener interface.
 func (tc *LegacyTabletStatsCache) StatsUpdate(ts *LegacyTabletStats) {
-	if ts.Target.TabletType != topodatapb.TabletType_MASTER &&
+	if ts.Target.TabletType != topodatapb.TabletType_PRIMARY &&
 		ts.Tablet.Alias.Cell != tc.cell &&
 		tc.getAliasByCell(ts.Tablet.Alias.Cell) != tc.getAliasByCell(tc.cell) {
 		// this is for a non-master tablet in a different cell and a different alias, drop it
@@ -219,7 +219,7 @@ func (tc *LegacyTabletStatsCache) StatsUpdate(ts *LegacyTabletStats) {
 			// We have an existing entry, and a new entry.
 			// Remember if they are both good (most common case).
 			trivialNonMasterUpdate = existing.LastError == nil && existing.Serving && ts.LastError == nil &&
-				ts.Serving && ts.Target.TabletType != topodatapb.TabletType_MASTER && existing.TrivialStatsUpdate(ts)
+				ts.Serving && ts.Target.TabletType != topodatapb.TabletType_PRIMARY && existing.TrivialStatsUpdate(ts)
 
 			// We already have the entry, update the
 			// values if necessary.  (will update both
@@ -244,8 +244,8 @@ func (tc *LegacyTabletStatsCache) StatsUpdate(ts *LegacyTabletStats) {
 
 	// Update our healthy list.
 	var allArray []*LegacyTabletStats
-	if ts.Target.TabletType == topodatapb.TabletType_MASTER {
-		// The healthy list is different for TabletType_MASTER: we
+	if ts.Target.TabletType == topodatapb.TabletType_PRIMARY {
+		// The healthy list is different for TabletType_PRIMARY: we
 		// only keep the most recent one.
 		e.updateHealthyMapForMaster(ts)
 	} else {
@@ -284,7 +284,7 @@ func (tc *LegacyTabletStatsCache) GetTabletStats(keyspace, shard string, tabletT
 
 // GetHealthyTabletStats returns only the healthy targets.
 // The returned array is owned by the caller.
-// For TabletType_MASTER, this will only return at most one entry,
+// For TabletType_PRIMARY, this will only return at most one entry,
 // the most recent tablet of type master.
 func (tc *LegacyTabletStatsCache) GetHealthyTabletStats(keyspace, shard string, tabletType topodatapb.TabletType) []LegacyTabletStats {
 	e := tc.getEntry(keyspace, shard, tabletType)

@@ -368,7 +368,7 @@ func (shard *GRShard) findShardPrimaryTablet() *grInstance {
 	var primaryInstance *grInstance
 	foundPrimary := false
 	for _, instance := range shard.instances {
-		if instance.tablet.Type == topodatapb.TabletType_MASTER {
+		if instance.tablet.Type == topodatapb.TabletType_PRIMARY {
 			foundPrimary = true
 			// It is possible that there are more than one master in topo server
 			// we should compare timestamp to pick the latest one
@@ -410,7 +410,7 @@ func (shard *GRShard) disconnectedInstance() (*grInstance, error) {
 	for _, instance := range shard.instances {
 		// Skip master because VTGR always join group and then update tablet type
 		// which means if a tablet has type master then it should have a group already
-		if instance.tablet.Type == topodatapb.TabletType_MASTER {
+		if instance.tablet.Type == topodatapb.TabletType_PRIMARY {
 			continue
 		}
 		// Skip instance without hostname because they are not up and running

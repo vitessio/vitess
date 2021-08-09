@@ -253,10 +253,10 @@ func (c *Conn) clientHandshake(characterSet uint8, params *ConnParams) error {
 	}
 
 	// Handle switch to SSL if necessary.
-	if params.Flags&CapabilityClientSSL > 0 {
+	if params.SslEnabled() {
 		// If client asked for SSL, but server doesn't support it,
 		// stop right here.
-		if capabilities&CapabilityClientSSL == 0 {
+		if params.SslRequired() && capabilities&CapabilityClientSSL == 0 {
 			return NewSQLError(CRSSLConnectionError, SSUnknownSQLState, "server doesn't support SSL but client asked for it")
 		}
 
@@ -282,7 +282,7 @@ func (c *Conn) clientHandshake(characterSet uint8, params *ConnParams) error {
 		}
 
 		// Build the TLS config.
-		clientConfig, err := vttls.ClientConfig(params.SslCert, params.SslKey, params.SslCa, serverName, tlsVersion)
+		clientConfig, err := vttls.ClientConfig(params.EffectiveSslMode(), params.SslCert, params.SslKey, params.SslCa, serverName, tlsVersion)
 		if err != nil {
 			return NewSQLError(CRSSLConnectionError, SSUnknownSQLState, "error loading client cert and ca: %v", err)
 		}

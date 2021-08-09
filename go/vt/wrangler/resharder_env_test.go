@@ -61,7 +61,7 @@ var (
 
 func getPartition(t *testing.T, shards []string) *topodatapb.SrvKeyspace_KeyspacePartition {
 	partition := &topodatapb.SrvKeyspace_KeyspacePartition{
-		ServedType:      topodatapb.TabletType_MASTER,
+		ServedType:      topodatapb.TabletType_PRIMARY,
 		ShardReferences: []*topodatapb.ShardReference{},
 	}
 	for _, shard := range shards {
@@ -103,12 +103,12 @@ func newTestResharderEnv(t *testing.T, sources, targets []string) *testResharder
 	initTopo(t, env.topoServ, "ks", sources, targets, []string{"cell"})
 	tabletID := 100
 	for _, shard := range sources {
-		_ = env.addTablet(tabletID, env.keyspace, shard, topodatapb.TabletType_MASTER)
+		_ = env.addTablet(tabletID, env.keyspace, shard, topodatapb.TabletType_PRIMARY)
 		tabletID += 10
 	}
 	tabletID = 200
 	for _, shard := range targets {
-		_ = env.addTablet(tabletID, env.keyspace, shard, topodatapb.TabletType_MASTER)
+		_ = env.addTablet(tabletID, env.keyspace, shard, topodatapb.TabletType_PRIMARY)
 		tabletID += 10
 	}
 	return env
@@ -162,9 +162,9 @@ func (env *testResharderEnv) addTablet(id int, keyspace, shard string, tabletTyp
 	if err := env.wr.InitTablet(context.Background(), tablet, false /* allowMasterOverride */, true /* createShardAndKeyspace */, false /* allowUpdate */); err != nil {
 		panic(err)
 	}
-	if tabletType == topodatapb.TabletType_MASTER {
+	if tabletType == topodatapb.TabletType_PRIMARY {
 		_, err := env.wr.ts.UpdateShardFields(context.Background(), keyspace, shard, func(si *topo.ShardInfo) error {
-			si.MasterAlias = tablet.Alias
+			si.PrimaryAlias = tablet.Alias
 			return nil
 		})
 		if err != nil {

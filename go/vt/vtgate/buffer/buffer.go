@@ -216,10 +216,10 @@ func (b *Buffer) WaitForFailoverEnd(ctx context.Context, keyspace, shard string,
 // ProcessMasterHealth notifies the buffer to record a new master
 // and end any failover buffering that may be in progress
 func (b *Buffer) ProcessMasterHealth(th *discovery.TabletHealth) {
-	if th.Target.TabletType != topodatapb.TabletType_MASTER {
+	if th.Target.TabletType != topodatapb.TabletType_PRIMARY {
 		panic(fmt.Sprintf("BUG: non MASTER TabletHealth object must not be forwarded: %#v", th))
 	}
-	timestamp := th.MasterTermStartTime
+	timestamp := th.PrimaryTermStartTime
 	if timestamp == 0 {
 		// Masters where TabletExternallyReparented was never called will return 0.
 		// Ignore them.
@@ -238,7 +238,7 @@ func (b *Buffer) ProcessMasterHealth(th *discovery.TabletHealth) {
 // each master. This way we can detect the end of a failover.
 // It is part of the discovery.LegacyHealthCheckStatsListener interface.
 func (b *Buffer) StatsUpdate(ts *discovery.LegacyTabletStats) {
-	if ts.Target.TabletType != topodatapb.TabletType_MASTER {
+	if ts.Target.TabletType != topodatapb.TabletType_PRIMARY {
 		panic(fmt.Sprintf("BUG: non MASTER LegacyTabletStats object must not be forwarded: %#v", ts))
 	}
 

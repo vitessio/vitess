@@ -228,7 +228,7 @@ func (wr *Wrangler) getWorkflowState(ctx context.Context, targetKeyspace, workfl
 			return nil, nil, err
 		}
 		ws.ReplicaCellsNotSwitched, ws.ReplicaCellsSwitched = cellsNotSwitched, cellsSwitched
-		if !shard.IsMasterServing {
+		if !shard.IsPrimaryServing {
 			ws.WritesSwitched = true
 		}
 	}
@@ -389,7 +389,7 @@ func (wr *Wrangler) areTabletsAvailableToStreamFrom(ctx context.Context, ts *tra
 		go func(cells []string, keyspace string, shard *topo.ShardInfo) {
 			defer wg.Done()
 			if cells == nil {
-				cells = append(cells, shard.MasterAlias.Cell)
+				cells = append(cells, shard.PrimaryAlias.Cell)
 			}
 			tp, err := discovery.NewTabletPicker(wr.ts, cells, keyspace, shard.ShardName(), tabletTypes)
 			if err != nil {
@@ -812,7 +812,7 @@ func (wr *Wrangler) buildTrafficSwitcher(ctx context.Context, targetKeyspace, wo
 			if err != nil {
 				return nil, err
 			}
-			sourcePrimary, err := sourceTopo.GetTablet(ctx, sourcesi.MasterAlias)
+			sourcePrimary, err := sourceTopo.GetTablet(ctx, sourcesi.PrimaryAlias)
 			if err != nil {
 				return nil, err
 			}
@@ -1006,7 +1006,7 @@ func (ts *trafficSwitcher) stopSourceWrites(ctx context.Context) error {
 func (ts *trafficSwitcher) changeTableSourceWrites(ctx context.Context, access accessType) error {
 	return ts.forAllSources(func(source *workflow.MigrationSource) error {
 		if _, err := ts.wr.ts.UpdateShardFields(ctx, ts.sourceKeyspace, source.GetShard().ShardName(), func(si *topo.ShardInfo) error {
-			return si.UpdateSourceBlacklistedTables(ctx, topodatapb.TabletType_MASTER, nil, access == allowWrites /* remove */, ts.tables)
+			return si.UpdateSourceBlacklistedTables(ctx, topodatapb.TabletType_PRIMARY, nil, access == allowWrites /* remove */, ts.tables)
 		}); err != nil {
 			return err
 		}
@@ -1241,7 +1241,7 @@ func (ts *trafficSwitcher) allowTargetWrites(ctx context.Context) error {
 func (ts *trafficSwitcher) allowTableTargetWrites(ctx context.Context) error {
 	return ts.forAllTargets(func(target *workflow.MigrationTarget) error {
 		if _, err := ts.wr.ts.UpdateShardFields(ctx, ts.targetKeyspace, target.GetShard().ShardName(), func(si *topo.ShardInfo) error {
-			return si.UpdateSourceBlacklistedTables(ctx, topodatapb.TabletType_MASTER, nil, true, ts.tables)
+			return si.UpdateSourceBlacklistedTables(ctx, topodatapb.TabletType_PRIMARY, nil, true, ts.tables)
 		}); err != nil {
 			return err
 		}
@@ -1282,7 +1282,7 @@ func (ts *trafficSwitcher) changeShardRouting(ctx context.Context) error {
 	}
 	err := ts.forAllSources(func(source *workflow.MigrationSource) error {
 		_, err := ts.wr.ts.UpdateShardFields(ctx, ts.sourceKeyspace, source.GetShard().ShardName(), func(si *topo.ShardInfo) error {
-			si.IsMasterServing = false
+			si.IsPrimaryServing = false
 			return nil
 		})
 		return err
@@ -1292,7 +1292,7 @@ func (ts *trafficSwitcher) changeShardRouting(ctx context.Context) error {
 	}
 	err = ts.forAllTargets(func(target *workflow.MigrationTarget) error {
 		_, err := ts.wr.ts.UpdateShardFields(ctx, ts.targetKeyspace, target.GetShard().ShardName(), func(si *topo.ShardInfo) error {
-			si.IsMasterServing = true
+			si.IsPrimaryServing = true
 			return nil
 		})
 		return err
@@ -1300,7 +1300,7 @@ func (ts *trafficSwitcher) changeShardRouting(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	err = ts.wr.ts.MigrateServedType(ctx, ts.targetKeyspace, ts.targetShards(), ts.sourceShards(), topodatapb.TabletType_MASTER, nil)
+	err = ts.wr.ts.MigrateServedType(ctx, ts.targetKeyspace, ts.targetShards(), ts.sourceShards(), topodatapb.TabletType_PRIMARY, nil)
 	if err != nil {
 		return err
 	}
@@ -1321,7 +1321,7 @@ func (ts *trafficSwitcher) startReverseVReplication(ctx context.Context) error {
 }
 
 func (ts *trafficSwitcher) changeShardsAccess(ctx context.Context, keyspace string, shards []*topo.ShardInfo, access accessType) error {
-	if err := ts.wr.ts.UpdateDisableQueryService(ctx, keyspace, shards, topodatapb.TabletType_MASTER, nil, access == disallowWrites /* disable */); err != nil {
+	if err := ts.wr.ts.UpdateDisableQueryService(ctx, keyspace, shards, topodatapb.TabletType_PRIMARY, nil, access == disallowWrites /* disable */); err != nil {
 		return err
 	}
 	return ts.wr.refreshMasters(ctx, shards)
@@ -1399,7 +1399,7 @@ func (ts *trafficSwitcher) targetShards() []*topo.ShardInfo {
 func (ts *trafficSwitcher) dropSourceBlacklistedTables(ctx context.Context) error {
 	return ts.forAllSources(func(source *workflow.MigrationSource) error {
 		if _, err := ts.wr.ts.UpdateShardFields(ctx, ts.sourceKeyspace, source.GetShard().ShardName(), func(si *topo.ShardInfo) error {
-			return si.UpdateSourceBlacklistedTables(ctx, topodatapb.TabletType_MASTER, nil, true, ts.tables)
+			return si.UpdateSourceBlacklistedTables(ctx, topodatapb.TabletType_PRIMARY, nil, true, ts.tables)
 		}); err != nil {
 			return err
 		}
@@ -1417,7 +1417,7 @@ func doValidateWorkflowHasCompleted(ctx context.Context, ts *trafficSwitcher) er
 	if ts.migrationType == binlogdatapb.MigrationType_SHARDS {
 		_ = ts.forAllSources(func(source *workflow.MigrationSource) error {
 			wg.Add(1)
-			if source.GetShard().IsMasterServing {
+			if source.GetShard().IsPrimaryServing {
 				rec.RecordError(fmt.Errorf(fmt.Sprintf("Shard %s is still serving", source.GetShard().ShardName())))
 			}
 			wg.Done()

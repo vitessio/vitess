@@ -324,7 +324,7 @@ var session2 = &vtgatepb.Session{
 			Target: &querypb.Target{
 				Keyspace:   "ks",
 				Shard:      "1",
-				TabletType: topodatapb.TabletType_MASTER,
+				TabletType: topodatapb.TabletType_PRIMARY,
 			},
 			TransactionId: 1,
 		},

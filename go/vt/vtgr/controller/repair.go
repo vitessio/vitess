@@ -458,7 +458,7 @@ func (shard *GRShard) fixPrimaryTabletLocked(ctx context.Context) error {
 	if err := shard.checkShardLocked(ctx); err != nil {
 		return err
 	}
-	err := shard.tmc.ChangeType(ctx, candidate.tablet, topodatapb.TabletType_MASTER)
+	err := shard.tmc.ChangeType(ctx, candidate.tablet, topodatapb.TabletType_PRIMARY)
 	if err != nil {
 		return fmt.Errorf("failed to change type to master on %v: %v", candidate.alias, err)
 	}
@@ -655,7 +655,7 @@ func (shard *GRShard) failoverLocked(ctx context.Context) error {
 	if err := shard.checkShardLocked(ctx); err != nil {
 		return err
 	}
-	err = shard.tmc.ChangeType(ctx, candidate.tablet, topodatapb.TabletType_MASTER)
+	err = shard.tmc.ChangeType(ctx, candidate.tablet, topodatapb.TabletType_PRIMARY)
 	if err != nil {
 		log.Errorf("Failed to failover Vitess %v", candidate.alias)
 		return err

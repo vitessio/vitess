@@ -75,7 +75,7 @@ func TestTxConnCommitSuccess(t *testing.T) {
 			Target: &querypb.Target{
 				Keyspace:   "TestTxConn",
 				Shard:      "0",
-				TabletType: topodatapb.TabletType_MASTER,
+				TabletType: topodatapb.TabletType_PRIMARY,
 			},
 			TransactionId: 1,
 			TabletAlias:   sbc0.Tablet().Alias,
@@ -89,7 +89,7 @@ func TestTxConnCommitSuccess(t *testing.T) {
 			Target: &querypb.Target{
 				Keyspace:   "TestTxConn",
 				Shard:      "0",
-				TabletType: topodatapb.TabletType_MASTER,
+				TabletType: topodatapb.TabletType_PRIMARY,
 			},
 			TransactionId: 1,
 			TabletAlias:   sbc0.Tablet().Alias,
@@ -97,7 +97,7 @@ func TestTxConnCommitSuccess(t *testing.T) {
 			Target: &querypb.Target{
 				Keyspace:   "TestTxConn",
 				Shard:      "1",
-				TabletType: topodatapb.TabletType_MASTER,
+				TabletType: topodatapb.TabletType_PRIMARY,
 			},
 			TransactionId: 1,
 			TabletAlias:   sbc0.Tablet().Alias,
@@ -127,7 +127,7 @@ func TestTxConnReservedCommitSuccess(t *testing.T) {
 			Target: &querypb.Target{
 				Keyspace:   "TestTxConn",
 				Shard:      "0",
-				TabletType: topodatapb.TabletType_MASTER,
+				TabletType: topodatapb.TabletType_PRIMARY,
 			},
 			TransactionId: 1,
 			ReservedId:    1,
@@ -143,7 +143,7 @@ func TestTxConnReservedCommitSuccess(t *testing.T) {
 			Target: &querypb.Target{
 				Keyspace:   "TestTxConn",
 				Shard:      "0",
-				TabletType: topodatapb.TabletType_MASTER,
+				TabletType: topodatapb.TabletType_PRIMARY,
 			},
 			TransactionId: 1,
 			ReservedId:    1,
@@ -152,7 +152,7 @@ func TestTxConnReservedCommitSuccess(t *testing.T) {
 			Target: &querypb.Target{
 				Keyspace:   "TestTxConn",
 				Shard:      "1",
-				TabletType: topodatapb.TabletType_MASTER,
+				TabletType: topodatapb.TabletType_PRIMARY,
 			},
 			TransactionId: 1,
 			ReservedId:    1,
@@ -169,7 +169,7 @@ func TestTxConnReservedCommitSuccess(t *testing.T) {
 			Target: &querypb.Target{
 				Keyspace:   "TestTxConn",
 				Shard:      "0",
-				TabletType: topodatapb.TabletType_MASTER,
+				TabletType: topodatapb.TabletType_PRIMARY,
 			},
 			ReservedId:  2,
 			TabletAlias: sbc0.Tablet().Alias,
@@ -177,7 +177,7 @@ func TestTxConnReservedCommitSuccess(t *testing.T) {
 			Target: &querypb.Target{
 				Keyspace:   "TestTxConn",
 				Shard:      "1",
-				TabletType: topodatapb.TabletType_MASTER,
+				TabletType: topodatapb.TabletType_PRIMARY,
 			},
 			ReservedId:  2,
 			TabletAlias: sbc1.Tablet().Alias,
@@ -215,7 +215,7 @@ func TestTxConnReservedOn2ShardTxOn1ShardAndCommit(t *testing.T) {
 			Target: &querypb.Target{
 				Keyspace:   keyspace,
 				Shard:      "1",
-				TabletType: topodatapb.TabletType_MASTER,
+				TabletType: topodatapb.TabletType_PRIMARY,
 			},
 			ReservedId:  1,
 			TabletAlias: sbc1.Tablet().Alias,
@@ -223,7 +223,7 @@ func TestTxConnReservedOn2ShardTxOn1ShardAndCommit(t *testing.T) {
 			Target: &querypb.Target{
 				Keyspace:   keyspace,
 				Shard:      "0",
-				TabletType: topodatapb.TabletType_MASTER,
+				TabletType: topodatapb.TabletType_PRIMARY,
 			},
 			ReservedId:  1,
 			TabletAlias: sbc0.Tablet().Alias,
@@ -242,7 +242,7 @@ func TestTxConnReservedOn2ShardTxOn1ShardAndCommit(t *testing.T) {
 			Target: &querypb.Target{
 				Keyspace:   keyspace,
 				Shard:      "1",
-				TabletType: topodatapb.TabletType_MASTER,
+				TabletType: topodatapb.TabletType_PRIMARY,
 			},
 			ReservedId:  1,
 			TabletAlias: sbc1.Tablet().Alias,
@@ -250,7 +250,7 @@ func TestTxConnReservedOn2ShardTxOn1ShardAndCommit(t *testing.T) {
 			Target: &querypb.Target{
 				Keyspace:   keyspace,
 				Shard:      "0",
-				TabletType: topodatapb.TabletType_MASTER,
+				TabletType: topodatapb.TabletType_PRIMARY,
 			},
 			TransactionId: 1,
 			ReservedId:    1,
@@ -269,7 +269,7 @@ func TestTxConnReservedOn2ShardTxOn1ShardAndCommit(t *testing.T) {
 			Target: &querypb.Target{
 				Keyspace:   keyspace,
 				Shard:      "1",
-				TabletType: topodatapb.TabletType_MASTER,
+				TabletType: topodatapb.TabletType_PRIMARY,
 			},
 			ReservedId:  1,
 			TabletAlias: sbc1.Tablet().Alias,
@@ -277,7 +277,7 @@ func TestTxConnReservedOn2ShardTxOn1ShardAndCommit(t *testing.T) {
 			Target: &querypb.Target{
 				Keyspace:   keyspace,
 				Shard:      "0",
-				TabletType: topodatapb.TabletType_MASTER,
+				TabletType: topodatapb.TabletType_PRIMARY,
 			},
 			ReservedId:  2,
 			TabletAlias: sbc0.Tablet().Alias,
@@ -308,7 +308,7 @@ func TestTxConnReservedOn2ShardTxOn1ShardAndRollback(t *testing.T) {
 			Target: &querypb.Target{
 				Keyspace:   keyspace,
 				Shard:      "1",
-				TabletType: topodatapb.TabletType_MASTER,
+				TabletType: topodatapb.TabletType_PRIMARY,
 			},
 			ReservedId:  1,
 			TabletAlias: sbc1.Tablet().Alias,
@@ -316,7 +316,7 @@ func TestTxConnReservedOn2ShardTxOn1ShardAndRollback(t *testing.T) {
 			Target: &querypb.Target{
 				Keyspace:   keyspace,
 				Shard:      "0",
-				TabletType: topodatapb.TabletType_MASTER,
+				TabletType: topodatapb.TabletType_PRIMARY,
 			},
 			ReservedId:  1,
 			TabletAlias: sbc0.Tablet().Alias,
@@ -335,7 +335,7 @@ func TestTxConnReservedOn2ShardTxOn1ShardAndRollback(t *testing.T) {
 			Target: &querypb.Target{
 				Keyspace:   keyspace,
 				Shard:      "1",
-				TabletType: topodatapb.TabletType_MASTER,
+				TabletType: topodatapb.TabletType_PRIMARY,
 			},
 			ReservedId:  1,
 			TabletAlias: sbc1.Tablet().Alias,
@@ -343,7 +343,7 @@ func TestTxConnReservedOn2ShardTxOn1ShardAndRollback(t *testing.T) {
 			Target: &querypb.Target{
 				Keyspace:   keyspace,
 				Shard:      "0",
-				TabletType: topodatapb.TabletType_MASTER,
+				TabletType: topodatapb.TabletType_PRIMARY,
 			},
 			TransactionId: 1,
 			ReservedId:    1,
@@ -362,7 +362,7 @@ func TestTxConnReservedOn2ShardTxOn1ShardAndRollback(t *testing.T) {
 			Target: &querypb.Target{
 				Keyspace:   keyspace,
 				Shard:      "1",
-				TabletType: topodatapb.TabletType_MASTER,
+				TabletType: topodatapb.TabletType_PRIMARY,
 			},
 			ReservedId:  1,
 			TabletAlias: sbc1.Tablet().Alias,
@@ -370,7 +370,7 @@ func TestTxConnReservedOn2ShardTxOn1ShardAndRollback(t *testing.T) {
 			Target: &querypb.Target{
 				Keyspace:   keyspace,
 				Shard:      "0",
-				TabletType: topodatapb.TabletType_MASTER,
+				TabletType: topodatapb.TabletType_PRIMARY,
 			},
 			ReservedId:  2,
 			TabletAlias: sbc0.Tablet().Alias,
@@ -469,7 +469,7 @@ func TestTxConnCommitOrderFailure3(t *testing.T) {
 	// The last failed commit must generate a warning.
 	wantSession := vtgatepb.Session{
 		Warnings: []*querypb.QueryWarning{{
-			Message: "post-operation transaction had an error: Code: INVALID_ARGUMENT\nINVALID_ARGUMENT error\n\ntarget: TestTxConn.1.master",
+			Message: "post-operation transaction had an error: Code: INVALID_ARGUMENT\nINVALID_ARGUMENT error\n\ntarget: TestTxConn.1.primary",
 		}},
 	}
 	utils.MustMatch(t, &wantSession, session.Session, "Session")
@@ -496,7 +496,7 @@ func TestTxConnCommitOrderSuccess(t *testing.T) {
 			Target: &querypb.Target{
 				Keyspace:   "TestTxConn",
 				Shard:      "0",
-				TabletType: topodatapb.TabletType_MASTER,
+				TabletType: topodatapb.TabletType_PRIMARY,
 			},
 			TransactionId: 1,
 			TabletAlias:   sbc0.Tablet().Alias,
@@ -512,7 +512,7 @@ func TestTxConnCommitOrderSuccess(t *testing.T) {
 			Target: &querypb.Target{
 				Keyspace:   "TestTxConn",
 				Shard:      "0",
-				TabletType: topodatapb.TabletType_MASTER,
+				TabletType: topodatapb.TabletType_PRIMARY,
 			},
 			TransactionId: 2,
 			TabletAlias:   sbc0.Tablet().Alias,
@@ -521,7 +521,7 @@ func TestTxConnCommitOrderSuccess(t *testing.T) {
 			Target: &querypb.Target{
 				Keyspace:   "TestTxConn",
 				Shard:      "0",
-				TabletType: topodatapb.TabletType_MASTER,
+				TabletType: topodatapb.TabletType_PRIMARY,
 			},
 			TransactionId: 1,
 			TabletAlias:   sbc0.Tablet().Alias,
@@ -537,7 +537,7 @@ func TestTxConnCommitOrderSuccess(t *testing.T) {
 			Target: &querypb.Target{
 				Keyspace:   "TestTxConn",
 				Shard:      "0",
-				TabletType: topodatapb.TabletType_MASTER,
+				TabletType: topodatapb.TabletType_PRIMARY,
 			},
 			TransactionId: 2,
 			TabletAlias:   sbc0.Tablet().Alias,
@@ -546,7 +546,7 @@ func TestTxConnCommitOrderSuccess(t *testing.T) {
 			Target: &querypb.Target{
 				Keyspace:   "TestTxConn",
 				Shard:      "0",
-				TabletType: topodatapb.TabletType_MASTER,
+				TabletType: topodatapb.TabletType_PRIMARY,
 			},
 			TransactionId: 1,
 			TabletAlias:   sbc0.Tablet().Alias,
@@ -555,7 +555,7 @@ func TestTxConnCommitOrderSuccess(t *testing.T) {
 			Target: &querypb.Target{
 				Keyspace:   "TestTxConn",
 				Shard:      "1",
-				TabletType: topodatapb.TabletType_MASTER,
+				TabletType: topodatapb.TabletType_PRIMARY,
 			},
 			TransactionId: 1,
 			TabletAlias:   sbc0.Tablet().Alias,
@@ -593,7 +593,7 @@ func TestTxConnReservedCommitOrderSuccess(t *testing.T) {
 			Target: &querypb.Target{
 				Keyspace:   "TestTxConn",
 				Shard:      "0",
-				TabletType: topodatapb.TabletType_MASTER,
+				TabletType: topodatapb.TabletType_PRIMARY,
 			},
 			TransactionId: 1,
 			ReservedId:    1,
@@ -611,7 +611,7 @@ func TestTxConnReservedCommitOrderSuccess(t *testing.T) {
 			Target: &querypb.Target{
 				Keyspace:   "TestTxConn",
 				Shard:      "0",
-				TabletType: topodatapb.TabletType_MASTER,
+				TabletType: topodatapb.TabletType_PRIMARY,
 			},
 			TransactionId: 2,
 			ReservedId:    2,
@@ -621,7 +621,7 @@ func TestTxConnReservedCommitOrderSuccess(t *testing.T) {
 			Target: &querypb.Target{
 				Keyspace:   "TestTxConn",
 				Shard:      "0",
-				TabletType: topodatapb.TabletType_MASTER,
+				TabletType: topodatapb.TabletType_PRIMARY,
 			},
 			TransactionId: 1,
 			ReservedId:    1,
@@ -639,7 +639,7 @@ func TestTxConnReservedCommitOrderSuccess(t *testing.T) {
 			Target: &querypb.Target{
 				Keyspace:   "TestTxConn",
 				Shard:      "0",
-				TabletType: topodatapb.TabletType_MASTER,
+				TabletType: topodatapb.TabletType_PRIMARY,
 			},
 			TransactionId: 2,
 			ReservedId:    2,
@@ -649,7 +649,7 @@ func TestTxConnReservedCommitOrderSuccess(t *testing.T) {
 			Target: &querypb.Target{
 				Keyspace:   "TestTxConn",
 				Shard:      "0",
-				TabletType: topodatapb.TabletType_MASTER,
+				TabletType: topodatapb.TabletType_PRIMARY,
 			},
 			TransactionId: 1,
 			ReservedId:    1,
@@ -659,7 +659,7 @@ func TestTxConnReservedCommitOrderSuccess(t *testing.T) {
 			Target: &querypb.Target{
 				Keyspace:   "TestTxConn",
 				Shard:      "1",
-				TabletType: topodatapb.TabletType_MASTER,
+				TabletType: topodatapb.TabletType_PRIMARY,
 			},
 			TransactionId: 1,
 			ReservedId:    1,
@@ -680,7 +680,7 @@ func TestTxConnReservedCommitOrderSuccess(t *testing.T) {
 			Target: &querypb.Target{
 				Keyspace:   "TestTxConn",
 				Shard:      "0",
-				TabletType: topodatapb.TabletType_MASTER,
+				TabletType: topodatapb.TabletType_PRIMARY,
 			},
 			ReservedId:  3,
 			TabletAlias: sbc0.Tablet().Alias,
@@ -689,7 +689,7 @@ func TestTxConnReservedCommitOrderSuccess(t *testing.T) {
 			Target: &querypb.Target{
 				Keyspace:   "TestTxConn",
 				Shard:      "0",
-				TabletType: topodatapb.TabletType_MASTER,
+				TabletType: topodatapb.TabletType_PRIMARY,
 			},
 			ReservedId:  4,
 			TabletAlias: sbc0.Tablet().Alias,
@@ -698,7 +698,7 @@ func TestTxConnReservedCommitOrderSuccess(t *testing.T) {
 			Target: &querypb.Target{
 				Keyspace:   "TestTxConn",
 				Shard:      "1",
-				TabletType: topodatapb.TabletType_MASTER,
+				TabletType: topodatapb.TabletType_PRIMARY,
 			},
 			ReservedId:  2,
 			TabletAlias: sbc1.Tablet().Alias,
@@ -872,7 +872,7 @@ func TestTxConnReservedRollback(t *testing.T) {
 			Target: &querypb.Target{
 				Keyspace:   "TxConnReservedRollback",
 				Shard:      "0",
-				TabletType: topodatapb.TabletType_MASTER,
+				TabletType: topodatapb.TabletType_PRIMARY,
 			},
 			ReservedId:  2,
 			TabletAlias: sbc0.Tablet().Alias,
@@ -880,7 +880,7 @@ func TestTxConnReservedRollback(t *testing.T) {
 			Target: &querypb.Target{
 				Keyspace:   "TxConnReservedRollback",
 				Shard:      "1",
-				TabletType: topodatapb.TabletType_MASTER,
+				TabletType: topodatapb.TabletType_PRIMARY,
 			},
 			ReservedId:  2,
 			TabletAlias: sbc1.Tablet().Alias,
@@ -926,7 +926,7 @@ func TestTxConnResolveOnPrepare(t *testing.T) {
 		Participants: []*querypb.Target{{
 			Keyspace:   "TestTxConn",
 			Shard:      "1",
-			TabletType: topodatapb.TabletType_MASTER,
+			TabletType: topodatapb.TabletType_PRIMARY,
 		}},
 	}}
 	err := sc.txConn.Resolve(ctx, dtid)
@@ -947,7 +947,7 @@ func TestTxConnResolveOnRollback(t *testing.T) {
 		Participants: []*querypb.Target{{
 			Keyspace:   "TestTxConn",
 			Shard:      "1",
-			TabletType: topodatapb.TabletType_MASTER,
+			TabletType: topodatapb.TabletType_PRIMARY,
 		}},
 	}}
 	require.NoError(t,
@@ -968,7 +968,7 @@ func TestTxConnResolveOnCommit(t *testing.T) {
 		Participants: []*querypb.Target{{
 			Keyspace:   "TestTxConn",
 			Shard:      "1",
-			TabletType: topodatapb.TabletType_MASTER,
+			TabletType: topodatapb.TabletType_PRIMARY,
 		}},
 	}}
 	require.NoError(t,
@@ -1008,7 +1008,7 @@ func TestTxConnResolveInternalError(t *testing.T) {
 		Participants: []*querypb.Target{{
 			Keyspace:   "TestTxConn",
 			Shard:      "1",
-			TabletType: topodatapb.TabletType_MASTER,
+			TabletType: topodatapb.TabletType_PRIMARY,
 		}},
 	}}
 	err := sc.txConn.Resolve(ctx, dtid)
@@ -1027,7 +1027,7 @@ func TestTxConnResolveSetRollbackFail(t *testing.T) {
 		Participants: []*querypb.Target{{
 			Keyspace:   "TestTxConn",
 			Shard:      "1",
-			TabletType: topodatapb.TabletType_MASTER,
+			TabletType: topodatapb.TabletType_PRIMARY,
 		}},
 	}}
 	sbc0.MustFailSetRollback = 1
@@ -1051,7 +1051,7 @@ func TestTxConnResolveRollbackPreparedFail(t *testing.T) {
 		Participants: []*querypb.Target{{
 			Keyspace:   "TestTxConn",
 			Shard:      "1",
-			TabletType: topodatapb.TabletType_MASTER,
+			TabletType: topodatapb.TabletType_PRIMARY,
 		}},
 	}}
 	sbc1.MustFailRollbackPrepared = 1
@@ -1075,7 +1075,7 @@ func TestTxConnResolveCommitPreparedFail(t *testing.T) {
 		Participants: []*querypb.Target{{
 			Keyspace:   "TestTxConn",
 			Shard:      "1",
-			TabletType: topodatapb.TabletType_MASTER,
+			TabletType: topodatapb.TabletType_PRIMARY,
 		}},
 	}}
 	sbc1.MustFailCommitPrepared = 1
@@ -1099,7 +1099,7 @@ func TestTxConnResolveConcludeTransactionFail(t *testing.T) {
 		Participants: []*querypb.Target{{
 			Keyspace:   "TestTxConn",
 			Shard:      "1",
-			TabletType: topodatapb.TabletType_MASTER,
+			TabletType: topodatapb.TabletType_PRIMARY,
 		}},
 	}}
 	sbc0.MustFailConcludeTransaction = 1
@@ -1185,15 +1185,15 @@ func newLegacyTestTxConnEnv(t *testing.T, name string) (sc *ScatterConn, sbc0, s
 	createSandbox(name)
 	hc := discovery.NewFakeLegacyHealthCheck()
 	sc = newTestLegacyScatterConn(hc, new(sandboxTopo), "aa")
-	sbc0 = hc.AddTestTablet("aa", "0", 1, name, "0", topodatapb.TabletType_MASTER, true, 1, nil)
-	sbc1 = hc.AddTestTablet("aa", "1", 1, name, "1", topodatapb.TabletType_MASTER, true, 1, nil)
+	sbc0 = hc.AddTestTablet("aa", "0", 1, name, "0", topodatapb.TabletType_PRIMARY, true, 1, nil)
+	sbc1 = hc.AddTestTablet("aa", "1", 1, name, "1", topodatapb.TabletType_PRIMARY, true, 1, nil)
 	res := srvtopo.NewResolver(&sandboxTopo{}, sc.gateway, "aa")
 	var err error
-	rss0, err = res.ResolveDestination(ctx, name, topodatapb.TabletType_MASTER, key.DestinationShard("0"))
+	rss0, err = res.ResolveDestination(ctx, name, topodatapb.TabletType_PRIMARY, key.DestinationShard("0"))
 	require.NoError(t, err)
-	rss1, err = res.ResolveDestination(ctx, name, topodatapb.TabletType_MASTER, key.DestinationShard("1"))
+	rss1, err = res.ResolveDestination(ctx, name, topodatapb.TabletType_PRIMARY, key.DestinationShard("1"))
 	require.NoError(t, err)
-	rss01, err = res.ResolveDestination(ctx, name, topodatapb.TabletType_MASTER, key.DestinationShards([]string{"0", "1"}))
+	rss01, err = res.ResolveDestination(ctx, name, topodatapb.TabletType_PRIMARY, key.DestinationShards([]string{"0", "1"}))
 	require.NoError(t, err)
 	return sc, sbc0, sbc1, rss0, rss1, rss01
 }
@@ -1203,15 +1203,15 @@ func newTestTxConnEnv(t *testing.T, name string) (sc *ScatterConn, sbc0, sbc1 *s
 	createSandbox(name)
 	hc := discovery.NewFakeHealthCheck()
 	sc = newTestScatterConn(hc, new(sandboxTopo), "aa")
-	sbc0 = hc.AddTestTablet("aa", "0", 1, name, "0", topodatapb.TabletType_MASTER, true, 1, nil)
-	sbc1 = hc.AddTestTablet("aa", "1", 1, name, "1", topodatapb.TabletType_MASTER, true, 1, nil)
+	sbc0 = hc.AddTestTablet("aa", "0", 1, name, "0", topodatapb.TabletType_PRIMARY, true, 1, nil)
+	sbc1 = hc.AddTestTablet("aa", "1", 1, name, "1", topodatapb.TabletType_PRIMARY, true, 1, nil)
 	res := srvtopo.NewResolver(&sandboxTopo{}, sc.gateway, "aa")
 	var err error
-	rss0, err = res.ResolveDestination(ctx, name, topodatapb.TabletType_MASTER, key.DestinationShard("0"))
+	rss0, err = res.ResolveDestination(ctx, name, topodatapb.TabletType_PRIMARY, key.DestinationShard("0"))
 	require.NoError(t, err)
-	rss1, err = res.ResolveDestination(ctx, name, topodatapb.TabletType_MASTER, key.DestinationShard("1"))
+	rss1, err = res.ResolveDestination(ctx, name, topodatapb.TabletType_PRIMARY, key.DestinationShard("1"))
 	require.NoError(t, err)
-	rss01, err = res.ResolveDestination(ctx, name, topodatapb.TabletType_MASTER, key.DestinationShards([]string{"0", "1"}))
+	rss01, err = res.ResolveDestination(ctx, name, topodatapb.TabletType_PRIMARY, key.DestinationShards([]string{"0", "1"}))
 	require.NoError(t, err)
 	return sc, sbc0, sbc1, rss0, rss1, rss01
 }
