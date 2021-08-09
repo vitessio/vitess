@@ -293,7 +293,7 @@ func (upd *Update) description() PrimitiveDescription {
 		OperatorType:     "Update",
 		Keyspace:         upd.Keyspace,
 		Variant:          upd.Opcode.String(),
-		TargetTabletType: topodatapb.TabletType_MASTER,
+		TargetTabletType: topodatapb.TabletType_PRIMARY,
 		Other:            other,
 	}
 }

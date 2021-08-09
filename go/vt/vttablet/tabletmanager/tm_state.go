@@ -175,11 +175,11 @@ func (ts *tmState) ChangeTabletType(ctx context.Context, tabletType topodatapb.T
 	defer ts.mu.Unlock()
 	log.Infof("Changing Tablet Type: %v", tabletType)
 
-	if tabletType == topodatapb.TabletType_MASTER {
-		masterTermStartTime := logutil.TimeToProto(time.Now())
+	if tabletType == topodatapb.TabletType_PRIMARY {
+		PrimaryTermStartTime := logutil.TimeToProto(time.Now())
 
 		// Update the tablet record first.
-		_, err := topotools.ChangeType(ctx, ts.tm.TopoServer, ts.tm.tabletAlias, tabletType, masterTermStartTime)
+		_, err := topotools.ChangeType(ctx, ts.tm.TopoServer, ts.tm.tabletAlias, tabletType, PrimaryTermStartTime)
 		if err != nil {
 			return err
 		}
@@ -192,10 +192,10 @@ func (ts *tmState) ChangeTabletType(ctx context.Context, tabletType topodatapb.T
 		}
 
 		ts.tablet.Type = tabletType
-		ts.tablet.MasterTermStartTime = masterTermStartTime
+		ts.tablet.PrimaryTermStartTime = PrimaryTermStartTime
 	} else {
 		ts.tablet.Type = tabletType
-		ts.tablet.MasterTermStartTime = nil
+		ts.tablet.PrimaryTermStartTime = nil
 	}
 
 	s := topoproto.TabletTypeLString(tabletType)
@@ -233,7 +233,7 @@ func (ts *tmState) updateLocked(ctx context.Context) {
 		return
 	}
 
-	terTime := logutil.ProtoToTime(ts.tablet.MasterTermStartTime)
+	terTime := logutil.ProtoToTime(ts.tablet.PrimaryTermStartTime)
 
 	// Disable TabletServer first so the nonserving state gets advertised
 	// before other services are shutdown.
@@ -260,7 +260,7 @@ func (ts *tmState) updateLocked(ctx context.Context) {
 	}
 
 	if ts.tm.VREngine != nil {
-		if ts.tablet.Type == topodatapb.TabletType_MASTER {
+		if ts.tablet.Type == topodatapb.TabletType_PRIMARY {
 			ts.tm.VREngine.Open(ts.tm.BatchCtx)
 		} else {
 			ts.tm.VREngine.Close()
@@ -317,7 +317,7 @@ func (ts *tmState) canServe(tabletType topodatapb.TabletType) string {
 	if ts.tabletControls[tabletType] {
 		return "TabletControl.DisableQueryService set"
 	}
-	if tabletType == topodatapb.TabletType_MASTER && ts.isResharding {
+	if tabletType == topodatapb.TabletType_PRIMARY && ts.isResharding {
 		return "master tablet with filtered replication on"
 	}
 	return ""

@@ -416,7 +416,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 					},
 					Keyspace: "testkeyspace",
 					Shard:    "-",
-					Type:     topodatapb.TabletType_MASTER,
+					Type:     topodatapb.TabletType_PRIMARY,
 				},
 				{
 					Alias: &topodatapb.TabletAlias{

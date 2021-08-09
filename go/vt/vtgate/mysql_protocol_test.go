@@ -40,7 +40,7 @@ import (
 func TestMySQLProtocolExecute(t *testing.T) {
 	createSandbox(KsTestUnsharded)
 	hcVTGateTest.Reset()
-	sbc := hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, KsTestUnsharded, "0", topodatapb.TabletType_MASTER, true, 1, nil)
+	sbc := hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, KsTestUnsharded, "0", topodatapb.TabletType_PRIMARY, true, 1, nil)
 
 	c, err := mysqlConnect(&mysql.ConnParams{})
 	if err != nil {
@@ -64,7 +64,7 @@ func TestMySQLProtocolExecute(t *testing.T) {
 func TestMySQLProtocolStreamExecute(t *testing.T) {
 	createSandbox(KsTestUnsharded)
 	hcVTGateTest.Reset()
-	sbc := hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, KsTestUnsharded, "0", topodatapb.TabletType_MASTER, true, 1, nil)
+	sbc := hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, KsTestUnsharded, "0", topodatapb.TabletType_PRIMARY, true, 1, nil)
 
 	c, err := mysqlConnect(&mysql.ConnParams{})
 	if err != nil {
@@ -91,7 +91,7 @@ func TestMySQLProtocolStreamExecute(t *testing.T) {
 func TestMySQLProtocolExecuteUseStatement(t *testing.T) {
 	createSandbox(KsTestUnsharded)
 	hcVTGateTest.Reset()
-	hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, KsTestUnsharded, "0", topodatapb.TabletType_MASTER, true, 1, nil)
+	hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, KsTestUnsharded, "0", topodatapb.TabletType_PRIMARY, true, 1, nil)
 
 	c, err := mysqlConnect(&mysql.ConnParams{DbName: "@master"})
 	if err != nil {
@@ -141,7 +141,7 @@ func TestMysqlProtocolInvalidDB(t *testing.T) {
 func TestMySQLProtocolClientFoundRows(t *testing.T) {
 	createSandbox(KsTestUnsharded)
 	hcVTGateTest.Reset()
-	sbc := hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, KsTestUnsharded, "0", topodatapb.TabletType_MASTER, true, 1, nil)
+	sbc := hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, KsTestUnsharded, "0", topodatapb.TabletType_PRIMARY, true, 1, nil)
 
 	c, err := mysqlConnect(&mysql.ConnParams{Flags: mysql.CapabilityClientFoundRows})
 	if err != nil {

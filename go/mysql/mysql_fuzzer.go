@@ -38,7 +38,7 @@ import (
 
 func createFuzzingSocketPair() (net.Listener, *Conn, *Conn) {
 	// Create a listener.
-	listener, err := net.Listen("tcp", ":0")
+	listener, err := net.Listen("tcp", "127.0.0.1:")
 	if err != nil {
 		fmt.Println("We got an error early on")
 		return nil, nil, nil
@@ -334,15 +334,13 @@ func FuzzTLSServer(data []byte) int {
 		Password: "password1",
 	}}
 	defer authServer.close()
-	l, err := NewListener("tcp", ":0", authServer, th, 0, 0, false)
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false)
 	if err != nil {
 		return -1
 	}
 	defer l.Close()
-	host, err := os.Hostname()
-	if err != nil {
-		return -1
-	}
+
+	host := l.Addr().(*net.TCPAddr).IP.String()
 	port := l.Addr().(*net.TCPAddr).Port
 	root, err := ioutil.TempDir("", "TestTLSServer")
 	if err != nil {
@@ -350,7 +348,7 @@ func FuzzTLSServer(data []byte) int {
 	}
 	defer os.RemoveAll(root)
 	tlstest.CreateCA(root)
-	tlstest.CreateSignedCert(root, tlstest.CA, "01", "server", host)
+	tlstest.CreateSignedCert(root, tlstest.CA, "01", "server", "server.example.com")
 	tlstest.CreateSignedCert(root, tlstest.CA, "02", "client", "Client Cert")
 
 	serverConfig, err := vttls.ServerConfig(
@@ -373,10 +371,11 @@ func FuzzTLSServer(data []byte) int {
 		Uname: "user1",
 		Pass:  "password1",
 		// SSL flags.
-		Flags:   CapabilityClientSSL,
-		SslCa:   path.Join(root, "ca-cert.pem"),
-		SslCert: path.Join(root, "client-cert.pem"),
-		SslKey:  path.Join(root, "client-key.pem"),
+		SslMode:    vttls.VerifyIdentity,
+		SslCa:      path.Join(root, "ca-cert.pem"),
+		SslCert:    path.Join(root, "client-cert.pem"),
+		SslKey:     path.Join(root, "client-key.pem"),
+		ServerName: "server.example.com",
 	}
 	conn, err := Connect(context.Background(), params)
 	if err != nil {

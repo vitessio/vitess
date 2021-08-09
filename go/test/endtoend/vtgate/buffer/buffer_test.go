@@ -310,7 +310,7 @@ func testBufferBase(t *testing.T, isExternalParent bool) {
 			panic(err)
 		}
 		inFlightMax = getVarFromVtgate(t, label, "BufferLastRequestsInFlightMax", resultMap)
-		promotedCount = getVarFromVtgate(t, label, "HealthcheckMasterPromoted", resultMap)
+		promotedCount = getVarFromVtgate(t, label, "HealthcheckPrimaryPromoted", resultMap)
 		durationMs = getVarFromVtgate(t, label, "BufferFailoverDurationSumMs", resultMap)
 		bufferingStops = getVarFromVtgate(t, "NewMasterSeen", "BufferStops", resultMap)
 	}

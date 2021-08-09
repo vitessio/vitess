@@ -2603,6 +2603,10 @@ show_statement:
   {
     $$ = &Show{&ShowBasic{Command: VitessMigrations, Filter: $4, DbName: $3}}
   }
+| SHOW VITESS_MIGRATION STRING LOGS
+  {
+    $$ = &ShowMigrationLogs{UUID: string($3)}
+  }
 | SHOW VSCHEMA TABLES
   {
     $$ = &Show{&ShowLegacy{Type: string($2) + " " + string($3), Scope: ImplicitScope}}

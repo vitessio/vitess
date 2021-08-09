@@ -220,8 +220,8 @@ func demotePrimaryTablet() (err error) {
 
 	// update the shard record's primary
 	if _, err = ts.UpdateShardFields(ctx, keyspaceName, shardName, func(si *topo.ShardInfo) error {
-		si.MasterAlias = nil
-		si.SetMasterTermStartTime(time.Now())
+		si.PrimaryAlias = nil
+		si.SetPrimaryTermStartTime(time.Now())
 		return nil
 	}); err != nil {
 		return err
@@ -389,13 +389,13 @@ func shardPrimaryTablet(t *testing.T, cluster *cluster.LocalProcessCluster, keys
 		var shardInfo topodatapb.Shard
 		err = json2.Unmarshal([]byte(result), &shardInfo)
 		assert.Nil(t, err)
-		if shardInfo.MasterAlias == nil {
+		if shardInfo.PrimaryAlias == nil {
 			log.Warningf("Shard %v/%v has no primary yet, sleep for 1 second\n", keyspace.Name, shard.Name)
 			time.Sleep(time.Second)
 			continue
 		}
 		for _, tablet := range shard.Vttablets {
-			if tablet.Alias == topoproto.TabletAliasString(shardInfo.MasterAlias) {
+			if tablet.Alias == topoproto.TabletAliasString(shardInfo.PrimaryAlias) {
 				return tablet
 			}
 		}
@@ -417,7 +417,7 @@ func checkPrimaryTablet(t *testing.T, cluster *cluster.LocalProcessCluster, tabl
 		err = json2.Unmarshal([]byte(result), &tabletInfo)
 		require.NoError(t, err)
 
-		if topodatapb.TabletType_MASTER != tabletInfo.GetType() {
+		if topodatapb.TabletType_PRIMARY != tabletInfo.GetType() {
 			log.Warningf("Tablet %v is not primary yet, sleep for 1 second\n", tablet.Alias)
 			time.Sleep(time.Second)
 			continue
@@ -436,7 +436,7 @@ func checkPrimaryTablet(t *testing.T, cluster *cluster.LocalProcessCluster, tabl
 			//}
 			assert.True(t, streamHealthResponse.GetServing(), "stream health: %v", &streamHealthResponse)
 			tabletType := streamHealthResponse.GetTarget().GetTabletType()
-			require.Equal(t, topodatapb.TabletType_MASTER, tabletType)
+			require.Equal(t, topodatapb.TabletType_PRIMARY, tabletType)
 			break
 		}
 	}

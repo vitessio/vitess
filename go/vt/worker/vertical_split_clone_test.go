@@ -75,7 +75,7 @@ func TestVerticalSplitClone(t *testing.T) {
 	sourceRdonlyFakeDB := sourceRdonlyFakeDB(t, "vt_source_ks", "moving1", verticalSplitCloneTestMin, verticalSplitCloneTestMax)
 
 	sourceMaster := testlib.NewFakeTablet(t, wi.wr, "cell1", 0,
-		topodatapb.TabletType_MASTER, nil, testlib.TabletKeyspaceShard(t, "source_ks", "0"))
+		topodatapb.TabletType_PRIMARY, nil, testlib.TabletKeyspaceShard(t, "source_ks", "0"))
 	sourceRdonly := testlib.NewFakeTablet(t, wi.wr, "cell1", 1,
 		topodatapb.TabletType_RDONLY, sourceRdonlyFakeDB, testlib.TabletKeyspaceShard(t, "source_ks", "0"))
 
@@ -83,7 +83,7 @@ func TestVerticalSplitClone(t *testing.T) {
 	ki := &topodatapb.Keyspace{
 		ServedFroms: []*topodatapb.Keyspace_ServedFrom{
 			{
-				TabletType: topodatapb.TabletType_MASTER,
+				TabletType: topodatapb.TabletType_PRIMARY,
 				Keyspace:   "source_ks",
 			},
 			{
@@ -108,7 +108,7 @@ func TestVerticalSplitClone(t *testing.T) {
 	defer destMasterFakeDb.VerifyAllExecutedOrFail()
 
 	destMaster := testlib.NewFakeTablet(t, wi.wr, "cell1", 10,
-		topodatapb.TabletType_MASTER, destMasterFakeDb, testlib.TabletKeyspaceShard(t, "destination_ks", "0"))
+		topodatapb.TabletType_PRIMARY, destMasterFakeDb, testlib.TabletKeyspaceShard(t, "destination_ks", "0"))
 	destRdonly := testlib.NewFakeTablet(t, wi.wr, "cell1", 11,
 		topodatapb.TabletType_RDONLY, nil, testlib.TabletKeyspaceShard(t, "destination_ks", "0"))
 

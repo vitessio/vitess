@@ -775,8 +775,8 @@ message RealtimeStats {
   int32 binlog_players_count = 3;
 
   // filtered_replication_lag_seconds is populated for the receiving
-  // master of an ongoing filtered replication only.
-  // It specifies how far the receiving master lags behind the sending master.
+  // primary of an ongoing filtered replication only.
+  // It specifies how far the receiving primary lags behind the sending primary.
   // NOTE: This field must not be evaluated if "health_error" is not empty.
   // NOTE: This field must not be evaluated if "bin_log_players_count" is 0.
   int64 filtered_replication_lag_seconds = 4;
@@ -803,15 +803,15 @@ message AggregateStats {
   // unhealthy_tablet_count is the number of unhealthy tablets in the group.
   int32 unhealthy_tablet_count = 2;
 
-  // seconds_behind_master_min is the minimum of the
-  // seconds_behind_master values of the healthy tablets. It is unset
-  // if the tablet type is master.
-  uint32 seconds_behind_master_min = 3;
+  // replication_lag_seconds_min is the minimum of the
+  // replication_lag_seconds values of the healthy tablets. It is unset
+  // if the tablet type is primary.
+  uint32 replication_lag_seconds_min = 3;
 
-  // seconds_behind_master_max is the maximum of the
-  // seconds_behind_master values of the healthy tablets. It is unset
-  // if the tablet type is master.
-  uint32 seconds_behind_master_max = 4;
+  // replication_lag_seconds_max is the maximum of the
+  // replication_lag_seconds values of the healthy tablets. It is unset
+  // if the tablet type is primary.
+  uint32 replication_lag_seconds_max = 4;
 }
 
 // StreamHealthResponse is streamed by StreamHealth on a regular basis.
@@ -825,19 +825,19 @@ message StreamHealthResponse {
   Target target = 1;
 
   // serving is true iff the tablet is serving. A tablet may not be serving
-  // if filtered replication is enabled on a master for instance,
+  // if filtered replication is enabled on a primary for instance,
   // or if a replica should not be used because the keyspace is being resharded.
   bool serving = 2;
 
   // tablet_externally_reparented_timestamp can be interpreted as the
-  // last time we knew that this tablet was the MASTER of this shard
+  // last time we knew that this tablet was the PRIMARY of this shard
   // (if StreamHealthResponse describes a group of tablets, between
-  // two vtgates, only one master will be present in the group, and
-  // this is this master's value).
+  // two vtgates, only one primary will be present in the group, and
+  // this is this primary's value).
   //
-  // It is used by vtgate when determining the current MASTER of a shard.
-  // If vtgate sees more than one MASTER tablet, this timestamp is used
-  // as tiebreaker where the MASTER with the highest timestamp wins.
+  // It is used by vtgate when determining the current PRIMARY of a shard.
+  // If vtgate sees more than one PRIMARY tablet, this timestamp is used
+  // as tiebreaker where the PRIMARY with the highest timestamp wins.
   // Another usage of this timestamp is in go/vt/vtgate/buffer to detect the end
   // of a reparent (failover) and stop buffering.
   //
@@ -845,16 +845,16 @@ message StreamHealthResponse {
   // a) the last time the RPC tabletmanager.TabletExternallyReparented was
   //    called on this tablet (usually done by an external failover tool e.g.
   //    Orchestrator). The failover tool can call this as long as we are the
-  //    master i.e. even ages after the last reparent occurred.
+  //    primary i.e. even ages after the last reparent occurred.
   // OR
   // b) the last time an active reparent was executed through a vtctl command
   //    (InitShardPrimary, PlannedReparentShard, EmergencyReparentShard)
   // OR
   // c) the last time vttablet was started and it initialized its tablet type
-  //    as MASTER because it was recorded as the shard's current master in the
+  //    as PRIMARY because it was recorded as the shard's current primary in the
   //    topology (see go/vt/vttablet/tabletmanager/init_tablet.go)
   // OR
-  // d) 0 if the vttablet was never a MASTER.
+  // d) 0 if the vttablet was never a PRIMARY.
   int64 tablet_externally_reparented_timestamp = 3;
 
   // realtime_stats contains information about the tablet status.

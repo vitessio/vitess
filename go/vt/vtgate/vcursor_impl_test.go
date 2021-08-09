@@ -57,7 +57,7 @@ func (f *fakeTopoServer) GetSrvKeyspace(ctx context.Context, cell, keyspace stri
 	ks := &topodatapb.SrvKeyspace{
 		Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
 			{
-				ServedType: topodatapb.TabletType_MASTER,
+				ServedType: topodatapb.TabletType_PRIMARY,
 				ShardReferences: []*topodatapb.ShardReference{
 					{Name: "-80", KeyRange: &topodatapb.KeyRange{Start: zeroHexBytes, End: eightyHexBytes}},
 					{Name: "80-", KeyRange: &topodatapb.KeyRange{Start: eightyHexBytes, End: zeroHexBytes}},
@@ -122,21 +122,21 @@ func TestDestinationKeyspace(t *testing.T) {
 		qualifier:          "",
 		expectedKeyspace:   ks1.Name,
 		expectedDest:       nil,
-		expectedTabletType: topodatapb.TabletType_MASTER,
+		expectedTabletType: topodatapb.TabletType_PRIMARY,
 	}, {
 		vschema:            vschemaWith1KS,
 		targetString:       "ks1",
 		qualifier:          "",
 		expectedKeyspace:   ks1.Name,
 		expectedDest:       nil,
-		expectedTabletType: topodatapb.TabletType_MASTER,
+		expectedTabletType: topodatapb.TabletType_PRIMARY,
 	}, {
 		vschema:            vschemaWith1KS,
 		targetString:       "ks1:-80",
 		qualifier:          "",
 		expectedKeyspace:   ks1.Name,
 		expectedDest:       key.DestinationShard("-80"),
-		expectedTabletType: topodatapb.TabletType_MASTER,
+		expectedTabletType: topodatapb.TabletType_PRIMARY,
 	}, {
 		vschema:            vschemaWith1KS,
 		targetString:       "ks1@replica",
@@ -157,7 +157,7 @@ func TestDestinationKeyspace(t *testing.T) {
 		qualifier:          "ks1",
 		expectedKeyspace:   ks1.Name,
 		expectedDest:       nil,
-		expectedTabletType: topodatapb.TabletType_MASTER,
+		expectedTabletType: topodatapb.TabletType_PRIMARY,
 	}, {
 		vschema:       vschemaWith1KS,
 		targetString:  "ks2",

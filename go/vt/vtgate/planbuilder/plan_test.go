@@ -229,7 +229,7 @@ func TestBypassPlanningShardTargetFromFile(t *testing.T) {
 			Name:    "main",
 			Sharded: false,
 		},
-		tabletType: topodatapb.TabletType_MASTER,
+		tabletType: topodatapb.TabletType_PRIMARY,
 		dest:       key.DestinationShard("-80")}
 
 	testFile(t, "bypass_shard_cases.txt", testOutputTempDir, vschema, true)
@@ -247,7 +247,7 @@ func TestBypassPlanningKeyrangeTargetFromFile(t *testing.T) {
 			Name:    "main",
 			Sharded: false,
 		},
-		tabletType: topodatapb.TabletType_MASTER,
+		tabletType: topodatapb.TabletType_PRIMARY,
 		dest:       key.DestinationExactKeyRange{KeyRange: keyRange[0]},
 	}
 
@@ -269,7 +269,7 @@ func TestWithDefaultKeyspaceFromFile(t *testing.T) {
 			Name:    "main",
 			Sharded: false,
 		},
-		tabletType: topodatapb.TabletType_MASTER,
+		tabletType: topodatapb.TabletType_PRIMARY,
 	}
 
 	testFile(t, "alterVschema_cases.txt", testOutputTempDir, vschema, false)
@@ -288,7 +288,7 @@ func TestWithSystemSchemaAsDefaultKeyspace(t *testing.T) {
 	vschema := &vschemaWrapper{
 		v:          loadSchema(t, "schema_test.json"),
 		keyspace:   &vindexes.Keyspace{Name: "information_schema"},
-		tabletType: topodatapb.TabletType_MASTER,
+		tabletType: topodatapb.TabletType_PRIMARY,
 	}
 
 	testFile(t, "sysschema_default.txt", testOutputTempDir, vschema, false)
@@ -305,7 +305,7 @@ func TestOtherPlanningFromFile(t *testing.T) {
 			Name:    "main",
 			Sharded: false,
 		},
-		tabletType: topodatapb.TabletType_MASTER,
+		tabletType: topodatapb.TabletType_PRIMARY,
 	}
 
 	testFile(t, "other_read_cases.txt", testOutputTempDir, vschema, false)
@@ -397,7 +397,7 @@ func (vw *vschemaWrapper) Destination() key.Destination {
 }
 
 func (vw *vschemaWrapper) FindTable(tab sqlparser.TableName) (*vindexes.Table, string, topodatapb.TabletType, key.Destination, error) {
-	destKeyspace, destTabletType, destTarget, err := topoproto.ParseDestination(tab.Qualifier.String(), topodatapb.TabletType_MASTER)
+	destKeyspace, destTabletType, destTarget, err := topoproto.ParseDestination(tab.Qualifier.String(), topodatapb.TabletType_PRIMARY)
 	if err != nil {
 		return nil, destKeyspace, destTabletType, destTarget, err
 	}
@@ -409,14 +409,14 @@ func (vw *vschemaWrapper) FindTable(tab sqlparser.TableName) (*vindexes.Table, s
 }
 
 func (vw *vschemaWrapper) FindTableOrVindex(tab sqlparser.TableName) (*vindexes.Table, vindexes.Vindex, string, topodatapb.TabletType, key.Destination, error) {
-	destKeyspace, destTabletType, destTarget, err := topoproto.ParseDestination(tab.Qualifier.String(), topodatapb.TabletType_MASTER)
+	destKeyspace, destTabletType, destTarget, err := topoproto.ParseDestination(tab.Qualifier.String(), topodatapb.TabletType_PRIMARY)
 	if err != nil {
 		return nil, nil, destKeyspace, destTabletType, destTarget, err
 	}
 	if destKeyspace == "" {
 		destKeyspace = vw.getActualKeyspace()
 	}
-	table, vindex, err := vw.v.FindTableOrVindex(destKeyspace, tab.Name.String(), topodatapb.TabletType_MASTER)
+	table, vindex, err := vw.v.FindTableOrVindex(destKeyspace, tab.Name.String(), topodatapb.TabletType_PRIMARY)
 	if err != nil {
 		return nil, nil, destKeyspace, destTabletType, destTarget, err
 	}
@@ -534,7 +534,12 @@ func testFile(t *testing.T, filename, tempDir string, vschema *vschemaWrapper, c
 					if outFirstPlanner == out {
 						expected.WriteString(samePlanMarker)
 					} else {
-						expected.WriteString(fmt.Sprintf("%s\n", out))
+						if err != nil {
+							out = out[1 : len(out)-1] // remove the double quotes
+							expected.WriteString(fmt.Sprintf("Gen4 error: %s\n", out))
+						} else {
+							expected.WriteString(fmt.Sprintf("%s\n", out))
+						}
 					}
 				})
 			} else {
@@ -551,7 +556,7 @@ func testFile(t *testing.T, filename, tempDir string, vschema *vschemaWrapper, c
 		if fail && tempDir != "" {
 			gotFile := fmt.Sprintf("%s/%s", tempDir, filename)
 			_ = ioutil.WriteFile(gotFile, []byte(strings.TrimSpace(expected.String())+"\n"), 0644)
-			fmt.Println(fmt.Sprintf("Errors found in plantests. If the output is correct, run `cp %s/* testdata/` to update test expectations", tempDir)) //nolint
+			fmt.Println(fmt.Sprintf("Errors found in plantests. If the output is correct, run `cp %s/* testdata/` to update test expectations", tempDir)) // nolint
 		}
 	})
 }
@@ -686,13 +691,14 @@ func locateFile(name string) string {
 	return "testdata/" + name
 }
 
+var benchMarkFiles = []string{"from_cases.txt", "filter_cases.txt", "large_cases.txt", "aggr_cases.txt", "select_cases.txt", "union_cases.txt"}
+
 func BenchmarkPlanner(b *testing.B) {
-	filenames := []string{"from_cases.txt", "filter_cases.txt", "large_cases.txt", "aggr_cases.txt", "select_cases.txt", "union_cases.txt"}
 	vschema := &vschemaWrapper{
 		v:             loadSchema(b, "schema_test.json"),
 		sysVarEnabled: true,
 	}
-	for _, filename := range filenames {
+	for _, filename := range benchMarkFiles {
 		var testCases []testCase
 		for tc := range iterateExecFile(filename) {
 			testCases = append(testCases, tc)
@@ -707,6 +713,39 @@ func BenchmarkPlanner(b *testing.B) {
 			benchmarkPlanner(b, Gen4Left2Right, testCases, vschema)
 		})
 	}
+}
+
+func BenchmarkSemAnalysis(b *testing.B) {
+	vschema := &vschemaWrapper{
+		v:             loadSchema(b, "schema_test.json"),
+		sysVarEnabled: true,
+	}
+
+	for i := 0; i < b.N; i++ {
+		for _, filename := range benchMarkFiles {
+			for tc := range iterateExecFile(filename) {
+				exerciseAnalyzer(tc.input, vschema.currentDb(), vschema)
+			}
+		}
+	}
+}
+
+func exerciseAnalyzer(query, database string, s semantics.SchemaInformation) {
+	defer func() {
+		// if analysis panics, let's just continue. this is just a benchmark
+		recover()
+	}()
+
+	ast, err := sqlparser.Parse(query)
+	if err != nil {
+		return
+	}
+	sel, ok := ast.(sqlparser.SelectStatement)
+	if !ok {
+		return
+	}
+
+	_, _ = semantics.Analyze(sel, database, s)
 }
 
 func BenchmarkSelectVsDML(b *testing.B) {

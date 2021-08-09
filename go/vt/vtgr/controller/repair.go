@@ -91,12 +91,12 @@ func (shard *GRShard) Repair(ctx context.Context, status DiagnoseType) (RepairRe
 }
 
 func (shard *GRShard) repairShardHasNoGroup(ctx context.Context) (RepairResultCode, error) {
-	ctx, unlock, err := shard.LockShard(ctx, "repairShardHasNoGroup")
+	ctx, err := shard.LockShard(ctx, "repairShardHasNoGroup")
 	if err != nil {
 		log.Warningf("repairShardHasNoPrimaryTablet fails to grab lock for the shard %v: %v", shard.KeyspaceShard, err)
 		return Noop, err
 	}
-	defer unlock(&err)
+	defer shard.UnlockShard()
 	shard.refreshTabletsInShardLocked(ctx)
 	// Diagnose() will call shardAgreedGroup as the first thing
 	// which will update mysqlGroup stored in the shard
@@ -169,12 +169,12 @@ func (shard *GRShard) repairShardHasNoGroupAction(ctx context.Context) error {
 }
 
 func (shard *GRShard) repairShardHasInactiveGroup(ctx context.Context) (RepairResultCode, error) {
-	ctx, unlock, err := shard.LockShard(ctx, "repairShardHasInactiveGroup")
+	ctx, err := shard.LockShard(ctx, "repairShardHasInactiveGroup")
 	if err != nil {
 		log.Warningf("repairShardHasInactiveGroup fails to grab lock for the shard %v: %v", shard.KeyspaceShard, err)
 		return Noop, err
 	}
-	defer unlock(&err)
+	defer shard.UnlockShard()
 	shard.refreshTabletsInShardLocked(ctx)
 	// Diagnose() will call shardAgreedGroup as the first thing
 	// which will update mysqlGroup stored in the shard
@@ -200,12 +200,12 @@ func (shard *GRShard) repairShardHasInactiveGroup(ctx context.Context) (RepairRe
 }
 
 func (shard *GRShard) repairBackoffError(ctx context.Context, diagnose DiagnoseType) (RepairResultCode, error) {
-	ctx, unlock, err := shard.LockShard(ctx, "repairBackoffError")
+	ctx, err := shard.LockShard(ctx, "repairBackoffError")
 	if err != nil {
 		log.Warningf("repairBackoffError fails to grab lock for the shard %v: %v", shard.KeyspaceShard, err)
 		return Noop, err
 	}
-	defer unlock(&err)
+	defer shard.UnlockShard()
 	shard.refreshTabletsInShardLocked(ctx)
 	status, err := shard.diagnoseLocked(ctx)
 	if err != nil {
@@ -416,12 +416,12 @@ func (shard *GRShard) findFailoverCandidate(ctx context.Context) (*grInstance, e
 }
 
 func (shard *GRShard) repairWrongPrimaryTablet(ctx context.Context) (RepairResultCode, error) {
-	ctx, unlock, err := shard.LockShard(ctx, "repairWrongPrimaryTablet")
+	ctx, err := shard.LockShard(ctx, "repairWrongPrimaryTablet")
 	if err != nil {
 		log.Warningf("repairWrongPrimaryTablet fails to grab lock for the shard %v: %v", shard.KeyspaceShard, err)
 		return Noop, err
 	}
-	defer unlock(&err)
+	defer shard.UnlockShard()
 	// We grab shard level lock and check again if there is no primary
 	// to avoid race conditions
 	shard.refreshTabletsInShardLocked(ctx)
@@ -458,7 +458,7 @@ func (shard *GRShard) fixPrimaryTabletLocked(ctx context.Context) error {
 	if err := shard.checkShardLocked(ctx); err != nil {
 		return err
 	}
-	err := shard.tmc.ChangeType(ctx, candidate.tablet, topodatapb.TabletType_MASTER)
+	err := shard.tmc.ChangeType(ctx, candidate.tablet, topodatapb.TabletType_PRIMARY)
 	if err != nil {
 		return fmt.Errorf("failed to change type to master on %v: %v", candidate.alias, err)
 	}
@@ -469,12 +469,12 @@ func (shard *GRShard) fixPrimaryTabletLocked(ctx context.Context) error {
 // repairUnconnectedReplica usually handle the case when there is a DiagnoseTypeHealthy tablet and
 // it is not connected to mysql primary node
 func (shard *GRShard) repairUnconnectedReplica(ctx context.Context) (RepairResultCode, error) {
-	ctx, unlock, err := shard.LockShard(ctx, "repairUnconnectedReplica")
+	ctx, err := shard.LockShard(ctx, "repairUnconnectedReplica")
 	if err != nil {
 		log.Warningf("repairUnconnectedReplica fails to grab lock for the shard %v: %v", formatKeyspaceShard(shard.KeyspaceShard), err)
 		return Noop, err
 	}
-	defer unlock(&err)
+	defer shard.UnlockShard()
 	shard.refreshTabletsInShardLocked(ctx)
 	status, err := shard.diagnoseLocked(ctx)
 	if err != nil {
@@ -526,12 +526,12 @@ func (shard *GRShard) repairUnconnectedReplicaAction(ctx context.Context) error 
 }
 
 func (shard *GRShard) repairUnreachablePrimary(ctx context.Context) (RepairResultCode, error) {
-	ctx, unlock, err := shard.LockShard(ctx, "repairUnreachablePrimary")
+	ctx, err := shard.LockShard(ctx, "repairUnreachablePrimary")
 	if err != nil {
 		log.Warningf("repairUnreachablePrimary fails to grab lock for the shard %v: %v", formatKeyspaceShard(shard.KeyspaceShard), err)
 		return Noop, err
 	}
-	defer unlock(&err)
+	defer shard.UnlockShard()
 	shard.refreshTabletsInShardLocked(ctx)
 	status, err := shard.diagnoseLocked(ctx)
 	if err != nil {
@@ -559,12 +559,12 @@ func (shard *GRShard) repairUnreachablePrimary(ctx context.Context) (RepairResul
 }
 
 func (shard *GRShard) repairInsufficientGroupSize(ctx context.Context) (RepairResultCode, error) {
-	ctx, unlock, err := shard.LockShard(ctx, "repairInsufficientGroupSize")
+	ctx, err := shard.LockShard(ctx, "repairInsufficientGroupSize")
 	if err != nil {
 		log.Warningf("repairInsufficientGroupSize fails to grab lock for the shard %v: %v", formatKeyspaceShard(shard.KeyspaceShard), err)
 		return Noop, err
 	}
-	defer unlock(&err)
+	defer shard.UnlockShard()
 	shard.refreshTabletsInShardLocked(ctx)
 	status, err := shard.diagnoseLocked(ctx)
 	if err != nil {
@@ -594,12 +594,12 @@ func (shard *GRShard) repairInsufficientGroupSize(ctx context.Context) (RepairRe
 }
 
 func (shard *GRShard) repairReadOnlyShard(ctx context.Context) (RepairResultCode, error) {
-	ctx, unlock, err := shard.LockShard(ctx, "repairReadOnlyShard")
+	ctx, err := shard.LockShard(ctx, "repairReadOnlyShard")
 	if err != nil {
 		log.Warningf("repairReadOnlyShard fails to grab lock for the shard %v: %v", formatKeyspaceShard(shard.KeyspaceShard), err)
 		return Noop, err
 	}
-	defer unlock(&err)
+	defer shard.UnlockShard()
 	shard.refreshTabletsInShardLocked(ctx)
 	status, err := shard.diagnoseLocked(ctx)
 	if err != nil {
@@ -625,12 +625,12 @@ func (shard *GRShard) repairReadOnlyShard(ctx context.Context) (RepairResultCode
 
 // Failover takes a shard and find an node with largest GTID as the mysql primary of the group
 func (shard *GRShard) Failover(ctx context.Context) error {
-	ctx, unlock, err := shard.LockShard(ctx, "Failover")
+	ctx, err := shard.LockShard(ctx, "Failover")
 	if err != nil {
 		log.Warningf("Failover fails to grab lock for the shard %v: %v", formatKeyspaceShard(shard.KeyspaceShard), err)
 		return err
 	}
-	defer unlock(&err)
+	defer shard.UnlockShard()
 	shard.refreshTabletsInShardLocked(ctx)
 	return shard.failoverLocked(ctx)
 }
@@ -655,7 +655,7 @@ func (shard *GRShard) failoverLocked(ctx context.Context) error {
 	if err := shard.checkShardLocked(ctx); err != nil {
 		return err
 	}
-	err = shard.tmc.ChangeType(ctx, candidate.tablet, topodatapb.TabletType_MASTER)
+	err = shard.tmc.ChangeType(ctx, candidate.tablet, topodatapb.TabletType_PRIMARY)
 	if err != nil {
 		log.Errorf("Failed to failover Vitess %v", candidate.alias)
 		return err

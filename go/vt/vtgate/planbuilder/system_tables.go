@@ -44,7 +44,7 @@ func (pb *primitiveBuilder) findSysInfoRoutingPredicates(expr sqlparser.Expr, ru
 	return nil
 }
 
-func (rp *routePlan) findSysInfoRoutingPredicatesGen4(reservedVars *sqlparser.ReservedVars) error {
+func (rp *routeTree) findSysInfoRoutingPredicatesGen4(reservedVars *sqlparser.ReservedVars) error {
 	for _, pred := range rp.predicates {
 		isTableSchema, bvName, out, err := extractInfoSchemaRoutingPredicate(pred, reservedVars)
 		if err != nil {

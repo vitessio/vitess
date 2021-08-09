@@ -410,7 +410,7 @@ func TestPlayerStatementModeWithFilter(t *testing.T) {
 	output := []string{
 		"begin",
 		"rollback",
-		"/update _vt.vreplication set message='Error: filter rules are not supported for SBR",
+		"/update _vt.vreplication set message='filter rules are not supported for SBR",
 	}
 
 	execStatements(t, input)
@@ -1568,7 +1568,7 @@ func TestPlayerDDL(t *testing.T) {
 	execStatements(t, []string{"alter table t1 add column val2 varchar(128)"})
 	expectDBClientQueries(t, []string{
 		"alter table t1 add column val2 varchar(128)",
-		"/update _vt.vreplication set message='Error: Duplicate",
+		"/update _vt.vreplication set message='Duplicate",
 	})
 	cancel()
 
@@ -2362,7 +2362,7 @@ func TestRestartOnVStreamEnd(t *testing.T) {
 
 	streamerEngine.Close()
 	expectDBClientQueries(t, []string{
-		"/update _vt.vreplication set message='Error: vstream ended'",
+		"/update _vt.vreplication set message='vstream ended'",
 	})
 	streamerEngine.Open()
 

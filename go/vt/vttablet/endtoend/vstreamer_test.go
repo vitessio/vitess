@@ -73,7 +73,7 @@ func TestSchemaVersioning(t *testing.T) {
 	target := &querypb.Target{
 		Keyspace:   "vttest",
 		Shard:      "0",
-		TabletType: tabletpb.TabletType_MASTER,
+		TabletType: tabletpb.TabletType_PRIMARY,
 		Cell:       "",
 	}
 	filter := &binlogdatapb.Filter{

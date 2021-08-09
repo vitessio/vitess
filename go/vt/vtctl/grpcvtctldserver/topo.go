@@ -208,16 +208,16 @@ func deleteTablet(ctx context.Context, ts *topo.Server, alias *topodatapb.Tablet
 		defer unlock(&err)
 
 		if _, err := ts.UpdateShardFields(lockCtx, tablet.Keyspace, tablet.Shard, func(si *topo.ShardInfo) error {
-			if !topoproto.TabletAliasEqual(si.MasterAlias, alias) {
+			if !topoproto.TabletAliasEqual(si.PrimaryAlias, alias) {
 				log.Warningf(
 					"Deleting master %v from shard %v/%v but master in Shard object was %v",
-					topoproto.TabletAliasString(alias), tablet.Keyspace, tablet.Shard, topoproto.TabletAliasString(si.MasterAlias),
+					topoproto.TabletAliasString(alias), tablet.Keyspace, tablet.Shard, topoproto.TabletAliasString(si.PrimaryAlias),
 				)
 
 				return topo.NewError(topo.NoUpdateNeeded, si.Keyspace()+"/"+si.ShardName())
 			}
-			si.MasterAlias = nil
-			si.SetMasterTermStartTime(time.Now())
+			si.PrimaryAlias = nil
+			si.SetPrimaryTermStartTime(time.Now())
 			return nil
 		}); err != nil {
 			return err
@@ -257,8 +257,8 @@ func removeShardCell(ctx context.Context, ts *topo.Server, cell string, keyspace
 		return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "shard %v/%v does not have serving cell %v", keyspace, shardName, cell)
 	}
 
-	if shard.MasterAlias != nil && shard.MasterAlias.Cell == cell {
-		return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "cannot remove cell %v; shard master %v is in cell", cell, topoproto.TabletAliasString(shard.MasterAlias))
+	if shard.PrimaryAlias != nil && shard.PrimaryAlias.Cell == cell {
+		return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "cannot remove cell %v; shard master %v is in cell", cell, topoproto.TabletAliasString(shard.PrimaryAlias))
 	}
 
 	replication, err := ts.GetShardReplication(ctx, cell, keyspace, shardName)
@@ -318,7 +318,7 @@ func removeShardCell(ctx context.Context, ts *topo.Server, cell string, keyspace
 		return err
 	}
 
-	if err := ts.DeleteSrvKeyspacePartitions(ctx, keyspace, []*topo.ShardInfo{shard}, topodatapb.TabletType_MASTER, []string{cell}); err != nil {
+	if err := ts.DeleteSrvKeyspacePartitions(ctx, keyspace, []*topo.ShardInfo{shard}, topodatapb.TabletType_PRIMARY, []string{cell}); err != nil {
 		return err
 	}
 

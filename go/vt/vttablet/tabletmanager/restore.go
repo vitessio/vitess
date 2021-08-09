@@ -177,7 +177,7 @@ func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.L
 	}
 
 	// Check whether we're going to restore before changing to RESTORE type,
-	// so we keep our MasterTermStartTime (if any) if we aren't actually restoring.
+	// so we keep our PrimaryTermStartTime (if any) if we aren't actually restoring.
 	ok, err := mysqlctl.ShouldRestore(ctx, params)
 	if err != nil {
 		return err
@@ -192,7 +192,7 @@ func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.L
 	}
 	// We should not become master after restore, because that would incorrectly
 	// start a new master term, and it's likely our data dir will be out of date.
-	if originalType == topodatapb.TabletType_MASTER {
+	if originalType == topodatapb.TabletType_PRIMARY {
 		originalType = tm.baseTabletType
 	}
 	if err := tm.tmState.ChangeTabletType(ctx, topodatapb.TabletType_RESTORE, DBActionNone); err != nil {
@@ -503,7 +503,7 @@ func (tm *TabletManager) startReplication(ctx context.Context, pos mysql.Positio
 	if err != nil {
 		return vterrors.Wrap(err, "can't read shard")
 	}
-	if si.MasterAlias == nil {
+	if si.PrimaryAlias == nil {
 		// We've restored, but there's no master. This is fine, since we've
 		// already set the position at which to resume when we're later reparented.
 		// If we had instead considered this fatal, all tablets would crash-loop
@@ -511,7 +511,7 @@ func (tm *TabletManager) startReplication(ctx context.Context, pos mysql.Positio
 		log.Warningf("Can't start replication after restore: shard %v/%v has no master.", tablet.Keyspace, tablet.Shard)
 		return nil
 	}
-	if topoproto.TabletAliasEqual(si.MasterAlias, tablet.Alias) {
+	if topoproto.TabletAliasEqual(si.PrimaryAlias, tablet.Alias) {
 		// We used to be the master before we got restarted in an empty data dir,
 		// and no other master has been elected in the meantime.
 		// This shouldn't happen, so we'll let the operator decide which tablet
@@ -519,9 +519,9 @@ func (tm *TabletManager) startReplication(ctx context.Context, pos mysql.Positio
 		log.Warningf("Can't start replication after restore: master record still points to this tablet.")
 		return nil
 	}
-	ti, err := tm.TopoServer.GetTablet(ctx, si.MasterAlias)
+	ti, err := tm.TopoServer.GetTablet(ctx, si.PrimaryAlias)
 	if err != nil {
-		return vterrors.Wrapf(err, "Cannot read master tablet %v", si.MasterAlias)
+		return vterrors.Wrapf(err, "Cannot read master tablet %v", si.PrimaryAlias)
 	}
 
 	// If using semi-sync, we need to enable it before connecting to master.
@@ -551,7 +551,7 @@ func (tm *TabletManager) startReplication(ctx context.Context, pos mysql.Positio
 	defer remoteCancel()
 	posStr, err := tmc.MasterPosition(remoteCtx, ti.Tablet)
 	if err != nil {
-		// It is possible that though MasterAlias is set, the master tablet is unreachable
+		// It is possible that though PrimaryAlias is set, the master tablet is unreachable
 		// Log a warning and let tablet restore in that case
 		// If we had instead considered this fatal, all tablets would crash-loop
 		// until a master appears, which would make it impossible to elect a master.

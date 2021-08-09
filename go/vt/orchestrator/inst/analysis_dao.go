@@ -463,7 +463,7 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 		}
 		if clusters[a.SuggestedClusterAlias] == nil {
 			clusters[a.SuggestedClusterAlias] = &clusterAnalysis{}
-			if a.TabletType == topodatapb.TabletType_MASTER {
+			if a.TabletType == topodatapb.TabletType_PRIMARY {
 				a.IsClusterMaster = true
 				clusters[a.SuggestedClusterAlias].masterKey = &a.AnalyzedInstanceKey
 			}

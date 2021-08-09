@@ -46,33 +46,33 @@ var ErrTabletAliasNil = errors.New("tablet alias is nil")
 // The proactive propagation allows a competing Orchestrator from discovering
 // the successful action of a previous one, which reduces churn.
 func SwitchMaster(newMasterKey, oldMasterKey InstanceKey) error {
-	newMasterTablet, err := ChangeTabletType(newMasterKey, topodatapb.TabletType_MASTER)
+	newMasterTablet, err := ChangeTabletType(newMasterKey, topodatapb.TabletType_PRIMARY)
 	if err != nil {
 		return err
 	}
 	// The following operations are best effort.
-	if newMasterTablet.Type != topodatapb.TabletType_MASTER {
+	if newMasterTablet.Type != topodatapb.TabletType_PRIMARY {
 		log.Errorf("Unexpected: tablet type did not change to master: %v", newMasterTablet.Type)
 		return nil
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), *topo.RemoteOperationTimeout)
 	defer cancel()
 	_, err = TopoServ.UpdateShardFields(ctx, newMasterTablet.Keyspace, newMasterTablet.Shard, func(si *topo.ShardInfo) error {
-		if proto.Equal(si.MasterAlias, newMasterTablet.Alias) && proto.Equal(si.MasterTermStartTime, newMasterTablet.MasterTermStartTime) {
+		if proto.Equal(si.PrimaryAlias, newMasterTablet.Alias) && proto.Equal(si.PrimaryTermStartTime, newMasterTablet.PrimaryTermStartTime) {
 			return topo.NewError(topo.NoUpdateNeeded, "")
 		}
 
 		// We just successfully reparented. We should check timestamps, but always overwrite.
-		lastTerm := si.GetMasterTermStartTime()
-		newTerm := logutil.ProtoToTime(newMasterTablet.MasterTermStartTime)
+		lastTerm := si.GetPrimaryTermStartTime()
+		newTerm := logutil.ProtoToTime(newMasterTablet.PrimaryTermStartTime)
 		if !newTerm.After(lastTerm) {
 			log.Errorf("Possible clock skew. New master start time is before previous one: %v vs %v", newTerm, lastTerm)
 		}
 
 		aliasStr := topoproto.TabletAliasString(newMasterTablet.Alias)
-		log.Infof("Updating shard record: master_alias=%v, master_term_start_time=%v", aliasStr, newTerm)
-		si.MasterAlias = newMasterTablet.Alias
-		si.MasterTermStartTime = newMasterTablet.MasterTermStartTime
+		log.Infof("Updating shard record: master_alias=%v, primary_term_start_time=%v", aliasStr, newTerm)
+		si.PrimaryAlias = newMasterTablet.Alias
+		si.PrimaryTermStartTime = newMasterTablet.PrimaryTermStartTime
 		return nil
 	})
 	// Don't proceed if shard record could not be updated.
@@ -157,7 +157,7 @@ func SaveTablet(tablet *topodatapb.Tablet) error {
 		tablet.Keyspace,
 		tablet.Shard,
 		int(tablet.Type),
-		logutil.ProtoToTime(tablet.MasterTermStartTime),
+		logutil.ProtoToTime(tablet.PrimaryTermStartTime),
 		tabletp,
 	)
 	return err

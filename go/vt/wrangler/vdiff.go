@@ -434,7 +434,7 @@ func (df *vdiff) buildTablePlan(table *tabletmanagerdatapb.TableDefinition, quer
 	sourceSelect := &sqlparser.Select{}
 	targetSelect := &sqlparser.Select{}
 	// aggregates contains the list if Aggregate functions, if any.
-	var aggregates []engine.AggregateParams
+	var aggregates []*engine.AggregateParams
 	for _, selExpr := range sel.SelectExprs {
 		switch selExpr := selExpr.(type) {
 		case *sqlparser.StarExpr:
@@ -463,7 +463,7 @@ func (df *vdiff) buildTablePlan(table *tabletmanagerdatapb.TableDefinition, quer
 			if expr, ok := selExpr.Expr.(*sqlparser.FuncExpr); ok {
 				switch fname := expr.Name.Lowered(); fname {
 				case "count", "sum":
-					aggregates = append(aggregates, engine.AggregateParams{
+					aggregates = append(aggregates, &engine.AggregateParams{
 						Opcode: engine.SupportedAggregates[fname],
 						Col:    len(sourceSelect.SelectExprs) - 1,
 					})
@@ -538,10 +538,10 @@ func (df *vdiff) buildTablePlan(table *tabletmanagerdatapb.TableDefinition, quer
 	return td, nil
 }
 
-func pkColsToGroupByParams(pkCols []int) []engine.GroupByParams {
-	var res []engine.GroupByParams
+func pkColsToGroupByParams(pkCols []int) []*engine.GroupByParams {
+	var res []*engine.GroupByParams
 	for _, col := range pkCols {
-		res = append(res, engine.GroupByParams{KeyCol: col, WeightStringCol: -1})
+		res = append(res, &engine.GroupByParams{KeyCol: col, WeightStringCol: -1})
 	}
 	return res
 }

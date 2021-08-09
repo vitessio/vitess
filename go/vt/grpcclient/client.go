@@ -131,8 +131,9 @@ func SecureDialOption(cert, key, ca, name string) (grpc.DialOption, error) {
 		return grpc.WithInsecure(), nil
 	}
 
-	// Load the config.
-	config, err := vttls.ClientConfig(cert, key, ca, name, tls.VersionTLS12)
+	// Load the config. At this point we know
+	// we want a strict config with verify identity.
+	config, err := vttls.ClientConfig(vttls.VerifyIdentity, cert, key, ca, name, tls.VersionTLS12)
 	if err != nil {
 		return nil, err
 	}

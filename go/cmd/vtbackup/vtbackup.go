@@ -434,16 +434,16 @@ func startReplication(ctx context.Context, mysqld mysqlctl.MysqlDaemon, topoServ
 	if err != nil {
 		return vterrors.Wrap(err, "can't read shard")
 	}
-	if topoproto.TabletAliasIsZero(si.MasterAlias) {
+	if topoproto.TabletAliasIsZero(si.PrimaryAlias) {
 		// Normal tablets will sit around waiting to be reparented in this case.
 		// Since vtbackup is a batch job, we just have to fail.
 		return fmt.Errorf("can't start replication after restore: shard %v/%v has no primary", *initKeyspace, *initShard)
 	}
 	// TODO(enisoc): Support replicating from another replica, preferably in the
 	//   same cell, preferably rdonly, to reduce load on the primary.
-	ti, err := topoServer.GetTablet(ctx, si.MasterAlias)
+	ti, err := topoServer.GetTablet(ctx, si.PrimaryAlias)
 	if err != nil {
-		return vterrors.Wrapf(err, "Cannot read primary tablet %v", si.MasterAlias)
+		return vterrors.Wrapf(err, "Cannot read primary tablet %v", si.PrimaryAlias)
 	}
 
 	// Stop replication (in case we're restarting), set replication source, and start replication.
@@ -458,14 +458,14 @@ func getPrimaryPosition(ctx context.Context, tmc tmclient.TabletManagerClient, t
 	if err != nil {
 		return mysql.Position{}, vterrors.Wrap(err, "can't read shard")
 	}
-	if topoproto.TabletAliasIsZero(si.MasterAlias) {
+	if topoproto.TabletAliasIsZero(si.PrimaryAlias) {
 		// Normal tablets will sit around waiting to be reparented in this case.
 		// Since vtbackup is a batch job, we just have to fail.
 		return mysql.Position{}, fmt.Errorf("shard %v/%v has no primary", *initKeyspace, *initShard)
 	}
-	ti, err := ts.GetTablet(ctx, si.MasterAlias)
+	ti, err := ts.GetTablet(ctx, si.PrimaryAlias)
 	if err != nil {
-		return mysql.Position{}, fmt.Errorf("can't get primary tablet record %v: %v", topoproto.TabletAliasString(si.MasterAlias), err)
+		return mysql.Position{}, fmt.Errorf("can't get primary tablet record %v: %v", topoproto.TabletAliasString(si.PrimaryAlias), err)
 	}
 	posStr, err := tmc.MasterPosition(ctx, ti.Tablet)
 	if err != nil {

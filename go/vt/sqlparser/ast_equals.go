@@ -722,6 +722,12 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfShowLegacy(a, b)
+	case *ShowMigrationLogs:
+		b, ok := inB.(*ShowMigrationLogs)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfShowMigrationLogs(a, b)
 	case *StarExpr:
 		b, ok := inB.(*StarExpr)
 		if !ok {
@@ -2310,6 +2316,18 @@ func EqualsRefOfShowLegacy(a, b *ShowLegacy) bool {
 		EqualsExpr(a.ShowCollationFilterOpt, b.ShowCollationFilterOpt)
 }
 
+// EqualsRefOfShowMigrationLogs does deep equals between the two objects.
+func EqualsRefOfShowMigrationLogs(a, b *ShowMigrationLogs) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.UUID == b.UUID &&
+		EqualsComments(a.Comments, b.Comments)
+}
+
 // EqualsRefOfStarExpr does deep equals between the two objects.
 func EqualsRefOfStarExpr(a, b *StarExpr) bool {
 	if a == b {
@@ -3598,6 +3616,12 @@ func EqualsStatement(inA, inB Statement) bool {
 			return false
 		}
 		return EqualsRefOfShow(a, b)
+	case *ShowMigrationLogs:
+		b, ok := inB.(*ShowMigrationLogs)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfShowMigrationLogs(a, b)
 	case *Stream:
 		b, ok := inB.(*Stream)
 		if !ok {

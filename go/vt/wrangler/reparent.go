@@ -65,7 +65,7 @@ func (wr *Wrangler) ShardReplicationStatuses(ctx context.Context, keyspace, shar
 	for i, ti := range tablets {
 		// Don't scan tablets that won't return something
 		// useful. Otherwise, you'll end up waiting for a timeout.
-		if ti.Type == topodatapb.TabletType_MASTER {
+		if ti.Type == topodatapb.TabletType_PRIMARY {
 			wg.Add(1)
 			go func(i int, ti *topo.TabletInfo) {
 				defer wg.Done()
@@ -186,7 +186,7 @@ func (wr *Wrangler) TabletExternallyReparented(ctx context.Context, newMasterAli
 	}
 
 	// We update the tablet only if it is not currently master
-	if tablet.Type != topodatapb.TabletType_MASTER {
+	if tablet.Type != topodatapb.TabletType_PRIMARY {
 		log.Infof("TabletExternallyReparented: executing tablet type change to MASTER")
 
 		// Create a reusable Reparent event with available info.
@@ -194,8 +194,8 @@ func (wr *Wrangler) TabletExternallyReparented(ctx context.Context, newMasterAli
 			ShardInfo: *si,
 			NewMaster: tablet,
 			OldMaster: &topodatapb.Tablet{
-				Alias: si.MasterAlias,
-				Type:  topodatapb.TabletType_MASTER,
+				Alias: si.PrimaryAlias,
+				Type:  topodatapb.TabletType_PRIMARY,
 			},
 		}
 		defer func() {
@@ -205,7 +205,7 @@ func (wr *Wrangler) TabletExternallyReparented(ctx context.Context, newMasterAli
 		}()
 		event.DispatchUpdate(ev, "starting external reparent")
 
-		if err := wr.tmc.ChangeType(ctx, tablet, topodatapb.TabletType_MASTER); err != nil {
+		if err := wr.tmc.ChangeType(ctx, tablet, topodatapb.TabletType_PRIMARY); err != nil {
 			log.Warningf("Error calling ChangeType on new master %v: %v", topoproto.TabletAliasString(newMasterAlias), err)
 			return err
 		}

@@ -63,7 +63,7 @@ func (uvs *uvstreamer) catchupAndCopy(ctx context.Context, tableName string) err
 // catchup on events for tables already fully or partially copied (upto last pk) until replication lag is small
 func (uvs *uvstreamer) catchup(ctx context.Context) error {
 	log.Infof("starting catchup ...")
-	uvs.setSecondsBehindMaster(math.MaxInt64)
+	uvs.setReplicationLagSeconds(math.MaxInt64)
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	defer func() {
@@ -85,7 +85,7 @@ func (uvs *uvstreamer) catchup(ctx context.Context) error {
 	defer tkr.Stop()
 	seconds := int64(uvs.config.MaxReplicationLag / time.Second)
 	for {
-		sbm := uvs.getSecondsBehindMaster()
+		sbm := uvs.getReplicationLagSeconds()
 		if sbm <= seconds {
 			log.Infof("Canceling context because lag is %d:%d", sbm, seconds)
 			cancel()

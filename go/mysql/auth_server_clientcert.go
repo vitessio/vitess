@@ -17,6 +17,7 @@ limitations under the License.
 package mysql
 
 import (
+	"crypto/x509"
 	"flag"
 	"fmt"
 	"net"
@@ -24,58 +25,71 @@ import (
 	"vitess.io/vitess/go/vt/log"
 )
 
-var clientcertAuthMethod = flag.String("mysql_clientcert_auth_method", MysqlClearPassword, "client-side authentication method to use. Supported values: mysql_clear_password, dialog.")
+var clientcertAuthMethod = flag.String("mysql_clientcert_auth_method", string(MysqlClearPassword), "client-side authentication method to use. Supported values: mysql_clear_password, dialog.")
 
+// AuthServerClientCert implements AuthServer which enforces client side certificates
 type AuthServerClientCert struct {
-	Method string
+	methods []AuthMethod
+	Method  AuthMethodDescription
 }
 
-// Init is public so it can be called from plugin_auth_clientcert.go (go/cmd/vtgate)
+// InitAuthServerClientCert is public so it can be called from plugin_auth_clientcert.go (go/cmd/vtgate)
 func InitAuthServerClientCert() {
 	if flag.CommandLine.Lookup("mysql_server_ssl_ca").Value.String() == "" {
 		log.Info("Not configuring AuthServerClientCert because mysql_server_ssl_ca is empty")
 		return
 	}
-	if *clientcertAuthMethod != MysqlClearPassword && *clientcertAuthMethod != MysqlDialog {
+	if *clientcertAuthMethod != string(MysqlClearPassword) && *clientcertAuthMethod != string(MysqlDialog) {
 		log.Exitf("Invalid mysql_clientcert_auth_method value: only support mysql_clear_password or dialog")
 	}
+
+	ascc := newAuthServerClientCert()
+	RegisterAuthServer("clientcert", ascc)
+}
+
+func newAuthServerClientCert() *AuthServerClientCert {
 	ascc := &AuthServerClientCert{
-		Method: *clientcertAuthMethod,
-	}
-	RegisterAuthServerImpl("clientcert", ascc)
-}
-
-// AuthMethod is part of the AuthServer interface.
-func (ascc *AuthServerClientCert) AuthMethod(user string) (string, error) {
-	return ascc.Method, nil
-}
-
-// Salt is not used for this plugin.
-func (ascc *AuthServerClientCert) Salt() ([]byte, error) {
-	return NewSalt()
-}
-
-// ValidateHash is unimplemented.
-func (ascc *AuthServerClientCert) ValidateHash(salt []byte, user string, authResponse []byte, remoteAddr net.Addr) (Getter, error) {
-	panic("unimplemented")
-}
-
-// Negotiate is part of the AuthServer interface.
-func (ascc *AuthServerClientCert) Negotiate(c *Conn, user string, remoteAddr net.Addr) (Getter, error) {
-	// This code depends on the fact that golang's tls server enforces client cert verification.
-	// Note that the -mysql_server_ssl_ca flag must be set in order for the vtgate to accept client certs.
-	// If not set, the vtgate will effectively deny all incoming mysql connections, since they will all lack certificates.
-	// For more info, check out go/vt/vtttls/vttls.go
-	certs := c.GetTLSClientCerts()
-	if len(certs) == 0 {
-		return nil, fmt.Errorf("no client certs for connection ID %v", c.ConnectionID)
+		Method: AuthMethodDescription(*clientcertAuthMethod),
 	}
 
-	if _, err := AuthServerReadPacketString(c); err != nil {
-		return nil, err
+	var authMethod AuthMethod
+	switch AuthMethodDescription(*clientcertAuthMethod) {
+	case MysqlClearPassword:
+		authMethod = NewMysqlClearAuthMethod(ascc, ascc)
+	case MysqlDialog:
+		authMethod = NewMysqlDialogAuthMethod(ascc, ascc, "")
+	default:
+		log.Exitf("Invalid mysql_clientcert_auth_method value: only support mysql_clear_password or dialog")
 	}
 
-	commonName := certs[0].Subject.CommonName
+	ascc.methods = []AuthMethod{authMethod}
+	return ascc
+}
+
+// AuthMethods returns the implement auth methods for the client
+// certificate authentication setup.
+func (asl *AuthServerClientCert) AuthMethods() []AuthMethod {
+	return asl.methods
+}
+
+// DefaultAuthMethodDescription returns always MysqlNativePassword
+// for the client certificate authentication setup.
+func (asl *AuthServerClientCert) DefaultAuthMethodDescription() AuthMethodDescription {
+	return MysqlNativePassword
+}
+
+// HandleUser is part of the UserValidator interface. We
+// handle any user here since we don't check up front.
+func (asl *AuthServerClientCert) HandleUser(user string) bool {
+	return true
+}
+
+// UserEntryWithPassword is part of the PlaintextStorage interface
+func (asl *AuthServerClientCert) UserEntryWithPassword(userCerts []*x509.Certificate, user string, password string, remoteAddr net.Addr) (Getter, error) {
+	if len(userCerts) == 0 {
+		return nil, fmt.Errorf("no client certs for connection")
+	}
+	commonName := userCerts[0].Subject.CommonName
 
 	if user != commonName {
 		return nil, fmt.Errorf("MySQL connection username '%v' does not match client cert common name '%v'", user, commonName)
@@ -83,6 +97,6 @@ func (ascc *AuthServerClientCert) Negotiate(c *Conn, user string, remoteAddr net
 
 	return &StaticUserData{
 		username: commonName,
-		groups:   certs[0].DNSNames,
+		groups:   userCerts[0].DNSNames,
 	}, nil
 }

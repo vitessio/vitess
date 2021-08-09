@@ -17,6 +17,7 @@ limitations under the License.
 package topo
 
 import (
+	"context"
 	"encoding/hex"
 	"fmt"
 	"path"
@@ -27,8 +28,6 @@ import (
 	"time"
 
 	"google.golang.org/protobuf/proto"
-
-	"context"
 
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
@@ -180,17 +179,17 @@ func (si *ShardInfo) Version() Version {
 
 // HasMaster returns true if the Shard has an assigned Master.
 func (si *ShardInfo) HasMaster() bool {
-	return !topoproto.TabletAliasIsZero(si.Shard.MasterAlias)
+	return !topoproto.TabletAliasIsZero(si.Shard.PrimaryAlias)
 }
 
-// GetMasterTermStartTime returns the shard's master term start time as a Time value.
-func (si *ShardInfo) GetMasterTermStartTime() time.Time {
-	return logutil.ProtoToTime(si.Shard.MasterTermStartTime)
+// GetPrimaryTermStartTime returns the shard's master term start time as a Time value.
+func (si *ShardInfo) GetPrimaryTermStartTime() time.Time {
+	return logutil.ProtoToTime(si.Shard.PrimaryTermStartTime)
 }
 
-// SetMasterTermStartTime sets the shard's master term start time as a Time value.
-func (si *ShardInfo) SetMasterTermStartTime(t time.Time) {
-	si.Shard.MasterTermStartTime = logutil.TimeToProto(t)
+// SetPrimaryTermStartTime sets the shard's master term start time as a Time value.
+func (si *ShardInfo) SetPrimaryTermStartTime(t time.Time) {
+	si.Shard.PrimaryTermStartTime = logutil.TimeToProto(t)
 }
 
 // GetShard is a high level function to read shard data.
@@ -299,14 +298,14 @@ func (ts *Server) CreateShard(ctx context.Context, keyspace, shard string) (err 
 
 	// Set master as serving only if its keyrange doesn't overlap
 	// with other shards. This applies to unsharded keyspaces also
-	value.IsMasterServing = true
+	value.IsPrimaryServing = true
 	sis, err := ts.FindAllShardsInKeyspace(ctx, keyspace)
 	if err != nil && !IsErrType(err, NoNode) {
 		return err
 	}
 	for _, si := range sis {
 		if si.KeyRange == nil || key.KeyRangesIntersect(si.KeyRange, keyRange) {
-			value.IsMasterServing = false
+			value.IsPrimaryServing = false
 			break
 		}
 	}
@@ -400,7 +399,7 @@ func (si *ShardInfo) UpdateSourceBlacklistedTables(ctx context.Context, tabletTy
 	if err := CheckKeyspaceLocked(ctx, si.keyspace); err != nil {
 		return err
 	}
-	if tabletType == topodatapb.TabletType_MASTER && len(cells) > 0 {
+	if tabletType == topodatapb.TabletType_PRIMARY && len(cells) > 0 {
 		return fmt.Errorf(blNoCellsForMaster)
 	}
 	tc := si.GetTabletControl(tabletType)
@@ -423,7 +422,7 @@ func (si *ShardInfo) UpdateSourceBlacklistedTables(ctx context.Context, tabletTy
 		return nil
 	}
 
-	if tabletType == topodatapb.TabletType_MASTER {
+	if tabletType == topodatapb.TabletType_PRIMARY {
 		if err := si.updateMasterTabletControl(tc, remove, tables); err != nil {
 			return err
 		}
@@ -478,7 +477,7 @@ func (si *ShardInfo) updateMasterTabletControl(tc *topodatapb.Shard_TabletContro
 		}
 		tc.BlacklistedTables = newBlacklist
 		if len(tc.BlacklistedTables) == 0 {
-			si.removeTabletTypeFromTabletControl(topodatapb.TabletType_MASTER)
+			si.removeTabletTypeFromTabletControl(topodatapb.TabletType_PRIMARY)
 		}
 		return nil
 	}
@@ -507,16 +506,6 @@ func (si *ShardInfo) removeCellsFromTabletControl(tc *topodatapb.Shard_TabletCon
 	} else {
 		tc.Cells = result
 	}
-}
-
-// GetServedType returns the Shard_ServedType for a TabletType, or nil
-func (si *ShardInfo) GetServedType(tabletType topodatapb.TabletType) *topodatapb.Shard_ServedType {
-	for _, st := range si.ServedTypes {
-		if st.TabletType == tabletType {
-			return st
-		}
-	}
-	return nil
 }
 
 //
@@ -580,8 +569,8 @@ func (ts *Server) FindAllTabletAliasesInShardByCell(ctx context.Context, keyspac
 
 	resultAsMap := make(map[string]*topodatapb.TabletAlias)
 	if si.HasMaster() {
-		if InCellList(si.MasterAlias.Cell, cells) {
-			resultAsMap[topoproto.TabletAliasString(si.MasterAlias)] = si.MasterAlias
+		if InCellList(si.PrimaryAlias.Cell, cells) {
+			resultAsMap[topoproto.TabletAliasString(si.PrimaryAlias)] = si.PrimaryAlias
 		}
 	}
 
