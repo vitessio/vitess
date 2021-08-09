@@ -97,7 +97,7 @@ func (t *VerticalSplitTask) Run(parameters map[string]string) ([]*automationpb.T
 		newTasks = append(newTasks, vSplitDiffTask)
 	}
 
-	for _, servedType := range []string{"rdonly", "replica", "master"} {
+	for _, servedType := range []string{"rdonly", "replica", "primary"} {
 		migrateServedTypesTasks := NewTaskContainer()
 		for _, shard := range shards {
 			AddTask(migrateServedTypesTasks, "MigrateServedFromTask", map[string]string{

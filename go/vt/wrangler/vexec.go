@@ -147,7 +147,7 @@ func (wr *Wrangler) VExecResult(ctx context.Context, workflow, keyspace, query s
 	return qr, nil
 }
 
-// VExec executes queries on a table on all masters in the target keyspace of the workflow
+// VExec executes queries on a table on all primaries in the target keyspace of the workflow
 func (wr *Wrangler) VExec(ctx context.Context, workflow, keyspace, query string, dryRun bool) (map[*topo.TabletInfo]*sqltypes.Result, error) {
 	results, err := wr.runVexec(ctx, workflow, keyspace, query, dryRun)
 	retResults := make(map[*topo.TabletInfo]*sqltypes.Result)
@@ -194,7 +194,7 @@ func (vx *vexec) outputDryRunInfo(ctx context.Context) error {
 	return vx.planner.dryRun(ctx)
 }
 
-// exec runs our planned query on backend shard masters. It collects query results from all
+// exec runs our planned query on backend shard primaries. It collects query results from all
 // shards and returns an aggregate (UNION ALL -like) result.
 func (vx *vexec) exec() (map[*topo.TabletInfo]*querypb.QueryResult, error) {
 	var wg sync.WaitGroup
@@ -232,7 +232,7 @@ func (vx *vexec) parseQuery() (err error) {
 	return nil
 }
 
-// getMasters identifies master tablet for all shards relevant to our keyspace
+// getMasters identifies primary tablet for all shards relevant to our keyspace
 func (vx *vexec) getMasters() error {
 	var err error
 	shards, err := vx.wr.ts.GetShardNames(vx.ctx, vx.keyspace)
@@ -283,7 +283,7 @@ func (wr *Wrangler) convertQueryResultToSQLTypesResult(results map[*topo.TabletI
 	return retResults
 }
 
-// WorkflowAction can start/stop/delete or list streams in _vt.vreplication on all masters in the target keyspace of the workflow.
+// WorkflowAction can start/stop/delete or list streams in _vt.vreplication on all primaries in the target keyspace of the workflow.
 func (wr *Wrangler) WorkflowAction(ctx context.Context, workflow, keyspace, action string, dryRun bool) (map[*topo.TabletInfo]*sqltypes.Result, error) {
 
 	if action == "show" {
@@ -347,7 +347,7 @@ type ReplicationStatusResult struct {
 	// MaxVReplicationLag represents the maximum vreplication lag seen across all shards.
 	MaxVReplicationLag int64
 
-	// Statuses is a map of <shard>/<master tablet alias> : ShardReplicationStatus (for the given shard).
+	// Statuses is a map of <shard>/<primary tablet alias> : ShardReplicationStatus (for the given shard).
 	ShardStatuses map[string]*ShardReplicationStatus
 }
 
@@ -359,11 +359,11 @@ type ReplicationLocation struct {
 
 // ShardReplicationStatus holds relevant vreplication related info for the given shard.
 type ShardReplicationStatus struct {
-	// MasterReplicationStatuses represents all of the replication statuses for the master tablets in the given shard.
+	// MasterReplicationStatuses represents all of the replication statuses for the primary tablets in the given shard.
 	MasterReplicationStatuses []*ReplicationStatus
 	// TabletControls represents the tablet controls for the tablets in the shard.
 	TabletControls []*topodatapb.Shard_TabletControl
-	// MasterIsServing indicates whether the master tablet of the given shard is currently serving write traffic.
+	// MasterIsServing indicates whether the primary tablet of the given shard is currently serving write traffic.
 	MasterIsServing bool
 }
 
@@ -549,7 +549,7 @@ func (wr *Wrangler) ListAllWorkflows(ctx context.Context, keyspace string, activ
 		qr := sqltypes.Proto3ToResult(result)
 		for _, row := range qr.Rows {
 			for _, value := range row {
-				// Even though we query for distinct, we must de-dup because we query per master tablet.
+				// Even though we query for distinct, we must de-dup because we query per primary tablet.
 				workflowsSet.Insert(value.ToString())
 			}
 		}

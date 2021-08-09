@@ -176,7 +176,7 @@ func handleDiscoveryRequests() {
 }
 
 // DiscoverInstance will attempt to discover (poll) an instance (unless
-// it is already up to date) and will also ensure that its master and
+// it is already up to date) and will also ensure that its primary and
 // replicas (if any) are also checked.
 func DiscoverInstance(instanceKey inst.InstanceKey) {
 	if inst.InstanceIsForgotten(&instanceKey) {
@@ -324,7 +324,7 @@ func onHealthTick() {
 	}
 }
 
-// Write a cluster's master (or all clusters masters) to kv stores.
+// SubmitMastersToKvStores records a cluster's primary (or all clusters primaries) to kv stores.
 // This should generally only happen once in a lifetime of a cluster. Otherwise KV
 // stores are updated via failovers.
 func SubmitMastersToKvStores(clusterName string, force bool) (kvPairs [](*kv.KVPair), submittedCount int, err error) {

@@ -42,7 +42,7 @@ func (tm *TabletManager) Backup(ctx context.Context, concurrency int, logger log
 	}
 
 	// Check tablet type current process has.
-	// During a network partition it is possible that from the topology perspective this is no longer the master,
+	// During a network partition it is possible that from the topology perspective this is no longer the primary,
 	// but the process didn't find out about this.
 	// It is not safe to take backups from tablet in this state
 	currentTablet := tm.Tablet()
@@ -125,7 +125,7 @@ func (tm *TabletManager) Backup(ctx context.Context, concurrency int, logger log
 		// above call to Backup. Thus we use the background context to get through to the finish.
 
 		// Change our type back to the original value.
-		// Original type could be master so pass in a real value for PrimaryTermStartTime
+		// Original type could be primary so pass in a real value for PrimaryTermStartTime
 		if err := tm.changeTypeLocked(bgCtx, originalType, DBActionNone); err != nil {
 			// failure in changing the topology type is probably worse,
 			// so returning that (we logged the snapshot error anyway)

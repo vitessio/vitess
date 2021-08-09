@@ -74,7 +74,7 @@ type LegacySplitCloneWorker struct {
 	// populated during WorkerStateFindTargets, read-only after that
 	sourceAliases []*topodatapb.TabletAlias
 	sourceTablets []*topodatapb.Tablet
-	// healthCheck tracks the health of all MASTER and REPLICA tablets.
+	// healthCheck tracks the health of all PRIMARY and REPLICA tablets.
 	// It must be closed at the end of the command.
 	healthCheck discovery.LegacyHealthCheck
 	tsc         *discovery.LegacyTabletStatsCache
@@ -395,7 +395,7 @@ func (scw *LegacySplitCloneWorker) findTargets(ctx context.Context) error {
 		scw.destinationShardWatchers = append(scw.destinationShardWatchers, watcher)
 	}
 
-	// Make sure we find a master for each destination shard and log it.
+	// Make sure we find a primary for each destination shard and log it.
 	scw.wr.Logger().Infof("Finding a MASTER tablet for each destination shard...")
 	for _, si := range scw.destinationShards {
 		waitCtx, waitCancel := context.WithTimeout(ctx, 10*time.Second)
@@ -438,7 +438,7 @@ func (scw *LegacySplitCloneWorker) findTargets(ctx context.Context) error {
 }
 
 // copy phase:
-//	- copy the data from source tablets to destination masters (with replication on)
+//	- copy the data from source tablets to destination primaries (with replication on)
 // Assumes that the schema has already been created on each destination tablet
 // (probably from vtctl's CopySchemaShard)
 func (scw *LegacySplitCloneWorker) copy(ctx context.Context) error {

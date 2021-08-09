@@ -13,7 +13,7 @@ backward-incompatible way -- for example, when removing deprecated interfaces.
 
 Our public API includes (but is not limited to):
 
-*   The VTGate [RPC interfaces](https://github.com/vitessio/vitess/tree/master/proto).
+*   The VTGate [RPC interfaces](https://github.com/vitessio/vitess/tree/main/proto).
 *   The interfaces exposed by the VTGate client library in each language.
 
 Care must also be taken when changing the format of any data stored by a live

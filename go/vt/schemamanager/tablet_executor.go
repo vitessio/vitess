@@ -83,7 +83,7 @@ func (exec *TabletExecutor) SkipPreflight() {
 	exec.skipPreflight = true
 }
 
-// Open opens a connection to the master for every shard.
+// Open opens a connection to the primary for every shard.
 func (exec *TabletExecutor) Open(ctx context.Context, keyspace string) error {
 	if !exec.isClosed {
 		return nil
@@ -412,7 +412,7 @@ func (exec *TabletExecutor) executeOneTablet(
 		return
 	}
 	// Get a replication position that's guaranteed to be after the schema change
-	// was applied on the master.
+	// was applied on the primary.
 	pos, err := exec.wr.TabletManagerClient().MasterPosition(ctx, tablet)
 	if err != nil {
 		errChan <- ShardWithError{

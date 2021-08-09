@@ -109,14 +109,14 @@ func TestTabletChange(t *testing.T) {
 	checkedExec(t, conn, "use @master")
 	checkedExec(t, conn, "set sql_mode = ''")
 
-	// this will create reserved connection on master on -80 and 80- shards.
+	// this will create reserved connection on primary on -80 and 80- shards.
 	checkedExec(t, conn, "select * from test")
 
 	// Change Master
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("PlannedReparentShard", "-keyspace_shard", fmt.Sprintf("%s/%s", keyspaceName, "-80"))
 	require.NoError(t, err)
 
-	// this should pass as there is new master tablet and is serving.
+	// this should pass as there is a new primary tablet and is serving.
 	_, err = exec(t, conn, "select * from test")
 	assert.NoError(t, err)
 }

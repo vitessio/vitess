@@ -39,7 +39,7 @@ const (
 )
 
 // replManager runs a poller to ensure mysql is replicating from
-// the master. If necessary, it invokes tm.repairReplication to get it
+// the primary. If necessary, it invokes tm.repairReplication to get it
 // fixed. On state change, SetTabletType must be called before changing
 // the tabletserver state. This will ensure that replication is fixed
 // upfront, allowing tabletserver to start off healthy.

@@ -60,7 +60,7 @@ func TestInitTabletShardConversion(t *testing.T) {
 	}
 }
 
-// TestDeleteTabletBasic tests delete of non-master tablet
+// TestDeleteTabletBasic tests delete of non-primary tablet
 func TestDeleteTabletBasic(t *testing.T) {
 	cell := "cell1"
 	ts := memorytopo.NewServer(cell)
@@ -87,7 +87,7 @@ func TestDeleteTabletBasic(t *testing.T) {
 	}
 }
 
-// TestDeleteTabletTrueMaster tests that you can delete a true master tablet
+// TestDeleteTabletTrueMaster tests that you can delete a true primary tablet
 // only if allowMaster is set to true
 func TestDeleteTabletTrueMaster(t *testing.T) {
 	cell := "cell1"
@@ -111,7 +111,7 @@ func TestDeleteTabletTrueMaster(t *testing.T) {
 		t.Fatalf("GetTablet failed: %v", err)
 	}
 
-	// set PrimaryAlias and PrimaryTermStartTime on shard to match chosen master tablet
+	// set PrimaryAlias and PrimaryTermStartTime on shard to match chosen primary tablet
 	if _, err := ts.UpdateShardFields(context.Background(), "test", "0", func(si *topo.ShardInfo) error {
 		si.PrimaryAlias = tablet.Alias
 		si.PrimaryTermStartTime = tablet.PrimaryTermStartTime
@@ -131,7 +131,7 @@ func TestDeleteTabletTrueMaster(t *testing.T) {
 	}
 }
 
-// TestDeleteTabletFalseMaster tests that you can delete a false master tablet
+// TestDeleteTabletFalseMaster tests that you can delete a false primary tablet
 // with allowMaster set to false
 func TestDeleteTabletFalseMaster(t *testing.T) {
 	cell := "cell1"
@@ -165,7 +165,7 @@ func TestDeleteTabletFalseMaster(t *testing.T) {
 		t.Fatalf("InitTablet failed: %v", err)
 	}
 
-	// set PrimaryAlias and PrimaryTermStartTime on shard to match chosen master tablet
+	// set PrimaryAlias and PrimaryTermStartTime on shard to match chosen primary tablet
 	if _, err := ts.UpdateShardFields(context.Background(), "test", "0", func(si *topo.ShardInfo) error {
 		si.PrimaryAlias = tablet2.Alias
 		si.PrimaryTermStartTime = tablet2.PrimaryTermStartTime
@@ -174,7 +174,7 @@ func TestDeleteTabletFalseMaster(t *testing.T) {
 		t.Fatalf("UpdateShardFields failed: %v", err)
 	}
 
-	// Should be able to delete old (false) master with allowMaster = false
+	// Should be able to delete old (false) primary with allowMaster = false
 	if err := wr.DeleteTablet(context.Background(), tablet1.Alias, false); err != nil {
 		t.Fatalf("DeleteTablet failed: %v", err)
 	}

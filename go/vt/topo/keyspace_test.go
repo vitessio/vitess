@@ -116,7 +116,7 @@ func TestUpdateServedFromMap(t *testing.T) {
 		t.Fatalf("migrate rdonly again should have failed: %v", err)
 	}
 
-	// finally migrate the master
+	// finally migrate the primary
 	if err := ki.UpdateServedFromMap(topodatapb.TabletType_PRIMARY, []string{"second"}, "source", true, allCells); err == nil || err.Error() != "cannot migrate only some cells for master removal in keyspace ks" {
 		t.Fatalf("migrate master with cells should have failed: %v", err)
 	}

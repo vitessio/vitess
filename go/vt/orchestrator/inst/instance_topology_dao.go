@@ -566,7 +566,7 @@ func workaroundBug83713(instanceKey *InstanceKey) {
 	}
 }
 
-// ChangeMasterTo changes the given instance's master according to given input.
+// ChangeMasterTo changes the given instance's primary according to given input.
 // TODO(sougou): deprecate ReplicationCredentialsQuery, and all other credential discovery.
 func ChangeMasterTo(instanceKey *InstanceKey, masterKey *InstanceKey, masterBinlogCoordinates *BinlogCoordinates, skipUnresolve bool, gtidHint OperationGTIDHint) (*Instance, error) {
 	user, password := config.Config.MySQLReplicaUser, config.Config.MySQLReplicaPassword
@@ -617,7 +617,7 @@ func ChangeMasterTo(instanceKey *InstanceKey, masterKey *InstanceKey, masterBinl
 		// Is MariaDB; not using GTID, turn into GTID
 		mariadbGTIDHint := "slave_pos"
 		if !instance.ReplicationThreadsExist() {
-			// This instance is currently a master. As per https://mariadb.com/kb/en/change-master-to/#master_use_gtid
+			// This instance is currently a primary. As per https://mariadb.com/kb/en/change-master-to/#master_use_gtid
 			// we should be using current_pos.
 			// See also:
 			// - https://github.com/openark/orchestrator/issues/1146
@@ -684,9 +684,9 @@ func ChangeMasterTo(instanceKey *InstanceKey, masterKey *InstanceKey, masterBinl
 	return instance, err
 }
 
-// SkipToNextBinaryLog changes master position to beginning of next binlog
+// SkipToNextBinaryLog changes primary position to beginning of next binlog
 // USE WITH CARE!
-// Use case is binlog servers where the master was gone & replaced by another.
+// Use case is binlog servers where the primary was gone & replaced by another.
 func SkipToNextBinaryLog(instanceKey *InstanceKey) (*Instance, error) {
 	instance, err := ReadTopologyInstance(instanceKey)
 	if err != nil {

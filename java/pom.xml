@@ -44,14 +44,14 @@
   <licenses>
     <license>
       <name>Apache Version 2.0</name>
-      <url>https://github.com/vitessio/vitess/blob/master/LICENSE</url>
+      <url>https://github.com/vitessio/vitess/blob/main/LICENSE</url>
       <distribution>manual</distribution>
     </license>
   </licenses>
   <scm>
     <connection>scm:git:git@github.com:vitessio/vitess.git</connection>
     <developerConnection>scm:git:git@github.com:vitessio/vitess.git</developerConnection>
-    <url>https://github.com/vitessio/vitess/tree/master</url>
+    <url>https://github.com/vitessio/vitess/tree/main</url>
   </scm>
   <issueManagement>
     <system>GitHub</system>

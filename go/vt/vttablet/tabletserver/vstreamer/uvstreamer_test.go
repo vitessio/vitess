@@ -204,7 +204,7 @@ func TestVStreamCopyCompleteFlow(t *testing.T) {
 		log.Info("Inserting row for fast forward to find, locking t2")
 		conn.ExecuteFetch("lock tables t2 write", 1, false)
 		insertRow(t, "t1", 1, numInitialRows+2)
-		log.Infof("Position after second insert into t1: %s", masterPosition(t))
+		log.Infof("Position after second insert into t1: %s", primaryPosition(t))
 		conn.ExecuteFetch("unlock tables", 1, false)
 		log.Info("Inserted row for fast forward to find, unlocked tables")
 
@@ -219,7 +219,7 @@ func TestVStreamCopyCompleteFlow(t *testing.T) {
 		conn.ExecuteFetch("lock tables t3 write", 1, false)
 		insertRow(t, "t1", 1, numInitialRows+3)
 		insertRow(t, "t2", 2, numInitialRows+2)
-		log.Infof("Position after third insert into t1: %s", masterPosition(t))
+		log.Infof("Position after third insert into t1: %s", primaryPosition(t))
 		conn.ExecuteFetch("unlock tables", 1, false)
 		log.Info("Inserted rows for fast forward to find, unlocked tables")
 
@@ -335,7 +335,7 @@ func insertMultipleRows(t *testing.T, table string, idx int, numRows int) {
 
 func initTables(t *testing.T, tables []string) {
 	var idx int
-	positions["start"] = masterPosition(t)
+	positions["start"] = primaryPosition(t)
 	for i, table := range tables {
 		idx = i + 1
 		execStatement(t, fmt.Sprintf(createTableQuery, table, idx, idx, idx))
@@ -344,7 +344,7 @@ func initTables(t *testing.T, tables []string) {
 		tableName := table
 		idx = i + 1
 		insertMultipleRows(t, table, idx, numInitialRows)
-		positions[fmt.Sprintf("%sBulkInsert", table)] = masterPosition(t)
+		positions[fmt.Sprintf("%sBulkInsert", table)] = primaryPosition(t)
 
 		callbacks[fmt.Sprintf("LASTPK.*%s.*%d", table, numInitialRows)] = func() {
 			ctx := context.Background()
@@ -364,11 +364,11 @@ func initTables(t *testing.T, tables []string) {
 					"commit",
 				}
 				env.Mysqld.ExecuteSuperQueryList(ctx, queries)
-				log.Infof("Position after first insert into t1 and t2: %s", masterPosition(t))
+				log.Infof("Position after first insert into t1 and t2: %s", primaryPosition(t))
 			}
 		}
 	}
-	positions["afterInitialInsert"] = masterPosition(t)
+	positions["afterInitialInsert"] = primaryPosition(t)
 }
 
 func initialize(t *testing.T) {

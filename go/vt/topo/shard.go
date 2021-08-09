@@ -47,7 +47,7 @@ import (
 const (
 	blTablesAlreadyPresent = "one or more tables are already present in the blacklist"
 	blTablesNotPresent     = "cannot remove tables since one or more do not exist in the blacklist"
-	blNoCellsForMaster     = "you cannot specify cells for a master's tablet control"
+	blNoCellsForMaster     = "you cannot specify cells for a primary's tablet control"
 )
 
 // Functions for dealing with shard representations in topology.
@@ -177,17 +177,17 @@ func (si *ShardInfo) Version() Version {
 	return si.version
 }
 
-// HasMaster returns true if the Shard has an assigned Master.
+// HasMaster returns true if the Shard has an assigned primary.
 func (si *ShardInfo) HasMaster() bool {
 	return !topoproto.TabletAliasIsZero(si.Shard.PrimaryAlias)
 }
 
-// GetPrimaryTermStartTime returns the shard's master term start time as a Time value.
+// GetPrimaryTermStartTime returns the shard's primary term start time as a Time value.
 func (si *ShardInfo) GetPrimaryTermStartTime() time.Time {
 	return logutil.ProtoToTime(si.Shard.PrimaryTermStartTime)
 }
 
-// SetPrimaryTermStartTime sets the shard's master term start time as a Time value.
+// SetPrimaryTermStartTime sets the shard's primary term start time as a Time value.
 func (si *ShardInfo) SetPrimaryTermStartTime(t time.Time) {
 	si.Shard.PrimaryTermStartTime = logutil.TimeToProto(t)
 }
@@ -296,7 +296,7 @@ func (ts *Server) CreateShard(ctx context.Context, keyspace, shard string) (err 
 		KeyRange: keyRange,
 	}
 
-	// Set master as serving only if its keyrange doesn't overlap
+	// Set primary as serving only if its keyrange doesn't overlap
 	// with other shards. This applies to unsharded keyspaces also
 	value.IsPrimaryServing = true
 	sis, err := ts.FindAllShardsInKeyspace(ctx, keyspace)

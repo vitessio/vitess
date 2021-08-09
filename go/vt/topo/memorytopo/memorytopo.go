@@ -144,7 +144,7 @@ type node struct {
 
 	// lockContents is the contents of the locks.
 	// For regular locks, it has the contents that was passed in.
-	// For master election, it has the id of the election leader.
+	// For primary election, it has the id of the election leader.
 	lockContents string
 }
 

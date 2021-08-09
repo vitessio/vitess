@@ -3752,11 +3752,11 @@ type DemotePrimaryResponse struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	// Position is deprecated, and is a string representation of a demoted masters executed position.
+	// Position is deprecated, and is a string representation of a demoted primaries executed position.
 	//
 	// Deprecated: Do not use.
 	DeprecatedPosition string `protobuf:"bytes,1,opt,name=deprecated_position,json=deprecatedPosition,proto3" json:"deprecated_position,omitempty"`
-	// PrimaryStatus represents the response from calling `SHOW MASTER STATUS` on a master that has been demoted.
+	// PrimaryStatus represents the response from calling `SHOW MASTER STATUS` on a primary that has been demoted.
 	PrimaryStatus *replicationdata.PrimaryStatus `protobuf:"bytes,2,opt,name=primary_status,json=primaryStatus,proto3" json:"primary_status,omitempty"`
 }
 

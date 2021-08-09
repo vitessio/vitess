@@ -57,7 +57,7 @@ func (tm *TabletManager) shardSyncLoop(ctx context.Context, notifyChan <-chan st
 	var retryChan <-chan time.Time
 
 	// shardWatch is how we get notified when the shard record is updated.
-	// We only watch the shard record while we are master.
+	// We only watch the shard record while we are primary.
 	shardWatch := &shardWatcher{}
 	defer shardWatch.stop()
 
@@ -96,14 +96,14 @@ func (tm *TabletManager) shardSyncLoop(ctx context.Context, notifyChan <-chan st
 		switch tablet.Type {
 		case topodatapb.TabletType_PRIMARY:
 			// This is a failsafe code because we've seen races that can cause
-			// master term start time to become zero.
+			// primary term start time to become zero.
 			if tablet.PrimaryTermStartTime == nil {
 				log.Errorf("PrimaryTermStartTime should not be nil: %v", tablet)
 				// Start retry timer and go back to sleep.
 				retryChan = time.After(*shardSyncRetryDelay)
 				continue
 			}
-			// If we think we're master, check if we need to update the shard record.
+			// If we think we're primary, check if we need to update the shard record.
 			// Fetch the start time from the record we just got, because the tm's tablet can change.
 			masterAlias, shouldDemote, err := syncShardMaster(ctx, tm.TopoServer, tablet, logutil.ProtoToTime(tablet.PrimaryTermStartTime))
 			if err != nil {
@@ -113,8 +113,8 @@ func (tm *TabletManager) shardSyncLoop(ctx context.Context, notifyChan <-chan st
 				continue
 			}
 			if shouldDemote {
-				// Someone updated the PrimaryTermStartTime while we still think we're master.
-				// This means that we should abort our term, since someone else must have claimed mastership
+				// Someone updated the PrimaryTermStartTime while we still think we're primary.
+				// This means that we should abort our term, since someone else must have claimed primaryship
 				// and wrote to the shard record
 				if err := tm.abortMasterTerm(ctx, masterAlias); err != nil {
 					log.Errorf("Failed to abort master term: %v", err)
@@ -122,13 +122,13 @@ func (tm *TabletManager) shardSyncLoop(ctx context.Context, notifyChan <-chan st
 					retryChan = time.After(*shardSyncRetryDelay)
 					continue
 				}
-				// We're not master anymore, so stop watching the shard record.
+				// We're not primary anymore, so stop watching the shard record.
 				shardWatch.stop()
 				continue
 			}
 
-			// As long as we're master, watch the shard record so we'll be
-			// notified if another master takes over.
+			// As long as we're primary, watch the shard record so we'll be
+			// notified if another primary takes over.
 			if shardWatch.active() {
 				// We already have an active watch. Nothing to do.
 				continue
@@ -140,20 +140,20 @@ func (tm *TabletManager) shardSyncLoop(ctx context.Context, notifyChan <-chan st
 				continue
 			}
 		default:
-			// If we're not master, stop watching the shard record,
-			// so only masters contribute to global topo watch load.
+			// If we're not primary, stop watching the shard record,
+			// so only primaries contribute to global topo watch load.
 			shardWatch.stop()
 		}
 	}
 }
 
-// syncShardMaster is called when we think we're master.
+// syncShardMaster is called when we think we're primary.
 // It checks that the shard record agrees, and updates it if possible.
 //
 // If the returned error is nil, the returned masterAlias indicates the current
-// master tablet according to the shard record.
+// primary tablet according to the shard record.
 //
-// If the shard record indicates a new master has taken over, this returns
+// If the shard record indicates a new primary has taken over, this returns
 // success (we successfully synchronized), but the returned masterAlias will be
 // different from the input tablet.Alias.
 func syncShardMaster(ctx context.Context, ts *topo.Server, tablet *topodatapb.Tablet, PrimaryTermStartTime time.Time) (masterAlias *topodatapb.TabletAlias, shouldDemote bool, err error) {
@@ -192,12 +192,12 @@ func syncShardMaster(ctx context.Context, ts *topo.Server, tablet *topodatapb.Ta
 	return shardInfo.PrimaryAlias, shouldDemote, nil
 }
 
-// abortMasterTerm is called when we unexpectedly lost mastership.
+// abortMasterTerm is called when we unexpectedly lost primaryship.
 //
 // Under normal circumstances, we should be gracefully demoted before a new
-// master appears. This function is only reached when that graceful demotion
-// failed or was skipped, so we only found out we're no longer master after the
-// new master started advertising itself.
+// primary appears. This function is only reached when that graceful demotion
+// failed or was skipped, so we only found out we're no longer primary after the
+// new primary started advertising itself.
 //
 // If active reparents are enabled, we demote our own MySQL to a replica and
 // update our tablet type to REPLICA.
@@ -221,7 +221,7 @@ func (tm *TabletManager) abortMasterTerm(ctx context.Context, masterAlias *topod
 
 	// Do a full demotion to convert MySQL into a replica.
 	// We do not revert on partial failure here because this code path only
-	// triggers after a new master has taken over, so we are past the point of
+	// triggers after a new primary has taken over, so we are past the point of
 	// no return. Instead, we should leave partial results and retry the rest
 	// later.
 	log.Infof("Active reparents are enabled; converting MySQL to replica.")

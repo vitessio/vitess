@@ -147,7 +147,7 @@ func expireLostInRecoveryDowntime() error {
 	for _, instance := range instances {
 		// We _may_ expire this downtime, but only after a minute
 		// This is a graceful period, during which other servers can claim ownership of the alias,
-		// or can update their own cluster name to match a new master's name
+		// or can update their own cluster name to match a new primary's name
 		if instance.ElapsedDowntime < time.Minute {
 			continue
 		}
@@ -159,10 +159,10 @@ func expireLostInRecoveryDowntime() error {
 			// back, alive, replicating in some topology
 			endDowntime = true
 		} else if instance.ReplicationDepth == 0 {
-			// instance makes the appearance of a master
+			// instance makes the appearance of a primary
 			if unambiguousKey, ok := unambiguousAliases[instance.SuggestedClusterAlias]; ok {
 				if unambiguousKey.Equals(&instance.Key) {
-					// This instance seems to be a master, which is valid, and has a suggested alias,
+					// This instance seems to be a primary, which is valid, and has a suggested alias,
 					// and is the _only_ one to have this suggested alias (i.e. no one took its place)
 					endDowntime = true
 				}
