@@ -150,9 +150,15 @@ type Executor struct {
 	shard    string
 	dbName   string
 
-	initMutex              sync.Mutex
-	migrationMutex         sync.Mutex
-	ownedRunningMigrations sync.Map // UUIDs owned by this executor
+	initMutex      sync.Mutex
+	migrationMutex sync.Mutex
+	// ownedRunningMigrations lists UUIDs owned by this executor (consider this a map[string]bool)
+	// A UUID listed in this map stands for a migration that is executing, and that this executor can control.
+	// Migrations found to be running which are not listed in this map will either:
+	// - be adopted by this executor (possible for vreplication migrations), or
+	// - be terminated (example: pt-osc migration gone rogue, process still running even as the migration failed)
+	// The Executor auto-reviews the map and cleans up migrations thought to be running which are not running.
+	ownedRunningMigrations sync.Map
 	tickReentranceFlag     int64
 
 	ticks             *timer.Timer
