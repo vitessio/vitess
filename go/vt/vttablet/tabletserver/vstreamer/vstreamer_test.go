@@ -258,7 +258,7 @@ func TestVersion(t *testing.T) {
 	defer engine.Close()
 
 	execStatements(t, []string{
-		"create table _vt.schema_version(id int, pos varbinary(10000), time_updated bigint(20), ddl varchar(10000), schemax blob, primary key(id))",
+		"create table _vt.schema_version(id int, pos blob, time_updated bigint(20), ddl varchar(10000), schemax blob, primary key(id))",
 	})
 	defer execStatements(t, []string{
 		"drop table _vt.schema_version",

@@ -541,7 +541,7 @@ func CreateVReplicationTable() []string {
   id INT AUTO_INCREMENT,
   workflow VARBINARY(1000),
   source VARBINARY(10000) NOT NULL,
-  pos VARBINARY(10000) NOT NULL,
+  pos BLOB NOT NULL,
   stop_pos VARBINARY(10000) DEFAULT NULL,
   max_tps BIGINT(20) NOT NULL,
   max_replication_lag BIGINT(20) NOT NULL,
