@@ -31,8 +31,9 @@ import (
 )
 
 var (
-	engine                                 *Engine
-	env                                    *testenv.Env
+	engine *Engine
+	env    *testenv.Env
+
 	ignoreKeyspaceShardInFieldAndRowEvents bool
 )
 
