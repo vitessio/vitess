@@ -543,6 +543,12 @@ func TestVStreamCopyWithDifferentFilters(t *testing.T) {
 						for j := range ev.FieldEvent.Fields {
 							ev.FieldEvent.Fields[j].Flags = 0
 						}
+						ev.FieldEvent.Keyspace = ""
+						ev.FieldEvent.Shard = ""
+					}
+					if ev.Type == binlogdatapb.VEventType_ROW {
+						ev.RowEvent.Keyspace = ""
+						ev.RowEvent.Shard = ""
 					}
 					got := ev.String()
 					want := expectedEvents[i]
