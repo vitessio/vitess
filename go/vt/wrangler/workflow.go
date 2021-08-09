@@ -220,7 +220,7 @@ func (vrw *VReplicationWorkflow) GetStreamCount() (int64, int64, []*WorkflowErro
 		return 0, 0, nil, err
 	}
 	for ksShard := range res.ShardStatuses {
-		statuses := res.ShardStatuses[ksShard].MasterReplicationStatuses
+		statuses := res.ShardStatuses[ksShard].PrimaryReplicationStatuses
 		for _, st := range statuses {
 			totalStreams++
 			if strings.HasPrefix(st.Message, "Error:") {

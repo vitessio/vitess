@@ -139,7 +139,7 @@ func CheckBinlogPlayerVars(t *testing.T, vttablet cluster.Vttablet, sourceShards
 	tabletVars := vttablet.VttabletProcess.GetVars()
 
 	assert.Contains(t, tabletVars, "VReplicationStreamCount")
-	// DEPRECATED
+	// DEPRECATED, can be deleted after v12.0
 	assert.Contains(t, tabletVars, "VReplicationSecondsBehindMasterMax")
 	assert.Contains(t, tabletVars, "VReplicationSecondsBehindMaster")
 
@@ -167,12 +167,12 @@ func CheckBinlogPlayerVars(t *testing.T, vttablet cluster.Vttablet, sourceShards
 	}
 
 	if replicationLagSeconds != 0 {
-		vreplicationLagMaxStr := fmt.Sprintf("%v", reflect.ValueOf(tabletVars["VReplicationSecondsBehindMasterMax"]))
+		vreplicationLagMaxStr := fmt.Sprintf("%v", reflect.ValueOf(tabletVars["VReplicationLagSecondsMax"]))
 		vreplicationLagMax, _ := strconv.ParseFloat(vreplicationLagMaxStr, 64)
 
 		assert.True(t, vreplicationLagMax < float64(replicationLagSeconds))
 
-		replicationLagObj := reflect.ValueOf(tabletVars["VReplicationSecondsBehindMaster"])
+		replicationLagObj := reflect.ValueOf(tabletVars["VReplicationLagSeconds"])
 		for _, key := range replicationSourceObj.MapKeys() {
 			str := fmt.Sprintf("%v", replicationLagObj.MapIndex(key))
 			flt, _ := strconv.ParseFloat(str, 64)
@@ -188,7 +188,7 @@ func checkStreamHealthEqualsBinlogPlayerVars(t *testing.T, vttablet cluster.Vtta
 	streamCountStr := fmt.Sprintf("%v", reflect.ValueOf(tabletVars["VReplicationStreamCount"]))
 	streamCount, _ := strconv.Atoi(streamCountStr)
 	log.Infof(">>>>>>>>>>>>>>>>>> tabletVars are %+v", tabletVars)
-	vreplicationLagMaxStr := fmt.Sprintf("%v", reflect.ValueOf(tabletVars["VReplicationSecondsBehindMasterMax"]))
+	vreplicationLagMaxStr := fmt.Sprintf("%v", reflect.ValueOf(tabletVars["VReplicationLagSecondsMax"]))
 	vreplicationLagMax, _ := strconv.ParseFloat(vreplicationLagMaxStr, 64)
 
 	assert.Equal(t, streamCount, count)

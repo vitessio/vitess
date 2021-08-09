@@ -219,7 +219,7 @@ func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, params BackupP
 	if semiSyncSource || semiSyncReplica {
 		// Only do this if one of them was on, since both being off could mean
 		// the plugin isn't even loaded, and the server variables don't exist.
-		params.Logger.Infof("restoring semi-sync settings from before backup: master=%v, replica=%v",
+		params.Logger.Infof("restoring semi-sync settings from before backup: primary=%v, replica=%v",
 			semiSyncSource, semiSyncReplica)
 		err := params.Mysqld.SetSemiSyncEnabled(semiSyncSource, semiSyncReplica)
 		if err != nil {
@@ -627,19 +627,20 @@ func getPrimaryPosition(ctx context.Context, tmc tmclient.TabletManagerClient, t
 		return mysql.Position{}, vterrors.Wrap(err, "can't read shard")
 	}
 	if topoproto.TabletAliasIsZero(si.PrimaryAlias) {
-		return mysql.Position{}, fmt.Errorf("shard %v/%v has no master", keyspace, shard)
+		return mysql.Position{}, fmt.Errorf("shard %v/%v has no primary", keyspace, shard)
 	}
 	ti, err := ts.GetTablet(ctx, si.PrimaryAlias)
 	if err != nil {
-		return mysql.Position{}, fmt.Errorf("can't get master tablet record %v: %v", topoproto.TabletAliasString(si.PrimaryAlias), err)
+		return mysql.Position{}, fmt.Errorf("can't get primary tablet record %v: %v", topoproto.TabletAliasString(si.PrimaryAlias), err)
 	}
+	// TODO(deepthi): fix after v12.0
 	posStr, err := tmc.MasterPosition(ctx, ti.Tablet)
 	if err != nil {
-		return mysql.Position{}, fmt.Errorf("can't get master replication position: %v", err)
+		return mysql.Position{}, fmt.Errorf("can't get primary replication position: %v", err)
 	}
 	pos, err := mysql.DecodePosition(posStr)
 	if err != nil {
-		return mysql.Position{}, fmt.Errorf("can't decode master replication position %q: %v", posStr, err)
+		return mysql.Position{}, fmt.Errorf("can't decode primary replication position %q: %v", posStr, err)
 	}
 	return pos, nil
 }

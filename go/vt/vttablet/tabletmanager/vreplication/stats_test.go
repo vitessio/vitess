@@ -40,7 +40,7 @@ VReplication state: Open</br>
     <th>State</th>
     <th>Stop Position</th>
     <th>Last Position</th>
-    <th>Seconds Behind Master</th>
+    <th>VReplication Lag</th>
     <th>Counts</th>
     <th>Rates</th>
     <th>Last Message</th>

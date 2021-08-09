@@ -96,7 +96,7 @@ func (p vreplicationPlanner) dryRun(ctx context.Context) error {
 	table.SetHeader([]string{"Tablet", "ID", "BinLogSource", "State", "DBName", "Current GTID"})
 	for _, master := range p.vx.masters {
 		key := fmt.Sprintf("%s/%s", master.Shard, master.AliasString())
-		for _, stream := range rsr.ShardStatuses[key].MasterReplicationStatuses {
+		for _, stream := range rsr.ShardStatuses[key].PrimaryReplicationStatuses {
 			table.Append([]string{key, fmt.Sprintf("%d", stream.ID), stream.Bls.String(), stream.State, stream.DBName, stream.Pos})
 		}
 	}

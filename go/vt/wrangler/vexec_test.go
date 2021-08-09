@@ -213,7 +213,7 @@ func TestWorkflowListStreams(t *testing.T) {
 	"MaxVReplicationLag": 0,
 	"ShardStatuses": {
 		"-80/zone1-0000000200": {
-			"MasterReplicationStatuses": [
+			"PrimaryReplicationStatuses": [
 				{
 					"Shard": "-80",
 					"Tablet": "zone1-0000000200",
@@ -246,10 +246,10 @@ func TestWorkflowListStreams(t *testing.T) {
 				}
 			],
 			"TabletControls": null,
-			"MasterIsServing": true
+			"PrimaryIsServing": true
 		},
 		"80-/zone1-0000000210": {
-			"MasterReplicationStatuses": [
+			"PrimaryReplicationStatuses": [
 				{
 					"Shard": "80-",
 					"Tablet": "zone1-0000000210",
@@ -282,7 +282,7 @@ func TestWorkflowListStreams(t *testing.T) {
 				}
 			],
 			"TabletControls": null,
-			"MasterIsServing": true
+			"PrimaryIsServing": true
 		}
 	}
 }

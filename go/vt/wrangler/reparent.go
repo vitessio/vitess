@@ -191,9 +191,9 @@ func (wr *Wrangler) TabletExternallyReparented(ctx context.Context, newMasterAli
 
 		// Create a reusable Reparent event with available info.
 		ev := &events.Reparent{
-			ShardInfo: *si,
-			NewMaster: tablet,
-			OldMaster: &topodatapb.Tablet{
+			ShardInfo:  *si,
+			NewPrimary: tablet,
+			OldPrimary: &topodatapb.Tablet{
 				Alias: si.PrimaryAlias,
 				Type:  topodatapb.TabletType_PRIMARY,
 			},

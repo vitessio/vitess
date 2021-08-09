@@ -108,7 +108,7 @@ func (wr *Wrangler) ValidateVersionShard(ctx context.Context, keyspace, shard st
 	}
 
 	// get version from the primary, or error
-	if !si.HasMaster() {
+	if !si.HasPrimary() {
 		return fmt.Errorf("no master in shard %v/%v", keyspace, shard)
 	}
 	log.Infof("Gathering version for master %v", topoproto.TabletAliasString(si.PrimaryAlias))
@@ -165,7 +165,7 @@ func (wr *Wrangler) ValidateVersionKeyspace(ctx context.Context, keyspace string
 	if err != nil {
 		return err
 	}
-	if !si.HasMaster() {
+	if !si.HasPrimary() {
 		return fmt.Errorf("no master in shard %v/%v", keyspace, shards[0])
 	}
 	referenceAlias := si.PrimaryAlias

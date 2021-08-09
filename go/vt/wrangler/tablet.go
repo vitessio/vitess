@@ -43,7 +43,7 @@ import (
 // allowUpdate is true, and a tablet with the same ID exists, just update it.
 // If a tablet is created as primary, and there is already a different
 // primary in the shard, allowMasterOverride must be set.
-func (wr *Wrangler) InitTablet(ctx context.Context, tablet *topodatapb.Tablet, allowMasterOverride, createShardAndKeyspace, allowUpdate bool) error {
+func (wr *Wrangler) InitTablet(ctx context.Context, tablet *topodatapb.Tablet, allowPrimaryOverride, createShardAndKeyspace, allowUpdate bool) error {
 	shard, kr, err := topo.ValidateShardName(tablet.Shard)
 	if err != nil {
 		return err
@@ -71,7 +71,7 @@ func (wr *Wrangler) InitTablet(ctx context.Context, tablet *topodatapb.Tablet, a
 	if !key.KeyRangeEqual(si.KeyRange, tablet.KeyRange) {
 		return fmt.Errorf("shard %v/%v has a different KeyRange: %v != %v", tablet.Keyspace, tablet.Shard, si.KeyRange, tablet.KeyRange)
 	}
-	if tablet.Type == topodatapb.TabletType_PRIMARY && si.HasMaster() && !topoproto.TabletAliasEqual(si.PrimaryAlias, tablet.Alias) && !allowMasterOverride {
+	if tablet.Type == topodatapb.TabletType_PRIMARY && si.HasPrimary() && !topoproto.TabletAliasEqual(si.PrimaryAlias, tablet.Alias) && !allowPrimaryOverride {
 		return fmt.Errorf("creating this tablet would override old master %v in shard %v/%v, use allow_master_override flag", topoproto.TabletAliasString(si.PrimaryAlias), tablet.Keyspace, tablet.Shard)
 	}
 

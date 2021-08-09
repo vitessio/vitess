@@ -174,7 +174,7 @@ type TabletManagerClient interface {
 
 	// PopulateReparentJournal asks the primary to insert a row in
 	// its reparent_journal table.
-	PopulateReparentJournal(ctx context.Context, tablet *topodatapb.Tablet, timeCreatedNS int64, actionName string, masterAlias *topodatapb.TabletAlias, pos string) error
+	PopulateReparentJournal(ctx context.Context, tablet *topodatapb.Tablet, timeCreatedNS int64, actionName string, tabletAlias *topodatapb.TabletAlias, pos string) error
 
 	// InitReplica tells a tablet to start replicating from the
 	// passed in primary tablet alias, and wait for the row in the
@@ -225,7 +225,7 @@ type TabletManagerClient interface {
 	//
 
 	// Backup creates a database backup
-	Backup(ctx context.Context, tablet *topodatapb.Tablet, concurrency int, allowMaster bool) (logutil.EventStream, error)
+	Backup(ctx context.Context, tablet *topodatapb.Tablet, concurrency int, allowPrimary bool) (logutil.EventStream, error)
 
 	// RestoreFromBackup deletes local data and restores database from backup
 	RestoreFromBackup(ctx context.Context, tablet *topodatapb.Tablet) (logutil.EventStream, error)

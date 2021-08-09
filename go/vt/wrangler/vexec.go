@@ -359,12 +359,12 @@ type ReplicationLocation struct {
 
 // ShardReplicationStatus holds relevant vreplication related info for the given shard.
 type ShardReplicationStatus struct {
-	// MasterReplicationStatuses represents all of the replication statuses for the primary tablets in the given shard.
-	MasterReplicationStatuses []*ReplicationStatus
+	// PrimaryReplicationStatuses represents all of the replication statuses for the primary tablets in the given shard.
+	PrimaryReplicationStatuses []*ReplicationStatus
 	// TabletControls represents the tablet controls for the tablets in the shard.
 	TabletControls []*topodatapb.Shard_TabletControl
-	// MasterIsServing indicates whether the primary tablet of the given shard is currently serving write traffic.
-	MasterIsServing bool
+	// PrimaryIsServing indicates whether the primary tablet of the given shard is currently serving write traffic.
+	PrimaryIsServing bool
 }
 
 type copyState struct {
@@ -507,9 +507,9 @@ func (wr *Wrangler) getStreams(ctx context.Context, workflow, keyspace string) (
 		}
 		targetShards.Insert(si.ShardName())
 		rsr.ShardStatuses[fmt.Sprintf("%s/%s", master.Shard, master.AliasString())] = &ShardReplicationStatus{
-			MasterReplicationStatuses: rsrStatus,
-			TabletControls:            si.TabletControls,
-			MasterIsServing:           si.IsPrimaryServing,
+			PrimaryReplicationStatuses: rsrStatus,
+			TabletControls:             si.TabletControls,
+			PrimaryIsServing:           si.IsPrimaryServing,
 		}
 	}
 	rsr.SourceLocation = ReplicationLocation{

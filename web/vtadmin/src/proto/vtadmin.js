@@ -32762,7 +32762,7 @@ $root.tabletmanagerdata = (function() {
          * @interface IPopulateReparentJournalRequest
          * @property {number|Long|null} [time_created_ns] PopulateReparentJournalRequest time_created_ns
          * @property {string|null} [action_name] PopulateReparentJournalRequest action_name
-         * @property {topodata.ITabletAlias|null} [master_alias] PopulateReparentJournalRequest master_alias
+         * @property {topodata.ITabletAlias|null} [primary_alias] PopulateReparentJournalRequest primary_alias
          * @property {string|null} [replication_position] PopulateReparentJournalRequest replication_position
          */
 
@@ -32798,12 +32798,12 @@ $root.tabletmanagerdata = (function() {
         PopulateReparentJournalRequest.prototype.action_name = "";
 
         /**
-         * PopulateReparentJournalRequest master_alias.
-         * @member {topodata.ITabletAlias|null|undefined} master_alias
+         * PopulateReparentJournalRequest primary_alias.
+         * @member {topodata.ITabletAlias|null|undefined} primary_alias
          * @memberof tabletmanagerdata.PopulateReparentJournalRequest
          * @instance
          */
-        PopulateReparentJournalRequest.prototype.master_alias = null;
+        PopulateReparentJournalRequest.prototype.primary_alias = null;
 
         /**
          * PopulateReparentJournalRequest replication_position.
@@ -32841,8 +32841,8 @@ $root.tabletmanagerdata = (function() {
                 writer.uint32(/* id 1, wireType 0 =*/8).int64(message.time_created_ns);
             if (message.action_name != null && Object.hasOwnProperty.call(message, "action_name"))
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.action_name);
-            if (message.master_alias != null && Object.hasOwnProperty.call(message, "master_alias"))
-                $root.topodata.TabletAlias.encode(message.master_alias, writer.uint32(/* id 3, wireType 2 =*/26).fork()).ldelim();
+            if (message.primary_alias != null && Object.hasOwnProperty.call(message, "primary_alias"))
+                $root.topodata.TabletAlias.encode(message.primary_alias, writer.uint32(/* id 3, wireType 2 =*/26).fork()).ldelim();
             if (message.replication_position != null && Object.hasOwnProperty.call(message, "replication_position"))
                 writer.uint32(/* id 4, wireType 2 =*/34).string(message.replication_position);
             return writer;
@@ -32886,7 +32886,7 @@ $root.tabletmanagerdata = (function() {
                     message.action_name = reader.string();
                     break;
                 case 3:
-                    message.master_alias = $root.topodata.TabletAlias.decode(reader, reader.uint32());
+                    message.primary_alias = $root.topodata.TabletAlias.decode(reader, reader.uint32());
                     break;
                 case 4:
                     message.replication_position = reader.string();
@@ -32932,10 +32932,10 @@ $root.tabletmanagerdata = (function() {
             if (message.action_name != null && message.hasOwnProperty("action_name"))
                 if (!$util.isString(message.action_name))
                     return "action_name: string expected";
-            if (message.master_alias != null && message.hasOwnProperty("master_alias")) {
-                var error = $root.topodata.TabletAlias.verify(message.master_alias);
+            if (message.primary_alias != null && message.hasOwnProperty("primary_alias")) {
+                var error = $root.topodata.TabletAlias.verify(message.primary_alias);
                 if (error)
-                    return "master_alias." + error;
+                    return "primary_alias." + error;
             }
             if (message.replication_position != null && message.hasOwnProperty("replication_position"))
                 if (!$util.isString(message.replication_position))
@@ -32966,10 +32966,10 @@ $root.tabletmanagerdata = (function() {
                     message.time_created_ns = new $util.LongBits(object.time_created_ns.low >>> 0, object.time_created_ns.high >>> 0).toNumber();
             if (object.action_name != null)
                 message.action_name = String(object.action_name);
-            if (object.master_alias != null) {
-                if (typeof object.master_alias !== "object")
-                    throw TypeError(".tabletmanagerdata.PopulateReparentJournalRequest.master_alias: object expected");
-                message.master_alias = $root.topodata.TabletAlias.fromObject(object.master_alias);
+            if (object.primary_alias != null) {
+                if (typeof object.primary_alias !== "object")
+                    throw TypeError(".tabletmanagerdata.PopulateReparentJournalRequest.primary_alias: object expected");
+                message.primary_alias = $root.topodata.TabletAlias.fromObject(object.primary_alias);
             }
             if (object.replication_position != null)
                 message.replication_position = String(object.replication_position);
@@ -32996,7 +32996,7 @@ $root.tabletmanagerdata = (function() {
                 } else
                     object.time_created_ns = options.longs === String ? "0" : 0;
                 object.action_name = "";
-                object.master_alias = null;
+                object.primary_alias = null;
                 object.replication_position = "";
             }
             if (message.time_created_ns != null && message.hasOwnProperty("time_created_ns"))
@@ -33006,8 +33006,8 @@ $root.tabletmanagerdata = (function() {
                     object.time_created_ns = options.longs === String ? $util.Long.prototype.toString.call(message.time_created_ns) : options.longs === Number ? new $util.LongBits(message.time_created_ns.low >>> 0, message.time_created_ns.high >>> 0).toNumber() : message.time_created_ns;
             if (message.action_name != null && message.hasOwnProperty("action_name"))
                 object.action_name = message.action_name;
-            if (message.master_alias != null && message.hasOwnProperty("master_alias"))
-                object.master_alias = $root.topodata.TabletAlias.toObject(message.master_alias, options);
+            if (message.primary_alias != null && message.hasOwnProperty("primary_alias"))
+                object.primary_alias = $root.topodata.TabletAlias.toObject(message.primary_alias, options);
             if (message.replication_position != null && message.hasOwnProperty("replication_position"))
                 object.replication_position = message.replication_position;
             return object;
@@ -36172,7 +36172,7 @@ $root.tabletmanagerdata = (function() {
          * @memberof tabletmanagerdata
          * @interface IBackupRequest
          * @property {number|Long|null} [concurrency] BackupRequest concurrency
-         * @property {boolean|null} [allowMaster] BackupRequest allowMaster
+         * @property {boolean|null} [allow_primary] BackupRequest allow_primary
          */
 
         /**
@@ -36199,12 +36199,12 @@ $root.tabletmanagerdata = (function() {
         BackupRequest.prototype.concurrency = $util.Long ? $util.Long.fromBits(0,0,false) : 0;
 
         /**
-         * BackupRequest allowMaster.
-         * @member {boolean} allowMaster
+         * BackupRequest allow_primary.
+         * @member {boolean} allow_primary
          * @memberof tabletmanagerdata.BackupRequest
          * @instance
          */
-        BackupRequest.prototype.allowMaster = false;
+        BackupRequest.prototype.allow_primary = false;
 
         /**
          * Creates a new BackupRequest instance using the specified properties.
@@ -36232,8 +36232,8 @@ $root.tabletmanagerdata = (function() {
                 writer = $Writer.create();
             if (message.concurrency != null && Object.hasOwnProperty.call(message, "concurrency"))
                 writer.uint32(/* id 1, wireType 0 =*/8).int64(message.concurrency);
-            if (message.allowMaster != null && Object.hasOwnProperty.call(message, "allowMaster"))
-                writer.uint32(/* id 2, wireType 0 =*/16).bool(message.allowMaster);
+            if (message.allow_primary != null && Object.hasOwnProperty.call(message, "allow_primary"))
+                writer.uint32(/* id 2, wireType 0 =*/16).bool(message.allow_primary);
             return writer;
         };
 
@@ -36272,7 +36272,7 @@ $root.tabletmanagerdata = (function() {
                     message.concurrency = reader.int64();
                     break;
                 case 2:
-                    message.allowMaster = reader.bool();
+                    message.allow_primary = reader.bool();
                     break;
                 default:
                     reader.skipType(tag & 7);
@@ -36312,9 +36312,9 @@ $root.tabletmanagerdata = (function() {
             if (message.concurrency != null && message.hasOwnProperty("concurrency"))
                 if (!$util.isInteger(message.concurrency) && !(message.concurrency && $util.isInteger(message.concurrency.low) && $util.isInteger(message.concurrency.high)))
                     return "concurrency: integer|Long expected";
-            if (message.allowMaster != null && message.hasOwnProperty("allowMaster"))
-                if (typeof message.allowMaster !== "boolean")
-                    return "allowMaster: boolean expected";
+            if (message.allow_primary != null && message.hasOwnProperty("allow_primary"))
+                if (typeof message.allow_primary !== "boolean")
+                    return "allow_primary: boolean expected";
             return null;
         };
 
@@ -36339,8 +36339,8 @@ $root.tabletmanagerdata = (function() {
                     message.concurrency = object.concurrency;
                 else if (typeof object.concurrency === "object")
                     message.concurrency = new $util.LongBits(object.concurrency.low >>> 0, object.concurrency.high >>> 0).toNumber();
-            if (object.allowMaster != null)
-                message.allowMaster = Boolean(object.allowMaster);
+            if (object.allow_primary != null)
+                message.allow_primary = Boolean(object.allow_primary);
             return message;
         };
 
@@ -36363,15 +36363,15 @@ $root.tabletmanagerdata = (function() {
                     object.concurrency = options.longs === String ? long.toString() : options.longs === Number ? long.toNumber() : long;
                 } else
                     object.concurrency = options.longs === String ? "0" : 0;
-                object.allowMaster = false;
+                object.allow_primary = false;
             }
             if (message.concurrency != null && message.hasOwnProperty("concurrency"))
                 if (typeof message.concurrency === "number")
                     object.concurrency = options.longs === String ? String(message.concurrency) : message.concurrency;
                 else
                     object.concurrency = options.longs === String ? $util.Long.prototype.toString.call(message.concurrency) : options.longs === Number ? new $util.LongBits(message.concurrency.low >>> 0, message.concurrency.high >>> 0).toNumber() : message.concurrency;
-            if (message.allowMaster != null && message.hasOwnProperty("allowMaster"))
-                object.allowMaster = message.allowMaster;
+            if (message.allow_primary != null && message.hasOwnProperty("allow_primary"))
+                object.allow_primary = message.allow_primary;
             return object;
         };
 

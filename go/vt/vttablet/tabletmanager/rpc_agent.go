@@ -118,7 +118,7 @@ type RPCTM interface {
 
 	InitPrimary(ctx context.Context) (string, error)
 
-	PopulateReparentJournal(ctx context.Context, timeCreatedNS int64, actionName string, masterAlias *topodatapb.TabletAlias, pos string) error
+	PopulateReparentJournal(ctx context.Context, timeCreatedNS int64, actionName string, tabletAlias *topodatapb.TabletAlias, pos string) error
 
 	InitReplica(ctx context.Context, parent *topodatapb.TabletAlias, replicationPosition string, timeCreatedNS int64) error
 
@@ -147,7 +147,7 @@ type RPCTM interface {
 
 	// Backup / restore related methods
 
-	Backup(ctx context.Context, concurrency int, logger logutil.Logger, allowMaster bool) error
+	Backup(ctx context.Context, concurrency int, logger logutil.Logger, allowPrimary bool) error
 
 	RestoreFromBackup(ctx context.Context, logger logutil.Logger) error
 
