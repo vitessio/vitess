@@ -230,9 +230,9 @@ func demotePrimaryTablet() (err error) {
 }
 
 // startVtorc is used to start the orchestrator with the given extra arguments
-func startVtorc(t *testing.T, orcExtraArgs []string) {
+func startVtorc(t *testing.T, orcExtraArgs []string, pathToConfig string) {
 	// Start vtorc
-	clusterInstance.VtorcProcess = clusterInstance.NewOrcProcess(path.Join(os.Getenv("PWD"), "test_config.json"))
+	clusterInstance.VtorcProcess = clusterInstance.NewOrcProcess(pathToConfig)
 	clusterInstance.VtorcProcess.ExtraArgs = orcExtraArgs
 	err := clusterInstance.VtorcProcess.Setup()
 	require.NoError(t, err)
@@ -249,7 +249,7 @@ func stopVtorc(t *testing.T) {
 }
 
 // setupVttabletsAndVtorc is used to setup the vttablets and start the orchestrator
-func setupVttabletsAndVtorc(t *testing.T, numReplicasReqCell1 int, numRdonlyReqCell1 int, numReplicasReqCell2 int, numRdonlyReqCell2 int, orcExtraArgs []string) {
+func setupVttabletsAndVtorc(t *testing.T, numReplicasReqCell1, numRdonlyReqCell1, numReplicasReqCell2, numRdonlyReqCell2 int, orcExtraArgs []string, pathToConfig string) {
 	// stop vtorc if it is running
 	stopVtorc(t)
 
@@ -312,8 +312,11 @@ func setupVttabletsAndVtorc(t *testing.T, numReplicasReqCell1 int, numRdonlyReqC
 		require.NoError(t, err)
 	}
 
+	if pathToConfig == "" {
+		pathToConfig = path.Join(os.Getenv("PWD"), "test_config.json")
+	}
 	// start vtorc
-	startVtorc(t, orcExtraArgs)
+	startVtorc(t, orcExtraArgs, pathToConfig)
 }
 
 func cleanAndStartVttablet(t *testing.T, vttablet *cluster.Vttablet) error {
