@@ -30,7 +30,7 @@ import (
 // covers the test case master-failover from orchestrator
 func TestDownPrimary(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	setupVttabletsAndVtorc(t, 2, 0, 0, 0, nil)
+	setupVttabletsAndVtorc(t, 2, 0, 0, 0, nil, "")
 	keyspace := &clusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 	// find primary from topo
@@ -58,7 +58,7 @@ func TestDownPrimary(t *testing.T) {
 // covers part of the test case master-failover-lost-replicas from orchestrator
 func TestCrossDataCenterFailure(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	setupVttabletsAndVtorc(t, 2, 1, 0, 0, nil)
+	setupVttabletsAndVtorc(t, 2, 1, 0, 0, nil, "")
 	keyspace := &clusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 	// find primary from topo
@@ -94,7 +94,7 @@ func TestCrossDataCenterFailure(t *testing.T) {
 // covers part of the test case master-failover-lost-replicas from orchestrator
 func TestLostReplicasOnPrimaryFailure(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	setupVttabletsAndVtorc(t, 2, 1, 0, 0, nil)
+	setupVttabletsAndVtorc(t, 2, 1, 0, 0, nil, "")
 	keyspace := &clusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 	// find primary from topo
