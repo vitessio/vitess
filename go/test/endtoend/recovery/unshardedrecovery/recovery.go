@@ -118,7 +118,7 @@ SET GLOBAL old_alter_table = ON;
 		for i := 0; i < 4; i++ {
 			tabletType := "replica"
 			if i == 0 {
-				tabletType = "master"
+				tabletType = "primary"
 			}
 			tablet := localCluster.NewVttabletInstance(tabletType, 0, cell)
 			tablet.VttabletProcess = localCluster.VtprocessInstanceFromVttablet(tablet, shard.Name, keyspaceName)
@@ -276,7 +276,7 @@ func TestRecoveryImpl(t *testing.T) {
 	localCluster.VtgateGrpcPort = vtgateInstance.GrpcPort
 	assert.NoError(t, err)
 	defer vtgateInstance.TearDown()
-	err = vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.master", keyspaceName, shardName), 1)
+	err = vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", keyspaceName, shardName), 1)
 	assert.NoError(t, err)
 	err = vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", keyspaceName, shardName), 1)
 	assert.NoError(t, err)

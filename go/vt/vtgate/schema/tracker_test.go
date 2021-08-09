@@ -42,7 +42,7 @@ func TestTracking(t *testing.T) {
 	target := &querypb.Target{
 		Keyspace:   "ks",
 		Shard:      "-80",
-		TabletType: topodatapb.TabletType_MASTER,
+		TabletType: topodatapb.TabletType_PRIMARY,
 		Cell:       "aa",
 	}
 	tablet := &topodatapb.Tablet{
@@ -196,7 +196,7 @@ func TestTrackingUnHealthyTablet(t *testing.T) {
 	target := &querypb.Target{
 		Keyspace:   "ks",
 		Shard:      "-80",
-		TabletType: topodatapb.TabletType_MASTER,
+		TabletType: topodatapb.TabletType_PRIMARY,
 		Cell:       "aa",
 	}
 	tablet := &topodatapb.Tablet{

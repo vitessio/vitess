@@ -67,7 +67,7 @@ func buildShowBasicPlan(show *sqlparser.ShowBasic, vschema ContextVSchema) (engi
 	case sqlparser.OpenTable, sqlparser.TableStatus, sqlparser.Table, sqlparser.Trigger:
 		return buildPlanWithDB(show, vschema)
 	case sqlparser.StatusGlobal, sqlparser.StatusSession:
-		return engine.NewRowsPrimitive(make([][]sqltypes.Value, 0, 2), buildVarCharFields("Variable_name", "Value")), nil
+		return buildSendAnywherePlan(show, vschema)
 	case sqlparser.VitessMigrations:
 		return buildShowVMigrationsPlan(show, vschema)
 	case sqlparser.VGtidExecGlobal:
@@ -206,7 +206,7 @@ func buildShowVMigrationsPlan(show *sqlparser.ShowBasic, vschema ContextVSchema)
 		return nil, vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.NoDB, "No database selected: use keyspace<:shard><@type> or keyspace<[range]><@type> (<> are optional)")
 	}
 
-	if tabletType != topodatapb.TabletType_MASTER {
+	if tabletType != topodatapb.TabletType_PRIMARY {
 		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "show vitess_migrations works only on primary tablet")
 	}
 
@@ -505,7 +505,7 @@ func buildShowVGtidPlan(show *sqlparser.ShowBasic, vschema ContextVSchema) (engi
 	}
 	return &engine.OrderedAggregate{
 		PreProcess: true,
-		Aggregates: []engine.AggregateParams{
+		Aggregates: []*engine.AggregateParams{
 			{
 				Opcode: engine.AggregateGtid,
 				Col:    1,

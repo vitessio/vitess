@@ -108,10 +108,6 @@ Gen4 plan same as above
 "unsupported: only one expression allowed inside aggregates: count(a, b)"
 Gen4 error: aggregate functions take a single argument 'count(a, b)'
 
-# Cannot have more than one aggr(distinct...
-"select count(distinct a), count(distinct b) from user"
-"unsupported: only one distinct aggregation allowed in a select: count(distinct b)"
-
 # scatter aggregate symtab lookup error
 "select id, b as id, count(*) from user order by id"
 "ambiguous symbol reference: id"
@@ -409,7 +405,7 @@ Gen4 plan same as above
 # create view with Cannot auto-resolve for cross-shard joins
 "create view user.view_a as select col from user join user_extra"
 "symbol col not found"
-Gen4 error: Complex select queries are not supported in create or alter view statements
+Gen4 error: Column 'col' in field list is ambiguous
 
 # create view with join that cannot be served in each shard separately
 "create view user.view_a as select user_extra.id from user join user_extra"
@@ -482,3 +478,13 @@ Gen4 plan same as above
   }
 }
 Gen4 error: In aggregated query without GROUP BY, expression of SELECT list contains nonaggregated column 'id'; this is incompatible with sql_mode=only_full_group_by
+
+# avg function on scatter query
+"select avg(id) from user"
+"unsupported: in scatter query: complex aggregate expression"
+Gen4 plan same as above
+
+# scatter aggregate with ambiguous aliases
+"select distinct a, b as a from user"
+"generating order by clause: ambiguous symbol reference: a"
+Gen4 plan same as above

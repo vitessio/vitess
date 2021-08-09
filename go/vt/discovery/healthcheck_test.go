@@ -84,11 +84,11 @@ func TestHealthCheck(t *testing.T) {
 
 	// Immediately after AddTablet() there will be the first notification.
 	want := &TabletHealth{
-		Tablet:              tablet,
-		Target:              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
-		Serving:             false,
-		Stats:               nil,
-		MasterTermStartTime: 0,
+		Tablet:               tablet,
+		Target:               &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Serving:              false,
+		Stats:                nil,
+		PrimaryTermStartTime: 0,
 	}
 	result := <-resultChan
 	mustMatch(t, want, result, "Wrong TabletHealth data")
@@ -104,11 +104,11 @@ func TestHealthCheck(t *testing.T) {
 	input <- shr
 	result = <-resultChan
 	want = &TabletHealth{
-		Tablet:              tablet,
-		Target:              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
-		Serving:             true,
-		Stats:               &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.5},
-		MasterTermStartTime: 0,
+		Tablet:               tablet,
+		Target:               &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Serving:              true,
+		Stats:                &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.5},
+		PrimaryTermStartTime: 0,
 	}
 	// create a context with timeout and select on it and channel
 	mustMatch(t, want, result, "Wrong TabletHealth data")
@@ -118,11 +118,11 @@ func TestHealthCheck(t *testing.T) {
 		Cell:   "cell",
 		Target: want.Target,
 		TabletsStats: TabletStatsList{{
-			Tablet:              tablet,
-			Target:              want.Target,
-			Serving:             true,
-			Stats:               &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.5},
-			MasterTermStartTime: 0,
+			Tablet:               tablet,
+			Target:               want.Target,
+			Serving:              true,
+			Stats:                &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.5},
+			PrimaryTermStartTime: 0,
 		}},
 	}}
 	// we can't use assert.Equal here because of the special way we want to compare equality
@@ -132,7 +132,7 @@ func TestHealthCheck(t *testing.T) {
 	// TabletType changed, should get both old and new event
 	shr = &querypb.StreamHealthResponse{
 		TabletAlias:                         tablet.Alias,
-		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
+		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_PRIMARY},
 		Serving:                             true,
 		TabletExternallyReparentedTimestamp: 10,
 		RealtimeStats:                       &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.2},
@@ -142,20 +142,20 @@ func TestHealthCheck(t *testing.T) {
 		Target: &querypb.Target{
 			Keyspace:   "k",
 			Shard:      "s",
-			TabletType: topodatapb.TabletType_MASTER,
+			TabletType: topodatapb.TabletType_PRIMARY,
 		},
-		Serving:             true,
-		Conn:                conn,
-		Stats:               &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.2},
-		MasterTermStartTime: 10,
+		Serving:              true,
+		Conn:                 conn,
+		Stats:                &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.2},
+		PrimaryTermStartTime: 10,
 	}
 	input <- shr
 	result = <-resultChan
 
 	mustMatch(t, want, result, "Wrong TabletHealth data")
-	testChecksum(t, 1780128002, hc.stateChecksum())
+	testChecksum(t, 1560849771, hc.stateChecksum())
 
-	err := checkErrorCounter("k", "s", topodatapb.TabletType_MASTER, 0)
+	err := checkErrorCounter("k", "s", topodatapb.TabletType_PRIMARY, 0)
 	require.NoError(t, err, "error checking error counter")
 
 	// Serving & RealtimeStats changed
@@ -167,11 +167,11 @@ func TestHealthCheck(t *testing.T) {
 		RealtimeStats:                       &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.3},
 	}
 	want = &TabletHealth{
-		Tablet:              tablet,
-		Target:              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
-		Serving:             false,
-		Stats:               &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.3},
-		MasterTermStartTime: 0,
+		Tablet:               tablet,
+		Target:               &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Serving:              false,
+		Stats:                &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.3},
+		PrimaryTermStartTime: 0,
 	}
 	input <- shr
 	result = <-resultChan
@@ -187,12 +187,12 @@ func TestHealthCheck(t *testing.T) {
 		RealtimeStats:                       &querypb.RealtimeStats{HealthError: "some error", ReplicationLagSeconds: 1, CpuUsage: 0.3},
 	}
 	want = &TabletHealth{
-		Tablet:              tablet,
-		Target:              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
-		Serving:             false,
-		Stats:               &querypb.RealtimeStats{HealthError: "some error", ReplicationLagSeconds: 1, CpuUsage: 0.3},
-		MasterTermStartTime: 0,
-		LastError:           fmt.Errorf("vttablet error: some error"),
+		Tablet:               tablet,
+		Target:               &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Serving:              false,
+		Stats:                &querypb.RealtimeStats{HealthError: "some error", ReplicationLagSeconds: 1, CpuUsage: 0.3},
+		PrimaryTermStartTime: 0,
+		LastError:            fmt.Errorf("vttablet error: some error"),
 	}
 	input <- shr
 	result = <-resultChan
@@ -219,10 +219,10 @@ func TestHealthCheckStreamError(t *testing.T) {
 
 	// Immediately after AddTablet() there will be the first notification.
 	want := &TabletHealth{
-		Tablet:              tablet,
-		Target:              &querypb.Target{Keyspace: "k", Shard: "s"},
-		Serving:             false,
-		MasterTermStartTime: 0,
+		Tablet:               tablet,
+		Target:               &querypb.Target{Keyspace: "k", Shard: "s"},
+		Serving:              false,
+		PrimaryTermStartTime: 0,
 	}
 	result := <-resultChan
 	mustMatch(t, want, result, "Wrong TabletHealth data")
@@ -236,11 +236,11 @@ func TestHealthCheckStreamError(t *testing.T) {
 		RealtimeStats:                       &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.2},
 	}
 	want = &TabletHealth{
-		Tablet:              tablet,
-		Target:              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
-		Serving:             true,
-		Stats:               &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.2},
-		MasterTermStartTime: 0,
+		Tablet:               tablet,
+		Target:               &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Serving:              true,
+		Stats:                &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.2},
+		PrimaryTermStartTime: 0,
 	}
 	input <- shr
 	result = <-resultChan
@@ -249,12 +249,12 @@ func TestHealthCheckStreamError(t *testing.T) {
 	// Stream error
 	fc.errCh <- fmt.Errorf("some stream error")
 	want = &TabletHealth{
-		Tablet:              tablet,
-		Target:              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
-		Serving:             false,
-		Stats:               &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.2},
-		MasterTermStartTime: 0,
-		LastError:           fmt.Errorf("some stream error"),
+		Tablet:               tablet,
+		Target:               &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Serving:              false,
+		Stats:                &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.2},
+		PrimaryTermStartTime: 0,
+		LastError:            fmt.Errorf("some stream error"),
 	}
 	result = <-resultChan
 	//TODO: figure out how to compare objects that contain errors using utils.MustMatch
@@ -279,10 +279,10 @@ func TestHealthCheckErrorOnPrimary(t *testing.T) {
 
 	// Immediately after AddTablet() there will be the first notification.
 	want := &TabletHealth{
-		Tablet:              tablet,
-		Target:              &querypb.Target{Keyspace: "k", Shard: "s"},
-		Serving:             false,
-		MasterTermStartTime: 0,
+		Tablet:               tablet,
+		Target:               &querypb.Target{Keyspace: "k", Shard: "s"},
+		Serving:              false,
+		PrimaryTermStartTime: 0,
 	}
 	result := <-resultChan
 	mustMatch(t, want, result, "Wrong TabletHealth data")
@@ -290,17 +290,17 @@ func TestHealthCheckErrorOnPrimary(t *testing.T) {
 	// one tablet after receiving a StreamHealthResponse
 	shr := &querypb.StreamHealthResponse{
 		TabletAlias:                         tablet.Alias,
-		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
+		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_PRIMARY},
 		Serving:                             true,
 		TabletExternallyReparentedTimestamp: 10,
 		RealtimeStats:                       &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.2},
 	}
 	want = &TabletHealth{
-		Tablet:              tablet,
-		Target:              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
-		Serving:             true,
-		Stats:               &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.2},
-		MasterTermStartTime: 10,
+		Tablet:               tablet,
+		Target:               &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_PRIMARY},
+		Serving:              true,
+		Stats:                &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.2},
+		PrimaryTermStartTime: 10,
 	}
 	input <- shr
 	result = <-resultChan
@@ -309,18 +309,18 @@ func TestHealthCheckErrorOnPrimary(t *testing.T) {
 	// Stream error
 	fc.errCh <- fmt.Errorf("some stream error")
 	want = &TabletHealth{
-		Tablet:              tablet,
-		Target:              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
-		Serving:             false,
-		Stats:               &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.2},
-		MasterTermStartTime: 10,
-		LastError:           fmt.Errorf("some stream error"),
+		Tablet:               tablet,
+		Target:               &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_PRIMARY},
+		Serving:              false,
+		Stats:                &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.2},
+		PrimaryTermStartTime: 10,
+		LastError:            fmt.Errorf("some stream error"),
 	}
 	result = <-resultChan
 	//TODO: figure out how to compare objects that contain errors using utils.MustMatch
 	assert.True(t, want.DeepEqual(result), "Wrong TabletHealth data\n Expected: %v\n Actual:   %v", want, result)
 	// tablet should be removed from healthy list
-	a := hc.GetHealthyTabletStats(&querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER})
+	a := hc.GetHealthyTabletStats(&querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_PRIMARY})
 	assert.Empty(t, a, "wrong result, expected empty list")
 }
 
@@ -356,7 +356,7 @@ func TestHealthCheckErrorOnPrimaryAfterExternalReparent(t *testing.T) {
 	<-resultChan
 	shr1 := &querypb.StreamHealthResponse{
 		TabletAlias:                         tablet1.Alias,
-		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
+		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_PRIMARY},
 		Serving:                             true,
 		TabletExternallyReparentedTimestamp: 10,
 		RealtimeStats:                       &querypb.RealtimeStats{ReplicationLagSeconds: 0, CpuUsage: 0.2},
@@ -365,18 +365,18 @@ func TestHealthCheckErrorOnPrimaryAfterExternalReparent(t *testing.T) {
 	<-resultChan
 	// tablet 1 is the primary now
 	health := []*TabletHealth{{
-		Tablet:              tablet1,
-		Target:              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
-		Serving:             true,
-		Stats:               &querypb.RealtimeStats{ReplicationLagSeconds: 0, CpuUsage: 0.2},
-		MasterTermStartTime: 10,
+		Tablet:               tablet1,
+		Target:               &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_PRIMARY},
+		Serving:              true,
+		Stats:                &querypb.RealtimeStats{ReplicationLagSeconds: 0, CpuUsage: 0.2},
+		PrimaryTermStartTime: 10,
 	}}
-	a := hc.GetHealthyTabletStats(&querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER})
+	a := hc.GetHealthyTabletStats(&querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_PRIMARY})
 	mustMatch(t, health, a, "unexpected result")
 
 	shr2 = &querypb.StreamHealthResponse{
 		TabletAlias:                         tablet2.Alias,
-		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
+		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_PRIMARY},
 		Serving:                             true,
 		TabletExternallyReparentedTimestamp: 20,
 		RealtimeStats:                       &querypb.RealtimeStats{ReplicationLagSeconds: 0, CpuUsage: 0.2},
@@ -385,20 +385,20 @@ func TestHealthCheckErrorOnPrimaryAfterExternalReparent(t *testing.T) {
 	<-resultChan
 	// reparent: tablet 2 is the primary now
 	health = []*TabletHealth{{
-		Tablet:              tablet2,
-		Target:              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
-		Serving:             true,
-		Stats:               &querypb.RealtimeStats{ReplicationLagSeconds: 0, CpuUsage: 0.2},
-		MasterTermStartTime: 20,
+		Tablet:               tablet2,
+		Target:               &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_PRIMARY},
+		Serving:              true,
+		Stats:                &querypb.RealtimeStats{ReplicationLagSeconds: 0, CpuUsage: 0.2},
+		PrimaryTermStartTime: 20,
 	}}
-	a = hc.GetHealthyTabletStats(&querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER})
+	a = hc.GetHealthyTabletStats(&querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_PRIMARY})
 	mustMatch(t, health, a, "unexpected result")
 
 	// Stream error from tablet 1
 	fc1.errCh <- fmt.Errorf("some stream error")
 	<-resultChan
 	// tablet 2 should still be the master
-	a = hc.GetHealthyTabletStats(&querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER})
+	a = hc.GetHealthyTabletStats(&querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_PRIMARY})
 	mustMatch(t, health, a, "unexpected result")
 }
 
@@ -416,16 +416,16 @@ func TestHealthCheckVerifiesTabletAlias(t *testing.T) {
 
 	// Immediately after AddTablet() there will be the first notification.
 	want := &TabletHealth{
-		Tablet:              tablet,
-		Target:              &querypb.Target{Keyspace: "k", Shard: "s"},
-		Serving:             false,
-		MasterTermStartTime: 0,
+		Tablet:               tablet,
+		Target:               &querypb.Target{Keyspace: "k", Shard: "s"},
+		Serving:              false,
+		PrimaryTermStartTime: 0,
 	}
 	result := <-resultChan
 	mustMatch(t, want, result, "Wrong TabletHealth data")
 
 	input <- &querypb.StreamHealthResponse{
-		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
+		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_PRIMARY},
 		TabletAlias:                         &topodatapb.TabletAlias{Uid: 20, Cell: "cellb"},
 		Serving:                             true,
 		TabletExternallyReparentedTimestamp: 10,
@@ -457,10 +457,10 @@ func TestHealthCheckCloseWaitsForGoRoutines(t *testing.T) {
 
 	// Immediately after AddTablet() there will be the first notification.
 	want := &TabletHealth{
-		Tablet:              tablet,
-		Target:              &querypb.Target{Keyspace: "k", Shard: "s"},
-		Serving:             false,
-		MasterTermStartTime: 0,
+		Tablet:               tablet,
+		Target:               &querypb.Target{Keyspace: "k", Shard: "s"},
+		Serving:              false,
+		PrimaryTermStartTime: 0,
 	}
 	result := <-resultChan
 	mustMatch(t, want, result, "Wrong TabletHealth data")
@@ -479,7 +479,7 @@ func TestHealthCheckCloseWaitsForGoRoutines(t *testing.T) {
 		Serving: true,
 		Stats:   &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.2},
 
-		MasterTermStartTime: 0,
+		PrimaryTermStartTime: 0,
 	}
 	input <- shr
 	result = <-resultChan
@@ -519,10 +519,10 @@ func TestHealthCheckTimeout(t *testing.T) {
 	hc.AddTablet(tablet)
 	// Immediately after AddTablet() there will be the first notification.
 	want := &TabletHealth{
-		Tablet:              tablet,
-		Target:              &querypb.Target{Keyspace: "k", Shard: "s"},
-		Serving:             false,
-		MasterTermStartTime: 0,
+		Tablet:               tablet,
+		Target:               &querypb.Target{Keyspace: "k", Shard: "s"},
+		Serving:              false,
+		PrimaryTermStartTime: 0,
 	}
 	result := <-resultChan
 	mustMatch(t, want, result, "Wrong TabletHealth data")
@@ -536,11 +536,11 @@ func TestHealthCheckTimeout(t *testing.T) {
 		RealtimeStats:                       &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.2},
 	}
 	want = &TabletHealth{
-		Tablet:              tablet,
-		Target:              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
-		Serving:             true,
-		Stats:               &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.2},
-		MasterTermStartTime: 0,
+		Tablet:               tablet,
+		Target:               &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Serving:              true,
+		Stats:                &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.2},
+		PrimaryTermStartTime: 0,
 	}
 	input <- shr
 	result = <-resultChan
@@ -689,11 +689,11 @@ func TestRemoveTablet(t *testing.T) {
 		RealtimeStats:                       &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.2},
 	}
 	want := []*TabletHealth{{
-		Tablet:              tablet,
-		Target:              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
-		Serving:             true,
-		Stats:               &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.2},
-		MasterTermStartTime: 0,
+		Tablet:               tablet,
+		Target:               &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Serving:              true,
+		Stats:                &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.2},
+		PrimaryTermStartTime: 0,
 	}}
 	input <- shr
 	<-resultChan
@@ -723,7 +723,7 @@ func TestGetHealthyTablets(t *testing.T) {
 	// there will be a first result, get and discard it
 	<-resultChan
 	// empty
-	a := hc.GetHealthyTabletStats(&querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER})
+	a := hc.GetHealthyTabletStats(&querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_PRIMARY})
 	assert.Empty(t, a, "wrong result, expected empty list")
 
 	shr := &querypb.StreamHealthResponse{
@@ -734,11 +734,11 @@ func TestGetHealthyTablets(t *testing.T) {
 		RealtimeStats:                       &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.2},
 	}
 	want := []*TabletHealth{{
-		Tablet:              tablet,
-		Target:              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
-		Serving:             true,
-		Stats:               &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.2},
-		MasterTermStartTime: 0,
+		Tablet:               tablet,
+		Target:               &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Serving:              true,
+		Stats:                &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.2},
+		PrimaryTermStartTime: 0,
 	}}
 	input <- shr
 	<-resultChan
@@ -770,11 +770,11 @@ func TestGetHealthyTablets(t *testing.T) {
 		RealtimeStats:                       &querypb.RealtimeStats{ReplicationLagSeconds: 35, CpuUsage: 0.2},
 	}
 	want = []*TabletHealth{{
-		Tablet:              tablet,
-		Target:              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
-		Serving:             true,
-		Stats:               &querypb.RealtimeStats{ReplicationLagSeconds: 35, CpuUsage: 0.2},
-		MasterTermStartTime: 0,
+		Tablet:               tablet,
+		Target:               &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Serving:              true,
+		Stats:                &querypb.RealtimeStats{ReplicationLagSeconds: 35, CpuUsage: 0.2},
+		PrimaryTermStartTime: 0,
 	}}
 	input <- shr
 	// wait for result before checking
@@ -800,17 +800,17 @@ func TestGetHealthyTablets(t *testing.T) {
 		RealtimeStats:                       &querypb.RealtimeStats{ReplicationLagSeconds: 10, CpuUsage: 0.2},
 	}
 	want2 := []*TabletHealth{{
-		Tablet:              tablet,
-		Target:              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
-		Serving:             true,
-		Stats:               &querypb.RealtimeStats{ReplicationLagSeconds: 35, CpuUsage: 0.2},
-		MasterTermStartTime: 0,
+		Tablet:               tablet,
+		Target:               &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Serving:              true,
+		Stats:                &querypb.RealtimeStats{ReplicationLagSeconds: 35, CpuUsage: 0.2},
+		PrimaryTermStartTime: 0,
 	}, {
-		Tablet:              tablet2,
-		Target:              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
-		Serving:             true,
-		Stats:               &querypb.RealtimeStats{ReplicationLagSeconds: 10, CpuUsage: 0.2},
-		MasterTermStartTime: 0,
+		Tablet:               tablet2,
+		Target:               &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Serving:              true,
+		Stats:                &querypb.RealtimeStats{ReplicationLagSeconds: 10, CpuUsage: 0.2},
+		PrimaryTermStartTime: 0,
 	}}
 	input2 <- shr2
 	// wait for result
@@ -838,7 +838,7 @@ func TestGetHealthyTablets(t *testing.T) {
 	// second tablet turns into a master
 	shr2 = &querypb.StreamHealthResponse{
 		TabletAlias: tablet2.Alias,
-		Target:      &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
+		Target:      &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_PRIMARY},
 		Serving:     true,
 
 		TabletExternallyReparentedTimestamp: 10,
@@ -853,20 +853,20 @@ func TestGetHealthyTablets(t *testing.T) {
 	mustMatch(t, want, a, "unexpected result")
 
 	want2 = []*TabletHealth{{
-		Tablet:              tablet2,
-		Target:              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
-		Serving:             true,
-		Stats:               &querypb.RealtimeStats{ReplicationLagSeconds: 0, CpuUsage: 0.2},
-		MasterTermStartTime: 10,
+		Tablet:               tablet2,
+		Target:               &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_PRIMARY},
+		Serving:              true,
+		Stats:                &querypb.RealtimeStats{ReplicationLagSeconds: 0, CpuUsage: 0.2},
+		PrimaryTermStartTime: 10,
 	}}
 	// check we have a master now
-	a = hc.GetHealthyTabletStats(&querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER})
+	a = hc.GetHealthyTabletStats(&querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_PRIMARY})
 	mustMatch(t, want2, a, "unexpected result")
 
 	// reparent: old replica goes into master
 	shr = &querypb.StreamHealthResponse{
 		TabletAlias:                         tablet.Alias,
-		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
+		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_PRIMARY},
 		Serving:                             true,
 		TabletExternallyReparentedTimestamp: 20,
 		RealtimeStats:                       &querypb.RealtimeStats{ReplicationLagSeconds: 0, CpuUsage: 0.2},
@@ -874,23 +874,23 @@ func TestGetHealthyTablets(t *testing.T) {
 	input <- shr
 	<-resultChan
 	want = []*TabletHealth{{
-		Tablet:              tablet,
-		Target:              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
-		Serving:             true,
-		Stats:               &querypb.RealtimeStats{ReplicationLagSeconds: 0, CpuUsage: 0.2},
-		MasterTermStartTime: 20,
+		Tablet:               tablet,
+		Target:               &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_PRIMARY},
+		Serving:              true,
+		Stats:                &querypb.RealtimeStats{ReplicationLagSeconds: 0, CpuUsage: 0.2},
+		PrimaryTermStartTime: 20,
 	}}
 
 	// check we lost all replicas, and master is new one
 	a = hc.GetHealthyTabletStats(&querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA})
 	assert.Empty(t, a, "Wrong number of results")
-	a = hc.GetHealthyTabletStats(&querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER})
+	a = hc.GetHealthyTabletStats(&querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_PRIMARY})
 	mustMatch(t, want, a, "unexpected result")
 
 	// old master sending an old ping should be ignored
 	input2 <- shr2
 	<-resultChan
-	a = hc.GetHealthyTabletStats(&querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER})
+	a = hc.GetHealthyTabletStats(&querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_PRIMARY})
 	mustMatch(t, want, a, "unexpected result")
 }
 
@@ -901,7 +901,7 @@ func TestMasterInOtherCell(t *testing.T) {
 
 	// add a tablet as master in different cell
 	tablet := createTestTablet(1, "cell2", "host1")
-	tablet.Type = topodatapb.TabletType_MASTER
+	tablet.Type = topodatapb.TabletType_PRIMARY
 	input := make(chan *querypb.StreamHealthResponse)
 	fc := createFakeConn(tablet, input)
 	// create a channel and subscribe to healthcheck
@@ -920,17 +920,17 @@ func TestMasterInOtherCell(t *testing.T) {
 
 	shr := &querypb.StreamHealthResponse{
 		TabletAlias:                         tablet.Alias,
-		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
+		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_PRIMARY},
 		Serving:                             true,
 		TabletExternallyReparentedTimestamp: 20,
 		RealtimeStats:                       &querypb.RealtimeStats{ReplicationLagSeconds: 0, CpuUsage: 0.2},
 	}
 	want := &TabletHealth{
-		Tablet:              tablet,
-		Target:              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
-		Serving:             true,
-		Stats:               &querypb.RealtimeStats{ReplicationLagSeconds: 0, CpuUsage: 0.2},
-		MasterTermStartTime: 20,
+		Tablet:               tablet,
+		Target:               &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_PRIMARY},
+		Serving:              true,
+		Stats:                &querypb.RealtimeStats{ReplicationLagSeconds: 0, CpuUsage: 0.2},
+		PrimaryTermStartTime: 20,
 	}
 
 	input <- shr
@@ -946,7 +946,7 @@ func TestMasterInOtherCell(t *testing.T) {
 	}
 
 	// check that MASTER tablet from other cell IS in healthy tablet list
-	a := hc.GetHealthyTabletStats(&querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER})
+	a := hc.GetHealthyTabletStats(&querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_PRIMARY})
 	require.Len(t, a, 1, "")
 	mustMatch(t, want, a[0], "Expecting healthy master")
 }
@@ -982,11 +982,11 @@ func TestReplicaInOtherCell(t *testing.T) {
 		RealtimeStats:                       &querypb.RealtimeStats{ReplicationLagSeconds: 10, CpuUsage: 0.2},
 	}
 	want := &TabletHealth{
-		Tablet:              local,
-		Target:              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
-		Serving:             true,
-		Stats:               &querypb.RealtimeStats{ReplicationLagSeconds: 10, CpuUsage: 0.2},
-		MasterTermStartTime: 0,
+		Tablet:               local,
+		Target:               &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Serving:              true,
+		Stats:                &querypb.RealtimeStats{ReplicationLagSeconds: 10, CpuUsage: 0.2},
+		PrimaryTermStartTime: 0,
 	}
 
 	input <- shr
@@ -1028,11 +1028,11 @@ func TestReplicaInOtherCell(t *testing.T) {
 		RealtimeStats:                       &querypb.RealtimeStats{ReplicationLagSeconds: 10, CpuUsage: 0.2},
 	}
 	want2 := &TabletHealth{
-		Tablet:              remote,
-		Target:              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
-		Serving:             true,
-		Stats:               &querypb.RealtimeStats{ReplicationLagSeconds: 10, CpuUsage: 0.2},
-		MasterTermStartTime: 0,
+		Tablet:               remote,
+		Target:               &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Serving:              true,
+		Stats:                &querypb.RealtimeStats{ReplicationLagSeconds: 10, CpuUsage: 0.2},
+		PrimaryTermStartTime: 0,
 	}
 
 	input2 <- shr2
@@ -1091,11 +1091,11 @@ func TestCellAliases(t *testing.T) {
 		RealtimeStats:                       &querypb.RealtimeStats{ReplicationLagSeconds: 10, CpuUsage: 0.2},
 	}
 	want := []*TabletHealth{{
-		Tablet:              tablet,
-		Target:              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
-		Serving:             true,
-		Stats:               &querypb.RealtimeStats{ReplicationLagSeconds: 10, CpuUsage: 0.2},
-		MasterTermStartTime: 0,
+		Tablet:               tablet,
+		Target:               &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Serving:              true,
+		Stats:                &querypb.RealtimeStats{ReplicationLagSeconds: 10, CpuUsage: 0.2},
+		PrimaryTermStartTime: 0,
 	}}
 
 	input <- shr
@@ -1137,11 +1137,11 @@ func TestTemplate(t *testing.T) {
 	tablet := topo.NewTablet(0, "cell", "a")
 	ts := []*TabletHealth{
 		{
-			Tablet:              tablet,
-			Target:              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
-			Serving:             false,
-			Stats:               &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.3},
-			MasterTermStartTime: 0,
+			Tablet:               tablet,
+			Target:               &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+			Serving:              false,
+			Stats:                &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.3},
+			PrimaryTermStartTime: 0,
 		},
 	}
 	tcs := &TabletsCacheStatus{
@@ -1167,11 +1167,11 @@ func TestDebugURLFormatting(t *testing.T) {
 	tablet := topo.NewTablet(0, "cell", "host.dc.domain")
 	ts := []*TabletHealth{
 		{
-			Tablet:              tablet,
-			Target:              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
-			Serving:             false,
-			Stats:               &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.3},
-			MasterTermStartTime: 0,
+			Tablet:               tablet,
+			Target:               &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+			Serving:              false,
+			Stats:                &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.3},
+			PrimaryTermStartTime: 0,
 		},
 	}
 	tcs := &TabletsCacheStatus{

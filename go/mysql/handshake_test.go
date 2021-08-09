@@ -38,15 +38,14 @@ import (
 func TestClearTextClientAuth(t *testing.T) {
 	th := &testHandler{}
 
-	authServer := NewAuthServerStatic("", "", 0)
-	authServer.method = MysqlClearPassword
+	authServer := NewAuthServerStaticWithAuthMethodDescription("", "", 0, MysqlClearPassword)
 	authServer.entries["user1"] = []*AuthServerStaticEntry{
 		{Password: "password1"},
 	}
 	defer authServer.close()
 
 	// Create the listener.
-	l, err := NewListener("tcp", ":0", authServer, th, 0, 0, false)
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false)
 	if err != nil {
 		t.Fatalf("NewListener failed: %v", err)
 	}
@@ -59,10 +58,11 @@ func TestClearTextClientAuth(t *testing.T) {
 
 	// Setup the right parameters.
 	params := &ConnParams{
-		Host:  host,
-		Port:  port,
-		Uname: "user1",
-		Pass:  "password1",
+		Host:    host,
+		Port:    port,
+		Uname:   "user1",
+		Pass:    "password1",
+		SslMode: vttls.Disabled,
 	}
 
 	// Connection should fail, as server requires SSL for clear text auth.
@@ -96,14 +96,14 @@ func TestClearTextClientAuth(t *testing.T) {
 func TestSSLConnection(t *testing.T) {
 	th := &testHandler{}
 
-	authServer := NewAuthServerStatic("", "", 0)
+	authServer := NewAuthServerStaticWithAuthMethodDescription("", "", 0, MysqlClearPassword)
 	authServer.entries["user1"] = []*AuthServerStaticEntry{
 		{Password: "password1"},
 	}
 	defer authServer.close()
 
 	// Create the listener, so we can get its host.
-	l, err := NewListener("tcp", ":0", authServer, th, 0, 0, false)
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false)
 	if err != nil {
 		t.Fatalf("NewListener failed: %v", err)
 	}
@@ -143,7 +143,7 @@ func TestSSLConnection(t *testing.T) {
 		Uname: "user1",
 		Pass:  "password1",
 		// SSL flags.
-		Flags:      CapabilityClientSSL,
+		SslMode:    vttls.VerifyIdentity,
 		SslCa:      path.Join(root, "ca-cert.pem"),
 		SslCert:    path.Join(root, "client-cert.pem"),
 		SslKey:     path.Join(root, "client-key.pem"),
@@ -156,7 +156,6 @@ func TestSSLConnection(t *testing.T) {
 
 	// Make sure clear text auth works over SSL.
 	t.Run("ClearText", func(t *testing.T) {
-		authServer.method = MysqlClearPassword
 		testSSLConnectionClearText(t, params)
 	})
 }

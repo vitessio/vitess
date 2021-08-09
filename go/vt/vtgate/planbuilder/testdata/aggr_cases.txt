@@ -791,7 +791,8 @@ Gen4 error: In aggregated query without GROUP BY, expression of SELECT list cont
           "Sharded": true
         },
         "FieldQuery": "select col, weight_string(col) from `user` where 1 != 1",
-        "Query": "select distinct col, weight_string(col) from `user`",
+        "OrderBy": "(0|1) ASC",
+        "Query": "select distinct col, weight_string(col) from `user` order by col asc",
         "Table": "`user`"
       }
     ]
@@ -866,6 +867,7 @@ Gen4 error: In aggregated query without GROUP BY, expression of SELECT list cont
     "Table": "`user`"
   }
 }
+Gen4 plan same as above
 
 # count with distinct unique vindex
 "select col, count(distinct id) from user group by col"
@@ -889,6 +891,31 @@ Gen4 error: In aggregated query without GROUP BY, expression of SELECT list cont
         "OrderBy": "(0|2) ASC",
         "Query": "select col, count(distinct id), weight_string(col) from `user` group by col order by col asc",
         "ResultColumns": 2,
+        "Table": "`user`"
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select col, count(distinct id) from user group by col",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Ordered",
+    "Aggregates": "count(1)",
+    "GroupBy": "(0|2)",
+    "ResultColumns": 2,
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select col, count(distinct id), weight_string(col) from `user` where 1 != 1 group by col",
+        "OrderBy": "(0|2) ASC",
+        "Query": "select col, count(distinct id), weight_string(col) from `user` group by col order by col asc",
         "Table": "`user`"
       }
     ]
@@ -922,6 +949,31 @@ Gen4 error: In aggregated query without GROUP BY, expression of SELECT list cont
     ]
   }
 }
+{
+  "QueryType": "SELECT",
+  "Original": "select col1, count(distinct col2) from user group by col1",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Ordered",
+    "Aggregates": "count_distinct(1|3) AS count(distinct col2)",
+    "GroupBy": "(0|2)",
+    "ResultColumns": 2,
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select col1, col2, weight_string(col1), weight_string(col2) from `user` where 1 != 1 group by col1, col2",
+        "OrderBy": "(0|2) ASC, (1|3) ASC",
+        "Query": "select col1, col2, weight_string(col1), weight_string(col2) from `user` group by col1, col2 order by col1 asc, col2 asc",
+        "Table": "`user`"
+      }
+    ]
+  }
+}
 
 # count with distinct no unique vindex and no group by
 "select count(distinct col2) from user"
@@ -944,6 +996,30 @@ Gen4 error: In aggregated query without GROUP BY, expression of SELECT list cont
         "OrderBy": "(0|1) ASC",
         "Query": "select col2, weight_string(col2) from `user` group by col2 order by col2 asc",
         "ResultColumns": 1,
+        "Table": "`user`"
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select count(distinct col2) from user",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Ordered",
+    "Aggregates": "count_distinct(0|1) AS count(distinct col2)",
+    "ResultColumns": 1,
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select col2, weight_string(col2) from `user` where 1 != 1 group by col2",
+        "OrderBy": "(0|1) ASC",
+        "Query": "select col2, weight_string(col2) from `user` group by col2 order by col2 asc",
         "Table": "`user`"
       }
     ]
@@ -977,6 +1053,31 @@ Gen4 error: In aggregated query without GROUP BY, expression of SELECT list cont
     ]
   }
 }
+{
+  "QueryType": "SELECT",
+  "Original": "select col1, count(distinct col2) c2 from user group by col1",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Ordered",
+    "Aggregates": "count_distinct(1|3) AS c2",
+    "GroupBy": "(0|2)",
+    "ResultColumns": 2,
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select col1, col2, weight_string(col1), weight_string(col2) from `user` where 1 != 1 group by col1, col2",
+        "OrderBy": "(0|2) ASC, (1|3) ASC",
+        "Query": "select col1, col2, weight_string(col1), weight_string(col2) from `user` group by col1, col2 order by col1 asc, col2 asc",
+        "Table": "`user`"
+      }
+    ]
+  }
+}
 
 # sum with distinct no unique vindex
 "select col1, sum(distinct col2) from user group by col1"
@@ -1000,6 +1101,31 @@ Gen4 error: In aggregated query without GROUP BY, expression of SELECT list cont
         "OrderBy": "(0|2) ASC, (1|3) ASC",
         "Query": "select col1, col2, weight_string(col1), weight_string(col2) from `user` group by col1, col2 order by col1 asc, col2 asc",
         "ResultColumns": 2,
+        "Table": "`user`"
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select col1, sum(distinct col2) from user group by col1",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Ordered",
+    "Aggregates": "sum_distinct(1|3) AS sum(distinct col2)",
+    "GroupBy": "(0|2)",
+    "ResultColumns": 2,
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select col1, col2, weight_string(col1), weight_string(col2) from `user` where 1 != 1 group by col1, col2",
+        "OrderBy": "(0|2) ASC, (1|3) ASC",
+        "Query": "select col1, col2, weight_string(col1), weight_string(col2) from `user` group by col1, col2 order by col1 asc, col2 asc",
         "Table": "`user`"
       }
     ]
@@ -1033,6 +1159,31 @@ Gen4 error: In aggregated query without GROUP BY, expression of SELECT list cont
     ]
   }
 }
+{
+  "QueryType": "SELECT",
+  "Original": "select col1, min(distinct col2) from user group by col1",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Ordered",
+    "Aggregates": "min(1)",
+    "GroupBy": "(0|2)",
+    "ResultColumns": 2,
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select col1, min(distinct col2), weight_string(col1) from `user` where 1 != 1 group by col1",
+        "OrderBy": "(0|2) ASC",
+        "Query": "select col1, min(distinct col2), weight_string(col1) from `user` group by col1 order by col1 asc",
+        "Table": "`user`"
+      }
+    ]
+  }
+}
 
 # order by count distinct
 "select col1, count(distinct col2) k from user group by col1 order by k"
@@ -1061,6 +1212,38 @@ Gen4 error: In aggregated query without GROUP BY, expression of SELECT list cont
             "OrderBy": "(0|2) ASC, (1|3) ASC",
             "Query": "select col1, col2, weight_string(col1), weight_string(col2) from `user` group by col1, col2 order by col1 asc, col2 asc",
             "ResultColumns": 2,
+            "Table": "`user`"
+          }
+        ]
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select col1, count(distinct col2) k from user group by col1 order by k",
+  "Instructions": {
+    "OperatorType": "Sort",
+    "Variant": "Memory",
+    "OrderBy": "1 ASC",
+    "ResultColumns": 2,
+    "Inputs": [
+      {
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "Aggregates": "count_distinct(1|3) AS k",
+        "GroupBy": "(0|2)",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select col1, col2, weight_string(col1), weight_string(col2) from `user` where 1 != 1 group by col1, col2",
+            "OrderBy": "(0|2) ASC, (1|3) ASC",
+            "Query": "select col1, col2, weight_string(col1), weight_string(col2) from `user` group by col1, col2 order by col1 asc, col2 asc",
             "Table": "`user`"
           }
         ]
@@ -1313,11 +1496,11 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4 plan same as above
 
 # scatter aggregate with complex select list (can't build order by)
 "select distinct a+1 from user"
 "generating order by clause: cannot reference a complex expression"
-
 
 # scatter aggregate with numbered order by columns
 "select a, b, c, d, count(*) from user group by 1, 2, 3 order by 1, 2, 3"
@@ -1824,7 +2007,8 @@ Gen4 plan same as above
           "Sharded": true
         },
         "FieldQuery": "select col1, col2, weight_string(col1), weight_string(col2) from `user` where 1 != 1",
-        "Query": "select distinct col1, col2, weight_string(col1), weight_string(col2) from `user`",
+        "OrderBy": "(0|2) ASC, (1|3) ASC",
+        "Query": "select distinct col1, col2, weight_string(col1), weight_string(col2) from `user` order by col1 asc, col2 asc",
         "Table": "`user`"
       }
     ]
@@ -2070,3 +2254,150 @@ Gen4 plan same as above
     ]
   }
 }
+
+# Cannot have more than one aggr(distinct...
+"select count(distinct a), count(distinct b) from user"
+"unsupported: only one distinct aggregation allowed in a select: count(distinct b)"
+{
+  "QueryType": "SELECT",
+  "Original": "select count(distinct a), count(distinct b) from user",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Ordered",
+    "Aggregates": "count_distinct(0|2) AS count(distinct a), count_distinct(1|3) AS count(distinct b)",
+    "ResultColumns": 2,
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select a, b, weight_string(a), weight_string(b) from `user` where 1 != 1 group by a, b",
+        "OrderBy": "(0|2) ASC, (1|3) ASC",
+        "Query": "select a, b, weight_string(a), weight_string(b) from `user` group by a, b order by a asc, b asc",
+        "Table": "`user`"
+      }
+    ]
+  }
+}
+
+# multiple distinct functions with grouping.
+"select col1, count(distinct col2), sum(distinct col2) from user group by col1"
+"unsupported: only one distinct aggregation allowed in a select: sum(distinct col2)"
+{
+  "QueryType": "SELECT",
+  "Original": "select col1, count(distinct col2), sum(distinct col2) from user group by col1",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Ordered",
+    "Aggregates": "count_distinct(1|4) AS count(distinct col2), sum_distinct(2|4) AS sum(distinct col2)",
+    "GroupBy": "(0|3)",
+    "ResultColumns": 3,
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select col1, col2, col2, weight_string(col1), weight_string(col2) from `user` where 1 != 1 group by col1, col2, col2",
+        "OrderBy": "(0|3) ASC, (1|4) ASC, (1|4) ASC",
+        "Query": "select col1, col2, col2, weight_string(col1), weight_string(col2) from `user` group by col1, col2, col2 order by col1 asc, col2 asc, col2 asc",
+        "Table": "`user`"
+      }
+    ]
+  }
+}
+
+# aggregate query with order by aggregate column along with NULL
+"select col, count(*) k from user group by col order by null, k"
+"unsupported: in scatter query: complex order by expression: null"
+{
+  "QueryType": "SELECT",
+  "Original": "select col, count(*) k from user group by col order by null, k",
+  "Instructions": {
+    "OperatorType": "Sort",
+    "Variant": "Memory",
+    "OrderBy": "1 ASC",
+    "ResultColumns": 2,
+    "Inputs": [
+      {
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "Aggregates": "count(1)",
+        "GroupBy": "(0|2)",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select col, count(*) as k, weight_string(col) from `user` where 1 != 1 group by col",
+            "OrderBy": "(0|2) ASC",
+            "Query": "select col, count(*) as k, weight_string(col) from `user` group by col order by col asc",
+            "Table": "`user`"
+          }
+        ]
+      }
+    ]
+  }
+}
+
+# aggregate query with order by NULL
+"select col, count(*) k from user group by col order by null"
+{
+  "QueryType": "SELECT",
+  "Original": "select col, count(*) k from user group by col order by null",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Ordered",
+    "Aggregates": "count(1)",
+    "GroupBy": "0",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select col, count(*) as k, weight_string(col) from `user` where 1 != 1 group by col",
+        "OrderBy": "(0|2) ASC",
+        "Query": "select col, count(*) as k, weight_string(col) from `user` group by col order by col asc",
+        "ResultColumns": 2,
+        "Table": "`user`"
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select col, count(*) k from user group by col order by null",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Ordered",
+    "Aggregates": "count(1)",
+    "GroupBy": "(0|2)",
+    "ResultColumns": 2,
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select col, count(*) as k, weight_string(col) from `user` where 1 != 1 group by col",
+        "OrderBy": "(0|2) ASC",
+        "Query": "select col, count(*) as k, weight_string(col) from `user` group by col order by col asc",
+        "Table": "`user`"
+      }
+    ]
+  }
+}
+

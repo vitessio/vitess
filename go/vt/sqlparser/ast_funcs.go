@@ -749,6 +749,16 @@ func (node *Select) GetColumnCount() int {
 	return len(node.SelectExprs)
 }
 
+// SetComments implements the SelectStatement interface
+func (node *Select) SetComments(comments Comments) {
+	node.Comments = comments
+}
+
+// GetComments implements the SelectStatement interface
+func (node *Select) GetComments() Comments {
+	return node.Comments
+}
+
 // AddWhere adds the boolean expression to the
 // WHERE clause as an AND condition.
 func (node *Select) AddWhere(expr Expr) {
@@ -806,6 +816,16 @@ func (node *ParenSelect) GetColumnCount() int {
 	return node.Select.GetColumnCount()
 }
 
+// SetComments implements the SelectStatement interface
+func (node *ParenSelect) SetComments(comments Comments) {
+	node.Select.SetComments(comments)
+}
+
+// GetComments implements the SelectStatement interface
+func (node *ParenSelect) GetComments() Comments {
+	return node.Select.GetComments()
+}
+
 // AddWhere adds the boolean expression to the
 // WHERE clause as an AND condition.
 func (node *Update) AddWhere(expr Expr) {
@@ -845,6 +865,16 @@ func (node *Union) MakeDistinct() {
 // GetColumnCount implements the SelectStatement interface
 func (node *Union) GetColumnCount() int {
 	return node.FirstStatement.GetColumnCount()
+}
+
+// SetComments implements the SelectStatement interface
+func (node *Union) SetComments(comments Comments) {
+	node.FirstStatement.SetComments(comments)
+}
+
+// GetComments implements the SelectStatement interface
+func (node *Union) GetComments() Comments {
+	return node.FirstStatement.GetComments()
 }
 
 //Unionize returns a UNION, either creating one or adding SELECT to an existing one
@@ -1347,7 +1377,7 @@ const (
 
 // handleUnaryMinus handles the case when a unary minus operator is seen in the parser. It takes 1 argument which is the expr to which the unary minus has been added to.
 func handleUnaryMinus(expr Expr) Expr {
-	if num, ok := expr.(*Literal); ok && num.Type == IntVal {
+	if num, ok := expr.(*Literal); ok && (num.Type == IntVal || num.Type == FloatVal) {
 		// Handle double negative
 		if num.Val[0] == '-' {
 			num.Val = num.Val[1:]

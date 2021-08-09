@@ -46,15 +46,15 @@ func TestExecuteFailOnAutocommit(t *testing.T) {
 	createSandbox("TestExecuteFailOnAutocommit")
 	hc := discovery.NewFakeHealthCheck()
 	sc := newTestScatterConn(hc, new(sandboxTopo), "aa")
-	sbc0 := hc.AddTestTablet("aa", "0", 1, "TestExecuteFailOnAutocommit", "0", topodatapb.TabletType_MASTER, true, 1, nil)
-	sbc1 := hc.AddTestTablet("aa", "1", 1, "TestExecuteFailOnAutocommit", "1", topodatapb.TabletType_MASTER, true, 1, nil)
+	sbc0 := hc.AddTestTablet("aa", "0", 1, "TestExecuteFailOnAutocommit", "0", topodatapb.TabletType_PRIMARY, true, 1, nil)
+	sbc1 := hc.AddTestTablet("aa", "1", 1, "TestExecuteFailOnAutocommit", "1", topodatapb.TabletType_PRIMARY, true, 1, nil)
 
 	rss := []*srvtopo.ResolvedShard{
 		{
 			Target: &querypb.Target{
 				Keyspace:   "TestExecuteFailOnAutocommit",
 				Shard:      "0",
-				TabletType: topodatapb.TabletType_MASTER,
+				TabletType: topodatapb.TabletType_PRIMARY,
 			},
 			Gateway: sbc0,
 		},
@@ -62,7 +62,7 @@ func TestExecuteFailOnAutocommit(t *testing.T) {
 			Target: &querypb.Target{
 				Keyspace:   "TestExecuteFailOnAutocommit",
 				Shard:      "1",
-				TabletType: topodatapb.TabletType_MASTER,
+				TabletType: topodatapb.TabletType_PRIMARY,
 			},
 			Gateway: sbc1,
 		},
@@ -89,7 +89,7 @@ func TestExecuteFailOnAutocommit(t *testing.T) {
 		InTransaction: true,
 		ShardSessions: []*vtgatepb.Session_ShardSession{
 			{
-				Target:        &querypb.Target{Keyspace: "TestExecuteFailOnAutocommit", Shard: "0", TabletType: topodatapb.TabletType_MASTER, Cell: "aa"},
+				Target:        &querypb.Target{Keyspace: "TestExecuteFailOnAutocommit", Shard: "0", TabletType: topodatapb.TabletType_PRIMARY, Cell: "aa"},
 				TransactionId: 123,
 				TabletAlias:   nil,
 			},

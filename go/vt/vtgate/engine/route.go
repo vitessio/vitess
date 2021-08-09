@@ -770,8 +770,8 @@ func shardVars(bv map[string]*querypb.BindVariable, mapVals [][]*querypb.Value) 
 
 func allowOnlyMaster(rss ...*srvtopo.ResolvedShard) error {
 	for _, rs := range rss {
-		if rs != nil && rs.Target.TabletType != topodatapb.TabletType_MASTER {
-			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "supported only for master tablet type, current type: %v", topoproto.TabletTypeLString(rs.Target.TabletType))
+		if rs != nil && rs.Target.TabletType != topodatapb.TabletType_PRIMARY {
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "supported only for primary tablet type, current type: %v", topoproto.TabletTypeLString(rs.Target.TabletType))
 		}
 	}
 	return nil

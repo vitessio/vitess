@@ -93,7 +93,7 @@ func newTestVDiffEnv(sourceShards, targetShards []string, query string, position
 
 	tabletID := 100
 	for _, shard := range sourceShards {
-		_ = env.addTablet(tabletID, "source", shard, topodatapb.TabletType_MASTER)
+		_ = env.addTablet(tabletID, "source", shard, topodatapb.TabletType_PRIMARY)
 		_ = env.addTablet(tabletID+1, "source", shard, topodatapb.TabletType_REPLICA)
 		env.tmc.waitpos[tabletID+1] = vdiffStopPosition
 
@@ -101,7 +101,7 @@ func newTestVDiffEnv(sourceShards, targetShards []string, query string, position
 	}
 	tabletID = 200
 	for _, shard := range targetShards {
-		master := env.addTablet(tabletID, "target", shard, topodatapb.TabletType_MASTER)
+		master := env.addTablet(tabletID, "target", shard, topodatapb.TabletType_PRIMARY)
 		_ = env.addTablet(tabletID+1, "target", shard, topodatapb.TabletType_REPLICA)
 
 		var rows []string
@@ -200,9 +200,9 @@ func (env *testVDiffEnv) addTablet(id int, keyspace, shard string, tabletType to
 	if err := env.wr.InitTablet(context.Background(), tablet, false /* allowMasterOverride */, true /* createShardAndKeyspace */, false /* allowUpdate */); err != nil {
 		panic(err)
 	}
-	if tabletType == topodatapb.TabletType_MASTER {
+	if tabletType == topodatapb.TabletType_PRIMARY {
 		_, err := env.wr.ts.UpdateShardFields(context.Background(), keyspace, shard, func(si *topo.ShardInfo) error {
-			si.MasterAlias = tablet.Alias
+			si.PrimaryAlias = tablet.Alias
 			return nil
 		})
 		if err != nil {

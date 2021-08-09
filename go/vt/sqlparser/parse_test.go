@@ -1195,6 +1195,10 @@ var (
 	}, {
 		input: "create table a (\n\ta int not null default 0\n)",
 	}, {
+		input: "create table a (\n\ta float not null default -1\n)",
+	}, {
+		input: "create table a (\n\ta float not null default -2.1\n)",
+	}, {
 		input:  "create table a (a int not null default 0, primary key(a))",
 		output: "create table a (\n\ta int not null default 0,\n\tprimary key (a)\n)",
 	}, {
@@ -1635,6 +1639,8 @@ var (
 		input: `show vitess_migrations from ks like '%pattern'`,
 	}, {
 		input: "show vitess_migrations like '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90'",
+	}, {
+		input: "show vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' logs",
 	}, {
 		input: "revert vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90'",
 	}, {

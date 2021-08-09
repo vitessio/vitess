@@ -94,18 +94,18 @@ func (tm *TabletManager) shardSyncLoop(ctx context.Context, notifyChan <-chan st
 		tablet := tm.Tablet()
 
 		switch tablet.Type {
-		case topodatapb.TabletType_MASTER:
+		case topodatapb.TabletType_PRIMARY:
 			// This is a failsafe code because we've seen races that can cause
 			// master term start time to become zero.
-			if tablet.MasterTermStartTime == nil {
-				log.Errorf("MasterTermStartTime should not be nil: %v", tablet)
+			if tablet.PrimaryTermStartTime == nil {
+				log.Errorf("PrimaryTermStartTime should not be nil: %v", tablet)
 				// Start retry timer and go back to sleep.
 				retryChan = time.After(*shardSyncRetryDelay)
 				continue
 			}
 			// If we think we're master, check if we need to update the shard record.
 			// Fetch the start time from the record we just got, because the tm's tablet can change.
-			masterAlias, shouldDemote, err := syncShardMaster(ctx, tm.TopoServer, tablet, logutil.ProtoToTime(tablet.MasterTermStartTime))
+			masterAlias, shouldDemote, err := syncShardMaster(ctx, tm.TopoServer, tablet, logutil.ProtoToTime(tablet.PrimaryTermStartTime))
 			if err != nil {
 				log.Errorf("Failed to sync shard record: %v", err)
 				// Start retry timer and go back to sleep.
@@ -113,7 +113,7 @@ func (tm *TabletManager) shardSyncLoop(ctx context.Context, notifyChan <-chan st
 				continue
 			}
 			if shouldDemote {
-				// Someone updated the masterTermStartTime while we still think we're master.
+				// Someone updated the PrimaryTermStartTime while we still think we're master.
 				// This means that we should abort our term, since someone else must have claimed mastership
 				// and wrote to the shard record
 				if err := tm.abortMasterTerm(ctx, masterAlias); err != nil {
@@ -156,40 +156,40 @@ func (tm *TabletManager) shardSyncLoop(ctx context.Context, notifyChan <-chan st
 // If the shard record indicates a new master has taken over, this returns
 // success (we successfully synchronized), but the returned masterAlias will be
 // different from the input tablet.Alias.
-func syncShardMaster(ctx context.Context, ts *topo.Server, tablet *topodatapb.Tablet, masterTermStartTime time.Time) (masterAlias *topodatapb.TabletAlias, shouldDemote bool, err error) {
+func syncShardMaster(ctx context.Context, ts *topo.Server, tablet *topodatapb.Tablet, PrimaryTermStartTime time.Time) (masterAlias *topodatapb.TabletAlias, shouldDemote bool, err error) {
 	ctx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
 	defer cancel()
 
 	var shardInfo *topo.ShardInfo
 	shouldDemote = false
 	_, err = ts.UpdateShardFields(ctx, tablet.Keyspace, tablet.Shard, func(si *topo.ShardInfo) error {
-		lastTerm := si.GetMasterTermStartTime()
+		lastTerm := si.GetPrimaryTermStartTime()
 
 		// Save the ShardInfo so we can check it afterward.
 		// We can't use the return value of UpdateShardFields because it might be nil.
 		shardInfo = si
 
-		if masterTermStartTime.Before(lastTerm) {
+		if PrimaryTermStartTime.Before(lastTerm) {
 			// In this case, we have outdated information, we will demote ourself
 			shouldDemote = true
 		}
 
 		// Only attempt an update if our term is more recent.
-		if !masterTermStartTime.After(lastTerm) {
+		if !PrimaryTermStartTime.After(lastTerm) {
 			return topo.NewError(topo.NoUpdateNeeded, si.ShardName())
 		}
 
 		aliasStr := topoproto.TabletAliasString(tablet.Alias)
-		log.Infof("Updating shard record: master_alias=%v, master_term_start_time=%v", aliasStr, masterTermStartTime)
-		si.MasterAlias = tablet.Alias
-		si.MasterTermStartTime = logutil.TimeToProto(masterTermStartTime)
+		log.Infof("Updating shard record: master_alias=%v, primary_term_start_time=%v", aliasStr, PrimaryTermStartTime)
+		si.PrimaryAlias = tablet.Alias
+		si.PrimaryTermStartTime = logutil.TimeToProto(PrimaryTermStartTime)
 		return nil
 	})
 	if err != nil {
 		return nil, shouldDemote, err
 	}
 
-	return shardInfo.MasterAlias, shouldDemote, nil
+	return shardInfo.PrimaryAlias, shouldDemote, nil
 }
 
 // abortMasterTerm is called when we unexpectedly lost mastership.

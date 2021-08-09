@@ -63,9 +63,6 @@ type GRTmcClient interface {
 	Ping(ctx context.Context, tablet *topodatapb.Tablet) error
 }
 
-// HostnameGetter is used to get local hostname
-type HostnameGetter func() (string, error)
-
 // GRShard stores the information about a Vitess shard that's running MySQL GR
 type GRShard struct {
 	KeyspaceShard        *topo.KeyspaceShard
@@ -76,6 +73,12 @@ type GRShard struct {
 	ts                   GRTopo
 	tmc                  GRTmcClient
 	dbAgent              db.Agent
+
+	// Every GRShard tracks a unlock function after it grab a topo lock for the shard
+	// VTGR needs to release the topo lock before gracefully shutdown
+	unlock func(*error)
+	// mutex to protect unlock function access
+	unlockMu sync.Mutex
 
 	// configuration
 	minNumReplicas            int
@@ -131,6 +134,7 @@ func NewGRShard(
 		tmc:                       tmc,
 		ts:                        ts,
 		dbAgent:                   dbAgent,
+		unlock:                    nil,
 		sqlGroup:                  NewSQLGroup(config.GroupSize, true, keyspace, shard),
 		minNumReplicas:            config.MinNumReplica,
 		disableReadOnlyProtection: config.DisableReadOnlyProtection,
@@ -180,7 +184,7 @@ func parseTabletInfos(tablets map[string]*topo.TabletInfo) []*grInstance {
 		tablet := tabletInfo.Tablet
 		// Only monitor master, replica and ronly tablet types
 		switch tablet.Type {
-		case topodatapb.TabletType_MASTER, topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY:
+		case topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY:
 			// mysql hostname and port might be empty here if tablet is not running
 			// we will treat them as unreachable
 			instanceKey := inst.InstanceKey{
@@ -190,7 +194,7 @@ func parseTabletInfos(tablets map[string]*topo.TabletInfo) []*grInstance {
 			grInstance := grInstance{
 				instanceKey:     &instanceKey,
 				tablet:          tablet,
-				masterTimeStamp: logutil.ProtoToTime(tablet.MasterTermStartTime),
+				masterTimeStamp: logutil.ProtoToTime(tablet.PrimaryTermStartTime),
 				alias:           alias,
 			}
 			newReplicas = append(newReplicas, &grInstance)
@@ -200,14 +204,37 @@ func parseTabletInfos(tablets map[string]*topo.TabletInfo) []*grInstance {
 }
 
 // LockShard locks the keyspace-shard on topo server to prevent others from executing conflicting actions.
-func (shard *GRShard) LockShard(ctx context.Context, action string) (context.Context, func(*error), error) {
+func (shard *GRShard) LockShard(ctx context.Context, action string) (context.Context, error) {
 	if shard.KeyspaceShard.Keyspace == "" || shard.KeyspaceShard.Shard == "" {
-		return nil, nil, fmt.Errorf("try to grab lock with incomplete information: %v/%v", shard.KeyspaceShard.Keyspace, shard.KeyspaceShard.Shard)
+		return nil, fmt.Errorf("try to grab lock with incomplete information: %v/%v", shard.KeyspaceShard.Keyspace, shard.KeyspaceShard.Shard)
+	}
+	shard.unlockMu.Lock()
+	defer shard.unlockMu.Unlock()
+	if shard.unlock != nil {
+		return nil, fmt.Errorf("try to grab lock for %s/%s while the shard holds an unlock function", shard.KeyspaceShard.Keyspace, shard.KeyspaceShard.Shard)
 	}
 	start := time.Now()
 	ctx, unlock, err := shard.ts.LockShard(ctx, shard.KeyspaceShard.Keyspace, shard.KeyspaceShard.Shard, fmt.Sprintf("VTGR repairing %s", action))
 	lockShardTimingsMs.Record([]string{action, strconv.FormatBool(err == nil)}, start)
-	return ctx, unlock, err
+	if err != nil {
+		return nil, err
+	}
+	shard.unlock = unlock
+	return ctx, nil
+}
+
+// UnlockShard unlocks the keyspace-shard on topo server
+// and set the unlock function to nil in the container
+func (shard *GRShard) UnlockShard() {
+	shard.unlockMu.Lock()
+	defer shard.unlockMu.Unlock()
+	if shard.unlock == nil {
+		log.Warningf("Shard %s/%s does not hold a lock", shard.KeyspaceShard.Keyspace, shard.KeyspaceShard.Shard)
+		return
+	}
+	var err error
+	shard.unlock(&err)
+	shard.unlock = nil
 }
 
 func (shard *GRShard) findTabletByHostAndPort(host string, port int) *grInstance {
@@ -243,6 +270,13 @@ func (shard *GRShard) GetCurrentShardStatuses() ShardStatus {
 	status := *collector.status
 	shard.Unlock()
 	return status
+}
+
+// GetUnlock returns the unlock function for the shard for testing
+func (shard *GRShard) GetUnlock() func(*error) {
+	shard.unlockMu.Lock()
+	defer shard.unlockMu.Unlock()
+	return shard.unlock
 }
 
 func (collector *shardStatusCollector) isUnreachable(instance *grInstance) bool {

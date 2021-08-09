@@ -262,7 +262,7 @@ func TestMergesharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 
 	// check srv keyspace
 	expectedPartitions := map[topodata.TabletType][]string{}
-	expectedPartitions[topodata.TabletType_MASTER] = []string{shard0.Name, shard1.Name, shard2.Name}
+	expectedPartitions[topodata.TabletType_PRIMARY] = []string{shard0.Name, shard1.Name, shard2.Name}
 	expectedPartitions[topodata.TabletType_REPLICA] = []string{shard0.Name, shard1.Name, shard2.Name}
 	expectedPartitions[topodata.TabletType_RDONLY] = []string{shard0.Name, shard1.Name, shard2.Name}
 	sharding.CheckSrvKeyspace(t, cell, keyspaceName, "", 0, expectedPartitions, *clusterInstance)
@@ -430,7 +430,7 @@ func TestMergesharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 
 	// check srv keyspace
 	expectedPartitions = map[topodata.TabletType][]string{}
-	expectedPartitions[topodata.TabletType_MASTER] = []string{shard0.Name, shard1.Name, shard2.Name}
+	expectedPartitions[topodata.TabletType_PRIMARY] = []string{shard0.Name, shard1.Name, shard2.Name}
 	expectedPartitions[topodata.TabletType_RDONLY] = []string{shard3.Name, shard2.Name}
 	expectedPartitions[topodata.TabletType_REPLICA] = []string{shard0.Name, shard1.Name, shard2.Name}
 	sharding.CheckSrvKeyspace(t, cell, keyspaceName, "", 0, expectedPartitions, *clusterInstance)
@@ -444,18 +444,18 @@ func TestMergesharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 	require.NoError(t, err)
 
 	expectedPartitions = map[topodata.TabletType][]string{}
-	expectedPartitions[topodata.TabletType_MASTER] = []string{shard0.Name, shard1.Name, shard2.Name}
+	expectedPartitions[topodata.TabletType_PRIMARY] = []string{shard0.Name, shard1.Name, shard2.Name}
 	expectedPartitions[topodata.TabletType_RDONLY] = []string{shard3.Name, shard2.Name}
 	expectedPartitions[topodata.TabletType_REPLICA] = []string{shard3.Name, shard2.Name}
 	sharding.CheckSrvKeyspace(t, cell, keyspaceName, "", 0, expectedPartitions, *clusterInstance)
 
 	// now serve from the split shards
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand(
-		"MigrateServedTypes", shard3Ks, "master")
+		"MigrateServedTypes", shard3Ks, "primary")
 	require.NoError(t, err)
 
 	expectedPartitions = map[topodata.TabletType][]string{}
-	expectedPartitions[topodata.TabletType_MASTER] = []string{shard3.Name, shard2.Name}
+	expectedPartitions[topodata.TabletType_PRIMARY] = []string{shard3.Name, shard2.Name}
 	expectedPartitions[topodata.TabletType_RDONLY] = []string{shard3.Name, shard2.Name}
 	expectedPartitions[topodata.TabletType_REPLICA] = []string{shard3.Name, shard2.Name}
 	sharding.CheckSrvKeyspace(t, cell, keyspaceName, "", 0, expectedPartitions, *clusterInstance)

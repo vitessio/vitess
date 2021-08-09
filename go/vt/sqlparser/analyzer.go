@@ -62,6 +62,7 @@ const (
 	StmtFlush
 	StmtCallProc
 	StmtRevert
+	StmtShowMigrationLogs
 )
 
 //ASTToStatementType returns a StatementType from an AST stmt
@@ -83,6 +84,8 @@ func ASTToStatementType(stmt Statement) StatementType {
 		return StmtDDL
 	case *RevertMigration:
 		return StmtRevert
+	case *ShowMigrationLogs:
+		return StmtShowMigrationLogs
 	case *Use:
 		return StmtUse
 	case *OtherRead, *OtherAdmin, *Load:

@@ -172,10 +172,10 @@ func AddTablet(ctx context.Context, t *testing.T, ts *topo.Server, tablet *topod
 				require.NoError(t, err, "CreateShard(%s, %s)", tablet.Keyspace, tablet.Shard)
 			}
 
-			if tablet.Type == topodatapb.TabletType_MASTER && opts.AlsoSetShardMaster {
+			if tablet.Type == topodatapb.TabletType_PRIMARY && opts.AlsoSetShardMaster {
 				_, err := ts.UpdateShardFields(ctx, tablet.Keyspace, tablet.Shard, func(si *topo.ShardInfo) error {
-					if si.IsMasterServing && si.MasterAlias != nil {
-						msg := fmt.Sprintf("shard %v/%v already has a serving master (%v)", tablet.Keyspace, tablet.Shard, topoproto.TabletAliasString(si.MasterAlias))
+					if si.IsPrimaryServing && si.PrimaryAlias != nil {
+						msg := fmt.Sprintf("shard %v/%v already has a serving master (%v)", tablet.Keyspace, tablet.Shard, topoproto.TabletAliasString(si.PrimaryAlias))
 
 						if !opts.ForceSetShardMaster {
 							return errors.New(msg)
@@ -184,9 +184,9 @@ func AddTablet(ctx context.Context, t *testing.T, ts *topo.Server, tablet *topod
 						t.Logf("%s; replacing with %v because ForceSetShardMaster = true", msg, topoproto.TabletAliasString(tablet.Alias))
 					}
 
-					si.MasterAlias = tablet.Alias
-					si.IsMasterServing = true
-					si.MasterTermStartTime = tablet.MasterTermStartTime
+					si.PrimaryAlias = tablet.Alias
+					si.IsPrimaryServing = true
+					si.PrimaryTermStartTime = tablet.PrimaryTermStartTime
 
 					return nil
 				})

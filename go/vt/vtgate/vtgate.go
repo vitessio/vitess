@@ -300,7 +300,7 @@ func addKeyspaceToTracker(ctx context.Context, srvResolver *srvtopo.Resolver, st
 }
 
 func resolveAndLoadKeyspace(ctx context.Context, srvResolver *srvtopo.Resolver, st *vtschema.Tracker, gw *TabletGateway, keyspace string) {
-	dest, err := srvResolver.ResolveDestination(ctx, keyspace, topodatapb.TabletType_MASTER, key.DestinationAllShards{})
+	dest, err := srvResolver.ResolveDestination(ctx, keyspace, topodatapb.TabletType_PRIMARY, key.DestinationAllShards{})
 	if err != nil {
 		log.Warningf("Unable to resolve destination: %v", err)
 		return

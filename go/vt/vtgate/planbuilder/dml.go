@@ -154,7 +154,7 @@ func buildDMLPlan(vschema ContextVSchema, dmlType string, stmt sqlparser.Stateme
 	}
 
 	if rb.eroute.TargetDestination != nil {
-		if rb.eroute.TargetTabletType != topodatapb.TabletType_MASTER {
+		if rb.eroute.TargetTabletType != topodatapb.TabletType_PRIMARY {
 			return nil, nil, "", vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.InnodbReadOnly, "unsupported: %s statement with a replica target", dmlType)
 		}
 		edml.Opcode = engine.ByDestination

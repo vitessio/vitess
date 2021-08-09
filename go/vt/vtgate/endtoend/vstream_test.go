@@ -82,7 +82,7 @@ func TestVStream(t *testing.T) {
 		}},
 	}
 	flags := &vtgatepb.VStreamFlags{}
-	reader, err := gconn.VStream(ctx, topodatapb.TabletType_MASTER, vgtid, filter, flags)
+	reader, err := gconn.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, filter, flags)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -198,7 +198,7 @@ func TestVStreamCopyBasic(t *testing.T) {
 		}},
 	}
 	flags := &vtgatepb.VStreamFlags{}
-	reader, err := gconn.VStream(ctx, topodatapb.TabletType_MASTER, vgtid, filter, flags)
+	reader, err := gconn.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, filter, flags)
 	_, _ = conn, mconn
 	if err != nil {
 		t.Fatal(err)
@@ -252,7 +252,7 @@ func TestVStreamCurrent(t *testing.T) {
 		}},
 	}
 	flags := &vtgatepb.VStreamFlags{}
-	reader, err := gconn.VStream(ctx, topodatapb.TabletType_MASTER, vgtid, filter, flags)
+	reader, err := gconn.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, filter, flags)
 	_, _ = conn, mconn
 	if err != nil {
 		t.Fatal(err)

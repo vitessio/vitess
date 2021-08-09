@@ -626,12 +626,12 @@ func getPrimaryPosition(ctx context.Context, tmc tmclient.TabletManagerClient, t
 	if err != nil {
 		return mysql.Position{}, vterrors.Wrap(err, "can't read shard")
 	}
-	if topoproto.TabletAliasIsZero(si.MasterAlias) {
+	if topoproto.TabletAliasIsZero(si.PrimaryAlias) {
 		return mysql.Position{}, fmt.Errorf("shard %v/%v has no master", keyspace, shard)
 	}
-	ti, err := ts.GetTablet(ctx, si.MasterAlias)
+	ti, err := ts.GetTablet(ctx, si.PrimaryAlias)
 	if err != nil {
-		return mysql.Position{}, fmt.Errorf("can't get master tablet record %v: %v", topoproto.TabletAliasString(si.MasterAlias), err)
+		return mysql.Position{}, fmt.Errorf("can't get master tablet record %v: %v", topoproto.TabletAliasString(si.PrimaryAlias), err)
 	}
 	posStr, err := tmc.MasterPosition(ctx, ti.Tablet)
 	if err != nil {

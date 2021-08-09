@@ -95,6 +95,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4 plan same as above
 
 # select limit with timeout directive sets QueryTimeout in the route
 "select /*vt+ QUERY_TIMEOUT_MS=1000 */ * from user limit 10"
@@ -164,6 +165,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4 plan same as above
 
 # select aggregation with partial scatter directive - added comments to try to confuse the hint extraction
 "/*VT_SPAN_CONTEXT=123*/select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ count(*) from user"
@@ -190,6 +192,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4 plan same as above
 
 # select limit with partial scatter directive
 "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ * from user limit 10"
@@ -443,40 +446,7 @@ Gen4 error: Unknown table 'a'
 # Cannot auto-resolve for cross-shard joins
 "select col from user join user_extra"
 "symbol col not found"
-{
-  "QueryType": "SELECT",
-  "Original": "select col from user join user_extra",
-  "Instructions": {
-    "OperatorType": "Join",
-    "Variant": "Join",
-    "JoinColumnIndexes": "-1",
-    "TableName": "`user`_user_extra",
-    "Inputs": [
-      {
-        "OperatorType": "Route",
-        "Variant": "SelectScatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select col from `user` where 1 != 1",
-        "Query": "select col from `user`",
-        "Table": "`user`"
-      },
-      {
-        "OperatorType": "Route",
-        "Variant": "SelectScatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select 1 from user_extra where 1 != 1",
-        "Query": "select 1 from user_extra",
-        "Table": "user_extra"
-      }
-    ]
-  }
-}
+Gen4 error: Column 'col' in field list is ambiguous
 
 # Auto-resolve should work if unique vindex columns are referenced
 "select id, user_id from user join user_extra"
@@ -514,6 +484,7 @@ Gen4 error: Unknown table 'a'
     ]
   }
 }
+Gen4 plan same as above
 
 # database calls should be substituted
 "select database() from dual"
@@ -807,6 +778,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4 plan same as above
 
 # for update
 "select user.col from user join user_extra for update"
@@ -854,6 +826,9 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-1,1",
+    "JoinVars": {
+      "user_id": 0
+    },
     "TableName": "`user`_unsharded",
     "Inputs": [
       {
@@ -1448,6 +1423,7 @@ Gen4 plan same as above
     "Table": "unsharded"
   }
 }
+Gen4 plan same as above
 
 # testing SingleRow Projection
 "select 42"
@@ -1741,87 +1717,3 @@ Gen4 plan same as above
 # Into outfile s3 in sub-query is incorrect
 "select id from (select id from user into outfile s3 'inner_outfile') as t2"
 "Incorrect usage/placement of 'INTO'"
-
-# Distinct with cross shard query
-"select distinct user.a from user join user_extra"
-{
-  "QueryType": "SELECT",
-  "Original": "select distinct user.a from user join user_extra",
-  "Instructions": {
-    "OperatorType": "Distinct",
-    "Inputs": [
-      {
-        "OperatorType": "Join",
-        "Variant": "Join",
-        "JoinColumnIndexes": "-1",
-        "TableName": "`user`_user_extra",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "SelectScatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select `user`.a from `user` where 1 != 1",
-            "Query": "select `user`.a from `user`",
-            "Table": "`user`"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "SelectScatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select 1 from user_extra where 1 != 1",
-            "Query": "select 1 from user_extra",
-            "Table": "user_extra"
-          }
-        ]
-      }
-    ]
-  }
-}
-{
-  "QueryType": "SELECT",
-  "Original": "select distinct user.a from user join user_extra",
-  "Instructions": {
-    "OperatorType": "Aggregate",
-    "Variant": "Ordered",
-    "GroupBy": "(0|1)",
-    "ResultColumns": 1,
-    "Inputs": [
-      {
-        "OperatorType": "Join",
-        "Variant": "Join",
-        "JoinColumnIndexes": "-1,-2",
-        "TableName": "`user`_user_extra",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "SelectScatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select `user`.a, weight_string(`user`.a) from `user` where 1 != 1",
-            "Query": "select `user`.a, weight_string(`user`.a) from `user`",
-            "Table": "`user`"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "SelectScatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select 1 from user_extra where 1 != 1",
-            "Query": "select 1 from user_extra",
-            "Table": "user_extra"
-          }
-        ]
-      }
-    ]
-  }
-}

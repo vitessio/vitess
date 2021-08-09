@@ -389,7 +389,7 @@ func (tsv *TabletServer) IsHealthy() error {
 // should not be serving in it's healthy state.
 func IsServingType(tabletType topodatapb.TabletType) bool {
 	switch tabletType {
-	case topodatapb.TabletType_MASTER, topodatapb.TabletType_REPLICA, topodatapb.TabletType_BATCH, topodatapb.TabletType_EXPERIMENTAL:
+	case topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA, topodatapb.TabletType_BATCH, topodatapb.TabletType_EXPERIMENTAL:
 		return true
 	default:
 		return false

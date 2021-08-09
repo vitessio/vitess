@@ -60,6 +60,7 @@ const (
 	alterSchemaMigrationsTableTableRows          = "ALTER TABLE _vt.schema_migrations add column table_rows bigint NOT NULL DEFAULT 0"
 	alterSchemaMigrationsTableAddedUniqueKeys    = "ALTER TABLE _vt.schema_migrations add column added_unique_keys int unsigned NOT NULL DEFAULT 0"
 	alterSchemaMigrationsTableRemovedUniqueKeys  = "ALTER TABLE _vt.schema_migrations add column removed_unique_keys int unsigned NOT NULL DEFAULT 0"
+	alterSchemaMigrationsTableLogFile            = "ALTER TABLE _vt.schema_migrations add column log_file varchar(1024) NOT NULL DEFAULT ''"
 
 	sqlInsertMigration = `INSERT IGNORE INTO _vt.schema_migrations (
 		migration_uuid,
@@ -114,8 +115,9 @@ const (
 		WHERE
 			migration_uuid=%a
 	`
-	sqlUpdateMigrationStartedTimestamp = `UPDATE _vt.schema_migrations
-			SET started_timestamp=IFNULL(started_timestamp, NOW())
+	sqlUpdateMigrationStartedTimestamp = `UPDATE _vt.schema_migrations SET
+			started_timestamp =IFNULL(started_timestamp,  NOW()),
+			liveness_timestamp=IFNULL(liveness_timestamp, NOW())
 		WHERE
 			migration_uuid=%a
 	`
@@ -125,12 +127,12 @@ const (
 			migration_uuid=%a
 	`
 	sqlUpdateMigrationLogPath = `UPDATE _vt.schema_migrations
-			SET log_path=%a
+			SET log_path=%a, log_file=%a
 		WHERE
 			migration_uuid=%a
 	`
 	sqlUpdateArtifacts = `UPDATE _vt.schema_migrations
-			SET artifacts=concat(%a, ',', artifacts)
+			SET artifacts=concat(%a, ',', artifacts), cleanup_timestamp=NULL
 		WHERE
 			migration_uuid=%a
 	`
@@ -263,12 +265,21 @@ const (
 	`
 	sqlSelectUncollectedArtifacts = `SELECT
 			migration_uuid,
-			artifacts
+			artifacts,
+			log_path
 		FROM _vt.schema_migrations
 		WHERE
 			migration_status IN ('complete', 'failed')
 			AND cleanup_timestamp IS NULL
 			AND completed_timestamp <= NOW() - INTERVAL %a SECOND
+	`
+	sqlFixCompletedTimestamp = `UPDATE _vt.schema_migrations
+		SET
+			completed_timestamp=NOW()
+		WHERE
+			migration_status='failed'
+			AND cleanup_timestamp IS NULL
+			AND completed_timestamp IS NULL
 	`
 	sqlSelectMigration = `SELECT
 			id,
@@ -287,6 +298,7 @@ const (
 			completed_timestamp,
 			migration_status,
 			log_path,
+			log_file,
 			retries,
 			ddl_action,
 			artifacts,
@@ -315,6 +327,7 @@ const (
 			completed_timestamp,
 			migration_status,
 			log_path,
+			log_file,
 			retries,
 			ddl_action,
 			artifacts,
@@ -504,4 +517,5 @@ var ApplyDDL = []string{
 	alterSchemaMigrationsTableTableRows,
 	alterSchemaMigrationsTableAddedUniqueKeys,
 	alterSchemaMigrationsTableRemovedUniqueKeys,
+	alterSchemaMigrationsTableLogFile,
 }

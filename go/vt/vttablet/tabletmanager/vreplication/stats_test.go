@@ -79,7 +79,7 @@ func TestStatusHtml(t *testing.T) {
 
 	blpStats := binlogplayer.NewStats()
 	blpStats.SetLastPosition(pos)
-	blpStats.SecondsBehindMaster.Set(2)
+	blpStats.ReplicationLagSeconds.Set(2)
 	blpStats.History.Add(&binlogplayer.StatsHistoryRecord{Time: time.Now(), Message: "Test Message1"})
 	blpStats.History.Add(&binlogplayer.StatsHistoryRecord{Time: time.Now(), Message: "Test Message2"})
 

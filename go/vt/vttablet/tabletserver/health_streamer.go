@@ -213,7 +213,7 @@ func (hs *healthStreamer) ChangeState(tabletType topodatapb.TabletType, terTimes
 	defer hs.mu.Unlock()
 
 	hs.state.Target.TabletType = tabletType
-	if tabletType == topodatapb.TabletType_MASTER {
+	if tabletType == topodatapb.TabletType_PRIMARY {
 		hs.state.TabletExternallyReparentedTimestamp = terTimestamp.Unix()
 	} else {
 		hs.state.TabletExternallyReparentedTimestamp = 0
@@ -268,7 +268,7 @@ func (hs *healthStreamer) broadCastToClients(shr *querypb.StreamHealthResponse) 
 func (hs *healthStreamer) AppendDetails(details []*kv) []*kv {
 	hs.mu.Lock()
 	defer hs.mu.Unlock()
-	if hs.state.Target.TabletType == topodatapb.TabletType_MASTER {
+	if hs.state.Target.TabletType == topodatapb.TabletType_PRIMARY {
 		return details
 	}
 	sbm := time.Duration(hs.state.RealtimeStats.ReplicationLagSeconds) * time.Second
@@ -314,7 +314,7 @@ func (hs *healthStreamer) reload() error {
 	hs.mu.Lock()
 	defer hs.mu.Unlock()
 	// Schema Reload to happen only on master.
-	if hs.state.Target.TabletType != topodatapb.TabletType_MASTER {
+	if hs.state.Target.TabletType != topodatapb.TabletType_PRIMARY {
 		return nil
 	}
 
@@ -359,7 +359,7 @@ func (hs *healthStreamer) reload() error {
 	}
 
 	tableNamePredicate := fmt.Sprintf("table_name IN (%s)", strings.Join(tableNames, ", "))
-	del := fmt.Sprintf("%s WHERE %s", mysql.ClearSchemaCopy, tableNamePredicate)
+	del := fmt.Sprintf("%s AND %s", mysql.ClearSchemaCopy, tableNamePredicate)
 	upd := fmt.Sprintf("%s AND %s", mysql.InsertIntoSchemaCopy, tableNamePredicate)
 
 	// Reload the schema in a transaction.

@@ -200,6 +200,11 @@ func (m *MaterializeSettings) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if m.MaterializationIntent != 0 {
+		i = encodeVarint(dAtA, i, uint64(m.MaterializationIntent))
+		i--
+		dAtA[i] = 0x48
+	}
 	if len(m.ExternalCluster) > 0 {
 		i -= len(m.ExternalCluster)
 		copy(dAtA[i:], m.ExternalCluster)
@@ -5190,6 +5195,9 @@ func (m *MaterializeSettings) SizeVT() (n int) {
 	if l > 0 {
 		n += 1 + l + sov(uint64(l))
 	}
+	if m.MaterializationIntent != 0 {
+		n += 1 + sov(uint64(m.MaterializationIntent))
+	}
 	if m.unknownFields != nil {
 		n += len(m.unknownFields)
 	}
@@ -7772,6 +7780,25 @@ func (m *MaterializeSettings) UnmarshalVT(dAtA []byte) error {
 			}
 			m.ExternalCluster = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
+		case 9:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field MaterializationIntent", wireType)
+			}
+			m.MaterializationIntent = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.MaterializationIntent |= MaterializationIntent(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
 		default:
 			iNdEx = preIndex
 			skippy, err := skip(dAtA[iNdEx:])

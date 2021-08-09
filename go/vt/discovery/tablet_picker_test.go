@@ -164,7 +164,7 @@ func TestPickRespectsTabletType(t *testing.T) {
 	te := newPickerTestEnv(t, []string{"cell"})
 	want := addTablet(te, 100, topodatapb.TabletType_REPLICA, "cell", true, true)
 	defer deleteTablet(t, te, want)
-	dont := addTablet(te, 101, topodatapb.TabletType_MASTER, "cell", true, true)
+	dont := addTablet(te, 101, topodatapb.TabletType_PRIMARY, "cell", true, true)
 	defer deleteTablet(t, te, dont)
 
 	tp, err := NewTabletPicker(te.topoServ, te.cells, te.keyspace, te.shard, "replica,rdonly")
@@ -196,12 +196,12 @@ func TestPickMultiCell(t *testing.T) {
 
 func TestPickMaster(t *testing.T) {
 	te := newPickerTestEnv(t, []string{"cell", "otherCell"})
-	want := addTablet(te, 100, topodatapb.TabletType_MASTER, "cell", true, true)
+	want := addTablet(te, 100, topodatapb.TabletType_PRIMARY, "cell", true, true)
 	defer deleteTablet(t, te, want)
 	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 	defer cancel()
 	_, err := te.topoServ.UpdateShardFields(ctx, te.keyspace, te.shard, func(si *topo.ShardInfo) error {
-		si.MasterAlias = want.Alias
+		si.PrimaryAlias = want.Alias
 		return nil
 	})
 	require.NoError(t, err)

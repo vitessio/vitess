@@ -198,6 +198,6 @@ func TestPromotionLagFailure(t *testing.T) {
 	// wait for 20 seconds
 	time.Sleep(20 * time.Second)
 
-	// the previous primary should still be the primary since recovery of dead master should fail
+	// the previous primary should still be the primary since recovery of dead primary should fail
 	checkPrimaryTablet(t, clusterInstance, curPrimary)
 }

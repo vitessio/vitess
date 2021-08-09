@@ -74,7 +74,7 @@ func TestRemoveUnhealthyTablets(t *testing.T) {
 }
 
 func master(uid uint32) LegacyTabletStats {
-	return minimalTabletStats(uid, topodatapb.TabletType_MASTER)
+	return minimalTabletStats(uid, topodatapb.TabletType_PRIMARY)
 }
 
 func replica(uid uint32) LegacyTabletStats {

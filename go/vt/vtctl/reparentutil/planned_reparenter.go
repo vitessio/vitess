@@ -101,7 +101,7 @@ func (pr *PlannedReparenter) ReparentShard(ctx context.Context, keyspace string,
 			return nil, err
 		}
 
-		opts.AvoidPrimaryAlias = shardInfo.MasterAlias
+		opts.AvoidPrimaryAlias = shardInfo.PrimaryAlias
 	}
 
 	ev := &events.Reparent{}
@@ -148,7 +148,7 @@ func (pr *PlannedReparenter) preflightChecks(
 	}
 
 	if opts.NewPrimaryAlias == nil {
-		if !topoproto.TabletAliasEqual(opts.AvoidPrimaryAlias, ev.ShardInfo.MasterAlias) {
+		if !topoproto.TabletAliasEqual(opts.AvoidPrimaryAlias, ev.ShardInfo.PrimaryAlias) {
 			event.DispatchUpdate(ev, "current primary is different than tablet to avoid, nothing to do")
 			return true, nil
 		}
@@ -161,7 +161,7 @@ func (pr *PlannedReparenter) preflightChecks(
 		}
 
 		if opts.NewPrimaryAlias == nil {
-			return true, vterrors.Errorf(vtrpc.Code_INTERNAL, "cannot find a tablet to reparent to")
+			return true, vterrors.Errorf(vtrpc.Code_INTERNAL, "cannot find a tablet to reparent to in the same cell as the current primary")
 		}
 
 		pr.logger.Infof("elected new primary candidate %v", topoproto.TabletAliasString(opts.NewPrimaryAlias))
@@ -177,7 +177,7 @@ func (pr *PlannedReparenter) preflightChecks(
 
 	ev.NewMaster = proto.Clone(newPrimaryTabletInfo.Tablet).(*topodatapb.Tablet)
 
-	if topoproto.TabletAliasIsZero(ev.ShardInfo.MasterAlias) {
+	if topoproto.TabletAliasIsZero(ev.ShardInfo.PrimaryAlias) {
 		return true, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "the shard has no current primary, use EmergencyReparentShard instead")
 	}
 
