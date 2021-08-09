@@ -249,7 +249,7 @@ func stopVtorc(t *testing.T) {
 }
 
 // setupVttabletsAndVtorc is used to setup the vttablets and start the orchestrator
-func setupVttabletsAndVtorc(t *testing.T, numReplicasReqCell1, numRdonlyReqCell1, numReplicasReqCell2, numRdonlyReqCell2 int, orcExtraArgs []string, pathToConfig string) {
+func setupVttabletsAndVtorc(t *testing.T, numReplicasReqCell1, numRdonlyReqCell1, numReplicasReqCell2, numRdonlyReqCell2 int, orcExtraArgs []string, configFileName string) {
 	// stop vtorc if it is running
 	stopVtorc(t)
 
@@ -312,9 +312,7 @@ func setupVttabletsAndVtorc(t *testing.T, numReplicasReqCell1, numRdonlyReqCell1
 		require.NoError(t, err)
 	}
 
-	if pathToConfig == "" {
-		pathToConfig = path.Join(os.Getenv("PWD"), "test_config.json")
-	}
+	pathToConfig := path.Join(os.Getenv("PWD"), configFileName)
 	// start vtorc
 	startVtorc(t, orcExtraArgs, pathToConfig)
 }
@@ -344,7 +342,7 @@ func TestMain(m *testing.M) {
 	// setup cellInfos before creating the cluster
 	cellInfos = append(cellInfos, &cellInfo{
 		cellName:    cell1,
-		numReplicas: 6,
+		numReplicas: 7,
 		numRdonly:   1,
 	})
 	cellInfos = append(cellInfos, &cellInfo{

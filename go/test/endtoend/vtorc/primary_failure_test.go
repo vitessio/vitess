@@ -30,7 +30,7 @@ import (
 // covers the test case master-failover from orchestrator
 func TestDownPrimary(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	setupVttabletsAndVtorc(t, 2, 0, 0, 0, nil, "")
+	setupVttabletsAndVtorc(t, 2, 0, 0, 0, nil, "test_config.json")
 	keyspace := &clusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 	// find primary from topo
@@ -58,7 +58,7 @@ func TestDownPrimary(t *testing.T) {
 // covers part of the test case master-failover-lost-replicas from orchestrator
 func TestCrossDataCenterFailure(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	setupVttabletsAndVtorc(t, 2, 1, 0, 0, nil, "")
+	setupVttabletsAndVtorc(t, 2, 1, 0, 0, nil, "test_config.json")
 	keyspace := &clusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 	// find primary from topo
@@ -94,7 +94,7 @@ func TestCrossDataCenterFailure(t *testing.T) {
 // covers part of the test case master-failover-lost-replicas from orchestrator
 func TestLostReplicasOnPrimaryFailure(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	setupVttabletsAndVtorc(t, 2, 1, 0, 0, nil, "")
+	setupVttabletsAndVtorc(t, 2, 1, 0, 0, nil, "test_config.json")
 	keyspace := &clusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 	// find primary from topo
@@ -144,4 +144,32 @@ func TestLostReplicasOnPrimaryFailure(t *testing.T) {
 	out, err := runSQL(t, "SELECT HOST FROM performance_schema.replication_connection_configuration", rdonly, "")
 	require.NoError(t, err)
 	require.Equal(t, "//localhost", out.Rows[0][0].ToString())
+}
+
+// This test checks that the promotion of a tablet succeeds if it passes the promotion lag test
+// covers the test case master-failover-fail-promotion-lag-minutes-success from orchestrator
+func TestPromotionLagSuccess(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	setupVttabletsAndVtorc(t, 2, 0, 0, 0, nil, "test_config_promotion_success.json")
+	keyspace := &clusterInstance.Keyspaces[0]
+	shard0 := &keyspace.Shards[0]
+	// find primary from topo
+	curPrimary := shardPrimaryTablet(t, clusterInstance, keyspace, shard0)
+	assert.NotNil(t, curPrimary, "should have elected a primary")
+
+	// Make the current primary database unavailable.
+	err := curPrimary.MysqlctlProcess.Stop()
+	require.NoError(t, err)
+	defer func() {
+		// we remove the tablet from our global list since its mysqlctl process has stopped and cannot be reused for other tests
+		permanentlyRemoveVttablet(curPrimary)
+	}()
+
+	for _, tablet := range shard0.Vttablets {
+		// we know we have only two tablets, so the "other" one must be the new primary
+		if tablet.Alias != curPrimary.Alias {
+			checkPrimaryTablet(t, clusterInstance, tablet)
+			break
+		}
+	}
 }
