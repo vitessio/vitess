@@ -141,7 +141,7 @@ func TestBeginOnReplica(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func TestTabletServerMasterToReplica(t *testing.T) {
+func TestTabletServerPrimaryToReplica(t *testing.T) {
 	// Reuse code from tx_executor_test.
 	_, tsv, db := newTestTxExecutor(t)
 	defer tsv.StopService()

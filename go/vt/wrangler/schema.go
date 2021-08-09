@@ -69,7 +69,7 @@ func (wr *Wrangler) ReloadSchema(ctx context.Context, tabletAlias *topodatapb.Ta
 // and the periodic schema reload makes them self-healing anyway.
 // So we do this on a best-effort basis, and log warnings for any tablets
 // that fail to reload within the context deadline.
-func (wr *Wrangler) ReloadSchemaShard(ctx context.Context, keyspace, shard, replicationPos string, concurrency *sync2.Semaphore, includeMaster bool) {
+func (wr *Wrangler) ReloadSchemaShard(ctx context.Context, keyspace, shard, replicationPos string, concurrency *sync2.Semaphore, includePrimary bool) {
 	tablets, err := wr.ts.GetTabletMapForShard(ctx, keyspace, shard)
 	switch {
 	case topo.IsErrType(err, topo.PartialResult):
@@ -86,7 +86,7 @@ func (wr *Wrangler) ReloadSchemaShard(ctx context.Context, keyspace, shard, repl
 
 	var wg sync.WaitGroup
 	for _, ti := range tablets {
-		if !includeMaster && ti.Type == topodatapb.TabletType_PRIMARY {
+		if !includePrimary && ti.Type == topodatapb.TabletType_PRIMARY {
 			// We don't need to reload on the primary
 			// because we assume ExecuteFetchAsDba()
 			// already did that.
@@ -150,7 +150,7 @@ func (wr *Wrangler) ValidateSchemaShard(ctx context.Context, keyspace, shard str
 	}
 
 	// get schema from the primary, or error
-	if !si.HasMaster() {
+	if !si.HasPrimary() {
 		return fmt.Errorf("no master in shard %v/%v", keyspace, shard)
 	}
 	log.Infof("Gathering schema for master %v", topoproto.TabletAliasString(si.PrimaryAlias))
@@ -233,7 +233,7 @@ func (wr *Wrangler) ValidateSchemaKeyspace(ctx context.Context, keyspace string,
 			continue
 		}
 
-		if !si.HasMaster() {
+		if !si.HasPrimary() {
 			if !skipNoPrimary {
 				er.RecordError(fmt.Errorf("no master in shard %v/%v", keyspace, shard))
 			}

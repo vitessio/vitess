@@ -364,7 +364,7 @@ func (shard *GRShard) instanceReachable(ctx context.Context, instance *grInstanc
 // findShardPrimaryTablet iterates through the replicas stored in grShard and returns
 // the one that's marked as primary
 func (shard *GRShard) findShardPrimaryTablet() *grInstance {
-	var latestMasterTimestamp time.Time
+	var latestPrimaryTimestamp time.Time
 	var primaryInstance *grInstance
 	foundPrimary := false
 	for _, instance := range shard.instances {
@@ -372,8 +372,8 @@ func (shard *GRShard) findShardPrimaryTablet() *grInstance {
 			foundPrimary = true
 			// It is possible that there are more than one primary in topo server
 			// we should compare timestamp to pick the latest one
-			if latestMasterTimestamp.Before(instance.masterTimeStamp) {
-				latestMasterTimestamp = instance.masterTimeStamp
+			if latestPrimaryTimestamp.Before(instance.primaryTimeStamp) {
+				latestPrimaryTimestamp = instance.primaryTimeStamp
 				primaryInstance = instance
 			}
 		}

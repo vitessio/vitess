@@ -80,7 +80,7 @@ func (tablet *Vttablet) ValidateTabletRestart(t *testing.T) {
 func GetPrimaryPosition(t *testing.T, vttablet Vttablet, hostname string) (string, string) {
 	ctx := context.Background()
 	vtablet := getTablet(vttablet.GrpcPort, hostname)
-	pos, err := tmClient.MasterPosition(ctx, vtablet)
+	pos, err := tmClient.PrimaryPosition(ctx, vtablet)
 	require.Nil(t, err)
 	gtID := strings.SplitAfter(pos, "/")[1]
 	return pos, gtID

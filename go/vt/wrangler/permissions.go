@@ -65,7 +65,7 @@ func (wr *Wrangler) ValidatePermissionsShard(ctx context.Context, keyspace, shar
 	}
 
 	// get permissions from the primary, or error
-	if !si.HasMaster() {
+	if !si.HasPrimary() {
 		return fmt.Errorf("no master in shard %v/%v", keyspace, shard)
 	}
 	log.Infof("Gathering permissions for master %v", topoproto.TabletAliasString(si.PrimaryAlias))
@@ -121,7 +121,7 @@ func (wr *Wrangler) ValidatePermissionsKeyspace(ctx context.Context, keyspace st
 	if err != nil {
 		return err
 	}
-	if !si.HasMaster() {
+	if !si.HasPrimary() {
 		return fmt.Errorf("no master in shard %v/%v", keyspace, shards[0])
 	}
 	referenceAlias := si.PrimaryAlias

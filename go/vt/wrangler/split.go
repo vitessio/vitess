@@ -86,7 +86,7 @@ func (wr *Wrangler) WaitForFilteredReplication(ctx context.Context, keyspace, sh
 	if len(shardInfo.SourceShards) == 0 {
 		return fmt.Errorf("shard %v/%v has no source shard", keyspace, shard)
 	}
-	if !shardInfo.HasMaster() {
+	if !shardInfo.HasPrimary() {
 		return fmt.Errorf("shard %v/%v has no master", keyspace, shard)
 	}
 	alias := shardInfo.PrimaryAlias

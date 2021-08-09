@@ -88,8 +88,8 @@ type shardBuffer struct {
 	// lastReparent is the last time we saw that the tablet alias of the PRIMARY
 	// changed i.e. we definitely reparented to a different tablet.
 	lastReparent time.Time
-	// currentMaster is tracked to determine when to update "lastReparent".
-	currentMaster *topodatapb.TabletAlias
+	// currentPrimary is tracked to determine when to update "lastReparent".
+	currentPrimary *topodatapb.TabletAlias
 	// timeoutThread will be set while a failover is in progress and the object is
 	// in the BUFFERING state.
 	timeoutThread *timeoutThread
@@ -490,11 +490,11 @@ func (sb *shardBuffer) recordExternallyReparentedTimestamp(timestamp int64, alia
 	}
 
 	sb.externallyReparented = timestamp
-	if !topoproto.TabletAliasEqual(alias, sb.currentMaster) {
-		if sb.currentMaster != nil {
+	if !topoproto.TabletAliasEqual(alias, sb.currentPrimary) {
+		if sb.currentPrimary != nil {
 			sb.lastReparent = sb.now()
 		}
-		sb.currentMaster = alias
+		sb.currentPrimary = alias
 	}
 	sb.stopBufferingLocked(stopFailoverEndDetected, "failover end detected")
 }

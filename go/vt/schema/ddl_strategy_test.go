@@ -66,8 +66,9 @@ func TestParseDDLStrategy(t *testing.T) {
 		{
 			strategyVariable: "gh-ost --max-load=Threads_running=100 --allow-master",
 			strategy:         DDLStrategyGhost,
-			options:          "--max-load=Threads_running=100 --allow-master",
-			runtimeOptions:   "--max-load=Threads_running=100 --allow-master",
+			// These are gh-ost options. Nothing we can do until that changes upstream
+			options:        "--max-load=Threads_running=100 --allow-master",
+			runtimeOptions: "--max-load=Threads_running=100 --allow-master",
 		},
 		{
 			strategyVariable: "gh-ost --max-load=Threads_running=100 -declarative",

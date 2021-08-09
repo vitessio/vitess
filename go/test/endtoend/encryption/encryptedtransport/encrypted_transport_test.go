@@ -426,7 +426,7 @@ func setSSLInfoEmpty() {
 
 func getSession() *vtgatepb.Session {
 	return &vtgatepb.Session{
-		TargetString: "test_keyspace:0@master",
+		TargetString: "test_keyspace:0@primary",
 	}
 }
 

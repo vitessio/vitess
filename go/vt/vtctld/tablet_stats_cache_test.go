@@ -303,7 +303,7 @@ func TestHeatmapData(t *testing.T) {
 	}
 
 	// Checking that the heatmap data is returned correctly for the following view: (keyspace="ks1", cell="cell2", type="PRIMARY").
-	got5, err := tabletStatsCache.heatmapData("ks1", "cell2", "MASTER", "lag")
+	got5, err := tabletStatsCache.heatmapData("ks1", "cell2", "PRIMARY", "lag")
 	if err != nil {
 		t.Errorf("could not get heatmap data: %v", err)
 	}

@@ -1821,7 +1821,7 @@ func (tsv *TabletServer) SetPassthroughDMLs(val bool) {
 // SetConsolidatorMode sets the consolidator mode.
 func (tsv *TabletServer) SetConsolidatorMode(mode string) {
 	switch mode {
-	case tabletenv.NotOnMaster, tabletenv.Enable, tabletenv.Disable:
+	case tabletenv.NotOnMaster, tabletenv.NotOnPrimary, tabletenv.Enable, tabletenv.Disable:
 		tsv.qe.consolidatorMode.Set(mode)
 	}
 }
