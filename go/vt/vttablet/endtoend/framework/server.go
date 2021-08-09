@@ -73,7 +73,7 @@ func StartCustomServer(connParams, connAppDebugParams mysql.ConnParams, dbName s
 	Target = &querypb.Target{
 		Keyspace:   "vttest",
 		Shard:      "0",
-		TabletType: topodatapb.TabletType_MASTER,
+		TabletType: topodatapb.TabletType_PRIMARY,
 	}
 	TopoServer = memorytopo.NewServer("")
 

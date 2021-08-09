@@ -46,15 +46,15 @@ func TestLegacyExecuteFailOnAutocommit(t *testing.T) {
 	createSandbox("TestExecuteFailOnAutocommit")
 	hc := discovery.NewFakeLegacyHealthCheck()
 	sc := newTestLegacyScatterConn(hc, new(sandboxTopo), "aa")
-	sbc0 := hc.AddTestTablet("aa", "0", 1, "TestExecuteFailOnAutocommit", "0", topodatapb.TabletType_MASTER, true, 1, nil)
-	sbc1 := hc.AddTestTablet("aa", "1", 1, "TestExecuteFailOnAutocommit", "1", topodatapb.TabletType_MASTER, true, 1, nil)
+	sbc0 := hc.AddTestTablet("aa", "0", 1, "TestExecuteFailOnAutocommit", "0", topodatapb.TabletType_PRIMARY, true, 1, nil)
+	sbc1 := hc.AddTestTablet("aa", "1", 1, "TestExecuteFailOnAutocommit", "1", topodatapb.TabletType_PRIMARY, true, 1, nil)
 
 	rss := []*srvtopo.ResolvedShard{
 		{
 			Target: &querypb.Target{
 				Keyspace:   "TestExecuteFailOnAutocommit",
 				Shard:      "0",
-				TabletType: topodatapb.TabletType_MASTER,
+				TabletType: topodatapb.TabletType_PRIMARY,
 			},
 			Gateway: sbc0,
 		},
@@ -62,7 +62,7 @@ func TestLegacyExecuteFailOnAutocommit(t *testing.T) {
 			Target: &querypb.Target{
 				Keyspace:   "TestExecuteFailOnAutocommit",
 				Shard:      "1",
-				TabletType: topodatapb.TabletType_MASTER,
+				TabletType: topodatapb.TabletType_PRIMARY,
 			},
 			Gateway: sbc1,
 		},
@@ -89,7 +89,7 @@ func TestLegacyExecuteFailOnAutocommit(t *testing.T) {
 		InTransaction: true,
 		ShardSessions: []*vtgatepb.Session_ShardSession{
 			{
-				Target:        &querypb.Target{Keyspace: "TestExecuteFailOnAutocommit", Shard: "0", TabletType: topodatapb.TabletType_MASTER, Cell: "aa"},
+				Target:        &querypb.Target{Keyspace: "TestExecuteFailOnAutocommit", Shard: "0", TabletType: topodatapb.TabletType_PRIMARY, Cell: "aa"},
 				TransactionId: 123,
 				TabletAlias:   nil,
 			},
@@ -496,13 +496,13 @@ func TestScatterConnSingleDB(t *testing.T) {
 
 	hc.Reset()
 	sc := newTestLegacyScatterConn(hc, new(sandboxTopo), "aa")
-	hc.AddTestTablet("aa", "0", 1, "TestScatterConnSingleDB", "0", topodatapb.TabletType_MASTER, true, 1, nil)
-	hc.AddTestTablet("aa", "1", 1, "TestScatterConnSingleDB", "1", topodatapb.TabletType_MASTER, true, 1, nil)
+	hc.AddTestTablet("aa", "0", 1, "TestScatterConnSingleDB", "0", topodatapb.TabletType_PRIMARY, true, 1, nil)
+	hc.AddTestTablet("aa", "1", 1, "TestScatterConnSingleDB", "1", topodatapb.TabletType_PRIMARY, true, 1, nil)
 
 	res := srvtopo.NewResolver(&sandboxTopo{}, sc.gateway, "aa")
-	rss0, err := res.ResolveDestination(ctx, "TestScatterConnSingleDB", topodatapb.TabletType_MASTER, key.DestinationShard("0"))
+	rss0, err := res.ResolveDestination(ctx, "TestScatterConnSingleDB", topodatapb.TabletType_PRIMARY, key.DestinationShard("0"))
 	require.NoError(t, err)
-	rss1, err := res.ResolveDestination(ctx, "TestScatterConnSingleDB", topodatapb.TabletType_MASTER, key.DestinationShard("1"))
+	rss1, err := res.ResolveDestination(ctx, "TestScatterConnSingleDB", topodatapb.TabletType_PRIMARY, key.DestinationShard("1"))
 	require.NoError(t, err)
 
 	want := "multi-db transaction attempted"

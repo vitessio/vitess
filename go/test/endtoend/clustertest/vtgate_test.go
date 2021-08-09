@@ -81,7 +81,7 @@ func verifyVtgateVariables(t *testing.T, url string) {
 		if len(healthCheckConnection) <= 0 {
 			t.Error("Atleast one healthy tablet needs to be present")
 		}
-		if !isMasterTabletPresent(healthCheckConnection) {
+		if !isPrimaryTabletPresent(healthCheckConnection) {
 			t.Error("Atleast one master tablet needs to be present")
 		}
 	} else {
@@ -101,9 +101,9 @@ func getMapFromJSON(JSON map[string]interface{}, key string) map[string]interfac
 	return result
 }
 
-func isMasterTabletPresent(tablets map[string]interface{}) bool {
+func isPrimaryTabletPresent(tablets map[string]interface{}) bool {
 	for key := range tablets {
-		if strings.Contains(key, "master") {
+		if strings.Contains(key, "primary") {
 			return true
 		}
 	}

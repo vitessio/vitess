@@ -119,7 +119,7 @@ func getClusterConfig(idx int, dataRootDir string) *ClusterConfig {
 		vtgatePort:          basePort + 1,
 		vtgateGrpcPort:      basePort + 991,
 		vtgateMySQLPort:     basePort + 306,
-		tabletTypes:         "master",
+		tabletTypes:         "primary",
 		vtdataroot:          dataRootDir,
 		tabletPortBase:      basePort + 1000,
 		tabletGrpcPortBase:  basePort + 1991,
@@ -301,7 +301,7 @@ func (vc *VitessCluster) AddShards(t testing.TB, cells []*Cell, keyspace *Keyspa
 				require.NoError(t, err)
 				require.NotNil(t, primary)
 				tabletIndex++
-				primary.Vttablet.VreplicationTabletType = "MASTER"
+				primary.Vttablet.VreplicationTabletType = "PRIMARY"
 				tablets = append(tablets, primary)
 				dbProcesses = append(dbProcesses, proc)
 				primaryTabletUID = primary.Vttablet.TabletUID

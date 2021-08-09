@@ -1023,7 +1023,7 @@ func (s *VtctldServer) GetTablets(ctx context.Context, req *vtctldatapb.GetTable
 	// topo. In that case, report its type as UNKNOWN. It used to be MASTER but
 	// is no longer the serving primary.
 	adjustTypeForStalePrimary := func(ti *topo.TabletInfo, mtst time.Time) {
-		if ti.Type == topodatapb.TabletType_MASTER && ti.GetMasterTermStartTime().Before(mtst) {
+		if ti.Type == topodatapb.TabletType_PRIMARY && ti.GetPrimaryTermStartTime().Before(mtst) {
 			ti.Tablet.Type = topodatapb.TabletType_UNKNOWN
 		}
 	}
@@ -1078,8 +1078,8 @@ func (s *VtctldServer) GetTablets(ctx context.Context, req *vtctldatapb.GetTable
 	if tabletMap != nil {
 		var trueMasterTimestamp time.Time
 		for _, ti := range tabletMap {
-			if ti.Type == topodatapb.TabletType_MASTER {
-				masterTimestamp := ti.GetMasterTermStartTime()
+			if ti.Type == topodatapb.TabletType_PRIMARY {
+				masterTimestamp := ti.GetPrimaryTermStartTime()
 				if masterTimestamp.After(trueMasterTimestamp) {
 					trueMasterTimestamp = masterTimestamp
 				}
@@ -1146,7 +1146,7 @@ func (s *VtctldServer) GetTablets(ctx context.Context, req *vtctldatapb.GetTable
 
 	// Collect true master term start times, and optionally filter out any
 	// tablets by keyspace according to the request.
-	masterTermStartTimes := map[string]time.Time{}
+	PrimaryTermStartTimes := map[string]time.Time{}
 	filteredTablets := make([]*topo.TabletInfo, 0, len(allTablets))
 
 	for _, tablet := range allTablets {
@@ -1155,12 +1155,12 @@ func (s *VtctldServer) GetTablets(ctx context.Context, req *vtctldatapb.GetTable
 		}
 
 		key := tablet.Keyspace + "." + tablet.Shard
-		if v, ok := masterTermStartTimes[key]; ok {
-			if tablet.GetMasterTermStartTime().After(v) {
-				masterTermStartTimes[key] = tablet.GetMasterTermStartTime()
+		if v, ok := PrimaryTermStartTimes[key]; ok {
+			if tablet.GetPrimaryTermStartTime().After(v) {
+				PrimaryTermStartTimes[key] = tablet.GetPrimaryTermStartTime()
 			}
 		} else {
-			masterTermStartTimes[key] = tablet.GetMasterTermStartTime()
+			PrimaryTermStartTimes[key] = tablet.GetPrimaryTermStartTime()
 		}
 
 		filteredTablets = append(filteredTablets, tablet)
@@ -1173,7 +1173,7 @@ func (s *VtctldServer) GetTablets(ctx context.Context, req *vtctldatapb.GetTable
 	// here.
 	for i, ti := range filteredTablets {
 		key := ti.Keyspace + "." + ti.Shard
-		adjustTypeForStalePrimary(ti, masterTermStartTimes[key])
+		adjustTypeForStalePrimary(ti, PrimaryTermStartTimes[key])
 
 		adjustedTablets[i] = ti.Tablet
 	}
@@ -1313,7 +1313,7 @@ func (s *VtctldServer) InitShardPrimaryLocked(
 
 	// Check the master is the only master is the shard, or -force was used.
 	_, masterTabletMap := topotools.SortedTabletMap(tabletMap)
-	if !topoproto.TabletAliasEqual(shardInfo.MasterAlias, req.PrimaryElectTabletAlias) {
+	if !topoproto.TabletAliasEqual(shardInfo.PrimaryAlias, req.PrimaryElectTabletAlias) {
 		if !req.Force {
 			return fmt.Errorf("master-elect tablet %v is not the shard master, use -force to proceed anyway", topoproto.TabletAliasString(req.PrimaryElectTabletAlias))
 		}
@@ -1435,9 +1435,9 @@ func (s *VtctldServer) InitShardPrimaryLocked(
 		wgReplicas.Wait()
 		return fmt.Errorf("failed to PopulateReparentJournal on master: %v", masterErr)
 	}
-	if !topoproto.TabletAliasEqual(shardInfo.MasterAlias, req.PrimaryElectTabletAlias) {
+	if !topoproto.TabletAliasEqual(shardInfo.PrimaryAlias, req.PrimaryElectTabletAlias) {
 		if _, err := s.ts.UpdateShardFields(ctx, req.Keyspace, req.Shard, func(si *topo.ShardInfo) error {
-			si.MasterAlias = req.PrimaryElectTabletAlias
+			si.PrimaryAlias = req.PrimaryElectTabletAlias
 			return nil
 		}); err != nil {
 			wgReplicas.Wait()
@@ -1684,31 +1684,31 @@ func (s *VtctldServer) ReparentTablet(ctx context.Context, req *vtctldatapb.Repa
 		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "no primary tablet for shard %v/%v", tablet.Keyspace, tablet.Shard)
 	}
 
-	shardPrimary, err := s.ts.GetTablet(ctx, shard.MasterAlias)
+	shardPrimary, err := s.ts.GetTablet(ctx, shard.PrimaryAlias)
 	if err != nil {
-		return nil, fmt.Errorf("cannot lookup primary tablet %v for shard %v/%v: %w", topoproto.TabletAliasString(shard.MasterAlias), tablet.Keyspace, tablet.Shard, err)
+		return nil, fmt.Errorf("cannot lookup primary tablet %v for shard %v/%v: %w", topoproto.TabletAliasString(shard.PrimaryAlias), tablet.Keyspace, tablet.Shard, err)
 	}
 
-	if shardPrimary.Type != topodatapb.TabletType_MASTER {
-		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "TopologyServer has incosistent state for shard master %v", topoproto.TabletAliasString(shard.MasterAlias))
+	if shardPrimary.Type != topodatapb.TabletType_PRIMARY {
+		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "TopologyServer has incosistent state for shard master %v", topoproto.TabletAliasString(shard.PrimaryAlias))
 	}
 
 	if shardPrimary.Keyspace != tablet.Keyspace || shardPrimary.Shard != tablet.Shard {
-		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "primary %v and potential replica %v not in same keypace shard (%v/%v)", topoproto.TabletAliasString(shard.MasterAlias), topoproto.TabletAliasString(req.Tablet), tablet.Keyspace, tablet.Shard)
+		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "primary %v and potential replica %v not in same keypace shard (%v/%v)", topoproto.TabletAliasString(shard.PrimaryAlias), topoproto.TabletAliasString(req.Tablet), tablet.Keyspace, tablet.Shard)
 	}
 
 	if topoproto.TabletAliasEqual(req.Tablet, shardPrimary.Alias) {
 		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "cannot ReparentTablet current shard primary (%v) onto itself", topoproto.TabletAliasString(req.Tablet))
 	}
 
-	if err := s.tmc.SetMaster(ctx, tablet.Tablet, shard.MasterAlias, 0, "", false); err != nil {
+	if err := s.tmc.SetMaster(ctx, tablet.Tablet, shard.PrimaryAlias, 0, "", false); err != nil {
 		return nil, err
 	}
 
 	return &vtctldatapb.ReparentTabletResponse{
 		Keyspace: tablet.Keyspace,
 		Shard:    tablet.Shard,
-		Primary:  shard.MasterAlias,
+		Primary:  shard.PrimaryAlias,
 	}, nil
 }
 
@@ -1745,7 +1745,7 @@ func (s *VtctldServer) ShardReplicationPositions(ctx context.Context, req *vtctl
 
 	for alias, tabletInfo := range tabletInfoMap {
 		switch {
-		case tabletInfo.Type == topodatapb.TabletType_MASTER:
+		case tabletInfo.Type == topodatapb.TabletType_PRIMARY:
 			wg.Add(1)
 
 			go func(ctx context.Context, alias string, tablet *topodatapb.Tablet) {
@@ -1866,12 +1866,12 @@ func (s *VtctldServer) TabletExternallyReparented(ctx context.Context, req *vtct
 		Keyspace:   shard.Keyspace(),
 		Shard:      shard.ShardName(),
 		NewPrimary: req.Tablet,
-		OldPrimary: shard.MasterAlias,
+		OldPrimary: shard.PrimaryAlias,
 	}
 
 	// If the externally reparented (new primary) tablet is already MASTER in
 	// the topo, this is a no-op.
-	if tablet.Type == topodatapb.TabletType_MASTER {
+	if tablet.Type == topodatapb.TabletType_PRIMARY {
 		return resp, nil
 	}
 
@@ -1880,8 +1880,8 @@ func (s *VtctldServer) TabletExternallyReparented(ctx context.Context, req *vtct
 		ShardInfo: *shard,
 		NewMaster: proto.Clone(tablet.Tablet).(*topodatapb.Tablet),
 		OldMaster: &topodatapb.Tablet{
-			Alias: shard.MasterAlias,
-			Type:  topodatapb.TabletType_MASTER,
+			Alias: shard.PrimaryAlias,
+			Type:  topodatapb.TabletType_PRIMARY,
 		},
 	}
 
@@ -1894,7 +1894,7 @@ func (s *VtctldServer) TabletExternallyReparented(ctx context.Context, req *vtct
 
 	event.DispatchUpdate(ev, "starting external reparent")
 
-	if err := s.tmc.ChangeType(ctx, tablet.Tablet, topodatapb.TabletType_MASTER); err != nil {
+	if err := s.tmc.ChangeType(ctx, tablet.Tablet, topodatapb.TabletType_PRIMARY); err != nil {
 		log.Warningf("ChangeType(%v, MASTER): %v", topoproto.TabletAliasString(req.Tablet), err)
 		return nil, err
 	}

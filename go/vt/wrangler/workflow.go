@@ -370,7 +370,7 @@ func (vrw *VReplicationWorkflow) getTabletTypes() []topodatapb.TabletType {
 	return tabletTypes
 }
 
-func (vrw *VReplicationWorkflow) parseTabletTypes() (hasReplica, hasRdonly, hasMaster bool, err error) {
+func (vrw *VReplicationWorkflow) parseTabletTypes() (hasReplica, hasRdonly, hasPrimary bool, err error) {
 	tabletTypesArr := strings.Split(vrw.params.TabletTypes, ",")
 	for _, tabletType := range tabletTypesArr {
 		switch tabletType {
@@ -378,13 +378,13 @@ func (vrw *VReplicationWorkflow) parseTabletTypes() (hasReplica, hasRdonly, hasM
 			hasReplica = true
 		case "rdonly":
 			hasRdonly = true
-		case "master":
-			hasMaster = true
+		case "primary", "master":
+			hasPrimary = true
 		default:
 			return false, false, false, fmt.Errorf("invalid tablet type passed %s", tabletType)
 		}
 	}
-	return hasReplica, hasRdonly, hasMaster, nil
+	return hasReplica, hasRdonly, hasPrimary, nil
 }
 
 // endregion
@@ -408,7 +408,7 @@ func (vrw *VReplicationWorkflow) switchReads() (*[]string, error) {
 	log.Infof("In VReplicationWorkflow.switchReads() for %+v", vrw)
 	var tabletTypes []topodatapb.TabletType
 	for _, tt := range vrw.getTabletTypes() {
-		if tt != topodatapb.TabletType_MASTER {
+		if tt != topodatapb.TabletType_PRIMARY {
 			tabletTypes = append(tabletTypes, tt)
 		}
 	}
@@ -482,7 +482,7 @@ func (vrw *VReplicationWorkflow) GetCopyProgress() (*CopyProgress, error) {
 	getRowCountQuery := "select table_name, table_rows, data_length from information_schema.tables where table_schema = %s and table_name in (%s)"
 	tables := make(map[string]bool)
 	const MaxRows = 1000
-	sourceMasters := make(map[*topodatapb.TabletAlias]bool)
+	sourcePrimaries := make(map[*topodatapb.TabletAlias]bool)
 	for _, target := range vrw.ts.targets {
 		for id, bls := range target.Sources {
 			query := fmt.Sprintf(getTablesQuery, id)
@@ -502,13 +502,13 @@ func (vrw *VReplicationWorkflow) GetCopyProgress() (*CopyProgress, error) {
 				return nil, err
 			}
 			found := false
-			for existingSource := range sourceMasters {
-				if existingSource.Uid == sourcesi.MasterAlias.Uid {
+			for existingSource := range sourcePrimaries {
+				if existingSource.Uid == sourcesi.PrimaryAlias.Uid {
 					found = true
 				}
 			}
 			if !found {
-				sourceMasters[sourcesi.MasterAlias] = true
+				sourcePrimaries[sourcesi.PrimaryAlias] = true
 			}
 		}
 	}
@@ -577,7 +577,7 @@ func (vrw *VReplicationWorkflow) GetCopyProgress() (*CopyProgress, error) {
 	}
 
 	query = fmt.Sprintf(getRowCountQuery, encodeString(sourceDbName), tablesStr)
-	for source := range sourceMasters {
+	for source := range sourcePrimaries {
 		ti, err := vrw.wr.ts.GetTablet(ctx, source)
 		tablet := ti.Tablet
 		if err != nil {

@@ -93,7 +93,7 @@ var sequenceFields = []*querypb.Field{
 
 func (qre *QueryExecutor) shouldConsolidate() bool {
 	cm := qre.tsv.qe.consolidatorMode.Get()
-	return cm == tabletenv.Enable || (cm == tabletenv.NotOnMaster && qre.tabletType != topodatapb.TabletType_MASTER)
+	return cm == tabletenv.Enable || (cm == tabletenv.NotOnMaster && qre.tabletType != topodatapb.TabletType_PRIMARY)
 }
 
 // Execute performs a non-streaming query execution.

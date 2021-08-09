@@ -478,3 +478,13 @@ Gen4 plan same as above
   }
 }
 Gen4 error: In aggregated query without GROUP BY, expression of SELECT list contains nonaggregated column 'id'; this is incompatible with sql_mode=only_full_group_by
+
+# avg function on scatter query
+"select avg(id) from user"
+"unsupported: in scatter query: complex aggregate expression"
+Gen4 plan same as above
+
+# scatter aggregate with ambiguous aliases
+"select distinct a, b as a from user"
+"generating order by clause: ambiguous symbol reference: a"
+Gen4 plan same as above

@@ -46,7 +46,7 @@ func TestInitShardPrimary(t *testing.T) {
 	primaryDb := fakesqldb.New(t)
 	primaryDb.AddQuery("create database if not exists `vt_test_keyspace`", &sqltypes.Result{InsertID: 0, RowsAffected: 0})
 
-	tablet1 := testlib.NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_MASTER, primaryDb)
+	tablet1 := testlib.NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_PRIMARY, primaryDb)
 	tablet2 := testlib.NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_REPLICA, nil)
 	tablet3 := testlib.NewFakeTablet(t, wr, "cell1", 2, topodatapb.TabletType_REPLICA, nil)
 
@@ -158,5 +158,5 @@ func TestInitShardPrimaryNoFormerPrimary(t *testing.T) {
 	assert.NotNil(t, resp)
 	tablet1PostInit, err := ts.GetTablet(context.Background(), tablet1.Tablet.Alias)
 	require.NoError(t, err)
-	assert.Equal(t, topodatapb.TabletType_MASTER, tablet1PostInit.Type)
+	assert.Equal(t, topodatapb.TabletType_PRIMARY, tablet1PostInit.Type)
 }

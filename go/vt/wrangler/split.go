@@ -89,7 +89,7 @@ func (wr *Wrangler) WaitForFilteredReplication(ctx context.Context, keyspace, sh
 	if !shardInfo.HasMaster() {
 		return fmt.Errorf("shard %v/%v has no master", keyspace, shard)
 	}
-	alias := shardInfo.MasterAlias
+	alias := shardInfo.PrimaryAlias
 	tabletInfo, err := wr.TopoServer().GetTablet(ctx, alias)
 	if err != nil {
 		return err

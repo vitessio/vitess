@@ -441,7 +441,7 @@ func (sm *StreamMigrator) syncSourceStreams(ctx context.Context) (map[string]mys
 					return
 				}
 
-				primary, err := sm.ts.TopoServer().GetTablet(ctx, si.MasterAlias)
+				primary, err := sm.ts.TopoServer().GetTablet(ctx, si.PrimaryAlias)
 				if err != nil {
 					allErrors.RecordError(err)
 					return

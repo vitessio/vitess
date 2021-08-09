@@ -176,10 +176,10 @@ func TestStreamMigrateMainflow(t *testing.T) {
 	checkServedTypes(t, tme.ts, "ks:-80", 3)
 	checkServedTypes(t, tme.ts, "ks:80-", 3)
 
-	checkIsMasterServing(t, tme.ts, "ks:-40", false)
-	checkIsMasterServing(t, tme.ts, "ks:40-", false)
-	checkIsMasterServing(t, tme.ts, "ks:-80", true)
-	checkIsMasterServing(t, tme.ts, "ks:80-", true)
+	checkIfPrimaryServing(t, tme.ts, "ks:-40", false)
+	checkIfPrimaryServing(t, tme.ts, "ks:40-", false)
+	checkIfPrimaryServing(t, tme.ts, "ks:-80", true)
+	checkIfPrimaryServing(t, tme.ts, "ks:80-", true)
 
 	tme.expectDeleteReverseVReplication()
 	tme.expectDeleteTargetVReplication()
@@ -350,10 +350,10 @@ func TestStreamMigrateTwoStreams(t *testing.T) {
 	checkServedTypes(t, tme.ts, "ks:-80", 3)
 	checkServedTypes(t, tme.ts, "ks:80-", 3)
 
-	checkIsMasterServing(t, tme.ts, "ks:-40", false)
-	checkIsMasterServing(t, tme.ts, "ks:40-", false)
-	checkIsMasterServing(t, tme.ts, "ks:-80", true)
-	checkIsMasterServing(t, tme.ts, "ks:80-", true)
+	checkIfPrimaryServing(t, tme.ts, "ks:-40", false)
+	checkIfPrimaryServing(t, tme.ts, "ks:40-", false)
+	checkIfPrimaryServing(t, tme.ts, "ks:-80", true)
+	checkIfPrimaryServing(t, tme.ts, "ks:80-", true)
 
 	verifyQueries(t, tme.allDBClients)
 }
@@ -483,9 +483,9 @@ func TestStreamMigrateOneToMany(t *testing.T) {
 	checkServedTypes(t, tme.ts, "ks:-80", 3)
 	checkServedTypes(t, tme.ts, "ks:80-", 3)
 
-	checkIsMasterServing(t, tme.ts, "ks:0", false)
-	checkIsMasterServing(t, tme.ts, "ks:-80", true)
-	checkIsMasterServing(t, tme.ts, "ks:80-", true)
+	checkIfPrimaryServing(t, tme.ts, "ks:0", false)
+	checkIfPrimaryServing(t, tme.ts, "ks:-80", true)
+	checkIfPrimaryServing(t, tme.ts, "ks:80-", true)
 
 	verifyQueries(t, tme.allDBClients)
 }
@@ -619,9 +619,9 @@ func TestStreamMigrateManyToOne(t *testing.T) {
 	checkServedTypes(t, tme.ts, "ks:80-", 0)
 	checkServedTypes(t, tme.ts, "ks:-", 3)
 
-	checkIsMasterServing(t, tme.ts, "ks:-80", false)
-	checkIsMasterServing(t, tme.ts, "ks:80-", false)
-	checkIsMasterServing(t, tme.ts, "ks:-", true)
+	checkIfPrimaryServing(t, tme.ts, "ks:-80", false)
+	checkIfPrimaryServing(t, tme.ts, "ks:80-", false)
+	checkIfPrimaryServing(t, tme.ts, "ks:-", true)
 
 	verifyQueries(t, tme.allDBClients)
 }
@@ -810,10 +810,10 @@ func TestStreamMigrateSyncSuccess(t *testing.T) {
 	checkServedTypes(t, tme.ts, "ks:-80", 3)
 	checkServedTypes(t, tme.ts, "ks:80-", 3)
 
-	checkIsMasterServing(t, tme.ts, "ks:-40", false)
-	checkIsMasterServing(t, tme.ts, "ks:40-", false)
-	checkIsMasterServing(t, tme.ts, "ks:-80", true)
-	checkIsMasterServing(t, tme.ts, "ks:80-", true)
+	checkIfPrimaryServing(t, tme.ts, "ks:-40", false)
+	checkIfPrimaryServing(t, tme.ts, "ks:40-", false)
+	checkIfPrimaryServing(t, tme.ts, "ks:-80", true)
+	checkIfPrimaryServing(t, tme.ts, "ks:80-", true)
 
 	verifyQueries(t, tme.allDBClients)
 }
@@ -1037,10 +1037,10 @@ func TestStreamMigrateCancel(t *testing.T) {
 	checkServedTypes(t, tme.ts, "ks:-80", 2)
 	checkServedTypes(t, tme.ts, "ks:80-", 2)
 
-	checkIsMasterServing(t, tme.ts, "ks:-40", true)
-	checkIsMasterServing(t, tme.ts, "ks:40-", true)
-	checkIsMasterServing(t, tme.ts, "ks:-80", false)
-	checkIsMasterServing(t, tme.ts, "ks:80-", false)
+	checkIfPrimaryServing(t, tme.ts, "ks:-40", true)
+	checkIfPrimaryServing(t, tme.ts, "ks:40-", true)
+	checkIfPrimaryServing(t, tme.ts, "ks:-80", false)
+	checkIfPrimaryServing(t, tme.ts, "ks:80-", false)
 
 	verifyQueries(t, tme.allDBClients)
 }

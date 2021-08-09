@@ -67,21 +67,21 @@ func TestReshardingWorkflowErrorsAndMisc(t *testing.T) {
 
 	require.ElementsMatch(t, mtwf.getCellsAsArray(), []string{"cell1", "cell2"})
 	require.ElementsMatch(t, mtwf.getTabletTypes(), []topodata.TabletType{topodata.TabletType_REPLICA, topodata.TabletType_RDONLY})
-	hasReplica, hasRdonly, hasMaster, err := mtwf.parseTabletTypes()
+	hasReplica, hasRdonly, hasPrimary, err := mtwf.parseTabletTypes()
 	require.NoError(t, err)
 	require.True(t, hasReplica)
 	require.True(t, hasRdonly)
-	require.False(t, hasMaster)
+	require.False(t, hasPrimary)
 
-	mtwf.params.TabletTypes = "replica,rdonly,master"
+	mtwf.params.TabletTypes = "replica,rdonly,primary"
 	require.ElementsMatch(t, mtwf.getTabletTypes(),
-		[]topodata.TabletType{topodata.TabletType_REPLICA, topodata.TabletType_RDONLY, topodata.TabletType_MASTER})
+		[]topodata.TabletType{topodata.TabletType_REPLICA, topodata.TabletType_RDONLY, topodata.TabletType_PRIMARY})
 
-	hasReplica, hasRdonly, hasMaster, err = mtwf.parseTabletTypes()
+	hasReplica, hasRdonly, hasPrimary, err = mtwf.parseTabletTypes()
 	require.NoError(t, err)
 	require.True(t, hasReplica)
 	require.True(t, hasRdonly)
-	require.True(t, hasMaster)
+	require.True(t, hasPrimary)
 }
 
 func TestCopyProgress(t *testing.T) {
@@ -94,7 +94,7 @@ func TestCopyProgress(t *testing.T) {
 		TargetKeyspace: "ks2",
 		Tables:         "t1,t2",
 		Cells:          "cell1,cell2",
-		TabletTypes:    "replica,rdonly,master",
+		TabletTypes:    "replica,rdonly,primary",
 		Timeout:        DefaultActionTimeout,
 	}
 	tme := newTestTableMigrater(ctx, t)
@@ -173,7 +173,7 @@ func TestMoveTablesV2(t *testing.T) {
 		TargetKeyspace: "ks2",
 		Tables:         "t1,t2",
 		Cells:          "cell1,cell2",
-		TabletTypes:    "replica,rdonly,master",
+		TabletTypes:    "replica,rdonly,primary",
 		Timeout:        DefaultActionTimeout,
 	}
 	tme := newTestTableMigrater(ctx, t)
@@ -219,7 +219,7 @@ func TestMoveTablesV2Complete(t *testing.T) {
 		TargetKeyspace: "ks2",
 		Tables:         "t1,t2",
 		Cells:          "cell1,cell2",
-		TabletTypes:    "replica,rdonly,master",
+		TabletTypes:    "replica,rdonly,primary",
 		Timeout:        DefaultActionTimeout,
 	}
 	tme := newTestTableMigrater(ctx, t)
@@ -267,7 +267,7 @@ func TestMoveTablesV2Partial(t *testing.T) {
 		TargetKeyspace: "ks2",
 		Tables:         "t1,t2",
 		Cells:          "cell1,cell2",
-		TabletTypes:    "replica,rdonly,master",
+		TabletTypes:    "replica,rdonly,primary",
 		Timeout:        DefaultActionTimeout,
 	}
 	tme := newTestTableMigrater(ctx, t)
@@ -323,7 +323,7 @@ func TestMoveTablesV2Cancel(t *testing.T) {
 		TargetKeyspace: "ks2",
 		Tables:         "t1,t2",
 		Cells:          "cell1,cell2",
-		TabletTypes:    "replica,rdonly,master",
+		TabletTypes:    "replica,rdonly,primary",
 		Timeout:        DefaultActionTimeout,
 	}
 	tme := newTestTableMigrater(ctx, t)
@@ -362,7 +362,7 @@ func TestReshardV2(t *testing.T) {
 		SourceShards:   sourceShards,
 		TargetShards:   targetShards,
 		Cells:          "cell1,cell2",
-		TabletTypes:    "replica,rdonly,master",
+		TabletTypes:    "replica,rdonly,primary",
 		Timeout:        DefaultActionTimeout,
 	}
 	tme := newTestShardMigrater(ctx, t, sourceShards, targetShards)
@@ -396,7 +396,7 @@ func TestVRWSchemaValidation(t *testing.T) {
 		SourceShards:   sourceShards,
 		TargetShards:   targetShards,
 		Cells:          "cell1,cell2",
-		TabletTypes:    "replica,rdonly,master",
+		TabletTypes:    "replica,rdonly,primary",
 		Timeout:        DefaultActionTimeout,
 	}
 	schm := &tabletmanagerdatapb.SchemaDefinition{
@@ -432,7 +432,7 @@ func TestReshardV2Cancel(t *testing.T) {
 		SourceShards:   sourceShards,
 		TargetShards:   targetShards,
 		Cells:          "cell1,cell2",
-		TabletTypes:    "replica,rdonly,master",
+		TabletTypes:    "replica,rdonly,primary",
 		Timeout:        DefaultActionTimeout,
 	}
 	tme := newTestShardMigrater(ctx, t, sourceShards, targetShards)

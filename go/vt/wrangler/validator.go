@@ -143,7 +143,7 @@ func (wr *Wrangler) validateShard(ctx context.Context, keyspace, shard string, p
 			results <- fmt.Errorf("tablet %v not found in map", topoproto.TabletAliasString(alias))
 			continue
 		}
-		if tabletInfo.Type == topodatapb.TabletType_MASTER {
+		if tabletInfo.Type == topodatapb.TabletType_PRIMARY {
 			if masterAlias != nil {
 				results <- fmt.Errorf("shard %v/%v already has master %v but found other master %v", keyspace, shard, topoproto.TabletAliasString(masterAlias), topoproto.TabletAliasString(alias))
 			} else {
@@ -154,8 +154,8 @@ func (wr *Wrangler) validateShard(ctx context.Context, keyspace, shard string, p
 
 	if masterAlias == nil {
 		results <- fmt.Errorf("no master for shard %v/%v", keyspace, shard)
-	} else if !topoproto.TabletAliasEqual(shardInfo.MasterAlias, masterAlias) {
-		results <- fmt.Errorf("master mismatch for shard %v/%v: found %v, expected %v", keyspace, shard, topoproto.TabletAliasString(masterAlias), topoproto.TabletAliasString(shardInfo.MasterAlias))
+	} else if !topoproto.TabletAliasEqual(shardInfo.PrimaryAlias, masterAlias) {
+		results <- fmt.Errorf("master mismatch for shard %v/%v: found %v, expected %v", keyspace, shard, topoproto.TabletAliasString(masterAlias), topoproto.TabletAliasString(shardInfo.PrimaryAlias))
 	}
 
 	for _, alias := range aliases {
@@ -187,12 +187,12 @@ func normalizeIP(ip string) string {
 }
 
 func (wr *Wrangler) validateReplication(ctx context.Context, shardInfo *topo.ShardInfo, tabletMap map[string]*topo.TabletInfo, results chan<- error) {
-	if shardInfo.MasterAlias == nil {
+	if shardInfo.PrimaryAlias == nil {
 		results <- fmt.Errorf("no master in shard record %v/%v", shardInfo.Keyspace(), shardInfo.ShardName())
 		return
 	}
 
-	shardInfoMasterAliasStr := topoproto.TabletAliasString(shardInfo.MasterAlias)
+	shardInfoMasterAliasStr := topoproto.TabletAliasString(shardInfo.PrimaryAlias)
 	masterTabletInfo, ok := tabletMap[shardInfoMasterAliasStr]
 	if !ok {
 		results <- fmt.Errorf("master %v not in tablet map", shardInfoMasterAliasStr)

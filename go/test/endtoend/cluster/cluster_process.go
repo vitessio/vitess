@@ -500,7 +500,7 @@ func (cluster *LocalProcessCluster) WaitForTabletsToHealthyInVtgate() (err error
 	for _, keyspace := range cluster.Keyspaces {
 		for _, shard := range keyspace.Shards {
 			isRdOnlyPresent = false
-			if err = cluster.VtgateProcess.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.master", keyspace.Name, shard.Name), 1); err != nil {
+			if err = cluster.VtgateProcess.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", keyspace.Name, shard.Name), 1); err != nil {
 				return err
 			}
 			if err = cluster.VtgateProcess.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", keyspace.Name, shard.Name), 1); err != nil {

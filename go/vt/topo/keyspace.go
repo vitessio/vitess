@@ -62,7 +62,7 @@ func (ki *KeyspaceInfo) GetServedFrom(tabletType topodatapb.TabletType) *topodat
 // CheckServedFromMigration makes sure a requested migration is safe
 func (ki *KeyspaceInfo) CheckServedFromMigration(tabletType topodatapb.TabletType, cells []string, keyspace string, remove bool) error {
 	// master is a special case with a few extra checks
-	if tabletType == topodatapb.TabletType_MASTER {
+	if tabletType == topodatapb.TabletType_PRIMARY {
 		if !remove {
 			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot add master back to %v", ki.keyspace)
 		}
@@ -255,7 +255,7 @@ func (ts *Server) GetServingShards(ctx context.Context, keyspace string) ([]*Sha
 		if err != nil {
 			return nil, vterrors.Wrapf(err, "GetShard(%v, %v) failed", keyspace, shard)
 		}
-		if !si.IsMasterServing {
+		if !si.IsPrimaryServing {
 			continue
 		}
 		result = append(result, si)

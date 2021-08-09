@@ -124,7 +124,7 @@ func SortedTabletMap(tabletMap map[string]*topo.TabletInfo) (map[string]*topo.Ta
 	replicaMap := make(map[string]*topo.TabletInfo)
 	masterMap := make(map[string]*topo.TabletInfo)
 	for alias, ti := range tabletMap {
-		if ti.Type == topodatapb.TabletType_MASTER {
+		if ti.Type == topodatapb.TabletType_PRIMARY {
 			masterMap[alias] = ti
 		} else {
 			replicaMap[alias] = ti

@@ -130,7 +130,7 @@ func TestResetSequence(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = client.SetServingType(topodatapb.TabletType_MASTER)
+	err = client.SetServingType(topodatapb.TabletType_PRIMARY)
 	if err != nil {
 		t.Fatal(err)
 	}

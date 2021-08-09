@@ -125,7 +125,7 @@ func validateBlacklist(t *testing.T, si *ShardInfo, tabletType topodatapb.Tablet
 }
 
 func TestUpdateSourceMasterBlacklistedTables(t *testing.T) {
-	master := topodatapb.TabletType_MASTER
+	master := topodatapb.TabletType_PRIMARY
 	si := NewShardInfo("ks", "sh", &topodatapb.Shard{}, nil)
 	ctx := lockedKeyspaceContext("ks")
 	t1, t2, t3, t4 := "t1", "t2", "t3", "t4"
