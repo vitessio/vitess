@@ -173,3 +173,31 @@ func TestPromotionLagSuccess(t *testing.T) {
 		}
 	}
 }
+
+// This test checks that the promotion of a tablet succeeds if it passes the promotion lag test
+// covers the test case master-failover-fail-promotion-lag-minutes-failure from orchestrator
+func TestPromotionLagFailure(t *testing.T) {
+	// skip the test since it fails now
+	t.Skip()
+	defer cluster.PanicHandler(t)
+	setupVttabletsAndVtorc(t, 2, 0, 0, 0, nil, "test_config_promotion_failure.json")
+	keyspace := &clusterInstance.Keyspaces[0]
+	shard0 := &keyspace.Shards[0]
+	// find primary from topo
+	curPrimary := shardPrimaryTablet(t, clusterInstance, keyspace, shard0)
+	assert.NotNil(t, curPrimary, "should have elected a primary")
+
+	// Make the current primary database unavailable.
+	err := curPrimary.MysqlctlProcess.Stop()
+	require.NoError(t, err)
+	defer func() {
+		// we remove the tablet from our global list since its mysqlctl process has stopped and cannot be reused for other tests
+		permanentlyRemoveVttablet(curPrimary)
+	}()
+
+	// wait for 20 seconds
+	time.Sleep(20 * time.Second)
+
+	// the previous primary should still be the primary since recovery of dead master should fail
+	checkPrimaryTablet(t, clusterInstance, curPrimary)
+}
