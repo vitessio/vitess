@@ -12990,6 +12990,7 @@ $root.topodata = (function() {
      * @name topodata.TabletType
      * @enum {number}
      * @property {number} UNKNOWN=0 UNKNOWN value
+     * @property {number} PRIMARY=1 PRIMARY value
      * @property {number} MASTER=1 MASTER value
      * @property {number} REPLICA=2 REPLICA value
      * @property {number} RDONLY=3 RDONLY value
@@ -13003,7 +13004,8 @@ $root.topodata = (function() {
     topodata.TabletType = (function() {
         var valuesById = {}, values = Object.create(valuesById);
         values[valuesById[0] = "UNKNOWN"] = 0;
-        values[valuesById[1] = "MASTER"] = 1;
+        values[valuesById[1] = "PRIMARY"] = 1;
+        values["MASTER"] = 1;
         values[valuesById[2] = "REPLICA"] = 2;
         values[valuesById[3] = "RDONLY"] = 3;
         values["BATCH"] = 3;
@@ -13032,7 +13034,7 @@ $root.topodata = (function() {
          * @property {Object.<string,string>|null} [tags] Tablet tags
          * @property {string|null} [mysql_hostname] Tablet mysql_hostname
          * @property {number|null} [mysql_port] Tablet mysql_port
-         * @property {vttime.ITime|null} [master_term_start_time] Tablet master_term_start_time
+         * @property {vttime.ITime|null} [primary_term_start_time] Tablet primary_term_start_time
          */
 
         /**
@@ -13141,12 +13143,12 @@ $root.topodata = (function() {
         Tablet.prototype.mysql_port = 0;
 
         /**
-         * Tablet master_term_start_time.
-         * @member {vttime.ITime|null|undefined} master_term_start_time
+         * Tablet primary_term_start_time.
+         * @member {vttime.ITime|null|undefined} primary_term_start_time
          * @memberof topodata.Tablet
          * @instance
          */
-        Tablet.prototype.master_term_start_time = null;
+        Tablet.prototype.primary_term_start_time = null;
 
         /**
          * Creates a new Tablet instance using the specified properties.
@@ -13196,8 +13198,8 @@ $root.topodata = (function() {
                 writer.uint32(/* id 12, wireType 2 =*/98).string(message.mysql_hostname);
             if (message.mysql_port != null && Object.hasOwnProperty.call(message, "mysql_port"))
                 writer.uint32(/* id 13, wireType 0 =*/104).int32(message.mysql_port);
-            if (message.master_term_start_time != null && Object.hasOwnProperty.call(message, "master_term_start_time"))
-                $root.vttime.Time.encode(message.master_term_start_time, writer.uint32(/* id 14, wireType 2 =*/114).fork()).ldelim();
+            if (message.primary_term_start_time != null && Object.hasOwnProperty.call(message, "primary_term_start_time"))
+                $root.vttime.Time.encode(message.primary_term_start_time, writer.uint32(/* id 14, wireType 2 =*/114).fork()).ldelim();
             return writer;
         };
 
@@ -13304,7 +13306,7 @@ $root.topodata = (function() {
                     message.mysql_port = reader.int32();
                     break;
                 case 14:
-                    message.master_term_start_time = $root.vttime.Time.decode(reader, reader.uint32());
+                    message.primary_term_start_time = $root.vttime.Time.decode(reader, reader.uint32());
                     break;
                 default:
                     reader.skipType(tag & 7);
@@ -13374,6 +13376,7 @@ $root.topodata = (function() {
                     return "type: enum value expected";
                 case 0:
                 case 1:
+                case 1:
                 case 2:
                 case 3:
                 case 3:
@@ -13401,10 +13404,10 @@ $root.topodata = (function() {
             if (message.mysql_port != null && message.hasOwnProperty("mysql_port"))
                 if (!$util.isInteger(message.mysql_port))
                     return "mysql_port: integer expected";
-            if (message.master_term_start_time != null && message.hasOwnProperty("master_term_start_time")) {
-                var error = $root.vttime.Time.verify(message.master_term_start_time);
+            if (message.primary_term_start_time != null && message.hasOwnProperty("primary_term_start_time")) {
+                var error = $root.vttime.Time.verify(message.primary_term_start_time);
                 if (error)
-                    return "master_term_start_time." + error;
+                    return "primary_term_start_time." + error;
             }
             return null;
         };
@@ -13448,6 +13451,10 @@ $root.topodata = (function() {
             case "UNKNOWN":
             case 0:
                 message.type = 0;
+                break;
+            case "PRIMARY":
+            case 1:
+                message.type = 1;
                 break;
             case "MASTER":
             case 1:
@@ -13499,10 +13506,10 @@ $root.topodata = (function() {
                 message.mysql_hostname = String(object.mysql_hostname);
             if (object.mysql_port != null)
                 message.mysql_port = object.mysql_port | 0;
-            if (object.master_term_start_time != null) {
-                if (typeof object.master_term_start_time !== "object")
-                    throw TypeError(".topodata.Tablet.master_term_start_time: object expected");
-                message.master_term_start_time = $root.vttime.Time.fromObject(object.master_term_start_time);
+            if (object.primary_term_start_time != null) {
+                if (typeof object.primary_term_start_time !== "object")
+                    throw TypeError(".topodata.Tablet.primary_term_start_time: object expected");
+                message.primary_term_start_time = $root.vttime.Time.fromObject(object.primary_term_start_time);
             }
             return message;
         };
@@ -13534,7 +13541,7 @@ $root.topodata = (function() {
                 object.db_name_override = "";
                 object.mysql_hostname = "";
                 object.mysql_port = 0;
-                object.master_term_start_time = null;
+                object.primary_term_start_time = null;
             }
             if (message.alias != null && message.hasOwnProperty("alias"))
                 object.alias = $root.topodata.TabletAlias.toObject(message.alias, options);
@@ -13565,8 +13572,8 @@ $root.topodata = (function() {
                 object.mysql_hostname = message.mysql_hostname;
             if (message.mysql_port != null && message.hasOwnProperty("mysql_port"))
                 object.mysql_port = message.mysql_port;
-            if (message.master_term_start_time != null && message.hasOwnProperty("master_term_start_time"))
-                object.master_term_start_time = $root.vttime.Time.toObject(message.master_term_start_time, options);
+            if (message.primary_term_start_time != null && message.hasOwnProperty("primary_term_start_time"))
+                object.primary_term_start_time = $root.vttime.Time.toObject(message.primary_term_start_time, options);
             return object;
         };
 
@@ -13590,12 +13597,12 @@ $root.topodata = (function() {
          * Properties of a Shard.
          * @memberof topodata
          * @interface IShard
-         * @property {topodata.ITabletAlias|null} [master_alias] Shard master_alias
-         * @property {vttime.ITime|null} [master_term_start_time] Shard master_term_start_time
+         * @property {topodata.ITabletAlias|null} [primary_alias] Shard primary_alias
+         * @property {vttime.ITime|null} [primary_term_start_time] Shard primary_term_start_time
          * @property {topodata.IKeyRange|null} [key_range] Shard key_range
          * @property {Array.<topodata.Shard.ISourceShard>|null} [source_shards] Shard source_shards
          * @property {Array.<topodata.Shard.ITabletControl>|null} [tablet_controls] Shard tablet_controls
-         * @property {boolean|null} [is_master_serving] Shard is_master_serving
+         * @property {boolean|null} [is_primary_serving] Shard is_primary_serving
          */
 
         /**
@@ -13616,20 +13623,20 @@ $root.topodata = (function() {
         }
 
         /**
-         * Shard master_alias.
-         * @member {topodata.ITabletAlias|null|undefined} master_alias
+         * Shard primary_alias.
+         * @member {topodata.ITabletAlias|null|undefined} primary_alias
          * @memberof topodata.Shard
          * @instance
          */
-        Shard.prototype.master_alias = null;
+        Shard.prototype.primary_alias = null;
 
         /**
-         * Shard master_term_start_time.
-         * @member {vttime.ITime|null|undefined} master_term_start_time
+         * Shard primary_term_start_time.
+         * @member {vttime.ITime|null|undefined} primary_term_start_time
          * @memberof topodata.Shard
          * @instance
          */
-        Shard.prototype.master_term_start_time = null;
+        Shard.prototype.primary_term_start_time = null;
 
         /**
          * Shard key_range.
@@ -13656,12 +13663,12 @@ $root.topodata = (function() {
         Shard.prototype.tablet_controls = $util.emptyArray;
 
         /**
-         * Shard is_master_serving.
-         * @member {boolean} is_master_serving
+         * Shard is_primary_serving.
+         * @member {boolean} is_primary_serving
          * @memberof topodata.Shard
          * @instance
          */
-        Shard.prototype.is_master_serving = false;
+        Shard.prototype.is_primary_serving = false;
 
         /**
          * Creates a new Shard instance using the specified properties.
@@ -13687,8 +13694,8 @@ $root.topodata = (function() {
         Shard.encode = function encode(message, writer) {
             if (!writer)
                 writer = $Writer.create();
-            if (message.master_alias != null && Object.hasOwnProperty.call(message, "master_alias"))
-                $root.topodata.TabletAlias.encode(message.master_alias, writer.uint32(/* id 1, wireType 2 =*/10).fork()).ldelim();
+            if (message.primary_alias != null && Object.hasOwnProperty.call(message, "primary_alias"))
+                $root.topodata.TabletAlias.encode(message.primary_alias, writer.uint32(/* id 1, wireType 2 =*/10).fork()).ldelim();
             if (message.key_range != null && Object.hasOwnProperty.call(message, "key_range"))
                 $root.topodata.KeyRange.encode(message.key_range, writer.uint32(/* id 2, wireType 2 =*/18).fork()).ldelim();
             if (message.source_shards != null && message.source_shards.length)
@@ -13697,10 +13704,10 @@ $root.topodata = (function() {
             if (message.tablet_controls != null && message.tablet_controls.length)
                 for (var i = 0; i < message.tablet_controls.length; ++i)
                     $root.topodata.Shard.TabletControl.encode(message.tablet_controls[i], writer.uint32(/* id 6, wireType 2 =*/50).fork()).ldelim();
-            if (message.is_master_serving != null && Object.hasOwnProperty.call(message, "is_master_serving"))
-                writer.uint32(/* id 7, wireType 0 =*/56).bool(message.is_master_serving);
-            if (message.master_term_start_time != null && Object.hasOwnProperty.call(message, "master_term_start_time"))
-                $root.vttime.Time.encode(message.master_term_start_time, writer.uint32(/* id 8, wireType 2 =*/66).fork()).ldelim();
+            if (message.is_primary_serving != null && Object.hasOwnProperty.call(message, "is_primary_serving"))
+                writer.uint32(/* id 7, wireType 0 =*/56).bool(message.is_primary_serving);
+            if (message.primary_term_start_time != null && Object.hasOwnProperty.call(message, "primary_term_start_time"))
+                $root.vttime.Time.encode(message.primary_term_start_time, writer.uint32(/* id 8, wireType 2 =*/66).fork()).ldelim();
             return writer;
         };
 
@@ -13736,10 +13743,10 @@ $root.topodata = (function() {
                 var tag = reader.uint32();
                 switch (tag >>> 3) {
                 case 1:
-                    message.master_alias = $root.topodata.TabletAlias.decode(reader, reader.uint32());
+                    message.primary_alias = $root.topodata.TabletAlias.decode(reader, reader.uint32());
                     break;
                 case 8:
-                    message.master_term_start_time = $root.vttime.Time.decode(reader, reader.uint32());
+                    message.primary_term_start_time = $root.vttime.Time.decode(reader, reader.uint32());
                     break;
                 case 2:
                     message.key_range = $root.topodata.KeyRange.decode(reader, reader.uint32());
@@ -13755,7 +13762,7 @@ $root.topodata = (function() {
                     message.tablet_controls.push($root.topodata.Shard.TabletControl.decode(reader, reader.uint32()));
                     break;
                 case 7:
-                    message.is_master_serving = reader.bool();
+                    message.is_primary_serving = reader.bool();
                     break;
                 default:
                     reader.skipType(tag & 7);
@@ -13792,15 +13799,15 @@ $root.topodata = (function() {
         Shard.verify = function verify(message) {
             if (typeof message !== "object" || message === null)
                 return "object expected";
-            if (message.master_alias != null && message.hasOwnProperty("master_alias")) {
-                var error = $root.topodata.TabletAlias.verify(message.master_alias);
+            if (message.primary_alias != null && message.hasOwnProperty("primary_alias")) {
+                var error = $root.topodata.TabletAlias.verify(message.primary_alias);
                 if (error)
-                    return "master_alias." + error;
+                    return "primary_alias." + error;
             }
-            if (message.master_term_start_time != null && message.hasOwnProperty("master_term_start_time")) {
-                var error = $root.vttime.Time.verify(message.master_term_start_time);
+            if (message.primary_term_start_time != null && message.hasOwnProperty("primary_term_start_time")) {
+                var error = $root.vttime.Time.verify(message.primary_term_start_time);
                 if (error)
-                    return "master_term_start_time." + error;
+                    return "primary_term_start_time." + error;
             }
             if (message.key_range != null && message.hasOwnProperty("key_range")) {
                 var error = $root.topodata.KeyRange.verify(message.key_range);
@@ -13825,9 +13832,9 @@ $root.topodata = (function() {
                         return "tablet_controls." + error;
                 }
             }
-            if (message.is_master_serving != null && message.hasOwnProperty("is_master_serving"))
-                if (typeof message.is_master_serving !== "boolean")
-                    return "is_master_serving: boolean expected";
+            if (message.is_primary_serving != null && message.hasOwnProperty("is_primary_serving"))
+                if (typeof message.is_primary_serving !== "boolean")
+                    return "is_primary_serving: boolean expected";
             return null;
         };
 
@@ -13843,15 +13850,15 @@ $root.topodata = (function() {
             if (object instanceof $root.topodata.Shard)
                 return object;
             var message = new $root.topodata.Shard();
-            if (object.master_alias != null) {
-                if (typeof object.master_alias !== "object")
-                    throw TypeError(".topodata.Shard.master_alias: object expected");
-                message.master_alias = $root.topodata.TabletAlias.fromObject(object.master_alias);
+            if (object.primary_alias != null) {
+                if (typeof object.primary_alias !== "object")
+                    throw TypeError(".topodata.Shard.primary_alias: object expected");
+                message.primary_alias = $root.topodata.TabletAlias.fromObject(object.primary_alias);
             }
-            if (object.master_term_start_time != null) {
-                if (typeof object.master_term_start_time !== "object")
-                    throw TypeError(".topodata.Shard.master_term_start_time: object expected");
-                message.master_term_start_time = $root.vttime.Time.fromObject(object.master_term_start_time);
+            if (object.primary_term_start_time != null) {
+                if (typeof object.primary_term_start_time !== "object")
+                    throw TypeError(".topodata.Shard.primary_term_start_time: object expected");
+                message.primary_term_start_time = $root.vttime.Time.fromObject(object.primary_term_start_time);
             }
             if (object.key_range != null) {
                 if (typeof object.key_range !== "object")
@@ -13878,8 +13885,8 @@ $root.topodata = (function() {
                     message.tablet_controls[i] = $root.topodata.Shard.TabletControl.fromObject(object.tablet_controls[i]);
                 }
             }
-            if (object.is_master_serving != null)
-                message.is_master_serving = Boolean(object.is_master_serving);
+            if (object.is_primary_serving != null)
+                message.is_primary_serving = Boolean(object.is_primary_serving);
             return message;
         };
 
@@ -13901,13 +13908,13 @@ $root.topodata = (function() {
                 object.tablet_controls = [];
             }
             if (options.defaults) {
-                object.master_alias = null;
+                object.primary_alias = null;
                 object.key_range = null;
-                object.is_master_serving = false;
-                object.master_term_start_time = null;
+                object.is_primary_serving = false;
+                object.primary_term_start_time = null;
             }
-            if (message.master_alias != null && message.hasOwnProperty("master_alias"))
-                object.master_alias = $root.topodata.TabletAlias.toObject(message.master_alias, options);
+            if (message.primary_alias != null && message.hasOwnProperty("primary_alias"))
+                object.primary_alias = $root.topodata.TabletAlias.toObject(message.primary_alias, options);
             if (message.key_range != null && message.hasOwnProperty("key_range"))
                 object.key_range = $root.topodata.KeyRange.toObject(message.key_range, options);
             if (message.source_shards && message.source_shards.length) {
@@ -13920,10 +13927,10 @@ $root.topodata = (function() {
                 for (var j = 0; j < message.tablet_controls.length; ++j)
                     object.tablet_controls[j] = $root.topodata.Shard.TabletControl.toObject(message.tablet_controls[j], options);
             }
-            if (message.is_master_serving != null && message.hasOwnProperty("is_master_serving"))
-                object.is_master_serving = message.is_master_serving;
-            if (message.master_term_start_time != null && message.hasOwnProperty("master_term_start_time"))
-                object.master_term_start_time = $root.vttime.Time.toObject(message.master_term_start_time, options);
+            if (message.is_primary_serving != null && message.hasOwnProperty("is_primary_serving"))
+                object.is_primary_serving = message.is_primary_serving;
+            if (message.primary_term_start_time != null && message.hasOwnProperty("primary_term_start_time"))
+                object.primary_term_start_time = $root.vttime.Time.toObject(message.primary_term_start_time, options);
             return object;
         };
 
@@ -14422,6 +14429,7 @@ $root.topodata = (function() {
                         return "tablet_type: enum value expected";
                     case 0:
                     case 1:
+                    case 1:
                     case 2:
                     case 3:
                     case 3:
@@ -14468,6 +14476,10 @@ $root.topodata = (function() {
                 case "UNKNOWN":
                 case 0:
                     message.tablet_type = 0;
+                    break;
+                case "PRIMARY":
+                case 1:
+                    message.tablet_type = 1;
                     break;
                 case "MASTER":
                 case 1:
@@ -15101,6 +15113,7 @@ $root.topodata = (function() {
                         return "tablet_type: enum value expected";
                     case 0:
                     case 1:
+                    case 1:
                     case 2:
                     case 3:
                     case 3:
@@ -15140,6 +15153,10 @@ $root.topodata = (function() {
                 case "UNKNOWN":
                 case 0:
                     message.tablet_type = 0;
+                    break;
+                case "PRIMARY":
+                case 1:
+                    message.tablet_type = 1;
                     break;
                 case "MASTER":
                 case 1:
@@ -16575,6 +16592,7 @@ $root.topodata = (function() {
                         return "served_type: enum value expected";
                     case 0:
                     case 1:
+                    case 1:
                     case 2:
                     case 3:
                     case 3:
@@ -16622,6 +16640,10 @@ $root.topodata = (function() {
                 case "UNKNOWN":
                 case 0:
                     message.served_type = 0;
+                    break;
+                case "PRIMARY":
+                case 1:
+                    message.served_type = 1;
                     break;
                 case "MASTER":
                 case 1:
@@ -16881,6 +16903,7 @@ $root.topodata = (function() {
                         return "tablet_type: enum value expected";
                     case 0:
                     case 1:
+                    case 1:
                     case 2:
                     case 3:
                     case 3:
@@ -16913,6 +16936,10 @@ $root.topodata = (function() {
                 case "UNKNOWN":
                 case 0:
                     message.tablet_type = 0;
+                    break;
+                case "PRIMARY":
+                case 1:
+                    message.tablet_type = 1;
                     break;
                 case "MASTER":
                 case 1:
@@ -23109,6 +23136,7 @@ $root.tabletmanagerdata = (function() {
                     return "tablet_type: enum value expected";
                 case 0:
                 case 1:
+                case 1:
                 case 2:
                 case 3:
                 case 3:
@@ -23138,6 +23166,10 @@ $root.tabletmanagerdata = (function() {
             case "UNKNOWN":
             case 0:
                 message.tablet_type = 0;
+                break;
+            case "PRIMARY":
+            case 1:
+                message.tablet_type = 1;
                 break;
             case "MASTER":
             case 1:
@@ -37521,6 +37553,7 @@ $root.query = (function() {
                     return "tablet_type: enum value expected";
                 case 0:
                 case 1:
+                case 1:
                 case 2:
                 case 3:
                 case 3:
@@ -37557,6 +37590,10 @@ $root.query = (function() {
             case "UNKNOWN":
             case 0:
                 message.tablet_type = 0;
+                break;
+            case "PRIMARY":
+            case 1:
+                message.tablet_type = 1;
                 break;
             case "MASTER":
             case 1:
@@ -59194,6 +59231,22 @@ $root.vtctldata = (function() {
         return ExecuteVtctlCommandResponse;
     })();
 
+    /**
+     * MaterializationIntent enum.
+     * @name vtctldata.MaterializationIntent
+     * @enum {number}
+     * @property {number} CUSTOM=0 CUSTOM value
+     * @property {number} MOVETABLES=1 MOVETABLES value
+     * @property {number} CREATELOOKUPINDEX=2 CREATELOOKUPINDEX value
+     */
+    vtctldata.MaterializationIntent = (function() {
+        var valuesById = {}, values = Object.create(valuesById);
+        values[valuesById[0] = "CUSTOM"] = 0;
+        values[valuesById[1] = "MOVETABLES"] = 1;
+        values[valuesById[2] = "CREATELOOKUPINDEX"] = 2;
+        return values;
+    })();
+
     vtctldata.TableMaterializeSettings = (function() {
 
         /**
@@ -59440,6 +59493,7 @@ $root.vtctldata = (function() {
          * @property {string|null} [cell] MaterializeSettings cell
          * @property {string|null} [tablet_types] MaterializeSettings tablet_types
          * @property {string|null} [external_cluster] MaterializeSettings external_cluster
+         * @property {vtctldata.MaterializationIntent|null} [materialization_intent] MaterializeSettings materialization_intent
          */
 
         /**
@@ -59523,6 +59577,14 @@ $root.vtctldata = (function() {
         MaterializeSettings.prototype.external_cluster = "";
 
         /**
+         * MaterializeSettings materialization_intent.
+         * @member {vtctldata.MaterializationIntent} materialization_intent
+         * @memberof vtctldata.MaterializeSettings
+         * @instance
+         */
+        MaterializeSettings.prototype.materialization_intent = 0;
+
+        /**
          * Creates a new MaterializeSettings instance using the specified properties.
          * @function create
          * @memberof vtctldata.MaterializeSettings
@@ -59563,6 +59625,8 @@ $root.vtctldata = (function() {
                 writer.uint32(/* id 7, wireType 2 =*/58).string(message.tablet_types);
             if (message.external_cluster != null && Object.hasOwnProperty.call(message, "external_cluster"))
                 writer.uint32(/* id 8, wireType 2 =*/66).string(message.external_cluster);
+            if (message.materialization_intent != null && Object.hasOwnProperty.call(message, "materialization_intent"))
+                writer.uint32(/* id 9, wireType 0 =*/72).int32(message.materialization_intent);
             return writer;
         };
 
@@ -59622,6 +59686,9 @@ $root.vtctldata = (function() {
                     break;
                 case 8:
                     message.external_cluster = reader.string();
+                    break;
+                case 9:
+                    message.materialization_intent = reader.int32();
                     break;
                 default:
                     reader.skipType(tag & 7);
@@ -59688,6 +59755,15 @@ $root.vtctldata = (function() {
             if (message.external_cluster != null && message.hasOwnProperty("external_cluster"))
                 if (!$util.isString(message.external_cluster))
                     return "external_cluster: string expected";
+            if (message.materialization_intent != null && message.hasOwnProperty("materialization_intent"))
+                switch (message.materialization_intent) {
+                default:
+                    return "materialization_intent: enum value expected";
+                case 0:
+                case 1:
+                case 2:
+                    break;
+                }
             return null;
         };
 
@@ -59727,6 +59803,20 @@ $root.vtctldata = (function() {
                 message.tablet_types = String(object.tablet_types);
             if (object.external_cluster != null)
                 message.external_cluster = String(object.external_cluster);
+            switch (object.materialization_intent) {
+            case "CUSTOM":
+            case 0:
+                message.materialization_intent = 0;
+                break;
+            case "MOVETABLES":
+            case 1:
+                message.materialization_intent = 1;
+                break;
+            case "CREATELOOKUPINDEX":
+            case 2:
+                message.materialization_intent = 2;
+                break;
+            }
             return message;
         };
 
@@ -59753,6 +59843,7 @@ $root.vtctldata = (function() {
                 object.cell = "";
                 object.tablet_types = "";
                 object.external_cluster = "";
+                object.materialization_intent = options.enums === String ? "CUSTOM" : 0;
             }
             if (message.workflow != null && message.hasOwnProperty("workflow"))
                 object.workflow = message.workflow;
@@ -59773,6 +59864,8 @@ $root.vtctldata = (function() {
                 object.tablet_types = message.tablet_types;
             if (message.external_cluster != null && message.hasOwnProperty("external_cluster"))
                 object.external_cluster = message.external_cluster;
+            if (message.materialization_intent != null && message.hasOwnProperty("materialization_intent"))
+                object.materialization_intent = options.enums === String ? $root.vtctldata.MaterializationIntent[message.materialization_intent] : message.materialization_intent;
             return object;
         };
 
@@ -64136,6 +64229,7 @@ $root.vtctldata = (function() {
                     return "db_type: enum value expected";
                 case 0:
                 case 1:
+                case 1:
                 case 2:
                 case 3:
                 case 3:
@@ -64173,6 +64267,10 @@ $root.vtctldata = (function() {
             case "UNKNOWN":
             case 0:
                 message.db_type = 0;
+                break;
+            case "PRIMARY":
+            case 1:
+                message.db_type = 1;
                 break;
             case "MASTER":
             case 1:
@@ -83281,6 +83379,7 @@ $root.binlogdata = (function() {
                     return "tablet_type: enum value expected";
                 case 0:
                 case 1:
+                case 1:
                 case 2:
                 case 3:
                 case 3:
@@ -83350,6 +83449,10 @@ $root.binlogdata = (function() {
             case "UNKNOWN":
             case 0:
                 message.tablet_type = 0;
+                break;
+            case "PRIMARY":
+            case 1:
+                message.tablet_type = 1;
                 break;
             case "MASTER":
             case 1:
