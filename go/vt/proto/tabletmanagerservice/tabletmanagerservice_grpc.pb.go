@@ -47,13 +47,13 @@ type TabletManagerClient interface {
 	ExecuteFetchAsApp(ctx context.Context, in *tabletmanagerdata.ExecuteFetchAsAppRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ExecuteFetchAsAppResponse, error)
 	// ReplicationStatus returns the current replication status.
 	ReplicationStatus(ctx context.Context, in *tabletmanagerdata.ReplicationStatusRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ReplicationStatusResponse, error)
-	// MasterStatus returns the current primary status.
+	// MasterStatus returns the current master status.
 	MasterStatus(ctx context.Context, in *tabletmanagerdata.PrimaryStatusRequest, opts ...grpc.CallOption) (*tabletmanagerdata.PrimaryStatusResponse, error)
-	// PrimaryStatus returns the current primary status.
+	// PrimaryStatus returns the current master status.
 	PrimaryStatus(ctx context.Context, in *tabletmanagerdata.PrimaryStatusRequest, opts ...grpc.CallOption) (*tabletmanagerdata.PrimaryStatusResponse, error)
-	// MasterPosition returns the current primary position
+	// MasterPosition returns the current master position
 	MasterPosition(ctx context.Context, in *tabletmanagerdata.PrimaryPositionRequest, opts ...grpc.CallOption) (*tabletmanagerdata.PrimaryPositionResponse, error)
-	// PrimaryPosition returns the current primary position
+	// PrimaryPosition returns the current master position
 	PrimaryPosition(ctx context.Context, in *tabletmanagerdata.PrimaryPositionRequest, opts ...grpc.CallOption) (*tabletmanagerdata.PrimaryPositionResponse, error)
 	// WaitForPosition waits for the position to be reached
 	WaitForPosition(ctx context.Context, in *tabletmanagerdata.WaitForPositionRequest, opts ...grpc.CallOption) (*tabletmanagerdata.WaitForPositionResponse, error)
@@ -76,12 +76,12 @@ type TabletManagerClient interface {
 	ResetReplication(ctx context.Context, in *tabletmanagerdata.ResetReplicationRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ResetReplicationResponse, error)
 	// Deprecated, use InitPrimary instead
 	InitMaster(ctx context.Context, in *tabletmanagerdata.InitPrimaryRequest, opts ...grpc.CallOption) (*tabletmanagerdata.InitPrimaryResponse, error)
-	// InitPrimary initializes the tablet as a primary
+	// InitPrimary initializes the tablet as a master
 	InitPrimary(ctx context.Context, in *tabletmanagerdata.InitPrimaryRequest, opts ...grpc.CallOption) (*tabletmanagerdata.InitPrimaryResponse, error)
 	// PopulateReparentJournal tells the tablet to add an entry to its
 	// reparent journal
 	PopulateReparentJournal(ctx context.Context, in *tabletmanagerdata.PopulateReparentJournalRequest, opts ...grpc.CallOption) (*tabletmanagerdata.PopulateReparentJournalResponse, error)
-	// InitReplica tells the tablet to reparent to the primary unconditionally
+	// InitReplica tells the tablet to reparent to the master unconditionally
 	InitReplica(ctx context.Context, in *tabletmanagerdata.InitReplicaRequest, opts ...grpc.CallOption) (*tabletmanagerdata.InitReplicaResponse, error)
 	// Deprecated, see DemotePrimary instead
 	DemoteMaster(ctx context.Context, in *tabletmanagerdata.DemotePrimaryRequest, opts ...grpc.CallOption) (*tabletmanagerdata.DemotePrimaryResponse, error)
@@ -91,18 +91,18 @@ type TabletManagerClient interface {
 	UndoDemoteMaster(ctx context.Context, in *tabletmanagerdata.UndoDemotePrimaryRequest, opts ...grpc.CallOption) (*tabletmanagerdata.UndoDemotePrimaryResponse, error)
 	// UndoDemotePrimary reverts all changes made by DemotePrimary
 	UndoDemotePrimary(ctx context.Context, in *tabletmanagerdata.UndoDemotePrimaryRequest, opts ...grpc.CallOption) (*tabletmanagerdata.UndoDemotePrimaryResponse, error)
-	// ReplicaWasPromoted tells the remote tablet it is now the primary
+	// ReplicaWasPromoted tells the remote tablet it is now the master
 	ReplicaWasPromoted(ctx context.Context, in *tabletmanagerdata.ReplicaWasPromotedRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ReplicaWasPromotedResponse, error)
 	// SetMaster tells the replica to reparent
 	SetMaster(ctx context.Context, in *tabletmanagerdata.SetReplicationSourceRequest, opts ...grpc.CallOption) (*tabletmanagerdata.SetReplicationSourceResponse, error)
 	// SetReplicationSource tells the replica to reparent
 	SetReplicationSource(ctx context.Context, in *tabletmanagerdata.SetReplicationSourceRequest, opts ...grpc.CallOption) (*tabletmanagerdata.SetReplicationSourceResponse, error)
-	// ReplicaWasRestarted tells the remote tablet its primary has changed
+	// ReplicaWasRestarted tells the remote tablet its master has changed
 	ReplicaWasRestarted(ctx context.Context, in *tabletmanagerdata.ReplicaWasRestartedRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ReplicaWasRestartedResponse, error)
 	// StopReplicationAndGetStatus stops MySQL replication, and returns the
 	// replication status
 	StopReplicationAndGetStatus(ctx context.Context, in *tabletmanagerdata.StopReplicationAndGetStatusRequest, opts ...grpc.CallOption) (*tabletmanagerdata.StopReplicationAndGetStatusResponse, error)
-	// PromoteReplica makes the replica the new primary
+	// PromoteReplica makes the replica the new master
 	PromoteReplica(ctx context.Context, in *tabletmanagerdata.PromoteReplicaRequest, opts ...grpc.CallOption) (*tabletmanagerdata.PromoteReplicaResponse, error)
 	Backup(ctx context.Context, in *tabletmanagerdata.BackupRequest, opts ...grpc.CallOption) (TabletManager_BackupClient, error)
 	// RestoreFromBackup deletes all local data and restores it from the latest backup.
@@ -656,13 +656,13 @@ type TabletManagerServer interface {
 	ExecuteFetchAsApp(context.Context, *tabletmanagerdata.ExecuteFetchAsAppRequest) (*tabletmanagerdata.ExecuteFetchAsAppResponse, error)
 	// ReplicationStatus returns the current replication status.
 	ReplicationStatus(context.Context, *tabletmanagerdata.ReplicationStatusRequest) (*tabletmanagerdata.ReplicationStatusResponse, error)
-	// MasterStatus returns the current primary status.
+	// MasterStatus returns the current master status.
 	MasterStatus(context.Context, *tabletmanagerdata.PrimaryStatusRequest) (*tabletmanagerdata.PrimaryStatusResponse, error)
-	// PrimaryStatus returns the current primary status.
+	// PrimaryStatus returns the current master status.
 	PrimaryStatus(context.Context, *tabletmanagerdata.PrimaryStatusRequest) (*tabletmanagerdata.PrimaryStatusResponse, error)
-	// MasterPosition returns the current primary position
+	// MasterPosition returns the current master position
 	MasterPosition(context.Context, *tabletmanagerdata.PrimaryPositionRequest) (*tabletmanagerdata.PrimaryPositionResponse, error)
-	// PrimaryPosition returns the current primary position
+	// PrimaryPosition returns the current master position
 	PrimaryPosition(context.Context, *tabletmanagerdata.PrimaryPositionRequest) (*tabletmanagerdata.PrimaryPositionResponse, error)
 	// WaitForPosition waits for the position to be reached
 	WaitForPosition(context.Context, *tabletmanagerdata.WaitForPositionRequest) (*tabletmanagerdata.WaitForPositionResponse, error)
@@ -685,12 +685,12 @@ type TabletManagerServer interface {
 	ResetReplication(context.Context, *tabletmanagerdata.ResetReplicationRequest) (*tabletmanagerdata.ResetReplicationResponse, error)
 	// Deprecated, use InitPrimary instead
 	InitMaster(context.Context, *tabletmanagerdata.InitPrimaryRequest) (*tabletmanagerdata.InitPrimaryResponse, error)
-	// InitPrimary initializes the tablet as a primary
+	// InitPrimary initializes the tablet as a master
 	InitPrimary(context.Context, *tabletmanagerdata.InitPrimaryRequest) (*tabletmanagerdata.InitPrimaryResponse, error)
 	// PopulateReparentJournal tells the tablet to add an entry to its
 	// reparent journal
 	PopulateReparentJournal(context.Context, *tabletmanagerdata.PopulateReparentJournalRequest) (*tabletmanagerdata.PopulateReparentJournalResponse, error)
-	// InitReplica tells the tablet to reparent to the primary unconditionally
+	// InitReplica tells the tablet to reparent to the master unconditionally
 	InitReplica(context.Context, *tabletmanagerdata.InitReplicaRequest) (*tabletmanagerdata.InitReplicaResponse, error)
 	// Deprecated, see DemotePrimary instead
 	DemoteMaster(context.Context, *tabletmanagerdata.DemotePrimaryRequest) (*tabletmanagerdata.DemotePrimaryResponse, error)
@@ -700,18 +700,18 @@ type TabletManagerServer interface {
 	UndoDemoteMaster(context.Context, *tabletmanagerdata.UndoDemotePrimaryRequest) (*tabletmanagerdata.UndoDemotePrimaryResponse, error)
 	// UndoDemotePrimary reverts all changes made by DemotePrimary
 	UndoDemotePrimary(context.Context, *tabletmanagerdata.UndoDemotePrimaryRequest) (*tabletmanagerdata.UndoDemotePrimaryResponse, error)
-	// ReplicaWasPromoted tells the remote tablet it is now the primary
+	// ReplicaWasPromoted tells the remote tablet it is now the master
 	ReplicaWasPromoted(context.Context, *tabletmanagerdata.ReplicaWasPromotedRequest) (*tabletmanagerdata.ReplicaWasPromotedResponse, error)
 	// SetMaster tells the replica to reparent
 	SetMaster(context.Context, *tabletmanagerdata.SetReplicationSourceRequest) (*tabletmanagerdata.SetReplicationSourceResponse, error)
 	// SetReplicationSource tells the replica to reparent
 	SetReplicationSource(context.Context, *tabletmanagerdata.SetReplicationSourceRequest) (*tabletmanagerdata.SetReplicationSourceResponse, error)
-	// ReplicaWasRestarted tells the remote tablet its primary has changed
+	// ReplicaWasRestarted tells the remote tablet its master has changed
 	ReplicaWasRestarted(context.Context, *tabletmanagerdata.ReplicaWasRestartedRequest) (*tabletmanagerdata.ReplicaWasRestartedResponse, error)
 	// StopReplicationAndGetStatus stops MySQL replication, and returns the
 	// replication status
 	StopReplicationAndGetStatus(context.Context, *tabletmanagerdata.StopReplicationAndGetStatusRequest) (*tabletmanagerdata.StopReplicationAndGetStatusResponse, error)
-	// PromoteReplica makes the replica the new primary
+	// PromoteReplica makes the replica the new master
 	PromoteReplica(context.Context, *tabletmanagerdata.PromoteReplicaRequest) (*tabletmanagerdata.PromoteReplicaResponse, error)
 	Backup(*tabletmanagerdata.BackupRequest, TabletManager_BackupServer) error
 	// RestoreFromBackup deletes all local data and restores it from the latest backup.

@@ -139,7 +139,7 @@ type Keyspace struct {
 	ShardingColumnType string `protobuf:"bytes,4,opt,name=sharding_column_type,json=shardingColumnType,proto3" json:"sharding_column_type,omitempty"`
 	// redirects all traffic to another keyspace. If set, shards is ignored.
 	ServedFrom string `protobuf:"bytes,5,opt,name=served_from,json=servedFrom,proto3" json:"served_from,omitempty"`
-	// number of replica tablets to instantiate. This includes the primary tablet.
+	// number of replica tablets to instantiate. This includes the master tablet.
 	ReplicaCount int32 `protobuf:"varint,6,opt,name=replica_count,json=replicaCount,proto3" json:"replica_count,omitempty"`
 	// number of rdonly tablets to instantiate.
 	RdonlyCount int32 `protobuf:"varint,7,opt,name=rdonly_count,json=rdonlyCount,proto3" json:"rdonly_count,omitempty"`
