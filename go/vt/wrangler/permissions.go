@@ -64,7 +64,7 @@ func (wr *Wrangler) ValidatePermissionsShard(ctx context.Context, keyspace, shar
 		return err
 	}
 
-	// get permissions from the master, or error
+	// get permissions from the primary, or error
 	if !si.HasMaster() {
 		return fmt.Errorf("no master in shard %v/%v", keyspace, shard)
 	}
@@ -75,13 +75,13 @@ func (wr *Wrangler) ValidatePermissionsShard(ctx context.Context, keyspace, shar
 	}
 
 	// read all the aliases in the shard, that is all tablets that are
-	// replicating from the master
+	// replicating from the primary
 	aliases, err := wr.ts.FindAllTabletAliasesInShard(ctx, keyspace, shard)
 	if err != nil {
 		return err
 	}
 
-	// then diff all of them, except master
+	// then diff all of them, except primary
 	er := concurrency.AllErrorRecorder{}
 	wg := sync.WaitGroup{}
 	for _, alias := range aliases {
@@ -116,7 +116,7 @@ func (wr *Wrangler) ValidatePermissionsKeyspace(ctx context.Context, keyspace st
 		return wr.ValidatePermissionsShard(ctx, keyspace, shards[0])
 	}
 
-	// find the reference permissions using the first shard's master
+	// find the reference permissions using the first shard's primary
 	si, err := wr.ts.GetShard(ctx, keyspace, shards[0])
 	if err != nil {
 		return err
@@ -125,13 +125,13 @@ func (wr *Wrangler) ValidatePermissionsKeyspace(ctx context.Context, keyspace st
 		return fmt.Errorf("no master in shard %v/%v", keyspace, shards[0])
 	}
 	referenceAlias := si.PrimaryAlias
-	log.Infof("Gathering permissions for reference master %v", topoproto.TabletAliasString(referenceAlias))
+	log.Infof("Gathering permissions for reference primary %v", topoproto.TabletAliasString(referenceAlias))
 	referencePermissions, err := wr.GetPermissions(ctx, si.PrimaryAlias)
 	if err != nil {
 		return err
 	}
 
-	// then diff with all tablets but master 0
+	// then diff with all tablets but primary 0
 	er := concurrency.AllErrorRecorder{}
 	wg := sync.WaitGroup{}
 	for _, shard := range shards {

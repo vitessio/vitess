@@ -1020,7 +1020,7 @@ func (s *VtctldServer) GetTablets(ctx context.Context, req *vtctldatapb.GetTable
 	span.Annotate("strict", req.Strict)
 
 	// It is possible that an old primary has not yet updated its type in the
-	// topo. In that case, report its type as UNKNOWN. It used to be MASTER but
+	// topo. In that case, report its type as UNKNOWN. It used to be PRIMARY but
 	// is no longer the serving primary.
 	adjustTypeForStalePrimary := func(ti *topo.TabletInfo, mtst time.Time) {
 		if ti.Type == topodatapb.TabletType_PRIMARY && ti.GetPrimaryTermStartTime().Before(mtst) {
@@ -1144,7 +1144,7 @@ func (s *VtctldServer) GetTablets(ctx context.Context, req *vtctldatapb.GetTable
 		}
 	}
 
-	// Collect true master term start times, and optionally filter out any
+	// Collect true primary term start times, and optionally filter out any
 	// tablets by keyspace according to the request.
 	PrimaryTermStartTimes := map[string]time.Time{}
 	filteredTablets := make([]*topo.TabletInfo, 0, len(allTablets))
@@ -1168,7 +1168,7 @@ func (s *VtctldServer) GetTablets(ctx context.Context, req *vtctldatapb.GetTable
 
 	adjustedTablets := make([]*topodatapb.Tablet, len(filteredTablets))
 
-	// collect the tablets with adjusted master term start times. they've
+	// collect the tablets with adjusted primary term start times. they've
 	// already been filtered by the above loop, so no keyspace filtering
 	// here.
 	for i, ti := range filteredTablets {
@@ -1303,7 +1303,7 @@ func (s *VtctldServer) InitShardPrimaryLocked(
 		return err
 	}
 
-	// Check the master elect is in tabletMap.
+	// Check the primary elect is in tabletMap.
 	masterElectTabletAliasStr := topoproto.TabletAliasString(req.PrimaryElectTabletAlias)
 	masterElectTabletInfo, ok := tabletMap[masterElectTabletAliasStr]
 	if !ok {
@@ -1311,7 +1311,7 @@ func (s *VtctldServer) InitShardPrimaryLocked(
 	}
 	ev.NewMaster = proto.Clone(masterElectTabletInfo.Tablet).(*topodatapb.Tablet)
 
-	// Check the master is the only master is the shard, or -force was used.
+	// Check the primary is the only primary is the shard, or -force was used.
 	_, masterTabletMap := topotools.SortedTabletMap(tabletMap)
 	if !topoproto.TabletAliasEqual(shardInfo.PrimaryAlias, req.PrimaryElectTabletAlias) {
 		if !req.Force {
@@ -1372,7 +1372,7 @@ func (s *VtctldServer) InitShardPrimaryLocked(
 		return fmt.Errorf("lost topology lock, aborting: %v", err)
 	}
 
-	// Tell the new master to break its replicas, return its replication
+	// Tell the new primary to break its replicas, return its replication
 	// position
 	logger.Infof("initializing master on %v", topoproto.TabletAliasString(req.PrimaryElectTabletAlias))
 	event.DispatchUpdate(ev, "initializing master")
@@ -1391,11 +1391,11 @@ func (s *VtctldServer) InitShardPrimaryLocked(
 	replCtx, replCancel := context.WithTimeout(ctx, waitReplicasTimeout)
 	defer replCancel()
 
-	// Now tell the new master to insert the reparent_journal row,
-	// and tell everybody else to become a replica of the new master,
+	// Now tell the new primary to insert the reparent_journal row,
+	// and tell everybody else to become a replica of the new primary,
 	// and wait for the row in the reparent_journal table.
 	// We start all these in parallel, to handle the semi-sync
-	// case: for the master to be able to commit its row in the
+	// case: for the primary to be able to commit its row in the
 	// reparent_journal table, it needs connected replicas.
 	event.DispatchUpdate(ev, "reparenting all tablets")
 	now := time.Now().UnixNano()
@@ -1424,11 +1424,11 @@ func (s *VtctldServer) InitShardPrimaryLocked(
 		}
 	}
 
-	// After the master is done, we can update the shard record
+	// After the primary is done, we can update the shard record
 	// (note with semi-sync, it also means at least one replica is done).
 	wgMaster.Wait()
 	if masterErr != nil {
-		// The master failed, there is no way the
+		// The primary failed, there is no way the
 		// replicas will work.  So we cancel them all.
 		logger.Warningf("master failed to PopulateReparentJournal, canceling replicas")
 		replCancel()
@@ -1454,7 +1454,7 @@ func (s *VtctldServer) InitShardPrimaryLocked(
 		return err
 	}
 
-	// Create database if necessary on the master. replicas will get it too through
+	// Create database if necessary on the primary. replicas will get it too through
 	// replication. Since the user called InitShardPrimary, they've told us to
 	// assume that whatever data is on all the replicas is what they intended.
 	// If the database doesn't exist, it means the user intends for these tablets
@@ -1869,7 +1869,7 @@ func (s *VtctldServer) TabletExternallyReparented(ctx context.Context, req *vtct
 		OldPrimary: shard.PrimaryAlias,
 	}
 
-	// If the externally reparented (new primary) tablet is already MASTER in
+	// If the externally reparented (new primary) tablet is already PRIMARY in
 	// the topo, this is a no-op.
 	if tablet.Type == topodatapb.TabletType_PRIMARY {
 		return resp, nil

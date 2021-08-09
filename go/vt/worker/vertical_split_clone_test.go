@@ -152,7 +152,7 @@ func TestVerticalSplitClone(t *testing.T) {
 	sourceRdonlyQs.addGeneratedRows(verticalSplitCloneTestMin, verticalSplitCloneTestMax)
 	grpcqueryservice.Register(sourceRdonly.RPCServer, sourceRdonlyQs)
 
-	// Set up destination master which will be used as input for the diff during the clone.
+	// Set up destination primary which will be used as input for the diff during the clone.
 	destMasterShqs := fakes.NewStreamHealthQueryService(destMaster.Target())
 	destMasterShqs.AddDefaultHealthResponse()
 	destMasterQs := newTestQueryService(t, destMaster.Target(), destMasterShqs, 0, 1, topoproto.TabletAliasString(destMaster.Tablet.Alias), true /* omitKeyspaceID */)

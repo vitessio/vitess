@@ -113,7 +113,7 @@ func runWorkflowManagerElection(ts *topo.Server) {
 		}
 
 		// Set up a redirect host so when we are not the
-		// master, we can redirect traffic properly.
+		// primary, we can redirect traffic properly.
 		vtctl.WorkflowManager.SetRedirectFunc(func() (string, error) {
 			ctx := context.Background()
 			return mp.GetCurrentMasterID(ctx)

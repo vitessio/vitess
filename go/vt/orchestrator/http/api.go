@@ -530,7 +530,7 @@ func (this *HttpAPI) MoveUpReplicas(params martini.Params, r render.Render, req 
 	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Moved up %d replicas of %+v below %+v; %d errors: %+v", len(replicas), instanceKey, newMaster.Key, len(errs), errs), Details: replicas})
 }
 
-// Repoint positiones a replica under another (or same) master with exact same coordinates.
+// Repoint positiones a replica under another (or same) primary with exact same coordinates.
 // Useful for binlog servers
 func (this *HttpAPI) Repoint(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	if !isAuthorizedForAction(req, user) {
@@ -578,7 +578,7 @@ func (this *HttpAPI) RepointReplicas(params martini.Params, r render.Render, req
 	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Repointed %d replicas of %+v", len(replicas), instanceKey), Details: replicas})
 }
 
-// MakeCoMaster attempts to make an instance co-master with its own master
+// MakeCoMaster attempts to make an instance co-primary with its own primary
 func (this *HttpAPI) MakeCoMaster(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	if !isAuthorizedForAction(req, user) {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
@@ -599,7 +599,7 @@ func (this *HttpAPI) MakeCoMaster(params martini.Params, r render.Render, req *h
 	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Instance made co-master: %+v", instance.Key), Details: instance})
 }
 
-// ResetReplication makes a replica forget about its master, effectively breaking the replication
+// ResetReplication makes a replica forget about its primary, effectively breaking the replication
 func (this *HttpAPI) ResetReplication(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	if !isAuthorizedForAction(req, user) {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
@@ -620,7 +620,7 @@ func (this *HttpAPI) ResetReplication(params martini.Params, r render.Render, re
 	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Replica reset on %+v", instance.Key), Details: instance})
 }
 
-// DetachReplicaMasterHost detaches a replica from its master by setting an invalid
+// DetachReplicaMasterHost detaches a replica from its primary by setting an invalid
 // (yet revertible) host name
 func (this *HttpAPI) DetachReplicaMasterHost(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	if !isAuthorizedForAction(req, user) {
@@ -643,7 +643,7 @@ func (this *HttpAPI) DetachReplicaMasterHost(params martini.Params, r render.Ren
 }
 
 // ReattachReplicaMasterHost reverts a detachReplicaMasterHost command
-// by resoting the original master hostname in CHANGE MASTER TO
+// by resetting the original primary hostname in CHANGE MASTER TO
 func (this *HttpAPI) ReattachReplicaMasterHost(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	if !isAuthorizedForAction(req, user) {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
@@ -743,7 +743,7 @@ func (this *HttpAPI) ErrantGTIDResetMaster(params martini.Params, r render.Rende
 	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Removed errant GTID on %+v and issued a RESET MASTER", instance.Key), Details: instance})
 }
 
-// ErrantGTIDInjectEmpty removes errant transactions by injecting and empty transaction on the cluster's master
+// ErrantGTIDInjectEmpty removes errant transactions by injecting and empty transaction on the cluster's primary
 func (this *HttpAPI) ErrantGTIDInjectEmpty(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	if !isAuthorizedForAction(req, user) {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
@@ -1637,7 +1637,7 @@ func (this *HttpAPI) UntagAll(params martini.Params, r render.Render, req *http.
 	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("%s removed from %+v instances", tag.TagName, len(*untagged)), Details: untagged.GetInstanceKeys()})
 }
 
-// Write a cluster's master (or all clusters masters) to kv stores.
+// SubmitMastersToKvStores writes a cluster's primary (or all clusters primaries) to kv stores.
 // This should generally only happen once in a lifetime of a cluster. Otherwise KV
 // stores are updated via failovers.
 func (this *HttpAPI) SubmitMastersToKvStores(params martini.Params, r render.Render, req *http.Request) {
@@ -1654,7 +1654,7 @@ func (this *HttpAPI) SubmitMastersToKvStores(params martini.Params, r render.Ren
 	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Submitted %d masters", submittedCount), Details: kvPairs})
 }
 
-// Clusters provides list of known masters
+// Clusters provides list of known primaries
 func (this *HttpAPI) Masters(params martini.Params, r render.Render, req *http.Request) {
 	instances, err := inst.ReadWriteableClustersMasters()
 
@@ -1666,7 +1666,7 @@ func (this *HttpAPI) Masters(params martini.Params, r render.Render, req *http.R
 	r.JSON(http.StatusOK, instances)
 }
 
-// ClusterMaster returns the writable master of a given cluster
+// ClusterMaster returns the writable primary of a given cluster
 func (this *HttpAPI) ClusterMaster(params martini.Params, r render.Render, req *http.Request) {
 	clusterName, err := figureClusterName(getClusterHint(params))
 	if err != nil {
@@ -2304,7 +2304,7 @@ func (this *HttpAPI) Recover(params martini.Params, r render.Render, req *http.R
 	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Recovery executed on %+v", instanceKey), Details: *promotedInstanceKey})
 }
 
-// GracefulMasterTakeover gracefully fails over a master onto its single replica.
+// GracefulMasterTakeover gracefully fails over a primary onto its single replica.
 func (this *HttpAPI) gracefulMasterTakeover(params martini.Params, r render.Render, req *http.Request, user auth.User, auto bool) {
 	if !isAuthorizedForAction(req, user) {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
@@ -2329,19 +2329,19 @@ func (this *HttpAPI) gracefulMasterTakeover(params martini.Params, r render.Rend
 	Respond(r, &APIResponse{Code: OK, Message: "graceful-master-takeover: successor promoted", Details: topologyRecovery})
 }
 
-// GracefulMasterTakeover gracefully fails over a master, either:
+// GracefulMasterTakeover gracefully fails over a primary, either:
 // - onto its single replica, or
 // - onto a replica indicated by the user
 func (this *HttpAPI) GracefulMasterTakeover(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	this.gracefulMasterTakeover(params, r, req, user, false)
 }
 
-// GracefulMasterTakeoverAuto gracefully fails over a master onto a replica of orchestrator's choosing
+// GracefulMasterTakeoverAuto gracefully fails over a primary onto a replica of orchestrator's choosing
 func (this *HttpAPI) GracefulMasterTakeoverAuto(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	this.gracefulMasterTakeover(params, r, req, user, true)
 }
 
-// ForceMasterFailover fails over a master (even if there's no particular problem with the master)
+// ForceMasterFailover fails over a primary (even if there's no particular problem with the primary)
 func (this *HttpAPI) ForceMasterFailover(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	if !isAuthorizedForAction(req, user) {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
@@ -2364,7 +2364,7 @@ func (this *HttpAPI) ForceMasterFailover(params martini.Params, r render.Render,
 	}
 }
 
-// ForceMasterTakeover fails over a master (even if there's no particular problem with the master)
+// ForceMasterTakeover fails over a primary (even if there's no particular problem with the primary)
 func (this *HttpAPI) ForceMasterTakeover(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	if !isAuthorizedForAction(req, user) {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})

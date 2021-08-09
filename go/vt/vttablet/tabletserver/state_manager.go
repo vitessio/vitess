@@ -440,7 +440,7 @@ func (sm *stateManager) unserveMaster() error {
 }
 
 func (sm *stateManager) serveNonMaster(wantTabletType topodatapb.TabletType) error {
-	// We are likely transitioning from master. We have to honor
+	// We are likely transitioning from primary. We have to honor
 	// the shutdown grace period.
 	cancel := sm.handleShutdownGracePeriod()
 	defer cancel()
@@ -584,7 +584,7 @@ func (sm *stateManager) stateStringLocked(tabletType topodatapb.TabletType, stat
 
 func (sm *stateManager) handleGracePeriod(tabletType topodatapb.TabletType) {
 	if tabletType != topodatapb.TabletType_PRIMARY {
-		// We allow serving of previous type only for a master transition.
+		// We allow serving of previous type only for a primary transition.
 		sm.alsoAllow = nil
 		return
 	}

@@ -74,7 +74,7 @@ type DiscoveryGateway struct {
 	// keyspace/shard/tablet_type.
 	statusAggregators map[string]*TabletStatusAggregator
 
-	// buffer, if enabled, buffers requests during a detected MASTER failover.
+	// buffer, if enabled, buffers requests during a detected PRIMARY failover.
 	buffer *buffer.Buffer
 }
 
@@ -91,7 +91,7 @@ func createDiscoveryGateway(ctx context.Context, hc discovery.LegacyHealthCheck,
 
 // NewDiscoveryGateway creates a new DiscoveryGateway using the provided healthcheck and toposerver.
 // cell is the cell where the gateway is located a.k.a localCell.
-// This gateway can route to MASTER in any cell provided by the cells_to_watch command line argument.
+// This gateway can route to PRIMARY in any cell provided by the cells_to_watch command line argument.
 // Other tablet type requests (REPLICA/RDONLY) are only routed to tablets in the same cell.
 func NewDiscoveryGateway(ctx context.Context, hc discovery.LegacyHealthCheck, serv srvtopo.Server, cell string, retryCount int) *DiscoveryGateway {
 	var topoServer *topo.Server
@@ -263,7 +263,7 @@ func (dg *DiscoveryGateway) withRetry(ctx context.Context, target *querypb.Targe
 
 	bufferedOnce := false
 	for i := 0; i < dg.retryCount+1; i++ {
-		// Check if we should buffer MASTER queries which failed due to an ongoing
+		// Check if we should buffer PRIMARY queries which failed due to an ongoing
 		// failover.
 		// Note: We only buffer once and only "!inTransaction" queries i.e.
 		// a) no transaction is necessary (e.g. critical reads) or

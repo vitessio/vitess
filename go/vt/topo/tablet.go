@@ -109,9 +109,9 @@ func IsRunningUpdateStream(tt topodatapb.TabletType) bool {
 	return false
 }
 
-// IsReplicaType returns if this type should be connected to a master db
+// IsReplicaType returns if this type should be connected to a primary db
 // and actively replicating?
-// MASTER is not obviously (only support one level replication graph)
+// PRIMARY is not obviously (only support one level replication graph)
 // BACKUP, RESTORE, DRAINED may or may not be, but we don't know for sure
 func IsReplicaType(tt topodatapb.TabletType) bool {
 	switch tt {
@@ -211,7 +211,7 @@ func (ti *TabletInfo) IsReplicaType() bool {
 	return IsReplicaType(ti.Type)
 }
 
-// GetPrimaryTermStartTime returns the tablet's master term start time as a Time value.
+// GetPrimaryTermStartTime returns the tablet's primary term start time as a Time value.
 func (ti *TabletInfo) GetPrimaryTermStartTime() time.Time {
 	return logutil.ProtoToTime(ti.Tablet.PrimaryTermStartTime)
 }
@@ -476,7 +476,7 @@ func (ts *Server) GetTabletsByCell(ctx context.Context, cell string) ([]*topodat
 }
 
 // ParseServingTabletType parses the tablet type into the enum, and makes sure
-// that the enum is of serving type (MASTER, REPLICA, RDONLY/BATCH).
+// that the enum is of serving type (PRIMARY, REPLICA, RDONLY/BATCH).
 //
 // Note: This function more closely belongs in topoproto, but that would create
 // a circular import between packages topo and topoproto.

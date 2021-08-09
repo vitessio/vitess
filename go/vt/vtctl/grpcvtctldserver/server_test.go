@@ -6273,7 +6273,7 @@ func TestTabletExternallyReparented(t *testing.T) {
 			},
 			shouldErr: false,
 			// NOTE: this seems weird, right? Why is the old primary still a
-			// MASTER, and why is the new primary's term start 0,0? Well, our
+			// PRIMARY, and why is the new primary's term start 0,0? Well, our
 			// test client implementation is a little incomplete. See
 			// ./testutil/test_tmclient.go for reference.
 			expectedTopo: []*topodatapb.Tablet{

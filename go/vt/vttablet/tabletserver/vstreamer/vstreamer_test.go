@@ -325,7 +325,7 @@ func TestMissingTables(t *testing.T) {
 		"drop table t1",
 		"drop table _shortlived",
 	})
-	startPos := masterPosition(t)
+	startPos := primaryPosition(t)
 	execStatements(t, []string{
 		"insert into shortlived values (1,1), (2,2)",
 		"alter table shortlived rename to _shortlived",
@@ -378,9 +378,9 @@ func TestVStreamCopySimpleFlow(t *testing.T) {
 		"create table t1(id11 int, id12 int, primary key(id11))",
 		"create table t2(id21 int, id22 int, primary key(id21))",
 	})
-	log.Infof("Pos before bulk insert: %s", masterPosition(t))
+	log.Infof("Pos before bulk insert: %s", primaryPosition(t))
 	insertLotsOfData(t, 10)
-	log.Infof("Pos after bulk insert: %s", masterPosition(t))
+	log.Infof("Pos after bulk insert: %s", primaryPosition(t))
 	defer execStatements(t, []string{
 		"drop table t1",
 		"drop table t2",
@@ -454,7 +454,7 @@ func TestVStreamCopySimpleFlow(t *testing.T) {
 	}
 
 	runCases(t, filter, testcases, "vscopy", tablePKs)
-	log.Infof("Pos at end of test: %s", masterPosition(t))
+	log.Infof("Pos at end of test: %s", primaryPosition(t))
 }
 
 func TestVStreamCopyWithDifferentFilters(t *testing.T) {
@@ -849,9 +849,9 @@ func TestOther(t *testing.T) {
 		}}
 
 		for _, stmt := range testcases {
-			startPosition := masterPosition(t)
+			startPosition := primaryPosition(t)
 			execStatement(t, stmt)
-			endPosition := masterPosition(t)
+			endPosition := primaryPosition(t)
 			if startPosition == endPosition {
 				t.Logf("statement %s did not affect binlog", stmt)
 				continue
@@ -1177,7 +1177,7 @@ func TestDDLAddColumn(t *testing.T) {
 	})
 
 	// Record position before the next few statements.
-	pos := masterPosition(t)
+	pos := primaryPosition(t)
 	execStatements(t, []string{
 		"begin",
 		"insert into ddl_test1 values(1, 'aaa')",
@@ -1250,7 +1250,7 @@ func TestDDLDropColumn(t *testing.T) {
 	defer execStatement(t, "drop table ddl_test2")
 
 	// Record position before the next few statements.
-	pos := masterPosition(t)
+	pos := primaryPosition(t)
 	execStatements(t, []string{
 		"insert into ddl_test2 values(1, 'aaa', 'ccc')",
 		// Adding columns is allowed.
@@ -1414,7 +1414,7 @@ func TestBestEffortNameInFieldEvent(t *testing.T) {
 	execStatements(t, []string{
 		"create table vitess_test(id int, val varbinary(128), primary key(id))",
 	})
-	position := masterPosition(t)
+	position := primaryPosition(t)
 	execStatements(t, []string{
 		"insert into vitess_test values(1, 'abc')",
 		"rename table vitess_test to vitess_test_new",
@@ -1468,7 +1468,7 @@ func TestInternalTables(t *testing.T) {
 		"create table _vt_PURGE_1f9194b43b2011eb8a0104ed332e05c2_20201210194431(id int, val varbinary(128), primary key(id))",
 		"create table _product_old(id int, val varbinary(128), primary key(id))",
 	})
-	position := masterPosition(t)
+	position := primaryPosition(t)
 	execStatements(t, []string{
 		"insert into vitess_test values(1, 'abc')",
 		"insert into _1e275eef_3b20_11eb_a38f_04ed332e05c2_20201210204529_gho values(1, 'abc')",
@@ -1764,7 +1764,7 @@ func TestMinimalMode(t *testing.T) {
 	engine.se.Reload(context.Background())
 
 	// Record position before the next few statements.
-	pos := masterPosition(t)
+	pos := primaryPosition(t)
 	execStatements(t, []string{
 		"set @@session.binlog_row_image='minimal'",
 		"update t1 set val1='bbb' where id=1",
@@ -1856,7 +1856,7 @@ func TestNoFutureGTID(t *testing.T) {
 	})
 	engine.se.Reload(context.Background())
 
-	pos := masterPosition(t)
+	pos := primaryPosition(t)
 	t.Logf("current position: %v", pos)
 	// Both mysql and mariadb have '-' in their gtids.
 	// Invent a GTID in the future.
@@ -2086,7 +2086,7 @@ func expectLog(ctx context.Context, t *testing.T, input interface{}, ch <-chan [
 func startStream(ctx context.Context, t *testing.T, filter *binlogdatapb.Filter, position string, tablePKs []*binlogdatapb.TableLastPK) (*sync.WaitGroup, <-chan []*binlogdatapb.VEvent) {
 	switch position {
 	case "":
-		position = masterPosition(t)
+		position = primaryPosition(t)
 	case "vscopy":
 		position = ""
 	}
@@ -2141,7 +2141,7 @@ func execStatements(t *testing.T, queries []string) {
 	}
 }
 
-func masterPosition(t *testing.T) string {
+func primaryPosition(t *testing.T) string {
 	t.Helper()
 	// We use the engine's cp because there is one test that overrides
 	// the flavor to FilePos. If so, we have to obtain the position

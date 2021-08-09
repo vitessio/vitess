@@ -45,16 +45,16 @@ import (
 // throttler adapts its throttling rate to the replication lag.
 //
 // The throttler is necessary because replicas apply transactions at a slower
-// rate than masters and fall behind at high write throughput.
+// rate than primaries and fall behind at high write throughput.
 // (Mostly they fall behind because MySQL replication is single threaded but
-//  the write throughput on the master does not have to.)
+//  the write throughput on the primary does not have to.)
 //
-// This demo simulates a client (writer), a master and a replica.
-// The client writes to the master which in turn replicas everything to the
+// This demo simulates a client (writer), a primary and a replica.
+// The client writes to the primary which in turn replicas everything to the
 // replica.
 // The replica measures its replication lag via the timestamp which is part of
 // each message.
-// While the master has no rate limit, the replica is limited to
+// While the primary has no rate limit, the replica is limited to
 // --rate (see below) transactions/second. The client runs the resharding
 // throttler which tries to throttle the client based on the observed
 // replication lag.
@@ -67,7 +67,7 @@ var (
 	replicaDegrationDuration = flag.Duration("replica_degration_duration", 10*time.Second, "duration a simulated degration should take")
 )
 
-// master simulates an *unthrottled* MySQL master which replicates every
+// primary simulates an *unthrottled* MySQL primary which replicates every
 // received "execute" call to a known "replica".
 type master struct {
 	replica *replica
@@ -79,13 +79,13 @@ func (m *master) execute(msg time.Time) {
 }
 
 // replica simulates a *throttled* MySQL replica.
-// If it cannot keep up with applying the master writes, it will report a
+// If it cannot keep up with applying the primary writes, it will report a
 // replication lag > 0 seconds.
 type replica struct {
 	fakeTablet *testlib.FakeTablet
 	qs         *fakes.StreamHealthQueryService
 
-	// replicationStream is the incoming stream of messages from the master.
+	// replicationStream is the incoming stream of messages from the primary.
 	replicationStream chan time.Time
 
 	// throttler is used to enforce the maximum rate at which replica applies

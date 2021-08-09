@@ -391,12 +391,12 @@ func (wr *Wrangler) cancelHorizontalResharding(ctx context.Context, keyspace, sh
 func (wr *Wrangler) MigrateServedTypes(ctx context.Context, keyspace, shard string, cells []string, servedType topodatapb.TabletType, reverse, skipReFreshState bool, filteredReplicationWaitTime time.Duration, reverseReplication bool) (err error) {
 	// check input parameters
 	if servedType == topodatapb.TabletType_PRIMARY {
-		// we cannot migrate a master back, since when master migration
+		// we cannot migrate a primary back, since when primary migration
 		// is done, the source shards are dead
 		if reverse {
 			return fmt.Errorf("cannot migrate master back to %v/%v", keyspace, shard)
 		}
-		// we cannot skip refresh state for a master
+		// we cannot skip refresh state for a primary
 		if skipReFreshState {
 			return fmt.Errorf("cannot skip refresh state for master migration on %v/%v", keyspace, shard)
 		}
@@ -450,7 +450,7 @@ func (wr *Wrangler) MigrateServedTypes(ctx context.Context, keyspace, shard stri
 	// refresh
 	// TODO(b/26388813): Integrate vtctl WaitForDrain here instead of just sleeping.
 	// Anything that's not a replica will use the RDONLY sleep time.
-	// Master Migrate performs its own refresh but we will refresh all non master
+	// Master Migrate performs its own refresh but we will refresh all non primary
 	// tablets after each migration
 	waitForDrainSleep := *waitForDrainSleepRdonly
 	if servedType == topodatapb.TabletType_REPLICA {
@@ -586,7 +586,7 @@ func (wr *Wrangler) waitForFilteredReplication(ctx context.Context, sourcePositi
 	return rec.Error()
 }
 
-// refreshMasters will just RPC-ping all the masters with RefreshState
+// refreshMasters will just RPC-ping all the primaries with RefreshState
 func (wr *Wrangler) refreshMasters(ctx context.Context, shards []*topo.ShardInfo) error {
 	wg := sync.WaitGroup{}
 	rec := concurrency.AllErrorRecorder{}
@@ -695,7 +695,7 @@ func (wr *Wrangler) masterMigrateServedType(ctx context.Context, keyspace string
 	}()
 
 	// Phase 1
-	// - check topology service can successfully refresh both source and target master
+	// - check topology service can successfully refresh both source and target primary
 	// - switch the source shards to read-only by disabling query service
 	// - gather all replication points
 	// - wait for filtered replication to catch up
@@ -733,7 +733,7 @@ func (wr *Wrangler) masterMigrateServedType(ctx context.Context, keyspace string
 		return err
 	}
 
-	// We've reached the point of no return. Freeze the tablet control records in the source masters.
+	// We've reached the point of no return. Freeze the tablet control records in the source primaries.
 	if err := wr.updateFrozenFlag(ctx, sourceShards, true); err != nil {
 		wr.cancelMasterMigrateServedTypes(ctx, keyspace, sourceShards)
 		return err
@@ -837,7 +837,7 @@ func (wr *Wrangler) cancelMasterMigrateServedTypes(ctx context.Context, keyspace
 }
 
 func (wr *Wrangler) setupReverseReplication(ctx context.Context, sourceShards, destinationShards []*topo.ShardInfo) error {
-	// Retrieve master positions of all destinations.
+	// Retrieve primary positions of all destinations.
 	masterPositions := make([]string, len(destinationShards))
 	for i, dest := range destinationShards {
 		ti, err := wr.ts.GetTablet(ctx, dest.PrimaryAlias)
@@ -867,7 +867,7 @@ func (wr *Wrangler) setupReverseReplication(ctx context.Context, sourceShards, d
 		if kr == nil {
 			kr = &topodatapb.KeyRange{}
 		}
-		// Create replications streams first using the retrieved master positions.
+		// Create replications streams first using the retrieved primary positions.
 		uids := make([]uint32, len(destinationShards))
 		for j, dest := range destinationShards {
 			bls := &binlogdatapb.BinlogSource{
@@ -921,8 +921,8 @@ func (wr *Wrangler) updateShardRecords(ctx context.Context, keyspace string, sha
 	return topotools.UpdateShardRecords(ctx, wr.ts, wr.tmc, keyspace, shards, cells, servedType, isFrom, clearSourceShards, wr.Logger())
 }
 
-// updateFrozenFlag sets or unsets the Frozen flag for master migration. This is performed
-// for all master tablet control records.
+// updateFrozenFlag sets or unsets the Frozen flag for primary migration. This is performed
+// for all primary tablet control records.
 func (wr *Wrangler) updateFrozenFlag(ctx context.Context, shards []*topo.ShardInfo, value bool) (err error) {
 	for i, si := range shards {
 		updatedShard, err := wr.ts.UpdateShardFields(ctx, si.Keyspace(), si.ShardName(), func(si *topo.ShardInfo) error {
@@ -1119,7 +1119,7 @@ func (wr *Wrangler) cancelVerticalResharding(ctx context.Context, keyspace, shar
 	}); err != nil {
 		return err
 	}
-	// set destination master back to serving
+	// set destination primary back to serving
 	return wr.refreshMasters(ctx, []*topo.ShardInfo{destinationShard})
 }
 
@@ -1201,7 +1201,7 @@ func (wr *Wrangler) migrateServedFromLocked(ctx context.Context, ki *topo.Keyspa
 	}
 	tables := destinationShard.SourceShards[0].Tables
 
-	// read the source shard, we'll need its master, and we'll need to
+	// read the source shard, we'll need its primary, and we'll need to
 	// update the blacklisted tables.
 	var sourceShard *topo.ShardInfo
 	sourceShard, err = wr.ts.GetShard(ctx, destinationShard.SourceShards[0].Keyspace, destinationShard.SourceShards[0].Shard)
@@ -1254,15 +1254,15 @@ func (wr *Wrangler) replicaMigrateServedFrom(ctx context.Context, ki *topo.Keysp
 	return wr.RefreshTabletsByShard(ctx, sourceShard, cells)
 }
 
-// masterMigrateServedFrom handles the master migration. The ordering is
+// masterMigrateServedFrom handles the primary migration. The ordering is
 // a bit different than for rdonly / replica to guarantee a smooth transition.
 //
 // The order is as follows:
-// - Add BlacklistedTables on the source shard map for master
-// - Refresh the source master, so it stops writing on the tables
-// - Get the source master position, wait until destination master reaches it
+// - Add BlacklistedTables on the source shard map for primary
+// - Refresh the source primary, so it stops writing on the tables
+// - Get the source primary position, wait until destination primary reaches it
 // - Clear SourceShard on the destination Shard
-// - Refresh the destination master, so its stops its filtered
+// - Refresh the destination primary, so its stops its filtered
 //   replication and starts accepting writes
 func (wr *Wrangler) masterMigrateServedFrom(ctx context.Context, ki *topo.KeyspaceInfo, sourceShard *topo.ShardInfo, destinationShard *topo.ShardInfo, tables []string, ev *events.MigrateServedFrom, filteredReplicationWaitTime time.Duration) error {
 	// Read the data we need
@@ -1285,7 +1285,7 @@ func (wr *Wrangler) masterMigrateServedFrom(ctx context.Context, ki *topo.Keyspa
 		return err
 	}
 
-	// Now refresh the blacklisted table list on the source master
+	// Now refresh the blacklisted table list on the source primary
 	event.DispatchUpdate(ev, "refreshing source master so it updates its blacklisted tables")
 	if err := wr.tmc.RefreshState(ctx, sourceMasterTabletInfo.Tablet); err != nil {
 		return err
@@ -1330,7 +1330,7 @@ func (wr *Wrangler) masterMigrateServedFrom(ctx context.Context, ki *topo.Keyspa
 		return err
 	}
 
-	// Tell the new shards masters they can now be read-write.
+	// Tell the new shards primaries they can now be read-write.
 	// Invoking a remote action will also make the tablet stop filtered
 	// replication.
 	event.DispatchUpdate(ev, "setting destination shard masters read-write")

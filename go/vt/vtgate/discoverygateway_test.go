@@ -122,7 +122,7 @@ func TestDiscoveryGatewayGetTablets(t *testing.T) {
 		t.Errorf("want %+v, got %+v", ep1, tsl)
 	}
 
-	// master should use the one with newer timestamp regardless of cell
+	// primary should use the one with newer timestamp regardless of cell
 	hc.Reset()
 	dg.tsc.ResetForTesting()
 	hc.AddTestTablet("remote", "1.1.1.1", 1001, keyspace, shard, topodatapb.TabletType_PRIMARY, true, 5, nil)

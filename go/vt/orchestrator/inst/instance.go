@@ -93,7 +93,7 @@ type Instance struct {
 	IsCoMaster                        bool
 	HasReplicationCredentials         bool
 	ReplicationCredentialsAvailable   bool
-	SemiSyncAvailable                 bool // when both semi sync plugins (master & replica) are loaded
+	SemiSyncAvailable                 bool // when both semi sync plugins (primary & replica) are loaded
 	SemiSyncEnforced                  bool
 	SemiSyncMasterEnabled             bool
 	SemiSyncReplicaEnabled            bool
@@ -314,20 +314,20 @@ func (this *Instance) IsReplica() bool {
 	return this.MasterKey.Hostname != "" && this.MasterKey.Hostname != "_" && this.MasterKey.Port != 0 && (this.ReadBinlogCoordinates.LogFile != "" || this.UsingGTID())
 }
 
-// IsMaster makes simple heuristics to decide whether this instance is a master (not replicating from any other server),
+// IsMaster makes simple heuristics to decide whether this instance is a primary (not replicating from any other server),
 // either via traditional async/semisync replication or group replication
 func (this *Instance) IsMaster() bool {
-	// If traditional replication is configured, it is for sure not a master
+	// If traditional replication is configured, it is for sure not a primary
 	if this.IsReplica() {
 		return false
 	}
 	// If traditional replication is not configured, and it is also not part of a replication group, this host is
-	// a master
+	// a primary
 	if !this.IsReplicationGroupMember() {
 		return true
 	}
 	// If traditional replication is not configured, and this host is part of a group, it is only considered a
-	// master if it has the role of group Primary. Otherwise it is not a master.
+	// primary if it has the role of group Primary. Otherwise it is not a primary.
 	if this.ReplicationGroupMemberRole == GroupReplicationMemberRolePrimary {
 		return true
 	}
@@ -407,12 +407,12 @@ func (this *Instance) GetNextBinaryLog(binlogCoordinates BinlogCoordinates) (Bin
 	return binlogCoordinates.NextFileCoordinates()
 }
 
-// IsReplicaOf returns true if this instance claims to replicate from given master
+// IsReplicaOf returns true if this instance claims to replicate from given primary
 func (this *Instance) IsReplicaOf(master *Instance) bool {
 	return this.MasterKey.Equals(&master.Key)
 }
 
-// IsReplicaOf returns true if this i supposed master of given replica
+// IsReplicaOf returns true if this i supposed primary of given replica
 func (this *Instance) IsMasterOf(replica *Instance) bool {
 	return replica.IsReplicaOf(this)
 }
@@ -440,7 +440,7 @@ func (this *Instance) CanReplicateFrom(other *Instance) (bool, error) {
 		if !other.LogReplicationUpdatesEnabled {
 			return false, fmt.Errorf("instance does not have log_slave_updates enabled: %+v", other.Key)
 		}
-		// OK for a master to not have log_slave_updates
+		// OK for a primary to not have log_slave_updates
 		// Not OK for a replica, for it has to relay the logs.
 	}
 	if this.IsSmallerMajorVersion(other) && !this.IsBinlogServer() {

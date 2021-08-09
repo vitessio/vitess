@@ -66,7 +66,7 @@ public class Proto {
    *
    * <p>
    * Errors returned by Vitess are documented in the
-   * <a href="https://github.com/vitessio/vitess/blob/master/proto/vtrpc.proto">vtrpc proto</a>.
+   * <a href="https://github.com/vitessio/vitess/blob/main/proto/vtrpc.proto">vtrpc proto</a>.
    */
   public static void checkError(RPCError error) throws SQLException {
     if (error != null) {

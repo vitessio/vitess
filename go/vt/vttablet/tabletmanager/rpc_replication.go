@@ -51,12 +51,12 @@ func (tm *TabletManager) ReplicationStatus(ctx context.Context) (*replicationdat
 	return mysql.ReplicationStatusToProto(status), nil
 }
 
-// MasterStatus returns the replication status fopr a master tablet.
+// MasterStatus returns the replication status fopr a primary tablet.
 func (tm *TabletManager) MasterStatus(ctx context.Context) (*replicationdatapb.PrimaryStatus, error) {
 	return tm.PrimaryStatus(ctx)
 }
 
-// PrimaryStatus returns the replication status fopr a master tablet.
+// PrimaryStatus returns the replication status fopr a primary tablet.
 func (tm *TabletManager) PrimaryStatus(ctx context.Context) (*replicationdatapb.PrimaryStatus, error) {
 	status, err := tm.MysqlDaemon.PrimaryStatus(ctx)
 	if err != nil {
@@ -65,7 +65,7 @@ func (tm *TabletManager) PrimaryStatus(ctx context.Context) (*replicationdatapb.
 	return mysql.PrimaryStatusToProto(status), nil
 }
 
-// MasterPosition returns the master position
+// MasterPosition returns the primary position
 func (tm *TabletManager) MasterPosition(ctx context.Context) (string, error) {
 	return tm.PrimaryPosition(ctx)
 }
@@ -265,7 +265,7 @@ func (tm *TabletManager) InitPrimary(ctx context.Context) (string, error) {
 		return "", err
 	}
 
-	// Enforce semi-sync after changing the tablet)type to MASTER. Otherwise, the
+	// Enforce semi-sync after changing the tablet)type to PRIMARY. Otherwise, the
 	// primary will hang while trying to create the database.
 	if err := tm.fixSemiSync(topodatapb.TabletType_PRIMARY); err != nil {
 		return "", err
@@ -286,7 +286,7 @@ func (tm *TabletManager) PopulateReparentJournal(ctx context.Context, timeCreate
 	return tm.MysqlDaemon.ExecuteSuperQueryList(ctx, cmds)
 }
 
-// InitReplica sets replication master and position, and waits for the
+// InitReplica sets replication primary and position, and waits for the
 // reparent_journal table entry up to context timeout
 func (tm *TabletManager) InitReplica(ctx context.Context, parent *topodatapb.TabletAlias, position string, timeCreatedNS int64) error {
 	if err := tm.lock(ctx); err != nil {
@@ -294,9 +294,9 @@ func (tm *TabletManager) InitReplica(ctx context.Context, parent *topodatapb.Tab
 	}
 	defer tm.unlock()
 
-	// If we were a master type, switch our type to replica.  This
-	// is used on the old master when using InitShardPrimary with
-	// -force, and the new master is different from the old master.
+	// If we were a primary type, switch our type to replica.  This
+	// is used on the old primary when using InitShardPrimary with
+	// -force, and the new primary is different from the old primary.
 	if tm.Tablet().Type == topodatapb.TabletType_PRIMARY {
 		if err := tm.changeTypeLocked(ctx, topodatapb.TabletType_REPLICA, DBActionNone); err != nil {
 			return err
@@ -314,8 +314,8 @@ func (tm *TabletManager) InitReplica(ctx context.Context, parent *topodatapb.Tab
 
 	tm.replManager.setReplicationStopped(false)
 
-	// If using semi-sync, we need to enable it before connecting to master.
-	// If we were a master type, we need to switch back to replica settings.
+	// If using semi-sync, we need to enable it before connecting to primary.
+	// If we were a primary type, we need to switch back to replica settings.
 	// Otherwise we won't be able to commit anything.
 	tt := tm.Tablet().Type
 	if tt == topodatapb.TabletType_PRIMARY {
@@ -336,7 +336,7 @@ func (tm *TabletManager) InitReplica(ctx context.Context, parent *topodatapb.Tab
 	return tm.MysqlDaemon.WaitForReparentJournal(ctx, timeCreatedNS)
 }
 
-// DemotePrimary prepares a MASTER tablet to give up leadership to another tablet.
+// DemotePrimary prepares a PRIMARY tablet to give up leadership to another tablet.
 //
 // It attemps to idempotently ensure the following guarantees upon returning
 // successfully:
@@ -347,7 +347,7 @@ func (tm *TabletManager) InitReplica(ctx context.Context, parent *topodatapb.Tab
 //
 // If necessary, it waits for all in-flight writes to complete or time out.
 //
-// It should be safe to call this on a MASTER tablet that was already demoted,
+// It should be safe to call this on a PRIMARY tablet that was already demoted,
 // or on a tablet that already transitioned to REPLICA.
 //
 // If a step fails in the middle, it will try to undo any changes it made.
@@ -379,8 +379,8 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 		return nil, err
 	}
 
-	// If we are a master tablet and not yet read-only, stop accepting new
-	// queries and wait for in-flight queries to complete. If we are not master,
+	// If we are a primary tablet and not yet read-only, stop accepting new
+	// queries and wait for in-flight queries to complete. If we are not primary,
 	// or if we are already read-only, there's no need to stop the queryservice
 	// in order to ensure the guarantee we are being asked to provide, which is
 	// that no writes are occurring.
@@ -416,7 +416,7 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 
 	// Now that we know no writes are in-flight and no new writes can occur,
 	// set MySQL to read-only mode. If we are already read-only because of a
-	// previous demotion, or because we are not master anyway, this should be
+	// previous demotion, or because we are not primary anyway, this should be
 	// idempotent.
 	if *setSuperReadOnly {
 		// Setting super_read_only also sets read_only
@@ -437,13 +437,13 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 		}
 	}()
 
-	// If using semi-sync, we need to disable master-side.
+	// If using semi-sync, we need to disable primary-side.
 	if err := tm.fixSemiSync(topodatapb.TabletType_REPLICA); err != nil {
 		return nil, err
 	}
 	defer func() {
 		if finalErr != nil && revertPartialFailure && wasMaster {
-			// enable master-side semi-sync again
+			// enable primary-side semi-sync again
 			if err := tm.fixSemiSync(topodatapb.TabletType_PRIMARY); err != nil {
 				log.Warningf("fixSemiSync(MASTER) failed during revert: %v", err)
 			}
@@ -465,7 +465,7 @@ func (tm *TabletManager) UndoDemoteMaster(ctx context.Context) error {
 
 // UndoDemotePrimary reverts a previous call to DemotePrimary
 // it sets read-only to false, fixes semi-sync
-// and returns its master position.
+// and returns its primary position.
 func (tm *TabletManager) UndoDemotePrimary(ctx context.Context) error {
 	if err := tm.lock(ctx); err != nil {
 		return err
@@ -501,12 +501,12 @@ func (tm *TabletManager) UndoDemotePrimary(ctx context.Context) error {
 	return nil
 }
 
-// ReplicaWasPromoted promotes a replica to master, no questions asked.
+// ReplicaWasPromoted promotes a replica to primary, no questions asked.
 func (tm *TabletManager) ReplicaWasPromoted(ctx context.Context) error {
 	return tm.ChangeType(ctx, topodatapb.TabletType_PRIMARY)
 }
 
-// SetReplicationSource sets replication master, and waits for the
+// SetReplicationSource sets replication primary, and waits for the
 // reparent_journal table entry up to context timeout
 func (tm *TabletManager) SetReplicationSource(ctx context.Context, parentAlias *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool) error {
 	if err := tm.lock(ctx); err != nil {
@@ -552,11 +552,11 @@ func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentA
 		}()
 	}()
 
-	// Change our type to REPLICA if we used to be MASTER.
-	// Being sent SetReplicationSource means another MASTER has been successfully promoted,
+	// Change our type to REPLICA if we used to be PRIMARY.
+	// Being sent SetReplicationSource means another PRIMARY has been successfully promoted,
 	// so we convert to REPLICA first, since we want to do it even if other
 	// steps fail below.
-	// Note it is important to check for MASTER here so that we don't
+	// Note it is important to check for PRIMARY here so that we don't
 	// unintentionally change the type of RDONLY tablets
 	tablet := tm.Tablet()
 	if tablet.Type == topodatapb.TabletType_PRIMARY {
@@ -572,8 +572,8 @@ func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentA
 	if err == mysql.ErrNotReplica {
 		// This is a special error that means we actually succeeded in reading
 		// the status, but the status is empty because replication is not
-		// configured. We assume this means we used to be a master, so we always
-		// try to start replicating once we are told who the new master is.
+		// configured. We assume this means we used to be a primary, so we always
+		// try to start replicating once we are told who the new primary is.
 		shouldbeReplicating = true
 		// Since we continue in the case of this error, make sure 'status' is
 		// in a known, empty state.
@@ -591,7 +591,7 @@ func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentA
 	}
 
 	// If using semi-sync, we need to enable it before connecting to primary.
-	// If we are currently MASTER, assume we are about to become REPLICA.
+	// If we are currently PRIMARY, assume we are about to become REPLICA.
 	tabletType := tm.Tablet().Type
 	if tabletType == topodatapb.TabletType_PRIMARY {
 		tabletType = topodatapb.TabletType_REPLICA
@@ -602,7 +602,7 @@ func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentA
 	// Update the primary/source address only if needed.
 	// We don't want to interrupt replication for no reason.
 	if parentAlias == nil {
-		// if there is no master in the shard, return an error so that we can retry
+		// if there is no primary in the shard, return an error so that we can retry
 		return vterrors.New(vtrpc.Code_FAILED_PRECONDITION, "Shard masterAlias is nil")
 	}
 	parent, err := tm.TopoServer.GetTablet(ctx, parentAlias)
@@ -660,7 +660,7 @@ func (tm *TabletManager) ReplicaWasRestarted(ctx context.Context, parent *topoda
 	}
 	defer tm.unlock()
 
-	// Only change type of former MASTER tablets.
+	// Only change type of former PRIMARY tablets.
 	// Don't change type of RDONLY
 	tablet := tm.Tablet()
 	if tablet.Type != topodatapb.TabletType_PRIMARY {
@@ -760,7 +760,7 @@ type StopReplicationAndGetStatusResponse struct {
 	Status *replicationdatapb.StopReplicationStatus
 }
 
-// PromoteReplica makes the current tablet the master
+// PromoteReplica makes the current tablet the primary
 func (tm *TabletManager) PromoteReplica(ctx context.Context) (string, error) {
 	if err := tm.lock(ctx); err != nil {
 		return "", err
@@ -799,14 +799,14 @@ func (tm *TabletManager) fixSemiSync(tabletType topodatapb.TabletType) error {
 		return nil
 	}
 
-	// Only enable if we're eligible for becoming master (REPLICA type).
+	// Only enable if we're eligible for becoming primary (REPLICA type).
 	// Ineligible tablets (RDONLY) shouldn't ACK because we'll never promote them.
 	if !isMasterEligible(tabletType) {
 		return tm.MysqlDaemon.SetSemiSyncEnabled(false, false)
 	}
 
-	// Always enable replica-side since it doesn't hurt to keep it on for a master.
-	// The master-side needs to be off for a replica, or else it will get stuck.
+	// Always enable replica-side since it doesn't hurt to keep it on for a primary.
+	// The primary-side needs to be off for a replica, or else it will get stuck.
 	return tm.MysqlDaemon.SetSemiSyncEnabled(tabletType == topodatapb.TabletType_PRIMARY, true)
 }
 
@@ -817,7 +817,7 @@ func (tm *TabletManager) fixSemiSyncAndReplication(tabletType topodatapb.TabletT
 	}
 
 	if tabletType == topodatapb.TabletType_PRIMARY {
-		// Master is special. It is always handled at the
+		// Primary is special. It is always handled at the
 		// right time by the reparent operations, it doesn't
 		// need to be fixed.
 		return nil
@@ -875,7 +875,7 @@ func (tm *TabletManager) handleRelayLogError(err error) error {
 }
 
 // repairReplication tries to connect this server to whoever is
-// the current master of the shard, and start replicating.
+// the current primary of the shard, and start replicating.
 func (tm *TabletManager) repairReplication(ctx context.Context) error {
 	tablet := tm.Tablet()
 
@@ -888,7 +888,7 @@ func (tm *TabletManager) repairReplication(ctx context.Context) error {
 	}
 
 	if topoproto.TabletAliasEqual(si.PrimaryAlias, tablet.Alias) {
-		// The shard record says we are master, but we disagree; we wouldn't
+		// The shard record says we are primary, but we disagree; we wouldn't
 		// reach this point unless we were told to check replication.
 		// Hopefully someone is working on fixing that, but in any case,
 		// we should not try to reparent to ourselves.

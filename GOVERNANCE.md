@@ -59,7 +59,7 @@ New committers can be nominated by any existing committer. Once they have been n
 
 Nominees may decline their appointment as a committer. However, this is unusual, as the project does not expect any specific time or resource commitment from its community members. The intention behind the role of committer is to allow people to contribute to the project more easily, not to tie them in to the project in any formal way.
 
-It is important to recognise that commitership is a privilege, not a right. That privilege must be earned and once earned it can be removed by the PMC for conduct inconsistent with the [Guiding Principles](https://github.com/vitessio/vitess/blob/master/GUIDING_PRINCIPLES.md) or if they drop below a level of commitment and engagement required to be a Committer, as determined by the PMC. The PMC also reserves the right to remove a person for any other reason inconsistent with the goals of Vitess.
+It is important to recognise that commitership is a privilege, not a right. That privilege must be earned and once earned it can be removed by the PMC for conduct inconsistent with the [Guiding Principles](https://github.com/vitessio/vitess/blob/main/GUIDING_PRINCIPLES.md) or if they drop below a level of commitment and engagement required to be a Committer, as determined by the PMC. The PMC also reserves the right to remove a person for any other reason inconsistent with the goals of Vitess.
 
 A committer who shows an above-average level of contribution to the project, particularly with respect to its strategic direction and long-term health, may be nominated to become a member of the PMC. This role is described below.
 
@@ -83,7 +83,7 @@ Membership of the PMC is by invitation from the existing PMC members. A nominati
 
 The number of PMC members should be limited to 7. This number is chosen to ensure that sufficient points of view are represented, while preserving the efficiency of the decision making process.
 
-The PMC is responsible for maintaining the [Guiding Principles](https://github.com/vitessio/vitess/blob/master/GUIDING_PRINCIPLES.md) and the code of conduct. It is also responsible for ensuring that those rules and principles are followed.
+The PMC is responsible for maintaining the [Guiding Principles](https://github.com/vitessio/vitess/blob/main/GUIDING_PRINCIPLES.md) and the code of conduct. It is also responsible for ensuring that those rules and principles are followed.
 
 ## PMC Chair
 
@@ -106,7 +106,7 @@ The Slack channel list is the most appropriate place for a contributor to ask fo
 
 Decisions about the future of the project are made by the PMC. New proposals and ideas can be brought to the PMC’s attention through the Slack channel or by filing an issue. If necessary, the PMC will seek input from others to come to the final decision.
 
-The PMC’s decision is itself governed by the project’s [Guiding Principles](https://github.com/vitessio/vitess/blob/master/GUIDING_PRINCIPLES.md), which shall be used to reach consensus. If a consensus cannot be reached, a simple majority voting process will be used to reach resolution. In case of a tie, the PMC chair has the casting vote.
+The PMC’s decision is itself governed by the project’s [Guiding Principles](https://github.com/vitessio/vitess/blob/main/GUIDING_PRINCIPLES.md), which shall be used to reach consensus. If a consensus cannot be reached, a simple majority voting process will be used to reach resolution. In case of a tie, the PMC chair has the casting vote.
 
 # Credits
 The contents of this document are based on http://oss-watch.ac.uk/resources/meritocraticgovernancemodel by Ross Gardler and Gabriel Hanganu.

@@ -387,10 +387,10 @@ message DemotePrimaryRequest {
 }
 
 message DemotePrimaryResponse {
-  // Position is deprecated, and is a string representation of a demoted masters executed position.
+  // Position is deprecated, and is a string representation of a demoted primaries executed position.
   string deprecated_position = 1 [deprecated=true];
 
-  // PrimaryStatus represents the response from calling `SHOW MASTER STATUS` on a master that has been demoted.
+  // PrimaryStatus represents the response from calling `SHOW MASTER STATUS` on a primary that has been demoted.
   replicationdata.PrimaryStatus primary_status = 2;
 }
 

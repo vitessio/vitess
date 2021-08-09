@@ -357,7 +357,7 @@ func (tme *testMigraterEnv) startTablets(t *testing.T) {
 	for _, master := range allMasters {
 		master.StartActionLoop(t, tme.wr)
 	}
-	// Wait for the shard record masters to be set.
+	// Wait for the shard record primaries to be set.
 	for _, master := range allMasters {
 		masterFound := false
 		for i := 0; i < 10; i++ {

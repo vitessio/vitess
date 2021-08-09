@@ -340,9 +340,9 @@ func (msdw *MultiSplitDiffWorker) findTargets(ctx context.Context) error {
 	return nil
 }
 
-// ask the master of the destination shard to pause filtered replication,
+// ask the primary of the destination shard to pause filtered replication,
 // and return the source binlog positions
-// (add a cleanup task to restart filtered replication on master)
+// (add a cleanup task to restart filtered replication on primary)
 func (msdw *MultiSplitDiffWorker) stopVreplicationOnAll(ctx context.Context, tabletInfo []*topo.TabletInfo) ([]string, error) {
 	destVreplicationPos := make([]string, len(msdw.destinationShards))
 
@@ -386,7 +386,7 @@ func (msdw *MultiSplitDiffWorker) getMasterTabletInfoForShard(ctx context.Contex
 }
 
 //  stop the source tablet at a binlog position higher than the
-//  destination masters. Return the reached position
+//  destination primaries. Return the reached position
 //  (add a cleanup task to restart binlog replication on the source tablet, and
 //   change the existing ChangeTabletType cleanup action to 'spare' type)
 func (msdw *MultiSplitDiffWorker) stopReplicationOnSourceTabletAt(ctx context.Context, destVreplicationPos []string) (string, error) {
@@ -428,7 +428,7 @@ func (msdw *MultiSplitDiffWorker) stopReplicationOnSourceTabletAt(ctx context.Co
 	return mysqlPos, nil
 }
 
-// ask the master of the destination shard to resume filtered replication
+// ask the primary of the destination shard to resume filtered replication
 // up to the specified source position, and return the destination position.
 func (msdw *MultiSplitDiffWorker) stopVreplicationAt(ctx context.Context, shardInfo *topo.ShardInfo, sourcePosition string, masterInfo *topo.TabletInfo) (string, error) {
 	msdw.wr.Logger().Infof("Restarting master %v until it catches up to %v", shardInfo.PrimaryAlias, sourcePosition)
@@ -455,7 +455,7 @@ func (msdw *MultiSplitDiffWorker) stopVreplicationAt(ctx context.Context, shardI
 	return masterPos, nil
 }
 
-// wait until the destination tablet is equal or passed that master
+// wait until the destination tablet is equal or passed that primary
 // binlog position, and stop its replication.
 // (add a cleanup task to restart binlog replication on it, and change
 //  the existing ChangeTabletType cleanup action to 'spare' type)
@@ -490,7 +490,7 @@ func (msdw *MultiSplitDiffWorker) stopReplicationAt(ctx context.Context, destina
 	return nil
 }
 
-// restart filtered replication on the destination master.
+// restart filtered replication on the destination primary.
 // (remove the cleanup task that does the same)
 func (msdw *MultiSplitDiffWorker) startVreplication(ctx context.Context, shardInfo *topo.ShardInfo, masterInfo *topo.TabletInfo) error {
 	msdw.wr.Logger().Infof("restarting filtered replication on master %v", shardInfo.PrimaryAlias)
@@ -596,7 +596,7 @@ func (msdw *MultiSplitDiffWorker) synchronizeSrcAndDestTxState(ctx context.Conte
 		msdw.scanners[i] = i2
 	}
 
-	// 4. Make sure all replicas have caught up with the master
+	// 4. Make sure all replicas have caught up with the primary
 	for i, shardInfo := range msdw.destinationShards {
 		masterInfo := masterInfos[i]
 		destinationAlias := msdw.destinationAliases[i]

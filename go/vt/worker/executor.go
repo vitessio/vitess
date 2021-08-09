@@ -64,7 +64,7 @@ func newExecutor(wr *wrangler.Wrangler, tsc *discovery.LegacyTabletStatsCache, t
 }
 
 // fetchLoop loops over the provided insertChannel and sends the commands to the
-// current master.
+// current primary.
 func (e *executor) fetchLoop(ctx context.Context, insertChannel chan string) error {
 	for {
 		select {
@@ -112,8 +112,8 @@ func (e *executor) refreshState(ctx context.Context) error {
 // If will keep retrying the ExecuteFetch (for a finite but longer duration) if
 // it fails due to a timeout or a retriable application error.
 //
-// executeFetchWithRetries will always get the current MASTER tablet from the
-// LegacyTabletStatsCache instance. If no MASTER is available, it will keep retrying.
+// executeFetchWithRetries will always get the current PRIMARY tablet from the
+// LegacyTabletStatsCache instance. If no PRIMARY is available, it will keep retrying.
 func (e *executor) fetchWithRetries(ctx context.Context, action func(ctx context.Context, tablet *topodatapb.Tablet) error) error {
 	retryDuration := *retryDuration
 	// We should keep retrying up until the retryCtx runs out.
@@ -125,7 +125,7 @@ func (e *executor) fetchWithRetries(ctx context.Context, action func(ctx context
 		var master *discovery.LegacyTabletStats
 		var err error
 
-		// Get the current master from the LegacyTabletStatsCache.
+		// Get the current primary from the LegacyTabletStatsCache.
 		masters := e.tsc.GetHealthyTabletStats(e.keyspace, e.shard, topodatapb.TabletType_PRIMARY)
 		if len(masters) == 0 {
 			e.wr.Logger().Warningf("ExecuteFetch failed for keyspace/shard %v/%v because no MASTER is available; will retry until there is MASTER again", e.keyspace, e.shard)
@@ -185,7 +185,7 @@ func (e *executor) fetchWithRetries(ctx context.Context, action func(ctx context
 			}
 			return vterrors.Wrapf(err, "interrupted while trying to run a command on tablet %v", tabletString)
 		case <-time.After(*executeFetchRetryTime):
-			// Retry 30s after the failure using the current master seen by the LegacyHealthCheck.
+			// Retry 30s after the failure using the current primary seen by the LegacyHealthCheck.
 		}
 		isRetry = true
 	}

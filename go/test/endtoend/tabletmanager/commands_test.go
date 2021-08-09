@@ -203,7 +203,7 @@ func runHookAndAssert(t *testing.T, params []string, expectedStatus string, expe
 }
 
 func TestShardReplicationFix(t *testing.T) {
-	// make sure the replica is in the replication graph, 2 nodes: 1 master, 1 replica
+	// make sure the replica is in the replication graph, 2 nodes: 1 primary, 1 replica
 	defer cluster.PanicHandler(t)
 	result, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("GetShardReplication", cell, keyspaceShard)
 	require.Nil(t, err, "error should be Nil")

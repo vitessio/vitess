@@ -2344,7 +2344,7 @@ func (e *Executor) reviewStaleMigrations(ctx context.Context) error {
 			}
 		}
 		if onlineDDL.TabletAlias != e.TabletAliasString() {
-			// This means another tablet started the migration, and the migration has failed due to the tablet failure (e.g. master failover)
+			// This means another tablet started the migration, and the migration has failed due to the tablet failure (e.g. primary failover)
 			if err := e.updateTabletFailure(ctx, onlineDDL.UUID); err != nil {
 				return err
 			}
