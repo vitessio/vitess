@@ -87,3 +87,58 @@ func TestCrossDataCenterFailure(t *testing.T) {
 	// we have a replica in the same cell, so that is the one which should be promoted and not the one from another cell
 	checkPrimaryTablet(t, clusterInstance, replicaInSameCell)
 }
+
+// Failover will sometimes lead to a replica which can no longer replicate.
+func TestLostReplicasOnPrimaryFailure(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	setupVttabletsAndVtorc(t, 2, 1, 0, 0, nil)
+	keyspace := &clusterInstance.Keyspaces[0]
+	shard0 := &keyspace.Shards[0]
+	// find primary from topo
+	curPrimary := shardPrimaryTablet(t, clusterInstance, keyspace, shard0)
+	assert.NotNil(t, curPrimary, "should have elected a primary")
+
+	// get the replicas
+	var replica, rdonly *cluster.Vttablet
+	for _, tablet := range shard0.Vttablets {
+		// find tablets which are not the primary
+		if tablet.Alias != curPrimary.Alias {
+			if tablet.Type == "replica" {
+				replica = tablet
+			} else {
+				rdonly = tablet
+			}
+		}
+	}
+	assert.NotNil(t, replica, "could not find replica tablet")
+	assert.NotNil(t, rdonly, "could not find rdonly tablet")
+
+	// revoke super privileges from vtorc on replica so that it is unable to repair the replication
+	changePrivileges(t, `REVOKE SUPER ON *.* FROM 'orc_client_user'@'%'`, replica, "orc_client_user")
+
+	// stop replication on the replica.
+	err := clusterInstance.VtctlclientProcess.ExecuteCommand("StopReplication", replica.Alias)
+	require.NoError(t, err)
+
+	// check that rdonly is able to replicate. We also want to add some queries to rdonly which will not be there in replica
+	checkReplication(t, clusterInstance, curPrimary, []*cluster.Vttablet{rdonly}, 15*time.Second)
+
+	// Make the current primary database unavailable.
+	err = curPrimary.MysqlctlProcess.Stop()
+	require.NoError(t, err)
+	defer func() {
+		// we remove the tablet from our global list since its mysqlctl process has stopped and cannot be reused for other tests
+		permanentlyRemoveVttablet(curPrimary)
+	}()
+
+	// grant super privileges back to vtorc on replica so that it can repair
+	changePrivileges(t, `GRANT SUPER ON *.* TO 'orc_client_user'@'%'`, replica, "orc_client_user")
+
+	// vtorc must promote the lagging replica and not the rdonly, since it has a MustNotPromoteRule promotion rule
+	checkPrimaryTablet(t, clusterInstance, replica)
+
+	// check that the rdonly replica is lost. The lost replica has is detached and its host is prepended with `//`
+	out, err := runSQL(t, "SELECT HOST FROM performance_schema.replication_connection_configuration", rdonly, "")
+	require.NoError(t, err)
+	require.Equal(t, "//localhost", out.Rows[0][0].ToString())
+}

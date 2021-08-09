@@ -341,7 +341,7 @@ func TestMain(m *testing.M) {
 	// setup cellInfos before creating the cluster
 	cellInfos = append(cellInfos, &cellInfo{
 		cellName:    cell1,
-		numReplicas: 5,
+		numReplicas: 6,
 		numRdonly:   1,
 	})
 	cellInfos = append(cellInfos, &cellInfo{
@@ -668,5 +668,19 @@ func permanentlyRemoveVttablet(tablet *cluster.Vttablet) {
 				return
 			}
 		}
+	}
+}
+
+func changePrivileges(t *testing.T, sql string, tablet *cluster.Vttablet, user string) {
+	_, err := runSQL(t, sql, tablet, "")
+	require.NoError(t, err)
+
+	res, err := runSQL(t, fmt.Sprintf("SELECT id FROM INFORMATION_SCHEMA.PROCESSLIST WHERE user = '%s'", user), tablet, "")
+	require.NoError(t, err)
+	for _, row := range res.Rows {
+		id, err := row[0].ToInt64()
+		require.NoError(t, err)
+		_, err = runSQL(t, fmt.Sprintf("kill %d", id), tablet, "")
+		require.NoError(t, err)
 	}
 }
