@@ -107,7 +107,7 @@ type (
 	// AddColumns represents a ADD COLUMN alter option
 	AddColumns struct {
 		Columns []*ColumnDefinition
-		First   *ColName
+		First   bool
 		After   *ColName
 	}
 
@@ -125,14 +125,14 @@ type (
 	ChangeColumn struct {
 		OldColumn        *ColName
 		NewColDefinition *ColumnDefinition
-		First            *ColName
+		First            bool
 		After            *ColName
 	}
 
 	// ModifyColumn is used to change the column definition in alter table command
 	ModifyColumn struct {
 		NewColDefinition *ColumnDefinition
-		First            *ColName
+		First            bool
 		After            *ColName
 	}
 
