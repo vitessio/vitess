@@ -53,13 +53,13 @@ type cellInfo struct {
 	// constants that should be set in TestMain
 	numReplicas int
 	numRdonly   int
+	uidBase     int
 }
 
 var (
 	clusterInstance *cluster.LocalProcessCluster
 	ts              *topo.Server
 	cellInfos       []*cellInfo
-	uidBase         = 100
 	lastUsedValue   = 100
 )
 
@@ -111,14 +111,14 @@ func createVttablets() error {
 	var tablets []*cluster.Vttablet
 	for _, cellInfo := range cellInfos {
 		for i := 0; i < cellInfo.numReplicas; i++ {
-			vttabletInstance := clusterInstance.NewVttabletInstance("replica", uidBase, cellInfo.cellName)
-			uidBase++
+			vttabletInstance := clusterInstance.NewVttabletInstance("replica", cellInfo.uidBase, cellInfo.cellName)
+			cellInfo.uidBase++
 			tablets = append(tablets, vttabletInstance)
 			cellInfo.replicaTablets = append(cellInfo.replicaTablets, vttabletInstance)
 		}
 		for i := 0; i < cellInfo.numRdonly; i++ {
-			vttabletInstance := clusterInstance.NewVttabletInstance("rdonly", uidBase, cellInfo.cellName)
-			uidBase++
+			vttabletInstance := clusterInstance.NewVttabletInstance("rdonly", cellInfo.uidBase, cellInfo.cellName)
+			cellInfo.uidBase++
 			tablets = append(tablets, vttabletInstance)
 			cellInfo.rdonlyTablets = append(cellInfo.rdonlyTablets, vttabletInstance)
 		}
@@ -250,7 +250,7 @@ func stopVtorc(t *testing.T) {
 }
 
 // setupVttabletsAndVtorc is used to setup the vttablets and start the orchestrator
-func setupVttabletsAndVtorc(t *testing.T, numReplicasReqCell1, numRdonlyReqCell1, numReplicasReqCell2, numRdonlyReqCell2 int, orcExtraArgs []string, configFileName string) {
+func setupVttabletsAndVtorc(t *testing.T, numReplicasReqCell1, numRdonlyReqCell1 int, orcExtraArgs []string, configFileName string) {
 	// stop vtorc if it is running
 	stopVtorc(t)
 
@@ -278,28 +278,9 @@ func setupVttabletsAndVtorc(t *testing.T, numReplicasReqCell1, numRdonlyReqCell1
 				numRdonlyReqCell1--
 			}
 		}
-		if cellInfo.cellName == cell2 {
-			for _, tablet := range cellInfo.replicaTablets {
-				if numReplicasReqCell2 == 0 {
-					break
-				}
-				err = cleanAndStartVttablet(t, tablet)
-				require.NoError(t, err)
-				numReplicasReqCell2--
-			}
-
-			for _, tablet := range cellInfo.rdonlyTablets {
-				if numRdonlyReqCell2 == 0 {
-					break
-				}
-				err = cleanAndStartVttablet(t, tablet)
-				require.NoError(t, err)
-				numRdonlyReqCell2--
-			}
-		}
 	}
 
-	if numRdonlyReqCell1 > 0 || numReplicasReqCell1 > 0 || numReplicasReqCell2 > 0 || numRdonlyReqCell2 > 0 {
+	if numRdonlyReqCell1 > 0 || numReplicasReqCell1 > 0 {
 		t.Fatalf("more than available tablets requested. Please increase the constants numReplicas or numRdonly")
 	}
 
@@ -343,13 +324,15 @@ func TestMain(m *testing.M) {
 	// setup cellInfos before creating the cluster
 	cellInfos = append(cellInfos, &cellInfo{
 		cellName:    cell1,
-		numReplicas: 7,
+		numReplicas: 8,
 		numRdonly:   1,
+		uidBase:     100,
 	})
 	cellInfos = append(cellInfos, &cellInfo{
 		cellName:    cell2,
 		numReplicas: 1,
 		numRdonly:   0,
+		uidBase:     200,
 	})
 
 	exitcode, err := func() (int, error) {
