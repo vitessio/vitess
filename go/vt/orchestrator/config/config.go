@@ -68,7 +68,7 @@ type Configuration struct {
 	ListenSocket                               string // Where orchestrator HTTP should listen for unix socket (default: empty; when given, TCP is disabled)
 	HTTPAdvertise                              string // optional, for raft setups, what is the HTTP address this node will advertise to its peers (potentially use where behind NAT or when rerouting ports; example: "http://11.22.33.44:3030")
 	AgentsServerPort                           string // port orchestrator agents talk back to
-	Durability                                 string // The type of durability to enforce. Default is "semi_sync". Other values are dictated by registered plugins
+	Durability                                 string // The type of durability to enforce. Default is "none". Other values are dictated by registered plugins
 	MySQLTopologyUser                          string
 	MySQLTopologyPassword                      string
 	MySQLReplicaUser                           string // If set, use this credential instead of discovering from mysql. TODO(sougou): deprecate this in favor of fetching from vttablet
