@@ -939,8 +939,8 @@ var (
 		input:  "set S= +- - - - -(4+1)",
 		output: "set S = -(4 + 1)",
 	}, {
-		input:  "alter table a add foo int references simple (a) on delete restrict first v",
-		output: "alter table a add column foo int references simple (a) on delete restrict first v",
+		input:  "alter table a add foo int references simple (a) on delete restrict first",
+		output: "alter table a add column foo int references simple (a) on delete restrict first",
 	}, {
 		input:  "alter table a lock default, lock = none, lock shared, lock exclusive",
 		output: "alter table a lock default, lock none, lock shared, lock exclusive",
@@ -958,7 +958,7 @@ var (
 	}, {
 		input: "alter table a change column s foo int default 1 after x",
 	}, {
-		input: "alter table a modify column foo int default 1 first x",
+		input: "alter table a modify column foo int default 1 first",
 	}, {
 		input:  "alter table a add foo varchar(255) generated always as (concat(bar, ' ', baz)) stored",
 		output: "alter table a add column foo varchar(255) as (concat(bar, ' ', baz)) stored",
@@ -1100,7 +1100,7 @@ var (
 		input:  "alter table a add id int",
 		output: "alter table a add column id int",
 	}, {
-		input: "alter table a add column id int first id2",
+		input: "alter table a add column id int first",
 	}, {
 		input: "alter table a add column id int after id2",
 	}, {

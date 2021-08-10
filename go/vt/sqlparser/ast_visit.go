@@ -335,9 +335,6 @@ func VisitRefOfAddColumns(in *AddColumns, f Visit) error {
 			return err
 		}
 	}
-	if err := VisitRefOfColName(in.First, f); err != nil {
-		return err
-	}
 	if err := VisitRefOfColName(in.After, f); err != nil {
 		return err
 	}
@@ -612,9 +609,6 @@ func VisitRefOfChangeColumn(in *ChangeColumn, f Visit) error {
 		return err
 	}
 	if err := VisitRefOfColumnDefinition(in.NewColDefinition, f); err != nil {
-		return err
-	}
-	if err := VisitRefOfColName(in.First, f); err != nil {
 		return err
 	}
 	if err := VisitRefOfColName(in.After, f); err != nil {
@@ -1326,9 +1320,6 @@ func VisitRefOfModifyColumn(in *ModifyColumn, f Visit) error {
 		return err
 	}
 	if err := VisitRefOfColumnDefinition(in.NewColDefinition, f); err != nil {
-		return err
-	}
-	if err := VisitRefOfColName(in.First, f); err != nil {
 		return err
 	}
 	if err := VisitRefOfColName(in.After, f); err != nil {
