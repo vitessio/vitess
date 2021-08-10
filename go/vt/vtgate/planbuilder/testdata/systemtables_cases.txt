@@ -544,6 +544,7 @@ Gen4 plan same as above
     "Table": "information_schema.`tables`"
   }
 }
+Gen4 plan same as above
 
 #rails_query 10
 "SELECT table_name FROM (SELECT * FROM information_schema.tables WHERE table_schema = 'table_schema') _subquery WHERE _subquery.table_type = 'table_type' AND _subquery.table_name = 'table_name'"
