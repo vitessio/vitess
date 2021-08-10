@@ -1546,7 +1546,7 @@ func (node *AddColumns) Format(buf *TrackedBuffer) {
 
 	if len(node.Columns) == 1 {
 		buf.astPrintf(node, "add column %v", node.Columns[0])
-		if node.First == true {
+		if node.First {
 			buf.astPrintf(node, " first")
 		}
 		if node.After != nil {
@@ -1582,7 +1582,7 @@ func (node *AlterColumn) Format(buf *TrackedBuffer) {
 // Format formats the node
 func (node *ChangeColumn) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "change column %v %v", node.OldColumn, node.NewColDefinition)
-	if node.First == true {
+	if node.First {
 		buf.astPrintf(node, " first")
 	}
 	if node.After != nil {
@@ -1593,7 +1593,7 @@ func (node *ChangeColumn) Format(buf *TrackedBuffer) {
 // Format formats the node
 func (node *ModifyColumn) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "modify column %v", node.NewColDefinition)
-	if node.First == true {
+	if node.First {
 		buf.astPrintf(node, " first")
 	}
 	if node.After != nil {
