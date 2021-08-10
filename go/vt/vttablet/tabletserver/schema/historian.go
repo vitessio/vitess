@@ -35,6 +35,9 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
+// maxVersions - how many entries to keep in memory
+// TODO: should this be exposed as a startup flag?
+const maxVersions = 1000
 const getSchemaVersions = "select id, pos, ddl, time_updated, schemax from _vt.schema_version where id > %d order by id asc"
 
 // vl defines the glog verbosity level for the package
@@ -164,11 +167,12 @@ func (h *historian) loadFromDB(ctx context.Context) error {
 		return err
 	}
 	defer conn.Recycle()
-	tableData, err := conn.Exec(ctx, fmt.Sprintf(getSchemaVersions, h.lastID), 10000, true)
+	tableData, err := conn.Exec(ctx, fmt.Sprintf(getSchemaVersions, h.lastID), maxVersions, true)
 	if err != nil {
 		log.Infof("Error reading schema_tracking table %v, will operate with the latest available schema", err)
 		return nil
 	}
+
 	for _, row := range tableData.Rows {
 		trackedSchema, id, err := h.readRow(row)
 		if err != nil {
@@ -178,6 +182,19 @@ func (h *historian) loadFromDB(ctx context.Context) error {
 		h.lastID = id
 	}
 	h.sortSchemas()
+
+	loadedSchemas := len(h.schemas)
+	if loadedSchemas > maxVersions {
+		cutOff := loadedSchemas - maxVersions
+		for i := 0; i < cutOff; i++ {
+			// discard references to other memory
+			h.schemas[i] = nil
+		}
+
+		// keep only last N versions
+		h.schemas = h.schemas[cutOff:loadedSchemas]
+	}
+
 	return nil
 }
 
