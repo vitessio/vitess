@@ -25,15 +25,26 @@ import (
 
 //=======================================================================
 
+// A newDurabler is a function that creates a new durabler based on the
+// properties specified in the input map. Every durabler must
+// register a newDurabler function.
+type newDurabler func(map[string]string) (durabler, error)
+
 var (
-	durabilityPolicies  = make(map[string]durabler)
+	durabilityPolicies  = make(map[string]newDurabler)
 	curDurabilityPolicy durabler
 )
 
 func init() {
-	registerDurability("none", &durabilityNone{})
-	registerDurability("semi_sync", &durabilitySemiSync{})
-	registerDurability("cross_cell", &durabilityCrossCell{})
+	registerDurability("none", func(map[string]string) (durabler, error) {
+		return &durabilityNone{}, nil
+	})
+	registerDurability("semi_sync", func(map[string]string) (durabler, error) {
+		return &durabilitySemiSync{}, nil
+	})
+	registerDurability("cross_cell", func(m map[string]string) (durabler, error) {
+		return &durabilityCrossCell{}, nil
+	})
 }
 
 type durabler interface {
@@ -42,22 +53,23 @@ type durabler interface {
 	replicaSemiSync(master, replica *topodatapb.Tablet) bool
 }
 
-func registerDurability(name string, d durabler) {
+func registerDurability(name string, newDurablerFunc newDurabler) {
 	if durabilityPolicies[name] != nil {
 		log.Fatalf("durability policy %v already registered", name)
 	}
-	durabilityPolicies[name] = d
+	durabilityPolicies[name] = newDurablerFunc
 }
 
 //=======================================================================
 
-func SetDurabilityPolicy(name string) error {
-	curDurabilityPolicy = durabilityPolicies[name]
-	if curDurabilityPolicy == nil {
+func SetDurabilityPolicy(name string) (err error) {
+	newDurabilityCreationFunc, found := durabilityPolicies[name]
+	if !found {
 		return fmt.Errorf("durability policy %v not found", name)
 	}
 	log.Infof("Durability setting: %v", name)
-	return nil
+	curDurabilityPolicy, err = newDurabilityCreationFunc(nil)
+	return err
 }
 
 // PromotionRule returns the promotion rule for the instance.
