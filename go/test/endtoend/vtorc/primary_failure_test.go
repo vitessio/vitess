@@ -76,7 +76,7 @@ func TestCrossDataCenterFailure(t *testing.T) {
 
 	crossCellReplica := startVttablet(t, cell2, false)
 	// newly started tablet does not replicate from anyone yet, we will allow orchestrator to fix this too
-	checkReplication(t, clusterInstance, curPrimary, []*cluster.Vttablet{crossCellReplica, replicaInSameCell}, 15*time.Second)
+	checkReplication(t, clusterInstance, curPrimary, []*cluster.Vttablet{crossCellReplica, replicaInSameCell}, 25*time.Second)
 
 	// Make the current primary database unavailable.
 	err := curPrimary.MysqlctlProcess.Stop()
@@ -116,6 +116,9 @@ func TestLostReplicasOnPrimaryFailure(t *testing.T) {
 	assert.NotNil(t, replica, "could not find replica tablet")
 	assert.NotNil(t, rdonly, "could not find rdonly tablet")
 
+	// check that replication is setup correctly
+	checkReplication(t, clusterInstance, curPrimary, []*cluster.Vttablet{rdonly, replica}, 15*time.Second)
+
 	// revoke super privileges from vtorc on replica so that it is unable to repair the replication
 	changePrivileges(t, `REVOKE SUPER ON *.* FROM 'orc_client_user'@'%'`, replica, "orc_client_user")
 
@@ -124,7 +127,7 @@ func TestLostReplicasOnPrimaryFailure(t *testing.T) {
 	require.NoError(t, err)
 
 	// check that rdonly is able to replicate. We also want to add some queries to rdonly which will not be there in replica
-	checkReplication(t, clusterInstance, curPrimary, []*cluster.Vttablet{rdonly}, 15*time.Second)
+	runAdditionalCommands(t, curPrimary, []*cluster.Vttablet{rdonly}, 15*time.Second)
 
 	// Make the current primary database unavailable.
 	err = curPrimary.MysqlctlProcess.Stop()
