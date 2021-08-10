@@ -67,7 +67,6 @@ func registerDurability(name string, newDurablerFunc newDurabler) {
 
 // SetDurabilityPolicy is used to set the durability policy from the registered policies
 func SetDurabilityPolicy(name string, durabilityParams map[string]string) error {
-	log.Error("received map", durabilityParams)
 	newDurabilityCreationFunc, found := durabilityPolicies[name]
 	if !found {
 		return fmt.Errorf("durability policy %v not found", name)

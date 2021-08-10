@@ -30,7 +30,7 @@ import (
 // covers the test case master-failover from orchestrator
 func TestDownPrimary(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	setupVttabletsAndVtorc(t, 2, 0, 0, 0, nil, "test_config.json")
+	setupVttabletsAndVtorc(t, 2, 0, nil, "test_config.json")
 	keyspace := &clusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 	// find primary from topo
@@ -58,7 +58,7 @@ func TestDownPrimary(t *testing.T) {
 // covers part of the test case master-failover-lost-replicas from orchestrator
 func TestCrossDataCenterFailure(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	setupVttabletsAndVtorc(t, 2, 1, 0, 0, nil, "test_config.json")
+	setupVttabletsAndVtorc(t, 2, 1, nil, "test_config.json")
 	keyspace := &clusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 	// find primary from topo
@@ -94,7 +94,7 @@ func TestCrossDataCenterFailure(t *testing.T) {
 // covers part of the test case master-failover-lost-replicas from orchestrator
 func TestLostReplicasOnPrimaryFailure(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	setupVttabletsAndVtorc(t, 2, 1, 0, 0, nil, "test_config.json")
+	setupVttabletsAndVtorc(t, 2, 1, nil, "test_config.json")
 	keyspace := &clusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 	// find primary from topo
@@ -153,7 +153,7 @@ func TestLostReplicasOnPrimaryFailure(t *testing.T) {
 // covers the test case master-failover-fail-promotion-lag-minutes-success from orchestrator
 func TestPromotionLagSuccess(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	setupVttabletsAndVtorc(t, 2, 0, 0, 0, nil, "test_config_promotion_success.json")
+	setupVttabletsAndVtorc(t, 2, 0, nil, "test_config_promotion_success.json")
 	keyspace := &clusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 	// find primary from topo
@@ -183,7 +183,7 @@ func TestPromotionLagFailure(t *testing.T) {
 	// skip the test since it fails now
 	t.Skip()
 	defer cluster.PanicHandler(t)
-	setupVttabletsAndVtorc(t, 2, 0, 0, 0, nil, "test_config_promotion_failure.json")
+	setupVttabletsAndVtorc(t, 2, 0, nil, "test_config_promotion_failure.json")
 	keyspace := &clusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 	// find primary from topo
@@ -203,4 +203,32 @@ func TestPromotionLagFailure(t *testing.T) {
 
 	// the previous primary should still be the primary since recovery of dead primary should fail
 	checkPrimaryTablet(t, clusterInstance, curPrimary)
+}
+
+// covers the test case master-failover-candidate from orchestrator
+// We explicitly set one of the replicas to Prefer promotion rule.
+// That is the replica which should be promoted in case of primary failure
+func TestDownPrimaryPromotionRule(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	setupVttabletsAndVtorc(t, 2, 1, nil, "test_config_crosscenter_prefer.json")
+	keyspace := &clusterInstance.Keyspaces[0]
+	shard0 := &keyspace.Shards[0]
+	// find primary from topo
+	curPrimary := shardPrimaryTablet(t, clusterInstance, keyspace, shard0)
+	assert.NotNil(t, curPrimary, "should have elected a primary")
+
+	crossCellReplica := startVttablet(t, cell2, false)
+	// newly started tablet does not replicate from anyone yet, we will allow orchestrator to fix this too
+	checkReplication(t, clusterInstance, curPrimary, []*cluster.Vttablet{crossCellReplica}, 25*time.Second)
+
+	// Make the current primary database unavailable.
+	err := curPrimary.MysqlctlProcess.Stop()
+	require.NoError(t, err)
+	defer func() {
+		// we remove the tablet from our global list since its mysqlctl process has stopped and cannot be reused for other tests
+		permanentlyRemoveVttablet(curPrimary)
+	}()
+
+	// we have a replica in the same cell, so that is the one which should be promoted and not the one from another cell
+	checkPrimaryTablet(t, clusterInstance, crossCellReplica)
 }
