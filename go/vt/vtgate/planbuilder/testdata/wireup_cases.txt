@@ -1105,7 +1105,7 @@
         "Query": "select 1 from `user` where id in ::__vals",
         "Table": "`user`",
         "Values": [
-          "::__sq"
+          "::__sq1"
         ],
         "Vindex": "user_index"
       }
@@ -1213,8 +1213,8 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select u.col, u.id, :__sq from `user` as u where 1 != 1",
-                "Query": "select u.col, u.id, :__sq from `user` as u",
+                "FieldQuery": "select u.col, u.id, :__sq1 from `user` as u where 1 != 1",
+                "Query": "select u.col, u.id, :__sq1 from `user` as u",
                 "Table": "`user`"
               },
               {

@@ -1626,6 +1626,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4 plan same as above
 
 # multi-level pullout
 "select id1 from user where id = (select id2 from user where id2 in (select id3 from user))"
@@ -1739,6 +1740,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4 plan same as above
 
 # Case preservation test
 "select user_extra.Id from user join user_extra on user.iD = user_extra.User_Id where user.Id = 5"
