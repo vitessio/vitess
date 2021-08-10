@@ -36,10 +36,6 @@ type (
 	}
 )
 
-var (
-	subqueryColName = sqlparser.NewColName("__sq")
-)
-
 func (r *rewriter) starRewrite(cursor *sqlparser.Cursor) bool {
 	switch node := cursor.Node().(type) {
 	case *sqlparser.Select:
@@ -116,7 +112,7 @@ func (r *rewriter) subqueryRewrite(cursor *sqlparser.Cursor) bool {
 			return false
 		}
 
-		argName := r.reservedVars.ReserveColName(subqueryColName)
+		argName := r.reservedVars.ReserveSubQuery()
 		semTableSQ.ArgName = argName
 
 		switch semTableSQ.OpCode {
