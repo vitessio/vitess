@@ -60,6 +60,7 @@ var (
 	ts              *topo.Server
 	cellInfos       []*cellInfo
 	uidBase         = 100
+	lastUsedValue   = 100
 )
 
 const (
@@ -465,18 +466,25 @@ func checkReplication(t *testing.T, clusterInstance *cluster.LocalProcessCluster
 				time.Sleep(100 * time.Millisecond)
 				break
 			}
-			confirmReplication(t, primary, replicas, time.Until(endTime))
+			confirmReplication(t, primary, replicas, time.Until(endTime), lastUsedValue)
+			lastUsedValue++
 			validateTopology(t, clusterInstance, true, time.Until(endTime))
 			return
 		}
 	}
 }
 
-func confirmReplication(t *testing.T, primary *cluster.Vttablet, replicas []*cluster.Vttablet, timeToWait time.Duration) {
+// call this function only after check replication.
+// it inserts more data into the table vt_insert_test and checks that it is replicated too
+func runAdditionalCommands(t *testing.T, primary *cluster.Vttablet, replicas []*cluster.Vttablet, timeToWait time.Duration) {
+	confirmReplication(t, primary, replicas, timeToWait, lastUsedValue)
+	lastUsedValue++
+}
+
+func confirmReplication(t *testing.T, primary *cluster.Vttablet, replicas []*cluster.Vttablet, timeToWait time.Duration, valueToInsert int) {
 	log.Infof("Insert data into primary and check that it is replicated to replica")
-	n := 2 // random value ...
 	// insert data into the new primary, check the connected replica work
-	insertSQL := fmt.Sprintf("insert into vt_insert_test(id, msg) values (%d, 'test %d')", n, n)
+	insertSQL := fmt.Sprintf("insert into vt_insert_test(id, msg) values (%d, 'test %d')", valueToInsert, valueToInsert)
 	_, err := runSQL(t, insertSQL, primary, "vt_ks")
 	require.NoError(t, err)
 	time.Sleep(100 * time.Millisecond)
@@ -489,7 +497,7 @@ func confirmReplication(t *testing.T, primary *cluster.Vttablet, replicas []*clu
 		default:
 			err = nil
 			for _, tab := range replicas {
-				errInReplication := checkInsertedValues(t, tab, n)
+				errInReplication := checkInsertedValues(t, tab, valueToInsert)
 				if errInReplication != nil {
 					err = errInReplication
 				}
