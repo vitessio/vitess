@@ -19,6 +19,8 @@ package inst
 import (
 	"fmt"
 
+	"vitess.io/vitess/go/vt/topo/topoproto"
+
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
@@ -28,7 +30,7 @@ import (
 // A newDurabler is a function that creates a new durabler based on the
 // properties specified in the input map. Every durabler must
 // register a newDurabler function.
-type newDurabler func(map[string]string) (durabler, error)
+type newDurabler func(map[string]string) durabler
 
 var (
 	durabilityPolicies  = make(map[string]newDurabler)
@@ -36,15 +38,16 @@ var (
 )
 
 func init() {
-	registerDurability("none", func(map[string]string) (durabler, error) {
-		return &durabilityNone{}, nil
+	registerDurability("none", func(map[string]string) durabler {
+		return &durabilityNone{}
 	})
-	registerDurability("semi_sync", func(map[string]string) (durabler, error) {
-		return &durabilitySemiSync{}, nil
+	registerDurability("semi_sync", func(map[string]string) durabler {
+		return &durabilitySemiSync{}
 	})
-	registerDurability("cross_cell", func(m map[string]string) (durabler, error) {
-		return &durabilityCrossCell{}, nil
+	registerDurability("cross_cell", func(map[string]string) durabler {
+		return &durabilityCrossCell{}
 	})
+	registerDurability("specified", newDurabilitySpecified)
 }
 
 type durabler interface {
@@ -62,14 +65,14 @@ func registerDurability(name string, newDurablerFunc newDurabler) {
 
 //=======================================================================
 
-func SetDurabilityPolicy(name string) (err error) {
+func SetDurabilityPolicy(name string) error {
 	newDurabilityCreationFunc, found := durabilityPolicies[name]
 	if !found {
 		return fmt.Errorf("durability policy %v not found", name)
 	}
 	log.Infof("Durability setting: %v", name)
-	curDurabilityPolicy, err = newDurabilityCreationFunc(nil)
-	return err
+	curDurabilityPolicy = newDurabilityCreationFunc(nil)
+	return nil
 }
 
 // PromotionRule returns the promotion rule for the instance.
@@ -172,4 +175,47 @@ func (d *durabilityCrossCell) replicaSemiSync(master, replica *topodatapb.Tablet
 		return master.Alias.Cell != replica.Alias.Cell
 	}
 	return false
+}
+
+//=======================================================================
+
+type durabilitySpecified struct {
+	promotionRules map[string]CandidatePromotionRule
+}
+
+func (d *durabilitySpecified) promotionRule(tablet *topodatapb.Tablet) CandidatePromotionRule {
+	promoteRule, isFound := d.promotionRules[topoproto.TabletAliasString(tablet.Alias)]
+	if isFound {
+		return promoteRule
+	}
+
+	switch tablet.Type {
+	case topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA:
+		return NeutralPromoteRule
+	}
+	return MustNotPromoteRule
+}
+
+func (d *durabilitySpecified) masterSemiSync(instanceKey InstanceKey) int {
+	return 0
+}
+
+func (d *durabilitySpecified) replicaSemiSync(master, replica *topodatapb.Tablet) bool {
+	return false
+}
+
+func newDurabilitySpecified(m map[string]string) durabler {
+	promotionRules := map[string]CandidatePromotionRule{}
+	for tabletAliasStr, promotionRuleStr := range m {
+		promotionRule, err := ParseCandidatePromotionRule(promotionRuleStr)
+		if err != nil {
+			log.Errorf("invalid promotion rule %s found, received error - %v", promotionRuleStr, err)
+			continue
+		}
+		promotionRules[tabletAliasStr] = promotionRule
+	}
+
+	return &durabilitySpecified{
+		promotionRules: promotionRules,
+	}
 }
