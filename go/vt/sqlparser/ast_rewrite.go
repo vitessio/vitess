@@ -344,11 +344,6 @@ func (a *application) rewriteRefOfAddColumns(parent SQLNode, node *AddColumns, r
 			return false
 		}
 	}
-	if !a.rewriteRefOfColName(node, node.First, func(newNode, parent SQLNode) {
-		parent.(*AddColumns).First = newNode.(*ColName)
-	}) {
-		return false
-	}
 	if !a.rewriteRefOfColName(node, node.After, func(newNode, parent SQLNode) {
 		parent.(*AddColumns).After = newNode.(*ColName)
 	}) {
@@ -940,11 +935,6 @@ func (a *application) rewriteRefOfChangeColumn(parent SQLNode, node *ChangeColum
 	}
 	if !a.rewriteRefOfColumnDefinition(node, node.NewColDefinition, func(newNode, parent SQLNode) {
 		parent.(*ChangeColumn).NewColDefinition = newNode.(*ColumnDefinition)
-	}) {
-		return false
-	}
-	if !a.rewriteRefOfColName(node, node.First, func(newNode, parent SQLNode) {
-		parent.(*ChangeColumn).First = newNode.(*ColName)
 	}) {
 		return false
 	}
@@ -2529,11 +2519,6 @@ func (a *application) rewriteRefOfModifyColumn(parent SQLNode, node *ModifyColum
 	}
 	if !a.rewriteRefOfColumnDefinition(node, node.NewColDefinition, func(newNode, parent SQLNode) {
 		parent.(*ModifyColumn).NewColDefinition = newNode.(*ColumnDefinition)
-	}) {
-		return false
-	}
-	if !a.rewriteRefOfColName(node, node.First, func(newNode, parent SQLNode) {
-		parent.(*ModifyColumn).First = newNode.(*ColName)
 	}) {
 		return false
 	}
