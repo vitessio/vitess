@@ -266,15 +266,15 @@ func TestDownPrimaryPromotionRuleWithLag(t *testing.T) {
 	checkReplication(t, clusterInstance, curPrimary, []*cluster.Vttablet{crossCellReplica, replica, rdonly}, 25*time.Second)
 
 	// make the crossCellReplica lag by setting the source_delay to 20 seconds
-	runSQL(t, "STOP REPLICA", crossCellReplica, "")
-	runSQL(t, "CHANGE REPLICATION SOURCE TO SOURCE_DELAY = 20", crossCellReplica, "")
-	runSQL(t, "START REPLICA", crossCellReplica, "")
+	runSQL(t, "STOP SLAVE", crossCellReplica, "")
+	runSQL(t, "CHANGE MASTER TO MASTER_DELAY = 20", crossCellReplica, "")
+	runSQL(t, "START SLAVE", crossCellReplica, "")
 
 	defer func() {
 		// fix the crossCell replica back so that no other tests see this as a side effect
-		runSQL(t, "STOP REPLICA", crossCellReplica, "")
-		runSQL(t, "CHANGE REPLICATION SOURCE TO SOURCE_DELAY = 0", crossCellReplica, "")
-		runSQL(t, "START REPLICA", crossCellReplica, "")
+		runSQL(t, "STOP SLAVE", crossCellReplica, "")
+		runSQL(t, "CHANGE MASTER TO MASTER_DELAY = 0", crossCellReplica, "")
+		runSQL(t, "START SLAVE", crossCellReplica, "")
 	}()
 
 	// check that rdonly and replica are able to replicate. We also want to add some queries to replica which will not be there in crossCellReplica
@@ -333,15 +333,15 @@ func TestDownPrimaryPromotionRuleWithLagCrossCenter(t *testing.T) {
 	checkReplication(t, clusterInstance, curPrimary, []*cluster.Vttablet{crossCellReplica, replica, rdonly}, 25*time.Second)
 
 	// make the replica lag by setting the source_delay to 20 seconds
-	runSQL(t, "STOP REPLICA", replica, "")
-	runSQL(t, "CHANGE REPLICATION SOURCE TO SOURCE_DELAY = 20", replica, "")
-	runSQL(t, "START REPLICA", replica, "")
+	runSQL(t, "STOP SLAVE", replica, "")
+	runSQL(t, "CHANGE MASTER TO MASTER_DELAY = 20", replica, "")
+	runSQL(t, "START SLAVE", replica, "")
 
 	defer func() {
 		// fix the replica back so that no other tests see this as a side effect
-		runSQL(t, "STOP REPLICA", replica, "")
-		runSQL(t, "CHANGE REPLICATION SOURCE TO SOURCE_DELAY = 0", replica, "")
-		runSQL(t, "START REPLICA", replica, "")
+		runSQL(t, "STOP SLAVE", replica, "")
+		runSQL(t, "CHANGE MASTER TO MASTER_DELAY = 0", replica, "")
+		runSQL(t, "START SLAVE", replica, "")
 	}()
 
 	// check that rdonly and crossCellReplica are able to replicate. We also want to add some queries to crossCenterReplica which will not be there in replica
