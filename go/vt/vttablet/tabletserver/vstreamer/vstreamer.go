@@ -681,6 +681,8 @@ func (vs *vstreamer) buildTablePlan(id uint64, tm *mysql.TableMap) (*binlogdatap
 		FieldEvent: &binlogdatapb.FieldEvent{
 			TableName: plan.Table.Name,
 			Fields:    plan.fields(),
+			Keyspace:  vs.vse.keyspace,
+			Shard:     vs.vse.shard,
 		},
 	}, nil
 }
@@ -840,6 +842,8 @@ func (vs *vstreamer) processRowEvent(vevents []*binlogdatapb.VEvent, plan *strea
 			RowEvent: &binlogdatapb.RowEvent{
 				TableName:  plan.Table.Name,
 				RowChanges: rowChanges,
+				Keyspace:   vs.vse.keyspace,
+				Shard:      vs.vse.shard,
 			},
 		})
 	}

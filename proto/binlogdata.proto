@@ -285,12 +285,16 @@ message RowChange {
 message RowEvent {
   string table_name = 1;
   repeated RowChange row_changes = 2;
+  string keyspace = 3;
+  string shard = 4;
 }
 
 // FieldEvent represents the field info for a table.
 message FieldEvent {
   string table_name = 1;
   repeated query.Field fields = 2;
+  string keyspace = 3;
+  string shard = 4;
 }
 
 // ShardGtid contains the GTID position for one shard.
