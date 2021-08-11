@@ -253,7 +253,7 @@ func TestVersion(t *testing.T) {
 	defer env.SchemaEngine.EnableHistorian(false)
 
 	engine = NewEngine(engine.env, env.SrvTopo, env.SchemaEngine, nil, env.Cells[0])
-	engine.InitDBConfig(env.KeyspaceName)
+	engine.InitDBConfig(env.KeyspaceName, env.ShardName)
 	engine.Open()
 	defer engine.Close()
 
@@ -543,6 +543,12 @@ func TestVStreamCopyWithDifferentFilters(t *testing.T) {
 						for j := range ev.FieldEvent.Fields {
 							ev.FieldEvent.Fields[j].Flags = 0
 						}
+						ev.FieldEvent.Keyspace = ""
+						ev.FieldEvent.Shard = ""
+					}
+					if ev.Type == binlogdatapb.VEventType_ROW {
+						ev.RowEvent.Keyspace = ""
+						ev.RowEvent.Shard = ""
 					}
 					got := ev.String()
 					want := expectedEvents[i]
@@ -922,6 +928,10 @@ func TestREKeyRange(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
 	}
+	ignoreKeyspaceShardInFieldAndRowEvents = false
+	defer func() {
+		ignoreKeyspaceShardInFieldAndRowEvents = true
+	}()
 	// Needed for this test to run if run standalone
 	engine.watcherOnce.Do(engine.setWatch)
 
@@ -964,11 +974,11 @@ func TestREKeyRange(t *testing.T) {
 	execStatements(t, input)
 	expectLog(ctx, t, input, ch, [][]string{{
 		`begin`,
-		`type:FIELD field_event:{table_name:"t1" fields:{name:"id1" type:INT32 table:"t1" org_table:"t1" database:"vttest" org_name:"id1" column_length:11 charset:63} fields:{name:"id2" type:INT32 table:"t1" org_table:"t1" database:"vttest" org_name:"id2" column_length:11 charset:63} fields:{name:"val" type:VARBINARY table:"t1" org_table:"t1" database:"vttest" org_name:"val" column_length:128 charset:63}}`,
-		`type:ROW row_event:{table_name:"t1" row_changes:{after:{lengths:1 lengths:1 lengths:3 values:"14aaa"}}}`,
-		`type:ROW row_event:{table_name:"t1" row_changes:{before:{lengths:1 lengths:1 lengths:3 values:"14aaa"} after:{lengths:1 lengths:1 lengths:3 values:"24aaa"}}}`,
-		`type:ROW row_event:{table_name:"t1" row_changes:{before:{lengths:1 lengths:1 lengths:3 values:"24aaa"}}}`,
-		`type:ROW row_event:{table_name:"t1" row_changes:{after:{lengths:1 lengths:1 lengths:3 values:"31bbb"}}}`,
+		`type:FIELD field_event:{table_name:"t1" fields:{name:"id1" type:INT32 table:"t1" org_table:"t1" database:"vttest" org_name:"id1" column_length:11 charset:63} fields:{name:"id2" type:INT32 table:"t1" org_table:"t1" database:"vttest" org_name:"id2" column_length:11 charset:63} fields:{name:"val" type:VARBINARY table:"t1" org_table:"t1" database:"vttest" org_name:"val" column_length:128 charset:63} keyspace:"vttest" shard:"0"}`,
+		`type:ROW row_event:{table_name:"t1" row_changes:{after:{lengths:1 lengths:1 lengths:3 values:"14aaa"}} keyspace:"vttest" shard:"0"}`,
+		`type:ROW row_event:{table_name:"t1" row_changes:{before:{lengths:1 lengths:1 lengths:3 values:"14aaa"} after:{lengths:1 lengths:1 lengths:3 values:"24aaa"}} keyspace:"vttest" shard:"0"}`,
+		`type:ROW row_event:{table_name:"t1" row_changes:{before:{lengths:1 lengths:1 lengths:3 values:"24aaa"}} keyspace:"vttest" shard:"0"}`,
+		`type:ROW row_event:{table_name:"t1" row_changes:{after:{lengths:1 lengths:1 lengths:3 values:"31bbb"}} keyspace:"vttest" shard:"0"}`,
 		`gtid`,
 		`commit`,
 	}})
@@ -1004,7 +1014,7 @@ func TestREKeyRange(t *testing.T) {
 	execStatements(t, input)
 	expectLog(ctx, t, input, ch, [][]string{{
 		`begin`,
-		`type:ROW row_event:{table_name:"t1" row_changes:{after:{lengths:1 lengths:1 lengths:3 values:"41aaa"}}}`,
+		`type:ROW row_event:{table_name:"t1" row_changes:{after:{lengths:1 lengths:1 lengths:3 values:"41aaa"}} keyspace:"vttest" shard:"0"}`,
 		`gtid`,
 		`commit`,
 	}})
@@ -2072,7 +2082,15 @@ func expectLog(ctx context.Context, t *testing.T, input interface{}, ch <-chan [
 				if evs[i].Type == binlogdatapb.VEventType_FIELD {
 					for j := range evs[i].FieldEvent.Fields {
 						evs[i].FieldEvent.Fields[j].Flags = 0
+						if ignoreKeyspaceShardInFieldAndRowEvents {
+							evs[i].FieldEvent.Keyspace = ""
+							evs[i].FieldEvent.Shard = ""
+						}
 					}
+				}
+				if ignoreKeyspaceShardInFieldAndRowEvents && evs[i].Type == binlogdatapb.VEventType_ROW {
+					evs[i].RowEvent.Keyspace = ""
+					evs[i].RowEvent.Shard = ""
 				}
 				if got := fmt.Sprintf("%v", evs[i]); got != want {
 					log.Errorf("%v (%d): event:\n%q, want\n%q", input, i, got, want)
