@@ -408,7 +408,7 @@ func TestVRWSchemaValidation(t *testing.T) {
 		}},
 	}
 	tme := newTestShardMigrater(ctx, t, sourceShards, targetShards)
-	for _, primary := range tme.sourceMasters {
+	for _, primary := range tme.sourcePrimaries {
 		primary.FakeMysqlDaemon.Schema = schm
 	}
 

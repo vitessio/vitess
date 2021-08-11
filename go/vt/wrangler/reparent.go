@@ -106,9 +106,9 @@ func (wr *Wrangler) ReparentTablet(ctx context.Context, tabletAlias *topodatapb.
 }
 
 // InitShardPrimary will make the provided tablet the primary for the shard.
-func (wr *Wrangler) InitShardPrimary(ctx context.Context, keyspace, shard string, masterElectTabletAlias *topodatapb.TabletAlias, force bool, waitReplicasTimeout time.Duration) (err error) {
+func (wr *Wrangler) InitShardPrimary(ctx context.Context, keyspace, shard string, primaryElectTabletAlias *topodatapb.TabletAlias, force bool, waitReplicasTimeout time.Duration) (err error) {
 	// lock the shard
-	ctx, unlock, lockErr := wr.ts.LockShard(ctx, keyspace, shard, fmt.Sprintf("InitShardPrimary(%v)", topoproto.TabletAliasString(masterElectTabletAlias)))
+	ctx, unlock, lockErr := wr.ts.LockShard(ctx, keyspace, shard, fmt.Sprintf("InitShardPrimary(%v)", topoproto.TabletAliasString(primaryElectTabletAlias)))
 	if lockErr != nil {
 		return lockErr
 	}
@@ -121,7 +121,7 @@ func (wr *Wrangler) InitShardPrimary(ctx context.Context, keyspace, shard string
 	err = grpcvtctldserver.NewVtctldServer(wr.ts).InitShardPrimaryLocked(ctx, ev, &vtctldatapb.InitShardPrimaryRequest{
 		Keyspace:                keyspace,
 		Shard:                   shard,
-		PrimaryElectTabletAlias: masterElectTabletAlias,
+		PrimaryElectTabletAlias: primaryElectTabletAlias,
 		Force:                   force,
 	}, waitReplicasTimeout, wr.tmc, wr.logger)
 	if err != nil {
@@ -134,14 +134,14 @@ func (wr *Wrangler) InitShardPrimary(ctx context.Context, keyspace, shard string
 
 // PlannedReparentShard will make the provided tablet the primary for the shard,
 // when both the current and new primary are reachable and in good shape.
-func (wr *Wrangler) PlannedReparentShard(ctx context.Context, keyspace, shard string, masterElectTabletAlias, avoidMasterAlias *topodatapb.TabletAlias, waitReplicasTimeout time.Duration) (err error) {
+func (wr *Wrangler) PlannedReparentShard(ctx context.Context, keyspace, shard string, primaryElectTabletAlias, avoidTabletAlias *topodatapb.TabletAlias, waitReplicasTimeout time.Duration) (err error) {
 	_, err = reparentutil.NewPlannedReparenter(wr.ts, wr.tmc, wr.logger).ReparentShard(
 		ctx,
 		keyspace,
 		shard,
 		reparentutil.PlannedReparentOptions{
-			AvoidPrimaryAlias:   avoidMasterAlias,
-			NewPrimaryAlias:     masterElectTabletAlias,
+			AvoidPrimaryAlias:   avoidTabletAlias,
+			NewPrimaryAlias:     primaryElectTabletAlias,
 			WaitReplicasTimeout: waitReplicasTimeout,
 		},
 	)
@@ -151,13 +151,13 @@ func (wr *Wrangler) PlannedReparentShard(ctx context.Context, keyspace, shard st
 
 // EmergencyReparentShard will make the provided tablet the primary for
 // the shard, when the old primary is completely unreachable.
-func (wr *Wrangler) EmergencyReparentShard(ctx context.Context, keyspace, shard string, masterElectTabletAlias *topodatapb.TabletAlias, waitReplicasTimeout time.Duration, ignoredTablets sets.String) (err error) {
+func (wr *Wrangler) EmergencyReparentShard(ctx context.Context, keyspace, shard string, primaryElectTabletAlias *topodatapb.TabletAlias, waitReplicasTimeout time.Duration, ignoredTablets sets.String) (err error) {
 	_, err = reparentutil.NewEmergencyReparenter(wr.ts, wr.tmc, wr.logger).ReparentShard(
 		ctx,
 		keyspace,
 		shard,
 		reparentutil.EmergencyReparentOptions{
-			NewPrimaryAlias:     masterElectTabletAlias,
+			NewPrimaryAlias:     primaryElectTabletAlias,
 			WaitReplicasTimeout: waitReplicasTimeout,
 			IgnoreReplicas:      ignoredTablets,
 		},
@@ -169,11 +169,11 @@ func (wr *Wrangler) EmergencyReparentShard(ctx context.Context, keyspace, shard 
 // TabletExternallyReparented changes the type of new primary for this shard to PRIMARY
 // and updates it's tablet record in the topo. Updating the shard record is handled
 // by the new primary tablet
-func (wr *Wrangler) TabletExternallyReparented(ctx context.Context, newMasterAlias *topodatapb.TabletAlias) error {
+func (wr *Wrangler) TabletExternallyReparented(ctx context.Context, newPrimaryAlias *topodatapb.TabletAlias) error {
 
-	tabletInfo, err := wr.ts.GetTablet(ctx, newMasterAlias)
+	tabletInfo, err := wr.ts.GetTablet(ctx, newPrimaryAlias)
 	if err != nil {
-		log.Warningf("TabletExternallyReparented: failed to read tablet record for %v: %v", newMasterAlias, err)
+		log.Warningf("TabletExternallyReparented: failed to read tablet record for %v: %v", newPrimaryAlias, err)
 		return err
 	}
 
@@ -187,7 +187,7 @@ func (wr *Wrangler) TabletExternallyReparented(ctx context.Context, newMasterAli
 
 	// We update the tablet only if it is not currently primary
 	if tablet.Type != topodatapb.TabletType_PRIMARY {
-		log.Infof("TabletExternallyReparented: executing tablet type change to MASTER")
+		log.Infof("TabletExternallyReparented: executing tablet type change to PRIMARY")
 
 		// Create a reusable Reparent event with available info.
 		ev := &events.Reparent{
@@ -206,7 +206,7 @@ func (wr *Wrangler) TabletExternallyReparented(ctx context.Context, newMasterAli
 		event.DispatchUpdate(ev, "starting external reparent")
 
 		if err := wr.tmc.ChangeType(ctx, tablet, topodatapb.TabletType_PRIMARY); err != nil {
-			log.Warningf("Error calling ChangeType on new master %v: %v", topoproto.TabletAliasString(newMasterAlias), err)
+			log.Warningf("Error calling ChangeType on new primary %v: %v", topoproto.TabletAliasString(newPrimaryAlias), err)
 			return err
 		}
 		event.DispatchUpdate(ev, "finished")

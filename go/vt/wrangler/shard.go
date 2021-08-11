@@ -250,7 +250,7 @@ func (wr *Wrangler) RemoveShardCell(ctx context.Context, keyspace, shard, cell s
 
 	// check the primary alias is not in the cell
 	if shardInfo.PrimaryAlias != nil && shardInfo.PrimaryAlias.Cell == cell {
-		return fmt.Errorf("master %v is in the cell '%v' we want to remove", topoproto.TabletAliasString(shardInfo.PrimaryAlias), cell)
+		return fmt.Errorf("primary %v is in the cell '%v' we want to remove", topoproto.TabletAliasString(shardInfo.PrimaryAlias), cell)
 	}
 
 	// get the ShardReplication object in the cell
