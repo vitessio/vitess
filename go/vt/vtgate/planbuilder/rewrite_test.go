@@ -214,7 +214,7 @@ func TestSubqueryRewrite(t *testing.T) {
 		//	input: "select id from t1 join t2 where t1.id = t2.id and exists (select 1)",
 	}, {
 		input:  "select (select 1), (select 2) from t1 join t2 on t1.id = (select 1) where t1.id in (select 1)",
-		output: "select :__sq2, :__sq3 from t1 join t2 on t1.id = :__sq1 where t1.id in :__sq4",
+		output: "select :__sq2, :__sq3 from t1 join t2 on t1.id = :__sq1 where t1.id in ::__sq4",
 	}}
 	for _, tcase := range tcases {
 		t.Run(tcase.input, func(t *testing.T) {
