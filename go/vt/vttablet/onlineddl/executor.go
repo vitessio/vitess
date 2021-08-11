@@ -2266,7 +2266,7 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 					// a vreplicaiton migration started by another tablet.
 					e.ownedRunningMigrations.Store(uuid, true)
 					_ = e.updateMigrationTimestamp(ctx, "liveness_timestamp", uuid)
-
+					_ = e.updateMigrationTablet(ctx, uuid)
 					_ = e.updateRowsCopied(ctx, uuid, s.rowsCopied)
 					_ = e.updateMigrationProgressByRowsCopied(ctx, uuid, s.rowsCopied)
 					_ = e.updateMigrationETASecondsByProgress(ctx, uuid)
@@ -2590,6 +2590,19 @@ func (e *Executor) updateArtifacts(ctx context.Context, uuid string, artifacts .
 
 func (e *Executor) clearArtifacts(ctx context.Context, uuid string) error {
 	query, err := sqlparser.ParseAndBind(sqlClearArtifacts,
+		sqltypes.StringBindVariable(uuid),
+	)
+	if err != nil {
+		return err
+	}
+	_, err = e.execQuery(ctx, query)
+	return err
+}
+
+// updateMigrationTablet sets 'tablet' column to be this executor's tablet alias for given migration
+func (e *Executor) updateMigrationTablet(ctx context.Context, uuid string) error {
+	query, err := sqlparser.ParseAndBind(sqlUpdateTablet,
+		sqltypes.StringBindVariable(e.TabletAliasString()),
 		sqltypes.StringBindVariable(uuid),
 	)
 	if err != nil {
