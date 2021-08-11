@@ -42,14 +42,14 @@ func TestVExec2(t *testing.T) {
 	wr := New(logger, env.topoServ, env.tmc)
 
 	vx := newVExec(ctx, workflow, keyspace, query, wr)
-	err := vx.getMasters()
+	err := vx.getPrimaries()
 	require.Nil(t, err)
-	masters := vx.masters
-	require.NotNil(t, masters)
-	require.Equal(t, len(masters), 2)
+	primaries := vx.primaries
+	require.NotNil(t, primaries)
+	require.Equal(t, len(primaries), 2)
 	var shards []string
-	for _, master := range masters {
-		shards = append(shards, master.Shard)
+	for _, primary := range primaries {
+		shards = append(shards, primary.Shard)
 	}
 	sort.Strings(shards)
 	require.Equal(t, fmt.Sprintf("%v", shards), "[-80 80-]")
@@ -172,7 +172,7 @@ func TestWorkflowStatusUpdate(t *testing.T) {
 	require.Equal(t, "Running", updateState("", "Running", nil, int64(time.Now().Second())))
 	require.Equal(t, "Lagging", updateState("", "Running", nil, int64(time.Now().Second())-100))
 	require.Equal(t, "Copying", updateState("", "Running", []copyState{{Table: "t1", LastPK: "[[INT64(10)]]"}}, int64(time.Now().Second())))
-	require.Equal(t, "Error", updateState("error: master tablet not contactable", "Running", nil, 0))
+	require.Equal(t, "Error", updateState("error: primary tablet not contactable", "Running", nil, 0))
 }
 
 func TestWorkflowListStreams(t *testing.T) {

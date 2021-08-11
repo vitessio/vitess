@@ -85,7 +85,7 @@ func (wr *Wrangler) GetVersion(ctx context.Context, tabletAlias *topodatapb.Tabl
 }
 
 // helper method to asynchronously get and diff a version
-func (wr *Wrangler) diffVersion(ctx context.Context, masterVersion string, masterAlias *topodatapb.TabletAlias, alias *topodatapb.TabletAlias, wg *sync.WaitGroup, er concurrency.ErrorRecorder) {
+func (wr *Wrangler) diffVersion(ctx context.Context, primaryVersion string, primaryAlias *topodatapb.TabletAlias, alias *topodatapb.TabletAlias, wg *sync.WaitGroup, er concurrency.ErrorRecorder) {
 	defer wg.Done()
 	log.Infof("Gathering version for %v", topoproto.TabletAliasString(alias))
 	replicaVersion, err := wr.GetVersion(ctx, alias)
@@ -94,8 +94,8 @@ func (wr *Wrangler) diffVersion(ctx context.Context, masterVersion string, maste
 		return
 	}
 
-	if masterVersion != replicaVersion {
-		er.RecordError(fmt.Errorf("master %v version %v is different than replica %v version %v", topoproto.TabletAliasString(masterAlias), masterVersion, topoproto.TabletAliasString(alias), replicaVersion))
+	if primaryVersion != replicaVersion {
+		er.RecordError(fmt.Errorf("primary %v version %v is different than replica %v version %v", topoproto.TabletAliasString(primaryAlias), primaryVersion, topoproto.TabletAliasString(alias), replicaVersion))
 	}
 }
 
@@ -109,10 +109,10 @@ func (wr *Wrangler) ValidateVersionShard(ctx context.Context, keyspace, shard st
 
 	// get version from the primary, or error
 	if !si.HasPrimary() {
-		return fmt.Errorf("no master in shard %v/%v", keyspace, shard)
+		return fmt.Errorf("no primary in shard %v/%v", keyspace, shard)
 	}
-	log.Infof("Gathering version for master %v", topoproto.TabletAliasString(si.PrimaryAlias))
-	masterVersion, err := wr.GetVersion(ctx, si.PrimaryAlias)
+	log.Infof("Gathering version for primary %v", topoproto.TabletAliasString(si.PrimaryAlias))
+	primaryVersion, err := wr.GetVersion(ctx, si.PrimaryAlias)
 	if err != nil {
 		return err
 	}
@@ -133,7 +133,7 @@ func (wr *Wrangler) ValidateVersionShard(ctx context.Context, keyspace, shard st
 		}
 
 		wg.Add(1)
-		go wr.diffVersion(ctx, masterVersion, si.PrimaryAlias, alias, &wg, &er)
+		go wr.diffVersion(ctx, primaryVersion, si.PrimaryAlias, alias, &wg, &er)
 	}
 	wg.Wait()
 	if er.HasErrors() {
@@ -166,10 +166,10 @@ func (wr *Wrangler) ValidateVersionKeyspace(ctx context.Context, keyspace string
 		return err
 	}
 	if !si.HasPrimary() {
-		return fmt.Errorf("no master in shard %v/%v", keyspace, shards[0])
+		return fmt.Errorf("no primary in shard %v/%v", keyspace, shards[0])
 	}
 	referenceAlias := si.PrimaryAlias
-	log.Infof("Gathering version for reference master %v", topoproto.TabletAliasString(referenceAlias))
+	log.Infof("Gathering version for reference primary %v", topoproto.TabletAliasString(referenceAlias))
 	referenceVersion, err := wr.GetVersion(ctx, referenceAlias)
 	if err != nil {
 		return err

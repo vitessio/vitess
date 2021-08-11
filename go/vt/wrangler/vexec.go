@@ -68,7 +68,7 @@ type vexec struct {
 
 	wr *Wrangler
 
-	masters []*topo.TabletInfo
+	primaries []*topo.TabletInfo
 }
 
 func newVExec(ctx context.Context, workflow, keyspace, query string, wr *Wrangler) *vexec {
@@ -161,7 +161,7 @@ func (wr *Wrangler) VExec(ctx context.Context, workflow, keyspace, query string,
 func (wr *Wrangler) runVexec(ctx context.Context, workflow, keyspace, query string, dryRun bool) (map[*topo.TabletInfo]*querypb.QueryResult, error) {
 	vx := newVExec(ctx, workflow, keyspace, query, wr)
 
-	if err := vx.getMasters(); err != nil {
+	if err := vx.getPrimaries(); err != nil {
 		return nil, err
 	}
 	plan, err := vx.parseAndPlan(ctx)
@@ -203,19 +203,19 @@ func (vx *vexec) exec() (map[*topo.TabletInfo]*querypb.QueryResult, error) {
 	var mu sync.Mutex
 	ctx, cancel := context.WithTimeout(vx.ctx, 10*time.Second)
 	defer cancel()
-	for _, master := range vx.masters {
+	for _, primary := range vx.primaries {
 		wg.Add(1)
-		go func(ctx context.Context, master *topo.TabletInfo) {
+		go func(ctx context.Context, primary *topo.TabletInfo) {
 			defer wg.Done()
-			qr, err := vx.planner.exec(ctx, master.Alias, vx.plannedQuery)
+			qr, err := vx.planner.exec(ctx, primary.Alias, vx.plannedQuery)
 			if err != nil {
 				allErrors.RecordError(err)
 			} else {
 				mu.Lock()
-				results[master] = qr
+				results[primary] = qr
 				mu.Unlock()
 			}
-		}(ctx, master)
+		}(ctx, primary)
 	}
 	wg.Wait()
 	return results, allErrors.AggrError(vterrors.Aggregate)
@@ -232,8 +232,8 @@ func (vx *vexec) parseQuery() (err error) {
 	return nil
 }
 
-// getMasters identifies primary tablet for all shards relevant to our keyspace
-func (vx *vexec) getMasters() error {
+// getPrimaries identifies primary tablet for all shards relevant to our keyspace
+func (vx *vexec) getPrimaries() error {
 	var err error
 	shards, err := vx.wr.ts.GetShardNames(vx.ctx, vx.keyspace)
 	if err != nil {
@@ -242,37 +242,37 @@ func (vx *vexec) getMasters() error {
 	if len(shards) == 0 {
 		return fmt.Errorf("no shards found in keyspace %s", vx.keyspace)
 	}
-	var allMasters []*topo.TabletInfo
-	var master *topo.TabletInfo
+	var allPrimaries []*topo.TabletInfo
+	var primary *topo.TabletInfo
 	for _, shard := range shards {
-		if master, err = vx.getMasterForShard(shard); err != nil {
+		if primary, err = vx.getPrimaryForShard(shard); err != nil {
 			return err
 		}
-		if master == nil {
-			return fmt.Errorf("no master found for shard %s", shard)
+		if primary == nil {
+			return fmt.Errorf("no primary found for shard %s", shard)
 		}
-		allMasters = append(allMasters, master)
+		allPrimaries = append(allPrimaries, primary)
 	}
-	vx.masters = allMasters
+	vx.primaries = allPrimaries
 	return nil
 }
 
-func (vx *vexec) getMasterForShard(shard string) (*topo.TabletInfo, error) {
+func (vx *vexec) getPrimaryForShard(shard string) (*topo.TabletInfo, error) {
 	si, err := vx.wr.ts.GetShard(vx.ctx, vx.keyspace, shard)
 	if err != nil {
 		return nil, err
 	}
 	if si.PrimaryAlias == nil {
-		return nil, fmt.Errorf("no master found for shard %s", shard)
+		return nil, fmt.Errorf("no primary found for shard %s", shard)
 	}
-	master, err := vx.wr.ts.GetTablet(vx.ctx, si.PrimaryAlias)
+	primary, err := vx.wr.ts.GetTablet(vx.ctx, si.PrimaryAlias)
 	if err != nil {
 		return nil, err
 	}
-	if master == nil {
+	if primary == nil {
 		return nil, fmt.Errorf("could not get tablet for %s:%s", vx.keyspace, si.PrimaryAlias)
 	}
-	return master, nil
+	return primary, nil
 }
 
 func (wr *Wrangler) convertQueryResultToSQLTypesResult(results map[*topo.TabletInfo]*querypb.QueryResult) map[*topo.TabletInfo]*sqltypes.Result {
@@ -403,7 +403,7 @@ type ReplicationStatus struct {
 	CopyState []copyState
 }
 
-func (wr *Wrangler) getReplicationStatusFromRow(ctx context.Context, row []sqltypes.Value, master *topo.TabletInfo) (*ReplicationStatus, string, error) {
+func (wr *Wrangler) getReplicationStatusFromRow(ctx context.Context, row []sqltypes.Value, primary *topo.TabletInfo) (*ReplicationStatus, string, error) {
 	var err error
 	var id, timeUpdated, transactionTimestamp int64
 	var state, dbName, pos, stopPos, message, tags string
@@ -441,8 +441,8 @@ func (wr *Wrangler) getReplicationStatusFromRow(ctx context.Context, row []sqlty
 	message = row[9].ToString()
 	tags = row[10].ToString()
 	status := &ReplicationStatus{
-		Shard:                master.Shard,
-		Tablet:               master.AliasString(),
+		Shard:                primary.Shard,
+		Tablet:               primary.AliasString(),
 		ID:                   id,
 		Bls:                  &bls,
 		Pos:                  pos,
@@ -454,7 +454,7 @@ func (wr *Wrangler) getReplicationStatusFromRow(ctx context.Context, row []sqlty
 		Message:              message,
 		Tags:                 tags,
 	}
-	status.CopyState, err = wr.getCopyState(ctx, master, id)
+	status.CopyState, err = wr.getCopyState(ctx, primary, id)
 	if err != nil {
 		return nil, "", err
 	}
@@ -480,14 +480,14 @@ func (wr *Wrangler) getStreams(ctx context.Context, workflow, keyspace string) (
 	var sourceKeyspace string
 	sourceShards := sets.NewString()
 	targetShards := sets.NewString()
-	for master, result := range results {
+	for primary, result := range results {
 		var rsrStatus []*ReplicationStatus
 		qr := sqltypes.Proto3ToResult(result)
 		if len(qr.Rows) == 0 {
 			continue
 		}
 		for _, row := range qr.Rows {
-			status, sk, err := wr.getReplicationStatusFromRow(ctx, row, master)
+			status, sk, err := wr.getReplicationStatusFromRow(ctx, row, primary)
 			if err != nil {
 				return nil, err
 			}
@@ -501,12 +501,12 @@ func (wr *Wrangler) getStreams(ctx context.Context, workflow, keyspace string) (
 				rsr.MaxVReplicationLag = int64(replicationLag.Seconds())
 			}
 		}
-		si, err := wr.ts.GetShard(ctx, keyspace, master.Shard)
+		si, err := wr.ts.GetShard(ctx, keyspace, primary.Shard)
 		if err != nil {
 			return nil, err
 		}
 		targetShards.Insert(si.ShardName())
-		rsr.ShardStatuses[fmt.Sprintf("%s/%s", master.Shard, master.AliasString())] = &ShardReplicationStatus{
+		rsr.ShardStatuses[fmt.Sprintf("%s/%s", primary.Shard, primary.AliasString())] = &ShardReplicationStatus{
 			PrimaryReplicationStatuses: rsrStatus,
 			TabletControls:             si.TabletControls,
 			PrimaryIsServing:           si.IsPrimaryServing,
