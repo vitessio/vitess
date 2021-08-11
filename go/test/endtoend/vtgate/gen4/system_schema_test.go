@@ -152,7 +152,7 @@ func TestSystemSchemaQueryWithoutQualifier(t *testing.T) {
 		"join information_schema.columns c "+
 		"on c.table_schema = t.table_schema and c.table_name = t.table_name "+
 		"where t.table_schema = '%s' and c.table_schema = '%s' "+
-		"order by t.table_schema,t.table_name,c.column_name", KeyspaceName, KeyspaceName)
+		"order by t.table_schema,t.table_name,c.column_name", shardedKs, shardedKs)
 	qr1 := checkedExec(t, conn, queryWithQualifier)
 
 	checkedExec(t, conn, "use information_schema")
@@ -161,7 +161,7 @@ func TestSystemSchemaQueryWithoutQualifier(t *testing.T) {
 		"join columns c "+
 		"on c.table_schema = t.table_schema and c.table_name = t.table_name "+
 		"where t.table_schema = '%s' and c.table_schema = '%s' "+
-		"order by t.table_schema,t.table_name,c.column_name", KeyspaceName, KeyspaceName)
+		"order by t.table_schema,t.table_name,c.column_name", shardedKs, shardedKs)
 	qr2 := checkedExec(t, conn, queryWithoutQualifier)
 	require.Equal(t, qr1, qr2)
 
@@ -186,7 +186,7 @@ func TestMultipleSchemaPredicates(t *testing.T) {
 		"from information_schema.tables t "+
 		"join information_schema.columns c "+
 		"on c.table_schema = t.table_schema and c.table_name = t.table_name "+
-		"where t.table_schema = '%s' and c.table_schema = '%s' and c.table_schema = '%s' and c.table_schema = '%s'", KeyspaceName, KeyspaceName, KeyspaceName, KeyspaceName)
+		"where t.table_schema = '%s' and c.table_schema = '%s' and c.table_schema = '%s' and c.table_schema = '%s'", shardedKs, shardedKs, shardedKs, shardedKs)
 	qr1 := checkedExec(t, conn, query)
 	require.EqualValues(t, 4, len(qr1.Fields))
 
@@ -195,7 +195,7 @@ func TestMultipleSchemaPredicates(t *testing.T) {
 		"from information_schema.tables t "+
 		"join information_schema.columns c "+
 		"on c.table_schema = t.table_schema and c.table_name = t.table_name "+
-		"where t.table_schema = '%s' and c.table_schema = '%s' and c.table_schema = '%s'", KeyspaceName, KeyspaceName, "a")
+		"where t.table_schema = '%s' and c.table_schema = '%s' and c.table_schema = '%s'", shardedKs, shardedKs, "a")
 	_, err = conn.ExecuteFetch(query, 1000, true)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "specifying two different database in the query is not supported")

@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/require"
 
@@ -167,6 +169,7 @@ func TestSubQueries(t *testing.T) {
 	defer func() {
 		_, _ = exec(t, conn, `delete from t2`)
 		_, _ = exec(t, conn, `delete from t3`)
+		_, _ = exec(t, conn, `delete from u_a`)
 	}()
 
 	checkedExec(t, conn, `insert into t2(id, tcol1, tcol2) values (1, 'A', 'A'),(2, 'B', 'C'),(3, 'A', 'C'),(4, 'C', 'A'),(5, 'A', 'A'),(6, 'B', 'C'),(7, 'B', 'A'),(8, 'C', 'B')`)
@@ -174,6 +177,18 @@ func TestSubQueries(t *testing.T) {
 
 	assertMatches(t, conn, `select t2.tcol1, t2.tcol2 from t2 where t2.id IN (select id from t3) order by t2.id`, `[[VARCHAR("A") VARCHAR("A")] [VARCHAR("B") VARCHAR("C")] [VARCHAR("A") VARCHAR("C")] [VARCHAR("C") VARCHAR("A")] [VARCHAR("A") VARCHAR("A")] [VARCHAR("B") VARCHAR("C")] [VARCHAR("B") VARCHAR("A")] [VARCHAR("C") VARCHAR("B")]]`)
 	assertMatches(t, conn, `select t2.tcol1, t2.tcol2 from t2 where t2.id IN (select t3.id from t3 join t2 on t2.id = t3.id) order by t2.id`, `[[VARCHAR("A") VARCHAR("A")] [VARCHAR("B") VARCHAR("C")] [VARCHAR("A") VARCHAR("C")] [VARCHAR("C") VARCHAR("A")] [VARCHAR("A") VARCHAR("A")] [VARCHAR("B") VARCHAR("C")] [VARCHAR("B") VARCHAR("A")] [VARCHAR("C") VARCHAR("B")]]`)
+
+	assertMatches(t, conn, `select u_a.a from u_a left join t2 on t2.id IN (select id from t2)`, `[]`)
+	//inserting some data in u_a
+	checkedExec(t, conn, `insert into u_a(id, a) values (1, 1)`)
+
+	// execute same query again.
+	qr := checkedExec(t, conn, `select u_a.a from u_a left join t2 on t2.id IN (select id from t2)`)
+	assert.EqualValues(t, 8, len(qr.Rows))
+	for index, row := range qr.Rows {
+		assert.EqualValues(t, `[INT64(1)]`, fmt.Sprintf("%v", row), "does not match for row: %d", index+1)
+	}
+
 }
 
 func assertMatches(t *testing.T, conn *mysql.Conn, query, expected string) {
