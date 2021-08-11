@@ -192,26 +192,29 @@ func TestSubqueryRewrite(t *testing.T) {
 		output: "select 1 from t1",
 	}, {
 		input:  "select (select 1) from t1",
-		output: "select :__sq from t1",
+		output: "select :__sq1 from t1",
 		//}, { fails on rewriting
 		//	input: "select 1 from t1 where exists (select 1)",
 	}, {
 		input:  "select id from t1 where id in (select 1)",
-		output: "select id from t1 where id in ::__sq",
+		output: "select id from t1 where id in ::__sq1",
 	}, {
 		input:  "select id from t1 where id not in (select 1)",
-		output: "select id from t1 where id not in ::__sq",
+		output: "select id from t1 where id not in ::__sq1",
 	}, {
 		input:  "select id from t1 where id = (select 1)",
-		output: "select id from t1 where id = :__sq",
+		output: "select id from t1 where id = :__sq1",
 	}, {
 		input:  "select id from t1 where id >= (select 1)",
-		output: "select id from t1 where id >= :__sq",
+		output: "select id from t1 where id >= :__sq1",
 	}, {
 		input:  "select id from t1 where t1.id = (select 1 from t2 where t2.id = t1.id)",
-		output: "select id from t1 where t1.id = :__sq",
+		output: "select id from t1 where t1.id = :__sq1",
 		//}, { fails on rewriting
 		//	input: "select id from t1 join t2 where t1.id = t2.id and exists (select 1)",
+	}, {
+		input:  "select (select 1), (select 2) from t1 join t2 on t1.id = (select 1) where t1.id in (select 1)",
+		output: "select :__sq2, :__sq3 from t1 join t2 on t1.id = :__sq1 where t1.id in :__sq4",
 	}}
 	for _, tcase := range tcases {
 		t.Run(tcase.input, func(t *testing.T) {

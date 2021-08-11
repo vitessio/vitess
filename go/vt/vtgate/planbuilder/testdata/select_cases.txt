@@ -1202,7 +1202,7 @@ Gen4 plan same as above
 }
 Gen4 plan same as above
 
-# select * from subquery expands specific columns
+# select * from derived table expands specific columns
 "select * from (select user.id id1, user_extra.id id2 from user join user_extra) as t"
 {
   "QueryType": "SELECT",
@@ -1248,11 +1248,11 @@ Gen4 plan same as above
   }
 }
 
-# duplicate columns not allowed in subquery
+# duplicate columns not allowed in derived table
 "select * from (select user.id, user_extra.id from user join user_extra) as t"
 "duplicate column names in subquery: id"
 
-# non-existent symbol in cross-shard subquery
+# non-existent symbol in cross-shard derived table
 "select t.col from (select user.id from user join user_extra) as t"
 "symbol t.col not found in table or subquery"
 

@@ -261,7 +261,7 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
   }
 }
 
-# order by on a cross-shard subquery
+# order by on a cross-shard derived table
 "select id from (select user.id, user.col from user join user_extra) as t order by id"
 {
   "QueryType": "SELECT",

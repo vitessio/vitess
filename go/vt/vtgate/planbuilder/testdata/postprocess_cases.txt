@@ -1123,7 +1123,7 @@ Gen4 plan same as above
 }
 Gen4 plan same as above
 
-#Order by subquery column
+#Order by derived table column
 "select * from user u join (select user_id from user_extra where user_id = 5) eu on u.id = eu.user_id where u.id = 5 order by eu.user_id"
 {
   "QueryType": "SELECT",
