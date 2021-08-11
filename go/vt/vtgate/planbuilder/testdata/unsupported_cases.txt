@@ -29,11 +29,11 @@ Gen4 plan same as above
 "select id from (select user.id, user.col from user join user_extra) as t order by rand()"
 "unsupported: memory sort: complex order by expression: rand()"
 
-# filtering on a cross-shard subquery
+# filtering on a cross-shard derived table
 "select id from (select user.id, user.col from user join user_extra) as t where id=5"
 "unsupported: filtering on results of cross-shard subquery"
 
-# expression on a cross-shard subquery
+# expression on a cross-shard derived table
 "select id+1 from (select user.id, user.col from user join user_extra) as t"
 "unsupported: expression on results of a cross-shard subquery"
 
@@ -131,7 +131,7 @@ Gen4 error: unsupported: in scatter query: complex aggregate expression
 "unsupported: cross-shard query with aggregates"
 Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains nonaggregated column '`user`.id' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by
 
-# if subquery scatter and ordering, then we don't allow outer constructs to be pushed down.
+# if derived table scatter and ordering, then we don't allow outer constructs to be pushed down.
 "select count(*) from (select col, user_extra.extra from user join user_extra on user.id = user_extra.user_id order by user_extra.extra) a"
 "unsupported: cross-shard query with aggregates"
 
