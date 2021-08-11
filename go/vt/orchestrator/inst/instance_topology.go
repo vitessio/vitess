@@ -1474,6 +1474,11 @@ func TakeMaster(instanceKey *InstanceKey, allowTakingCoMaster bool) (*Instance, 
 		goto Cleanup
 	}
 	// swap is done!
+	// we make it official by now writing the results in topo server and changing the types for the tablets
+	err = SwitchMaster(instance.Key, masterInstance.Key)
+	if err != nil {
+		goto Cleanup
+	}
 
 Cleanup:
 	if instance != nil {
