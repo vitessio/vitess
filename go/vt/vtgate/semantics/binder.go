@@ -61,6 +61,9 @@ func (b *binder) down(cursor *sqlparser.Cursor) error {
 	switch node := cursor.Node().(type) {
 	case *sqlparser.Subquery:
 		currScope := b.scoper.currentScope()
+		if currScope.selectStmt == nil {
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unable to bind subquery to select statement")
+		}
 		opcode := engine.PulloutValue
 		switch par := cursor.Parent().(type) {
 		case *sqlparser.ComparisonExpr:
