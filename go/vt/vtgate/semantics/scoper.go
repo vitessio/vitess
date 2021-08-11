@@ -50,7 +50,10 @@ func (s *scoper) down(cursor *sqlparser.Cursor) {
 			// can only see the two tables involved in the JOIN, and no other tables.
 			// To create this special context, we create a special scope here that is then merged with
 			// the surrounding scope when we come back out from the JOIN
-			s.push(newScope(nil))
+			nScope := newScope(nil)
+			nScope.selectStmt = cursor.Parent().(*sqlparser.Select)
+			s.push(nScope)
+
 		}
 	case sqlparser.SelectExprs:
 		sel, parentIsSelect := cursor.Parent().(*sqlparser.Select)
