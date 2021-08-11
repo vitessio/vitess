@@ -299,3 +299,70 @@ func TestDownPrimaryPromotionRuleWithLag(t *testing.T) {
 	// check that rdonly and replica are able to replicate from the crossCellReplica
 	runAdditionalCommands(t, crossCellReplica, []*cluster.Vttablet{replica, rdonly}, 15*time.Second)
 }
+
+// covers the test case master-failover-candidate-lag-cross-datacenter from orchestrator
+// We explicitly set one of the cross-cell replicas to Prefer promotion rule, but we prevent cross data center promotions.
+// We let a replica in our own cell lag. That is the replica which should be promoted in case of primary failure
+// It should also be caught up when it is promoted
+func TestDownPrimaryPromotionRuleWithLagCrossCenter(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	setupVttabletsAndVtorc(t, 2, 1, nil, "test_config_crosscenter_prefer_prevent.json")
+	keyspace := &clusterInstance.Keyspaces[0]
+	shard0 := &keyspace.Shards[0]
+	// find primary from topo
+	curPrimary := shardPrimaryTablet(t, clusterInstance, keyspace, shard0)
+	assert.NotNil(t, curPrimary, "should have elected a primary")
+
+	// get the replicas in the same cell
+	var replica, rdonly *cluster.Vttablet
+	for _, tablet := range shard0.Vttablets {
+		// find tablets which are not the primary
+		if tablet.Alias != curPrimary.Alias {
+			if tablet.Type == "replica" {
+				replica = tablet
+			} else {
+				rdonly = tablet
+			}
+		}
+	}
+	assert.NotNil(t, replica, "could not find replica tablet")
+	assert.NotNil(t, rdonly, "could not find rdonly tablet")
+
+	crossCellReplica := startVttablet(t, cell2, false)
+	// newly started tablet does not replicate from anyone yet, we will allow orchestrator to fix this too
+	checkReplication(t, clusterInstance, curPrimary, []*cluster.Vttablet{crossCellReplica, replica, rdonly}, 25*time.Second)
+
+	// make the replica lag by setting the source_delay to 20 seconds
+	runSQL(t, "STOP REPLICA", replica, "")
+	runSQL(t, "CHANGE REPLICATION SOURCE TO SOURCE_DELAY = 20", replica, "")
+	runSQL(t, "START REPLICA", replica, "")
+
+	defer func() {
+		// fix the replica back so that no other tests see this as a side effect
+		runSQL(t, "STOP REPLICA", replica, "")
+		runSQL(t, "CHANGE REPLICATION SOURCE TO SOURCE_DELAY = 0", replica, "")
+		runSQL(t, "START REPLICA", replica, "")
+	}()
+
+	// check that rdonly and crossCellReplica are able to replicate. We also want to add some queries to crossCenterReplica which will not be there in replica
+	runAdditionalCommands(t, curPrimary, []*cluster.Vttablet{rdonly, crossCellReplica}, 15*time.Second)
+
+	// assert that the replica is indeed lagging and does not have the new insertion by checking the count of rows in the table
+	out, err := runSQL(t, "SELECT * FROM vt_insert_test", replica, "vt_ks")
+	require.NoError(t, err)
+	require.Equal(t, 1, len(out.Rows))
+
+	// Make the current primary database unavailable.
+	err = curPrimary.MysqlctlProcess.Stop()
+	require.NoError(t, err)
+	defer func() {
+		// we remove the tablet from our global list since its mysqlctl process has stopped and cannot be reused for other tests
+		permanentlyRemoveVttablet(curPrimary)
+	}()
+
+	// the replica should be promoted since we have prevented cross cell promotions
+	checkPrimaryTablet(t, clusterInstance, replica)
+
+	// check that rdonly and crossCellReplica are able to replicate from the replica
+	runAdditionalCommands(t, replica, []*cluster.Vttablet{crossCellReplica, rdonly}, 15*time.Second)
+}
