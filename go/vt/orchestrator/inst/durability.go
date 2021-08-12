@@ -56,7 +56,7 @@ func init() {
 // durabler is the interface which is used to get the promotion rules for candidates and the semi sync setup
 type durabler interface {
 	promotionRule(*topodatapb.Tablet) CandidatePromotionRule
-	masterSemiSync(InstanceKey) int
+	primarySemiSync(InstanceKey) int
 	replicaSemiSync(master, replica *topodatapb.Tablet) bool
 }
 
@@ -88,12 +88,12 @@ func PromotionRule(tablet *topodatapb.Tablet) CandidatePromotionRule {
 // PrimarySemiSync returns the primary semi-sync setting for the instance.
 // 0 means none. Non-zero specifies the number of required ackers.
 func PrimarySemiSync(instanceKey InstanceKey) int {
-	return curDurabilityPolicy.masterSemiSync(instanceKey)
+	return curDurabilityPolicy.primarySemiSync(instanceKey)
 }
 
 // ReplicaSemiSync returns the replica semi-sync setting for the instance.
-func ReplicaSemiSync(masterKey, replicaKey InstanceKey) bool {
-	master, err := ReadTablet(masterKey)
+func ReplicaSemiSync(primaryKey, replicaKey InstanceKey) bool {
+	primary, err := ReadTablet(primaryKey)
 	if err != nil {
 		return false
 	}
@@ -101,13 +101,13 @@ func ReplicaSemiSync(masterKey, replicaKey InstanceKey) bool {
 	if err != nil {
 		return false
 	}
-	return curDurabilityPolicy.replicaSemiSync(master, replica)
+	return curDurabilityPolicy.replicaSemiSync(primary, replica)
 }
 
 // ReplicaSemiSyncFromTablet returns the replica semi-sync setting from the tablet record.
 // Prefer using this function if tablet record is available.
-func ReplicaSemiSyncFromTablet(master, replica *topodatapb.Tablet) bool {
-	return curDurabilityPolicy.replicaSemiSync(master, replica)
+func ReplicaSemiSyncFromTablet(primary, replica *topodatapb.Tablet) bool {
+	return curDurabilityPolicy.replicaSemiSync(primary, replica)
 }
 
 //=======================================================================
@@ -123,11 +123,11 @@ func (d *durabilityNone) promotionRule(tablet *topodatapb.Tablet) CandidatePromo
 	return MustNotPromoteRule
 }
 
-func (d *durabilityNone) masterSemiSync(instanceKey InstanceKey) int {
+func (d *durabilityNone) primarySemiSync(instanceKey InstanceKey) int {
 	return 0
 }
 
-func (d *durabilityNone) replicaSemiSync(master, replica *topodatapb.Tablet) bool {
+func (d *durabilityNone) replicaSemiSync(primary, replica *topodatapb.Tablet) bool {
 	return false
 }
 
@@ -145,11 +145,11 @@ func (d *durabilitySemiSync) promotionRule(tablet *topodatapb.Tablet) CandidateP
 	return MustNotPromoteRule
 }
 
-func (d *durabilitySemiSync) masterSemiSync(instanceKey InstanceKey) int {
+func (d *durabilitySemiSync) primarySemiSync(instanceKey InstanceKey) int {
 	return 1
 }
 
-func (d *durabilitySemiSync) replicaSemiSync(master, replica *topodatapb.Tablet) bool {
+func (d *durabilitySemiSync) replicaSemiSync(primary, replica *topodatapb.Tablet) bool {
 	switch replica.Type {
 	case topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA:
 		return true
@@ -172,18 +172,18 @@ func (d *durabilityCrossCell) promotionRule(tablet *topodatapb.Tablet) Candidate
 	return MustNotPromoteRule
 }
 
-func (d *durabilityCrossCell) masterSemiSync(instanceKey InstanceKey) int {
+func (d *durabilityCrossCell) primarySemiSync(instanceKey InstanceKey) int {
 	return 1
 }
 
-func (d *durabilityCrossCell) replicaSemiSync(master, replica *topodatapb.Tablet) bool {
+func (d *durabilityCrossCell) replicaSemiSync(primary, replica *topodatapb.Tablet) bool {
 	// Prevent panics.
-	if master.Alias == nil || replica.Alias == nil {
+	if primary.Alias == nil || replica.Alias == nil {
 		return false
 	}
 	switch replica.Type {
 	case topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA:
-		return master.Alias.Cell != replica.Alias.Cell
+		return primary.Alias.Cell != replica.Alias.Cell
 	}
 	return false
 }
@@ -209,11 +209,11 @@ func (d *durabilitySpecified) promotionRule(tablet *topodatapb.Tablet) Candidate
 	return MustNotPromoteRule
 }
 
-func (d *durabilitySpecified) masterSemiSync(instanceKey InstanceKey) int {
+func (d *durabilitySpecified) primarySemiSync(instanceKey InstanceKey) int {
 	return 0
 }
 
-func (d *durabilitySpecified) replicaSemiSync(master, replica *topodatapb.Tablet) bool {
+func (d *durabilitySpecified) replicaSemiSync(primary, replica *topodatapb.Tablet) bool {
 	return false
 }
 

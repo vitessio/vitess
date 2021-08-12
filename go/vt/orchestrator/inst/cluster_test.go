@@ -38,29 +38,29 @@ func init() {
 }
 
 func TestGetClusterMasterKVKey(t *testing.T) {
-	kvKey := GetClusterMasterKVKey("foo")
+	kvKey := GetClusterPrimaryKVKey("foo")
 	test.S(t).ExpectEquals(kvKey, "test/master/foo")
 }
 
 func TestGetClusterMasterKVPair(t *testing.T) {
 	{
-		kvPair := getClusterMasterKVPair("myalias", &masterKey)
+		kvPair := getClusterPrimaryKVPair("myalias", &masterKey)
 		test.S(t).ExpectNotNil(kvPair)
 		test.S(t).ExpectEquals(kvPair.Key, "test/master/myalias")
 		test.S(t).ExpectEquals(kvPair.Value, masterKey.StringCode())
 	}
 	{
-		kvPair := getClusterMasterKVPair("", &masterKey)
+		kvPair := getClusterPrimaryKVPair("", &masterKey)
 		test.S(t).ExpectTrue(kvPair == nil)
 	}
 	{
-		kvPair := getClusterMasterKVPair("myalias", nil)
+		kvPair := getClusterPrimaryKVPair("myalias", nil)
 		test.S(t).ExpectTrue(kvPair == nil)
 	}
 }
 
 func TestGetClusterMasterKVPairs(t *testing.T) {
-	kvPairs := GetClusterMasterKVPairs("myalias", &masterKey)
+	kvPairs := GetClusterPrimaryKVPairs("myalias", &masterKey)
 	test.S(t).ExpectTrue(len(kvPairs) >= 2)
 
 	{
@@ -81,6 +81,6 @@ func TestGetClusterMasterKVPairs(t *testing.T) {
 }
 
 func TestGetClusterMasterKVPairs2(t *testing.T) {
-	kvPairs := GetClusterMasterKVPairs("", &masterKey)
+	kvPairs := GetClusterPrimaryKVPairs("", &masterKey)
 	test.S(t).ExpectEquals(len(kvPairs), 0)
 }
