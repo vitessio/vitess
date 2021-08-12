@@ -2171,3 +2171,22 @@ Gen4 plan same as above
     "Vindex": "vindex1"
   }
 }
+
+# select from unsharded keyspace with uncorrelated subquery which should be merged to a single route
+"select unsharded.id from unsharded where unsharded.name in (select name from unsharded_a)"
+{
+  "QueryType": "SELECT",
+  "Original": "select unsharded.id from unsharded where unsharded.name in (select name from unsharded_a)",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select unsharded.id from unsharded where 1 != 1",
+    "Query": "select unsharded.id from unsharded where unsharded.`name` in (select `name` from unsharded_a)",
+    "Table": "unsharded"
+  }
+}
+Gen4 plan same as above
