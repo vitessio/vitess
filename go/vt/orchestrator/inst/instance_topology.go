@@ -942,8 +942,8 @@ func MakeCoPrimary(instanceKey *InstanceKey) (*Instance, error) {
 		defer EndMaintenance(maintenanceToken)
 	}
 
-	// the coMaster used to be merely a replica. Just point primary into *some* position
-	// within coMaster...
+	// the coPrimary used to be merely a replica. Just point primary into *some* position
+	// within coPrimary...
 	if primary.IsReplica() {
 		// this is the case of a co-primary. For primaries, the StopReplication operation throws an error, and
 		// there's really no point in doing it.
@@ -1021,7 +1021,7 @@ Cleanup:
 	return instance, err
 }
 
-// DetachReplicaPrimaryHost detaches a replica from its primary by corrupting the Master_Host (in such way that is reversible)
+// DetachReplicaPrimaryHost detaches a replica from its primary by corrupting the primary_Host (in such way that is reversible)
 func DetachReplicaPrimaryHost(instanceKey *InstanceKey) (*Instance, error) {
 	instance, err := ReadTopologyInstance(instanceKey)
 	if err != nil {
@@ -1999,7 +1999,7 @@ func relocateBelowInternal(instance, other *Instance) (*Instance, error) {
 
 	// Check simple binlog file/pos operations:
 	if InstancesAreSiblings(instance, other) {
-		// If comastering, only move below if it's read-only
+		// If coPrimary-ing, only move below if it's read-only
 		if !other.IsCoPrimary || other.ReadOnly {
 			return MoveBelow(&instance.Key, &other.Key)
 		}

@@ -642,7 +642,7 @@ func (this *HttpAPI) DetachReplicaPrimaryHost(params martini.Params, r render.Re
 	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Replica detached: %+v", instance.Key), Details: instance})
 }
 
-// ReattachReplicaPrimaryHost reverts a detachReplicaMasterHost command
+// ReattachReplicaPrimaryHost reverts a detachReplicaPrimaryHost command
 // by resetting the original primary hostname in CHANGE MASTER TO
 func (this *HttpAPI) ReattachReplicaPrimaryHost(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	if !isAuthorizedForAction(req, user) {
@@ -1351,7 +1351,7 @@ func (this *HttpAPI) asciiTopology(params martini.Params, r render.Render, req *
 	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Topology for cluster %s", clusterName), Details: asciiOutput})
 }
 
-// SnapshotTopologies triggers orchestrator to record a snapshot of host/master for all known hosts.
+// SnapshotTopologies triggers orchestrator to record a snapshot of host/primary for all known hosts.
 func (this *HttpAPI) SnapshotTopologies(params martini.Params, r render.Render, req *http.Request) {
 	start := time.Now()
 	if err := inst.SnapshotTopologies(); err != nil {
@@ -2358,9 +2358,9 @@ func (this *HttpAPI) ForcePrimaryFailover(params martini.Params, r render.Render
 		return
 	}
 	if topologyRecovery.SuccessorKey != nil {
-		Respond(r, &APIResponse{Code: OK, Message: "Master failed over", Details: topologyRecovery})
+		Respond(r, &APIResponse{Code: OK, Message: "Primary failed over", Details: topologyRecovery})
 	} else {
-		Respond(r, &APIResponse{Code: ERROR, Message: "Master not failed over", Details: topologyRecovery})
+		Respond(r, &APIResponse{Code: ERROR, Message: "Primary not failed over", Details: topologyRecovery})
 	}
 }
 
@@ -2392,9 +2392,9 @@ func (this *HttpAPI) ForcePrimaryTakeover(params martini.Params, r render.Render
 		return
 	}
 	if topologyRecovery.SuccessorKey != nil {
-		Respond(r, &APIResponse{Code: OK, Message: "Master failed over", Details: topologyRecovery})
+		Respond(r, &APIResponse{Code: OK, Message: "Primary failed over", Details: topologyRecovery})
 	} else {
-		Respond(r, &APIResponse{Code: ERROR, Message: "Master not failed over", Details: topologyRecovery})
+		Respond(r, &APIResponse{Code: ERROR, Message: "Primary not failed over", Details: topologyRecovery})
 	}
 }
 
@@ -2434,8 +2434,8 @@ func (this *HttpAPI) RegisterCandidate(params martini.Params, r render.Render, r
 // AutomatedRecoveryFilters retuens list of clusters which are configured with automated recovery
 func (this *HttpAPI) AutomatedRecoveryFilters(params martini.Params, r render.Render, req *http.Request) {
 	automatedRecoveryMap := make(map[string]interface{})
-	automatedRecoveryMap["RecoverMasterClusterFilters"] = config.Config.RecoverPrimaryClusterFilters
-	automatedRecoveryMap["RecoverIntermediateMasterClusterFilters"] = config.Config.RecoverIntermediatePrimaryClusterFilters
+	automatedRecoveryMap["RecoverPrimaryClusterFilters"] = config.Config.RecoverPrimaryClusterFilters
+	automatedRecoveryMap["RecoverIntermediatePrimaryClusterFilters"] = config.Config.RecoverIntermediatePrimaryClusterFilters
 	automatedRecoveryMap["RecoveryIgnoreHostnameFilters"] = config.Config.RecoveryIgnoreHostnameFilters
 
 	Respond(r, &APIResponse{Code: OK, Message: "Automated recovery configuration details", Details: automatedRecoveryMap})

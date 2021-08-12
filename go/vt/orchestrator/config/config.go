@@ -202,15 +202,15 @@ type Configuration struct {
 	RecoverPrimaryClusterFilters                []string          // Only do primary recovery on clusters matching these regexp patterns (of course the ".*" pattern matches everything)
 	RecoverIntermediatePrimaryClusterFilters    []string          // Only do IM recovery on clusters matching these regexp patterns (of course the ".*" pattern matches everything)
 	ProcessesShellCommand                       string            // Shell that executes command scripts
-	OnFailureDetectionProcesses                 []string          // Processes to execute when detecting a failover scenario (before making a decision whether to failover or not). May and should use some of these placeholders: {failureType}, {instanceType}, {isMaster}, {isCoMaster}, {failureDescription}, {command}, {failedHost}, {failureCluster}, {failureClusterAlias}, {failureClusterDomain}, {failedPort}, {successorHost}, {successorPort}, {successorAlias}, {countReplicas}, {replicaHosts}, {isDowntimed}, {autoMasterRecovery}, {autoIntermediateMasterRecovery}
-	PreGracefulTakeoverProcesses                []string          // Processes to execute before doing a failover (aborting operation should any once of them exits with non-zero code; order of execution undefined). May and should use some of these placeholders: {failureType}, {instanceType}, {isMaster}, {isCoMaster}, {failureDescription}, {command}, {failedHost}, {failureCluster}, {failureClusterAlias}, {failureClusterDomain}, {failedPort}, {successorHost}, {successorPort}, {countReplicas}, {replicaHosts}, {isDowntimed}
-	PreFailoverProcesses                        []string          // Processes to execute before doing a failover (aborting operation should any once of them exits with non-zero code; order of execution undefined). May and should use some of these placeholders: {failureType}, {instanceType}, {isMaster}, {isCoMaster}, {failureDescription}, {command}, {failedHost}, {failureCluster}, {failureClusterAlias}, {failureClusterDomain}, {failedPort}, {countReplicas}, {replicaHosts}, {isDowntimed}
-	PostFailoverProcesses                       []string          // Processes to execute after doing a failover (order of execution undefined). May and should use some of these placeholders: {failureType}, {instanceType}, {isMaster}, {isCoMaster}, {failureDescription}, {command}, {failedHost}, {failureCluster}, {failureClusterAlias}, {failureClusterDomain}, {failedPort}, {successorHost}, {successorPort}, {successorAlias}, {countReplicas}, {replicaHosts}, {isDowntimed}, {isSuccessful}, {lostReplicas}, {countLostReplicas}
-	PostUnsuccessfulFailoverProcesses           []string          // Processes to execute after a not-completely-successful failover (order of execution undefined). May and should use some of these placeholders: {failureType}, {instanceType}, {isMaster}, {isCoMaster}, {failureDescription}, {command}, {failedHost}, {failureCluster}, {failureClusterAlias}, {failureClusterDomain}, {failedPort}, {successorHost}, {successorPort}, {successorAlias}, {countReplicas}, {replicaHosts}, {isDowntimed}, {isSuccessful}, {lostReplicas}, {countLostReplicas}
+	OnFailureDetectionProcesses                 []string          // Processes to execute when detecting a failover scenario (before making a decision whether to failover or not). May and should use some of these placeholders: {failureType}, {instanceType}, {isPrimary}, {isCoPrimary}, {failureDescription}, {command}, {failedHost}, {failureCluster}, {failureClusterAlias}, {failureClusterDomain}, {failedPort}, {successorHost}, {successorPort}, {successorAlias}, {countReplicas}, {replicaHosts}, {isDowntimed}, {autoPrimaryRecovery}, {autoIntermediatePrimaryRecovery}
+	PreGracefulTakeoverProcesses                []string          // Processes to execute before doing a failover (aborting operation should any once of them exits with non-zero code; order of execution undefined). May and should use some of these placeholders: {failureType}, {instanceType}, {isPrimary}, {isCoPrimary}, {failureDescription}, {command}, {failedHost}, {failureCluster}, {failureClusterAlias}, {failureClusterDomain}, {failedPort}, {successorHost}, {successorPort}, {countReplicas}, {replicaHosts}, {isDowntimed}
+	PreFailoverProcesses                        []string          // Processes to execute before doing a failover (aborting operation should any once of them exits with non-zero code; order of execution undefined). May and should use some of these placeholders: {failureType}, {instanceType}, {isPrimary}, {isCoPrimary}, {failureDescription}, {command}, {failedHost}, {failureCluster}, {failureClusterAlias}, {failureClusterDomain}, {failedPort}, {countReplicas}, {replicaHosts}, {isDowntimed}
+	PostFailoverProcesses                       []string          // Processes to execute after doing a failover (order of execution undefined). May and should use some of these placeholders: {failureType}, {instanceType}, {isPrimary}, {isCoPrimary}, {failureDescription}, {command}, {failedHost}, {failureCluster}, {failureClusterAlias}, {failureClusterDomain}, {failedPort}, {successorHost}, {successorPort}, {successorAlias}, {countReplicas}, {replicaHosts}, {isDowntimed}, {isSuccessful}, {lostReplicas}, {countLostReplicas}
+	PostUnsuccessfulFailoverProcesses           []string          // Processes to execute after a not-completely-successful failover (order of execution undefined). May and should use some of these placeholders: {failureType}, {instanceType}, {isPrimary}, {isCoPrimary}, {failureDescription}, {command}, {failedHost}, {failureCluster}, {failureClusterAlias}, {failureClusterDomain}, {failedPort}, {successorHost}, {successorPort}, {successorAlias}, {countReplicas}, {replicaHosts}, {isDowntimed}, {isSuccessful}, {lostReplicas}, {countLostReplicas}
 	PostPrimaryFailoverProcesses                []string          // Processes to execute after doing a primary failover (order of execution undefined). Uses same placeholders as PostFailoverProcesses
 	PostIntermediatePrimaryFailoverProcesses    []string          // Processes to execute after doing a primary failover (order of execution undefined). Uses same placeholders as PostFailoverProcesses
 	PostGracefulTakeoverProcesses               []string          // Processes to execute after running a graceful primary takeover. Uses same placeholders as PostFailoverProcesses
-	PostTakePrimaryProcesses                    []string          // Processes to execute after a successful Take-Master event has taken place
+	PostTakePrimaryProcesses                    []string          // Processes to execute after a successful Take-Primary event has taken place
 	CoPrimaryRecoveryMustPromoteOtherCoPrimary  bool              // When 'false', anything can get promoted (and candidates are prefered over others). When 'true', orchestrator will promote the other co-primary or else fail
 	DetachLostSlavesAfterPrimaryFailover        bool              // synonym to DetachLostReplicasAfterPrimaryFailover
 	DetachLostReplicasAfterPrimaryFailover      bool              // Should replicas that are not to be lost in primary recovery (i.e. were more up-to-date than promoted replica) be forcibly detached
@@ -219,7 +219,7 @@ type Configuration struct {
 	PreventCrossRegionPrimaryFailover           bool              // When true (default: false), cross-region primary failover are not allowed, orchestrator will do all it can to only fail over within same region, or else not fail over at all.
 	PrimaryFailoverLostInstancesDowntimeMinutes uint              // Number of minutes to downtime any server that was lost after a primary failover (including failed primary & lost replicas). 0 to disable
 	PrimaryFailoverDetachSlavePrimaryHost       bool              // synonym to PrimaryFailoverDetachReplicaPrimaryHost
-	PrimaryFailoverDetachReplicaPrimaryHost     bool              // Should orchestrator issue a detach-replica-master-host on newly promoted primary (this makes sure the new primary will not attempt to replicate old primary if that comes back to life). Defaults 'false'. Meaningless if ApplyMySQLPromotionAfterPrimaryFailover is 'true'.
+	PrimaryFailoverDetachReplicaPrimaryHost     bool              // Should orchestrator issue a detach-replica-primary-host on newly promoted primary (this makes sure the new primary will not attempt to replicate old primary if that comes back to life). Defaults 'false'. Meaningless if ApplyMySQLPromotionAfterPrimaryFailover is 'true'.
 	FailPrimaryPromotionOnLagMinutes            uint              // when > 0, fail a primary promotion if the candidate replica is lagging >= configured number of minutes.
 	FailPrimaryPromotionIfSQLThreadNotUpToDate  bool              // when true, and a primary failover takes place, if candidate primary has not consumed all relay logs, promotion is aborted with error
 	DelayPrimaryPromotionIfSQLThreadNotUpToDate bool              // when true, and a primary failover takes place, if candidate primary has not consumed all relay logs, delay promotion until the sql thread has caught up
@@ -235,7 +235,7 @@ type Configuration struct {
 	ConsulAclToken                              string            // ACL token used to write to Consul KV
 	ConsulCrossDataCenterDistribution           bool              // should orchestrator automatically auto-deduce all consul DCs and write KVs in all DCs
 	ZkAddress                                   string            // UNSUPPERTED YET. Address where (single or multiple) ZooKeeper servers are found, in `srv1[:port1][,srv2[:port2]...]` format. Default port is 2181. Example: srv-a,srv-b:12181,srv-c
-	KVClusterPrimaryPrefix                      string            // Prefix to use for clusters' primary's entries in KV stores (internal, consul, ZK), default: "mysql/master"
+	KVClusterPrimaryPrefix                      string            // Prefix to use for clusters' primary's entries in KV stores (internal, consul, ZK), default: "mysql/primary"
 	WebMessage                                  string            // If provided, will be shown on all web pages below the title bar
 	MaxConcurrentReplicaOperations              int               // Maximum number of concurrent operations on replicas
 	InstanceDBExecContextTimeoutSeconds         int               // Timeout on context used while calling ExecContext on instance database
@@ -395,7 +395,7 @@ func newConfiguration() *Configuration {
 		ConsulAclToken:                              "",
 		ConsulCrossDataCenterDistribution:           false,
 		ZkAddress:                                   "",
-		KVClusterPrimaryPrefix:                      "mysql/master",
+		KVClusterPrimaryPrefix:                      "mysql/primary",
 		WebMessage:                                  "",
 		MaxConcurrentReplicaOperations:              5,
 		InstanceDBExecContextTimeoutSeconds:         30,
@@ -486,10 +486,10 @@ func (this *Configuration) postReadAdjustments() error {
 		}
 	}
 	if this.FailPrimaryPromotionIfSQLThreadNotUpToDate && this.DelayPrimaryPromotionIfSQLThreadNotUpToDate {
-		return fmt.Errorf("Cannot have both FailMasterPromotionIfSQLThreadNotUpToDate and DelayMasterPromotionIfSQLThreadNotUpToDate enabled")
+		return fmt.Errorf("Cannot have both FailPrimaryPromotionIfSQLThreadNotUpToDate and DelayPrimaryPromotionIfSQLThreadNotUpToDate enabled")
 	}
 	if this.FailPrimaryPromotionOnLagMinutes > 0 && this.ReplicationLagQuery == "" {
-		return fmt.Errorf("nonzero FailMasterPromotionOnLagMinutes requires ReplicationLagQuery to be set")
+		return fmt.Errorf("nonzero FailPrimaryPromotionOnLagMinutes requires ReplicationLagQuery to be set")
 	}
 	{
 		if this.PostponeReplicaRecoveryOnLagMinutes != 0 && this.PostponeSlaveRecoveryOnLagMinutes != 0 &&

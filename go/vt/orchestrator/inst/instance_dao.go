@@ -1855,7 +1855,7 @@ func ForgetUnseenInstancesDifferentlyResolved() error {
 	return err
 }
 
-// readUnknownPrimaryHostnameResolves will figure out the resolved hostnames of master-hosts which cannot be found.
+// readUnknownPrimaryHostnameResolves will figure out the resolved hostnames of primary-hosts which cannot be found.
 // It uses the hostname_resolve_history table to heuristically guess the correct hostname (based on "this was the
 // last time we saw this hostname and it resolves into THAT")
 func readUnknownPrimaryHostnameResolves() (map[string]string, error) {
@@ -2070,7 +2070,7 @@ func GetPrimariesKVPairs(clusterName string) (kvPairs [](*kv.KVPair), err error)
 }
 
 // HeuristicallyApplyClusterDomainInstanceAttribute writes down the cluster-domain
-// to master-hostname as a general attribute, by reading current topology and **trusting** it to be correct
+// to primary-hostname as a general attribute, by reading current topology and **trusting** it to be correct
 func HeuristicallyApplyClusterDomainInstanceAttribute(clusterName string) (instanceKey *InstanceKey, err error) {
 	clusterInfo, err := ReadClusterInfo(clusterName)
 	if err != nil {
@@ -2086,7 +2086,7 @@ func HeuristicallyApplyClusterDomainInstanceAttribute(clusterName string) (insta
 		return nil, err
 	}
 	if len(primaries) != 1 {
-		return nil, fmt.Errorf("Found %+v potential master for cluster %+v", len(primaries), clusterName)
+		return nil, fmt.Errorf("Found %+v potential primary for cluster %+v", len(primaries), clusterName)
 	}
 	instanceKey = &primaries[0].Key
 	return instanceKey, attributes.SetGeneralAttribute(clusterInfo.ClusterDomain, instanceKey.StringCode())
@@ -2133,7 +2133,7 @@ func ReadAllInstanceKeys() ([]InstanceKey, error) {
 	return res, log.Errore(err)
 }
 
-// ReadAllInstanceKeysMasterKeys
+// ReadAllInstanceKeysPrimaryKeys
 func ReadAllMinimalInstances() ([]MinimalInstance, error) {
 	res := []MinimalInstance{}
 	query := `

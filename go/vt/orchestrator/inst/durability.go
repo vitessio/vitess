@@ -57,7 +57,7 @@ func init() {
 type durabler interface {
 	promotionRule(*topodatapb.Tablet) CandidatePromotionRule
 	primarySemiSync(InstanceKey) int
-	replicaSemiSync(master, replica *topodatapb.Tablet) bool
+	replicaSemiSync(primary, replica *topodatapb.Tablet) bool
 }
 
 func registerDurability(name string, newDurablerFunc newDurabler) {

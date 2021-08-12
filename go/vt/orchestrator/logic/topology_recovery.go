@@ -1231,7 +1231,7 @@ func checkAndRecoverDeadIntermediatePrimary(analysisEntry inst.ReplicationAnalys
 		recoverDeadIntermediatePrimarySuccessCounter.Inc(1)
 
 		if !skipProcesses {
-			// Execute post intermediate-master-failover processes
+			// Execute post intermediate-primary-failover processes
 			topologyRecovery.SuccessorKey = &promotedReplica.Key
 			topologyRecovery.SuccessorAlias = promotedReplica.InstanceAlias
 			executeProcesses(config.Config.PostIntermediatePrimaryFailoverProcesses, "PostIntermediateMasterFailoverProcesses", topologyRecovery, false)
@@ -1328,9 +1328,9 @@ func RecoverDeadCoPrimary(topologyRecovery *TopologyRecovery, skipProcesses bool
 	// Say we started with M1<->M2<-S1, with M2 failing, and we promoted S1.
 	// We now have M1->S1 (because S1 is promoted), S1->M2 (because that's what it remembers), M2->M1 (because that's what it remembers)
 	// !! This is an evil 3-node circle that must be broken.
-	// config.Config.ApplyMySQLPromotionAfterMasterFailover, if true, will cause it to break, because we would RESET SLAVE on S1
+	// config.Config.ApplyMySQLPromotionAfterPrimaryFailover, if true, will cause it to break, because we would RESET SLAVE on S1
 	// but we want to make sure the circle is broken no matter what.
-	// So in the case we promoted not-the-other-co-primary, we issue a detach-replica-master-host, which is a reversible operation
+	// So in the case we promoted not-the-other-co-primary, we issue a detach-replica-primary-host, which is a reversible operation
 	if promotedReplica != nil && !promotedReplica.Key.Equals(otherCoPrimaryKey) {
 		_, err = inst.DetachReplicaPrimaryHost(&promotedReplica.Key)
 		topologyRecovery.AddError(log.Errore(err))
@@ -1396,7 +1396,7 @@ func checkAndRecoverDeadCoPrimary(analysisEntry inst.ReplicationAnalysis, candid
 			inst.SetReadOnly(&promotedReplica.Key, false)
 		}
 		if !skipProcesses {
-			// Execute post intermediate-master-failover processes
+			// Execute post intermediate-primary-failover processes
 			topologyRecovery.SuccessorKey = &promotedReplica.Key
 			topologyRecovery.SuccessorAlias = promotedReplica.InstanceAlias
 			executeProcesses(config.Config.PostPrimaryFailoverProcesses, "PostMasterFailoverProcesses", topologyRecovery, false)
@@ -1575,7 +1575,7 @@ func getCheckAndRecoverFunction(analysisCode inst.AnalysisCode, analyzedInstance
 	}
 	// Right now this is mostly causing noise with no clear action.
 	// Will revisit this in the future.
-	// case inst.AllMasterReplicasStale:
+	// case inst.AllPrimaryReplicasStale:
 	//   return checkAndRecoverGenericProblem, false
 
 	return nil, false
