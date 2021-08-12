@@ -823,7 +823,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 		{
 			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
 			if instanceKey == nil {
-				log.Fatalf("Unable to get master: unresolved instance")
+				log.Fatalf("Unable to get primary: unresolved instance")
 			}
 			instance := validateInstanceIsFound(instanceKey)
 			fmt.Println(instance.Key.DisplayString())
