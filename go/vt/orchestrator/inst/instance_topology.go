@@ -1037,7 +1037,7 @@ func DetachReplicaPrimaryHost(instanceKey *InstanceKey) (*Instance, error) {
 
 	log.Infof("Will detach primary host on %+v. Detached key is %+v", *instanceKey, *detachedPrimaryKey)
 
-	if maintenanceToken, merr := BeginMaintenance(instanceKey, GetMaintenanceOwner(), "detach-replica-master-host"); merr != nil {
+	if maintenanceToken, merr := BeginMaintenance(instanceKey, GetMaintenanceOwner(), "detach-replica-primary-host"); merr != nil {
 		err = fmt.Errorf("Cannot begin maintenance on %+v: %v", *instanceKey, merr)
 		goto Cleanup
 	} else {
@@ -1082,7 +1082,7 @@ func ReattachReplicaPrimaryHost(instanceKey *InstanceKey) (*Instance, error) {
 
 	log.Infof("Will reattach master host on %+v. Reattached key is %+v", *instanceKey, *reattachedPrimaryKey)
 
-	if maintenanceToken, merr := BeginMaintenance(instanceKey, GetMaintenanceOwner(), "reattach-replica-master-host"); merr != nil {
+	if maintenanceToken, merr := BeginMaintenance(instanceKey, GetMaintenanceOwner(), "reattach-replica-primary-host"); merr != nil {
 		err = fmt.Errorf("Cannot begin maintenance on %+v: %v", *instanceKey, merr)
 		goto Cleanup
 	} else {
@@ -1223,13 +1223,13 @@ func ErrantGTIDResetPrimary(instanceKey *InstanceKey) (instance *Instance, err e
 		return instance, err
 	}
 	if instance.GtidErrant == "" {
-		return instance, log.Errorf("gtid-errant-reset-master will not operate on %+v because no errant GTID is found", *instanceKey)
+		return instance, log.Errorf("gtid-errant-reset-primary will not operate on %+v because no errant GTID is found", *instanceKey)
 	}
 	if !instance.SupportsOracleGTID {
-		return instance, log.Errorf("gtid-errant-reset-master requested for %+v but it is not using oracle-gtid", *instanceKey)
+		return instance, log.Errorf("gtid-errant-reset-primary requested for %+v but it is not using oracle-gtid", *instanceKey)
 	}
 	if len(instance.Replicas) > 0 {
-		return instance, log.Errorf("gtid-errant-reset-master will not operate on %+v because it has %+v replicas. Expecting no replicas", *instanceKey, len(instance.Replicas))
+		return instance, log.Errorf("gtid-errant-reset-primary will not operate on %+v because it has %+v replicas. Expecting no replicas", *instanceKey, len(instance.Replicas))
 	}
 
 	gtidSubtract := ""

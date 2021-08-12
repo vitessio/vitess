@@ -32,10 +32,10 @@ type StructureAnalysisCode string
 const (
 	NoProblem                                                AnalysisCode = "NoProblem"
 	ClusterHasNoPrimary                                      AnalysisCode = "ClusterHasNoMaster"
-	DeadPrimaryWithoutReplicas                               AnalysisCode = "DeadMasterWithoutReplicas"
-	DeadPrimary                                              AnalysisCode = "DeadMaster"
-	DeadPrimaryAndReplicas                                   AnalysisCode = "DeadMasterAndReplicas"
-	DeadPrimaryAndSomeReplicas                               AnalysisCode = "DeadMasterAndSomeReplicas"
+	DeadPrimaryWithoutReplicas                               AnalysisCode = "DeadPrimaryWithoutReplicas"
+	DeadPrimary                                              AnalysisCode = "DeadPrimary"
+	DeadPrimaryAndReplicas                                   AnalysisCode = "DeadPrimaryAndReplicas"
+	DeadPrimaryAndSomeReplicas                               AnalysisCode = "DeadPrimaryAndSomeReplicas"
 	PrimaryHasPrimary                                        AnalysisCode = "MasterHasMaster"
 	PrimaryIsReadOnly                                        AnalysisCode = "MasterIsReadOnly"
 	PrimarySemiSyncMustBeSet                                 AnalysisCode = "MasterSemiSyncMustBeSet"
@@ -112,9 +112,9 @@ type ReplicationAnalysisHints struct {
 }
 
 const (
-	ForcePrimaryFailoverCommandHint    string = "force-master-failover"
-	ForcePrimaryTakeoverCommandHint    string = "force-master-takeover"
-	GracefulPrimaryTakeoverCommandHint string = "graceful-master-takeover"
+	ForcePrimaryFailoverCommandHint    string = "force-primary-failover"
+	ForcePrimaryTakeoverCommandHint    string = "force-primary-takeover"
+	GracefulPrimaryTakeoverCommandHint string = "graceful-primary-takeover"
 )
 
 type AnalysisInstanceType string

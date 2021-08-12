@@ -495,19 +495,19 @@ func recoverDeadPrimary(topologyRecovery *TopologyRecovery, candidateInstanceKey
 		}
 	}
 
-	AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("RecoverDeadMaster: will recover %+v", *failedInstanceKey))
+	AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("RecoverDeadPrimary: will recover %+v", *failedInstanceKey))
 
 	err = TabletDemotePrimary(*failedInstanceKey)
-	AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("RecoverDeadMaster: TabletDemotePrimary: %v", err))
+	AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("RecoverDeadPrimary: TabletDemotePrimary: %v", err))
 
 	topologyRecovery.RecoveryType = GetPrimaryRecoveryType(analysisEntry)
-	AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("RecoverDeadMaster: masterRecoveryType=%+v", topologyRecovery.RecoveryType))
+	AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("RecoverDeadPrimary: masterRecoveryType=%+v", topologyRecovery.RecoveryType))
 
 	promotedReplicaIsIdeal := func(promoted *inst.Instance, hasBestPromotionRule bool) bool {
 		if promoted == nil {
 			return false
 		}
-		AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("RecoverDeadMaster: promotedReplicaIsIdeal(%+v)", promoted.Key))
+		AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("RecoverDeadPrimary: promotedReplicaIsIdeal(%+v)", promoted.Key))
 		if candidateInstanceKey != nil { //explicit request to promote a specific server
 			return promoted.Key.Equals(candidateInstanceKey)
 		}
@@ -515,7 +515,7 @@ func recoverDeadPrimary(topologyRecovery *TopologyRecovery, candidateInstanceKey
 			promoted.PhysicalEnvironment == topologyRecovery.AnalysisEntry.AnalyzedInstancePhysicalEnvironment {
 			if promoted.PromotionRule == inst.MustPromoteRule || promoted.PromotionRule == inst.PreferPromoteRule ||
 				(hasBestPromotionRule && promoted.PromotionRule != inst.MustNotPromoteRule) {
-				AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("RecoverDeadMaster: found %+v to be ideal candidate; will optimize recovery", promoted.Key))
+				AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("RecoverDeadPrimary: found %+v to be ideal candidate; will optimize recovery", promoted.Key))
 				postponedAll = true
 				return true
 			}
@@ -529,31 +529,31 @@ func recoverDeadPrimary(topologyRecovery *TopologyRecovery, candidateInstanceKey
 		}
 	case PrimaryRecoveryGTID:
 		{
-			AuditTopologyRecovery(topologyRecovery, "RecoverDeadMaster: regrouping replicas via GTID")
+			AuditTopologyRecovery(topologyRecovery, "RecoverDeadPrimary: regrouping replicas via GTID")
 			lostReplicas, _, cannotReplicateReplicas, promotedReplica, err = inst.RegroupReplicasGTID(failedInstanceKey, true, nil, &topologyRecovery.PostponedFunctionsContainer, promotedReplicaIsIdeal)
 		}
 	case PrimaryRecoveryBinlogServer:
 		{
-			AuditTopologyRecovery(topologyRecovery, "RecoverDeadMaster: recovering via binlog servers")
+			AuditTopologyRecovery(topologyRecovery, "RecoverDeadPrimary: recovering via binlog servers")
 			promotedReplica, err = recoverDeadPrimaryInBinlogServerTopology(topologyRecovery)
 		}
 	}
 	topologyRecovery.AddError(err)
 	lostReplicas = append(lostReplicas, cannotReplicateReplicas...)
 	for _, replica := range lostReplicas {
-		AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("RecoverDeadMaster: - lost replica: %+v", replica.Key))
+		AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("RecoverDeadPrimary: - lost replica: %+v", replica.Key))
 	}
 
 	if promotedReplica != nil && len(lostReplicas) > 0 && config.Config.DetachLostReplicasAfterPrimaryFailover {
 		postponedFunction := func() error {
-			AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("RecoverDeadMaster: lost %+v replicas during recovery process; detaching them", len(lostReplicas)))
+			AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("RecoverDeadPrimary: lost %+v replicas during recovery process; detaching them", len(lostReplicas)))
 			for _, replica := range lostReplicas {
 				replica := replica
 				inst.DetachReplicaPrimaryHost(&replica.Key)
 			}
 			return nil
 		}
-		topologyRecovery.AddPostponedFunction(postponedFunction, fmt.Sprintf("RecoverDeadMaster, detach %+v lost replicas", len(lostReplicas)))
+		topologyRecovery.AddPostponedFunction(postponedFunction, fmt.Sprintf("RecoverDeadPrimary, detach %+v lost replicas", len(lostReplicas)))
 	}
 
 	func() error {
@@ -567,7 +567,7 @@ func recoverDeadPrimary(topologyRecovery *TopologyRecovery, candidateInstanceKey
 		return nil
 	}()
 
-	AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("RecoverDeadMaster: %d postponed functions", topologyRecovery.PostponedFunctionsContainer.Len()))
+	AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("RecoverDeadPrimary: %d postponed functions", topologyRecovery.PostponedFunctionsContainer.Len()))
 
 	if promotedReplica != nil && !postponedAll {
 		promotedReplica, err = replacePromotedReplicaWithCandidate(topologyRecovery, &analysisEntry.AnalyzedInstanceKey, promotedReplica, candidateInstanceKey)
@@ -576,7 +576,7 @@ func recoverDeadPrimary(topologyRecovery *TopologyRecovery, candidateInstanceKey
 
 	if promotedReplica == nil {
 		err := TabletUndoDemotePrimary(*failedInstanceKey)
-		AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("RecoverDeadMaster: TabletUndoDemotePrimary: %v", err))
+		AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("RecoverDeadPrimary: TabletUndoDemotePrimary: %v", err))
 		message := "Failure: no replica promoted."
 		AuditTopologyRecovery(topologyRecovery, message)
 		inst.AuditOperation("recover-dead-master", failedInstanceKey, message)
@@ -820,10 +820,10 @@ func checkAndRecoverDeadPrimary(analysisEntry inst.ReplicationAnalysis, candidat
 	}
 	topologyRecovery, err = AttemptRecoveryRegistration(&analysisEntry, !forceInstanceRecovery, !forceInstanceRecovery)
 	if topologyRecovery == nil {
-		AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("found an active or recent recovery on %+v. Will not issue another RecoverDeadMaster.", analysisEntry.AnalyzedInstanceKey))
+		AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("found an active or recent recovery on %+v. Will not issue another RecoverDeadPrimary.", analysisEntry.AnalyzedInstanceKey))
 		return false, nil, err
 	}
-	log.Infof("Analysis: %v, deadmaster %+v", analysisEntry.Analysis, analysisEntry.AnalyzedInstanceKey)
+	log.Infof("Analysis: %v, DeadPrimary %+v", analysisEntry.Analysis, analysisEntry.AnalyzedInstanceKey)
 
 	// That's it! We must do recovery!
 	// TODO(sougou): This function gets called by GracefulPrimaryTakeover which may
@@ -847,7 +847,7 @@ func checkAndRecoverDeadPrimary(analysisEntry inst.ReplicationAnalysis, candidat
 		return false, topologyRecovery, nil
 	}
 
-	AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("will handle DeadMaster event on %+v", analysisEntry.ClusterDetails.ClusterName))
+	AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("will handle DeadPrimary event on %+v", analysisEntry.ClusterDetails.ClusterName))
 	recoverDeadPrimaryCounter.Inc(1)
 	recoveryAttempted, promotedReplica, lostReplicas, err := recoverDeadPrimary(topologyRecovery, candidateInstanceKey, skipProcesses)
 	if err != nil {
@@ -1392,7 +1392,7 @@ func checkAndRecoverDeadCoPrimary(analysisEntry inst.ReplicationAnalysis, candid
 		recoverDeadCoPrimarySuccessCounter.Inc(1)
 
 		if config.Config.ApplyMySQLPromotionAfterPrimaryFailover {
-			AuditTopologyRecovery(topologyRecovery, "- RecoverDeadMaster: will apply MySQL changes to promoted master")
+			AuditTopologyRecovery(topologyRecovery, "- RecoverDeadPrimary: will apply MySQL changes to promoted master")
 			inst.SetReadOnly(&promotedReplica.Key, false)
 		}
 		if !skipProcesses {

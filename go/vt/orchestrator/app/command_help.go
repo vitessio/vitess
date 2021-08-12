@@ -35,12 +35,12 @@ func init() {
   Relocate a replica beneath another (destination) instance. The choice of destination is almost arbitrary;
   it must not be a child/descendant of the instance, but otherwise it can be anywhere, and can be a normal replica
   or a binlog server. Orchestrator will choose the best course of action to relocate the replica.
-  No action taken when destination instance cannot act as master (e.g. has no binary logs, is of incompatible version, incompatible binlog format etc.)
+  No action taken when destination instance cannot act as primary (e.g. has no binary logs, is of incompatible version, incompatible binlog format etc.)
   Examples:
 
-  orchestrator -c relocate -i replica.to.relocate.com -d instance.that.becomes.its.master
+  orchestrator -c relocate -i replica.to.relocate.com -d instance.that.becomes.its.primary
 
-  orchestrator -c relocate -d destination.instance.that.becomes.its.master
+  orchestrator -c relocate -d destination.instance.that.becomes.its.primary
       -i not given, implicitly assumed local hostname
 
   (this command was previously named "relocate-below")
@@ -50,12 +50,12 @@ func init() {
   typically much faster than relocating replicas one by one.
   Orchestrator chooses the best course of action to relocation the replicas. It may choose a multi-step operations.
   Some replicas may succeed and some may fail the operation.
-  The instance (replicas' master) itself may be crashed or inaccessible. It is not contacted throughout the operation.
+  The instance (replicas' primary) itself may be crashed or inaccessible. It is not contacted throughout the operation.
   Examples:
 
-  orchestrator -c relocate-replicas -i instance.whose.replicas.will.relocate -d instance.that.becomes.their.master
+  orchestrator -c relocate-replicas -i instance.whose.replicas.will.relocate -d instance.that.becomes.their.primary
 
-  orchestrator -c relocate-replicas -i instance.whose.replicas.will.relocate -d instance.that.becomes.their.master --pattern=regexp.filter
+  orchestrator -c relocate-replicas -i instance.whose.replicas.will.relocate -d instance.that.becomes.their.primary --pattern=regexp.filter
       only apply to those instances that match given regex
   `
 	CommandHelp["move-up-replicas"] = `
@@ -69,8 +69,8 @@ func init() {
       only apply to those instances that match given regex
 	`
 	CommandHelp["move-below"] = `
-  Moves a replica beneath its sibling. Both replicas must be actively replicating from same master.
-  The sibling will become instance's master. No action taken when sibling cannot act as master
+  Moves a replica beneath its sibling. Both replicas must be actively replicating from same primary.
+  The sibling will become instance's primary. No action taken when sibling cannot act as primary
   (e.g. has no binary logs, is of incompatible version, incompatible binlog format etc.)
   Example:
 
@@ -79,22 +79,22 @@ func init() {
   orchestrator -c move-below -d sibling.replica.under.which.to.move.com
       -i not given, implicitly assumed local hostname
 	`
-	CommandHelp["take-master"] = `
-  Turn an instance into a master of its own master; essentially switch the two. Replicas of each of the two
+	CommandHelp["take-primary"] = `
+  Turn an instance into a primary of its own primary; essentially switch the two. Replicas of each of the two
   involved instances are unaffected, and continue to replicate as they were.
-  The instance's master must itself be a replica. It does not necessarily have to be actively replicating.
+  The instance's primary must itself be a replica. It does not necessarily have to be actively replicating.
 
-  orchestrator -c take-master -i replica.that.will.switch.places.with.its.master.com
+  orchestrator -c take-primary -i replica.that.will.switch.places.with.its.primary.com
 	`
 	CommandHelp["repoint"] = `
   Make the given instance replicate from another instance without changing the binglog coordinates. There
-  are little sanity checks to this and this is a risky operation. Use cases are: a rename of the master's
+  are little sanity checks to this and this is a risky operation. Use cases are: a rename of the primary's
   host, a corruption in relay-logs, move from beneath Binlog-server. Examples:
 
-  orchestrator -c repoint -i replica.to.operate.on.com -d new.master.com
+  orchestrator -c repoint -i replica.to.operate.on.com -d new.primary.com
 
   orchestrator -c repoint -i replica.to.operate.on.com
-      The above will repoint the replica back to its existing master without change
+      The above will repoint the replica back to its existing primary without change
 
   orchestrator -c repoint
       -i not given, implicitly assumed local hostname
@@ -108,22 +108,22 @@ func init() {
   orchestrator -c repoint-replicas
       -i not given, implicitly assumed local hostname
 	`
-	CommandHelp["make-co-master"] = `
-  Create a master-master replication. Given instance is a replica which replicates directly from a master.
-  The master is then turned to be a replica of the instance. The master is expected to not be a replica.
+	CommandHelp["make-co-primary"] = `
+  Create a primary-primary replication. Given instance is a replica which replicates directly from a primary.
+  The primary is then turned to be a replica of the instance. The primary is expected to not be a replica.
   The read_only property of the slve is unaffected by this operation. Examples:
 
-  orchestrator -c make-co-master -i replica.to.turn.into.co.master.com
+  orchestrator -c make-co-primary -i replica.to.turn.into.co.primary.com
 
-  orchestrator -c make-co-master
+  orchestrator -c make-co-primary
       -i not given, implicitly assumed local hostname
 	`
 	CommandHelp["get-candidate-replica"] = `
   Information command suggesting the most up-to-date replica of a given instance, which can be promoted
-  as local master to its siblings. If replication is up and running, this command merely gives an
+  as local primary to its siblings. If replication is up and running, this command merely gives an
   estimate, since replicas advance and progress continuously in different pace. If all replicas of given
   instance have broken replication (e.g. because given instance is dead), then this command provides
-  with a definitve candidate, which could act as a replace master. See also regroup-replicas. Example:
+  with a definitve candidate, which could act as a replace primary. See also regroup-replicas. Example:
 
   orchestrator -c get-candidate-replica -i instance.with.replicas.one.of.which.may.be.candidate.com
 	`
@@ -139,35 +139,35 @@ func init() {
 	`
 	CommandHelp["move-gtid"] = `
   Move a replica beneath another (destination) instance. Orchestrator will reject the operation if GTID is
-  not enabled on the replica, or is not supported by the would-be master.
+  not enabled on the replica, or is not supported by the would-be primary.
   You may try and move the replica under any other instance; there are no constraints on the family ties the
   two may have, though you should be careful as not to try and replicate from a descendant (making an
   impossible loop).
   Examples:
 
-  orchestrator -c move-gtid -i replica.to.move.com -d instance.that.becomes.its.master
+  orchestrator -c move-gtid -i replica.to.move.com -d instance.that.becomes.its.primary
 
-  orchestrator -c match -d destination.instance.that.becomes.its.master
+  orchestrator -c match -d destination.instance.that.becomes.its.primary
       -i not given, implicitly assumed local hostname
 	`
 	CommandHelp["move-replicas-gtid"] = `
   Moves all replicas of a given instance under another (destination) instance using GTID. This is a (faster)
   shortcut to moving each replica via "move-gtid".
   Orchestrator will only move those replica configured with GTID (either Oracle or MariaDB variants) and under the
-  condition the would-be master supports GTID.
+  condition the would-be primary supports GTID.
   Examples:
 
-  orchestrator -c move-replicas-gtid -i instance.whose.replicas.will.relocate -d instance.that.becomes.their.master
+  orchestrator -c move-replicas-gtid -i instance.whose.replicas.will.relocate -d instance.that.becomes.their.primary
 
-  orchestrator -c move-replicas-gtid -i instance.whose.replicas.will.relocate -d instance.that.becomes.their.master --pattern=regexp.filter
+  orchestrator -c move-replicas-gtid -i instance.whose.replicas.will.relocate -d instance.that.becomes.their.primary --pattern=regexp.filter
       only apply to those instances that match given regex
 	`
 	CommandHelp["regroup-replicas-gtid"] = `
   Given an instance (possibly a crashed one; it is never being accessed), pick one of its replica and make it
-  local master of its siblings, using GTID. The rules are similar to those in the "regroup-replicas" command.
+  local primary of its siblings, using GTID. The rules are similar to those in the "regroup-replicas" command.
   Example:
 
-  orchestrator -c regroup-replicas-gtid -i instance.with.gtid.and.replicas.one.of.which.will.turn.local.master.if.possible
+  orchestrator -c regroup-replicas-gtid -i instance.with.gtid.and.replicas.one.of.which.will.turn.local.primary.if.possible
 
   --debug is your friend.
 	`
@@ -177,12 +177,12 @@ func init() {
   and in fact (if you know what you're doing), they don't actually have to belong to the same topology.
   The operation expects the relocated instance to be "behind" the destination instance. It only finds out
   whether this is the case by the end; the operation is cancelled in the event this is not the case.
-  No action taken when destination instance cannot act as master (e.g. has no binary logs, is of incompatible version, incompatible binlog format etc.)
+  No action taken when destination instance cannot act as primary (e.g. has no binary logs, is of incompatible version, incompatible binlog format etc.)
   Examples:
 
-  orchestrator -c match -i replica.to.relocate.com -d instance.that.becomes.its.master
+  orchestrator -c match -i replica.to.relocate.com -d instance.that.becomes.its.primary
 
-  orchestrator -c match -d destination.instance.that.becomes.its.master
+  orchestrator -c match -d destination.instance.that.becomes.its.primary
       -i not given, implicitly assumed local hostname
 
   (this command was previously named "match-below")
@@ -194,9 +194,9 @@ func init() {
   respective position behind the instance (the more replicas, the more savings).
   The instance itself may be crashed or inaccessible. It is not contacted throughout the operation. Examples:
 
-  orchestrator -c match-replicas -i instance.whose.replicas.will.relocate -d instance.that.becomes.their.master
+  orchestrator -c match-replicas -i instance.whose.replicas.will.relocate -d instance.that.becomes.their.primary
 
-  orchestrator -c match-replicas -i instance.whose.replicas.will.relocate -d instance.that.becomes.their.master --pattern=regexp.filter
+  orchestrator -c match-replicas -i instance.whose.replicas.will.relocate -d instance.that.becomes.their.primary --pattern=regexp.filter
       only apply to those instances that match given regex
 
   (this command was previously named "multi-match-replicas")
@@ -213,13 +213,13 @@ func init() {
 
   orchestrator -c disable-gtid -i replica.replicating.via.gtid.com
 	`
-	CommandHelp["reset-master-gtid-remove-own-uuid"] = `
-  Assuming GTID is enabled, Reset master on instance, remove GTID entries generated by the instance.
+	CommandHelp["reset-primary-gtid-remove-own-uuid"] = `
+  Assuming GTID is enabled, Reset primary on instance, remove GTID entries generated by the instance.
   This operation is only allowed on Oracle-GTID enabled servers that have no replicas.
   Is is used for cleaning up the GTID mess incurred by mistakenly issuing queries on the replica (even such
   queries as "FLUSH ENGINE LOGS" that happen to write to binary logs). Example:
 
-  orchestrator -c reset-master-gtid-remove-own-uuid -i replica.running.with.gtid.com
+  orchestrator -c reset-primary-gtid-remove-own-uuid -i replica.running.with.gtid.com
 	`
 	CommandHelp["stop-slave"] = `
   Issues a STOP SLAVE; command. Example:
@@ -264,19 +264,19 @@ func init() {
 
   Issuing this on an attached (i.e. normal) replica will do nothing.
 	`
-	CommandHelp["detach-replica-master-host"] = `
-  Stops replication and modifies Master_Host into an impossible, yet reversible, value.
-  This effectively means the replication becomes broken. See reattach-replica-master-host. Example:
+	CommandHelp["detach-replica-primary-host"] = `
+  Stops replication and modifies Primary_Host into an impossible, yet reversible, value.
+  This effectively means the replication becomes broken. See reattach-replica-primary-host. Example:
 
-  orchestrator -c detach-replica-master-host -i replica.whose.replication.will.break.com
+  orchestrator -c detach-replica-primary-host -i replica.whose.replication.will.break.com
 
   Issuing this on an already detached replica will do nothing.
 	`
-	CommandHelp["reattach-replica-master-host"] = `
-  Undo a detach-replica-master-host operation. Reverses the hostname change into the original value, and
+	CommandHelp["reattach-replica-primary-host"] = `
+  Undo a detach-replica-primary-host operation. Reverses the hostname change into the original value, and
   resumes replication. Example:
 
-  orchestrator -c reattach-replica-master-host -i detahced.replica.whose.replication.will.amend.com
+  orchestrator -c reattach-replica-primary-host -i detahced.replica.whose.replication.will.amend.com
 
   Issuing this on an attached (i.e. normal) replica will do nothing.
 	`
@@ -363,18 +363,18 @@ func init() {
 	`
 	CommandHelp["clusters"] = `
   List all clusters known to orchestrator. A cluster (aka topology, aka chain) is identified by its
-  master (or one of its master if more than one exists). Example:
+  primary (or one of its primary if more than one exists). Example:
 
   orchestrator -c clusters
       -i not given, implicitly assumed local hostname
 	`
-	CommandHelp["all-clusters-masters"] = `
-  List of writeable masters, one per cluster.
-	For most single-master topologies, this is trivially the master.
-	For active-active master-master topologies, this ensures only one of
-	the masters is returned. Example:
+	CommandHelp["all-clusters-primaries"] = `
+  List of writeable primaries, one per cluster.
+	For most single-primary topologies, this is trivially the primary.
+	For active-active primary-primary topologies, this ensures only one of
+	the primaries is returned. Example:
 
-        orchestrator -c all-clusters-masters
+        orchestrator -c all-clusters-primaries
 	`
 	CommandHelp["topology"] = `
   Show an ascii-graph of a replication topology, given a member of that topology. Example:
@@ -446,26 +446,26 @@ func init() {
 		Detects the domain name for given cluster, reads from key-value store the writer host associated with the domain name.
 
 	orchestrator -c which-heuristic-domain-instance -i instance.of.some.cluster
-		Cluster is inferred by a member instance (the instance is not necessarily the master)
+		Cluster is inferred by a member instance (the instance is not necessarily the primary)
 	`
-	CommandHelp["which-cluster-master"] = `
-	Output the name of the active master in a given cluster, indicated by instance or alias.
-	An "active" master is one that is writable and is not marked as downtimed due to a topology recovery.
+	CommandHelp["which-cluster-primary"] = `
+	Output the name of the active primary in a given cluster, indicated by instance or alias.
+	An "active" primary is one that is writable and is not marked as downtimed due to a topology recovery.
 	Examples:
 
-  orchestrator -c which-cluster-master -i instance.to.check.com
+  orchestrator -c which-cluster-primary -i instance.to.check.com
 
-  orchestrator -c which-cluster-master
+  orchestrator -c which-cluster-primary
       -i not given, implicitly assumed local hostname
 
-  orchestrator -c which-cluster-master -alias some_alias
+  orchestrator -c which-cluster-primary -alias some_alias
       assuming some_alias is a known cluster alias (see ClusterNameToAlias or DetectClusterAliasQuery configuration)
 	`
 	CommandHelp["which-cluster-osc-replicas"] = `
   Output a list of replicas in same cluster as given instance, that would server as good candidates as control replicas
   for a pt-online-schema-change operation.
   Those replicas would be used for replication delay so as to throtthe osc operation. Selected replicas will include,
-  where possible: intermediate masters, their replicas, 3rd level replicas, direct non-intermediate-master replicas.
+  where possible: intermediate primaries, their replicas, 3rd level replicas, direct non-intermediate-primary replicas.
 
   orchestrator -c which-cluster-osc-replicas -i instance.to.check.com
 
@@ -484,17 +484,17 @@ func init() {
 	orchestrator -c which-lost-in-recovery
 			Lists all heuristically-recent known lost instances
 	`
-	CommandHelp["which-master"] = `
-  Output the fully-qualified hostname:port representation of a given instance's master. Examples:
+	CommandHelp["which-primary"] = `
+  Output the fully-qualified hostname:port representation of a given instance's primary. Examples:
 
-  orchestrator -c which-master -i a.known.replica.com
+  orchestrator -c which-primary -i a.known.replica.com
 
-  orchestrator -c which-master
+  orchestrator -c which-primary
       -i not given, implicitly assumed local hostname
 	`
 	CommandHelp["which-replicas"] = `
   Output the fully-qualified hostname:port list of replicas (one per line) of a given instance (or empty
-  list if instance is not a master to anyone). Examples:
+  list if instance is not a primary to anyone). Examples:
 
   orchestrator -c which-replicas -i a.known.instance.com
 
@@ -526,7 +526,7 @@ func init() {
 	`
 	CommandHelp["snapshot-topologies"] = `
   Take a snapshot of existing topologies. This will record minimal replication topology data: the identity
-  of an instance, its master and its cluster.
+  of an instance, its primary and its cluster.
   Taking a snapshot later allows for reviewing changes in topologies. One might wish to invoke this command
   on a daily basis, and later be able to solve questions like 'where was this instacne replicating from before
   we moved it?', 'which instances were replication from this instance a week ago?' etc. Example:
@@ -621,57 +621,57 @@ func init() {
 
   orchestrator -c recover-lite -i dead.instance.com --debug
 	`
-	CommandHelp["force-master-failover"] = `
-  Forcibly begin a master failover process, even if orchestrator does not see anything wrong
-  in particular with the master.
-  - This will not work in a master-master configuration
-	- Orchestrator just treats this command as a DeadMaster failover scenario
+	CommandHelp["force-primary-failover"] = `
+  Forcibly begin a primary failover process, even if orchestrator does not see anything wrong
+  in particular with the primary.
+  - This will not work in a primary-primary configuration
+	- Orchestrator just treats this command as a DeadPrimary failover scenario
   - Orchestrator will issue all relevant pre-failover and post-failover external processes.
-  - Orchestrator will not attempt to recover/reconnect the old master
+  - Orchestrator will not attempt to recover/reconnect the old primary
 	`
-	CommandHelp["force-master-takeover"] = `
-	Forcibly discard master and promote another (direct child) instance instead, even if everything is running well.
+	CommandHelp["force-primary-takeover"] = `
+	Forcibly discard primary and promote another (direct child) instance instead, even if everything is running well.
 	This allows for planned switchover.
 	NOTE:
 	- You must specify the instance to promote via "-d"
-	- Promoted instance must be a direct child of the existing master
-	- This will not work in a master-master configuration
-	- Orchestrator just treats this command as a DeadMaster failover scenario
+	- Promoted instance must be a direct child of the existing primary
+	- This will not work in a primary-primary configuration
+	- Orchestrator just treats this command as a DeadPrimary failover scenario
 	- It is STRONGLY suggested that you first relocate everything below your chosen instance-to-promote.
 	  It *is* a planned failover thing.
 	- Otherwise orchestrator will do its thing in moving instances around, hopefully promoting your requested
 	  server on top.
 	- Orchestrator will issue all relevant pre-failover and post-failover external processes.
-	- In this command orchestrator will not issue 'SET GLOBAL read_only=1' on the existing master, nor will
-	  it issue a 'FLUSH TABLES WITH READ LOCK'. Please see the 'graceful-master-takeover' command.
+	- In this command orchestrator will not issue 'SET GLOBAL read_only=1' on the existing primary, nor will
+	  it issue a 'FLUSH TABLES WITH READ LOCK'. Please see the 'graceful-primary-takeover' command.
 	Examples:
 
-	orchestrator -c force-master-takeover -alias mycluster -d immediate.child.of.master.com
-			Indicate cluster by alias. Orchestrator automatically figures out the master
+	orchestrator -c force-primary-takeover -alias mycluster -d immediate.child.of.primary.com
+			Indicate cluster by alias. Orchestrator automatically figures out the primary
 
-	orchestrator -c force-master-takeover -i instance.in.relevant.cluster.com -d immediate.child.of.master.com
-			Indicate cluster by an instance. You don't structly need to specify the master, orchestrator
-			will infer the master's identify.
+	orchestrator -c force-primary-takeover -i instance.in.relevant.cluster.com -d immediate.child.of.primary.com
+			Indicate cluster by an instance. You don't structly need to specify the primary, orchestrator
+			will infer the primary's identify.
 	`
-	CommandHelp["graceful-master-takeover"] = `
-	Gracefully discard master and promote another (direct child) instance instead, even if everything is running well.
+	CommandHelp["graceful-primary-takeover"] = `
+	Gracefully discard primary and promote another (direct child) instance instead, even if everything is running well.
 	This allows for planned switchover.
 	NOTE:
-	- Promoted instance must be a direct child of the existing master
-	- Promoted instance must be the *only* direct child of the existing master. It *is* a planned failover thing.
-	- Orchestrator will first issue a "set global read_only=1" on existing master
-	- It will promote candidate master to the binlog positions of the existing master after issuing the above
-	- There _could_ still be statements issued and executed on the existing master by SUPER users, but those are ignored.
-	- Orchestrator then proceeds to handle a DeadMaster failover scenario
+	- Promoted instance must be a direct child of the existing primary
+	- Promoted instance must be the *only* direct child of the existing primary. It *is* a planned failover thing.
+	- Orchestrator will first issue a "set global read_only=1" on existing primary
+	- It will promote candidate primary to the binlog positions of the existing primary after issuing the above
+	- There _could_ still be statements issued and executed on the existing primary by SUPER users, but those are ignored.
+	- Orchestrator then proceeds to handle a DeadPrimary failover scenario
 	- Orchestrator will issue all relevant pre-failover and post-failover external processes.
 	Examples:
 
-	orchestrator -c graceful-master-takeover -alias mycluster
-		Indicate cluster by alias. Orchestrator automatically figures out the master and verifies it has a single direct replica
+	orchestrator -c graceful-primary-takeover -alias mycluster
+		Indicate cluster by alias. Orchestrator automatically figures out the primary and verifies it has a single direct replica
 
-	orchestrator -c force-master-takeover -i instance.in.relevant.cluster.com
-		Indicate cluster by an instance. You don't structly need to specify the master, orchestrator
-		will infer the master's identify.
+	orchestrator -c force-primary-takeover -i instance.in.relevant.cluster.com
+		Indicate cluster by an instance. You don't structly need to specify the primary, orchestrator
+		will infer the primary's identify.
 	`
 	CommandHelp["replication-analysis"] = `
   Request an analysis of potential crash incidents in all known topologies.
@@ -704,11 +704,11 @@ func init() {
 	`
 
 	CommandHelp["register-candidate"] = `
-  Indicate that a specific instance is a preferred candidate for master promotion. Upon a dead master
+  Indicate that a specific instance is a preferred candidate for primary promotion. Upon a dead primary
   recovery, orchestrator will do its best to promote instances that are marked as candidates. However
   orchestrator cannot guarantee this will always work. Issues like version compatabilities, binlog format
   etc. are limiting factors.
-  You will want to mark an instance as a candidate when: it is replicating directly from the master, has
+  You will want to mark an instance as a candidate when: it is replicating directly from the primary, has
   binary logs and log_slave_updates is enabled, uses same binlog_format as its siblings, compatible version
   as its siblings. If you're using DataCenterPattern & PhysicalEnvironmentPattern (see configuration),
   you would further wish to make sure you have a candidate in each data center.
@@ -727,10 +727,10 @@ func init() {
 	CommandHelp["register-hostname-unresolve"] = `
   Assigns the given instance a virtual (aka "unresolved") name. When moving replicas under an instance with assigned
   "unresolve" name, orchestrator issues a CHANGE MASTER TO MASTER_HOST='<the unresovled name instead of the fqdn>' ...
-  This is useful in cases where your master is behind virtual IP (e.g. active/passive masters with shared storage or DRBD,
+  This is useful in cases where your primary is behind virtual IP (e.g. active/passive primaries with shared storage or DRBD,
   e.g. binlog servers sharing common VIP).
   A "repoint" command is useful after "register-hostname-unresolve": you can repoint replicas of the instance to their exact
-  same location, and orchestrator will swap the fqdn of their master with the unresolved name.
+  same location, and orchestrator will swap the fqdn of their primary with the unresolved name.
   Such registration must be periodic. Orchestrator automatically expires such registration after ExpiryHostnameResolvesMinutes.
   Example:
 
@@ -738,25 +738,25 @@ func init() {
 	`
 	CommandHelp["deregister-hostname-unresolve"] = `
   Explicitly deregister/dosassociate a hostname with an "unresolved" name. Orchestrator merely remvoes the association, but does
-  not touch any replica at this point. A "repoint" command can be useful right after calling this command to change replica's master host
-  name (assumed to be an "unresolved" name, such as a VIP) with the real fqdn of the master host.
+  not touch any replica at this point. A "repoint" command can be useful right after calling this command to change replica's primary host
+  name (assumed to be an "unresolved" name, such as a VIP) with the real fqdn of the primary host.
   Example:
 
   orchestrator -c deregister-hostname-unresolve -i instance.fqdn.com
 	`
 	CommandHelp["set-heuristic-domain-instance"] = `
 	This is a temporary (sync your watches, watch for next ice age) command which registers the cluster domain name of a given cluster
-	with the master/writer host for that cluster. It is a one-time-master-discovery operation.
+	with the primary/writer host for that cluster. It is a one-time-primary-discovery operation.
 	At this time orchestrator may also act as a small & simple key-value store (recall the "temporary" indication).
-	Master failover operations will overwrite the domain instance identity. Orchestrator so turns into a mini master-discovery
+	Primary failover operations will overwrite the domain instance identity. Orchestrator so turns into a mini primary-discovery
 	service (I said "TEMPORARY"). Really there are other tools for the job. See also: which-heuristic-domain-instance
 	Example:
 
 	orchestrator -c set-heuristic-domain-instance --alias some_alias
-			Detects the domain name for given cluster, identifies the writer master of the cluster, associates the two in key-value store
+			Detects the domain name for given cluster, identifies the writer primary of the cluster, associates the two in key-value store
 
 	orchestrator -c set-heuristic-domain-instance -i instance.of.some.cluster
-			Cluster is inferred by a member instance (the instance is not necessarily the master)
+			Cluster is inferred by a member instance (the instance is not necessarily the primary)
 	`
 
 	CommandHelp["continuous"] = `

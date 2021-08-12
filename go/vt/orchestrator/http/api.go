@@ -51,26 +51,26 @@ const (
 )
 
 var apiSynonyms = map[string]string{
-	"relocate-slaves":            "relocate-replicas",
-	"regroup-slaves":             "regroup-replicas",
-	"move-up-slaves":             "move-up-replicas",
-	"repoint-slaves":             "repoint-replicas",
-	"enslave-siblings":           "take-siblings",
-	"enslave-master":             "take-master",
-	"regroup-slaves-bls":         "regroup-replicas-bls",
-	"move-slaves-gtid":           "move-replicas-gtid",
-	"regroup-slaves-gtid":        "regroup-replicas-gtid",
-	"detach-slave":               "detach-replica",
-	"reattach-slave":             "reattach-replica",
-	"detach-slave-master-host":   "detach-replica-master-host",
-	"reattach-slave-master-host": "reattach-replica-master-host",
-	"cluster-osc-slaves":         "cluster-osc-replicas",
-	"start-slave":                "start-replica",
-	"restart-slave":              "restart-replica",
-	"stop-slave":                 "stop-replica",
-	"stop-slave-nice":            "stop-replica-nice",
-	"reset-slave":                "reset-replica",
-	"restart-slave-statements":   "restart-replica-statements",
+	"relocate-slaves":             "relocate-replicas",
+	"regroup-slaves":              "regroup-replicas",
+	"move-up-slaves":              "move-up-replicas",
+	"repoint-slaves":              "repoint-replicas",
+	"enslave-siblings":            "take-siblings",
+	"enslave-master":              "take-master",
+	"regroup-slaves-bls":          "regroup-replicas-bls",
+	"move-slaves-gtid":            "move-replicas-gtid",
+	"regroup-slaves-gtid":         "regroup-replicas-gtid",
+	"detach-slave":                "detach-replica",
+	"reattach-slave":              "reattach-replica",
+	"detach-slave-primary-host":   "detach-replica-primary-host",
+	"reattach-slave-primary-host": "reattach-replica-primary-host",
+	"cluster-osc-slaves":          "cluster-osc-replicas",
+	"start-slave":                 "start-replica",
+	"restart-slave":               "restart-replica",
+	"stop-slave":                  "stop-replica",
+	"stop-slave-nice":             "stop-replica-nice",
+	"reset-slave":                 "reset-replica",
+	"restart-slave-statements":    "restart-replica-statements",
 }
 
 var registeredPaths = []string{}
@@ -2323,10 +2323,10 @@ func (this *HttpAPI) gracefulPrimaryTakeover(params martini.Params, r render.Ren
 		return
 	}
 	if topologyRecovery == nil || topologyRecovery.SuccessorKey == nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: "graceful-master-takeover: no successor promoted", Details: topologyRecovery})
+		Respond(r, &APIResponse{Code: ERROR, Message: "graceful-primary-takeover: no successor promoted", Details: topologyRecovery})
 		return
 	}
-	Respond(r, &APIResponse{Code: OK, Message: "graceful-master-takeover: successor promoted", Details: topologyRecovery})
+	Respond(r, &APIResponse{Code: OK, Message: "graceful-primary-takeover: successor promoted", Details: topologyRecovery})
 }
 
 // GracefulPrimaryTakeover gracefully fails over a primary, either:
@@ -2839,7 +2839,7 @@ func (this *HttpAPI) RegisterRequests(m *martini.ClassicMartini) {
 	this.registerAPIRequest(m, "move-below/:host/:port/:siblingHost/:siblingPort", this.MoveBelow)
 	this.registerAPIRequest(m, "repoint/:host/:port/:belowHost/:belowPort", this.Repoint)
 	this.registerAPIRequest(m, "repoint-slaves/:host/:port", this.RepointReplicas)
-	this.registerAPIRequest(m, "make-co-master/:host/:port", this.MakeCoPrimary)
+	this.registerAPIRequest(m, "make-co-primary/:host/:port", this.MakeCoPrimary)
 	this.registerAPIRequest(m, "enslave-siblings/:host/:port", this.TakeSiblings)
 	this.registerAPIRequest(m, "enslave-master/:host/:port", this.TakePrimary)
 
@@ -2855,7 +2855,7 @@ func (this *HttpAPI) RegisterRequests(m *martini.ClassicMartini) {
 	this.registerAPIRequest(m, "enable-gtid/:host/:port", this.EnableGTID)
 	this.registerAPIRequest(m, "disable-gtid/:host/:port", this.DisableGTID)
 	this.registerAPIRequest(m, "locate-gtid-errant/:host/:port", this.LocateErrantGTID)
-	this.registerAPIRequest(m, "gtid-errant-reset-master/:host/:port", this.ErrantGTIDResetPrimary)
+	this.registerAPIRequest(m, "gtid-errant-reset-primary/:host/:port", this.ErrantGTIDResetPrimary)
 	this.registerAPIRequest(m, "gtid-errant-inject-empty/:host/:port", this.ErrantGTIDInjectEmpty)
 	this.registerAPIRequest(m, "skip-query/:host/:port", this.SkipQuery)
 	this.registerAPIRequest(m, "start-slave/:host/:port", this.StartReplication)
@@ -2865,8 +2865,8 @@ func (this *HttpAPI) RegisterRequests(m *martini.ClassicMartini) {
 	this.registerAPIRequest(m, "reset-slave/:host/:port", this.ResetReplication)
 	this.registerAPIRequest(m, "detach-slave/:host/:port", this.DetachReplicaPrimaryHost)
 	this.registerAPIRequest(m, "reattach-slave/:host/:port", this.ReattachReplicaPrimaryHost)
-	this.registerAPIRequest(m, "detach-slave-master-host/:host/:port", this.DetachReplicaPrimaryHost)
-	this.registerAPIRequest(m, "reattach-slave-master-host/:host/:port", this.ReattachReplicaPrimaryHost)
+	this.registerAPIRequest(m, "detach-slave-primary-host/:host/:port", this.DetachReplicaPrimaryHost)
+	this.registerAPIRequest(m, "reattach-slave-primary-host/:host/:port", this.ReattachReplicaPrimaryHost)
 	this.registerAPIRequest(m, "flush-binary-logs/:host/:port", this.FlushBinaryLogs)
 	this.registerAPIRequest(m, "purge-binary-logs/:host/:port/:logFile", this.PurgeBinaryLogs)
 	this.registerAPIRequest(m, "restart-slave-statements/:host/:port", this.RestartReplicationStatements)
@@ -2919,8 +2919,8 @@ func (this *HttpAPI) RegisterRequests(m *martini.ClassicMartini) {
 	this.registerAPIRequest(m, "snapshot-topologies", this.SnapshotTopologies)
 
 	// Key-value:
-	this.registerAPIRequest(m, "submit-masters-to-kv-stores", this.SubmitPrimaryToKvStores)
-	this.registerAPIRequest(m, "submit-masters-to-kv-stores/:clusterHint", this.SubmitPrimaryToKvStores)
+	this.registerAPIRequest(m, "submit-primaries-to-kv-stores", this.SubmitPrimaryToKvStores)
+	this.registerAPIRequest(m, "submit-primaries-to-kv-stores/:clusterHint", this.SubmitPrimaryToKvStores)
 
 	// Tags:
 	this.registerAPIRequest(m, "tagged", this.Tagged)
@@ -2958,18 +2958,18 @@ func (this *HttpAPI) RegisterRequests(m *martini.ClassicMartini) {
 	this.registerAPIRequest(m, "recover/:host/:port/:candidateHost/:candidatePort", this.Recover)
 	this.registerAPIRequest(m, "recover-lite/:host/:port", this.RecoverLite)
 	this.registerAPIRequest(m, "recover-lite/:host/:port/:candidateHost/:candidatePort", this.RecoverLite)
-	this.registerAPIRequest(m, "graceful-master-takeover/:host/:port", this.GracefulPrimaryTakeover)
-	this.registerAPIRequest(m, "graceful-master-takeover/:host/:port/:designatedHost/:designatedPort", this.GracefulPrimaryTakeover)
-	this.registerAPIRequest(m, "graceful-master-takeover/:clusterHint", this.GracefulPrimaryTakeover)
-	this.registerAPIRequest(m, "graceful-master-takeover/:clusterHint/:designatedHost/:designatedPort", this.GracefulPrimaryTakeover)
-	this.registerAPIRequest(m, "graceful-master-takeover-auto/:host/:port", this.GracefulPrimaryTakeoverAuto)
-	this.registerAPIRequest(m, "graceful-master-takeover-auto/:host/:port/:designatedHost/:designatedPort", this.GracefulPrimaryTakeoverAuto)
-	this.registerAPIRequest(m, "graceful-master-takeover-auto/:clusterHint", this.GracefulPrimaryTakeoverAuto)
-	this.registerAPIRequest(m, "graceful-master-takeover-auto/:clusterHint/:designatedHost/:designatedPort", this.GracefulPrimaryTakeoverAuto)
-	this.registerAPIRequest(m, "force-master-failover/:host/:port", this.ForcePrimaryFailover)
-	this.registerAPIRequest(m, "force-master-failover/:clusterHint", this.ForcePrimaryFailover)
-	this.registerAPIRequest(m, "force-master-takeover/:clusterHint/:designatedHost/:designatedPort", this.ForcePrimaryTakeover)
-	this.registerAPIRequest(m, "force-master-takeover/:host/:port/:designatedHost/:designatedPort", this.ForcePrimaryTakeover)
+	this.registerAPIRequest(m, "graceful-primary-takeover/:host/:port", this.GracefulPrimaryTakeover)
+	this.registerAPIRequest(m, "graceful-primary-takeover/:host/:port/:designatedHost/:designatedPort", this.GracefulPrimaryTakeover)
+	this.registerAPIRequest(m, "graceful-primary-takeover/:clusterHint", this.GracefulPrimaryTakeover)
+	this.registerAPIRequest(m, "graceful-primary-takeover/:clusterHint/:designatedHost/:designatedPort", this.GracefulPrimaryTakeover)
+	this.registerAPIRequest(m, "graceful-primary-takeover-auto/:host/:port", this.GracefulPrimaryTakeoverAuto)
+	this.registerAPIRequest(m, "graceful-primary-takeover-auto/:host/:port/:designatedHost/:designatedPort", this.GracefulPrimaryTakeoverAuto)
+	this.registerAPIRequest(m, "graceful-primary-takeover-auto/:clusterHint", this.GracefulPrimaryTakeoverAuto)
+	this.registerAPIRequest(m, "graceful-primary-takeover-auto/:clusterHint/:designatedHost/:designatedPort", this.GracefulPrimaryTakeoverAuto)
+	this.registerAPIRequest(m, "force-primary-failover/:host/:port", this.ForcePrimaryFailover)
+	this.registerAPIRequest(m, "force-primary-failover/:clusterHint", this.ForcePrimaryFailover)
+	this.registerAPIRequest(m, "force-primary-takeover/:clusterHint/:designatedHost/:designatedPort", this.ForcePrimaryTakeover)
+	this.registerAPIRequest(m, "force-primary-takeover/:host/:port/:designatedHost/:designatedPort", this.ForcePrimaryTakeover)
 	this.registerAPIRequest(m, "register-candidate/:host/:port/:promotionRule", this.RegisterCandidate)
 	this.registerAPIRequest(m, "automated-recovery-filters", this.AutomatedRecoveryFilters)
 	this.registerAPIRequest(m, "audit-failure-detection", this.AuditFailureDetection)
