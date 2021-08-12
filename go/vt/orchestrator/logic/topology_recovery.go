@@ -253,8 +253,8 @@ func prepareCommand(command string, topologyRecovery *TopologyRecovery) (result 
 	}
 	command = strings.Replace(command, "{failureType}", string(analysisEntry.Analysis), -1)
 	command = strings.Replace(command, "{instanceType}", string(analysisEntry.GetAnalysisInstanceType()), -1)
-	command = strings.Replace(command, "{isMaster}", fmt.Sprintf("%t", analysisEntry.IsMaster), -1)
-	command = strings.Replace(command, "{isCoMaster}", fmt.Sprintf("%t", analysisEntry.IsCoMaster), -1)
+	command = strings.Replace(command, "{isMaster}", fmt.Sprintf("%t", analysisEntry.IsPrimary), -1)
+	command = strings.Replace(command, "{isCoMaster}", fmt.Sprintf("%t", analysisEntry.IsCoPrimary), -1)
 	command = strings.Replace(command, "{failureDescription}", analysisEntry.Description, -1)
 	command = strings.Replace(command, "{command}", analysisEntry.CommandHint, -1)
 	command = strings.Replace(command, "{failedHost}", analysisEntry.AnalyzedInstanceKey.Hostname, -1)
@@ -294,8 +294,8 @@ func applyEnvironmentVariables(topologyRecovery *TopologyRecovery) []string {
 	env := goos.Environ()
 	env = append(env, fmt.Sprintf("ORC_FAILURE_TYPE=%s", string(analysisEntry.Analysis)))
 	env = append(env, fmt.Sprintf("ORC_INSTANCE_TYPE=%s", string(analysisEntry.GetAnalysisInstanceType())))
-	env = append(env, fmt.Sprintf("ORC_IS_MASTER=%t", analysisEntry.IsMaster))
-	env = append(env, fmt.Sprintf("ORC_IS_CO_MASTER=%t", analysisEntry.IsCoMaster))
+	env = append(env, fmt.Sprintf("ORC_IS_MASTER=%t", analysisEntry.IsPrimary))
+	env = append(env, fmt.Sprintf("ORC_IS_CO_MASTER=%t", analysisEntry.IsCoPrimary))
 	env = append(env, fmt.Sprintf("ORC_FAILURE_DESCRIPTION=%s", analysisEntry.Description))
 	env = append(env, fmt.Sprintf("ORC_COMMAND=%s", analysisEntry.CommandHint))
 	env = append(env, fmt.Sprintf("ORC_FAILED_HOST=%s", analysisEntry.AnalyzedInstanceKey.Hostname))
@@ -910,7 +910,7 @@ func checkAndRecoverDeadMaster(analysisEntry inst.ReplicationAnalysis, candidate
 			}
 		}
 		{
-			count := inst.MasterSemiSync(promotedReplica.Key)
+			count := inst.PrimarySemiSync(promotedReplica.Key)
 			err := inst.SetSemiSyncMaster(&promotedReplica.Key, count > 0)
 			AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("- RecoverDeadMaster: applying semi-sync %v: success=%t", count > 0, (err == nil)))
 
@@ -1188,9 +1188,9 @@ func RecoverDeadIntermediateMaster(topologyRecovery *TopologyRecovery, skipProce
 		// So, match up all that's left, plan D
 		AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("- RecoverDeadIntermediateMaster: will next attempt to relocate up from %+v", *failedInstanceKey))
 
-		relocatedReplicas, masterInstance, _, errs := inst.RelocateReplicas(failedInstanceKey, &analysisEntry.AnalyzedInstanceMasterKey, "")
+		relocatedReplicas, masterInstance, _, errs := inst.RelocateReplicas(failedInstanceKey, &analysisEntry.AnalyzedInstancePrimaryKey, "")
 		topologyRecovery.AddErrors(errs)
-		topologyRecovery.ParticipatingInstanceKeys.AddKey(analysisEntry.AnalyzedInstanceMasterKey)
+		topologyRecovery.ParticipatingInstanceKeys.AddKey(analysisEntry.AnalyzedInstancePrimaryKey)
 
 		if len(relocatedReplicas) > 0 {
 			recoveryResolved = true
@@ -1247,7 +1247,7 @@ func RecoverDeadCoMaster(topologyRecovery *TopologyRecovery, skipProcesses bool)
 	topologyRecovery.Type = CoMasterRecovery
 	analysisEntry := &topologyRecovery.AnalysisEntry
 	failedInstanceKey := &analysisEntry.AnalyzedInstanceKey
-	otherCoMasterKey := &analysisEntry.AnalyzedInstanceMasterKey
+	otherCoMasterKey := &analysisEntry.AnalyzedInstancePrimaryKey
 	otherCoMaster, found, _ := inst.ReadInstance(otherCoMasterKey)
 	if otherCoMaster == nil || !found {
 		return nil, lostReplicas, topologyRecovery.AddError(log.Errorf("RecoverDeadCoMaster: could not read info for co-master %+v of %+v", *otherCoMasterKey, *failedInstanceKey))
@@ -1521,56 +1521,56 @@ func getCheckAndRecoverFunction(analysisCode inst.AnalysisCode, analyzedInstance
 ) {
 	switch analysisCode {
 	// primary
-	case inst.DeadMaster, inst.DeadMasterAndSomeReplicas:
+	case inst.DeadPrimary, inst.DeadPrimaryAndSomeReplicas:
 		if isInEmergencyOperationGracefulPeriod(analyzedInstanceKey) {
 			return checkAndRecoverGenericProblem, false
 		} else {
 			return checkAndRecoverDeadMaster, true
 		}
-	case inst.LockedSemiSyncMaster:
+	case inst.LockedSemiSyncPrimary:
 		if isInEmergencyOperationGracefulPeriod(analyzedInstanceKey) {
 			return checkAndRecoverGenericProblem, false
 		} else {
 			return checkAndRecoverLockedSemiSyncMaster, true
 		}
 	// topo
-	case inst.ClusterHasNoMaster:
+	case inst.ClusterHasNoPrimary:
 		return electNewMaster, true
-	case inst.MasterHasMaster:
+	case inst.PrimaryHasPrimary:
 		return fixClusterAndMaster, true
-	case inst.MasterIsReadOnly, inst.MasterSemiSyncMustBeSet, inst.MasterSemiSyncMustNotBeSet:
+	case inst.PrimaryIsReadOnly, inst.PrimarySemiSyncMustBeSet, inst.PrimarySemiSyncMustNotBeSet:
 		return fixMaster, true
-	case inst.NotConnectedToMaster, inst.ConnectedToWrongMaster, inst.ReplicationStopped, inst.ReplicaIsWritable,
+	case inst.NotConnectedToPrimary, inst.ConnectedToWrongPrimary, inst.ReplicationStopped, inst.ReplicaIsWritable,
 		inst.ReplicaSemiSyncMustBeSet, inst.ReplicaSemiSyncMustNotBeSet:
 		return fixReplica, false
 	// intermediate primary
-	case inst.DeadIntermediateMaster:
+	case inst.DeadIntermediatePrimary:
 		return checkAndRecoverDeadIntermediateMaster, true
-	case inst.DeadIntermediateMasterAndSomeReplicas:
+	case inst.DeadIntermediatePrimaryAndSomeReplicas:
 		return checkAndRecoverDeadIntermediateMaster, true
-	case inst.DeadIntermediateMasterWithSingleReplicaFailingToConnect:
+	case inst.DeadIntermediatePrimaryWithSingleReplicaFailingToConnect:
 		return checkAndRecoverDeadIntermediateMaster, true
-	case inst.AllIntermediateMasterReplicasFailingToConnectOrDead:
+	case inst.AllIntermediatePrimaryReplicasFailingToConnectOrDead:
 		return checkAndRecoverDeadIntermediateMaster, true
-	case inst.DeadIntermediateMasterAndReplicas:
+	case inst.DeadIntermediatePrimaryAndReplicas:
 		return checkAndRecoverGenericProblem, false
 	// co-primary
-	case inst.DeadCoMaster:
+	case inst.DeadCoPrimary:
 		return checkAndRecoverDeadCoMaster, true
-	case inst.DeadCoMasterAndSomeReplicas:
+	case inst.DeadCoPrimaryAndSomeReplicas:
 		return checkAndRecoverDeadCoMaster, true
 	// primary, non actionable
-	case inst.DeadMasterAndReplicas:
+	case inst.DeadPrimaryAndReplicas:
 		return checkAndRecoverGenericProblem, false
-	case inst.UnreachableMaster:
+	case inst.UnreachablePrimary:
 		return checkAndRecoverGenericProblem, false
-	case inst.UnreachableMasterWithLaggingReplicas:
+	case inst.UnreachablePrimaryWithLaggingReplicas:
 		return checkAndRecoverGenericProblem, false
-	case inst.AllMasterReplicasNotReplicating:
+	case inst.AllPrimaryReplicasNotReplicating:
 		return checkAndRecoverGenericProblem, false
-	case inst.AllMasterReplicasNotReplicatingOrDead:
+	case inst.AllPrimaryReplicasNotReplicatingOrDead:
 		return checkAndRecoverGenericProblem, false
-	case inst.UnreachableIntermediateMasterWithLaggingReplicas:
+	case inst.UnreachableIntermediatePrimaryWithLaggingReplicas:
 		return checkAndRecoverGenericProblem, false
 	}
 	// Right now this is mostly causing noise with no clear action.
@@ -1583,24 +1583,24 @@ func getCheckAndRecoverFunction(analysisCode inst.AnalysisCode, analyzedInstance
 
 func runEmergentOperations(analysisEntry *inst.ReplicationAnalysis) {
 	switch analysisEntry.Analysis {
-	case inst.DeadMasterAndReplicas:
-		go emergentlyReadTopologyInstance(&analysisEntry.AnalyzedInstanceMasterKey, analysisEntry.Analysis)
-	case inst.UnreachableMaster:
+	case inst.DeadPrimaryAndReplicas:
+		go emergentlyReadTopologyInstance(&analysisEntry.AnalyzedInstancePrimaryKey, analysisEntry.Analysis)
+	case inst.UnreachablePrimary:
 		go emergentlyReadTopologyInstance(&analysisEntry.AnalyzedInstanceKey, analysisEntry.Analysis)
 		go emergentlyReadTopologyInstanceReplicas(&analysisEntry.AnalyzedInstanceKey, analysisEntry.Analysis)
-	case inst.UnreachableMasterWithLaggingReplicas:
+	case inst.UnreachablePrimaryWithLaggingReplicas:
 		go emergentlyRestartReplicationOnTopologyInstanceReplicas(&analysisEntry.AnalyzedInstanceKey, analysisEntry.Analysis)
-	case inst.LockedSemiSyncMasterHypothesis:
+	case inst.LockedSemiSyncPrimaryHypothesis:
 		go emergentlyReadTopologyInstance(&analysisEntry.AnalyzedInstanceKey, analysisEntry.Analysis)
 		go emergentlyRecordStaleBinlogCoordinates(&analysisEntry.AnalyzedInstanceKey, &analysisEntry.AnalyzedInstanceBinlogCoordinates)
-	case inst.UnreachableIntermediateMasterWithLaggingReplicas:
+	case inst.UnreachableIntermediatePrimaryWithLaggingReplicas:
 		go emergentlyRestartReplicationOnTopologyInstanceReplicas(&analysisEntry.AnalyzedInstanceKey, analysisEntry.Analysis)
-	case inst.AllMasterReplicasNotReplicating:
+	case inst.AllPrimaryReplicasNotReplicating:
 		go emergentlyReadTopologyInstance(&analysisEntry.AnalyzedInstanceKey, analysisEntry.Analysis)
-	case inst.AllMasterReplicasNotReplicatingOrDead:
+	case inst.AllPrimaryReplicasNotReplicatingOrDead:
 		go emergentlyReadTopologyInstance(&analysisEntry.AnalyzedInstanceKey, analysisEntry.Analysis)
-	case inst.FirstTierReplicaFailingToConnectToMaster:
-		go emergentlyReadTopologyInstance(&analysisEntry.AnalyzedInstanceMasterKey, analysisEntry.Analysis)
+	case inst.FirstTierReplicaFailingToConnectToPrimary:
+		go emergentlyReadTopologyInstance(&analysisEntry.AnalyzedInstancePrimaryKey, analysisEntry.Analysis)
 	}
 }
 
@@ -1780,7 +1780,7 @@ func ForcePrimaryFailover(clusterName string) (topologyRecovery *TopologyRecover
 	}
 	clusterMaster := clusterMasters[0]
 
-	analysisEntry, err := forceAnalysisEntry(clusterName, inst.DeadMaster, inst.ForceMasterFailoverCommandHint, &clusterMaster.Key)
+	analysisEntry, err := forceAnalysisEntry(clusterName, inst.DeadPrimary, inst.ForcePrimaryFailoverCommandHint, &clusterMaster.Key)
 	if err != nil {
 		return nil, err
 	}
@@ -1817,7 +1817,7 @@ func ForcePrimaryTakeover(clusterName string, destination *inst.Instance) (topol
 	}
 	log.Infof("Will demote %+v and promote %+v instead", clusterMaster.Key, destination.Key)
 
-	analysisEntry, err := forceAnalysisEntry(clusterName, inst.DeadMaster, inst.ForceMasterTakeoverCommandHint, &clusterMaster.Key)
+	analysisEntry, err := forceAnalysisEntry(clusterName, inst.DeadPrimary, inst.ForcePrimaryTakeoverCommandHint, &clusterMaster.Key)
 	if err != nil {
 		return nil, err
 	}
@@ -1951,7 +1951,7 @@ func GracefulPrimaryTakeover(clusterName string, designatedKey *inst.InstanceKey
 	}
 	log.Infof("GracefulPrimaryTakeover: Will demote %+v and promote %+v instead", clusterMaster.Key, designatedInstance.Key)
 
-	analysisEntry, err := forceAnalysisEntry(clusterName, inst.DeadMaster, inst.GracefulMasterTakeoverCommandHint, &clusterMaster.Key)
+	analysisEntry, err := forceAnalysisEntry(clusterName, inst.DeadPrimary, inst.GracefulPrimaryTakeoverCommandHint, &clusterMaster.Key)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -2080,7 +2080,7 @@ func electNewMaster(analysisEntry inst.ReplicationAnalysis, candidateInstanceKey
 			return false, topologyRecovery, err
 		}
 	}
-	count := inst.MasterSemiSync(candidate.Key)
+	count := inst.PrimarySemiSync(candidate.Key)
 	err = inst.SetSemiSyncMaster(&candidate.Key, count > 0)
 	AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("- electNewMaster: applying semi-sync %v: success=%t", count > 0, (err == nil)))
 	if err != nil {
@@ -2110,7 +2110,7 @@ func fixClusterAndMaster(analysisEntry inst.ReplicationAnalysis, candidateInstan
 		return false, topologyRecovery, err
 	}
 
-	altAnalysis, err := forceAnalysisEntry(analysisEntry.ClusterDetails.ClusterName, inst.DeadMaster, "", &analysisEntry.AnalyzedInstanceMasterKey)
+	altAnalysis, err := forceAnalysisEntry(analysisEntry.ClusterDetails.ClusterName, inst.DeadPrimary, "", &analysisEntry.AnalyzedInstancePrimaryKey)
 	if err != nil {
 		return false, topologyRecovery, err
 	}
@@ -2143,7 +2143,7 @@ func fixMaster(analysisEntry inst.ReplicationAnalysis, candidateInstanceKey *ins
 	defer unlock(&err)
 
 	// TODO(sougou): this code pattern has reached DRY limits. Reuse.
-	count := inst.MasterSemiSync(analysisEntry.AnalyzedInstanceKey)
+	count := inst.PrimarySemiSync(analysisEntry.AnalyzedInstanceKey)
 	err = inst.SetSemiSyncMaster(&analysisEntry.AnalyzedInstanceKey, count > 0)
 	//AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("- fixMaster: applying semi-sync %v: success=%t", count > 0, (err == nil)))
 	if err != nil {
