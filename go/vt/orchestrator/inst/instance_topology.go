@@ -422,7 +422,7 @@ Cleanup:
 		// All returned with error
 		return res, instance, log.Error("Error on all operations"), errs
 	}
-	AuditOperation("move-up-replicas", instanceKey, fmt.Sprintf("moved up %d/%d replicas of %+v. New master: %+v", len(res), len(replicas), *instanceKey, instance.PrimaryKey))
+	AuditOperation("move-up-replicas", instanceKey, fmt.Sprintf("moved up %d/%d replicas of %+v. New primary: %+v", len(res), len(replicas), *instanceKey, instance.PrimaryKey))
 
 	return res, instance, err, errs
 }
@@ -1060,7 +1060,7 @@ Cleanup:
 		return instance, log.Errore(err)
 	}
 	// and we're done (pending deferred functions)
-	AuditOperation("repoint", instanceKey, fmt.Sprintf("replica %+v detached from master into %+v", *instanceKey, *detachedPrimaryKey))
+	AuditOperation("repoint", instanceKey, fmt.Sprintf("replica %+v detached from primary into %+v", *instanceKey, *detachedPrimaryKey))
 
 	return instance, err
 }
@@ -1080,7 +1080,7 @@ func ReattachReplicaPrimaryHost(instanceKey *InstanceKey) (*Instance, error) {
 
 	reattachedPrimaryKey := instance.PrimaryKey.ReattachedKey()
 
-	log.Infof("Will reattach master host on %+v. Reattached key is %+v", *instanceKey, *reattachedPrimaryKey)
+	log.Infof("Will reattach primary host on %+v. Reattached key is %+v", *instanceKey, *reattachedPrimaryKey)
 
 	if maintenanceToken, merr := BeginMaintenance(instanceKey, GetMaintenanceOwner(), "reattach-replica-primary-host"); merr != nil {
 		err = fmt.Errorf("Cannot begin maintenance on %+v: %v", *instanceKey, merr)
@@ -1107,7 +1107,7 @@ Cleanup:
 		return instance, log.Errore(err)
 	}
 	// and we're done (pending deferred functions)
-	AuditOperation("repoint", instanceKey, fmt.Sprintf("replica %+v reattached to master %+v", *instanceKey, *reattachedPrimaryKey))
+	AuditOperation("repoint", instanceKey, fmt.Sprintf("replica %+v reattached to primary %+v", *instanceKey, *reattachedPrimaryKey))
 
 	return instance, err
 }
@@ -1341,12 +1341,12 @@ func ErrantGTIDInjectEmpty(instanceKey *InstanceKey) (instance *Instance, cluste
 		return instance, clusterPrimary, countInjectedTransactions, err
 	}
 	if len(primaries) == 0 {
-		return instance, clusterPrimary, countInjectedTransactions, log.Errorf("gtid-errant-inject-empty found no writabel master for %+v cluster", instance.ClusterName)
+		return instance, clusterPrimary, countInjectedTransactions, log.Errorf("gtid-errant-inject-empty found no writabel primary for %+v cluster", instance.ClusterName)
 	}
 	clusterPrimary = primaries[0]
 
 	if !clusterPrimary.SupportsOracleGTID {
-		return instance, clusterPrimary, countInjectedTransactions, log.Errorf("gtid-errant-inject-empty requested for %+v but the cluster's master %+v does not support oracle-gtid", *instanceKey, clusterPrimary.Key)
+		return instance, clusterPrimary, countInjectedTransactions, log.Errorf("gtid-errant-inject-empty requested for %+v but the cluster's primary %+v does not support oracle-gtid", *instanceKey, clusterPrimary.Key)
 	}
 
 	gtidSet, err := NewOracleGtidSet(instance.GtidErrant)
@@ -1354,7 +1354,7 @@ func ErrantGTIDInjectEmpty(instanceKey *InstanceKey) (instance *Instance, cluste
 		return instance, clusterPrimary, countInjectedTransactions, err
 	}
 	explodedEntries := gtidSet.Explode()
-	log.Infof("gtid-errant-inject-empty: about to inject %+v empty transactions %+v on cluster master %+v", len(explodedEntries), gtidSet.String(), clusterPrimary.Key)
+	log.Infof("gtid-errant-inject-empty: about to inject %+v empty transactions %+v on cluster primary %+v", len(explodedEntries), gtidSet.String(), clusterPrimary.Key)
 	for _, entry := range explodedEntries {
 		if err := injectEmptyGTIDTransaction(&clusterPrimary.Key, entry); err != nil {
 			return instance, clusterPrimary, countInjectedTransactions, err
@@ -1404,15 +1404,15 @@ func TakePrimaryHook(successor *Instance, demoted *Instance) {
 
 	processCount := len(config.Config.PostTakePrimaryProcesses)
 	for i, command := range config.Config.PostTakePrimaryProcesses {
-		fullDescription := fmt.Sprintf("PostTakeMasterProcesses hook %d of %d", i+1, processCount)
-		log.Debugf("Take-Master: PostTakeMasterProcesses: Calling %+s", fullDescription)
+		fullDescription := fmt.Sprintf("PostTakePrimaryProcesses hook %d of %d", i+1, processCount)
+		log.Debugf("Take-Primary: PostTakePrimaryProcesses: Calling %+s", fullDescription)
 		start := time.Now()
 		if err := os.CommandRun(command, env, successorStr, demotedStr); err == nil {
 			info := fmt.Sprintf("Completed %s in %v", fullDescription, time.Since(start))
-			log.Infof("Take-Master: %s", info)
+			log.Infof("Take-Primary: %s", info)
 		} else {
-			info := fmt.Sprintf("Execution of PostTakeMasterProcesses failed in %v with error: %v", time.Since(start), err)
-			log.Errorf("Take-Master: %s", info)
+			info := fmt.Sprintf("Execution of PostTakePrimaryProcesses failed in %v with error: %v", time.Since(start), err)
+			log.Errorf("Take-Primary: %s", info)
 		}
 	}
 
@@ -1438,9 +1438,9 @@ func TakePrimary(instanceKey *InstanceKey, allowTakingCoPrimary bool) (*Instance
 		return instance, err
 	}
 	if primaryInstance.IsCoPrimary && !allowTakingCoPrimary {
-		return instance, fmt.Errorf("%+v is co-master. Cannot take it.", primaryInstance.Key)
+		return instance, fmt.Errorf("%+v is co-primary. Cannot take it.", primaryInstance.Key)
 	}
-	log.Debugf("TakePrimary: will attempt making %+v take its master %+v, now resolved as %+v", *instanceKey, instance.PrimaryKey, primaryInstance.Key)
+	log.Debugf("TakePrimary: will attempt making %+v take its primary %+v, now resolved as %+v", *instanceKey, instance.PrimaryKey, primaryInstance.Key)
 
 	if canReplicate, err := primaryInstance.CanReplicateFrom(instance); !canReplicate {
 		return instance, err
@@ -1490,7 +1490,7 @@ Cleanup:
 	if err != nil {
 		return instance, err
 	}
-	AuditOperation("take-primary", instanceKey, fmt.Sprintf("took master: %+v", primaryInstance.Key))
+	AuditOperation("take-primary", instanceKey, fmt.Sprintf("took primary: %+v", primaryInstance.Key))
 
 	// Created this to enable a custom hook to be called after a TakePrimary success.
 	// This only runs if there is a hook configured in orchestrator.conf.json
