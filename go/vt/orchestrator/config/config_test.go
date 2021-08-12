@@ -65,54 +65,54 @@ func TestPostponeReplicaRecoveryOnLagMinutes(t *testing.T) {
 func TestMasterFailoverDetachReplicaMasterHost(t *testing.T) {
 	{
 		c := newConfiguration()
-		c.MasterFailoverDetachSlaveMasterHost = false
-		c.MasterFailoverDetachReplicaMasterHost = false
+		c.PrimaryFailoverDetachSlavePrimaryHost = false
+		c.PrimaryFailoverDetachReplicaPrimaryHost = false
 		err := c.postReadAdjustments()
 		test.S(t).ExpectNil(err)
-		test.S(t).ExpectFalse(c.MasterFailoverDetachReplicaMasterHost)
+		test.S(t).ExpectFalse(c.PrimaryFailoverDetachReplicaPrimaryHost)
 	}
 	{
 		c := newConfiguration()
-		c.MasterFailoverDetachSlaveMasterHost = false
-		c.MasterFailoverDetachReplicaMasterHost = true
+		c.PrimaryFailoverDetachSlavePrimaryHost = false
+		c.PrimaryFailoverDetachReplicaPrimaryHost = true
 		err := c.postReadAdjustments()
 		test.S(t).ExpectNil(err)
-		test.S(t).ExpectTrue(c.MasterFailoverDetachReplicaMasterHost)
+		test.S(t).ExpectTrue(c.PrimaryFailoverDetachReplicaPrimaryHost)
 	}
 	{
 		c := newConfiguration()
-		c.MasterFailoverDetachSlaveMasterHost = true
-		c.MasterFailoverDetachReplicaMasterHost = false
+		c.PrimaryFailoverDetachSlavePrimaryHost = true
+		c.PrimaryFailoverDetachReplicaPrimaryHost = false
 		err := c.postReadAdjustments()
 		test.S(t).ExpectNil(err)
-		test.S(t).ExpectTrue(c.MasterFailoverDetachReplicaMasterHost)
+		test.S(t).ExpectTrue(c.PrimaryFailoverDetachReplicaPrimaryHost)
 	}
 }
 
 func TestMasterFailoverDetachDetachLostReplicasAfterMasterFailover(t *testing.T) {
 	{
 		c := newConfiguration()
-		c.DetachLostSlavesAfterMasterFailover = false
-		c.DetachLostReplicasAfterMasterFailover = false
+		c.DetachLostSlavesAfterPrimaryFailover = false
+		c.DetachLostReplicasAfterPrimaryFailover = false
 		err := c.postReadAdjustments()
 		test.S(t).ExpectNil(err)
-		test.S(t).ExpectFalse(c.DetachLostReplicasAfterMasterFailover)
+		test.S(t).ExpectFalse(c.DetachLostReplicasAfterPrimaryFailover)
 	}
 	{
 		c := newConfiguration()
-		c.DetachLostSlavesAfterMasterFailover = false
-		c.DetachLostReplicasAfterMasterFailover = true
+		c.DetachLostSlavesAfterPrimaryFailover = false
+		c.DetachLostReplicasAfterPrimaryFailover = true
 		err := c.postReadAdjustments()
 		test.S(t).ExpectNil(err)
-		test.S(t).ExpectTrue(c.DetachLostReplicasAfterMasterFailover)
+		test.S(t).ExpectTrue(c.DetachLostReplicasAfterPrimaryFailover)
 	}
 	{
 		c := newConfiguration()
-		c.DetachLostSlavesAfterMasterFailover = true
-		c.DetachLostReplicasAfterMasterFailover = false
+		c.DetachLostSlavesAfterPrimaryFailover = true
+		c.DetachLostReplicasAfterPrimaryFailover = false
 		err := c.postReadAdjustments()
 		test.S(t).ExpectNil(err)
-		test.S(t).ExpectTrue(c.DetachLostReplicasAfterMasterFailover)
+		test.S(t).ExpectTrue(c.DetachLostReplicasAfterPrimaryFailover)
 	}
 }
 

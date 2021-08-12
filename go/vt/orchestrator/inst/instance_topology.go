@@ -1402,8 +1402,8 @@ func TakeMasterHook(successor *Instance, demoted *Instance) {
 	successorStr := fmt.Sprintf("%v", successorKey)
 	demotedStr := fmt.Sprintf("%v", demotedKey)
 
-	processCount := len(config.Config.PostTakeMasterProcesses)
-	for i, command := range config.Config.PostTakeMasterProcesses {
+	processCount := len(config.Config.PostTakePrimaryProcesses)
+	for i, command := range config.Config.PostTakePrimaryProcesses {
 		fullDescription := fmt.Sprintf("PostTakeMasterProcesses hook %d of %d", i+1, processCount)
 		log.Debugf("Take-Master: PostTakeMasterProcesses: Calling %+s", fullDescription)
 		start := time.Now()
@@ -1496,7 +1496,7 @@ Cleanup:
 	// This only runs if there is a hook configured in orchestrator.conf.json
 	demoted := masterInstance
 	successor := instance
-	if config.Config.PostTakeMasterProcesses != nil {
+	if config.Config.PostTakePrimaryProcesses != nil {
 		TakeMasterHook(successor, demoted)
 	}
 

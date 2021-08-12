@@ -26,7 +26,7 @@ import (
 )
 
 func GetClusterMasterKVKey(clusterAlias string) string {
-	return fmt.Sprintf("%s%s", config.Config.KVClusterMasterPrefix, clusterAlias)
+	return fmt.Sprintf("%s%s", config.Config.KVClusterPrimaryPrefix, clusterAlias)
 }
 
 func getClusterMasterKVPair(clusterAlias string, masterKey *InstanceKey) *kv.KVPair {
@@ -90,8 +90,8 @@ type ClusterInfo struct {
 
 // ReadRecoveryInfo
 func (this *ClusterInfo) ReadRecoveryInfo() {
-	this.HasAutomatedMasterRecovery = this.filtersMatchCluster(config.Config.RecoverMasterClusterFilters)
-	this.HasAutomatedIntermediateMasterRecovery = this.filtersMatchCluster(config.Config.RecoverIntermediateMasterClusterFilters)
+	this.HasAutomatedMasterRecovery = this.filtersMatchCluster(config.Config.RecoverPrimaryClusterFilters)
+	this.HasAutomatedIntermediateMasterRecovery = this.filtersMatchCluster(config.Config.RecoverIntermediatePrimaryClusterFilters)
 }
 
 // filtersMatchCluster will see whether the given filters match the given cluster details
