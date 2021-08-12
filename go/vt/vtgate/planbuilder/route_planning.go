@@ -228,7 +228,10 @@ func canMergeSubQuery(outer, subq queryTree) bool {
 		return false
 	}
 
-	if subQRoute.routeOpCode == engine.SelectUnsharded && outerRoute.routeOpCode == engine.SelectUnsharded && subQRoute.keyspace == outerRoute.keyspace {
+	if subQRoute.keyspace != outerRoute.keyspace {
+		return false
+	}
+	if subQRoute.routeOpCode == engine.SelectUnsharded && outerRoute.routeOpCode == engine.SelectUnsharded {
 		return true
 	}
 
@@ -240,7 +243,10 @@ func mergeSubQuery(outer queryTree, subq *abstract.SubQueryInner) queryTree {
 	if !isRoute {
 		return nil
 	}
-	outerRoute.subQueriesToReplace = append(outerRoute.subQueriesToReplace, subq)
+	if outerRoute.sqToReplace == nil {
+		outerRoute.sqToReplace = map[string]*sqlparser.Select{}
+	}
+	outerRoute.sqToReplace[subq.ArgName] = subq.SelectStatement
 	return outerRoute
 }
 
