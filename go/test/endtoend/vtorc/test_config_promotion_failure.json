@@ -6,5 +6,6 @@
   "MySQLReplicaPassword": "",
   "RecoveryPeriodBlockSeconds": 1,
   "InstancePollSeconds": 1,
-  "PreventCrossDataCenterMasterFailover": true
+  "ReplicationLagQuery": "select 61",
+  "FailMasterPromotionOnLagMinutes": 1
 }
