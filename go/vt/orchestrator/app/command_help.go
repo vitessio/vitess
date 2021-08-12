@@ -265,7 +265,7 @@ func init() {
   Issuing this on an attached (i.e. normal) replica will do nothing.
 	`
 	CommandHelp["detach-replica-primary-host"] = `
-  Stops replication and modifies Primary_Host into an impossible, yet reversible, value.
+  Stops replication and modifies Master_Host into an impossible, yet reversible, value.
   This effectively means the replication becomes broken. See reattach-replica-primary-host. Example:
 
   orchestrator -c detach-replica-primary-host -i replica.whose.replication.will.break.com

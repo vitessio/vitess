@@ -874,7 +874,7 @@ func ReadInstanceClusterAttributes(instance *Instance) (err error) {
 		clusterNameByCoPrimaryKey := instance.PrimaryKey.StringCode()
 		if clusterName != clusterNameByInstanceKey && clusterName != clusterNameByCoPrimaryKey {
 			// Can be caused by a co-primary topology failover
-			log.Errorf("ReadInstanceClusterAttributes: in co-master topology %s is not in (%s, %s). Forcing it to become one of them", clusterName, clusterNameByInstanceKey, clusterNameByCoPrimaryKey)
+			log.Errorf("ReadInstanceClusterAttributes: in co-primary topology %s is not in (%s, %s). Forcing it to become one of them", clusterName, clusterNameByInstanceKey, clusterNameByCoPrimaryKey)
 			clusterName = math.TernaryString(instance.Key.SmallerThan(&instance.PrimaryKey), clusterNameByInstanceKey, clusterNameByCoPrimaryKey)
 		}
 		if clusterName == clusterNameByInstanceKey {
@@ -1736,11 +1736,11 @@ func readUnseenPrimaryKeys() ([]InstanceKey, error) {
 			        LEFT JOIN
 			    hostname_resolve ON (slave_instance.primary_host = hostname_resolve.hostname)
 			        LEFT JOIN
-			    database_instance master_instance ON (
-			    	COALESCE(hostname_resolve.resolved_hostname, slave_instance.primary_host) = master_instance.hostname
-			    	and slave_instance.primary_port = master_instance.port)
+			    database_instance primary_instance ON (
+			    	COALESCE(hostname_resolve.resolved_hostname, slave_instance.primary_host) = primary_instance.hostname
+			    	and slave_instance.primary_port = primary_instance.port)
 			WHERE
-			    master_instance.last_checked IS NULL
+			    primary_instance.last_checked IS NULL
 			    and slave_instance.primary_host != ''
 			    and slave_instance.primary_host != '_'
 			    and slave_instance.primary_port > 0
@@ -1790,7 +1790,7 @@ func InjectUnseenPrimaries() error {
 		primaryKey := primaryKey
 
 		if RegexpMatchPatterns(primaryKey.StringCode(), config.Config.DiscoveryIgnorePrimaryHostnameFilters) {
-			log.Debugf("InjectUnseenPrimaries: skipping discovery of %+v because it matches DiscoveryIgnoreMasterHostnameFilters", primaryKey)
+			log.Debugf("InjectUnseenPrimaries: skipping discovery of %+v because it matches DiscoveryIgnorePrimaryHostnameFilters", primaryKey)
 			continue
 		}
 		if RegexpMatchPatterns(primaryKey.StringCode(), config.Config.DiscoveryIgnoreHostnameFilters) {
@@ -1806,7 +1806,7 @@ func InjectUnseenPrimaries() error {
 		}
 	}
 
-	AuditOperation("inject-unseen-masters", nil, fmt.Sprintf("Operations: %d", operations))
+	AuditOperation("inject-unseen-primaries", nil, fmt.Sprintf("Operations: %d", operations))
 	return err
 }
 
@@ -1866,12 +1866,12 @@ func readUnknownPrimaryHostnameResolves() (map[string]string, error) {
 			FROM
 			    database_instance slave_instance
 			LEFT JOIN hostname_resolve ON (slave_instance.primary_host = hostname_resolve.hostname)
-			LEFT JOIN database_instance master_instance ON (
-			    COALESCE(hostname_resolve.resolved_hostname, slave_instance.primary_host) = master_instance.hostname
-			    and slave_instance.primary_port = master_instance.port
+			LEFT JOIN database_instance primary_instance ON (
+			    COALESCE(hostname_resolve.resolved_hostname, slave_instance.primary_host) = primary_instance.hostname
+			    and slave_instance.primary_port = primary_instance.port
 			) LEFT JOIN hostname_resolve_history ON (slave_instance.primary_host = hostname_resolve_history.hostname)
 			WHERE
-			    master_instance.last_checked IS NULL
+			    primary_instance.last_checked IS NULL
 			    and slave_instance.primary_host != ''
 			    and slave_instance.primary_host != '_'
 			    and slave_instance.primary_port > 0
@@ -1899,7 +1899,7 @@ func ResolveUnknownPrimaryHostnameResolves() error {
 		UpdateResolvedHostname(hostname, resolvedHostname)
 	}
 
-	AuditOperation("resolve-unknown-masters", nil, fmt.Sprintf("Num resolved hostnames: %d", len(hostnameResolves)))
+	AuditOperation("resolve-unknown-primaries", nil, fmt.Sprintf("Num resolved hostnames: %d", len(hostnameResolves)))
 	return err
 }
 

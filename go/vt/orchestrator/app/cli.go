@@ -526,7 +526,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			}
 			fmt.Println(instanceKey.DisplayString())
 		}
-	case registerCliCommand("detach-replica-primary-host", "Replication, general", `Stops replication and modifies Primary_Host into an impossible, yet reversible, value.`):
+	case registerCliCommand("detach-replica-primary-host", "Replication, general", `Stops replication and modifies Master_Host into an impossible, yet reversible, value.`):
 		{
 			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
 			if instanceKey == nil {

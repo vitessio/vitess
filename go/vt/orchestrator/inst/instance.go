@@ -579,7 +579,7 @@ func (this *Instance) descriptionTokens() (tokens []string) {
 			extraTokens = append(extraTokens, token)
 		}
 		if this.SemiSyncPrimaryStatus {
-			extraTokens = append(extraTokens, "semi:master")
+			extraTokens = append(extraTokens, "semi:primary")
 		}
 		if this.SemiSyncReplicaStatus {
 			extraTokens = append(extraTokens, "semi:replica")
