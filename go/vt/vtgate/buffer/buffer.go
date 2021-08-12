@@ -221,7 +221,7 @@ func (b *Buffer) ProcessMasterHealth(th *discovery.TabletHealth) {
 	}
 	timestamp := th.PrimaryTermStartTime
 	if timestamp == 0 {
-		// Masters where TabletExternallyReparented was never called will return 0.
+		// Primaries where TabletExternallyReparented was never called will return 0.
 		// Ignore them.
 		return
 	}
@@ -244,7 +244,7 @@ func (b *Buffer) StatsUpdate(ts *discovery.LegacyTabletStats) {
 
 	timestamp := ts.TabletExternallyReparentedTimestamp
 	if timestamp == 0 {
-		// Masters where TabletExternallyReparented was never called will return 0.
+		// Primaries where TabletExternallyReparented was never called will return 0.
 		// Ignore them.
 		return
 	}
