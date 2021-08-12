@@ -97,13 +97,13 @@ func TestToSqlite3AlterTable(t *testing.T) {
 		statement := `
 			ALTER TABLE
 				database_instance
-				ADD INDEX master_host_port_idx (master_host, master_port)
+				ADD INDEX primary_host_port_idx (primary_host, primary_port)
 		`
 		result := stripSpaces(ToSqlite3Dialect(statement))
 		test.S(t).ExpectEquals(result, stripSpaces(`
 			create index
-				master_host_port_idx_database_instance
-				on database_instance (master_host, master_port)
+				primary_host_port_idx_database_instance
+				on database_instance (primary_host, primary_port)
 			`))
 	}
 	{
@@ -126,14 +126,14 @@ func TestCreateIndex(t *testing.T) {
 	{
 		statement := `
 			create index
-				master_host_port_idx_database_instance
-				on database_instance (master_host(128), master_port)
+				primary_host_port_idx_database_instance
+				on database_instance (primary_host(128), primary_port)
 		`
 		result := stripSpaces(ToSqlite3Dialect(statement))
 		test.S(t).ExpectEquals(result, stripSpaces(`
 			create index
-				master_host_port_idx_database_instance
-				on database_instance (master_host, master_port)
+				primary_host_port_idx_database_instance
+				on database_instance (primary_host, primary_port)
 			`))
 	}
 }

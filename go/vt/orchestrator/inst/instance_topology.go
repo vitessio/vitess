@@ -1490,7 +1490,7 @@ Cleanup:
 	if err != nil {
 		return instance, err
 	}
-	AuditOperation("take-master", instanceKey, fmt.Sprintf("took master: %+v", primaryInstance.Key))
+	AuditOperation("take-primary", instanceKey, fmt.Sprintf("took master: %+v", primaryInstance.Key))
 
 	// Created this to enable a custom hook to be called after a TakePrimary success.
 	// This only runs if there is a hook configured in orchestrator.conf.json

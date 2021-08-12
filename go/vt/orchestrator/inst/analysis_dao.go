@@ -72,13 +72,13 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 		vitess_tablet.hostname,
 		vitess_tablet.port,
 		vitess_tablet.tablet_type,
-		vitess_tablet.master_timestamp,
+		vitess_tablet.primary_timestamp,
 		master_instance.read_only AS read_only,
 		MIN(master_instance.data_center) AS data_center,
 		MIN(master_instance.region) AS region,
 		MIN(master_instance.physical_environment) AS physical_environment,
-		MIN(master_instance.master_host) AS master_host,
-		MIN(master_instance.master_port) AS master_port,
+		MIN(master_instance.primary_host) AS primary_host,
+		MIN(master_instance.primary_port) AS primary_port,
 		MIN(master_instance.cluster_name) AS cluster_name,
 		MIN(master_instance.binary_log_file) AS binary_log_file,
 		MIN(master_instance.binary_log_pos) AS binary_log_pos,
@@ -113,16 +113,16 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 		MIN(master_instance.last_check_partial_success) as last_check_partial_success,
 		MIN(
 			(
-				master_instance.master_host IN ('', '_')
-				OR master_instance.master_port = 0
-				OR substr(master_instance.master_host, 1, 2) = '//'
+				master_instance.primary_host IN ('', '_')
+				OR master_instance.primary_port = 0
+				OR substr(master_instance.primary_host, 1, 2) = '//'
 			)
 			AND (
 				master_instance.replication_group_name = ''
 				OR master_instance.replication_group_member_role = 'PRIMARY'
 			)
 		) AS is_master,
-		MIN(master_instance.is_co_master) AS is_co_master,
+		MIN(master_instance.is_co_primary) AS is_co_primary,
 		MIN(
 			CONCAT(
 				master_instance.hostname,
@@ -192,21 +192,21 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 			master_instance.supports_oracle_gtid
 		) AS supports_oracle_gtid,
 		MIN(
-			master_instance.semi_sync_master_enabled
-		) AS semi_sync_master_enabled,
+			master_instance.semi_sync_primary_enabled
+		) AS semi_sync_primary_enabled,
 		MIN(
-			master_instance.semi_sync_master_wait_for_slave_count
-		) AS semi_sync_master_wait_for_slave_count,
+			master_instance.semi_sync_primary_wait_for_slave_count
+		) AS semi_sync_primary_wait_for_slave_count,
 		MIN(
-			master_instance.semi_sync_master_clients
-		) AS semi_sync_master_clients,
+			master_instance.semi_sync_primary_clients
+		) AS semi_sync_primary_clients,
 		MIN(
-			master_instance.semi_sync_master_status
-		) AS semi_sync_master_status,
+			master_instance.semi_sync_primary_status
+		) AS semi_sync_primary_status,
 		MIN(
 			master_instance.semi_sync_replica_enabled
 		) AS semi_sync_replica_enabled,
-		SUM(replica_instance.is_co_master) AS count_co_master_replicas,
+		SUM(replica_instance.is_co_primary) AS count_co_master_replicas,
 		SUM(replica_instance.oracle_gtid) AS count_oracle_gtid_replicas,
 		IFNULL(
 			SUM(
@@ -312,8 +312,8 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 			AND vitess_tablet.port = master_instance.port
 		)
 		LEFT JOIN vitess_tablet master_tablet ON (
-			master_tablet.hostname = master_instance.master_host
-			AND master_tablet.port = master_instance.master_port
+			master_tablet.hostname = master_instance.primary_host
+			AND master_tablet.port = master_instance.primary_port
 		)
 		LEFT JOIN hostname_resolve ON (
 			master_instance.hostname = hostname_resolve.hostname
@@ -322,8 +322,8 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 			COALESCE(
 				hostname_resolve.resolved_hostname,
 				master_instance.hostname
-			) = replica_instance.master_host
-			AND master_instance.port = replica_instance.master_port
+			) = replica_instance.primary_host
+			AND master_instance.port = replica_instance.primary_port
 		)
 		LEFT JOIN database_instance_maintenance ON (
 			master_instance.hostname = database_instance_maintenance.hostname
@@ -358,7 +358,7 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 		vitess_tablet.port
 	ORDER BY
 		vitess_tablet.tablet_type ASC,
-		vitess_tablet.master_timestamp DESC
+		vitess_tablet.primary_timestamp DESC
 	`
 
 	clusters := make(map[string]*clusterAnalysis)
@@ -384,13 +384,13 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 		}
 
 		a.TabletType = tablet.Type
-		a.PrimaryTimeStamp = m.GetTime("master_timestamp")
+		a.PrimaryTimeStamp = m.GetTime("primary_timestamp")
 
 		a.IsPrimary = m.GetBool("is_master")
 		countCoPrimaryReplicas := m.GetUint("count_co_master_replicas")
-		a.IsCoPrimary = m.GetBool("is_co_master") || (countCoPrimaryReplicas > 0)
+		a.IsCoPrimary = m.GetBool("is_co_primary") || (countCoPrimaryReplicas > 0)
 		a.AnalyzedInstanceKey = InstanceKey{Hostname: m.GetString("hostname"), Port: m.GetInt("port")}
-		a.AnalyzedInstancePrimaryKey = InstanceKey{Hostname: m.GetString("master_host"), Port: m.GetInt("master_port")}
+		a.AnalyzedInstancePrimaryKey = InstanceKey{Hostname: m.GetString("primary_host"), Port: m.GetInt("primary_port")}
 		a.AnalyzedInstanceDataCenter = m.GetString("data_center")
 		a.AnalyzedInstanceRegion = m.GetString("region")
 		a.AnalyzedInstancePhysicalEnvironment = m.GetString("physical_environment")
@@ -430,13 +430,13 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 		a.MariaDBGTIDImmediateTopology = countValidMariaDBGTIDReplicas == a.CountValidReplicas && a.CountValidReplicas > 0
 		countValidBinlogServerReplicas := m.GetUint("count_valid_binlog_server_replicas")
 		a.BinlogServerImmediateTopology = countValidBinlogServerReplicas == a.CountValidReplicas && a.CountValidReplicas > 0
-		a.SemiSyncPrimaryEnabled = m.GetBool("semi_sync_master_enabled")
-		a.SemiSyncPrimaryStatus = m.GetBool("semi_sync_master_status")
+		a.SemiSyncPrimaryEnabled = m.GetBool("semi_sync_primary_enabled")
+		a.SemiSyncPrimaryStatus = m.GetBool("semi_sync_primary_status")
 		a.SemiSyncReplicaEnabled = m.GetBool("semi_sync_replica_enabled")
 		a.CountSemiSyncReplicasEnabled = m.GetUint("count_semi_sync_replicas")
 		// countValidSemiSyncReplicasEnabled := m.GetUint("count_valid_semi_sync_replicas")
-		a.SemiSyncPrimaryWaitForReplicaCount = m.GetUint("semi_sync_master_wait_for_slave_count")
-		a.SemiSyncPrimaryClients = m.GetUint("semi_sync_master_clients")
+		a.SemiSyncPrimaryWaitForReplicaCount = m.GetUint("semi_sync_primary_wait_for_slave_count")
+		a.SemiSyncPrimaryClients = m.GetUint("semi_sync_primary_clients")
 
 		a.MinReplicaGTIDMode = m.GetString("min_replica_gtid_mode")
 		a.MaxReplicaGTIDMode = m.GetString("max_replica_gtid_mode")

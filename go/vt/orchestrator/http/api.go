@@ -56,7 +56,7 @@ var apiSynonyms = map[string]string{
 	"move-up-slaves":              "move-up-replicas",
 	"repoint-slaves":              "repoint-replicas",
 	"enslave-siblings":            "take-siblings",
-	"enslave-master":              "take-master",
+	"enslave-primary":             "take-primary",
 	"regroup-slaves-bls":          "regroup-replicas-bls",
 	"move-slaves-gtid":            "move-replicas-gtid",
 	"regroup-slaves-gtid":         "regroup-replicas-gtid",
@@ -596,7 +596,7 @@ func (this *HttpAPI) MakeCoPrimary(params martini.Params, r render.Render, req *
 		return
 	}
 
-	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Instance made co-master: %+v", instance.Key), Details: instance})
+	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Instance made co-primary: %+v", instance.Key), Details: instance})
 }
 
 // ResetReplication makes a replica forget about its primary, effectively breaking the replication
@@ -761,7 +761,7 @@ func (this *HttpAPI) ErrantGTIDInjectEmpty(params martini.Params, r render.Rende
 		return
 	}
 
-	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Have injected %+v transactions on cluster master %+v", countInjectedTransactions, clusterPrimary.Key), Details: instance})
+	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Have injected %+v transactions on cluster primary %+v", countInjectedTransactions, clusterPrimary.Key), Details: instance})
 }
 
 // MoveBelow attempts to move an instance below its supposed sibling
@@ -881,7 +881,7 @@ func (this *HttpAPI) TakePrimary(params martini.Params, r render.Render, req *ht
 		return
 	}
 
-	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("%+v took its master", instanceKey), Details: instance})
+	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("%+v took its primary", instanceKey), Details: instance})
 }
 
 // RelocateBelow attempts to move an instance below another, orchestrator choosing the best (potentially multi-step)
@@ -1651,7 +1651,7 @@ func (this *HttpAPI) SubmitPrimaryToKvStores(params martini.Params, r render.Ren
 		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
 		return
 	}
-	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Submitted %d masters", submittedCount), Details: kvPairs})
+	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Submitted %d primaries", submittedCount), Details: kvPairs})
 }
 
 // Clusters provides list of known primaries
@@ -2841,7 +2841,7 @@ func (this *HttpAPI) RegisterRequests(m *martini.ClassicMartini) {
 	this.registerAPIRequest(m, "repoint-slaves/:host/:port", this.RepointReplicas)
 	this.registerAPIRequest(m, "make-co-primary/:host/:port", this.MakeCoPrimary)
 	this.registerAPIRequest(m, "enslave-siblings/:host/:port", this.TakeSiblings)
-	this.registerAPIRequest(m, "enslave-master/:host/:port", this.TakePrimary)
+	this.registerAPIRequest(m, "enslave-primary/:host/:port", this.TakePrimary)
 
 	// Binlog server relocation:
 	this.registerAPIRequest(m, "regroup-slaves-bls/:host/:port", this.RegroupReplicasBinlogServers)
@@ -2904,8 +2904,8 @@ func (this *HttpAPI) RegisterRequests(m *martini.ClassicMartini) {
 	this.registerAPIRequest(m, "clusters", this.Clusters)
 	this.registerAPIRequest(m, "clusters-info", this.ClustersInfo)
 
-	this.registerAPIRequest(m, "masters", this.Primaries)
-	this.registerAPIRequest(m, "master/:clusterHint", this.ClusterPrimary)
+	this.registerAPIRequest(m, "primaries", this.Primaries)
+	this.registerAPIRequest(m, "primary/:clusterHint", this.ClusterPrimary)
 	this.registerAPIRequest(m, "instance-replicas/:host/:port", this.InstanceReplicas)
 	this.registerAPIRequest(m, "all-instances", this.AllInstances)
 	this.registerAPIRequest(m, "downtimed", this.Downtimed)
