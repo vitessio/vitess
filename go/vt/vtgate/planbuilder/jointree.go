@@ -93,7 +93,8 @@ type (
 		SysTableTableSchema []evalengine.Expr
 		SysTableTableName   map[string]evalengine.Expr
 
-		subQueriesToReplace []*abstract.SubQueryInner
+		// these helps in replacing the argNames with the subquery
+		sqToReplace map[string]*sqlparser.Select
 	}
 
 	derivedTree struct {

@@ -113,6 +113,33 @@ func transformJoinPlan(n *joinTree, semTable *semantics.SemTable, processing *po
 	}, nil
 }
 
+type subQReplacer struct {
+	rt  *routeTree
+	err error
+}
+
+func (sqr *subQReplacer) replacer(cursor *sqlparser.Cursor) bool {
+	var argName string
+	switch node := cursor.Node().(type) {
+	case sqlparser.ListArg:
+		argName = string(node)
+	case sqlparser.Argument:
+		argName = string(node)
+	default:
+		return true
+	}
+	subqSelect, exists := sqr.rt.sqToReplace[argName]
+	if !exists {
+		sqr.err = vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unable to find subquery with argument: %s", argName)
+		return false
+	}
+	cursor.Replace(&sqlparser.Subquery{
+		Select: subqSelect,
+	})
+
+	return false
+}
+
 func transformRoutePlan(n *routeTree, semTable *semantics.SemTable) (*route, error) {
 	var tablesForSelect sqlparser.TableExprs
 	tableNameMap := map[string]interface{}{}
@@ -199,26 +226,9 @@ func transformRoutePlan(n *routeTree, semTable *semantics.SemTable) (*route, err
 		Comments:    semTable.Comments,
 	}
 
-	if len(n.subQueriesToReplace) > 0 {
-		sqlparser.Rewrite(sel, func(cursor *sqlparser.Cursor) bool {
-			var argName string
-			switch node := cursor.Node().(type) {
-			case sqlparser.ListArg:
-				argName = string(node)
-			case sqlparser.Argument:
-				argName = string(node)
-			default:
-				return true
-			}
-			for _, inner := range n.subQueriesToReplace {
-				if argName == inner.ArgName {
-					cursor.Replace(&sqlparser.Subquery{
-						Select: inner.SelectStatement,
-					})
-				}
-			}
-			return false
-		}, nil)
+	if len(n.sqToReplace) > 0 {
+		sqr := &subQReplacer{rt: n}
+		sqlparser.Rewrite(sel, sqr.replacer, nil)
 	}
 
 	return &route{
