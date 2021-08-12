@@ -227,14 +227,14 @@ func (e *Executor) initSchema(ctx context.Context) error {
 
 	defer e.env.LogError()
 
-	conn, err := e.pool.Get(ctx)
+	conn, err := dbconnpool.NewDBConnection(ctx, e.env.Config().DB.DbaConnector())
 	if err != nil {
 		return err
 	}
-	defer conn.Recycle()
+	defer conn.Close()
 
 	for _, ddl := range ApplyDDL {
-		_, err := conn.Exec(ctx, ddl, math.MaxInt32, false)
+		_, err := conn.ExecuteFetch(ddl, math.MaxInt32, false)
 		if mysql.IsSchemaApplyError(err) {
 			continue
 		}
