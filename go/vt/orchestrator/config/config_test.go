@@ -62,7 +62,7 @@ func TestPostponeReplicaRecoveryOnLagMinutes(t *testing.T) {
 	}
 }
 
-func TestMasterFailoverDetachReplicaMasterHost(t *testing.T) {
+func TestPrimaryFailoverDetachReplicaPrimaryHost(t *testing.T) {
 	{
 		c := newConfiguration()
 		c.PrimaryFailoverDetachSlavePrimaryHost = false
@@ -89,7 +89,7 @@ func TestMasterFailoverDetachReplicaMasterHost(t *testing.T) {
 	}
 }
 
-func TestMasterFailoverDetachDetachLostReplicasAfterMasterFailover(t *testing.T) {
+func TestPrimaryFailoverDetachDetachLostReplicasAfterPrimaryFailover(t *testing.T) {
 	{
 		c := newConfiguration()
 		c.DetachLostSlavesAfterPrimaryFailover = false
