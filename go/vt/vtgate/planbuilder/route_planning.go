@@ -198,18 +198,50 @@ func optimizeQuery(opTree abstract.Operator, reservedVars *sqlparser.ReservedVar
 			if err != nil {
 				return nil, err
 			}
-			subqTree = &subqueryTree{
-				subquery: inner.SelectStatement,
-				outer:    subqTree,
-				inner:    treeInner,
-				opcode:   inner.Type,
-				argName:  inner.ArgName,
+			if canMergeSubQuery(subqTree, treeInner) {
+				subqTree = mergeSubQuery(subqTree, inner)
+			} else {
+				subqTree = &subqueryTree{
+					subquery: inner.SelectStatement,
+					outer:    subqTree,
+					inner:    treeInner,
+					opcode:   inner.Type,
+					argName:  inner.ArgName,
+				}
 			}
+
 		}
 		return subqTree, nil
 	default:
 		return nil, semantics.Gen4NotSupportedF("optimizeQuery")
 	}
+}
+
+func canMergeSubQuery(outer, subq queryTree) bool {
+	// check merge the subq into the outer one
+	subQRoute, isRoute := subq.(*routeTree)
+	if !isRoute {
+		return false
+	}
+	outerRoute, isRoute := outer.(*routeTree)
+	if !isRoute {
+		return false
+	}
+
+	if subQRoute.routeOpCode == engine.SelectUnsharded && outerRoute.routeOpCode == engine.SelectUnsharded && subQRoute.keyspace == outerRoute.keyspace {
+		return true
+	}
+
+	return false
+}
+
+func mergeSubQuery(outer queryTree, subq *abstract.SubQueryInner) queryTree {
+	outerRoute, isRoute := outer.(*routeTree)
+	if !isRoute {
+		return nil
+	}
+	outerRoute.subQueriesToReplace = append(outerRoute.subQueriesToReplace, subq)
+	return outerRoute
 }
 
 func planLimit(limit *sqlparser.Limit, plan logicalPlan) (logicalPlan, error) {

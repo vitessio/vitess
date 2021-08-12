@@ -92,6 +92,8 @@ type (
 		// The following two fields are used when routing information_schema queries
 		SysTableTableSchema []evalengine.Expr
 		SysTableTableName   map[string]evalengine.Expr
+
+		subQueriesToReplace []*abstract.SubQueryInner
 	}
 
 	derivedTree struct {

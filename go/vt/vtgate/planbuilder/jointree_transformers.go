@@ -192,6 +192,35 @@ func transformRoutePlan(n *routeTree, semTable *semantics.SemTable) (*route, err
 	}
 	sort.Strings(tableNames)
 
+	sel := &sqlparser.Select{
+		SelectExprs: expressions,
+		From:        tablesForSelect,
+		Where:       where,
+		Comments:    semTable.Comments,
+	}
+
+	if len(n.subQueriesToReplace) > 0 {
+		sqlparser.Rewrite(sel, func(cursor *sqlparser.Cursor) bool {
+			var argName string
+			switch node := cursor.Node().(type) {
+			case sqlparser.ListArg:
+				argName = string(node)
+			case sqlparser.Argument:
+				argName = string(node)
+			default:
+				return true
+			}
+			for _, inner := range n.subQueriesToReplace {
+				if argName == inner.ArgName {
+					cursor.Replace(&sqlparser.Subquery{
+						Select: inner.SelectStatement,
+					})
+				}
+			}
+			return false
+		}, nil)
+	}
+
 	return &route{
 		eroute: &engine.Route{
 			Opcode:              n.routeOpCode,
@@ -202,12 +231,7 @@ func transformRoutePlan(n *routeTree, semTable *semantics.SemTable) (*route, err
 			SysTableTableName:   n.SysTableTableName,
 			SysTableTableSchema: n.SysTableTableSchema,
 		},
-		Select: &sqlparser.Select{
-			SelectExprs: expressions,
-			From:        tablesForSelect,
-			Where:       where,
-			Comments:    semTable.Comments,
-		},
+		Select: sel,
 		tables: n.solved,
 	}, nil
 }
