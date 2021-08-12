@@ -213,7 +213,7 @@ func TestReplicationFromOtherReplica(t *testing.T) {
 	require.NoError(t, err, result)
 
 	// check replication is setup correctly
-	checkReplication(t, clusterInstance, curPrimary, []*cluster.Vttablet{replica, otherReplica}, 15*time.Second)
+	checkReplication(t, clusterInstance, curPrimary, []*cluster.Vttablet{replica, otherReplica}, 25*time.Second)
 }
 
 func TestRepairAfterTER(t *testing.T) {
