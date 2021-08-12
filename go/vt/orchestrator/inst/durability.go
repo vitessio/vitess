@@ -33,11 +33,14 @@ import (
 type newDurabler func(map[string]string) durabler
 
 var (
-	durabilityPolicies  = make(map[string]newDurabler)
+	// durabilityPolicies is a map that stores the functions needed to create a new durabler
+	durabilityPolicies = make(map[string]newDurabler)
+	// curDurabilityPolicy is the current durability policy in use
 	curDurabilityPolicy durabler
 )
 
 func init() {
+	// register all the durability rules with their functions to create them
 	registerDurability("none", func(map[string]string) durabler {
 		return &durabilityNone{}
 	})
@@ -50,6 +53,7 @@ func init() {
 	registerDurability("specified", newDurabilitySpecified)
 }
 
+// durabler is the interface which is used to get the promotion rules for candidates and the semi sync setup
 type durabler interface {
 	promotionRule(*topodatapb.Tablet) CandidatePromotionRule
 	masterSemiSync(InstanceKey) int
@@ -108,6 +112,7 @@ func ReplicaSemiSyncFromTablet(master, replica *topodatapb.Tablet) bool {
 
 //=======================================================================
 
+// durabilityNone has no semi-sync and returns NeutralPromoteRule for Primary and Replica tablet types, MustNotPromoteRule for everything else
 type durabilityNone struct{}
 
 func (d *durabilityNone) promotionRule(tablet *topodatapb.Tablet) CandidatePromotionRule {
@@ -128,6 +133,8 @@ func (d *durabilityNone) replicaSemiSync(master, replica *topodatapb.Tablet) boo
 
 //=======================================================================
 
+// durabilitySemiSync has 1 semi-sync setup. It only allows Primary and Replica type servers to acknowledge semi sync
+// It returns NeutralPromoteRule for Primary and Replica tablet types, MustNotPromoteRule for everything else
 type durabilitySemiSync struct{}
 
 func (d *durabilitySemiSync) promotionRule(tablet *topodatapb.Tablet) CandidatePromotionRule {
@@ -152,6 +159,9 @@ func (d *durabilitySemiSync) replicaSemiSync(master, replica *topodatapb.Tablet)
 
 //=======================================================================
 
+// durabilityCrossCell has 1 semi-sync setup. It only allows Primary and Replica type servers from a different cell to acknowledge semi sync.
+// This means that a transaction must be in two cells for it to be acknowledged
+// It returns NeutralPromoteRule for Primary and Replica tablet types, MustNotPromoteRule for everything else
 type durabilityCrossCell struct{}
 
 func (d *durabilityCrossCell) promotionRule(tablet *topodatapb.Tablet) CandidatePromotionRule {
@@ -180,6 +190,8 @@ func (d *durabilityCrossCell) replicaSemiSync(master, replica *topodatapb.Tablet
 
 //=======================================================================
 
+// durabilitySpecified is like durabilityNone. It has an additional map which it first queries with the tablet alias as the key
+// If a CandidatePromotionRule is found in that map, then that is used as the promotion rule. Otherwise, it reverts to the same logic as durabilityNone
 type durabilitySpecified struct {
 	promotionRules map[string]CandidatePromotionRule
 }
@@ -205,14 +217,19 @@ func (d *durabilitySpecified) replicaSemiSync(master, replica *topodatapb.Tablet
 	return false
 }
 
+// newDurabilitySpecified is a function that is used to create a new durabilitySpecified struct
 func newDurabilitySpecified(m map[string]string) durabler {
 	promotionRules := map[string]CandidatePromotionRule{}
+	// range over the map given by the user
 	for tabletAliasStr, promotionRuleStr := range m {
+		// parse the promotion rule
 		promotionRule, err := ParseCandidatePromotionRule(promotionRuleStr)
+		// if parsing is not successful, skip over this rule
 		if err != nil {
 			log.Errorf("invalid promotion rule %s found, received error - %v", promotionRuleStr, err)
 			continue
 		}
+		// set the promotion rule in the map at the given tablet alias
 		promotionRules[tabletAliasStr] = promotionRule
 	}
 
