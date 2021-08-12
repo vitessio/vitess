@@ -458,13 +458,13 @@ func (mysqld *Mysqld) DisableBinlogPlayback() error {
 
 // SetSemiSyncEnabled enables or disables semi-sync replication for
 // primary and/or replica mode.
-func (mysqld *Mysqld) SetSemiSyncEnabled(master, replica bool) error {
-	log.Infof("Setting semi-sync mode: master=%v, replica=%v", master, replica)
+func (mysqld *Mysqld) SetSemiSyncEnabled(primary, replica bool) error {
+	log.Infof("Setting semi-sync mode: primary=%v, replica=%v", primary, replica)
 
 	// Convert bool to int.
-	var m, s int
-	if master {
-		m = 1
+	var p, s int
+	if primary {
+		p = 1
 	}
 	if replica {
 		s = 1
@@ -472,7 +472,7 @@ func (mysqld *Mysqld) SetSemiSyncEnabled(master, replica bool) error {
 
 	err := mysqld.ExecuteSuperQuery(context.TODO(), fmt.Sprintf(
 		"SET GLOBAL rpl_semi_sync_master_enabled = %v, GLOBAL rpl_semi_sync_slave_enabled = %v",
-		m, s))
+		p, s))
 	if err != nil {
 		return fmt.Errorf("can't set semi-sync mode: %v; make sure plugins are loaded in my.cnf", err)
 	}
@@ -481,14 +481,14 @@ func (mysqld *Mysqld) SetSemiSyncEnabled(master, replica bool) error {
 
 // SemiSyncEnabled returns whether semi-sync is enabled for primary or replica.
 // If the semi-sync plugin is not loaded, we assume semi-sync is disabled.
-func (mysqld *Mysqld) SemiSyncEnabled() (master, replica bool) {
+func (mysqld *Mysqld) SemiSyncEnabled() (primary, replica bool) {
 	vars, err := mysqld.fetchVariables(context.TODO(), "rpl_semi_sync_%_enabled")
 	if err != nil {
 		return false, false
 	}
-	master = (vars["rpl_semi_sync_master_enabled"] == "ON")
+	primary = (vars["rpl_semi_sync_master_enabled"] == "ON")
 	replica = (vars["rpl_semi_sync_slave_enabled"] == "ON")
-	return master, replica
+	return primary, replica
 }
 
 // SemiSyncReplicationStatus returns whether semi-sync is currently used by replication.

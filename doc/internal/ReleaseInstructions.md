@@ -33,7 +33,7 @@ backward-compatible way. This should be the majority of normal releases.
 A patch release indicates that only a select set of bugfixes have been
 cherrypicked onto the associated minor release. The expectation is that
 upgrading by a patch release should be painless (not requiring any config
-changes) and safe (isolated from active development on `master`).
+changes) and safe (isolated from active development on `main`).
 
 ### Pre-Release Labels (vX.Y.Z-label.N)
 
@@ -61,14 +61,14 @@ and tag the following items under it:
 ## Release Branches
 
 Each minor release level (X.Y) should have a [release branch](https://github.com/vitessio/vitess/branches/all?query=release) named
-`release-X.Y`. This branch should diverge from `master` when the code freeze for
+`release-X.Y`. This branch should diverge from `main` when the code freeze for
 that release is declared, after which point only bugfix PRs should be
-cherrypicked onto the branch. All other activity on `master` will go out with a
+cherrypicked onto the branch. All other activity on `main` will go out with a
 subsequent minor release.
 
 ```bash
-git checkout master
-git pull --ff-only upstream master
+git checkout main
+git pull --ff-only upstream main
 
 git checkout -b release-X.Y
 git push upstream release-X.Y
@@ -215,7 +215,7 @@ Create the `settings.xml` in the `$HOME/.m2/` directory as described in their [i
 
 1.  Run `git diff java/` to double check that the version was updated correctly.
 
-1.  Create a Git commit with the version change while you are in the **release** branch (not master). You will push it later.
+1.  Create a Git commit with the version change while you are in the **release** branch (not main). You will push it later.
 
 1.  Run `gpg-agent` to avoid that Maven will constantly prompt you for the password of your private key.
 
@@ -234,7 +234,7 @@ Create the `settings.xml` in the `$HOME/.m2/` directory as described in their [i
     cd ..
     ```
 
-At the end of the release, you will also have to bump the SNAPSHOT version in the master branch (see [below](#bump-java-snapshot-version)).
+At the end of the release, you will also have to bump the SNAPSHOT version in the main branch (see [below](#bump-java-snapshot-version)).
 
 ## Push the release branch and tag to upstream
 
@@ -262,14 +262,14 @@ Then send an announcement on the [vitess-announce](https://groups.google.com/for
 
 ## Bump Java SNAPSHOT version
 
-The Java version in the **master** branch has the suffix `-SNAPSHOT` and should always reference the **next** release number.
+The Java version in the **main** branch has the suffix `-SNAPSHOT` and should always reference the **next** release number.
 For example, if you just released `2.1.0`, you could bump it to `2.1.1-SNAPSHOT`.
 
 Change the SNAPSHOT version as follows:
 
 ```bash
-git checkout master
-git pull --ff-only upstream master
+git checkout main
+git pull --ff-only upstream main
 
 # Example:
 # (Note that there is no leading "v".)
@@ -282,5 +282,5 @@ git diff
 
 git commit -a -m "java: Bump SNAPSHOT version to $JAVA_VERSION after Vitess release $PATCH."
 
-git push upstream master
+git push upstream main
 ```

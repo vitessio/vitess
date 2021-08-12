@@ -813,13 +813,13 @@ func (mysqld *Mysqld) getMycnfTemplate() string {
 	}
 	myTemplateSource.Write(b)
 
-	// mysql version specific file.
-	// master_{flavor}{major}{minor}.cnf
+	// database flavor + version specific file.
+	// {flavor}{major}{minor}.cnf
 	f := FlavorMariaDB
 	if mysqld.capabilities.isMySQLLike() {
 		f = FlavorMySQL
 	}
-	fn := fmt.Sprintf("mycnf/master_%s%d%d.cnf", f, mysqld.capabilities.version.Major, mysqld.capabilities.version.Minor)
+	fn := fmt.Sprintf("mycnf/%s%d%d.cnf", f, mysqld.capabilities.version.Major, mysqld.capabilities.version.Minor)
 	b, err = riceBox.Bytes(fn)
 	if err != nil {
 		log.Infof("this version of Vitess does not include built-in support for %v %v", mysqld.capabilities.flavor, mysqld.capabilities.version)

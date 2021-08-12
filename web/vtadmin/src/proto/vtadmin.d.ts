@@ -14366,8 +14366,8 @@ export namespace tabletmanagerdata {
         /** PopulateReparentJournalRequest action_name */
         action_name?: (string|null);
 
-        /** PopulateReparentJournalRequest master_alias */
-        master_alias?: (topodata.ITabletAlias|null);
+        /** PopulateReparentJournalRequest primary_alias */
+        primary_alias?: (topodata.ITabletAlias|null);
 
         /** PopulateReparentJournalRequest replication_position */
         replication_position?: (string|null);
@@ -14388,8 +14388,8 @@ export namespace tabletmanagerdata {
         /** PopulateReparentJournalRequest action_name. */
         public action_name: string;
 
-        /** PopulateReparentJournalRequest master_alias. */
-        public master_alias?: (topodata.ITabletAlias|null);
+        /** PopulateReparentJournalRequest primary_alias. */
+        public primary_alias?: (topodata.ITabletAlias|null);
 
         /** PopulateReparentJournalRequest replication_position. */
         public replication_position: string;
@@ -15983,8 +15983,8 @@ export namespace tabletmanagerdata {
         /** BackupRequest concurrency */
         concurrency?: (number|Long|null);
 
-        /** BackupRequest allowMaster */
-        allowMaster?: (boolean|null);
+        /** BackupRequest allow_primary */
+        allow_primary?: (boolean|null);
     }
 
     /** Represents a BackupRequest. */
@@ -15999,8 +15999,8 @@ export namespace tabletmanagerdata {
         /** BackupRequest concurrency. */
         public concurrency: (number|Long);
 
-        /** BackupRequest allowMaster. */
-        public allowMaster: boolean;
+        /** BackupRequest allow_primary. */
+        public allow_primary: boolean;
 
         /**
          * Creates a new BackupRequest instance using the specified properties.

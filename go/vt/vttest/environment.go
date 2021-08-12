@@ -116,7 +116,7 @@ func GetMySQLOptions(flavor string) (string, []string, error) {
 	}
 
 	mycnf := []string{}
-	mycnf = append(mycnf, "config/mycnf/default-fast.cnf")
+	mycnf = append(mycnf, "config/mycnf/test-suite.cnf")
 
 	for i, cnf := range mycnf {
 		mycnf[i] = path.Join(os.Getenv("VTROOT"), cnf)

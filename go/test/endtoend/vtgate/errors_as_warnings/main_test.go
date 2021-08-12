@@ -114,7 +114,7 @@ func TestScatterErrsAsWarns(t *testing.T) {
 
 	checkedExec(t, oltp, `insert into t1(id1, id2) values (1, 1), (2, 2), (3, 3), (4, 4), (5, 5)`)
 	defer func() {
-		checkedExec(t, oltp, "use @master")
+		checkedExec(t, oltp, "use @primary")
 		checkedExec(t, oltp, `delete from t1`)
 	}()
 

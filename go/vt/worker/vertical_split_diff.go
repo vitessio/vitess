@@ -200,7 +200,7 @@ func (vsdw *VerticalSplitDiffWorker) init(ctx context.Context) error {
 	if len(vsdw.shardInfo.SourceShards[0].Tables) == 0 {
 		return fmt.Errorf("shard %v/%v has no tables in source shard[0]", vsdw.keyspace, vsdw.shard)
 	}
-	if !vsdw.shardInfo.HasMaster() {
+	if !vsdw.shardInfo.HasPrimary() {
 		return fmt.Errorf("shard %v/%v has no master", vsdw.keyspace, vsdw.shard)
 	}
 

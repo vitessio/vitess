@@ -381,8 +381,8 @@ func (c *tabletStatsCache) heatmapData(selectedKeyspace, selectedCell, selectedT
 			}
 			// Otherwise traverse the type labels because that is the innermost label.
 			// For example if h.CellAndTypeLabels =
-			//   { CellLabel: {Name: 'cell1', Rowspan: 3}, TypeLabels: [{Name: 'Master', Rowspan: 1},  {Name: 'Replica', Rowspan: 2}] },
-			//   { CellLabel: {Name: 'cell2', Rowspan: 3}, TypeLabels: [{Name: 'Master', Rowspan: 1},  {Name: 'Replica', Rowspan: 2}] },
+			//   { CellLabel: {Name: 'cell1', Rowspan: 3}, TypeLabels: [{Name: 'Primary', Rowspan: 1},  {Name: 'Replica', Rowspan: 2}] },
+			//   { CellLabel: {Name: 'cell2', Rowspan: 3}, TypeLabels: [{Name: 'Primary', Rowspan: 1},  {Name: 'Replica', Rowspan: 2}] },
 			// then the resulting array will be [1.5, 2.5, 4.5, 5.5] which specifies the grid line indexes
 			// starting from 0 which is at the bottom of the heatmap.
 			for t := len(h.CellAndTypeLabels[c].TypeLabels) - 1; t >= 0; t-- {

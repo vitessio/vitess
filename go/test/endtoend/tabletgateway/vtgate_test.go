@@ -72,7 +72,7 @@ func verifyVtgateVariables(t *testing.T, url string) {
 
 	healthCheckConnection := getMapFromJSON(resultMap, "HealthcheckConnections")
 	assert.NotEmpty(t, healthCheckConnection, "Atleast one healthy tablet needs to be present")
-	assert.True(t, isPrimaryTabletPresent(healthCheckConnection), "Atleast one master tablet needs to be present")
+	assert.True(t, isPrimaryTabletPresent(healthCheckConnection), "Atleast one primary tablet needs to be present")
 }
 
 func retryNTimes(t *testing.T, maxRetries int, f func() bool) {

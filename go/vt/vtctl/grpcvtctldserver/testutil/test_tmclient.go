@@ -172,6 +172,7 @@ type TabletManagerClient struct {
 	// keyed by tablet alias.
 	SetMasterDelays map[string]time.Duration
 	// keyed by tablet alias.
+	// TODO(deepthi): fix after v12.0
 	SetMasterResults map[string]error
 	// keyed by tablet alias.
 	SetReadWriteDelays map[string]time.Duration

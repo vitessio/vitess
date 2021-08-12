@@ -60,7 +60,7 @@ func TestValidateSchemaShard(t *testing.T) {
 		},
 	}
 
-	for _, primary := range tme.sourceMasters {
+	for _, primary := range tme.sourcePrimaries {
 		if primary.Tablet.Shard == "80-" {
 			primary.FakeMysqlDaemon.Schema = schm
 		} else {
@@ -116,11 +116,11 @@ func TestValidateSchemaKeyspace(t *testing.T) {
 		},
 	}
 
-	for _, primary := range append(tmePass.sourceMasters, tmePass.targetMasters...) {
+	for _, primary := range append(tmePass.sourcePrimaries, tmePass.targetPrimaries...) {
 		primary.FakeMysqlDaemon.Schema = sameAsVSchema
 	}
 
-	for _, primary := range append(tmeDiffs.sourceMasters, tmeDiffs.targetMasters...) {
+	for _, primary := range append(tmeDiffs.sourcePrimaries, tmeDiffs.targetPrimaries...) {
 		primary.FakeMysqlDaemon.Schema = schm
 	}
 

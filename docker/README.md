@@ -31,14 +31,9 @@ Our list of images can be grouped into:
 
 | Image | How (When) Updated | Description |
 | --- | --- | --- |
-| **
-bootstrap** | manual (after incompatible changes are made to [bootstrap.sh](https://github.com/vitessio/vitess/blob/main/bootstrap.sh) or [vendor/vendor.json](https://github.com/vitessio/vitess/blob/main/vendor/vendor.json) | Basis for all Vitess images. It is a snapshot of the checked out repository after running `./bootstrap.sh`. Used to cache dependencies. Avoids lengthy recompilation of dependencies if they did not change. Our internal test runner [`test.go`](https://github.com/vitessio/vitess/blob/master/test.go) uses it to test the code against different MySQL versions. |
-| **
-base** | automatic (after every GitHub push to the master branch) | Contains all Vitess server binaries. Snapshot after running `make build`. |
-| **root** | automatic (after every GitHub push to the master branch) | Same as **
-base** but with the default user set to "root". Required for Kubernetes. |
-| **lite** | manual (updated with every Vitess release) | Stripped down version of **
-base** e.g. source code and build dependencies are removed. Default image in our Kubernetes templates for minimized startup time. |
+| bootstrap | manual (after incompatible changes are made to [bootstrap.sh](https://github.com/vitessio/vitess/blob/main/bootstrap.sh) or [vendor/vendor.json](https://github.com/vitessio/vitess/blob/main/vendor/vendor.json) | Basis for all Vitess images. It is a snapshot of the checked out repository after running `./bootstrap.sh`. Used to cache dependencies. Avoids lengthy recompilation of dependencies if they did not change. Our internal test runner [`test.go`](https://github.com/vitessio/vitess/blob/main/test.go) uses it to test the code against different MySQL versions. |
+| base | manual (on demand) | Contains all Vitess server binaries. Snapshot after running `make build`. |
+| **lite** | automatic (after every push to main branch) | Stripped down version of base
 
 All these Vitess images include a specific MySQL/MariaDB version ("flavor").
 
@@ -46,4 +41,5 @@ All these Vitess images include a specific MySQL/MariaDB version ("flavor").
 * On Docker Hub we publish only images with MySQL 5.7 to minimize maintenance overhead and avoid confusion.
 
 If you are looking for a stable version of Vitess, use the **lite** image with a fixed version. If you are looking for
-the latest Vitess code in binary form, use the "latest" tag of the **base** image.
+the latest Vitess code in binary form, use the "latest" tag of the **lite** image. 
+If you need to use a binary that is not included in **lite** use the **base** image.

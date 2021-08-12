@@ -1674,6 +1674,9 @@ var (
 		input:  "use `ks:-80@master`",
 		output: "use `ks:-80@master`",
 	}, {
+		input:  "use `ks:-80@primary`",
+		output: "use `ks:-80@primary`",
+	}, {
 		input:  "use @replica",
 		output: "use `@replica`",
 	}, {
