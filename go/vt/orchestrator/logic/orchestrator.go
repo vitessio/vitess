@@ -324,12 +324,12 @@ func onHealthTick() {
 	}
 }
 
-// SubmitMastersToKvStores records a cluster's primary (or all clusters primaries) to kv stores.
+// SubmitPrimariesToKvStores records a cluster's primary (or all clusters primaries) to kv stores.
 // This should generally only happen once in a lifetime of a cluster. Otherwise KV
 // stores are updated via failovers.
-func SubmitMastersToKvStores(clusterName string, force bool) (kvPairs [](*kv.KVPair), submittedCount int, err error) {
+func SubmitPrimariesToKvStores(clusterName string, force bool) (kvPairs [](*kv.KVPair), submittedCount int, err error) {
 	kvPairs, err = inst.GetMastersKVPairs(clusterName)
-	log.Debugf("kv.SubmitMastersToKvStores, clusterName: %s, force: %+v: numPairs: %+v", clusterName, force, len(kvPairs))
+	log.Debugf("kv.SubmitPrimariesToKvStores, clusterName: %s, force: %+v: numPairs: %+v", clusterName, force, len(kvPairs))
 	if err != nil {
 		return kvPairs, submittedCount, log.Errore(err)
 	}
@@ -352,7 +352,7 @@ func SubmitMastersToKvStores(clusterName string, force bool) (kvPairs [](*kv.KVP
 		}
 		submitKvPairs = append(submitKvPairs, kvPair)
 	}
-	log.Debugf("kv.SubmitMastersToKvStores: submitKvPairs: %+v", len(submitKvPairs))
+	log.Debugf("kv.SubmitPrimariesToKvStores: submitKvPairs: %+v", len(submitKvPairs))
 	for _, kvPair := range submitKvPairs {
 		err := kv.PutKVPair(kvPair)
 		if err == nil {
@@ -465,7 +465,7 @@ func ContinuousDiscovery() {
 					go ExpireTopologyRecoveryStepsHistory()
 
 					if runCheckAndRecoverOperationsTimeRipe() && IsLeader() {
-						go SubmitMastersToKvStores("", false)
+						go SubmitPrimariesToKvStores("", false)
 					}
 				} else {
 					// Take this opportunity to refresh yourself

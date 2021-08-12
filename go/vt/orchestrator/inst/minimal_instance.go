@@ -9,7 +9,7 @@ type MinimalInstance struct {
 func (this *MinimalInstance) ToInstance() *Instance {
 	return &Instance{
 		Key:         this.Key,
-		MasterKey:   this.MasterKey,
+		PrimaryKey:  this.MasterKey,
 		ClusterName: this.ClusterName,
 	}
 }

@@ -549,7 +549,7 @@ func recoverDeadMaster(topologyRecovery *TopologyRecovery, candidateInstanceKey 
 			AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("RecoverDeadMaster: lost %+v replicas during recovery process; detaching them", len(lostReplicas)))
 			for _, replica := range lostReplicas {
 				replica := replica
-				inst.DetachReplicaMasterHost(&replica.Key)
+				inst.DetachReplicaPrimaryHost(&replica.Key)
 			}
 			return nil
 		}
@@ -781,9 +781,9 @@ func replacePromotedReplicaWithCandidate(topologyRecovery *TopologyRecovery, dea
 	// Try and promote suggested candidate, if applicable and possible
 	AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("replace-promoted-replica-with-candidate: promoted instance %+v is not the suggested candidate %+v. Will see what can be done", promotedReplica.Key, candidateInstance.Key))
 
-	if candidateInstance.MasterKey.Equals(&promotedReplica.Key) {
+	if candidateInstance.PrimaryKey.Equals(&promotedReplica.Key) {
 		AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("replace-promoted-replica-with-candidate: suggested candidate %+v is replica of promoted instance %+v. Will try and take its master", candidateInstance.Key, promotedReplica.Key))
-		candidateInstance, err = inst.TakeMaster(&candidateInstance.Key, topologyRecovery.Type == CoMasterRecovery)
+		candidateInstance, err = inst.TakePrimary(&candidateInstance.Key, topologyRecovery.Type == CoMasterRecovery)
 		if err != nil {
 			return promotedReplica, log.Errore(err)
 		}
@@ -826,7 +826,7 @@ func checkAndRecoverDeadMaster(analysisEntry inst.ReplicationAnalysis, candidate
 	log.Infof("Analysis: %v, deadmaster %+v", analysisEntry.Analysis, analysisEntry.AnalyzedInstanceKey)
 
 	// That's it! We must do recovery!
-	// TODO(sougou): This function gets called by GracefulMasterTakeover which may
+	// TODO(sougou): This function gets called by GracefulPrimaryTakeover which may
 	// need to obtain shard lock before getting here.
 	unlock, err := LockShard(analysisEntry.AnalyzedInstanceKey)
 	if err != nil {
@@ -940,7 +940,7 @@ func checkAndRecoverDeadMaster(analysisEntry inst.ReplicationAnalysis, candidate
 		if config.Config.MasterFailoverDetachReplicaMasterHost {
 			postponedFunction := func() error {
 				AuditTopologyRecovery(topologyRecovery, "- RecoverDeadMaster: detaching master host on promoted master")
-				inst.DetachReplicaMasterHost(&promotedReplica.Key)
+				inst.DetachReplicaPrimaryHost(&promotedReplica.Key)
 				return nil
 			}
 			topologyRecovery.AddPostponedFunction(postponedFunction, fmt.Sprintf("RecoverDeadMaster, detaching promoted master host %+v", promotedReplica.Key))
@@ -1039,7 +1039,7 @@ func canTakeOverPromotedServerAsMaster(wantToTakeOver *inst.Instance, toBeTakenO
 	if !isGenerallyValidAsWouldBeMaster(wantToTakeOver, true) {
 		return false
 	}
-	if !wantToTakeOver.MasterKey.Equals(&toBeTakenOver.Key) {
+	if !wantToTakeOver.PrimaryKey.Equals(&toBeTakenOver.Key) {
 		return false
 	}
 	if canReplicate, _ := toBeTakenOver.CanReplicateFrom(wantToTakeOver); !canReplicate {
@@ -1052,7 +1052,7 @@ func canTakeOverPromotedServerAsMaster(wantToTakeOver *inst.Instance, toBeTakenO
 // to whom the IM's replicas can be moved.
 func GetCandidateSiblingOfIntermediateMaster(topologyRecovery *TopologyRecovery, intermediateMasterInstance *inst.Instance) (*inst.Instance, error) {
 
-	siblings, err := inst.ReadReplicaInstances(&intermediateMasterInstance.MasterKey)
+	siblings, err := inst.ReadReplicaInstances(&intermediateMasterInstance.PrimaryKey)
 	if err != nil {
 		return nil, err
 	}
@@ -1332,7 +1332,7 @@ func RecoverDeadCoMaster(topologyRecovery *TopologyRecovery, skipProcesses bool)
 	// but we want to make sure the circle is broken no matter what.
 	// So in the case we promoted not-the-other-co-primary, we issue a detach-replica-master-host, which is a reversible operation
 	if promotedReplica != nil && !promotedReplica.Key.Equals(otherCoMasterKey) {
-		_, err = inst.DetachReplicaMasterHost(&promotedReplica.Key)
+		_, err = inst.DetachReplicaPrimaryHost(&promotedReplica.Key)
 		topologyRecovery.AddError(log.Errore(err))
 	}
 
@@ -1341,7 +1341,7 @@ func RecoverDeadCoMaster(topologyRecovery *TopologyRecovery, skipProcesses bool)
 			AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("- RecoverDeadCoMaster: lost %+v replicas during recovery process; detaching them", len(lostReplicas)))
 			for _, replica := range lostReplicas {
 				replica := replica
-				inst.DetachReplicaMasterHost(&replica.Key)
+				inst.DetachReplicaPrimaryHost(&replica.Key)
 			}
 			return nil
 		}
@@ -1769,9 +1769,9 @@ func ForceExecuteRecovery(analysisEntry inst.ReplicationAnalysis, candidateInsta
 	return executeCheckAndRecoverFunction(analysisEntry, candidateInstanceKey, true, skipProcesses)
 }
 
-// ForceMasterFailover *trusts* primary of given cluster is dead and initiates a failover
-func ForceMasterFailover(clusterName string) (topologyRecovery *TopologyRecovery, err error) {
-	clusterMasters, err := inst.ReadClusterMaster(clusterName)
+// ForcePrimaryFailover *trusts* primary of given cluster is dead and initiates a failover
+func ForcePrimaryFailover(clusterName string) (topologyRecovery *TopologyRecovery, err error) {
+	clusterMasters, err := inst.ReadClusterPrimary(clusterName)
 	if err != nil {
 		return nil, fmt.Errorf("Cannot deduce cluster master for %+v", clusterName)
 	}
@@ -1800,9 +1800,9 @@ func ForceMasterFailover(clusterName string) (topologyRecovery *TopologyRecovery
 	return topologyRecovery, nil
 }
 
-// ForceMasterTakeover *trusts* primary of given cluster is dead and fails over to designated instance,
+// ForcePrimaryTakeover *trusts* primary of given cluster is dead and fails over to designated instance,
 // which has to be its direct child.
-func ForceMasterTakeover(clusterName string, destination *inst.Instance) (topologyRecovery *TopologyRecovery, err error) {
+func ForcePrimaryTakeover(clusterName string, destination *inst.Instance) (topologyRecovery *TopologyRecovery, err error) {
 	clusterMasters, err := inst.ReadClusterWriteableMaster(clusterName)
 	if err != nil {
 		return nil, fmt.Errorf("Cannot deduce cluster master for %+v", clusterName)
@@ -1812,8 +1812,8 @@ func ForceMasterTakeover(clusterName string, destination *inst.Instance) (topolo
 	}
 	clusterMaster := clusterMasters[0]
 
-	if !destination.MasterKey.Equals(&clusterMaster.Key) {
-		return nil, fmt.Errorf("You may only promote a direct child of the master %+v. The master of %+v is %+v.", clusterMaster.Key, destination.Key, destination.MasterKey)
+	if !destination.PrimaryKey.Equals(&clusterMaster.Key) {
+		return nil, fmt.Errorf("You may only promote a direct child of the master %+v. The master of %+v is %+v.", clusterMaster.Key, destination.Key, destination.PrimaryKey)
 	}
 	log.Infof("Will demote %+v and promote %+v instead", clusterMaster.Key, destination.Key)
 
@@ -1846,18 +1846,18 @@ func getGracefulMasterTakeoverDesignatedInstance(clusterMasterKey *inst.Instance
 		}
 		// More than one replica.
 		if !auto {
-			return nil, fmt.Errorf("GracefulMasterTakeover: target instance not indicated, auto=false, and master %+v has %+v replicas. orchestrator cannot choose where to failover to. Aborting", *clusterMasterKey, len(clusterMasterDirectReplicas))
+			return nil, fmt.Errorf("GracefulPrimaryTakeover: target instance not indicated, auto=false, and master %+v has %+v replicas. orchestrator cannot choose where to failover to. Aborting", *clusterMasterKey, len(clusterMasterDirectReplicas))
 		}
-		log.Debugf("GracefulMasterTakeover: request takeover for master %+v, no designated replica indicated. orchestrator will attempt to auto deduce replica.", *clusterMasterKey)
+		log.Debugf("GracefulPrimaryTakeover: request takeover for master %+v, no designated replica indicated. orchestrator will attempt to auto deduce replica.", *clusterMasterKey)
 		designatedInstance, _, _, _, _, err = inst.GetCandidateReplica(clusterMasterKey, false)
 		if err != nil || designatedInstance == nil {
-			return nil, fmt.Errorf("GracefulMasterTakeover: no target instance indicated, failed to auto-detect candidate replica for master %+v. Aborting", *clusterMasterKey)
+			return nil, fmt.Errorf("GracefulPrimaryTakeover: no target instance indicated, failed to auto-detect candidate replica for master %+v. Aborting", *clusterMasterKey)
 		}
-		log.Debugf("GracefulMasterTakeover: candidateReplica=%+v", designatedInstance.Key)
+		log.Debugf("GracefulPrimaryTakeover: candidateReplica=%+v", designatedInstance.Key)
 		if _, err := inst.StartReplication(&designatedInstance.Key); err != nil {
-			return nil, fmt.Errorf("GracefulMasterTakeover:cannot start replication on designated replica %+v. Aborting", designatedKey)
+			return nil, fmt.Errorf("GracefulPrimaryTakeover:cannot start replication on designated replica %+v. Aborting", designatedKey)
 		}
-		log.Infof("GracefulMasterTakeover: designated master deduced to be %+v", designatedInstance.Key)
+		log.Infof("GracefulPrimaryTakeover: designated master deduced to be %+v", designatedInstance.Key)
 		return designatedInstance, nil
 	}
 
@@ -1868,20 +1868,20 @@ func getGracefulMasterTakeoverDesignatedInstance(clusterMasterKey *inst.Instance
 		}
 	}
 	if designatedInstance == nil {
-		return nil, fmt.Errorf("GracefulMasterTakeover: indicated designated instance %+v must be directly replicating from the master %+v", *designatedKey, *clusterMasterKey)
+		return nil, fmt.Errorf("GracefulPrimaryTakeover: indicated designated instance %+v must be directly replicating from the master %+v", *designatedKey, *clusterMasterKey)
 	}
-	log.Infof("GracefulMasterTakeover: designated master instructed to be %+v", designatedInstance.Key)
+	log.Infof("GracefulPrimaryTakeover: designated master instructed to be %+v", designatedInstance.Key)
 	return designatedInstance, nil
 }
 
-// GracefulMasterTakeover will demote primary of existing topology and promote its
+// GracefulPrimaryTakeover will demote primary of existing topology and promote its
 // direct replica instead.
 // It expects that replica to have no siblings.
 // This function is graceful in that it will first lock down the primary, then wait
 // for the designated replica to catch up with last position.
 // It will point old primary at the newly promoted primary at the correct coordinates.
-func GracefulMasterTakeover(clusterName string, designatedKey *inst.InstanceKey, auto bool) (topologyRecovery *TopologyRecovery, promotedMasterCoordinates *inst.BinlogCoordinates, err error) {
-	clusterMasters, err := inst.ReadClusterMaster(clusterName)
+func GracefulPrimaryTakeover(clusterName string, designatedKey *inst.InstanceKey, auto bool) (topologyRecovery *TopologyRecovery, promotedMasterCoordinates *inst.BinlogCoordinates, err error) {
+	clusterMasters, err := inst.ReadClusterPrimary(clusterName)
 	if err != nil {
 		return nil, nil, fmt.Errorf("Cannot deduce cluster master for %+v; error: %+v", clusterName, err)
 	}
@@ -1909,7 +1909,7 @@ func GracefulMasterTakeover(clusterName string, designatedKey *inst.InstanceKey,
 	}
 
 	if inst.IsBannedFromBeingCandidateReplica(designatedInstance) {
-		return nil, nil, fmt.Errorf("GracefulMasterTakeover: designated instance %+v cannot be promoted due to promotion rule or it is explicitly ignored in PromotionIgnoreHostnameFilters configuration", designatedInstance.Key)
+		return nil, nil, fmt.Errorf("GracefulPrimaryTakeover: designated instance %+v cannot be promoted due to promotion rule or it is explicitly ignored in PromotionIgnoreHostnameFilters configuration", designatedInstance.Key)
 	}
 
 	masterOfDesignatedInstance, err := inst.GetInstanceMaster(designatedInstance)
@@ -1917,14 +1917,14 @@ func GracefulMasterTakeover(clusterName string, designatedKey *inst.InstanceKey,
 		return nil, nil, err
 	}
 	if !masterOfDesignatedInstance.Key.Equals(&clusterMaster.Key) {
-		return nil, nil, fmt.Errorf("Sanity check failure. It seems like the designated instance %+v does not replicate from the master %+v (designated instance's master key is %+v). This error is strange. Panicking", designatedInstance.Key, clusterMaster.Key, designatedInstance.MasterKey)
+		return nil, nil, fmt.Errorf("Sanity check failure. It seems like the designated instance %+v does not replicate from the master %+v (designated instance's master key is %+v). This error is strange. Panicking", designatedInstance.Key, clusterMaster.Key, designatedInstance.PrimaryKey)
 	}
 	if !designatedInstance.HasReasonableMaintenanceReplicationLag() {
 		return nil, nil, fmt.Errorf("Desginated instance %+v seems to be lagging to much for thie operation. Aborting.", designatedInstance.Key)
 	}
 
 	if len(clusterMasterDirectReplicas) > 1 {
-		log.Infof("GracefulMasterTakeover: Will let %+v take over its siblings", designatedInstance.Key)
+		log.Infof("GracefulPrimaryTakeover: Will let %+v take over its siblings", designatedInstance.Key)
 		relocatedReplicas, _, err, _ := inst.RelocateReplicas(&clusterMaster.Key, &designatedInstance.Key, "")
 		if len(relocatedReplicas) != len(clusterMasterDirectReplicas)-1 {
 			// We are unable to make designated instance primary of all its siblings
@@ -1942,14 +1942,14 @@ func GracefulMasterTakeover(clusterName string, designatedKey *inst.InstanceKey,
 				}
 				if directReplica.IsDowntimed {
 					// obviously we skip this one
-					log.Warningf("GracefulMasterTakeover: unable to relocate %+v below designated %+v, but since it is downtimed (downtime reason: %s) I will proceed", directReplica.Key, designatedInstance.Key, directReplica.DowntimeReason)
+					log.Warningf("GracefulPrimaryTakeover: unable to relocate %+v below designated %+v, but since it is downtimed (downtime reason: %s) I will proceed", directReplica.Key, designatedInstance.Key, directReplica.DowntimeReason)
 					continue
 				}
 				return nil, nil, fmt.Errorf("Desginated instance %+v cannot take over all of its siblings. Error: %+v", designatedInstance.Key, err)
 			}
 		}
 	}
-	log.Infof("GracefulMasterTakeover: Will demote %+v and promote %+v instead", clusterMaster.Key, designatedInstance.Key)
+	log.Infof("GracefulPrimaryTakeover: Will demote %+v and promote %+v instead", clusterMaster.Key, designatedInstance.Key)
 
 	analysisEntry, err := forceAnalysisEntry(clusterName, inst.DeadMaster, inst.GracefulMasterTakeoverCommandHint, &clusterMaster.Key)
 	if err != nil {
@@ -1963,22 +1963,22 @@ func GracefulMasterTakeover(clusterName string, designatedKey *inst.InstanceKey,
 		return nil, nil, fmt.Errorf("Failed running PreGracefulTakeoverProcesses: %+v", err)
 	}
 	demotedMasterSelfBinlogCoordinates := &clusterMaster.SelfBinlogCoordinates
-	log.Infof("GracefulMasterTakeover: Will wait for %+v to reach master coordinates %+v", designatedInstance.Key, *demotedMasterSelfBinlogCoordinates)
+	log.Infof("GracefulPrimaryTakeover: Will wait for %+v to reach master coordinates %+v", designatedInstance.Key, *demotedMasterSelfBinlogCoordinates)
 	if designatedInstance, _, err = inst.WaitForExecBinlogCoordinatesToReach(&designatedInstance.Key, demotedMasterSelfBinlogCoordinates, time.Duration(config.Config.ReasonableMaintenanceReplicationLagSeconds)*time.Second); err != nil {
 		return nil, nil, err
 	}
 	promotedMasterCoordinates = &designatedInstance.SelfBinlogCoordinates
 
-	log.Infof("GracefulMasterTakeover: attempting recovery")
+	log.Infof("GracefulPrimaryTakeover: attempting recovery")
 	recoveryAttempted, topologyRecovery, err := ForceExecuteRecovery(analysisEntry, &designatedInstance.Key, false)
 	if err != nil {
-		log.Errorf("GracefulMasterTakeover: noting an error, and for now proceeding: %+v", err)
+		log.Errorf("GracefulPrimaryTakeover: noting an error, and for now proceeding: %+v", err)
 	}
 	if !recoveryAttempted {
-		return nil, nil, fmt.Errorf("GracefulMasterTakeover: unexpected error: recovery not attempted. This should not happen")
+		return nil, nil, fmt.Errorf("GracefulPrimaryTakeover: unexpected error: recovery not attempted. This should not happen")
 	}
 	if topologyRecovery == nil {
-		return nil, nil, fmt.Errorf("GracefulMasterTakeover: recovery attempted but with no results. This should not happen")
+		return nil, nil, fmt.Errorf("GracefulPrimaryTakeover: recovery attempted but with no results. This should not happen")
 	}
 	var gtidHint inst.OperationGTIDHint = inst.GTIDHintNeutral
 	if topologyRecovery.RecoveryType == MasterRecoveryGTID {
@@ -1986,7 +1986,7 @@ func GracefulMasterTakeover(clusterName string, designatedKey *inst.InstanceKey,
 	}
 	clusterMaster, err = inst.ChangeMasterTo(&clusterMaster.Key, &designatedInstance.Key, promotedMasterCoordinates, false, gtidHint)
 	if !clusterMaster.SelfBinlogCoordinates.Equals(demotedMasterSelfBinlogCoordinates) {
-		log.Errorf("GracefulMasterTakeover: sanity problem. Demoted master's coordinates changed from %+v to %+v while supposed to have been frozen", *demotedMasterSelfBinlogCoordinates, clusterMaster.SelfBinlogCoordinates)
+		log.Errorf("GracefulPrimaryTakeover: sanity problem. Demoted master's coordinates changed from %+v to %+v while supposed to have been frozen", *demotedMasterSelfBinlogCoordinates, clusterMaster.SelfBinlogCoordinates)
 	}
 	_, startReplicationErr := inst.StartReplication(&clusterMaster.Key)
 	if err == nil {

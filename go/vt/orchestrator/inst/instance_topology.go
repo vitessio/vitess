@@ -116,7 +116,7 @@ func ASCIITopology(clusterName string, historyTimestampPattern string, tabulated
 	var masterInstance *Instance
 	// Investigate replicas:
 	for _, instance := range instances {
-		master, ok := instancesMap[instance.MasterKey]
+		master, ok := instancesMap[instance.PrimaryKey]
 		if ok {
 			if _, ok := replicationMap[master]; !ok {
 				replicationMap[master] = [](*Instance){}
@@ -181,7 +181,7 @@ func shouldPostponeRelocatingReplica(replica *Instance, postponedFunctionsContai
 // GetInstanceMaster synchronously reaches into the replication topology
 // and retrieves primary's data
 func GetInstanceMaster(instance *Instance) (*Instance, error) {
-	master, err := ReadTopologyInstance(&instance.MasterKey)
+	master, err := ReadTopologyInstance(&instance.PrimaryKey)
 	return master, err
 }
 
@@ -197,7 +197,7 @@ func InstancesAreSiblings(instance0, instance1 *Instance) bool {
 		// same instance...
 		return false
 	}
-	return instance0.MasterKey.Equals(&instance1.MasterKey)
+	return instance0.PrimaryKey.Equals(&instance1.PrimaryKey)
 }
 
 // InstanceIsMasterOf checks whether an instance is the primary of another
@@ -209,7 +209,7 @@ func InstanceIsMasterOf(allegedMaster, allegedReplica *Instance) bool {
 		// same instance...
 		return false
 	}
-	return allegedMaster.Key.Equals(&allegedReplica.MasterKey)
+	return allegedMaster.Key.Equals(&allegedReplica.PrimaryKey)
 }
 
 // MoveUp will attempt moving instance indicated by instanceKey up the topology hierarchy.
@@ -241,7 +241,7 @@ func MoveUp(instanceKey *InstanceKey) (*Instance, error) {
 	}
 	if master.IsBinlogServer() {
 		// Quick solution via binlog servers
-		return Repoint(instanceKey, &master.MasterKey, GTIDHintDeny)
+		return Repoint(instanceKey, &master.PrimaryKey, GTIDHintDeny)
 	}
 
 	log.Infof("Will move %+v up the topology", *instanceKey)
@@ -279,7 +279,7 @@ func MoveUp(instanceKey *InstanceKey) (*Instance, error) {
 	}
 
 	// We can skip hostname unresolve; we just copy+paste whatever our primary thinks of its primary.
-	_, err = ChangeMasterTo(instanceKey, &master.MasterKey, &master.ExecBinlogCoordinates, true, GTIDHintDeny)
+	_, err = ChangeMasterTo(instanceKey, &master.PrimaryKey, &master.ExecBinlogCoordinates, true, GTIDHintDeny)
 	if err != nil {
 		goto Cleanup
 	}
@@ -320,7 +320,7 @@ func MoveUpReplicas(instanceKey *InstanceKey, pattern string) ([](*Instance), *I
 	}
 
 	if instance.IsBinlogServer() {
-		replicas, err, errors := RepointReplicasTo(instanceKey, pattern, &instance.MasterKey)
+		replicas, err, errors := RepointReplicasTo(instanceKey, pattern, &instance.PrimaryKey)
 		// Bail out!
 		return replicas, instance, err, errors
 	}
@@ -390,7 +390,7 @@ func MoveUpReplicas(instanceKey *InstanceKey, pattern string) ([](*Instance), *I
 						return
 					}
 
-					replica, err = ChangeMasterTo(&replica.Key, &instance.MasterKey, &instance.ExecBinlogCoordinates, false, GTIDHintDeny)
+					replica, err = ChangeMasterTo(&replica.Key, &instance.PrimaryKey, &instance.ExecBinlogCoordinates, false, GTIDHintDeny)
 					if err != nil {
 						replicaErr = err
 						return
@@ -422,7 +422,7 @@ Cleanup:
 		// All returned with error
 		return res, instance, log.Error("Error on all operations"), errs
 	}
-	AuditOperation("move-up-replicas", instanceKey, fmt.Sprintf("moved up %d/%d replicas of %+v. New master: %+v", len(res), len(replicas), *instanceKey, instance.MasterKey))
+	AuditOperation("move-up-replicas", instanceKey, fmt.Sprintf("moved up %d/%d replicas of %+v. New master: %+v", len(res), len(replicas), *instanceKey, instance.PrimaryKey))
 
 	return res, instance, err, errs
 }
@@ -731,7 +731,7 @@ func Repoint(instanceKey *InstanceKey, masterKey *InstanceKey, gtidHint Operatio
 		return instance, fmt.Errorf("repoint: %+v is a secondary replication group member, hence, it cannot be relocated", instance.Key)
 	}
 	if masterKey == nil {
-		masterKey = &instance.MasterKey
+		masterKey = &instance.PrimaryKey
 	}
 	// With repoint we *prefer* the primary to be alive, but we don't strictly require it.
 	// The use case for the primary being alive is with hostname-resolve or hostname-unresolve: asking the replica
@@ -864,7 +864,7 @@ func RepointReplicasTo(instanceKey *InstanceKey, pattern string, belowKey *Insta
 	}
 	if belowKey == nil {
 		// Default to existing primary. All replicas are of the same primary, hence just pick one.
-		belowKey = &replicas[0].MasterKey
+		belowKey = &replicas[0].PrimaryKey
 	}
 	log.Infof("Will repoint replicas of %+v to %+v", *instanceKey, *belowKey)
 	return RepointTo(replicas, belowKey)
@@ -875,9 +875,9 @@ func RepointReplicas(instanceKey *InstanceKey, pattern string) ([](*Instance), e
 	return RepointReplicasTo(instanceKey, pattern, nil)
 }
 
-// MakeCoMaster will attempt to make an instance co-primary with its primary, by making its primary a replica of its own.
+// MakeCoPrimary will attempt to make an instance co-primary with its primary, by making its primary a replica of its own.
 // This only works out if the primary is not replicating; the primary does not have a known primary (it may have an unknown primary).
-func MakeCoMaster(instanceKey *InstanceKey) (*Instance, error) {
+func MakeCoPrimary(instanceKey *InstanceKey) (*Instance, error) {
 	instance, err := ReadTopologyInstance(instanceKey)
 	if err != nil {
 		return instance, err
@@ -892,13 +892,13 @@ func MakeCoMaster(instanceKey *InstanceKey) (*Instance, error) {
 	// Relocation of group secondaries makes no sense, group secondaries, by definition, always replicate from the group
 	// primary
 	if instance.IsReplicationGroupSecondary() {
-		return instance, fmt.Errorf("MakeCoMaster: %+v is a secondary replication group member, hence, it cannot be relocated", instance.Key)
+		return instance, fmt.Errorf("MakeCoPrimary: %+v is a secondary replication group member, hence, it cannot be relocated", instance.Key)
 	}
 	log.Debugf("Will check whether %+v's master (%+v) can become its co-master", instance.Key, master.Key)
 	if canMove, merr := master.CanMoveAsCoMaster(); !canMove {
 		return instance, merr
 	}
-	if instanceKey.Equals(&master.MasterKey) {
+	if instanceKey.Equals(&master.PrimaryKey) {
 		return instance, fmt.Errorf("instance %+v is already co master of %+v", instance.Key, master.Key)
 	}
 	if !instance.ReadOnly {
@@ -915,13 +915,13 @@ func MakeCoMaster(instanceKey *InstanceKey) (*Instance, error) {
 		// - M2 is read-only or is unreachable/invalid
 		// - S  is read-only
 		// And so we will be replacing one read-only co-primary with another.
-		otherCoMaster, found, _ := ReadInstance(&master.MasterKey)
+		otherCoMaster, found, _ := ReadInstance(&master.PrimaryKey)
 		if found && otherCoMaster.IsLastCheckValid && !otherCoMaster.ReadOnly {
 			return instance, fmt.Errorf("master %+v is already co-master with %+v, and %+v is alive, and not read-only; cowardly refusing to demote it. Please set it as read-only beforehand", master.Key, otherCoMaster.Key, otherCoMaster.Key)
 		}
 		// OK, good to go.
-	} else if _, found, _ := ReadInstance(&master.MasterKey); found {
-		return instance, fmt.Errorf("%+v is not a real master; it replicates from: %+v", master.Key, master.MasterKey)
+	} else if _, found, _ := ReadInstance(&master.PrimaryKey); found {
+		return instance, fmt.Errorf("%+v is not a real master; it replicates from: %+v", master.Key, master.PrimaryKey)
 	}
 	if canReplicate, err := master.CanReplicateFrom(instance); !canReplicate {
 		return instance, err
@@ -1021,8 +1021,8 @@ Cleanup:
 	return instance, err
 }
 
-// DetachReplicaMasterHost detaches a replica from its primary by corrupting the Master_Host (in such way that is reversible)
-func DetachReplicaMasterHost(instanceKey *InstanceKey) (*Instance, error) {
+// DetachReplicaPrimaryHost detaches a replica from its primary by corrupting the Master_Host (in such way that is reversible)
+func DetachReplicaPrimaryHost(instanceKey *InstanceKey) (*Instance, error) {
 	instance, err := ReadTopologyInstance(instanceKey)
 	if err != nil {
 		return instance, err
@@ -1030,10 +1030,10 @@ func DetachReplicaMasterHost(instanceKey *InstanceKey) (*Instance, error) {
 	if !instance.IsReplica() {
 		return instance, fmt.Errorf("instance is not a replica: %+v", *instanceKey)
 	}
-	if instance.MasterKey.IsDetached() {
+	if instance.PrimaryKey.IsDetached() {
 		return instance, fmt.Errorf("instance already detached: %+v", *instanceKey)
 	}
-	detachedMasterKey := instance.MasterKey.DetachedKey()
+	detachedMasterKey := instance.PrimaryKey.DetachedKey()
 
 	log.Infof("Will detach master host on %+v. Detached key is %+v", *instanceKey, *detachedMasterKey)
 
@@ -1065,8 +1065,8 @@ Cleanup:
 	return instance, err
 }
 
-// ReattachReplicaMasterHost reattaches a replica back onto its primary by undoing a DetachReplicaMasterHost operation
-func ReattachReplicaMasterHost(instanceKey *InstanceKey) (*Instance, error) {
+// ReattachReplicaPrimaryHost reattaches a replica back onto its primary by undoing a DetachReplicaPrimaryHost operation
+func ReattachReplicaPrimaryHost(instanceKey *InstanceKey) (*Instance, error) {
 	instance, err := ReadTopologyInstance(instanceKey)
 	if err != nil {
 		return instance, err
@@ -1074,11 +1074,11 @@ func ReattachReplicaMasterHost(instanceKey *InstanceKey) (*Instance, error) {
 	if !instance.IsReplica() {
 		return instance, fmt.Errorf("instance is not a replica: %+v", *instanceKey)
 	}
-	if !instance.MasterKey.IsDetached() {
+	if !instance.PrimaryKey.IsDetached() {
 		return instance, fmt.Errorf("instance does not seem to be detached: %+v", *instanceKey)
 	}
 
-	reattachedMasterKey := instance.MasterKey.ReattachedKey()
+	reattachedMasterKey := instance.PrimaryKey.ReattachedKey()
 
 	log.Infof("Will reattach master host on %+v. Reattached key is %+v", *instanceKey, *reattachedMasterKey)
 
@@ -1213,11 +1213,11 @@ func LocateErrantGTID(instanceKey *InstanceKey) (errantBinlogs []string, err err
 	return errantBinlogs, err
 }
 
-// ErrantGTIDResetMaster will issue a safe RESET MASTER on a replica that replicates via GTID:
+// ErrantGTIDResetPrimary will issue a safe RESET MASTER on a replica that replicates via GTID:
 // It will make sure the gtid_purged set matches the executed set value as read just before the RESET.
 // this will enable new replicas to be attached to given instance without complaints about missing/purged entries.
 // This function requires that the instance does not have replicas.
-func ErrantGTIDResetMaster(instanceKey *InstanceKey) (instance *Instance, err error) {
+func ErrantGTIDResetPrimary(instanceKey *InstanceKey) (instance *Instance, err error) {
 	instance, err = ReadTopologyInstance(instanceKey)
 	if err != nil {
 		return instance, err
@@ -1379,12 +1379,12 @@ func TakeSiblings(instanceKey *InstanceKey) (instance *Instance, takenSiblings i
 	if !instance.IsReplica() {
 		return instance, takenSiblings, log.Errorf("take-siblings: instance %+v is not a replica.", *instanceKey)
 	}
-	relocatedReplicas, _, err, _ := RelocateReplicas(&instance.MasterKey, instanceKey, "")
+	relocatedReplicas, _, err, _ := RelocateReplicas(&instance.PrimaryKey, instanceKey, "")
 
 	return instance, len(relocatedReplicas), err
 }
 
-// Created this function to allow a hook to be called after a successful TakeMaster event
+// Created this function to allow a hook to be called after a successful TakePrimary event
 func TakeMasterHook(successor *Instance, demoted *Instance) {
 	if demoted == nil {
 		return
@@ -1418,12 +1418,12 @@ func TakeMasterHook(successor *Instance, demoted *Instance) {
 
 }
 
-// TakeMaster will move an instance up the chain and cause its primary to become its replica.
+// TakePrimary will move an instance up the chain and cause its primary to become its replica.
 // It's almost a role change, just that other replicas of either 'instance' or its primary are currently unaffected
 // (they continue replicate without change)
 // Note that the primary must itself be a replica; however the grandparent does not necessarily have to be reachable
 // and can in fact be dead.
-func TakeMaster(instanceKey *InstanceKey, allowTakingCoMaster bool) (*Instance, error) {
+func TakePrimary(instanceKey *InstanceKey, allowTakingCoMaster bool) (*Instance, error) {
 	instance, err := ReadTopologyInstance(instanceKey)
 	if err != nil {
 		return instance, err
@@ -1433,14 +1433,14 @@ func TakeMaster(instanceKey *InstanceKey, allowTakingCoMaster bool) (*Instance, 
 	if instance.IsReplicationGroupSecondary() {
 		return instance, fmt.Errorf("takeMaster: %+v is a secondary replication group member, hence, it cannot be relocated", instance.Key)
 	}
-	masterInstance, found, err := ReadInstance(&instance.MasterKey)
+	masterInstance, found, err := ReadInstance(&instance.PrimaryKey)
 	if err != nil || !found {
 		return instance, err
 	}
 	if masterInstance.IsCoMaster && !allowTakingCoMaster {
 		return instance, fmt.Errorf("%+v is co-master. Cannot take it.", masterInstance.Key)
 	}
-	log.Debugf("TakeMaster: will attempt making %+v take its master %+v, now resolved as %+v", *instanceKey, instance.MasterKey, masterInstance.Key)
+	log.Debugf("TakePrimary: will attempt making %+v take its master %+v, now resolved as %+v", *instanceKey, instance.PrimaryKey, masterInstance.Key)
 
 	if canReplicate, err := masterInstance.CanReplicateFrom(instance); !canReplicate {
 		return instance, err
@@ -1464,7 +1464,7 @@ func TakeMaster(instanceKey *InstanceKey, allowTakingCoMaster bool) (*Instance, 
 	// We skip name unresolve. It is OK if the primary's primary is dead, unreachable, does not resolve properly.
 	// We just copy+paste info from the primary.
 	// In particular, this is commonly calledin DeadMaster recovery
-	instance, err = ChangeMasterTo(&instance.Key, &masterInstance.MasterKey, &masterInstance.ExecBinlogCoordinates, true, GTIDHintNeutral)
+	instance, err = ChangeMasterTo(&instance.Key, &masterInstance.PrimaryKey, &masterInstance.ExecBinlogCoordinates, true, GTIDHintNeutral)
 	if err != nil {
 		goto Cleanup
 	}
@@ -1492,7 +1492,7 @@ Cleanup:
 	}
 	AuditOperation("take-master", instanceKey, fmt.Sprintf("took master: %+v", masterInstance.Key))
 
-	// Created this to enable a custom hook to be called after a TakeMaster success.
+	// Created this to enable a custom hook to be called after a TakePrimary success.
 	// This only runs if there is a hook configured in orchestrator.conf.json
 	demoted := masterInstance
 	successor := instance
@@ -1954,13 +1954,13 @@ func relocateBelowInternal(instance, other *Instance) (*Instance, error) {
 	if InstancesAreSiblings(instance, other) && other.IsBinlogServer() {
 		return MoveBelow(&instance.Key, &other.Key)
 	}
-	instanceMaster, _, err := ReadInstance(&instance.MasterKey)
+	instanceMaster, _, err := ReadInstance(&instance.PrimaryKey)
 	if err != nil {
 		return instance, err
 	}
-	if instanceMaster != nil && instanceMaster.MasterKey.Equals(&other.Key) && instanceMaster.IsBinlogServer() {
+	if instanceMaster != nil && instanceMaster.PrimaryKey.Equals(&other.Key) && instanceMaster.IsBinlogServer() {
 		// Moving to grandparent via binlog server
-		return Repoint(&instance.Key, &instanceMaster.MasterKey, GTIDHintDeny)
+		return Repoint(&instance.Key, &instanceMaster.PrimaryKey, GTIDHintDeny)
 	}
 	if other.IsBinlogServer() {
 		if instanceMaster != nil && instanceMaster.IsBinlogServer() && InstancesAreSiblings(instanceMaster, other) {
@@ -1969,12 +1969,12 @@ func relocateBelowInternal(instance, other *Instance) (*Instance, error) {
 		}
 
 		// Relocate to its primary, then repoint to the binlog server
-		otherMaster, found, err := ReadInstance(&other.MasterKey)
+		otherMaster, found, err := ReadInstance(&other.PrimaryKey)
 		if err != nil {
 			return instance, err
 		}
 		if !found {
-			return instance, log.Errorf("Cannot find master %+v", other.MasterKey)
+			return instance, log.Errorf("Cannot find master %+v", other.PrimaryKey)
 		}
 		if !other.IsLastCheckValid {
 			return instance, log.Errorf("Binlog server %+v is not reachable. It would take two steps to relocate %+v below it, and I won't even do the first step.", other.Key, instance.Key)
@@ -2005,7 +2005,7 @@ func relocateBelowInternal(instance, other *Instance) (*Instance, error) {
 		}
 	}
 	// See if we need to MoveUp
-	if instanceMaster != nil && instanceMaster.MasterKey.Equals(&other.Key) {
+	if instanceMaster != nil && instanceMaster.PrimaryKey.Equals(&other.Key) {
 		// Moving to grandparent--handles co-primary writable case
 		return MoveUp(&instance.Key)
 	}
@@ -2077,7 +2077,7 @@ func relocateReplicasInternal(replicas [](*Instance), instance, other *Instance)
 	}
 	if other.IsBinlogServer() {
 		// Relocate to binlog server's parent (recursive call), then repoint down
-		otherMaster, found, err := ReadInstance(&other.MasterKey)
+		otherMaster, found, err := ReadInstance(&other.PrimaryKey)
 		if err != nil || !found {
 			return nil, err, errs
 		}

@@ -486,8 +486,8 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 		if resolveErr != nil {
 			logReadTopologyInstanceError(instanceKey, fmt.Sprintf("ResolveHostname(%q)", masterKey.Hostname), resolveErr)
 		}
-		instance.MasterKey = *masterKey
-		instance.IsDetachedMaster = instance.MasterKey.IsDetached()
+		instance.PrimaryKey = *masterKey
+		instance.IsDetachedMaster = instance.PrimaryKey.IsDetached()
 		instance.SecondsBehindMaster = m.GetNullInt64("Seconds_Behind_Master")
 		if instance.SecondsBehindMaster.Valid && instance.SecondsBehindMaster.Int64 < 0 {
 			log.Warningf("Host: %+v, instance.ReplicationLagSeconds < 0 [%+v], correcting to 0", instanceKey, instance.SecondsBehindMaster.Int64)
@@ -838,7 +838,7 @@ func ReadInstanceClusterAttributes(instance *Instance) (err error) {
 	if instance.IsReplicationGroupSecondary() {
 		masterOrGroupPrimaryInstanceKey = instance.ReplicationGroupPrimaryInstanceKey
 	} else {
-		masterOrGroupPrimaryInstanceKey = instance.MasterKey
+		masterOrGroupPrimaryInstanceKey = instance.PrimaryKey
 	}
 	args := sqlutils.Args(masterOrGroupPrimaryInstanceKey.Hostname, masterOrGroupPrimaryInstanceKey.Port)
 	err = db.QueryOrchestrator(query, args, func(m sqlutils.RowMap) error {
@@ -871,11 +871,11 @@ func ReadInstanceClusterAttributes(instance *Instance) (err error) {
 	if masterOrGroupPrimaryInstanceKey.Equals(&instance.Key) {
 		// co-primary calls for special case, in fear of the infinite loop
 		isCoMaster = true
-		clusterNameByCoMasterKey := instance.MasterKey.StringCode()
+		clusterNameByCoMasterKey := instance.PrimaryKey.StringCode()
 		if clusterName != clusterNameByInstanceKey && clusterName != clusterNameByCoMasterKey {
 			// Can be caused by a co-primary topology failover
 			log.Errorf("ReadInstanceClusterAttributes: in co-master topology %s is not in (%s, %s). Forcing it to become one of them", clusterName, clusterNameByInstanceKey, clusterNameByCoMasterKey)
-			clusterName = math.TernaryString(instance.Key.SmallerThan(&instance.MasterKey), clusterNameByInstanceKey, clusterNameByCoMasterKey)
+			clusterName = math.TernaryString(instance.Key.SmallerThan(&instance.PrimaryKey), clusterNameByInstanceKey, clusterNameByCoMasterKey)
 		}
 		if clusterName == clusterNameByInstanceKey {
 			// circular replication. Avoid infinite ++ on replicationDepth
@@ -965,9 +965,9 @@ func readInstanceRow(m sqlutils.RowMap) *Instance {
 	instance.BinlogRowImage = m.GetString("binlog_row_image")
 	instance.LogBinEnabled = m.GetBool("log_bin")
 	instance.LogReplicationUpdatesEnabled = m.GetBool("log_slave_updates")
-	instance.MasterKey.Hostname = m.GetString("master_host")
-	instance.MasterKey.Port = m.GetInt("master_port")
-	instance.IsDetachedMaster = instance.MasterKey.IsDetached()
+	instance.PrimaryKey.Hostname = m.GetString("master_host")
+	instance.PrimaryKey.Port = m.GetInt("master_port")
+	instance.IsDetachedMaster = instance.PrimaryKey.IsDetached()
 	instance.ReplicationSQLThreadRuning = m.GetBool("slave_sql_running")
 	instance.ReplicationIOThreadRuning = m.GetBool("slave_io_running")
 	instance.ReplicationSQLThreadState = ReplicationThreadState(m.GetInt("replication_sql_thread_state"))
@@ -1166,10 +1166,10 @@ func ReadClusterWriteableMaster(clusterName string) ([](*Instance), error) {
 	return readInstancesByCondition(condition, sqlutils.Args(clusterName), "replication_depth asc")
 }
 
-// ReadClusterMaster returns the primary of this cluster.
+// ReadClusterPrimary returns the primary of this cluster.
 // - if the cluster has co-primaries, the/a writable one is returned
 // - if the cluster has a single primary, that primary is returned whether it is read-only or writable.
-func ReadClusterMaster(clusterName string) ([](*Instance), error) {
+func ReadClusterPrimary(clusterName string) ([](*Instance), error) {
 	condition := `
 		cluster_name = ?
 		and (replication_depth = 0 or is_co_master)
@@ -1177,9 +1177,9 @@ func ReadClusterMaster(clusterName string) ([](*Instance), error) {
 	return readInstancesByCondition(condition, sqlutils.Args(clusterName), "read_only asc, replication_depth asc")
 }
 
-// ReadWriteableClustersMasters returns writeable primaries of all clusters, but only one
+// ReadWriteableClustersPrimaries returns writeable primaries of all clusters, but only one
 // per cluster, in similar logic to ReadClusterWriteableMaster
-func ReadWriteableClustersMasters() (instances [](*Instance), err error) {
+func ReadWriteableClustersPrimaries() (instances [](*Instance), err error) {
 	condition := `
 		read_only = 0
 		and (replication_depth = 0 or is_co_master)
@@ -1703,12 +1703,12 @@ func ReviewUnseenInstances() error {
 	for _, instance := range instances {
 		instance := instance
 
-		masterHostname, err := ResolveHostname(instance.MasterKey.Hostname)
+		masterHostname, err := ResolveHostname(instance.PrimaryKey.Hostname)
 		if err != nil {
 			log.Errore(err)
 			continue
 		}
-		instance.MasterKey.Hostname = masterHostname
+		instance.PrimaryKey.Hostname = masterHostname
 		savedClusterName := instance.ClusterName
 
 		if err := ReadInstanceClusterAttributes(instance); err != nil {
@@ -2057,7 +2057,7 @@ func GetMastersKVPairs(clusterName string) (kvPairs [](*kv.KVPair), err error) {
 		}
 	}
 
-	masters, err := ReadWriteableClustersMasters()
+	masters, err := ReadWriteableClustersPrimaries()
 	if err != nil {
 		return kvPairs, err
 	}
@@ -2370,8 +2370,8 @@ func mkInsertOdkuForInstances(instances []*Instance, instanceWasActuallyFound bo
 		args = append(args, instance.LogReplicationUpdatesEnabled)
 		args = append(args, instance.SelfBinlogCoordinates.LogFile)
 		args = append(args, instance.SelfBinlogCoordinates.LogPos)
-		args = append(args, instance.MasterKey.Hostname)
-		args = append(args, instance.MasterKey.Port)
+		args = append(args, instance.PrimaryKey.Hostname)
+		args = append(args, instance.PrimaryKey.Port)
 		args = append(args, instance.ReplicationSQLThreadRuning)
 		args = append(args, instance.ReplicationIOThreadRuning)
 		args = append(args, instance.ReplicationSQLThreadState)
@@ -2734,8 +2734,8 @@ func ReadHistoryClusterInstances(clusterName string, historyTimestampPattern str
 
 		instance.Key.Hostname = m.GetString("hostname")
 		instance.Key.Port = m.GetInt("port")
-		instance.MasterKey.Hostname = m.GetString("master_host")
-		instance.MasterKey.Port = m.GetInt("master_port")
+		instance.PrimaryKey.Hostname = m.GetString("master_host")
+		instance.PrimaryKey.Port = m.GetInt("master_port")
 		instance.ClusterName = m.GetString("cluster_name")
 
 		instances = append(instances, instance)
