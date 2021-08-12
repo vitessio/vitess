@@ -894,7 +894,7 @@ func TestGetHealthyTablets(t *testing.T) {
 	mustMatch(t, want, a, "unexpected result")
 }
 
-func TestMasterInOtherCell(t *testing.T) {
+func TestPrimaryInOtherCell(t *testing.T) {
 	ts := memorytopo.NewServer("cell1", "cell2")
 	hc := NewHealthCheck(context.Background(), 1*time.Millisecond, time.Hour, ts, "cell1", "cell1, cell2")
 	defer hc.Close()
@@ -948,7 +948,7 @@ func TestMasterInOtherCell(t *testing.T) {
 	// check that PRIMARY tablet from other cell IS in healthy tablet list
 	a := hc.GetHealthyTabletStats(&querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_PRIMARY})
 	require.Len(t, a, 1, "")
-	mustMatch(t, want, a[0], "Expecting healthy master")
+	mustMatch(t, want, a[0], "Expecting healthy primary")
 }
 
 func TestReplicaInOtherCell(t *testing.T) {

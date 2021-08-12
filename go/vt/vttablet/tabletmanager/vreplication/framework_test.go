@@ -151,7 +151,7 @@ func resetBinlogClient() {
 	globalFBC = &fakeBinlogClient{}
 }
 
-func masterPosition(t *testing.T) string {
+func primaryPosition(t *testing.T) string {
 	t.Helper()
 	pos, err := env.Mysqld.PrimaryPosition()
 	if err != nil {

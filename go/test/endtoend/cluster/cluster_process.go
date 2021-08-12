@@ -265,6 +265,9 @@ func (cluster *LocalProcessCluster) StartKeyspace(keyspace Keyspace, shardNames 
 				Alias:     fmt.Sprintf("%s-%010d", cluster.Cell, tabletUID),
 			}
 			if i == 0 { // Make the first one as primary
+				// version_upgrade test depends on using older binaries
+				// which means we cannot use the new PRIMARY tabletType here
+				// TODO(deepthi): fix after v12.0
 				tablet.Type = "master"
 			} else if i == totalTabletsRequired-1 && rdonly { // Make the last one as rdonly if rdonly flag is passed
 				tablet.Type = "rdonly"
@@ -450,6 +453,9 @@ func (cluster *LocalProcessCluster) NewVtgateInstance() *VtgateProcess {
 		cluster.Cell,
 		cluster.Cell,
 		cluster.Hostname,
+		// version_upgrade test depends on using older binaries
+		// which means we cannot use the new PRIMARY tablet_type here
+		// TODO(deepthi): fix after v12.0
 		"MASTER,REPLICA",
 		cluster.TopoProcess.Port,
 		cluster.TmpDirectory,

@@ -368,7 +368,7 @@ func TestExecutorSetOp(t *testing.T) {
 
 func TestExecutorSetMetadata(t *testing.T) {
 	executor, _, _, _ := createLegacyExecutorEnv()
-	session := NewSafeSession(&vtgatepb.Session{TargetString: "@master", Autocommit: true})
+	session := NewSafeSession(&vtgatepb.Session{TargetString: "@primary", Autocommit: true})
 
 	set := "set @@vitess_metadata.app_keyspace_v1= '1'"
 	_, err := executor.Execute(context.Background(), "TestExecute", session, set, nil)
@@ -380,7 +380,7 @@ func TestExecutorSetMetadata(t *testing.T) {
 	}()
 
 	executor, _, _, _ = createLegacyExecutorEnv()
-	session = NewSafeSession(&vtgatepb.Session{TargetString: "@master", Autocommit: true})
+	session = NewSafeSession(&vtgatepb.Session{TargetString: "@primary", Autocommit: true})
 
 	set = "set @@vitess_metadata.app_keyspace_v1= '1'"
 	_, err = executor.Execute(context.Background(), "TestExecute", session, set, nil)

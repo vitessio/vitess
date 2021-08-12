@@ -607,8 +607,8 @@ func (s *VtctldServer) EmergencyReparentShard(ctx context.Context, req *vtctldat
 		resp.Keyspace = ev.ShardInfo.Keyspace()
 		resp.Shard = ev.ShardInfo.ShardName()
 
-		if ev.NewMaster != nil && !topoproto.TabletAliasIsZero(ev.NewMaster.Alias) {
-			resp.PromotedPrimary = ev.NewMaster.Alias
+		if ev.NewPrimary != nil && !topoproto.TabletAliasIsZero(ev.NewPrimary.Alias) {
+			resp.PromotedPrimary = ev.NewPrimary.Alias
 		}
 	}
 
@@ -1076,19 +1076,19 @@ func (s *VtctldServer) GetTablets(ctx context.Context, req *vtctldatapb.GetTable
 	}
 
 	if tabletMap != nil {
-		var trueMasterTimestamp time.Time
+		var truePrimaryTimestamp time.Time
 		for _, ti := range tabletMap {
 			if ti.Type == topodatapb.TabletType_PRIMARY {
-				masterTimestamp := ti.GetPrimaryTermStartTime()
-				if masterTimestamp.After(trueMasterTimestamp) {
-					trueMasterTimestamp = masterTimestamp
+				primaryTimestamp := ti.GetPrimaryTermStartTime()
+				if primaryTimestamp.After(truePrimaryTimestamp) {
+					truePrimaryTimestamp = primaryTimestamp
 				}
 			}
 		}
 
 		tablets := make([]*topodatapb.Tablet, 0, len(tabletMap))
 		for _, ti := range tabletMap {
-			adjustTypeForStalePrimary(ti, trueMasterTimestamp)
+			adjustTypeForStalePrimary(ti, truePrimaryTimestamp)
 			tablets = append(tablets, ti.Tablet)
 		}
 
@@ -1304,39 +1304,39 @@ func (s *VtctldServer) InitShardPrimaryLocked(
 	}
 
 	// Check the primary elect is in tabletMap.
-	masterElectTabletAliasStr := topoproto.TabletAliasString(req.PrimaryElectTabletAlias)
-	masterElectTabletInfo, ok := tabletMap[masterElectTabletAliasStr]
+	primaryElectTabletAliasStr := topoproto.TabletAliasString(req.PrimaryElectTabletAlias)
+	primaryElectTabletInfo, ok := tabletMap[primaryElectTabletAliasStr]
 	if !ok {
-		return fmt.Errorf("master-elect tablet %v is not in the shard", topoproto.TabletAliasString(req.PrimaryElectTabletAlias))
+		return fmt.Errorf("primary-elect tablet %v is not in the shard", topoproto.TabletAliasString(req.PrimaryElectTabletAlias))
 	}
-	ev.NewMaster = proto.Clone(masterElectTabletInfo.Tablet).(*topodatapb.Tablet)
+	ev.NewPrimary = proto.Clone(primaryElectTabletInfo.Tablet).(*topodatapb.Tablet)
 
 	// Check the primary is the only primary is the shard, or -force was used.
-	_, masterTabletMap := topotools.SortedTabletMap(tabletMap)
+	_, primaryTabletMap := topotools.SortedTabletMap(tabletMap)
 	if !topoproto.TabletAliasEqual(shardInfo.PrimaryAlias, req.PrimaryElectTabletAlias) {
 		if !req.Force {
-			return fmt.Errorf("master-elect tablet %v is not the shard master, use -force to proceed anyway", topoproto.TabletAliasString(req.PrimaryElectTabletAlias))
+			return fmt.Errorf("primary-elect tablet %v is not the shard primary, use -force to proceed anyway", topoproto.TabletAliasString(req.PrimaryElectTabletAlias))
 		}
 
-		logger.Warningf("master-elect tablet %v is not the shard master, proceeding anyway as -force was used", topoproto.TabletAliasString(req.PrimaryElectTabletAlias))
+		logger.Warningf("primary-elect tablet %v is not the shard primary, proceeding anyway as -force was used", topoproto.TabletAliasString(req.PrimaryElectTabletAlias))
 	}
-	if _, ok := masterTabletMap[masterElectTabletAliasStr]; !ok {
+	if _, ok := primaryTabletMap[primaryElectTabletAliasStr]; !ok {
 		if !req.Force {
-			return fmt.Errorf("master-elect tablet %v is not a master in the shard, use -force to proceed anyway", topoproto.TabletAliasString(req.PrimaryElectTabletAlias))
+			return fmt.Errorf("primary-elect tablet %v is not a primary in the shard, use -force to proceed anyway", topoproto.TabletAliasString(req.PrimaryElectTabletAlias))
 		}
-		logger.Warningf("master-elect tablet %v is not a master in the shard, proceeding anyway as -force was used", topoproto.TabletAliasString(req.PrimaryElectTabletAlias))
+		logger.Warningf("primary-elect tablet %v is not a primary in the shard, proceeding anyway as -force was used", topoproto.TabletAliasString(req.PrimaryElectTabletAlias))
 	}
-	haveOtherMaster := false
-	for alias := range masterTabletMap {
-		if masterElectTabletAliasStr != alias {
-			haveOtherMaster = true
+	haveOtherPrimary := false
+	for alias := range primaryTabletMap {
+		if primaryElectTabletAliasStr != alias {
+			haveOtherPrimary = true
 		}
 	}
-	if haveOtherMaster {
+	if haveOtherPrimary {
 		if !req.Force {
-			return fmt.Errorf("master-elect tablet %v is not the only master in the shard, use -force to proceed anyway", topoproto.TabletAliasString(req.PrimaryElectTabletAlias))
+			return fmt.Errorf("primary-elect tablet %v is not the only primary in the shard, use -force to proceed anyway", topoproto.TabletAliasString(req.PrimaryElectTabletAlias))
 		}
-		logger.Warningf("master-elect tablet %v is not the only master in the shard, proceeding anyway as -force was used", topoproto.TabletAliasString(req.PrimaryElectTabletAlias))
+		logger.Warningf("primary-elect tablet %v is not the only primary in the shard, proceeding anyway as -force was used", topoproto.TabletAliasString(req.PrimaryElectTabletAlias))
 	}
 
 	// First phase: reset replication on all tablets. If anyone fails,
@@ -1374,9 +1374,9 @@ func (s *VtctldServer) InitShardPrimaryLocked(
 
 	// Tell the new primary to break its replicas, return its replication
 	// position
-	logger.Infof("initializing master on %v", topoproto.TabletAliasString(req.PrimaryElectTabletAlias))
-	event.DispatchUpdate(ev, "initializing master")
-	rp, err := tmc.InitMaster(ctx, masterElectTabletInfo.Tablet)
+	logger.Infof("initializing primary on %v", topoproto.TabletAliasString(req.PrimaryElectTabletAlias))
+	event.DispatchUpdate(ev, "initializing primary")
+	rp, err := tmc.InitPrimary(ctx, primaryElectTabletInfo.Tablet)
 	if err != nil {
 		return err
 	}
@@ -1399,16 +1399,16 @@ func (s *VtctldServer) InitShardPrimaryLocked(
 	// reparent_journal table, it needs connected replicas.
 	event.DispatchUpdate(ev, "reparenting all tablets")
 	now := time.Now().UnixNano()
-	wgMaster := sync.WaitGroup{}
+	wgPrimary := sync.WaitGroup{}
 	wgReplicas := sync.WaitGroup{}
-	var masterErr error
+	var primaryErr error
 	for alias, tabletInfo := range tabletMap {
-		if alias == masterElectTabletAliasStr {
-			wgMaster.Add(1)
+		if alias == primaryElectTabletAliasStr {
+			wgPrimary.Add(1)
 			go func(alias string, tabletInfo *topo.TabletInfo) {
-				defer wgMaster.Done()
-				logger.Infof("populating reparent journal on new master %v", alias)
-				masterErr = tmc.PopulateReparentJournal(replCtx, tabletInfo.Tablet, now,
+				defer wgPrimary.Done()
+				logger.Infof("populating reparent journal on new primary %v", alias)
+				primaryErr = tmc.PopulateReparentJournal(replCtx, tabletInfo.Tablet, now,
 					initShardPrimaryOperation,
 					req.PrimaryElectTabletAlias, rp)
 			}(alias, tabletInfo)
@@ -1426,14 +1426,14 @@ func (s *VtctldServer) InitShardPrimaryLocked(
 
 	// After the primary is done, we can update the shard record
 	// (note with semi-sync, it also means at least one replica is done).
-	wgMaster.Wait()
-	if masterErr != nil {
+	wgPrimary.Wait()
+	if primaryErr != nil {
 		// The primary failed, there is no way the
 		// replicas will work.  So we cancel them all.
-		logger.Warningf("master failed to PopulateReparentJournal, canceling replicas")
+		logger.Warningf("primary failed to PopulateReparentJournal, canceling replicas")
 		replCancel()
 		wgReplicas.Wait()
-		return fmt.Errorf("failed to PopulateReparentJournal on master: %v", masterErr)
+		return fmt.Errorf("failed to PopulateReparentJournal on primary: %v", primaryErr)
 	}
 	if !topoproto.TabletAliasEqual(shardInfo.PrimaryAlias, req.PrimaryElectTabletAlias) {
 		if _, err := s.ts.UpdateShardFields(ctx, req.Keyspace, req.Shard, func(si *topo.ShardInfo) error {
@@ -1441,7 +1441,7 @@ func (s *VtctldServer) InitShardPrimaryLocked(
 			return nil
 		}); err != nil {
 			wgReplicas.Wait()
-			return fmt.Errorf("failed to update shard master record: %v", err)
+			return fmt.Errorf("failed to update shard primary record: %v", err)
 		}
 	}
 
@@ -1459,12 +1459,12 @@ func (s *VtctldServer) InitShardPrimaryLocked(
 	// assume that whatever data is on all the replicas is what they intended.
 	// If the database doesn't exist, it means the user intends for these tablets
 	// to begin serving with no data (i.e. first time initialization).
-	createDB := fmt.Sprintf("CREATE DATABASE IF NOT EXISTS %s", sqlescape.EscapeID(topoproto.TabletDbName(masterElectTabletInfo.Tablet)))
-	if _, err := tmc.ExecuteFetchAsDba(ctx, masterElectTabletInfo.Tablet, false, []byte(createDB), 1, false, true); err != nil {
+	createDB := fmt.Sprintf("CREATE DATABASE IF NOT EXISTS %s", sqlescape.EscapeID(topoproto.TabletDbName(primaryElectTabletInfo.Tablet)))
+	if _, err := tmc.ExecuteFetchAsDba(ctx, primaryElectTabletInfo.Tablet, false, []byte(createDB), 1, false, true); err != nil {
 		return fmt.Errorf("failed to create database: %v", err)
 	}
 	// Refresh the state to force the tabletserver to reconnect after db has been created.
-	if err := tmc.RefreshState(ctx, masterElectTabletInfo.Tablet); err != nil {
+	if err := tmc.RefreshState(ctx, primaryElectTabletInfo.Tablet); err != nil {
 		log.Warningf("RefreshState failed: %v", err)
 	}
 
@@ -1523,8 +1523,8 @@ func (s *VtctldServer) PlannedReparentShard(ctx context.Context, req *vtctldatap
 		resp.Keyspace = ev.ShardInfo.Keyspace()
 		resp.Shard = ev.ShardInfo.ShardName()
 
-		if !topoproto.TabletAliasIsZero(ev.NewMaster.Alias) {
-			resp.PromotedPrimary = ev.NewMaster.Alias
+		if !topoproto.TabletAliasIsZero(ev.NewPrimary.Alias) {
+			resp.PromotedPrimary = ev.NewPrimary.Alias
 		}
 	}
 
@@ -1680,7 +1680,7 @@ func (s *VtctldServer) ReparentTablet(ctx context.Context, req *vtctldatapb.Repa
 		return nil, err
 	}
 
-	if !shard.HasMaster() {
+	if !shard.HasPrimary() {
 		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "no primary tablet for shard %v/%v", tablet.Keyspace, tablet.Shard)
 	}
 
@@ -1690,7 +1690,7 @@ func (s *VtctldServer) ReparentTablet(ctx context.Context, req *vtctldatapb.Repa
 	}
 
 	if shardPrimary.Type != topodatapb.TabletType_PRIMARY {
-		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "TopologyServer has incosistent state for shard master %v", topoproto.TabletAliasString(shard.PrimaryAlias))
+		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "TopologyServer has incosistent state for shard primary %v", topoproto.TabletAliasString(shard.PrimaryAlias))
 	}
 
 	if shardPrimary.Keyspace != tablet.Keyspace || shardPrimary.Shard != tablet.Shard {
@@ -1765,9 +1765,9 @@ func (s *VtctldServer) ShardReplicationPositions(ctx context.Context, req *vtctl
 				if err != nil {
 					switch ctx.Err() {
 					case context.Canceled:
-						log.Warningf("context canceled before obtaining master position from %s: %s", alias, err)
+						log.Warningf("context canceled before obtaining primary position from %s: %s", alias, err)
 					case context.DeadlineExceeded:
-						log.Warningf("context deadline exceeded before obtaining master position from %s: %s", alias, err)
+						log.Warningf("context deadline exceeded before obtaining primary position from %s: %s", alias, err)
 					default:
 						// The RPC was not timed out or canceled. We treat this
 						// as a fatal error for the overall request.
@@ -1875,11 +1875,11 @@ func (s *VtctldServer) TabletExternallyReparented(ctx context.Context, req *vtct
 		return resp, nil
 	}
 
-	log.Infof("TabletExternallyReparented: executing tablet type change %v -> MASTER on %v", tablet.Type, topoproto.TabletAliasString(req.Tablet))
+	log.Infof("TabletExternallyReparented: executing tablet type change %v -> PRIMARY on %v", tablet.Type, topoproto.TabletAliasString(req.Tablet))
 	ev := &events.Reparent{
-		ShardInfo: *shard,
-		NewMaster: proto.Clone(tablet.Tablet).(*topodatapb.Tablet),
-		OldMaster: &topodatapb.Tablet{
+		ShardInfo:  *shard,
+		NewPrimary: proto.Clone(tablet.Tablet).(*topodatapb.Tablet),
+		OldPrimary: &topodatapb.Tablet{
 			Alias: shard.PrimaryAlias,
 			Type:  topodatapb.TabletType_PRIMARY,
 		},
@@ -1895,7 +1895,7 @@ func (s *VtctldServer) TabletExternallyReparented(ctx context.Context, req *vtct
 	event.DispatchUpdate(ev, "starting external reparent")
 
 	if err := s.tmc.ChangeType(ctx, tablet.Tablet, topodatapb.TabletType_PRIMARY); err != nil {
-		log.Warningf("ChangeType(%v, MASTER): %v", topoproto.TabletAliasString(req.Tablet), err)
+		log.Warningf("ChangeType(%v, PRIMARY): %v", topoproto.TabletAliasString(req.Tablet), err)
 		return nil, err
 	}
 

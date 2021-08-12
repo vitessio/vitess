@@ -38,7 +38,7 @@ import (
 )
 
 var (
-	enableSemiSync   = flag.Bool("enable_semi_sync", false, "Enable semi-sync when configuring replication, on master and replica tablets only (rdonly tablets will not ack).")
+	enableSemiSync   = flag.Bool("enable_semi_sync", false, "Enable semi-sync when configuring replication, on primary and replica tablets only (rdonly tablets will not ack).")
 	setSuperReadOnly = flag.Bool("use_super_read_only", false, "Set super_read_only flag when performing planned failover.")
 )
 
@@ -51,7 +51,7 @@ func (tm *TabletManager) ReplicationStatus(ctx context.Context) (*replicationdat
 	return mysql.ReplicationStatusToProto(status), nil
 }
 
-// MasterStatus returns the replication status fopr a primary tablet.
+// MasterStatus is the old version of PrimaryStatus. Deprecated.
 func (tm *TabletManager) MasterStatus(ctx context.Context) (*replicationdatapb.PrimaryStatus, error) {
 	return tm.PrimaryStatus(ctx)
 }
@@ -65,7 +65,7 @@ func (tm *TabletManager) PrimaryStatus(ctx context.Context) (*replicationdatapb.
 	return mysql.PrimaryStatusToProto(status), nil
 }
 
-// MasterPosition returns the primary position
+// MasterPosition is the old version of PrimaryPosition. Deprecated.
 func (tm *TabletManager) MasterPosition(ctx context.Context) (string, error) {
 	return tm.PrimaryPosition(ctx)
 }
@@ -230,7 +230,7 @@ func (tm *TabletManager) ResetReplication(ctx context.Context) error {
 	return tm.MysqlDaemon.ResetReplication(ctx)
 }
 
-// InitMaster enables writes and returns the replication position.
+// InitMaster is the old version of InitPrimary. Deprecated.
 func (tm *TabletManager) InitMaster(ctx context.Context) (string, error) {
 	return tm.InitPrimary(ctx)
 }
@@ -275,13 +275,13 @@ func (tm *TabletManager) InitPrimary(ctx context.Context) (string, error) {
 }
 
 // PopulateReparentJournal adds an entry into the reparent_journal table.
-func (tm *TabletManager) PopulateReparentJournal(ctx context.Context, timeCreatedNS int64, actionName string, masterAlias *topodatapb.TabletAlias, position string) error {
+func (tm *TabletManager) PopulateReparentJournal(ctx context.Context, timeCreatedNS int64, actionName string, primaryAlias *topodatapb.TabletAlias, position string) error {
 	pos, err := mysql.DecodePosition(position)
 	if err != nil {
 		return err
 	}
 	cmds := mysqlctl.CreateReparentJournal()
-	cmds = append(cmds, mysqlctl.PopulateReparentJournal(timeCreatedNS, actionName, topoproto.TabletAliasString(masterAlias), pos))
+	cmds = append(cmds, mysqlctl.PopulateReparentJournal(timeCreatedNS, actionName, topoproto.TabletAliasString(primaryAlias), pos))
 
 	return tm.MysqlDaemon.ExecuteSuperQueryList(ctx, cmds)
 }
@@ -356,7 +356,7 @@ func (tm *TabletManager) DemotePrimary(ctx context.Context) (*replicationdatapb.
 	return tm.demotePrimary(ctx, true /* revertPartialFailure */)
 }
 
-// DemoteMaster is the old version of DemotePrimary
+// DemoteMaster is the old version of DemotePrimary. Deprecated.
 func (tm *TabletManager) DemoteMaster(ctx context.Context) (*replicationdatapb.PrimaryStatus, error) {
 	return tm.DemotePrimary(ctx)
 }
@@ -365,14 +365,14 @@ func (tm *TabletManager) DemoteMaster(ctx context.Context) (*replicationdatapb.P
 //
 // If revertPartialFailure is true, and a step fails in the middle, it will try
 // to undo any changes it made.
-func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure bool) (masterStatus *replicationdatapb.PrimaryStatus, finalErr error) {
+func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure bool) (primaryStatus *replicationdatapb.PrimaryStatus, finalErr error) {
 	if err := tm.lock(ctx); err != nil {
 		return nil, err
 	}
 	defer tm.unlock()
 
 	tablet := tm.Tablet()
-	wasMaster := tablet.Type == topodatapb.TabletType_PRIMARY
+	wasPrimary := tablet.Type == topodatapb.TabletType_PRIMARY
 	wasServing := tm.QueryServiceControl.IsServing()
 	wasReadOnly, err := tm.MysqlDaemon.IsReadOnly()
 	if err != nil {
@@ -384,7 +384,7 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 	// or if we are already read-only, there's no need to stop the queryservice
 	// in order to ensure the guarantee we are being asked to provide, which is
 	// that no writes are occurring.
-	if wasMaster && !wasReadOnly {
+	if wasPrimary && !wasReadOnly {
 		// Tell Orchestrator we're stopped on purpose for demotion.
 		// This is a best effort task, so run it in a goroutine.
 		go func() {
@@ -442,10 +442,10 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 		return nil, err
 	}
 	defer func() {
-		if finalErr != nil && revertPartialFailure && wasMaster {
+		if finalErr != nil && revertPartialFailure && wasPrimary {
 			// enable primary-side semi-sync again
 			if err := tm.fixSemiSync(topodatapb.TabletType_PRIMARY); err != nil {
-				log.Warningf("fixSemiSync(MASTER) failed during revert: %v", err)
+				log.Warningf("fixSemiSync(PRIMARY) failed during revert: %v", err)
 			}
 		}
 	}()
@@ -458,7 +458,7 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 	return mysql.PrimaryStatusToProto(status), nil
 }
 
-// UndoDemoteMaster is the old version of UndoDemotePrimary
+// UndoDemoteMaster is the old version of UndoDemotePrimary. Deprecated.
 func (tm *TabletManager) UndoDemoteMaster(ctx context.Context) error {
 	return tm.UndoDemotePrimary(ctx)
 }
@@ -517,7 +517,7 @@ func (tm *TabletManager) SetReplicationSource(ctx context.Context, parentAlias *
 	return tm.setReplicationSourceLocked(ctx, parentAlias, timeCreatedNS, waitPosition, forceStartReplication)
 }
 
-// SetMaster is the old version of SetReplicationSource
+// SetMaster is the old version of SetReplicationSource. Deprecated.
 func (tm *TabletManager) SetMaster(ctx context.Context, parentAlias *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool) error {
 	return tm.SetReplicationSource(ctx, parentAlias, timeCreatedNS, waitPosition, forceStartReplication)
 }
@@ -603,17 +603,17 @@ func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentA
 	// We don't want to interrupt replication for no reason.
 	if parentAlias == nil {
 		// if there is no primary in the shard, return an error so that we can retry
-		return vterrors.New(vtrpc.Code_FAILED_PRECONDITION, "Shard masterAlias is nil")
+		return vterrors.New(vtrpc.Code_FAILED_PRECONDITION, "Shard primaryAlias is nil")
 	}
 	parent, err := tm.TopoServer.GetTablet(ctx, parentAlias)
 	if err != nil {
 		return err
 	}
-	masterHost := parent.Tablet.MysqlHostname
-	masterPort := int(parent.Tablet.MysqlPort)
-	if status.SourceHost != masterHost || status.SourcePort != masterPort {
+	host := parent.Tablet.MysqlHostname
+	port := int(parent.Tablet.MysqlPort)
+	if status.SourceHost != host || status.SourcePort != port {
 		// This handles both changing the address and starting replication.
-		if err := tm.MysqlDaemon.SetReplicationSource(ctx, masterHost, masterPort, wasReplicating, shouldbeReplicating); err != nil {
+		if err := tm.MysqlDaemon.SetReplicationSource(ctx, host, port, wasReplicating, shouldbeReplicating); err != nil {
 			if err := tm.handleRelayLogError(err); err != nil {
 				return err
 			}
@@ -784,7 +784,7 @@ func (tm *TabletManager) PromoteReplica(ctx context.Context) (string, error) {
 	return mysql.EncodePosition(pos), nil
 }
 
-func isMasterEligible(tabletType topodatapb.TabletType) bool {
+func isPrimaryEligible(tabletType topodatapb.TabletType) bool {
 	switch tabletType {
 	case topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA:
 		return true
@@ -801,7 +801,7 @@ func (tm *TabletManager) fixSemiSync(tabletType topodatapb.TabletType) error {
 
 	// Only enable if we're eligible for becoming primary (REPLICA type).
 	// Ineligible tablets (RDONLY) shouldn't ACK because we'll never promote them.
-	if !isMasterEligible(tabletType) {
+	if !isPrimaryEligible(tabletType) {
 		return tm.MysqlDaemon.SetSemiSyncEnabled(false, false)
 	}
 
@@ -840,7 +840,7 @@ func (tm *TabletManager) fixSemiSyncAndReplication(tabletType topodatapb.TabletT
 		return nil
 	}
 
-	shouldAck := isMasterEligible(tabletType)
+	shouldAck := isPrimaryEligible(tabletType)
 	acking, err := tm.MysqlDaemon.SemiSyncReplicationStatus()
 	if err != nil {
 		return vterrors.Wrap(err, "failed to get SemiSyncReplicationStatus")
@@ -883,8 +883,8 @@ func (tm *TabletManager) repairReplication(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	if !si.HasMaster() {
-		return fmt.Errorf("no master tablet for shard %v/%v", tablet.Keyspace, tablet.Shard)
+	if !si.HasPrimary() {
+		return fmt.Errorf("no primary tablet for shard %v/%v", tablet.Keyspace, tablet.Shard)
 	}
 
 	if topoproto.TabletAliasEqual(si.PrimaryAlias, tablet.Alias) {
@@ -892,7 +892,7 @@ func (tm *TabletManager) repairReplication(ctx context.Context) error {
 		// reach this point unless we were told to check replication.
 		// Hopefully someone is working on fixing that, but in any case,
 		// we should not try to reparent to ourselves.
-		return fmt.Errorf("shard %v/%v record claims tablet %v is master, but its type is %v", tablet.Keyspace, tablet.Shard, topoproto.TabletAliasString(tablet.Alias), tablet.Type)
+		return fmt.Errorf("shard %v/%v record claims tablet %v is primary, but its type is %v", tablet.Keyspace, tablet.Shard, topoproto.TabletAliasString(tablet.Alias), tablet.Type)
 	}
 
 	// If Orchestrator is configured and if Orchestrator is actively reparenting, we should not repairReplication

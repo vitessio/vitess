@@ -105,7 +105,7 @@ func (tm *TabletManager) shardSyncLoop(ctx context.Context, notifyChan <-chan st
 			}
 			// If we think we're primary, check if we need to update the shard record.
 			// Fetch the start time from the record we just got, because the tm's tablet can change.
-			masterAlias, shouldDemote, err := syncShardMaster(ctx, tm.TopoServer, tablet, logutil.ProtoToTime(tablet.PrimaryTermStartTime))
+			primaryAlias, shouldDemote, err := syncShardPrimary(ctx, tm.TopoServer, tablet, logutil.ProtoToTime(tablet.PrimaryTermStartTime))
 			if err != nil {
 				log.Errorf("Failed to sync shard record: %v", err)
 				// Start retry timer and go back to sleep.
@@ -116,8 +116,8 @@ func (tm *TabletManager) shardSyncLoop(ctx context.Context, notifyChan <-chan st
 				// Someone updated the PrimaryTermStartTime while we still think we're primary.
 				// This means that we should abort our term, since someone else must have claimed primaryship
 				// and wrote to the shard record
-				if err := tm.abortMasterTerm(ctx, masterAlias); err != nil {
-					log.Errorf("Failed to abort master term: %v", err)
+				if err := tm.endPrimaryTerm(ctx, primaryAlias); err != nil {
+					log.Errorf("Failed to abort primary term: %v", err)
 					// Start retry timer and go back to sleep.
 					retryChan = time.After(*shardSyncRetryDelay)
 					continue
@@ -147,16 +147,16 @@ func (tm *TabletManager) shardSyncLoop(ctx context.Context, notifyChan <-chan st
 	}
 }
 
-// syncShardMaster is called when we think we're primary.
+// syncShardPrimary is called when we think we're primary.
 // It checks that the shard record agrees, and updates it if possible.
 //
-// If the returned error is nil, the returned masterAlias indicates the current
+// If the returned error is nil, the returned primaryAlias indicates the current
 // primary tablet according to the shard record.
 //
 // If the shard record indicates a new primary has taken over, this returns
-// success (we successfully synchronized), but the returned masterAlias will be
+// success (we successfully synchronized), but the returned primaryAlias will be
 // different from the input tablet.Alias.
-func syncShardMaster(ctx context.Context, ts *topo.Server, tablet *topodatapb.Tablet, PrimaryTermStartTime time.Time) (masterAlias *topodatapb.TabletAlias, shouldDemote bool, err error) {
+func syncShardPrimary(ctx context.Context, ts *topo.Server, tablet *topodatapb.Tablet, PrimaryTermStartTime time.Time) (primaryAlias *topodatapb.TabletAlias, shouldDemote bool, err error) {
 	ctx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
 	defer cancel()
 
@@ -180,7 +180,7 @@ func syncShardMaster(ctx context.Context, ts *topo.Server, tablet *topodatapb.Ta
 		}
 
 		aliasStr := topoproto.TabletAliasString(tablet.Alias)
-		log.Infof("Updating shard record: master_alias=%v, primary_term_start_time=%v", aliasStr, PrimaryTermStartTime)
+		log.Infof("Updating shard record: primary_alias=%v, primary_term_start_time=%v", aliasStr, PrimaryTermStartTime)
 		si.PrimaryAlias = tablet.Alias
 		si.PrimaryTermStartTime = logutil.TimeToProto(PrimaryTermStartTime)
 		return nil
@@ -192,7 +192,7 @@ func syncShardMaster(ctx context.Context, ts *topo.Server, tablet *topodatapb.Ta
 	return shardInfo.PrimaryAlias, shouldDemote, nil
 }
 
-// abortMasterTerm is called when we unexpectedly lost primaryship.
+// endPrimaryTerm is called when we unexpectedly lost primaryship.
 //
 // Under normal circumstances, we should be gracefully demoted before a new
 // primary appears. This function is only reached when that graceful demotion
@@ -204,9 +204,9 @@ func syncShardMaster(ctx context.Context, ts *topo.Server, tablet *topodatapb.Ta
 //
 // If active reparents are disabled, we don't touch our MySQL.
 // We just directly update our tablet type to REPLICA.
-func (tm *TabletManager) abortMasterTerm(ctx context.Context, masterAlias *topodatapb.TabletAlias) error {
-	masterAliasStr := topoproto.TabletAliasString(masterAlias)
-	log.Warningf("Another tablet (%v) has won master election. Stepping down to %v.", masterAliasStr, tm.baseTabletType)
+func (tm *TabletManager) endPrimaryTerm(ctx context.Context, primaryAlias *topodatapb.TabletAlias) error {
+	primaryAliasStr := topoproto.TabletAliasString(primaryAlias)
+	log.Warningf("Another tablet (%v) has won primary election. Stepping down to %v.", primaryAliasStr, tm.baseTabletType)
 
 	if *mysqlctl.DisableActiveReparents {
 		// Don't touch anything at the MySQL level. Just update tablet state.
@@ -225,21 +225,21 @@ func (tm *TabletManager) abortMasterTerm(ctx context.Context, masterAlias *topod
 	// no return. Instead, we should leave partial results and retry the rest
 	// later.
 	log.Infof("Active reparents are enabled; converting MySQL to replica.")
-	demoteMasterCtx, cancelDemoteMaster := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
-	defer cancelDemoteMaster()
-	if _, err := tm.demotePrimary(demoteMasterCtx, false /* revertPartialFailure */); err != nil {
-		return vterrors.Wrap(err, "failed to demote master")
+	demotePrimaryCtx, cancelDemotePrimary := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+	defer cancelDemotePrimary()
+	if _, err := tm.demotePrimary(demotePrimaryCtx, false /* revertPartialFailure */); err != nil {
+		return vterrors.Wrap(err, "failed to demote primary")
 	}
-	setMasterCtx, cancelSetMaster := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
-	defer cancelSetMaster()
-	log.Infof("Attempting to reparent self to new master %v.", masterAliasStr)
-	if masterAlias == nil {
+	setPrimaryCtx, cancelSetPrimary := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+	defer cancelSetPrimary()
+	log.Infof("Attempting to reparent self to new primary %v.", primaryAliasStr)
+	if primaryAlias == nil {
 		if err := tm.tmState.ChangeTabletType(ctx, topodatapb.TabletType_REPLICA, DBActionNone); err != nil {
 			return err
 		}
 	} else {
-		if err := tm.SetMaster(setMasterCtx, masterAlias, 0, "", true); err != nil {
-			return vterrors.Wrap(err, "failed to reparent self to new master")
+		if err := tm.SetReplicationSource(setPrimaryCtx, primaryAlias, 0, "", true); err != nil {
+			return vterrors.Wrap(err, "failed to reparent self to new primary")
 		}
 	}
 	return nil

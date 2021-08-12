@@ -95,7 +95,7 @@ func initCluster(shardNames []string, totalTabletsRequired int) error {
 				Alias:     fmt.Sprintf("%s-%010d", clusterInstance.Cell, tabletUID),
 			}
 			if i == 0 { // Make the first one as primary
-				tablet.Type = "master"
+				tablet.Type = "primary"
 			}
 			// Start Mysqlctld process
 			tablet.MysqlctldProcess = *cluster.MysqlCtldProcessInstance(tablet.TabletUID, tablet.MySQLPort, clusterInstance.TmpDirectory)

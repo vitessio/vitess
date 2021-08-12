@@ -318,7 +318,7 @@ func (ts *tmState) canServe(tabletType topodatapb.TabletType) string {
 		return "TabletControl.DisableQueryService set"
 	}
 	if tabletType == topodatapb.TabletType_PRIMARY && ts.isResharding {
-		return "master tablet with filtered replication on"
+		return "primary tablet with filtered replication on"
 	}
 	return ""
 }

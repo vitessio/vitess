@@ -47,7 +47,7 @@ import (
 const (
 	blTablesAlreadyPresent = "one or more tables are already present in the blacklist"
 	blTablesNotPresent     = "cannot remove tables since one or more do not exist in the blacklist"
-	blNoCellsForMaster     = "you cannot specify cells for a primary's tablet control"
+	blNoCellsForPrimary    = "you cannot specify cells for a primary's tablet control"
 )
 
 // Functions for dealing with shard representations in topology.
@@ -177,8 +177,8 @@ func (si *ShardInfo) Version() Version {
 	return si.version
 }
 
-// HasMaster returns true if the Shard has an assigned primary.
-func (si *ShardInfo) HasMaster() bool {
+// HasPrimary returns true if the Shard has an assigned primary.
+func (si *ShardInfo) HasPrimary() bool {
 	return !topoproto.TabletAliasIsZero(si.Shard.PrimaryAlias)
 }
 
@@ -400,7 +400,7 @@ func (si *ShardInfo) UpdateSourceBlacklistedTables(ctx context.Context, tabletTy
 		return err
 	}
 	if tabletType == topodatapb.TabletType_PRIMARY && len(cells) > 0 {
-		return fmt.Errorf(blNoCellsForMaster)
+		return fmt.Errorf(blNoCellsForPrimary)
 	}
 	tc := si.GetTabletControl(tabletType)
 	if tc == nil {
@@ -568,7 +568,7 @@ func (ts *Server) FindAllTabletAliasesInShardByCell(ctx context.Context, keyspac
 	}
 
 	resultAsMap := make(map[string]*topodatapb.TabletAlias)
-	if si.HasMaster() {
+	if si.HasPrimary() {
 		if InCellList(si.PrimaryAlias.Cell, cells) {
 			resultAsMap[topoproto.TabletAliasString(si.PrimaryAlias)] = si.PrimaryAlias
 		}

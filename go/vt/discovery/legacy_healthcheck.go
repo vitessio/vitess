@@ -878,7 +878,7 @@ func (tcs *LegacyTabletsCacheStatus) StatusAsHTML() template.HTML {
 			color = "red"
 			extra = " (Down)"
 		} else if ts.Target.TabletType == topodatapb.TabletType_PRIMARY {
-			extra = fmt.Sprintf(" (MasterTS: %v)", ts.TabletExternallyReparentedTimestamp)
+			extra = fmt.Sprintf(" (PrimaryTermStartTime: %v)", ts.TabletExternallyReparentedTimestamp)
 		} else {
 			extra = fmt.Sprintf(" (RepLag: %v)", ts.Stats.ReplicationLagSeconds)
 		}

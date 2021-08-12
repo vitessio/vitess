@@ -114,7 +114,7 @@ func NewDiscoveryGateway(ctx context.Context, hc discovery.LegacyHealthCheck, se
 		buffer:            buffer.New(),
 	}
 
-	// Set listener which will update LegacyTabletStatsCache and MasterBuffer.
+	// Set listener which will update LegacyTabletStatsCache and PrimaryBuffer.
 	// We set sendDownEvents=true because it's required by LegacyTabletStatsCache.
 	hc.SetListener(dg, true /* sendDownEvents */)
 
@@ -184,7 +184,7 @@ func (dg *DiscoveryGateway) topologyWatcherChecksum() int64 {
 	return checksum
 }
 
-// StatsUpdate forwards LegacyHealthCheck updates to LegacyTabletStatsCache and MasterBuffer.
+// StatsUpdate forwards LegacyHealthCheck updates to LegacyTabletStatsCache and PrimaryBuffer.
 // It is part of the discovery.LegacyHealthCheckStatsListener interface.
 func (dg *DiscoveryGateway) StatsUpdate(ts *discovery.LegacyTabletStats) {
 	dg.tsc.StatsUpdate(ts)

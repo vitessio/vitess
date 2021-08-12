@@ -157,7 +157,7 @@ func (tc *splitCloneTestCase) setUpWithConcurrency(v3 bool, concurrency, writeQu
 	tc.leftReplicaFakeDb = fakesqldb.New(tc.t).SetName("leftReplica").OrderMatters()
 	tc.rightPrimaryFakeDb = fakesqldb.New(tc.t).SetName("rightPrimary").OrderMatters()
 
-	sourceMaster := testlib.NewFakeTablet(tc.t, tc.wi.wr, "cell1", 0,
+	sourcePrimary := testlib.NewFakeTablet(tc.t, tc.wi.wr, "cell1", 0,
 		topodatapb.TabletType_PRIMARY, nil, testlib.TabletKeyspaceShard(tc.t, "ks", "-80"))
 	sourceRdonly1 := testlib.NewFakeTablet(tc.t, tc.wi.wr, "cell1", 1,
 		topodatapb.TabletType_RDONLY, sourceRdonlyFakeDB, testlib.TabletKeyspaceShard(tc.t, "ks", "-80"))
@@ -182,7 +182,7 @@ func (tc *splitCloneTestCase) setUpWithConcurrency(v3 bool, concurrency, writeQu
 	rightRdonly2 := testlib.NewFakeTablet(tc.t, tc.wi.wr, "cell1", 23,
 		topodatapb.TabletType_RDONLY, nil, testlib.TabletKeyspaceShard(tc.t, "ks", "40-80"))
 
-	tc.tablets = []*testlib.FakeTablet{sourceMaster, sourceRdonly1, sourceRdonly2,
+	tc.tablets = []*testlib.FakeTablet{sourcePrimary, sourceRdonly1, sourceRdonly2,
 		leftPrimary, tc.leftReplica, leftRdonly1, leftRdonly2, rightPrimary, rightRdonly1, rightRdonly2}
 
 	// add the topo and schema data we'll need
@@ -996,10 +996,10 @@ func TestSplitCloneV2_RetryDueToReadonly(t *testing.T) {
 	}
 }
 
-// TestSplitCloneV2_NoMasterAvailable tests that vtworker correctly retries
+// TestSplitCloneV2_NoPrimaryAvailable tests that vtworker correctly retries
 // even in a period where no PRIMARY tablet is available according to the
 // HealthCheck instance.
-func TestSplitCloneV2_NoMasterAvailable(t *testing.T) {
+func TestSplitCloneV2_NoPrimaryAvailable(t *testing.T) {
 	delay := discovery.GetTabletPickerRetryDelay()
 	defer func() {
 		discovery.SetTabletPickerRetryDelay(delay)
@@ -1018,7 +1018,7 @@ func TestSplitCloneV2_NoMasterAvailable(t *testing.T) {
 
 	// During the 29th write, let the PRIMARY disappear.
 	tc.leftPrimaryFakeDb.GetEntry(28).AfterFunc = func() {
-		t.Logf("setting MASTER tablet to REPLICA")
+		t.Logf("setting PRIMARY tablet to REPLICA")
 		tc.leftPrimaryQs.UpdateType(topodatapb.TabletType_REPLICA)
 		tc.leftPrimaryQs.AddDefaultHealthResponse()
 	}
@@ -1034,7 +1034,7 @@ func TestSplitCloneV2_NoMasterAvailable(t *testing.T) {
 	// processed.
 	defer tc.leftPrimaryFakeDb.DeleteAllEntriesAfterIndex(28)
 
-	// Wait for a retry due to NoMasterAvailable to happen, expect the 30th write
+	// Wait for a retry due to NoPrimaryAvailable to happen, expect the 30th write
 	// on leftReplica and change leftReplica from REPLICA to PRIMARY.
 	//
 	// Reset the stats now. It also happens when the worker starts but that's too
@@ -1045,15 +1045,15 @@ func TestSplitCloneV2_NoMasterAvailable(t *testing.T) {
 		defer cancel()
 
 		for {
-			retries := statsRetryCounters.Counts()[retryCategoryNoMasterAvailable]
+			retries := statsRetryCounters.Counts()[retryCategoryNoPrimaryAvailable]
 			if retries >= 1 {
-				t.Logf("retried on no MASTER %v times", retries)
+				t.Logf("retried on no PRIMARY %v times", retries)
 				break
 			}
 
 			select {
 			case <-ctx.Done():
-				panic(fmt.Errorf("timed out waiting for vtworker to retry due to NoMasterAvailable: %v", ctx.Err()))
+				panic(fmt.Errorf("timed out waiting for vtworker to retry due to NoPrimaryAvailable: %v", ctx.Err()))
 			case <-time.After(10 * time.Millisecond):
 				// Poll constantly.
 			}
@@ -1061,7 +1061,7 @@ func TestSplitCloneV2_NoMasterAvailable(t *testing.T) {
 
 		// Make leftReplica the new PRIMARY.
 		tc.leftReplica.TM.ChangeType(ctx, topodatapb.TabletType_PRIMARY)
-		t.Logf("resetting tablet back to MASTER")
+		t.Logf("resetting tablet back to PRIMARY")
 		tc.leftReplicaQs.UpdateType(topodatapb.TabletType_PRIMARY)
 		tc.leftReplicaQs.AddDefaultHealthResponse()
 	}()

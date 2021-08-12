@@ -240,9 +240,9 @@ func (se *Engine) Close() {
 	log.Info("Schema Engine: closed")
 }
 
-// MakeNonMaster clears the sequence caches to make sure that
+// MakeNonPrimary clears the sequence caches to make sure that
 // they don't get accidentally reused after losing primaryship.
-func (se *Engine) MakeNonMaster() {
+func (se *Engine) MakeNonPrimary() {
 	// This function is tested through endtoend test.
 	se.mu.Lock()
 	defer se.mu.Unlock()

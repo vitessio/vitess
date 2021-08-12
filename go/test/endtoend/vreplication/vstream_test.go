@@ -54,7 +54,7 @@ func TestVStreamFailover(t *testing.T) {
 	vc.AddKeyspace(t, []*Cell{defaultCell}, "product", "0", initialProductVSchema, initialProductSchema, defaultReplicas, defaultRdonly, 100)
 	vtgate = defaultCell.Vtgates[0]
 	require.NotNil(t, vtgate)
-	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.master", "product", "0"), 3)
+	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", "product", "0"), 3)
 	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 	defer vtgateConn.Close()
 
@@ -101,7 +101,7 @@ func TestVStreamFailover(t *testing.T) {
 	}()
 
 	// stream events from the VStream API
-	reader, err := vstreamConn.VStream(ctx, topodatapb.TabletType_MASTER, vgtid, filter, flags)
+	reader, err := vstreamConn.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, filter, flags)
 	require.NoError(t, err)
 	var numRowEvents int64
 	// second goroutine that continuously receives events via VStream API and should be resilient to the two PRS events
@@ -139,13 +139,13 @@ func TestVStreamFailover(t *testing.T) {
 		switch tickCount {
 		case 1:
 			insertMu.Lock()
-			output, err := vc.VtctlClient.ExecuteCommandWithOutput("PlannedReparentShard", "-keyspace_shard=product/0", "-new_master=zone1-101")
+			output, err := vc.VtctlClient.ExecuteCommandWithOutput("PlannedReparentShard", "-keyspace_shard=product/0", "-new_primary=zone1-101")
 			insertMu.Unlock()
 			log.Infof("output of first PRS is %s", output)
 			require.NoError(t, err)
 		case 2:
 			insertMu.Lock()
-			output, err := vc.VtctlClient.ExecuteCommandWithOutput("PlannedReparentShard", "-keyspace_shard=product/0", "-new_master=zone1-100")
+			output, err := vc.VtctlClient.ExecuteCommandWithOutput("PlannedReparentShard", "-keyspace_shard=product/0", "-new_primary=zone1-100")
 			insertMu.Unlock()
 			log.Infof("output of second PRS is %s", output)
 			require.NoError(t, err)

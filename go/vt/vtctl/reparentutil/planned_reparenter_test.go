@@ -149,7 +149,7 @@ func TestPlannedReparenter_ReparentShard(t *testing.T) {
 					KeyRange:         &topodatapb.KeyRange{},
 					IsPrimaryServing: true,
 				}, nil),
-				NewMaster: &topodatapb.Tablet{
+				NewPrimary: &topodatapb.Tablet{
 					Alias: &topodatapb.TabletAlias{
 						Cell: "zone1",
 						Uid:  100,
@@ -242,8 +242,8 @@ func TestPlannedReparenter_ReparentShard(t *testing.T) {
 			ctx := ctx
 
 			testutil.AddTablets(ctx, t, tt.ts, &testutil.AddTabletOptions{
-				AlsoSetShardMaster: true,
-				SkipShardCreation:  false,
+				AlsoSetShardPrimary: true,
+				SkipShardCreation:   false,
 			}, tt.tablets...)
 
 			if tt.lockShardBeforeTest {
@@ -395,7 +395,7 @@ func TestPlannedReparenter_preflightChecks(t *testing.T) {
 						Uid:  500,
 					},
 				}, nil),
-				NewMaster: &topodatapb.Tablet{
+				NewPrimary: &topodatapb.Tablet{
 					Alias: &topodatapb.TabletAlias{
 						Cell: "zone1",
 						Uid:  100,
@@ -475,7 +475,7 @@ func TestPlannedReparenter_preflightChecks(t *testing.T) {
 						Uid:  500,
 					},
 				}, nil),
-				NewMaster: &topodatapb.Tablet{
+				NewPrimary: &topodatapb.Tablet{
 					Alias: &topodatapb.TabletAlias{
 						Cell: "zone1",
 						Uid:  100,
@@ -606,7 +606,7 @@ func TestPlannedReparenter_preflightChecks(t *testing.T) {
 				ShardInfo: *topo.NewShardInfo("testkeyspace", "-", &topodatapb.Shard{
 					PrimaryAlias: nil,
 				}, nil),
-				NewMaster: &topodatapb.Tablet{
+				NewPrimary: &topodatapb.Tablet{
 					Alias: &topodatapb.TabletAlias{
 						Cell: "zone1",
 						Uid:  100,
@@ -2329,7 +2329,7 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 					KeyRange:         &topodatapb.KeyRange{},
 					IsPrimaryServing: true,
 				}, nil),
-				NewMaster: &topodatapb.Tablet{
+				NewPrimary: &topodatapb.Tablet{
 					Alias: &topodatapb.TabletAlias{
 						Cell: "zone1",
 						Uid:  100,
@@ -2472,7 +2472,7 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 					KeyRange:         &topodatapb.KeyRange{},
 					IsPrimaryServing: true,
 				}, nil),
-				NewMaster: &topodatapb.Tablet{
+				NewPrimary: &topodatapb.Tablet{
 					Alias: &topodatapb.TabletAlias{
 						Cell: "zone1",
 						Uid:  200,
@@ -2580,7 +2580,7 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 					KeyRange:         &topodatapb.KeyRange{},
 					IsPrimaryServing: true,
 				}, nil),
-				NewMaster: &topodatapb.Tablet{
+				NewPrimary: &topodatapb.Tablet{
 					Alias: &topodatapb.TabletAlias{
 						Cell: "zone1",
 						Uid:  100,
@@ -2651,7 +2651,7 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 					KeyRange:         &topodatapb.KeyRange{},
 					IsPrimaryServing: true,
 				}, nil),
-				NewMaster: &topodatapb.Tablet{
+				NewPrimary: &topodatapb.Tablet{
 					Alias: &topodatapb.TabletAlias{
 						Cell: "zone1",
 						Uid:  100,
@@ -2723,7 +2723,7 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 					KeyRange:         &topodatapb.KeyRange{},
 					IsPrimaryServing: true,
 				}, nil),
-				NewMaster: &topodatapb.Tablet{
+				NewPrimary: &topodatapb.Tablet{
 					Alias: &topodatapb.TabletAlias{
 						Cell: "zone1",
 						Uid:  100,
@@ -2748,9 +2748,9 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 			ctx := ctx
 
 			testutil.AddTablets(ctx, t, tt.ts, &testutil.AddTabletOptions{
-				AlsoSetShardMaster:  true,
-				ForceSetShardMaster: true, // Some of our test cases count on having multiple primaries, so let the last one "win".
-				SkipShardCreation:   false,
+				AlsoSetShardPrimary:  true,
+				ForceSetShardPrimary: true, // Some of our test cases count on having multiple primaries, so let the last one "win".
+				SkipShardCreation:    false,
 			}, tt.tablets...)
 
 			if !tt.unlockTopo {
@@ -2812,7 +2812,7 @@ func TestPlannedReparenter_reparentTablets(t *testing.T) {
 				},
 			},
 			ev: &events.Reparent{
-				NewMaster: &topodatapb.Tablet{
+				NewPrimary: &topodatapb.Tablet{
 					Alias: &topodatapb.TabletAlias{
 						Cell: "zone1",
 						Uid:  100,
@@ -2873,7 +2873,7 @@ func TestPlannedReparenter_reparentTablets(t *testing.T) {
 				},
 			},
 			ev: &events.Reparent{
-				NewMaster: &topodatapb.Tablet{
+				NewPrimary: &topodatapb.Tablet{
 					Alias: &topodatapb.TabletAlias{
 						Cell: "zone1",
 						Uid:  100,
@@ -2937,7 +2937,7 @@ func TestPlannedReparenter_reparentTablets(t *testing.T) {
 				},
 			},
 			ev: &events.Reparent{
-				NewMaster: &topodatapb.Tablet{
+				NewPrimary: &topodatapb.Tablet{
 					Alias: &topodatapb.TabletAlias{
 						Cell: "zone1",
 						Uid:  100,
@@ -3001,7 +3001,7 @@ func TestPlannedReparenter_reparentTablets(t *testing.T) {
 				},
 			},
 			ev: &events.Reparent{
-				NewMaster: &topodatapb.Tablet{
+				NewPrimary: &topodatapb.Tablet{
 					Alias: &topodatapb.TabletAlias{
 						Cell: "zone1",
 						Uid:  100,
@@ -3065,7 +3065,7 @@ func TestPlannedReparenter_reparentTablets(t *testing.T) {
 				},
 			},
 			ev: &events.Reparent{
-				NewMaster: &topodatapb.Tablet{
+				NewPrimary: &topodatapb.Tablet{
 					Alias: &topodatapb.TabletAlias{
 						Cell: "zone1",
 						Uid:  100,
@@ -3171,8 +3171,8 @@ func AssertReparentEventsEqualWithMessage(t *testing.T, expected *events.Reparen
 	}
 
 	utils.MustMatch(t, removeVersion(&expected.ShardInfo), removeVersion(&actual.ShardInfo), msg+"Reparent.ShardInfo mismatch")
-	utils.MustMatch(t, &expected.NewMaster, &actual.NewMaster, msg+"Reparent.NewMaster mismatch")
-	utils.MustMatch(t, &expected.OldMaster, &actual.OldMaster, msg+"Reparent.OldMaster mismatch")
+	utils.MustMatch(t, &expected.NewPrimary, &actual.NewPrimary, msg+"Reparent.NewPrimary mismatch")
+	utils.MustMatch(t, &expected.OldPrimary, &actual.OldPrimary, msg+"Reparent.OldPrimary mismatch")
 }
 
 func AssertReparentEventsEqual(t *testing.T, expected *events.Reparent, actual *events.Reparent) {
