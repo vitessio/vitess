@@ -6,5 +6,9 @@
   "MySQLReplicaPassword": "",
   "RecoveryPeriodBlockSeconds": 1,
   "InstancePollSeconds": 1,
+  "Durability": "specified",
+  "DurabilityParams": {
+    "zone2-0000000200": "prefer"
+  },
   "PreventCrossDataCenterMasterFailover": true
 }

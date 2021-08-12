@@ -413,7 +413,7 @@ func ContinuousDiscovery() {
 	go ometrics.InitMetrics()
 	go acceptSignals()
 	go kv.InitKVStores()
-	inst.SetDurabilityPolicy(config.Config.Durability)
+	inst.SetDurabilityPolicy(config.Config.Durability, config.Config.DurabilityParams)
 
 	if *config.RuntimeCLIFlags.GrabElection {
 		process.GrabElection()

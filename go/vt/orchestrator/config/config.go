@@ -62,13 +62,14 @@ const (
 // strictly expected from user.
 // TODO(sougou): change this to yaml parsing, and possible merge with tabletenv.
 type Configuration struct {
-	Debug                                      bool   // set debug mode (similar to --debug option)
-	EnableSyslog                               bool   // Should logs be directed (in addition) to syslog daemon?
-	ListenAddress                              string // Where orchestrator HTTP should listen for TCP
-	ListenSocket                               string // Where orchestrator HTTP should listen for unix socket (default: empty; when given, TCP is disabled)
-	HTTPAdvertise                              string // optional, for raft setups, what is the HTTP address this node will advertise to its peers (potentially use where behind NAT or when rerouting ports; example: "http://11.22.33.44:3030")
-	AgentsServerPort                           string // port orchestrator agents talk back to
-	Durability                                 string // The type of durability to enforce. Default is "semi_sync". Other values are dictated by registered plugins
+	Debug                                      bool              // set debug mode (similar to --debug option)
+	EnableSyslog                               bool              // Should logs be directed (in addition) to syslog daemon?
+	ListenAddress                              string            // Where orchestrator HTTP should listen for TCP
+	ListenSocket                               string            // Where orchestrator HTTP should listen for unix socket (default: empty; when given, TCP is disabled)
+	HTTPAdvertise                              string            // optional, for raft setups, what is the HTTP address this node will advertise to its peers (potentially use where behind NAT or when rerouting ports; example: "http://11.22.33.44:3030")
+	AgentsServerPort                           string            // port orchestrator agents talk back to
+	Durability                                 string            // The type of durability to enforce. Default is "none". Other values are dictated by registered plugins
+	DurabilityParams                           map[string]string // map for specifying additional parameters for durability plugins. Used by durability mode "specified"
 	MySQLTopologyUser                          string
 	MySQLTopologyPassword                      string
 	MySQLReplicaUser                           string // If set, use this credential instead of discovering from mysql. TODO(sougou): deprecate this in favor of fetching from vttablet
@@ -260,6 +261,7 @@ func newConfiguration() *Configuration {
 		HTTPAdvertise:                              "",
 		AgentsServerPort:                           ":3001",
 		Durability:                                 "none",
+		DurabilityParams:                           make(map[string]string),
 		StatusEndpoint:                             DefaultStatusAPIEndpoint,
 		StatusOUVerify:                             false,
 		BackendDB:                                  "sqlite",
