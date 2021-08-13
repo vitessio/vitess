@@ -1,8 +1,3 @@
-2021-04-11T04:23:49Z,unit_race,https://github.com/vitessio/vitess/actions/runs/737408790
-2021-04-11T11:24:20Z,Cluster (onlineddl_declarative),https://github.com/vitessio/vitess/actions/runs/738085315
-2021-04-11T11:24:20Z,Unit Test (mariadb101),https://github.com/vitessio/vitess/actions/runs/738085320
-2021-04-11T11:24:20Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/738085331
-2021-04-11T11:24:20Z,local_example,https://github.com/vitessio/vitess/actions/runs/738085354
 2021-04-11T20:53:56Z,Cluster (vreplication_cellalias),https://github.com/vitessio/vitess/actions/runs/739051694
 2021-04-11T20:53:56Z,Unit Test (mariadb101),https://github.com/vitessio/vitess/actions/runs/739051706
 2021-04-11T20:53:56Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/739051688
@@ -9869,9 +9864,14 @@
 2021-08-06T19:26:54Z,endtoend,https://github.com/vitessio/vitess/actions/runs/1106192991
 2021-08-06T19:26:54Z,pr-labels,https://github.com/vitessio/vitess/actions/runs/1106192961
 2021-08-07T14:07:40Z,Cluster (vtorc),https://github.com/vitessio/vitess/actions/runs/1108072246
+2021-08-09T20:35:11Z,pr-labels,https://github.com/vitessio/vitess/actions/runs/1114263791
+2021-08-09T20:35:11Z,pr-labels,https://github.com/vitessio/vitess/actions/runs/1114263793
 2021-08-09T21:05:55Z,Cluster (12),https://github.com/vitessio/vitess/actions/runs/1114343380
 2021-08-09T21:05:55Z,Cluster (23),https://github.com/vitessio/vitess/actions/runs/1114343385
+2021-08-09T21:05:55Z,Cluster (resharding),https://github.com/vitessio/vitess/actions/runs/1114343393
+2021-08-09T21:05:55Z,Cluster (tabletmanager_throttler_custom_config),https://github.com/vitessio/vitess/actions/runs/1114343392
 2021-08-09T21:05:55Z,Cluster (vreplication_migrate),https://github.com/vitessio/vitess/actions/runs/1114343358
+2021-08-09T21:05:55Z,Cluster (vtgate_readafterwrite),https://github.com/vitessio/vitess/actions/runs/1114343396
 2021-08-09T21:05:55Z,Cluster (xb_recovery),https://github.com/vitessio/vitess/actions/runs/1114343379
 2021-08-09T21:05:55Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/1114343390
 2021-08-09T21:08:18Z,Cluster (onlineddl_vrepl),https://github.com/vitessio/vitess/actions/runs/1114350922
