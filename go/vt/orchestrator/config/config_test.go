@@ -15,57 +15,24 @@ func init() {
 func TestReplicationLagQuery(t *testing.T) {
 	{
 		c := newConfiguration()
-		c.SlaveLagQuery = "select 3"
-		c.ReplicationLagQuery = "select 4"
-		err := c.postReadAdjustments()
-		test.S(t).ExpectNotNil(err)
-	}
-	{
-		c := newConfiguration()
-		c.SlaveLagQuery = "select 3"
 		c.ReplicationLagQuery = "select 3"
 		err := c.postReadAdjustments()
 		test.S(t).ExpectNil(err)
-	}
-	{
-		c := newConfiguration()
-		c.SlaveLagQuery = "select 3"
-		c.ReplicationLagQuery = ""
-		err := c.postReadAdjustments()
-		test.S(t).ExpectNil(err)
-		test.S(t).ExpectEquals(c.ReplicationLagQuery, "select 3")
 	}
 }
 
 func TestPostponeReplicaRecoveryOnLagMinutes(t *testing.T) {
 	{
 		c := newConfiguration()
-		c.PostponeSlaveRecoveryOnLagMinutes = 3
-		c.PostponeReplicaRecoveryOnLagMinutes = 5
-		err := c.postReadAdjustments()
-		test.S(t).ExpectNotNil(err)
-	}
-	{
-		c := newConfiguration()
-		c.PostponeSlaveRecoveryOnLagMinutes = 3
 		c.PostponeReplicaRecoveryOnLagMinutes = 3
 		err := c.postReadAdjustments()
 		test.S(t).ExpectNil(err)
-	}
-	{
-		c := newConfiguration()
-		c.PostponeSlaveRecoveryOnLagMinutes = 3
-		c.PostponeReplicaRecoveryOnLagMinutes = 0
-		err := c.postReadAdjustments()
-		test.S(t).ExpectNil(err)
-		test.S(t).ExpectEquals(c.PostponeReplicaRecoveryOnLagMinutes, uint(3))
 	}
 }
 
 func TestPrimaryFailoverDetachReplicaPrimaryHost(t *testing.T) {
 	{
 		c := newConfiguration()
-		c.PrimaryFailoverDetachSlavePrimaryHost = false
 		c.PrimaryFailoverDetachReplicaPrimaryHost = false
 		err := c.postReadAdjustments()
 		test.S(t).ExpectNil(err)
@@ -73,16 +40,7 @@ func TestPrimaryFailoverDetachReplicaPrimaryHost(t *testing.T) {
 	}
 	{
 		c := newConfiguration()
-		c.PrimaryFailoverDetachSlavePrimaryHost = false
 		c.PrimaryFailoverDetachReplicaPrimaryHost = true
-		err := c.postReadAdjustments()
-		test.S(t).ExpectNil(err)
-		test.S(t).ExpectTrue(c.PrimaryFailoverDetachReplicaPrimaryHost)
-	}
-	{
-		c := newConfiguration()
-		c.PrimaryFailoverDetachSlavePrimaryHost = true
-		c.PrimaryFailoverDetachReplicaPrimaryHost = false
 		err := c.postReadAdjustments()
 		test.S(t).ExpectNil(err)
 		test.S(t).ExpectTrue(c.PrimaryFailoverDetachReplicaPrimaryHost)
@@ -92,7 +50,6 @@ func TestPrimaryFailoverDetachReplicaPrimaryHost(t *testing.T) {
 func TestPrimaryFailoverDetachDetachLostReplicasAfterPrimaryFailover(t *testing.T) {
 	{
 		c := newConfiguration()
-		c.DetachLostSlavesAfterPrimaryFailover = false
 		c.DetachLostReplicasAfterPrimaryFailover = false
 		err := c.postReadAdjustments()
 		test.S(t).ExpectNil(err)
@@ -100,16 +57,7 @@ func TestPrimaryFailoverDetachDetachLostReplicasAfterPrimaryFailover(t *testing.
 	}
 	{
 		c := newConfiguration()
-		c.DetachLostSlavesAfterPrimaryFailover = false
 		c.DetachLostReplicasAfterPrimaryFailover = true
-		err := c.postReadAdjustments()
-		test.S(t).ExpectNil(err)
-		test.S(t).ExpectTrue(c.DetachLostReplicasAfterPrimaryFailover)
-	}
-	{
-		c := newConfiguration()
-		c.DetachLostSlavesAfterPrimaryFailover = true
-		c.DetachLostReplicasAfterPrimaryFailover = false
 		err := c.postReadAdjustments()
 		test.S(t).ExpectNil(err)
 		test.S(t).ExpectTrue(c.DetachLostReplicasAfterPrimaryFailover)
