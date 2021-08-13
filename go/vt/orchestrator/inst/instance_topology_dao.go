@@ -208,7 +208,7 @@ func purgeBinaryLogsTo(instanceKey *InstanceKey, logFile string) (*Instance, err
 
 // TODO(sougou): implement count
 func SetSemiSyncPrimary(instanceKey *InstanceKey, enablePrimary bool) error {
-	if _, err := ExecInstance(instanceKey, `set global rpl_semi_sync_primary_enabled = ?, global rpl_semi_sync_slave_enabled = ?`, enablePrimary, false); err != nil {
+	if _, err := ExecInstance(instanceKey, `set global rpl_semi_sync_master_enabled = ?, global rpl_semi_sync_slave_enabled = ?`, enablePrimary, false); err != nil {
 		return log.Errore(err)
 	}
 	return nil
@@ -216,7 +216,7 @@ func SetSemiSyncPrimary(instanceKey *InstanceKey, enablePrimary bool) error {
 
 // TODO(sougou): This function may be used later for fixing semi-sync
 func SetSemiSyncReplica(instanceKey *InstanceKey, enableReplica bool) error {
-	if _, err := ExecInstance(instanceKey, `set global rpl_semi_sync_primary_enabled = ?, global rpl_semi_sync_slave_enabled = ?`, false, enableReplica); err != nil {
+	if _, err := ExecInstance(instanceKey, `set global rpl_semi_sync_master_enabled = ?, global rpl_semi_sync_slave_enabled = ?`, false, enableReplica); err != nil {
 		return log.Errore(err)
 	}
 	// Need to apply change by stopping starting IO thread
@@ -501,7 +501,7 @@ func StartReplicationUntilPrimaryCoordinates(instanceKey *InstanceKey, primaryCo
 	// MariaDB has a bug: a CHANGE MASTER TO statement does not work properly with prepared statement... :P
 	// See https://mariadb.atlassian.net/browse/MDEV-7640
 	// This is the reason for ExecInstance
-	_, err = ExecInstance(instanceKey, "start slave until primary_log_file=?, primary_log_pos=?",
+	_, err = ExecInstance(instanceKey, "start slave until master_log_file=?, master_log_pos=?",
 		primaryCoordinates.LogFile, primaryCoordinates.LogPos)
 	if err != nil {
 		return instance, log.Errore(err)
@@ -601,7 +601,7 @@ func ChangePrimaryTo(instanceKey *InstanceKey, primaryKey *InstanceKey, primaryB
 	if instance.UsingMariaDBGTID && gtidHint != GTIDHintDeny {
 		// Keep on using GTID
 		changePrimaryFunc = func() error {
-			_, err := ExecInstance(instanceKey, "change master to master_user=?, master_password=?, primary_host=?, primary_port=?",
+			_, err := ExecInstance(instanceKey, "change master to master_user=?, master_password=?, master_host=?, master_port=?",
 				user, password, changeToPrimaryKey.Hostname, changeToPrimaryKey.Port)
 			return err
 		}
@@ -609,7 +609,7 @@ func ChangePrimaryTo(instanceKey *InstanceKey, primaryKey *InstanceKey, primaryB
 	} else if instance.UsingMariaDBGTID && gtidHint == GTIDHintDeny {
 		// Make sure to not use GTID
 		changePrimaryFunc = func() error {
-			_, err = ExecInstance(instanceKey, "change master to master_user=?, master_password=?, primary_host=?, primary_port=?, primary_log_file=?, primary_log_pos=?, master_use_gtid=no",
+			_, err = ExecInstance(instanceKey, "change master to master_user=?, master_password=?, master_host=?, master_port=?, master_log_file=?, master_log_pos=?, master_use_gtid=no",
 				user, password, changeToPrimaryKey.Hostname, changeToPrimaryKey.Port, primaryBinlogCoordinates.LogFile, primaryBinlogCoordinates.LogPos)
 			return err
 		}
@@ -625,7 +625,7 @@ func ChangePrimaryTo(instanceKey *InstanceKey, primaryKey *InstanceKey, primaryB
 			mariadbGTIDHint = "current_pos"
 		}
 		changePrimaryFunc = func() error {
-			_, err = ExecInstance(instanceKey, fmt.Sprintf("change master to master_user=?, master_password=?, primary_host=?, primary_port=?, master_use_gtid=%s", mariadbGTIDHint),
+			_, err = ExecInstance(instanceKey, fmt.Sprintf("change master to master_user=?, master_password=?, master_host=?, master_port=?, master_use_gtid=%s", mariadbGTIDHint),
 				user, password, changeToPrimaryKey.Hostname, changeToPrimaryKey.Port)
 			return err
 		}
@@ -633,7 +633,7 @@ func ChangePrimaryTo(instanceKey *InstanceKey, primaryKey *InstanceKey, primaryB
 	} else if instance.UsingOracleGTID && gtidHint != GTIDHintDeny {
 		// Is Oracle; already uses GTID; keep using it.
 		changePrimaryFunc = func() error {
-			_, err = ExecInstance(instanceKey, "change master to master_user=?, master_password=?, primary_host=?, primary_port=?",
+			_, err = ExecInstance(instanceKey, "change master to master_user=?, master_password=?, master_host=?, master_port=?",
 				user, password, changeToPrimaryKey.Hostname, changeToPrimaryKey.Port)
 			return err
 		}
@@ -641,14 +641,14 @@ func ChangePrimaryTo(instanceKey *InstanceKey, primaryKey *InstanceKey, primaryB
 	} else if instance.UsingOracleGTID && gtidHint == GTIDHintDeny {
 		// Is Oracle; already uses GTID
 		changePrimaryFunc = func() error {
-			_, err = ExecInstance(instanceKey, "change master to master_user=?, master_password=?, primary_host=?, primary_port=?, primary_log_file=?, primary_log_pos=?, master_auto_position=0",
+			_, err = ExecInstance(instanceKey, "change master to master_user=?, master_password=?, master_host=?, master_port=?, master_log_file=?, master_log_pos=?, master_auto_position=0",
 				user, password, changeToPrimaryKey.Hostname, changeToPrimaryKey.Port, primaryBinlogCoordinates.LogFile, primaryBinlogCoordinates.LogPos)
 			return err
 		}
 	} else if instance.SupportsOracleGTID && gtidHint == GTIDHintForce {
 		// Is Oracle; not using GTID right now; turn into GTID
 		changePrimaryFunc = func() error {
-			_, err = ExecInstance(instanceKey, "change master to master_user=?, master_password=?, primary_host=?, primary_port=?, master_auto_position=1",
+			_, err = ExecInstance(instanceKey, "change master to master_user=?, master_password=?, master_host=?, master_port=?, master_auto_position=1",
 				user, password, changeToPrimaryKey.Hostname, changeToPrimaryKey.Port)
 			return err
 		}
@@ -656,7 +656,7 @@ func ChangePrimaryTo(instanceKey *InstanceKey, primaryKey *InstanceKey, primaryB
 	} else {
 		// Normal binlog file:pos
 		changePrimaryFunc = func() error {
-			_, err = ExecInstance(instanceKey, "change master to master_user=?, master_password=?, primary_host=?, primary_port=?, primary_log_file=?, primary_log_pos=?",
+			_, err = ExecInstance(instanceKey, "change master to master_user=?, master_password=?, master_host=?, master_port=?, master_log_file=?, master_log_pos=?",
 				user, password, changeToPrimaryKey.Hostname, changeToPrimaryKey.Port, primaryBinlogCoordinates.LogFile, primaryBinlogCoordinates.LogPos)
 			return err
 		}
@@ -672,7 +672,7 @@ func ChangePrimaryTo(instanceKey *InstanceKey, primaryKey *InstanceKey, primaryB
 	}
 
 	semiSync := ReplicaSemiSync(*primaryKey, *instanceKey)
-	if _, err := ExecInstance(instanceKey, `set global rpl_semi_sync_primary_enabled = ?, global rpl_semi_sync_slave_enabled = ?`, false, semiSync); err != nil {
+	if _, err := ExecInstance(instanceKey, `set global rpl_semi_sync_master_enabled = ?, global rpl_semi_sync_slave_enabled = ?`, false, semiSync); err != nil {
 		return instance, log.Errore(err)
 	}
 
@@ -727,7 +727,7 @@ func ResetReplication(instanceKey *InstanceKey) (*Instance, error) {
 	// and only resets till after next restart. This leads to orchestrator still thinking the instance replicates
 	// from old host. We therefore forcibly modify the hostname.
 	// RESET SLAVE ALL command solves this, but only as of 5.6.3
-	_, err = ExecInstance(instanceKey, `change master to primary_host='_'`)
+	_, err = ExecInstance(instanceKey, `change master to master_host='_'`)
 	if err != nil {
 		return instance, log.Errore(err)
 	}
