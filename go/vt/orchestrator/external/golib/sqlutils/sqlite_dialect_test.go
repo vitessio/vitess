@@ -84,7 +84,7 @@ func TestToSqlite3AlterTable(t *testing.T) {
 		statement := `
 			ALTER TABLE
 				database_instance
-				ADD COLUMN sql_delay INT UNSIGNED NOT NULL AFTER slave_lag_seconds
+				ADD COLUMN sql_delay INT UNSIGNED NOT NULL AFTER replica_lag_seconds
 		`
 		result := stripSpaces(ToSqlite3Dialect(statement))
 		test.S(t).ExpectEquals(result, stripSpaces(`

@@ -37,7 +37,7 @@ var generateSQLPatches = []string{
 	`
 		ALTER TABLE
 			database_instance
-			ADD COLUMN oracle_gtid TINYINT UNSIGNED NOT NULL AFTER slave_io_running
+			ADD COLUMN oracle_gtid TINYINT UNSIGNED NOT NULL AFTER replica_io_running
 	`,
 	`
 		ALTER TABLE
@@ -75,7 +75,7 @@ var generateSQLPatches = []string{
 	`
 		ALTER TABLE
 			database_instance
-			ADD COLUMN has_replication_filters TINYINT UNSIGNED NOT NULL AFTER slave_io_running
+			ADD COLUMN has_replication_filters TINYINT UNSIGNED NOT NULL AFTER replica_io_running
 	`,
 	`
 		ALTER TABLE
@@ -115,7 +115,7 @@ var generateSQLPatches = []string{
 	`
 		ALTER TABLE
 			database_instance
-			ADD COLUMN sql_delay INT UNSIGNED NOT NULL AFTER slave_lag_seconds
+			ADD COLUMN sql_delay INT UNSIGNED NOT NULL AFTER replica_lag_seconds
 	`,
 	`
 		ALTER TABLE
@@ -135,12 +135,12 @@ var generateSQLPatches = []string{
 	`
 		ALTER TABLE
 			topology_recovery
-			ADD COLUMN count_affected_slaves int unsigned NOT NULL
+			ADD COLUMN count_affected_replicas int unsigned NOT NULL
 	`,
 	`
 		ALTER TABLE
 			topology_recovery
-			ADD COLUMN slave_hosts text CHARACTER SET ascii NOT NULL
+			ADD COLUMN replica_hosts text CHARACTER SET ascii NOT NULL
 	`,
 	`
 		ALTER TABLE hostname_unresolve
@@ -222,17 +222,17 @@ var generateSQLPatches = []string{
 	`
 		ALTER TABLE
 			topology_recovery
-			ADD COLUMN participating_instances text CHARACTER SET ascii NOT NULL after slave_hosts
+			ADD COLUMN participating_instances text CHARACTER SET ascii NOT NULL after replica_hosts
 	`,
 	`
 		ALTER TABLE
 			topology_recovery
-			ADD COLUMN lost_slaves text CHARACTER SET ascii NOT NULL after participating_instances
+			ADD COLUMN lost_replicas text CHARACTER SET ascii NOT NULL after participating_instances
 	`,
 	`
 		ALTER TABLE
 			topology_recovery
-			ADD COLUMN all_errors text CHARACTER SET ascii NOT NULL after lost_slaves
+			ADD COLUMN all_errors text CHARACTER SET ascii NOT NULL after lost_replicas
 	`,
 	`
 		ALTER TABLE audit
@@ -528,7 +528,7 @@ var generateSQLPatches = []string{
 	`
 		ALTER TABLE
 			database_instance
-			ADD COLUMN replication_sql_thread_state tinyint signed not null default 0 AFTER slave_io_running
+			ADD COLUMN replication_sql_thread_state tinyint signed not null default 0 AFTER replica_io_running
 	`,
 	`
 		ALTER TABLE
@@ -554,12 +554,12 @@ var generateSQLPatches = []string{
 	`
 		ALTER TABLE
 			database_instance
-			ADD COLUMN semi_sync_primary_wait_for_slave_count INT UNSIGNED NOT NULL DEFAULT 0 AFTER semi_sync_primary_timeout
+			ADD COLUMN semi_sync_primary_wait_for_replica_count INT UNSIGNED NOT NULL DEFAULT 0 AFTER semi_sync_primary_timeout
 	`,
 	`
 		ALTER TABLE
 			database_instance
-			ADD COLUMN semi_sync_primary_status TINYINT UNSIGNED NOT NULL DEFAULT 0 AFTER semi_sync_primary_wait_for_slave_count
+			ADD COLUMN semi_sync_primary_status TINYINT UNSIGNED NOT NULL DEFAULT 0 AFTER semi_sync_primary_wait_for_replica_count
 	`,
 	`
 		ALTER TABLE

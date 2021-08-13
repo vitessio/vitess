@@ -45,7 +45,6 @@ type Instance struct {
 	Binlog_format                string
 	BinlogRowImage               string
 	LogBinEnabled                bool
-	LogSlaveUpdatesEnabled       bool // for API backwards compatibility. Equals `LogReplicationUpdatesEnabled`
 	LogReplicationUpdatesEnabled bool
 	SelfBinlogCoordinates        BinlogCoordinates
 	PrimaryKey                   InstanceKey
@@ -53,9 +52,7 @@ type Instance struct {
 	AncestryUUID                 string
 	IsDetachedPrimary            bool
 
-	Slave_SQL_Running          bool // for API backwards compatibility. Equals `ReplicationSQLThreadRuning`
 	ReplicationSQLThreadRuning bool
-	Slave_IO_Running           bool // for API backwards compatibility. Equals `ReplicationIOThreadRuning`
 	ReplicationIOThreadRuning  bool
 	ReplicationSQLThreadState  ReplicationThreadState
 	ReplicationIOThreadState   ReplicationThreadState
@@ -80,9 +77,7 @@ type Instance struct {
 
 	primaryExecutedGtidSet string // Not exported
 
-	SlaveLagSeconds                    sql.NullInt64 // for API backwards compatibility. Equals `ReplicationLagSeconds`
 	ReplicationLagSeconds              sql.NullInt64
-	SlaveHosts                         InstanceKeyMap // for API backwards compatibility. Equals `Replicas`
 	Replicas                           InstanceKeyMap
 	ClusterName                        string
 	SuggestedClusterAlias              string
@@ -163,13 +158,6 @@ func (this *Instance) MarshalJSON() ([]byte, error) {
 		Instance
 	}{}
 	i.Instance = *this
-	// change terminology. Users of the orchestrator API can switch to new terminology and avoid using old terminology
-	// flip
-	i.SlaveHosts = i.Replicas
-	i.SlaveLagSeconds = this.ReplicationLagSeconds
-	i.LogSlaveUpdatesEnabled = this.LogReplicationUpdatesEnabled
-	i.Slave_SQL_Running = this.ReplicationSQLThreadRuning
-	i.Slave_IO_Running = this.ReplicationIOThreadRuning
 
 	return json.Marshal(i)
 }

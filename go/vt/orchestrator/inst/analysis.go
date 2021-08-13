@@ -149,7 +149,6 @@ type ReplicationAnalysis struct {
 	CountDowntimedReplicas                    uint
 	ReplicationDepth                          uint
 	Replicas                                  InstanceKeyMap
-	SlaveHosts                                InstanceKeyMap // for backwards compatibility. Equals `Replicas`
 	IsFailingToConnectToPrimary               bool
 	ReplicationStopped                        bool
 	Analysis                                  AnalysisCode
@@ -202,8 +201,6 @@ func (this *ReplicationAnalysis) MarshalJSON() ([]byte, error) {
 		ReplicationAnalysis
 	}{}
 	i.ReplicationAnalysis = *this
-	// backwards compatibility
-	i.SlaveHosts = i.Replicas
 
 	return json.Marshal(i)
 }

@@ -141,17 +141,17 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 		IFNULL(
 			SUM(
 				replica_instance.last_checked <= replica_instance.last_seen
-				AND replica_instance.slave_io_running != 0
-				AND replica_instance.slave_sql_running != 0
+				AND replica_instance.replica_io_running != 0
+				AND replica_instance.replica_sql_running != 0
 			),
 			0
 		) AS count_valid_replicating_replicas,
 		IFNULL(
 			SUM(
 				replica_instance.last_checked <= replica_instance.last_seen
-				AND replica_instance.slave_io_running = 0
+				AND replica_instance.replica_io_running = 0
 				AND replica_instance.last_io_error like '%%error %%connecting to master%%'
-				AND replica_instance.slave_sql_running = 1
+				AND replica_instance.replica_sql_running = 1
 			),
 			0
 		) AS count_replicas_failing_to_connect_to_primary,
@@ -162,15 +162,15 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 				':',
 				replica_instance.Port
 			)
-		) as slave_hosts,
+		) as replica_hosts,
 		MIN(
-			primary_instance.slave_sql_running = 1
-			AND primary_instance.slave_io_running = 0
+			primary_instance.replica_sql_running = 1
+			AND primary_instance.replica_io_running = 0
 			AND primary_instance.last_io_error like '%%error %%connecting to master%%'
 		) AS is_failing_to_connect_to_primary,
 		MIN(
-			primary_instance.slave_sql_running = 0
-			AND primary_instance.slave_io_running = 0
+			primary_instance.replica_sql_running = 0
+			AND primary_instance.replica_io_running = 0
 		) AS replication_stopped,
 		MIN(
 			primary_downtime.downtime_active is not null
@@ -195,8 +195,8 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 			primary_instance.semi_sync_primary_enabled
 		) AS semi_sync_primary_enabled,
 		MIN(
-			primary_instance.semi_sync_primary_wait_for_slave_count
-		) AS semi_sync_primary_wait_for_slave_count,
+			primary_instance.semi_sync_primary_wait_for_replica_count
+		) AS semi_sync_primary_wait_for_replica_count,
 		MIN(
 			primary_instance.semi_sync_primary_clients
 		) AS semi_sync_primary_clients,
@@ -249,14 +249,14 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 		IFNULL(
 			SUM(
 				replica_instance.log_bin
-				AND replica_instance.log_slave_updates
+				AND replica_instance.log_replica_updates
 			),
 			0
 		) AS count_logging_replicas,
 		IFNULL(
 			SUM(
 				replica_instance.log_bin
-				AND replica_instance.log_slave_updates
+				AND replica_instance.log_replica_updates
 				AND replica_instance.binlog_format = 'STATEMENT'
 			),
 			0
@@ -264,7 +264,7 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 		IFNULL(
 			SUM(
 				replica_instance.log_bin
-				AND replica_instance.log_slave_updates
+				AND replica_instance.log_replica_updates
 				AND replica_instance.binlog_format = 'MIXED'
 			),
 			0
@@ -272,7 +272,7 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 		IFNULL(
 			SUM(
 				replica_instance.log_bin
-				AND replica_instance.log_slave_updates
+				AND replica_instance.log_replica_updates
 				AND replica_instance.binlog_format = 'ROW'
 			),
 			0
@@ -282,7 +282,7 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 			0
 		) AS count_delayed_replicas,
 		IFNULL(
-			SUM(replica_instance.slave_lag_seconds > ?),
+			SUM(replica_instance.replica_lag_seconds > ?),
 			0
 		) AS count_lagging_replicas,
 		IFNULL(MIN(replica_instance.gtid_mode), '') AS min_replica_gtid_mode,
@@ -303,7 +303,7 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 		) AS count_downtimed_replicas,
 		COUNT(
 			DISTINCT case when replica_instance.log_bin
-			AND replica_instance.log_slave_updates then replica_instance.major_version else NULL end
+			AND replica_instance.log_replica_updates then replica_instance.major_version else NULL end
 		) AS count_distinct_logging_major_versions
 	FROM
 		vitess_tablet
@@ -422,7 +422,7 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 		a.ClusterDetails.ReadRecoveryInfo()
 
 		a.Replicas = *NewInstanceKeyMap()
-		a.Replicas.ReadCommaDelimitedList(m.GetString("slave_hosts"))
+		a.Replicas.ReadCommaDelimitedList(m.GetString("replica_hosts"))
 
 		countValidOracleGTIDReplicas := m.GetUint("count_valid_oracle_gtid_replicas")
 		a.OracleGTIDImmediateTopology = countValidOracleGTIDReplicas == a.CountValidReplicas && a.CountValidReplicas > 0
@@ -435,7 +435,7 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 		a.SemiSyncReplicaEnabled = m.GetBool("semi_sync_replica_enabled")
 		a.CountSemiSyncReplicasEnabled = m.GetUint("count_semi_sync_replicas")
 		// countValidSemiSyncReplicasEnabled := m.GetUint("count_valid_semi_sync_replicas")
-		a.SemiSyncPrimaryWaitForReplicaCount = m.GetUint("semi_sync_primary_wait_for_slave_count")
+		a.SemiSyncPrimaryWaitForReplicaCount = m.GetUint("semi_sync_primary_wait_for_replica_count")
 		a.SemiSyncPrimaryClients = m.GetUint("semi_sync_primary_clients")
 
 		a.MinReplicaGTIDMode = m.GetString("min_replica_gtid_mode")

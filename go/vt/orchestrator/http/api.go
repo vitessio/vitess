@@ -51,26 +51,8 @@ const (
 )
 
 var apiSynonyms = map[string]string{
-	"relocate-slaves":             "relocate-replicas",
-	"regroup-slaves":              "regroup-replicas",
-	"move-up-slaves":              "move-up-replicas",
-	"repoint-slaves":              "repoint-replicas",
-	"enslave-siblings":            "take-siblings",
-	"enslave-primary":             "take-primary",
-	"regroup-slaves-bls":          "regroup-replicas-bls",
-	"move-slaves-gtid":            "move-replicas-gtid",
-	"regroup-slaves-gtid":         "regroup-replicas-gtid",
-	"detach-slave":                "detach-replica",
-	"reattach-slave":              "reattach-replica",
-	"detach-slave-primary-host":   "detach-replica-primary-host",
-	"reattach-slave-primary-host": "reattach-replica-primary-host",
-	"cluster-osc-slaves":          "cluster-osc-replicas",
-	"start-slave":                 "start-replica",
-	"restart-slave":               "restart-replica",
-	"stop-slave":                  "stop-replica",
-	"stop-slave-nice":             "stop-replica-nice",
-	"reset-slave":                 "reset-replica",
-	"restart-slave-statements":    "restart-replica-statements",
+	"enslave-siblings": "take-siblings",
+	"enslave-primary":  "take-primary",
 }
 
 var registeredPaths = []string{}
@@ -2830,26 +2812,26 @@ func (this *HttpAPI) RegisterRequests(m *martini.ClassicMartini) {
 	// Smart relocation:
 	this.registerAPIRequest(m, "relocate/:host/:port/:belowHost/:belowPort", this.RelocateBelow)
 	this.registerAPIRequest(m, "relocate-below/:host/:port/:belowHost/:belowPort", this.RelocateBelow)
-	this.registerAPIRequest(m, "relocate-slaves/:host/:port/:belowHost/:belowPort", this.RelocateReplicas)
-	this.registerAPIRequest(m, "regroup-slaves/:host/:port", this.RegroupReplicas)
+	this.registerAPIRequest(m, "relocate-replicas/:host/:port/:belowHost/:belowPort", this.RelocateReplicas)
+	this.registerAPIRequest(m, "regroup-replicas/:host/:port", this.RegroupReplicas)
 
 	// Classic file:pos relocation:
 	this.registerAPIRequest(m, "move-up/:host/:port", this.MoveUp)
-	this.registerAPIRequest(m, "move-up-slaves/:host/:port", this.MoveUpReplicas)
+	this.registerAPIRequest(m, "move-up-replicas/:host/:port", this.MoveUpReplicas)
 	this.registerAPIRequest(m, "move-below/:host/:port/:siblingHost/:siblingPort", this.MoveBelow)
 	this.registerAPIRequest(m, "repoint/:host/:port/:belowHost/:belowPort", this.Repoint)
-	this.registerAPIRequest(m, "repoint-slaves/:host/:port", this.RepointReplicas)
+	this.registerAPIRequest(m, "repoint-replicas/:host/:port", this.RepointReplicas)
 	this.registerAPIRequest(m, "make-co-primary/:host/:port", this.MakeCoPrimary)
 	this.registerAPIRequest(m, "enslave-siblings/:host/:port", this.TakeSiblings)
 	this.registerAPIRequest(m, "enslave-primary/:host/:port", this.TakePrimary)
 
 	// Binlog server relocation:
-	this.registerAPIRequest(m, "regroup-slaves-bls/:host/:port", this.RegroupReplicasBinlogServers)
+	this.registerAPIRequest(m, "regroup-replicas-bls/:host/:port", this.RegroupReplicasBinlogServers)
 
 	// GTID relocation:
 	this.registerAPIRequest(m, "move-below-gtid/:host/:port/:belowHost/:belowPort", this.MoveBelowGTID)
-	this.registerAPIRequest(m, "move-slaves-gtid/:host/:port/:belowHost/:belowPort", this.MoveReplicasGTID)
-	this.registerAPIRequest(m, "regroup-slaves-gtid/:host/:port", this.RegroupReplicasGTID)
+	this.registerAPIRequest(m, "move-replicas-gtid/:host/:port/:belowHost/:belowPort", this.MoveReplicasGTID)
+	this.registerAPIRequest(m, "regroup-replicas-gtid/:host/:port", this.RegroupReplicasGTID)
 
 	// Replication, general:
 	this.registerAPIRequest(m, "enable-gtid/:host/:port", this.EnableGTID)
@@ -2858,18 +2840,18 @@ func (this *HttpAPI) RegisterRequests(m *martini.ClassicMartini) {
 	this.registerAPIRequest(m, "gtid-errant-reset-primary/:host/:port", this.ErrantGTIDResetPrimary)
 	this.registerAPIRequest(m, "gtid-errant-inject-empty/:host/:port", this.ErrantGTIDInjectEmpty)
 	this.registerAPIRequest(m, "skip-query/:host/:port", this.SkipQuery)
-	this.registerAPIRequest(m, "start-slave/:host/:port", this.StartReplication)
-	this.registerAPIRequest(m, "restart-slave/:host/:port", this.RestartReplication)
-	this.registerAPIRequest(m, "stop-slave/:host/:port", this.StopReplication)
-	this.registerAPIRequest(m, "stop-slave-nice/:host/:port", this.StopReplicationNicely)
-	this.registerAPIRequest(m, "reset-slave/:host/:port", this.ResetReplication)
-	this.registerAPIRequest(m, "detach-slave/:host/:port", this.DetachReplicaPrimaryHost)
-	this.registerAPIRequest(m, "reattach-slave/:host/:port", this.ReattachReplicaPrimaryHost)
-	this.registerAPIRequest(m, "detach-slave-primary-host/:host/:port", this.DetachReplicaPrimaryHost)
-	this.registerAPIRequest(m, "reattach-slave-primary-host/:host/:port", this.ReattachReplicaPrimaryHost)
+	this.registerAPIRequest(m, "start-replica/:host/:port", this.StartReplication)
+	this.registerAPIRequest(m, "restart-replica/:host/:port", this.RestartReplication)
+	this.registerAPIRequest(m, "stop-replica/:host/:port", this.StopReplication)
+	this.registerAPIRequest(m, "stop-replica-nice/:host/:port", this.StopReplicationNicely)
+	this.registerAPIRequest(m, "reset-replica/:host/:port", this.ResetReplication)
+	this.registerAPIRequest(m, "detach-replica/:host/:port", this.DetachReplicaPrimaryHost)
+	this.registerAPIRequest(m, "reattach-replica/:host/:port", this.ReattachReplicaPrimaryHost)
+	this.registerAPIRequest(m, "detach-replica-primary-host/:host/:port", this.DetachReplicaPrimaryHost)
+	this.registerAPIRequest(m, "reattach-replica-primary-host/:host/:port", this.ReattachReplicaPrimaryHost)
 	this.registerAPIRequest(m, "flush-binary-logs/:host/:port", this.FlushBinaryLogs)
 	this.registerAPIRequest(m, "purge-binary-logs/:host/:port/:logFile", this.PurgeBinaryLogs)
-	this.registerAPIRequest(m, "restart-slave-statements/:host/:port", this.RestartReplicationStatements)
+	this.registerAPIRequest(m, "restart-replica-statements/:host/:port", this.RestartReplicationStatements)
 
 	// Replication information:
 	this.registerAPIRequest(m, "can-replicate-from/:host/:port/:belowHost/:belowPort", this.CanReplicateFrom)
@@ -2899,7 +2881,7 @@ func (this *HttpAPI) RegisterRequests(m *martini.ClassicMartini) {
 	this.registerAPIRequest(m, "cluster/instance/:host/:port", this.ClusterByInstance)
 	this.registerAPIRequest(m, "cluster-info/:clusterHint", this.ClusterInfo)
 	this.registerAPIRequest(m, "cluster-info/alias/:clusterAlias", this.ClusterInfoByAlias)
-	this.registerAPIRequest(m, "cluster-osc-slaves/:clusterHint", this.ClusterOSCReplicas)
+	this.registerAPIRequest(m, "cluster-osc-replicas/:clusterHint", this.ClusterOSCReplicas)
 	this.registerAPIRequest(m, "set-cluster-alias/:clusterName", this.SetClusterAliasManualOverride)
 	this.registerAPIRequest(m, "clusters", this.Clusters)
 	this.registerAPIRequest(m, "clusters-info", this.ClustersInfo)

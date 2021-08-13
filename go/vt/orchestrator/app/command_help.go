@@ -221,20 +221,20 @@ func init() {
 
   orchestrator -c reset-primary-gtid-remove-own-uuid -i replica.running.with.gtid.com
 	`
-	CommandHelp["stop-slave"] = `
+	CommandHelp["stop-replica"] = `
   Issues a STOP SLAVE; command. Example:
 
-  orchestrator -c stop-slave -i replica.to.be.stopped.com
+  orchestrator -c stop-replica -i replica.to.be.stopped.com
 	`
-	CommandHelp["start-slave"] = `
+	CommandHelp["start-replica"] = `
   Issues a START SLAVE; command. Example:
 
-  orchestrator -c start-slave -i replica.to.be.started.com
+  orchestrator -c start-replica -i replica.to.be.started.com
 	`
-	CommandHelp["restart-slave"] = `
+	CommandHelp["restart-replica"] = `
   Issues STOP SLAVE + START SLAVE; Example:
 
-  orchestrator -c restart-slave -i replica.to.be.started.com
+  orchestrator -c restart-replica -i replica.to.be.started.com
 	`
 	CommandHelp["skip-query"] = `
   On a failed replicating replica, skips a single query and attempts to resume replication.
@@ -243,10 +243,10 @@ func init() {
 
   orchestrator -c skip-query -i replica.with.broken.sql.thread.com
 	`
-	CommandHelp["reset-slave"] = `
+	CommandHelp["reset-replica"] = `
   Issues a RESET SLAVE command. Destructive to replication. Example:
 
-  orchestrator -c reset-slave -i replica.to.reset.com
+  orchestrator -c reset-replica -i replica.to.reset.com
 	`
 	CommandHelp["detach-replica"] = `
   Stops replication and modifies binlog position into an impossible, yet reversible, value.
@@ -280,7 +280,7 @@ func init() {
 
   Issuing this on an attached (i.e. normal) replica will do nothing.
 	`
-	CommandHelp["restart-slave-statements"] = `
+	CommandHelp["restart-replica-statements"] = `
 	Prints a list of statements to execute to stop then restore replica to same execution state.
 	Provide --statement for injected statement.
 	This is useful for issuing a command that can only be executed while replica is stopped. Such
@@ -288,7 +288,7 @@ func init() {
 	Orchestrator will not execute given commands, only print them as courtesy. It may not have
 	the privileges to execute them in the first place. Example:
 
-	orchestrator -c restart-slave-statements -i some.replica.com -statement="change master to master_heartbeat_period=5"
+	orchestrator -c restart-replica-statements -i some.replica.com -statement="change master to master_heartbeat_period=5"
 	`
 
 	CommandHelp["set-read-only"] = `

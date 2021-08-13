@@ -51,29 +51,10 @@ func (a stringSlice) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 func (a stringSlice) Less(i, j int) bool { return a[i] < a[j] }
 
 var commandSynonyms = map[string]string{
-	"stop-slave":                  "stop-replica",
-	"start-slave":                 "start-replica",
-	"restart-slave":               "restart-replica",
-	"reset-slave":                 "reset-replica",
-	"restart-slave-statements":    "restart-replica-statements",
-	"relocate-slaves":             "relocate-replicas",
-	"regroup-slaves":              "regroup-replicas",
-	"move-up-slaves":              "move-up-replicas",
-	"repoint-slaves":              "repoint-replicas",
-	"enslave-siblings":            "take-siblings",
-	"enslave-primary":             "take-primary",
-	"get-candidate-slave":         "get-candidate-replica",
-	"move-slaves-gtid":            "move-replicas-gtid",
-	"regroup-slaves-gtid":         "regroup-replicas-gtid",
-	"which-cluster-osc-slaves":    "which-cluster-osc-replicas",
-	"which-cluster-gh-ost-slaves": "which-cluster-gh-ost-replicas",
-	"which-slaves":                "which-replicas",
-	"detach-slave":                "detach-replica-primary-host",
-	"detach-replica":              "detach-replica-primary-host",
-	"detach-slave-primary-host":   "detach-replica-primary-host",
-	"reattach-slave":              "reattach-replica-primary-host",
-	"reattach-replica":            "reattach-replica-primary-host",
-	"reattach-slave-primary-host": "reattach-replica-primary-host",
+	"enslave-siblings": "take-siblings",
+	"enslave-primary":  "take-primary",
+	"detach-replica":   "detach-replica-primary-host",
+	"reattach-replica": "reattach-replica-primary-host",
 }
 
 func registerCliCommand(command string, section string, description string) string {
@@ -490,7 +471,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			}
 			fmt.Println(instanceKey.DisplayString())
 		}
-	case registerCliCommand("stop-slave", "Replication, general", `Issue a STOP SLAVE on an instance`):
+	case registerCliCommand("stop-replica", "Replication, general", `Issue a STOP SLAVE on an instance`):
 		{
 			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
 			_, err := inst.StopReplication(instanceKey)
@@ -499,7 +480,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			}
 			fmt.Println(instanceKey.DisplayString())
 		}
-	case registerCliCommand("start-slave", "Replication, general", `Issue a START SLAVE on an instance`):
+	case registerCliCommand("start-replica", "Replication, general", `Issue a START SLAVE on an instance`):
 		{
 			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
 			_, err := inst.StartReplication(instanceKey)
@@ -508,7 +489,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			}
 			fmt.Println(instanceKey.DisplayString())
 		}
-	case registerCliCommand("restart-slave", "Replication, general", `STOP and START SLAVE on an instance`):
+	case registerCliCommand("restart-replica", "Replication, general", `STOP and START SLAVE on an instance`):
 		{
 			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
 			_, err := inst.RestartReplication(instanceKey)
@@ -517,7 +498,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			}
 			fmt.Println(instanceKey.DisplayString())
 		}
-	case registerCliCommand("reset-slave", "Replication, general", `Issues a RESET SLAVE command; use with care`):
+	case registerCliCommand("reset-replica", "Replication, general", `Issues a RESET SLAVE command; use with care`):
 		{
 			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
 			_, err := inst.ResetReplicationOperation(instanceKey)
@@ -574,7 +555,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			}
 			fmt.Println(instanceKey.DisplayString())
 		}
-	case registerCliCommand("restart-slave-statements", "Replication, general", `Get a list of statements to execute to stop then restore replica to same execution state. Provide --statement for injected statement`):
+	case registerCliCommand("restart-replica-statements", "Replication, general", `Get a list of statements to execute to stop then restore replica to same execution state. Provide --statement for injected statement`):
 		{
 			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
 			if instanceKey == nil {

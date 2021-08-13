@@ -1016,7 +1016,7 @@ Cleanup:
 	}
 
 	// and we're done (pending deferred functions)
-	AuditOperation("reset-slave", instanceKey, fmt.Sprintf("%+v replication reset", *instanceKey))
+	AuditOperation("reset-replica", instanceKey, fmt.Sprintf("%+v replication reset", *instanceKey))
 
 	return instance, err
 }
