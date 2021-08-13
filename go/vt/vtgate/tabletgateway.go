@@ -123,7 +123,7 @@ func NewTabletGateway(ctx context.Context, hc discovery.HealthCheck, serv srvtop
 					return
 				}
 				if result.Target.TabletType == topodatapb.TabletType_PRIMARY {
-					buffer.ProcessMasterHealth(result)
+					buffer.ProcessPrimaryHealth(result)
 				}
 			}
 		}

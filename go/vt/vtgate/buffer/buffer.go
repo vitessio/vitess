@@ -45,7 +45,7 @@ import (
 )
 
 var (
-	bufferFullError      = vterrors.New(vtrpcpb.Code_UNAVAILABLE, "master buffer is full")
+	bufferFullError      = vterrors.New(vtrpcpb.Code_UNAVAILABLE, "primary buffer is full")
 	entryEvictedError    = vterrors.New(vtrpcpb.Code_UNAVAILABLE, "buffer full: request evicted for newer request")
 	contextCanceledError = vterrors.New(vtrpcpb.Code_UNAVAILABLE, "context was canceled before failover finished")
 )
@@ -213,9 +213,9 @@ func (b *Buffer) WaitForFailoverEnd(ctx context.Context, keyspace, shard string,
 	return sb.waitForFailoverEnd(ctx, keyspace, shard, err)
 }
 
-// ProcessMasterHealth notifies the buffer to record a new primary
+// ProcessPrimaryHealth notifies the buffer to record a new primary
 // and end any failover buffering that may be in progress
-func (b *Buffer) ProcessMasterHealth(th *discovery.TabletHealth) {
+func (b *Buffer) ProcessPrimaryHealth(th *discovery.TabletHealth) {
 	if th.Target.TabletType != topodatapb.TabletType_PRIMARY {
 		panic(fmt.Sprintf("BUG: non MASTER TabletHealth object must not be forwarded: %#v", th))
 	}

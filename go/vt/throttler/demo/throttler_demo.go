@@ -69,12 +69,12 @@ var (
 
 // primary simulates an *unthrottled* MySQL primary which replicates every
 // received "execute" call to a known "replica".
-type master struct {
+type primary struct {
 	replica *replica
 }
 
 // execute is the simulated RPC which is called by the client.
-func (m *master) execute(msg time.Time) {
+func (m *primary) execute(msg time.Time) {
 	m.replica.replicate(msg)
 }
 
@@ -211,7 +211,7 @@ func (r *replica) stop() {
 // client simulates a client which should throttle itself based on the
 // replication lag of all replicas.
 type client struct {
-	master *master
+	primary *primary
 
 	healthCheck discovery.LegacyHealthCheck
 	throttler   *throttler.Throttler
@@ -220,7 +220,7 @@ type client struct {
 	wg       sync.WaitGroup
 }
 
-func newClient(master *master, replica *replica) *client {
+func newClient(primary *primary, replica *replica) *client {
 	t, err := throttler.NewThrottler("client", "TPS", 1, throttler.MaxRateModuleDisabled, 5 /* seconds */)
 	if err != nil {
 		log.Fatal(err)
@@ -228,7 +228,7 @@ func newClient(master *master, replica *replica) *client {
 
 	healthCheck := discovery.NewLegacyHealthCheck(5*time.Second, 1*time.Minute)
 	c := &client{
-		master:      master,
+		primary:     primary,
 		healthCheck: healthCheck,
 		throttler:   t,
 		stopChan:    make(chan struct{}),
@@ -261,7 +261,7 @@ func (c *client) loop() {
 			time.Sleep(backoff)
 		}
 
-		c.master.execute(time.Now())
+		c.primary.execute(time.Now())
 	}
 }
 
@@ -295,8 +295,8 @@ func main() {
 
 	log.Infof("start rate set to: %v", *rate)
 	replica := newReplica(*lagUpdateInterval, *replicaDegrationInterval, *replicaDegrationDuration)
-	master := &master{replica: replica}
-	client := newClient(master, replica)
+	primary := &primary{replica: replica}
+	client := newClient(primary, replica)
 	client.run()
 
 	time.Sleep(*duration)

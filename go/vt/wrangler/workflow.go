@@ -220,7 +220,7 @@ func (vrw *VReplicationWorkflow) GetStreamCount() (int64, int64, []*WorkflowErro
 		return 0, 0, nil, err
 	}
 	for ksShard := range res.ShardStatuses {
-		statuses := res.ShardStatuses[ksShard].MasterReplicationStatuses
+		statuses := res.ShardStatuses[ksShard].PrimaryReplicationStatuses
 		for _, st := range statuses {
 			totalStreams++
 			if strings.HasPrefix(st.Message, "Error:") {
@@ -245,7 +245,7 @@ func (vrw *VReplicationWorkflow) SwitchTraffic(direction workflow.TrafficSwitchD
 	var rdDryRunResults, wrDryRunResults *[]string
 	var isCopyInProgress bool
 	var err error
-	var hasReplica, hasRdonly, hasMaster bool
+	var hasReplica, hasRdonly, hasPrimary bool
 
 	if !vrw.Exists() {
 		return nil, fmt.Errorf("workflow has not yet been started")
@@ -263,7 +263,7 @@ func (vrw *VReplicationWorkflow) SwitchTraffic(direction workflow.TrafficSwitchD
 	}
 
 	vrw.params.Direction = direction
-	hasReplica, hasRdonly, hasMaster, err = vrw.parseTabletTypes()
+	hasReplica, hasRdonly, hasPrimary, err = vrw.parseTabletTypes()
 	if err != nil {
 		return nil, err
 	}
@@ -275,7 +275,7 @@ func (vrw *VReplicationWorkflow) SwitchTraffic(direction workflow.TrafficSwitchD
 	if rdDryRunResults != nil {
 		dryRunResults = append(dryRunResults, *rdDryRunResults...)
 	}
-	if hasMaster {
+	if hasPrimary {
 		if wrDryRunResults, err = vrw.switchWrites(); err != nil {
 			return nil, err
 		}

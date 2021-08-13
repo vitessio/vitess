@@ -131,17 +131,17 @@ func (erp *EmergencyReparenter) promoteNewPrimary(
 	statusMap map[string]*replicationdatapb.StopReplicationStatus,
 	opts EmergencyReparentOptions,
 ) error {
-	erp.logger.Infof("promoting tablet %v to master", newPrimaryTabletAlias)
+	erp.logger.Infof("promoting tablet %v to primary", newPrimaryTabletAlias)
 	event.DispatchUpdate(ev, "promoting replica")
 
 	newPrimaryTabletInfo, ok := tabletMap[newPrimaryTabletAlias]
 	if !ok {
-		return vterrors.Errorf(vtrpc.Code_INTERNAL, "attempted to promote master-elect %v that was not in the tablet map; this an impossible situation", newPrimaryTabletAlias)
+		return vterrors.Errorf(vtrpc.Code_INTERNAL, "attempted to promote primary-elect %v that was not in the tablet map; this an impossible situation", newPrimaryTabletAlias)
 	}
 
 	rp, err := erp.tmc.PromoteReplica(ctx, newPrimaryTabletInfo.Tablet)
 	if err != nil {
-		return vterrors.Wrapf(err, "master-elect tablet %v failed to be upgraded to master: %v", newPrimaryTabletAlias, err)
+		return vterrors.Wrapf(err, "primary-elect tablet %v failed to be upgraded to primary: %v", newPrimaryTabletAlias, err)
 	}
 
 	if err := topo.CheckShardLocked(ctx, keyspace, shard); err != nil {
@@ -171,13 +171,13 @@ func (erp *EmergencyReparenter) promoteNewPrimary(
 	rec := concurrency.AllErrorRecorder{}
 
 	handlePrimary := func(alias string, ti *topo.TabletInfo) error {
-		erp.logger.Infof("populating reparent journal on new master %v", alias)
+		erp.logger.Infof("populating reparent journal on new primary %v", alias)
 		return erp.tmc.PopulateReparentJournal(replCtx, ti.Tablet, now, opts.lockAction, newPrimaryTabletInfo.Alias, rp)
 	}
 
 	handleReplica := func(alias string, ti *topo.TabletInfo) {
 		defer replWg.Done()
-		erp.logger.Infof("setting new master on replica %v", alias)
+		erp.logger.Infof("setting new primary on replica %v", alias)
 
 		forceStart := false
 		if status, ok := statusMap[alias]; ok {
@@ -233,10 +233,10 @@ func (erp *EmergencyReparenter) promoteNewPrimary(
 
 	primaryErr := handlePrimary(newPrimaryTabletAlias, newPrimaryTabletInfo)
 	if primaryErr != nil {
-		erp.logger.Warningf("master failed to PopulateReparentJournal")
+		erp.logger.Warningf("primary failed to PopulateReparentJournal")
 		replCancel()
 
-		return vterrors.Wrapf(primaryErr, "failed to PopulateReparentJournal on master: %v", primaryErr)
+		return vterrors.Wrapf(primaryErr, "failed to PopulateReparentJournal on primary: %v", primaryErr)
 	}
 
 	select {
@@ -321,9 +321,9 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		pos, ok := validCandidates[winningPrimaryTabletAliasStr]
 		switch {
 		case !ok:
-			return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "master elect %v has errant GTIDs", winningPrimaryTabletAliasStr)
+			return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "primary elect %v has errant GTIDs", winningPrimaryTabletAliasStr)
 		case !pos.AtLeast(winningPosition):
-			return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "master elect %v at position %v is not fully caught up. Winning position: %v", winningPrimaryTabletAliasStr, pos, winningPosition)
+			return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "primary elect %v at position %v is not fully caught up. Winning position: %v", winningPrimaryTabletAliasStr, pos, winningPosition)
 		}
 	}
 
@@ -337,7 +337,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		return err
 	}
 
-	ev.NewMaster = proto.Clone(tabletMap[winningPrimaryTabletAliasStr].Tablet).(*topodatapb.Tablet)
+	ev.NewPrimary = proto.Clone(tabletMap[winningPrimaryTabletAliasStr].Tablet).(*topodatapb.Tablet)
 	return nil
 }
 
@@ -376,7 +376,7 @@ func (erp *EmergencyReparenter) waitForAllRelayLogsToApply(
 		// place, so we skip it, and log that we did.
 		status, ok := statusMap[candidate]
 		if !ok {
-			erp.logger.Infof("EmergencyReparent candidate %v not in replica status map; this means it was not running replication (because it was formerly MASTER), so skipping WaitForRelayLogsToApply step for this candidate", candidate)
+			erp.logger.Infof("EmergencyReparent candidate %v not in replica status map; this means it was not running replication (because it was formerly PRIMARY), so skipping WaitForRelayLogsToApply step for this candidate", candidate)
 			continue
 		}
 

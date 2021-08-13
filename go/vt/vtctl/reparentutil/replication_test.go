@@ -161,7 +161,7 @@ func TestFindValidEmergencyReparentCandidates(t *testing.T) {
 			shouldErr: false,
 		},
 		{
-			name: "bad master position fails the call",
+			name: "bad primary position fails the call",
 			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
 				"r1": {
 					After: &replicationdatapb.Status{
@@ -384,7 +384,7 @@ func TestStopReplicationAndBuildStatusMaps(t *testing.T) {
 			shouldErr:                false,
 		},
 		{
-			name: "have MASTER tablet and can demote",
+			name: "have PRIMARY tablet and can demote",
 			tmc: &stopReplicationAndBuildStatusMapsTestTMClient{
 				demoteMasterResults: map[string]*struct {
 					PrimaryStatus *replicationdatapb.PrimaryStatus
@@ -392,7 +392,7 @@ func TestStopReplicationAndBuildStatusMaps(t *testing.T) {
 				}{
 					"zone1-0000000100": {
 						PrimaryStatus: &replicationdatapb.PrimaryStatus{
-							Position: "master-position-100",
+							Position: "primary-position-100",
 						},
 					},
 				},
@@ -438,13 +438,13 @@ func TestStopReplicationAndBuildStatusMaps(t *testing.T) {
 			},
 			expectedPrimaryStatusMap: map[string]*replicationdatapb.PrimaryStatus{
 				"zone1-0000000100": {
-					Position: "master-position-100",
+					Position: "primary-position-100",
 				},
 			},
 			shouldErr: false,
 		},
 		{
-			name: "one tablet is MASTER and cannot demote",
+			name: "one tablet is PRIMARY and cannot demote",
 			tmc: &stopReplicationAndBuildStatusMapsTestTMClient{
 				demoteMasterResults: map[string]*struct {
 					PrimaryStatus *replicationdatapb.PrimaryStatus
@@ -498,7 +498,7 @@ func TestStopReplicationAndBuildStatusMaps(t *testing.T) {
 			shouldErr:                false,
 		},
 		{
-			name: "multiple tablets are MASTER and cannot demote",
+			name: "multiple tablets are PRIMARY and cannot demote",
 			tmc: &stopReplicationAndBuildStatusMapsTestTMClient{
 				demoteMasterResults: map[string]*struct {
 					PrimaryStatus *replicationdatapb.PrimaryStatus
@@ -691,7 +691,7 @@ func TestStopReplicationAndBuildStatusMaps(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			statusMap, masterStatusMap, err := StopReplicationAndBuildStatusMaps(
+			statusMap, primaryStatusMap, err := StopReplicationAndBuildStatusMaps(
 				ctx,
 				tt.tmc,
 				&events.Reparent{},
@@ -707,7 +707,7 @@ func TestStopReplicationAndBuildStatusMaps(t *testing.T) {
 
 			assert.NoError(t, err)
 			assert.Equal(t, tt.expectedStatusMap, statusMap, "StopReplicationStatus mismatch")
-			assert.Equal(t, tt.expectedPrimaryStatusMap, masterStatusMap, "PrimaryStatusMap mismatch")
+			assert.Equal(t, tt.expectedPrimaryStatusMap, primaryStatusMap, "PrimaryStatusMap mismatch")
 		})
 	}
 }

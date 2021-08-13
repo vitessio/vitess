@@ -326,7 +326,7 @@ func ShardPrimary(instanceKey *inst.InstanceKey) (primaryKey *inst.InstanceKey, 
 	if err != nil {
 		return nil, err
 	}
-	if !si.HasMaster() {
+	if !si.HasPrimary() {
 		return nil, fmt.Errorf("no primary tablet for shard %v/%v", tablet.Keyspace, tablet.Shard)
 	}
 	tCtx, tCancel := context.WithTimeout(context.Background(), *topo.RemoteOperationTimeout)

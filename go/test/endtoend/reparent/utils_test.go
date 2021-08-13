@@ -236,9 +236,9 @@ func prsWithTimeout(t *testing.T, tab *cluster.Vttablet, avoid bool, actionTimeo
 		args = append(args, "-wait_replicas_timeout", waitTimeout)
 	}
 	if avoid {
-		args = append(args, "-avoid_master")
+		args = append(args, "-avoid_tablet")
 	} else {
-		args = append(args, "-new_master")
+		args = append(args, "-new_primary")
 	}
 	args = append(args, tab.Alias)
 	out, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(args...)
@@ -252,7 +252,7 @@ func ers(t *testing.T, tab *cluster.Vttablet, timeout string) (string, error) {
 func ersIgnoreTablet(t *testing.T, tab *cluster.Vttablet, timeout string, tabToIgnore *cluster.Vttablet) (string, error) {
 	args := []string{"EmergencyReparentShard", "-keyspace_shard", fmt.Sprintf("%s/%s", keyspaceName, shardName)}
 	if tab != nil {
-		args = append(args, "-new_master", tab.Alias)
+		args = append(args, "-new_primary", tab.Alias)
 	}
 	if timeout != "" {
 		args = append(args, "-wait_replicas_timeout", "30s")
@@ -324,7 +324,7 @@ func confirmReplication(t *testing.T, primary *cluster.Vttablet, replicas []*clu
 func confirmOldPrimaryIsHangingAround(t *testing.T) {
 	out, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("Validate")
 	require.Error(t, err)
-	require.Contains(t, out, "already has master")
+	require.Contains(t, out, "already has primary")
 }
 
 //	Waits for tablet B to catch up to the replication position of tablet A.
@@ -497,7 +497,7 @@ func resurrectTablet(ctx context.Context, t *testing.T, tab *cluster.Vttablet) {
 func deleteTablet(t *testing.T, tab *cluster.Vttablet) {
 	err := clusterInstance.VtctlclientProcess.ExecuteCommand(
 		"DeleteTablet",
-		"-allow_master",
+		"-allow_primary",
 		tab.Alias)
 	require.NoError(t, err)
 }

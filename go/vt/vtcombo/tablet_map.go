@@ -116,7 +116,7 @@ func CreateTablet(ctx context.Context, ts *topo.Server, cell string, uid uint32,
 
 	if tabletType == topodatapb.TabletType_PRIMARY {
 		if err := tm.ChangeType(ctx, topodatapb.TabletType_PRIMARY); err != nil {
-			return fmt.Errorf("TabletExternallyReparented failed on master %v: %v", topoproto.TabletAliasString(alias), err)
+			return fmt.Errorf("TabletExternallyReparented failed on primary %v: %v", topoproto.TabletAliasString(alias), err)
 		}
 	}
 	controller.AddStatusHeader()
@@ -807,7 +807,7 @@ func (itmc *internalTabletManagerClient) PromoteReplica(ctx context.Context, tab
 	return "", fmt.Errorf("not implemented in vtcombo")
 }
 
-func (itmc *internalTabletManagerClient) Backup(ctx context.Context, tablet *topodatapb.Tablet, concurrency int, allowMaster bool) (logutil.EventStream, error) {
+func (itmc *internalTabletManagerClient) Backup(ctx context.Context, tablet *topodatapb.Tablet, concurrency int, allowPrimary bool) (logutil.EventStream, error) {
 	return nil, fmt.Errorf("not implemented in vtcombo")
 }
 

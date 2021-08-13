@@ -367,7 +367,7 @@ message InitPrimaryResponse {
 message PopulateReparentJournalRequest {
   int64 time_created_ns = 1;
   string action_name = 2;
-  topodata.TabletAlias master_alias = 3;
+  topodata.TabletAlias primary_alias = 3;
   string replication_position = 4;
 }
 
@@ -449,7 +449,7 @@ message PromoteReplicaResponse {
 
 message BackupRequest {
   int64 concurrency = 1;
-  bool allowMaster = 2;
+  bool allow_primary = 2;
 }
 
 message BackupResponse {

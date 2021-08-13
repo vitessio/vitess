@@ -196,7 +196,7 @@ func TestMergesharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 		}
 	}
 
-	// Init Shard Master
+	// Init Shard primary
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("InitShardPrimary",
 		"-force", fmt.Sprintf("%s/%s", keyspaceName, shard0.Name), shard0Primary.Alias)
 	require.NoError(t, err)
@@ -208,7 +208,7 @@ func TestMergesharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 		"-force", fmt.Sprintf("%s/%s", keyspaceName, shard2.Name), shard2Primary.Alias)
 	require.NoError(t, err)
 
-	// Init Shard Master on Merge Shard
+	// Init Shard primary on Merge Shard
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("InitShardPrimary",
 		"-force", fmt.Sprintf("%s/%s", keyspaceName, shard3.Name), shard3Primary.Alias)
 	require.NoError(t, err)
@@ -490,7 +490,7 @@ func TestMergesharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 	}
 
 	for _, tablet := range []cluster.Vttablet{*shard0Primary, *shard1Primary} {
-		err = clusterInstance.VtctlclientProcess.ExecuteCommand("DeleteTablet", "-allow_master", tablet.Alias)
+		err = clusterInstance.VtctlclientProcess.ExecuteCommand("DeleteTablet", "-allow_primary", tablet.Alias)
 		require.NoError(t, err)
 	}
 

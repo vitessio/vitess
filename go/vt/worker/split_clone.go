@@ -442,8 +442,8 @@ func (scw *SplitCloneWorker) run(ctx context.Context) error {
 	}
 
 	// Phase 2: Find destination primary tablets.
-	if err := scw.findDestinationMasters(ctx); err != nil {
-		return vterrors.Wrap(err, "findDestinationMasters() failed")
+	if err := scw.findDestinationPrimarys(ctx); err != nil {
+		return vterrors.Wrap(err, "findDestinationPrimarys() failed")
 	}
 	if err := checkDone(ctx); err != nil {
 		return err
@@ -836,32 +836,32 @@ func (scw *SplitCloneWorker) findTransactionalSources(ctx context.Context) error
 	return nil
 }
 
-// findDestinationMasters finds for each destination shard the current primary.
-func (scw *SplitCloneWorker) findDestinationMasters(ctx context.Context) error {
+// findDestinationPrimarys finds for each destination shard the current primary.
+func (scw *SplitCloneWorker) findDestinationPrimarys(ctx context.Context) error {
 	scw.setState(WorkerStateFindTargets)
 
 	// Make sure we find a primary for each destination shard and log it.
-	scw.wr.Logger().Infof("Finding a MASTER tablet for each destination shard...")
+	scw.wr.Logger().Infof("Finding a PRIMARY tablet for each destination shard...")
 	for _, si := range scw.destinationShards {
 		waitCtx, waitCancel := context.WithTimeout(ctx, *waitForHealthyTabletsTimeout)
 		err := scw.tsc.WaitForTablets(waitCtx, si.Keyspace(), si.ShardName(), topodatapb.TabletType_PRIMARY)
 		waitCancel()
 		if err != nil {
-			return vterrors.Wrapf(err, "cannot find MASTER tablet for destination shard for %v/%v (in cell: %v)", si.Keyspace(), si.ShardName(), scw.cell)
+			return vterrors.Wrapf(err, "cannot find PRIMARY tablet for destination shard for %v/%v (in cell: %v)", si.Keyspace(), si.ShardName(), scw.cell)
 		}
-		masters := scw.tsc.GetHealthyTabletStats(si.Keyspace(), si.ShardName(), topodatapb.TabletType_PRIMARY)
-		if len(masters) == 0 {
-			return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "cannot find MASTER tablet for destination shard for %v/%v (in cell: %v) in LegacyHealthCheck: empty LegacyTabletStats list", si.Keyspace(), si.ShardName(), scw.cell)
+		primarys := scw.tsc.GetHealthyTabletStats(si.Keyspace(), si.ShardName(), topodatapb.TabletType_PRIMARY)
+		if len(primarys) == 0 {
+			return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "cannot find PRIMARY tablet for destination shard for %v/%v (in cell: %v) in LegacyHealthCheck: empty LegacyTabletStats list", si.Keyspace(), si.ShardName(), scw.cell)
 		}
-		master := masters[0]
+		primary := primarys[0]
 
 		// Get the MySQL database name of the tablet.
 		keyspaceAndShard := topoproto.KeyspaceShardString(si.Keyspace(), si.ShardName())
-		scw.destinationDbNames[keyspaceAndShard] = topoproto.TabletDbName(master.Tablet)
+		scw.destinationDbNames[keyspaceAndShard] = topoproto.TabletDbName(primary.Tablet)
 
-		scw.wr.Logger().Infof("Using tablet %v as destination master for %v/%v", topoproto.TabletAliasString(master.Tablet.Alias), si.Keyspace(), si.ShardName())
+		scw.wr.Logger().Infof("Using tablet %v as destination primary for %v/%v", topoproto.TabletAliasString(primary.Tablet.Alias), si.Keyspace(), si.ShardName())
 	}
-	scw.wr.Logger().Infof("NOTE: The used master of a destination shard might change over the course of the copy e.g. due to a reparent. The LegacyHealthCheck module will track and log master changes and any error message will always refer the actually used master address.")
+	scw.wr.Logger().Infof("NOTE: The used primary of a destination shard might change over the course of the copy e.g. due to a reparent. The LegacyHealthCheck module will track and log primary changes and any error message will always refer the actually used primary address.")
 
 	return nil
 }

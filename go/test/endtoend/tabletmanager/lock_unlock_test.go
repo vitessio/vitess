@@ -90,15 +90,15 @@ func TestStartReplicationUntilAfter(t *testing.T) {
 	require.Nil(t, err)
 
 	exec(t, conn, "insert into t1(id, value) values(1,'a')")
-	pos1, err := tmcMasterPosition(ctx, primaryTablet.GrpcPort)
+	pos1, err := tmcPrimaryPosition(ctx, primaryTablet.GrpcPort)
 	require.Nil(t, err)
 
 	exec(t, conn, "insert into t1(id, value) values(2,'b')")
-	pos2, err := tmcMasterPosition(ctx, primaryTablet.GrpcPort)
+	pos2, err := tmcPrimaryPosition(ctx, primaryTablet.GrpcPort)
 	require.Nil(t, err)
 
 	exec(t, conn, "insert into t1(id, value) values(3,'c')")
-	pos3, err := tmcMasterPosition(ctx, primaryTablet.GrpcPort)
+	pos3, err := tmcPrimaryPosition(ctx, primaryTablet.GrpcPort)
 	require.Nil(t, err)
 
 	// Now, we'll resume stepwise position by position and make sure that we see the expected data
@@ -131,16 +131,16 @@ func TestLockAndTimeout(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 
-	masterConn, err := mysql.Connect(ctx, &primaryTabletParams)
+	primaryConn, err := mysql.Connect(ctx, &primaryTabletParams)
 	require.Nil(t, err)
-	defer masterConn.Close()
+	defer primaryConn.Close()
 
 	replicaConn, err := mysql.Connect(ctx, &replicaTabletParams)
 	require.Nil(t, err)
 	defer replicaConn.Close()
 
 	// first make sure that our writes to the primary make it to the replica
-	exec(t, masterConn, "insert into t1(id, value) values(1,'a')")
+	exec(t, primaryConn, "insert into t1(id, value) values(1,'a')")
 	checkDataOnReplica(t, replicaConn, `[[VARCHAR("a")]]`)
 
 	// now lock the replica
@@ -148,7 +148,7 @@ func TestLockAndTimeout(t *testing.T) {
 	require.Nil(t, err)
 
 	// make sure that writing to the primary does not show up on the replica while locked
-	exec(t, masterConn, "insert into t1(id, value) values(2,'b')")
+	exec(t, primaryConn, "insert into t1(id, value) values(2,'b')")
 	checkDataOnReplica(t, replicaConn, `[[VARCHAR("a")]]`)
 
 	// the tests sets the lock timeout to 5 seconds, so sleeping 8 should be safe
@@ -156,7 +156,7 @@ func TestLockAndTimeout(t *testing.T) {
 	checkDataOnReplica(t, replicaConn, `[[VARCHAR("a")] [VARCHAR("b")]]`)
 
 	// Clean the table for further testing
-	exec(t, masterConn, "delete from t1")
+	exec(t, primaryConn, "delete from t1")
 }
 
 func checkDataOnReplica(t *testing.T, replicaConn *mysql.Conn, want string) {

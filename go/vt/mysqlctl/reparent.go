@@ -54,7 +54,7 @@ ENGINE=InnoDB`, mysql.MaximumPositionSize)}
 // PopulateReparentJournal returns the SQL command to use to populate
 // the _vt.reparent_journal table, as well as the time_created_ns
 // value used.
-func PopulateReparentJournal(timeCreatedNS int64, actionName, masterAlias string, pos mysql.Position) string {
+func PopulateReparentJournal(timeCreatedNS int64, actionName, primaryAlias string, pos mysql.Position) string {
 	posStr := mysql.EncodePosition(pos)
 	if len(posStr) > mysql.MaximumPositionSize {
 		posStr = posStr[:mysql.MaximumPositionSize]
@@ -62,7 +62,7 @@ func PopulateReparentJournal(timeCreatedNS int64, actionName, masterAlias string
 	return fmt.Sprintf("INSERT INTO _vt.reparent_journal "+
 		"(time_created_ns, action_name, master_alias, replication_position) "+
 		"VALUES (%v, '%v', '%v', '%v')",
-		timeCreatedNS, actionName, masterAlias, posStr)
+		timeCreatedNS, actionName, primaryAlias, posStr)
 }
 
 // queryReparentJournal returns the SQL query to use to query the database

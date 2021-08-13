@@ -262,7 +262,7 @@ func TestPlanPrefixKey(t *testing.T) {
 	tests := []testCase{{
 		vschema:               vschemaWith1KS,
 		targetString:          "",
-		expectedPlanPrefixKey: "ks1@master",
+		expectedPlanPrefixKey: "ks1@primary",
 	}, {
 		vschema:               vschemaWith1KS,
 		targetString:          "ks1@replica",
@@ -270,11 +270,11 @@ func TestPlanPrefixKey(t *testing.T) {
 	}, {
 		vschema:               vschemaWith1KS,
 		targetString:          "ks1:-80",
-		expectedPlanPrefixKey: "ks1@masterDestinationShard(-80)",
+		expectedPlanPrefixKey: "ks1@primaryDestinationShard(-80)",
 	}, {
 		vschema:               vschemaWith1KS,
 		targetString:          "ks1[deadbeef]",
-		expectedPlanPrefixKey: "ks1@masterKsIDsResolved(80-)",
+		expectedPlanPrefixKey: "ks1@primaryKsIDsResolved(80-)",
 	}}
 
 	for i, tc := range tests {

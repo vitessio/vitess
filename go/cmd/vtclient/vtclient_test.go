@@ -89,27 +89,27 @@ func TestVtclient(t *testing.T) {
 			args: []string{"SELECT * FROM table1"},
 		},
 		{
-			args: []string{"-target", "@master", "-bind_variables", `[ 1, 100 ]`,
+			args: []string{"-target", "@primary", "-bind_variables", `[ 1, 100 ]`,
 				"INSERT INTO table1 (id, i) VALUES (:v1, :v2)"},
 			rowsAffected: 1,
 		},
 		{
-			args: []string{"-target", "@master",
+			args: []string{"-target", "@primary",
 				"UPDATE table1 SET i = (i + 1)"},
 			rowsAffected: 1,
 		},
 		{
-			args: []string{"-target", "@master",
+			args: []string{"-target", "@primary",
 				"SELECT * FROM table1"},
 			rowsAffected: 1,
 		},
 		{
-			args: []string{"-target", "@master", "-bind_variables", `[ 1 ]`,
+			args: []string{"-target", "@primary", "-bind_variables", `[ 1 ]`,
 				"DELETE FROM table1 WHERE id = :v1"},
 			rowsAffected: 1,
 		},
 		{
-			args: []string{"-target", "@master",
+			args: []string{"-target", "@primary",
 				"SELECT * FROM table1"},
 			rowsAffected: 0,
 		},

@@ -508,7 +508,7 @@ func (tm *TabletManager) startReplication(ctx context.Context, pos mysql.Positio
 		// already set the position at which to resume when we're later reparented.
 		// If we had instead considered this fatal, all tablets would crash-loop
 		// until a primary appears, which would make it impossible to elect a primary.
-		log.Warningf("Can't start replication after restore: shard %v/%v has no master.", tablet.Keyspace, tablet.Shard)
+		log.Warningf("Can't start replication after restore: shard %v/%v has no primary.", tablet.Keyspace, tablet.Shard)
 		return nil
 	}
 	if topoproto.TabletAliasEqual(si.PrimaryAlias, tablet.Alias) {
@@ -516,12 +516,12 @@ func (tm *TabletManager) startReplication(ctx context.Context, pos mysql.Positio
 		// and no other primary has been elected in the meantime.
 		// This shouldn't happen, so we'll let the operator decide which tablet
 		// should actually be promoted to primary.
-		log.Warningf("Can't start replication after restore: master record still points to this tablet.")
+		log.Warningf("Can't start replication after restore: primary in shard record still points to this tablet.")
 		return nil
 	}
 	ti, err := tm.TopoServer.GetTablet(ctx, si.PrimaryAlias)
 	if err != nil {
-		return vterrors.Wrapf(err, "Cannot read master tablet %v", si.PrimaryAlias)
+		return vterrors.Wrapf(err, "Cannot read primary tablet %v", si.PrimaryAlias)
 	}
 
 	// If using semi-sync, we need to enable it before connecting to primary.
@@ -558,12 +558,12 @@ func (tm *TabletManager) startReplication(ctx context.Context, pos mysql.Positio
 		log.Warningf("Can't get primary replication position after restore: %v", err)
 		return nil
 	}
-	masterPos, err := mysql.DecodePosition(posStr)
+	primaryPos, err := mysql.DecodePosition(posStr)
 	if err != nil {
-		return vterrors.Wrapf(err, "can't decode master replication position: %q", posStr)
+		return vterrors.Wrapf(err, "can't decode primary replication position: %q", posStr)
 	}
 
-	if !pos.Equal(masterPos) {
+	if !pos.Equal(primaryPos) {
 		for {
 			if err := ctx.Err(); err != nil {
 				return err
@@ -591,7 +591,7 @@ func (tm *TabletManager) getLocalMetadataValues(tabletType topodatapb.TabletType
 		"DataCenter":    tablet.Alias.Cell,
 		"PromotionRule": "must_not",
 	}
-	if isMasterEligible(tabletType) {
+	if isPrimaryEligible(tabletType) {
 		values["PromotionRule"] = "neutral"
 	}
 	return values

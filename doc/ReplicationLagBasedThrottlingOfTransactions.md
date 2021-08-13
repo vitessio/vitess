@@ -1,6 +1,6 @@
 # Replication Lag Based Throttling of Transactions 
 Vitess supports throttling of transactions based on replication lag. When this
-feature is turned on, each VTTablet master monitors the replication lag from
+feature is turned on, each VTTablet primary monitors the replication lag from
 the replicas, and based on the observed replication lag tries to rate-limit the
 received transactions to keep the replication lag under a configured limit.
 
