@@ -1,11 +1,3 @@
-2021-04-11T20:53:56Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/739051710
-2021-04-11T20:53:56Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/739051687
-2021-04-11T20:53:56Z,unit_race,https://github.com/vitessio/vitess/actions/runs/739051715
-2021-04-11T21:27:20Z,Cluster (27),https://github.com/vitessio/vitess/actions/runs/739104768
-2021-04-11T21:27:20Z,Cluster (onlineddl_ghost),https://github.com/vitessio/vitess/actions/runs/739104727
-2021-04-11T21:27:20Z,Cluster (vreplication_cellalias),https://github.com/vitessio/vitess/actions/runs/739104728
-2021-04-11T21:27:20Z,Cluster (vreplication_multicell),https://github.com/vitessio/vitess/actions/runs/739104746
-2021-04-11T21:27:20Z,Unit Test (mariadb101),https://github.com/vitessio/vitess/actions/runs/739104762
 2021-04-11T21:27:20Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/739104774
 2021-04-11T21:27:20Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/739104773
 2021-04-11T21:27:20Z,Unit Test (mysql57),https://github.com/vitessio/vitess/actions/runs/739104741
@@ -9998,3 +9990,11 @@
 2021-08-13T01:20:01Z,Cluster (vtgate_vschema),https://github.com/vitessio/vitess/actions/runs/1126057879
 2021-08-13T01:20:01Z,Unit Test (mysql57),https://github.com/vitessio/vitess/actions/runs/1126057874
 2021-08-13T01:20:01Z,unit_race,https://github.com/vitessio/vitess/actions/runs/1126057836
+2021-08-14T19:11:38Z,Cluster (12),https://github.com/vitessio/vitess/actions/runs/1131129410
+2021-08-14T19:11:38Z,Cluster (14),https://github.com/vitessio/vitess/actions/runs/1131129419
+2021-08-14T19:11:38Z,Cluster (18),https://github.com/vitessio/vitess/actions/runs/1131129399
+2021-08-14T19:11:38Z,Cluster (upgrade),https://github.com/vitessio/vitess/actions/runs/1131129401
+2021-08-14T19:11:38Z,Cluster (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/1131129428
+2021-08-14T19:11:38Z,Cluster (vreplication_multicell),https://github.com/vitessio/vitess/actions/runs/1131129423
+2021-08-14T19:11:38Z,Cluster (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/1131129393
+2021-08-14T19:11:38Z,endtoend,https://github.com/vitessio/vitess/actions/runs/1131129409
