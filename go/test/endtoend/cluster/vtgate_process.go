@@ -27,6 +27,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"vitess.io/vitess/go/vt/log"
@@ -191,26 +192,21 @@ func (vtgate *VtgateProcess) TearDown() error {
 		return nil
 	}
 	// graceful shutdown is not currently working with vtgate, attempting a force-kill to make tests less flaky
-	vtgate.proc.Process.Kill()
-	vtgate.proc = nil
-	return nil
-	/*
-		// Attempt graceful shutdown with SIGTERM first
-		vtgate.proc.Process.Signal(syscall.SIGTERM)
+	// Attempt graceful shutdown with SIGTERM first
+	vtgate.proc.Process.Signal(syscall.SIGTERM)
 
-		// We are not checking vtgate's exit code because it sometimes
-		// returns exit code 2, even though vtgate terminates cleanly.
-		select {
-		case <-vtgate.exit:
-			vtgate.proc = nil
-			return nil
+	// We are not checking vtgate's exit code because it sometimes
+	// returns exit code 2, even though vtgate terminates cleanly.
+	select {
+	case <-vtgate.exit:
+		vtgate.proc = nil
+		return nil
 
-		case <-time.After(30 * time.Second):
-			vtgate.proc.Process.Kill()
-			vtgate.proc = nil
-			return <-vtgate.exit
-		}
-	*/
+	case <-time.After(30 * time.Second):
+		vtgate.proc.Process.Kill()
+		vtgate.proc = nil
+		return <-vtgate.exit
+	}
 }
 
 // VtgateProcessInstance returns a Vtgate handle for vtgate process
