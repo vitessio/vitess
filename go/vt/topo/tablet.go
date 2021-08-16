@@ -83,7 +83,7 @@ func IsRunningQueryService(tt topodatapb.TabletType) bool {
 // non-serving state through its health check. then vtgate will catch
 // that non-serving state, and stop sending queries.
 //
-// Masters are not subject to lameduck, as we usually want to transition
+// Primaries are not subject to lameduck, as we usually want to transition
 // them as fast as possible.
 //
 // Replica and rdonly will use lameduck when going from healthy to
