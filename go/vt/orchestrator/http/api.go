@@ -1646,7 +1646,7 @@ func (this *HttpAPI) SubmitMastersToKvStores(params martini.Params, r render.Ren
 		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
 		return
 	}
-	kvPairs, submittedCount, err := logic.SubmitMastersToKvStores(clusterName, true)
+	kvPairs, submittedCount, err := logic.SubmitPrimariesToKvStores(clusterName, true)
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
 		return
@@ -2317,7 +2317,7 @@ func (this *HttpAPI) gracefulMasterTakeover(params martini.Params, r render.Rend
 	}
 	designatedKey, _ := this.getInstanceKey(params["designatedHost"], params["designatedPort"])
 	// designatedKey may be empty/invalid
-	topologyRecovery, _, err := logic.GracefulMasterTakeover(clusterName, &designatedKey, auto)
+	topologyRecovery, _, err := logic.GracefulPrimaryTakeover(clusterName, &designatedKey, auto)
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), Details: topologyRecovery})
 		return
@@ -2352,7 +2352,7 @@ func (this *HttpAPI) ForceMasterFailover(params martini.Params, r render.Render,
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
 	}
-	topologyRecovery, err := logic.ForceMasterFailover(clusterName)
+	topologyRecovery, err := logic.ForcePrimaryFailover(clusterName)
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
@@ -2386,7 +2386,7 @@ func (this *HttpAPI) ForceMasterTakeover(params martini.Params, r render.Render,
 		return
 	}
 
-	topologyRecovery, err := logic.ForceMasterTakeover(clusterName, designatedInstance)
+	topologyRecovery, err := logic.ForcePrimaryTakeover(clusterName, designatedInstance)
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return

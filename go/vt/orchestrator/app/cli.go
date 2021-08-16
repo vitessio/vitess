@@ -863,14 +863,14 @@ func Cli(command string, strict bool, instance string, destination string, owner
 	case registerCliCommand("which-cluster-master", "Information", `Output the name of the master in a given cluster`):
 		{
 			clusterName := getClusterName(clusterAlias, instanceKey)
-			masters, err := inst.ReadClusterPrimary(clusterName)
+			primaries, err := inst.ReadClusterPrimary(clusterName)
 			if err != nil {
 				log.Fatale(err)
 			}
-			if len(masters) == 0 {
-				log.Fatalf("No writeable masters found for cluster %+v", clusterName)
+			if len(primaries) == 0 {
+				log.Fatalf("No writeable primaries found for cluster %+v", clusterName)
 			}
-			fmt.Println(masters[0].Key.DisplayString())
+			fmt.Println(primaries[0].Key.DisplayString())
 		}
 	case registerCliCommand("which-cluster-instances", "Information", `Output the list of instances participating in same cluster as given instance`):
 		{
@@ -974,7 +974,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			clusterName := getClusterName(clusterAlias, instanceKey)
 			log.Debugf("cluster name is <%s>", clusterName)
 
-			kvPairs, _, err := logic.SubmitMastersToKvStores(clusterName, true)
+			kvPairs, _, err := logic.SubmitPrimariesToKvStores(clusterName, true)
 			if err != nil {
 				log.Fatale(err)
 			}
@@ -1195,7 +1195,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 	case registerCliCommand("force-master-failover", "Recovery", `Forcibly discard master and initiate a failover, even if orchestrator doesn't see a problem. This command lets orchestrator choose the replacement master`):
 		{
 			clusterName := getClusterName(clusterAlias, instanceKey)
-			topologyRecovery, err := logic.ForceMasterFailover(clusterName)
+			topologyRecovery, err := logic.ForcePrimaryFailover(clusterName)
 			if err != nil {
 				log.Fatale(err)
 			}
@@ -1208,7 +1208,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 				log.Fatal("Cannot deduce destination, the instance to promote in place of the master. Please provide with -d")
 			}
 			destination := validateInstanceIsFound(destinationKey)
-			topologyRecovery, err := logic.ForceMasterTakeover(clusterName, destination)
+			topologyRecovery, err := logic.ForcePrimaryTakeover(clusterName, destination)
 			if err != nil {
 				log.Fatale(err)
 			}
@@ -1220,13 +1220,13 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			if destinationKey != nil {
 				validateInstanceIsFound(destinationKey)
 			}
-			topologyRecovery, promotedMasterCoordinates, err := logic.GracefulMasterTakeover(clusterName, destinationKey, false)
+			topologyRecovery, promotedPrimaryCoordinates, err := logic.GracefulPrimaryTakeover(clusterName, destinationKey, false)
 			if err != nil {
 				log.Fatale(err)
 			}
 			fmt.Println(topologyRecovery.SuccessorKey.DisplayString())
-			fmt.Println(*promotedMasterCoordinates)
-			log.Debugf("Promoted %+v as new master. Binlog coordinates at time of promotion: %+v", topologyRecovery.SuccessorKey, *promotedMasterCoordinates)
+			fmt.Println(*promotedPrimaryCoordinates)
+			log.Debugf("Promoted %+v as new master. Binlog coordinates at time of promotion: %+v", topologyRecovery.SuccessorKey, *promotedPrimaryCoordinates)
 		}
 	case registerCliCommand("graceful-master-takeover-auto", "Recovery", `Gracefully promote a new master. orchestrator will attempt to pick the promoted replica automatically`):
 		{
@@ -1236,13 +1236,13 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			if destinationKey != nil {
 				validateInstanceIsFound(destinationKey)
 			}
-			topologyRecovery, promotedMasterCoordinates, err := logic.GracefulMasterTakeover(clusterName, destinationKey, true)
+			topologyRecovery, promotedPrimaryCoordinates, err := logic.GracefulPrimaryTakeover(clusterName, destinationKey, true)
 			if err != nil {
 				log.Fatale(err)
 			}
 			fmt.Println(topologyRecovery.SuccessorKey.DisplayString())
-			fmt.Println(*promotedMasterCoordinates)
-			log.Debugf("Promoted %+v as new master. Binlog coordinates at time of promotion: %+v", topologyRecovery.SuccessorKey, *promotedMasterCoordinates)
+			fmt.Println(*promotedPrimaryCoordinates)
+			log.Debugf("Promoted %+v as new master. Binlog coordinates at time of promotion: %+v", topologyRecovery.SuccessorKey, *promotedPrimaryCoordinates)
 		}
 	case registerCliCommand("replication-analysis", "Recovery", `Request an analysis of potential crash incidents in all known topologies`):
 		{
