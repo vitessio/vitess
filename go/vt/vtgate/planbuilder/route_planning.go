@@ -223,18 +223,11 @@ func optimizeQuery(opTree abstract.Operator, reservedVars *sqlparser.ReservedVar
 
 func canMergeSubQuery(outer, subq queryTree, subqOp abstract.Operator) (bool, error) {
 	// check merge the subq into the outer one
-	var subQRoute *routeTree
 	var subQP *abstract.QueryGraph
-	switch node := subq.(type) {
+	switch subq.(type) {
 	case *routeTree:
-		subQRoute = node
 		subQP = subqOp.(*abstract.QueryGraph)
 	case *derivedTree:
-		routeT, isRoute := node.inner.(*routeTree)
-		if !isRoute {
-			return false, nil
-		}
-		subQRoute = routeT
 		derivedO, isDerived := subqOp.(*abstract.Derived)
 		if !isDerived {
 			return false, nil
@@ -268,7 +261,15 @@ func canMergeSubQuery(outer, subq queryTree, subqOp abstract.Operator) (bool, er
 		}
 		return false, nil
 	}
-	if subQRoute.routeOpCode == engine.SelectUnsharded && outerRoute.routeOpCode == engine.SelectUnsharded {
+	subqOpCode, err := subq.getOpCode()
+	if err != nil {
+		return false, err
+	}
+	outerOpCode, err := outer.getOpCode()
+	if err != nil {
+		return false, err
+	}
+	if subqOpCode == engine.SelectUnsharded && outerOpCode == engine.SelectUnsharded {
 		return true, nil
 	}
 

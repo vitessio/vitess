@@ -48,6 +48,7 @@ type (
 		pushOutputColumns([]*sqlparser.ColName, *semantics.SemTable) ([]int, error)
 
 		getKeyspace() (*vindexes.Keyspace, error)
+		getOpCode() (engine.RouteOpcode, error)
 	}
 
 	joinTree struct {
@@ -113,6 +114,22 @@ type (
 		argName  string
 	}
 )
+
+func (s *subqueryTree) getOpCode() (engine.RouteOpcode, error) {
+	return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unsupported getOpCode for %T", s)
+}
+
+func (d *derivedTree) getOpCode() (engine.RouteOpcode, error) {
+	return d.inner.getOpCode()
+}
+
+func (jp *joinTree) getOpCode() (engine.RouteOpcode, error) {
+	return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unsupported getOpCode for %T", jp)
+}
+
+func (rp *routeTree) getOpCode() (engine.RouteOpcode, error) {
+	return rp.routeOpCode, nil
+}
 
 func (s *subqueryTree) getKeyspace() (*vindexes.Keyspace, error) {
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unsupported getKeyspace for %T", s)
