@@ -30,8 +30,8 @@ type Join struct {
 var _ Operator = (*Join)(nil)
 
 // Solves implements the Operator interface
-func (j *Join) Solves(ts semantics.TableSet) bool {
-	return j.LHS.Solves(ts) || j.RHS.Solves(ts)
+func (j *Join) Solves(ts semantics.TableSet) (bool, []sqlparser.Expr) {
+	return false, nil
 }
 
 // PushPredicate implements the Operator interface

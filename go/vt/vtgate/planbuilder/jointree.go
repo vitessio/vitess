@@ -49,6 +49,7 @@ type (
 
 		getKeyspace() (*vindexes.Keyspace, error)
 		getOpCode() (engine.RouteOpcode, error)
+		getVindexPredicates() ([]*vindexPlusPredicates, error)
 	}
 
 	joinTree struct {
@@ -114,6 +115,22 @@ type (
 		argName  string
 	}
 )
+
+func (s *subqueryTree) getVindexPredicates() ([]*vindexPlusPredicates, error) {
+	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unsupported getVindexPredicates for %T", s)
+}
+
+func (d *derivedTree) getVindexPredicates() ([]*vindexPlusPredicates, error) {
+	return d.inner.getVindexPredicates()
+}
+
+func (jp *joinTree) getVindexPredicates() ([]*vindexPlusPredicates, error) {
+	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unsupported getVindexPredicates for %T", jp)
+}
+
+func (rp *routeTree) getVindexPredicates() ([]*vindexPlusPredicates, error) {
+	return rp.vindexPreds, nil
+}
 
 func (s *subqueryTree) getOpCode() (engine.RouteOpcode, error) {
 	return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unsupported getOpCode for %T", s)

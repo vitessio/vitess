@@ -30,8 +30,8 @@ type LeftJoin struct {
 var _ Operator = (*LeftJoin)(nil)
 
 // Solves implements the Operator interface
-func (oj *LeftJoin) Solves(ts semantics.TableSet) bool {
-	return oj.Left.Solves(ts) || oj.Right.Solves(ts)
+func (oj *LeftJoin) Solves(ts semantics.TableSet) (bool, []sqlparser.Expr) {
+	return false, nil
 }
 
 // PushPredicate implements the Operator interface

@@ -89,13 +89,13 @@ func (qg *QueryGraph) GetPredicates(lhs, rhs semantics.TableSet) []sqlparser.Exp
 
 // Solves tells whether the QueryGraph has join overlapping with the provided semantics.TableSet
 // This method implements the Operator interface
-func (qg *QueryGraph) Solves(given semantics.TableSet) bool {
-	for ts := range qg.innerJoins {
+func (qg *QueryGraph) Solves(given semantics.TableSet) (bool, []sqlparser.Expr) {
+	for ts, exprs := range qg.innerJoins {
 		if ts.IsOverlapping(given) {
-			return true
+			return true, exprs
 		}
 	}
-	return false
+	return false, nil
 }
 
 func newQueryGraph() *QueryGraph {
