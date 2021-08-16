@@ -12,24 +12,6 @@ func init() {
 	log.SetLevel(log.ERROR)
 }
 
-func TestReplicationLagQuery(t *testing.T) {
-	{
-		c := newConfiguration()
-		c.ReplicationLagQuery = "select 3"
-		err := c.postReadAdjustments()
-		test.S(t).ExpectNil(err)
-	}
-}
-
-func TestPostponeReplicaRecoveryOnLagMinutes(t *testing.T) {
-	{
-		c := newConfiguration()
-		c.PostponeReplicaRecoveryOnLagMinutes = 3
-		err := c.postReadAdjustments()
-		test.S(t).ExpectNil(err)
-	}
-}
-
 func TestPrimaryFailoverDetachReplicaPrimaryHost(t *testing.T) {
 	{
 		c := newConfiguration()
