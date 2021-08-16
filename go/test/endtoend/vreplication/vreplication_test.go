@@ -320,13 +320,13 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 			dropSourcesDryRun(t, ksWorkflow, true, dryRunResultsDropSourcesRenameCustomerShard)
 
 			var exists bool
-			exists, err = checkIfBlacklistExists(t, vc, "product:0", "customer")
-			require.NoError(t, err, "Error getting blacklist for customer:0")
+			exists, err = checkIfDenyListExists(t, vc, "product:0", "customer")
+			require.NoError(t, err, "Error getting denylist for customer:0")
 			require.True(t, exists)
 			dropSources(t, ksWorkflow)
 
-			exists, err = checkIfBlacklistExists(t, vc, "product:0", "customer")
-			require.NoError(t, err, "Error getting blacklist for customer:0")
+			exists, err = checkIfDenyListExists(t, vc, "product:0", "customer")
+			require.NoError(t, err, "Error getting denylist for customer:0")
 			require.False(t, exists)
 
 			for _, shard := range strings.Split("-80,80-", ",") {

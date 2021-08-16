@@ -98,7 +98,7 @@ func TestStateResharding(t *testing.T) {
 	assert.False(t, qsc.IsServing())
 }
 
-func TestStateBlacklist(t *testing.T) {
+func TestStateDenyList(t *testing.T) {
 	ctx := context.Background()
 	ts := memorytopo.NewServer("cell1")
 	tm := newTestTM(t, ts, 1, "ks", "0")
@@ -113,20 +113,20 @@ func TestStateBlacklist(t *testing.T) {
 	si := &topo.ShardInfo{
 		Shard: &topodatapb.Shard{
 			TabletControls: []*topodatapb.Shard_TabletControl{{
-				TabletType:        topodatapb.TabletType_REPLICA,
-				Cells:             []string{"cell1"},
-				BlacklistedTables: []string{"t1"},
+				TabletType:   topodatapb.TabletType_REPLICA,
+				Cells:        []string{"cell1"},
+				DeniedTables: []string{"t1"},
 			}},
 		},
 	}
 	tm.tmState.RefreshFromTopoInfo(ctx, si, nil)
 	tm.tmState.mu.Lock()
-	assert.Equal(t, map[topodatapb.TabletType][]string{topodatapb.TabletType_REPLICA: {"t1"}}, tm.tmState.blacklistedTables)
+	assert.Equal(t, map[topodatapb.TabletType][]string{topodatapb.TabletType_REPLICA: {"t1"}}, tm.tmState.deniedTables)
 	tm.tmState.mu.Unlock()
 
 	qsc := tm.QueryServiceControl.(*tabletservermock.Controller)
-	b, _ := json.Marshal(qsc.GetQueryRules(blacklistQueryRules))
-	assert.Equal(t, `[{"Description":"enforce blacklisted tables","Name":"blacklisted_table","TableNames":["t1"],"Action":"FAIL_RETRY"}]`, string(b))
+	b, _ := json.Marshal(qsc.GetQueryRules(denyListQueryList))
+	assert.Equal(t, `[{"Description":"enforce denied tables","Name":"denied_table","TableNames":["t1"],"Action":"FAIL_RETRY"}]`, string(b))
 }
 
 func TestStateTabletControls(t *testing.T) {
