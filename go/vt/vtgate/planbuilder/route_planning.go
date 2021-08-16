@@ -247,7 +247,16 @@ func canMergeSubQuery(outer, subq queryTree, subqOp abstract.Operator) (bool, er
 	if !isRoute {
 		return false, nil
 	}
-	if subQRoute.keyspace != outerRoute.keyspace {
+
+	subqKs, err := subq.getKeyspace()
+	if err != nil {
+		return false, err
+	}
+	outerKs, err := outer.getKeyspace()
+	if err != nil {
+		return false, err
+	}
+	if subqKs != outerKs {
 		subQp, ok := subqOp.(*abstract.QueryGraph)
 		if !ok {
 			return false, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "subquery is complex to plan")

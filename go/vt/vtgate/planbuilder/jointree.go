@@ -46,6 +46,8 @@ type (
 		clone() queryTree
 
 		pushOutputColumns([]*sqlparser.ColName, *semantics.SemTable) ([]int, error)
+
+		getKeyspace() (*vindexes.Keyspace, error)
 	}
 
 	joinTree struct {
@@ -111,6 +113,22 @@ type (
 		argName  string
 	}
 )
+
+func (s *subqueryTree) getKeyspace() (*vindexes.Keyspace, error) {
+	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unsupported getKeyspace for %T", s)
+}
+
+func (d *derivedTree) getKeyspace() (*vindexes.Keyspace, error) {
+	return d.inner.getKeyspace()
+}
+
+func (jp *joinTree) getKeyspace() (*vindexes.Keyspace, error) {
+	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unsupported getKeyspace for %T", jp)
+}
+
+func (rp *routeTree) getKeyspace() (*vindexes.Keyspace, error) {
+	return rp.keyspace, nil
+}
 
 func (s *subqueryTree) tableID() semantics.TableSet {
 	panic("implement me")
