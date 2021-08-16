@@ -72,8 +72,8 @@ const (
 	criticalReadRowID          = 1
 	updateRowID                = 2
 	demoteQuery                = "SET GLOBAL read_only = ON;FLUSH TABLES WITH READ LOCK;UNLOCK TABLES;"
-	disableSemiSyncMasterQuery = "SET GLOBAL rpl_semi_sync_master_enabled = 0"
-	enableSemiSyncMasterQuery  = "SET GLOBAL rpl_semi_sync_master_enabled = 1"
+	disableSemiSyncSourceQuery = "SET GLOBAL rpl_semi_sync_master_enabled = 0"
+	enableSemiSyncSourceQuery  = "SET GLOBAL rpl_semi_sync_master_enabled = 1"
 	promoteQuery               = "STOP SLAVE;RESET SLAVE ALL;SET GLOBAL read_only = OFF;"
 )
 
@@ -277,7 +277,7 @@ func testBufferBase(t *testing.T, isExternalParent bool) {
 		//reparent call
 		if err := clusterInstance.VtctlclientProcess.ExecuteCommand("PlannedReparentShard", "-keyspace_shard",
 			fmt.Sprintf("%s/%s", keyspaceUnshardedName, "0"),
-			"-new_master", clusterInstance.Keyspaces[0].Shards[0].Vttablets[1].Alias); err != nil {
+			"-new_primary", clusterInstance.Keyspaces[0].Shards[0].Vttablets[1].Alias); err != nil {
 			log.Errorf("clusterInstance.VtctlclientProcess.ExecuteCommand(\"PlannedRepare... caused an error : %v", err)
 		}
 	}
@@ -310,9 +310,9 @@ func testBufferBase(t *testing.T, isExternalParent bool) {
 			panic(err)
 		}
 		inFlightMax = getVarFromVtgate(t, label, "BufferLastRequestsInFlightMax", resultMap)
-		promotedCount = getVarFromVtgate(t, label, "HealthcheckMasterPromoted", resultMap)
+		promotedCount = getVarFromVtgate(t, label, "HealthcheckPrimaryPromoted", resultMap)
 		durationMs = getVarFromVtgate(t, label, "BufferFailoverDurationSumMs", resultMap)
-		bufferingStops = getVarFromVtgate(t, "NewMasterSeen", "BufferStops", resultMap)
+		bufferingStops = getVarFromVtgate(t, "NewPrimarySeen", "BufferStops", resultMap)
 	}
 	if inFlightMax == 0 {
 		// Missed buffering is okay when we observed the failover during the
@@ -364,7 +364,7 @@ func externalReparenting(ctx context.Context, t *testing.T, clusterInstance *clu
 	if primary.VttabletProcess.EnableSemiSync {
 
 		//log error
-		if _, err := primary.VttabletProcess.QueryTablet(disableSemiSyncMasterQuery, keyspaceUnshardedName, true); err != nil {
+		if _, err := primary.VttabletProcess.QueryTablet(disableSemiSyncSourceQuery, keyspaceUnshardedName, true); err != nil {
 			log.Errorf("primary.VttabletProcess.QueryTablet(disableSemi... caused an error : %v", err)
 		}
 
@@ -388,7 +388,7 @@ func externalReparenting(ctx context.Context, t *testing.T, clusterInstance *clu
 
 	if replica.VttabletProcess.EnableSemiSync {
 		//Log error
-		if _, err := replica.VttabletProcess.QueryTablet(enableSemiSyncMasterQuery, keyspaceUnshardedName, true); err != nil {
+		if _, err := replica.VttabletProcess.QueryTablet(enableSemiSyncSourceQuery, keyspaceUnshardedName, true); err != nil {
 			log.Errorf("replica.VttabletProcess.QueryTablet caused an error : %v", err)
 		}
 	}
@@ -399,10 +399,10 @@ func externalReparenting(ctx context.Context, t *testing.T, clusterInstance *clu
 
 	// Use 'localhost' as hostname because Travis CI worker hostnames
 	// are too long for MySQL replication.
-	changeMasterCommands := fmt.Sprintf("RESET SLAVE;SET GLOBAL gtid_slave_pos = '%s';CHANGE MASTER TO MASTER_HOST='%s', MASTER_PORT=%d ,MASTER_USER='vt_repl', MASTER_USE_GTID = slave_pos;START SLAVE;", gtID, "localhost", newPrimary.MySQLPort)
+	changeSourceCommands := fmt.Sprintf("RESET SLAVE;SET GLOBAL gtid_slave_pos = '%s';CHANGE MASTER TO MASTER_HOST='%s', MASTER_PORT=%d ,MASTER_USER='vt_repl', MASTER_USE_GTID = slave_pos;START SLAVE;", gtID, "localhost", newPrimary.MySQLPort)
 
 	//Log error
-	if _, err := oldPrimary.VttabletProcess.QueryTablet(changeMasterCommands, keyspaceUnshardedName, true); err != nil {
+	if _, err := oldPrimary.VttabletProcess.QueryTablet(changeSourceCommands, keyspaceUnshardedName, true); err != nil {
 		log.Errorf("oldPrimary.VttabletProcess.QueryTablet caused an error : %v", err)
 	}
 

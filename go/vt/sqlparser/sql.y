@@ -299,7 +299,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <alterDatabase> alter_database_prefix
 %type <collateAndCharset> collate character_set
 %type <collateAndCharsets> create_options create_options_opt
-%type <boolean> default_optional
+%type <boolean> default_optional first_opt
 %type <statement> analyze_statement show_statement use_statement other_statement
 %type <statement> begin_statement commit_statement rollback_statement savepoint_statement release_statement load_statement
 %type <statement> lock_statement unlock_statement call_statement
@@ -342,7 +342,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <expr> tuple_expression
 %type <subquery> subquery
 %type <derivedTable> derived_table
-%type <colName> column_name first_opt after_opt
+%type <colName> column_name after_opt
 %type <whens> when_expression_list
 %type <when> when_expression
 %type <expr> expression_opt else_expression_opt
@@ -1937,11 +1937,11 @@ column_opt:
 
 first_opt:
   {
-    $$ = nil
+    $$ = false
   }
-| FIRST column_name
+| FIRST
   {
-    $$ = $2
+    $$ = true
   }
 
 after_opt:
@@ -2602,6 +2602,10 @@ show_statement:
 | SHOW VITESS_MIGRATIONS from_database_opt like_or_where_opt
   {
     $$ = &Show{&ShowBasic{Command: VitessMigrations, Filter: $4, DbName: $3}}
+  }
+| SHOW VITESS_MIGRATION STRING LOGS
+  {
+    $$ = &ShowMigrationLogs{UUID: string($3)}
   }
 | SHOW VSCHEMA TABLES
   {

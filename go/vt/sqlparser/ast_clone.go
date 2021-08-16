@@ -255,6 +255,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfShowFilter(in)
 	case *ShowLegacy:
 		return CloneRefOfShowLegacy(in)
+	case *ShowMigrationLogs:
+		return CloneRefOfShowMigrationLogs(in)
 	case *StarExpr:
 		return CloneRefOfStarExpr(in)
 	case *Stream:
@@ -330,7 +332,6 @@ func CloneRefOfAddColumns(n *AddColumns) *AddColumns {
 	}
 	out := *n
 	out.Columns = CloneSliceOfRefOfColumnDefinition(n.Columns)
-	out.First = CloneRefOfColName(n.First)
 	out.After = CloneRefOfColName(n.After)
 	return &out
 }
@@ -530,7 +531,6 @@ func CloneRefOfChangeColumn(n *ChangeColumn) *ChangeColumn {
 	out := *n
 	out.OldColumn = CloneRefOfColName(n.OldColumn)
 	out.NewColDefinition = CloneRefOfColumnDefinition(n.NewColDefinition)
-	out.First = CloneRefOfColName(n.First)
 	out.After = CloneRefOfColName(n.After)
 	return &out
 }
@@ -1068,7 +1068,6 @@ func CloneRefOfModifyColumn(n *ModifyColumn) *ModifyColumn {
 	}
 	out := *n
 	out.NewColDefinition = CloneRefOfColumnDefinition(n.NewColDefinition)
-	out.First = CloneRefOfColName(n.First)
 	out.After = CloneRefOfColName(n.After)
 	return &out
 }
@@ -1467,6 +1466,16 @@ func CloneRefOfShowLegacy(n *ShowLegacy) *ShowLegacy {
 	out.Table = CloneTableName(n.Table)
 	out.ShowTablesOpt = CloneRefOfShowTablesOpt(n.ShowTablesOpt)
 	out.ShowCollationFilterOpt = CloneExpr(n.ShowCollationFilterOpt)
+	return &out
+}
+
+// CloneRefOfShowMigrationLogs creates a deep clone of the input.
+func CloneRefOfShowMigrationLogs(n *ShowMigrationLogs) *ShowMigrationLogs {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Comments = CloneComments(n.Comments)
 	return &out
 }
 
@@ -2182,6 +2191,8 @@ func CloneStatement(in Statement) Statement {
 		return CloneRefOfSetTransaction(in)
 	case *Show:
 		return CloneRefOfShow(in)
+	case *ShowMigrationLogs:
+		return CloneRefOfShowMigrationLogs(in)
 	case *Stream:
 		return CloneRefOfStream(in)
 	case *TruncateTable:

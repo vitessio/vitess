@@ -140,7 +140,7 @@ func LaunchCluster(setupType int, streamMode string, stripes int) (int, error) {
 	for i := 0; i < 3; i++ {
 		tabletType := "replica"
 		if i == 0 {
-			tabletType = "master"
+			tabletType = "primary"
 		}
 		tablet := localCluster.NewVttabletInstance(tabletType, 0, cell)
 		tablet.VttabletProcess = localCluster.VtprocessInstanceFromVttablet(tablet, shard.Name, keyspaceName)
@@ -281,11 +281,11 @@ func primaryBackup(t *testing.T) {
 
 	output, err := localCluster.VtctlclientProcess.ExecuteCommandWithOutput("Backup", primary.Alias)
 	require.Error(t, err)
-	assert.Contains(t, output, "type MASTER cannot take backup. if you really need to do this, rerun the backup command with -allow_master")
+	assert.Contains(t, output, "type PRIMARY cannot take backup. if you really need to do this, rerun the backup command with -allow_primary")
 
 	localCluster.VerifyBackupCount(t, shardKsName, 0)
 
-	err = localCluster.VtctlclientProcess.ExecuteCommand("Backup", "-allow_master=true", primary.Alias)
+	err = localCluster.VtctlclientProcess.ExecuteCommand("Backup", "-allow_primary=true", primary.Alias)
 	require.Nil(t, err)
 
 	backups := localCluster.VerifyBackupCount(t, shardKsName, 1)
@@ -336,7 +336,7 @@ func primaryReplicaSameBackup(t *testing.T) {
 	// Promote replica2 to primary
 	err = localCluster.VtctlclientProcess.ExecuteCommand("PlannedReparentShard",
 		"-keyspace_shard", shardKsName,
-		"-new_master", replica2.Alias)
+		"-new_primary", replica2.Alias)
 	require.Nil(t, err)
 
 	// insert more data on replica2 (current primary)
@@ -408,7 +408,7 @@ func testRestoreOldPrimary(t *testing.T, method restoreMethod) {
 	// reparent to replica1
 	err = localCluster.VtctlclientProcess.ExecuteCommand("PlannedReparentShard",
 		"-keyspace_shard", shardKsName,
-		"-new_master", replica1.Alias)
+		"-new_primary", replica1.Alias)
 	require.Nil(t, err)
 
 	// insert more data to new primary
@@ -474,12 +474,12 @@ func stopAllTablets() {
 		tablet.VttabletProcess.TearDown()
 		if tablet.MysqlctldProcess.TabletUID > 0 {
 			tablet.MysqlctldProcess.Stop()
-			localCluster.VtctlclientProcess.ExecuteCommand("DeleteTablet", "-allow_master", tablet.Alias)
+			localCluster.VtctlclientProcess.ExecuteCommand("DeleteTablet", "-allow_primary", tablet.Alias)
 			continue
 		}
 		proc, _ := tablet.MysqlctlProcess.StopProcess()
 		mysqlProcs = append(mysqlProcs, proc)
-		localCluster.VtctlclientProcess.ExecuteCommand("DeleteTablet", "-allow_master", tablet.Alias)
+		localCluster.VtctlclientProcess.ExecuteCommand("DeleteTablet", "-allow_primary", tablet.Alias)
 	}
 	for _, proc := range mysqlProcs {
 		proc.Wait()
@@ -509,7 +509,7 @@ func terminatedRestore(t *testing.T) {
 	// reparent to replica1
 	err = localCluster.VtctlclientProcess.ExecuteCommand("PlannedReparentShard",
 		"-keyspace_shard", shardKsName,
-		"-new_master", replica1.Alias)
+		"-new_primary", replica1.Alias)
 	require.Nil(t, err)
 
 	// insert more data to new primary

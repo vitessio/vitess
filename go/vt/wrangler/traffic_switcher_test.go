@@ -275,11 +275,11 @@ func TestTableMigrateMainflow(t *testing.T) {
 	verifyQueries(t, tme.allDBClients)
 
 	//-------------------------------------------------------------------------------------------------------------------
-	// Can't switch master with SwitchReads.
-	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", []topodatapb.TabletType{topodatapb.TabletType_MASTER}, nil, workflow.DirectionForward, false)
-	want := "tablet type must be REPLICA or RDONLY: MASTER"
+	// Can't switch primary with SwitchReads.
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", []topodatapb.TabletType{topodatapb.TabletType_PRIMARY}, nil, workflow.DirectionForward, false)
+	want := "tablet type must be REPLICA or RDONLY: PRIMARY"
 	if err == nil || err.Error() != want {
-		t.Errorf("SwitchReads(master) err: %v, want %v", err, want)
+		t.Errorf("SwitchReads(primary) err: %v, want %v", err, want)
 	}
 	verifyQueries(t, tme.allDBClients)
 
@@ -593,11 +593,11 @@ func TestShardMigrateMainflow(t *testing.T) {
 	verifyQueries(t, tme.allDBClients)
 
 	//-------------------------------------------------------------------------------------------------------------------
-	// Can't switch master with SwitchReads.
-	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", []topodatapb.TabletType{topodatapb.TabletType_MASTER}, nil, workflow.DirectionForward, false)
-	want := "tablet type must be REPLICA or RDONLY: MASTER"
+	// Can't switch primary with SwitchReads.
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", []topodatapb.TabletType{topodatapb.TabletType_PRIMARY}, nil, workflow.DirectionForward, false)
+	want := "tablet type must be REPLICA or RDONLY: PRIMARY"
 	if err == nil || err.Error() != want {
-		t.Errorf("SwitchReads(master) err: %v, want %v", err, want)
+		t.Errorf("SwitchReads(primary) err: %v, want %v", err, want)
 	}
 	verifyQueries(t, tme.allDBClients)
 
@@ -614,10 +614,10 @@ func TestShardMigrateMainflow(t *testing.T) {
 	checkServedTypes(t, tme.ts, "ks:40-", 1)
 	checkServedTypes(t, tme.ts, "ks:-80", 2)
 	checkServedTypes(t, tme.ts, "ks:80-", 2)
-	checkIsMasterServing(t, tme.ts, "ks:-40", true)
-	checkIsMasterServing(t, tme.ts, "ks:40-", true)
-	checkIsMasterServing(t, tme.ts, "ks:-80", false)
-	checkIsMasterServing(t, tme.ts, "ks:80-", false)
+	checkIfPrimaryServing(t, tme.ts, "ks:-40", true)
+	checkIfPrimaryServing(t, tme.ts, "ks:40-", true)
+	checkIfPrimaryServing(t, tme.ts, "ks:-80", false)
+	checkIfPrimaryServing(t, tme.ts, "ks:80-", false)
 
 	checkJournals := func() {
 		tme.dbSourceClients[0].addQuery("select val from _vt.resharding_journal where id=6432976123657117097", &sqltypes.Result{}, nil)
@@ -668,10 +668,10 @@ func TestShardMigrateMainflow(t *testing.T) {
 	checkServedTypes(t, tme.ts, "ks:40-", 1)
 	checkServedTypes(t, tme.ts, "ks:-80", 2)
 	checkServedTypes(t, tme.ts, "ks:80-", 2)
-	checkIsMasterServing(t, tme.ts, "ks:-40", true)
-	checkIsMasterServing(t, tme.ts, "ks:40-", true)
-	checkIsMasterServing(t, tme.ts, "ks:-80", false)
-	checkIsMasterServing(t, tme.ts, "ks:80-", false)
+	checkIfPrimaryServing(t, tme.ts, "ks:-40", true)
+	checkIfPrimaryServing(t, tme.ts, "ks:40-", true)
+	checkIfPrimaryServing(t, tme.ts, "ks:-80", false)
+	checkIfPrimaryServing(t, tme.ts, "ks:80-", false)
 
 	//-------------------------------------------------------------------------------------------------------------------
 	// Test successful SwitchWrites.
@@ -761,10 +761,10 @@ func TestShardMigrateMainflow(t *testing.T) {
 	checkServedTypes(t, tme.ts, "ks:-80", 3)
 	checkServedTypes(t, tme.ts, "ks:80-", 3)
 
-	checkIsMasterServing(t, tme.ts, "ks:-40", false)
-	checkIsMasterServing(t, tme.ts, "ks:40-", false)
-	checkIsMasterServing(t, tme.ts, "ks:-80", true)
-	checkIsMasterServing(t, tme.ts, "ks:80-", true)
+	checkIfPrimaryServing(t, tme.ts, "ks:-40", false)
+	checkIfPrimaryServing(t, tme.ts, "ks:40-", false)
+	checkIfPrimaryServing(t, tme.ts, "ks:-80", true)
+	checkIfPrimaryServing(t, tme.ts, "ks:80-", true)
 
 	verifyQueries(t, tme.allDBClients)
 }
@@ -1282,10 +1282,10 @@ func TestShardMigrateJournalExists(t *testing.T) {
 	checkServedTypes(t, tme.ts, "ks:-80", 3)
 	checkServedTypes(t, tme.ts, "ks:80-", 3)
 
-	checkIsMasterServing(t, tme.ts, "ks:-40", false)
-	checkIsMasterServing(t, tme.ts, "ks:40-", false)
-	checkIsMasterServing(t, tme.ts, "ks:-80", true)
-	checkIsMasterServing(t, tme.ts, "ks:80-", true)
+	checkIfPrimaryServing(t, tme.ts, "ks:-40", false)
+	checkIfPrimaryServing(t, tme.ts, "ks:40-", false)
+	checkIfPrimaryServing(t, tme.ts, "ks:-80", true)
+	checkIfPrimaryServing(t, tme.ts, "ks:80-", true)
 
 	verifyQueries(t, tme.allDBClients)
 }
@@ -1717,12 +1717,12 @@ func TestReverseVReplicationUpdateQuery(t *testing.T) {
 			want: fmt.Sprintf(updateQuery, "cell2", ""),
 		},
 		{
-			targetCell: "cell1", sourceCell: "cell1", optCells: "cell1,cell2", optTabletTypes: "replica,master",
-			want: fmt.Sprintf(updateQuery, "cell1,cell2", "replica,master"),
+			targetCell: "cell1", sourceCell: "cell1", optCells: "cell1,cell2", optTabletTypes: "replica,primary",
+			want: fmt.Sprintf(updateQuery, "cell1,cell2", "replica,primary"),
 		},
 		{
-			targetCell: "cell1", sourceCell: "cell1", optCells: "", optTabletTypes: "replica,master",
-			want: fmt.Sprintf(updateQuery, "", "replica,master"),
+			targetCell: "cell1", sourceCell: "cell1", optCells: "", optTabletTypes: "replica,primary",
+			want: fmt.Sprintf(updateQuery, "", "replica,primary"),
 		},
 	}
 	for _, tc := range tCases {
@@ -1840,11 +1840,11 @@ func TestShardMigrateNoAvailableTabletsForReverseReplication(t *testing.T) {
 	verifyQueries(t, tme.allDBClients)
 
 	//-------------------------------------------------------------------------------------------------------------------
-	// Can't switch master with SwitchReads.
-	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", []topodatapb.TabletType{topodatapb.TabletType_MASTER}, nil, workflow.DirectionForward, false)
-	want := "tablet type must be REPLICA or RDONLY: MASTER"
+	// Can't switch primary with SwitchReads.
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", []topodatapb.TabletType{topodatapb.TabletType_PRIMARY}, nil, workflow.DirectionForward, false)
+	want := "tablet type must be REPLICA or RDONLY: PRIMARY"
 	if err == nil || err.Error() != want {
-		t.Errorf("SwitchReads(master) err: %v, want %v", err, want)
+		t.Errorf("SwitchReads(primary) err: %v, want %v", err, want)
 	}
 	verifyQueries(t, tme.allDBClients)
 
@@ -1861,10 +1861,10 @@ func TestShardMigrateNoAvailableTabletsForReverseReplication(t *testing.T) {
 	checkServedTypes(t, tme.ts, "ks:40-", 1)
 	checkServedTypes(t, tme.ts, "ks:-80", 2)
 	checkServedTypes(t, tme.ts, "ks:80-", 2)
-	checkIsMasterServing(t, tme.ts, "ks:-40", true)
-	checkIsMasterServing(t, tme.ts, "ks:40-", true)
-	checkIsMasterServing(t, tme.ts, "ks:-80", false)
-	checkIsMasterServing(t, tme.ts, "ks:80-", false)
+	checkIfPrimaryServing(t, tme.ts, "ks:-40", true)
+	checkIfPrimaryServing(t, tme.ts, "ks:40-", true)
+	checkIfPrimaryServing(t, tme.ts, "ks:-80", false)
+	checkIfPrimaryServing(t, tme.ts, "ks:80-", false)
 
 	checkJournals := func() {
 		tme.dbSourceClients[0].addQuery("select val from _vt.resharding_journal where id=6432976123657117097", &sqltypes.Result{}, nil)
@@ -1915,10 +1915,10 @@ func TestShardMigrateNoAvailableTabletsForReverseReplication(t *testing.T) {
 	checkServedTypes(t, tme.ts, "ks:40-", 1)
 	checkServedTypes(t, tme.ts, "ks:-80", 2)
 	checkServedTypes(t, tme.ts, "ks:80-", 2)
-	checkIsMasterServing(t, tme.ts, "ks:-40", true)
-	checkIsMasterServing(t, tme.ts, "ks:40-", true)
-	checkIsMasterServing(t, tme.ts, "ks:-80", false)
-	checkIsMasterServing(t, tme.ts, "ks:80-", false)
+	checkIfPrimaryServing(t, tme.ts, "ks:-40", true)
+	checkIfPrimaryServing(t, tme.ts, "ks:40-", true)
+	checkIfPrimaryServing(t, tme.ts, "ks:-80", false)
+	checkIfPrimaryServing(t, tme.ts, "ks:80-", false)
 
 	//-------------------------------------------------------------------------------------------------------------------
 	// Test successful SwitchWrites.
@@ -2024,10 +2024,10 @@ func TestShardMigrateNoAvailableTabletsForReverseReplication(t *testing.T) {
 	checkServedTypes(t, tme.ts, "ks:-80", 3)
 	checkServedTypes(t, tme.ts, "ks:80-", 3)
 
-	checkIsMasterServing(t, tme.ts, "ks:-40", false)
-	checkIsMasterServing(t, tme.ts, "ks:40-", false)
-	checkIsMasterServing(t, tme.ts, "ks:-80", true)
-	checkIsMasterServing(t, tme.ts, "ks:80-", true)
+	checkIfPrimaryServing(t, tme.ts, "ks:-40", false)
+	checkIfPrimaryServing(t, tme.ts, "ks:40-", false)
+	checkIfPrimaryServing(t, tme.ts, "ks:-80", true)
+	checkIfPrimaryServing(t, tme.ts, "ks:80-", true)
 
 	verifyQueries(t, tme.allDBClients)
 }
@@ -2075,7 +2075,7 @@ func checkBlacklist(t *testing.T, ts *topo.Server, keyspaceShard string, want []
 	if err != nil {
 		t.Fatal(err)
 	}
-	tc := si.GetTabletControl(topodatapb.TabletType_MASTER)
+	tc := si.GetTabletControl(topodatapb.TabletType_PRIMARY)
 	var got []string
 	if tc != nil {
 		got = tc.BlacklistedTables
@@ -2124,7 +2124,7 @@ outer:
 		keyspaceShard, cell, count, want))
 }
 
-func checkIsMasterServing(t *testing.T, ts *topo.Server, keyspaceShard string, want bool) {
+func checkIfPrimaryServing(t *testing.T, ts *topo.Server, keyspaceShard string, want bool) {
 	t.Helper()
 	ctx := context.Background()
 	splits := strings.Split(keyspaceShard, ":")
@@ -2132,8 +2132,8 @@ func checkIsMasterServing(t *testing.T, ts *topo.Server, keyspaceShard string, w
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want != si.IsMasterServing {
-		t.Errorf("IsMasterServing(%v): %v, want %v", keyspaceShard, si.IsMasterServing, want)
+	if want != si.IsPrimaryServing {
+		t.Errorf("IsPrimaryServing(%v): %v, want %v", keyspaceShard, si.IsPrimaryServing, want)
 	}
 }
 
@@ -2141,7 +2141,7 @@ func getResult(id int, state string, keyspace string, shard string) *sqltypes.Re
 	return sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 		"id|state|cell|tablet_types|source",
 		"int64|varchar|varchar|varchar|varchar"),
-		fmt.Sprintf("%d|%s|cell1|MASTER|keyspace:\"%s\" shard:\"%s\"", id, state, keyspace, shard),
+		fmt.Sprintf("%d|%s|cell1|PRIMARY|keyspace:\"%s\" shard:\"%s\"", id, state, keyspace, shard),
 	)
 }
 

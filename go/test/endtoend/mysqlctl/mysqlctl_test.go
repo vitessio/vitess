@@ -62,8 +62,9 @@ func TestMain(m *testing.M) {
 
 		// Collect tablet paths and ports
 		tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
+		// TODO(deepthi): can remove master after 12.0
 		for _, tablet := range tablets {
-			if tablet.Type == "master" {
+			if tablet.Type == "master" || tablet.Type == "primary" {
 				primaryTablet = *tablet
 			} else if tablet.Type != "rdonly" {
 				replicaTablet = *tablet
@@ -94,8 +95,8 @@ func initCluster(shardNames []string, totalTabletsRequired int) {
 				MySQLPort: clusterInstance.GetAndReservePort(),
 				Alias:     fmt.Sprintf("%s-%010d", clusterInstance.Cell, tabletUID),
 			}
-			if i == 0 { // Make the first one as master
-				tablet.Type = "master"
+			if i == 0 { // Make the first one as primary
+				tablet.Type = "primary"
 			}
 			// Start Mysqlctl process
 			tablet.MysqlctlProcess = *cluster.MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, clusterInstance.TmpDirectory)

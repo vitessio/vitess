@@ -324,5 +324,5 @@ func execCommand(index int, c *fuzz.ConsumeFuzzer, vc *loggingVCursor, vs *vinde
 }
 
 func newFuzzDMLTestVCursor(shards ...string) *loggingVCursor {
-	return &loggingVCursor{shards: shards, resolvedTargetTabletType: topodatapb.TabletType_MASTER}
+	return &loggingVCursor{shards: shards, resolvedTargetTabletType: topodatapb.TabletType_PRIMARY}
 }

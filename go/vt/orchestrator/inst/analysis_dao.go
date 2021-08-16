@@ -60,7 +60,7 @@ type clusterAnalysis struct {
 	masterKey            *InstanceKey
 }
 
-// GetReplicationAnalysis will check for replication problems (dead master; unreachable master; etc)
+// GetReplicationAnalysis will check for replication problems (dead primary; unreachable primary; etc)
 func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints) ([]ReplicationAnalysis, error) {
 	result := []ReplicationAnalysis{}
 
@@ -463,7 +463,7 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 		}
 		if clusters[a.SuggestedClusterAlias] == nil {
 			clusters[a.SuggestedClusterAlias] = &clusterAnalysis{}
-			if a.TabletType == topodatapb.TabletType_MASTER {
+			if a.TabletType == topodatapb.TabletType_PRIMARY {
 				a.IsClusterMaster = true
 				clusters[a.SuggestedClusterAlias].masterKey = &a.AnalyzedInstanceKey
 			}
@@ -550,7 +550,7 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 			a.Description = "Master cannot be reached by orchestrator but it has replicating replicas; possibly a network/host issue"
 			//
 		} else if a.IsMaster && !a.LastCheckValid && a.LastCheckPartialSuccess && a.CountReplicasFailingToConnectToMaster > 0 && a.CountValidReplicas > 0 && a.CountValidReplicatingReplicas > 0 {
-			// there's partial success, but also at least one replica is failing to connect to master
+			// there's partial success, but also at least one replica is failing to connect to primary
 			a.Analysis = UnreachableMaster
 			a.Description = "Master cannot be reached by orchestrator but it has replicating replicas; possibly a network/host issue"
 			//
@@ -624,9 +624,9 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 			//
 		} else if !a.IsMaster && a.LastCheckValid && a.CountReplicas > 1 && a.CountValidReplicatingReplicas == 0 &&
 			a.CountReplicasFailingToConnectToMaster > 0 && a.CountReplicasFailingToConnectToMaster == a.CountValidReplicas {
-			// All replicas are either failing to connect to master (and at least one of these have to exist)
+			// All replicas are either failing to connect to primary (and at least one of these have to exist)
 			// or completely dead.
-			// Must have at least two replicas to reach such conclusion -- do note that the intermediate master is still
+			// Must have at least two replicas to reach such conclusion -- do note that the intermediate primary is still
 			// reachable to orchestrator, so we base our conclusion on replicas only at this point.
 			a.Analysis = AllIntermediateMasterReplicasFailingToConnectOrDead
 			a.Description = "Intermediate master is reachable but all of its replicas are failing to connect"

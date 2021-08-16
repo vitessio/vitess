@@ -61,7 +61,7 @@ func IsTrivialTypeChange(oldTabletType, newTabletType topodatapb.TabletType) boo
 // IsInServingGraph returns if a tablet appears in the serving graph
 func IsInServingGraph(tt topodatapb.TabletType) bool {
 	switch tt {
-	case topodatapb.TabletType_MASTER, topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY:
+	case topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY:
 		return true
 	}
 	return false
@@ -70,7 +70,7 @@ func IsInServingGraph(tt topodatapb.TabletType) bool {
 // IsRunningQueryService returns if a tablet is running the query service
 func IsRunningQueryService(tt topodatapb.TabletType) bool {
 	switch tt {
-	case topodatapb.TabletType_MASTER, topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY, topodatapb.TabletType_EXPERIMENTAL, topodatapb.TabletType_DRAINED:
+	case topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY, topodatapb.TabletType_EXPERIMENTAL, topodatapb.TabletType_DRAINED:
 		return true
 	}
 	return false
@@ -103,19 +103,19 @@ func IsSubjectToLameduck(tt topodatapb.TabletType) bool {
 // RPC service.
 func IsRunningUpdateStream(tt topodatapb.TabletType) bool {
 	switch tt {
-	case topodatapb.TabletType_MASTER, topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY:
+	case topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY:
 		return true
 	}
 	return false
 }
 
-// IsReplicaType returns if this type should be connected to a master db
+// IsReplicaType returns if this type should be connected to a primary db
 // and actively replicating?
-// MASTER is not obviously (only support one level replication graph)
+// PRIMARY is not obviously (only support one level replication graph)
 // BACKUP, RESTORE, DRAINED may or may not be, but we don't know for sure
 func IsReplicaType(tt topodatapb.TabletType) bool {
 	switch tt {
-	case topodatapb.TabletType_MASTER, topodatapb.TabletType_BACKUP, topodatapb.TabletType_RESTORE, topodatapb.TabletType_DRAINED:
+	case topodatapb.TabletType_PRIMARY, topodatapb.TabletType_BACKUP, topodatapb.TabletType_RESTORE, topodatapb.TabletType_DRAINED:
 		return false
 	}
 	return true
@@ -211,9 +211,9 @@ func (ti *TabletInfo) IsReplicaType() bool {
 	return IsReplicaType(ti.Type)
 }
 
-// GetMasterTermStartTime returns the tablet's master term start time as a Time value.
-func (ti *TabletInfo) GetMasterTermStartTime() time.Time {
-	return logutil.ProtoToTime(ti.Tablet.MasterTermStartTime)
+// GetPrimaryTermStartTime returns the tablet's primary term start time as a Time value.
+func (ti *TabletInfo) GetPrimaryTermStartTime() time.Time {
+	return logutil.ProtoToTime(ti.Tablet.PrimaryTermStartTime)
 }
 
 // NewTabletInfo returns a TabletInfo basing on tablet with the
@@ -228,6 +228,7 @@ func NewTabletInfo(tablet *topodatapb.Tablet, version Version) *TabletInfo {
 func (ts *Server) GetTablet(ctx context.Context, alias *topodatapb.TabletAlias) (*TabletInfo, error) {
 	conn, err := ts.ConnForCell(ctx, alias.Cell)
 	if err != nil {
+		log.Errorf("Unable to get connection for cell %s", alias.Cell)
 		return nil, err
 	}
 
@@ -238,6 +239,7 @@ func (ts *Server) GetTablet(ctx context.Context, alias *topodatapb.TabletAlias) 
 	tabletPath := path.Join(TabletsPath, topoproto.TabletAliasString(alias), TabletFile)
 	data, version, err := conn.Get(ctx, tabletPath)
 	if err != nil {
+		log.Errorf("unable to connect to tablet %s: %s", alias, err)
 		return nil, err
 	}
 	tablet := &topodatapb.Tablet{}
@@ -474,7 +476,7 @@ func (ts *Server) GetTabletsByCell(ctx context.Context, cell string) ([]*topodat
 }
 
 // ParseServingTabletType parses the tablet type into the enum, and makes sure
-// that the enum is of serving type (MASTER, REPLICA, RDONLY/BATCH).
+// that the enum is of serving type (PRIMARY, REPLICA, RDONLY/BATCH).
 //
 // Note: This function more closely belongs in topoproto, but that would create
 // a circular import between packages topo and topoproto.

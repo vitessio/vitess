@@ -21,23 +21,30 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
-// LeftJoin represents an outerjoin.
-type LeftJoin struct {
-	Left, Right Operator
-	Predicate   sqlparser.Expr
+// Derived represents a derived table in the query
+type Derived struct {
+	Sel   *sqlparser.Select
+	Inner Operator
+	Alias string
+}
+
+var _ Operator = (*Derived)(nil)
+
+// TableID implements the Operator interface
+func (d *Derived) TableID() semantics.TableSet {
+	return d.Inner.TableID()
 }
 
 // PushPredicate implements the Operator interface
-func (oj *LeftJoin) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) error {
-	deps := semTable.Dependencies(expr)
-	if deps.IsSolvedBy(oj.Left.TableID()) {
-		return oj.Left.PushPredicate(expr, semTable)
+func (d *Derived) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) error {
+	tableInfo, err := semTable.TableInfoForExpr(expr)
+	if err != nil {
+		return err
 	}
 
-	return semantics.Gen4NotSupportedF("cannot push predicates to the RHS of an outer join")
-}
-
-// TableID implements the Operator interface
-func (oj *LeftJoin) TableID() semantics.TableSet {
-	return oj.Right.TableID().Merge(oj.Left.TableID())
+	newExpr, err := semantics.RewriteDerivedExpression(expr, tableInfo)
+	if err != nil {
+		return err
+	}
+	return d.Inner.PushPredicate(newExpr, semTable)
 }

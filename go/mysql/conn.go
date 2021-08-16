@@ -91,7 +91,7 @@ type Conn struct {
 
 	// authPluginName is the name of server's authentication plugin.
 	// It is set during the initial handshake.
-	authPluginName string
+	authPluginName AuthMethodDescription
 
 	// schemaName is the default database name to use. It is set
 	// during handshake, and by ComInitDb packets. Both client and
@@ -957,7 +957,7 @@ func (c *Conn) handleComStmtReset(data []byte) bool {
 }
 
 func (c *Conn) handleComStmtSendLongData(data []byte) bool {
-	stmtID, paramID, chunkData, ok := c.parseComStmtSendLongData(data)
+	stmtID, paramID, chunk, ok := c.parseComStmtSendLongData(data)
 	c.recycleReadPacket()
 	if !ok {
 		err := fmt.Errorf("error parsing statement send long data from client %v, returning error: %v", c.ConnectionID, data)
@@ -976,9 +976,6 @@ func (c *Conn) handleComStmtSendLongData(data []byte) bool {
 		err := fmt.Errorf("invalid parameter Number from client %v, statement: %v", c.ConnectionID, prepare.PrepareStmt)
 		return c.writeErrorPacketFromErrorAndLog(err)
 	}
-
-	chunk := make([]byte, len(chunkData))
-	copy(chunk, chunkData)
 
 	key := fmt.Sprintf("v%d", paramID+1)
 	if val, ok := prepare.BindVars[key]; ok {
@@ -1497,6 +1494,17 @@ func (c *Conn) GetTLSClientCerts() []*x509.Certificate {
 		return tlsConn.ConnectionState().PeerCertificates
 	}
 	return nil
+}
+
+// TLSEnabled returns true if this connection is using TLS.
+func (c *Conn) TLSEnabled() bool {
+	return c.Capabilities&CapabilityClientSSL > 0
+}
+
+// IsUnixSocket returns true if this connection is over a Unix socket.
+func (c *Conn) IsUnixSocket() bool {
+	_, ok := c.listener.listener.(*net.UnixListener)
+	return ok
 }
 
 // GetRawConn returns the raw net.Conn for nefarious purposes.

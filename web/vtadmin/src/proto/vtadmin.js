@@ -12990,6 +12990,7 @@ $root.topodata = (function() {
      * @name topodata.TabletType
      * @enum {number}
      * @property {number} UNKNOWN=0 UNKNOWN value
+     * @property {number} PRIMARY=1 PRIMARY value
      * @property {number} MASTER=1 MASTER value
      * @property {number} REPLICA=2 REPLICA value
      * @property {number} RDONLY=3 RDONLY value
@@ -13003,7 +13004,8 @@ $root.topodata = (function() {
     topodata.TabletType = (function() {
         var valuesById = {}, values = Object.create(valuesById);
         values[valuesById[0] = "UNKNOWN"] = 0;
-        values[valuesById[1] = "MASTER"] = 1;
+        values[valuesById[1] = "PRIMARY"] = 1;
+        values["MASTER"] = 1;
         values[valuesById[2] = "REPLICA"] = 2;
         values[valuesById[3] = "RDONLY"] = 3;
         values["BATCH"] = 3;
@@ -13032,7 +13034,7 @@ $root.topodata = (function() {
          * @property {Object.<string,string>|null} [tags] Tablet tags
          * @property {string|null} [mysql_hostname] Tablet mysql_hostname
          * @property {number|null} [mysql_port] Tablet mysql_port
-         * @property {vttime.ITime|null} [master_term_start_time] Tablet master_term_start_time
+         * @property {vttime.ITime|null} [primary_term_start_time] Tablet primary_term_start_time
          */
 
         /**
@@ -13141,12 +13143,12 @@ $root.topodata = (function() {
         Tablet.prototype.mysql_port = 0;
 
         /**
-         * Tablet master_term_start_time.
-         * @member {vttime.ITime|null|undefined} master_term_start_time
+         * Tablet primary_term_start_time.
+         * @member {vttime.ITime|null|undefined} primary_term_start_time
          * @memberof topodata.Tablet
          * @instance
          */
-        Tablet.prototype.master_term_start_time = null;
+        Tablet.prototype.primary_term_start_time = null;
 
         /**
          * Creates a new Tablet instance using the specified properties.
@@ -13196,8 +13198,8 @@ $root.topodata = (function() {
                 writer.uint32(/* id 12, wireType 2 =*/98).string(message.mysql_hostname);
             if (message.mysql_port != null && Object.hasOwnProperty.call(message, "mysql_port"))
                 writer.uint32(/* id 13, wireType 0 =*/104).int32(message.mysql_port);
-            if (message.master_term_start_time != null && Object.hasOwnProperty.call(message, "master_term_start_time"))
-                $root.vttime.Time.encode(message.master_term_start_time, writer.uint32(/* id 14, wireType 2 =*/114).fork()).ldelim();
+            if (message.primary_term_start_time != null && Object.hasOwnProperty.call(message, "primary_term_start_time"))
+                $root.vttime.Time.encode(message.primary_term_start_time, writer.uint32(/* id 14, wireType 2 =*/114).fork()).ldelim();
             return writer;
         };
 
@@ -13304,7 +13306,7 @@ $root.topodata = (function() {
                     message.mysql_port = reader.int32();
                     break;
                 case 14:
-                    message.master_term_start_time = $root.vttime.Time.decode(reader, reader.uint32());
+                    message.primary_term_start_time = $root.vttime.Time.decode(reader, reader.uint32());
                     break;
                 default:
                     reader.skipType(tag & 7);
@@ -13374,6 +13376,7 @@ $root.topodata = (function() {
                     return "type: enum value expected";
                 case 0:
                 case 1:
+                case 1:
                 case 2:
                 case 3:
                 case 3:
@@ -13401,10 +13404,10 @@ $root.topodata = (function() {
             if (message.mysql_port != null && message.hasOwnProperty("mysql_port"))
                 if (!$util.isInteger(message.mysql_port))
                     return "mysql_port: integer expected";
-            if (message.master_term_start_time != null && message.hasOwnProperty("master_term_start_time")) {
-                var error = $root.vttime.Time.verify(message.master_term_start_time);
+            if (message.primary_term_start_time != null && message.hasOwnProperty("primary_term_start_time")) {
+                var error = $root.vttime.Time.verify(message.primary_term_start_time);
                 if (error)
-                    return "master_term_start_time." + error;
+                    return "primary_term_start_time." + error;
             }
             return null;
         };
@@ -13448,6 +13451,10 @@ $root.topodata = (function() {
             case "UNKNOWN":
             case 0:
                 message.type = 0;
+                break;
+            case "PRIMARY":
+            case 1:
+                message.type = 1;
                 break;
             case "MASTER":
             case 1:
@@ -13499,10 +13506,10 @@ $root.topodata = (function() {
                 message.mysql_hostname = String(object.mysql_hostname);
             if (object.mysql_port != null)
                 message.mysql_port = object.mysql_port | 0;
-            if (object.master_term_start_time != null) {
-                if (typeof object.master_term_start_time !== "object")
-                    throw TypeError(".topodata.Tablet.master_term_start_time: object expected");
-                message.master_term_start_time = $root.vttime.Time.fromObject(object.master_term_start_time);
+            if (object.primary_term_start_time != null) {
+                if (typeof object.primary_term_start_time !== "object")
+                    throw TypeError(".topodata.Tablet.primary_term_start_time: object expected");
+                message.primary_term_start_time = $root.vttime.Time.fromObject(object.primary_term_start_time);
             }
             return message;
         };
@@ -13534,7 +13541,7 @@ $root.topodata = (function() {
                 object.db_name_override = "";
                 object.mysql_hostname = "";
                 object.mysql_port = 0;
-                object.master_term_start_time = null;
+                object.primary_term_start_time = null;
             }
             if (message.alias != null && message.hasOwnProperty("alias"))
                 object.alias = $root.topodata.TabletAlias.toObject(message.alias, options);
@@ -13565,8 +13572,8 @@ $root.topodata = (function() {
                 object.mysql_hostname = message.mysql_hostname;
             if (message.mysql_port != null && message.hasOwnProperty("mysql_port"))
                 object.mysql_port = message.mysql_port;
-            if (message.master_term_start_time != null && message.hasOwnProperty("master_term_start_time"))
-                object.master_term_start_time = $root.vttime.Time.toObject(message.master_term_start_time, options);
+            if (message.primary_term_start_time != null && message.hasOwnProperty("primary_term_start_time"))
+                object.primary_term_start_time = $root.vttime.Time.toObject(message.primary_term_start_time, options);
             return object;
         };
 
@@ -13590,13 +13597,12 @@ $root.topodata = (function() {
          * Properties of a Shard.
          * @memberof topodata
          * @interface IShard
-         * @property {topodata.ITabletAlias|null} [master_alias] Shard master_alias
-         * @property {vttime.ITime|null} [master_term_start_time] Shard master_term_start_time
+         * @property {topodata.ITabletAlias|null} [primary_alias] Shard primary_alias
+         * @property {vttime.ITime|null} [primary_term_start_time] Shard primary_term_start_time
          * @property {topodata.IKeyRange|null} [key_range] Shard key_range
-         * @property {Array.<topodata.Shard.IServedType>|null} [served_types] Shard served_types
          * @property {Array.<topodata.Shard.ISourceShard>|null} [source_shards] Shard source_shards
          * @property {Array.<topodata.Shard.ITabletControl>|null} [tablet_controls] Shard tablet_controls
-         * @property {boolean|null} [is_master_serving] Shard is_master_serving
+         * @property {boolean|null} [is_primary_serving] Shard is_primary_serving
          */
 
         /**
@@ -13608,7 +13614,6 @@ $root.topodata = (function() {
          * @param {topodata.IShard=} [properties] Properties to set
          */
         function Shard(properties) {
-            this.served_types = [];
             this.source_shards = [];
             this.tablet_controls = [];
             if (properties)
@@ -13618,20 +13623,20 @@ $root.topodata = (function() {
         }
 
         /**
-         * Shard master_alias.
-         * @member {topodata.ITabletAlias|null|undefined} master_alias
+         * Shard primary_alias.
+         * @member {topodata.ITabletAlias|null|undefined} primary_alias
          * @memberof topodata.Shard
          * @instance
          */
-        Shard.prototype.master_alias = null;
+        Shard.prototype.primary_alias = null;
 
         /**
-         * Shard master_term_start_time.
-         * @member {vttime.ITime|null|undefined} master_term_start_time
+         * Shard primary_term_start_time.
+         * @member {vttime.ITime|null|undefined} primary_term_start_time
          * @memberof topodata.Shard
          * @instance
          */
-        Shard.prototype.master_term_start_time = null;
+        Shard.prototype.primary_term_start_time = null;
 
         /**
          * Shard key_range.
@@ -13640,14 +13645,6 @@ $root.topodata = (function() {
          * @instance
          */
         Shard.prototype.key_range = null;
-
-        /**
-         * Shard served_types.
-         * @member {Array.<topodata.Shard.IServedType>} served_types
-         * @memberof topodata.Shard
-         * @instance
-         */
-        Shard.prototype.served_types = $util.emptyArray;
 
         /**
          * Shard source_shards.
@@ -13666,12 +13663,12 @@ $root.topodata = (function() {
         Shard.prototype.tablet_controls = $util.emptyArray;
 
         /**
-         * Shard is_master_serving.
-         * @member {boolean} is_master_serving
+         * Shard is_primary_serving.
+         * @member {boolean} is_primary_serving
          * @memberof topodata.Shard
          * @instance
          */
-        Shard.prototype.is_master_serving = false;
+        Shard.prototype.is_primary_serving = false;
 
         /**
          * Creates a new Shard instance using the specified properties.
@@ -13697,23 +13694,20 @@ $root.topodata = (function() {
         Shard.encode = function encode(message, writer) {
             if (!writer)
                 writer = $Writer.create();
-            if (message.master_alias != null && Object.hasOwnProperty.call(message, "master_alias"))
-                $root.topodata.TabletAlias.encode(message.master_alias, writer.uint32(/* id 1, wireType 2 =*/10).fork()).ldelim();
+            if (message.primary_alias != null && Object.hasOwnProperty.call(message, "primary_alias"))
+                $root.topodata.TabletAlias.encode(message.primary_alias, writer.uint32(/* id 1, wireType 2 =*/10).fork()).ldelim();
             if (message.key_range != null && Object.hasOwnProperty.call(message, "key_range"))
                 $root.topodata.KeyRange.encode(message.key_range, writer.uint32(/* id 2, wireType 2 =*/18).fork()).ldelim();
-            if (message.served_types != null && message.served_types.length)
-                for (var i = 0; i < message.served_types.length; ++i)
-                    $root.topodata.Shard.ServedType.encode(message.served_types[i], writer.uint32(/* id 3, wireType 2 =*/26).fork()).ldelim();
             if (message.source_shards != null && message.source_shards.length)
                 for (var i = 0; i < message.source_shards.length; ++i)
                     $root.topodata.Shard.SourceShard.encode(message.source_shards[i], writer.uint32(/* id 4, wireType 2 =*/34).fork()).ldelim();
             if (message.tablet_controls != null && message.tablet_controls.length)
                 for (var i = 0; i < message.tablet_controls.length; ++i)
                     $root.topodata.Shard.TabletControl.encode(message.tablet_controls[i], writer.uint32(/* id 6, wireType 2 =*/50).fork()).ldelim();
-            if (message.is_master_serving != null && Object.hasOwnProperty.call(message, "is_master_serving"))
-                writer.uint32(/* id 7, wireType 0 =*/56).bool(message.is_master_serving);
-            if (message.master_term_start_time != null && Object.hasOwnProperty.call(message, "master_term_start_time"))
-                $root.vttime.Time.encode(message.master_term_start_time, writer.uint32(/* id 8, wireType 2 =*/66).fork()).ldelim();
+            if (message.is_primary_serving != null && Object.hasOwnProperty.call(message, "is_primary_serving"))
+                writer.uint32(/* id 7, wireType 0 =*/56).bool(message.is_primary_serving);
+            if (message.primary_term_start_time != null && Object.hasOwnProperty.call(message, "primary_term_start_time"))
+                $root.vttime.Time.encode(message.primary_term_start_time, writer.uint32(/* id 8, wireType 2 =*/66).fork()).ldelim();
             return writer;
         };
 
@@ -13749,18 +13743,13 @@ $root.topodata = (function() {
                 var tag = reader.uint32();
                 switch (tag >>> 3) {
                 case 1:
-                    message.master_alias = $root.topodata.TabletAlias.decode(reader, reader.uint32());
+                    message.primary_alias = $root.topodata.TabletAlias.decode(reader, reader.uint32());
                     break;
                 case 8:
-                    message.master_term_start_time = $root.vttime.Time.decode(reader, reader.uint32());
+                    message.primary_term_start_time = $root.vttime.Time.decode(reader, reader.uint32());
                     break;
                 case 2:
                     message.key_range = $root.topodata.KeyRange.decode(reader, reader.uint32());
-                    break;
-                case 3:
-                    if (!(message.served_types && message.served_types.length))
-                        message.served_types = [];
-                    message.served_types.push($root.topodata.Shard.ServedType.decode(reader, reader.uint32()));
                     break;
                 case 4:
                     if (!(message.source_shards && message.source_shards.length))
@@ -13773,7 +13762,7 @@ $root.topodata = (function() {
                     message.tablet_controls.push($root.topodata.Shard.TabletControl.decode(reader, reader.uint32()));
                     break;
                 case 7:
-                    message.is_master_serving = reader.bool();
+                    message.is_primary_serving = reader.bool();
                     break;
                 default:
                     reader.skipType(tag & 7);
@@ -13810,29 +13799,20 @@ $root.topodata = (function() {
         Shard.verify = function verify(message) {
             if (typeof message !== "object" || message === null)
                 return "object expected";
-            if (message.master_alias != null && message.hasOwnProperty("master_alias")) {
-                var error = $root.topodata.TabletAlias.verify(message.master_alias);
+            if (message.primary_alias != null && message.hasOwnProperty("primary_alias")) {
+                var error = $root.topodata.TabletAlias.verify(message.primary_alias);
                 if (error)
-                    return "master_alias." + error;
+                    return "primary_alias." + error;
             }
-            if (message.master_term_start_time != null && message.hasOwnProperty("master_term_start_time")) {
-                var error = $root.vttime.Time.verify(message.master_term_start_time);
+            if (message.primary_term_start_time != null && message.hasOwnProperty("primary_term_start_time")) {
+                var error = $root.vttime.Time.verify(message.primary_term_start_time);
                 if (error)
-                    return "master_term_start_time." + error;
+                    return "primary_term_start_time." + error;
             }
             if (message.key_range != null && message.hasOwnProperty("key_range")) {
                 var error = $root.topodata.KeyRange.verify(message.key_range);
                 if (error)
                     return "key_range." + error;
-            }
-            if (message.served_types != null && message.hasOwnProperty("served_types")) {
-                if (!Array.isArray(message.served_types))
-                    return "served_types: array expected";
-                for (var i = 0; i < message.served_types.length; ++i) {
-                    var error = $root.topodata.Shard.ServedType.verify(message.served_types[i]);
-                    if (error)
-                        return "served_types." + error;
-                }
             }
             if (message.source_shards != null && message.hasOwnProperty("source_shards")) {
                 if (!Array.isArray(message.source_shards))
@@ -13852,9 +13832,9 @@ $root.topodata = (function() {
                         return "tablet_controls." + error;
                 }
             }
-            if (message.is_master_serving != null && message.hasOwnProperty("is_master_serving"))
-                if (typeof message.is_master_serving !== "boolean")
-                    return "is_master_serving: boolean expected";
+            if (message.is_primary_serving != null && message.hasOwnProperty("is_primary_serving"))
+                if (typeof message.is_primary_serving !== "boolean")
+                    return "is_primary_serving: boolean expected";
             return null;
         };
 
@@ -13870,30 +13850,20 @@ $root.topodata = (function() {
             if (object instanceof $root.topodata.Shard)
                 return object;
             var message = new $root.topodata.Shard();
-            if (object.master_alias != null) {
-                if (typeof object.master_alias !== "object")
-                    throw TypeError(".topodata.Shard.master_alias: object expected");
-                message.master_alias = $root.topodata.TabletAlias.fromObject(object.master_alias);
+            if (object.primary_alias != null) {
+                if (typeof object.primary_alias !== "object")
+                    throw TypeError(".topodata.Shard.primary_alias: object expected");
+                message.primary_alias = $root.topodata.TabletAlias.fromObject(object.primary_alias);
             }
-            if (object.master_term_start_time != null) {
-                if (typeof object.master_term_start_time !== "object")
-                    throw TypeError(".topodata.Shard.master_term_start_time: object expected");
-                message.master_term_start_time = $root.vttime.Time.fromObject(object.master_term_start_time);
+            if (object.primary_term_start_time != null) {
+                if (typeof object.primary_term_start_time !== "object")
+                    throw TypeError(".topodata.Shard.primary_term_start_time: object expected");
+                message.primary_term_start_time = $root.vttime.Time.fromObject(object.primary_term_start_time);
             }
             if (object.key_range != null) {
                 if (typeof object.key_range !== "object")
                     throw TypeError(".topodata.Shard.key_range: object expected");
                 message.key_range = $root.topodata.KeyRange.fromObject(object.key_range);
-            }
-            if (object.served_types) {
-                if (!Array.isArray(object.served_types))
-                    throw TypeError(".topodata.Shard.served_types: array expected");
-                message.served_types = [];
-                for (var i = 0; i < object.served_types.length; ++i) {
-                    if (typeof object.served_types[i] !== "object")
-                        throw TypeError(".topodata.Shard.served_types: object expected");
-                    message.served_types[i] = $root.topodata.Shard.ServedType.fromObject(object.served_types[i]);
-                }
             }
             if (object.source_shards) {
                 if (!Array.isArray(object.source_shards))
@@ -13915,8 +13885,8 @@ $root.topodata = (function() {
                     message.tablet_controls[i] = $root.topodata.Shard.TabletControl.fromObject(object.tablet_controls[i]);
                 }
             }
-            if (object.is_master_serving != null)
-                message.is_master_serving = Boolean(object.is_master_serving);
+            if (object.is_primary_serving != null)
+                message.is_primary_serving = Boolean(object.is_primary_serving);
             return message;
         };
 
@@ -13934,25 +13904,19 @@ $root.topodata = (function() {
                 options = {};
             var object = {};
             if (options.arrays || options.defaults) {
-                object.served_types = [];
                 object.source_shards = [];
                 object.tablet_controls = [];
             }
             if (options.defaults) {
-                object.master_alias = null;
+                object.primary_alias = null;
                 object.key_range = null;
-                object.is_master_serving = false;
-                object.master_term_start_time = null;
+                object.is_primary_serving = false;
+                object.primary_term_start_time = null;
             }
-            if (message.master_alias != null && message.hasOwnProperty("master_alias"))
-                object.master_alias = $root.topodata.TabletAlias.toObject(message.master_alias, options);
+            if (message.primary_alias != null && message.hasOwnProperty("primary_alias"))
+                object.primary_alias = $root.topodata.TabletAlias.toObject(message.primary_alias, options);
             if (message.key_range != null && message.hasOwnProperty("key_range"))
                 object.key_range = $root.topodata.KeyRange.toObject(message.key_range, options);
-            if (message.served_types && message.served_types.length) {
-                object.served_types = [];
-                for (var j = 0; j < message.served_types.length; ++j)
-                    object.served_types[j] = $root.topodata.Shard.ServedType.toObject(message.served_types[j], options);
-            }
             if (message.source_shards && message.source_shards.length) {
                 object.source_shards = [];
                 for (var j = 0; j < message.source_shards.length; ++j)
@@ -13963,10 +13927,10 @@ $root.topodata = (function() {
                 for (var j = 0; j < message.tablet_controls.length; ++j)
                     object.tablet_controls[j] = $root.topodata.Shard.TabletControl.toObject(message.tablet_controls[j], options);
             }
-            if (message.is_master_serving != null && message.hasOwnProperty("is_master_serving"))
-                object.is_master_serving = message.is_master_serving;
-            if (message.master_term_start_time != null && message.hasOwnProperty("master_term_start_time"))
-                object.master_term_start_time = $root.vttime.Time.toObject(message.master_term_start_time, options);
+            if (message.is_primary_serving != null && message.hasOwnProperty("is_primary_serving"))
+                object.is_primary_serving = message.is_primary_serving;
+            if (message.primary_term_start_time != null && message.hasOwnProperty("primary_term_start_time"))
+                object.primary_term_start_time = $root.vttime.Time.toObject(message.primary_term_start_time, options);
             return object;
         };
 
@@ -13980,285 +13944,6 @@ $root.topodata = (function() {
         Shard.prototype.toJSON = function toJSON() {
             return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
         };
-
-        Shard.ServedType = (function() {
-
-            /**
-             * Properties of a ServedType.
-             * @memberof topodata.Shard
-             * @interface IServedType
-             * @property {topodata.TabletType|null} [tablet_type] ServedType tablet_type
-             * @property {Array.<string>|null} [cells] ServedType cells
-             */
-
-            /**
-             * Constructs a new ServedType.
-             * @memberof topodata.Shard
-             * @classdesc Represents a ServedType.
-             * @implements IServedType
-             * @constructor
-             * @param {topodata.Shard.IServedType=} [properties] Properties to set
-             */
-            function ServedType(properties) {
-                this.cells = [];
-                if (properties)
-                    for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
-                        if (properties[keys[i]] != null)
-                            this[keys[i]] = properties[keys[i]];
-            }
-
-            /**
-             * ServedType tablet_type.
-             * @member {topodata.TabletType} tablet_type
-             * @memberof topodata.Shard.ServedType
-             * @instance
-             */
-            ServedType.prototype.tablet_type = 0;
-
-            /**
-             * ServedType cells.
-             * @member {Array.<string>} cells
-             * @memberof topodata.Shard.ServedType
-             * @instance
-             */
-            ServedType.prototype.cells = $util.emptyArray;
-
-            /**
-             * Creates a new ServedType instance using the specified properties.
-             * @function create
-             * @memberof topodata.Shard.ServedType
-             * @static
-             * @param {topodata.Shard.IServedType=} [properties] Properties to set
-             * @returns {topodata.Shard.ServedType} ServedType instance
-             */
-            ServedType.create = function create(properties) {
-                return new ServedType(properties);
-            };
-
-            /**
-             * Encodes the specified ServedType message. Does not implicitly {@link topodata.Shard.ServedType.verify|verify} messages.
-             * @function encode
-             * @memberof topodata.Shard.ServedType
-             * @static
-             * @param {topodata.Shard.IServedType} message ServedType message or plain object to encode
-             * @param {$protobuf.Writer} [writer] Writer to encode to
-             * @returns {$protobuf.Writer} Writer
-             */
-            ServedType.encode = function encode(message, writer) {
-                if (!writer)
-                    writer = $Writer.create();
-                if (message.tablet_type != null && Object.hasOwnProperty.call(message, "tablet_type"))
-                    writer.uint32(/* id 1, wireType 0 =*/8).int32(message.tablet_type);
-                if (message.cells != null && message.cells.length)
-                    for (var i = 0; i < message.cells.length; ++i)
-                        writer.uint32(/* id 2, wireType 2 =*/18).string(message.cells[i]);
-                return writer;
-            };
-
-            /**
-             * Encodes the specified ServedType message, length delimited. Does not implicitly {@link topodata.Shard.ServedType.verify|verify} messages.
-             * @function encodeDelimited
-             * @memberof topodata.Shard.ServedType
-             * @static
-             * @param {topodata.Shard.IServedType} message ServedType message or plain object to encode
-             * @param {$protobuf.Writer} [writer] Writer to encode to
-             * @returns {$protobuf.Writer} Writer
-             */
-            ServedType.encodeDelimited = function encodeDelimited(message, writer) {
-                return this.encode(message, writer).ldelim();
-            };
-
-            /**
-             * Decodes a ServedType message from the specified reader or buffer.
-             * @function decode
-             * @memberof topodata.Shard.ServedType
-             * @static
-             * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
-             * @param {number} [length] Message length if known beforehand
-             * @returns {topodata.Shard.ServedType} ServedType
-             * @throws {Error} If the payload is not a reader or valid buffer
-             * @throws {$protobuf.util.ProtocolError} If required fields are missing
-             */
-            ServedType.decode = function decode(reader, length) {
-                if (!(reader instanceof $Reader))
-                    reader = $Reader.create(reader);
-                var end = length === undefined ? reader.len : reader.pos + length, message = new $root.topodata.Shard.ServedType();
-                while (reader.pos < end) {
-                    var tag = reader.uint32();
-                    switch (tag >>> 3) {
-                    case 1:
-                        message.tablet_type = reader.int32();
-                        break;
-                    case 2:
-                        if (!(message.cells && message.cells.length))
-                            message.cells = [];
-                        message.cells.push(reader.string());
-                        break;
-                    default:
-                        reader.skipType(tag & 7);
-                        break;
-                    }
-                }
-                return message;
-            };
-
-            /**
-             * Decodes a ServedType message from the specified reader or buffer, length delimited.
-             * @function decodeDelimited
-             * @memberof topodata.Shard.ServedType
-             * @static
-             * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
-             * @returns {topodata.Shard.ServedType} ServedType
-             * @throws {Error} If the payload is not a reader or valid buffer
-             * @throws {$protobuf.util.ProtocolError} If required fields are missing
-             */
-            ServedType.decodeDelimited = function decodeDelimited(reader) {
-                if (!(reader instanceof $Reader))
-                    reader = new $Reader(reader);
-                return this.decode(reader, reader.uint32());
-            };
-
-            /**
-             * Verifies a ServedType message.
-             * @function verify
-             * @memberof topodata.Shard.ServedType
-             * @static
-             * @param {Object.<string,*>} message Plain object to verify
-             * @returns {string|null} `null` if valid, otherwise the reason why it is not
-             */
-            ServedType.verify = function verify(message) {
-                if (typeof message !== "object" || message === null)
-                    return "object expected";
-                if (message.tablet_type != null && message.hasOwnProperty("tablet_type"))
-                    switch (message.tablet_type) {
-                    default:
-                        return "tablet_type: enum value expected";
-                    case 0:
-                    case 1:
-                    case 2:
-                    case 3:
-                    case 3:
-                    case 4:
-                    case 5:
-                    case 6:
-                    case 7:
-                    case 8:
-                        break;
-                    }
-                if (message.cells != null && message.hasOwnProperty("cells")) {
-                    if (!Array.isArray(message.cells))
-                        return "cells: array expected";
-                    for (var i = 0; i < message.cells.length; ++i)
-                        if (!$util.isString(message.cells[i]))
-                            return "cells: string[] expected";
-                }
-                return null;
-            };
-
-            /**
-             * Creates a ServedType message from a plain object. Also converts values to their respective internal types.
-             * @function fromObject
-             * @memberof topodata.Shard.ServedType
-             * @static
-             * @param {Object.<string,*>} object Plain object
-             * @returns {topodata.Shard.ServedType} ServedType
-             */
-            ServedType.fromObject = function fromObject(object) {
-                if (object instanceof $root.topodata.Shard.ServedType)
-                    return object;
-                var message = new $root.topodata.Shard.ServedType();
-                switch (object.tablet_type) {
-                case "UNKNOWN":
-                case 0:
-                    message.tablet_type = 0;
-                    break;
-                case "MASTER":
-                case 1:
-                    message.tablet_type = 1;
-                    break;
-                case "REPLICA":
-                case 2:
-                    message.tablet_type = 2;
-                    break;
-                case "RDONLY":
-                case 3:
-                    message.tablet_type = 3;
-                    break;
-                case "BATCH":
-                case 3:
-                    message.tablet_type = 3;
-                    break;
-                case "SPARE":
-                case 4:
-                    message.tablet_type = 4;
-                    break;
-                case "EXPERIMENTAL":
-                case 5:
-                    message.tablet_type = 5;
-                    break;
-                case "BACKUP":
-                case 6:
-                    message.tablet_type = 6;
-                    break;
-                case "RESTORE":
-                case 7:
-                    message.tablet_type = 7;
-                    break;
-                case "DRAINED":
-                case 8:
-                    message.tablet_type = 8;
-                    break;
-                }
-                if (object.cells) {
-                    if (!Array.isArray(object.cells))
-                        throw TypeError(".topodata.Shard.ServedType.cells: array expected");
-                    message.cells = [];
-                    for (var i = 0; i < object.cells.length; ++i)
-                        message.cells[i] = String(object.cells[i]);
-                }
-                return message;
-            };
-
-            /**
-             * Creates a plain object from a ServedType message. Also converts values to other types if specified.
-             * @function toObject
-             * @memberof topodata.Shard.ServedType
-             * @static
-             * @param {topodata.Shard.ServedType} message ServedType
-             * @param {$protobuf.IConversionOptions} [options] Conversion options
-             * @returns {Object.<string,*>} Plain object
-             */
-            ServedType.toObject = function toObject(message, options) {
-                if (!options)
-                    options = {};
-                var object = {};
-                if (options.arrays || options.defaults)
-                    object.cells = [];
-                if (options.defaults)
-                    object.tablet_type = options.enums === String ? "UNKNOWN" : 0;
-                if (message.tablet_type != null && message.hasOwnProperty("tablet_type"))
-                    object.tablet_type = options.enums === String ? $root.topodata.TabletType[message.tablet_type] : message.tablet_type;
-                if (message.cells && message.cells.length) {
-                    object.cells = [];
-                    for (var j = 0; j < message.cells.length; ++j)
-                        object.cells[j] = message.cells[j];
-                }
-                return object;
-            };
-
-            /**
-             * Converts this ServedType to JSON.
-             * @function toJSON
-             * @memberof topodata.Shard.ServedType
-             * @instance
-             * @returns {Object.<string,*>} JSON object
-             */
-            ServedType.prototype.toJSON = function toJSON() {
-                return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
-            };
-
-            return ServedType;
-        })();
 
         Shard.SourceShard = (function() {
 
@@ -14744,6 +14429,7 @@ $root.topodata = (function() {
                         return "tablet_type: enum value expected";
                     case 0:
                     case 1:
+                    case 1:
                     case 2:
                     case 3:
                     case 3:
@@ -14790,6 +14476,10 @@ $root.topodata = (function() {
                 case "UNKNOWN":
                 case 0:
                     message.tablet_type = 0;
+                    break;
+                case "PRIMARY":
+                case 1:
+                    message.tablet_type = 1;
                     break;
                 case "MASTER":
                 case 1:
@@ -15423,6 +15113,7 @@ $root.topodata = (function() {
                         return "tablet_type: enum value expected";
                     case 0:
                     case 1:
+                    case 1:
                     case 2:
                     case 3:
                     case 3:
@@ -15462,6 +15153,10 @@ $root.topodata = (function() {
                 case "UNKNOWN":
                 case 0:
                     message.tablet_type = 0;
+                    break;
+                case "PRIMARY":
+                case 1:
+                    message.tablet_type = 1;
                     break;
                 case "MASTER":
                 case 1:
@@ -16897,6 +16592,7 @@ $root.topodata = (function() {
                         return "served_type: enum value expected";
                     case 0:
                     case 1:
+                    case 1:
                     case 2:
                     case 3:
                     case 3:
@@ -16944,6 +16640,10 @@ $root.topodata = (function() {
                 case "UNKNOWN":
                 case 0:
                     message.served_type = 0;
+                    break;
+                case "PRIMARY":
+                case 1:
+                    message.served_type = 1;
                     break;
                 case "MASTER":
                 case 1:
@@ -17203,6 +16903,7 @@ $root.topodata = (function() {
                         return "tablet_type: enum value expected";
                     case 0:
                     case 1:
+                    case 1:
                     case 2:
                     case 3:
                     case 3:
@@ -17235,6 +16936,10 @@ $root.topodata = (function() {
                 case "UNKNOWN":
                 case 0:
                     message.tablet_type = 0;
+                    break;
+                case "PRIMARY":
+                case 1:
+                    message.tablet_type = 1;
                     break;
                 case "MASTER":
                 case 1:
@@ -23431,6 +23136,7 @@ $root.tabletmanagerdata = (function() {
                     return "tablet_type: enum value expected";
                 case 0:
                 case 1:
+                case 1:
                 case 2:
                 case 3:
                 case 3:
@@ -23460,6 +23166,10 @@ $root.tabletmanagerdata = (function() {
             case "UNKNOWN":
             case 0:
                 message.tablet_type = 0;
+                break;
+            case "PRIMARY":
+            case 1:
+                message.tablet_type = 1;
                 break;
             case "MASTER":
             case 1:
@@ -28770,23 +28480,23 @@ $root.tabletmanagerdata = (function() {
         return ReplicationStatusResponse;
     })();
 
-    tabletmanagerdata.MasterStatusRequest = (function() {
+    tabletmanagerdata.PrimaryStatusRequest = (function() {
 
         /**
-         * Properties of a MasterStatusRequest.
+         * Properties of a PrimaryStatusRequest.
          * @memberof tabletmanagerdata
-         * @interface IMasterStatusRequest
+         * @interface IPrimaryStatusRequest
          */
 
         /**
-         * Constructs a new MasterStatusRequest.
+         * Constructs a new PrimaryStatusRequest.
          * @memberof tabletmanagerdata
-         * @classdesc Represents a MasterStatusRequest.
-         * @implements IMasterStatusRequest
+         * @classdesc Represents a PrimaryStatusRequest.
+         * @implements IPrimaryStatusRequest
          * @constructor
-         * @param {tabletmanagerdata.IMasterStatusRequest=} [properties] Properties to set
+         * @param {tabletmanagerdata.IPrimaryStatusRequest=} [properties] Properties to set
          */
-        function MasterStatusRequest(properties) {
+        function PrimaryStatusRequest(properties) {
             if (properties)
                 for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
                     if (properties[keys[i]] != null)
@@ -28794,60 +28504,60 @@ $root.tabletmanagerdata = (function() {
         }
 
         /**
-         * Creates a new MasterStatusRequest instance using the specified properties.
+         * Creates a new PrimaryStatusRequest instance using the specified properties.
          * @function create
-         * @memberof tabletmanagerdata.MasterStatusRequest
+         * @memberof tabletmanagerdata.PrimaryStatusRequest
          * @static
-         * @param {tabletmanagerdata.IMasterStatusRequest=} [properties] Properties to set
-         * @returns {tabletmanagerdata.MasterStatusRequest} MasterStatusRequest instance
+         * @param {tabletmanagerdata.IPrimaryStatusRequest=} [properties] Properties to set
+         * @returns {tabletmanagerdata.PrimaryStatusRequest} PrimaryStatusRequest instance
          */
-        MasterStatusRequest.create = function create(properties) {
-            return new MasterStatusRequest(properties);
+        PrimaryStatusRequest.create = function create(properties) {
+            return new PrimaryStatusRequest(properties);
         };
 
         /**
-         * Encodes the specified MasterStatusRequest message. Does not implicitly {@link tabletmanagerdata.MasterStatusRequest.verify|verify} messages.
+         * Encodes the specified PrimaryStatusRequest message. Does not implicitly {@link tabletmanagerdata.PrimaryStatusRequest.verify|verify} messages.
          * @function encode
-         * @memberof tabletmanagerdata.MasterStatusRequest
+         * @memberof tabletmanagerdata.PrimaryStatusRequest
          * @static
-         * @param {tabletmanagerdata.IMasterStatusRequest} message MasterStatusRequest message or plain object to encode
+         * @param {tabletmanagerdata.IPrimaryStatusRequest} message PrimaryStatusRequest message or plain object to encode
          * @param {$protobuf.Writer} [writer] Writer to encode to
          * @returns {$protobuf.Writer} Writer
          */
-        MasterStatusRequest.encode = function encode(message, writer) {
+        PrimaryStatusRequest.encode = function encode(message, writer) {
             if (!writer)
                 writer = $Writer.create();
             return writer;
         };
 
         /**
-         * Encodes the specified MasterStatusRequest message, length delimited. Does not implicitly {@link tabletmanagerdata.MasterStatusRequest.verify|verify} messages.
+         * Encodes the specified PrimaryStatusRequest message, length delimited. Does not implicitly {@link tabletmanagerdata.PrimaryStatusRequest.verify|verify} messages.
          * @function encodeDelimited
-         * @memberof tabletmanagerdata.MasterStatusRequest
+         * @memberof tabletmanagerdata.PrimaryStatusRequest
          * @static
-         * @param {tabletmanagerdata.IMasterStatusRequest} message MasterStatusRequest message or plain object to encode
+         * @param {tabletmanagerdata.IPrimaryStatusRequest} message PrimaryStatusRequest message or plain object to encode
          * @param {$protobuf.Writer} [writer] Writer to encode to
          * @returns {$protobuf.Writer} Writer
          */
-        MasterStatusRequest.encodeDelimited = function encodeDelimited(message, writer) {
+        PrimaryStatusRequest.encodeDelimited = function encodeDelimited(message, writer) {
             return this.encode(message, writer).ldelim();
         };
 
         /**
-         * Decodes a MasterStatusRequest message from the specified reader or buffer.
+         * Decodes a PrimaryStatusRequest message from the specified reader or buffer.
          * @function decode
-         * @memberof tabletmanagerdata.MasterStatusRequest
+         * @memberof tabletmanagerdata.PrimaryStatusRequest
          * @static
          * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
          * @param {number} [length] Message length if known beforehand
-         * @returns {tabletmanagerdata.MasterStatusRequest} MasterStatusRequest
+         * @returns {tabletmanagerdata.PrimaryStatusRequest} PrimaryStatusRequest
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        MasterStatusRequest.decode = function decode(reader, length) {
+        PrimaryStatusRequest.decode = function decode(reader, length) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
-            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.MasterStatusRequest();
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.PrimaryStatusRequest();
             while (reader.pos < end) {
                 var tag = reader.uint32();
                 switch (tag >>> 3) {
@@ -28860,94 +28570,94 @@ $root.tabletmanagerdata = (function() {
         };
 
         /**
-         * Decodes a MasterStatusRequest message from the specified reader or buffer, length delimited.
+         * Decodes a PrimaryStatusRequest message from the specified reader or buffer, length delimited.
          * @function decodeDelimited
-         * @memberof tabletmanagerdata.MasterStatusRequest
+         * @memberof tabletmanagerdata.PrimaryStatusRequest
          * @static
          * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
-         * @returns {tabletmanagerdata.MasterStatusRequest} MasterStatusRequest
+         * @returns {tabletmanagerdata.PrimaryStatusRequest} PrimaryStatusRequest
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        MasterStatusRequest.decodeDelimited = function decodeDelimited(reader) {
+        PrimaryStatusRequest.decodeDelimited = function decodeDelimited(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
             return this.decode(reader, reader.uint32());
         };
 
         /**
-         * Verifies a MasterStatusRequest message.
+         * Verifies a PrimaryStatusRequest message.
          * @function verify
-         * @memberof tabletmanagerdata.MasterStatusRequest
+         * @memberof tabletmanagerdata.PrimaryStatusRequest
          * @static
          * @param {Object.<string,*>} message Plain object to verify
          * @returns {string|null} `null` if valid, otherwise the reason why it is not
          */
-        MasterStatusRequest.verify = function verify(message) {
+        PrimaryStatusRequest.verify = function verify(message) {
             if (typeof message !== "object" || message === null)
                 return "object expected";
             return null;
         };
 
         /**
-         * Creates a MasterStatusRequest message from a plain object. Also converts values to their respective internal types.
+         * Creates a PrimaryStatusRequest message from a plain object. Also converts values to their respective internal types.
          * @function fromObject
-         * @memberof tabletmanagerdata.MasterStatusRequest
+         * @memberof tabletmanagerdata.PrimaryStatusRequest
          * @static
          * @param {Object.<string,*>} object Plain object
-         * @returns {tabletmanagerdata.MasterStatusRequest} MasterStatusRequest
+         * @returns {tabletmanagerdata.PrimaryStatusRequest} PrimaryStatusRequest
          */
-        MasterStatusRequest.fromObject = function fromObject(object) {
-            if (object instanceof $root.tabletmanagerdata.MasterStatusRequest)
+        PrimaryStatusRequest.fromObject = function fromObject(object) {
+            if (object instanceof $root.tabletmanagerdata.PrimaryStatusRequest)
                 return object;
-            return new $root.tabletmanagerdata.MasterStatusRequest();
+            return new $root.tabletmanagerdata.PrimaryStatusRequest();
         };
 
         /**
-         * Creates a plain object from a MasterStatusRequest message. Also converts values to other types if specified.
+         * Creates a plain object from a PrimaryStatusRequest message. Also converts values to other types if specified.
          * @function toObject
-         * @memberof tabletmanagerdata.MasterStatusRequest
+         * @memberof tabletmanagerdata.PrimaryStatusRequest
          * @static
-         * @param {tabletmanagerdata.MasterStatusRequest} message MasterStatusRequest
+         * @param {tabletmanagerdata.PrimaryStatusRequest} message PrimaryStatusRequest
          * @param {$protobuf.IConversionOptions} [options] Conversion options
          * @returns {Object.<string,*>} Plain object
          */
-        MasterStatusRequest.toObject = function toObject() {
+        PrimaryStatusRequest.toObject = function toObject() {
             return {};
         };
 
         /**
-         * Converts this MasterStatusRequest to JSON.
+         * Converts this PrimaryStatusRequest to JSON.
          * @function toJSON
-         * @memberof tabletmanagerdata.MasterStatusRequest
+         * @memberof tabletmanagerdata.PrimaryStatusRequest
          * @instance
          * @returns {Object.<string,*>} JSON object
          */
-        MasterStatusRequest.prototype.toJSON = function toJSON() {
+        PrimaryStatusRequest.prototype.toJSON = function toJSON() {
             return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
         };
 
-        return MasterStatusRequest;
+        return PrimaryStatusRequest;
     })();
 
-    tabletmanagerdata.MasterStatusResponse = (function() {
+    tabletmanagerdata.PrimaryStatusResponse = (function() {
 
         /**
-         * Properties of a MasterStatusResponse.
+         * Properties of a PrimaryStatusResponse.
          * @memberof tabletmanagerdata
-         * @interface IMasterStatusResponse
-         * @property {replicationdata.IMasterStatus|null} [status] MasterStatusResponse status
+         * @interface IPrimaryStatusResponse
+         * @property {replicationdata.IPrimaryStatus|null} [status] PrimaryStatusResponse status
          */
 
         /**
-         * Constructs a new MasterStatusResponse.
+         * Constructs a new PrimaryStatusResponse.
          * @memberof tabletmanagerdata
-         * @classdesc Represents a MasterStatusResponse.
-         * @implements IMasterStatusResponse
+         * @classdesc Represents a PrimaryStatusResponse.
+         * @implements IPrimaryStatusResponse
          * @constructor
-         * @param {tabletmanagerdata.IMasterStatusResponse=} [properties] Properties to set
+         * @param {tabletmanagerdata.IPrimaryStatusResponse=} [properties] Properties to set
          */
-        function MasterStatusResponse(properties) {
+        function PrimaryStatusResponse(properties) {
             if (properties)
                 for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
                     if (properties[keys[i]] != null)
@@ -28955,75 +28665,75 @@ $root.tabletmanagerdata = (function() {
         }
 
         /**
-         * MasterStatusResponse status.
-         * @member {replicationdata.IMasterStatus|null|undefined} status
-         * @memberof tabletmanagerdata.MasterStatusResponse
+         * PrimaryStatusResponse status.
+         * @member {replicationdata.IPrimaryStatus|null|undefined} status
+         * @memberof tabletmanagerdata.PrimaryStatusResponse
          * @instance
          */
-        MasterStatusResponse.prototype.status = null;
+        PrimaryStatusResponse.prototype.status = null;
 
         /**
-         * Creates a new MasterStatusResponse instance using the specified properties.
+         * Creates a new PrimaryStatusResponse instance using the specified properties.
          * @function create
-         * @memberof tabletmanagerdata.MasterStatusResponse
+         * @memberof tabletmanagerdata.PrimaryStatusResponse
          * @static
-         * @param {tabletmanagerdata.IMasterStatusResponse=} [properties] Properties to set
-         * @returns {tabletmanagerdata.MasterStatusResponse} MasterStatusResponse instance
+         * @param {tabletmanagerdata.IPrimaryStatusResponse=} [properties] Properties to set
+         * @returns {tabletmanagerdata.PrimaryStatusResponse} PrimaryStatusResponse instance
          */
-        MasterStatusResponse.create = function create(properties) {
-            return new MasterStatusResponse(properties);
+        PrimaryStatusResponse.create = function create(properties) {
+            return new PrimaryStatusResponse(properties);
         };
 
         /**
-         * Encodes the specified MasterStatusResponse message. Does not implicitly {@link tabletmanagerdata.MasterStatusResponse.verify|verify} messages.
+         * Encodes the specified PrimaryStatusResponse message. Does not implicitly {@link tabletmanagerdata.PrimaryStatusResponse.verify|verify} messages.
          * @function encode
-         * @memberof tabletmanagerdata.MasterStatusResponse
+         * @memberof tabletmanagerdata.PrimaryStatusResponse
          * @static
-         * @param {tabletmanagerdata.IMasterStatusResponse} message MasterStatusResponse message or plain object to encode
+         * @param {tabletmanagerdata.IPrimaryStatusResponse} message PrimaryStatusResponse message or plain object to encode
          * @param {$protobuf.Writer} [writer] Writer to encode to
          * @returns {$protobuf.Writer} Writer
          */
-        MasterStatusResponse.encode = function encode(message, writer) {
+        PrimaryStatusResponse.encode = function encode(message, writer) {
             if (!writer)
                 writer = $Writer.create();
             if (message.status != null && Object.hasOwnProperty.call(message, "status"))
-                $root.replicationdata.MasterStatus.encode(message.status, writer.uint32(/* id 1, wireType 2 =*/10).fork()).ldelim();
+                $root.replicationdata.PrimaryStatus.encode(message.status, writer.uint32(/* id 1, wireType 2 =*/10).fork()).ldelim();
             return writer;
         };
 
         /**
-         * Encodes the specified MasterStatusResponse message, length delimited. Does not implicitly {@link tabletmanagerdata.MasterStatusResponse.verify|verify} messages.
+         * Encodes the specified PrimaryStatusResponse message, length delimited. Does not implicitly {@link tabletmanagerdata.PrimaryStatusResponse.verify|verify} messages.
          * @function encodeDelimited
-         * @memberof tabletmanagerdata.MasterStatusResponse
+         * @memberof tabletmanagerdata.PrimaryStatusResponse
          * @static
-         * @param {tabletmanagerdata.IMasterStatusResponse} message MasterStatusResponse message or plain object to encode
+         * @param {tabletmanagerdata.IPrimaryStatusResponse} message PrimaryStatusResponse message or plain object to encode
          * @param {$protobuf.Writer} [writer] Writer to encode to
          * @returns {$protobuf.Writer} Writer
          */
-        MasterStatusResponse.encodeDelimited = function encodeDelimited(message, writer) {
+        PrimaryStatusResponse.encodeDelimited = function encodeDelimited(message, writer) {
             return this.encode(message, writer).ldelim();
         };
 
         /**
-         * Decodes a MasterStatusResponse message from the specified reader or buffer.
+         * Decodes a PrimaryStatusResponse message from the specified reader or buffer.
          * @function decode
-         * @memberof tabletmanagerdata.MasterStatusResponse
+         * @memberof tabletmanagerdata.PrimaryStatusResponse
          * @static
          * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
          * @param {number} [length] Message length if known beforehand
-         * @returns {tabletmanagerdata.MasterStatusResponse} MasterStatusResponse
+         * @returns {tabletmanagerdata.PrimaryStatusResponse} PrimaryStatusResponse
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        MasterStatusResponse.decode = function decode(reader, length) {
+        PrimaryStatusResponse.decode = function decode(reader, length) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
-            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.MasterStatusResponse();
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.PrimaryStatusResponse();
             while (reader.pos < end) {
                 var tag = reader.uint32();
                 switch (tag >>> 3) {
                 case 1:
-                    message.status = $root.replicationdata.MasterStatus.decode(reader, reader.uint32());
+                    message.status = $root.replicationdata.PrimaryStatus.decode(reader, reader.uint32());
                     break;
                 default:
                     reader.skipType(tag & 7);
@@ -29034,34 +28744,34 @@ $root.tabletmanagerdata = (function() {
         };
 
         /**
-         * Decodes a MasterStatusResponse message from the specified reader or buffer, length delimited.
+         * Decodes a PrimaryStatusResponse message from the specified reader or buffer, length delimited.
          * @function decodeDelimited
-         * @memberof tabletmanagerdata.MasterStatusResponse
+         * @memberof tabletmanagerdata.PrimaryStatusResponse
          * @static
          * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
-         * @returns {tabletmanagerdata.MasterStatusResponse} MasterStatusResponse
+         * @returns {tabletmanagerdata.PrimaryStatusResponse} PrimaryStatusResponse
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        MasterStatusResponse.decodeDelimited = function decodeDelimited(reader) {
+        PrimaryStatusResponse.decodeDelimited = function decodeDelimited(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
             return this.decode(reader, reader.uint32());
         };
 
         /**
-         * Verifies a MasterStatusResponse message.
+         * Verifies a PrimaryStatusResponse message.
          * @function verify
-         * @memberof tabletmanagerdata.MasterStatusResponse
+         * @memberof tabletmanagerdata.PrimaryStatusResponse
          * @static
          * @param {Object.<string,*>} message Plain object to verify
          * @returns {string|null} `null` if valid, otherwise the reason why it is not
          */
-        MasterStatusResponse.verify = function verify(message) {
+        PrimaryStatusResponse.verify = function verify(message) {
             if (typeof message !== "object" || message === null)
                 return "object expected";
             if (message.status != null && message.hasOwnProperty("status")) {
-                var error = $root.replicationdata.MasterStatus.verify(message.status);
+                var error = $root.replicationdata.PrimaryStatus.verify(message.status);
                 if (error)
                     return "status." + error;
             }
@@ -29069,76 +28779,76 @@ $root.tabletmanagerdata = (function() {
         };
 
         /**
-         * Creates a MasterStatusResponse message from a plain object. Also converts values to their respective internal types.
+         * Creates a PrimaryStatusResponse message from a plain object. Also converts values to their respective internal types.
          * @function fromObject
-         * @memberof tabletmanagerdata.MasterStatusResponse
+         * @memberof tabletmanagerdata.PrimaryStatusResponse
          * @static
          * @param {Object.<string,*>} object Plain object
-         * @returns {tabletmanagerdata.MasterStatusResponse} MasterStatusResponse
+         * @returns {tabletmanagerdata.PrimaryStatusResponse} PrimaryStatusResponse
          */
-        MasterStatusResponse.fromObject = function fromObject(object) {
-            if (object instanceof $root.tabletmanagerdata.MasterStatusResponse)
+        PrimaryStatusResponse.fromObject = function fromObject(object) {
+            if (object instanceof $root.tabletmanagerdata.PrimaryStatusResponse)
                 return object;
-            var message = new $root.tabletmanagerdata.MasterStatusResponse();
+            var message = new $root.tabletmanagerdata.PrimaryStatusResponse();
             if (object.status != null) {
                 if (typeof object.status !== "object")
-                    throw TypeError(".tabletmanagerdata.MasterStatusResponse.status: object expected");
-                message.status = $root.replicationdata.MasterStatus.fromObject(object.status);
+                    throw TypeError(".tabletmanagerdata.PrimaryStatusResponse.status: object expected");
+                message.status = $root.replicationdata.PrimaryStatus.fromObject(object.status);
             }
             return message;
         };
 
         /**
-         * Creates a plain object from a MasterStatusResponse message. Also converts values to other types if specified.
+         * Creates a plain object from a PrimaryStatusResponse message. Also converts values to other types if specified.
          * @function toObject
-         * @memberof tabletmanagerdata.MasterStatusResponse
+         * @memberof tabletmanagerdata.PrimaryStatusResponse
          * @static
-         * @param {tabletmanagerdata.MasterStatusResponse} message MasterStatusResponse
+         * @param {tabletmanagerdata.PrimaryStatusResponse} message PrimaryStatusResponse
          * @param {$protobuf.IConversionOptions} [options] Conversion options
          * @returns {Object.<string,*>} Plain object
          */
-        MasterStatusResponse.toObject = function toObject(message, options) {
+        PrimaryStatusResponse.toObject = function toObject(message, options) {
             if (!options)
                 options = {};
             var object = {};
             if (options.defaults)
                 object.status = null;
             if (message.status != null && message.hasOwnProperty("status"))
-                object.status = $root.replicationdata.MasterStatus.toObject(message.status, options);
+                object.status = $root.replicationdata.PrimaryStatus.toObject(message.status, options);
             return object;
         };
 
         /**
-         * Converts this MasterStatusResponse to JSON.
+         * Converts this PrimaryStatusResponse to JSON.
          * @function toJSON
-         * @memberof tabletmanagerdata.MasterStatusResponse
+         * @memberof tabletmanagerdata.PrimaryStatusResponse
          * @instance
          * @returns {Object.<string,*>} JSON object
          */
-        MasterStatusResponse.prototype.toJSON = function toJSON() {
+        PrimaryStatusResponse.prototype.toJSON = function toJSON() {
             return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
         };
 
-        return MasterStatusResponse;
+        return PrimaryStatusResponse;
     })();
 
-    tabletmanagerdata.MasterPositionRequest = (function() {
+    tabletmanagerdata.PrimaryPositionRequest = (function() {
 
         /**
-         * Properties of a MasterPositionRequest.
+         * Properties of a PrimaryPositionRequest.
          * @memberof tabletmanagerdata
-         * @interface IMasterPositionRequest
+         * @interface IPrimaryPositionRequest
          */
 
         /**
-         * Constructs a new MasterPositionRequest.
+         * Constructs a new PrimaryPositionRequest.
          * @memberof tabletmanagerdata
-         * @classdesc Represents a MasterPositionRequest.
-         * @implements IMasterPositionRequest
+         * @classdesc Represents a PrimaryPositionRequest.
+         * @implements IPrimaryPositionRequest
          * @constructor
-         * @param {tabletmanagerdata.IMasterPositionRequest=} [properties] Properties to set
+         * @param {tabletmanagerdata.IPrimaryPositionRequest=} [properties] Properties to set
          */
-        function MasterPositionRequest(properties) {
+        function PrimaryPositionRequest(properties) {
             if (properties)
                 for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
                     if (properties[keys[i]] != null)
@@ -29146,60 +28856,60 @@ $root.tabletmanagerdata = (function() {
         }
 
         /**
-         * Creates a new MasterPositionRequest instance using the specified properties.
+         * Creates a new PrimaryPositionRequest instance using the specified properties.
          * @function create
-         * @memberof tabletmanagerdata.MasterPositionRequest
+         * @memberof tabletmanagerdata.PrimaryPositionRequest
          * @static
-         * @param {tabletmanagerdata.IMasterPositionRequest=} [properties] Properties to set
-         * @returns {tabletmanagerdata.MasterPositionRequest} MasterPositionRequest instance
+         * @param {tabletmanagerdata.IPrimaryPositionRequest=} [properties] Properties to set
+         * @returns {tabletmanagerdata.PrimaryPositionRequest} PrimaryPositionRequest instance
          */
-        MasterPositionRequest.create = function create(properties) {
-            return new MasterPositionRequest(properties);
+        PrimaryPositionRequest.create = function create(properties) {
+            return new PrimaryPositionRequest(properties);
         };
 
         /**
-         * Encodes the specified MasterPositionRequest message. Does not implicitly {@link tabletmanagerdata.MasterPositionRequest.verify|verify} messages.
+         * Encodes the specified PrimaryPositionRequest message. Does not implicitly {@link tabletmanagerdata.PrimaryPositionRequest.verify|verify} messages.
          * @function encode
-         * @memberof tabletmanagerdata.MasterPositionRequest
+         * @memberof tabletmanagerdata.PrimaryPositionRequest
          * @static
-         * @param {tabletmanagerdata.IMasterPositionRequest} message MasterPositionRequest message or plain object to encode
+         * @param {tabletmanagerdata.IPrimaryPositionRequest} message PrimaryPositionRequest message or plain object to encode
          * @param {$protobuf.Writer} [writer] Writer to encode to
          * @returns {$protobuf.Writer} Writer
          */
-        MasterPositionRequest.encode = function encode(message, writer) {
+        PrimaryPositionRequest.encode = function encode(message, writer) {
             if (!writer)
                 writer = $Writer.create();
             return writer;
         };
 
         /**
-         * Encodes the specified MasterPositionRequest message, length delimited. Does not implicitly {@link tabletmanagerdata.MasterPositionRequest.verify|verify} messages.
+         * Encodes the specified PrimaryPositionRequest message, length delimited. Does not implicitly {@link tabletmanagerdata.PrimaryPositionRequest.verify|verify} messages.
          * @function encodeDelimited
-         * @memberof tabletmanagerdata.MasterPositionRequest
+         * @memberof tabletmanagerdata.PrimaryPositionRequest
          * @static
-         * @param {tabletmanagerdata.IMasterPositionRequest} message MasterPositionRequest message or plain object to encode
+         * @param {tabletmanagerdata.IPrimaryPositionRequest} message PrimaryPositionRequest message or plain object to encode
          * @param {$protobuf.Writer} [writer] Writer to encode to
          * @returns {$protobuf.Writer} Writer
          */
-        MasterPositionRequest.encodeDelimited = function encodeDelimited(message, writer) {
+        PrimaryPositionRequest.encodeDelimited = function encodeDelimited(message, writer) {
             return this.encode(message, writer).ldelim();
         };
 
         /**
-         * Decodes a MasterPositionRequest message from the specified reader or buffer.
+         * Decodes a PrimaryPositionRequest message from the specified reader or buffer.
          * @function decode
-         * @memberof tabletmanagerdata.MasterPositionRequest
+         * @memberof tabletmanagerdata.PrimaryPositionRequest
          * @static
          * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
          * @param {number} [length] Message length if known beforehand
-         * @returns {tabletmanagerdata.MasterPositionRequest} MasterPositionRequest
+         * @returns {tabletmanagerdata.PrimaryPositionRequest} PrimaryPositionRequest
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        MasterPositionRequest.decode = function decode(reader, length) {
+        PrimaryPositionRequest.decode = function decode(reader, length) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
-            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.MasterPositionRequest();
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.PrimaryPositionRequest();
             while (reader.pos < end) {
                 var tag = reader.uint32();
                 switch (tag >>> 3) {
@@ -29212,94 +28922,94 @@ $root.tabletmanagerdata = (function() {
         };
 
         /**
-         * Decodes a MasterPositionRequest message from the specified reader or buffer, length delimited.
+         * Decodes a PrimaryPositionRequest message from the specified reader or buffer, length delimited.
          * @function decodeDelimited
-         * @memberof tabletmanagerdata.MasterPositionRequest
+         * @memberof tabletmanagerdata.PrimaryPositionRequest
          * @static
          * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
-         * @returns {tabletmanagerdata.MasterPositionRequest} MasterPositionRequest
+         * @returns {tabletmanagerdata.PrimaryPositionRequest} PrimaryPositionRequest
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        MasterPositionRequest.decodeDelimited = function decodeDelimited(reader) {
+        PrimaryPositionRequest.decodeDelimited = function decodeDelimited(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
             return this.decode(reader, reader.uint32());
         };
 
         /**
-         * Verifies a MasterPositionRequest message.
+         * Verifies a PrimaryPositionRequest message.
          * @function verify
-         * @memberof tabletmanagerdata.MasterPositionRequest
+         * @memberof tabletmanagerdata.PrimaryPositionRequest
          * @static
          * @param {Object.<string,*>} message Plain object to verify
          * @returns {string|null} `null` if valid, otherwise the reason why it is not
          */
-        MasterPositionRequest.verify = function verify(message) {
+        PrimaryPositionRequest.verify = function verify(message) {
             if (typeof message !== "object" || message === null)
                 return "object expected";
             return null;
         };
 
         /**
-         * Creates a MasterPositionRequest message from a plain object. Also converts values to their respective internal types.
+         * Creates a PrimaryPositionRequest message from a plain object. Also converts values to their respective internal types.
          * @function fromObject
-         * @memberof tabletmanagerdata.MasterPositionRequest
+         * @memberof tabletmanagerdata.PrimaryPositionRequest
          * @static
          * @param {Object.<string,*>} object Plain object
-         * @returns {tabletmanagerdata.MasterPositionRequest} MasterPositionRequest
+         * @returns {tabletmanagerdata.PrimaryPositionRequest} PrimaryPositionRequest
          */
-        MasterPositionRequest.fromObject = function fromObject(object) {
-            if (object instanceof $root.tabletmanagerdata.MasterPositionRequest)
+        PrimaryPositionRequest.fromObject = function fromObject(object) {
+            if (object instanceof $root.tabletmanagerdata.PrimaryPositionRequest)
                 return object;
-            return new $root.tabletmanagerdata.MasterPositionRequest();
+            return new $root.tabletmanagerdata.PrimaryPositionRequest();
         };
 
         /**
-         * Creates a plain object from a MasterPositionRequest message. Also converts values to other types if specified.
+         * Creates a plain object from a PrimaryPositionRequest message. Also converts values to other types if specified.
          * @function toObject
-         * @memberof tabletmanagerdata.MasterPositionRequest
+         * @memberof tabletmanagerdata.PrimaryPositionRequest
          * @static
-         * @param {tabletmanagerdata.MasterPositionRequest} message MasterPositionRequest
+         * @param {tabletmanagerdata.PrimaryPositionRequest} message PrimaryPositionRequest
          * @param {$protobuf.IConversionOptions} [options] Conversion options
          * @returns {Object.<string,*>} Plain object
          */
-        MasterPositionRequest.toObject = function toObject() {
+        PrimaryPositionRequest.toObject = function toObject() {
             return {};
         };
 
         /**
-         * Converts this MasterPositionRequest to JSON.
+         * Converts this PrimaryPositionRequest to JSON.
          * @function toJSON
-         * @memberof tabletmanagerdata.MasterPositionRequest
+         * @memberof tabletmanagerdata.PrimaryPositionRequest
          * @instance
          * @returns {Object.<string,*>} JSON object
          */
-        MasterPositionRequest.prototype.toJSON = function toJSON() {
+        PrimaryPositionRequest.prototype.toJSON = function toJSON() {
             return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
         };
 
-        return MasterPositionRequest;
+        return PrimaryPositionRequest;
     })();
 
-    tabletmanagerdata.MasterPositionResponse = (function() {
+    tabletmanagerdata.PrimaryPositionResponse = (function() {
 
         /**
-         * Properties of a MasterPositionResponse.
+         * Properties of a PrimaryPositionResponse.
          * @memberof tabletmanagerdata
-         * @interface IMasterPositionResponse
-         * @property {string|null} [position] MasterPositionResponse position
+         * @interface IPrimaryPositionResponse
+         * @property {string|null} [position] PrimaryPositionResponse position
          */
 
         /**
-         * Constructs a new MasterPositionResponse.
+         * Constructs a new PrimaryPositionResponse.
          * @memberof tabletmanagerdata
-         * @classdesc Represents a MasterPositionResponse.
-         * @implements IMasterPositionResponse
+         * @classdesc Represents a PrimaryPositionResponse.
+         * @implements IPrimaryPositionResponse
          * @constructor
-         * @param {tabletmanagerdata.IMasterPositionResponse=} [properties] Properties to set
+         * @param {tabletmanagerdata.IPrimaryPositionResponse=} [properties] Properties to set
          */
-        function MasterPositionResponse(properties) {
+        function PrimaryPositionResponse(properties) {
             if (properties)
                 for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
                     if (properties[keys[i]] != null)
@@ -29307,35 +29017,35 @@ $root.tabletmanagerdata = (function() {
         }
 
         /**
-         * MasterPositionResponse position.
+         * PrimaryPositionResponse position.
          * @member {string} position
-         * @memberof tabletmanagerdata.MasterPositionResponse
+         * @memberof tabletmanagerdata.PrimaryPositionResponse
          * @instance
          */
-        MasterPositionResponse.prototype.position = "";
+        PrimaryPositionResponse.prototype.position = "";
 
         /**
-         * Creates a new MasterPositionResponse instance using the specified properties.
+         * Creates a new PrimaryPositionResponse instance using the specified properties.
          * @function create
-         * @memberof tabletmanagerdata.MasterPositionResponse
+         * @memberof tabletmanagerdata.PrimaryPositionResponse
          * @static
-         * @param {tabletmanagerdata.IMasterPositionResponse=} [properties] Properties to set
-         * @returns {tabletmanagerdata.MasterPositionResponse} MasterPositionResponse instance
+         * @param {tabletmanagerdata.IPrimaryPositionResponse=} [properties] Properties to set
+         * @returns {tabletmanagerdata.PrimaryPositionResponse} PrimaryPositionResponse instance
          */
-        MasterPositionResponse.create = function create(properties) {
-            return new MasterPositionResponse(properties);
+        PrimaryPositionResponse.create = function create(properties) {
+            return new PrimaryPositionResponse(properties);
         };
 
         /**
-         * Encodes the specified MasterPositionResponse message. Does not implicitly {@link tabletmanagerdata.MasterPositionResponse.verify|verify} messages.
+         * Encodes the specified PrimaryPositionResponse message. Does not implicitly {@link tabletmanagerdata.PrimaryPositionResponse.verify|verify} messages.
          * @function encode
-         * @memberof tabletmanagerdata.MasterPositionResponse
+         * @memberof tabletmanagerdata.PrimaryPositionResponse
          * @static
-         * @param {tabletmanagerdata.IMasterPositionResponse} message MasterPositionResponse message or plain object to encode
+         * @param {tabletmanagerdata.IPrimaryPositionResponse} message PrimaryPositionResponse message or plain object to encode
          * @param {$protobuf.Writer} [writer] Writer to encode to
          * @returns {$protobuf.Writer} Writer
          */
-        MasterPositionResponse.encode = function encode(message, writer) {
+        PrimaryPositionResponse.encode = function encode(message, writer) {
             if (!writer)
                 writer = $Writer.create();
             if (message.position != null && Object.hasOwnProperty.call(message, "position"))
@@ -29344,33 +29054,33 @@ $root.tabletmanagerdata = (function() {
         };
 
         /**
-         * Encodes the specified MasterPositionResponse message, length delimited. Does not implicitly {@link tabletmanagerdata.MasterPositionResponse.verify|verify} messages.
+         * Encodes the specified PrimaryPositionResponse message, length delimited. Does not implicitly {@link tabletmanagerdata.PrimaryPositionResponse.verify|verify} messages.
          * @function encodeDelimited
-         * @memberof tabletmanagerdata.MasterPositionResponse
+         * @memberof tabletmanagerdata.PrimaryPositionResponse
          * @static
-         * @param {tabletmanagerdata.IMasterPositionResponse} message MasterPositionResponse message or plain object to encode
+         * @param {tabletmanagerdata.IPrimaryPositionResponse} message PrimaryPositionResponse message or plain object to encode
          * @param {$protobuf.Writer} [writer] Writer to encode to
          * @returns {$protobuf.Writer} Writer
          */
-        MasterPositionResponse.encodeDelimited = function encodeDelimited(message, writer) {
+        PrimaryPositionResponse.encodeDelimited = function encodeDelimited(message, writer) {
             return this.encode(message, writer).ldelim();
         };
 
         /**
-         * Decodes a MasterPositionResponse message from the specified reader or buffer.
+         * Decodes a PrimaryPositionResponse message from the specified reader or buffer.
          * @function decode
-         * @memberof tabletmanagerdata.MasterPositionResponse
+         * @memberof tabletmanagerdata.PrimaryPositionResponse
          * @static
          * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
          * @param {number} [length] Message length if known beforehand
-         * @returns {tabletmanagerdata.MasterPositionResponse} MasterPositionResponse
+         * @returns {tabletmanagerdata.PrimaryPositionResponse} PrimaryPositionResponse
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        MasterPositionResponse.decode = function decode(reader, length) {
+        PrimaryPositionResponse.decode = function decode(reader, length) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
-            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.MasterPositionResponse();
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.PrimaryPositionResponse();
             while (reader.pos < end) {
                 var tag = reader.uint32();
                 switch (tag >>> 3) {
@@ -29386,30 +29096,30 @@ $root.tabletmanagerdata = (function() {
         };
 
         /**
-         * Decodes a MasterPositionResponse message from the specified reader or buffer, length delimited.
+         * Decodes a PrimaryPositionResponse message from the specified reader or buffer, length delimited.
          * @function decodeDelimited
-         * @memberof tabletmanagerdata.MasterPositionResponse
+         * @memberof tabletmanagerdata.PrimaryPositionResponse
          * @static
          * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
-         * @returns {tabletmanagerdata.MasterPositionResponse} MasterPositionResponse
+         * @returns {tabletmanagerdata.PrimaryPositionResponse} PrimaryPositionResponse
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        MasterPositionResponse.decodeDelimited = function decodeDelimited(reader) {
+        PrimaryPositionResponse.decodeDelimited = function decodeDelimited(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
             return this.decode(reader, reader.uint32());
         };
 
         /**
-         * Verifies a MasterPositionResponse message.
+         * Verifies a PrimaryPositionResponse message.
          * @function verify
-         * @memberof tabletmanagerdata.MasterPositionResponse
+         * @memberof tabletmanagerdata.PrimaryPositionResponse
          * @static
          * @param {Object.<string,*>} message Plain object to verify
          * @returns {string|null} `null` if valid, otherwise the reason why it is not
          */
-        MasterPositionResponse.verify = function verify(message) {
+        PrimaryPositionResponse.verify = function verify(message) {
             if (typeof message !== "object" || message === null)
                 return "object expected";
             if (message.position != null && message.hasOwnProperty("position"))
@@ -29419,32 +29129,32 @@ $root.tabletmanagerdata = (function() {
         };
 
         /**
-         * Creates a MasterPositionResponse message from a plain object. Also converts values to their respective internal types.
+         * Creates a PrimaryPositionResponse message from a plain object. Also converts values to their respective internal types.
          * @function fromObject
-         * @memberof tabletmanagerdata.MasterPositionResponse
+         * @memberof tabletmanagerdata.PrimaryPositionResponse
          * @static
          * @param {Object.<string,*>} object Plain object
-         * @returns {tabletmanagerdata.MasterPositionResponse} MasterPositionResponse
+         * @returns {tabletmanagerdata.PrimaryPositionResponse} PrimaryPositionResponse
          */
-        MasterPositionResponse.fromObject = function fromObject(object) {
-            if (object instanceof $root.tabletmanagerdata.MasterPositionResponse)
+        PrimaryPositionResponse.fromObject = function fromObject(object) {
+            if (object instanceof $root.tabletmanagerdata.PrimaryPositionResponse)
                 return object;
-            var message = new $root.tabletmanagerdata.MasterPositionResponse();
+            var message = new $root.tabletmanagerdata.PrimaryPositionResponse();
             if (object.position != null)
                 message.position = String(object.position);
             return message;
         };
 
         /**
-         * Creates a plain object from a MasterPositionResponse message. Also converts values to other types if specified.
+         * Creates a plain object from a PrimaryPositionResponse message. Also converts values to other types if specified.
          * @function toObject
-         * @memberof tabletmanagerdata.MasterPositionResponse
+         * @memberof tabletmanagerdata.PrimaryPositionResponse
          * @static
-         * @param {tabletmanagerdata.MasterPositionResponse} message MasterPositionResponse
+         * @param {tabletmanagerdata.PrimaryPositionResponse} message PrimaryPositionResponse
          * @param {$protobuf.IConversionOptions} [options] Conversion options
          * @returns {Object.<string,*>} Plain object
          */
-        MasterPositionResponse.toObject = function toObject(message, options) {
+        PrimaryPositionResponse.toObject = function toObject(message, options) {
             if (!options)
                 options = {};
             var object = {};
@@ -29456,17 +29166,17 @@ $root.tabletmanagerdata = (function() {
         };
 
         /**
-         * Converts this MasterPositionResponse to JSON.
+         * Converts this PrimaryPositionResponse to JSON.
          * @function toJSON
-         * @memberof tabletmanagerdata.MasterPositionResponse
+         * @memberof tabletmanagerdata.PrimaryPositionResponse
          * @instance
          * @returns {Object.<string,*>} JSON object
          */
-        MasterPositionResponse.prototype.toJSON = function toJSON() {
+        PrimaryPositionResponse.prototype.toJSON = function toJSON() {
             return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
         };
 
-        return MasterPositionResponse;
+        return PrimaryPositionResponse;
     })();
 
     tabletmanagerdata.WaitForPositionRequest = (function() {
@@ -32697,23 +32407,23 @@ $root.tabletmanagerdata = (function() {
         return VReplicationWaitForPosResponse;
     })();
 
-    tabletmanagerdata.InitMasterRequest = (function() {
+    tabletmanagerdata.InitPrimaryRequest = (function() {
 
         /**
-         * Properties of an InitMasterRequest.
+         * Properties of an InitPrimaryRequest.
          * @memberof tabletmanagerdata
-         * @interface IInitMasterRequest
+         * @interface IInitPrimaryRequest
          */
 
         /**
-         * Constructs a new InitMasterRequest.
+         * Constructs a new InitPrimaryRequest.
          * @memberof tabletmanagerdata
-         * @classdesc Represents an InitMasterRequest.
-         * @implements IInitMasterRequest
+         * @classdesc Represents an InitPrimaryRequest.
+         * @implements IInitPrimaryRequest
          * @constructor
-         * @param {tabletmanagerdata.IInitMasterRequest=} [properties] Properties to set
+         * @param {tabletmanagerdata.IInitPrimaryRequest=} [properties] Properties to set
          */
-        function InitMasterRequest(properties) {
+        function InitPrimaryRequest(properties) {
             if (properties)
                 for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
                     if (properties[keys[i]] != null)
@@ -32721,60 +32431,60 @@ $root.tabletmanagerdata = (function() {
         }
 
         /**
-         * Creates a new InitMasterRequest instance using the specified properties.
+         * Creates a new InitPrimaryRequest instance using the specified properties.
          * @function create
-         * @memberof tabletmanagerdata.InitMasterRequest
+         * @memberof tabletmanagerdata.InitPrimaryRequest
          * @static
-         * @param {tabletmanagerdata.IInitMasterRequest=} [properties] Properties to set
-         * @returns {tabletmanagerdata.InitMasterRequest} InitMasterRequest instance
+         * @param {tabletmanagerdata.IInitPrimaryRequest=} [properties] Properties to set
+         * @returns {tabletmanagerdata.InitPrimaryRequest} InitPrimaryRequest instance
          */
-        InitMasterRequest.create = function create(properties) {
-            return new InitMasterRequest(properties);
+        InitPrimaryRequest.create = function create(properties) {
+            return new InitPrimaryRequest(properties);
         };
 
         /**
-         * Encodes the specified InitMasterRequest message. Does not implicitly {@link tabletmanagerdata.InitMasterRequest.verify|verify} messages.
+         * Encodes the specified InitPrimaryRequest message. Does not implicitly {@link tabletmanagerdata.InitPrimaryRequest.verify|verify} messages.
          * @function encode
-         * @memberof tabletmanagerdata.InitMasterRequest
+         * @memberof tabletmanagerdata.InitPrimaryRequest
          * @static
-         * @param {tabletmanagerdata.IInitMasterRequest} message InitMasterRequest message or plain object to encode
+         * @param {tabletmanagerdata.IInitPrimaryRequest} message InitPrimaryRequest message or plain object to encode
          * @param {$protobuf.Writer} [writer] Writer to encode to
          * @returns {$protobuf.Writer} Writer
          */
-        InitMasterRequest.encode = function encode(message, writer) {
+        InitPrimaryRequest.encode = function encode(message, writer) {
             if (!writer)
                 writer = $Writer.create();
             return writer;
         };
 
         /**
-         * Encodes the specified InitMasterRequest message, length delimited. Does not implicitly {@link tabletmanagerdata.InitMasterRequest.verify|verify} messages.
+         * Encodes the specified InitPrimaryRequest message, length delimited. Does not implicitly {@link tabletmanagerdata.InitPrimaryRequest.verify|verify} messages.
          * @function encodeDelimited
-         * @memberof tabletmanagerdata.InitMasterRequest
+         * @memberof tabletmanagerdata.InitPrimaryRequest
          * @static
-         * @param {tabletmanagerdata.IInitMasterRequest} message InitMasterRequest message or plain object to encode
+         * @param {tabletmanagerdata.IInitPrimaryRequest} message InitPrimaryRequest message or plain object to encode
          * @param {$protobuf.Writer} [writer] Writer to encode to
          * @returns {$protobuf.Writer} Writer
          */
-        InitMasterRequest.encodeDelimited = function encodeDelimited(message, writer) {
+        InitPrimaryRequest.encodeDelimited = function encodeDelimited(message, writer) {
             return this.encode(message, writer).ldelim();
         };
 
         /**
-         * Decodes an InitMasterRequest message from the specified reader or buffer.
+         * Decodes an InitPrimaryRequest message from the specified reader or buffer.
          * @function decode
-         * @memberof tabletmanagerdata.InitMasterRequest
+         * @memberof tabletmanagerdata.InitPrimaryRequest
          * @static
          * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
          * @param {number} [length] Message length if known beforehand
-         * @returns {tabletmanagerdata.InitMasterRequest} InitMasterRequest
+         * @returns {tabletmanagerdata.InitPrimaryRequest} InitPrimaryRequest
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        InitMasterRequest.decode = function decode(reader, length) {
+        InitPrimaryRequest.decode = function decode(reader, length) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
-            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.InitMasterRequest();
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.InitPrimaryRequest();
             while (reader.pos < end) {
                 var tag = reader.uint32();
                 switch (tag >>> 3) {
@@ -32787,94 +32497,94 @@ $root.tabletmanagerdata = (function() {
         };
 
         /**
-         * Decodes an InitMasterRequest message from the specified reader or buffer, length delimited.
+         * Decodes an InitPrimaryRequest message from the specified reader or buffer, length delimited.
          * @function decodeDelimited
-         * @memberof tabletmanagerdata.InitMasterRequest
+         * @memberof tabletmanagerdata.InitPrimaryRequest
          * @static
          * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
-         * @returns {tabletmanagerdata.InitMasterRequest} InitMasterRequest
+         * @returns {tabletmanagerdata.InitPrimaryRequest} InitPrimaryRequest
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        InitMasterRequest.decodeDelimited = function decodeDelimited(reader) {
+        InitPrimaryRequest.decodeDelimited = function decodeDelimited(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
             return this.decode(reader, reader.uint32());
         };
 
         /**
-         * Verifies an InitMasterRequest message.
+         * Verifies an InitPrimaryRequest message.
          * @function verify
-         * @memberof tabletmanagerdata.InitMasterRequest
+         * @memberof tabletmanagerdata.InitPrimaryRequest
          * @static
          * @param {Object.<string,*>} message Plain object to verify
          * @returns {string|null} `null` if valid, otherwise the reason why it is not
          */
-        InitMasterRequest.verify = function verify(message) {
+        InitPrimaryRequest.verify = function verify(message) {
             if (typeof message !== "object" || message === null)
                 return "object expected";
             return null;
         };
 
         /**
-         * Creates an InitMasterRequest message from a plain object. Also converts values to their respective internal types.
+         * Creates an InitPrimaryRequest message from a plain object. Also converts values to their respective internal types.
          * @function fromObject
-         * @memberof tabletmanagerdata.InitMasterRequest
+         * @memberof tabletmanagerdata.InitPrimaryRequest
          * @static
          * @param {Object.<string,*>} object Plain object
-         * @returns {tabletmanagerdata.InitMasterRequest} InitMasterRequest
+         * @returns {tabletmanagerdata.InitPrimaryRequest} InitPrimaryRequest
          */
-        InitMasterRequest.fromObject = function fromObject(object) {
-            if (object instanceof $root.tabletmanagerdata.InitMasterRequest)
+        InitPrimaryRequest.fromObject = function fromObject(object) {
+            if (object instanceof $root.tabletmanagerdata.InitPrimaryRequest)
                 return object;
-            return new $root.tabletmanagerdata.InitMasterRequest();
+            return new $root.tabletmanagerdata.InitPrimaryRequest();
         };
 
         /**
-         * Creates a plain object from an InitMasterRequest message. Also converts values to other types if specified.
+         * Creates a plain object from an InitPrimaryRequest message. Also converts values to other types if specified.
          * @function toObject
-         * @memberof tabletmanagerdata.InitMasterRequest
+         * @memberof tabletmanagerdata.InitPrimaryRequest
          * @static
-         * @param {tabletmanagerdata.InitMasterRequest} message InitMasterRequest
+         * @param {tabletmanagerdata.InitPrimaryRequest} message InitPrimaryRequest
          * @param {$protobuf.IConversionOptions} [options] Conversion options
          * @returns {Object.<string,*>} Plain object
          */
-        InitMasterRequest.toObject = function toObject() {
+        InitPrimaryRequest.toObject = function toObject() {
             return {};
         };
 
         /**
-         * Converts this InitMasterRequest to JSON.
+         * Converts this InitPrimaryRequest to JSON.
          * @function toJSON
-         * @memberof tabletmanagerdata.InitMasterRequest
+         * @memberof tabletmanagerdata.InitPrimaryRequest
          * @instance
          * @returns {Object.<string,*>} JSON object
          */
-        InitMasterRequest.prototype.toJSON = function toJSON() {
+        InitPrimaryRequest.prototype.toJSON = function toJSON() {
             return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
         };
 
-        return InitMasterRequest;
+        return InitPrimaryRequest;
     })();
 
-    tabletmanagerdata.InitMasterResponse = (function() {
+    tabletmanagerdata.InitPrimaryResponse = (function() {
 
         /**
-         * Properties of an InitMasterResponse.
+         * Properties of an InitPrimaryResponse.
          * @memberof tabletmanagerdata
-         * @interface IInitMasterResponse
-         * @property {string|null} [position] InitMasterResponse position
+         * @interface IInitPrimaryResponse
+         * @property {string|null} [position] InitPrimaryResponse position
          */
 
         /**
-         * Constructs a new InitMasterResponse.
+         * Constructs a new InitPrimaryResponse.
          * @memberof tabletmanagerdata
-         * @classdesc Represents an InitMasterResponse.
-         * @implements IInitMasterResponse
+         * @classdesc Represents an InitPrimaryResponse.
+         * @implements IInitPrimaryResponse
          * @constructor
-         * @param {tabletmanagerdata.IInitMasterResponse=} [properties] Properties to set
+         * @param {tabletmanagerdata.IInitPrimaryResponse=} [properties] Properties to set
          */
-        function InitMasterResponse(properties) {
+        function InitPrimaryResponse(properties) {
             if (properties)
                 for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
                     if (properties[keys[i]] != null)
@@ -32882,35 +32592,35 @@ $root.tabletmanagerdata = (function() {
         }
 
         /**
-         * InitMasterResponse position.
+         * InitPrimaryResponse position.
          * @member {string} position
-         * @memberof tabletmanagerdata.InitMasterResponse
+         * @memberof tabletmanagerdata.InitPrimaryResponse
          * @instance
          */
-        InitMasterResponse.prototype.position = "";
+        InitPrimaryResponse.prototype.position = "";
 
         /**
-         * Creates a new InitMasterResponse instance using the specified properties.
+         * Creates a new InitPrimaryResponse instance using the specified properties.
          * @function create
-         * @memberof tabletmanagerdata.InitMasterResponse
+         * @memberof tabletmanagerdata.InitPrimaryResponse
          * @static
-         * @param {tabletmanagerdata.IInitMasterResponse=} [properties] Properties to set
-         * @returns {tabletmanagerdata.InitMasterResponse} InitMasterResponse instance
+         * @param {tabletmanagerdata.IInitPrimaryResponse=} [properties] Properties to set
+         * @returns {tabletmanagerdata.InitPrimaryResponse} InitPrimaryResponse instance
          */
-        InitMasterResponse.create = function create(properties) {
-            return new InitMasterResponse(properties);
+        InitPrimaryResponse.create = function create(properties) {
+            return new InitPrimaryResponse(properties);
         };
 
         /**
-         * Encodes the specified InitMasterResponse message. Does not implicitly {@link tabletmanagerdata.InitMasterResponse.verify|verify} messages.
+         * Encodes the specified InitPrimaryResponse message. Does not implicitly {@link tabletmanagerdata.InitPrimaryResponse.verify|verify} messages.
          * @function encode
-         * @memberof tabletmanagerdata.InitMasterResponse
+         * @memberof tabletmanagerdata.InitPrimaryResponse
          * @static
-         * @param {tabletmanagerdata.IInitMasterResponse} message InitMasterResponse message or plain object to encode
+         * @param {tabletmanagerdata.IInitPrimaryResponse} message InitPrimaryResponse message or plain object to encode
          * @param {$protobuf.Writer} [writer] Writer to encode to
          * @returns {$protobuf.Writer} Writer
          */
-        InitMasterResponse.encode = function encode(message, writer) {
+        InitPrimaryResponse.encode = function encode(message, writer) {
             if (!writer)
                 writer = $Writer.create();
             if (message.position != null && Object.hasOwnProperty.call(message, "position"))
@@ -32919,33 +32629,33 @@ $root.tabletmanagerdata = (function() {
         };
 
         /**
-         * Encodes the specified InitMasterResponse message, length delimited. Does not implicitly {@link tabletmanagerdata.InitMasterResponse.verify|verify} messages.
+         * Encodes the specified InitPrimaryResponse message, length delimited. Does not implicitly {@link tabletmanagerdata.InitPrimaryResponse.verify|verify} messages.
          * @function encodeDelimited
-         * @memberof tabletmanagerdata.InitMasterResponse
+         * @memberof tabletmanagerdata.InitPrimaryResponse
          * @static
-         * @param {tabletmanagerdata.IInitMasterResponse} message InitMasterResponse message or plain object to encode
+         * @param {tabletmanagerdata.IInitPrimaryResponse} message InitPrimaryResponse message or plain object to encode
          * @param {$protobuf.Writer} [writer] Writer to encode to
          * @returns {$protobuf.Writer} Writer
          */
-        InitMasterResponse.encodeDelimited = function encodeDelimited(message, writer) {
+        InitPrimaryResponse.encodeDelimited = function encodeDelimited(message, writer) {
             return this.encode(message, writer).ldelim();
         };
 
         /**
-         * Decodes an InitMasterResponse message from the specified reader or buffer.
+         * Decodes an InitPrimaryResponse message from the specified reader or buffer.
          * @function decode
-         * @memberof tabletmanagerdata.InitMasterResponse
+         * @memberof tabletmanagerdata.InitPrimaryResponse
          * @static
          * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
          * @param {number} [length] Message length if known beforehand
-         * @returns {tabletmanagerdata.InitMasterResponse} InitMasterResponse
+         * @returns {tabletmanagerdata.InitPrimaryResponse} InitPrimaryResponse
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        InitMasterResponse.decode = function decode(reader, length) {
+        InitPrimaryResponse.decode = function decode(reader, length) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
-            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.InitMasterResponse();
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.InitPrimaryResponse();
             while (reader.pos < end) {
                 var tag = reader.uint32();
                 switch (tag >>> 3) {
@@ -32961,30 +32671,30 @@ $root.tabletmanagerdata = (function() {
         };
 
         /**
-         * Decodes an InitMasterResponse message from the specified reader or buffer, length delimited.
+         * Decodes an InitPrimaryResponse message from the specified reader or buffer, length delimited.
          * @function decodeDelimited
-         * @memberof tabletmanagerdata.InitMasterResponse
+         * @memberof tabletmanagerdata.InitPrimaryResponse
          * @static
          * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
-         * @returns {tabletmanagerdata.InitMasterResponse} InitMasterResponse
+         * @returns {tabletmanagerdata.InitPrimaryResponse} InitPrimaryResponse
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        InitMasterResponse.decodeDelimited = function decodeDelimited(reader) {
+        InitPrimaryResponse.decodeDelimited = function decodeDelimited(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
             return this.decode(reader, reader.uint32());
         };
 
         /**
-         * Verifies an InitMasterResponse message.
+         * Verifies an InitPrimaryResponse message.
          * @function verify
-         * @memberof tabletmanagerdata.InitMasterResponse
+         * @memberof tabletmanagerdata.InitPrimaryResponse
          * @static
          * @param {Object.<string,*>} message Plain object to verify
          * @returns {string|null} `null` if valid, otherwise the reason why it is not
          */
-        InitMasterResponse.verify = function verify(message) {
+        InitPrimaryResponse.verify = function verify(message) {
             if (typeof message !== "object" || message === null)
                 return "object expected";
             if (message.position != null && message.hasOwnProperty("position"))
@@ -32994,32 +32704,32 @@ $root.tabletmanagerdata = (function() {
         };
 
         /**
-         * Creates an InitMasterResponse message from a plain object. Also converts values to their respective internal types.
+         * Creates an InitPrimaryResponse message from a plain object. Also converts values to their respective internal types.
          * @function fromObject
-         * @memberof tabletmanagerdata.InitMasterResponse
+         * @memberof tabletmanagerdata.InitPrimaryResponse
          * @static
          * @param {Object.<string,*>} object Plain object
-         * @returns {tabletmanagerdata.InitMasterResponse} InitMasterResponse
+         * @returns {tabletmanagerdata.InitPrimaryResponse} InitPrimaryResponse
          */
-        InitMasterResponse.fromObject = function fromObject(object) {
-            if (object instanceof $root.tabletmanagerdata.InitMasterResponse)
+        InitPrimaryResponse.fromObject = function fromObject(object) {
+            if (object instanceof $root.tabletmanagerdata.InitPrimaryResponse)
                 return object;
-            var message = new $root.tabletmanagerdata.InitMasterResponse();
+            var message = new $root.tabletmanagerdata.InitPrimaryResponse();
             if (object.position != null)
                 message.position = String(object.position);
             return message;
         };
 
         /**
-         * Creates a plain object from an InitMasterResponse message. Also converts values to other types if specified.
+         * Creates a plain object from an InitPrimaryResponse message. Also converts values to other types if specified.
          * @function toObject
-         * @memberof tabletmanagerdata.InitMasterResponse
+         * @memberof tabletmanagerdata.InitPrimaryResponse
          * @static
-         * @param {tabletmanagerdata.InitMasterResponse} message InitMasterResponse
+         * @param {tabletmanagerdata.InitPrimaryResponse} message InitPrimaryResponse
          * @param {$protobuf.IConversionOptions} [options] Conversion options
          * @returns {Object.<string,*>} Plain object
          */
-        InitMasterResponse.toObject = function toObject(message, options) {
+        InitPrimaryResponse.toObject = function toObject(message, options) {
             if (!options)
                 options = {};
             var object = {};
@@ -33031,17 +32741,17 @@ $root.tabletmanagerdata = (function() {
         };
 
         /**
-         * Converts this InitMasterResponse to JSON.
+         * Converts this InitPrimaryResponse to JSON.
          * @function toJSON
-         * @memberof tabletmanagerdata.InitMasterResponse
+         * @memberof tabletmanagerdata.InitPrimaryResponse
          * @instance
          * @returns {Object.<string,*>} JSON object
          */
-        InitMasterResponse.prototype.toJSON = function toJSON() {
+        InitPrimaryResponse.prototype.toJSON = function toJSON() {
             return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
         };
 
-        return InitMasterResponse;
+        return InitPrimaryResponse;
     })();
 
     tabletmanagerdata.PopulateReparentJournalRequest = (function() {
@@ -33052,7 +32762,7 @@ $root.tabletmanagerdata = (function() {
          * @interface IPopulateReparentJournalRequest
          * @property {number|Long|null} [time_created_ns] PopulateReparentJournalRequest time_created_ns
          * @property {string|null} [action_name] PopulateReparentJournalRequest action_name
-         * @property {topodata.ITabletAlias|null} [master_alias] PopulateReparentJournalRequest master_alias
+         * @property {topodata.ITabletAlias|null} [primary_alias] PopulateReparentJournalRequest primary_alias
          * @property {string|null} [replication_position] PopulateReparentJournalRequest replication_position
          */
 
@@ -33088,12 +32798,12 @@ $root.tabletmanagerdata = (function() {
         PopulateReparentJournalRequest.prototype.action_name = "";
 
         /**
-         * PopulateReparentJournalRequest master_alias.
-         * @member {topodata.ITabletAlias|null|undefined} master_alias
+         * PopulateReparentJournalRequest primary_alias.
+         * @member {topodata.ITabletAlias|null|undefined} primary_alias
          * @memberof tabletmanagerdata.PopulateReparentJournalRequest
          * @instance
          */
-        PopulateReparentJournalRequest.prototype.master_alias = null;
+        PopulateReparentJournalRequest.prototype.primary_alias = null;
 
         /**
          * PopulateReparentJournalRequest replication_position.
@@ -33131,8 +32841,8 @@ $root.tabletmanagerdata = (function() {
                 writer.uint32(/* id 1, wireType 0 =*/8).int64(message.time_created_ns);
             if (message.action_name != null && Object.hasOwnProperty.call(message, "action_name"))
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.action_name);
-            if (message.master_alias != null && Object.hasOwnProperty.call(message, "master_alias"))
-                $root.topodata.TabletAlias.encode(message.master_alias, writer.uint32(/* id 3, wireType 2 =*/26).fork()).ldelim();
+            if (message.primary_alias != null && Object.hasOwnProperty.call(message, "primary_alias"))
+                $root.topodata.TabletAlias.encode(message.primary_alias, writer.uint32(/* id 3, wireType 2 =*/26).fork()).ldelim();
             if (message.replication_position != null && Object.hasOwnProperty.call(message, "replication_position"))
                 writer.uint32(/* id 4, wireType 2 =*/34).string(message.replication_position);
             return writer;
@@ -33176,7 +32886,7 @@ $root.tabletmanagerdata = (function() {
                     message.action_name = reader.string();
                     break;
                 case 3:
-                    message.master_alias = $root.topodata.TabletAlias.decode(reader, reader.uint32());
+                    message.primary_alias = $root.topodata.TabletAlias.decode(reader, reader.uint32());
                     break;
                 case 4:
                     message.replication_position = reader.string();
@@ -33222,10 +32932,10 @@ $root.tabletmanagerdata = (function() {
             if (message.action_name != null && message.hasOwnProperty("action_name"))
                 if (!$util.isString(message.action_name))
                     return "action_name: string expected";
-            if (message.master_alias != null && message.hasOwnProperty("master_alias")) {
-                var error = $root.topodata.TabletAlias.verify(message.master_alias);
+            if (message.primary_alias != null && message.hasOwnProperty("primary_alias")) {
+                var error = $root.topodata.TabletAlias.verify(message.primary_alias);
                 if (error)
-                    return "master_alias." + error;
+                    return "primary_alias." + error;
             }
             if (message.replication_position != null && message.hasOwnProperty("replication_position"))
                 if (!$util.isString(message.replication_position))
@@ -33256,10 +32966,10 @@ $root.tabletmanagerdata = (function() {
                     message.time_created_ns = new $util.LongBits(object.time_created_ns.low >>> 0, object.time_created_ns.high >>> 0).toNumber();
             if (object.action_name != null)
                 message.action_name = String(object.action_name);
-            if (object.master_alias != null) {
-                if (typeof object.master_alias !== "object")
-                    throw TypeError(".tabletmanagerdata.PopulateReparentJournalRequest.master_alias: object expected");
-                message.master_alias = $root.topodata.TabletAlias.fromObject(object.master_alias);
+            if (object.primary_alias != null) {
+                if (typeof object.primary_alias !== "object")
+                    throw TypeError(".tabletmanagerdata.PopulateReparentJournalRequest.primary_alias: object expected");
+                message.primary_alias = $root.topodata.TabletAlias.fromObject(object.primary_alias);
             }
             if (object.replication_position != null)
                 message.replication_position = String(object.replication_position);
@@ -33286,7 +32996,7 @@ $root.tabletmanagerdata = (function() {
                 } else
                     object.time_created_ns = options.longs === String ? "0" : 0;
                 object.action_name = "";
-                object.master_alias = null;
+                object.primary_alias = null;
                 object.replication_position = "";
             }
             if (message.time_created_ns != null && message.hasOwnProperty("time_created_ns"))
@@ -33296,8 +33006,8 @@ $root.tabletmanagerdata = (function() {
                     object.time_created_ns = options.longs === String ? $util.Long.prototype.toString.call(message.time_created_ns) : options.longs === Number ? new $util.LongBits(message.time_created_ns.low >>> 0, message.time_created_ns.high >>> 0).toNumber() : message.time_created_ns;
             if (message.action_name != null && message.hasOwnProperty("action_name"))
                 object.action_name = message.action_name;
-            if (message.master_alias != null && message.hasOwnProperty("master_alias"))
-                object.master_alias = $root.topodata.TabletAlias.toObject(message.master_alias, options);
+            if (message.primary_alias != null && message.hasOwnProperty("primary_alias"))
+                object.primary_alias = $root.topodata.TabletAlias.toObject(message.primary_alias, options);
             if (message.replication_position != null && message.hasOwnProperty("replication_position"))
                 object.replication_position = message.replication_position;
             return object;
@@ -33888,23 +33598,23 @@ $root.tabletmanagerdata = (function() {
         return InitReplicaResponse;
     })();
 
-    tabletmanagerdata.DemoteMasterRequest = (function() {
+    tabletmanagerdata.DemotePrimaryRequest = (function() {
 
         /**
-         * Properties of a DemoteMasterRequest.
+         * Properties of a DemotePrimaryRequest.
          * @memberof tabletmanagerdata
-         * @interface IDemoteMasterRequest
+         * @interface IDemotePrimaryRequest
          */
 
         /**
-         * Constructs a new DemoteMasterRequest.
+         * Constructs a new DemotePrimaryRequest.
          * @memberof tabletmanagerdata
-         * @classdesc Represents a DemoteMasterRequest.
-         * @implements IDemoteMasterRequest
+         * @classdesc Represents a DemotePrimaryRequest.
+         * @implements IDemotePrimaryRequest
          * @constructor
-         * @param {tabletmanagerdata.IDemoteMasterRequest=} [properties] Properties to set
+         * @param {tabletmanagerdata.IDemotePrimaryRequest=} [properties] Properties to set
          */
-        function DemoteMasterRequest(properties) {
+        function DemotePrimaryRequest(properties) {
             if (properties)
                 for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
                     if (properties[keys[i]] != null)
@@ -33912,60 +33622,60 @@ $root.tabletmanagerdata = (function() {
         }
 
         /**
-         * Creates a new DemoteMasterRequest instance using the specified properties.
+         * Creates a new DemotePrimaryRequest instance using the specified properties.
          * @function create
-         * @memberof tabletmanagerdata.DemoteMasterRequest
+         * @memberof tabletmanagerdata.DemotePrimaryRequest
          * @static
-         * @param {tabletmanagerdata.IDemoteMasterRequest=} [properties] Properties to set
-         * @returns {tabletmanagerdata.DemoteMasterRequest} DemoteMasterRequest instance
+         * @param {tabletmanagerdata.IDemotePrimaryRequest=} [properties] Properties to set
+         * @returns {tabletmanagerdata.DemotePrimaryRequest} DemotePrimaryRequest instance
          */
-        DemoteMasterRequest.create = function create(properties) {
-            return new DemoteMasterRequest(properties);
+        DemotePrimaryRequest.create = function create(properties) {
+            return new DemotePrimaryRequest(properties);
         };
 
         /**
-         * Encodes the specified DemoteMasterRequest message. Does not implicitly {@link tabletmanagerdata.DemoteMasterRequest.verify|verify} messages.
+         * Encodes the specified DemotePrimaryRequest message. Does not implicitly {@link tabletmanagerdata.DemotePrimaryRequest.verify|verify} messages.
          * @function encode
-         * @memberof tabletmanagerdata.DemoteMasterRequest
+         * @memberof tabletmanagerdata.DemotePrimaryRequest
          * @static
-         * @param {tabletmanagerdata.IDemoteMasterRequest} message DemoteMasterRequest message or plain object to encode
+         * @param {tabletmanagerdata.IDemotePrimaryRequest} message DemotePrimaryRequest message or plain object to encode
          * @param {$protobuf.Writer} [writer] Writer to encode to
          * @returns {$protobuf.Writer} Writer
          */
-        DemoteMasterRequest.encode = function encode(message, writer) {
+        DemotePrimaryRequest.encode = function encode(message, writer) {
             if (!writer)
                 writer = $Writer.create();
             return writer;
         };
 
         /**
-         * Encodes the specified DemoteMasterRequest message, length delimited. Does not implicitly {@link tabletmanagerdata.DemoteMasterRequest.verify|verify} messages.
+         * Encodes the specified DemotePrimaryRequest message, length delimited. Does not implicitly {@link tabletmanagerdata.DemotePrimaryRequest.verify|verify} messages.
          * @function encodeDelimited
-         * @memberof tabletmanagerdata.DemoteMasterRequest
+         * @memberof tabletmanagerdata.DemotePrimaryRequest
          * @static
-         * @param {tabletmanagerdata.IDemoteMasterRequest} message DemoteMasterRequest message or plain object to encode
+         * @param {tabletmanagerdata.IDemotePrimaryRequest} message DemotePrimaryRequest message or plain object to encode
          * @param {$protobuf.Writer} [writer] Writer to encode to
          * @returns {$protobuf.Writer} Writer
          */
-        DemoteMasterRequest.encodeDelimited = function encodeDelimited(message, writer) {
+        DemotePrimaryRequest.encodeDelimited = function encodeDelimited(message, writer) {
             return this.encode(message, writer).ldelim();
         };
 
         /**
-         * Decodes a DemoteMasterRequest message from the specified reader or buffer.
+         * Decodes a DemotePrimaryRequest message from the specified reader or buffer.
          * @function decode
-         * @memberof tabletmanagerdata.DemoteMasterRequest
+         * @memberof tabletmanagerdata.DemotePrimaryRequest
          * @static
          * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
          * @param {number} [length] Message length if known beforehand
-         * @returns {tabletmanagerdata.DemoteMasterRequest} DemoteMasterRequest
+         * @returns {tabletmanagerdata.DemotePrimaryRequest} DemotePrimaryRequest
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        DemoteMasterRequest.decode = function decode(reader, length) {
+        DemotePrimaryRequest.decode = function decode(reader, length) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
-            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.DemoteMasterRequest();
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.DemotePrimaryRequest();
             while (reader.pos < end) {
                 var tag = reader.uint32();
                 switch (tag >>> 3) {
@@ -33978,95 +33688,95 @@ $root.tabletmanagerdata = (function() {
         };
 
         /**
-         * Decodes a DemoteMasterRequest message from the specified reader or buffer, length delimited.
+         * Decodes a DemotePrimaryRequest message from the specified reader or buffer, length delimited.
          * @function decodeDelimited
-         * @memberof tabletmanagerdata.DemoteMasterRequest
+         * @memberof tabletmanagerdata.DemotePrimaryRequest
          * @static
          * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
-         * @returns {tabletmanagerdata.DemoteMasterRequest} DemoteMasterRequest
+         * @returns {tabletmanagerdata.DemotePrimaryRequest} DemotePrimaryRequest
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        DemoteMasterRequest.decodeDelimited = function decodeDelimited(reader) {
+        DemotePrimaryRequest.decodeDelimited = function decodeDelimited(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
             return this.decode(reader, reader.uint32());
         };
 
         /**
-         * Verifies a DemoteMasterRequest message.
+         * Verifies a DemotePrimaryRequest message.
          * @function verify
-         * @memberof tabletmanagerdata.DemoteMasterRequest
+         * @memberof tabletmanagerdata.DemotePrimaryRequest
          * @static
          * @param {Object.<string,*>} message Plain object to verify
          * @returns {string|null} `null` if valid, otherwise the reason why it is not
          */
-        DemoteMasterRequest.verify = function verify(message) {
+        DemotePrimaryRequest.verify = function verify(message) {
             if (typeof message !== "object" || message === null)
                 return "object expected";
             return null;
         };
 
         /**
-         * Creates a DemoteMasterRequest message from a plain object. Also converts values to their respective internal types.
+         * Creates a DemotePrimaryRequest message from a plain object. Also converts values to their respective internal types.
          * @function fromObject
-         * @memberof tabletmanagerdata.DemoteMasterRequest
+         * @memberof tabletmanagerdata.DemotePrimaryRequest
          * @static
          * @param {Object.<string,*>} object Plain object
-         * @returns {tabletmanagerdata.DemoteMasterRequest} DemoteMasterRequest
+         * @returns {tabletmanagerdata.DemotePrimaryRequest} DemotePrimaryRequest
          */
-        DemoteMasterRequest.fromObject = function fromObject(object) {
-            if (object instanceof $root.tabletmanagerdata.DemoteMasterRequest)
+        DemotePrimaryRequest.fromObject = function fromObject(object) {
+            if (object instanceof $root.tabletmanagerdata.DemotePrimaryRequest)
                 return object;
-            return new $root.tabletmanagerdata.DemoteMasterRequest();
+            return new $root.tabletmanagerdata.DemotePrimaryRequest();
         };
 
         /**
-         * Creates a plain object from a DemoteMasterRequest message. Also converts values to other types if specified.
+         * Creates a plain object from a DemotePrimaryRequest message. Also converts values to other types if specified.
          * @function toObject
-         * @memberof tabletmanagerdata.DemoteMasterRequest
+         * @memberof tabletmanagerdata.DemotePrimaryRequest
          * @static
-         * @param {tabletmanagerdata.DemoteMasterRequest} message DemoteMasterRequest
+         * @param {tabletmanagerdata.DemotePrimaryRequest} message DemotePrimaryRequest
          * @param {$protobuf.IConversionOptions} [options] Conversion options
          * @returns {Object.<string,*>} Plain object
          */
-        DemoteMasterRequest.toObject = function toObject() {
+        DemotePrimaryRequest.toObject = function toObject() {
             return {};
         };
 
         /**
-         * Converts this DemoteMasterRequest to JSON.
+         * Converts this DemotePrimaryRequest to JSON.
          * @function toJSON
-         * @memberof tabletmanagerdata.DemoteMasterRequest
+         * @memberof tabletmanagerdata.DemotePrimaryRequest
          * @instance
          * @returns {Object.<string,*>} JSON object
          */
-        DemoteMasterRequest.prototype.toJSON = function toJSON() {
+        DemotePrimaryRequest.prototype.toJSON = function toJSON() {
             return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
         };
 
-        return DemoteMasterRequest;
+        return DemotePrimaryRequest;
     })();
 
-    tabletmanagerdata.DemoteMasterResponse = (function() {
+    tabletmanagerdata.DemotePrimaryResponse = (function() {
 
         /**
-         * Properties of a DemoteMasterResponse.
+         * Properties of a DemotePrimaryResponse.
          * @memberof tabletmanagerdata
-         * @interface IDemoteMasterResponse
-         * @property {string|null} [deprecated_position] DemoteMasterResponse deprecated_position
-         * @property {replicationdata.IMasterStatus|null} [master_status] DemoteMasterResponse master_status
+         * @interface IDemotePrimaryResponse
+         * @property {string|null} [deprecated_position] DemotePrimaryResponse deprecated_position
+         * @property {replicationdata.IPrimaryStatus|null} [primary_status] DemotePrimaryResponse primary_status
          */
 
         /**
-         * Constructs a new DemoteMasterResponse.
+         * Constructs a new DemotePrimaryResponse.
          * @memberof tabletmanagerdata
-         * @classdesc Represents a DemoteMasterResponse.
-         * @implements IDemoteMasterResponse
+         * @classdesc Represents a DemotePrimaryResponse.
+         * @implements IDemotePrimaryResponse
          * @constructor
-         * @param {tabletmanagerdata.IDemoteMasterResponse=} [properties] Properties to set
+         * @param {tabletmanagerdata.IDemotePrimaryResponse=} [properties] Properties to set
          */
-        function DemoteMasterResponse(properties) {
+        function DemotePrimaryResponse(properties) {
             if (properties)
                 for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
                     if (properties[keys[i]] != null)
@@ -34074,80 +33784,80 @@ $root.tabletmanagerdata = (function() {
         }
 
         /**
-         * DemoteMasterResponse deprecated_position.
+         * DemotePrimaryResponse deprecated_position.
          * @member {string} deprecated_position
-         * @memberof tabletmanagerdata.DemoteMasterResponse
+         * @memberof tabletmanagerdata.DemotePrimaryResponse
          * @instance
          */
-        DemoteMasterResponse.prototype.deprecated_position = "";
+        DemotePrimaryResponse.prototype.deprecated_position = "";
 
         /**
-         * DemoteMasterResponse master_status.
-         * @member {replicationdata.IMasterStatus|null|undefined} master_status
-         * @memberof tabletmanagerdata.DemoteMasterResponse
+         * DemotePrimaryResponse primary_status.
+         * @member {replicationdata.IPrimaryStatus|null|undefined} primary_status
+         * @memberof tabletmanagerdata.DemotePrimaryResponse
          * @instance
          */
-        DemoteMasterResponse.prototype.master_status = null;
+        DemotePrimaryResponse.prototype.primary_status = null;
 
         /**
-         * Creates a new DemoteMasterResponse instance using the specified properties.
+         * Creates a new DemotePrimaryResponse instance using the specified properties.
          * @function create
-         * @memberof tabletmanagerdata.DemoteMasterResponse
+         * @memberof tabletmanagerdata.DemotePrimaryResponse
          * @static
-         * @param {tabletmanagerdata.IDemoteMasterResponse=} [properties] Properties to set
-         * @returns {tabletmanagerdata.DemoteMasterResponse} DemoteMasterResponse instance
+         * @param {tabletmanagerdata.IDemotePrimaryResponse=} [properties] Properties to set
+         * @returns {tabletmanagerdata.DemotePrimaryResponse} DemotePrimaryResponse instance
          */
-        DemoteMasterResponse.create = function create(properties) {
-            return new DemoteMasterResponse(properties);
+        DemotePrimaryResponse.create = function create(properties) {
+            return new DemotePrimaryResponse(properties);
         };
 
         /**
-         * Encodes the specified DemoteMasterResponse message. Does not implicitly {@link tabletmanagerdata.DemoteMasterResponse.verify|verify} messages.
+         * Encodes the specified DemotePrimaryResponse message. Does not implicitly {@link tabletmanagerdata.DemotePrimaryResponse.verify|verify} messages.
          * @function encode
-         * @memberof tabletmanagerdata.DemoteMasterResponse
+         * @memberof tabletmanagerdata.DemotePrimaryResponse
          * @static
-         * @param {tabletmanagerdata.IDemoteMasterResponse} message DemoteMasterResponse message or plain object to encode
+         * @param {tabletmanagerdata.IDemotePrimaryResponse} message DemotePrimaryResponse message or plain object to encode
          * @param {$protobuf.Writer} [writer] Writer to encode to
          * @returns {$protobuf.Writer} Writer
          */
-        DemoteMasterResponse.encode = function encode(message, writer) {
+        DemotePrimaryResponse.encode = function encode(message, writer) {
             if (!writer)
                 writer = $Writer.create();
             if (message.deprecated_position != null && Object.hasOwnProperty.call(message, "deprecated_position"))
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.deprecated_position);
-            if (message.master_status != null && Object.hasOwnProperty.call(message, "master_status"))
-                $root.replicationdata.MasterStatus.encode(message.master_status, writer.uint32(/* id 2, wireType 2 =*/18).fork()).ldelim();
+            if (message.primary_status != null && Object.hasOwnProperty.call(message, "primary_status"))
+                $root.replicationdata.PrimaryStatus.encode(message.primary_status, writer.uint32(/* id 2, wireType 2 =*/18).fork()).ldelim();
             return writer;
         };
 
         /**
-         * Encodes the specified DemoteMasterResponse message, length delimited. Does not implicitly {@link tabletmanagerdata.DemoteMasterResponse.verify|verify} messages.
+         * Encodes the specified DemotePrimaryResponse message, length delimited. Does not implicitly {@link tabletmanagerdata.DemotePrimaryResponse.verify|verify} messages.
          * @function encodeDelimited
-         * @memberof tabletmanagerdata.DemoteMasterResponse
+         * @memberof tabletmanagerdata.DemotePrimaryResponse
          * @static
-         * @param {tabletmanagerdata.IDemoteMasterResponse} message DemoteMasterResponse message or plain object to encode
+         * @param {tabletmanagerdata.IDemotePrimaryResponse} message DemotePrimaryResponse message or plain object to encode
          * @param {$protobuf.Writer} [writer] Writer to encode to
          * @returns {$protobuf.Writer} Writer
          */
-        DemoteMasterResponse.encodeDelimited = function encodeDelimited(message, writer) {
+        DemotePrimaryResponse.encodeDelimited = function encodeDelimited(message, writer) {
             return this.encode(message, writer).ldelim();
         };
 
         /**
-         * Decodes a DemoteMasterResponse message from the specified reader or buffer.
+         * Decodes a DemotePrimaryResponse message from the specified reader or buffer.
          * @function decode
-         * @memberof tabletmanagerdata.DemoteMasterResponse
+         * @memberof tabletmanagerdata.DemotePrimaryResponse
          * @static
          * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
          * @param {number} [length] Message length if known beforehand
-         * @returns {tabletmanagerdata.DemoteMasterResponse} DemoteMasterResponse
+         * @returns {tabletmanagerdata.DemotePrimaryResponse} DemotePrimaryResponse
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        DemoteMasterResponse.decode = function decode(reader, length) {
+        DemotePrimaryResponse.decode = function decode(reader, length) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
-            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.DemoteMasterResponse();
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.DemotePrimaryResponse();
             while (reader.pos < end) {
                 var tag = reader.uint32();
                 switch (tag >>> 3) {
@@ -34155,7 +33865,7 @@ $root.tabletmanagerdata = (function() {
                     message.deprecated_position = reader.string();
                     break;
                 case 2:
-                    message.master_status = $root.replicationdata.MasterStatus.decode(reader, reader.uint32());
+                    message.primary_status = $root.replicationdata.PrimaryStatus.decode(reader, reader.uint32());
                     break;
                 default:
                     reader.skipType(tag & 7);
@@ -34166,120 +33876,120 @@ $root.tabletmanagerdata = (function() {
         };
 
         /**
-         * Decodes a DemoteMasterResponse message from the specified reader or buffer, length delimited.
+         * Decodes a DemotePrimaryResponse message from the specified reader or buffer, length delimited.
          * @function decodeDelimited
-         * @memberof tabletmanagerdata.DemoteMasterResponse
+         * @memberof tabletmanagerdata.DemotePrimaryResponse
          * @static
          * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
-         * @returns {tabletmanagerdata.DemoteMasterResponse} DemoteMasterResponse
+         * @returns {tabletmanagerdata.DemotePrimaryResponse} DemotePrimaryResponse
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        DemoteMasterResponse.decodeDelimited = function decodeDelimited(reader) {
+        DemotePrimaryResponse.decodeDelimited = function decodeDelimited(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
             return this.decode(reader, reader.uint32());
         };
 
         /**
-         * Verifies a DemoteMasterResponse message.
+         * Verifies a DemotePrimaryResponse message.
          * @function verify
-         * @memberof tabletmanagerdata.DemoteMasterResponse
+         * @memberof tabletmanagerdata.DemotePrimaryResponse
          * @static
          * @param {Object.<string,*>} message Plain object to verify
          * @returns {string|null} `null` if valid, otherwise the reason why it is not
          */
-        DemoteMasterResponse.verify = function verify(message) {
+        DemotePrimaryResponse.verify = function verify(message) {
             if (typeof message !== "object" || message === null)
                 return "object expected";
             if (message.deprecated_position != null && message.hasOwnProperty("deprecated_position"))
                 if (!$util.isString(message.deprecated_position))
                     return "deprecated_position: string expected";
-            if (message.master_status != null && message.hasOwnProperty("master_status")) {
-                var error = $root.replicationdata.MasterStatus.verify(message.master_status);
+            if (message.primary_status != null && message.hasOwnProperty("primary_status")) {
+                var error = $root.replicationdata.PrimaryStatus.verify(message.primary_status);
                 if (error)
-                    return "master_status." + error;
+                    return "primary_status." + error;
             }
             return null;
         };
 
         /**
-         * Creates a DemoteMasterResponse message from a plain object. Also converts values to their respective internal types.
+         * Creates a DemotePrimaryResponse message from a plain object. Also converts values to their respective internal types.
          * @function fromObject
-         * @memberof tabletmanagerdata.DemoteMasterResponse
+         * @memberof tabletmanagerdata.DemotePrimaryResponse
          * @static
          * @param {Object.<string,*>} object Plain object
-         * @returns {tabletmanagerdata.DemoteMasterResponse} DemoteMasterResponse
+         * @returns {tabletmanagerdata.DemotePrimaryResponse} DemotePrimaryResponse
          */
-        DemoteMasterResponse.fromObject = function fromObject(object) {
-            if (object instanceof $root.tabletmanagerdata.DemoteMasterResponse)
+        DemotePrimaryResponse.fromObject = function fromObject(object) {
+            if (object instanceof $root.tabletmanagerdata.DemotePrimaryResponse)
                 return object;
-            var message = new $root.tabletmanagerdata.DemoteMasterResponse();
+            var message = new $root.tabletmanagerdata.DemotePrimaryResponse();
             if (object.deprecated_position != null)
                 message.deprecated_position = String(object.deprecated_position);
-            if (object.master_status != null) {
-                if (typeof object.master_status !== "object")
-                    throw TypeError(".tabletmanagerdata.DemoteMasterResponse.master_status: object expected");
-                message.master_status = $root.replicationdata.MasterStatus.fromObject(object.master_status);
+            if (object.primary_status != null) {
+                if (typeof object.primary_status !== "object")
+                    throw TypeError(".tabletmanagerdata.DemotePrimaryResponse.primary_status: object expected");
+                message.primary_status = $root.replicationdata.PrimaryStatus.fromObject(object.primary_status);
             }
             return message;
         };
 
         /**
-         * Creates a plain object from a DemoteMasterResponse message. Also converts values to other types if specified.
+         * Creates a plain object from a DemotePrimaryResponse message. Also converts values to other types if specified.
          * @function toObject
-         * @memberof tabletmanagerdata.DemoteMasterResponse
+         * @memberof tabletmanagerdata.DemotePrimaryResponse
          * @static
-         * @param {tabletmanagerdata.DemoteMasterResponse} message DemoteMasterResponse
+         * @param {tabletmanagerdata.DemotePrimaryResponse} message DemotePrimaryResponse
          * @param {$protobuf.IConversionOptions} [options] Conversion options
          * @returns {Object.<string,*>} Plain object
          */
-        DemoteMasterResponse.toObject = function toObject(message, options) {
+        DemotePrimaryResponse.toObject = function toObject(message, options) {
             if (!options)
                 options = {};
             var object = {};
             if (options.defaults) {
                 object.deprecated_position = "";
-                object.master_status = null;
+                object.primary_status = null;
             }
             if (message.deprecated_position != null && message.hasOwnProperty("deprecated_position"))
                 object.deprecated_position = message.deprecated_position;
-            if (message.master_status != null && message.hasOwnProperty("master_status"))
-                object.master_status = $root.replicationdata.MasterStatus.toObject(message.master_status, options);
+            if (message.primary_status != null && message.hasOwnProperty("primary_status"))
+                object.primary_status = $root.replicationdata.PrimaryStatus.toObject(message.primary_status, options);
             return object;
         };
 
         /**
-         * Converts this DemoteMasterResponse to JSON.
+         * Converts this DemotePrimaryResponse to JSON.
          * @function toJSON
-         * @memberof tabletmanagerdata.DemoteMasterResponse
+         * @memberof tabletmanagerdata.DemotePrimaryResponse
          * @instance
          * @returns {Object.<string,*>} JSON object
          */
-        DemoteMasterResponse.prototype.toJSON = function toJSON() {
+        DemotePrimaryResponse.prototype.toJSON = function toJSON() {
             return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
         };
 
-        return DemoteMasterResponse;
+        return DemotePrimaryResponse;
     })();
 
-    tabletmanagerdata.UndoDemoteMasterRequest = (function() {
+    tabletmanagerdata.UndoDemotePrimaryRequest = (function() {
 
         /**
-         * Properties of an UndoDemoteMasterRequest.
+         * Properties of an UndoDemotePrimaryRequest.
          * @memberof tabletmanagerdata
-         * @interface IUndoDemoteMasterRequest
+         * @interface IUndoDemotePrimaryRequest
          */
 
         /**
-         * Constructs a new UndoDemoteMasterRequest.
+         * Constructs a new UndoDemotePrimaryRequest.
          * @memberof tabletmanagerdata
-         * @classdesc Represents an UndoDemoteMasterRequest.
-         * @implements IUndoDemoteMasterRequest
+         * @classdesc Represents an UndoDemotePrimaryRequest.
+         * @implements IUndoDemotePrimaryRequest
          * @constructor
-         * @param {tabletmanagerdata.IUndoDemoteMasterRequest=} [properties] Properties to set
+         * @param {tabletmanagerdata.IUndoDemotePrimaryRequest=} [properties] Properties to set
          */
-        function UndoDemoteMasterRequest(properties) {
+        function UndoDemotePrimaryRequest(properties) {
             if (properties)
                 for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
                     if (properties[keys[i]] != null)
@@ -34287,60 +33997,60 @@ $root.tabletmanagerdata = (function() {
         }
 
         /**
-         * Creates a new UndoDemoteMasterRequest instance using the specified properties.
+         * Creates a new UndoDemotePrimaryRequest instance using the specified properties.
          * @function create
-         * @memberof tabletmanagerdata.UndoDemoteMasterRequest
+         * @memberof tabletmanagerdata.UndoDemotePrimaryRequest
          * @static
-         * @param {tabletmanagerdata.IUndoDemoteMasterRequest=} [properties] Properties to set
-         * @returns {tabletmanagerdata.UndoDemoteMasterRequest} UndoDemoteMasterRequest instance
+         * @param {tabletmanagerdata.IUndoDemotePrimaryRequest=} [properties] Properties to set
+         * @returns {tabletmanagerdata.UndoDemotePrimaryRequest} UndoDemotePrimaryRequest instance
          */
-        UndoDemoteMasterRequest.create = function create(properties) {
-            return new UndoDemoteMasterRequest(properties);
+        UndoDemotePrimaryRequest.create = function create(properties) {
+            return new UndoDemotePrimaryRequest(properties);
         };
 
         /**
-         * Encodes the specified UndoDemoteMasterRequest message. Does not implicitly {@link tabletmanagerdata.UndoDemoteMasterRequest.verify|verify} messages.
+         * Encodes the specified UndoDemotePrimaryRequest message. Does not implicitly {@link tabletmanagerdata.UndoDemotePrimaryRequest.verify|verify} messages.
          * @function encode
-         * @memberof tabletmanagerdata.UndoDemoteMasterRequest
+         * @memberof tabletmanagerdata.UndoDemotePrimaryRequest
          * @static
-         * @param {tabletmanagerdata.IUndoDemoteMasterRequest} message UndoDemoteMasterRequest message or plain object to encode
+         * @param {tabletmanagerdata.IUndoDemotePrimaryRequest} message UndoDemotePrimaryRequest message or plain object to encode
          * @param {$protobuf.Writer} [writer] Writer to encode to
          * @returns {$protobuf.Writer} Writer
          */
-        UndoDemoteMasterRequest.encode = function encode(message, writer) {
+        UndoDemotePrimaryRequest.encode = function encode(message, writer) {
             if (!writer)
                 writer = $Writer.create();
             return writer;
         };
 
         /**
-         * Encodes the specified UndoDemoteMasterRequest message, length delimited. Does not implicitly {@link tabletmanagerdata.UndoDemoteMasterRequest.verify|verify} messages.
+         * Encodes the specified UndoDemotePrimaryRequest message, length delimited. Does not implicitly {@link tabletmanagerdata.UndoDemotePrimaryRequest.verify|verify} messages.
          * @function encodeDelimited
-         * @memberof tabletmanagerdata.UndoDemoteMasterRequest
+         * @memberof tabletmanagerdata.UndoDemotePrimaryRequest
          * @static
-         * @param {tabletmanagerdata.IUndoDemoteMasterRequest} message UndoDemoteMasterRequest message or plain object to encode
+         * @param {tabletmanagerdata.IUndoDemotePrimaryRequest} message UndoDemotePrimaryRequest message or plain object to encode
          * @param {$protobuf.Writer} [writer] Writer to encode to
          * @returns {$protobuf.Writer} Writer
          */
-        UndoDemoteMasterRequest.encodeDelimited = function encodeDelimited(message, writer) {
+        UndoDemotePrimaryRequest.encodeDelimited = function encodeDelimited(message, writer) {
             return this.encode(message, writer).ldelim();
         };
 
         /**
-         * Decodes an UndoDemoteMasterRequest message from the specified reader or buffer.
+         * Decodes an UndoDemotePrimaryRequest message from the specified reader or buffer.
          * @function decode
-         * @memberof tabletmanagerdata.UndoDemoteMasterRequest
+         * @memberof tabletmanagerdata.UndoDemotePrimaryRequest
          * @static
          * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
          * @param {number} [length] Message length if known beforehand
-         * @returns {tabletmanagerdata.UndoDemoteMasterRequest} UndoDemoteMasterRequest
+         * @returns {tabletmanagerdata.UndoDemotePrimaryRequest} UndoDemotePrimaryRequest
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        UndoDemoteMasterRequest.decode = function decode(reader, length) {
+        UndoDemotePrimaryRequest.decode = function decode(reader, length) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
-            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.UndoDemoteMasterRequest();
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.UndoDemotePrimaryRequest();
             while (reader.pos < end) {
                 var tag = reader.uint32();
                 switch (tag >>> 3) {
@@ -34353,93 +34063,93 @@ $root.tabletmanagerdata = (function() {
         };
 
         /**
-         * Decodes an UndoDemoteMasterRequest message from the specified reader or buffer, length delimited.
+         * Decodes an UndoDemotePrimaryRequest message from the specified reader or buffer, length delimited.
          * @function decodeDelimited
-         * @memberof tabletmanagerdata.UndoDemoteMasterRequest
+         * @memberof tabletmanagerdata.UndoDemotePrimaryRequest
          * @static
          * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
-         * @returns {tabletmanagerdata.UndoDemoteMasterRequest} UndoDemoteMasterRequest
+         * @returns {tabletmanagerdata.UndoDemotePrimaryRequest} UndoDemotePrimaryRequest
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        UndoDemoteMasterRequest.decodeDelimited = function decodeDelimited(reader) {
+        UndoDemotePrimaryRequest.decodeDelimited = function decodeDelimited(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
             return this.decode(reader, reader.uint32());
         };
 
         /**
-         * Verifies an UndoDemoteMasterRequest message.
+         * Verifies an UndoDemotePrimaryRequest message.
          * @function verify
-         * @memberof tabletmanagerdata.UndoDemoteMasterRequest
+         * @memberof tabletmanagerdata.UndoDemotePrimaryRequest
          * @static
          * @param {Object.<string,*>} message Plain object to verify
          * @returns {string|null} `null` if valid, otherwise the reason why it is not
          */
-        UndoDemoteMasterRequest.verify = function verify(message) {
+        UndoDemotePrimaryRequest.verify = function verify(message) {
             if (typeof message !== "object" || message === null)
                 return "object expected";
             return null;
         };
 
         /**
-         * Creates an UndoDemoteMasterRequest message from a plain object. Also converts values to their respective internal types.
+         * Creates an UndoDemotePrimaryRequest message from a plain object. Also converts values to their respective internal types.
          * @function fromObject
-         * @memberof tabletmanagerdata.UndoDemoteMasterRequest
+         * @memberof tabletmanagerdata.UndoDemotePrimaryRequest
          * @static
          * @param {Object.<string,*>} object Plain object
-         * @returns {tabletmanagerdata.UndoDemoteMasterRequest} UndoDemoteMasterRequest
+         * @returns {tabletmanagerdata.UndoDemotePrimaryRequest} UndoDemotePrimaryRequest
          */
-        UndoDemoteMasterRequest.fromObject = function fromObject(object) {
-            if (object instanceof $root.tabletmanagerdata.UndoDemoteMasterRequest)
+        UndoDemotePrimaryRequest.fromObject = function fromObject(object) {
+            if (object instanceof $root.tabletmanagerdata.UndoDemotePrimaryRequest)
                 return object;
-            return new $root.tabletmanagerdata.UndoDemoteMasterRequest();
+            return new $root.tabletmanagerdata.UndoDemotePrimaryRequest();
         };
 
         /**
-         * Creates a plain object from an UndoDemoteMasterRequest message. Also converts values to other types if specified.
+         * Creates a plain object from an UndoDemotePrimaryRequest message. Also converts values to other types if specified.
          * @function toObject
-         * @memberof tabletmanagerdata.UndoDemoteMasterRequest
+         * @memberof tabletmanagerdata.UndoDemotePrimaryRequest
          * @static
-         * @param {tabletmanagerdata.UndoDemoteMasterRequest} message UndoDemoteMasterRequest
+         * @param {tabletmanagerdata.UndoDemotePrimaryRequest} message UndoDemotePrimaryRequest
          * @param {$protobuf.IConversionOptions} [options] Conversion options
          * @returns {Object.<string,*>} Plain object
          */
-        UndoDemoteMasterRequest.toObject = function toObject() {
+        UndoDemotePrimaryRequest.toObject = function toObject() {
             return {};
         };
 
         /**
-         * Converts this UndoDemoteMasterRequest to JSON.
+         * Converts this UndoDemotePrimaryRequest to JSON.
          * @function toJSON
-         * @memberof tabletmanagerdata.UndoDemoteMasterRequest
+         * @memberof tabletmanagerdata.UndoDemotePrimaryRequest
          * @instance
          * @returns {Object.<string,*>} JSON object
          */
-        UndoDemoteMasterRequest.prototype.toJSON = function toJSON() {
+        UndoDemotePrimaryRequest.prototype.toJSON = function toJSON() {
             return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
         };
 
-        return UndoDemoteMasterRequest;
+        return UndoDemotePrimaryRequest;
     })();
 
-    tabletmanagerdata.UndoDemoteMasterResponse = (function() {
+    tabletmanagerdata.UndoDemotePrimaryResponse = (function() {
 
         /**
-         * Properties of an UndoDemoteMasterResponse.
+         * Properties of an UndoDemotePrimaryResponse.
          * @memberof tabletmanagerdata
-         * @interface IUndoDemoteMasterResponse
+         * @interface IUndoDemotePrimaryResponse
          */
 
         /**
-         * Constructs a new UndoDemoteMasterResponse.
+         * Constructs a new UndoDemotePrimaryResponse.
          * @memberof tabletmanagerdata
-         * @classdesc Represents an UndoDemoteMasterResponse.
-         * @implements IUndoDemoteMasterResponse
+         * @classdesc Represents an UndoDemotePrimaryResponse.
+         * @implements IUndoDemotePrimaryResponse
          * @constructor
-         * @param {tabletmanagerdata.IUndoDemoteMasterResponse=} [properties] Properties to set
+         * @param {tabletmanagerdata.IUndoDemotePrimaryResponse=} [properties] Properties to set
          */
-        function UndoDemoteMasterResponse(properties) {
+        function UndoDemotePrimaryResponse(properties) {
             if (properties)
                 for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
                     if (properties[keys[i]] != null)
@@ -34447,60 +34157,60 @@ $root.tabletmanagerdata = (function() {
         }
 
         /**
-         * Creates a new UndoDemoteMasterResponse instance using the specified properties.
+         * Creates a new UndoDemotePrimaryResponse instance using the specified properties.
          * @function create
-         * @memberof tabletmanagerdata.UndoDemoteMasterResponse
+         * @memberof tabletmanagerdata.UndoDemotePrimaryResponse
          * @static
-         * @param {tabletmanagerdata.IUndoDemoteMasterResponse=} [properties] Properties to set
-         * @returns {tabletmanagerdata.UndoDemoteMasterResponse} UndoDemoteMasterResponse instance
+         * @param {tabletmanagerdata.IUndoDemotePrimaryResponse=} [properties] Properties to set
+         * @returns {tabletmanagerdata.UndoDemotePrimaryResponse} UndoDemotePrimaryResponse instance
          */
-        UndoDemoteMasterResponse.create = function create(properties) {
-            return new UndoDemoteMasterResponse(properties);
+        UndoDemotePrimaryResponse.create = function create(properties) {
+            return new UndoDemotePrimaryResponse(properties);
         };
 
         /**
-         * Encodes the specified UndoDemoteMasterResponse message. Does not implicitly {@link tabletmanagerdata.UndoDemoteMasterResponse.verify|verify} messages.
+         * Encodes the specified UndoDemotePrimaryResponse message. Does not implicitly {@link tabletmanagerdata.UndoDemotePrimaryResponse.verify|verify} messages.
          * @function encode
-         * @memberof tabletmanagerdata.UndoDemoteMasterResponse
+         * @memberof tabletmanagerdata.UndoDemotePrimaryResponse
          * @static
-         * @param {tabletmanagerdata.IUndoDemoteMasterResponse} message UndoDemoteMasterResponse message or plain object to encode
+         * @param {tabletmanagerdata.IUndoDemotePrimaryResponse} message UndoDemotePrimaryResponse message or plain object to encode
          * @param {$protobuf.Writer} [writer] Writer to encode to
          * @returns {$protobuf.Writer} Writer
          */
-        UndoDemoteMasterResponse.encode = function encode(message, writer) {
+        UndoDemotePrimaryResponse.encode = function encode(message, writer) {
             if (!writer)
                 writer = $Writer.create();
             return writer;
         };
 
         /**
-         * Encodes the specified UndoDemoteMasterResponse message, length delimited. Does not implicitly {@link tabletmanagerdata.UndoDemoteMasterResponse.verify|verify} messages.
+         * Encodes the specified UndoDemotePrimaryResponse message, length delimited. Does not implicitly {@link tabletmanagerdata.UndoDemotePrimaryResponse.verify|verify} messages.
          * @function encodeDelimited
-         * @memberof tabletmanagerdata.UndoDemoteMasterResponse
+         * @memberof tabletmanagerdata.UndoDemotePrimaryResponse
          * @static
-         * @param {tabletmanagerdata.IUndoDemoteMasterResponse} message UndoDemoteMasterResponse message or plain object to encode
+         * @param {tabletmanagerdata.IUndoDemotePrimaryResponse} message UndoDemotePrimaryResponse message or plain object to encode
          * @param {$protobuf.Writer} [writer] Writer to encode to
          * @returns {$protobuf.Writer} Writer
          */
-        UndoDemoteMasterResponse.encodeDelimited = function encodeDelimited(message, writer) {
+        UndoDemotePrimaryResponse.encodeDelimited = function encodeDelimited(message, writer) {
             return this.encode(message, writer).ldelim();
         };
 
         /**
-         * Decodes an UndoDemoteMasterResponse message from the specified reader or buffer.
+         * Decodes an UndoDemotePrimaryResponse message from the specified reader or buffer.
          * @function decode
-         * @memberof tabletmanagerdata.UndoDemoteMasterResponse
+         * @memberof tabletmanagerdata.UndoDemotePrimaryResponse
          * @static
          * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
          * @param {number} [length] Message length if known beforehand
-         * @returns {tabletmanagerdata.UndoDemoteMasterResponse} UndoDemoteMasterResponse
+         * @returns {tabletmanagerdata.UndoDemotePrimaryResponse} UndoDemotePrimaryResponse
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        UndoDemoteMasterResponse.decode = function decode(reader, length) {
+        UndoDemotePrimaryResponse.decode = function decode(reader, length) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
-            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.UndoDemoteMasterResponse();
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.UndoDemotePrimaryResponse();
             while (reader.pos < end) {
                 var tag = reader.uint32();
                 switch (tag >>> 3) {
@@ -34513,74 +34223,74 @@ $root.tabletmanagerdata = (function() {
         };
 
         /**
-         * Decodes an UndoDemoteMasterResponse message from the specified reader or buffer, length delimited.
+         * Decodes an UndoDemotePrimaryResponse message from the specified reader or buffer, length delimited.
          * @function decodeDelimited
-         * @memberof tabletmanagerdata.UndoDemoteMasterResponse
+         * @memberof tabletmanagerdata.UndoDemotePrimaryResponse
          * @static
          * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
-         * @returns {tabletmanagerdata.UndoDemoteMasterResponse} UndoDemoteMasterResponse
+         * @returns {tabletmanagerdata.UndoDemotePrimaryResponse} UndoDemotePrimaryResponse
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        UndoDemoteMasterResponse.decodeDelimited = function decodeDelimited(reader) {
+        UndoDemotePrimaryResponse.decodeDelimited = function decodeDelimited(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
             return this.decode(reader, reader.uint32());
         };
 
         /**
-         * Verifies an UndoDemoteMasterResponse message.
+         * Verifies an UndoDemotePrimaryResponse message.
          * @function verify
-         * @memberof tabletmanagerdata.UndoDemoteMasterResponse
+         * @memberof tabletmanagerdata.UndoDemotePrimaryResponse
          * @static
          * @param {Object.<string,*>} message Plain object to verify
          * @returns {string|null} `null` if valid, otherwise the reason why it is not
          */
-        UndoDemoteMasterResponse.verify = function verify(message) {
+        UndoDemotePrimaryResponse.verify = function verify(message) {
             if (typeof message !== "object" || message === null)
                 return "object expected";
             return null;
         };
 
         /**
-         * Creates an UndoDemoteMasterResponse message from a plain object. Also converts values to their respective internal types.
+         * Creates an UndoDemotePrimaryResponse message from a plain object. Also converts values to their respective internal types.
          * @function fromObject
-         * @memberof tabletmanagerdata.UndoDemoteMasterResponse
+         * @memberof tabletmanagerdata.UndoDemotePrimaryResponse
          * @static
          * @param {Object.<string,*>} object Plain object
-         * @returns {tabletmanagerdata.UndoDemoteMasterResponse} UndoDemoteMasterResponse
+         * @returns {tabletmanagerdata.UndoDemotePrimaryResponse} UndoDemotePrimaryResponse
          */
-        UndoDemoteMasterResponse.fromObject = function fromObject(object) {
-            if (object instanceof $root.tabletmanagerdata.UndoDemoteMasterResponse)
+        UndoDemotePrimaryResponse.fromObject = function fromObject(object) {
+            if (object instanceof $root.tabletmanagerdata.UndoDemotePrimaryResponse)
                 return object;
-            return new $root.tabletmanagerdata.UndoDemoteMasterResponse();
+            return new $root.tabletmanagerdata.UndoDemotePrimaryResponse();
         };
 
         /**
-         * Creates a plain object from an UndoDemoteMasterResponse message. Also converts values to other types if specified.
+         * Creates a plain object from an UndoDemotePrimaryResponse message. Also converts values to other types if specified.
          * @function toObject
-         * @memberof tabletmanagerdata.UndoDemoteMasterResponse
+         * @memberof tabletmanagerdata.UndoDemotePrimaryResponse
          * @static
-         * @param {tabletmanagerdata.UndoDemoteMasterResponse} message UndoDemoteMasterResponse
+         * @param {tabletmanagerdata.UndoDemotePrimaryResponse} message UndoDemotePrimaryResponse
          * @param {$protobuf.IConversionOptions} [options] Conversion options
          * @returns {Object.<string,*>} Plain object
          */
-        UndoDemoteMasterResponse.toObject = function toObject() {
+        UndoDemotePrimaryResponse.toObject = function toObject() {
             return {};
         };
 
         /**
-         * Converts this UndoDemoteMasterResponse to JSON.
+         * Converts this UndoDemotePrimaryResponse to JSON.
          * @function toJSON
-         * @memberof tabletmanagerdata.UndoDemoteMasterResponse
+         * @memberof tabletmanagerdata.UndoDemotePrimaryResponse
          * @instance
          * @returns {Object.<string,*>} JSON object
          */
-        UndoDemoteMasterResponse.prototype.toJSON = function toJSON() {
+        UndoDemotePrimaryResponse.prototype.toJSON = function toJSON() {
             return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
         };
 
-        return UndoDemoteMasterResponse;
+        return UndoDemotePrimaryResponse;
     })();
 
     tabletmanagerdata.ReplicaWasPromotedRequest = (function() {
@@ -34903,27 +34613,27 @@ $root.tabletmanagerdata = (function() {
         return ReplicaWasPromotedResponse;
     })();
 
-    tabletmanagerdata.SetMasterRequest = (function() {
+    tabletmanagerdata.SetReplicationSourceRequest = (function() {
 
         /**
-         * Properties of a SetMasterRequest.
+         * Properties of a SetReplicationSourceRequest.
          * @memberof tabletmanagerdata
-         * @interface ISetMasterRequest
-         * @property {topodata.ITabletAlias|null} [parent] SetMasterRequest parent
-         * @property {number|Long|null} [time_created_ns] SetMasterRequest time_created_ns
-         * @property {boolean|null} [force_start_replication] SetMasterRequest force_start_replication
-         * @property {string|null} [wait_position] SetMasterRequest wait_position
+         * @interface ISetReplicationSourceRequest
+         * @property {topodata.ITabletAlias|null} [parent] SetReplicationSourceRequest parent
+         * @property {number|Long|null} [time_created_ns] SetReplicationSourceRequest time_created_ns
+         * @property {boolean|null} [force_start_replication] SetReplicationSourceRequest force_start_replication
+         * @property {string|null} [wait_position] SetReplicationSourceRequest wait_position
          */
 
         /**
-         * Constructs a new SetMasterRequest.
+         * Constructs a new SetReplicationSourceRequest.
          * @memberof tabletmanagerdata
-         * @classdesc Represents a SetMasterRequest.
-         * @implements ISetMasterRequest
+         * @classdesc Represents a SetReplicationSourceRequest.
+         * @implements ISetReplicationSourceRequest
          * @constructor
-         * @param {tabletmanagerdata.ISetMasterRequest=} [properties] Properties to set
+         * @param {tabletmanagerdata.ISetReplicationSourceRequest=} [properties] Properties to set
          */
-        function SetMasterRequest(properties) {
+        function SetReplicationSourceRequest(properties) {
             if (properties)
                 for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
                     if (properties[keys[i]] != null)
@@ -34931,59 +34641,59 @@ $root.tabletmanagerdata = (function() {
         }
 
         /**
-         * SetMasterRequest parent.
+         * SetReplicationSourceRequest parent.
          * @member {topodata.ITabletAlias|null|undefined} parent
-         * @memberof tabletmanagerdata.SetMasterRequest
+         * @memberof tabletmanagerdata.SetReplicationSourceRequest
          * @instance
          */
-        SetMasterRequest.prototype.parent = null;
+        SetReplicationSourceRequest.prototype.parent = null;
 
         /**
-         * SetMasterRequest time_created_ns.
+         * SetReplicationSourceRequest time_created_ns.
          * @member {number|Long} time_created_ns
-         * @memberof tabletmanagerdata.SetMasterRequest
+         * @memberof tabletmanagerdata.SetReplicationSourceRequest
          * @instance
          */
-        SetMasterRequest.prototype.time_created_ns = $util.Long ? $util.Long.fromBits(0,0,false) : 0;
+        SetReplicationSourceRequest.prototype.time_created_ns = $util.Long ? $util.Long.fromBits(0,0,false) : 0;
 
         /**
-         * SetMasterRequest force_start_replication.
+         * SetReplicationSourceRequest force_start_replication.
          * @member {boolean} force_start_replication
-         * @memberof tabletmanagerdata.SetMasterRequest
+         * @memberof tabletmanagerdata.SetReplicationSourceRequest
          * @instance
          */
-        SetMasterRequest.prototype.force_start_replication = false;
+        SetReplicationSourceRequest.prototype.force_start_replication = false;
 
         /**
-         * SetMasterRequest wait_position.
+         * SetReplicationSourceRequest wait_position.
          * @member {string} wait_position
-         * @memberof tabletmanagerdata.SetMasterRequest
+         * @memberof tabletmanagerdata.SetReplicationSourceRequest
          * @instance
          */
-        SetMasterRequest.prototype.wait_position = "";
+        SetReplicationSourceRequest.prototype.wait_position = "";
 
         /**
-         * Creates a new SetMasterRequest instance using the specified properties.
+         * Creates a new SetReplicationSourceRequest instance using the specified properties.
          * @function create
-         * @memberof tabletmanagerdata.SetMasterRequest
+         * @memberof tabletmanagerdata.SetReplicationSourceRequest
          * @static
-         * @param {tabletmanagerdata.ISetMasterRequest=} [properties] Properties to set
-         * @returns {tabletmanagerdata.SetMasterRequest} SetMasterRequest instance
+         * @param {tabletmanagerdata.ISetReplicationSourceRequest=} [properties] Properties to set
+         * @returns {tabletmanagerdata.SetReplicationSourceRequest} SetReplicationSourceRequest instance
          */
-        SetMasterRequest.create = function create(properties) {
-            return new SetMasterRequest(properties);
+        SetReplicationSourceRequest.create = function create(properties) {
+            return new SetReplicationSourceRequest(properties);
         };
 
         /**
-         * Encodes the specified SetMasterRequest message. Does not implicitly {@link tabletmanagerdata.SetMasterRequest.verify|verify} messages.
+         * Encodes the specified SetReplicationSourceRequest message. Does not implicitly {@link tabletmanagerdata.SetReplicationSourceRequest.verify|verify} messages.
          * @function encode
-         * @memberof tabletmanagerdata.SetMasterRequest
+         * @memberof tabletmanagerdata.SetReplicationSourceRequest
          * @static
-         * @param {tabletmanagerdata.ISetMasterRequest} message SetMasterRequest message or plain object to encode
+         * @param {tabletmanagerdata.ISetReplicationSourceRequest} message SetReplicationSourceRequest message or plain object to encode
          * @param {$protobuf.Writer} [writer] Writer to encode to
          * @returns {$protobuf.Writer} Writer
          */
-        SetMasterRequest.encode = function encode(message, writer) {
+        SetReplicationSourceRequest.encode = function encode(message, writer) {
             if (!writer)
                 writer = $Writer.create();
             if (message.parent != null && Object.hasOwnProperty.call(message, "parent"))
@@ -34998,33 +34708,33 @@ $root.tabletmanagerdata = (function() {
         };
 
         /**
-         * Encodes the specified SetMasterRequest message, length delimited. Does not implicitly {@link tabletmanagerdata.SetMasterRequest.verify|verify} messages.
+         * Encodes the specified SetReplicationSourceRequest message, length delimited. Does not implicitly {@link tabletmanagerdata.SetReplicationSourceRequest.verify|verify} messages.
          * @function encodeDelimited
-         * @memberof tabletmanagerdata.SetMasterRequest
+         * @memberof tabletmanagerdata.SetReplicationSourceRequest
          * @static
-         * @param {tabletmanagerdata.ISetMasterRequest} message SetMasterRequest message or plain object to encode
+         * @param {tabletmanagerdata.ISetReplicationSourceRequest} message SetReplicationSourceRequest message or plain object to encode
          * @param {$protobuf.Writer} [writer] Writer to encode to
          * @returns {$protobuf.Writer} Writer
          */
-        SetMasterRequest.encodeDelimited = function encodeDelimited(message, writer) {
+        SetReplicationSourceRequest.encodeDelimited = function encodeDelimited(message, writer) {
             return this.encode(message, writer).ldelim();
         };
 
         /**
-         * Decodes a SetMasterRequest message from the specified reader or buffer.
+         * Decodes a SetReplicationSourceRequest message from the specified reader or buffer.
          * @function decode
-         * @memberof tabletmanagerdata.SetMasterRequest
+         * @memberof tabletmanagerdata.SetReplicationSourceRequest
          * @static
          * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
          * @param {number} [length] Message length if known beforehand
-         * @returns {tabletmanagerdata.SetMasterRequest} SetMasterRequest
+         * @returns {tabletmanagerdata.SetReplicationSourceRequest} SetReplicationSourceRequest
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        SetMasterRequest.decode = function decode(reader, length) {
+        SetReplicationSourceRequest.decode = function decode(reader, length) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
-            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.SetMasterRequest();
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.SetReplicationSourceRequest();
             while (reader.pos < end) {
                 var tag = reader.uint32();
                 switch (tag >>> 3) {
@@ -35049,30 +34759,30 @@ $root.tabletmanagerdata = (function() {
         };
 
         /**
-         * Decodes a SetMasterRequest message from the specified reader or buffer, length delimited.
+         * Decodes a SetReplicationSourceRequest message from the specified reader or buffer, length delimited.
          * @function decodeDelimited
-         * @memberof tabletmanagerdata.SetMasterRequest
+         * @memberof tabletmanagerdata.SetReplicationSourceRequest
          * @static
          * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
-         * @returns {tabletmanagerdata.SetMasterRequest} SetMasterRequest
+         * @returns {tabletmanagerdata.SetReplicationSourceRequest} SetReplicationSourceRequest
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        SetMasterRequest.decodeDelimited = function decodeDelimited(reader) {
+        SetReplicationSourceRequest.decodeDelimited = function decodeDelimited(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
             return this.decode(reader, reader.uint32());
         };
 
         /**
-         * Verifies a SetMasterRequest message.
+         * Verifies a SetReplicationSourceRequest message.
          * @function verify
-         * @memberof tabletmanagerdata.SetMasterRequest
+         * @memberof tabletmanagerdata.SetReplicationSourceRequest
          * @static
          * @param {Object.<string,*>} message Plain object to verify
          * @returns {string|null} `null` if valid, otherwise the reason why it is not
          */
-        SetMasterRequest.verify = function verify(message) {
+        SetReplicationSourceRequest.verify = function verify(message) {
             if (typeof message !== "object" || message === null)
                 return "object expected";
             if (message.parent != null && message.hasOwnProperty("parent")) {
@@ -35093,20 +34803,20 @@ $root.tabletmanagerdata = (function() {
         };
 
         /**
-         * Creates a SetMasterRequest message from a plain object. Also converts values to their respective internal types.
+         * Creates a SetReplicationSourceRequest message from a plain object. Also converts values to their respective internal types.
          * @function fromObject
-         * @memberof tabletmanagerdata.SetMasterRequest
+         * @memberof tabletmanagerdata.SetReplicationSourceRequest
          * @static
          * @param {Object.<string,*>} object Plain object
-         * @returns {tabletmanagerdata.SetMasterRequest} SetMasterRequest
+         * @returns {tabletmanagerdata.SetReplicationSourceRequest} SetReplicationSourceRequest
          */
-        SetMasterRequest.fromObject = function fromObject(object) {
-            if (object instanceof $root.tabletmanagerdata.SetMasterRequest)
+        SetReplicationSourceRequest.fromObject = function fromObject(object) {
+            if (object instanceof $root.tabletmanagerdata.SetReplicationSourceRequest)
                 return object;
-            var message = new $root.tabletmanagerdata.SetMasterRequest();
+            var message = new $root.tabletmanagerdata.SetReplicationSourceRequest();
             if (object.parent != null) {
                 if (typeof object.parent !== "object")
-                    throw TypeError(".tabletmanagerdata.SetMasterRequest.parent: object expected");
+                    throw TypeError(".tabletmanagerdata.SetReplicationSourceRequest.parent: object expected");
                 message.parent = $root.topodata.TabletAlias.fromObject(object.parent);
             }
             if (object.time_created_ns != null)
@@ -35126,15 +34836,15 @@ $root.tabletmanagerdata = (function() {
         };
 
         /**
-         * Creates a plain object from a SetMasterRequest message. Also converts values to other types if specified.
+         * Creates a plain object from a SetReplicationSourceRequest message. Also converts values to other types if specified.
          * @function toObject
-         * @memberof tabletmanagerdata.SetMasterRequest
+         * @memberof tabletmanagerdata.SetReplicationSourceRequest
          * @static
-         * @param {tabletmanagerdata.SetMasterRequest} message SetMasterRequest
+         * @param {tabletmanagerdata.SetReplicationSourceRequest} message SetReplicationSourceRequest
          * @param {$protobuf.IConversionOptions} [options] Conversion options
          * @returns {Object.<string,*>} Plain object
          */
-        SetMasterRequest.toObject = function toObject(message, options) {
+        SetReplicationSourceRequest.toObject = function toObject(message, options) {
             if (!options)
                 options = {};
             var object = {};
@@ -35163,36 +34873,36 @@ $root.tabletmanagerdata = (function() {
         };
 
         /**
-         * Converts this SetMasterRequest to JSON.
+         * Converts this SetReplicationSourceRequest to JSON.
          * @function toJSON
-         * @memberof tabletmanagerdata.SetMasterRequest
+         * @memberof tabletmanagerdata.SetReplicationSourceRequest
          * @instance
          * @returns {Object.<string,*>} JSON object
          */
-        SetMasterRequest.prototype.toJSON = function toJSON() {
+        SetReplicationSourceRequest.prototype.toJSON = function toJSON() {
             return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
         };
 
-        return SetMasterRequest;
+        return SetReplicationSourceRequest;
     })();
 
-    tabletmanagerdata.SetMasterResponse = (function() {
+    tabletmanagerdata.SetReplicationSourceResponse = (function() {
 
         /**
-         * Properties of a SetMasterResponse.
+         * Properties of a SetReplicationSourceResponse.
          * @memberof tabletmanagerdata
-         * @interface ISetMasterResponse
+         * @interface ISetReplicationSourceResponse
          */
 
         /**
-         * Constructs a new SetMasterResponse.
+         * Constructs a new SetReplicationSourceResponse.
          * @memberof tabletmanagerdata
-         * @classdesc Represents a SetMasterResponse.
-         * @implements ISetMasterResponse
+         * @classdesc Represents a SetReplicationSourceResponse.
+         * @implements ISetReplicationSourceResponse
          * @constructor
-         * @param {tabletmanagerdata.ISetMasterResponse=} [properties] Properties to set
+         * @param {tabletmanagerdata.ISetReplicationSourceResponse=} [properties] Properties to set
          */
-        function SetMasterResponse(properties) {
+        function SetReplicationSourceResponse(properties) {
             if (properties)
                 for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
                     if (properties[keys[i]] != null)
@@ -35200,60 +34910,60 @@ $root.tabletmanagerdata = (function() {
         }
 
         /**
-         * Creates a new SetMasterResponse instance using the specified properties.
+         * Creates a new SetReplicationSourceResponse instance using the specified properties.
          * @function create
-         * @memberof tabletmanagerdata.SetMasterResponse
+         * @memberof tabletmanagerdata.SetReplicationSourceResponse
          * @static
-         * @param {tabletmanagerdata.ISetMasterResponse=} [properties] Properties to set
-         * @returns {tabletmanagerdata.SetMasterResponse} SetMasterResponse instance
+         * @param {tabletmanagerdata.ISetReplicationSourceResponse=} [properties] Properties to set
+         * @returns {tabletmanagerdata.SetReplicationSourceResponse} SetReplicationSourceResponse instance
          */
-        SetMasterResponse.create = function create(properties) {
-            return new SetMasterResponse(properties);
+        SetReplicationSourceResponse.create = function create(properties) {
+            return new SetReplicationSourceResponse(properties);
         };
 
         /**
-         * Encodes the specified SetMasterResponse message. Does not implicitly {@link tabletmanagerdata.SetMasterResponse.verify|verify} messages.
+         * Encodes the specified SetReplicationSourceResponse message. Does not implicitly {@link tabletmanagerdata.SetReplicationSourceResponse.verify|verify} messages.
          * @function encode
-         * @memberof tabletmanagerdata.SetMasterResponse
+         * @memberof tabletmanagerdata.SetReplicationSourceResponse
          * @static
-         * @param {tabletmanagerdata.ISetMasterResponse} message SetMasterResponse message or plain object to encode
+         * @param {tabletmanagerdata.ISetReplicationSourceResponse} message SetReplicationSourceResponse message or plain object to encode
          * @param {$protobuf.Writer} [writer] Writer to encode to
          * @returns {$protobuf.Writer} Writer
          */
-        SetMasterResponse.encode = function encode(message, writer) {
+        SetReplicationSourceResponse.encode = function encode(message, writer) {
             if (!writer)
                 writer = $Writer.create();
             return writer;
         };
 
         /**
-         * Encodes the specified SetMasterResponse message, length delimited. Does not implicitly {@link tabletmanagerdata.SetMasterResponse.verify|verify} messages.
+         * Encodes the specified SetReplicationSourceResponse message, length delimited. Does not implicitly {@link tabletmanagerdata.SetReplicationSourceResponse.verify|verify} messages.
          * @function encodeDelimited
-         * @memberof tabletmanagerdata.SetMasterResponse
+         * @memberof tabletmanagerdata.SetReplicationSourceResponse
          * @static
-         * @param {tabletmanagerdata.ISetMasterResponse} message SetMasterResponse message or plain object to encode
+         * @param {tabletmanagerdata.ISetReplicationSourceResponse} message SetReplicationSourceResponse message or plain object to encode
          * @param {$protobuf.Writer} [writer] Writer to encode to
          * @returns {$protobuf.Writer} Writer
          */
-        SetMasterResponse.encodeDelimited = function encodeDelimited(message, writer) {
+        SetReplicationSourceResponse.encodeDelimited = function encodeDelimited(message, writer) {
             return this.encode(message, writer).ldelim();
         };
 
         /**
-         * Decodes a SetMasterResponse message from the specified reader or buffer.
+         * Decodes a SetReplicationSourceResponse message from the specified reader or buffer.
          * @function decode
-         * @memberof tabletmanagerdata.SetMasterResponse
+         * @memberof tabletmanagerdata.SetReplicationSourceResponse
          * @static
          * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
          * @param {number} [length] Message length if known beforehand
-         * @returns {tabletmanagerdata.SetMasterResponse} SetMasterResponse
+         * @returns {tabletmanagerdata.SetReplicationSourceResponse} SetReplicationSourceResponse
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        SetMasterResponse.decode = function decode(reader, length) {
+        SetReplicationSourceResponse.decode = function decode(reader, length) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
-            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.SetMasterResponse();
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.SetReplicationSourceResponse();
             while (reader.pos < end) {
                 var tag = reader.uint32();
                 switch (tag >>> 3) {
@@ -35266,74 +34976,74 @@ $root.tabletmanagerdata = (function() {
         };
 
         /**
-         * Decodes a SetMasterResponse message from the specified reader or buffer, length delimited.
+         * Decodes a SetReplicationSourceResponse message from the specified reader or buffer, length delimited.
          * @function decodeDelimited
-         * @memberof tabletmanagerdata.SetMasterResponse
+         * @memberof tabletmanagerdata.SetReplicationSourceResponse
          * @static
          * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
-         * @returns {tabletmanagerdata.SetMasterResponse} SetMasterResponse
+         * @returns {tabletmanagerdata.SetReplicationSourceResponse} SetReplicationSourceResponse
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        SetMasterResponse.decodeDelimited = function decodeDelimited(reader) {
+        SetReplicationSourceResponse.decodeDelimited = function decodeDelimited(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
             return this.decode(reader, reader.uint32());
         };
 
         /**
-         * Verifies a SetMasterResponse message.
+         * Verifies a SetReplicationSourceResponse message.
          * @function verify
-         * @memberof tabletmanagerdata.SetMasterResponse
+         * @memberof tabletmanagerdata.SetReplicationSourceResponse
          * @static
          * @param {Object.<string,*>} message Plain object to verify
          * @returns {string|null} `null` if valid, otherwise the reason why it is not
          */
-        SetMasterResponse.verify = function verify(message) {
+        SetReplicationSourceResponse.verify = function verify(message) {
             if (typeof message !== "object" || message === null)
                 return "object expected";
             return null;
         };
 
         /**
-         * Creates a SetMasterResponse message from a plain object. Also converts values to their respective internal types.
+         * Creates a SetReplicationSourceResponse message from a plain object. Also converts values to their respective internal types.
          * @function fromObject
-         * @memberof tabletmanagerdata.SetMasterResponse
+         * @memberof tabletmanagerdata.SetReplicationSourceResponse
          * @static
          * @param {Object.<string,*>} object Plain object
-         * @returns {tabletmanagerdata.SetMasterResponse} SetMasterResponse
+         * @returns {tabletmanagerdata.SetReplicationSourceResponse} SetReplicationSourceResponse
          */
-        SetMasterResponse.fromObject = function fromObject(object) {
-            if (object instanceof $root.tabletmanagerdata.SetMasterResponse)
+        SetReplicationSourceResponse.fromObject = function fromObject(object) {
+            if (object instanceof $root.tabletmanagerdata.SetReplicationSourceResponse)
                 return object;
-            return new $root.tabletmanagerdata.SetMasterResponse();
+            return new $root.tabletmanagerdata.SetReplicationSourceResponse();
         };
 
         /**
-         * Creates a plain object from a SetMasterResponse message. Also converts values to other types if specified.
+         * Creates a plain object from a SetReplicationSourceResponse message. Also converts values to other types if specified.
          * @function toObject
-         * @memberof tabletmanagerdata.SetMasterResponse
+         * @memberof tabletmanagerdata.SetReplicationSourceResponse
          * @static
-         * @param {tabletmanagerdata.SetMasterResponse} message SetMasterResponse
+         * @param {tabletmanagerdata.SetReplicationSourceResponse} message SetReplicationSourceResponse
          * @param {$protobuf.IConversionOptions} [options] Conversion options
          * @returns {Object.<string,*>} Plain object
          */
-        SetMasterResponse.toObject = function toObject() {
+        SetReplicationSourceResponse.toObject = function toObject() {
             return {};
         };
 
         /**
-         * Converts this SetMasterResponse to JSON.
+         * Converts this SetReplicationSourceResponse to JSON.
          * @function toJSON
-         * @memberof tabletmanagerdata.SetMasterResponse
+         * @memberof tabletmanagerdata.SetReplicationSourceResponse
          * @instance
          * @returns {Object.<string,*>} JSON object
          */
-        SetMasterResponse.prototype.toJSON = function toJSON() {
+        SetReplicationSourceResponse.prototype.toJSON = function toJSON() {
             return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
         };
 
-        return SetMasterResponse;
+        return SetReplicationSourceResponse;
     })();
 
     tabletmanagerdata.ReplicaWasRestartedRequest = (function() {
@@ -36462,7 +36172,7 @@ $root.tabletmanagerdata = (function() {
          * @memberof tabletmanagerdata
          * @interface IBackupRequest
          * @property {number|Long|null} [concurrency] BackupRequest concurrency
-         * @property {boolean|null} [allowMaster] BackupRequest allowMaster
+         * @property {boolean|null} [allow_primary] BackupRequest allow_primary
          */
 
         /**
@@ -36489,12 +36199,12 @@ $root.tabletmanagerdata = (function() {
         BackupRequest.prototype.concurrency = $util.Long ? $util.Long.fromBits(0,0,false) : 0;
 
         /**
-         * BackupRequest allowMaster.
-         * @member {boolean} allowMaster
+         * BackupRequest allow_primary.
+         * @member {boolean} allow_primary
          * @memberof tabletmanagerdata.BackupRequest
          * @instance
          */
-        BackupRequest.prototype.allowMaster = false;
+        BackupRequest.prototype.allow_primary = false;
 
         /**
          * Creates a new BackupRequest instance using the specified properties.
@@ -36522,8 +36232,8 @@ $root.tabletmanagerdata = (function() {
                 writer = $Writer.create();
             if (message.concurrency != null && Object.hasOwnProperty.call(message, "concurrency"))
                 writer.uint32(/* id 1, wireType 0 =*/8).int64(message.concurrency);
-            if (message.allowMaster != null && Object.hasOwnProperty.call(message, "allowMaster"))
-                writer.uint32(/* id 2, wireType 0 =*/16).bool(message.allowMaster);
+            if (message.allow_primary != null && Object.hasOwnProperty.call(message, "allow_primary"))
+                writer.uint32(/* id 2, wireType 0 =*/16).bool(message.allow_primary);
             return writer;
         };
 
@@ -36562,7 +36272,7 @@ $root.tabletmanagerdata = (function() {
                     message.concurrency = reader.int64();
                     break;
                 case 2:
-                    message.allowMaster = reader.bool();
+                    message.allow_primary = reader.bool();
                     break;
                 default:
                     reader.skipType(tag & 7);
@@ -36602,9 +36312,9 @@ $root.tabletmanagerdata = (function() {
             if (message.concurrency != null && message.hasOwnProperty("concurrency"))
                 if (!$util.isInteger(message.concurrency) && !(message.concurrency && $util.isInteger(message.concurrency.low) && $util.isInteger(message.concurrency.high)))
                     return "concurrency: integer|Long expected";
-            if (message.allowMaster != null && message.hasOwnProperty("allowMaster"))
-                if (typeof message.allowMaster !== "boolean")
-                    return "allowMaster: boolean expected";
+            if (message.allow_primary != null && message.hasOwnProperty("allow_primary"))
+                if (typeof message.allow_primary !== "boolean")
+                    return "allow_primary: boolean expected";
             return null;
         };
 
@@ -36629,8 +36339,8 @@ $root.tabletmanagerdata = (function() {
                     message.concurrency = object.concurrency;
                 else if (typeof object.concurrency === "object")
                     message.concurrency = new $util.LongBits(object.concurrency.low >>> 0, object.concurrency.high >>> 0).toNumber();
-            if (object.allowMaster != null)
-                message.allowMaster = Boolean(object.allowMaster);
+            if (object.allow_primary != null)
+                message.allow_primary = Boolean(object.allow_primary);
             return message;
         };
 
@@ -36653,15 +36363,15 @@ $root.tabletmanagerdata = (function() {
                     object.concurrency = options.longs === String ? long.toString() : options.longs === Number ? long.toNumber() : long;
                 } else
                     object.concurrency = options.longs === String ? "0" : 0;
-                object.allowMaster = false;
+                object.allow_primary = false;
             }
             if (message.concurrency != null && message.hasOwnProperty("concurrency"))
                 if (typeof message.concurrency === "number")
                     object.concurrency = options.longs === String ? String(message.concurrency) : message.concurrency;
                 else
                     object.concurrency = options.longs === String ? $util.Long.prototype.toString.call(message.concurrency) : options.longs === Number ? new $util.LongBits(message.concurrency.low >>> 0, message.concurrency.high >>> 0).toNumber() : message.concurrency;
-            if (message.allowMaster != null && message.hasOwnProperty("allowMaster"))
-                object.allowMaster = message.allowMaster;
+            if (message.allow_primary != null && message.hasOwnProperty("allow_primary"))
+                object.allow_primary = message.allow_primary;
             return object;
         };
 
@@ -37843,6 +37553,7 @@ $root.query = (function() {
                     return "tablet_type: enum value expected";
                 case 0:
                 case 1:
+                case 1:
                 case 2:
                 case 3:
                 case 3:
@@ -37879,6 +37590,10 @@ $root.query = (function() {
             case "UNKNOWN":
             case 0:
                 message.tablet_type = 0;
+                break;
+            case "PRIMARY":
+            case 1:
+                message.tablet_type = 1;
                 break;
             case "MASTER":
             case 1:
@@ -53403,9 +53118,9 @@ $root.query = (function() {
          * @memberof query
          * @interface IRealtimeStats
          * @property {string|null} [health_error] RealtimeStats health_error
-         * @property {number|null} [seconds_behind_master] RealtimeStats seconds_behind_master
+         * @property {number|null} [replication_lag_seconds] RealtimeStats replication_lag_seconds
          * @property {number|null} [binlog_players_count] RealtimeStats binlog_players_count
-         * @property {number|Long|null} [seconds_behind_master_filtered_replication] RealtimeStats seconds_behind_master_filtered_replication
+         * @property {number|Long|null} [filtered_replication_lag_seconds] RealtimeStats filtered_replication_lag_seconds
          * @property {number|null} [cpu_usage] RealtimeStats cpu_usage
          * @property {number|null} [qps] RealtimeStats qps
          * @property {Array.<string>|null} [table_schema_changed] RealtimeStats table_schema_changed
@@ -53436,12 +53151,12 @@ $root.query = (function() {
         RealtimeStats.prototype.health_error = "";
 
         /**
-         * RealtimeStats seconds_behind_master.
-         * @member {number} seconds_behind_master
+         * RealtimeStats replication_lag_seconds.
+         * @member {number} replication_lag_seconds
          * @memberof query.RealtimeStats
          * @instance
          */
-        RealtimeStats.prototype.seconds_behind_master = 0;
+        RealtimeStats.prototype.replication_lag_seconds = 0;
 
         /**
          * RealtimeStats binlog_players_count.
@@ -53452,12 +53167,12 @@ $root.query = (function() {
         RealtimeStats.prototype.binlog_players_count = 0;
 
         /**
-         * RealtimeStats seconds_behind_master_filtered_replication.
-         * @member {number|Long} seconds_behind_master_filtered_replication
+         * RealtimeStats filtered_replication_lag_seconds.
+         * @member {number|Long} filtered_replication_lag_seconds
          * @memberof query.RealtimeStats
          * @instance
          */
-        RealtimeStats.prototype.seconds_behind_master_filtered_replication = $util.Long ? $util.Long.fromBits(0,0,false) : 0;
+        RealtimeStats.prototype.filtered_replication_lag_seconds = $util.Long ? $util.Long.fromBits(0,0,false) : 0;
 
         /**
          * RealtimeStats cpu_usage.
@@ -53509,12 +53224,12 @@ $root.query = (function() {
                 writer = $Writer.create();
             if (message.health_error != null && Object.hasOwnProperty.call(message, "health_error"))
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.health_error);
-            if (message.seconds_behind_master != null && Object.hasOwnProperty.call(message, "seconds_behind_master"))
-                writer.uint32(/* id 2, wireType 0 =*/16).uint32(message.seconds_behind_master);
+            if (message.replication_lag_seconds != null && Object.hasOwnProperty.call(message, "replication_lag_seconds"))
+                writer.uint32(/* id 2, wireType 0 =*/16).uint32(message.replication_lag_seconds);
             if (message.binlog_players_count != null && Object.hasOwnProperty.call(message, "binlog_players_count"))
                 writer.uint32(/* id 3, wireType 0 =*/24).int32(message.binlog_players_count);
-            if (message.seconds_behind_master_filtered_replication != null && Object.hasOwnProperty.call(message, "seconds_behind_master_filtered_replication"))
-                writer.uint32(/* id 4, wireType 0 =*/32).int64(message.seconds_behind_master_filtered_replication);
+            if (message.filtered_replication_lag_seconds != null && Object.hasOwnProperty.call(message, "filtered_replication_lag_seconds"))
+                writer.uint32(/* id 4, wireType 0 =*/32).int64(message.filtered_replication_lag_seconds);
             if (message.cpu_usage != null && Object.hasOwnProperty.call(message, "cpu_usage"))
                 writer.uint32(/* id 5, wireType 1 =*/41).double(message.cpu_usage);
             if (message.qps != null && Object.hasOwnProperty.call(message, "qps"))
@@ -53560,13 +53275,13 @@ $root.query = (function() {
                     message.health_error = reader.string();
                     break;
                 case 2:
-                    message.seconds_behind_master = reader.uint32();
+                    message.replication_lag_seconds = reader.uint32();
                     break;
                 case 3:
                     message.binlog_players_count = reader.int32();
                     break;
                 case 4:
-                    message.seconds_behind_master_filtered_replication = reader.int64();
+                    message.filtered_replication_lag_seconds = reader.int64();
                     break;
                 case 5:
                     message.cpu_usage = reader.double();
@@ -53617,15 +53332,15 @@ $root.query = (function() {
             if (message.health_error != null && message.hasOwnProperty("health_error"))
                 if (!$util.isString(message.health_error))
                     return "health_error: string expected";
-            if (message.seconds_behind_master != null && message.hasOwnProperty("seconds_behind_master"))
-                if (!$util.isInteger(message.seconds_behind_master))
-                    return "seconds_behind_master: integer expected";
+            if (message.replication_lag_seconds != null && message.hasOwnProperty("replication_lag_seconds"))
+                if (!$util.isInteger(message.replication_lag_seconds))
+                    return "replication_lag_seconds: integer expected";
             if (message.binlog_players_count != null && message.hasOwnProperty("binlog_players_count"))
                 if (!$util.isInteger(message.binlog_players_count))
                     return "binlog_players_count: integer expected";
-            if (message.seconds_behind_master_filtered_replication != null && message.hasOwnProperty("seconds_behind_master_filtered_replication"))
-                if (!$util.isInteger(message.seconds_behind_master_filtered_replication) && !(message.seconds_behind_master_filtered_replication && $util.isInteger(message.seconds_behind_master_filtered_replication.low) && $util.isInteger(message.seconds_behind_master_filtered_replication.high)))
-                    return "seconds_behind_master_filtered_replication: integer|Long expected";
+            if (message.filtered_replication_lag_seconds != null && message.hasOwnProperty("filtered_replication_lag_seconds"))
+                if (!$util.isInteger(message.filtered_replication_lag_seconds) && !(message.filtered_replication_lag_seconds && $util.isInteger(message.filtered_replication_lag_seconds.low) && $util.isInteger(message.filtered_replication_lag_seconds.high)))
+                    return "filtered_replication_lag_seconds: integer|Long expected";
             if (message.cpu_usage != null && message.hasOwnProperty("cpu_usage"))
                 if (typeof message.cpu_usage !== "number")
                     return "cpu_usage: number expected";
@@ -53656,19 +53371,19 @@ $root.query = (function() {
             var message = new $root.query.RealtimeStats();
             if (object.health_error != null)
                 message.health_error = String(object.health_error);
-            if (object.seconds_behind_master != null)
-                message.seconds_behind_master = object.seconds_behind_master >>> 0;
+            if (object.replication_lag_seconds != null)
+                message.replication_lag_seconds = object.replication_lag_seconds >>> 0;
             if (object.binlog_players_count != null)
                 message.binlog_players_count = object.binlog_players_count | 0;
-            if (object.seconds_behind_master_filtered_replication != null)
+            if (object.filtered_replication_lag_seconds != null)
                 if ($util.Long)
-                    (message.seconds_behind_master_filtered_replication = $util.Long.fromValue(object.seconds_behind_master_filtered_replication)).unsigned = false;
-                else if (typeof object.seconds_behind_master_filtered_replication === "string")
-                    message.seconds_behind_master_filtered_replication = parseInt(object.seconds_behind_master_filtered_replication, 10);
-                else if (typeof object.seconds_behind_master_filtered_replication === "number")
-                    message.seconds_behind_master_filtered_replication = object.seconds_behind_master_filtered_replication;
-                else if (typeof object.seconds_behind_master_filtered_replication === "object")
-                    message.seconds_behind_master_filtered_replication = new $util.LongBits(object.seconds_behind_master_filtered_replication.low >>> 0, object.seconds_behind_master_filtered_replication.high >>> 0).toNumber();
+                    (message.filtered_replication_lag_seconds = $util.Long.fromValue(object.filtered_replication_lag_seconds)).unsigned = false;
+                else if (typeof object.filtered_replication_lag_seconds === "string")
+                    message.filtered_replication_lag_seconds = parseInt(object.filtered_replication_lag_seconds, 10);
+                else if (typeof object.filtered_replication_lag_seconds === "number")
+                    message.filtered_replication_lag_seconds = object.filtered_replication_lag_seconds;
+                else if (typeof object.filtered_replication_lag_seconds === "object")
+                    message.filtered_replication_lag_seconds = new $util.LongBits(object.filtered_replication_lag_seconds.low >>> 0, object.filtered_replication_lag_seconds.high >>> 0).toNumber();
             if (object.cpu_usage != null)
                 message.cpu_usage = Number(object.cpu_usage);
             if (object.qps != null)
@@ -53700,27 +53415,27 @@ $root.query = (function() {
                 object.table_schema_changed = [];
             if (options.defaults) {
                 object.health_error = "";
-                object.seconds_behind_master = 0;
+                object.replication_lag_seconds = 0;
                 object.binlog_players_count = 0;
                 if ($util.Long) {
                     var long = new $util.Long(0, 0, false);
-                    object.seconds_behind_master_filtered_replication = options.longs === String ? long.toString() : options.longs === Number ? long.toNumber() : long;
+                    object.filtered_replication_lag_seconds = options.longs === String ? long.toString() : options.longs === Number ? long.toNumber() : long;
                 } else
-                    object.seconds_behind_master_filtered_replication = options.longs === String ? "0" : 0;
+                    object.filtered_replication_lag_seconds = options.longs === String ? "0" : 0;
                 object.cpu_usage = 0;
                 object.qps = 0;
             }
             if (message.health_error != null && message.hasOwnProperty("health_error"))
                 object.health_error = message.health_error;
-            if (message.seconds_behind_master != null && message.hasOwnProperty("seconds_behind_master"))
-                object.seconds_behind_master = message.seconds_behind_master;
+            if (message.replication_lag_seconds != null && message.hasOwnProperty("replication_lag_seconds"))
+                object.replication_lag_seconds = message.replication_lag_seconds;
             if (message.binlog_players_count != null && message.hasOwnProperty("binlog_players_count"))
                 object.binlog_players_count = message.binlog_players_count;
-            if (message.seconds_behind_master_filtered_replication != null && message.hasOwnProperty("seconds_behind_master_filtered_replication"))
-                if (typeof message.seconds_behind_master_filtered_replication === "number")
-                    object.seconds_behind_master_filtered_replication = options.longs === String ? String(message.seconds_behind_master_filtered_replication) : message.seconds_behind_master_filtered_replication;
+            if (message.filtered_replication_lag_seconds != null && message.hasOwnProperty("filtered_replication_lag_seconds"))
+                if (typeof message.filtered_replication_lag_seconds === "number")
+                    object.filtered_replication_lag_seconds = options.longs === String ? String(message.filtered_replication_lag_seconds) : message.filtered_replication_lag_seconds;
                 else
-                    object.seconds_behind_master_filtered_replication = options.longs === String ? $util.Long.prototype.toString.call(message.seconds_behind_master_filtered_replication) : options.longs === Number ? new $util.LongBits(message.seconds_behind_master_filtered_replication.low >>> 0, message.seconds_behind_master_filtered_replication.high >>> 0).toNumber() : message.seconds_behind_master_filtered_replication;
+                    object.filtered_replication_lag_seconds = options.longs === String ? $util.Long.prototype.toString.call(message.filtered_replication_lag_seconds) : options.longs === Number ? new $util.LongBits(message.filtered_replication_lag_seconds.low >>> 0, message.filtered_replication_lag_seconds.high >>> 0).toNumber() : message.filtered_replication_lag_seconds;
             if (message.cpu_usage != null && message.hasOwnProperty("cpu_usage"))
                 object.cpu_usage = options.json && !isFinite(message.cpu_usage) ? String(message.cpu_usage) : message.cpu_usage;
             if (message.qps != null && message.hasOwnProperty("qps"))
@@ -53755,8 +53470,8 @@ $root.query = (function() {
          * @interface IAggregateStats
          * @property {number|null} [healthy_tablet_count] AggregateStats healthy_tablet_count
          * @property {number|null} [unhealthy_tablet_count] AggregateStats unhealthy_tablet_count
-         * @property {number|null} [seconds_behind_master_min] AggregateStats seconds_behind_master_min
-         * @property {number|null} [seconds_behind_master_max] AggregateStats seconds_behind_master_max
+         * @property {number|null} [replication_lag_seconds_min] AggregateStats replication_lag_seconds_min
+         * @property {number|null} [replication_lag_seconds_max] AggregateStats replication_lag_seconds_max
          */
 
         /**
@@ -53791,20 +53506,20 @@ $root.query = (function() {
         AggregateStats.prototype.unhealthy_tablet_count = 0;
 
         /**
-         * AggregateStats seconds_behind_master_min.
-         * @member {number} seconds_behind_master_min
+         * AggregateStats replication_lag_seconds_min.
+         * @member {number} replication_lag_seconds_min
          * @memberof query.AggregateStats
          * @instance
          */
-        AggregateStats.prototype.seconds_behind_master_min = 0;
+        AggregateStats.prototype.replication_lag_seconds_min = 0;
 
         /**
-         * AggregateStats seconds_behind_master_max.
-         * @member {number} seconds_behind_master_max
+         * AggregateStats replication_lag_seconds_max.
+         * @member {number} replication_lag_seconds_max
          * @memberof query.AggregateStats
          * @instance
          */
-        AggregateStats.prototype.seconds_behind_master_max = 0;
+        AggregateStats.prototype.replication_lag_seconds_max = 0;
 
         /**
          * Creates a new AggregateStats instance using the specified properties.
@@ -53834,10 +53549,10 @@ $root.query = (function() {
                 writer.uint32(/* id 1, wireType 0 =*/8).int32(message.healthy_tablet_count);
             if (message.unhealthy_tablet_count != null && Object.hasOwnProperty.call(message, "unhealthy_tablet_count"))
                 writer.uint32(/* id 2, wireType 0 =*/16).int32(message.unhealthy_tablet_count);
-            if (message.seconds_behind_master_min != null && Object.hasOwnProperty.call(message, "seconds_behind_master_min"))
-                writer.uint32(/* id 3, wireType 0 =*/24).uint32(message.seconds_behind_master_min);
-            if (message.seconds_behind_master_max != null && Object.hasOwnProperty.call(message, "seconds_behind_master_max"))
-                writer.uint32(/* id 4, wireType 0 =*/32).uint32(message.seconds_behind_master_max);
+            if (message.replication_lag_seconds_min != null && Object.hasOwnProperty.call(message, "replication_lag_seconds_min"))
+                writer.uint32(/* id 3, wireType 0 =*/24).uint32(message.replication_lag_seconds_min);
+            if (message.replication_lag_seconds_max != null && Object.hasOwnProperty.call(message, "replication_lag_seconds_max"))
+                writer.uint32(/* id 4, wireType 0 =*/32).uint32(message.replication_lag_seconds_max);
             return writer;
         };
 
@@ -53879,10 +53594,10 @@ $root.query = (function() {
                     message.unhealthy_tablet_count = reader.int32();
                     break;
                 case 3:
-                    message.seconds_behind_master_min = reader.uint32();
+                    message.replication_lag_seconds_min = reader.uint32();
                     break;
                 case 4:
-                    message.seconds_behind_master_max = reader.uint32();
+                    message.replication_lag_seconds_max = reader.uint32();
                     break;
                 default:
                     reader.skipType(tag & 7);
@@ -53925,12 +53640,12 @@ $root.query = (function() {
             if (message.unhealthy_tablet_count != null && message.hasOwnProperty("unhealthy_tablet_count"))
                 if (!$util.isInteger(message.unhealthy_tablet_count))
                     return "unhealthy_tablet_count: integer expected";
-            if (message.seconds_behind_master_min != null && message.hasOwnProperty("seconds_behind_master_min"))
-                if (!$util.isInteger(message.seconds_behind_master_min))
-                    return "seconds_behind_master_min: integer expected";
-            if (message.seconds_behind_master_max != null && message.hasOwnProperty("seconds_behind_master_max"))
-                if (!$util.isInteger(message.seconds_behind_master_max))
-                    return "seconds_behind_master_max: integer expected";
+            if (message.replication_lag_seconds_min != null && message.hasOwnProperty("replication_lag_seconds_min"))
+                if (!$util.isInteger(message.replication_lag_seconds_min))
+                    return "replication_lag_seconds_min: integer expected";
+            if (message.replication_lag_seconds_max != null && message.hasOwnProperty("replication_lag_seconds_max"))
+                if (!$util.isInteger(message.replication_lag_seconds_max))
+                    return "replication_lag_seconds_max: integer expected";
             return null;
         };
 
@@ -53950,10 +53665,10 @@ $root.query = (function() {
                 message.healthy_tablet_count = object.healthy_tablet_count | 0;
             if (object.unhealthy_tablet_count != null)
                 message.unhealthy_tablet_count = object.unhealthy_tablet_count | 0;
-            if (object.seconds_behind_master_min != null)
-                message.seconds_behind_master_min = object.seconds_behind_master_min >>> 0;
-            if (object.seconds_behind_master_max != null)
-                message.seconds_behind_master_max = object.seconds_behind_master_max >>> 0;
+            if (object.replication_lag_seconds_min != null)
+                message.replication_lag_seconds_min = object.replication_lag_seconds_min >>> 0;
+            if (object.replication_lag_seconds_max != null)
+                message.replication_lag_seconds_max = object.replication_lag_seconds_max >>> 0;
             return message;
         };
 
@@ -53973,17 +53688,17 @@ $root.query = (function() {
             if (options.defaults) {
                 object.healthy_tablet_count = 0;
                 object.unhealthy_tablet_count = 0;
-                object.seconds_behind_master_min = 0;
-                object.seconds_behind_master_max = 0;
+                object.replication_lag_seconds_min = 0;
+                object.replication_lag_seconds_max = 0;
             }
             if (message.healthy_tablet_count != null && message.hasOwnProperty("healthy_tablet_count"))
                 object.healthy_tablet_count = message.healthy_tablet_count;
             if (message.unhealthy_tablet_count != null && message.hasOwnProperty("unhealthy_tablet_count"))
                 object.unhealthy_tablet_count = message.unhealthy_tablet_count;
-            if (message.seconds_behind_master_min != null && message.hasOwnProperty("seconds_behind_master_min"))
-                object.seconds_behind_master_min = message.seconds_behind_master_min;
-            if (message.seconds_behind_master_max != null && message.hasOwnProperty("seconds_behind_master_max"))
-                object.seconds_behind_master_max = message.seconds_behind_master_max;
+            if (message.replication_lag_seconds_min != null && message.hasOwnProperty("replication_lag_seconds_min"))
+                object.replication_lag_seconds_min = message.replication_lag_seconds_min;
+            if (message.replication_lag_seconds_max != null && message.hasOwnProperty("replication_lag_seconds_max"))
+                object.replication_lag_seconds_max = message.replication_lag_seconds_max;
             return object;
         };
 
@@ -55370,15 +55085,15 @@ $root.replicationdata = (function() {
          * @property {string|null} [position] Status position
          * @property {boolean|null} [io_thread_running] Status io_thread_running
          * @property {boolean|null} [sql_thread_running] Status sql_thread_running
-         * @property {number|null} [seconds_behind_master] Status seconds_behind_master
-         * @property {string|null} [master_host] Status master_host
-         * @property {number|null} [master_port] Status master_port
-         * @property {number|null} [master_connect_retry] Status master_connect_retry
+         * @property {number|null} [replication_lag_seconds] Status replication_lag_seconds
+         * @property {string|null} [source_host] Status source_host
+         * @property {number|null} [source_port] Status source_port
+         * @property {number|null} [connect_retry] Status connect_retry
          * @property {string|null} [relay_log_position] Status relay_log_position
          * @property {string|null} [file_position] Status file_position
          * @property {string|null} [file_relay_log_position] Status file_relay_log_position
-         * @property {number|null} [master_server_id] Status master_server_id
-         * @property {string|null} [master_uuid] Status master_uuid
+         * @property {number|null} [source_server_id] Status source_server_id
+         * @property {string|null} [source_uuid] Status source_uuid
          */
 
         /**
@@ -55421,36 +55136,36 @@ $root.replicationdata = (function() {
         Status.prototype.sql_thread_running = false;
 
         /**
-         * Status seconds_behind_master.
-         * @member {number} seconds_behind_master
+         * Status replication_lag_seconds.
+         * @member {number} replication_lag_seconds
          * @memberof replicationdata.Status
          * @instance
          */
-        Status.prototype.seconds_behind_master = 0;
+        Status.prototype.replication_lag_seconds = 0;
 
         /**
-         * Status master_host.
-         * @member {string} master_host
+         * Status source_host.
+         * @member {string} source_host
          * @memberof replicationdata.Status
          * @instance
          */
-        Status.prototype.master_host = "";
+        Status.prototype.source_host = "";
 
         /**
-         * Status master_port.
-         * @member {number} master_port
+         * Status source_port.
+         * @member {number} source_port
          * @memberof replicationdata.Status
          * @instance
          */
-        Status.prototype.master_port = 0;
+        Status.prototype.source_port = 0;
 
         /**
-         * Status master_connect_retry.
-         * @member {number} master_connect_retry
+         * Status connect_retry.
+         * @member {number} connect_retry
          * @memberof replicationdata.Status
          * @instance
          */
-        Status.prototype.master_connect_retry = 0;
+        Status.prototype.connect_retry = 0;
 
         /**
          * Status relay_log_position.
@@ -55477,20 +55192,20 @@ $root.replicationdata = (function() {
         Status.prototype.file_relay_log_position = "";
 
         /**
-         * Status master_server_id.
-         * @member {number} master_server_id
+         * Status source_server_id.
+         * @member {number} source_server_id
          * @memberof replicationdata.Status
          * @instance
          */
-        Status.prototype.master_server_id = 0;
+        Status.prototype.source_server_id = 0;
 
         /**
-         * Status master_uuid.
-         * @member {string} master_uuid
+         * Status source_uuid.
+         * @member {string} source_uuid
          * @memberof replicationdata.Status
          * @instance
          */
-        Status.prototype.master_uuid = "";
+        Status.prototype.source_uuid = "";
 
         /**
          * Creates a new Status instance using the specified properties.
@@ -55522,24 +55237,24 @@ $root.replicationdata = (function() {
                 writer.uint32(/* id 2, wireType 0 =*/16).bool(message.io_thread_running);
             if (message.sql_thread_running != null && Object.hasOwnProperty.call(message, "sql_thread_running"))
                 writer.uint32(/* id 3, wireType 0 =*/24).bool(message.sql_thread_running);
-            if (message.seconds_behind_master != null && Object.hasOwnProperty.call(message, "seconds_behind_master"))
-                writer.uint32(/* id 4, wireType 0 =*/32).uint32(message.seconds_behind_master);
-            if (message.master_host != null && Object.hasOwnProperty.call(message, "master_host"))
-                writer.uint32(/* id 5, wireType 2 =*/42).string(message.master_host);
-            if (message.master_port != null && Object.hasOwnProperty.call(message, "master_port"))
-                writer.uint32(/* id 6, wireType 0 =*/48).int32(message.master_port);
-            if (message.master_connect_retry != null && Object.hasOwnProperty.call(message, "master_connect_retry"))
-                writer.uint32(/* id 7, wireType 0 =*/56).int32(message.master_connect_retry);
+            if (message.replication_lag_seconds != null && Object.hasOwnProperty.call(message, "replication_lag_seconds"))
+                writer.uint32(/* id 4, wireType 0 =*/32).uint32(message.replication_lag_seconds);
+            if (message.source_host != null && Object.hasOwnProperty.call(message, "source_host"))
+                writer.uint32(/* id 5, wireType 2 =*/42).string(message.source_host);
+            if (message.source_port != null && Object.hasOwnProperty.call(message, "source_port"))
+                writer.uint32(/* id 6, wireType 0 =*/48).int32(message.source_port);
+            if (message.connect_retry != null && Object.hasOwnProperty.call(message, "connect_retry"))
+                writer.uint32(/* id 7, wireType 0 =*/56).int32(message.connect_retry);
             if (message.relay_log_position != null && Object.hasOwnProperty.call(message, "relay_log_position"))
                 writer.uint32(/* id 8, wireType 2 =*/66).string(message.relay_log_position);
             if (message.file_position != null && Object.hasOwnProperty.call(message, "file_position"))
                 writer.uint32(/* id 9, wireType 2 =*/74).string(message.file_position);
             if (message.file_relay_log_position != null && Object.hasOwnProperty.call(message, "file_relay_log_position"))
                 writer.uint32(/* id 10, wireType 2 =*/82).string(message.file_relay_log_position);
-            if (message.master_server_id != null && Object.hasOwnProperty.call(message, "master_server_id"))
-                writer.uint32(/* id 11, wireType 0 =*/88).uint32(message.master_server_id);
-            if (message.master_uuid != null && Object.hasOwnProperty.call(message, "master_uuid"))
-                writer.uint32(/* id 12, wireType 2 =*/98).string(message.master_uuid);
+            if (message.source_server_id != null && Object.hasOwnProperty.call(message, "source_server_id"))
+                writer.uint32(/* id 11, wireType 0 =*/88).uint32(message.source_server_id);
+            if (message.source_uuid != null && Object.hasOwnProperty.call(message, "source_uuid"))
+                writer.uint32(/* id 12, wireType 2 =*/98).string(message.source_uuid);
             return writer;
         };
 
@@ -55584,16 +55299,16 @@ $root.replicationdata = (function() {
                     message.sql_thread_running = reader.bool();
                     break;
                 case 4:
-                    message.seconds_behind_master = reader.uint32();
+                    message.replication_lag_seconds = reader.uint32();
                     break;
                 case 5:
-                    message.master_host = reader.string();
+                    message.source_host = reader.string();
                     break;
                 case 6:
-                    message.master_port = reader.int32();
+                    message.source_port = reader.int32();
                     break;
                 case 7:
-                    message.master_connect_retry = reader.int32();
+                    message.connect_retry = reader.int32();
                     break;
                 case 8:
                     message.relay_log_position = reader.string();
@@ -55605,10 +55320,10 @@ $root.replicationdata = (function() {
                     message.file_relay_log_position = reader.string();
                     break;
                 case 11:
-                    message.master_server_id = reader.uint32();
+                    message.source_server_id = reader.uint32();
                     break;
                 case 12:
-                    message.master_uuid = reader.string();
+                    message.source_uuid = reader.string();
                     break;
                 default:
                     reader.skipType(tag & 7);
@@ -55654,18 +55369,18 @@ $root.replicationdata = (function() {
             if (message.sql_thread_running != null && message.hasOwnProperty("sql_thread_running"))
                 if (typeof message.sql_thread_running !== "boolean")
                     return "sql_thread_running: boolean expected";
-            if (message.seconds_behind_master != null && message.hasOwnProperty("seconds_behind_master"))
-                if (!$util.isInteger(message.seconds_behind_master))
-                    return "seconds_behind_master: integer expected";
-            if (message.master_host != null && message.hasOwnProperty("master_host"))
-                if (!$util.isString(message.master_host))
-                    return "master_host: string expected";
-            if (message.master_port != null && message.hasOwnProperty("master_port"))
-                if (!$util.isInteger(message.master_port))
-                    return "master_port: integer expected";
-            if (message.master_connect_retry != null && message.hasOwnProperty("master_connect_retry"))
-                if (!$util.isInteger(message.master_connect_retry))
-                    return "master_connect_retry: integer expected";
+            if (message.replication_lag_seconds != null && message.hasOwnProperty("replication_lag_seconds"))
+                if (!$util.isInteger(message.replication_lag_seconds))
+                    return "replication_lag_seconds: integer expected";
+            if (message.source_host != null && message.hasOwnProperty("source_host"))
+                if (!$util.isString(message.source_host))
+                    return "source_host: string expected";
+            if (message.source_port != null && message.hasOwnProperty("source_port"))
+                if (!$util.isInteger(message.source_port))
+                    return "source_port: integer expected";
+            if (message.connect_retry != null && message.hasOwnProperty("connect_retry"))
+                if (!$util.isInteger(message.connect_retry))
+                    return "connect_retry: integer expected";
             if (message.relay_log_position != null && message.hasOwnProperty("relay_log_position"))
                 if (!$util.isString(message.relay_log_position))
                     return "relay_log_position: string expected";
@@ -55675,12 +55390,12 @@ $root.replicationdata = (function() {
             if (message.file_relay_log_position != null && message.hasOwnProperty("file_relay_log_position"))
                 if (!$util.isString(message.file_relay_log_position))
                     return "file_relay_log_position: string expected";
-            if (message.master_server_id != null && message.hasOwnProperty("master_server_id"))
-                if (!$util.isInteger(message.master_server_id))
-                    return "master_server_id: integer expected";
-            if (message.master_uuid != null && message.hasOwnProperty("master_uuid"))
-                if (!$util.isString(message.master_uuid))
-                    return "master_uuid: string expected";
+            if (message.source_server_id != null && message.hasOwnProperty("source_server_id"))
+                if (!$util.isInteger(message.source_server_id))
+                    return "source_server_id: integer expected";
+            if (message.source_uuid != null && message.hasOwnProperty("source_uuid"))
+                if (!$util.isString(message.source_uuid))
+                    return "source_uuid: string expected";
             return null;
         };
 
@@ -55702,24 +55417,24 @@ $root.replicationdata = (function() {
                 message.io_thread_running = Boolean(object.io_thread_running);
             if (object.sql_thread_running != null)
                 message.sql_thread_running = Boolean(object.sql_thread_running);
-            if (object.seconds_behind_master != null)
-                message.seconds_behind_master = object.seconds_behind_master >>> 0;
-            if (object.master_host != null)
-                message.master_host = String(object.master_host);
-            if (object.master_port != null)
-                message.master_port = object.master_port | 0;
-            if (object.master_connect_retry != null)
-                message.master_connect_retry = object.master_connect_retry | 0;
+            if (object.replication_lag_seconds != null)
+                message.replication_lag_seconds = object.replication_lag_seconds >>> 0;
+            if (object.source_host != null)
+                message.source_host = String(object.source_host);
+            if (object.source_port != null)
+                message.source_port = object.source_port | 0;
+            if (object.connect_retry != null)
+                message.connect_retry = object.connect_retry | 0;
             if (object.relay_log_position != null)
                 message.relay_log_position = String(object.relay_log_position);
             if (object.file_position != null)
                 message.file_position = String(object.file_position);
             if (object.file_relay_log_position != null)
                 message.file_relay_log_position = String(object.file_relay_log_position);
-            if (object.master_server_id != null)
-                message.master_server_id = object.master_server_id >>> 0;
-            if (object.master_uuid != null)
-                message.master_uuid = String(object.master_uuid);
+            if (object.source_server_id != null)
+                message.source_server_id = object.source_server_id >>> 0;
+            if (object.source_uuid != null)
+                message.source_uuid = String(object.source_uuid);
             return message;
         };
 
@@ -55740,15 +55455,15 @@ $root.replicationdata = (function() {
                 object.position = "";
                 object.io_thread_running = false;
                 object.sql_thread_running = false;
-                object.seconds_behind_master = 0;
-                object.master_host = "";
-                object.master_port = 0;
-                object.master_connect_retry = 0;
+                object.replication_lag_seconds = 0;
+                object.source_host = "";
+                object.source_port = 0;
+                object.connect_retry = 0;
                 object.relay_log_position = "";
                 object.file_position = "";
                 object.file_relay_log_position = "";
-                object.master_server_id = 0;
-                object.master_uuid = "";
+                object.source_server_id = 0;
+                object.source_uuid = "";
             }
             if (message.position != null && message.hasOwnProperty("position"))
                 object.position = message.position;
@@ -55756,24 +55471,24 @@ $root.replicationdata = (function() {
                 object.io_thread_running = message.io_thread_running;
             if (message.sql_thread_running != null && message.hasOwnProperty("sql_thread_running"))
                 object.sql_thread_running = message.sql_thread_running;
-            if (message.seconds_behind_master != null && message.hasOwnProperty("seconds_behind_master"))
-                object.seconds_behind_master = message.seconds_behind_master;
-            if (message.master_host != null && message.hasOwnProperty("master_host"))
-                object.master_host = message.master_host;
-            if (message.master_port != null && message.hasOwnProperty("master_port"))
-                object.master_port = message.master_port;
-            if (message.master_connect_retry != null && message.hasOwnProperty("master_connect_retry"))
-                object.master_connect_retry = message.master_connect_retry;
+            if (message.replication_lag_seconds != null && message.hasOwnProperty("replication_lag_seconds"))
+                object.replication_lag_seconds = message.replication_lag_seconds;
+            if (message.source_host != null && message.hasOwnProperty("source_host"))
+                object.source_host = message.source_host;
+            if (message.source_port != null && message.hasOwnProperty("source_port"))
+                object.source_port = message.source_port;
+            if (message.connect_retry != null && message.hasOwnProperty("connect_retry"))
+                object.connect_retry = message.connect_retry;
             if (message.relay_log_position != null && message.hasOwnProperty("relay_log_position"))
                 object.relay_log_position = message.relay_log_position;
             if (message.file_position != null && message.hasOwnProperty("file_position"))
                 object.file_position = message.file_position;
             if (message.file_relay_log_position != null && message.hasOwnProperty("file_relay_log_position"))
                 object.file_relay_log_position = message.file_relay_log_position;
-            if (message.master_server_id != null && message.hasOwnProperty("master_server_id"))
-                object.master_server_id = message.master_server_id;
-            if (message.master_uuid != null && message.hasOwnProperty("master_uuid"))
-                object.master_uuid = message.master_uuid;
+            if (message.source_server_id != null && message.hasOwnProperty("source_server_id"))
+                object.source_server_id = message.source_server_id;
+            if (message.source_uuid != null && message.hasOwnProperty("source_uuid"))
+                object.source_uuid = message.source_uuid;
             return object;
         };
 
@@ -56025,25 +55740,25 @@ $root.replicationdata = (function() {
         return values;
     })();
 
-    replicationdata.MasterStatus = (function() {
+    replicationdata.PrimaryStatus = (function() {
 
         /**
-         * Properties of a MasterStatus.
+         * Properties of a PrimaryStatus.
          * @memberof replicationdata
-         * @interface IMasterStatus
-         * @property {string|null} [position] MasterStatus position
-         * @property {string|null} [file_position] MasterStatus file_position
+         * @interface IPrimaryStatus
+         * @property {string|null} [position] PrimaryStatus position
+         * @property {string|null} [file_position] PrimaryStatus file_position
          */
 
         /**
-         * Constructs a new MasterStatus.
+         * Constructs a new PrimaryStatus.
          * @memberof replicationdata
-         * @classdesc Represents a MasterStatus.
-         * @implements IMasterStatus
+         * @classdesc Represents a PrimaryStatus.
+         * @implements IPrimaryStatus
          * @constructor
-         * @param {replicationdata.IMasterStatus=} [properties] Properties to set
+         * @param {replicationdata.IPrimaryStatus=} [properties] Properties to set
          */
-        function MasterStatus(properties) {
+        function PrimaryStatus(properties) {
             if (properties)
                 for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
                     if (properties[keys[i]] != null)
@@ -56051,43 +55766,43 @@ $root.replicationdata = (function() {
         }
 
         /**
-         * MasterStatus position.
+         * PrimaryStatus position.
          * @member {string} position
-         * @memberof replicationdata.MasterStatus
+         * @memberof replicationdata.PrimaryStatus
          * @instance
          */
-        MasterStatus.prototype.position = "";
+        PrimaryStatus.prototype.position = "";
 
         /**
-         * MasterStatus file_position.
+         * PrimaryStatus file_position.
          * @member {string} file_position
-         * @memberof replicationdata.MasterStatus
+         * @memberof replicationdata.PrimaryStatus
          * @instance
          */
-        MasterStatus.prototype.file_position = "";
+        PrimaryStatus.prototype.file_position = "";
 
         /**
-         * Creates a new MasterStatus instance using the specified properties.
+         * Creates a new PrimaryStatus instance using the specified properties.
          * @function create
-         * @memberof replicationdata.MasterStatus
+         * @memberof replicationdata.PrimaryStatus
          * @static
-         * @param {replicationdata.IMasterStatus=} [properties] Properties to set
-         * @returns {replicationdata.MasterStatus} MasterStatus instance
+         * @param {replicationdata.IPrimaryStatus=} [properties] Properties to set
+         * @returns {replicationdata.PrimaryStatus} PrimaryStatus instance
          */
-        MasterStatus.create = function create(properties) {
-            return new MasterStatus(properties);
+        PrimaryStatus.create = function create(properties) {
+            return new PrimaryStatus(properties);
         };
 
         /**
-         * Encodes the specified MasterStatus message. Does not implicitly {@link replicationdata.MasterStatus.verify|verify} messages.
+         * Encodes the specified PrimaryStatus message. Does not implicitly {@link replicationdata.PrimaryStatus.verify|verify} messages.
          * @function encode
-         * @memberof replicationdata.MasterStatus
+         * @memberof replicationdata.PrimaryStatus
          * @static
-         * @param {replicationdata.IMasterStatus} message MasterStatus message or plain object to encode
+         * @param {replicationdata.IPrimaryStatus} message PrimaryStatus message or plain object to encode
          * @param {$protobuf.Writer} [writer] Writer to encode to
          * @returns {$protobuf.Writer} Writer
          */
-        MasterStatus.encode = function encode(message, writer) {
+        PrimaryStatus.encode = function encode(message, writer) {
             if (!writer)
                 writer = $Writer.create();
             if (message.position != null && Object.hasOwnProperty.call(message, "position"))
@@ -56098,33 +55813,33 @@ $root.replicationdata = (function() {
         };
 
         /**
-         * Encodes the specified MasterStatus message, length delimited. Does not implicitly {@link replicationdata.MasterStatus.verify|verify} messages.
+         * Encodes the specified PrimaryStatus message, length delimited. Does not implicitly {@link replicationdata.PrimaryStatus.verify|verify} messages.
          * @function encodeDelimited
-         * @memberof replicationdata.MasterStatus
+         * @memberof replicationdata.PrimaryStatus
          * @static
-         * @param {replicationdata.IMasterStatus} message MasterStatus message or plain object to encode
+         * @param {replicationdata.IPrimaryStatus} message PrimaryStatus message or plain object to encode
          * @param {$protobuf.Writer} [writer] Writer to encode to
          * @returns {$protobuf.Writer} Writer
          */
-        MasterStatus.encodeDelimited = function encodeDelimited(message, writer) {
+        PrimaryStatus.encodeDelimited = function encodeDelimited(message, writer) {
             return this.encode(message, writer).ldelim();
         };
 
         /**
-         * Decodes a MasterStatus message from the specified reader or buffer.
+         * Decodes a PrimaryStatus message from the specified reader or buffer.
          * @function decode
-         * @memberof replicationdata.MasterStatus
+         * @memberof replicationdata.PrimaryStatus
          * @static
          * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
          * @param {number} [length] Message length if known beforehand
-         * @returns {replicationdata.MasterStatus} MasterStatus
+         * @returns {replicationdata.PrimaryStatus} PrimaryStatus
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        MasterStatus.decode = function decode(reader, length) {
+        PrimaryStatus.decode = function decode(reader, length) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
-            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.replicationdata.MasterStatus();
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.replicationdata.PrimaryStatus();
             while (reader.pos < end) {
                 var tag = reader.uint32();
                 switch (tag >>> 3) {
@@ -56143,30 +55858,30 @@ $root.replicationdata = (function() {
         };
 
         /**
-         * Decodes a MasterStatus message from the specified reader or buffer, length delimited.
+         * Decodes a PrimaryStatus message from the specified reader or buffer, length delimited.
          * @function decodeDelimited
-         * @memberof replicationdata.MasterStatus
+         * @memberof replicationdata.PrimaryStatus
          * @static
          * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
-         * @returns {replicationdata.MasterStatus} MasterStatus
+         * @returns {replicationdata.PrimaryStatus} PrimaryStatus
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        MasterStatus.decodeDelimited = function decodeDelimited(reader) {
+        PrimaryStatus.decodeDelimited = function decodeDelimited(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
             return this.decode(reader, reader.uint32());
         };
 
         /**
-         * Verifies a MasterStatus message.
+         * Verifies a PrimaryStatus message.
          * @function verify
-         * @memberof replicationdata.MasterStatus
+         * @memberof replicationdata.PrimaryStatus
          * @static
          * @param {Object.<string,*>} message Plain object to verify
          * @returns {string|null} `null` if valid, otherwise the reason why it is not
          */
-        MasterStatus.verify = function verify(message) {
+        PrimaryStatus.verify = function verify(message) {
             if (typeof message !== "object" || message === null)
                 return "object expected";
             if (message.position != null && message.hasOwnProperty("position"))
@@ -56179,17 +55894,17 @@ $root.replicationdata = (function() {
         };
 
         /**
-         * Creates a MasterStatus message from a plain object. Also converts values to their respective internal types.
+         * Creates a PrimaryStatus message from a plain object. Also converts values to their respective internal types.
          * @function fromObject
-         * @memberof replicationdata.MasterStatus
+         * @memberof replicationdata.PrimaryStatus
          * @static
          * @param {Object.<string,*>} object Plain object
-         * @returns {replicationdata.MasterStatus} MasterStatus
+         * @returns {replicationdata.PrimaryStatus} PrimaryStatus
          */
-        MasterStatus.fromObject = function fromObject(object) {
-            if (object instanceof $root.replicationdata.MasterStatus)
+        PrimaryStatus.fromObject = function fromObject(object) {
+            if (object instanceof $root.replicationdata.PrimaryStatus)
                 return object;
-            var message = new $root.replicationdata.MasterStatus();
+            var message = new $root.replicationdata.PrimaryStatus();
             if (object.position != null)
                 message.position = String(object.position);
             if (object.file_position != null)
@@ -56198,15 +55913,15 @@ $root.replicationdata = (function() {
         };
 
         /**
-         * Creates a plain object from a MasterStatus message. Also converts values to other types if specified.
+         * Creates a plain object from a PrimaryStatus message. Also converts values to other types if specified.
          * @function toObject
-         * @memberof replicationdata.MasterStatus
+         * @memberof replicationdata.PrimaryStatus
          * @static
-         * @param {replicationdata.MasterStatus} message MasterStatus
+         * @param {replicationdata.PrimaryStatus} message PrimaryStatus
          * @param {$protobuf.IConversionOptions} [options] Conversion options
          * @returns {Object.<string,*>} Plain object
          */
-        MasterStatus.toObject = function toObject(message, options) {
+        PrimaryStatus.toObject = function toObject(message, options) {
             if (!options)
                 options = {};
             var object = {};
@@ -56222,17 +55937,17 @@ $root.replicationdata = (function() {
         };
 
         /**
-         * Converts this MasterStatus to JSON.
+         * Converts this PrimaryStatus to JSON.
          * @function toJSON
-         * @memberof replicationdata.MasterStatus
+         * @memberof replicationdata.PrimaryStatus
          * @instance
          * @returns {Object.<string,*>} JSON object
          */
-        MasterStatus.prototype.toJSON = function toJSON() {
+        PrimaryStatus.prototype.toJSON = function toJSON() {
             return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
         };
 
-        return MasterStatus;
+        return PrimaryStatus;
     })();
 
     return replicationdata;
@@ -59516,6 +59231,22 @@ $root.vtctldata = (function() {
         return ExecuteVtctlCommandResponse;
     })();
 
+    /**
+     * MaterializationIntent enum.
+     * @name vtctldata.MaterializationIntent
+     * @enum {number}
+     * @property {number} CUSTOM=0 CUSTOM value
+     * @property {number} MOVETABLES=1 MOVETABLES value
+     * @property {number} CREATELOOKUPINDEX=2 CREATELOOKUPINDEX value
+     */
+    vtctldata.MaterializationIntent = (function() {
+        var valuesById = {}, values = Object.create(valuesById);
+        values[valuesById[0] = "CUSTOM"] = 0;
+        values[valuesById[1] = "MOVETABLES"] = 1;
+        values[valuesById[2] = "CREATELOOKUPINDEX"] = 2;
+        return values;
+    })();
+
     vtctldata.TableMaterializeSettings = (function() {
 
         /**
@@ -59762,6 +59493,7 @@ $root.vtctldata = (function() {
          * @property {string|null} [cell] MaterializeSettings cell
          * @property {string|null} [tablet_types] MaterializeSettings tablet_types
          * @property {string|null} [external_cluster] MaterializeSettings external_cluster
+         * @property {vtctldata.MaterializationIntent|null} [materialization_intent] MaterializeSettings materialization_intent
          */
 
         /**
@@ -59845,6 +59577,14 @@ $root.vtctldata = (function() {
         MaterializeSettings.prototype.external_cluster = "";
 
         /**
+         * MaterializeSettings materialization_intent.
+         * @member {vtctldata.MaterializationIntent} materialization_intent
+         * @memberof vtctldata.MaterializeSettings
+         * @instance
+         */
+        MaterializeSettings.prototype.materialization_intent = 0;
+
+        /**
          * Creates a new MaterializeSettings instance using the specified properties.
          * @function create
          * @memberof vtctldata.MaterializeSettings
@@ -59885,6 +59625,8 @@ $root.vtctldata = (function() {
                 writer.uint32(/* id 7, wireType 2 =*/58).string(message.tablet_types);
             if (message.external_cluster != null && Object.hasOwnProperty.call(message, "external_cluster"))
                 writer.uint32(/* id 8, wireType 2 =*/66).string(message.external_cluster);
+            if (message.materialization_intent != null && Object.hasOwnProperty.call(message, "materialization_intent"))
+                writer.uint32(/* id 9, wireType 0 =*/72).int32(message.materialization_intent);
             return writer;
         };
 
@@ -59944,6 +59686,9 @@ $root.vtctldata = (function() {
                     break;
                 case 8:
                     message.external_cluster = reader.string();
+                    break;
+                case 9:
+                    message.materialization_intent = reader.int32();
                     break;
                 default:
                     reader.skipType(tag & 7);
@@ -60010,6 +59755,15 @@ $root.vtctldata = (function() {
             if (message.external_cluster != null && message.hasOwnProperty("external_cluster"))
                 if (!$util.isString(message.external_cluster))
                     return "external_cluster: string expected";
+            if (message.materialization_intent != null && message.hasOwnProperty("materialization_intent"))
+                switch (message.materialization_intent) {
+                default:
+                    return "materialization_intent: enum value expected";
+                case 0:
+                case 1:
+                case 2:
+                    break;
+                }
             return null;
         };
 
@@ -60049,6 +59803,20 @@ $root.vtctldata = (function() {
                 message.tablet_types = String(object.tablet_types);
             if (object.external_cluster != null)
                 message.external_cluster = String(object.external_cluster);
+            switch (object.materialization_intent) {
+            case "CUSTOM":
+            case 0:
+                message.materialization_intent = 0;
+                break;
+            case "MOVETABLES":
+            case 1:
+                message.materialization_intent = 1;
+                break;
+            case "CREATELOOKUPINDEX":
+            case 2:
+                message.materialization_intent = 2;
+                break;
+            }
             return message;
         };
 
@@ -60075,6 +59843,7 @@ $root.vtctldata = (function() {
                 object.cell = "";
                 object.tablet_types = "";
                 object.external_cluster = "";
+                object.materialization_intent = options.enums === String ? "CUSTOM" : 0;
             }
             if (message.workflow != null && message.hasOwnProperty("workflow"))
                 object.workflow = message.workflow;
@@ -60095,6 +59864,8 @@ $root.vtctldata = (function() {
                 object.tablet_types = message.tablet_types;
             if (message.external_cluster != null && message.hasOwnProperty("external_cluster"))
                 object.external_cluster = message.external_cluster;
+            if (message.materialization_intent != null && message.hasOwnProperty("materialization_intent"))
+                object.materialization_intent = options.enums === String ? $root.vtctldata.MaterializationIntent[message.materialization_intent] : message.materialization_intent;
             return object;
         };
 
@@ -61425,6 +61196,7 @@ $root.vtctldata = (function() {
              * @property {Array.<vtctldata.Workflow.Stream.ICopyState>|null} [copy_states] Stream copy_states
              * @property {Array.<vtctldata.Workflow.Stream.ILog>|null} [logs] Stream logs
              * @property {string|null} [log_fetch_error] Stream log_fetch_error
+             * @property {Array.<string>|null} [tags] Stream tags
              */
 
             /**
@@ -61438,6 +61210,7 @@ $root.vtctldata = (function() {
             function Stream(properties) {
                 this.copy_states = [];
                 this.logs = [];
+                this.tags = [];
                 if (properties)
                     for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
                         if (properties[keys[i]] != null)
@@ -61557,6 +61330,14 @@ $root.vtctldata = (function() {
             Stream.prototype.log_fetch_error = "";
 
             /**
+             * Stream tags.
+             * @member {Array.<string>} tags
+             * @memberof vtctldata.Workflow.Stream
+             * @instance
+             */
+            Stream.prototype.tags = $util.emptyArray;
+
+            /**
              * Creates a new Stream instance using the specified properties.
              * @function create
              * @memberof vtctldata.Workflow.Stream
@@ -61610,6 +61391,9 @@ $root.vtctldata = (function() {
                         $root.vtctldata.Workflow.Stream.Log.encode(message.logs[i], writer.uint32(/* id 13, wireType 2 =*/106).fork()).ldelim();
                 if (message.log_fetch_error != null && Object.hasOwnProperty.call(message, "log_fetch_error"))
                     writer.uint32(/* id 14, wireType 2 =*/114).string(message.log_fetch_error);
+                if (message.tags != null && message.tags.length)
+                    for (var i = 0; i < message.tags.length; ++i)
+                        writer.uint32(/* id 15, wireType 2 =*/122).string(message.tags[i]);
                 return writer;
             };
 
@@ -61689,6 +61473,11 @@ $root.vtctldata = (function() {
                         break;
                     case 14:
                         message.log_fetch_error = reader.string();
+                        break;
+                    case 15:
+                        if (!(message.tags && message.tags.length))
+                            message.tags = [];
+                        message.tags.push(reader.string());
                         break;
                     default:
                         reader.skipType(tag & 7);
@@ -61787,6 +61576,13 @@ $root.vtctldata = (function() {
                 if (message.log_fetch_error != null && message.hasOwnProperty("log_fetch_error"))
                     if (!$util.isString(message.log_fetch_error))
                         return "log_fetch_error: string expected";
+                if (message.tags != null && message.hasOwnProperty("tags")) {
+                    if (!Array.isArray(message.tags))
+                        return "tags: array expected";
+                    for (var i = 0; i < message.tags.length; ++i)
+                        if (!$util.isString(message.tags[i]))
+                            return "tags: string[] expected";
+                }
                 return null;
             };
 
@@ -61865,6 +61661,13 @@ $root.vtctldata = (function() {
                 }
                 if (object.log_fetch_error != null)
                     message.log_fetch_error = String(object.log_fetch_error);
+                if (object.tags) {
+                    if (!Array.isArray(object.tags))
+                        throw TypeError(".vtctldata.Workflow.Stream.tags: array expected");
+                    message.tags = [];
+                    for (var i = 0; i < object.tags.length; ++i)
+                        message.tags[i] = String(object.tags[i]);
+                }
                 return message;
             };
 
@@ -61884,6 +61687,7 @@ $root.vtctldata = (function() {
                 if (options.arrays || options.defaults) {
                     object.copy_states = [];
                     object.logs = [];
+                    object.tags = [];
                 }
                 if (options.defaults) {
                     if ($util.Long) {
@@ -61940,6 +61744,11 @@ $root.vtctldata = (function() {
                 }
                 if (message.log_fetch_error != null && message.hasOwnProperty("log_fetch_error"))
                     object.log_fetch_error = message.log_fetch_error;
+                if (message.tags && message.tags.length) {
+                    object.tags = [];
+                    for (var j = 0; j < message.tags.length; ++j)
+                        object.tags[j] = message.tags[j];
+                }
                 return object;
             };
 
@@ -64420,6 +64229,7 @@ $root.vtctldata = (function() {
                     return "db_type: enum value expected";
                 case 0:
                 case 1:
+                case 1:
                 case 2:
                 case 3:
                 case 3:
@@ -64457,6 +64267,10 @@ $root.vtctldata = (function() {
             case "UNKNOWN":
             case 0:
                 message.db_type = 0;
+                break;
+            case "PRIMARY":
+            case 1:
+                message.db_type = 1;
                 break;
             case "MASTER":
             case 1:
@@ -82629,6 +82443,9 @@ $root.binlogdata = (function() {
          * @property {string|null} [filter] Rule filter
          * @property {Object.<string,string>|null} [convert_enum_to_text] Rule convert_enum_to_text
          * @property {Object.<string,binlogdata.ICharsetConversion>|null} [convert_charset] Rule convert_charset
+         * @property {string|null} [source_unique_key_columns] Rule source_unique_key_columns
+         * @property {string|null} [target_unique_key_columns] Rule target_unique_key_columns
+         * @property {string|null} [source_unique_key_target_columns] Rule source_unique_key_target_columns
          */
 
         /**
@@ -82681,6 +82498,30 @@ $root.binlogdata = (function() {
         Rule.prototype.convert_charset = $util.emptyObject;
 
         /**
+         * Rule source_unique_key_columns.
+         * @member {string} source_unique_key_columns
+         * @memberof binlogdata.Rule
+         * @instance
+         */
+        Rule.prototype.source_unique_key_columns = "";
+
+        /**
+         * Rule target_unique_key_columns.
+         * @member {string} target_unique_key_columns
+         * @memberof binlogdata.Rule
+         * @instance
+         */
+        Rule.prototype.target_unique_key_columns = "";
+
+        /**
+         * Rule source_unique_key_target_columns.
+         * @member {string} source_unique_key_target_columns
+         * @memberof binlogdata.Rule
+         * @instance
+         */
+        Rule.prototype.source_unique_key_target_columns = "";
+
+        /**
          * Creates a new Rule instance using the specified properties.
          * @function create
          * @memberof binlogdata.Rule
@@ -82716,6 +82557,12 @@ $root.binlogdata = (function() {
                     writer.uint32(/* id 4, wireType 2 =*/34).fork().uint32(/* id 1, wireType 2 =*/10).string(keys[i]);
                     $root.binlogdata.CharsetConversion.encode(message.convert_charset[keys[i]], writer.uint32(/* id 2, wireType 2 =*/18).fork()).ldelim().ldelim();
                 }
+            if (message.source_unique_key_columns != null && Object.hasOwnProperty.call(message, "source_unique_key_columns"))
+                writer.uint32(/* id 5, wireType 2 =*/42).string(message.source_unique_key_columns);
+            if (message.target_unique_key_columns != null && Object.hasOwnProperty.call(message, "target_unique_key_columns"))
+                writer.uint32(/* id 6, wireType 2 =*/50).string(message.target_unique_key_columns);
+            if (message.source_unique_key_target_columns != null && Object.hasOwnProperty.call(message, "source_unique_key_target_columns"))
+                writer.uint32(/* id 7, wireType 2 =*/58).string(message.source_unique_key_target_columns);
             return writer;
         };
 
@@ -82800,6 +82647,15 @@ $root.binlogdata = (function() {
                     }
                     message.convert_charset[key] = value;
                     break;
+                case 5:
+                    message.source_unique_key_columns = reader.string();
+                    break;
+                case 6:
+                    message.target_unique_key_columns = reader.string();
+                    break;
+                case 7:
+                    message.source_unique_key_target_columns = reader.string();
+                    break;
                 default:
                     reader.skipType(tag & 7);
                     break;
@@ -82859,6 +82715,15 @@ $root.binlogdata = (function() {
                         return "convert_charset." + error;
                 }
             }
+            if (message.source_unique_key_columns != null && message.hasOwnProperty("source_unique_key_columns"))
+                if (!$util.isString(message.source_unique_key_columns))
+                    return "source_unique_key_columns: string expected";
+            if (message.target_unique_key_columns != null && message.hasOwnProperty("target_unique_key_columns"))
+                if (!$util.isString(message.target_unique_key_columns))
+                    return "target_unique_key_columns: string expected";
+            if (message.source_unique_key_target_columns != null && message.hasOwnProperty("source_unique_key_target_columns"))
+                if (!$util.isString(message.source_unique_key_target_columns))
+                    return "source_unique_key_target_columns: string expected";
             return null;
         };
 
@@ -82895,6 +82760,12 @@ $root.binlogdata = (function() {
                     message.convert_charset[keys[i]] = $root.binlogdata.CharsetConversion.fromObject(object.convert_charset[keys[i]]);
                 }
             }
+            if (object.source_unique_key_columns != null)
+                message.source_unique_key_columns = String(object.source_unique_key_columns);
+            if (object.target_unique_key_columns != null)
+                message.target_unique_key_columns = String(object.target_unique_key_columns);
+            if (object.source_unique_key_target_columns != null)
+                message.source_unique_key_target_columns = String(object.source_unique_key_target_columns);
             return message;
         };
 
@@ -82918,6 +82789,9 @@ $root.binlogdata = (function() {
             if (options.defaults) {
                 object.match = "";
                 object.filter = "";
+                object.source_unique_key_columns = "";
+                object.target_unique_key_columns = "";
+                object.source_unique_key_target_columns = "";
             }
             if (message.match != null && message.hasOwnProperty("match"))
                 object.match = message.match;
@@ -82934,6 +82808,12 @@ $root.binlogdata = (function() {
                 for (var j = 0; j < keys2.length; ++j)
                     object.convert_charset[keys2[j]] = $root.binlogdata.CharsetConversion.toObject(message.convert_charset[keys2[j]], options);
             }
+            if (message.source_unique_key_columns != null && message.hasOwnProperty("source_unique_key_columns"))
+                object.source_unique_key_columns = message.source_unique_key_columns;
+            if (message.target_unique_key_columns != null && message.hasOwnProperty("target_unique_key_columns"))
+                object.target_unique_key_columns = message.target_unique_key_columns;
+            if (message.source_unique_key_target_columns != null && message.hasOwnProperty("source_unique_key_target_columns"))
+                object.source_unique_key_target_columns = message.source_unique_key_target_columns;
             return object;
         };
 
@@ -83499,6 +83379,7 @@ $root.binlogdata = (function() {
                     return "tablet_type: enum value expected";
                 case 0:
                 case 1:
+                case 1:
                 case 2:
                 case 3:
                 case 3:
@@ -83568,6 +83449,10 @@ $root.binlogdata = (function() {
             case "UNKNOWN":
             case 0:
                 message.tablet_type = 0;
+                break;
+            case "PRIMARY":
+            case 1:
+                message.tablet_type = 1;
                 break;
             case "MASTER":
             case 1:

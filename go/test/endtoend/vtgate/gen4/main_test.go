@@ -42,6 +42,13 @@ create table t2(
 	tcol2 varchar(50),
 	primary key(id)
 ) Engine=InnoDB;
+
+create table t3(
+	id bigint,
+	tcol1 varchar(50),
+	tcol2 varchar(50),
+	primary key(id)
+) Engine=InnoDB;
 `
 
 	VSchema = `
@@ -62,6 +69,20 @@ create table t2(
       ]
     },
     "t2": {
+      "column_vindexes": [
+        {
+          "column": "id",
+          "name": "xxhash"
+        }
+      ],
+      "columns": [
+        {
+          "name": "tcol1",
+          "type": "VARCHAR"
+        }
+      ]
+    },
+    "t3": {
       "column_vindexes": [
         {
           "column": "id",

@@ -387,14 +387,14 @@ func TestVDiffPlanSuccess(t *testing.T) {
 			pkCols:           []int{0},
 			selectPks:        []int{0},
 			sourcePrimitive: &engine.OrderedAggregate{
-				Aggregates: []engine.AggregateParams{{
+				Aggregates: []*engine.AggregateParams{{
 					Opcode: engine.AggregateCount,
 					Col:    2,
 				}, {
 					Opcode: engine.AggregateSum,
 					Col:    3,
 				}},
-				GroupByKeys: []engine.GroupByParams{{KeyCol: 0, WeightStringCol: -1}},
+				GroupByKeys: []*engine.GroupByParams{{KeyCol: 0, WeightStringCol: -1}},
 				Input:       newMergeSorter(nil, []compareColInfo{{0, 0, true}}),
 			},
 			targetPrimitive: newMergeSorter(nil, []compareColInfo{{0, 0, true}}),
@@ -731,7 +731,7 @@ func TestVDiffUnsharded(t *testing.T) {
 	for _, tcase := range testcases {
 		t.Run(tcase.id, func(t *testing.T) {
 			env.tablets[101].setResults("select c1, c2 from t1 order by c1 asc", vdiffSourceGtid, tcase.source)
-			env.tablets[201].setResults("select c1, c2 from t1 order by c1 asc", vdiffTargetMasterPosition, tcase.target)
+			env.tablets[201].setResults("select c1, c2 from t1 order by c1 asc", vdiffTargetPrimaryPosition, tcase.target)
 
 			dr, err := env.wr.VDiff(context.Background(), "target", env.workflow, env.cell, env.cell, "replica", 30*time.Second, "", 100, "", tcase.debug, tcase.onlyPks)
 			require.NoError(t, err)
@@ -789,14 +789,14 @@ func TestVDiffSharded(t *testing.T) {
 	)
 	env.tablets[201].setResults(
 		query,
-		vdiffTargetMasterPosition,
+		vdiffTargetPrimaryPosition,
 		sqltypes.MakeTestStreamingResults(fields,
 			"1|3",
 		),
 	)
 	env.tablets[211].setResults(
 		query,
-		vdiffTargetMasterPosition,
+		vdiffTargetPrimaryPosition,
 		sqltypes.MakeTestStreamingResults(fields,
 			"2|4",
 			"3|4",
@@ -854,7 +854,7 @@ func TestVDiffAggregates(t *testing.T) {
 	targetQuery := "select c1, c2, c3 from t1 order by c1 asc"
 	env.tablets[201].setResults(
 		targetQuery,
-		vdiffTargetMasterPosition,
+		vdiffTargetPrimaryPosition,
 		sqltypes.MakeTestStreamingResults(fields,
 			"1|4|5",
 			"5|3|3",
@@ -862,7 +862,7 @@ func TestVDiffAggregates(t *testing.T) {
 	)
 	env.tablets[211].setResults(
 		targetQuery,
-		vdiffTargetMasterPosition,
+		vdiffTargetPrimaryPosition,
 		sqltypes.MakeTestStreamingResults(fields,
 			"2|4|5",
 			"3|2|2",
@@ -920,14 +920,14 @@ func TestVDiffPKWeightString(t *testing.T) {
 	)
 	env.tablets[201].setResults(
 		query,
-		vdiffTargetMasterPosition,
+		vdiffTargetPrimaryPosition,
 		sqltypes.MakeTestStreamingResults(fields,
 			"A|3|A",
 		),
 	)
 	env.tablets[211].setResults(
 		query,
-		vdiffTargetMasterPosition,
+		vdiffTargetPrimaryPosition,
 		sqltypes.MakeTestStreamingResults(fields,
 			"b|4|B",
 			"c|5|C",
@@ -985,14 +985,14 @@ func TestVDiffNoPKWeightString(t *testing.T) {
 	)
 	env.tablets[201].setResults(
 		query,
-		vdiffTargetMasterPosition,
+		vdiffTargetPrimaryPosition,
 		sqltypes.MakeTestStreamingResults(fields,
 			"3|A|A",
 		),
 	)
 	env.tablets[211].setResults(
 		query,
-		vdiffTargetMasterPosition,
+		vdiffTargetPrimaryPosition,
 		sqltypes.MakeTestStreamingResults(fields,
 			"4|b|B",
 			"5|c|C",
@@ -1037,7 +1037,7 @@ func TestVDiffDefaults(t *testing.T) {
 	)
 	target := source
 	env.tablets[101].setResults("select c1, c2 from t1 order by c1 asc", vdiffSourceGtid, source)
-	env.tablets[201].setResults("select c1, c2 from t1 order by c1 asc", vdiffTargetMasterPosition, target)
+	env.tablets[201].setResults("select c1, c2 from t1 order by c1 asc", vdiffTargetPrimaryPosition, target)
 
 	_, err := env.wr.VDiff(context.Background(), "target", env.workflow, "", "", "replica", 30*time.Second, "", 100, "", false /*debug*/, false /*onlyPks*/)
 	require.NoError(t, err)
@@ -1090,7 +1090,7 @@ func TestVDiffReplicationWait(t *testing.T) {
 	)
 	target := source
 	env.tablets[101].setResults("select c1, c2 from t1 order by c1 asc", vdiffSourceGtid, source)
-	env.tablets[201].setResults("select c1, c2 from t1 order by c1 asc", vdiffTargetMasterPosition, target)
+	env.tablets[201].setResults("select c1, c2 from t1 order by c1 asc", vdiffTargetPrimaryPosition, target)
 
 	_, err := env.wr.VDiff(context.Background(), "target", env.workflow, env.cell, env.cell, "replica", 0*time.Second, "", 100, "", false /*debug*/, false /*onlyPks*/)
 	require.Error(t, err)
@@ -1368,7 +1368,7 @@ func TestVDiffNullWeightString(t *testing.T) {
 	for _, tcase := range testcases {
 		t.Run(tcase.name, func(t *testing.T) {
 			env.tablets[101].setResults("select c1, c2, weight_string(c2) from t1 order by c1 asc", vdiffSourceGtid, tcase.source)
-			env.tablets[201].setResults("select c1, c2, weight_string(c2) from t1 order by c1 asc", vdiffTargetMasterPosition, tcase.target)
+			env.tablets[201].setResults("select c1, c2, weight_string(c2) from t1 order by c1 asc", vdiffTargetPrimaryPosition, tcase.target)
 
 			dr, err := env.wr.VDiff(context.Background(), "target", env.workflow, env.cell, env.cell, "replica", 30*time.Second, "", 100, "", false /*debug*/, false /*onlyPks*/)
 			require.NoError(t, err)

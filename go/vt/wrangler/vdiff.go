@@ -139,7 +139,7 @@ type tableDiffer struct {
 // every tableDiffer. A new result channel gets instantiated
 // for every tableDiffer iteration.
 type shardStreamer struct {
-	master           *topo.TabletInfo
+	primary          *topo.TabletInfo
 	tablet           *topodatapb.Tablet
 	position         mysql.Position
 	snapshotPosition string
@@ -201,13 +201,13 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflowName, sou
 	}
 	for shard, source := range ts.sources {
 		df.sources[shard] = &shardStreamer{
-			master: source.GetPrimary(),
+			primary: source.GetPrimary(),
 		}
 	}
 	var oneTarget *workflow.MigrationTarget
 	for shard, target := range ts.targets {
 		df.targets[shard] = &shardStreamer{
-			master: target.GetPrimary(),
+			primary: target.GetPrimary(),
 		}
 		oneTarget = target
 	}
@@ -434,7 +434,7 @@ func (df *vdiff) buildTablePlan(table *tabletmanagerdatapb.TableDefinition, quer
 	sourceSelect := &sqlparser.Select{}
 	targetSelect := &sqlparser.Select{}
 	// aggregates contains the list if Aggregate functions, if any.
-	var aggregates []engine.AggregateParams
+	var aggregates []*engine.AggregateParams
 	for _, selExpr := range sel.SelectExprs {
 		switch selExpr := selExpr.(type) {
 		case *sqlparser.StarExpr:
@@ -463,7 +463,7 @@ func (df *vdiff) buildTablePlan(table *tabletmanagerdatapb.TableDefinition, quer
 			if expr, ok := selExpr.Expr.(*sqlparser.FuncExpr); ok {
 				switch fname := expr.Name.Lowered(); fname {
 				case "count", "sum":
-					aggregates = append(aggregates, engine.AggregateParams{
+					aggregates = append(aggregates, &engine.AggregateParams{
 						Opcode: engine.SupportedAggregates[fname],
 						Col:    len(sourceSelect.SelectExprs) - 1,
 					})
@@ -538,10 +538,10 @@ func (df *vdiff) buildTablePlan(table *tabletmanagerdatapb.TableDefinition, quer
 	return td, nil
 }
 
-func pkColsToGroupByParams(pkCols []int) []engine.GroupByParams {
-	var res []engine.GroupByParams
+func pkColsToGroupByParams(pkCols []int) []*engine.GroupByParams {
+	var res []*engine.GroupByParams
 	for _, col := range pkCols {
-		res = append(res, engine.GroupByParams{KeyCol: col, WeightStringCol: -1})
+		res = append(res, &engine.GroupByParams{KeyCol: col, WeightStringCol: -1})
 	}
 	return res
 }
@@ -624,13 +624,13 @@ func (df *vdiff) stopTargets(ctx context.Context) error {
 	var mu sync.Mutex
 
 	err := df.forAll(df.targets, func(shard string, target *shardStreamer) error {
-		query := fmt.Sprintf("update _vt.vreplication set state='Stopped', message='for vdiff' where db_name=%s and workflow=%s", encodeString(target.master.DbName()), encodeString(df.ts.workflow))
-		_, err := df.ts.wr.tmc.VReplicationExec(ctx, target.master.Tablet, query)
+		query := fmt.Sprintf("update _vt.vreplication set state='Stopped', message='for vdiff' where db_name=%s and workflow=%s", encodeString(target.primary.DbName()), encodeString(df.ts.workflow))
+		_, err := df.ts.wr.tmc.VReplicationExec(ctx, target.primary.Tablet, query)
 		if err != nil {
 			return err
 		}
-		query = fmt.Sprintf("select source, pos from _vt.vreplication where db_name=%s and workflow=%s", encodeString(target.master.DbName()), encodeString(df.ts.workflow))
-		p3qr, err := df.ts.wr.tmc.VReplicationExec(ctx, target.master.Tablet, query)
+		query = fmt.Sprintf("select source, pos from _vt.vreplication where db_name=%s and workflow=%s", encodeString(target.primary.DbName()), encodeString(df.ts.workflow))
+		p3qr, err := df.ts.wr.tmc.VReplicationExec(ctx, target.primary.Tablet, query)
 		if err != nil {
 			return err
 		}
@@ -677,7 +677,7 @@ func (df *vdiff) startQueryStreams(ctx context.Context, keyspace string, partici
 	return df.forAll(participants, func(shard string, participant *shardStreamer) error {
 		// Iteration for each participant.
 		if participant.position.IsZero() {
-			return fmt.Errorf("workflow %s.%s: stream has not started on tablet %s", df.targetKeyspace, df.workflow, participant.master.Alias.String())
+			return fmt.Errorf("workflow %s.%s: stream has not started on tablet %s", df.targetKeyspace, df.workflow, participant.primary.Alias.String())
 		}
 		log.Infof("WaitForPosition: tablet %s should reach position %s", participant.tablet.Alias.String(), mysql.EncodePosition(participant.position))
 		if err := df.ts.wr.tmc.WaitForPosition(waitCtx, participant.tablet, mysql.EncodePosition(participant.position)); err != nil {
@@ -773,7 +773,7 @@ func (df *vdiff) syncTargets(ctx context.Context, filteredReplicationWaitTime ti
 	}
 
 	err = df.forAll(df.targets, func(shard string, target *shardStreamer) error {
-		pos, err := df.ts.wr.tmc.MasterPosition(ctx, target.master.Tablet)
+		pos, err := df.ts.wr.tmc.MasterPosition(ctx, target.primary.Tablet)
 		if err != nil {
 			return err
 		}
@@ -790,9 +790,9 @@ func (df *vdiff) syncTargets(ctx context.Context, filteredReplicationWaitTime ti
 // restartTargets restarts the stopped target vreplication streams.
 func (df *vdiff) restartTargets(ctx context.Context) error {
 	return df.forAll(df.targets, func(shard string, target *shardStreamer) error {
-		query := fmt.Sprintf("update _vt.vreplication set state='Running', message='', stop_pos='' where db_name=%s and workflow=%s", encodeString(target.master.DbName()), encodeString(df.ts.workflow))
+		query := fmt.Sprintf("update _vt.vreplication set state='Running', message='', stop_pos='' where db_name=%s and workflow=%s", encodeString(target.primary.DbName()), encodeString(df.ts.workflow))
 		log.Infof("restarting target replication with %s", query)
-		_, err := df.ts.wr.tmc.VReplicationExec(ctx, target.master.Tablet, query)
+		_, err := df.ts.wr.tmc.VReplicationExec(ctx, target.primary.Tablet, query)
 		return err
 	})
 }

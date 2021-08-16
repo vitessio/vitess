@@ -43,6 +43,18 @@ message ExecuteVtctlCommandResponse {
   logutil.Event event = 1;
 }
 
+// MaterializationIntent describes the reason for creating the Materialize flow
+enum MaterializationIntent {
+  // CUSTOM is the default value
+  CUSTOM = 0;
+
+  // MOVETABLES is when we are creating a MoveTables flow
+  MOVETABLES = 1;
+
+  // CREATELOOKUPINDEX is when we are creating a CreateLookupIndex flow
+  CREATELOOKUPINDEX = 2;
+}
+
 // TableMaterializeSttings contains the settings for one table.
 message TableMaterializeSettings {
   string target_table = 1;
@@ -69,7 +81,8 @@ message MaterializeSettings {
   // ExternalCluster is the name of the mounted cluster which has the source keyspace/db for this workflow
   // it is of the type <cluster_type.cluster_name>
   string external_cluster = 8;
-
+  // MaterializationIntent is used to identify the reason behind the materialization workflow: eg. MoveTables, CreateLookupVindex
+  MaterializationIntent materialization_intent = 9;
 }
 
 /* Data types for VtctldServer */
@@ -309,7 +322,7 @@ message DeleteShardsResponse {
 message DeleteTabletsRequest {
   // TabletAliases is the list of tablets to delete.
   repeated topodata.TabletAlias tablet_aliases = 1;
-  // AllowPrimary allows for the master/primary tablet of a shard to be deleted.
+  // AllowPrimary allows for the primary tablet of a shard to be deleted.
   // Use with caution.
   bool allow_primary = 2;
 }

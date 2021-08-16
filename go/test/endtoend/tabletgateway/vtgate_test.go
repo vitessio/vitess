@@ -72,7 +72,7 @@ func verifyVtgateVariables(t *testing.T, url string) {
 
 	healthCheckConnection := getMapFromJSON(resultMap, "HealthcheckConnections")
 	assert.NotEmpty(t, healthCheckConnection, "Atleast one healthy tablet needs to be present")
-	assert.True(t, isMasterTabletPresent(healthCheckConnection), "Atleast one master tablet needs to be present")
+	assert.True(t, isPrimaryTabletPresent(healthCheckConnection), "Atleast one primary tablet needs to be present")
 }
 
 func retryNTimes(t *testing.T, maxRetries int, f func() bool) {
@@ -152,19 +152,19 @@ func TestReplicaTransactions(t *testing.T) {
 	// begin transaction on replica
 	exec(t, readConn, "begin", "")
 	// try to delete a row, should fail
-	exec(t, readConn, "delete from customer where id=1", "supported only for master tablet type, current type: replica")
+	exec(t, readConn, "delete from customer where id=1", "supported only for primary tablet type, current type: replica")
 	exec(t, readConn, "commit", "")
 
 	// begin transaction on replica
 	exec(t, readConn, "begin", "")
 	// try to update a row, should fail
-	exec(t, readConn, "update customer set email='emailn' where id=1", "supported only for master tablet type, current type: replica")
+	exec(t, readConn, "update customer set email='emailn' where id=1", "supported only for primary tablet type, current type: replica")
 	exec(t, readConn, "commit", "")
 
 	// begin transaction on replica
 	exec(t, readConn, "begin", "")
 	// try to insert a row, should fail
-	exec(t, readConn, "insert into customer(id, email) values(1,'email1')", "supported only for master tablet type, current type: replica")
+	exec(t, readConn, "insert into customer(id, email) values(1,'email1')", "supported only for primary tablet type, current type: replica")
 	// call rollback just for fun
 	exec(t, readConn, "rollback", "")
 
@@ -204,9 +204,9 @@ func getMapFromJSON(JSON map[string]interface{}, key string) map[string]interfac
 	return result
 }
 
-func isMasterTabletPresent(tablets map[string]interface{}) bool {
+func isPrimaryTabletPresent(tablets map[string]interface{}) bool {
 	for key := range tablets {
-		if strings.Contains(key, "master") {
+		if strings.Contains(key, "primary") {
 			return true
 		}
 	}

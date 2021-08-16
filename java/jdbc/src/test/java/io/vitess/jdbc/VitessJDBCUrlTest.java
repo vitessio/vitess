@@ -87,7 +87,7 @@ public class VitessJDBCUrlTest {
     info.setProperty("userName", "user");
     info.setProperty("password", "password");
     VitessJDBCUrl vitessJDBCUrl = new VitessJDBCUrl("jdbc:vitess://hostname1:15991,hostname2:15991,"
-        + "hostname3:15991/keyspace/catalog?TABLET_TYPE=master", info);
+        + "hostname3:15991/keyspace/catalog?TABLET_TYPE=primary", info);
     Assert.assertEquals(3, vitessJDBCUrl.getHostInfos().size());
     Assert.assertEquals("hostname1", vitessJDBCUrl.getHostInfos().get(0).getHostname());
     Assert.assertEquals(15991, vitessJDBCUrl.getHostInfos().get(0).getPort());
@@ -95,7 +95,7 @@ public class VitessJDBCUrlTest {
     Assert.assertEquals(15991, vitessJDBCUrl.getHostInfos().get(1).getPort());
     Assert.assertEquals("hostname3", vitessJDBCUrl.getHostInfos().get(2).getHostname());
     Assert.assertEquals(15991, vitessJDBCUrl.getHostInfos().get(2).getPort());
-    Assert.assertEquals(Topodata.TabletType.MASTER.name(),
+    Assert.assertEquals(Topodata.TabletType.PRIMARY.name(),
         vitessJDBCUrl.getProperties().getProperty(Constants.Property.TABLET_TYPE).toUpperCase());
     Assert.assertEquals("user",
         vitessJDBCUrl.getProperties().getProperty(Constants.Property.USERNAME));
@@ -108,10 +108,10 @@ public class VitessJDBCUrlTest {
     info.setProperty("password", "password");
     VitessJDBCUrl vitessJDBCUrl = new VitessJDBCUrl(
         "jdbc:vitess://hostname1:15991,hostname2:15991,hostname3"
-            + ":15991/keyspace/catalog?TABLET_TYPE=master", info);
+            + ":15991/keyspace/catalog?TABLET_TYPE=primary", info);
     VitessJDBCUrl vitessJDBCUrl1 = new VitessJDBCUrl(
         "jdbc:vitess://hostname1:15001,hostname2:15001,hostname3"
-            + ":15001/keyspace/catalog?TABLET_TYPE=master", info);
+            + ":15001/keyspace/catalog?TABLET_TYPE=primary", info);
     Assert.assertEquals(3, vitessJDBCUrl.getHostInfos().size());
     Assert.assertEquals(3, vitessJDBCUrl1.getHostInfos().size());
     Assert.assertEquals("hostname1", vitessJDBCUrl.getHostInfos().get(0).getHostname());
@@ -126,7 +126,7 @@ public class VitessJDBCUrlTest {
     Assert.assertEquals(15991, vitessJDBCUrl.getHostInfos().get(2).getPort());
     Assert.assertEquals("hostname3", vitessJDBCUrl1.getHostInfos().get(2).getHostname());
     Assert.assertEquals(15001, vitessJDBCUrl1.getHostInfos().get(2).getPort());
-    Assert.assertEquals(Topodata.TabletType.MASTER.name(),
+    Assert.assertEquals(Topodata.TabletType.PRIMARY.name(),
         vitessJDBCUrl.getProperties().getProperty(Constants.Property.TABLET_TYPE).toUpperCase());
     Assert.assertEquals("user",
         vitessJDBCUrl.getProperties().getProperty(Constants.Property.USERNAME));

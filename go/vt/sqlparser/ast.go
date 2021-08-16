@@ -47,6 +47,8 @@ type (
 		SetLock(lock Lock)
 		MakeDistinct()
 		GetColumnCount() int
+		SetComments(comments Comments)
+		GetComments() Comments
 	}
 
 	// DDLStatement represents any DDL Statement
@@ -105,7 +107,7 @@ type (
 	// AddColumns represents a ADD COLUMN alter option
 	AddColumns struct {
 		Columns []*ColumnDefinition
-		First   *ColName
+		First   bool
 		After   *ColName
 	}
 
@@ -123,14 +125,14 @@ type (
 	ChangeColumn struct {
 		OldColumn        *ColName
 		NewColDefinition *ColumnDefinition
-		First            *ColName
+		First            bool
 		After            *ColName
 	}
 
 	// ModifyColumn is used to change the column definition in alter table command
 	ModifyColumn struct {
 		NewColDefinition *ColumnDefinition
-		First            *ColName
+		First            bool
 		After            *ColName
 	}
 
@@ -415,6 +417,12 @@ type (
 		AutoIncSpec *AutoIncSpec
 	}
 
+	// ShowMigrationLogs represents a SHOW VITESS_MIGRATION '<uuid>' LOGS statement
+	ShowMigrationLogs struct {
+		UUID     string
+		Comments Comments
+	}
+
 	// RevertMigration represents a REVERT VITESS_MIGRATION statement
 	RevertMigration struct {
 		UUID     string
@@ -623,6 +631,7 @@ func (*AlterTable) iStatement()        {}
 func (*AlterVschema) iStatement()      {}
 func (*AlterMigration) iStatement()    {}
 func (*RevertMigration) iStatement()   {}
+func (*ShowMigrationLogs) iStatement() {}
 func (*DropTable) iStatement()         {}
 func (*DropView) iStatement()          {}
 func (*TruncateTable) iStatement()     {}

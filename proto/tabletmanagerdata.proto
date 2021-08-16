@@ -278,17 +278,17 @@ message ReplicationStatusResponse {
   replicationdata.Status status = 1;
 }
 
-message MasterStatusRequest {
+message PrimaryStatusRequest {
 }
 
-message MasterStatusResponse {
+message PrimaryStatusResponse {
   replicationdata.PrimaryStatus status = 1;
 }
 
-message MasterPositionRequest {
+message PrimaryPositionRequest {
 }
 
-message MasterPositionResponse {
+message PrimaryPositionResponse {
   string position = 1;
 }
 
@@ -367,7 +367,7 @@ message InitPrimaryResponse {
 message PopulateReparentJournalRequest {
   int64 time_created_ns = 1;
   string action_name = 2;
-  topodata.TabletAlias master_alias = 3;
+  topodata.TabletAlias primary_alias = 3;
   string replication_position = 4;
 }
 
@@ -383,14 +383,14 @@ message InitReplicaRequest {
 message InitReplicaResponse {
 }
 
-message DemoteMasterRequest {
+message DemotePrimaryRequest {
 }
 
-message DemoteMasterResponse {
-  // Position is deprecated, and is a string representation of a demoted masters executed position.
+message DemotePrimaryResponse {
+  // Position is deprecated, and is a string representation of a demoted primaries executed position.
   string deprecated_position = 1 [deprecated=true];
 
-  // MasterStatus represents the response from calling `SHOW MASTER STATUS` on a master that has been demoted.
+  // PrimaryStatus represents the response from calling `SHOW MASTER STATUS` on a primary that has been demoted.
   replicationdata.PrimaryStatus primary_status = 2;
 }
 
@@ -406,14 +406,14 @@ message ReplicaWasPromotedRequest {
 message ReplicaWasPromotedResponse {
 }
 
-message SetMasterRequest {
+message SetReplicationSourceRequest {
   topodata.TabletAlias parent = 1;
   int64 time_created_ns = 2;
   bool force_start_replication = 3;
   string wait_position = 4;
 }
 
-message SetMasterResponse {
+message SetReplicationSourceResponse {
 }
 
 message ReplicaWasRestartedRequest {
@@ -449,7 +449,7 @@ message PromoteReplicaResponse {
 
 message BackupRequest {
   int64 concurrency = 1;
-  bool allowMaster = 2;
+  bool allow_primary = 2;
 }
 
 message BackupResponse {

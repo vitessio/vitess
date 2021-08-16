@@ -55,7 +55,7 @@ func TestRealtimeStats(t *testing.T) {
 			changeDropdownOptions(t, k[0], k[1])
 		}
 
-		tabletOption := []string{"all", "MASTER", "REPLICA", "RDONLY"}
+		tabletOption := []string{"all", "PRIMARY", "REPLICA", "RDONLY"}
 		if k[3] == "test2" {
 			tabletOption = []string{"all", "REPLICA", "RDONLY"}
 		}
@@ -70,7 +70,7 @@ func TestShardView(t *testing.T) {
 	navigateToShardView(t)
 
 	tabletTypes, tabletUIDs := getShardTablets(t)
-
+	// TODO: update vtctld web ui to change master to primary
 	assert.ElementsMatch(t, []string{"master", "replica", "rdonly", "rdonly", "replica", "replica", "rdonly", "rdonly"}, tabletTypes)
 	assert.ElementsMatch(t, []string{"1", "2", "3", "4", "5", "6", "7", "8"}, tabletUIDs)
 }

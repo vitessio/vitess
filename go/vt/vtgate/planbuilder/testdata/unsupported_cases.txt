@@ -91,10 +91,12 @@ Gen4 plan same as above
 # group by must reference select list
 "select a from user group by b"
 "unsupported: in scatter query: group by column must reference column in SELECT list"
+Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains nonaggregated column 'a' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by
 
 # complex group by expression
 "select a from user group by a+1"
 "unsupported: in scatter query: only simple references allowed"
+Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains nonaggregated column 'a' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by
 
 # Complex aggregate expression on scatter
 "select 1+count(*) from user"
@@ -106,21 +108,10 @@ Gen4 plan same as above
 "unsupported: only one expression allowed inside aggregates: count(a, b)"
 Gen4 error: aggregate functions take a single argument 'count(a, b)'
 
-# Cannot have more than one aggr(distinct...
-"select count(distinct a), count(distinct b) from user"
-"unsupported: only one distinct aggregation allowed in a select: count(distinct b)"
-
-# scatter aggregate group by doesn't reference select list
-"select id from user group by col"
-"unsupported: in scatter query: group by column must reference column in SELECT list"
-
 # scatter aggregate symtab lookup error
 "select id, b as id, count(*) from user order by id"
 "ambiguous symbol reference: id"
-
-# scatter aggregate with ambiguous aliases
-"select distinct a, b as a from user"
-"generating order by clause: ambiguous symbol reference: a"
+Gen4 error: In aggregated query without GROUP BY, expression of SELECT list contains nonaggregated column 'id'; this is incompatible with sql_mode=only_full_group_by
 
 # scatter aggregate complex order by
 "select id from user group by id order by id+1"
@@ -130,25 +121,15 @@ Gen4 error: aggregate functions take a single argument 'count(a, b)'
 "select col, count(*) from user group by col order by col+1"
 "unsupported: in scatter query: complex order by expression: col + 1"
 
-# Scatter order by and aggregation: order by column must reference column from select list
-"select col, count(*) from user group by col order by c1"
-"unsupported: memory sort: order by must reference a column in the select list: c1 asc"
-
-# Aggregates and joins
-"select count(*) from user join user_extra"
-"unsupported: cross-shard query with aggregates"
-
 # Aggregate detection (group_concat)
 "select group_concat(user.a) from user join user_extra"
 "unsupported: cross-shard query with aggregates"
-
-# Aggregate detection (group by)
-"select user.a from user join user_extra group by user.a"
-"unsupported: cross-shard query with aggregates"
+Gen4 error: unsupported: in scatter query: complex aggregate expression
 
 # group by and ',' joins
 "select user.id from user, user_extra group by id"
 "unsupported: cross-shard query with aggregates"
+Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains nonaggregated column '`user`.id' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by
 
 # if subquery scatter and ordering, then we don't allow outer constructs to be pushed down.
 "select count(*) from (select col, user_extra.extra from user join user_extra on user.id = user_extra.user_id order by user_extra.extra) a"
@@ -424,7 +405,7 @@ Gen4 plan same as above
 # create view with Cannot auto-resolve for cross-shard joins
 "create view user.view_a as select col from user join user_extra"
 "symbol col not found"
-Gen4 error: Complex select queries are not supported in create or alter view statements
+Gen4 error: Column 'col' in field list is ambiguous
 
 # create view with join that cannot be served in each shard separately
 "create view user.view_a as select user_extra.id from user join user_extra"
@@ -496,4 +477,14 @@ Gen4 plan same as above
     ]
   }
 }
-"Mixing of aggregation and non-aggregation columns is not allowed if there is no GROUP BY clause"
+Gen4 error: In aggregated query without GROUP BY, expression of SELECT list contains nonaggregated column 'id'; this is incompatible with sql_mode=only_full_group_by
+
+# avg function on scatter query
+"select avg(id) from user"
+"unsupported: in scatter query: complex aggregate expression"
+Gen4 plan same as above
+
+# scatter aggregate with ambiguous aliases
+"select distinct a, b as a from user"
+"generating order by clause: ambiguous symbol reference: a"
+Gen4 plan same as above

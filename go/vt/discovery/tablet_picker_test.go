@@ -164,13 +164,13 @@ func TestPickRespectsTabletType(t *testing.T) {
 	te := newPickerTestEnv(t, []string{"cell"})
 	want := addTablet(te, 100, topodatapb.TabletType_REPLICA, "cell", true, true)
 	defer deleteTablet(t, te, want)
-	dont := addTablet(te, 101, topodatapb.TabletType_MASTER, "cell", true, true)
+	dont := addTablet(te, 101, topodatapb.TabletType_PRIMARY, "cell", true, true)
 	defer deleteTablet(t, te, dont)
 
 	tp, err := NewTabletPicker(te.topoServ, te.cells, te.keyspace, te.shard, "replica,rdonly")
 	require.NoError(t, err)
 
-	// In 20 attempts, master tablet must be never picked
+	// In 20 attempts, primary tablet must be never picked
 	for i := 0; i < 20; i++ {
 		tablet, err := tp.PickForStreaming(context.Background())
 		require.NoError(t, err)
@@ -194,19 +194,19 @@ func TestPickMultiCell(t *testing.T) {
 	assert.True(t, proto.Equal(want, tablet), "Pick: %v, want %v", tablet, want)
 }
 
-func TestPickMaster(t *testing.T) {
+func TestPickPrimary(t *testing.T) {
 	te := newPickerTestEnv(t, []string{"cell", "otherCell"})
-	want := addTablet(te, 100, topodatapb.TabletType_MASTER, "cell", true, true)
+	want := addTablet(te, 100, topodatapb.TabletType_PRIMARY, "cell", true, true)
 	defer deleteTablet(t, te, want)
 	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 	defer cancel()
 	_, err := te.topoServ.UpdateShardFields(ctx, te.keyspace, te.shard, func(si *topo.ShardInfo) error {
-		si.MasterAlias = want.Alias
+		si.PrimaryAlias = want.Alias
 		return nil
 	})
 	require.NoError(t, err)
 
-	tp, err := NewTabletPicker(te.topoServ, []string{"otherCell"}, te.keyspace, te.shard, "master")
+	tp, err := NewTabletPicker(te.topoServ, []string{"otherCell"}, te.keyspace, te.shard, "primary")
 	require.NoError(t, err)
 
 	ctx2, cancel2 := context.WithTimeout(context.Background(), 200*time.Millisecond)

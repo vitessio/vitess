@@ -99,7 +99,7 @@ func (conn *FakeVTGateConn) Execute(ctx context.Context, session *vtgatepb.Sessi
 			"Execute: %+v, want %+v", query, response.execQuery)
 	}
 	reply := *response.reply
-	s := newSession(true, "test_keyspace", []string{}, topodatapb.TabletType_MASTER)
+	s := newSession(true, "test_keyspace", []string{}, topodatapb.TabletType_PRIMARY)
 	return s, &reply, nil
 }
 
@@ -173,7 +173,7 @@ func (conn *FakeVTGateConn) Prepare(ctx context.Context, session *vtgatepb.Sessi
 			"Prepare: %+v, want %+v", query, response.execQuery)
 	}
 	reply := *response.reply
-	s := newSession(true, "test_keyspace", []string{}, topodatapb.TabletType_MASTER)
+	s := newSession(true, "test_keyspace", []string{}, topodatapb.TabletType_PRIMARY)
 	return s, reply.Fields, nil
 }
 

@@ -309,11 +309,11 @@ func TestExecutorReadTransaction(t *testing.T) {
 		Participants: []*querypb.Target{{
 			Keyspace:   "test1",
 			Shard:      "0",
-			TabletType: topodatapb.TabletType_MASTER,
+			TabletType: topodatapb.TabletType_PRIMARY,
 		}, {
 			Keyspace:   "test2",
 			Shard:      "1",
-			TabletType: topodatapb.TabletType_MASTER,
+			TabletType: topodatapb.TabletType_PRIMARY,
 		}},
 	}
 	if !proto.Equal(got, want) {
@@ -541,7 +541,7 @@ func newNoTwopcExecutor(t *testing.T) (txe *TxExecutor, tsv *TabletServer, db *f
 // newTxForPrep creates a non-empty transaction.
 func newTxForPrep(tsv *TabletServer) int64 {
 	txid := newTransaction(tsv, nil)
-	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
+	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 	_, err := tsv.Execute(ctx, &target, "update test_table set name = 2 where pk = 1", nil, txid, 0, nil)
 	if err != nil {
 		panic(err)

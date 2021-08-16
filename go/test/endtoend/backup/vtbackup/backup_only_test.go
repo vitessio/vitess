@@ -77,7 +77,7 @@ func TestTabletBackupOnly(t *testing.T) {
 	// Test Backup Flow
 	//    TestTabletBackupOnly will:
 	//    - Create a shard using regular init & start tablet
-	//    - Run initShardMaster to start replication
+	//    - Run InitShardPrimary to start replication
 	//    - Insert Some data
 	//    - Verify that the cluster is working
 	//    - Take a Second Backup
@@ -299,7 +299,7 @@ func tearDown(t *testing.T, initMysql bool) {
 
 		resetTabletDirectory(t, tablet, initMysql)
 		// DeleteTablet on a primary will cause tablet to shutdown, so should only call it after tablet is already shut down
-		err := localCluster.VtctlclientProcess.ExecuteCommand("DeleteTablet", "-allow_master", tablet.Alias)
+		err := localCluster.VtctlclientProcess.ExecuteCommand("DeleteTablet", "-allow_primary", tablet.Alias)
 		require.Nil(t, err)
 	}
 }

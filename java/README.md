@@ -5,7 +5,7 @@ This subdirectory contains all Vitess Java code.
 It is split in the following subdirectories (Maven modules):
 
 * **client:** Our Java client library.
-  * See [VTGateConn.java](https://github.com/vitessio/vitess/blob/master/java/client/src/main/java/io/vitess/client/VTGateConn.java) and [VTGateBlockingConn.java](https://github.com/vitessio/vitess/blob/master/java/client/src/main/java/io/vitess/client/VTGateBlockingConn.java) for the API.
+  * See [VTGateConn.java](https://github.com/vitessio/vitess/blob/main/java/client/src/main/java/io/vitess/client/VTGateConn.java) and [VTGateBlockingConn.java](https://github.com/vitessio/vitess/blob/main/java/client/src/main/java/io/vitess/client/VTGateBlockingConn.java) for the API.
   * Note: The library is agnostic of the underlying RPC system and only defines an interface for that.
   * In open-source, the library must always be used together with the code in `grpc-client`.
 * **grpc-client:** Implements the client's RPC interface for gRPC.

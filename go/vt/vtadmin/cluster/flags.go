@@ -172,8 +172,8 @@ func parseOne(cfg *Config, name string, val string) error {
 				return fmt.Errorf("error parsing %s: %w", name, err)
 			}
 		case strings.HasPrefix(name, "schema-read-pool-"):
-			if cfg.BackupReadPoolConfig == nil {
-				cfg.BackupReadPoolConfig = &RPCPoolConfig{
+			if cfg.SchemaReadPoolConfig == nil {
+				cfg.SchemaReadPoolConfig = &RPCPoolConfig{
 					Size:        -1,
 					WaitTimeout: -1,
 				}

@@ -99,7 +99,7 @@ func TestBackupRestore(t *testing.T) {
 	require.NoError(t, ioutil.WriteFile(path.Join(sourceDataDbDir, "db.opt"), []byte("db opt file"), os.ModePerm))
 
 	// create a primary tablet, set its primary position
-	primary := NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_MASTER, db)
+	primary := NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_PRIMARY, db)
 	primary.FakeMysqlDaemon.ReadOnly = false
 	primary.FakeMysqlDaemon.Replicating = false
 	primary.FakeMysqlDaemon.CurrentPrimaryPosition = mysql.Position{
@@ -225,8 +225,8 @@ func TestBackupRestore(t *testing.T) {
 
 	// restore primary from backup
 	require.NoError(t, primary.TM.RestoreData(ctx, logutil.NewConsoleLogger(), 0 /* waitForBackupInterval */, false /* deleteBeforeRestore */), "RestoreData failed")
-	// tablet was created as MASTER, so it's baseTabletType is MASTER
-	assert.Equal(t, topodatapb.TabletType_MASTER, primary.Tablet.Type)
+	// tablet was created as PRIMARY, so it's baseTabletType is PRIMARY
+	assert.Equal(t, topodatapb.TabletType_PRIMARY, primary.Tablet.Type)
 	assert.False(t, primary.FakeMysqlDaemon.Replicating)
 	assert.True(t, primary.FakeMysqlDaemon.Running)
 
@@ -240,7 +240,7 @@ func TestBackupRestore(t *testing.T) {
 
 	require.NoError(t, primary.TM.RestoreData(ctx, logutil.NewConsoleLogger(), 0 /* waitForBackupInterval */, false /* deleteBeforeRestore */), "RestoreData failed")
 	// Tablet type should not change
-	assert.Equal(t, topodatapb.TabletType_MASTER, primary.Tablet.Type)
+	assert.Equal(t, topodatapb.TabletType_PRIMARY, primary.Tablet.Type)
 	assert.False(t, primary.FakeMysqlDaemon.Replicating)
 	assert.True(t, primary.FakeMysqlDaemon.Running)
 }
@@ -300,7 +300,7 @@ func TestBackupRestoreLagged(t *testing.T) {
 	require.NoError(t, ioutil.WriteFile(path.Join(sourceDataDbDir, "db.opt"), []byte("db opt file"), os.ModePerm))
 
 	// create a primary tablet, set its position
-	primary := NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_MASTER, db)
+	primary := NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_PRIMARY, db)
 	primary.FakeMysqlDaemon.ReadOnly = false
 	primary.FakeMysqlDaemon.Replicating = false
 	primary.FakeMysqlDaemon.CurrentPrimaryPosition = mysql.Position{
@@ -445,7 +445,7 @@ func TestBackupRestoreLagged(t *testing.T) {
 	}
 }
 
-func TestRestoreUnreachableMaster(t *testing.T) {
+func TestRestoreUnreachablePrimary(t *testing.T) {
 	delay := discovery.GetTabletPickerRetryDelay()
 	defer func() {
 		discovery.SetTabletPickerRetryDelay(delay)
@@ -497,7 +497,7 @@ func TestRestoreUnreachableMaster(t *testing.T) {
 	require.NoError(t, ioutil.WriteFile(path.Join(sourceDataDbDir, "db.opt"), []byte("db opt file"), os.ModePerm))
 
 	// create a primary tablet, set its primary position
-	primary := NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_MASTER, db)
+	primary := NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_PRIMARY, db)
 	primary.FakeMysqlDaemon.ReadOnly = false
 	primary.FakeMysqlDaemon.Replicating = false
 	primary.FakeMysqlDaemon.CurrentPrimaryPosition = mysql.Position{
@@ -650,7 +650,7 @@ func TestDisableActiveReparents(t *testing.T) {
 	require.NoError(t, ioutil.WriteFile(path.Join(sourceDataDbDir, "db.opt"), []byte("db opt file"), os.ModePerm))
 
 	// create a primary tablet, set its primary position
-	primary := NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_MASTER, db)
+	primary := NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_PRIMARY, db)
 	primary.FakeMysqlDaemon.ReadOnly = false
 	primary.FakeMysqlDaemon.Replicating = false
 	primary.FakeMysqlDaemon.CurrentPrimaryPosition = mysql.Position{

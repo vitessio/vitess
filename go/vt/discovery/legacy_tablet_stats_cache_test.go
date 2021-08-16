@@ -64,7 +64,7 @@ func TestLegacyTabletStatsCache(t *testing.T) {
 	}
 
 	// empty
-	a := tsc.GetTabletStats("k", "s", topodatapb.TabletType_MASTER)
+	a := tsc.GetTabletStats("k", "s", topodatapb.TabletType_PRIMARY)
 	if len(a) != 0 {
 		t.Errorf("wrong result, expected empty list: %v", a)
 	}
@@ -190,12 +190,12 @@ func TestLegacyTabletStatsCache(t *testing.T) {
 		t.Errorf("unexpected result: %v", a)
 	}
 
-	// second tablet turns into a master, we receive down + up
+	// second tablet turns into a primary, we receive down + up
 	ts2.Serving = true
 	ts2.Up = false
 	tsc.StatsUpdate(ts2)
 	ts2.Up = true
-	ts2.Target.TabletType = topodatapb.TabletType_MASTER
+	ts2.Target.TabletType = topodatapb.TabletType_PRIMARY
 	ts2.TabletExternallyReparentedTimestamp = 10
 	tsc.StatsUpdate(ts2)
 
@@ -205,33 +205,33 @@ func TestLegacyTabletStatsCache(t *testing.T) {
 		t.Errorf("unexpected result: %v", a)
 	}
 
-	// check we have a master now
-	a = tsc.GetTabletStats("k", "s", topodatapb.TabletType_MASTER)
+	// check we have a primary now
+	a = tsc.GetTabletStats("k", "s", topodatapb.TabletType_PRIMARY)
 	if len(a) != 1 || !ts2.DeepEqual(&a[0]) {
 		t.Errorf("unexpected result: %v", a)
 	}
 
-	// reparent: old replica goes into master
+	// reparent: old replica goes into primary
 	ts1.Up = false
 	tsc.StatsUpdate(ts1)
 	ts1.Up = true
-	ts1.Target.TabletType = topodatapb.TabletType_MASTER
+	ts1.Target.TabletType = topodatapb.TabletType_PRIMARY
 	ts1.TabletExternallyReparentedTimestamp = 20
 	tsc.StatsUpdate(ts1)
 
-	// check we lost all replicas, and master is new one
+	// check we lost all replicas, and primary is new one
 	a = tsc.GetTabletStats("k", "s", topodatapb.TabletType_REPLICA)
 	if len(a) != 0 {
 		t.Errorf("unexpected result: %v", a)
 	}
-	a = tsc.GetHealthyTabletStats("k", "s", topodatapb.TabletType_MASTER)
+	a = tsc.GetHealthyTabletStats("k", "s", topodatapb.TabletType_PRIMARY)
 	if len(a) != 1 || !ts1.DeepEqual(&a[0]) {
 		t.Errorf("unexpected result: %v", a)
 	}
 
-	// old master sending an old ping should be ignored
+	// old primary sending an old ping should be ignored
 	tsc.StatsUpdate(ts2)
-	a = tsc.GetHealthyTabletStats("k", "s", topodatapb.TabletType_MASTER)
+	a = tsc.GetHealthyTabletStats("k", "s", topodatapb.TabletType_PRIMARY)
 	if len(a) != 1 || !ts1.DeepEqual(&a[0]) {
 		t.Errorf("unexpected result: %v", a)
 	}

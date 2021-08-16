@@ -89,7 +89,7 @@ where c.table_schema = database() AND ISC.table_schema is null`
 	DetectSchemaChange = detectChangeColumns + " UNION " + detectNewColumns + " UNION " + detectRemoveColumns
 
 	// ClearSchemaCopy query clears the schemacopy table.
-	ClearSchemaCopy = `delete from _vt.schemacopy`
+	ClearSchemaCopy = `delete from _vt.schemacopy where table_schema = database()`
 
 	// InsertIntoSchemaCopy query copies over the schema information from information_schema.columns table.
 	InsertIntoSchemaCopy = `insert _vt.schemacopy 

@@ -50,12 +50,12 @@ func TestPermissions(t *testing.T) {
 	vp := NewVtctlPipe(t, ts)
 	defer vp.Close()
 
-	primary := NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_MASTER, nil)
+	primary := NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_PRIMARY, nil)
 	replica := NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_REPLICA, nil)
 
 	// mark the primary inside the shard
 	_, err := ts.UpdateShardFields(ctx, primary.Tablet.Keyspace, primary.Tablet.Shard, func(si *topo.ShardInfo) error {
-		si.MasterAlias = primary.Tablet.Alias
+		si.PrimaryAlias = primary.Tablet.Alias
 		return nil
 	})
 	if err != nil {

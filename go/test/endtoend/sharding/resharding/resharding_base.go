@@ -366,7 +366,7 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 
 	// check srv keyspace
 	expectedPartitions := map[topodata.TabletType][]string{}
-	expectedPartitions[topodata.TabletType_MASTER] = []string{shard0.Name, shard1.Name}
+	expectedPartitions[topodata.TabletType_PRIMARY] = []string{shard0.Name, shard1.Name}
 	expectedPartitions[topodata.TabletType_REPLICA] = []string{shard0.Name, shard1.Name}
 	expectedPartitions[topodata.TabletType_RDONLY] = []string{shard0.Name, shard1.Name}
 	sharding.CheckSrvKeyspace(t, cell1, keyspaceName, "", 0, expectedPartitions, *clusterInstance)
@@ -613,7 +613,7 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 	sharding.CheckBinlogServerVars(t, *shard1Replica2, 80, 80, false)
 
 	// check we can't migrate the primary just yet
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("MigrateServedTypes", shard1Ks, "master")
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("MigrateServedTypes", shard1Ks, "primary")
 	require.Error(t, err, "MigrateServedTypes should fail")
 
 	// check query service is off on primary 2 and primary 3, as filtered replication is enabled.
@@ -645,14 +645,14 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 
 	// check srv keyspace
 	expectedPartitions = map[topodata.TabletType][]string{}
-	expectedPartitions[topodata.TabletType_MASTER] = []string{shard0.Name, shard1.Name}
+	expectedPartitions[topodata.TabletType_PRIMARY] = []string{shard0.Name, shard1.Name}
 	expectedPartitions[topodata.TabletType_RDONLY] = []string{shard0.Name, shard2.Name, shard3.Name}
 	expectedPartitions[topodata.TabletType_REPLICA] = []string{shard0.Name, shard1.Name}
 	sharding.CheckSrvKeyspace(t, cell1, keyspaceName, "", 0, expectedPartitions, *clusterInstance)
 
 	// Cell 2 is not affected
 	expectedPartitions = map[topodata.TabletType][]string{}
-	expectedPartitions[topodata.TabletType_MASTER] = []string{shard0.Name, shard1.Name}
+	expectedPartitions[topodata.TabletType_PRIMARY] = []string{shard0.Name, shard1.Name}
 	expectedPartitions[topodata.TabletType_RDONLY] = []string{shard0.Name, shard1.Name}
 	expectedPartitions[topodata.TabletType_REPLICA] = []string{shard0.Name, shard1.Name}
 	sharding.CheckSrvKeyspace(t, cell2, keyspaceName, "", 0, expectedPartitions, *clusterInstance)
@@ -682,7 +682,7 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 	require.Nil(t, err)
 
 	expectedPartitions = map[topodata.TabletType][]string{}
-	expectedPartitions[topodata.TabletType_MASTER] = []string{shard0.Name, shard1.Name}
+	expectedPartitions[topodata.TabletType_PRIMARY] = []string{shard0.Name, shard1.Name}
 	expectedPartitions[topodata.TabletType_RDONLY] = []string{shard0.Name, shard2.Name, shard3.Name}
 	expectedPartitions[topodata.TabletType_REPLICA] = []string{shard0.Name, shard1.Name}
 	sharding.CheckSrvKeyspace(t, cell1, keyspaceName, "", 0, expectedPartitions, *clusterInstance)
@@ -708,7 +708,7 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 	require.Nil(t, err)
 
 	expectedPartitions = map[topodata.TabletType][]string{}
-	expectedPartitions[topodata.TabletType_MASTER] = []string{shard0.Name, shard1.Name}
+	expectedPartitions[topodata.TabletType_PRIMARY] = []string{shard0.Name, shard1.Name}
 	expectedPartitions[topodata.TabletType_RDONLY] = []string{shard0.Name, shard2.Name, shard3.Name}
 	expectedPartitions[topodata.TabletType_REPLICA] = []string{shard0.Name, shard2.Name, shard3.Name}
 	sharding.CheckSrvKeyspace(t, cell1, keyspaceName, "", 0, expectedPartitions, *clusterInstance)
@@ -731,7 +731,7 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 		topodata.TabletType_REPLICA, false)
 
 	expectedPartitions = map[topodata.TabletType][]string{}
-	expectedPartitions[topodata.TabletType_MASTER] = []string{shard0.Name, shard1.Name}
+	expectedPartitions[topodata.TabletType_PRIMARY] = []string{shard0.Name, shard1.Name}
 	expectedPartitions[topodata.TabletType_RDONLY] = []string{shard0.Name, shard2.Name, shard3.Name}
 	expectedPartitions[topodata.TabletType_REPLICA] = []string{shard0.Name, shard1.Name}
 	sharding.CheckSrvKeyspace(t, cell1, keyspaceName, "", 0, expectedPartitions, *clusterInstance)
@@ -750,14 +750,14 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 		topodata.TabletType_REPLICA, true)
 
 	expectedPartitions = map[topodata.TabletType][]string{}
-	expectedPartitions[topodata.TabletType_MASTER] = []string{shard0.Name, shard1.Name}
+	expectedPartitions[topodata.TabletType_PRIMARY] = []string{shard0.Name, shard1.Name}
 	expectedPartitions[topodata.TabletType_RDONLY] = []string{shard0.Name, shard2.Name, shard3.Name}
 	expectedPartitions[topodata.TabletType_REPLICA] = []string{shard0.Name, shard2.Name, shard3.Name}
 	sharding.CheckSrvKeyspace(t, cell1, keyspaceName, "", 0, expectedPartitions, *clusterInstance)
 
 	// reparent shard2 to shard2Replica1, then insert more data and see it flow through still
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("PlannedReparentShard", "-keyspace_shard", shard2Ks,
-		"-new_master", shard2Replica1.Alias)
+		"-new_primary", shard2Replica1.Alias)
 	require.Nil(t, err)
 
 	// update our test variables to point at the new primary
@@ -812,12 +812,14 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 	// do a Migrate that will fail waiting for replication
 	// which should cause the Migrate to be canceled and the source
 	// primary to be serving again.
+	// This is the legacy resharding migration command which should work with either primary or master
+	// We will leave this one to test that, all other usages have been replaced with "primary"
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("MigrateServedTypes",
 		"-filtered_replication_wait_time", "0s", shard1Ks, "master")
 	require.Error(t, err)
 
 	expectedPartitions = map[topodata.TabletType][]string{}
-	expectedPartitions[topodata.TabletType_MASTER] = []string{shard0.Name, shard1.Name}
+	expectedPartitions[topodata.TabletType_PRIMARY] = []string{shard0.Name, shard1.Name}
 	expectedPartitions[topodata.TabletType_RDONLY] = []string{shard0.Name, shard2.Name, shard3.Name}
 	expectedPartitions[topodata.TabletType_REPLICA] = []string{shard0.Name, shard2.Name, shard3.Name}
 	sharding.CheckSrvKeyspace(t, cell1, keyspaceName, "", 0, expectedPartitions, *clusterInstance)
@@ -827,11 +829,11 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 	// sabotage primary migration and make it fail in an unfinished state.
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("SetShardTabletControl",
 		"-blacklisted_tables=t",
-		shard3Ks, "master")
+		shard3Ks, "primary")
 	require.Nil(t, err)
 
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("MigrateServedTypes",
-		shard1Ks, "master")
+		shard1Ks, "primary")
 	require.Error(t, err)
 
 	// Query service is disabled in source shard as failure occurred after point of no return
@@ -839,33 +841,33 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 
 	// Global topology records should not change as migration did not succeed
 	shardInfo := sharding.GetShardInfo(t, shard1Ks, *clusterInstance)
-	assert.True(t, shardInfo.GetIsMasterServing(), "source shards should be set in destination shard")
+	assert.True(t, shardInfo.GetIsPrimaryServing(), "source shards should be set in destination shard")
 
 	shardInfo = sharding.GetShardInfo(t, shard3Ks, *clusterInstance)
 	assert.Equal(t, 1, len(shardInfo.GetSourceShards()), "source shards should be set in destination shard")
-	assert.False(t, shardInfo.GetIsMasterServing(), "source shards should be set in destination shard")
+	assert.False(t, shardInfo.GetIsPrimaryServing(), "source shards should be set in destination shard")
 
 	shardInfo = sharding.GetShardInfo(t, shard2Ks, *clusterInstance)
 	assert.Equal(t, 1, len(shardInfo.GetSourceShards()), "source shards should be set in destination shard")
-	assert.False(t, shardInfo.GetIsMasterServing(), "source shards should be set in destination shard")
+	assert.False(t, shardInfo.GetIsPrimaryServing(), "source shards should be set in destination shard")
 
 	// remove sabotage, but make it fail early. This should not result in the source primary serving,
 	// because this failure is past the point of no return.
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("SetShardTabletControl", "-blacklisted_tables=t",
-		"-remove", shard3Ks, "master")
+		"-remove", shard3Ks, "primary")
 	require.Nil(t, err)
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("MigrateServedTypes",
-		"-filtered_replication_wait_time", "0s", shard1Ks, "master")
+		"-filtered_replication_wait_time", "0s", shard1Ks, "primary")
 	require.Error(t, err)
 
 	sharding.CheckTabletQueryService(t, *shard1Primary, "NOT_SERVING", true, *clusterInstance)
 
 	// do the migration that's expected to succeed
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("MigrateServedTypes",
-		shard1Ks, "master")
+		shard1Ks, "primary")
 	require.Nil(t, err)
 	expectedPartitions = map[topodata.TabletType][]string{}
-	expectedPartitions[topodata.TabletType_MASTER] = []string{shard0.Name, shard2.Name, shard3.Name}
+	expectedPartitions[topodata.TabletType_PRIMARY] = []string{shard0.Name, shard2.Name, shard3.Name}
 	expectedPartitions[topodata.TabletType_RDONLY] = []string{shard0.Name, shard2.Name, shard3.Name}
 	expectedPartitions[topodata.TabletType_REPLICA] = []string{shard0.Name, shard2.Name, shard3.Name}
 	sharding.CheckSrvKeyspace(t, cell1, keyspaceName, "", 0, expectedPartitions, *clusterInstance)
@@ -895,7 +897,7 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 
 	// repeat the migration with reverse_replication
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("MigrateServedTypes", "-reverse_replication=true",
-		shard1Ks, "master")
+		shard1Ks, "primary")
 	require.Nil(t, err)
 	// look for the rows in the original primary after a short wait
 	time.Sleep(1 * time.Second)
@@ -908,7 +910,7 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand(
 		"MigrateServedTypes",
 		"-reverse_replication=true",
-		shard1Ks, "master")
+		shard1Ks, "primary")
 	require.Error(t, err)
 
 	// CancelResharding should now succeed
@@ -933,7 +935,7 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 		err = clusterInstance.VtctlclientProcess.ExecuteCommand("DeleteTablet", tablet.Alias)
 		require.Nil(t, err)
 	}
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("DeleteTablet", "-allow_master", shard1Primary.Alias)
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("DeleteTablet", "-allow_primary", shard1Primary.Alias)
 	require.Nil(t, err)
 
 	// rebuild the serving graph, all mentions of the old shards should be gone

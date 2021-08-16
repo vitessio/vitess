@@ -115,9 +115,9 @@ func TestStartBuildTabletFromInput(t *testing.T) {
 	_, err = BuildTabletFromInput(alias, port, grpcport)
 	assert.Contains(t, err.Error(), "unknown TabletType bad")
 
-	*initTabletType = "master"
+	*initTabletType = "primary"
 	_, err = BuildTabletFromInput(alias, port, grpcport)
-	assert.Contains(t, err.Error(), "invalid init_tablet_type MASTER")
+	assert.Contains(t, err.Error(), "invalid init_tablet_type PRIMARY")
 }
 
 func TestStartCreateKeyspaceShard(t *testing.T) {
@@ -204,7 +204,7 @@ func TestStartCreateKeyspaceShard(t *testing.T) {
 	ensureSrvKeyspace(t, ts, cell, "ks4")
 }
 
-func TestCheckMastership(t *testing.T) {
+func TestCheckPrimaryShip(t *testing.T) {
 	defer func(saved time.Duration) { rebuildKeyspaceRetryInterval = saved }(rebuildKeyspaceRetryInterval)
 	rebuildKeyspaceRetryInterval = 10 * time.Millisecond
 
@@ -226,16 +226,16 @@ func TestCheckMastership(t *testing.T) {
 	assert.Equal(t, topodatapb.TabletType_REPLICA, ti.Type)
 	tm.Stop()
 
-	// 2. Update shard's master to our alias, then try to init again.
-	// (This simulates the case where the MasterAlias in the shard record says
-	// that we are the master but the tablet record says otherwise. In that case,
-	// we become master by inheriting the shard record's timestamp.)
+	// 2. Update shard's primary to our alias, then try to init again.
+	// (This simulates the case where the PrimaryAlias in the shard record says
+	// that we are the primary but the tablet record says otherwise. In that case,
+	// we become primary by inheriting the shard record's timestamp.)
 	now := time.Now()
 	_, err = ts.UpdateShardFields(ctx, "ks", "0", func(si *topo.ShardInfo) error {
-		si.MasterAlias = alias
-		si.MasterTermStartTime = logutil.TimeToProto(now)
+		si.PrimaryAlias = alias
+		si.PrimaryTermStartTime = logutil.TimeToProto(now)
 		// Reassign to now for easier comparison.
-		now = si.GetMasterTermStartTime()
+		now = si.GetPrimaryTermStartTime()
 		return nil
 	})
 	require.NoError(t, err)
@@ -243,59 +243,59 @@ func TestCheckMastership(t *testing.T) {
 	require.NoError(t, err)
 	ti, err = ts.GetTablet(ctx, alias)
 	require.NoError(t, err)
-	assert.Equal(t, topodatapb.TabletType_MASTER, ti.Type)
-	ter0 := ti.GetMasterTermStartTime()
+	assert.Equal(t, topodatapb.TabletType_PRIMARY, ti.Type)
+	ter0 := ti.GetPrimaryTermStartTime()
 	assert.Equal(t, now, ter0)
-	assert.Equal(t, "master", statsTabletType.Get())
+	assert.Equal(t, "primary", statsTabletType.Get())
 	tm.Stop()
 
 	// 3. Delete the tablet record. The shard record still says that we are the
-	// MASTER. Since it is the only source, we assume that its information is
-	// correct and start as MASTER.
+	// PRIMARY. Since it is the only source, we assume that its information is
+	// correct and start as PRIMARY.
 	err = ts.DeleteTablet(ctx, alias)
 	require.NoError(t, err)
 	err = tm.Start(tablet, 0)
 	require.NoError(t, err)
 	ti, err = ts.GetTablet(ctx, alias)
 	require.NoError(t, err)
-	assert.Equal(t, topodatapb.TabletType_MASTER, ti.Type)
-	ter1 := ti.GetMasterTermStartTime()
+	assert.Equal(t, topodatapb.TabletType_PRIMARY, ti.Type)
+	ter1 := ti.GetPrimaryTermStartTime()
 	tm.Stop()
 
-	// 4. Fix the tablet record to agree that we're master.
+	// 4. Fix the tablet record to agree that we're primary.
 	// Shard and tablet record are in sync now and we assume that we are actually
-	// the MASTER.
-	ti.Type = topodatapb.TabletType_MASTER
+	// the PRIMARY.
+	ti.Type = topodatapb.TabletType_PRIMARY
 	err = ts.UpdateTablet(ctx, ti)
 	require.NoError(t, err)
 	err = tm.Start(tablet, 0)
 	require.NoError(t, err)
 	ti, err = ts.GetTablet(ctx, alias)
 	require.NoError(t, err)
-	assert.Equal(t, topodatapb.TabletType_MASTER, ti.Type)
-	ter2 := ti.GetMasterTermStartTime()
+	assert.Equal(t, topodatapb.TabletType_PRIMARY, ti.Type)
+	ter2 := ti.GetPrimaryTermStartTime()
 	assert.Equal(t, ter1, ter2)
 	tm.Stop()
 
-	// 5. Subsequent inits will still start the vttablet as MASTER.
+	// 5. Subsequent inits will still start the vttablet as PRIMARY.
 	err = tm.Start(tablet, 0)
 	require.NoError(t, err)
 	ti, err = ts.GetTablet(ctx, alias)
 	require.NoError(t, err)
-	assert.Equal(t, topodatapb.TabletType_MASTER, ti.Type)
-	ter3 := ti.GetMasterTermStartTime()
+	assert.Equal(t, topodatapb.TabletType_PRIMARY, ti.Type)
+	ter3 := ti.GetPrimaryTermStartTime()
 	assert.Equal(t, ter1, ter3)
 	tm.Stop()
 
-	// 6. If the shard record shows a different master with an older
-	// timestamp, we take over mastership.
+	// 6. If the shard record shows a different primary with an older
+	// timestamp, we take over primaryship.
 	otherAlias := &topodatapb.TabletAlias{
 		Cell: "cell1",
 		Uid:  2,
 	}
 	_, err = ts.UpdateShardFields(ctx, "ks", "0", func(si *topo.ShardInfo) error {
-		si.MasterAlias = otherAlias
-		si.MasterTermStartTime = logutil.TimeToProto(ter1.Add(-10 * time.Second))
+		si.PrimaryAlias = otherAlias
+		si.PrimaryTermStartTime = logutil.TimeToProto(ter1.Add(-10 * time.Second))
 		return nil
 	})
 	require.NoError(t, err)
@@ -303,27 +303,27 @@ func TestCheckMastership(t *testing.T) {
 	require.NoError(t, err)
 	ti, err = ts.GetTablet(ctx, alias)
 	require.NoError(t, err)
-	assert.Equal(t, topodatapb.TabletType_MASTER, ti.Type)
-	ter4 := ti.GetMasterTermStartTime()
+	assert.Equal(t, topodatapb.TabletType_PRIMARY, ti.Type)
+	ter4 := ti.GetPrimaryTermStartTime()
 	assert.Equal(t, ter1, ter4)
 	tm.Stop()
 
-	// 7. If the shard record shows a different master with a newer
+	// 7. If the shard record shows a different primary with a newer
 	// timestamp, we remain replica.
 	_, err = ts.UpdateShardFields(ctx, "ks", "0", func(si *topo.ShardInfo) error {
-		si.MasterAlias = otherAlias
-		si.MasterTermStartTime = logutil.TimeToProto(ter4.Add(10 * time.Second))
+		si.PrimaryAlias = otherAlias
+		si.PrimaryTermStartTime = logutil.TimeToProto(ter4.Add(10 * time.Second))
 		return nil
 	})
 	require.NoError(t, err)
 	tablet.Type = topodatapb.TabletType_REPLICA
-	tablet.MasterTermStartTime = nil
+	tablet.PrimaryTermStartTime = nil
 	err = tm.Start(tablet, 0)
 	require.NoError(t, err)
 	ti, err = ts.GetTablet(ctx, alias)
 	require.NoError(t, err)
 	assert.Equal(t, topodatapb.TabletType_REPLICA, ti.Type)
-	ter5 := ti.GetMasterTermStartTime()
+	ter5 := ti.GetPrimaryTermStartTime()
 	assert.True(t, ter5.IsZero())
 	tm.Stop()
 }
@@ -480,22 +480,22 @@ func TestCheckTabletTypeResets(t *testing.T) {
 	// Verify that it changes back to initTabletType
 	assert.Equal(t, topodatapb.TabletType_REPLICA, ti.Type)
 
-	// 3. Update shard's master to our alias, then try to init again.
-	// (This simulates the case where the MasterAlias in the shard record says
-	// that we are the master but the tablet record says otherwise. In that case,
-	// we become master by inheriting the shard record's timestamp.)
+	// 3. Update shard's primary to our alias, then try to init again.
+	// (This simulates the case where the PrimaryAlias in the shard record says
+	// that we are the primary but the tablet record says otherwise. In that case,
+	// we become primary by inheriting the shard record's timestamp.)
 	now := time.Now()
 	_, err = ts.UpdateShardFields(ctx, "ks", "0", func(si *topo.ShardInfo) error {
-		si.MasterAlias = alias
-		si.MasterTermStartTime = logutil.TimeToProto(now)
+		si.PrimaryAlias = alias
+		si.PrimaryTermStartTime = logutil.TimeToProto(now)
 		// Reassign to now for easier comparison.
-		now = si.GetMasterTermStartTime()
+		now = si.GetPrimaryTermStartTime()
 		return nil
 	})
 	require.NoError(t, err)
 	si, err := tm.createKeyspaceShard(ctx)
 	require.NoError(t, err)
-	err = tm.checkMastership(ctx, si)
+	err = tm.checkPrimaryShip(ctx, si)
 	require.NoError(t, err)
 	assert.Equal(t, tm.tmState.tablet.Type, tm.tmState.displayState.tablet.Type)
 	err = tm.initTablet(ctx)
@@ -503,8 +503,8 @@ func TestCheckTabletTypeResets(t *testing.T) {
 	assert.Equal(t, tm.tmState.tablet.Type, tm.tmState.displayState.tablet.Type)
 	ti, err = ts.GetTablet(ctx, alias)
 	require.NoError(t, err)
-	assert.Equal(t, topodatapb.TabletType_MASTER, ti.Type)
-	ter0 := ti.GetMasterTermStartTime()
+	assert.Equal(t, topodatapb.TabletType_PRIMARY, ti.Type)
+	ter0 := ti.GetPrimaryTermStartTime()
 	assert.Equal(t, now, ter0)
 	tm.Stop()
 }
