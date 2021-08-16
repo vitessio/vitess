@@ -864,3 +864,15 @@ func less(c1, c2 cost) bool {
 		return c1.isUnique
 	}
 }
+
+func isQueryTreeKeyspaceMatching(qt1, qt2 queryTree) (bool, error) {
+	qt1Ks, err := qt1.getKeyspace()
+	if err != nil {
+		return false, nil
+	}
+	qt2Ks, err := qt2.getKeyspace()
+	if err != nil {
+		return false, nil
+	}
+	return qt1Ks == qt2Ks, nil
+}

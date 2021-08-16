@@ -222,15 +222,11 @@ func optimizeQuery(opTree abstract.Operator, reservedVars *sqlparser.ReservedVar
 }
 
 func canMergeSubQuery(outer, subq queryTree, subqOp abstract.Operator) (bool, error) {
-	subqKs, err := subq.getKeyspace()
+	ksMatch, err := isQueryTreeKeyspaceMatching(subq, outer)
 	if err != nil {
 		return false, nil
 	}
-	outerKs, err := outer.getKeyspace()
-	if err != nil {
-		return false, nil
-	}
-	if subqKs != outerKs {
+	if !ksMatch {
 		if subqOp.Solves(outer.tableID()) {
 			// throwing below error for compatibility
 			//return false, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "correlated subquery belonging to different keyspace is not supported")
