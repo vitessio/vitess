@@ -32,9 +32,4 @@ func TestKnownPaths(t *testing.T) {
 	test.S(t).ExpectTrue(pathsMap["lb-check"])
 	test.S(t).ExpectTrue(pathsMap["relocate"])
 	test.S(t).ExpectTrue(pathsMap["relocate-replicas"])
-
-	for path, synonym := range apiSynonyms {
-		test.S(t).ExpectTrue(pathsMap[path])
-		test.S(t).ExpectTrue(pathsMap[synonym])
-	}
 }

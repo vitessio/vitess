@@ -50,11 +50,6 @@ const (
 	OK
 )
 
-var apiSynonyms = map[string]string{
-	"enslave-siblings": "take-siblings",
-	"enslave-primary":  "take-primary",
-}
-
 var registeredPaths = []string{}
 var emptyInstanceKey inst.InstanceKey
 
@@ -2776,14 +2771,6 @@ func (this *HttpAPI) CheckGlobalRecoveries(params martini.Params, r render.Rende
 	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Global recoveries %+v", details), Details: details})
 }
 
-func (this *HttpAPI) getSynonymPath(path string) (synonymPath string) {
-	pathBase := strings.Split(path, "/")[0]
-	if synonym, ok := apiSynonyms[pathBase]; ok {
-		synonymPath = fmt.Sprintf("%s%s", synonym, path[len(pathBase):])
-	}
-	return synonymPath
-}
-
 func (this *HttpAPI) registerSingleAPIRequest(m *martini.ClassicMartini, path string, handler martini.Handler, allowProxy bool) {
 	registeredPaths = append(registeredPaths, path)
 	fullPath := fmt.Sprintf("%s/api/%s", this.URLPrefix, path)
@@ -2793,10 +2780,6 @@ func (this *HttpAPI) registerSingleAPIRequest(m *martini.ClassicMartini, path st
 
 func (this *HttpAPI) registerAPIRequestInternal(m *martini.ClassicMartini, path string, handler martini.Handler, allowProxy bool) {
 	this.registerSingleAPIRequest(m, path, handler, allowProxy)
-
-	if synonym := this.getSynonymPath(path); synonym != "" {
-		this.registerSingleAPIRequest(m, synonym, handler, allowProxy)
-	}
 }
 
 func (this *HttpAPI) registerAPIRequest(m *martini.ClassicMartini, path string, handler martini.Handler) {
@@ -2822,8 +2805,8 @@ func (this *HttpAPI) RegisterRequests(m *martini.ClassicMartini) {
 	this.registerAPIRequest(m, "repoint/:host/:port/:belowHost/:belowPort", this.Repoint)
 	this.registerAPIRequest(m, "repoint-replicas/:host/:port", this.RepointReplicas)
 	this.registerAPIRequest(m, "make-co-primary/:host/:port", this.MakeCoPrimary)
-	this.registerAPIRequest(m, "enslave-siblings/:host/:port", this.TakeSiblings)
-	this.registerAPIRequest(m, "enslave-primary/:host/:port", this.TakePrimary)
+	this.registerAPIRequest(m, "take-siblings/:host/:port", this.TakeSiblings)
+	this.registerAPIRequest(m, "take-primary/:host/:port", this.TakePrimary)
 
 	// Binlog server relocation:
 	this.registerAPIRequest(m, "regroup-replicas-bls/:host/:port", this.RegroupReplicasBinlogServers)
