@@ -280,7 +280,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			if err != nil {
 				log.Fatale(err)
 			}
-			fmt.Printf("%s<%s\n", instanceKey.DisplayString(), instance.MasterKey.DisplayString())
+			fmt.Printf("%s<%s\n", instanceKey.DisplayString(), instance.PrimaryKey.DisplayString())
 		}
 	case registerCliCommand("move-up-replicas", "Classic file:pos relocation", `Moves replicas of the given instance one level up the topology`):
 		{
@@ -321,7 +321,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			if err != nil {
 				log.Fatale(err)
 			}
-			fmt.Printf("%s<%s\n", instanceKey.DisplayString(), instance.MasterKey.DisplayString())
+			fmt.Printf("%s<%s\n", instanceKey.DisplayString(), instance.PrimaryKey.DisplayString())
 		}
 	case registerCliCommand("repoint-replicas", "Classic file:pos relocation", `Repoint all replicas of given instance to replicate back from the instance. Use with care`):
 		{
@@ -344,7 +344,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			if instanceKey == nil {
 				log.Fatal("Cannot deduce instance:", instance)
 			}
-			_, err := inst.TakeMaster(instanceKey, false)
+			_, err := inst.TakePrimary(instanceKey, false)
 			if err != nil {
 				log.Fatale(err)
 			}
@@ -353,7 +353,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 	case registerCliCommand("make-co-master", "Classic file:pos relocation", `Create a master-master replication. Given instance is a replica which replicates directly from a master.`):
 		{
 			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
-			_, err := inst.MakeCoMaster(instanceKey)
+			_, err := inst.MakeCoPrimary(instanceKey)
 			if err != nil {
 				log.Fatale(err)
 			}
@@ -475,7 +475,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 	case registerCliCommand("gtid-errant-reset-master", "Replication, general", `Reset master on instance, remove GTID errant transactions`):
 		{
 			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
-			_, err := inst.ErrantGTIDResetMaster(instanceKey)
+			_, err := inst.ErrantGTIDResetPrimary(instanceKey)
 			if err != nil {
 				log.Fatale(err)
 			}
@@ -532,7 +532,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			if instanceKey == nil {
 				log.Fatal("Cannot deduce instance:", instance)
 			}
-			_, err := inst.DetachReplicaMasterHost(instanceKey)
+			_, err := inst.DetachReplicaPrimaryHost(instanceKey)
 			if err != nil {
 				log.Fatale(err)
 			}
@@ -544,7 +544,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			if instanceKey == nil {
 				log.Fatal("Cannot deduce instance:", instance)
 			}
-			_, err := inst.ReattachReplicaMasterHost(instanceKey)
+			_, err := inst.ReattachReplicaPrimaryHost(instanceKey)
 			if err != nil {
 				log.Fatale(err)
 			}
@@ -568,7 +568,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			if binlogCoordinates, err = inst.ParseBinlogCoordinates(*config.RuntimeCLIFlags.BinlogFile); err != nil {
 				log.Fatalf("Expecing --binlog argument as file:pos")
 			}
-			_, err = inst.MasterPosWait(instanceKey, binlogCoordinates)
+			_, err = inst.PrimaryPosWait(instanceKey, binlogCoordinates)
 			if err != nil {
 				log.Fatale(err)
 			}
@@ -772,7 +772,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 		}
 	case registerCliCommand("all-clusters-masters", "Information", `List of writeable masters, one per cluster`):
 		{
-			instances, err := inst.ReadWriteableClustersMasters()
+			instances, err := inst.ReadWriteableClustersPrimaries()
 			if err != nil {
 				log.Fatale(err)
 			} else {
@@ -863,7 +863,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 	case registerCliCommand("which-cluster-master", "Information", `Output the name of the master in a given cluster`):
 		{
 			clusterName := getClusterName(clusterAlias, instanceKey)
-			masters, err := inst.ReadClusterMaster(clusterName)
+			masters, err := inst.ReadClusterPrimary(clusterName)
 			if err != nil {
 				log.Fatale(err)
 			}
@@ -912,8 +912,8 @@ func Cli(command string, strict bool, instance string, destination string, owner
 				log.Fatalf("Unable to get master: unresolved instance")
 			}
 			instance := validateInstanceIsFound(instanceKey)
-			if instance.MasterKey.IsValid() {
-				fmt.Println(instance.MasterKey.DisplayString())
+			if instance.PrimaryKey.IsValid() {
+				fmt.Println(instance.PrimaryKey.DisplayString())
 			}
 		}
 	case registerCliCommand("which-downtimed-instances", "Information", `List instances currently downtimed, potentially filtered by cluster`):

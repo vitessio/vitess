@@ -590,7 +590,7 @@ func (this *HttpAPI) MakeCoMaster(params martini.Params, r render.Render, req *h
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
 	}
-	instance, err := inst.MakeCoMaster(&instanceKey)
+	instance, err := inst.MakeCoPrimary(&instanceKey)
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
@@ -633,7 +633,7 @@ func (this *HttpAPI) DetachReplicaMasterHost(params martini.Params, r render.Ren
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
 	}
-	instance, err := inst.DetachReplicaMasterHost(&instanceKey)
+	instance, err := inst.DetachReplicaPrimaryHost(&instanceKey)
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
@@ -655,7 +655,7 @@ func (this *HttpAPI) ReattachReplicaMasterHost(params martini.Params, r render.R
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
 	}
-	instance, err := inst.ReattachReplicaMasterHost(&instanceKey)
+	instance, err := inst.ReattachReplicaPrimaryHost(&instanceKey)
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
@@ -734,7 +734,7 @@ func (this *HttpAPI) ErrantGTIDResetMaster(params martini.Params, r render.Rende
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
 	}
-	instance, err := inst.ErrantGTIDResetMaster(&instanceKey)
+	instance, err := inst.ErrantGTIDResetPrimary(&instanceKey)
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
@@ -875,7 +875,7 @@ func (this *HttpAPI) TakeMaster(params martini.Params, r render.Render, req *htt
 		return
 	}
 
-	instance, err := inst.TakeMaster(&instanceKey, false)
+	instance, err := inst.TakePrimary(&instanceKey, false)
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
@@ -1656,7 +1656,7 @@ func (this *HttpAPI) SubmitMastersToKvStores(params martini.Params, r render.Ren
 
 // Clusters provides list of known primaries
 func (this *HttpAPI) Masters(params martini.Params, r render.Render, req *http.Request) {
-	instances, err := inst.ReadWriteableClustersMasters()
+	instances, err := inst.ReadWriteableClustersPrimaries()
 
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
@@ -1674,7 +1674,7 @@ func (this *HttpAPI) ClusterMaster(params martini.Params, r render.Render, req *
 		return
 	}
 
-	masters, err := inst.ReadClusterMaster(clusterName)
+	masters, err := inst.ReadClusterPrimary(clusterName)
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
 		return

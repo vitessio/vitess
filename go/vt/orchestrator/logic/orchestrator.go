@@ -328,7 +328,7 @@ func onHealthTick() {
 // This should generally only happen once in a lifetime of a cluster. Otherwise KV
 // stores are updated via failovers.
 func SubmitMastersToKvStores(clusterName string, force bool) (kvPairs [](*kv.KVPair), submittedCount int, err error) {
-	kvPairs, err = inst.GetMastersKVPairs(clusterName)
+	kvPairs, err = inst.GetPrimariesKVPairs(clusterName)
 	log.Debugf("kv.SubmitMastersToKvStores, clusterName: %s, force: %+v: numPairs: %+v", clusterName, force, len(kvPairs))
 	if err != nil {
 		return kvPairs, submittedCount, log.Errore(err)
@@ -442,13 +442,13 @@ func ContinuousDiscovery() {
 			go func() {
 				if IsLeaderOrActive() {
 					go inst.ReviewUnseenInstances()
-					go inst.InjectUnseenMasters()
+					go inst.InjectUnseenPrimaries()
 
 					go inst.ForgetLongUnseenInstances()
 					go inst.ForgetUnseenInstancesDifferentlyResolved()
 					go inst.ForgetExpiredHostnameResolves()
 					go inst.DeleteInvalidHostnameResolves()
-					go inst.ResolveUnknownMasterHostnameResolves()
+					go inst.ResolveUnknownPrimaryHostnameResolves()
 					go inst.ExpireMaintenance()
 					go inst.ExpireCandidateInstances()
 					go inst.ExpireHostnameUnresolve()
