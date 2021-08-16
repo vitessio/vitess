@@ -60,7 +60,7 @@ func TestNewEmergencyReparenter(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			er := NewEmergencyReparenter(nil, nil, tt.logger)
+			er := NewEmergencyReparenter2(nil, tt.logger)
 			assert.NotNil(t, er.logger, "NewEmergencyReparenter should never result in a nil logger instance on the EmergencyReparenter")
 		})
 	}
@@ -1048,9 +1048,15 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 				ctx = lctx // make the reparentShardLocked call use the lock ctx
 			}
 
-			erp := NewEmergencyReparenter(tt.ts, tt.tmc, logger)
+			erp := NewEmergencyReparenter2(tt.tmc, logger)
+			vtctlReparentFunctions := NewVtctlReparentFunctions(tt.ts)
+			vtctlReparentFunctions.keyspace = tt.keyspace
+			vtctlReparentFunctions.shard = tt.shard
+			vtctlReparentFunctions.IgnoreReplicas = tt.opts.IgnoreReplicas
+			vtctlReparentFunctions.WaitReplicasTimeout = tt.opts.WaitReplicasTimeout
+			vtctlReparentFunctions.NewPrimaryAlias = tt.opts.NewPrimaryAlias
 
-			err := erp.reparentShardLocked(ctx, ev, tt.keyspace, tt.shard, tt.opts)
+			err := erp.reparentShardLocked(ctx, ev, vtctlReparentFunctions)
 			if tt.shouldErr {
 				assert.Error(t, err)
 				return
@@ -1740,8 +1746,12 @@ func TestEmergencyReparenter_waitForAllRelayLogsToApply(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			erp := NewEmergencyReparenter(nil, tt.tmc, logger)
-			err := erp.waitForAllRelayLogsToApply(ctx, tt.candidates, tt.tabletMap, tt.statusMap, opts)
+			vtctlReparentFunctions := NewVtctlReparentFunctions(nil)
+			vtctlReparentFunctions.tabletMap = tt.tabletMap
+			vtctlReparentFunctions.statusMap = tt.statusMap
+			vtctlReparentFunctions.WaitReplicasTimeout = opts.WaitReplicasTimeout
+
+			err := vtctlReparentFunctions.waitForAllRelayLogsToApply(ctx, logger, tt.tmc, tt.candidates)
 			if tt.shouldErr {
 				assert.Error(t, err)
 				return
