@@ -170,10 +170,6 @@ func TestCreateRoutePlanForOuter(t *testing.T) {
 	assert.NotNil(merge)
 }
 
-func TestOptimizeQuery(t *testing.T) {
-
-}
-
 func equals(left, right sqlparser.Expr) sqlparser.Expr {
 	return &sqlparser.ComparisonExpr{
 		Operator: sqlparser.EqualOp,

@@ -222,12 +222,6 @@ func optimizeQuery(opTree abstract.Operator, reservedVars *sqlparser.ReservedVar
 }
 
 func canMergeSubQuery(outer, subq queryTree, subqOp abstract.Operator) (bool, error) {
-	// check merge the subq into the outer one
-	outerRoute, isRoute := outer.(*routeTree)
-	if !isRoute {
-		return false, nil
-	}
-
 	subqKs, err := subq.getKeyspace()
 	if err != nil {
 		return false, nil
@@ -237,7 +231,7 @@ func canMergeSubQuery(outer, subq queryTree, subqOp abstract.Operator) (bool, er
 		return false, nil
 	}
 	if subqKs != outerKs {
-		if subqOp.Solves(outerRoute.solved) {
+		if subqOp.Solves(outer.tableID()) {
 			// throwing below error for compatibility
 			//return false, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "correlated subquery belonging to different keyspace is not supported")
 			return false, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: cross-shard correlated subquery")
@@ -256,7 +250,7 @@ func canMergeSubQuery(outer, subq queryTree, subqOp abstract.Operator) (bool, er
 		return true, nil
 	}
 
-	if subqOp.Solves(outerRoute.solved) {
+	if subqOp.Solves(outer.tableID()) {
 		return false, semantics.Gen4NotSupportedF("correlated subquery")
 	}
 	return false, nil
