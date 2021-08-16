@@ -29,12 +29,16 @@ type (
 	//     while still preserving the results
 	//	*  LeftJoin - A left join. These can't be evaluated in any order, so we keep them separate
 	//	*  Join - A join represents inner join.
+	//  *  SubQuery - A represents a query that encapsulates one or more sub-queries (SubQueryInner).
 	Operator interface {
 		// TableID returns a TableSet of the tables contained within
 		TableID() semantics.TableSet
 
 		// PushPredicate pushes a predicate to the closest possible operator
 		PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) error
+
+		// Solves returns true if the Operator solves the given TableSet
+		Solves(ts semantics.TableSet) bool
 	}
 )
 

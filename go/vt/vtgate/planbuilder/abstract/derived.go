@@ -35,6 +35,11 @@ func (d *Derived) TableID() semantics.TableSet {
 	return d.Inner.TableID()
 }
 
+// Solves implements the Operator interface
+func (d *Derived) Solves(ts semantics.TableSet) bool {
+	return d.Inner.Solves(ts)
+}
+
 // PushPredicate implements the Operator interface
 func (d *Derived) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) error {
 	tableInfo, err := semTable.TableInfoForExpr(expr)

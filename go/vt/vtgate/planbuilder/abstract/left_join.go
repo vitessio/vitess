@@ -29,6 +29,11 @@ type LeftJoin struct {
 
 var _ Operator = (*LeftJoin)(nil)
 
+// Solves implements the Operator interface
+func (oj *LeftJoin) Solves(ts semantics.TableSet) bool {
+	return oj.Left.Solves(ts) || oj.Right.Solves(ts)
+}
+
 // PushPredicate implements the Operator interface
 func (oj *LeftJoin) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) error {
 	deps := semTable.BaseTableDependencies(expr)

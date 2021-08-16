@@ -223,19 +223,6 @@ func optimizeQuery(opTree abstract.Operator, reservedVars *sqlparser.ReservedVar
 
 func canMergeSubQuery(outer, subq queryTree, subqOp abstract.Operator) (bool, error) {
 	// check merge the subq into the outer one
-	var subQP *abstract.QueryGraph
-	switch subq.(type) {
-	case *routeTree:
-		subQP = subqOp.(*abstract.QueryGraph)
-	case *derivedTree:
-		derivedO, isDerived := subqOp.(*abstract.Derived)
-		if !isDerived {
-			return false, nil
-		}
-		subQP = derivedO.Inner.(*abstract.QueryGraph)
-	default:
-		return false, nil
-	}
 	outerRoute, isRoute := outer.(*routeTree)
 	if !isRoute {
 		return false, nil
@@ -243,18 +230,14 @@ func canMergeSubQuery(outer, subq queryTree, subqOp abstract.Operator) (bool, er
 
 	subqKs, err := subq.getKeyspace()
 	if err != nil {
-		return false, err
+		return false, nil
 	}
 	outerKs, err := outer.getKeyspace()
 	if err != nil {
-		return false, err
+		return false, nil
 	}
 	if subqKs != outerKs {
-		subQp, ok := subqOp.(*abstract.QueryGraph)
-		if !ok {
-			return false, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "subquery is complex to plan")
-		}
-		if subQp.Solves(outerRoute.solved) {
+		if subqOp.Solves(outerRoute.solved) {
 			// throwing below error for compatibility
 			//return false, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "correlated subquery belonging to different keyspace is not supported")
 			return false, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: cross-shard correlated subquery")
@@ -263,17 +246,17 @@ func canMergeSubQuery(outer, subq queryTree, subqOp abstract.Operator) (bool, er
 	}
 	subqOpCode, err := subq.getOpCode()
 	if err != nil {
-		return false, err
+		return false, nil
 	}
 	outerOpCode, err := outer.getOpCode()
 	if err != nil {
-		return false, err
+		return false, nil
 	}
 	if subqOpCode == engine.SelectUnsharded && outerOpCode == engine.SelectUnsharded {
 		return true, nil
 	}
 
-	if subQP.Solves(outerRoute.solved) {
+	if subqOp.Solves(outerRoute.solved) {
 		return false, semantics.Gen4NotSupportedF("correlated subquery")
 	}
 	return false, nil
