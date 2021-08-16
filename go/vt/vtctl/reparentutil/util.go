@@ -84,9 +84,15 @@ var (
 	_ ReparentFunctions = (*VtctlReparentFunctions)(nil)
 )
 
-func NewVtctlReparentFunctions(ts *topo.Server) *VtctlReparentFunctions {
+// NewVtctlReparentFunctions creates a new VtctlReparentFunctions which is used in ERS ans PRS
+func NewVtctlReparentFunctions(newPrimaryAlias *topodatapb.TabletAlias, ignoreReplicas sets.String, waitReplicasTimeout time.Duration, keyspace string, shard string, ts *topo.Server) *VtctlReparentFunctions {
 	return &VtctlReparentFunctions{
-		ts: ts,
+		NewPrimaryAlias:     newPrimaryAlias,
+		IgnoreReplicas:      ignoreReplicas,
+		WaitReplicasTimeout: waitReplicasTimeout,
+		keyspace:            keyspace,
+		shard:               shard,
+		ts:                  ts,
 	}
 }
 
