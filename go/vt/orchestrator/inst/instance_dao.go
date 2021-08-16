@@ -354,12 +354,12 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 				semiSyncPrimaryPluginLoaded := false
 				semiSyncReplicaPluginLoaded := false
 				err := sqlutils.QueryRowsMap(db, "show global variables like 'rpl_semi_sync_%'", func(m sqlutils.RowMap) error {
-					if m.GetString("Variable_name") == "rpl_semi_sync_primary_enabled" {
+					if m.GetString("Variable_name") == "rpl_semi_sync_master_enabled" {
 						instance.SemiSyncPrimaryEnabled = (m.GetString("Value") == "ON")
 						semiSyncPrimaryPluginLoaded = true
-					} else if m.GetString("Variable_name") == "rpl_semi_sync_primary_timeout" {
+					} else if m.GetString("Variable_name") == "rpl_semi_sync_master_timeout" {
 						instance.SemiSyncPrimaryTimeout = m.GetUint64("Value")
-					} else if m.GetString("Variable_name") == "rpl_semi_sync_primary_wait_for_replica_count" {
+					} else if m.GetString("Variable_name") == "rpl_semi_sync_master_wait_for_slave_count" {
 						instance.SemiSyncPrimaryWaitForReplicaCount = m.GetUint("Value")
 					} else if m.GetString("Variable_name") == "rpl_semi_sync_slave_enabled" {
 						instance.SemiSyncReplicaEnabled = (m.GetString("Value") == "ON")
@@ -376,9 +376,9 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 			go func() {
 				defer waitGroup.Done()
 				err := sqlutils.QueryRowsMap(db, "show global status like 'rpl_semi_sync_%'", func(m sqlutils.RowMap) error {
-					if m.GetString("Variable_name") == "Rpl_semi_sync_primary_status" {
+					if m.GetString("Variable_name") == "Rpl_semi_sync_master_status" {
 						instance.SemiSyncPrimaryStatus = (m.GetString("Value") == "ON")
-					} else if m.GetString("Variable_name") == "Rpl_semi_sync_primary_clients" {
+					} else if m.GetString("Variable_name") == "Rpl_semi_sync_master_clients" {
 						instance.SemiSyncPrimaryClients = m.GetUint("Value")
 					} else if m.GetString("Variable_name") == "Rpl_semi_sync_slave_status" {
 						instance.SemiSyncReplicaStatus = (m.GetString("Value") == "ON")
@@ -975,7 +975,7 @@ func readInstanceRow(m sqlutils.RowMap) *Instance {
 	instance.HasReplicationFilters = m.GetBool("has_replication_filters")
 	instance.SupportsOracleGTID = m.GetBool("supports_oracle_gtid")
 	instance.UsingOracleGTID = m.GetBool("oracle_gtid")
-	instance.PrimaryUUID = m.GetString("replica_uuid")
+	instance.PrimaryUUID = m.GetString("primary_uuid")
 	instance.AncestryUUID = m.GetString("ancestry_uuid")
 	instance.ExecutedGtidSet = m.GetString("executed_gtid_set")
 	instance.GTIDMode = m.GetString("gtid_mode")
@@ -2286,7 +2286,7 @@ func mkInsertOdkuForInstances(instances []*Instance, instanceWasActuallyFound bo
 		"has_replication_filters",
 		"supports_oracle_gtid",
 		"oracle_gtid",
-		"replica_uuid",
+		"primary_uuid",
 		"ancestry_uuid",
 		"executed_gtid_set",
 		"gtid_mode",

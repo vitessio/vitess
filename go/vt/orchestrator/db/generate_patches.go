@@ -513,7 +513,7 @@ var generateSQLPatches = []string{
 	`
 		ALTER TABLE
 			database_instance
-			ADD COLUMN replica_uuid varchar(64) CHARACTER SET ascii NOT NULL AFTER oracle_gtid
+			ADD COLUMN primary_uuid varchar(64) CHARACTER SET ascii NOT NULL AFTER oracle_gtid
 	`,
 	`
 		ALTER TABLE
@@ -523,7 +523,7 @@ var generateSQLPatches = []string{
 	`
 		ALTER TABLE
 			database_instance
-			ADD COLUMN ancestry_uuid text CHARACTER SET ascii NOT NULL AFTER replica_uuid
+			ADD COLUMN ancestry_uuid text CHARACTER SET ascii NOT NULL AFTER primary_uuid
 	`,
 	`
 		ALTER TABLE
