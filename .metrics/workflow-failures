@@ -1,4 +1,3 @@
-2021-04-12T08:31:15Z,docker_test_2,https://github.com/vitessio/vitess/actions/runs/740452426
 2021-04-12T08:31:15Z,docker_test_3,https://github.com/vitessio/vitess/actions/runs/740452454
 2021-04-12T08:31:15Z,endtoend,https://github.com/vitessio/vitess/actions/runs/740452434
 2021-04-12T08:31:15Z,local_example,https://github.com/vitessio/vitess/actions/runs/740452433
@@ -9998,3 +9997,4 @@
 2021-08-16T23:37:36Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/1137341923
 2021-08-16T23:37:36Z,cluster_initial_sharding_multi,https://github.com/vitessio/vitess/actions/runs/1137341873
 2021-08-16T23:37:51Z,Cluster (onlineddl_vrepl),https://github.com/vitessio/vitess/actions/runs/1137342165
+2021-08-16T23:37:51Z,Cluster (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/1137342175
