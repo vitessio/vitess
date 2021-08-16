@@ -51,8 +51,6 @@ func (a stringSlice) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 func (a stringSlice) Less(i, j int) bool { return a[i] < a[j] }
 
 var commandSynonyms = map[string]string{
-	"enslave-siblings": "take-siblings",
-	"enslave-primary":  "take-primary",
 	"detach-replica":   "detach-replica-primary-host",
 	"reattach-replica": "reattach-replica-primary-host",
 }
