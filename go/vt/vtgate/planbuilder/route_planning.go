@@ -242,8 +242,10 @@ func canMergeSubQuery(outer, subq queryTree, subqOp abstract.Operator) (bool, er
 	if err != nil {
 		return false, nil
 	}
-	if subqOpCode == engine.SelectUnsharded && outerOpCode == engine.SelectUnsharded {
-		return true, nil
+
+	switch outerOpCode {
+	case engine.SelectUnsharded, engine.SelectDBA, engine.SelectReference:
+		return subqOpCode == outerOpCode || subqOpCode == engine.SelectReference, nil
 	}
 
 	if solves, exprs := subqOp.Solves(outer.tableID()); solves {
