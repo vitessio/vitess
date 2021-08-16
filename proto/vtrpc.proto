@@ -30,7 +30,7 @@ package vtrpc;
 // just be used for logging purposes, and to easily find a client.
 // VtGate propagates it to VtTablet, and VtTablet may use this
 // information for monitoring purposes, to display on dashboards, or
-// for blacklisting purposes.
+// for denying access to tables during a migration.
 message CallerID {
   // principal is the effective user identifier. It is usually filled in
   // with whoever made the request to the appserver, if the request
@@ -223,7 +223,7 @@ enum LegacyErrorCode {
   // Client can interpret it as: "the tablet that you sent this query to cannot
   // serve the query right now, try a different tablet or try again later."
   // This could be due to various reasons: QueryService is not serving, should
-  // not be serving, wrong shard, wrong tablet type, blacklisted table, etc.
+  // not be serving, wrong shard, wrong tablet type, table is part of the denylist, etc.
   // Clients that receive this error should usually retry the query, but after taking
   // the appropriate steps to make sure that the query will get sent to the correct
   // tablet.

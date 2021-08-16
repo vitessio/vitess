@@ -6134,8 +6134,8 @@ export namespace topodata {
             /** TabletControl cells */
             cells?: (string[]|null);
 
-            /** TabletControl blacklisted_tables */
-            blacklisted_tables?: (string[]|null);
+            /** TabletControl denied_tables */
+            denied_tables?: (string[]|null);
 
             /** TabletControl frozen */
             frozen?: (boolean|null);
@@ -6156,8 +6156,8 @@ export namespace topodata {
             /** TabletControl cells. */
             public cells: string[];
 
-            /** TabletControl blacklisted_tables. */
-            public blacklisted_tables: string[];
+            /** TabletControl denied_tables. */
+            public denied_tables: string[];
 
             /** TabletControl frozen. */
             public frozen: boolean;
@@ -35320,6 +35320,12 @@ export namespace binlogdata {
 
         /** RowEvent row_changes */
         row_changes?: (binlogdata.IRowChange[]|null);
+
+        /** RowEvent keyspace */
+        keyspace?: (string|null);
+
+        /** RowEvent shard */
+        shard?: (string|null);
     }
 
     /** Represents a RowEvent. */
@@ -35336,6 +35342,12 @@ export namespace binlogdata {
 
         /** RowEvent row_changes. */
         public row_changes: binlogdata.IRowChange[];
+
+        /** RowEvent keyspace. */
+        public keyspace: string;
+
+        /** RowEvent shard. */
+        public shard: string;
 
         /**
          * Creates a new RowEvent instance using the specified properties.
@@ -35416,6 +35428,12 @@ export namespace binlogdata {
 
         /** FieldEvent fields */
         fields?: (query.IField[]|null);
+
+        /** FieldEvent keyspace */
+        keyspace?: (string|null);
+
+        /** FieldEvent shard */
+        shard?: (string|null);
     }
 
     /** Represents a FieldEvent. */
@@ -35432,6 +35450,12 @@ export namespace binlogdata {
 
         /** FieldEvent fields. */
         public fields: query.IField[];
+
+        /** FieldEvent keyspace. */
+        public keyspace: string;
+
+        /** FieldEvent shard. */
+        public shard: string;
 
         /**
          * Creates a new FieldEvent instance using the specified properties.

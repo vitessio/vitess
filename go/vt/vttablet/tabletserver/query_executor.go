@@ -372,14 +372,14 @@ func (qre *QueryExecutor) MessageStream(callback StreamCallback) error {
 }
 
 // checkPermissions returns an error if the query does not pass all checks
-// (query blacklisting, table ACL).
+// (denied query, table ACL).
 func (qre *QueryExecutor) checkPermissions() error {
 	// Skip permissions check if the context is local.
 	if tabletenv.IsLocalContext(qre.ctx) {
 		return nil
 	}
 
-	// Check if the query is blacklisted.
+	// Check if the query relates to a table that is in the denylist.
 	remoteAddr := ""
 	username := ""
 	ci, ok := callinfo.FromContext(qre.ctx)

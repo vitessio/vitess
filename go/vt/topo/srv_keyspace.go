@@ -412,8 +412,8 @@ func (ts *Server) UpdateDisableQueryService(ctx context.Context, keyspace string
 
 	for _, shard := range shards {
 		for _, tc := range shard.TabletControls {
-			if len(tc.BlacklistedTables) > 0 {
-				return fmt.Errorf("cannot safely alter DisableQueryService as BlacklistedTables is set for shard %v", shard)
+			if len(tc.DeniedTables) > 0 {
+				return fmt.Errorf("cannot safely alter DisableQueryService as DeniedTables is set for shard %v", shard)
 			}
 		}
 	}

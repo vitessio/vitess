@@ -828,7 +828,7 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 
 	// sabotage primary migration and make it fail in an unfinished state.
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("SetShardTabletControl",
-		"-blacklisted_tables=t",
+		"-denied_tables=t",
 		shard3Ks, "primary")
 	require.Nil(t, err)
 
@@ -853,7 +853,7 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 
 	// remove sabotage, but make it fail early. This should not result in the source primary serving,
 	// because this failure is past the point of no return.
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("SetShardTabletControl", "-blacklisted_tables=t",
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("SetShardTabletControl", "-denied_tables=t",
 		"-remove", shard3Ks, "primary")
 	require.Nil(t, err)
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("MigrateServedTypes",

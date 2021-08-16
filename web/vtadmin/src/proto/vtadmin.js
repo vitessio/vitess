@@ -14251,7 +14251,7 @@ $root.topodata = (function() {
              * @interface ITabletControl
              * @property {topodata.TabletType|null} [tablet_type] TabletControl tablet_type
              * @property {Array.<string>|null} [cells] TabletControl cells
-             * @property {Array.<string>|null} [blacklisted_tables] TabletControl blacklisted_tables
+             * @property {Array.<string>|null} [denied_tables] TabletControl denied_tables
              * @property {boolean|null} [frozen] TabletControl frozen
              */
 
@@ -14265,7 +14265,7 @@ $root.topodata = (function() {
              */
             function TabletControl(properties) {
                 this.cells = [];
-                this.blacklisted_tables = [];
+                this.denied_tables = [];
                 if (properties)
                     for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
                         if (properties[keys[i]] != null)
@@ -14289,12 +14289,12 @@ $root.topodata = (function() {
             TabletControl.prototype.cells = $util.emptyArray;
 
             /**
-             * TabletControl blacklisted_tables.
-             * @member {Array.<string>} blacklisted_tables
+             * TabletControl denied_tables.
+             * @member {Array.<string>} denied_tables
              * @memberof topodata.Shard.TabletControl
              * @instance
              */
-            TabletControl.prototype.blacklisted_tables = $util.emptyArray;
+            TabletControl.prototype.denied_tables = $util.emptyArray;
 
             /**
              * TabletControl frozen.
@@ -14333,9 +14333,9 @@ $root.topodata = (function() {
                 if (message.cells != null && message.cells.length)
                     for (var i = 0; i < message.cells.length; ++i)
                         writer.uint32(/* id 2, wireType 2 =*/18).string(message.cells[i]);
-                if (message.blacklisted_tables != null && message.blacklisted_tables.length)
-                    for (var i = 0; i < message.blacklisted_tables.length; ++i)
-                        writer.uint32(/* id 4, wireType 2 =*/34).string(message.blacklisted_tables[i]);
+                if (message.denied_tables != null && message.denied_tables.length)
+                    for (var i = 0; i < message.denied_tables.length; ++i)
+                        writer.uint32(/* id 4, wireType 2 =*/34).string(message.denied_tables[i]);
                 if (message.frozen != null && Object.hasOwnProperty.call(message, "frozen"))
                     writer.uint32(/* id 5, wireType 0 =*/40).bool(message.frozen);
                 return writer;
@@ -14381,9 +14381,9 @@ $root.topodata = (function() {
                         message.cells.push(reader.string());
                         break;
                     case 4:
-                        if (!(message.blacklisted_tables && message.blacklisted_tables.length))
-                            message.blacklisted_tables = [];
-                        message.blacklisted_tables.push(reader.string());
+                        if (!(message.denied_tables && message.denied_tables.length))
+                            message.denied_tables = [];
+                        message.denied_tables.push(reader.string());
                         break;
                     case 5:
                         message.frozen = reader.bool();
@@ -14447,12 +14447,12 @@ $root.topodata = (function() {
                         if (!$util.isString(message.cells[i]))
                             return "cells: string[] expected";
                 }
-                if (message.blacklisted_tables != null && message.hasOwnProperty("blacklisted_tables")) {
-                    if (!Array.isArray(message.blacklisted_tables))
-                        return "blacklisted_tables: array expected";
-                    for (var i = 0; i < message.blacklisted_tables.length; ++i)
-                        if (!$util.isString(message.blacklisted_tables[i]))
-                            return "blacklisted_tables: string[] expected";
+                if (message.denied_tables != null && message.hasOwnProperty("denied_tables")) {
+                    if (!Array.isArray(message.denied_tables))
+                        return "denied_tables: array expected";
+                    for (var i = 0; i < message.denied_tables.length; ++i)
+                        if (!$util.isString(message.denied_tables[i]))
+                            return "denied_tables: string[] expected";
                 }
                 if (message.frozen != null && message.hasOwnProperty("frozen"))
                     if (typeof message.frozen !== "boolean")
@@ -14525,12 +14525,12 @@ $root.topodata = (function() {
                     for (var i = 0; i < object.cells.length; ++i)
                         message.cells[i] = String(object.cells[i]);
                 }
-                if (object.blacklisted_tables) {
-                    if (!Array.isArray(object.blacklisted_tables))
-                        throw TypeError(".topodata.Shard.TabletControl.blacklisted_tables: array expected");
-                    message.blacklisted_tables = [];
-                    for (var i = 0; i < object.blacklisted_tables.length; ++i)
-                        message.blacklisted_tables[i] = String(object.blacklisted_tables[i]);
+                if (object.denied_tables) {
+                    if (!Array.isArray(object.denied_tables))
+                        throw TypeError(".topodata.Shard.TabletControl.denied_tables: array expected");
+                    message.denied_tables = [];
+                    for (var i = 0; i < object.denied_tables.length; ++i)
+                        message.denied_tables[i] = String(object.denied_tables[i]);
                 }
                 if (object.frozen != null)
                     message.frozen = Boolean(object.frozen);
@@ -14552,7 +14552,7 @@ $root.topodata = (function() {
                 var object = {};
                 if (options.arrays || options.defaults) {
                     object.cells = [];
-                    object.blacklisted_tables = [];
+                    object.denied_tables = [];
                 }
                 if (options.defaults) {
                     object.tablet_type = options.enums === String ? "UNKNOWN" : 0;
@@ -14565,10 +14565,10 @@ $root.topodata = (function() {
                     for (var j = 0; j < message.cells.length; ++j)
                         object.cells[j] = message.cells[j];
                 }
-                if (message.blacklisted_tables && message.blacklisted_tables.length) {
-                    object.blacklisted_tables = [];
-                    for (var j = 0; j < message.blacklisted_tables.length; ++j)
-                        object.blacklisted_tables[j] = message.blacklisted_tables[j];
+                if (message.denied_tables && message.denied_tables.length) {
+                    object.denied_tables = [];
+                    for (var j = 0; j < message.denied_tables.length; ++j)
+                        object.denied_tables[j] = message.denied_tables[j];
                 }
                 if (message.frozen != null && message.hasOwnProperty("frozen"))
                     object.frozen = message.frozen;
@@ -83879,6 +83879,8 @@ $root.binlogdata = (function() {
          * @interface IRowEvent
          * @property {string|null} [table_name] RowEvent table_name
          * @property {Array.<binlogdata.IRowChange>|null} [row_changes] RowEvent row_changes
+         * @property {string|null} [keyspace] RowEvent keyspace
+         * @property {string|null} [shard] RowEvent shard
          */
 
         /**
@@ -83914,6 +83916,22 @@ $root.binlogdata = (function() {
         RowEvent.prototype.row_changes = $util.emptyArray;
 
         /**
+         * RowEvent keyspace.
+         * @member {string} keyspace
+         * @memberof binlogdata.RowEvent
+         * @instance
+         */
+        RowEvent.prototype.keyspace = "";
+
+        /**
+         * RowEvent shard.
+         * @member {string} shard
+         * @memberof binlogdata.RowEvent
+         * @instance
+         */
+        RowEvent.prototype.shard = "";
+
+        /**
          * Creates a new RowEvent instance using the specified properties.
          * @function create
          * @memberof binlogdata.RowEvent
@@ -83942,6 +83960,10 @@ $root.binlogdata = (function() {
             if (message.row_changes != null && message.row_changes.length)
                 for (var i = 0; i < message.row_changes.length; ++i)
                     $root.binlogdata.RowChange.encode(message.row_changes[i], writer.uint32(/* id 2, wireType 2 =*/18).fork()).ldelim();
+            if (message.keyspace != null && Object.hasOwnProperty.call(message, "keyspace"))
+                writer.uint32(/* id 3, wireType 2 =*/26).string(message.keyspace);
+            if (message.shard != null && Object.hasOwnProperty.call(message, "shard"))
+                writer.uint32(/* id 4, wireType 2 =*/34).string(message.shard);
             return writer;
         };
 
@@ -83983,6 +84005,12 @@ $root.binlogdata = (function() {
                     if (!(message.row_changes && message.row_changes.length))
                         message.row_changes = [];
                     message.row_changes.push($root.binlogdata.RowChange.decode(reader, reader.uint32()));
+                    break;
+                case 3:
+                    message.keyspace = reader.string();
+                    break;
+                case 4:
+                    message.shard = reader.string();
                     break;
                 default:
                     reader.skipType(tag & 7);
@@ -84031,6 +84059,12 @@ $root.binlogdata = (function() {
                         return "row_changes." + error;
                 }
             }
+            if (message.keyspace != null && message.hasOwnProperty("keyspace"))
+                if (!$util.isString(message.keyspace))
+                    return "keyspace: string expected";
+            if (message.shard != null && message.hasOwnProperty("shard"))
+                if (!$util.isString(message.shard))
+                    return "shard: string expected";
             return null;
         };
 
@@ -84058,6 +84092,10 @@ $root.binlogdata = (function() {
                     message.row_changes[i] = $root.binlogdata.RowChange.fromObject(object.row_changes[i]);
                 }
             }
+            if (object.keyspace != null)
+                message.keyspace = String(object.keyspace);
+            if (object.shard != null)
+                message.shard = String(object.shard);
             return message;
         };
 
@@ -84076,8 +84114,11 @@ $root.binlogdata = (function() {
             var object = {};
             if (options.arrays || options.defaults)
                 object.row_changes = [];
-            if (options.defaults)
+            if (options.defaults) {
                 object.table_name = "";
+                object.keyspace = "";
+                object.shard = "";
+            }
             if (message.table_name != null && message.hasOwnProperty("table_name"))
                 object.table_name = message.table_name;
             if (message.row_changes && message.row_changes.length) {
@@ -84085,6 +84126,10 @@ $root.binlogdata = (function() {
                 for (var j = 0; j < message.row_changes.length; ++j)
                     object.row_changes[j] = $root.binlogdata.RowChange.toObject(message.row_changes[j], options);
             }
+            if (message.keyspace != null && message.hasOwnProperty("keyspace"))
+                object.keyspace = message.keyspace;
+            if (message.shard != null && message.hasOwnProperty("shard"))
+                object.shard = message.shard;
             return object;
         };
 
@@ -84110,6 +84155,8 @@ $root.binlogdata = (function() {
          * @interface IFieldEvent
          * @property {string|null} [table_name] FieldEvent table_name
          * @property {Array.<query.IField>|null} [fields] FieldEvent fields
+         * @property {string|null} [keyspace] FieldEvent keyspace
+         * @property {string|null} [shard] FieldEvent shard
          */
 
         /**
@@ -84145,6 +84192,22 @@ $root.binlogdata = (function() {
         FieldEvent.prototype.fields = $util.emptyArray;
 
         /**
+         * FieldEvent keyspace.
+         * @member {string} keyspace
+         * @memberof binlogdata.FieldEvent
+         * @instance
+         */
+        FieldEvent.prototype.keyspace = "";
+
+        /**
+         * FieldEvent shard.
+         * @member {string} shard
+         * @memberof binlogdata.FieldEvent
+         * @instance
+         */
+        FieldEvent.prototype.shard = "";
+
+        /**
          * Creates a new FieldEvent instance using the specified properties.
          * @function create
          * @memberof binlogdata.FieldEvent
@@ -84173,6 +84236,10 @@ $root.binlogdata = (function() {
             if (message.fields != null && message.fields.length)
                 for (var i = 0; i < message.fields.length; ++i)
                     $root.query.Field.encode(message.fields[i], writer.uint32(/* id 2, wireType 2 =*/18).fork()).ldelim();
+            if (message.keyspace != null && Object.hasOwnProperty.call(message, "keyspace"))
+                writer.uint32(/* id 3, wireType 2 =*/26).string(message.keyspace);
+            if (message.shard != null && Object.hasOwnProperty.call(message, "shard"))
+                writer.uint32(/* id 4, wireType 2 =*/34).string(message.shard);
             return writer;
         };
 
@@ -84214,6 +84281,12 @@ $root.binlogdata = (function() {
                     if (!(message.fields && message.fields.length))
                         message.fields = [];
                     message.fields.push($root.query.Field.decode(reader, reader.uint32()));
+                    break;
+                case 3:
+                    message.keyspace = reader.string();
+                    break;
+                case 4:
+                    message.shard = reader.string();
                     break;
                 default:
                     reader.skipType(tag & 7);
@@ -84262,6 +84335,12 @@ $root.binlogdata = (function() {
                         return "fields." + error;
                 }
             }
+            if (message.keyspace != null && message.hasOwnProperty("keyspace"))
+                if (!$util.isString(message.keyspace))
+                    return "keyspace: string expected";
+            if (message.shard != null && message.hasOwnProperty("shard"))
+                if (!$util.isString(message.shard))
+                    return "shard: string expected";
             return null;
         };
 
@@ -84289,6 +84368,10 @@ $root.binlogdata = (function() {
                     message.fields[i] = $root.query.Field.fromObject(object.fields[i]);
                 }
             }
+            if (object.keyspace != null)
+                message.keyspace = String(object.keyspace);
+            if (object.shard != null)
+                message.shard = String(object.shard);
             return message;
         };
 
@@ -84307,8 +84390,11 @@ $root.binlogdata = (function() {
             var object = {};
             if (options.arrays || options.defaults)
                 object.fields = [];
-            if (options.defaults)
+            if (options.defaults) {
                 object.table_name = "";
+                object.keyspace = "";
+                object.shard = "";
+            }
             if (message.table_name != null && message.hasOwnProperty("table_name"))
                 object.table_name = message.table_name;
             if (message.fields && message.fields.length) {
@@ -84316,6 +84402,10 @@ $root.binlogdata = (function() {
                 for (var j = 0; j < message.fields.length; ++j)
                     object.fields[j] = $root.query.Field.toObject(message.fields[j], options);
             }
+            if (message.keyspace != null && message.hasOwnProperty("keyspace"))
+                object.keyspace = message.keyspace;
+            if (message.shard != null && message.hasOwnProperty("shard"))
+                object.shard = message.shard;
             return object;
         };
 

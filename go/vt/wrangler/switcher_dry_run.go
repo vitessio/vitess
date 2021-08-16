@@ -308,13 +308,13 @@ func (dr *switcherDryRun) freezeTargetVReplication(ctx context.Context) error {
 	return nil
 }
 
-func (dr *switcherDryRun) dropSourceBlacklistedTables(ctx context.Context) error {
+func (dr *switcherDryRun) dropSourceDeniedTables(ctx context.Context) error {
 	logs := make([]string, 0)
 	for _, si := range dr.ts.sourceShards() {
 		logs = append(logs, fmt.Sprintf("\tKeyspace %s Shard %s Tablet %d", si.Keyspace(), si.ShardName(), si.PrimaryAlias.Uid))
 	}
 	if len(logs) > 0 {
-		dr.drLog.Log(fmt.Sprintf("Blacklisted tables [%s] will be removed from:", strings.Join(dr.ts.tables, ",")))
+		dr.drLog.Log(fmt.Sprintf("Denied tables [%s] will be removed from:", strings.Join(dr.ts.tables, ",")))
 		dr.drLog.LogSlice(logs)
 	}
 	return nil
