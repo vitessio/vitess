@@ -199,6 +199,8 @@ func TestOpenAndReload(t *testing.T) {
 	}
 	delete(want, "msg")
 	assert.Equal(t, want, se.GetSchema())
+	assert.Equal(t, int64(0), se.tableAllocatedSizeGauge.Counts()["msg"])
+	assert.Equal(t, int64(0), se.tableFileSizeGauge.Counts()["msg"])
 
 	//ReloadAt tests
 	pos1, err := mysql.DecodePosition("MariaDB/0-41983-20")
