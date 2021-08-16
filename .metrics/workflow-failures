@@ -1,4 +1,3 @@
-2021-04-12T08:31:15Z,Cluster (onlineddl_vrepl),https://github.com/vitessio/vitess/actions/runs/740452436
 2021-04-12T08:31:15Z,Cluster (onlineddl_vrepl_stress),https://github.com/vitessio/vitess/actions/runs/740452415
 2021-04-12T08:31:15Z,Cluster (tabletmanager_throttler_custom_config),https://github.com/vitessio/vitess/actions/runs/740452456
 2021-04-12T08:31:15Z,Cluster (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/740452458
@@ -9998,3 +9997,4 @@
 2021-08-16T21:58:08Z,Cluster (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/1137106262
 2021-08-16T21:58:08Z,Cluster (vtgate_vschema),https://github.com/vitessio/vitess/actions/runs/1137106219
 2021-08-16T21:58:08Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/1137106261
+2021-08-16T22:30:41Z,pr-labels,https://github.com/vitessio/vitess/actions/runs/1137187866
