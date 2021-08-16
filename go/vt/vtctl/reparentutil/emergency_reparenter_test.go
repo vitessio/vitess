@@ -92,7 +92,7 @@ func TestEmergencyReparenter_getLockAction(t *testing.T) {
 		},
 	}
 
-	erp := &EmergencyReparenter{}
+	vtctlReparentFunctions := &VtctlReparentFunctions{}
 
 	for _, tt := range tests {
 		tt := tt
@@ -100,7 +100,7 @@ func TestEmergencyReparenter_getLockAction(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			actual := erp.getLockAction(tt.alias)
+			actual := vtctlReparentFunctions.getLockAction(tt.alias)
 			assert.Equal(t, tt.expected, actual, tt.msg)
 		})
 	}
@@ -1169,7 +1169,6 @@ func TestEmergencyReparenter_promoteNewPrimary(t *testing.T) {
 				"zone1-0000000101": {},
 			},
 			statusMap: map[string]*replicationdatapb.StopReplicationStatus{},
-			opts:      EmergencyReparentOptions{},
 			shouldErr: true,
 		},
 		{
@@ -1207,7 +1206,6 @@ func TestEmergencyReparenter_promoteNewPrimary(t *testing.T) {
 				},
 			},
 			statusMap: map[string]*replicationdatapb.StopReplicationStatus{},
-			opts:      EmergencyReparentOptions{},
 			shouldErr: true,
 		},
 		{
@@ -1246,7 +1244,6 @@ func TestEmergencyReparenter_promoteNewPrimary(t *testing.T) {
 				},
 			},
 			statusMap: map[string]*replicationdatapb.StopReplicationStatus{},
-			opts:      EmergencyReparentOptions{},
 			shouldErr: true,
 		},
 		{
@@ -1287,7 +1284,6 @@ func TestEmergencyReparenter_promoteNewPrimary(t *testing.T) {
 				},
 			},
 			statusMap: map[string]*replicationdatapb.StopReplicationStatus{},
-			opts:      EmergencyReparentOptions{},
 			shouldErr: true,
 		},
 		{
@@ -1341,7 +1337,6 @@ func TestEmergencyReparenter_promoteNewPrimary(t *testing.T) {
 				},
 			},
 			statusMap: map[string]*replicationdatapb.StopReplicationStatus{},
-			opts:      EmergencyReparentOptions{},
 			shouldErr: true,
 		},
 		{
@@ -1488,9 +1483,17 @@ func TestEmergencyReparenter_promoteNewPrimary(t *testing.T) {
 				}()
 			}
 
-			erp := NewEmergencyReparenter(tt.ts, tt.tmc, logger)
+			var err error
+			vtctlReparentFunctions := NewVtctlReparentFunctions(tt.ts)
+			vtctlReparentFunctions.keyspace = tt.keyspace
+			vtctlReparentFunctions.shard = tt.shard
+			vtctlReparentFunctions.winningPrimaryTabletAliasStr = tt.newPrimaryTabletAlias
+			vtctlReparentFunctions.tabletMap = tt.tabletMap
+			vtctlReparentFunctions.statusMap = tt.statusMap
+			vtctlReparentFunctions.IgnoreReplicas = tt.opts.IgnoreReplicas
+			vtctlReparentFunctions.WaitReplicasTimeout = tt.opts.WaitReplicasTimeout
 
-			err := erp.promoteNewPrimary(ctx, ev, tt.keyspace, tt.shard, tt.newPrimaryTabletAlias, tt.tabletMap, tt.statusMap, tt.opts)
+			err = vtctlReparentFunctions.promoteNewPrimary(ctx, ev, logger, tt.tmc)
 			if tt.shouldErr {
 				assert.Error(t, err)
 				return
