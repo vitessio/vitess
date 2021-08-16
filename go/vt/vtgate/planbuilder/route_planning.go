@@ -229,7 +229,6 @@ func canMergeSubQuery(outer, subq queryTree, subqOp abstract.Operator) (bool, er
 	if !ksMatch {
 		if solves, _ := subqOp.Solves(outer.tableID()); solves {
 			// throwing below error for compatibility
-			//return false, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "correlated subquery belonging to different keyspace is not supported")
 			return false, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: cross-shard correlated subquery")
 		}
 		return false, nil
@@ -256,6 +255,8 @@ func canMergeSubQuery(outer, subq queryTree, subqOp abstract.Operator) (bool, er
 			return false, nil
 		}
 		return subqOpCode == outerOpCode && matchVdxName && matchVdxValue, nil
+	case engine.SelectNext:
+		return false, nil
 	}
 
 	if solves, exprs := subqOp.Solves(outer.tableID()); solves {
