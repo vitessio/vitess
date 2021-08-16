@@ -52,6 +52,15 @@ type VtOrcReparentFunctions struct {
 	recoveryAttempted    bool
 }
 
+func NewVtorcReparentFunctions(analysisEntry inst.ReplicationAnalysis, candidateInstanceKey *inst.InstanceKey, skipProcesses bool, topologyRecovery *TopologyRecovery) *VtOrcReparentFunctions {
+	return &VtOrcReparentFunctions{
+		analysisEntry:        analysisEntry,
+		candidateInstanceKey: candidateInstanceKey,
+		skipProcesses:        skipProcesses,
+		topologyRecovery:     topologyRecovery,
+	}
+}
+
 // LockShard implements the ReparentFunctions interface
 func (vtorcReparent *VtOrcReparentFunctions) LockShard(ctx context.Context) (context.Context, func(*error), error) {
 	ctx, unlock, err := LockShard(ctx, vtorcReparent.analysisEntry.AnalyzedInstanceKey)

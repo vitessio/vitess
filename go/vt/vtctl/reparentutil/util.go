@@ -84,6 +84,12 @@ var (
 	_ ReparentFunctions = (*VtctlReparentFunctions)(nil)
 )
 
+func NewVtctlReparentFunctions(ts *topo.Server) *VtctlReparentFunctions {
+	return &VtctlReparentFunctions{
+		ts: ts,
+	}
+}
+
 // LockShard implements the ReparentFunctions interface
 func (vtctlReparent *VtctlReparentFunctions) LockShard(ctx context.Context) (context.Context, func(*error), error) {
 	vtctlReparent.lockAction = vtctlReparent.getLockAction(vtctlReparent.NewPrimaryAlias)

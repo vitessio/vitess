@@ -623,12 +623,7 @@ func checkAndRecoverDeadMaster(analysisEntry inst.ReplicationAnalysis, candidate
 	}
 	log.Infof("Analysis: %v, deadmaster %+v", analysisEntry.Analysis, analysisEntry.AnalyzedInstanceKey)
 
-	reparentFunctions := &VtOrcReparentFunctions{
-		analysisEntry:        analysisEntry,
-		candidateInstanceKey: candidateInstanceKey,
-		skipProcesses:        skipProcesses,
-		topologyRecovery:     topologyRecovery,
-	}
+	reparentFunctions := NewVtorcReparentFunctions(analysisEntry, candidateInstanceKey, skipProcesses, topologyRecovery)
 	_, err = reparentutil.NewEmergencyReparenter2(tmclient.NewTabletManagerClient(), nil).ReparentShard(context.Background(), reparentFunctions)
 
 	return reparentFunctions.recoveryAttempted, topologyRecovery, err
