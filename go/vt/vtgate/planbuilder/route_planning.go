@@ -198,7 +198,11 @@ func optimizeQuery(opTree abstract.Operator, reservedVars *sqlparser.ReservedVar
 			if err != nil {
 				return nil, err
 			}
-			if canMergeSubQuery(subqTree, treeInner) {
+			canMerge, err := canMergeSubQuery(subqTree, treeInner, inner.Inner)
+			if err != nil {
+				return nil, err
+			}
+			if canMerge {
 				subqTree = mergeSubQuery(subqTree, inner)
 			} else {
 				subqTree = &subqueryTree{
@@ -217,25 +221,52 @@ func optimizeQuery(opTree abstract.Operator, reservedVars *sqlparser.ReservedVar
 	}
 }
 
-func canMergeSubQuery(outer, subq queryTree) bool {
+func canMergeSubQuery(outer, subq queryTree, subqOp abstract.Operator) (bool, error) {
 	// check merge the subq into the outer one
-	subQRoute, isRoute := subq.(*routeTree)
-	if !isRoute {
-		return false
+	var subQRoute *routeTree
+	var subQP *abstract.QueryGraph
+	switch node := subq.(type) {
+	case *routeTree:
+		subQRoute = node
+		subQP = subqOp.(*abstract.QueryGraph)
+	case *derivedTree:
+		routeT, isRoute := node.inner.(*routeTree)
+		if !isRoute {
+			return false, nil
+		}
+		subQRoute = routeT
+		derivedO, isDerived := subqOp.(*abstract.Derived)
+		if !isDerived {
+			return false, nil
+		}
+		subQP = derivedO.Inner.(*abstract.QueryGraph)
+	default:
+		return false, nil
 	}
 	outerRoute, isRoute := outer.(*routeTree)
 	if !isRoute {
-		return false
+		return false, nil
 	}
-
 	if subQRoute.keyspace != outerRoute.keyspace {
-		return false
+		subQp, ok := subqOp.(*abstract.QueryGraph)
+		if !ok {
+			return false, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "subquery is complex to plan")
+		}
+		if subQp.Solves(outerRoute.solved) {
+			// throwing below error for compatibility
+			//return false, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "correlated subquery belonging to different keyspace is not supported")
+			return false, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: cross-shard correlated subquery")
+		}
+		return false, nil
 	}
 	if subQRoute.routeOpCode == engine.SelectUnsharded && outerRoute.routeOpCode == engine.SelectUnsharded {
-		return true
+		return true, nil
 	}
 
-	return false
+	if subQP.Solves(outerRoute.solved) {
+		return false, semantics.Gen4NotSupportedF("correlated subquery")
+	}
+	return false, nil
 }
 
 func mergeSubQuery(outer queryTree, subq *abstract.SubQueryInner) queryTree {
