@@ -84,6 +84,8 @@ func TestOpenAndReload(t *testing.T) {
 
 	want := initialSchema()
 	mustMatch(t, want, se.GetSchema())
+	assert.Equal(t, int64(100), se.tableFileSizeGauge.Counts()["msg"])
+	assert.Equal(t, int64(150), se.tableAllocatedSizeGauge.Counts()["msg"])
 
 	// Advance time some more.
 	db.AddQuery("select unix_timestamp()", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
@@ -195,6 +197,8 @@ func TestOpenAndReload(t *testing.T) {
 	}
 	delete(want, "msg")
 	assert.Equal(t, want, se.GetSchema())
+	assert.Equal(t, int64(0), se.tableAllocatedSizeGauge.Counts()["msg"])
+	assert.Equal(t, int64(0), se.tableFileSizeGauge.Counts()["msg"])
 
 	//ReloadAt tests
 	pos1, err := mysql.DecodePosition("MariaDB/0-41983-20")
