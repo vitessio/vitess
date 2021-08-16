@@ -18,8 +18,9 @@ package planbuilder
 
 import (
 	"bytes"
-	"errors"
-	"fmt"
+
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -97,7 +98,7 @@ func (pb *primitiveBuilder) findOrigin(expr sqlparser.Expr, reservedVars *sqlpar
 					return false, err
 				}
 			default:
-				return false, fmt.Errorf("BUG: unexpected SELECT type: %T", node)
+				return false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: unexpected SELECT type: %T", node)
 			}
 			sqi := subqueryInfo{
 				ast:  node,
@@ -134,7 +135,7 @@ func (pb *primitiveBuilder) findOrigin(expr sqlparser.Expr, reservedVars *sqlpar
 			continue
 		}
 		if sqi.origin != nil {
-			return nil, nil, nil, errors.New("unsupported: cross-shard correlated subquery")
+			return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: cross-shard correlated subquery")
 		}
 
 		sqName, hasValues := pb.jt.GenerateSubqueryVars()
@@ -193,13 +194,15 @@ func (pb *primitiveBuilder) findOrigin(expr sqlparser.Expr, reservedVars *sqlpar
 	return pullouts, highestOrigin, expr, nil
 }
 
+var dummyErr = vterrors.Errorf(vtrpcpb.Code_INTERNAL, "dummy")
+
 func hasSubquery(node sqlparser.SQLNode) bool {
 	has := false
 	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 		switch node.(type) {
 		case *sqlparser.DerivedTable, *sqlparser.Subquery:
 			has = true
-			return false, errors.New("dummy")
+			return false, dummyErr
 		}
 		return true, nil
 	}, node)
@@ -235,11 +238,11 @@ func (pb *primitiveBuilder) finalizeUnshardedDMLSubqueries(reservedVars *sqlpars
 				innerRoute, ok := spb.plan.(*route)
 				if !ok {
 					samePlan = false
-					return false, errors.New("dummy")
+					return false, dummyErr
 				}
 				if innerRoute.eroute.Keyspace.Name != keyspace {
 					samePlan = false
-					return false, errors.New("dummy")
+					return false, dummyErr
 				}
 				for _, sub := range innerRoute.substitutions {
 					*sub.oldExpr = *sub.newExpr
@@ -256,11 +259,11 @@ func (pb *primitiveBuilder) finalizeUnshardedDMLSubqueries(reservedVars *sqlpars
 				innerRoute, ok := spb.plan.(*route)
 				if !ok {
 					samePlan = false
-					return false, errors.New("dummy")
+					return false, dummyErr
 				}
 				if innerRoute.eroute.Keyspace.Name != keyspace {
 					samePlan = false
-					return false, errors.New("dummy")
+					return false, dummyErr
 				}
 			}
 
