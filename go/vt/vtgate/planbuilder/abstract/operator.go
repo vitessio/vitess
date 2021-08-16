@@ -38,7 +38,7 @@ type (
 		PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) error
 
 		// Solves returns true if the Operator solves the given TableSet
-		Solves(ts semantics.TableSet) bool
+		Solves(ts semantics.TableSet) (bool, []sqlparser.Expr)
 	}
 )
 

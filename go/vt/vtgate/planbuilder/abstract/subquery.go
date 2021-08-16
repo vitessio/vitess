@@ -48,13 +48,13 @@ func (s *SubQuery) TableID() semantics.TableSet {
 }
 
 // Solves implements the Operator interface
-func (s *SubQuery) Solves(ts semantics.TableSet) bool {
+func (s *SubQuery) Solves(ts semantics.TableSet) (bool, []sqlparser.Expr) {
 	for _, inner := range s.Inner {
-		if inner.Inner.Solves(ts) {
-			return true
+		if solves, exprs := inner.Inner.Solves(ts); solves {
+			return true, exprs
 		}
 	}
-	return false
+	return false, nil
 }
 
 // PushPredicate implements the Operator interface

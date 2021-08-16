@@ -36,7 +36,7 @@ func (d *Derived) TableID() semantics.TableSet {
 }
 
 // Solves implements the Operator interface
-func (d *Derived) Solves(ts semantics.TableSet) bool {
+func (d *Derived) Solves(ts semantics.TableSet) (bool, []sqlparser.Expr) {
 	return d.Inner.Solves(ts)
 }
 

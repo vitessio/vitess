@@ -416,6 +416,7 @@ Gen4 plan same as above
     "Table": "`user`"
   }
 }
+Gen4 plan same as above
 
 # Composite IN: RHS has no simple values
 "select id from user where (col1, name) in (('aa', 1+1))"
@@ -1388,6 +1389,7 @@ Gen4 plan same as above
     "Table": "`user`"
   }
 }
+Gen4 plan same as above
 
 # outer and inner subquery route by same int val
 "select id from user where id = 5 and user.col in (select user_extra.col from user_extra where user_extra.user_id = 5)"
@@ -2269,4 +2271,23 @@ Gen4 plan same as above
 # correlated subquery with different keyspace tables involved
 "select id from user where id in (select col from unsharded where col = user.id)"
 "unsupported: cross-shard correlated subquery"
+Gen4 plan same as above
+
+# correlated subquery with same keyspace
+"select u.id from user as u where u.col in (select ue.user_id from user_extra as ue where ue.user_id = u.id)"
+{
+  "QueryType": "SELECT",
+  "Original": "select u.id from user as u where u.col in (select ue.user_id from user_extra as ue where ue.user_id = u.id)",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select u.id from `user` as u where 1 != 1",
+    "Query": "select u.id from `user` as u where u.col in (select ue.user_id from user_extra as ue where ue.user_id = u.id)",
+    "Table": "`user`"
+  }
+}
 Gen4 plan same as above

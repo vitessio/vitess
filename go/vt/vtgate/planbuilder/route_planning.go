@@ -227,7 +227,7 @@ func canMergeSubQuery(outer, subq queryTree, subqOp abstract.Operator) (bool, er
 		return false, nil
 	}
 	if !ksMatch {
-		if subqOp.Solves(outer.tableID()) {
+		if solves, _ := subqOp.Solves(outer.tableID()); solves {
 			// throwing below error for compatibility
 			//return false, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "correlated subquery belonging to different keyspace is not supported")
 			return false, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: cross-shard correlated subquery")
@@ -246,8 +246,34 @@ func canMergeSubQuery(outer, subq queryTree, subqOp abstract.Operator) (bool, er
 		return true, nil
 	}
 
-	if subqOp.Solves(outer.tableID()) {
-		return false, semantics.Gen4NotSupportedF("correlated subquery")
+	if solves, exprs := subqOp.Solves(outer.tableID()); solves {
+		outerVindexPreds, err := outer.getVindexPredicates()
+		if err != nil {
+			return false, nil
+		}
+		innerVindexPreds, err := subq.getVindexPredicates()
+		if err != nil {
+			return false, nil
+		}
+
+		for _, expr := range exprs {
+			cmp, isCmp := expr.(*sqlparser.ComparisonExpr)
+			if !isCmp {
+				continue
+			}
+
+			for _, pred := range outerVindexPreds {
+				for _, innerPred := range innerVindexPreds {
+					if pred.colVindex.Name != innerPred.colVindex.Name {
+						continue
+					}
+					if !cmp.ColNameMatch(pred.colVindex.Columns[0], innerPred.colVindex.Columns[0]) {
+						return false, nil
+					}
+				}
+			}
+		}
+		return true, nil
 	}
 	return false, nil
 }
