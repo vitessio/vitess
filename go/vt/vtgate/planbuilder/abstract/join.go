@@ -29,6 +29,11 @@ type Join struct {
 
 var _ Operator = (*Join)(nil)
 
+// Solves implements the Operator interface
+func (j *Join) Solves(ts semantics.TableSet) bool {
+	return j.LHS.Solves(ts) || j.RHS.Solves(ts)
+}
+
 // PushPredicate implements the Operator interface
 func (j *Join) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) error {
 	deps := semTable.BaseTableDependencies(expr)
