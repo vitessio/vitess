@@ -329,7 +329,7 @@ func verifyPrimaryChange(t *testing.T, cluster *cluster.LocalProcessCluster, ks,
 		var shardInfo topodatapb.Shard
 		err = json2.Unmarshal([]byte(result), &shardInfo)
 		require.NoError(t, err)
-		if shardInfo.MasterAlias.String() != old.String() {
+		if shardInfo.PrimaryAlias.String() != old.String() {
 			return nil
 		}
 	}
@@ -345,8 +345,8 @@ func getPrimaryTablet(t *testing.T, cluster *cluster.LocalProcessCluster, ks, sh
 		var shardInfo topodatapb.Shard
 		err = json2.Unmarshal([]byte(result), &shardInfo)
 		require.NoError(t, err)
-		if shardInfo.MasterAlias != nil {
-			return shardInfo.MasterAlias, nil
+		if shardInfo.PrimaryAlias != nil {
+			return shardInfo.PrimaryAlias, nil
 		}
 	}
 	return nil, fmt.Errorf("timeout looking for primary tablet")

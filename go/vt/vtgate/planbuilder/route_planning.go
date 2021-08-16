@@ -62,12 +62,35 @@ func gen4Planner(_ string) func(sqlparser.Statement, *sqlparser.ReservedVars, Co
 	}
 }
 
-func newBuildSelectPlan(sel *sqlparser.Select, reservedVars *sqlparser.ReservedVars, vschema ContextVSchema) (logicalPlan, error) {
+type postProcessor struct {
+	inDerived bool
+	semTable  *semantics.SemTable
+	vschema   ContextVSchema
+}
 
-	directives := sqlparser.ExtractCommentDirectives(sel.Comments)
-	if len(directives) > 0 {
-		return nil, semantics.Gen4NotSupportedF("comment directives")
+func (pp *postProcessor) planHorizon(plan logicalPlan, sel *sqlparser.Select) (logicalPlan, error) {
+	hp := horizonPlanning{
+		sel:       sel,
+		plan:      plan,
+		semTable:  pp.semTable,
+		vschema:   pp.vschema,
+		inDerived: pp.inDerived,
 	}
+
+	plan, err := hp.planHorizon()
+	if err != nil {
+		return nil, err
+	}
+
+	plan, err = planLimit(sel.Limit, plan)
+	if err != nil {
+		return nil, err
+	}
+	return plan, nil
+
+}
+
+func newBuildSelectPlan(sel *sqlparser.Select, reservedVars *sqlparser.ReservedVars, vschema ContextVSchema) (logicalPlan, error) {
 	ksName := ""
 	if ks, _ := vschema.DefaultKeyspace(); ks != nil {
 		ksName = ks.Name
@@ -92,24 +115,16 @@ func newBuildSelectPlan(sel *sqlparser.Select, reservedVars *sqlparser.ReservedV
 		return nil, err
 	}
 
-	plan, err := transformToLogicalPlan(tree, semTable)
-	if err != nil {
-		return nil, err
-	}
-
-	hp := horizonPlanning{
-		sel:      sel,
-		plan:     plan,
+	postProcessing := &postProcessor{
 		semTable: semTable,
 		vschema:  vschema,
 	}
-
-	plan, err = hp.planHorizon()
+	plan, err := transformToLogicalPlan(tree, semTable, postProcessing)
 	if err != nil {
 		return nil, err
 	}
 
-	plan, err = planLimit(sel.Limit, plan)
+	plan, err = postProcessing.planHorizon(plan, sel)
 	if err != nil {
 		return nil, err
 	}
@@ -118,10 +133,21 @@ func newBuildSelectPlan(sel *sqlparser.Select, reservedVars *sqlparser.ReservedV
 		return nil, err
 	}
 
+	directives := sqlparser.ExtractCommentDirectives(sel.Comments)
+	if directives.IsSet(sqlparser.DirectiveScatterErrorsAsWarnings) {
+		visit(plan, func(logicalPlan logicalPlan) (bool, logicalPlan, error) {
+			switch plan := logicalPlan.(type) {
+			case *route:
+				plan.eroute.ScatterErrorsAsWarnings = true
+			}
+			return true, logicalPlan, nil
+		})
+	}
+
 	return plan, nil
 }
 
-func optimizeQuery(opTree abstract.Operator, reservedVars *sqlparser.ReservedVars, semTable *semantics.SemTable, vschema ContextVSchema) (joinTree, error) {
+func optimizeQuery(opTree abstract.Operator, reservedVars *sqlparser.ReservedVars, semTable *semantics.SemTable, vschema ContextVSchema) (queryTree, error) {
 	switch op := opTree.(type) {
 	case *abstract.QueryGraph:
 		switch {
@@ -150,7 +176,16 @@ func optimizeQuery(opTree abstract.Operator, reservedVars *sqlparser.ReservedVar
 			return nil, err
 		}
 		return mergeOrJoin(treeInner, treeOuter, []sqlparser.Expr{op.Exp}, semTable, true)
-
+	case *abstract.Derived:
+		treeInner, err := optimizeQuery(op.Inner, reservedVars, semTable, vschema)
+		if err != nil {
+			return nil, err
+		}
+		return &derivedTree{
+			query: op.Sel,
+			inner: treeInner,
+			alias: op.Alias,
+		}, nil
 	default:
 		return nil, semantics.Gen4NotSupportedF("optimizeQuery")
 	}
@@ -185,14 +220,23 @@ type horizonPlanning struct {
 	semTable        *semantics.SemTable
 	vschema         ContextVSchema
 	qp              *abstract.QueryProjection
+	inDerived       bool
 	needsTruncation bool
 	vtgateGrouping  bool
 }
 
-func (hp horizonPlanning) planHorizon() (logicalPlan, error) {
+func (hp *horizonPlanning) planHorizon() (logicalPlan, error) {
 	rb, ok := hp.plan.(*route)
 	if !ok && hp.semTable.ProjectionErr != nil {
 		return nil, hp.semTable.ProjectionErr
+	}
+
+	if hp.inDerived {
+		for _, expr := range hp.sel.SelectExprs {
+			if sqlparser.ContainsAggregation(expr) {
+				return nil, semantics.Gen4NotSupportedF("aggregation inside of derived table")
+			}
+		}
 	}
 
 	if ok && rb.isSingleShard() {
@@ -238,22 +282,20 @@ func (hp horizonPlanning) planHorizon() (logicalPlan, error) {
 		}
 	}
 
+	err = hp.planDistinct()
+	if err != nil {
+		return nil, err
+	}
+
 	err = hp.truncateColumnsIfNeeded()
 	if err != nil {
 		return nil, err
 	}
 
-	if hp.qp.NeedsDistinct() {
-		hp.plan, err = pushDistinct(hp.plan, hp.semTable, hp.vschema, hp.qp)
-		if err != nil {
-			return nil, err
-		}
-	}
-
 	return hp.plan, nil
 }
 
-func (hp horizonPlanning) truncateColumnsIfNeeded() error {
+func (hp *horizonPlanning) truncateColumnsIfNeeded() error {
 	if !hp.needsTruncation {
 		return nil
 	}
@@ -261,6 +303,8 @@ func (hp horizonPlanning) truncateColumnsIfNeeded() error {
 	switch p := hp.plan.(type) {
 	case *route:
 		p.eroute.SetTruncateColumnCount(hp.sel.GetColumnCount())
+	case *joinGen4:
+		// since this is a join, we can safely add extra columns and not need to truncate them
 	case *orderedAggregate:
 		p.eaggr.SetTruncateColumnCount(hp.sel.GetColumnCount())
 	case *memorySort:
@@ -272,39 +316,12 @@ func (hp horizonPlanning) truncateColumnsIfNeeded() error {
 	return nil
 }
 
-func pushDistinct(plan logicalPlan, semTable *semantics.SemTable, vschema ContextVSchema, qp *abstract.QueryProjection) (logicalPlan, error) {
-	switch p := plan.(type) {
-	case *route:
-		// we always make the underlying query distinct,
-		// and then we might also add a distinct operator on top if it is needed
-		p.Select.MakeDistinct()
-		if !p.isSingleShard() && !selectHasUniqueVindex(vschema, semTable, qp.SelectExprs) {
-			plan = newDistinct(plan)
-		}
-		return plan, nil
-	case *orderedAggregate, *joinGen4:
-		return newDistinct(plan), nil
-
-	default:
-		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unknown plan type for DISTINCT %T", plan)
-	}
-}
-
-func selectHasUniqueVindex(vschema ContextVSchema, semTable *semantics.SemTable, sel []abstract.SelectExpr) bool {
-	for _, expr := range sel {
-		if exprHasUniqueVindex(vschema, semTable, expr.Col.Expr) {
-			return true
-		}
-	}
-	return false
-}
-
 func exprHasUniqueVindex(vschema ContextVSchema, semTable *semantics.SemTable, expr sqlparser.Expr) bool {
 	col, isCol := expr.(*sqlparser.ColName)
 	if !isCol {
 		return false
 	}
-	ts := semTable.Dependencies(expr)
+	ts := semTable.BaseTableDependencies(expr)
 	tableInfo, err := semTable.TableInfoFor(ts)
 	if err != nil {
 		return false
@@ -349,53 +366,88 @@ func checkUnsupportedConstructs(sel *sqlparser.Select) error {
 	return nil
 }
 
-func pushJoinPredicate(exprs []sqlparser.Expr, tree joinTree, semTable *semantics.SemTable) (joinTree, error) {
+func pushJoinPredicate(exprs []sqlparser.Expr, tree queryTree, semTable *semantics.SemTable) (queryTree, error) {
 	switch node := tree.(type) {
-	case *routePlan:
-		plan := node.clone().(*routePlan)
+	case *routeTree:
+		plan := node.clone().(*routeTree)
 		err := plan.addPredicate(exprs...)
 		if err != nil {
 			return nil, err
 		}
 		return plan, nil
 
-	case *joinPlan:
-		node = node.clone().(*joinPlan)
+	case *joinTree:
+		node = node.clone().(*joinTree)
 
 		// we break up the predicates so that colnames from the LHS are replaced by arguments
 		var rhsPreds []sqlparser.Expr
 		var lhsColumns []*sqlparser.ColName
+		var lhsVarsName []string
 		lhsSolves := node.lhs.tableID()
 		for _, expr := range exprs {
-			cols, predicate, err := breakPredicateInLHSandRHS(expr, semTable, lhsSolves)
+			bvName, cols, predicate, err := breakPredicateInLHSandRHS(expr, semTable, lhsSolves)
 			if err != nil {
 				return nil, err
 			}
 			lhsColumns = append(lhsColumns, cols...)
+			lhsVarsName = append(lhsVarsName, bvName...)
 			rhsPreds = append(rhsPreds, predicate)
 		}
-		node.pushOutputColumns(lhsColumns, semTable)
+		if lhsColumns != nil && lhsVarsName != nil {
+			idxs, err := node.pushOutputColumns(lhsColumns, semTable)
+			if err != nil {
+				return nil, err
+			}
+			for i, idx := range idxs {
+				node.vars[lhsVarsName[i]] = idx
+			}
+		}
+
 		rhsPlan, err := pushJoinPredicate(rhsPreds, node.rhs, semTable)
 		if err != nil {
 			return nil, err
 		}
 
-		return &joinPlan{
+		return &joinTree{
 			lhs:   node.lhs,
 			rhs:   rhsPlan,
 			outer: node.outer,
+			vars:  node.vars,
 		}, nil
+	case *derivedTree:
+		plan := node.clone().(*derivedTree)
+
+		newExpressions := make([]sqlparser.Expr, 0, len(exprs))
+		for _, expr := range exprs {
+			tblInfo, err := semTable.TableInfoForExpr(expr)
+			if err != nil {
+				return nil, err
+			}
+			rewritten, err := semantics.RewriteDerivedExpression(expr, tblInfo)
+			if err != nil {
+				return nil, err
+			}
+			newExpressions = append(newExpressions, rewritten)
+		}
+
+		newInner, err := pushJoinPredicate(newExpressions, plan.inner, semTable)
+		if err != nil {
+			return nil, err
+		}
+
+		plan.inner = newInner
+		return plan, nil
 	default:
 		panic(fmt.Sprintf("BUG: unknown type %T", node))
 	}
 }
 
-func breakPredicateInLHSandRHS(expr sqlparser.Expr, semTable *semantics.SemTable, lhs semantics.TableSet) (columns []*sqlparser.ColName, predicate sqlparser.Expr, err error) {
+func breakPredicateInLHSandRHS(expr sqlparser.Expr, semTable *semantics.SemTable, lhs semantics.TableSet) (bvNames []string, columns []*sqlparser.ColName, predicate sqlparser.Expr, err error) {
 	predicate = sqlparser.CloneExpr(expr)
 	_ = sqlparser.Rewrite(predicate, nil, func(cursor *sqlparser.Cursor) bool {
 		switch node := cursor.Node().(type) {
 		case *sqlparser.ColName:
-			deps := semTable.Dependencies(node)
+			deps := semTable.BaseTableDependencies(node)
 			if deps == 0 {
 				err = vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unknown column. has the AST been copied?")
 				return false
@@ -403,29 +455,31 @@ func breakPredicateInLHSandRHS(expr sqlparser.Expr, semTable *semantics.SemTable
 			if deps.IsSolvedBy(lhs) {
 				node.Qualifier.Qualifier = sqlparser.NewTableIdent("")
 				columns = append(columns, node)
-				arg := sqlparser.NewArgument(node.CompliantName())
+				bvName := node.CompliantName()
+				bvNames = append(bvNames, bvName)
+				arg := sqlparser.NewArgument(bvName)
 				cursor.Replace(arg)
 			}
 		}
 		return true
 	})
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	return
 }
 
-func mergeOrJoinInner(lhs, rhs joinTree, joinPredicates []sqlparser.Expr, semTable *semantics.SemTable) (joinTree, error) {
+func mergeOrJoinInner(lhs, rhs queryTree, joinPredicates []sqlparser.Expr, semTable *semantics.SemTable) (queryTree, error) {
 	return mergeOrJoin(lhs, rhs, joinPredicates, semTable, true)
 }
 
-func mergeOrJoin(lhs, rhs joinTree, joinPredicates []sqlparser.Expr, semTable *semantics.SemTable, inner bool) (joinTree, error) {
+func mergeOrJoin(lhs, rhs queryTree, joinPredicates []sqlparser.Expr, semTable *semantics.SemTable, inner bool) (queryTree, error) {
 	newPlan := tryMerge(lhs, rhs, joinPredicates, semTable, inner)
 	if newPlan != nil {
 		return newPlan, nil
 	}
 
-	tree := &joinPlan{lhs: lhs.clone(), rhs: rhs.clone(), outer: !inner}
+	tree := &joinTree{lhs: lhs.clone(), rhs: rhs.clone(), outer: !inner, vars: map[string]int{}}
 	return pushJoinPredicate(joinPredicates, tree, semTable)
 }
 
@@ -433,7 +487,7 @@ type (
 	tableSetPair struct {
 		left, right semantics.TableSet
 	}
-	cacheMap map[tableSetPair]joinTree
+	cacheMap map[tableSetPair]queryTree
 )
 
 /*
@@ -442,7 +496,7 @@ type (
 	and removes the two inputs to this cheapest plan and instead adds the join.
 	As an optimization, it first only considers joining tables that have predicates defined between them
 */
-func greedySolve(qg *abstract.QueryGraph, reservedVars *sqlparser.ReservedVars, semTable *semantics.SemTable, vschema ContextVSchema) (joinTree, error) {
+func greedySolve(qg *abstract.QueryGraph, reservedVars *sqlparser.ReservedVars, semTable *semantics.SemTable, vschema ContextVSchema) (queryTree, error) {
 	joinTrees, err := seedPlanList(qg, reservedVars, semTable, vschema)
 	planCache := cacheMap{}
 	if err != nil {
@@ -456,7 +510,7 @@ func greedySolve(qg *abstract.QueryGraph, reservedVars *sqlparser.ReservedVars, 
 	return tree, nil
 }
 
-func mergeJoinTrees(qg *abstract.QueryGraph, semTable *semantics.SemTable, joinTrees []joinTree, planCache cacheMap, crossJoinsOK bool) (joinTree, error) {
+func mergeJoinTrees(qg *abstract.QueryGraph, semTable *semantics.SemTable, joinTrees []queryTree, planCache cacheMap, crossJoinsOK bool) (queryTree, error) {
 	if len(joinTrees) == 0 {
 		return nil, nil
 	}
@@ -486,7 +540,7 @@ func mergeJoinTrees(qg *abstract.QueryGraph, semTable *semantics.SemTable, joinT
 	return joinTrees[0], nil
 }
 
-func (cm cacheMap) getJoinTreeFor(lhs, rhs joinTree, joinPredicates []sqlparser.Expr, semTable *semantics.SemTable) (joinTree, error) {
+func (cm cacheMap) getJoinTreeFor(lhs, rhs queryTree, joinPredicates []sqlparser.Expr, semTable *semantics.SemTable) (queryTree, error) {
 	solves := tableSetPair{left: lhs.tableID(), right: rhs.tableID()}
 	cachedPlan := cm[solves]
 	if cachedPlan != nil {
@@ -504,10 +558,10 @@ func (cm cacheMap) getJoinTreeFor(lhs, rhs joinTree, joinPredicates []sqlparser.
 func findBestJoinTree(
 	qg *abstract.QueryGraph,
 	semTable *semantics.SemTable,
-	plans []joinTree,
+	plans []queryTree,
 	planCache cacheMap,
 	crossJoinsOK bool,
-) (bestPlan joinTree, lIdx int, rIdx int, err error) {
+) (bestPlan queryTree, lIdx int, rIdx int, err error) {
 	for i, lhs := range plans {
 		for j, rhs := range plans {
 			if i == j {
@@ -535,13 +589,13 @@ func findBestJoinTree(
 	return bestPlan, lIdx, rIdx, nil
 }
 
-func leftToRightSolve(qg *abstract.QueryGraph, reservedVars *sqlparser.ReservedVars, semTable *semantics.SemTable, vschema ContextVSchema) (joinTree, error) {
+func leftToRightSolve(qg *abstract.QueryGraph, reservedVars *sqlparser.ReservedVars, semTable *semantics.SemTable, vschema ContextVSchema) (queryTree, error) {
 	plans, err := seedPlanList(qg, reservedVars, semTable, vschema)
 	if err != nil {
 		return nil, err
 	}
 
-	var acc joinTree
+	var acc queryTree
 	for _, plan := range plans {
 		if acc == nil {
 			acc = plan
@@ -557,9 +611,9 @@ func leftToRightSolve(qg *abstract.QueryGraph, reservedVars *sqlparser.ReservedV
 	return acc, nil
 }
 
-// seedPlanList returns a routePlan for each table in the qg
-func seedPlanList(qg *abstract.QueryGraph, reservedVars *sqlparser.ReservedVars, semTable *semantics.SemTable, vschema ContextVSchema) ([]joinTree, error) {
-	plans := make([]joinTree, len(qg.Tables))
+// seedPlanList returns a routeTree for each table in the qg
+func seedPlanList(qg *abstract.QueryGraph, reservedVars *sqlparser.ReservedVars, semTable *semantics.SemTable, vschema ContextVSchema) ([]queryTree, error) {
+	plans := make([]queryTree, len(qg.Tables))
 
 	// we start by seeding the table with the single routes
 	for i, table := range qg.Tables {
@@ -576,17 +630,17 @@ func seedPlanList(qg *abstract.QueryGraph, reservedVars *sqlparser.ReservedVars,
 	return plans, nil
 }
 
-func removeAt(plans []joinTree, idx int) []joinTree {
+func removeAt(plans []queryTree, idx int) []queryTree {
 	return append(plans[:idx], plans[idx+1:]...)
 }
 
-func createRoutePlan(table *abstract.QueryTable, solves semantics.TableSet, reservedVars *sqlparser.ReservedVars, vschema ContextVSchema) (*routePlan, error) {
+func createRoutePlan(table *abstract.QueryTable, solves semantics.TableSet, reservedVars *sqlparser.ReservedVars, vschema ContextVSchema) (*routeTree, error) {
 	if table.IsInfSchema {
 		ks, err := vschema.AnyKeyspace()
 		if err != nil {
 			return nil, err
 		}
-		rp := &routePlan{
+		rp := &routeTree{
 			routeOpCode: engine.SelectDBA,
 			solved:      solves,
 			keyspace:    ks,
@@ -625,7 +679,7 @@ func createRoutePlan(table *abstract.QueryTable, solves semantics.TableSet, rese
 			table.Alias.As = sqlparser.NewTableIdent(name.String())
 		}
 	}
-	plan := &routePlan{
+	plan := &routeTree{
 		solved: solves,
 		tables: []relation{&routeTable{
 			qtable: table,
@@ -662,32 +716,36 @@ func createRoutePlan(table *abstract.QueryTable, solves semantics.TableSet, rese
 	return plan, nil
 }
 
-func findColumnVindex(a *routePlan, exp sqlparser.Expr, sem *semantics.SemTable) vindexes.SingleColumn {
+func findColumnVindex(a *routeTree, exp sqlparser.Expr, sem *semantics.SemTable) vindexes.SingleColumn {
 	left, isCol := exp.(*sqlparser.ColName)
 	if !isCol {
 		return nil
 	}
-	leftDep := sem.Dependencies(left)
+	leftDep := sem.BaseTableDependencies(left)
 
 	var singCol vindexes.SingleColumn
 
-	_ = visitTables(a.tables, func(table *routeTable) error {
-		if leftDep.IsSolvedBy(table.qtable.TableID) {
-			for _, vindex := range table.vtable.ColumnVindexes {
+	_ = visitRelations(a.tables, func(rel relation) (bool, error) {
+		rb, isRoute := rel.(*routeTable)
+		if !isRoute {
+			return true, nil
+		}
+		if leftDep.IsSolvedBy(rb.qtable.TableID) {
+			for _, vindex := range rb.vtable.ColumnVindexes {
 				sC, isSingle := vindex.Vindex.(vindexes.SingleColumn)
 				if isSingle && vindex.Columns[0].Equal(left.Name) {
 					singCol = sC
-					return io.EOF
+					return false, io.EOF
 				}
 			}
 		}
-		return nil
+		return false, nil
 	})
 
 	return singCol
 }
 
-func canMergeOnFilter(a, b *routePlan, predicate sqlparser.Expr, sem *semantics.SemTable) bool {
+func canMergeOnFilter(a, b *routeTree, predicate sqlparser.Expr, sem *semantics.SemTable) bool {
 	comparison, ok := predicate.(*sqlparser.ComparisonExpr)
 	if !ok {
 		return false
@@ -713,7 +771,7 @@ func canMergeOnFilter(a, b *routePlan, predicate sqlparser.Expr, sem *semantics.
 	return rVindex == lVindex
 }
 
-func canMergeOnFilters(a, b *routePlan, joinPredicates []sqlparser.Expr, semTable *semantics.SemTable) bool {
+func canMergeOnFilters(a, b *routeTree, joinPredicates []sqlparser.Expr, semTable *semantics.SemTable) bool {
 	for _, predicate := range joinPredicates {
 		for _, expr := range sqlparser.SplitAndExpression(nil, predicate) {
 			if canMergeOnFilter(a, b, expr, semTable) {
@@ -724,7 +782,7 @@ func canMergeOnFilters(a, b *routePlan, joinPredicates []sqlparser.Expr, semTabl
 	return false
 }
 
-func tryMerge(a, b joinTree, joinPredicates []sqlparser.Expr, semTable *semantics.SemTable, inner bool) joinTree {
+func tryMerge(a, b queryTree, joinPredicates []sqlparser.Expr, semTable *semantics.SemTable, inner bool) queryTree {
 	aRoute, bRoute := joinTreesToRoutes(a, b)
 	if aRoute == nil || bRoute == nil {
 		return nil
@@ -737,7 +795,7 @@ func tryMerge(a, b joinTree, joinPredicates []sqlparser.Expr, semTable *semantic
 
 	newTabletSet := aRoute.solved | bRoute.solved
 
-	var r *routePlan
+	var r *routeTree
 	if inner {
 		r = createRoutePlanForInner(aRoute, bRoute, newTabletSet, joinPredicates)
 	} else {
@@ -773,19 +831,50 @@ func tryMerge(a, b joinTree, joinPredicates []sqlparser.Expr, semTable *semantic
 	return r
 }
 
-func joinTreesToRoutes(a, b joinTree) (*routePlan, *routePlan) {
-	aRoute, ok := a.(*routePlan)
+func makeRoute(j queryTree) *routeTree {
+	rb, ok := j.(*routeTree)
+	if ok {
+		return rb
+	}
+
+	x, ok := j.(*derivedTree)
 	if !ok {
+		return nil
+	}
+	dp := x.clone().(*derivedTree)
+
+	inner := makeRoute(dp.inner)
+	if inner == nil {
+		return nil
+	}
+
+	dt := &derivedTable{
+		tables:     inner.tables,
+		query:      dp.query,
+		predicates: inner.predicates,
+		leftJoins:  inner.leftJoins,
+		alias:      dp.alias,
+	}
+
+	inner.tables = parenTables{dt}
+	inner.predicates = nil
+	inner.leftJoins = nil
+	return inner
+}
+
+func joinTreesToRoutes(a, b queryTree) (*routeTree, *routeTree) {
+	aRoute := makeRoute(a)
+	if aRoute == nil {
 		return nil, nil
 	}
-	bRoute, ok := b.(*routePlan)
-	if !ok {
+	bRoute := makeRoute(b)
+	if bRoute == nil {
 		return nil, nil
 	}
 	return aRoute, bRoute
 }
 
-func createRoutePlanForInner(aRoute *routePlan, bRoute *routePlan, newTabletSet semantics.TableSet, joinPredicates []sqlparser.Expr) *routePlan {
+func createRoutePlanForInner(aRoute *routeTree, bRoute *routeTree, newTabletSet semantics.TableSet, joinPredicates []sqlparser.Expr) *routeTree {
 	var tables parenTables
 	if !aRoute.hasOuterjoins() {
 		tables = append(aRoute.tables, bRoute.tables...)
@@ -803,7 +892,7 @@ func createRoutePlanForInner(aRoute *routePlan, bRoute *routePlan, newTabletSet 
 		}
 	}
 
-	return &routePlan{
+	return &routeTree{
 		routeOpCode: aRoute.routeOpCode,
 		solved:      newTabletSet,
 		tables:      tables,
@@ -835,12 +924,12 @@ func findTables(deps semantics.TableSet, tables parenTables) (relation, relation
 	return nil, nil, tables
 }
 
-func createRoutePlanForOuter(aRoute, bRoute *routePlan, semTable *semantics.SemTable, newTabletSet semantics.TableSet, joinPredicates []sqlparser.Expr) *routePlan {
+func createRoutePlanForOuter(aRoute, bRoute *routeTree, semTable *semantics.SemTable, newTabletSet semantics.TableSet, joinPredicates []sqlparser.Expr) *routeTree {
 	// create relation slice with all tables
 	tables := bRoute.tables
 	// we are doing an outer join where the outer part contains multiple tables - we have to turn the outer part into a join or two
 	for _, predicate := range bRoute.predicates {
-		deps := semTable.Dependencies(predicate)
+		deps := semTable.BaseTableDependencies(predicate)
 		aTbl, bTbl, newTables := findTables(deps, tables)
 		tables = newTables
 		if aTbl != nil && bTbl != nil {
@@ -860,7 +949,7 @@ func createRoutePlanForOuter(aRoute, bRoute *routePlan, semTable *semantics.SemT
 		outer = tables
 	}
 
-	return &routePlan{
+	return &routeTree{
 		routeOpCode: aRoute.routeOpCode,
 		solved:      newTabletSet,
 		tables:      aRoute.tables,

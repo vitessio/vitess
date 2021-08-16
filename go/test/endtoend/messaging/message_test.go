@@ -277,7 +277,7 @@ func TestReparenting(t *testing.T) {
 	clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(
 		"PlannedReparentShard",
 		"-keyspace_shard", userKeyspace+"/-80",
-		"-new_master", shard0Replica.Alias)
+		"-new_primary", shard0Replica.Alias)
 	// validate topology
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("Validate")
 	require.Nil(t, err)
@@ -290,7 +290,7 @@ func TestReparenting(t *testing.T) {
 	assert.Equal(t, 0, getClientCount(shard0Primary))
 	assert.Equal(t, 1, getClientCount(shard0Replica))
 	assert.Equal(t, 1, getClientCount(shard1Primary))
-	session := stream.Session("@master", nil)
+	session := stream.Session("@primary", nil)
 	cluster.ExecuteQueriesUsingVtgate(t, session, "insert into sharded_message (id, message) values (3,'hello world 3')")
 
 	// validate that we have received inserted message
@@ -300,7 +300,7 @@ func TestReparenting(t *testing.T) {
 	clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(
 		"PlannedReparentShard",
 		"-keyspace_shard", userKeyspace+"/-80",
-		"-new_master", shard0Primary.Alias)
+		"-new_primary", shard0Primary.Alias)
 	// validate topology
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("Validate")
 	require.Nil(t, err)
@@ -350,7 +350,7 @@ func TestConnection(t *testing.T) {
 
 	// insert data in primary and validate that we receive this
 	// in message stream
-	session := stream.Session("@master", nil)
+	session := stream.Session("@primary", nil)
 	// insert data in primary
 	cluster.ExecuteQueriesUsingVtgate(t, session, "insert into sharded_message (id, message) values (2,'hello world 2')")
 	cluster.ExecuteQueriesUsingVtgate(t, session, "insert into sharded_message (id, message) values (5,'hello world 5')")
@@ -378,7 +378,7 @@ func testMessaging(t *testing.T, name, ks string) {
 	require.Nil(t, err)
 	defer stream.Close()
 
-	session := stream.Session("@master", nil)
+	session := stream.Session("@primary", nil)
 	cluster.ExecuteQueriesUsingVtgate(t, session, "insert into "+name+" (id, message) values (4,'hello world 4')")
 	cluster.ExecuteQueriesUsingVtgate(t, session, "insert into "+name+" (id, message) values (1,'hello world 1')")
 
@@ -459,7 +459,7 @@ func VtgateGrpcConn(ctx context.Context, cluster *cluster.LocalProcessCluster) (
 // MessageStream strarts the stream for the corresponding connection.
 func (stream *VTGateStream) MessageStream(ks, shard string, keyRange *topodata.KeyRange, name string) (*sqltypes.Result, error) {
 	// start message stream which send received message to the respChan
-	session := stream.Session("@master", nil)
+	session := stream.Session("@primary", nil)
 	resultStream, err := session.StreamExecute(stream.ctx, fmt.Sprintf("stream * from %s", name), nil)
 	if err != nil {
 		return nil, err

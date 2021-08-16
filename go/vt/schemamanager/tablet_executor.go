@@ -83,7 +83,7 @@ func (exec *TabletExecutor) SkipPreflight() {
 	exec.skipPreflight = true
 }
 
-// Open opens a connection to the master for every shard.
+// Open opens a connection to the primary for every shard.
 func (exec *TabletExecutor) Open(ctx context.Context, keyspace string) error {
 	if !exec.isClosed {
 		return nil
@@ -99,18 +99,18 @@ func (exec *TabletExecutor) Open(ctx context.Context, keyspace string) error {
 		if err != nil {
 			return fmt.Errorf("unable to get shard info, keyspace: %s, shard: %s, error: %v", keyspace, shardName, err)
 		}
-		if !shardInfo.HasMaster() {
-			return fmt.Errorf("shard: %s does not have a master", shardName)
+		if !shardInfo.HasPrimary() {
+			return fmt.Errorf("shard: %s does not have a primary", shardName)
 		}
-		tabletInfo, err := exec.wr.TopoServer().GetTablet(ctx, shardInfo.MasterAlias)
+		tabletInfo, err := exec.wr.TopoServer().GetTablet(ctx, shardInfo.PrimaryAlias)
 		if err != nil {
-			return fmt.Errorf("unable to get master tablet info, keyspace: %s, shard: %s, error: %v", keyspace, shardName, err)
+			return fmt.Errorf("unable to get primary tablet info, keyspace: %s, shard: %s, error: %v", keyspace, shardName, err)
 		}
 		exec.tablets[i] = tabletInfo.Tablet
 	}
 
 	if len(exec.tablets) == 0 {
-		return fmt.Errorf("keyspace: %s does not contain any master tablets", keyspace)
+		return fmt.Errorf("keyspace: %s does not contain any primary tablets", keyspace)
 	}
 	exec.isClosed = false
 	return nil
@@ -189,10 +189,10 @@ func (exec *TabletExecutor) isOnlineSchemaDDL(stmt sqlparser.Statement) (isOnlin
 func (exec *TabletExecutor) detectBigSchemaChanges(ctx context.Context, parsedDDLs []sqlparser.DDLStatement) (bool, error) {
 	// exec.tablets is guaranteed to have at least one element;
 	// Otherwise, Open should fail and executor should fail.
-	masterTabletInfo := exec.tablets[0]
+	primaryTabletInfo := exec.tablets[0]
 	// get database schema, excluding views.
 	dbSchema, err := exec.wr.TabletManagerClient().GetSchema(
-		ctx, masterTabletInfo, []string{}, []string{}, false)
+		ctx, primaryTabletInfo, []string{}, []string{}, false)
 	if err != nil {
 		return false, fmt.Errorf("unable to get database schema, error: %v", err)
 	}
@@ -350,10 +350,10 @@ func (exec *TabletExecutor) executeOnlineDDL(
 // executeOnAllTablets runs a query on all tablets, synchronously. This can be a long running operation.
 func (exec *TabletExecutor) executeOnAllTablets(ctx context.Context, execResult *ExecuteResult, sql string, viaQueryService bool) {
 	var wg sync.WaitGroup
-	numOfMasterTablets := len(exec.tablets)
-	wg.Add(numOfMasterTablets)
-	errChan := make(chan ShardWithError, numOfMasterTablets)
-	successChan := make(chan ShardResult, numOfMasterTablets)
+	numOfPrimaryTablets := len(exec.tablets)
+	wg.Add(numOfPrimaryTablets)
+	errChan := make(chan ShardWithError, numOfPrimaryTablets)
+	successChan := make(chan ShardResult, numOfPrimaryTablets)
 	for _, tablet := range exec.tablets {
 		go func(tablet *topodatapb.Tablet) {
 			defer wg.Done()
@@ -386,7 +386,7 @@ func (exec *TabletExecutor) executeOnAllTablets(ctx context.Context, execResult 
 		wg.Add(1)
 		go func(result ShardResult) {
 			defer wg.Done()
-			exec.wr.ReloadSchemaShard(reloadCtx, exec.keyspace, result.Shard, result.Position, concurrency, false /* includeMaster */)
+			exec.wr.ReloadSchemaShard(reloadCtx, exec.keyspace, result.Shard, result.Position, concurrency, false /* includePrimary */)
 		}(result)
 	}
 	wg.Wait()
@@ -412,12 +412,12 @@ func (exec *TabletExecutor) executeOneTablet(
 		return
 	}
 	// Get a replication position that's guaranteed to be after the schema change
-	// was applied on the master.
+	// was applied on the primary.
 	pos, err := exec.wr.TabletManagerClient().MasterPosition(ctx, tablet)
 	if err != nil {
 		errChan <- ShardWithError{
 			Shard: tablet.Shard,
-			Err:   fmt.Sprintf("couldn't get replication position after applying schema change on master: %v", err),
+			Err:   fmt.Sprintf("couldn't get replication position after applying schema change on primary: %v", err),
 		}
 		return
 	}

@@ -136,26 +136,26 @@ func (wr *Wrangler) validateShard(ctx context.Context, keyspace, shard string, p
 
 	tabletMap, _ := wr.ts.GetTabletMap(ctx, aliases)
 
-	var masterAlias *topodatapb.TabletAlias
+	var primaryAlias *topodatapb.TabletAlias
 	for _, alias := range aliases {
 		tabletInfo, ok := tabletMap[topoproto.TabletAliasString(alias)]
 		if !ok {
 			results <- fmt.Errorf("tablet %v not found in map", topoproto.TabletAliasString(alias))
 			continue
 		}
-		if tabletInfo.Type == topodatapb.TabletType_MASTER {
-			if masterAlias != nil {
-				results <- fmt.Errorf("shard %v/%v already has master %v but found other master %v", keyspace, shard, topoproto.TabletAliasString(masterAlias), topoproto.TabletAliasString(alias))
+		if tabletInfo.Type == topodatapb.TabletType_PRIMARY {
+			if primaryAlias != nil {
+				results <- fmt.Errorf("shard %v/%v already has primary %v but found other primary %v", keyspace, shard, topoproto.TabletAliasString(primaryAlias), topoproto.TabletAliasString(alias))
 			} else {
-				masterAlias = alias
+				primaryAlias = alias
 			}
 		}
 	}
 
-	if masterAlias == nil {
-		results <- fmt.Errorf("no master for shard %v/%v", keyspace, shard)
-	} else if !topoproto.TabletAliasEqual(shardInfo.MasterAlias, masterAlias) {
-		results <- fmt.Errorf("master mismatch for shard %v/%v: found %v, expected %v", keyspace, shard, topoproto.TabletAliasString(masterAlias), topoproto.TabletAliasString(shardInfo.MasterAlias))
+	if primaryAlias == nil {
+		results <- fmt.Errorf("no primary for shard %v/%v", keyspace, shard)
+	} else if !topoproto.TabletAliasEqual(shardInfo.PrimaryAlias, primaryAlias) {
+		results <- fmt.Errorf("primary mismatch for shard %v/%v: found %v, expected %v", keyspace, shard, topoproto.TabletAliasString(primaryAlias), topoproto.TabletAliasString(shardInfo.PrimaryAlias))
 	}
 
 	for _, alias := range aliases {
@@ -187,25 +187,25 @@ func normalizeIP(ip string) string {
 }
 
 func (wr *Wrangler) validateReplication(ctx context.Context, shardInfo *topo.ShardInfo, tabletMap map[string]*topo.TabletInfo, results chan<- error) {
-	if shardInfo.MasterAlias == nil {
-		results <- fmt.Errorf("no master in shard record %v/%v", shardInfo.Keyspace(), shardInfo.ShardName())
+	if shardInfo.PrimaryAlias == nil {
+		results <- fmt.Errorf("no primary in shard record %v/%v", shardInfo.Keyspace(), shardInfo.ShardName())
 		return
 	}
 
-	shardInfoMasterAliasStr := topoproto.TabletAliasString(shardInfo.MasterAlias)
-	masterTabletInfo, ok := tabletMap[shardInfoMasterAliasStr]
+	shardInfoPrimaryAliasStr := topoproto.TabletAliasString(shardInfo.PrimaryAlias)
+	primaryTabletInfo, ok := tabletMap[shardInfoPrimaryAliasStr]
 	if !ok {
-		results <- fmt.Errorf("master %v not in tablet map", shardInfoMasterAliasStr)
+		results <- fmt.Errorf("primary %v not in tablet map", shardInfoPrimaryAliasStr)
 		return
 	}
 
-	replicaList, err := wr.tmc.GetReplicas(ctx, masterTabletInfo.Tablet)
+	replicaList, err := wr.tmc.GetReplicas(ctx, primaryTabletInfo.Tablet)
 	if err != nil {
-		results <- fmt.Errorf("GetReplicas(%v) failed: %v", masterTabletInfo, err)
+		results <- fmt.Errorf("GetReplicas(%v) failed: %v", primaryTabletInfo, err)
 		return
 	}
 	if len(replicaList) == 0 {
-		results <- fmt.Errorf("no replicas of tablet %v found", shardInfoMasterAliasStr)
+		results <- fmt.Errorf("no replicas of tablet %v found", shardInfoPrimaryAliasStr)
 		return
 	}
 
@@ -228,7 +228,7 @@ func (wr *Wrangler) validateReplication(ctx context.Context, shardInfo *topo.Sha
 		replicaIPMap[normalizeIP(replicaAddr)] = true
 	}
 
-	// See if every entry in the replication graph is connected to the master.
+	// See if every entry in the replication graph is connected to the primary.
 	for _, tablet := range tabletMap {
 		if !tablet.IsReplicaType() {
 			continue

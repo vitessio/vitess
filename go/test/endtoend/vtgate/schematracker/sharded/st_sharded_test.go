@@ -165,6 +165,37 @@ func TestMain(m *testing.M) {
 	os.Exit(exitCode)
 }
 
+func TestNewTable(t *testing.T) {
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	shard1Params := vtParams
+	shard1Params.DbName += ":-80@primary"
+	connShard1, err := mysql.Connect(ctx, &shard1Params)
+	require.NoError(t, err)
+	defer connShard1.Close()
+
+	shard2Params := vtParams
+	shard2Params.DbName += ":80-@primary"
+	connShard2, err := mysql.Connect(ctx, &shard2Params)
+	require.NoError(t, err)
+	defer connShard2.Close()
+
+	_ = exec(t, conn, "create table test_table (id bigint, name varchar(100))")
+
+	time.Sleep(2 * time.Second)
+
+	assertMatches(t, conn, "select * from test_table", `[]`)
+	assertMatches(t, connShard1, "select * from test_table", `[]`)
+	assertMatches(t, connShard2, "select * from test_table", `[]`)
+
+	exec(t, conn, "drop table test_table")
+
+	time.Sleep(2 * time.Second)
+}
+
 func TestAmbiguousColumnJoin(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	ctx := context.Background()

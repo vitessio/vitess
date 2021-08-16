@@ -196,6 +196,11 @@ func (client *FakeTabletManagerClient) MasterStatus(ctx context.Context, tablet 
 	return &replicationdatapb.PrimaryStatus{}, nil
 }
 
+// PrimaryStatus is part of the tmclient.TabletManagerClient interface.
+func (client *FakeTabletManagerClient) PrimaryStatus(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error) {
+	return &replicationdatapb.PrimaryStatus{}, nil
+}
+
 // StartReplication is part of the tmclient.TabletManagerClient interface.
 func (client *FakeTabletManagerClient) StartReplication(ctx context.Context, tablet *topodatapb.Tablet) error {
 	return nil
@@ -228,6 +233,11 @@ func (client *FakeTabletManagerClient) ReplicaWasRestarted(ctx context.Context, 
 
 // MasterPosition is part of the tmclient.TabletManagerClient interface.
 func (client *FakeTabletManagerClient) MasterPosition(ctx context.Context, tablet *topodatapb.Tablet) (string, error) {
+	return "", nil
+}
+
+// PrimaryPosition is part of the tmclient.TabletManagerClient interface.
+func (client *FakeTabletManagerClient) PrimaryPosition(ctx context.Context, tablet *topodatapb.Tablet) (string, error) {
 	return "", nil
 }
 
@@ -275,6 +285,11 @@ func (client *FakeTabletManagerClient) InitMaster(ctx context.Context, tablet *t
 	return "", nil
 }
 
+// InitPrimary is part of the tmclient.TabletManagerClient interface.
+func (client *FakeTabletManagerClient) InitPrimary(ctx context.Context, tablet *topodatapb.Tablet) (string, error) {
+	return "", nil
+}
+
 // PopulateReparentJournal is part of the tmclient.TabletManagerClient interface.
 func (client *FakeTabletManagerClient) PopulateReparentJournal(ctx context.Context, tablet *topodatapb.Tablet, timeCreatedNS int64, actionName string, masterAlias *topodatapb.TabletAlias, position string) error {
 	return nil
@@ -290,8 +305,23 @@ func (client *FakeTabletManagerClient) UndoDemoteMaster(ctx context.Context, tab
 	return nil
 }
 
+// DemotePrimary is part of the tmclient.TabletManagerClient interface.
+func (client *FakeTabletManagerClient) DemotePrimary(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error) {
+	return nil, nil
+}
+
+// UndoDemotePrimary is part of the tmclient.TabletManagerClient interface.
+func (client *FakeTabletManagerClient) UndoDemotePrimary(ctx context.Context, tablet *topodatapb.Tablet) error {
+	return nil
+}
+
 // SetMaster is part of the tmclient.TabletManagerClient interface.
 func (client *FakeTabletManagerClient) SetMaster(ctx context.Context, tablet *topodatapb.Tablet, parent *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool) error {
+	return nil
+}
+
+// SetReplicationSource is part of the tmclient.TabletManagerClient interface.
+func (client *FakeTabletManagerClient) SetReplicationSource(ctx context.Context, tablet *topodatapb.Tablet, parent *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool) error {
 	return nil
 }
 

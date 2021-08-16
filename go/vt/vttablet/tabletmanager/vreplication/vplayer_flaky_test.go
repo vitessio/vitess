@@ -410,7 +410,7 @@ func TestPlayerStatementModeWithFilter(t *testing.T) {
 	output := []string{
 		"begin",
 		"rollback",
-		"/update _vt.vreplication set message='Error: filter rules are not supported for SBR",
+		"/update _vt.vreplication set message='filter rules are not supported for SBR",
 	}
 
 	execStatements(t, input)
@@ -1519,9 +1519,9 @@ func TestPlayerDDL(t *testing.T) {
 		OnDdl:    binlogdatapb.OnDDLAction_STOP,
 	}
 	cancel, id := startVReplication(t, bls, "")
-	pos0 := masterPosition(t) //For debugging only
+	pos0 := primaryPosition(t) //For debugging only
 	execStatements(t, []string{"alter table t1 add column val varchar(128)"})
-	pos1 := masterPosition(t)
+	pos1 := primaryPosition(t)
 	// The stop position must be the GTID of the first DDL
 	expectDBClientQueries(t, []string{
 		"begin",
@@ -1529,9 +1529,9 @@ func TestPlayerDDL(t *testing.T) {
 		"/update _vt.vreplication set state='Stopped'",
 		"commit",
 	})
-	pos2b := masterPosition(t)
+	pos2b := primaryPosition(t)
 	execStatements(t, []string{"alter table t1 drop column val"})
-	pos2 := masterPosition(t)
+	pos2 := primaryPosition(t)
 	log.Errorf("Expected log:: TestPlayerDDL Positions are: before first alter %v, after first alter %v, before second alter %v, after second alter %v",
 		pos0, pos1, pos2b, pos2) //For debugging only: to check what are the positions when test works and if/when it fails
 	// Restart vreplication
@@ -1568,7 +1568,7 @@ func TestPlayerDDL(t *testing.T) {
 	execStatements(t, []string{"alter table t1 add column val2 varchar(128)"})
 	expectDBClientQueries(t, []string{
 		"alter table t1 add column val2 varchar(128)",
-		"/update _vt.vreplication set message='Error: Duplicate",
+		"/update _vt.vreplication set message='Duplicate",
 	})
 	cancel()
 
@@ -1680,7 +1680,7 @@ func TestPlayerStopPos(t *testing.T) {
 		Filter:   filter,
 		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
 	}
-	startPos := masterPosition(t)
+	startPos := primaryPosition(t)
 	query := binlogplayer.CreateVReplicationState("test", bls, startPos, binlogplayer.BlpStopped, vrepldb)
 	qr, err := playerEngine.Exec(query)
 	if err != nil {
@@ -1697,7 +1697,7 @@ func TestPlayerStopPos(t *testing.T) {
 	execStatements(t, []string{
 		"insert into yes values(1, 'aaa')",
 	})
-	stopPos := masterPosition(t)
+	stopPos := primaryPosition(t)
 	query = binlogplayer.StartVReplicationUntil(id, stopPos)
 	if _, err := playerEngine.Exec(query); err != nil {
 		t.Fatal(err)
@@ -1719,7 +1719,7 @@ func TestPlayerStopPos(t *testing.T) {
 		"insert into no values(2, 'aaa')",
 		"insert into no values(3, 'aaa')",
 	})
-	stopPos = masterPosition(t)
+	stopPos = primaryPosition(t)
 	execStatements(t, []string{
 		"insert into no values(4, 'aaa')",
 	})
@@ -1773,7 +1773,7 @@ func TestPlayerStopAtOther(t *testing.T) {
 	execStatements(t, []string{
 		"insert into t1 values(1, 'aaa')",
 	})
-	startPos := masterPosition(t)
+	startPos := primaryPosition(t)
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
 			Match: "/.*",
@@ -1830,7 +1830,7 @@ func TestPlayerStopAtOther(t *testing.T) {
 		"insert into t1 values(2, 'ddd')",
 		"grant select on *.* to 'vt_app'@'127.0.0.1'",
 	})
-	stopPos := masterPosition(t)
+	stopPos := primaryPosition(t)
 	query = binlogplayer.StartVReplicationUntil(id, stopPos)
 	if _, err := playerEngine.Exec(query); err != nil {
 		t.Fatal(err)
@@ -2362,7 +2362,7 @@ func TestRestartOnVStreamEnd(t *testing.T) {
 
 	streamerEngine.Close()
 	expectDBClientQueries(t, []string{
-		"/update _vt.vreplication set message='Error: vstream ended'",
+		"/update _vt.vreplication set message='vstream ended'",
 	})
 	streamerEngine.Open()
 
@@ -2746,7 +2746,7 @@ func startVReplication(t *testing.T, bls *binlogdatapb.BinlogSource, pos string)
 	t.Helper()
 
 	if pos == "" {
-		pos = masterPosition(t)
+		pos = primaryPosition(t)
 	}
 	query := binlogplayer.CreateVReplication("test", bls, pos, 9223372036854775807, 9223372036854775807, 0, vrepldb)
 	qr, err := playerEngine.Exec(query)

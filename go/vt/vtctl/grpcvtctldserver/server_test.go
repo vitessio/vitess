@@ -589,7 +589,7 @@ func TestChangeTabletType(t *testing.T) {
 			shouldErr: true,
 		},
 		{
-			name:  "master promotions not allowed",
+			name:  "primary promotions not allowed",
 			cells: []string{"zone1"},
 			tablets: []*topodatapb.Tablet{
 				{
@@ -605,13 +605,13 @@ func TestChangeTabletType(t *testing.T) {
 					Cell: "zone1",
 					Uid:  100,
 				},
-				DbType: topodatapb.TabletType_MASTER,
+				DbType: topodatapb.TabletType_PRIMARY,
 			},
 			expected:  nil,
 			shouldErr: true,
 		},
 		{
-			name:  "master demotions not allowed",
+			name:  "primary demotions not allowed",
 			cells: []string{"zone1"},
 			tablets: []*topodatapb.Tablet{
 				{
@@ -619,7 +619,7 @@ func TestChangeTabletType(t *testing.T) {
 						Cell: "zone1",
 						Uid:  100,
 					},
-					Type: topodatapb.TabletType_MASTER,
+					Type: topodatapb.TabletType_PRIMARY,
 				},
 			},
 			req: &vtctldatapb.ChangeTabletTypeRequest{
@@ -1021,8 +1021,8 @@ func TestCreateShard(t *testing.T) {
 					Keyspace: "testkeyspace",
 					Name:     "-",
 					Shard: &topodatapb.Shard{
-						KeyRange:        &topodatapb.KeyRange{},
-						IsMasterServing: true,
+						KeyRange:         &topodatapb.KeyRange{},
+						IsPrimaryServing: true,
 					},
 				},
 				ShardAlreadyExists: false,
@@ -1048,8 +1048,8 @@ func TestCreateShard(t *testing.T) {
 					Keyspace: "testkeyspace",
 					Name:     "-",
 					Shard: &topodatapb.Shard{
-						KeyRange:        &topodatapb.KeyRange{},
-						IsMasterServing: true,
+						KeyRange:         &topodatapb.KeyRange{},
+						IsPrimaryServing: true,
 					},
 				},
 				ShardAlreadyExists: false,
@@ -1111,8 +1111,8 @@ func TestCreateShard(t *testing.T) {
 					Keyspace: "testkeyspace",
 					Name:     "-",
 					Shard: &topodatapb.Shard{
-						KeyRange:        &topodatapb.KeyRange{},
-						IsMasterServing: true,
+						KeyRange:         &topodatapb.KeyRange{},
+						IsPrimaryServing: true,
 					},
 				},
 				ShardAlreadyExists: false,
@@ -1170,8 +1170,8 @@ func TestCreateShard(t *testing.T) {
 					Keyspace: "testkeyspace",
 					Name:     "-",
 					Shard: &topodatapb.Shard{
-						KeyRange:        &topodatapb.KeyRange{},
-						IsMasterServing: true,
+						KeyRange:         &topodatapb.KeyRange{},
+						IsPrimaryServing: true,
 					},
 				},
 				ShardAlreadyExists: true,
@@ -1683,7 +1683,7 @@ func TestDeleteShards(t *testing.T) {
 					"testkeyspace": &topodatapb.SrvKeyspace{
 						Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
 							{
-								ServedType: topodatapb.TabletType_MASTER,
+								ServedType: topodatapb.TabletType_PRIMARY,
 								ShardReferences: []*topodatapb.ShardReference{
 									{
 										Name:     "-",
@@ -1727,7 +1727,7 @@ func TestDeleteShards(t *testing.T) {
 					"testkeyspace": &topodatapb.SrvKeyspace{
 						Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
 							{
-								ServedType: topodatapb.TabletType_MASTER,
+								ServedType: topodatapb.TabletType_PRIMARY,
 								ShardReferences: []*topodatapb.ShardReference{
 									{
 										Name:     "-",
@@ -2027,10 +2027,10 @@ func TestDeleteTablets(t *testing.T) {
 						Cell: "zone1",
 						Uid:  100,
 					},
-					Type:     topodatapb.TabletType_MASTER,
+					Type:     topodatapb.TabletType_PRIMARY,
 					Keyspace: "testkeyspace",
 					Shard:    "-",
-					MasterTermStartTime: &vttime.Time{
+					PrimaryTermStartTime: &vttime.Time{
 						Seconds:     100,
 						Nanoseconds: 10,
 					},
@@ -2057,10 +2057,10 @@ func TestDeleteTablets(t *testing.T) {
 						Cell: "zone1",
 						Uid:  100,
 					},
-					Type:     topodatapb.TabletType_MASTER,
+					Type:     topodatapb.TabletType_PRIMARY,
 					Keyspace: "testkeyspace",
 					Shard:    "-",
-					MasterTermStartTime: &vttime.Time{
+					PrimaryTermStartTime: &vttime.Time{
 						Seconds:     100,
 						Nanoseconds: 10,
 					},
@@ -2149,10 +2149,10 @@ func TestDeleteTablets(t *testing.T) {
 						Cell: "zone1",
 						Uid:  100,
 					},
-					Type:     topodatapb.TabletType_MASTER,
+					Type:     topodatapb.TabletType_PRIMARY,
 					Keyspace: "testkeyspace",
 					Shard:    "-",
-					MasterTermStartTime: &vttime.Time{
+					PrimaryTermStartTime: &vttime.Time{
 						Seconds:     100,
 						Nanoseconds: 10,
 					},
@@ -2164,10 +2164,10 @@ func TestDeleteTablets(t *testing.T) {
 						Cell: "zone1",
 						Uid:  101,
 					},
-					Type:     topodatapb.TabletType_MASTER,
+					Type:     topodatapb.TabletType_PRIMARY,
 					Keyspace: "testkeyspace",
 					Shard:    "-",
-					MasterTermStartTime: &vttime.Time{
+					PrimaryTermStartTime: &vttime.Time{
 						Seconds:     1001,
 						Nanoseconds: 101,
 					},
@@ -2175,11 +2175,11 @@ func TestDeleteTablets(t *testing.T) {
 			},
 			shardFieldUpdates: map[string]func(*topo.ShardInfo) error{
 				"testkeyspace/-": func(si *topo.ShardInfo) error {
-					si.MasterAlias = &topodatapb.TabletAlias{
+					si.PrimaryAlias = &topodatapb.TabletAlias{
 						Cell: "zone1",
 						Uid:  101,
 					}
-					si.MasterTermStartTime = &vttime.Time{
+					si.PrimaryTermStartTime = &vttime.Time{
 						Seconds:     1001,
 						Nanoseconds: 101,
 					}
@@ -2205,10 +2205,10 @@ func TestDeleteTablets(t *testing.T) {
 						Cell: "zone1",
 						Uid:  101,
 					},
-					Type:     topodatapb.TabletType_MASTER,
+					Type:     topodatapb.TabletType_PRIMARY,
 					Keyspace: "testkeyspace",
 					Shard:    "-",
-					MasterTermStartTime: &vttime.Time{
+					PrimaryTermStartTime: &vttime.Time{
 						Seconds:     1001,
 						Nanoseconds: 101,
 					},
@@ -2261,10 +2261,10 @@ func TestDeleteTablets(t *testing.T) {
 						Cell: "zone1",
 						Uid:  100,
 					},
-					Type:     topodatapb.TabletType_MASTER,
+					Type:     topodatapb.TabletType_PRIMARY,
 					Keyspace: "testkeyspace",
 					Shard:    "-",
-					MasterTermStartTime: &vttime.Time{
+					PrimaryTermStartTime: &vttime.Time{
 						Seconds:     100,
 						Nanoseconds: 10,
 					},
@@ -2293,10 +2293,10 @@ func TestDeleteTablets(t *testing.T) {
 						Cell: "zone1",
 						Uid:  100,
 					},
-					Type:     topodatapb.TabletType_MASTER,
+					Type:     topodatapb.TabletType_PRIMARY,
 					Keyspace: "testkeyspace",
 					Shard:    "-",
-					MasterTermStartTime: &vttime.Time{
+					PrimaryTermStartTime: &vttime.Time{
 						Seconds:     100,
 						Nanoseconds: 10,
 					},
@@ -2312,10 +2312,10 @@ func TestDeleteTablets(t *testing.T) {
 						Cell: "zone1",
 						Uid:  100,
 					},
-					Type:     topodatapb.TabletType_MASTER,
+					Type:     topodatapb.TabletType_PRIMARY,
 					Keyspace: "testkeyspace",
 					Shard:    "-80",
-					MasterTermStartTime: &vttime.Time{
+					PrimaryTermStartTime: &vttime.Time{
 						Seconds:     100,
 						Nanoseconds: 10,
 					},
@@ -2325,10 +2325,10 @@ func TestDeleteTablets(t *testing.T) {
 						Cell: "zone1",
 						Uid:  200,
 					},
-					Type:     topodatapb.TabletType_MASTER,
+					Type:     topodatapb.TabletType_PRIMARY,
 					Keyspace: "testkeyspace",
 					Shard:    "80-",
-					MasterTermStartTime: &vttime.Time{
+					PrimaryTermStartTime: &vttime.Time{
 						Seconds:     200,
 						Nanoseconds: 20,
 					},
@@ -2358,10 +2358,10 @@ func TestDeleteTablets(t *testing.T) {
 						Cell: "zone1",
 						Uid:  200,
 					},
-					Type:     topodatapb.TabletType_MASTER,
+					Type:     topodatapb.TabletType_PRIMARY,
 					Keyspace: "testkeyspace",
 					Shard:    "80-",
-					MasterTermStartTime: &vttime.Time{
+					PrimaryTermStartTime: &vttime.Time{
 						Seconds:     200,
 						Nanoseconds: 20,
 					},
@@ -2503,8 +2503,8 @@ func TestEmergencyReparentShard(t *testing.T) {
 						Cell: "zone1",
 						Uid:  100,
 					},
-					Type: topodatapb.TabletType_MASTER,
-					MasterTermStartTime: &vttime.Time{
+					Type: topodatapb.TabletType_PRIMARY,
+					PrimaryTermStartTime: &vttime.Time{
 						Seconds: 100,
 					},
 					Keyspace: "testkeyspace",
@@ -2642,9 +2642,9 @@ func TestEmergencyReparentShard(t *testing.T) {
 			t.Parallel()
 
 			testutil.AddTablets(ctx, t, tt.ts, &testutil.AddTabletOptions{
-				AlsoSetShardMaster:  true,
-				ForceSetShardMaster: true,
-				SkipShardCreation:   false,
+				AlsoSetShardPrimary:  true,
+				ForceSetShardPrimary: true,
+				SkipShardCreation:    false,
 			}, tt.tablets...)
 
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, tt.ts, tt.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
@@ -3295,8 +3295,8 @@ func TestGetShard(t *testing.T) {
 					Keyspace: "testkeyspace",
 					Name:     "-",
 					Shard: &topodatapb.Shard{
-						KeyRange:        &topodatapb.KeyRange{},
-						IsMasterServing: true,
+						KeyRange:         &topodatapb.KeyRange{},
+						IsPrimaryServing: true,
 					},
 				},
 			},
@@ -3981,21 +3981,21 @@ func TestGetTablets(t *testing.T) {
 						Cell: "cell1",
 						Uid:  102,
 					},
-					Keyspace:            "ks2",
-					Shard:               "-",
-					Type:                topodatapb.TabletType_MASTER,
-					MasterTermStartTime: logutil.TimeToProto(time.Date(2006, time.January, 2, 15, 4, 5, 0, time.UTC)),
+					Keyspace:             "ks2",
+					Shard:                "-",
+					Type:                 topodatapb.TabletType_PRIMARY,
+					PrimaryTermStartTime: logutil.TimeToProto(time.Date(2006, time.January, 2, 15, 4, 5, 0, time.UTC)),
 				},
 				{
 					Alias: &topodatapb.TabletAlias{
 						Cell: "cell1",
 						Uid:  103,
 					},
-					Keyspace:            "ks2",
-					Shard:               "-",
-					Hostname:            "stale.primary",
-					Type:                topodatapb.TabletType_MASTER,
-					MasterTermStartTime: logutil.TimeToProto(time.Date(2006, time.January, 2, 14, 4, 5, 0, time.UTC)),
+					Keyspace:             "ks2",
+					Shard:                "-",
+					Hostname:             "stale.primary",
+					Type:                 topodatapb.TabletType_PRIMARY,
+					PrimaryTermStartTime: logutil.TimeToProto(time.Date(2006, time.January, 2, 14, 4, 5, 0, time.UTC)),
 				},
 			},
 			req: &vtctldatapb.GetTabletsRequest{
@@ -4008,21 +4008,21 @@ func TestGetTablets(t *testing.T) {
 						Cell: "cell1",
 						Uid:  102,
 					},
-					Keyspace:            "ks2",
-					Shard:               "-",
-					Type:                topodatapb.TabletType_MASTER,
-					MasterTermStartTime: logutil.TimeToProto(time.Date(2006, time.January, 2, 15, 4, 5, 0, time.UTC)),
+					Keyspace:             "ks2",
+					Shard:                "-",
+					Type:                 topodatapb.TabletType_PRIMARY,
+					PrimaryTermStartTime: logutil.TimeToProto(time.Date(2006, time.January, 2, 15, 4, 5, 0, time.UTC)),
 				},
 				{
 					Alias: &topodatapb.TabletAlias{
 						Cell: "cell1",
 						Uid:  103,
 					},
-					Keyspace:            "ks2",
-					Shard:               "-",
-					Hostname:            "stale.primary",
-					Type:                topodatapb.TabletType_UNKNOWN,
-					MasterTermStartTime: logutil.TimeToProto(time.Date(2006, time.January, 2, 14, 4, 5, 0, time.UTC)),
+					Keyspace:             "ks2",
+					Shard:                "-",
+					Hostname:             "stale.primary",
+					Type:                 topodatapb.TabletType_UNKNOWN,
+					PrimaryTermStartTime: logutil.TimeToProto(time.Date(2006, time.January, 2, 14, 4, 5, 0, time.UTC)),
 				},
 			},
 			shouldErr: false,
@@ -4036,33 +4036,33 @@ func TestGetTablets(t *testing.T) {
 						Cell: "cell1",
 						Uid:  100,
 					},
-					Keyspace:            "ks1",
-					Shard:               "-",
-					Hostname:            "slightly less stale",
-					Type:                topodatapb.TabletType_MASTER,
-					MasterTermStartTime: logutil.TimeToProto(time.Date(2006, time.January, 2, 15, 4, 5, 0, time.UTC)),
+					Keyspace:             "ks1",
+					Shard:                "-",
+					Hostname:             "slightly less stale",
+					Type:                 topodatapb.TabletType_PRIMARY,
+					PrimaryTermStartTime: logutil.TimeToProto(time.Date(2006, time.January, 2, 15, 4, 5, 0, time.UTC)),
 				},
 				{
 					Alias: &topodatapb.TabletAlias{
 						Cell: "cell1",
 						Uid:  101,
 					},
-					Hostname:            "stale primary",
-					Keyspace:            "ks1",
-					Shard:               "-",
-					Type:                topodatapb.TabletType_MASTER,
-					MasterTermStartTime: logutil.TimeToProto(time.Date(2006, time.January, 2, 14, 4, 5, 0, time.UTC)),
+					Hostname:             "stale primary",
+					Keyspace:             "ks1",
+					Shard:                "-",
+					Type:                 topodatapb.TabletType_PRIMARY,
+					PrimaryTermStartTime: logutil.TimeToProto(time.Date(2006, time.January, 2, 14, 4, 5, 0, time.UTC)),
 				},
 				{
 					Alias: &topodatapb.TabletAlias{
 						Cell: "cell1",
 						Uid:  103,
 					},
-					Hostname:            "true primary",
-					Keyspace:            "ks1",
-					Shard:               "-",
-					Type:                topodatapb.TabletType_MASTER,
-					MasterTermStartTime: logutil.TimeToProto(time.Date(2006, time.January, 2, 16, 4, 5, 0, time.UTC)),
+					Hostname:             "true primary",
+					Keyspace:             "ks1",
+					Shard:                "-",
+					Type:                 topodatapb.TabletType_PRIMARY,
+					PrimaryTermStartTime: logutil.TimeToProto(time.Date(2006, time.January, 2, 16, 4, 5, 0, time.UTC)),
 				},
 			},
 			req: &vtctldatapb.GetTabletsRequest{},
@@ -4072,33 +4072,33 @@ func TestGetTablets(t *testing.T) {
 						Cell: "cell1",
 						Uid:  100,
 					},
-					Keyspace:            "ks1",
-					Shard:               "-",
-					Hostname:            "slightly less stale",
-					Type:                topodatapb.TabletType_UNKNOWN,
-					MasterTermStartTime: logutil.TimeToProto(time.Date(2006, time.January, 2, 15, 4, 5, 0, time.UTC)),
+					Keyspace:             "ks1",
+					Shard:                "-",
+					Hostname:             "slightly less stale",
+					Type:                 topodatapb.TabletType_UNKNOWN,
+					PrimaryTermStartTime: logutil.TimeToProto(time.Date(2006, time.January, 2, 15, 4, 5, 0, time.UTC)),
 				},
 				{
 					Alias: &topodatapb.TabletAlias{
 						Cell: "cell1",
 						Uid:  101,
 					},
-					Hostname:            "stale primary",
-					Keyspace:            "ks1",
-					Shard:               "-",
-					Type:                topodatapb.TabletType_UNKNOWN,
-					MasterTermStartTime: logutil.TimeToProto(time.Date(2006, time.January, 2, 14, 4, 5, 0, time.UTC)),
+					Hostname:             "stale primary",
+					Keyspace:             "ks1",
+					Shard:                "-",
+					Type:                 topodatapb.TabletType_UNKNOWN,
+					PrimaryTermStartTime: logutil.TimeToProto(time.Date(2006, time.January, 2, 14, 4, 5, 0, time.UTC)),
 				},
 				{
 					Alias: &topodatapb.TabletAlias{
 						Cell: "cell1",
 						Uid:  103,
 					},
-					Hostname:            "true primary",
-					Keyspace:            "ks1",
-					Shard:               "-",
-					Type:                topodatapb.TabletType_MASTER,
-					MasterTermStartTime: logutil.TimeToProto(time.Date(2006, time.January, 2, 16, 4, 5, 0, time.UTC)),
+					Hostname:             "true primary",
+					Keyspace:             "ks1",
+					Shard:                "-",
+					Type:                 topodatapb.TabletType_PRIMARY,
+					PrimaryTermStartTime: logutil.TimeToProto(time.Date(2006, time.January, 2, 16, 4, 5, 0, time.UTC)),
 				},
 			},
 			shouldErr: false,
@@ -4379,8 +4379,8 @@ func TestPlannedReparentShard(t *testing.T) {
 						Cell: "zone1",
 						Uid:  100,
 					},
-					Type: topodatapb.TabletType_MASTER,
-					MasterTermStartTime: &vttime.Time{
+					Type: topodatapb.TabletType_PRIMARY,
+					PrimaryTermStartTime: &vttime.Time{
 						Seconds: 100,
 					},
 					Keyspace: "testkeyspace",
@@ -4507,9 +4507,9 @@ func TestPlannedReparentShard(t *testing.T) {
 			t.Parallel()
 
 			testutil.AddTablets(ctx, t, tt.ts, &testutil.AddTabletOptions{
-				AlsoSetShardMaster:  true,
-				ForceSetShardMaster: true,
-				SkipShardCreation:   false,
+				AlsoSetShardPrimary:  true,
+				ForceSetShardPrimary: true,
+				SkipShardCreation:    false,
 			}, tt.tablets...)
 
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, tt.ts, tt.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
@@ -5401,10 +5401,10 @@ func TestReparentTablet(t *testing.T) {
 						Cell: "zone2",
 						Uid:  200,
 					},
-					Type:     topodatapb.TabletType_MASTER,
+					Type:     topodatapb.TabletType_PRIMARY,
 					Keyspace: "testkeyspace",
 					Shard:    "-",
-					MasterTermStartTime: &vttime.Time{
+					PrimaryTermStartTime: &vttime.Time{
 						Seconds: 1000,
 					},
 				},
@@ -5414,14 +5414,14 @@ func TestReparentTablet(t *testing.T) {
 					Keyspace: "testkeyspace",
 					Name:     "-",
 					Shard: &topodatapb.Shard{
-						MasterAlias: &topodatapb.TabletAlias{
+						PrimaryAlias: &topodatapb.TabletAlias{
 							Cell: "zone2",
 							Uid:  200,
 						},
-						MasterTermStartTime: &vttime.Time{
+						PrimaryTermStartTime: &vttime.Time{
 							Seconds: 1000,
 						},
-						IsMasterServing: true,
+						IsPrimaryServing: true,
 					},
 				},
 			},
@@ -5458,10 +5458,10 @@ func TestReparentTablet(t *testing.T) {
 						Cell: "zone2",
 						Uid:  200,
 					},
-					Type:     topodatapb.TabletType_MASTER,
+					Type:     topodatapb.TabletType_PRIMARY,
 					Keyspace: "testkeyspace",
 					Shard:    "-",
-					MasterTermStartTime: &vttime.Time{
+					PrimaryTermStartTime: &vttime.Time{
 						Seconds: 1000,
 					},
 				},
@@ -5471,14 +5471,14 @@ func TestReparentTablet(t *testing.T) {
 					Keyspace: "testkeyspace",
 					Name:     "-",
 					Shard: &topodatapb.Shard{
-						MasterAlias: &topodatapb.TabletAlias{
+						PrimaryAlias: &topodatapb.TabletAlias{
 							Cell: "zone2",
 							Uid:  200,
 						},
-						MasterTermStartTime: &vttime.Time{
+						PrimaryTermStartTime: &vttime.Time{
 							Seconds: 1000,
 						},
-						IsMasterServing: true,
+						IsPrimaryServing: true,
 					},
 				},
 			},
@@ -5496,10 +5496,10 @@ func TestReparentTablet(t *testing.T) {
 						Cell: "zone2",
 						Uid:  200,
 					},
-					Type:     topodatapb.TabletType_MASTER,
+					Type:     topodatapb.TabletType_PRIMARY,
 					Keyspace: "testkeyspace",
 					Shard:    "-",
-					MasterTermStartTime: &vttime.Time{
+					PrimaryTermStartTime: &vttime.Time{
 						Seconds: 1000,
 					},
 				},
@@ -5509,14 +5509,14 @@ func TestReparentTablet(t *testing.T) {
 					Keyspace: "testkeyspace",
 					Name:     "-",
 					Shard: &topodatapb.Shard{
-						MasterAlias: &topodatapb.TabletAlias{
+						PrimaryAlias: &topodatapb.TabletAlias{
 							Cell: "zone2",
 							Uid:  200,
 						},
-						MasterTermStartTime: &vttime.Time{
+						PrimaryTermStartTime: &vttime.Time{
 							Seconds: 1000,
 						},
-						IsMasterServing: true,
+						IsPrimaryServing: true,
 					},
 				},
 			},
@@ -5546,10 +5546,10 @@ func TestReparentTablet(t *testing.T) {
 						Cell: "zone2",
 						Uid:  200,
 					},
-					Type:     topodatapb.TabletType_MASTER,
+					Type:     topodatapb.TabletType_PRIMARY,
 					Keyspace: "testkeyspace",
 					Shard:    "-",
-					MasterTermStartTime: &vttime.Time{
+					PrimaryTermStartTime: &vttime.Time{
 						Seconds: 1000,
 					},
 				},
@@ -5582,7 +5582,7 @@ func TestReparentTablet(t *testing.T) {
 					Keyspace: "testkeyspace",
 					Name:     "-",
 					Shard: &topodatapb.Shard{
-						IsMasterServing: false,
+						IsPrimaryServing: false,
 					},
 				},
 			},
@@ -5612,10 +5612,10 @@ func TestReparentTablet(t *testing.T) {
 						Cell: "zone2",
 						Uid:  200,
 					},
-					Type:     topodatapb.TabletType_MASTER,
+					Type:     topodatapb.TabletType_PRIMARY,
 					Keyspace: "testkeyspace",
 					Shard:    "-",
-					MasterTermStartTime: &vttime.Time{
+					PrimaryTermStartTime: &vttime.Time{
 						Seconds: 1000,
 					},
 				},
@@ -5625,14 +5625,14 @@ func TestReparentTablet(t *testing.T) {
 					Keyspace: "testkeyspace",
 					Name:     "-",
 					Shard: &topodatapb.Shard{
-						MasterAlias: &topodatapb.TabletAlias{
+						PrimaryAlias: &topodatapb.TabletAlias{
 							Cell: "zone3",
 							Uid:  300,
 						},
-						MasterTermStartTime: &vttime.Time{
+						PrimaryTermStartTime: &vttime.Time{
 							Seconds: 1010,
 						},
-						IsMasterServing: true,
+						IsPrimaryServing: true,
 					},
 				},
 			},
@@ -5646,7 +5646,7 @@ func TestReparentTablet(t *testing.T) {
 			shouldErr: true,
 		},
 		{
-			name: "shard primary is not type MASTER",
+			name: "shard primary is not type PRIMARY",
 			tablets: []*topodatapb.Tablet{
 				{
 					Alias: &topodatapb.TabletAlias{
@@ -5672,14 +5672,14 @@ func TestReparentTablet(t *testing.T) {
 					Keyspace: "testkeyspace",
 					Name:     "-",
 					Shard: &topodatapb.Shard{
-						MasterAlias: &topodatapb.TabletAlias{
+						PrimaryAlias: &topodatapb.TabletAlias{
 							Cell: "zone2",
 							Uid:  200,
 						},
-						MasterTermStartTime: &vttime.Time{
+						PrimaryTermStartTime: &vttime.Time{
 							Seconds: 1010,
 						},
-						IsMasterServing: true,
+						IsPrimaryServing: true,
 					},
 				},
 			},
@@ -5709,10 +5709,10 @@ func TestReparentTablet(t *testing.T) {
 						Cell: "zone2",
 						Uid:  200,
 					},
-					Type:     topodatapb.TabletType_MASTER,
+					Type:     topodatapb.TabletType_PRIMARY,
 					Keyspace: "otherkeyspace",
 					Shard:    "-",
-					MasterTermStartTime: &vttime.Time{
+					PrimaryTermStartTime: &vttime.Time{
 						Seconds: 1000,
 					},
 				},
@@ -5722,14 +5722,14 @@ func TestReparentTablet(t *testing.T) {
 					Keyspace: "testkeyspace",
 					Name:     "-",
 					Shard: &topodatapb.Shard{
-						MasterAlias: &topodatapb.TabletAlias{
+						PrimaryAlias: &topodatapb.TabletAlias{
 							Cell: "zone2",
 							Uid:  200,
 						},
-						MasterTermStartTime: &vttime.Time{
+						PrimaryTermStartTime: &vttime.Time{
 							Seconds: 1010,
 						},
-						IsMasterServing: true,
+						IsPrimaryServing: true,
 					},
 				},
 			},
@@ -5750,7 +5750,7 @@ func TestReparentTablet(t *testing.T) {
 						Cell: "zone1",
 						Uid:  100,
 					},
-					Type:     topodatapb.TabletType_MASTER,
+					Type:     topodatapb.TabletType_PRIMARY,
 					Keyspace: "testkeyspace",
 					Shard:    "-",
 				},
@@ -5760,14 +5760,14 @@ func TestReparentTablet(t *testing.T) {
 					Keyspace: "testkeyspace",
 					Name:     "-",
 					Shard: &topodatapb.Shard{
-						MasterAlias: &topodatapb.TabletAlias{
+						PrimaryAlias: &topodatapb.TabletAlias{
 							Cell: "zone1",
 							Uid:  100,
 						},
-						MasterTermStartTime: &vttime.Time{
+						PrimaryTermStartTime: &vttime.Time{
 							Seconds: 1010,
 						},
-						IsMasterServing: true,
+						IsPrimaryServing: true,
 					},
 				},
 			},
@@ -5802,10 +5802,10 @@ func TestReparentTablet(t *testing.T) {
 						Cell: "zone2",
 						Uid:  200,
 					},
-					Type:     topodatapb.TabletType_MASTER,
+					Type:     topodatapb.TabletType_PRIMARY,
 					Keyspace: "testkeyspace",
 					Shard:    "-",
-					MasterTermStartTime: &vttime.Time{
+					PrimaryTermStartTime: &vttime.Time{
 						Seconds: 1000,
 					},
 				},
@@ -5815,14 +5815,14 @@ func TestReparentTablet(t *testing.T) {
 					Keyspace: "testkeyspace",
 					Name:     "-",
 					Shard: &topodatapb.Shard{
-						MasterAlias: &topodatapb.TabletAlias{
+						PrimaryAlias: &topodatapb.TabletAlias{
 							Cell: "zone2",
 							Uid:  200,
 						},
-						MasterTermStartTime: &vttime.Time{
+						PrimaryTermStartTime: &vttime.Time{
 							Seconds: 1000,
 						},
-						IsMasterServing: true,
+						IsPrimaryServing: true,
 					},
 				},
 			},
@@ -5857,10 +5857,10 @@ func TestReparentTablet(t *testing.T) {
 						Cell: "zone2",
 						Uid:  200,
 					},
-					Type:     topodatapb.TabletType_MASTER,
+					Type:     topodatapb.TabletType_PRIMARY,
 					Keyspace: "testkeyspace",
 					Shard:    "-",
-					MasterTermStartTime: &vttime.Time{
+					PrimaryTermStartTime: &vttime.Time{
 						Seconds: 1000,
 					},
 				},
@@ -5870,14 +5870,14 @@ func TestReparentTablet(t *testing.T) {
 					Keyspace: "testkeyspace",
 					Name:     "-",
 					Shard: &topodatapb.Shard{
-						MasterAlias: &topodatapb.TabletAlias{
+						PrimaryAlias: &topodatapb.TabletAlias{
 							Cell: "zone2",
 							Uid:  200,
 						},
-						MasterTermStartTime: &vttime.Time{
+						PrimaryTermStartTime: &vttime.Time{
 							Seconds: 1000,
 						},
-						IsMasterServing: true,
+						IsPrimaryServing: true,
 					},
 				},
 			},
@@ -5956,7 +5956,7 @@ func TestShardReplicationPositions(t *testing.T) {
 					},
 					Keyspace: "testkeyspace",
 					Shard:    "-",
-					Type:     topodatapb.TabletType_MASTER,
+					Type:     topodatapb.TabletType_PRIMARY,
 				},
 				{
 					Alias: &topodatapb.TabletAlias{
@@ -6009,7 +6009,7 @@ func TestShardReplicationPositions(t *testing.T) {
 						},
 						Keyspace: "testkeyspace",
 						Shard:    "-",
-						Type:     topodatapb.TabletType_MASTER,
+						Type:     topodatapb.TabletType_PRIMARY,
 					},
 					"zone1-0000000101": {
 						Alias: &topodatapb.TabletAlias{
@@ -6035,7 +6035,7 @@ func TestShardReplicationPositions(t *testing.T) {
 					},
 					Keyspace: "testkeyspace",
 					Shard:    "-",
-					Type:     topodatapb.TabletType_MASTER,
+					Type:     topodatapb.TabletType_PRIMARY,
 				},
 				{
 					Alias: &topodatapb.TabletAlias{
@@ -6091,7 +6091,7 @@ func TestShardReplicationPositions(t *testing.T) {
 						},
 						Keyspace: "testkeyspace",
 						Shard:    "-",
-						Type:     topodatapb.TabletType_MASTER,
+						Type:     topodatapb.TabletType_PRIMARY,
 					},
 					"zone1-0000000101": {
 						Alias: &topodatapb.TabletAlias{
@@ -6117,7 +6117,7 @@ func TestShardReplicationPositions(t *testing.T) {
 					},
 					Keyspace: "testkeyspace",
 					Shard:    "-",
-					Type:     topodatapb.TabletType_MASTER,
+					Type:     topodatapb.TabletType_PRIMARY,
 				},
 				{
 					Alias: &topodatapb.TabletAlias{
@@ -6177,8 +6177,8 @@ func TestShardReplicationPositions(t *testing.T) {
 			ctx := context.Background()
 
 			testutil.AddTablets(ctx, t, tt.ts, &testutil.AddTabletOptions{
-				AlsoSetShardMaster: true,
-				SkipShardCreation:  false,
+				AlsoSetShardPrimary: true,
+				SkipShardCreation:   false,
 			}, tt.tablets...)
 
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, tt.ts, tt.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
@@ -6226,10 +6226,10 @@ func TestTabletExternallyReparented(t *testing.T) {
 						Cell: "zone1",
 						Uid:  100,
 					},
-					Type:     topodatapb.TabletType_MASTER,
+					Type:     topodatapb.TabletType_PRIMARY,
 					Keyspace: "testkeyspace",
 					Shard:    "-",
-					MasterTermStartTime: &vttime.Time{
+					PrimaryTermStartTime: &vttime.Time{
 						Seconds: 1000,
 					},
 				},
@@ -6273,7 +6273,7 @@ func TestTabletExternallyReparented(t *testing.T) {
 			},
 			shouldErr: false,
 			// NOTE: this seems weird, right? Why is the old primary still a
-			// MASTER, and why is the new primary's term start 0,0? Well, our
+			// PRIMARY, and why is the new primary's term start 0,0? Well, our
 			// test client implementation is a little incomplete. See
 			// ./testutil/test_tmclient.go for reference.
 			expectedTopo: []*topodatapb.Tablet{
@@ -6282,10 +6282,10 @@ func TestTabletExternallyReparented(t *testing.T) {
 						Cell: "zone1",
 						Uid:  100,
 					},
-					Type:     topodatapb.TabletType_MASTER,
+					Type:     topodatapb.TabletType_PRIMARY,
 					Keyspace: "testkeyspace",
 					Shard:    "-",
-					MasterTermStartTime: &vttime.Time{
+					PrimaryTermStartTime: &vttime.Time{
 						Seconds: 1000,
 					},
 				},
@@ -6294,10 +6294,10 @@ func TestTabletExternallyReparented(t *testing.T) {
 						Cell: "zone2",
 						Uid:  200,
 					},
-					Type:                topodatapb.TabletType_UNKNOWN,
-					Keyspace:            "testkeyspace",
-					Shard:               "-",
-					MasterTermStartTime: &vttime.Time{},
+					Type:                 topodatapb.TabletType_UNKNOWN,
+					Keyspace:             "testkeyspace",
+					Shard:                "-",
+					PrimaryTermStartTime: &vttime.Time{},
 				},
 				{
 					Alias: &topodatapb.TabletAlias{
@@ -6329,10 +6329,10 @@ func TestTabletExternallyReparented(t *testing.T) {
 						Cell: "zone1",
 						Uid:  100,
 					},
-					Type:     topodatapb.TabletType_MASTER,
+					Type:     topodatapb.TabletType_PRIMARY,
 					Keyspace: "testkeyspace",
 					Shard:    "-",
-					MasterTermStartTime: &vttime.Time{
+					PrimaryTermStartTime: &vttime.Time{
 						Seconds: 1000,
 					},
 				},
@@ -6370,10 +6370,10 @@ func TestTabletExternallyReparented(t *testing.T) {
 						Cell: "zone1",
 						Uid:  100,
 					},
-					Type:     topodatapb.TabletType_MASTER,
+					Type:     topodatapb.TabletType_PRIMARY,
 					Keyspace: "testkeyspace",
 					Shard:    "-",
-					MasterTermStartTime: &vttime.Time{
+					PrimaryTermStartTime: &vttime.Time{
 						Seconds: 1000,
 					},
 				},
@@ -6405,10 +6405,10 @@ func TestTabletExternallyReparented(t *testing.T) {
 						Cell: "zone1",
 						Uid:  100,
 					},
-					Type:     topodatapb.TabletType_MASTER,
+					Type:     topodatapb.TabletType_PRIMARY,
 					Keyspace: "testkeyspace",
 					Shard:    "-",
-					MasterTermStartTime: &vttime.Time{
+					PrimaryTermStartTime: &vttime.Time{
 						Seconds: 1000,
 					},
 				},
@@ -6457,10 +6457,10 @@ func TestTabletExternallyReparented(t *testing.T) {
 						Cell: "zone1",
 						Uid:  100,
 					},
-					Type:     topodatapb.TabletType_MASTER,
+					Type:     topodatapb.TabletType_PRIMARY,
 					Keyspace: "testkeyspace",
 					Shard:    "-",
-					MasterTermStartTime: &vttime.Time{
+					PrimaryTermStartTime: &vttime.Time{
 						Seconds: 1000,
 					},
 				},
@@ -6492,10 +6492,10 @@ func TestTabletExternallyReparented(t *testing.T) {
 						Cell: "zone1",
 						Uid:  100,
 					},
-					Type:     topodatapb.TabletType_MASTER,
+					Type:     topodatapb.TabletType_PRIMARY,
 					Keyspace: "testkeyspace",
 					Shard:    "-",
-					MasterTermStartTime: &vttime.Time{
+					PrimaryTermStartTime: &vttime.Time{
 						Seconds: 1000,
 					},
 				},
@@ -6534,10 +6534,10 @@ func TestTabletExternallyReparented(t *testing.T) {
 						Cell: "zone1",
 						Uid:  100,
 					},
-					Type:     topodatapb.TabletType_MASTER,
+					Type:     topodatapb.TabletType_PRIMARY,
 					Keyspace: "testkeyspace",
 					Shard:    "-",
-					MasterTermStartTime: &vttime.Time{
+					PrimaryTermStartTime: &vttime.Time{
 						Seconds: 1000,
 					},
 				},
@@ -6588,7 +6588,7 @@ func TestTabletExternallyReparented(t *testing.T) {
 			}
 
 			testutil.AddTablets(ctx, t, ts, &testutil.AddTabletOptions{
-				AlsoSetShardMaster: true,
+				AlsoSetShardPrimary: true,
 			}, tt.topo...)
 
 			if tt.topoErr != nil {

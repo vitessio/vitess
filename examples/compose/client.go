@@ -72,7 +72,7 @@ func main() {
 		}
 	}
 
-	// Read it back from the master.
+	// Read it back from the primary.
 	fmt.Println("Reading from master...")
 	rows, err := db.Query("SELECT page, time_created_ns, message FROM messages")
 	if err != nil {
@@ -94,7 +94,7 @@ func main() {
 	}
 
 	// Read from a replica.
-	// Note that this may be behind master due to replication lag.
+	// Note that this may be behind primary due to replication lag.
 	fmt.Println("Reading from replica...")
 
 	dbr, err := vitessdriver.Open(*server, "@replica")

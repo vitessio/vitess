@@ -27,9 +27,11 @@ type Join struct {
 	Exp      sqlparser.Expr
 }
 
+var _ Operator = (*Join)(nil)
+
 // PushPredicate implements the Operator interface
 func (j *Join) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) error {
-	deps := semTable.Dependencies(expr)
+	deps := semTable.BaseTableDependencies(expr)
 	switch {
 	case deps.IsSolvedBy(j.LHS.TableID()):
 		return j.LHS.PushPredicate(expr, semTable)

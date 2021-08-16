@@ -253,10 +253,10 @@ func (c *Conn) clientHandshake(characterSet uint8, params *ConnParams) error {
 	}
 
 	// Handle switch to SSL if necessary.
-	if params.Flags&CapabilityClientSSL > 0 {
+	if params.SslEnabled() {
 		// If client asked for SSL, but server doesn't support it,
 		// stop right here.
-		if capabilities&CapabilityClientSSL == 0 {
+		if params.SslRequired() && capabilities&CapabilityClientSSL == 0 {
 			return NewSQLError(CRSSLConnectionError, SSUnknownSQLState, "server doesn't support SSL but client asked for it")
 		}
 
@@ -282,7 +282,7 @@ func (c *Conn) clientHandshake(characterSet uint8, params *ConnParams) error {
 		}
 
 		// Build the TLS config.
-		clientConfig, err := vttls.ClientConfig(params.SslCert, params.SslKey, params.SslCa, serverName, tlsVersion)
+		clientConfig, err := vttls.ClientConfig(params.EffectiveSslMode(), params.SslCert, params.SslKey, params.SslCa, serverName, tlsVersion)
 		if err != nil {
 			return NewSQLError(CRSSLConnectionError, SSUnknownSQLState, "error loading client cert and ca: %v", err)
 		}
@@ -483,7 +483,7 @@ func (c *Conn) parseInitialHandshakePacket(data []byte) (uint32, []byte, error) 
 			// 5.6.2 that don't have a null terminated string.
 			authPluginName = string(data[pos : len(data)-1])
 		}
-		c.authPluginName = authPluginName
+		c.authPluginName = AuthMethodDescription(authPluginName)
 	}
 
 	return capabilities, authPluginData, nil
@@ -617,7 +617,7 @@ func (c *Conn) writeHandshakeResponse41(capabilities uint32, scrambledPassword [
 	}
 
 	// Assume native client during response
-	pos = writeNullString(data, pos, c.authPluginName)
+	pos = writeNullString(data, pos, string(c.authPluginName))
 
 	// Sanity-check the length.
 	if pos != len(data) {
@@ -734,7 +734,7 @@ func (c *Conn) handleAuthMoreDataPacket(data byte, params *ConnParams) error {
 	}
 }
 
-func parseAuthSwitchRequest(data []byte) (string, []byte, error) {
+func parseAuthSwitchRequest(data []byte) (AuthMethodDescription, []byte, error) {
 	pos := 1
 	pluginName, pos, ok := readNullString(data, pos)
 	if !ok {
@@ -746,7 +746,7 @@ func parseAuthSwitchRequest(data []byte) (string, []byte, error) {
 	if len(salt) > 20 {
 		salt = salt[:20]
 	}
-	return pluginName, salt, nil
+	return AuthMethodDescription(pluginName), salt, nil
 }
 
 // requestPublicKey requests a public key from the server

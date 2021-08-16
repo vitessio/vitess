@@ -173,7 +173,7 @@ func TestUnShardedRecoveryAfterSharding(t *testing.T) {
 	require.NoError(t, err)
 
 	// then serve primary from the split shards
-	err = localCluster.VtctlclientProcess.ExecuteCommand("MigrateServedTypes", "test_keyspace/0", "master")
+	err = localCluster.VtctlclientProcess.ExecuteCommand("MigrateServedTypes", "test_keyspace/0", "primary")
 	require.NoError(t, err)
 
 	// remove the original tablets in the original shard
@@ -183,7 +183,7 @@ func TestUnShardedRecoveryAfterSharding(t *testing.T) {
 		err = localCluster.VtctlclientProcess.ExecuteCommand("DeleteTablet", tablet.Alias)
 		require.NoError(t, err)
 	}
-	err = localCluster.VtctlclientProcess.ExecuteCommand("DeleteTablet", "-allow_master", primary.Alias)
+	err = localCluster.VtctlclientProcess.ExecuteCommand("DeleteTablet", "-allow_primary", primary.Alias)
 	require.NoError(t, err)
 
 	// rebuild the serving graph, all mentions of the old shards should be gone
@@ -205,11 +205,11 @@ func TestUnShardedRecoveryAfterSharding(t *testing.T) {
 	err = vtgateInstance.Setup()
 	localCluster.VtgateGrpcPort = vtgateInstance.GrpcPort
 	require.NoError(t, err)
-	err = vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.master", keyspaceName, shard0Name), 1)
+	err = vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", keyspaceName, shard0Name), 1)
 	require.NoError(t, err)
 	err = vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", keyspaceName, shard1Name), 1)
 	require.NoError(t, err)
-	err = vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.master", keyspaceName, shard0Name), 1)
+	err = vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", keyspaceName, shard0Name), 1)
 	require.NoError(t, err)
 	err = vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", keyspaceName, shard1Name), 1)
 	require.NoError(t, err)
@@ -308,7 +308,7 @@ func TestShardedRecovery(t *testing.T) {
 	require.NoError(t, err)
 
 	// then serve primary from the split shards
-	err = localCluster.VtctlclientProcess.ExecuteCommand("MigrateServedTypes", "test_keyspace/0", "master")
+	err = localCluster.VtctlclientProcess.ExecuteCommand("MigrateServedTypes", "test_keyspace/0", "primary")
 	require.NoError(t, err)
 
 	// remove the original tablets in the original shard
@@ -318,7 +318,7 @@ func TestShardedRecovery(t *testing.T) {
 		err = localCluster.VtctlclientProcess.ExecuteCommand("DeleteTablet", tablet.Alias)
 		require.NoError(t, err)
 	}
-	err = localCluster.VtctlclientProcess.ExecuteCommand("DeleteTablet", "-allow_master", primary.Alias)
+	err = localCluster.VtctlclientProcess.ExecuteCommand("DeleteTablet", "-allow_primary", primary.Alias)
 	require.NoError(t, err)
 
 	// rebuild the serving graph, all mentions of the old shards should be gone
@@ -373,13 +373,13 @@ func TestShardedRecovery(t *testing.T) {
 	assert.True(t, strings.HasSuffix(output[0], shard1Replica.Alias))
 
 	vtgateInstance := localCluster.NewVtgateInstance()
-	vtgateInstance.TabletTypesToWait = "MASTER"
+	vtgateInstance.TabletTypesToWait = "PRIMARY"
 	err = vtgateInstance.Setup()
 	localCluster.VtgateGrpcPort = vtgateInstance.GrpcPort
 	require.NoError(t, err)
-	err = vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.master", keyspaceName, shard0Name), 1)
+	err = vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", keyspaceName, shard0Name), 1)
 	require.NoError(t, err)
-	err = vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.master", keyspaceName, shard1Name), 1)
+	err = vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", keyspaceName, shard1Name), 1)
 	require.NoError(t, err)
 
 	// Build vtgate grpc connection
@@ -387,7 +387,7 @@ func TestShardedRecovery(t *testing.T) {
 	grpcAddress := fmt.Sprintf("%s:%d", localCluster.Hostname, localCluster.VtgateGrpcPort)
 	vtgateConn, err := vtgateconn.Dial(context.Background(), grpcAddress)
 	require.NoError(t, err)
-	session := vtgateConn.Session("@master", nil)
+	session := vtgateConn.Session("@primary", nil)
 	cluster.ExecuteQueriesUsingVtgate(t, session, "insert into vt_insert_test (id, msg) values (2,'test 2')")
 	cluster.ExecuteQueriesUsingVtgate(t, session, "insert into vt_insert_test (id, msg) values (3,'test 3')")
 
@@ -409,11 +409,11 @@ func TestShardedRecovery(t *testing.T) {
 	err = vtgateInstance.Setup()
 	localCluster.VtgateGrpcPort = vtgateInstance.GrpcPort
 	require.NoError(t, err)
-	err = vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.master", keyspaceName, shard0Name), 1)
+	err = vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", keyspaceName, shard0Name), 1)
 	require.NoError(t, err)
 	err = vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", keyspaceName, shard1Name), 1)
 	require.NoError(t, err)
-	err = vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.master", keyspaceName, shard0Name), 1)
+	err = vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", keyspaceName, shard0Name), 1)
 	require.NoError(t, err)
 	err = vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", keyspaceName, shard1Name), 1)
 	require.NoError(t, err)

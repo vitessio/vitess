@@ -382,6 +382,13 @@ func (node *RevertMigration) formatFast(buf *TrackedBuffer) {
 }
 
 // formatFast formats the node.
+func (node *ShowMigrationLogs) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("show vitess_migration '")
+	buf.WriteString(node.UUID)
+	buf.WriteString("' logs")
+}
+
+// formatFast formats the node.
 func (node *OptLike) formatFast(buf *TrackedBuffer) {
 	buf.WriteString("like ")
 	node.LikeTable.formatFast(buf)
@@ -2039,9 +2046,8 @@ func (node *AddColumns) formatFast(buf *TrackedBuffer) {
 	if len(node.Columns) == 1 {
 		buf.WriteString("add column ")
 		node.Columns[0].formatFast(buf)
-		if node.First != nil {
-			buf.WriteString(" first ")
-			node.First.formatFast(buf)
+		if node.First {
+			buf.WriteString(" first")
 		}
 		if node.After != nil {
 			buf.WriteString(" after ")
@@ -2088,9 +2094,8 @@ func (node *ChangeColumn) formatFast(buf *TrackedBuffer) {
 	node.OldColumn.formatFast(buf)
 	buf.WriteByte(' ')
 	node.NewColDefinition.formatFast(buf)
-	if node.First != nil {
-		buf.WriteString(" first ")
-		node.First.formatFast(buf)
+	if node.First {
+		buf.WriteString(" first")
 	}
 	if node.After != nil {
 		buf.WriteString(" after ")
@@ -2102,9 +2107,8 @@ func (node *ChangeColumn) formatFast(buf *TrackedBuffer) {
 func (node *ModifyColumn) formatFast(buf *TrackedBuffer) {
 	buf.WriteString("modify column ")
 	node.NewColDefinition.formatFast(buf)
-	if node.First != nil {
-		buf.WriteString(" first ")
-		node.First.formatFast(buf)
+	if node.First {
+		buf.WriteString(" first")
 	}
 	if node.After != nil {
 		buf.WriteString(" after ")

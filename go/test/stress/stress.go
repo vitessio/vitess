@@ -91,6 +91,9 @@ type (
 		// PrintErrLogs enables or disables the rendering of MySQL error logs.
 		PrintErrLogs bool
 
+		// PrintLogs enables or disables the rendering of Stresser logs.
+		PrintLogs bool
+
 		// NumberOfTables to create in the cluster.
 		NumberOfTables int
 
@@ -127,6 +130,7 @@ var DefaultConfig = Config{
 	MaximumDuration: 120 * time.Second,
 	MinimumDuration: 1 * time.Second,
 	PrintErrLogs:    false,
+	PrintLogs:       false,
 	NumberOfTables:  100,
 	TableNamePrefix: "stress_t",
 	InsertInterval:  10 * time.Microsecond,
@@ -181,14 +185,18 @@ func (s *Stresser) StopAfter(after time.Duration) {
 	timeoutCh := time.After(after)
 	select {
 	case res := <-s.doneCh:
-		res.print(s.t.Logf, s.duration.Seconds())
+		if s.cfg.PrintLogs {
+			res.print(s.t.Logf, s.duration.Seconds())
+		}
 		if !res.assert() {
 			s.t.Errorf("Requires no failed queries")
 		}
 	case <-timeoutCh:
 		atomic.StoreUint32(&s.finish, 1)
 		res := <-s.doneCh
-		res.print(s.t.Logf, s.duration.Seconds())
+		if s.cfg.PrintLogs {
+			res.print(s.t.Logf, s.duration.Seconds())
+		}
 		if !res.assert() {
 			s.t.Errorf("Requires no failed queries")
 		}
@@ -218,7 +226,9 @@ func (s *Stresser) SetConn(conn *mysql.ConnParams) *Stresser {
 //		s.Stop()
 //
 func (s *Stresser) Start() *Stresser {
-	s.t.Log("Starting load testing ...")
+	if s.cfg.PrintLogs {
+		s.t.Log("Starting load testing ...")
+	}
 	s.tbls = s.createTables(s.cfg.NumberOfTables)
 	s.start = time.Now()
 	go s.startClients()

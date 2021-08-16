@@ -13,6 +13,7 @@
     "Table": "music"
   }
 }
+Gen4 plan same as above
 
 #vstream table
 "vstream * from user where pos > 'a4afea21-a320-11eb-a37a-98af65a6dc4a:1-44' limit 1000"
@@ -31,3 +32,4 @@
     "Table": "user"
   }
 }
+Gen4 plan same as above

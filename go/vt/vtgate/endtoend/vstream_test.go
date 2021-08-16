@@ -82,7 +82,7 @@ func TestVStream(t *testing.T) {
 		}},
 	}
 	flags := &vtgatepb.VStreamFlags{}
-	reader, err := gconn.VStream(ctx, topodatapb.TabletType_MASTER, vgtid, filter, flags)
+	reader, err := gconn.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, filter, flags)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -116,6 +116,8 @@ func TestVStream(t *testing.T) {
 		}
 		wantFields := &binlogdatapb.FieldEvent{
 			TableName: "ks.vstream_test",
+			Keyspace:  "ks",
+			Shard:     "-80",
 			Fields: []*querypb.Field{{
 				Name: "id",
 				Type: querypb.Type_INT64,
@@ -128,6 +130,8 @@ func TestVStream(t *testing.T) {
 		gotFields := events[1].FieldEvent
 		filteredFields := &binlogdatapb.FieldEvent{
 			TableName: gotFields.TableName,
+			Keyspace:  gotFields.Keyspace,
+			Shard:     gotFields.Shard,
 			Fields:    []*querypb.Field{},
 		}
 		for _, field := range gotFields.Fields {
@@ -137,10 +141,12 @@ func TestVStream(t *testing.T) {
 			})
 		}
 		if !proto.Equal(filteredFields, wantFields) {
-			t.Errorf("FieldEvent:\n%v, want\n%v", gotFields, wantFields)
+			t.Errorf("FieldEvent:\n%v, want\n%v", filteredFields, wantFields)
 		}
 		wantRows := &binlogdatapb.RowEvent{
 			TableName: "ks.vstream_test",
+			Keyspace:  "ks",
+			Shard:     "-80",
 			RowChanges: []*binlogdatapb.RowChange{{
 				After: &query.Row{
 					Lengths: []int64{1, 1},
@@ -198,7 +204,7 @@ func TestVStreamCopyBasic(t *testing.T) {
 		}},
 	}
 	flags := &vtgatepb.VStreamFlags{}
-	reader, err := gconn.VStream(ctx, topodatapb.TabletType_MASTER, vgtid, filter, flags)
+	reader, err := gconn.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, filter, flags)
 	_, _ = conn, mconn
 	if err != nil {
 		t.Fatal(err)
@@ -252,7 +258,7 @@ func TestVStreamCurrent(t *testing.T) {
 		}},
 	}
 	flags := &vtgatepb.VStreamFlags{}
-	reader, err := gconn.VStream(ctx, topodatapb.TabletType_MASTER, vgtid, filter, flags)
+	reader, err := gconn.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, filter, flags)
 	_, _ = conn, mconn
 	if err != nil {
 		t.Fatal(err)
@@ -278,6 +284,96 @@ func TestVStreamCurrent(t *testing.T) {
 			t.Fatalf("remote error: %v\n", err)
 		}
 	}
+}
+
+func TestVStreamSharded(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	gconn, conn, mconn, closeConnections := initialize(ctx, t)
+	defer closeConnections()
+
+	var shardGtids []*binlogdatapb.ShardGtid
+	var vgtid = &binlogdatapb.VGtid{}
+	shardGtids = append(shardGtids, &binlogdatapb.ShardGtid{
+		Keyspace: "ks",
+		Shard:    "-80",
+		Gtid:     "",
+	})
+	shardGtids = append(shardGtids, &binlogdatapb.ShardGtid{
+		Keyspace: "ks",
+		Shard:    "80-",
+		Gtid:     "",
+	})
+	vgtid.ShardGtids = shardGtids
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "t1_sharded",
+			Filter: "select * from t1_sharded",
+		}},
+	}
+	_, err := conn.ExecuteFetch("insert into t1_sharded(id1,id2) values(1,1), (4,4)", 1, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	flags := &vtgatepb.VStreamFlags{}
+	reader, err := gconn.VStream(ctx, topodatapb.TabletType_MASTER, vgtid, filter, flags)
+	_, _ = conn, mconn
+	if err != nil {
+		t.Fatal(err)
+	}
+	numExpectedEvents := 4
+	require.NotNil(t, reader)
+	var evs []*binlogdatapb.VEvent
+
+	type expectedEvent struct {
+		ev       string
+		received bool
+	}
+	expectedEvents := []*expectedEvent{
+		{`type:FIELD field_event:{table_name:"ks.t1_sharded" fields:{name:"id1" type:INT64 table:"t1_sharded" org_table:"t1_sharded" database:"vt_ks_-80" org_name:"id1" column_length:20 charset:63 flags:53251} fields:{name:"id2" type:INT64 table:"t1_sharded" org_table:"t1_sharded" database:"vt_ks_-80" org_name:"id2" column_length:20 charset:63 flags:32768} keyspace:"ks" shard:"-80"}`, false},
+		{`type:ROW row_event:{table_name:"ks.t1_sharded" row_changes:{after:{lengths:1 lengths:1 values:"11"}} keyspace:"ks" shard:"-80"}`, false},
+		{`type:FIELD field_event:{table_name:"ks.t1_sharded" fields:{name:"id1" type:INT64 table:"t1_sharded" org_table:"t1_sharded" database:"vt_ks_80-" org_name:"id1" column_length:20 charset:63 flags:53251} fields:{name:"id2" type:INT64 table:"t1_sharded" org_table:"t1_sharded" database:"vt_ks_80-" org_name:"id2" column_length:20 charset:63 flags:32768} keyspace:"ks" shard:"80-"}`, false},
+		{`type:ROW row_event:{table_name:"ks.t1_sharded" row_changes:{after:{lengths:1 lengths:1 values:"44"}} keyspace:"ks" shard:"80-"}`, false},
+	}
+	for {
+		events, err := reader.Recv()
+		switch err {
+		case nil:
+			for _, event := range events {
+				switch event.Type {
+				case binlogdatapb.VEventType_ROW, binlogdatapb.VEventType_FIELD:
+					evs = append(evs, event)
+				default:
+				}
+			}
+			printEvents(evs) // for debugging ci failures
+			if len(evs) == numExpectedEvents {
+				// events from the two shards -80 and 80- can come in any order, hence this logic
+				for _, ev := range evs {
+					s := fmt.Sprintf("%v", ev)
+					for _, expectedEv := range expectedEvents {
+						if expectedEv.ev == s {
+							expectedEv.received = true
+							break
+						}
+					}
+				}
+				for _, expectedEv := range expectedEvents {
+					require.Truef(t, expectedEv.received, "event %s not received", expectedEv.ev)
+				}
+
+				t.Logf("TestVStreamCurrent was successful")
+				return
+			}
+		case io.EOF:
+			log.Infof("stream ended\n")
+			cancel()
+		default:
+			log.Errorf("Returned err %v", err)
+			t.Fatalf("remote error: %v\n", err)
+		}
+	}
+
 }
 
 var printMu sync.Mutex

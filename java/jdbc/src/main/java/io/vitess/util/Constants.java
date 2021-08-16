@@ -34,9 +34,9 @@ public class Constants {
   public static final String VITESS_PORT = "Port number of Vitess Server";
   public static final String VITESS_DB_NAME = "Database name";
   public static final String VITESS_TABLET_TYPE = "Tablet Type to which Vitess will connect"
-      + "(master, replica, rdonly)";
+      + "(primary, replica, rdonly)";
   public static final String DEFAULT_PORT = "15991";
-  public static final Topodata.TabletType DEFAULT_TABLET_TYPE = Topodata.TabletType.MASTER;
+  public static final Topodata.TabletType DEFAULT_TABLET_TYPE = Topodata.TabletType.PRIMARY;
   public static final String LITERAL_V = "v";
   public static final String LITERAL_SINGLE_QUOTE = "'";
   public static final int DRIVER_MAJOR_VERSION = 2;

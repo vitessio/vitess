@@ -22,9 +22,6 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/test/stress"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -41,39 +38,21 @@ var (
 	tab1, tab2, tab3, tab4 *cluster.Vttablet
 )
 
-func TestMasterToSpareStateChangeImpossible(t *testing.T) {
+func TestPrimaryToSpareStateChangeImpossible(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	setupReparentCluster(t)
 	defer teardownCluster()
 
-	err := clusterInstance.StartVtgate()
-	require.NoError(t, err)
-
-	cfg := stress.DefaultConfig
-	cfg.ConnParams = &mysql.ConnParams{Port: clusterInstance.VtgateMySQLPort, Host: "localhost", DbName: "ks"}
-	cfg.MaxClient = 1
-	s := stress.New(t, cfg).Start()
-
-	// We cannot change a master to spare
+	// We cannot change a primary to spare
 	out, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("ChangeTabletType", tab1.Alias, "spare")
 	require.Error(t, err, out)
-	require.Contains(t, out, "type change MASTER -> SPARE is not an allowed transition for ChangeTabletType")
-
-	s.Stop()
+	require.Contains(t, out, "type change PRIMARY -> SPARE is not an allowed transition for ChangeTabletType")
 }
 
 func TestReparentDownPrimary(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	setupReparentCluster(t)
 	defer teardownCluster()
-
-	err := clusterInstance.StartVtgate()
-	require.NoError(t, err)
-
-	cfg := stress.DefaultConfig
-	cfg.ConnParams = &mysql.ConnParams{Port: clusterInstance.VtgateMySQLPort, Host: "localhost", DbName: "ks"}
-	cfg.AllowFailure = true
-	s := stress.New(t, cfg).Start()
 
 	ctx := context.Background()
 
@@ -82,7 +61,7 @@ func TestReparentDownPrimary(t *testing.T) {
 
 	// Perform a planned reparent operation, will try to contact
 	// the current primary and fail somewhat quickly
-	_, err = prsWithTimeout(t, tab2, false, "1s", "5s")
+	_, err := prsWithTimeout(t, tab2, false, "1s", "5s")
 	require.Error(t, err)
 
 	validateTopology(t, false)
@@ -91,8 +70,6 @@ func TestReparentDownPrimary(t *testing.T) {
 	out, err := ers(t, tab2, "30s")
 	log.Infof("EmergencyReparentShard Output: %v", out)
 	require.NoError(t, err)
-
-	s.AllowFailure(false)
 
 	// Check that old primary tablet is left around for human intervention.
 	confirmOldPrimaryIsHangingAround(t)
@@ -105,8 +82,6 @@ func TestReparentDownPrimary(t *testing.T) {
 	checkPrimaryTablet(t, tab2)
 	confirmReplication(t, tab2, []*cluster.Vttablet{tab3, tab4})
 	resurrectTablet(ctx, t, tab1)
-
-	s.StopAfter(5 * time.Second)
 }
 
 func TestReparentNoChoiceDownPrimary(t *testing.T) {
@@ -202,27 +177,15 @@ func TestReparentGraceful(t *testing.T) {
 	setupReparentCluster(t)
 	defer teardownCluster()
 
-	err := clusterInstance.StartVtgate()
-	require.NoError(t, err)
-
-	cfg := stress.DefaultConfig
-	cfg.ConnParams = &mysql.ConnParams{Port: clusterInstance.VtgateMySQLPort, Host: "localhost", DbName: "ks"}
-	cfg.MaxClient = 3
-	s := stress.New(t, cfg).Start()
-
 	// Run this to make sure it succeeds.
 	strArray := getShardReplicationPositions(t, keyspaceName, shardName, false)
-	assert.Equal(t, 4, len(strArray))         // one primary, three replicas
-	assert.Contains(t, strArray[0], "master") // primary first
-
-	s.AllowFailure(true)
+	assert.Equal(t, 4, len(strArray))          // one primary, three replicas
+	assert.Contains(t, strArray[0], "primary") // primary first
 
 	// Perform a graceful reparent operation
 	prs(t, tab2)
 	validateTopology(t, false)
 	checkPrimaryTablet(t, tab2)
-
-	s.AllowFailure(false)
 
 	// A graceful reparent to the same primary should be idempotent.
 	prs(t, tab2)
@@ -230,8 +193,6 @@ func TestReparentGraceful(t *testing.T) {
 	checkPrimaryTablet(t, tab2)
 
 	confirmReplication(t, tab2, []*cluster.Vttablet{tab1, tab3, tab4})
-
-	s.StopAfter(3 * time.Second)
 }
 
 func TestReparentReplicaOffline(t *testing.T) {
@@ -256,7 +217,7 @@ func TestReparentAvoid(t *testing.T) {
 	defer teardownCluster()
 	deleteTablet(t, tab3)
 
-	// Perform a reparent operation with avoid_master pointing to non-primary. It
+	// Perform a reparent operation with avoid_tablet pointing to non-primary. It
 	// should succeed without doing anything.
 	_, err := prsAvoid(t, tab2)
 	require.NoError(t, err)
@@ -264,7 +225,7 @@ func TestReparentAvoid(t *testing.T) {
 	validateTopology(t, false)
 	checkPrimaryTablet(t, tab1)
 
-	// Perform a reparent operation with avoid_master pointing to primary.
+	// Perform a reparent operation with avoid_tablet pointing to primary.
 	_, err = prsAvoid(t, tab1)
 	require.NoError(t, err)
 	validateTopology(t, false)
@@ -272,11 +233,11 @@ func TestReparentAvoid(t *testing.T) {
 	// tab2 is in the same cell and tab4 is in a different cell, so we must land on tab2
 	checkPrimaryTablet(t, tab2)
 
-	// If we kill the tablet in the same cell as primary then reparent -avoid_master will fail.
+	// If we kill the tablet in the same cell as primary then reparent -avoid_tablet will fail.
 	stopTablet(t, tab1, true)
 	out, err := prsAvoid(t, tab2)
 	require.Error(t, err)
-	assert.Contains(t, out, "cannot find a tablet to reparent to")
+	assert.Contains(t, out, "cannot find a tablet to reparent to in the same cell as the current primary")
 	validateTopology(t, false)
 	checkPrimaryTablet(t, tab2)
 }
@@ -358,7 +319,7 @@ func reparentFromOutside(t *testing.T, downPrimary bool) {
 		err := tab1.VttabletProcess.TearDownWithTimeout(30 * time.Second)
 		require.NoError(t, err)
 		err = clusterInstance.VtctlclientProcess.ExecuteCommand("DeleteTablet",
-			"-allow_master", tab1.Alias)
+			"-allow_primary", tab1.Alias)
 		require.NoError(t, err)
 	}
 

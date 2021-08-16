@@ -18,14 +18,13 @@ package vtctld
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
-
-	"context"
 
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/wrangler"
@@ -274,16 +273,15 @@ func TestAPI(t *testing.T) {
 		// Shards
 		{"GET", "shards/ks1/", "", `["-80","80-"]`, http.StatusOK},
 		{"GET", "shards/ks1/-80", "", `{
-				"master_alias": null,
-				"master_term_start_time":null,
+				"primary_alias": null,
+				"primary_term_start_time":null,
 				"key_range": {
 					"start": "",
 					"end":"gA=="
 				},
-				"served_types": [],
 				"source_shards": [],
 				"tablet_controls": [],
-				"is_master_serving": true
+				"is_primary_serving": true
 			}`, http.StatusOK},
 		{"GET", "shards/ks1/-DEAD", "", "404 page not found", http.StatusNotFound},
 		{"POST", "shards/ks1/-80?action=TestShardAction", "", `{

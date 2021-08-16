@@ -227,14 +227,14 @@ func (e *Executor) initSchema(ctx context.Context) error {
 
 	defer e.env.LogError()
 
-	conn, err := e.pool.Get(ctx)
+	conn, err := dbconnpool.NewDBConnection(ctx, e.env.Config().DB.DbaConnector())
 	if err != nil {
 		return err
 	}
-	defer conn.Recycle()
+	defer conn.Close()
 
 	for _, ddl := range ApplyDDL {
-		_, err := conn.Exec(ctx, ddl, math.MaxInt32, false)
+		_, err := conn.ExecuteFetch(ddl, math.MaxInt32, false)
 		if mysql.IsSchemaApplyError(err) {
 			continue
 		}
@@ -420,15 +420,9 @@ func (e *Executor) dropOnlineDDLUser(ctx context.Context) error {
 
 // tableExists checks if a given table exists.
 func (e *Executor) tableExists(ctx context.Context, tableName string) (bool, error) {
-	conn, err := e.pool.Get(ctx)
-	if err != nil {
-		return false, err
-	}
-	defer conn.Recycle()
-
 	tableName = strings.ReplaceAll(tableName, `_`, `\_`)
 	parsed := sqlparser.BuildParsedQuery(sqlShowTablesLike, tableName)
-	rs, err := conn.Exec(ctx, parsed.Query, 1, true)
+	rs, err := e.execQuery(ctx, parsed.Query)
 	if err != nil {
 		return false, err
 	}
@@ -599,7 +593,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 	}
 	toggleWrites := func(allowWrites bool) error {
 		if _, err := e.ts.UpdateShardFields(ctx, e.keyspace, shardInfo.ShardName(), func(si *topo.ShardInfo) error {
-			err := si.UpdateSourceBlacklistedTables(ctx, topodatapb.TabletType_MASTER, nil, allowWrites, []string{onlineDDL.Table})
+			err := si.UpdateSourceBlacklistedTables(ctx, topodatapb.TabletType_PRIMARY, nil, allowWrites, []string{onlineDDL.Table})
 			return err
 		}); err != nil {
 			return err
@@ -777,7 +771,7 @@ func (e *Executor) ExecuteWithVReplication(ctx context.Context, onlineDDL *schem
 		return ErrExecutorMigrationAlreadyRunning
 	}
 
-	if e.tabletTypeFunc() != topodatapb.TabletType_MASTER {
+	if e.tabletTypeFunc() != topodatapb.TabletType_PRIMARY {
 		return ErrExecutorNotWritableTablet
 	}
 
@@ -867,7 +861,7 @@ func (e *Executor) ExecuteWithGhost(ctx context.Context, onlineDDL *schema.Onlin
 		return ErrExecutorMigrationAlreadyRunning
 	}
 
-	if e.tabletTypeFunc() != topodatapb.TabletType_MASTER {
+	if e.tabletTypeFunc() != topodatapb.TabletType_PRIMARY {
 		return ErrExecutorNotWritableTablet
 	}
 	variables, err := e.readMySQLVariables(ctx)
@@ -1056,7 +1050,6 @@ exit $exit_code
 			return err
 		}
 		// Migration successful!
-		os.RemoveAll(tempDir)
 		successfulMigrations.Add(1)
 		log.Infof("+ OK")
 		return nil
@@ -1072,7 +1065,7 @@ func (e *Executor) ExecuteWithPTOSC(ctx context.Context, onlineDDL *schema.Onlin
 		return ErrExecutorMigrationAlreadyRunning
 	}
 
-	if e.tabletTypeFunc() != topodatapb.TabletType_MASTER {
+	if e.tabletTypeFunc() != topodatapb.TabletType_PRIMARY {
 		return ErrExecutorNotWritableTablet
 	}
 	variables, err := e.readMySQLVariables(ctx)
@@ -1280,7 +1273,6 @@ export MYSQL_PWD
 			return err
 		}
 		// Migration successful!
-		os.RemoveAll(tempDir)
 		successfulMigrations.Add(1)
 		log.Infof("+ OK")
 		return nil
@@ -2327,15 +2319,13 @@ func (e *Executor) reviewStaleMigrations(ctx context.Context) error {
 	e.migrationMutex.Lock()
 	defer e.migrationMutex.Unlock()
 
-	parsed := sqlparser.BuildParsedQuery(sqlSelectStaleMigrations, ":minutes")
-	bindVars := map[string]*querypb.BindVariable{
-		"minutes": sqltypes.Int64BindVariable(staleMigrationMinutes),
-	}
-	bound, err := parsed.GenerateQuery(bindVars, nil)
+	query, err := sqlparser.ParseAndBind(sqlSelectStaleMigrations,
+		sqltypes.Int64BindVariable(staleMigrationMinutes),
+	)
 	if err != nil {
 		return err
 	}
-	r, err := e.execQuery(ctx, bound)
+	r, err := e.execQuery(ctx, query)
 	if err != nil {
 		return err
 	}
@@ -2354,12 +2344,16 @@ func (e *Executor) reviewStaleMigrations(ctx context.Context) error {
 			}
 		}
 		if onlineDDL.TabletAlias != e.TabletAliasString() {
-			// This means another tablet started the migration, and the migration has failed due to the tablet failure (e.g. master failover)
+			// This means another tablet started the migration, and the migration has failed due to the tablet failure (e.g. primary failover)
 			if err := e.updateTabletFailure(ctx, onlineDDL.UUID); err != nil {
 				return err
 			}
 		}
 		if err := e.updateMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusFailed); err != nil {
+			return err
+		}
+		_ = e.updateMigrationStartedTimestamp(ctx, uuid)
+		if err := e.updateMigrationTimestamp(ctx, "completed_timestamp", uuid); err != nil {
 			return err
 		}
 		_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, "stale migration")
@@ -2376,7 +2370,7 @@ func (e *Executor) retryTabletFailureMigrations(ctx context.Context) error {
 }
 
 // gcArtifactTable garbage-collects a single table
-func (e *Executor) gcArtifactTable(ctx context.Context, artifactTable, uuid string) error {
+func (e *Executor) gcArtifactTable(ctx context.Context, artifactTable, uuid string, t time.Time) error {
 	tableExists, err := e.tableExists(ctx, artifactTable)
 	if err != nil {
 		return err
@@ -2386,17 +2380,11 @@ func (e *Executor) gcArtifactTable(ctx context.Context, artifactTable, uuid stri
 	}
 	// We've already concluded in gcArtifacts() that this table was held for long enough.
 	// We therefore move it into PURGE state.
-	renameStatement, _, err := schema.GenerateRenameStatementWithUUID(artifactTable, schema.PurgeTableGCState, schema.OnlineDDLToGCUUID(uuid), time.Now().UTC())
+	renameStatement, _, err := schema.GenerateRenameStatementWithUUID(artifactTable, schema.PurgeTableGCState, schema.OnlineDDLToGCUUID(uuid), t)
 	if err != nil {
 		return err
 	}
-	conn, err := e.pool.Get(ctx)
-	if err != nil {
-		return err
-	}
-	defer conn.Recycle()
-
-	_, err = conn.Exec(ctx, renameStatement, 1, true)
+	_, err = e.execQuery(ctx, renameStatement)
 	return err
 }
 
@@ -2405,6 +2393,13 @@ func (e *Executor) gcArtifacts(ctx context.Context) error {
 	e.migrationMutex.Lock()
 	defer e.migrationMutex.Unlock()
 
+	if _, err := e.execQuery(ctx, sqlFixCompletedTimestamp); err != nil {
+		// This query fixes a bug where stale migrations were marked as 'failed' without updating 'completed_timestamp'
+		// see https://github.com/vitessio/vitess/issues/8499
+		// Running this query retroactively sets completed_timestamp
+		// This 'if' clause can be removed in version v13
+		return err
+	}
 	query, err := sqlparser.ParseAndBind(sqlSelectUncollectedArtifacts,
 		sqltypes.Int64BindVariable(int64((*retainOnlineDDLTables).Seconds())),
 	)
@@ -2418,13 +2413,31 @@ func (e *Executor) gcArtifacts(ctx context.Context) error {
 	for _, row := range r.Named().Rows {
 		uuid := row["migration_uuid"].ToString()
 		artifacts := row["artifacts"].ToString()
+		logPath := row["log_path"].ToString()
 
+		// Remove tables:
 		artifactTables := textutil.SplitDelimitedList(artifacts)
-		for _, artifactTable := range artifactTables {
-			if err := e.gcArtifactTable(ctx, artifactTable, uuid); err != nil {
+
+		timeNow := time.Now()
+		for i, artifactTable := range artifactTables {
+			// We wish to generate distinct timestamp values for each table in this UUID,
+			// because all tables will be renamed as _something_UUID_timestamp. Since UUID
+			// is shared for all artifacts in this loop, we differentiate via timestamp
+			t := timeNow.Add(time.Duration(i) * time.Second).UTC()
+			if err := e.gcArtifactTable(ctx, artifactTable, uuid, t); err != nil {
 				return err
 			}
 			log.Infof("Executor.gcArtifacts: renamed away artifact %s", artifactTable)
+		}
+
+		// Remove logs:
+		{
+			// logPath is in 'hostname:/path/to/logs' format
+			tokens := strings.SplitN(logPath, ":", 2)
+			logPath = tokens[len(tokens)-1]
+			if err := os.RemoveAll(logPath); err != nil {
+				return err
+			}
 		}
 		if err := e.updateMigrationTimestamp(ctx, "cleanup_timestamp", uuid); err != nil {
 			return err
@@ -2450,7 +2463,7 @@ func (e *Executor) onMigrationCheckTick() {
 		return
 	}
 
-	if e.tabletTypeFunc() != topodatapb.TabletType_MASTER {
+	if e.tabletTypeFunc() != topodatapb.TabletType_PRIMARY {
 		return
 	}
 	if e.keyspace == "" {
@@ -2516,10 +2529,12 @@ func (e *Executor) updateMigrationTimestamp(ctx context.Context, timestampColumn
 	return err
 }
 
-func (e *Executor) updateMigrationLogPath(ctx context.Context, uuid string, hostname, path string) error {
-	logPath := fmt.Sprintf("%s:%s", hostname, path)
+func (e *Executor) updateMigrationLogPath(ctx context.Context, uuid string, hostname, logPath string) error {
+	logFile := path.Join(logPath, migrationLogFileName)
+	hostLogPath := fmt.Sprintf("%s:%s", hostname, logPath)
 	query, err := sqlparser.ParseAndBind(sqlUpdateMigrationLogPath,
-		sqltypes.StringBindVariable(logPath),
+		sqltypes.StringBindVariable(hostLogPath),
+		sqltypes.StringBindVariable(logFile),
 		sqltypes.StringBindVariable(uuid),
 	)
 	if err != nil {
@@ -2820,6 +2835,39 @@ func (e *Executor) SubmitMigration(
 	defer e.triggerNextCheckInterval()
 
 	return e.execQuery(ctx, query)
+}
+
+// ShowMigrationLogs reads the migration log for a given migration
+func (e *Executor) ShowMigrationLogs(ctx context.Context, stmt *sqlparser.ShowMigrationLogs) (result *sqltypes.Result, err error) {
+	if !e.isOpen {
+		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "online ddl is disabled")
+	}
+	_, row, err := e.readMigration(ctx, stmt.UUID)
+	if err != nil {
+		return nil, err
+	}
+	logFile := row["log_file"].ToString()
+	if logFile == "" {
+		return nil, vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "No log file for migration %v", stmt.UUID)
+	}
+	content, err := ioutil.ReadFile(logFile)
+	if err != nil {
+		return nil, err
+	}
+
+	result = &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{
+				Name: "migration_log",
+				Type: sqltypes.VarChar,
+			},
+		},
+		Rows: [][]sqltypes.Value{},
+	}
+	result.Rows = append(result.Rows, []sqltypes.Value{
+		sqltypes.NewVarChar(string(content)),
+	})
+	return result, nil
 }
 
 // onSchemaMigrationStatus is called when a status is set/changed for a running migration

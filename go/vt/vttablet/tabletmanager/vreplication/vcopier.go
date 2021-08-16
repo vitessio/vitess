@@ -140,7 +140,7 @@ func (vc *vcopier) copyNext(ctx context.Context, settings binlogplayer.VRSetting
 }
 
 // catchup replays events to the subset of the tables that have been copied
-// until replication is caught up. In order to stop, the seconds behind master has
+// until replication is caught up. In order to stop, the seconds behind primary has
 // to fall below replicationLagTolerance.
 func (vc *vcopier) catchup(ctx context.Context, copyState map[string]*sqltypes.Result) error {
 	ctx, cancel := context.WithCancel(ctx)
@@ -168,7 +168,7 @@ func (vc *vcopier) catchup(ctx context.Context, copyState map[string]*sqltypes.R
 	defer tkr.Stop()
 	seconds := int64(*replicaLagTolerance / time.Second)
 	for {
-		sbm := vc.vr.stats.SecondsBehindMaster.Get()
+		sbm := vc.vr.stats.ReplicationLagSeconds.Get()
 		if sbm < seconds {
 			cancel()
 			// Make sure vplayer returns before returning.

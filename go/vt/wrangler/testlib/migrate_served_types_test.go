@@ -87,7 +87,7 @@ func TestMigrateServedTypes(t *testing.T) {
 	}
 
 	// create the source shard
-	sourcePrimary := NewFakeTablet(t, wr, "cell1", 10, topodatapb.TabletType_MASTER, nil,
+	sourcePrimary := NewFakeTablet(t, wr, "cell1", 10, topodatapb.TabletType_PRIMARY, nil,
 		TabletKeyspaceShard(t, "ks", "0"))
 	sourceReplica := NewFakeTablet(t, wr, "cell1", 11, topodatapb.TabletType_REPLICA, nil,
 		TabletKeyspaceShard(t, "ks", "0"))
@@ -95,7 +95,7 @@ func TestMigrateServedTypes(t *testing.T) {
 		TabletKeyspaceShard(t, "ks", "0"))
 
 	// create the first destination shard
-	dest1Primary := NewFakeTablet(t, wr, "cell1", 20, topodatapb.TabletType_MASTER, nil,
+	dest1Primary := NewFakeTablet(t, wr, "cell1", 20, topodatapb.TabletType_PRIMARY, nil,
 		TabletKeyspaceShard(t, "ks", "-80"))
 	dest1Replica := NewFakeTablet(t, wr, "cell1", 21, topodatapb.TabletType_REPLICA, nil,
 		TabletKeyspaceShard(t, "ks", "-80"))
@@ -103,7 +103,7 @@ func TestMigrateServedTypes(t *testing.T) {
 		TabletKeyspaceShard(t, "ks", "-80"))
 
 	// create the second destination shard
-	dest2Primary := NewFakeTablet(t, wr, "cell1", 30, topodatapb.TabletType_MASTER, nil,
+	dest2Primary := NewFakeTablet(t, wr, "cell1", 30, topodatapb.TabletType_PRIMARY, nil,
 		TabletKeyspaceShard(t, "ks", "80-"))
 	dest2Replica := NewFakeTablet(t, wr, "cell1", 31, topodatapb.TabletType_REPLICA, nil,
 		TabletKeyspaceShard(t, "ks", "80-"))
@@ -235,7 +235,7 @@ func TestMigrateServedTypes(t *testing.T) {
 	checkShardSourceShards(t, ts, "80-", 1)
 
 	// migrate primary over
-	if err := vp.Run([]string{"MigrateServedTypes", "ks/0", "master"}); err != nil {
+	if err := vp.Run([]string{"MigrateServedTypes", "ks/0", "primary"}); err != nil {
 		t.Fatalf("MigrateServedType(master) failed: %v", err)
 	}
 
@@ -271,7 +271,7 @@ func TestMultiShardMigrateServedTypes(t *testing.T) {
 	}
 
 	// create the first source shard
-	source1Primary := NewFakeTablet(t, wr, "cell1", 20, topodatapb.TabletType_MASTER, nil,
+	source1Primary := NewFakeTablet(t, wr, "cell1", 20, topodatapb.TabletType_PRIMARY, nil,
 		TabletKeyspaceShard(t, "ks", "-80"))
 	source1Replica := NewFakeTablet(t, wr, "cell1", 21, topodatapb.TabletType_REPLICA, nil,
 		TabletKeyspaceShard(t, "ks", "-80"))
@@ -279,14 +279,14 @@ func TestMultiShardMigrateServedTypes(t *testing.T) {
 		TabletKeyspaceShard(t, "ks", "-80"))
 
 	// create the second source shard
-	source2Primary := NewFakeTablet(t, wr, "cell1", 30, topodatapb.TabletType_MASTER, nil,
+	source2Primary := NewFakeTablet(t, wr, "cell1", 30, topodatapb.TabletType_PRIMARY, nil,
 		TabletKeyspaceShard(t, "ks", "80-"))
 	source2Replica := NewFakeTablet(t, wr, "cell1", 31, topodatapb.TabletType_REPLICA, nil,
 		TabletKeyspaceShard(t, "ks", "80-"))
 	source2Rdonly := NewFakeTablet(t, wr, "cell1", 32, topodatapb.TabletType_RDONLY, nil,
 		TabletKeyspaceShard(t, "ks", "80-"))
 
-	dest1Primary := NewFakeTablet(t, wr, "cell1", 40, topodatapb.TabletType_MASTER, nil,
+	dest1Primary := NewFakeTablet(t, wr, "cell1", 40, topodatapb.TabletType_PRIMARY, nil,
 		TabletKeyspaceShard(t, "ks", "-40"))
 	dest1Replica := NewFakeTablet(t, wr, "cell1", 41, topodatapb.TabletType_REPLICA, nil,
 		TabletKeyspaceShard(t, "ks", "-40"))
@@ -294,14 +294,14 @@ func TestMultiShardMigrateServedTypes(t *testing.T) {
 		TabletKeyspaceShard(t, "ks", "-40"))
 
 	//	create the second source shard
-	dest2Primary := NewFakeTablet(t, wr, "cell1", 50, topodatapb.TabletType_MASTER, nil,
+	dest2Primary := NewFakeTablet(t, wr, "cell1", 50, topodatapb.TabletType_PRIMARY, nil,
 		TabletKeyspaceShard(t, "ks", "40-80"))
 	dest2Replica := NewFakeTablet(t, wr, "cell1", 51, topodatapb.TabletType_REPLICA, nil,
 		TabletKeyspaceShard(t, "ks", "40-80"))
 	dest2Rdonly := NewFakeTablet(t, wr, "cell1", 52, topodatapb.TabletType_RDONLY, nil,
 		TabletKeyspaceShard(t, "ks", "40-80"))
 
-	dest3Primary := NewFakeTablet(t, wr, "cell1", 60, topodatapb.TabletType_MASTER, nil,
+	dest3Primary := NewFakeTablet(t, wr, "cell1", 60, topodatapb.TabletType_PRIMARY, nil,
 		TabletKeyspaceShard(t, "ks", "80-c0"))
 	dest3Replica := NewFakeTablet(t, wr, "cell1", 61, topodatapb.TabletType_REPLICA, nil,
 		TabletKeyspaceShard(t, "ks", "80-c0"))
@@ -309,7 +309,7 @@ func TestMultiShardMigrateServedTypes(t *testing.T) {
 		TabletKeyspaceShard(t, "ks", "80-c0"))
 
 	// create the second source shard
-	dest4Primary := NewFakeTablet(t, wr, "cell1", 70, topodatapb.TabletType_MASTER, nil,
+	dest4Primary := NewFakeTablet(t, wr, "cell1", 70, topodatapb.TabletType_PRIMARY, nil,
 		TabletKeyspaceShard(t, "ks", "c0-"))
 	dest4Replica := NewFakeTablet(t, wr, "cell1", 71, topodatapb.TabletType_REPLICA, nil,
 		TabletKeyspaceShard(t, "ks", "c0-"))
@@ -491,7 +491,7 @@ func TestMultiShardMigrateServedTypes(t *testing.T) {
 	checkShardSourceShards(t, ts, "40-80", 1)
 
 	// migrate primary over
-	if err := vp.Run([]string{"MigrateServedTypes", "ks/-80", "master"}); err != nil {
+	if err := vp.Run([]string{"MigrateServedTypes", "ks/-80", "primary"}); err != nil {
 		t.Fatalf("MigrateServedType(master) failed: %v", err)
 	}
 
@@ -569,7 +569,7 @@ func TestMultiShardMigrateServedTypes(t *testing.T) {
 	checkShardSourceShards(t, ts, "c0-", 1)
 
 	// // migrate primary over
-	if err := vp.Run([]string{"MigrateServedTypes", "ks/80-", "master"}); err != nil {
+	if err := vp.Run([]string{"MigrateServedTypes", "ks/80-", "primary"}); err != nil {
 		t.Fatalf("MigrateServedType(master) failed: %v", err)
 	}
 

@@ -2,8 +2,11 @@
 
 name: Cluster (onlineddl_singleton)
 on: [push, pull_request]
-jobs:
+concurrency:
+  group: format('{0}-{1}', ${{ github.ref }}, 'Cluster (onlineddl_singleton)')
+  cancel-in-progress: true
 
+jobs:
   build:
     name: Run endtoend tests on Cluster (onlineddl_singleton)
     runs-on: ubuntu-18.04

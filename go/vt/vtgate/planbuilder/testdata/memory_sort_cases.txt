@@ -35,6 +35,7 @@
     ]
   }
 }
+Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains nonaggregated column 'b' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by
 
 # scatter aggregate order by references aggregate expression
 "select a, b, count(*) k from user group by a order by k"
@@ -70,6 +71,7 @@
     ]
   }
 }
+Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains nonaggregated column 'b' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by
 
 # scatter aggregate order by references multiple non-group-by expressions
 "select a, b, count(*) k from user group by a order by b, a, k"
@@ -107,6 +109,7 @@
     ]
   }
 }
+Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains nonaggregated column 'b' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by
 
 # scatter aggregate with memory sort and limit
 "select a, b, count(*) k from user group by a order by k desc limit 10"
@@ -148,6 +151,7 @@
     ]
   }
 }
+Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains nonaggregated column 'b' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by
 
 # scatter aggregate with memory sort and order by number
 "select a, b, count(*) k from user group by a order by 1,3"
@@ -185,9 +189,10 @@
     ]
   }
 }
+Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains nonaggregated column 'b' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by
 
 # scatter aggregate with memory sort and order by number, reuse weight_string
-# we have to use a meaningless construct to test this.
+# we have to use a meaningless construct to test this. TODO: improve to do ordering once for textcol1
 "select textcol1 as t, count(*) k from user group by textcol1 order by textcol1, k, textcol1"
 {
   "QueryType": "SELECT",
@@ -216,6 +221,38 @@
             "OrderBy": "(0|2) ASC, (0|2) ASC",
             "Query": "select textcol1 as t, count(*) as k, weight_string(textcol1) from `user` group by textcol1 order by textcol1 asc, textcol1 asc",
             "ResultColumns": 3,
+            "Table": "`user`"
+          }
+        ]
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select textcol1 as t, count(*) k from user group by textcol1 order by textcol1, k, textcol1",
+  "Instructions": {
+    "OperatorType": "Sort",
+    "Variant": "Memory",
+    "OrderBy": "(2|3) ASC, 1 ASC, (2|3) ASC",
+    "ResultColumns": 2,
+    "Inputs": [
+      {
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "Aggregates": "count(1)",
+        "GroupBy": "(2|3)",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select textcol1 as t, count(*) as k, textcol1, weight_string(textcol1) from `user` where 1 != 1 group by textcol1",
+            "OrderBy": "(2|3) ASC",
+            "Query": "select textcol1 as t, count(*) as k, textcol1, weight_string(textcol1) from `user` group by textcol1 order by textcol1 asc",
             "Table": "`user`"
           }
         ]
@@ -292,6 +329,9 @@
         "OperatorType": "Join",
         "Variant": "Join",
         "JoinColumnIndexes": "-1,-2,1,2",
+        "JoinVars": {
+          "user_id": 2
+        },
         "TableName": "`user`_music",
         "Inputs": [
           {
@@ -342,6 +382,9 @@
         "OperatorType": "Join",
         "Variant": "Join",
         "JoinColumnIndexes": "-2,-3,1,2",
+        "JoinVars": {
+          "user_id": 0
+        },
         "TableName": "`user`_music",
         "Inputs": [
           {
@@ -395,6 +438,9 @@
         "OperatorType": "Join",
         "Variant": "Join",
         "JoinColumnIndexes": "-1,-2,1,-3,2,-4",
+        "JoinVars": {
+          "user_id": 4
+        },
         "TableName": "`user`_music",
         "Inputs": [
           {
@@ -445,6 +491,9 @@
         "OperatorType": "Join",
         "Variant": "Join",
         "JoinColumnIndexes": "-2,-3,1,-4,2,-5",
+        "JoinVars": {
+          "user_id": 0
+        },
         "TableName": "`user`_music",
         "Inputs": [
           {
@@ -636,6 +685,9 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-1",
+    "JoinVars": {
+      "u_a": 0
+    },
     "TableName": "`user`_music",
     "Inputs": [
       {

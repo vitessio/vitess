@@ -154,7 +154,7 @@ func assertInsertedRowsExist(ctx context.Context, t *testing.T, conn *vtgateconn
 }
 
 func assertCanInsertRow(ctx context.Context, t *testing.T, conn *vtgateconn.VTGateConn) {
-	cur := conn.Session(ks1+":80-@master", nil)
+	cur := conn.Session(ks1+":80-@primary", nil)
 	_, err := cur.Execute(ctx, "begin", nil)
 	require.Nil(t, err)
 
@@ -173,7 +173,7 @@ func assertCanInsertRow(ctx context.Context, t *testing.T, conn *vtgateconn.VTGa
 }
 
 func insertManyRows(ctx context.Context, t *testing.T, conn *vtgateconn.VTGateConn, idStart, rowCount int) {
-	cur := conn.Session(ks1+":-80@master", nil)
+	cur := conn.Session(ks1+":-80@primary", nil)
 
 	query := "insert into test_table (id, msg, keyspace_id) values (:id, :msg, :keyspace_id)"
 	_, err := cur.Execute(ctx, "begin", nil)
@@ -211,7 +211,7 @@ func assertTablesPresent(t *testing.T) {
 		assert.Equal(t, "test_keyspace", parts[1])
 
 		switch parts[3] {
-		case "master":
+		case "primary":
 			numPrimary++
 		case "replica":
 			numReplica++

@@ -44,7 +44,7 @@ func ShardSession(dtid string) (*vtgatepb.Session_ShardSession, error) {
 	target := &querypb.Target{
 		Keyspace:   splits[0],
 		Shard:      splits[1],
-		TabletType: topodatapb.TabletType_MASTER,
+		TabletType: topodatapb.TabletType_PRIMARY,
 	}
 	txid, err := strconv.ParseInt(splits[2], 10, 0)
 	if err != nil {

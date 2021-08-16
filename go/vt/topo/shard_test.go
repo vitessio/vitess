@@ -125,34 +125,34 @@ func validateBlacklist(t *testing.T, si *ShardInfo, tabletType topodatapb.Tablet
 }
 
 func TestUpdateSourceMasterBlacklistedTables(t *testing.T) {
-	master := topodatapb.TabletType_MASTER
+	primary := topodatapb.TabletType_PRIMARY
 	si := NewShardInfo("ks", "sh", &topodatapb.Shard{}, nil)
 	ctx := lockedKeyspaceContext("ks")
 	t1, t2, t3, t4 := "t1", "t2", "t3", "t4"
 	tables1 := []string{t1, t2}
 	tables2 := []string{t3, t4}
 
-	require.NoError(t, addToBlacklist(ctx, si, master, nil, tables1))
-	validateBlacklist(t, si, master, nil, tables1)
+	require.NoError(t, addToBlacklist(ctx, si, primary, nil, tables1))
+	validateBlacklist(t, si, primary, nil, tables1)
 
-	require.NoError(t, addToBlacklist(ctx, si, master, nil, tables2))
-	validateBlacklist(t, si, master, nil, append(tables1, tables2...))
+	require.NoError(t, addToBlacklist(ctx, si, primary, nil, tables2))
+	validateBlacklist(t, si, primary, nil, append(tables1, tables2...))
 
-	require.Error(t, addToBlacklist(ctx, si, master, nil, tables2), blTablesAlreadyPresent)
-	require.Error(t, addToBlacklist(ctx, si, master, nil, []string{t1}), blTablesAlreadyPresent)
+	require.Error(t, addToBlacklist(ctx, si, primary, nil, tables2), blTablesAlreadyPresent)
+	require.Error(t, addToBlacklist(ctx, si, primary, nil, []string{t1}), blTablesAlreadyPresent)
 
-	require.NoError(t, removeFromBlacklist(ctx, si, master, nil, tables2))
-	validateBlacklist(t, si, master, nil, tables1)
+	require.NoError(t, removeFromBlacklist(ctx, si, primary, nil, tables2))
+	validateBlacklist(t, si, primary, nil, tables1)
 
-	require.Error(t, removeFromBlacklist(ctx, si, master, nil, tables2), blTablesNotPresent)
-	require.Error(t, removeFromBlacklist(ctx, si, master, nil, []string{t3}), blTablesNotPresent)
-	validateBlacklist(t, si, master, nil, tables1)
+	require.Error(t, removeFromBlacklist(ctx, si, primary, nil, tables2), blTablesNotPresent)
+	require.Error(t, removeFromBlacklist(ctx, si, primary, nil, []string{t3}), blTablesNotPresent)
+	validateBlacklist(t, si, primary, nil, tables1)
 
-	require.NoError(t, removeFromBlacklist(ctx, si, master, nil, []string{t1}))
-	require.NoError(t, removeFromBlacklist(ctx, si, master, nil, []string{t2}))
-	require.Nil(t, si.GetTabletControl(master))
+	require.NoError(t, removeFromBlacklist(ctx, si, primary, nil, []string{t1}))
+	require.NoError(t, removeFromBlacklist(ctx, si, primary, nil, []string{t2}))
+	require.Nil(t, si.GetTabletControl(primary))
 
-	require.Error(t, addToBlacklist(ctx, si, master, []string{"cell"}, tables1), blNoCellsForMaster)
+	require.Error(t, addToBlacklist(ctx, si, primary, []string{"cell"}, tables1), blNoCellsForPrimary)
 }
 
 func TestUpdateSourceBlacklistedTables(t *testing.T) {

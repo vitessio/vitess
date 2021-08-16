@@ -29,7 +29,7 @@ import (
 
 // shard related methods for Wrangler
 
-// SetShardIsPrimaryServing changes the IsMasterServing parameter of a shard.
+// SetShardIsPrimaryServing changes the IsPrimaryServing parameter of a shard.
 // It does not rebuild any serving graph or do any consistency check.
 // This is an emergency manual operation.
 func (wr *Wrangler) SetShardIsPrimaryServing(ctx context.Context, keyspace, shard string, isServing bool) (err error) {
@@ -42,7 +42,7 @@ func (wr *Wrangler) SetShardIsPrimaryServing(ctx context.Context, keyspace, shar
 
 	// and update the shard
 	_, err = wr.ts.UpdateShardFields(ctx, keyspace, shard, func(si *topo.ShardInfo) error {
-		si.IsMasterServing = isServing
+		si.IsPrimaryServing = isServing
 		return nil
 	})
 	return err
@@ -248,9 +248,9 @@ func (wr *Wrangler) RemoveShardCell(ctx context.Context, keyspace, shard, cell s
 		return fmt.Errorf("cell %v in not in shard info", cell)
 	}
 
-	// check the master alias is not in the cell
-	if shardInfo.MasterAlias != nil && shardInfo.MasterAlias.Cell == cell {
-		return fmt.Errorf("master %v is in the cell '%v' we want to remove", topoproto.TabletAliasString(shardInfo.MasterAlias), cell)
+	// check the primary alias is not in the cell
+	if shardInfo.PrimaryAlias != nil && shardInfo.PrimaryAlias.Cell == cell {
+		return fmt.Errorf("primary %v is in the cell '%v' we want to remove", topoproto.TabletAliasString(shardInfo.PrimaryAlias), cell)
 	}
 
 	// get the ShardReplication object in the cell
@@ -304,7 +304,7 @@ func (wr *Wrangler) RemoveShardCell(ctx context.Context, keyspace, shard, cell s
 	if err = wr.ts.DeleteSrvKeyspacePartitions(ctx, keyspace, []*topo.ShardInfo{shardInfo}, topodatapb.TabletType_REPLICA, []string{cell}); err != nil {
 		return err
 	}
-	return wr.ts.DeleteSrvKeyspacePartitions(ctx, keyspace, []*topo.ShardInfo{shardInfo}, topodatapb.TabletType_MASTER, []string{cell})
+	return wr.ts.DeleteSrvKeyspacePartitions(ctx, keyspace, []*topo.ShardInfo{shardInfo}, topodatapb.TabletType_PRIMARY, []string{cell})
 }
 
 // SourceShardDelete will delete a SourceShard inside a shard, by index.

@@ -87,11 +87,17 @@ service TabletManager {
   // ReplicationStatus returns the current replication status.
   rpc ReplicationStatus(tabletmanagerdata.ReplicationStatusRequest) returns (tabletmanagerdata.ReplicationStatusResponse) {};
 
-  // MasterStatus returns the current master status.
-  rpc MasterStatus(tabletmanagerdata.MasterStatusRequest) returns (tabletmanagerdata.MasterStatusResponse) {};
+  // MasterStatus returns the current primary status.
+  rpc MasterStatus(tabletmanagerdata.PrimaryStatusRequest) returns (tabletmanagerdata.PrimaryStatusResponse) {};
 
-  // MasterPosition returns the current master position
-  rpc MasterPosition(tabletmanagerdata.MasterPositionRequest) returns (tabletmanagerdata.MasterPositionResponse) {};
+  // PrimaryStatus returns the current primary status.
+  rpc PrimaryStatus(tabletmanagerdata.PrimaryStatusRequest) returns (tabletmanagerdata.PrimaryStatusResponse) {};
+
+  // MasterPosition returns the current primary position
+  rpc MasterPosition(tabletmanagerdata.PrimaryPositionRequest) returns (tabletmanagerdata.PrimaryPositionResponse) {};
+
+  // PrimaryPosition returns the current primary position
+  rpc PrimaryPosition(tabletmanagerdata.PrimaryPositionRequest) returns (tabletmanagerdata.PrimaryPositionResponse) {};
 
   // WaitForPosition waits for the position to be reached
   rpc WaitForPosition(tabletmanagerdata.WaitForPositionRequest) returns (tabletmanagerdata.WaitForPositionResponse) {};
@@ -127,18 +133,21 @@ service TabletManager {
   // Deprecated, use InitPrimary instead
   rpc InitMaster(tabletmanagerdata.InitPrimaryRequest) returns (tabletmanagerdata.InitPrimaryResponse) {};
 
-  // InitPrimary initializes the tablet as a master
+  // InitPrimary initializes the tablet as a primary
   rpc InitPrimary(tabletmanagerdata.InitPrimaryRequest) returns (tabletmanagerdata.InitPrimaryResponse) {};
 
   // PopulateReparentJournal tells the tablet to add an entry to its
   // reparent journal
   rpc PopulateReparentJournal(tabletmanagerdata.PopulateReparentJournalRequest) returns (tabletmanagerdata.PopulateReparentJournalResponse) {};
 
-  // InitReplica tells the tablet to reparent to the master unconditionally
+  // InitReplica tells the tablet to reparent to the primary unconditionally
   rpc InitReplica(tabletmanagerdata.InitReplicaRequest) returns (tabletmanagerdata.InitReplicaResponse) {};
 
-  // DemoteMaster tells the soon-to-be-former master it's gonna change
-  rpc DemoteMaster(tabletmanagerdata.DemoteMasterRequest) returns (tabletmanagerdata.DemoteMasterResponse) {};
+  // Deprecated, see DemotePrimary instead
+  rpc DemoteMaster(tabletmanagerdata.DemotePrimaryRequest) returns (tabletmanagerdata.DemotePrimaryResponse) {};
+
+  // DemotePrimary tells the soon-to-be-former primary it's gonna change
+  rpc DemotePrimary(tabletmanagerdata.DemotePrimaryRequest) returns (tabletmanagerdata.DemotePrimaryResponse) {};
 
   // Deprecated, use UndoDemotePrimary instead
   rpc UndoDemoteMaster(tabletmanagerdata.UndoDemotePrimaryRequest) returns (tabletmanagerdata.UndoDemotePrimaryResponse) {};
@@ -146,20 +155,23 @@ service TabletManager {
   // UndoDemotePrimary reverts all changes made by DemotePrimary
   rpc UndoDemotePrimary(tabletmanagerdata.UndoDemotePrimaryRequest) returns (tabletmanagerdata.UndoDemotePrimaryResponse) {};
 
-  // ReplicaWasPromoted tells the remote tablet it is now the master
+  // ReplicaWasPromoted tells the remote tablet it is now the primary
   rpc ReplicaWasPromoted(tabletmanagerdata.ReplicaWasPromotedRequest) returns (tabletmanagerdata.ReplicaWasPromotedResponse) {};
 
   // SetMaster tells the replica to reparent
-  rpc SetMaster(tabletmanagerdata.SetMasterRequest) returns (tabletmanagerdata.SetMasterResponse) {};
+  rpc SetMaster(tabletmanagerdata.SetReplicationSourceRequest) returns (tabletmanagerdata.SetReplicationSourceResponse) {};
 
-  // ReplicaWasRestarted tells the remote tablet its master has changed
+  // SetReplicationSource tells the replica to reparent
+  rpc SetReplicationSource(tabletmanagerdata.SetReplicationSourceRequest) returns (tabletmanagerdata.SetReplicationSourceResponse) {};
+
+  // ReplicaWasRestarted tells the remote tablet its primary has changed
   rpc ReplicaWasRestarted(tabletmanagerdata.ReplicaWasRestartedRequest) returns (tabletmanagerdata.ReplicaWasRestartedResponse) {};
 
   // StopReplicationAndGetStatus stops MySQL replication, and returns the
   // replication status
   rpc StopReplicationAndGetStatus(tabletmanagerdata.StopReplicationAndGetStatusRequest) returns (tabletmanagerdata.StopReplicationAndGetStatusResponse) {};
 
-  // PromoteReplica makes the replica the new master
+  // PromoteReplica makes the replica the new primary
   rpc PromoteReplica(tabletmanagerdata.PromoteReplicaRequest) returns (tabletmanagerdata.PromoteReplicaResponse) {};
 
   //

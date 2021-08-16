@@ -2,8 +2,11 @@
 
 name: Cluster (tabletmanager_tablegc)
 on: [push, pull_request]
-jobs:
+concurrency:
+  group: format('{0}-{1}', ${{ github.ref }}, 'Cluster (tabletmanager_tablegc)')
+  cancel-in-progress: true
 
+jobs:
   build:
     name: Run endtoend tests on Cluster (tabletmanager_tablegc)
     runs-on: ubuntu-18.04

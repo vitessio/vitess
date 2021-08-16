@@ -75,7 +75,7 @@ func main() {
 		//MinimizeSkew:      false,
 		//HeartbeatInterval: 60, //seconds
 	}
-	reader, err := conn.VStream(ctx, topodatapb.TabletType_MASTER, vgtid, filter, flags)
+	reader, err := conn.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, filter, flags)
 	for {
 		e, err := reader.Recv()
 		switch err {

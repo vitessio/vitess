@@ -23,11 +23,14 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/vt/discovery"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/topo"
+
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 
 	"google.golang.org/protobuf/proto"
 
-	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -92,6 +95,7 @@ type vstream struct {
 
 	eventCh           chan []*binlogdatapb.VEvent
 	heartbeatInterval uint32
+	ts                *topo.Server
 }
 
 type journalEvent struct {
@@ -114,6 +118,14 @@ func (vsm *vstreamManager) VStream(ctx context.Context, tabletType topodatapb.Ta
 	if err != nil {
 		return err
 	}
+	ts, err := vsm.toposerv.GetTopoServer()
+	if err != nil {
+		return err
+	}
+	if ts == nil {
+		log.Errorf("unable to get topo server in VStream()")
+		return fmt.Errorf("unable to get topo server")
+	}
 	vs := &vstream{
 		vgtid:              vgtid,
 		tabletType:         tabletType,
@@ -127,6 +139,7 @@ func (vsm *vstreamManager) VStream(ctx context.Context, tabletType topodatapb.Ta
 		vsm:                vsm,
 		eventCh:            make(chan []*binlogdatapb.VEvent),
 		heartbeatInterval:  flags.GetHeartbeatInterval(),
+		ts:                 ts,
 	}
 	return vs.stream(ctx)
 }
@@ -286,6 +299,7 @@ func (vs *vstream) startOneStream(ctx context.Context, sgtid *binlogdatapb.Shard
 
 		// Set the error on exit. First one wins.
 		if err != nil {
+			log.Errorf("Error in vstream for %+v: %s", sgtid, err)
 			vs.once.Do(func() {
 				vs.err = err
 				vs.cancel()
@@ -404,25 +418,66 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 
 		var eventss [][]*binlogdatapb.VEvent
 		var err error
-		rss := vs.rss
-		if vs.resolver != nil {
-			rss, err = vs.resolver.ResolveDestination(ctx, sgtid.Keyspace, vs.tabletType, key.DestinationShard(sgtid.Shard))
-			if err != nil {
-				return err
-			}
+		tp, err := discovery.NewTabletPicker(vs.ts, []string{vs.vsm.cell}, sgtid.Keyspace, sgtid.Shard, vs.tabletType.String())
+		if err != nil {
+			log.Errorf(err.Error())
+			return err
 		}
-		if len(rss) != 1 {
-			// Unreachable.
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected number or shards: %v", rss)
+		tablet, err := tp.PickForStreaming(ctx)
+		if err != nil {
+			log.Errorf(err.Error())
+			return err
 		}
+		log.Infof("Picked tablet %s for for %s/%s/%s/%s", tablet.Alias.String(), vs.vsm.cell, sgtid.Keyspace, sgtid.Shard, vs.tabletType.String())
+		target := &querypb.Target{
+			Keyspace:   sgtid.Keyspace,
+			Shard:      sgtid.Shard,
+			TabletType: vs.tabletType,
+			Cell:       vs.vsm.cell,
+		}
+		tabletConn, err := vs.vsm.resolver.GetGateway().QueryServiceByAlias(tablet.Alias, target)
+		if err != nil {
+			log.Errorf(err.Error())
+			return err
+		}
+
+		errCh := make(chan string, 1)
+		go func() {
+			tabletConn.StreamHealth(ctx, func(shr *querypb.StreamHealthResponse) error {
+				var errString string
+				if ctx.Err() != nil {
+					return fmt.Errorf("context has ended")
+				}
+				if shr == nil || shr.RealtimeStats == nil || shr.Target == nil {
+					return fmt.Errorf("health check failed")
+				}
+				if vs.tabletType != shr.Target.TabletType {
+					errString = fmt.Sprintf("tablet %s is no longer healthy: %s, restarting vstream",
+						tablet.Alias, shr.RealtimeStats.HealthError)
+				} else if shr.RealtimeStats.HealthError != "" {
+					errString = fmt.Sprintf("tablet type has changed from %s to %s, restarting vstream",
+						vs.tabletType, shr.Target.TabletType)
+				}
+				if errString != "" {
+					errCh <- errString
+					return fmt.Errorf(errString)
+				}
+				return nil
+			})
+		}()
+
+		log.Infof("Starting to vstream from %s", tablet.Alias.String())
 		// Safe to access sgtid.Gtid here (because it can't change until streaming begins).
-		err = rss[0].Gateway.VStream(ctx, rss[0].Target, sgtid.Gtid, sgtid.TablePKs, vs.filter, func(events []*binlogdatapb.VEvent) error {
+		err = tabletConn.VStream(ctx, target, sgtid.Gtid, sgtid.TablePKs, vs.filter, func(events []*binlogdatapb.VEvent) error {
 			// We received a valid event. Reset error count.
 			errCount = 0
 
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
+			case streamErr := <-errCh:
+				log.Warningf("Tablet state changed: %s, attempting to restart", streamErr)
+				return vterrors.New(vtrpcpb.Code_UNAVAILABLE, streamErr)
 			case <-journalDone:
 				// Unreachable.
 				// This can happen if a server misbehaves and does not end

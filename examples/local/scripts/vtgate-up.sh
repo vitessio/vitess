@@ -36,7 +36,7 @@ vtgate \
   -mysql_server_socket_path $mysql_server_socket_path \
   -cell $cell \
   -cells_to_watch $cell \
-  -tablet_types_to_wait MASTER,REPLICA \
+  -tablet_types_to_wait PRIMARY,REPLICA \
   -service_map 'grpc-vtgateservice' \
   -pid_file $VTDATAROOT/tmp/vtgate.pid \
   -mysql_auth_server_impl none \

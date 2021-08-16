@@ -261,7 +261,7 @@ func TestFlags(t *testing.T) {
 	enableConsolidator = true
 	enableConsolidatorReplicas = true
 	Init()
-	want.Consolidator = NotOnMaster
+	want.Consolidator = NotOnPrimary
 	assert.Equal(t, want, currentConfig)
 
 	enableConsolidator = true
@@ -273,7 +273,7 @@ func TestFlags(t *testing.T) {
 	enableConsolidator = false
 	enableConsolidatorReplicas = true
 	Init()
-	want.Consolidator = NotOnMaster
+	want.Consolidator = NotOnPrimary
 	assert.Equal(t, want, currentConfig)
 
 	enableConsolidator = false

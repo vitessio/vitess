@@ -2,8 +2,11 @@
 
 name: Cluster (15)
 on: [push, pull_request]
-jobs:
+concurrency:
+  group: format('{0}-{1}', ${{ github.ref }}, 'Cluster (15)')
+  cancel-in-progress: true
 
+jobs:
   build:
     name: Run endtoend tests on Cluster (15)
     runs-on: ubuntu-18.04

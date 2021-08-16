@@ -597,11 +597,11 @@ func (m *MaxReplicationLagModule) decreaseAndGuessRate(r *result, now time.Time,
 	}
 
 	// Find out the average rate (per second) at which we inserted data
-	// at the master during the observed timespan.
+	// at the primary during the observed timespan.
 	from := lagRecordBefore.time
 	to := lagRecordNow.time
-	avgMasterRate := m.actualRatesHistory.average(from, to)
-	if math.IsNaN(avgMasterRate) {
+	avgPrimaryRate := m.actualRatesHistory.average(from, to)
+	if math.IsNaN(avgPrimaryRate) {
 		// NaN (0.0/0.0) occurs when no observations were in the timespan.
 		// Wait for more rate observations.
 		r.Reason = fmt.Sprintf("did not decrease the rate because the throttler has not recorded its historic rates in the range [%v , %v]", from.Format("15:04:05"), to.Format("15:04:05"))
@@ -617,7 +617,7 @@ func (m *MaxReplicationLagModule) decreaseAndGuessRate(r *result, now time.Time,
 	}
 
 	// Guess the replica capacity based on the replication lag change.
-	rate, reason := m.guessReplicationRate(r, avgMasterRate, lagBefore, lagNow, lagDifference, d)
+	rate, reason := m.guessReplicationRate(r, avgPrimaryRate, lagBefore, lagNow, lagDifference, d)
 
 	m.updateRate(r, stateDecreaseAndGuessRate, rate, reason, now, lagRecordNow, m.config.MinDurationBetweenDecreases())
 }
@@ -625,16 +625,16 @@ func (m *MaxReplicationLagModule) decreaseAndGuessRate(r *result, now time.Time,
 // guessReplicationRate guesses the actual replication rate based on the new bac
 // Note that "lagDifference" can be positive (lag increased) or negative (lag
 // decreased).
-func (m *MaxReplicationLagModule) guessReplicationRate(r *result, avgMasterRate float64, lagBefore, lagNow int64, lagDifference, d time.Duration) (int64, string) {
+func (m *MaxReplicationLagModule) guessReplicationRate(r *result, avgPrimaryRate float64, lagBefore, lagNow int64, lagDifference, d time.Duration) (int64, string) {
 	// avgReplicationRate is the average rate (per second) at which the replica
 	// applied transactions from the replication stream. We infer the value
 	// from the relative change in the replication lag.
-	avgReplicationRate := avgMasterRate * (d - lagDifference).Seconds() / d.Seconds()
+	avgReplicationRate := avgPrimaryRate * (d - lagDifference).Seconds() / d.Seconds()
 	if avgReplicationRate <= 0 {
-		log.Warningf("guessed Replication rate was <= 0 (%v). master rate: %v d: %.1f lag difference: %.1f", avgReplicationRate, avgMasterRate, d.Seconds(), lagDifference.Seconds())
+		log.Warningf("guessed Replication rate was <= 0 (%v). Primary rate: %v d: %.1f lag difference: %.1f", avgReplicationRate, avgPrimaryRate, d.Seconds(), lagDifference.Seconds())
 		avgReplicationRate = 1
 	}
-	r.MasterRate = int64(avgMasterRate)
+	r.PrimaryRate = int64(avgPrimaryRate)
 	r.GuessedReplicationRate = int64(avgReplicationRate)
 
 	oldRequestsBehind := 0.0
@@ -645,8 +645,8 @@ func (m *MaxReplicationLagModule) guessReplicationRate(r *result, avgMasterRate 
 	newRequestsBehind := 0.0
 	// If the lag increased (i.e. replication rate was slower), the replica must make up
 	// for the difference in the future.
-	if avgReplicationRate < avgMasterRate {
-		newRequestsBehind = (avgMasterRate - avgReplicationRate) * d.Seconds()
+	if avgReplicationRate < avgPrimaryRate {
+		newRequestsBehind = (avgPrimaryRate - avgReplicationRate) * d.Seconds()
 	}
 	requestsBehind := oldRequestsBehind + newRequestsBehind
 	r.GuessedReplicationBacklogOld = int(oldRequestsBehind)

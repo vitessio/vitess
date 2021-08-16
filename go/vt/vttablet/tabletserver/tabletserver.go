@@ -239,7 +239,7 @@ func (tsv *TabletServer) InitDBConfig(target *querypb.Target, dbcfgs *dbconfigs.
 	tsv.se.InitDBConfig(tsv.config.DB.DbaWithDB())
 	tsv.rt.InitDBConfig(target, mysqld)
 	tsv.txThrottler.InitDBConfig(target)
-	tsv.vstreamer.InitDBConfig(target.Keyspace)
+	tsv.vstreamer.InitDBConfig(target.Keyspace, target.Shard)
 	tsv.hs.InitDBConfig(target, tsv.config.DB.DbaWithDB())
 	tsv.onlineDDLExecutor.InitDBConfig(target.Keyspace, target.Shard, dbcfgs.DBName)
 	tsv.lagThrottler.InitDBConfig(target.Keyspace, target.Shard)
@@ -389,7 +389,7 @@ func (tsv *TabletServer) IsHealthy() error {
 // should not be serving in it's healthy state.
 func IsServingType(tabletType topodatapb.TabletType) bool {
 	switch tabletType {
-	case topodatapb.TabletType_MASTER, topodatapb.TabletType_REPLICA, topodatapb.TabletType_BATCH, topodatapb.TabletType_EXPERIMENTAL:
+	case topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA, topodatapb.TabletType_BATCH, topodatapb.TabletType_EXPERIMENTAL:
 		return true
 	default:
 		return false
@@ -1821,7 +1821,7 @@ func (tsv *TabletServer) SetPassthroughDMLs(val bool) {
 // SetConsolidatorMode sets the consolidator mode.
 func (tsv *TabletServer) SetConsolidatorMode(mode string) {
 	switch mode {
-	case tabletenv.NotOnMaster, tabletenv.Enable, tabletenv.Disable:
+	case tabletenv.NotOnMaster, tabletenv.NotOnPrimary, tabletenv.Enable, tabletenv.Disable:
 		tsv.qe.consolidatorMode.Set(mode)
 	}
 }

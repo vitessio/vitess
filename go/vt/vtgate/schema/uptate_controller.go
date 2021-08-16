@@ -95,7 +95,7 @@ func (u *updateController) getItemFromQueueLocked() *discovery.TabletHealth {
 
 func (u *updateController) add(th *discovery.TabletHealth) {
 	// For non-primary tablet health, there is no schema tracking.
-	if th.Tablet.Type != topodatapb.TabletType_MASTER {
+	if th.Tablet.Type != topodatapb.TabletType_PRIMARY {
 		return
 	}
 

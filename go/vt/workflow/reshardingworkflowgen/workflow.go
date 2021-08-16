@@ -184,7 +184,7 @@ func findSourceAndDestinationShards(ts *topo.Server, keyspace string) ([][][]str
 		var sourceShardInfo *topo.ShardInfo
 		var destinationShardInfos []*topo.ShardInfo
 
-		isLeftServing := os.Left[0].IsMasterServing
+		isLeftServing := os.Left[0].IsPrimaryServing
 		if err != nil {
 			return nil, err
 		}

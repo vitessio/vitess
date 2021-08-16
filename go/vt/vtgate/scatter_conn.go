@@ -436,7 +436,7 @@ func (stc *ScatterConn) MessageStream(ctx context.Context, rss []*srvtopo.Resolv
 				return stc.processOneStreamingResult(&mu, &fieldSent, qr, callback)
 			})
 			// nil and EOF are equivalent. UNAVAILABLE can be returned by vttablet if it's demoted
-			// from master to replica. For any of these conditions, we have to retry.
+			// from primary to replica. For any of these conditions, we have to retry.
 			if err != nil && err != io.EOF && vterrors.Code(err) != vtrpcpb.Code_UNAVAILABLE {
 				cancel()
 				return err
@@ -700,7 +700,7 @@ func requireNewQS(err error, target *querypb.Target) bool {
 	code := vterrors.Code(err)
 	msg := err.Error()
 	return (code == vtrpcpb.Code_FAILED_PRECONDITION && (vterrors.RxOp.MatchString(msg) || vterrors.RxWrongTablet.MatchString(msg))) ||
-		(target != nil && target.TabletType == topodatapb.TabletType_MASTER && buffer.CausedByFailover(err))
+		(target != nil && target.TabletType == topodatapb.TabletType_PRIMARY && buffer.CausedByFailover(err))
 }
 
 // actionInfo looks at the current session, and returns information about what needs to be done for this tablet

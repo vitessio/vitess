@@ -133,7 +133,7 @@ func (erp *EmergencyReparenter2) reparentShardLocked(ctx context.Context, ev *ev
 		return err
 	}
 
-	ev.NewMaster = proto.Clone(reparentFunctions.GetNewPrimary()).(*topodatapb.Tablet)
+	ev.NewPrimary = proto.Clone(reparentFunctions.GetNewPrimary()).(*topodatapb.Tablet)
 
 	return nil
 }
