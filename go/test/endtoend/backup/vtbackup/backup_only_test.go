@@ -163,11 +163,11 @@ func firstBackupTest(t *testing.T, tabletType string) {
 
 }
 
-func vtBackup(t *testing.T, initialBackup bool, fullFlush bool) {
+func vtBackup(t *testing.T, initialBackup bool, restartBeforeBackup bool) {
 	// Take the back using vtbackup executable
 	extraArgs := []string{"-allow_first_backup", "-db-credentials-file", dbCredentialFile}
-	if fullFlush {
-		extraArgs = append(extraArgs, "-full_flush")
+	if restartBeforeBackup {
+		extraArgs = append(extraArgs, "-restart_before_backup")
 	}
 	log.Infof("starting backup tablet %s", time.Now())
 	err := localCluster.StartVtbackup(newInitDBFile, initialBackup, keyspaceName, shardName, cell, extraArgs...)

@@ -113,7 +113,8 @@ var (
 
 	initialBackup    = flag.Bool("initial_backup", false, "Instead of restoring from backup, initialize an empty database with the provided init_db_sql_file and upload a backup of that for the shard, if the shard has no backups yet. This can be used to seed a brand new shard with an initial, empty backup. If any backups already exist for the shard, this will be considered a successful no-op. This can only be done before the shard exists in topology (i.e. before any tablets are deployed).")
 	allowFirstBackup = flag.Bool("allow_first_backup", false, "Allow this job to take the first backup of an existing shard.")
-	fullFlush        = flag.Bool("full_flush", false, "Perform a full redo & buffer flush before taking the backup, currently implemented as a clean shutdown and startup. Only makes sense to work around xtrabackup bugs.")
+
+	restartBeforeBackup = flag.Bool("restart_before_backup", false, "Perform a mysqld clean/full restart after applying binlogs, but before taking the backup. Only makes sense to work around xtrabackup bugs.")
 
 	// vttablet-like flags
 	initDbNameOverride = flag.String("init_db_name_override", "", "(init parameter) override the name of the db used by vttablet")
@@ -393,9 +394,9 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 		return fmt.Errorf("not taking backup: replication did not make any progress from restore point: %v", restorePos)
 	}
 
-	if *fullFlush {
+	if *restartBeforeBackup {
 		log.Info("Proceeding with clean MySQL shutdown and startup to flush all buffers.")
-		// Prep for full/clean shutdown (not the default)
+		// Prep for full/clean shutdown (not typically the default)
 		if err := mysqld.ExecuteSuperQuery(ctx, "SET GLOBAL innodb_fast_shutdown=0"); err != nil {
 			return fmt.Errorf("Could not prep for full shutdown: %v", err)
 		}
