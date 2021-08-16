@@ -246,6 +246,16 @@ func canMergeSubQuery(outer, subq queryTree, subqOp abstract.Operator) (bool, er
 	switch outerOpCode {
 	case engine.SelectUnsharded, engine.SelectDBA, engine.SelectReference:
 		return subqOpCode == outerOpCode || subqOpCode == engine.SelectReference, nil
+	case engine.SelectEqualUnique:
+		matchVdxName, err := isMatchingVindexName(outer, subq)
+		if err != nil {
+			return false, nil
+		}
+		matchVdxValue, err := isMatchingVindexValue(outer, subq)
+		if err != nil {
+			return false, nil
+		}
+		return subqOpCode == outerOpCode && matchVdxName && matchVdxValue, nil
 	}
 
 	if solves, exprs := subqOp.Solves(outer.tableID()); solves {

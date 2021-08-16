@@ -50,6 +50,8 @@ type (
 		getKeyspace() (*vindexes.Keyspace, error)
 		getOpCode() (engine.RouteOpcode, error)
 		getVindexPredicates() ([]*vindexPlusPredicates, error)
+		getVindexName() (string, error)
+		getVindexValueExpr() (sqlparser.Expr, error)
 	}
 
 	joinTree struct {
@@ -115,6 +117,49 @@ type (
 		argName  string
 	}
 )
+
+func (s *subqueryTree) getVindexValueExpr() (sqlparser.Expr, error) {
+	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unsupported getVindexValueExpr for %T", s)
+}
+
+func (d *derivedTree) getVindexValueExpr() (sqlparser.Expr, error) {
+	return d.inner.getVindexValueExpr()
+}
+
+func (jp *joinTree) getVindexValueExpr() (sqlparser.Expr, error) {
+	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unsupported getVindexValueExpr for %T", jp)
+}
+
+func (rp *routeTree) getVindexValueExpr() (sqlparser.Expr, error) {
+	if rp.vindex == nil {
+		return nil, nil
+	}
+	for i, pred := range rp.vindexPreds {
+		if pred.colVindex.Name == rp.vindex.String() {
+			return pred.valueExprs[i], nil
+		}
+	}
+	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "could not find vindex value expression")
+}
+
+func (s *subqueryTree) getVindexName() (string, error) {
+	return "", vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unsupported getVindexName for %T", s)
+}
+
+func (d *derivedTree) getVindexName() (string, error) {
+	return d.inner.getVindexName()
+}
+
+func (jp *joinTree) getVindexName() (string, error) {
+	return "", vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unsupported getVindexName for %T", jp)
+}
+
+func (rp *routeTree) getVindexName() (string, error) {
+	if rp.vindex == nil {
+		return "", nil
+	}
+	return rp.vindex.String(), nil
+}
 
 func (s *subqueryTree) getVindexPredicates() ([]*vindexPlusPredicates, error) {
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unsupported getVindexPredicates for %T", s)
@@ -232,8 +277,9 @@ type cost struct {
 
 // vindexPlusPredicates is a struct used to store all the predicates that the vindex can be used to query
 type vindexPlusPredicates struct {
-	colVindex *vindexes.ColumnVindex
-	values    []sqltypes.PlanValue
+	colVindex  *vindexes.ColumnVindex
+	values     []sqltypes.PlanValue
+	valueExprs []sqlparser.Expr
 
 	// when we have the predicates found, we also know how to interact with this vindex
 	foundVindex vindexes.Vindex
@@ -547,24 +593,26 @@ func equalOrEqualUnique(vindex *vindexes.ColumnVindex) engine.RouteOpcode {
 func (rp *routeTree) planEqualOp(node *sqlparser.ComparisonExpr) (bool, error) {
 	column, ok := node.Left.(*sqlparser.ColName)
 	other := node.Right
+	vdValue := other
 	if !ok {
 		column, ok = node.Right.(*sqlparser.ColName)
 		if !ok {
 			// either the LHS or RHS have to be a column to be useful for the vindex
 			return false, nil
 		}
-		other = node.Left
+		vdValue = node.Left
 	}
-	val, err := makePlanValue(other)
+	val, err := makePlanValue(vdValue)
 	if err != nil || val == nil {
 		return false, err
 	}
 
-	return rp.haveMatchingVindex(node, column, *val, equalOrEqualUnique, justTheVindex), err
+	return rp.haveMatchingVindex(node, vdValue, column, *val, equalOrEqualUnique, justTheVindex), err
 }
 
 func (rp *routeTree) planSimpleInOp(node *sqlparser.ComparisonExpr, left *sqlparser.ColName) (bool, error) {
-	value, err := sqlparser.NewPlanValue(node.Right)
+	vdValue := node.Right
+	value, err := sqlparser.NewPlanValue(vdValue)
 	if err != nil {
 		// if we are unable to create a PlanValue, we can't use a vindex, but we don't have to fail
 		if strings.Contains(err.Error(), "expression is too complex") {
@@ -573,7 +621,7 @@ func (rp *routeTree) planSimpleInOp(node *sqlparser.ComparisonExpr, left *sqlpar
 		// something else went wrong, return the error
 		return false, err
 	}
-	switch nodeR := node.Right.(type) {
+	switch nodeR := vdValue.(type) {
 	case sqlparser.ValTuple:
 		if len(nodeR) == 1 && sqlparser.IsNull(nodeR[0]) {
 			rp.routeOpCode = engine.SelectNone
@@ -581,7 +629,7 @@ func (rp *routeTree) planSimpleInOp(node *sqlparser.ComparisonExpr, left *sqlpar
 		}
 	}
 	opcode := func(*vindexes.ColumnVindex) engine.RouteOpcode { return engine.SelectIN }
-	return rp.haveMatchingVindex(node, left, value, opcode, justTheVindex), err
+	return rp.haveMatchingVindex(node, vdValue, left, value, opcode, justTheVindex), err
 }
 
 func (rp *routeTree) planCompositeInOp(node *sqlparser.ComparisonExpr, left sqlparser.ValTuple) (bool, error) {
@@ -630,7 +678,7 @@ func (rp *routeTree) planCompositeInOpRecursive(node *sqlparser.ComparisonExpr, 
 			}
 
 			opcode := func(*vindexes.ColumnVindex) engine.RouteOpcode { return engine.SelectMultiEqual }
-			newVindex := rp.haveMatchingVindex(node, expr, *newPlanValues, opcode, justTheVindex)
+			newVindex := rp.haveMatchingVindex(node, rightVals, expr, *newPlanValues, opcode, justTheVindex)
 			foundVindex = newVindex || foundVindex
 		}
 	}
@@ -653,7 +701,8 @@ func (rp *routeTree) planLikeOp(node *sqlparser.ComparisonExpr) (bool, error) {
 		return false, nil
 	}
 
-	val, err := makePlanValue(node.Right)
+	vdValue := node.Right
+	val, err := makePlanValue(vdValue)
 	if err != nil || val == nil {
 		return false, err
 	}
@@ -668,7 +717,7 @@ func (rp *routeTree) planLikeOp(node *sqlparser.ComparisonExpr) (bool, error) {
 		return nil
 	}
 
-	return rp.haveMatchingVindex(node, column, *val, selectEqual, vdx), err
+	return rp.haveMatchingVindex(node, vdValue, column, *val, selectEqual, vdx), err
 }
 
 func (rp *routeTree) planIsExpr(node *sqlparser.IsExpr) (bool, error) {
@@ -680,12 +729,13 @@ func (rp *routeTree) planIsExpr(node *sqlparser.IsExpr) (bool, error) {
 	if !ok {
 		return false, nil
 	}
-	val, err := makePlanValue(&sqlparser.NullVal{})
+	vdValue := &sqlparser.NullVal{}
+	val, err := makePlanValue(vdValue)
 	if err != nil || val == nil {
 		return false, err
 	}
 
-	return rp.haveMatchingVindex(node, column, *val, equalOrEqualUnique, justTheVindex), err
+	return rp.haveMatchingVindex(node, vdValue, column, *val, equalOrEqualUnique, justTheVindex), err
 }
 
 func makePlanValue(n sqlparser.Expr) (*sqltypes.PlanValue, error) {
@@ -714,6 +764,7 @@ func (rp routeTree) hasVindex(column *sqlparser.ColName) bool {
 
 func (rp *routeTree) haveMatchingVindex(
 	node sqlparser.Expr,
+	valueExpr sqlparser.Expr,
 	column *sqlparser.ColName,
 	value sqltypes.PlanValue,
 	opcode func(*vindexes.ColumnVindex) engine.RouteOpcode,
@@ -728,6 +779,7 @@ func (rp *routeTree) haveMatchingVindex(
 			// If the column for the predicate matches any column in the vindex add it to the list
 			if column.Name.Equal(col) {
 				v.values = append(v.values, value)
+				v.valueExprs = append(v.valueExprs, valueExpr)
 				v.predicates = append(v.predicates, node)
 				// Vindex is covered if all the columns in the vindex have a associated predicate
 				covered := len(v.values) == len(v.colVindex.Columns)
@@ -892,4 +944,28 @@ func isQueryTreeKeyspaceMatching(qt1, qt2 queryTree) (bool, error) {
 		return false, nil
 	}
 	return qt1Ks == qt2Ks, nil
+}
+
+func isMatchingVindexName(qt1, qt2 queryTree) (bool, error) {
+	var qt1Name, qt2Name string
+	var err error
+	if qt1Name, err = qt1.getVindexName(); err != nil {
+		return false, err
+	}
+	if qt2Name, err = qt2.getVindexName(); err != nil {
+		return false, err
+	}
+	return qt1Name == qt2Name, nil
+}
+
+func isMatchingVindexValue(qt1, qt2 queryTree) (bool, error) {
+	var qt1Expr, qt2Expr sqlparser.Expr
+	var err error
+	if qt1Expr, err = qt1.getVindexValueExpr(); err != nil {
+		return false, err
+	}
+	if qt2Expr, err = qt2.getVindexValueExpr(); err != nil {
+		return false, err
+	}
+	return valEqual(qt1Expr, qt2Expr), nil
 }
