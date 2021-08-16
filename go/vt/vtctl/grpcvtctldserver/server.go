@@ -588,7 +588,7 @@ func (s *VtctldServer) EmergencyReparentShard(ctx context.Context, req *vtctldat
 		logstream = append(logstream, e)
 	})
 
-	ev, err := reparentutil.NewEmergencyReparenter2(s.tmc, logger).ReparentShard(ctx,
+	ev, err := reparentutil.NewEmergencyReparenter(s.tmc, logger).ReparentShard(ctx,
 		reparentutil.NewVtctlReparentFunctions(req.NewPrimary,
 			sets.NewString(ignoreReplicaAliases...),
 			waitReplicasTimeout,

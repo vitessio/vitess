@@ -34,19 +34,19 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 )
 
-// EmergencyReparenter2 performs EmergencyReparentShard operations.
-type EmergencyReparenter2 struct {
+// EmergencyReparenter performs EmergencyReparentShard operations.
+type EmergencyReparenter struct {
 	tmc    tmclient.TabletManagerClient
 	logger logutil.Logger
 }
 
-// NewEmergencyReparenter2 returns a new EmergencyReparenter object, ready to
-// perform EmergencyReparentShard operations using the given topo.Server,
+// NewEmergencyReparenter returns a new EmergencyReparenter object, ready to
+// perform EmergencyReparentShard operations using the given
 // TabletManagerClient, and logger.
 //
 // Providing a nil logger instance is allowed.
-func NewEmergencyReparenter2(tmc tmclient.TabletManagerClient, logger logutil.Logger) *EmergencyReparenter2 {
-	erp := EmergencyReparenter2{
+func NewEmergencyReparenter(tmc tmclient.TabletManagerClient, logger logutil.Logger) *EmergencyReparenter {
+	erp := EmergencyReparenter{
 		tmc:    tmc,
 		logger: logger,
 	}
@@ -62,7 +62,7 @@ func NewEmergencyReparenter2(tmc tmclient.TabletManagerClient, logger logutil.Lo
 
 // ReparentShard performs the EmergencyReparentShard operation on the given
 // keyspace and shard.
-func (erp *EmergencyReparenter2) ReparentShard(ctx context.Context, reparentFunctions ReparentFunctions) (*events.Reparent, error) {
+func (erp *EmergencyReparenter) ReparentShard(ctx context.Context, reparentFunctions ReparentFunctions) (*events.Reparent, error) {
 	ctx, unlock, err := reparentFunctions.LockShard(ctx)
 	if err != nil {
 		return nil, err
@@ -84,7 +84,7 @@ func (erp *EmergencyReparenter2) ReparentShard(ctx context.Context, reparentFunc
 	return ev, err
 }
 
-func (erp *EmergencyReparenter2) reparentShardLocked(ctx context.Context, ev *events.Reparent, reparentFunctions ReparentFunctions) error {
+func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *events.Reparent, reparentFunctions ReparentFunctions) error {
 
 	if reparentFunctions.CheckIfFixed() {
 		return nil
