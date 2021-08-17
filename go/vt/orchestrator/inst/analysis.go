@@ -112,9 +112,9 @@ type ReplicationAnalysisHints struct {
 }
 
 const (
-	ForcePrimaryFailoverCommandHint    string = "force-master-failover"
-	ForcePrimaryTakeoverCommandHint    string = "force-master-takeover"
-	GracefulPrimaryTakeoverCommandHint string = "graceful-master-takeover"
+	ForcePrimaryFailoverCommandHint    string = "force-primary-failover"
+	ForcePrimaryTakeoverCommandHint    string = "force-primary-takeover"
+	GracefulPrimaryTakeoverCommandHint string = "graceful-primary-takeover"
 )
 
 type AnalysisInstanceType string

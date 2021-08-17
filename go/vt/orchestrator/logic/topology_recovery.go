@@ -1330,7 +1330,7 @@ func RecoverDeadCoPrimary(topologyRecovery *TopologyRecovery, skipProcesses bool
 	// !! This is an evil 3-node circle that must be broken.
 	// config.Config.ApplyMySQLPromotionAfterMasterFailover, if true, will cause it to break, because we would RESET SLAVE on S1
 	// but we want to make sure the circle is broken no matter what.
-	// So in the case we promoted not-the-other-co-primary, we issue a detach-replica-master-host, which is a reversible operation
+	// So in the case we promoted not-the-other-co-primary, we issue a detach-replica-primary-host, which is a reversible operation
 	if promotedReplica != nil && !promotedReplica.Key.Equals(otherCoPrimaryKey) {
 		_, err = inst.DetachReplicaPrimaryHost(&promotedReplica.Key)
 		topologyRecovery.AddError(log.Errore(err))
