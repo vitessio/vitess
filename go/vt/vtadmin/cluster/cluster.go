@@ -243,6 +243,65 @@ func (c *Cluster) parseTablet(rows *sql.Rows) (*vtadminpb.Tablet, error) {
 	return tablet, nil
 }
 
+// CreateKeyspace creates a keyspace in the given cluster, proxying a
+// CreateKeyspaceRequest to a vtctld in that cluster.
+func (c *Cluster) CreateKeyspace(ctx context.Context, req *vtctldatapb.CreateKeyspaceRequest) (*vtadminpb.Keyspace, error) {
+	span, ctx := trace.NewSpan(ctx, "Cluster.CreateKeyspace")
+	defer span.Finish()
+
+	AnnotateSpan(c, span)
+
+	if req == nil {
+		return nil, fmt.Errorf("%w: request cannot be nil", errors.ErrInvalidRequest)
+	}
+
+	if req.Name == "" {
+		return nil, fmt.Errorf("%w: keyspace name is required", errors.ErrInvalidRequest)
+	}
+
+	span.Annotate("keyspace", req.Name)
+
+	if err := c.topoRWPool.Acquire(ctx); err != nil {
+		return nil, fmt.Errorf("CreateKeyspace(%+v) failed to acquire topoRWPool: %w", req, err)
+	}
+
+	resp, err := c.Vtctld.CreateKeyspace(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	return &vtadminpb.Keyspace{
+		Cluster:  c.ToProto(),
+		Keyspace: resp.Keyspace,
+		Shards:   map[string]*vtctldatapb.Shard{},
+	}, nil
+}
+
+// DeleteKeyspace deletes a keyspace in the given cluster, proxying a
+// DeleteKeyspaceRequest to a vtctld in that cluster.
+func (c *Cluster) DeleteKeyspace(ctx context.Context, req *vtctldatapb.DeleteKeyspaceRequest) (*vtctldatapb.DeleteKeyspaceResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "Cluster.DeleteKeyspace")
+	defer span.Finish()
+
+	AnnotateSpan(c, span)
+
+	if req == nil {
+		return nil, fmt.Errorf("%w: request cannot be nil", errors.ErrInvalidRequest)
+	}
+
+	if req.Keyspace == "" {
+		return nil, fmt.Errorf("%w: keyspace name is required", errors.ErrInvalidRequest)
+	}
+
+	span.Annotate("keyspace", req.Keyspace)
+
+	if err := c.topoRWPool.Acquire(ctx); err != nil {
+		return nil, fmt.Errorf("DeleteKeyspace(%+v) failed to acquire topoRWPool: %w", req, err)
+	}
+
+	return c.Vtctld.DeleteKeyspace(ctx, req)
+}
+
 // FindAllShardsInKeyspaceOptions modify the behavior of a cluster's
 // FindAllShardsInKeyspace method.
 type FindAllShardsInKeyspaceOptions struct {

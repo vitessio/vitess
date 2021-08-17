@@ -226,6 +226,59 @@ func (api *API) ListenAndServe() error {
 	return api.serv.ListenAndServe()
 }
 
+// CreateKeyspace is part of the vtadminpb.VTAdminServer interface.
+func (api *API) CreateKeyspace(ctx context.Context, req *vtadminpb.CreateKeyspaceRequest) (*vtadminpb.CreateKeyspaceResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.CreateKeyspace")
+	defer span.Finish()
+
+	span.Annotate("cluster_id", req.ClusterId)
+
+	if !api.authz.IsAuthorized(ctx, req.ClusterId, rbac.KeyspaceResource, rbac.CreateAction) {
+		return nil, fmt.Errorf("%w: cannot create keyspace in %s", errors.ErrUnauthorized, req.ClusterId)
+	}
+
+	c, ok := api.clusterMap[req.ClusterId]
+	if !ok {
+		return nil, fmt.Errorf("%w: no cluster with id %s", errors.ErrUnsupportedCluster, req.ClusterId)
+	}
+
+	if err := c.Vtctld.Dial(ctx); err != nil {
+		return nil, err
+	}
+
+	ks, err := c.CreateKeyspace(ctx, req.Options)
+	if err != nil {
+		return nil, err
+	}
+
+	return &vtadminpb.CreateKeyspaceResponse{
+		Keyspace: ks,
+	}, nil
+}
+
+// DeleteKeyspace is part of the vtadminpb.VTAdminServer interface.
+func (api *API) DeleteKeyspace(ctx context.Context, req *vtadminpb.DeleteKeyspaceRequest) (*vtctldatapb.DeleteKeyspaceResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.DeleteKeyspace")
+	defer span.Finish()
+
+	span.Annotate("cluster_id", req.ClusterId)
+
+	if !api.authz.IsAuthorized(ctx, req.ClusterId, rbac.KeyspaceResource, rbac.DeleteAction) {
+		return nil, fmt.Errorf("%w: cannot delete keyspace in %s", errors.ErrUnauthorized, req.ClusterId)
+	}
+
+	c, ok := api.clusterMap[req.ClusterId]
+	if !ok {
+		return nil, fmt.Errorf("%w: no cluster with id %s", errors.ErrUnsupportedCluster, req.ClusterId)
+	}
+
+	if err := c.Vtctld.Dial(ctx); err != nil {
+		return nil, err
+	}
+
+	return c.DeleteKeyspace(ctx, req.Options)
+}
+
 // FindSchema is part of the vtadminpb.VTAdminServer interface.
 func (api *API) FindSchema(ctx context.Context, req *vtadminpb.FindSchemaRequest) (*vtadminpb.Schema, error) {
 	span, _ := trace.NewSpan(ctx, "API.FindSchema")
