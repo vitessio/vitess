@@ -361,6 +361,9 @@ func main() {
 			test := *t
 			test.flavor = flavor
 			test.bootstrapVersion = *bootstrapVersion
+			if *failFast {
+				test.Args = append(test.Args, "-failfast")
+			}
 			dup = append(dup, &test)
 		}
 	}
