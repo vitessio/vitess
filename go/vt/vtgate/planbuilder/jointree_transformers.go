@@ -128,15 +128,22 @@ func (sqr *subQReplacer) replacer(cursor *sqlparser.Cursor) bool {
 	default:
 		return true
 	}
+
+	var node sqlparser.SQLNode
 	subqSelect, exists := sqr.rt.sqToReplace[argName]
 	if !exists {
 		sqr.err = vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unable to find subquery with argument: %s", argName)
 		return false
 	}
-	cursor.Replace(&sqlparser.Subquery{
-		Select: subqSelect,
-	})
+	sq := &sqlparser.Subquery{Select: subqSelect}
+	node = sq
 
+	// if the subquery is in an EXISTS, e.g. "__sq_has_values1"
+	// then we encapsulate the subquery in an exists expression.
+	if strings.HasPrefix(argName, string(sqlparser.HasValueSubQueryBaseName)) {
+		node = &sqlparser.ExistsExpr{Subquery: sq}
+	}
+	cursor.Replace(node)
 	return false
 }
 

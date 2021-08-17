@@ -1660,6 +1660,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4 plan same as above
 
 # cross-shard subquery as expression
 "select id from user where id = (select col from user)"
@@ -2347,6 +2348,52 @@ Gen4 plan same as above
     },
     "FieldQuery": "select u1.col from `user` as u1 where 1 != 1",
     "Query": "select u1.col from `user` as u1 where u1.id = 5 and u1.`name` in (select u2.`name` from `user` as u2 where u2.id = 5)",
+    "Table": "`user`",
+    "Values": [
+      5
+    ],
+    "Vindex": "user_index"
+  }
+}
+Gen4 plan same as above
+
+# SelectEqualUnique with EXISTS uncorrelated subquery
+"select u1.col from user as u1 where u1.id = 5 and exists (select u2.name from user u2 where u2.id = 5)"
+{
+  "QueryType": "SELECT",
+  "Original": "select u1.col from user as u1 where u1.id = 5 and exists (select u2.name from user u2 where u2.id = 5)",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select u1.col from `user` as u1 where 1 != 1",
+    "Query": "select u1.col from `user` as u1 where u1.id = 5 and exists (select u2.`name` from `user` as u2 where u2.id = 5)",
+    "Table": "`user`",
+    "Values": [
+      5
+    ],
+    "Vindex": "user_index"
+  }
+}
+Gen4 plan same as above
+
+# SelectEqualUnique with NOT EXISTS uncorrelated subquery
+"select u1.col from user as u1 where u1.id = 5 and not exists (select u2.name from user u2 where u2.id = 5)"
+{
+  "QueryType": "SELECT",
+  "Original": "select u1.col from user as u1 where u1.id = 5 and not exists (select u2.name from user u2 where u2.id = 5)",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select u1.col from `user` as u1 where 1 != 1",
+    "Query": "select u1.col from `user` as u1 where u1.id = 5 and not exists (select u2.`name` from `user` as u2 where u2.id = 5)",
     "Table": "`user`",
     "Values": [
       5
