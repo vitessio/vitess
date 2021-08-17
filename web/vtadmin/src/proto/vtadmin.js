@@ -51,6 +51,72 @@ $root.vtadmin = (function() {
         };
 
         /**
+         * Callback as used by {@link vtadmin.VTAdmin#createKeyspace}.
+         * @memberof vtadmin.VTAdmin
+         * @typedef CreateKeyspaceCallback
+         * @type {function}
+         * @param {Error|null} error Error, if any
+         * @param {vtadmin.CreateKeyspaceResponse} [response] CreateKeyspaceResponse
+         */
+
+        /**
+         * Calls CreateKeyspace.
+         * @function createKeyspace
+         * @memberof vtadmin.VTAdmin
+         * @instance
+         * @param {vtadmin.ICreateKeyspaceRequest} request CreateKeyspaceRequest message or plain object
+         * @param {vtadmin.VTAdmin.CreateKeyspaceCallback} callback Node-style callback called with the error, if any, and CreateKeyspaceResponse
+         * @returns {undefined}
+         * @variation 1
+         */
+        Object.defineProperty(VTAdmin.prototype.createKeyspace = function createKeyspace(request, callback) {
+            return this.rpcCall(createKeyspace, $root.vtadmin.CreateKeyspaceRequest, $root.vtadmin.CreateKeyspaceResponse, request, callback);
+        }, "name", { value: "CreateKeyspace" });
+
+        /**
+         * Calls CreateKeyspace.
+         * @function createKeyspace
+         * @memberof vtadmin.VTAdmin
+         * @instance
+         * @param {vtadmin.ICreateKeyspaceRequest} request CreateKeyspaceRequest message or plain object
+         * @returns {Promise<vtadmin.CreateKeyspaceResponse>} Promise
+         * @variation 2
+         */
+
+        /**
+         * Callback as used by {@link vtadmin.VTAdmin#deleteKeyspace}.
+         * @memberof vtadmin.VTAdmin
+         * @typedef DeleteKeyspaceCallback
+         * @type {function}
+         * @param {Error|null} error Error, if any
+         * @param {vtctldata.DeleteKeyspaceResponse} [response] DeleteKeyspaceResponse
+         */
+
+        /**
+         * Calls DeleteKeyspace.
+         * @function deleteKeyspace
+         * @memberof vtadmin.VTAdmin
+         * @instance
+         * @param {vtadmin.IDeleteKeyspaceRequest} request DeleteKeyspaceRequest message or plain object
+         * @param {vtadmin.VTAdmin.DeleteKeyspaceCallback} callback Node-style callback called with the error, if any, and DeleteKeyspaceResponse
+         * @returns {undefined}
+         * @variation 1
+         */
+        Object.defineProperty(VTAdmin.prototype.deleteKeyspace = function deleteKeyspace(request, callback) {
+            return this.rpcCall(deleteKeyspace, $root.vtadmin.DeleteKeyspaceRequest, $root.vtctldata.DeleteKeyspaceResponse, request, callback);
+        }, "name", { value: "DeleteKeyspace" });
+
+        /**
+         * Calls DeleteKeyspace.
+         * @function deleteKeyspace
+         * @memberof vtadmin.VTAdmin
+         * @instance
+         * @param {vtadmin.IDeleteKeyspaceRequest} request DeleteKeyspaceRequest message or plain object
+         * @returns {Promise<vtctldata.DeleteKeyspaceResponse>} Promise
+         * @variation 2
+         */
+
+        /**
          * Callback as used by {@link vtadmin.VTAdmin#findSchema}.
          * @memberof vtadmin.VTAdmin
          * @typedef FindSchemaCallback
@@ -4020,6 +4086,628 @@ $root.vtadmin = (function() {
         };
 
         return Workflow;
+    })();
+
+    vtadmin.CreateKeyspaceRequest = (function() {
+
+        /**
+         * Properties of a CreateKeyspaceRequest.
+         * @memberof vtadmin
+         * @interface ICreateKeyspaceRequest
+         * @property {string|null} [cluster_id] CreateKeyspaceRequest cluster_id
+         * @property {vtctldata.ICreateKeyspaceRequest|null} [options] CreateKeyspaceRequest options
+         */
+
+        /**
+         * Constructs a new CreateKeyspaceRequest.
+         * @memberof vtadmin
+         * @classdesc Represents a CreateKeyspaceRequest.
+         * @implements ICreateKeyspaceRequest
+         * @constructor
+         * @param {vtadmin.ICreateKeyspaceRequest=} [properties] Properties to set
+         */
+        function CreateKeyspaceRequest(properties) {
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * CreateKeyspaceRequest cluster_id.
+         * @member {string} cluster_id
+         * @memberof vtadmin.CreateKeyspaceRequest
+         * @instance
+         */
+        CreateKeyspaceRequest.prototype.cluster_id = "";
+
+        /**
+         * CreateKeyspaceRequest options.
+         * @member {vtctldata.ICreateKeyspaceRequest|null|undefined} options
+         * @memberof vtadmin.CreateKeyspaceRequest
+         * @instance
+         */
+        CreateKeyspaceRequest.prototype.options = null;
+
+        /**
+         * Creates a new CreateKeyspaceRequest instance using the specified properties.
+         * @function create
+         * @memberof vtadmin.CreateKeyspaceRequest
+         * @static
+         * @param {vtadmin.ICreateKeyspaceRequest=} [properties] Properties to set
+         * @returns {vtadmin.CreateKeyspaceRequest} CreateKeyspaceRequest instance
+         */
+        CreateKeyspaceRequest.create = function create(properties) {
+            return new CreateKeyspaceRequest(properties);
+        };
+
+        /**
+         * Encodes the specified CreateKeyspaceRequest message. Does not implicitly {@link vtadmin.CreateKeyspaceRequest.verify|verify} messages.
+         * @function encode
+         * @memberof vtadmin.CreateKeyspaceRequest
+         * @static
+         * @param {vtadmin.ICreateKeyspaceRequest} message CreateKeyspaceRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        CreateKeyspaceRequest.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.cluster_id != null && Object.hasOwnProperty.call(message, "cluster_id"))
+                writer.uint32(/* id 1, wireType 2 =*/10).string(message.cluster_id);
+            if (message.options != null && Object.hasOwnProperty.call(message, "options"))
+                $root.vtctldata.CreateKeyspaceRequest.encode(message.options, writer.uint32(/* id 2, wireType 2 =*/18).fork()).ldelim();
+            return writer;
+        };
+
+        /**
+         * Encodes the specified CreateKeyspaceRequest message, length delimited. Does not implicitly {@link vtadmin.CreateKeyspaceRequest.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtadmin.CreateKeyspaceRequest
+         * @static
+         * @param {vtadmin.ICreateKeyspaceRequest} message CreateKeyspaceRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        CreateKeyspaceRequest.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a CreateKeyspaceRequest message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtadmin.CreateKeyspaceRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtadmin.CreateKeyspaceRequest} CreateKeyspaceRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        CreateKeyspaceRequest.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.CreateKeyspaceRequest();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    message.cluster_id = reader.string();
+                    break;
+                case 2:
+                    message.options = $root.vtctldata.CreateKeyspaceRequest.decode(reader, reader.uint32());
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a CreateKeyspaceRequest message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtadmin.CreateKeyspaceRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtadmin.CreateKeyspaceRequest} CreateKeyspaceRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        CreateKeyspaceRequest.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a CreateKeyspaceRequest message.
+         * @function verify
+         * @memberof vtadmin.CreateKeyspaceRequest
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        CreateKeyspaceRequest.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.cluster_id != null && message.hasOwnProperty("cluster_id"))
+                if (!$util.isString(message.cluster_id))
+                    return "cluster_id: string expected";
+            if (message.options != null && message.hasOwnProperty("options")) {
+                var error = $root.vtctldata.CreateKeyspaceRequest.verify(message.options);
+                if (error)
+                    return "options." + error;
+            }
+            return null;
+        };
+
+        /**
+         * Creates a CreateKeyspaceRequest message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtadmin.CreateKeyspaceRequest
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtadmin.CreateKeyspaceRequest} CreateKeyspaceRequest
+         */
+        CreateKeyspaceRequest.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtadmin.CreateKeyspaceRequest)
+                return object;
+            var message = new $root.vtadmin.CreateKeyspaceRequest();
+            if (object.cluster_id != null)
+                message.cluster_id = String(object.cluster_id);
+            if (object.options != null) {
+                if (typeof object.options !== "object")
+                    throw TypeError(".vtadmin.CreateKeyspaceRequest.options: object expected");
+                message.options = $root.vtctldata.CreateKeyspaceRequest.fromObject(object.options);
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a CreateKeyspaceRequest message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtadmin.CreateKeyspaceRequest
+         * @static
+         * @param {vtadmin.CreateKeyspaceRequest} message CreateKeyspaceRequest
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        CreateKeyspaceRequest.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.defaults) {
+                object.cluster_id = "";
+                object.options = null;
+            }
+            if (message.cluster_id != null && message.hasOwnProperty("cluster_id"))
+                object.cluster_id = message.cluster_id;
+            if (message.options != null && message.hasOwnProperty("options"))
+                object.options = $root.vtctldata.CreateKeyspaceRequest.toObject(message.options, options);
+            return object;
+        };
+
+        /**
+         * Converts this CreateKeyspaceRequest to JSON.
+         * @function toJSON
+         * @memberof vtadmin.CreateKeyspaceRequest
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        CreateKeyspaceRequest.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return CreateKeyspaceRequest;
+    })();
+
+    vtadmin.CreateKeyspaceResponse = (function() {
+
+        /**
+         * Properties of a CreateKeyspaceResponse.
+         * @memberof vtadmin
+         * @interface ICreateKeyspaceResponse
+         * @property {vtadmin.IKeyspace|null} [keyspace] CreateKeyspaceResponse keyspace
+         */
+
+        /**
+         * Constructs a new CreateKeyspaceResponse.
+         * @memberof vtadmin
+         * @classdesc Represents a CreateKeyspaceResponse.
+         * @implements ICreateKeyspaceResponse
+         * @constructor
+         * @param {vtadmin.ICreateKeyspaceResponse=} [properties] Properties to set
+         */
+        function CreateKeyspaceResponse(properties) {
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * CreateKeyspaceResponse keyspace.
+         * @member {vtadmin.IKeyspace|null|undefined} keyspace
+         * @memberof vtadmin.CreateKeyspaceResponse
+         * @instance
+         */
+        CreateKeyspaceResponse.prototype.keyspace = null;
+
+        /**
+         * Creates a new CreateKeyspaceResponse instance using the specified properties.
+         * @function create
+         * @memberof vtadmin.CreateKeyspaceResponse
+         * @static
+         * @param {vtadmin.ICreateKeyspaceResponse=} [properties] Properties to set
+         * @returns {vtadmin.CreateKeyspaceResponse} CreateKeyspaceResponse instance
+         */
+        CreateKeyspaceResponse.create = function create(properties) {
+            return new CreateKeyspaceResponse(properties);
+        };
+
+        /**
+         * Encodes the specified CreateKeyspaceResponse message. Does not implicitly {@link vtadmin.CreateKeyspaceResponse.verify|verify} messages.
+         * @function encode
+         * @memberof vtadmin.CreateKeyspaceResponse
+         * @static
+         * @param {vtadmin.ICreateKeyspaceResponse} message CreateKeyspaceResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        CreateKeyspaceResponse.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.keyspace != null && Object.hasOwnProperty.call(message, "keyspace"))
+                $root.vtadmin.Keyspace.encode(message.keyspace, writer.uint32(/* id 1, wireType 2 =*/10).fork()).ldelim();
+            return writer;
+        };
+
+        /**
+         * Encodes the specified CreateKeyspaceResponse message, length delimited. Does not implicitly {@link vtadmin.CreateKeyspaceResponse.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtadmin.CreateKeyspaceResponse
+         * @static
+         * @param {vtadmin.ICreateKeyspaceResponse} message CreateKeyspaceResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        CreateKeyspaceResponse.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a CreateKeyspaceResponse message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtadmin.CreateKeyspaceResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtadmin.CreateKeyspaceResponse} CreateKeyspaceResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        CreateKeyspaceResponse.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.CreateKeyspaceResponse();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    message.keyspace = $root.vtadmin.Keyspace.decode(reader, reader.uint32());
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a CreateKeyspaceResponse message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtadmin.CreateKeyspaceResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtadmin.CreateKeyspaceResponse} CreateKeyspaceResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        CreateKeyspaceResponse.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a CreateKeyspaceResponse message.
+         * @function verify
+         * @memberof vtadmin.CreateKeyspaceResponse
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        CreateKeyspaceResponse.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.keyspace != null && message.hasOwnProperty("keyspace")) {
+                var error = $root.vtadmin.Keyspace.verify(message.keyspace);
+                if (error)
+                    return "keyspace." + error;
+            }
+            return null;
+        };
+
+        /**
+         * Creates a CreateKeyspaceResponse message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtadmin.CreateKeyspaceResponse
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtadmin.CreateKeyspaceResponse} CreateKeyspaceResponse
+         */
+        CreateKeyspaceResponse.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtadmin.CreateKeyspaceResponse)
+                return object;
+            var message = new $root.vtadmin.CreateKeyspaceResponse();
+            if (object.keyspace != null) {
+                if (typeof object.keyspace !== "object")
+                    throw TypeError(".vtadmin.CreateKeyspaceResponse.keyspace: object expected");
+                message.keyspace = $root.vtadmin.Keyspace.fromObject(object.keyspace);
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a CreateKeyspaceResponse message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtadmin.CreateKeyspaceResponse
+         * @static
+         * @param {vtadmin.CreateKeyspaceResponse} message CreateKeyspaceResponse
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        CreateKeyspaceResponse.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.defaults)
+                object.keyspace = null;
+            if (message.keyspace != null && message.hasOwnProperty("keyspace"))
+                object.keyspace = $root.vtadmin.Keyspace.toObject(message.keyspace, options);
+            return object;
+        };
+
+        /**
+         * Converts this CreateKeyspaceResponse to JSON.
+         * @function toJSON
+         * @memberof vtadmin.CreateKeyspaceResponse
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        CreateKeyspaceResponse.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return CreateKeyspaceResponse;
+    })();
+
+    vtadmin.DeleteKeyspaceRequest = (function() {
+
+        /**
+         * Properties of a DeleteKeyspaceRequest.
+         * @memberof vtadmin
+         * @interface IDeleteKeyspaceRequest
+         * @property {string|null} [cluster_id] DeleteKeyspaceRequest cluster_id
+         * @property {vtctldata.IDeleteKeyspaceRequest|null} [options] DeleteKeyspaceRequest options
+         */
+
+        /**
+         * Constructs a new DeleteKeyspaceRequest.
+         * @memberof vtadmin
+         * @classdesc Represents a DeleteKeyspaceRequest.
+         * @implements IDeleteKeyspaceRequest
+         * @constructor
+         * @param {vtadmin.IDeleteKeyspaceRequest=} [properties] Properties to set
+         */
+        function DeleteKeyspaceRequest(properties) {
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * DeleteKeyspaceRequest cluster_id.
+         * @member {string} cluster_id
+         * @memberof vtadmin.DeleteKeyspaceRequest
+         * @instance
+         */
+        DeleteKeyspaceRequest.prototype.cluster_id = "";
+
+        /**
+         * DeleteKeyspaceRequest options.
+         * @member {vtctldata.IDeleteKeyspaceRequest|null|undefined} options
+         * @memberof vtadmin.DeleteKeyspaceRequest
+         * @instance
+         */
+        DeleteKeyspaceRequest.prototype.options = null;
+
+        /**
+         * Creates a new DeleteKeyspaceRequest instance using the specified properties.
+         * @function create
+         * @memberof vtadmin.DeleteKeyspaceRequest
+         * @static
+         * @param {vtadmin.IDeleteKeyspaceRequest=} [properties] Properties to set
+         * @returns {vtadmin.DeleteKeyspaceRequest} DeleteKeyspaceRequest instance
+         */
+        DeleteKeyspaceRequest.create = function create(properties) {
+            return new DeleteKeyspaceRequest(properties);
+        };
+
+        /**
+         * Encodes the specified DeleteKeyspaceRequest message. Does not implicitly {@link vtadmin.DeleteKeyspaceRequest.verify|verify} messages.
+         * @function encode
+         * @memberof vtadmin.DeleteKeyspaceRequest
+         * @static
+         * @param {vtadmin.IDeleteKeyspaceRequest} message DeleteKeyspaceRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        DeleteKeyspaceRequest.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.cluster_id != null && Object.hasOwnProperty.call(message, "cluster_id"))
+                writer.uint32(/* id 1, wireType 2 =*/10).string(message.cluster_id);
+            if (message.options != null && Object.hasOwnProperty.call(message, "options"))
+                $root.vtctldata.DeleteKeyspaceRequest.encode(message.options, writer.uint32(/* id 2, wireType 2 =*/18).fork()).ldelim();
+            return writer;
+        };
+
+        /**
+         * Encodes the specified DeleteKeyspaceRequest message, length delimited. Does not implicitly {@link vtadmin.DeleteKeyspaceRequest.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtadmin.DeleteKeyspaceRequest
+         * @static
+         * @param {vtadmin.IDeleteKeyspaceRequest} message DeleteKeyspaceRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        DeleteKeyspaceRequest.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a DeleteKeyspaceRequest message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtadmin.DeleteKeyspaceRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtadmin.DeleteKeyspaceRequest} DeleteKeyspaceRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        DeleteKeyspaceRequest.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.DeleteKeyspaceRequest();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    message.cluster_id = reader.string();
+                    break;
+                case 2:
+                    message.options = $root.vtctldata.DeleteKeyspaceRequest.decode(reader, reader.uint32());
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a DeleteKeyspaceRequest message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtadmin.DeleteKeyspaceRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtadmin.DeleteKeyspaceRequest} DeleteKeyspaceRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        DeleteKeyspaceRequest.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a DeleteKeyspaceRequest message.
+         * @function verify
+         * @memberof vtadmin.DeleteKeyspaceRequest
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        DeleteKeyspaceRequest.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.cluster_id != null && message.hasOwnProperty("cluster_id"))
+                if (!$util.isString(message.cluster_id))
+                    return "cluster_id: string expected";
+            if (message.options != null && message.hasOwnProperty("options")) {
+                var error = $root.vtctldata.DeleteKeyspaceRequest.verify(message.options);
+                if (error)
+                    return "options." + error;
+            }
+            return null;
+        };
+
+        /**
+         * Creates a DeleteKeyspaceRequest message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtadmin.DeleteKeyspaceRequest
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtadmin.DeleteKeyspaceRequest} DeleteKeyspaceRequest
+         */
+        DeleteKeyspaceRequest.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtadmin.DeleteKeyspaceRequest)
+                return object;
+            var message = new $root.vtadmin.DeleteKeyspaceRequest();
+            if (object.cluster_id != null)
+                message.cluster_id = String(object.cluster_id);
+            if (object.options != null) {
+                if (typeof object.options !== "object")
+                    throw TypeError(".vtadmin.DeleteKeyspaceRequest.options: object expected");
+                message.options = $root.vtctldata.DeleteKeyspaceRequest.fromObject(object.options);
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a DeleteKeyspaceRequest message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtadmin.DeleteKeyspaceRequest
+         * @static
+         * @param {vtadmin.DeleteKeyspaceRequest} message DeleteKeyspaceRequest
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        DeleteKeyspaceRequest.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.defaults) {
+                object.cluster_id = "";
+                object.options = null;
+            }
+            if (message.cluster_id != null && message.hasOwnProperty("cluster_id"))
+                object.cluster_id = message.cluster_id;
+            if (message.options != null && message.hasOwnProperty("options"))
+                object.options = $root.vtctldata.DeleteKeyspaceRequest.toObject(message.options, options);
+            return object;
+        };
+
+        /**
+         * Converts this DeleteKeyspaceRequest to JSON.
+         * @function toJSON
+         * @memberof vtadmin.DeleteKeyspaceRequest
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        DeleteKeyspaceRequest.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return DeleteKeyspaceRequest;
     })();
 
     vtadmin.FindSchemaRequest = (function() {
@@ -83879,6 +84567,8 @@ $root.binlogdata = (function() {
          * @interface IRowEvent
          * @property {string|null} [table_name] RowEvent table_name
          * @property {Array.<binlogdata.IRowChange>|null} [row_changes] RowEvent row_changes
+         * @property {string|null} [keyspace] RowEvent keyspace
+         * @property {string|null} [shard] RowEvent shard
          */
 
         /**
@@ -83914,6 +84604,22 @@ $root.binlogdata = (function() {
         RowEvent.prototype.row_changes = $util.emptyArray;
 
         /**
+         * RowEvent keyspace.
+         * @member {string} keyspace
+         * @memberof binlogdata.RowEvent
+         * @instance
+         */
+        RowEvent.prototype.keyspace = "";
+
+        /**
+         * RowEvent shard.
+         * @member {string} shard
+         * @memberof binlogdata.RowEvent
+         * @instance
+         */
+        RowEvent.prototype.shard = "";
+
+        /**
          * Creates a new RowEvent instance using the specified properties.
          * @function create
          * @memberof binlogdata.RowEvent
@@ -83942,6 +84648,10 @@ $root.binlogdata = (function() {
             if (message.row_changes != null && message.row_changes.length)
                 for (var i = 0; i < message.row_changes.length; ++i)
                     $root.binlogdata.RowChange.encode(message.row_changes[i], writer.uint32(/* id 2, wireType 2 =*/18).fork()).ldelim();
+            if (message.keyspace != null && Object.hasOwnProperty.call(message, "keyspace"))
+                writer.uint32(/* id 3, wireType 2 =*/26).string(message.keyspace);
+            if (message.shard != null && Object.hasOwnProperty.call(message, "shard"))
+                writer.uint32(/* id 4, wireType 2 =*/34).string(message.shard);
             return writer;
         };
 
@@ -83983,6 +84693,12 @@ $root.binlogdata = (function() {
                     if (!(message.row_changes && message.row_changes.length))
                         message.row_changes = [];
                     message.row_changes.push($root.binlogdata.RowChange.decode(reader, reader.uint32()));
+                    break;
+                case 3:
+                    message.keyspace = reader.string();
+                    break;
+                case 4:
+                    message.shard = reader.string();
                     break;
                 default:
                     reader.skipType(tag & 7);
@@ -84031,6 +84747,12 @@ $root.binlogdata = (function() {
                         return "row_changes." + error;
                 }
             }
+            if (message.keyspace != null && message.hasOwnProperty("keyspace"))
+                if (!$util.isString(message.keyspace))
+                    return "keyspace: string expected";
+            if (message.shard != null && message.hasOwnProperty("shard"))
+                if (!$util.isString(message.shard))
+                    return "shard: string expected";
             return null;
         };
 
@@ -84058,6 +84780,10 @@ $root.binlogdata = (function() {
                     message.row_changes[i] = $root.binlogdata.RowChange.fromObject(object.row_changes[i]);
                 }
             }
+            if (object.keyspace != null)
+                message.keyspace = String(object.keyspace);
+            if (object.shard != null)
+                message.shard = String(object.shard);
             return message;
         };
 
@@ -84076,8 +84802,11 @@ $root.binlogdata = (function() {
             var object = {};
             if (options.arrays || options.defaults)
                 object.row_changes = [];
-            if (options.defaults)
+            if (options.defaults) {
                 object.table_name = "";
+                object.keyspace = "";
+                object.shard = "";
+            }
             if (message.table_name != null && message.hasOwnProperty("table_name"))
                 object.table_name = message.table_name;
             if (message.row_changes && message.row_changes.length) {
@@ -84085,6 +84814,10 @@ $root.binlogdata = (function() {
                 for (var j = 0; j < message.row_changes.length; ++j)
                     object.row_changes[j] = $root.binlogdata.RowChange.toObject(message.row_changes[j], options);
             }
+            if (message.keyspace != null && message.hasOwnProperty("keyspace"))
+                object.keyspace = message.keyspace;
+            if (message.shard != null && message.hasOwnProperty("shard"))
+                object.shard = message.shard;
             return object;
         };
 
@@ -84110,6 +84843,8 @@ $root.binlogdata = (function() {
          * @interface IFieldEvent
          * @property {string|null} [table_name] FieldEvent table_name
          * @property {Array.<query.IField>|null} [fields] FieldEvent fields
+         * @property {string|null} [keyspace] FieldEvent keyspace
+         * @property {string|null} [shard] FieldEvent shard
          */
 
         /**
@@ -84145,6 +84880,22 @@ $root.binlogdata = (function() {
         FieldEvent.prototype.fields = $util.emptyArray;
 
         /**
+         * FieldEvent keyspace.
+         * @member {string} keyspace
+         * @memberof binlogdata.FieldEvent
+         * @instance
+         */
+        FieldEvent.prototype.keyspace = "";
+
+        /**
+         * FieldEvent shard.
+         * @member {string} shard
+         * @memberof binlogdata.FieldEvent
+         * @instance
+         */
+        FieldEvent.prototype.shard = "";
+
+        /**
          * Creates a new FieldEvent instance using the specified properties.
          * @function create
          * @memberof binlogdata.FieldEvent
@@ -84173,6 +84924,10 @@ $root.binlogdata = (function() {
             if (message.fields != null && message.fields.length)
                 for (var i = 0; i < message.fields.length; ++i)
                     $root.query.Field.encode(message.fields[i], writer.uint32(/* id 2, wireType 2 =*/18).fork()).ldelim();
+            if (message.keyspace != null && Object.hasOwnProperty.call(message, "keyspace"))
+                writer.uint32(/* id 3, wireType 2 =*/26).string(message.keyspace);
+            if (message.shard != null && Object.hasOwnProperty.call(message, "shard"))
+                writer.uint32(/* id 4, wireType 2 =*/34).string(message.shard);
             return writer;
         };
 
@@ -84214,6 +84969,12 @@ $root.binlogdata = (function() {
                     if (!(message.fields && message.fields.length))
                         message.fields = [];
                     message.fields.push($root.query.Field.decode(reader, reader.uint32()));
+                    break;
+                case 3:
+                    message.keyspace = reader.string();
+                    break;
+                case 4:
+                    message.shard = reader.string();
                     break;
                 default:
                     reader.skipType(tag & 7);
@@ -84262,6 +85023,12 @@ $root.binlogdata = (function() {
                         return "fields." + error;
                 }
             }
+            if (message.keyspace != null && message.hasOwnProperty("keyspace"))
+                if (!$util.isString(message.keyspace))
+                    return "keyspace: string expected";
+            if (message.shard != null && message.hasOwnProperty("shard"))
+                if (!$util.isString(message.shard))
+                    return "shard: string expected";
             return null;
         };
 
@@ -84289,6 +85056,10 @@ $root.binlogdata = (function() {
                     message.fields[i] = $root.query.Field.fromObject(object.fields[i]);
                 }
             }
+            if (object.keyspace != null)
+                message.keyspace = String(object.keyspace);
+            if (object.shard != null)
+                message.shard = String(object.shard);
             return message;
         };
 
@@ -84307,8 +85078,11 @@ $root.binlogdata = (function() {
             var object = {};
             if (options.arrays || options.defaults)
                 object.fields = [];
-            if (options.defaults)
+            if (options.defaults) {
                 object.table_name = "";
+                object.keyspace = "";
+                object.shard = "";
+            }
             if (message.table_name != null && message.hasOwnProperty("table_name"))
                 object.table_name = message.table_name;
             if (message.fields && message.fields.length) {
@@ -84316,6 +85090,10 @@ $root.binlogdata = (function() {
                 for (var j = 0; j < message.fields.length; ++j)
                     object.fields[j] = $root.query.Field.toObject(message.fields[j], options);
             }
+            if (message.keyspace != null && message.hasOwnProperty("keyspace"))
+                object.keyspace = message.keyspace;
+            if (message.shard != null && message.hasOwnProperty("shard"))
+                object.shard = message.shard;
             return object;
         };
 
