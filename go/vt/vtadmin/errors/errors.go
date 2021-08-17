@@ -48,6 +48,9 @@ var (
 	// ErrNoWorkflow occurs when a workflow cannot be found for a given set of
 	// filter criteria.
 	ErrNoWorkflow = errors.New("no such workflow")
+	// ErrUnauthorized occurs when attempting to perform a (subject, resource, action)
+	// in a cluster that the rbac configuration does not allow.
+	ErrUnauthorized = errors.New("unauthorized")
 	// ErrUnsupportedCluster occurs when a cluster parameter is invalid.
 	ErrUnsupportedCluster = errors.New("unsupported cluster(s)")
 )
