@@ -781,7 +781,7 @@ func replacePromotedReplicaWithCandidate(topologyRecovery *TopologyRecovery, dea
 	// Try and promote suggested candidate, if applicable and possible
 	AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("replace-promoted-replica-with-candidate: promoted instance %+v is not the suggested candidate %+v. Will see what can be done", promotedReplica.Key, candidateInstance.Key))
 
-	if candidateInstance.PrimaryKey.Equals(&promotedReplica.Key) {
+	if candidateInstance.SourceKey.Equals(&promotedReplica.Key) {
 		AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("replace-promoted-replica-with-candidate: suggested candidate %+v is replica of promoted instance %+v. Will try and take its master", candidateInstance.Key, promotedReplica.Key))
 		candidateInstance, err = inst.TakePrimary(&candidateInstance.Key, topologyRecovery.Type == CoPrimaryRecovery)
 		if err != nil {
@@ -1039,7 +1039,7 @@ func canTakeOverPromotedServerAsPrimary(wantToTakeOver *inst.Instance, toBeTaken
 	if !isGenerallyValidAsWouldBePrimary(wantToTakeOver, true) {
 		return false
 	}
-	if !wantToTakeOver.PrimaryKey.Equals(&toBeTakenOver.Key) {
+	if !wantToTakeOver.SourceKey.Equals(&toBeTakenOver.Key) {
 		return false
 	}
 	if canReplicate, _ := toBeTakenOver.CanReplicateFrom(wantToTakeOver); !canReplicate {
@@ -1052,7 +1052,7 @@ func canTakeOverPromotedServerAsPrimary(wantToTakeOver *inst.Instance, toBeTaken
 // to whom the IM's replicas can be moved.
 func GetCandidateSiblingOfIntermediatePrimary(topologyRecovery *TopologyRecovery, intermediatePrimaryInstance *inst.Instance) (*inst.Instance, error) {
 
-	siblings, err := inst.ReadReplicaInstances(&intermediatePrimaryInstance.PrimaryKey)
+	siblings, err := inst.ReadReplicaInstances(&intermediatePrimaryInstance.SourceKey)
 	if err != nil {
 		return nil, err
 	}
@@ -1812,8 +1812,8 @@ func ForcePrimaryTakeover(clusterName string, destination *inst.Instance) (topol
 	}
 	clusterPrimary := clusterPrimaries[0]
 
-	if !destination.PrimaryKey.Equals(&clusterPrimary.Key) {
-		return nil, fmt.Errorf("You may only promote a direct child of the master %+v. The master of %+v is %+v.", clusterPrimary.Key, destination.Key, destination.PrimaryKey)
+	if !destination.SourceKey.Equals(&clusterPrimary.Key) {
+		return nil, fmt.Errorf("You may only promote a direct child of the master %+v. The master of %+v is %+v.", clusterPrimary.Key, destination.Key, destination.SourceKey)
 	}
 	log.Infof("Will demote %+v and promote %+v instead", clusterPrimary.Key, destination.Key)
 
@@ -1917,7 +1917,7 @@ func GracefulPrimaryTakeover(clusterName string, designatedKey *inst.InstanceKey
 		return nil, nil, err
 	}
 	if !primaryOfDesignatedInstance.Key.Equals(&clusterPrimary.Key) {
-		return nil, nil, fmt.Errorf("Sanity check failure. It seems like the designated instance %+v does not replicate from the master %+v (designated instance's master key is %+v). This error is strange. Panicking", designatedInstance.Key, clusterPrimary.Key, designatedInstance.PrimaryKey)
+		return nil, nil, fmt.Errorf("Sanity check failure. It seems like the designated instance %+v does not replicate from the master %+v (designated instance's master key is %+v). This error is strange. Panicking", designatedInstance.Key, clusterPrimary.Key, designatedInstance.SourceKey)
 	}
 	if !designatedInstance.HasReasonableMaintenanceReplicationLag() {
 		return nil, nil, fmt.Errorf("Desginated instance %+v seems to be lagging to much for thie operation. Aborting.", designatedInstance.Key)
