@@ -362,7 +362,10 @@ func main() {
 			test.flavor = flavor
 			test.bootstrapVersion = *bootstrapVersion
 			if *failFast {
-				test.Args = append(test.Args, "-failfast")
+				var args []string
+				args = append(args, "-failfast")
+				args = append(args, test.Args...)
+				test.Args = args
 			}
 			dup = append(dup, &test)
 		}
