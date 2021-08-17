@@ -23,6 +23,34 @@ export namespace vtadmin {
         public static create(rpcImpl: $protobuf.RPCImpl, requestDelimited?: boolean, responseDelimited?: boolean): VTAdmin;
 
         /**
+         * Calls CreateKeyspace.
+         * @param request CreateKeyspaceRequest message or plain object
+         * @param callback Node-style callback called with the error, if any, and CreateKeyspaceResponse
+         */
+        public createKeyspace(request: vtadmin.ICreateKeyspaceRequest, callback: vtadmin.VTAdmin.CreateKeyspaceCallback): void;
+
+        /**
+         * Calls CreateKeyspace.
+         * @param request CreateKeyspaceRequest message or plain object
+         * @returns Promise
+         */
+        public createKeyspace(request: vtadmin.ICreateKeyspaceRequest): Promise<vtadmin.CreateKeyspaceResponse>;
+
+        /**
+         * Calls DeleteKeyspace.
+         * @param request DeleteKeyspaceRequest message or plain object
+         * @param callback Node-style callback called with the error, if any, and DeleteKeyspaceResponse
+         */
+        public deleteKeyspace(request: vtadmin.IDeleteKeyspaceRequest, callback: vtadmin.VTAdmin.DeleteKeyspaceCallback): void;
+
+        /**
+         * Calls DeleteKeyspace.
+         * @param request DeleteKeyspaceRequest message or plain object
+         * @returns Promise
+         */
+        public deleteKeyspace(request: vtadmin.IDeleteKeyspaceRequest): Promise<vtctldata.DeleteKeyspaceResponse>;
+
+        /**
          * Calls FindSchema.
          * @param request FindSchemaRequest message or plain object
          * @param callback Node-style callback called with the error, if any, and Schema
@@ -262,6 +290,20 @@ export namespace vtadmin {
     }
 
     namespace VTAdmin {
+
+        /**
+         * Callback as used by {@link vtadmin.VTAdmin#createKeyspace}.
+         * @param error Error, if any
+         * @param [response] CreateKeyspaceResponse
+         */
+        type CreateKeyspaceCallback = (error: (Error|null), response?: vtadmin.CreateKeyspaceResponse) => void;
+
+        /**
+         * Callback as used by {@link vtadmin.VTAdmin#deleteKeyspace}.
+         * @param error Error, if any
+         * @param [response] DeleteKeyspaceResponse
+         */
+        type DeleteKeyspaceCallback = (error: (Error|null), response?: vtctldata.DeleteKeyspaceResponse) => void;
 
         /**
          * Callback as used by {@link vtadmin.VTAdmin#findSchema}.
@@ -1723,6 +1765,288 @@ export namespace vtadmin {
 
         /**
          * Converts this Workflow to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a CreateKeyspaceRequest. */
+    interface ICreateKeyspaceRequest {
+
+        /** CreateKeyspaceRequest cluster_id */
+        cluster_id?: (string|null);
+
+        /** CreateKeyspaceRequest options */
+        options?: (vtctldata.ICreateKeyspaceRequest|null);
+    }
+
+    /** Represents a CreateKeyspaceRequest. */
+    class CreateKeyspaceRequest implements ICreateKeyspaceRequest {
+
+        /**
+         * Constructs a new CreateKeyspaceRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtadmin.ICreateKeyspaceRequest);
+
+        /** CreateKeyspaceRequest cluster_id. */
+        public cluster_id: string;
+
+        /** CreateKeyspaceRequest options. */
+        public options?: (vtctldata.ICreateKeyspaceRequest|null);
+
+        /**
+         * Creates a new CreateKeyspaceRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns CreateKeyspaceRequest instance
+         */
+        public static create(properties?: vtadmin.ICreateKeyspaceRequest): vtadmin.CreateKeyspaceRequest;
+
+        /**
+         * Encodes the specified CreateKeyspaceRequest message. Does not implicitly {@link vtadmin.CreateKeyspaceRequest.verify|verify} messages.
+         * @param message CreateKeyspaceRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtadmin.ICreateKeyspaceRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified CreateKeyspaceRequest message, length delimited. Does not implicitly {@link vtadmin.CreateKeyspaceRequest.verify|verify} messages.
+         * @param message CreateKeyspaceRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtadmin.ICreateKeyspaceRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a CreateKeyspaceRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns CreateKeyspaceRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.CreateKeyspaceRequest;
+
+        /**
+         * Decodes a CreateKeyspaceRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns CreateKeyspaceRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.CreateKeyspaceRequest;
+
+        /**
+         * Verifies a CreateKeyspaceRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a CreateKeyspaceRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns CreateKeyspaceRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtadmin.CreateKeyspaceRequest;
+
+        /**
+         * Creates a plain object from a CreateKeyspaceRequest message. Also converts values to other types if specified.
+         * @param message CreateKeyspaceRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtadmin.CreateKeyspaceRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this CreateKeyspaceRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a CreateKeyspaceResponse. */
+    interface ICreateKeyspaceResponse {
+
+        /** CreateKeyspaceResponse keyspace */
+        keyspace?: (vtadmin.IKeyspace|null);
+    }
+
+    /** Represents a CreateKeyspaceResponse. */
+    class CreateKeyspaceResponse implements ICreateKeyspaceResponse {
+
+        /**
+         * Constructs a new CreateKeyspaceResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtadmin.ICreateKeyspaceResponse);
+
+        /** CreateKeyspaceResponse keyspace. */
+        public keyspace?: (vtadmin.IKeyspace|null);
+
+        /**
+         * Creates a new CreateKeyspaceResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns CreateKeyspaceResponse instance
+         */
+        public static create(properties?: vtadmin.ICreateKeyspaceResponse): vtadmin.CreateKeyspaceResponse;
+
+        /**
+         * Encodes the specified CreateKeyspaceResponse message. Does not implicitly {@link vtadmin.CreateKeyspaceResponse.verify|verify} messages.
+         * @param message CreateKeyspaceResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtadmin.ICreateKeyspaceResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified CreateKeyspaceResponse message, length delimited. Does not implicitly {@link vtadmin.CreateKeyspaceResponse.verify|verify} messages.
+         * @param message CreateKeyspaceResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtadmin.ICreateKeyspaceResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a CreateKeyspaceResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns CreateKeyspaceResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.CreateKeyspaceResponse;
+
+        /**
+         * Decodes a CreateKeyspaceResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns CreateKeyspaceResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.CreateKeyspaceResponse;
+
+        /**
+         * Verifies a CreateKeyspaceResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a CreateKeyspaceResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns CreateKeyspaceResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtadmin.CreateKeyspaceResponse;
+
+        /**
+         * Creates a plain object from a CreateKeyspaceResponse message. Also converts values to other types if specified.
+         * @param message CreateKeyspaceResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtadmin.CreateKeyspaceResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this CreateKeyspaceResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a DeleteKeyspaceRequest. */
+    interface IDeleteKeyspaceRequest {
+
+        /** DeleteKeyspaceRequest cluster_id */
+        cluster_id?: (string|null);
+
+        /** DeleteKeyspaceRequest options */
+        options?: (vtctldata.IDeleteKeyspaceRequest|null);
+    }
+
+    /** Represents a DeleteKeyspaceRequest. */
+    class DeleteKeyspaceRequest implements IDeleteKeyspaceRequest {
+
+        /**
+         * Constructs a new DeleteKeyspaceRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtadmin.IDeleteKeyspaceRequest);
+
+        /** DeleteKeyspaceRequest cluster_id. */
+        public cluster_id: string;
+
+        /** DeleteKeyspaceRequest options. */
+        public options?: (vtctldata.IDeleteKeyspaceRequest|null);
+
+        /**
+         * Creates a new DeleteKeyspaceRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns DeleteKeyspaceRequest instance
+         */
+        public static create(properties?: vtadmin.IDeleteKeyspaceRequest): vtadmin.DeleteKeyspaceRequest;
+
+        /**
+         * Encodes the specified DeleteKeyspaceRequest message. Does not implicitly {@link vtadmin.DeleteKeyspaceRequest.verify|verify} messages.
+         * @param message DeleteKeyspaceRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtadmin.IDeleteKeyspaceRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified DeleteKeyspaceRequest message, length delimited. Does not implicitly {@link vtadmin.DeleteKeyspaceRequest.verify|verify} messages.
+         * @param message DeleteKeyspaceRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtadmin.IDeleteKeyspaceRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a DeleteKeyspaceRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns DeleteKeyspaceRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.DeleteKeyspaceRequest;
+
+        /**
+         * Decodes a DeleteKeyspaceRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns DeleteKeyspaceRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.DeleteKeyspaceRequest;
+
+        /**
+         * Verifies a DeleteKeyspaceRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a DeleteKeyspaceRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns DeleteKeyspaceRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtadmin.DeleteKeyspaceRequest;
+
+        /**
+         * Creates a plain object from a DeleteKeyspaceRequest message. Also converts values to other types if specified.
+         * @param message DeleteKeyspaceRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtadmin.DeleteKeyspaceRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this DeleteKeyspaceRequest to JSON.
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
@@ -35320,6 +35644,12 @@ export namespace binlogdata {
 
         /** RowEvent row_changes */
         row_changes?: (binlogdata.IRowChange[]|null);
+
+        /** RowEvent keyspace */
+        keyspace?: (string|null);
+
+        /** RowEvent shard */
+        shard?: (string|null);
     }
 
     /** Represents a RowEvent. */
@@ -35336,6 +35666,12 @@ export namespace binlogdata {
 
         /** RowEvent row_changes. */
         public row_changes: binlogdata.IRowChange[];
+
+        /** RowEvent keyspace. */
+        public keyspace: string;
+
+        /** RowEvent shard. */
+        public shard: string;
 
         /**
          * Creates a new RowEvent instance using the specified properties.
@@ -35416,6 +35752,12 @@ export namespace binlogdata {
 
         /** FieldEvent fields */
         fields?: (query.IField[]|null);
+
+        /** FieldEvent keyspace */
+        keyspace?: (string|null);
+
+        /** FieldEvent shard */
+        shard?: (string|null);
     }
 
     /** Represents a FieldEvent. */
@@ -35432,6 +35774,12 @@ export namespace binlogdata {
 
         /** FieldEvent fields. */
         public fields: query.IField[];
+
+        /** FieldEvent keyspace. */
+        public keyspace: string;
+
+        /** FieldEvent shard. */
+        public shard: string;
 
         /**
          * Creates a new FieldEvent instance using the specified properties.
