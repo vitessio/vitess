@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2018 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -86,7 +86,7 @@ func TestTabletExternallyReparentedBasic(t *testing.T) {
 		t.Fatalf("GetTablet(%v) failed: %v", oldPrimary.Tablet.Alias, err)
 	}
 	if tablet.Type != topodatapb.TabletType_PRIMARY {
-		t.Fatalf("old primary should be MASTER but is: %v", tablet.Type)
+		t.Fatalf("old primary should be PRIMARY but is: %v", tablet.Type)
 	}
 
 	oldPrimary.FakeMysqlDaemon.SetReplicationSourceInput = topoproto.MysqlAddr(newPrimary.Tablet)
@@ -107,7 +107,7 @@ func TestTabletExternallyReparentedBasic(t *testing.T) {
 		t.Fatalf("GetTablet(%v) failed: %v", newPrimary.Tablet.Alias, err)
 	}
 	if tablet.Type != topodatapb.TabletType_PRIMARY {
-		t.Fatalf("new primary should be MASTER but is: %v", tablet.Type)
+		t.Fatalf("new primary should be PRIMARY but is: %v", tablet.Type)
 	}
 
 	// We have to wait for shard sync to do its magic in the background
@@ -186,7 +186,7 @@ func TestTabletExternallyReparentedToReplica(t *testing.T) {
 		t.Fatalf("GetTablet(%v) failed: %v", newPrimary.Tablet.Alias, err)
 	}
 	if tablet.Type != topodatapb.TabletType_PRIMARY {
-		t.Fatalf("new primary should be MASTER but is: %v", tablet.Type)
+		t.Fatalf("new primary should be PRIMARY but is: %v", tablet.Type)
 	}
 
 	// We have to wait for shard sync to do its magic in the background
@@ -272,7 +272,7 @@ func TestTabletExternallyReparentedWithDifferentMysqlPort(t *testing.T) {
 		t.Fatalf("GetTablet(%v) failed: %v", newPrimary.Tablet.Alias, err)
 	}
 	if tablet.Type != topodatapb.TabletType_PRIMARY {
-		t.Fatalf("new primary should be MASTER but is: %v", tablet.Type)
+		t.Fatalf("new primary should be PRIMARY but is: %v", tablet.Type)
 	}
 
 	// We have to wait for shard sync to do its magic in the background
@@ -353,7 +353,7 @@ func TestTabletExternallyReparentedContinueOnUnexpectedPrimary(t *testing.T) {
 		t.Fatalf("GetTablet(%v) failed: %v", newPrimary.Tablet.Alias, err)
 	}
 	if tablet.Type != topodatapb.TabletType_PRIMARY {
-		t.Fatalf("new primary should be MASTER but is: %v", tablet.Type)
+		t.Fatalf("new primary should be PRIMARY but is: %v", tablet.Type)
 	}
 	// We have to wait for shard sync to do its magic in the background
 	startTime := time.Now()
@@ -431,7 +431,7 @@ func TestTabletExternallyReparentedRerun(t *testing.T) {
 		t.Fatalf("GetTablet(%v) failed: %v", newPrimary.Tablet.Alias, err)
 	}
 	if tablet.Type != topodatapb.TabletType_PRIMARY {
-		t.Fatalf("new primary should be MASTER but is: %v", tablet.Type)
+		t.Fatalf("new primary should be PRIMARY but is: %v", tablet.Type)
 	}
 
 	// We have to wait for shard sync to do its magic in the background
@@ -467,7 +467,7 @@ func TestTabletExternallyReparentedRerun(t *testing.T) {
 		t.Fatalf("GetTablet(%v) failed: %v", newPrimary.Tablet.Alias, err)
 	}
 	if tablet.Type != topodatapb.TabletType_PRIMARY {
-		t.Fatalf("new primary should be MASTER but is: %v", tablet.Type)
+		t.Fatalf("new primary should be PRIMARY but is: %v", tablet.Type)
 	}
 
 }

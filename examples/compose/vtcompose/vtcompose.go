@@ -517,7 +517,7 @@ func applyShardPatches(
 }
 
 func generateDefaultShard(tabAlias int, shard string, keyspaceData keyspaceInfo, opts vtOptions) string {
-	aliases := []int{tabAlias + 1} // master alias, e.g. 201
+	aliases := []int{tabAlias + 1} // primary alias, e.g. 201
 	for i := 0; i < keyspaceData.replicaTablets; i++ {
 		aliases = append(aliases, tabAlias+2+i) // replica aliases, e.g. 202, 203, ...
 	}
@@ -546,7 +546,7 @@ func generateExternalmaster(
 	opts vtOptions,
 ) string {
 
-	aliases := []int{tabAlias + 1} // master alias, e.g. 201
+	aliases := []int{tabAlias + 1} // primary alias, e.g. 201
 	for i := 0; i < keyspaceData.replicaTablets; i++ {
 		aliases = append(aliases, tabAlias+2+i) // replica aliases, e.g. 202, 203, ...
 	}

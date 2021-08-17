@@ -277,7 +277,7 @@ func TestReparenting(t *testing.T) {
 	clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(
 		"PlannedReparentShard",
 		"-keyspace_shard", userKeyspace+"/-80",
-		"-new_master", shard0Replica.Alias)
+		"-new_primary", shard0Replica.Alias)
 	// validate topology
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("Validate")
 	require.Nil(t, err)
@@ -300,7 +300,7 @@ func TestReparenting(t *testing.T) {
 	clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(
 		"PlannedReparentShard",
 		"-keyspace_shard", userKeyspace+"/-80",
-		"-new_master", shard0Primary.Alias)
+		"-new_primary", shard0Primary.Alias)
 	// validate topology
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("Validate")
 	require.Nil(t, err)

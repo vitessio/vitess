@@ -170,7 +170,7 @@ func TestPickRespectsTabletType(t *testing.T) {
 	tp, err := NewTabletPicker(te.topoServ, te.cells, te.keyspace, te.shard, "replica,rdonly")
 	require.NoError(t, err)
 
-	// In 20 attempts, master tablet must be never picked
+	// In 20 attempts, primary tablet must be never picked
 	for i := 0; i < 20; i++ {
 		tablet, err := tp.PickForStreaming(context.Background())
 		require.NoError(t, err)
@@ -194,7 +194,7 @@ func TestPickMultiCell(t *testing.T) {
 	assert.True(t, proto.Equal(want, tablet), "Pick: %v, want %v", tablet, want)
 }
 
-func TestPickMaster(t *testing.T) {
+func TestPickPrimary(t *testing.T) {
 	te := newPickerTestEnv(t, []string{"cell", "otherCell"})
 	want := addTablet(te, 100, topodatapb.TabletType_PRIMARY, "cell", true, true)
 	defer deleteTablet(t, te, want)
@@ -206,7 +206,7 @@ func TestPickMaster(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	tp, err := NewTabletPicker(te.topoServ, []string{"otherCell"}, te.keyspace, te.shard, "master")
+	tp, err := NewTabletPicker(te.topoServ, []string{"otherCell"}, te.keyspace, te.shard, "primary")
 	require.NoError(t, err)
 
 	ctx2, cancel2 := context.WithTimeout(context.Background(), 200*time.Millisecond)

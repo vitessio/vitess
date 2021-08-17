@@ -200,7 +200,7 @@ func (vsdw *VerticalSplitDiffWorker) init(ctx context.Context) error {
 	if len(vsdw.shardInfo.SourceShards[0].Tables) == 0 {
 		return fmt.Errorf("shard %v/%v has no tables in source shard[0]", vsdw.keyspace, vsdw.shard)
 	}
-	if !vsdw.shardInfo.HasMaster() {
+	if !vsdw.shardInfo.HasPrimary() {
 		return fmt.Errorf("shard %v/%v has no master", vsdw.keyspace, vsdw.shard)
 	}
 
@@ -241,20 +241,20 @@ func (vsdw *VerticalSplitDiffWorker) findTargets(ctx context.Context) error {
 }
 
 // synchronizeReplication phase:
-// 1 - ask the master of the destination shard to pause filtered replication,
+// 1 - ask the primary of the destination shard to pause filtered replication,
 //   and return the source binlog positions
-//   (add a cleanup task to restart filtered replication on master)
+//   (add a cleanup task to restart filtered replication on primary)
 // 2 - stop the source tablet at a binlog position higher than the
-//   destination master. Get that new position.
+//   destination primary. Get that new position.
 //   (add a cleanup task to restart binlog replication on it, and change
 //    the existing ChangeTabletType cleanup action to 'spare' type)
-// 3 - ask the master of the destination shard to resume filtered replication
+// 3 - ask the primary of the destination shard to resume filtered replication
 //   up to the new list of positions, and return its binlog position.
-// 4 - wait until the destination tablet is equal or passed that master
+// 4 - wait until the destination tablet is equal or passed that primary
 //   binlog position, and stop its replication.
 //   (add a cleanup task to restart binlog replication on it, and change
 //    the existing ChangeTabletType cleanup action to 'spare' type)
-// 5 - restart filtered replication on destination master.
+// 5 - restart filtered replication on destination primary.
 //   (remove the cleanup task that does the same)
 // At this point, all source and destination tablets are stopped at the same point.
 
@@ -270,7 +270,7 @@ func (vsdw *VerticalSplitDiffWorker) synchronizeReplication(ctx context.Context)
 
 	ss := vsdw.shardInfo.SourceShards[0]
 
-	// 1 - stop the master binlog replication, get its current position
+	// 1 - stop the primary binlog replication, get its current position
 	vsdw.wr.Logger().Infof("Stopping master binlog replication on %v", topoproto.TabletAliasString(vsdw.shardInfo.PrimaryAlias))
 	shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
 	defer cancel()
@@ -306,7 +306,7 @@ func (vsdw *VerticalSplitDiffWorker) synchronizeReplication(ctx context.Context)
 	// to StartReplication() + ChangeTabletType(spare)
 	wrangler.RecordStartReplicationAction(vsdw.cleaner, sourceTablet.Tablet)
 
-	// 3 - ask the master of the destination shard to resume filtered
+	// 3 - ask the primary of the destination shard to resume filtered
 	//     replication up to the new list of positions
 	vsdw.wr.Logger().Infof("Restarting master %v until it catches up to %v", topoproto.TabletAliasString(vsdw.shardInfo.PrimaryAlias), mysqlPos)
 	shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
@@ -324,7 +324,7 @@ func (vsdw *VerticalSplitDiffWorker) synchronizeReplication(ctx context.Context)
 	}
 
 	// 4 - wait until the destination tablet is equal or passed
-	//     that master binlog position, and stop its replication.
+	//     that primary binlog position, and stop its replication.
 	vsdw.wr.Logger().Infof("Waiting for destination tablet %v to catch up to %v", topoproto.TabletAliasString(vsdw.destinationAlias), masterPos)
 	shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
 	defer cancel()
@@ -340,7 +340,7 @@ func (vsdw *VerticalSplitDiffWorker) synchronizeReplication(ctx context.Context)
 	}
 	wrangler.RecordStartReplicationAction(vsdw.cleaner, destinationTablet.Tablet)
 
-	// 5 - restart filtered replication on destination master
+	// 5 - restart filtered replication on destination primary
 	vsdw.wr.Logger().Infof("Restarting filtered replication on master %v", topoproto.TabletAliasString(vsdw.shardInfo.PrimaryAlias))
 	shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
 	defer cancel()

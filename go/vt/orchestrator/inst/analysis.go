@@ -226,7 +226,7 @@ func (this *ReplicationAnalysis) AnalysisString() string {
 	return strings.Join(result, ", ")
 }
 
-// Get a string description of the analyzed instance type (master? co-master? intermediate-master?)
+// Get a string description of the analyzed instance type (primary? co-primary? intermediate-primary?)
 func (this *ReplicationAnalysis) GetAnalysisInstanceType() AnalysisInstanceType {
 	if this.IsCoMaster {
 		return AnalysisInstanceTypeCoMaster

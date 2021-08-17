@@ -397,7 +397,7 @@ func TestHealthCheckErrorOnPrimaryAfterExternalReparent(t *testing.T) {
 	// Stream error from tablet 1
 	fc1.errCh <- fmt.Errorf("some stream error")
 	<-resultChan
-	// tablet 2 should still be the master
+	// tablet 2 should still be the primary
 	a = hc.GetHealthyTabletStats(&querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_PRIMARY})
 	mustMatch(t, health, a, "unexpected result")
 }
@@ -835,7 +835,7 @@ func TestGetHealthyTablets(t *testing.T) {
 	a = hc.GetHealthyTabletStats(&querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA})
 	assert.Equal(t, 1, len(a), "Wrong number of results")
 
-	// second tablet turns into a master
+	// second tablet turns into a primary
 	shr2 = &querypb.StreamHealthResponse{
 		TabletAlias: tablet2.Alias,
 		Target:      &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_PRIMARY},
@@ -859,11 +859,11 @@ func TestGetHealthyTablets(t *testing.T) {
 		Stats:                &querypb.RealtimeStats{ReplicationLagSeconds: 0, CpuUsage: 0.2},
 		PrimaryTermStartTime: 10,
 	}}
-	// check we have a master now
+	// check we have a primary now
 	a = hc.GetHealthyTabletStats(&querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_PRIMARY})
 	mustMatch(t, want2, a, "unexpected result")
 
-	// reparent: old replica goes into master
+	// reparent: old replica goes into primary
 	shr = &querypb.StreamHealthResponse{
 		TabletAlias:                         tablet.Alias,
 		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_PRIMARY},
@@ -881,25 +881,25 @@ func TestGetHealthyTablets(t *testing.T) {
 		PrimaryTermStartTime: 20,
 	}}
 
-	// check we lost all replicas, and master is new one
+	// check we lost all replicas, and primary is new one
 	a = hc.GetHealthyTabletStats(&querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA})
 	assert.Empty(t, a, "Wrong number of results")
 	a = hc.GetHealthyTabletStats(&querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_PRIMARY})
 	mustMatch(t, want, a, "unexpected result")
 
-	// old master sending an old ping should be ignored
+	// old primary sending an old ping should be ignored
 	input2 <- shr2
 	<-resultChan
 	a = hc.GetHealthyTabletStats(&querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_PRIMARY})
 	mustMatch(t, want, a, "unexpected result")
 }
 
-func TestMasterInOtherCell(t *testing.T) {
+func TestPrimaryInOtherCell(t *testing.T) {
 	ts := memorytopo.NewServer("cell1", "cell2")
 	hc := NewHealthCheck(context.Background(), 1*time.Millisecond, time.Hour, ts, "cell1", "cell1, cell2")
 	defer hc.Close()
 
-	// add a tablet as master in different cell
+	// add a tablet as primary in different cell
 	tablet := createTestTablet(1, "cell2", "host1")
 	tablet.Type = topodatapb.TabletType_PRIMARY
 	input := make(chan *querypb.StreamHealthResponse)
@@ -939,16 +939,16 @@ func TestMasterInOtherCell(t *testing.T) {
 	case err := <-fc.cbErrCh:
 		require.Fail(t, "Unexpected error: %v", err)
 	case got := <-resultChan:
-		// check that we DO receive health check update for MASTER in other cell
+		// check that we DO receive health check update for PRIMARY in other cell
 		mustMatch(t, want, got, "Wrong TabletHealth data")
 	case <-ticker.C:
 		require.Fail(t, "Timed out waiting for HealthCheck update")
 	}
 
-	// check that MASTER tablet from other cell IS in healthy tablet list
+	// check that PRIMARY tablet from other cell IS in healthy tablet list
 	a := hc.GetHealthyTabletStats(&querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_PRIMARY})
 	require.Len(t, a, 1, "")
-	mustMatch(t, want, a[0], "Expecting healthy master")
+	mustMatch(t, want, a[0], "Expecting healthy primary")
 }
 
 func TestReplicaInOtherCell(t *testing.T) {

@@ -460,7 +460,7 @@ func (shard *GRShard) fixPrimaryTabletLocked(ctx context.Context) error {
 	}
 	err := shard.tmc.ChangeType(ctx, candidate.tablet, topodatapb.TabletType_PRIMARY)
 	if err != nil {
-		return fmt.Errorf("failed to change type to master on %v: %v", candidate.alias, err)
+		return fmt.Errorf("failed to change type to primary on %v: %v", candidate.alias, err)
 	}
 	log.Infof("Successfully make %v the primary tablet", candidate.alias)
 	return nil

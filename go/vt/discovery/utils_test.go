@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2018 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -51,8 +51,8 @@ func TestRemoveUnhealthyTablets(t *testing.T) {
 		want:  []LegacyTabletStats{healthy(replica(1))},
 	}, {
 		desc:  "no filtering by tablet type",
-		input: []LegacyTabletStats{healthy(master(1)), healthy(replica(2)), healthy(rdonly(3))},
-		want:  []LegacyTabletStats{healthy(master(1)), healthy(replica(2)), healthy(rdonly(3))},
+		input: []LegacyTabletStats{healthy(primary(1)), healthy(replica(2)), healthy(rdonly(3))},
+		want:  []LegacyTabletStats{healthy(primary(1)), healthy(replica(2)), healthy(rdonly(3))},
 	}, {
 		desc:  "non-serving tablets won't be removed",
 		input: []LegacyTabletStats{notServing(healthy(replica(1)))},
@@ -73,7 +73,7 @@ func TestRemoveUnhealthyTablets(t *testing.T) {
 	}
 }
 
-func master(uid uint32) LegacyTabletStats {
+func primary(uid uint32) LegacyTabletStats {
 	return minimalTabletStats(uid, topodatapb.TabletType_PRIMARY)
 }
 

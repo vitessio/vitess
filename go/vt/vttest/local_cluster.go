@@ -521,7 +521,7 @@ func (db *LocalCluster) applyVschema(keyspace string, migration string) error {
 
 func (db *LocalCluster) reloadSchemaKeyspace(keyspace string) error {
 	server := fmt.Sprintf("localhost:%v", db.vt.PortGrpc)
-	args := []string{"ReloadSchemaKeyspace", "-include_master=true", keyspace}
+	args := []string{"ReloadSchemaKeyspace", "-include_primary=true", keyspace}
 	fmt.Printf("Reloading keyspace schema %v", args)
 
 	err := vtctlclient.RunCommandAndWait(context.Background(), server, args, func(e *logutil.Event) {

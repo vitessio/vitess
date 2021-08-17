@@ -94,8 +94,8 @@ func initCluster(shardNames []string, totalTabletsRequired int) error {
 				MySQLPort: clusterInstance.GetAndReservePort(),
 				Alias:     fmt.Sprintf("%s-%010d", clusterInstance.Cell, tabletUID),
 			}
-			if i == 0 { // Make the first one as master
-				tablet.Type = "master"
+			if i == 0 { // Make the first one as primary
+				tablet.Type = "primary"
 			}
 			// Start Mysqlctld process
 			tablet.MysqlctldProcess = *cluster.MysqlCtldProcessInstance(tablet.TabletUID, tablet.MySQLPort, clusterInstance.TmpDirectory)

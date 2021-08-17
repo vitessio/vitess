@@ -319,7 +319,7 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 	}
 
 	// Get the current primary replication position, and wait until we catch up
-	// to that point. We do this instead of looking at Seconds_Behind_Master
+	// to that point. We do this instead of looking at ReplicationLag
 	// because that value can
 	// sometimes lie and tell you there's 0 lag when actually replication is
 	// stopped. Also, if replication is making progress but is too slow to ever
@@ -467,6 +467,8 @@ func getPrimaryPosition(ctx context.Context, tmc tmclient.TabletManagerClient, t
 	if err != nil {
 		return mysql.Position{}, fmt.Errorf("can't get primary tablet record %v: %v", topoproto.TabletAliasString(si.PrimaryAlias), err)
 	}
+	// Use old RPC for backwards-compatibility
+	// TODO(deepthi): change to PrimaryPosition after v12.0
 	posStr, err := tmc.MasterPosition(ctx, ti.Tablet)
 	if err != nil {
 		return mysql.Position{}, fmt.Errorf("can't get primary replication position: %v", err)

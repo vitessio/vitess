@@ -75,18 +75,18 @@ func TestVersion(t *testing.T) {
 	defer vp.Close()
 
 	// couple tablets is enough
-	sourceMaster := NewFakeTablet(t, wr, "cell1", 10, topodatapb.TabletType_PRIMARY, nil,
+	sourcePrimary := NewFakeTablet(t, wr, "cell1", 10, topodatapb.TabletType_PRIMARY, nil,
 		TabletKeyspaceShard(t, "source", "0"),
 		StartHTTPServer())
 	sourceReplica := NewFakeTablet(t, wr, "cell1", 11, topodatapb.TabletType_REPLICA, nil,
 		TabletKeyspaceShard(t, "source", "0"),
 		StartHTTPServer())
 
-	// sourceMaster loop
-	sourceMasterGitRev := "fake git rev"
-	sourceMaster.StartActionLoop(t, wr)
-	sourceMaster.HTTPServer.Handler.(*http.ServeMux).HandleFunc("/debug/vars", expvarHandler(&sourceMasterGitRev))
-	defer sourceMaster.StopActionLoop(t)
+	// sourcePrimary loop
+	sourcePrimaryGitRev := "fake git rev"
+	sourcePrimary.StartActionLoop(t, wr)
+	sourcePrimary.HTTPServer.Handler.(*http.ServeMux).HandleFunc("/debug/vars", expvarHandler(&sourcePrimaryGitRev))
+	defer sourcePrimary.StopActionLoop(t)
 
 	// sourceReplica loop
 	sourceReplicaGitRev := "fake git rev"
@@ -95,13 +95,13 @@ func TestVersion(t *testing.T) {
 	defer sourceReplica.StopActionLoop(t)
 
 	// test when versions are the same
-	if err := vp.Run([]string{"ValidateVersionKeyspace", sourceMaster.Tablet.Keyspace}); err != nil {
+	if err := vp.Run([]string{"ValidateVersionKeyspace", sourcePrimary.Tablet.Keyspace}); err != nil {
 		t.Fatalf("ValidateVersionKeyspace(same) failed: %v", err)
 	}
 
 	// test when versions are different
 	sourceReplicaGitRev = "different fake git rev"
-	if err := vp.Run([]string{"ValidateVersionKeyspace", sourceMaster.Tablet.Keyspace}); err == nil || !strings.Contains(err.Error(), "is different than replica") {
+	if err := vp.Run([]string{"ValidateVersionKeyspace", sourcePrimary.Tablet.Keyspace}); err == nil || !strings.Contains(err.Error(), "is different than replica") {
 		t.Fatalf("ValidateVersionKeyspace(different) returned an unexpected error: %v", err)
 	}
 }

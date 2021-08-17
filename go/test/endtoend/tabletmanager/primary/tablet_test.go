@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package master
+package primary
 
 import (
 	"encoding/json"
@@ -108,6 +108,7 @@ func TestMain(m *testing.M) {
 		// Collect table paths and ports
 		tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 		for _, tablet := range tablets {
+			// TODO(deepthi): fix after v12.0
 			if tablet.Type == "master" || tablet.Type == "primary" {
 				primaryTablet = *tablet
 			} else if tablet.Type != "rdonly" {

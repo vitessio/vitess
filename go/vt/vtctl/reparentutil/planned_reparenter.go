@@ -175,7 +175,7 @@ func (pr *PlannedReparenter) preflightChecks(
 		return true, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "primary-elect tablet %v is not in the shard", primaryElectAliasStr)
 	}
 
-	ev.NewMaster = proto.Clone(newPrimaryTabletInfo.Tablet).(*topodatapb.Tablet)
+	ev.NewPrimary = proto.Clone(newPrimaryTabletInfo.Tablet).(*topodatapb.Tablet)
 
 	if topoproto.TabletAliasIsZero(ev.ShardInfo.PrimaryAlias) {
 		return true, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "the shard has no current primary, use EmergencyReparentShard instead")
@@ -195,7 +195,7 @@ func (pr *PlannedReparenter) performGracefulPromotion(
 	opts PlannedReparentOptions,
 ) (string, error) {
 	primaryElectAliasStr := topoproto.TabletAliasString(primaryElect.Alias)
-	ev.OldMaster = proto.Clone(currentPrimary.Tablet).(*topodatapb.Tablet)
+	ev.OldPrimary = proto.Clone(currentPrimary.Tablet).(*topodatapb.Tablet)
 
 	// Before demoting the old primary, we're going to ensure that replication
 	// is working from the old primary to the primary-elect. If replication is
@@ -243,7 +243,7 @@ func (pr *PlannedReparenter) performGracefulPromotion(
 	demoteCtx, demoteCancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
 	defer demoteCancel()
 
-	masterStatus, err := pr.tmc.DemoteMaster(demoteCtx, currentPrimary.Tablet)
+	primaryStatus, err := pr.tmc.DemoteMaster(demoteCtx, currentPrimary.Tablet)
 	if err != nil {
 		return "", vterrors.Wrapf(err, "failed to DemoteMaster on current primary %v: %v", currentPrimary.AliasString(), err)
 	}
@@ -254,13 +254,13 @@ func (pr *PlannedReparenter) performGracefulPromotion(
 	waitCtx, waitCancel := context.WithTimeout(ctx, opts.WaitReplicasTimeout)
 	defer waitCancel()
 
-	waitErr := pr.tmc.WaitForPosition(waitCtx, primaryElect, masterStatus.Position)
+	waitErr := pr.tmc.WaitForPosition(waitCtx, primaryElect, primaryStatus.Position)
 
 	// Do some wrapping of errors to get the right codes and callstacks.
 	var finalWaitErr error
 	switch {
 	case waitErr != nil:
-		finalWaitErr = vterrors.Wrapf(waitErr, "primary-elect tablet %v failed to catch up with replication %v", primaryElectAliasStr, masterStatus.Position)
+		finalWaitErr = vterrors.Wrapf(waitErr, "primary-elect tablet %v failed to catch up with replication %v", primaryElectAliasStr, primaryStatus.Position)
 	case ctx.Err() == context.DeadlineExceeded:
 		finalWaitErr = vterrors.New(vtrpc.Code_DEADLINE_EXCEEDED, "PlannedReparent timed out; please try again")
 	}
@@ -334,7 +334,7 @@ func (pr *PlannedReparenter) performPotentialPromotion(
 ) (string, error) {
 	primaryElectAliasStr := topoproto.TabletAliasString(primaryElect.Alias)
 
-	pr.logger.Infof("no clear winner found for current master term; checking if it's safe to recover by electing %v", primaryElectAliasStr)
+	pr.logger.Infof("no clear winner found for current primary term; checking if it's safe to recover by electing %v", primaryElectAliasStr)
 
 	type tabletPos struct {
 		alias  string
@@ -379,16 +379,16 @@ func (pr *PlannedReparenter) performPotentialPromotion(
 			// tablet type), that's already in read-only.
 			pr.logger.Infof("demoting tablet %v", alias)
 
-			masterStatus, err := pr.tmc.DemoteMaster(stopAllCtx, tablet)
+			primaryStatus, err := pr.tmc.DemoteMaster(stopAllCtx, tablet)
 			if err != nil {
 				rec.RecordError(vterrors.Wrapf(err, "DemoteMaster(%v) failed on contested primary", alias))
 
 				return
 			}
 
-			pos, err := mysql.DecodePosition(masterStatus.Position)
+			pos, err := mysql.DecodePosition(primaryStatus.Position)
 			if err != nil {
-				rec.RecordError(vterrors.Wrapf(err, "cannot decode replication position (%v) for demoted tablet %v", masterStatus.Position, alias))
+				rec.RecordError(vterrors.Wrapf(err, "cannot decode replication position (%v) for demoted tablet %v", primaryStatus.Position, alias))
 
 				return
 			}
@@ -448,7 +448,7 @@ func (pr *PlannedReparenter) performPotentialPromotion(
 		return "", vterrors.Wrap(err, "lost topology lock; aborting")
 	}
 
-	// Promote the candidate primary to type:MASTER.
+	// Promote the candidate primary to type:PRIMARY.
 	promoteCtx, promoteCancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
 	defer promoteCancel()
 
@@ -519,15 +519,15 @@ func (pr *PlannedReparenter) reparentShardLocked(
 	case currentPrimary == nil:
 		// Case (1): no clear current primary. Try to find a safe promotion
 		// candidate, and promote to it.
-		reparentJournalPos, err = pr.performPotentialPromotion(ctx, keyspace, shard, ev.NewMaster, tabletMap)
+		reparentJournalPos, err = pr.performPotentialPromotion(ctx, keyspace, shard, ev.NewPrimary, tabletMap)
 	case topoproto.TabletAliasEqual(currentPrimary.Alias, opts.NewPrimaryAlias):
 		// Case (2): desired new primary is the current primary. Attempt to fix
 		// up replicas to recover from a previous partial promotion.
-		reparentJournalPos, err = pr.performPartialPromotionRecovery(ctx, ev.NewMaster)
+		reparentJournalPos, err = pr.performPartialPromotionRecovery(ctx, ev.NewPrimary)
 	default:
 		// Case (3): desired primary and current primary differ. Do a graceful
 		// demotion-then-promotion.
-		reparentJournalPos, err = pr.performGracefulPromotion(ctx, ev, keyspace, shard, currentPrimary, ev.NewMaster, tabletMap, opts)
+		reparentJournalPos, err = pr.performGracefulPromotion(ctx, ev, keyspace, shard, currentPrimary, ev.NewPrimary, tabletMap, opts)
 	}
 
 	if err != nil {
@@ -566,7 +566,7 @@ func (pr *PlannedReparenter) reparentTablets(
 	// We add a (hopefully) unique record to the reparent journal table on the
 	// new primary, so we can check if replicas got it through replication.
 	reparentJournalTimestamp := time.Now().UnixNano()
-	primaryElectAliasStr := topoproto.TabletAliasString(ev.NewMaster.Alias)
+	primaryElectAliasStr := topoproto.TabletAliasString(ev.NewPrimary.Alias)
 	replicasWg := sync.WaitGroup{}
 	rec := concurrency.AllErrorRecorder{}
 
@@ -592,9 +592,9 @@ func (pr *PlannedReparenter) reparentTablets(
 			// attempt, we can no longer assume that we know who the former
 			// primary was. Instead, we rely on the former primary to remember
 			// that it needs to start replication after transitioning from
-			// MASTER => REPLICA.
+			// PRIMARY => REPLICA.
 			forceStartReplication := false
-			if err := pr.tmc.SetMaster(replCtx, tablet, ev.NewMaster.Alias, reparentJournalTimestamp, "", forceStartReplication); err != nil {
+			if err := pr.tmc.SetMaster(replCtx, tablet, ev.NewPrimary.Alias, reparentJournalTimestamp, "", forceStartReplication); err != nil {
 				rec.RecordError(vterrors.Wrapf(err, "tablet %v failed to SetMaster(%v): %v", alias, primaryElectAliasStr, err))
 			}
 		}(alias, tabletInfo.Tablet)
@@ -607,7 +607,7 @@ func (pr *PlannedReparenter) reparentTablets(
 	// If we fail to populate the reparent journal, there's no way the replicas
 	// will work, so we cancel the ongoing reparent RPCs and bail out.
 	pr.logger.Infof("populating reparent journal on new primary %v", primaryElectAliasStr)
-	if err := pr.tmc.PopulateReparentJournal(replCtx, ev.NewMaster, reparentJournalTimestamp, "PlannedReparentShard", ev.NewMaster.Alias, reparentJournalPosition); err != nil {
+	if err := pr.tmc.PopulateReparentJournal(replCtx, ev.NewPrimary, reparentJournalTimestamp, "PlannedReparentShard", ev.NewPrimary.Alias, reparentJournalPosition); err != nil {
 		pr.logger.Warningf("primary failed to PopulateReparentJournal (position: %v); cancelling replica reparent attempts", reparentJournalPosition)
 		replCancel()
 		replicasWg.Wait()

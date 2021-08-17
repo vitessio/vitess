@@ -61,10 +61,10 @@ func checkElection(t *testing.T, ts *topo.Server) {
 		t.Fatalf("cannot create mp1: %v", err)
 	}
 
-	// no master yet, check name
+	// no primary yet, check name
 	waitForMasterID(t, mp1, "")
 
-	// wait for id1 to be the master
+	// wait for id1 to be the primary
 	ctx1, err := mp1.WaitForMastership()
 	if err != nil {
 		t.Fatalf("mp1 cannot become master: %v", err)
@@ -84,7 +84,7 @@ func checkElection(t *testing.T, ts *topo.Server) {
 		}
 	}
 
-	// get the current master name, better be id1
+	// get the current primary name, better be id1
 	waitForMasterID(t, mp1, id1)
 
 	// create a second MasterParticipation on same name
@@ -94,7 +94,7 @@ func checkElection(t *testing.T, ts *topo.Server) {
 		t.Fatalf("cannot create mp2: %v", err)
 	}
 
-	// wait until mp2 gets to be the master in the background
+	// wait until mp2 gets to be the primary in the background
 	mp2IsMaster := make(chan error)
 	var mp2Context context.Context
 	go func() {
@@ -103,7 +103,7 @@ func checkElection(t *testing.T, ts *topo.Server) {
 		mp2IsMaster <- err
 	}()
 
-	// ask mp2 for master name, should get id1
+	// ask mp2 for primary name, should get id1
 	waitForMasterID(t, mp2, id1)
 
 	// stop mp1
@@ -118,13 +118,13 @@ func checkElection(t *testing.T, ts *topo.Server) {
 		t.Fatalf("shutting down mp1 didn't close ctx1 in time")
 	}
 
-	// now mp2 should be master
+	// now mp2 should be primary
 	err = <-mp2IsMaster
 	if err != nil {
 		t.Fatalf("mp2 awoke with error: %v", err)
 	}
 
-	// ask mp2 for master name, should get id2
+	// ask mp2 for primary name, should get id2
 	waitForMasterID(t, mp2, id2)
 
 	// stop mp2, we're done

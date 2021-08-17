@@ -73,7 +73,7 @@ func (a byTabletUID) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 func (a byTabletUID) Less(i, j int) bool { return a[i].Tablet.Alias.Uid < a[j].Tablet.Alias.Uid }
 
 // availableTabletTypes is an array of tabletTypes that are being considered to display on the heatmap.
-// Note: this list must always be sorted by the order they should appear (i.e. MASTER first, then REPLICA, then RDONLY)
+// Note: this list must always be sorted by the order they should appear (i.e. PRIMARY first, then REPLICA, then RDONLY)
 var availableTabletTypes = []topodatapb.TabletType{topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY}
 
 // tabletStatsCache holds the most recent status update received for
@@ -381,8 +381,8 @@ func (c *tabletStatsCache) heatmapData(selectedKeyspace, selectedCell, selectedT
 			}
 			// Otherwise traverse the type labels because that is the innermost label.
 			// For example if h.CellAndTypeLabels =
-			//   { CellLabel: {Name: 'cell1', Rowspan: 3}, TypeLabels: [{Name: 'Master', Rowspan: 1},  {Name: 'Replica', Rowspan: 2}] },
-			//   { CellLabel: {Name: 'cell2', Rowspan: 3}, TypeLabels: [{Name: 'Master', Rowspan: 1},  {Name: 'Replica', Rowspan: 2}] },
+			//   { CellLabel: {Name: 'cell1', Rowspan: 3}, TypeLabels: [{Name: 'Primary', Rowspan: 1},  {Name: 'Replica', Rowspan: 2}] },
+			//   { CellLabel: {Name: 'cell2', Rowspan: 3}, TypeLabels: [{Name: 'Primary', Rowspan: 1},  {Name: 'Replica', Rowspan: 2}] },
 			// then the resulting array will be [1.5, 2.5, 4.5, 5.5] which specifies the grid line indexes
 			// starting from 0 which is at the bottom of the heatmap.
 			for t := len(h.CellAndTypeLabels[c].TypeLabels) - 1; t >= 0; t-- {

@@ -185,7 +185,7 @@ func (ts *tmState) ChangeTabletType(ctx context.Context, tabletType topodatapb.T
 		}
 		if action == DBActionSetReadWrite {
 			// We call SetReadOnly only after the topo has been updated to avoid
-			// situations where two tablets are master at the DB level but not at the vitess level
+			// situations where two tablets are primary at the DB level but not at the vitess level
 			if err := ts.tm.MysqlDaemon.SetReadOnly(false); err != nil {
 				return err
 			}
@@ -318,7 +318,7 @@ func (ts *tmState) canServe(tabletType topodatapb.TabletType) string {
 		return "TabletControl.DisableQueryService set"
 	}
 	if tabletType == topodatapb.TabletType_PRIMARY && ts.isResharding {
-		return "master tablet with filtered replication on"
+		return "primary tablet with filtered replication on"
 	}
 	return ""
 }

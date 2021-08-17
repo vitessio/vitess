@@ -136,7 +136,7 @@ func (s *Server) Lock(ctx context.Context, dirPath, contents string) (topo.LockD
 	return s.lock(ctx, dirPath, contents)
 }
 
-// lock is used by both Lock() and master election.
+// lock is used by both Lock() and primary election.
 func (s *Server) lock(ctx context.Context, nodePath, contents string) (topo.LockDescriptor, error) {
 	nodePath = path.Join(s.root, nodePath, locksPath)
 

@@ -1,6 +1,6 @@
 # Replication Lag Based Throttling of Transactions 
 Vitess supports throttling of transactions based on replication lag. When this
-feature is turned on, each VTTablet master monitors the replication lag from
+feature is turned on, each VTTablet primary monitors the replication lag from
 the replicas, and based on the observed replication lag tries to rate-limit the
 received transactions to keep the replication lag under a configured limit.
 
@@ -21,11 +21,11 @@ A boolean flag controlling whether the replication-lag-based throttling is enabl
 
 * *tx-throttler-config*
 
-A text-format representation of the  [throttlerdata.Configuration](https://github.com/vitessio/vitess/blob/master/proto/throttlerdata.proto) protocol buffer 
+A text-format representation of the  [throttlerdata.Configuration](https://github.com/vitessio/vitess/blob/main/proto/throttlerdata.proto) protocol buffer 
 that contains configuration options for the throttler. 
 The most important fields in that message are *target_replication_lag_sec* and 
 *max_replication_lag_sec* that specify the desired limits on the replication lag. See the comments in the protocol definition file for more details.
-If this is not specified a [default](https://github.com/vitessio/vitess/tree/master/go/vt/vttablet/tabletserver/tabletenv/config.go) configuration will be used.
+If this is not specified a [default](https://github.com/vitessio/vitess/tree/main/go/vt/vttablet/tabletserver/tabletenv/config.go) configuration will be used.
 
 * *tx-throttler-healthcheck-cells*
 

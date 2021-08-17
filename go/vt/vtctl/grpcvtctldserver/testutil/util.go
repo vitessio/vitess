@@ -120,15 +120,15 @@ func AddKeyspaces(ctx context.Context, t *testing.T, ts *topo.Server, keyspaces 
 // AddTabletOptions is a container for different behaviors tests need from
 // AddTablet.
 type AddTabletOptions struct {
-	// AlsoSetShardMaster is an option to control additional setup to take when
-	// AddTablet receives a tablet of type MASTER. When set, AddTablet will also
+	// AlsoSetShardPrimary is an option to control additional setup to take when
+	// AddTablet receives a tablet of type PRIMARY. When set, AddTablet will also
 	// update the shard record to make that tablet the primary, and fail the
 	// test if the shard record has a serving primary already.
-	AlsoSetShardMaster bool
-	// ForceSetShardMaster, when combined with AlsoSetShardMaster, will ignore
+	AlsoSetShardPrimary bool
+	// ForceSetShardPrimary, when combined with AlsoSetShardPrimary, will ignore
 	// any existing primary in the shard, making the current tablet the serving
-	// primary (given it is type MASTER), and log that it has done so.
-	ForceSetShardMaster bool
+	// primary (given it is type PRIMARY), and log that it has done so.
+	ForceSetShardPrimary bool
 	// SkipShardCreation, when set, makes AddTablet never attempt to create a
 	// shard record in the topo under any circumstances.
 	SkipShardCreation bool
@@ -143,8 +143,8 @@ type AddTabletOptions struct {
 // from the topo server without error.
 //
 // If AddTablet receives a tablet record with a keyspace and shard set, and that
-// tablet's type is MASTER, and opts.AlsoSetShardMaster is set, then AddTablet
-// will update the shard record to make that tablet the shard master and set the
+// tablet's type is PRIMARY, and opts.AlsoSetShardPrimary is set, then AddTablet
+// will update the shard record to make that tablet the shard primary and set the
 // shard to serving. If that shard record already has a serving primary, then
 // AddTablet will fail the test.
 func AddTablet(ctx context.Context, t *testing.T, ts *topo.Server, tablet *topodatapb.Tablet, opts *AddTabletOptions) {
@@ -172,16 +172,16 @@ func AddTablet(ctx context.Context, t *testing.T, ts *topo.Server, tablet *topod
 				require.NoError(t, err, "CreateShard(%s, %s)", tablet.Keyspace, tablet.Shard)
 			}
 
-			if tablet.Type == topodatapb.TabletType_PRIMARY && opts.AlsoSetShardMaster {
+			if tablet.Type == topodatapb.TabletType_PRIMARY && opts.AlsoSetShardPrimary {
 				_, err := ts.UpdateShardFields(ctx, tablet.Keyspace, tablet.Shard, func(si *topo.ShardInfo) error {
 					if si.IsPrimaryServing && si.PrimaryAlias != nil {
 						msg := fmt.Sprintf("shard %v/%v already has a serving master (%v)", tablet.Keyspace, tablet.Shard, topoproto.TabletAliasString(si.PrimaryAlias))
 
-						if !opts.ForceSetShardMaster {
+						if !opts.ForceSetShardPrimary {
 							return errors.New(msg)
 						}
 
-						t.Logf("%s; replacing with %v because ForceSetShardMaster = true", msg, topoproto.TabletAliasString(tablet.Alias))
+						t.Logf("%s; replacing with %v because ForceSetShardPrimary = true", msg, topoproto.TabletAliasString(tablet.Alias))
 					}
 
 					si.PrimaryAlias = tablet.Alias

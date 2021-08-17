@@ -287,7 +287,7 @@ func (client *fakeTabletManagerClient) ExecuteFetchAsDba(ctx context.Context, ta
 // newFakeTopo returns a topo with:
 // - a keyspace named 'test_keyspace'.
 // - 3 shards named '1', '2', '3'.
-// - A master tablet for each shard.
+// - A primary tablet for each shard.
 func newFakeTopo(t *testing.T) *topo.Server {
 	ts := memorytopo.NewServer("test_cell")
 	ctx := context.Background()

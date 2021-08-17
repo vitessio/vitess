@@ -40,8 +40,8 @@ var TopoServ *topo.Server
 // ErrTabletAliasNil is a fixed error message.
 var ErrTabletAliasNil = errors.New("tablet alias is nil")
 
-// SwitchMaster makes the new tablet the master and proactively performs
-// the necessary propagation to the old master. The propagation is best
+// SwitchMaster makes the new tablet the primary and proactively performs
+// the necessary propagation to the old primary. The propagation is best
 // effort. If it fails, the tablet's shard sync will eventually converge.
 // The proactive propagation allows a competing Orchestrator from discovering
 // the successful action of a previous one, which reduces churn.
@@ -87,7 +87,7 @@ func SwitchMaster(newMasterKey, oldMasterKey InstanceKey) error {
 	return nil
 }
 
-// ChangeTabletType designates the tablet that owns an instance as the master.
+// ChangeTabletType designates the tablet that owns an instance as the primary.
 func ChangeTabletType(instanceKey InstanceKey, tabletType topodatapb.TabletType) (*topodatapb.Tablet, error) {
 	if instanceKey.Hostname == "" {
 		return nil, errors.New("can't set tablet to master: instance is unspecified")

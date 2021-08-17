@@ -40,7 +40,7 @@ func TestReplManagerSetTabletType(t *testing.T) {
 	tm.replManager.SetTabletType(topodatapb.TabletType_REPLICA)
 	assert.False(t, tm.replManager.ticks.Running())
 
-	// Master should stop the manager
+	// primary should stop the manager
 	*mysqlctl.DisableActiveReparents = false
 	tm.replManager.ticks.Start(nil)
 	tm.replManager.SetTabletType(topodatapb.TabletType_PRIMARY)

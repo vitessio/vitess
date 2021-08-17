@@ -103,7 +103,7 @@ func (q *StreamHealthQueryService) AddHealthResponseWithQPS(qps float64) {
 }
 
 // AddHealthResponseWithReplicationLag adds a faked health response to the
-// buffer channel. Only "seconds_behind_master" is different in this message.
+// buffer channel. Only "replication_lag_seconds" is different in this message.
 func (q *StreamHealthQueryService) AddHealthResponseWithReplicationLag(replicationLag uint32) {
 	q.healthResponses <- &querypb.StreamHealthResponse{
 		Target:  proto.Clone(q.target).(*querypb.Target),

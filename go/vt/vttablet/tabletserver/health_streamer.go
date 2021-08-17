@@ -313,7 +313,7 @@ func (hs *healthStreamer) SetUnhealthyThreshold(v time.Duration) {
 func (hs *healthStreamer) reload() error {
 	hs.mu.Lock()
 	defer hs.mu.Unlock()
-	// Schema Reload to happen only on master.
+	// Schema Reload to happen only on primary.
 	if hs.state.Target.TabletType != topodatapb.TabletType_PRIMARY {
 		return nil
 	}

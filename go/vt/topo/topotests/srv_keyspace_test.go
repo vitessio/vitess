@@ -1106,7 +1106,7 @@ func TestMasterMigrateServedType(t *testing.T) {
 		t.Errorf("MigrateServedType() failure. Got %v, want: %v", string(got), string(want))
 	}
 
-	// migrating master type cleans up shard tablet controls records
+	// migrating primary type cleans up shard tablet controls records
 
 	targetKs = &topodatapb.SrvKeyspace{
 		Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{

@@ -16,7 +16,7 @@
 
 mysql_host="$1"
 mysql_port="$2"
-is_master="$3"
+is_primary="$3"
 
 source ./env.sh
 
@@ -81,8 +81,8 @@ curl -I "http://$hostname:$port/debug/status" >/dev/null 2>&1 || fail "tablet co
 
 echo "  + vttablet started"
 
-if [ "$is_master" == "true" ] ; then
-  echo "  > Setting this tablet as master"
+if [ "$is_primary" == "true" ] ; then
+  echo "  > Setting this tablet as primary"
   vtctlclient TabletExternallyReparented "$alias" &&
     echo "  + done"
 fi

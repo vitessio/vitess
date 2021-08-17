@@ -24,4 +24,4 @@ Vitess is driven by high technical standards, and these must be maintained. It i
 * Diversity
 * Inclusiveness
 * Openness
-* Adherence to the [Code of Conduct](https://github.com/vitessio/vitess/blob/master/CODE_OF_CONDUCT.md)
+* Adherence to the [Code of Conduct](https://github.com/vitessio/vitess/blob/main/CODE_OF_CONDUCT.md)

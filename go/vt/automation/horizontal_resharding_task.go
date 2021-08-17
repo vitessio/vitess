@@ -97,7 +97,7 @@ func (t *HorizontalReshardingTask) Run(parameters map[string]string) ([]*automat
 		newTasks = append(newTasks, splitDiffTask)
 	}
 
-	for _, servedType := range []string{"rdonly", "replica", "master"} {
+	for _, servedType := range []string{"rdonly", "replica", "primary"} {
 		migrateServedTypesTasks := NewTaskContainer()
 		for _, sourceShard := range sourceShards {
 			AddTask(migrateServedTypesTasks, "MigrateServedTypesTask", map[string]string{

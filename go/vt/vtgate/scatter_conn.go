@@ -436,7 +436,7 @@ func (stc *ScatterConn) MessageStream(ctx context.Context, rss []*srvtopo.Resolv
 				return stc.processOneStreamingResult(&mu, &fieldSent, qr, callback)
 			})
 			// nil and EOF are equivalent. UNAVAILABLE can be returned by vttablet if it's demoted
-			// from master to replica. For any of these conditions, we have to retry.
+			// from primary to replica. For any of these conditions, we have to retry.
 			if err != nil && err != io.EOF && vterrors.Code(err) != vtrpcpb.Code_UNAVAILABLE {
 				cancel()
 				return err

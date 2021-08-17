@@ -377,7 +377,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 	// tells us the size of the event header.
 	if vs.format.IsZero() {
 		// The only thing that should come before the FORMAT_DESCRIPTION_EVENT
-		// is a fake ROTATE_EVENT, which the master sends to tell us the name
+		// is a fake ROTATE_EVENT, which the primary sends to tell us the name
 		// of the current log file.
 		if ev.IsRotate() {
 			return nil, nil
@@ -681,6 +681,8 @@ func (vs *vstreamer) buildTablePlan(id uint64, tm *mysql.TableMap) (*binlogdatap
 		FieldEvent: &binlogdatapb.FieldEvent{
 			TableName: plan.Table.Name,
 			Fields:    plan.fields(),
+			Keyspace:  vs.vse.keyspace,
+			Shard:     vs.vse.shard,
 		},
 	}, nil
 }
@@ -840,6 +842,8 @@ func (vs *vstreamer) processRowEvent(vevents []*binlogdatapb.VEvent, plan *strea
 			RowEvent: &binlogdatapb.RowEvent{
 				TableName:  plan.Table.Name,
 				RowChanges: rowChanges,
+				Keyspace:   vs.vse.keyspace,
+				Shard:      vs.vse.shard,
 			},
 		})
 	}
