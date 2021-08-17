@@ -143,7 +143,19 @@ func (rp *routeTree) getVindexValueExpr() (sqlparser.Expr, error) {
 }
 
 func (s *subqueryTree) getVindexName() (string, error) {
-	return "", vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unsupported getVindexName for %T", s)
+	var innerVindexName, outerVindexName string
+	var err error
+	if innerVindexName, err = s.inner.getVindexName(); err != nil {
+		return "", err
+	}
+	if outerVindexName, err = s.outer.getVindexName(); err != nil {
+		return "", err
+	}
+
+	if innerVindexName != outerVindexName {
+		return "", vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unsupported getVindexName for %T", s)
+	}
+	return innerVindexName, nil
 }
 
 func (d *derivedTree) getVindexName() (string, error) {
@@ -178,7 +190,19 @@ func (rp *routeTree) getVindexPredicates() ([]*vindexPlusPredicates, error) {
 }
 
 func (s *subqueryTree) getOpCode() (engine.RouteOpcode, error) {
-	return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unsupported getOpCode for %T", s)
+	var innerOpCode, outerOpCode engine.RouteOpcode
+	var err error
+	if innerOpCode, err = s.inner.getOpCode(); err != nil {
+		return 0, err
+	}
+	if outerOpCode, err = s.outer.getOpCode(); err != nil {
+		return 0, err
+	}
+
+	if innerOpCode != outerOpCode {
+		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unsupported getOpCode for %T", s)
+	}
+	return innerOpCode, nil
 }
 
 func (d *derivedTree) getOpCode() (engine.RouteOpcode, error) {
@@ -194,7 +218,19 @@ func (rp *routeTree) getOpCode() (engine.RouteOpcode, error) {
 }
 
 func (s *subqueryTree) getKeyspace() (*vindexes.Keyspace, error) {
-	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unsupported getKeyspace for %T", s)
+	var innerKs, outerKs *vindexes.Keyspace
+	var err error
+	if innerKs, err = s.inner.getKeyspace(); err != nil {
+		return nil, err
+	}
+	if outerKs, err = s.outer.getKeyspace(); err != nil {
+		return nil, err
+	}
+
+	if innerKs != outerKs {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unsupported getKeyspace for %T", s)
+	}
+	return innerKs, nil
 }
 
 func (d *derivedTree) getKeyspace() (*vindexes.Keyspace, error) {
@@ -210,7 +246,7 @@ func (rp *routeTree) getKeyspace() (*vindexes.Keyspace, error) {
 }
 
 func (s *subqueryTree) tableID() semantics.TableSet {
-	panic("implement me")
+	return s.inner.tableID() | s.outer.tableID()
 }
 
 func (s *subqueryTree) cost() int {
