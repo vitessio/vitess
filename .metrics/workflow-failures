@@ -1,6 +1,3 @@
-2021-04-12T14:43:47Z,Cluster (16),https://github.com/vitessio/vitess/actions/runs/741547673
-2021-04-12T14:43:47Z,Cluster (17),https://github.com/vitessio/vitess/actions/runs/741547682
-2021-04-12T14:43:47Z,Cluster (18),https://github.com/vitessio/vitess/actions/runs/741547670
 2021-04-12T14:43:47Z,Cluster (20),https://github.com/vitessio/vitess/actions/runs/741547672
 2021-04-12T14:43:47Z,Cluster (21),https://github.com/vitessio/vitess/actions/runs/741547701
 2021-04-12T14:43:47Z,Cluster (22),https://github.com/vitessio/vitess/actions/runs/741547677
@@ -9983,12 +9980,15 @@
 2021-08-17T16:19:34Z,local_example,https://github.com/vitessio/vitess/actions/runs/1140020237
 2021-08-17T16:19:34Z,region_example,https://github.com/vitessio/vitess/actions/runs/1140020223
 2021-08-17T16:19:34Z,unit_race,https://github.com/vitessio/vitess/actions/runs/1140020183
+2021-08-17T16:23:10Z,Cluster (13),https://github.com/vitessio/vitess/actions/runs/1140030660
 2021-08-17T16:23:10Z,Cluster (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/1140030677
 2021-08-17T16:23:10Z,Cluster (vreplication_multicell),https://github.com/vitessio/vitess/actions/runs/1140030727
+2021-08-17T16:23:10Z,Cluster (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/1140030679
 2021-08-17T16:23:10Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/1140030652
 2021-08-17T16:23:10Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/1140030653
 2021-08-17T16:23:10Z,Unit Test (mysql57),https://github.com/vitessio/vitess/actions/runs/1140030699
 2021-08-17T16:23:10Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/1140030643
+2021-08-17T16:23:10Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/1140030694
 2021-08-17T16:23:10Z,check_formatting,https://github.com/vitessio/vitess/actions/runs/1140030659
 2021-08-17T16:23:10Z,cluster_initial_sharding_multi,https://github.com/vitessio/vitess/actions/runs/1140030697
 2021-08-17T16:23:10Z,docker_test_1,https://github.com/vitessio/vitess/actions/runs/1140030654
