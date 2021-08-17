@@ -3889,9 +3889,11 @@ func TestGetWorkflow(t *testing.T) {
 									Workflows: []*vtctldatapb.Workflow{
 										{
 											Name: "workflow1",
+											Tags: []string{"tag1", "tag2"},
 										},
 										{
 											Name: "workflow2",
+											Tags: []string{"tag1", "tag2"},
 										},
 									},
 								},
@@ -3913,6 +3915,7 @@ func TestGetWorkflow(t *testing.T) {
 				Keyspace: "testkeyspace",
 				Workflow: &vtctldatapb.Workflow{
 					Name: "workflow1",
+					Tags: []string{"tag1", "tag2"},
 				},
 			},
 			shouldErr: false,

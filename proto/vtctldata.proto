@@ -105,6 +105,7 @@ message Workflow {
   ReplicationLocation target = 3;
   int64 max_v_replication_lag = 4;
   map<string, ShardStream> shard_streams = 5;
+  repeated string tags = 6;
 
   message ReplicationLocation {
     string keyspace = 1;

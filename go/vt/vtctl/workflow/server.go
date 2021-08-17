@@ -310,6 +310,7 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 	targetKeyspaceByWorkflow := make(map[string]string, len(results))
 	targetShardsByWorkflow := make(map[string]sets.String, len(results))
 	maxVReplicationLagByWorkflow := make(map[string]float64, len(results))
+	tagsByWorkflow := make(map[string]sets.String, len(results))
 
 	// We guarantee the following invariants when this function is called for a
 	// given workflow:
@@ -428,6 +429,10 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 		sourceShardsByWorkflow[workflow.Name].Insert(stream.BinlogSource.Shard)
 		targetShardsByWorkflow[workflow.Name].Insert(tablet.Shard)
 
+		for _, tag := range tagArray {
+			tagsByWorkflow[workflow.Name].Insert(tag)
+		}
+
 		if ks, ok := sourceKeyspaceByWorkflow[workflow.Name]; ok && ks != stream.BinlogSource.Keyspace {
 			return fmt.Errorf("%w: workflow = %v, ks1 = %v, ks2 = %v", ErrMultipleSourceKeyspaces, workflow.Name, ks, stream.BinlogSource.Keyspace)
 		}
@@ -485,6 +490,7 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 				workflowsMap[workflowName] = workflow
 				sourceShardsByWorkflow[workflowName] = sets.NewString()
 				targetShardsByWorkflow[workflowName] = sets.NewString()
+				tagsByWorkflow[workflowName] = sets.NewString()
 			}
 
 			scanWorkflowWg.Add(1)
@@ -678,6 +684,8 @@ ORDER BY
 		}
 
 		workflow.MaxVReplicationLag = int64(maxVReplicationLag)
+
+		workflow.Tags = tagsByWorkflow[name].List()
 
 		// Sort shard streams by stream_id ASC, to support an optimization
 		// in fetchStreamLogs below.

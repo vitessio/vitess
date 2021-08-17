@@ -821,6 +821,15 @@ func (m *Workflow) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if len(m.Tags) > 0 {
+		for iNdEx := len(m.Tags) - 1; iNdEx >= 0; iNdEx-- {
+			i -= len(m.Tags[iNdEx])
+			copy(dAtA[i:], m.Tags[iNdEx])
+			i = encodeVarint(dAtA, i, uint64(len(m.Tags[iNdEx])))
+			i--
+			dAtA[i] = 0x32
+		}
+	}
 	if len(m.ShardStreams) > 0 {
 		for k := range m.ShardStreams {
 			v := m.ShardStreams[k]
@@ -5469,6 +5478,12 @@ func (m *Workflow) SizeVT() (n int) {
 			n += mapEntrySize + 1 + sov(uint64(mapEntrySize))
 		}
 	}
+	if len(m.Tags) > 0 {
+		for _, s := range m.Tags {
+			l = len(s)
+			n += 1 + l + sov(uint64(l))
+		}
+	}
 	if m.unknownFields != nil {
 		n += len(m.unknownFields)
 	}
@@ -9554,6 +9569,38 @@ func (m *Workflow) UnmarshalVT(dAtA []byte) error {
 				}
 			}
 			m.ShardStreams[mapkey] = mapvalue
+			iNdEx = postIndex
+		case 6:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Tags", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Tags = append(m.Tags, string(dAtA[iNdEx:postIndex]))
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
