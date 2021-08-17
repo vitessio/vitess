@@ -56,6 +56,7 @@ import (
 	"sync"
 	"syscall"
 	"time"
+	"vitess.io/vitess/go/exit"
 )
 
 var usage = `Usage of test.go:
@@ -91,6 +92,7 @@ var (
 	follow           = flag.Bool("follow", false, "print test output as it runs, instead of waiting to see if it passes or fails")
 	parallel         = flag.Int("parallel", 1, "number of tests to run in parallel")
 	skipBuild        = flag.Bool("skip-build", false, "skip running 'make build'. Assumes pre-existing binaries exist")
+	failFast        = flag.Bool("fail-fast", true, "fail entire test when any test fails")
 
 	remoteStats = flag.String("remote-stats", "", "url to send remote stats")
 )
@@ -107,6 +109,8 @@ const (
 
 	// List of flavors for which a bootstrap Docker image is available.
 	flavors = "mysql56,mysql57,mysql80,mariadb,mariadb103,percona,percona57,percona80"
+
+	errReturnCode = -1
 )
 
 // Config is the overall object serialized in test/config.json.
@@ -497,6 +501,9 @@ func main() {
 						mu.Lock()
 						testFailed(test.name)
 						mu.Unlock()
+						if *failFast {
+							exit.Return(errReturnCode)
+						}
 						continue
 					}
 
