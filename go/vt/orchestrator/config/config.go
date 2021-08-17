@@ -112,7 +112,6 @@ type Configuration struct {
 	MySQLTopologyReadTimeoutSeconds             int      // Number of seconds before topology mysql read operation is aborted (driver-side). Used for all but discovery queries.
 	MySQLConnectionLifetimeSeconds              int      // Number of seconds the mysql driver will keep database connection alive before recycling it
 	DefaultInstancePort                         int      // In case port was not specified on command line
-	SlaveLagQuery                               string   // Synonym to ReplicationLagQuery
 	ReplicationLagQuery                         string   // custom query to check on replica lg (e.g. heartbeat table). Must return a single row with a single numeric column, which is the lag.
 	ReplicationCredentialsQuery                 string   // custom query to get replication credentials. Must return a single row, with two text columns: 1st is username, 2nd is password. This is optional, and can be used by orchestrator to configure replication after primary takeover or setup of co-primary. You need to ensure the orchestrator user has the privileges to run this query
 	DiscoverByShowSlaveHosts                    bool     // Attempt SHOW SLAVE HOSTS before PROCESSLIST
@@ -212,18 +211,15 @@ type Configuration struct {
 	PostGracefulTakeoverProcesses               []string          // Processes to execute after running a graceful primary takeover. Uses same placeholders as PostFailoverProcesses
 	PostTakePrimaryProcesses                    []string          // Processes to execute after a successful Take-Master event has taken place
 	CoPrimaryRecoveryMustPromoteOtherCoPrimary  bool              // When 'false', anything can get promoted (and candidates are prefered over others). When 'true', orchestrator will promote the other co-primary or else fail
-	DetachLostSlavesAfterPrimaryFailover        bool              // synonym to DetachLostReplicasAfterPrimaryFailover
 	DetachLostReplicasAfterPrimaryFailover      bool              // Should replicas that are not to be lost in primary recovery (i.e. were more up-to-date than promoted replica) be forcibly detached
 	ApplyMySQLPromotionAfterPrimaryFailover     bool              // Should orchestrator take upon itself to apply MySQL primary promotion: set read_only=0, detach replication, etc.
 	PreventCrossDataCenterPrimaryFailover       bool              // When true (default: false), cross-DC primary failover are not allowed, orchestrator will do all it can to only fail over within same DC, or else not fail over at all.
 	PreventCrossRegionPrimaryFailover           bool              // When true (default: false), cross-region primary failover are not allowed, orchestrator will do all it can to only fail over within same region, or else not fail over at all.
 	PrimaryFailoverLostInstancesDowntimeMinutes uint              // Number of minutes to downtime any server that was lost after a primary failover (including failed primary & lost replicas). 0 to disable
-	PrimaryFailoverDetachSlavePrimaryHost       bool              // synonym to PrimaryFailoverDetachReplicaPrimaryHost
 	PrimaryFailoverDetachReplicaPrimaryHost     bool              // Should orchestrator issue a detach-replica-primary-host on newly promoted primary (this makes sure the new primary will not attempt to replicate old primary if that comes back to life). Defaults 'false'. Meaningless if ApplyMySQLPromotionAfterPrimaryFailover is 'true'.
 	FailPrimaryPromotionOnLagMinutes            uint              // when > 0, fail a primary promotion if the candidate replica is lagging >= configured number of minutes.
 	FailPrimaryPromotionIfSQLThreadNotUpToDate  bool              // when true, and a primary failover takes place, if candidate primary has not consumed all relay logs, promotion is aborted with error
 	DelayPrimaryPromotionIfSQLThreadNotUpToDate bool              // when true, and a primary failover takes place, if candidate primary has not consumed all relay logs, delay promotion until the sql thread has caught up
-	PostponeSlaveRecoveryOnLagMinutes           uint              // Synonym to PostponeReplicaRecoveryOnLagMinutes
 	PostponeReplicaRecoveryOnLagMinutes         uint              // On crash recovery, replicas that are lagging more than given minutes are only resurrected late in the recovery process, after primary/IM has been elected and processes executed. Value of 0 disables this feature
 	OSCIgnoreHostnameFilters                    []string          // OSC replicas recommendation will ignore replica hostnames matching given patterns
 	URLPrefix                                   string            // URL prefix to run orchestrator on non-root web path, e.g. /orchestrator to put it behind nginx.
@@ -377,16 +373,16 @@ func newConfiguration() *Configuration {
 		PostGracefulTakeoverProcesses:               []string{},
 		PostTakePrimaryProcesses:                    []string{},
 		CoPrimaryRecoveryMustPromoteOtherCoPrimary:  true,
-		DetachLostSlavesAfterPrimaryFailover:        true,
+		DetachLostReplicasAfterPrimaryFailover:      true,
 		ApplyMySQLPromotionAfterPrimaryFailover:     true,
 		PreventCrossDataCenterPrimaryFailover:       false,
 		PreventCrossRegionPrimaryFailover:           false,
 		PrimaryFailoverLostInstancesDowntimeMinutes: 0,
-		PrimaryFailoverDetachSlavePrimaryHost:       false,
+		PrimaryFailoverDetachReplicaPrimaryHost:     false,
 		FailPrimaryPromotionOnLagMinutes:            0,
 		FailPrimaryPromotionIfSQLThreadNotUpToDate:  false,
 		DelayPrimaryPromotionIfSQLThreadNotUpToDate: true,
-		PostponeSlaveRecoveryOnLagMinutes:           0,
+		PostponeReplicaRecoveryOnLagMinutes:         0,
 		OSCIgnoreHostnameFilters:                    []string{},
 		URLPrefix:                                   "",
 		DiscoveryIgnoreReplicaHostnameFilters:       []string{},
@@ -460,45 +456,11 @@ func (this *Configuration) postReadAdjustments() error {
 		this.RecoveryPeriodBlockSeconds = this.RecoveryPeriodBlockMinutes * 60
 	}
 
-	{
-		if this.ReplicationLagQuery != "" && this.SlaveLagQuery != "" && this.ReplicationLagQuery != this.SlaveLagQuery {
-			return fmt.Errorf("config's ReplicationLagQuery and SlaveLagQuery are synonyms and cannot both be defined")
-		}
-		// ReplicationLagQuery is the replacement param to SlaveLagQuery
-		if this.ReplicationLagQuery == "" {
-			this.ReplicationLagQuery = this.SlaveLagQuery
-		}
-		// We reset SlaveLagQuery because we want to support multiple config file loading;
-		// One of the next config files may indicate a new value for ReplicationLagQuery.
-		// If we do not reset SlaveLagQuery, then the two will have a conflict.
-		this.SlaveLagQuery = ""
-	}
-
-	{
-		if this.DetachLostSlavesAfterPrimaryFailover {
-			this.DetachLostReplicasAfterPrimaryFailover = true
-		}
-	}
-
-	{
-		if this.PrimaryFailoverDetachSlavePrimaryHost {
-			this.PrimaryFailoverDetachReplicaPrimaryHost = true
-		}
-	}
 	if this.FailPrimaryPromotionIfSQLThreadNotUpToDate && this.DelayPrimaryPromotionIfSQLThreadNotUpToDate {
 		return fmt.Errorf("Cannot have both FailPrimaryPromotionIfSQLThreadNotUpToDate and DelayPrimaryPromotionIfSQLThreadNotUpToDate enabled")
 	}
 	if this.FailPrimaryPromotionOnLagMinutes > 0 && this.ReplicationLagQuery == "" {
 		return fmt.Errorf("nonzero FailPrimaryPromotionOnLagMinutes requires ReplicationLagQuery to be set")
-	}
-	{
-		if this.PostponeReplicaRecoveryOnLagMinutes != 0 && this.PostponeSlaveRecoveryOnLagMinutes != 0 &&
-			this.PostponeReplicaRecoveryOnLagMinutes != this.PostponeSlaveRecoveryOnLagMinutes {
-			return fmt.Errorf("config's PostponeReplicaRecoveryOnLagMinutes and PostponeSlaveRecoveryOnLagMinutes are synonyms and cannot both be defined")
-		}
-		if this.PostponeSlaveRecoveryOnLagMinutes != 0 {
-			this.PostponeReplicaRecoveryOnLagMinutes = this.PostponeSlaveRecoveryOnLagMinutes
-		}
 	}
 
 	if this.URLPrefix != "" {
