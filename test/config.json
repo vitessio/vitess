@@ -914,21 +914,21 @@
 			"RetryMax": 1,
 			"Tags": []
 		},
-		"vstream_stoponreshard_true": {
+		"vstream_stop_on_reshard_true": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "VStreamStopOnReshardTrue"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "vstream_stoponreshard_true",
+			"Shard": "vstream_stop_on_reshard_true",
 			"RetryMax": 1,
 			"Tags": []
 		},
-		"vstream_stoponreshard_false": {
+		"vstream_stop_on_reshard_false": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "VStreamStopOnReshardFalse"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "vstream_stoponreshard_false",
+			"Shard": "vstream_stop_on_reshard_false",
 			"RetryMax": 1,
 			"Tags": []
 		},
