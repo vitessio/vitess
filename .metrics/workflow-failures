@@ -1,13 +1,3 @@
-2021-04-12T09:22:11Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/740604366
-2021-04-12T09:22:11Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/740604385
-2021-04-12T09:22:11Z,local_example,https://github.com/vitessio/vitess/actions/runs/740604363
-2021-04-12T09:22:11Z,local_example,https://github.com/vitessio/vitess/actions/runs/740604401
-2021-04-12T09:22:11Z,region_example,https://github.com/vitessio/vitess/actions/runs/740604378
-2021-04-12T09:22:11Z,unit_race,https://github.com/vitessio/vitess/actions/runs/740604364
-2021-04-12T10:02:17Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/740724807
-2021-04-12T10:02:17Z,Unit Test (mysql57),https://github.com/vitessio/vitess/actions/runs/740724809
-2021-04-12T10:02:17Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/740724797
-2021-04-12T10:02:17Z,endtoend,https://github.com/vitessio/vitess/actions/runs/740724759
 2021-04-12T10:02:17Z,local_example,https://github.com/vitessio/vitess/actions/runs/740724786
 2021-04-12T10:02:17Z,local_example,https://github.com/vitessio/vitess/actions/runs/740724810
 2021-04-12T10:57:53Z,Cluster (27),https://github.com/vitessio/vitess/actions/runs/740886744
@@ -9998,3 +9988,13 @@
 2021-08-17T07:39:42Z,Unit Test (mysql57),https://github.com/vitessio/vitess/actions/runs/1138401483
 2021-08-17T07:39:42Z,cluster_initial_sharding_multi,https://github.com/vitessio/vitess/actions/runs/1138401462
 2021-08-17T07:39:42Z,unit_race,https://github.com/vitessio/vitess/actions/runs/1138401477
+2021-08-17T09:05:10Z,Cluster (12),https://github.com/vitessio/vitess/actions/runs/1138640092
+2021-08-17T09:05:10Z,Cluster (18),https://github.com/vitessio/vitess/actions/runs/1138640081
+2021-08-17T09:05:10Z,Cluster (onlineddl_ghost),https://github.com/vitessio/vitess/actions/runs/1138640111
+2021-08-17T09:05:10Z,Cluster (vreplication_cellalias),https://github.com/vitessio/vitess/actions/runs/1138640083
+2021-08-17T09:05:10Z,Cluster (vreplication_multicell),https://github.com/vitessio/vitess/actions/runs/1138640119
+2021-08-17T09:05:10Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/1138640139
+2021-08-17T09:07:13Z,Cluster (12),https://github.com/vitessio/vitess/actions/runs/1138647490
+2021-08-17T09:07:13Z,Cluster (23),https://github.com/vitessio/vitess/actions/runs/1138647450
+2021-08-17T09:07:13Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/1138647446
+2021-08-17T09:07:13Z,cluster_initial_sharding_multi,https://github.com/vitessio/vitess/actions/runs/1138647489
