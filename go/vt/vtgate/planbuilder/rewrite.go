@@ -105,6 +105,18 @@ func expandTableColumns(tables []semantics.TableInfo, starExpr *sqlparser.StarEx
 
 func (r *rewriter) subqueryRewrite(cursor *sqlparser.Cursor) bool {
 	switch node := cursor.Node().(type) {
+	case *sqlparser.ExistsExpr:
+		semTableSQ, found := r.semTable.SubqueryRef[node.Subquery]
+		if !found {
+			// should never happen
+			return false
+		}
+
+		argName := r.reservedVars.ReserveHasValuesSubQuery()
+		semTableSQ.ArgName = argName
+
+		cursor.Replace(sqlparser.NewArgument(argName))
+		return false
 	case *sqlparser.Subquery:
 		semTableSQ, found := r.semTable.SubqueryRef[node]
 		if !found {
@@ -126,20 +138,13 @@ func (r *rewriter) subqueryRewrite(cursor *sqlparser.Cursor) bool {
 }
 
 func (r *rewriter) rewriterPre(cursor *sqlparser.Cursor) bool {
-	return r.starRewrite(cursor)
-}
-
-func (r *rewriter) rewriterPost(cursor *sqlparser.Cursor) bool {
-	if len(r.semTable.SubqueryMap) == 0 {
-		return true
-	}
-	return r.subqueryRewrite(cursor)
+	return r.starRewrite(cursor) && (len(r.semTable.SubqueryMap) == 0 || r.subqueryRewrite(cursor))
 }
 
 func rewrite(sel *sqlparser.Select, semTable *semantics.SemTable, reservedVars *sqlparser.ReservedVars) (*sqlparser.Select, error) {
 	r := &rewriter{semTable: semTable, reservedVars: reservedVars}
 
-	_ = sqlparser.Rewrite(sel, r.rewriterPre, r.rewriterPost)
+	_ = sqlparser.Rewrite(sel, r.rewriterPre, nil)
 	if r.err != nil {
 		return nil, r.err
 	}
