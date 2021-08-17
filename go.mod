@@ -10,6 +10,7 @@ require (
 	github.com/Azure/go-autorest/autorest v0.10.0 // indirect
 	github.com/DataDog/datadog-go v2.2.0+incompatible
 	github.com/GeertJohan/go.rice v1.0.0
+	github.com/HdrHistogram/hdrhistogram-go v0.9.0 // indirect
 	github.com/PuerkitoBio/goquery v1.5.1
 	github.com/aquarapid/vaultlib v0.5.1
 	github.com/armon/consul-api v0.0.0-20180202201655-eb2c6b5be1b6
@@ -17,7 +18,6 @@ require (
 	github.com/aws/aws-sdk-go v1.34.2
 	github.com/buger/jsonparser v0.0.0-20200322175846-f7e751efca13
 	github.com/cespare/xxhash/v2 v2.1.1
-	github.com/codahale/hdrhistogram v0.0.0-20161010025455-3a0bb77429bd // indirect
 	github.com/codegangsta/inject v0.0.0-20150114235600-33e0aa1cb7c0 // indirect
 	github.com/corpix/uarand v0.1.1 // indirect
 	github.com/dave/jennifer v1.4.1
@@ -92,7 +92,7 @@ require (
 	github.com/tinylib/msgp v1.1.1 // indirect
 	github.com/uber-go/atomic v1.4.0 // indirect
 	github.com/uber/jaeger-client-go v2.16.0+incompatible
-	github.com/uber/jaeger-lib v2.0.0+incompatible // indirect
+	github.com/uber/jaeger-lib v2.4.1+incompatible // indirect
 	github.com/z-division/go-zookeeper v0.0.0-20190128072838-6d7457066b9b
 	go.etcd.io/etcd/api/v3 v3.5.0
 	go.etcd.io/etcd/client/pkg/v3 v3.5.0
