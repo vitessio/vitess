@@ -474,7 +474,7 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 		instance.SQLDelay = m.GetUintD("SQL_Delay", 0)
 		instance.UsingOracleGTID = (m.GetIntD("Auto_Position", 0) == 1)
 		instance.UsingMariaDBGTID = (m.GetStringD("Using_Gtid", "No") != "No")
-		instance.PrimaryUUID = m.GetStringD("Master_UUID", "No")
+		instance.SourceUUID = m.GetStringD("Master_UUID", "No")
 		instance.HasReplicationFilters = ((m.GetStringD("Replicate_Do_DB", "") != "") || (m.GetStringD("Replicate_Ignore_DB", "") != "") || (m.GetStringD("Replicate_Do_Table", "") != "") || (m.GetStringD("Replicate_Ignore_Table", "") != "") || (m.GetStringD("Replicate_Wild_Do_Table", "") != "") || (m.GetStringD("Replicate_Wild_Ignore_Table", "") != ""))
 
 		primaryHostname := m.GetString("Master_Host")
@@ -486,8 +486,8 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 		if resolveErr != nil {
 			logReadTopologyInstanceError(instanceKey, fmt.Sprintf("ResolveHostname(%q)", primaryKey.Hostname), resolveErr)
 		}
-		instance.PrimaryKey = *primaryKey
-		instance.IsDetachedPrimary = instance.PrimaryKey.IsDetached()
+		instance.SourceKey = *primaryKey
+		instance.IsDetachedPrimary = instance.SourceKey.IsDetached()
 		instance.SecondsBehindPrimary = m.GetNullInt64("Seconds_Behind_Master")
 		if instance.SecondsBehindPrimary.Valid && instance.SecondsBehindPrimary.Int64 < 0 {
 			log.Warningf("Host: %+v, instance.ReplicationLagSeconds < 0 [%+v], correcting to 0", instanceKey, instance.SecondsBehindPrimary.Int64)
@@ -720,7 +720,7 @@ Cleanup:
 	if instanceFound {
 		if instance.IsCoPrimary {
 			// Take co-primary into account, and avoid infinite loop
-			instance.AncestryUUID = fmt.Sprintf("%s,%s", instance.PrimaryUUID, instance.ServerUUID)
+			instance.AncestryUUID = fmt.Sprintf("%s,%s", instance.SourceUUID, instance.ServerUUID)
 		} else {
 			instance.AncestryUUID = fmt.Sprintf("%s,%s", instance.AncestryUUID, instance.ServerUUID)
 		}
@@ -747,7 +747,7 @@ Cleanup:
 			// Avoid querying the database if there's no point:
 			if !redactedExecutedGtidSet.IsEmpty() {
 				redactedPrimaryExecutedGtidSet, _ := NewOracleGtidSet(instance.primaryExecutedGtidSet)
-				redactedPrimaryExecutedGtidSet.RemoveUUID(instance.PrimaryUUID)
+				redactedPrimaryExecutedGtidSet.RemoveUUID(instance.SourceUUID)
 
 				db.QueryRow("select gtid_subtract(?, ?)", redactedExecutedGtidSet.String(), redactedPrimaryExecutedGtidSet.String()).Scan(&instance.GtidErrant)
 			}
@@ -838,7 +838,7 @@ func ReadInstanceClusterAttributes(instance *Instance) (err error) {
 	if instance.IsReplicationGroupSecondary() {
 		primaryOrGroupPrimaryInstanceKey = instance.ReplicationGroupPrimaryInstanceKey
 	} else {
-		primaryOrGroupPrimaryInstanceKey = instance.PrimaryKey
+		primaryOrGroupPrimaryInstanceKey = instance.SourceKey
 	}
 	args := sqlutils.Args(primaryOrGroupPrimaryInstanceKey.Hostname, primaryOrGroupPrimaryInstanceKey.Port)
 	err = db.QueryOrchestrator(query, args, func(m sqlutils.RowMap) error {
@@ -871,11 +871,11 @@ func ReadInstanceClusterAttributes(instance *Instance) (err error) {
 	if primaryOrGroupPrimaryInstanceKey.Equals(&instance.Key) {
 		// co-primary calls for special case, in fear of the infinite loop
 		isCoPrimary = true
-		clusterNameByCoPrimaryKey := instance.PrimaryKey.StringCode()
+		clusterNameByCoPrimaryKey := instance.SourceKey.StringCode()
 		if clusterName != clusterNameByInstanceKey && clusterName != clusterNameByCoPrimaryKey {
 			// Can be caused by a co-primary topology failover
 			log.Errorf("ReadInstanceClusterAttributes: in co-master topology %s is not in (%s, %s). Forcing it to become one of them", clusterName, clusterNameByInstanceKey, clusterNameByCoPrimaryKey)
-			clusterName = math.TernaryString(instance.Key.SmallerThan(&instance.PrimaryKey), clusterNameByInstanceKey, clusterNameByCoPrimaryKey)
+			clusterName = math.TernaryString(instance.Key.SmallerThan(&instance.SourceKey), clusterNameByInstanceKey, clusterNameByCoPrimaryKey)
 		}
 		if clusterName == clusterNameByInstanceKey {
 			// circular replication. Avoid infinite ++ on replicationDepth
@@ -965,9 +965,9 @@ func readInstanceRow(m sqlutils.RowMap) *Instance {
 	instance.BinlogRowImage = m.GetString("binlog_row_image")
 	instance.LogBinEnabled = m.GetBool("log_bin")
 	instance.LogReplicationUpdatesEnabled = m.GetBool("log_slave_updates")
-	instance.PrimaryKey.Hostname = m.GetString("master_host")
-	instance.PrimaryKey.Port = m.GetInt("master_port")
-	instance.IsDetachedPrimary = instance.PrimaryKey.IsDetached()
+	instance.SourceKey.Hostname = m.GetString("master_host")
+	instance.SourceKey.Port = m.GetInt("master_port")
+	instance.IsDetachedPrimary = instance.SourceKey.IsDetached()
 	instance.ReplicationSQLThreadRuning = m.GetBool("slave_sql_running")
 	instance.ReplicationIOThreadRuning = m.GetBool("slave_io_running")
 	instance.ReplicationSQLThreadState = ReplicationThreadState(m.GetInt("replication_sql_thread_state"))
@@ -975,7 +975,7 @@ func readInstanceRow(m sqlutils.RowMap) *Instance {
 	instance.HasReplicationFilters = m.GetBool("has_replication_filters")
 	instance.SupportsOracleGTID = m.GetBool("supports_oracle_gtid")
 	instance.UsingOracleGTID = m.GetBool("oracle_gtid")
-	instance.PrimaryUUID = m.GetString("master_uuid")
+	instance.SourceUUID = m.GetString("master_uuid")
 	instance.AncestryUUID = m.GetString("ancestry_uuid")
 	instance.ExecutedGtidSet = m.GetString("executed_gtid_set")
 	instance.GTIDMode = m.GetString("gtid_mode")
@@ -1703,12 +1703,12 @@ func ReviewUnseenInstances() error {
 	for _, instance := range instances {
 		instance := instance
 
-		primaryHostname, err := ResolveHostname(instance.PrimaryKey.Hostname)
+		primaryHostname, err := ResolveHostname(instance.SourceKey.Hostname)
 		if err != nil {
 			log.Errore(err)
 			continue
 		}
-		instance.PrimaryKey.Hostname = primaryHostname
+		instance.SourceKey.Hostname = primaryHostname
 		savedClusterName := instance.ClusterName
 
 		if err := ReadInstanceClusterAttributes(instance); err != nil {
@@ -2370,8 +2370,8 @@ func mkInsertOdkuForInstances(instances []*Instance, instanceWasActuallyFound bo
 		args = append(args, instance.LogReplicationUpdatesEnabled)
 		args = append(args, instance.SelfBinlogCoordinates.LogFile)
 		args = append(args, instance.SelfBinlogCoordinates.LogPos)
-		args = append(args, instance.PrimaryKey.Hostname)
-		args = append(args, instance.PrimaryKey.Port)
+		args = append(args, instance.SourceKey.Hostname)
+		args = append(args, instance.SourceKey.Port)
 		args = append(args, instance.ReplicationSQLThreadRuning)
 		args = append(args, instance.ReplicationIOThreadRuning)
 		args = append(args, instance.ReplicationSQLThreadState)
@@ -2379,7 +2379,7 @@ func mkInsertOdkuForInstances(instances []*Instance, instanceWasActuallyFound bo
 		args = append(args, instance.HasReplicationFilters)
 		args = append(args, instance.SupportsOracleGTID)
 		args = append(args, instance.UsingOracleGTID)
-		args = append(args, instance.PrimaryUUID)
+		args = append(args, instance.SourceUUID)
 		args = append(args, instance.AncestryUUID)
 		args = append(args, instance.ExecutedGtidSet)
 		args = append(args, instance.GTIDMode)
@@ -2734,8 +2734,8 @@ func ReadHistoryClusterInstances(clusterName string, historyTimestampPattern str
 
 		instance.Key.Hostname = m.GetString("hostname")
 		instance.Key.Port = m.GetInt("port")
-		instance.PrimaryKey.Hostname = m.GetString("master_host")
-		instance.PrimaryKey.Port = m.GetInt("master_port")
+		instance.SourceKey.Hostname = m.GetString("master_host")
+		instance.SourceKey.Port = m.GetInt("master_port")
 		instance.ClusterName = m.GetString("cluster_name")
 
 		instances = append(instances, instance)

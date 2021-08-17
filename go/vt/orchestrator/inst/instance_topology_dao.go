@@ -700,7 +700,7 @@ func SkipToNextBinaryLog(instanceKey *InstanceKey) (*Instance, error) {
 	nextFileCoordinates.LogPos = 4
 	log.Debugf("Will skip replication on %+v to next binary log: %+v", instance.Key, nextFileCoordinates.LogFile)
 
-	instance, err = ChangePrimaryTo(&instance.Key, &instance.PrimaryKey, &nextFileCoordinates, false, GTIDHintNeutral)
+	instance, err = ChangePrimaryTo(&instance.Key, &instance.SourceKey, &nextFileCoordinates, false, GTIDHintNeutral)
 	if err != nil {
 		return instance, log.Errore(err)
 	}

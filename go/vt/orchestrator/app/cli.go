@@ -280,7 +280,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			if err != nil {
 				log.Fatale(err)
 			}
-			fmt.Printf("%s<%s\n", instanceKey.DisplayString(), instance.PrimaryKey.DisplayString())
+			fmt.Printf("%s<%s\n", instanceKey.DisplayString(), instance.SourceKey.DisplayString())
 		}
 	case registerCliCommand("move-up-replicas", "Classic file:pos relocation", `Moves replicas of the given instance one level up the topology`):
 		{
@@ -321,7 +321,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			if err != nil {
 				log.Fatale(err)
 			}
-			fmt.Printf("%s<%s\n", instanceKey.DisplayString(), instance.PrimaryKey.DisplayString())
+			fmt.Printf("%s<%s\n", instanceKey.DisplayString(), instance.SourceKey.DisplayString())
 		}
 	case registerCliCommand("repoint-replicas", "Classic file:pos relocation", `Repoint all replicas of given instance to replicate back from the instance. Use with care`):
 		{
@@ -912,8 +912,8 @@ func Cli(command string, strict bool, instance string, destination string, owner
 				log.Fatalf("Unable to get master: unresolved instance")
 			}
 			instance := validateInstanceIsFound(instanceKey)
-			if instance.PrimaryKey.IsValid() {
-				fmt.Println(instance.PrimaryKey.DisplayString())
+			if instance.SourceKey.IsValid() {
+				fmt.Println(instance.SourceKey.DisplayString())
 			}
 		}
 	case registerCliCommand("which-downtimed-instances", "Information", `List instances currently downtimed, potentially filtered by cluster`):

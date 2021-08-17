@@ -48,8 +48,8 @@ type Instance struct {
 	LogSlaveUpdatesEnabled       bool // for API backwards compatibility. Equals `LogReplicationUpdatesEnabled`
 	LogReplicationUpdatesEnabled bool
 	SelfBinlogCoordinates        BinlogCoordinates
-	PrimaryKey                   InstanceKey
-	PrimaryUUID                  string
+	SourceKey                    InstanceKey
+	SourceUUID                   string
 	AncestryUUID                 string
 	IsDetachedPrimary            bool
 
@@ -311,7 +311,7 @@ func (this *Instance) FlavorNameAndMajorVersion() string {
 
 // IsReplica makes simple heuristics to decide whether this instance is a replica of another instance
 func (this *Instance) IsReplica() bool {
-	return this.PrimaryKey.Hostname != "" && this.PrimaryKey.Hostname != "_" && this.PrimaryKey.Port != 0 && (this.ReadBinlogCoordinates.LogFile != "" || this.UsingGTID())
+	return this.SourceKey.Hostname != "" && this.SourceKey.Hostname != "_" && this.SourceKey.Port != 0 && (this.ReadBinlogCoordinates.LogFile != "" || this.UsingGTID())
 }
 
 // IsPrimary makes simple heuristics to decide whether this instance is a primary (not replicating from any other server),
@@ -409,7 +409,7 @@ func (this *Instance) GetNextBinaryLog(binlogCoordinates BinlogCoordinates) (Bin
 
 // IsReplicaOf returns true if this instance claims to replicate from given primary
 func (this *Instance) IsReplicaOf(primary *Instance) bool {
-	return this.PrimaryKey.Equals(&primary.Key)
+	return this.SourceKey.Equals(&primary.Key)
 }
 
 // IsReplicaOf returns true if this i supposed primary of given replica
