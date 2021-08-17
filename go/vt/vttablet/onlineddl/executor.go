@@ -602,7 +602,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 	}
 	toggleWrites := func(allowWrites bool) error {
 		if _, err := e.ts.UpdateShardFields(ctx, e.keyspace, shardInfo.ShardName(), func(si *topo.ShardInfo) error {
-			err := si.UpdateSourceBlacklistedTables(ctx, topodatapb.TabletType_PRIMARY, nil, allowWrites, []string{onlineDDL.Table})
+			err := si.UpdateSourceDeniedTables(ctx, topodatapb.TabletType_PRIMARY, nil, allowWrites, []string{onlineDDL.Table})
 			return err
 		}); err != nil {
 			return err
@@ -620,7 +620,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 
 	if isVreplicationTestSuite {
 		// The testing suite may inject queries internally from the server via a recurring EVENT.
-		// Those queries are unaffected by UpdateSourceBlacklistedTables() because they don't go through Vitess.
+		// Those queries are unaffected by UpdateSourceDeniedTables() because they don't go through Vitess.
 		// We therefore hard-rename the table here, such that the queries will hard-fail.
 		beforeTableName := fmt.Sprintf("%s_before", onlineDDL.Table)
 		parsed := sqlparser.BuildParsedQuery(sqlRenameTable,

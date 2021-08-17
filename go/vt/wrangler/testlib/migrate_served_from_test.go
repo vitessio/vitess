@@ -145,20 +145,20 @@ func TestMigrateServedFrom(t *testing.T) {
 		t.Fatalf("bad initial dest ServedFroms: %v", ki.ServedFroms)
 	}
 
-	// check the source shard has the right blacklisted tables
+	// check the source shard has the right list of denied tables
 	si, err := ts.GetShard(ctx, "source", "0")
 	if err != nil {
 		t.Fatalf("GetShard failed: %v", err)
 	}
 	expected := []*topodatapb.Shard_TabletControl{
 		{
-			TabletType:        topodatapb.TabletType_RDONLY,
-			Cells:             []string{"cell1"},
-			BlacklistedTables: []string{"gone1", "gone2"},
+			TabletType:   topodatapb.TabletType_RDONLY,
+			Cells:        []string{"cell1"},
+			DeniedTables: []string{"gone1", "gone2"},
 		},
 	}
 	if len(si.TabletControls) != 1 || !reflect.DeepEqual(si.TabletControls, expected) {
-		t.Fatalf("rdonly type doesn't have right blacklisted tables. Expected: %v, got: %v", expected, si.TabletControls)
+		t.Fatalf("rdonly type doesn't have right list of denied tables. Expected: %v, got: %v", expected, si.TabletControls)
 	}
 
 	// migrate rdonly reverse cell
@@ -175,14 +175,14 @@ func TestMigrateServedFrom(t *testing.T) {
 		t.Fatalf("bad initial dest ServedFroms: %v", ki.ServedFroms)
 	}
 
-	// check the source shard has the right blacklisted tables
+	// check the source shard has the right list of denied tables
 	si, err = ts.GetShard(ctx, "source", "0")
 	if err != nil {
 		t.Fatalf("GetShard failed: %v", err)
 	}
 
 	if len(si.TabletControls) != 0 {
-		t.Fatalf("rdonly type doesn't have right blacklisted tables. Expected: nil, got: %v", si.TabletControls)
+		t.Fatalf("rdonly type doesn't have right list of denied tables. Expected: nil, got: %v", si.TabletControls)
 	}
 
 	// Now migrate rdonly over
@@ -199,19 +199,19 @@ func TestMigrateServedFrom(t *testing.T) {
 		t.Fatalf("bad initial dest ServedFroms: %v", ki.ServedFroms)
 	}
 
-	// check the source shard has the right blacklisted tables
+	// check the source shard has the right list of denied tables
 	si, err = ts.GetShard(ctx, "source", "0")
 	if err != nil {
 		t.Fatalf("GetShard failed: %v", err)
 	}
 	expected = []*topodatapb.Shard_TabletControl{
 		{
-			TabletType:        topodatapb.TabletType_RDONLY,
-			BlacklistedTables: []string{"gone1", "gone2"},
+			TabletType:   topodatapb.TabletType_RDONLY,
+			DeniedTables: []string{"gone1", "gone2"},
 		},
 	}
 	if len(si.TabletControls) != 1 || !reflect.DeepEqual(si.TabletControls, expected) {
-		t.Fatalf("rdonly type doesn't have right blacklisted tables. Expected: %v, got: %v", expected, si.TabletControls)
+		t.Fatalf("rdonly type doesn't have right list of denied tables. Expected: %v, got: %v", expected, si.TabletControls)
 	}
 
 	// migrate replica over
@@ -228,22 +228,22 @@ func TestMigrateServedFrom(t *testing.T) {
 		t.Fatalf("bad initial dest ServedFrom: %+v", ki.ServedFroms)
 	}
 
-	// check the source shard has the right blacklisted tables
+	// check the source shard has the right list of denied tables
 	si, err = ts.GetShard(ctx, "source", "0")
 	if err != nil {
 		t.Fatalf("GetShard failed: %v", err)
 	}
 	if len(si.TabletControls) != 2 || !reflect.DeepEqual(si.TabletControls, []*topodatapb.Shard_TabletControl{
 		{
-			TabletType:        topodatapb.TabletType_RDONLY,
-			BlacklistedTables: []string{"gone1", "gone2"},
+			TabletType:   topodatapb.TabletType_RDONLY,
+			DeniedTables: []string{"gone1", "gone2"},
 		},
 		{
-			TabletType:        topodatapb.TabletType_REPLICA,
-			BlacklistedTables: []string{"gone1", "gone2"},
+			TabletType:   topodatapb.TabletType_REPLICA,
+			DeniedTables: []string{"gone1", "gone2"},
 		},
 	}) {
-		t.Fatalf("replica type doesn't have right blacklisted tables")
+		t.Fatalf("replica type doesn't have right list of denied tables")
 	}
 
 	// migrate primary over
@@ -260,25 +260,25 @@ func TestMigrateServedFrom(t *testing.T) {
 		t.Fatalf("dest keyspace still is ServedFrom: %+v", ki.ServedFroms)
 	}
 
-	// check the source shard has the right blacklisted tables
+	// check the source shard has the right list of denied tables
 	si, err = ts.GetShard(ctx, "source", "0")
 	if err != nil {
 		t.Fatalf("GetShard failed: %v", err)
 	}
 	if len(si.TabletControls) != 3 || !reflect.DeepEqual(si.TabletControls, []*topodatapb.Shard_TabletControl{
 		{
-			TabletType:        topodatapb.TabletType_RDONLY,
-			BlacklistedTables: []string{"gone1", "gone2"},
+			TabletType:   topodatapb.TabletType_RDONLY,
+			DeniedTables: []string{"gone1", "gone2"},
 		},
 		{
-			TabletType:        topodatapb.TabletType_REPLICA,
-			BlacklistedTables: []string{"gone1", "gone2"},
+			TabletType:   topodatapb.TabletType_REPLICA,
+			DeniedTables: []string{"gone1", "gone2"},
 		},
 		{
-			TabletType:        topodatapb.TabletType_PRIMARY,
-			BlacklistedTables: []string{"gone1", "gone2"},
+			TabletType:   topodatapb.TabletType_PRIMARY,
+			DeniedTables: []string{"gone1", "gone2"},
 		},
 	}) {
-		t.Fatalf("master type doesn't have right blacklisted tables")
+		t.Fatalf("master type doesn't have right list of denied tables")
 	}
 }
