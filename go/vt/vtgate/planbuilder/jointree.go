@@ -119,7 +119,7 @@ type (
 )
 
 func (s *subqueryTree) getVindexValueExpr() (sqlparser.Expr, error) {
-	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unsupported getVindexValueExpr for %T", s)
+	return s.outer.getVindexValueExpr()
 }
 
 func (d *derivedTree) getVindexValueExpr() (sqlparser.Expr, error) {

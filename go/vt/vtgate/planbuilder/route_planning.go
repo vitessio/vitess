@@ -259,6 +259,7 @@ func canMergeSubQuery(outer, subq queryTree, subqOp abstract.Operator) (bool, er
 		return false, nil
 	}
 
+	// correlated
 	if solves, exprs := subqOp.Solves(outer.tableID()); solves {
 		outerVindexPreds, err := outer.getVindexPredicates()
 		if err != nil {
@@ -292,15 +293,29 @@ func canMergeSubQuery(outer, subq queryTree, subqOp abstract.Operator) (bool, er
 }
 
 func mergeSubQuery(outer queryTree, subq *abstract.SubQueryInner) queryTree {
-	outerRoute, isRoute := outer.(*routeTree)
-	if !isRoute {
-		return nil
+	switch outer := outer.(type) {
+	case *routeTree:
+		if outer.sqToReplace == nil {
+			outer.sqToReplace = map[string]*sqlparser.Select{}
+		}
+		outer.sqToReplace[subq.ArgName] = subq.SelectStatement
+		return outer
+	case *subqueryTree:
+		/*
+			 	subq will only be able to merge with the outer.outer
+				for that reason, we create a new queryTree that merges our outer.outer with our subq
+
+							 outer
+					      /			\
+					     /			 \
+					outer.outer	 outer.inner
+
+					outer.outer = outer.outer + subq
+		*/
+		outer.outer = mergeSubQuery(outer.outer, subq)
+		return outer
 	}
-	if outerRoute.sqToReplace == nil {
-		outerRoute.sqToReplace = map[string]*sqlparser.Select{}
-	}
-	outerRoute.sqToReplace[subq.ArgName] = subq.SelectStatement
-	return outerRoute
+	return nil
 }
 
 func planLimit(limit *sqlparser.Limit, plan logicalPlan) (logicalPlan, error) {
