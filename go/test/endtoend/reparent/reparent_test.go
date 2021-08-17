@@ -139,7 +139,7 @@ func TestReparentIgnoreReplicas(t *testing.T) {
 	require.NotNil(t, err, out)
 
 	// Now let's run it again, but set the command to ignore the unreachable replica.
-	out, err = ersIgnoreTablet(t, nil, "30s", tab3)
+	out, err = ersIgnoreTablet(t, nil, "30s", []*cluster.Vttablet{tab3})
 	require.Nil(t, err, out)
 
 	// We'll bring back the replica we took down.
@@ -157,6 +157,33 @@ func TestReparentIgnoreReplicas(t *testing.T) {
 
 	// bring back the old primary as a replica, check that it catches up
 	resurrectTablet(ctx, t, tab1)
+}
+
+// TestERSPromoteRdonly tests that we never end up promoting a rdonly instance as the primary
+func TestERSPromoteRdonly(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	setupReparentCluster(t)
+	defer teardownCluster()
+	var err error
+
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", tab2.Alias, "rdonly")
+	require.NoError(t, err)
+
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", tab3.Alias, "rdonly")
+	require.NoError(t, err)
+
+	confirmReplication(t, tab1, []*cluster.Vttablet{tab2, tab3, tab4})
+
+	// Make the current primary agent and database unavailable.
+	stopTablet(t, tab1, true)
+
+	// We expect this one to fail because we have ignored all the replicas and have only the rdonly's which should not be promoted
+	out, err := ersIgnoreTablet(t, nil, "30s", []*cluster.Vttablet{tab4})
+	require.NotNil(t, err, out)
+
+	out, err = clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("GetShard", keyspaceShard)
+	require.NoError(t, err)
+	require.Contains(t, out, `"uid": 101`, "the primary should still be 101 in the shard info")
 }
 
 func TestReparentCrossCell(t *testing.T) {
