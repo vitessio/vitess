@@ -20,6 +20,9 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/json2"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -88,6 +91,41 @@ func TestCrossDataCenterFailure(t *testing.T) {
 
 	// we have a replica in the same cell, so that is the one which should be promoted and not the one from another cell
 	checkPrimaryTablet(t, clusterInstance, replicaInSameCell)
+}
+
+// Failover should not be cross data centers, according to the configuration file
+// In case of no viable candidates, we should error out
+func TestCrossDataCenterFailureError(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	setupVttabletsAndVtorc(t, 1, 1, nil, "test_config.json")
+	keyspace := &clusterInstance.Keyspaces[0]
+	shard0 := &keyspace.Shards[0]
+	// find primary from topo
+	curPrimary := shardPrimaryTablet(t, clusterInstance, keyspace, shard0)
+	assert.NotNil(t, curPrimary, "should have elected a primary")
+
+	crossCellReplica := startVttablet(t, cell2, false)
+	// newly started tablet does not replicate from anyone yet, we will allow orchestrator to fix this too
+	checkReplication(t, clusterInstance, curPrimary, []*cluster.Vttablet{crossCellReplica}, 25*time.Second)
+
+	// Make the current primary database unavailable.
+	err := curPrimary.MysqlctlProcess.Stop()
+	require.NoError(t, err)
+	defer func() {
+		// we remove the tablet from our global list since its mysqlctl process has stopped and cannot be reused for other tests
+		permanentlyRemoveVttablet(curPrimary)
+	}()
+
+	// Give vtorc time to repair
+	time.Sleep(15 * time.Second)
+
+	// we should not have promoted the crossCellReplica
+	result, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("GetTablet", crossCellReplica.Alias)
+	require.NoError(t, err)
+	var tabletInfo topodatapb.Tablet
+	err = json2.Unmarshal([]byte(result), &tabletInfo)
+	require.NoError(t, err)
+	require.NotEqual(t, topodatapb.TabletType_PRIMARY, tabletInfo.GetType())
 }
 
 // Failover will sometimes lead to a replica which can no longer replicate.
