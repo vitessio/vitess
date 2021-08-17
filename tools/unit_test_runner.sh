@@ -59,7 +59,7 @@ echo '# Flaky tests (3 attempts permitted)'
 
 # Run flaky tests sequentially. Retry when necessary.
 for pkg in $flaky_tests; do
-  max_attempts=3
+  max_attempts=1
   attempt=1
   # Set a timeout because some tests may deadlock when they flake.
   until go test -failfast -timeout 2m $VT_GO_PARALLEL $pkg -count=1; do

@@ -503,7 +503,7 @@ func main() {
 						mu.Unlock()
 						if *failFast {
 							test.logf("EXITING test since fail-fast is set")
-							exit.Return(errReturnCode) 
+							exit.Return(errReturnCode)
 						}
 						continue
 					}
