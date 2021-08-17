@@ -60,20 +60,16 @@ var commandSynonyms = map[string]string{
 	"regroup-slaves":              "regroup-replicas",
 	"move-up-slaves":              "move-up-replicas",
 	"repoint-slaves":              "repoint-replicas",
-	"enslave-siblings":            "take-siblings",
-	"enslave-master":              "take-master",
 	"get-candidate-slave":         "get-candidate-replica",
 	"move-slaves-gtid":            "move-replicas-gtid",
 	"regroup-slaves-gtid":         "regroup-replicas-gtid",
 	"which-cluster-osc-slaves":    "which-cluster-osc-replicas",
 	"which-cluster-gh-ost-slaves": "which-cluster-gh-ost-replicas",
 	"which-slaves":                "which-replicas",
-	"detach-slave":                "detach-replica-master-host",
-	"detach-replica":              "detach-replica-master-host",
-	"detach-slave-master-host":    "detach-replica-master-host",
-	"reattach-slave":              "reattach-replica-master-host",
-	"reattach-replica":            "reattach-replica-master-host",
-	"reattach-slave-master-host":  "reattach-replica-master-host",
+	"detach-slave":                "detach-replica-primary-host",
+	"detach-replica":              "detach-replica-primary-host",
+	"reattach-slave":              "reattach-replica-primary-host",
+	"reattach-replica":            "reattach-replica-primary-host",
 }
 
 func registerCliCommand(command string, section string, description string) string {
@@ -250,7 +246,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			}
 			fmt.Println(instanceKey.DisplayString())
 		}
-	case registerCliCommand("regroup-replicas", "Smart relocation", `Given an instance, pick one of its replicas and make it local master of its siblings`):
+	case registerCliCommand("regroup-replicas", "Smart relocation", `Given an instance, pick one of its replicas and make it local primary of its siblings`):
 		{
 			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
 			if instanceKey == nil {
@@ -301,7 +297,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 				}
 			}
 		}
-	case registerCliCommand("move-below", "Classic file:pos relocation", `Moves a replica beneath its sibling. Both replicas must be actively replicating from same master.`):
+	case registerCliCommand("move-below", "Classic file:pos relocation", `Moves a replica beneath its sibling. Both replicas must be actively replicating from same primary.`):
 		{
 			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
 			if destinationKey == nil {
@@ -338,7 +334,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 				}
 			}
 		}
-	case registerCliCommand("take-master", "Classic file:pos relocation", `Turn an instance into a master of its own master; essentially switch the two.`):
+	case registerCliCommand("take-primary", "Classic file:pos relocation", `Turn an instance into a primary of its own primary; essentially switch the two.`):
 		{
 			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
 			if instanceKey == nil {
@@ -350,7 +346,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			}
 			fmt.Println(instanceKey.DisplayString())
 		}
-	case registerCliCommand("make-co-master", "Classic file:pos relocation", `Create a master-master replication. Given instance is a replica which replicates directly from a master.`):
+	case registerCliCommand("make-co-primary", "Classic file:pos relocation", `Create a primary-primary replication. Given instance is a replica which replicates directly from a primary.`):
 		{
 			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
 			_, err := inst.MakeCoPrimary(instanceKey)
@@ -421,7 +417,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 				}
 			}
 		}
-	case registerCliCommand("regroup-replicas-gtid", "GTID relocation", `Given an instance, pick one of its replica and make it local master of its siblings, using GTID.`):
+	case registerCliCommand("regroup-replicas-gtid", "GTID relocation", `Given an instance, pick one of its replica and make it local primary of its siblings, using GTID.`):
 		{
 			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
 			if instanceKey == nil {
@@ -472,7 +468,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			}
 			fmt.Println(instance.GtidErrant) //nolint
 		}
-	case registerCliCommand("gtid-errant-reset-master", "Replication, general", `Reset master on instance, remove GTID errant transactions`):
+	case registerCliCommand("gtid-errant-reset-primary", "Replication, general", `Reset primary on instance, remove GTID errant transactions`):
 		{
 			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
 			_, err := inst.ErrantGTIDResetPrimary(instanceKey)
@@ -526,7 +522,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			}
 			fmt.Println(instanceKey.DisplayString())
 		}
-	case registerCliCommand("detach-replica-master-host", "Replication, general", `Stops replication and modifies Master_Host into an impossible, yet reversible, value.`):
+	case registerCliCommand("detach-replica-primary-host", "Replication, general", `Stops replication and modifies Master_Host into an impossible, yet reversible, value.`):
 		{
 			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
 			if instanceKey == nil {
@@ -538,7 +534,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			}
 			fmt.Println(instanceKey.DisplayString())
 		}
-	case registerCliCommand("reattach-replica-master-host", "Replication, general", `Undo a detach-replica-master-host operation`):
+	case registerCliCommand("reattach-replica-primary-host", "Replication, general", `Undo a detach-replica-primary-host operation`):
 		{
 			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
 			if instanceKey == nil {
@@ -550,7 +546,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			}
 			fmt.Println(instanceKey.DisplayString())
 		}
-	case registerCliCommand("master-pos-wait", "Replication, general", `Wait until replica reaches given replication coordinates (--binlog=file:pos)`):
+	case registerCliCommand("primary-pos-wait", "Replication, general", `Wait until replica reaches given replication coordinates (--binlog=file:pos)`):
 		{
 			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
 			if instanceKey == nil {
@@ -770,7 +766,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 				fmt.Printf("%s\t%s\n", cluster.ClusterName, cluster.ClusterAlias)
 			}
 		}
-	case registerCliCommand("all-clusters-masters", "Information", `List of writeable masters, one per cluster`):
+	case registerCliCommand("all-clusters-primaries", "Information", `List of writeable primaries, one per cluster`):
 		{
 			instances, err := inst.ReadWriteableClustersPrimaries()
 			if err != nil {
@@ -823,7 +819,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 		{
 			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
 			if instanceKey == nil {
-				log.Fatalf("Unable to get master: unresolved instance")
+				log.Fatalf("Unable to get primary: unresolved instance")
 			}
 			instance := validateInstanceIsFound(instanceKey)
 			fmt.Println(instance.Key.DisplayString())
@@ -860,7 +856,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			}
 			fmt.Println(instanceKey.DisplayString())
 		}
-	case registerCliCommand("which-cluster-master", "Information", `Output the name of the master in a given cluster`):
+	case registerCliCommand("which-cluster-primary", "Information", `Output the name of the primary in a given cluster`):
 		{
 			clusterName := getClusterName(clusterAlias, instanceKey)
 			primaries, err := inst.ReadClusterPrimary(clusterName)
@@ -905,11 +901,11 @@ func Cli(command string, strict bool, instance string, destination string, owner
 				fmt.Println(clusterInstance.Key.DisplayString())
 			}
 		}
-	case registerCliCommand("which-master", "Information", `Output the fully-qualified hostname:port representation of a given instance's master`):
+	case registerCliCommand("which-primary", "Information", `Output the fully-qualified hostname:port representation of a given instance's primary`):
 		{
 			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
 			if instanceKey == nil {
-				log.Fatalf("Unable to get master: unresolved instance")
+				log.Fatalf("Unable to get primary: unresolved instance")
 			}
 			instance := validateInstanceIsFound(instanceKey)
 			if instance.SourceKey.IsValid() {
@@ -969,7 +965,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			}
 			fmt.Println(lag)
 		}
-	case registerCliCommand("submit-masters-to-kv-stores", "Key-value", `Submit master of a specific cluster, or all masters of all clusters to key-value stores`):
+	case registerCliCommand("submit-primaries-to-kv-stores", "Key-value", `Submit primary of a specific cluster, or all primaries of all clusters to key-value stores`):
 		{
 			clusterName := getClusterName(clusterAlias, instanceKey)
 			log.Debugf("cluster name is <%s>", clusterName)
@@ -1192,7 +1188,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 				fmt.Println(promotedInstanceKey.DisplayString())
 			}
 		}
-	case registerCliCommand("force-master-failover", "Recovery", `Forcibly discard master and initiate a failover, even if orchestrator doesn't see a problem. This command lets orchestrator choose the replacement master`):
+	case registerCliCommand("force-primary-failover", "Recovery", `Forcibly discard primary and initiate a failover, even if orchestrator doesn't see a problem. This command lets orchestrator choose the replacement primary`):
 		{
 			clusterName := getClusterName(clusterAlias, instanceKey)
 			topologyRecovery, err := logic.ForcePrimaryFailover(clusterName)
@@ -1201,11 +1197,11 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			}
 			fmt.Println(topologyRecovery.SuccessorKey.DisplayString())
 		}
-	case registerCliCommand("force-master-takeover", "Recovery", `Forcibly discard master and promote another (direct child) instance instead, even if everything is running well`):
+	case registerCliCommand("force-primary-takeover", "Recovery", `Forcibly discard primary and promote another (direct child) instance instead, even if everything is running well`):
 		{
 			clusterName := getClusterName(clusterAlias, instanceKey)
 			if destinationKey == nil {
-				log.Fatal("Cannot deduce destination, the instance to promote in place of the master. Please provide with -d")
+				log.Fatal("Cannot deduce destination, the instance to promote in place of the primary. Please provide with -d")
 			}
 			destination := validateInstanceIsFound(destinationKey)
 			topologyRecovery, err := logic.ForcePrimaryTakeover(clusterName, destination)
@@ -1214,7 +1210,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			}
 			fmt.Println(topologyRecovery.SuccessorKey.DisplayString())
 		}
-	case registerCliCommand("graceful-master-takeover", "Recovery", `Gracefully promote a new master. Either indicate identity of new master via '-d designated.instance.com' or setup replication tree to have a single direct replica to the master.`):
+	case registerCliCommand("graceful-primary-takeover", "Recovery", `Gracefully promote a new primary. Either indicate identity of new primary via '-d designated.instance.com' or setup replication tree to have a single direct replica to the primary.`):
 		{
 			clusterName := getClusterName(clusterAlias, instanceKey)
 			if destinationKey != nil {
@@ -1226,9 +1222,9 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			}
 			fmt.Println(topologyRecovery.SuccessorKey.DisplayString())
 			fmt.Println(*promotedPrimaryCoordinates)
-			log.Debugf("Promoted %+v as new master. Binlog coordinates at time of promotion: %+v", topologyRecovery.SuccessorKey, *promotedPrimaryCoordinates)
+			log.Debugf("Promoted %+v as new primary. Binlog coordinates at time of promotion: %+v", topologyRecovery.SuccessorKey, *promotedPrimaryCoordinates)
 		}
-	case registerCliCommand("graceful-master-takeover-auto", "Recovery", `Gracefully promote a new master. orchestrator will attempt to pick the promoted replica automatically`):
+	case registerCliCommand("graceful-primary-takeover-auto", "Recovery", `Gracefully promote a new primary. orchestrator will attempt to pick the promoted replica automatically`):
 		{
 			clusterName := getClusterName(clusterAlias, instanceKey)
 			// destinationKey doesn't _have_ to be specified: if unspecified, orchestrator will auto-deduce a replica.
@@ -1242,7 +1238,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			}
 			fmt.Println(topologyRecovery.SuccessorKey.DisplayString())
 			fmt.Println(*promotedPrimaryCoordinates)
-			log.Debugf("Promoted %+v as new master. Binlog coordinates at time of promotion: %+v", topologyRecovery.SuccessorKey, *promotedPrimaryCoordinates)
+			log.Debugf("Promoted %+v as new primary. Binlog coordinates at time of promotion: %+v", topologyRecovery.SuccessorKey, *promotedPrimaryCoordinates)
 		}
 	case registerCliCommand("replication-analysis", "Recovery", `Request an analysis of potential crash incidents in all known topologies`):
 		{
@@ -1291,7 +1287,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			fmt.Printf("%d recoveries acknowldged\n", countRecoveries)
 		}
 	// Instance meta
-	case registerCliCommand("register-candidate", "Instance, meta", `Indicate that a specific instance is a preferred candidate for master promotion`):
+	case registerCliCommand("register-candidate", "Instance, meta", `Indicate that a specific instance is a preferred candidate for primary promotion`):
 		{
 			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
 			promotionRule, err := inst.ParseCandidatePromotionRule(*config.RuntimeCLIFlags.PromotionRule)
@@ -1322,7 +1318,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			}
 			fmt.Println(instanceKey.DisplayString())
 		}
-	case registerCliCommand("set-heuristic-domain-instance", "Instance, meta", `Associate domain name of given cluster with what seems to be the writer master for that cluster`):
+	case registerCliCommand("set-heuristic-domain-instance", "Instance, meta", `Associate domain name of given cluster with what seems to be the writer primary for that cluster`):
 		{
 			clusterName := getClusterName(clusterAlias, instanceKey)
 			instanceKey, err := inst.HeuristicallyApplyClusterDomainInstanceAttribute(clusterName)

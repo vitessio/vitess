@@ -219,7 +219,7 @@ type Configuration struct {
 	PreventCrossRegionPrimaryFailover           bool              // When true (default: false), cross-region primary failover are not allowed, orchestrator will do all it can to only fail over within same region, or else not fail over at all.
 	PrimaryFailoverLostInstancesDowntimeMinutes uint              // Number of minutes to downtime any server that was lost after a primary failover (including failed primary & lost replicas). 0 to disable
 	PrimaryFailoverDetachSlavePrimaryHost       bool              // synonym to PrimaryFailoverDetachReplicaPrimaryHost
-	PrimaryFailoverDetachReplicaPrimaryHost     bool              // Should orchestrator issue a detach-replica-master-host on newly promoted primary (this makes sure the new primary will not attempt to replicate old primary if that comes back to life). Defaults 'false'. Meaningless if ApplyMySQLPromotionAfterPrimaryFailover is 'true'.
+	PrimaryFailoverDetachReplicaPrimaryHost     bool              // Should orchestrator issue a detach-replica-primary-host on newly promoted primary (this makes sure the new primary will not attempt to replicate old primary if that comes back to life). Defaults 'false'. Meaningless if ApplyMySQLPromotionAfterPrimaryFailover is 'true'.
 	FailPrimaryPromotionOnLagMinutes            uint              // when > 0, fail a primary promotion if the candidate replica is lagging >= configured number of minutes.
 	FailPrimaryPromotionIfSQLThreadNotUpToDate  bool              // when true, and a primary failover takes place, if candidate primary has not consumed all relay logs, promotion is aborted with error
 	DelayPrimaryPromotionIfSQLThreadNotUpToDate bool              // when true, and a primary failover takes place, if candidate primary has not consumed all relay logs, delay promotion until the sql thread has caught up
@@ -235,7 +235,7 @@ type Configuration struct {
 	ConsulAclToken                              string            // ACL token used to write to Consul KV
 	ConsulCrossDataCenterDistribution           bool              // should orchestrator automatically auto-deduce all consul DCs and write KVs in all DCs
 	ZkAddress                                   string            // UNSUPPERTED YET. Address where (single or multiple) ZooKeeper servers are found, in `srv1[:port1][,srv2[:port2]...]` format. Default port is 2181. Example: srv-a,srv-b:12181,srv-c
-	KVClusterPrimaryPrefix                      string            // Prefix to use for clusters' primary's entries in KV stores (internal, consul, ZK), default: "mysql/master"
+	KVClusterPrimaryPrefix                      string            // Prefix to use for clusters' primary's entries in KV stores (internal, consul, ZK), default: "mysql/primary"
 	WebMessage                                  string            // If provided, will be shown on all web pages below the title bar
 	MaxConcurrentReplicaOperations              int               // Maximum number of concurrent operations on replicas
 	InstanceDBExecContextTimeoutSeconds         int               // Timeout on context used while calling ExecContext on instance database
@@ -395,7 +395,7 @@ func newConfiguration() *Configuration {
 		ConsulAclToken:                              "",
 		ConsulCrossDataCenterDistribution:           false,
 		ZkAddress:                                   "",
-		KVClusterPrimaryPrefix:                      "mysql/master",
+		KVClusterPrimaryPrefix:                      "mysql/primary",
 		WebMessage:                                  "",
 		MaxConcurrentReplicaOperations:              5,
 		InstanceDBExecContextTimeoutSeconds:         30,
@@ -486,10 +486,10 @@ func (this *Configuration) postReadAdjustments() error {
 		}
 	}
 	if this.FailPrimaryPromotionIfSQLThreadNotUpToDate && this.DelayPrimaryPromotionIfSQLThreadNotUpToDate {
-		return fmt.Errorf("Cannot have both FailMasterPromotionIfSQLThreadNotUpToDate and DelayMasterPromotionIfSQLThreadNotUpToDate enabled")
+		return fmt.Errorf("Cannot have both FailPrimaryPromotionIfSQLThreadNotUpToDate and DelayPrimaryPromotionIfSQLThreadNotUpToDate enabled")
 	}
 	if this.FailPrimaryPromotionOnLagMinutes > 0 && this.ReplicationLagQuery == "" {
-		return fmt.Errorf("nonzero FailMasterPromotionOnLagMinutes requires ReplicationLagQuery to be set")
+		return fmt.Errorf("nonzero FailPrimaryPromotionOnLagMinutes requires ReplicationLagQuery to be set")
 	}
 	{
 		if this.PostponeReplicaRecoveryOnLagMinutes != 0 && this.PostponeSlaveRecoveryOnLagMinutes != 0 &&
