@@ -32,7 +32,7 @@ var masterKey = InstanceKey{Hostname: "host1", Port: 3306}
 
 func init() {
 	config.Config.HostnameResolveMethod = "none"
-	config.Config.KVClusterMasterPrefix = "test/master/"
+	config.Config.KVClusterPrimaryPrefix = "test/master/"
 	config.MarkConfigurationLoaded()
 	log.SetLevel(log.ERROR)
 }
