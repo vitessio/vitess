@@ -70,6 +70,7 @@ type Cluster struct {
 
 	backupReadPool   *pools.RPCPool
 	schemaReadPool   *pools.RPCPool
+	topoRWPool       *pools.RPCPool
 	topoReadPool     *pools.RPCPool
 	workflowReadPool *pools.RPCPool
 
@@ -121,6 +122,7 @@ func New(cfg Config) (*Cluster, error) {
 
 	cluster.backupReadPool = cfg.BackupReadPoolConfig.NewReadPool()
 	cluster.schemaReadPool = cfg.SchemaReadPoolConfig.NewReadPool()
+	cluster.topoRWPool = cfg.TopoRWPoolConfig.NewRWPool()
 	cluster.topoReadPool = cfg.TopoReadPoolConfig.NewReadPool()
 	cluster.workflowReadPool = cfg.WorkflowReadPoolConfig.NewReadPool()
 
@@ -1299,6 +1301,7 @@ func (c *Cluster) Debug() map[string]interface{} {
 			"backup_read_pool":   json.RawMessage(c.backupReadPool.StatsJSON()),
 			"schema_read_pool":   json.RawMessage(c.schemaReadPool.StatsJSON()),
 			"topo_read_pool":     json.RawMessage(c.topoReadPool.StatsJSON()),
+			"topo_rw_pool":       json.RawMessage(c.topoRWPool.StatsJSON()),
 			"workflow_read_pool": json.RawMessage(c.workflowReadPool.StatsJSON()),
 		},
 	}
