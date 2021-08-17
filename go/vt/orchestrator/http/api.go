@@ -2434,8 +2434,8 @@ func (this *HttpAPI) RegisterCandidate(params martini.Params, r render.Render, r
 // AutomatedRecoveryFilters retuens list of clusters which are configured with automated recovery
 func (this *HttpAPI) AutomatedRecoveryFilters(params martini.Params, r render.Render, req *http.Request) {
 	automatedRecoveryMap := make(map[string]interface{})
-	automatedRecoveryMap["RecoverMasterClusterFilters"] = config.Config.RecoverMasterClusterFilters
-	automatedRecoveryMap["RecoverIntermediateMasterClusterFilters"] = config.Config.RecoverIntermediateMasterClusterFilters
+	automatedRecoveryMap["RecoverMasterClusterFilters"] = config.Config.RecoverPrimaryClusterFilters
+	automatedRecoveryMap["RecoverIntermediateMasterClusterFilters"] = config.Config.RecoverIntermediatePrimaryClusterFilters
 	automatedRecoveryMap["RecoveryIgnoreHostnameFilters"] = config.Config.RecoveryIgnoreHostnameFilters
 
 	Respond(r, &APIResponse{Code: OK, Message: "Automated recovery configuration details", Details: automatedRecoveryMap})
