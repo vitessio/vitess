@@ -1202,7 +1202,7 @@ func (wr *Wrangler) migrateServedFromLocked(ctx context.Context, ki *topo.Keyspa
 	tables := destinationShard.SourceShards[0].Tables
 
 	// read the source shard, we'll need its primary, and we'll need to
-	// update the blacklisted tables.
+	// update the list of denied tables.
 	var sourceShard *topo.ShardInfo
 	sourceShard, err = wr.ts.GetShard(ctx, destinationShard.SourceShards[0].Keyspace, destinationShard.SourceShards[0].Shard)
 	if err != nil {
@@ -1240,17 +1240,16 @@ func (wr *Wrangler) replicaMigrateServedFrom(ctx context.Context, ki *topo.Keysp
 		return err
 	}
 
-	// Save the source shard (its blacklisted tables field has changed)
+	// Save the source shard (its denylist has changed)
 	event.DispatchUpdate(ev, "updating source shard")
 	if _, err := wr.ts.UpdateShardFields(ctx, sourceShard.Keyspace(), sourceShard.ShardName(), func(si *topo.ShardInfo) error {
-		return si.UpdateSourceBlacklistedTables(ctx, servedType, cells, reverse, tables)
+		return si.UpdateSourceDeniedTables(ctx, servedType, cells, reverse, tables)
 	}); err != nil {
 		return err
 	}
 
-	// Now refresh the source servers so they reload their
-	// blacklisted table list
-	event.DispatchUpdate(ev, "refreshing sources tablets state so they update their blacklisted tables")
+	// Now refresh the source servers so they reload the denylist
+	event.DispatchUpdate(ev, "refreshing sources tablets state so they update their denied tables")
 	return wr.RefreshTabletsByShard(ctx, sourceShard, cells)
 }
 
@@ -1258,7 +1257,7 @@ func (wr *Wrangler) replicaMigrateServedFrom(ctx context.Context, ki *topo.Keysp
 // a bit different than for rdonly / replica to guarantee a smooth transition.
 //
 // The order is as follows:
-// - Add BlacklistedTables on the source shard map for primary
+// - Add DeniedTables on the source shard map for primary
 // - Refresh the source primary, so it stops writing on the tables
 // - Get the source primary position, wait until destination primary reaches it
 // - Clear SourceShard on the destination Shard
@@ -1277,16 +1276,16 @@ func (wr *Wrangler) masterMigrateServedFrom(ctx context.Context, ki *topo.Keyspa
 		return err
 	}
 
-	// Update source shard (more blacklisted tables)
+	// Update source shard (tables will be added to the denylist)
 	event.DispatchUpdate(ev, "updating source shard")
 	if _, err := wr.ts.UpdateShardFields(ctx, sourceShard.Keyspace(), sourceShard.ShardName(), func(si *topo.ShardInfo) error {
-		return si.UpdateSourceBlacklistedTables(ctx, topodatapb.TabletType_PRIMARY, nil, false, tables)
+		return si.UpdateSourceDeniedTables(ctx, topodatapb.TabletType_PRIMARY, nil, false, tables)
 	}); err != nil {
 		return err
 	}
 
-	// Now refresh the blacklisted table list on the source primary
-	event.DispatchUpdate(ev, "refreshing source primary so it updates its blacklisted tables")
+	// Now refresh the list of denied table list on the source primary
+	event.DispatchUpdate(ev, "refreshing source primary so it updates its denylist")
 	if err := wr.tmc.RefreshState(ctx, sourcePrimaryTabletInfo.Tablet); err != nil {
 		return err
 	}

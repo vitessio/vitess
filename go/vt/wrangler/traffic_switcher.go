@@ -573,7 +573,7 @@ func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflowNa
 	return ts.id, sw.logs(), nil
 }
 
-// DropTargets cleans up target tables, shards and blacklisted tables if a MoveTables/Reshard is cancelled
+// DropTargets cleans up target tables, shards and denied tables if a MoveTables/Reshard is cancelled
 func (wr *Wrangler) DropTargets(ctx context.Context, targetKeyspace, workflow string, keepData, dryRun bool) (*[]string, error) {
 	ts, err := wr.buildTrafficSwitcher(ctx, targetKeyspace, workflow)
 	if err != nil {
@@ -610,7 +610,7 @@ func (wr *Wrangler) DropTargets(ctx context.Context, targetKeyspace, workflow st
 			if err := sw.removeTargetTables(ctx); err != nil {
 				return nil, err
 			}
-			if err := sw.dropSourceBlacklistedTables(ctx); err != nil {
+			if err := sw.dropSourceDeniedTables(ctx); err != nil {
 				return nil, err
 			}
 		case binlogdatapb.MigrationType_SHARDS:
@@ -684,7 +684,7 @@ func (wr *Wrangler) finalizeMigrateWorkflow(ctx context.Context, targetKeyspace,
 	return sw.logs(), nil
 }
 
-// DropSources cleans up source tables, shards and blacklisted tables after a MoveTables/Reshard is completed
+// DropSources cleans up source tables, shards and denied tables after a MoveTables/Reshard is completed
 func (wr *Wrangler) DropSources(ctx context.Context, targetKeyspace, workflowName string, removalType workflow.TableRemovalType, keepData, force, dryRun bool) (*[]string, error) {
 	ts, err := wr.buildTrafficSwitcher(ctx, targetKeyspace, workflowName)
 	if err != nil {
@@ -727,7 +727,7 @@ func (wr *Wrangler) DropSources(ctx context.Context, targetKeyspace, workflowNam
 			if err := sw.removeSourceTables(ctx, removalType); err != nil {
 				return nil, err
 			}
-			if err := sw.dropSourceBlacklistedTables(ctx); err != nil {
+			if err := sw.dropSourceDeniedTables(ctx); err != nil {
 				return nil, err
 			}
 
@@ -1006,7 +1006,7 @@ func (ts *trafficSwitcher) stopSourceWrites(ctx context.Context) error {
 func (ts *trafficSwitcher) changeTableSourceWrites(ctx context.Context, access accessType) error {
 	return ts.forAllSources(func(source *workflow.MigrationSource) error {
 		if _, err := ts.wr.ts.UpdateShardFields(ctx, ts.sourceKeyspace, source.GetShard().ShardName(), func(si *topo.ShardInfo) error {
-			return si.UpdateSourceBlacklistedTables(ctx, topodatapb.TabletType_PRIMARY, nil, access == allowWrites /* remove */, ts.tables)
+			return si.UpdateSourceDeniedTables(ctx, topodatapb.TabletType_PRIMARY, nil, access == allowWrites /* remove */, ts.tables)
 		}); err != nil {
 			return err
 		}
@@ -1241,7 +1241,7 @@ func (ts *trafficSwitcher) allowTargetWrites(ctx context.Context) error {
 func (ts *trafficSwitcher) allowTableTargetWrites(ctx context.Context) error {
 	return ts.forAllTargets(func(target *workflow.MigrationTarget) error {
 		if _, err := ts.wr.ts.UpdateShardFields(ctx, ts.targetKeyspace, target.GetShard().ShardName(), func(si *topo.ShardInfo) error {
-			return si.UpdateSourceBlacklistedTables(ctx, topodatapb.TabletType_PRIMARY, nil, true, ts.tables)
+			return si.UpdateSourceDeniedTables(ctx, topodatapb.TabletType_PRIMARY, nil, true, ts.tables)
 		}); err != nil {
 			return err
 		}
@@ -1396,10 +1396,10 @@ func (ts *trafficSwitcher) targetShards() []*topo.ShardInfo {
 	return shards
 }
 
-func (ts *trafficSwitcher) dropSourceBlacklistedTables(ctx context.Context) error {
+func (ts *trafficSwitcher) dropSourceDeniedTables(ctx context.Context) error {
 	return ts.forAllSources(func(source *workflow.MigrationSource) error {
 		if _, err := ts.wr.ts.UpdateShardFields(ctx, ts.sourceKeyspace, source.GetShard().ShardName(), func(si *topo.ShardInfo) error {
-			return si.UpdateSourceBlacklistedTables(ctx, topodatapb.TabletType_PRIMARY, nil, true, ts.tables)
+			return si.UpdateSourceDeniedTables(ctx, topodatapb.TabletType_PRIMARY, nil, true, ts.tables)
 		}); err != nil {
 			return err
 		}
