@@ -56,6 +56,7 @@ import (
 	"sync"
 	"syscall"
 	"time"
+	"vitess.io/vitess/go/exit"
 )
 
 var usage = `Usage of test.go:
@@ -502,7 +503,7 @@ func main() {
 						mu.Unlock()
 						if *failFast {
 							test.logf("EXITING test since fail-fast is set")
-							sigchan <- syscall.SIGINT
+							exit.Return(errReturnCode) 
 						}
 						continue
 					}
