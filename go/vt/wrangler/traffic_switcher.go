@@ -379,7 +379,7 @@ func (wr *Wrangler) areTabletsAvailableToStreamFrom(ctx context.Context, ts *tra
 	// we use the value specified in the tablet flag `-vreplication_tablet_type`
 	// but ideally we should populate the vreplication table with a default value when we setup the workflow
 	if tabletTypes == "" {
-		tabletTypes = "MASTER,REPLICA"
+		tabletTypes = "PRIMARY,REPLICA"
 	}
 
 	var wg sync.WaitGroup
@@ -1019,7 +1019,7 @@ func (ts *trafficSwitcher) waitForCatchup(ctx context.Context, filteredReplicati
 	defer cancel()
 	// source writes have been stopped, wait for all streams on targets to catch up
 	if err := ts.forAllUids(func(target *workflow.MigrationTarget, uid uint32) error {
-		ts.wr.Logger().Infof("Before Catchup: uid: %d, target master %s, target position %s, shard %s", uid,
+		ts.wr.Logger().Infof("Before Catchup: uid: %d, target primary %s, target position %s, shard %s", uid,
 			target.GetPrimary().AliasString(), target.Position, target.GetShard().String())
 		bls := target.Sources[uid]
 		source := ts.sources[bls.Shard]
@@ -1044,7 +1044,7 @@ func (ts *trafficSwitcher) waitForCatchup(ctx context.Context, filteredReplicati
 	return ts.forAllTargets(func(target *workflow.MigrationTarget) error {
 		var err error
 		target.Position, err = ts.wr.tmc.MasterPosition(ctx, target.GetPrimary().Tablet)
-		ts.wr.Logger().Infof("After catchup, position for target master %s, %v", target.GetPrimary().AliasString(), target.Position)
+		ts.wr.Logger().Infof("After catchup, position for target primary %s, %v", target.GetPrimary().AliasString(), target.Position)
 		return err
 	})
 }
@@ -1324,7 +1324,7 @@ func (ts *trafficSwitcher) changeShardsAccess(ctx context.Context, keyspace stri
 	if err := ts.wr.ts.UpdateDisableQueryService(ctx, keyspace, shards, topodatapb.TabletType_PRIMARY, nil, access == disallowWrites /* disable */); err != nil {
 		return err
 	}
-	return ts.wr.refreshMasters(ctx, shards)
+	return ts.wr.refreshPrimaryTablets(ctx, shards)
 }
 
 func (ts *trafficSwitcher) forAllSources(f func(*workflow.MigrationSource) error) error {

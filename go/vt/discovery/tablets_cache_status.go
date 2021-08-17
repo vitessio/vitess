@@ -69,7 +69,7 @@ func (tcs *TabletsCacheStatus) StatusAsHTML() template.HTML {
 			color = "red"
 			extra = " (Not Serving)"
 		} else if ts.Target.TabletType == topodatapb.TabletType_PRIMARY {
-			extra = fmt.Sprintf(" (MasterTS: %v)", ts.PrimaryTermStartTime)
+			extra = fmt.Sprintf(" (PrimaryTermStartTime: %v)", ts.PrimaryTermStartTime)
 		} else {
 			extra = fmt.Sprintf(" (RepLag: %v)", ts.Stats.ReplicationLagSeconds)
 		}

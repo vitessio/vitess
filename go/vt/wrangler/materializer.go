@@ -273,13 +273,13 @@ func (wr *Wrangler) getKeyspaceTables(ctx context.Context, ks string, ts *topo.S
 	if len(shards) == 0 {
 		return nil, fmt.Errorf("keyspace %s has no shards", ks)
 	}
-	master := shards[0].PrimaryAlias
-	if master == nil {
-		return nil, fmt.Errorf("shard does not have a master: %v", shards[0].ShardName())
+	primary := shards[0].PrimaryAlias
+	if primary == nil {
+		return nil, fmt.Errorf("shard does not have a primary: %v", shards[0].ShardName())
 	}
 	allTables := []string{"/.*/"}
 
-	ti, err := ts.GetTablet(ctx, master)
+	ti, err := ts.GetTablet(ctx, primary)
 	if err != nil {
 		return nil, err
 	}
@@ -287,7 +287,7 @@ func (wr *Wrangler) getKeyspaceTables(ctx context.Context, ks string, ts *topo.S
 	if err != nil {
 		return nil, err
 	}
-	log.Infof("got table schemas from source master %v.", master)
+	log.Infof("got table schemas from source primary %v.", primary)
 
 	var sourceTables []string
 	for _, td := range schema.TableDefinitions {
@@ -511,7 +511,7 @@ func (wr *Wrangler) prepareCreateLookup(ctx context.Context, keyspace string, sp
 	}
 	onesource := sourceShards[0]
 	if onesource.PrimaryAlias == nil {
-		return nil, nil, nil, fmt.Errorf("source shard has no master: %v", onesource.ShardName())
+		return nil, nil, nil, fmt.Errorf("source shard has no primary: %v", onesource.ShardName())
 	}
 	tableSchema, err := wr.GetSchema(ctx, onesource.PrimaryAlias, []string{sourceTableName}, nil, false)
 	if err != nil {
@@ -694,11 +694,11 @@ func (wr *Wrangler) ExternalizeVindex(ctx context.Context, qualifiedVindexName s
 	}
 
 	err = forAllTargets(func(targetShard *topo.ShardInfo) error {
-		targetMaster, err := wr.ts.GetTablet(ctx, targetShard.PrimaryAlias)
+		targetPrimary, err := wr.ts.GetTablet(ctx, targetShard.PrimaryAlias)
 		if err != nil {
 			return err
 		}
-		p3qr, err := wr.tmc.VReplicationExec(ctx, targetMaster.Tablet, fmt.Sprintf("select id, state, message from _vt.vreplication where workflow=%s and db_name=%s", encodeString(workflow), encodeString(targetMaster.DbName())))
+		p3qr, err := wr.tmc.VReplicationExec(ctx, targetPrimary.Tablet, fmt.Sprintf("select id, state, message from _vt.vreplication where workflow=%s and db_name=%s", encodeString(workflow), encodeString(targetPrimary.DbName())))
 		if err != nil {
 			return err
 		}
@@ -731,12 +731,12 @@ func (wr *Wrangler) ExternalizeVindex(ctx context.Context, qualifiedVindexName s
 	if sourceVindex.Owner != "" {
 		// If there is an owner, we have to delete the streams.
 		err := forAllTargets(func(targetShard *topo.ShardInfo) error {
-			targetMaster, err := wr.ts.GetTablet(ctx, targetShard.PrimaryAlias)
+			targetPrimary, err := wr.ts.GetTablet(ctx, targetShard.PrimaryAlias)
 			if err != nil {
 				return err
 			}
-			query := fmt.Sprintf("delete from _vt.vreplication where db_name=%s and workflow=%s", encodeString(targetMaster.DbName()), encodeString(workflow))
-			_, err = wr.tmc.VReplicationExec(ctx, targetMaster.Tablet, query)
+			query := fmt.Sprintf("delete from _vt.vreplication where db_name=%s and workflow=%s", encodeString(targetPrimary.DbName()), encodeString(workflow))
+			_, err = wr.tmc.VReplicationExec(ctx, targetPrimary.Tablet, query)
 			if err != nil {
 				return err
 			}
@@ -760,13 +760,13 @@ func (wr *Wrangler) collectTargetStreams(ctx context.Context, mz *materializer) 
 		var qrproto *querypb.QueryResult
 		var id int64
 		var err error
-		targetMaster, err := mz.wr.ts.GetTablet(ctx, target.PrimaryAlias)
+		targetPrimary, err := mz.wr.ts.GetTablet(ctx, target.PrimaryAlias)
 		if err != nil {
 			return vterrors.Wrapf(err, "GetTablet(%v) failed", target.PrimaryAlias)
 		}
-		query := fmt.Sprintf("select id from _vt.vreplication where db_name=%s and workflow=%s", encodeString(targetMaster.DbName()), encodeString(mz.ms.Workflow))
-		if qrproto, err = mz.wr.tmc.VReplicationExec(ctx, targetMaster.Tablet, query); err != nil {
-			return vterrors.Wrapf(err, "VReplicationExec(%v, %s)", targetMaster.Tablet, query)
+		query := fmt.Sprintf("select id from _vt.vreplication where db_name=%s and workflow=%s", encodeString(targetPrimary.DbName()), encodeString(mz.ms.Workflow))
+		if qrproto, err = mz.wr.tmc.VReplicationExec(ctx, targetPrimary.Tablet, query); err != nil {
+			return vterrors.Wrapf(err, "VReplicationExec(%v, %s)", targetPrimary.Tablet, query)
 		}
 		qr := sqltypes.Proto3ToResult(qrproto)
 		for i := 0; i < len(qr.Rows); i++ {
@@ -870,12 +870,12 @@ func (mz *materializer) getSourceTableDDLs(ctx context.Context) (map[string]stri
 	sourceDDLs := make(map[string]string)
 	allTables := []string{"/.*/"}
 
-	sourceMaster := mz.sourceShards[0].PrimaryAlias
-	if sourceMaster == nil {
-		return nil, fmt.Errorf("source shard must have a master for copying schema: %v", mz.sourceShards[0].ShardName())
+	sourcePrimary := mz.sourceShards[0].PrimaryAlias
+	if sourcePrimary == nil {
+		return nil, fmt.Errorf("source shard must have a primary for copying schema: %v", mz.sourceShards[0].ShardName())
 	}
 
-	ti, err := mz.wr.sourceTs.GetTablet(ctx, sourceMaster)
+	ti, err := mz.wr.sourceTs.GetTablet(ctx, sourcePrimary)
 	if err != nil {
 		return nil, err
 	}
@@ -926,8 +926,8 @@ func (mz *materializer) deploySchema(ctx context.Context) error {
 			mu.Lock()
 			if len(sourceDDLs) == 0 {
 				//only get ddls for tables, once and lazily: if we need to copy the schema from source to target
-				//we copy schemas from masters on the source keyspace
-				//and we have found use cases where user just has a replica (no master) in the source keyspace
+				//we copy schemas from primaries on the source keyspace
+				//and we have found use cases where user just has a replica (no primary) in the source keyspace
 				sourceDDLs, err = mz.getSourceTableDDLs(ctx)
 			}
 			mu.Unlock()
@@ -1129,7 +1129,7 @@ func matchColInSelect(col sqlparser.ColIdent, sel *sqlparser.Select) (*sqlparser
 func (mz *materializer) createStreams(ctx context.Context, insertsMap map[string]string) error {
 	return mz.forAllTargets(func(target *topo.ShardInfo) error {
 		inserts := insertsMap[target.ShardName()]
-		targetMaster, err := mz.wr.ts.GetTablet(ctx, target.PrimaryAlias)
+		targetPrimary, err := mz.wr.ts.GetTablet(ctx, target.PrimaryAlias)
 		if err != nil {
 			return vterrors.Wrapf(err, "GetTablet(%v) failed", target.PrimaryAlias)
 		}
@@ -1137,12 +1137,12 @@ func (mz *materializer) createStreams(ctx context.Context, insertsMap map[string
 		t := template.Must(template.New("").Parse(inserts))
 		input := map[string]string{
 			"keyrange": key.KeyRangeString(target.KeyRange),
-			"dbname":   targetMaster.DbName(),
+			"dbname":   targetPrimary.DbName(),
 		}
 		if err := t.Execute(buf, input); err != nil {
 			return err
 		}
-		if _, err := mz.wr.TabletManagerClient().VReplicationExec(ctx, targetMaster.Tablet, buf.String()); err != nil {
+		if _, err := mz.wr.TabletManagerClient().VReplicationExec(ctx, targetPrimary.Tablet, buf.String()); err != nil {
 			return err
 		}
 		return nil
@@ -1151,13 +1151,13 @@ func (mz *materializer) createStreams(ctx context.Context, insertsMap map[string
 
 func (mz *materializer) startStreams(ctx context.Context) error {
 	return mz.forAllTargets(func(target *topo.ShardInfo) error {
-		targetMaster, err := mz.wr.ts.GetTablet(ctx, target.PrimaryAlias)
+		targetPrimary, err := mz.wr.ts.GetTablet(ctx, target.PrimaryAlias)
 		if err != nil {
 			return vterrors.Wrapf(err, "GetTablet(%v) failed", target.PrimaryAlias)
 		}
-		query := fmt.Sprintf("update _vt.vreplication set state='Running' where db_name=%s and workflow=%s", encodeString(targetMaster.DbName()), encodeString(mz.ms.Workflow))
-		if _, err := mz.wr.tmc.VReplicationExec(ctx, targetMaster.Tablet, query); err != nil {
-			return vterrors.Wrapf(err, "VReplicationExec(%v, %s)", targetMaster.Tablet, query)
+		query := fmt.Sprintf("update _vt.vreplication set state='Running' where db_name=%s and workflow=%s", encodeString(targetPrimary.DbName()), encodeString(mz.ms.Workflow))
+		if _, err := mz.wr.tmc.VReplicationExec(ctx, targetPrimary.Tablet, query); err != nil {
+			return vterrors.Wrapf(err, "VReplicationExec(%v, %s)", targetPrimary.Tablet, query)
 		}
 		return nil
 	})

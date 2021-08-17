@@ -371,7 +371,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 					StopStatus *replicationdatapb.StopReplicationStatus
 					Error      error
 				}{
-					"zone1-0000000100": { // This tablet claims MASTER, so is not running replication.
+					"zone1-0000000100": { // This tablet claims PRIMARY, so is not running replication.
 						Error: mysql.ErrNotReplica,
 					},
 					"zone1-0000000101": {

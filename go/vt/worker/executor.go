@@ -64,7 +64,7 @@ func newExecutor(wr *wrangler.Wrangler, tsc *discovery.LegacyTabletStatsCache, t
 }
 
 // fetchLoop loops over the provided insertChannel and sends the commands to the
-// current master.
+// current primary.
 func (e *executor) fetchLoop(ctx context.Context, insertChannel chan string) error {
 	for {
 		select {
@@ -112,8 +112,8 @@ func (e *executor) refreshState(ctx context.Context) error {
 // If will keep retrying the ExecuteFetch (for a finite but longer duration) if
 // it fails due to a timeout or a retriable application error.
 //
-// executeFetchWithRetries will always get the current MASTER tablet from the
-// LegacyTabletStatsCache instance. If no MASTER is available, it will keep retrying.
+// executeFetchWithRetries will always get the current PRIMARY tablet from the
+// LegacyTabletStatsCache instance. If no PRIMARY is available, it will keep retrying.
 func (e *executor) fetchWithRetries(ctx context.Context, action func(ctx context.Context, tablet *topodatapb.Tablet) error) error {
 	retryDuration := *retryDuration
 	// We should keep retrying up until the retryCtx runs out.
@@ -122,18 +122,20 @@ func (e *executor) fetchWithRetries(ctx context.Context, action func(ctx context
 	// Is this current attempt a retry of a previous attempt?
 	isRetry := false
 	for {
-		var master *discovery.LegacyTabletStats
+		var primary *discovery.LegacyTabletStats
 		var err error
 
-		// Get the current master from the LegacyTabletStatsCache.
-		masters := e.tsc.GetHealthyTabletStats(e.keyspace, e.shard, topodatapb.TabletType_PRIMARY)
-		if len(masters) == 0 {
-			e.wr.Logger().Warningf("ExecuteFetch failed for keyspace/shard %v/%v because no MASTER is available; will retry until there is MASTER again", e.keyspace, e.shard)
+		// Get the current primary from the LegacyTabletStatsCache.
+		primaries := e.tsc.GetHealthyTabletStats(e.keyspace, e.shard, topodatapb.TabletType_PRIMARY)
+		if len(primaries) == 0 {
+			e.wr.Logger().Warningf("ExecuteFetch failed for keyspace/shard %v/%v because no PRIMARY is available; will retry until there is PRIMARY again", e.keyspace, e.shard)
 			statsRetryCount.Add(1)
+			// TODO(deepthi): for backwards compatibility. remove after v12.0
 			statsRetryCounters.Add(retryCategoryNoMasterAvailable, 1)
+			statsRetryCounters.Add(retryCategoryNoPrimaryAvailable, 1)
 			goto retry
 		}
-		master = &masters[0]
+		primary = &primaries[0]
 
 		// Block if we are throttled.
 		if e.throttler != nil {
@@ -151,7 +153,7 @@ func (e *executor) fetchWithRetries(ctx context.Context, action func(ctx context
 		// new variables until the label is reached.)
 		{
 			tryCtx, cancel := context.WithTimeout(retryCtx, 2*time.Minute)
-			err = action(tryCtx, master.Tablet)
+			err = action(tryCtx, primary.Tablet)
 			cancel()
 
 			if err == nil {
@@ -159,7 +161,7 @@ func (e *executor) fetchWithRetries(ctx context.Context, action func(ctx context
 				return nil
 			}
 
-			succeeded, finalErr := e.checkError(tryCtx, err, isRetry, master)
+			succeeded, finalErr := e.checkError(tryCtx, err, isRetry, primary)
 			if succeeded {
 				// We can ignore the error and don't have to retry.
 				return nil
@@ -171,11 +173,11 @@ func (e *executor) fetchWithRetries(ctx context.Context, action func(ctx context
 		}
 
 	retry:
-		masterAlias := "no-master-was-available"
-		if master != nil {
-			masterAlias = topoproto.TabletAliasString(master.Tablet.Alias)
+		primaryAlias := "no-primary-was-available"
+		if primary != nil {
+			primaryAlias = topoproto.TabletAliasString(primary.Tablet.Alias)
 		}
-		tabletString := fmt.Sprintf("%v (%v/%v)", masterAlias, e.keyspace, e.shard)
+		tabletString := fmt.Sprintf("%v (%v/%v)", primaryAlias, e.keyspace, e.shard)
 
 		select {
 		case <-retryCtx.Done():
@@ -185,7 +187,7 @@ func (e *executor) fetchWithRetries(ctx context.Context, action func(ctx context
 			}
 			return vterrors.Wrapf(err, "interrupted while trying to run a command on tablet %v", tabletString)
 		case <-time.After(*executeFetchRetryTime):
-			// Retry 30s after the failure using the current master seen by the LegacyHealthCheck.
+			// Retry 30s after the failure using the current primary seen by the LegacyHealthCheck.
 		}
 		isRetry = true
 	}
@@ -194,8 +196,8 @@ func (e *executor) fetchWithRetries(ctx context.Context, action func(ctx context
 // checkError returns true if the error can be ignored and the command
 // succeeded, false if the error is retryable and a non-nil error if the
 // command must not be retried.
-func (e *executor) checkError(ctx context.Context, err error, isRetry bool, master *discovery.LegacyTabletStats) (bool, error) {
-	tabletString := fmt.Sprintf("%v (%v/%v)", topoproto.TabletAliasString(master.Tablet.Alias), e.keyspace, e.shard)
+func (e *executor) checkError(ctx context.Context, err error, isRetry bool, primary *discovery.LegacyTabletStats) (bool, error) {
+	tabletString := fmt.Sprintf("%v (%v/%v)", topoproto.TabletAliasString(primary.Tablet.Alias), e.keyspace, e.shard)
 
 	// first see if it was a context timeout.
 	select {

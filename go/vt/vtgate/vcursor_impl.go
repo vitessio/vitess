@@ -125,7 +125,7 @@ func newVCursorImpl(
 		return nil, err
 	}
 
-	// With DiscoveryGateway transactions are only allowed on master.
+	// With DiscoveryGateway transactions are only allowed on primary.
 	if UsingLegacyGateway() && safeSession.InTransaction() && tabletType != topodatapb.TabletType_PRIMARY {
 		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "transaction is supported only for primary tablet type, current type: %v", tabletType)
 	}

@@ -808,7 +808,7 @@ func TestPlayerCopyTableContinuation(t *testing.T) {
 			Filter: "select * from not_copied",
 		}},
 	}
-	pos := masterPosition(t)
+	pos := primaryPosition(t)
 	execStatements(t, []string{
 		// insert inside and outside current range.
 		"insert into src1 values(1,1,'insert in'), (7,7,'insert out')",
@@ -951,7 +951,7 @@ func TestPlayerCopyWildcardTableContinuation(t *testing.T) {
 			Filter: "select * from src",
 		}},
 	}
-	pos := masterPosition(t)
+	pos := primaryPosition(t)
 	execStatements(t, []string{
 		"insert into src values(4,'new')",
 	})
@@ -1038,7 +1038,7 @@ func TestPlayerCopyWildcardTableContinuationWithOptimizeInserts(t *testing.T) {
 			Filter: "select * from src",
 		}},
 	}
-	pos := masterPosition(t)
+	pos := primaryPosition(t)
 	execStatements(t, []string{
 		"insert into src values(4,'new')",
 	})

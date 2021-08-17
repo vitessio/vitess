@@ -133,13 +133,13 @@ type (
 	schemaEngine interface {
 		EnsureConnectionAndDB(topodatapb.TabletType) error
 		Open() error
-		MakeNonMaster()
+		MakeNonPrimary()
 		Close()
 	}
 
 	replTracker interface {
-		MakeMaster()
-		MakeNonMaster()
+		MakePrimary()
+		MakeNonPrimary()
 		Close()
 		Status() (time.Duration, error)
 	}
@@ -245,15 +245,15 @@ func (sm *stateManager) execTransition(tabletType topodatapb.TabletType, state s
 	switch state {
 	case StateServing:
 		if tabletType == topodatapb.TabletType_PRIMARY {
-			err = sm.serveMaster()
+			err = sm.servePrimary()
 		} else {
-			err = sm.serveNonMaster(tabletType)
+			err = sm.serveNonPrimary(tabletType)
 		}
 	case StateNotServing:
 		if tabletType == topodatapb.TabletType_PRIMARY {
-			err = sm.unserveMaster()
+			err = sm.unservePrimary()
 		} else {
-			err = sm.unserveNonMaster(tabletType)
+			err = sm.unserveNonPrimary(tabletType)
 		}
 	case StateNotConnected:
 		sm.closeAll()
@@ -403,14 +403,14 @@ func (sm *stateManager) verifyTargetLocked(ctx context.Context, target *querypb.
 	return nil
 }
 
-func (sm *stateManager) serveMaster() error {
+func (sm *stateManager) servePrimary() error {
 	sm.watcher.Close()
 
 	if err := sm.connect(topodatapb.TabletType_PRIMARY); err != nil {
 		return err
 	}
 
-	sm.rt.MakeMaster()
+	sm.rt.MakePrimary()
 	sm.tracker.Open()
 	// We instantly kill all stateful queries to allow for
 	// te to quickly transition into RW, but olap and stateless
@@ -425,7 +425,7 @@ func (sm *stateManager) serveMaster() error {
 	return nil
 }
 
-func (sm *stateManager) unserveMaster() error {
+func (sm *stateManager) unservePrimary() error {
 	sm.unserveCommon()
 
 	sm.watcher.Close()
@@ -434,13 +434,13 @@ func (sm *stateManager) unserveMaster() error {
 		return err
 	}
 
-	sm.rt.MakeMaster()
+	sm.rt.MakePrimary()
 	sm.setState(topodatapb.TabletType_PRIMARY, StateNotServing)
 	return nil
 }
 
-func (sm *stateManager) serveNonMaster(wantTabletType topodatapb.TabletType) error {
-	// We are likely transitioning from master. We have to honor
+func (sm *stateManager) serveNonPrimary(wantTabletType topodatapb.TabletType) error {
+	// We are likely transitioning from primary. We have to honor
 	// the shutdown grace period.
 	cancel := sm.handleShutdownGracePeriod()
 	defer cancel()
@@ -449,30 +449,30 @@ func (sm *stateManager) serveNonMaster(wantTabletType topodatapb.TabletType) err
 	sm.tableGC.Close()
 	sm.messager.Close()
 	sm.tracker.Close()
-	sm.se.MakeNonMaster()
+	sm.se.MakeNonPrimary()
 
 	if err := sm.connect(wantTabletType); err != nil {
 		return err
 	}
 
 	sm.te.AcceptReadOnly()
-	sm.rt.MakeNonMaster()
+	sm.rt.MakeNonPrimary()
 	sm.watcher.Open()
 	sm.throttler.Open()
 	sm.setState(wantTabletType, StateServing)
 	return nil
 }
 
-func (sm *stateManager) unserveNonMaster(wantTabletType topodatapb.TabletType) error {
+func (sm *stateManager) unserveNonPrimary(wantTabletType topodatapb.TabletType) error {
 	sm.unserveCommon()
 
-	sm.se.MakeNonMaster()
+	sm.se.MakeNonPrimary()
 
 	if err := sm.connect(wantTabletType); err != nil {
 		return err
 	}
 
-	sm.rt.MakeNonMaster()
+	sm.rt.MakeNonPrimary()
 	sm.watcher.Open()
 	sm.setState(wantTabletType, StateNotServing)
 	return nil
@@ -584,7 +584,7 @@ func (sm *stateManager) stateStringLocked(tabletType topodatapb.TabletType, stat
 
 func (sm *stateManager) handleGracePeriod(tabletType topodatapb.TabletType) {
 	if tabletType != topodatapb.TabletType_PRIMARY {
-		// We allow serving of previous type only for a master transition.
+		// We allow serving of previous type only for a primary transition.
 		sm.alsoAllow = nil
 		return
 	}

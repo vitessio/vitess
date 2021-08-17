@@ -687,7 +687,7 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 	instance.SuggestedClusterAlias = fmt.Sprintf("%v:%v", tablet.Keyspace, tablet.Shard)
 
 	if instance.ReplicationDepth == 0 && config.Config.DetectClusterDomainQuery != "" {
-		// Only need to do on masters
+		// Only need to do on primary tablets
 		domainName := ""
 		if err := db.QueryRow(config.Config.DetectClusterDomainQuery).Scan(&domainName); err != nil {
 			domainName = ""
@@ -719,7 +719,7 @@ Cleanup:
 
 	if instanceFound {
 		if instance.IsCoMaster {
-			// Take co-master into account, and avoid infinite loop
+			// Take co-primary into account, and avoid infinite loop
 			instance.AncestryUUID = fmt.Sprintf("%s,%s", instance.MasterUUID, instance.ServerUUID)
 		} else {
 			instance.AncestryUUID = fmt.Sprintf("%s,%s", instance.AncestryUUID, instance.ServerUUID)
@@ -729,18 +729,18 @@ Cleanup:
 		instance.AncestryUUID = fmt.Sprintf("%s,%s", instance.AncestryUUID, instance.ReplicationGroupName)
 		instance.AncestryUUID = strings.Trim(instance.AncestryUUID, ",")
 		if instance.ExecutedGtidSet != "" && instance.masterExecutedGtidSet != "" {
-			// Compare master & replica GTID sets, but ignore the sets that present the master's UUID.
-			// This is because orchestrator may pool master and replica at an inconvenient timing,
-			// such that the replica may _seems_ to have more entries than the master, when in fact
-			// it's just that the master's probing is stale.
+			// Compare primary & replica GTID sets, but ignore the sets that present the primary's UUID.
+			// This is because orchestrator may pool primary and replica at an inconvenient timing,
+			// such that the replica may _seems_ to have more entries than the primary, when in fact
+			// it's just that the primary's probing is stale.
 			redactedExecutedGtidSet, _ := NewOracleGtidSet(instance.ExecutedGtidSet)
 			for _, uuid := range strings.Split(instance.AncestryUUID, ",") {
 				if uuid != instance.ServerUUID {
 					redactedExecutedGtidSet.RemoveUUID(uuid)
 				}
 				if instance.IsCoMaster && uuid == instance.ServerUUID {
-					// If this is a co-master, then this server is likely to show its own generated GTIDs as errant,
-					// because its co-master has not applied them yet
+					// If this is a co-primary, then this server is likely to show its own generated GTIDs as errant,
+					// because its co-primary has not applied them yet
 					redactedExecutedGtidSet.RemoveUUID(uuid)
 				}
 			}
@@ -807,7 +807,7 @@ func ReadReplicationGroupPrimary(instance *Instance) (err error) {
 	return err
 }
 
-// ReadInstanceClusterAttributes will return the cluster name for a given instance by looking at its master
+// ReadInstanceClusterAttributes will return the cluster name for a given instance by looking at its primary
 // and getting it from there.
 // It is a non-recursive function and so-called-recursion is performed upon periodic reading of
 // instances.
@@ -819,7 +819,7 @@ func ReadInstanceClusterAttributes(instance *Instance) (err error) {
 	var masterOrGroupPrimaryExecutedGtidSet string
 	masterOrGroupPrimaryDataFound := false
 
-	// Read the cluster_name of the _master_ or _group_primary_ of our instance, derive it from there.
+	// Read the cluster_name of the _primary_ or _group_primary_ of our instance, derive it from there.
 	query := `
 			select
 					cluster_name,
@@ -833,8 +833,8 @@ func ReadInstanceClusterAttributes(instance *Instance) (err error) {
 				where hostname=? and port=?
 	`
 	// For instances that are part of a replication group, if the host is not the group's primary, we use the
-	// information from the group primary. If it is the group primary, we use the information of its master
-	// (if it has any). If it is not a group member, we use the information from the host's master.
+	// information from the group primary. If it is the group primary, we use the information of its primary
+	// (if it has any). If it is not a group member, we use the information from the host's primary.
 	if instance.IsReplicationGroupSecondary() {
 		masterOrGroupPrimaryInstanceKey = instance.ReplicationGroupPrimaryInstanceKey
 	} else {
@@ -863,17 +863,17 @@ func ReadInstanceClusterAttributes(instance *Instance) (err error) {
 	}
 	clusterNameByInstanceKey := instance.Key.StringCode()
 	if clusterName == "" {
-		// Nothing from master; we set it to be named after the instance itself
+		// Nothing from primary; we set it to be named after the instance itself
 		clusterName = clusterNameByInstanceKey
 	}
 
 	isCoMaster := false
 	if masterOrGroupPrimaryInstanceKey.Equals(&instance.Key) {
-		// co-master calls for special case, in fear of the infinite loop
+		// co-primary calls for special case, in fear of the infinite loop
 		isCoMaster = true
 		clusterNameByCoMasterKey := instance.MasterKey.StringCode()
 		if clusterName != clusterNameByInstanceKey && clusterName != clusterNameByCoMasterKey {
-			// Can be caused by a co-master topology failover
+			// Can be caused by a co-primary topology failover
 			log.Errorf("ReadInstanceClusterAttributes: in co-master topology %s is not in (%s, %s). Forcing it to become one of them", clusterName, clusterNameByInstanceKey, clusterNameByCoMasterKey)
 			clusterName = math.TernaryString(instance.Key.SmallerThan(&instance.MasterKey), clusterNameByInstanceKey, clusterNameByCoMasterKey)
 		}
@@ -1153,9 +1153,9 @@ func ReadClusterInstances(clusterName string) ([](*Instance), error) {
 	return readInstancesByCondition(condition, sqlutils.Args(clusterName), "")
 }
 
-// ReadClusterWriteableMaster returns the/a writeable master of this cluster
-// Typically, the cluster name indicates the master of the cluster. However, in circular
-// master-master replication one master can assume the name of the cluster, and it is
+// ReadClusterWriteableMaster returns the/a writeable primary of this cluster
+// Typically, the cluster name indicates the primary of the cluster. However, in circular
+// primary-primary replication one primary can assume the name of the cluster, and it is
 // not guaranteed that it is the writeable one.
 func ReadClusterWriteableMaster(clusterName string) ([](*Instance), error) {
 	condition := `
@@ -1166,9 +1166,9 @@ func ReadClusterWriteableMaster(clusterName string) ([](*Instance), error) {
 	return readInstancesByCondition(condition, sqlutils.Args(clusterName), "replication_depth asc")
 }
 
-// ReadClusterMaster returns the master of this cluster.
-// - if the cluster has co-masters, the/a writable one is returned
-// - if the cluster has a single master, that master is retuened whether it is read-only or writable.
+// ReadClusterMaster returns the primary of this cluster.
+// - if the cluster has co-primaries, the/a writable one is returned
+// - if the cluster has a single primary, that primary is returned whether it is read-only or writable.
 func ReadClusterMaster(clusterName string) ([](*Instance), error) {
 	condition := `
 		cluster_name = ?
@@ -1177,7 +1177,7 @@ func ReadClusterMaster(clusterName string) ([](*Instance), error) {
 	return readInstancesByCondition(condition, sqlutils.Args(clusterName), "read_only asc, replication_depth asc")
 }
 
-// ReadWriteableClustersMasters returns writeable masters of all clusters, but only one
+// ReadWriteableClustersMasters returns writeable primaries of all clusters, but only one
 // per cluster, in similar logic to ReadClusterWriteableMaster
 func ReadWriteableClustersMasters() (instances [](*Instance), err error) {
 	condition := `
@@ -1204,7 +1204,7 @@ func ReadClusterAliasInstances(clusterAlias string) ([](*Instance), error) {
 	return readInstancesByCondition(condition, sqlutils.Args(clusterAlias), "")
 }
 
-// ReadReplicaInstances reads replicas of a given master
+// ReadReplicaInstances reads replicas of a given primary
 func ReadReplicaInstances(masterKey *InstanceKey) ([](*Instance), error) {
 	condition := `
 			master_host = ?
@@ -1233,7 +1233,7 @@ func ReadReplicaInstancesIncludingBinlogServerSubReplicas(masterKey *InstanceKey
 	return replicas, err
 }
 
-// ReadBinlogServerReplicaInstances reads direct replicas of a given master that are binlog servers
+// ReadBinlogServerReplicaInstances reads direct replicas of a given primary that are binlog servers
 func ReadBinlogServerReplicaInstances(masterKey *InstanceKey) ([](*Instance), error) {
 	condition := `
 			master_host = ?
@@ -1452,7 +1452,7 @@ func filterOSCInstances(instances [](*Instance)) [](*Instance) {
 }
 
 // GetClusterOSCReplicas returns a heuristic list of replicas which are fit as controll replicas for an OSC operation.
-// These would be intermediate masters
+// These would be intermediate primaries
 func GetClusterOSCReplicas(clusterName string) ([](*Instance), error) {
 	var intermediateMasters [](*Instance)
 	result := [](*Instance){}
@@ -1665,8 +1665,8 @@ func updateInstanceClusterName(instance *Instance) error {
 	return ExecDBWriteFunc(writeFunc)
 }
 
-// ReplaceClusterName replaces all occurances of oldClusterName with newClusterName
-// It is called after a master failover
+// ReplaceClusterName replaces all occurrences of oldClusterName with newClusterName
+// It is called after a primary failover
 func ReplaceClusterName(oldClusterName string, newClusterName string) error {
 	if oldClusterName == "" {
 		return log.Errorf("replaceClusterName: skipping empty oldClusterName")
@@ -1723,7 +1723,7 @@ func ReviewUnseenInstances() error {
 	return err
 }
 
-// readUnseenMasterKeys will read list of masters that have never been seen, and yet whose replicas
+// readUnseenMasterKeys will read list of primaries that have never been seen, and yet whose replicas
 // seem to be replicating.
 func readUnseenMasterKeys() ([]InstanceKey, error) {
 	res := []InstanceKey{}
@@ -1775,8 +1775,8 @@ func InjectSeed(instanceKey *InstanceKey) error {
 	return err
 }
 
-// InjectUnseenMasters will review masters of instances that are known to be replicating, yet which are not listed
-// in database_instance. Since their replicas are listed as replicating, we can assume that such masters actually do
+// InjectUnseenMasters will review primaries of instances that are known to be replicating, yet which are not listed
+// in database_instance. Since their replicas are listed as replicating, we can assume that such primaries actually do
 // exist: we shall therefore inject them with minimal details into the database_instance table.
 func InjectUnseenMasters() error {
 
@@ -2045,7 +2045,7 @@ func ReadClustersInfo(clusterName string) ([]ClusterInfo, error) {
 	return clusters, err
 }
 
-// Get a listing of KVPair for clusters masters, for all clusters or for a specific cluster.
+// Get a listing of KVPair for clusters primaries, for all clusters or for a specific cluster.
 func GetMastersKVPairs(clusterName string) (kvPairs [](*kv.KVPair), err error) {
 
 	clusterAliasMap := make(map[string]string)

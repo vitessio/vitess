@@ -284,12 +284,12 @@ func TabletRefresh(instanceKey inst.InstanceKey) (*topodatapb.Tablet, error) {
 	return ti.Tablet, nil
 }
 
-// TabletDemoteMaster requests the master tablet to stop accepting transactions.
+// TabletDemoteMaster requests the primary tablet to stop accepting transactions.
 func TabletDemoteMaster(instanceKey inst.InstanceKey) error {
 	return tabletDemoteMaster(instanceKey, true)
 }
 
-// TabletUndoDemoteMaster requests the master tablet to undo the demote.
+// TabletUndoDemoteMaster requests the primary tablet to undo the demote.
 func TabletUndoDemoteMaster(instanceKey inst.InstanceKey) error {
 	return tabletDemoteMaster(instanceKey, false)
 }
@@ -326,7 +326,7 @@ func ShardMaster(instanceKey *inst.InstanceKey) (masterKey *inst.InstanceKey, er
 	if err != nil {
 		return nil, err
 	}
-	if !si.HasMaster() {
+	if !si.HasPrimary() {
 		return nil, fmt.Errorf("no master tablet for shard %v/%v", tablet.Keyspace, tablet.Shard)
 	}
 	tCtx, tCancel := context.WithTimeout(context.Background(), *topo.RemoteOperationTimeout)

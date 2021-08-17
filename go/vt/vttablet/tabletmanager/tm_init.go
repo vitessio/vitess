@@ -144,7 +144,7 @@ type TabletManager struct {
 	tabletAlias *topodatapb.TabletAlias
 
 	// baseTabletType is the tablet type we revert back to
-	// when we transition back from something like MASTER.
+	// when we transition back from something like PRIMARY.
 	baseTabletType topodatapb.TabletType
 
 	// actionSema is there to run only one action at a time.
@@ -480,34 +480,34 @@ func (tm *TabletManager) rebuildKeyspace(ctx context.Context, done chan<- struct
 
 func (tm *TabletManager) checkPrimaryShip(ctx context.Context, si *topo.ShardInfo) error {
 	if si.PrimaryAlias != nil && topoproto.TabletAliasEqual(si.PrimaryAlias, tm.tabletAlias) {
-		// We're marked as master in the shard record, which could mean the master
+		// We're marked as primary in the shard record, which could mean the primary
 		// tablet process was just restarted. However, we need to check if a new
-		// master is in the process of taking over. In that case, it will let us
-		// know by forcibly updating the old master's tablet record.
+		// primary is in the process of taking over. In that case, it will let us
+		// know by forcibly updating the old primary's tablet record.
 		oldTablet, err := tm.TopoServer.GetTablet(ctx, tm.tabletAlias)
 		switch {
 		case topo.IsErrType(err, topo.NoNode):
 			// There's no existing tablet record, so we can assume
 			// no one has left us a message to step down.
-			log.Infof("Shard master alias matches, but there is no existing tablet record. Switching to master with 'Now' as time")
+			log.Infof("Shard primary alias matches, but there is no existing tablet record. Switching to primary with 'Now' as time")
 			tm.tmState.UpdateTablet(func(tablet *topodatapb.Tablet) {
 				tablet.Type = topodatapb.TabletType_PRIMARY
-				// Update the master term start time (current value is 0) because we
-				// assume that we are actually the MASTER and in case of a tiebreak,
+				// Update the primary term start time (current value is 0) because we
+				// assume that we are actually the PRIMARY and in case of a tiebreak,
 				// vtgate should prefer us.
 				tablet.PrimaryTermStartTime = logutil.TimeToProto(time.Now())
 			})
 		case err == nil:
 			if oldTablet.Type == topodatapb.TabletType_PRIMARY {
-				log.Infof("Shard master alias matches, and existing tablet agrees. Switching to master with tablet's master term start time: %v", oldTablet.PrimaryTermStartTime)
-				// We're marked as master in the shard record,
+				log.Infof("Shard primary alias matches, and existing tablet agrees. Switching to primary with tablet's primary term start time: %v", oldTablet.PrimaryTermStartTime)
+				// We're marked as primary in the shard record,
 				// and our existing tablet record agrees.
 				tm.tmState.UpdateTablet(func(tablet *topodatapb.Tablet) {
 					tablet.Type = topodatapb.TabletType_PRIMARY
 					tablet.PrimaryTermStartTime = oldTablet.PrimaryTermStartTime
 				})
 			} else {
-				log.Warningf("Shard master alias matches, but existing tablet is not master. Switching from %v to master with the shard's master term start time: %v", oldTablet.Type, si.PrimaryTermStartTime)
+				log.Warningf("Shard primary alias matches, but existing tablet is not primary. Switching from %v to primary with the shard's primary term start time: %v", oldTablet.Type, si.PrimaryTermStartTime)
 				tm.tmState.UpdateTablet(func(tablet *topodatapb.Tablet) {
 					tablet.Type = topodatapb.TabletType_PRIMARY
 					tablet.PrimaryTermStartTime = si.PrimaryTermStartTime
@@ -523,18 +523,18 @@ func (tm *TabletManager) checkPrimaryShip(ctx context.Context, si *topo.ShardInf
 			// There's no existing tablet record, so there is nothing to do
 		case err == nil:
 			if oldTablet.Type == topodatapb.TabletType_PRIMARY {
-				// Our existing tablet type is master, but the shard record does not agree.
+				// Our existing tablet type is primary, but the shard record does not agree.
 				// Only take over if our primary_term_start_time is after what is in the shard record
 				oldPrimaryTermStartTime := oldTablet.GetPrimaryTermStartTime()
 				currentShardTime := si.GetPrimaryTermStartTime()
 				if oldPrimaryTermStartTime.After(currentShardTime) {
-					log.Infof("Shard master alias does not match, but the tablet's master term start time is newer. Switching to master with tablet's master term start time: %v", oldTablet.PrimaryTermStartTime)
+					log.Infof("Shard primary alias does not match, but the tablet's primary term start time is newer. Switching to primary with tablet's primary term start time: %v", oldTablet.PrimaryTermStartTime)
 					tm.tmState.UpdateTablet(func(tablet *topodatapb.Tablet) {
 						tablet.Type = topodatapb.TabletType_PRIMARY
 						tablet.PrimaryTermStartTime = oldTablet.PrimaryTermStartTime
 					})
 				} else {
-					log.Infof("Existing tablet type is master, but the shard record has a different master with a newer timestamp. Remaining a replica")
+					log.Infof("Existing tablet type is primary, but the shard record has a different primary with a newer timestamp. Remaining a replica")
 				}
 			}
 		default:

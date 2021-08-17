@@ -5721,6 +5721,7 @@ export namespace topodata {
     /** TabletType enum. */
     enum TabletType {
         UNKNOWN = 0,
+        PRIMARY = 1,
         MASTER = 1,
         REPLICA = 2,
         RDONLY = 3,
@@ -5768,8 +5769,8 @@ export namespace topodata {
         /** Tablet mysql_port */
         mysql_port?: (number|null);
 
-        /** Tablet master_term_start_time */
-        master_term_start_time?: (vttime.ITime|null);
+        /** Tablet primary_term_start_time */
+        primary_term_start_time?: (vttime.ITime|null);
     }
 
     /** Represents a Tablet. */
@@ -5814,8 +5815,8 @@ export namespace topodata {
         /** Tablet mysql_port. */
         public mysql_port: number;
 
-        /** Tablet master_term_start_time. */
-        public master_term_start_time?: (vttime.ITime|null);
+        /** Tablet primary_term_start_time. */
+        public primary_term_start_time?: (vttime.ITime|null);
 
         /**
          * Creates a new Tablet instance using the specified properties.
@@ -5891,11 +5892,11 @@ export namespace topodata {
     /** Properties of a Shard. */
     interface IShard {
 
-        /** Shard master_alias */
-        master_alias?: (topodata.ITabletAlias|null);
+        /** Shard primary_alias */
+        primary_alias?: (topodata.ITabletAlias|null);
 
-        /** Shard master_term_start_time */
-        master_term_start_time?: (vttime.ITime|null);
+        /** Shard primary_term_start_time */
+        primary_term_start_time?: (vttime.ITime|null);
 
         /** Shard key_range */
         key_range?: (topodata.IKeyRange|null);
@@ -5906,8 +5907,8 @@ export namespace topodata {
         /** Shard tablet_controls */
         tablet_controls?: (topodata.Shard.ITabletControl[]|null);
 
-        /** Shard is_master_serving */
-        is_master_serving?: (boolean|null);
+        /** Shard is_primary_serving */
+        is_primary_serving?: (boolean|null);
     }
 
     /** Represents a Shard. */
@@ -5919,11 +5920,11 @@ export namespace topodata {
          */
         constructor(properties?: topodata.IShard);
 
-        /** Shard master_alias. */
-        public master_alias?: (topodata.ITabletAlias|null);
+        /** Shard primary_alias. */
+        public primary_alias?: (topodata.ITabletAlias|null);
 
-        /** Shard master_term_start_time. */
-        public master_term_start_time?: (vttime.ITime|null);
+        /** Shard primary_term_start_time. */
+        public primary_term_start_time?: (vttime.ITime|null);
 
         /** Shard key_range. */
         public key_range?: (topodata.IKeyRange|null);
@@ -5934,8 +5935,8 @@ export namespace topodata {
         /** Shard tablet_controls. */
         public tablet_controls: topodata.Shard.ITabletControl[];
 
-        /** Shard is_master_serving. */
-        public is_master_serving: boolean;
+        /** Shard is_primary_serving. */
+        public is_primary_serving: boolean;
 
         /**
          * Creates a new Shard instance using the specified properties.
@@ -14365,8 +14366,8 @@ export namespace tabletmanagerdata {
         /** PopulateReparentJournalRequest action_name */
         action_name?: (string|null);
 
-        /** PopulateReparentJournalRequest master_alias */
-        master_alias?: (topodata.ITabletAlias|null);
+        /** PopulateReparentJournalRequest primary_alias */
+        primary_alias?: (topodata.ITabletAlias|null);
 
         /** PopulateReparentJournalRequest replication_position */
         replication_position?: (string|null);
@@ -14387,8 +14388,8 @@ export namespace tabletmanagerdata {
         /** PopulateReparentJournalRequest action_name. */
         public action_name: string;
 
-        /** PopulateReparentJournalRequest master_alias. */
-        public master_alias?: (topodata.ITabletAlias|null);
+        /** PopulateReparentJournalRequest primary_alias. */
+        public primary_alias?: (topodata.ITabletAlias|null);
 
         /** PopulateReparentJournalRequest replication_position. */
         public replication_position: string;
@@ -15982,8 +15983,8 @@ export namespace tabletmanagerdata {
         /** BackupRequest concurrency */
         concurrency?: (number|Long|null);
 
-        /** BackupRequest allowMaster */
-        allowMaster?: (boolean|null);
+        /** BackupRequest allow_primary */
+        allow_primary?: (boolean|null);
     }
 
     /** Represents a BackupRequest. */
@@ -15998,8 +15999,8 @@ export namespace tabletmanagerdata {
         /** BackupRequest concurrency. */
         public concurrency: (number|Long);
 
-        /** BackupRequest allowMaster. */
-        public allowMaster: boolean;
+        /** BackupRequest allow_primary. */
+        public allow_primary: boolean;
 
         /**
          * Creates a new BackupRequest instance using the specified properties.
@@ -24865,6 +24866,13 @@ export namespace vtctldata {
         public toJSON(): { [k: string]: any };
     }
 
+    /** MaterializationIntent enum. */
+    enum MaterializationIntent {
+        CUSTOM = 0,
+        MOVETABLES = 1,
+        CREATELOOKUPINDEX = 2
+    }
+
     /** Properties of a TableMaterializeSettings. */
     interface ITableMaterializeSettings {
 
@@ -24993,6 +25001,9 @@ export namespace vtctldata {
 
         /** MaterializeSettings external_cluster */
         external_cluster?: (string|null);
+
+        /** MaterializeSettings materialization_intent */
+        materialization_intent?: (vtctldata.MaterializationIntent|null);
     }
 
     /** Represents a MaterializeSettings. */
@@ -25027,6 +25038,9 @@ export namespace vtctldata {
 
         /** MaterializeSettings external_cluster. */
         public external_cluster: string;
+
+        /** MaterializeSettings materialization_intent. */
+        public materialization_intent: vtctldata.MaterializationIntent;
 
         /**
          * Creates a new MaterializeSettings instance using the specified properties.

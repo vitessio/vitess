@@ -38,7 +38,7 @@ import (
 // TabletTypeSuffix maps the tablet type to its suffix string.
 var TabletTypeSuffix = map[topodatapb.TabletType]string{
 	0: "@unknown",
-	1: "@master",
+	1: "@primary",
 	2: "@replica",
 	3: "@rdonly",
 	4: "@spare",

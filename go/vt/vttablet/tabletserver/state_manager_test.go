@@ -66,7 +66,7 @@ func TestStateManagerStateByName(t *testing.T) {
 	assert.Equal(t, "NOT_SERVING", sm.IsServingString())
 }
 
-func TestStateManagerServeMaster(t *testing.T) {
+func TestStateManagerServePrimary(t *testing.T) {
 	sm := newTestStateManager(t)
 	defer sm.StopService()
 	sm.EnterLameduck()
@@ -82,22 +82,22 @@ func TestStateManagerServeMaster(t *testing.T) {
 	verifySubcomponent(t, 3, sm.vstreamer, testStateOpen)
 	verifySubcomponent(t, 4, sm.qe, testStateOpen)
 	verifySubcomponent(t, 5, sm.txThrottler, testStateOpen)
-	verifySubcomponent(t, 6, sm.rt, testStateMaster)
+	verifySubcomponent(t, 6, sm.rt, testStatePrimary)
 	verifySubcomponent(t, 7, sm.tracker, testStateOpen)
-	verifySubcomponent(t, 8, sm.te, testStateMaster)
+	verifySubcomponent(t, 8, sm.te, testStatePrimary)
 	verifySubcomponent(t, 9, sm.messager, testStateOpen)
 	verifySubcomponent(t, 10, sm.throttler, testStateOpen)
 	verifySubcomponent(t, 11, sm.tableGC, testStateOpen)
 	verifySubcomponent(t, 12, sm.ddle, testStateOpen)
 
-	assert.False(t, sm.se.(*testSchemaEngine).nonMaster)
+	assert.False(t, sm.se.(*testSchemaEngine).nonPrimary)
 	assert.True(t, sm.se.(*testSchemaEngine).ensureCalled)
 
 	assert.Equal(t, topodatapb.TabletType_PRIMARY, sm.target.TabletType)
 	assert.Equal(t, StateServing, sm.state)
 }
 
-func TestStateManagerServeNonMaster(t *testing.T) {
+func TestStateManagerServeNonPrimary(t *testing.T) {
 	sm := newTestStateManager(t)
 	defer sm.StopService()
 	err := sm.SetServingType(topodatapb.TabletType_REPLICA, testNow, StateServing, "")
@@ -107,14 +107,14 @@ func TestStateManagerServeNonMaster(t *testing.T) {
 	verifySubcomponent(t, 2, sm.tableGC, testStateClosed)
 	verifySubcomponent(t, 3, sm.messager, testStateClosed)
 	verifySubcomponent(t, 4, sm.tracker, testStateClosed)
-	assert.True(t, sm.se.(*testSchemaEngine).nonMaster)
+	assert.True(t, sm.se.(*testSchemaEngine).nonPrimary)
 
 	verifySubcomponent(t, 5, sm.se, testStateOpen)
 	verifySubcomponent(t, 6, sm.vstreamer, testStateOpen)
 	verifySubcomponent(t, 7, sm.qe, testStateOpen)
 	verifySubcomponent(t, 8, sm.txThrottler, testStateOpen)
-	verifySubcomponent(t, 9, sm.te, testStateNonMaster)
-	verifySubcomponent(t, 10, sm.rt, testStateNonMaster)
+	verifySubcomponent(t, 9, sm.te, testStateNonPrimary)
+	verifySubcomponent(t, 10, sm.rt, testStateNonPrimary)
 	verifySubcomponent(t, 11, sm.watcher, testStateOpen)
 	verifySubcomponent(t, 12, sm.throttler, testStateOpen)
 
@@ -122,7 +122,7 @@ func TestStateManagerServeNonMaster(t *testing.T) {
 	assert.Equal(t, StateServing, sm.state)
 }
 
-func TestStateManagerUnserveMaster(t *testing.T) {
+func TestStateManagerUnservePrimary(t *testing.T) {
 	sm := newTestStateManager(t)
 	defer sm.StopService()
 	err := sm.SetServingType(topodatapb.TabletType_PRIMARY, testNow, StateNotServing, "")
@@ -141,13 +141,13 @@ func TestStateManagerUnserveMaster(t *testing.T) {
 	verifySubcomponent(t, 10, sm.qe, testStateOpen)
 	verifySubcomponent(t, 11, sm.txThrottler, testStateOpen)
 
-	verifySubcomponent(t, 12, sm.rt, testStateMaster)
+	verifySubcomponent(t, 12, sm.rt, testStatePrimary)
 
 	assert.Equal(t, topodatapb.TabletType_PRIMARY, sm.target.TabletType)
 	assert.Equal(t, StateNotServing, sm.state)
 }
 
-func TestStateManagerUnserveNonmaster(t *testing.T) {
+func TestStateManagerUnserveNonPrimary(t *testing.T) {
 	sm := newTestStateManager(t)
 	defer sm.StopService()
 	err := sm.SetServingType(topodatapb.TabletType_RDONLY, testNow, StateNotServing, "")
@@ -160,14 +160,14 @@ func TestStateManagerUnserveNonmaster(t *testing.T) {
 	verifySubcomponent(t, 5, sm.te, testStateClosed)
 
 	verifySubcomponent(t, 6, sm.tracker, testStateClosed)
-	assert.True(t, sm.se.(*testSchemaEngine).nonMaster)
+	assert.True(t, sm.se.(*testSchemaEngine).nonPrimary)
 
 	verifySubcomponent(t, 7, sm.se, testStateOpen)
 	verifySubcomponent(t, 8, sm.vstreamer, testStateOpen)
 	verifySubcomponent(t, 9, sm.qe, testStateOpen)
 	verifySubcomponent(t, 10, sm.txThrottler, testStateOpen)
 
-	verifySubcomponent(t, 11, sm.rt, testStateNonMaster)
+	verifySubcomponent(t, 11, sm.rt, testStateNonPrimary)
 	verifySubcomponent(t, 12, sm.watcher, testStateOpen)
 
 	assert.Equal(t, topodatapb.TabletType_RDONLY, sm.target.TabletType)
@@ -298,14 +298,14 @@ func TestStateManagerSetServingTypeNoChange(t *testing.T) {
 	verifySubcomponent(t, 2, sm.tableGC, testStateClosed)
 	verifySubcomponent(t, 3, sm.messager, testStateClosed)
 	verifySubcomponent(t, 4, sm.tracker, testStateClosed)
-	assert.True(t, sm.se.(*testSchemaEngine).nonMaster)
+	assert.True(t, sm.se.(*testSchemaEngine).nonPrimary)
 
 	verifySubcomponent(t, 5, sm.se, testStateOpen)
 	verifySubcomponent(t, 6, sm.vstreamer, testStateOpen)
 	verifySubcomponent(t, 7, sm.qe, testStateOpen)
 	verifySubcomponent(t, 8, sm.txThrottler, testStateOpen)
-	verifySubcomponent(t, 9, sm.te, testStateNonMaster)
-	verifySubcomponent(t, 10, sm.rt, testStateNonMaster)
+	verifySubcomponent(t, 9, sm.te, testStateNonPrimary)
+	verifySubcomponent(t, 10, sm.rt, testStateNonPrimary)
 	verifySubcomponent(t, 11, sm.watcher, testStateOpen)
 	verifySubcomponent(t, 12, sm.throttler, testStateOpen)
 
@@ -426,7 +426,7 @@ func TestStateManagerShutdownGracePeriod(t *testing.T) {
 	assert.False(t, kconn1.killed.Get())
 	assert.False(t, kconn2.killed.Get())
 
-	// Transition to master with a short shutdown grace period should kill both conns.
+	// Transition to primary with a short shutdown grace period should kill both conns.
 	err = sm.SetServingType(topodatapb.TabletType_PRIMARY, testNow, StateServing, "")
 	require.NoError(t, err)
 	sm.shutdownGracePeriod = 10 * time.Millisecond
@@ -435,7 +435,7 @@ func TestStateManagerShutdownGracePeriod(t *testing.T) {
 	assert.True(t, kconn1.killed.Get())
 	assert.True(t, kconn2.killed.Get())
 
-	// Master non-serving should also kill the conn.
+	// Primary non-serving should also kill the conn.
 	err = sm.SetServingType(topodatapb.TabletType_PRIMARY, testNow, StateServing, "")
 	require.NoError(t, err)
 	sm.shutdownGracePeriod = 10 * time.Millisecond
@@ -721,8 +721,8 @@ const (
 	_ = testState(iota)
 	testStateOpen
 	testStateClosed
-	testStateMaster
-	testStateNonMaster
+	testStatePrimary
+	testStateNonPrimary
 )
 
 type orderState interface {
@@ -746,7 +746,7 @@ func (tos testOrderState) State() testState {
 type testSchemaEngine struct {
 	testOrderState
 	ensureCalled bool
-	nonMaster    bool
+	nonPrimary   bool
 
 	failMySQL bool
 }
@@ -766,8 +766,8 @@ func (te *testSchemaEngine) Open() error {
 	return nil
 }
 
-func (te *testSchemaEngine) MakeNonMaster() {
-	te.nonMaster = true
+func (te *testSchemaEngine) MakeNonPrimary() {
+	te.nonPrimary = true
 }
 
 func (te *testSchemaEngine) Close() {
@@ -781,14 +781,14 @@ type testReplTracker struct {
 	err error
 }
 
-func (te *testReplTracker) MakeMaster() {
+func (te *testReplTracker) MakePrimary() {
 	te.order = order.Add(1)
-	te.state = testStateMaster
+	te.state = testStatePrimary
 }
 
-func (te *testReplTracker) MakeNonMaster() {
+func (te *testReplTracker) MakeNonPrimary() {
 	te.order = order.Add(1)
-	te.state = testStateNonMaster
+	te.state = testStateNonPrimary
 }
 
 func (te *testReplTracker) Close() {
@@ -831,12 +831,12 @@ type testTxEngine struct {
 
 func (te *testTxEngine) AcceptReadWrite() {
 	te.order = order.Add(1)
-	te.state = testStateMaster
+	te.state = testStatePrimary
 }
 
 func (te *testTxEngine) AcceptReadOnly() {
 	te.order = order.Add(1)
-	te.state = testStateNonMaster
+	te.state = testStateNonPrimary
 }
 
 func (te *testTxEngine) Close() {

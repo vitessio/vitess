@@ -170,7 +170,7 @@ func TestOpen_InvalidJson(t *testing.T) {
 }
 
 func TestBeginIsolation(t *testing.T) {
-	db, err := Open(testAddress, "@master")
+	db, err := Open(testAddress, "@primary")
 	require.NoError(t, err)
 	defer db.Close()
 	_, err = db.BeginTx(context.Background(), &sql.TxOptions{Isolation: sql.LevelRepeatableRead})
@@ -553,7 +553,7 @@ func TestTx(t *testing.T) {
 	c := Configuration{
 		Protocol: "grpc",
 		Address:  testAddress,
-		Target:   "@master",
+		Target:   "@primary",
 	}
 
 	db, err := OpenWithConfiguration(c)

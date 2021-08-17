@@ -86,8 +86,8 @@ func (wr *Wrangler) WaitForFilteredReplication(ctx context.Context, keyspace, sh
 	if len(shardInfo.SourceShards) == 0 {
 		return fmt.Errorf("shard %v/%v has no source shard", keyspace, shard)
 	}
-	if !shardInfo.HasMaster() {
-		return fmt.Errorf("shard %v/%v has no master", keyspace, shard)
+	if !shardInfo.HasPrimary() {
+		return fmt.Errorf("shard %v/%v has no primary", keyspace, shard)
 	}
 	alias := shardInfo.PrimaryAlias
 	tabletInfo, err := wr.TopoServer().GetTablet(ctx, alias)

@@ -54,7 +54,7 @@ func TestTabletExecutorOpen(t *testing.T) {
 	}
 }
 
-func TestTabletExecutorOpenWithEmptyMasterAlias(t *testing.T) {
+func TestTabletExecutorOpenWithEmptyPrimaryAlias(t *testing.T) {
 	ctx := context.Background()
 	ts := memorytopo.NewServer("test_cell")
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, newFakeTabletManagerClient())
@@ -68,12 +68,12 @@ func TestTabletExecutorOpenWithEmptyMasterAlias(t *testing.T) {
 		Type:     topodatapb.TabletType_REPLICA,
 	}
 	// This will create the Keyspace, Shard and Tablet record.
-	// Since this is a replica tablet, the Shard will have no master.
-	if err := wr.InitTablet(ctx, tablet, false /*allowMasterOverride*/, true /*createShardAndKeyspace*/, false /*allowUpdate*/); err != nil {
+	// Since this is a replica tablet, the Shard will have no primary.
+	if err := wr.InitTablet(ctx, tablet, false /*allowPrimaryOverride*/, true /*createShardAndKeyspace*/, false /*allowUpdate*/); err != nil {
 		t.Fatalf("InitTablet failed: %v", err)
 	}
-	executor := NewTabletExecutor("TestTabletExecutorOpenWithEmptyMasterAlias", wr, testWaitReplicasTimeout)
-	if err := executor.Open(ctx, "test_keyspace"); err == nil || !strings.Contains(err.Error(), "does not have a master") {
+	executor := NewTabletExecutor("TestTabletExecutorOpenWithEmptyPrimaryAlias", wr, testWaitReplicasTimeout)
+	if err := executor.Open(ctx, "test_keyspace"); err == nil || !strings.Contains(err.Error(), "does not have a primary") {
 		t.Fatalf("executor.Open() = '%v', want error", err)
 	}
 	executor.Close()

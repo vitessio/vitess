@@ -332,7 +332,6 @@ func CloneRefOfAddColumns(n *AddColumns) *AddColumns {
 	}
 	out := *n
 	out.Columns = CloneSliceOfRefOfColumnDefinition(n.Columns)
-	out.First = CloneRefOfColName(n.First)
 	out.After = CloneRefOfColName(n.After)
 	return &out
 }
@@ -532,7 +531,6 @@ func CloneRefOfChangeColumn(n *ChangeColumn) *ChangeColumn {
 	out := *n
 	out.OldColumn = CloneRefOfColName(n.OldColumn)
 	out.NewColDefinition = CloneRefOfColumnDefinition(n.NewColDefinition)
-	out.First = CloneRefOfColName(n.First)
 	out.After = CloneRefOfColName(n.After)
 	return &out
 }
@@ -1070,7 +1068,6 @@ func CloneRefOfModifyColumn(n *ModifyColumn) *ModifyColumn {
 	}
 	out := *n
 	out.NewColDefinition = CloneRefOfColumnDefinition(n.NewColDefinition)
-	out.First = CloneRefOfColName(n.First)
 	out.After = CloneRefOfColName(n.After)
 	return &out
 }

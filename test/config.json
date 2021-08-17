@@ -920,7 +920,7 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtorc",
-			"RetryMax": 1,
+			"RetryMax": 3,
 			"Tags": []
 		},
 		"vault": {

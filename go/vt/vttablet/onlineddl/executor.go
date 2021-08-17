@@ -239,14 +239,14 @@ func (e *Executor) initSchema(ctx context.Context) error {
 
 	defer e.env.LogError()
 
-	conn, err := e.pool.Get(ctx)
+	conn, err := dbconnpool.NewDBConnection(ctx, e.env.Config().DB.DbaConnector())
 	if err != nil {
 		return err
 	}
-	defer conn.Recycle()
+	defer conn.Close()
 
 	for _, ddl := range ApplyDDL {
-		_, err := conn.Exec(ctx, ddl, math.MaxInt32, false)
+		_, err := conn.ExecuteFetch(ddl, math.MaxInt32, false)
 		if mysql.IsSchemaApplyError(err) {
 			continue
 		}
@@ -2365,7 +2365,7 @@ func (e *Executor) reviewStaleMigrations(ctx context.Context) error {
 		}
 		message := fmt.Sprintf("stale migration %s: found running but indicates no liveness", onlineDDL.UUID)
 		if onlineDDL.TabletAlias != e.TabletAliasString() {
-			// This means another tablet started the migration, and the migration has failed due to the tablet failure (e.g. master failover)
+			// This means another tablet started the migration, and the migration has failed due to the tablet failure (e.g. primary failover)
 			if err := e.updateTabletFailure(ctx, onlineDDL.UUID); err != nil {
 				return err
 			}

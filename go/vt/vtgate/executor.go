@@ -227,7 +227,7 @@ func (e *Executor) legacyExecute(ctx context.Context, safeSession *SafeSession, 
 
 	logStats.Keyspace = destKeyspace
 	logStats.TabletType = destTabletType.String()
-	// Legacy gateway allows transactions only on MASTER
+	// Legacy gateway allows transactions only on PRIMARY
 	if UsingLegacyGateway() && safeSession.InTransaction() && destTabletType != topodatapb.TabletType_PRIMARY {
 		return 0, nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "transaction is supported only for primary tablet type, current type: %v", destTabletType)
 	}

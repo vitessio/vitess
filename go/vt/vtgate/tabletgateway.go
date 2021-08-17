@@ -69,7 +69,7 @@ type TabletGateway struct {
 	// keyspace/shard/tablet_type.
 	statusAggregators map[string]*TabletStatusAggregator
 
-	// buffer, if enabled, buffers requests during a detected MASTER failover.
+	// buffer, if enabled, buffers requests during a detected PRIMARY failover.
 	buffer *buffer.Buffer
 }
 
@@ -123,7 +123,7 @@ func NewTabletGateway(ctx context.Context, hc discovery.HealthCheck, serv srvtop
 					return
 				}
 				if result.Target.TabletType == topodatapb.TabletType_PRIMARY {
-					buffer.ProcessMasterHealth(result)
+					buffer.ProcessPrimaryHealth(result)
 				}
 			}
 		}
@@ -208,7 +208,7 @@ func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, 
 
 	bufferedOnce := false
 	for i := 0; i < gw.retryCount+1; i++ {
-		// Check if we should buffer MASTER queries which failed due to an ongoing
+		// Check if we should buffer PRIMARY queries which failed due to an ongoing
 		// failover.
 		// Note: We only buffer once and only "!inTransaction" queries i.e.
 		// a) no transaction is necessary (e.g. critical reads) or

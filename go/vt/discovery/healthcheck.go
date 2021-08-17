@@ -73,7 +73,7 @@ var (
 
 	//TODO(deepthi): change these vars back to unexported when discoveryGateway is removed
 
-	// AllowedTabletTypes is the list of allowed tablet types. e.g. {MASTER, REPLICA}
+	// AllowedTabletTypes is the list of allowed tablet types. e.g. {PRIMARY, REPLICA}
 	AllowedTabletTypes []topodata.TabletType
 	// TabletFilters are the keyspace|shard or keyrange filters to apply to the full set of tablets
 	TabletFilters flagutil.StringListValue
@@ -192,12 +192,12 @@ type HealthCheck interface {
 	// GetHealthyTabletStats returns only the healthy tablets.
 	// The returned array is owned by the caller.
 	// For TabletType_PRIMARY, this will only return at most one entry,
-	// the most recent tablet of type master.
+	// the most recent tablet of type primary.
 	// This returns a copy of the data so that callers can access without
 	// synchronization
 	GetHealthyTabletStats(target *query.Target) []*TabletHealth
 
-	// Subscribe adds a listener. Used by vtgate buffer to learn about master changes.
+	// Subscribe adds a listener. Used by vtgate buffer to learn about primary changes.
 	Subscribe() chan *TabletHealth
 
 	// Unsubscribe removes a listener.
@@ -261,7 +261,7 @@ type HealthCheckImpl struct {
 // localCell.
 //   The localCell for this healthcheck
 // callback.
-//   A function to call when there is a master change. Used to notify vtgate's buffer to stop buffering.
+//   A function to call when there is a primary change. Used to notify vtgate's buffer to stop buffering.
 func NewHealthCheck(ctx context.Context, retryDelay, healthCheckTimeout time.Duration, topoServer *topo.Server, localCell, cellsToWatch string) *HealthCheckImpl {
 	log.Infof("loading tablets for cells: %v", cellsToWatch)
 
@@ -443,7 +443,7 @@ func (hc *HealthCheckImpl) updateHealth(th *TabletHealth, prevTarget *query.Targ
 			// We already have one up server, see if we
 			// need to replace it.
 			if th.PrimaryTermStartTime < hc.healthy[targetKey][0].PrimaryTermStartTime {
-				log.Warningf("not marking healthy master %s as Up for %s because its PrimaryTermStartTime is smaller than the highest known timestamp from previous MASTERs %s: %d < %d ",
+				log.Warningf("not marking healthy primary %s as Up for %s because its PrimaryTermStartTime is smaller than the highest known timestamp from previous PRIMARYs %s: %d < %d ",
 					topoproto.TabletAliasString(th.Tablet.Alias),
 					topoproto.KeyspaceShardString(th.Target.Keyspace, th.Target.Shard),
 					topoproto.TabletAliasString(hc.healthy[targetKey][0].Tablet.Alias),
@@ -467,7 +467,7 @@ func (hc *HealthCheckImpl) updateHealth(th *TabletHealth, prevTarget *query.Targ
 
 	if !trivialUpdate {
 		// We re-sort the healthy tablet list whenever we get a health update for tablets we can route to.
-		// Tablets from other cells for non-master targets should not trigger a re-sort;
+		// Tablets from other cells for non-primary targets should not trigger a re-sort;
 		// they should also be excluded from healthy list.
 		if th.Target.TabletType != topodata.TabletType_PRIMARY && hc.isIncluded(th.Target.TabletType, th.Tablet.Alias) {
 			hc.recomputeHealthy(targetKey)
@@ -480,7 +480,7 @@ func (hc *HealthCheckImpl) updateHealth(th *TabletHealth, prevTarget *query.Targ
 
 	isNewPrimary := isPrimary && prevTarget.TabletType != topodata.TabletType_PRIMARY
 	if isNewPrimary {
-		log.Errorf("Adding 1 to MasterPromoted counter for target: %v, tablet: %v, tabletType: %v", prevTarget, topoproto.TabletAliasString(th.Tablet.Alias), th.Target.TabletType)
+		log.Errorf("Adding 1 to PrimaryPromoted counter for target: %v, tablet: %v, tabletType: %v", prevTarget, topoproto.TabletAliasString(th.Tablet.Alias), th.Target.TabletType)
 		hcMasterPromotedCounters.Add([]string{th.Target.Keyspace, th.Target.Shard}, 1)
 		hcPrimaryPromotedCounters.Add([]string{th.Target.Keyspace, th.Target.Shard}, 1)
 	}
@@ -501,7 +501,7 @@ func (hc *HealthCheckImpl) recomputeHealthy(key keyspaceShardTabletType) {
 	hc.healthy[key] = FilterStatsByReplicationLag(allArray)
 }
 
-// Subscribe adds a listener. Used by vtgate buffer to learn about master changes.
+// Subscribe adds a listener. Used by vtgate buffer to learn about primary changes.
 func (hc *HealthCheckImpl) Subscribe() chan *TabletHealth {
 	hc.subMu.Lock()
 	defer hc.subMu.Unlock()
@@ -590,7 +590,7 @@ func (hc *HealthCheckImpl) Close() error {
 // GetHealthyTabletStats returns only the healthy tablets.
 // The returned array is owned by the caller.
 // For TabletType_PRIMARY, this will only return at most one entry,
-// the most recent tablet of type master.
+// the most recent tablet of type primary.
 // This returns a copy of the data so that callers can access without
 // synchronization
 func (hc *HealthCheckImpl) GetHealthyTabletStats(target *query.Target) []*TabletHealth {
@@ -606,7 +606,7 @@ func (hc *HealthCheckImpl) GetHealthyTabletStats(target *query.Target) []*Tablet
 // getTabletStats returns all tablets for the given target.
 // The returned array is owned by the caller.
 // For TabletType_PRIMARY, this will only return at most one entry,
-// the most recent tablet of type master.
+// the most recent tablet of type primary.
 func (hc *HealthCheckImpl) getTabletStats(target *query.Target) []*TabletHealth {
 	var result []*TabletHealth
 	hc.mu.Lock()

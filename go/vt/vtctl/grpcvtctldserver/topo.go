@@ -196,7 +196,7 @@ func deleteTablet(ctx context.Context, ts *topo.Server, alias *topodatapb.Tablet
 		return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "cannot delete tablet %v as it is a master, pass AllowPrimary = true", topoproto.TabletAliasString(alias))
 	}
 
-	// Update the Shard object if the master was scrapped. We do this before
+	// Update the Shard object if the primary was scrapped. We do this before
 	// calling DeleteTablet so that the operation can be retried in case of
 	// failure.
 	if isPrimary {

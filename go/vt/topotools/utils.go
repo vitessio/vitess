@@ -115,11 +115,11 @@ func GetAllTabletsAcrossCells(ctx context.Context, ts *topo.Server) ([]*topo.Tab
 }
 
 // SortedTabletMap returns two maps:
-// - The replicaMap contains all the non-master non-scrapped hosts.
+// - The replicaMap contains all the non-primary non-scrapped hosts.
 //   This can be used as a list of replicas to fix up for reparenting
 // - The masterMap contains all the tablets without parents
 //   (scrapped or not). This can be used to special case
-//   the old master, and any tablet in a weird state, left over, ...
+//   the old primary, and any tablet in a weird state, left over, ...
 func SortedTabletMap(tabletMap map[string]*topo.TabletInfo) (map[string]*topo.TabletInfo, map[string]*topo.TabletInfo) {
 	replicaMap := make(map[string]*topo.TabletInfo)
 	masterMap := make(map[string]*topo.TabletInfo)

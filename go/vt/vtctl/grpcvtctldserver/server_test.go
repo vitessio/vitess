@@ -589,7 +589,7 @@ func TestChangeTabletType(t *testing.T) {
 			shouldErr: true,
 		},
 		{
-			name:  "master promotions not allowed",
+			name:  "primary promotions not allowed",
 			cells: []string{"zone1"},
 			tablets: []*topodatapb.Tablet{
 				{
@@ -611,7 +611,7 @@ func TestChangeTabletType(t *testing.T) {
 			shouldErr: true,
 		},
 		{
-			name:  "master demotions not allowed",
+			name:  "primary demotions not allowed",
 			cells: []string{"zone1"},
 			tablets: []*topodatapb.Tablet{
 				{
@@ -2642,9 +2642,9 @@ func TestEmergencyReparentShard(t *testing.T) {
 			t.Parallel()
 
 			testutil.AddTablets(ctx, t, tt.ts, &testutil.AddTabletOptions{
-				AlsoSetShardMaster:  true,
-				ForceSetShardMaster: true,
-				SkipShardCreation:   false,
+				AlsoSetShardPrimary:  true,
+				ForceSetShardPrimary: true,
+				SkipShardCreation:    false,
 			}, tt.tablets...)
 
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, tt.ts, tt.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
@@ -4507,9 +4507,9 @@ func TestPlannedReparentShard(t *testing.T) {
 			t.Parallel()
 
 			testutil.AddTablets(ctx, t, tt.ts, &testutil.AddTabletOptions{
-				AlsoSetShardMaster:  true,
-				ForceSetShardMaster: true,
-				SkipShardCreation:   false,
+				AlsoSetShardPrimary:  true,
+				ForceSetShardPrimary: true,
+				SkipShardCreation:    false,
 			}, tt.tablets...)
 
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, tt.ts, tt.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
@@ -5646,7 +5646,7 @@ func TestReparentTablet(t *testing.T) {
 			shouldErr: true,
 		},
 		{
-			name: "shard primary is not type MASTER",
+			name: "shard primary is not type PRIMARY",
 			tablets: []*topodatapb.Tablet{
 				{
 					Alias: &topodatapb.TabletAlias{
@@ -6177,8 +6177,8 @@ func TestShardReplicationPositions(t *testing.T) {
 			ctx := context.Background()
 
 			testutil.AddTablets(ctx, t, tt.ts, &testutil.AddTabletOptions{
-				AlsoSetShardMaster: true,
-				SkipShardCreation:  false,
+				AlsoSetShardPrimary: true,
+				SkipShardCreation:   false,
 			}, tt.tablets...)
 
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, tt.ts, tt.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
@@ -6273,7 +6273,7 @@ func TestTabletExternallyReparented(t *testing.T) {
 			},
 			shouldErr: false,
 			// NOTE: this seems weird, right? Why is the old primary still a
-			// MASTER, and why is the new primary's term start 0,0? Well, our
+			// PRIMARY, and why is the new primary's term start 0,0? Well, our
 			// test client implementation is a little incomplete. See
 			// ./testutil/test_tmclient.go for reference.
 			expectedTopo: []*topodatapb.Tablet{
@@ -6588,7 +6588,7 @@ func TestTabletExternallyReparented(t *testing.T) {
 			}
 
 			testutil.AddTablets(ctx, t, ts, &testutil.AddTabletOptions{
-				AlsoSetShardMaster: true,
+				AlsoSetShardPrimary: true,
 			}, tt.topo...)
 
 			if tt.topoErr != nil {

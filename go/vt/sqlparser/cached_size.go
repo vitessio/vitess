@@ -36,8 +36,6 @@ func (cached *AddColumns) CachedSize(alloc bool) int64 {
 			size += elem.CachedSize(true)
 		}
 	}
-	// field First *vitess.io/vitess/go/vt/sqlparser.ColName
-	size += cached.First.CachedSize(true)
 	// field After *vitess.io/vitess/go/vt/sqlparser.ColName
 	size += cached.After.CachedSize(true)
 	return size
@@ -391,8 +389,6 @@ func (cached *ChangeColumn) CachedSize(alloc bool) int64 {
 	size += cached.OldColumn.CachedSize(true)
 	// field NewColDefinition *vitess.io/vitess/go/vt/sqlparser.ColumnDefinition
 	size += cached.NewColDefinition.CachedSize(true)
-	// field First *vitess.io/vitess/go/vt/sqlparser.ColName
-	size += cached.First.CachedSize(true)
 	// field After *vitess.io/vitess/go/vt/sqlparser.ColName
 	size += cached.After.CachedSize(true)
 	return size
@@ -1325,8 +1321,6 @@ func (cached *ModifyColumn) CachedSize(alloc bool) int64 {
 	}
 	// field NewColDefinition *vitess.io/vitess/go/vt/sqlparser.ColumnDefinition
 	size += cached.NewColDefinition.CachedSize(true)
-	// field First *vitess.io/vitess/go/vt/sqlparser.ColName
-	size += cached.First.CachedSize(true)
 	// field After *vitess.io/vitess/go/vt/sqlparser.ColName
 	size += cached.After.CachedSize(true)
 	return size
