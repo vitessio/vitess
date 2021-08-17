@@ -1337,7 +1337,7 @@ func (e *Executor) readPendingMigrationsUUIDs(ctx context.Context) (uuids []stri
 
 // terminateMigration attempts to interrupt and hard-stop a running migration
 func (e *Executor) terminateMigration(ctx context.Context, onlineDDL *schema.OnlineDDL) (foundRunning bool, err error) {
-	// It's possible the killing the migratoin fails for whatever reason, in which case
+	// It's possible the killing the migration fails for whatever reason, in which case
 	// the logic will retry killing it later on.
 	// Whatever happens in this function, this executor stops owning the given migration.
 	defer e.ownedRunningMigrations.Delete(onlineDDL.UUID)
