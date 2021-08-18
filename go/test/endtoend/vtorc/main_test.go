@@ -324,7 +324,7 @@ func TestMain(m *testing.M) {
 	// setup cellInfos before creating the cluster
 	cellInfos = append(cellInfos, &cellInfo{
 		cellName:    cell1,
-		numReplicas: 10,
+		numReplicas: 11,
 		numRdonly:   1,
 		uidBase:     100,
 	})

@@ -1661,11 +1661,7 @@ func TestEmergencyReparenter_waitForAllRelayLogsToApply(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			vtctlReparentFunctions := NewVtctlReparentFunctions(nil, nil, waitReplicasTimeout, "", "", nil)
-			vtctlReparentFunctions.tabletMap = tt.tabletMap
-			vtctlReparentFunctions.statusMap = tt.statusMap
-
-			err := vtctlReparentFunctions.waitForAllRelayLogsToApply(ctx, logger, tt.tmc, tt.candidates)
+			err := waitForAllRelayLogsToApply(ctx, logger, tt.tmc, tt.candidates, tt.tabletMap, tt.statusMap, waitReplicasTimeout)
 			if tt.shouldErr {
 				assert.Error(t, err)
 				return
