@@ -25,7 +25,7 @@ export type ShardsByState = { [k in ShardState]: vtctldata.IShard[] };
 
 export const getShardsByState = <K extends pb.IKeyspace>(keyspace: K | null | undefined): ShardsByState => {
     const grouped = groupBy(Object.values(keyspace?.shards || {}), (s) =>
-        s.shard?.is_master_serving ? ShardState.serving : ShardState.nonserving
+        s.shard?.is_primary_serving ? ShardState.serving : ShardState.nonserving
     );
 
     // Add exhaustive enum keys (since groupBy only returns a dictionary), as well as define defaults
