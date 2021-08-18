@@ -31,6 +31,7 @@ import (
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
+	"vitess.io/vitess/go/vt/proto/vtctldata"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
@@ -85,6 +86,18 @@ func TestResharderOneToMany(t *testing.T) {
 		}
 		env.tmc.schema = schm
 
+		vs := &vschemapb.Keyspace{
+			Tables: map[string]*vschemapb.Table{
+				"t1": {
+					Type: vindexes.TypeSequence,
+				},
+			},
+		}
+
+		if err := env.wr.ts.SaveVSchema(context.Background(), env.keyspace, vs); err != nil {
+			t.Fatal(err)
+		}
+
 		env.expectValidation()
 		env.expectNoRefStream()
 		name := tc.cells + "/" + tc.tabletTypes
@@ -106,7 +119,19 @@ func TestResharderOneToMany(t *testing.T) {
 			env.tmc.expectVRQuery(200, "update _vt.vreplication set state='Running' where db_name='vt_ks'", &sqltypes.Result{})
 			env.tmc.expectVRQuery(210, "update _vt.vreplication set state='Running' where db_name='vt_ks'", &sqltypes.Result{})
 
-			err := env.wr.Reshard(context.Background(), env.keyspace, env.workflow, env.sources, env.targets, true, tc.cells, tc.tabletTypes, true, false)
+			// err := env.wr.Reshard(context.Background(), env.keyspace, env.workflow, env.sources, env.targets, true, tc.cells, tc.tabletTypes, true, false)
+			req := &vtctldata.ReshardRequest{
+				Keyspace:       env.keyspace,
+				Workflow:       env.workflow,
+				Sources:        env.sources,
+				Targets:        env.targets,
+				SkipSchemaCopy: true,
+				Cell:           tc.cells,
+				TabletTypes:    tc.tabletTypes,
+				AutoStart:      true,
+				StopAfterCopy:  false,
+			}
+			_, err := env.vtctldServer.Reshard(context.Background(), req)
 			require.NoError(t, err)
 			env.tmc.verifyQueries(t)
 		})
@@ -128,6 +153,18 @@ func TestResharderManyToOne(t *testing.T) {
 	}
 	env.tmc.schema = schm
 
+	vs := &vschemapb.Keyspace{
+		Tables: map[string]*vschemapb.Table{
+			"t1": {
+				Type: vindexes.TypeSequence,
+			},
+		},
+	}
+
+	if err := env.wr.ts.SaveVSchema(context.Background(), env.keyspace, vs); err != nil {
+		t.Fatal(err)
+	}
+
 	env.expectValidation()
 	env.expectNoRefStream()
 
@@ -142,7 +179,19 @@ func TestResharderManyToOne(t *testing.T) {
 
 	env.tmc.expectVRQuery(200, "update _vt.vreplication set state='Running' where db_name='vt_ks'", &sqltypes.Result{})
 
-	err := env.wr.Reshard(context.Background(), env.keyspace, env.workflow, env.sources, env.targets, true, "", "", true, false)
+	// err := env.wr.Reshard(context.Background(), env.keyspace, env.workflow, env.sources, env.targets, true, "", "", true, false)
+	req := &vtctldata.ReshardRequest{
+		Keyspace:       env.keyspace,
+		Workflow:       env.workflow,
+		Sources:        env.sources,
+		Targets:        env.targets,
+		SkipSchemaCopy: true,
+		Cell:           "",
+		TabletTypes:    "",
+		AutoStart:      true,
+		StopAfterCopy:  false,
+	}
+	_, err := env.vtctldServer.Reshard(context.Background(), req)
 	assert.NoError(t, err)
 	env.tmc.verifyQueries(t)
 }
@@ -160,6 +209,17 @@ func TestResharderManyToMany(t *testing.T) {
 		}},
 	}
 	env.tmc.schema = schm
+	vs := &vschemapb.Keyspace{
+		Tables: map[string]*vschemapb.Table{
+			"t1": {
+				Type: vindexes.TypeSequence,
+			},
+		},
+	}
+
+	if err := env.wr.ts.SaveVSchema(context.Background(), env.keyspace, vs); err != nil {
+		t.Fatal(err)
+	}
 
 	env.expectValidation()
 	env.expectNoRefStream()
@@ -183,7 +243,19 @@ func TestResharderManyToMany(t *testing.T) {
 	env.tmc.expectVRQuery(200, "update _vt.vreplication set state='Running' where db_name='vt_ks'", &sqltypes.Result{})
 	env.tmc.expectVRQuery(210, "update _vt.vreplication set state='Running' where db_name='vt_ks'", &sqltypes.Result{})
 
-	err := env.wr.Reshard(context.Background(), env.keyspace, env.workflow, env.sources, env.targets, true, "", "", true, false)
+	// err := env.wr.Reshard(context.Background(), env.keyspace, env.workflow, env.sources, env.targets, true, "", "", true, false)
+	req := &vtctldata.ReshardRequest{
+		Keyspace:       env.keyspace,
+		Workflow:       env.workflow,
+		Sources:        env.sources,
+		Targets:        env.targets,
+		SkipSchemaCopy: true,
+		Cell:           "",
+		TabletTypes:    "",
+		AutoStart:      true,
+		StopAfterCopy:  false,
+	}
+	_, err := env.vtctldServer.Reshard(context.Background(), req)
 	assert.NoError(t, err)
 	env.tmc.verifyQueries(t)
 }
@@ -236,7 +308,19 @@ func TestResharderOneRefTable(t *testing.T) {
 	env.tmc.expectVRQuery(200, "update _vt.vreplication set state='Running' where db_name='vt_ks'", &sqltypes.Result{})
 	env.tmc.expectVRQuery(210, "update _vt.vreplication set state='Running' where db_name='vt_ks'", &sqltypes.Result{})
 
-	err := env.wr.Reshard(context.Background(), env.keyspace, env.workflow, env.sources, env.targets, true, "", "", true, false)
+	// err := env.wr.Reshard(context.Background(), env.keyspace, env.workflow, env.sources, env.targets, true, "", "", true, false)
+	req := &vtctldata.ReshardRequest{
+		Keyspace:       env.keyspace,
+		Workflow:       env.workflow,
+		Sources:        env.sources,
+		Targets:        env.targets,
+		SkipSchemaCopy: true,
+		Cell:           "",
+		TabletTypes:    "",
+		AutoStart:      true,
+		StopAfterCopy:  false,
+	}
+	_, err := env.vtctldServer.Reshard(context.Background(), req)
 	assert.NoError(t, err)
 	env.tmc.verifyQueries(t)
 }
@@ -287,7 +371,19 @@ func TestReshardStopFlags(t *testing.T) {
 	)
 	// -auto_start=false is tested by NOT expecting the update query which sets state to RUNNING
 
-	err := env.wr.Reshard(context.Background(), env.keyspace, env.workflow, env.sources, env.targets, true, "", "", false, true)
+	// err := env.wr.Reshard(context.Background(), env.keyspace, env.workflow, env.sources, env.targets, true, "", "", false, true)
+	req := &vtctldata.ReshardRequest{
+		Keyspace:       env.keyspace,
+		Workflow:       env.workflow,
+		Sources:        env.sources,
+		Targets:        env.targets,
+		SkipSchemaCopy: true,
+		Cell:           "",
+		TabletTypes:    "",
+		AutoStart:      false,
+		StopAfterCopy:  true,
+	}
+	_, err := env.vtctldServer.Reshard(context.Background(), req)
 	assert.NoError(t, err)
 	env.tmc.verifyQueries(t)
 }
@@ -355,7 +451,19 @@ func TestResharderOneRefStream(t *testing.T) {
 	env.tmc.expectVRQuery(200, "update _vt.vreplication set state='Running' where db_name='vt_ks'", &sqltypes.Result{})
 	env.tmc.expectVRQuery(210, "update _vt.vreplication set state='Running' where db_name='vt_ks'", &sqltypes.Result{})
 
-	err := env.wr.Reshard(context.Background(), env.keyspace, env.workflow, env.sources, env.targets, true, "", "", true, false)
+	// err := env.wr.Reshard(context.Background(), env.keyspace, env.workflow, env.sources, env.targets, true, "", "", true, false)
+	req := &vtctldata.ReshardRequest{
+		Keyspace:       env.keyspace,
+		Workflow:       env.workflow,
+		Sources:        env.sources,
+		Targets:        env.targets,
+		SkipSchemaCopy: true,
+		Cell:           "",
+		TabletTypes:    "",
+		AutoStart:      true,
+		StopAfterCopy:  false,
+	}
+	_, err := env.vtctldServer.Reshard(context.Background(), req)
 	assert.NoError(t, err)
 	env.tmc.verifyQueries(t)
 }
@@ -432,7 +540,19 @@ func TestResharderNoRefStream(t *testing.T) {
 	env.tmc.expectVRQuery(200, "update _vt.vreplication set state='Running' where db_name='vt_ks'", &sqltypes.Result{})
 	env.tmc.expectVRQuery(210, "update _vt.vreplication set state='Running' where db_name='vt_ks'", &sqltypes.Result{})
 
-	err := env.wr.Reshard(context.Background(), env.keyspace, env.workflow, env.sources, env.targets, true, "", "", true, false)
+	// err := env.wr.Reshard(context.Background(), env.keyspace, env.workflow, env.sources, env.targets, true, "", "", true, false)
+	req := &vtctldata.ReshardRequest{
+		Keyspace:       env.keyspace,
+		Workflow:       env.workflow,
+		Sources:        env.sources,
+		Targets:        env.targets,
+		SkipSchemaCopy: true,
+		Cell:           "",
+		TabletTypes:    "",
+		AutoStart:      true,
+		StopAfterCopy:  false,
+	}
+	_, err := env.vtctldServer.Reshard(context.Background(), req)
 	assert.NoError(t, err)
 	env.tmc.verifyQueries(t)
 }
@@ -450,6 +570,17 @@ func TestResharderCopySchema(t *testing.T) {
 		}},
 	}
 	env.tmc.schema = schm
+
+	vs := &vschemapb.Keyspace{
+		Tables: map[string]*vschemapb.Table{
+			"t1": {
+				Type: vindexes.TypeSequence,
+			},
+		},
+	}
+	if err := env.wr.ts.SaveVSchema(context.Background(), env.keyspace, vs); err != nil {
+		t.Fatal(err)
+	}
 
 	env.expectValidation()
 	env.expectNoRefStream()
@@ -476,7 +607,19 @@ func TestResharderCopySchema(t *testing.T) {
 	env.tmc.expectVRQuery(200, "update _vt.vreplication set state='Running' where db_name='vt_ks'", &sqltypes.Result{})
 	env.tmc.expectVRQuery(210, "update _vt.vreplication set state='Running' where db_name='vt_ks'", &sqltypes.Result{})
 
-	err := env.wr.Reshard(context.Background(), env.keyspace, env.workflow, env.sources, env.targets, false, "", "", true, false)
+	// err := env.wr.Reshard(context.Background(), env.keyspace, env.workflow, env.sources, env.targets, false, "", "", true, false)
+	req := &vtctldata.ReshardRequest{
+		Keyspace:       env.keyspace,
+		Workflow:       env.workflow,
+		Sources:        env.sources,
+		Targets:        env.targets,
+		SkipSchemaCopy: false,
+		Cell:           "",
+		TabletTypes:    "",
+		AutoStart:      true,
+		StopAfterCopy:  false,
+	}
+	_, err := env.vtctldServer.Reshard(context.Background(), req)
 	assert.NoError(t, err)
 	env.tmc.verifyQueries(t)
 }
@@ -494,6 +637,16 @@ func TestResharderDupWorkflow(t *testing.T) {
 		}},
 	}
 	env.tmc.schema = schm
+	vs := &vschemapb.Keyspace{
+		Tables: map[string]*vschemapb.Table{
+			"t1": {
+				Type: vindexes.TypeReference,
+			},
+		},
+	}
+	if err := env.wr.ts.SaveVSchema(context.Background(), env.keyspace, vs); err != nil {
+		t.Fatal(err)
+	}
 
 	env.tmc.expectVRQuery(100, fmt.Sprintf("select 1 from _vt.vreplication where db_name='vt_%s' and workflow='%s'", env.keyspace, env.workflow), &sqltypes.Result{})
 	env.tmc.expectVRQuery(200, fmt.Sprintf("select 1 from _vt.vreplication where db_name='vt_%s' and workflow='%s'", env.keyspace, env.workflow), &sqltypes.Result{})
@@ -507,7 +660,19 @@ func TestResharderDupWorkflow(t *testing.T) {
 	env.tmc.expectVRQuery(200, rsSelectFrozenQuery, &sqltypes.Result{})
 	env.tmc.expectVRQuery(100, rsSelectFrozenQuery, &sqltypes.Result{})
 
-	err := env.wr.Reshard(context.Background(), env.keyspace, env.workflow, env.sources, env.targets, true, "", "", true, false)
+	// err := env.wr.Reshard(context.Background(), env.keyspace, env.workflow, env.sources, env.targets, true, "", "", true, false)
+	req := &vtctldata.ReshardRequest{
+		Keyspace:       env.keyspace,
+		Workflow:       env.workflow,
+		Sources:        env.sources,
+		Targets:        env.targets,
+		SkipSchemaCopy: true,
+		Cell:           "",
+		TabletTypes:    "",
+		AutoStart:      true,
+		StopAfterCopy:  false,
+	}
+	_, err := env.vtctldServer.Reshard(context.Background(), req)
 	assert.EqualError(t, err, "validateWorkflowName.VReplicationExec: workflow resharderTest already exists in keyspace ks on tablet 210")
 	env.tmc.verifyQueries(t)
 }
@@ -525,6 +690,16 @@ func TestResharderServingState(t *testing.T) {
 		}},
 	}
 	env.tmc.schema = schm
+	vs := &vschemapb.Keyspace{
+		Tables: map[string]*vschemapb.Table{
+			"t1": {
+				Type: vindexes.TypeReference,
+			},
+		},
+	}
+	if err := env.wr.ts.SaveVSchema(context.Background(), env.keyspace, vs); err != nil {
+		t.Fatal(err)
+	}
 
 	env.tmc.expectVRQuery(100, fmt.Sprintf("select 1 from _vt.vreplication where db_name='vt_%s' and workflow='%s'", env.keyspace, env.workflow), &sqltypes.Result{})
 	env.tmc.expectVRQuery(200, fmt.Sprintf("select 1 from _vt.vreplication where db_name='vt_%s' and workflow='%s'", env.keyspace, env.workflow), &sqltypes.Result{})
@@ -532,7 +707,19 @@ func TestResharderServingState(t *testing.T) {
 	env.tmc.expectVRQuery(100, rsSelectFrozenQuery, &sqltypes.Result{})
 	env.tmc.expectVRQuery(200, rsSelectFrozenQuery, &sqltypes.Result{})
 	env.tmc.expectVRQuery(210, rsSelectFrozenQuery, &sqltypes.Result{})
-	err := env.wr.Reshard(context.Background(), env.keyspace, env.workflow, []string{"-80"}, nil, true, "", "", true, false)
+	// err := env.wr.Reshard(context.Background(), env.keyspace, env.workflow, []string{"-80"}, nil, true, "", "", true, false)
+	req := &vtctldata.ReshardRequest{
+		Keyspace:       env.keyspace,
+		Workflow:       env.workflow,
+		Sources:        []string{"-80"},
+		Targets:        env.targets,
+		SkipSchemaCopy: true,
+		Cell:           "",
+		TabletTypes:    "",
+		AutoStart:      true,
+		StopAfterCopy:  false,
+	}
+	_, err := env.vtctldServer.Reshard(context.Background(), req)
 	assert.EqualError(t, err, "buildResharder: source shard -80 is not in serving state")
 
 	env.tmc.expectVRQuery(100, fmt.Sprintf("select 1 from _vt.vreplication where db_name='vt_%s' and workflow='%s'", env.keyspace, env.workflow), &sqltypes.Result{})
@@ -541,7 +728,19 @@ func TestResharderServingState(t *testing.T) {
 	env.tmc.expectVRQuery(100, rsSelectFrozenQuery, &sqltypes.Result{})
 	env.tmc.expectVRQuery(200, rsSelectFrozenQuery, &sqltypes.Result{})
 	env.tmc.expectVRQuery(210, rsSelectFrozenQuery, &sqltypes.Result{})
-	err = env.wr.Reshard(context.Background(), env.keyspace, env.workflow, []string{"0"}, []string{"0"}, true, "", "", true, false)
+	// err = env.wr.Reshard(context.Background(), env.keyspace, env.workflow, []string{"0"}, []string{"0"}, true, "", "", true, false)
+	req = &vtctldata.ReshardRequest{
+		Keyspace:       env.keyspace,
+		Workflow:       env.workflow,
+		Sources:        []string{"0"},
+		Targets:        []string{"0"},
+		SkipSchemaCopy: true,
+		Cell:           "",
+		TabletTypes:    "",
+		AutoStart:      true,
+		StopAfterCopy:  false,
+	}
+	_, err = env.vtctldServer.Reshard(context.Background(), req)
 	assert.EqualError(t, err, "buildResharder: target shard 0 is in serving state")
 
 	env.tmc.expectVRQuery(100, fmt.Sprintf("select 1 from _vt.vreplication where db_name='vt_%s' and workflow='%s'", env.keyspace, env.workflow), &sqltypes.Result{})
@@ -550,7 +749,19 @@ func TestResharderServingState(t *testing.T) {
 	env.tmc.expectVRQuery(100, rsSelectFrozenQuery, &sqltypes.Result{})
 	env.tmc.expectVRQuery(200, rsSelectFrozenQuery, &sqltypes.Result{})
 	env.tmc.expectVRQuery(210, rsSelectFrozenQuery, &sqltypes.Result{})
-	err = env.wr.Reshard(context.Background(), env.keyspace, env.workflow, []string{"0"}, []string{"-80"}, true, "", "", true, false)
+	// err = env.wr.Reshard(context.Background(), env.keyspace, env.workflow, []string{"0"}, []string{"-80"}, true, "", "", true, false)
+	req = &vtctldata.ReshardRequest{
+		Keyspace:       env.keyspace,
+		Workflow:       env.workflow,
+		Sources:        []string{"0"},
+		Targets:        []string{"-80"},
+		SkipSchemaCopy: true,
+		Cell:           "",
+		TabletTypes:    "",
+		AutoStart:      true,
+		StopAfterCopy:  false,
+	}
+	_, err = env.vtctldServer.Reshard(context.Background(), req)
 	assert.EqualError(t, err, "buildResharder: ValidateForReshard: source and target keyranges don't match: - vs -80")
 }
 
@@ -567,6 +778,17 @@ func TestResharderTargetAlreadyResharding(t *testing.T) {
 		}},
 	}
 	env.tmc.schema = schm
+	vs := &vschemapb.Keyspace{
+		Tables: map[string]*vschemapb.Table{
+			"t1": {
+				Type: vindexes.TypeSequence,
+			},
+		},
+	}
+
+	if err := env.wr.ts.SaveVSchema(context.Background(), env.keyspace, vs); err != nil {
+		t.Fatal(err)
+	}
 
 	env.tmc.expectVRQuery(100, fmt.Sprintf("select 1 from _vt.vreplication where db_name='vt_%s' and workflow='%s'", env.keyspace, env.workflow), &sqltypes.Result{})
 	env.tmc.expectVRQuery(200, fmt.Sprintf("select 1 from _vt.vreplication where db_name='vt_%s' and workflow='%s'", env.keyspace, env.workflow), &sqltypes.Result{})
@@ -582,7 +804,19 @@ func TestResharderTargetAlreadyResharding(t *testing.T) {
 	env.tmc.expectVRQuery(200, fmt.Sprintf("select 1 from _vt.vreplication where db_name='vt_%s'", env.keyspace), result)
 	env.tmc.expectVRQuery(210, fmt.Sprintf("select 1 from _vt.vreplication where db_name='vt_%s'", env.keyspace), &sqltypes.Result{})
 	env.tmc.expectVRQuery(100, rsSelectFrozenQuery, &sqltypes.Result{})
-	err := env.wr.Reshard(context.Background(), env.keyspace, env.workflow, env.sources, env.targets, true, "", "", true, false)
+	// err := env.wr.Reshard(context.Background(), env.keyspace, env.workflow, env.sources, env.targets, true, "", "", true, false)
+	req := &vtctldata.ReshardRequest{
+		Keyspace:       env.keyspace,
+		Workflow:       env.workflow,
+		Sources:        env.sources,
+		Targets:        env.targets,
+		SkipSchemaCopy: true,
+		Cell:           "",
+		TabletTypes:    "",
+		AutoStart:      true,
+		StopAfterCopy:  false,
+	}
+	_, err := env.vtctldServer.Reshard(context.Background(), req)
 	assert.EqualError(t, err, "buildResharder: validateTargets: some streams already exist in the target shards, please clean them up and retry the command")
 	env.tmc.verifyQueries(t)
 }
@@ -630,7 +864,19 @@ func TestResharderUnnamedStream(t *testing.T) {
 	)
 	env.tmc.expectVRQuery(100, fmt.Sprintf("select workflow, source, cell, tablet_types from _vt.vreplication where db_name='vt_%s' and message != 'FROZEN'", env.keyspace), result)
 
-	err := env.wr.Reshard(context.Background(), env.keyspace, env.workflow, env.sources, env.targets, true, "", "", true, false)
+	// err := env.wr.Reshard(context.Background(), env.keyspace, env.workflow, env.sources, env.targets, true, "", "", true, false)
+	req := &vtctldata.ReshardRequest{
+		Keyspace:       env.keyspace,
+		Workflow:       env.workflow,
+		Sources:        env.sources,
+		Targets:        env.targets,
+		SkipSchemaCopy: true,
+		Cell:           "",
+		TabletTypes:    "",
+		AutoStart:      true,
+		StopAfterCopy:  false,
+	}
+	_, err := env.vtctldServer.Reshard(context.Background(), req)
 	assert.EqualError(t, err, "buildResharder: readRefStreams: VReplication streams must have named workflows for migration: shard: ks:0")
 	env.tmc.verifyQueries(t)
 }
@@ -694,7 +940,20 @@ func TestResharderMismatchedRefStreams(t *testing.T) {
 	)
 	env.tmc.expectVRQuery(110, fmt.Sprintf("select workflow, source, cell, tablet_types from _vt.vreplication where db_name='vt_%s' and message != 'FROZEN'", env.keyspace), result2)
 
-	err := env.wr.Reshard(context.Background(), env.keyspace, env.workflow, env.sources, env.targets, true, "", "", true, false)
+	// err := env.wr.Reshard(context.Background(), env.keyspace, env.workflow, env.sources, env.targets, true, "", "", true, false)
+	req := &vtctldata.ReshardRequest{
+		Keyspace:       env.keyspace,
+		Workflow:       env.workflow,
+		Sources:        env.sources,
+		Targets:        env.targets,
+		SkipSchemaCopy: true,
+		Cell:           "",
+		TabletTypes:    "",
+		AutoStart:      true,
+		StopAfterCopy:  false,
+	}
+	_, err := env.vtctldServer.Reshard(context.Background(), req)
+
 	want := "buildResharder: readRefStreams: streams are mismatched across source shards"
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
 		t.Errorf("Reshard err: %v, want %v", err, want)
@@ -718,25 +977,37 @@ func TestResharderTableNotInVSchema(t *testing.T) {
 
 	env.expectValidation()
 
-	bls := &binlogdatapb.BinlogSource{
-		Keyspace: "ks1",
-		Shard:    "0",
-		Filter: &binlogdatapb.Filter{
-			Rules: []*binlogdatapb.Rule{{
-				Match: "t1",
-			}},
-		},
-	}
-	result := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
-		"workflow|source|cell|tablet_types",
-		"varchar|varchar|varchar|varchar"),
-		fmt.Sprintf("t1|%v|cell1|master,primary,replica", bls),
-	)
-	env.tmc.expectVRQuery(100, fmt.Sprintf("select workflow, source, cell, tablet_types from _vt.vreplication where db_name='vt_%s' and message != 'FROZEN'", env.keyspace), result)
+	// bls := &binlogdatapb.BinlogSource{
+	// 	Keyspace: "ks1",
+	// 	Shard:    "0",
+	// 	Filter: &binlogdatapb.Filter{
+	// 		Rules: []*binlogdatapb.Rule{{
+	// 			Match: "t1",
+	// 		}},
+	// 	},
+	// }
+	// result := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+	// 	"workflow|source|cell|tablet_types",
+	// 	"varchar|varchar|varchar|varchar"),
+	// 	fmt.Sprintf("t1|%v|cell1|master,replica", bls),
+	// )
+	// env.tmc.expectVRQuery(100, fmt.Sprintf("select workflow, source, cell, tablet_types from _vt.vreplication where db_name='vt_%s' and message != 'FROZEN'", env.keyspace), result)
 
-	err := env.wr.Reshard(context.Background(), env.keyspace, env.workflow, env.sources, env.targets, true, "", "", true, false)
-	assert.EqualError(t, err, "buildResharder: readRefStreams: blsIsReference: table t1 not found in vschema")
-	env.tmc.verifyQueries(t)
+	// err := env.wr.Reshard(context.Background(), env.keyspace, env.workflow, env.sources, env.targets, true, "", "", true, false)
+	req := &vtctldata.ReshardRequest{
+		Keyspace:       env.keyspace,
+		Workflow:       env.workflow,
+		Sources:        env.sources,
+		Targets:        env.targets,
+		SkipSchemaCopy: true,
+		Cell:           "",
+		TabletTypes:    "",
+		AutoStart:      true,
+		StopAfterCopy:  false,
+	}
+	_, err := env.vtctldServer.Reshard(context.Background(), req)
+	assert.Contains(t, err.Error(), "ValidateVSchema(ks, [-80 0 80-], [], true) failed:")
+	// env.tmc.verifyQueries(t)
 }
 
 func TestResharderMixedTablesOrder1(t *testing.T) {
@@ -798,7 +1069,19 @@ func TestResharderMixedTablesOrder1(t *testing.T) {
 	)
 	env.tmc.expectVRQuery(100, fmt.Sprintf("select workflow, source, cell, tablet_types from _vt.vreplication where db_name='vt_%s' and message != 'FROZEN'", env.keyspace), result)
 
-	err := env.wr.Reshard(context.Background(), env.keyspace, env.workflow, env.sources, env.targets, true, "", "", true, false)
+	// err := env.wr.Reshard(context.Background(), env.keyspace, env.workflow, env.sources, env.targets, true, "", "", true, false)
+	req := &vtctldata.ReshardRequest{
+		Keyspace:       env.keyspace,
+		Workflow:       env.workflow,
+		Sources:        env.sources,
+		Targets:        env.targets,
+		SkipSchemaCopy: true,
+		Cell:           "",
+		TabletTypes:    "",
+		AutoStart:      true,
+		StopAfterCopy:  false,
+	}
+	_, err := env.vtctldServer.Reshard(context.Background(), req)
 	want := "buildResharder: readRefStreams: blsIsReference: cannot reshard streams with a mix of reference and sharded tables"
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
 		t.Errorf("Reshard err: %v, want %v", err.Error(), want)
@@ -865,7 +1148,19 @@ func TestResharderMixedTablesOrder2(t *testing.T) {
 	)
 	env.tmc.expectVRQuery(100, fmt.Sprintf("select workflow, source, cell, tablet_types from _vt.vreplication where db_name='vt_%s' and message != 'FROZEN'", env.keyspace), result)
 
-	err := env.wr.Reshard(context.Background(), env.keyspace, env.workflow, env.sources, env.targets, true, "", "", true, false)
+	// err := env.wr.Reshard(context.Background(), env.keyspace, env.workflow, env.sources, env.targets, true, "", "", true, false)
+	req := &vtctldata.ReshardRequest{
+		Keyspace:       env.keyspace,
+		Workflow:       env.workflow,
+		Sources:        env.sources,
+		Targets:        env.targets,
+		SkipSchemaCopy: true,
+		Cell:           "",
+		TabletTypes:    "",
+		AutoStart:      true,
+		StopAfterCopy:  false,
+	}
+	_, err := env.vtctldServer.Reshard(context.Background(), req)
 	want := "buildResharder: readRefStreams: blsIsReference: cannot reshard streams with a mix of reference and sharded tables"
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
 		t.Errorf("Reshard err: %v, want %v", err.Error(), want)

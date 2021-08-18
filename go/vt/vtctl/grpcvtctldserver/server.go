@@ -17,6 +17,7 @@ limitations under the License.
 package grpcvtctldserver
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -32,6 +33,7 @@ import (
 	"vitess.io/vitess/go/event"
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sqlescape"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/log"
@@ -66,9 +68,10 @@ const (
 // VtctldServer implements the Vtctld RPC service protocol.
 type VtctldServer struct {
 	vtctlservicepb.UnimplementedVtctldServer
-	ts  *topo.Server
-	tmc tmclient.TabletManagerClient
-	ws  *workflow.Server
+	ts     *topo.Server
+	tmc    tmclient.TabletManagerClient
+	ws     *workflow.Server
+	logger logutil.Logger
 }
 
 // NewVtctldServer returns a new VtctldServer for the given topo server.
@@ -76,9 +79,19 @@ func NewVtctldServer(ts *topo.Server) *VtctldServer {
 	tmc := tmclient.NewTabletManagerClient()
 
 	return &VtctldServer{
-		ts:  ts,
-		tmc: tmc,
-		ws:  workflow.NewServer(ts, tmc),
+		ts:     ts,
+		tmc:    tmc,
+		ws:     workflow.NewServer(ts, tmc),
+		logger: logutil.NewConsoleLogger(),
+	}
+}
+
+func NewVtctldServerCustomTmc(ts *topo.Server, tmc tmclient.TabletManagerClient) *VtctldServer {
+	return &VtctldServer{
+		ts:     ts,
+		tmc:    tmc,
+		ws:     workflow.NewServer(ts, tmc),
+		logger: logutil.NewConsoleLogger(),
 	}
 }
 
@@ -1712,6 +1725,109 @@ func (s *VtctldServer) ReparentTablet(ctx context.Context, req *vtctldatapb.Repa
 	}, nil
 }
 
+func (s *VtctldServer) Reshard(ctx context.Context, req *vtctldatapb.ReshardRequest) (*vtctldatapb.ReshardResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.Reshard")
+	defer span.Finish()
+
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("workflow", req.Workflow)
+	span.Annotate("cell", req.Cell)
+	span.Annotate("tablet_types", req.TabletTypes)
+	span.Annotate("source_shards", req.Sources)
+	span.Annotate("target_shards", req.Targets)
+	span.Annotate("auto_start", req.AutoStart)
+	span.Annotate("skip_schema_copy", req.SkipSchemaCopy)
+	span.Annotate("stop_after_copy", req.StopAfterCopy)
+
+	s.logger.Infof(fmt.Sprintf("Starting reshard for %v/%v\nTarget Shards:%v", req.Keyspace, req.Sources, req.Targets))
+
+	if err := s.ValidateSchemaKeyspace(ctx, req.Keyspace, nil, true, false, true); err != nil {
+		return nil, err
+	}
+
+	if err := s.validateNewWorkflow(ctx, req.Keyspace, req.Workflow); err != nil {
+		return nil, err
+	}
+	if err := s.ts.ValidateSrvKeyspace(ctx, req.Keyspace, req.Cell); err != nil {
+		err2 := vterrors.Wrapf(err, "SrvKeyspace for keyspace %s is corrupt in cell %s", req.Keyspace, req.Cell)
+		log.Errorf("%w", err2)
+		return nil, err2
+	}
+
+	rs, err := s.buildResharder(ctx, req.Keyspace, req.Workflow, req.Sources, req.Targets, req.Cell, req.TabletTypes)
+	if err != nil {
+		return nil, vterrors.Wrap(err, "buildResharder")
+	}
+
+	rs.stopAfterCopy = req.StopAfterCopy
+	if !req.SkipSchemaCopy {
+		if err := rs.copySchema(ctx); err != nil {
+			return nil, vterrors.Wrap(err, "copySchema")
+		}
+	}
+	if err := rs.createStreams(ctx); err != nil {
+		return nil, vterrors.Wrap(err, "createStreams")
+	}
+
+	if req.AutoStart {
+		if err := rs.startStreams(ctx); err != nil {
+			return nil, vterrors.Wrap(err, "startStreams")
+		}
+	} else {
+		s.logger.Infof("Streams will not be started since -auto_start is set to false")
+	}
+	return &vtctldatapb.ReshardResponse{Error: ""}, nil
+}
+
+func (s *VtctldServer) validateNewWorkflow(ctx context.Context, keyspace, workflow string) error {
+	allshards, err := s.ts.FindAllShardsInKeyspace(ctx, keyspace)
+	if err != nil {
+		return err
+	}
+	var wg sync.WaitGroup
+	allErrors := &concurrency.AllErrorRecorder{}
+	for _, si := range allshards {
+		if si.MasterAlias == nil {
+			allErrors.RecordError(fmt.Errorf("shard has no master: %v", si.ShardName()))
+			continue
+		}
+		wg.Add(1)
+		go func(si *topo.ShardInfo) {
+			defer wg.Done()
+
+			master, err := s.ts.GetTablet(ctx, si.MasterAlias)
+			if err != nil {
+				allErrors.RecordError(vterrors.Wrap(err, "validateWorkflowName.GetTablet"))
+				return
+			}
+			validations := []struct {
+				query string
+				msg   string
+			}{{
+				fmt.Sprintf("select 1 from _vt.vreplication where db_name=%s and workflow=%s", encodeString(master.DbName()), encodeString(workflow)),
+				fmt.Sprintf("workflow %s already exists in keyspace %s on tablet %d", workflow, keyspace, master.Alias.Uid),
+			}, {
+				fmt.Sprintf("select 1 from _vt.vreplication where db_name=%s and message='FROZEN'", encodeString(master.DbName())),
+				fmt.Sprintf("found previous frozen workflow on tablet %d, please review and delete it first before creating a new workflow",
+					master.Alias.Uid),
+			}}
+			for _, validation := range validations {
+				p3qr, err := s.tmc.VReplicationExec(ctx, master.Tablet, validation.query)
+				if err != nil {
+					allErrors.RecordError(vterrors.Wrap(err, "validateWorkflowName.VReplicationExec"))
+					return
+				}
+				if p3qr != nil && len(p3qr.Rows) != 0 {
+					allErrors.RecordError(vterrors.Wrap(fmt.Errorf(validation.msg), "validateWorkflowName.VReplicationExec"))
+					return
+				}
+			}
+		}(si)
+	}
+	wg.Wait()
+	return allErrors.AggrError(vterrors.Aggregate)
+}
+
 // ShardReplicationPositions is part of the vtctldservicepb.VtctldServer interface.
 func (s *VtctldServer) ShardReplicationPositions(ctx context.Context, req *vtctldatapb.ShardReplicationPositionsRequest) (*vtctldatapb.ShardReplicationPositionsResponse, error) {
 	span, ctx := trace.NewSpan(ctx, "VtctldServer.ShardReplicationPositions")
@@ -1980,6 +2096,15 @@ func (s *VtctldServer) UpdateCellsAlias(ctx context.Context, req *vtctldatapb.Up
 		Name:       req.Name,
 		CellsAlias: updatedCa,
 	}, nil
+}
+
+// Straight copy-paste of encodeString from wrangler/keyspace.go. I want to make
+// this public, but it doesn't belong in package workflow. Maybe package sqltypes,
+// or maybe package sqlescape?
+func encodeString(in string) string {
+	buf := bytes.NewBuffer(nil)
+	sqltypes.NewVarChar(in).EncodeSQL(buf)
+	return buf.String()
 }
 
 // StartServer registers a VtctldServer for RPCs on the given gRPC server.

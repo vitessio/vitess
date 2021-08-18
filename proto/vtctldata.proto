@@ -674,6 +674,22 @@ message ReparentTabletResponse {
   topodata.TabletAlias primary = 3;
 }
 
+message ReshardRequest {
+  string keyspace = 1;
+  string workflow = 2;
+  repeated string sources = 3;
+  repeated string targets = 4;
+  bool skipSchemaCopy = 5;
+  string cell = 6;
+  string tabletTypes = 7;
+  bool autoStart = 8;
+  bool stopAfterCopy = 9;
+}
+
+message ReshardResponse {
+  string error = 1;
+}
+
 message ShardReplicationPositionsRequest {
   string keyspace = 1;
   string shard = 2;

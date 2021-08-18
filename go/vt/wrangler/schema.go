@@ -17,22 +17,20 @@ limitations under the License.
 package wrangler
 
 import (
-	"bytes"
 	"fmt"
-	"html/template"
 	"sort"
 	"sync"
 	"time"
 
 	"context"
 
-	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver"
 
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -336,169 +334,5 @@ func (wr *Wrangler) CopySchemaShardFromShard(ctx context.Context, tables, exclud
 		return fmt.Errorf("no primary in shard record %v/%v. Consider running 'vtctl InitShardPrimary' in case of a new shard or reparenting the shard to fix the topology data, or providing a non-primary tablet alias", sourceKeyspace, sourceShard)
 	}
 
-	return wr.CopySchemaShard(ctx, sourceShardInfo.PrimaryAlias, tables, excludeTables, includeViews, destKeyspace, destShard, waitReplicasTimeout, skipVerify)
-}
-
-// CopySchemaShard copies the schema from a source tablet to the
-// specified shard.  The schema is applied directly on the primary of
-// the destination shard, and is propagated to the replicas through
-// binlogs.
-func (wr *Wrangler) CopySchemaShard(ctx context.Context, sourceTabletAlias *topodatapb.TabletAlias, tables, excludeTables []string, includeViews bool, destKeyspace, destShard string, waitReplicasTimeout time.Duration, skipVerify bool) error {
-	destShardInfo, err := wr.ts.GetShard(ctx, destKeyspace, destShard)
-	if err != nil {
-		return fmt.Errorf("GetShard(%v, %v) failed: %v", destKeyspace, destShard, err)
-	}
-
-	if destShardInfo.PrimaryAlias == nil {
-		return fmt.Errorf("no primary in shard record %v/%v. Consider running 'vtctl InitShardPrimary' in case of a new shard or reparenting the shard to fix the topology data", destKeyspace, destShard)
-	}
-
-	err = wr.copyShardMetadata(ctx, sourceTabletAlias, destShardInfo.PrimaryAlias)
-	if err != nil {
-		return fmt.Errorf("copyShardMetadata(%v, %v) failed: %v", sourceTabletAlias, destShardInfo.PrimaryAlias, err)
-	}
-
-	diffs, err := wr.compareSchemas(ctx, sourceTabletAlias, destShardInfo.PrimaryAlias, tables, excludeTables, includeViews)
-	if err != nil {
-		return fmt.Errorf("CopySchemaShard failed because schemas could not be compared initially: %v", err)
-	}
-	if diffs == nil {
-		// Return early because dest has already the same schema as source.
-		return nil
-	}
-
-	sourceSd, err := wr.GetSchema(ctx, sourceTabletAlias, tables, excludeTables, includeViews)
-	if err != nil {
-		return fmt.Errorf("GetSchema(%v, %v, %v, %v) failed: %v", sourceTabletAlias, tables, excludeTables, includeViews, err)
-	}
-	createSQL := tmutils.SchemaDefinitionToSQLStrings(sourceSd)
-	destTabletInfo, err := wr.ts.GetTablet(ctx, destShardInfo.PrimaryAlias)
-	if err != nil {
-		return fmt.Errorf("GetTablet(%v) failed: %v", destShardInfo.PrimaryAlias, err)
-	}
-	for i, sqlLine := range createSQL {
-		err = wr.applySQLShard(ctx, destTabletInfo, sqlLine, i == len(createSQL)-1)
-		if err != nil {
-			return fmt.Errorf("creating a table failed."+
-				" Most likely some tables already exist on the destination and differ from the source."+
-				" Please remove all to be copied tables from the destination manually and run this command again."+
-				" Full error: %v", err)
-		}
-	}
-
-	// Remember the replication position after all the above were applied.
-	destPrimaryPos, err := wr.tmc.MasterPosition(ctx, destTabletInfo.Tablet)
-	if err != nil {
-		return fmt.Errorf("CopySchemaShard: can't get replication position after schema applied: %v", err)
-	}
-
-	// Although the copy was successful, we have to verify it to catch the case
-	// where the database already existed on the destination, but with different
-	// options e.g. a different character set.
-	// In that case, MySQL would have skipped our CREATE DATABASE IF NOT EXISTS
-	// statement. We want to fail early in this case because vtworker SplitDiff
-	// fails in case of such an inconsistency as well.
-	if !skipVerify {
-		diffs, err = wr.compareSchemas(ctx, sourceTabletAlias, destShardInfo.PrimaryAlias, tables, excludeTables, includeViews)
-		if err != nil {
-			return fmt.Errorf("CopySchemaShard failed because schemas could not be compared finally: %v", err)
-		}
-		if diffs != nil {
-			return fmt.Errorf("CopySchemaShard was not successful because the schemas between the two tablets %v and %v differ: %v", sourceTabletAlias, destShardInfo.PrimaryAlias, diffs)
-		}
-	}
-
-	// Notify Replicass to reload schema. This is best-effort.
-	concurrency := sync2.NewSemaphore(10, 0)
-	reloadCtx, cancel := context.WithTimeout(ctx, waitReplicasTimeout)
-	defer cancel()
-	wr.ReloadSchemaShard(reloadCtx, destKeyspace, destShard, destPrimaryPos, concurrency, true /* includePrimary */)
-	return nil
-}
-
-// copyShardMetadata copies contents of _vt.shard_metadata table from the source
-// tablet to the destination tablet. It's assumed that destination tablet is a
-// primary and binlogging is not turned off when INSERT statements are executed.
-func (wr *Wrangler) copyShardMetadata(ctx context.Context, srcTabletAlias *topodatapb.TabletAlias, destTabletAlias *topodatapb.TabletAlias) error {
-	sql := "SELECT 1 FROM information_schema.tables WHERE table_schema = '_vt' AND table_name = 'shard_metadata'"
-	presenceResult, err := wr.ExecuteFetchAsDba(ctx, srcTabletAlias, sql, 1, false, false)
-	if err != nil {
-		return fmt.Errorf("ExecuteFetchAsDba(%v, %v, 1, false, false) failed: %v", srcTabletAlias, sql, err)
-	}
-	if len(presenceResult.Rows) == 0 {
-		log.Infof("_vt.shard_metadata doesn't exist on the source tablet %v, skipping its copy.", topoproto.TabletAliasString(srcTabletAlias))
-		return nil
-	}
-
-	// TODO: 100 may be too low here for row limit
-	sql = "SELECT db_name, name, value FROM _vt.shard_metadata"
-	dataProto, err := wr.ExecuteFetchAsDba(ctx, srcTabletAlias, sql, 100, false, false)
-	if err != nil {
-		return fmt.Errorf("ExecuteFetchAsDba(%v, %v, 100, false, false) failed: %v", srcTabletAlias, sql, err)
-	}
-	data := sqltypes.Proto3ToResult(dataProto)
-	for _, row := range data.Rows {
-		dbName := row[0]
-		name := row[1]
-		value := row[2]
-		queryBuf := bytes.Buffer{}
-		queryBuf.WriteString("INSERT INTO _vt.shard_metadata (db_name, name, value) VALUES (")
-		dbName.EncodeSQL(&queryBuf)
-		queryBuf.WriteByte(',')
-		name.EncodeSQL(&queryBuf)
-		queryBuf.WriteByte(',')
-		value.EncodeSQL(&queryBuf)
-		queryBuf.WriteString(") ON DUPLICATE KEY UPDATE value = ")
-		value.EncodeSQL(&queryBuf)
-
-		_, err := wr.ExecuteFetchAsDba(ctx, destTabletAlias, queryBuf.String(), 0, false, false)
-		if err != nil {
-			return fmt.Errorf("ExecuteFetchAsDba(%v, %v, 0, false, false) failed: %v", destTabletAlias, queryBuf.String(), err)
-		}
-	}
-	return nil
-}
-
-// compareSchemas returns nil if the schema of the two tablets referenced by
-// "sourceAlias" and "destAlias" are identical. Otherwise, the difference is
-// returned as []string.
-func (wr *Wrangler) compareSchemas(ctx context.Context, sourceAlias, destAlias *topodatapb.TabletAlias, tables, excludeTables []string, includeViews bool) ([]string, error) {
-	sourceSd, err := wr.GetSchema(ctx, sourceAlias, tables, excludeTables, includeViews)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get schema from tablet %v. err: %v", sourceAlias, err)
-	}
-	destSd, err := wr.GetSchema(ctx, destAlias, tables, excludeTables, includeViews)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get schema from tablet %v. err: %v", destAlias, err)
-	}
-	return tmutils.DiffSchemaToArray("source", sourceSd, "dest", destSd), nil
-}
-
-// applySQLShard applies a given SQL change on a given tablet alias. It allows executing arbitrary
-// SQL statements, but doesn't return any results, so it's only useful for SQL statements
-// that would be run for their effects (e.g., CREATE).
-// It works by applying the SQL statement on the shard's primary tablet with replication turned on.
-// Thus it should be used only for changes that can be applied on a live instance without causing issues;
-// it shouldn't be used for anything that will require a pivot.
-// The SQL statement string is expected to have {{.DatabaseName}} in place of the actual db name.
-func (wr *Wrangler) applySQLShard(ctx context.Context, tabletInfo *topo.TabletInfo, change string, reloadSchema bool) error {
-	filledChange, err := fillStringTemplate(change, map[string]string{"DatabaseName": tabletInfo.DbName()})
-	if err != nil {
-		return fmt.Errorf("fillStringTemplate failed: %v", err)
-	}
-	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
-	defer cancel()
-	// Need to make sure that we enable binlog, since we're only applying the statement on primaries.
-	_, err = wr.tmc.ExecuteFetchAsDba(ctx, tabletInfo.Tablet, false, []byte(filledChange), 0, false, reloadSchema)
-	return err
-}
-
-// fillStringTemplate returns the string template filled
-func fillStringTemplate(tmpl string, vars interface{}) (string, error) {
-	myTemplate := template.Must(template.New("").Parse(tmpl))
-	data := new(bytes.Buffer)
-	if err := myTemplate.Execute(data, vars); err != nil {
-		return "", err
-	}
-	return data.String(), nil
+	return grpcvtctldserver.NewVtctldServer(wr.ts).CopySchemaShard(ctx, sourceShardInfo.MasterAlias, tables, excludeTables, includeViews, destKeyspace, destShard, waitReplicasTimeout, skipVerify)
 }

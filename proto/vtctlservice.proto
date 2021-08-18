@@ -151,6 +151,8 @@ service Vtctld {
   // only works if the current replica position matches the last known reparent
   // action.
   rpc ReparentTablet(vtctldata.ReparentTabletRequest) returns (vtctldata.ReparentTabletResponse) {};
+  // Reshard support horizontal sharding by letting you change the sharding ranges of your existing keyspace. 
+  rpc Reshard(vtctldata.ReshardRequest) returns (vtctldata.ReshardResponse) {};
   // ShardReplicationPositions returns the replication position of each tablet
   // in a shard. This RPC makes a best-effort to return partial results. For
   // example, if one tablet in the shard graph is unreachable, then

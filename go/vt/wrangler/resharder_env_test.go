@@ -27,6 +27,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/key"
+	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver"
 
 	"context"
 
@@ -35,21 +36,23 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 )
 
 type testResharderEnv struct {
-	wr       *Wrangler
-	keyspace string
-	workflow string
-	sources  []string
-	targets  []string
-	tablets  map[int]*topodatapb.Tablet
-	topoServ *topo.Server
-	cell     string
-	tmc      *testResharderTMClient
+	wr           *Wrangler
+	keyspace     string
+	workflow     string
+	sources      []string
+	targets      []string
+	tablets      map[int]*topodatapb.Tablet
+	topoServ     *topo.Server
+	cell         string
+	tmc          *testResharderTMClient
+	vtctldServer *grpcvtctldserver.VtctldServer
 }
 
 var (
@@ -99,6 +102,7 @@ func newTestResharderEnv(t *testing.T, sources, targets []string) *testResharder
 		cell:     "cell",
 		tmc:      newTestResharderTMClient(),
 	}
+	env.vtctldServer = grpcvtctldserver.NewVtctldServerCustomTmc(env.topoServ, env.tmc)
 	env.wr = New(logutil.NewConsoleLogger(), env.topoServ, env.tmc)
 	initTopo(t, env.topoServ, "ks", sources, targets, []string{"cell"})
 	tabletID := 100
