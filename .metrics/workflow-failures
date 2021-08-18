@@ -1,4 +1,3 @@
-2021-04-12T14:51:54Z,Cluster (onlineddl_declarative),https://github.com/vitessio/vitess/actions/runs/741573058
 2021-04-12T14:51:54Z,Cluster (onlineddl_ghost),https://github.com/vitessio/vitess/actions/runs/741573053
 2021-04-12T14:51:54Z,Cluster (onlineddl_revert),https://github.com/vitessio/vitess/actions/runs/741573037
 2021-04-12T14:51:54Z,Cluster (onlineddl_vrepl),https://github.com/vitessio/vitess/actions/runs/741573028
@@ -9998,3 +9997,4 @@
 2021-08-18T09:20:11Z,Cluster (vtgate_vschema),https://github.com/vitessio/vitess/actions/runs/1142550002
 2021-08-18T09:20:11Z,docker_test_1,https://github.com/vitessio/vitess/actions/runs/1142550006
 2021-08-18T09:20:11Z,endtoend,https://github.com/vitessio/vitess/actions/runs/1142549927
+2021-08-18T09:20:11Z,unit_race,https://github.com/vitessio/vitess/actions/runs/1142549954
