@@ -21,6 +21,13 @@ import (
 	"fmt"
 	"time"
 
+	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
+
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
+
+	"vitess.io/vitess/go/mysql"
+
 	"k8s.io/apimachinery/pkg/util/sets"
 
 	"vitess.io/vitess/go/vt/orchestrator/attributes"
@@ -140,7 +147,7 @@ func (vtorcReparent *VtOrcReparentFunctions) CheckPrimaryRecoveryType() error {
 }
 
 // FindPrimaryCandidates implements the ReparentFunctions interface
-func (vtorcReparent *VtOrcReparentFunctions) FindPrimaryCandidates(ctx context.Context, logger logutil.Logger, tmc tmclient.TabletManagerClient) error {
+func (vtorcReparent *VtOrcReparentFunctions) FindPrimaryCandidates(ctx context.Context, logger logutil.Logger, tmc tmclient.TabletManagerClient, validCandidates map[string]mysql.Position, tabletMap map[string]*topo.TabletInfo) error {
 	postponedAll := false
 	promotedReplicaIsIdeal := func(promoted *inst.Instance, hasBestPromotionRule bool) bool {
 		if promoted == nil {
@@ -163,9 +170,8 @@ func (vtorcReparent *VtOrcReparentFunctions) FindPrimaryCandidates(ctx context.C
 	}
 
 	AuditTopologyRecovery(vtorcReparent.topologyRecovery, "RecoverDeadMaster: regrouping replicas via GTID")
-	lostReplicas, _, cannotReplicateReplicas, promotedReplica, err := inst.RegroupReplicasGTID(&vtorcReparent.analysisEntry.AnalyzedInstanceKey, true, nil, &vtorcReparent.topologyRecovery.PostponedFunctionsContainer, promotedReplicaIsIdeal)
+	lostReplicas, promotedReplica, err := ChooseCandidate(tmc, &vtorcReparent.analysisEntry.AnalyzedInstanceKey, &vtorcReparent.topologyRecovery.PostponedFunctionsContainer, promotedReplicaIsIdeal, validCandidates, tabletMap)
 	vtorcReparent.topologyRecovery.AddError(err)
-	lostReplicas = append(lostReplicas, cannotReplicateReplicas...)
 	for _, replica := range lostReplicas {
 		AuditTopologyRecovery(vtorcReparent.topologyRecovery, fmt.Sprintf("RecoverDeadMaster: - lost replica: %+v", replica.Key))
 	}
@@ -204,6 +210,132 @@ func (vtorcReparent *VtOrcReparentFunctions) FindPrimaryCandidates(ctx context.C
 	vtorcReparent.lostReplicas = lostReplicas
 	vtorcReparent.recoveryAttempted = true
 	return nil
+}
+
+// ChooseCandidate will choose a candidate replica of a given instance, and take its siblings using GTID
+func ChooseCandidate(
+	tmc tmclient.TabletManagerClient,
+	masterKey *inst.InstanceKey,
+	postponedFunctionsContainer *inst.PostponedFunctionsContainer,
+	postponeAllMatchOperations func(*inst.Instance, bool) bool,
+	validCandidates map[string]mysql.Position,
+	tabletMap map[string]*topo.TabletInfo,
+) (
+	lostReplicas [](*inst.Instance),
+	candidateReplica *inst.Instance,
+	err error,
+) {
+	var emptyReplicas [](*inst.Instance)
+	var unmovedReplicas [](*inst.Instance)
+	var movedReplicas [](*inst.Instance)
+
+	dataCenterHint := ""
+	if master, _, _ := inst.ReadInstance(masterKey); master != nil {
+		dataCenterHint = master.DataCenter
+	}
+
+	var replicas [](*inst.Instance)
+	log.Errorf("started Manan's new function")
+
+	for candidate := range validCandidates {
+		candidateInfo, ok := tabletMap[candidate]
+		if !ok {
+			return emptyReplicas, candidateReplica, vterrors.Errorf(vtrpc.Code_INTERNAL, "candidate %v not found in the tablet map; this an impossible situation", candidate)
+		}
+		candidateInstance, _, err := inst.ReadInstance(&inst.InstanceKey{
+			Hostname: candidateInfo.MysqlHostname,
+			Port:     int(candidateInfo.MysqlPort),
+		})
+		if err != nil {
+			log.Errorf("%v", err)
+			return emptyReplicas, candidateReplica, err
+		}
+		replicas = append(replicas, candidateInstance)
+	}
+
+	inst.SortInstancesDataCenterHint(replicas, dataCenterHint)
+	for _, replica := range replicas {
+		log.Debugf("- sorted replica: %+v %+v", replica.Key, replica.ExecBinlogCoordinates)
+	}
+
+	candidateReplica, aheadReplicas, equalReplicas, laterReplicas, cannotReplicateReplicas, err := inst.ChooseCandidateReplica(replicas)
+	if err != nil {
+		return emptyReplicas, candidateReplica, err
+	}
+	if candidateReplica != nil {
+		mostUpToDateReplica := replicas[0]
+		if candidateReplica.ExecBinlogCoordinates.SmallerThan(&mostUpToDateReplica.ExecBinlogCoordinates) {
+			log.Warningf("GetCandidateReplica: chosen replica: %+v is behind most-up-to-date replica: %+v", candidateReplica.Key, mostUpToDateReplica.Key)
+		}
+	}
+	log.Debugf("GetCandidateReplica: candidate: %+v, ahead: %d, equal: %d, late: %d, break: %d", candidateReplica.Key, len(aheadReplicas), len(equalReplicas), len(laterReplicas), len(cannotReplicateReplicas))
+
+	replicasToMove := append(equalReplicas, laterReplicas...)
+	hasBestPromotionRule := true
+	if candidateReplica != nil {
+		for _, replica := range replicasToMove {
+			if replica.PromotionRule.BetterThan(candidateReplica.PromotionRule) {
+				hasBestPromotionRule = false
+			}
+		}
+	}
+
+	// TODO: Use the set replication source functionality instead of the moveReplicasViaGTID
+	//now := time.Now().UnixNano()
+	if err := inst.SwitchMaster(candidateReplica.Key, *masterKey); err != nil {
+		return emptyReplicas, candidateReplica, err
+	}
+
+	//candidateReplicaTablet, err := inst.ReadTablet(candidateReplica.Key)
+	//if err != nil {
+	//	return emptyReplicas, candidateReplica, err
+	//}
+
+	//moveGTIDFunc := func() error {
+	//	log.Debugf("RegroupReplicasGTID: working on %d replicas", len(replicasToMove))
+	//
+	//	for _, instance := range replicasToMove {
+	//		tablet, err := inst.ReadTablet(instance.Key)
+	//		if err != nil {
+	//			return err
+	//		}
+	//
+	//		err = tmc.SetReplicationSource(context.Background(), tablet, candidateReplicaTablet.Alias, now, "", false)
+	//		if err != nil {
+	//			unmovedReplicas = append(unmovedReplicas, instance)
+	//			err = vterrors.Wrapf(err, "tablet %v SetMaster failed: %v", tablet.Alias, err)
+	//			return err
+	//		}
+	//		movedReplicas = append(movedReplicas, instance)
+	//	}
+	//
+	//	unmovedReplicas = append(unmovedReplicas, aheadReplicas...)
+	//	unmovedReplicas = append(unmovedReplicas, cannotReplicateReplicas...)
+	//	return log.Errore(err)
+	//}
+	moveGTIDFunc := func() error {
+		log.Debugf("RegroupReplicasGTID: working on %d replicas", len(replicasToMove))
+
+		movedReplicas, unmovedReplicas, err, _ = inst.MoveReplicasViaGTID(replicasToMove, candidateReplica, postponedFunctionsContainer)
+		unmovedReplicas = append(unmovedReplicas, aheadReplicas...)
+		return log.Errore(err)
+	}
+	if postponedFunctionsContainer != nil && postponeAllMatchOperations != nil && postponeAllMatchOperations(candidateReplica, hasBestPromotionRule) {
+		postponedFunctionsContainer.AddPostponedFunction(moveGTIDFunc, fmt.Sprintf("regroup-replicas-gtid %+v", candidateReplica.Key))
+	} else {
+		err = moveGTIDFunc()
+	}
+	if postponedFunctionsContainer != nil && postponeAllMatchOperations != nil && postponeAllMatchOperations(candidateReplica, hasBestPromotionRule) {
+		postponedFunctionsContainer.AddPostponedFunction(moveGTIDFunc, fmt.Sprintf("regroup-replicas-gtid %+v", candidateReplica.Key))
+	} else {
+		err = moveGTIDFunc()
+	}
+
+	inst.StartReplication(&candidateReplica.Key)
+
+	log.Debugf("RegroupReplicasGTID: done")
+	inst.AuditOperation("regroup-replicas-gtid", masterKey, fmt.Sprintf("regrouped replicas of %+v via GTID; promoted %+v", *masterKey, candidateReplica.Key))
+	return unmovedReplicas, candidateReplica, err
 }
 
 // CheckIfNeedToOverridePrimary implements the ReparentFunctions interface
@@ -344,4 +476,7 @@ func (vtorcReparent *VtOrcReparentFunctions) StartReplication(ctx context.Contex
 func (vtorcReparent *VtOrcReparentFunctions) GetNewPrimary() *topodatapb.Tablet {
 	tablet, _ := inst.ReadTablet(vtorcReparent.promotedReplica.Key)
 	return tablet
+}
+
+func (vtorcReparent *VtOrcReparentFunctions) SetMaps(tabletMap map[string]*topo.TabletInfo, statusMap map[string]*replicationdatapb.StopReplicationStatus, primaryStatusMap map[string]*replicationdatapb.PrimaryStatus) {
 }

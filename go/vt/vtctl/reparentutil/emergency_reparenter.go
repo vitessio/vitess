@@ -19,6 +19,8 @@ package reparentutil
 import (
 	"context"
 
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 
 	"google.golang.org/protobuf/proto"
@@ -104,12 +106,16 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		return err
 	}
 
+	if err := reparentFunctions.CheckPrimaryRecoveryType(); err != nil {
+		return err
+	}
+
 	tabletMap, err := ts.GetTabletMapForShard(ctx, keyspace, shard)
 	if err != nil {
 		return vterrors.Wrapf(err, "failed to get tablet map for %v/%v: %v", keyspace, shard, err)
 	}
 
-	_, _, err = StopReplicationAndBuildStatusMaps(ctx, erp.tmc, ev, tabletMap, reparentFunctions.GetWaitReplicasTimeout(), reparentFunctions.GetIgnoreReplicas(), erp.logger)
+	statusMap, primaryStatusMap, err := StopReplicationAndBuildStatusMaps(ctx, erp.tmc, ev, tabletMap, reparentFunctions.GetWaitReplicasTimeout(), reparentFunctions.GetIgnoreReplicas(), erp.logger)
 	if err != nil {
 		return vterrors.Wrapf(err, "failed to stop replication and build status maps: %v", err)
 	}
@@ -118,11 +124,22 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		return vterrors.Wrapf(err, "lost topology lock, aborting: %v", err)
 	}
 
-	if err := reparentFunctions.CheckPrimaryRecoveryType(); err != nil {
+	// TODO: remove this entirely
+	reparentFunctions.SetMaps(tabletMap, statusMap, primaryStatusMap)
+
+	validCandidates, err := FindValidEmergencyReparentCandidates(statusMap, primaryStatusMap)
+	if err != nil {
+		return err
+	} else if len(validCandidates) == 0 {
+		return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "no valid candidates for emergency reparent")
+	}
+
+	// Wait for all candidates to apply relay logs
+	if err := waitForAllRelayLogsToApply(ctx, erp.logger, erp.tmc, validCandidates, tabletMap, statusMap, reparentFunctions.GetWaitReplicasTimeout()); err != nil {
 		return err
 	}
 
-	if err := reparentFunctions.FindPrimaryCandidates(ctx, erp.logger, erp.tmc); err != nil {
+	if err := reparentFunctions.FindPrimaryCandidates(ctx, erp.logger, erp.tmc, validCandidates, tabletMap); err != nil {
 		return err
 	}
 
