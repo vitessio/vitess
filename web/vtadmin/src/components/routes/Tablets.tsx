@@ -136,7 +136,7 @@ export const formatRows = (
             alias: formatAlias(t.tablet?.alias),
             cluster: t.cluster?.name,
             hostname: t.tablet?.hostname,
-            isShardServing: shard?.shard?.is_master_serving,
+            isShardServing: shard?.shard?.is_primary_serving,
             keyspace: t.tablet?.keyspace,
             shard: shardName,
             state: formatState(t),
