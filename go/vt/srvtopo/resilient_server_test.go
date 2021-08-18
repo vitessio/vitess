@@ -756,3 +756,54 @@ func TestSrvKeyspaceWatcher(t *testing.T) {
 	assert.NotNil(t, seen6[9].keyspace)
 	assert.Equal(t, seen6[9].keyspace.ShardingColumnName, "updated4")
 }
+
+func TestSrvKeyspaceListener(t *testing.T) {
+	ts, _ := memorytopo.NewServerAndFactory("test_cell")
+	*srvTopoCacheTTL = time.Duration(100 * time.Millisecond)
+	*srvTopoCacheRefresh = time.Duration(40 * time.Millisecond)
+	defer func() {
+		*srvTopoCacheTTL = 1 * time.Second
+		*srvTopoCacheRefresh = 1 * time.Second
+	}()
+
+	rs := NewResilientServer(ts, "TestGetSrvKeyspaceWatcher")
+
+	ctx, cancel := context.WithCancel(context.Background())
+	callbackCount := 0
+
+	// adding listener will perform callback.
+	rs.WatchSrvKeyspace(context.Background(), "test_cell", "test_ks", func(srvKs *topodatapb.SrvKeyspace, err error) bool {
+		callbackCount++
+		select {
+		case <-ctx.Done():
+			return false
+		default:
+			return true
+		}
+	})
+
+	// First update (callback - 2)
+	want := &topodatapb.SrvKeyspace{
+		ShardingColumnName: "id",
+		ShardingColumnType: topodatapb.KeyspaceIdType_UINT64,
+	}
+	err := ts.UpdateSrvKeyspace(context.Background(), "test_cell", "test_ks", want)
+	require.NoError(t, err)
+
+	// Next callback to remove from listener
+	cancel()
+
+	// multi updates thereafter
+	for i := 0; i < 5; i++ {
+		want = &topodatapb.SrvKeyspace{
+			ShardingColumnName: fmt.Sprintf("updated%d", i),
+			ShardingColumnType: topodatapb.KeyspaceIdType_UINT64,
+		}
+		err = ts.UpdateSrvKeyspace(context.Background(), "test_cell", "test_ks", want)
+		require.NoError(t, err)
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	// only 3 times the callback called for the listener
+	assert.Equal(t, 3, callbackCount)
+}
