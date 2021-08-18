@@ -87,8 +87,14 @@ func (vm *VSchemaManager) UpdateVSchema(ctx context.Context, ksName string, vsch
 			log.Errorf("error updating vschema in cell %s: %v", cell, cellErr)
 		}
 	}
+	if err != nil {
+		return err
+	}
 
-	return err
+	// Update all the local copy of VSchema if the topo update is successful.
+	vm.VSchemaUpdate(vschema, err)
+
+	return nil
 }
 
 // VSchemaUpdate builds the VSchema from SrvVschema and call subscribers.
