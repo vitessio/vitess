@@ -104,8 +104,14 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		return err
 	}
 
-	if err := reparentFunctions.StopReplicationAndBuildStatusMaps(ctx, erp.tmc, ev, erp.logger); err != nil {
-		return err
+	tabletMap, err := ts.GetTabletMapForShard(ctx, keyspace, shard)
+	if err != nil {
+		return vterrors.Wrapf(err, "failed to get tablet map for %v/%v: %v", keyspace, shard, err)
+	}
+
+	_, _, err = StopReplicationAndBuildStatusMaps(ctx, erp.tmc, ev, tabletMap, reparentFunctions.GetWaitReplicasTimeout(), reparentFunctions.GetIgnoreReplicas(), erp.logger)
+	if err != nil {
+		return vterrors.Wrapf(err, "failed to stop replication and build status maps: %v", err)
 	}
 
 	if err := topo.CheckShardLocked(ctx, keyspace, shard); err != nil {

@@ -54,7 +54,8 @@ type (
 		GetShard() string
 		CheckIfFixed() bool
 		PreRecoveryProcesses(context.Context) error
-		StopReplicationAndBuildStatusMaps(context.Context, tmclient.TabletManagerClient, *events.Reparent, logutil.Logger) error
+		GetWaitReplicasTimeout() time.Duration
+		GetIgnoreReplicas() sets.String
 		CheckPrimaryRecoveryType() error
 		FindPrimaryCandidates(context.Context, logutil.Logger, tmclient.TabletManagerClient) error
 		CheckIfNeedToOverridePrimary() error
@@ -125,22 +126,15 @@ func (vtctlReparent *VtctlReparentFunctions) CheckIfFixed() bool {
 
 // PreRecoveryProcesses implements the ReparentFunctions interface
 func (vtctlReparent *VtctlReparentFunctions) PreRecoveryProcesses(ctx context.Context) error {
-	var err error
-	vtctlReparent.tabletMap, err = vtctlReparent.ts.GetTabletMapForShard(ctx, vtctlReparent.keyspace, vtctlReparent.shard)
-	if err != nil {
-		return vterrors.Wrapf(err, "failed to get tablet map for %v/%v: %v", vtctlReparent.keyspace, vtctlReparent.shard, err)
-	}
 	return nil
 }
 
-// StopReplicationAndBuildStatusMaps implements the ReparentFunctions interface
-func (vtctlReparent *VtctlReparentFunctions) StopReplicationAndBuildStatusMaps(ctx context.Context, tmc tmclient.TabletManagerClient, ev *events.Reparent, logger logutil.Logger) error {
-	var err error
-	vtctlReparent.statusMap, vtctlReparent.primaryStatusMap, err = StopReplicationAndBuildStatusMaps(ctx, tmc, ev, vtctlReparent.tabletMap, vtctlReparent.WaitReplicasTimeout, vtctlReparent.IgnoreReplicas, logger)
-	if err != nil {
-		return vterrors.Wrapf(err, "failed to stop replication and build status maps: %v", err)
-	}
-	return nil
+func (vtctlReparentFunctions *VtctlReparentFunctions) GetWaitReplicasTimeout() time.Duration {
+	return vtctlReparentFunctions.WaitReplicasTimeout
+}
+
+func (vtctlReparentFunctions *VtctlReparentFunctions) GetIgnoreReplicas() sets.String {
+	return vtctlReparentFunctions.IgnoreReplicas
 }
 
 // CheckPrimaryRecoveryType implements the ReparentFunctions interface

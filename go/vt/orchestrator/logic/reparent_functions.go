@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"time"
 
+	"k8s.io/apimachinery/pkg/util/sets"
+
 	"vitess.io/vitess/go/vt/orchestrator/attributes"
 	"vitess.io/vitess/go/vt/orchestrator/kv"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil"
@@ -94,7 +96,7 @@ func (vtorcReparent *VtOrcReparentFunctions) GetShard() string {
 func (vtorcReparent *VtOrcReparentFunctions) CheckIfFixed() bool {
 	// Check if someone else fixed the problem.
 	tablet, err := TabletRefresh(vtorcReparent.analysisEntry.AnalyzedInstanceKey)
-	if err == nil && tablet.Type != topodatapb.TabletType_MASTER {
+	if err == nil && tablet.Type != topodatapb.TabletType_PRIMARY {
 		// TODO(sougou); use a version that only refreshes the current shard.
 		RefreshTablets()
 		AuditTopologyRecovery(vtorcReparent.topologyRecovery, "another agent seems to have fixed the problem")
@@ -119,10 +121,11 @@ func (vtorcReparent *VtOrcReparentFunctions) PreRecoveryProcesses(ctx context.Co
 	return nil
 }
 
-// StopReplicationAndBuildStatusMaps implements the ReparentFunctions interface
-func (vtorcReparent *VtOrcReparentFunctions) StopReplicationAndBuildStatusMaps(context.Context, tmclient.TabletManagerClient, *events.Reparent, logutil.Logger) error {
-	err := TabletDemoteMaster(vtorcReparent.analysisEntry.AnalyzedInstanceKey)
-	AuditTopologyRecovery(vtorcReparent.topologyRecovery, fmt.Sprintf("RecoverDeadMaster: TabletDemoteMaster: %v", err))
+func (vtorcReparent *VtOrcReparentFunctions) GetWaitReplicasTimeout() time.Duration {
+	return time.Duration(config.Config.LockShardTimeoutSeconds) * time.Second
+}
+
+func (vtorcReparent *VtOrcReparentFunctions) GetIgnoreReplicas() sets.String {
 	return nil
 }
 
