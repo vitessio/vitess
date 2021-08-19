@@ -157,15 +157,25 @@ func TestLostRdonlyOnPrimaryFailure(t *testing.T) {
 	// check that replication is setup correctly
 	checkReplication(t, clusterInstance, curPrimary, []*cluster.Vttablet{rdonly, replica}, 15*time.Second)
 
-	// revoke super privileges from vtorc on replica so that it is unable to repair the replication
-	changePrivileges(t, `REVOKE SUPER ON *.* FROM 'orc_client_user'@'%'`, replica, "orc_client_user")
+	// make the replica lag by setting the source_delay to 20 seconds
+	runSQL(t, "STOP SLAVE", replica, "")
+	runSQL(t, "CHANGE MASTER TO MASTER_DELAY = 20", replica, "")
+	runSQL(t, "START SLAVE", replica, "")
 
-	// stop replication on the replica.
-	err := clusterInstance.VtctlclientProcess.ExecuteCommand("StopReplication", replica.Alias)
-	require.NoError(t, err)
+	defer func() {
+		// fix the crossCell replica back so that no other tests see this as a side effect
+		runSQL(t, "STOP SLAVE", replica, "")
+		runSQL(t, "CHANGE MASTER TO MASTER_DELAY = 0", replica, "")
+		runSQL(t, "START SLAVE", replica, "")
+	}()
 
 	// check that rdonly is able to replicate. We also want to add some queries to rdonly which will not be there in replica
 	runAdditionalCommands(t, curPrimary, []*cluster.Vttablet{rdonly}, 15*time.Second)
+
+	// assert that the replica is indeed lagging and does not have the new insertion by checking the count of rows in the table
+	out, err := runSQL(t, "SELECT * FROM vt_insert_test", replica, "vt_ks")
+	require.NoError(t, err)
+	require.Equal(t, 1, len(out.Rows))
 
 	// Make the current primary database unavailable.
 	err = curPrimary.MysqlctlProcess.Stop()
@@ -175,14 +185,11 @@ func TestLostRdonlyOnPrimaryFailure(t *testing.T) {
 		permanentlyRemoveVttablet(curPrimary)
 	}()
 
-	// grant super privileges back to vtorc on replica so that it can repair
-	changePrivileges(t, `GRANT SUPER ON *.* TO 'orc_client_user'@'%'`, replica, "orc_client_user")
-
 	// vtorc must promote the lagging replica and not the rdonly, since it has a MustNotPromoteRule promotion rule
 	checkPrimaryTablet(t, clusterInstance, replica)
 
 	// check that the rdonly is lost. The lost replica has is detached and its host is prepended with `//`
-	out, err := runSQL(t, "SELECT HOST FROM performance_schema.replication_connection_configuration", rdonly, "")
+	out, err = runSQL(t, "SELECT HOST FROM performance_schema.replication_connection_configuration", rdonly, "")
 	require.NoError(t, err)
 	require.Equal(t, "//localhost", out.Rows[0][0].ToString())
 }
