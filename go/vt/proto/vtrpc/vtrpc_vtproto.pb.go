@@ -114,11 +114,6 @@ func (m *RPCError) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i--
 		dAtA[i] = 0x12
 	}
-	if m.LegacyCode != 0 {
-		i = encodeVarint(dAtA, i, uint64(m.LegacyCode))
-		i--
-		dAtA[i] = 0x8
-	}
 	return len(dAtA) - i, nil
 }
 
@@ -163,9 +158,6 @@ func (m *RPCError) SizeVT() (n int) {
 	}
 	var l int
 	_ = l
-	if m.LegacyCode != 0 {
-		n += 1 + sov(uint64(m.LegacyCode))
-	}
 	l = len(m.Message)
 	if l > 0 {
 		n += 1 + l + sov(uint64(l))
@@ -361,25 +353,6 @@ func (m *RPCError) UnmarshalVT(dAtA []byte) error {
 			return fmt.Errorf("proto: RPCError: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
-		case 1:
-			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field LegacyCode", wireType)
-			}
-			m.LegacyCode = 0
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflow
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				m.LegacyCode |= LegacyErrorCode(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
 		case 2:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field Message", wireType)
