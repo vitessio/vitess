@@ -96,9 +96,6 @@ enum Code {
   // instead for those errors).
   PERMISSION_DENIED = 7;
 
-  // UNAUTHENTICATED indicates the request does not have valid
-  // authentication credentials for the operation.
-  UNAUTHENTICATED = 16;
 
   // RESOURCE_EXHAUSTED indicates some resource has been exhausted, perhaps
   // a per-user quota, or perhaps the entire file system is out of space.
@@ -169,6 +166,13 @@ enum Code {
 
   // DATA_LOSS indicates unrecoverable data loss or corruption.
   DATA_LOSS = 15;
+
+  // UNAUTHENTICATED indicates the request does not have valid
+  // authentication credentials for the operation.
+  UNAUTHENTICATED = 16;
+
+  // CLUSTER_EVENT indicates a cluster EVENT
+  CLUSTER_EVENT = 17;
 }
 
 // RPCError is an application-level error structure returned by

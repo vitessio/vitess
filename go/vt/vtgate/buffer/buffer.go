@@ -264,15 +264,17 @@ func CausedByFailover(err error) bool {
 	log.V(2).Infof("Checking error (type: %T) if it is caused by a failover. err: %v", err, err)
 
 	// TODO(sougou): Remove the INTERNAL check after rollout.
-	if code := vterrors.Code(err); code != vtrpcpb.Code_FAILED_PRECONDITION && code != vtrpcpb.Code_INTERNAL {
+	code := vterrors.Code(err)
+	if code == vtrpcpb.Code_CLUSTER_EVENT {
+		return true
+	}
+	if code != vtrpcpb.Code_FAILED_PRECONDITION && code != vtrpcpb.Code_INTERNAL {
 		return false
 	}
 	errString := err.Error()
 	switch {
 	// All flavors.
-	case strings.Contains(errString, "operation not allowed in state NOT_SERVING") ||
-		strings.Contains(errString, "operation not allowed in state SHUTTING_DOWN") ||
-		// Match 1290 if -queryserver-config-terse-errors explicitly hid the error message
+	case // Match 1290 if -queryserver-config-terse-errors explicitly hid the error message
 		// (which it does to avoid logging the original query including any PII).
 		strings.Contains(errString, "(errno 1290) (sqlstate HY000) during query:"):
 		return true
