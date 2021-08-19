@@ -54640,49 +54640,12 @@ $root.vtrpc = (function() {
         return values;
     })();
 
-    /**
-     * LegacyErrorCode enum.
-     * @name vtrpc.LegacyErrorCode
-     * @enum {number}
-     * @property {number} SUCCESS_LEGACY=0 SUCCESS_LEGACY value
-     * @property {number} CANCELLED_LEGACY=1 CANCELLED_LEGACY value
-     * @property {number} UNKNOWN_ERROR_LEGACY=2 UNKNOWN_ERROR_LEGACY value
-     * @property {number} BAD_INPUT_LEGACY=3 BAD_INPUT_LEGACY value
-     * @property {number} DEADLINE_EXCEEDED_LEGACY=4 DEADLINE_EXCEEDED_LEGACY value
-     * @property {number} INTEGRITY_ERROR_LEGACY=5 INTEGRITY_ERROR_LEGACY value
-     * @property {number} PERMISSION_DENIED_LEGACY=6 PERMISSION_DENIED_LEGACY value
-     * @property {number} RESOURCE_EXHAUSTED_LEGACY=7 RESOURCE_EXHAUSTED_LEGACY value
-     * @property {number} QUERY_NOT_SERVED_LEGACY=8 QUERY_NOT_SERVED_LEGACY value
-     * @property {number} NOT_IN_TX_LEGACY=9 NOT_IN_TX_LEGACY value
-     * @property {number} INTERNAL_ERROR_LEGACY=10 INTERNAL_ERROR_LEGACY value
-     * @property {number} TRANSIENT_ERROR_LEGACY=11 TRANSIENT_ERROR_LEGACY value
-     * @property {number} UNAUTHENTICATED_LEGACY=12 UNAUTHENTICATED_LEGACY value
-     */
-    vtrpc.LegacyErrorCode = (function() {
-        var valuesById = {}, values = Object.create(valuesById);
-        values[valuesById[0] = "SUCCESS_LEGACY"] = 0;
-        values[valuesById[1] = "CANCELLED_LEGACY"] = 1;
-        values[valuesById[2] = "UNKNOWN_ERROR_LEGACY"] = 2;
-        values[valuesById[3] = "BAD_INPUT_LEGACY"] = 3;
-        values[valuesById[4] = "DEADLINE_EXCEEDED_LEGACY"] = 4;
-        values[valuesById[5] = "INTEGRITY_ERROR_LEGACY"] = 5;
-        values[valuesById[6] = "PERMISSION_DENIED_LEGACY"] = 6;
-        values[valuesById[7] = "RESOURCE_EXHAUSTED_LEGACY"] = 7;
-        values[valuesById[8] = "QUERY_NOT_SERVED_LEGACY"] = 8;
-        values[valuesById[9] = "NOT_IN_TX_LEGACY"] = 9;
-        values[valuesById[10] = "INTERNAL_ERROR_LEGACY"] = 10;
-        values[valuesById[11] = "TRANSIENT_ERROR_LEGACY"] = 11;
-        values[valuesById[12] = "UNAUTHENTICATED_LEGACY"] = 12;
-        return values;
-    })();
-
     vtrpc.RPCError = (function() {
 
         /**
          * Properties of a RPCError.
          * @memberof vtrpc
          * @interface IRPCError
-         * @property {vtrpc.LegacyErrorCode|null} [legacy_code] RPCError legacy_code
          * @property {string|null} [message] RPCError message
          * @property {vtrpc.Code|null} [code] RPCError code
          */
@@ -54701,14 +54664,6 @@ $root.vtrpc = (function() {
                     if (properties[keys[i]] != null)
                         this[keys[i]] = properties[keys[i]];
         }
-
-        /**
-         * RPCError legacy_code.
-         * @member {vtrpc.LegacyErrorCode} legacy_code
-         * @memberof vtrpc.RPCError
-         * @instance
-         */
-        RPCError.prototype.legacy_code = 0;
 
         /**
          * RPCError message.
@@ -54750,8 +54705,6 @@ $root.vtrpc = (function() {
         RPCError.encode = function encode(message, writer) {
             if (!writer)
                 writer = $Writer.create();
-            if (message.legacy_code != null && Object.hasOwnProperty.call(message, "legacy_code"))
-                writer.uint32(/* id 1, wireType 0 =*/8).int32(message.legacy_code);
             if (message.message != null && Object.hasOwnProperty.call(message, "message"))
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.message);
             if (message.code != null && Object.hasOwnProperty.call(message, "code"))
@@ -54790,9 +54743,6 @@ $root.vtrpc = (function() {
             while (reader.pos < end) {
                 var tag = reader.uint32();
                 switch (tag >>> 3) {
-                case 1:
-                    message.legacy_code = reader.int32();
-                    break;
                 case 2:
                     message.message = reader.string();
                     break;
@@ -54834,25 +54784,6 @@ $root.vtrpc = (function() {
         RPCError.verify = function verify(message) {
             if (typeof message !== "object" || message === null)
                 return "object expected";
-            if (message.legacy_code != null && message.hasOwnProperty("legacy_code"))
-                switch (message.legacy_code) {
-                default:
-                    return "legacy_code: enum value expected";
-                case 0:
-                case 1:
-                case 2:
-                case 3:
-                case 4:
-                case 5:
-                case 6:
-                case 7:
-                case 8:
-                case 9:
-                case 10:
-                case 11:
-                case 12:
-                    break;
-                }
             if (message.message != null && message.hasOwnProperty("message"))
                 if (!$util.isString(message.message))
                     return "message: string expected";
@@ -54894,60 +54825,6 @@ $root.vtrpc = (function() {
             if (object instanceof $root.vtrpc.RPCError)
                 return object;
             var message = new $root.vtrpc.RPCError();
-            switch (object.legacy_code) {
-            case "SUCCESS_LEGACY":
-            case 0:
-                message.legacy_code = 0;
-                break;
-            case "CANCELLED_LEGACY":
-            case 1:
-                message.legacy_code = 1;
-                break;
-            case "UNKNOWN_ERROR_LEGACY":
-            case 2:
-                message.legacy_code = 2;
-                break;
-            case "BAD_INPUT_LEGACY":
-            case 3:
-                message.legacy_code = 3;
-                break;
-            case "DEADLINE_EXCEEDED_LEGACY":
-            case 4:
-                message.legacy_code = 4;
-                break;
-            case "INTEGRITY_ERROR_LEGACY":
-            case 5:
-                message.legacy_code = 5;
-                break;
-            case "PERMISSION_DENIED_LEGACY":
-            case 6:
-                message.legacy_code = 6;
-                break;
-            case "RESOURCE_EXHAUSTED_LEGACY":
-            case 7:
-                message.legacy_code = 7;
-                break;
-            case "QUERY_NOT_SERVED_LEGACY":
-            case 8:
-                message.legacy_code = 8;
-                break;
-            case "NOT_IN_TX_LEGACY":
-            case 9:
-                message.legacy_code = 9;
-                break;
-            case "INTERNAL_ERROR_LEGACY":
-            case 10:
-                message.legacy_code = 10;
-                break;
-            case "TRANSIENT_ERROR_LEGACY":
-            case 11:
-                message.legacy_code = 11;
-                break;
-            case "UNAUTHENTICATED_LEGACY":
-            case 12:
-                message.legacy_code = 12;
-                break;
-            }
             if (object.message != null)
                 message.message = String(object.message);
             switch (object.code) {
@@ -55037,12 +54914,9 @@ $root.vtrpc = (function() {
                 options = {};
             var object = {};
             if (options.defaults) {
-                object.legacy_code = options.enums === String ? "SUCCESS_LEGACY" : 0;
                 object.message = "";
                 object.code = options.enums === String ? "OK" : 0;
             }
-            if (message.legacy_code != null && message.hasOwnProperty("legacy_code"))
-                object.legacy_code = options.enums === String ? $root.vtrpc.LegacyErrorCode[message.legacy_code] : message.legacy_code;
             if (message.message != null && message.hasOwnProperty("message"))
                 object.message = message.message;
             if (message.code != null && message.hasOwnProperty("code"))
@@ -55738,6 +55612,216 @@ $root.replicationdata = (function() {
         values[valuesById[0] = "IOANDSQLTHREAD"] = 0;
         values[valuesById[1] = "IOTHREADONLY"] = 1;
         return values;
+    })();
+
+    replicationdata.PrimaryStatus = (function() {
+
+        /**
+         * Properties of a PrimaryStatus.
+         * @memberof replicationdata
+         * @interface IPrimaryStatus
+         * @property {string|null} [position] PrimaryStatus position
+         * @property {string|null} [file_position] PrimaryStatus file_position
+         */
+
+        /**
+         * Constructs a new PrimaryStatus.
+         * @memberof replicationdata
+         * @classdesc Represents a PrimaryStatus.
+         * @implements IPrimaryStatus
+         * @constructor
+         * @param {replicationdata.IPrimaryStatus=} [properties] Properties to set
+         */
+        function PrimaryStatus(properties) {
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * PrimaryStatus position.
+         * @member {string} position
+         * @memberof replicationdata.PrimaryStatus
+         * @instance
+         */
+        PrimaryStatus.prototype.position = "";
+
+        /**
+         * PrimaryStatus file_position.
+         * @member {string} file_position
+         * @memberof replicationdata.PrimaryStatus
+         * @instance
+         */
+        PrimaryStatus.prototype.file_position = "";
+
+        /**
+         * Creates a new PrimaryStatus instance using the specified properties.
+         * @function create
+         * @memberof replicationdata.PrimaryStatus
+         * @static
+         * @param {replicationdata.IPrimaryStatus=} [properties] Properties to set
+         * @returns {replicationdata.PrimaryStatus} PrimaryStatus instance
+         */
+        PrimaryStatus.create = function create(properties) {
+            return new PrimaryStatus(properties);
+        };
+
+        /**
+         * Encodes the specified PrimaryStatus message. Does not implicitly {@link replicationdata.PrimaryStatus.verify|verify} messages.
+         * @function encode
+         * @memberof replicationdata.PrimaryStatus
+         * @static
+         * @param {replicationdata.IPrimaryStatus} message PrimaryStatus message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        PrimaryStatus.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.position != null && Object.hasOwnProperty.call(message, "position"))
+                writer.uint32(/* id 1, wireType 2 =*/10).string(message.position);
+            if (message.file_position != null && Object.hasOwnProperty.call(message, "file_position"))
+                writer.uint32(/* id 2, wireType 2 =*/18).string(message.file_position);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified PrimaryStatus message, length delimited. Does not implicitly {@link replicationdata.PrimaryStatus.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof replicationdata.PrimaryStatus
+         * @static
+         * @param {replicationdata.IPrimaryStatus} message PrimaryStatus message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        PrimaryStatus.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a PrimaryStatus message from the specified reader or buffer.
+         * @function decode
+         * @memberof replicationdata.PrimaryStatus
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {replicationdata.PrimaryStatus} PrimaryStatus
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        PrimaryStatus.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.replicationdata.PrimaryStatus();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    message.position = reader.string();
+                    break;
+                case 2:
+                    message.file_position = reader.string();
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a PrimaryStatus message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof replicationdata.PrimaryStatus
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {replicationdata.PrimaryStatus} PrimaryStatus
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        PrimaryStatus.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a PrimaryStatus message.
+         * @function verify
+         * @memberof replicationdata.PrimaryStatus
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        PrimaryStatus.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.position != null && message.hasOwnProperty("position"))
+                if (!$util.isString(message.position))
+                    return "position: string expected";
+            if (message.file_position != null && message.hasOwnProperty("file_position"))
+                if (!$util.isString(message.file_position))
+                    return "file_position: string expected";
+            return null;
+        };
+
+        /**
+         * Creates a PrimaryStatus message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof replicationdata.PrimaryStatus
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {replicationdata.PrimaryStatus} PrimaryStatus
+         */
+        PrimaryStatus.fromObject = function fromObject(object) {
+            if (object instanceof $root.replicationdata.PrimaryStatus)
+                return object;
+            var message = new $root.replicationdata.PrimaryStatus();
+            if (object.position != null)
+                message.position = String(object.position);
+            if (object.file_position != null)
+                message.file_position = String(object.file_position);
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a PrimaryStatus message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof replicationdata.PrimaryStatus
+         * @static
+         * @param {replicationdata.PrimaryStatus} message PrimaryStatus
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        PrimaryStatus.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.defaults) {
+                object.position = "";
+                object.file_position = "";
+            }
+            if (message.position != null && message.hasOwnProperty("position"))
+                object.position = message.position;
+            if (message.file_position != null && message.hasOwnProperty("file_position"))
+                object.file_position = message.file_position;
+            return object;
+        };
+
+        /**
+         * Converts this PrimaryStatus to JSON.
+         * @function toJSON
+         * @memberof replicationdata.PrimaryStatus
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        PrimaryStatus.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return PrimaryStatus;
     })();
 
     replicationdata.PrimaryStatus = (function() {
