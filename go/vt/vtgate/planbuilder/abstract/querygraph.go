@@ -116,37 +116,6 @@ func (qg *QueryGraph) collectPredicates(sel *sqlparser.Select, semTable *semanti
 	return nil
 }
 
-func (qg *QueryGraph) collectPredicateTable(t sqlparser.TableExpr, predicate sqlparser.Expr, semTable *semantics.SemTable) error {
-	deps := semTable.BaseTableDependencies(predicate)
-	switch deps.NumberOfTables() {
-	case 0:
-		qg.addNoDepsPredicate(predicate)
-	case 1:
-		found := qg.addToSingleTable(deps, predicate)
-		if !found {
-			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "table %v for predicate %v not found", deps, sqlparser.String(predicate))
-		}
-	default:
-		switch table := t.(type) {
-		case *sqlparser.JoinTableExpr:
-			switch table.Join {
-			case sqlparser.NormalJoinType:
-				allPredicates, found := qg.innerJoins[deps]
-				if found {
-					allPredicates = append(allPredicates, predicate)
-				} else {
-					allPredicates = []sqlparser.Expr{predicate}
-				}
-				qg.innerJoins[deps] = allPredicates
-			case sqlparser.LeftJoinType, sqlparser.RightJoinType:
-				break
-			}
-		}
-	}
-
-	return nil
-}
-
 func (qg *QueryGraph) collectPredicate(predicate sqlparser.Expr, semTable *semantics.SemTable) error {
 	// looking at local tables only
 	deps := semTable.BaseTableDependencies(predicate) & qg.TableID()
