@@ -44,12 +44,12 @@ const (
 	mysqlAggregateInterval      = 100 * time.Millisecond
 
 	aggregatedMetricsExpiration   = 5 * time.Second
-	aggregatedMetricsCleanup      = 1 * time.Second
+	aggregatedMetricsCleanup      = 10 * time.Second
 	throttledAppsSnapshotInterval = 5 * time.Second
 	recentAppsExpiration          = time.Hour * 24
 
 	nonDeprioritizedAppMapExpiration = time.Second
-	nonDeprioritizedAppMapInterval   = 100 * time.Millisecond
+	nonDeprioritizedAppMapInterval   = 10 * time.Second
 
 	dormantPeriod             = time.Minute
 	defaultThrottleTTLMinutes = 60
