@@ -437,9 +437,6 @@ func (rp *routeTree) searchForNewVindexes(predicates []sqlparser.Expr) (bool, er
 					return false, err
 				}
 				newVindexFound = newVindexFound || found
-
-			default:
-				return false, semantics.Gen4NotSupportedF("%s", sqlparser.String(filter))
 			}
 		case *sqlparser.IsExpr:
 			found, err := rp.planIsExpr(node)
