@@ -130,6 +130,10 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	validCandidates, err := FindValidEmergencyReparentCandidates(statusMap, primaryStatusMap)
 	if err != nil {
 		return err
+	}
+	validCandidates, err = reparentFunctions.RestrictValidCandidates(validCandidates, tabletMap)
+	if err != nil {
+		return err
 	} else if len(validCandidates) == 0 {
 		return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "no valid candidates for emergency reparent")
 	}
