@@ -975,7 +975,7 @@ Cleanup:
 		return instance, log.Errore(err)
 	}
 	// and we're done (pending deferred functions)
-	AuditOperation("make-co-master", instanceKey, fmt.Sprintf("%+v made co-master of %+v", *instanceKey, primary.Key))
+	AuditOperation("make-co-primary", instanceKey, fmt.Sprintf("%+v made co-master of %+v", *instanceKey, primary.Key))
 
 	return instance, err
 }
@@ -1016,7 +1016,7 @@ Cleanup:
 	}
 
 	// and we're done (pending deferred functions)
-	AuditOperation("reset-slave", instanceKey, fmt.Sprintf("%+v replication reset", *instanceKey))
+	AuditOperation("reset-replica", instanceKey, fmt.Sprintf("%+v replication reset", *instanceKey))
 
 	return instance, err
 }
@@ -1037,7 +1037,7 @@ func DetachReplicaPrimaryHost(instanceKey *InstanceKey) (*Instance, error) {
 
 	log.Infof("Will detach master host on %+v. Detached key is %+v", *instanceKey, *detachedPrimaryKey)
 
-	if maintenanceToken, merr := BeginMaintenance(instanceKey, GetMaintenanceOwner(), "detach-replica-master-host"); merr != nil {
+	if maintenanceToken, merr := BeginMaintenance(instanceKey, GetMaintenanceOwner(), "detach-replica-primary-host"); merr != nil {
 		err = fmt.Errorf("Cannot begin maintenance on %+v: %v", *instanceKey, merr)
 		goto Cleanup
 	} else {
@@ -1082,7 +1082,7 @@ func ReattachReplicaPrimaryHost(instanceKey *InstanceKey) (*Instance, error) {
 
 	log.Infof("Will reattach master host on %+v. Reattached key is %+v", *instanceKey, *reattachedPrimaryKey)
 
-	if maintenanceToken, merr := BeginMaintenance(instanceKey, GetMaintenanceOwner(), "reattach-replica-master-host"); merr != nil {
+	if maintenanceToken, merr := BeginMaintenance(instanceKey, GetMaintenanceOwner(), "reattach-replica-primary-host"); merr != nil {
 		err = fmt.Errorf("Cannot begin maintenance on %+v: %v", *instanceKey, merr)
 		goto Cleanup
 	} else {
@@ -1223,13 +1223,13 @@ func ErrantGTIDResetPrimary(instanceKey *InstanceKey) (instance *Instance, err e
 		return instance, err
 	}
 	if instance.GtidErrant == "" {
-		return instance, log.Errorf("gtid-errant-reset-master will not operate on %+v because no errant GTID is found", *instanceKey)
+		return instance, log.Errorf("gtid-errant-reset-primary will not operate on %+v because no errant GTID is found", *instanceKey)
 	}
 	if !instance.SupportsOracleGTID {
-		return instance, log.Errorf("gtid-errant-reset-master requested for %+v but it is not using oracle-gtid", *instanceKey)
+		return instance, log.Errorf("gtid-errant-reset-primary requested for %+v but it is not using oracle-gtid", *instanceKey)
 	}
 	if len(instance.Replicas) > 0 {
-		return instance, log.Errorf("gtid-errant-reset-master will not operate on %+v because it has %+v replicas. Expecting no replicas", *instanceKey, len(instance.Replicas))
+		return instance, log.Errorf("gtid-errant-reset-primary will not operate on %+v because it has %+v replicas. Expecting no replicas", *instanceKey, len(instance.Replicas))
 	}
 
 	gtidSubtract := ""
@@ -1255,7 +1255,7 @@ func ErrantGTIDResetPrimary(instanceKey *InstanceKey) (instance *Instance, err e
 			goto Cleanup
 		}
 		if !replicationStopped {
-			err = fmt.Errorf("gtid-errant-reset-master: timeout while waiting for replication to stop on %+v", instance.Key)
+			err = fmt.Errorf("gtid-errant-reset-primary: timeout while waiting for replication to stop on %+v", instance.Key)
 			goto Cleanup
 		}
 	}
@@ -1276,21 +1276,21 @@ func ErrantGTIDResetPrimary(instanceKey *InstanceKey) (instance *Instance, err e
 		time.Sleep(waitInterval)
 	}
 	if err != nil {
-		err = fmt.Errorf("gtid-errant-reset-master: error while resetting master on %+v, after which intended to set gtid_purged to: %s. Error was: %+v", instance.Key, gtidSubtract, err)
+		err = fmt.Errorf("gtid-errant-reset-primary: error while resetting master on %+v, after which intended to set gtid_purged to: %s. Error was: %+v", instance.Key, gtidSubtract, err)
 		goto Cleanup
 	}
 
 	primaryStatusFound, executedGtidSet, err = ShowPrimaryStatus(instanceKey)
 	if err != nil {
-		err = fmt.Errorf("gtid-errant-reset-master: error getting master status on %+v, after which intended to set gtid_purged to: %s. Error was: %+v", instance.Key, gtidSubtract, err)
+		err = fmt.Errorf("gtid-errant-reset-primary: error getting master status on %+v, after which intended to set gtid_purged to: %s. Error was: %+v", instance.Key, gtidSubtract, err)
 		goto Cleanup
 	}
 	if !primaryStatusFound {
-		err = fmt.Errorf("gtid-errant-reset-master: cannot get master status on %+v, after which intended to set gtid_purged to: %s.", instance.Key, gtidSubtract)
+		err = fmt.Errorf("gtid-errant-reset-primary: cannot get master status on %+v, after which intended to set gtid_purged to: %s.", instance.Key, gtidSubtract)
 		goto Cleanup
 	}
 	if executedGtidSet != "" {
-		err = fmt.Errorf("gtid-errant-reset-master: Unexpected non-empty Executed_Gtid_Set found on %+v following RESET MASTER, after which intended to set gtid_purged to: %s. Executed_Gtid_Set found to be: %+v", instance.Key, gtidSubtract, executedGtidSet)
+		err = fmt.Errorf("gtid-errant-reset-primary: Unexpected non-empty Executed_Gtid_Set found on %+v following RESET MASTER, after which intended to set gtid_purged to: %s. Executed_Gtid_Set found to be: %+v", instance.Key, gtidSubtract, executedGtidSet)
 		goto Cleanup
 	}
 
@@ -1303,7 +1303,7 @@ func ErrantGTIDResetPrimary(instanceKey *InstanceKey) (instance *Instance, err e
 		time.Sleep(waitInterval)
 	}
 	if err != nil {
-		err = fmt.Errorf("gtid-errant-reset-master: error setting gtid_purged on %+v to: %s. Error was: %+v", instance.Key, gtidSubtract, err)
+		err = fmt.Errorf("gtid-errant-reset-primary: error setting gtid_purged on %+v to: %s. Error was: %+v", instance.Key, gtidSubtract, err)
 		goto Cleanup
 	}
 
@@ -1317,7 +1317,7 @@ Cleanup:
 	}
 
 	// and we're done (pending deferred functions)
-	AuditOperation("gtid-errant-reset-master", instanceKey, fmt.Sprintf("%+v master reset", *instanceKey))
+	AuditOperation("gtid-errant-reset-primary", instanceKey, fmt.Sprintf("%+v master reset", *instanceKey))
 
 	return instance, err
 }
@@ -1402,8 +1402,8 @@ func TakePrimaryHook(successor *Instance, demoted *Instance) {
 	successorStr := fmt.Sprintf("%v", successorKey)
 	demotedStr := fmt.Sprintf("%v", demotedKey)
 
-	processCount := len(config.Config.PostTakeMasterProcesses)
-	for i, command := range config.Config.PostTakeMasterProcesses {
+	processCount := len(config.Config.PostTakePrimaryProcesses)
+	for i, command := range config.Config.PostTakePrimaryProcesses {
 		fullDescription := fmt.Sprintf("PostTakeMasterProcesses hook %d of %d", i+1, processCount)
 		log.Debugf("Take-Master: PostTakeMasterProcesses: Calling %+s", fullDescription)
 		start := time.Now()
@@ -1490,13 +1490,13 @@ Cleanup:
 	if err != nil {
 		return instance, err
 	}
-	AuditOperation("take-master", instanceKey, fmt.Sprintf("took master: %+v", primaryInstance.Key))
+	AuditOperation("take-primary", instanceKey, fmt.Sprintf("took master: %+v", primaryInstance.Key))
 
 	// Created this to enable a custom hook to be called after a TakePrimary success.
 	// This only runs if there is a hook configured in orchestrator.conf.json
 	demoted := primaryInstance
 	successor := instance
-	if config.Config.PostTakeMasterProcesses != nil {
+	if config.Config.PostTakePrimaryProcesses != nil {
 		TakePrimaryHook(successor, demoted)
 	}
 

@@ -112,9 +112,9 @@ type ReplicationAnalysisHints struct {
 }
 
 const (
-	ForcePrimaryFailoverCommandHint    string = "force-master-failover"
-	ForcePrimaryTakeoverCommandHint    string = "force-master-takeover"
-	GracefulPrimaryTakeoverCommandHint string = "graceful-master-takeover"
+	ForcePrimaryFailoverCommandHint    string = "force-primary-failover"
+	ForcePrimaryTakeoverCommandHint    string = "force-primary-takeover"
+	GracefulPrimaryTakeoverCommandHint string = "graceful-primary-takeover"
 )
 
 type AnalysisInstanceType string
@@ -149,7 +149,6 @@ type ReplicationAnalysis struct {
 	CountDowntimedReplicas                    uint
 	ReplicationDepth                          uint
 	Replicas                                  InstanceKeyMap
-	SlaveHosts                                InstanceKeyMap // for backwards compatibility. Equals `Replicas`
 	IsFailingToConnectToPrimary               bool
 	ReplicationStopped                        bool
 	Analysis                                  AnalysisCode
@@ -202,8 +201,6 @@ func (this *ReplicationAnalysis) MarshalJSON() ([]byte, error) {
 		ReplicationAnalysis
 	}{}
 	i.ReplicationAnalysis = *this
-	// backwards compatibility
-	i.SlaveHosts = i.Replicas
 
 	return json.Marshal(i)
 }
