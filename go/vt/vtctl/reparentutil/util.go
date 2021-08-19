@@ -57,6 +57,7 @@ type (
 		GetWaitReplicasTimeout() time.Duration
 		GetIgnoreReplicas() sets.String
 		CheckPrimaryRecoveryType() error
+		RestrictValidCandidates(map[string]mysql.Position, map[string]*topo.TabletInfo) (map[string]mysql.Position, error)
 		FindPrimaryCandidates(context.Context, logutil.Logger, tmclient.TabletManagerClient, map[string]mysql.Position, map[string]*topo.TabletInfo) error
 		CheckIfNeedToOverridePrimary() error
 		StartReplication(context.Context, *events.Reparent, logutil.Logger, tmclient.TabletManagerClient) error
@@ -143,6 +144,26 @@ func (vtctlReparentFunctions *VtctlReparentFunctions) GetIgnoreReplicas() sets.S
 // CheckPrimaryRecoveryType implements the ReparentFunctions interface
 func (vtctlReparent *VtctlReparentFunctions) CheckPrimaryRecoveryType() error {
 	return nil
+}
+
+// RestrictValidCandidates implements the ReparentFunctions interface
+func (vtctlReparent *VtctlReparentFunctions) RestrictValidCandidates(validCandidates map[string]mysql.Position, tabletMap map[string]*topo.TabletInfo) (map[string]mysql.Position, error) {
+	restrictedValidCandidates := make(map[string]mysql.Position)
+
+	for candidate, position := range validCandidates {
+		candidateInfo, ok := tabletMap[candidate]
+		if !ok {
+			return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "candidate %v not found in the tablet map; this an impossible situation", candidate)
+		}
+
+		if candidateInfo.Type != topodatapb.TabletType_PRIMARY && candidateInfo.Type != topodatapb.TabletType_REPLICA {
+			continue
+		}
+
+		restrictedValidCandidates[candidate] = position
+	}
+
+	return restrictedValidCandidates, nil
 }
 
 // FindPrimaryCandidates implements the ReparentFunctions interface

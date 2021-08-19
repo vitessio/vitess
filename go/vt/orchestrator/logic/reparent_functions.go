@@ -146,6 +146,35 @@ func (vtorcReparent *VtOrcReparentFunctions) CheckPrimaryRecoveryType() error {
 	return nil
 }
 
+// RestrictValidCandidates implements the ReparentFunctions interface
+func (vtorcReparent *VtOrcReparentFunctions) RestrictValidCandidates(validCandidates map[string]mysql.Position, tabletMap map[string]*topo.TabletInfo) (map[string]mysql.Position, error) {
+	restrictedValidCandidates := make(map[string]mysql.Position)
+
+	for candidate, position := range validCandidates {
+		candidateInfo, ok := tabletMap[candidate]
+		if !ok {
+			return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "candidate %v not found in the tablet map; this an impossible situation", candidate)
+		}
+
+		candidateInstance, _, err := inst.ReadInstance(&inst.InstanceKey{
+			Hostname: candidateInfo.MysqlHostname,
+			Port:     int(candidateInfo.MysqlPort),
+		})
+
+		if err != nil {
+			return nil, err
+		}
+
+		if candidateInstance.PromotionRule == inst.MustNotPromoteRule {
+			continue
+		}
+
+		restrictedValidCandidates[candidate] = position
+	}
+
+	return restrictedValidCandidates, nil
+}
+
 // FindPrimaryCandidates implements the ReparentFunctions interface
 func (vtorcReparent *VtOrcReparentFunctions) FindPrimaryCandidates(ctx context.Context, logger logutil.Logger, tmc tmclient.TabletManagerClient, validCandidates map[string]mysql.Position, tabletMap map[string]*topo.TabletInfo) error {
 	postponedAll := false
