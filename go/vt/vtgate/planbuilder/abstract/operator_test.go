@@ -186,32 +186,52 @@ JoinPredicates:
 	}, {
 		input: "select (select 1) from t where exists (select 1) and id in (select 1)",
 		output: `SubQuery: {
-	SubQueries: [
+	SubQueries: [	
 	{
 		Type: PulloutValue
 		ArgName: 
 		Query: 	QueryGraph: {
-	Tables:
-		2:dual
-	}} 
+		Tables:
+			2:dual
+		}
+	} 	
 	{
 		Type: PulloutExists
 		ArgName: 
 		Query: 	QueryGraph: {
-	Tables:
-		4:dual
-	}} 
+		Tables:
+			4:dual
+		}
+	} 	
 	{
 		Type: PulloutIn
 		ArgName: 
 		Query: 	QueryGraph: {
-	Tables:
-		8:dual
-	}}]
+		Tables:
+			8:dual
+		}
+	}]
 	Outer: 	QueryGraph: {
 	Tables:
 		1:t where id in (select 1 from dual)
 	ForAll: exists (select 1 from dual)
+	}
+}`,
+	}, {
+		input: "select u.id from user u where u.id = (select id from user_extra where id = u.id)",
+		output: `SubQuery: {
+	SubQueries: [	
+	{
+		Type: PulloutValue
+		ArgName: 
+		Query: 	QueryGraph: {
+		Tables:
+			2:user_extra where id = u.id
+		}
+	}]
+	Outer: 	QueryGraph: {
+	Tables:
+		1:` + "`user`" + ` AS u where u.id = (select id from user_extra where id = u.id)
 	}
 }`,
 	}}
@@ -252,8 +272,8 @@ func testString(op Operator) string {
 	case *SubQuery:
 		var inners []string
 		for _, sqOp := range op.Inner {
-			subquery := fmt.Sprintf("\n\t{\n\t\tType: %s\n\t\tArgName: %s\n\t\tQuery: %s}", sqOp.Type.String(), sqOp.ArgName, indent(testString(sqOp.Inner)))
-			inners = append(inners, subquery)
+			subquery := fmt.Sprintf("\n{\n\tType: %s\n\tArgName: %s\n\tQuery: %s\n}", sqOp.Type.String(), sqOp.ArgName, indent(testString(sqOp.Inner)))
+			inners = append(inners, indent(subquery))
 		}
 		outer := indent(testString(op.Outer))
 		return fmt.Sprintf("SubQuery: {\n\tSubQueries: %s\n\tOuter: %s\n}", inners, outer)

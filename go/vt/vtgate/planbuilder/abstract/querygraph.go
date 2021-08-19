@@ -148,7 +148,8 @@ func (qg *QueryGraph) collectPredicateTable(t sqlparser.TableExpr, predicate sql
 }
 
 func (qg *QueryGraph) collectPredicate(predicate sqlparser.Expr, semTable *semantics.SemTable) error {
-	deps := semTable.BaseTableDependencies(predicate)
+	// looking at local tables only
+	deps := semTable.BaseTableDependencies(predicate) & qg.TableID()
 	switch deps.NumberOfTables() {
 	case 0:
 		qg.addNoDepsPredicate(predicate)
