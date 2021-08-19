@@ -7,5 +7,5 @@
   "RecoveryPeriodBlockSeconds": 1,
   "InstancePollSeconds": 1,
   "ReplicationLagQuery": "select 59",
-  "FailMasterPromotionOnLagMinutes": 1
+  "FailPrimaryPromotionOnLagMinutes": 1
 }

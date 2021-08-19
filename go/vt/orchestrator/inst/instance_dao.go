@@ -1789,7 +1789,7 @@ func InjectUnseenPrimaries() error {
 	for _, primaryKey := range unseenPrimaryKeys {
 		primaryKey := primaryKey
 
-		if RegexpMatchPatterns(primaryKey.StringCode(), config.Config.DiscoveryIgnoreMasterHostnameFilters) {
+		if RegexpMatchPatterns(primaryKey.StringCode(), config.Config.DiscoveryIgnorePrimaryHostnameFilters) {
 			log.Debugf("InjectUnseenPrimaries: skipping discovery of %+v because it matches DiscoveryIgnoreMasterHostnameFilters", primaryKey)
 			continue
 		}
