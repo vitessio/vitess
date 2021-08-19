@@ -110,7 +110,12 @@ func newBuildSelectPlan(sel *sqlparser.Select, reservedVars *sqlparser.ReservedV
 		return nil, err
 	}
 
-	tree, err := optimizeQuery(opTree, reservedVars, semTable, vschema)
+	ctx := optimizeContext{
+		reservedVars: reservedVars,
+		semTable:     semTable,
+		vschema:      vschema,
+	}
+	tree, err := optimizeQuery(ctx, opTree)
 	if err != nil {
 		return nil, err
 	}
@@ -147,37 +152,43 @@ func newBuildSelectPlan(sel *sqlparser.Select, reservedVars *sqlparser.ReservedV
 	return plan, nil
 }
 
-func optimizeQuery(opTree abstract.Operator, reservedVars *sqlparser.ReservedVars, semTable *semantics.SemTable, vschema ContextVSchema) (queryTree, error) {
+type optimizeContext struct {
+	reservedVars *sqlparser.ReservedVars
+	semTable     *semantics.SemTable
+	vschema      ContextVSchema
+}
+
+func optimizeQuery(ctx optimizeContext, opTree abstract.Operator) (queryTree, error) {
 	switch op := opTree.(type) {
 	case *abstract.QueryGraph:
 		switch {
-		case vschema.Planner() == Gen4Left2Right:
-			return leftToRightSolve(op, reservedVars, semTable, vschema)
+		case ctx.vschema.Planner() == Gen4Left2Right:
+			return leftToRightSolve(ctx, op)
 		default:
-			return greedySolve(op, reservedVars, semTable, vschema)
+			return greedySolve(ctx, op)
 		}
 	case *abstract.LeftJoin:
-		treeInner, err := optimizeQuery(op.Left, reservedVars, semTable, vschema)
+		treeInner, err := optimizeQuery(ctx, op.Left)
 		if err != nil {
 			return nil, err
 		}
-		treeOuter, err := optimizeQuery(op.Right, reservedVars, semTable, vschema)
+		treeOuter, err := optimizeQuery(ctx, op.Right)
 		if err != nil {
 			return nil, err
 		}
-		return mergeOrJoin(treeInner, treeOuter, []sqlparser.Expr{op.Predicate}, semTable, false)
+		return mergeOrJoin(treeInner, treeOuter, []sqlparser.Expr{op.Predicate}, ctx.semTable, false)
 	case *abstract.Join:
-		treeInner, err := optimizeQuery(op.LHS, reservedVars, semTable, vschema)
+		treeInner, err := optimizeQuery(ctx, op.LHS)
 		if err != nil {
 			return nil, err
 		}
-		treeOuter, err := optimizeQuery(op.RHS, reservedVars, semTable, vschema)
+		treeOuter, err := optimizeQuery(ctx, op.RHS)
 		if err != nil {
 			return nil, err
 		}
-		return mergeOrJoin(treeInner, treeOuter, []sqlparser.Expr{op.Exp}, semTable, true)
+		return mergeOrJoin(treeInner, treeOuter, []sqlparser.Expr{op.Exp}, ctx.semTable, true)
 	case *abstract.Derived:
-		treeInner, err := optimizeQuery(op.Inner, reservedVars, semTable, vschema)
+		treeInner, err := optimizeQuery(ctx, op.Inner)
 		if err != nil {
 			return nil, err
 		}
@@ -187,14 +198,14 @@ func optimizeQuery(opTree abstract.Operator, reservedVars *sqlparser.ReservedVar
 			alias: op.Alias,
 		}, nil
 	case *abstract.SubQuery:
-		outerTree, err := optimizeQuery(op.Outer, reservedVars, semTable, vschema)
+		outerTree, err := optimizeQuery(ctx, op.Outer)
 		if err != nil {
 			return nil, err
 		}
 		var subqTree queryTree
 		subqTree = outerTree
 		for _, inner := range op.Inner {
-			treeInner, err := optimizeQuery(inner.Inner, reservedVars, semTable, vschema)
+			treeInner, err := optimizeQuery(ctx, inner.Inner)
 			if err != nil {
 				return nil, err
 			}
@@ -625,14 +636,14 @@ type (
 	and removes the two inputs to this cheapest plan and instead adds the join.
 	As an optimization, it first only considers joining tables that have predicates defined between them
 */
-func greedySolve(qg *abstract.QueryGraph, reservedVars *sqlparser.ReservedVars, semTable *semantics.SemTable, vschema ContextVSchema) (queryTree, error) {
-	joinTrees, err := seedPlanList(qg, reservedVars, semTable, vschema)
+func greedySolve(ctx optimizeContext, qg *abstract.QueryGraph) (queryTree, error) {
+	joinTrees, err := seedPlanList(ctx, qg)
 	planCache := cacheMap{}
 	if err != nil {
 		return nil, err
 	}
 
-	tree, err := mergeJoinTrees(qg, semTable, joinTrees, planCache, false)
+	tree, err := mergeJoinTrees(qg, ctx.semTable, joinTrees, planCache, false)
 	if err != nil {
 		return nil, err
 	}
@@ -718,8 +729,8 @@ func findBestJoinTree(
 	return bestPlan, lIdx, rIdx, nil
 }
 
-func leftToRightSolve(qg *abstract.QueryGraph, reservedVars *sqlparser.ReservedVars, semTable *semantics.SemTable, vschema ContextVSchema) (queryTree, error) {
-	plans, err := seedPlanList(qg, reservedVars, semTable, vschema)
+func leftToRightSolve(ctx optimizeContext, qg *abstract.QueryGraph) (queryTree, error) {
+	plans, err := seedPlanList(ctx, qg)
 	if err != nil {
 		return nil, err
 	}
@@ -731,7 +742,7 @@ func leftToRightSolve(qg *abstract.QueryGraph, reservedVars *sqlparser.ReservedV
 			continue
 		}
 		joinPredicates := qg.GetPredicates(acc.tableID(), plan.tableID())
-		acc, err = mergeOrJoinInner(acc, plan, joinPredicates, semTable)
+		acc, err = mergeOrJoinInner(acc, plan, joinPredicates, ctx.semTable)
 		if err != nil {
 			return nil, err
 		}
@@ -741,13 +752,13 @@ func leftToRightSolve(qg *abstract.QueryGraph, reservedVars *sqlparser.ReservedV
 }
 
 // seedPlanList returns a routeTree for each table in the qg
-func seedPlanList(qg *abstract.QueryGraph, reservedVars *sqlparser.ReservedVars, semTable *semantics.SemTable, vschema ContextVSchema) ([]queryTree, error) {
+func seedPlanList(ctx optimizeContext, qg *abstract.QueryGraph) ([]queryTree, error) {
 	plans := make([]queryTree, len(qg.Tables))
 
 	// we start by seeding the table with the single routes
 	for i, table := range qg.Tables {
-		solves := semTable.TableSetFor(table.Alias)
-		plan, err := createRoutePlan(table, solves, reservedVars, vschema)
+		solves := ctx.semTable.TableSetFor(table.Alias)
+		plan, err := createRoutePlan(table, solves, ctx.reservedVars, ctx.vschema)
 		if err != nil {
 			return nil, err
 		}
