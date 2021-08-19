@@ -1,6 +1,3 @@
-2021-04-12T15:23:26Z,local_example,https://github.com/vitessio/vitess/actions/runs/741671295
-2021-04-12T15:23:26Z,region_example,https://github.com/vitessio/vitess/actions/runs/741671282
-2021-04-12T15:27:10Z,Cluster (27),https://github.com/vitessio/vitess/actions/runs/741682603
 2021-04-12T15:27:10Z,Cluster (onlineddl_declarative),https://github.com/vitessio/vitess/actions/runs/741682650
 2021-04-12T15:27:10Z,Unit Test (mariadb101),https://github.com/vitessio/vitess/actions/runs/741682621
 2021-04-12T15:27:10Z,region_example,https://github.com/vitessio/vitess/actions/runs/741682624
@@ -9998,3 +9995,6 @@
 2021-08-18T19:38:09Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/1144436471
 2021-08-18T19:38:09Z,docker_test_1,https://github.com/vitessio/vitess/actions/runs/1144436502
 2021-08-18T19:38:09Z,pr-labels,https://github.com/vitessio/vitess/actions/runs/1144436454
+2021-08-19T06:39:56Z,Cluster (vtgate_buffer),https://github.com/vitessio/vitess/actions/runs/1145933243
+2021-08-19T06:39:56Z,Cluster (vtgate_reservedconn),https://github.com/vitessio/vitess/actions/runs/1145933288
+2021-08-19T06:39:56Z,pr-labels,https://github.com/vitessio/vitess/actions/runs/1145933290
