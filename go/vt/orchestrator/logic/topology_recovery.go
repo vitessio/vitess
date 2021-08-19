@@ -27,6 +27,9 @@ import (
 	"sync/atomic"
 	"time"
 
+	"vitess.io/vitess/go/vt/logutil"
+	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
+
 	"vitess.io/vitess/go/vt/vtctl/reparentutil"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
@@ -624,7 +627,18 @@ func checkAndRecoverDeadMaster(analysisEntry inst.ReplicationAnalysis, candidate
 	log.Infof("Analysis: %v, deadmaster %+v", analysisEntry.Analysis, analysisEntry.AnalyzedInstanceKey)
 
 	reparentFunctions := NewVtorcReparentFunctions(analysisEntry, candidateInstanceKey, skipProcesses, topologyRecovery)
-	_, err = reparentutil.NewEmergencyReparenter(tmclient.NewTabletManagerClient(), nil).ReparentShard(context.Background(), reparentFunctions)
+	_, err = reparentutil.NewEmergencyReparenter(tmclient.NewTabletManagerClient(), logutil.NewCallbackLogger(func(event *logutilpb.Event) {
+		level := event.GetLevel()
+		value := event.GetValue()
+		switch level {
+		case logutilpb.Level_WARNING:
+			log.Warningf("ERP - %s", value)
+		case logutilpb.Level_ERROR:
+			log.Errorf("ERP - %s", value)
+		default:
+			log.Infof("ERP - %s", value)
+		}
+	})).ReparentShard(context.Background(), reparentFunctions)
 
 	return reparentFunctions.recoveryAttempted, topologyRecovery, err
 }
