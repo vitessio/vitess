@@ -128,9 +128,9 @@ func TestCrossDataCenterFailureError(t *testing.T) {
 	require.NotEqual(t, topodatapb.TabletType_PRIMARY, tabletInfo.GetType())
 }
 
-// Failover will sometimes lead to a replica which can no longer replicate.
+// Failover will sometimes lead to a rdonly which can no longer replicate.
 // covers part of the test case master-failover-lost-replicas from orchestrator
-func TestLostReplicasOnPrimaryFailure(t *testing.T) {
+func TestLostRdonlyOnPrimaryFailure(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	setupVttabletsAndVtorc(t, 2, 1, nil, "test_config.json")
 	keyspace := &clusterInstance.Keyspaces[0]
@@ -181,7 +181,7 @@ func TestLostReplicasOnPrimaryFailure(t *testing.T) {
 	// vtorc must promote the lagging replica and not the rdonly, since it has a MustNotPromoteRule promotion rule
 	checkPrimaryTablet(t, clusterInstance, replica)
 
-	// check that the rdonly replica is lost. The lost replica has is detached and its host is prepended with `//`
+	// check that the rdonly is lost. The lost replica has is detached and its host is prepended with `//`
 	out, err := runSQL(t, "SELECT HOST FROM performance_schema.replication_connection_configuration", rdonly, "")
 	require.NoError(t, err)
 	require.Equal(t, "//localhost", out.Rows[0][0].ToString())
