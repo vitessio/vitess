@@ -28,7 +28,6 @@ package buffer
 
 import (
 	"fmt"
-	"strings"
 	"sync"
 	"time"
 
@@ -262,33 +261,7 @@ func (b *Buffer) StatsUpdate(ts *discovery.LegacyTabletStats) {
 // in one function. Supported flavors: MariaDB, MySQL, Google internal.
 func CausedByFailover(err error) bool {
 	log.V(2).Infof("Checking error (type: %T) if it is caused by a failover. err: %v", err, err)
-
-	// TODO(sougou): Remove the INTERNAL check after rollout.
-	code := vterrors.Code(err)
-	if code == vtrpcpb.Code_CLUSTER_EVENT {
-		return true
-	}
-	if code != vtrpcpb.Code_FAILED_PRECONDITION && code != vtrpcpb.Code_INTERNAL {
-		return false
-	}
-	errString := err.Error()
-	switch {
-	// All flavors.
-	case // Match 1290 if -queryserver-config-terse-errors explicitly hid the error message
-		// (which it does to avoid logging the original query including any PII).
-		strings.Contains(errString, "(errno 1290) (sqlstate HY000) during query:"):
-		return true
-	// MariaDB flavor.
-	case strings.Contains(errString, "The MariaDB server is running with the --read-only option so it cannot execute this statement (errno 1290) (sqlstate HY000)"):
-		return true
-	// MySQL flavor.
-	case strings.Contains(errString, "The MySQL server is running with the --read-only option so it cannot execute this statement (errno 1290) (sqlstate HY000)"):
-		return true
-	// Google internal flavor.
-	case strings.Contains(errString, "failover in progress (errno 1227) (sqlstate 42000)"):
-		return true
-	}
-	return false
+	return vterrors.Code(err) == vtrpcpb.Code_CLUSTER_EVENT
 }
 
 // getOrCreateBuffer returns the ShardBuffer for the given keyspace and shard.
