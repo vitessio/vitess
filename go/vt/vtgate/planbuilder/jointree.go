@@ -342,6 +342,10 @@ func (rp *routeTree) clone() queryTree {
 		p := *pred
 		result.vindexPreds[i] = &p
 	}
+	result.sqToReplace = map[string]*sqlparser.Select{}
+	for key, val := range rp.sqToReplace {
+		result.sqToReplace[key] = val
+	}
 	return &result
 }
 
