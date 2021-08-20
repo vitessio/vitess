@@ -111,6 +111,15 @@ type (
 		Comments    sqlparser.Comments
 		SubqueryMap map[*sqlparser.Select][]*subquery
 		SubqueryRef map[*sqlparser.Subquery]*subquery
+
+		// PredicateRelations is used to enable transitive closures
+		// if a == b and b == c then a == c
+		PredicateRelations map[ColumnName][]sqlparser.Expr
+	}
+
+	ColumnName struct {
+		TS  TableSet
+		Str string
 	}
 
 	subquery struct {
@@ -392,7 +401,7 @@ func (r *RealTable) Matches(name sqlparser.TableName) bool {
 
 // NewSemTable creates a new empty SemTable
 func NewSemTable() *SemTable {
-	return &SemTable{ExprBaseTableDeps: map[sqlparser.Expr]TableSet{}}
+	return &SemTable{ExprBaseTableDeps: map[sqlparser.Expr]TableSet{}, PredicateRelations: map[ColumnName][]sqlparser.Expr{}}
 }
 
 // TableSetFor returns the bitmask for this particular table
@@ -421,6 +430,18 @@ func (st *SemTable) BaseTableDependencies(expr sqlparser.Expr) TableSet {
 // Dependencies return the table dependencies of the expression.
 func (st *SemTable) Dependencies(expr sqlparser.Expr) TableSet {
 	return st.ExprDeps.Dependencies(expr)
+}
+
+// AddInfoToPredicateRelations adds a relation of the given colName to the PredicateRelations map
+func (st *SemTable) AddInfoToPredicateRelations(colName *sqlparser.ColName, expr sqlparser.Expr) {
+	ts := st.ExprDeps.Dependencies(colName)
+	columnName := ColumnName{
+		TS:  ts,
+		Str: colName.Name.String(),
+	}
+	elem := st.PredicateRelations[columnName]
+	elem = append(elem, expr)
+	st.PredicateRelations[columnName] = elem
 }
 
 // TableInfoForExpr returns the table info of the table that this expression depends on.
@@ -504,7 +525,7 @@ func (s *scope) addTable(info TableInfo) error {
 // IsOverlapping returns true if at least one table exists in both sets
 func (ts TableSet) IsOverlapping(b TableSet) bool { return ts&b != 0 }
 
-// IsSolvedBy returns true if all of `ts` is contained in `b`
+// IsSolvedBy returns true if all of `TS` is contained in `b`
 func (ts TableSet) IsSolvedBy(b TableSet) bool { return ts&b == ts }
 
 // NumberOfTables returns the number of bits set
