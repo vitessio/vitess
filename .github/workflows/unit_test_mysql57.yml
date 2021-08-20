@@ -20,5 +20,5 @@ jobs:
 
     - name: Cleanup Docker Image
       run: |
-        docker images rm unit_test_mysql57
+        docker image rm unit_test_mysql57
         docker volume prune -f

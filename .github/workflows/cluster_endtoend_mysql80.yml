@@ -20,5 +20,5 @@ jobs:
 
       - name: Cleanup Docker Image
         run: |
-          docker images rm cluster_test_mysql80
+          docker image rm cluster_test_mysql80
           docker volume prune -f
