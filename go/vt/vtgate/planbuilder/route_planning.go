@@ -894,7 +894,10 @@ func tryMerge(ctx optimizeContext, a, b queryTree, joinPredicates []sqlparser.Ex
 		}
 	case engine.SelectEqualUnique:
 		// if they are already both being sent to the same shard, we can merge
-		if bRoute.routeOpCode == engine.SelectEqualUnique && (aRoute.vindex != bRoute.vindex || !gen4ValuesEqual(ctx, aRoute.valueExprs, bRoute.valueExprs)) {
+		if bRoute.routeOpCode == engine.SelectEqualUnique {
+			if aRoute.vindex == bRoute.vindex && gen4ValuesEqual(ctx, aRoute.valueExprs, bRoute.valueExprs) {
+				return r
+			}
 			return nil
 		}
 		fallthrough
