@@ -291,9 +291,9 @@ func TestEmergencyReparentShardSlow(t *testing.T) {
 			}
 
 			testutil.AddTablets(ctx, t, tt.ts, &testutil.AddTabletOptions{
-				AlsoSetShardMaster:  true,
-				ForceSetShardMaster: true,
-				SkipShardCreation:   false,
+				AlsoSetShardPrimary:  true,
+				ForceSetShardPrimary: true,
+				SkipShardCreation:    false,
 			}, tt.tablets...)
 
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, tt.ts, tt.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
@@ -560,9 +560,9 @@ func TestPlannedReparentShardSlow(t *testing.T) {
 			t.Parallel()
 
 			testutil.AddTablets(ctx, t, tt.ts, &testutil.AddTabletOptions{
-				AlsoSetShardMaster:  true,
-				ForceSetShardMaster: true,
-				SkipShardCreation:   false,
+				AlsoSetShardPrimary:  true,
+				ForceSetShardPrimary: true,
+				SkipShardCreation:    false,
 			}, tt.tablets...)
 
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, tt.ts, tt.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {

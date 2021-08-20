@@ -122,18 +122,20 @@ func (e *executor) fetchWithRetries(ctx context.Context, action func(ctx context
 	// Is this current attempt a retry of a previous attempt?
 	isRetry := false
 	for {
-		var master *discovery.LegacyTabletStats
+		var primary *discovery.LegacyTabletStats
 		var err error
 
 		// Get the current primary from the LegacyTabletStatsCache.
-		masters := e.tsc.GetHealthyTabletStats(e.keyspace, e.shard, topodatapb.TabletType_PRIMARY)
-		if len(masters) == 0 {
-			e.wr.Logger().Warningf("ExecuteFetch failed for keyspace/shard %v/%v because no MASTER is available; will retry until there is MASTER again", e.keyspace, e.shard)
+		primaries := e.tsc.GetHealthyTabletStats(e.keyspace, e.shard, topodatapb.TabletType_PRIMARY)
+		if len(primaries) == 0 {
+			e.wr.Logger().Warningf("ExecuteFetch failed for keyspace/shard %v/%v because no PRIMARY is available; will retry until there is PRIMARY again", e.keyspace, e.shard)
 			statsRetryCount.Add(1)
+			// TODO(deepthi): for backwards compatibility. remove after v12.0
 			statsRetryCounters.Add(retryCategoryNoMasterAvailable, 1)
+			statsRetryCounters.Add(retryCategoryNoPrimaryAvailable, 1)
 			goto retry
 		}
-		master = &masters[0]
+		primary = &primaries[0]
 
 		// Block if we are throttled.
 		if e.throttler != nil {
@@ -151,7 +153,7 @@ func (e *executor) fetchWithRetries(ctx context.Context, action func(ctx context
 		// new variables until the label is reached.)
 		{
 			tryCtx, cancel := context.WithTimeout(retryCtx, 2*time.Minute)
-			err = action(tryCtx, master.Tablet)
+			err = action(tryCtx, primary.Tablet)
 			cancel()
 
 			if err == nil {
@@ -159,7 +161,7 @@ func (e *executor) fetchWithRetries(ctx context.Context, action func(ctx context
 				return nil
 			}
 
-			succeeded, finalErr := e.checkError(tryCtx, err, isRetry, master)
+			succeeded, finalErr := e.checkError(tryCtx, err, isRetry, primary)
 			if succeeded {
 				// We can ignore the error and don't have to retry.
 				return nil
@@ -171,11 +173,11 @@ func (e *executor) fetchWithRetries(ctx context.Context, action func(ctx context
 		}
 
 	retry:
-		masterAlias := "no-master-was-available"
-		if master != nil {
-			masterAlias = topoproto.TabletAliasString(master.Tablet.Alias)
+		primaryAlias := "no-primary-was-available"
+		if primary != nil {
+			primaryAlias = topoproto.TabletAliasString(primary.Tablet.Alias)
 		}
-		tabletString := fmt.Sprintf("%v (%v/%v)", masterAlias, e.keyspace, e.shard)
+		tabletString := fmt.Sprintf("%v (%v/%v)", primaryAlias, e.keyspace, e.shard)
 
 		select {
 		case <-retryCtx.Done():
@@ -194,8 +196,8 @@ func (e *executor) fetchWithRetries(ctx context.Context, action func(ctx context
 // checkError returns true if the error can be ignored and the command
 // succeeded, false if the error is retryable and a non-nil error if the
 // command must not be retried.
-func (e *executor) checkError(ctx context.Context, err error, isRetry bool, master *discovery.LegacyTabletStats) (bool, error) {
-	tabletString := fmt.Sprintf("%v (%v/%v)", topoproto.TabletAliasString(master.Tablet.Alias), e.keyspace, e.shard)
+func (e *executor) checkError(ctx context.Context, err error, isRetry bool, primary *discovery.LegacyTabletStats) (bool, error) {
+	tabletString := fmt.Sprintf("%v (%v/%v)", topoproto.TabletAliasString(primary.Tablet.Alias), e.keyspace, e.shard)
 
 	// first see if it was a context timeout.
 	select {

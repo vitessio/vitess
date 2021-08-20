@@ -82,7 +82,7 @@ func verifyVtgateVariables(t *testing.T, url string) {
 			t.Error("Atleast one healthy tablet needs to be present")
 		}
 		if !isPrimaryTabletPresent(healthCheckConnection) {
-			t.Error("Atleast one master tablet needs to be present")
+			t.Error("Atleast one PRIMARY tablet needs to be present")
 		}
 	} else {
 		t.Error("Vtgate api url response not found")

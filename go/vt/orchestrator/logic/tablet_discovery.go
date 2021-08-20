@@ -284,17 +284,17 @@ func TabletRefresh(instanceKey inst.InstanceKey) (*topodatapb.Tablet, error) {
 	return ti.Tablet, nil
 }
 
-// TabletDemoteMaster requests the primary tablet to stop accepting transactions.
-func TabletDemoteMaster(instanceKey inst.InstanceKey) error {
-	return tabletDemoteMaster(instanceKey, true)
+// TabletDemotePrimary requests the primary tablet to stop accepting transactions.
+func TabletDemotePrimary(instanceKey inst.InstanceKey) error {
+	return tabletDemotePrimary(instanceKey, true)
 }
 
-// TabletUndoDemoteMaster requests the primary tablet to undo the demote.
-func TabletUndoDemoteMaster(instanceKey inst.InstanceKey) error {
-	return tabletDemoteMaster(instanceKey, false)
+// TabletUndoDemotePrimary requests the primary tablet to undo the demote.
+func TabletUndoDemotePrimary(instanceKey inst.InstanceKey) error {
+	return tabletDemotePrimary(instanceKey, false)
 }
 
-func tabletDemoteMaster(instanceKey inst.InstanceKey, forward bool) error {
+func tabletDemotePrimary(instanceKey inst.InstanceKey, forward bool) error {
 	if instanceKey.Hostname == "" {
 		return errors.New("Can't demote/undo master: instance is unspecified")
 	}
@@ -308,14 +308,14 @@ func tabletDemoteMaster(instanceKey inst.InstanceKey, forward bool) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
 	if forward {
-		_, err = tmc.DemoteMaster(ctx, tablet)
+		_, err = tmc.DemotePrimary(ctx, tablet)
 	} else {
-		err = tmc.UndoDemoteMaster(ctx, tablet)
+		err = tmc.UndoDemotePrimary(ctx, tablet)
 	}
 	return err
 }
 
-func ShardMaster(instanceKey *inst.InstanceKey) (masterKey *inst.InstanceKey, err error) {
+func ShardPrimary(instanceKey *inst.InstanceKey) (primaryKey *inst.InstanceKey, err error) {
 	tablet, err := inst.ReadTablet(*instanceKey)
 	if err != nil {
 		return nil, err
@@ -326,17 +326,17 @@ func ShardMaster(instanceKey *inst.InstanceKey) (masterKey *inst.InstanceKey, er
 	if err != nil {
 		return nil, err
 	}
-	if !si.HasMaster() {
+	if !si.HasPrimary() {
 		return nil, fmt.Errorf("no master tablet for shard %v/%v", tablet.Keyspace, tablet.Shard)
 	}
 	tCtx, tCancel := context.WithTimeout(context.Background(), *topo.RemoteOperationTimeout)
 	defer tCancel()
-	master, err := ts.GetTablet(tCtx, si.PrimaryAlias)
+	primary, err := ts.GetTablet(tCtx, si.PrimaryAlias)
 	if err != nil {
 		return nil, err
 	}
 	return &inst.InstanceKey{
-		Hostname: master.MysqlHostname,
-		Port:     int(master.MysqlPort),
+		Hostname: primary.MysqlHostname,
+		Port:     int(primary.MysqlPort),
 	}, nil
 }

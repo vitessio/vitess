@@ -413,7 +413,7 @@ func (s *server) PopulateReparentJournal(ctx context.Context, request *tabletman
 	defer s.tm.HandleRPCPanic(ctx, "PopulateReparentJournal", request, response, false /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response = &tabletmanagerdatapb.PopulateReparentJournalResponse{}
-	return response, s.tm.PopulateReparentJournal(ctx, request.TimeCreatedNs, request.ActionName, request.MasterAlias, request.ReplicationPosition)
+	return response, s.tm.PopulateReparentJournal(ctx, request.TimeCreatedNs, request.ActionName, request.PrimaryAlias, request.ReplicationPosition)
 }
 
 func (s *server) InitReplica(ctx context.Context, request *tabletmanagerdatapb.InitReplicaRequest) (response *tabletmanagerdatapb.InitReplicaResponse, err error) {
@@ -530,7 +530,7 @@ func (s *server) Backup(request *tabletmanagerdatapb.BackupRequest, stream table
 		})
 	})
 
-	return s.tm.Backup(ctx, int(request.Concurrency), logger, bool(request.AllowMaster))
+	return s.tm.Backup(ctx, int(request.Concurrency), logger, request.AllowPrimary)
 }
 
 func (s *server) RestoreFromBackup(request *tabletmanagerdatapb.RestoreFromBackupRequest, stream tabletmanagerservicepb.TabletManager_RestoreFromBackupServer) (err error) {

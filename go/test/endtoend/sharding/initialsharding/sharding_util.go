@@ -608,7 +608,7 @@ func KillTabletsInKeyspace(keyspace *cluster.Keyspace) {
 	}
 	_ = ClusterInstance.VtctlclientProcess.ExecuteCommand("DeleteTablet", shard1.Replica().Alias)
 	_ = ClusterInstance.VtctlclientProcess.ExecuteCommand("DeleteTablet", shard1.Rdonly().Alias)
-	_ = ClusterInstance.VtctlclientProcess.ExecuteCommand("DeleteTablet", "-allow_master", shard1.PrimaryTablet().Alias)
+	_ = ClusterInstance.VtctlclientProcess.ExecuteCommand("DeleteTablet", "-allow_primary", shard1.PrimaryTablet().Alias)
 
 	_ = ClusterInstance.VtctlclientProcess.ExecuteCommand("RebuildKeyspaceGraph", keyspace.Name)
 	_ = ClusterInstance.VtctlclientProcess.ExecuteCommand("DeleteShard", keyspace.Name+"/"+shard1.Name)

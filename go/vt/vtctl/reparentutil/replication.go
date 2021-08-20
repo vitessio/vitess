@@ -130,7 +130,7 @@ func FindValidEmergencyReparentCandidates(
 	for alias, primaryStatus := range primaryStatusMap {
 		executedPosition, err := mysql.DecodePosition(primaryStatus.Position)
 		if err != nil {
-			return nil, vterrors.Wrapf(err, "could not decode a master status executed position for tablet %v: %v", alias, err)
+			return nil, vterrors.Wrapf(err, "could not decode a primary status executed position for tablet %v: %v", alias, err)
 		}
 
 		positionMap[alias] = executedPosition
@@ -165,10 +165,10 @@ func StopReplicationAndBuildStatusMaps(
 	event.DispatchUpdate(ev, "stop replication on all replicas")
 
 	var (
-		statusMap       = map[string]*replicationdatapb.StopReplicationStatus{}
-		masterStatusMap = map[string]*replicationdatapb.PrimaryStatus{}
-		m               sync.Mutex
-		errChan         = make(chan error)
+		statusMap        = map[string]*replicationdatapb.StopReplicationStatus{}
+		primaryStatusMap = map[string]*replicationdatapb.PrimaryStatus{}
+		m                sync.Mutex
+		errChan          = make(chan error)
 	)
 
 	groupCtx, groupCancel := context.WithTimeout(ctx, waitReplicasTimeout)
@@ -183,11 +183,11 @@ func StopReplicationAndBuildStatusMaps(
 		_, stopReplicationStatus, err := tmc.StopReplicationAndGetStatus(groupCtx, tabletInfo.Tablet, replicationdatapb.StopReplicationMode_IOTHREADONLY)
 		switch err {
 		case mysql.ErrNotReplica:
-			var masterStatus *replicationdatapb.PrimaryStatus
+			var primaryStatus *replicationdatapb.PrimaryStatus
 
-			masterStatus, err = tmc.DemoteMaster(groupCtx, tabletInfo.Tablet)
+			primaryStatus, err = tmc.DemoteMaster(groupCtx, tabletInfo.Tablet)
 			if err != nil {
-				msg := "replica %v thinks it's master but we failed to demote it"
+				msg := "replica %v thinks it's primary but we failed to demote it"
 				err = vterrors.Wrapf(err, msg+": %v", alias, err)
 
 				logger.Warningf(msg, alias)
@@ -195,7 +195,7 @@ func StopReplicationAndBuildStatusMaps(
 			}
 
 			m.Lock()
-			masterStatusMap[alias] = masterStatus
+			primaryStatusMap[alias] = primaryStatus
 			m.Unlock()
 		case nil:
 			m.Lock()
@@ -225,7 +225,7 @@ func StopReplicationAndBuildStatusMaps(
 		return nil, nil, vterrors.Wrapf(errRecorder.Error(), "encountered more than one error when trying to stop replication and get positions: %v", errRecorder.Error())
 	}
 
-	return statusMap, masterStatusMap, nil
+	return statusMap, primaryStatusMap, nil
 }
 
 // WaitForRelayLogsToApply blocks execution waiting for the given tablet's relay

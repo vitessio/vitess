@@ -1,12 +1,12 @@
 By default, the [Helm Charts](https://github.com/vitessio/vitess/tree/main/helm)
 point to the `vitess/lite` image on [Docker Hub](https://hub.docker.com/u/vitess/).
 
-We created the `lite` image as a stripped down version of our main image `base` such that Kubernetes pods can start faster.
-The `lite` image does not change very often and is updated manually by the Vitess team with every release.
-In contrast, the `base` image is updated automatically after every push to the GitHub master branch.
+We created the `lite` image as a stripped down version of our old image `base` such that Kubernetes pods can start faster.
+The `lite` image is updated automatically after every push to the GitHub main branch.
+
 For more information on the different images we provide, please read the [`docker/README.md`](https://github.com/vitessio/vitess/tree/main/docker) file.
 
-If your goal is run the latest Vitess code, the simplest solution is to use the bigger `base` image instead of `lite`.
+If your goal is run the latest Vitess code, the simplest solution is to use the `lite`.
 
 Another alternative is to customize our Docker images and build them yourselves.
 This is described below and involves building the `base` image first.

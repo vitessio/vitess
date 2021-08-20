@@ -183,7 +183,7 @@ func TestUnShardedRecoveryAfterSharding(t *testing.T) {
 		err = localCluster.VtctlclientProcess.ExecuteCommand("DeleteTablet", tablet.Alias)
 		require.NoError(t, err)
 	}
-	err = localCluster.VtctlclientProcess.ExecuteCommand("DeleteTablet", "-allow_master", primary.Alias)
+	err = localCluster.VtctlclientProcess.ExecuteCommand("DeleteTablet", "-allow_primary", primary.Alias)
 	require.NoError(t, err)
 
 	// rebuild the serving graph, all mentions of the old shards should be gone

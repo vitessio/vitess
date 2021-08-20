@@ -240,9 +240,9 @@ func (se *Engine) Close() {
 	log.Info("Schema Engine: closed")
 }
 
-// MakeNonMaster clears the sequence caches to make sure that
+// MakeNonPrimary clears the sequence caches to make sure that
 // they don't get accidentally reused after losing primaryship.
-func (se *Engine) MakeNonMaster() {
+func (se *Engine) MakeNonPrimary() {
 	// This function is tested through endtoend test.
 	se.mu.Lock()
 	defer se.mu.Unlock()
@@ -373,6 +373,10 @@ func (se *Engine) reload(ctx context.Context) error {
 		if !curTables[tableName] {
 			dropped = append(dropped, tableName)
 			delete(se.tables, tableName)
+			// We can't actually delete the label from the stats, but we can set it to 0.
+			// Many monitoring tools will drop zero-valued metrics.
+			se.tableFileSizeGauge.Reset(tableName)
+			se.tableAllocatedSizeGauge.Reset(tableName)
 		}
 	}
 

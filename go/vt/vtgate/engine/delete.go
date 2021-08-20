@@ -110,7 +110,7 @@ func (del *Delete) execDeleteUnsharded(vcursor VCursor, bindVars map[string]*que
 	if len(rss) != 1 {
 		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot send query to multiple shards for un-sharded database: %v", rss)
 	}
-	err = allowOnlyMaster(rss...)
+	err = allowOnlyPrimary(rss...)
 	if err != nil {
 		return nil, err
 	}
@@ -126,7 +126,7 @@ func (del *Delete) execDeleteEqual(vcursor VCursor, bindVars map[string]*querypb
 	if err != nil {
 		return nil, err
 	}
-	err = allowOnlyMaster(rs)
+	err = allowOnlyPrimary(rs)
 	if err != nil {
 		return nil, err
 	}
@@ -148,7 +148,7 @@ func (del *Delete) execDeleteIn(vcursor VCursor, bindVars map[string]*querypb.Bi
 	if err != nil {
 		return nil, err
 	}
-	err = allowOnlyMaster(rss...)
+	err = allowOnlyPrimary(rss...)
 	if err != nil {
 		return nil, err
 	}
@@ -166,7 +166,7 @@ func (del *Delete) execDeleteByDestination(vcursor VCursor, bindVars map[string]
 	if err != nil {
 		return nil, err
 	}
-	err = allowOnlyMaster(rss...)
+	err = allowOnlyPrimary(rss...)
 	if err != nil {
 		return nil, err
 	}

@@ -217,11 +217,11 @@ Gen4 plan same as above
   }
 }
 
-# routing rules with master targeting
-"select * from master_redirect"
+# routing rules with primary targeting
+"select * from primary_redirect"
 {
   "QueryType": "SELECT",
-  "Original": "select * from master_redirect",
+  "Original": "select * from primary_redirect",
   "Instructions": {
     "OperatorType": "Route",
     "Variant": "SelectScatter",
@@ -229,8 +229,8 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select * from `user` as master_redirect where 1 != 1",
-    "Query": "select * from `user` as master_redirect",
+    "FieldQuery": "select * from `user` as primary_redirect where 1 != 1",
+    "Query": "select * from `user` as primary_redirect",
     "Table": "`user`"
   }
 }

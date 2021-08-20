@@ -6134,8 +6134,8 @@ export namespace topodata {
             /** TabletControl cells */
             cells?: (string[]|null);
 
-            /** TabletControl blacklisted_tables */
-            blacklisted_tables?: (string[]|null);
+            /** TabletControl denied_tables */
+            denied_tables?: (string[]|null);
 
             /** TabletControl frozen */
             frozen?: (boolean|null);
@@ -6156,8 +6156,8 @@ export namespace topodata {
             /** TabletControl cells. */
             public cells: string[];
 
-            /** TabletControl blacklisted_tables. */
-            public blacklisted_tables: string[];
+            /** TabletControl denied_tables. */
+            public denied_tables: string[];
 
             /** TabletControl frozen. */
             public frozen: boolean;
@@ -14366,8 +14366,8 @@ export namespace tabletmanagerdata {
         /** PopulateReparentJournalRequest action_name */
         action_name?: (string|null);
 
-        /** PopulateReparentJournalRequest master_alias */
-        master_alias?: (topodata.ITabletAlias|null);
+        /** PopulateReparentJournalRequest primary_alias */
+        primary_alias?: (topodata.ITabletAlias|null);
 
         /** PopulateReparentJournalRequest replication_position */
         replication_position?: (string|null);
@@ -14388,8 +14388,8 @@ export namespace tabletmanagerdata {
         /** PopulateReparentJournalRequest action_name. */
         public action_name: string;
 
-        /** PopulateReparentJournalRequest master_alias. */
-        public master_alias?: (topodata.ITabletAlias|null);
+        /** PopulateReparentJournalRequest primary_alias. */
+        public primary_alias?: (topodata.ITabletAlias|null);
 
         /** PopulateReparentJournalRequest replication_position. */
         public replication_position: string;
@@ -15983,8 +15983,8 @@ export namespace tabletmanagerdata {
         /** BackupRequest concurrency */
         concurrency?: (number|Long|null);
 
-        /** BackupRequest allowMaster */
-        allowMaster?: (boolean|null);
+        /** BackupRequest allow_primary */
+        allow_primary?: (boolean|null);
     }
 
     /** Represents a BackupRequest. */
@@ -15999,8 +15999,8 @@ export namespace tabletmanagerdata {
         /** BackupRequest concurrency. */
         public concurrency: (number|Long);
 
-        /** BackupRequest allowMaster. */
-        public allowMaster: boolean;
+        /** BackupRequest allow_primary. */
+        public allow_primary: boolean;
 
         /**
          * Creates a new BackupRequest instance using the specified properties.
@@ -35320,6 +35320,12 @@ export namespace binlogdata {
 
         /** RowEvent row_changes */
         row_changes?: (binlogdata.IRowChange[]|null);
+
+        /** RowEvent keyspace */
+        keyspace?: (string|null);
+
+        /** RowEvent shard */
+        shard?: (string|null);
     }
 
     /** Represents a RowEvent. */
@@ -35336,6 +35342,12 @@ export namespace binlogdata {
 
         /** RowEvent row_changes. */
         public row_changes: binlogdata.IRowChange[];
+
+        /** RowEvent keyspace. */
+        public keyspace: string;
+
+        /** RowEvent shard. */
+        public shard: string;
 
         /**
          * Creates a new RowEvent instance using the specified properties.
@@ -35416,6 +35428,12 @@ export namespace binlogdata {
 
         /** FieldEvent fields */
         fields?: (query.IField[]|null);
+
+        /** FieldEvent keyspace */
+        keyspace?: (string|null);
+
+        /** FieldEvent shard */
+        shard?: (string|null);
     }
 
     /** Represents a FieldEvent. */
@@ -35432,6 +35450,12 @@ export namespace binlogdata {
 
         /** FieldEvent fields. */
         public fields: query.IField[];
+
+        /** FieldEvent keyspace. */
+        public keyspace: string;
+
+        /** FieldEvent shard. */
+        public shard: string;
 
         /**
          * Creates a new FieldEvent instance using the specified properties.
