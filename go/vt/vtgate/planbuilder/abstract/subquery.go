@@ -47,17 +47,12 @@ func (s *SubQuery) TableID() semantics.TableSet {
 	return ts
 }
 
-// Solves implements the Operator interface
-func (s *SubQuery) Solves(ts semantics.TableSet) (bool, []sqlparser.Expr) {
-	for _, inner := range s.Inner {
-		if solves, exprs := inner.Inner.Solves(ts); solves {
-			return true, exprs
-		}
-	}
-	return false, nil
-}
-
 // PushPredicate implements the Operator interface
 func (s *SubQuery) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) error {
+	panic("implement me")
+}
+
+// UnsolvedPredicates implements the Operator interface
+func (s *SubQuery) UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.Expr {
 	panic("implement me")
 }

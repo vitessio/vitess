@@ -87,17 +87,6 @@ func (qg *QueryGraph) GetPredicates(lhs, rhs semantics.TableSet) []sqlparser.Exp
 	return allExprs
 }
 
-// Solves tells whether the QueryGraph has join overlapping with the provided semantics.TableSet
-// This method implements the Operator interface
-func (qg *QueryGraph) Solves(given semantics.TableSet) (bool, []sqlparser.Expr) {
-	for ts, exprs := range qg.innerJoins {
-		if ts.IsOverlapping(given) {
-			return true, exprs
-		}
-	}
-	return false, nil
-}
-
 func newQueryGraph() *QueryGraph {
 	return &QueryGraph{
 		innerJoins: map[semantics.TableSet][]sqlparser.Expr{},
@@ -117,8 +106,7 @@ func (qg *QueryGraph) collectPredicates(sel *sqlparser.Select, semTable *semanti
 }
 
 func (qg *QueryGraph) collectPredicate(predicate sqlparser.Expr, semTable *semantics.SemTable) error {
-	// looking at local tables only
-	deps := semTable.BaseTableDependencies(predicate) & qg.TableID()
+	deps := semTable.BaseTableDependencies(predicate)
 	switch deps.NumberOfTables() {
 	case 0:
 		qg.addNoDepsPredicate(predicate)
@@ -158,4 +146,15 @@ func (qg *QueryGraph) addNoDepsPredicate(predicate sqlparser.Expr) {
 			Right: predicate,
 		}
 	}
+}
+
+// UnsolvedPredicates implements the Operator interface
+func (qg *QueryGraph) UnsolvedPredicates(_ *semantics.SemTable) []sqlparser.Expr {
+	var result []sqlparser.Expr
+	for set, exprs := range qg.innerJoins {
+		if !set.IsSolvedBy(qg.TableID()) {
+			result = append(result, exprs...)
+		}
+	}
+	return result
 }

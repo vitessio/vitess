@@ -210,19 +210,22 @@ func optimizeQuery(ctx optimizeContext, opTree abstract.Operator) (queryTree, er
 			if err != nil {
 				return nil, err
 			}
-			canMerge, err := canMergeSubQuery(outerTree, treeInner, inner.Inner)
-			if err != nil {
-				return nil, err
+
+			preds := inner.Inner.UnsolvedPredicates(ctx.semTable)
+			merger := func(a, b *routeTree) *routeTree {
+				return mergeSubQuery(a, inner)
 			}
-			if canMerge {
-				outerTree = mergeSubQuery(outerTree, inner)
-			} else {
+
+			merged := tryMerge(ctx, outerTree, treeInner, preds, merger)
+			if merged == nil {
 				unmerged = append(unmerged, &subqueryTree{
 					subquery: inner.SelectStatement,
 					inner:    treeInner,
 					opcode:   inner.Type,
 					argName:  inner.ArgName,
 				})
+			} else {
+				outerTree = merged
 			}
 		}
 
@@ -247,151 +250,12 @@ func optimizeQuery(ctx optimizeContext, opTree abstract.Operator) (queryTree, er
 	}
 }
 
-// func tryMergeSubQuery(outer, subq queryTree, subqOp abstract.Operator) (queryTree, error) {
-// 	outerRoute, subQRoute := joinTreesToRoutes(outer, subq)
-// 	if outerRoute == nil || subQRoute == nil {
-// 		return nil, nil
-// 	}
-// 	if outerRoute.keyspace != subQRoute.keyspace {
-// 		if solves, _ := subqOp.Solves(outer.tableID()); solves {
-// 			// throwing below error for compatibility
-// 			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: cross-shard correlated subquery")
-// 		}
-// 		return nil, nil
-// 	}
-// 	outerOpCode := outerRoute.routeOpCode
-// 	subRouteOpCode := subQRoute.routeOpCode
-// 	switch outerOpCode {
-// 	case engine.SelectUnsharded, engine.SelectDBA:
-// 		if subRouteOpCode != outerOpCode && subRouteOpCode != engine.SelectReference {
-// 			return nil, nil
-// 		}
-// 	case engine.SelectEqualUnique:
-//
-// 		matchVdxName, err := isMatchingVindexName(outer, subq)
-// 		if err != nil {
-// 			return nil, nil
-// 		}
-// 		matchVdxValue, err := isMatchingVindexValue(outer, subq)
-// 		if err != nil {
-// 			return nil, nil
-// 		}
-// 		if subRouteOpCode == outerOpCode && matchVdxName && matchVdxValue {
-//
-// 		} else {
-// 			return nil, nil
-// 		}
-// 	case engine.SelectNext:
-// 		return nil, nil
-// 	case engine.SelectReference:
-//
-// 	}
-//
-// 	solves, exprs := subqOp.Solves(outer.tableID())
-// 	if !solves {
-// 		return nil, nil
-// 	}
-//
-// 	outerVindexPreds := outerRoute.vindexPreds
-// 	innerVindexPreds := subQRoute.vindexPreds
-//
-// }
-
-func canMergeSubQuery(outer, subq queryTree, subqOp abstract.Operator) (bool, error) {
-	ksMatch, err := isQueryTreeKeyspaceMatching(subq, outer)
-	if err != nil {
-		return false, nil
+func mergeSubQuery(outer *routeTree, subq *abstract.SubQueryInner) *routeTree {
+	if outer.sqToReplace == nil {
+		outer.sqToReplace = map[string]*sqlparser.Select{}
 	}
-	if !ksMatch {
-		if solves, _ := subqOp.Solves(outer.tableID()); solves {
-			// throwing below error for compatibility
-			return false, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: cross-shard correlated subquery")
-		}
-		return false, nil
-	}
-	subqOpCode, err := subq.getOpCode()
-	if err != nil {
-		return false, nil
-	}
-	outerOpCode, err := outer.getOpCode()
-	if err != nil {
-		return false, nil
-	}
-
-	switch outerOpCode {
-	case engine.SelectUnsharded, engine.SelectDBA, engine.SelectReference:
-		return subqOpCode == outerOpCode || subqOpCode == engine.SelectReference, nil
-	case engine.SelectEqualUnique:
-		matchVdxName, err := isMatchingVindexName(outer, subq)
-		if err != nil {
-			return false, nil
-		}
-		matchVdxValue, err := isMatchingVindexValue(outer, subq)
-		if err != nil {
-			return false, nil
-		}
-		return subqOpCode == outerOpCode && matchVdxName && matchVdxValue, nil
-	case engine.SelectNext:
-		return false, nil
-	}
-
-	// correlated
-	if solves, exprs := subqOp.Solves(outer.tableID()); solves {
-		outerVindexPreds, err := outer.getVindexPredicates()
-		if err != nil {
-			return false, nil
-		}
-		innerVindexPreds, err := subq.getVindexPredicates()
-		if err != nil {
-			return false, nil
-		}
-
-		for _, expr := range exprs {
-			cmp, isCmp := expr.(*sqlparser.ComparisonExpr)
-			if !isCmp {
-				continue
-			}
-
-			for _, pred := range outerVindexPreds {
-				for _, innerPred := range innerVindexPreds {
-					if pred.colVindex.Name != innerPred.colVindex.Name {
-						continue
-					}
-					if !cmp.ColNameMatch(pred.colVindex.Columns[0], innerPred.colVindex.Columns[0]) {
-						return false, nil
-					}
-				}
-			}
-		}
-		return true, nil
-	}
-	return false, nil
-}
-
-func mergeSubQuery(outer queryTree, subq *abstract.SubQueryInner) queryTree {
-	switch outer := outer.(type) {
-	case *routeTree:
-		if outer.sqToReplace == nil {
-			outer.sqToReplace = map[string]*sqlparser.Select{}
-		}
-		outer.sqToReplace[subq.ArgName] = subq.SelectStatement
-		return outer
-	case *subqueryTree:
-		/*
-			 	subq will only be able to merge with the outer.outer
-				for that reason, we create a new queryTree that merges our outer.outer with our subq
-
-							 outer
-					      /			\
-					     /			 \
-					outer.outer	 outer.inner
-
-					outer.outer = outer.outer + subq
-		*/
-		outer.outer = mergeSubQuery(outer.outer, subq)
-		return outer
-	}
-	return nil
+	outer.sqToReplace[subq.ArgName] = subq.SelectStatement
+	return outer
 }
 
 func planLimit(limit *sqlparser.Limit, plan logicalPlan) (logicalPlan, error) {
@@ -999,7 +863,7 @@ func canMergeOnFilters(ctx optimizeContext, a, b *routeTree, joinPredicates []sq
 type mergeFunc func(a, b *routeTree) *routeTree
 
 func tryMerge(ctx optimizeContext, a, b queryTree, joinPredicates []sqlparser.Expr, merger mergeFunc) queryTree {
-	aRoute, bRoute := joinTreesToRoutes(a, b)
+	aRoute, bRoute := joinTreesToRoutes(a.clone(), b.clone())
 	if aRoute == nil || bRoute == nil {
 		return nil
 	}
@@ -1011,15 +875,30 @@ func tryMerge(ctx optimizeContext, a, b queryTree, joinPredicates []sqlparser.Ex
 
 	r := merger(aRoute, bRoute)
 
+	if aRoute.keyspace == bRoute.keyspace {
+		// if either side is a reference table, we can just merge it and use the opcode of the other side
+		if aRoute.routeOpCode == engine.SelectReference {
+			r.routeOpCode = bRoute.routeOpCode
+			return r
+		}
+		if bRoute.routeOpCode == engine.SelectReference {
+			r.routeOpCode = aRoute.routeOpCode
+			return r
+		}
+	}
+
 	switch aRoute.routeOpCode {
 	case engine.SelectUnsharded, engine.SelectDBA:
 		if aRoute.routeOpCode != bRoute.routeOpCode {
 			return nil
 		}
-	case engine.SelectScatter, engine.SelectEqualUnique:
-		if bRoute.routeOpCode == engine.SelectReference {
-			return r
+	case engine.SelectEqualUnique:
+		// if they are already both being sent to the same shard, we can merge
+		if bRoute.routeOpCode == engine.SelectEqualUnique && (aRoute.vindex != bRoute.vindex || !gen4ValuesEqual(ctx, aRoute.valueExprs, bRoute.valueExprs)) {
+			return nil
 		}
+		fallthrough
+	case engine.SelectScatter:
 		if len(joinPredicates) == 0 {
 			// If we are doing two Scatters, we have to make sure that the
 			// joins are on the correct vindex to allow them to be merged
@@ -1032,10 +911,6 @@ func tryMerge(ctx optimizeContext, a, b queryTree, joinPredicates []sqlparser.Ex
 			return nil
 		}
 		r.pickBestAvailableVindex()
-	case engine.SelectReference:
-		if bRoute.routeOpCode != engine.SelectReference {
-			return nil
-		}
 	}
 	return r
 }
@@ -1083,7 +958,7 @@ func joinTreesToRoutes(a, b queryTree) (*routeTree, *routeTree) {
 	return aRoute, bRoute
 }
 
-func createRoutePlanForInner(aRoute *routeTree, bRoute *routeTree, newTabletSet semantics.TableSet, joinPredicates []sqlparser.Expr) *routeTree {
+func createRoutePlanForInner(aRoute, bRoute *routeTree, newTabletSet semantics.TableSet, joinPredicates []sqlparser.Expr) *routeTree {
 	var tables parenTables
 	if !aRoute.hasOuterjoins() {
 		tables = append(aRoute.tables, bRoute.tables...)

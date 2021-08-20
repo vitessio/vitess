@@ -46,12 +46,6 @@ type (
 		clone() queryTree
 
 		pushOutputColumns([]*sqlparser.ColName, *semantics.SemTable) ([]int, error)
-
-		getKeyspace() (*vindexes.Keyspace, error)
-		getOpCode() (engine.RouteOpcode, error)
-		getVindexPredicates() ([]*vindexPlusPredicates, error)
-		getVindexName() (string, error)
-		getVindexValueExpr() (sqlparser.Expr, error)
 	}
 
 	joinTree struct {
@@ -83,10 +77,15 @@ type (
 		leftJoins []*outerTable
 
 		// these fields are set if a vindex will be used for this route
-		currentCost      cost // currentCost tracks the cost of the chosen access method
-		vindex           vindexes.Vindex
-		vindexValues     []sqltypes.PlanValue
+		currentCost cost // currentCost tracks the cost of the chosen access method
+		vindex      vindexes.Vindex
+
+		// vindexValues contains the values that the vindex needs to be queried for
+		vindexValues []sqltypes.PlanValue
+
+		// vindexPredicates contains the comparisons that were the source of vindexValues
 		vindexPredicates []sqlparser.Expr
+		valueExprs       []sqlparser.Expr
 
 		// here we store the possible vindexes we can use so that when we add predicates to the plan,
 		// we can quickly check if the new predicates enables any new vindex options
@@ -117,133 +116,6 @@ type (
 		argName  string
 	}
 )
-
-func (s *subqueryTree) getVindexValueExpr() (sqlparser.Expr, error) {
-	return s.outer.getVindexValueExpr()
-}
-
-func (d *derivedTree) getVindexValueExpr() (sqlparser.Expr, error) {
-	return d.inner.getVindexValueExpr()
-}
-
-func (jp *joinTree) getVindexValueExpr() (sqlparser.Expr, error) {
-	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unsupported getVindexValueExpr for %T", jp)
-}
-
-func (rp *routeTree) getVindexValueExpr() (sqlparser.Expr, error) {
-	if rp.vindex == nil {
-		return nil, nil
-	}
-	for i, pred := range rp.vindexPreds {
-		if pred.colVindex.Name == rp.vindex.String() {
-			return pred.valueExprs[i], nil
-		}
-	}
-	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "could not find vindex value expression")
-}
-
-func (s *subqueryTree) getVindexName() (string, error) {
-	var innerVindexName, outerVindexName string
-	var err error
-	if innerVindexName, err = s.inner.getVindexName(); err != nil {
-		return "", err
-	}
-	if outerVindexName, err = s.outer.getVindexName(); err != nil {
-		return "", err
-	}
-
-	if innerVindexName != outerVindexName {
-		return "", vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unsupported getVindexName for %T", s)
-	}
-	return innerVindexName, nil
-}
-
-func (d *derivedTree) getVindexName() (string, error) {
-	return d.inner.getVindexName()
-}
-
-func (jp *joinTree) getVindexName() (string, error) {
-	return "", vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unsupported getVindexName for %T", jp)
-}
-
-func (rp *routeTree) getVindexName() (string, error) {
-	if rp.vindex == nil {
-		return "", nil
-	}
-	return rp.vindex.String(), nil
-}
-
-func (s *subqueryTree) getVindexPredicates() ([]*vindexPlusPredicates, error) {
-	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unsupported getVindexPredicates for %T", s)
-}
-
-func (d *derivedTree) getVindexPredicates() ([]*vindexPlusPredicates, error) {
-	return d.inner.getVindexPredicates()
-}
-
-func (jp *joinTree) getVindexPredicates() ([]*vindexPlusPredicates, error) {
-	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unsupported getVindexPredicates for %T", jp)
-}
-
-func (rp *routeTree) getVindexPredicates() ([]*vindexPlusPredicates, error) {
-	return rp.vindexPreds, nil
-}
-
-func (s *subqueryTree) getOpCode() (engine.RouteOpcode, error) {
-	var innerOpCode, outerOpCode engine.RouteOpcode
-	var err error
-	if innerOpCode, err = s.inner.getOpCode(); err != nil {
-		return 0, err
-	}
-	if outerOpCode, err = s.outer.getOpCode(); err != nil {
-		return 0, err
-	}
-
-	if innerOpCode != outerOpCode {
-		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unsupported getOpCode for %T", s)
-	}
-	return innerOpCode, nil
-}
-
-func (d *derivedTree) getOpCode() (engine.RouteOpcode, error) {
-	return d.inner.getOpCode()
-}
-
-func (jp *joinTree) getOpCode() (engine.RouteOpcode, error) {
-	return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unsupported getOpCode for %T", jp)
-}
-
-func (rp *routeTree) getOpCode() (engine.RouteOpcode, error) {
-	return rp.routeOpCode, nil
-}
-
-func (s *subqueryTree) getKeyspace() (*vindexes.Keyspace, error) {
-	var innerKs, outerKs *vindexes.Keyspace
-	var err error
-	if innerKs, err = s.inner.getKeyspace(); err != nil {
-		return nil, err
-	}
-	if outerKs, err = s.outer.getKeyspace(); err != nil {
-		return nil, err
-	}
-
-	if innerKs != outerKs {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unsupported getKeyspace for %T", s)
-	}
-	return innerKs, nil
-}
-
-func (d *derivedTree) getKeyspace() (*vindexes.Keyspace, error) {
-	return d.inner.getKeyspace()
-}
-
-func (jp *joinTree) getKeyspace() (*vindexes.Keyspace, error) {
-	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unsupported getKeyspace for %T", jp)
-}
-
-func (rp *routeTree) getKeyspace() (*vindexes.Keyspace, error) {
-	return rp.keyspace, nil
-}
 
 func (s *subqueryTree) tableID() semantics.TableSet {
 	return s.inner.tableID() | s.outer.tableID()
@@ -844,6 +716,7 @@ func (rp *routeTree) pickBestAvailableVindex() {
 			rp.vindex = v.foundVindex
 			rp.vindexValues = v.values
 			rp.vindexPredicates = v.predicates
+			rp.valueExprs = v.valueExprs
 		}
 	}
 }
@@ -970,38 +843,55 @@ func less(c1, c2 cost) bool {
 	}
 }
 
-func isQueryTreeKeyspaceMatching(qt1, qt2 queryTree) (bool, error) {
-	qt1Ks, err := qt1.getKeyspace()
-	if err != nil {
-		return false, nil
+func gen4ValuesEqual(ctx optimizeContext, a, b []sqlparser.Expr) bool {
+	if len(a) != len(b) {
+		return false
 	}
-	qt2Ks, err := qt2.getKeyspace()
-	if err != nil {
-		return false, nil
+	for i, aExpr := range a {
+		bExpr := b[i]
+		if !gen4ValEqual(ctx, aExpr, bExpr) {
+			return false
+		}
 	}
-	return qt1Ks == qt2Ks, nil
+	return true
 }
 
-func isMatchingVindexName(qt1, qt2 queryTree) (bool, error) {
-	var qt1Name, qt2Name string
-	var err error
-	if qt1Name, err = qt1.getVindexName(); err != nil {
-		return false, err
-	}
-	if qt2Name, err = qt2.getVindexName(); err != nil {
-		return false, err
-	}
-	return qt1Name == qt2Name, nil
-}
+func gen4ValEqual(ctx optimizeContext, a, b sqlparser.Expr) bool {
+	switch a := a.(type) {
+	case *sqlparser.ColName:
+		if b, ok := b.(*sqlparser.ColName); ok {
+			if !a.Name.Equal(b.Name) {
+				return false
+			}
 
-func isMatchingVindexValue(qt1, qt2 queryTree) (bool, error) {
-	var qt1Expr, qt2Expr sqlparser.Expr
-	var err error
-	if qt1Expr, err = qt1.getVindexValueExpr(); err != nil {
-		return false, err
+			return ctx.semTable.Dependencies(a) == ctx.semTable.Dependencies(b)
+		}
+	case sqlparser.Argument:
+		b, ok := b.(sqlparser.Argument)
+		if !ok {
+			return false
+		}
+		return a == b
+	case *sqlparser.Literal:
+		b, ok := b.(*sqlparser.Literal)
+		if !ok {
+			return false
+		}
+		switch a.Type {
+		case sqlparser.StrVal:
+			switch b.Type {
+			case sqlparser.StrVal:
+				return a.Val == b.Val
+			case sqlparser.HexVal:
+				return hexEqual(b, a)
+			}
+		case sqlparser.HexVal:
+			return hexEqual(a, b)
+		case sqlparser.IntVal:
+			if b.Type == (sqlparser.IntVal) {
+				return a.Val == b.Val
+			}
+		}
 	}
-	if qt2Expr, err = qt2.getVindexValueExpr(); err != nil {
-		return false, err
-	}
-	return valEqual(qt1Expr, qt2Expr), nil
+	return false
 }
