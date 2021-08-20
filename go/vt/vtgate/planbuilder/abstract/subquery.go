@@ -54,5 +54,22 @@ func (s *SubQuery) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTab
 
 // UnsolvedPredicates implements the Operator interface
 func (s *SubQuery) UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.Expr {
-	panic("implement me")
+	ts := s.TableID()
+	var result []sqlparser.Expr
+
+	for _, expr := range s.Outer.UnsolvedPredicates(semTable) {
+		deps := semTable.Dependencies(expr)
+		if !deps.IsSolvedBy(ts) {
+			result = append(result, expr)
+		}
+	}
+	for _, inner := range s.Inner {
+		for _, expr := range inner.Inner.UnsolvedPredicates(semTable) {
+			deps := semTable.Dependencies(expr)
+			if !deps.IsSolvedBy(ts) {
+				result = append(result, expr)
+			}
+		}
+	}
+	return result
 }
