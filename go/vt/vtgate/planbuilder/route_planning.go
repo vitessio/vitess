@@ -216,7 +216,10 @@ func optimizeQuery(ctx optimizeContext, opTree abstract.Operator) (queryTree, er
 				return mergeSubQuery(a, inner)
 			}
 
-			merged := tryMerge(ctx, outerTree, treeInner, preds, merger)
+			merged, err := tryMerge(ctx, outerTree, treeInner, preds, merger)
+			if err != nil {
+				return nil, err
+			}
 			if merged == nil {
 				unmerged = append(unmerged, &subqueryTree{
 					subquery: inner.SelectStatement,
@@ -552,7 +555,7 @@ func mergeOrJoin(ctx optimizeContext, lhs, rhs queryTree, joinPredicates []sqlpa
 		return createRoutePlanForOuter(ctx, a, b, newTabletSet, joinPredicates)
 	}
 
-	newPlan := tryMerge(ctx, lhs, rhs, joinPredicates, merger)
+	newPlan, _ := tryMerge(ctx, lhs, rhs, joinPredicates, merger)
 	if newPlan != nil {
 		return newPlan, nil
 	}
@@ -862,43 +865,40 @@ func canMergeOnFilters(ctx optimizeContext, a, b *routeTree, joinPredicates []sq
 
 type mergeFunc func(a, b *routeTree) *routeTree
 
-func tryMerge(ctx optimizeContext, a, b queryTree, joinPredicates []sqlparser.Expr, merger mergeFunc) queryTree {
+func tryMerge(ctx optimizeContext, a, b queryTree, joinPredicates []sqlparser.Expr, merger mergeFunc) (queryTree, error) {
 	aRoute, bRoute := joinTreesToRoutes(a.clone(), b.clone())
 	if aRoute == nil || bRoute == nil {
-		return nil
+		return nil, nil
 	}
-	// If both the routes are system schema queries then we do not validate the keyspaces at plan time. As they are not always the ones where the query will be sent to.
-	if (aRoute.routeOpCode != engine.SelectDBA ||
-		bRoute.routeOpCode != engine.SelectDBA) && aRoute.keyspace != bRoute.keyspace {
-		return nil
-	}
+
+	sameKeyspace := aRoute.keyspace == bRoute.keyspace
 
 	r := merger(aRoute, bRoute)
 
-	if aRoute.keyspace == bRoute.keyspace {
+	if sameKeyspace {
 		// if either side is a reference table, we can just merge it and use the opcode of the other side
 		if aRoute.routeOpCode == engine.SelectReference {
 			r.routeOpCode = bRoute.routeOpCode
-			return r
+			return r, nil
 		}
 		if bRoute.routeOpCode == engine.SelectReference {
 			r.routeOpCode = aRoute.routeOpCode
-			return r
+			return r, nil
 		}
 	}
 
 	switch aRoute.routeOpCode {
 	case engine.SelectUnsharded, engine.SelectDBA:
 		if aRoute.routeOpCode == bRoute.routeOpCode {
-			return r
+			return r, nil
 		}
 	case engine.SelectEqualUnique:
 		// if they are already both being sent to the same shard, we can merge
 		if bRoute.routeOpCode == engine.SelectEqualUnique {
 			if aRoute.vindex == bRoute.vindex && gen4ValuesEqual(ctx, aRoute.valueExprs, bRoute.valueExprs) {
-				return r
+				return r, nil
 			}
-			return nil
+			return nil, nil
 		}
 		fallthrough
 	case engine.SelectScatter, engine.SelectIN:
@@ -906,17 +906,20 @@ func tryMerge(ctx optimizeContext, a, b queryTree, joinPredicates []sqlparser.Ex
 			// If we are doing two Scatters, we have to make sure that the
 			// joins are on the correct vindex to allow them to be merged
 			// no join predicates - no vindex
-			return nil
+			return nil, nil
+		}
+		if !sameKeyspace {
+			return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "unsupported: cross-shard correlated subquery")
 		}
 
 		canMerge := canMergeOnFilters(ctx, aRoute, bRoute, joinPredicates)
 		if !canMerge {
-			return nil
+			return nil, nil
 		}
 		r.pickBestAvailableVindex()
-		return r
+		return r, nil
 	}
-	return nil
+	return nil, nil
 }
 
 func makeRoute(j queryTree) *routeTree {
