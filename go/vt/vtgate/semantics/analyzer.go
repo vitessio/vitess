@@ -64,15 +64,16 @@ func Analyze(statement sqlparser.SelectStatement, currentDb string, si SchemaInf
 		return nil, err
 	}
 	return &SemTable{
-		ExprBaseTableDeps: analyzer.binder.exprRecursiveDeps,
-		ExprDeps:          analyzer.binder.exprDeps,
-		exprTypes:         analyzer.typer.exprTypes,
-		Tables:            analyzer.tables.Tables,
-		selectScope:       analyzer.scoper.rScope,
-		ProjectionErr:     analyzer.projErr,
-		Comments:          statement.GetComments(),
-		SubqueryMap:       analyzer.binder.subqueryMap,
-		SubqueryRef:       analyzer.binder.subqueryRef,
+		ExprBaseTableDeps:  analyzer.binder.exprRecursiveDeps,
+		ExprDeps:           analyzer.binder.exprDeps,
+		exprTypes:          analyzer.typer.exprTypes,
+		Tables:             analyzer.tables.Tables,
+		selectScope:        analyzer.scoper.rScope,
+		ProjectionErr:      analyzer.projErr,
+		Comments:           statement.GetComments(),
+		SubqueryMap:        analyzer.binder.subqueryMap,
+		SubqueryRef:        analyzer.binder.subqueryRef,
+		PredicateRelations: map[ColumnName][]sqlparser.Expr{},
 	}, nil
 }
 

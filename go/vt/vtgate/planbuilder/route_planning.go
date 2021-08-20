@@ -156,6 +156,7 @@ type optimizeContext struct {
 	reservedVars *sqlparser.ReservedVars
 	semTable     *semantics.SemTable
 	vschema      ContextVSchema
+	parent       queryTree
 }
 
 func optimizeQuery(ctx optimizeContext, opTree abstract.Operator) (queryTree, error) {
@@ -204,6 +205,7 @@ func optimizeQuery(ctx optimizeContext, opTree abstract.Operator) (queryTree, er
 		}
 		var unmerged []*subqueryTree
 
+		ctx.parent = outerTree
 		// first loop over the subqueries and try to merge them into the outer plan
 		for _, inner := range op.Inner {
 			treeInner, err := optimizeQuery(ctx, inner.Inner)
@@ -213,7 +215,7 @@ func optimizeQuery(ctx optimizeContext, opTree abstract.Operator) (queryTree, er
 
 			preds := inner.Inner.UnsolvedPredicates(ctx.semTable)
 			merger := func(a, b *routeTree) *routeTree {
-				return mergeSubQuery(a, inner)
+				return mergeSubQuery(a, b, inner)
 			}
 
 			merged, err := tryMerge(ctx, outerTree, treeInner, preds, merger)
@@ -241,7 +243,6 @@ func optimizeQuery(ctx optimizeContext, opTree abstract.Operator) (queryTree, er
 			         sqt   rt
 			        rt rt
 		*/
-
 		for _, tree := range unmerged {
 			tree.outer = outerTree
 			outerTree = tree
@@ -253,11 +254,48 @@ func optimizeQuery(ctx optimizeContext, opTree abstract.Operator) (queryTree, er
 	}
 }
 
-func mergeSubQuery(outer *routeTree, subq *abstract.SubQueryInner) *routeTree {
+func mergeSubQuery(outer, inner *routeTree, subq *abstract.SubQueryInner) *routeTree {
 	if outer.sqToReplace == nil {
 		outer.sqToReplace = map[string]*sqlparser.Select{}
 	}
 	outer.sqToReplace[subq.ArgName] = subq.SelectStatement
+	for argName, selectStmt := range inner.sqToReplace {
+		outer.sqToReplace[argName] = selectStmt
+	}
+
+	// finding all vindexPlusPredicates that needs to be removed from the outer
+	keepVindexPlusPredicates := []*vindexPlusPredicates{}
+	for _, vp := range outer.vindexPreds {
+		found := false
+		for _, predicate := range vp.predicates {
+			sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+				var argName string
+				switch node := node.(type) {
+				case sqlparser.Argument:
+					argName = string(node)
+				case sqlparser.ListArg:
+					argName = string(node)
+				}
+				if argName == subq.ArgName {
+					found = true
+				}
+				return true, nil
+			}, predicate)
+			if found {
+				break
+			}
+		}
+		if !found {
+			keepVindexPlusPredicates = append(keepVindexPlusPredicates, vp)
+		}
+	}
+
+	// assigning the new slice of vindexPlusPredicates to our outer and nulling the chosen vindex
+	// so that pickBestAvailableVindex re-picks a best vindex
+	if len(outer.vindexPreds) != len(keepVindexPlusPredicates) {
+		outer.vindex = nil
+		outer.vindexPreds = keepVindexPlusPredicates
+	}
 	return outer
 }
 
@@ -802,26 +840,45 @@ func findColumnVindex(ctx optimizeContext, a *routeTree, exp sqlparser.Expr) vin
 	if !isCol {
 		return nil
 	}
-	leftDep := ctx.semTable.BaseTableDependencies(left)
 
 	var singCol vindexes.SingleColumn
 
-	_ = visitRelations(a.tables, func(rel relation) (bool, error) {
-		rb, isRoute := rel.(*routeTable)
-		if !isRoute {
-			return true, nil
+	exprs := []sqlparser.Expr{exp}
+	leftTc := ctx.semTable.PredicateRelations[semantics.ColumnName{TS: ctx.semTable.Dependencies(left), Str: left.Name.String()}]
+	exprs = append(exprs, leftTc...)
+
+	parentColumnVindexes := []*vindexes.ColumnVindex{}
+	for _, r := range ctx.parent.(*routeTree).tables {
+		parentColumnVindexes = append(parentColumnVindexes, r.(*routeTable).vtable.ColumnVindexes...)
+	}
+	for _, expr := range exprs {
+		col, isCol := expr.(*sqlparser.ColName)
+		if !isCol {
+			continue
 		}
-		if leftDep.IsSolvedBy(rb.qtable.TableID) {
-			for _, vindex := range rb.vtable.ColumnVindexes {
-				sC, isSingle := vindex.Vindex.(vindexes.SingleColumn)
-				if isSingle && vindex.Columns[0].Equal(left.Name) {
-					singCol = sC
-					return false, io.EOF
+		leftDep := ctx.semTable.BaseTableDependencies(expr)
+		_ = visitRelations(a.tables, func(rel relation) (bool, error) {
+			rb, isRoute := rel.(*routeTable)
+			if !isRoute {
+				return true, nil
+			}
+			if leftDep.IsSolvedBy(rb.qtable.TableID.Merge(ctx.parent.tableID())) {
+				columnVindexes := rb.vtable.ColumnVindexes
+				columnVindexes = append(columnVindexes, parentColumnVindexes...)
+				for _, vindex := range columnVindexes {
+					sC, isSingle := vindex.Vindex.(vindexes.SingleColumn)
+					if isSingle && vindex.Columns[0].Equal(col.Name) {
+						singCol = sC
+						return false, io.EOF
+					}
 				}
 			}
+			return false, nil
+		})
+		if singCol != nil {
+			return singCol
 		}
-		return false, nil
-	})
+	}
 
 	return singCol
 }

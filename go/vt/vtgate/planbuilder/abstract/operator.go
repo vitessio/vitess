@@ -161,6 +161,7 @@ func CreateOperatorFromSelect(sel *sqlparser.Select, semTable *semantics.SemTabl
 			if err != nil {
 				return nil, err
 			}
+			addRelationInformation(semTable, expr)
 		}
 	}
 	if resultantOp == nil {
@@ -168,6 +169,22 @@ func CreateOperatorFromSelect(sel *sqlparser.Select, semTable *semantics.SemTabl
 	}
 	resultantOp.Outer = op
 	return resultantOp, nil
+}
+
+func addRelationInformation(semTable *semantics.SemTable, expr sqlparser.Expr) {
+	switch expr := expr.(type) {
+	case *sqlparser.ComparisonExpr:
+		if expr.Operator != sqlparser.EqualOp {
+			return
+		}
+
+		if left, isCol := expr.Left.(*sqlparser.ColName); isCol {
+			semTable.AddInfoToPredicateRelations(left, expr.Right)
+		}
+		if right, isCol := expr.Right.(*sqlparser.ColName); isCol {
+			semTable.AddInfoToPredicateRelations(right, expr.Left)
+		}
+	}
 }
 
 func createJoin(LHS, RHS Operator) Operator {
