@@ -31,16 +31,16 @@ func (s *VtctldServer) CopySchemaShard(ctx context.Context, sourceTabletAlias *t
 		return fmt.Errorf("GetShard(%v, %v) failed: %v", destKeyspace, destShard, err)
 	}
 
-	if destShardInfo.MasterAlias == nil {
+	if destShardInfo.Shard.PrimaryAlias == nil {
 		return fmt.Errorf("no master in shard record %v/%v. Consider to run 'vtctl InitShardMaster' in case of a new shard or to reparent the shard to fix the topology data", destKeyspace, destShard)
 	}
 
-	err = s.copyShardMetadata(ctx, sourceTabletAlias, destShardInfo.MasterAlias)
+	err = s.copyShardMetadata(ctx, sourceTabletAlias, destShardInfo.Shard.PrimaryAlias)
 	if err != nil {
-		return fmt.Errorf("copyShardMetadata(%v, %v) failed: %v", sourceTabletAlias, destShardInfo.MasterAlias, err)
+		return fmt.Errorf("copyShardMetadata(%v, %v) failed: %v", sourceTabletAlias, destShardInfo.Shard.PrimaryAlias, err)
 	}
 
-	diffs, err := s.compareSchemas(ctx, sourceTabletAlias, destShardInfo.MasterAlias, tables, excludeTables, includeViews)
+	diffs, err := s.compareSchemas(ctx, sourceTabletAlias, destShardInfo.Shard.PrimaryAlias, tables, excludeTables, includeViews)
 	if err != nil {
 		return fmt.Errorf("CopySchemaShard failed because schemas could not be compared initially: %v", err)
 	}
@@ -59,9 +59,9 @@ func (s *VtctldServer) CopySchemaShard(ctx context.Context, sourceTabletAlias *t
 		return fmt.Errorf("GetSchema(%v, %v, %v, %v) failed: %v", sourceTabletAlias, tables, excludeTables, includeViews, err)
 	}
 	createSQL := tmutils.SchemaDefinitionToSQLStrings(sourceSd.GetSchema())
-	destTabletInfo, err := s.ts.GetTablet(ctx, destShardInfo.MasterAlias)
+	destTabletInfo, err := s.ts.GetTablet(ctx, destShardInfo.Shard.PrimaryAlias)
 	if err != nil {
-		return fmt.Errorf("GetTablet(%v) failed: %v", destShardInfo.MasterAlias, err)
+		return fmt.Errorf("GetTablet(%v) failed: %v", destShardInfo.Shard.PrimaryAlias, err)
 	}
 	for i, sqlLine := range createSQL {
 		err = s.applySQLShard(ctx, destTabletInfo, sqlLine, i == len(createSQL)-1)
@@ -86,12 +86,12 @@ func (s *VtctldServer) CopySchemaShard(ctx context.Context, sourceTabletAlias *t
 	// statement. We want to fail early in this case because vtworker SplitDiff
 	// fails in case of such an inconsistency as well.
 	if !skipVerify {
-		diffs, err = s.compareSchemas(ctx, sourceTabletAlias, destShardInfo.MasterAlias, tables, excludeTables, includeViews)
+		diffs, err = s.compareSchemas(ctx, sourceTabletAlias, destShardInfo.Shard.PrimaryAlias, tables, excludeTables, includeViews)
 		if err != nil {
 			return fmt.Errorf("CopySchemaShard failed because schemas could not be compared finally: %v", err)
 		}
 		if diffs != nil {
-			return fmt.Errorf("CopySchemaShard was not successful because the schemas between the two tablets %v and %v differ: %v", sourceTabletAlias, destShardInfo.MasterAlias, diffs)
+			return fmt.Errorf("CopySchemaShard was not successful because the schemas between the two tablets %v and %v differ: %v", sourceTabletAlias, destShardInfo.Shard.PrimaryAlias, diffs)
 		}
 	}
 
@@ -313,16 +313,16 @@ func (s *VtctldServer) ValidateSchemaKeyspace(ctx context.Context, keyspace stri
 			continue
 		}
 
-		if !si.HasMaster() {
+		if !si.HasPrimary() {
 			if !skipNoMaster {
-				er.RecordError(fmt.Errorf("no master in shard %v/%v", keyspace, shard))
+				er.RecordError(fmt.Errorf("no primary in shard %v/%v", keyspace, shard))
 			}
 			continue
 		}
 
 		if referenceSchema == nil {
-			referenceAlias = si.MasterAlias
-			log.Infof("Gathering schema for reference master %v", topoproto.TabletAliasString(referenceAlias))
+			referenceAlias = si.Shard.PrimaryAlias
+			log.Infof("Gathering schema for reference primary %v", topoproto.TabletAliasString(referenceAlias))
 
 			req := &vtctldata.GetTabletRequest{
 				TabletAlias: referenceAlias,
@@ -369,13 +369,13 @@ func (s *VtctldServer) ValidateSchemaShard(ctx context.Context, keyspace, shard 
 	}
 
 	// get schema from the master, or error
-	if !si.HasMaster() {
-		return fmt.Errorf("no master in shard %v/%v", keyspace, shard)
+	if !si.HasPrimary() {
+		return fmt.Errorf("no primary in shard %v/%v", keyspace, shard)
 	}
-	log.Infof("Gathering schema for master %v", topoproto.TabletAliasString(si.MasterAlias))
+	log.Infof("Gathering schema for primary %v", topoproto.TabletAliasString(si.Shard.PrimaryAlias))
 
 	req := &vtctldata.GetTabletRequest{
-		TabletAlias: si.MasterAlias,
+		TabletAlias: si.Shard.PrimaryAlias,
 	}
 
 	getTabletResponse, err := s.GetTablet(ctx, req)
@@ -385,7 +385,7 @@ func (s *VtctldServer) ValidateSchemaShard(ctx context.Context, keyspace, shard 
 
 	masterSchema, err := s.tmc.GetSchema(ctx, getTabletResponse.Tablet, nil, excludeTables, includeViews)
 	if err != nil {
-		return fmt.Errorf("GetSchema(%v, nil, %v, %v) failed: %v", si.MasterAlias, excludeTables, includeViews, err)
+		return fmt.Errorf("GetSchema(%v, nil, %v, %v) failed: %v", si.Shard.PrimaryAlias, excludeTables, includeViews, err)
 	}
 
 	if includeVSchema {
@@ -406,12 +406,12 @@ func (s *VtctldServer) ValidateSchemaShard(ctx context.Context, keyspace, shard 
 	er := concurrency.AllErrorRecorder{}
 	wg := sync.WaitGroup{}
 	for _, alias := range aliases {
-		if topoproto.TabletAliasEqual(alias, si.MasterAlias) {
+		if topoproto.TabletAliasEqual(alias, si.Shard.PrimaryAlias) {
 			continue
 		}
 
 		wg.Add(1)
-		go s.diffSchema(ctx, masterSchema, si.MasterAlias, alias, excludeTables, includeViews, &wg, &er)
+		go s.diffSchema(ctx, masterSchema, si.Shard.PrimaryAlias, alias, excludeTables, includeViews, &wg, &er)
 	}
 	wg.Wait()
 	if er.HasErrors() {
@@ -441,15 +441,15 @@ func (s *VtctldServer) ValidateVSchema(ctx context.Context, keyspace string, sha
 				return
 			}
 
-			primaryTablet, err := s.ts.GetTablet(ctx, si.MasterAlias)
+			primaryTablet, err := s.ts.GetTablet(ctx, si.Shard.PrimaryAlias)
 			if err != nil {
-				shardFailures.RecordError(fmt.Errorf("GetTablet(%v) failed: %v", si.MasterAlias, err))
+				shardFailures.RecordError(fmt.Errorf("GetTablet(%v) failed: %v", si.Shard.PrimaryAlias, err))
 				return
 			}
 
 			masterSchema, err := s.tmc.GetSchema(ctx, primaryTablet.Tablet, nil, excludeTables, includeViews)
 			if err != nil {
-				shardFailures.RecordError(fmt.Errorf("GetSchema(%s, nil, %v, %v) (%v/%v) failed: %v", si.MasterAlias.String(),
+				shardFailures.RecordError(fmt.Errorf("GetSchema(%s, nil, %v, %v) (%v/%v) failed: %v", si.Shard.PrimaryAlias.String(),
 					excludeTables, includeViews, keyspace, shard, err,
 				))
 				return

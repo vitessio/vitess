@@ -108,13 +108,13 @@ func (s *VtctldServer) buildResharder(ctx context.Context, keyspace, workflow st
 		if err != nil {
 			return nil, vterrors.Wrapf(err, "GetShard(%s) failed", shard)
 		}
-		if !si.IsMasterServing {
+		if !si.Shard.IsPrimaryServing {
 			return nil, fmt.Errorf("source shard %v is not in serving state", shard)
 		}
 		rs.sourceShards = append(rs.sourceShards, si)
-		master, err := s.ts.GetTablet(ctx, si.MasterAlias)
+		master, err := s.ts.GetTablet(ctx, si.Shard.PrimaryAlias)
 		if err != nil {
-			return nil, vterrors.Wrapf(err, "GetTablet(%s) failed", si.MasterAlias)
+			return nil, vterrors.Wrapf(err, "GetTablet(%s) failed", si.Shard.PrimaryAlias)
 		}
 		rs.sourceMasters[si.ShardName()] = master
 	}
@@ -123,13 +123,13 @@ func (s *VtctldServer) buildResharder(ctx context.Context, keyspace, workflow st
 		if err != nil {
 			return nil, vterrors.Wrapf(err, "GetShard(%s) failed", shard)
 		}
-		if si.IsMasterServing {
+		if si.Shard.IsPrimaryServing {
 			return nil, fmt.Errorf("target shard %v is in serving state", shard)
 		}
 		rs.targetShards = append(rs.targetShards, si)
-		master, err := s.ts.GetTablet(ctx, si.MasterAlias)
+		master, err := s.ts.GetTablet(ctx, si.Shard.PrimaryAlias)
 		if err != nil {
-			return nil, vterrors.Wrapf(err, "GetTablet(%s) failed", si.MasterAlias)
+			return nil, vterrors.Wrapf(err, "GetTablet(%s) failed", si.Shard.PrimaryAlias)
 		}
 		rs.targetMasters[si.ShardName()] = master
 	}
@@ -153,7 +153,7 @@ func (s *VtctldServer) buildResharder(ctx context.Context, keyspace, workflow st
 }
 
 func (rs *resharder) copySchema(ctx context.Context) error {
-	oneSource := rs.sourceShards[0].MasterAlias
+	oneSource := rs.sourceShards[0].Shard.PrimaryAlias
 	err := rs.forAll(rs.targetShards, func(target *topo.ShardInfo) error {
 		return rs.vtctldServer.CopySchemaShard(ctx, oneSource, []string{"/.*"}, nil, false, rs.keyspace, target.ShardName(), 1*time.Second, false)
 	})

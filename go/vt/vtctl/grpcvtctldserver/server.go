@@ -1787,7 +1787,7 @@ func (s *VtctldServer) validateNewWorkflow(ctx context.Context, keyspace, workfl
 	var wg sync.WaitGroup
 	allErrors := &concurrency.AllErrorRecorder{}
 	for _, si := range allshards {
-		if si.MasterAlias == nil {
+		if si.Shard.PrimaryAlias == nil {
 			allErrors.RecordError(fmt.Errorf("shard has no master: %v", si.ShardName()))
 			continue
 		}
@@ -1795,7 +1795,7 @@ func (s *VtctldServer) validateNewWorkflow(ctx context.Context, keyspace, workfl
 		go func(si *topo.ShardInfo) {
 			defer wg.Done()
 
-			master, err := s.ts.GetTablet(ctx, si.MasterAlias)
+			master, err := s.ts.GetTablet(ctx, si.Shard.PrimaryAlias)
 			if err != nil {
 				allErrors.RecordError(vterrors.Wrap(err, "validateWorkflowName.GetTablet"))
 				return
