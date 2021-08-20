@@ -182,7 +182,7 @@ func generateUnitTestWorkflows() error {
 		directoryName := fmt.Sprintf("unit_test_%s", platform)
 		test := &test{
 			Name:              fmt.Sprintf("Unit Test (%s)", platform),
-			ImageName:         fmt.Sprintf("unit_test_(%s)", platform),
+			ImageName:         fmt.Sprintf("unit_test_%s", platform),
 			Platform:          platform,
 			directoryName:     directoryName,
 			Dockerfile:        fmt.Sprintf("./.github/dockerFiles/%s/Dockerfile", directoryName),
@@ -208,7 +208,7 @@ func generateClusterWorkflows() error {
 		directoryName := fmt.Sprintf("cluster_test_%s", cluster)
 		test := &test{
 			Name:              fmt.Sprintf("Cluster (%s)", cluster),
-			ImageName:         fmt.Sprintf("cluster_test_(%s)", cluster),
+			ImageName:         fmt.Sprintf("cluster_test_%s", cluster),
 			Platform:          "mysql57",
 			directoryName:     directoryName,
 			Dockerfile:        fmt.Sprintf("./.github/dockerFiles/%s/Dockerfile", directoryName),
