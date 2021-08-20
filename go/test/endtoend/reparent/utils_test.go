@@ -51,6 +51,7 @@ var (
 	dbName          = "vt_" + keyspaceName
 	username        = "vt_dba"
 	hostname        = "localhost"
+	insertVal       = 1
 	insertSQL       = "insert into vt_insert_test(id, msg) values (%d, 'test %d')"
 	sqlSchema       = `
 	create table vt_insert_test (
@@ -310,7 +311,8 @@ func validateTopology(t *testing.T, pingTablets bool) {
 
 func confirmReplication(t *testing.T, primary *cluster.Vttablet, replicas []*cluster.Vttablet) {
 	ctx := context.Background()
-	n := 2 // random value ...
+	insertVal++
+	n := insertVal // unique value ...
 	// insert data into the new primary, check the connected replica work
 	insertSQL := fmt.Sprintf(insertSQL, n, n)
 	runSQL(ctx, t, insertSQL, primary)
@@ -441,7 +443,7 @@ func isHealthyPrimaryTablet(t *testing.T, tablet *cluster.Vttablet) bool {
 
 func checkInsertedValues(ctx context.Context, t *testing.T, tablet *cluster.Vttablet, index int) error {
 	// wait until it gets the data
-	timeout := time.Now().Add(5 * time.Second)
+	timeout := time.Now().Add(15 * time.Second)
 	i := 0
 	for time.Now().Before(timeout) {
 		selectSQL := fmt.Sprintf("select msg from vt_insert_test where id=%d", index)
@@ -490,7 +492,7 @@ func resurrectTablet(ctx context.Context, t *testing.T, tab *cluster.Vttablet) {
 	err = tab.VttabletProcess.Setup()
 	require.NoError(t, err)
 
-	err = checkInsertedValues(ctx, t, tab, 2)
+	err = checkInsertedValues(ctx, t, tab, insertVal)
 	require.NoError(t, err)
 }
 
