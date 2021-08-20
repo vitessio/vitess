@@ -1,0 +1,13 @@
+name: self_hosted_runner
+on: [pull_request]
+jobs:
+
+  build:
+    name: Try Self Hosted Runner
+    runs-on: self-hosted
+    steps:
+
+    - name: echo_command
+      run: |
+        echo 'runner works'
+
