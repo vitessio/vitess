@@ -12,13 +12,13 @@ jobs:
         uses: actions/checkout@v2
 
       - name: Build Docker Image
-        run: docker build -f ./.github/dockerFiles/cluster_test_18/Dockerfile -t cluster_test_(18)  .
+        run: docker build -f ./.github/dockerFiles/cluster_test_18/Dockerfile -t cluster_test_18  .
 
       - name: Run test
         timeout-minutes: 30
-        run: docker run --rm cluster_test_(18) /bin/bash -c 'source build.env && go run test.go -docker=false -print-log -follow -shard 18'
+        run: docker run --rm cluster_test_18 /bin/bash -c 'source build.env && go run test.go -docker=false -print-log -follow -shard 18'
 
       - name: Cleanup Docker Image
         run: |
-          docker images rm cluster_test_(18)
+          docker images rm cluster_test_18
           docker volume prune -f
