@@ -35,11 +35,6 @@ func (d *Derived) TableID() semantics.TableSet {
 	return d.Inner.TableID()
 }
 
-// Solves implements the Operator interface
-func (d *Derived) Solves(ts semantics.TableSet) (bool, []sqlparser.Expr) {
-	return d.Inner.Solves(ts)
-}
-
 // PushPredicate implements the Operator interface
 func (d *Derived) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) error {
 	tableInfo, err := semTable.TableInfoForExpr(expr)
@@ -52,4 +47,9 @@ func (d *Derived) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTabl
 		return err
 	}
 	return d.Inner.PushPredicate(newExpr, semTable)
+}
+
+// UnsolvedPredicates implements the Operator interface
+func (d *Derived) UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.Expr {
+	return d.Inner.UnsolvedPredicates(semTable)
 }

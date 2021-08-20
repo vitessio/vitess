@@ -29,11 +29,6 @@ type LeftJoin struct {
 
 var _ Operator = (*LeftJoin)(nil)
 
-// Solves implements the Operator interface
-func (oj *LeftJoin) Solves(ts semantics.TableSet) (bool, []sqlparser.Expr) {
-	return false, nil
-}
-
 // PushPredicate implements the Operator interface
 func (oj *LeftJoin) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) error {
 	deps := semTable.BaseTableDependencies(expr)
@@ -47,4 +42,23 @@ func (oj *LeftJoin) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTa
 // TableID implements the Operator interface
 func (oj *LeftJoin) TableID() semantics.TableSet {
 	return oj.Right.TableID().Merge(oj.Left.TableID())
+}
+
+// UnsolvedPredicates implements the Operator interface
+func (oj *LeftJoin) UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.Expr {
+	ts := oj.TableID()
+	var result []sqlparser.Expr
+	for _, expr := range oj.Left.UnsolvedPredicates(semTable) {
+		deps := semTable.Dependencies(expr)
+		if !deps.IsSolvedBy(ts) {
+			result = append(result, expr)
+		}
+	}
+	for _, expr := range oj.Right.UnsolvedPredicates(semTable) {
+		deps := semTable.Dependencies(expr)
+		if !deps.IsSolvedBy(ts) {
+			result = append(result, expr)
+		}
+	}
+	return result
 }

@@ -37,8 +37,8 @@ type (
 		// PushPredicate pushes a predicate to the closest possible operator
 		PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) error
 
-		// Solves returns true if the Operator solves the given TableSet
-		Solves(ts semantics.TableSet) (bool, []sqlparser.Expr)
+		// UnsolvedPredicates returns any predicates that have dependencies from the outside
+		UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.Expr
 	}
 )
 
