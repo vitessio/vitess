@@ -141,7 +141,7 @@ func (be *XtrabackupEngine) ExecuteBackup(ctx context.Context, params BackupPara
 	}
 	pos, err := conn.PrimaryPosition()
 	if err != nil {
-		return false, vterrors.Wrap(err, "unable to obtain master position")
+		return false, vterrors.Wrap(err, "unable to obtain primary position")
 	}
 	flavor := pos.GTIDSet.Flavor()
 	params.Logger.Infof("Detected MySQL flavor: %v", flavor)

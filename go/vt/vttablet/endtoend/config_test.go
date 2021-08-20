@@ -132,7 +132,7 @@ func TestConsolidatorReplicasOnly(t *testing.T) {
 	afterOne := framework.FetchInt(framework.DebugVars(), totalConsolidationsTag)
 	assert.Equal(t, initial+1, afterOne, "expected one consolidation")
 
-	revert := changeVar(t, "Consolidator", tabletenv.NotOnMaster)
+	revert := changeVar(t, "Consolidator", tabletenv.NotOnPrimary)
 	defer revert()
 
 	// primary should not do query consolidation

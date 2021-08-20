@@ -44,7 +44,7 @@ func main() {
 	rand.Seed(time.Now().UnixNano())
 
 	// Connect to vtgate.
-	db, err := vitessdriver.Open(*server, "@master")
+	db, err := vitessdriver.Open(*server, "@primary")
 	if err != nil {
 		fmt.Printf("client error: %v\n", err)
 		os.Exit(1)
@@ -52,7 +52,7 @@ func main() {
 	defer db.Close()
 
 	// Insert some messages on random pages.
-	fmt.Println("Inserting into master...")
+	fmt.Println("Inserting into primary...")
 	for i := 0; i < 3; i++ {
 		tx, err := db.Begin()
 		if err != nil {
@@ -73,7 +73,7 @@ func main() {
 	}
 
 	// Read it back from the primary.
-	fmt.Println("Reading from master...")
+	fmt.Println("Reading from primary...")
 	rows, err := db.Query("SELECT page, time_created_ns, message FROM messages")
 	if err != nil {
 		fmt.Printf("query failed: %v\n", err)

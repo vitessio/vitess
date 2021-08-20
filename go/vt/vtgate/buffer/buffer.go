@@ -116,7 +116,7 @@ func newWithNow(now func() time.Time) *Buffer {
 	}
 
 	if *enabled {
-		log.Infof("vtgate buffer enabled. MASTER requests will be buffered during detected failovers.")
+		log.Infof("vtgate buffer enabled. PRIMARY requests will be buffered during detected failovers.")
 
 		// Log a second line if it's only enabled for some keyspaces or shards.
 		header := "Buffering limited to configured "
@@ -217,7 +217,7 @@ func (b *Buffer) WaitForFailoverEnd(ctx context.Context, keyspace, shard string,
 // and end any failover buffering that may be in progress
 func (b *Buffer) ProcessPrimaryHealth(th *discovery.TabletHealth) {
 	if th.Target.TabletType != topodatapb.TabletType_PRIMARY {
-		panic(fmt.Sprintf("BUG: non MASTER TabletHealth object must not be forwarded: %#v", th))
+		panic(fmt.Sprintf("BUG: non-PRIMARY TabletHealth object must not be forwarded: %#v", th))
 	}
 	timestamp := th.PrimaryTermStartTime
 	if timestamp == 0 {
@@ -239,7 +239,7 @@ func (b *Buffer) ProcessPrimaryHealth(th *discovery.TabletHealth) {
 // It is part of the discovery.LegacyHealthCheckStatsListener interface.
 func (b *Buffer) StatsUpdate(ts *discovery.LegacyTabletStats) {
 	if ts.Target.TabletType != topodatapb.TabletType_PRIMARY {
-		panic(fmt.Sprintf("BUG: non MASTER LegacyTabletStats object must not be forwarded: %#v", ts))
+		panic(fmt.Sprintf("BUG: non-PRIMARY LegacyTabletStats object must not be forwarded: %#v", ts))
 	}
 
 	timestamp := ts.TabletExternallyReparentedTimestamp
