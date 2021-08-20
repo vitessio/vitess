@@ -398,7 +398,7 @@ func (fmd *FakeMysqlDaemon) WaitForReparentJournal(ctx context.Context, timeCrea
 	return nil
 }
 
-// DemoteMaster is deprecated: use mysqld.PrimaryPosition() instead
+// DemoteMaster is deprecated: use mysqld.DemotePrimary() instead
 func (fmd *FakeMysqlDaemon) DemoteMaster() (mysql.Position, error) {
 	return fmd.CurrentPrimaryPosition, nil
 }

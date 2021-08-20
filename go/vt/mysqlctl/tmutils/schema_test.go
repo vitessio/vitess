@@ -492,7 +492,7 @@ func TestFilterTables(t *testing.T) {
 			},
 		},
 		{
-			desc: "filter based on excludeTables (blacklist)",
+			desc: "filter based on excludeTables (denylist)",
 			input: &tabletmanagerdatapb.SchemaDefinition{
 				TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
 					basicTable1,

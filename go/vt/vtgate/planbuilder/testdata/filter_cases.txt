@@ -2209,6 +2209,25 @@ Gen4 plan same as above
   }
 }
 
+# non unique predicate on vindex
+"select id from user where user.id > 5"
+{
+  "QueryType": "SELECT",
+  "Original": "select id from user where user.id \u003e 5",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select id from `user` where 1 != 1",
+    "Query": "select id from `user` where `user`.id \u003e 5",
+    "Table": "`user`"
+  }
+}
+Gen4 plan same as above
+
 # select from unsharded keyspace with uncorrelated subquery which should be merged to a single route
 "select unsharded.id from unsharded where unsharded.name in (select name from unsharded_a)"
 {

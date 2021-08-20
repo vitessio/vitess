@@ -1651,7 +1651,7 @@ func TestMaterializerOneToOne(t *testing.T) {
 			},
 		},
 		Cell:        "zone1",
-		TabletTypes: "master,rdonly",
+		TabletTypes: "master,primary,rdonly",
 	}
 	env := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"0"})
 	defer env.close()
@@ -1668,7 +1668,7 @@ func TestMaterializerOneToOne(t *testing.T) {
 				`rules:{match:\\"t2\\" filter:\\"select.*t3\\"} `+
 				`rules:{match:\\"t4\\"}`+
 				`}', `)+
-			`'', [0-9]*, [0-9]*, 'zone1', 'master,rdonly', [0-9]*, 0, 'Stopped', 'vt_targetks'`+
+			`'', [0-9]*, [0-9]*, 'zone1', 'master,primary,rdonly', [0-9]*, 0, 'Stopped', 'vt_targetks'`+
 			`\)`+eol,
 		&sqltypes.Result{},
 	)
@@ -2209,7 +2209,7 @@ func TestMaterializerNoSourceMaster(t *testing.T) {
 
 	env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
 	err := env.wr.Materialize(context.Background(), ms)
-	require.EqualError(t, err, "source shard must have a master for copying schema: 0")
+	require.EqualError(t, err, "source shard must have a primary for copying schema: 0")
 }
 
 func TestMaterializerTableMismatchNonCopy(t *testing.T) {

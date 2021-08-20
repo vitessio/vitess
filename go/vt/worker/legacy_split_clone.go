@@ -396,32 +396,32 @@ func (scw *LegacySplitCloneWorker) findTargets(ctx context.Context) error {
 	}
 
 	// Make sure we find a primary for each destination shard and log it.
-	scw.wr.Logger().Infof("Finding a MASTER tablet for each destination shard...")
+	scw.wr.Logger().Infof("Finding a PRIMARY tablet for each destination shard...")
 	for _, si := range scw.destinationShards {
 		waitCtx, waitCancel := context.WithTimeout(ctx, 10*time.Second)
 		defer waitCancel()
 		if err := scw.tsc.WaitForTablets(waitCtx, si.Keyspace(), si.ShardName(), topodatapb.TabletType_PRIMARY); err != nil {
-			return vterrors.Wrapf(err, "cannot find MASTER tablet for destination shard for %v/%v", si.Keyspace(), si.ShardName())
+			return vterrors.Wrapf(err, "cannot find PRIMARY tablet for destination shard for %v/%v", si.Keyspace(), si.ShardName())
 		}
-		masters := scw.tsc.GetHealthyTabletStats(si.Keyspace(), si.ShardName(), topodatapb.TabletType_PRIMARY)
-		if len(masters) == 0 {
-			return fmt.Errorf("cannot find MASTER tablet for destination shard for %v/%v in LegacyHealthCheck: empty LegacyTabletStats list", si.Keyspace(), si.ShardName())
+		primarys := scw.tsc.GetHealthyTabletStats(si.Keyspace(), si.ShardName(), topodatapb.TabletType_PRIMARY)
+		if len(primarys) == 0 {
+			return fmt.Errorf("cannot find PRIMARY tablet for destination shard for %v/%v in LegacyHealthCheck: empty LegacyTabletStats list", si.Keyspace(), si.ShardName())
 		}
-		master := masters[0]
+		primary := primarys[0]
 
 		// Get the MySQL database name of the tablet.
 		shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
-		ti, err := scw.wr.TopoServer().GetTablet(shortCtx, master.Tablet.Alias)
+		ti, err := scw.wr.TopoServer().GetTablet(shortCtx, primary.Tablet.Alias)
 		cancel()
 		if err != nil {
-			return vterrors.Wrapf(err, "cannot get the TabletInfo for destination master (%v) to find out its db name", topoproto.TabletAliasString(master.Tablet.Alias))
+			return vterrors.Wrapf(err, "cannot get the TabletInfo for destination primary (%v) to find out its db name", topoproto.TabletAliasString(primary.Tablet.Alias))
 		}
 		keyspaceAndShard := topoproto.KeyspaceShardString(si.Keyspace(), si.ShardName())
 		scw.destinationDbNames[keyspaceAndShard] = ti.DbName()
 
-		scw.wr.Logger().Infof("Using tablet %v as destination master for %v/%v", topoproto.TabletAliasString(master.Tablet.Alias), si.Keyspace(), si.ShardName())
+		scw.wr.Logger().Infof("Using tablet %v as destination primary for %v/%v", topoproto.TabletAliasString(primary.Tablet.Alias), si.Keyspace(), si.ShardName())
 	}
-	scw.wr.Logger().Infof("NOTE: The used master of a destination shard might change over the course of the copy e.g. due to a reparent. The LegacyHealthCheck module will track and log master changes and any error message will always refer the actually used master address.")
+	scw.wr.Logger().Infof("NOTE: The used primary of a destination shard might change over the course of the copy e.g. due to a reparent. The LegacyHealthCheck module will track and log primary changes and any error message will always refer the actually used primary address.")
 
 	// Set up the throttler for each destination shard.
 	for _, si := range scw.destinationShards {

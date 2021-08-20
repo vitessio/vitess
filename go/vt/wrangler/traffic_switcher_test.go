@@ -368,10 +368,10 @@ func TestTableMigrateMainflow(t *testing.T) {
 		"ks2.t2@rdonly":  {"ks2.t2"},
 		"ks1.t2@rdonly":  {"ks2.t2"},
 	})
-	checkBlacklist(t, tme.ts, "ks1:-40", nil)
-	checkBlacklist(t, tme.ts, "ks1:40-", nil)
-	checkBlacklist(t, tme.ts, "ks2:-80", nil)
-	checkBlacklist(t, tme.ts, "ks2:80-", nil)
+	checkDenyList(t, tme.ts, "ks1:-40", nil)
+	checkDenyList(t, tme.ts, "ks1:40-", nil)
+	checkDenyList(t, tme.ts, "ks2:-80", nil)
+	checkDenyList(t, tme.ts, "ks2:80-", nil)
 
 	//-------------------------------------------------------------------------------------------------------------------
 	// Test successful SwitchWrites.
@@ -478,10 +478,10 @@ func TestTableMigrateMainflow(t *testing.T) {
 		"ks2.t2@rdonly":  {"ks2.t2"},
 		"ks1.t2@rdonly":  {"ks2.t2"},
 	})
-	checkBlacklist(t, tme.ts, "ks1:-40", []string{"t1", "t2"})
-	checkBlacklist(t, tme.ts, "ks1:40-", []string{"t1", "t2"})
-	checkBlacklist(t, tme.ts, "ks2:-80", nil)
-	checkBlacklist(t, tme.ts, "ks2:80-", nil)
+	checkDenyList(t, tme.ts, "ks1:-40", []string{"t1", "t2"})
+	checkDenyList(t, tme.ts, "ks1:40-", []string{"t1", "t2"})
+	checkDenyList(t, tme.ts, "ks2:-80", nil)
+	checkDenyList(t, tme.ts, "ks2:80-", nil)
 
 	verifyQueries(t, tme.allDBClients)
 }
@@ -862,7 +862,7 @@ func TestTableMigrateOneToMany(t *testing.T) {
 		"Dropping these tables from the database and removing them from the vschema for keyspace ks1:",
 		"	Keyspace ks1 Shard 0 DbName vt_ks1 Tablet 10 Table t1",
 		"	Keyspace ks1 Shard 0 DbName vt_ks1 Tablet 10 Table t2",
-		"Blacklisted tables [t1,t2] will be removed from:",
+		"Denied tables [t1,t2] will be removed from:",
 		"	Keyspace ks1 Shard 0 Tablet 10",
 		"Delete reverse vreplication streams on source:",
 		"	Keyspace ks1 Shard 0 Workflow test_reverse DbName vt_ks1 Tablet 10",
@@ -876,7 +876,7 @@ func TestTableMigrateOneToMany(t *testing.T) {
 	results, err := tme.wr.DropSources(ctx, tme.targetKeyspace, "test", workflow.DropTable, false, false, true)
 	require.NoError(t, err)
 	require.Empty(t, cmp.Diff(wantdryRunDropSources, *results))
-	checkBlacklist(t, tme.ts, fmt.Sprintf("%s:%s", "ks1", "0"), []string{"t1", "t2"})
+	checkDenyList(t, tme.ts, fmt.Sprintf("%s:%s", "ks1", "0"), []string{"t1", "t2"})
 
 	dropSourcesDryRunRename := func() {
 		tme.dbTargetClients[0].addQuery("select 1 from _vt.vreplication where db_name='vt_ks2' and workflow='test' and message!='FROZEN'", &sqltypes.Result{}, nil)
@@ -889,7 +889,7 @@ func TestTableMigrateOneToMany(t *testing.T) {
 		"Renaming these tables from the database and removing them from the vschema for keyspace ks1:", "	" +
 			"Keyspace ks1 Shard 0 DbName vt_ks1 Tablet 10 Table t1",
 		"	Keyspace ks1 Shard 0 DbName vt_ks1 Tablet 10 Table t2",
-		"Blacklisted tables [t1,t2] will be removed from:",
+		"Denied tables [t1,t2] will be removed from:",
 		"	Keyspace ks1 Shard 0 Tablet 10",
 		"Delete reverse vreplication streams on source:",
 		"	Keyspace ks1 Shard 0 Workflow test_reverse DbName vt_ks1 Tablet 10",
@@ -903,7 +903,7 @@ func TestTableMigrateOneToMany(t *testing.T) {
 	results, err = tme.wr.DropSources(ctx, tme.targetKeyspace, "test", workflow.RenameTable, false, false, true)
 	require.NoError(t, err)
 	require.Empty(t, cmp.Diff(wantdryRunRenameSources, *results))
-	checkBlacklist(t, tme.ts, fmt.Sprintf("%s:%s", "ks1", "0"), []string{"t1", "t2"})
+	checkDenyList(t, tme.ts, fmt.Sprintf("%s:%s", "ks1", "0"), []string{"t1", "t2"})
 
 	dropSources := func() {
 		tme.dbTargetClients[0].addQuery("select 1 from _vt.vreplication where db_name='vt_ks2' and workflow='test' and message!='FROZEN'", &sqltypes.Result{}, nil)
@@ -936,7 +936,7 @@ func TestTableMigrateOneToMany(t *testing.T) {
 	})
 	_, err = tme.wr.DropSources(ctx, tme.targetKeyspace, "test", workflow.RenameTable, false, false, false)
 	require.NoError(t, err)
-	checkBlacklist(t, tme.ts, fmt.Sprintf("%s:%s", "ks1", "0"), nil)
+	checkDenyList(t, tme.ts, fmt.Sprintf("%s:%s", "ks1", "0"), nil)
 	checkRouting(t, tme.wr, map[string][]string{})
 	verifyQueries(t, tme.allDBClients)
 }
@@ -1219,12 +1219,12 @@ func TestTableMigrateJournalExists(t *testing.T) {
 		"ks2.t2@rdonly":  {"ks2.t2"},
 		"ks1.t2@rdonly":  {"ks2.t2"},
 	})
-	// We're showing that there are no blacklisted tables. But in real life,
-	// tables on ks1 should be blacklisted from the previous failed attempt.
-	checkBlacklist(t, tme.ts, "ks1:-40", nil)
-	checkBlacklist(t, tme.ts, "ks1:40-", nil)
-	checkBlacklist(t, tme.ts, "ks2:-80", nil)
-	checkBlacklist(t, tme.ts, "ks2:80-", nil)
+	// We're showing that there are no denied tables. But in real life,
+	// tables on ks1 should be denied from the previous failed attempt.
+	checkDenyList(t, tme.ts, "ks1:-40", nil)
+	checkDenyList(t, tme.ts, "ks1:40-", nil)
+	checkDenyList(t, tme.ts, "ks2:-80", nil)
+	checkDenyList(t, tme.ts, "ks2:80-", nil)
 
 	verifyQueries(t, tme.allDBClients)
 }
@@ -2067,7 +2067,7 @@ func checkCellRouting(t *testing.T, wr *Wrangler, cell string, want map[string][
 	}
 }
 
-func checkBlacklist(t *testing.T, ts *topo.Server, keyspaceShard string, want []string) {
+func checkDenyList(t *testing.T, ts *topo.Server, keyspaceShard string, want []string) {
 	t.Helper()
 	ctx := context.Background()
 	splits := strings.Split(keyspaceShard, ":")
@@ -2078,10 +2078,10 @@ func checkBlacklist(t *testing.T, ts *topo.Server, keyspaceShard string, want []
 	tc := si.GetTabletControl(topodatapb.TabletType_PRIMARY)
 	var got []string
 	if tc != nil {
-		got = tc.BlacklistedTables
+		got = tc.DeniedTables
 	}
 	if !reflect.DeepEqual(got, want) {
-		t.Errorf("Blacklisted tables for %v: %v, want %v", keyspaceShard, got, want)
+		t.Errorf("Denied tables for %v: %v, want %v", keyspaceShard, got, want)
 	}
 }
 

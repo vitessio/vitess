@@ -320,13 +320,13 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 			dropSourcesDryRun(t, ksWorkflow, true, dryRunResultsDropSourcesRenameCustomerShard)
 
 			var exists bool
-			exists, err = checkIfBlacklistExists(t, vc, "product:0", "customer")
-			require.NoError(t, err, "Error getting blacklist for customer:0")
+			exists, err = checkIfDenyListExists(t, vc, "product:0", "customer")
+			require.NoError(t, err, "Error getting denylist for customer:0")
 			require.True(t, exists)
 			dropSources(t, ksWorkflow)
 
-			exists, err = checkIfBlacklistExists(t, vc, "product:0", "customer")
-			require.NoError(t, err, "Error getting blacklist for customer:0")
+			exists, err = checkIfDenyListExists(t, vc, "product:0", "customer")
+			require.NoError(t, err, "Error getting denylist for customer:0")
 			require.False(t, exists)
 
 			for _, shard := range strings.Split("-80,80-", ",") {
@@ -820,7 +820,7 @@ func catchup(t *testing.T, vttablet *cluster.VttabletProcess, workflow, info str
 
 func moveTables(t *testing.T, cell, workflow, sourceKs, targetKs, tables string) {
 	if err := vc.VtctlClient.ExecuteCommand("MoveTables", "-v1", "-cells="+cell, "-workflow="+workflow,
-		"-tablet_types="+"master,replica,rdonly", sourceKs, targetKs, tables); err != nil {
+		"-tablet_types="+"primary,replica,rdonly", sourceKs, targetKs, tables); err != nil {
 		t.Fatalf("MoveTables command failed with %+v\n", err)
 	}
 }

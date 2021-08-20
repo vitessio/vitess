@@ -36,7 +36,7 @@ const (
 )
 
 // Backup takes a db backup and sends it to the BackupStorage
-func (tm *TabletManager) Backup(ctx context.Context, concurrency int, logger logutil.Logger, allowMaster bool) error {
+func (tm *TabletManager) Backup(ctx context.Context, concurrency int, logger logutil.Logger, allowPrimary bool) error {
 	if tm.Cnf == nil {
 		return fmt.Errorf("cannot perform backup without my.cnf, please restart vttablet with a my.cnf file specified")
 	}
@@ -46,8 +46,8 @@ func (tm *TabletManager) Backup(ctx context.Context, concurrency int, logger log
 	// but the process didn't find out about this.
 	// It is not safe to take backups from tablet in this state
 	currentTablet := tm.Tablet()
-	if !allowMaster && currentTablet.Type == topodatapb.TabletType_PRIMARY {
-		return fmt.Errorf("type MASTER cannot take backup. if you really need to do this, rerun the backup command with -allow_master")
+	if !allowPrimary && currentTablet.Type == topodatapb.TabletType_PRIMARY {
+		return fmt.Errorf("type PRIMARY cannot take backup. if you really need to do this, rerun the backup command with -allow_primary")
 	}
 	engine, err := mysqlctl.GetBackupEngine()
 	if err != nil {
@@ -58,8 +58,8 @@ func (tm *TabletManager) Backup(ctx context.Context, concurrency int, logger log
 	if err != nil {
 		return err
 	}
-	if !allowMaster && tablet.Type == topodatapb.TabletType_PRIMARY {
-		return fmt.Errorf("type MASTER cannot take backup. if you really need to do this, rerun the backup command with -allow_master")
+	if !allowPrimary && tablet.Type == topodatapb.TabletType_PRIMARY {
+		return fmt.Errorf("type PRIMARY cannot take backup. if you really need to do this, rerun the backup command with -allow_primary")
 	}
 
 	// prevent concurrent backups, and record stats
@@ -162,7 +162,7 @@ func (tm *TabletManager) RestoreFromBackup(ctx context.Context, logger logutil.L
 		return err
 	}
 	if tablet.Type == topodatapb.TabletType_PRIMARY {
-		return fmt.Errorf("type MASTER cannot restore from backup, if you really need to do this, restart vttablet in replica mode")
+		return fmt.Errorf("type PRIMARY cannot restore from backup, if you really need to do this, restart vttablet in replica mode")
 	}
 
 	// create the loggers: tee to console and source

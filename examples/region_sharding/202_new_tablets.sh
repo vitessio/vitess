@@ -27,7 +27,7 @@ CELL=zone1 TABLET_UID=500 ./scripts/mysqlctl-up.sh
 SHARD=c0- CELL=zone1 KEYSPACE=main TABLET_UID=500 ./scripts/vttablet-up.sh
 
 # set primary
-vtctlclient InitShardMaster -force main/-40 zone1-200
-vtctlclient InitShardMaster -force main/40-80 zone1-300
-vtctlclient InitShardMaster -force main/80-c0 zone1-400
-vtctlclient InitShardMaster -force main/c0- zone1-500
+vtctlclient InitShardPrimary -force main/-40 zone1-200
+vtctlclient InitShardPrimary -force main/40-80 zone1-300
+vtctlclient InitShardPrimary -force main/80-c0 zone1-400
+vtctlclient InitShardPrimary -force main/c0- zone1-500

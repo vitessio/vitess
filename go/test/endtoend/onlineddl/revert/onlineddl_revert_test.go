@@ -648,7 +648,7 @@ func runSingleConnection(ctx context.Context, t *testing.T, done *int64) {
 			err = generateDelete(t, conn)
 		}
 		if err != nil {
-			if strings.Contains(err.Error(), "disallowed due to rule: enforce blacklisted tables") {
+			if strings.Contains(err.Error(), "disallowed due to rule: enforce denied tables") {
 				err = nil
 			}
 		}

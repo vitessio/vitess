@@ -39,7 +39,7 @@ Scalability and availability require some trade-offs:
 fully consistent.
 Vitess lets you specify the kind of consistency you want on your read.
 It's generally recommended that you use replica reads as they're easier to scale.
-You can always request for master reads if you want up-to-date data.
+You can always request for primary reads if you want up-to-date data.
 You can also additionally perform 'for update' reads that ensure that
 a row will not change until you've committed your changes.
 * *Transactions*: Relational transactions are prohibitively expensive

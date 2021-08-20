@@ -13,7 +13,7 @@ The `vitess/bootstrap` image comes in different flavors:
 * `vitess/bootstrap:percona57` - bootstrap image for Percona Server 5.7
 
 **NOTE: Unlike the base image that builds Vitess itself, this bootstrap image
-will NOT be rebuilt automatically on every push to the Vitess master branch.**
+will NOT be rebuilt automatically on every push to the Vitess main branch.**
 
 To build a new bootstrap image, use the [build.sh](https://github.com/vitessio/vitess/blob/main/docker/bootstrap/build.sh)
 script.

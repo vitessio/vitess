@@ -1,13 +1,22 @@
-# This file is auto-included when MariaDB 10.4 is detected.
+# This file is auto-included when MariaDB 10.2 is detected.
+
+# Semi-sync replication is required for automated unplanned failover
+# (when the primary goes away). Here we just load the plugin so it's
+# available if desired, but it's disabled at startup.
+#
+# If the -enable_semi_sync flag is used, VTTablet will enable semi-sync
+# at the proper time when replication is set up, or when a primary is
+# promoted or demoted.
+plugin-load = rpl_semi_sync_master=semisync_master.so;rpl_semi_sync_slave=semisync_slave.so
 
 # enable strict mode so it's safe to compare sequence numbers across different server IDs.
 gtid_strict_mode = 1
 innodb_stats_persistent = 0
 
 # When semi-sync is enabled, don't allow fallback to async
-# if you get no ack, or have no slaves. This is necessary to
+# if you get no ack, or have no replicas. This is necessary to
 # prevent alternate futures when doing a failover in response to
-# a master that becomes unresponsive.
+# a primary that becomes unresponsive.
 rpl_semi_sync_master_timeout = 1000000000000000000
 rpl_semi_sync_master_wait_no_slave = 1
 
@@ -26,5 +35,3 @@ expire_logs_days = 3
 
 character_set_server = utf8
 collation_server = utf8_general_ci
-
-

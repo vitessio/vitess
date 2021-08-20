@@ -51,10 +51,10 @@ func (wr *Wrangler) SetShardIsPrimaryServing(ctx context.Context, keyspace, shar
 // SetShardTabletControl changes the TabletControl records
 // for a shard.  It does not rebuild any serving graph or do
 // cross-shard consistency check.
-// - sets black listed tables in tablet control record
+// - sets list of denied tables in tablet control record
 //
 // This takes the keyspace lock as to not interfere with resharding operations.
-func (wr *Wrangler) SetShardTabletControl(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, cells []string, remove bool, blacklistedTables []string) (err error) {
+func (wr *Wrangler) SetShardTabletControl(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, cells []string, remove bool, deniedTables []string) (err error) {
 	// lock the keyspace
 	ctx, unlock, lockErr := wr.ts.LockKeyspace(ctx, keyspace, "SetShardTabletControl")
 	if lockErr != nil {
@@ -64,8 +64,8 @@ func (wr *Wrangler) SetShardTabletControl(ctx context.Context, keyspace, shard s
 
 	// update the shard
 	_, err = wr.ts.UpdateShardFields(ctx, keyspace, shard, func(si *topo.ShardInfo) error {
-		// we are setting / removing the blacklisted tables only
-		return si.UpdateSourceBlacklistedTables(ctx, tabletType, cells, remove, blacklistedTables)
+		// we are setting / removing the denied tables only
+		return si.UpdateSourceDeniedTables(ctx, tabletType, cells, remove, deniedTables)
 	})
 	return err
 }
@@ -250,7 +250,7 @@ func (wr *Wrangler) RemoveShardCell(ctx context.Context, keyspace, shard, cell s
 
 	// check the primary alias is not in the cell
 	if shardInfo.PrimaryAlias != nil && shardInfo.PrimaryAlias.Cell == cell {
-		return fmt.Errorf("master %v is in the cell '%v' we want to remove", topoproto.TabletAliasString(shardInfo.PrimaryAlias), cell)
+		return fmt.Errorf("primary %v is in the cell '%v' we want to remove", topoproto.TabletAliasString(shardInfo.PrimaryAlias), cell)
 	}
 
 	// get the ShardReplication object in the cell

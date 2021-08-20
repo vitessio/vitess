@@ -366,11 +366,11 @@ func (m *Shard_TabletControl) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i--
 		dAtA[i] = 0x28
 	}
-	if len(m.BlacklistedTables) > 0 {
-		for iNdEx := len(m.BlacklistedTables) - 1; iNdEx >= 0; iNdEx-- {
-			i -= len(m.BlacklistedTables[iNdEx])
-			copy(dAtA[i:], m.BlacklistedTables[iNdEx])
-			i = encodeVarint(dAtA, i, uint64(len(m.BlacklistedTables[iNdEx])))
+	if len(m.DeniedTables) > 0 {
+		for iNdEx := len(m.DeniedTables) - 1; iNdEx >= 0; iNdEx-- {
+			i -= len(m.DeniedTables[iNdEx])
+			copy(dAtA[i:], m.DeniedTables[iNdEx])
+			i = encodeVarint(dAtA, i, uint64(len(m.DeniedTables[iNdEx])))
 			i--
 			dAtA[i] = 0x22
 		}
@@ -1391,8 +1391,8 @@ func (m *Shard_TabletControl) SizeVT() (n int) {
 			n += 1 + l + sov(uint64(l))
 		}
 	}
-	if len(m.BlacklistedTables) > 0 {
-		for _, s := range m.BlacklistedTables {
+	if len(m.DeniedTables) > 0 {
+		for _, s := range m.DeniedTables {
 			l = len(s)
 			n += 1 + l + sov(uint64(l))
 		}
@@ -2864,7 +2864,7 @@ func (m *Shard_TabletControl) UnmarshalVT(dAtA []byte) error {
 			iNdEx = postIndex
 		case 4:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field BlacklistedTables", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field DeniedTables", wireType)
 			}
 			var stringLen uint64
 			for shift := uint(0); ; shift += 7 {
@@ -2892,7 +2892,7 @@ func (m *Shard_TabletControl) UnmarshalVT(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.BlacklistedTables = append(m.BlacklistedTables, string(dAtA[iNdEx:postIndex]))
+			m.DeniedTables = append(m.DeniedTables, string(dAtA[iNdEx:postIndex]))
 			iNdEx = postIndex
 		case 5:
 			if wireType != 0 {

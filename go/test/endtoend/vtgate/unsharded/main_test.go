@@ -307,7 +307,7 @@ func TestCallProcedure(t *testing.T) {
 		Host:   "localhost",
 		Port:   clusterInstance.VtgateMySQLPort,
 		Flags:  mysql.CapabilityClientMultiResults,
-		DbName: "@master",
+		DbName: "@primary",
 	}
 	time.Sleep(5 * time.Second)
 	conn, err := mysql.Connect(ctx, &vtParams)

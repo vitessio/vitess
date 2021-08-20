@@ -159,7 +159,7 @@ func (env *testResharderEnv) addTablet(id int, keyspace, shard string, tabletTyp
 		},
 	}
 	env.tablets[id] = tablet
-	if err := env.wr.InitTablet(context.Background(), tablet, false /* allowMasterOverride */, true /* createShardAndKeyspace */, false /* allowUpdate */); err != nil {
+	if err := env.wr.InitTablet(context.Background(), tablet, false /* allowPrimaryOverride */, true /* createShardAndKeyspace */, false /* allowUpdate */); err != nil {
 		panic(err)
 	}
 	if tabletType == topodatapb.TabletType_PRIMARY {

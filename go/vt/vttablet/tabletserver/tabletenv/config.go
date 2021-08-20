@@ -34,12 +34,14 @@ import (
 
 // These constants represent values for various config parameters.
 const (
-	Enable      = "enable"
-	Disable     = "disable"
-	Dryrun      = "dryRun"
-	NotOnMaster = "notOnMaster"
-	Polling     = "polling"
-	Heartbeat   = "heartbeat"
+	Enable  = "enable"
+	Disable = "disable"
+	Dryrun  = "dryRun"
+	// TODO(deepthi): Deprecated. Should be deleted after v12.0
+	NotOnMaster  = "notOnMaster"
+	NotOnPrimary = "notOnPrimary"
+	Polling      = "polling"
+	Heartbeat    = "heartbeat"
 )
 
 var (
@@ -183,7 +185,7 @@ func Init() {
 
 	switch {
 	case enableConsolidatorReplicas:
-		currentConfig.Consolidator = NotOnMaster
+		currentConfig.Consolidator = NotOnPrimary
 	case enableConsolidator:
 		currentConfig.Consolidator = Enable
 	default:

@@ -139,11 +139,11 @@ func TestLockRelease(t *testing.T) {
 	assert.EqualError(t, err, "lost topology lock; aborting: shard ks/0 is not locked (no lockInfo in map)")
 }
 
-func buildTabletInfo(id uint32, host string, mysqlPort int, ttype topodatapb.TabletType, masterTermTime time.Time) *topo.TabletInfo {
-	return buildTabletInfoWithCell(id, host, "test_cell", mysqlPort, ttype, masterTermTime)
+func buildTabletInfo(id uint32, host string, mysqlPort int, ttype topodatapb.TabletType, primaryTermTime time.Time) *topo.TabletInfo {
+	return buildTabletInfoWithCell(id, host, "test_cell", mysqlPort, ttype, primaryTermTime)
 }
 
-func buildTabletInfoWithCell(id uint32, host, cell string, mysqlPort int, ttype topodatapb.TabletType, masterTermTime time.Time) *topo.TabletInfo {
+func buildTabletInfoWithCell(id uint32, host, cell string, mysqlPort int, ttype topodatapb.TabletType, primaryTermTime time.Time) *topo.TabletInfo {
 	alias := &topodatapb.TabletAlias{Cell: cell, Uid: id}
 	return &topo.TabletInfo{Tablet: &topodatapb.Tablet{
 		Alias:                alias,
@@ -153,7 +153,7 @@ func buildTabletInfoWithCell(id uint32, host, cell string, mysqlPort int, ttype 
 		Keyspace:             "ks",
 		Shard:                "0",
 		Type:                 ttype,
-		PrimaryTermStartTime: logutil.TimeToProto(masterTermTime),
+		PrimaryTermStartTime: logutil.TimeToProto(primaryTermTime),
 		Tags:                 map[string]string{"hostname": fmt.Sprintf("host_%d", id)},
 	}}
 }

@@ -217,14 +217,14 @@ func testSplitDiff(t *testing.T, v3 bool, destinationTabletType topodatapb.Table
 		}
 	}
 
-	sourceMaster := testlib.NewFakeTablet(t, wi.wr, "cell1", 0,
+	sourcePrimary := testlib.NewFakeTablet(t, wi.wr, "cell1", 0,
 		topodatapb.TabletType_PRIMARY, nil, testlib.TabletKeyspaceShard(t, "ks", "-80"))
 	sourceRdonly1 := testlib.NewFakeTablet(t, wi.wr, "cell1", 1,
 		topodatapb.TabletType_RDONLY, nil, testlib.TabletKeyspaceShard(t, "ks", "-80"))
 	sourceRdonly2 := testlib.NewFakeTablet(t, wi.wr, "cell1", 2,
 		topodatapb.TabletType_RDONLY, nil, testlib.TabletKeyspaceShard(t, "ks", "-80"))
 
-	leftMaster := testlib.NewFakeTablet(t, wi.wr, "cell1", 10,
+	leftPrimary := testlib.NewFakeTablet(t, wi.wr, "cell1", 10,
 		topodatapb.TabletType_PRIMARY, nil, testlib.TabletKeyspaceShard(t, "ks", "-40"))
 	leftRdonly1 := testlib.NewFakeTablet(t, wi.wr, "cell1", 11,
 		destinationTabletType, nil, testlib.TabletKeyspaceShard(t, "ks", "-40"))
@@ -293,7 +293,7 @@ func testSplitDiff(t *testing.T, v3 bool, destinationTabletType topodatapb.Table
 	}
 
 	// Start action loop after having registered all RPC services.
-	for _, ft := range []*testlib.FakeTablet{sourceMaster, sourceRdonly1, sourceRdonly2, leftMaster, leftRdonly1, leftRdonly2} {
+	for _, ft := range []*testlib.FakeTablet{sourcePrimary, sourceRdonly1, sourceRdonly2, leftPrimary, leftRdonly1, leftRdonly2} {
 		ft.StartActionLoop(t, wi.wr)
 		defer ft.StopActionLoop(t)
 	}

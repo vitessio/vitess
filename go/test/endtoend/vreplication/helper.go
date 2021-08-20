@@ -217,7 +217,7 @@ func checkIfTableExists(t *testing.T, vc *VitessCluster, tabletAlias string, tab
 	return found, nil
 }
 
-func checkIfBlacklistExists(t *testing.T, vc *VitessCluster, ksShard string, table string) (bool, error) {
+func checkIfDenyListExists(t *testing.T, vc *VitessCluster, ksShard string, table string) (bool, error) {
 	var output string
 	var err error
 	found := false
@@ -229,7 +229,7 @@ func checkIfBlacklistExists(t *testing.T, vc *VitessCluster, ksShard string, tab
 		if string(value) == table {
 			found = true
 		}
-	}, "tablet_controls", "[0]", "blacklisted_tables")
+	}, "tablet_controls", "[0]", "denied_tables")
 	return found, nil
 }
 

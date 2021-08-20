@@ -68,8 +68,8 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
-// Query rules from blacklist
-const blacklistQueryRules string = "BlacklistQueryRules"
+// Query rules from denylist
+const denyListQueryList string = "DenyListQueryRules"
 
 var (
 	// The following flags initialize the tablet record.
@@ -275,7 +275,7 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, healthCheckInterval ti
 	if err != nil {
 		return vterrors.Wrap(err, "failed to InitDBConfig")
 	}
-	tm.QueryServiceControl.RegisterQueryRuleSource(blacklistQueryRules)
+	tm.QueryServiceControl.RegisterQueryRuleSource(denyListQueryList)
 
 	if tm.UpdateStream != nil {
 		tm.UpdateStream.InitDBConfig(tm.DBConfigs)
@@ -489,7 +489,7 @@ func (tm *TabletManager) checkPrimaryShip(ctx context.Context, si *topo.ShardInf
 		case topo.IsErrType(err, topo.NoNode):
 			// There's no existing tablet record, so we can assume
 			// no one has left us a message to step down.
-			log.Infof("Shard master alias matches, but there is no existing tablet record. Switching to master with 'Now' as time")
+			log.Infof("Shard primary alias matches, but there is no existing tablet record. Switching to primary with 'Now' as time")
 			tm.tmState.UpdateTablet(func(tablet *topodatapb.Tablet) {
 				tablet.Type = topodatapb.TabletType_PRIMARY
 				// Update the primary term start time (current value is 0) because we
@@ -499,7 +499,7 @@ func (tm *TabletManager) checkPrimaryShip(ctx context.Context, si *topo.ShardInf
 			})
 		case err == nil:
 			if oldTablet.Type == topodatapb.TabletType_PRIMARY {
-				log.Infof("Shard master alias matches, and existing tablet agrees. Switching to master with tablet's master term start time: %v", oldTablet.PrimaryTermStartTime)
+				log.Infof("Shard primary alias matches, and existing tablet agrees. Switching to primary with tablet's primary term start time: %v", oldTablet.PrimaryTermStartTime)
 				// We're marked as primary in the shard record,
 				// and our existing tablet record agrees.
 				tm.tmState.UpdateTablet(func(tablet *topodatapb.Tablet) {
@@ -507,7 +507,7 @@ func (tm *TabletManager) checkPrimaryShip(ctx context.Context, si *topo.ShardInf
 					tablet.PrimaryTermStartTime = oldTablet.PrimaryTermStartTime
 				})
 			} else {
-				log.Warningf("Shard master alias matches, but existing tablet is not master. Switching from %v to master with the shard's master term start time: %v", oldTablet.Type, si.PrimaryTermStartTime)
+				log.Warningf("Shard primary alias matches, but existing tablet is not primary. Switching from %v to primary with the shard's primary term start time: %v", oldTablet.Type, si.PrimaryTermStartTime)
 				tm.tmState.UpdateTablet(func(tablet *topodatapb.Tablet) {
 					tablet.Type = topodatapb.TabletType_PRIMARY
 					tablet.PrimaryTermStartTime = si.PrimaryTermStartTime
@@ -528,13 +528,13 @@ func (tm *TabletManager) checkPrimaryShip(ctx context.Context, si *topo.ShardInf
 				oldPrimaryTermStartTime := oldTablet.GetPrimaryTermStartTime()
 				currentShardTime := si.GetPrimaryTermStartTime()
 				if oldPrimaryTermStartTime.After(currentShardTime) {
-					log.Infof("Shard master alias does not match, but the tablet's master term start time is newer. Switching to master with tablet's master term start time: %v", oldTablet.PrimaryTermStartTime)
+					log.Infof("Shard primary alias does not match, but the tablet's primary term start time is newer. Switching to primary with tablet's primary term start time: %v", oldTablet.PrimaryTermStartTime)
 					tm.tmState.UpdateTablet(func(tablet *topodatapb.Tablet) {
 						tablet.Type = topodatapb.TabletType_PRIMARY
 						tablet.PrimaryTermStartTime = oldTablet.PrimaryTermStartTime
 					})
 				} else {
-					log.Infof("Existing tablet type is master, but the shard record has a different master with a newer timestamp. Remaining a replica")
+					log.Infof("Existing tablet type is primary, but the shard record has a different primary with a newer timestamp. Remaining a replica")
 				}
 			}
 		default:
@@ -713,9 +713,9 @@ func (tm *TabletManager) Tablet() *topodatapb.Tablet {
 	return tm.tmState.Tablet()
 }
 
-// BlacklistedTables returns the list of currently blacklisted tables.
-func (tm *TabletManager) BlacklistedTables() []string {
-	return tm.tmState.BlacklistedTables()
+// DeniedTables returns the list of currently denied tables.
+func (tm *TabletManager) DeniedTables() []string {
+	return tm.tmState.DeniedTables()
 }
 
 // hookExtraEnv returns the map to pass to local hooks

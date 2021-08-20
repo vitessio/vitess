@@ -42,8 +42,8 @@ import (
 // parent keyspace or shard don't exist, they will be created.  If
 // allowUpdate is true, and a tablet with the same ID exists, just update it.
 // If a tablet is created as primary, and there is already a different
-// primary in the shard, allowMasterOverride must be set.
-func (wr *Wrangler) InitTablet(ctx context.Context, tablet *topodatapb.Tablet, allowMasterOverride, createShardAndKeyspace, allowUpdate bool) error {
+// primary in the shard, allowPrimaryOverride must be set.
+func (wr *Wrangler) InitTablet(ctx context.Context, tablet *topodatapb.Tablet, allowPrimaryOverride, createShardAndKeyspace, allowUpdate bool) error {
 	shard, kr, err := topo.ValidateShardName(tablet.Shard)
 	if err != nil {
 		return err
@@ -71,8 +71,8 @@ func (wr *Wrangler) InitTablet(ctx context.Context, tablet *topodatapb.Tablet, a
 	if !key.KeyRangeEqual(si.KeyRange, tablet.KeyRange) {
 		return fmt.Errorf("shard %v/%v has a different KeyRange: %v != %v", tablet.Keyspace, tablet.Shard, si.KeyRange, tablet.KeyRange)
 	}
-	if tablet.Type == topodatapb.TabletType_PRIMARY && si.HasMaster() && !topoproto.TabletAliasEqual(si.PrimaryAlias, tablet.Alias) && !allowMasterOverride {
-		return fmt.Errorf("creating this tablet would override old master %v in shard %v/%v, use allow_master_override flag", topoproto.TabletAliasString(si.PrimaryAlias), tablet.Keyspace, tablet.Shard)
+	if tablet.Type == topodatapb.TabletType_PRIMARY && si.HasPrimary() && !topoproto.TabletAliasEqual(si.PrimaryAlias, tablet.Alias) && !allowPrimaryOverride {
+		return fmt.Errorf("creating this tablet would override old primary %v in shard %v/%v, use allow_master_override flag", topoproto.TabletAliasString(si.PrimaryAlias), tablet.Keyspace, tablet.Shard)
 	}
 
 	if tablet.Type == topodatapb.TabletType_PRIMARY {
@@ -104,7 +104,7 @@ func (wr *Wrangler) InitTablet(ctx context.Context, tablet *topodatapb.Tablet, a
 }
 
 // DeleteTablet removes a tablet from a shard.
-// - if allowMaster is set, we can Delete a primary tablet (and clear
+// - if allowPrimary is set, we can Delete a primary tablet (and clear
 // its record from the Shard record if it was the primary).
 func (wr *Wrangler) DeleteTablet(ctx context.Context, tabletAlias *topodatapb.TabletAlias, allowPrimary bool) (err error) {
 	// load the tablet, see if we'll need to rebuild
@@ -113,18 +113,18 @@ func (wr *Wrangler) DeleteTablet(ctx context.Context, tabletAlias *topodatapb.Ta
 		return err
 	}
 
-	wasMaster, err := wr.isMasterTablet(ctx, ti)
+	wasPrimary, err := wr.isPrimaryTablet(ctx, ti)
 	if err != nil {
 		return err
 	}
 
-	if wasMaster && !allowPrimary {
-		return fmt.Errorf("cannot delete tablet %v as it is a master, use allow_master flag", topoproto.TabletAliasString(tabletAlias))
+	if wasPrimary && !allowPrimary {
+		return fmt.Errorf("cannot delete tablet %v as it is a primary, use allow_primary flag", topoproto.TabletAliasString(tabletAlias))
 	}
 
 	// update the Shard object if the primary was scrapped.
 	// we do this before calling DeleteTablet so that the operation can be retried in case of failure.
-	if wasMaster {
+	if wasPrimary {
 		// We lock the shard to not conflict with reparent operations.
 		ctx, unlock, lockErr := wr.ts.LockShard(ctx, ti.Keyspace, ti.Shard, fmt.Sprintf("DeleteTablet(%v)", topoproto.TabletAliasString(tabletAlias)))
 		if lockErr != nil {
@@ -135,7 +135,7 @@ func (wr *Wrangler) DeleteTablet(ctx context.Context, tabletAlias *topodatapb.Ta
 		// update the shard record's primary
 		if _, err := wr.ts.UpdateShardFields(ctx, ti.Keyspace, ti.Shard, func(si *topo.ShardInfo) error {
 			if !topoproto.TabletAliasEqual(si.PrimaryAlias, tabletAlias) {
-				wr.Logger().Warningf("Deleting master %v from shard %v/%v but master in Shard object was %v", topoproto.TabletAliasString(tabletAlias), ti.Keyspace, ti.Shard, topoproto.TabletAliasString(si.PrimaryAlias))
+				wr.Logger().Warningf("Deleting primary %v from shard %v/%v but primary in Shard object was %v", topoproto.TabletAliasString(tabletAlias), ti.Keyspace, ti.Shard, topoproto.TabletAliasString(si.PrimaryAlias))
 				return topo.NewError(topo.NoUpdateNeeded, si.Keyspace()+"/"+si.ShardName())
 			}
 			si.PrimaryAlias = nil
@@ -222,7 +222,7 @@ func (wr *Wrangler) GenericVExec(ctx context.Context, tabletAlias *topodatapb.Ta
 	return wr.tmc.VExec(ctx, ti.Tablet, query, workflow, keyspace)
 }
 
-// isMasterTablet is a shortcut way to determine whether the current tablet
+// isPrimaryTablet is a shortcut way to determine whether the current tablet
 // is a primary before we allow its tablet record to be deleted. The canonical
 // way to determine the only true primary in a shard is to list all the tablets
 // and find the one with the highest PrimaryTermStartTime among the ones that
@@ -232,6 +232,6 @@ func (wr *Wrangler) GenericVExec(ctx context.Context, tabletAlias *topodatapb.Ta
 // the true primary. This can occur if someone issues a DeleteTablet while
 // the system is in transition (a reparenting event is in progress and parts of
 // the topo have not yet been updated).
-func (wr *Wrangler) isMasterTablet(ctx context.Context, ti *topo.TabletInfo) (bool, error) {
+func (wr *Wrangler) isPrimaryTablet(ctx context.Context, ti *topo.TabletInfo) (bool, error) {
 	return topotools.IsPrimaryTablet(ctx, wr.TopoServer(), ti)
 }
