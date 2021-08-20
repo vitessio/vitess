@@ -142,7 +142,7 @@ const (
 	// UNAUTHENTICATED indicates the request does not have valid
 	// authentication credentials for the operation.
 	Code_UNAUTHENTICATED Code = 16
-	// CLUSTER_EVENT indicates a cluster EVENT
+	// CLUSTER_EVENT indicates that a cluster operation might be in effect
 	Code_CLUSTER_EVENT Code = 17
 )
 

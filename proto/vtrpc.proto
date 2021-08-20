@@ -171,7 +171,7 @@ enum Code {
   // authentication credentials for the operation.
   UNAUTHENTICATED = 16;
 
-  // CLUSTER_EVENT indicates a cluster EVENT
+  // CLUSTER_EVENT indicates that a cluster operation might be in effect
   CLUSTER_EVENT = 17;
 }
 
