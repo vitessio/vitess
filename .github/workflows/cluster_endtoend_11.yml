@@ -1,0 +1,24 @@
+# DO NOT MODIFY: THIS FILE IS GENERATED USING "make generate_ci_workflows"
+
+name: Cluster (11)
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: self-hosted
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v2
+
+      - name: Build Docker Image
+        run: docker build -f ./.github/dockerFiles/cluster_test_11/Dockerfile -t cluster_test_(11)  .
+
+      - name: Run test
+        timeout-minutes: 30
+        run: docker run --rm cluster_test_(11) /bin/bash -c 'source build.env && go run test.go -docker=false -print-log -follow -shard 11'
+
+      - name: Cleanup Docker Image
+        run: |
+          docker images rm cluster_test_(11)
+          docker volume prune -f
