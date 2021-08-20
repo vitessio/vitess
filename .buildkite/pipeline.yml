@@ -1,6 +1,46 @@
 # DO NOT MODIFY: THIS FILE IS GENERATED USING "make generate_ci_workflows"
 
 steps:
+  - label: "Unit Test (percona)"
+    command: make unit_test
+    plugins:
+      - docker-compose#v3.8.0:
+          run: vitess
+          config: ./.buildkite/unit_test_percona/docker-compose.yml
+          no-cache: true
+    timeout_in_minutes: 30
+  - label: "Unit Test (mysql57)"
+    command: make unit_test
+    plugins:
+      - docker-compose#v3.8.0:
+          run: vitess
+          config: ./.buildkite/unit_test_mysql57/docker-compose.yml
+          no-cache: true
+    timeout_in_minutes: 30
+  - label: "Unit Test (mysql80)"
+    command: make unit_test
+    plugins:
+      - docker-compose#v3.8.0:
+          run: vitess
+          config: ./.buildkite/unit_test_mysql80/docker-compose.yml
+          no-cache: true
+    timeout_in_minutes: 30
+  - label: "Unit Test (mariadb)"
+    command: make unit_test
+    plugins:
+      - docker-compose#v3.8.0:
+          run: vitess
+          config: ./.buildkite/unit_test_mariadb/docker-compose.yml
+          no-cache: true
+    timeout_in_minutes: 30
+  - label: "Unit Test (mariadb103)"
+    command: make unit_test
+    plugins:
+      - docker-compose#v3.8.0:
+          run: vitess
+          config: ./.buildkite/unit_test_mariadb103/docker-compose.yml
+          no-cache: true
+    timeout_in_minutes: 30
   - label: "Cluster (11)"
     command: . ./build.env && go run test.go -docker=false -print-log -follow -shard 11
     plugins:

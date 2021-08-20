@@ -148,10 +148,10 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	//err = generateBuildkiteUnitTestWorkflows()
-	//if err != nil {
-	//	log.Fatal(err)
-	//}
+	err = generateBuildkiteUnitTestWorkflows()
+	if err != nil {
+		log.Fatal(err)
+	}
 	err = generateBuildkiteClusterWorkflows()
 	if err != nil {
 		log.Fatal(err)
