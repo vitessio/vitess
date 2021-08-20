@@ -889,8 +889,8 @@ func tryMerge(ctx optimizeContext, a, b queryTree, joinPredicates []sqlparser.Ex
 
 	switch aRoute.routeOpCode {
 	case engine.SelectUnsharded, engine.SelectDBA:
-		if aRoute.routeOpCode != bRoute.routeOpCode {
-			return nil
+		if aRoute.routeOpCode == bRoute.routeOpCode {
+			return r
 		}
 	case engine.SelectEqualUnique:
 		// if they are already both being sent to the same shard, we can merge
@@ -901,7 +901,7 @@ func tryMerge(ctx optimizeContext, a, b queryTree, joinPredicates []sqlparser.Ex
 			return nil
 		}
 		fallthrough
-	case engine.SelectScatter:
+	case engine.SelectScatter, engine.SelectIN:
 		if len(joinPredicates) == 0 {
 			// If we are doing two Scatters, we have to make sure that the
 			// joins are on the correct vindex to allow them to be merged
@@ -914,8 +914,9 @@ func tryMerge(ctx optimizeContext, a, b queryTree, joinPredicates []sqlparser.Ex
 			return nil
 		}
 		r.pickBestAvailableVindex()
+		return r
 	}
-	return r
+	return nil
 }
 
 func makeRoute(j queryTree) *routeTree {
