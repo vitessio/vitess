@@ -126,7 +126,15 @@ func (s *subqueryTree) cost() int {
 }
 
 func (s *subqueryTree) clone() queryTree {
-	panic("implement me")
+	result := &subqueryTree{
+		subquery: &sqlparser.Select{},
+		outer:    s.outer.clone(),
+		inner:    s.inner.clone(),
+		opcode:   s.opcode,
+		argName:  s.argName,
+	}
+	*result.subquery = *s.subquery
+	return result
 }
 
 func (s *subqueryTree) pushOutputColumns(names []*sqlparser.ColName, semTable *semantics.SemTable) ([]int, error) {
