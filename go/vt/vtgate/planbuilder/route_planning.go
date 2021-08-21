@@ -263,39 +263,40 @@ func mergeSubQuery(outer, inner *routeTree, subq *abstract.SubQueryInner) *route
 		outer.sqToReplace[argName] = selectStmt
 	}
 
-	// finding all vindexPlusPredicates that needs to be removed from the outer
-	keepVindexPlusPredicates := []*vindexPlusPredicates{}
-	for _, vp := range outer.vindexPreds {
-		found := false
-		for _, predicate := range vp.predicates {
-			sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
-				var argName string
-				switch node := node.(type) {
-				case sqlparser.Argument:
-					argName = string(node)
-				case sqlparser.ListArg:
-					argName = string(node)
-				}
-				if argName == subq.ArgName {
-					found = true
-				}
-				return true, nil
-			}, predicate)
-			if found {
-				break
-			}
-		}
-		if !found {
-			keepVindexPlusPredicates = append(keepVindexPlusPredicates, vp)
-		}
+	outer.vindex = nil
+
+	vschemaTable := outer.tables[0].(*routeTable).vtable
+
+	switch {
+	case vschemaTable.Type == vindexes.TypeSequence:
+		outer.routeOpCode = engine.SelectNext
+	case vschemaTable.Type == vindexes.TypeReference:
+		outer.routeOpCode = engine.SelectReference
+	case !vschemaTable.Keyspace.Sharded:
+		outer.routeOpCode = engine.SelectUnsharded
+	case vschemaTable.Pinned != nil:
+
+		// Pinned tables have their keyspace ids already assigned.
+		// Use the Binary vindex, which is the identity function
+		// for keyspace id.
+		outer.routeOpCode = engine.SelectEqualUnique
+	default:
+		outer.routeOpCode = engine.SelectScatter
 	}
 
-	// assigning the new slice of vindexPlusPredicates to our outer and nulling the chosen vindex
-	// so that pickBestAvailableVindex re-picks a best vindex
-	if len(outer.vindexPreds) != len(keepVindexPlusPredicates) {
-		outer.vindex = nil
-		outer.vindexPreds = keepVindexPlusPredicates
+	outer.vindexValues = nil
+	outer.valueExprs = nil
+	outer.vindexPredicates = nil
+	for i, vp := range outer.vindexPreds {
+		outer.vindexPreds[i] = &vindexPlusPredicates{colVindex: vp.colVindex}
 	}
+	predicates := outer.predicates
+	outer.predicates = nil
+	err := outer.addPredicate(predicates...)
+	if err != nil {
+		panic("TODO return an error instead")
+	}
+
 	return outer
 }
 
@@ -930,16 +931,17 @@ func tryMerge(ctx optimizeContext, a, b queryTree, joinPredicates []sqlparser.Ex
 
 	sameKeyspace := aRoute.keyspace == bRoute.keyspace
 
-	r := merger(aRoute, bRoute)
-
 	if sameKeyspace {
 		// if either side is a reference table, we can just merge it and use the opcode of the other side
+		opCode := engine.NumRouteOpcodes
 		if aRoute.routeOpCode == engine.SelectReference {
-			r.routeOpCode = bRoute.routeOpCode
-			return r, nil
+			opCode = bRoute.routeOpCode
+		} else if bRoute.routeOpCode == engine.SelectReference {
+			opCode = aRoute.routeOpCode
 		}
-		if bRoute.routeOpCode == engine.SelectReference {
-			r.routeOpCode = aRoute.routeOpCode
+		if opCode != engine.NumRouteOpcodes {
+			r := merger(aRoute, bRoute)
+			r.routeOpCode = opCode
 			return r, nil
 		}
 	}
@@ -947,13 +949,13 @@ func tryMerge(ctx optimizeContext, a, b queryTree, joinPredicates []sqlparser.Ex
 	switch aRoute.routeOpCode {
 	case engine.SelectUnsharded, engine.SelectDBA:
 		if aRoute.routeOpCode == bRoute.routeOpCode {
-			return r, nil
+			return merger(aRoute, bRoute), nil
 		}
 	case engine.SelectEqualUnique:
 		// if they are already both being sent to the same shard, we can merge
 		if bRoute.routeOpCode == engine.SelectEqualUnique {
 			if aRoute.vindex == bRoute.vindex && gen4ValuesEqual(ctx, aRoute.valueExprs, bRoute.valueExprs) {
-				return r, nil
+				return merger(aRoute, bRoute), nil
 			}
 			return nil, nil
 		}
@@ -973,6 +975,7 @@ func tryMerge(ctx optimizeContext, a, b queryTree, joinPredicates []sqlparser.Ex
 		if !canMerge {
 			return nil, nil
 		}
+		r := merger(aRoute, bRoute)
 		r.pickBestAvailableVindex()
 		return r, nil
 	}

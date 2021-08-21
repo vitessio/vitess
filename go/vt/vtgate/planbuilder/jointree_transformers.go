@@ -114,8 +114,9 @@ func transformJoinPlan(n *joinTree, semTable *semantics.SemTable, processing *po
 }
 
 type subQReplacer struct {
-	rt  *routeTree
-	err error
+	rt       *routeTree
+	err      error
+	replaced bool
 }
 
 func (sqr *subQReplacer) replacer(cursor *sqlparser.Cursor) bool {
@@ -144,6 +145,7 @@ func (sqr *subQReplacer) replacer(cursor *sqlparser.Cursor) bool {
 		node = &sqlparser.ExistsExpr{Subquery: sq}
 	}
 	cursor.Replace(node)
+	sqr.replaced = true
 	return false
 }
 
@@ -236,6 +238,11 @@ func transformRoutePlan(n *routeTree, semTable *semantics.SemTable) (*route, err
 	if len(n.sqToReplace) > 0 {
 		sqr := &subQReplacer{rt: n}
 		sqlparser.Rewrite(sel, sqr.replacer, nil)
+		for sqr.replaced {
+			// to handle subqueries inside subqueries, we need to do this again and again until no replacements are left
+			sqr.replaced = false
+			sqlparser.Rewrite(sel, sqr.replacer, nil)
+		}
 	}
 
 	return &route{
