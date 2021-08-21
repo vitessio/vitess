@@ -519,7 +519,7 @@ func (rp *routeTree) planEqualOp(node *sqlparser.ComparisonExpr) (bool, error) {
 		}
 		vdValue = node.Left
 	}
-	val, err := makePlanValue(vdValue)
+	val, err := rp.makePlanValue(vdValue)
 	if err != nil || val == nil {
 		return false, err
 	}
@@ -589,7 +589,7 @@ func (rp *routeTree) planCompositeInOpRecursive(node *sqlparser.ComparisonExpr, 
 					return false, nil
 				}
 			}
-			newPlanValues, err := makePlanValue(rightVals)
+			newPlanValues, err := rp.makePlanValue(rightVals)
 			if newPlanValues == nil || err != nil {
 				return false, err
 			}
@@ -619,7 +619,7 @@ func (rp *routeTree) planLikeOp(node *sqlparser.ComparisonExpr) (bool, error) {
 	}
 
 	vdValue := node.Right
-	val, err := makePlanValue(vdValue)
+	val, err := rp.makePlanValue(vdValue)
 	if err != nil || val == nil {
 		return false, err
 	}
@@ -647,12 +647,16 @@ func (rp *routeTree) planIsExpr(node *sqlparser.IsExpr) (bool, error) {
 		return false, nil
 	}
 	vdValue := &sqlparser.NullVal{}
-	val, err := makePlanValue(vdValue)
+	val, err := rp.makePlanValue(vdValue)
 	if err != nil || val == nil {
 		return false, err
 	}
 
 	return rp.haveMatchingVindex(node, vdValue, column, *val, equalOrEqualUnique, justTheVindex), err
+}
+
+func (rp *routeTree) makePlanValue(n sqlparser.Expr) (*sqltypes.PlanValue, error) {
+	return makePlanValue(n)
 }
 
 func makePlanValue(n sqlparser.Expr) (*sqltypes.PlanValue, error) {
@@ -668,7 +672,7 @@ func makePlanValue(n sqlparser.Expr) (*sqltypes.PlanValue, error) {
 	return &value, nil
 }
 
-func (rp routeTree) hasVindex(column *sqlparser.ColName) bool {
+func (rp *routeTree) hasVindex(column *sqlparser.ColName) bool {
 	for _, v := range rp.vindexPreds {
 		for _, col := range v.colVindex.Columns {
 			if column.Name.Equal(col) {
