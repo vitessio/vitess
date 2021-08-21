@@ -179,10 +179,10 @@ func addRelationInformation(semTable *semantics.SemTable, expr sqlparser.Expr) {
 		}
 
 		if left, isCol := expr.Left.(*sqlparser.ColName); isCol {
-			semTable.AddInfoToPredicateRelations(left, expr.Right)
+			semTable.AddColumnEquality(left, expr.Right)
 		}
 		if right, isCol := expr.Right.(*sqlparser.ColName); isCol {
-			semTable.AddInfoToPredicateRelations(right, expr.Left)
+			semTable.AddColumnEquality(right, expr.Left)
 		}
 	}
 }
