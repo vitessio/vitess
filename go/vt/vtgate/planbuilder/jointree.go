@@ -341,7 +341,7 @@ func visitRelations(r relation, f func(tbl relation) (bool, error)) error {
 }
 
 // clone returns a copy of the struct with copies of slices,
-// so changing the the contents of them will not be reflected in the original
+// so changing the contents of them will not be reflected in the original
 func (rp *routeTree) clone() queryTree {
 	result := *rp
 	result.vindexPreds = make([]*vindexPlusPredicates, len(rp.vindexPreds))
@@ -529,13 +529,8 @@ func (rp *routeTree) planEqualOp(node *sqlparser.ComparisonExpr) (bool, error) {
 
 func (rp *routeTree) planSimpleInOp(node *sqlparser.ComparisonExpr, left *sqlparser.ColName) (bool, error) {
 	vdValue := node.Right
-	value, err := sqlparser.NewPlanValue(vdValue)
-	if err != nil {
-		// if we are unable to create a PlanValue, we can't use a vindex, but we don't have to fail
-		if strings.Contains(err.Error(), "expression is too complex") {
-			return false, nil
-		}
-		// something else went wrong, return the error
+	value, err := rp.makePlanValue(vdValue)
+	if err != nil || value == nil {
 		return false, err
 	}
 	switch nodeR := vdValue.(type) {
@@ -546,7 +541,7 @@ func (rp *routeTree) planSimpleInOp(node *sqlparser.ComparisonExpr, left *sqlpar
 		}
 	}
 	opcode := func(*vindexes.ColumnVindex) engine.RouteOpcode { return engine.SelectIN }
-	return rp.haveMatchingVindex(node, vdValue, left, value, opcode, justTheVindex), err
+	return rp.haveMatchingVindex(node, vdValue, left, *value, opcode, justTheVindex), err
 }
 
 func (rp *routeTree) planCompositeInOp(node *sqlparser.ComparisonExpr, left sqlparser.ValTuple) (bool, error) {
@@ -656,6 +651,19 @@ func (rp *routeTree) planIsExpr(node *sqlparser.IsExpr) (bool, error) {
 }
 
 func (rp *routeTree) makePlanValue(n sqlparser.Expr) (*sqltypes.PlanValue, error) {
+	name := ""
+	switch expr := n.(type) {
+	case sqlparser.Argument:
+		name = string(expr)
+	case sqlparser.ListArg:
+		name = string(expr)
+	}
+	if name != "" {
+		_, found := rp.sqToReplace[name]
+		if found {
+			return nil, nil
+		}
+	}
 	return makePlanValue(n)
 }
 
