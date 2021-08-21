@@ -215,7 +215,7 @@ func optimizeQuery(ctx optimizeContext, opTree abstract.Operator) (queryTree, er
 			var mergeErr error
 			merger := func(a, b *routeTree) *routeTree {
 				var merged *routeTree
-				merged, mergeErr = mergeSubQuery(a, b, inner)
+				merged, mergeErr = mergeSubQuery(ctx, a, b, inner)
 				return merged
 			}
 
@@ -258,7 +258,7 @@ func optimizeQuery(ctx optimizeContext, opTree abstract.Operator) (queryTree, er
 	}
 }
 
-func mergeSubQuery(outer, inner *routeTree, subq *abstract.SubQueryInner) (*routeTree, error) {
+func mergeSubQuery(ctx optimizeContext, outer, inner *routeTree, subq *abstract.SubQueryInner) (*routeTree, error) {
 	if outer.sqToReplace == nil {
 		outer.sqToReplace = map[string]*sqlparser.Select{}
 	}
@@ -267,7 +267,7 @@ func mergeSubQuery(outer, inner *routeTree, subq *abstract.SubQueryInner) (*rout
 		outer.sqToReplace[argName] = selectStmt
 	}
 
-	err := outer.resetRoutingSelections()
+	err := outer.resetRoutingSelections(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -456,7 +456,7 @@ func pushJoinPredicate(ctx optimizeContext, exprs []sqlparser.Expr, tree queryTr
 	switch node := tree.(type) {
 	case *routeTree:
 		plan := node.clone().(*routeTree)
-		err := plan.addPredicate(exprs...)
+		err := plan.addPredicate(ctx, exprs...)
 		if err != nil {
 			return nil, err
 		}
@@ -713,7 +713,7 @@ func seedPlanList(ctx optimizeContext, qg *abstract.QueryGraph) ([]queryTree, er
 	// we start by seeding the table with the single routes
 	for i, table := range qg.Tables {
 		solves := ctx.semTable.TableSetFor(table.Alias)
-		plan, err := createRoutePlan(table, solves, ctx.reservedVars, ctx.vschema)
+		plan, err := createRoutePlan(ctx, table, solves)
 		if err != nil {
 			return nil, err
 		}
@@ -729,9 +729,9 @@ func removeAt(plans []queryTree, idx int) []queryTree {
 	return append(plans[:idx], plans[idx+1:]...)
 }
 
-func createRoutePlan(table *abstract.QueryTable, solves semantics.TableSet, reservedVars *sqlparser.ReservedVars, vschema ContextVSchema) (*routeTree, error) {
+func createRoutePlan(ctx optimizeContext, table *abstract.QueryTable, solves semantics.TableSet) (*routeTree, error) {
 	if table.IsInfSchema {
-		ks, err := vschema.AnyKeyspace()
+		ks, err := ctx.vschema.AnyKeyspace()
 		if err != nil {
 			return nil, err
 		}
@@ -748,14 +748,14 @@ func createRoutePlan(table *abstract.QueryTable, solves semantics.TableSet, rese
 			}},
 			predicates: table.Predicates,
 		}
-		err = rp.findSysInfoRoutingPredicatesGen4(reservedVars)
+		err = rp.findSysInfoRoutingPredicatesGen4(ctx.reservedVars)
 		if err != nil {
 			return nil, err
 		}
 
 		return rp, nil
 	}
-	vschemaTable, _, _, _, _, err := vschema.FindTableOrVindex(table.Table)
+	vschemaTable, _, _, _, _, err := ctx.vschema.FindTableOrVindex(table.Table)
 	if err != nil {
 		return nil, err
 	}
@@ -803,7 +803,7 @@ func createRoutePlan(table *abstract.QueryTable, solves semantics.TableSet, rese
 	default:
 		plan.routeOpCode = engine.SelectScatter
 	}
-	err = plan.addPredicate(table.Predicates...)
+	err = plan.addPredicate(ctx, table.Predicates...)
 	if err != nil {
 		return nil, err
 	}
@@ -812,18 +812,14 @@ func createRoutePlan(table *abstract.QueryTable, solves semantics.TableSet, rese
 }
 
 func findColumnVindex(ctx optimizeContext, a *routeTree, exp sqlparser.Expr) vindexes.SingleColumn {
-	left, isCol := exp.(*sqlparser.ColName)
+	_, isCol := exp.(*sqlparser.ColName)
 	if !isCol {
 		return nil
 	}
 
 	var singCol vindexes.SingleColumn
 
-	exprs := []sqlparser.Expr{exp}
-	leftTc := ctx.semTable.PredicateRelations[semantics.ColumnName{TS: ctx.semTable.Dependencies(left), Str: left.Name.String()}]
-	exprs = append(exprs, leftTc...)
-
-	for _, expr := range exprs {
+	for _, expr := range ctx.semTable.GetExprAndEqualities(exp) {
 		col, isCol := expr.(*sqlparser.ColName)
 		if !isCol {
 			continue

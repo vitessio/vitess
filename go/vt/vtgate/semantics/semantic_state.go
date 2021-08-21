@@ -112,14 +112,14 @@ type (
 		SubqueryMap map[*sqlparser.Select][]*subquery
 		SubqueryRef map[*sqlparser.Subquery]*subquery
 
-		// PredicateRelations is used to enable transitive closures
+		// ColumnEqualities is used to enable transitive closures
 		// if a == b and b == c then a == c
-		PredicateRelations map[ColumnName][]sqlparser.Expr
+		ColumnEqualities map[columnName][]sqlparser.Expr
 	}
 
-	ColumnName struct {
-		TS  TableSet
-		Str string
+	columnName struct {
+		Table      TableSet
+		ColumnName string
 	}
 
 	subquery struct {
@@ -401,7 +401,7 @@ func (r *RealTable) Matches(name sqlparser.TableName) bool {
 
 // NewSemTable creates a new empty SemTable
 func NewSemTable() *SemTable {
-	return &SemTable{ExprBaseTableDeps: map[sqlparser.Expr]TableSet{}, PredicateRelations: map[ColumnName][]sqlparser.Expr{}}
+	return &SemTable{ExprBaseTableDeps: map[sqlparser.Expr]TableSet{}, ColumnEqualities: map[columnName][]sqlparser.Expr{}}
 }
 
 // TableSetFor returns the bitmask for this particular table
@@ -432,16 +432,28 @@ func (st *SemTable) Dependencies(expr sqlparser.Expr) TableSet {
 	return st.ExprDeps.Dependencies(expr)
 }
 
-// AddInfoToPredicateRelations adds a relation of the given colName to the PredicateRelations map
-func (st *SemTable) AddInfoToPredicateRelations(colName *sqlparser.ColName, expr sqlparser.Expr) {
+// AddColumnEquality adds a relation of the given colName to the ColumnEqualities map
+func (st *SemTable) AddColumnEquality(colName *sqlparser.ColName, expr sqlparser.Expr) {
 	ts := st.ExprDeps.Dependencies(colName)
-	columnName := ColumnName{
-		TS:  ts,
-		Str: colName.Name.String(),
+	columnName := columnName{
+		Table:      ts,
+		ColumnName: colName.Name.String(),
 	}
-	elem := st.PredicateRelations[columnName]
+	elem := st.ColumnEqualities[columnName]
 	elem = append(elem, expr)
-	st.PredicateRelations[columnName] = elem
+	st.ColumnEqualities[columnName] = elem
+}
+
+// GetExprAndEqualities returns a slice containing the given expression, and it's known equalities if any
+func (st *SemTable) GetExprAndEqualities(expr sqlparser.Expr) []sqlparser.Expr {
+	result := []sqlparser.Expr{expr}
+	switch expr := expr.(type) {
+	case *sqlparser.ColName:
+		table := st.Dependencies(expr)
+		key := columnName{Table: table, ColumnName: expr.Name.String()}
+		result = append(result, st.ColumnEqualities[key]...)
+	}
+	return result
 }
 
 // TableInfoForExpr returns the table info of the table that this expression depends on.
