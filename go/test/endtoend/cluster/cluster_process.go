@@ -587,6 +587,9 @@ func (cluster *LocalProcessCluster) Teardown() {
 		log.Errorf("Error in topo server teardown: %v", err)
 	}
 
+	// reset the VTDATAROOT path.
+	os.Setenv("VTDATAROOT", cluster.OriginalVTDATAROOT)
+
 	cluster.teardownCompleted = true
 }
 

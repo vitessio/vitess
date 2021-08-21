@@ -350,13 +350,13 @@ func (sm *stateManager) StartRequest(ctx context.Context, target *querypb.Target
 
 	if sm.state != StateServing || !sm.replHealthy {
 		// This specific error string needs to be returned for vtgate buffering to work.
-		return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.NotServing)
+		return vterrors.New(vtrpcpb.Code_CLUSTER_EVENT, vterrors.NotServing)
 	}
 
 	shuttingDown := sm.wantState != StateServing
 	if shuttingDown && !allowOnShutdown {
 		// This specific error string needs to be returned for vtgate buffering to work.
-		return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.ShuttingDown)
+		return vterrors.New(vtrpcpb.Code_CLUSTER_EVENT, vterrors.ShuttingDown)
 	}
 
 	err = sm.verifyTargetLocked(ctx, target)

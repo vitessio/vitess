@@ -130,9 +130,6 @@ func mapToSQLErrorFromErrorCode(err error, msg string) *SQLError {
 	case vtrpcpb.Code_CANCELED, vtrpcpb.Code_DEADLINE_EXCEEDED, vtrpcpb.Code_ABORTED:
 		num = ERQueryInterrupted
 		ss = SSQueryInterrupted
-	case vtrpcpb.Code_UNKNOWN, vtrpcpb.Code_INVALID_ARGUMENT, vtrpcpb.Code_NOT_FOUND, vtrpcpb.Code_ALREADY_EXISTS,
-		vtrpcpb.Code_FAILED_PRECONDITION, vtrpcpb.Code_OUT_OF_RANGE, vtrpcpb.Code_UNAVAILABLE, vtrpcpb.Code_DATA_LOSS:
-		num = ERUnknownError
 	case vtrpcpb.Code_PERMISSION_DENIED, vtrpcpb.Code_UNAUTHENTICATED:
 		num = ERAccessDeniedError
 		ss = SSAccessDeniedError
