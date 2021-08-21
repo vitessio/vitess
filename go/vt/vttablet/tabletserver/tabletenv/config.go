@@ -246,7 +246,8 @@ type TabletConfig struct {
 
 	ReplicationTracker ReplicationTrackerConfig `json:"replicationTracker,omitempty"`
 
-	// Consolidator can be enable, disable, or notOnMaster. Default is enable.
+	// Consolidator can be enable, disable, or notOnPrimary. Default is enable.
+	// notOnMaster is the deprecated value that is the same as notOnPrimary.
 	Consolidator                            string  `json:"consolidator,omitempty"`
 	PassthroughDML                          bool    `json:"passthroughDML,omitempty"`
 	StreamBufferSize                        int     `json:"streamBufferSize,omitempty"`
