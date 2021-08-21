@@ -1452,6 +1452,7 @@ Gen4 plan same as above
     "Table": "`user`"
   }
 }
+Gen4 plan same as above
 
 # cross-shard subquery in IN clause.
 # Note the improved Underlying plan as SelectIN.

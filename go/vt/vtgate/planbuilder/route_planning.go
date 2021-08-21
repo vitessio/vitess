@@ -156,7 +156,6 @@ type optimizeContext struct {
 	reservedVars *sqlparser.ReservedVars
 	semTable     *semantics.SemTable
 	vschema      ContextVSchema
-	parent       queryTree
 }
 
 func optimizeQuery(ctx optimizeContext, opTree abstract.Operator) (queryTree, error) {
@@ -205,7 +204,6 @@ func optimizeQuery(ctx optimizeContext, opTree abstract.Operator) (queryTree, er
 		}
 		var unmerged []*subqueryTree
 
-		ctx.parent = outerTree
 		// first loop over the subqueries and try to merge them into the outer plan
 		for _, inner := range op.Inner {
 			treeInner, err := optimizeQuery(ctx, inner.Inner)
@@ -214,13 +212,19 @@ func optimizeQuery(ctx optimizeContext, opTree abstract.Operator) (queryTree, er
 			}
 
 			preds := inner.Inner.UnsolvedPredicates(ctx.semTable)
+			var mergeErr error
 			merger := func(a, b *routeTree) *routeTree {
-				return mergeSubQuery(a, b, inner)
+				var merged *routeTree
+				merged, mergeErr = mergeSubQuery(a, b, inner)
+				return merged
 			}
 
 			merged, err := tryMerge(ctx, outerTree, treeInner, preds, merger)
 			if err != nil {
 				return nil, err
+			}
+			if mergeErr != nil {
+				return nil, mergeErr
 			}
 			if merged == nil {
 				unmerged = append(unmerged, &subqueryTree{
@@ -254,7 +258,7 @@ func optimizeQuery(ctx optimizeContext, opTree abstract.Operator) (queryTree, er
 	}
 }
 
-func mergeSubQuery(outer, inner *routeTree, subq *abstract.SubQueryInner) *routeTree {
+func mergeSubQuery(outer, inner *routeTree, subq *abstract.SubQueryInner) (*routeTree, error) {
 	if outer.sqToReplace == nil {
 		outer.sqToReplace = map[string]*sqlparser.Select{}
 	}
@@ -263,41 +267,12 @@ func mergeSubQuery(outer, inner *routeTree, subq *abstract.SubQueryInner) *route
 		outer.sqToReplace[argName] = selectStmt
 	}
 
-	outer.vindex = nil
-
-	vschemaTable := outer.tables[0].(*routeTable).vtable
-
-	switch {
-	case vschemaTable.Type == vindexes.TypeSequence:
-		outer.routeOpCode = engine.SelectNext
-	case vschemaTable.Type == vindexes.TypeReference:
-		outer.routeOpCode = engine.SelectReference
-	case !vschemaTable.Keyspace.Sharded:
-		outer.routeOpCode = engine.SelectUnsharded
-	case vschemaTable.Pinned != nil:
-
-		// Pinned tables have their keyspace ids already assigned.
-		// Use the Binary vindex, which is the identity function
-		// for keyspace id.
-		outer.routeOpCode = engine.SelectEqualUnique
-	default:
-		outer.routeOpCode = engine.SelectScatter
-	}
-
-	outer.vindexValues = nil
-	outer.valueExprs = nil
-	outer.vindexPredicates = nil
-	for i, vp := range outer.vindexPreds {
-		outer.vindexPreds[i] = &vindexPlusPredicates{colVindex: vp.colVindex}
-	}
-	predicates := outer.predicates
-	outer.predicates = nil
-	err := outer.addPredicate(predicates...)
+	err := outer.resetRoutingSelections()
 	if err != nil {
-		panic("TODO return an error instead")
+		return nil, err
 	}
 
-	return outer
+	return outer, nil
 }
 
 func planLimit(limit *sqlparser.Limit, plan logicalPlan) (logicalPlan, error) {
@@ -848,10 +823,6 @@ func findColumnVindex(ctx optimizeContext, a *routeTree, exp sqlparser.Expr) vin
 	leftTc := ctx.semTable.PredicateRelations[semantics.ColumnName{TS: ctx.semTable.Dependencies(left), Str: left.Name.String()}]
 	exprs = append(exprs, leftTc...)
 
-	parentColumnVindexes := []*vindexes.ColumnVindex{}
-	for _, r := range ctx.parent.(*routeTree).tables {
-		parentColumnVindexes = append(parentColumnVindexes, r.(*routeTable).vtable.ColumnVindexes...)
-	}
 	for _, expr := range exprs {
 		col, isCol := expr.(*sqlparser.ColName)
 		if !isCol {
@@ -863,10 +834,8 @@ func findColumnVindex(ctx optimizeContext, a *routeTree, exp sqlparser.Expr) vin
 			if !isRoute {
 				return true, nil
 			}
-			if leftDep.IsSolvedBy(rb.qtable.TableID.Merge(ctx.parent.tableID())) {
-				columnVindexes := rb.vtable.ColumnVindexes
-				columnVindexes = append(columnVindexes, parentColumnVindexes...)
-				for _, vindex := range columnVindexes {
+			if leftDep.IsSolvedBy(rb.qtable.TableID) {
+				for _, vindex := range rb.vtable.ColumnVindexes {
 					sC, isSingle := vindex.Vindex.(vindexes.SingleColumn)
 					if isSingle && vindex.Columns[0].Equal(col.Name) {
 						singCol = sC
