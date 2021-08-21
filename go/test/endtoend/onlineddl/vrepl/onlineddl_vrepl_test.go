@@ -395,7 +395,7 @@ func TestSchemaChange(t *testing.T) {
 			})
 			t.Run("PRS shard -80", func(t *testing.T) {
 				// migration has started and is throttled. We now run PRS
-				err := clusterInstance.VtctlclientProcess.ExecuteCommand("PlannedReparentShard", "-keyspace_shard", keyspaceName+"/-80", "-new_master", shards[0].Vttablets[reparentTabletIndex].Alias)
+				err := clusterInstance.VtctlclientProcess.ExecuteCommand("PlannedReparentShard", "-keyspace_shard", keyspaceName+"/-80", "-new_primary", shards[0].Vttablets[reparentTabletIndex].Alias)
 				require.NoError(t, err, "failed PRS: %v", err)
 			})
 
