@@ -775,6 +775,44 @@ outer:
 	return idxs, nil
 }
 
+// resetRoutingSelections resets all vindex selections and replans this routeTree
+func (rp *routeTree) resetRoutingSelections() error {
+
+	vschemaTable := rp.tables[0].(*routeTable).vtable
+
+	switch {
+	case rp.routeOpCode == engine.SelectDBA:
+		// don't change it if we know it is a system table
+	case vschemaTable.Type == vindexes.TypeSequence:
+		rp.routeOpCode = engine.SelectNext
+	case vschemaTable.Type == vindexes.TypeReference:
+		rp.routeOpCode = engine.SelectReference
+	case !vschemaTable.Keyspace.Sharded:
+		rp.routeOpCode = engine.SelectUnsharded
+	case vschemaTable.Pinned != nil:
+
+		// Pinned tables have their keyspace ids already assigned.
+		// Use the Binary vindex, which is the identity function
+		// for keyspace id.
+		rp.routeOpCode = engine.SelectEqualUnique
+	default:
+		rp.routeOpCode = engine.SelectScatter
+	}
+
+	rp.vindex = nil
+	rp.vindexValues = nil
+	rp.valueExprs = nil
+	rp.vindexPredicates = nil
+
+	for i, vp := range rp.vindexPreds {
+		rp.vindexPreds[i] = &vindexPlusPredicates{colVindex: vp.colVindex}
+	}
+
+	predicates := rp.predicates
+	rp.predicates = nil
+	return rp.addPredicate(predicates...)
+}
+
 func (jp *joinTree) tableID() semantics.TableSet {
 	return jp.lhs.tableID() | jp.rhs.tableID()
 }
