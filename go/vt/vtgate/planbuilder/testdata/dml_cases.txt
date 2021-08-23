@@ -2427,3 +2427,22 @@ Gen4 plan same as above
 "delete user from (select * from user) music where id = 1"
 "Unknown table 'user' in MULTI DELETE"
 Gen4 plan same as above
+
+"INSERT INTO main.user_privacy_consents (user_id, accepted_at)  SELECT user_id, accepted_at FROM (SELECT 1 as user_id, 1629194864 as accepted_at) AS tmp WHERE NOT EXISTS (SELECT user_id FROM main.user_privacy_consents WHERE user_id = 1)"
+{
+  "QueryType": "INSERT",
+  "Original": "INSERT INTO main.user_privacy_consents (user_id, accepted_at)  SELECT user_id, accepted_at FROM (SELECT 1 as user_id, 1629194864 as accepted_at) AS tmp WHERE NOT EXISTS (SELECT user_id FROM main.user_privacy_consents WHERE user_id = 1)",
+  "Instructions": {
+    "OperatorType": "Insert",
+    "Variant": "Unsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "TargetTabletType": "PRIMARY",
+    "MultiShardAutocommit": false,
+    "Query": "insert into user_privacy_consents(user_id, accepted_at) select user_id, accepted_at from (select 1 as user_id, 1629194864 as accepted_at from dual) as tmp where not exists (select user_id from user_privacy_consents where user_id = 1)",
+    "TableName": "user_privacy_consents"
+  }
+}
+Gen4 plan same as above
