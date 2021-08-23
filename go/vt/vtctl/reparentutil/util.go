@@ -22,6 +22,8 @@ import (
 	"sync"
 	"time"
 
+	"google.golang.org/protobuf/proto"
+
 	"vitess.io/vitess/go/event"
 
 	"vitess.io/vitess/go/vt/concurrency"
@@ -203,7 +205,8 @@ func (vtctlReparent *VtctlReparentFunctions) CheckIfNeedToOverridePrimary() erro
 // StartReplication implements the ReparentFunctions interface
 func (vtctlReparent *VtctlReparentFunctions) StartReplication(ctx context.Context, ev *events.Reparent, logger logutil.Logger, tmc tmclient.TabletManagerClient) error {
 	// Do the promotion.
-	return vtctlReparent.promoteNewPrimary(ctx, ev, logger, tmc)
+	//return vtctlReparent.promoteNewPrimary(ctx, ev, logger, tmc)
+	return nil
 }
 
 // GetNewPrimary implements the ReparentFunctions interface
@@ -301,7 +304,13 @@ func (vtctlReparent *VtctlReparentFunctions) promoteNewPrimary(ctx context.Conte
 		return vterrors.Wrapf(err, "lost topology lock, aborting: %v", err)
 	}
 
-	replCtx, replCancel := context.WithTimeout(ctx, vtctlReparent.WaitReplicasTimeout)
+	return reparentReplicasAndPopulateJournal(ctx, ev, logger, tmc, newPrimaryTabletInfo.Tablet, vtctlReparent.lockAction, rp, vtctlReparent.tabletMap, vtctlReparent)
+}
+
+func reparentReplicasAndPopulateJournal(ctx context.Context, ev *events.Reparent, logger logutil.Logger,
+	tmc tmclient.TabletManagerClient, newPrimaryTablet *topodatapb.Tablet, lockAction, rp string,
+	tabletMap map[string]*topo.TabletInfo, reparentFunction ReparentFunctions) error {
+	replCtx, replCancel := context.WithTimeout(ctx, reparentFunction.GetWaitReplicasTimeout())
 	defer replCancel()
 
 	event.DispatchUpdate(ev, "reparenting all tablets")
@@ -323,47 +332,34 @@ func (vtctlReparent *VtctlReparentFunctions) promoteNewPrimary(ctx context.Conte
 	replWg := sync.WaitGroup{}
 	rec := concurrency.AllErrorRecorder{}
 
-	handlePrimary := func(alias string, ti *topo.TabletInfo) error {
+	handlePrimary := func(alias string, ti *topodatapb.Tablet) error {
 		logger.Infof("populating reparent journal on new master %v", alias)
-		return tmc.PopulateReparentJournal(replCtx, ti.Tablet, now, vtctlReparent.lockAction, newPrimaryTabletInfo.Alias, rp)
+		return tmc.PopulateReparentJournal(replCtx, ti, now, lockAction, newPrimaryTablet.Alias, rp)
 	}
 
 	handleReplica := func(alias string, ti *topo.TabletInfo) {
 		defer replWg.Done()
 		logger.Infof("setting new master on replica %v", alias)
 
-		forceStart := false
-		if status, ok := vtctlReparent.statusMap[alias]; ok {
-			fs, err := ReplicaWasRunning(status)
-			if err != nil {
-				err = vterrors.Wrapf(err, "tablet %v could not determine StopReplicationStatus: %v", alias, err)
-				rec.RecordError(err)
-
-				return
-			}
-
-			forceStart = fs
-		}
-
-		err := tmc.SetMaster(replCtx, ti.Tablet, newPrimaryTabletInfo.Alias, now, "", forceStart)
+		err := tmc.SetReplicationSource(replCtx, ti.Tablet, newPrimaryTablet.Alias, now, "", true)
 		if err != nil {
-			err = vterrors.Wrapf(err, "tablet %v SetMaster failed: %v", alias, err)
+			err = vterrors.Wrapf(err, "tablet %v SetReplicationSource failed: %v", alias, err)
 			rec.RecordError(err)
 
 			return
 		}
 
-		// Signal that at least one goroutine succeeded to SetMaster.
+		// Signal that at least one goroutine succeeded to SetReplicationSource.
 		replSuccessCancel()
 	}
 
 	numReplicas := 0
 
-	for alias, ti := range vtctlReparent.tabletMap {
+	for alias, ti := range tabletMap {
 		switch {
-		case alias == vtctlReparent.winningPrimaryTabletAliasStr:
+		case alias == topoproto.TabletAliasString(newPrimaryTablet.Alias):
 			continue
-		case !vtctlReparent.IgnoreReplicas.Has(alias):
+		case !reparentFunction.GetIgnoreReplicas().Has(alias):
 			replWg.Add(1)
 			numReplicas++
 			go handleReplica(alias, ti)
@@ -371,7 +367,7 @@ func (vtctlReparent *VtctlReparentFunctions) promoteNewPrimary(ctx context.Conte
 	}
 
 	// Spin up a background goroutine to wait until all replica goroutines
-	// finished. Polling this way allows us to have promoteNewPrimary return
+	// finished. Polling this way allows us to have reparentReplicasAndPopulateJournal return
 	// success as soon as (a) the primary successfully populates its reparent
 	// journal and (b) at least one replica successfully begins replicating.
 	//
@@ -384,7 +380,7 @@ func (vtctlReparent *VtctlReparentFunctions) promoteNewPrimary(ctx context.Conte
 		allReplicasDoneCancel()
 	}()
 
-	primaryErr := handlePrimary(vtctlReparent.winningPrimaryTabletAliasStr, newPrimaryTabletInfo)
+	primaryErr := handlePrimary(topoproto.TabletAliasString(newPrimaryTablet.Alias), newPrimaryTablet)
 	if primaryErr != nil {
 		logger.Warningf("master failed to PopulateReparentJournal")
 		replCancel()
@@ -476,6 +472,70 @@ func ChooseNewPrimary(
 	}
 
 	return nil, nil
+}
+
+// PromotePrimaryCandidateAndStartReplication promotes the primary candidate that we have, but it does not set to start accepting writes
+func PromotePrimaryCandidateAndStartReplication(ctx context.Context, tmc tmclient.TabletManagerClient, ts *topo.Server, ev *events.Reparent, logger logutil.Logger, newPrimary *topodatapb.Tablet,
+	lockAction, rp string, tabletMap map[string]*topo.TabletInfo, reparentFunctions ReparentFunctions) error {
+	if err := promotePrimary(ctx, tmc, ts, logger, newPrimary); err != nil {
+		return err
+	}
+
+	if err := reparentReplicasAndPopulateJournal(ctx, ev, logger, tmc, newPrimary, lockAction, rp, tabletMap, reparentFunctions); err != nil {
+		return err
+	}
+
+	// TODO := add as a postponed function
+	//if postponedFunctionsContainer != nil && postponeAllMatchOperations != nil && postponeAllMatchOperations(candidateReplica, hasBestPromotionRule) {
+	//	postponedFunctionsContainer.AddPostponedFunction(moveGTIDFunc, fmt.Sprintf("regroup-replicas-gtid %+v", candidateReplica.Key))
+	//} else {
+	//	err = moveGTIDFunc()
+	//}
+
+	err := tmc.StartReplication(ctx, newPrimary)
+	if err != nil {
+		return err
+	}
+
+	//log.Debugf("RegroupReplicasGTID: done")
+	//inst.AuditOperation("regroup-replicas-gtid", masterKey, fmt.Sprintf("regrouped replicas of %+v via GTID; promoted %+v", *masterKey, candidateReplica.Key))
+	return nil //unmovedReplicas, candidateReplica, err
+}
+
+// promotePrimary makes the new tablet the primary and proactively performs
+// the necessary propagation to the old primary. The propagation is best
+// effort. If it fails, the tablet's shard sync will eventually converge.
+func promotePrimary(ctx context.Context, tmc tmclient.TabletManagerClient, ts *topo.Server, logger logutil.Logger, newPrimary *topodatapb.Tablet) error {
+	err := tmc.ChangeType(ctx, newPrimary, topodatapb.TabletType_PRIMARY)
+	if err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+	defer cancel()
+	_, err = ts.UpdateShardFields(ctx, newPrimary.Keyspace, newPrimary.Shard, func(si *topo.ShardInfo) error {
+		if proto.Equal(si.PrimaryAlias, newPrimary.Alias) && proto.Equal(si.PrimaryTermStartTime, newPrimary.PrimaryTermStartTime) {
+			return topo.NewError(topo.NoUpdateNeeded, "")
+		}
+
+		// We just successfully reparented. We should check timestamps, but always overwrite.
+		lastTerm := si.GetPrimaryTermStartTime()
+		newTerm := logutil.ProtoToTime(newPrimary.PrimaryTermStartTime)
+		if !newTerm.After(lastTerm) {
+			logger.Errorf("Possible clock skew. New master start time is before previous one: %v vs %v", newTerm, lastTerm)
+		}
+
+		aliasStr := topoproto.TabletAliasString(newPrimary.Alias)
+		logger.Infof("Updating shard record: master_alias=%v, primary_term_start_time=%v", aliasStr, newTerm)
+		si.PrimaryAlias = newPrimary.Alias
+		si.PrimaryTermStartTime = newPrimary.PrimaryTermStartTime
+		return nil
+	})
+	// Log any error but do not abort
+	if err != nil {
+		logger.Error(err)
+		return nil
+	}
+	return nil
 }
 
 // FindCurrentPrimary returns the current primary tablet of a shard, if any. The
