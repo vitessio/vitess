@@ -334,7 +334,7 @@ var commands = []commandGroup{
 				"<from_keyspace> <to_keyspace> <tables>",
 				"Start the VerticalSplitClone process to perform vertical resharding. Example: SplitClone from_ks to_ks 'a,/b.*/'"},
 			{"VDiff", commandVDiff,
-				"[-source_cell=<cell>] [-target_cell=<cell>] [-tablet_types=replica] [-filtered_replication_wait_time=30s] <keyspace.workflow>",
+				"[-source_cell=<cell>] [-target_cell=<cell>] [-tablet_types=primary,replica,rdonly] [-filtered_replication_wait_time=30s] <keyspace.workflow>",
 				"Perform a diff of all tables in the workflow"},
 			{"MigrateServedTypes", commandMigrateServedTypes,
 				"[-cells=c1,c2,...] [-reverse] [-skip-refresh-state] [-filtered_replication_wait_time=30s] [-reverse_replication=false] <keyspace/shard> <served tablet type>",
@@ -379,7 +379,7 @@ var commands = []commandGroup{
 				"<tablet alias> ...",
 				"Lists specified tablets in an awk-friendly way."},
 			{"GenerateShardRanges", commandGenerateShardRanges,
-				"-num_shards N",
+				"[-num_shards 2]",
 				"Generates shard ranges assuming a keyspace with N shards."},
 			{"Panic", commandPanic,
 				"",
@@ -2376,8 +2376,8 @@ func commandVerticalSplitClone(ctx context.Context, wr *wrangler.Wrangler, subFl
 }
 
 func commandVDiff(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	sourceCell := subFlags.String("source_cell", "", "The source cell to compare from")
-	targetCell := subFlags.String("target_cell", "", "The target cell to compare with")
+	sourceCell := subFlags.String("source_cell", "", "The source cell to compare from; default is any available cell")
+	targetCell := subFlags.String("target_cell", "", "The target cell to compare with; default is any available cell")
 	tabletTypes := subFlags.String("tablet_types", "primary,replica,rdonly", "Tablet types for source and target")
 	filteredReplicationWaitTime := subFlags.Duration("filtered_replication_wait_time", 30*time.Second, "Specifies the maximum time to wait, in seconds, for filtered replication to catch up on primary migrations. The migration will be cancelled on a timeout.")
 	maxRows := subFlags.Int64("limit", math.MaxInt64, "Max rows to stop comparing after")
