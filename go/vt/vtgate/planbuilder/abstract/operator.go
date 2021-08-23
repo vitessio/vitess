@@ -29,7 +29,7 @@ type (
 	//     while still preserving the results
 	//	*  LeftJoin - A left join. These can't be evaluated in any order, so we keep them separate
 	//	*  Join - A join represents inner join.
-	//  *  SubQuery - A represents a query that encapsulates one or more sub-queries (SubQueryInner).
+	//  *  SubQuery - Represents a query that encapsulates one or more sub-queries (SubQueryInner).
 	Operator interface {
 		// TableID returns a TableSet of the tables contained within
 		TableID() semantics.TableSet

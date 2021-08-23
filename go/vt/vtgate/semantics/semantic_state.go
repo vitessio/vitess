@@ -537,7 +537,7 @@ func (s *scope) addTable(info TableInfo) error {
 // IsOverlapping returns true if at least one table exists in both sets
 func (ts TableSet) IsOverlapping(b TableSet) bool { return ts&b != 0 }
 
-// IsSolvedBy returns true if all of `TS` is contained in `b`
+// IsSolvedBy returns true if all of `ts` is contained in `b`
 func (ts TableSet) IsSolvedBy(b TableSet) bool { return ts&b == ts }
 
 // NumberOfTables returns the number of bits set
