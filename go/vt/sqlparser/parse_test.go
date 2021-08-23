@@ -1192,6 +1192,10 @@ var (
 		}, {
 			input: "alter table a add constraint a_pk primary key (a, b)",
 		}, {
+			input: "alter table a add constraint a_pk primary key (value)",
+		}, {
+			input: "alter table a add primary key (value)",
+		}, {
 			input: "alter table a drop primary key",
 		}, {
 			input: "alter table a drop column id",
@@ -1220,6 +1224,10 @@ var (
 			input: "alter table a add check (b > 0)",
 		}, {
 			input: "alter table a drop check ch_1",
+		}, {
+			input: "alter table a drop check status",
+		}, {
+			input: "alter table a drop constraint status",
 		}, {
 			input: "alter table a drop foreign key fk_something",
 		}, {
@@ -1995,6 +2003,11 @@ var (
 			output: "alter table t alter column foo drop default",
 		}, {
 			input: "alter table t alter column foo drop default",
+		}, {
+			input: "alter table t modify value float(53) not null",
+			output: "alter table t modify column `value` (\n" +
+				"\t`value` float(53) not null\n" +
+				")",
 		}, {
 			input:  "delete a.*, b.* from tbl_a a, tbl_b b where a.id = b.id and b.name = 'test'",
 			output: "delete a, b from tbl_a as a, tbl_b as b where a.id = b.id and b.name = 'test'",
