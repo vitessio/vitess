@@ -42,13 +42,12 @@ func (s *subqueryTree) cost() int {
 
 func (s *subqueryTree) clone() queryTree {
 	result := &subqueryTree{
-		subquery: &sqlparser.Select{},
+		subquery: s.subquery,
 		outer:    s.outer.clone(),
 		inner:    s.inner.clone(),
 		opcode:   s.opcode,
 		argName:  s.argName,
 	}
-	*result.subquery = *s.subquery
 	return result
 }
 
