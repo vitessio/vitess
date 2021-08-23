@@ -37,7 +37,8 @@ type (
 		// PushPredicate pushes a predicate to the closest possible operator
 		PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) error
 
-		// UnsolvedPredicates returns any predicates that have dependencies from the outside
+		// UnsolvedPredicates returns any predicates that have dependencies on the given Operator and
+		// on the outside of it (a parent Select expression, any other table not used by Operator, etc).
 		UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.Expr
 	}
 )
@@ -161,7 +162,7 @@ func CreateOperatorFromSelect(sel *sqlparser.Select, semTable *semantics.SemTabl
 			if err != nil {
 				return nil, err
 			}
-			addRelationInformation(semTable, expr)
+			addColumnEquality(semTable, expr)
 		}
 	}
 	if resultantOp == nil {
@@ -171,7 +172,7 @@ func CreateOperatorFromSelect(sel *sqlparser.Select, semTable *semantics.SemTabl
 	return resultantOp, nil
 }
 
-func addRelationInformation(semTable *semantics.SemTable, expr sqlparser.Expr) {
+func addColumnEquality(semTable *semantics.SemTable, expr sqlparser.Expr) {
 	switch expr := expr.(type) {
 	case *sqlparser.ComparisonExpr:
 		if expr.Operator != sqlparser.EqualOp {
