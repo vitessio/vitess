@@ -178,11 +178,6 @@ func (vtctlReparent *VtctlReparentFunctions) FindPrimaryCandidates(ctx context.C
 
 	vtctlReparent.validCandidates = validCandidates
 
-	return nil
-}
-
-// CheckIfNeedToOverridePrimary implements the ReparentFunctions interface
-func (vtctlReparent *VtctlReparentFunctions) CheckIfNeedToOverridePrimary() error {
 	// If we were requested to elect a particular primary, verify it's a valid
 	// candidate (non-zero position, no errant GTIDs) and is at least as
 	// advanced as the winning position.
@@ -196,6 +191,12 @@ func (vtctlReparent *VtctlReparentFunctions) CheckIfNeedToOverridePrimary() erro
 			return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "master elect %v at position %v is not fully caught up. Winning position: %v", vtctlReparent.winningPrimaryTabletAliasStr, pos, vtctlReparent.winningPosition)
 		}
 	}
+
+	return nil
+}
+
+// CheckIfNeedToOverridePrimary implements the ReparentFunctions interface
+func (vtctlReparent *VtctlReparentFunctions) CheckIfNeedToOverridePrimary() error {
 	return nil
 }
 
