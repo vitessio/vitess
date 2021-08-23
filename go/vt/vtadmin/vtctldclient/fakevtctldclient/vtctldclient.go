@@ -26,6 +26,7 @@ import (
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtctl/vtctldclient"
 
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
@@ -34,6 +35,8 @@ import (
 type VtctldClient struct {
 	vtctldclient.VtctldClient
 
+	CreateKeyspaceShouldErr        bool
+	DeleteKeyspaceShouldErr        bool
 	FindAllShardsInKeyspaceResults map[string]struct {
 		Response *vtctldatapb.FindAllShardsInKeyspaceResponse
 		Error    error
@@ -63,6 +66,38 @@ type VtctldClient struct {
 // Compile-time type assertion to make sure we haven't overriden a method
 // incorrectly.
 var _ vtctldclient.VtctldClient = (*VtctldClient)(nil)
+
+// CreateKeyspace is part of the vtctldclient.VtctldClient interface.
+func (fake *VtctldClient) CreateKeyspace(ctx context.Context, req *vtctldatapb.CreateKeyspaceRequest, opts ...grpc.CallOption) (*vtctldatapb.CreateKeyspaceResponse, error) {
+	if fake.CreateKeyspaceShouldErr {
+		return nil, fmt.Errorf("%w: CreateKeyspace error", assert.AnError)
+	}
+
+	ks := &topodatapb.Keyspace{
+		ShardingColumnName: req.ShardingColumnName,
+		ShardingColumnType: req.ShardingColumnType,
+		ServedFroms:        req.ServedFroms,
+		KeyspaceType:       req.Type,
+		BaseKeyspace:       req.BaseKeyspace,
+		SnapshotTime:       req.SnapshotTime,
+	}
+
+	return &vtctldatapb.CreateKeyspaceResponse{
+		Keyspace: &vtctldatapb.Keyspace{
+			Name:     req.Name,
+			Keyspace: ks,
+		},
+	}, nil
+}
+
+// DeleteKeyspace is part of the vtctldclient.VtctldClient interface.
+func (fake *VtctldClient) DeleteKeyspace(ctx context.Context, req *vtctldatapb.DeleteKeyspaceRequest, opts ...grpc.CallOption) (*vtctldatapb.DeleteKeyspaceResponse, error) {
+	if fake.DeleteKeyspaceShouldErr {
+		return nil, fmt.Errorf("%w: DeleteKeyspace error", assert.AnError)
+	}
+
+	return &vtctldatapb.DeleteKeyspaceResponse{}, nil
+}
 
 // FindAllShardsInKeyspace is part of the vtctldclient.VtctldClient interface.
 func (fake *VtctldClient) FindAllShardsInKeyspace(ctx context.Context, req *vtctldatapb.FindAllShardsInKeyspaceRequest, opts ...grpc.CallOption) (*vtctldatapb.FindAllShardsInKeyspaceResponse, error) {

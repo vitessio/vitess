@@ -193,6 +193,17 @@ func parseOne(cfg *Config, name string, val string) error {
 			if err := cfg.TopoReadPoolConfig.parseFlag(strings.TrimPrefix(name, "topo-read-pool-"), val); err != nil {
 				return fmt.Errorf("error parsing %s: %w", name, err)
 			}
+		case strings.HasPrefix(name, "topo-rw-pool-"):
+			if cfg.TopoRWPoolConfig == nil {
+				cfg.TopoRWPoolConfig = &RPCPoolConfig{
+					Size:        -1,
+					WaitTimeout: -1,
+				}
+			}
+
+			if err := cfg.TopoRWPoolConfig.parseFlag(strings.TrimPrefix(name, "topo-rw-pool-"), val); err != nil {
+				return fmt.Errorf("error parsing %s: %w", name, err)
+			}
 		case strings.HasPrefix(name, "workflow-read-pool-"):
 			if cfg.WorkflowReadPoolConfig == nil {
 				cfg.WorkflowReadPoolConfig = &RPCPoolConfig{
