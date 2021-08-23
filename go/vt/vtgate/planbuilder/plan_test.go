@@ -229,7 +229,7 @@ func TestBypassPlanningShardTargetFromFile(t *testing.T) {
 			Name:    "main",
 			Sharded: false,
 		},
-		tabletType: topodatapb.TabletType_MASTER,
+		tabletType: topodatapb.TabletType_PRIMARY,
 		dest:       key.DestinationShard("-80")}
 
 	testFile(t, "bypass_shard_cases.txt", testOutputTempDir, vschema, true)
@@ -247,7 +247,7 @@ func TestBypassPlanningKeyrangeTargetFromFile(t *testing.T) {
 			Name:    "main",
 			Sharded: false,
 		},
-		tabletType: topodatapb.TabletType_MASTER,
+		tabletType: topodatapb.TabletType_PRIMARY,
 		dest:       key.DestinationExactKeyRange{KeyRange: keyRange[0]},
 	}
 
@@ -269,7 +269,7 @@ func TestWithDefaultKeyspaceFromFile(t *testing.T) {
 			Name:    "main",
 			Sharded: false,
 		},
-		tabletType: topodatapb.TabletType_MASTER,
+		tabletType: topodatapb.TabletType_PRIMARY,
 	}
 
 	testFile(t, "alterVschema_cases.txt", testOutputTempDir, vschema, false)
@@ -288,7 +288,7 @@ func TestWithSystemSchemaAsDefaultKeyspace(t *testing.T) {
 	vschema := &vschemaWrapper{
 		v:          loadSchema(t, "schema_test.json"),
 		keyspace:   &vindexes.Keyspace{Name: "information_schema"},
-		tabletType: topodatapb.TabletType_MASTER,
+		tabletType: topodatapb.TabletType_PRIMARY,
 	}
 
 	testFile(t, "sysschema_default.txt", testOutputTempDir, vschema, false)
@@ -305,7 +305,7 @@ func TestOtherPlanningFromFile(t *testing.T) {
 			Name:    "main",
 			Sharded: false,
 		},
-		tabletType: topodatapb.TabletType_MASTER,
+		tabletType: topodatapb.TabletType_PRIMARY,
 	}
 
 	testFile(t, "other_read_cases.txt", testOutputTempDir, vschema, false)
@@ -397,7 +397,7 @@ func (vw *vschemaWrapper) Destination() key.Destination {
 }
 
 func (vw *vschemaWrapper) FindTable(tab sqlparser.TableName) (*vindexes.Table, string, topodatapb.TabletType, key.Destination, error) {
-	destKeyspace, destTabletType, destTarget, err := topoproto.ParseDestination(tab.Qualifier.String(), topodatapb.TabletType_MASTER)
+	destKeyspace, destTabletType, destTarget, err := topoproto.ParseDestination(tab.Qualifier.String(), topodatapb.TabletType_PRIMARY)
 	if err != nil {
 		return nil, destKeyspace, destTabletType, destTarget, err
 	}
@@ -409,14 +409,14 @@ func (vw *vschemaWrapper) FindTable(tab sqlparser.TableName) (*vindexes.Table, s
 }
 
 func (vw *vschemaWrapper) FindTableOrVindex(tab sqlparser.TableName) (*vindexes.Table, vindexes.Vindex, string, topodatapb.TabletType, key.Destination, error) {
-	destKeyspace, destTabletType, destTarget, err := topoproto.ParseDestination(tab.Qualifier.String(), topodatapb.TabletType_MASTER)
+	destKeyspace, destTabletType, destTarget, err := topoproto.ParseDestination(tab.Qualifier.String(), topodatapb.TabletType_PRIMARY)
 	if err != nil {
 		return nil, nil, destKeyspace, destTabletType, destTarget, err
 	}
 	if destKeyspace == "" {
 		destKeyspace = vw.getActualKeyspace()
 	}
-	table, vindex, err := vw.v.FindTableOrVindex(destKeyspace, tab.Name.String(), topodatapb.TabletType_MASTER)
+	table, vindex, err := vw.v.FindTableOrVindex(destKeyspace, tab.Name.String(), topodatapb.TabletType_PRIMARY)
 	if err != nil {
 		return nil, nil, destKeyspace, destTabletType, destTarget, err
 	}

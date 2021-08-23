@@ -42,7 +42,7 @@ func TestRefreshTabletsInShard(t *testing.T) {
 	defer ts.Close()
 	ts.CreateKeyspace(ctx, "ks", &topodatapb.Keyspace{})
 	ts.CreateShard(ctx, "ks", "0")
-	tablet1 := buildTabletInfo(uint32(0), testHost, testPort0, topodatapb.TabletType_MASTER, time.Time{})
+	tablet1 := buildTabletInfo(uint32(0), testHost, testPort0, topodatapb.TabletType_PRIMARY, time.Time{})
 	tablet2 := buildTabletInfo(uint32(1), testHost, testPort1, topodatapb.TabletType_SPARE, time.Time{})
 	tablet3 := buildTabletInfo(uint32(2), testHost, 0, topodatapb.TabletType_REPLICA, time.Time{})
 	testutil.AddTablet(ctx, t, ts, tablet1.Tablet, nil)
@@ -61,7 +61,7 @@ func TestRefreshTabletsInShard(t *testing.T) {
 	})
 	assert.Equal(t, testHost, instances[0].tablet.Hostname)
 	assert.Equal(t, int32(testPort0), instances[0].tablet.MysqlPort)
-	assert.Equal(t, topodatapb.TabletType_MASTER, instances[0].tablet.Type)
+	assert.Equal(t, topodatapb.TabletType_PRIMARY, instances[0].tablet.Type)
 	// host 3 is missing mysql host but we still put it in the instances list here
 	assert.Equal(t, testHost, instances[1].instanceKey.Hostname)
 	assert.Equal(t, int32(0), instances[1].tablet.MysqlPort)
@@ -139,21 +139,21 @@ func TestLockRelease(t *testing.T) {
 	assert.EqualError(t, err, "lost topology lock; aborting: shard ks/0 is not locked (no lockInfo in map)")
 }
 
-func buildTabletInfo(id uint32, host string, mysqlPort int, ttype topodatapb.TabletType, masterTermTime time.Time) *topo.TabletInfo {
-	return buildTabletInfoWithCell(id, host, "test_cell", mysqlPort, ttype, masterTermTime)
+func buildTabletInfo(id uint32, host string, mysqlPort int, ttype topodatapb.TabletType, primaryTermTime time.Time) *topo.TabletInfo {
+	return buildTabletInfoWithCell(id, host, "test_cell", mysqlPort, ttype, primaryTermTime)
 }
 
-func buildTabletInfoWithCell(id uint32, host, cell string, mysqlPort int, ttype topodatapb.TabletType, masterTermTime time.Time) *topo.TabletInfo {
+func buildTabletInfoWithCell(id uint32, host, cell string, mysqlPort int, ttype topodatapb.TabletType, primaryTermTime time.Time) *topo.TabletInfo {
 	alias := &topodatapb.TabletAlias{Cell: cell, Uid: id}
 	return &topo.TabletInfo{Tablet: &topodatapb.Tablet{
-		Alias:               alias,
-		Hostname:            host,
-		MysqlHostname:       host,
-		MysqlPort:           int32(mysqlPort),
-		Keyspace:            "ks",
-		Shard:               "0",
-		Type:                ttype,
-		MasterTermStartTime: logutil.TimeToProto(masterTermTime),
-		Tags:                map[string]string{"hostname": fmt.Sprintf("host_%d", id)},
+		Alias:                alias,
+		Hostname:             host,
+		MysqlHostname:        host,
+		MysqlPort:            int32(mysqlPort),
+		Keyspace:             "ks",
+		Shard:                "0",
+		Type:                 ttype,
+		PrimaryTermStartTime: logutil.TimeToProto(primaryTermTime),
+		Tags:                 map[string]string{"hostname": fmt.Sprintf("host_%d", id)},
 	}}
 }

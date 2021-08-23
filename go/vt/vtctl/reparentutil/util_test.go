@@ -82,7 +82,7 @@ func TestChooseNewPrimary(t *testing.T) {
 				},
 			},
 			shardInfo: topo.NewShardInfo("testkeyspace", "-", &topodatapb.Shard{
-				MasterAlias: &topodatapb.TabletAlias{
+				PrimaryAlias: &topodatapb.TabletAlias{
 					Cell: "zone1",
 					Uid:  100,
 				},
@@ -94,7 +94,7 @@ func TestChooseNewPrimary(t *testing.T) {
 							Cell: "zone1",
 							Uid:  100,
 						},
-						Type: topodatapb.TabletType_MASTER,
+						Type: topodatapb.TabletType_PRIMARY,
 					},
 				},
 				"replica1": {
@@ -143,7 +143,7 @@ func TestChooseNewPrimary(t *testing.T) {
 							Cell: "zone1",
 							Uid:  100,
 						},
-						Type: topodatapb.TabletType_MASTER,
+						Type: topodatapb.TabletType_PRIMARY,
 					},
 				},
 				"replica1": {
@@ -176,7 +176,7 @@ func TestChooseNewPrimary(t *testing.T) {
 				},
 			},
 			shardInfo: topo.NewShardInfo("testkeyspace", "-", &topodatapb.Shard{
-				MasterAlias: &topodatapb.TabletAlias{
+				PrimaryAlias: &topodatapb.TabletAlias{
 					Cell: "zone1",
 					Uid:  100,
 				},
@@ -188,7 +188,7 @@ func TestChooseNewPrimary(t *testing.T) {
 							Cell: "zone1",
 							Uid:  100,
 						},
-						Type: topodatapb.TabletType_MASTER,
+						Type: topodatapb.TabletType_PRIMARY,
 					},
 				},
 				"replica1": {
@@ -219,7 +219,7 @@ func TestChooseNewPrimary(t *testing.T) {
 				},
 			},
 			shardInfo: topo.NewShardInfo("testkeyspace", "-", &topodatapb.Shard{
-				MasterAlias: &topodatapb.TabletAlias{
+				PrimaryAlias: &topodatapb.TabletAlias{
 					Cell: "zone2",
 					Uid:  200,
 				},
@@ -231,7 +231,7 @@ func TestChooseNewPrimary(t *testing.T) {
 							Cell: "zone2",
 							Uid:  200,
 						},
-						Type: topodatapb.TabletType_MASTER,
+						Type: topodatapb.TabletType_PRIMARY,
 					},
 				},
 				"replica1": {
@@ -274,7 +274,7 @@ func TestChooseNewPrimary(t *testing.T) {
 				},
 			},
 			shardInfo: topo.NewShardInfo("testkeyspace", "-", &topodatapb.Shard{
-				MasterAlias: &topodatapb.TabletAlias{
+				PrimaryAlias: &topodatapb.TabletAlias{
 					Cell: "zone1",
 					Uid:  100,
 				},
@@ -301,7 +301,7 @@ func TestChooseNewPrimary(t *testing.T) {
 			name: "no replicas in shard",
 			tmc:  &chooseNewPrimaryTestTMClient{},
 			shardInfo: topo.NewShardInfo("testkeyspace", "-", &topodatapb.Shard{
-				MasterAlias: &topodatapb.TabletAlias{
+				PrimaryAlias: &topodatapb.TabletAlias{
 					Cell: "zone1",
 					Uid:  100,
 				},
@@ -313,7 +313,7 @@ func TestChooseNewPrimary(t *testing.T) {
 							Cell: "zone1",
 							Uid:  100,
 						},
-						Type: topodatapb.TabletType_MASTER,
+						Type: topodatapb.TabletType_PRIMARY,
 					},
 				},
 			},
@@ -365,8 +365,8 @@ func TestFindCurrentPrimary(t *testing.T) {
 				"primary": {
 					Tablet: &topodatapb.Tablet{
 						Alias: alias,
-						Type:  topodatapb.TabletType_MASTER,
-						MasterTermStartTime: &vttime.Time{
+						Type:  topodatapb.TabletType_PRIMARY,
+						PrimaryTermStartTime: &vttime.Time{
 							Seconds: 100,
 						},
 						Hostname: "primary-tablet",
@@ -390,8 +390,8 @@ func TestFindCurrentPrimary(t *testing.T) {
 			expected: &topo.TabletInfo{
 				Tablet: &topodatapb.Tablet{
 					Alias: alias,
-					Type:  topodatapb.TabletType_MASTER,
-					MasterTermStartTime: &vttime.Time{
+					Type:  topodatapb.TabletType_PRIMARY,
+					PrimaryTermStartTime: &vttime.Time{
 						Seconds: 100,
 					},
 					Hostname: "primary-tablet",
@@ -431,8 +431,8 @@ func TestFindCurrentPrimary(t *testing.T) {
 				"stale-primary": {
 					Tablet: &topodatapb.Tablet{
 						Alias: alias,
-						Type:  topodatapb.TabletType_MASTER,
-						MasterTermStartTime: &vttime.Time{
+						Type:  topodatapb.TabletType_PRIMARY,
+						PrimaryTermStartTime: &vttime.Time{
 							Seconds: 100,
 						},
 						Hostname: "stale-primary-tablet",
@@ -441,8 +441,8 @@ func TestFindCurrentPrimary(t *testing.T) {
 				"true-primary": {
 					Tablet: &topodatapb.Tablet{
 						Alias: alias,
-						Type:  topodatapb.TabletType_MASTER,
-						MasterTermStartTime: &vttime.Time{
+						Type:  topodatapb.TabletType_PRIMARY,
+						PrimaryTermStartTime: &vttime.Time{
 							Seconds: 1000,
 						},
 						Hostname: "true-primary-tablet",
@@ -459,8 +459,8 @@ func TestFindCurrentPrimary(t *testing.T) {
 			expected: &topo.TabletInfo{
 				Tablet: &topodatapb.Tablet{
 					Alias: alias,
-					Type:  topodatapb.TabletType_MASTER,
-					MasterTermStartTime: &vttime.Time{
+					Type:  topodatapb.TabletType_PRIMARY,
+					PrimaryTermStartTime: &vttime.Time{
 						Seconds: 1000,
 					},
 					Hostname: "true-primary-tablet",
@@ -473,8 +473,8 @@ func TestFindCurrentPrimary(t *testing.T) {
 				"primary1": {
 					Tablet: &topodatapb.Tablet{
 						Alias: alias,
-						Type:  topodatapb.TabletType_MASTER,
-						MasterTermStartTime: &vttime.Time{
+						Type:  topodatapb.TabletType_PRIMARY,
+						PrimaryTermStartTime: &vttime.Time{
 							Seconds: 100,
 						},
 						Hostname: "primary-tablet-1",
@@ -483,8 +483,8 @@ func TestFindCurrentPrimary(t *testing.T) {
 				"primary2": {
 					Tablet: &topodatapb.Tablet{
 						Alias: alias,
-						Type:  topodatapb.TabletType_MASTER,
-						MasterTermStartTime: &vttime.Time{
+						Type:  topodatapb.TabletType_PRIMARY,
+						PrimaryTermStartTime: &vttime.Time{
 							Seconds: 100,
 						},
 						Hostname: "primary-tablet-2",

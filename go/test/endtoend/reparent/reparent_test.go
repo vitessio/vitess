@@ -38,15 +38,15 @@ var (
 	tab1, tab2, tab3, tab4 *cluster.Vttablet
 )
 
-func TestMasterToSpareStateChangeImpossible(t *testing.T) {
+func TestPrimaryToSpareStateChangeImpossible(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	setupReparentCluster(t)
 	defer teardownCluster()
 
-	// We cannot change a master to spare
+	// We cannot change a primary to spare
 	out, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("ChangeTabletType", tab1.Alias, "spare")
 	require.Error(t, err, out)
-	require.Contains(t, out, "type change MASTER -> SPARE is not an allowed transition for ChangeTabletType")
+	require.Contains(t, out, "type change PRIMARY -> SPARE is not an allowed transition for ChangeTabletType")
 }
 
 func TestReparentDownPrimary(t *testing.T) {
@@ -179,8 +179,8 @@ func TestReparentGraceful(t *testing.T) {
 
 	// Run this to make sure it succeeds.
 	strArray := getShardReplicationPositions(t, keyspaceName, shardName, false)
-	assert.Equal(t, 4, len(strArray))         // one primary, three replicas
-	assert.Contains(t, strArray[0], "master") // primary first
+	assert.Equal(t, 4, len(strArray))          // one primary, three replicas
+	assert.Contains(t, strArray[0], "primary") // primary first
 
 	// Perform a graceful reparent operation
 	prs(t, tab2)
@@ -217,7 +217,7 @@ func TestReparentAvoid(t *testing.T) {
 	defer teardownCluster()
 	deleteTablet(t, tab3)
 
-	// Perform a reparent operation with avoid_master pointing to non-primary. It
+	// Perform a reparent operation with avoid_tablet pointing to non-primary. It
 	// should succeed without doing anything.
 	_, err := prsAvoid(t, tab2)
 	require.NoError(t, err)
@@ -225,7 +225,7 @@ func TestReparentAvoid(t *testing.T) {
 	validateTopology(t, false)
 	checkPrimaryTablet(t, tab1)
 
-	// Perform a reparent operation with avoid_master pointing to primary.
+	// Perform a reparent operation with avoid_tablet pointing to primary.
 	_, err = prsAvoid(t, tab1)
 	require.NoError(t, err)
 	validateTopology(t, false)
@@ -233,7 +233,7 @@ func TestReparentAvoid(t *testing.T) {
 	// tab2 is in the same cell and tab4 is in a different cell, so we must land on tab2
 	checkPrimaryTablet(t, tab2)
 
-	// If we kill the tablet in the same cell as primary then reparent -avoid_master will fail.
+	// If we kill the tablet in the same cell as primary then reparent -avoid_tablet will fail.
 	stopTablet(t, tab1, true)
 	out, err := prsAvoid(t, tab2)
 	require.Error(t, err)
@@ -319,7 +319,7 @@ func reparentFromOutside(t *testing.T, downPrimary bool) {
 		err := tab1.VttabletProcess.TearDownWithTimeout(30 * time.Second)
 		require.NoError(t, err)
 		err = clusterInstance.VtctlclientProcess.ExecuteCommand("DeleteTablet",
-			"-allow_master", tab1.Alias)
+			"-allow_primary", tab1.Alias)
 		require.NoError(t, err)
 	}
 

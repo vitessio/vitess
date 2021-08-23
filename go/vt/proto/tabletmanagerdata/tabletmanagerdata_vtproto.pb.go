@@ -3121,8 +3121,8 @@ func (m *PopulateReparentJournalRequest) MarshalToSizedBufferVT(dAtA []byte) (in
 		i--
 		dAtA[i] = 0x22
 	}
-	if m.MasterAlias != nil {
-		size, err := m.MasterAlias.MarshalToSizedBufferVT(dAtA[:i])
+	if m.PrimaryAlias != nil {
+		size, err := m.PrimaryAlias.MarshalToSizedBufferVT(dAtA[:i])
 		if err != nil {
 			return 0, err
 		}
@@ -3850,9 +3850,9 @@ func (m *BackupRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
-	if m.AllowMaster {
+	if m.AllowPrimary {
 		i--
-		if m.AllowMaster {
+		if m.AllowPrimary {
 			dAtA[i] = 1
 		} else {
 			dAtA[i] = 0
@@ -5317,8 +5317,8 @@ func (m *PopulateReparentJournalRequest) SizeVT() (n int) {
 	if l > 0 {
 		n += 1 + l + sov(uint64(l))
 	}
-	if m.MasterAlias != nil {
-		l = m.MasterAlias.SizeVT()
+	if m.PrimaryAlias != nil {
+		l = m.PrimaryAlias.SizeVT()
 		n += 1 + l + sov(uint64(l))
 	}
 	l = len(m.ReplicationPosition)
@@ -5596,7 +5596,7 @@ func (m *BackupRequest) SizeVT() (n int) {
 	if m.Concurrency != 0 {
 		n += 1 + sov(uint64(m.Concurrency))
 	}
-	if m.AllowMaster {
+	if m.AllowPrimary {
 		n += 2
 	}
 	if m.unknownFields != nil {
@@ -12195,7 +12195,7 @@ func (m *PopulateReparentJournalRequest) UnmarshalVT(dAtA []byte) error {
 			iNdEx = postIndex
 		case 3:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field MasterAlias", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field PrimaryAlias", wireType)
 			}
 			var msglen int
 			for shift := uint(0); ; shift += 7 {
@@ -12222,10 +12222,10 @@ func (m *PopulateReparentJournalRequest) UnmarshalVT(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			if m.MasterAlias == nil {
-				m.MasterAlias = &topodata.TabletAlias{}
+			if m.PrimaryAlias == nil {
+				m.PrimaryAlias = &topodata.TabletAlias{}
 			}
-			if err := m.MasterAlias.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+			if err := m.PrimaryAlias.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
 			iNdEx = postIndex
@@ -13621,7 +13621,7 @@ func (m *BackupRequest) UnmarshalVT(dAtA []byte) error {
 			}
 		case 2:
 			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field AllowMaster", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field AllowPrimary", wireType)
 			}
 			var v int
 			for shift := uint(0); ; shift += 7 {
@@ -13638,7 +13638,7 @@ func (m *BackupRequest) UnmarshalVT(dAtA []byte) error {
 					break
 				}
 			}
-			m.AllowMaster = bool(v != 0)
+			m.AllowPrimary = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := skip(dAtA[iNdEx:])

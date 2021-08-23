@@ -10,7 +10,7 @@
       "from_table": "second_user.user",
       "to_tables": ["user.user"]
     }, {
-      "from_table": "master_redirect@master",
+      "from_table": "primary_redirect@primary",
       "to_tables": ["user.user"]
     }, {
       "from_table": "bad_table",

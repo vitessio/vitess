@@ -119,7 +119,7 @@ func getClusterConfig(idx int, dataRootDir string) *ClusterConfig {
 		vtgatePort:          basePort + 1,
 		vtgateGrpcPort:      basePort + 991,
 		vtgateMySQLPort:     basePort + 306,
-		tabletTypes:         "master",
+		tabletTypes:         "primary",
 		vtdataroot:          dataRootDir,
 		tabletPortBase:      basePort + 1000,
 		tabletGrpcPortBase:  basePort + 1991,
@@ -301,7 +301,7 @@ func (vc *VitessCluster) AddShards(t testing.TB, cells []*Cell, keyspace *Keyspa
 				require.NoError(t, err)
 				require.NotNil(t, primary)
 				tabletIndex++
-				primary.Vttablet.VreplicationTabletType = "MASTER"
+				primary.Vttablet.VreplicationTabletType = "PRIMARY"
 				tablets = append(tablets, primary)
 				dbProcesses = append(dbProcesses, proc)
 				primaryTabletUID = primary.Vttablet.TabletUID
@@ -400,6 +400,8 @@ func (vc *VitessCluster) teardown(t testing.TB) {
 		for _, vtgate := range cell.Vtgates {
 			if err := vtgate.TearDown(); err != nil {
 				log.Errorf("Error in vtgate teardown - %s", err.Error())
+			} else {
+				log.Infof("vtgate teardown successful")
 			}
 		}
 	}
@@ -436,11 +438,15 @@ func (vc *VitessCluster) teardown(t testing.TB) {
 	wg.Wait()
 	if err := vc.Vtctld.TearDown(); err != nil {
 		log.Infof("Error stopping Vtctld:  %s", err.Error())
+	} else {
+		log.Info("Successfully stopped vtctld")
 	}
 
 	for _, cell := range vc.Cells {
 		if err := vc.Topo.TearDown(cell.Name, originalVtdataroot, vtdataroot, false, "etcd2"); err != nil {
 			log.Infof("Error in etcd teardown - %s", err.Error())
+		} else {
+			log.Infof("Successfully tore down topo %s", vc.Topo.Name)
 		}
 	}
 }
@@ -461,6 +467,8 @@ func (vc *VitessCluster) TearDown(t testing.TB) {
 	case <-time.After(1 * time.Minute):
 		log.Infof("TearDown() timed out")
 	}
+	// some processes seem to hang around for a bit
+	time.Sleep(5 * time.Second)
 }
 
 func (vc *VitessCluster) getVttabletsInKeyspace(t *testing.T, cell *Cell, ksName string, tabletType string) map[string]*cluster.VttabletProcess {

@@ -37,7 +37,7 @@
 ";"
 ","
 "-allow_update"
-"-allow_master"
+"-allow_primary"
 "-allow_different_shard"
 "-allow_master_override"
 "-parent"

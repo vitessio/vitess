@@ -173,10 +173,10 @@ func (tp *TabletPicker) PickForStreaming(ctx context.Context) (*topodatapb.Table
 // GetMatchingTablets returns a list of TabletInfo for tablets
 // that match the cells, keyspace, shard and tabletTypes for this TabletPicker
 func (tp *TabletPicker) GetMatchingTablets(ctx context.Context) []*topo.TabletInfo {
-	// Special handling for MASTER tablet type
-	// Since there is only one master, we ignore cell and find the master
+	// Special handling for PRIMARY tablet type
+	// Since there is only one primary, we ignore cell and find the primary
 	aliases := make([]*topodatapb.TabletAlias, 0)
-	if len(tp.tabletTypes) == 1 && tp.tabletTypes[0] == topodatapb.TabletType_MASTER {
+	if len(tp.tabletTypes) == 1 && tp.tabletTypes[0] == topodatapb.TabletType_PRIMARY {
 		shortCtx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
 		defer cancel()
 		si, err := tp.ts.GetShard(shortCtx, tp.keyspace, tp.shard)
@@ -184,7 +184,7 @@ func (tp *TabletPicker) GetMatchingTablets(ctx context.Context) []*topo.TabletIn
 			log.Errorf("error getting shard %s/%s: %s", tp.keyspace, tp.shard, err.Error())
 			return nil
 		}
-		aliases = append(aliases, si.MasterAlias)
+		aliases = append(aliases, si.PrimaryAlias)
 	} else {
 		actualCells := make([]string, 0)
 		for _, cell := range tp.cells {

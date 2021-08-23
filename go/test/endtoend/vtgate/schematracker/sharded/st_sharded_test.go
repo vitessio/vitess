@@ -172,13 +172,13 @@ func TestNewTable(t *testing.T) {
 	defer conn.Close()
 
 	shard1Params := vtParams
-	shard1Params.DbName += ":-80@master"
+	shard1Params.DbName += ":-80@primary"
 	connShard1, err := mysql.Connect(ctx, &shard1Params)
 	require.NoError(t, err)
 	defer connShard1.Close()
 
 	shard2Params := vtParams
-	shard2Params.DbName += ":80-@master"
+	shard2Params.DbName += ":80-@primary"
 	connShard2, err := mysql.Connect(ctx, &shard2Params)
 	require.NoError(t, err)
 	defer connShard2.Close()

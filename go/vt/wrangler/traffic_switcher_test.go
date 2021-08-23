@@ -275,11 +275,11 @@ func TestTableMigrateMainflow(t *testing.T) {
 	verifyQueries(t, tme.allDBClients)
 
 	//-------------------------------------------------------------------------------------------------------------------
-	// Can't switch master with SwitchReads.
-	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", []topodatapb.TabletType{topodatapb.TabletType_MASTER}, nil, workflow.DirectionForward, false)
-	want := "tablet type must be REPLICA or RDONLY: MASTER"
+	// Can't switch primary with SwitchReads.
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", []topodatapb.TabletType{topodatapb.TabletType_PRIMARY}, nil, workflow.DirectionForward, false)
+	want := "tablet type must be REPLICA or RDONLY: PRIMARY"
 	if err == nil || err.Error() != want {
-		t.Errorf("SwitchReads(master) err: %v, want %v", err, want)
+		t.Errorf("SwitchReads(primary) err: %v, want %v", err, want)
 	}
 	verifyQueries(t, tme.allDBClients)
 
@@ -368,10 +368,10 @@ func TestTableMigrateMainflow(t *testing.T) {
 		"ks2.t2@rdonly":  {"ks2.t2"},
 		"ks1.t2@rdonly":  {"ks2.t2"},
 	})
-	checkBlacklist(t, tme.ts, "ks1:-40", nil)
-	checkBlacklist(t, tme.ts, "ks1:40-", nil)
-	checkBlacklist(t, tme.ts, "ks2:-80", nil)
-	checkBlacklist(t, tme.ts, "ks2:80-", nil)
+	checkDenyList(t, tme.ts, "ks1:-40", nil)
+	checkDenyList(t, tme.ts, "ks1:40-", nil)
+	checkDenyList(t, tme.ts, "ks2:-80", nil)
+	checkDenyList(t, tme.ts, "ks2:80-", nil)
 
 	//-------------------------------------------------------------------------------------------------------------------
 	// Test successful SwitchWrites.
@@ -478,10 +478,10 @@ func TestTableMigrateMainflow(t *testing.T) {
 		"ks2.t2@rdonly":  {"ks2.t2"},
 		"ks1.t2@rdonly":  {"ks2.t2"},
 	})
-	checkBlacklist(t, tme.ts, "ks1:-40", []string{"t1", "t2"})
-	checkBlacklist(t, tme.ts, "ks1:40-", []string{"t1", "t2"})
-	checkBlacklist(t, tme.ts, "ks2:-80", nil)
-	checkBlacklist(t, tme.ts, "ks2:80-", nil)
+	checkDenyList(t, tme.ts, "ks1:-40", []string{"t1", "t2"})
+	checkDenyList(t, tme.ts, "ks1:40-", []string{"t1", "t2"})
+	checkDenyList(t, tme.ts, "ks2:-80", nil)
+	checkDenyList(t, tme.ts, "ks2:80-", nil)
 
 	verifyQueries(t, tme.allDBClients)
 }
@@ -593,11 +593,11 @@ func TestShardMigrateMainflow(t *testing.T) {
 	verifyQueries(t, tme.allDBClients)
 
 	//-------------------------------------------------------------------------------------------------------------------
-	// Can't switch master with SwitchReads.
-	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", []topodatapb.TabletType{topodatapb.TabletType_MASTER}, nil, workflow.DirectionForward, false)
-	want := "tablet type must be REPLICA or RDONLY: MASTER"
+	// Can't switch primary with SwitchReads.
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", []topodatapb.TabletType{topodatapb.TabletType_PRIMARY}, nil, workflow.DirectionForward, false)
+	want := "tablet type must be REPLICA or RDONLY: PRIMARY"
 	if err == nil || err.Error() != want {
-		t.Errorf("SwitchReads(master) err: %v, want %v", err, want)
+		t.Errorf("SwitchReads(primary) err: %v, want %v", err, want)
 	}
 	verifyQueries(t, tme.allDBClients)
 
@@ -614,10 +614,10 @@ func TestShardMigrateMainflow(t *testing.T) {
 	checkServedTypes(t, tme.ts, "ks:40-", 1)
 	checkServedTypes(t, tme.ts, "ks:-80", 2)
 	checkServedTypes(t, tme.ts, "ks:80-", 2)
-	checkIsMasterServing(t, tme.ts, "ks:-40", true)
-	checkIsMasterServing(t, tme.ts, "ks:40-", true)
-	checkIsMasterServing(t, tme.ts, "ks:-80", false)
-	checkIsMasterServing(t, tme.ts, "ks:80-", false)
+	checkIfPrimaryServing(t, tme.ts, "ks:-40", true)
+	checkIfPrimaryServing(t, tme.ts, "ks:40-", true)
+	checkIfPrimaryServing(t, tme.ts, "ks:-80", false)
+	checkIfPrimaryServing(t, tme.ts, "ks:80-", false)
 
 	checkJournals := func() {
 		tme.dbSourceClients[0].addQuery("select val from _vt.resharding_journal where id=6432976123657117097", &sqltypes.Result{}, nil)
@@ -668,10 +668,10 @@ func TestShardMigrateMainflow(t *testing.T) {
 	checkServedTypes(t, tme.ts, "ks:40-", 1)
 	checkServedTypes(t, tme.ts, "ks:-80", 2)
 	checkServedTypes(t, tme.ts, "ks:80-", 2)
-	checkIsMasterServing(t, tme.ts, "ks:-40", true)
-	checkIsMasterServing(t, tme.ts, "ks:40-", true)
-	checkIsMasterServing(t, tme.ts, "ks:-80", false)
-	checkIsMasterServing(t, tme.ts, "ks:80-", false)
+	checkIfPrimaryServing(t, tme.ts, "ks:-40", true)
+	checkIfPrimaryServing(t, tme.ts, "ks:40-", true)
+	checkIfPrimaryServing(t, tme.ts, "ks:-80", false)
+	checkIfPrimaryServing(t, tme.ts, "ks:80-", false)
 
 	//-------------------------------------------------------------------------------------------------------------------
 	// Test successful SwitchWrites.
@@ -761,10 +761,10 @@ func TestShardMigrateMainflow(t *testing.T) {
 	checkServedTypes(t, tme.ts, "ks:-80", 3)
 	checkServedTypes(t, tme.ts, "ks:80-", 3)
 
-	checkIsMasterServing(t, tme.ts, "ks:-40", false)
-	checkIsMasterServing(t, tme.ts, "ks:40-", false)
-	checkIsMasterServing(t, tme.ts, "ks:-80", true)
-	checkIsMasterServing(t, tme.ts, "ks:80-", true)
+	checkIfPrimaryServing(t, tme.ts, "ks:-40", false)
+	checkIfPrimaryServing(t, tme.ts, "ks:40-", false)
+	checkIfPrimaryServing(t, tme.ts, "ks:-80", true)
+	checkIfPrimaryServing(t, tme.ts, "ks:80-", true)
 
 	verifyQueries(t, tme.allDBClients)
 }
@@ -862,7 +862,7 @@ func TestTableMigrateOneToMany(t *testing.T) {
 		"Dropping these tables from the database and removing them from the vschema for keyspace ks1:",
 		"	Keyspace ks1 Shard 0 DbName vt_ks1 Tablet 10 Table t1",
 		"	Keyspace ks1 Shard 0 DbName vt_ks1 Tablet 10 Table t2",
-		"Blacklisted tables [t1,t2] will be removed from:",
+		"Denied tables [t1,t2] will be removed from:",
 		"	Keyspace ks1 Shard 0 Tablet 10",
 		"Delete reverse vreplication streams on source:",
 		"	Keyspace ks1 Shard 0 Workflow test_reverse DbName vt_ks1 Tablet 10",
@@ -876,7 +876,7 @@ func TestTableMigrateOneToMany(t *testing.T) {
 	results, err := tme.wr.DropSources(ctx, tme.targetKeyspace, "test", workflow.DropTable, false, false, true)
 	require.NoError(t, err)
 	require.Empty(t, cmp.Diff(wantdryRunDropSources, *results))
-	checkBlacklist(t, tme.ts, fmt.Sprintf("%s:%s", "ks1", "0"), []string{"t1", "t2"})
+	checkDenyList(t, tme.ts, fmt.Sprintf("%s:%s", "ks1", "0"), []string{"t1", "t2"})
 
 	dropSourcesDryRunRename := func() {
 		tme.dbTargetClients[0].addQuery("select 1 from _vt.vreplication where db_name='vt_ks2' and workflow='test' and message!='FROZEN'", &sqltypes.Result{}, nil)
@@ -889,7 +889,7 @@ func TestTableMigrateOneToMany(t *testing.T) {
 		"Renaming these tables from the database and removing them from the vschema for keyspace ks1:", "	" +
 			"Keyspace ks1 Shard 0 DbName vt_ks1 Tablet 10 Table t1",
 		"	Keyspace ks1 Shard 0 DbName vt_ks1 Tablet 10 Table t2",
-		"Blacklisted tables [t1,t2] will be removed from:",
+		"Denied tables [t1,t2] will be removed from:",
 		"	Keyspace ks1 Shard 0 Tablet 10",
 		"Delete reverse vreplication streams on source:",
 		"	Keyspace ks1 Shard 0 Workflow test_reverse DbName vt_ks1 Tablet 10",
@@ -903,7 +903,7 @@ func TestTableMigrateOneToMany(t *testing.T) {
 	results, err = tme.wr.DropSources(ctx, tme.targetKeyspace, "test", workflow.RenameTable, false, false, true)
 	require.NoError(t, err)
 	require.Empty(t, cmp.Diff(wantdryRunRenameSources, *results))
-	checkBlacklist(t, tme.ts, fmt.Sprintf("%s:%s", "ks1", "0"), []string{"t1", "t2"})
+	checkDenyList(t, tme.ts, fmt.Sprintf("%s:%s", "ks1", "0"), []string{"t1", "t2"})
 
 	dropSources := func() {
 		tme.dbTargetClients[0].addQuery("select 1 from _vt.vreplication where db_name='vt_ks2' and workflow='test' and message!='FROZEN'", &sqltypes.Result{}, nil)
@@ -936,7 +936,7 @@ func TestTableMigrateOneToMany(t *testing.T) {
 	})
 	_, err = tme.wr.DropSources(ctx, tme.targetKeyspace, "test", workflow.RenameTable, false, false, false)
 	require.NoError(t, err)
-	checkBlacklist(t, tme.ts, fmt.Sprintf("%s:%s", "ks1", "0"), nil)
+	checkDenyList(t, tme.ts, fmt.Sprintf("%s:%s", "ks1", "0"), nil)
 	checkRouting(t, tme.wr, map[string][]string{})
 	verifyQueries(t, tme.allDBClients)
 }
@@ -1219,12 +1219,12 @@ func TestTableMigrateJournalExists(t *testing.T) {
 		"ks2.t2@rdonly":  {"ks2.t2"},
 		"ks1.t2@rdonly":  {"ks2.t2"},
 	})
-	// We're showing that there are no blacklisted tables. But in real life,
-	// tables on ks1 should be blacklisted from the previous failed attempt.
-	checkBlacklist(t, tme.ts, "ks1:-40", nil)
-	checkBlacklist(t, tme.ts, "ks1:40-", nil)
-	checkBlacklist(t, tme.ts, "ks2:-80", nil)
-	checkBlacklist(t, tme.ts, "ks2:80-", nil)
+	// We're showing that there are no denied tables. But in real life,
+	// tables on ks1 should be denied from the previous failed attempt.
+	checkDenyList(t, tme.ts, "ks1:-40", nil)
+	checkDenyList(t, tme.ts, "ks1:40-", nil)
+	checkDenyList(t, tme.ts, "ks2:-80", nil)
+	checkDenyList(t, tme.ts, "ks2:80-", nil)
 
 	verifyQueries(t, tme.allDBClients)
 }
@@ -1282,10 +1282,10 @@ func TestShardMigrateJournalExists(t *testing.T) {
 	checkServedTypes(t, tme.ts, "ks:-80", 3)
 	checkServedTypes(t, tme.ts, "ks:80-", 3)
 
-	checkIsMasterServing(t, tme.ts, "ks:-40", false)
-	checkIsMasterServing(t, tme.ts, "ks:40-", false)
-	checkIsMasterServing(t, tme.ts, "ks:-80", true)
-	checkIsMasterServing(t, tme.ts, "ks:80-", true)
+	checkIfPrimaryServing(t, tme.ts, "ks:-40", false)
+	checkIfPrimaryServing(t, tme.ts, "ks:40-", false)
+	checkIfPrimaryServing(t, tme.ts, "ks:-80", true)
+	checkIfPrimaryServing(t, tme.ts, "ks:80-", true)
 
 	verifyQueries(t, tme.allDBClients)
 }
@@ -1717,12 +1717,12 @@ func TestReverseVReplicationUpdateQuery(t *testing.T) {
 			want: fmt.Sprintf(updateQuery, "cell2", ""),
 		},
 		{
-			targetCell: "cell1", sourceCell: "cell1", optCells: "cell1,cell2", optTabletTypes: "replica,master",
-			want: fmt.Sprintf(updateQuery, "cell1,cell2", "replica,master"),
+			targetCell: "cell1", sourceCell: "cell1", optCells: "cell1,cell2", optTabletTypes: "replica,primary",
+			want: fmt.Sprintf(updateQuery, "cell1,cell2", "replica,primary"),
 		},
 		{
-			targetCell: "cell1", sourceCell: "cell1", optCells: "", optTabletTypes: "replica,master",
-			want: fmt.Sprintf(updateQuery, "", "replica,master"),
+			targetCell: "cell1", sourceCell: "cell1", optCells: "", optTabletTypes: "replica,primary",
+			want: fmt.Sprintf(updateQuery, "", "replica,primary"),
 		},
 	}
 	for _, tc := range tCases {
@@ -1840,11 +1840,11 @@ func TestShardMigrateNoAvailableTabletsForReverseReplication(t *testing.T) {
 	verifyQueries(t, tme.allDBClients)
 
 	//-------------------------------------------------------------------------------------------------------------------
-	// Can't switch master with SwitchReads.
-	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", []topodatapb.TabletType{topodatapb.TabletType_MASTER}, nil, workflow.DirectionForward, false)
-	want := "tablet type must be REPLICA or RDONLY: MASTER"
+	// Can't switch primary with SwitchReads.
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", []topodatapb.TabletType{topodatapb.TabletType_PRIMARY}, nil, workflow.DirectionForward, false)
+	want := "tablet type must be REPLICA or RDONLY: PRIMARY"
 	if err == nil || err.Error() != want {
-		t.Errorf("SwitchReads(master) err: %v, want %v", err, want)
+		t.Errorf("SwitchReads(primary) err: %v, want %v", err, want)
 	}
 	verifyQueries(t, tme.allDBClients)
 
@@ -1861,10 +1861,10 @@ func TestShardMigrateNoAvailableTabletsForReverseReplication(t *testing.T) {
 	checkServedTypes(t, tme.ts, "ks:40-", 1)
 	checkServedTypes(t, tme.ts, "ks:-80", 2)
 	checkServedTypes(t, tme.ts, "ks:80-", 2)
-	checkIsMasterServing(t, tme.ts, "ks:-40", true)
-	checkIsMasterServing(t, tme.ts, "ks:40-", true)
-	checkIsMasterServing(t, tme.ts, "ks:-80", false)
-	checkIsMasterServing(t, tme.ts, "ks:80-", false)
+	checkIfPrimaryServing(t, tme.ts, "ks:-40", true)
+	checkIfPrimaryServing(t, tme.ts, "ks:40-", true)
+	checkIfPrimaryServing(t, tme.ts, "ks:-80", false)
+	checkIfPrimaryServing(t, tme.ts, "ks:80-", false)
 
 	checkJournals := func() {
 		tme.dbSourceClients[0].addQuery("select val from _vt.resharding_journal where id=6432976123657117097", &sqltypes.Result{}, nil)
@@ -1915,10 +1915,10 @@ func TestShardMigrateNoAvailableTabletsForReverseReplication(t *testing.T) {
 	checkServedTypes(t, tme.ts, "ks:40-", 1)
 	checkServedTypes(t, tme.ts, "ks:-80", 2)
 	checkServedTypes(t, tme.ts, "ks:80-", 2)
-	checkIsMasterServing(t, tme.ts, "ks:-40", true)
-	checkIsMasterServing(t, tme.ts, "ks:40-", true)
-	checkIsMasterServing(t, tme.ts, "ks:-80", false)
-	checkIsMasterServing(t, tme.ts, "ks:80-", false)
+	checkIfPrimaryServing(t, tme.ts, "ks:-40", true)
+	checkIfPrimaryServing(t, tme.ts, "ks:40-", true)
+	checkIfPrimaryServing(t, tme.ts, "ks:-80", false)
+	checkIfPrimaryServing(t, tme.ts, "ks:80-", false)
 
 	//-------------------------------------------------------------------------------------------------------------------
 	// Test successful SwitchWrites.
@@ -2024,10 +2024,10 @@ func TestShardMigrateNoAvailableTabletsForReverseReplication(t *testing.T) {
 	checkServedTypes(t, tme.ts, "ks:-80", 3)
 	checkServedTypes(t, tme.ts, "ks:80-", 3)
 
-	checkIsMasterServing(t, tme.ts, "ks:-40", false)
-	checkIsMasterServing(t, tme.ts, "ks:40-", false)
-	checkIsMasterServing(t, tme.ts, "ks:-80", true)
-	checkIsMasterServing(t, tme.ts, "ks:80-", true)
+	checkIfPrimaryServing(t, tme.ts, "ks:-40", false)
+	checkIfPrimaryServing(t, tme.ts, "ks:40-", false)
+	checkIfPrimaryServing(t, tme.ts, "ks:-80", true)
+	checkIfPrimaryServing(t, tme.ts, "ks:80-", true)
 
 	verifyQueries(t, tme.allDBClients)
 }
@@ -2067,7 +2067,7 @@ func checkCellRouting(t *testing.T, wr *Wrangler, cell string, want map[string][
 	}
 }
 
-func checkBlacklist(t *testing.T, ts *topo.Server, keyspaceShard string, want []string) {
+func checkDenyList(t *testing.T, ts *topo.Server, keyspaceShard string, want []string) {
 	t.Helper()
 	ctx := context.Background()
 	splits := strings.Split(keyspaceShard, ":")
@@ -2075,13 +2075,13 @@ func checkBlacklist(t *testing.T, ts *topo.Server, keyspaceShard string, want []
 	if err != nil {
 		t.Fatal(err)
 	}
-	tc := si.GetTabletControl(topodatapb.TabletType_MASTER)
+	tc := si.GetTabletControl(topodatapb.TabletType_PRIMARY)
 	var got []string
 	if tc != nil {
-		got = tc.BlacklistedTables
+		got = tc.DeniedTables
 	}
 	if !reflect.DeepEqual(got, want) {
-		t.Errorf("Blacklisted tables for %v: %v, want %v", keyspaceShard, got, want)
+		t.Errorf("Denied tables for %v: %v, want %v", keyspaceShard, got, want)
 	}
 }
 
@@ -2124,7 +2124,7 @@ outer:
 		keyspaceShard, cell, count, want))
 }
 
-func checkIsMasterServing(t *testing.T, ts *topo.Server, keyspaceShard string, want bool) {
+func checkIfPrimaryServing(t *testing.T, ts *topo.Server, keyspaceShard string, want bool) {
 	t.Helper()
 	ctx := context.Background()
 	splits := strings.Split(keyspaceShard, ":")
@@ -2132,8 +2132,8 @@ func checkIsMasterServing(t *testing.T, ts *topo.Server, keyspaceShard string, w
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want != si.IsMasterServing {
-		t.Errorf("IsMasterServing(%v): %v, want %v", keyspaceShard, si.IsMasterServing, want)
+	if want != si.IsPrimaryServing {
+		t.Errorf("IsPrimaryServing(%v): %v, want %v", keyspaceShard, si.IsPrimaryServing, want)
 	}
 }
 
@@ -2141,7 +2141,7 @@ func getResult(id int, state string, keyspace string, shard string) *sqltypes.Re
 	return sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 		"id|state|cell|tablet_types|source",
 		"int64|varchar|varchar|varchar|varchar"),
-		fmt.Sprintf("%d|%s|cell1|MASTER|keyspace:\"%s\" shard:\"%s\"", id, state, keyspace, shard),
+		fmt.Sprintf("%d|%s|cell1|PRIMARY|keyspace:\"%s\" shard:\"%s\"", id, state, keyspace, shard),
 	)
 }
 

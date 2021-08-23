@@ -45,9 +45,9 @@ import (
 )
 
 const (
-	blTablesAlreadyPresent = "one or more tables are already present in the blacklist"
-	blTablesNotPresent     = "cannot remove tables since one or more do not exist in the blacklist"
-	blNoCellsForMaster     = "you cannot specify cells for a master's tablet control"
+	dlTablesAlreadyPresent = "one or more tables are already present in the denylist"
+	dlTablesNotPresent     = "cannot remove tables since one or more do not exist in the denylist"
+	dlNoCellsForPrimary    = "you cannot specify cells for a primary's tablet control"
 )
 
 // Functions for dealing with shard representations in topology.
@@ -177,19 +177,19 @@ func (si *ShardInfo) Version() Version {
 	return si.version
 }
 
-// HasMaster returns true if the Shard has an assigned Master.
-func (si *ShardInfo) HasMaster() bool {
-	return !topoproto.TabletAliasIsZero(si.Shard.MasterAlias)
+// HasPrimary returns true if the Shard has an assigned primary.
+func (si *ShardInfo) HasPrimary() bool {
+	return !topoproto.TabletAliasIsZero(si.Shard.PrimaryAlias)
 }
 
-// GetMasterTermStartTime returns the shard's master term start time as a Time value.
-func (si *ShardInfo) GetMasterTermStartTime() time.Time {
-	return logutil.ProtoToTime(si.Shard.MasterTermStartTime)
+// GetPrimaryTermStartTime returns the shard's primary term start time as a Time value.
+func (si *ShardInfo) GetPrimaryTermStartTime() time.Time {
+	return logutil.ProtoToTime(si.Shard.PrimaryTermStartTime)
 }
 
-// SetMasterTermStartTime sets the shard's master term start time as a Time value.
-func (si *ShardInfo) SetMasterTermStartTime(t time.Time) {
-	si.Shard.MasterTermStartTime = logutil.TimeToProto(t)
+// SetPrimaryTermStartTime sets the shard's primary term start time as a Time value.
+func (si *ShardInfo) SetPrimaryTermStartTime(t time.Time) {
+	si.Shard.PrimaryTermStartTime = logutil.TimeToProto(t)
 }
 
 // GetShard is a high level function to read shard data.
@@ -296,16 +296,16 @@ func (ts *Server) CreateShard(ctx context.Context, keyspace, shard string) (err 
 		KeyRange: keyRange,
 	}
 
-	// Set master as serving only if its keyrange doesn't overlap
+	// Set primary as serving only if its keyrange doesn't overlap
 	// with other shards. This applies to unsharded keyspaces also
-	value.IsMasterServing = true
+	value.IsPrimaryServing = true
 	sis, err := ts.FindAllShardsInKeyspace(ctx, keyspace)
 	if err != nil && !IsErrType(err, NoNode) {
 		return err
 	}
 	for _, si := range sis {
 		if si.KeyRange == nil || key.KeyRangesIntersect(si.KeyRange, keyRange) {
-			value.IsMasterServing = false
+			value.IsPrimaryServing = false
 			break
 		}
 	}
@@ -386,21 +386,21 @@ func (si *ShardInfo) GetTabletControl(tabletType topodatapb.TabletType) *topodat
 	return nil
 }
 
-// UpdateSourceBlacklistedTables will add or remove the listed tables
+// UpdateSourceDeniedTables will add or remove the listed tables
 // in the shard record's TabletControl structures. Note we don't
 // support a lot of the corner cases:
 // - only support one table list per shard. If we encounter a different
 //   table list that the provided one, we error out.
-// - we don't support DisableQueryService at the same time as BlacklistedTables,
+// - we don't support DisableQueryService at the same time as DeniedTables,
 //   because it's not used in the same context (vertical vs horizontal sharding)
 //
 // This function should be called while holding the keyspace lock.
-func (si *ShardInfo) UpdateSourceBlacklistedTables(ctx context.Context, tabletType topodatapb.TabletType, cells []string, remove bool, tables []string) error {
+func (si *ShardInfo) UpdateSourceDeniedTables(ctx context.Context, tabletType topodatapb.TabletType, cells []string, remove bool, tables []string) error {
 	if err := CheckKeyspaceLocked(ctx, si.keyspace); err != nil {
 		return err
 	}
-	if tabletType == topodatapb.TabletType_MASTER && len(cells) > 0 {
-		return fmt.Errorf(blNoCellsForMaster)
+	if tabletType == topodatapb.TabletType_PRIMARY && len(cells) > 0 {
+		return fmt.Errorf(dlNoCellsForPrimary)
 	}
 	tc := si.GetTabletControl(tabletType)
 	if tc == nil {
@@ -409,20 +409,20 @@ func (si *ShardInfo) UpdateSourceBlacklistedTables(ctx context.Context, tabletTy
 		if remove {
 			// we try to remove from something that doesn't exist,
 			// log, but we're done.
-			log.Warningf("Trying to remove TabletControl.BlacklistedTables for missing type %v in shard %v/%v", tabletType, si.keyspace, si.shardName)
+			log.Warningf("Trying to remove TabletControl.DeniedTables for missing type %v in shard %v/%v", tabletType, si.keyspace, si.shardName)
 			return nil
 		}
 
 		// trying to add more constraints with no existing record
 		si.TabletControls = append(si.TabletControls, &topodatapb.Shard_TabletControl{
-			TabletType:        tabletType,
-			Cells:             cells,
-			BlacklistedTables: tables,
+			TabletType:   tabletType,
+			Cells:        cells,
+			DeniedTables: tables,
 		})
 		return nil
 	}
 
-	if tabletType == topodatapb.TabletType_MASTER {
+	if tabletType == topodatapb.TabletType_PRIMARY {
 		if err := si.updateMasterTabletControl(tc, remove, tables); err != nil {
 			return err
 		}
@@ -433,8 +433,8 @@ func (si *ShardInfo) UpdateSourceBlacklistedTables(ctx context.Context, tabletTy
 	if remove {
 		si.removeCellsFromTabletControl(tc, tabletType, cells)
 	} else {
-		if !reflect.DeepEqual(tc.BlacklistedTables, tables) {
-			return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "trying to use two different sets of blacklisted tables for shard %v/%v: %v and %v", si.keyspace, si.shardName, tc.BlacklistedTables, tables)
+		if !reflect.DeepEqual(tc.DeniedTables, tables) {
+			return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "trying to use two different sets of denied tables for shard %v/%v: %v and %v", si.keyspace, si.shardName, tc.DeniedTables, tables)
 		}
 
 		tc.Cells = addCells(tc.Cells, cells)
@@ -446,7 +446,7 @@ func (si *ShardInfo) updateMasterTabletControl(tc *topodatapb.Shard_TabletContro
 	var newTables []string
 	for _, table := range tables {
 		exists := false
-		for _, blt := range tc.BlacklistedTables {
+		for _, blt := range tc.DeniedTables {
 			if blt == table {
 				exists = true
 				break
@@ -458,11 +458,11 @@ func (si *ShardInfo) updateMasterTabletControl(tc *topodatapb.Shard_TabletContro
 	}
 	if remove {
 		if len(newTables) != 0 {
-			return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, blTablesNotPresent)
+			return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, dlTablesNotPresent)
 		}
-		var newBlacklist []string
+		var newDenyList []string
 		if len(tables) != 0 { // legacy uses
-			for _, blt := range tc.BlacklistedTables {
+			for _, blt := range tc.DeniedTables {
 				mustDelete := false
 				for _, table := range tables {
 					if blt == table {
@@ -471,20 +471,20 @@ func (si *ShardInfo) updateMasterTabletControl(tc *topodatapb.Shard_TabletContro
 					}
 				}
 				if !mustDelete {
-					newBlacklist = append(newBlacklist, blt)
+					newDenyList = append(newDenyList, blt)
 				}
 			}
 		}
-		tc.BlacklistedTables = newBlacklist
-		if len(tc.BlacklistedTables) == 0 {
-			si.removeTabletTypeFromTabletControl(topodatapb.TabletType_MASTER)
+		tc.DeniedTables = newDenyList
+		if len(tc.DeniedTables) == 0 {
+			si.removeTabletTypeFromTabletControl(topodatapb.TabletType_PRIMARY)
 		}
 		return nil
 	}
 	if len(newTables) != len(tables) {
-		return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, blTablesAlreadyPresent)
+		return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, dlTablesAlreadyPresent)
 	}
-	tc.BlacklistedTables = append(tc.BlacklistedTables, tables...)
+	tc.DeniedTables = append(tc.DeniedTables, tables...)
 	return nil
 }
 
@@ -568,9 +568,9 @@ func (ts *Server) FindAllTabletAliasesInShardByCell(ctx context.Context, keyspac
 	}
 
 	resultAsMap := make(map[string]*topodatapb.TabletAlias)
-	if si.HasMaster() {
-		if InCellList(si.MasterAlias.Cell, cells) {
-			resultAsMap[topoproto.TabletAliasString(si.MasterAlias)] = si.MasterAlias
+	if si.HasPrimary() {
+		if InCellList(si.PrimaryAlias.Cell, cells) {
+			resultAsMap[topoproto.TabletAliasString(si.PrimaryAlias)] = si.PrimaryAlias
 		}
 	}
 

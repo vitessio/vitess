@@ -154,7 +154,7 @@ func (tal TabletAliasList) ToStringSlice() []string {
 
 // AllTabletTypes lists all the possible tablet types
 var AllTabletTypes = []topodatapb.TabletType{
-	topodatapb.TabletType_MASTER,
+	topodatapb.TabletType_PRIMARY,
 	topodatapb.TabletType_REPLICA,
 	topodatapb.TabletType_RDONLY,
 	topodatapb.TabletType_BATCH,
@@ -167,6 +167,9 @@ var AllTabletTypes = []topodatapb.TabletType{
 
 // ParseTabletType parses the tablet type into the enum.
 func ParseTabletType(param string) (topodatapb.TabletType, error) {
+	if strings.ToUpper(param) == "MASTER" {
+		param = "PRIMARY"
+	}
 	value, ok := topodatapb.TabletType_value[strings.ToUpper(param)]
 	if !ok {
 		return topodatapb.TabletType_UNKNOWN, fmt.Errorf("unknown TabletType %v", param)

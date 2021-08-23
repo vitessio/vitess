@@ -657,5 +657,5 @@ func buildTestVSchema() *vindexes.VSchema {
 }
 
 func newDMLTestVCursor(shards ...string) *loggingVCursor {
-	return &loggingVCursor{shards: shards, resolvedTargetTabletType: topodatapb.TabletType_MASTER}
+	return &loggingVCursor{shards: shards, resolvedTargetTabletType: topodatapb.TabletType_PRIMARY}
 }

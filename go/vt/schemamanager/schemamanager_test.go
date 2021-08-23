@@ -287,7 +287,7 @@ func (client *fakeTabletManagerClient) ExecuteFetchAsDba(ctx context.Context, ta
 // newFakeTopo returns a topo with:
 // - a keyspace named 'test_keyspace'.
 // - 3 shards named '1', '2', '3'.
-// - A master tablet for each shard.
+// - A primary tablet for each shard.
 func newFakeTopo(t *testing.T) *topo.Server {
 	ts := memorytopo.NewServer("test_cell")
 	ctx := context.Background()
@@ -310,7 +310,7 @@ func newFakeTopo(t *testing.T) *topo.Server {
 			t.Fatalf("CreateTablet failed: %v", err)
 		}
 		if _, err := ts.UpdateShardFields(ctx, "test_keyspace", shard, func(si *topo.ShardInfo) error {
-			si.Shard.MasterAlias = tablet.Alias
+			si.Shard.PrimaryAlias = tablet.Alias
 			return nil
 		}); err != nil {
 			t.Fatalf("UpdateShardFields failed: %v", err)
@@ -334,7 +334,7 @@ func newFakeTopo(t *testing.T) *topo.Server {
 		t.Fatalf("CreateTablet failed: %v", err)
 	}
 	if _, err := ts.UpdateShardFields(ctx, "unsharded_keyspace", "0", func(si *topo.ShardInfo) error {
-		si.Shard.MasterAlias = tablet.Alias
+		si.Shard.PrimaryAlias = tablet.Alias
 		return nil
 	}); err != nil {
 		t.Fatalf("UpdateShardFields failed: %v", err)

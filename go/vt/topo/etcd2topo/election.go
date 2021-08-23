@@ -86,7 +86,7 @@ func (mp *etcdMasterParticipation) WaitForMastership() (context.Context, error) 
 		close(mp.done)
 	}()
 
-	// Try to get the mastership, by getting a lock.
+	// Try to get the primaryship, by getting a lock.
 	var err error
 	ld, err = mp.s.lock(lockCtx, electionPath, mp.id)
 	if err != nil {
@@ -118,7 +118,7 @@ func (mp *etcdMasterParticipation) GetCurrentMasterID(ctx context.Context) (stri
 		return "", convertError(err, electionPath)
 	}
 	if len(resp.Kvs) == 0 {
-		// No key starts with this prefix, means nobody is the master.
+		// No key starts with this prefix, means nobody is the primary.
 		return "", nil
 	}
 	return string(resp.Kvs[0].Value), nil

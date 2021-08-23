@@ -67,10 +67,10 @@ func TestSuite(t *testing.T, ts *topo.Server, client vtctlclient.VtctlClient) {
 		PortMap: map[string]int32{
 			"vt": 3333,
 		},
-		MasterTermStartTime: logutil.TimeToProto(time.Date(1970, 1, 1, 1, 1, 1, 1, time.UTC)),
-		Tags:                map[string]string{"tag": "value"},
-		Keyspace:            "test_keyspace",
-		Type:                topodatapb.TabletType_MASTER,
+		PrimaryTermStartTime: logutil.TimeToProto(time.Date(1970, 1, 1, 1, 1, 1, 1, time.UTC)),
+		Tags:                 map[string]string{"tag": "value"},
+		Keyspace:             "test_keyspace",
+		Type:                 topodatapb.TabletType_PRIMARY,
 	}
 	tablet.MysqlPort = 3334
 	if err := ts.CreateTablet(ctx, tablet); err != nil {
@@ -87,7 +87,7 @@ func TestSuite(t *testing.T, ts *topo.Server, client vtctlclient.VtctlClient) {
 	if err != nil {
 		t.Fatalf("failed to get first line: %v", err)
 	}
-	expected := "cell1-0000000001 test_keyspace <null> master localhost:3333 localhost:3334 [tag: \"value\"] 1970-01-01T01:01:01Z\n"
+	expected := "cell1-0000000001 test_keyspace <null> primary localhost:3333 localhost:3334 [tag: \"value\"] 1970-01-01T01:01:01Z\n"
 	if logutil.EventString(got) != expected {
 		t.Errorf("Got unexpected log line '%v' expected '%v'", got.String(), expected)
 	}

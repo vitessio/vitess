@@ -161,7 +161,7 @@ func createShardedSrvKeyspace(shardSpec, servedFromKeyspace string) (*topodatapb
 		ShardingColumnType: topodatapb.KeyspaceIdType_UINT64,
 		Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
 			{
-				ServedType:      topodatapb.TabletType_MASTER,
+				ServedType:      topodatapb.TabletType_PRIMARY,
 				ShardReferences: shards,
 			},
 			{
@@ -181,7 +181,7 @@ func createShardedSrvKeyspace(shardSpec, servedFromKeyspace string) (*topodatapb
 				Keyspace:   servedFromKeyspace,
 			},
 			{
-				TabletType: topodatapb.TabletType_MASTER,
+				TabletType: topodatapb.TabletType_PRIMARY,
 				Keyspace:   servedFromKeyspace,
 			},
 		}
@@ -197,7 +197,7 @@ func createUnshardedKeyspace() (*topodatapb.SrvKeyspace, error) {
 	unshardedSrvKeyspace := &topodatapb.SrvKeyspace{
 		Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
 			{
-				ServedType:      topodatapb.TabletType_MASTER,
+				ServedType:      topodatapb.TabletType_PRIMARY,
 				ShardReferences: []*topodatapb.ShardReference{shard},
 			},
 			{
@@ -272,7 +272,7 @@ func (sct *sandboxTopo) GetSrvKeyspace(ctx context.Context, cell, keyspace strin
 				Keyspace:   KsTestUnsharded,
 			},
 			{
-				TabletType: topodatapb.TabletType_MASTER,
+				TabletType: topodatapb.TabletType_PRIMARY,
 				Keyspace:   KsTestUnsharded,
 			},
 		}

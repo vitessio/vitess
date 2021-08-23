@@ -232,7 +232,7 @@ var execMap = map[string]struct {
 		execQuery: &queryExecute{
 			SQL: "begin",
 			Session: &vtgatepb.Session{
-				TargetString: "@master",
+				TargetString: "@primary",
 				Autocommit:   true,
 			},
 		},
@@ -246,7 +246,7 @@ var execMap = map[string]struct {
 		},
 		result: &sqltypes.Result{},
 		session: &vtgatepb.Session{
-			TargetString: "@master",
+			TargetString: "@primary",
 			Autocommit:   true,
 		},
 	},
@@ -257,7 +257,7 @@ var execMap = map[string]struct {
 		},
 		result: &sqltypes.Result{},
 		session: &vtgatepb.Session{
-			TargetString: "@master",
+			TargetString: "@primary",
 		},
 	},
 }
@@ -324,7 +324,7 @@ var session2 = &vtgatepb.Session{
 			Target: &querypb.Target{
 				Keyspace:   "ks",
 				Shard:      "1",
-				TabletType: topodatapb.TabletType_MASTER,
+				TabletType: topodatapb.TabletType_PRIMARY,
 			},
 			TransactionId: 1,
 		},

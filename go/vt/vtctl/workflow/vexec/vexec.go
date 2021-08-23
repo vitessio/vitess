@@ -176,17 +176,17 @@ func (vx *VExec) initialize(ctx context.Context) error {
 			return err
 		}
 
-		if si.MasterAlias == nil {
+		if si.PrimaryAlias == nil {
 			return fmt.Errorf("%w %s/%s", ErrNoShardPrimary, vx.keyspace, shard)
 		}
 
-		primary, err := vx.ts.GetTablet(ctx, si.MasterAlias)
+		primary, err := vx.ts.GetTablet(ctx, si.PrimaryAlias)
 		if err != nil {
 			return err
 		}
 
 		if primary == nil {
-			return fmt.Errorf("%w %s/%s: tablet %v not found", ErrNoShardPrimary, vx.keyspace, shard, topoproto.TabletAliasString(si.MasterAlias))
+			return fmt.Errorf("%w %s/%s: tablet %v not found", ErrNoShardPrimary, vx.keyspace, shard, topoproto.TabletAliasString(si.PrimaryAlias))
 		}
 
 		primaries = append(primaries, primary)

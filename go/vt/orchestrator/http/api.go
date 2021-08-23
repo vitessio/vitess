@@ -521,16 +521,16 @@ func (this *HttpAPI) MoveUpReplicas(params martini.Params, r render.Render, req 
 		return
 	}
 
-	replicas, newMaster, err, errs := inst.MoveUpReplicas(&instanceKey, req.URL.Query().Get("pattern"))
+	replicas, newPrimary, err, errs := inst.MoveUpReplicas(&instanceKey, req.URL.Query().Get("pattern"))
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
 	}
 
-	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Moved up %d replicas of %+v below %+v; %d errors: %+v", len(replicas), instanceKey, newMaster.Key, len(errs), errs), Details: replicas})
+	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Moved up %d replicas of %+v below %+v; %d errors: %+v", len(replicas), instanceKey, newPrimary.Key, len(errs), errs), Details: replicas})
 }
 
-// Repoint positiones a replica under another (or same) master with exact same coordinates.
+// Repoint positiones a replica under another (or same) primary with exact same coordinates.
 // Useful for binlog servers
 func (this *HttpAPI) Repoint(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	if !isAuthorizedForAction(req, user) {
@@ -578,8 +578,8 @@ func (this *HttpAPI) RepointReplicas(params martini.Params, r render.Render, req
 	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Repointed %d replicas of %+v", len(replicas), instanceKey), Details: replicas})
 }
 
-// MakeCoMaster attempts to make an instance co-master with its own master
-func (this *HttpAPI) MakeCoMaster(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+// MakeCoPrimary attempts to make an instance co-primary with its own primary
+func (this *HttpAPI) MakeCoPrimary(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	if !isAuthorizedForAction(req, user) {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
 		return
@@ -590,7 +590,7 @@ func (this *HttpAPI) MakeCoMaster(params martini.Params, r render.Render, req *h
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
 	}
-	instance, err := inst.MakeCoMaster(&instanceKey)
+	instance, err := inst.MakeCoPrimary(&instanceKey)
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
@@ -599,7 +599,7 @@ func (this *HttpAPI) MakeCoMaster(params martini.Params, r render.Render, req *h
 	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Instance made co-master: %+v", instance.Key), Details: instance})
 }
 
-// ResetReplication makes a replica forget about its master, effectively breaking the replication
+// ResetReplication makes a replica forget about its primary, effectively breaking the replication
 func (this *HttpAPI) ResetReplication(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	if !isAuthorizedForAction(req, user) {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
@@ -620,9 +620,9 @@ func (this *HttpAPI) ResetReplication(params martini.Params, r render.Render, re
 	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Replica reset on %+v", instance.Key), Details: instance})
 }
 
-// DetachReplicaMasterHost detaches a replica from its master by setting an invalid
+// DetachReplicaPrimaryHost detaches a replica from its primary by setting an invalid
 // (yet revertible) host name
-func (this *HttpAPI) DetachReplicaMasterHost(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+func (this *HttpAPI) DetachReplicaPrimaryHost(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	if !isAuthorizedForAction(req, user) {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
 		return
@@ -633,7 +633,7 @@ func (this *HttpAPI) DetachReplicaMasterHost(params martini.Params, r render.Ren
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
 	}
-	instance, err := inst.DetachReplicaMasterHost(&instanceKey)
+	instance, err := inst.DetachReplicaPrimaryHost(&instanceKey)
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
@@ -642,9 +642,9 @@ func (this *HttpAPI) DetachReplicaMasterHost(params martini.Params, r render.Ren
 	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Replica detached: %+v", instance.Key), Details: instance})
 }
 
-// ReattachReplicaMasterHost reverts a detachReplicaMasterHost command
-// by resoting the original master hostname in CHANGE MASTER TO
-func (this *HttpAPI) ReattachReplicaMasterHost(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+// ReattachReplicaPrimaryHost reverts a detachReplicaMasterHost command
+// by resetting the original primary hostname in CHANGE MASTER TO
+func (this *HttpAPI) ReattachReplicaPrimaryHost(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	if !isAuthorizedForAction(req, user) {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
 		return
@@ -655,7 +655,7 @@ func (this *HttpAPI) ReattachReplicaMasterHost(params martini.Params, r render.R
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
 	}
-	instance, err := inst.ReattachReplicaMasterHost(&instanceKey)
+	instance, err := inst.ReattachReplicaPrimaryHost(&instanceKey)
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
@@ -722,8 +722,8 @@ func (this *HttpAPI) LocateErrantGTID(params martini.Params, r render.Render, re
 	Respond(r, &APIResponse{Code: OK, Message: "located errant GTID", Details: errantBinlogs})
 }
 
-// ErrantGTIDResetMaster removes errant transactions on a server by way of RESET MASTER
-func (this *HttpAPI) ErrantGTIDResetMaster(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+// ErrantGTIDResetPrimary removes errant transactions on a server by way of RESET MASTER
+func (this *HttpAPI) ErrantGTIDResetPrimary(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	if !isAuthorizedForAction(req, user) {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
 		return
@@ -734,7 +734,7 @@ func (this *HttpAPI) ErrantGTIDResetMaster(params martini.Params, r render.Rende
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
 	}
-	instance, err := inst.ErrantGTIDResetMaster(&instanceKey)
+	instance, err := inst.ErrantGTIDResetPrimary(&instanceKey)
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
@@ -743,7 +743,7 @@ func (this *HttpAPI) ErrantGTIDResetMaster(params martini.Params, r render.Rende
 	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Removed errant GTID on %+v and issued a RESET MASTER", instance.Key), Details: instance})
 }
 
-// ErrantGTIDInjectEmpty removes errant transactions by injecting and empty transaction on the cluster's master
+// ErrantGTIDInjectEmpty removes errant transactions by injecting and empty transaction on the cluster's primary
 func (this *HttpAPI) ErrantGTIDInjectEmpty(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	if !isAuthorizedForAction(req, user) {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
@@ -755,13 +755,13 @@ func (this *HttpAPI) ErrantGTIDInjectEmpty(params martini.Params, r render.Rende
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
 	}
-	instance, clusterMaster, countInjectedTransactions, err := inst.ErrantGTIDInjectEmpty(&instanceKey)
+	instance, clusterPrimary, countInjectedTransactions, err := inst.ErrantGTIDInjectEmpty(&instanceKey)
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
 	}
 
-	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Have injected %+v transactions on cluster master %+v", countInjectedTransactions, clusterMaster.Key), Details: instance})
+	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Have injected %+v transactions on cluster master %+v", countInjectedTransactions, clusterPrimary.Key), Details: instance})
 }
 
 // MoveBelow attempts to move an instance below its supposed sibling
@@ -863,8 +863,8 @@ func (this *HttpAPI) TakeSiblings(params martini.Params, r render.Render, req *h
 	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Took %d siblings of %+v", count, instanceKey), Details: instance})
 }
 
-// TakeMaster
-func (this *HttpAPI) TakeMaster(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+// TakePrimary
+func (this *HttpAPI) TakePrimary(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	if !isAuthorizedForAction(req, user) {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
 		return
@@ -875,7 +875,7 @@ func (this *HttpAPI) TakeMaster(params martini.Params, r render.Render, req *htt
 		return
 	}
 
-	instance, err := inst.TakeMaster(&instanceKey, false)
+	instance, err := inst.TakePrimary(&instanceKey, false)
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
@@ -1637,16 +1637,16 @@ func (this *HttpAPI) UntagAll(params martini.Params, r render.Render, req *http.
 	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("%s removed from %+v instances", tag.TagName, len(*untagged)), Details: untagged.GetInstanceKeys()})
 }
 
-// Write a cluster's master (or all clusters masters) to kv stores.
+// SubmitPrimariesToKvStores writes a cluster's primary (or all clusters primaries) to kv stores.
 // This should generally only happen once in a lifetime of a cluster. Otherwise KV
 // stores are updated via failovers.
-func (this *HttpAPI) SubmitMastersToKvStores(params martini.Params, r render.Render, req *http.Request) {
+func (this *HttpAPI) SubmitPrimariesToKvStores(params martini.Params, r render.Render, req *http.Request) {
 	clusterName, err := getClusterNameIfExists(params)
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
 		return
 	}
-	kvPairs, submittedCount, err := logic.SubmitMastersToKvStores(clusterName, true)
+	kvPairs, submittedCount, err := logic.SubmitPrimariesToKvStores(clusterName, true)
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
 		return
@@ -1654,9 +1654,9 @@ func (this *HttpAPI) SubmitMastersToKvStores(params martini.Params, r render.Ren
 	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Submitted %d masters", submittedCount), Details: kvPairs})
 }
 
-// Clusters provides list of known masters
-func (this *HttpAPI) Masters(params martini.Params, r render.Render, req *http.Request) {
-	instances, err := inst.ReadWriteableClustersMasters()
+// Clusters provides list of known primaries
+func (this *HttpAPI) Primaries(params martini.Params, r render.Render, req *http.Request) {
+	instances, err := inst.ReadWriteableClustersPrimaries()
 
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
@@ -1666,25 +1666,25 @@ func (this *HttpAPI) Masters(params martini.Params, r render.Render, req *http.R
 	r.JSON(http.StatusOK, instances)
 }
 
-// ClusterMaster returns the writable master of a given cluster
-func (this *HttpAPI) ClusterMaster(params martini.Params, r render.Render, req *http.Request) {
+// ClusterPrimary returns the writable primary of a given cluster
+func (this *HttpAPI) ClusterPrimary(params martini.Params, r render.Render, req *http.Request) {
 	clusterName, err := figureClusterName(getClusterHint(params))
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
 		return
 	}
 
-	masters, err := inst.ReadClusterMaster(clusterName)
+	primaries, err := inst.ReadClusterPrimary(clusterName)
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
 		return
 	}
-	if len(masters) == 0 {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("No masters found for %+v", clusterName)})
+	if len(primaries) == 0 {
+		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("No primaries found for %+v", clusterName)})
 		return
 	}
 
-	r.JSON(http.StatusOK, masters[0])
+	r.JSON(http.StatusOK, primaries[0])
 }
 
 // Downtimed lists downtimed instances, potentially filtered by cluster
@@ -2304,8 +2304,8 @@ func (this *HttpAPI) Recover(params martini.Params, r render.Render, req *http.R
 	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Recovery executed on %+v", instanceKey), Details: *promotedInstanceKey})
 }
 
-// GracefulMasterTakeover gracefully fails over a master onto its single replica.
-func (this *HttpAPI) gracefulMasterTakeover(params martini.Params, r render.Render, req *http.Request, user auth.User, auto bool) {
+// GracefulPrimaryTakeover gracefully fails over a primary onto its single replica.
+func (this *HttpAPI) gracefulPrimaryTakeover(params martini.Params, r render.Render, req *http.Request, user auth.User, auto bool) {
 	if !isAuthorizedForAction(req, user) {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
 		return
@@ -2317,7 +2317,7 @@ func (this *HttpAPI) gracefulMasterTakeover(params martini.Params, r render.Rend
 	}
 	designatedKey, _ := this.getInstanceKey(params["designatedHost"], params["designatedPort"])
 	// designatedKey may be empty/invalid
-	topologyRecovery, _, err := logic.GracefulMasterTakeover(clusterName, &designatedKey, auto)
+	topologyRecovery, _, err := logic.GracefulPrimaryTakeover(clusterName, &designatedKey, auto)
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), Details: topologyRecovery})
 		return
@@ -2329,20 +2329,20 @@ func (this *HttpAPI) gracefulMasterTakeover(params martini.Params, r render.Rend
 	Respond(r, &APIResponse{Code: OK, Message: "graceful-master-takeover: successor promoted", Details: topologyRecovery})
 }
 
-// GracefulMasterTakeover gracefully fails over a master, either:
+// GracefulPrimaryTakeover gracefully fails over a primary, either:
 // - onto its single replica, or
 // - onto a replica indicated by the user
-func (this *HttpAPI) GracefulMasterTakeover(params martini.Params, r render.Render, req *http.Request, user auth.User) {
-	this.gracefulMasterTakeover(params, r, req, user, false)
+func (this *HttpAPI) GracefulPrimaryTakeover(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+	this.gracefulPrimaryTakeover(params, r, req, user, false)
 }
 
-// GracefulMasterTakeoverAuto gracefully fails over a master onto a replica of orchestrator's choosing
-func (this *HttpAPI) GracefulMasterTakeoverAuto(params martini.Params, r render.Render, req *http.Request, user auth.User) {
-	this.gracefulMasterTakeover(params, r, req, user, true)
+// GracefulPrimaryTakeoverAuto gracefully fails over a primary onto a replica of orchestrator's choosing
+func (this *HttpAPI) GracefulPrimaryTakeoverAuto(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+	this.gracefulPrimaryTakeover(params, r, req, user, true)
 }
 
-// ForceMasterFailover fails over a master (even if there's no particular problem with the master)
-func (this *HttpAPI) ForceMasterFailover(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+// ForcePrimaryFailover fails over a primary (even if there's no particular problem with the primary)
+func (this *HttpAPI) ForcePrimaryFailover(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	if !isAuthorizedForAction(req, user) {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
 		return
@@ -2352,7 +2352,7 @@ func (this *HttpAPI) ForceMasterFailover(params martini.Params, r render.Render,
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
 	}
-	topologyRecovery, err := logic.ForceMasterFailover(clusterName)
+	topologyRecovery, err := logic.ForcePrimaryFailover(clusterName)
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
@@ -2364,8 +2364,8 @@ func (this *HttpAPI) ForceMasterFailover(params martini.Params, r render.Render,
 	}
 }
 
-// ForceMasterTakeover fails over a master (even if there's no particular problem with the master)
-func (this *HttpAPI) ForceMasterTakeover(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+// ForcePrimaryTakeover fails over a primary (even if there's no particular problem with the primary)
+func (this *HttpAPI) ForcePrimaryTakeover(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	if !isAuthorizedForAction(req, user) {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
 		return
@@ -2386,7 +2386,7 @@ func (this *HttpAPI) ForceMasterTakeover(params martini.Params, r render.Render,
 		return
 	}
 
-	topologyRecovery, err := logic.ForceMasterTakeover(clusterName, designatedInstance)
+	topologyRecovery, err := logic.ForcePrimaryTakeover(clusterName, designatedInstance)
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
@@ -2839,9 +2839,9 @@ func (this *HttpAPI) RegisterRequests(m *martini.ClassicMartini) {
 	this.registerAPIRequest(m, "move-below/:host/:port/:siblingHost/:siblingPort", this.MoveBelow)
 	this.registerAPIRequest(m, "repoint/:host/:port/:belowHost/:belowPort", this.Repoint)
 	this.registerAPIRequest(m, "repoint-slaves/:host/:port", this.RepointReplicas)
-	this.registerAPIRequest(m, "make-co-master/:host/:port", this.MakeCoMaster)
+	this.registerAPIRequest(m, "make-co-master/:host/:port", this.MakeCoPrimary)
 	this.registerAPIRequest(m, "enslave-siblings/:host/:port", this.TakeSiblings)
-	this.registerAPIRequest(m, "enslave-master/:host/:port", this.TakeMaster)
+	this.registerAPIRequest(m, "enslave-master/:host/:port", this.TakePrimary)
 
 	// Binlog server relocation:
 	this.registerAPIRequest(m, "regroup-slaves-bls/:host/:port", this.RegroupReplicasBinlogServers)
@@ -2855,7 +2855,7 @@ func (this *HttpAPI) RegisterRequests(m *martini.ClassicMartini) {
 	this.registerAPIRequest(m, "enable-gtid/:host/:port", this.EnableGTID)
 	this.registerAPIRequest(m, "disable-gtid/:host/:port", this.DisableGTID)
 	this.registerAPIRequest(m, "locate-gtid-errant/:host/:port", this.LocateErrantGTID)
-	this.registerAPIRequest(m, "gtid-errant-reset-master/:host/:port", this.ErrantGTIDResetMaster)
+	this.registerAPIRequest(m, "gtid-errant-reset-master/:host/:port", this.ErrantGTIDResetPrimary)
 	this.registerAPIRequest(m, "gtid-errant-inject-empty/:host/:port", this.ErrantGTIDInjectEmpty)
 	this.registerAPIRequest(m, "skip-query/:host/:port", this.SkipQuery)
 	this.registerAPIRequest(m, "start-slave/:host/:port", this.StartReplication)
@@ -2863,10 +2863,10 @@ func (this *HttpAPI) RegisterRequests(m *martini.ClassicMartini) {
 	this.registerAPIRequest(m, "stop-slave/:host/:port", this.StopReplication)
 	this.registerAPIRequest(m, "stop-slave-nice/:host/:port", this.StopReplicationNicely)
 	this.registerAPIRequest(m, "reset-slave/:host/:port", this.ResetReplication)
-	this.registerAPIRequest(m, "detach-slave/:host/:port", this.DetachReplicaMasterHost)
-	this.registerAPIRequest(m, "reattach-slave/:host/:port", this.ReattachReplicaMasterHost)
-	this.registerAPIRequest(m, "detach-slave-master-host/:host/:port", this.DetachReplicaMasterHost)
-	this.registerAPIRequest(m, "reattach-slave-master-host/:host/:port", this.ReattachReplicaMasterHost)
+	this.registerAPIRequest(m, "detach-slave/:host/:port", this.DetachReplicaPrimaryHost)
+	this.registerAPIRequest(m, "reattach-slave/:host/:port", this.ReattachReplicaPrimaryHost)
+	this.registerAPIRequest(m, "detach-slave-master-host/:host/:port", this.DetachReplicaPrimaryHost)
+	this.registerAPIRequest(m, "reattach-slave-master-host/:host/:port", this.ReattachReplicaPrimaryHost)
 	this.registerAPIRequest(m, "flush-binary-logs/:host/:port", this.FlushBinaryLogs)
 	this.registerAPIRequest(m, "purge-binary-logs/:host/:port/:logFile", this.PurgeBinaryLogs)
 	this.registerAPIRequest(m, "restart-slave-statements/:host/:port", this.RestartReplicationStatements)
@@ -2904,8 +2904,8 @@ func (this *HttpAPI) RegisterRequests(m *martini.ClassicMartini) {
 	this.registerAPIRequest(m, "clusters", this.Clusters)
 	this.registerAPIRequest(m, "clusters-info", this.ClustersInfo)
 
-	this.registerAPIRequest(m, "masters", this.Masters)
-	this.registerAPIRequest(m, "master/:clusterHint", this.ClusterMaster)
+	this.registerAPIRequest(m, "masters", this.Primaries)
+	this.registerAPIRequest(m, "master/:clusterHint", this.ClusterPrimary)
 	this.registerAPIRequest(m, "instance-replicas/:host/:port", this.InstanceReplicas)
 	this.registerAPIRequest(m, "all-instances", this.AllInstances)
 	this.registerAPIRequest(m, "downtimed", this.Downtimed)
@@ -2919,8 +2919,8 @@ func (this *HttpAPI) RegisterRequests(m *martini.ClassicMartini) {
 	this.registerAPIRequest(m, "snapshot-topologies", this.SnapshotTopologies)
 
 	// Key-value:
-	this.registerAPIRequest(m, "submit-masters-to-kv-stores", this.SubmitMastersToKvStores)
-	this.registerAPIRequest(m, "submit-masters-to-kv-stores/:clusterHint", this.SubmitMastersToKvStores)
+	this.registerAPIRequest(m, "submit-masters-to-kv-stores", this.SubmitPrimariesToKvStores)
+	this.registerAPIRequest(m, "submit-masters-to-kv-stores/:clusterHint", this.SubmitPrimariesToKvStores)
 
 	// Tags:
 	this.registerAPIRequest(m, "tagged", this.Tagged)
@@ -2958,18 +2958,18 @@ func (this *HttpAPI) RegisterRequests(m *martini.ClassicMartini) {
 	this.registerAPIRequest(m, "recover/:host/:port/:candidateHost/:candidatePort", this.Recover)
 	this.registerAPIRequest(m, "recover-lite/:host/:port", this.RecoverLite)
 	this.registerAPIRequest(m, "recover-lite/:host/:port/:candidateHost/:candidatePort", this.RecoverLite)
-	this.registerAPIRequest(m, "graceful-master-takeover/:host/:port", this.GracefulMasterTakeover)
-	this.registerAPIRequest(m, "graceful-master-takeover/:host/:port/:designatedHost/:designatedPort", this.GracefulMasterTakeover)
-	this.registerAPIRequest(m, "graceful-master-takeover/:clusterHint", this.GracefulMasterTakeover)
-	this.registerAPIRequest(m, "graceful-master-takeover/:clusterHint/:designatedHost/:designatedPort", this.GracefulMasterTakeover)
-	this.registerAPIRequest(m, "graceful-master-takeover-auto/:host/:port", this.GracefulMasterTakeoverAuto)
-	this.registerAPIRequest(m, "graceful-master-takeover-auto/:host/:port/:designatedHost/:designatedPort", this.GracefulMasterTakeoverAuto)
-	this.registerAPIRequest(m, "graceful-master-takeover-auto/:clusterHint", this.GracefulMasterTakeoverAuto)
-	this.registerAPIRequest(m, "graceful-master-takeover-auto/:clusterHint/:designatedHost/:designatedPort", this.GracefulMasterTakeoverAuto)
-	this.registerAPIRequest(m, "force-master-failover/:host/:port", this.ForceMasterFailover)
-	this.registerAPIRequest(m, "force-master-failover/:clusterHint", this.ForceMasterFailover)
-	this.registerAPIRequest(m, "force-master-takeover/:clusterHint/:designatedHost/:designatedPort", this.ForceMasterTakeover)
-	this.registerAPIRequest(m, "force-master-takeover/:host/:port/:designatedHost/:designatedPort", this.ForceMasterTakeover)
+	this.registerAPIRequest(m, "graceful-master-takeover/:host/:port", this.GracefulPrimaryTakeover)
+	this.registerAPIRequest(m, "graceful-master-takeover/:host/:port/:designatedHost/:designatedPort", this.GracefulPrimaryTakeover)
+	this.registerAPIRequest(m, "graceful-master-takeover/:clusterHint", this.GracefulPrimaryTakeover)
+	this.registerAPIRequest(m, "graceful-master-takeover/:clusterHint/:designatedHost/:designatedPort", this.GracefulPrimaryTakeover)
+	this.registerAPIRequest(m, "graceful-master-takeover-auto/:host/:port", this.GracefulPrimaryTakeoverAuto)
+	this.registerAPIRequest(m, "graceful-master-takeover-auto/:host/:port/:designatedHost/:designatedPort", this.GracefulPrimaryTakeoverAuto)
+	this.registerAPIRequest(m, "graceful-master-takeover-auto/:clusterHint", this.GracefulPrimaryTakeoverAuto)
+	this.registerAPIRequest(m, "graceful-master-takeover-auto/:clusterHint/:designatedHost/:designatedPort", this.GracefulPrimaryTakeoverAuto)
+	this.registerAPIRequest(m, "force-master-failover/:host/:port", this.ForcePrimaryFailover)
+	this.registerAPIRequest(m, "force-master-failover/:clusterHint", this.ForcePrimaryFailover)
+	this.registerAPIRequest(m, "force-master-takeover/:clusterHint/:designatedHost/:designatedPort", this.ForcePrimaryTakeover)
+	this.registerAPIRequest(m, "force-master-takeover/:host/:port/:designatedHost/:designatedPort", this.ForcePrimaryTakeover)
 	this.registerAPIRequest(m, "register-candidate/:host/:port/:promotionRule", this.RegisterCandidate)
 	this.registerAPIRequest(m, "automated-recovery-filters", this.AutomatedRecoveryFilters)
 	this.registerAPIRequest(m, "audit-failure-detection", this.AuditFailureDetection)

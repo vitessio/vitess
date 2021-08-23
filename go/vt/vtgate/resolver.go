@@ -161,7 +161,7 @@ func (res *Resolver) MessageStream(ctx context.Context, keyspace string, shard s
 		// the message streams.
 		destination = key.DestinationExactKeyRange{KeyRange: keyRange}
 	}
-	rss, err := res.resolver.ResolveDestination(ctx, keyspace, topodatapb.TabletType_MASTER, destination)
+	rss, err := res.resolver.ResolveDestination(ctx, keyspace, topodatapb.TabletType_PRIMARY, destination)
 	if err != nil {
 		return err
 	}

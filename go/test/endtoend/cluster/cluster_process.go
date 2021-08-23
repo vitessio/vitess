@@ -149,7 +149,7 @@ func (shard *Shard) Rdonly() *Vttablet {
 }
 
 // Replica get the last but one tablet which is replica
-// Mostly we have either 3 tablet setup [master, replica, rdonly]
+// Mostly we have either 3 tablet setup [primary, replica, rdonly]
 func (shard *Shard) Replica() *Vttablet {
 	for idx, tablet := range shard.Vttablets {
 		if tablet.Type == "replica" && idx > 0 {
@@ -265,6 +265,9 @@ func (cluster *LocalProcessCluster) StartKeyspace(keyspace Keyspace, shardNames 
 				Alias:     fmt.Sprintf("%s-%010d", cluster.Cell, tabletUID),
 			}
 			if i == 0 { // Make the first one as primary
+				// version_upgrade test depends on using older binaries
+				// which means we cannot use the new PRIMARY tabletType here
+				// TODO(deepthi): fix after v12.0
 				tablet.Type = "master"
 			} else if i == totalTabletsRequired-1 && rdonly { // Make the last one as rdonly if rdonly flag is passed
 				tablet.Type = "rdonly"
@@ -450,6 +453,9 @@ func (cluster *LocalProcessCluster) NewVtgateInstance() *VtgateProcess {
 		cluster.Cell,
 		cluster.Cell,
 		cluster.Hostname,
+		// version_upgrade test depends on using older binaries
+		// which means we cannot use the new PRIMARY tablet_type here
+		// TODO(deepthi): fix after v12.0
 		"MASTER,REPLICA",
 		cluster.TopoProcess.Port,
 		cluster.TmpDirectory,
@@ -500,7 +506,7 @@ func (cluster *LocalProcessCluster) WaitForTabletsToHealthyInVtgate() (err error
 	for _, keyspace := range cluster.Keyspaces {
 		for _, shard := range keyspace.Shards {
 			isRdOnlyPresent = false
-			if err = cluster.VtgateProcess.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.master", keyspace.Name, shard.Name), 1); err != nil {
+			if err = cluster.VtgateProcess.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", keyspace.Name, shard.Name), 1); err != nil {
 				return err
 			}
 			if err = cluster.VtgateProcess.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", keyspace.Name, shard.Name), 1); err != nil {

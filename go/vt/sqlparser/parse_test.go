@@ -939,8 +939,8 @@ var (
 		input:  "set S= +- - - - -(4+1)",
 		output: "set S = -(4 + 1)",
 	}, {
-		input:  "alter table a add foo int references simple (a) on delete restrict first v",
-		output: "alter table a add column foo int references simple (a) on delete restrict first v",
+		input:  "alter table a add foo int references simple (a) on delete restrict first",
+		output: "alter table a add column foo int references simple (a) on delete restrict first",
 	}, {
 		input:  "alter table a lock default, lock = none, lock shared, lock exclusive",
 		output: "alter table a lock default, lock none, lock shared, lock exclusive",
@@ -958,7 +958,7 @@ var (
 	}, {
 		input: "alter table a change column s foo int default 1 after x",
 	}, {
-		input: "alter table a modify column foo int default 1 first x",
+		input: "alter table a modify column foo int default 1 first",
 	}, {
 		input:  "alter table a add foo varchar(255) generated always as (concat(bar, ' ', baz)) stored",
 		output: "alter table a add column foo varchar(255) as (concat(bar, ' ', baz)) stored",
@@ -1100,7 +1100,7 @@ var (
 		input:  "alter table a add id int",
 		output: "alter table a add column id int",
 	}, {
-		input: "alter table a add column id int first id2",
+		input: "alter table a add column id int first",
 	}, {
 		input: "alter table a add column id int after id2",
 	}, {
@@ -1194,6 +1194,10 @@ var (
 		input: "create /*vt+ strategy=online */ table a (\n\ta int not null\n)",
 	}, {
 		input: "create table a (\n\ta int not null default 0\n)",
+	}, {
+		input: "create table a (\n\ta float not null default -1\n)",
+	}, {
+		input: "create table a (\n\ta float not null default -2.1\n)",
 	}, {
 		input:  "create table a (a int not null default 0, primary key(a))",
 		output: "create table a (\n\ta int not null default 0,\n\tprimary key (a)\n)",
@@ -1669,6 +1673,9 @@ var (
 	}, {
 		input:  "use `ks:-80@master`",
 		output: "use `ks:-80@master`",
+	}, {
+		input:  "use `ks:-80@primary`",
+		output: "use `ks:-80@primary`",
 	}, {
 		input:  "use @replica",
 		output: "use `@replica`",

@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2018 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -55,7 +55,7 @@ func TestTabletExternallyReparentedBasic(t *testing.T) {
 	defer vp.Close()
 
 	// Create an old primary, a new primary, two good replicas, one bad replica
-	oldPrimary := NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_MASTER, nil)
+	oldPrimary := NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_PRIMARY, nil)
 	newPrimary := NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_REPLICA, nil)
 
 	// Build keyspace graph
@@ -85,8 +85,8 @@ func TestTabletExternallyReparentedBasic(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetTablet(%v) failed: %v", oldPrimary.Tablet.Alias, err)
 	}
-	if tablet.Type != topodatapb.TabletType_MASTER {
-		t.Fatalf("old primary should be MASTER but is: %v", tablet.Type)
+	if tablet.Type != topodatapb.TabletType_PRIMARY {
+		t.Fatalf("old primary should be PRIMARY but is: %v", tablet.Type)
 	}
 
 	oldPrimary.FakeMysqlDaemon.SetReplicationSourceInput = topoproto.MysqlAddr(newPrimary.Tablet)
@@ -106,8 +106,8 @@ func TestTabletExternallyReparentedBasic(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetTablet(%v) failed: %v", newPrimary.Tablet.Alias, err)
 	}
-	if tablet.Type != topodatapb.TabletType_MASTER {
-		t.Fatalf("new primary should be MASTER but is: %v", tablet.Type)
+	if tablet.Type != topodatapb.TabletType_PRIMARY {
+		t.Fatalf("new primary should be PRIMARY but is: %v", tablet.Type)
 	}
 
 	// We have to wait for shard sync to do its magic in the background
@@ -145,7 +145,7 @@ func TestTabletExternallyReparentedToReplica(t *testing.T) {
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 
 	// Create an old primary, a new primary, two good replicas, one bad replica
-	oldPrimary := NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_MASTER, nil)
+	oldPrimary := NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_PRIMARY, nil)
 	newPrimary := NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_REPLICA, nil)
 	newPrimary.FakeMysqlDaemon.ReadOnly = true
 	newPrimary.FakeMysqlDaemon.Replicating = true
@@ -185,8 +185,8 @@ func TestTabletExternallyReparentedToReplica(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetTablet(%v) failed: %v", newPrimary.Tablet.Alias, err)
 	}
-	if tablet.Type != topodatapb.TabletType_MASTER {
-		t.Fatalf("new primary should be MASTER but is: %v", tablet.Type)
+	if tablet.Type != topodatapb.TabletType_PRIMARY {
+		t.Fatalf("new primary should be PRIMARY but is: %v", tablet.Type)
 	}
 
 	// We have to wait for shard sync to do its magic in the background
@@ -227,7 +227,7 @@ func TestTabletExternallyReparentedWithDifferentMysqlPort(t *testing.T) {
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 
 	// Create an old primary, a new primary, two good replicas, one bad replica
-	oldPrimary := NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_MASTER, nil)
+	oldPrimary := NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_PRIMARY, nil)
 	newPrimary := NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_REPLICA, nil)
 	goodReplica := NewFakeTablet(t, wr, "cell1", 2, topodatapb.TabletType_REPLICA, nil)
 
@@ -271,8 +271,8 @@ func TestTabletExternallyReparentedWithDifferentMysqlPort(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetTablet(%v) failed: %v", newPrimary.Tablet.Alias, err)
 	}
-	if tablet.Type != topodatapb.TabletType_MASTER {
-		t.Fatalf("new primary should be MASTER but is: %v", tablet.Type)
+	if tablet.Type != topodatapb.TabletType_PRIMARY {
+		t.Fatalf("new primary should be PRIMARY but is: %v", tablet.Type)
 	}
 
 	// We have to wait for shard sync to do its magic in the background
@@ -312,7 +312,7 @@ func TestTabletExternallyReparentedContinueOnUnexpectedPrimary(t *testing.T) {
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 
 	// Create an old primary, a new primary, two good replicas, one bad replica
-	oldPrimary := NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_MASTER, nil)
+	oldPrimary := NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_PRIMARY, nil)
 	newPrimary := NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_REPLICA, nil)
 	goodReplica := NewFakeTablet(t, wr, "cell1", 2, topodatapb.TabletType_REPLICA, nil)
 
@@ -352,8 +352,8 @@ func TestTabletExternallyReparentedContinueOnUnexpectedPrimary(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetTablet(%v) failed: %v", newPrimary.Tablet.Alias, err)
 	}
-	if tablet.Type != topodatapb.TabletType_MASTER {
-		t.Fatalf("new primary should be MASTER but is: %v", tablet.Type)
+	if tablet.Type != topodatapb.TabletType_PRIMARY {
+		t.Fatalf("new primary should be PRIMARY but is: %v", tablet.Type)
 	}
 	// We have to wait for shard sync to do its magic in the background
 	startTime := time.Now()
@@ -390,7 +390,7 @@ func TestTabletExternallyReparentedRerun(t *testing.T) {
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 
 	// Create an old primary, a new primary, and a good replica.
-	oldPrimary := NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_MASTER, nil)
+	oldPrimary := NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_PRIMARY, nil)
 	newPrimary := NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_REPLICA, nil)
 	goodReplica := NewFakeTablet(t, wr, "cell1", 2, topodatapb.TabletType_REPLICA, nil)
 
@@ -430,8 +430,8 @@ func TestTabletExternallyReparentedRerun(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetTablet(%v) failed: %v", newPrimary.Tablet.Alias, err)
 	}
-	if tablet.Type != topodatapb.TabletType_MASTER {
-		t.Fatalf("new primary should be MASTER but is: %v", tablet.Type)
+	if tablet.Type != topodatapb.TabletType_PRIMARY {
+		t.Fatalf("new primary should be PRIMARY but is: %v", tablet.Type)
 	}
 
 	// We have to wait for shard sync to do its magic in the background
@@ -466,8 +466,8 @@ func TestTabletExternallyReparentedRerun(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetTablet(%v) failed: %v", newPrimary.Tablet.Alias, err)
 	}
-	if tablet.Type != topodatapb.TabletType_MASTER {
-		t.Fatalf("new primary should be MASTER but is: %v", tablet.Type)
+	if tablet.Type != topodatapb.TabletType_PRIMARY {
+		t.Fatalf("new primary should be PRIMARY but is: %v", tablet.Type)
 	}
 
 }
@@ -534,6 +534,6 @@ func TestRPCTabletExternallyReparentedDemotesPrimaryToConfiguredTabletType(t *te
 	shardInfo, err := ts.GetShard(context.Background(), newPrimary.Tablet.Keyspace, newPrimary.Tablet.Shard)
 	assert.NoError(t, err)
 
-	assert.True(t, topoproto.TabletAliasEqual(newPrimary.Tablet.Alias, shardInfo.MasterAlias))
-	assert.Equal(t, topodatapb.TabletType_MASTER, newPrimary.TM.Tablet().Type)
+	assert.True(t, topoproto.TabletAliasEqual(newPrimary.Tablet.Alias, shardInfo.PrimaryAlias))
+	assert.Equal(t, topodatapb.TabletType_PRIMARY, newPrimary.TM.Tablet().Type)
 }

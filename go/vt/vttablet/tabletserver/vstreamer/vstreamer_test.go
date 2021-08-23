@@ -253,7 +253,7 @@ func TestVersion(t *testing.T) {
 	defer env.SchemaEngine.EnableHistorian(false)
 
 	engine = NewEngine(engine.env, env.SrvTopo, env.SchemaEngine, nil, env.Cells[0])
-	engine.InitDBConfig(env.KeyspaceName)
+	engine.InitDBConfig(env.KeyspaceName, env.ShardName)
 	engine.Open()
 	defer engine.Close()
 
@@ -325,7 +325,7 @@ func TestMissingTables(t *testing.T) {
 		"drop table t1",
 		"drop table _shortlived",
 	})
-	startPos := masterPosition(t)
+	startPos := primaryPosition(t)
 	execStatements(t, []string{
 		"insert into shortlived values (1,1), (2,2)",
 		"alter table shortlived rename to _shortlived",
@@ -378,9 +378,9 @@ func TestVStreamCopySimpleFlow(t *testing.T) {
 		"create table t1(id11 int, id12 int, primary key(id11))",
 		"create table t2(id21 int, id22 int, primary key(id21))",
 	})
-	log.Infof("Pos before bulk insert: %s", masterPosition(t))
+	log.Infof("Pos before bulk insert: %s", primaryPosition(t))
 	insertLotsOfData(t, 10)
-	log.Infof("Pos after bulk insert: %s", masterPosition(t))
+	log.Infof("Pos after bulk insert: %s", primaryPosition(t))
 	defer execStatements(t, []string{
 		"drop table t1",
 		"drop table t2",
@@ -454,7 +454,7 @@ func TestVStreamCopySimpleFlow(t *testing.T) {
 	}
 
 	runCases(t, filter, testcases, "vscopy", tablePKs)
-	log.Infof("Pos at end of test: %s", masterPosition(t))
+	log.Infof("Pos at end of test: %s", primaryPosition(t))
 }
 
 func TestVStreamCopyWithDifferentFilters(t *testing.T) {
@@ -543,6 +543,12 @@ func TestVStreamCopyWithDifferentFilters(t *testing.T) {
 						for j := range ev.FieldEvent.Fields {
 							ev.FieldEvent.Fields[j].Flags = 0
 						}
+						ev.FieldEvent.Keyspace = ""
+						ev.FieldEvent.Shard = ""
+					}
+					if ev.Type == binlogdatapb.VEventType_ROW {
+						ev.RowEvent.Keyspace = ""
+						ev.RowEvent.Shard = ""
 					}
 					got := ev.String()
 					want := expectedEvents[i]
@@ -849,9 +855,9 @@ func TestOther(t *testing.T) {
 		}}
 
 		for _, stmt := range testcases {
-			startPosition := masterPosition(t)
+			startPosition := primaryPosition(t)
 			execStatement(t, stmt)
-			endPosition := masterPosition(t)
+			endPosition := primaryPosition(t)
 			if startPosition == endPosition {
 				t.Logf("statement %s did not affect binlog", stmt)
 				continue
@@ -922,6 +928,10 @@ func TestREKeyRange(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
 	}
+	ignoreKeyspaceShardInFieldAndRowEvents = false
+	defer func() {
+		ignoreKeyspaceShardInFieldAndRowEvents = true
+	}()
 	// Needed for this test to run if run standalone
 	engine.watcherOnce.Do(engine.setWatch)
 
@@ -964,11 +974,11 @@ func TestREKeyRange(t *testing.T) {
 	execStatements(t, input)
 	expectLog(ctx, t, input, ch, [][]string{{
 		`begin`,
-		`type:FIELD field_event:{table_name:"t1" fields:{name:"id1" type:INT32 table:"t1" org_table:"t1" database:"vttest" org_name:"id1" column_length:11 charset:63} fields:{name:"id2" type:INT32 table:"t1" org_table:"t1" database:"vttest" org_name:"id2" column_length:11 charset:63} fields:{name:"val" type:VARBINARY table:"t1" org_table:"t1" database:"vttest" org_name:"val" column_length:128 charset:63}}`,
-		`type:ROW row_event:{table_name:"t1" row_changes:{after:{lengths:1 lengths:1 lengths:3 values:"14aaa"}}}`,
-		`type:ROW row_event:{table_name:"t1" row_changes:{before:{lengths:1 lengths:1 lengths:3 values:"14aaa"} after:{lengths:1 lengths:1 lengths:3 values:"24aaa"}}}`,
-		`type:ROW row_event:{table_name:"t1" row_changes:{before:{lengths:1 lengths:1 lengths:3 values:"24aaa"}}}`,
-		`type:ROW row_event:{table_name:"t1" row_changes:{after:{lengths:1 lengths:1 lengths:3 values:"31bbb"}}}`,
+		`type:FIELD field_event:{table_name:"t1" fields:{name:"id1" type:INT32 table:"t1" org_table:"t1" database:"vttest" org_name:"id1" column_length:11 charset:63} fields:{name:"id2" type:INT32 table:"t1" org_table:"t1" database:"vttest" org_name:"id2" column_length:11 charset:63} fields:{name:"val" type:VARBINARY table:"t1" org_table:"t1" database:"vttest" org_name:"val" column_length:128 charset:63} keyspace:"vttest" shard:"0"}`,
+		`type:ROW row_event:{table_name:"t1" row_changes:{after:{lengths:1 lengths:1 lengths:3 values:"14aaa"}} keyspace:"vttest" shard:"0"}`,
+		`type:ROW row_event:{table_name:"t1" row_changes:{before:{lengths:1 lengths:1 lengths:3 values:"14aaa"} after:{lengths:1 lengths:1 lengths:3 values:"24aaa"}} keyspace:"vttest" shard:"0"}`,
+		`type:ROW row_event:{table_name:"t1" row_changes:{before:{lengths:1 lengths:1 lengths:3 values:"24aaa"}} keyspace:"vttest" shard:"0"}`,
+		`type:ROW row_event:{table_name:"t1" row_changes:{after:{lengths:1 lengths:1 lengths:3 values:"31bbb"}} keyspace:"vttest" shard:"0"}`,
 		`gtid`,
 		`commit`,
 	}})
@@ -1004,7 +1014,7 @@ func TestREKeyRange(t *testing.T) {
 	execStatements(t, input)
 	expectLog(ctx, t, input, ch, [][]string{{
 		`begin`,
-		`type:ROW row_event:{table_name:"t1" row_changes:{after:{lengths:1 lengths:1 lengths:3 values:"41aaa"}}}`,
+		`type:ROW row_event:{table_name:"t1" row_changes:{after:{lengths:1 lengths:1 lengths:3 values:"41aaa"}} keyspace:"vttest" shard:"0"}`,
 		`gtid`,
 		`commit`,
 	}})
@@ -1177,7 +1187,7 @@ func TestDDLAddColumn(t *testing.T) {
 	})
 
 	// Record position before the next few statements.
-	pos := masterPosition(t)
+	pos := primaryPosition(t)
 	execStatements(t, []string{
 		"begin",
 		"insert into ddl_test1 values(1, 'aaa')",
@@ -1250,7 +1260,7 @@ func TestDDLDropColumn(t *testing.T) {
 	defer execStatement(t, "drop table ddl_test2")
 
 	// Record position before the next few statements.
-	pos := masterPosition(t)
+	pos := primaryPosition(t)
 	execStatements(t, []string{
 		"insert into ddl_test2 values(1, 'aaa', 'ccc')",
 		// Adding columns is allowed.
@@ -1414,7 +1424,7 @@ func TestBestEffortNameInFieldEvent(t *testing.T) {
 	execStatements(t, []string{
 		"create table vitess_test(id int, val varbinary(128), primary key(id))",
 	})
-	position := masterPosition(t)
+	position := primaryPosition(t)
 	execStatements(t, []string{
 		"insert into vitess_test values(1, 'abc')",
 		"rename table vitess_test to vitess_test_new",
@@ -1468,7 +1478,7 @@ func TestInternalTables(t *testing.T) {
 		"create table _vt_PURGE_1f9194b43b2011eb8a0104ed332e05c2_20201210194431(id int, val varbinary(128), primary key(id))",
 		"create table _product_old(id int, val varbinary(128), primary key(id))",
 	})
-	position := masterPosition(t)
+	position := primaryPosition(t)
 	execStatements(t, []string{
 		"insert into vitess_test values(1, 'abc')",
 		"insert into _1e275eef_3b20_11eb_a38f_04ed332e05c2_20201210204529_gho values(1, 'abc')",
@@ -1764,7 +1774,7 @@ func TestMinimalMode(t *testing.T) {
 	engine.se.Reload(context.Background())
 
 	// Record position before the next few statements.
-	pos := masterPosition(t)
+	pos := primaryPosition(t)
 	execStatements(t, []string{
 		"set @@session.binlog_row_image='minimal'",
 		"update t1 set val1='bbb' where id=1",
@@ -1856,7 +1866,7 @@ func TestNoFutureGTID(t *testing.T) {
 	})
 	engine.se.Reload(context.Background())
 
-	pos := masterPosition(t)
+	pos := primaryPosition(t)
 	t.Logf("current position: %v", pos)
 	// Both mysql and mariadb have '-' in their gtids.
 	// Invent a GTID in the future.
@@ -2072,7 +2082,15 @@ func expectLog(ctx context.Context, t *testing.T, input interface{}, ch <-chan [
 				if evs[i].Type == binlogdatapb.VEventType_FIELD {
 					for j := range evs[i].FieldEvent.Fields {
 						evs[i].FieldEvent.Fields[j].Flags = 0
+						if ignoreKeyspaceShardInFieldAndRowEvents {
+							evs[i].FieldEvent.Keyspace = ""
+							evs[i].FieldEvent.Shard = ""
+						}
 					}
+				}
+				if ignoreKeyspaceShardInFieldAndRowEvents && evs[i].Type == binlogdatapb.VEventType_ROW {
+					evs[i].RowEvent.Keyspace = ""
+					evs[i].RowEvent.Shard = ""
 				}
 				if got := fmt.Sprintf("%v", evs[i]); got != want {
 					log.Errorf("%v (%d): event:\n%q, want\n%q", input, i, got, want)
@@ -2086,7 +2104,7 @@ func expectLog(ctx context.Context, t *testing.T, input interface{}, ch <-chan [
 func startStream(ctx context.Context, t *testing.T, filter *binlogdatapb.Filter, position string, tablePKs []*binlogdatapb.TableLastPK) (*sync.WaitGroup, <-chan []*binlogdatapb.VEvent) {
 	switch position {
 	case "":
-		position = masterPosition(t)
+		position = primaryPosition(t)
 	case "vscopy":
 		position = ""
 	}
@@ -2141,7 +2159,7 @@ func execStatements(t *testing.T, queries []string) {
 	}
 }
 
-func masterPosition(t *testing.T) string {
+func primaryPosition(t *testing.T) string {
 	t.Helper()
 	// We use the engine's cp because there is one test that overrides
 	// the flavor to FilePos. If so, we have to obtain the position

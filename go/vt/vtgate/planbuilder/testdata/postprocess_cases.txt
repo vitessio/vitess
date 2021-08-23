@@ -1737,16 +1737,124 @@ Gen4 error: In aggregated query without GROUP BY, expression of SELECT list cont
 "unsupported: memory sort: order by must reference a column in the select list: c1 asc"
 Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains nonaggregated column 'c1' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by
 
-# scatter aggregate with ambiguous aliases
-"select distinct a, b as a from user"
-"generating order by clause: ambiguous symbol reference: a"
+# Distinct with cross shard query
+"select distinct user.a from user join user_extra"
 {
   "QueryType": "SELECT",
-  "Original": "select distinct a, b as a from user",
+  "Original": "select distinct user.a from user join user_extra",
+  "Instructions": {
+    "OperatorType": "Distinct",
+    "Inputs": [
+      {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "-1",
+        "TableName": "`user`_user_extra",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select `user`.a from `user` where 1 != 1",
+            "Query": "select `user`.a from `user`",
+            "Table": "`user`"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from user_extra where 1 != 1",
+            "Query": "select 1 from user_extra",
+            "Table": "user_extra"
+          }
+        ]
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select distinct user.a from user join user_extra",
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "GroupBy": "(0|2), (1|4)",
+    "GroupBy": "(0|1)",
+    "ResultColumns": 1,
+    "Inputs": [
+      {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "-1,-2",
+        "TableName": "`user`_user_extra",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select `user`.a, weight_string(`user`.a) from `user` where 1 != 1",
+            "OrderBy": "(0|1) ASC",
+            "Query": "select `user`.a, weight_string(`user`.a) from `user` order by `user`.a asc",
+            "Table": "`user`"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from user_extra where 1 != 1",
+            "Query": "select 1 from user_extra",
+            "Table": "user_extra"
+          }
+        ]
+      }
+    ]
+  }
+}
+
+# Distinct with column alias
+"select distinct a as c, a from user"
+{
+  "QueryType": "SELECT",
+  "Original": "select distinct a as c, a from user",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Ordered",
+    "GroupBy": "0, 1",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select a as c, a, weight_string(a) from `user` where 1 != 1",
+        "OrderBy": "(0|2) ASC, (0|2) ASC",
+        "Query": "select distinct a as c, a, weight_string(a) from `user` order by c asc, a asc",
+        "ResultColumns": 2,
+        "Table": "`user`"
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select distinct a as c, a from user",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Ordered",
+    "GroupBy": "(0|2), (1|2)",
     "ResultColumns": 2,
     "Inputs": [
       {
@@ -1756,8 +1864,37 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select a, b as a, weight_string(a), b, weight_string(b) from `user` where 1 != 1",
-        "Query": "select distinct a, b as a, weight_string(a), b, weight_string(b) from `user`",
+        "FieldQuery": "select a as c, a, weight_string(a) from `user` where 1 != 1",
+        "OrderBy": "(0|2) ASC, (1|2) ASC",
+        "Query": "select distinct a as c, a, weight_string(a) from `user` order by c asc, a asc",
+        "Table": "`user`"
+      }
+    ]
+  }
+}
+
+# Distinct with same column
+"select distinct a, a from user"
+"generating order by clause: ambiguous symbol reference: a"
+{
+  "QueryType": "SELECT",
+  "Original": "select distinct a, a from user",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Ordered",
+    "GroupBy": "(0|2), (1|2)",
+    "ResultColumns": 2,
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select a, a, weight_string(a) from `user` where 1 != 1",
+        "OrderBy": "(0|2) ASC, (0|2) ASC",
+        "Query": "select distinct a, a, weight_string(a) from `user` order by a asc, a asc",
         "Table": "`user`"
       }
     ]
