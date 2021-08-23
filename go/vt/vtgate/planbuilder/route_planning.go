@@ -148,6 +148,10 @@ func newBuildSelectPlan(sel *sqlparser.Select, reservedVars *sqlparser.ReservedV
 		return nil, err
 	}
 
+	if err := setMiscFunc(plan, sel); err != nil {
+		return nil, err
+	}
+
 	if err := plan.WireupGen4(semTable); err != nil {
 		return nil, err
 	}
