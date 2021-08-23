@@ -120,13 +120,8 @@ type subQReplacer struct {
 }
 
 func (sqr *subQReplacer) replacer(cursor *sqlparser.Cursor) bool {
-	var argName string
-	switch node := cursor.Node().(type) {
-	case sqlparser.ListArg:
-		argName = string(node)
-	case sqlparser.Argument:
-		argName = string(node)
-	default:
+	argName := argumentName(cursor.Node())
+	if argName == "" {
 		return true
 	}
 
