@@ -1726,6 +1726,7 @@ Gen4 plan same as above
 # Into outfile s3 in sub-query is incorrect
 "select id from (select id from user into outfile s3 'inner_outfile') as t2"
 "Incorrect usage/placement of 'INTO'"
+Gen4 plan same as above
 
 "select (select u.id from user as u where u.id = 1), a.id from user as a where a.id = 1"
 {

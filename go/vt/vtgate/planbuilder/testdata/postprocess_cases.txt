@@ -612,6 +612,51 @@ Gen4 plan same as above
     ]
   }
 }
+{
+  "QueryType": "SELECT",
+  "Original": "select user.col1 as a, user.col2, music.col3 from user join music on user.id = music.id where user.id = 1 order by null",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "-2,-3,1",
+    "JoinVars": {
+      "user_id": 0
+    },
+    "TableName": "`user`_music",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectEqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select `user`.id, `user`.col1 as a, `user`.col2 from `user` where 1 != 1",
+        "Query": "select `user`.id, `user`.col1 as a, `user`.col2 from `user` where `user`.id = 1 order by null",
+        "Table": "`user`",
+        "Values": [
+          1
+        ],
+        "Vindex": "user_index"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectEqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select music.col3 from music where 1 != 1",
+        "Query": "select music.col3 from music where music.id = :user_id",
+        "Table": "music",
+        "Values": [
+          ":user_id"
+        ],
+        "Vindex": "music_user_map"
+      }
+    ]
+  }
+}
 
 # ORDER BY non-key column for join
 "select user.col1 as a, user.col2, music.col3 from user join music on user.id = music.id where user.id = 1 order by a"
