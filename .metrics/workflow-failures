@@ -1,6 +1,3 @@
-2021-04-13T21:30:25Z,local_example,https://github.com/vitessio/vitess/actions/runs/746182271
-2021-04-13T21:30:25Z,local_example,https://github.com/vitessio/vitess/actions/runs/746182290
-2021-04-13T21:30:25Z,region_example,https://github.com/vitessio/vitess/actions/runs/746182300
 2021-04-13T21:30:25Z,unit_race,https://github.com/vitessio/vitess/actions/runs/746182286
 2021-04-13T21:30:28Z,endtoend,https://github.com/vitessio/vitess/actions/runs/746182387
 2021-04-13T21:32:13Z,Cluster (27),https://github.com/vitessio/vitess/actions/runs/746186550
@@ -9998,3 +9995,6 @@
 2021-08-23T14:49:36Z,Cluster (vstream_stoponreshard_true),https://github.com/vitessio/vitess/actions/runs/1159110618
 2021-08-23T14:49:36Z,Cluster (vtorc),https://github.com/vitessio/vitess/actions/runs/1159110657
 2021-08-23T14:49:36Z,region_example,https://github.com/vitessio/vitess/actions/runs/1159110645
+2021-08-23T15:30:34Z,Cluster (vreplication_multicell),https://github.com/vitessio/vitess/actions/runs/1159256428
+2021-08-23T15:30:34Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/1159256450
+2021-08-23T15:30:34Z,unit_race,https://github.com/vitessio/vitess/actions/runs/1159256393
