@@ -435,6 +435,32 @@ func (fake *TabletManagerClient) SetMaster(ctx context.Context, tablet *topodata
 	return assert.AnError
 }
 
+// SetReplicationSource is part of the tmclient.TabletManagerClient interface.
+func (fake *TabletManagerClient) SetReplicationSource(ctx context.Context, tablet *topodatapb.Tablet, parent *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool) error {
+	if fake.SetMasterResults == nil {
+		return assert.AnError
+	}
+
+	key := topoproto.TabletAliasString(tablet.Alias)
+
+	if fake.SetMasterDelays != nil {
+		if delay, ok := fake.SetMasterDelays[key]; ok {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(delay):
+				// proceed to results
+			}
+		}
+	}
+
+	if result, ok := fake.SetMasterResults[key]; ok {
+		return result
+	}
+
+	return assert.AnError
+}
+
 // SetReadWrite is part of the tmclient.TabletManagerClient interface.
 func (fake *TabletManagerClient) SetReadWrite(ctx context.Context, tablet *topodatapb.Tablet) error {
 	if fake.SetReadWriteResults == nil {
