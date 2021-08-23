@@ -651,18 +651,8 @@ func (rp *routeTree) planIsExpr(ctx optimizeContext, node *sqlparser.IsExpr) (bo
 }
 
 func (rp *routeTree) makePlanValue(ctx optimizeContext, n sqlparser.Expr) (*sqltypes.PlanValue, error) {
-	name := ""
-	switch expr := n.(type) {
-	case sqlparser.Argument:
-		name = string(expr)
-	case sqlparser.ListArg:
-		name = string(expr)
-	}
-	if name != "" {
-		_, found := rp.sqToReplace[name]
-		if found {
-			return nil, nil
-		}
+	if rp.isSubQueryToReplace(argumentName(n)) {
+		return nil, nil
 	}
 
 	for _, expr := range ctx.semTable.GetExprAndEqualities(n) {
@@ -689,6 +679,22 @@ func makePlanValue(n sqlparser.Expr) (*sqltypes.PlanValue, error) {
 		return nil, err
 	}
 	return &value, nil
+}
+
+func (rp *routeTree) isSubQueryToReplace(name string) bool {
+	_, found := rp.sqToReplace[name]
+	return found
+}
+
+func argumentName(node sqlparser.SQLNode) string {
+	var argName string
+	switch node := node.(type) {
+	case sqlparser.ListArg:
+		argName = string(node)
+	case sqlparser.Argument:
+		argName = string(node)
+	}
+	return argName
 }
 
 func (rp *routeTree) hasVindex(column *sqlparser.ColName) bool {
@@ -917,6 +923,9 @@ func gen4ValuesEqual(ctx optimizeContext, a, b []sqlparser.Expr) bool {
 	if len(a) != len(b) {
 		return false
 	}
+
+	// TODO: check semTable's columnEqualities for better plan
+
 	for i, aExpr := range a {
 		bExpr := b[i]
 		if !gen4ValEqual(ctx, aExpr, bExpr) {
