@@ -1194,7 +1194,7 @@ var (
 		}, {
 			input: "alter table a add constraint a_pk primary key (value)",
 		}, {
-			input: "alter table a add constraint a_pk primary key (value)",
+			input: "alter table a add primary key (value)",
 		}, {
 			input: "alter table a drop primary key",
 		}, {
