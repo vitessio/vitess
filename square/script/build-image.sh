@@ -14,9 +14,6 @@ fi
 loadBootstrapImages
 
 # Now we build using the regular vitess Dockerfile
-docker build -t "vitess/base" --build-arg CGO_ENABLED=0 .
-
-# Add additional utils needed for tests
 BUILD_DOCKER_TAG=square-vitess-build-${GIT_COMMIT}
 docker build -t "$BUILD_DOCKER_TAG" --build-arg CGO_ENABLED=0 --file square/Dockerfile.bootstrap .
 
