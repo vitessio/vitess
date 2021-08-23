@@ -60,7 +60,7 @@ type (
 		GetIgnoreReplicas() sets.String
 		CheckPrimaryRecoveryType() error
 		RestrictValidCandidates(map[string]mysql.Position, map[string]*topo.TabletInfo) (map[string]mysql.Position, error)
-		FindPrimaryCandidates(context.Context, logutil.Logger, tmclient.TabletManagerClient, map[string]mysql.Position, map[string]*topo.TabletInfo) error
+		FindPrimaryCandidates(context.Context, logutil.Logger, tmclient.TabletManagerClient, map[string]mysql.Position, map[string]*topo.TabletInfo) (*topodatapb.Tablet, error)
 		CheckIfNeedToOverridePrimary() error
 		StartReplication(context.Context, *events.Reparent, logutil.Logger, tmclient.TabletManagerClient) error
 		GetNewPrimary() *topodatapb.Tablet
@@ -169,7 +169,7 @@ func (vtctlReparent *VtctlReparentFunctions) RestrictValidCandidates(validCandid
 }
 
 // FindPrimaryCandidates implements the ReparentFunctions interface
-func (vtctlReparent *VtctlReparentFunctions) FindPrimaryCandidates(ctx context.Context, logger logutil.Logger, tmc tmclient.TabletManagerClient, validCandidates map[string]mysql.Position, m map[string]*topo.TabletInfo) error {
+func (vtctlReparent *VtctlReparentFunctions) FindPrimaryCandidates(ctx context.Context, logger logutil.Logger, tmc tmclient.TabletManagerClient, validCandidates map[string]mysql.Position, tabletMap map[string]*topo.TabletInfo) (*topodatapb.Tablet, error) {
 	// Elect the candidate with the most up-to-date position.
 	for alias, position := range validCandidates {
 		if vtctlReparent.winningPosition.IsZero() || position.AtLeast(vtctlReparent.winningPosition) {
@@ -188,13 +188,15 @@ func (vtctlReparent *VtctlReparentFunctions) FindPrimaryCandidates(ctx context.C
 		pos, ok := vtctlReparent.validCandidates[vtctlReparent.winningPrimaryTabletAliasStr]
 		switch {
 		case !ok:
-			return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "master elect %v has errant GTIDs", vtctlReparent.winningPrimaryTabletAliasStr)
+			return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "master elect %v has errant GTIDs", vtctlReparent.winningPrimaryTabletAliasStr)
 		case !pos.AtLeast(vtctlReparent.winningPosition):
-			return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "master elect %v at position %v is not fully caught up. Winning position: %v", vtctlReparent.winningPrimaryTabletAliasStr, pos, vtctlReparent.winningPosition)
+			return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "master elect %v at position %v is not fully caught up. Winning position: %v", vtctlReparent.winningPrimaryTabletAliasStr, pos, vtctlReparent.winningPosition)
 		}
 	}
 
-	return nil
+	// TODO:= handle not found error
+	newPrimaryAlias := tabletMap[vtctlReparent.winningPrimaryTabletAliasStr]
+	return newPrimaryAlias.Tablet, nil
 }
 
 // CheckIfNeedToOverridePrimary implements the ReparentFunctions interface
@@ -309,8 +311,8 @@ func (vtctlReparent *VtctlReparentFunctions) promoteNewPrimary(ctx context.Conte
 
 func reparentReplicasAndPopulateJournal(ctx context.Context, ev *events.Reparent, logger logutil.Logger,
 	tmc tmclient.TabletManagerClient, newPrimaryTablet *topodatapb.Tablet, lockAction, rp string,
-	tabletMap map[string]*topo.TabletInfo, reparentFunction ReparentFunctions) error {
-	replCtx, replCancel := context.WithTimeout(ctx, reparentFunction.GetWaitReplicasTimeout())
+	tabletMap map[string]*topo.TabletInfo, reparentFunctions ReparentFunctions) error {
+	replCtx, replCancel := context.WithTimeout(ctx, reparentFunctions.GetWaitReplicasTimeout())
 	defer replCancel()
 
 	event.DispatchUpdate(ev, "reparenting all tablets")
@@ -359,7 +361,7 @@ func reparentReplicasAndPopulateJournal(ctx context.Context, ev *events.Reparent
 		switch {
 		case alias == topoproto.TabletAliasString(newPrimaryTablet.Alias):
 			continue
-		case !reparentFunction.GetIgnoreReplicas().Has(alias):
+		case !reparentFunctions.GetIgnoreReplicas().Has(alias):
 			replWg.Add(1)
 			numReplicas++
 			go handleReplica(alias, ti)

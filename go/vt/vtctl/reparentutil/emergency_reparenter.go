@@ -143,7 +143,13 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		return err
 	}
 
-	if err := reparentFunctions.FindPrimaryCandidates(ctx, erp.logger, erp.tmc, validCandidates, tabletMap); err != nil {
+	newPrimary, err := reparentFunctions.FindPrimaryCandidates(ctx, erp.logger, erp.tmc, validCandidates, tabletMap)
+	if err != nil {
+		return err
+	}
+
+	// TODO := LockAction and RP
+	if err := PromotePrimaryCandidateAndStartReplication(ctx, erp.tmc, ts, ev, erp.logger, newPrimary, "", "", tabletMap, reparentFunctions); err != nil {
 		return err
 	}
 
