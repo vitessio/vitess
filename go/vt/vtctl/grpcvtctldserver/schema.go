@@ -157,7 +157,7 @@ func (s *VtctldServer) copyShardMetadata(ctx context.Context, srcTabletAlias *to
 		queryBuf.WriteString(") ON DUPLICATE KEY UPDATE value = ")
 		value.EncodeSQL(&queryBuf)
 
-		_, err := s.tmc.ExecuteFetchAsDba(ctx, getTabletResp.GetTablet(), false, []byte(queryBuf.String()), 0, false, false)
+		_, err := s.tmc.ExecuteFetchAsDba(ctx, getTabletResp.GetTablet(), false, queryBuf.Bytes(), 0, false, false)
 		if err != nil {
 			return fmt.Errorf("ExecuteFetchAsDba(%v, %v, 0, false, false) failed: %v", destTabletAlias, queryBuf.String(), err)
 		}
