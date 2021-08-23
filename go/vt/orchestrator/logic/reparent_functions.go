@@ -243,7 +243,6 @@ func ChooseCandidate(
 	}
 
 	var replicas [](*inst.Instance)
-	log.Errorf("started Manan's new function")
 
 	for candidate := range validCandidates {
 		candidateInfo, ok := tabletMap[candidate]
@@ -288,51 +287,53 @@ func ChooseCandidate(
 		}
 	}
 
-	// TODO: Use the set replication source functionality instead of the moveReplicasViaGTID
-	//now := time.Now().UnixNano()
+	now := time.Now().UnixNano()
 	if err := inst.SwitchMaster(candidateReplica.Key, *masterKey); err != nil {
 		return emptyReplicas, candidateReplica, err
 	}
 
-	//candidateReplicaTablet, err := inst.ReadTablet(candidateReplica.Key)
-	//if err != nil {
-	//	return emptyReplicas, candidateReplica, err
-	//}
+	candidateReplicaTablet, err := inst.ReadTablet(candidateReplica.Key)
+	if err != nil {
+		return emptyReplicas, candidateReplica, err
+	}
 
-	//moveGTIDFunc := func() error {
-	//	log.Debugf("RegroupReplicasGTID: working on %d replicas", len(replicasToMove))
-	//
-	//	for _, instance := range replicasToMove {
-	//		tablet, err := inst.ReadTablet(instance.Key)
-	//		if err != nil {
-	//			return err
-	//		}
-	//
-	//		err = tmc.SetReplicationSource(context.Background(), tablet, candidateReplicaTablet.Alias, now, "", false)
-	//		if err != nil {
-	//			unmovedReplicas = append(unmovedReplicas, instance)
-	//			err = vterrors.Wrapf(err, "tablet %v SetMaster failed: %v", tablet.Alias, err)
-	//			return err
-	//		}
-	//		movedReplicas = append(movedReplicas, instance)
-	//	}
-	//
-	//	unmovedReplicas = append(unmovedReplicas, aheadReplicas...)
-	//	unmovedReplicas = append(unmovedReplicas, cannotReplicateReplicas...)
-	//	return log.Errore(err)
-	//}
 	moveGTIDFunc := func() error {
 		log.Debugf("RegroupReplicasGTID: working on %d replicas", len(replicasToMove))
 
-		movedReplicas, unmovedReplicas, err, _ = inst.MoveReplicasViaGTID(replicasToMove, candidateReplica, postponedFunctionsContainer)
+		for _, instance := range replicasToMove {
+			tablet, err := inst.ReadTablet(instance.Key)
+			if err != nil {
+				goto Cleanup
+			}
+
+			if maintenanceToken, merr := inst.BeginMaintenance(&instance.Key, inst.GetMaintenanceOwner(), fmt.Sprintf("move below %+v", candidateReplica.Key)); merr != nil {
+				err = fmt.Errorf("Cannot begin maintenance on %+v: %v", instance.Key, merr)
+				goto Cleanup
+			} else {
+				defer inst.EndMaintenance(maintenanceToken)
+			}
+
+			err = tmc.SetReplicationSource(context.Background(), tablet, candidateReplicaTablet.Alias, now, "", false)
+			if err != nil {
+				unmovedReplicas = append(unmovedReplicas, instance)
+				err = vterrors.Wrapf(err, "tablet %v SetMaster failed: %v", tablet.Alias, err)
+				goto Cleanup
+			}
+			movedReplicas = append(movedReplicas, instance)
+
+		Cleanup:
+			tmc.StartReplication(context.Background(), tablet)
+			return err
+		}
+
 		unmovedReplicas = append(unmovedReplicas, aheadReplicas...)
-		return log.Errore(err)
+		unmovedReplicas = append(unmovedReplicas, cannotReplicateReplicas...)
+		if err != nil {
+			log.Errore(err)
+		}
+		return nil
 	}
-	if postponedFunctionsContainer != nil && postponeAllMatchOperations != nil && postponeAllMatchOperations(candidateReplica, hasBestPromotionRule) {
-		postponedFunctionsContainer.AddPostponedFunction(moveGTIDFunc, fmt.Sprintf("regroup-replicas-gtid %+v", candidateReplica.Key))
-	} else {
-		err = moveGTIDFunc()
-	}
+
 	if postponedFunctionsContainer != nil && postponeAllMatchOperations != nil && postponeAllMatchOperations(candidateReplica, hasBestPromotionRule) {
 		postponedFunctionsContainer.AddPostponedFunction(moveGTIDFunc, fmt.Sprintf("regroup-replicas-gtid %+v", candidateReplica.Key))
 	} else {
