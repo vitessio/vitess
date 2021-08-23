@@ -373,10 +373,12 @@ Gen4 plan same as above
 # select get_lock with non-dual table
 "select get_lock('xyz', 10) from user"
 "get_lock('xyz', 10) allowed only with dual"
+Gen4 plan same as above
 
 # select is_free_lock with non-dual table
 "select is_free_lock('xyz') from user"
 "is_free_lock('xyz') allowed only with dual"
+Gen4 plan same as above
 
 # insert using select get_lock from table
 "insert into user(pattern) SELECT GET_LOCK('xyz1', 10)"

@@ -210,7 +210,7 @@ func checkForInvalidConstructs(cursor *sqlparser.Cursor) error {
 		}
 	case *sqlparser.FuncExpr:
 		if sqlparser.IsLockingFunc(node) {
-			return Gen4NotSupportedF("locking functions")
+			return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%v allowed only with dual", sqlparser.String(node))
 		}
 
 		if node.Distinct {
