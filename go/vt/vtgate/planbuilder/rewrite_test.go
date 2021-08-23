@@ -194,7 +194,7 @@ func TestSubqueryRewrite(t *testing.T) {
 		input:  "select (select 1) from t1",
 		output: "select :__sq1 from t1",
 	}, {
-		input: "select 1 from t1 where exists (select 1)",
+		input:  "select 1 from t1 where exists (select 1)",
 		output: "select 1 from t1 where :__sq_has_values1",
 	}, {
 		input:  "select id from t1 where id in (select 1)",
@@ -212,13 +212,13 @@ func TestSubqueryRewrite(t *testing.T) {
 		input:  "select id from t1 where t1.id = (select 1 from t2 where t2.id = t1.id)",
 		output: "select id from t1 where t1.id = :__sq1",
 	}, {
-		input: "select id from t1 join t2 where t1.id = t2.id and exists (select 1)",
+		input:  "select id from t1 join t2 where t1.id = t2.id and exists (select 1)",
 		output: "select id from t1 join t2 where t1.id = t2.id and :__sq_has_values1",
 	}, {
-		input: "select id from t1 where not exists (select 1)",
+		input:  "select id from t1 where not exists (select 1)",
 		output: "select id from t1 where not :__sq_has_values1",
 	}, {
-		input: "select id from t1 where not exists (select 1) and exists (select 2)",
+		input:  "select id from t1 where not exists (select 1) and exists (select 2)",
 		output: "select id from t1 where not :__sq_has_values1 and :__sq_has_values2",
 	}, {
 		input:  "select (select 1), (select 2) from t1 join t2 on t1.id = (select 1) where t1.id in (select 1)",

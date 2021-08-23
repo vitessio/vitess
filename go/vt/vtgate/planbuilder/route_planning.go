@@ -198,64 +198,67 @@ func optimizeQuery(ctx optimizeContext, opTree abstract.Operator) (queryTree, er
 			alias: op.Alias,
 		}, nil
 	case *abstract.SubQuery:
-		outerTree, err := optimizeQuery(ctx, op.Outer)
-		if err != nil {
-			return nil, err
-		}
-		var unmerged []*subqueryTree
-
-		// first loop over the subqueries and try to merge them into the outer plan
-		for _, inner := range op.Inner {
-			treeInner, err := optimizeQuery(ctx, inner.Inner)
-			if err != nil {
-				return nil, err
-			}
-
-			preds := inner.Inner.UnsolvedPredicates(ctx.semTable)
-			var mergeErr error
-			merger := func(a, b *routeTree) *routeTree {
-				var merged *routeTree
-				merged, mergeErr = mergeSubQuery(ctx, a, b, inner)
-				return merged
-			}
-
-			merged, err := tryMerge(ctx, outerTree, treeInner, preds, merger)
-			if err != nil {
-				return nil, err
-			}
-			if mergeErr != nil {
-				return nil, mergeErr
-			}
-			if merged == nil {
-				unmerged = append(unmerged, &subqueryTree{
-					subquery: inner.SelectStatement,
-					inner:    treeInner,
-					opcode:   inner.Type,
-					argName:  inner.ArgName,
-				})
-			} else {
-				outerTree = merged
-			}
-		}
-
-		/*
-			build a tree of the unmerged subqueries
-			rt: route, sqt: subqueryTree
-
-
-			            sqt
-			         sqt   rt
-			        rt rt
-		*/
-		for _, tree := range unmerged {
-			tree.outer = outerTree
-			outerTree = tree
-		}
-
-		return outerTree, nil
+		return optimizeSubQuery(ctx, op)
 	default:
 		return nil, semantics.Gen4NotSupportedF("optimizeQuery")
 	}
+}
+
+func optimizeSubQuery(ctx optimizeContext, op *abstract.SubQuery) (queryTree, error) {
+	outerTree, err := optimizeQuery(ctx, op.Outer)
+	if err != nil {
+		return nil, err
+	}
+	var unmerged []*subqueryTree
+
+	// first loop over the subqueries and try to merge them into the outer plan
+	for _, inner := range op.Inner {
+		treeInner, err := optimizeQuery(ctx, inner.Inner)
+		if err != nil {
+			return nil, err
+		}
+
+		preds := inner.Inner.UnsolvedPredicates(ctx.semTable)
+		var mergeErr error
+		merger := func(a, b *routeTree) *routeTree {
+			var merged *routeTree
+			merged, mergeErr = mergeSubQuery(ctx, a, b, inner)
+			return merged
+		}
+
+		merged, err := tryMerge(ctx, outerTree, treeInner, preds, merger)
+		if err != nil {
+			return nil, err
+		}
+		if mergeErr != nil {
+			return nil, mergeErr
+		}
+		if merged == nil {
+			unmerged = append(unmerged, &subqueryTree{
+				subquery: inner.SelectStatement,
+				inner:    treeInner,
+				opcode:   inner.Type,
+				argName:  inner.ArgName,
+			})
+		} else {
+			outerTree = merged
+		}
+	}
+
+	/*
+		build a tree of the unmerged subqueries
+		rt: route, sqt: subqueryTree
+
+
+		            sqt
+		         sqt   rt
+		        rt rt
+	*/
+	for _, tree := range unmerged {
+		tree.outer = outerTree
+		outerTree = tree
+	}
+	return outerTree, nil
 }
 
 func mergeSubQuery(ctx optimizeContext, outer, inner *routeTree, subq *abstract.SubQueryInner) (*routeTree, error) {
