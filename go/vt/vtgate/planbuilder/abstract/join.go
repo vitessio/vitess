@@ -21,7 +21,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
-// Join represents an join. If we have a predicate, this is an inner join. If no predicate exists, it is a cross join
+// Join represents a join. If we have a predicate, this is an inner join. If no predicate exists, it is a cross join
 type Join struct {
 	LHS, RHS Operator
 	Exp      sqlparser.Expr
@@ -48,4 +48,23 @@ func (j *Join) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) 
 // TableID implements the Operator interface
 func (j *Join) TableID() semantics.TableSet {
 	return j.RHS.TableID().Merge(j.LHS.TableID())
+}
+
+// UnsolvedPredicates implements the Operator interface
+func (j *Join) UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.Expr {
+	ts := j.TableID()
+	var result []sqlparser.Expr
+	for _, expr := range j.LHS.UnsolvedPredicates(semTable) {
+		deps := semTable.Dependencies(expr)
+		if !deps.IsSolvedBy(ts) {
+			result = append(result, expr)
+		}
+	}
+	for _, expr := range j.RHS.UnsolvedPredicates(semTable) {
+		deps := semTable.Dependencies(expr)
+		if !deps.IsSolvedBy(ts) {
+			result = append(result, expr)
+		}
+	}
+	return result
 }

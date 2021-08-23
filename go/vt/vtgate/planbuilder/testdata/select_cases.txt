@@ -1164,6 +1164,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4 plan same as above
 
 # sub-expression subquery in select
 "select a, 1+(select col from user) from unsharded"
@@ -1199,8 +1200,9 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4 plan same as above
 
-# select * from subquery expands specific columns
+# select * from derived table expands specific columns
 "select * from (select user.id id1, user_extra.id id2 from user join user_extra) as t"
 {
   "QueryType": "SELECT",
@@ -1246,11 +1248,11 @@ Gen4 plan same as above
   }
 }
 
-# duplicate columns not allowed in subquery
+# duplicate columns not allowed in derived table
 "select * from (select user.id, user_extra.id from user join user_extra) as t"
 "duplicate column names in subquery: id"
 
-# non-existent symbol in cross-shard subquery
+# non-existent symbol in cross-shard derived table
 "select t.col from (select user.id from user join user_extra) as t"
 "symbol t.col not found in table or subquery"
 
@@ -1717,3 +1719,25 @@ Gen4 plan same as above
 # Into outfile s3 in sub-query is incorrect
 "select id from (select id from user into outfile s3 'inner_outfile') as t2"
 "Incorrect usage/placement of 'INTO'"
+
+"select (select u.id from user as u where u.id = 1), a.id from user as a where a.id = 1"
+{
+  "QueryType": "SELECT",
+  "Original": "select (select u.id from user as u where u.id = 1), a.id from user as a where a.id = 1",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select (select u.id from `user` as u where 1 != 1), a.id from `user` as a where 1 != 1",
+    "Query": "select (select u.id from `user` as u where u.id = 1), a.id from `user` as a where a.id = 1",
+    "Table": "`user`",
+    "Values": [
+      1
+    ],
+    "Vindex": "user_index"
+  }
+}
+Gen4 plan same as above

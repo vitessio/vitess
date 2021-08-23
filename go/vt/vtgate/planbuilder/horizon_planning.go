@@ -87,8 +87,11 @@ func pushProjection(expr *sqlparser.AliasedExpr, plan logicalPlan, semTable *sem
 		}
 		node.Cols = append(node.Cols, column)
 		return len(node.Cols) - 1, true, nil
+	case *pulloutSubquery:
+		// push projection to the outer query
+		return pushProjection(expr, node.underlying, semTable, inner, reuseCol)
 	default:
-		return 0, false, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%T not yet supported", node)
+		return 0, false, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "[BUG] push projection does not yet support: %T", node)
 	}
 }
 
@@ -376,6 +379,13 @@ func (hp *horizonPlanning) planOrderBy(orderExprs []abstract.OrderBy, plan logic
 		plan.input = newInput
 		return plan, nil
 	case *memorySort:
+		return plan, nil
+	case *pulloutSubquery:
+		newUnderlyingPlan, err := hp.planOrderBy(orderExprs, plan.underlying)
+		if err != nil {
+			return nil, err
+		}
+		plan.underlying = newUnderlyingPlan
 		return plan, nil
 	default:
 		return nil, semantics.Gen4NotSupportedF("ordering on complex query %T", plan)

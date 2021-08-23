@@ -26,11 +26,12 @@ import (
 )
 
 var (
-	clusterInstance *cluster.LocalProcessCluster
-	vtParams        mysql.ConnParams
-	KeyspaceName    = "ks"
-	Cell            = "test"
-	SchemaSQL       = `create table t1(
+	clusterInstance  *cluster.LocalProcessCluster
+	vtParams         mysql.ConnParams
+	shardedKs        = "ks"
+	unshardedKs      = "uks"
+	Cell             = "test"
+	shardedSchemaSQL = `create table t1(
 	id bigint,
 	col bigint,
 	primary key(id)
@@ -50,8 +51,20 @@ create table t3(
 	primary key(id)
 ) Engine=InnoDB;
 `
+	unshardedSchemaSQL = `create table u_a(
+	id bigint,
+	a bigint,
+	primary key(id)
+) Engine=InnoDB;
 
-	VSchema = `
+create table u_b(
+	id bigint,
+	b varchar(50),
+	primary key(id)
+) Engine=InnoDB;
+`
+
+	shardedVSchema = `
 {
   "sharded": true,
   "vindexes": {
@@ -99,6 +112,15 @@ create table t3(
   }
 }`
 
+	unshardedVSchema = `
+{
+  "sharded": false,
+  "tables": {
+    "u_a": {},
+    "u_b": {}
+  }
+}`
+
 	routingRules = `
 {"rules": [
   {
@@ -124,12 +146,22 @@ func TestMain(m *testing.M) {
 		}
 
 		// Start keyspace
-		keyspace := &cluster.Keyspace{
-			Name:      KeyspaceName,
-			SchemaSQL: SchemaSQL,
-			VSchema:   VSchema,
+		sKs := &cluster.Keyspace{
+			Name:      shardedKs,
+			SchemaSQL: shardedSchemaSQL,
+			VSchema:   shardedVSchema,
 		}
-		err = clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 1, true)
+		err = clusterInstance.StartKeyspace(*sKs, []string{"-80", "80-"}, 0, false)
+		if err != nil {
+			return 1
+		}
+
+		uKs := &cluster.Keyspace{
+			Name:      unshardedKs,
+			SchemaSQL: unshardedSchemaSQL,
+			VSchema:   unshardedVSchema,
+		}
+		err = clusterInstance.StartUnshardedKeyspace(*uKs, 0, false)
 		if err != nil {
 			return 1
 		}

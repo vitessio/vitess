@@ -13,7 +13,6 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-// +build gofuzz
 
 /*
 	DEPENDENCIES:
@@ -36,6 +35,7 @@ limitations under the License.
 	continuously by OSS-fuzz. Needless to say, more
 	APIs can be added with ease.
 */
+// +build gofuzz
 
 package engine
 

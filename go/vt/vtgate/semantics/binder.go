@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"strconv"
 
+	"vitess.io/vitess/go/vt/vtgate/engine"
+
 	querypb "vitess.io/vitess/go/vt/proto/query"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -38,6 +40,8 @@ type binder struct {
 	tc                *tableCollector
 	org               originable
 	typer             *typer
+	subqueryMap       map[*sqlparser.Select][]*subquery
+	subqueryRef       map[*sqlparser.Subquery]*subquery
 }
 
 func newBinder(scoper *scoper, org originable, tc *tableCollector, typer *typer) *binder {
@@ -48,11 +52,36 @@ func newBinder(scoper *scoper, org originable, tc *tableCollector, typer *typer)
 		org:               org,
 		tc:                tc,
 		typer:             typer,
+		subqueryMap:       map[*sqlparser.Select][]*subquery{},
+		subqueryRef:       map[*sqlparser.Subquery]*subquery{},
 	}
 }
 
 func (b *binder) down(cursor *sqlparser.Cursor) error {
 	switch node := cursor.Node().(type) {
+	case *sqlparser.Subquery:
+		currScope := b.scoper.currentScope()
+		if currScope.selectStmt == nil {
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unable to bind subquery to select statement")
+		}
+		opcode := engine.PulloutValue
+		switch par := cursor.Parent().(type) {
+		case *sqlparser.ComparisonExpr:
+			switch par.Operator {
+			case sqlparser.InOp:
+				opcode = engine.PulloutIn
+			case sqlparser.NotInOp:
+				opcode = engine.PulloutNotIn
+			}
+		case *sqlparser.ExistsExpr:
+			opcode = engine.PulloutExists
+		}
+		sq := &subquery{
+			SubQuery: node,
+			OpCode:   opcode,
+		}
+		b.subqueryMap[currScope.selectStmt] = append(b.subqueryMap[currScope.selectStmt], sq)
+		b.subqueryRef[node] = sq
 	case *sqlparser.Order:
 		return b.analyzeOrderByGroupByExprForLiteral(node.Expr, "order clause")
 	case sqlparser.GroupBy:
@@ -89,11 +118,11 @@ func (b *binder) analyzeOrderByGroupByExprForLiteral(input sqlparser.Expr, calle
 	if err != nil {
 		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "error parsing column number: %s", l.Val)
 	}
-	if num < 1 || num > len(currScope.selectExprs) {
+	if num < 1 || num > len(currScope.selectStmt.SelectExprs) {
 		return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadFieldError, "Unknown column '%d' in '%s'", num, caller)
 	}
 
-	expr, ok := currScope.selectExprs[num-1].(*sqlparser.AliasedExpr)
+	expr, ok := currScope.selectStmt.SelectExprs[num-1].(*sqlparser.AliasedExpr)
 	if !ok {
 		return nil
 	}
