@@ -35,7 +35,7 @@ func TestTxKillerKillsTransactionsInReservedConnections(t *testing.T) {
 	_, err := client.ReserveBeginExecute("select 42", nil, nil)
 	require.NoError(t, err)
 
-	assertIsKilledWithin5Seconds(t, client)
+	assertIsKilledWithin6Seconds(t, client)
 }
 
 func TestTxKillerDoesNotKillReservedConnectionsInUse(t *testing.T) {
@@ -73,7 +73,7 @@ func TestTxKillerCountsTimeFromTxStartedNotStatefulConnCreated(t *testing.T) {
 	_, err = client.Execute("select 43", nil)
 	require.NoError(t, err)
 
-	assertIsKilledWithin5Seconds(t, client)
+	assertIsKilledWithin6Seconds(t, client)
 }
 
 func TestTxKillerKillsTransactionThreeSecondsAfterCreation(t *testing.T) {
@@ -83,7 +83,7 @@ func TestTxKillerKillsTransactionThreeSecondsAfterCreation(t *testing.T) {
 	_, err := client.BeginExecute("select 42", nil, nil)
 	require.NoError(t, err)
 
-	assertIsKilledWithin5Seconds(t, client)
+	assertIsKilledWithin6Seconds(t, client)
 }
 
 func assertIsNotKilledOver5Second(t *testing.T, client *framework.QueryClient) {
@@ -94,10 +94,10 @@ func assertIsNotKilledOver5Second(t *testing.T, client *framework.QueryClient) {
 	}
 }
 
-func assertIsKilledWithin5Seconds(t *testing.T, client *framework.QueryClient) {
+func assertIsKilledWithin6Seconds(t *testing.T, client *framework.QueryClient) {
 	var err error
 	// when it is used once per second
-	for i := 0; i < 5; i++ {
+	for i := 0; i < 6; i++ {
 		_, err = client.Execute("select 43", nil)
 		if err != nil {
 			break
