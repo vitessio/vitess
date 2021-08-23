@@ -2007,6 +2007,7 @@ index_column:
   {
       $$ = &IndexColumn{Column: NewColIdent(string($1)), Length: $2, Order: $3}
   }
+
 constraint_definition:
   CONSTRAINT ID constraint_info
   {

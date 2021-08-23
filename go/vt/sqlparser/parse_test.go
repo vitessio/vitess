@@ -1227,6 +1227,8 @@ var (
 		}, {
 			input: "alter table a drop check status",
 		}, {
+			input: "alter table a drop constraint status",
+		}, {
 			input: "alter table a drop foreign key fk_something",
 		}, {
 			input: "alter table a drop constraint b",
