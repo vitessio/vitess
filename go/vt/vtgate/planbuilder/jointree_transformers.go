@@ -32,7 +32,7 @@ import (
 func transformToLogicalPlan(tree queryTree, semTable *semantics.SemTable, processing *postProcessor) (logicalPlan, error) {
 	switch n := tree.(type) {
 	case *routeTree:
-		return transformRoutePlan(n, semTable)
+		return transformRoutePlan(n, semTable, processing.sqToReplace)
 
 	case *joinTree:
 		return transformJoinPlan(n, semTable, processing)
@@ -49,7 +49,7 @@ func transformToLogicalPlan(tree queryTree, semTable *semantics.SemTable, proces
 			return nil, err
 		}
 		processing.inDerived = true
-		plan, err = processing.planHorizon(plan, n.query)
+		plan, err = processing.planHorizon(plan, n.query, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -74,7 +74,7 @@ func transformToLogicalPlan(tree queryTree, semTable *semantics.SemTable, proces
 		if err != nil {
 			return nil, err
 		}
-		innerPlan, err = processing.planHorizon(innerPlan, n.subquery)
+		innerPlan, err = processing.planHorizon(innerPlan, n.subquery, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -114,9 +114,9 @@ func transformJoinPlan(n *joinTree, semTable *semantics.SemTable, processing *po
 }
 
 type subQReplacer struct {
-	rt       *routeTree
-	err      error
-	replaced bool
+	sqToReplace map[string]*sqlparser.Select
+	err         error
+	replaced    bool
 }
 
 func (sqr *subQReplacer) replacer(cursor *sqlparser.Cursor) bool {
@@ -126,7 +126,7 @@ func (sqr *subQReplacer) replacer(cursor *sqlparser.Cursor) bool {
 	}
 
 	var node sqlparser.SQLNode
-	subqSelect, exists := sqr.rt.sqToReplace[argName]
+	subqSelect, exists := sqr.sqToReplace[argName]
 	if !exists {
 		sqr.err = vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unable to find subquery with argument: %s", argName)
 		return false
@@ -144,7 +144,7 @@ func (sqr *subQReplacer) replacer(cursor *sqlparser.Cursor) bool {
 	return false
 }
 
-func transformRoutePlan(n *routeTree, semTable *semantics.SemTable) (*route, error) {
+func transformRoutePlan(n *routeTree, semTable *semantics.SemTable, sqToReplace map[string]*sqlparser.Select) (*route, error) {
 	var tablesForSelect sqlparser.TableExprs
 	tableNameMap := map[string]interface{}{}
 
@@ -230,15 +230,7 @@ func transformRoutePlan(n *routeTree, semTable *semantics.SemTable) (*route, err
 		Comments:    semTable.Comments,
 	}
 
-	if len(n.sqToReplace) > 0 {
-		sqr := &subQReplacer{rt: n}
-		sqlparser.Rewrite(sel, sqr.replacer, nil)
-		for sqr.replaced {
-			// to handle subqueries inside subqueries, we need to do this again and again until no replacements are left
-			sqr.replaced = false
-			sqlparser.Rewrite(sel, sqr.replacer, nil)
-		}
-	}
+	replaceSubQuery(sqToReplace, sel)
 
 	return &route{
 		eroute: &engine.Route{
@@ -253,6 +245,18 @@ func transformRoutePlan(n *routeTree, semTable *semantics.SemTable) (*route, err
 		Select: sel,
 		tables: n.solved,
 	}, nil
+}
+
+func replaceSubQuery(sqToReplace map[string]*sqlparser.Select, sel *sqlparser.Select) {
+	if len(sqToReplace) > 0 {
+		sqr := &subQReplacer{sqToReplace: sqToReplace}
+		sqlparser.Rewrite(sel, sqr.replacer, nil)
+		for sqr.replaced {
+			// to handle subqueries inside subqueries, we need to do this again and again until no replacements are left
+			sqr.replaced = false
+			sqlparser.Rewrite(sel, sqr.replacer, nil)
+		}
+	}
 }
 
 func relToTableExpr(t relation) (sqlparser.TableExpr, error) {

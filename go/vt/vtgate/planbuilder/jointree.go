@@ -97,9 +97,6 @@ type (
 		// The following two fields are used when routing information_schema queries
 		SysTableTableSchema []evalengine.Expr
 		SysTableTableName   map[string]evalengine.Expr
-
-		// these helps in replacing the argNames with the subquery
-		sqToReplace map[string]*sqlparser.Select
 	}
 
 	derivedTree struct {
@@ -349,10 +346,6 @@ func (rp *routeTree) clone() queryTree {
 		// we do this to create a copy of the struct
 		p := *pred
 		result.vindexPreds[i] = &p
-	}
-	result.sqToReplace = map[string]*sqlparser.Select{}
-	for key, val := range rp.sqToReplace {
-		result.sqToReplace[key] = val
 	}
 	return &result
 }
@@ -656,7 +649,7 @@ func (rp *routeTree) planIsExpr(ctx optimizeContext, node *sqlparser.IsExpr) (bo
 // Otherwise, the method will try to apply makePlanValue for any equality the sqlparser.Expr n has.
 // The first PlanValue that is successfully produced will be returned.
 func (rp *routeTree) makePlanValue(ctx optimizeContext, n sqlparser.Expr) (*sqltypes.PlanValue, error) {
-	if rp.isSubQueryToReplace(argumentName(n)) {
+	if ctx.isSubQueryToReplace(argumentName(n)) {
 		return nil, nil
 	}
 
@@ -687,11 +680,6 @@ func makePlanValue(n sqlparser.Expr) (*sqltypes.PlanValue, error) {
 		return nil, err
 	}
 	return &value, nil
-}
-
-func (rp *routeTree) isSubQueryToReplace(name string) bool {
-	_, found := rp.sqToReplace[name]
-	return found
 }
 
 func argumentName(node sqlparser.SQLNode) string {
