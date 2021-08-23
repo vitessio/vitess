@@ -334,7 +334,7 @@ var commands = []commandGroup{
 				"<from_keyspace> <to_keyspace> <tables>",
 				"Start the VerticalSplitClone process to perform vertical resharding. Example: SplitClone from_ks to_ks 'a,/b.*/'"},
 			{"VDiff", commandVDiff,
-				"[-source_cell=<cell>] [-target_cell=<cell>] [-tablet_types=master,replica,rdonly] [-filtered_replication_wait_time=30s] <keyspace.workflow>",
+				"[-source_cell=<cell>] [-target_cell=<cell>] [-tablet_types=primary,replica,rdonly] [-filtered_replication_wait_time=30s] <keyspace.workflow>",
 				"Perform a diff of all tables in the workflow"},
 			{"MigrateServedTypes", commandMigrateServedTypes,
 				"[-cells=c1,c2,...] [-reverse] [-skip-refresh-state] [-filtered_replication_wait_time=30s] [-reverse_replication=false] <keyspace/shard> <served tablet type>",
