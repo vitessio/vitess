@@ -2004,3 +2004,22 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
     ]
   }
 }
+
+# Order by has subqueries
+"select id from unsharded order by (select id from unsharded)"
+"unsupported: subqueries disallowed in GROUP or ORDER BY"
+{
+  "QueryType": "SELECT",
+  "Original": "select id from unsharded order by (select id from unsharded)",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select id from unsharded where 1 != 1",
+    "Query": "select id from unsharded order by (select id from unsharded) asc",
+    "Table": "unsharded"
+  }
+}
