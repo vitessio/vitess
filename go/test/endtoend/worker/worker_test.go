@@ -305,10 +305,10 @@ func verifySuccessfulWorkerCopyWithReparent(t *testing.T, isMysqlDown bool) {
 
 	// Reparent away from the old primaries.
 	localCluster.VtctlclientProcess.ExecuteCommand("PlannedReparentShard", "-keyspace_shard",
-		"test_keyspace/-80", "-new_master", shard0Replica.Alias)
+		"test_keyspace/-80", "-new_primary", shard0Replica.Alias)
 
 	localCluster.VtctlclientProcess.ExecuteCommand("PlannedReparentShard", "-keyspace_shard",
-		"test_keyspace/80-", "-new_master", shard1Replica.Alias)
+		"test_keyspace/80-", "-new_primary", shard1Replica.Alias)
 
 	proc.Wait()
 
@@ -486,7 +486,7 @@ func runShardTablets(t *testing.T, shardName string, tabletArr []*cluster.Vttabl
 		err = json2.Unmarshal([]byte(result), &shardInfo)
 		assert.Nil(t, err)
 
-		if int(shardInfo.MasterAlias.Uid) == tabletArr[0].TabletUID {
+		if int(shardInfo.PrimaryAlias.Uid) == tabletArr[0].TabletUID {
 			break
 		}
 		time.Sleep(10 * time.Second)

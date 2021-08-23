@@ -45,7 +45,7 @@ import (
 
 func createSocketPair(t *testing.T) (net.Listener, *Conn, *Conn) {
 	// Create a listener.
-	listener, err := net.Listen("tcp", ":0")
+	listener, err := net.Listen("tcp", "127.0.0.1:")
 	if err != nil {
 		t.Fatalf("Listen failed: %v", err)
 	}

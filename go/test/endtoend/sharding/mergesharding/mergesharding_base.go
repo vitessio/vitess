@@ -196,7 +196,7 @@ func TestMergesharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 		}
 	}
 
-	// Init Shard Master
+	// Init Shard primary
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("InitShardPrimary",
 		"-force", fmt.Sprintf("%s/%s", keyspaceName, shard0.Name), shard0Primary.Alias)
 	require.NoError(t, err)
@@ -208,7 +208,7 @@ func TestMergesharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 		"-force", fmt.Sprintf("%s/%s", keyspaceName, shard2.Name), shard2Primary.Alias)
 	require.NoError(t, err)
 
-	// Init Shard Master on Merge Shard
+	// Init Shard primary on Merge Shard
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("InitShardPrimary",
 		"-force", fmt.Sprintf("%s/%s", keyspaceName, shard3.Name), shard3Primary.Alias)
 	require.NoError(t, err)
@@ -262,7 +262,7 @@ func TestMergesharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 
 	// check srv keyspace
 	expectedPartitions := map[topodata.TabletType][]string{}
-	expectedPartitions[topodata.TabletType_MASTER] = []string{shard0.Name, shard1.Name, shard2.Name}
+	expectedPartitions[topodata.TabletType_PRIMARY] = []string{shard0.Name, shard1.Name, shard2.Name}
 	expectedPartitions[topodata.TabletType_REPLICA] = []string{shard0.Name, shard1.Name, shard2.Name}
 	expectedPartitions[topodata.TabletType_RDONLY] = []string{shard0.Name, shard1.Name, shard2.Name}
 	sharding.CheckSrvKeyspace(t, cell, keyspaceName, "", 0, expectedPartitions, *clusterInstance)
@@ -430,7 +430,7 @@ func TestMergesharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 
 	// check srv keyspace
 	expectedPartitions = map[topodata.TabletType][]string{}
-	expectedPartitions[topodata.TabletType_MASTER] = []string{shard0.Name, shard1.Name, shard2.Name}
+	expectedPartitions[topodata.TabletType_PRIMARY] = []string{shard0.Name, shard1.Name, shard2.Name}
 	expectedPartitions[topodata.TabletType_RDONLY] = []string{shard3.Name, shard2.Name}
 	expectedPartitions[topodata.TabletType_REPLICA] = []string{shard0.Name, shard1.Name, shard2.Name}
 	sharding.CheckSrvKeyspace(t, cell, keyspaceName, "", 0, expectedPartitions, *clusterInstance)
@@ -444,18 +444,18 @@ func TestMergesharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 	require.NoError(t, err)
 
 	expectedPartitions = map[topodata.TabletType][]string{}
-	expectedPartitions[topodata.TabletType_MASTER] = []string{shard0.Name, shard1.Name, shard2.Name}
+	expectedPartitions[topodata.TabletType_PRIMARY] = []string{shard0.Name, shard1.Name, shard2.Name}
 	expectedPartitions[topodata.TabletType_RDONLY] = []string{shard3.Name, shard2.Name}
 	expectedPartitions[topodata.TabletType_REPLICA] = []string{shard3.Name, shard2.Name}
 	sharding.CheckSrvKeyspace(t, cell, keyspaceName, "", 0, expectedPartitions, *clusterInstance)
 
 	// now serve from the split shards
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand(
-		"MigrateServedTypes", shard3Ks, "master")
+		"MigrateServedTypes", shard3Ks, "primary")
 	require.NoError(t, err)
 
 	expectedPartitions = map[topodata.TabletType][]string{}
-	expectedPartitions[topodata.TabletType_MASTER] = []string{shard3.Name, shard2.Name}
+	expectedPartitions[topodata.TabletType_PRIMARY] = []string{shard3.Name, shard2.Name}
 	expectedPartitions[topodata.TabletType_RDONLY] = []string{shard3.Name, shard2.Name}
 	expectedPartitions[topodata.TabletType_REPLICA] = []string{shard3.Name, shard2.Name}
 	sharding.CheckSrvKeyspace(t, cell, keyspaceName, "", 0, expectedPartitions, *clusterInstance)
@@ -490,7 +490,7 @@ func TestMergesharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 	}
 
 	for _, tablet := range []cluster.Vttablet{*shard0Primary, *shard1Primary} {
-		err = clusterInstance.VtctlclientProcess.ExecuteCommand("DeleteTablet", "-allow_master", tablet.Alias)
+		err = clusterInstance.VtctlclientProcess.ExecuteCommand("DeleteTablet", "-allow_primary", tablet.Alias)
 		require.NoError(t, err)
 	}
 

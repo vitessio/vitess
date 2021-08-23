@@ -145,9 +145,9 @@ type LegacyTabletStats struct {
 	// Serving describes if the tablet can be serving traffic.
 	Serving bool
 	// TabletExternallyReparentedTimestamp is the last timestamp
-	// that this tablet was either elected the master, or received
+	// that this tablet was either elected the primary, or received
 	// a TabletExternallyReparented event. It is set to 0 if the
-	// tablet doesn't think it's a master.
+	// tablet doesn't think it's a primary.
 	TabletExternallyReparentedTimestamp int64
 	// Stats is the current health status, as received by the
 	// StreamHealth RPC (replication lag, ...).
@@ -293,7 +293,7 @@ type LegacyHealthCheck interface {
 	RegisterStats()
 	// SetListener sets the listener for healthcheck
 	// updates. sendDownEvents is used when a tablet changes type
-	// (from replica to master for instance). If the listener
+	// (from replica to primary for instance). If the listener
 	// wants two events (Up=false on old type, Up=True on new
 	// type), sendDownEvents should be set. Otherwise, the
 	// healthcheck will only send one event (Up=true on new type).
@@ -498,9 +498,9 @@ func (hc *LegacyHealthCheckImpl) updateHealth(ts *LegacyTabletStats, conn querys
 			hc.listener.StatsUpdate(&oldts)
 		}
 
-		// Track how often a tablet gets promoted to master. It is used for
+		// Track how often a tablet gets promoted to primary. It is used for
 		// comparing against the variables in go/vtgate/buffer/variables.go.
-		if oldts.Target.TabletType != topodatapb.TabletType_MASTER && ts.Target.TabletType == topodatapb.TabletType_MASTER {
+		if oldts.Target.TabletType != topodatapb.TabletType_PRIMARY && ts.Target.TabletType == topodatapb.TabletType_PRIMARY {
 			hcMasterPromotedCounters.Add([]string{ts.Target.Keyspace, ts.Target.Shard}, 1)
 			hcPrimaryPromotedCounters.Add([]string{ts.Target.Keyspace, ts.Target.Shard}, 1)
 		}
@@ -877,8 +877,8 @@ func (tcs *LegacyTabletsCacheStatus) StatusAsHTML() template.HTML {
 		} else if !ts.Up {
 			color = "red"
 			extra = " (Down)"
-		} else if ts.Target.TabletType == topodatapb.TabletType_MASTER {
-			extra = fmt.Sprintf(" (MasterTS: %v)", ts.TabletExternallyReparentedTimestamp)
+		} else if ts.Target.TabletType == topodatapb.TabletType_PRIMARY {
+			extra = fmt.Sprintf(" (PrimaryTermStartTime: %v)", ts.TabletExternallyReparentedTimestamp)
 		} else {
 			extra = fmt.Sprintf(" (RepLag: %v)", ts.Stats.ReplicationLagSeconds)
 		}

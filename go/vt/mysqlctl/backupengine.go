@@ -57,7 +57,7 @@ type BackupParams struct {
 	Concurrency int
 	// Extra env variables for pre-backup and post-backup transform hooks
 	HookExtraEnv map[string]string
-	// TopoServer, Keyspace and Shard are used to discover master tablet
+	// TopoServer, Keyspace and Shard are used to discover primary tablet
 	TopoServer *topo.Server
 	// Keyspace and Shard are used to infer the directory where backups should be stored
 	Keyspace string

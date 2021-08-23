@@ -77,7 +77,7 @@ const (
 )
 
 func init() {
-	topoproto.TabletTypeVar(&defaultTabletType, "default_tablet_type", topodatapb.TabletType_MASTER, "The default tablet type to set for queries, when one is not explicitly selected")
+	topoproto.TabletTypeVar(&defaultTabletType, "default_tablet_type", topodatapb.TabletType_PRIMARY, "The default tablet type to set for queries, when one is not explicitly selected")
 }
 
 // Executor is the engine that executes queries by utilizing
@@ -227,9 +227,9 @@ func (e *Executor) legacyExecute(ctx context.Context, safeSession *SafeSession, 
 
 	logStats.Keyspace = destKeyspace
 	logStats.TabletType = destTabletType.String()
-	// Legacy gateway allows transactions only on MASTER
-	if UsingLegacyGateway() && safeSession.InTransaction() && destTabletType != topodatapb.TabletType_MASTER {
-		return 0, nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "transaction is supported only for master tablet type, current type: %v", destTabletType)
+	// Legacy gateway allows transactions only on PRIMARY
+	if UsingLegacyGateway() && safeSession.InTransaction() && destTabletType != topodatapb.TabletType_PRIMARY {
+		return 0, nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "transaction is supported only for primary tablet type, current type: %v", destTabletType)
 	}
 	if bindVars == nil {
 		bindVars = make(map[string]*querypb.BindVariable)
@@ -879,7 +879,7 @@ func (e *Executor) showTablets(show *sqlparser.ShowLegacy) (*sqltypes.Result, er
 		if filter.Like != "" {
 			tabletRegexp := sqlparser.LikeToRegexp(filter.Like)
 
-			f := func(tablet *topodatapb.Tablet, servingState string, masterTermStartTime int64) bool {
+			f := func(tablet *topodatapb.Tablet, servingState string, PrimaryTermStartTime int64) bool {
 				return tabletRegexp.MatchString(tablet.Hostname)
 			}
 
@@ -944,10 +944,10 @@ func (e *Executor) showTablets(show *sqlparser.ShowLegacy) (*sqltypes.Result, er
 				if !ts.Serving {
 					state = "NOT_SERVING"
 				}
-				mtst := ts.MasterTermStartTime
+				mtst := ts.PrimaryTermStartTime
 				mtstStr := ""
 				if mtst > 0 {
-					// this code depends on the fact that MasterTermStartTime is the seconds since epoch start
+					// this code depends on the fact that PrimaryTermStartTime is the seconds since epoch start
 					mtstStr = time.Unix(mtst, 0).UTC().Format(time.RFC3339)
 				}
 
@@ -977,7 +977,7 @@ func (e *Executor) showTablets(show *sqlparser.ShowLegacy) (*sqltypes.Result, er
 		}
 	}
 	return &sqltypes.Result{
-		Fields: buildVarCharFields("Cell", "Keyspace", "Shard", "TabletType", "State", "Alias", "Hostname", "MasterTermStartTime"),
+		Fields: buildVarCharFields("Cell", "Keyspace", "Shard", "TabletType", "State", "Alias", "Hostname", "PrimaryTermStartTime"),
 		Rows:   rows,
 	}, nil
 }
@@ -1395,8 +1395,8 @@ func (e *Executor) prepare(ctx context.Context, safeSession *SafeSession, sql st
 		return nil, err
 	}
 
-	if UsingLegacyGateway() && safeSession.InTransaction() && destTabletType != topodatapb.TabletType_MASTER {
-		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "transaction is supported only for master tablet type, current type: %v", destTabletType)
+	if UsingLegacyGateway() && safeSession.InTransaction() && destTabletType != topodatapb.TabletType_PRIMARY {
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "transaction is supported only for primary tablet type, current type: %v", destTabletType)
 	}
 	if bindVars == nil {
 		bindVars = make(map[string]*querypb.BindVariable)
@@ -1513,7 +1513,7 @@ func (e *Executor) startVStream(ctx context.Context, rss []*srvtopo.ResolvedShar
 	}
 	vs := &vstream{
 		vgtid:      vgtid,
-		tabletType: topodatapb.TabletType_MASTER,
+		tabletType: topodatapb.TabletType_PRIMARY,
 		filter:     filter,
 		send:       callback,
 		rss:        rss,

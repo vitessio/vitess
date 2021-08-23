@@ -322,7 +322,7 @@ func (bls *Streamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 		// tells us the size of the event header.
 		if format.IsZero() {
 			// The only thing that should come before the FORMAT_DESCRIPTION_EVENT
-			// is a fake ROTATE_EVENT, which the master sends to tell us the name
+			// is a fake ROTATE_EVENT, which the primary sends to tell us the name
 			// of the current log file.
 			if ev.IsRotate() {
 				continue

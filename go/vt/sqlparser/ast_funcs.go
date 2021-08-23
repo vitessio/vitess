@@ -1377,7 +1377,7 @@ const (
 
 // handleUnaryMinus handles the case when a unary minus operator is seen in the parser. It takes 1 argument which is the expr to which the unary minus has been added to.
 func handleUnaryMinus(expr Expr) Expr {
-	if num, ok := expr.(*Literal); ok && num.Type == IntVal {
+	if num, ok := expr.(*Literal); ok && (num.Type == IntVal || num.Type == FloatVal) {
 		// Handle double negative
 		if num.Val[0] == '-' {
 			num.Val = num.Val[1:]

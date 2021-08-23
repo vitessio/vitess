@@ -61,7 +61,7 @@ func initWorkflowManager(ts *topo.Server) {
 		// Register workflow that generates Horizontal Resharding workflows.
 		reshardingworkflowgen.Register()
 
-		// Unregister the blacklisted workflows.
+		// Unregister the disabled workflows.
 		for _, name := range workflowManagerDisable {
 			workflow.Unregister(name)
 		}
@@ -113,7 +113,7 @@ func runWorkflowManagerElection(ts *topo.Server) {
 		}
 
 		// Set up a redirect host so when we are not the
-		// master, we can redirect traffic properly.
+		// primary, we can redirect traffic properly.
 		vtctl.WorkflowManager.SetRedirectFunc(func() (string, error) {
 			ctx := context.Background()
 			return mp.GetCurrentMasterID(ctx)

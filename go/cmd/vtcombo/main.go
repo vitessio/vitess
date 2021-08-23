@@ -206,7 +206,7 @@ func main() {
 	// vtgate configuration and init
 	resilientServer = srvtopo.NewResilientServer(ts, "ResilientSrvTopoServer")
 	tabletTypesToWait := []topodatapb.TabletType{
-		topodatapb.TabletType_MASTER,
+		topodatapb.TabletType_PRIMARY,
 		topodatapb.TabletType_REPLICA,
 		topodatapb.TabletType_RDONLY,
 	}

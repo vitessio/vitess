@@ -928,8 +928,8 @@ func EqualsRefOfAddColumns(a, b *AddColumns) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return EqualsSliceOfRefOfColumnDefinition(a.Columns, b.Columns) &&
-		EqualsRefOfColName(a.First, b.First) &&
+	return a.First == b.First &&
+		EqualsSliceOfRefOfColumnDefinition(a.Columns, b.Columns) &&
 		EqualsRefOfColName(a.After, b.After)
 }
 
@@ -1160,9 +1160,9 @@ func EqualsRefOfChangeColumn(a, b *ChangeColumn) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return EqualsRefOfColName(a.OldColumn, b.OldColumn) &&
+	return a.First == b.First &&
+		EqualsRefOfColName(a.OldColumn, b.OldColumn) &&
 		EqualsRefOfColumnDefinition(a.NewColDefinition, b.NewColDefinition) &&
-		EqualsRefOfColName(a.First, b.First) &&
 		EqualsRefOfColName(a.After, b.After)
 }
 
@@ -1828,8 +1828,8 @@ func EqualsRefOfModifyColumn(a, b *ModifyColumn) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return EqualsRefOfColumnDefinition(a.NewColDefinition, b.NewColDefinition) &&
-		EqualsRefOfColName(a.First, b.First) &&
+	return a.First == b.First &&
+		EqualsRefOfColumnDefinition(a.NewColDefinition, b.NewColDefinition) &&
 		EqualsRefOfColName(a.After, b.After)
 }
 

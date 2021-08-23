@@ -92,7 +92,7 @@ type flavor interface {
 	setReplicationPositionCommands(pos Position) []string
 
 	// changeReplicationSourceArg returns the specific parameter to add to
-	// a "change master" command.
+	// a "change primary" command.
 	changeReplicationSourceArg() string
 
 	// status returns the result of the appropriate status command,

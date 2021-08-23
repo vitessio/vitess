@@ -127,7 +127,7 @@ func newTablet(opts *Options, t *topodatapb.Tablet) *explainTablet {
 	target := querypb.Target{
 		Keyspace:   t.Keyspace,
 		Shard:      t.Shard,
-		TabletType: topodatapb.TabletType_MASTER,
+		TabletType: topodatapb.TabletType_PRIMARY,
 	}
 	tsv.StartService(&target, dbcfgs, nil /* mysqld */)
 
@@ -610,8 +610,10 @@ func (t *explainTablet) HandleQuery(c *mysql.Conn, query string, callback func(*
 		resultJSON, _ := json.MarshalIndent(result, "", "    ")
 		log.V(100).Infof("query %s result %s\n", query, string(resultJSON))
 
-	case sqlparser.StmtBegin, sqlparser.StmtCommit, sqlparser.StmtSet, sqlparser.StmtShow:
+	case sqlparser.StmtBegin, sqlparser.StmtCommit, sqlparser.StmtSet:
 		result = &sqltypes.Result{}
+	case sqlparser.StmtShow:
+		result = &sqltypes.Result{Fields: sqltypes.MakeTestFields("", "")}
 	case sqlparser.StmtInsert, sqlparser.StmtReplace, sqlparser.StmtUpdate, sqlparser.StmtDelete:
 		result = &sqltypes.Result{
 			RowsAffected: 1,

@@ -106,7 +106,9 @@ func ParseDBName(connectionString string) string {
 func ParseTabletType(connectionString string) string {
 	databaseName := ParseDBName(connectionString)
 	if strings.HasSuffix(databaseName, "@master") {
-		return "master"
+		return "primary"
+	} else if strings.HasSuffix(databaseName, "@primary") {
+		return "primary"
 	} else if strings.HasSuffix(databaseName, "@replica") {
 		return "replica"
 	} else if strings.HasSuffix(databaseName, "@rdonly") {

@@ -54,7 +54,7 @@ var withDDL = withddl.New([]string{
 	fmt.Sprintf(sqlCreateHeartbeatTable, "_vt"),
 })
 
-// heartbeatWriter runs on master tablets and writes heartbeats to the _vt.heartbeat
+// heartbeatWriter runs on primary tablets and writes heartbeats to the _vt.heartbeat
 // table at a regular interval, defined by heartbeat_interval.
 type heartbeatWriter struct {
 	env tabletenv.Env

@@ -219,7 +219,7 @@ const (
 
 func redactPassword(input string) string {
 	i := strings.Index(input, masterPasswordStart)
-	// We have master password in the query, try to redact it
+	// We have primary password in the query, try to redact it
 	if i != -1 {
 		j := strings.Index(input[i+len(masterPasswordStart):], masterPasswordEnd)
 		if j == -1 {

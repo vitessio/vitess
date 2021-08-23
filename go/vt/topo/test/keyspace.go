@@ -73,7 +73,7 @@ func checkKeyspace(t *testing.T, ts *topo.Server) {
 				Keyspace:   "test_keyspace3",
 			},
 			{
-				TabletType: topodatapb.TabletType_MASTER,
+				TabletType: topodatapb.TabletType_PRIMARY,
 				Cells:      nil,
 				Keyspace:   "test_keyspace3",
 			},

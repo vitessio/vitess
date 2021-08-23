@@ -732,7 +732,7 @@ func (client *Client) InitPrimary(ctx context.Context, tablet *topodatapb.Tablet
 }
 
 // PopulateReparentJournal is part of the tmclient.TabletManagerClient interface.
-func (client *Client) PopulateReparentJournal(ctx context.Context, tablet *topodatapb.Tablet, timeCreatedNS int64, actionName string, masterAlias *topodatapb.TabletAlias, pos string) error {
+func (client *Client) PopulateReparentJournal(ctx context.Context, tablet *topodatapb.Tablet, timeCreatedNS int64, actionName string, tabletAlias *topodatapb.TabletAlias, pos string) error {
 	c, closer, err := client.dialer.dial(ctx, tablet)
 	if err != nil {
 		return err
@@ -741,7 +741,7 @@ func (client *Client) PopulateReparentJournal(ctx context.Context, tablet *topod
 	_, err = c.PopulateReparentJournal(ctx, &tabletmanagerdatapb.PopulateReparentJournalRequest{
 		TimeCreatedNs:       timeCreatedNS,
 		ActionName:          actionName,
-		MasterAlias:         masterAlias,
+		PrimaryAlias:        tabletAlias,
 		ReplicationPosition: pos,
 	})
 	return err
@@ -902,15 +902,15 @@ func (e *backupStreamAdapter) Recv() (*logutilpb.Event, error) {
 }
 
 // Backup is part of the tmclient.TabletManagerClient interface.
-func (client *Client) Backup(ctx context.Context, tablet *topodatapb.Tablet, concurrency int, allowMaster bool) (logutil.EventStream, error) {
+func (client *Client) Backup(ctx context.Context, tablet *topodatapb.Tablet, concurrency int, allowPrimary bool) (logutil.EventStream, error) {
 	c, closer, err := client.dialer.dial(ctx, tablet)
 	if err != nil {
 		return nil, err
 	}
 
 	stream, err := c.Backup(ctx, &tabletmanagerdatapb.BackupRequest{
-		Concurrency: int64(concurrency),
-		AllowMaster: bool(allowMaster),
+		Concurrency:  int64(concurrency),
+		AllowPrimary: allowPrimary,
 	})
 	if err != nil {
 		closer.Close()

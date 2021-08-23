@@ -228,7 +228,7 @@ func (wr *Wrangler) getWorkflowState(ctx context.Context, targetKeyspace, workfl
 			return nil, nil, err
 		}
 		ws.ReplicaCellsNotSwitched, ws.ReplicaCellsSwitched = cellsNotSwitched, cellsSwitched
-		if !shard.IsMasterServing {
+		if !shard.IsPrimaryServing {
 			ws.WritesSwitched = true
 		}
 	}
@@ -379,7 +379,7 @@ func (wr *Wrangler) areTabletsAvailableToStreamFrom(ctx context.Context, ts *tra
 	// we use the value specified in the tablet flag `-vreplication_tablet_type`
 	// but ideally we should populate the vreplication table with a default value when we setup the workflow
 	if tabletTypes == "" {
-		tabletTypes = "MASTER,REPLICA"
+		tabletTypes = "PRIMARY,REPLICA"
 	}
 
 	var wg sync.WaitGroup
@@ -389,7 +389,7 @@ func (wr *Wrangler) areTabletsAvailableToStreamFrom(ctx context.Context, ts *tra
 		go func(cells []string, keyspace string, shard *topo.ShardInfo) {
 			defer wg.Done()
 			if cells == nil {
-				cells = append(cells, shard.MasterAlias.Cell)
+				cells = append(cells, shard.PrimaryAlias.Cell)
 			}
 			tp, err := discovery.NewTabletPicker(wr.ts, cells, keyspace, shard.ShardName(), tabletTypes)
 			if err != nil {
@@ -573,7 +573,7 @@ func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflowNa
 	return ts.id, sw.logs(), nil
 }
 
-// DropTargets cleans up target tables, shards and blacklisted tables if a MoveTables/Reshard is cancelled
+// DropTargets cleans up target tables, shards and denied tables if a MoveTables/Reshard is cancelled
 func (wr *Wrangler) DropTargets(ctx context.Context, targetKeyspace, workflow string, keepData, dryRun bool) (*[]string, error) {
 	ts, err := wr.buildTrafficSwitcher(ctx, targetKeyspace, workflow)
 	if err != nil {
@@ -610,7 +610,7 @@ func (wr *Wrangler) DropTargets(ctx context.Context, targetKeyspace, workflow st
 			if err := sw.removeTargetTables(ctx); err != nil {
 				return nil, err
 			}
-			if err := sw.dropSourceBlacklistedTables(ctx); err != nil {
+			if err := sw.dropSourceDeniedTables(ctx); err != nil {
 				return nil, err
 			}
 		case binlogdatapb.MigrationType_SHARDS:
@@ -684,7 +684,7 @@ func (wr *Wrangler) finalizeMigrateWorkflow(ctx context.Context, targetKeyspace,
 	return sw.logs(), nil
 }
 
-// DropSources cleans up source tables, shards and blacklisted tables after a MoveTables/Reshard is completed
+// DropSources cleans up source tables, shards and denied tables after a MoveTables/Reshard is completed
 func (wr *Wrangler) DropSources(ctx context.Context, targetKeyspace, workflowName string, removalType workflow.TableRemovalType, keepData, force, dryRun bool) (*[]string, error) {
 	ts, err := wr.buildTrafficSwitcher(ctx, targetKeyspace, workflowName)
 	if err != nil {
@@ -727,7 +727,7 @@ func (wr *Wrangler) DropSources(ctx context.Context, targetKeyspace, workflowNam
 			if err := sw.removeSourceTables(ctx, removalType); err != nil {
 				return nil, err
 			}
-			if err := sw.dropSourceBlacklistedTables(ctx); err != nil {
+			if err := sw.dropSourceDeniedTables(ctx); err != nil {
 				return nil, err
 			}
 
@@ -812,7 +812,7 @@ func (wr *Wrangler) buildTrafficSwitcher(ctx context.Context, targetKeyspace, wo
 			if err != nil {
 				return nil, err
 			}
-			sourcePrimary, err := sourceTopo.GetTablet(ctx, sourcesi.MasterAlias)
+			sourcePrimary, err := sourceTopo.GetTablet(ctx, sourcesi.PrimaryAlias)
 			if err != nil {
 				return nil, err
 			}
@@ -1006,7 +1006,7 @@ func (ts *trafficSwitcher) stopSourceWrites(ctx context.Context) error {
 func (ts *trafficSwitcher) changeTableSourceWrites(ctx context.Context, access accessType) error {
 	return ts.forAllSources(func(source *workflow.MigrationSource) error {
 		if _, err := ts.wr.ts.UpdateShardFields(ctx, ts.sourceKeyspace, source.GetShard().ShardName(), func(si *topo.ShardInfo) error {
-			return si.UpdateSourceBlacklistedTables(ctx, topodatapb.TabletType_MASTER, nil, access == allowWrites /* remove */, ts.tables)
+			return si.UpdateSourceDeniedTables(ctx, topodatapb.TabletType_PRIMARY, nil, access == allowWrites /* remove */, ts.tables)
 		}); err != nil {
 			return err
 		}
@@ -1019,7 +1019,7 @@ func (ts *trafficSwitcher) waitForCatchup(ctx context.Context, filteredReplicati
 	defer cancel()
 	// source writes have been stopped, wait for all streams on targets to catch up
 	if err := ts.forAllUids(func(target *workflow.MigrationTarget, uid uint32) error {
-		ts.wr.Logger().Infof("Before Catchup: uid: %d, target master %s, target position %s, shard %s", uid,
+		ts.wr.Logger().Infof("Before Catchup: uid: %d, target primary %s, target position %s, shard %s", uid,
 			target.GetPrimary().AliasString(), target.Position, target.GetShard().String())
 		bls := target.Sources[uid]
 		source := ts.sources[bls.Shard]
@@ -1044,7 +1044,7 @@ func (ts *trafficSwitcher) waitForCatchup(ctx context.Context, filteredReplicati
 	return ts.forAllTargets(func(target *workflow.MigrationTarget) error {
 		var err error
 		target.Position, err = ts.wr.tmc.MasterPosition(ctx, target.GetPrimary().Tablet)
-		ts.wr.Logger().Infof("After catchup, position for target master %s, %v", target.GetPrimary().AliasString(), target.Position)
+		ts.wr.Logger().Infof("After catchup, position for target primary %s, %v", target.GetPrimary().AliasString(), target.Position)
 		return err
 	})
 }
@@ -1241,7 +1241,7 @@ func (ts *trafficSwitcher) allowTargetWrites(ctx context.Context) error {
 func (ts *trafficSwitcher) allowTableTargetWrites(ctx context.Context) error {
 	return ts.forAllTargets(func(target *workflow.MigrationTarget) error {
 		if _, err := ts.wr.ts.UpdateShardFields(ctx, ts.targetKeyspace, target.GetShard().ShardName(), func(si *topo.ShardInfo) error {
-			return si.UpdateSourceBlacklistedTables(ctx, topodatapb.TabletType_MASTER, nil, true, ts.tables)
+			return si.UpdateSourceDeniedTables(ctx, topodatapb.TabletType_PRIMARY, nil, true, ts.tables)
 		}); err != nil {
 			return err
 		}
@@ -1282,7 +1282,7 @@ func (ts *trafficSwitcher) changeShardRouting(ctx context.Context) error {
 	}
 	err := ts.forAllSources(func(source *workflow.MigrationSource) error {
 		_, err := ts.wr.ts.UpdateShardFields(ctx, ts.sourceKeyspace, source.GetShard().ShardName(), func(si *topo.ShardInfo) error {
-			si.IsMasterServing = false
+			si.IsPrimaryServing = false
 			return nil
 		})
 		return err
@@ -1292,7 +1292,7 @@ func (ts *trafficSwitcher) changeShardRouting(ctx context.Context) error {
 	}
 	err = ts.forAllTargets(func(target *workflow.MigrationTarget) error {
 		_, err := ts.wr.ts.UpdateShardFields(ctx, ts.targetKeyspace, target.GetShard().ShardName(), func(si *topo.ShardInfo) error {
-			si.IsMasterServing = true
+			si.IsPrimaryServing = true
 			return nil
 		})
 		return err
@@ -1300,7 +1300,7 @@ func (ts *trafficSwitcher) changeShardRouting(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	err = ts.wr.ts.MigrateServedType(ctx, ts.targetKeyspace, ts.targetShards(), ts.sourceShards(), topodatapb.TabletType_MASTER, nil)
+	err = ts.wr.ts.MigrateServedType(ctx, ts.targetKeyspace, ts.targetShards(), ts.sourceShards(), topodatapb.TabletType_PRIMARY, nil)
 	if err != nil {
 		return err
 	}
@@ -1321,10 +1321,10 @@ func (ts *trafficSwitcher) startReverseVReplication(ctx context.Context) error {
 }
 
 func (ts *trafficSwitcher) changeShardsAccess(ctx context.Context, keyspace string, shards []*topo.ShardInfo, access accessType) error {
-	if err := ts.wr.ts.UpdateDisableQueryService(ctx, keyspace, shards, topodatapb.TabletType_MASTER, nil, access == disallowWrites /* disable */); err != nil {
+	if err := ts.wr.ts.UpdateDisableQueryService(ctx, keyspace, shards, topodatapb.TabletType_PRIMARY, nil, access == disallowWrites /* disable */); err != nil {
 		return err
 	}
-	return ts.wr.refreshMasters(ctx, shards)
+	return ts.wr.refreshPrimaryTablets(ctx, shards)
 }
 
 func (ts *trafficSwitcher) forAllSources(f func(*workflow.MigrationSource) error) error {
@@ -1396,10 +1396,10 @@ func (ts *trafficSwitcher) targetShards() []*topo.ShardInfo {
 	return shards
 }
 
-func (ts *trafficSwitcher) dropSourceBlacklistedTables(ctx context.Context) error {
+func (ts *trafficSwitcher) dropSourceDeniedTables(ctx context.Context) error {
 	return ts.forAllSources(func(source *workflow.MigrationSource) error {
 		if _, err := ts.wr.ts.UpdateShardFields(ctx, ts.sourceKeyspace, source.GetShard().ShardName(), func(si *topo.ShardInfo) error {
-			return si.UpdateSourceBlacklistedTables(ctx, topodatapb.TabletType_MASTER, nil, true, ts.tables)
+			return si.UpdateSourceDeniedTables(ctx, topodatapb.TabletType_PRIMARY, nil, true, ts.tables)
 		}); err != nil {
 			return err
 		}
@@ -1417,7 +1417,7 @@ func doValidateWorkflowHasCompleted(ctx context.Context, ts *trafficSwitcher) er
 	if ts.migrationType == binlogdatapb.MigrationType_SHARDS {
 		_ = ts.forAllSources(func(source *workflow.MigrationSource) error {
 			wg.Add(1)
-			if source.GetShard().IsMasterServing {
+			if source.GetShard().IsPrimaryServing {
 				rec.RecordError(fmt.Errorf(fmt.Sprintf("Shard %s is still serving", source.GetShard().ShardName())))
 			}
 			wg.Done()

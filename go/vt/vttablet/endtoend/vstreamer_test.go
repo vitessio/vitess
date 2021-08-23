@@ -69,11 +69,11 @@ func TestSchemaVersioning(t *testing.T) {
 	defer cancel()
 	tsv.EnableHistorian(true)
 	tsv.SetTracking(true)
-
+	time.Sleep(100 * time.Millisecond) // wait for _vt tables to be created
 	target := &querypb.Target{
 		Keyspace:   "vttest",
 		Shard:      "0",
-		TabletType: tabletpb.TabletType_MASTER,
+		TabletType: tabletpb.TabletType_PRIMARY,
 		Cell:       "",
 	}
 	filter := &binlogdatapb.Filter{
@@ -422,6 +422,12 @@ func expectLogs(ctx context.Context, t *testing.T, query string, eventCh chan []
 				for j := range evs[i].FieldEvent.Fields {
 					evs[i].FieldEvent.Fields[j].Flags = 0
 				}
+				evs[i].FieldEvent.Keyspace = ""
+				evs[i].FieldEvent.Shard = ""
+			}
+			if evs[i].Type == binlogdatapb.VEventType_ROW {
+				evs[i].RowEvent.Keyspace = ""
+				evs[i].RowEvent.Shard = ""
 			}
 			if got := fmt.Sprintf("%v", evs[i]); got != want {
 				t.Fatalf("%v (%d): event:\n%q, want\n%q", query, i, got, want)
@@ -436,28 +442,27 @@ func encodeString(in string) string {
 	return buf.String()
 }
 
-func validateSchemaInserted(client *framework.QueryClient, ddl string) (bool, error) {
+func validateSchemaInserted(client *framework.QueryClient, ddl string) bool {
 	qr, _ := client.Execute(fmt.Sprintf("select * from _vt.schema_version where ddl = %s", encodeString(ddl)), nil)
 	if len(qr.Rows) == 1 {
 		log.Infof("Found ddl in schema_version: %s", ddl)
-		return true, nil
+		return true
 	}
-	return false, fmt.Errorf("Found %d rows for gtid %s", len(qr.Rows), ddl)
+	return false
 }
 
 // To avoid races between ddls and the historian refreshing its cache explicitly wait for tracker's insert to be visible
 func waitForVersionInsert(client *framework.QueryClient, ddl string) (bool, error) {
-	timeout := time.After(1000 * time.Millisecond)
+	timeout := time.After(3000 * time.Millisecond)
 	tick := time.Tick(100 * time.Millisecond)
 	for {
 		select {
 		case <-timeout:
+			log.Infof("waitForVersionInsert timed out")
 			return false, errors.New("waitForVersionInsert timed out")
 		case <-tick:
-			ok, err := validateSchemaInserted(client, ddl)
-			if err != nil {
-				return false, err
-			} else if ok {
+			ok := validateSchemaInserted(client, ddl)
+			if ok {
 				log.Infof("Found version insert for %s", ddl)
 				return true, nil
 			}

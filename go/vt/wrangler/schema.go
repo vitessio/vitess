@@ -69,7 +69,7 @@ func (wr *Wrangler) ReloadSchema(ctx context.Context, tabletAlias *topodatapb.Ta
 // and the periodic schema reload makes them self-healing anyway.
 // So we do this on a best-effort basis, and log warnings for any tablets
 // that fail to reload within the context deadline.
-func (wr *Wrangler) ReloadSchemaShard(ctx context.Context, keyspace, shard, replicationPos string, concurrency *sync2.Semaphore, includeMaster bool) {
+func (wr *Wrangler) ReloadSchemaShard(ctx context.Context, keyspace, shard, replicationPos string, concurrency *sync2.Semaphore, includePrimary bool) {
 	tablets, err := wr.ts.GetTabletMapForShard(ctx, keyspace, shard)
 	switch {
 	case topo.IsErrType(err, topo.PartialResult):
@@ -86,8 +86,8 @@ func (wr *Wrangler) ReloadSchemaShard(ctx context.Context, keyspace, shard, repl
 
 	var wg sync.WaitGroup
 	for _, ti := range tablets {
-		if !includeMaster && ti.Type == topodatapb.TabletType_MASTER {
-			// We don't need to reload on the master
+		if !includePrimary && ti.Type == topodatapb.TabletType_PRIMARY {
+			// We don't need to reload on the primary
 			// because we assume ExecuteFetchAsDba()
 			// already did that.
 			continue
@@ -99,8 +99,8 @@ func (wr *Wrangler) ReloadSchemaShard(ctx context.Context, keyspace, shard, repl
 			concurrency.Acquire()
 			defer concurrency.Release()
 			pos := replicationPos
-			// Master is always up-to-date. So, don't wait for position.
-			if tablet.Type == topodatapb.TabletType_MASTER {
+			// Primary is always up-to-date. So, don't wait for position.
+			if tablet.Type == topodatapb.TabletType_PRIMARY {
 				pos = ""
 			}
 			if err := wr.tmc.ReloadSchema(ctx, tablet, pos); err != nil {
@@ -116,20 +116,20 @@ func (wr *Wrangler) ReloadSchemaShard(ctx context.Context, keyspace, shard, repl
 // ReloadSchemaKeyspace reloads the schema in all shards in a
 // keyspace.  The concurrency is shared across all shards (only that
 // many tablets will be reloaded at once).
-func (wr *Wrangler) ReloadSchemaKeyspace(ctx context.Context, keyspace string, concurrency *sync2.Semaphore, includeMaster bool) error {
+func (wr *Wrangler) ReloadSchemaKeyspace(ctx context.Context, keyspace string, concurrency *sync2.Semaphore, includePrimary bool) error {
 	shards, err := wr.ts.GetShardNames(ctx, keyspace)
 	if err != nil {
 		return fmt.Errorf("GetShardNames(%v) failed: %v", keyspace, err)
 	}
 
 	for _, shard := range shards {
-		wr.ReloadSchemaShard(ctx, keyspace, shard, "" /* waitPosition */, concurrency, includeMaster)
+		wr.ReloadSchemaShard(ctx, keyspace, shard, "" /* waitPosition */, concurrency, includePrimary)
 	}
 	return nil
 }
 
 // helper method to asynchronously diff a schema
-func (wr *Wrangler) diffSchema(ctx context.Context, masterSchema *tabletmanagerdatapb.SchemaDefinition, masterTabletAlias, alias *topodatapb.TabletAlias, excludeTables []string, includeViews bool, wg *sync.WaitGroup, er concurrency.ErrorRecorder) {
+func (wr *Wrangler) diffSchema(ctx context.Context, primarySchema *tabletmanagerdatapb.SchemaDefinition, primaryTabletAlias, alias *topodatapb.TabletAlias, excludeTables []string, includeViews bool, wg *sync.WaitGroup, er concurrency.ErrorRecorder) {
 	defer wg.Done()
 	log.Infof("Gathering schema for %v", topoproto.TabletAliasString(alias))
 	replicaSchema, err := wr.GetSchema(ctx, alias, nil, excludeTables, includeViews)
@@ -139,7 +139,7 @@ func (wr *Wrangler) diffSchema(ctx context.Context, masterSchema *tabletmanagerd
 	}
 
 	log.Infof("Diffing schema for %v", topoproto.TabletAliasString(alias))
-	tmutils.DiffSchema(topoproto.TabletAliasString(masterTabletAlias), masterSchema, topoproto.TabletAliasString(alias), replicaSchema, er)
+	tmutils.DiffSchema(topoproto.TabletAliasString(primaryTabletAlias), primarySchema, topoproto.TabletAliasString(alias), replicaSchema, er)
 }
 
 // ValidateSchemaShard will diff the schema from all the tablets in the shard.
@@ -149,14 +149,14 @@ func (wr *Wrangler) ValidateSchemaShard(ctx context.Context, keyspace, shard str
 		return fmt.Errorf("GetShard(%v, %v) failed: %v", keyspace, shard, err)
 	}
 
-	// get schema from the master, or error
-	if !si.HasMaster() {
-		return fmt.Errorf("no master in shard %v/%v", keyspace, shard)
+	// get schema from the primary, or error
+	if !si.HasPrimary() {
+		return fmt.Errorf("no primary in shard %v/%v", keyspace, shard)
 	}
-	log.Infof("Gathering schema for master %v", topoproto.TabletAliasString(si.MasterAlias))
-	masterSchema, err := wr.GetSchema(ctx, si.MasterAlias, nil, excludeTables, includeViews)
+	log.Infof("Gathering schema for primary %v", topoproto.TabletAliasString(si.PrimaryAlias))
+	primarySchema, err := wr.GetSchema(ctx, si.PrimaryAlias, nil, excludeTables, includeViews)
 	if err != nil {
-		return fmt.Errorf("GetSchema(%v, nil, %v, %v) failed: %v", si.MasterAlias, excludeTables, includeViews, err)
+		return fmt.Errorf("GetSchema(%v, nil, %v, %v) failed: %v", si.PrimaryAlias, excludeTables, includeViews, err)
 	}
 
 	if includeVSchema {
@@ -167,7 +167,7 @@ func (wr *Wrangler) ValidateSchemaShard(ctx context.Context, keyspace, shard str
 	}
 
 	// read all the aliases in the shard, that is all tablets that are
-	// replicating from the master
+	// replicating from the primary
 	aliases, err := wr.ts.FindAllTabletAliasesInShard(ctx, keyspace, shard)
 	if err != nil {
 		return fmt.Errorf("FindAllTabletAliasesInShard(%v, %v) failed: %v", keyspace, shard, err)
@@ -177,12 +177,12 @@ func (wr *Wrangler) ValidateSchemaShard(ctx context.Context, keyspace, shard str
 	er := concurrency.AllErrorRecorder{}
 	wg := sync.WaitGroup{}
 	for _, alias := range aliases {
-		if topoproto.TabletAliasEqual(alias, si.MasterAlias) {
+		if topoproto.TabletAliasEqual(alias, si.PrimaryAlias) {
 			continue
 		}
 
 		wg.Add(1)
-		go wr.diffSchema(ctx, masterSchema, si.MasterAlias, alias, excludeTables, includeViews, &wg, &er)
+		go wr.diffSchema(ctx, primarySchema, si.PrimaryAlias, alias, excludeTables, includeViews, &wg, &er)
 	}
 	wg.Wait()
 	if er.HasErrors() {
@@ -233,16 +233,16 @@ func (wr *Wrangler) ValidateSchemaKeyspace(ctx context.Context, keyspace string,
 			continue
 		}
 
-		if !si.HasMaster() {
+		if !si.HasPrimary() {
 			if !skipNoPrimary {
-				er.RecordError(fmt.Errorf("no master in shard %v/%v", keyspace, shard))
+				er.RecordError(fmt.Errorf("no primary in shard %v/%v", keyspace, shard))
 			}
 			continue
 		}
 
 		if referenceSchema == nil {
-			referenceAlias = si.MasterAlias
-			log.Infof("Gathering schema for reference master %v", topoproto.TabletAliasString(referenceAlias))
+			referenceAlias = si.PrimaryAlias
+			log.Infof("Gathering schema for reference primary %v", topoproto.TabletAliasString(referenceAlias))
 			referenceSchema, err = wr.GetSchema(ctx, referenceAlias, nil, excludeTables, includeViews)
 			if err != nil {
 				return fmt.Errorf("GetSchema(%v, nil, %v, %v) failed: %v", referenceAlias, excludeTables, includeViews, err)
@@ -291,14 +291,14 @@ func (wr *Wrangler) ValidateVSchema(ctx context.Context, keyspace string, shards
 				shardFailures.RecordError(fmt.Errorf("GetShard(%v, %v) failed: %v", keyspace, shard, err))
 				return
 			}
-			masterSchema, err := wr.GetSchema(ctx, si.MasterAlias, nil, excludeTables, includeViews)
+			primarySchema, err := wr.GetSchema(ctx, si.PrimaryAlias, nil, excludeTables, includeViews)
 			if err != nil {
-				shardFailures.RecordError(fmt.Errorf("GetSchema(%s, nil, %v, %v) (%v/%v) failed: %v", si.MasterAlias.String(),
+				shardFailures.RecordError(fmt.Errorf("GetSchema(%s, nil, %v, %v) (%v/%v) failed: %v", si.PrimaryAlias.String(),
 					excludeTables, includeViews, keyspace, shard, err,
 				))
 				return
 			}
-			for _, tableDef := range masterSchema.TableDefinitions {
+			for _, tableDef := range primarySchema.TableDefinitions {
 				if _, ok := vschm.Tables[tableDef.Name]; !ok {
 					notFoundTables = append(notFoundTables, tableDef.Name)
 				}
@@ -326,21 +326,21 @@ func (wr *Wrangler) PreflightSchema(ctx context.Context, tabletAlias *topodatapb
 }
 
 // CopySchemaShardFromShard copies the schema from a source shard to the specified destination shard.
-// For both source and destination it picks the master tablet. See also CopySchemaShard.
+// For both source and destination it picks the primary tablet. See also CopySchemaShard.
 func (wr *Wrangler) CopySchemaShardFromShard(ctx context.Context, tables, excludeTables []string, includeViews bool, sourceKeyspace, sourceShard, destKeyspace, destShard string, waitReplicasTimeout time.Duration, skipVerify bool) error {
 	sourceShardInfo, err := wr.ts.GetShard(ctx, sourceKeyspace, sourceShard)
 	if err != nil {
 		return fmt.Errorf("GetShard(%v, %v) failed: %v", sourceKeyspace, sourceShard, err)
 	}
-	if sourceShardInfo.MasterAlias == nil {
+	if sourceShardInfo.PrimaryAlias == nil {
 		return fmt.Errorf("no primary in shard record %v/%v. Consider running 'vtctl InitShardPrimary' in case of a new shard or reparenting the shard to fix the topology data, or providing a non-primary tablet alias", sourceKeyspace, sourceShard)
 	}
 
-	return wr.CopySchemaShard(ctx, sourceShardInfo.MasterAlias, tables, excludeTables, includeViews, destKeyspace, destShard, waitReplicasTimeout, skipVerify)
+	return wr.CopySchemaShard(ctx, sourceShardInfo.PrimaryAlias, tables, excludeTables, includeViews, destKeyspace, destShard, waitReplicasTimeout, skipVerify)
 }
 
 // CopySchemaShard copies the schema from a source tablet to the
-// specified shard.  The schema is applied directly on the master of
+// specified shard.  The schema is applied directly on the primary of
 // the destination shard, and is propagated to the replicas through
 // binlogs.
 func (wr *Wrangler) CopySchemaShard(ctx context.Context, sourceTabletAlias *topodatapb.TabletAlias, tables, excludeTables []string, includeViews bool, destKeyspace, destShard string, waitReplicasTimeout time.Duration, skipVerify bool) error {
@@ -349,16 +349,16 @@ func (wr *Wrangler) CopySchemaShard(ctx context.Context, sourceTabletAlias *topo
 		return fmt.Errorf("GetShard(%v, %v) failed: %v", destKeyspace, destShard, err)
 	}
 
-	if destShardInfo.MasterAlias == nil {
+	if destShardInfo.PrimaryAlias == nil {
 		return fmt.Errorf("no primary in shard record %v/%v. Consider running 'vtctl InitShardPrimary' in case of a new shard or reparenting the shard to fix the topology data", destKeyspace, destShard)
 	}
 
-	err = wr.copyShardMetadata(ctx, sourceTabletAlias, destShardInfo.MasterAlias)
+	err = wr.copyShardMetadata(ctx, sourceTabletAlias, destShardInfo.PrimaryAlias)
 	if err != nil {
-		return fmt.Errorf("copyShardMetadata(%v, %v) failed: %v", sourceTabletAlias, destShardInfo.MasterAlias, err)
+		return fmt.Errorf("copyShardMetadata(%v, %v) failed: %v", sourceTabletAlias, destShardInfo.PrimaryAlias, err)
 	}
 
-	diffs, err := wr.compareSchemas(ctx, sourceTabletAlias, destShardInfo.MasterAlias, tables, excludeTables, includeViews)
+	diffs, err := wr.compareSchemas(ctx, sourceTabletAlias, destShardInfo.PrimaryAlias, tables, excludeTables, includeViews)
 	if err != nil {
 		return fmt.Errorf("CopySchemaShard failed because schemas could not be compared initially: %v", err)
 	}
@@ -372,9 +372,9 @@ func (wr *Wrangler) CopySchemaShard(ctx context.Context, sourceTabletAlias *topo
 		return fmt.Errorf("GetSchema(%v, %v, %v, %v) failed: %v", sourceTabletAlias, tables, excludeTables, includeViews, err)
 	}
 	createSQL := tmutils.SchemaDefinitionToSQLStrings(sourceSd)
-	destTabletInfo, err := wr.ts.GetTablet(ctx, destShardInfo.MasterAlias)
+	destTabletInfo, err := wr.ts.GetTablet(ctx, destShardInfo.PrimaryAlias)
 	if err != nil {
-		return fmt.Errorf("GetTablet(%v) failed: %v", destShardInfo.MasterAlias, err)
+		return fmt.Errorf("GetTablet(%v) failed: %v", destShardInfo.PrimaryAlias, err)
 	}
 	for i, sqlLine := range createSQL {
 		err = wr.applySQLShard(ctx, destTabletInfo, sqlLine, i == len(createSQL)-1)
@@ -387,7 +387,7 @@ func (wr *Wrangler) CopySchemaShard(ctx context.Context, sourceTabletAlias *topo
 	}
 
 	// Remember the replication position after all the above were applied.
-	destMasterPos, err := wr.tmc.MasterPosition(ctx, destTabletInfo.Tablet)
+	destPrimaryPos, err := wr.tmc.MasterPosition(ctx, destTabletInfo.Tablet)
 	if err != nil {
 		return fmt.Errorf("CopySchemaShard: can't get replication position after schema applied: %v", err)
 	}
@@ -399,12 +399,12 @@ func (wr *Wrangler) CopySchemaShard(ctx context.Context, sourceTabletAlias *topo
 	// statement. We want to fail early in this case because vtworker SplitDiff
 	// fails in case of such an inconsistency as well.
 	if !skipVerify {
-		diffs, err = wr.compareSchemas(ctx, sourceTabletAlias, destShardInfo.MasterAlias, tables, excludeTables, includeViews)
+		diffs, err = wr.compareSchemas(ctx, sourceTabletAlias, destShardInfo.PrimaryAlias, tables, excludeTables, includeViews)
 		if err != nil {
 			return fmt.Errorf("CopySchemaShard failed because schemas could not be compared finally: %v", err)
 		}
 		if diffs != nil {
-			return fmt.Errorf("CopySchemaShard was not successful because the schemas between the two tablets %v and %v differ: %v", sourceTabletAlias, destShardInfo.MasterAlias, diffs)
+			return fmt.Errorf("CopySchemaShard was not successful because the schemas between the two tablets %v and %v differ: %v", sourceTabletAlias, destShardInfo.PrimaryAlias, diffs)
 		}
 	}
 
@@ -412,13 +412,13 @@ func (wr *Wrangler) CopySchemaShard(ctx context.Context, sourceTabletAlias *topo
 	concurrency := sync2.NewSemaphore(10, 0)
 	reloadCtx, cancel := context.WithTimeout(ctx, waitReplicasTimeout)
 	defer cancel()
-	wr.ReloadSchemaShard(reloadCtx, destKeyspace, destShard, destMasterPos, concurrency, true /* includeMaster */)
+	wr.ReloadSchemaShard(reloadCtx, destKeyspace, destShard, destPrimaryPos, concurrency, true /* includePrimary */)
 	return nil
 }
 
 // copyShardMetadata copies contents of _vt.shard_metadata table from the source
 // tablet to the destination tablet. It's assumed that destination tablet is a
-// master and binlogging is not turned off when INSERT statements are executed.
+// primary and binlogging is not turned off when INSERT statements are executed.
 func (wr *Wrangler) copyShardMetadata(ctx context.Context, srcTabletAlias *topodatapb.TabletAlias, destTabletAlias *topodatapb.TabletAlias) error {
 	sql := "SELECT 1 FROM information_schema.tables WHERE table_schema = '_vt' AND table_name = 'shard_metadata'"
 	presenceResult, err := wr.ExecuteFetchAsDba(ctx, srcTabletAlias, sql, 1, false, false)
@@ -477,7 +477,7 @@ func (wr *Wrangler) compareSchemas(ctx context.Context, sourceAlias, destAlias *
 // applySQLShard applies a given SQL change on a given tablet alias. It allows executing arbitrary
 // SQL statements, but doesn't return any results, so it's only useful for SQL statements
 // that would be run for their effects (e.g., CREATE).
-// It works by applying the SQL statement on the shard's master tablet with replication turned on.
+// It works by applying the SQL statement on the shard's primary tablet with replication turned on.
 // Thus it should be used only for changes that can be applied on a live instance without causing issues;
 // it shouldn't be used for anything that will require a pivot.
 // The SQL statement string is expected to have {{.DatabaseName}} in place of the actual db name.
@@ -488,7 +488,7 @@ func (wr *Wrangler) applySQLShard(ctx context.Context, tabletInfo *topo.TabletIn
 	}
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
-	// Need to make sure that we enable binlog, since we're only applying the statement on masters.
+	// Need to make sure that we enable binlog, since we're only applying the statement on primaries.
 	_, err = wr.tmc.ExecuteFetchAsDba(ctx, tabletInfo.Tablet, false, []byte(filledChange), 0, false, reloadSchema)
 	return err
 }

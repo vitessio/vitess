@@ -121,10 +121,12 @@ var (
 )
 
 const (
-	retryCategoryReadOnly          = "ReadOnly"
-	retryCategoryTimeoutError      = "TimeoutError"
-	retryCategoryConnectionError   = "ConnectionError"
-	retryCategoryNoMasterAvailable = "NoMasterAvailable"
+	retryCategoryReadOnly        = "ReadOnly"
+	retryCategoryTimeoutError    = "TimeoutError"
+	retryCategoryConnectionError = "ConnectionError"
+	// Deprecated. TODO(deepthi): remove after v12.0
+	retryCategoryNoMasterAvailable  = "NoMasterAvailable"
+	retryCategoryNoPrimaryAvailable = "NoPrimaryAvailable"
 )
 
 // resetVars resets the debug variables that are meant to provide information on a

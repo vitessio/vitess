@@ -82,6 +82,8 @@ func initCmd(subFlags *flag.FlagSet, args []string) error {
 }
 
 func reinitConfigCmd(subFlags *flag.FlagSet, args []string) error {
+	subFlags.Parse(args)
+
 	// There ought to be an existing my.cnf, so use it to find mysqld.
 	mysqld, cnf, err := mysqlctl.OpenMysqldAndMycnf(uint32(*tabletUID))
 	if err != nil {

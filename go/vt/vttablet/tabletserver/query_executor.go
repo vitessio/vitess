@@ -93,7 +93,7 @@ var sequenceFields = []*querypb.Field{
 
 func (qre *QueryExecutor) shouldConsolidate() bool {
 	cm := qre.tsv.qe.consolidatorMode.Get()
-	return cm == tabletenv.Enable || (cm == tabletenv.NotOnMaster && qre.tabletType != topodatapb.TabletType_MASTER)
+	return cm == tabletenv.Enable || ((cm == tabletenv.NotOnMaster || cm == tabletenv.NotOnPrimary) && qre.tabletType != topodatapb.TabletType_PRIMARY)
 }
 
 // Execute performs a non-streaming query execution.
@@ -372,14 +372,14 @@ func (qre *QueryExecutor) MessageStream(callback StreamCallback) error {
 }
 
 // checkPermissions returns an error if the query does not pass all checks
-// (query blacklisting, table ACL).
+// (denied query, table ACL).
 func (qre *QueryExecutor) checkPermissions() error {
 	// Skip permissions check if the context is local.
 	if tabletenv.IsLocalContext(qre.ctx) {
 		return nil
 	}
 
-	// Check if the query is blacklisted.
+	// Check if the query relates to a table that is in the denylist.
 	remoteAddr := ""
 	username := ""
 	ci, ok := callinfo.FromContext(qre.ctx)
@@ -838,7 +838,7 @@ func (qre *QueryExecutor) execAlterMigration() (*sqltypes.Result, error) {
 	case sqlparser.CompleteMigrationType:
 		return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "ALTER VITESS_MIGRATION COMPLETE is not implemented yet")
 	case sqlparser.CancelMigrationType:
-		return qre.tsv.onlineDDLExecutor.CancelMigration(qre.ctx, alterMigration.UUID, true, "CANCEL issued by user")
+		return qre.tsv.onlineDDLExecutor.CancelMigration(qre.ctx, alterMigration.UUID, "CANCEL issued by user")
 	case sqlparser.CancelAllMigrationType:
 		return qre.tsv.onlineDDLExecutor.CancelPendingMigrations(qre.ctx, "CANCEL ALL issued by user")
 	}

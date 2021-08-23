@@ -20,7 +20,7 @@ Gen4 plan same as above
       "Name": "main",
       "Sharded": false
     },
-    "TargetTabletType": "MASTER",
+    "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "update m1 set val = 1"
   }
@@ -39,7 +39,7 @@ Gen4 plan same as above
       "Name": "main",
       "Sharded": false
     },
-    "TargetTabletType": "MASTER",
+    "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "update unsharded set val = 1"
   }
@@ -58,7 +58,7 @@ Gen4 plan same as above
       "Name": "main",
       "Sharded": false
     },
-    "TargetTabletType": "MASTER",
+    "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "update unsharded set col = (select col from unsharded limit 1)"
   }
@@ -77,7 +77,7 @@ Gen4 plan same as above
       "Name": "main",
       "Sharded": false
     },
-    "TargetTabletType": "MASTER",
+    "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "update unsharded set col = (select id from unsharded union select id from unsharded)"
   }
@@ -96,7 +96,7 @@ Gen4 plan same as above
       "Name": "main",
       "Sharded": false
     },
-    "TargetTabletType": "MASTER",
+    "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "update unsharded set col = (select id from unsharded as a join unsharded as b on a.id = b.id)"
   }
@@ -115,7 +115,7 @@ Gen4 plan same as above
       "Name": "main",
       "Sharded": false
     },
-    "TargetTabletType": "MASTER",
+    "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "update unsharded as foo left join (select id from unsharded where col is not null order by col desc limit 10) as keepers on foo.id = keepers.id set col1 = 'asdf' where keepers.id is null and foo.col is not null and foo.col \u003c 1000"
   }
@@ -134,7 +134,7 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "TargetTabletType": "MASTER",
+    "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "update `user` as route1 set a = 1 where id = 1",
     "Table": "user",
@@ -158,7 +158,7 @@ Gen4 plan same as above
       "Name": "main",
       "Sharded": false
     },
-    "TargetTabletType": "MASTER",
+    "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "update unsharded_a set a = (select a from unsharded as route2)"
   }
@@ -177,7 +177,7 @@ Gen4 plan same as above
       "Name": "main",
       "Sharded": false
     },
-    "TargetTabletType": "MASTER",
+    "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "delete from unsharded"
   }
@@ -196,7 +196,7 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "TargetTabletType": "MASTER",
+    "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "update `user` set val = 1 where id = 1",
     "Table": "user",
@@ -220,7 +220,7 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "TargetTabletType": "MASTER",
+    "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "update `user` as user_alias set val = 1 where user_alias.id = 1",
     "Table": "user",
@@ -244,7 +244,7 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "TargetTabletType": "MASTER",
+    "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "update `user` set val = 1 where id = 1",
     "Table": "user",
@@ -268,7 +268,7 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "TargetTabletType": "MASTER",
+    "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "update `user` set val = 1 where `name` = 'foo' and id = 1",
     "Table": "user",
@@ -292,7 +292,7 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "TargetTabletType": "MASTER",
+    "TargetTabletType": "PRIMARY",
     "ChangedVindexValues": [
       "email_user_map:3"
     ],
@@ -326,7 +326,7 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "TargetTabletType": "MASTER",
+    "TargetTabletType": "PRIMARY",
     "ChangedVindexValues": [
       "address_user_map:4",
       "email_user_map:3"
@@ -356,7 +356,7 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "TargetTabletType": "MASTER",
+    "TargetTabletType": "PRIMARY",
     "ChangedVindexValues": [
       "email_user_map:3"
     ],
@@ -385,7 +385,7 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "TargetTabletType": "MASTER",
+    "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "update `user` set val = 1 where id = id2 and id = 1",
     "Table": "user",
@@ -409,7 +409,7 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "TargetTabletType": "MASTER",
+    "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "update `user` set val = 1 where id = 18446744073709551616 and id = 1",
     "Table": "user",
@@ -433,7 +433,7 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "TargetTabletType": "MASTER",
+    "TargetTabletType": "PRIMARY",
     "KsidVindex": "user_index",
     "MultiShardAutocommit": false,
     "OwnedVindexQuery": "select Id, `Name`, Costly from `user` where id = 1 for update",
@@ -459,7 +459,7 @@ Gen4 plan same as above
       "Name": "main",
       "Sharded": false
     },
-    "TargetTabletType": "MASTER",
+    "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "delete a from unsharded_a as a, unsharded_b as b where a.id = b.id and b.val = 1"
   }
@@ -478,7 +478,7 @@ Gen4 plan same as above
       "Name": "main",
       "Sharded": false
     },
-    "TargetTabletType": "MASTER",
+    "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "delete a from unsharded_a as a join unsharded_b as b on a.id = b.id where b.val = 1"
   }
@@ -497,7 +497,7 @@ Gen4 plan same as above
       "Name": "main",
       "Sharded": false
     },
-    "TargetTabletType": "MASTER",
+    "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "delete foo from unsharded as foo left join (select id from unsharded where col is not null order by col desc limit 10) as keepers on foo.id = keepers.id where keepers.id is null and foo.col is not null and foo.col \u003c 1000"
   }
@@ -516,7 +516,7 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "TargetTabletType": "MASTER",
+    "TargetTabletType": "PRIMARY",
     "KsidVindex": "user_index",
     "MultiShardAutocommit": false,
     "OwnedVindexQuery": "select Id, `Name`, Costly from `user` where id = 1 for update",
@@ -542,7 +542,7 @@ Gen4 plan same as above
       "Name": "main",
       "Sharded": false
     },
-    "TargetTabletType": "MASTER",
+    "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "delete from unsharded_a where a = (select a from unsharded as route2)"
   }
@@ -561,7 +561,7 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "TargetTabletType": "MASTER",
+    "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "update music set val = 1 where id = 1",
     "Table": "music",
@@ -585,7 +585,7 @@ Gen4 plan same as above
       "Name": "main",
       "Sharded": false
     },
-    "TargetTabletType": "MASTER",
+    "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "update unsharded_a as a join unsharded_b as b on a.id = b.id set a.val = 'foo' where b.val = 1"
   }
@@ -604,7 +604,7 @@ Gen4 plan same as above
       "Name": "main",
       "Sharded": false
     },
-    "TargetTabletType": "MASTER",
+    "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "update unsharded_a as a, unsharded_b as b set a.val = 'foo' where a.id = b.id and b.val = 1"
   }
@@ -623,7 +623,7 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "TargetTabletType": "MASTER",
+    "TargetTabletType": "PRIMARY",
     "KsidVindex": "user_index",
     "MultiShardAutocommit": false,
     "OwnedVindexQuery": "select user_id, id from music where id = 1 for update",
@@ -649,7 +649,7 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "TargetTabletType": "MASTER",
+    "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "delete from music_extra where user_id = 1",
     "Table": "music_extra",
@@ -673,7 +673,7 @@ Gen4 plan same as above
       "Name": "main",
       "Sharded": false
     },
-    "TargetTabletType": "MASTER",
+    "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "insert into unsharded values ()",
     "TableName": "unsharded"
@@ -693,7 +693,7 @@ Gen4 plan same as above
       "Name": "main",
       "Sharded": false
     },
-    "TargetTabletType": "MASTER",
+    "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "insert into unsharded values (1, 2)",
     "TableName": "unsharded"
@@ -713,7 +713,7 @@ Gen4 plan same as above
       "Name": "main",
       "Sharded": false
     },
-    "TargetTabletType": "MASTER",
+    "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "insert into unsharded values (1, 2) on duplicate key update x = 3",
     "TableName": "unsharded"
@@ -733,7 +733,7 @@ Gen4 plan same as above
       "Name": "main",
       "Sharded": false
     },
-    "TargetTabletType": "MASTER",
+    "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "insert into unsharded_authoritative(col1, col2) values (:__seq0, 1)",
     "TableName": "unsharded_authoritative"
@@ -753,7 +753,7 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "TargetTabletType": "MASTER",
+    "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "insert into music(user_id, id) values (:_user_id_0, :_id_0) on duplicate key update user_id = values(user_id)",
     "TableName": "music"
@@ -773,7 +773,7 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "TargetTabletType": "MASTER",
+    "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "insert into music(user_id, id) values (:_user_id_0, :_id_0), (:_user_id_1, :_id_1) on duplicate key update user_id = values(user_id)",
     "TableName": "music"
@@ -793,7 +793,7 @@ Gen4 plan same as above
       "Name": "main",
       "Sharded": false
     },
-    "TargetTabletType": "MASTER",
+    "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "insert into unsharded select id from unsharded_auto",
     "TableName": "unsharded"
@@ -813,7 +813,7 @@ Gen4 plan same as above
       "Name": "main",
       "Sharded": false
     },
-    "TargetTabletType": "MASTER",
+    "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "insert into unsharded select id from unsharded join unsharded_auto",
     "TableName": "unsharded"
@@ -838,7 +838,7 @@ Gen4 plan same as above
       "Name": "main",
       "Sharded": false
     },
-    "TargetTabletType": "MASTER",
+    "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "insert into unsharded_auto(id, val) values (:__seq0, 'aa')",
     "TableName": "unsharded_auto"
@@ -858,7 +858,7 @@ Gen4 plan same as above
       "Name": "main",
       "Sharded": false
     },
-    "TargetTabletType": "MASTER",
+    "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "insert into unsharded_auto(val, id) values ('aa', :__seq0)",
     "TableName": "unsharded_auto"
@@ -878,7 +878,7 @@ Gen4 plan same as above
       "Name": "main",
       "Sharded": false
     },
-    "TargetTabletType": "MASTER",
+    "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "insert into unsharded_auto(val, id) values (false, :__seq0)",
     "TableName": "unsharded_auto"
@@ -898,7 +898,7 @@ Gen4 plan same as above
       "Name": "main",
       "Sharded": false
     },
-    "TargetTabletType": "MASTER",
+    "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "insert into unsharded_auto(id, val) values (:__seq0, 'aa'), (:__seq1, 'bb')",
     "TableName": "unsharded_auto"
@@ -918,7 +918,7 @@ Gen4 plan same as above
       "Name": "main",
       "Sharded": false
     },
-    "TargetTabletType": "MASTER",
+    "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "insert into unsharded values (1, 1)",
     "TableName": "unsharded"
@@ -938,7 +938,7 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "TargetTabletType": "MASTER",
+    "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "insert into `user`(id, val, `Name`, Costly) values (:_Id_0, 1, :_Name_0, :_Costly_0)",
     "TableName": "user"
@@ -958,7 +958,7 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "TargetTabletType": "MASTER",
+    "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "insert into `user`(id, `Name`, Costly) values (:_Id_0, :_Name_0, :_Costly_0)",
     "TableName": "user"
@@ -983,7 +983,7 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "TargetTabletType": "MASTER",
+    "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "insert into authoritative(user_id, col1, col2) values (:_user_id_0, 2, 3)",
     "TableName": "authoritative"
@@ -1003,7 +1003,7 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "TargetTabletType": "MASTER",
+    "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "insert into `user`(id, `Name`, Costly) values (:_Id_0, :_Name_0, :_Costly_0)",
     "TableName": "user"
@@ -1023,7 +1023,7 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "TargetTabletType": "MASTER",
+    "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "insert into `user`(id, `Name`, Costly) values (:_Id_0, :_Name_0, :_Costly_0)",
     "TableName": "user"
@@ -1043,7 +1043,7 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "TargetTabletType": "MASTER",
+    "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "insert ignore into `user`(id, `Name`, Costly) values (:_Id_0, :_Name_0, :_Costly_0)",
     "TableName": "user"
@@ -1063,7 +1063,7 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "TargetTabletType": "MASTER",
+    "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "insert into `user`(id, `Name`, Costly) values (:_Id_0, :_Name_0, :_Costly_0) on duplicate key update col = 2",
     "TableName": "user"
@@ -1083,7 +1083,7 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "TargetTabletType": "MASTER",
+    "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "insert into `user`(id, `Name`, Costly) values (:_Id_0, :_Name_0, :_Costly_0)",
     "TableName": "user"
@@ -1103,7 +1103,7 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "TargetTabletType": "MASTER",
+    "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "insert into `user`(nonid, id, `Name`, Costly) values (2, :_Id_0, :_Name_0, :_Costly_0)",
     "TableName": "user"
@@ -1123,7 +1123,7 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "TargetTabletType": "MASTER",
+    "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "insert into `user`(id, nonid, `Name`, Costly) values (:_Id_0, 2, :_Name_0, :_Costly_0)",
     "TableName": "user"
@@ -1143,7 +1143,7 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "TargetTabletType": "MASTER",
+    "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "insert into `user`(nonid, id, `Name`, Costly) values (true, :_Id_0, :_Name_0, :_Costly_0)",
     "TableName": "user"
@@ -1163,7 +1163,7 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "TargetTabletType": "MASTER",
+    "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "insert into `user`(nonid, `name`, id, Costly) values (2, :_Name_0, :_Id_0, :_Costly_0)",
     "TableName": "user"
@@ -1183,7 +1183,7 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "TargetTabletType": "MASTER",
+    "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "insert into user_extra(nonid, extra_id, user_id) values (2, :__seq0, :_user_id_0)",
     "TableName": "user_extra"
@@ -1203,7 +1203,7 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "TargetTabletType": "MASTER",
+    "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "insert into `weird``name`(`a``b*c`, `b*c`) values (:_a_b_c_0, 2)",
     "TableName": "weird`name"
@@ -1223,7 +1223,7 @@ Gen4 plan same as above
       "Name": "main",
       "Sharded": false
     },
-    "TargetTabletType": "MASTER",
+    "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "insert into unsharded select 1 from dual union select 1 from dual",
     "TableName": "unsharded"
@@ -1263,7 +1263,7 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "TargetTabletType": "MASTER",
+    "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "insert into `user`(id, `Name`, Costly) values (:_Id_0, :_Name_0, :_Costly_0), (:_Id_1, :_Name_1, :_Costly_1)",
     "TableName": "user"
@@ -1283,7 +1283,7 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "TargetTabletType": "MASTER",
+    "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "insert /*vt+ QUERY_TIMEOUT_MS=1 */ into `user`(id, `Name`, Costly) values (:_Id_0, :_Name_0, :_Costly_0), (:_Id_1, :_Name_1, :_Costly_1)",
     "QueryTimeout": 1,
@@ -1304,7 +1304,7 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "TargetTabletType": "MASTER",
+    "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": true,
     "Query": "insert /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ into `user`(id, `Name`, Costly) values (:_Id_0, :_Name_0, :_Costly_0), (:_Id_1, :_Name_1, :_Costly_1)",
     "TableName": "user"
@@ -1329,7 +1329,7 @@ Gen4 plan same as above
       "Name": "main",
       "Sharded": false
     },
-    "TargetTabletType": "MASTER",
+    "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "replace into unsharded values (1, 2)",
     "TableName": "unsharded"
@@ -1349,7 +1349,7 @@ Gen4 plan same as above
       "Name": "main",
       "Sharded": false
     },
-    "TargetTabletType": "MASTER",
+    "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "replace into unsharded select id from unsharded_auto",
     "TableName": "unsharded"
@@ -1374,7 +1374,7 @@ Gen4 plan same as above
       "Name": "main",
       "Sharded": false
     },
-    "TargetTabletType": "MASTER",
+    "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "replace into unsharded_auto(id, val) values (:__seq0, 'aa')",
     "TableName": "unsharded_auto"
@@ -1394,7 +1394,7 @@ Gen4 plan same as above
       "Name": "main",
       "Sharded": false
     },
-    "TargetTabletType": "MASTER",
+    "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "replace into unsharded_auto(val, id) values ('aa', :__seq0)",
     "TableName": "unsharded_auto"
@@ -1414,7 +1414,7 @@ Gen4 plan same as above
       "Name": "main",
       "Sharded": false
     },
-    "TargetTabletType": "MASTER",
+    "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "replace into unsharded_auto(id, val) values (:__seq0, 'aa'), (:__seq1, 'bb')",
     "TableName": "unsharded_auto"
@@ -1439,7 +1439,7 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "TargetTabletType": "MASTER",
+    "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "insert into multicolvin(column_a, column_b, column_c, kid) values (:_column_a_0, :_column_b_0, :_column_c_0, :_kid_0)",
     "TableName": "multicolvin"
@@ -1459,7 +1459,7 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "TargetTabletType": "MASTER",
+    "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "insert into overlap_vindex(kid, column_a, column_b) values (:_kid_0, :_column_a_0, 3)",
     "TableName": "overlap_vindex"
@@ -1479,7 +1479,7 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "TargetTabletType": "MASTER",
+    "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "insert into multicolvin(column_a, column_b, column_c, kid) values (:_column_a_0, :_column_b_0, :_column_c_0, :_kid_0), (:_column_a_1, :_column_b_1, :_column_c_1, :_kid_1)",
     "TableName": "multicolvin"
@@ -1499,7 +1499,7 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "TargetTabletType": "MASTER",
+    "TargetTabletType": "PRIMARY",
     "KsidVindex": "kid_index",
     "MultiShardAutocommit": false,
     "OwnedVindexQuery": "select kid, column_a, column_b, column_c from multicolvin where kid = 1 for update",
@@ -1525,7 +1525,7 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "TargetTabletType": "MASTER",
+    "TargetTabletType": "PRIMARY",
     "ChangedVindexValues": [
       "colb_colc_map:4"
     ],
@@ -1554,7 +1554,7 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "TargetTabletType": "MASTER",
+    "TargetTabletType": "PRIMARY",
     "ChangedVindexValues": [
       "cola_map:4",
       "colb_colc_map:5"
@@ -1584,7 +1584,7 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "TargetTabletType": "MASTER",
+    "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "update user_extra set val = 1",
     "Table": "user_extra"
@@ -1604,7 +1604,7 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "TargetTabletType": "MASTER",
+    "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "update user_extra set val = 1",
     "Table": "user_extra"
@@ -1624,7 +1624,7 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "TargetTabletType": "MASTER",
+    "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": true,
     "Query": "update /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ user_extra set val = 1",
     "Table": "user_extra"
@@ -1644,7 +1644,7 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "TargetTabletType": "MASTER",
+    "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "update /*vt+ QUERY_TIMEOUT_MS=1 */ user_extra set val = 1",
     "QueryTimeout": 1,
@@ -1665,7 +1665,7 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "TargetTabletType": "MASTER",
+    "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "update user_extra set val = 1 where id between 1 and 2",
     "Table": "user_extra"
@@ -1685,7 +1685,7 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "TargetTabletType": "MASTER",
+    "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "update user_extra set val = 1 where user_id in (1, 2)",
     "Table": "user_extra",
@@ -1712,7 +1712,7 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "TargetTabletType": "MASTER",
+    "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "update user_extra set val = 1 where `name` = 'foo'",
     "Table": "user_extra"
@@ -1732,7 +1732,7 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "TargetTabletType": "MASTER",
+    "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "update user_extra set val = 1 where id in (1, 2)",
     "Table": "user_extra"
@@ -1752,7 +1752,7 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "TargetTabletType": "MASTER",
+    "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "update user_extra set val = 1 where `name` = 'foo' or id = 1",
     "Table": "user_extra"
@@ -1772,7 +1772,7 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "TargetTabletType": "MASTER",
+    "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "delete from user_extra",
     "Table": "user_extra"
@@ -1792,7 +1792,7 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "TargetTabletType": "MASTER",
+    "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "delete from user_extra",
     "Table": "user_extra"
@@ -1812,7 +1812,7 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "TargetTabletType": "MASTER",
+    "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "delete from user_extra where user_id between 1 and 2",
     "Table": "user_extra"
@@ -1832,7 +1832,7 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "TargetTabletType": "MASTER",
+    "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "delete from user_extra where `name` = 'jose'",
     "Table": "user_extra"
@@ -1852,7 +1852,7 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "TargetTabletType": "MASTER",
+    "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": true,
     "Query": "delete /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ from user_extra where `name` = 'jose'",
     "Table": "user_extra"
@@ -1872,7 +1872,7 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "TargetTabletType": "MASTER",
+    "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "delete /*vt+ QUERY_TIMEOUT_MS=1 */ from user_extra where `name` = 'jose'",
     "QueryTimeout": 1,
@@ -1893,7 +1893,7 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "TargetTabletType": "MASTER",
+    "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "delete from user_extra where user_id in (1, 2)",
     "Table": "user_extra",
@@ -1920,7 +1920,7 @@ Gen4 plan same as above
       "Name": "main",
       "Sharded": false
     },
-    "TargetTabletType": "MASTER",
+    "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "update unsharded set col = (select id from unsharded_a where id = unsharded.col) where col = (select id from unsharded_b)"
   }
@@ -1939,7 +1939,7 @@ Gen4 plan same as above
       "Name": "main",
       "Sharded": false
     },
-    "TargetTabletType": "MASTER",
+    "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "delete from unsharded where col = (select id from unsharded_a where id = unsharded.col)"
   }
@@ -1958,7 +1958,7 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "TargetTabletType": "MASTER",
+    "TargetTabletType": "PRIMARY",
     "ChangedVindexValues": [
       "name_user_map:3"
     ],
@@ -1987,7 +1987,7 @@ Gen4 plan same as above
       "Name": "main",
       "Sharded": false
     },
-    "TargetTabletType": "MASTER",
+    "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "insert into unsharded values (:__lastInsertId, 2)",
     "TableName": "unsharded"
@@ -2007,7 +2007,7 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "TargetTabletType": "MASTER",
+    "TargetTabletType": "PRIMARY",
     "ChangedVindexValues": [
       "name_user_map:3"
     ],
@@ -2040,7 +2040,7 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "TargetTabletType": "MASTER",
+    "TargetTabletType": "PRIMARY",
     "ChangedVindexValues": [
       "name_user_map:3"
     ],
@@ -2065,7 +2065,7 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "TargetTabletType": "MASTER",
+    "TargetTabletType": "PRIMARY",
     "ChangedVindexValues": [
       "name_user_map:3"
     ],
@@ -2090,7 +2090,7 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "TargetTabletType": "MASTER",
+    "TargetTabletType": "PRIMARY",
     "KsidVindex": "user_index",
     "MultiShardAutocommit": false,
     "OwnedVindexQuery": "select Id, `Name`, Costly from `user` where id in (1, 2, 3) for update",
@@ -2120,7 +2120,7 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "TargetTabletType": "MASTER",
+    "TargetTabletType": "PRIMARY",
     "KsidVindex": "user_index",
     "MultiShardAutocommit": false,
     "OwnedVindexQuery": "select Id, `Name`, Costly from `user` where id + 1 = 2 for update",
@@ -2142,7 +2142,7 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "TargetTabletType": "MASTER",
+    "TargetTabletType": "PRIMARY",
     "KsidVindex": "user_index",
     "MultiShardAutocommit": false,
     "OwnedVindexQuery": "select Id, `Name`, Costly from `user` for update",
@@ -2164,7 +2164,7 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "TargetTabletType": "MASTER",
+    "TargetTabletType": "PRIMARY",
     "KsidVindex": "user_index",
     "MultiShardAutocommit": false,
     "OwnedVindexQuery": "select user_id, id from music where id = 1 for update",
@@ -2190,7 +2190,7 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "TargetTabletType": "MASTER",
+    "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "update `user` set val = 1",
     "Table": "user"
@@ -2210,7 +2210,7 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "TargetTabletType": "MASTER",
+    "TargetTabletType": "PRIMARY",
     "KsidVindex": "user_index",
     "MultiShardAutocommit": false,
     "OwnedVindexQuery": "select Id, `Name`, Costly from `user` for update",
@@ -2232,7 +2232,7 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "TargetTabletType": "MASTER",
+    "TargetTabletType": "PRIMARY",
     "ChangedVindexValues": [
       "colb_colc_map:4"
     ],
@@ -2261,7 +2261,7 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "TargetTabletType": "MASTER",
+    "TargetTabletType": "PRIMARY",
     "ChangedVindexValues": [
       "name_user_map:3"
     ],
@@ -2286,7 +2286,7 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "TargetTabletType": "MASTER",
+    "TargetTabletType": "PRIMARY",
     "ChangedVindexValues": [
       "name_user_map:3"
     ],
@@ -2314,7 +2314,7 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "TargetTabletType": "MASTER",
+    "TargetTabletType": "PRIMARY",
     "KsidVindex": "user_index",
     "MultiShardAutocommit": false,
     "OwnedVindexQuery": "select Id, `Name`, Costly from `user` where `name` = _binary 'abc' for update",
@@ -2336,7 +2336,7 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "TargetTabletType": "MASTER",
+    "TargetTabletType": "PRIMARY",
     "KsidVindex": "user_index",
     "MultiShardAutocommit": false,
     "OwnedVindexQuery": "select Id, `Name`, Costly from `user` for update",
@@ -2358,7 +2358,7 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "TargetTabletType": "MASTER",
+    "TargetTabletType": "PRIMARY",
     "ChangedVindexValues": [
       "name_user_map:3"
     ],
@@ -2383,7 +2383,7 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "TargetTabletType": "MASTER",
+    "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "update user_extra set val = 1",
     "Table": "user_extra"
@@ -2403,7 +2403,7 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "TargetTabletType": "MASTER",
+    "TargetTabletType": "PRIMARY",
     "KsidVindex": "user_index",
     "MultiShardAutocommit": false,
     "OwnedVindexQuery": "select Id, `Name`, Costly from `user` where `user`.id * `user`.col = `user`.foo for update",

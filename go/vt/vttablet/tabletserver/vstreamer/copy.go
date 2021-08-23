@@ -134,6 +134,8 @@ func (uvs *uvstreamer) sendEventsForRows(ctx context.Context, tableName string, 
 			Type: binlogdatapb.VEventType_ROW,
 			RowEvent: &binlogdatapb.RowEvent{
 				TableName: tableName,
+				Keyspace:  uvs.vse.keyspace,
+				Shard:     uvs.vse.shard,
 				RowChanges: []*binlogdatapb.RowChange{{
 					Before: nil,
 					After:  row,
@@ -238,6 +240,8 @@ func (uvs *uvstreamer) copyTable(ctx context.Context, tableName string) error {
 			fieldEvent := &binlogdatapb.FieldEvent{
 				TableName: tableName,
 				Fields:    rows.Fields,
+				Keyspace:  uvs.vse.keyspace,
+				Shard:     uvs.vse.shard,
 			}
 			uvs.fields = rows.Fields
 			uvs.pkfields = rows.Pkfields

@@ -78,7 +78,7 @@ func TestStateResharding(t *testing.T) {
 	defer tm.Stop()
 
 	tm.tmState.mu.Lock()
-	tm.tmState.tablet.Type = topodatapb.TabletType_MASTER
+	tm.tmState.tablet.Type = topodatapb.TabletType_PRIMARY
 	tm.tmState.mu.Unlock()
 
 	si := &topo.ShardInfo{
@@ -94,11 +94,11 @@ func TestStateResharding(t *testing.T) {
 	tm.tmState.mu.Unlock()
 
 	qsc := tm.QueryServiceControl.(*tabletservermock.Controller)
-	assert.Equal(t, topodatapb.TabletType_MASTER, qsc.CurrentTarget().TabletType)
+	assert.Equal(t, topodatapb.TabletType_PRIMARY, qsc.CurrentTarget().TabletType)
 	assert.False(t, qsc.IsServing())
 }
 
-func TestStateBlacklist(t *testing.T) {
+func TestStateDenyList(t *testing.T) {
 	ctx := context.Background()
 	ts := memorytopo.NewServer("cell1")
 	tm := newTestTM(t, ts, 1, "ks", "0")
@@ -113,20 +113,20 @@ func TestStateBlacklist(t *testing.T) {
 	si := &topo.ShardInfo{
 		Shard: &topodatapb.Shard{
 			TabletControls: []*topodatapb.Shard_TabletControl{{
-				TabletType:        topodatapb.TabletType_REPLICA,
-				Cells:             []string{"cell1"},
-				BlacklistedTables: []string{"t1"},
+				TabletType:   topodatapb.TabletType_REPLICA,
+				Cells:        []string{"cell1"},
+				DeniedTables: []string{"t1"},
 			}},
 		},
 	}
 	tm.tmState.RefreshFromTopoInfo(ctx, si, nil)
 	tm.tmState.mu.Lock()
-	assert.Equal(t, map[topodatapb.TabletType][]string{topodatapb.TabletType_REPLICA: {"t1"}}, tm.tmState.blacklistedTables)
+	assert.Equal(t, map[topodatapb.TabletType][]string{topodatapb.TabletType_REPLICA: {"t1"}}, tm.tmState.deniedTables)
 	tm.tmState.mu.Unlock()
 
 	qsc := tm.QueryServiceControl.(*tabletservermock.Controller)
-	b, _ := json.Marshal(qsc.GetQueryRules(blacklistQueryRules))
-	assert.Equal(t, `[{"Description":"enforce blacklisted tables","Name":"blacklisted_table","TableNames":["t1"],"Action":"FAIL_RETRY"}]`, string(b))
+	b, _ := json.Marshal(qsc.GetQueryRules(denyListQueryList))
+	assert.Equal(t, `[{"Description":"enforce denied tables","Name":"denied_table","TableNames":["t1"],"Action":"FAIL_RETRY"}]`, string(b))
 }
 
 func TestStateTabletControls(t *testing.T) {
@@ -164,7 +164,7 @@ func TestStateIsShardServingisInSrvKeyspace(t *testing.T) {
 	defer tm.Stop()
 
 	tm.tmState.mu.Lock()
-	tm.tmState.tablet.Type = topodatapb.TabletType_MASTER
+	tm.tmState.tablet.Type = topodatapb.TabletType_PRIMARY
 	tm.tmState.updateLocked(ctx)
 	tm.tmState.mu.Unlock()
 
@@ -215,7 +215,7 @@ func TestStateIsShardServingisInSrvKeyspace(t *testing.T) {
 	ks = &topodatapb.SrvKeyspace{
 		Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
 			{
-				ServedType: topodatapb.TabletType_MASTER,
+				ServedType: topodatapb.TabletType_PRIMARY,
 				ShardReferences: []*topodatapb.ShardReference{
 					{
 						Name:     "-80",
@@ -243,7 +243,7 @@ func TestStateIsShardServingisInSrvKeyspace(t *testing.T) {
 	ks = &topodatapb.SrvKeyspace{
 		Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
 			{
-				ServedType: topodatapb.TabletType_MASTER,
+				ServedType: topodatapb.TabletType_PRIMARY,
 				ShardReferences: []*topodatapb.ShardReference{
 					{
 						Name:     "0",
@@ -254,7 +254,7 @@ func TestStateIsShardServingisInSrvKeyspace(t *testing.T) {
 		},
 	}
 	want = map[topodatapb.TabletType]bool{
-		topodatapb.TabletType_MASTER: true,
+		topodatapb.TabletType_PRIMARY: true,
 	}
 	tm.tmState.RefreshFromTopoInfo(ctx, nil, ks)
 
@@ -359,22 +359,22 @@ func TestStateChangeTabletType(t *testing.T) {
 		Uid:  2,
 	}
 
-	err := tm.tmState.ChangeTabletType(ctx, topodatapb.TabletType_MASTER, DBActionSetReadWrite)
+	err := tm.tmState.ChangeTabletType(ctx, topodatapb.TabletType_PRIMARY, DBActionSetReadWrite)
 	require.NoError(t, err)
 	ti, err := ts.GetTablet(ctx, alias)
 	require.NoError(t, err)
-	assert.Equal(t, topodatapb.TabletType_MASTER, ti.Type)
-	assert.NotNil(t, ti.MasterTermStartTime)
-	assert.Equal(t, "master", statsTabletType.Get())
+	assert.Equal(t, topodatapb.TabletType_PRIMARY, ti.Type)
+	assert.NotNil(t, ti.PrimaryTermStartTime)
+	assert.Equal(t, "primary", statsTabletType.Get())
 	assert.Equal(t, 2, len(statsTabletTypeCount.Counts()))
-	assert.Equal(t, int64(1), statsTabletTypeCount.Counts()["master"])
+	assert.Equal(t, int64(1), statsTabletTypeCount.Counts()["primary"])
 
 	err = tm.tmState.ChangeTabletType(ctx, topodatapb.TabletType_REPLICA, DBActionNone)
 	require.NoError(t, err)
 	ti, err = ts.GetTablet(ctx, alias)
 	require.NoError(t, err)
 	assert.Equal(t, topodatapb.TabletType_REPLICA, ti.Type)
-	assert.Nil(t, ti.MasterTermStartTime)
+	assert.Nil(t, ti.PrimaryTermStartTime)
 	assert.Equal(t, "replica", statsTabletType.Get())
 	assert.Equal(t, 2, len(statsTabletTypeCount.Counts()))
 	assert.Equal(t, int64(2), statsTabletTypeCount.Counts()["replica"])
@@ -444,7 +444,7 @@ func TestPublishDeleted(t *testing.T) {
 		Uid:  2,
 	}
 
-	err := tm.tmState.ChangeTabletType(ctx, topodatapb.TabletType_MASTER, DBActionSetReadWrite)
+	err := tm.tmState.ChangeTabletType(ctx, topodatapb.TabletType_PRIMARY, DBActionSetReadWrite)
 	require.NoError(t, err)
 
 	err = ts.DeleteTablet(ctx, alias)

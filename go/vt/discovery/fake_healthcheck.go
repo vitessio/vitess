@@ -222,7 +222,7 @@ func (fhc *FakeHealthCheck) AddFakeTablet(cell, host string, port int32, keyspac
 		TabletType: tabletType,
 	}
 	item.ts.Serving = serving
-	item.ts.MasterTermStartTime = reparentTS
+	item.ts.PrimaryTermStartTime = reparentTS
 	item.ts.Stats = &querypb.RealtimeStats{}
 	item.ts.LastError = err
 	conn := connFactory(t)

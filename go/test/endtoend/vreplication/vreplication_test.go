@@ -91,7 +91,7 @@ func TestBasicVreplicationWorkflow(t *testing.T) {
 	vc = NewVitessCluster(t, "TestBasicVreplicationWorkflow", allCells, mainClusterConfig)
 
 	require.NotNil(t, vc)
-	defaultReplicas = 0 // because of CI resource constraints we can only run this test with master tablets
+	defaultReplicas = 0 // because of CI resource constraints we can only run this test with primary tablets
 	defer func() { defaultReplicas = 1 }()
 
 	defer vc.TearDown(t)
@@ -100,7 +100,7 @@ func TestBasicVreplicationWorkflow(t *testing.T) {
 	vc.AddKeyspace(t, []*Cell{defaultCell}, "product", "0", initialProductVSchema, initialProductSchema, defaultReplicas, defaultRdonly, 100)
 	vtgate = defaultCell.Vtgates[0]
 	require.NotNil(t, vtgate)
-	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.master", "product", "0"), 1)
+	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", "product", "0"), 1)
 
 	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 	defer vtgateConn.Close()
@@ -151,7 +151,7 @@ func TestMultiCellVreplicationWorkflow(t *testing.T) {
 
 	vtgate = cell1.Vtgates[0]
 	require.NotNil(t, vtgate)
-	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.master", "product", "0"), 1)
+	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", "product", "0"), 1)
 	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", "product", "0"), 2)
 
 	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
@@ -185,7 +185,7 @@ func TestCellAliasVreplicationWorkflow(t *testing.T) {
 
 	vtgate = cell1.Vtgates[0]
 	require.NotNil(t, vtgate)
-	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.master", "product", "0"), 1)
+	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", "product", "0"), 1)
 	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", "product", "0"), 2)
 
 	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
@@ -248,10 +248,10 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 		if _, err := vc.AddKeyspace(t, cells, "customer", "-80,80-", customerVSchema, customerSchema, defaultReplicas, defaultRdonly, 200); err != nil {
 			t.Fatal(err)
 		}
-		if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.master", "customer", "-80"), 1); err != nil {
+		if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", "customer", "-80"), 1); err != nil {
 			t.Fatal(err)
 		}
-		if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.master", "customer", "80-"), 1); err != nil {
+		if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", "customer", "80-"), 1); err != nil {
 			t.Fatal(err)
 		}
 
@@ -320,13 +320,13 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 			dropSourcesDryRun(t, ksWorkflow, true, dryRunResultsDropSourcesRenameCustomerShard)
 
 			var exists bool
-			exists, err = checkIfBlacklistExists(t, vc, "product:0", "customer")
-			require.NoError(t, err, "Error getting blacklist for customer:0")
+			exists, err = checkIfDenyListExists(t, vc, "product:0", "customer")
+			require.NoError(t, err, "Error getting denylist for customer:0")
 			require.True(t, exists)
 			dropSources(t, ksWorkflow)
 
-			exists, err = checkIfBlacklistExists(t, vc, "product:0", "customer")
-			require.NoError(t, err, "Error getting blacklist for customer:0")
+			exists, err = checkIfDenyListExists(t, vc, "product:0", "customer")
+			require.NoError(t, err, "Error getting denylist for customer:0")
 			require.False(t, exists)
 
 			for _, shard := range strings.Split("-80,80-", ",") {
@@ -414,7 +414,7 @@ func reshardMerchant2to3SplitMerge(t *testing.T) {
 				t.Fatalf("GetShard merchant failed for: %s: %v", shard, err)
 			}
 			assert.NotContains(t, output, "node doesn't exist", "GetShard failed for valid shard merchant:"+shard)
-			assert.Contains(t, output, "master_alias", "GetShard failed for valid shard merchant:"+shard)
+			assert.Contains(t, output, "primary_alias", "GetShard failed for valid shard merchant:"+shard)
 		}
 
 		for _, shard := range strings.Split("-40,40-c0,c0-", ",") {
@@ -473,14 +473,14 @@ func reshard(t *testing.T, ksName string, tableName string, workflow string, sou
 		arrTargetShardNames := strings.Split(targetShards, ",")
 
 		for _, shardName := range arrTargetShardNames {
-			if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.master", ksName, shardName), 1); err != nil {
+			if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", ksName, shardName), 1); err != nil {
 				t.Fatal(err)
 			}
 		}
-		if err := vc.VtctlClient.ExecuteCommand("Reshard", "-v1", "-cells="+sourceCellOrAlias, "-tablet_types=replica,master", ksWorkflow, sourceShards, targetShards); err != nil {
+		if err := vc.VtctlClient.ExecuteCommand("Reshard", "-v1", "-cells="+sourceCellOrAlias, "-tablet_types=replica,primary", ksWorkflow, sourceShards, targetShards); err != nil {
 			t.Fatalf("Reshard command failed with %+v\n", err)
 		}
-		tablets := vc.getVttabletsInKeyspace(t, defaultCell, ksName, "master")
+		tablets := vc.getVttabletsInKeyspace(t, defaultCell, ksName, "primary")
 		targetShards = "," + targetShards + ","
 		for _, tab := range tablets {
 			if strings.Contains(targetShards, ","+tab.Shard+",") {
@@ -545,10 +545,10 @@ func shardMerchant(t *testing.T) {
 		if _, err := vc.AddKeyspace(t, []*Cell{defaultCell}, "merchant", "-80,80-", merchantVSchema, "", defaultReplicas, defaultRdonly, 400); err != nil {
 			t.Fatal(err)
 		}
-		if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.master", "merchant", "-80"), 1); err != nil {
+		if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", "merchant", "-80"), 1); err != nil {
 			t.Fatal(err)
 		}
-		if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.master", "merchant", "80-"), 1); err != nil {
+		if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", "merchant", "80-"), 1); err != nil {
 			t.Fatal(err)
 		}
 		moveTables(t, cell, workflow, sourceKs, targetKs, tables)
@@ -571,7 +571,7 @@ func shardMerchant(t *testing.T) {
 
 func vdiff(t *testing.T, workflow, cells string) {
 	t.Run("vdiff", func(t *testing.T) {
-		output, err := vc.VtctlClient.ExecuteCommandWithOutput("VDiff", "-tablet_types=master", "-source_cell="+cells, "-format", "json", workflow)
+		output, err := vc.VtctlClient.ExecuteCommandWithOutput("VDiff", "-tablet_types=primary", "-source_cell="+cells, "-format", "json", workflow)
 		log.Infof("vdiff err: %+v, output: %+v", err, output)
 		require.Nil(t, err)
 		require.NotNil(t, output)
@@ -604,7 +604,7 @@ func materializeProduct(t *testing.T) {
 		keyspace := "customer"
 		applyVSchema(t, materializeProductVSchema, keyspace)
 		materialize(t, materializeProductSpec)
-		customerTablets := vc.getVttabletsInKeyspace(t, defaultCell, keyspace, "master")
+		customerTablets := vc.getVttabletsInKeyspace(t, defaultCell, keyspace, "primary")
 		{
 			for _, tab := range customerTablets {
 				catchup(t, tab, workflow, "Materialize")
@@ -614,7 +614,7 @@ func materializeProduct(t *testing.T) {
 			}
 		}
 
-		productTablets := vc.getVttabletsInKeyspace(t, defaultCell, "product", "master")
+		productTablets := vc.getVttabletsInKeyspace(t, defaultCell, "product", "primary")
 		t.Run("throttle-app-product", func(t *testing.T) {
 			// Now, throttle the streamer on source tablets, insert some rows
 			for _, tab := range productTablets {
@@ -748,7 +748,7 @@ func materializeMerchantSales(t *testing.T) {
 	t.Run("materializeMerchantSales", func(t *testing.T) {
 		workflow := "msales"
 		materialize(t, materializeMerchantSalesSpec)
-		merchantTablets := vc.getVttabletsInKeyspace(t, defaultCell, "merchant", "master")
+		merchantTablets := vc.getVttabletsInKeyspace(t, defaultCell, "merchant", "primary")
 		for _, tab := range merchantTablets {
 			catchup(t, tab, workflow, "Materialize")
 		}
@@ -764,7 +764,7 @@ func materializeMerchantOrders(t *testing.T) {
 		keyspace := "merchant"
 		applyVSchema(t, merchantOrdersVSchema, keyspace)
 		materialize(t, materializeMerchantOrdersSpec)
-		merchantTablets := vc.getVttabletsInKeyspace(t, defaultCell, "merchant", "master")
+		merchantTablets := vc.getVttabletsInKeyspace(t, defaultCell, "merchant", "primary")
 		for _, tab := range merchantTablets {
 			catchup(t, tab, workflow, "Materialize")
 		}
@@ -820,7 +820,7 @@ func catchup(t *testing.T, vttablet *cluster.VttabletProcess, workflow, info str
 
 func moveTables(t *testing.T, cell, workflow, sourceKs, targetKs, tables string) {
 	if err := vc.VtctlClient.ExecuteCommand("MoveTables", "-v1", "-cells="+cell, "-workflow="+workflow,
-		"-tablet_types="+"master,replica,rdonly", sourceKs, targetKs, tables); err != nil {
+		"-tablet_types="+"primary,replica,rdonly", sourceKs, targetKs, tables); err != nil {
 		t.Fatalf("MoveTables command failed with %+v\n", err)
 	}
 }
