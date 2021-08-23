@@ -49,7 +49,7 @@ func (s *SubQuery) TableID() semantics.TableSet {
 
 // PushPredicate implements the Operator interface
 func (s *SubQuery) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) error {
-	panic("implement me")
+	return semantics.Gen4NotSupportedF("pushing predicate on subquery")
 }
 
 // UnsolvedPredicates implements the Operator interface
