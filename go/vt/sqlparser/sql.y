@@ -1372,6 +1372,14 @@ column_definition:
     }
     $$ = &ColumnDefinition{Name: NewColIdent(string($1)), Type: $2}
   }
+| column_name_safe_reserved_keyword column_type column_type_options
+  {
+    if err := $2.merge($3); err != nil {
+      yylex.Error(err.Error())
+      return 1
+    }
+    $$ = &ColumnDefinition{Name: NewColIdent(string($1)), Type: $2}
+  }
 
 column_definition_for_create:
   reserved_sql_id column_type column_type_options
@@ -1995,12 +2003,19 @@ index_column:
   {
       $$ = &IndexColumn{Column: $1, Length: $2, Order: $3}
   }
-
+| column_name_safe_reserved_keyword length_opt asc_desc_opt
+  {
+      $$ = &IndexColumn{Column: NewColIdent(string($1)), Length: $2, Order: $3}
+  }
 constraint_definition:
   CONSTRAINT ID constraint_info
   {
     $$ = &ConstraintDefinition{Name: string($2), Details: $3}
   }
+|  CONSTRAINT column_name_safe_reserved_keyword constraint_info
+   {
+     $$ = &ConstraintDefinition{Name: string($2), Details: $3}
+   }
 |  constraint_info
   {
     $$ = &ConstraintDefinition{Details: $1}
@@ -2263,7 +2278,17 @@ alter_table_statement_part:
     $$ = &DDL{Action: AlterStr, ConstraintAction: DropStr, TableSpec: &TableSpec{Constraints:
         []*ConstraintDefinition{&ConstraintDefinition{Name: string($3)}}}}
   }
+| DROP CONSTRAINT column_name_safe_reserved_keyword
+  {
+    $$ = &DDL{Action: AlterStr, ConstraintAction: DropStr, TableSpec: &TableSpec{Constraints:
+        []*ConstraintDefinition{&ConstraintDefinition{Name: string($3)}}}}
+  }
 | DROP CHECK ID
+  {
+    $$ = &DDL{Action: AlterStr, ConstraintAction: DropStr, TableSpec: &TableSpec{Constraints:
+        []*ConstraintDefinition{&ConstraintDefinition{Name: string($3), Details: &CheckConstraintDefinition{}}}}}
+  }
+| DROP CHECK column_name_safe_reserved_keyword
   {
     $$ = &DDL{Action: AlterStr, ConstraintAction: DropStr, TableSpec: &TableSpec{Constraints:
         []*ConstraintDefinition{&ConstraintDefinition{Name: string($3), Details: &CheckConstraintDefinition{}}}}}
@@ -4921,6 +4946,7 @@ reserved_keyword:
 | UTC_TIME
 | UTC_TIMESTAMP
 | VALUES
+| VALUE
 | VARIANCE
 | VAR_POP
 | VAR_SAMP
@@ -5136,7 +5162,6 @@ non_reserved_keyword:
 | UNCOMMITTED
 | UNSIGNED
 | UNUSED
-| VALUE
 | VARBINARY
 | VARCHAR
 | VARIABLES
@@ -5179,6 +5204,7 @@ column_name_safe_reserved_keyword:
 | STDDEV_POP
 | STDDEV_SAMP
 | SUM
+| VALUE
 | VARIANCE
 | VAR_POP
 | VAR_SAMP
