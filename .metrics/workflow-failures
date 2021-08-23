@@ -1,5 +1,3 @@
-2021-04-13T11:40:24Z,Cluster (onlineddl_vrepl_stress),https://github.com/vitessio/vitess/actions/runs/744585306
-2021-04-13T11:40:24Z,Cluster (tabletmanager_throttler),https://github.com/vitessio/vitess/actions/runs/744585313
 2021-04-13T11:40:24Z,Cluster (tabletmanager_throttler_custom_config),https://github.com/vitessio/vitess/actions/runs/744585332
 2021-04-13T11:40:24Z,Cluster (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/744585349
 2021-04-13T11:40:24Z,Cluster (vreplication_cellalias),https://github.com/vitessio/vitess/actions/runs/744585338
@@ -9997,4 +9995,6 @@
 2021-08-23T05:13:27Z,Cluster (onlineddl_vrepl),https://github.com/vitessio/vitess/actions/runs/1157430303
 2021-08-23T05:13:27Z,unit_race,https://github.com/vitessio/vitess/actions/runs/1157430276
 2021-08-23T05:21:33Z,Cluster (onlineddl_ghost),https://github.com/vitessio/vitess/actions/runs/1157447773
+2021-08-23T05:21:33Z,Cluster (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/1157447754
+2021-08-23T05:21:33Z,Cluster (vstream_stoponreshard_true),https://github.com/vitessio/vitess/actions/runs/1157447820
 2021-08-23T05:21:33Z,endtoend,https://github.com/vitessio/vitess/actions/runs/1157447785
