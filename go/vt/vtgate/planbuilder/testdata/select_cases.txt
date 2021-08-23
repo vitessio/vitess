@@ -506,6 +506,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4 plan same as above
 
 # nextval for simple route
 "select next value from user"
@@ -1447,6 +1448,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4 plan same as above
 
 # don't filter on the vtgate
 "select 42 from dual where false"
@@ -1487,6 +1489,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4 plan same as above
 
 # sql_calc_found_rows without limit
 "select sql_calc_found_rows * from music where user_id = 1"

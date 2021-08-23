@@ -3167,6 +3167,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4 plan same as above
 
 # last_insert_id for sharded keyspace
 "select last_insert_id() from user"
