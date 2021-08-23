@@ -226,12 +226,16 @@ JoinPredicates:
 		ArgName: 
 		Query: 	QueryGraph: {
 		Tables:
-			2:user_extra where id = u.id
+			2:user_extra
+		JoinPredicates:
+			1:2 - id = u.id
 		}
 	}]
 	Outer: 	QueryGraph: {
 	Tables:
-		1:` + "`user`" + ` AS u where u.id = (select id from user_extra where id = u.id)
+		1:` + "`user`" + ` AS u
+	JoinPredicates:
+		1:2 - u.id = (select id from user_extra where id = u.id)
 	}
 }`,
 	}}
