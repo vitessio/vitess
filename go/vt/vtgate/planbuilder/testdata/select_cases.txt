@@ -1719,3 +1719,25 @@ Gen4 plan same as above
 # Into outfile s3 in sub-query is incorrect
 "select id from (select id from user into outfile s3 'inner_outfile') as t2"
 "Incorrect usage/placement of 'INTO'"
+
+"select (select u.id from user as u where u.id = 1), a.id from user as a where a.id = 1"
+{
+  "QueryType": "SELECT",
+  "Original": "select (select u.id from user as u where u.id = 1), a.id from user as a where a.id = 1",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select (select u.id from `user` as u where 1 != 1), a.id from `user` as a where 1 != 1",
+    "Query": "select (select u.id from `user` as u where u.id = 1), a.id from `user` as a where a.id = 1",
+    "Table": "`user`",
+    "Values": [
+      1
+    ],
+    "Vindex": "user_index"
+  }
+}
+Gen4 plan same as above

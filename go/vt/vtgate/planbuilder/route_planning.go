@@ -63,12 +63,13 @@ func gen4Planner(_ string) func(sqlparser.Statement, *sqlparser.ReservedVars, Co
 }
 
 type postProcessor struct {
-	inDerived bool
-	semTable  *semantics.SemTable
-	vschema   ContextVSchema
+	inDerived   bool
+	semTable    *semantics.SemTable
+	vschema     ContextVSchema
+	sqToReplace map[string]*sqlparser.Select
 }
 
-func (pp *postProcessor) planHorizon(plan logicalPlan, sel *sqlparser.Select) (logicalPlan, error) {
+func (pp *postProcessor) planHorizon(plan logicalPlan, sel *sqlparser.Select, sqToReplace map[string]*sqlparser.Select) (logicalPlan, error) {
 	hp := horizonPlanning{
 		sel:       sel,
 		plan:      plan,
@@ -76,6 +77,8 @@ func (pp *postProcessor) planHorizon(plan logicalPlan, sel *sqlparser.Select) (l
 		vschema:   pp.vschema,
 		inDerived: pp.inDerived,
 	}
+
+	replaceSubQuery(sqToReplace, hp.sel)
 
 	plan, err := hp.planHorizon()
 	if err != nil {
@@ -114,6 +117,7 @@ func newBuildSelectPlan(sel *sqlparser.Select, reservedVars *sqlparser.ReservedV
 		reservedVars: reservedVars,
 		semTable:     semTable,
 		vschema:      vschema,
+		sqToReplace:  map[string]*sqlparser.Select{},
 	}
 	tree, err := optimizeQuery(ctx, opTree)
 	if err != nil {
@@ -121,15 +125,16 @@ func newBuildSelectPlan(sel *sqlparser.Select, reservedVars *sqlparser.ReservedV
 	}
 
 	postProcessing := &postProcessor{
-		semTable: semTable,
-		vschema:  vschema,
+		semTable:    semTable,
+		vschema:     vschema,
+		sqToReplace: ctx.sqToReplace,
 	}
 	plan, err := transformToLogicalPlan(tree, semTable, postProcessing)
 	if err != nil {
 		return nil, err
 	}
 
-	plan, err = postProcessing.planHorizon(plan, sel)
+	plan, err = postProcessing.planHorizon(plan, sel, postProcessing.sqToReplace)
 	if err != nil {
 		return nil, err
 	}
@@ -156,6 +161,13 @@ type optimizeContext struct {
 	reservedVars *sqlparser.ReservedVars
 	semTable     *semantics.SemTable
 	vschema      ContextVSchema
+	// these helps in replacing the argNames with the subquery
+	sqToReplace map[string]*sqlparser.Select
+}
+
+func (c optimizeContext) isSubQueryToReplace(name string) bool {
+	_, found := c.sqToReplace[name]
+	return found
 }
 
 func optimizeQuery(ctx optimizeContext, opTree abstract.Operator) (queryTree, error) {
@@ -222,7 +234,7 @@ func optimizeSubQuery(ctx optimizeContext, op *abstract.SubQuery) (queryTree, er
 		var mergeErr error
 		merger := func(a, b *routeTree) *routeTree {
 			var merged *routeTree
-			merged, mergeErr = mergeSubQuery(ctx, a, b, inner)
+			merged, mergeErr = mergeSubQuery(ctx, a, inner)
 			return merged
 		}
 
@@ -261,20 +273,12 @@ func optimizeSubQuery(ctx optimizeContext, op *abstract.SubQuery) (queryTree, er
 	return outerTree, nil
 }
 
-func mergeSubQuery(ctx optimizeContext, outer, inner *routeTree, subq *abstract.SubQueryInner) (*routeTree, error) {
-	if outer.sqToReplace == nil {
-		outer.sqToReplace = map[string]*sqlparser.Select{}
-	}
-	outer.sqToReplace[subq.ArgName] = subq.SelectStatement
-	for argName, selectStmt := range inner.sqToReplace {
-		outer.sqToReplace[argName] = selectStmt
-	}
-
+func mergeSubQuery(ctx optimizeContext, outer *routeTree, subq *abstract.SubQueryInner) (*routeTree, error) {
+	ctx.sqToReplace[subq.ArgName] = subq.SelectStatement
 	err := outer.resetRoutingSelections(ctx)
 	if err != nil {
 		return nil, err
 	}
-
 	return outer, nil
 }
 
