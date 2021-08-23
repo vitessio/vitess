@@ -117,30 +117,6 @@ type (
 	}
 )
 
-func (s *subqueryTree) tableID() semantics.TableSet {
-	return s.inner.tableID() | s.outer.tableID()
-}
-
-func (s *subqueryTree) cost() int {
-	panic("implement me")
-}
-
-func (s *subqueryTree) clone() queryTree {
-	result := &subqueryTree{
-		subquery: &sqlparser.Select{},
-		outer:    s.outer.clone(),
-		inner:    s.inner.clone(),
-		opcode:   s.opcode,
-		argName:  s.argName,
-	}
-	*result.subquery = *s.subquery
-	return result
-}
-
-func (s *subqueryTree) pushOutputColumns([]*sqlparser.ColName, *semantics.SemTable) ([]int, error) {
-	panic("implement me")
-}
-
 // relation interface and implementations
 // They are representation of the tables in a routeTree
 // When we are able to merge queryTree then it lives as relation otherwise it stays as joinTree
@@ -201,6 +177,30 @@ type vindexPlusPredicates struct {
 	foundVindex vindexes.Vindex
 	opcode      engine.RouteOpcode
 	predicates  []sqlparser.Expr
+}
+
+func (s *subqueryTree) tableID() semantics.TableSet {
+	return s.inner.tableID() | s.outer.tableID()
+}
+
+func (s *subqueryTree) cost() int {
+	return s.inner.cost() + s.outer.cost()
+}
+
+func (s *subqueryTree) clone() queryTree {
+	result := &subqueryTree{
+		subquery: &sqlparser.Select{},
+		outer:    s.outer.clone(),
+		inner:    s.inner.clone(),
+		opcode:   s.opcode,
+		argName:  s.argName,
+	}
+	*result.subquery = *s.subquery
+	return result
+}
+
+func (s *subqueryTree) pushOutputColumns([]*sqlparser.ColName, *semantics.SemTable) ([]int, error) {
+	return nil, semantics.Gen4NotSupportedF("pushing output columns on subquery tree")
 }
 
 func (d *derivedTree) tableID() semantics.TableSet {
