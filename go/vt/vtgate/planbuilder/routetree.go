@@ -76,6 +76,7 @@ type cost struct {
 
 // vindexPlusPredicates is a struct used to store all the predicates that the vindex can be used to query
 type vindexPlusPredicates struct {
+	tableID    semantics.TableSet
 	colVindex  *vindexes.ColumnVindex
 	values     []sqltypes.PlanValue
 	valueExprs []sqlparser.Expr
@@ -267,7 +268,7 @@ func (rp *routeTree) planEqualOp(ctx optimizeContext, node *sqlparser.Comparison
 		return false, err
 	}
 
-	return rp.haveMatchingVindex(node, vdValue, column, *val, equalOrEqualUnique, justTheVindex), err
+	return rp.haveMatchingVindex(ctx, node, vdValue, column, *val, equalOrEqualUnique, justTheVindex), err
 }
 
 func (rp *routeTree) planSimpleInOp(ctx optimizeContext, node *sqlparser.ComparisonExpr, left *sqlparser.ColName) (bool, error) {
@@ -284,7 +285,7 @@ func (rp *routeTree) planSimpleInOp(ctx optimizeContext, node *sqlparser.Compari
 		}
 	}
 	opcode := func(*vindexes.ColumnVindex) engine.RouteOpcode { return engine.SelectIN }
-	return rp.haveMatchingVindex(node, vdValue, left, *value, opcode, justTheVindex), err
+	return rp.haveMatchingVindex(ctx, node, vdValue, left, *value, opcode, justTheVindex), err
 }
 
 func (rp *routeTree) planCompositeInOp(ctx optimizeContext, node *sqlparser.ComparisonExpr, left sqlparser.ValTuple) (bool, error) {
@@ -333,7 +334,7 @@ func (rp *routeTree) planCompositeInOpRecursive(ctx optimizeContext, node *sqlpa
 			}
 
 			opcode := func(*vindexes.ColumnVindex) engine.RouteOpcode { return engine.SelectMultiEqual }
-			newVindex := rp.haveMatchingVindex(node, rightVals, expr, *newPlanValues, opcode, justTheVindex)
+			newVindex := rp.haveMatchingVindex(ctx, node, rightVals, expr, *newPlanValues, opcode, justTheVindex)
 			foundVindex = newVindex || foundVindex
 		}
 	}
@@ -372,7 +373,7 @@ func (rp *routeTree) planLikeOp(ctx optimizeContext, node *sqlparser.ComparisonE
 		return nil
 	}
 
-	return rp.haveMatchingVindex(node, vdValue, column, *val, selectEqual, vdx), err
+	return rp.haveMatchingVindex(ctx, node, vdValue, column, *val, selectEqual, vdx), err
 }
 
 func (rp *routeTree) planIsExpr(ctx optimizeContext, node *sqlparser.IsExpr) (bool, error) {
@@ -390,7 +391,7 @@ func (rp *routeTree) planIsExpr(ctx optimizeContext, node *sqlparser.IsExpr) (bo
 		return false, err
 	}
 
-	return rp.haveMatchingVindex(node, vdValue, column, *val, equalOrEqualUnique, justTheVindex), err
+	return rp.haveMatchingVindex(ctx, node, vdValue, column, *val, equalOrEqualUnique, justTheVindex), err
 }
 
 // makePlanValue transforms the given sqlparser.Expr into a sqltypes.PlanValue.
@@ -428,6 +429,7 @@ func (rp *routeTree) hasVindex(column *sqlparser.ColName) bool {
 }
 
 func (rp *routeTree) haveMatchingVindex(
+	ctx optimizeContext,
 	node sqlparser.Expr,
 	valueExpr sqlparser.Expr,
 	column *sqlparser.ColName,
@@ -437,7 +439,7 @@ func (rp *routeTree) haveMatchingVindex(
 ) bool {
 	newVindexFound := false
 	for _, v := range rp.vindexPreds {
-		if v.foundVindex != nil {
+		if v.foundVindex != nil || !ctx.semTable.Dependencies(column).IsSolvedBy(v.tableID) {
 			continue
 		}
 		for _, col := range v.colVindex.Columns {
@@ -525,7 +527,7 @@ func (rp *routeTree) resetRoutingSelections(ctx optimizeContext) error {
 	rp.vindexPredicates = nil
 
 	for i, vp := range rp.vindexPreds {
-		rp.vindexPreds[i] = &vindexPlusPredicates{colVindex: vp.colVindex}
+		rp.vindexPreds[i] = &vindexPlusPredicates{colVindex: vp.colVindex, tableID: vp.tableID}
 	}
 
 	predicates := rp.predicates

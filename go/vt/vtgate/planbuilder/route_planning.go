@@ -791,7 +791,7 @@ func createRoutePlan(ctx optimizeContext, table *abstract.QueryTable, solves sem
 	}
 
 	for _, columnVindex := range vschemaTable.ColumnVindexes {
-		plan.vindexPreds = append(plan.vindexPreds, &vindexPlusPredicates{colVindex: columnVindex})
+		plan.vindexPreds = append(plan.vindexPreds, &vindexPlusPredicates{colVindex: columnVindex, tableID: solves})
 	}
 
 	switch {
