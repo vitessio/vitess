@@ -189,6 +189,11 @@ func TestSubQueries(t *testing.T) {
 		assert.EqualValues(t, `[INT64(1)]`, fmt.Sprintf("%v", row), "does not match for row: %d", index+1)
 	}
 
+	// fail as projection subquery is not scalar
+	_, err = exec(t, conn, `select (select id from t2) from t2 order by id`)
+	assert.EqualError(t, err, "subquery returned more than one row (errno 1105) (sqlstate HY000) during query: select (select id from t2) from t2 order by id")
+
+	assertMatches(t, conn, `select (select id from t2 order by id limit 1) from t2 order by id limit 2`, `[[INT64(1)] [INT64(1)]]`)
 }
 
 func assertMatches(t *testing.T, conn *mysql.Conn, query, expected string) {
