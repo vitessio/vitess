@@ -465,8 +465,8 @@ func NewListArg(in string) ListArg {
 }
 
 // String returns ListArg as a string.
-func (node *ListArg) String() string {
-	return string(*node)
+func (node ListArg) String() string {
+	return string(node)
 }
 
 // Bytes return the []byte
