@@ -27,9 +27,15 @@ import (
 )
 
 var (
+	// DefaultRWPoolSize is the pool size used when creating read-write RPC
+	// pools if a config has no size set.
+	DefaultRWPoolSize = 50
 	// DefaultReadPoolSize is the pool size used when creating read-only RPC
 	// pools if a config has no size set.
 	DefaultReadPoolSize = 500
+	// DefaultRWPoolWaitTimeout is the pool wait timeout used when creating
+	// read-write RPC pools if a config has no wait timeout set.
+	DefaultRWPoolWaitTimeout = time.Millisecond * 100
 	// DefaultReadPoolWaitTimeout is the pool wait timeout used when creating
 	// read-only RPC pools if a config has no wait timeout set.
 	DefaultReadPoolWaitTimeout = time.Millisecond * 100
@@ -47,6 +53,7 @@ type Config struct {
 
 	BackupReadPoolConfig   *RPCPoolConfig
 	SchemaReadPoolConfig   *RPCPoolConfig
+	TopoRWPoolConfig       *RPCPoolConfig
 	TopoReadPoolConfig     *RPCPoolConfig
 	WorkflowReadPoolConfig *RPCPoolConfig
 }
@@ -99,6 +106,10 @@ func (cfg *Config) UnmarshalYAML(unmarshal func(interface{}) error) error {
 
 // MarshalJSON implements the json.Marshaler interface.
 func (cfg *Config) MarshalJSON() ([]byte, error) {
+	defaultRWPoolConfig := &RPCPoolConfig{
+		Size:        DefaultRWPoolSize,
+		WaitTimeout: DefaultRWPoolWaitTimeout,
+	}
 	defaultReadPoolConfig := &RPCPoolConfig{
 		Size:        DefaultReadPoolSize,
 		WaitTimeout: DefaultReadPoolWaitTimeout,
@@ -115,6 +126,7 @@ func (cfg *Config) MarshalJSON() ([]byte, error) {
 
 		BackupReadPoolConfig   *RPCPoolConfig `json:"backup_read_pool_config"`
 		SchemaReadPoolConfig   *RPCPoolConfig `json:"schema_read_pool_config"`
+		TopoRWPoolConfig       *RPCPoolConfig `json:"topo_rw_pool_config"`
 		TopoReadPoolConfig     *RPCPoolConfig `json:"topo_read_pool_config"`
 		WorkflowReadPoolConfig *RPCPoolConfig `json:"workflow_read_pool_config"`
 	}{
@@ -126,6 +138,7 @@ func (cfg *Config) MarshalJSON() ([]byte, error) {
 		VtctldFlags:            cfg.VtctldFlags,
 		BackupReadPoolConfig:   defaultReadPoolConfig.merge(cfg.BackupReadPoolConfig),
 		SchemaReadPoolConfig:   defaultReadPoolConfig.merge(cfg.SchemaReadPoolConfig),
+		TopoRWPoolConfig:       defaultRWPoolConfig.merge(cfg.TopoRWPoolConfig),
 		TopoReadPoolConfig:     defaultReadPoolConfig.merge(cfg.TopoReadPoolConfig),
 		WorkflowReadPoolConfig: defaultReadPoolConfig.merge(cfg.WorkflowReadPoolConfig),
 	}
@@ -147,6 +160,7 @@ func (cfg Config) Merge(override Config) Config {
 		BackupReadPoolConfig:   cfg.BackupReadPoolConfig.merge(override.BackupReadPoolConfig),
 		SchemaReadPoolConfig:   cfg.SchemaReadPoolConfig.merge(override.SchemaReadPoolConfig),
 		TopoReadPoolConfig:     cfg.TopoReadPoolConfig.merge(override.TopoReadPoolConfig),
+		TopoRWPoolConfig:       cfg.TopoRWPoolConfig.merge(override.TopoRWPoolConfig),
 		WorkflowReadPoolConfig: cfg.WorkflowReadPoolConfig.merge(override.WorkflowReadPoolConfig),
 	}
 
@@ -190,6 +204,27 @@ func mergeStringMap(base map[string]string, override map[string]string) {
 type RPCPoolConfig struct {
 	Size        int           `json:"size"`
 	WaitTimeout time.Duration `json:"wait_timeout"`
+}
+
+// NewRWPool returns an RPCPool from the given config that should be used for
+// performing read-write operations. If the config is nil, or has a non-positive
+// size, DefaultRWPoolSize will be used. Similarly, if the config is nil or has
+// a negative wait timeout, DefaultRWPoolWaitTimeout will be used.
+func (cfg *RPCPoolConfig) NewRWPool() *pools.RPCPool {
+	size := DefaultRWPoolSize
+	waitTimeout := DefaultRWPoolWaitTimeout
+
+	if cfg != nil {
+		if cfg.Size > 0 {
+			size = cfg.Size
+		}
+
+		if cfg.WaitTimeout >= 0 {
+			waitTimeout = cfg.WaitTimeout
+		}
+	}
+
+	return pools.NewRPCPool(size, waitTimeout, nil)
 }
 
 // NewReadPool returns an RPCPool from the given config that should be used for
