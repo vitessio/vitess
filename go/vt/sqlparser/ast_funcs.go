@@ -424,26 +424,6 @@ func (node *ComparisonExpr) IsImpossible() bool {
 	return false
 }
 
-// ColNameMatch returns true if the left and right expression of the comparison are matching column names.
-func (node *ComparisonExpr) ColNameMatch(leftName, rightName ColIdent) bool {
-	var left, right *ColName
-	var isCol bool
-	if left, isCol = node.Left.(*ColName); !isCol {
-		return false
-	}
-	if right, isCol = node.Right.(*ColName); !isCol {
-		return false
-	}
-
-	if leftName.Equal(left.Name) && rightName.Equal(right.Name) {
-		return true
-	}
-	if leftName.Equal(right.Name) && rightName.Equal(left.Name) {
-		return true
-	}
-	return false
-}
-
 // NewStrLiteral builds a new StrVal.
 func NewStrLiteral(in string) *Literal {
 	return &Literal{Type: StrVal, Val: in}
