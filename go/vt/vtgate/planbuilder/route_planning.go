@@ -42,6 +42,15 @@ func gen4Planner(_ string) func(sqlparser.Statement, *sqlparser.ReservedVars, Co
 			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%T not yet supported", stmt)
 		}
 
+		// handle dual table for processing at vtgate.
+		p, err := handleDualSelects(sel, vschema)
+		if err != nil {
+			return nil, err
+		}
+		if p != nil {
+			return p, nil
+		}
+
 		getPlan := func(sel *sqlparser.Select) (logicalPlan, error) {
 			return newBuildSelectPlan(sel, reservedVars, vschema)
 		}
