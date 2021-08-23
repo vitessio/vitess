@@ -1,4 +1,3 @@
-2021-04-13T23:39:40Z,region_example,https://github.com/vitessio/vitess/actions/runs/746463618
 2021-04-13T23:39:40Z,unit_race,https://github.com/vitessio/vitess/actions/runs/746463639
 2021-04-14T08:30:29Z,Cluster (onlineddl_declarative),https://github.com/vitessio/vitess/actions/runs/747616892
 2021-04-14T08:30:29Z,Cluster (onlineddl_ghost),https://github.com/vitessio/vitess/actions/runs/747616884
@@ -9998,3 +9997,4 @@
 2021-08-23T18:28:13Z,pr-labels,https://github.com/vitessio/vitess/actions/runs/1159789715
 2021-08-23T18:28:13Z,unit_race,https://github.com/vitessio/vitess/actions/runs/1159789759
 2021-08-23T18:39:07Z,pr-labels,https://github.com/vitessio/vitess/actions/runs/1159820429
+2021-08-23T18:39:07Z,unit_race,https://github.com/vitessio/vitess/actions/runs/1159820381
