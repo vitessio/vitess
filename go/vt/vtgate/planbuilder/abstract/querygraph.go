@@ -105,37 +105,6 @@ func (qg *QueryGraph) collectPredicates(sel *sqlparser.Select, semTable *semanti
 	return nil
 }
 
-func (qg *QueryGraph) collectPredicateTable(t sqlparser.TableExpr, predicate sqlparser.Expr, semTable *semantics.SemTable) error {
-	deps := semTable.BaseTableDependencies(predicate)
-	switch deps.NumberOfTables() {
-	case 0:
-		qg.addNoDepsPredicate(predicate)
-	case 1:
-		found := qg.addToSingleTable(deps, predicate)
-		if !found {
-			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "table %v for predicate %v not found", deps, sqlparser.String(predicate))
-		}
-	default:
-		switch table := t.(type) {
-		case *sqlparser.JoinTableExpr:
-			switch table.Join {
-			case sqlparser.NormalJoinType:
-				allPredicates, found := qg.innerJoins[deps]
-				if found {
-					allPredicates = append(allPredicates, predicate)
-				} else {
-					allPredicates = []sqlparser.Expr{predicate}
-				}
-				qg.innerJoins[deps] = allPredicates
-			case sqlparser.LeftJoinType, sqlparser.RightJoinType:
-				break
-			}
-		}
-	}
-
-	return nil
-}
-
 func (qg *QueryGraph) collectPredicate(predicate sqlparser.Expr, semTable *semantics.SemTable) error {
 	deps := semTable.BaseTableDependencies(predicate)
 	switch deps.NumberOfTables() {
@@ -177,4 +146,15 @@ func (qg *QueryGraph) addNoDepsPredicate(predicate sqlparser.Expr) {
 			Right: predicate,
 		}
 	}
+}
+
+// UnsolvedPredicates implements the Operator interface
+func (qg *QueryGraph) UnsolvedPredicates(_ *semantics.SemTable) []sqlparser.Expr {
+	var result []sqlparser.Expr
+	for set, exprs := range qg.innerJoins {
+		if !set.IsSolvedBy(qg.TableID()) {
+			result = append(result, exprs...)
+		}
+	}
+	return result
 }

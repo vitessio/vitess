@@ -48,3 +48,8 @@ func (d *Derived) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTabl
 	}
 	return d.Inner.PushPredicate(newExpr, semTable)
 }
+
+// UnsolvedPredicates implements the Operator interface
+func (d *Derived) UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.Expr {
+	return d.Inner.UnsolvedPredicates(semTable)
+}

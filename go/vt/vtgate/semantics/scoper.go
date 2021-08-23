@@ -40,7 +40,7 @@ func (s *scoper) down(cursor *sqlparser.Cursor) {
 		s.push(currScope)
 
 		// Needed for order by with Literal to find the Expression.
-		currScope.selectExprs = node.SelectExprs
+		currScope.selectStmt = node
 
 		s.rScope[node] = currScope
 		s.wScope[node] = newScope(nil)
@@ -50,7 +50,10 @@ func (s *scoper) down(cursor *sqlparser.Cursor) {
 			// can only see the two tables involved in the JOIN, and no other tables.
 			// To create this special context, we create a special scope here that is then merged with
 			// the surrounding scope when we come back out from the JOIN
-			s.push(newScope(nil))
+			nScope := newScope(nil)
+			nScope.selectStmt = cursor.Parent().(*sqlparser.Select)
+			s.push(nScope)
+
 		}
 	case sqlparser.SelectExprs:
 		sel, parentIsSelect := cursor.Parent().(*sqlparser.Select)
@@ -106,7 +109,7 @@ func (s *scoper) changeScopeForOrderBy(cursor *sqlparser.Cursor) {
 	s.push(nScope)
 	wScope := s.wScope[sel]
 	nScope.tables = append(nScope.tables, wScope.tables...)
-	nScope.selectExprs = incomingScope.selectExprs
+	nScope.selectStmt = incomingScope.selectStmt
 
 	if s.rScope[sel] != incomingScope {
 		panic("BUG: scope counts did not match")

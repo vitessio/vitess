@@ -116,7 +116,7 @@ func TestExpandStar(t *testing.T) {
 			require.True(t, isSelectStatement, "analyzer expects a select statement")
 			semTable, err := semantics.Analyze(selectStatement, cDB, schemaInfo)
 			require.NoError(t, err)
-			expandedSelect, err := expandStar(selectStatement, semTable)
+			expandedSelect, err := rewrite(selectStatement, semTable, nil)
 			if tcase.expErr == "" {
 				require.NoError(t, err)
 				assert.Equal(t, tcase.expSQL, sqlparser.String(expandedSelect))
@@ -164,7 +164,7 @@ func TestSemTableDependenciesAfterExpandStar(t *testing.T) {
 			require.True(t, isSelectStatement, "analyzer expects a select statement")
 			semTable, err := semantics.Analyze(selectStatement, "", schemaInfo)
 			require.NoError(t, err)
-			expandedSelect, err := expandStar(selectStatement, semTable)
+			expandedSelect, err := rewrite(selectStatement, semTable, nil)
 			require.NoError(t, err)
 			assert.Equal(t, tcase.expSQL, sqlparser.String(expandedSelect))
 			if tcase.otherTbl != -1 {
@@ -179,6 +179,62 @@ func TestSemTableDependenciesAfterExpandStar(t *testing.T) {
 					semTable.BaseTableDependencies(expandedSelect.SelectExprs[tcase.expandedCol].(*sqlparser.AliasedExpr).Expr),
 				)
 			}
+		})
+	}
+}
+
+func TestSubqueryRewrite(t *testing.T) {
+	tcases := []struct {
+		input  string
+		output string
+	}{{
+		input:  "select 1 from t1",
+		output: "select 1 from t1",
+	}, {
+		input:  "select (select 1) from t1",
+		output: "select :__sq1 from t1",
+	}, {
+		input:  "select 1 from t1 where exists (select 1)",
+		output: "select 1 from t1 where :__sq_has_values1",
+	}, {
+		input:  "select id from t1 where id in (select 1)",
+		output: "select id from t1 where id in ::__sq1",
+	}, {
+		input:  "select id from t1 where id not in (select 1)",
+		output: "select id from t1 where id not in ::__sq1",
+	}, {
+		input:  "select id from t1 where id = (select 1)",
+		output: "select id from t1 where id = :__sq1",
+	}, {
+		input:  "select id from t1 where id >= (select 1)",
+		output: "select id from t1 where id >= :__sq1",
+	}, {
+		input:  "select id from t1 where t1.id = (select 1 from t2 where t2.id = t1.id)",
+		output: "select id from t1 where t1.id = :__sq1",
+	}, {
+		input:  "select id from t1 join t2 where t1.id = t2.id and exists (select 1)",
+		output: "select id from t1 join t2 where t1.id = t2.id and :__sq_has_values1",
+	}, {
+		input:  "select id from t1 where not exists (select 1)",
+		output: "select id from t1 where not :__sq_has_values1",
+	}, {
+		input:  "select id from t1 where not exists (select 1) and exists (select 2)",
+		output: "select id from t1 where not :__sq_has_values1 and :__sq_has_values2",
+	}, {
+		input:  "select (select 1), (select 2) from t1 join t2 on t1.id = (select 1) where t1.id in (select 1)",
+		output: "select :__sq2, :__sq3 from t1 join t2 on t1.id = :__sq1 where t1.id in ::__sq4",
+	}}
+	for _, tcase := range tcases {
+		t.Run(tcase.input, func(t *testing.T) {
+			ast, err := sqlparser.Parse(tcase.input)
+			require.NoError(t, err)
+			selectStatement, isSelectStatement := ast.(*sqlparser.Select)
+			require.True(t, isSelectStatement, "analyzer expects a select statement")
+			semTable, err := semantics.Analyze(selectStatement, "", &semantics.FakeSI{})
+			require.NoError(t, err)
+			rewrittenAST, err := rewrite(selectStatement, semTable, sqlparser.NewReservedVars("vtg", map[string]struct{}{}))
+			require.NoError(t, err)
+			assert.Equal(t, tcase.output, sqlparser.String(rewrittenAST))
 		})
 	}
 }

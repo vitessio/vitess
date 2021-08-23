@@ -47,21 +47,50 @@ func extract(in *sqlparser.Select, idx int) sqlparser.Expr {
 }
 
 func TestScopeForSubqueries(t *testing.T) {
-	t.Skip("subqueries not yet supported")
-	query := `
+	tcases := []struct {
+		sql  string
+		deps TableSet
+	}{
+		{
+			sql: `
 select t.col1, (
 	select t.col2 from z as t) 
-from x as t`
-	stmt, semTable := parseAndAnalyze(t, query, "")
+from x as t`,
+			deps: T2,
+		}, {
+			sql: `
+select t.col1, (
+	select t.col2 from z) 
+from x as t`,
+			deps: T1,
+		}, {
+			sql: `
+select t.col1, (
+	select (select z.col2 from y) from z) 
+from x as t`,
+			deps: T2,
+		}, {
+			sql: `
+select t.col1, (
+	select (select y.col2 from y) from z) 
+from x as t`,
+			deps: T3,
+		},
+	}
+	for _, tc := range tcases {
+		t.Run(tc.sql, func(t *testing.T) {
+			stmt, semTable := parseAndAnalyze(t, tc.sql, "d")
+			sel, _ := stmt.(*sqlparser.Select)
 
-	sel, _ := stmt.(*sqlparser.Select)
-
-	// extract the `t.col2` expression from the subquery
-	sel2 := sel.SelectExprs[1].(*sqlparser.AliasedExpr).Expr.(*sqlparser.Subquery).Select.(*sqlparser.Select)
-	s1 := semTable.BaseTableDependencies(extract(sel2, 0))
-
-	// if scoping works as expected, we should be able to see the inner table being used by the inner expression
-	assert.Equal(t, T2, s1)
+			// extract the first expression from the subquery (which should be the second expression in the outer query)
+			sel2 := sel.SelectExprs[1].(*sqlparser.AliasedExpr).Expr.(*sqlparser.Subquery).Select.(*sqlparser.Select)
+			exp := extract(sel2, 0)
+			s1 := semTable.BaseTableDependencies(exp)
+			require.NoError(t, semTable.ProjectionErr)
+			// if scoping works as expected, we should be able to see the inner table being used by the inner expression
+			assert.Equal(t, tc.deps, s1)
+		})
+	}
 }
 
 func TestBindingSingleTablePositive(t *testing.T) {

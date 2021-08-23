@@ -530,6 +530,40 @@ Gen4 plan same as above
     ]
   }
 }
+{
+  "QueryType": "SELECT",
+  "Original": "select col from user where col in (select col2 from user) order by col",
+  "Instructions": {
+    "OperatorType": "Subquery",
+    "Variant": "PulloutIn",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select col2 from `user` where 1 != 1",
+        "Query": "select col2 from `user`",
+        "Table": "`user`"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select col, weight_string(col) from `user` where 1 != 1",
+        "OrderBy": "(0|1) ASC",
+        "Query": "select col, weight_string(col) from `user` where col in ::__sq1 order by col asc",
+        "ResultColumns": 1,
+        "Table": "`user`"
+      }
+    ]
+  }
+}
 
 # ORDER BY NULL for join
 "select user.col1 as a, user.col2, music.col3 from user join music on user.id = music.id where user.id = 1 order by null"
@@ -796,6 +830,38 @@ Gen4 plan same as above
         },
         "FieldQuery": "select col from `user` where 1 != 1",
         "Query": "select col from `user` where :__sq_has_values1 = 1 and col in ::__sq1 order by null",
+        "Table": "`user`"
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select col from user where col in (select col2 from user) order by null",
+  "Instructions": {
+    "OperatorType": "Subquery",
+    "Variant": "PulloutIn",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select col2 from `user` where 1 != 1",
+        "Query": "select col2 from `user`",
+        "Table": "`user`"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select col from `user` where 1 != 1",
+        "Query": "select col from `user` where col in ::__sq1 order by null",
         "Table": "`user`"
       }
     ]
@@ -1123,7 +1189,7 @@ Gen4 plan same as above
 }
 Gen4 plan same as above
 
-#Order by subquery column
+#Order by derived table column
 "select * from user u join (select user_id from user_extra where user_id = 5) eu on u.id = eu.user_id where u.id = 5 order by eu.user_id"
 {
   "QueryType": "SELECT",
@@ -1343,6 +1409,44 @@ Gen4 plan same as above
             },
             "FieldQuery": "select col from `user` where 1 != 1",
             "Query": "select col from `user` where :__sq_has_values1 = 1 and col in ::__sq1 limit :__upper_limit",
+            "Table": "`user`"
+          }
+        ]
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select col from user where col in (select col1 from user) limit 1",
+  "Instructions": {
+    "OperatorType": "Limit",
+    "Count": 1,
+    "Inputs": [
+      {
+        "OperatorType": "Subquery",
+        "Variant": "PulloutIn",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select col1 from `user` where 1 != 1",
+            "Query": "select col1 from `user`",
+            "Table": "`user`"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select col from `user` where 1 != 1",
+            "Query": "select col from `user` where col in ::__sq1 limit :__upper_limit",
             "Table": "`user`"
           }
         ]
