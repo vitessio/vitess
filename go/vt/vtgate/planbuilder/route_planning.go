@@ -1089,6 +1089,62 @@ func createRoutePlanForOuter(ctx optimizeContext, aRoute, bRoute *routeTree, new
 	}
 }
 
+func gen4ValuesEqual(ctx optimizeContext, a, b []sqlparser.Expr) bool {
+	if len(a) != len(b) {
+		return false
+	}
+
+	// TODO: check semTable's columnEqualities for better plan
+
+	for i, aExpr := range a {
+		bExpr := b[i]
+		if !gen4ValEqual(ctx, aExpr, bExpr) {
+			return false
+		}
+	}
+	return true
+}
+
+func gen4ValEqual(ctx optimizeContext, a, b sqlparser.Expr) bool {
+	switch a := a.(type) {
+	case *sqlparser.ColName:
+		if b, ok := b.(*sqlparser.ColName); ok {
+			if !a.Name.Equal(b.Name) {
+				return false
+			}
+
+			return ctx.semTable.Dependencies(a) == ctx.semTable.Dependencies(b)
+		}
+	case sqlparser.Argument:
+		b, ok := b.(sqlparser.Argument)
+		if !ok {
+			return false
+		}
+		return a == b
+	case *sqlparser.Literal:
+		b, ok := b.(*sqlparser.Literal)
+		if !ok {
+			return false
+		}
+		switch a.Type {
+		case sqlparser.StrVal:
+			switch b.Type {
+			case sqlparser.StrVal:
+				return a.Val == b.Val
+			case sqlparser.HexVal:
+				return hexEqual(b, a)
+			}
+		case sqlparser.HexVal:
+			return hexEqual(a, b)
+		case sqlparser.IntVal:
+			if b.Type == (sqlparser.IntVal) {
+				return a.Val == b.Val
+			}
+		}
+	}
+	return false
+}
+
 var _ sort.Interface = (parenTables)(nil)
 
 func (p parenTables) Len() int {
