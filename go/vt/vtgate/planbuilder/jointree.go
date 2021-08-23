@@ -650,6 +650,11 @@ func (rp *routeTree) planIsExpr(ctx optimizeContext, node *sqlparser.IsExpr) (bo
 	return rp.haveMatchingVindex(node, vdValue, column, *val, equalOrEqualUnique, justTheVindex), err
 }
 
+// makePlanValue transforms the given sqlparser.Expr into a sqltypes.PlanValue.
+// If the given sqlparser.Expr is an argument and can be found in the rp.sqToReplace then the
+// method will stops and return nil values.
+// Otherwise, the method will try to apply makePlanValue for any equality the sqlparser.Expr n has.
+// The first PlanValue that is successfully produced will be returned.
 func (rp *routeTree) makePlanValue(ctx optimizeContext, n sqlparser.Expr) (*sqltypes.PlanValue, error) {
 	if rp.isSubQueryToReplace(argumentName(n)) {
 		return nil, nil
@@ -668,6 +673,9 @@ func (rp *routeTree) makePlanValue(ctx optimizeContext, n sqlparser.Expr) (*sqlt
 	return nil, nil
 }
 
+// makePlanValue transforms a sqlparser.Expr into a sqltypes.PlanValue.
+// If the expression is too complex e.g: not an argument/literal/tuple/null/unary, then
+// the method will not fail, instead it will exit with nil values.
 func makePlanValue(n sqlparser.Expr) (*sqltypes.PlanValue, error) {
 	value, err := sqlparser.NewPlanValue(n)
 	if err != nil {

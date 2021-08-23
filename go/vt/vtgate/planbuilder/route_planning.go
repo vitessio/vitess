@@ -819,6 +819,10 @@ func findColumnVindex(ctx optimizeContext, a *routeTree, exp sqlparser.Expr) vin
 
 	var singCol vindexes.SingleColumn
 
+	// for each equality expression that exp has with other column name, we check if it
+	// can be solved by any table in our routeTree a. If an equality expression can be solved,
+	// we check if the equality expression and our table share the same vindex, if they do:
+	// the method will return the associated vindexes.SingleColumn.
 	for _, expr := range ctx.semTable.GetExprAndEqualities(exp) {
 		col, isCol := expr.(*sqlparser.ColName)
 		if !isCol {
