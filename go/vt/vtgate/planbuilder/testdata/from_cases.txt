@@ -3453,3 +3453,110 @@ Gen4 plan same as above
     "Table": "unsharded"
   }
 }
+
+# gen4 - optimise plan by merging user_extra and music first, and then querying for user info
+"select 1 from user u join user_extra ue on ue.id = u.id join music m on m.user_id = ue.user_id"
+{
+  "QueryType": "SELECT",
+  "Original": "select 1 from user u join user_extra ue on ue.id = u.id join music m on m.user_id = ue.user_id",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "-1",
+    "JoinVars": {
+      "ue_user_id": 1
+    },
+    "TableName": "`user`_user_extra_music",
+    "Inputs": [
+      {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "-1,1",
+        "JoinVars": {
+          "u_id": 1
+        },
+        "TableName": "`user`_user_extra",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1, u.id from `user` as u where 1 != 1",
+            "Query": "select 1, u.id from `user` as u",
+            "Table": "`user`"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select ue.user_id from user_extra as ue where 1 != 1",
+            "Query": "select ue.user_id from user_extra as ue where ue.id = :u_id",
+            "Table": "user_extra"
+          }
+        ]
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectEqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select 1 from music as m where 1 != 1",
+        "Query": "select 1 from music as m where m.user_id = :ue_user_id",
+        "Table": "music",
+        "Values": [
+          ":ue_user_id"
+        ],
+        "Vindex": "user_index"
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select 1 from user u join user_extra ue on ue.id = u.id join music m on m.user_id = ue.user_id",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "-2",
+    "JoinVars": {
+      "ue_id": 0
+    },
+    "TableName": "music, user_extra_`user`",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select ue.id, 1 from user_extra as ue, music as m where 1 != 1",
+        "Query": "select ue.id, 1 from user_extra as ue, music as m where m.user_id = ue.user_id",
+        "Table": "music, user_extra"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectEqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select 1 from `user` as u where 1 != 1",
+        "Query": "select 1 from `user` as u where u.id = :ue_id",
+        "Table": "`user`",
+        "Values": [
+          ":ue_id"
+        ],
+        "Vindex": "user_index"
+      }
+    ]
+  }
+}
