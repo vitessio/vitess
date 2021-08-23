@@ -1207,7 +1207,7 @@ Gen4 plan same as above
 }
 Gen4 plan same as above
 
-# derived table
+# subquery
 "select u.m from user_extra join user u where u.id in (select m2 from user where user.id = u.id and user_extra.col = user.col) and u.id in (user_extra.col, 1)"
 {
   "QueryType": "SELECT",
