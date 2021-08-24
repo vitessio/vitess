@@ -1328,7 +1328,7 @@ func (this *HttpAPI) asciiTopology(params martini.Params, r render.Render, req *
 	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Topology for cluster %s", clusterName), Details: asciiOutput})
 }
 
-// SnapshotTopologies triggers orchestrator to record a snapshot of host/master for all known hosts.
+// SnapshotTopologies triggers orchestrator to record a snapshot of host/primary for all known hosts.
 func (this *HttpAPI) SnapshotTopologies(params martini.Params, r render.Render, req *http.Request) {
 	start := time.Now()
 	if err := inst.SnapshotTopologies(); err != nil {

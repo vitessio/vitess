@@ -906,7 +906,7 @@ func MakeCoPrimary(instanceKey *InstanceKey) (*Instance, error) {
 	}
 	if primary.IsCoPrimary {
 		// We allow breaking of an existing co-primary replication. Here's the breakdown:
-		// Ideally, this would not eb allowed, and we would first require the user to RESET SLAVE on 'master'
+		// Ideally, this would not eb allowed, and we would first require the user to RESET SLAVE on 'primary'
 		// prior to making it participate as co-primary with our 'instance'.
 		// However there's the problem that upon RESET SLAVE we lose the replication's user/password info.
 		// Thus, we come up with the following rule:
@@ -942,8 +942,8 @@ func MakeCoPrimary(instanceKey *InstanceKey) (*Instance, error) {
 		defer EndMaintenance(maintenanceToken)
 	}
 
-	// the coMaster used to be merely a replica. Just point primary into *some* position
-	// within coMaster...
+	// the coPrimary used to be merely a replica. Just point primary into *some* position
+	// within coPrimary...
 	if primary.IsReplica() {
 		// this is the case of a co-primary. For primaries, the StopReplication operation throws an error, and
 		// there's really no point in doing it.
@@ -1463,7 +1463,7 @@ func TakePrimary(instanceKey *InstanceKey, allowTakingCoPrimary bool) (*Instance
 	// instance and primaryInstance are equal
 	// We skip name unresolve. It is OK if the primary's primary is dead, unreachable, does not resolve properly.
 	// We just copy+paste info from the primary.
-	// In particular, this is commonly calledin DeadMaster recovery
+	// In particular, this is commonly calledin DeadPrimary recovery
 	instance, err = ChangePrimaryTo(&instance.Key, &primaryInstance.SourceKey, &primaryInstance.ExecBinlogCoordinates, true, GTIDHintNeutral)
 	if err != nil {
 		goto Cleanup
@@ -1999,7 +1999,7 @@ func relocateBelowInternal(instance, other *Instance) (*Instance, error) {
 
 	// Check simple binlog file/pos operations:
 	if InstancesAreSiblings(instance, other) {
-		// If comastering, only move below if it's read-only
+		// If co-primarying, only move below if it's read-only
 		if !other.IsCoPrimary || other.ReadOnly {
 			return MoveBelow(&instance.Key, &other.Key)
 		}
