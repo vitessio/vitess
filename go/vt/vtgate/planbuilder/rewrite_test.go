@@ -227,7 +227,7 @@ func TestSubqueryRewrite(t *testing.T) {
 			reservedVars := sqlparser.NewReservedVars("vtg", vars)
 			selectStatement, isSelectStatement := ast.(*sqlparser.Select)
 			require.True(t, isSelectStatement, "analyzer expects a select statement")
-			semTable, err := semantics.Analyze(selectStatement, "", &semantics.FakeSI{}, func(statement sqlparser.SelectStatement, semTable *semantics.SemTable) error { return nil })
+			semTable, err := semantics.Analyze(selectStatement, "", &semantics.FakeSI{}, semantics.NoRewrite)
 			require.NoError(t, err)
 			err = subqueryRewrite(selectStatement, semTable, reservedVars)
 			require.NoError(t, err)
