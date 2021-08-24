@@ -147,10 +147,6 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
 "select user.col1 as a from user order by 1 collate utf8_general_ci"
 "unsupported: in scatter query: complex order by expression: 1 collate utf8_general_ci"
 
-# Order by has subqueries
-"select id from unsharded order by (select id from unsharded)"
-"unsupported: subqueries disallowed in GROUP or ORDER BY"
-
 # subqueries in update
 "update user set col = (select id from unsharded)"
 "unsupported: subqueries in sharded DML"
